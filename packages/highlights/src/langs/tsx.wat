@@ -1,13 +1,24 @@
 (module
-  (import "./js.wat")
-  (import "./ts.wat")
-  (import "./jsx.wat")
   (import "./js-inline-template.wat")
+  (import "./js.wat")
+  (import "./jsx.wat")
+  (import "./ts.wat")
+  (import "./tsrx.wat")
 
   ;; One feature-gated pipeline composes JS, JSX, TS, and TSX.
   ;; emit one classified token, splitting the multi-part kinds
   (func $emitCur (param $t i32) (param $lhs i32) (param $rhs i32) (param $next i32)
     (local $c i32)
+    ;; a TSRX `@{` statement container - the scanner's two-byte l_brace -
+    ;; splits into its directive `@` and an ordinary `{`; the classifier
+    ;; still steps the parameter machine for the brace
+    (if (i32.and (i32.eq (local.get $t) (enum.get $Lex.l_brace))
+                 (i32.eq (i32.sub (local.get $rhs) (local.get $lhs)) (i32.const 2)))
+      (then
+        (drop (call $classify (global.get $prevTok) (local.get $t) (local.get $next)
+                              (local.get $lhs) (local.get $rhs)))
+        (call $tsrxEmitContainerOpen (local.get $lhs) (local.get $rhs))
+        (return)))
     ;; every single-span kind classifies through the table; only the
     ;; multi-part kinds (sentinel 253) take the chain below
     (if (i32.ne (enum-map.get $LexHl (local.get $t)) (i32.const 253))
@@ -198,13 +209,18 @@
         (local.set $m (i32.const 0))
         (if (call $ecmaHasJsx)
           (then (local.set $m (call $jsxTopMode))))
-        (if (i32.and (i32.ne (local.get $m) (i32.const 0))
-                     (i32.ne (local.get $m) (i32.const 3)))
+        (if (call $jsxByteMode (local.get $m))
           (then
             (br_if $out (i32.ge_u (global.get $ptr) (global.get $end)))
             (if (i32.eq (local.get $m) (i32.const 1))
               (then (call $jsxTagStep))
-              (else (call $jsxContentStep)))
+              (else
+                (if (i32.eq (local.get $m) (i32.const 2))
+                  (then (call $jsxContentStep))
+                  (else
+                    (if (i32.eq (local.get $m) (i32.const 6))
+                      (then (call $tsrxStyleStep))
+                      (else (call $jsxCloseTailStep)))))))
             (local.set $done (global.get $ptr))
             (br $main)))
         ;; pull the current token (the previous iteration's lookahead, if any)
@@ -220,6 +236,20 @@
             (local.set $curRhs (global.get $rhs))))
         (call $emitGap (local.get $done) (local.get $curLhs))
         (local.set $done (local.get $curLhs))
+        ;; a TSRX `<script>` body ends where the scanner reported `</script`
+        ;; as eof before the input end: emit the close tag and pop
+        (if (i32.and (i32.eq (local.get $curT) (enum.get $Lex.eof))
+                     (i32.and (i32.eq (local.get $m) (i32.const 5))
+                              (i32.lt_u (global.get $ptr) (global.get $end))))
+          (then
+            (global.set $ptr (i32.add (local.get $curLhs) (i32.const 2)))
+            (call $emitTok (enum.get $Token.punctuation.bracket.jsx)
+              (local.get $curLhs) (global.get $ptr))
+            (drop (call $jsxEmitName))
+            (drop (call $jsxCloseTagTail))
+            (call $jsxPop)
+            (local.set $done (global.get $ptr))
+            (br $main)))
         (br_if $out (i32.eq (local.get $curT) (enum.get $Lex.eof)))
         ;; Stop before an embedded framework expression's outer delimiter so
         ;; its parent lexer can emit the punctuation and resume its own scan.
@@ -265,9 +295,11 @@
                 (global.set $tsxStreamExpressionDepth
                   (i32.sub
                     (global.get $tsxStreamExpressionDepth) (i32.const 1)))))))
-        ;; a `}` that closes a jsx expression container resumes the tag/content
+        ;; a `}` that closes a jsx expression container - or a TSRX directive
+        ;; block - resumes the tag/content
         (if (i32.and (i32.eq (local.get $curT) (enum.get $Lex.r_brace))
-                     (i32.eq (local.get $m) (i32.const 3)))
+                     (i32.or (i32.eq (local.get $m) (i32.const 3))
+                             (i32.eq (local.get $m) (i32.const 4))))
           (then
             (if (i32.le_s (global.get $braceDepth) (call $jsxTopTarget))
               (then
@@ -289,8 +321,7 @@
                 (call $emitTok (enum.get $Token.punctuation.bracket.jsx)
                   (local.get $curLhs) (local.get $curRhs))
                 (global.set $jsTemplateMarker (i32.const 0))
-                (call $jsxEmitName)
-                (call $jsxPush (i32.const 1) (i32.const 0))
+                (call $jsxPush (i32.const 1) (call $jsxEmitName))
                 (local.set $done (global.get $ptr))
                 (br $main)))))
         ;; lookahead, then emit the current token. A nonzero stream mode

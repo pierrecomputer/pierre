@@ -74,6 +74,38 @@ export default function Badge({ label, count = 0 }: BadgeProps) {
 }`,
   ],
   [
+    'tsrx',
+    'TSRX',
+    `// TodoList.tsrx
+
+type Todo = {
+  id: string;
+  title: string;
+  hidden?: boolean;
+};
+
+export function TodoList({ items }: { items: Todo[] }) @{
+  const visibleItems = items.filter((item) => !item.hidden);
+
+  <>
+    <ul>
+      @for (const item of visibleItems; index i; key item.id) {
+        <li>{i + 1}. {item.title}</li>
+      } @empty {
+        <li>No todos yet</li>
+      }
+    </ul>
+
+    <style>
+      ul {
+        display: grid;
+        gap: 0.5rem;
+      }
+    </style>
+  </>
+}`,
+  ],
+  [
     'html',
     'HTML',
     `<!doctype html>

@@ -40,41 +40,55 @@
   ;;)
   (memory (export "memory") 3)
 
-  (import "./token.wat")
   (import "./emit.wat")
-  (import "./live.wat")
   (import "./langs/angular-html.wat")
   (import "./langs/asm.wat")
   (import "./langs/astro.wat")
   (import "./langs/bash.wat")
   (import "./langs/c.wat")
   (import "./langs/c3.wat")
+  (import "./langs/clojure.wat")
+  (import "./langs/cmake.wat")
   (import "./langs/cpp.wat")
   (import "./langs/csharp.wat")
   (import "./langs/css.wat")
   (import "./langs/dart.wat")
   (import "./langs/diff.wat")
+  (import "./langs/dockerfile.wat")
   (import "./langs/elixir.wat")
+  (import "./langs/erlang.wat")
+  (import "./langs/fsharp.wat")
+  (import "./langs/gleam.wat")
   (import "./langs/glsl.wat")
   (import "./langs/go.wat")
+  (import "./langs/graphql.wat")
+  (import "./langs/groovy.wat")
   (import "./langs/haskell.wat")
   (import "./langs/hlsl.wat")
   (import "./langs/html.wat")
   (import "./langs/java.wat")
   (import "./langs/json.wat")
+  (import "./langs/julia.wat")
   (import "./langs/kotlin.wat")
   (import "./langs/lisp.wat")
   (import "./langs/lua.wat")
+  (import "./langs/makefile.wat")
   (import "./langs/markdown.wat")
+  (import "./langs/matlab.wat")
   (import "./langs/mdx.wat")
+  (import "./langs/nix.wat")
   (import "./langs/objc.wat")
   (import "./langs/ocaml.wat")
+  (import "./langs/pascal.wat")
   (import "./langs/perl.wat")
   (import "./langs/php.wat")
+  (import "./langs/powershell.wat")
   (import "./langs/proto.wat")
   (import "./langs/python.wat")
+  (import "./langs/r.wat")
   (import "./langs/ruby.wat")
   (import "./langs/rust.wat")
+  (import "./langs/scala.wat")
   (import "./langs/sql.wat")
   (import "./langs/svelte.wat")
   (import "./langs/swift.wat")
@@ -87,22 +101,8 @@
   (import "./langs/xml.wat")
   (import "./langs/yaml.wat")
   (import "./langs/zig.wat")
-  (import "./langs/dockerfile.wat")
-  (import "./langs/erlang.wat")
-  (import "./langs/gleam.wat")
-  (import "./langs/graphql.wat")
-  (import "./langs/powershell.wat")
-  (import "./langs/r.wat")
-  (import "./langs/scala.wat")
-  (import "./langs/clojure.wat")
-  (import "./langs/cmake.wat")
-  (import "./langs/fsharp.wat")
-  (import "./langs/groovy.wat")
-  (import "./langs/julia.wat")
-  (import "./langs/makefile.wat")
-  (import "./langs/matlab.wat")
-  (import "./langs/nix.wat")
-  (import "./langs/pascal.wat")
+  (import "./live.wat")
+  (import "./token.wat")
 
   ;; Numeric values are the public ABI mirrored by lib/highlighter.ts.
   (enum $Language
@@ -166,6 +166,7 @@
     "terraform"
     "toml"
     "ts"
+    "tsrx"
     "tsx"
     "vue"
     "wat"
@@ -185,7 +186,7 @@
       $hlLua $hlMakefile $hlMarkdown $hlMatlab $hlMdx $hlNix $hlObjc $hlOcaml
       $hlPascal $hlPerl $hlPhp $hlPowershell $hlProto $hlPython $hlR $hlRuby
       $hlRust $hlSass $hlScala $hlScss $hlSql $hlSvelte $hlSwift $hlTerraform
-      $hlToml $hlTs $hlTsx $hlVue $hlWat $hlWgsl $hlXml $hlYaml $hlZig))
+      $hlToml $hlTs $hlTsrx $hlTsx $hlVue $hlWat $hlWgsl $hlXml $hlYaml $hlZig))
 
   ;; plain text: one unstyled token covering the whole input
   (func $hlPlain
@@ -398,6 +399,8 @@
       (then (call $hlTsStream (local.get $reset)) (return)))
     (if (i32.eq (local.get $lang) (enum.get $Language.tsx))
       (then (call $hlTsxStream (local.get $reset)) (return)))
+    (if (i32.eq (local.get $lang) (enum.get $Language.tsrx))
+      (then (call $hlTsrxStream (local.get $reset)) (return)))
     ;; non-ecma lexers share the parameter-machine globals; the ecma stream
     ;; entries reset them in $hlEcmaImpl
     (if (local.get $reset) (then (call $sigReset)))

@@ -1,14 +1,5 @@
 (module
   ;; TypeScript-aware semantic classification shared by TS and TSX.
-  ;; The context-free part is a table: each token kind's $Token bucket -
-  ;; punctuation, operators, literals, and the keyword buckets mirroring Zed's
-  ;; typescript query, where control flow and declaration introducers get
-  ;; their own buckets, literal keywords their literal kinds, and everything
-  ;; else - new/typeof/in/void/... - stays plain `keyword`. Three sentinels
-  ;; mark the kinds that need more: 255 for identifiers and contextual words
-  ;; ($identHl), 254 for `:` and `?`, whose TypeScript punctuation.special
-  ;; reading depends on the next token, and 253 for the multi-part kinds the
-  ;; pipeline emits itself ($emitCur). Anything unlisted is an operator.
   (enum-map $LexHl $Lex $mem.jsTokenHighlightMap $Token.operator
     (value 253
       "eof" "invalid" "comment" "multiline_comment" "hash_bang"
@@ -217,8 +208,12 @@
       (then
         (if (i32.eqz (global.get $sigObscure))
           (then (global.set $sigPattern (i32.or
-            (i32.eq (local.get $prev) (enum.get $Lex.l_paren))
-            (i32.eq (local.get $prev) (enum.get $Lex.comma))))))
+            (i32.or
+              (i32.eq (local.get $prev) (enum.get $Lex.l_paren))
+              (i32.eq (local.get $prev) (enum.get $Lex.comma)))
+            ;; a TSRX lazy pattern `&{ }` / `&[ ]` in parameter position
+            (i32.and (call $ecmaHasTsrx)
+                     (i32.eq (local.get $prev) (enum.get $Lex.ampersand)))))))
         (global.set $sigObscure
           (i32.add (global.get $sigObscure) (i32.const 1)))
         (return)))
@@ -265,6 +260,10 @@
     (if (i32.eq (local.get $t) (enum.get $Lex.ctxword_from))
       (then
         (if (i32.eq (local.get $next) (enum.get $Lex.string_literal))
+          (then (return (enum.get $Token.keyword.import))))
+        ;; TSRX imports from a declared submodule by its name
+        (if (i32.and (call $ecmaHasTsrx)
+                     (i32.eq (local.get $next) (enum.get $Lex.identifier)))
           (then (return (enum.get $Token.keyword.import))))))
     (if (i32.eq (local.get $t) (enum.get $Lex.ctxword_as))
       (then
@@ -303,6 +302,20 @@
         (if (i32.eq (local.get $next) (enum.get $Lex.l_paren))
           (then (return (enum.get $Token.function.method))))
         (return (enum.get $Token.property))))
+    (if (call $ecmaHasTsrx)
+      (then
+        ;; `module name {` declares a submodule
+        (if (i32.eq (local.get $prev) (enum.get $Lex.ctxword_namespace))
+          (then (return (enum.get $Token.namespace))))
+        ;; `@for (const x of xs; index i; key x.id)`: the clause words after a
+        ;; `;` inside a control paren, right before their operand
+        (if (i32.and (i32.eq (local.get $prev) (enum.get $Lex.semicolon))
+                     (i32.eq (local.get $next) (enum.get $Lex.identifier)))
+          (then
+            (if (i32.and
+                  (i32.eq (call $brkTopKind) (i32.const 1))
+                  (call $tsrxForClauseWord (local.get $lhs) (local.get $rhs)))
+              (then (return (enum.get $Token.keyword))))))))
     ;; parameter positions, mirroring Zed's @variable.parameter captures: an
     ;; arrow's sole parameter (`x =>` and `(x) =>`), a TS type-predicate
     ;; subject (`x is T`), the top level of a marked parameter list, and one

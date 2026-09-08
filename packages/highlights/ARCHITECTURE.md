@@ -20,7 +20,7 @@ src/scan.wat        read cursors ($ptr/$end/$eof) and SIMD scans
 src/emit.wat        HTML/token-record emitter and driver prologue/epilogue
 src/common.wat      shared ASCII, identifier, number, string, and comment scans
 src/sig.wat         shared parameter-list machine (variable.parameter)
-src/langs/*.wat     65 built-in language modes
+src/langs/*.wat     67 built-in language modes
 src/live.wat        incremental-tokenizer core: heap, line table, state
                     interning, per-line driver, edit splicing, compaction
 src/highlights.wat  memory, $Language enum, imports, and dispatch

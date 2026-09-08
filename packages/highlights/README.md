@@ -3,10 +3,10 @@
 `@pierre/highlights` is a fast code highlighter written by hand in WebAssembly
 Text (WAT).
 
-- **Lightweight**: 67.9 KiB (gzipped Wasm) for 66 languages
+- **Lightweight**: 69.2 KiB (gzipped Wasm) for 67 languages
 - **Fast**: 120–582× Shiki's throughput in the latest
   [HTML benchmark](./benchmark/README.md#html-generation)
-- Includes 65 built-in language lexers, no external grammar definitions needed
+- Includes 67 built-in language lexers, no external grammar definitions needed
 - Compatible with Zed's theme format
 
 Try it live in the [playground](https://diffs.com/highlights).

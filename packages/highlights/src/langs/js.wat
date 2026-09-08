@@ -153,7 +153,8 @@
     "ctxword_type"
   )
 
-  ;; Shared JavaScript state. Feature bit 0 enables TypeScript and bit 1 JSX.
+  ;; Shared JavaScript state. Feature bit 0 enables TypeScript, bit 1 JSX,
+  ;; and bit 2 TSRX (see langs/tsrx.wat).
   (global $ecmaFeatures (mut i32) (i32.const 3))
   (global $sourceStart (mut i32) (i32.const 65536))
   (global $lhs  (mut i32) (i32.const 0))
@@ -187,11 +188,22 @@
       (i32.and (global.get $ecmaFeatures) (i32.const 2))
       (i32.const 0)))
 
+  (func $ecmaHasTsrx (result i32)
+    (i32.ne
+      (i32.and (global.get $ecmaFeatures) (i32.const 4))
+      (i32.const 0)))
+
   ;; bracket-kind stack (regexp-vs-division bookkeeping)
   (func $brkPush (param $k i32)
     (if (i32.lt_u (global.get $brkSp) (i32.const 1024))
       (then (i32.store8 (i32.add (i32.const $mem.jsBracketStack) (global.get $brkSp)) (local.get $k))))
     (global.set $brkSp (i32.add (global.get $brkSp) (i32.const 1))))
+  ;; kind of the innermost open bracket - 1 for a control paren or a block,
+  ;; 0 for an object or call - or 0 with none open
+  (func $brkTopKind (result i32)
+    (if (i32.or (i32.eqz (global.get $brkSp)) (i32.gt_u (global.get $brkSp) (i32.const 1024)))
+      (then (return (i32.const 0))))
+    (i32.load8_u (i32.add (i32.const $mem.jsBracketStack) (i32.sub (global.get $brkSp) (i32.const 1)))))
   (func $brkPop
     (global.set $rxCloser (i32.const 0))
     (if (i32.eqz (global.get $brkSp)) (then (return)))
@@ -663,7 +675,11 @@
           (then (return (enum.get $Lex.identifier))))
         (if (i32.eq (local.tee $kw (call $isKeyword (global.get $lhs) (global.get $ptr)))
                     (enum.get $Lex.invalid))
-          (then (return (enum.get $Lex.identifier))))
+          (then
+            ;; TSRX declaration words live outside the keyword table
+            (if (call $ecmaHasTsrx)
+              (then (return (call $tsrxWordKind (global.get $lhs) (global.get $ptr)))))
+            (return (enum.get $Lex.identifier))))
         (if (i32.and
               (i32.eqz (call $ecmaHasTypeScript))
               (i32.ge_u (local.get $kw) (enum.get $Lex.ctxword_abstract)))
@@ -794,6 +810,13 @@
       (case 39
  (return (call $scanString (i32.const 39))))
       (case "<"
+          ;; a TSRX `<script>` body ends at `</script`: report it as eof so
+          ;; the pipeline emits the close tag before the input end
+          (if (call $ecmaHasTsrx)
+            (then
+              (if (i32.and (i32.eq (call $jsxTopMode) (i32.const 5))
+                           (call $tsrxRawClose (global.get $ptr) (i32.const 1)))
+                (then (return (enum.get $Lex.eof))))))
           (if (i32.eq (local.get $c2) (i32.const "<"))
             (then
               (if (i32.eq (call $tsxByte (i32.add (global.get $ptr) (i32.const 2))) (i32.const "="))
@@ -851,6 +874,24 @@
           (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
           (return (call $scanTemplateBody)))
       (case "@"
+          (if (call $ecmaHasTsrx)
+            (then
+              ;; `@{` opens a statement container: one two-byte l_brace token,
+              ;; a block for the bracket stack
+              (if (i32.eq (local.get $c2) (i32.const "{"))
+                (then
+                  (call $brkPush (i32.const 1))
+                  (global.set $braceDepth (i32.add (global.get $braceDepth) (i32.const 1)))
+                  (br $takeDone (i32.or (i32.shl (enum.get $Lex.l_brace) (i32.const 3)) (i32.const 2)))))
+              ;; `@if` and the other directive heads act as the keyword they
+              ;; name, `@` included; other `@words` stay decorators
+              (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
+              (call $scanIdentTail)
+              (local.set $kw (call $tsrxDirectiveKind
+                (i32.add (global.get $lhs) (i32.const 1)) (global.get $ptr)))
+              (if (i32.ne (local.get $kw) (enum.get $Lex.invalid))
+                (then (return (local.get $kw))))
+              (return (enum.get $Lex.at_identifier))))
           (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
           (call $scanIdentTail)
           (return (enum.get $Lex.at_identifier)))

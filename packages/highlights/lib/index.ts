@@ -156,6 +156,7 @@ export type Lang =
   | 'tfvars'
   | 'toml'
   | 'ts'
+  | 'tsrx'
   | 'tsx'
   | 'txt'
   | 'typescript'
