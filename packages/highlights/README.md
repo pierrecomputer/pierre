@@ -3,7 +3,7 @@
 `@pierre/highlights` is a fast code highlighter written by hand in WebAssembly
 Text (WAT).
 
-- **Lightweight**: 69.2 KiB (gzipped Wasm) for 67 languages
+- **Lightweight**: 69.5 KiB (gzipped Wasm) for 67 languages
 - **Fast**: 120–582× Shiki's throughput in the latest
   [HTML benchmark](./benchmark/README.md#html-generation)
 - Includes 67 built-in language lexers, no external grammar definitions needed
@@ -63,9 +63,13 @@ const root = codeToHast('const a = 1', { lang: 'ts', theme: pierreDark });
 // { type: 'root', children: [{ tagName: 'pre', ... }] }
 ```
 
-Pass `theme` for one theme or `themes` for multiple color schemes.
-`tokenizeMaxLineLength` collapses long lines into one unthemed token.
-`codeToHast` also accepts Shiki-style `transformers` and `decorations`.
+Pass `theme` for one theme or `themes` for multiple color schemes. With
+`themes`, the `defaultColor` theme (`light` unless set) is applied inline and
+the others become `--hls-<name>` custom properties; `defaultColor: false` makes
+every theme a custom property, and `'light-dark()'` merges `light` and `dark`
+into CSS `light-dark()` colors. `tokenizeMaxLineLength` collapses long lines
+into one unthemed token. `codeToHast` also accepts Shiki-style `transformers`
+and `decorations`.
 
 Use `StreamTokenizer` for streaming and `LiveTokenizer` for editors. Each owns a
 Wasm instance and text buffer. Streams preserve lexer state for every language
@@ -138,7 +142,9 @@ interface Theme {
 ```
 
 Highlights bundles themes matching all 65 IDs, names, and appearances in Shiki's
-catalog, plus eight Pierre themes. See the [theme list](./themes/README.md).
+catalog, plus eight Pierre themes, and ships further variants through the
+`@pierre/highlights/themes/<name>` subpaths. See the
+[theme list](./themes/README.md).
 
 ### CSS variables
 

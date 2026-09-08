@@ -266,6 +266,10 @@ export class LiveTokenizer {
   #deferGeneration = 0;
   #deferBudget = 64;
   #paused = false;
+  // Set while applyEdits or reset runs, including the synchronous
+  // onDeferTokenize delivery inside it: a mutating call from that callback
+  // would replace the change list the outer update is about to report.
+  #updating = false;
 
   constructor(options: LiveTokenizerOptions) {
     this.#langId = langIdOf(options.lang);
@@ -525,13 +529,16 @@ export class LiveTokenizer {
    * converges in background slices that also report through
    * `onDeferTokenize`. An edit arriving while such work is pending does not
    * wait for it: the unreached dirty ranges are remapped through the batch
-   * natively and converge with this update's own deferred tail.
+   * natively and converge with this update's own deferred tail. Calling
+   * `applyEdits` or `reset` from the `onDeferTokenize` delivery made by this
+   * update throws; reads, `pause`, and `flush` are allowed there.
    */
   applyEdits(
     edits: readonly TextEdit[],
     options?: LiveUpdateOptions
   ): LiveTokenizerUpdate {
     const { hl, ex } = this.#live();
+    this.#checkNotUpdating();
     const renderRange = checkRenderRange(options?.renderRange);
     const batch = this.#validate(edits, hl, ex);
     const previousLineCount = ex.liveLineCount();
@@ -548,15 +555,21 @@ export class LiveTokenizer {
     // dirty ranges into this batch and #runSlice restarts the background tail
     this.#deferGeneration += 1;
     this.#paused = false;
-    this.#stageEdits(hl, ex, batch);
-    this.#revision += 1;
-    const lines = this.#runSlice(hl, ex, renderRange);
-    return this.#readUpdate(hl, ex, previousLineCount, lines);
+    this.#updating = true;
+    try {
+      this.#stageEdits(hl, ex, batch);
+      this.#revision += 1;
+      const lines = this.#runSlice(hl, ex, renderRange);
+      return this.#readUpdate(hl, ex, previousLineCount, lines);
+    } finally {
+      this.#updating = false;
+    }
   }
 
   /** Replace the document in a fresh Wasm instance and swap it in. */
   reset(code: string, options?: LiveUpdateOptions): LiveTokenizerUpdate {
     const { ex } = this.#live();
+    this.#checkNotUpdating();
     const renderRange = checkRenderRange(options?.renderRange);
     if (typeof code !== 'string') throw new TypeError('code must be a string');
     // pending tokens describe the outgoing document; drop them, don't settle
@@ -565,7 +578,13 @@ export class LiveTokenizer {
     const previousLineCount = ex.liveLineCount();
     [this.#hl, this.#ex] = LiveTokenizer.#createStaged(code, this.#langId);
     this.#revision += 1;
-    const lines = this.#runSlice(this.#hl, this.#ex, renderRange);
+    this.#updating = true;
+    let lines: Map<number, HighlightedToken[]>;
+    try {
+      lines = this.#runSlice(this.#hl, this.#ex, renderRange);
+    } finally {
+      this.#updating = false;
+    }
     const lineCount = this.#ex.liveLineCount();
     return {
       revision: this.#revision,
@@ -581,6 +600,15 @@ export class LiveTokenizer {
       ],
       lines,
     };
+  }
+
+  /** Reject a mutating call made from inside a synchronous update. */
+  #checkNotUpdating(): void {
+    if (this.#updating) {
+      throw new Error(
+        'applyEdits and reset cannot be called from onDeferTokenize during an update; use pause, flush, or the reads instead'
+      );
+    }
   }
 
   /**

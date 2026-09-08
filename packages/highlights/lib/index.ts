@@ -255,7 +255,11 @@ export interface ThemedToken {
    * Highlights emits italic and bold; transformers can set the rest.
    */
   fontStyle?: number;
-  /** Custom-property styles for multi-theme output, keyed by `${cssVariablePrefix}${themeColor}`. */
+  /**
+   * Inline styles for multi-theme output: plain `color`, `font-style`, and
+   * `font-weight` for the `defaultColor` theme, custom properties keyed by
+   * `${cssVariablePrefix}${themeColor}` for the others.
+   */
   htmlStyle?: Record<string, string>;
   /** Extra attributes for the token's `<span>` (`htmlAttrs` in Shiki). */
   htmlAttrs?: Record<string, string>;
@@ -268,7 +272,14 @@ export interface CodeToTokensBaseOptions {
   lang: Lang;
   /** Prefix for per-theme custom properties. Defaults to `--hls-`. */
   cssVariablePrefix?: string;
-  /** Only `false` has an effect: emit all theme colors as custom properties. */
+  /**
+   * With `themes`, the key of the theme applied inline through plain `color`,
+   * `font-style`, and `font-weight`; every other theme becomes custom
+   * properties named `${cssVariablePrefix}${key}`. Defaults to `light`, like
+   * Shiki, and throws when `themes` lacks that key. `false` makes every theme
+   * a custom property, and `'light-dark()'` merges the `light` and `dark`
+   * themes into CSS `light-dark()` colors.
+   */
   defaultColor?: string | false;
   /**
    * Lines at or above this length become one unthemed token, matching Shiki's

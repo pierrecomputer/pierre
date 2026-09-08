@@ -26,6 +26,9 @@ const pageSize = 65536;
 const themePtr = 64; // $mem.themeTable in src/memory.wat
 const themeBytes = 384; // 73 five-byte records, padded for SIMD comparisons
 const themeBuildCache = new WeakMap<Theme, Uint8Array>();
+// Unicode identifier classes for the ECMAScript lexers; see #idClass.
+const idClassRegex = [/^\p{ID_Start}$/u, /^[\u200C\u200D\p{ID_Continue}]$/u];
+let idClassCache: Uint8Array | undefined;
 
 /**
  * Map of language names to their Wasm language ID.
@@ -234,10 +237,8 @@ export class HighlightsHighlighter implements Highlighter {
   constructor(wasmModule: WebAssembly.Module) {
     this.wasmModule = wasmModule;
     const env = {
-      is_id_start: (ptr: number, bits: number) =>
-        /^\p{ID_Start}$/u.test(this.#readChars(ptr, bits)),
-      is_id_continue: (ptr: number, bits: number) =>
-        /^[\u200C\u200D\p{ID_Continue}]$/u.test(this.#readChars(ptr, bits)),
+      is_id_start: (ptr: number, len: number) => this.#idClass(ptr, len, 0),
+      is_id_continue: (ptr: number, len: number) => this.#idClass(ptr, len, 2),
     };
     const instance = new WebAssembly.Instance(wasmModule, { env });
     this.instance = instance;
@@ -464,10 +465,42 @@ export class HighlightsHighlighter implements Highlighter {
     }
   }
 
-  /** Decode a UTF-8 byte range from wasm memory. */
-  #readChars(ptr: number, length: number): string {
+  /**
+   * Answer the ECMAScript lexers' `is_id_start` / `is_id_continue` imports
+   * for the non-ASCII code point encoded at `ptr` (`len` bytes long).
+   * `shift` selects the class: 0 for ID_Start, 2 for ID_Continue. The lexer
+   * asks once per code point, so the Unicode regex only runs on a cache miss;
+   * the cache stores 2 bits per class per BMP code point (0 unknown, 1 no,
+   * 2 yes) and astral code points fall back to the regex.
+   */
+  #idClass(ptr: number, len: number, shift: number): number {
     this.bindMemory();
-    return dec.decode(this.buffer.subarray(ptr, ptr + length));
+    const b = this.buffer;
+    let cp: number;
+    if (len === 2) cp = ((b[ptr] & 0x1f) << 6) | (b[ptr + 1] & 0x3f);
+    else if (len === 3)
+      cp =
+        ((b[ptr] & 0x0f) << 12) |
+        ((b[ptr + 1] & 0x3f) << 6) |
+        (b[ptr + 2] & 0x3f);
+    else
+      cp =
+        ((b[ptr] & 0x07) << 18) |
+        ((b[ptr + 1] & 0x3f) << 12) |
+        ((b[ptr + 2] & 0x3f) << 6) |
+        (b[ptr + 3] & 0x3f);
+    // invalid UTF-8 (a lead byte above 0xf4) decodes past the last code
+    // point; it is never an identifier
+    if (cp > 0x10ffff) return 0;
+    if (cp > 0xffff || (cp >= 0xd800 && cp <= 0xdfff)) {
+      return idClassRegex[shift >> 1].test(String.fromCodePoint(cp)) ? 1 : 0;
+    }
+    idClassCache ??= new Uint8Array(0x10000);
+    const known = (idClassCache[cp] >> shift) & 3;
+    if (known !== 0) return known - 1;
+    const yes = idClassRegex[shift >> 1].test(String.fromCharCode(cp));
+    idClassCache[cp] |= (yes ? 2 : 1) << shift;
+    return yes ? 1 : 0;
   }
 
   /** Rebind views after growing wasm memory. */

@@ -3,7 +3,12 @@ import test from 'node:test';
 
 import { HighlightsHighlighter, langIdOf } from '../lib/highlighter';
 import type { Lang } from '../lib/index';
-import { optimizeWasm, transformWat, wat2wasm } from '../scripts/build';
+import {
+  listTokenTypes,
+  optimizeWasm,
+  transformWat,
+  wat2wasm,
+} from '../scripts/build';
 import { cssVariables, pierreDark } from '../themes/index';
 import { samples } from './_samples';
 
@@ -136,4 +141,90 @@ void test('compact SIMD constants preserve all byte values, mixed lanes and data
     );
   });
   assert.deepEqual(output[1], output[0]);
+});
+
+const preludeUrl = new URL('./preprocessor.wat', import.meta.url);
+/** A synthetic module with just enough of the stream machinery for a lexer. */
+const synthetic = (body: string) =>
+  transformWat(
+    preludeUrl,
+    `(module
+      (memory 2)
+      (global $streaming (mut i32) (i32.const 0))
+      (global $streamDepth (mut i32) (i32.const 0))
+      (global $streamReset (mut i32) (i32.const 0))
+      (const $mem.streamState 8864)
+      (const $mem.bashWords 10144)
+      (const $mem.byteSets 1424)
+      (func $lexEmitLeadingContinuation)
+      ${body})`
+  );
+
+void test('preprocessor: comments cannot define, import, or reference forms', () => {
+  const { code, enumMap } = synthetic(`
+    ;; (enum $Ghost "a" "b")
+    (; (enum $Block "c") (byteset.get "ab" (local.get $x)) ;)
+    (enum $Real "x" "y")
+    (func $f (result i32)
+      ;; (import "env" "old_hook" (func $old (param i32)))
+      (drop (i32.const ";;"))
+      (enum.get $Real.y))`);
+  assert.equal(enumMap.has('$Ghost'), false);
+  assert.equal(enumMap.has('$Block'), false);
+  assert.deepEqual(enumMap.get('$Real'), { x: 0, y: 1 });
+  assert.equal(code.includes('old_hook'), false);
+  assert.ok(code.includes('i32.const 0x3b3b'));
+  wat2wasm(preludeUrl.pathname, code);
+});
+
+void test('preprocessor: stream lexers must branch by label name', () => {
+  const lexer = (labels: string) => `
+    (func $hlRust
+      (local $x i32) (local $i i32)
+      (call $lexEmitLeadingContinuation)
+      (block $outer
+        (block $inner (br_table ${labels} (local.get $i)))
+        (local.set $x (i32.const 0)))
+      (block $done
+        (loop $l
+          (local.set $i (i32.add (local.get $i) (local.get $x)))
+          (br_if $done (i32.gt_u (local.get $i) (i32.const 10)))
+          (br $l))))`;
+  const named = synthetic(lexer('$outer $inner')).code;
+  assert.match(named, /i32\.load offset=\d+ \(local\.get \$streamRoot\)/);
+  assert.throws(() => synthetic(lexer('1 0')), /branch by index/);
+});
+
+void test('preprocessor: a nested block may shadow an outer label', () => {
+  const { code } = synthetic(`
+    (func $hlRust
+      (local $x i32)
+      (call $lexEmitLeadingContinuation)
+      (block $a
+        (br_if $a (local.get $x))
+        (block $a (br $a))
+        (local.set $x (i32.const 1))))`);
+  wat2wasm(preludeUrl.pathname, code);
+});
+
+void test('preprocessor: data segments count UTF-8 bytes', () => {
+  assert.throws(
+    () =>
+      synthetic(`
+        (data (i32.const 100) "éé")
+        (data (i32.const 102) "x")`),
+    /overlap/
+  );
+  synthetic(`
+    (data (i32.const 100) "éé")
+    (data (i32.const 104) "x")`);
+});
+
+void test('preprocessor: the $Token enum cannot outgrow the emitter regions', () => {
+  const names = (n: number) =>
+    Array.from({ length: n }, (_, i) => `"t${i}"`).join(' ');
+  const { enumMap } = synthetic(`(enum $Token ${names(74)})`);
+  assert.throws(() => listTokenTypes(enumMap), /span cache holds 73/);
+  const { enumMap: ok } = synthetic(`(enum $Token ${names(73)})`);
+  assert.equal(listTokenTypes(ok).length, 73);
 });

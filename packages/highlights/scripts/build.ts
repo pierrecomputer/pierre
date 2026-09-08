@@ -36,20 +36,23 @@ export function transformWat(
   >();
   const imports: string[] = [];
   const seen = new Set([url.href]);
+  // Comments go first, per file, so no pass below can match a form, import,
+  // enum, or string literal that only appears in a comment.
   const flatten = (moduleUrl: URL, source: string): string =>
-    source.replace(/\(\s*import\s+"(\.+\/.+\.wat)"\s*\)/g, (_, path) => {
-      const importUrl = new URL(path, moduleUrl);
-      if (seen.has(importUrl.href)) return '';
-      seen.add(importUrl.href);
-      return flatten(importUrl, readFileSync(importUrl, 'utf-8')).replace(
-        /^\s*\(\s*module\s+([\s\S]+)\s*\)\s*$/,
-        '$1'
-      );
-    });
-  // Match comment blocks as whole lines. A broad `(?:;;.+\s+)*` pattern
-  // backtracks exponentially on blocks with trailing whitespace.
+    stripComments(source).replace(
+      /\(\s*import\s+"(\.+\/.+\.wat)"\s*\)/g,
+      (_, path) => {
+        const importUrl = new URL(path, moduleUrl);
+        if (seen.has(importUrl.href)) return '';
+        seen.add(importUrl.href);
+        return flatten(importUrl, readFileSync(importUrl, 'utf-8')).replace(
+          /^\s*\(\s*module\s+([\s\S]+)\s*\)\s*$/,
+          '$1'
+        );
+      }
+    );
   let code = flatten(url, content)
-    .replace(/(?:;;[^\n]*\n\s*)*\(\s*import +".+" +\( *func.+\)/g, (i) => {
+    .replace(/\(\s*import +".+" +\( *func.+\)/g, (i) => {
       imports.push(i);
       return '';
     })
@@ -738,6 +741,47 @@ export function transformWat(
 }
 
 /**
+ * Remove `;;` line comments and nested `(; ... ;)` block comments from WAT
+ * source, leaving string literals (and any `;;` inside them) intact. Line
+ * breaks are kept so the remaining text keeps its shape.
+ */
+function stripComments(src: string): string {
+  let out = '';
+  let last = 0;
+  let i = 0;
+  while (i < src.length) {
+    const c = src[i];
+    if (c === '"') {
+      i++;
+      while (i < src.length && src[i] !== '"') i += src[i] === '\\' ? 2 : 1;
+      i++;
+    } else if (c === ';' && src[i + 1] === ';') {
+      out += src.slice(last, i);
+      while (i < src.length && src[i] !== '\n') i++;
+      last = i;
+    } else if (c === '(' && src[i + 1] === ';') {
+      out += src.slice(last, i);
+      let depth = 1;
+      i += 2;
+      while (i < src.length && depth > 0) {
+        if (src[i] === '(' && src[i + 1] === ';') {
+          depth++;
+          i += 2;
+        } else if (src[i] === ';' && src[i + 1] === ')') {
+          depth--;
+          i += 2;
+        } else i++;
+      }
+      out += ' ';
+      last = i;
+    } else {
+      i++;
+    }
+  }
+  return out + src.slice(last);
+}
+
+/**
  * Decode a quoted WAT string literal into bytes: `\XX` hex escapes, the
  * named escapes, and plain ASCII. Non-ASCII characters are rejected because
  * the byte sets index by single bytes.
@@ -1012,7 +1056,7 @@ class LocalLiveness {
         let i = 0;
         for (
           ;
-          typeof rest[i] === 'string' && (rest[i] as string).startsWith('$');
+          typeof rest[i] === 'string' && /^[$\d]/.test(rest[i] as string);
           i++
         ) {
           joined = union(joined, this.target(rest[i]));
@@ -1030,8 +1074,13 @@ class LocalLiveness {
   }
 
   private target(label: Sexpr): Set<string> {
-    const live = this.labels.get(label as string);
-    if (live === undefined) throw new Error(`unknown label ${String(label)}`);
+    if (typeof label !== 'string' || /^\d/.test(label)) {
+      throw new Error(
+        `label ${String(label)} must be a name: stream lexers cannot branch by index`
+      );
+    }
+    const live = this.labels.get(label);
+    if (live === undefined) throw new Error(`unknown label ${label}`);
     return live;
   }
 
@@ -1053,6 +1102,9 @@ class LocalLiveness {
         )
     );
     let before: Set<string>;
+    // a nested block may reuse an outer label; restore the outer binding on
+    // the way out so later references (earlier in source) still resolve
+    const outer = label === undefined ? undefined : this.labels.get(label);
     if (head === 'loop') {
       // a branch to the loop label re-enters the head: iterate until the
       // head's live-in set stops growing
@@ -1084,7 +1136,10 @@ class LocalLiveness {
         );
       }
     }
-    if (label !== undefined) this.labels.delete(label);
+    if (label !== undefined) {
+      if (outer === undefined) this.labels.delete(label);
+      else this.labels.set(label, outer);
+    }
     return before;
   }
 }
@@ -1183,7 +1238,12 @@ function checkDataSegments(code: string, path: string): void {
           i += /[0-9a-fA-F]{2}/.test(code.slice(i + 1, i + 3)) ? 2 : 1;
           length++;
         } else if (c === '"') inStr = false;
-        else length++;
+        else {
+          // wabt emits UTF-8, so a non-ASCII character is several bytes
+          const cp = code.codePointAt(i) ?? 0;
+          length += cp < 0x80 ? 1 : cp < 0x800 ? 2 : cp < 0x10000 ? 3 : 4;
+          if (cp > 0xffff) i++;
+        }
       } else if (c === '"') inStr = true;
       else if (c === ';' && code[i + 1] === ';') inComment = true;
       else if (c === '(') depth++;
@@ -1283,8 +1343,19 @@ export function listTokenTypes(
   names.forEach((name, i) => {
     if (hl[name] !== i) throw new Error(`$Token enum is not dense at ${name}`);
   });
+  if (names.length > tokenSlotLimit) {
+    throw new Error(
+      `$Token has ${names.length} members; the emitter span cache holds ${tokenSlotLimit} (see $mem.emitterSpanCache in src/memory.wat, the 384-byte theme table, and lib/highlighter.ts themeBytes)`
+    );
+  }
   return names;
 }
+
+// The largest $Token count the fixed regions accept: the emitter span cache
+// has 73 slots of 66 bytes, the theme table and its SIMD compare cover 384
+// bytes (76 five-byte records), and packed live records keep the id in one
+// byte. Growing the enum past this means resizing those regions.
+const tokenSlotLimit = 73;
 
 /** Write `content` to `url` only when it differs, keeping mtimes stable. */
 function writeIfChanged(url: URL, content: string): void {
@@ -1304,9 +1375,33 @@ function listThemeNames(moduleUrl: string): string[] {
     .sort();
 }
 
+// `bun ./scripts/build.ts [--wasm] [--themes-index]`: with no flag both
+// phases run. `--wasm` compiles the WAT, regenerates lib/token-types.ts, and
+// writes the per-theme modules; it runs before tsdown so the token table it
+// rewrites is what tsdown compiles. `--themes-index` fills the loader
+// placeholder in dist/themes.js, which only exists after tsdown.
 if (import.meta.main) {
   const start = performance.now();
+  const flags = new Set(process.argv.slice(2));
+  const phaseWasm = flags.size === 0 || flags.has('--wasm');
+  const phaseIndex = flags.size === 0 || flags.has('--themes-index');
   const moduleUrl = import.meta.url;
+  if (phaseWasm) buildWasmAndThemes(moduleUrl);
+  if (phaseIndex) fillThemesIndex(moduleUrl);
+  const pkg = JSON.parse(
+    readFileSync(new URL('../package.json', moduleUrl), 'utf-8')
+  );
+  console.log(
+    `✨ Done in ${Math.ceil(performance.now() - start)}ms (wasm: ${pkg.meta['highlights.wasm']} bytes, gzipped: ${pkg.meta['highlights.wasm.gz']} bytes, -O3)`
+  );
+}
+
+/**
+ * Compile src/highlights.wat into dist/, regenerate the tracked `$Token`
+ * table in lib/token-types.ts, write one module per theme JSON, and record
+ * the wasm sizes in package.json.
+ */
+function buildWasmAndThemes(moduleUrl: string): void {
   const sourceUrl = new URL('../src/highlights.wat', moduleUrl);
   const { code, enumMap } = transformWat(sourceUrl);
   const wasmBytes = optimizeWasm(wat2wasm(sourceUrl.pathname, code));
@@ -1347,6 +1442,21 @@ if (import.meta.main) {
     );
     writeIfChanged(new URL(`${name}.d.ts`, distThemesUrl), themeDts);
   }
+  const pkgUrl = new URL('../package.json', moduleUrl);
+  const pkg = JSON.parse(readFileSync(pkgUrl, 'utf-8'));
+  pkg.meta = {
+    'highlights.wasm': wasmBytes.length,
+    'highlights.wasm.gz': gzipSync(wasmBytes, { level: 9 }).length,
+  };
+  writeIfChanged(pkgUrl, JSON.stringify(pkg, null, 2) + '\n');
+}
+
+/**
+ * Replace the `themes` placeholder that themes/index.ts exports with one
+ * dynamic import per theme JSON, so consumers can lazy-load themes by name.
+ */
+function fillThemesIndex(moduleUrl: string): void {
+  const themeNames = listThemeNames(moduleUrl);
   const themesIndexUrl = new URL('../dist/themes.js', moduleUrl);
   const themesIndex = readFileSync(themesIndexUrl, 'utf-8');
   const placeholder = 'const themes = {};';
@@ -1366,15 +1476,5 @@ if (import.meta.main) {
           .join('\n') +
         '\n};'
     )
-  );
-  const pkgUrl = new URL('../package.json', moduleUrl);
-  const pkg = JSON.parse(readFileSync(pkgUrl, 'utf-8'));
-  pkg.meta = {
-    'highlights.wasm': wasmBytes.length,
-    'highlights.wasm.gz': gzipSync(wasmBytes, { level: 9 }).length,
-  };
-  writeIfChanged(pkgUrl, JSON.stringify(pkg, null, 2) + '\n');
-  console.log(
-    `✨ Done in ${Math.ceil(performance.now() - start)}ms (wasm: ${pkg.meta['highlights.wasm']} bytes, gzipped: ${pkg.meta['highlights.wasm.gz']} bytes, -O3)`
   );
 }

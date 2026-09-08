@@ -1636,3 +1636,115 @@ void t.test('LiveTokenizer: structural edits move lines', () => {
   assert.equal(tokenLineText(tokens), 'let b = 1');
   live.dispose();
 });
+
+void t.test(
+  'LiveTokenizer: line lengths are known before deferred work reaches a line',
+  () => {
+    const code = Array.from(
+      { length: 200 },
+      (_, i) => `let v${i} = ${i};`
+    ).join('\n');
+    const live = new LiveTokenizer({
+      lang: 'ts',
+      theme: pierreDark,
+      code,
+      renderRange: [0, 5],
+    });
+    assert.equal(live.pendingTokenization, true);
+    assert.equal(live.getLineLength(150), live.getLineText(150).length);
+    // an edit below the viewport validates against the real line length
+    live.applyEdits(
+      [
+        {
+          range: {
+            start: { line: 150, character: 3 },
+            end: { line: 150, character: 3 },
+          },
+          newText: 'X',
+        },
+      ],
+      { renderRange: [0, 5] }
+    );
+    assert.equal(live.getLineText(150), 'letX v150 = 150;');
+    // a freshly spliced line reports its length before it is tokenized
+    live.applyEdits(
+      [
+        {
+          range: {
+            start: { line: 100, character: 0 },
+            end: { line: 100, character: 0 },
+          },
+          newText: 'let another = 2;\nlet more = "é🙂";\n',
+        },
+      ],
+      { renderRange: [0, 5] }
+    );
+    assert.equal(live.pendingTokenization, true);
+    assert.equal(live.getLineLength(100), 'let another = 2;'.length);
+    assert.equal(live.getLineLength(101), 'let more = "é🙂";'.length);
+    live.applyEdits(
+      [
+        {
+          range: {
+            start: { line: 101, character: 4 },
+            end: { line: 101, character: 4 },
+          },
+          newText: 'x',
+        },
+      ],
+      { renderRange: [0, 5] }
+    );
+    live.flush();
+    assert.equal(live.getLineText(101), 'let xmore = "é🙂";');
+    assert.equal(live.getLineLength(101), 'let xmore = "é🙂";'.length);
+    live.dispose();
+  }
+);
+
+void t.test(
+  'LiveTokenizer: mutating calls from the update delivery throw',
+  () => {
+    const code = Array.from({ length: 60 }, (_, i) => `let v${i} = ${i};`).join(
+      '\n'
+    );
+    let seen: string | undefined;
+    const live = new LiveTokenizer({
+      lang: 'ts',
+      theme: pierreDark,
+      code,
+      onDeferTokenize: () => {
+        try {
+          live.applyEdits([
+            {
+              range: {
+                start: { line: 40, character: 0 },
+                end: { line: 40, character: 0 },
+              },
+              newText: 'a\nb\nc\n',
+            },
+          ]);
+        } catch (e) {
+          seen = String(e);
+        }
+      },
+    });
+    const update = live.applyEdits(
+      [
+        {
+          range: {
+            start: { line: 0, character: 0 },
+            end: { line: 0, character: 0 },
+          },
+          newText: '`',
+        },
+      ],
+      { renderRange: [10, 12] }
+    );
+    assert.match(seen ?? '', /cannot be called from onDeferTokenize/);
+    // the outer update still describes its own edit
+    assert.equal(update.lineCount, 60);
+    assert.equal(update.previousLineCount, 60);
+    live.flush();
+    live.dispose();
+  }
+);

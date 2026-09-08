@@ -40,6 +40,7 @@
   ;;)
   (memory (export "memory") 3)
 
+  (import "./embed.wat")
   (import "./emit.wat")
   (import "./langs/angular-html.wat")
   (import "./langs/asm.wat")
@@ -207,131 +208,6 @@
     (call $highlightLang (i32.load8_u (i32.const 0)))
     (call $hlEnd))
 
-  (func $streamEmbedRange (param $kind i32) (param $from i32) (param $to i32)
-    (local $reset i32)
-    (local $saveDepth i32)
-    (local $saveEnd i32)
-    (local $saveReset i32)
-    (local.set $reset (i32.eqz (global.get $streamRegionStarted)))
-    (local.set $saveDepth (global.get $streamDepth))
-    (local.set $saveEnd (global.get $end))
-    (local.set $saveReset (global.get $streamReset))
-    (global.set $streamDepth (i32.const 0))
-    (global.set $streamReset (local.get $reset))
-    (global.set $end (local.get $to))
-    (global.set $ptr (local.get $from))
-    (if (i32.eq (local.get $kind) (i32.const 1))
-      (then (call $hlJsStream (local.get $reset)))
-      (else
-        (if (i32.eq (local.get $kind) (i32.const 2))
-          (then (call $hlCss))
-          (else
-            (if (i32.eq (local.get $kind) (i32.const 4))
-              (then
-                ;; a block scalar left open by the previous chunk is a
-                ;; yaml-owned mode that the top-level resume only checks
-                ;; for yaml documents; resume it inside the range first
-                (if (i32.and
-                      (i32.eqz (local.get $reset))
-                      (i32.eq (global.get $streamMode) (i32.const 11)))
-                  (then (drop (call $yamlStreamResume))))
-                (call $hlYaml))
-              (else (call $hlTsxStream (local.get $reset))))))))
-    (global.set $end (local.get $saveEnd))
-    (global.set $ptr (local.get $to))
-    (global.set $streamReset (local.get $saveReset))
-    (global.set $streamDepth (local.get $saveDepth))
-    (global.set $streamRegionStarted (i32.const 1)))
-
-  (func $streamResumeRegion (result i32)
-    (local $after i32)
-    (local $close i32)
-    (local $closeLen i32)
-    (local $kind i32)
-    (local $lineEnd i32)
-    (local $p i32)
-    (local $found i32)
-    (local.set $kind (global.get $streamRegionKind))
-    (local.set $close (global.get $end))
-    (local.set $p (global.get $ptr))
-    ;; Framework expression bodies: Vue uses `}}`; Astro, MDX, and Svelte use
-    ;; `}`. The TSX lexer stops before the outer delimiter.
-    (if (i32.ge_u (local.get $kind) (i32.const 6))
-      (then
-        (local.set $closeLen
-          (select (i32.const 2) (i32.const 1)
-            (i32.eq (local.get $kind) (i32.const 6))))
-        (if (i32.eqz
-              (call $hlTsxExpressionStream
-                (i32.const 0) (local.get $closeLen)))
-          (then (return (i32.const 1))))
-        (local.set $close (global.get $ptr))
-        (local.set $after (i32.add (local.get $close) (local.get $closeLen)))
-        (call $emitTok
-          (select
-            (enum.get $Token.punctuation.special)
-            (enum.get $Token.punctuation.bracket)
-            (i32.le_u (local.get $kind) (i32.const 7)))
-          (local.get $close) (local.get $after))
-        (global.set $ptr (local.get $after))
-        (global.set $streamRegionKind (i32.const 0))
-        (global.set $streamMode (i32.const 0))
-        (return (i32.const 0))))
-    (if (i32.le_u (local.get $kind) (i32.const 2))
-      (then
-        (block $rawDone
-          (loop $raw
-            (local.set $p (call $lexFindByte (local.get $p) (i32.const "<")))
-            (br_if $rawDone (i32.ge_u (local.get $p) (global.get $end)))
-            (if (call $isRawTextClose (local.get $p) (local.get $kind))
-              (then
-                (local.set $close (local.get $p))
-                (local.set $found (i32.const 1))
-                (br $rawDone)))
-            (local.set $p (i32.add (local.get $p) (i32.const 1)))
-            (br $raw))))
-      (else
-        (if (i32.eq (local.get $kind) (i32.const 5))
-          (then
-            (local.set $p (call $lexFindByte (local.get $p) (i32.const ">")))
-            (if (i32.lt_u (local.get $p) (global.get $end))
-              (then
-                (local.set $close (i32.add (local.get $p) (i32.const 1)))
-                (local.set $found (i32.const 1)))))
-          (else
-            (block $frontDone
-              (loop $front
-                (br_if $frontDone (i32.ge_u (local.get $p) (global.get $end)))
-                (local.set $lineEnd (call $markdownLineEnd (local.get $p)))
-                (if (i32.and
-                      (i32.eq (i32.sub (local.get $lineEnd) (local.get $p)) (i32.const 3))
-                      (i32.eq
-                        (i32.and (i32.load (local.get $p)) (i32.const 0xffffff))
-                        (i32.const "---")))
-                  (then
-                    (local.set $close (local.get $p))
-                    (local.set $found (i32.const 1))
-                    (br $frontDone)))
-                (local.set $p (call $markdownAfterLine (local.get $lineEnd)))
-                (br $front)))))))
-    (call $streamEmbedRange
-      (local.get $kind) (global.get $ptr) (local.get $close))
-    (if (i32.eqz (local.get $found))
-      (then (return (i32.const 1))))
-    (global.set $ptr (local.get $close))
-    (global.set $streamRegionKind (i32.const 0))
-    (global.set $streamMode (i32.const 0))
-    (if (i32.and
-          (i32.gt_u (local.get $kind) (i32.const 2))
-          (i32.ne (local.get $kind) (i32.const 5)))
-      (then
-        (local.set $after
-          (call $markdownAfterLine (call $markdownLineEnd (global.get $ptr))))
-        (call $emitTok
-          (enum.get $Token.punctuation.special) (global.get $ptr) (local.get $after))
-        (global.set $ptr (local.get $after))))
-    (i32.const 0))
-
   (func $streamResumeLang (param $lang i32) (result i32)
     ;; start-tag regions owned by the markup lexers (kinds 9-13)
     (if (i32.eq (global.get $streamRegionKind) (i32.const 9))
@@ -368,9 +244,16 @@
       (then (return (call $tomlStreamResume))))
     (i32.const 0))
 
-  ;; Zero every cross-chunk stream global, matching a fresh Wasm instance.
-  ;; Called for a stream reset and before the live tokenizer's first line.
+  ;; Zero every cross-chunk stream global, the stream delimiter, and the
+  ;; lexer checkpoint windows, matching a fresh Wasm instance. Called for a
+  ;; stream reset and before the live tokenizer's first line. The windows
+  ;; matter for a pooled instance: a lexer first entered on a later chunk (a
+  ;; markdown fence body) restores its window, which must not hold the
+  ;; previous stream's locals.
   (func $streamResetGlobals
+    (memory.fill (i32.const $mem.streamDelimiter) (i32.const 0) (i32.const 32))
+    (memory.fill (i32.const $mem.streamState) (i32.const 0)
+      (i32.const $mem.streamStateUsed))
     (global.set $streamMode (i32.const 0))
     (global.set $streamA (i32.const 0))
     (global.set $streamB (i32.const 0))
@@ -404,6 +287,19 @@
     ;; non-ecma lexers share the parameter-machine globals; the ecma stream
     ;; entries reset them in $hlEcmaImpl
     (if (local.get $reset) (then (call $sigReset)))
+    ;; An open markdown fence owns the chunk start: its body resumes inside
+    ;; the fence bounds ($markdownCodeRange runs the shared and per-language
+    ;; resumes there), so the top-level resumes must not consume a mode the
+    ;; body left open.
+    (if (i32.and
+          (i32.or
+            (i32.eq (local.get $lang) (enum.get $Language.markdown))
+            (i32.eq (local.get $lang) (enum.get $Language.mdx)))
+          (i32.ne (call $markdownFenceReg) (i32.const 0)))
+      (then
+        (if (call $markdownStreamResume) (then (return)))
+        (call $highlightLang (local.get $lang))
+        (return)))
     (if (call $streamResumeCommon) (then (return)))
     (if (call $streamResumeLang (local.get $lang)) (then (return)))
     (call $highlightLang (local.get $lang)))

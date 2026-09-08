@@ -27,6 +27,7 @@
   (import "./diff.wat")
   (import "./glsl.wat")
   (import "./lua.wat")
+  (import "../embed.wat")
 
   (enum $MarkdownFenceLang
     "unknown"
@@ -166,8 +167,65 @@
         (memory.fill (local.get $from) (i32.const 0)
           (i32.sub (i32.const $mem.tomlStack) (local.get $from))))))
 
-  (func $markdownCodeRange (param $lang i32) (param $from i32) (param $to i32)
+  ;; Transient: did the last $markdownCodeRange call run a body lexer? The
+  ;; caller folds it into the fence registers (bit 8 of the language slot) so
+  ;; a later chunk knows whether the body's lexer already checkpointed state
+  ;; for this fence.
+  (global $markdownBodyRan (mut i32) (i32.const 0))
+
+  ;; Run the ECMAScript pipeline over a fence body: the stream entry while
+  ;; streaming, so an open template or comment carries to the next chunk of
+  ;; the fence, and the whole-buffer entry otherwise.
+  (func $markdownEcmaBody (param $features i32) (param $resume i32)
+    (if (global.get $streaming)
+      (then (call $hlEcmaStream (local.get $features) (i32.eqz (local.get $resume))))
+      (else (call $hlEcma (local.get $features)))))
+
+  ;; Resume a construct the body's lexer left open at the previous chunk end,
+  ;; mirroring $streamResumeLang for the fence languages: start tags and
+  ;; embedded regions first, then the modes owned by one language. Returns 1
+  ;; when the construct consumed the whole (fence-bounded) range.
+  (func $markdownFenceResumeLang (param $lang i32) (result i32)
+    (if (i32.eq (global.get $streamRegionKind) (i32.const 9))
+      (then (return (call $htmlStreamResumeTag))))
+    (if (i32.eq (global.get $streamRegionKind) (i32.const 10))
+      (then (return (call $xmlStreamResumeTag))))
+    (if (i32.eq (global.get $streamRegionKind) (i32.const 11))
+      (then (return (call $vueStreamResumeTag))))
+    (if (i32.eq (global.get $streamRegionKind) (i32.const 12))
+      (then (return (call $svelteStreamResumeTag))))
+    (if (i32.eq (global.get $streamRegionKind) (i32.const 13))
+      (then (return (call $astroStreamResumeTag))))
+    (if (global.get $streamRegionKind)
+      (then (return (call $streamResumeRegion))))
+    (if (i32.eq (local.get $lang) (enum.get $MarkdownFenceLang.python))
+      (then (return (call $pyStreamResume))))
+    (if (i32.eq (local.get $lang) (enum.get $MarkdownFenceLang.php))
+      (then (return (call $phpStreamResume))))
+    (if (i32.and
+          (i32.eq (local.get $lang) (enum.get $MarkdownFenceLang.yaml))
+          (i32.eq (global.get $streamMode) (i32.const 11)))
+      (then (return (call $yamlStreamResume))))
+    (if (i32.and
+          (i32.eq (local.get $lang) (enum.get $MarkdownFenceLang.bash))
+          (i32.eq (global.get $streamMode) (i32.const 12)))
+      (then (return (call $bashStreamResume))))
+    (i32.const 0))
+
+  ;; Highlight the fence body [$from,$to) as $lang. A whole-buffer run and
+  ;; the first chunk of a streamed body start the body's lexer fresh; a later
+  ;; chunk of a streamed body ($resume) continues it the way the top-level
+  ;; driver continues a document: the shared comment/string modes and the
+  ;; language's own resume hooks run first, bounded by the fence closer, and
+  ;; checkpoint lexers run at stream depth 0 so their locals carry over. A
+  ;; nested markdown or mdx body stays a bounded call one nesting depth down;
+  ;; its state lives in the per-depth fence registers.
+  (func $markdownCodeRange
+    (param $lang i32) (param $from i32) (param $to i32) (param $resume i32)
     (local $save i32)
+    (local $saveDepth i32)
+    (local $saveReset i32)
+    (global.set $markdownBodyRan (i32.const 0))
     (if (i32.ge_u (local.get $from) (local.get $to))
       (then (global.set $ptr (local.get $to)) (return)))
     ;; Past the limit the body stays literal text rather than growing the stack:
@@ -177,54 +235,97 @@
         (call $emitTok (enum.get $Token.text.literal) (local.get $from) (local.get $to))
         (global.set $ptr (local.get $to))
         (return)))
+    (global.set $markdownBodyRan (i32.const 1))
     (global.set $markdownDepth (i32.add (global.get $markdownDepth) (i32.const 1)))
     (local.set $save (global.get $end))
     (global.set $end (local.get $to))
     (global.set $ptr (local.get $from))
     (block $codeDone
-      ;; A `markdown` or `mdx` body first resumes the fence its previous
-      ;; chunk left open at this depth, as the document does at top level;
-      ;; the lexer then continues after the closer, or the range is spent.
-      (if (i32.and
-            (global.get $streaming)
-            (i32.ne (call $markdownFenceReg) (i32.const 0)))
+      (if (i32.or
+            (i32.eq (local.get $lang) (enum.get $MarkdownFenceLang.markdown))
+            (i32.eq (local.get $lang) (enum.get $MarkdownFenceLang.mdx)))
         (then
-          (br_if $codeDone (call $markdownStreamResume))
-          (br_if $codeDone (i32.ge_u (global.get $ptr) (global.get $end)))))
-      (if (i32.eq (local.get $lang) (enum.get $MarkdownFenceLang.tsx)) (then (call $hlTsx) (br $codeDone)))
-      (if (i32.eq (local.get $lang) (enum.get $MarkdownFenceLang.js)) (then (call $hlJs) (br $codeDone)))
-      (if (i32.eq (local.get $lang) (enum.get $MarkdownFenceLang.jsx)) (then (call $hlJsx) (br $codeDone)))
-      (if (i32.eq (local.get $lang) (enum.get $MarkdownFenceLang.ts)) (then (call $hlTs) (br $codeDone)))
-      (if (i32.eq (local.get $lang) (enum.get $MarkdownFenceLang.html)) (then (call $hlHtml) (br $codeDone)))
-      (if (i32.eq (local.get $lang) (enum.get $MarkdownFenceLang.angular-html)) (then (call $hlAngularHtml) (br $codeDone)))
-      (if (i32.eq (local.get $lang) (enum.get $MarkdownFenceLang.css)) (then (call $hlCss) (br $codeDone)))
-      (if (i32.eq (local.get $lang) (enum.get $MarkdownFenceLang.json)) (then (call $hlJson) (br $codeDone)))
-      (if (i32.eq (local.get $lang) (enum.get $MarkdownFenceLang.bash)) (then (call $hlBash) (br $codeDone)))
-      (if (i32.eq (local.get $lang) (enum.get $MarkdownFenceLang.c)) (then (call $hlC) (br $codeDone)))
-      (if (i32.eq (local.get $lang) (enum.get $MarkdownFenceLang.cpp)) (then (call $hlCpp) (br $codeDone)))
-      (if (i32.eq (local.get $lang) (enum.get $MarkdownFenceLang.go)) (then (call $hlGo) (br $codeDone)))
-      (if (i32.eq (local.get $lang) (enum.get $MarkdownFenceLang.python)) (then (call $hlPython) (br $codeDone)))
-      (if (i32.eq (local.get $lang) (enum.get $MarkdownFenceLang.rust)) (then (call $hlRust) (br $codeDone)))
-      (if (i32.eq (local.get $lang) (enum.get $MarkdownFenceLang.yaml)) (then (call $hlYaml) (br $codeDone)))
-      (if (i32.eq (local.get $lang) (enum.get $MarkdownFenceLang.php)) (then (call $hlPhp) (br $codeDone)))
-      (if (i32.eq (local.get $lang) (enum.get $MarkdownFenceLang.sql)) (then (call $hlSql) (br $codeDone)))
-      (if (i32.eq (local.get $lang) (enum.get $MarkdownFenceLang.swift)) (then (call $hlSwift) (br $codeDone)))
-      (if (i32.eq (local.get $lang) (enum.get $MarkdownFenceLang.haskell)) (then (call $hlHaskell) (br $codeDone)))
-      (if (i32.eq (local.get $lang) (enum.get $MarkdownFenceLang.kotlin)) (then (call $hlKotlin) (br $codeDone)))
-      (if (i32.eq (local.get $lang) (enum.get $MarkdownFenceLang.astro)) (then (call $hlAstro) (br $codeDone)))
-      (if (i32.eq (local.get $lang) (enum.get $MarkdownFenceLang.vue)) (then (call $hlVue) (br $codeDone)))
-      (if (i32.eq (local.get $lang) (enum.get $MarkdownFenceLang.svelte)) (then (call $hlSvelte) (br $codeDone)))
-      (if (i32.eq (local.get $lang) (enum.get $MarkdownFenceLang.xml)) (then (call $hlXml) (br $codeDone)))
-      (if (i32.eq (local.get $lang) (enum.get $MarkdownFenceLang.markdown)) (then (call $hlMarkdown) (br $codeDone)))
-      (if (i32.eq (local.get $lang) (enum.get $MarkdownFenceLang.mdx)) (then (call $hlMdx) (br $codeDone)))
-      (if (i32.eq (local.get $lang) (enum.get $MarkdownFenceLang.asm)) (then (call $hlAsm) (br $codeDone)))
-      (if (i32.eq (local.get $lang) (enum.get $MarkdownFenceLang.wat)) (then (call $hlWat) (br $codeDone)))
-      (if (i32.eq (local.get $lang) (enum.get $MarkdownFenceLang.diff)) (then (call $hlDiff) (br $codeDone)))
-      (if (i32.eq (local.get $lang) (enum.get $MarkdownFenceLang.glsl)) (then (call $hlGlsl) (br $codeDone)))
-      (if (i32.eq (local.get $lang) (enum.get $MarkdownFenceLang.lua)) (then (call $hlLua) (br $codeDone))))
+          ;; A `markdown` or `mdx` body first resumes the fence its previous
+          ;; chunk left open at this depth, as the document does at top level;
+          ;; the lexer then continues after the closer, or the range is spent.
+          (if (i32.and
+                (global.get $streaming)
+                (i32.ne (call $markdownFenceReg) (i32.const 0)))
+            (then
+              (br_if $codeDone (call $markdownStreamResume))
+              (br_if $codeDone (i32.ge_u (global.get $ptr) (global.get $end)))))
+          (if (i32.eq (local.get $lang) (enum.get $MarkdownFenceLang.markdown))
+            (then (call $hlMarkdown))
+            (else (call $hlMdx)))
+          (br $codeDone)))
+      ;; a fresh body is a fresh sub-document for the shared parameter-machine
+      ;; globals; a resumed one keeps them
+      (if (i32.or (i32.eqz (global.get $streaming)) (i32.eqz (local.get $resume)))
+        (then (call $sigReset)))
+      (local.set $saveDepth (global.get $streamDepth))
+      (local.set $saveReset (global.get $streamReset))
+      (if (global.get $streaming)
+        (then
+          (global.set $streamDepth (i32.const 0))
+          (global.set $streamReset (i32.eqz (local.get $resume)))))
+      (block $bodyDone
+        ;; the ECMAScript family keeps its own resumable machine
+        (if (i32.and
+              (i32.and (global.get $streaming) (local.get $resume))
+              (i32.eqz (call $markdownFenceIsEcma (local.get $lang))))
+          (then
+            (br_if $bodyDone (call $streamResumeCommon))
+            (br_if $bodyDone (call $markdownFenceResumeLang (local.get $lang)))))
+        (call $markdownFenceLexer (local.get $lang) (local.get $resume)))
+      (if (global.get $streaming)
+        (then
+          (global.set $streamDepth (local.get $saveDepth))
+          (global.set $streamReset (local.get $saveReset)))))
     (global.set $markdownDepth (i32.sub (global.get $markdownDepth) (i32.const 1)))
     (global.set $end (local.get $save))
     (global.set $ptr (local.get $to)))
+
+  (func $markdownFenceIsEcma (param $lang i32) (result i32)
+    (i32.or
+      (i32.or
+        (i32.eq (local.get $lang) (enum.get $MarkdownFenceLang.tsx))
+        (i32.eq (local.get $lang) (enum.get $MarkdownFenceLang.js)))
+      (i32.or
+        (i32.eq (local.get $lang) (enum.get $MarkdownFenceLang.jsx))
+        (i32.eq (local.get $lang) (enum.get $MarkdownFenceLang.ts)))))
+
+  ;; Dispatch a fence body to its lexer; $ptr, $end, and the stream globals
+  ;; are already set up by $markdownCodeRange.
+  (func $markdownFenceLexer (param $lang i32) (param $resume i32)
+    (if (i32.eq (local.get $lang) (enum.get $MarkdownFenceLang.tsx)) (then (call $markdownEcmaBody (i32.const 3) (local.get $resume)) (return)))
+    (if (i32.eq (local.get $lang) (enum.get $MarkdownFenceLang.js)) (then (call $markdownEcmaBody (i32.const 0) (local.get $resume)) (return)))
+    (if (i32.eq (local.get $lang) (enum.get $MarkdownFenceLang.jsx)) (then (call $markdownEcmaBody (i32.const 2) (local.get $resume)) (return)))
+    (if (i32.eq (local.get $lang) (enum.get $MarkdownFenceLang.ts)) (then (call $markdownEcmaBody (i32.const 1) (local.get $resume)) (return)))
+    (if (i32.eq (local.get $lang) (enum.get $MarkdownFenceLang.html)) (then (call $hlHtml) (return)))
+    (if (i32.eq (local.get $lang) (enum.get $MarkdownFenceLang.angular-html)) (then (call $hlAngularHtml) (return)))
+    (if (i32.eq (local.get $lang) (enum.get $MarkdownFenceLang.css)) (then (call $hlCss) (return)))
+    (if (i32.eq (local.get $lang) (enum.get $MarkdownFenceLang.json)) (then (call $hlJson) (return)))
+    (if (i32.eq (local.get $lang) (enum.get $MarkdownFenceLang.bash)) (then (call $hlBash) (return)))
+    (if (i32.eq (local.get $lang) (enum.get $MarkdownFenceLang.c)) (then (call $hlC) (return)))
+    (if (i32.eq (local.get $lang) (enum.get $MarkdownFenceLang.cpp)) (then (call $hlCpp) (return)))
+    (if (i32.eq (local.get $lang) (enum.get $MarkdownFenceLang.go)) (then (call $hlGo) (return)))
+    (if (i32.eq (local.get $lang) (enum.get $MarkdownFenceLang.python)) (then (call $hlPython) (return)))
+    (if (i32.eq (local.get $lang) (enum.get $MarkdownFenceLang.rust)) (then (call $hlRust) (return)))
+    (if (i32.eq (local.get $lang) (enum.get $MarkdownFenceLang.yaml)) (then (call $hlYaml) (return)))
+    (if (i32.eq (local.get $lang) (enum.get $MarkdownFenceLang.php)) (then (call $hlPhp) (return)))
+    (if (i32.eq (local.get $lang) (enum.get $MarkdownFenceLang.sql)) (then (call $hlSql) (return)))
+    (if (i32.eq (local.get $lang) (enum.get $MarkdownFenceLang.swift)) (then (call $hlSwift) (return)))
+    (if (i32.eq (local.get $lang) (enum.get $MarkdownFenceLang.haskell)) (then (call $hlHaskell) (return)))
+    (if (i32.eq (local.get $lang) (enum.get $MarkdownFenceLang.kotlin)) (then (call $hlKotlin) (return)))
+    (if (i32.eq (local.get $lang) (enum.get $MarkdownFenceLang.astro)) (then (call $hlAstro) (return)))
+    (if (i32.eq (local.get $lang) (enum.get $MarkdownFenceLang.vue)) (then (call $hlVue) (return)))
+    (if (i32.eq (local.get $lang) (enum.get $MarkdownFenceLang.svelte)) (then (call $hlSvelte) (return)))
+    (if (i32.eq (local.get $lang) (enum.get $MarkdownFenceLang.xml)) (then (call $hlXml) (return)))
+    (if (i32.eq (local.get $lang) (enum.get $MarkdownFenceLang.asm)) (then (call $hlAsm) (return)))
+    (if (i32.eq (local.get $lang) (enum.get $MarkdownFenceLang.wat)) (then (call $hlWat) (return)))
+    (if (i32.eq (local.get $lang) (enum.get $MarkdownFenceLang.diff)) (then (call $hlDiff) (return)))
+    (if (i32.eq (local.get $lang) (enum.get $MarkdownFenceLang.glsl)) (then (call $hlGlsl) (return)))
+    (if (i32.eq (local.get $lang) (enum.get $MarkdownFenceLang.lua)) (then (call $hlLua) (return))))
 
   ;; First CR or LF at or after $p, or $end - one SIMD compare per 16 bytes.
   ;; Every caller passes $p <= $end, so the shared finder's clamp to $end
@@ -337,12 +438,13 @@
         (br $lines)))
     (global.get $end))
 
-  ;; Drop stream state left behind by an embedded range. A fence body or an
-  ;; inline HTML range hands its bytes to another lexer over an $end swap; at
-  ;; that inner end the lexer may checkpoint an open comment, string, or
-  ;; script/style region as if the chunk ended there. Fence bodies re-lex
-  ;; statelessly per chunk, and a range that ends before $eof continues as
-  ;; markdown, so neither state may survive into the next chunk.
+  ;; Drop stream state left behind by an embedded range that finished inside
+  ;; this chunk. A fence body or an inline HTML range hands its bytes to
+  ;; another lexer over an $end swap; at that inner end the lexer may
+  ;; checkpoint an open comment, string, or script/style region as if the
+  ;; chunk ended there. When the range really continues in the next chunk
+  ;; (a fence body cut by the chunk end) that state is kept and resumed by
+  ;; $markdownCodeRange; otherwise markdown continues and it must not leak.
   (func $markdownClearEmbeddedStream
     (global.set $streamMode (i32.const 0))
     (global.set $streamRegionKind (i32.const 0))
@@ -351,10 +453,12 @@
   ;; Continue a fenced block whose closing delimiter is in a later stream
   ;; chunk. Returns one while the whole chunk belongs to the fence body.
   ;; The fence length register packs the block-quote depth of the opener
-  ;; into its upper half so the closer scan can demand the same `>` prefix.
+  ;; into its upper half so the closer scan can demand the same `>` prefix;
+  ;; the language register carries bit 8 once the body's lexer has run, so
+  ;; the next chunk resumes that lexer instead of starting it fresh.
   ;; Runs at the current nesting depth: for the document itself from
-  ;; $streamResumeLang, and for a nested markdown body from
-  ;; $markdownCodeRange, which resumes a fence recorded one depth down.
+  ;; $streamChunk, and for a nested markdown body from $markdownCodeRange,
+  ;; which resumes a fence recorded one depth down.
   (func $markdownStreamResume (result i32)
     (local $after i32)
     (local $close i32)
@@ -362,35 +466,42 @@
     (local $lang i32)
     (local $len i32)
     (local $lineEnd i32)
+    (local $reg i32)
     (local.set $fence (call $markdownFenceReg))
     (if (i32.eqz (local.get $fence))
       (then (return (i32.const 0))))
     (local.set $len (call $markdownFenceLenReg))
-    (local.set $lang (call $markdownFenceLangReg))
+    (local.set $reg (call $markdownFenceLangReg))
+    (local.set $lang (i32.and (local.get $reg) (i32.const 0xff)))
     (local.set $close (call $markdownFenceClose (global.get $ptr)
       (local.get $fence)
       (i32.and (local.get $len) (i32.const 0xffff))
       (i32.shr_u (local.get $len) (i32.const 16))))
     (if (local.get $lang)
       (then
-        ;; streamed fence bodies re-lex per chunk without carried state, so
-        ;; clear the shared parameter-machine globals like the fence open does
-        (call $sigReset)
         (call $markdownCodeRange
-          (local.get $lang) (global.get $ptr) (local.get $close)))
+          (local.get $lang) (global.get $ptr) (local.get $close)
+          (i32.ne (i32.and (local.get $reg) (i32.const 0x100)) (i32.const 0))))
       (else (call $emitTok
         (enum.get $Token.text.literal) (global.get $ptr) (local.get $close))))
-    (call $markdownClearEmbeddedStream)
-    ;; a nested body records its own fences one depth down, so the registers
-    ;; at this depth still describe the fence being resumed
     (if (i32.eq (local.get $close) (global.get $end))
-      (then (return (i32.const 1))))
+      (then
+        ;; still open: the body's stream state stays live for the next chunk
+        (if (i32.and (i32.ne (local.get $lang) (i32.const 0)) (global.get $markdownBodyRan))
+          (then
+            (call $markdownFenceSet (local.get $fence) (local.get $len)
+              (i32.or (local.get $lang) (i32.const 0x100)))))
+        (return (i32.const 1))))
+    ;; closed in this chunk: whatever the body left open is finished text
+    (call $markdownClearEmbeddedStream)
     (global.set $ptr (local.get $close))
     (local.set $lineEnd (call $markdownLineEnd (global.get $ptr)))
     (local.set $after (call $markdownAfterLine (local.get $lineEnd)))
     (call $emitTok (enum.get $Token.punctuation.delimiter)
       (global.get $ptr) (local.get $after))
     (global.set $ptr (local.get $after))
+    ;; a nested body records its own fences one depth down, so the registers
+    ;; at this depth still describe the fence being closed
     (call $markdownFenceSet (i32.const 0) (i32.const 0) (i32.const 0))
     (call $markdownFenceClearDeeper)
     (i32.const 0))
@@ -765,23 +876,20 @@
                   (local.get $quotes)))
                 (if (local.get $lang)
                   (then
-                    ;; a fence body is a fresh sub-document for the shared
-                    ;; parameter-machine globals
-                    (call $sigReset)
                     (call $markdownCodeRange
-                      (local.get $lang) (local.get $body) (local.get $close)))
+                      (local.get $lang) (local.get $body) (local.get $close)
+                      (i32.const 0)))
                   (else (call $emitTok
                     (enum.get $Token.text.literal) (local.get $body) (local.get $close))))
                 (if (global.get $streaming)
                   (then
-                    ;; the body's lexer may have checkpointed an open comment
-                    ;; or region at the body end; only the fence itself
-                    ;; carries over, so the next chunk resumes the fence
-                    ;; rather than a construct cut off by it
-                    (call $markdownClearEmbeddedStream)
                     (if (i32.eq (local.get $close) (global.get $end))
                       (then
-                        ;; run length in the low half, block-quote depth above
+                        ;; the body continues in the next chunk: whatever its
+                        ;; lexer left open stays live, and the registers
+                        ;; record the fence - run length in the low half,
+                        ;; block-quote depth above, and bit 8 of the language
+                        ;; once the body's lexer has run
                         (call $markdownFenceSet
                           (local.get $fence)
                           (i32.or
@@ -791,10 +899,17 @@
                               (select (i32.const 0x7fff) (local.get $quotes)
                                 (i32.gt_u (local.get $quotes) (i32.const 0x7fff)))
                               (i32.const 16)))
-                          (local.get $lang)))
-                      ;; the block closed in this chunk, so fences its body
-                      ;; left open at deeper depths are finished text
-                      (else (call $markdownFenceClearDeeper)))))
+                          (i32.or (local.get $lang)
+                            (select (i32.const 0x100) (i32.const 0)
+                              (i32.and
+                                (i32.ne (local.get $lang) (i32.const 0))
+                                (global.get $markdownBodyRan))))))
+                      (else
+                        ;; the block closed in this chunk: a construct its
+                        ;; body left open, and fences left open at deeper
+                        ;; depths, are finished text
+                        (call $markdownClearEmbeddedStream)
+                        (call $markdownFenceClearDeeper)))))
                 (global.set $ptr (local.get $close))
                 (if (i32.lt_u (local.get $close) (global.get $end))
                   (then

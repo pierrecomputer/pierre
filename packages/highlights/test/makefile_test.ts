@@ -209,3 +209,15 @@ void t.test('makefile: multi-line constructs stream line-fed', () => {
     assertLineFedParity('makefile', code);
   }
 });
+
+void t.test(
+  'makefile: deeply nested references neither trap nor lose bytes',
+  () => {
+    // $makeDollar recurses per nested `$(`; past 64 levels a `$` stays plain
+    for (const open of ['$(', '${', '$(a ', '$($(']) {
+      checkInvariants(lexer.hl, open.repeat(20000));
+      checkInvariants(lexer.hl, `x = ${open.repeat(20000)}\n`);
+    }
+    checkInvariants(lexer.hl, `${'$('.repeat(70)}x${')'.repeat(70)}\n`);
+  }
+);

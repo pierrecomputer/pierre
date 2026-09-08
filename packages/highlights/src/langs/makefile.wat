@@ -107,8 +107,10 @@
   ;; automatic variables - also `$(@D)` - are variable.special, `$x` is a
   ;; one-letter variable, and `$$` passes a dollar to the shell, so a name
   ;; after it is a shell variable. A body never crosses a line break, so a
-  ;; whole-buffer run and a line-fed stream agree.
-  (func $makeDollar
+  ;; whole-buffer run and a line-fed stream agree. $nest counts the enclosing
+  ;; references: past 64 levels a nested `$` stays plain text, so a line of
+  ;; thousands of `$(` cannot exhaust the call stack.
+  (func $makeDollar (param $nest i32)
     (local $lhs i32) (local $c i32) (local $open i32) (local $close i32)
     (local $depth i32) (local $rhs i32) (local $p i32)
     (local.set $lhs (global.get $ptr))
@@ -181,10 +183,12 @@
         (br_if $done (i32.ge_u (global.get $ptr) (global.get $end)))
         (local.set $c (i32.load8_u (global.get $ptr)))
         (br_if $done (i32.or (i32.eq (local.get $c) (i32.const 10)) (i32.eq (local.get $c) (i32.const 13))))
-        (if (i32.eq (local.get $c) (i32.const "$"))
+        (if (i32.and
+              (i32.eq (local.get $c) (i32.const "$"))
+              (i32.lt_u (local.get $nest) (i32.const 64)))
           (then
             (call $emitTok (enum.get $Token.none) (local.get $lhs) (global.get $ptr))
-            (call $makeDollar)
+            (call $makeDollar (i32.add (local.get $nest) (i32.const 1)))
             (local.set $lhs (global.get $ptr))
             (br $l)))
         (if (i32.and (i32.eq (local.get $c) (i32.const ",")) (i32.eqz (local.get $depth)))
@@ -238,7 +242,7 @@
         (if (i32.eq (local.get $c) (i32.const "$"))
           (then
             (call $emitTok (enum.get $Token.string) (local.get $seg) (global.get $ptr))
-            (call $makeDollar)
+            (call $makeDollar (i32.const 0))
             (local.set $seg (global.get $ptr))
             (br $l)))
         (global.set $ptr (call $utf8SpanEnd (i32.add (global.get $ptr) (i32.const 1)) (global.get $end)))
@@ -400,7 +404,7 @@
             (br $next)))
         (if (i32.eq (local.get $c) (i32.const "$"))
           (then
-            (call $makeDollar)
+            (call $makeDollar (i32.const 0))
             (local.set $cmdHead (i32.const 0))
             (local.set $expectVar (i32.const 0))
             (br $next)))

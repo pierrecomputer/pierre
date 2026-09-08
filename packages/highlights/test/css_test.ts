@@ -913,3 +913,22 @@ void t.test('css: comments, strings, and rule blocks stream line-fed', () => {
     '/* a\n b */\n.x {\n  content: "c\\\n  d";\n  color: red;\n}\n@media (min-width: 1px) {\n  a { b: 1 }\n}\n'
   );
 });
+
+void t.test(
+  'css: an unfinished bare identifier is judged by its own line',
+  () => {
+    // the property-name guess for a statement that never reaches `{`, `;`, or
+    // `}` reads only the first line, which is all a streamed run can see
+    for (const lang of ['css', 'scss', 'less'] as const) {
+      for (const code of [
+        '{b\nc',
+        'a{b\nc',
+        'a {\n  color\n  red\n}\n',
+        '{b\n',
+        '{\nc',
+      ]) {
+        assertLineFedParity(lang, code);
+      }
+    }
+  }
+);

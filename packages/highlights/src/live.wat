@@ -696,7 +696,9 @@
       (i32.const $mem.streamStateUsed)))
 
   ;; A gap buffer of 32-byte descriptors:
-  ;;   +0 textPtr  +4 byteLen (content, no terminator)  +8 utf16Len
+  ;;   +0 textPtr  +4 byteLen (content, no terminator)  +8 utf16Len (counted
+  ;;      from the bytes when the line is appended or spliced, so reads and
+  ;;      edit validation see it before the driver has run the line)
   ;;   +12 tokPtr  +16 tokCount  +20 outgoing stateId  +24 flags  +28 spare
   ;; flags: bits 0-1 terminator (0 none, 1 LF, 2 CRLF), bit 2 wide records,
   ;; bit 3 text points into the initial contiguous document block.
@@ -971,6 +973,41 @@
   (global $lvPhase (mut i32) (i32.const 0))
   (global $lvRetok (mut i32) (i32.const 0))
 
+  ;; UTF-16 length of the WTF-8 bytes [$p, $p+$len): every byte but a
+  ;; continuation byte is one unit, and a 4-byte lead adds the second half of
+  ;; its surrogate pair. Sixteen bytes per step; the tail is scalar.
+  (func $lvUtf16Len (param $p i32) (param $len i32) (result i32)
+    (local $b i32)
+    (local $n i32)
+    (local $stop i32)
+    (local $w v128)
+    (local.set $stop (i32.add (local.get $p) (local.get $len)))
+    (block $tail
+      (loop $wide
+        (br_if $tail (i32.lt_u (i32.sub (local.get $stop) (local.get $p)) (i32.const 16)))
+        (local.set $w (v128.load (local.get $p)))
+        (local.set $n (i32.add (local.get $n)
+          (i32.sub (i32.const 16)
+            (i32.popcnt (i8x16.bitmask (i8x16.eq
+              (v128.and (local.get $w) (i8x16.splat (i32.const 0xc0)))
+              (i8x16.splat (i32.const 0x80))))))))
+        (local.set $n (i32.add (local.get $n)
+          (i32.popcnt (i8x16.bitmask
+            (i8x16.ge_u (local.get $w) (i8x16.splat (i32.const 0xf0)))))))
+        (local.set $p (i32.add (local.get $p) (i32.const 16)))
+        (br $wide)))
+    (block $done
+      (loop $byte
+        (br_if $done (i32.ge_u (local.get $p) (local.get $stop)))
+        (local.set $b (i32.load8_u (local.get $p)))
+        (local.set $n (i32.add (local.get $n)
+          (i32.ne (i32.and (local.get $b) (i32.const 0xc0)) (i32.const 0x80))))
+        (local.set $n (i32.add (local.get $n)
+          (i32.ge_u (local.get $b) (i32.const 0xf0))))
+        (local.set $p (i32.add (local.get $p) (i32.const 1)))
+        (br $byte)))
+    (local.get $n))
+
   (func $lvAppendLine (param $textPtr i32) (param $byteLen i32) (param $flags i32)
     (local $slot i32)
     (call $lvEnsureLines (i32.const 1))
@@ -978,7 +1015,8 @@
       (i32.shl (global.get $lvLineCount) (i32.const 5))))
     (i32.store (local.get $slot) (local.get $textPtr))
     (i32.store offset=4 (local.get $slot) (local.get $byteLen))
-    (i32.store offset=8 (local.get $slot) (i32.const 0))
+    (i32.store offset=8 (local.get $slot)
+      (call $lvUtf16Len (local.get $textPtr) (local.get $byteLen)))
     (i32.store offset=12 (local.get $slot) (i32.const 0))
     (i32.store offset=16 (local.get $slot) (i32.const 0))
     (i32.store offset=20 (local.get $slot) (i32.const -1))
@@ -1139,7 +1177,8 @@
       (i32.shl (local.get $line) (i32.const 5))))
     (i32.store (local.get $slot) (local.get $tp))
     (i32.store offset=4 (local.get $slot) (local.get $len))
-    (i32.store offset=8 (local.get $slot) (i32.const 0))
+    (i32.store offset=8 (local.get $slot)
+      (call $lvUtf16Len (local.get $src) (local.get $len)))
     (i32.store offset=12 (local.get $slot) (i32.const 0))
     (i32.store offset=16 (local.get $slot) (i32.const 0))
     (i32.store offset=20 (local.get $slot) (local.get $state))

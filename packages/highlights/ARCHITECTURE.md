@@ -21,6 +21,9 @@ src/emit.wat        HTML/token-record emitter and driver prologue/epilogue
 src/common.wat      shared ASCII, identifier, number, string, and comment scans
 src/sig.wat         shared parameter-list machine (variable.parameter)
 src/langs/*.wat     67 built-in language modes
+src/embed.wat       stream resumption of embedded regions (script/style
+                    bodies, front matter, framework expressions) shared by
+                    the driver and by markdown fence bodies
 src/live.wat        incremental-tokenizer core: heap, line table, state
                     interning, per-line driver, edit splicing, compaction
 src/highlights.wat  memory, $Language enum, imports, and dispatch
@@ -67,9 +70,9 @@ before preprocessing, so editor warnings are expected.
    `(keyword-table.value $Name <start> <end>)` returns that value directly, or
    -1 for a miss. Words are 2..31 bytes, matched case-sensitively. Two words
    sharing first two bytes, last byte, and length collide unfixably - keep one
-   out of the table and match it directly (see rust.wat's `where`). Never spell
-   a form name inside parentheses in a comment; the matchers do not skip
-   comments.
+   out of the table and match it directly (see rust.wat's `where`). Comments are
+   stripped from every file before any form is matched, so a form name in a
+   comment is inert.
 8. **Byte sets:** `(byteset.get "bytes" (local.get $c))` tests membership of the
    byte in `$c` against a 256-bit bitmap (one load and two shifts) instead of an
    equality ladder; identical sets share a bitmap at `$mem.byteSets`.
@@ -118,7 +121,7 @@ padding. Case-insensitive lookups lowercase ASCII 16 bytes at a time.
   [8448:8832)     saved theme bytes for the emitter span cache
   [8832:8864)     streaming delimiter
   [8864:10144)    streaming lexer checkpoints
-  [10144:36960)   language keyword tables
+  [10144:36960)   language keyword tables (Angular's sits at 63760)
   [36960:37984)   JSON nesting stack
   [37984:39008)   JavaScript bracket-kind stack
   [39008:39152)   JavaScript token-class bitset
@@ -131,7 +134,7 @@ padding. Case-insensitive lookups lowercase ASCII 16 bytes at a time.
   [46592:47616)   TOML nesting stack
   [47616:63632)   live tokenizer change list
   [63632:63760)   live tokenizer free-list heads
-  [63760:65536)   free
+  [63760:65536)   Angular keyword table
 [] pages 2..N     (text buffer; a live instance lays them out itself,
                   see src/live.wat)
   [65536:EOF)     input, NUL sentinel, then at least 16 bytes of slack
@@ -248,6 +251,16 @@ An embedded lexer uses a bounded subrange:
 ;; $ptr == $to here
 ```
 
+When streaming, an embedded range that continues in the next chunk resumes like
+a document: html-family lexers record the open script, style, or expression
+region (`$streamSetRegion`) and `src/embed.wat` resumes it; a markdown fence
+body records its fence and language (`$markdownFenceSet`, bit 8 of the language
+once the body's lexer has run) and `$markdownCodeRange` resumes it inside the
+fence bounds - the shared comment/string modes, the language's own resume hook,
+then the lexer at stream depth 0 with `$streamReset` set only for the fence's
+first body chunk. `$streamChunk` gives an open fence the chunk start before any
+top-level resume could consume a mode the body left open.
+
 ## HTML output shape
 
 Output is one self-contained fragment:
@@ -281,8 +294,10 @@ Each line is copied into scratch with its terminator. `$srcBase` points at it,
 then `$streamChunk` runs the ordinary mode-3 pipeline. Output matches
 `StreamTokenizer` fed one line per chunk.
 
-The change list holds up to 1,000 16-byte records. It and the 32 free-list heads
-occupy the end of page 1, leaving the text pages for heap and scratch.
+The change list holds up to 1,000 16-byte records; past that, new spans merge
+into the last record, so `lineChanges` may then span unedited lines between
+them. It and the 32 free-list heads occupy the end of page 1, leaving the text
+pages for heap and scratch.
 
 Before and after each line the driver saves streaming state: cross-chunk
 globals, the 32-byte stream delimiter, the fence registers of nested markdown
@@ -298,7 +313,9 @@ reused without hashing.
 The line table is a gap buffer of 32-byte descriptors: text pointer/length,
 UTF-16 length, token block, outgoing state id, terminator and format flags.
 Token records pack as `(tokenId << 24) | endUtf16`, or `[endUtf16, tokenId]`
-once the id exceeds 24 bits.
+once a line's UTF-16 end exceeds 24 bits (the id always fits one byte). Each
+descriptor's UTF-16 length is counted when the line is appended or spliced, so
+reads and edit validation never wait for the driver.
 
 Edits splice descriptors. The last replacement line keeps the old end line's
 state id. The driver re-tokenizes dirty ranges until a line's new outgoing id

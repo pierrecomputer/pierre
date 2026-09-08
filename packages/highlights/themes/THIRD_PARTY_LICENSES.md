@@ -132,10 +132,12 @@ from the MIT-licensed GitHub/Primer theme credited above. Highlights extracts
 individual themes and prunes unused Zed style properties. The full Apache-2.0
 text is included in the package's [`LICENSE.md`](../LICENSE.md).
 
-## Unexported legacy files
+## Additional themes
 
-Older JSON files remain in the source tree but are no longer bundled by
-`@pierre/highlights/themes`. Their prior sources are retained here:
+These JSON files are not exported from the `@pierre/highlights/themes` barrel,
+but every theme file is published as a `@pierre/highlights/themes/<name>` module
+and listed in the `themes` loader map (see the
+[theme list](./README.md#additional-themes)). Their sources:
 
 - Sonokai variants:
   [ciathefed/zed-sonokai `dc84454`](https://github.com/ciathefed/zed-sonokai/blob/dc844540e610150c42068d3a59daaab1ef043331/themes/sonokai.json),

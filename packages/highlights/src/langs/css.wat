@@ -342,7 +342,8 @@
   ;; a declaration value and any other `:` names a pseudo-class. Without a
   ;; colon the text is a selector whose `{` is still to come - `h1,` /
   ;; `.a > .b` / `&` - except for a bare identifier inside a block, which is
-  ;; a property name still being typed.
+  ;; a property name still being typed. That last guess reads only the
+  ;; statement's first line, the most a streamed run can see.
   (func $cssDecideAtEnd (param $depth i32) (param $colon i32) (param $stop i32) (result i32)
     (local $p i32)
     (local $c i32)
@@ -365,10 +366,15 @@
     (block $blank
       (loop $space
         (br_if $blank (i32.ge_u (local.get $p) (local.get $stop)))
-        (br_if $blank (i32.eqz (call $lexIsSpace (i32.load8_u (local.get $p)))))
+        (local.set $c (i32.load8_u (local.get $p)))
+        (br_if $blank (i32.or (i32.eq (local.get $c) (i32.const 10))
+                              (i32.eq (local.get $c) (i32.const 13))))
+        (br_if $blank (i32.eqz (call $lexIsSpace (local.get $c))))
         (local.set $p (i32.add (local.get $p) (i32.const 1)))
         (br $space)))
-    (i32.lt_u (local.get $p) (local.get $stop)))
+    (if (i32.ge_u (local.get $p) (local.get $stop))
+      (then (return (i32.const 0))))
+    (i32.and (i32.ne (local.get $c) (i32.const 10)) (i32.ne (local.get $c) (i32.const 13))))
 
   ;; The entry points: css proper, and the three preprocessor dialects that
   ;; share its lexer with a few extra forms - `//` comments, `$var` and

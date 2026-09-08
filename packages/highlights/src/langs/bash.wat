@@ -87,15 +87,21 @@
     (local.get $depth))
 
   ;; Scan the inside of a `${` expansion from $ptr up to its `}`, emitting the
-  ;; name as a variable and the brace as punctuation. Returns 1 when the brace
-  ;; was found, 0 when $end arrived first.
+  ;; name as a variable and the brace as punctuation. The name ends at the
+  ;; brace or at the line break: an expansion cut by a line break is over
+  ;; without its brace, so a whole-buffer run and a line-fed stream agree.
+  ;; Returns 1 when the expansion ended (brace found or line break reached),
+  ;; 0 when $end arrived first.
   (func $bashBraceScan (result i32)
     (local $seg i32)
     (local.set $seg (global.get $ptr))
-    (global.set $ptr (call $lexFindByte (global.get $ptr) (i32.const "}")))
+    (global.set $ptr (call $scanFind3
+      (global.get $ptr) (i32.const "}") (i32.const 10) (i32.const 13)))
     (call $emitTok (enum.get $Token.variable) (local.get $seg) (global.get $ptr))
     (if (i32.ge_u (global.get $ptr) (global.get $end))
       (then (return (i32.const 0))))
+    (if (i32.ne (i32.load8_u (global.get $ptr)) (i32.const "}"))
+      (then (return (i32.const 1))))
     (local.set $seg (global.get $ptr))
     (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
     (call $emitTok (enum.get $Token.punctuation.special) (local.get $seg) (global.get $ptr))

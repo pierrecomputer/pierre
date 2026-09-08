@@ -552,3 +552,73 @@ void t.test('theme styles cache by object identity, not name', () => {
   assert.equal(themeColor('keyword', variantB), '#00ff00');
   assert.equal(themeColor('keyword', variantA), '#ff0000');
 });
+
+void t.test('codeToTokens: defaultColor applies one theme inline', () => {
+  const themes = { dark: pierreDark, light: pierreLight };
+  const keyword = themeColor('keyword.declaration');
+  const keywordLight = themeColor('keyword.declaration', pierreLight);
+  // like shiki, `light` is the default theme: plain color plus one custom
+  // property per other theme, and the <pre> style carries both
+  const light = codeToTokens('const a = 1', { lang: 'ts', themes });
+  assert.deepEqual(light.tokens[0][0].htmlStyle, {
+    color: keywordLight,
+    '--hls-dark': keyword,
+  });
+  assert.equal(
+    light.fg,
+    `${themeColor('foreground', pierreLight)};--hls-dark:${themeColor('foreground')}`
+  );
+  assert.equal(
+    light.bg,
+    `${themeColor('background', pierreLight)};--hls-dark-bg:${themeColor('background')}`
+  );
+  assert.equal(light.rootStyle, undefined);
+  const pre = el(codeToHast('const a = 1', { lang: 'ts', themes }).children[0]);
+  assert.equal(
+    pre.properties.style,
+    `background-color:${light.bg};color:${light.fg}`
+  );
+  const dark = codeToTokens('const a = 1', {
+    lang: 'ts',
+    themes,
+    defaultColor: 'dark',
+  });
+  assert.deepEqual(dark.tokens[0][0].htmlStyle, {
+    color: keyword,
+    '--hls-light': keywordLight,
+  });
+  // `light-dark()` merges the pair into one color
+  const merged = codeToTokens('const a = 1', {
+    lang: 'ts',
+    themes,
+    defaultColor: 'light-dark()',
+  });
+  assert.deepEqual(merged.tokens[0][0].htmlStyle, {
+    color: `light-dark(${keywordLight}, ${keyword})`,
+  });
+  assert.equal(
+    merged.fg,
+    `light-dark(${themeColor('foreground', pierreLight)}, ${themeColor('foreground')})`
+  );
+  assert.throws(
+    () => codeToTokens('x', { lang: 'ts', themes: { dark: pierreDark } }),
+    /must contain the defaultColor key `light`/
+  );
+  assert.throws(
+    () =>
+      codeToTokens('x', {
+        lang: 'ts',
+        themes: { dark: pierreDark },
+        defaultColor: 'light-dark()',
+      }),
+    /light-dark/
+  );
+  // a theme without colors leaves the <pre> style empty instead of `undefined`
+  const bare = el(
+    codeToHast('x', {
+      lang: 'ts',
+      theme: { name: 'bare', appearance: 'dark', style: {} },
+    }).children[0]
+  );
+  assert.equal(bare.properties.style, '');
+});

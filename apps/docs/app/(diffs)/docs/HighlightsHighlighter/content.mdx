@@ -46,14 +46,14 @@ hook.
 
 The shared token options are:
 
-| Option                  | Behavior                                                               |
-| ----------------------- | ---------------------------------------------------------------------- |
-| `lang`                  | A built-in language name or alias                                      |
-| `theme`                 | One Zed `Theme` or `ThemeFamily`                                       |
-| `themes`                | Named themes such as `{ dark, light }`; emits per-theme CSS properties |
-| `cssVariablePrefix`     | Prefix for multi-theme properties; defaults to `--hls-`                |
-| `defaultColor: false`   | Emits every theme color as a custom property                           |
-| `tokenizeMaxLineLength` | Collapses longer lines into one unthemed token for DOM safety          |
+| Option                  | Behavior                                                                                            |
+| ----------------------- | --------------------------------------------------------------------------------------------------- |
+| `lang`                  | A built-in language name or alias                                                                   |
+| `theme`                 | One Zed `Theme` or `ThemeFamily`                                                                    |
+| `themes`                | Named themes such as `{ dark, light }`; emits per-theme CSS properties                              |
+| `cssVariablePrefix`     | Prefix for multi-theme properties; defaults to `--hls-`                                             |
+| `defaultColor`          | Theme key applied inline (`light` unless set); `false` emits every theme color as a custom property |
+| `tokenizeMaxLineLength` | Collapses longer lines into one unthemed token for DOM safety                                       |
 
 Choose either `theme` or `themes`. `codeToHtml()` accepts one `theme`, while the
 token and HAST APIs accept either form.

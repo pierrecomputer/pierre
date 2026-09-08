@@ -383,3 +383,23 @@ void t.test(
     );
   }
 );
+
+void t.test(
+  'bash: a `${` cut by a line break ends there, streamed or not',
+  () => {
+    for (const code of [
+      '${a\nc}\n',
+      'x=${a\nc}\n',
+      'echo "${a\nb}"\n',
+      '"${a\r\nb}"\n',
+    ]) {
+      assertLineFedParity('bash', code);
+    }
+    assert.deepEqual(tokenKinds('bash', '${a\nc}\n'), [
+      ['${', 'punctuation.special'],
+      ['a', 'variable'],
+      ['c', 'function'],
+      ['}', 'punctuation.bracket'],
+    ]);
+  }
+);

@@ -646,3 +646,63 @@ void t.test(
     }
   }
 );
+
+void t.test(
+  'markdown: multi-line constructs inside fence bodies stream line-fed',
+  () => {
+    // a fence body is resumed like a document: block comments, template
+    // literals, heredocs, raw strings, and open tags carry across the line
+    // boundaries the live tokenizer cuts at
+    for (const code of [
+      '```js\n/* a\nb */\nlet x\n```\n',
+      '```js\nconst s = `a\nb`;\n```\n',
+      '```ts\n`\na\n`\n',
+      '```css\n/* a\nb */\n```\n',
+      '```css\na {\n  color: red;\n}\n```\n',
+      '```c\n/* a\nb */\n```\n',
+      '```rust\nlet s = r#"a\nb"#;\n/* a\nb */\n```\n',
+      '```go\n`a\nb`\n```\n',
+      '```sql\n/* a\nb */\n```\n',
+      '```xml\n<!-- a\nb -->\n```\n',
+      '```bash\ncat <<EOF\nhi\nEOF\necho "a\nb"\n```\n',
+      '```php\n<?php\n/* a\nb */\n```\n',
+      '```python\n"""a\nb"""\n```\n',
+      '```html\n<style>\n/* a\nb */\n</style>\n<script>\nconst s = `a\nb`;\n</script>\n```\n',
+      '```yaml\na: |\n  x\n  y\n```\n',
+      '````md\n```js\n/* a\nb */\n```\n````\n',
+      // the first body line and an unterminated last line are lexed the same
+      '```asm\nt',
+      '```angular-html\nt',
+      '```cpp\n#include <x>\nint a;\n',
+      '```css\nfoo:',
+      '```tsx\n<a>\nz',
+      // an open comment still ends at the closing fence
+      '```css\n/* open\n```\n# heading\n',
+    ]) {
+      assertLineFedParity('markdown', code);
+      assertLineFedParity('mdx', code);
+    }
+  }
+);
+
+void t.test(
+  'markdown: a pooled stream instance does not leak lexer state into a fence',
+  () => {
+    // StreamTokenizer reuses one Wasm instance across streams; a fence body
+    // lexer first entered on a later chunk restores its checkpoint window,
+    // which must not hold the previous stream's locals
+    for (const [lang, tail] of [
+      ['css', 'foo:'],
+      ['cpp', 'int a = 1; /* c'],
+      ['python', 'class '],
+    ] as const) {
+      const previous = new StreamTokenizer({ lang, theme: pierreDark });
+      previous.pushCode(tail);
+      previous.end();
+      assertLineFedMatchesWhole(
+        'markdown',
+        '```css\na {\n  color: red;\n}\n```\n```cpp\n#include <x>\nint a;\n```\n```python\nfoo:\nbar\n```\n'
+      );
+    }
+  }
+);

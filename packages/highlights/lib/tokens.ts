@@ -33,9 +33,19 @@ export interface ResolvedThemeStyles {
   bg?: string;
 }
 
+/**
+ * How one resolved theme reaches the output: `single` for the `theme` option
+ * (plain `color`/`fontStyle`), `default` for the `defaultColor` theme of a
+ * `themes` set (plain `color`, `font-style`, `font-weight` in `htmlStyle`),
+ * `variable` for the other themes of a set (custom properties), and
+ * `light-dark` for the `light`/`dark` pair merged into CSS `light-dark()`.
+ */
+export type ThemeRole = 'single' | 'default' | 'variable' | 'light-dark';
+
 /** Resolved styles tagged with the option color key (`null` for `theme`). */
 export interface ResolvedTheme extends ResolvedThemeStyles {
   color: string | null;
+  role: ThemeRole;
 }
 
 /** A `[start, end, tokenId]` style run within one line. */
@@ -126,7 +136,11 @@ export function resolveThemeStyles(
 }
 
 /**
- * Normalize Shiki-style options to a list of themes.
+ * Normalize Shiki-style options to a list of themes. With `themes`, the
+ * `defaultColor` theme (Shiki's default is `light`) comes first and is applied
+ * inline; the others follow in name order as custom properties.
+ * `defaultColor: false` makes every theme a custom property, and
+ * `'light-dark()'` pairs the `light` and `dark` themes.
  */
 export function resolveOptionThemes(
   options: CodeToTokensOptions
@@ -136,12 +150,39 @@ export function resolveOptionThemes(
       .filter(([, t]) => t != null)
       .sort(([a], [b]) => (a < b ? -1 : 1));
     if (entries.length === 0) throw new TypeError('themes must not be empty');
-    return entries.map(([color, theme]) => ({
+    const defaultColor = options.defaultColor ?? 'light';
+    if (defaultColor === 'light-dark()') {
+      const light = entries.find(([key]) => key === 'light');
+      const dark = entries.find(([key]) => key === 'dark');
+      if (light === undefined || dark === undefined) {
+        throw new TypeError(
+          "`themes` must contain `light` and `dark` when defaultColor is 'light-dark()'"
+        );
+      }
+      return [light, dark].map(([color, theme]) => ({
+        color,
+        role: 'light-dark' as const,
+        ...resolveThemeStyles(theme),
+      }));
+    }
+    if (defaultColor !== false) {
+      const at = entries.findIndex(([key]) => key === defaultColor);
+      if (at < 0) {
+        throw new TypeError(
+          `\`themes\` must contain the defaultColor key \`${defaultColor}\``
+        );
+      }
+      entries.unshift(...entries.splice(at, 1));
+    }
+    return entries.map(([color, theme], i) => ({
       color,
+      role: defaultColor !== false && i === 0 ? 'default' : 'variable',
       ...resolveThemeStyles(theme),
     }));
   }
-  return [{ color: null, ...resolveThemeStyles(options.theme) }];
+  return [
+    { color: null, role: 'single', ...resolveThemeStyles(options.theme) },
+  ];
 }
 
 /**
@@ -246,8 +287,10 @@ function isAscii(
 /**
  * Convert a `[start, end, tokenId]` run to a Shiki `ThemedToken`.
  *
- * `theme` uses `color` and `fontStyle`. `themes` uses an `htmlStyle` map keyed by
- * `${cssVariablePrefix}${themeColor}`, like Shiki's dual-theme output.
+ * `theme` uses `color` and `fontStyle`. `themes` uses an `htmlStyle` map: plain
+ * `color`/`font-style`/`font-weight` for the `defaultColor` theme and
+ * `${cssVariablePrefix}${themeColor}` custom properties for the rest, like
+ * Shiki's dual-theme output.
  */
 export function runToToken(
   code: string,
@@ -273,7 +316,7 @@ export function rangeToToken(
     content: code.slice(start, end),
     offset: start + offsetBase,
   };
-  if (themes.length === 1 && themes[0].color === null) {
+  if (themes[0].role === 'single') {
     const { styles, fg } = themes[0];
     const style = styles[hl];
     token.color = style?.color ?? fg;
@@ -281,18 +324,26 @@ export function rangeToToken(
     if (style?.italic === true) bits |= 1;
     if ((style?.weight ?? 0) >= 600) bits |= 2;
     token.fontStyle = bits;
+  } else if (themes[0].role === 'light-dark') {
+    token.htmlStyle = lightDarkStyle(themes, hl, cssVariablePrefix);
   } else {
     const htmlStyle: Record<string, string> = {};
-    for (const { color, styles, fg } of themes) {
+    for (const { color, role, styles, fg } of themes) {
       const style = styles[hl];
-      htmlStyle[cssVariablePrefix + color] = style?.color ?? fg ?? 'inherit';
+      // the default theme is applied inline; the others are custom
+      // properties the page switches between
+      const plain = role === 'default';
+      htmlStyle[plain ? 'color' : cssVariablePrefix + color] =
+        style?.color ?? fg ?? 'inherit';
       if (style?.italic === true) {
-        htmlStyle[`${cssVariablePrefix}${color}-font-style`] = 'italic';
+        htmlStyle[
+          plain ? 'font-style' : `${cssVariablePrefix}${color}-font-style`
+        ] = 'italic';
       }
       if (style != null && style.weight !== 0) {
-        htmlStyle[`${cssVariablePrefix}${color}-font-weight`] = String(
-          style.weight
-        );
+        htmlStyle[
+          plain ? 'font-weight' : `${cssVariablePrefix}${color}-font-weight`
+        ] = String(style.weight);
       }
     }
     token.htmlStyle = htmlStyle;
@@ -300,6 +351,43 @@ export function rangeToToken(
   const type = standardTypes[hl];
   if (type !== 0) token.type = type;
   return token;
+}
+
+/**
+ * The `htmlStyle` of a token under `defaultColor: 'light-dark()'`: the two
+ * colors merge into one CSS `light-dark()` value, and font settings stay plain
+ * when both themes agree or become per-theme custom properties otherwise.
+ */
+function lightDarkStyle(
+  themes: ResolvedTheme[],
+  hl: number,
+  cssVariablePrefix: string
+): Record<string, string> {
+  const [light, dark] = themes;
+  const a = light.styles[hl];
+  const b = dark.styles[hl];
+  const ac = a?.color ?? light.fg ?? 'inherit';
+  const bc = b?.color ?? dark.fg ?? 'inherit';
+  const htmlStyle: Record<string, string> = {
+    color: ac === bc ? ac : `light-dark(${ac}, ${bc})`,
+  };
+  const ai = a?.italic === true;
+  const bi = b?.italic === true;
+  if (ai && bi) htmlStyle['font-style'] = 'italic';
+  else {
+    if (ai) htmlStyle[`${cssVariablePrefix}light-font-style`] = 'italic';
+    if (bi) htmlStyle[`${cssVariablePrefix}dark-font-style`] = 'italic';
+  }
+  const aw = a?.weight ?? 0;
+  const bw = b?.weight ?? 0;
+  if (aw !== 0 && aw === bw) htmlStyle['font-weight'] = String(aw);
+  else {
+    if (aw !== 0)
+      htmlStyle[`${cssVariablePrefix}light-font-weight`] = String(aw);
+    if (bw !== 0)
+      htmlStyle[`${cssVariablePrefix}dark-font-weight`] = String(bw);
+  }
+  return htmlStyle;
 }
 
 /** Convert UTF-16 token records with `0xffffffff` line markers to tokens. */
@@ -406,30 +494,54 @@ export function lineRecordsToRuns(
 
 /**
  * Build the `fg`, `bg`, `themeName`, and `rootStyle` block of a Shiki
- * `TokensResult`. `themes` uses CSS declaration lists.
+ * `TokensResult`. With `themes`, `fg` and `bg` are CSS declaration lists: the
+ * `defaultColor` theme's plain color first, then one custom property per other
+ * theme. `rootStyle` is set only when no theme is applied inline, so the
+ * `<pre>` style is either `rootStyle` or `background-color:bg;color:fg`.
  */
 export function themeMeta(
   themes: ResolvedTheme[],
   cssVariablePrefix: string
 ): Pick<TokensResult, 'fg' | 'bg' | 'themeName' | 'rootStyle'> {
-  if (themes.length === 1 && themes[0].color === null) {
+  if (themes[0].role === 'single') {
     return {
       fg: themes[0].fg,
       bg: themes[0].bg,
       themeName: themes[0].name,
     };
   }
+  const themeName = `highlights-themes ${themes.map((t) => t.name).join(' ')}`;
+  if (themes[0].role === 'light-dark') {
+    const pair = (a: string | undefined, b: string | undefined) => {
+      const x = a ?? 'inherit';
+      const y = b ?? 'inherit';
+      return x === y ? x : `light-dark(${x}, ${y})`;
+    };
+    return {
+      fg: pair(themes[0].fg, themes[1].fg),
+      bg: pair(themes[0].bg, themes[1].bg),
+      themeName,
+    };
+  }
   const fg = themes
-    .map((t) => `${cssVariablePrefix}${t.color}:${t.fg ?? 'inherit'}`)
+    .map((t) =>
+      t.role === 'default'
+        ? (t.fg ?? 'inherit')
+        : `${cssVariablePrefix}${t.color}:${t.fg ?? 'inherit'}`
+    )
     .join(';');
   const bg = themes
-    .map((t) => `${cssVariablePrefix}${t.color}-bg:${t.bg ?? 'inherit'}`)
+    .map((t) =>
+      t.role === 'default'
+        ? (t.bg ?? 'inherit')
+        : `${cssVariablePrefix}${t.color}-bg:${t.bg ?? 'inherit'}`
+    )
     .join(';');
   return {
     fg,
     bg,
-    themeName: `highlights-themes ${themes.map((t) => t.name).join(' ')}`,
-    rootStyle: `${fg};${bg}`,
+    themeName,
+    rootStyle: themes[0].role === 'default' ? undefined : `${fg};${bg}`,
   };
 }
 
@@ -587,11 +699,13 @@ export function buildHast(
     properties: {},
     children: codeChildren,
   };
+  const preStyle: string[] = [];
+  if (themeInfo.bg !== undefined)
+    preStyle.push(`background-color:${themeInfo.bg}`);
+  if (themeInfo.fg !== undefined) preStyle.push(`color:${themeInfo.fg}`);
   const preProperties: HastElement['properties'] = {
     class: `shiki ${themeInfo.themeName}`,
-    style:
-      themeInfo.rootStyle ??
-      `background-color:${themeInfo.bg};color:${themeInfo.fg}`,
+    style: themeInfo.rootStyle ?? preStyle.join(';'),
     tabindex: '0',
   };
   for (const [key, value] of Object.entries(options.meta ?? {})) {
