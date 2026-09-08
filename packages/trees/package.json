@@ -59,7 +59,6 @@
     "preact-render-to-string": "catalog:"
   },
   "devDependencies": {
-    "@arethetypeswrong/core": "catalog:",
     "@pierre/tree-test-data": "workspace:*",
     "@pierre/vscode-icons": "catalog:",
     "@playwright/test": "catalog:",

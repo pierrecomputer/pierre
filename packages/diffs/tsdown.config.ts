@@ -18,7 +18,6 @@ const config: UserConfig[] = defineConfig([
     loader: {
       '.css': 'text',
     },
-    attw: process.env.ATTW === 'true',
     tsconfig: './tsconfig.json',
     clean: true,
     dts: {

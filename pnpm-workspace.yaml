@@ -46,7 +46,6 @@ minimumReleaseAgeExclude:
   - bun-types@1.4.0
 
 catalog:
-  '@arethetypeswrong/core': '0.18.2'
   '@icons-pack/react-simple-icons': '13.8.0'
   '@moonrepo/cli': '2.3.3'
   '@octokit/app': '16.1.1'

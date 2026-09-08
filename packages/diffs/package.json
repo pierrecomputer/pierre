@@ -76,7 +76,6 @@
     "shiki": "^3.0.0 || ^4.0.0"
   },
   "devDependencies": {
-    "@arethetypeswrong/core": "catalog:",
     "@playwright/test": "catalog:",
     "@tsdown/css": "catalog:",
     "@types/hast": "catalog:",
