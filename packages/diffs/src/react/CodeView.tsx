@@ -78,6 +78,13 @@ interface CodeViewBaseProps<LAnnotation, Caret> {
   getEditStateKey?(item: CodeViewItem<LAnnotation>): string | undefined;
   className?: string;
   style?: CSSProperties;
+  /**
+   * Ref to the scroll container element. A callback ref follows the React 18
+   * protocol: it is called with the element on mount and with `null` on
+   * unmount. A cleanup function returned from the callback (the React 19
+   * form) is ignored, so release resources on the `null` call or use a ref
+   * object.
+   */
   containerRef?: Ref<HTMLDivElement>;
   disableWorkerPool?: boolean;
   selectedLines?: CodeViewLineSelection | null;
