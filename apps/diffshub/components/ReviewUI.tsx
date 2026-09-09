@@ -10,7 +10,6 @@ import {
   useEffect,
   useRef,
   useState,
-  useSyncExternalStore,
 } from 'react';
 
 import { DiffsHubHeader } from './DiffsHubHeader';
@@ -20,6 +19,7 @@ import { DiffsHubViewer } from './DiffsHubViewer';
 import { ThemeSourceProvider } from './ThemeSourceProvider';
 import { useGitHubDiffFileLoader } from './useGitHubDiffFileLoader';
 import { useGitHubToken } from './useGitHubToken';
+import { useIsHydrated } from './useIsHydrated';
 import { usePatchLoader } from './usePatchLoader';
 import { useThemeCycle } from './useThemeCycle';
 import {
@@ -41,20 +41,6 @@ interface ReviewUIProps {
   domain?: string;
   initialUrl: string;
   path: string;
-}
-
-// Hydration state changes only once, from the server snapshot to the client
-// snapshot, so there is no external source to subscribe to.
-function nullSubscription(): () => void {
-  return () => {};
-}
-
-function getClientHydrationState(): boolean {
-  return true;
-}
-
-function getServerHydrationState(): boolean {
-  return false;
 }
 
 export function ReviewUI({ domain, initialUrl, path }: ReviewUIProps) {
@@ -109,11 +95,7 @@ function ReviewUIInner({ domain, initialUrl, path }: ReviewUIProps) {
   // the SSR markup, then flips to the user's selection. This also keeps the
   // long-lived WorkerPool and the CodeView from mounting against the default
   // palette before the persisted values apply.
-  const themesHydrated = useSyncExternalStore(
-    nullSubscription,
-    getClientHydrationState,
-    getServerHydrationState
-  );
+  const themesHydrated = useIsHydrated();
 
   const colorMode: ColorMode = themesHydrated ? themeState.mode : 'system';
   const appResolvedTheme = themesHydrated
