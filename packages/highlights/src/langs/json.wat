@@ -21,17 +21,19 @@
         ;; string (object key or value)
         (if (i32.eq (local.get $c) (i32.const 34))
           (then
-            (call $jsonString (select
-              (enum.get $Token.property.json_key)
-              (enum.get $Token.string)
-              (local.get $expectKey)))
+            (call $jsonString
+              (select
+                (enum.get $Token.property.json_key)
+                (enum.get $Token.string)
+                (local.get $expectKey)))
             (local.set $expectKey (i32.const 0))
             (br $next)))
 
         ;; number
-        (if (i32.or
-              (i32.le_u (i32.sub (local.get $c) (i32.const "0")) (i32.const 9))
-              (i32.eq (local.get $c) (i32.const "-")))
+        (if
+          (i32.or
+            (i32.le_u (i32.sub (local.get $c) (i32.const "0")) (i32.const 9))
+            (i32.eq (local.get $c) (i32.const "-")))
           (then
             (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
             (call $jsonNumber)
@@ -42,8 +44,10 @@
         (if (i32.or (i32.eq (local.get $c) (i32.const "{")) (i32.eq (local.get $c) (i32.const "[")))
           (then
             (if (i32.lt_u (local.get $depth) (i32.const 1024))
-              (then (i32.store8 (i32.add (i32.const $mem.jsonStack) (local.get $depth))
-                (i32.eq (local.get $c) (i32.const "{")))))
+              (then
+                (i32.store8
+                  (i32.add (i32.const $mem.jsonStack) (local.get $depth))
+                  (i32.eq (local.get $c) (i32.const "{")))))
             (local.set $depth (i32.add (local.get $depth) (i32.const 1)))
             (local.set $expectKey (i32.eq (local.get $c) (i32.const "{")))
             (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
@@ -61,26 +65,37 @@
           (then
             ;; the next string is a key again iff the current container is an object
             (local.set $expectKey (i32.const 0))
-            (if (i32.and (i32.gt_u (local.get $depth) (i32.const 0))
-                         (i32.le_u (local.get $depth) (i32.const 1024)))
-              (then (local.set $expectKey (i32.load8_u
-                (i32.add (i32.const $mem.jsonStack-1) (local.get $depth))))))
+            (if
+              (i32.and
+                (i32.gt_u (local.get $depth) (i32.const 0))
+                (i32.le_u (local.get $depth) (i32.const 1024)))
+              (then
+                (local.set $expectKey
+                  (i32.load8_u (i32.add (i32.const $mem.jsonStack-1) (local.get $depth))))))
             (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
-            (call $emitTok (enum.get $Token.punctuation.delimiter) (local.get $lhs) (global.get $ptr))
+            (call $emitTok
+              (enum.get $Token.punctuation.delimiter)
+              (local.get $lhs)
+              (global.get $ptr))
             (br $next)))
         (if (i32.eq (local.get $c) (i32.const ":"))
           (then
             (local.set $expectKey (i32.const 0))
             (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
-            (call $emitTok (enum.get $Token.punctuation.delimiter) (local.get $lhs) (global.get $ptr))
+            (call $emitTok
+              (enum.get $Token.punctuation.delimiter)
+              (local.get $lhs)
+              (global.get $ptr))
             (br $next)))
 
         ;; JSONC comments
         (if (i32.eq (local.get $c) (i32.const "/"))
           (then
-            (local.set $c (select
-              (i32.load8_u offset=1 (global.get $ptr)) (i32.const 0)
-              (i32.lt_u (i32.add (global.get $ptr) (i32.const 1)) (global.get $end))))
+            (local.set $c
+              (select
+                (i32.load8_u offset=1 (global.get $ptr))
+                (i32.const 0)
+                (i32.lt_u (i32.add (global.get $ptr) (i32.const 1)) (global.get $end))))
             (if (i32.eq (local.get $c) (i32.const "/"))
               (then
                 (global.set $ptr (i32.add (global.get $ptr) (i32.const 2)))
@@ -96,17 +111,23 @@
             (br $next)))
 
         ;; words: true/false -> boolean, null -> constant.builtin, else plain
-        (if (i32.le_u (i32.sub (i32.or (local.get $c) (i32.const 32)) (i32.const "a")) (i32.const 25))
+        (if
+          (i32.le_u (i32.sub (i32.or (local.get $c) (i32.const 32)) (i32.const "a")) (i32.const 25))
           (then
             (block $wordDone
               (loop $word
                 (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
                 (br_if $wordDone (i32.ge_u (global.get $ptr) (global.get $end)))
-                (br_if $word (i32.le_u
-                  (i32.sub (i32.or (i32.load8_u (global.get $ptr)) (i32.const 32)) (i32.const "a"))
-                  (i32.const 25)))))
-            (call $emitTok (call $jsonWordHl (local.get $lhs) (global.get $ptr))
-              (local.get $lhs) (global.get $ptr))
+                (br_if $word
+                  (i32.le_u
+                    (i32.sub
+                      (i32.or (i32.load8_u (global.get $ptr)) (i32.const 32))
+                      (i32.const "a"))
+                    (i32.const 25)))))
+            (call $emitTok
+              (call $jsonWordHl (local.get $lhs) (global.get $ptr))
+              (local.get $lhs)
+              (global.get $ptr))
             (br $next)))
 
         ;; anything else: one plain byte
@@ -125,8 +146,10 @@
           (then (return (enum.get $Token.boolean))))
         (if (i32.eq (i32.load (local.get $lhs)) (i32.const "null"))
           (then (return (enum.get $Token.constant.builtin))))))
-    (if (i32.and (i32.eq (local.get $len) (i32.const 5))
-                 (i32.eq (i32.load (local.get $lhs)) (i32.const "fals")))
+    (if
+      (i32.and
+        (i32.eq (local.get $len) (i32.const 5))
+        (i32.eq (i32.load (local.get $lhs)) (i32.const "fals")))
       (then
         (if (i32.eq (i32.load8_u offset=4 (local.get $lhs)) (i32.const "e"))
           (then (return (enum.get $Token.boolean))))))
@@ -143,8 +166,13 @@
     (block $done
       (loop $l
         ;; hop to the next quote, backslash, or line break, 16 bytes per step
-        (global.set $ptr (call $scanFindSpecial
-          (global.get $ptr) (global.get $end) (i32.const 34) (i32.const 1) (i32.const 1)))
+        (global.set $ptr
+          (call $scanFindSpecial
+            (global.get $ptr)
+            (global.get $end)
+            (i32.const 34)
+            (i32.const 1)
+            (i32.const 1)))
         (br_if $done (i32.ge_u (global.get $ptr) (global.get $end)))
         (local.set $c (i32.load8_u (global.get $ptr)))
         (if (i32.eq (local.get $c) (i32.const 34))
@@ -159,12 +187,15 @@
         ;; Any other escaped byte stays whole with its UTF-8 tail - a span
         ;; boundary must never split a code point - and a `\` before LF or
         ;; CRLF continues the string on the next line
-        (if (i32.and
-              (i32.lt_u (i32.add (global.get $ptr) (i32.const 1)) (global.get $end))
-              (i32.eq (i32.load8_u offset=1 (global.get $ptr)) (i32.const "u")))
-          (then (local.set $e (call $utf8SpanEnd
-            (call $scanHexRun (i32.add (global.get $ptr) (i32.const 2)) (i32.const 4))
-            (global.get $end))))
+        (if
+          (i32.and
+            (i32.lt_u (i32.add (global.get $ptr) (i32.const 1)) (global.get $end))
+            (i32.eq (i32.load8_u offset=1 (global.get $ptr)) (i32.const "u")))
+          (then
+            (local.set $e
+              (call $utf8SpanEnd
+                (call $scanHexRun (i32.add (global.get $ptr) (i32.const 2)) (i32.const 4))
+                (global.get $end))))
           (else (local.set $e (call $lexEscapeEnd (global.get $ptr)))))
         (call $emitTok (enum.get $Token.string.escape) (global.get $ptr) (local.get $e))
         (global.set $ptr (local.get $e))
@@ -177,13 +208,14 @@
   ;; the shared string mode so the next chunk resumes the body instead of
   ;; lexing the continuation line as json
   (func $jsonStringOpenAtChunkEnd (param $hl i32)
-    (if (i32.and
-          (global.get $streaming)
-          (i32.and
-            (i32.eq (global.get $ptr) (global.get $end))
-            (i32.or
-              (i32.eq (i32.load8_u (i32.sub (global.get $ptr) (i32.const 1))) (i32.const 10))
-              (i32.eq (i32.load8_u (i32.sub (global.get $ptr) (i32.const 1))) (i32.const 13)))))
+    (if
+      (i32.and
+        (global.get $streaming)
+        (i32.and
+          (i32.eq (global.get $ptr) (global.get $end))
+          (i32.or
+            (i32.eq (i32.load8_u (i32.sub (global.get $ptr) (i32.const 1))) (i32.const 10))
+            (i32.eq (i32.load8_u (i32.sub (global.get $ptr) (i32.const 1))) (i32.const 13)))))
       (then
         (global.set $streamMode (i32.const 2))
         (global.set $streamA (i32.const 34))
@@ -202,9 +234,12 @@
           (br_if $consume (i32.le_u (i32.sub (local.get $c) (i32.const "0")) (i32.const 9)))
           (br_if $consume (i32.eq (local.get $c) (i32.const ".")))
           (br_if $consume (i32.eq (i32.or (local.get $c) (i32.const 32)) (i32.const "e")))
-          (if (i32.and
-                (i32.or (i32.eq (local.get $c) (i32.const "+")) (i32.eq (local.get $c) (i32.const "-")))
-                (i32.eq (i32.or (local.get $prev) (i32.const 32)) (i32.const "e")))
+          (if
+            (i32.and
+              (i32.or
+                (i32.eq (local.get $c) (i32.const "+"))
+                (i32.eq (local.get $c) (i32.const "-")))
+              (i32.eq (i32.or (local.get $prev) (i32.const 32)) (i32.const "e")))
             (then (br $consume)))
           (br $done))
         (local.set $prev (local.get $c))

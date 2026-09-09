@@ -14,9 +14,11 @@
       (loop $wide
         (br_if $found (i32.ge_u (global.get $ptr) (global.get $end)))
         (local.set $w (v128.load (global.get $ptr)))
-        (local.set $mask (i8x16.bitmask (v128.or
-          (i8x16.eq (local.get $w) (i8x16.splat (i32.const 10)))
-          (i8x16.eq (local.get $w) (i8x16.splat (i32.const 13))))))
+        (local.set $mask
+          (i8x16.bitmask
+            (v128.or
+              (i8x16.eq (local.get $w) (i8x16.splat (i32.const 10)))
+              (i8x16.eq (local.get $w) (i8x16.splat (i32.const 13))))))
         (if (local.get $mask)
           (then
             (global.set $ptr (i32.add (global.get $ptr) (i32.ctz (local.get $mask))))
@@ -35,16 +37,18 @@
     (block $done
       (loop $wide
         (br_if $done (i32.ge_u (global.get $ptr) (global.get $end)))
-        (local.set $stars
-          (i8x16.eq (v128.load (global.get $ptr)) (i8x16.splat (i32.const "*"))))
+        (local.set $stars (i8x16.eq (v128.load (global.get $ptr)) (i8x16.splat (i32.const "*"))))
         (if (v128.any_true (local.get $stars))
           (then
-            (local.set $mask (i8x16.bitmask (v128.and (local.get $stars)
-              (i8x16.eq (v128.load offset=1 (global.get $ptr)) (i8x16.splat (i32.const "/"))))))
+            (local.set $mask
+              (i8x16.bitmask
+                (v128.and
+                  (local.get $stars)
+                  (i8x16.eq (v128.load offset=1 (global.get $ptr)) (i8x16.splat (i32.const "/"))))))
             (if (local.get $mask)
               (then
-                (global.set $ptr (i32.add (global.get $ptr)
-                  (i32.add (i32.ctz (local.get $mask)) (i32.const 2))))
+                (global.set $ptr
+                  (i32.add (global.get $ptr) (i32.add (i32.ctz (local.get $mask)) (i32.const 2))))
                 (br $done)))))
         (global.set $ptr (i32.add (global.get $ptr) (i32.const 16)))
         (br $wide)))
@@ -56,7 +60,13 @@
   ;; may pass $stop into the buffer slack; matches at or past $stop are
   ;; discarded. Disabled classes compare against $q again, so the loop body
   ;; stays branch-free.
-  (func $scanFindSpecial (param $p i32) (param $stop i32) (param $q i32) (param $esc i32) (param $nl i32) (result i32)
+  (func $scanFindSpecial
+    (param $p i32)
+    (param $stop i32)
+    (param $q i32)
+    (param $esc i32)
+    (param $nl i32)
+    (result i32)
     (local $mask i32)
     (local $w v128)
     (local $qv v128)
@@ -74,13 +84,15 @@
     (block $done
       (loop $wide
         (local.set $w (v128.load (local.get $p)))
-        (local.set $mask (i8x16.bitmask (v128.or
-          (v128.or
-            (i8x16.eq (local.get $w) (local.get $qv))
-            (i8x16.eq (local.get $w) (local.get $ev)))
-          (v128.or
-            (i8x16.eq (local.get $w) (local.get $nv))
-            (i8x16.eq (local.get $w) (local.get $rv))))))
+        (local.set $mask
+          (i8x16.bitmask
+            (v128.or
+              (v128.or
+                (i8x16.eq (local.get $w) (local.get $qv))
+                (i8x16.eq (local.get $w) (local.get $ev)))
+              (v128.or
+                (i8x16.eq (local.get $w) (local.get $nv))
+                (i8x16.eq (local.get $w) (local.get $rv))))))
         (if (local.get $mask)
           (then
             (local.set $p (i32.add (local.get $p) (i32.ctz (local.get $mask))))
@@ -102,7 +114,9 @@
     (if (i32.ge_u (global.get $ptr) (global.get $end))
       (then (return)))
     (local.set $c (i32.load8_u (global.get $ptr)))
-    (if (i32.eqz (i32.or
+    (if
+      (i32.eqz
+        (i32.or
           (i32.eq (local.get $c) (i32.const 32))
           (i32.le_u (i32.sub (local.get $c) (i32.const 9)) (i32.const 4))))
       (then (return)))
@@ -110,7 +124,9 @@
     (if (i32.ge_u (global.get $ptr) (global.get $end))
       (then (return)))
     (local.set $c (i32.load8_u (global.get $ptr)))
-    (if (i32.eqz (i32.or
+    (if
+      (i32.eqz
+        (i32.or
           (i32.eq (local.get $c) (i32.const 32))
           (i32.le_u (i32.sub (local.get $c) (i32.const 9)) (i32.const 4))))
       (then (return)))
@@ -118,13 +134,15 @@
       (loop $wide
         (br_if $done (i32.ge_u (global.get $ptr) (global.get $end)))
         (local.set $w (v128.load (global.get $ptr)))
-        (local.set $mask (i32.xor
-          (i8x16.bitmask (v128.or
-            (i8x16.eq (local.get $w) (i8x16.splat (i32.const 32)))
-            (i8x16.le_u
-              (i8x16.sub (local.get $w) (i8x16.splat (i32.const 9)))
-              (i8x16.splat (i32.const 4)))))
-          (i32.const 65535)))
+        (local.set $mask
+          (i32.xor
+            (i8x16.bitmask
+              (v128.or
+                (i8x16.eq (local.get $w) (i8x16.splat (i32.const 32)))
+                (i8x16.le_u
+                  (i8x16.sub (local.get $w) (i8x16.splat (i32.const 9)))
+                  (i8x16.splat (i32.const 4)))))
+            (i32.const 65535)))
         (if (local.get $mask)
           (then
             (global.set $ptr (i32.add (global.get $ptr) (i32.ctz (local.get $mask))))
@@ -146,23 +164,25 @@
     (block $done
       (loop $wide
         (local.set $w (v128.load (global.get $ptr)))
-        (local.set $mask (i32.xor
-          (i8x16.bitmask (v128.or
-            (v128.or
-              (i8x16.le_u
-                (i8x16.sub
-                  (v128.or (local.get $w) (i8x16.splat (i32.const 32)))
-                  (i8x16.splat (i32.const "a")))
-                (i8x16.splat (i32.const 25)))
-              (local.get $w))
-            (v128.or
-              (i8x16.le_u
-                (i8x16.sub (local.get $w) (i8x16.splat (i32.const "0")))
-                (i8x16.splat (i32.const 9)))
+        (local.set $mask
+          (i32.xor
+            (i8x16.bitmask
               (v128.or
-                (i8x16.eq (local.get $w) (i8x16.splat (i32.const "_")))
-                (i8x16.eq (local.get $w) (i8x16.splat (local.get $x)))))))
-          (i32.const 65535)))
+                (v128.or
+                  (i8x16.le_u
+                    (i8x16.sub
+                      (v128.or (local.get $w) (i8x16.splat (i32.const 32)))
+                      (i8x16.splat (i32.const "a")))
+                    (i8x16.splat (i32.const 25)))
+                  (local.get $w))
+                (v128.or
+                  (i8x16.le_u
+                    (i8x16.sub (local.get $w) (i8x16.splat (i32.const "0")))
+                    (i8x16.splat (i32.const 9)))
+                  (v128.or
+                    (i8x16.eq (local.get $w) (i8x16.splat (i32.const "_")))
+                    (i8x16.eq (local.get $w) (i8x16.splat (local.get $x)))))))
+            (i32.const 65535)))
         (if (local.get $mask)
           (then
             (global.set $ptr (i32.add (global.get $ptr) (i32.ctz (local.get $mask))))
@@ -174,8 +194,7 @@
 
   ;; the next occurrence in [$p,$end) of $a, $b, or $c, or $end when there is
   ;; none - 16 bytes per step, with matches in the input slack clamped to $end
-  (func $scanFind3
-    (param $p i32) (param $a i32) (param $b i32) (param $c i32) (result i32)
+  (func $scanFind3 (param $p i32) (param $a i32) (param $b i32) (param $c i32) (result i32)
     (local $mask i32)
     (local $w v128)
     (if (i32.ge_u (local.get $p) (global.get $end))
@@ -183,19 +202,20 @@
     (block $done
       (loop $simd
         (local.set $w (v128.load (local.get $p)))
-        (local.set $mask (i8x16.bitmask (v128.or
-          (v128.or
-            (i8x16.eq (local.get $w) (i8x16.splat (local.get $a)))
-            (i8x16.eq (local.get $w) (i8x16.splat (local.get $b))))
-          (i8x16.eq (local.get $w) (i8x16.splat (local.get $c))))))
+        (local.set $mask
+          (i8x16.bitmask
+            (v128.or
+              (v128.or
+                (i8x16.eq (local.get $w) (i8x16.splat (local.get $a)))
+                (i8x16.eq (local.get $w) (i8x16.splat (local.get $b))))
+              (i8x16.eq (local.get $w) (i8x16.splat (local.get $c))))))
         (if (local.get $mask)
           (then
             (local.set $p (i32.add (local.get $p) (i32.ctz (local.get $mask))))
             (br $done)))
         (local.set $p (i32.add (local.get $p) (i32.const 16)))
         (br_if $simd (i32.lt_u (local.get $p) (global.get $end)))))
-    (select (local.get $p) (global.get $end)
-      (i32.lt_u (local.get $p) (global.get $end))))
+    (select (local.get $p) (global.get $end) (i32.lt_u (local.get $p) (global.get $end))))
 
   ;; clamp $e to $stop, then extend it over UTF-8 continuation bytes: an
   ;; escape span must never split a code point
@@ -205,9 +225,8 @@
     (block $done
       (loop $l
         (br_if $done (i32.ge_u (local.get $e) (local.get $stop)))
-        (br_if $done (i32.ne
-          (i32.and (i32.load8_u (local.get $e)) (i32.const 0xc0))
-          (i32.const 0x80)))
+        (br_if $done
+          (i32.ne (i32.and (i32.load8_u (local.get $e)) (i32.const 0xc0)) (i32.const 0x80)))
         (local.set $e (i32.add (local.get $e) (i32.const 1)))
         (br $l)))
     (local.get $e))
@@ -226,9 +245,12 @@
       (loop $l
         (br_if $done (i32.ge_u (local.get $p) (local.get $stop)))
         (local.set $c (i32.load8_u (local.get $p)))
-        (br_if $done (i32.and
-          (i32.gt_u (i32.sub (local.get $c) (i32.const "0")) (i32.const 9))
-          (i32.gt_u (i32.sub (i32.or (local.get $c) (i32.const 32)) (i32.const "a")) (i32.const 5))))
+        (br_if $done
+          (i32.and
+            (i32.gt_u (i32.sub (local.get $c) (i32.const "0")) (i32.const 9))
+            (i32.gt_u
+              (i32.sub (i32.or (local.get $c) (i32.const 32)) (i32.const "a"))
+              (i32.const 5))))
         (local.set $p (i32.add (local.get $p) (i32.const 1)))
         (br $l)))
     (local.get $p))

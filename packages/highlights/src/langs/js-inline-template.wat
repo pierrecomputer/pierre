@@ -39,10 +39,12 @@
     (local.set $angular (i32.and (global.get $jsTemplateState) (i32.const 0x80000000)))
     (global.set $ptr (local.get $from))
     (global.set $end (local.get $to))
-    (global.set $jsTemplateState (i32.or (local.get $angular)
-      (call $hlTemplateMarkup
-        (i32.and (global.get $jsTemplateState) (i32.const 0x7fffffff))
-        (i32.ne (local.get $angular) (i32.const 0)))))
+    (global.set $jsTemplateState
+      (i32.or
+        (local.get $angular)
+        (call $hlTemplateMarkup
+          (i32.and (global.get $jsTemplateState) (i32.const 0x7fffffff))
+          (i32.ne (local.get $angular) (i32.const 0)))))
     (global.set $ptr (local.get $savePtr))
     (global.set $end (local.get $saveEnd)))
 )

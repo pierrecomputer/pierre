@@ -41,9 +41,11 @@
 
   ;; write one byte as two lowercase hex digits
   (func $hexByte (param $b i32)
-    (i32.store8 (global.get $out)
+    (i32.store8
+      (global.get $out)
       (i32.load8_u (i32.add (i32.const $mem.emitterHtml) (i32.shr_u (local.get $b) (i32.const 4)))))
-    (i32.store8 offset=1 (global.get $out)
+    (i32.store8 offset=1
+      (global.get $out)
       (i32.load8_u (i32.add (i32.const $mem.emitterHtml) (i32.and (local.get $b) (i32.const 15)))))
     (global.set $out (i32.add (global.get $out) (i32.const 2))))
 
@@ -64,17 +66,12 @@
   (func $emitCssVariable (param $hl i32)
     (local $entry i32)
     (local $n i32)
-    (memory.copy
-      (global.get $out) (i32.const $mem.emitterHtml+114) (i32.const 10))
+    (memory.copy (global.get $out) (i32.const $mem.emitterHtml+114) (i32.const 10))
     (global.set $out (i32.add (global.get $out) (i32.const 10)))
     (local.set $entry
-      (i32.add (i32.const $mem.tokenCssTable)
-        (i32.mul (local.get $hl) (i32.const 3))))
+      (i32.add (i32.const $mem.tokenCssTable) (i32.mul (local.get $hl) (i32.const 3))))
     (local.set $n (i32.load8_u offset=2 (local.get $entry)))
-    (memory.copy
-      (global.get $out)
-      (i32.load16_u (local.get $entry))
-      (local.get $n))
+    (memory.copy (global.get $out) (i32.load16_u (local.get $entry)) (local.get $n))
     (global.set $out (i32.add (global.get $out) (local.get $n)))
     (i32.store8 (global.get $out) (i32.const ")"))
     (global.set $out (i32.add (global.get $out) (i32.const 1))))
@@ -103,7 +100,9 @@
       (then (return)))
     ;; a failed grow (output would pass the wasm32 4 GB ceiling) traps here on
     ;; purpose: the host sees a RuntimeError and the instance stays reusable
-    (if (i32.eq (memory.grow
+    (if
+      (i32.eq
+        (memory.grow
           (i32.add
             (i32.shr_u
               (i32.sub
@@ -111,7 +110,7 @@
                 (i32.mul (memory.size) (i32.const 65536)))
               (i32.const 16))
             (i32.const 4)))
-          (i32.const -1))
+        (i32.const -1))
       (then (unreachable)))
     (global.set $cap (i32.sub (i32.mul (memory.size) (i32.const 65536)) (i32.const 16))))
 
@@ -135,8 +134,7 @@
     (local $save i32)
     (local $rec i32)
     (local.set $slot
-      (i32.add (i32.const $mem.emitterSpanCache)
-        (i32.mul (local.get $hl) (i32.const 66))))
+      (i32.add (i32.const $mem.emitterSpanCache) (i32.mul (local.get $hl) (i32.const 66))))
     (local.set $len (i32.load8_u (local.get $slot)))
     (if (i32.eqz (local.get $len))
       (then
@@ -178,18 +176,18 @@
   ;; the 64-byte wide copy $emitSpanOpen performs.
   (func $setSpan (param $hl i32)
     (local $val i64)
-    (if (i32.eq (local.get $hl) (global.get $spanHl)) (then (return)))
+    (if (i32.eq (local.get $hl) (global.get $spanHl))
+      (then (return)))
     (global.set $spanHl (local.get $hl))
     ;; Token identity is the style in CSS-variable mode; otherwise compare the
     ;; whole packed five-byte theme record.
     (local.set $val
-      (if (result i64) (global.get $cssVariables)
+      (if (result i64)
+        (global.get $cssVariables)
         (then (i64.extend_i32_u (local.get $hl)))
-        (else
-          (i64.and
-            (i64.load (call $themeRec (local.get $hl)))
-            (i64.const 0xFFFFFFFFFF)))))
-    (if (i64.eq (local.get $val) (global.get $spanVal)) (then (return)))
+        (else (i64.and (i64.load (call $themeRec (local.get $hl))) (i64.const 0xFFFFFFFFFF)))))
+    (if (i64.eq (local.get $val) (global.get $spanVal))
+      (then (return)))
     (if (i64.ne (global.get $spanVal) (i64.const 0))
       (then
         (i64.store (global.get $out) (i64.const "</span>"))
@@ -225,16 +223,21 @@
         (block $special
           (loop $wide
             (local.set $w (v128.load (local.get $lhs)))
-            (local.set $mask (i8x16.bitmask (v128.or
-              (v128.or
-                (i8x16.eq (local.get $w) (i8x16.splat (i32.const "&")))
-                (i8x16.eq (local.get $w) (i8x16.splat (i32.const "<"))))
-              (i8x16.eq (local.get $w) (i8x16.splat (i32.const ">"))))))
+            (local.set $mask
+              (i8x16.bitmask
+                (v128.or
+                  (v128.or
+                    (i8x16.eq (local.get $w) (i8x16.splat (i32.const "&")))
+                    (i8x16.eq (local.get $w) (i8x16.splat (i32.const "<"))))
+                  (i8x16.eq (local.get $w) (i8x16.splat (i32.const ">"))))))
             (local.set $rem (i32.sub (local.get $rhs) (local.get $lhs)))
             ;; ignore specials past $rhs
             (if (i32.lt_u (local.get $rem) (i32.const 16))
-              (then (local.set $mask (i32.and (local.get $mask)
-                (i32.sub (i32.shl (i32.const 1) (local.get $rem)) (i32.const 1))))))
+              (then
+                (local.set $mask
+                  (i32.and
+                    (local.get $mask)
+                    (i32.sub (i32.shl (i32.const 1) (local.get $rem)) (i32.const 1))))))
             (if (local.get $mask)
               (then
                 ;; copy the clean prefix, then leave to escape the special byte
@@ -272,11 +275,13 @@
   ;; the analog of span merging. Records tile the input; a record's start is
   ;; the previous record's end (0 for the first).
   (func $recTok (param $hl i32) (param $rhs i32)
-    (if (i32.and
-          (i32.gt_u (global.get $out) (i32.load (i32.const 6)))
-          (i32.eq (i32.load (i32.sub (global.get $out) (i32.const 4))) (local.get $hl)))
+    (if
+      (i32.and
+        (i32.gt_u (global.get $out) (i32.load (i32.const 6)))
+        (i32.eq (i32.load (i32.sub (global.get $out) (i32.const 4))) (local.get $hl)))
       (then
-        (i32.store (i32.sub (global.get $out) (i32.const 8))
+        (i32.store
+          (i32.sub (global.get $out) (i32.const 8))
           (i32.sub (local.get $rhs) (global.get $srcBase)))
         (return)))
     (call $ensureCap (i32.const 16))
@@ -300,23 +305,22 @@
 
   (func $recStreamEnd
     (if (i32.gt_u (global.get $out) (i32.load (i32.const 6)))
-      (then
-        (global.set $recCarryHl
-          (i32.load (i32.sub (global.get $out) (i32.const 4)))))))
+      (then (global.set $recCarryHl (i32.load (i32.sub (global.get $out) (i32.const 4)))))))
 
   ;; Append a line-aware `(endUtf16:u32, hl:u32)` record. Token id -1 marks a
   ;; line terminator and ends after it. Other equal neighbors merge.
   (func $recLineWrite (param $hl i32) (param $end i32)
     (local $start i32)
     (if (i32.gt_u (global.get $out) (i32.load (i32.const 6)))
-      (then
-        (local.set $start (i32.load (i32.sub (global.get $out) (i32.const 8))))))
-    (if (i32.le_u (local.get $end) (local.get $start)) (then (return)))
-    (if (i32.and
-          (i32.ne (local.get $hl) (i32.const -1))
-          (i32.and
-            (i32.gt_u (global.get $out) (i32.load (i32.const 6)))
-            (i32.eq (i32.load (i32.sub (global.get $out) (i32.const 4))) (local.get $hl))))
+      (then (local.set $start (i32.load (i32.sub (global.get $out) (i32.const 8))))))
+    (if (i32.le_u (local.get $end) (local.get $start))
+      (then (return)))
+    (if
+      (i32.and
+        (i32.ne (local.get $hl) (i32.const -1))
+        (i32.and
+          (i32.gt_u (global.get $out) (i32.load (i32.const 6)))
+          (i32.eq (i32.load (i32.sub (global.get $out) (i32.const 4))) (local.get $hl))))
       (then
         (i32.store (i32.sub (global.get $out) (i32.const 8)) (local.get $end))
         (return)))
@@ -330,10 +334,13 @@
   (func $recLineTrim (param $end i32)
     (local $last i32)
     (local $prev i32)
-    (if (i32.le_u (global.get $out) (i32.load (i32.const 6))) (then (return)))
+    (if (i32.le_u (global.get $out) (i32.load (i32.const 6)))
+      (then (return)))
     (local.set $last (i32.sub (global.get $out) (i32.const 8)))
-    (if (i32.eq (i32.load offset=4 (local.get $last)) (i32.const -1)) (then (return)))
-    (if (i32.le_u (i32.load (local.get $last)) (local.get $end)) (then (return)))
+    (if (i32.eq (i32.load offset=4 (local.get $last)) (i32.const -1))
+      (then (return)))
+    (if (i32.le_u (i32.load (local.get $last)) (local.get $end))
+      (then (return)))
     (if (i32.gt_u (local.get $last) (i32.load (i32.const 6)))
       (then (local.set $prev (i32.load (i32.sub (local.get $last) (i32.const 8))))))
     (if (i32.le_u (local.get $end) (local.get $prev))
@@ -342,8 +349,7 @@
 
   ;; Scan newly emitted input bytes once, splitting records at LF/CRLF
   ;; boundaries and returning the UTF-16 cursor for the next record.
-  (func $recLineTok (param $hl i32) (param $p i32) (param $rhs i32)
-    (param $char i32) (result i32)
+  (func $recLineTok (param $hl i32) (param $p i32) (param $rhs i32) (param $char i32) (result i32)
     (local $b i32)
     (local $cut i32)
     (local $step i32)
@@ -358,18 +364,20 @@
         ;; pass $rhs into the following record or the buffer slack; matches
         ;; there are masked off. The bitmask reads non-ASCII high bits directly.
         (local.set $w (v128.load (local.get $p)))
-        (local.set $mask (i8x16.bitmask (v128.or
-          (local.get $w)
-          (i8x16.eq (local.get $w) (i8x16.splat (i32.const 10))))))
+        (local.set $mask
+          (i8x16.bitmask
+            (v128.or (local.get $w) (i8x16.eq (local.get $w) (i8x16.splat (i32.const 10))))))
         (local.set $rem (i32.sub (local.get $rhs) (local.get $p)))
         (if (i32.lt_u (local.get $rem) (i32.const 16))
-          (then (local.set $mask (i32.and (local.get $mask)
-            (i32.sub (i32.shl (i32.const 1) (local.get $rem)) (i32.const 1))))))
+          (then
+            (local.set $mask
+              (i32.and
+                (local.get $mask)
+                (i32.sub (i32.shl (i32.const 1) (local.get $rem)) (i32.const 1))))))
         (if (i32.eqz (local.get $mask))
           (then
-            (local.set $step (select
-              (local.get $rem) (i32.const 16)
-              (i32.lt_u (local.get $rem) (i32.const 16))))
+            (local.set $step
+              (select (local.get $rem) (i32.const 16) (i32.lt_u (local.get $rem) (i32.const 16))))
             (local.set $p (i32.add (local.get $p) (local.get $step)))
             (local.set $char (i32.add (local.get $char) (local.get $step)))
             (br $scan)))
@@ -380,9 +388,10 @@
         (if (i32.eq (local.get $b) (i32.const 10))
           (then
             (local.set $cut (local.get $char))
-            (if (i32.and
-                  (i32.gt_u (local.get $p) (global.get $srcBase))
-                  (i32.eq (i32.load8_u (i32.sub (local.get $p) (i32.const 1))) (i32.const 13)))
+            (if
+              (i32.and
+                (i32.gt_u (local.get $p) (global.get $srcBase))
+                (i32.eq (i32.load8_u (i32.sub (local.get $p) (i32.const 1))) (i32.const 13)))
               (then
                 (local.set $cut (i32.sub (local.get $cut) (i32.const 1)))
                 (call $recLineTrim (local.get $cut))))
@@ -418,53 +427,53 @@
     (local $char i32)
     (local.set $rec (i32.load (i32.const 6)))
     (local.set $oldEnd (global.get $out))
-    (global.set $out
-      (i32.and (i32.add (local.get $oldEnd) (i32.const 15)) (i32.const -16)))
+    (global.set $out (i32.and (i32.add (local.get $oldEnd) (i32.const 15)) (i32.const -16)))
     (i32.store (i32.const 6) (global.get $out))
     (block $done
       (loop $records
         (br_if $done (i32.ge_u (local.get $rec) (local.get $oldEnd)))
         (local.set $rhs (i32.load (local.get $rec)))
-        (if (i32.gt_u
-              (local.get $rhs)
-              (local.get $lhs))
+        (if (i32.gt_u (local.get $rhs) (local.get $lhs))
           (then
-            (local.set $char (call $recLineTok
-              (i32.load offset=4 (local.get $rec))
-              (i32.add (global.get $srcBase) (local.get $lhs))
-              (i32.add (global.get $srcBase) (local.get $rhs))
-              (local.get $char)))
+            (local.set $char
+              (call $recLineTok
+                (i32.load offset=4 (local.get $rec))
+                (i32.add (global.get $srcBase) (local.get $lhs))
+                (i32.add (global.get $srcBase) (local.get $rhs))
+                (local.get $char)))
             (local.set $lhs (local.get $rhs))))
         (local.set $rec (i32.add (local.get $rec) (i32.const 8)))
         (br $records))))
 
   ;; emit the token bytes [$lhs,$rhs) styled as $hl
   (func $emitTok (param $hl i32) (param $lhs i32) (param $rhs i32)
-    (if (i32.ge_u (local.get $lhs) (local.get $rhs)) (then (return)))
+    (if (i32.ge_u (local.get $lhs) (local.get $rhs))
+      (then (return)))
     (if (global.get $tokens)
       (then
         (call $recTok (local.get $hl) (local.get $rhs))
         (return)))
-    (call $ensureCap (i32.add
-      (i32.mul (i32.sub (local.get $rhs) (local.get $lhs)) (i32.const 5))
-      (i32.const 96)))
+    (call $ensureCap
+      (i32.add (i32.mul (i32.sub (local.get $rhs) (local.get $lhs)) (i32.const 5)) (i32.const 96)))
     (call $setSpan (local.get $hl))
     (call $escCopy (local.get $lhs) (local.get $rhs) (i32.const 0)))
 
   ;; Copy whitespace or leading UTF-8 continuation bytes without changing
   ;; the open span. These bytes cannot contain HTML specials (& < >).
   (func $emitGap (param $lhs i32) (param $rhs i32)
-    (if (i32.ge_u (local.get $lhs) (local.get $rhs)) (then (return)))
+    (if (i32.ge_u (local.get $lhs) (local.get $rhs))
+      (then (return)))
     (if (global.get $tokens)
       (then
         ;; a gap keeps the open record's style, mirroring HTML span merging
         (if (i32.gt_u (global.get $out) (i32.load (i32.const 6)))
-          (then (i32.store (i32.sub (global.get $out) (i32.const 8))
-            (i32.sub (local.get $rhs) (global.get $srcBase))))
+          (then
+            (i32.store
+              (i32.sub (global.get $out) (i32.const 8))
+              (i32.sub (local.get $rhs) (global.get $srcBase))))
           (else (call $recTok (enum.get $Token.none) (local.get $rhs))))
         (return)))
-    (call $ensureCap (i32.add
-      (i32.sub (local.get $rhs) (local.get $lhs)) (i32.const 16)))
+    (call $ensureCap (i32.add (i32.sub (local.get $rhs) (local.get $lhs)) (i32.const 16)))
     (call $escCopy (local.get $lhs) (local.get $rhs) (i32.const 1)))
 
   ;; Keep a span open when a bounded range resumes inside a UTF-8 code point.
@@ -534,28 +543,36 @@
         ;; Compare all 73 five-byte records, padded to 384 bytes, in twelve
         ;; pairs of vectors. Reading bytes also catches direct host writes.
         (loop $theme
-          (local.set $changed (v128.or (local.get $changed)
+          (local.set $changed
             (v128.or
-              (v128.xor
-                (v128.load (i32.add (i32.const $mem.themeTable) (local.get $offset)))
-                (v128.load (i32.add (i32.const $mem.emitterThemeCache) (local.get $offset))))
-              (v128.xor
-                (v128.load offset=16 (i32.add (i32.const $mem.themeTable) (local.get $offset)))
-                (v128.load offset=16 (i32.add (i32.const $mem.emitterThemeCache) (local.get $offset)))))))
+              (local.get $changed)
+              (v128.or
+                (v128.xor
+                  (v128.load (i32.add (i32.const $mem.themeTable) (local.get $offset)))
+                  (v128.load (i32.add (i32.const $mem.emitterThemeCache) (local.get $offset))))
+                (v128.xor
+                  (v128.load offset=16 (i32.add (i32.const $mem.themeTable) (local.get $offset)))
+                  (v128.load offset=16
+                    (i32.add (i32.const $mem.emitterThemeCache) (local.get $offset)))))))
           (local.set $offset (i32.add (local.get $offset) (i32.const 32)))
           (br_if $theme (i32.lt_u (local.get $offset) (i32.const 384))))
-        (if (i32.or
-              (v128.any_true (local.get $changed))
-              (i32.ne (global.get $spanCacheMode) (global.get $cssVariables)))
+        (if
+          (i32.or
+            (v128.any_true (local.get $changed))
+            (i32.ne (global.get $spanCacheMode) (global.get $cssVariables)))
           (then
             (memory.fill (i32.const $mem.emitterSpanCache) (i32.const 0) (i32.const 4818))
-            (memory.copy (i32.const $mem.emitterThemeCache) (i32.const $mem.themeTable) (i32.const 384))
+            (memory.copy
+              (i32.const $mem.emitterThemeCache)
+              (i32.const $mem.themeTable)
+              (i32.const 384))
             (global.set $spanCacheMode (global.get $cssVariables))))
         (call $prologue))))
 
   ;; driver epilogue: emit the wrapper closing and publish the result
   (func $hlEnd
-    (if (i32.eqz (global.get $tokens)) (then (call $epilogue)))
+    (if (i32.eqz (global.get $tokens))
+      (then (call $epilogue)))
     (if (i32.eq (i32.load8_u (i32.const 1)) (i32.const 3))
       (then (call $recLinesPost)))
     (i32.store (i32.const 10) (i32.sub (global.get $out) (i32.load (i32.const 6)))))

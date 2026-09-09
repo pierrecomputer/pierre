@@ -174,20 +174,11 @@
     "wgsl"
     "xml"
     "yaml"
-    "zig"
-  )
+    "zig")
 
   ;; language dispatch table, one entry per $Language member in enum order
   (table $hlDispatch funcref
-    (elem
-      $hlPlain $hlAngularHtml $hlAsm $hlAstro $hlBash $hlC $hlC3 $hlClojure $hlCmake $hlCpp
-      $hlCsharp $hlCss $hlDart $hlDiff $hlDockerfile $hlElixir $hlErlang
-      $hlFsharp $hlGleam $hlGlsl $hlGo $hlGraphql $hlGroovy $hlHaskell $hlHlsl
-      $hlHtml $hlJava $hlJs $hlJson $hlJsx $hlJulia $hlKotlin $hlLess $hlLisp
-      $hlLua $hlMakefile $hlMarkdown $hlMatlab $hlMdx $hlNix $hlObjc $hlOcaml
-      $hlPascal $hlPerl $hlPhp $hlPowershell $hlProto $hlPython $hlR $hlRuby
-      $hlRust $hlSass $hlScala $hlScss $hlSql $hlSvelte $hlSwift $hlTerraform
-      $hlToml $hlTs $hlTsrx $hlTsx $hlVue $hlWat $hlWgsl $hlXml $hlYaml $hlZig))
+    (elem $hlPlain $hlAngularHtml $hlAsm $hlAstro $hlBash $hlC $hlC3 $hlClojure $hlCmake $hlCpp $hlCsharp $hlCss $hlDart $hlDiff $hlDockerfile $hlElixir $hlErlang $hlFsharp $hlGleam $hlGlsl $hlGo $hlGraphql $hlGroovy $hlHaskell $hlHlsl $hlHtml $hlJava $hlJs $hlJson $hlJsx $hlJulia $hlKotlin $hlLess $hlLisp $hlLua $hlMakefile $hlMarkdown $hlMatlab $hlMdx $hlNix $hlObjc $hlOcaml $hlPascal $hlPerl $hlPhp $hlPowershell $hlProto $hlPython $hlR $hlRuby $hlRust $hlSass $hlScala $hlScss $hlSql $hlSvelte $hlSwift $hlTerraform $hlToml $hlTs $hlTsrx $hlTsx $hlVue $hlWat $hlWgsl $hlXml $hlYaml $hlZig))
 
   ;; plain text: one unstyled token covering the whole input
   (func $hlPlain
@@ -226,21 +217,25 @@
       (then (return (call $pyStreamResume))))
     (if (i32.eq (local.get $lang) (enum.get $Language.php))
       (then (return (call $phpStreamResume))))
-    (if (i32.or
-          (i32.eq (local.get $lang) (enum.get $Language.markdown))
-          (i32.eq (local.get $lang) (enum.get $Language.mdx)))
+    (if
+      (i32.or
+        (i32.eq (local.get $lang) (enum.get $Language.markdown))
+        (i32.eq (local.get $lang) (enum.get $Language.mdx)))
       (then (return (call $markdownStreamResume))))
-    (if (i32.and
-          (i32.eq (local.get $lang) (enum.get $Language.yaml))
-          (i32.eq (global.get $streamMode) (i32.const 11)))
+    (if
+      (i32.and
+        (i32.eq (local.get $lang) (enum.get $Language.yaml))
+        (i32.eq (global.get $streamMode) (i32.const 11)))
       (then (return (call $yamlStreamResume))))
-    (if (i32.and
-          (i32.eq (local.get $lang) (enum.get $Language.bash))
-          (i32.eq (global.get $streamMode) (i32.const 12)))
+    (if
+      (i32.and
+        (i32.eq (local.get $lang) (enum.get $Language.bash))
+        (i32.eq (global.get $streamMode) (i32.const 12)))
       (then (return (call $bashStreamResume))))
-    (if (i32.and
-          (i32.eq (local.get $lang) (enum.get $Language.toml))
-          (i32.eq (global.get $streamMode) (i32.const 13)))
+    (if
+      (i32.and
+        (i32.eq (local.get $lang) (enum.get $Language.toml))
+        (i32.eq (global.get $streamMode) (i32.const 13)))
       (then (return (call $tomlStreamResume))))
     (i32.const 0))
 
@@ -252,8 +247,7 @@
   ;; previous stream's locals.
   (func $streamResetGlobals
     (memory.fill (i32.const $mem.streamDelimiter) (i32.const 0) (i32.const 32))
-    (memory.fill (i32.const $mem.streamState) (i32.const 0)
-      (i32.const $mem.streamStateUsed))
+    (memory.fill (i32.const $mem.streamState) (i32.const 0) (i32.const $mem.streamStateUsed))
     (global.set $streamMode (i32.const 0))
     (global.set $streamA (i32.const 0))
     (global.set $streamB (i32.const 0))
@@ -264,7 +258,9 @@
     (global.set $markdownStreamFence (i32.const 0))
     (global.set $markdownStreamFenceLen (i32.const 0))
     (global.set $markdownStreamLang (i32.const 0))
-    (memory.fill (i32.const $mem.markdownFenceStack) (i32.const 0)
+    (memory.fill
+      (i32.const $mem.markdownFenceStack)
+      (i32.const 0)
       (i32.sub (i32.const $mem.tomlStack) (i32.const $mem.markdownFenceStack)))
     (global.set $phpStreamingCode (i32.const 0))
     (global.set $phpStreamDecl (i32.const 0))
@@ -275,33 +271,48 @@
   ;; Shared by highlightStream and the live tokenizer's per-line runs.
   (func $streamChunk (param $lang i32) (param $reset i32)
     (if (i32.eq (local.get $lang) (enum.get $Language.js))
-      (then (call $hlJsStream (local.get $reset)) (return)))
+      (then
+        (call $hlJsStream (local.get $reset))
+        (return)))
     (if (i32.eq (local.get $lang) (enum.get $Language.jsx))
-      (then (call $hlJsxStream (local.get $reset)) (return)))
+      (then
+        (call $hlJsxStream (local.get $reset))
+        (return)))
     (if (i32.eq (local.get $lang) (enum.get $Language.ts))
-      (then (call $hlTsStream (local.get $reset)) (return)))
+      (then
+        (call $hlTsStream (local.get $reset))
+        (return)))
     (if (i32.eq (local.get $lang) (enum.get $Language.tsx))
-      (then (call $hlTsxStream (local.get $reset)) (return)))
+      (then
+        (call $hlTsxStream (local.get $reset))
+        (return)))
     (if (i32.eq (local.get $lang) (enum.get $Language.tsrx))
-      (then (call $hlTsrxStream (local.get $reset)) (return)))
+      (then
+        (call $hlTsrxStream (local.get $reset))
+        (return)))
     ;; non-ecma lexers share the parameter-machine globals; the ecma stream
     ;; entries reset them in $hlEcmaImpl
-    (if (local.get $reset) (then (call $sigReset)))
+    (if (local.get $reset)
+      (then (call $sigReset)))
     ;; An open markdown fence owns the chunk start: its body resumes inside
     ;; the fence bounds ($markdownCodeRange runs the shared and per-language
     ;; resumes there), so the top-level resumes must not consume a mode the
     ;; body left open.
-    (if (i32.and
-          (i32.or
-            (i32.eq (local.get $lang) (enum.get $Language.markdown))
-            (i32.eq (local.get $lang) (enum.get $Language.mdx)))
-          (i32.ne (call $markdownFenceReg) (i32.const 0)))
+    (if
+      (i32.and
+        (i32.or
+          (i32.eq (local.get $lang) (enum.get $Language.markdown))
+          (i32.eq (local.get $lang) (enum.get $Language.mdx)))
+        (i32.ne (call $markdownFenceReg) (i32.const 0)))
       (then
-        (if (call $markdownStreamResume) (then (return)))
+        (if (call $markdownStreamResume)
+          (then (return)))
         (call $highlightLang (local.get $lang))
         (return)))
-    (if (call $streamResumeCommon) (then (return)))
-    (if (call $streamResumeLang (local.get $lang)) (then (return)))
+    (if (call $streamResumeCommon)
+      (then (return)))
+    (if (call $streamResumeLang (local.get $lang))
+      (then (return)))
     (call $highlightLang (local.get $lang)))
 
   ;; Stream one input chunk through any language while preserving lexer and

@@ -14,48 +14,59 @@
     (if (i32.gt_u (i32.sub (local.get $n) (i32.const 1)) (i32.const 4))
       (then (return (enum.get $Token.string))))
     (if (i32.eq (local.get $n) (i32.const 1))
-      (then (return (select
-        (enum.get $Token.constant.builtin) (enum.get $Token.string)
-        (i32.eq (i32.load8_u (local.get $lhs)) (i32.const "~"))))))
+      (then
+        (return
+          (select
+            (enum.get $Token.constant.builtin)
+            (enum.get $Token.string)
+            (i32.eq (i32.load8_u (local.get $lhs)) (i32.const "~"))))))
     (if (i32.eq (local.get $n) (i32.const 5))
-      (then (return (select
-        (enum.get $Token.boolean) (enum.get $Token.string)
-        (i64.eq
-          (i64.and
-            (i64.or (i64.load (local.get $lhs)) (i64.const 0x2020202020))
-            (i64.const 0xffffffffff))
-          (i64.const "false"))))))
+      (then
+        (return
+          (select
+            (enum.get $Token.boolean)
+            (enum.get $Token.string)
+            (i64.eq
+              (i64.and
+                (i64.or (i64.load (local.get $lhs)) (i64.const 0x2020202020))
+                (i64.const 0xffffffffff))
+              (i64.const "false"))))))
     ;; wide loads stay inside the buffer slack, so a short word is safe to read
     (local.set $w (i32.or (i32.load (local.get $lhs)) (i32.const 0x20202020)))
     (if (i32.eq (local.get $n) (i32.const 4))
       (then
         (if (i32.eq (local.get $w) (i32.const "true"))
           (then (return (enum.get $Token.boolean))))
-        (return (select
-          (enum.get $Token.constant.builtin) (enum.get $Token.string)
-          (i32.eq (local.get $w) (i32.const "null"))))))
+        (return
+          (select
+            (enum.get $Token.constant.builtin)
+            (enum.get $Token.string)
+            (i32.eq (local.get $w) (i32.const "null"))))))
     (if (i32.eq (local.get $n) (i32.const 3))
       (then
         (local.set $w (i32.and (local.get $w) (i32.const 0xffffff)))
-        (return (select
-          (enum.get $Token.boolean) (enum.get $Token.string)
-          (i32.or
-            (i32.eq (local.get $w) (i32.const "yes"))
-            (i32.eq (local.get $w) (i32.const "off")))))))
+        (return
+          (select
+            (enum.get $Token.boolean)
+            (enum.get $Token.string)
+            (i32.or
+              (i32.eq (local.get $w) (i32.const "yes"))
+              (i32.eq (local.get $w) (i32.const "off")))))))
     (local.set $w (i32.and (local.get $w) (i32.const 0xffff)))
     (select
-      (enum.get $Token.boolean) (enum.get $Token.string)
-      (i32.or
-        (i32.eq (local.get $w) (i32.const "no"))
-        (i32.eq (local.get $w) (i32.const "on")))))
+      (enum.get $Token.boolean)
+      (enum.get $Token.string)
+      (i32.or (i32.eq (local.get $w) (i32.const "no")) (i32.eq (local.get $w) (i32.const "on")))))
 
   (func $yamlSkipHorizontal (param $p i32) (result i32)
     (block $done
       (loop $space
         (br_if $done (i32.ge_u (local.get $p) (global.get $end)))
-        (br_if $done (i32.eqz (i32.or
-          (i32.eq (i32.load8_u (local.get $p)) (i32.const 32))
-          (i32.eq (i32.load8_u (local.get $p)) (i32.const 9)))))
+        (br_if $done
+          (i32.eqz
+            (i32.or
+              (i32.eq (i32.load8_u (local.get $p)) (i32.const 32))
+              (i32.eq (i32.load8_u (local.get $p)) (i32.const 9)))))
         (local.set $p (i32.add (local.get $p) (i32.const 1)))
         (br $space)))
     (local.get $p))
@@ -65,9 +76,10 @@
       (then
         (if (i32.eq (i32.load8_u (local.get $p)) (i32.const 13))
           (then (local.set $p (i32.add (local.get $p) (i32.const 1)))))
-        (if (i32.and
-              (i32.lt_u (local.get $p) (global.get $end))
-              (i32.eq (i32.load8_u (local.get $p)) (i32.const 10)))
+        (if
+          (i32.and
+            (i32.lt_u (local.get $p) (global.get $end))
+            (i32.eq (i32.load8_u (local.get $p)) (i32.const 10)))
           (then (local.set $p (i32.add (local.get $p) (i32.const 1)))))))
     (local.get $p))
 
@@ -77,9 +89,10 @@
     (block $done
       (loop $back
         (br_if $done (i32.le_u (local.get $p) (global.get $srcBase)))
-        (br_if $done (i32.or
-          (i32.eq (i32.load8_u (i32.sub (local.get $p) (i32.const 1))) (i32.const 10))
-          (i32.eq (i32.load8_u (i32.sub (local.get $p) (i32.const 1))) (i32.const 13))))
+        (br_if $done
+          (i32.or
+            (i32.eq (i32.load8_u (i32.sub (local.get $p) (i32.const 1))) (i32.const 10))
+            (i32.eq (i32.load8_u (i32.sub (local.get $p) (i32.const 1))) (i32.const 13))))
         (local.set $p (i32.sub (local.get $p) (i32.const 1)))
         (br $back)))
     (i32.sub (call $yamlSkipHorizontal (local.get $p)) (local.get $p)))
@@ -103,19 +116,23 @@
       (loop $mod
         (br_if $modDone (i32.ge_u (local.get $p) (global.get $end)))
         (local.set $c (i32.load8_u (local.get $p)))
-        (br_if $modDone (i32.eqz (i32.or
-          (i32.or (i32.eq (local.get $c) (i32.const "+"))
-                  (i32.eq (local.get $c) (i32.const "-")))
-          (i32.le_u (i32.sub (local.get $c) (i32.const "1")) (i32.const 8)))))
+        (br_if $modDone
+          (i32.eqz
+            (i32.or
+              (i32.or
+                (i32.eq (local.get $c) (i32.const "+"))
+                (i32.eq (local.get $c) (i32.const "-")))
+              (i32.le_u (i32.sub (local.get $c) (i32.const "1")) (i32.const 8)))))
         (local.set $p (i32.add (local.get $p) (i32.const 1)))
         (br $mod)))
     ;; the header has to end the line; anything else is an ordinary delimiter
     (local.set $lineEnd (call $yamlSkipHorizontal (local.get $p)))
-    (if (i32.and
-          (i32.lt_u (local.get $lineEnd) (global.get $end))
-          (i32.and
-            (i32.ne (i32.load8_u (local.get $lineEnd)) (i32.const 10))
-            (i32.ne (i32.load8_u (local.get $lineEnd)) (i32.const 13))))
+    (if
+      (i32.and
+        (i32.lt_u (local.get $lineEnd) (global.get $end))
+        (i32.and
+          (i32.ne (i32.load8_u (local.get $lineEnd)) (i32.const 10))
+          (i32.ne (i32.load8_u (local.get $lineEnd)) (i32.const 13))))
       (then (return (i32.const 0))))
     (local.set $indent (call $yamlLineIndent (local.get $lhs)))
     (call $emitTok (enum.get $Token.punctuation.delimiter) (local.get $lhs) (local.get $p))
@@ -127,20 +144,18 @@
       (loop $scan
         (br_if $scanDone (i32.ge_u (local.get $bodyEnd) (global.get $end)))
         (local.set $col (call $yamlSkipHorizontal (local.get $bodyEnd)))
-        (local.set $lineEnd
-          (call $lexFindEither (local.get $col) (i32.const 10) (i32.const 13)))
+        (local.set $lineEnd (call $lexFindEither (local.get $col) (i32.const 10) (i32.const 13)))
         ;; a blank line always belongs to the body; a filled one only when it is
         ;; indented deeper than the line that opened the block
-        (br_if $scanDone (i32.and
-          (i32.ne (local.get $col) (local.get $lineEnd))
-          (i32.le_u (i32.sub (local.get $col) (local.get $bodyEnd)) (local.get $indent))))
+        (br_if $scanDone
+          (i32.and
+            (i32.ne (local.get $col) (local.get $lineEnd))
+            (i32.le_u (i32.sub (local.get $col) (local.get $bodyEnd)) (local.get $indent))))
         (local.set $bodyEnd (call $yamlAfterLine (local.get $lineEnd)))
         (br $scan)))
     (call $emitTok (enum.get $Token.string) (global.get $ptr) (local.get $bodyEnd))
     (global.set $ptr (local.get $bodyEnd))
-    (if (i32.and
-          (global.get $streaming)
-          (i32.eq (global.get $ptr) (global.get $end)))
+    (if (i32.and (global.get $streaming) (i32.eq (global.get $ptr) (global.get $end)))
       (then
         (global.set $streamMode (i32.const 11))
         (global.set $streamA (local.get $indent))))
@@ -159,17 +174,14 @@
       (loop $scan
         (br_if $done (i32.ge_u (local.get $bodyEnd) (global.get $end)))
         (local.set $col (call $yamlSkipHorizontal (local.get $bodyEnd)))
-        (local.set $lineEnd
-          (call $lexFindEither (local.get $col) (i32.const 10) (i32.const 13)))
-        (br_if $done (i32.and
-          (i32.ne (local.get $col) (local.get $lineEnd))
-          (i32.le_u
-            (i32.sub (local.get $col) (local.get $bodyEnd))
-            (global.get $streamA))))
+        (local.set $lineEnd (call $lexFindEither (local.get $col) (i32.const 10) (i32.const 13)))
+        (br_if $done
+          (i32.and
+            (i32.ne (local.get $col) (local.get $lineEnd))
+            (i32.le_u (i32.sub (local.get $col) (local.get $bodyEnd)) (global.get $streamA))))
         (local.set $bodyEnd (call $yamlAfterLine (local.get $lineEnd)))
         (br $scan)))
-    (call $emitTok
-      (enum.get $Token.string) (local.get $lhs) (local.get $bodyEnd))
+    (call $emitTok (enum.get $Token.string) (local.get $lhs) (local.get $bodyEnd))
     (global.set $ptr (local.get $bodyEnd))
     (if (i32.eq (global.get $ptr) (global.get $end))
       (then (return (i32.const 1))))
@@ -196,9 +208,7 @@
       (i32.ne (local.get $flow) (i32.const 0))
       (i32.or
         (i32.eq (local.get $c) (i32.const ","))
-        (i32.or
-          (i32.eq (local.get $c) (i32.const "]"))
-          (i32.eq (local.get $c) (i32.const "}"))))))
+        (i32.or (i32.eq (local.get $c) (i32.const "]")) (i32.eq (local.get $c) (i32.const "}"))))))
 
   ;; Advance $ptr over plain-scalar bytes: stop at a blank, a flow indicator
   ;; (`,` `[` `]` `{` `}`), or a `:` that $yamlColonEnds accepts - 16 bytes
@@ -212,32 +222,40 @@
       (loop $wide
         (br_if $done (i32.ge_u (global.get $ptr) (global.get $end)))
         (local.set $w (v128.load (global.get $ptr)))
-        (local.set $mask (i8x16.bitmask (v128.or
-          (v128.or
+        (local.set $mask
+          (i8x16.bitmask
             (v128.or
-              (i8x16.le_u (i8x16.sub (local.get $w) (i8x16.splat (i32.const 9))) (i8x16.splat (i32.const 4)))
-              (i8x16.eq (local.get $w) (i8x16.splat (i32.const 32))))
-            (v128.or
-              (i8x16.eq (local.get $w) (i8x16.splat (i32.const ":")))
-              (i8x16.eq (local.get $w) (i8x16.splat (i32.const ",")))))
-          (v128.or
-            (v128.or
-              (i8x16.eq (local.get $w) (i8x16.splat (i32.const "[")))
-              (i8x16.eq (local.get $w) (i8x16.splat (i32.const "]"))))
-            (v128.or
-              (i8x16.eq (local.get $w) (i8x16.splat (i32.const "{")))
-              (i8x16.eq (local.get $w) (i8x16.splat (i32.const "}"))))))))
+              (v128.or
+                (v128.or
+                  (i8x16.le_u
+                    (i8x16.sub (local.get $w) (i8x16.splat (i32.const 9)))
+                    (i8x16.splat (i32.const 4)))
+                  (i8x16.eq (local.get $w) (i8x16.splat (i32.const 32))))
+                (v128.or
+                  (i8x16.eq (local.get $w) (i8x16.splat (i32.const ":")))
+                  (i8x16.eq (local.get $w) (i8x16.splat (i32.const ",")))))
+              (v128.or
+                (v128.or
+                  (i8x16.eq (local.get $w) (i8x16.splat (i32.const "[")))
+                  (i8x16.eq (local.get $w) (i8x16.splat (i32.const "]"))))
+                (v128.or
+                  (i8x16.eq (local.get $w) (i8x16.splat (i32.const "{")))
+                  (i8x16.eq (local.get $w) (i8x16.splat (i32.const "}"))))))))
         (local.set $rem (i32.sub (global.get $end) (global.get $ptr)))
         (if (i32.lt_u (local.get $rem) (i32.const 16))
-          (then (local.set $mask (i32.and (local.get $mask)
-            (i32.sub (i32.shl (i32.const 1) (local.get $rem)) (i32.const 1))))))
+          (then
+            (local.set $mask
+              (i32.and
+                (local.get $mask)
+                (i32.sub (i32.shl (i32.const 1) (local.get $rem)) (i32.const 1))))))
         (if (local.get $mask)
           (then
             (global.set $ptr (i32.add (global.get $ptr) (i32.ctz (local.get $mask))))
             ;; a `:` that does not end the scalar is one more scalar byte
-            (if (i32.and
-                  (i32.eq (i32.load8_u (global.get $ptr)) (i32.const ":"))
-                  (i32.eqz (call $yamlColonEnds (global.get $ptr) (local.get $flow))))
+            (if
+              (i32.and
+                (i32.eq (i32.load8_u (global.get $ptr)) (i32.const ":"))
+                (i32.eqz (call $yamlColonEnds (global.get $ptr) (local.get $flow))))
               (then
                 (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
                 (br $wide)))
@@ -257,9 +275,7 @@
     (if (i32.le_u (local.get $p) (global.get $srcBase))
       (then (return (i32.const 1))))
     (local.set $c (i32.load8_u (i32.sub (local.get $p) (i32.const 1))))
-    (i32.or
-      (i32.eq (local.get $c) (i32.const 10))
-      (i32.eq (local.get $c) (i32.const 13))))
+    (i32.or (i32.eq (local.get $c) (i32.const 10)) (i32.eq (local.get $c) (i32.const 13))))
 
   (func $hlYaml
     (local $after i32)
@@ -283,21 +299,19 @@
         ;; scalar all begin at one, a block-scalar body consumes its own line
         ;; break, and a string closed by the shared resume leaves the cursor
         ;; mid-line.
-        (local.set $commentOk (i32.or
-          (i32.ne (global.get $ptr) (local.get $lhs))
-          (call $yamlAtLineStart (global.get $ptr))))
+        (local.set $commentOk
+          (i32.or
+            (i32.ne (global.get $ptr) (local.get $lhs))
+            (call $yamlAtLineStart (global.get $ptr))))
         (local.set $lhs (global.get $ptr))
         (local.set $c (i32.load8_u (global.get $ptr)))
 
-        (if (i32.and
-              (i32.eq (local.get $c) (i32.const "#"))
-              (local.get $commentOk))
+        (if (i32.and (i32.eq (local.get $c) (i32.const "#")) (local.get $commentOk))
           (then
             (call $lexLineComment (i32.const 1) (enum.get $Token.comment))
             (br $next)))
 
-        (if (i32.or (i32.eq (local.get $c) (i32.const 34))
-                    (i32.eq (local.get $c) (i32.const 39)))
+        (if (i32.or (i32.eq (local.get $c) (i32.const 34)) (i32.eq (local.get $c) (i32.const 39)))
           (then
             (local.set $quote (local.get $c))
             ;; Probe the closing quote so quoted mapping keys get property. The
@@ -308,9 +322,13 @@
             (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
             (block $quoteDone
               (loop $q
-                (global.set $ptr (call $scanFindSpecial
-                  (global.get $ptr) (global.get $end) (local.get $quote)
-                  (i32.eq (local.get $quote) (i32.const 34)) (i32.const 0)))
+                (global.set $ptr
+                  (call $scanFindSpecial
+                    (global.get $ptr)
+                    (global.get $end)
+                    (local.get $quote)
+                    (i32.eq (local.get $quote) (i32.const 34))
+                    (i32.const 0)))
                 (br_if $quoteDone (i32.ge_u (global.get $ptr) (global.get $end)))
                 (local.set $c (i32.load8_u (global.get $ptr)))
                 (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
@@ -320,10 +338,13 @@
                   (then (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))))
                 (br $q)))
             (local.set $after (call $yamlSkipHorizontal (global.get $ptr)))
-            (local.set $hl (select
-              (enum.get $Token.property) (enum.get $Token.string)
-              (i32.and (i32.lt_u (local.get $after) (global.get $end))
-                       (i32.eq (i32.load8_u (local.get $after)) (i32.const ":")))))
+            (local.set $hl
+              (select
+                (enum.get $Token.property)
+                (enum.get $Token.string)
+                (i32.and
+                  (i32.lt_u (local.get $after) (global.get $end))
+                  (i32.eq (i32.load8_u (local.get $after)) (i32.const ":")))))
             (global.set $ptr (local.get $lhs))
             (if (i32.eq (local.get $quote) (i32.const 34))
               (then (call $lexString (local.get $quote) (i32.const 1) (local.get $hl)))
@@ -331,45 +352,55 @@
             ;; the key's `:` is the value indicator even when glued to the
             ;; value, as in `{"b":2}`, so take it here rather than letting the
             ;; plain-scalar rule fold `:2` into one scalar
-            (if (i32.and
-                  (i32.eq (local.get $hl) (enum.get $Token.property))
-                  (i32.le_u (global.get $ptr) (local.get $after)))
+            (if
+              (i32.and
+                (i32.eq (local.get $hl) (enum.get $Token.property))
+                (i32.le_u (global.get $ptr) (local.get $after)))
               (then
                 (call $emitGap (global.get $ptr) (local.get $after))
                 (global.set $ptr (i32.add (local.get $after) (i32.const 1)))
-                (call $emitTok (enum.get $Token.punctuation.delimiter) (local.get $after) (global.get $ptr))))
+                (call $emitTok
+                  (enum.get $Token.punctuation.delimiter)
+                  (local.get $after)
+                  (global.get $ptr))))
             (br $next)))
 
-        (if (i32.or
-              (i32.eq (local.get $c) (i32.const "&"))
-              (i32.or
-                (i32.eq (local.get $c) (i32.const "*"))
-                (i32.eq (local.get $c) (i32.const "!"))))
+        (if
+          (i32.or
+            (i32.eq (local.get $c) (i32.const "&"))
+            (i32.or
+              (i32.eq (local.get $c) (i32.const "*"))
+              (i32.eq (local.get $c) (i32.const "!"))))
           (then
             (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
             (call $lexScanIdent)
             (call $emitTok (enum.get $Token.type) (local.get $lhs) (global.get $ptr))
             (br $next)))
 
-        (if (i32.and
-              (i32.le_u (i32.add (global.get $ptr) (i32.const 3)) (global.get $end))
-              (i32.or
-                (i32.eq (i32.and (i32.load (global.get $ptr)) (i32.const 0xffffff)) (i32.const "---"))
-                (i32.eq (i32.and (i32.load (global.get $ptr)) (i32.const 0xffffff)) (i32.const "..."))))
+        (if
+          (i32.and
+            (i32.le_u (i32.add (global.get $ptr) (i32.const 3)) (global.get $end))
+            (i32.or
+              (i32.eq (i32.and (i32.load (global.get $ptr)) (i32.const 0xffffff)) (i32.const "---"))
+              (i32.eq
+                (i32.and (i32.load (global.get $ptr)) (i32.const 0xffffff))
+                (i32.const "..."))))
           (then
             (global.set $ptr (i32.add (global.get $ptr) (i32.const 3)))
             (call $emitTok (enum.get $Token.punctuation.special) (local.get $lhs) (global.get $ptr))
             (br $next)))
 
         (block $scalar
-          (if (i32.or
-                (call $lexIsDigit (local.get $c))
+          (if
+            (i32.or
+              (call $lexIsDigit (local.get $c))
+              (i32.and
+                (i32.or
+                  (i32.eq (local.get $c) (i32.const "+"))
+                  (i32.eq (local.get $c) (i32.const "-")))
                 (i32.and
-                  (i32.or (i32.eq (local.get $c) (i32.const "+"))
-                          (i32.eq (local.get $c) (i32.const "-")))
-                  (i32.and
-                    (i32.lt_u (i32.add (global.get $ptr) (i32.const 1)) (global.get $end))
-                    (call $lexIsDigit (i32.load8_u offset=1 (global.get $ptr))))))
+                  (i32.lt_u (i32.add (global.get $ptr) (i32.const 1)) (global.get $end))
+                  (call $lexIsDigit (i32.load8_u offset=1 (global.get $ptr))))))
             (then
               (if (i32.eqz (call $lexIsDigit (local.get $c)))
                 (then (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))))
@@ -384,37 +415,53 @@
                   (br $next)))
               (br $scalar)))
 
-          (if (i32.or
-                (i32.or (i32.eq (local.get $c) (i32.const "["))
-                        (i32.eq (local.get $c) (i32.const "{")))
-                (i32.or (i32.eq (local.get $c) (i32.const "]"))
-                        (i32.eq (local.get $c) (i32.const "}"))))
+          (if
+            (i32.or
+              (i32.or
+                (i32.eq (local.get $c) (i32.const "["))
+                (i32.eq (local.get $c) (i32.const "{")))
+              (i32.or
+                (i32.eq (local.get $c) (i32.const "]"))
+                (i32.eq (local.get $c) (i32.const "}"))))
             (then
-              (if (i32.or (i32.eq (local.get $c) (i32.const "["))
-                          (i32.eq (local.get $c) (i32.const "{")))
+              (if
+                (i32.or
+                  (i32.eq (local.get $c) (i32.const "["))
+                  (i32.eq (local.get $c) (i32.const "{")))
                 (then (local.set $flow (i32.add (local.get $flow) (i32.const 1))))
                 (else
                   (if (local.get $flow)
                     (then (local.set $flow (i32.sub (local.get $flow) (i32.const 1)))))))
               (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
-              (call $emitTok (enum.get $Token.punctuation.bracket) (local.get $lhs) (global.get $ptr))
+              (call $emitTok
+                (enum.get $Token.punctuation.bracket)
+                (local.get $lhs)
+                (global.get $ptr))
               (br $next)))
-          (if (i32.or (i32.eq (local.get $c) (i32.const "|"))
-                      (i32.eq (local.get $c) (i32.const ">")))
+          (if
+            (i32.or (i32.eq (local.get $c) (i32.const "|")) (i32.eq (local.get $c) (i32.const ">")))
             (then
               (if (call $yamlBlockScalar)
                 (then (br $next)))))
           ;; a `:` that does not end a key, as in `:foo`, starts a plain scalar
-          (if (i32.or
-                (i32.eq (local.get $c) (i32.const ","))
-                (i32.or (call $yamlColonEnds (global.get $ptr) (local.get $flow))
-                  (i32.or (i32.eq (local.get $c) (i32.const "?"))
-                    (i32.or (i32.eq (local.get $c) (i32.const "|"))
-                      (i32.or (i32.eq (local.get $c) (i32.const ">"))
-                              (i32.eq (local.get $c) (i32.const "-")))))))
+          (if
+            (i32.or
+              (i32.eq (local.get $c) (i32.const ","))
+              (i32.or
+                (call $yamlColonEnds (global.get $ptr) (local.get $flow))
+                (i32.or
+                  (i32.eq (local.get $c) (i32.const "?"))
+                  (i32.or
+                    (i32.eq (local.get $c) (i32.const "|"))
+                    (i32.or
+                      (i32.eq (local.get $c) (i32.const ">"))
+                      (i32.eq (local.get $c) (i32.const "-")))))))
             (then
               (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
-              (call $emitTok (enum.get $Token.punctuation.delimiter) (local.get $lhs) (global.get $ptr))
+              (call $emitTok
+                (enum.get $Token.punctuation.delimiter)
+                (local.get $lhs)
+                (global.get $ptr))
               (br $next))))
 
         ;; Plain scalar: stop at YAML structure or whitespace. A scalar that
@@ -423,10 +470,11 @@
         (if (i32.eq (global.get $ptr) (local.get $lhs))
           (then (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))))
         (local.set $p (call $yamlSkipHorizontal (global.get $ptr)))
-        (local.set $hl (select
-          (enum.get $Token.property)
-          (call $yamlWordHl (local.get $lhs) (global.get $ptr))
-          (call $yamlColonEnds (local.get $p) (local.get $flow))))
+        (local.set $hl
+          (select
+            (enum.get $Token.property)
+            (call $yamlWordHl (local.get $lhs) (global.get $ptr))
+            (call $yamlColonEnds (local.get $p) (local.get $flow))))
         (call $emitTok (local.get $hl) (local.get $lhs) (global.get $ptr))
         (br $next))))
 )

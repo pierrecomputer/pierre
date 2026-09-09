@@ -2,8 +2,7 @@
   (import "../common.wat")
 
   (func $protoByte (param $p i32) (result i32)
-    (select (i32.load8_u (local.get $p)) (i32.const 0)
-      (i32.lt_u (local.get $p) (global.get $end))))
+    (select (i32.load8_u (local.get $p)) (i32.const 0) (i32.lt_u (local.get $p) (global.get $end))))
 
   ;; Group order is the dispatch order in $protoWordHl below. `required` and
   ;; `reserved` are absent on purpose: the table hash sees only the first two
@@ -16,11 +15,11 @@
     (group "package") ;; 3: declaration, next name is a namespace
     (group "import")  ;; 4: import
     (group ;; 5: keywords
-      "to" "map" "max" "weak" "group" "oneof" "syntax" "option" "public"
-      "stream" "edition" "returns" "optional" "repeated" "extensions")
+      "to" "map" "max" "weak" "group" "oneof" "syntax" "option" "public" "stream" "edition"
+      "returns" "optional" "repeated" "extensions")
     (group ;; 6: scalar types
-      "bool" "bytes" "float" "int32" "int64" "double" "string" "sint32"
-      "sint64" "uint32" "uint64" "fixed32" "fixed64" "sfixed32" "sfixed64")
+      "bool" "bytes" "float" "int32" "int64" "double" "string" "sint32" "sint64" "uint32" "uint64"
+      "fixed32" "fixed64" "sfixed32" "sfixed64")
     (group "true" "false")) ;; 7: booleans
 
   ;; Token in the low byte; the high byte selects the next-name capture:
@@ -36,14 +35,16 @@
         (if (i32.eq (i32.sub (local.get $rhs) (local.get $lhs)) (i32.const 8))
           (then
             (local.set $w (i64.load (local.get $lhs)))
-            (if (i32.or
-                  (i64.eq (local.get $w) (i64.const "required"))
-                  (i64.eq (local.get $w) (i64.const "reserved")))
+            (if
+              (i32.or
+                (i64.eq (local.get $w) (i64.const "required"))
+                (i64.eq (local.get $w) (i64.const "reserved")))
               (then (return (enum.get $Token.keyword))))))
         (return (i32.const -1))))
     (if (i32.le_u (local.get $g) (i32.const 3))
-      (then (return (i32.or (enum.get $Token.keyword.declaration)
-        (i32.shl (local.get $g) (i32.const 8))))))
+      (then
+        (return
+          (i32.or (enum.get $Token.keyword.declaration) (i32.shl (local.get $g) (i32.const 8))))))
     (if (i32.eq (local.get $g) (i32.const 4))
       (then (return (enum.get $Token.keyword.import))))
     (if (i32.eq (local.get $g) (i32.const 5))
@@ -57,9 +58,16 @@
   ;; capitalized one a message type. A name before `=` is a field or option
   ;; name, one in SCREAMING_CASE an enum value.
   (func $hlProto
-    (local $c i32) (local $c2 i32)
-    (local $gap i32) (local $lhs i32) (local $rhs i32) (local $p i32)
-    (local $kind i32) (local $hl i32) (local $expect i32) (local $member i32)
+    (local $c i32)
+    (local $c2 i32)
+    (local $gap i32)
+    (local $lhs i32)
+    (local $rhs i32)
+    (local $p i32)
+    (local $kind i32)
+    (local $hl i32)
+    (local $expect i32)
+    (local $member i32)
     (call $lexEmitLeadingContinuation)
     (block $done
       (loop $next
@@ -71,11 +79,13 @@
         (local.set $c (i32.load8_u (global.get $ptr)))
         (local.set $c2 (call $protoByte (i32.add (global.get $ptr) (i32.const 1))))
 
-        (if (i32.and (i32.eq (local.get $c) (i32.const "/")) (i32.eq (local.get $c2) (i32.const "/")))
+        (if
+          (i32.and (i32.eq (local.get $c) (i32.const "/")) (i32.eq (local.get $c2) (i32.const "/")))
           (then
             (call $lexLineComment (i32.const 2) (enum.get $Token.comment))
             (br $next)))
-        (if (i32.and (i32.eq (local.get $c) (i32.const "/")) (i32.eq (local.get $c2) (i32.const "*")))
+        (if
+          (i32.and (i32.eq (local.get $c) (i32.const "/")) (i32.eq (local.get $c2) (i32.const "*")))
           (then
             (call $lexBlockComment (i32.const 2) (enum.get $Token.comment))
             (br $next)))
@@ -90,9 +100,11 @@
             (call $lexScanIdent)
             (local.set $rhs (global.get $ptr))
             (local.set $p (call $lexSkipSpaceAt (local.get $rhs)))
-            (local.set $kind (select (i32.const -1)
-              (call $protoWordHl (local.get $lhs) (local.get $rhs))
-              (local.get $member)))
+            (local.set $kind
+              (select
+                (i32.const -1)
+                (call $protoWordHl (local.get $lhs) (local.get $rhs))
+                (local.get $member)))
             (if (i32.ge_s (local.get $kind) (i32.const 0))
               (then
                 (local.set $hl (i32.and (local.get $kind) (i32.const 255)))
@@ -100,14 +112,19 @@
               (else
                 (if (local.get $expect)
                   (then
-                    (local.set $hl (select (enum.get $Token.type)
-                      (select (enum.get $Token.function.definition) (enum.get $Token.namespace)
-                        (i32.eq (local.get $expect) (i32.const 2)))
-                      (i32.eq (local.get $expect) (i32.const 1))))
+                    (local.set $hl
+                      (select
+                        (enum.get $Token.type)
+                        (select
+                          (enum.get $Token.function.definition)
+                          (enum.get $Token.namespace)
+                          (i32.eq (local.get $expect) (i32.const 2)))
+                        (i32.eq (local.get $expect) (i32.const 1))))
                     ;; a dotted package keeps its capture
-                    (if (i32.or
-                          (i32.ne (local.get $expect) (i32.const 3))
-                          (i32.ne (call $protoByte (local.get $p)) (i32.const ".")))
+                    (if
+                      (i32.or
+                        (i32.ne (local.get $expect) (i32.const 3))
+                        (i32.ne (call $protoByte (local.get $p)) (i32.const ".")))
                       (then (local.set $expect (i32.const 0)))))
                   (else
                     (if (call $lexIsConstCase (local.get $lhs) (local.get $rhs))
@@ -116,20 +133,33 @@
                         (if (i32.eq (call $protoByte (local.get $p)) (i32.const "="))
                           (then (local.set $hl (enum.get $Token.property)))
                           (else
-                            (if (i32.le_u (i32.sub (i32.load8_u (local.get $lhs)) (i32.const "A")) (i32.const 25))
+                            (if
+                              (i32.le_u
+                                (i32.sub (i32.load8_u (local.get $lhs)) (i32.const "A"))
+                                (i32.const 25))
                               (then (local.set $hl (enum.get $Token.type)))
                               (else
-                                (local.set $hl (select (enum.get $Token.namespace) (enum.get $Token.variable)
-                                  (i32.or (local.get $member)
-                                    (i32.eq (call $protoByte (local.get $p)) (i32.const ".")))))))))))))))
+                                (local.set $hl
+                                  (select
+                                    (enum.get $Token.namespace)
+                                    (enum.get $Token.variable)
+                                    (i32.or
+                                      (local.get $member)
+                                      (i32.eq
+                                        (call $protoByte (local.get $p))
+                                        (i32.const ".")))))))))))))))
             (call $emitTok (local.get $hl) (local.get $lhs) (local.get $rhs))
             (local.set $member (i32.const 0))
             (br $next)))
 
-        (if (i32.or (call $lexIsDigit (local.get $c))
-                    (i32.and
-                      (i32.or (i32.eq (local.get $c) (i32.const "-")) (i32.eq (local.get $c) (i32.const "+")))
-                      (call $lexIsDigit (local.get $c2))))
+        (if
+          (i32.or
+            (call $lexIsDigit (local.get $c))
+            (i32.and
+              (i32.or
+                (i32.eq (local.get $c) (i32.const "-"))
+                (i32.eq (local.get $c) (i32.const "+")))
+              (call $lexIsDigit (local.get $c2))))
           (then
             (if (i32.eqz (call $lexIsDigit (local.get $c)))
               (then (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))))
@@ -145,19 +175,26 @@
             (local.set $member (i32.const 0))
             (local.set $expect (i32.const 0))
             (br $next)))
-        (if (i32.or
-              (i32.or (i32.eq (local.get $c) (i32.const ",")) (i32.eq (local.get $c) (i32.const ";")))
-              (i32.eq (local.get $c) (i32.const ":")))
+        (if
+          (i32.or
+            (i32.or (i32.eq (local.get $c) (i32.const ",")) (i32.eq (local.get $c) (i32.const ";")))
+            (i32.eq (local.get $c) (i32.const ":")))
           (then
             (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
-            (call $emitTok (enum.get $Token.punctuation.delimiter) (local.get $lhs) (global.get $ptr))
+            (call $emitTok
+              (enum.get $Token.punctuation.delimiter)
+              (local.get $lhs)
+              (global.get $ptr))
             (local.set $member (i32.const 0))
             (local.set $expect (i32.const 0))
             (br $next)))
         (if (i32.eq (local.get $c) (i32.const "."))
           (then
             (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
-            (call $emitTok (enum.get $Token.punctuation.delimiter) (local.get $lhs) (global.get $ptr))
+            (call $emitTok
+              (enum.get $Token.punctuation.delimiter)
+              (local.get $lhs)
+              (global.get $ptr))
             (local.set $member (i32.const 1))
             (br $next)))
         (if (i32.eq (local.get $c) (i32.const "="))

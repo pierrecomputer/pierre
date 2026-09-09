@@ -22,9 +22,11 @@
   (func $jsxPush (param $mode i32) (param $target i32)
     (if (i32.lt_u (global.get $jsxSp) (i32.const 512))
       (then
-        (i32.store (i32.add (i32.const $mem.jsxStack) (i32.shl (global.get $jsxSp) (i32.const 3)))
+        (i32.store
+          (i32.add (i32.const $mem.jsxStack) (i32.shl (global.get $jsxSp) (i32.const 3)))
           (local.get $mode))
-        (i32.store offset=4 (i32.add (i32.const $mem.jsxStack) (i32.shl (global.get $jsxSp) (i32.const 3)))
+        (i32.store offset=4
+          (i32.add (i32.const $mem.jsxStack) (i32.shl (global.get $jsxSp) (i32.const 3)))
           (local.get $target))))
     (global.set $jsxSp (i32.add (global.get $jsxSp) (i32.const 1))))
   ;; address of the top entry, clamped to the last stored one ($jsxSp > 0)
@@ -35,16 +37,20 @@
       (then (local.set $i (i32.const 511))))
     (i32.add (i32.const $mem.jsxStack) (i32.shl (local.get $i) (i32.const 3))))
   (func $jsxTopMode (result i32)
-    (if (i32.eqz (global.get $jsxSp)) (then (return (i32.const 0))))
+    (if (i32.eqz (global.get $jsxSp))
+      (then (return (i32.const 0))))
     (i32.load (call $jsxTopSlot)))
   (func $jsxTopTarget (result i32)
-    (if (i32.eqz (global.get $jsxSp)) (then (return (i32.const 0))))
+    (if (i32.eqz (global.get $jsxSp))
+      (then (return (i32.const 0))))
     (i32.load offset=4 (call $jsxTopSlot)))
   (func $jsxSetTopMode (param $mode i32)
-    (if (i32.eqz (global.get $jsxSp)) (then (return)))
+    (if (i32.eqz (global.get $jsxSp))
+      (then (return)))
     (i32.store (call $jsxTopSlot) (local.get $mode)))
   (func $jsxSetTopTarget (param $target i32)
-    (if (i32.eqz (global.get $jsxSp)) (then (return)))
+    (if (i32.eqz (global.get $jsxSp))
+      (then (return)))
     (i32.store offset=4 (call $jsxTopSlot) (local.get $target)))
   ;; modes that scan bytes rather than tokens: TAG, CONTENT, STYLE, CLOSE TAIL
   (func $jsxByteMode (param $mode i32) (result i32)
@@ -66,8 +72,10 @@
     (if (call $ecmaHasTsrx)
       (then
         (global.set $prevTok (enum.get $Lex.eof))
-        (if (i32.and (i32.eq (call $jsxTopMode) (i32.const 4))
-                     (i32.eq (global.get $braceDepth) (call $jsxTopTarget)))
+        (if
+          (i32.and
+            (i32.eq (call $jsxTopMode) (i32.const 4))
+            (i32.eq (global.get $braceDepth) (call $jsxTopTarget)))
           (then (global.set $jsxSp (i32.sub (global.get $jsxSp) (i32.const 1))))))))
 
   ;; ---- JSX ----
@@ -86,21 +94,23 @@
         (i32.le_u (i32.sub (local.get $c) (i32.const "0")) (i32.const 9)))
       (i32.or
         (i32.eq (local.get $c) (i32.const "."))
-        (i32.or (i32.eq (local.get $c) (i32.const ":"))
-                (i32.eq (local.get $c) (i32.const "-"))))))
+        (i32.or (i32.eq (local.get $c) (i32.const ":")) (i32.eq (local.get $c) (i32.const "-"))))))
 
   ;; does the byte shape after the `<` at $p look like a JSX tag? pure
   ;; lookahead, consumes nothing. `<>`, or a name followed by `>`/`/`/`{`/
   ;; quote/another name - anything else bails to a comparison operator.
   (func $jsxValidate (param $p i32) (result i32)
     (local $c i32)
-    (if (i32.ge_u (local.get $p) (global.get $end)) (then (return (i32.const 0))))
+    (if (i32.ge_u (local.get $p) (global.get $end))
+      (then (return (i32.const 0))))
     (local.set $c (i32.load8_u (local.get $p)))
-    (if (i32.eq (local.get $c) (i32.const ">")) (then (return (i32.const 1))))
+    (if (i32.eq (local.get $c) (i32.const ">"))
+      (then (return (i32.const 1))))
     ;; TSRX dynamic tag `<{expr}`
     (if (i32.and (call $ecmaHasTsrx) (i32.eq (local.get $c) (i32.const "{")))
       (then (return (i32.const 1))))
-    (if (i32.eqz (call $jsxNameStart (local.get $c))) (then (return (i32.const 0))))
+    (if (i32.eqz (call $jsxNameStart (local.get $c)))
+      (then (return (i32.const 0))))
     ;; the tag name
     (block $nameDone
       (loop $name
@@ -112,21 +122,21 @@
       (loop $ws
         (br_if $wsDone (i32.ge_u (local.get $p) (global.get $end)))
         (local.set $c (i32.load8_u (local.get $p)))
-        (br_if $wsDone (i32.eqz (i32.or
-          (i32.eq (local.get $c) (i32.const 32))
-          (i32.le_u (i32.sub (local.get $c) (i32.const 9)) (i32.const 4)))))
+        (br_if $wsDone
+          (i32.eqz
+            (i32.or
+              (i32.eq (local.get $c) (i32.const 32))
+              (i32.le_u (i32.sub (local.get $c) (i32.const 9)) (i32.const 4)))))
         (local.set $p (i32.add (local.get $p) (i32.const 1)))
         (br $ws)))
-    (if (i32.ge_u (local.get $p) (global.get $end)) (then (return (i32.const 1))))
+    (if (i32.ge_u (local.get $p) (global.get $end))
+      (then (return (i32.const 1))))
     (local.set $c (i32.load8_u (local.get $p)))
     (i32.or
       (i32.or
-        (i32.or (i32.eq (local.get $c) (i32.const ">"))
-                (i32.eq (local.get $c) (i32.const "/")))
-        (i32.or (i32.eq (local.get $c) (i32.const "{"))
-                (call $jsxNameStart (local.get $c))))
-      (i32.or (i32.eq (local.get $c) (i32.const 34))
-              (i32.eq (local.get $c) (i32.const 39)))))
+        (i32.or (i32.eq (local.get $c) (i32.const ">")) (i32.eq (local.get $c) (i32.const "/")))
+        (i32.or (i32.eq (local.get $c) (i32.const "{")) (call $jsxNameStart (local.get $c))))
+      (i32.or (i32.eq (local.get $c) (i32.const 34)) (i32.eq (local.get $c) (i32.const 39)))))
 
   ;; scan + emit the tag name at $ptr: lowercase simple names are `tag.jsx`,
   ;; Capitalized or dotted names are `tag.component.jsx` - Zed's tsx captures.
@@ -150,10 +160,14 @@
     (if (i32.gt_u (global.get $ptr) (local.get $from))
       (then
         (call $emitTok
-          (select (enum.get $Token.tag.component.jsx) (enum.get $Token.tag.jsx)
-            (i32.or (local.get $dotted)
+          (select
+            (enum.get $Token.tag.component.jsx)
+            (enum.get $Token.tag.jsx)
+            (i32.or
+              (local.get $dotted)
               (i32.le_u (i32.sub (i32.load8_u (local.get $from)) (i32.const "A")) (i32.const 25))))
-          (local.get $from) (global.get $ptr))
+          (local.get $from)
+          (global.get $ptr))
         (if (call $ecmaHasTsrx)
           (then (local.set $kind (call $tsrxRawKind (local.get $from) (global.get $ptr)))))))
     (local.get $kind))
@@ -168,8 +182,7 @@
     (if (i32.eq (i32.sub (global.get $rhs) (global.get $lhs)) (i32.const 2))
       (then (call $tsrxEmitContainerOpen (global.get $lhs) (global.get $rhs)))
       (else
-        (call $emitTok (enum.get $Token.punctuation.bracket)
-          (global.get $lhs) (global.get $rhs))))
+        (call $emitTok (enum.get $Token.punctuation.bracket) (global.get $lhs) (global.get $rhs))))
     (call $jsxPush (i32.const 3) (i32.sub (global.get $braceDepth) (i32.const 1)))
     (global.set $prevTok (enum.get $Lex.l_brace)))
 
@@ -184,13 +197,16 @@
       (loop $ws
         (br_if $wsDone (i32.ge_u (global.get $ptr) (global.get $end)))
         (local.set $c (i32.load8_u (global.get $ptr)))
-        (br_if $wsDone (i32.eqz (i32.or
-          (i32.eq (local.get $c) (i32.const 32))
-          (i32.le_u (i32.sub (local.get $c) (i32.const 9)) (i32.const 4)))))
+        (br_if $wsDone
+          (i32.eqz
+            (i32.or
+              (i32.eq (local.get $c) (i32.const 32))
+              (i32.le_u (i32.sub (local.get $c) (i32.const 9)) (i32.const 4)))))
         (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
         (br $ws)))
     (call $emitGap (local.get $from) (global.get $ptr))
-    (if (i32.ge_u (global.get $ptr) (global.get $end)) (then (return)))
+    (if (i32.ge_u (global.get $ptr) (global.get $end))
+      (then (return)))
     (local.set $from (global.get $ptr))
     ;; `>` - the tag opens: children follow. A TSRX raw-text element - the
     ;; open tag recorded its kind in the entry's target field - takes the
@@ -199,7 +215,10 @@
     (if (i32.eq (local.get $c) (i32.const ">"))
       (then
         (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
-        (call $emitTok (enum.get $Token.punctuation.bracket.jsx) (local.get $from) (global.get $ptr))
+        (call $emitTok
+          (enum.get $Token.punctuation.bracket.jsx)
+          (local.get $from)
+          (global.get $ptr))
         (local.set $q (call $jsxTopTarget))
         (call $jsxSetTopMode (i32.const 2))
         (if (i32.eq (local.get $q) (i32.const 2))
@@ -214,11 +233,16 @@
             (global.set $lto (enum.get $Lex.eof))))
         (return)))
     ;; `/>` - self-closing
-    (if (i32.and (i32.eq (local.get $c) (i32.const "/"))
-                 (i32.eq (call $tsxByte (i32.add (global.get $ptr) (i32.const 1))) (i32.const ">")))
+    (if
+      (i32.and
+        (i32.eq (local.get $c) (i32.const "/"))
+        (i32.eq (call $tsxByte (i32.add (global.get $ptr) (i32.const 1))) (i32.const ">")))
       (then
         (global.set $ptr (i32.add (global.get $ptr) (i32.const 2)))
-        (call $emitTok (enum.get $Token.punctuation.bracket.jsx) (local.get $from) (global.get $ptr))
+        (call $emitTok
+          (enum.get $Token.punctuation.bracket.jsx)
+          (local.get $from)
+          (global.get $ptr))
         (call $jsxPop)
         (return)))
     ;; `{` - spread attribute or expression value
@@ -230,9 +254,12 @@
     (if (i32.or (i32.eq (local.get $c) (i32.const 34)) (i32.eq (local.get $c) (i32.const 39)))
       (then
         (local.set $q (local.get $c))
-        (global.set $ptr (call $scanFind3
-          (i32.add (global.get $ptr) (i32.const 1))
-          (local.get $q) (local.get $q) (local.get $q)))
+        (global.set $ptr
+          (call $scanFind3
+            (i32.add (global.get $ptr) (i32.const 1))
+            (local.get $q)
+            (local.get $q)
+            (local.get $q)))
         (if (i32.lt_u (global.get $ptr) (global.get $end))
           (then (global.set $ptr (i32.add (global.get $ptr) (i32.const 1))))
           (else
@@ -246,7 +273,10 @@
     (if (i32.eq (local.get $c) (i32.const "="))
       (then
         (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
-        (call $emitTok (enum.get $Token.punctuation.delimiter.jsx) (local.get $from) (global.get $ptr))
+        (call $emitTok
+          (enum.get $Token.punctuation.delimiter.jsx)
+          (local.get $from)
+          (global.get $ptr))
         (return)))
     ;; attribute name
     (if (call $jsxNameStart (local.get $c))
@@ -275,9 +305,11 @@
           (loop $ws
             (br_if $wsDone (i32.ge_u (global.get $ptr) (global.get $end)))
             (local.set $c (i32.load8_u (global.get $ptr)))
-            (br_if $wsDone (i32.eqz (i32.or
-              (i32.eq (local.get $c) (i32.const 32))
-              (i32.le_u (i32.sub (local.get $c) (i32.const 9)) (i32.const 4)))))
+            (br_if $wsDone
+              (i32.eqz
+                (i32.or
+                  (i32.eq (local.get $c) (i32.const 32))
+                  (i32.le_u (i32.sub (local.get $c) (i32.const 9)) (i32.const 4)))))
             (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
             (br $ws)))
         (call $emitGap (local.get $seg) (global.get $ptr))
@@ -287,7 +319,10 @@
         (if (i32.eq (local.get $c) (i32.const ">"))
           (then
             (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
-            (call $emitTok (enum.get $Token.punctuation.bracket.jsx) (local.get $seg) (global.get $ptr))
+            (call $emitTok
+              (enum.get $Token.punctuation.bracket.jsx)
+              (local.get $seg)
+              (global.get $ptr))
             (br $tDone)))
         ;; a `<` here starts something new: stop the close tag leniently
         (br_if $tDone (i32.eq (local.get $c) (i32.const "<")))
@@ -299,7 +334,8 @@
   ;; one step in a TSRX dynamic close tag `</{expr}>` after its container
   ;; closed (mode 7): the tail, then the element pops
   (func $jsxCloseTailStep
-    (if (call $jsxCloseTagTail) (then (call $jsxPop))))
+    (if (call $jsxCloseTagTail)
+      (then (call $jsxPop))))
 
   ;; one step between `>` and the closing tag: a text run, then one structural
   ;; item - a child tag, a close tag, a `{...}` container, or a stray byte.
@@ -335,12 +371,12 @@
         (if (local.get $tsrx)
           (then (global.set $ptr (call $tsrxContentFind (global.get $ptr))))
           (else
-            (global.set $ptr (call $scanFind3
-              (global.get $ptr) (i32.const "<") (i32.const "{") (i32.const "&")))))
+            (global.set $ptr
+              (call $scanFind3 (global.get $ptr) (i32.const "<") (i32.const "{") (i32.const "&")))))
         (br_if $textDone (i32.ge_u (global.get $ptr) (global.get $end)))
         (local.set $c (i32.load8_u (global.get $ptr)))
-        (br_if $textDone (i32.or (i32.eq (local.get $c) (i32.const "<"))
-                                 (i32.eq (local.get $c) (i32.const "{"))))
+        (br_if $textDone
+          (i32.or (i32.eq (local.get $c) (i32.const "<")) (i32.eq (local.get $c) (i32.const "{"))))
         (if (i32.eq (local.get $c) (i32.const "&"))
           (then
             (local.set $p (i32.add (global.get $ptr) (i32.const 1)))
@@ -348,21 +384,29 @@
               (loop $e
                 (br_if $eDone (i32.ge_u (local.get $p) (global.get $end)))
                 (local.set $c2 (i32.load8_u (local.get $p)))
-                (br_if $eDone (i32.eqz (i32.or
-                  (i32.or
-                    (i32.le_u (i32.sub (i32.or (local.get $c2) (i32.const 32)) (i32.const "a")) (i32.const 25))
-                    (i32.le_u (i32.sub (local.get $c2) (i32.const "0")) (i32.const 9)))
-                  (i32.eq (local.get $c2) (i32.const "#")))))
+                (br_if $eDone
+                  (i32.eqz
+                    (i32.or
+                      (i32.or
+                        (i32.le_u
+                          (i32.sub (i32.or (local.get $c2) (i32.const 32)) (i32.const "a"))
+                          (i32.const 25))
+                        (i32.le_u (i32.sub (local.get $c2) (i32.const "0")) (i32.const 9)))
+                      (i32.eq (local.get $c2) (i32.const "#")))))
                 (local.set $p (i32.add (local.get $p) (i32.const 1)))
                 (br $e)))
-            (if (i32.and
-                  (i32.gt_u (local.get $p) (i32.add (global.get $ptr) (i32.const 1)))
-                  (i32.and (i32.lt_u (local.get $p) (global.get $end))
-                           (i32.eq (call $tsxByte (local.get $p)) (i32.const ";"))))
+            (if
+              (i32.and
+                (i32.gt_u (local.get $p) (i32.add (global.get $ptr) (i32.const 1)))
+                (i32.and
+                  (i32.lt_u (local.get $p) (global.get $end))
+                  (i32.eq (call $tsxByte (local.get $p)) (i32.const ";"))))
               (then
                 (call $emitTok (enum.get $Token.text.jsx) (local.get $seg) (global.get $ptr))
-                (call $emitTok (enum.get $Token.string.special)
-                  (global.get $ptr) (i32.add (local.get $p) (i32.const 1)))
+                (call $emitTok
+                  (enum.get $Token.string.special)
+                  (global.get $ptr)
+                  (i32.add (local.get $p) (i32.const 1)))
                 (global.set $ptr (i32.add (local.get $p) (i32.const 1)))
                 (local.set $seg (global.get $ptr)))
               (else
@@ -403,14 +447,18 @@
             (call $scanBlockCommentEnd)
             (call $emitTok (enum.get $Token.comment) (local.get $seg) (global.get $ptr))
             ;; open at the chunk end: the next chunk resumes the comment
-            (if (i32.and (global.get $tsxStreaming)
-                         (call $blockCommentOpen (local.get $seg) (global.get $ptr)))
+            (if
+              (i32.and
+                (global.get $tsxStreaming)
+                (call $blockCommentOpen (local.get $seg) (global.get $ptr)))
               (then (global.set $tsxStreamMode (i32.const 2))))
             (local.set $seg (global.get $ptr))
             (local.set $bound (global.get $ptr))
             (br $text)))
-        (if (i32.and (i32.eq (local.get $c2) (i32.const "/"))
-                     (call $tsrxAtBoundary (local.get $bound) (global.get $ptr)))
+        (if
+          (i32.and
+            (i32.eq (local.get $c2) (i32.const "/"))
+            (call $tsrxAtBoundary (local.get $bound) (global.get $ptr)))
           (then
             (call $emitTok (enum.get $Token.text.jsx) (local.get $seg) (global.get $ptr))
             (local.set $seg (global.get $ptr))
@@ -422,7 +470,8 @@
         (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
         (br $text)))
     (call $emitTok (enum.get $Token.text.jsx) (local.get $seg) (global.get $ptr))
-    (if (i32.ge_u (global.get $ptr) (global.get $end)) (then (return)))
+    (if (i32.ge_u (global.get $ptr) (global.get $end))
+      (then (return)))
     ;; TSRX: an `@{` container, or a directive head the token pipeline scans
     (if (i32.eq (local.get $act) (i32.const 1))
       (then
@@ -447,8 +496,7 @@
         (call $emitTok (enum.get $Token.punctuation.bracket.jsx) (local.get $seg) (global.get $ptr))
         (drop (call $jsxEmitName))
         ;; TSRX dynamic close tag `</{expr}>`: the tail waits for its container
-        (if (i32.and (local.get $tsrx)
-                     (i32.eq (call $tsxByte (global.get $ptr)) (i32.const "{")))
+        (if (i32.and (local.get $tsrx) (i32.eq (call $tsxByte (global.get $ptr)) (i32.const "{")))
           (then
             (call $jsxSetTopMode (i32.const 7))
             (call $jsxOpenContainer)
@@ -457,9 +505,12 @@
         (call $jsxPop)
         (return)))
     ;; `<name` / `<>` opens a child; TSRX also `<{expr}`
-    (if (i32.or (call $jsxNameStart (local.get $c2))
-                (i32.or (i32.eq (local.get $c2) (i32.const ">"))
-                        (i32.and (local.get $tsrx) (i32.eq (local.get $c2) (i32.const "{")))))
+    (if
+      (i32.or
+        (call $jsxNameStart (local.get $c2))
+        (i32.or
+          (i32.eq (local.get $c2) (i32.const ">"))
+          (i32.and (local.get $tsrx) (i32.eq (local.get $c2) (i32.const "{")))))
       (then
         (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
         (call $emitTok (enum.get $Token.punctuation.bracket.jsx) (local.get $seg) (global.get $ptr))
@@ -499,12 +550,15 @@
       (loop $ws
         (br_if $wsDone (i32.ge_u (global.get $ptr) (global.get $end)))
         (local.set $c (i32.load8_u (global.get $ptr)))
-        (br_if $wsDone (i32.eqz (i32.or
-          (i32.eq (local.get $c) (i32.const 32))
-          (i32.le_u (i32.sub (local.get $c) (i32.const 9)) (i32.const 4)))))
+        (br_if $wsDone
+          (i32.eqz
+            (i32.or
+              (i32.eq (local.get $c) (i32.const 32))
+              (i32.le_u (i32.sub (local.get $c) (i32.const 9)) (i32.const 4)))))
         (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
         (br $ws)))
-    (if (i32.ge_u (global.get $ptr) (global.get $end)) (then (return)))
+    (if (i32.ge_u (global.get $ptr) (global.get $end))
+      (then (return)))
     ;; `>` - the tag opens: children follow
     (if (i32.eq (local.get $c) (i32.const ">"))
       (then
@@ -512,8 +566,10 @@
         (call $jsxSetTopMode (i32.const 2))
         (return)))
     ;; `/>` - self-closing
-    (if (i32.and (i32.eq (local.get $c) (i32.const "/"))
-                 (i32.eq (call $tsxByte (i32.add (global.get $ptr) (i32.const 1))) (i32.const ">")))
+    (if
+      (i32.and
+        (i32.eq (local.get $c) (i32.const "/"))
+        (i32.eq (call $tsxByte (i32.add (global.get $ptr) (i32.const 1))) (i32.const ">")))
       (then
         (global.set $ptr (i32.add (global.get $ptr) (i32.const 2)))
         (call $jsxPop)
@@ -526,9 +582,12 @@
     ;; quoted attribute value (may span lines; no escapes in JSX strings)
     (if (i32.or (i32.eq (local.get $c) (i32.const 34)) (i32.eq (local.get $c) (i32.const 39)))
       (then
-        (global.set $ptr (call $scanFind3
-          (i32.add (global.get $ptr) (i32.const 1))
-          (local.get $c) (local.get $c) (local.get $c)))
+        (global.set $ptr
+          (call $scanFind3
+            (i32.add (global.get $ptr) (i32.const 1))
+            (local.get $c)
+            (local.get $c)
+            (local.get $c)))
         (if (i32.lt_u (global.get $ptr) (global.get $end))
           (then (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))))
         (return)))
@@ -545,9 +604,10 @@
   (func $jsxSkipContentStep
     (local $c i32)
     (local $c2 i32)
-    (global.set $ptr (call $scanFind3
-      (global.get $ptr) (i32.const "<") (i32.const "{") (i32.const "{")))
-    (if (i32.ge_u (global.get $ptr) (global.get $end)) (then (return)))
+    (global.set $ptr
+      (call $scanFind3 (global.get $ptr) (i32.const "<") (i32.const "{") (i32.const "{")))
+    (if (i32.ge_u (global.get $ptr) (global.get $end))
+      (then (return)))
     (local.set $c (i32.load8_u (global.get $ptr)))
     ;; `{` container
     (if (i32.eq (local.get $c) (i32.const "{"))
@@ -581,7 +641,8 @@
     ;; a stray `<`: text
     (global.set $ptr (i32.add (global.get $ptr) (i32.const 1))))
 
-  (func $hlJsx (call $hlEcma (i32.const 2)))
+  (func $hlJsx
+    (call $hlEcma (i32.const 2)))
   (func $hlJsxStream (param $reset i32)
     (call $hlEcmaStream (i32.const 2) (local.get $reset)))
 )

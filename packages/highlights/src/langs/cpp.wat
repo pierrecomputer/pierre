@@ -3,8 +3,7 @@
 
   ;; A bounded byte read for prefix and operator lookahead.
   (func $cppByte (param $p i32) (result i32)
-    (select (i32.load8_u (local.get $p)) (i32.const 0)
-      (i32.lt_u (local.get $p) (global.get $end))))
+    (select (i32.load8_u (local.get $p)) (i32.const 0) (i32.lt_u (local.get $p) (global.get $end))))
 
   (func $cppIsOp (param $c i32) (result i32)
     (byteset.get "!#%&*+-/<=>?^|~" (local.get $c)))
@@ -35,12 +34,12 @@
             (local.set $prev (local.get $c))
             (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
             (br $l)))
-        (if (i32.and
-              (i32.or (i32.eq (local.get $c) (i32.const "+"))
-                      (i32.eq (local.get $c) (i32.const "-")))
-              (i32.or
-                (i32.eq (i32.or (local.get $prev) (i32.const 32)) (i32.const "e"))
-                (i32.eq (i32.or (local.get $prev) (i32.const 32)) (i32.const "p"))))
+        (if
+          (i32.and
+            (i32.or (i32.eq (local.get $c) (i32.const "+")) (i32.eq (local.get $c) (i32.const "-")))
+            (i32.or
+              (i32.eq (i32.or (local.get $prev) (i32.const 32)) (i32.const "e"))
+              (i32.eq (i32.or (local.get $prev) (i32.const 32)) (i32.const "p"))))
           (then
             (local.set $prev (local.get $c))
             (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
@@ -53,36 +52,33 @@
     (local $c i32)
     (local $n i32)
     (local.set $c (call $cppByte (local.get $p)))
-    (if (i32.or (i32.eq (local.get $c) (i32.const 34))
-                (i32.eq (local.get $c) (i32.const 39)))
+    (if (i32.or (i32.eq (local.get $c) (i32.const 34)) (i32.eq (local.get $c) (i32.const 39)))
       (then (return (i32.const 1))))
     (local.set $n (call $cppByte (i32.add (local.get $p) (i32.const 1))))
-    (if (i32.and (i32.eq (local.get $c) (i32.const "R"))
-                 (i32.eq (local.get $n) (i32.const 34)))
+    (if (i32.and (i32.eq (local.get $c) (i32.const "R")) (i32.eq (local.get $n) (i32.const 34)))
       (then (return (i32.const 258))))
-    (if (i32.and (i32.eq (local.get $c) (i32.const "u"))
-                 (i32.eq (local.get $n) (i32.const "8")))
+    (if (i32.and (i32.eq (local.get $c) (i32.const "u")) (i32.eq (local.get $n) (i32.const "8")))
       (then
         (local.set $n (call $cppByte (i32.add (local.get $p) (i32.const 2))))
-        (if (i32.or (i32.eq (local.get $n) (i32.const 34))
-                    (i32.eq (local.get $n) (i32.const 39)))
+        (if (i32.or (i32.eq (local.get $n) (i32.const 34)) (i32.eq (local.get $n) (i32.const 39)))
           (then (return (i32.const 3))))
-        (if (i32.and (i32.eq (local.get $n) (i32.const "R"))
-                     (i32.eq (call $cppByte (i32.add (local.get $p) (i32.const 3))) (i32.const 34)))
+        (if
+          (i32.and
+            (i32.eq (local.get $n) (i32.const "R"))
+            (i32.eq (call $cppByte (i32.add (local.get $p) (i32.const 3))) (i32.const 34)))
           (then (return (i32.const 260))))))
-    (if (i32.and
-          (i32.or
-            (i32.or (i32.eq (local.get $c) (i32.const "L"))
-                    (i32.eq (local.get $c) (i32.const "u")))
-            (i32.eq (local.get $c) (i32.const "U")))
-          (i32.or
-            (i32.or (i32.eq (local.get $n) (i32.const 34))
-                    (i32.eq (local.get $n) (i32.const 39)))
-            (i32.and (i32.eq (local.get $n) (i32.const "R"))
-                     (i32.eq (call $cppByte (i32.add (local.get $p) (i32.const 2))) (i32.const 34)))))
+    (if
+      (i32.and
+        (i32.or
+          (i32.or (i32.eq (local.get $c) (i32.const "L")) (i32.eq (local.get $c) (i32.const "u")))
+          (i32.eq (local.get $c) (i32.const "U")))
+        (i32.or
+          (i32.or (i32.eq (local.get $n) (i32.const 34)) (i32.eq (local.get $n) (i32.const 39)))
+          (i32.and
+            (i32.eq (local.get $n) (i32.const "R"))
+            (i32.eq (call $cppByte (i32.add (local.get $p) (i32.const 2))) (i32.const 34)))))
       (then
-        (return (select (i32.const 259) (i32.const 2)
-          (i32.eq (local.get $n) (i32.const "R"))))))
+        (return (select (i32.const 259) (i32.const 2) (i32.eq (local.get $n) (i32.const "R"))))))
     (i32.const 0))
 
   ;; Scan an ordinary or prefixed literal body from $ptr, whose bytes from
@@ -102,8 +98,13 @@
     (block $done
       (loop $scan
         ;; hop to the next quote, backslash, or line break, 16 bytes per step
-        (global.set $ptr (call $scanFindSpecial
-          (global.get $ptr) (global.get $end) (local.get $q) (i32.const 1) (i32.const 1)))
+        (global.set $ptr
+          (call $scanFindSpecial
+            (global.get $ptr)
+            (global.get $end)
+            (local.get $q)
+            (i32.const 1)
+            (i32.const 1)))
         (br_if $done (i32.ge_u (global.get $ptr) (global.get $end)))
         (local.set $c (i32.load8_u (global.get $ptr)))
         (if (i32.eq (local.get $c) (local.get $q))
@@ -113,28 +114,34 @@
               (then (call $lexScanIdent)))
             (local.set $status (i32.const 1))
             (br $done)))
-        (br_if $done (i32.or (i32.eq (local.get $c) (i32.const 10))
-                             (i32.eq (local.get $c) (i32.const 13))))
+        (br_if $done
+          (i32.or (i32.eq (local.get $c) (i32.const 10)) (i32.eq (local.get $c) (i32.const 13))))
 
         ;; Escape endpoint: fixed-width Unicode, arbitrary hex (bounded here
         ;; to a generous run), octal, named Unicode, or one whole UTF-8 char.
         (call $emitTok (local.get $hl) (local.get $seg) (global.get $ptr))
         (local.set $c2 (call $cppByte (i32.add (global.get $ptr) (i32.const 1))))
         (if (i32.eq (local.get $c2) (i32.const "u"))
-          (then (local.set $e (call $scanHexRun
-            (i32.add (global.get $ptr) (i32.const 2)) (i32.const 4))))
+          (then
+            (local.set $e
+              (call $scanHexRun (i32.add (global.get $ptr) (i32.const 2)) (i32.const 4))))
           (else
             (if (i32.eq (local.get $c2) (i32.const "U"))
-              (then (local.set $e (call $scanHexRun
-                (i32.add (global.get $ptr) (i32.const 2)) (i32.const 8))))
+              (then
+                (local.set $e
+                  (call $scanHexRun (i32.add (global.get $ptr) (i32.const 2)) (i32.const 8))))
               (else
                 (if (i32.eq (local.get $c2) (i32.const "x"))
-                  (then (local.set $e (call $scanHexRun
-                    (i32.add (global.get $ptr) (i32.const 2)) (i32.const 64))))
+                  (then
+                    (local.set $e
+                      (call $scanHexRun (i32.add (global.get $ptr) (i32.const 2)) (i32.const 64))))
                   (else
-                    (if (i32.and
-                          (i32.eq (local.get $c2) (i32.const "N"))
-                          (i32.eq (call $cppByte (i32.add (global.get $ptr) (i32.const 2))) (i32.const "{")))
+                    (if
+                      (i32.and
+                        (i32.eq (local.get $c2) (i32.const "N"))
+                        (i32.eq
+                          (call $cppByte (i32.add (global.get $ptr) (i32.const 2)))
+                          (i32.const "{")))
                       (then
                         (local.set $e (i32.add (global.get $ptr) (i32.const 3)))
                         (block $namedDone
@@ -153,28 +160,32 @@
                             (local.set $k (i32.const 0))
                             (block $octDone
                               (loop $oct
-                                (br_if $octDone (i32.or
-                                  (i32.ge_u (local.get $e) (global.get $end))
-                                  (i32.ge_u (local.get $k) (i32.const 3))))
-                                (br_if $octDone (i32.gt_u
-                                  (i32.sub (i32.load8_u (local.get $e)) (i32.const "0")) (i32.const 7)))
+                                (br_if $octDone
+                                  (i32.or
+                                    (i32.ge_u (local.get $e) (global.get $end))
+                                    (i32.ge_u (local.get $k) (i32.const 3))))
+                                (br_if $octDone
+                                  (i32.gt_u
+                                    (i32.sub (i32.load8_u (local.get $e)) (i32.const "0"))
+                                    (i32.const 7)))
                                 (local.set $e (i32.add (local.get $e) (i32.const 1)))
                                 (local.set $k (i32.add (local.get $k) (i32.const 1)))
                                 (br $oct))))
                           ;; one escaped byte, or a line continuation
                           ;; before LF or CRLF
-                          (else
-                            (local.set $e (call $lexEscapeEnd (global.get $ptr)))))))))))))
+                          (else (local.set $e (call $lexEscapeEnd (global.get $ptr)))))))))))))
         ;; an escaped multibyte UTF-8 character stays whole inside the span
         (local.set $e (call $utf8SpanEnd (local.get $e) (global.get $end)))
         (call $emitTok (enum.get $Token.string.escape) (global.get $ptr) (local.get $e))
         (global.set $ptr (local.get $e))
         (local.set $seg (local.get $e))
         ;; an escaped line break that ends the chunk leaves the literal open
-        (if (i32.and
-              (i32.eq (global.get $ptr) (global.get $end))
-              (i32.or (i32.eq (local.get $c2) (i32.const 10))
-                      (i32.eq (local.get $c2) (i32.const 13))))
+        (if
+          (i32.and
+            (i32.eq (global.get $ptr) (global.get $end))
+            (i32.or
+              (i32.eq (local.get $c2) (i32.const 10))
+              (i32.eq (local.get $c2) (i32.const 13))))
           (then
             (local.set $status (i32.const 2))
             (br $done)))
@@ -200,8 +211,10 @@
     (local $mask i32)
     (local $rem i32)
     (local $w v128)
-    (local.set $quote (i32.add (local.get $lhs)
-      (i32.sub (i32.and (local.get $kind) (i32.const 255)) (i32.const 1))))
+    (local.set $quote
+      (i32.add
+        (local.get $lhs)
+        (i32.sub (i32.and (local.get $kind) (i32.const 255)) (i32.const 1))))
 
     (block $ordinary
       (if (i32.and (local.get $kind) (i32.const 256))
@@ -214,11 +227,14 @@
               (br_if $ordinary (i32.ge_u (local.get $p) (global.get $end)))
               (local.set $c (i32.load8_u (local.get $p)))
               (br_if $delimiter (i32.eq (local.get $c) (i32.const "(")))
-              (br_if $ordinary (i32.or
-                (i32.or (i32.le_u (local.get $c) (i32.const 32))
-                        (i32.eq (local.get $c) (i32.const ")")))
-                (i32.or (i32.eq (local.get $c) (i32.const 92))
-                        (i32.ge_u (i32.sub (local.get $p) (local.get $d)) (i32.const 16)))))
+              (br_if $ordinary
+                (i32.or
+                  (i32.or
+                    (i32.le_u (local.get $c) (i32.const 32))
+                    (i32.eq (local.get $c) (i32.const ")")))
+                  (i32.or
+                    (i32.eq (local.get $c) (i32.const 92))
+                    (i32.ge_u (i32.sub (local.get $p) (local.get $d)) (i32.const 16)))))
               (local.set $p (i32.add (local.get $p) (i32.const 1)))
               (br $dl)))
           (local.set $dlen (i32.sub (local.get $p) (local.get $d)))
@@ -227,47 +243,58 @@
             (loop $raw
               (br_if $rawDone (i32.ge_u (global.get $ptr) (global.get $end)))
               (local.set $w (v128.load (global.get $ptr)))
-              (local.set $mask (i8x16.bitmask
-                (i8x16.eq (local.get $w) (i8x16.splat (i32.const ")")))))
+              (local.set $mask
+                (i8x16.bitmask (i8x16.eq (local.get $w) (i8x16.splat (i32.const ")")))))
               (local.set $rem (i32.sub (global.get $end) (global.get $ptr)))
               (if (i32.lt_u (local.get $rem) (i32.const 16))
-                (then (local.set $mask (i32.and (local.get $mask)
-                  (i32.sub (i32.shl (i32.const 1) (local.get $rem)) (i32.const 1))))))
+                (then
+                  (local.set $mask
+                    (i32.and
+                      (local.get $mask)
+                      (i32.sub (i32.shl (i32.const 1) (local.get $rem)) (i32.const 1))))))
               (block $advance
                 (loop $candidate
                   (br_if $advance (i32.eqz (local.get $mask)))
                   (local.set $q (i32.add (global.get $ptr) (i32.ctz (local.get $mask))))
-                  (if (i32.le_u
-                        (i32.add (local.get $q) (i32.add (local.get $dlen) (i32.const 2)))
-                        (global.get $end))
+                  (if
+                    (i32.le_u
+                      (i32.add (local.get $q) (i32.add (local.get $dlen) (i32.const 2)))
+                      (global.get $end))
                     (then
                       (local.set $match (i32.const 1))
                       (local.set $k (i32.const 0))
                       (block $cmpDone
                         (loop $cmp
                           (br_if $cmpDone (i32.ge_u (local.get $k) (local.get $dlen)))
-                          (if (i32.ne
-                                (i32.load8_u (i32.add (i32.add (local.get $q) (i32.const 1)) (local.get $k)))
-                                (i32.load8_u (i32.add (local.get $d) (local.get $k))))
+                          (if
+                            (i32.ne
+                              (i32.load8_u
+                                (i32.add (i32.add (local.get $q) (i32.const 1)) (local.get $k)))
+                              (i32.load8_u (i32.add (local.get $d) (local.get $k))))
                             (then
                               (local.set $match (i32.const 0))
                               (br $cmpDone)))
                           (local.set $k (i32.add (local.get $k) (i32.const 1)))
                           (br $cmp)))
-                      (if (i32.and (local.get $match)
-                            (i32.eq
-                              (i32.load8_u (i32.add (i32.add (local.get $q) (local.get $dlen)) (i32.const 1)))
-                              (i32.const 34)))
+                      (if
+                        (i32.and
+                          (local.get $match)
+                          (i32.eq
+                            (i32.load8_u
+                              (i32.add (i32.add (local.get $q) (local.get $dlen)) (i32.const 1)))
+                            (i32.const 34)))
                         (then
                           (global.set $ptr
                             (i32.add (local.get $q) (i32.add (local.get $dlen) (i32.const 2))))
                           (if (call $lexIsIdentStart (call $cppByte (global.get $ptr)))
                             (then (call $lexScanIdent)))
-                          (call $emitTok (enum.get $Token.string)
-                            (local.get $lhs) (global.get $ptr))
+                          (call $emitTok
+                            (enum.get $Token.string)
+                            (local.get $lhs)
+                            (global.get $ptr))
                           (return (i32.const 0))))))
-                  (local.set $mask (i32.and (local.get $mask)
-                    (i32.sub (local.get $mask) (i32.const 1))))
+                  (local.set $mask
+                    (i32.and (local.get $mask) (i32.sub (local.get $mask) (i32.const 1))))
                   (br $candidate)))
               (if (i32.le_u (local.get $rem) (i32.const 16))
                 (then
@@ -279,8 +306,7 @@
           (if (i32.eq (global.get $ptr) (global.get $end))
             (then
               (i32.store8 (i32.const $mem.streamDelimiter) (i32.const ")"))
-              (memory.copy
-                (i32.const $mem.streamDelimiter+1) (local.get $d) (local.get $dlen))
+              (memory.copy (i32.const $mem.streamDelimiter+1) (local.get $d) (local.get $dlen))
               (i32.store8
                 (i32.add (i32.const $mem.streamDelimiter+1) (local.get $dlen))
                 (i32.const 34))
@@ -294,10 +320,15 @@
     ;; lenient, bounded, and still colors its leading R/u8R prefix as string.
     (local.set $q (i32.load8_u (local.get $quote)))
     (global.set $ptr (i32.add (local.get $quote) (i32.const 1)))
-    (select (local.get $q) (i32.const 0)
+    (select
+      (local.get $q)
+      (i32.const 0)
       (i32.eq
-        (call $cppStringBody (local.get $q)
-          (select (enum.get $Token.number) (enum.get $Token.string)
+        (call $cppStringBody
+          (local.get $q)
+          (select
+            (enum.get $Token.number)
+            (enum.get $Token.string)
             (i32.eq (local.get $q) (i32.const 39)))
           (local.get $lhs))
         (i32.const 2))))
@@ -313,9 +344,10 @@
         (call $scanToLineEnd)
         (if (i32.ge_u (global.get $ptr) (global.get $end))
           (then (return (i32.eq (global.get $ptr) (local.get $joined)))))
-        (br_if $done (i32.or
-          (i32.eq (global.get $ptr) (local.get $lhs))
-          (i32.ne (i32.load8_u (i32.sub (global.get $ptr) (i32.const 1))) (i32.const 92))))
+        (br_if $done
+          (i32.or
+            (i32.eq (global.get $ptr) (local.get $lhs))
+            (i32.ne (i32.load8_u (i32.sub (global.get $ptr) (i32.const 1))) (i32.const 92))))
         (if (i32.eq (i32.load8_u (global.get $ptr)) (i32.const 13))
           (then (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))))
         (if (i32.eq (call $cppByte (global.get $ptr)) (i32.const 10))
@@ -327,9 +359,8 @@
   ;; group order is the dispatch order in $cppWordHl below
   (keyword-table $cppWords $mem.cppWords $mem.csharpWords
     (group $Token.keyword.control ;; 1: control - `continue` lives in $cppWordHl instead
-      "if" "do" "for" "try" "else" "case" "goto" "while" "break" "catch"
-      "throw" "switch" "return" "default" "co_await" "co_yield"
-      "co_return")
+      "if" "do" "for" "try" "else" "case" "goto" "while" "break" "catch" "throw" "switch" "return"
+      "default" "co_await" "co_yield" "co_return")
     (group $Token.keyword.declaration+256 "class" "union" "struct")           ;; 2: declaration, next name is a class type
     (group $Token.keyword.declaration+512 "enum" "using" "typedef" "concept") ;; 3: declaration, next name is a type
     (group $Token.keyword.declaration+768 "namespace")                        ;; 4: declaration, next name is a namespace
@@ -337,21 +368,18 @@
       "extern" "inline" "static" "register" "template")
     (group $Token.keyword.import "import" "module" "export") ;; 6: modules
     (group $Token.type.builtin ;; 7: primitive types - `char32_t` lives in $cppWordHl instead
-      "int" "auto" "bool" "char" "long" "void" "float" "short" "double"
-      "signed" "char8_t" "wchar_t" "char16_t" "unsigned")
+      "int" "auto" "bool" "char" "long" "void" "float" "short" "double" "signed" "char8_t"
+      "wchar_t" "char16_t" "unsigned")
     (group $Token.boolean "true" "false") ;; 8: booleans
     (group $Token.constant.builtin "nullptr")      ;; 9: built-in constant
     (group $Token.variable.special "this")         ;; 10: special variable
     (group $Token.operator ;; 11: alternative operator spellings
-      "or" "and" "not" "xor" "bitor" "compl" "or_eq" "and_eq" "bitand"
-      "not_eq" "xor_eq")
+      "or" "and" "not" "xor" "bitor" "compl" "or_eq" "and_eq" "bitand" "not_eq" "xor_eq")
     (group $Token.keyword ;; 12: remaining keywords, including casts and specifiers
-      "asm" "new" "const" "final" "delete" "friend" "public" "sizeof"
-      "typeid" "alignas" "alignof" "mutable" "private" "virtual" "decltype"
-      "explicit" "noexcept" "operator" "override" "requires" "typename"
-      "volatile" "consteval" "constexpr" "constinit" "protected"
-      "const_cast" "static_cast" "dynamic_cast" "thread_local"
-      "static_assert" "reinterpret_cast"))
+      "asm" "new" "const" "final" "delete" "friend" "public" "sizeof" "typeid" "alignas" "alignof"
+      "mutable" "private" "virtual" "decltype" "explicit" "noexcept" "operator" "override"
+      "requires" "typename" "volatile" "consteval" "constexpr" "constinit" "protected"
+      "const_cast" "static_cast" "dynamic_cast" "thread_local" "static_assert" "reinterpret_cast"))
 
   ;; Token in the low byte; the high byte selects the next-name capture:
   ;; 1=type.class, 2=type, 3=namespace. -1 means an ordinary identifier.
@@ -394,13 +422,19 @@
     ;; continues with C++ escape rules, or the directive owns this line too.
     (if (local.get $strCont)
       (then
-        (local.set $strCont (select (local.get $strCont) (i32.const 0)
-          (i32.eq
-            (call $cppStringBody (local.get $strCont)
-              (select (enum.get $Token.number) (enum.get $Token.string)
-                (i32.eq (local.get $strCont) (i32.const 39)))
-              (global.get $ptr))
-            (i32.const 2))))))
+        (local.set $strCont
+          (select
+            (local.get $strCont)
+            (i32.const 0)
+            (i32.eq
+              (call $cppStringBody
+                (local.get $strCont)
+                (select
+                  (enum.get $Token.number)
+                  (enum.get $Token.string)
+                  (i32.eq (local.get $strCont) (i32.const 39)))
+                (global.get $ptr))
+              (i32.const 2))))))
     (if (local.get $contDirective)
       (then
         (local.set $lhs (global.get $ptr))
@@ -413,10 +447,15 @@
         ;; line is scanned once, not once per token.
         (local.set $gap (global.get $ptr))
         (call $scanWhitespace)
-        (if (i32.lt_u
-              (call $scanFindSpecial
-                (local.get $gap) (global.get $ptr) (i32.const 10) (i32.const 0) (i32.const 1))
-              (global.get $ptr))
+        (if
+          (i32.lt_u
+            (call $scanFindSpecial
+              (local.get $gap)
+              (global.get $ptr)
+              (i32.const 10)
+              (i32.const 0)
+              (i32.const 1))
+            (global.get $ptr))
           (then (local.set $midLine (i32.const 0))))
         (call $emitGap (local.get $gap) (global.get $ptr))
         (br_if $done (i32.ge_u (global.get $ptr) (global.get $end)))
@@ -426,23 +465,33 @@
         (local.set $c3 (call $cppByte (i32.add (global.get $ptr) (i32.const 2))))
 
         ;; comments, including Doxygen-style documentation comments
-        (if (i32.and (i32.eq (local.get $c) (i32.const "/"))
-                     (i32.eq (local.get $c2) (i32.const "/")))
+        (if
+          (i32.and (i32.eq (local.get $c) (i32.const "/")) (i32.eq (local.get $c2) (i32.const "/")))
           (then
-            (call $lexLineComment (i32.const 2)
-              (select (enum.get $Token.comment.doc) (enum.get $Token.comment)
-                (i32.or (i32.eq (local.get $c3) (i32.const "/"))
-                        (i32.eq (local.get $c3) (i32.const "!")))))
+            (call $lexLineComment
+              (i32.const 2)
+              (select
+                (enum.get $Token.comment.doc)
+                (enum.get $Token.comment)
+                (i32.or
+                  (i32.eq (local.get $c3) (i32.const "/"))
+                  (i32.eq (local.get $c3) (i32.const "!")))))
             (br $next)))
-        (if (i32.and (i32.eq (local.get $c) (i32.const "/"))
-                     (i32.eq (local.get $c2) (i32.const "*")))
+        (if
+          (i32.and (i32.eq (local.get $c) (i32.const "/")) (i32.eq (local.get $c2) (i32.const "*")))
           (then
-            (call $lexBlockComment (i32.const 2)
-              (select (enum.get $Token.comment.doc) (enum.get $Token.comment)
+            (call $lexBlockComment
+              (i32.const 2)
+              (select
+                (enum.get $Token.comment.doc)
+                (enum.get $Token.comment)
                 (i32.or
                   (i32.eq (local.get $c3) (i32.const "!"))
-                  (i32.and (i32.eq (local.get $c3) (i32.const "*"))
-                    (i32.ne (call $cppByte (i32.add (local.get $lhs) (i32.const 3))) (i32.const "/"))))))
+                  (i32.and
+                    (i32.eq (local.get $c3) (i32.const "*"))
+                    (i32.ne
+                      (call $cppByte (i32.add (local.get $lhs) (i32.const 3)))
+                      (i32.const "/"))))))
             (br $next)))
 
         ;; A directive owns its logical line, including escaped newlines.
@@ -483,55 +532,74 @@
                 (if (local.get $expectType)
                   (then
                     (local.set $hl
-                      (select (enum.get $Token.type.class)
-                        (select (enum.get $Token.namespace) (enum.get $Token.type)
+                      (select
+                        (enum.get $Token.type.class)
+                        (select
+                          (enum.get $Token.namespace)
+                          (enum.get $Token.type)
                           (i32.eq (local.get $expectType) (i32.const 3)))
                         (i32.eq (local.get $expectType) (i32.const 1))))
                     (local.set $expectType (i32.const 0)))
                   (else
                     (if (i32.eq (call $cppByte (local.get $p)) (i32.const "("))
-                      (then (local.set $hl (select
-                        (enum.get $Token.function.method) (enum.get $Token.function)
-                        (local.get $member))))
+                      (then
+                        (local.set $hl
+                          (select
+                            (enum.get $Token.function.method)
+                            (enum.get $Token.function)
+                            (local.get $member))))
                       (else
                         (if (i32.eq (local.get $member) (i32.const 1))
                           (then (local.set $hl (enum.get $Token.property)))
                           (else
-                            (if (i32.or
-                                  (i32.eq (local.get $member) (i32.const 2))
-                                  (i32.and
-                                    (i32.eq (call $cppByte (local.get $p)) (i32.const ":"))
-                                    (i32.eq (call $cppByte (i32.add (local.get $p) (i32.const 1))) (i32.const ":"))))
-                              (then (local.set $hl
-                                (select (enum.get $Token.namespace) (enum.get $Token.type)
-                                  (i32.and
-                                    (i32.eq (call $cppByte (local.get $p)) (i32.const ":"))
-                                    (i32.eq (call $cppByte (i32.add (local.get $p) (i32.const 1)))
-                                            (i32.const ":"))))))
-                              (else
-                                (if (i32.and
+                            (if
+                              (i32.or
+                                (i32.eq (local.get $member) (i32.const 2))
+                                (i32.and
+                                  (i32.eq (call $cppByte (local.get $p)) (i32.const ":"))
+                                  (i32.eq
+                                    (call $cppByte (i32.add (local.get $p) (i32.const 1)))
+                                    (i32.const ":"))))
+                              (then
+                                (local.set $hl
+                                  (select
+                                    (enum.get $Token.namespace)
+                                    (enum.get $Token.type)
+                                    (i32.and
                                       (i32.eq (call $cppByte (local.get $p)) (i32.const ":"))
-                                      (i32.ne (call $cppByte (i32.add (local.get $p) (i32.const 1))) (i32.const ":")))
+                                      (i32.eq
+                                        (call $cppByte (i32.add (local.get $p) (i32.const 1)))
+                                        (i32.const ":"))))))
+                              (else
+                                (if
+                                  (i32.and
+                                    (i32.eq (call $cppByte (local.get $p)) (i32.const ":"))
+                                    (i32.ne
+                                      (call $cppByte (i32.add (local.get $p) (i32.const 1)))
+                                      (i32.const ":")))
                                   (then (local.set $hl (enum.get $Token.label)))
                                   (else
                                     (if (call $lexIsConstCase (local.get $lhs) (local.get $rhs))
                                       (then (local.set $hl (enum.get $Token.constant)))
                                       (else
-                                        (if (i32.le_u
-                                              (i32.sub (i32.load8_u (local.get $lhs)) (i32.const "A"))
-                                              (i32.const 25))
+                                        (if
+                                          (i32.le_u
+                                            (i32.sub (i32.load8_u (local.get $lhs)) (i32.const "A"))
+                                            (i32.const 25))
                                           (then (local.set $hl (enum.get $Token.type)))
-                                          (else (local.set $hl (enum.get $Token.variable))))))))))))))))))
+                                          (else
+                                            (local.set $hl
+                                              (enum.get $Token.variable))))))))))))))))))
             (call $emitTok (local.get $hl) (local.get $lhs) (local.get $rhs))
             (local.set $midLine (i32.const 1))
             (local.set $member (i32.const 0))
             (br $next)))
 
         ;; numeric literals, including .5, binary/hex floats and separators
-        (if (i32.or
-              (call $lexIsDigit (local.get $c))
-              (i32.and (i32.eq (local.get $c) (i32.const "."))
-                       (call $lexIsDigit (local.get $c2))))
+        (if
+          (i32.or
+            (call $lexIsDigit (local.get $c))
+            (i32.and (i32.eq (local.get $c) (i32.const ".")) (call $lexIsDigit (local.get $c2))))
           (then
             (call $cppScanNumber)
             (call $emitTok (enum.get $Token.number) (local.get $lhs) (global.get $ptr))
@@ -546,42 +614,59 @@
             (call $emitTok (enum.get $Token.punctuation.bracket) (local.get $lhs) (global.get $ptr))
             (local.set $midLine (i32.const 1))
             (local.set $member (i32.const 0))
-            (if (i32.or (i32.eq (local.get $c) (i32.const "{"))
-                        (i32.eq (local.get $c) (i32.const "}")))
+            (if
+              (i32.or
+                (i32.eq (local.get $c) (i32.const "{"))
+                (i32.eq (local.get $c) (i32.const "}")))
               (then (local.set $expectType (i32.const 0))))
             (br $next)))
 
         ;; scope/member delimiters and ellipsis/pointer-to-member operators
         (if (i32.eq (local.get $c) (i32.const ":"))
           (then
-            (global.set $ptr (i32.add (global.get $ptr)
-              (select (i32.const 2) (i32.const 1) (i32.eq (local.get $c2) (i32.const ":")))))
-            (call $emitTok (enum.get $Token.punctuation.delimiter) (local.get $lhs) (global.get $ptr))
-            (local.set $member (select (i32.const 2) (i32.const 0)
-              (i32.eq (local.get $c2) (i32.const ":"))))
+            (global.set $ptr
+              (i32.add
+                (global.get $ptr)
+                (select (i32.const 2) (i32.const 1) (i32.eq (local.get $c2) (i32.const ":")))))
+            (call $emitTok
+              (enum.get $Token.punctuation.delimiter)
+              (local.get $lhs)
+              (global.get $ptr))
+            (local.set $member
+              (select (i32.const 2) (i32.const 0) (i32.eq (local.get $c2) (i32.const ":"))))
             (local.set $midLine (i32.const 1))
             (br $next)))
         (if (i32.eq (local.get $c) (i32.const "."))
           (then
-            (if (i32.or (i32.eq (local.get $c2) (i32.const "*"))
-                        (i32.and (i32.eq (local.get $c2) (i32.const "."))
-                                 (i32.eq (local.get $c3) (i32.const "."))))
+            (if
+              (i32.or
+                (i32.eq (local.get $c2) (i32.const "*"))
+                (i32.and
+                  (i32.eq (local.get $c2) (i32.const "."))
+                  (i32.eq (local.get $c3) (i32.const "."))))
               (then
-                (global.set $ptr (i32.add (global.get $ptr)
-                  (select (i32.const 3) (i32.const 2) (i32.eq (local.get $c2) (i32.const ".")))))
+                (global.set $ptr
+                  (i32.add
+                    (global.get $ptr)
+                    (select (i32.const 3) (i32.const 2) (i32.eq (local.get $c2) (i32.const ".")))))
                 (call $emitTok (enum.get $Token.operator) (local.get $lhs) (global.get $ptr))
                 (local.set $member (i32.const 0)))
               (else
                 (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
-                (call $emitTok (enum.get $Token.punctuation.delimiter) (local.get $lhs) (global.get $ptr))
+                (call $emitTok
+                  (enum.get $Token.punctuation.delimiter)
+                  (local.get $lhs)
+                  (global.get $ptr))
                 (local.set $member (i32.const 1))))
             (local.set $midLine (i32.const 1))
             (br $next)))
-        (if (i32.or (i32.eq (local.get $c) (i32.const ","))
-                    (i32.eq (local.get $c) (i32.const ";")))
+        (if (i32.or (i32.eq (local.get $c) (i32.const ",")) (i32.eq (local.get $c) (i32.const ";")))
           (then
             (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
-            (call $emitTok (enum.get $Token.punctuation.delimiter) (local.get $lhs) (global.get $ptr))
+            (call $emitTok
+              (enum.get $Token.punctuation.delimiter)
+              (local.get $lhs)
+              (global.get $ptr))
             (local.set $midLine (i32.const 1))
             (local.set $member (i32.const 0))
             (if (i32.eq (local.get $c) (i32.const ";"))
@@ -594,31 +679,37 @@
           (then
             (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
             (local.set $member (i32.const 0))
-            (if (i32.and (i32.eq (local.get $c) (i32.const "-"))
-                         (i32.eq (local.get $c2) (i32.const ">")))
+            (if
+              (i32.and
+                (i32.eq (local.get $c) (i32.const "-"))
+                (i32.eq (local.get $c2) (i32.const ">")))
               (then
                 (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
                 (if (i32.eq (call $cppByte (global.get $ptr)) (i32.const "*"))
                   (then (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))))
                 (local.set $member (i32.const 1)))
               (else
-                (if (i32.and
-                      (i32.eq (local.get $c) (i32.const "<"))
-                      (i32.and (i32.eq (local.get $c2) (i32.const "="))
-                               (i32.eq (local.get $c3) (i32.const ">"))))
+                (if
+                  (i32.and
+                    (i32.eq (local.get $c) (i32.const "<"))
+                    (i32.and
+                      (i32.eq (local.get $c2) (i32.const "="))
+                      (i32.eq (local.get $c3) (i32.const ">"))))
                   (then (global.set $ptr (i32.add (global.get $ptr) (i32.const 2))))
                   (else
-                    (if (i32.or (i32.eq (local.get $c2) (i32.const "="))
-                                (i32.eq (local.get $c) (local.get $c2)))
+                    (if
+                      (i32.or
+                        (i32.eq (local.get $c2) (i32.const "="))
+                        (i32.eq (local.get $c) (local.get $c2)))
                       (then
                         (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
-                        (if (i32.and
-                              (i32.or (i32.eq (local.get $c) (i32.const "<"))
-                                      (i32.eq (local.get $c) (i32.const ">")))
-                              (i32.eq (call $cppByte (global.get $ptr)) (i32.const "=")))
-                          (then
-                            (global.set $ptr
-                              (i32.add (global.get $ptr) (i32.const 1)))))))))))
+                        (if
+                          (i32.and
+                            (i32.or
+                              (i32.eq (local.get $c) (i32.const "<"))
+                              (i32.eq (local.get $c) (i32.const ">")))
+                            (i32.eq (call $cppByte (global.get $ptr)) (i32.const "=")))
+                          (then (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))))))))))
             (call $emitTok (enum.get $Token.operator) (local.get $lhs) (global.get $ptr))
             (local.set $midLine (i32.const 1))
             (br $next)))
@@ -629,11 +720,12 @@
           (loop $plain
             (br_if $plainDone (i32.ge_u (global.get $ptr) (global.get $end)))
             (local.set $c (i32.load8_u (global.get $ptr)))
-            (br_if $plainDone (i32.or
+            (br_if $plainDone
               (i32.or
-                (i32.or (call $lexIsSpace (local.get $c)) (call $lexIsIdentStart (local.get $c)))
-                (i32.or (call $lexIsDigit (local.get $c)) (call $cppIsOp (local.get $c))))
-              (byteset.get "\22'(),.:;[]{}" (local.get $c))))
+                (i32.or
+                  (i32.or (call $lexIsSpace (local.get $c)) (call $lexIsIdentStart (local.get $c)))
+                  (i32.or (call $lexIsDigit (local.get $c)) (call $cppIsOp (local.get $c))))
+                (byteset.get "\22'(),.:;[]{}" (local.get $c))))
             (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
             (br $plain)))
         (call $emitTok (enum.get $Token.none) (local.get $lhs) (global.get $ptr))

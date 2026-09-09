@@ -42,14 +42,15 @@
     (local.set $need (i32.add (local.get $addr) (i32.const 16)))
     (if (i32.gt_u (local.get $need) (i32.mul (memory.size) (i32.const 65536)))
       (then
-        (if (i32.eq
-              (memory.grow (i32.add
+        (if
+          (i32.eq
+            (memory.grow
+              (i32.add
                 (i32.shr_u
-                  (i32.sub (local.get $need)
-                    (i32.mul (memory.size) (i32.const 65536)))
+                  (i32.sub (local.get $need) (i32.mul (memory.size) (i32.const 65536)))
                   (i32.const 16))
                 (i32.const 1)))
-              (i32.const -1))
+            (i32.const -1))
           (then (unreachable))))))
 
   ;; size class of a total block size (8-aligned, >= 16). Classes are 8-byte
@@ -60,8 +61,7 @@
     (local $quarter i32)
     (if (i32.le_u (local.get $size) (i32.const 64))
       (then (return (i32.shr_u (i32.add (local.get $size) (i32.const 7)) (i32.const 3)))))
-    (local.set $p (i32.sub (i32.const 32)
-      (i32.clz (i32.sub (local.get $size) (i32.const 1)))))
+    (local.set $p (i32.sub (i32.const 32) (i32.clz (i32.sub (local.get $size) (i32.const 1)))))
     (if (i32.ge_u (local.get $p) (i32.const 17))
       (then (return (i32.const 31))))
     (local.set $quarter (i32.shl (i32.const 1) (i32.sub (local.get $p) (i32.const 2))))
@@ -69,8 +69,7 @@
     ;; above the 8-byte classes: sizes 3<<(p-2) and 4<<(p-2) take 9+(p-7)*2
     ;; and 10+(p-7)*2, so every class holds exactly one block size
     (i32.add
-      (i32.add (i32.const 8)
-        (i32.shl (i32.sub (local.get $p) (i32.const 7)) (i32.const 1)))
+      (i32.add (i32.const 8) (i32.shl (i32.sub (local.get $p) (i32.const 7)) (i32.const 1)))
       (i32.sub
         (i32.shr_u
           (i32.and
@@ -87,8 +86,7 @@
       (then (local.set $size (i32.const 16))))
     (if (i32.le_u (local.get $size) (i32.const 64))
       (then (return (i32.and (i32.add (local.get $size) (i32.const 7)) (i32.const -8)))))
-    (local.set $p (i32.sub (i32.const 32)
-      (i32.clz (i32.sub (local.get $size) (i32.const 1)))))
+    (local.set $p (i32.sub (i32.const 32) (i32.clz (i32.sub (local.get $size) (i32.const 1)))))
     (if (i32.ge_u (local.get $p) (i32.const 17))
       (then (return (i32.and (i32.add (local.get $size) (i32.const 7)) (i32.const -8)))))
     (local.set $quarter (i32.shl (i32.const 1) (i32.sub (local.get $p) (i32.const 2))))
@@ -99,18 +97,20 @@
   ;; extend the heap area upward, sliding the transient scratch window with it
   (func $lvExtendHeap (param $min i32)
     (local $delta i32)
-    (local.set $delta (i32.and
-      (i32.add (local.get $min) (i32.const 327679)) (i32.const -65536)))
+    (local.set $delta (i32.and (i32.add (local.get $min) (i32.const 327679)) (i32.const -65536)))
     ;; the window sits above the line's scratch copy, not at the ceiling, so
     ;; the slide destination ends at $lvTransHi+$delta; growing from the
     ;; ceiling alone under-allocates by the line length and the copy traps on
     ;; token-dense long lines
-    (call $lvGrowTo (i32.add
+    (call $lvGrowTo
       (i32.add
-        (select (global.get $lvTransHi) (global.get $lvHeapCeil)
-          (i32.gt_u (global.get $lvTransHi) (global.get $lvHeapCeil)))
-        (local.get $delta))
-      (i32.const 64)))
+        (i32.add
+          (select
+            (global.get $lvTransHi)
+            (global.get $lvHeapCeil)
+            (i32.gt_u (global.get $lvTransHi) (global.get $lvHeapCeil)))
+          (local.get $delta))
+        (i32.const 64)))
     (if (i32.gt_u (global.get $lvTransHi) (global.get $lvTransLo))
       (then
         (memory.copy
@@ -129,14 +129,14 @@
     (local $prev i32)
     (local.set $total (call $lvRoundSize (i32.add (local.get $len) (i32.const 8))))
     (local.set $idx (call $lvClassOf (local.get $total)))
-    (local.set $head (i32.load (i32.add (i32.const $mem.liveFree)
-      (i32.shl (local.get $idx) (i32.const 2)))))
+    (local.set $head
+      (i32.load (i32.add (i32.const $mem.liveFree) (i32.shl (local.get $idx) (i32.const 2)))))
     (if (i32.ne (local.get $idx) (i32.const 31))
       (then
         (if (local.get $head)
           (then
-            (i32.store (i32.add (i32.const $mem.liveFree)
-              (i32.shl (local.get $idx) (i32.const 2)))
+            (i32.store
+              (i32.add (i32.const $mem.liveFree) (i32.shl (local.get $idx) (i32.const 2)))
               (i32.load offset=4 (local.get $head)))
             (i32.store (local.get $head) (local.get $total))
             (global.set $lvHeapFreed (i32.sub (global.get $lvHeapFreed) (local.get $total)))
@@ -147,14 +147,15 @@
         (block $miss
           (loop $walk
             (br_if $miss (i32.eqz (local.get $head)))
-            (if (i32.eq (i32.and (i32.load (local.get $head)) (i32.const -2))
-                        (local.get $total))
+            (if (i32.eq (i32.and (i32.load (local.get $head)) (i32.const -2)) (local.get $total))
               (then
                 (if (local.get $prev)
-                  (then (i32.store offset=4 (local.get $prev)
-                    (i32.load offset=4 (local.get $head))))
-                  (else (i32.store (i32.const $mem.liveFree+124)
-                    (i32.load offset=4 (local.get $head)))))
+                  (then
+                    (i32.store offset=4 (local.get $prev) (i32.load offset=4 (local.get $head))))
+                  (else
+                    (i32.store
+                      (i32.const $mem.liveFree+124)
+                      (i32.load offset=4 (local.get $head)))))
                 (i32.store (local.get $head) (local.get $total))
                 (global.set $lvHeapFreed (i32.sub (global.get $lvHeapFreed) (local.get $total)))
                 (global.set $lvHeapLive (i32.add (global.get $lvHeapLive) (local.get $total)))
@@ -162,8 +163,7 @@
             (local.set $prev (local.get $head))
             (local.set $head (i32.load offset=4 (local.get $head)))
             (br $walk)))))
-    (if (i32.gt_u (i32.add (global.get $lvHeapEnd) (local.get $total))
-                  (global.get $lvHeapCeil))
+    (if (i32.gt_u (i32.add (global.get $lvHeapEnd) (local.get $total)) (global.get $lvHeapCeil))
       (then (call $lvExtendHeap (local.get $total))))
     (local.set $head (global.get $lvHeapEnd))
     (global.set $lvHeapEnd (i32.add (local.get $head) (local.get $total)))
@@ -177,14 +177,17 @@
     (local $hdr i32)
     (local $total i32)
     (local $idx i32)
-    (if (i32.eqz (local.get $body)) (then (return)))
+    (if (i32.eqz (local.get $body))
+      (then (return)))
     (local.set $hdr (i32.sub (local.get $body) (i32.const 8)))
     (local.set $total (i32.and (i32.load (local.get $hdr)) (i32.const -2)))
     (local.set $idx (call $lvClassOf (local.get $total)))
     (i32.store (local.get $hdr) (i32.or (local.get $total) (i32.const 1)))
-    (i32.store offset=4 (local.get $hdr)
+    (i32.store offset=4
+      (local.get $hdr)
       (i32.load (i32.add (i32.const $mem.liveFree) (i32.shl (local.get $idx) (i32.const 2)))))
-    (i32.store (i32.add (i32.const $mem.liveFree) (i32.shl (local.get $idx) (i32.const 2)))
+    (i32.store
+      (i32.add (i32.const $mem.liveFree) (i32.shl (local.get $idx) (i32.const 2)))
       (local.get $hdr))
     (global.set $lvHeapLive (i32.sub (global.get $lvHeapLive) (local.get $total)))
     (global.set $lvHeapFreed (i32.add (global.get $lvHeapFreed) (local.get $total))))
@@ -200,7 +203,8 @@
     (local.set $total (i32.and (i32.load (local.get $hdr)) (i32.const -2)))
     (local.set $keep (call $lvRoundSize (i32.add (local.get $len) (i32.const 8))))
     (local.set $rest (i32.sub (local.get $total) (local.get $keep)))
-    (if (i32.lt_u (local.get $rest) (i32.const 16)) (then (return)))
+    (if (i32.lt_u (local.get $rest) (i32.const 16))
+      (then (return)))
     ;; the tail joins a free list keyed by class size, and $lvAlloc hands a
     ;; block from that list out at the class size; a tail that is not exactly
     ;; a class size would be handed out larger than it is
@@ -212,7 +216,8 @@
 
   ;; lazy first-use setup: heap cursors and free-list heads
   (func $lvHeapInit
-    (if (global.get $lvHeapEnd) (then (return)))
+    (if (global.get $lvHeapEnd)
+      (then (return)))
     (global.set $lvHeapEnd (i32.const $mem.liveHeapStart))
     (global.set $lvHeapCeil (i32.const $mem.liveHeapStart))
     (global.set $lvHeapLive (i32.const 0))
@@ -248,9 +253,8 @@
     (block $done
       (loop $lane
         (br_if $done (i32.ge_u (local.get $p) (local.get $stop)))
-        (local.set $h (i64.mul
-          (i64.xor (local.get $h) (i64.load (local.get $p)))
-          (i64.const 0x100000001b3)))
+        (local.set $h
+          (i64.mul (i64.xor (local.get $h) (i64.load (local.get $p))) (i64.const 0x100000001b3)))
         (local.set $p (i32.add (local.get $p) (i32.const 8)))
         (br $lane)))
     (local.set $k (i32.and (local.get $len) (i32.const 7)))
@@ -260,13 +264,13 @@
           (loop $tl
             (br_if $tdone (i32.eqz (local.get $k)))
             (local.set $k (i32.sub (local.get $k) (i32.const 1)))
-            (local.set $tail (i64.or
-              (i64.shl (local.get $tail) (i64.const 8))
-              (i64.load8_u (i32.add (local.get $p) (local.get $k)))))
+            (local.set $tail
+              (i64.or
+                (i64.shl (local.get $tail) (i64.const 8))
+                (i64.load8_u (i32.add (local.get $p) (local.get $k)))))
             (br $tl)))
-        (local.set $h (i64.mul
-          (i64.xor (local.get $h) (local.get $tail))
-          (i64.const 0x100000001b3)))))
+        (local.set $h
+          (i64.mul (i64.xor (local.get $h) (local.get $tail)) (i64.const 0x100000001b3)))))
     (local.get $h))
 
   (func $lvBytesEq (param $a i32) (param $b i32) (param $len i32) (result i32)
@@ -311,23 +315,29 @@
     (if (global.get $lvIdFree)
       (then
         (local.set $id (global.get $lvIdFree))
-        (global.set $lvIdFree (i32.shr_u
-          (i32.load (i32.add (global.get $lvIdTab) (i32.shl (local.get $id) (i32.const 2))))
-          (i32.const 1))))
+        (global.set $lvIdFree
+          (i32.shr_u
+            (i32.load (i32.add (global.get $lvIdTab) (i32.shl (local.get $id) (i32.const 2))))
+            (i32.const 1))))
       (else
         (if (i32.ge_u (global.get $lvIdNext) (global.get $lvIdCap))
           (then
             (local.set $nt (call $lvAlloc (i32.shl (global.get $lvIdCap) (i32.const 3))))
-            (memory.copy (local.get $nt) (global.get $lvIdTab)
+            (memory.copy
+              (local.get $nt)
+              (global.get $lvIdTab)
               (i32.shl (global.get $lvIdCap) (i32.const 2)))
-            (memory.fill (i32.add (local.get $nt) (i32.shl (global.get $lvIdCap) (i32.const 2)))
-              (i32.const 0) (i32.shl (global.get $lvIdCap) (i32.const 2)))
+            (memory.fill
+              (i32.add (local.get $nt) (i32.shl (global.get $lvIdCap) (i32.const 2)))
+              (i32.const 0)
+              (i32.shl (global.get $lvIdCap) (i32.const 2)))
             (call $lvFree (global.get $lvIdTab))
             (global.set $lvIdTab (local.get $nt))
             (global.set $lvIdCap (i32.shl (global.get $lvIdCap) (i32.const 1)))))
         (local.set $id (global.get $lvIdNext))
         (global.set $lvIdNext (i32.add (local.get $id) (i32.const 1)))))
-    (i32.store (i32.add (global.get $lvIdTab) (i32.shl (local.get $id) (i32.const 2)))
+    (i32.store
+      (i32.add (global.get $lvIdTab) (i32.shl (local.get $id) (i32.const 2)))
       (local.get $blob))
     (local.get $id))
 
@@ -339,23 +349,28 @@
     (local $node i32)
     (local $next i32)
     (local $slot i32)
-    (local.set $newMask (i32.add
-      (i32.shl (global.get $lvBucketMask) (i32.const 1)) (i32.const 1)))
-    (local.set $nb (call $lvAlloc (i32.shl (i32.add (local.get $newMask) (i32.const 1)) (i32.const 2))))
-    (memory.fill (local.get $nb) (i32.const 0)
+    (local.set $newMask (i32.add (i32.shl (global.get $lvBucketMask) (i32.const 1)) (i32.const 1)))
+    (local.set $nb
+      (call $lvAlloc (i32.shl (i32.add (local.get $newMask) (i32.const 1)) (i32.const 2))))
+    (memory.fill
+      (local.get $nb)
+      (i32.const 0)
       (i32.shl (i32.add (local.get $newMask) (i32.const 1)) (i32.const 2)))
     (block $done
       (loop $bucket
         (br_if $done (i32.gt_u (local.get $i) (global.get $lvBucketMask)))
-        (local.set $node (i32.load (i32.add (global.get $lvBuckets)
-          (i32.shl (local.get $i) (i32.const 2)))))
+        (local.set $node
+          (i32.load (i32.add (global.get $lvBuckets) (i32.shl (local.get $i) (i32.const 2)))))
         (block $chainDone
           (loop $chain
             (br_if $chainDone (i32.eqz (local.get $node)))
             (local.set $next (i32.load (local.get $node)))
-            (local.set $slot (i32.add (local.get $nb) (i32.shl
-              (i32.and (i32.load offset=12 (local.get $node)) (local.get $newMask))
-              (i32.const 2))))
+            (local.set $slot
+              (i32.add
+                (local.get $nb)
+                (i32.shl
+                  (i32.and (i32.load offset=12 (local.get $node)) (local.get $newMask))
+                  (i32.const 2))))
             (i32.store (local.get $node) (i32.load (local.get $slot)))
             (i32.store (local.get $slot) (local.get $node))
             (local.set $node (local.get $next))
@@ -382,35 +397,43 @@
     (local.set $h (call $lvHash (local.get $ptr) (local.get $len)))
     (local.set $lo (i32.wrap_i64 (local.get $h)))
     (local.set $hi (i32.wrap_i64 (i64.shr_u (local.get $h) (i64.const 32))))
-    (local.set $node (i32.load (i32.add (global.get $lvBuckets)
-      (i32.shl (i32.and (local.get $lo) (global.get $lvBucketMask)) (i32.const 2)))))
+    (local.set $node
+      (i32.load
+        (i32.add
+          (global.get $lvBuckets)
+          (i32.shl (i32.and (local.get $lo) (global.get $lvBucketMask)) (i32.const 2)))))
     (block $miss
       (loop $walk
         (br_if $miss (i32.eqz (local.get $node)))
-        (if (i32.and
-              (i32.eq (i32.load offset=8 (local.get $node)) (local.get $len))
-              (i32.and
-                (i32.eq (i32.load offset=12 (local.get $node)) (local.get $lo))
-                (i32.eq (i32.load offset=16 (local.get $node)) (local.get $hi))))
+        (if
+          (i32.and
+            (i32.eq (i32.load offset=8 (local.get $node)) (local.get $len))
+            (i32.and
+              (i32.eq (i32.load offset=12 (local.get $node)) (local.get $lo))
+              (i32.eq (i32.load offset=16 (local.get $node)) (local.get $hi))))
           (then
-            (if (call $lvBytesEq
-                  (i32.add (local.get $node) (i32.const 24))
-                  (local.get $ptr) (local.get $len))
+            (if
+              (call $lvBytesEq
+                (i32.add (local.get $node) (i32.const 24))
+                (local.get $ptr)
+                (local.get $len))
               (then
-                (i32.store offset=4 (local.get $node)
+                (i32.store offset=4
+                  (local.get $node)
                   (i32.add (i32.load offset=4 (local.get $node)) (i32.const 1)))
                 (return (i32.load offset=20 (local.get $node)))))))
         (local.set $node (i32.load (local.get $node)))
         (br $walk)))
     (local.set $before (global.get $lvTransLo))
     (local.set $body (call $lvAlloc (i32.add (local.get $len) (i32.const 24))))
-    (local.set $ptr (i32.add (local.get $ptr)
-      (i32.sub (global.get $lvTransLo) (local.get $before))))
-    (memory.copy (i32.add (local.get $body) (i32.const 24))
-      (local.get $ptr) (local.get $len))
+    (local.set $ptr
+      (i32.add (local.get $ptr) (i32.sub (global.get $lvTransLo) (local.get $before))))
+    (memory.copy (i32.add (local.get $body) (i32.const 24)) (local.get $ptr) (local.get $len))
     (local.set $id (call $lvAllocId (local.get $body)))
-    (local.set $slot (i32.add (global.get $lvBuckets)
-      (i32.shl (i32.and (local.get $lo) (global.get $lvBucketMask)) (i32.const 2))))
+    (local.set $slot
+      (i32.add
+        (global.get $lvBuckets)
+        (i32.shl (i32.and (local.get $lo) (global.get $lvBucketMask)) (i32.const 2))))
     (i32.store (local.get $body) (i32.load (local.get $slot)))
     (i32.store offset=4 (local.get $body) (i32.const 1))
     (i32.store offset=8 (local.get $body) (local.get $len))
@@ -420,9 +443,12 @@
     (i32.store (local.get $slot) (local.get $body))
     (global.set $lvStateCount (i32.add (global.get $lvStateCount) (i32.const 1)))
     (global.set $lvStateBytes (i32.add (global.get $lvStateBytes) (local.get $len)))
-    (if (i32.gt_u (global.get $lvStateCount)
-          (i32.sub (i32.add (global.get $lvBucketMask) (i32.const 1))
-            (i32.shr_u (i32.add (global.get $lvBucketMask) (i32.const 1)) (i32.const 2))))
+    (if
+      (i32.gt_u
+        (global.get $lvStateCount)
+        (i32.sub
+          (i32.add (global.get $lvBucketMask) (i32.const 1))
+          (i32.shr_u (i32.add (global.get $lvBucketMask) (i32.const 1)) (i32.const 2))))
       (then (call $lvGrowBuckets)))
     (local.get $id))
 
@@ -432,19 +458,22 @@
     (local $slotAddr i32)
     (local $node i32)
     (local $prev i32)
-    (if (i32.or
-          (i32.eqz (local.get $id))
-          (i32.eq (local.get $id) (i32.const -1)))
+    (if (i32.or (i32.eqz (local.get $id)) (i32.eq (local.get $id) (i32.const -1)))
       (then (return)))
     (local.set $slotAddr (i32.add (global.get $lvIdTab) (i32.shl (local.get $id) (i32.const 2))))
     (local.set $node (i32.load (local.get $slotAddr)))
-    (i32.store offset=4 (local.get $node)
+    (i32.store offset=4
+      (local.get $node)
       (i32.sub (i32.load offset=4 (local.get $node)) (i32.const 1)))
-    (if (i32.load offset=4 (local.get $node)) (then (return)))
+    (if (i32.load offset=4 (local.get $node))
+      (then (return)))
     ;; unlink from the bucket chain
-    (local.set $prev (i32.add (global.get $lvBuckets)
-      (i32.shl (i32.and (i32.load offset=12 (local.get $node)) (global.get $lvBucketMask))
-        (i32.const 2))))
+    (local.set $prev
+      (i32.add
+        (global.get $lvBuckets)
+        (i32.shl
+          (i32.and (i32.load offset=12 (local.get $node)) (global.get $lvBucketMask))
+          (i32.const 2))))
     (block $unlinked
       (loop $walk
         (if (i32.eq (i32.load (local.get $prev)) (local.get $node))
@@ -454,10 +483,11 @@
         (local.set $prev (i32.load (local.get $prev)))
         (br $walk)))
     (global.set $lvStateCount (i32.sub (global.get $lvStateCount) (i32.const 1)))
-    (global.set $lvStateBytes (i32.sub (global.get $lvStateBytes)
-      (i32.load offset=8 (local.get $node))))
+    (global.set $lvStateBytes
+      (i32.sub (global.get $lvStateBytes) (i32.load offset=8 (local.get $node))))
     (call $lvFree (local.get $node))
-    (i32.store (local.get $slotAddr)
+    (i32.store
+      (local.get $slotAddr)
       (i32.or (i32.shl (global.get $lvIdFree) (i32.const 1)) (i32.const 1)))
     (global.set $lvIdFree (local.get $id)))
 
@@ -491,9 +521,10 @@
   ;; depth through a global; JavaScript uses the template lexer's cursor.
   (func $lvStackPrefix (result i32)
     (local $n i32)
-    (if (i32.or
-          (i32.eq (global.get $lvLang) (enum.get $Language.json))
-          (i32.eq (global.get $lvLang) (enum.get $Language.toml)))
+    (if
+      (i32.or
+        (i32.eq (global.get $lvLang) (enum.get $Language.json))
+        (i32.eq (global.get $lvLang) (enum.get $Language.toml)))
       (then (local.set $n (global.get $liveStackBytes)))
       (else (local.set $n (i32.shl (global.get $jsTemplateLexSp) (i32.const 2)))))
     (if (i32.gt_u (local.get $n) (i32.const 1024))
@@ -555,22 +586,27 @@
     (i32.store offset=160 (local.get $dst) (global.get $jsTemplateMarker))
     (i32.store offset=164 (local.get $dst) (global.get $jsTemplateState))
     (i32.store offset=168 (local.get $dst) (global.get $jsTemplateEmitSp))
-    (memory.copy (i32.add (local.get $dst) (i32.const 172))
-      (i32.const $mem.streamDelimiter) (i32.const 32))
-    (memory.copy (i32.add (local.get $dst) (i32.const 204))
-      (i32.const $mem.markdownFenceStack) (i32.const 96))
+    (memory.copy
+      (i32.add (local.get $dst) (i32.const 172))
+      (i32.const $mem.streamDelimiter)
+      (i32.const 32))
+    (memory.copy
+      (i32.add (local.get $dst) (i32.const 204))
+      (i32.const $mem.markdownFenceStack)
+      (i32.const 96))
     (local.set $p (i32.add (local.get $dst) (i32.const 300)))
     (memory.copy (local.get $p) (call $lvStackBase) (local.get $stackLen))
     (local.set $p (i32.add (local.get $p) (local.get $stackLen)))
-    (memory.copy (local.get $p) (i32.const $mem.jsTemplateFn)
+    (memory.copy
+      (local.get $p)
+      (i32.const $mem.jsTemplateFn)
       (i32.shl (global.get $jsTemplateEmitSp) (i32.const 2)))
     (local.set $p (i32.add (local.get $p) (i32.shl (global.get $jsTemplateEmitSp) (i32.const 2))))
     (memory.copy (local.get $p) (i32.const $mem.jsBracketStack) (local.get $brkLen))
     (local.set $p (i32.add (local.get $p) (local.get $brkLen)))
     (memory.copy (local.get $p) (i32.const $mem.jsxStack) (local.get $jsxLen))
     (local.set $p (i32.add (local.get $p) (local.get $jsxLen)))
-    (memory.copy (local.get $p)
-      (i32.const $mem.streamState) (i32.const $mem.streamStateUsed))
+    (memory.copy (local.get $p) (i32.const $mem.streamState) (i32.const $mem.streamStateUsed))
     (i32.sub (i32.add (local.get $p) (i32.const $mem.streamStateUsed)) (local.get $dst)))
 
   ;; Length of the blob at $base without its trailing zero bytes. Most of a
@@ -585,10 +621,8 @@
     ;; drop whole zero 16-byte chunks, then the bytes of the last one
     (block $chunks
       (loop $wide
-        (br_if $chunks
-          (i32.lt_u (i32.sub (local.get $p) (local.get $base)) (i32.const 16)))
-        (br_if $chunks
-          (v128.any_true (v128.load (i32.sub (local.get $p) (i32.const 16)))))
+        (br_if $chunks (i32.lt_u (i32.sub (local.get $p) (local.get $base)) (i32.const 16)))
+        (br_if $chunks (v128.any_true (v128.load (i32.sub (local.get $p) (i32.const 16)))))
         (local.set $p (i32.sub (local.get $p) (i32.const 16)))
         (br $wide)))
     (block $done
@@ -648,22 +682,27 @@
     (global.set $jsTemplateState (i32.load offset=164 (local.get $src)))
     (global.set $jsTemplateEmitSp (i32.load offset=168 (local.get $src)))
     (global.set $liveStackBytes (local.get $stackLen))
-    (memory.copy (i32.const $mem.streamDelimiter)
-      (i32.add (local.get $src) (i32.const 172)) (i32.const 32))
-    (memory.copy (i32.const $mem.markdownFenceStack)
-      (i32.add (local.get $src) (i32.const 204)) (i32.const 96))
+    (memory.copy
+      (i32.const $mem.streamDelimiter)
+      (i32.add (local.get $src) (i32.const 172))
+      (i32.const 32))
+    (memory.copy
+      (i32.const $mem.markdownFenceStack)
+      (i32.add (local.get $src) (i32.const 204))
+      (i32.const 96))
     (local.set $p (i32.add (local.get $src) (i32.const 300)))
     (memory.copy (call $lvStackBase) (local.get $p) (local.get $stackLen))
     (local.set $p (i32.add (local.get $p) (local.get $stackLen)))
-    (memory.copy (i32.const $mem.jsTemplateFn) (local.get $p)
+    (memory.copy
+      (i32.const $mem.jsTemplateFn)
+      (local.get $p)
       (i32.shl (global.get $jsTemplateEmitSp) (i32.const 2)))
     (local.set $p (i32.add (local.get $p) (i32.shl (global.get $jsTemplateEmitSp) (i32.const 2))))
     (memory.copy (i32.const $mem.jsBracketStack) (local.get $p) (local.get $brkLen))
     (local.set $p (i32.add (local.get $p) (local.get $brkLen)))
     (memory.copy (i32.const $mem.jsxStack) (local.get $p) (local.get $jsxLen))
     (local.set $p (i32.add (local.get $p) (local.get $jsxLen)))
-    (memory.copy (i32.const $mem.streamState)
-      (local.get $p) (i32.const $mem.streamStateUsed)))
+    (memory.copy (i32.const $mem.streamState) (local.get $p) (i32.const $mem.streamStateUsed)))
 
   ;; canonicalize every captured location before the first line so stale
   ;; values from earlier batches can never leak into a blob
@@ -692,8 +731,7 @@
     (call $sigReset)
     (global.set $liveStackBytes (i32.const 0))
     (memory.fill (i32.const $mem.streamDelimiter) (i32.const 0) (i32.const 32))
-    (memory.fill (i32.const $mem.streamState) (i32.const 0)
-      (i32.const $mem.streamStateUsed)))
+    (memory.fill (i32.const $mem.streamState) (i32.const 0) (i32.const $mem.streamStateUsed)))
 
   ;; A gap buffer of 32-byte descriptors:
   ;;   +0 textPtr  +4 byteLen (content, no terminator)  +8 utf16Len (counted
@@ -714,25 +752,29 @@
 
   (func $lvSlot (param $i i32) (result i32)
     (if (i32.ge_u (local.get $i) (global.get $lvGapAt))
-      (then (local.set $i (i32.add (local.get $i)
-        (i32.sub (global.get $lvLineCap) (global.get $lvLineCount))))))
+      (then
+        (local.set $i
+          (i32.add (local.get $i) (i32.sub (global.get $lvLineCap) (global.get $lvLineCount))))))
     (i32.add (global.get $lvLineTab) (i32.shl (local.get $i) (i32.const 5))))
 
   (func $lvMoveGap (param $to i32)
     (local $gapLen i32)
-    (if (i32.eq (local.get $to) (global.get $lvGapAt)) (then (return)))
+    (if (i32.eq (local.get $to) (global.get $lvGapAt))
+      (then (return)))
     (local.set $gapLen (i32.sub (global.get $lvLineCap) (global.get $lvLineCount)))
     (if (i32.lt_u (local.get $to) (global.get $lvGapAt))
       (then
         (memory.copy
-          (i32.add (global.get $lvLineTab)
+          (i32.add
+            (global.get $lvLineTab)
             (i32.shl (i32.add (local.get $to) (local.get $gapLen)) (i32.const 5)))
           (i32.add (global.get $lvLineTab) (i32.shl (local.get $to) (i32.const 5)))
           (i32.shl (i32.sub (global.get $lvGapAt) (local.get $to)) (i32.const 5))))
       (else
         (memory.copy
           (i32.add (global.get $lvLineTab) (i32.shl (global.get $lvGapAt) (i32.const 5)))
-          (i32.add (global.get $lvLineTab)
+          (i32.add
+            (global.get $lvLineTab)
             (i32.shl (i32.add (global.get $lvGapAt) (local.get $gapLen)) (i32.const 5)))
           (i32.shl (i32.sub (local.get $to) (global.get $lvGapAt)) (i32.const 5)))))
     (global.set $lvGapAt (local.get $to)))
@@ -742,22 +784,28 @@
     (local $newCap i32)
     (local $nt i32)
     (local $tail i32)
-    (if (i32.le_u (i32.add (global.get $lvLineCount) (local.get $extra))
-                  (global.get $lvLineCap))
+    (if (i32.le_u (i32.add (global.get $lvLineCount) (local.get $extra)) (global.get $lvLineCap))
       (then (return)))
     (local.set $newCap (i32.shl (global.get $lvLineCap) (i32.const 1)))
-    (if (i32.lt_u (local.get $newCap)
-          (i32.add (i32.add (global.get $lvLineCount) (local.get $extra)) (i32.const 64)))
-      (then (local.set $newCap
-        (i32.add (i32.add (global.get $lvLineCount) (local.get $extra)) (i32.const 64)))))
+    (if
+      (i32.lt_u
+        (local.get $newCap)
+        (i32.add (i32.add (global.get $lvLineCount) (local.get $extra)) (i32.const 64)))
+      (then
+        (local.set $newCap
+          (i32.add (i32.add (global.get $lvLineCount) (local.get $extra)) (i32.const 64)))))
     (local.set $nt (call $lvAlloc (i32.shl (local.get $newCap) (i32.const 5))))
     (local.set $tail (i32.sub (global.get $lvLineCount) (global.get $lvGapAt)))
-    (memory.copy (local.get $nt) (global.get $lvLineTab)
+    (memory.copy
+      (local.get $nt)
+      (global.get $lvLineTab)
       (i32.shl (global.get $lvGapAt) (i32.const 5)))
     (memory.copy
-      (i32.add (local.get $nt)
+      (i32.add
+        (local.get $nt)
         (i32.shl (i32.sub (local.get $newCap) (local.get $tail)) (i32.const 5)))
-      (i32.add (global.get $lvLineTab)
+      (i32.add
+        (global.get $lvLineTab)
         (i32.shl (i32.sub (global.get $lvLineCap) (local.get $tail)) (i32.const 5)))
       (i32.shl (local.get $tail) (i32.const 5)))
     (call $lvFree (global.get $lvLineTab))
@@ -829,25 +877,23 @@
           (then
             ;; blobs are stored zero-trimmed: rebuild the full image in the
             ;; scratch area, which the line copy below then overwrites
-            (local.set $node (i32.load (i32.add (global.get $lvIdTab)
-              (i32.shl (global.get $lvIncoming) (i32.const 2)))))
-            (call $lvGrowTo (i32.add (local.get $inBase)
-              (i32.const $mem.streamStateUsed+7472)))
-            (memory.fill (local.get $inBase) (i32.const 0)
-              (i32.const $mem.streamStateUsed+7472))
-            (memory.copy (local.get $inBase)
+            (local.set $node
+              (i32.load
+                (i32.add (global.get $lvIdTab) (i32.shl (global.get $lvIncoming) (i32.const 2)))))
+            (call $lvGrowTo (i32.add (local.get $inBase) (i32.const $mem.streamStateUsed+7472)))
+            (memory.fill (local.get $inBase) (i32.const 0) (i32.const $mem.streamStateUsed+7472))
+            (memory.copy
+              (local.get $inBase)
               (i32.add (local.get $node) (i32.const 24))
               (i32.load offset=8 (local.get $node)))
             (call $lvRestoreBlob (local.get $inBase))))))
     (global.set $lvMachineId (i32.const -1))
     (memory.copy (local.get $inBase) (i32.load (local.get $slot)) (local.get $byteLen))
     (if (i32.eq (local.get $termBytes) (i32.const 2))
-      (then (i32.store16 (i32.add (local.get $inBase) (local.get $byteLen))
-        (i32.const 0x0a0d)))
+      (then (i32.store16 (i32.add (local.get $inBase) (local.get $byteLen)) (i32.const 0x0a0d)))
       (else
         (if (local.get $termBytes)
-          (then (i32.store8 (i32.add (local.get $inBase) (local.get $byteLen))
-            (i32.const 10))))))
+          (then (i32.store8 (i32.add (local.get $inBase) (local.get $byteLen)) (i32.const 10))))))
     (i32.store8 (i32.add (local.get $inBase) (local.get $total)) (i32.const 0))
     (i32.store8 (i32.const 1) (i32.const 3))
     (i32.store (i32.const 2) (local.get $total))
@@ -865,44 +911,50 @@
     (local.set $recStart (i32.load (i32.const 6)))
     (local.set $recLen (i32.load (i32.const 10)))
     ;; capture the outgoing state right after the records
-    (local.set $blobBase (i32.and
-      (i32.add (i32.add (local.get $recStart) (local.get $recLen)) (i32.const 7))
-      (i32.const -8)))
+    (local.set $blobBase
+      (i32.and
+        (i32.add (i32.add (local.get $recStart) (local.get $recLen)) (i32.const 7))
+        (i32.const -8)))
     ;; head, globals, delimiter, and fence registers (300) plus the four
     ;; stack prefixes at their caps (1024 + 1024 + 1024 + 4096), then the checkpoints
-    (call $lvGrowTo (i32.add (local.get $blobBase)
-      (i32.const $mem.streamStateUsed+7552)))
-    (local.set $blobLen (call $lvTrimBlob (local.get $blobBase)
-      (call $lvCaptureBlob (local.get $blobBase))))
+    (call $lvGrowTo (i32.add (local.get $blobBase) (i32.const $mem.streamStateUsed+7552)))
+    (local.set $blobLen
+      (call $lvTrimBlob (local.get $blobBase) (call $lvCaptureBlob (local.get $blobBase))))
     (global.set $lvTransLo (local.get $recStart))
     (global.set $lvTransHi (i32.add (local.get $blobBase) (local.get $blobLen)))
     ;; the common line leaves the state unchanged: compare against the
     ;; incoming blob first and skip the hash and bucket walk on a match
-    (if (i32.and
-          (i32.eqz (local.get $reset))
-          (i32.lt_u (global.get $lvIncoming) (global.get $lvIdNext)))
+    (if
+      (i32.and
+        (i32.eqz (local.get $reset))
+        (i32.lt_u (global.get $lvIncoming) (global.get $lvIdNext)))
       (then
-        (local.set $node (i32.load (i32.add (global.get $lvIdTab)
-          (i32.shl (global.get $lvIncoming) (i32.const 2)))))
-        (if (i32.and
-              (i32.eqz (i32.and (local.get $node) (i32.const 1)))
-              (i32.and
-                (i32.ne (local.get $node) (i32.const 0))
-                (i32.eq (i32.load offset=8 (local.get $node)) (local.get $blobLen))))
+        (local.set $node
+          (i32.load
+            (i32.add (global.get $lvIdTab) (i32.shl (global.get $lvIncoming) (i32.const 2)))))
+        (if
+          (i32.and
+            (i32.eqz (i32.and (local.get $node) (i32.const 1)))
+            (i32.and
+              (i32.ne (local.get $node) (i32.const 0))
+              (i32.eq (i32.load offset=8 (local.get $node)) (local.get $blobLen))))
           (then
-            (if (call $lvBytesEq
-                  (i32.add (local.get $node) (i32.const 24))
-                  (local.get $blobBase) (local.get $blobLen))
+            (if
+              (call $lvBytesEq
+                (i32.add (local.get $node) (i32.const 24))
+                (local.get $blobBase)
+                (local.get $blobLen))
               (then
-                (i32.store offset=4 (local.get $node)
+                (i32.store offset=4
+                  (local.get $node)
                   (i32.add (i32.load offset=4 (local.get $node)) (i32.const 1)))
                 (local.set $newId (global.get $lvIncoming))))))))
     (if (i32.eqz (local.get $newId))
       (then
         (local.set $before (global.get $lvTransLo))
         (local.set $newId (call $lvIntern (local.get $blobBase) (local.get $blobLen)))
-        (local.set $recStart (i32.add (local.get $recStart)
-          (i32.sub (global.get $lvTransLo) (local.get $before))))))
+        (local.set $recStart
+          (i32.add (local.get $recStart) (i32.sub (global.get $lvTransLo) (local.get $before))))))
     (global.set $lvMachineId (local.get $newId))
     ;; parse the line records: count content records, find the utf16 length
     (local.set $recs (local.get $recStart))
@@ -910,15 +962,16 @@
     (block $parsed
       (loop $parse
         (br_if $parsed (i32.ge_u (local.get $r) (local.get $nRecs)))
-        (local.set $end (i32.load (i32.add (local.get $recs)
-          (i32.shl (local.get $r) (i32.const 3)))))
-        (local.set $hl (i32.load offset=4 (i32.add (local.get $recs)
-          (i32.shl (local.get $r) (i32.const 3)))))
+        (local.set $end
+          (i32.load (i32.add (local.get $recs) (i32.shl (local.get $r) (i32.const 3)))))
+        (local.set $hl
+          (i32.load offset=4 (i32.add (local.get $recs) (i32.shl (local.get $r) (i32.const 3)))))
         (if (i32.eq (local.get $hl) (i32.const -1))
           (then
-            (local.set $lastEnd (i32.sub (local.get $end)
-              (select (i32.const 2) (i32.const 1)
-                (i32.eq (local.get $termBytes) (i32.const 2)))))
+            (local.set $lastEnd
+              (i32.sub
+                (local.get $end)
+                (select (i32.const 2) (i32.const 1) (i32.eq (local.get $termBytes) (i32.const 2)))))
             (br $parsed)))
         (local.set $n (i32.add (local.get $n) (i32.const 1)))
         (local.set $lastEnd (local.get $end))
@@ -932,13 +985,17 @@
     (if (local.get $n)
       (then
         (local.set $before (global.get $lvTransLo))
-        (local.set $tokPtr (call $lvAlloc
-          (i32.shl (local.get $n) (select (i32.const 3) (i32.const 2) (local.get $wide)))))
-        (local.set $recs (i32.add (local.get $recs)
-          (i32.sub (global.get $lvTransLo) (local.get $before))))
+        (local.set $tokPtr
+          (call $lvAlloc
+            (i32.shl (local.get $n) (select (i32.const 3) (i32.const 2) (local.get $wide)))))
+        (local.set $recs
+          (i32.add (local.get $recs) (i32.sub (global.get $lvTransLo) (local.get $before))))
         (if (local.get $wide)
-          (then (memory.copy (local.get $tokPtr) (local.get $recs)
-            (i32.shl (local.get $n) (i32.const 3))))
+          (then
+            (memory.copy
+              (local.get $tokPtr)
+              (local.get $recs)
+              (i32.shl (local.get $n) (i32.const 3))))
           (else
             (local.set $r (i32.const 0))
             (block $packed
@@ -958,8 +1015,10 @@
     (i32.store offset=8 (local.get $slot) (local.get $utf16))
     (i32.store offset=12 (local.get $slot) (local.get $tokPtr))
     (i32.store offset=16 (local.get $slot) (local.get $n))
-    (i32.store offset=24 (local.get $slot)
-      (i32.or (i32.and (local.get $flags) (i32.const -5))
+    (i32.store offset=24
+      (local.get $slot)
+      (i32.or
+        (i32.and (local.get $flags) (i32.const -5))
         (i32.shl (local.get $wide) (i32.const 2))))
     (global.set $lvIncoming (local.get $newId))
     (local.get $newId))
@@ -986,24 +1045,32 @@
       (loop $wide
         (br_if $tail (i32.lt_u (i32.sub (local.get $stop) (local.get $p)) (i32.const 16)))
         (local.set $w (v128.load (local.get $p)))
-        (local.set $n (i32.add (local.get $n)
-          (i32.sub (i32.const 16)
-            (i32.popcnt (i8x16.bitmask (i8x16.eq
-              (v128.and (local.get $w) (i8x16.splat (i32.const 0xc0)))
-              (i8x16.splat (i32.const 0x80))))))))
-        (local.set $n (i32.add (local.get $n)
-          (i32.popcnt (i8x16.bitmask
-            (i8x16.ge_u (local.get $w) (i8x16.splat (i32.const 0xf0)))))))
+        (local.set $n
+          (i32.add
+            (local.get $n)
+            (i32.sub
+              (i32.const 16)
+              (i32.popcnt
+                (i8x16.bitmask
+                  (i8x16.eq
+                    (v128.and (local.get $w) (i8x16.splat (i32.const 0xc0)))
+                    (i8x16.splat (i32.const 0x80))))))))
+        (local.set $n
+          (i32.add
+            (local.get $n)
+            (i32.popcnt
+              (i8x16.bitmask (i8x16.ge_u (local.get $w) (i8x16.splat (i32.const 0xf0)))))))
         (local.set $p (i32.add (local.get $p) (i32.const 16)))
         (br $wide)))
     (block $done
       (loop $byte
         (br_if $done (i32.ge_u (local.get $p) (local.get $stop)))
         (local.set $b (i32.load8_u (local.get $p)))
-        (local.set $n (i32.add (local.get $n)
-          (i32.ne (i32.and (local.get $b) (i32.const 0xc0)) (i32.const 0x80))))
-        (local.set $n (i32.add (local.get $n)
-          (i32.ge_u (local.get $b) (i32.const 0xf0))))
+        (local.set $n
+          (i32.add
+            (local.get $n)
+            (i32.ne (i32.and (local.get $b) (i32.const 0xc0)) (i32.const 0x80))))
+        (local.set $n (i32.add (local.get $n) (i32.ge_u (local.get $b) (i32.const 0xf0))))
         (local.set $p (i32.add (local.get $p) (i32.const 1)))
         (br $byte)))
     (local.get $n))
@@ -1011,11 +1078,12 @@
   (func $lvAppendLine (param $textPtr i32) (param $byteLen i32) (param $flags i32)
     (local $slot i32)
     (call $lvEnsureLines (i32.const 1))
-    (local.set $slot (i32.add (global.get $lvLineTab)
-      (i32.shl (global.get $lvLineCount) (i32.const 5))))
+    (local.set $slot
+      (i32.add (global.get $lvLineTab) (i32.shl (global.get $lvLineCount) (i32.const 5))))
     (i32.store (local.get $slot) (local.get $textPtr))
     (i32.store offset=4 (local.get $slot) (local.get $byteLen))
-    (i32.store offset=8 (local.get $slot)
+    (i32.store offset=8
+      (local.get $slot)
       (call $lvUtf16Len (local.get $textPtr) (local.get $byteLen)))
     (i32.store offset=12 (local.get $slot) (i32.const 0))
     (i32.store offset=16 (local.get $slot) (i32.const 0))
@@ -1058,33 +1126,40 @@
         (local.set $b (i32.load8_u (local.get $p)))
         (if (i32.eq (local.get $b) (i32.const 13))
           (then
-            (call $lvAppendLine (local.get $lineStart)
+            (call $lvAppendLine
+              (local.get $lineStart)
               (i32.sub (local.get $p) (local.get $lineStart))
-              (select (i32.const 10) (i32.const 25)
+              (select
+                (i32.const 10)
+                (i32.const 25)
                 (i32.and
                   (i32.lt_u (i32.add (local.get $p) (i32.const 1)) (local.get $stop))
-                  (i32.eq (i32.load8_u (i32.add (local.get $p) (i32.const 1)))
-                          (i32.const 10)))))
-            (local.set $p (i32.add (local.get $p)
-              (select (i32.const 2) (i32.const 1)
-                (i32.and
-                  (i32.lt_u (i32.add (local.get $p) (i32.const 1)) (local.get $stop))
-                  (i32.eq (i32.load8_u (i32.add (local.get $p) (i32.const 1)))
-                          (i32.const 10))))))
+                  (i32.eq (i32.load8_u (i32.add (local.get $p) (i32.const 1))) (i32.const 10)))))
+            (local.set $p
+              (i32.add
+                (local.get $p)
+                (select
+                  (i32.const 2)
+                  (i32.const 1)
+                  (i32.and
+                    (i32.lt_u (i32.add (local.get $p) (i32.const 1)) (local.get $stop))
+                    (i32.eq (i32.load8_u (i32.add (local.get $p) (i32.const 1))) (i32.const 10))))))
             (local.set $lineStart (local.get $p)))
           (else
             (if (i32.eq (local.get $b) (i32.const 10))
               (then
-                (call $lvAppendLine (local.get $lineStart)
+                (call $lvAppendLine
+                  (local.get $lineStart)
                   (i32.sub (local.get $p) (local.get $lineStart))
                   (i32.const 9))
                 (local.set $p (i32.add (local.get $p) (i32.const 1)))
                 (local.set $lineStart (local.get $p)))
-              (else
-                (local.set $p (i32.add (local.get $p) (i32.const 1)))))))
+              (else (local.set $p (i32.add (local.get $p) (i32.const 1)))))))
         (br $scan)))
-    (call $lvAppendLine (local.get $lineStart)
-      (i32.sub (local.get $stop) (local.get $lineStart)) (i32.const 8))
+    (call $lvAppendLine
+      (local.get $lineStart)
+      (i32.sub (local.get $stop) (local.get $lineStart))
+      (i32.const 8))
     (global.set $lvInitialBlock (local.get $ptr))
     (global.set $lvInitialEnd (local.get $stop))
     (global.set $lvInitialLive (global.get $lvLineCount))
@@ -1117,9 +1192,10 @@
     (local $b i32)
     (block $done
       (loop $walk
-        (br_if $done (i32.or
-          (i32.ge_u (local.get $c) (local.get $target))
-          (i32.ge_u (local.get $p) (local.get $len))))
+        (br_if $done
+          (i32.or
+            (i32.ge_u (local.get $c) (local.get $target))
+            (i32.ge_u (local.get $p) (local.get $len))))
         (local.set $b (i32.load8_u (i32.add (local.get $text) (local.get $p))))
         (if (i32.lt_u (local.get $b) (i32.const 0x80))
           (then
@@ -1156,29 +1232,34 @@
 
   ;; write one UTF-16 surrogate as its 3-byte WTF-8 form
   (func $lvWriteSurrogate (param $dst i32) (param $s i32)
-    (i32.store8 (local.get $dst)
+    (i32.store8
+      (local.get $dst)
       (i32.or (i32.const 0xe0) (i32.shr_u (local.get $s) (i32.const 12))))
-    (i32.store8 offset=1 (local.get $dst)
+    (i32.store8 offset=1
+      (local.get $dst)
       (i32.or (i32.const 0x80) (i32.and (i32.shr_u (local.get $s) (i32.const 6)) (i32.const 63))))
-    (i32.store8 offset=2 (local.get $dst)
+    (i32.store8 offset=2
+      (local.get $dst)
       (i32.or (i32.const 0x80) (i32.and (local.get $s) (i32.const 63)))))
 
   ;; Write replacement line $line (an absolute pre-gap slot index) with its
   ;; content copied out of the splice scratch region.
-  (func $lvEmitSpliceLine (param $line i32) (param $src i32) (param $len i32)
-      (param $flags i32) (param $state i32)
+  (func $lvEmitSpliceLine
+    (param $line i32)
+    (param $src i32)
+    (param $len i32)
+    (param $flags i32)
+    (param $state i32)
     (local $tp i32)
     (local $slot i32)
     (if (local.get $len)
       (then
         (local.set $tp (call $lvAlloc (local.get $len)))
         (memory.copy (local.get $tp) (local.get $src) (local.get $len))))
-    (local.set $slot (i32.add (global.get $lvLineTab)
-      (i32.shl (local.get $line) (i32.const 5))))
+    (local.set $slot (i32.add (global.get $lvLineTab) (i32.shl (local.get $line) (i32.const 5))))
     (i32.store (local.get $slot) (local.get $tp))
     (i32.store offset=4 (local.get $slot) (local.get $len))
-    (i32.store offset=8 (local.get $slot)
-      (call $lvUtf16Len (local.get $src) (local.get $len)))
+    (i32.store offset=8 (local.get $slot) (call $lvUtf16Len (local.get $src) (local.get $len)))
     (i32.store offset=12 (local.get $slot) (i32.const 0))
     (i32.store offset=16 (local.get $slot) (i32.const 0))
     (i32.store offset=20 (local.get $slot) (local.get $state))
@@ -1192,8 +1273,13 @@
   ;; validated by the caller against the pre-edit revision; edits are applied
   ;; in descending order so earlier coordinates stay valid.
   (func $lvSpliceEdit
-    (param $sLine i32) (param $sChar i32) (param $eLine i32) (param $eChar i32)
-    (param $textPtr i32) (param $textLen i32) (result i32)
+    (param $sLine i32)
+    (param $sChar i32)
+    (param $eLine i32)
+    (param $eChar i32)
+    (param $textPtr i32)
+    (param $textLen i32)
+    (result i32)
     (local $sSlot i32)
     (local $eSlot i32)
     (local $sText i32)
@@ -1237,26 +1323,26 @@
     (local.set $eText (i32.load (local.get $eSlot)))
     (local.set $eByteLen (i32.load offset=4 (local.get $eSlot)))
     (local.set $eFlags (i32.load offset=24 (local.get $eSlot)))
-    (local.set $sPos (call $lvCharToByte
-      (local.get $sText) (local.get $sByteLen) (local.get $sChar)))
+    (local.set $sPos
+      (call $lvCharToByte (local.get $sText) (local.get $sByteLen) (local.get $sChar)))
     (local.set $sSplit (i32.shr_u (local.get $sPos) (i32.const 31)))
     (local.set $sPos (i32.and (local.get $sPos) (i32.const 0x7fffffff)))
-    (local.set $ePos (call $lvCharToByte
-      (local.get $eText) (local.get $eByteLen) (local.get $eChar)))
+    (local.set $ePos
+      (call $lvCharToByte (local.get $eText) (local.get $eByteLen) (local.get $eChar)))
     (local.set $eSplit (i32.shr_u (local.get $ePos) (i32.const 31)))
     (local.set $ePos (i32.and (local.get $ePos) (i32.const 0x7fffffff)))
     ;; Assemble the whole replacement region (prefix + staged text + suffix)
     ;; into one scratch block first, so terminator scanning sees every CR/LF
     ;; pairing — including ones straddling the old segment boundaries — with
     ;; one set of rules: CRLF, lone CR, and lone LF all terminate a line.
-    (local.set $pre (i32.add (local.get $sPos)
-      (i32.mul (local.get $sSplit) (i32.const 3))))
-    (local.set $suf (i32.add
-      (i32.mul (local.get $eSplit) (i32.const 3))
-      (i32.sub (i32.sub (local.get $eByteLen) (local.get $ePos))
-        (i32.mul (local.get $eSplit) (i32.const 4)))))
-    (local.set $L (i32.add (i32.add (local.get $pre) (local.get $textLen))
-      (local.get $suf)))
+    (local.set $pre (i32.add (local.get $sPos) (i32.mul (local.get $sSplit) (i32.const 3))))
+    (local.set $suf
+      (i32.add
+        (i32.mul (local.get $eSplit) (i32.const 3))
+        (i32.sub
+          (i32.sub (local.get $eByteLen) (local.get $ePos))
+          (i32.mul (local.get $eSplit) (i32.const 4)))))
+    (local.set $L (i32.add (i32.add (local.get $pre) (local.get $textLen)) (local.get $suf)))
     (if (local.get $L)
       (then
         (local.set $scratch (call $lvAlloc (local.get $L)))
@@ -1265,28 +1351,33 @@
         (local.set $w (i32.add (local.get $w) (local.get $sPos)))
         (if (local.get $sSplit)
           (then
-            (local.set $cp (i32.sub
-              (call $lvReadAstral (i32.add (local.get $sText) (local.get $sPos)))
-              (i32.const 0x10000)))
-            (call $lvWriteSurrogate (local.get $w)
-              (i32.add (i32.const 0xd800)
-                (i32.shr_u (local.get $cp) (i32.const 10))))
+            (local.set $cp
+              (i32.sub
+                (call $lvReadAstral (i32.add (local.get $sText) (local.get $sPos)))
+                (i32.const 0x10000)))
+            (call $lvWriteSurrogate
+              (local.get $w)
+              (i32.add (i32.const 0xd800) (i32.shr_u (local.get $cp) (i32.const 10))))
             (local.set $w (i32.add (local.get $w) (i32.const 3)))))
         (memory.copy (local.get $w) (local.get $textPtr) (local.get $textLen))
         (local.set $w (i32.add (local.get $w) (local.get $textLen)))
         (if (local.get $eSplit)
           (then
-            (local.set $cp (i32.sub
-              (call $lvReadAstral (i32.add (local.get $eText) (local.get $ePos)))
-              (i32.const 0x10000)))
-            (call $lvWriteSurrogate (local.get $w)
-              (i32.add (i32.const 0xdc00)
-                (i32.and (local.get $cp) (i32.const 0x3ff))))
+            (local.set $cp
+              (i32.sub
+                (call $lvReadAstral (i32.add (local.get $eText) (local.get $ePos)))
+                (i32.const 0x10000)))
+            (call $lvWriteSurrogate
+              (local.get $w)
+              (i32.add (i32.const 0xdc00) (i32.and (local.get $cp) (i32.const 0x3ff))))
             (local.set $w (i32.add (local.get $w) (i32.const 3)))))
-        (memory.copy (local.get $w)
-          (i32.add (i32.add (local.get $eText) (local.get $ePos))
+        (memory.copy
+          (local.get $w)
+          (i32.add
+            (i32.add (local.get $eText) (local.get $ePos))
             (i32.mul (local.get $eSplit) (i32.const 4)))
-          (i32.sub (i32.sub (local.get $eByteLen) (local.get $ePos))
+          (i32.sub
+            (i32.sub (local.get $eByteLen) (local.get $ePos))
             (i32.mul (local.get $eSplit) (i32.const 4))))))
     ;; the final segment inherits the end line's terminator (with its CR kind)
     (local.set $finalTerm (i32.and (local.get $eFlags) (i32.const 19)))
@@ -1299,28 +1390,30 @@
       (then
         (local.set $pSlot (call $lvSlot (i32.sub (local.get $sLine) (i32.const 1))))
         (local.set $pFlags (i32.load offset=24 (local.get $pSlot)))
-        (if (i32.and
-              (i32.eq (i32.and (local.get $pFlags) (i32.const 19)) (i32.const 17))
-              (select
-                (i32.eq (i32.load8_u (local.get $scratch)) (i32.const 10))
-                (i32.eq (local.get $finalTerm) (i32.const 1))
-                (local.get $L)))
+        (if
+          (i32.and
+            (i32.eq (i32.and (local.get $pFlags) (i32.const 19)) (i32.const 17))
+            (select
+              (i32.eq (i32.load8_u (local.get $scratch)) (i32.const 10))
+              (i32.eq (local.get $finalTerm) (i32.const 1))
+              (local.get $L)))
           (then
             (local.set $pText (i32.load (local.get $pSlot)))
             (local.set $pLen (i32.load offset=4 (local.get $pSlot)))
-            (local.set $w (call $lvAlloc
-              (i32.add (i32.add (local.get $pLen) (i32.const 1)) (local.get $L))))
+            (local.set $w
+              (call $lvAlloc (i32.add (i32.add (local.get $pLen) (i32.const 1)) (local.get $L))))
             (memory.copy (local.get $w) (local.get $pText) (local.get $pLen))
             (i32.store8 (i32.add (local.get $w) (local.get $pLen)) (i32.const 13))
             (if (local.get $L)
-              (then (memory.copy
-                (i32.add (i32.add (local.get $w) (local.get $pLen)) (i32.const 1))
-                (local.get $scratch) (local.get $L))))
+              (then
+                (memory.copy
+                  (i32.add (i32.add (local.get $w) (local.get $pLen)) (i32.const 1))
+                  (local.get $scratch)
+                  (local.get $L))))
             (if (local.get $scratch)
               (then (call $lvFree (local.get $scratch))))
             (local.set $scratch (local.get $w))
-            (local.set $L (i32.add (i32.add (local.get $pLen) (i32.const 1))
-              (local.get $L)))
+            (local.set $L (i32.add (i32.add (local.get $pLen) (i32.const 1)) (local.get $L)))
             (local.set $sLine (i32.sub (local.get $sLine) (i32.const 1)))
             (local.set $sText (local.get $pText))
             (local.set $sByteLen (local.get $pLen))
@@ -1333,10 +1426,12 @@
     ;; one CRLF, exactly like the byte stream would read
     (if (local.get $L)
       (then
-        (if (i32.and
-              (i32.eq (i32.load8_u (i32.add (local.get $scratch)
-                (i32.sub (local.get $L) (i32.const 1)))) (i32.const 13))
-              (i32.eq (local.get $finalTerm) (i32.const 1)))
+        (if
+          (i32.and
+            (i32.eq
+              (i32.load8_u (i32.add (local.get $scratch) (i32.sub (local.get $L) (i32.const 1))))
+              (i32.const 13))
+            (i32.eq (local.get $finalTerm) (i32.const 1)))
           (then
             (local.set $L (i32.sub (local.get $L) (i32.const 1)))
             (local.set $finalTerm (i32.const 2))))))
@@ -1350,12 +1445,18 @@
         (if (i32.eq (local.get $b) (i32.const 13))
           (then
             (local.set $n (i32.add (local.get $n) (i32.const 1)))
-            (local.set $p (i32.add (local.get $p)
-              (select (i32.const 2) (i32.const 1)
-                (i32.and
-                  (i32.lt_u (i32.add (local.get $p) (i32.const 1)) (local.get $L))
-                  (i32.eq (i32.load8_u (i32.add (i32.add (local.get $scratch)
-                    (local.get $p)) (i32.const 1))) (i32.const 10)))))))
+            (local.set $p
+              (i32.add
+                (local.get $p)
+                (select
+                  (i32.const 2)
+                  (i32.const 1)
+                  (i32.and
+                    (i32.lt_u (i32.add (local.get $p) (i32.const 1)) (local.get $L))
+                    (i32.eq
+                      (i32.load8_u
+                        (i32.add (i32.add (local.get $scratch) (local.get $p)) (i32.const 1)))
+                      (i32.const 10)))))))
           (else
             (if (i32.eq (local.get $b) (i32.const 10))
               (then (local.set $n (i32.add (local.get $n) (i32.const 1)))))
@@ -1374,9 +1475,10 @@
       (loop $free
         (br_if $freed (i32.gt_u (local.get $j) (local.get $eLine)))
         (local.set $b (call $lvSlot (local.get $j)))
-        (if (i32.and
-              (i32.gt_u (local.get $j) (local.get $sLine))
-              (i32.lt_u (local.get $j) (local.get $eLine)))
+        (if
+          (i32.and
+            (i32.gt_u (local.get $j) (local.get $sLine))
+            (i32.lt_u (local.get $j) (local.get $eLine)))
           (then (call $lvFreeLineRes (local.get $b)))
           (else
             (call $lvFree (i32.load offset=12 (local.get $b)))
@@ -1396,56 +1498,64 @@
         (local.set $b (i32.load8_u (i32.add (local.get $scratch) (local.get $p))))
         (if (i32.eq (local.get $b) (i32.const 13))
           (then
-            (local.set $crlf (i32.and
-              (i32.lt_u (i32.add (local.get $p) (i32.const 1)) (local.get $L))
-              (i32.eq (i32.load8_u (i32.add (i32.add (local.get $scratch)
-                (local.get $p)) (i32.const 1))) (i32.const 10))))
+            (local.set $crlf
+              (i32.and
+                (i32.lt_u (i32.add (local.get $p) (i32.const 1)) (local.get $L))
+                (i32.eq
+                  (i32.load8_u
+                    (i32.add (i32.add (local.get $scratch) (local.get $p)) (i32.const 1)))
+                  (i32.const 10))))
             (local.set $term (select (i32.const 2) (i32.const 17) (local.get $crlf)))
-            (call $lvEmitSpliceLine (i32.add (local.get $sLine) (local.get $j))
+            (call $lvEmitSpliceLine
+              (i32.add (local.get $sLine) (local.get $j))
               (i32.add (local.get $scratch) (local.get $segStart))
               (i32.sub (local.get $p) (local.get $segStart))
-              (local.get $term) (i32.const -1))
-            (local.set $p (i32.add (local.get $p)
-              (select (i32.const 2) (i32.const 1) (local.get $crlf))))
+              (local.get $term)
+              (i32.const -1))
+            (local.set $p
+              (i32.add (local.get $p) (select (i32.const 2) (i32.const 1) (local.get $crlf))))
             (local.set $segStart (local.get $p))
             (local.set $j (i32.add (local.get $j) (i32.const 1))))
           (else
             (if (i32.eq (local.get $b) (i32.const 10))
               (then
-                (call $lvEmitSpliceLine (i32.add (local.get $sLine) (local.get $j))
+                (call $lvEmitSpliceLine
+                  (i32.add (local.get $sLine) (local.get $j))
                   (i32.add (local.get $scratch) (local.get $segStart))
                   (i32.sub (local.get $p) (local.get $segStart))
-                  (i32.const 1) (i32.const -1))
+                  (i32.const 1)
+                  (i32.const -1))
                 (local.set $p (i32.add (local.get $p) (i32.const 1)))
                 (local.set $segStart (local.get $p))
                 (local.set $j (i32.add (local.get $j) (i32.const 1))))
-              (else
-                (local.set $p (i32.add (local.get $p) (i32.const 1)))))))
+              (else (local.set $p (i32.add (local.get $p) (i32.const 1)))))))
         (br $build)))
-    (call $lvEmitSpliceLine (i32.add (local.get $sLine) (local.get $j))
+    (call $lvEmitSpliceLine
+      (i32.add (local.get $sLine) (local.get $j))
       (i32.add (local.get $scratch) (local.get $segStart))
       (i32.sub (local.get $L) (local.get $segStart))
-      (local.get $finalTerm) (local.get $eState))
+      (local.get $finalTerm)
+      (local.get $eState))
     (if (local.get $scratch)
       (then (call $lvFree (local.get $scratch))))
     (global.set $lvGapAt (i32.add (local.get $sLine) (local.get $n)))
     (global.set $lvLineCount (i32.add (global.get $lvLineCount) (local.get $n)))
     (call $lvFreeLineText (local.get $sText) (local.get $sByteLen) (local.get $sFlags))
     (if (i32.eqz (local.get $same))
-      (then (call $lvFreeLineText
-        (local.get $eText) (local.get $eByteLen) (local.get $eFlags))))
+      (then (call $lvFreeLineText (local.get $eText) (local.get $eByteLen) (local.get $eFlags))))
     (i32.or (i32.shl (local.get $n) (i32.const 1)) (local.get $ext)))
 
   ;; append or merge a change entry; returns 1 when a new entry was appended
-  (func $lvAddChange
-    (param $os i32) (param $oe i32) (param $ns i32) (param $ne i32) (result i32)
+  (func $lvAddChange (param $os i32) (param $oe i32) (param $ns i32) (param $ne i32) (result i32)
     (local $count i32)
     (local $last i32)
     (local.set $count (i32.load (i32.const $mem.liveChanges)))
     (if (local.get $count)
       (then
-        (local.set $last (i32.add (i32.const $mem.liveChanges+4)
-          (i32.shl (i32.sub (local.get $count) (i32.const 1)) (i32.const 4))))
+        (local.set $last
+          (i32.add
+            (i32.const $mem.liveChanges+4)
+            (i32.shl (i32.sub (local.get $count) (i32.const 1)) (i32.const 4))))
         (if (i32.le_u (local.get $os) (i32.load offset=4 (local.get $last)))
           (then
             (if (i32.gt_u (local.get $oe) (i32.load offset=4 (local.get $last)))
@@ -1458,8 +1568,8 @@
             (i32.store offset=4 (local.get $last) (local.get $oe))
             (i32.store offset=12 (local.get $last) (local.get $ne))
             (return (i32.const 0))))))
-    (local.set $last (i32.add (i32.const $mem.liveChanges+4)
-      (i32.shl (local.get $count) (i32.const 4))))
+    (local.set $last
+      (i32.add (i32.const $mem.liveChanges+4) (i32.shl (local.get $count) (i32.const 4))))
     (i32.store (local.get $last) (local.get $os))
     (i32.store offset=4 (local.get $last) (local.get $oe))
     (i32.store offset=8 (local.get $last) (local.get $ns))
@@ -1472,26 +1582,30 @@
     (local $count i32)
     (local $e i32)
     (local.set $count (i32.load (i32.const $mem.liveChanges)))
-    (local.set $e (i32.add (i32.const $mem.liveChanges+4)
-      (i32.shl (local.get $idx) (i32.const 4))))
+    (local.set $e (i32.add (i32.const $mem.liveChanges+4) (i32.shl (local.get $idx) (i32.const 4))))
     (i32.store offset=4 (local.get $e) (i32.load offset=20 (local.get $e)))
     (i32.store offset=12 (local.get $e) (i32.load offset=28 (local.get $e)))
     (if (i32.gt_u (local.get $count) (i32.add (local.get $idx) (i32.const 2)))
-      (then (memory.copy
-        (i32.add (local.get $e) (i32.const 16))
-        (i32.add (local.get $e) (i32.const 32))
-        (i32.shl (i32.sub (local.get $count) (i32.add (local.get $idx) (i32.const 2)))
-          (i32.const 4)))))
+      (then
+        (memory.copy
+          (i32.add (local.get $e) (i32.const 16))
+          (i32.add (local.get $e) (i32.const 32))
+          (i32.shl
+            (i32.sub (local.get $count) (i32.add (local.get $idx) (i32.const 2)))
+            (i32.const 4)))))
     (i32.store (i32.const $mem.liveChanges) (i32.sub (local.get $count) (i32.const 1))))
 
   ;; record lines the driver retokenized past the structural range end
   (func $lvCloseRange (param $through i32)
     (local $e i32)
-    (if (i32.le_u (local.get $through) (global.get $lvDirtyTo)) (then (return)))
-    (local.set $e (i32.add (i32.const $mem.liveChanges+4)
-      (i32.shl (global.get $lvChangeIdx) (i32.const 4))))
-    (i32.store offset=4 (local.get $e)
-      (i32.add (i32.load offset=4 (local.get $e))
+    (if (i32.le_u (local.get $through) (global.get $lvDirtyTo))
+      (then (return)))
+    (local.set $e
+      (i32.add (i32.const $mem.liveChanges+4) (i32.shl (global.get $lvChangeIdx) (i32.const 4))))
+    (i32.store offset=4
+      (local.get $e)
+      (i32.add
+        (i32.load offset=4 (local.get $e))
         (i32.sub (local.get $through) (global.get $lvDirtyTo))))
     (i32.store offset=12 (local.get $e) (local.get $through)))
 
@@ -1501,17 +1615,17 @@
     (global.set $lvPhase (i32.const 0))
     ;; slide the heap once parked free space outweighs live data and at
     ;; least a mebibyte would come back
-    (if (i32.and
-          (i32.gt_u (global.get $lvHeapFreed) (global.get $lvHeapLive))
-          (i32.ge_u (global.get $lvHeapFreed) (i32.const 1048576)))
+    (if
+      (i32.and
+        (i32.gt_u (global.get $lvHeapFreed) (global.get $lvHeapLive))
+        (i32.ge_u (global.get $lvHeapFreed) (i32.const 1048576)))
       (then (call $lvCompact))))
 
   ;; new body address of an old block body after compaction pass one
   (func $lvNewAddr (param $body i32) (result i32)
-    (if (i32.eqz (local.get $body)) (then (return (i32.const 0))))
-    (i32.add
-      (i32.load offset=4 (i32.sub (local.get $body) (i32.const 8)))
-      (i32.const 8)))
+    (if (i32.eqz (local.get $body))
+      (then (return (i32.const 0))))
+    (i32.add (i32.load offset=4 (i32.sub (local.get $body) (i32.const 8))) (i32.const 8)))
 
   ;; Sliding compaction: assign packed addresses into each live header's aux
   ;; word, rewrite every reference (line descriptors, state id table, bucket
@@ -1553,20 +1667,24 @@
         (if (i32.ge_u (local.get $i) (local.get $stop))
           (then
             (br_if $descsDone (i32.eq (local.get $stop) (global.get $lvLineCap)))
-            (local.set $i (i32.add (global.get $lvGapAt)
-              (i32.sub (global.get $lvLineCap) (global.get $lvLineCount))))
+            (local.set $i
+              (i32.add
+                (global.get $lvGapAt)
+                (i32.sub (global.get $lvLineCap) (global.get $lvLineCount))))
             (local.set $stop (global.get $lvLineCap))
             (br_if $descsDone (i32.ge_u (local.get $i) (local.get $stop)))))
-        (local.set $slot (i32.add (global.get $lvLineTab)
-          (i32.shl (local.get $i) (i32.const 5))))
+        (local.set $slot (i32.add (global.get $lvLineTab) (i32.shl (local.get $i) (i32.const 5))))
         (local.set $flags (i32.load offset=24 (local.get $slot)))
         (if (i32.and (local.get $flags) (i32.const 8))
-          (then (i32.store (local.get $slot)
-            (i32.add (local.get $newInitial)
-              (i32.sub (i32.load (local.get $slot)) (global.get $lvInitialBlock)))))
-          (else (i32.store (local.get $slot)
-            (call $lvNewAddr (i32.load (local.get $slot))))))
-        (i32.store offset=12 (local.get $slot)
+          (then
+            (i32.store
+              (local.get $slot)
+              (i32.add
+                (local.get $newInitial)
+                (i32.sub (i32.load (local.get $slot)) (global.get $lvInitialBlock)))))
+          (else (i32.store (local.get $slot) (call $lvNewAddr (i32.load (local.get $slot))))))
+        (i32.store offset=12
+          (local.get $slot)
           (call $lvNewAddr (i32.load offset=12 (local.get $slot))))
         (local.set $i (i32.add (local.get $i) (i32.const 1)))
         (br $descs)))
@@ -1577,9 +1695,10 @@
         (br_if $idsDone (i32.ge_u (local.get $i) (global.get $lvIdNext)))
         (local.set $slot (i32.add (global.get $lvIdTab) (i32.shl (local.get $i) (i32.const 2))))
         (local.set $v (i32.load (local.get $slot)))
-        (if (i32.and
-              (i32.ne (local.get $v) (i32.const 0))
-              (i32.eqz (i32.and (local.get $v) (i32.const 1))))
+        (if
+          (i32.and
+            (i32.ne (local.get $v) (i32.const 0))
+            (i32.eqz (i32.and (local.get $v) (i32.const 1))))
           (then (i32.store (local.get $slot) (call $lvNewAddr (local.get $v)))))
         (local.set $i (i32.add (local.get $i) (i32.const 1)))
         (br $ids)))
@@ -1602,8 +1721,10 @@
     ;; pass two: singleton table pointers
     (if (global.get $lvInitialBlock)
       (then
-        (global.set $lvInitialEnd (i32.add (local.get $newInitial)
-          (i32.sub (global.get $lvInitialEnd) (global.get $lvInitialBlock))))
+        (global.set $lvInitialEnd
+          (i32.add
+            (local.get $newInitial)
+            (i32.sub (global.get $lvInitialEnd) (global.get $lvInitialBlock))))
         (global.set $lvInitialBlock (local.get $newInitial))))
     (global.set $lvLineTab (call $lvNewAddr (global.get $lvLineTab)))
     (global.set $lvIdTab (call $lvNewAddr (global.get $lvIdTab)))
@@ -1632,27 +1753,34 @@
   ;; ascending old-start order interleaved with the batch's own entries, so
   ;; touching spans coalesce through $lvAddChange and the range table mirrors
   ;; the entry the piece merged into.
-  (func $lvAddPend (param $a i32) (param $b i32) (param $shift i32)
-      (param $ranges i32) (param $rangeCount i32) (result i32)
+  (func $lvAddPend
+    (param $a i32)
+    (param $b i32)
+    (param $shift i32)
+    (param $ranges i32)
+    (param $rangeCount i32)
+    (result i32)
     (local $slot i32)
     (if (i32.ge_u (local.get $a) (local.get $b))
       (then (return (local.get $rangeCount))))
-    (if (call $lvAddChange (local.get $a) (local.get $b)
-          (i32.add (local.get $a) (local.get $shift))
-          (i32.add (local.get $b) (local.get $shift)))
+    (if
+      (call $lvAddChange
+        (local.get $a)
+        (local.get $b)
+        (i32.add (local.get $a) (local.get $shift))
+        (i32.add (local.get $b) (local.get $shift)))
       (then
-        (local.set $slot (i32.add (local.get $ranges)
-          (i32.shl (local.get $rangeCount) (i32.const 3))))
+        (local.set $slot
+          (i32.add (local.get $ranges) (i32.shl (local.get $rangeCount) (i32.const 3))))
         (i32.store (local.get $slot) (i32.add (local.get $a) (local.get $shift)))
-        (i32.store offset=4 (local.get $slot)
-          (i32.add (local.get $b) (local.get $shift)))
+        (i32.store offset=4 (local.get $slot) (i32.add (local.get $b) (local.get $shift)))
         (return (i32.add (local.get $rangeCount) (i32.const 1)))))
-    (local.set $slot (i32.add (local.get $ranges)
-      (i32.shl (i32.sub (local.get $rangeCount) (i32.const 1)) (i32.const 3))))
-    (if (i32.gt_u (i32.add (local.get $b) (local.get $shift))
-          (i32.load offset=4 (local.get $slot)))
-      (then (i32.store offset=4 (local.get $slot)
-        (i32.add (local.get $b) (local.get $shift)))))
+    (local.set $slot
+      (i32.add
+        (local.get $ranges)
+        (i32.shl (i32.sub (local.get $rangeCount) (i32.const 1)) (i32.const 3))))
+    (if (i32.gt_u (i32.add (local.get $b) (local.get $shift)) (i32.load offset=4 (local.get $slot)))
+      (then (i32.store offset=4 (local.get $slot) (i32.add (local.get $b) (local.get $shift)))))
     (local.get $rangeCount))
 
   ;; Apply a validated staged edit batch: [count][24-byte records][text bytes]
@@ -1692,25 +1820,26 @@
     ;; the untouched later ranges follow verbatim
     (if (global.get $lvPhase)
       (then
-        (local.set $pendCount
-          (i32.sub (global.get $lvRangeCount) (global.get $lvRangeIdx)))
+        (local.set $pendCount (i32.sub (global.get $lvRangeCount) (global.get $lvRangeIdx)))
         (local.set $pend (call $lvAlloc (i32.shl (local.get $pendCount) (i32.const 3))))
         (i32.store (local.get $pend) (global.get $lvCursor))
-        (i32.store offset=4 (local.get $pend)
-          (select (global.get $lvDirtyTo)
+        (i32.store offset=4
+          (local.get $pend)
+          (select
+            (global.get $lvDirtyTo)
             (i32.add (global.get $lvCursor) (i32.const 1))
             (i32.gt_u (global.get $lvDirtyTo) (global.get $lvCursor))))
         (local.set $k (i32.const 1))
         (block $copied
           (loop $copy
             (br_if $copied (i32.ge_u (local.get $k) (local.get $pendCount)))
-            (local.set $slot (i32.add (global.get $lvRangePtr)
-              (i32.shl (i32.add (global.get $lvRangeIdx) (local.get $k)) (i32.const 3))))
-            (local.set $pendSlot (i32.add (local.get $pend)
-              (i32.shl (local.get $k) (i32.const 3))))
+            (local.set $slot
+              (i32.add
+                (global.get $lvRangePtr)
+                (i32.shl (i32.add (global.get $lvRangeIdx) (local.get $k)) (i32.const 3))))
+            (local.set $pendSlot (i32.add (local.get $pend) (i32.shl (local.get $k) (i32.const 3))))
             (i32.store (local.get $pendSlot) (i32.load (local.get $slot)))
-            (i32.store offset=4 (local.get $pendSlot)
-              (i32.load offset=4 (local.get $slot)))
+            (i32.store offset=4 (local.get $pendSlot) (i32.load offset=4 (local.get $slot)))
             (local.set $k (i32.add (local.get $k) (i32.const 1)))
             (br $copy)))
         (call $lvFree (global.get $lvRangePtr))
@@ -1723,38 +1852,45 @@
       (loop $desc
         (br_if $spliced (i32.eqz (local.get $k)))
         (local.set $k (i32.sub (local.get $k) (i32.const 1)))
-        (local.set $e (i32.add (i32.add (local.get $staged) (i32.const 4))
-          (i32.mul (local.get $k) (i32.const 24))))
-        (local.set $n (call $lvSpliceEdit
-          (i32.load (local.get $e))
-          (i32.load offset=4 (local.get $e))
-          (i32.load offset=8 (local.get $e))
-          (i32.load offset=12 (local.get $e))
-          (i32.add (local.get $staged) (i32.load offset=16 (local.get $e)))
-          (i32.load offset=20 (local.get $e))))
+        (local.set $e
+          (i32.add
+            (i32.add (local.get $staged) (i32.const 4))
+            (i32.mul (local.get $k) (i32.const 24))))
+        (local.set $n
+          (call $lvSpliceEdit
+            (i32.load (local.get $e))
+            (i32.load offset=4 (local.get $e))
+            (i32.load offset=8 (local.get $e))
+            (i32.load offset=12 (local.get $e))
+            (i32.add (local.get $staged) (i32.load offset=16 (local.get $e)))
+            (i32.load offset=20 (local.get $e))))
         (i32.store offset=20 (local.get $e) (local.get $n))
         (br $desc)))
     ;; ascending pass: dirty ranges in new coordinates plus change entries,
     ;; interleaving the batch's own spans with the remapped pending pieces
     (i32.store (i32.const $mem.liveChanges) (i32.const 0))
-    (local.set $ranges (call $lvAlloc
-      (i32.shl
-        (i32.add (i32.add (local.get $count) (local.get $pendCount)) (i32.const 1))
-        (i32.const 3))))
+    (local.set $ranges
+      (call $lvAlloc
+        (i32.shl
+          (i32.add (i32.add (local.get $count) (local.get $pendCount)) (i32.const 1))
+          (i32.const 3))))
     (local.set $k (i32.const 0))
     (block $ranged
       (loop $asc
         (br_if $ranged (i32.ge_u (local.get $k) (local.get $count)))
-        (local.set $e (i32.add (i32.add (local.get $staged) (i32.const 4))
-          (i32.mul (local.get $k) (i32.const 24))))
+        (local.set $e
+          (i32.add
+            (i32.add (local.get $staged) (i32.const 4))
+            (i32.mul (local.get $k) (i32.const 24))))
         (local.set $n (i32.load offset=20 (local.get $e)))
         (local.set $ext (i32.and (local.get $n) (i32.const 1)))
         (local.set $n (i32.shr_u (local.get $n) (i32.const 1)))
-        (local.set $n0 (i32.add
+        (local.set $n0
           (i32.add
-            (i32.sub (i32.load offset=8 (local.get $e)) (i32.load (local.get $e)))
-            (i32.const 1))
-          (local.get $ext)))
+            (i32.add
+              (i32.sub (i32.load offset=8 (local.get $e)) (i32.load (local.get $e)))
+              (i32.const 1))
+            (local.get $ext)))
         (local.set $os (i32.sub (i32.load (local.get $e)) (local.get $ext)))
         (local.set $oe (i32.add (i32.load offset=8 (local.get $e)) (i32.const 1)))
         ;; pending pieces before this edit's replaced range [os, oe) keep the
@@ -1763,16 +1899,18 @@
         (block $pendDone
           (loop $pendWalk
             (br_if $pendDone (i32.ge_u (local.get $pendIdx) (local.get $pendCount)))
-            (local.set $pendSlot (i32.add (local.get $pend)
-              (i32.shl (local.get $pendIdx) (i32.const 3))))
+            (local.set $pendSlot
+              (i32.add (local.get $pend) (i32.shl (local.get $pendIdx) (i32.const 3))))
             (local.set $a (i32.load (local.get $pendSlot)))
             (local.set $b (i32.load offset=4 (local.get $pendSlot)))
             (br_if $pendDone (i32.ge_u (local.get $a) (local.get $oe)))
-            (local.set $rangeCount (call $lvAddPend
-              (local.get $a)
-              (select (local.get $b) (local.get $os)
-                (i32.lt_u (local.get $b) (local.get $os)))
-              (local.get $shift) (local.get $ranges) (local.get $rangeCount)))
+            (local.set $rangeCount
+              (call $lvAddPend
+                (local.get $a)
+                (select (local.get $b) (local.get $os) (i32.lt_u (local.get $b) (local.get $os)))
+                (local.get $shift)
+                (local.get $ranges)
+                (local.get $rangeCount)))
             (if (i32.gt_u (local.get $b) (local.get $oe))
               (then
                 (i32.store (local.get $pendSlot) (local.get $oe))
@@ -1781,36 +1919,43 @@
             (br $pendWalk)))
         (local.set $newFrom (i32.add (local.get $os) (local.get $shift)))
         (local.set $newTo (i32.add (local.get $newFrom) (local.get $n)))
-        (if (call $lvAddChange
-              (local.get $os) (local.get $oe)
-              (local.get $newFrom) (local.get $newTo))
+        (if
+          (call $lvAddChange
+            (local.get $os)
+            (local.get $oe)
+            (local.get $newFrom)
+            (local.get $newTo))
           (then
-            (i32.store (i32.add (local.get $ranges)
-              (i32.shl (local.get $rangeCount) (i32.const 3)))
+            (i32.store
+              (i32.add (local.get $ranges) (i32.shl (local.get $rangeCount) (i32.const 3)))
               (local.get $newFrom))
-            (i32.store offset=4 (i32.add (local.get $ranges)
-              (i32.shl (local.get $rangeCount) (i32.const 3)))
+            (i32.store offset=4
+              (i32.add (local.get $ranges) (i32.shl (local.get $rangeCount) (i32.const 3)))
               (local.get $newTo))
             (local.set $rangeCount (i32.add (local.get $rangeCount) (i32.const 1))))
           (else
-            (local.set $slot (i32.add (local.get $ranges)
-              (i32.shl (i32.sub (local.get $rangeCount) (i32.const 1)) (i32.const 3))))
+            (local.set $slot
+              (i32.add
+                (local.get $ranges)
+                (i32.shl (i32.sub (local.get $rangeCount) (i32.const 1)) (i32.const 3))))
             (if (i32.gt_u (local.get $newTo) (i32.load offset=4 (local.get $slot)))
               (then (i32.store offset=4 (local.get $slot) (local.get $newTo))))))
-        (local.set $shift (i32.add (local.get $shift)
-          (i32.sub (local.get $n) (local.get $n0))))
+        (local.set $shift (i32.add (local.get $shift) (i32.sub (local.get $n) (local.get $n0))))
         (local.set $k (i32.add (local.get $k) (i32.const 1)))
         (br $asc)))
     ;; pending pieces past the last edit shift by the batch's full line delta
     (block $pendFlushed
       (loop $pendFlush
         (br_if $pendFlushed (i32.ge_u (local.get $pendIdx) (local.get $pendCount)))
-        (local.set $pendSlot (i32.add (local.get $pend)
-          (i32.shl (local.get $pendIdx) (i32.const 3))))
-        (local.set $rangeCount (call $lvAddPend
-          (i32.load (local.get $pendSlot))
-          (i32.load offset=4 (local.get $pendSlot))
-          (local.get $shift) (local.get $ranges) (local.get $rangeCount)))
+        (local.set $pendSlot
+          (i32.add (local.get $pend) (i32.shl (local.get $pendIdx) (i32.const 3))))
+        (local.set $rangeCount
+          (call $lvAddPend
+            (i32.load (local.get $pendSlot))
+            (i32.load offset=4 (local.get $pendSlot))
+            (local.get $shift)
+            (local.get $ranges)
+            (local.get $rangeCount)))
         (local.set $pendIdx (i32.add (local.get $pendIdx) (i32.const 1)))
         (br $pendFlush)))
     (call $lvFree (local.get $pend))
@@ -1826,8 +1971,9 @@
         (global.set $lvCursor (i32.load (local.get $ranges)))
         (global.set $lvDirtyTo (i32.load offset=4 (local.get $ranges)))
         (if (global.get $lvCursor)
-          (then (global.set $lvIncoming (i32.load offset=20
-            (call $lvSlot (i32.sub (global.get $lvCursor) (i32.const 1))))))
+          (then
+            (global.set $lvIncoming
+              (i32.load offset=20 (call $lvSlot (i32.sub (global.get $lvCursor) (i32.const 1))))))
           (else (global.set $lvIncoming (i32.const 0))))
         (global.set $lvPhase (i32.const 1)))
       (else (call $lvFinish))))
@@ -1841,10 +1987,12 @@
     (local $oldId i32)
     (local $newId i32)
     (local $next i32)
-    (if (i32.eqz (global.get $lvPhase)) (then (return (i32.const 0))))
+    (if (i32.eqz (global.get $lvPhase))
+      (then (return (i32.const 0))))
     (block $out
       (loop $step
-        (if (i32.eqz (local.get $budget)) (then (return (i32.const 1))))
+        (if (i32.eqz (local.get $budget))
+          (then (return (i32.const 1))))
         (local.set $budget (i32.sub (local.get $budget) (i32.const 1)))
         (local.set $i (global.get $lvCursor))
         (local.set $slot (call $lvSlot (local.get $i)))
@@ -1857,11 +2005,14 @@
         ;; absorb pending ranges the cursor has reached
         (block $merged
           (loop $merge
-            (br_if $merged (i32.ge_u
-              (i32.add (global.get $lvRangeIdx) (i32.const 1))
-              (global.get $lvRangeCount)))
-            (local.set $next (i32.add (global.get $lvRangePtr)
-              (i32.shl (i32.add (global.get $lvRangeIdx) (i32.const 1)) (i32.const 3))))
+            (br_if $merged
+              (i32.ge_u
+                (i32.add (global.get $lvRangeIdx) (i32.const 1))
+                (global.get $lvRangeCount)))
+            (local.set $next
+              (i32.add
+                (global.get $lvRangePtr)
+                (i32.shl (i32.add (global.get $lvRangeIdx) (i32.const 1)) (i32.const 3))))
             (br_if $merged (i32.lt_u (global.get $lvCursor) (i32.load (local.get $next))))
             (if (i32.gt_u (i32.load offset=4 (local.get $next)) (global.get $lvDirtyTo))
               (then (global.set $lvDirtyTo (i32.load offset=4 (local.get $next)))))
@@ -1873,30 +2024,34 @@
             (call $lvCloseRange (global.get $lvCursor))
             (call $lvFinish)
             (return (i32.const 0))))
-        (if (i32.and
-              (i32.eq (local.get $newId) (local.get $oldId))
-              (i32.ge_u (global.get $lvCursor) (global.get $lvDirtyTo)))
+        (if
+          (i32.and
+            (i32.eq (local.get $newId) (local.get $oldId))
+            (i32.ge_u (global.get $lvCursor) (global.get $lvDirtyTo)))
           (then
             (call $lvCloseRange (global.get $lvCursor))
-            (if (i32.lt_u
-                  (i32.add (global.get $lvRangeIdx) (i32.const 1))
-                  (global.get $lvRangeCount))
+            (if
+              (i32.lt_u (i32.add (global.get $lvRangeIdx) (i32.const 1)) (global.get $lvRangeCount))
               (then
                 (global.set $lvRangeIdx (i32.add (global.get $lvRangeIdx) (i32.const 1)))
                 (global.set $lvChangeIdx (i32.add (global.get $lvChangeIdx) (i32.const 1)))
-                (local.set $next (i32.add (global.get $lvRangePtr)
-                  (i32.shl (global.get $lvRangeIdx) (i32.const 3))))
+                (local.set $next
+                  (i32.add
+                    (global.get $lvRangePtr)
+                    (i32.shl (global.get $lvRangeIdx) (i32.const 3))))
                 (global.set $lvCursor (i32.load (local.get $next)))
                 (global.set $lvDirtyTo (i32.load offset=4 (local.get $next)))
-                (global.set $lvIncoming (i32.load offset=20
-                  (call $lvSlot (i32.sub (global.get $lvCursor) (i32.const 1))))))
+                (global.set $lvIncoming
+                  (i32.load offset=20
+                    (call $lvSlot (i32.sub (global.get $lvCursor) (i32.const 1))))))
               (else
                 (call $lvFinish)
                 (return (i32.const 0))))))
         (br $step)))
     (i32.const 0))
 
-  (func (export "liveLineCount") (result i32) (global.get $lvLineCount))
+  (func (export "liveLineCount") (result i32)
+    (global.get $lvLineCount))
   (func (export "liveLineLen") (param $i i32) (result i32)
     (i32.load offset=8 (call $lvSlot (local.get $i))))
   (func (export "liveLineByteLen") (param $i i32) (result i32)
@@ -1909,10 +2064,12 @@
     (i32.load offset=12 (call $lvSlot (local.get $i))))
   (func (export "liveLineTokCount") (param $i i32) (result i32)
     (i32.load offset=16 (call $lvSlot (local.get $i))))
-  (func (export "liveChangesPtr") (result i32) (i32.const $mem.liveChanges))
+  (func (export "liveChangesPtr") (result i32)
+    (i32.const $mem.liveChanges))
 
   (func (export "liveStats") (param $k i32) (result i32)
-    (if (i32.eqz (local.get $k)) (then (return (global.get $lvRetok))))
+    (if (i32.eqz (local.get $k))
+      (then (return (global.get $lvRetok))))
     (if (i32.eq (local.get $k) (i32.const 1))
       (then (return (global.get $lvStateCount))))
     (if (i32.eq (local.get $k) (i32.const 2))

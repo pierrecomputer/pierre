@@ -17,20 +17,14 @@
   (func $lexIsHex (param $c i32) (result i32)
     (i32.or
       (call $lexIsDigit (local.get $c))
-      (i32.le_u
-        (i32.sub (i32.or (local.get $c) (i32.const 32)) (i32.const "a"))
-        (i32.const 5))))
+      (i32.le_u (i32.sub (i32.or (local.get $c) (i32.const 32)) (i32.const "a")) (i32.const 5))))
 
   (func $lexIsIdentStart (param $c i32) (result i32)
     (i32.or
       (i32.ge_u (local.get $c) (i32.const 0x80))
       (i32.or
-        (i32.le_u
-          (i32.sub (i32.or (local.get $c) (i32.const 32)) (i32.const "a"))
-          (i32.const 25))
-        (i32.or
-          (i32.eq (local.get $c) (i32.const "_"))
-          (i32.eq (local.get $c) (i32.const "$"))))))
+        (i32.le_u (i32.sub (i32.or (local.get $c) (i32.const 32)) (i32.const "a")) (i32.const 25))
+        (i32.or (i32.eq (local.get $c) (i32.const "_")) (i32.eq (local.get $c) (i32.const "$"))))))
 
   (func $lexIsIdentContinue (param $c i32) (result i32)
     (i32.or (call $lexIsIdentStart (local.get $c)) (call $lexIsDigit (local.get $c))))
@@ -45,9 +39,10 @@
   ;; unless a digit follows it. Start at the first digit or dot, after any
   ;; sign, so `0x` is visible and its `e` digits cannot consume a `+` or `-`.
   (func $lexScanNumber
-    (call $lexScanNumberBody (i32.and
-      (i32.lt_u (i32.add (global.get $ptr) (i32.const 1)) (global.get $end))
-      (i32.eq (i32.or (i32.load16_u (global.get $ptr)) (i32.const 0x2000)) (i32.const "0x")))))
+    (call $lexScanNumberBody
+      (i32.and
+        (i32.lt_u (i32.add (global.get $ptr) (i32.const 1)) (global.get $end))
+        (i32.eq (i32.or (i32.load16_u (global.get $ptr)) (i32.const 0x2000)) (i32.const "0x")))))
 
   ;; Keep the radix when resuming after the dot of a hexadecimal fraction.
   (func $lexScanNumberBody (param $hex i32)
@@ -65,20 +60,23 @@
             (br $l)))
         (if (i32.eq (local.get $c) (i32.const "."))
           (then
-            (local.set $next (select
-              (i32.load8_u offset=1 (global.get $ptr)) (i32.const 0)
-              (i32.lt_u (i32.add (global.get $ptr) (i32.const 1)) (global.get $end))))
+            (local.set $next
+              (select
+                (i32.load8_u offset=1 (global.get $ptr))
+                (i32.const 0)
+                (i32.lt_u (i32.add (global.get $ptr) (i32.const 1)) (global.get $end))))
             (br_if $done (i32.eqz (call $lexIsDigit (local.get $next))))
             (local.set $prev (local.get $c))
             (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
             (br $l)))
-        (if (i32.and
-              (i32.or (i32.eq (local.get $c) (i32.const "+"))
-                      (i32.eq (local.get $c) (i32.const "-")))
-              (i32.or
-                (i32.and (i32.eqz (local.get $hex))
-                  (i32.eq (i32.or (local.get $prev) (i32.const 32)) (i32.const "e")))
-                (i32.eq (i32.or (local.get $prev) (i32.const 32)) (i32.const "p"))))
+        (if
+          (i32.and
+            (i32.or (i32.eq (local.get $c) (i32.const "+")) (i32.eq (local.get $c) (i32.const "-")))
+            (i32.or
+              (i32.and
+                (i32.eqz (local.get $hex))
+                (i32.eq (i32.or (local.get $prev) (i32.const 32)) (i32.const "e")))
+              (i32.eq (i32.or (local.get $prev) (i32.const 32)) (i32.const "p"))))
           (then
             (local.set $prev (local.get $c))
             (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
@@ -95,45 +93,64 @@
     (local $c i32)
     (local.set $lhs (global.get $ptr))
     (call $lexScanNumber)
-    (if (i32.and
-          (i32.lt_u (i32.add (local.get $lhs) (i32.const 1)) (global.get $end))
-          (i32.and
-            (i32.eq (i32.load8_u (local.get $lhs)) (i32.const "0"))
-            (i32.eq (i32.or (i32.load8_u offset=1 (local.get $lhs)) (i32.const 32)) (i32.const "x"))))
+    (if
+      (i32.and
+        (i32.lt_u (i32.add (local.get $lhs) (i32.const 1)) (global.get $end))
+        (i32.and
+          (i32.eq (i32.load8_u (local.get $lhs)) (i32.const "0"))
+          (i32.eq (i32.or (i32.load8_u offset=1 (local.get $lhs)) (i32.const 32)) (i32.const "x"))))
       (then
         (if (i32.lt_u (global.get $ptr) (global.get $end))
           (then
-            (local.set $next (select
-              (i32.load8_u offset=1 (global.get $ptr)) (i32.const 0)
-              (i32.lt_u (i32.add (global.get $ptr) (i32.const 1)) (global.get $end))))
-            (if (i32.and
-                  (i32.eq (i32.load8_u (global.get $ptr)) (i32.const "."))
-                  (i32.or (call $lexIsHex (local.get $next))
-                    (i32.eq (i32.or (local.get $next) (i32.const 32)) (i32.const "p"))))
+            (local.set $next
+              (select
+                (i32.load8_u offset=1 (global.get $ptr))
+                (i32.const 0)
+                (i32.lt_u (i32.add (global.get $ptr) (i32.const 1)) (global.get $end))))
+            (if
+              (i32.and
+                (i32.eq (i32.load8_u (global.get $ptr)) (i32.const "."))
+                (i32.or
+                  (call $lexIsHex (local.get $next))
+                  (i32.eq (i32.or (local.get $next) (i32.const 32)) (i32.const "p"))))
               (then
-                (if (i32.or (local.get $requireExponent)
-                      (i32.eq (i32.or (local.get $next) (i32.const 32)) (i32.const "p")))
+                (if
+                  (i32.or
+                    (local.get $requireExponent)
+                    (i32.eq (i32.or (local.get $next) (i32.const 32)) (i32.const "p")))
                   (then
                     (local.set $p (i32.add (global.get $ptr) (i32.const 1)))
                     (block $fractionDone
                       (loop $fraction
                         (br_if $fractionDone (i32.ge_u (local.get $p) (global.get $end)))
                         (local.set $c (i32.load8_u (local.get $p)))
-                        (br_if $fractionDone (i32.eqz (i32.or
-                          (call $lexIsHex (local.get $c)) (i32.eq (local.get $c) (i32.const "_")))))
+                        (br_if $fractionDone
+                          (i32.eqz
+                            (i32.or
+                              (call $lexIsHex (local.get $c))
+                              (i32.eq (local.get $c) (i32.const "_")))))
                         (local.set $p (i32.add (local.get $p) (i32.const 1)))
                         (br $fraction)))
-                    (if (i32.or (i32.ge_u (local.get $p) (global.get $end))
-                          (i32.ne (i32.or (i32.load8_u (local.get $p)) (i32.const 32)) (i32.const "p")))
+                    (if
+                      (i32.or
+                        (i32.ge_u (local.get $p) (global.get $end))
+                        (i32.ne
+                          (i32.or (i32.load8_u (local.get $p)) (i32.const 32))
+                          (i32.const "p")))
                       (then (return)))
                     (local.set $p (i32.add (local.get $p) (i32.const 1)))
                     (if (i32.lt_u (local.get $p) (global.get $end))
                       (then
                         (local.set $c (i32.load8_u (local.get $p)))
-                        (if (i32.or (i32.eq (local.get $c) (i32.const "+")) (i32.eq (local.get $c) (i32.const "-")))
+                        (if
+                          (i32.or
+                            (i32.eq (local.get $c) (i32.const "+"))
+                            (i32.eq (local.get $c) (i32.const "-")))
                           (then (local.set $p (i32.add (local.get $p) (i32.const 1)))))))
-                    (if (i32.or (i32.ge_u (local.get $p) (global.get $end))
-                          (i32.eqz (call $lexIsDigit (i32.load8_u (local.get $p)))))
+                    (if
+                      (i32.or
+                        (i32.ge_u (local.get $p) (global.get $end))
+                        (i32.eqz (call $lexIsDigit (i32.load8_u (local.get $p)))))
                       (then (return)))))
                 (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
                 (call $lexScanNumberBody (i32.const 1)))))))))
@@ -144,15 +161,15 @@
   ;; CRLF continues the line exactly like one before LF. Clamped to $end.
   (func $lexEscapeEnd (param $p i32) (result i32)
     (local $e i32)
-    (local.set $e (call $utf8SpanEnd
-      (i32.add (local.get $p) (i32.const 2)) (global.get $end)))
-    (if (i32.and
-          (i32.eq (local.get $e) (i32.add (local.get $p) (i32.const 2)))
+    (local.set $e (call $utf8SpanEnd (i32.add (local.get $p) (i32.const 2)) (global.get $end)))
+    (if
+      (i32.and
+        (i32.eq (local.get $e) (i32.add (local.get $p) (i32.const 2)))
+        (i32.and
+          (i32.eq (i32.load8_u offset=1 (local.get $p)) (i32.const 13))
           (i32.and
-            (i32.eq (i32.load8_u offset=1 (local.get $p)) (i32.const 13))
-            (i32.and
-              (i32.lt_u (local.get $e) (global.get $end))
-              (i32.eq (i32.load8_u (local.get $e)) (i32.const 10)))))
+            (i32.lt_u (local.get $e) (global.get $end))
+            (i32.eq (i32.load8_u (local.get $e)) (i32.const 10)))))
       (then (local.set $e (i32.add (local.get $e) (i32.const 1)))))
     (local.get $e))
 
@@ -160,16 +177,23 @@
   ;; token and starts at $ptr when resuming a stream chunk. Returns 1 after a
   ;; closing quote, 2 after an escaped newline at EOF, or 0 otherwise.
   (func $lexStringBody
-    (param $quote i32) (param $multiline i32) (param $hl i32) (param $seg i32)
+    (param $quote i32)
+    (param $multiline i32)
+    (param $hl i32)
+    (param $seg i32)
     (result i32)
     (local $c i32)
     (local $e i32)
     (local $status i32)
     (block $done
       (loop $l
-        (global.set $ptr (call $scanFindSpecial
-          (global.get $ptr) (global.get $end) (local.get $quote) (i32.const 1)
-          (i32.eqz (local.get $multiline))))
+        (global.set $ptr
+          (call $scanFindSpecial
+            (global.get $ptr)
+            (global.get $end)
+            (local.get $quote)
+            (i32.const 1)
+            (i32.eqz (local.get $multiline))))
         (br_if $done (i32.ge_u (global.get $ptr) (global.get $end)))
         (local.set $c (i32.load8_u (global.get $ptr)))
         (if (i32.eq (local.get $c) (local.get $quote))
@@ -183,13 +207,14 @@
         (local.set $e (call $lexEscapeEnd (global.get $ptr)))
         (call $emitTok (enum.get $Token.string.escape) (global.get $ptr) (local.get $e))
         (global.set $ptr (local.get $e))
-        (if (i32.and
-              (i32.eq (global.get $ptr) (global.get $end))
-              (i32.and
-                (i32.gt_u (global.get $ptr) (local.get $seg))
-                (i32.or
-                  (i32.eq (i32.load8_u (i32.sub (global.get $ptr) (i32.const 1))) (i32.const 10))
-                  (i32.eq (i32.load8_u (i32.sub (global.get $ptr) (i32.const 1))) (i32.const 13)))))
+        (if
+          (i32.and
+            (i32.eq (global.get $ptr) (global.get $end))
+            (i32.and
+              (i32.gt_u (global.get $ptr) (local.get $seg))
+              (i32.or
+                (i32.eq (i32.load8_u (i32.sub (global.get $ptr) (i32.const 1))) (i32.const 10))
+                (i32.eq (i32.load8_u (i32.sub (global.get $ptr) (i32.const 1))) (i32.const 13)))))
           (then (local.set $status (i32.const 2))))
         (local.set $seg (global.get $ptr))
         (br $l)))
@@ -205,14 +230,18 @@
     (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
     (local.set $status
       (call $lexStringBody
-        (local.get $quote) (local.get $multiline) (local.get $hl) (local.get $lhs)))
-    (if (i32.and
-          (global.get $streaming)
+        (local.get $quote)
+        (local.get $multiline)
+        (local.get $hl)
+        (local.get $lhs)))
+    (if
+      (i32.and
+        (global.get $streaming)
+        (i32.and
+          (i32.eq (global.get $ptr) (global.get $end))
           (i32.and
-            (i32.eq (global.get $ptr) (global.get $end))
-            (i32.and
-              (i32.ne (local.get $status) (i32.const 1))
-              (i32.or (local.get $multiline) (i32.eq (local.get $status) (i32.const 2))))))
+            (i32.ne (local.get $status) (i32.const 1))
+            (i32.or (local.get $multiline) (i32.eq (local.get $status) (i32.const 2))))))
       (then
         (global.set $streamMode (i32.const 2))
         (global.set $streamA (local.get $quote))
@@ -220,15 +249,23 @@
         (global.set $streamHl (local.get $hl)))))
 
   (func $lexRawStringBody
-    (param $quote i32) (param $multiline i32) (param $hl i32) (param $lhs i32)
+    (param $quote i32)
+    (param $multiline i32)
+    (param $hl i32)
+    (param $lhs i32)
     (result i32)
-    (global.set $ptr (call $scanFindSpecial
-      (global.get $ptr) (global.get $end)
-      (local.get $quote) (i32.const 0) (i32.eqz (local.get $multiline))))
+    (global.set $ptr
+      (call $scanFindSpecial
+        (global.get $ptr)
+        (global.get $end)
+        (local.get $quote)
+        (i32.const 0)
+        (i32.eqz (local.get $multiline))))
     ;; the closing quote is consumed; a raw line break is left unconsumed
-    (if (i32.and
-          (i32.lt_u (global.get $ptr) (global.get $end))
-          (i32.eq (i32.load8_u (global.get $ptr)) (local.get $quote)))
+    (if
+      (i32.and
+        (i32.lt_u (global.get $ptr) (global.get $end))
+        (i32.eq (i32.load8_u (global.get $ptr)) (local.get $quote)))
       (then
         (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
         (call $emitTok (local.get $hl) (local.get $lhs) (global.get $ptr))
@@ -243,14 +280,16 @@
     (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
     (local.set $closed
       (call $lexRawStringBody
-        (local.get $quote) (local.get $multiline) (local.get $hl) (local.get $lhs)))
-    (if (i32.and
-          (global.get $streaming)
-          (i32.and
-            (local.get $multiline)
-            (i32.and
-              (i32.eqz (local.get $closed))
-              (i32.eq (global.get $ptr) (global.get $end)))))
+        (local.get $quote)
+        (local.get $multiline)
+        (local.get $hl)
+        (local.get $lhs)))
+    (if
+      (i32.and
+        (global.get $streaming)
+        (i32.and
+          (local.get $multiline)
+          (i32.and (i32.eqz (local.get $closed)) (i32.eq (global.get $ptr) (global.get $end)))))
       (then
         (global.set $streamMode (i32.const 3))
         (global.set $streamA (local.get $quote))
@@ -274,15 +313,14 @@
       (then (global.set $ptr (global.get $end))))
     (call $scanBlockCommentEnd)
     (call $emitTok (local.get $hl) (local.get $lhs) (global.get $ptr))
-    (if (i32.and
-          (global.get $streaming)
-          (i32.and
-            (i32.eq (global.get $ptr) (global.get $end))
-            (i32.or
-              (i32.lt_u (i32.sub (global.get $ptr) (local.get $lhs)) (i32.const 2))
-              (i32.ne
-                (i32.load16_u (i32.sub (global.get $ptr) (i32.const 2)))
-                (i32.const 0x2f2a)))))
+    (if
+      (i32.and
+        (global.get $streaming)
+        (i32.and
+          (i32.eq (global.get $ptr) (global.get $end))
+          (i32.or
+            (i32.lt_u (i32.sub (global.get $ptr) (local.get $lhs)) (i32.const 2))
+            (i32.ne (i32.load16_u (i32.sub (global.get $ptr) (i32.const 2))) (i32.const 0x2f2a)))))
       (then
         (global.set $streamMode (i32.const 1))
         (global.set $streamHl (local.get $hl)))))
@@ -292,32 +330,31 @@
   ;; checkpointed: the region is 32 bytes and anything past it is the lexer
   ;; checkpoint area, so the token simply ends at the chunk.
   (func $streamSetFixed (param $delimiter i32) (param $len i32) (param $hl i32)
-    (if (i32.and
-          (global.get $streaming)
-          (i32.and
-            (i32.le_u (local.get $len) (i32.const 32))
-            (i32.eq (global.get $ptr) (global.get $end))))
+    (if
+      (i32.and
+        (global.get $streaming)
+        (i32.and
+          (i32.le_u (local.get $len) (i32.const 32))
+          (i32.eq (global.get $ptr) (global.get $end))))
       (then
-        (memory.copy
-          (i32.const $mem.streamDelimiter) (local.get $delimiter) (local.get $len))
+        (memory.copy (i32.const $mem.streamDelimiter) (local.get $delimiter) (local.get $len))
         (global.set $streamMode (i32.const 20))
         (global.set $streamA (local.get $len))
         (global.set $streamHl (local.get $hl)))))
 
   (func $streamSetFixed32 (param $delimiter i32) (param $len i32) (param $hl i32)
     (i32.store (i32.const $mem.streamDelimiter) (local.get $delimiter))
-    (call $streamSetFixed
-      (i32.const $mem.streamDelimiter) (local.get $len) (local.get $hl)))
+    (call $streamSetFixed (i32.const $mem.streamDelimiter) (local.get $len) (local.get $hl)))
 
   ;; Save a two-byte nested delimiter pair. Packed constants use source byte
   ;; order, for example `/*` and `*/`.
-  (func $streamSetNested
-    (param $depth i32) (param $open i32) (param $close i32) (param $hl i32)
-    (if (i32.and
-          (global.get $streaming)
-          (i32.and
-            (i32.ne (local.get $depth) (i32.const 0))
-            (i32.eq (global.get $ptr) (global.get $end))))
+  (func $streamSetNested (param $depth i32) (param $open i32) (param $close i32) (param $hl i32)
+    (if
+      (i32.and
+        (global.get $streaming)
+        (i32.and
+          (i32.ne (local.get $depth) (i32.const 0))
+          (i32.eq (global.get $ptr) (global.get $end))))
       (then
         (global.set $streamMode (i32.const 21))
         (global.set $streamA (local.get $depth))
@@ -329,16 +366,15 @@
   ;; heredocs). $trim is one when leading tabs are allowed before it (`<<-`)
   ;; and two when spaces are too. Delimiters longer than the 32-byte region
   ;; are not checkpointed (see $streamSetFixed).
-  (func $streamSetLine
-    (param $delimiter i32) (param $len i32) (param $trim i32) (param $hl i32)
-    (if (i32.and
-          (global.get $streaming)
-          (i32.and
-            (i32.le_u (local.get $len) (i32.const 32))
-            (i32.eq (global.get $ptr) (global.get $end))))
+  (func $streamSetLine (param $delimiter i32) (param $len i32) (param $trim i32) (param $hl i32)
+    (if
+      (i32.and
+        (global.get $streaming)
+        (i32.and
+          (i32.le_u (local.get $len) (i32.const 32))
+          (i32.eq (global.get $ptr) (global.get $end))))
       (then
-        (memory.copy
-          (i32.const $mem.streamDelimiter) (local.get $delimiter) (local.get $len))
+        (memory.copy (i32.const $mem.streamDelimiter) (local.get $delimiter) (local.get $len))
         (global.set $streamMode (i32.const 22))
         (global.set $streamA (local.get $len))
         (global.set $streamB (local.get $trim))
@@ -350,9 +386,7 @@
   ;; through thirteen start tags whose attributes continue (html, xml, vue,
   ;; svelte, astro - resumed by the owning lexer through highlights.wat).
   (func $streamSetRegion (param $kind i32)
-    (if (i32.and
-          (global.get $streaming)
-          (i32.eq (global.get $ptr) (global.get $end)))
+    (if (i32.and (global.get $streaming) (i32.eq (global.get $ptr) (global.get $end)))
       (then
         (global.set $streamRegionKind (local.get $kind))
         (global.set $streamRegionStarted (i32.const 0)))))
@@ -368,21 +402,19 @@
     (local.set $p (global.get $ptr))
     (block $notFound
       (loop $search
-        (local.set $p (call $lexFindByte
-          (local.get $p) (i32.load8_u (i32.const $mem.streamDelimiter))))
+        (local.set $p
+          (call $lexFindByte (local.get $p) (i32.load8_u (i32.const $mem.streamDelimiter))))
         (br_if $notFound
-          (i32.gt_u
-            (i32.add (local.get $p) (global.get $streamA))
-            (global.get $end)))
+          (i32.gt_u (i32.add (local.get $p) (global.get $streamA)) (global.get $end)))
         (local.set $i (i32.const 1))
         (local.set $matched (i32.const 1))
         (block $compareDone
           (loop $compare
             (br_if $compareDone (i32.ge_u (local.get $i) (global.get $streamA)))
-            (if (i32.ne
-                  (i32.load8_u (i32.add (local.get $p) (local.get $i)))
-                  (i32.load8_u
-                    (i32.add (i32.const $mem.streamDelimiter) (local.get $i))))
+            (if
+              (i32.ne
+                (i32.load8_u (i32.add (local.get $p) (local.get $i)))
+                (i32.load8_u (i32.add (i32.const $mem.streamDelimiter) (local.get $i))))
               (then
                 (local.set $matched (i32.const 0))
                 (br $compareDone)))
@@ -391,8 +423,7 @@
         (if (local.get $matched)
           (then
             (global.set $ptr (i32.add (local.get $p) (global.get $streamA)))
-            (call $emitTok
-              (global.get $streamHl) (local.get $lhs) (global.get $ptr))
+            (call $emitTok (global.get $streamHl) (local.get $lhs) (global.get $ptr))
             (global.set $streamMode (i32.const 0))
             (return (i32.const 0))))
         (local.set $p (i32.add (local.get $p) (i32.const 1)))
@@ -409,18 +440,22 @@
     (local $pair i32)
     (block $done
       (loop $scan
-        (global.set $ptr (call $lexFindEither (global.get $ptr)
-          (i32.and (local.get $open) (i32.const 255))
-          (i32.and (local.get $close) (i32.const 255))))
+        (global.set $ptr
+          (call $lexFindEither
+            (global.get $ptr)
+            (i32.and (local.get $open) (i32.const 255))
+            (i32.and (local.get $close) (i32.const 255))))
         (br_if $done (i32.ge_u (global.get $ptr) (global.get $end)))
         ;; the byte past $end reads as 0, which matches no printable delimiter
-        (local.set $pair (i32.or
-          (i32.load8_u (global.get $ptr))
-          (i32.shl
-            (select
-              (i32.load8_u offset=1 (global.get $ptr)) (i32.const 0)
-              (i32.lt_u (i32.add (global.get $ptr) (i32.const 1)) (global.get $end)))
-            (i32.const 8))))
+        (local.set $pair
+          (i32.or
+            (i32.load8_u (global.get $ptr))
+            (i32.shl
+              (select
+                (i32.load8_u offset=1 (global.get $ptr))
+                (i32.const 0)
+                (i32.lt_u (i32.add (global.get $ptr) (i32.const 1)) (global.get $end)))
+              (i32.const 8))))
         (if (i32.eq (local.get $pair) (local.get $open))
           (then
             (local.set $depth (i32.add (local.get $depth) (i32.const 1)))
@@ -446,17 +481,15 @@
     (global.set $ptr (i32.add (global.get $ptr) (i32.const 2)))
     (if (i32.gt_u (global.get $ptr) (global.get $end))
       (then (global.set $ptr (global.get $end))))
-    (local.set $depth
-      (call $lexNestedScan (i32.const 1) (local.get $open) (local.get $close)))
+    (local.set $depth (call $lexNestedScan (i32.const 1) (local.get $open) (local.get $close)))
     (call $emitTok (local.get $hl) (local.get $lhs) (global.get $ptr))
-    (call $streamSetNested
-      (local.get $depth) (local.get $open) (local.get $close) (local.get $hl)))
+    (call $streamSetNested (local.get $depth) (local.get $open) (local.get $close) (local.get $hl)))
 
   (func $streamResumeNested (result i32)
     (local $lhs i32)
     (local.set $lhs (global.get $ptr))
-    (global.set $streamA (call $lexNestedScan
-      (global.get $streamA) (global.get $streamB) (global.get $streamC)))
+    (global.set $streamA
+      (call $lexNestedScan (global.get $streamA) (global.get $streamB) (global.get $streamC)))
     (call $emitTok (global.get $streamHl) (local.get $lhs) (global.get $ptr))
     (if (i32.eqz (global.get $streamA))
       (then
@@ -481,30 +514,28 @@
           (then
             (block $trimDone
               (loop $trim
-                (br_if $trimDone
-                  (i32.ge_u (local.get $candidate) (global.get $end)))
+                (br_if $trimDone (i32.ge_u (local.get $candidate) (global.get $end)))
                 (local.set $c (i32.load8_u (local.get $candidate)))
-                (br_if $trimDone (i32.eqz (i32.or
-                  (i32.eq (local.get $c) (i32.const 9))
-                  (i32.and
-                    (i32.eq (local.get $c) (i32.const 32))
-                    (i32.eq (global.get $streamB) (i32.const 2))))))
-                (local.set $candidate
-                  (i32.add (local.get $candidate) (i32.const 1)))
+                (br_if $trimDone
+                  (i32.eqz
+                    (i32.or
+                      (i32.eq (local.get $c) (i32.const 9))
+                      (i32.and
+                        (i32.eq (local.get $c) (i32.const 32))
+                        (i32.eq (global.get $streamB) (i32.const 2))))))
+                (local.set $candidate (i32.add (local.get $candidate) (i32.const 1)))
                 (br $trim)))))
         (local.set $matched
-          (i32.le_u
-            (i32.add (local.get $candidate) (global.get $streamA))
-            (global.get $end)))
+          (i32.le_u (i32.add (local.get $candidate) (global.get $streamA)) (global.get $end)))
         (local.set $i (i32.const 0))
         (block $compareDone
           (loop $compare
             (br_if $compareDone (i32.eqz (local.get $matched)))
             (br_if $compareDone (i32.ge_u (local.get $i) (global.get $streamA)))
-            (if (i32.ne
-                  (i32.load8_u (i32.add (local.get $candidate) (local.get $i)))
-                  (i32.load8_u
-                    (i32.add (i32.const $mem.streamDelimiter) (local.get $i))))
+            (if
+              (i32.ne
+                (i32.load8_u (i32.add (local.get $candidate) (local.get $i)))
+                (i32.load8_u (i32.add (i32.const $mem.streamDelimiter) (local.get $i))))
               (then
                 (local.set $matched (i32.const 0))
                 (br $compareDone)))
@@ -512,33 +543,29 @@
             (br $compare)))
         (if (local.get $matched)
           (then
-            (global.set $ptr
-              (i32.add (local.get $candidate) (global.get $streamA)))
+            (global.set $ptr (i32.add (local.get $candidate) (global.get $streamA)))
             ;; the delimiter must occupy the whole line; consume its LF/CRLF
-            (if (i32.and
-                  (i32.lt_u (global.get $ptr) (global.get $end))
-                  (i32.and
-                    (i32.ne (i32.load8_u (global.get $ptr)) (i32.const 10))
-                    (i32.ne (i32.load8_u (global.get $ptr)) (i32.const 13))))
+            (if
+              (i32.and
+                (i32.lt_u (global.get $ptr) (global.get $end))
+                (i32.and
+                  (i32.ne (i32.load8_u (global.get $ptr)) (i32.const 10))
+                  (i32.ne (i32.load8_u (global.get $ptr)) (i32.const 13))))
               (then (local.set $matched (i32.const 0))))
             (if (local.get $matched)
               (then
                 (if (i32.lt_u (global.get $ptr) (global.get $end))
                   (then
                     (local.set $c (i32.load8_u (global.get $ptr)))
-                    (global.set $ptr
-                      (i32.add (global.get $ptr) (i32.const 1)))
-                    (if (i32.and
-                          (i32.eq (local.get $c) (i32.const 13))
-                          (i32.and
-                            (i32.lt_u (global.get $ptr) (global.get $end))
-                            (i32.eq
-                              (i32.load8_u (global.get $ptr))
-                              (i32.const 10))))
-                      (then (global.set $ptr
-                        (i32.add (global.get $ptr) (i32.const 1)))))))
-                (call $emitTok
-                  (global.get $streamHl) (local.get $lhs) (global.get $ptr))
+                    (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
+                    (if
+                      (i32.and
+                        (i32.eq (local.get $c) (i32.const 13))
+                        (i32.and
+                          (i32.lt_u (global.get $ptr) (global.get $end))
+                          (i32.eq (i32.load8_u (global.get $ptr)) (i32.const 10))))
+                      (then (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))))))
+                (call $emitTok (global.get $streamHl) (local.get $lhs) (global.get $ptr))
                 (global.set $streamMode (i32.const 0))
                 (return (i32.const 0))))))
         (block $lineDone
@@ -563,11 +590,10 @@
       (then
         (call $scanBlockCommentEnd)
         (call $emitTok (global.get $streamHl) (local.get $lhs) (global.get $ptr))
-        (if (i32.or
-              (i32.lt_u (i32.sub (global.get $ptr) (local.get $lhs)) (i32.const 2))
-              (i32.ne
-                (i32.load16_u (i32.sub (global.get $ptr) (i32.const 2)))
-                (i32.const 0x2f2a)))
+        (if
+          (i32.or
+            (i32.lt_u (i32.sub (global.get $ptr) (local.get $lhs)) (i32.const 2))
+            (i32.ne (i32.load16_u (i32.sub (global.get $ptr) (i32.const 2))) (i32.const 0x2f2a)))
           (then (return (i32.const 1))))
         (global.set $streamMode (i32.const 0))
         (return (i32.const 0))))
@@ -575,11 +601,14 @@
       (then
         (local.set $status
           (call $lexStringBody
-            (global.get $streamA) (global.get $streamB)
-            (global.get $streamHl) (local.get $lhs)))
-        (if (i32.and
-              (i32.eq (global.get $ptr) (global.get $end))
-              (i32.ne (local.get $status) (i32.const 1)))
+            (global.get $streamA)
+            (global.get $streamB)
+            (global.get $streamHl)
+            (local.get $lhs)))
+        (if
+          (i32.and
+            (i32.eq (global.get $ptr) (global.get $end))
+            (i32.ne (local.get $status) (i32.const 1)))
           (then (return (i32.const 1))))
         (global.set $streamMode (i32.const 0))
         (return (i32.const 0))))
@@ -587,8 +616,10 @@
       (then
         (local.set $status
           (call $lexRawStringBody
-            (global.get $streamA) (global.get $streamB)
-            (global.get $streamHl) (local.get $lhs)))
+            (global.get $streamA)
+            (global.get $streamB)
+            (global.get $streamHl)
+            (local.get $lhs)))
         (if (i32.eqz (local.get $status))
           (then (return (i32.const 1))))
         (global.set $streamMode (i32.const 0))))
@@ -610,9 +641,8 @@
       (loop $l
         (br_if $done (i32.ge_u (local.get $p) (global.get $end)))
         (local.set $c (i32.load8_u (local.get $p)))
-        (br_if $done (i32.and
-          (i32.ne (local.get $c) (i32.const 32))
-          (i32.ne (local.get $c) (i32.const 9))))
+        (br_if $done
+          (i32.and (i32.ne (local.get $c) (i32.const 32)) (i32.ne (local.get $c) (i32.const 9))))
         (local.set $p (i32.add (local.get $p) (i32.const 1)))
         (br $l)))
     (local.get $p))
@@ -629,39 +659,46 @@
     (block $name
       (loop $space
         (br_if $name (i32.ge_u (local.get $p) (local.get $rhs)))
-        (br_if $name (i32.and
-          (i32.ne (i32.load8_u (local.get $p)) (i32.const 32))
-          (i32.ne (i32.load8_u (local.get $p)) (i32.const 9))))
+        (br_if $name
+          (i32.and
+            (i32.ne (i32.load8_u (local.get $p)) (i32.const 32))
+            (i32.ne (i32.load8_u (local.get $p)) (i32.const 9))))
         (local.set $p (i32.add (local.get $p) (i32.const 1)))
         (br $space)))
     (local.set $word (local.get $p))
     (if (i32.gt_u (i32.add (local.get $word) (i32.const 6)) (local.get $rhs))
       (then (return (i32.const 0))))
     ;; the wide loads stay inside the input slack
-    (if (i64.eq
-          (i64.and (i64.load (local.get $word)) (i64.const 0x00ffffffffffffff))
-          (i64.const "include"))
+    (if
+      (i64.eq
+        (i64.and (i64.load (local.get $word)) (i64.const 0x00ffffffffffffff))
+        (i64.const "include"))
       (then (local.set $p (i32.add (local.get $word) (i32.const 7))))
       (else
-        (if (i64.ne
-              (i64.and (i64.load (local.get $word)) (i64.const 0x0000ffffffffffff))
-              (i64.const "import"))
+        (if
+          (i64.ne
+            (i64.and (i64.load (local.get $word)) (i64.const 0x0000ffffffffffff))
+            (i64.const "import"))
           (then (return (i32.const 0))))
         (local.set $p (i32.add (local.get $word) (i32.const 6)))))
     (if (i32.gt_u (local.get $p) (local.get $rhs))
       (then (return (i32.const 0))))
-    (if (i32.and (i32.lt_u (local.get $p) (local.get $rhs))
-          (call $lexIsIdentContinue (i32.load8_u (local.get $p))))
+    (if
+      (i32.and
+        (i32.lt_u (local.get $p) (local.get $rhs))
+        (call $lexIsIdentContinue (i32.load8_u (local.get $p))))
       (then (return (i32.const 0))))
     (block $headerStart
       (loop $space
         (br_if $headerStart (i32.ge_u (local.get $p) (local.get $rhs)))
-        (br_if $headerStart (i32.and
-          (i32.ne (i32.load8_u (local.get $p)) (i32.const 32))
-          (i32.ne (i32.load8_u (local.get $p)) (i32.const 9))))
+        (br_if $headerStart
+          (i32.and
+            (i32.ne (i32.load8_u (local.get $p)) (i32.const 32))
+            (i32.ne (i32.load8_u (local.get $p)) (i32.const 9))))
         (local.set $p (i32.add (local.get $p) (i32.const 1)))
         (br $space)))
-    (if (i32.ge_u (local.get $p) (local.get $rhs)) (then (return (i32.const 0))))
+    (if (i32.ge_u (local.get $p) (local.get $rhs))
+      (then (return (i32.const 0))))
     (if (i32.eq (i32.load8_u (local.get $p)) (i32.const "<"))
       (then (local.set $close (i32.const ">")))
       (else
@@ -691,8 +728,12 @@
   ;; Callers go through the keyword-table.get form, which fills in the table
   ;; constants.
   (func $lexKeywordLookup
-    (param $start i32) (param $end i32) (param $base i32)
-    (param $bucketMask i32) (param $slotMask i32) (result i32)
+    (param $start i32)
+    (param $end i32)
+    (param $base i32)
+    (param $bucketMask i32)
+    (param $slotMask i32)
+    (result i32)
     (local $len i32)
     (local $h i32)
     (local $entry i32)
@@ -705,32 +746,27 @@
       (i32.or
         (i32.or
           (i32.load16_u (local.get $start))
-          (i32.shl
-            (i32.load8_u (i32.sub (local.get $end) (i32.const 1)))
-            (i32.const 16)))
+          (i32.shl (i32.load8_u (i32.sub (local.get $end) (i32.const 1))) (i32.const 16)))
         (i32.shl (local.get $len) (i32.const 24))))
     (local.set $h
       (i32.mul
         (i32.xor (local.get $h) (i32.shr_u (local.get $h) (i32.const 16)))
         (i32.const 0xe51fac89)))
-    (local.set $h
-      (i32.xor (local.get $h) (i32.shr_u (local.get $h) (i32.const 24))))
+    (local.set $h (i32.xor (local.get $h) (i32.shr_u (local.get $h) (i32.const 24))))
     ;; base: displacement bytes; base+buckets: u16 (len<<11 | recOffset+1).
     ;; The slot is the bucket's displacement times an odd second hash plus
     ;; the base slot - double hashing, so the build can pack tables densely
     (local.set $entry
       (i32.load16_u
         (i32.add
-          (i32.add (local.get $base)
-            (i32.add (local.get $bucketMask) (i32.const 1)))
+          (i32.add (local.get $base) (i32.add (local.get $bucketMask) (i32.const 1)))
           (i32.shl
             (i32.and
               (i32.add
                 (i32.shr_u (local.get $h) (i32.const 4))
                 (i32.mul
                   (i32.load8_u
-                    (i32.add (local.get $base)
-                      (i32.and (local.get $h) (local.get $bucketMask))))
+                    (i32.add (local.get $base) (i32.and (local.get $h) (local.get $bucketMask))))
                   (i32.or (i32.shr_u (local.get $h) (i32.const 12)) (i32.const 1))))
               (local.get $slotMask))
             (i32.const 1)))))
@@ -741,27 +777,30 @@
     (local.set $rec
       (i32.add
         (i32.add
-          (i32.add (local.get $base)
-            (i32.add (local.get $bucketMask) (i32.const 1)))
+          (i32.add (local.get $base) (i32.add (local.get $bucketMask) (i32.const 1)))
           (i32.shl (i32.add (local.get $slotMask) (i32.const 1)) (i32.const 1)))
         (i32.sub (i32.and (local.get $entry) (i32.const 2047)) (i32.const 1))))
     ;; Compare up to 16 bytes at once. Longer words use an overlapping tail
     ;; inside the word. Short words mask lookahead into input slack or the
     ;; memory following a static table record; neither needs zero padding.
-    (local.set $mask (i8x16.bitmask (i8x16.ne
-      (v128.load (local.get $start))
-      (v128.load offset=1 (local.get $rec)))))
+    (local.set $mask
+      (i8x16.bitmask
+        (i8x16.ne (v128.load (local.get $start)) (v128.load offset=1 (local.get $rec)))))
     (if (i32.gt_u (local.get $len) (i32.const 16))
       (then
-        (if (i32.or (local.get $mask)
-              (i8x16.bitmask (i8x16.ne
+        (if
+          (i32.or
+            (local.get $mask)
+            (i8x16.bitmask
+              (i8x16.ne
                 (v128.load (i32.sub (local.get $end) (i32.const 16)))
-                (v128.load (i32.add (local.get $rec)
-                  (i32.sub (local.get $len) (i32.const 15)))))))
+                (v128.load (i32.add (local.get $rec) (i32.sub (local.get $len) (i32.const 15)))))))
           (then (return (i32.const 0)))))
       (else
-        (if (i32.and (local.get $mask)
-              (i32.sub (i32.shl (i32.const 1) (local.get $len)) (i32.const 1)))
+        (if
+          (i32.and
+            (local.get $mask)
+            (i32.sub (i32.shl (i32.const 1) (local.get $len)) (i32.const 1)))
           (then (return (i32.const 0))))))
     (i32.load8_u (local.get $rec)))
 
@@ -769,15 +808,24 @@
   ;; keyword-table.value form - or -1 when the word is not in the table or
   ;; its group declares no value.
   (func $lexKeywordValue
-    (param $start i32) (param $end i32) (param $base i32)
-    (param $bucketMask i32) (param $slotMask i32) (param $values i32) (result i32)
+    (param $start i32)
+    (param $end i32)
+    (param $base i32)
+    (param $bucketMask i32)
+    (param $slotMask i32)
+    (param $values i32)
+    (result i32)
     (local $g i32)
-    (local.set $g (call $lexKeywordLookup
-      (local.get $start) (local.get $end) (local.get $base)
-      (local.get $bucketMask) (local.get $slotMask)))
-    (if (i32.eqz (local.get $g)) (then (return (i32.const -1))))
+    (local.set $g
+      (call $lexKeywordLookup
+        (local.get $start)
+        (local.get $end)
+        (local.get $base)
+        (local.get $bucketMask)
+        (local.get $slotMask)))
+    (if (i32.eqz (local.get $g))
+      (then (return (i32.const -1))))
     (i32.load16_s (i32.add (local.get $values) (i32.shl (local.get $g) (i32.const 1)))))
-
 
   ;; Copy a word as lowercase ASCII for case-insensitive keyword lookup.
   ;; Wide loads use input slack; stores fit the 64-byte scratch buffer.
@@ -794,12 +842,15 @@
       (loop $wide
         (br_if $done (i32.ge_u (local.get $i) (local.get $n)))
         (local.set $w (v128.load (i32.add (local.get $lhs) (local.get $i))))
-        (v128.store (i32.add (local.get $dst) (local.get $i))
-          (v128.or (local.get $w) (v128.and
-            (i8x16.le_u
-              (i8x16.sub (local.get $w) (i8x16.splat (i32.const "A")))
-              (i8x16.splat (i32.const 25)))
-            (i8x16.splat (i32.const 32)))))
+        (v128.store
+          (i32.add (local.get $dst) (local.get $i))
+          (v128.or
+            (local.get $w)
+            (v128.and
+              (i8x16.le_u
+                (i8x16.sub (local.get $w) (i8x16.splat (i32.const "A")))
+                (i8x16.splat (i32.const 25)))
+              (i8x16.splat (i32.const 32)))))
         (local.set $i (i32.add (local.get $i) (i32.const 16)))
         (br $wide)))
     (local.get $n))
@@ -814,17 +865,18 @@
     (block $done
       (loop $simd
         (local.set $w (v128.load (local.get $p)))
-        (local.set $mask (i8x16.bitmask (v128.or
-          (i8x16.eq (local.get $w) (i8x16.splat (local.get $a)))
-          (i8x16.eq (local.get $w) (i8x16.splat (local.get $b))))))
+        (local.set $mask
+          (i8x16.bitmask
+            (v128.or
+              (i8x16.eq (local.get $w) (i8x16.splat (local.get $a)))
+              (i8x16.eq (local.get $w) (i8x16.splat (local.get $b))))))
         (if (local.get $mask)
           (then
             (local.set $p (i32.add (local.get $p) (i32.ctz (local.get $mask))))
             (br $done)))
         (local.set $p (i32.add (local.get $p) (i32.const 16)))
         (br_if $simd (i32.lt_u (local.get $p) (global.get $end)))))
-    (select (local.get $p) (global.get $end)
-      (i32.lt_u (local.get $p) (global.get $end))))
+    (select (local.get $p) (global.get $end) (i32.lt_u (local.get $p) (global.get $end))))
 
   ;; Return the next occurrence of byte $a, or $end - one SIMD comparison per
   ;; 16 bytes. Prefer this over $lexFindEither with a repeated byte: the loop
@@ -836,16 +888,15 @@
       (then (return (global.get $end))))
     (block $done
       (loop $simd
-        (local.set $mask (i8x16.bitmask
-          (i8x16.eq (v128.load (local.get $p)) (i8x16.splat (local.get $a)))))
+        (local.set $mask
+          (i8x16.bitmask (i8x16.eq (v128.load (local.get $p)) (i8x16.splat (local.get $a)))))
         (if (local.get $mask)
           (then
             (local.set $p (i32.add (local.get $p) (i32.ctz (local.get $mask))))
             (br $done)))
         (local.set $p (i32.add (local.get $p) (i32.const 16)))
         (br_if $simd (i32.lt_u (local.get $p) (global.get $end)))))
-    (select (local.get $p) (global.get $end)
-      (i32.lt_u (local.get $p) (global.get $end))))
+    (select (local.get $p) (global.get $end) (i32.lt_u (local.get $p) (global.get $end))))
 
   ;; Whether the operator [lhs,rhs) is made only of `<`, `>`, and `?` - the
   ;; bytes that glue a generic or nullable type together - so a C-family
@@ -856,9 +907,12 @@
       (loop $l
         (br_if $done (i32.ge_u (local.get $lhs) (local.get $rhs)))
         (local.set $c (i32.load8_u (local.get $lhs)))
-        (if (i32.and
-              (i32.ne (local.get $c) (i32.const "<"))
-              (i32.and (i32.ne (local.get $c) (i32.const ">")) (i32.ne (local.get $c) (i32.const "?"))))
+        (if
+          (i32.and
+            (i32.ne (local.get $c) (i32.const "<"))
+            (i32.and
+              (i32.ne (local.get $c) (i32.const ">"))
+              (i32.ne (local.get $c) (i32.const "?"))))
           (then (return (i32.const 0))))
         (local.set $lhs (i32.add (local.get $lhs) (i32.const 1)))
         (br $l)))
@@ -879,9 +933,9 @@
         (if (i32.le_u (i32.sub (local.get $c) (i32.const "A")) (i32.const 25))
           (then (local.set $upper (i32.const 1)))
           (else
-            (if (i32.eqz (i32.or
-                  (call $lexIsDigit (local.get $c))
-                  (i32.eq (local.get $c) (i32.const "_"))))
+            (if
+              (i32.eqz
+                (i32.or (call $lexIsDigit (local.get $c)) (i32.eq (local.get $c) (i32.const "_"))))
               (then (return (i32.const 0))))))
         (local.set $lhs (i32.add (local.get $lhs) (i32.const 1)))
         (br $l)))

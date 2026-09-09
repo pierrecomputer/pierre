@@ -8,8 +8,8 @@
     (group ;; 2: structured control
       "if" "br" "else" "loop" "then" "block")
     (group ;; 3: module fields and declarations
-      "mut" "nop" "data" "elem" "func" "type" "start" "local" "param" "table"
-      "global" "memory" "export" "import" "module" "result"))
+      "mut" "nop" "data" "elem" "func" "type" "start" "local" "param" "table" "global" "memory"
+      "export" "import" "module" "result"))
 
   ;; Highlight for the bare word [$lhs,$rhs). Every table word is at most six
   ;; bytes, so the lookup's length check rejects the dotted instructions that
@@ -22,22 +22,27 @@
     ;; Numeric atoms include their sign, trailing dot, and NaN payload.
     (local.set $p (local.get $lhs))
     (local.set $c (i32.load8_u (local.get $p)))
-    (if (i32.or (i32.eq (local.get $c) (i32.const "+"))
-                (i32.eq (local.get $c) (i32.const "-")))
+    (if (i32.or (i32.eq (local.get $c) (i32.const "+")) (i32.eq (local.get $c) (i32.const "-")))
       (then (local.set $p (i32.add (local.get $p) (i32.const 1)))))
-    (if (i32.and (i32.lt_u (local.get $p) (local.get $rhs))
-          (call $lexIsDigit (i32.load8_u (local.get $p))))
+    (if
+      (i32.and
+        (i32.lt_u (local.get $p) (local.get $rhs))
+        (call $lexIsDigit (i32.load8_u (local.get $p))))
       (then (return (enum.get $Token.number))))
     (local.set $c (i32.and (i32.load (local.get $p)) (i32.const 0xffffff)))
-    (if (i32.and
-          (i32.eq (i32.sub (local.get $rhs) (local.get $p)) (i32.const 3))
-          (i32.or (i32.eq (local.get $c) (i32.const "inf"))
-                  (i32.eq (local.get $c) (i32.const "nan"))))
+    (if
+      (i32.and
+        (i32.eq (i32.sub (local.get $rhs) (local.get $p)) (i32.const 3))
+        (i32.or
+          (i32.eq (local.get $c) (i32.const "inf"))
+          (i32.eq (local.get $c) (i32.const "nan"))))
       (then (return (enum.get $Token.number))))
-    (if (i32.and
-          (i32.gt_u (i32.sub (local.get $rhs) (local.get $p)) (i32.const 6))
-          (i64.eq (i64.and (i64.load (local.get $p)) (i64.const 0xffffffffffff))
-            (i64.const "nan:0x")))
+    (if
+      (i32.and
+        (i32.gt_u (i32.sub (local.get $rhs) (local.get $p)) (i32.const 6))
+        (i64.eq
+          (i64.and (i64.load (local.get $p)) (i64.const 0xffffffffffff))
+          (i64.const "nan:0x")))
       (then
         (local.set $p (i32.add (local.get $p) (i32.const 6)))
         (block $notNumber
@@ -77,21 +82,26 @@
     (global.set $ptr (i32.add (global.get $ptr) (i32.const 2)))
     (block $done
       (loop $scan
-        (global.set $ptr
-          (call $lexFindEither (global.get $ptr) (i32.const "(") (i32.const ";")))
+        (global.set $ptr (call $lexFindEither (global.get $ptr) (i32.const "(") (i32.const ";")))
         (br_if $done (i32.ge_u (global.get $ptr) (global.get $end)))
         (local.set $c (i32.load8_u (global.get $ptr)))
-        (local.set $next (select
-          (i32.load8_u offset=1 (global.get $ptr)) (i32.const 0)
-          (i32.lt_u (i32.add (global.get $ptr) (i32.const 1)) (global.get $end))))
-        (if (i32.and (i32.eq (local.get $c) (i32.const "("))
-                     (i32.eq (local.get $next) (i32.const ";")))
+        (local.set $next
+          (select
+            (i32.load8_u offset=1 (global.get $ptr))
+            (i32.const 0)
+            (i32.lt_u (i32.add (global.get $ptr) (i32.const 1)) (global.get $end))))
+        (if
+          (i32.and
+            (i32.eq (local.get $c) (i32.const "("))
+            (i32.eq (local.get $next) (i32.const ";")))
           (then
             (local.set $depth (i32.add (local.get $depth) (i32.const 1)))
             (global.set $ptr (i32.add (global.get $ptr) (i32.const 2)))
             (br $scan)))
-        (if (i32.and (i32.eq (local.get $c) (i32.const ";"))
-                     (i32.eq (local.get $next) (i32.const ")")))
+        (if
+          (i32.and
+            (i32.eq (local.get $c) (i32.const ";"))
+            (i32.eq (local.get $next) (i32.const ")")))
           (then
             (local.set $depth (i32.sub (local.get $depth) (i32.const 1)))
             (global.set $ptr (i32.add (global.get $ptr) (i32.const 2)))
@@ -101,7 +111,9 @@
         (br $scan)))
     (call $emitTok (enum.get $Token.comment) (local.get $lhs) (global.get $ptr))
     (call $streamSetNested
-      (local.get $depth) (i32.const "(;") (i32.const ";)")
+      (local.get $depth)
+      (i32.const "(;")
+      (i32.const ";)")
       (enum.get $Token.comment)))
 
   ;; Advance $ptr over a wat name or bare word: any byte up to whitespace, a
@@ -116,14 +128,16 @@
         (call $scanIdentRun (local.get $extra))
         (br_if $done (i32.ge_u (global.get $ptr) (global.get $end)))
         (local.set $c (i32.load8_u (global.get $ptr)))
-        (br_if $done (i32.or
-          (call $lexIsSpace (local.get $c))
+        (br_if $done
           (i32.or
-            (i32.eq (local.get $c) (i32.const 34))
+            (call $lexIsSpace (local.get $c))
             (i32.or
-              (i32.or (i32.eq (local.get $c) (i32.const "("))
-                      (i32.eq (local.get $c) (i32.const ")")))
-              (i32.eq (local.get $c) (i32.const ";"))))))
+              (i32.eq (local.get $c) (i32.const 34))
+              (i32.or
+                (i32.or
+                  (i32.eq (local.get $c) (i32.const "("))
+                  (i32.eq (local.get $c) (i32.const ")")))
+                (i32.eq (local.get $c) (i32.const ";"))))))
         (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
         (br $l))))
 
@@ -140,16 +154,22 @@
         (br_if $done (i32.ge_u (global.get $ptr) (global.get $end)))
         (local.set $lhs (global.get $ptr))
         (local.set $c (i32.load8_u (global.get $ptr)))
-        (local.set $next (select
-          (i32.load8_u offset=1 (global.get $ptr)) (i32.const 0)
-          (i32.lt_u (i32.add (global.get $ptr) (i32.const 1)) (global.get $end))))
-        (if (i32.and (i32.eq (local.get $c) (i32.const ";"))
-                     (i32.eq (local.get $next) (i32.const ";")))
+        (local.set $next
+          (select
+            (i32.load8_u offset=1 (global.get $ptr))
+            (i32.const 0)
+            (i32.lt_u (i32.add (global.get $ptr) (i32.const 1)) (global.get $end))))
+        (if
+          (i32.and
+            (i32.eq (local.get $c) (i32.const ";"))
+            (i32.eq (local.get $next) (i32.const ";")))
           (then
             (call $lexLineComment (i32.const 2) (enum.get $Token.comment))
             (br $token)))
-        (if (i32.and (i32.eq (local.get $c) (i32.const "("))
-                     (i32.eq (local.get $next) (i32.const ";")))
+        (if
+          (i32.and
+            (i32.eq (local.get $c) (i32.const "("))
+            (i32.eq (local.get $next) (i32.const ";")))
           (then
             (call $watBlockComment)
             (br $token)))
@@ -163,8 +183,7 @@
             (call $watScanName (i32.const 0))
             (call $emitTok (enum.get $Token.variable) (local.get $lhs) (global.get $ptr))
             (br $token)))
-        (if (i32.or (i32.eq (local.get $c) (i32.const "("))
-                    (i32.eq (local.get $c) (i32.const ")")))
+        (if (i32.or (i32.eq (local.get $c) (i32.const "(")) (i32.eq (local.get $c) (i32.const ")")))
           (then
             (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
             (call $emitTok (enum.get $Token.punctuation.bracket) (local.get $lhs) (global.get $ptr))
@@ -172,12 +191,17 @@
         (if (i32.eq (local.get $c) (i32.const ";"))
           (then
             (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
-            (call $emitTok (enum.get $Token.punctuation.delimiter) (local.get $lhs) (global.get $ptr))
+            (call $emitTok
+              (enum.get $Token.punctuation.delimiter)
+              (local.get $lhs)
+              (global.get $ptr))
             (br $token)))
         (call $watScanName (i32.const "."))
         ;; the word run always advances: whitespace, quotes, parens and `;` are
         ;; the only stop bytes, and each is consumed by a branch above
-        (call $emitTok (call $watWordHl (local.get $lhs) (global.get $ptr))
-          (local.get $lhs) (global.get $ptr))
+        (call $emitTok
+          (call $watWordHl (local.get $lhs) (global.get $ptr))
+          (local.get $lhs)
+          (global.get $ptr))
         (br $token))))
 )

@@ -13,17 +13,21 @@
     (local.set $len (i32.sub (local.get $rhs) (local.get $lhs)))
     (if (i32.eq (local.get $len) (i32.const 6))
       (then
-        (if (i64.eq
-              (i64.or (i64.and (i64.load (local.get $lhs)) (i64.const 0xFFFFFFFFFFFF))
-                      (i64.const 0x202020202020))
-              (i64.const "script"))
+        (if
+          (i64.eq
+            (i64.or
+              (i64.and (i64.load (local.get $lhs)) (i64.const 0xFFFFFFFFFFFF))
+              (i64.const 0x202020202020))
+            (i64.const "script"))
           (then (return (i32.const 1))))))
     (if (i32.eq (local.get $len) (i32.const 5))
       (then
-        (if (i64.eq
-              (i64.or (i64.and (i64.load (local.get $lhs)) (i64.const 0xFFFFFFFFFF))
-                      (i64.const 0x2020202020))
-              (i64.const "style"))
+        (if
+          (i64.eq
+            (i64.or
+              (i64.and (i64.load (local.get $lhs)) (i64.const 0xFFFFFFFFFF))
+              (i64.const 0x2020202020))
+            (i64.const "style"))
           (then (return (i32.const 2))))))
     (i32.const 0))
 
@@ -37,29 +41,35 @@
         (if (i32.gt_u (i32.add (local.get $p) (i32.const 8)) (global.get $end))
           (then (return (i32.const 0))))
         ;; bytes p+1..p+7 = "/script" (letters folded)
-        (if (i64.ne
-              (i64.or (i64.and (i64.load offset=1 (local.get $p)) (i64.const 0x00FFFFFFFFFFFFFF))
-                      (i64.const 0x0020202020202000))
-              (i64.const "/script"))
+        (if
+          (i64.ne
+            (i64.or
+              (i64.and (i64.load offset=1 (local.get $p)) (i64.const 0x00FFFFFFFFFFFFFF))
+              (i64.const 0x0020202020202000))
+            (i64.const "/script"))
           (then (return (i32.const 0))))
         (local.set $tp (i32.add (local.get $p) (i32.const 8))))
       (else
         (if (i32.gt_u (i32.add (local.get $p) (i32.const 7)) (global.get $end))
           (then (return (i32.const 0))))
         ;; bytes p+1..p+6 = "/style" (letters folded)
-        (if (i64.ne
-              (i64.or (i64.and (i64.load offset=1 (local.get $p)) (i64.const 0xFFFFFFFFFFFF))
-                      (i64.const 0x202020202000))
-              (i64.const "/style"))
+        (if
+          (i64.ne
+            (i64.or
+              (i64.and (i64.load offset=1 (local.get $p)) (i64.const 0xFFFFFFFFFFFF))
+              (i64.const 0x202020202000))
+            (i64.const "/style"))
           (then (return (i32.const 0))))
         (local.set $tp (i32.add (local.get $p) (i32.const 7)))))
     ;; the close-tag name must end here: whitespace, `>`, `/`, or input end
-    (if (i32.ge_u (local.get $tp) (global.get $end)) (then (return (i32.const 1))))
+    (if (i32.ge_u (local.get $tp) (global.get $end))
+      (then (return (i32.const 1))))
     (local.set $t (i32.load8_u (local.get $tp)))
     (i32.or
       (i32.or (i32.eq (local.get $t) (i32.const ">")) (i32.eq (local.get $t) (i32.const "/")))
-      (i32.or (i32.eq (local.get $t) (i32.const 32))
-              (i32.le_u (i32.sub (local.get $t) (i32.const 9)) (i32.const 4)))))
+      (i32.or
+        (i32.eq (local.get $t) (i32.const 32))
+        (i32.le_u (i32.sub (local.get $t) (i32.const 9)) (i32.const 4)))))
 
   ;; scan a character reference at `&`; emits it as string.escape and returns 1,
   ;; or returns 0 leaving $ptr on the `&`
@@ -67,8 +77,10 @@
     (local $q i32)
     (local $c i32)
     (local.set $q (i32.add (global.get $ptr) (i32.const 1)))
-    (if (i32.and (i32.lt_u (local.get $q) (global.get $end))
-                 (i32.eq (i32.load8_u (local.get $q)) (i32.const "#")))
+    (if
+      (i32.and
+        (i32.lt_u (local.get $q) (global.get $end))
+        (i32.eq (i32.load8_u (local.get $q)) (i32.const "#")))
       (then (local.set $q (i32.add (local.get $q) (i32.const 1)))))
     (block $stop
       (loop $l
@@ -78,19 +90,29 @@
         (local.set $c (i32.load8_u (local.get $q)))
         (block $ok
           (br_if $ok (i32.le_u (i32.sub (local.get $c) (i32.const "0")) (i32.const 9)))
-          (br_if $ok (i32.le_u (i32.sub (i32.or (local.get $c) (i32.const 32)) (i32.const "a")) (i32.const 25)))
+          (br_if $ok
+            (i32.le_u
+              (i32.sub (i32.or (local.get $c) (i32.const 32)) (i32.const "a"))
+              (i32.const 25)))
           (br $stop))
         (local.set $q (i32.add (local.get $q) (i32.const 1)))
         (br $l)))
     ;; need at least one name character and a closing `;`
-    (if (i32.or
-          (i32.le_u (i32.sub (local.get $q) (global.get $ptr))
-            (select (i32.const 2) (i32.const 1)
-              (i32.eq (i32.load8_u offset=1 (global.get $ptr)) (i32.const "#"))))
-          (i32.or (i32.ge_u (local.get $q) (global.get $end))
-                  (i32.ne (i32.load8_u (local.get $q)) (i32.const ";"))))
+    (if
+      (i32.or
+        (i32.le_u
+          (i32.sub (local.get $q) (global.get $ptr))
+          (select
+            (i32.const 2)
+            (i32.const 1)
+            (i32.eq (i32.load8_u offset=1 (global.get $ptr)) (i32.const "#"))))
+        (i32.or
+          (i32.ge_u (local.get $q) (global.get $end))
+          (i32.ne (i32.load8_u (local.get $q)) (i32.const ";"))))
       (then (return (i32.const 0))))
-    (call $emitTok (enum.get $Token.string.special) (global.get $ptr)
+    (call $emitTok
+      (enum.get $Token.string.special)
+      (global.get $ptr)
       (i32.add (local.get $q) (i32.const 1)))
     (global.set $ptr (i32.add (local.get $q) (i32.const 1)))
     (i32.const 1))
@@ -100,8 +122,7 @@
   ;; complete comments), and the streaming checkpoint are byte-identical to an
   ;; XML comment section, so delegate.
   (func $htmlComment (param $lhs i32)
-    (call $xmlSection
-      (local.get $lhs) (i32.const 4) (i32.const 1) (enum.get $Token.comment)))
+    (call $xmlSection (local.get $lhs) (i32.const 4) (i32.const 1) (enum.get $Token.comment)))
 
   ;; `<!...>` declaration ($pi 0) or `<?...?>` processing instruction ($pi 1)
   ;; at $ptr: emit it as $hl, advancing past the close (or to $end). A token
@@ -115,9 +136,10 @@
       (loop $l
         (local.set $p (call $lexFindByte (local.get $p) (i32.const ">")))
         (br_if $found (i32.ge_u (local.get $p) (global.get $end)))
-        (br_if $found (i32.or
-          (i32.eqz (local.get $pi))
-          (i32.eq (i32.load8_u (i32.sub (local.get $p) (i32.const 1))) (i32.const "?"))))
+        (br_if $found
+          (i32.or
+            (i32.eqz (local.get $pi))
+            (i32.eq (i32.load8_u (i32.sub (local.get $p) (i32.const 1))) (i32.const "?"))))
         (local.set $p (i32.add (local.get $p) (i32.const 1)))
         (br $l)))
     (if (i32.lt_u (local.get $p) (global.get $end))
@@ -198,19 +220,21 @@
   ;; after-`=` flag, $streamC = open quote; the owning lexer's resume hook
   ;; calls back into this loop with them.
   (func $htmlAttrs
-    (param $afterEq i32) (param $quote i32) (param $kind i32) (param $region i32)
+    (param $afterEq i32)
+    (param $quote i32)
+    (param $kind i32)
+    (param $region i32)
     (result i32)
     (local $c i32)
     (local $lhs i32)
     (if (local.get $quote)
       (then (local.set $quote (call $htmlQuotedBody (local.get $quote) (global.get $ptr)))))
-    (block $done (result i32)
+    (block $done
+      (result i32)
       (loop $next
         (if (i32.ge_u (global.get $ptr) (global.get $end))
           (then
-            (if (i32.and
-                  (global.get $streaming)
-                  (i32.eq (global.get $ptr) (global.get $eof)))
+            (if (i32.and (global.get $streaming) (i32.eq (global.get $ptr) (global.get $eof)))
               (then
                 (call $streamSetRegion (local.get $region))
                 (global.set $streamA (local.get $kind))
@@ -220,8 +244,10 @@
         (local.set $c (i32.load8_u (global.get $ptr)))
         (local.set $lhs (global.get $ptr))
         ;; whitespace gap
-        (if (i32.or (i32.eq (local.get $c) (i32.const 32))
-                    (i32.le_u (i32.sub (local.get $c) (i32.const 9)) (i32.const 4)))
+        (if
+          (i32.or
+            (i32.eq (local.get $c) (i32.const 32))
+            (i32.le_u (i32.sub (local.get $c) (i32.const 9)) (i32.const 4)))
           (then
             (call $scanWhitespace)
             (call $emitGap (local.get $lhs) (global.get $ptr))
@@ -229,14 +255,18 @@
         (if (i32.eq (local.get $c) (i32.const ">"))
           (then
             (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
-            (call $emitTok (enum.get $Token.punctuation.bracket.html) (local.get $lhs) (global.get $ptr))
+            (call $emitTok
+              (enum.get $Token.punctuation.bracket.html)
+              (local.get $lhs)
+              (global.get $ptr))
             (br $done (i32.const 1))))
         ;; the value right after `=`: quoted, or an unquoted run (which may
         ;; contain `/` and `=`, so this comes before those branches)
         (if (local.get $afterEq)
           (then
             (local.set $afterEq (i32.const 0))
-            (if (i32.or (i32.eq (local.get $c) (i32.const 34)) (i32.eq (local.get $c) (i32.const 39)))
+            (if
+              (i32.or (i32.eq (local.get $c) (i32.const 34)) (i32.eq (local.get $c) (i32.const 39)))
               (then
                 (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
                 (local.set $quote (call $htmlQuotedBody (local.get $c) (local.get $lhs)))
@@ -250,18 +280,26 @@
           (then
             ;; `/>` or a stray slash
             (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
-            (if (i32.and (i32.lt_u (global.get $ptr) (global.get $end))
-                         (i32.eq (i32.load8_u (global.get $ptr)) (i32.const ">")))
+            (if
+              (i32.and
+                (i32.lt_u (global.get $ptr) (global.get $end))
+                (i32.eq (i32.load8_u (global.get $ptr)) (i32.const ">")))
               (then
                 (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
-                (call $emitTok (enum.get $Token.punctuation.bracket.html) (local.get $lhs) (global.get $ptr))
+                (call $emitTok
+                  (enum.get $Token.punctuation.bracket.html)
+                  (local.get $lhs)
+                  (global.get $ptr))
                 (br $done (i32.const 2))))
             (call $emitTok (enum.get $Token.none) (local.get $lhs) (global.get $ptr))
             (br $next)))
         (if (i32.eq (local.get $c) (i32.const "="))
           (then
             (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
-            (call $emitTok (enum.get $Token.punctuation.delimiter.html) (local.get $lhs) (global.get $ptr))
+            (call $emitTok
+              (enum.get $Token.punctuation.delimiter.html)
+              (local.get $lhs)
+              (global.get $ptr))
             (local.set $afterEq (i32.const 1))
             (br $next)))
         (if (i32.or (i32.eq (local.get $c) (i32.const 34)) (i32.eq (local.get $c) (i32.const 39)))
@@ -297,8 +335,8 @@
     ;; hand [from,to) to the embedded language over an $end swap
     (local.set $to (global.get $ptr))
     (local.set $save (global.get $end))
-    (local.set $continued (i32.and
-      (global.get $streaming) (i32.eq (local.get $to) (local.get $save))))
+    (local.set $continued
+      (i32.and (global.get $streaming) (i32.eq (local.get $to) (local.get $save))))
     (if (local.get $continued)
       (then (call $streamSetRegion (local.get $kind))))
     (global.set $end (local.get $to))
@@ -339,11 +377,12 @@
     (local.set $kind (call $rawTextKind (global.get $ptr) (local.get $q)))
     (call $emitTok (enum.get $Token.tag) (global.get $ptr) (local.get $q))
     (global.set $ptr (local.get $q))
-    (if (i32.and
-          (i32.ne
-            (call $htmlAttrs (i32.const 0) (i32.const 0) (local.get $kind) (local.get $region))
-            (i32.const 0))
-          (i32.ne (local.get $kind) (i32.const 0)))
+    (if
+      (i32.and
+        (i32.ne
+          (call $htmlAttrs (i32.const 0) (i32.const 0) (local.get $kind) (local.get $region))
+          (i32.const 0))
+        (i32.ne (local.get $kind) (i32.const 0)))
       (then (call $htmlRawText (local.get $kind)))))
 
   ;; The html main loop over [$ptr, $end). Frameworks that lex html between
@@ -360,8 +399,7 @@
         (br_if $done (i32.ge_u (global.get $ptr) (global.get $end)))
         ;; text run: everything up to the next `<` or `&`
         (local.set $textFrom (global.get $ptr))
-        (global.set $ptr (call $lexFindEither
-          (global.get $ptr) (i32.const "<") (i32.const "&")))
+        (global.set $ptr (call $lexFindEither (global.get $ptr) (i32.const "<") (i32.const "&")))
         (call $emitTok (enum.get $Token.none) (local.get $textFrom) (global.get $ptr))
         (br_if $done (i32.ge_u (global.get $ptr) (global.get $end)))
         (local.set $c (i32.load8_u (global.get $ptr)))
@@ -377,18 +415,21 @@
             (br $next)))
 
         ;; `<`: comment, declaration, close tag, open tag, or plain text
-        (local.set $c (select (i32.load8_u offset=1 (global.get $ptr)) (i32.const 0)
-          (i32.lt_u (i32.add (global.get $ptr) (i32.const 1)) (global.get $end))))
+        (local.set $c
+          (select
+            (i32.load8_u offset=1 (global.get $ptr))
+            (i32.const 0)
+            (i32.lt_u (i32.add (global.get $ptr) (i32.const 1)) (global.get $end))))
 
         ;; `<!--` / `<!...>` / `<?...?>`
         (if (i32.eq (local.get $c) (i32.const "!"))
           (then
-            (if (i32.and
-                  (i32.le_u (i32.add (global.get $ptr) (i32.const 4)) (global.get $end))
-                  (i32.eq (i32.load (global.get $ptr)) (i32.const "<!--")))
+            (if
+              (i32.and
+                (i32.le_u (i32.add (global.get $ptr) (i32.const 4)) (global.get $end))
+                (i32.eq (i32.load (global.get $ptr)) (i32.const "<!--")))
               (then (call $htmlComment (local.get $lhs)))
-              (else
-                (call $htmlDecl (local.get $lhs) (i32.const 0) (enum.get $Token.tag.doctype))))
+              (else (call $htmlDecl (local.get $lhs) (i32.const 0) (enum.get $Token.tag.doctype))))
             (br $next)))
         (if (i32.eq (local.get $c) (i32.const "?"))
           (then
@@ -399,7 +440,10 @@
         (if (i32.eq (local.get $c) (i32.const "/"))
           (then
             (global.set $ptr (i32.add (global.get $ptr) (i32.const 2)))
-            (call $emitTok (enum.get $Token.punctuation.bracket.html) (local.get $lhs) (global.get $ptr))
+            (call $emitTok
+              (enum.get $Token.punctuation.bracket.html)
+              (local.get $lhs)
+              (global.get $ptr))
             (local.set $q (call $htmlNameEnd (global.get $ptr)))
             (call $emitTok (enum.get $Token.tag) (global.get $ptr) (local.get $q))
             (global.set $ptr (local.get $q))
@@ -407,9 +451,14 @@
             (br $next)))
 
         ;; `<name`: an open tag only when a name really starts here
-        (if (i32.or
-              (i32.le_u (i32.sub (i32.or (local.get $c) (i32.const 32)) (i32.const "a")) (i32.const 25))
-              (i32.or (i32.eq (local.get $c) (i32.const "_")) (i32.ge_u (local.get $c) (i32.const 128))))
+        (if
+          (i32.or
+            (i32.le_u
+              (i32.sub (i32.or (local.get $c) (i32.const 32)) (i32.const "a"))
+              (i32.const 25))
+            (i32.or
+              (i32.eq (local.get $c) (i32.const "_"))
+              (i32.ge_u (local.get $c) (i32.const 128))))
           (then
             (call $htmlTag (local.get $region))
             (br $next)))
@@ -431,17 +480,14 @@
   ;; region 1/2. The resume hooks run at stream depth 1 so embedded lexers
   ;; behave as they do under the html root; this resets the depth.
   (func $htmlTagResumeEnd (param $status i32) (param $kind i32) (result i32)
-    (if (i32.and
-          (i32.eqz (local.get $status))
-          (i32.eq (global.get $ptr) (global.get $eof)))
+    (if (i32.and (i32.eqz (local.get $status)) (i32.eq (global.get $ptr) (global.get $eof)))
       (then
         (global.set $streamDepth (i32.const 0))
         (return (i32.const 1))))
     (global.set $streamRegionKind (i32.const 0))
     (global.set $streamMode (i32.const 0))
-    (if (i32.and
-          (i32.ne (local.get $status) (i32.const 0))
-          (i32.ne (local.get $kind) (i32.const 0)))
+    (if
+      (i32.and (i32.ne (local.get $status) (i32.const 0)) (i32.ne (local.get $kind) (i32.const 0)))
       (then (call $htmlRawText (local.get $kind))))
     (global.set $streamDepth (i32.const 0))
     (i32.const 0))
@@ -454,7 +500,10 @@
     (global.set $streamDepth (i32.const 1))
     (call $htmlTagResumeEnd
       (call $htmlAttrs
-        (global.get $streamB) (global.get $streamC) (local.get $kind) (local.get $region))
+        (global.get $streamB)
+        (global.get $streamC)
+        (local.get $kind)
+        (local.get $region))
       (local.get $kind)))
 
   ;; Resume stream region 9: a start tag whose attributes continue past

@@ -2,8 +2,7 @@
   (import "../common.wat")
 
   (func $cmakeByte (param $p i32) (result i32)
-    (select (i32.load8_u (local.get $p)) (i32.const 0)
-      (i32.lt_u (local.get $p) (global.get $end))))
+    (select (i32.load8_u (local.get $p)) (i32.const 0) (i32.lt_u (local.get $p) (global.get $end))))
 
   ;; Commands are case-insensitive, so groups 1-3 hold lowercase command
   ;; names that $cmakeCommandGroup probes with a lowercased copy of the word.
@@ -12,19 +11,17 @@
   ;; dispatch order in $hlCmake.
   (keyword-table $cmakeWords $mem.cmakeWords $mem.cppWords
     (group ;; 1: flow control
-      "if" "elseif" "else" "endif" "foreach" "endforeach" "while" "endwhile"
-      "break" "continue" "return" "function" "endfunction" "macro" "endmacro"
-      "block" "endblock")
+      "if" "elseif" "else" "endif" "foreach" "endforeach" "while" "endwhile" "break" "continue"
+      "return" "function" "endfunction" "macro" "endmacro" "block" "endblock")
     (group ;; 2: bringing in modules, packages, and directories
-      "include" "find_package" "add_subdirectory" "include_directories"
-      "find_library" "find_program" "find_path" "find_file" "include_guard")
+      "include" "find_package" "add_subdirectory" "include_directories" "find_library"
+      "find_program" "find_path" "find_file" "include_guard")
     (group "set" "unset" "option") ;; 3: the first argument names a variable
     (group ;; 4: condition operators
-      "AND" "OR" "NOT" "EQUAL" "LESS" "GREATER" "LESS_EQUAL" "GREATER_EQUAL"
-      "STREQUAL" "STRLESS" "STRGREATER" "VERSION_LESS" "VERSION_GREATER"
-      "VERSION_EQUAL" "VERSION_LESS_EQUAL" "VERSION_GREATER_EQUAL" "MATCHES"
-      "DEFINED" "EXISTS" "COMMAND" "POLICY" "TARGET" "TEST" "IS_DIRECTORY"
-      "IS_ABSOLUTE" "IS_SYMLINK" "IS_NEWER_THAN" "IN_LIST" "PATH_EQUAL")
+      "AND" "OR" "NOT" "EQUAL" "LESS" "GREATER" "LESS_EQUAL" "GREATER_EQUAL" "STREQUAL" "STRLESS"
+      "STRGREATER" "VERSION_LESS" "VERSION_GREATER" "VERSION_EQUAL" "VERSION_LESS_EQUAL"
+      "VERSION_GREATER_EQUAL" "MATCHES" "DEFINED" "EXISTS" "COMMAND" "POLICY" "TARGET" "TEST"
+      "IS_DIRECTORY" "IS_ABSOLUTE" "IS_SYMLINK" "IS_NEWER_THAN" "IN_LIST" "PATH_EQUAL")
     (group ;; 5: boolean constants
       "ON" "OFF" "TRUE" "FALSE" "YES" "NO" "IGNORE" "NOTFOUND"))
 
@@ -33,8 +30,8 @@
   ;; $cmakeIsCondition.
   (func $cmakeCommandGroup (param $lhs i32) (param $rhs i32) (result i32)
     (local $n i32)
-    (local.set $n (call $lexLowerCopy
-      (local.get $lhs) (local.get $rhs) (i32.const $mem.lexLowerScratch)))
+    (local.set $n
+      (call $lexLowerCopy (local.get $lhs) (local.get $rhs) (i32.const $mem.lexLowerScratch)))
     (keyword-table.get $cmakeWords
       (i32.const $mem.lexLowerScratch)
       (i32.add (i32.const $mem.lexLowerScratch) (local.get $n))))
@@ -44,16 +41,19 @@
   ;; operator words.
   (func $cmakeIsCondition (param $n i32) (result i32)
     (if (i32.eq (local.get $n) (i32.const 2))
-      (then (return (i32.eq
-        (i32.load16_u (i32.const $mem.lexLowerScratch)) (i32.const "if")))))
+      (then (return (i32.eq (i32.load16_u (i32.const $mem.lexLowerScratch)) (i32.const "if")))))
     (if (i32.eq (local.get $n) (i32.const 5))
-      (then (return (i32.and
-        (i32.eq (i32.load (i32.const $mem.lexLowerScratch)) (i32.const "whil"))
-        (i32.eq (i32.load8_u (i32.const $mem.lexLowerScratch+4)) (i32.const "e"))))))
+      (then
+        (return
+          (i32.and
+            (i32.eq (i32.load (i32.const $mem.lexLowerScratch)) (i32.const "whil"))
+            (i32.eq (i32.load8_u (i32.const $mem.lexLowerScratch+4)) (i32.const "e"))))))
     (if (i32.eq (local.get $n) (i32.const 6))
-      (then (return (i32.and
-        (i32.eq (i32.load (i32.const $mem.lexLowerScratch)) (i32.const "else"))
-        (i32.eq (i32.load16_u (i32.const $mem.lexLowerScratch+4)) (i32.const "if"))))))
+      (then
+        (return
+          (i32.and
+            (i32.eq (i32.load (i32.const $mem.lexLowerScratch)) (i32.const "else"))
+            (i32.eq (i32.load16_u (i32.const $mem.lexLowerScratch+4)) (i32.const "if"))))))
     (i32.const 0))
 
   ;; The number of `=` between the brackets of a `[=*[` opener at $p, or -1
@@ -67,9 +67,10 @@
         (local.set $p (i32.add (local.get $p) (i32.const 1)))
         (local.set $n (i32.add (local.get $n) (i32.const 1)))
         (br $l)))
-    (if (i32.or
-          (i32.ne (call $cmakeByte (local.get $p)) (i32.const "["))
-          (i32.gt_u (local.get $n) (i32.const 30)))
+    (if
+      (i32.or
+        (i32.ne (call $cmakeByte (local.get $p)) (i32.const "["))
+        (i32.gt_u (local.get $n) (i32.const 30)))
       (then (return (i32.const -1))))
     (local.get $n))
 
@@ -90,7 +91,8 @@
     (if (call $streamResumeFixed)
       (then
         (call $streamSetFixed
-          (i32.const $mem.streamDelimiter) (i32.add (local.get $n) (i32.const 2))
+          (i32.const $mem.streamDelimiter)
+          (i32.add (local.get $n) (i32.const 2))
           (local.get $hl)))
       (else
         (global.set $streamA (i32.const 0))
@@ -107,9 +109,7 @@
         (br_if $done (i32.gt_u (i32.sub (local.get $c) (i32.const "A")) (i32.const 25)))
         (local.set $p (i32.add (local.get $p) (i32.const 1)))
         (br $l)))
-    (i32.or
-      (i32.eq (local.get $c) (i32.const "{"))
-      (i32.eq (local.get $c) (i32.const "<"))))
+    (i32.or (i32.eq (local.get $c) (i32.const "{")) (i32.eq (local.get $c) (i32.const "<"))))
 
   ;; Emit the reference opening at $ptr: `${name}`, `$ENV{name}`, and
   ;; `$CACHE{name}` as one variable through the brace balancing the opener,
@@ -117,26 +117,34 @@
   ;; balancing `>`. Neither crosses a line break, so a whole-buffer run and a
   ;; line-fed stream agree; an unbalanced reference ends at the break.
   (func $cmakeReference
-    (local $lhs i32) (local $c i32) (local $depth i32)
-    (local $open i32) (local $close i32) (local $hl i32)
+    (local $lhs i32)
+    (local $c i32)
+    (local $depth i32)
+    (local $open i32)
+    (local $close i32)
+    (local $hl i32)
     (local.set $lhs (global.get $ptr))
     (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
     (block $wordDone
       (loop $word
-        (br_if $wordDone (i32.gt_u
-          (i32.sub (call $cmakeByte (global.get $ptr)) (i32.const "A")) (i32.const 25)))
+        (br_if $wordDone
+          (i32.gt_u (i32.sub (call $cmakeByte (global.get $ptr)) (i32.const "A")) (i32.const 25)))
         (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
         (br $word)))
     (local.set $open (call $cmakeByte (global.get $ptr)))
-    (local.set $close (select (i32.const ">") (i32.const "}")
-      (i32.eq (local.get $open) (i32.const "<"))))
-    (local.set $hl (select (enum.get $Token.string.special) (enum.get $Token.variable)
-      (i32.eq (local.get $open) (i32.const "<"))))
+    (local.set $close
+      (select (i32.const ">") (i32.const "}") (i32.eq (local.get $open) (i32.const "<"))))
+    (local.set $hl
+      (select
+        (enum.get $Token.string.special)
+        (enum.get $Token.variable)
+        (i32.eq (local.get $open) (i32.const "<"))))
     (block $done
       (loop $l
         (br_if $done (i32.ge_u (global.get $ptr) (global.get $end)))
         (local.set $c (i32.load8_u (global.get $ptr)))
-        (br_if $done (i32.or (i32.eq (local.get $c) (i32.const 10)) (i32.eq (local.get $c) (i32.const 13))))
+        (br_if $done
+          (i32.or (i32.eq (local.get $c) (i32.const 10)) (i32.eq (local.get $c) (i32.const 13))))
         (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
         (if (i32.eq (local.get $c) (local.get $open))
           (then (local.set $depth (i32.add (local.get $depth) (i32.const 1)))))
@@ -152,11 +160,13 @@
   ;; separately, and the body may span lines. Returns 1 past the closing
   ;; quote and 0 when the body stops at $end.
   (func $cmakeQuotedBody (param $seg i32) (result i32)
-    (local $c i32) (local $e i32) (local $p i32)
+    (local $c i32)
+    (local $e i32)
+    (local $p i32)
     (block $done
       (loop $scan
-        (local.set $p (call $scanFind3
-          (global.get $ptr) (i32.const 34) (i32.const 92) (i32.const "$")))
+        (local.set $p
+          (call $scanFind3 (global.get $ptr) (i32.const 34) (i32.const 92) (i32.const "$")))
         (if (i32.ge_u (local.get $p) (global.get $end))
           (then
             (global.set $ptr (global.get $end))
@@ -193,9 +203,7 @@
   (func $cmakeIsWordByte (param $c i32) (result i32)
     (i32.and
       (i32.ne (local.get $c) (i32.const "$"))
-      (i32.or
-        (call $lexIsIdentContinue (local.get $c))
-        (byteset.get "+-./:" (local.get $c)))))
+      (i32.or (call $lexIsIdentContinue (local.get $c)) (byteset.get "+-./:" (local.get $c)))))
 
   (func $cmakeScanWord
     (block $done
@@ -213,9 +221,18 @@
   ;; variable. $strOpen is 1 while a quoted argument continues past a chunk
   ;; boundary. All are checkpointed.
   (func $hlCmake
-    (local $c i32) (local $c2 i32) (local $gap i32) (local $lhs i32) (local $rhs i32)
-    (local $g i32) (local $n i32) (local $hl i32)
-    (local $depth i32) (local $cond i32) (local $setVar i32) (local $strOpen i32)
+    (local $c i32)
+    (local $c2 i32)
+    (local $gap i32)
+    (local $lhs i32)
+    (local $rhs i32)
+    (local $g i32)
+    (local $n i32)
+    (local $hl i32)
+    (local $depth i32)
+    (local $cond i32)
+    (local $setVar i32)
+    (local $strOpen i32)
     (call $lexEmitLeadingContinuation)
     (block $done
       (loop $next
@@ -240,7 +257,9 @@
           (then
             (local.set $n (i32.const -1))
             (if (i32.eq (local.get $c2) (i32.const "["))
-              (then (local.set $n (call $cmakeBracketEquals (i32.add (global.get $ptr) (i32.const 1))))))
+              (then
+                (local.set $n
+                  (call $cmakeBracketEquals (i32.add (global.get $ptr) (i32.const 1))))))
             (if (i32.ge_s (local.get $n) (i32.const 0))
               (then
                 (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
@@ -264,7 +283,8 @@
               (then (local.set $strOpen (i32.const 1))))
             (local.set $setVar (i32.const 0))
             (br $next)))
-        (if (i32.and (i32.eq (local.get $c) (i32.const "$")) (call $cmakeIsRefOpen (global.get $ptr)))
+        (if
+          (i32.and (i32.eq (local.get $c) (i32.const "$")) (call $cmakeIsRefOpen (global.get $ptr)))
           (then
             (call $cmakeReference)
             (local.set $setVar (i32.const 0))
@@ -290,7 +310,10 @@
         (if (i32.eq (local.get $c) (i32.const ";"))
           (then
             (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
-            (call $emitTok (enum.get $Token.punctuation.delimiter) (local.get $lhs) (global.get $ptr))
+            (call $emitTok
+              (enum.get $Token.punctuation.delimiter)
+              (local.get $lhs)
+              (global.get $ptr))
             (br $next)))
 
         ;; a number stands alone: `3.16`, `17`; digits that lead into a name
@@ -311,7 +334,8 @@
             (if (i32.eqz (local.get $depth))
               (then
                 (local.set $g (call $cmakeCommandGroup (local.get $lhs) (local.get $rhs)))
-                (local.set $cond (call $cmakeIsCondition (i32.sub (local.get $rhs) (local.get $lhs))))
+                (local.set $cond
+                  (call $cmakeIsCondition (i32.sub (local.get $rhs) (local.get $lhs))))
                 (local.set $setVar (i32.eq (local.get $g) (i32.const 3)))
                 (local.set $hl (enum.get $Token.function))
                 (if (i32.eq (local.get $g) (i32.const 1))
@@ -320,8 +344,11 @@
                   (then (local.set $hl (enum.get $Token.keyword.import)))))
               (else
                 (local.set $g (keyword-table.get $cmakeWords (local.get $lhs) (local.get $rhs)))
-                (local.set $hl (select (enum.get $Token.constant) (enum.get $Token.none)
-                  (call $lexIsConstCase (local.get $lhs) (local.get $rhs))))
+                (local.set $hl
+                  (select
+                    (enum.get $Token.constant)
+                    (enum.get $Token.none)
+                    (call $lexIsConstCase (local.get $lhs) (local.get $rhs))))
                 (if (local.get $setVar)
                   (then (local.set $hl (enum.get $Token.variable))))
                 (if (i32.and (i32.eq (local.get $g) (i32.const 4)) (local.get $cond))
@@ -332,7 +359,8 @@
             (call $emitTok (local.get $hl) (local.get $lhs) (local.get $rhs))
             (br $next)))
 
-        (global.set $ptr (call $utf8SpanEnd (i32.add (global.get $ptr) (i32.const 1)) (global.get $end)))
+        (global.set $ptr
+          (call $utf8SpanEnd (i32.add (global.get $ptr) (i32.const 1)) (global.get $end)))
         (call $emitTok (enum.get $Token.none) (local.get $lhs) (global.get $ptr))
         (br $next))))
 )

@@ -8,8 +8,8 @@
   ;; group order is the dispatch order in $bashWordHl below
   (keyword-table $bashWords $mem.bashWords $mem.c3Words
     (group ;; 1: control
-      "do" "fi" "if" "in" "for" "case" "done" "elif" "else" "esac" "then"
-      "break" "until" "while" "return" "select" "continue")
+      "do" "fi" "if" "in" "for" "case" "done" "elif" "else" "esac" "then" "break" "until" "while"
+      "return" "select" "continue")
     (group ;; 2: declaration
       "local" "export" "declare" "readonly" "typeset")
     (group "function")       ;; 3: declaration, next name is a function
@@ -29,9 +29,7 @@
   ;; `$@`, `$*`, `$#`, `$?`, `$!`, `$-` and `$1`..`$9`. A `$` before anything
   ;; else - a quote, a space, end of input - is a literal dollar sign.
   (func $bashIsSpecialParam (param $c i32) (result i32)
-    (i32.or
-      (call $lexIsDigit (local.get $c))
-      (byteset.get "!#*-?@" (local.get $c))))
+    (i32.or (call $lexIsDigit (local.get $c)) (byteset.get "!#*-?@" (local.get $c))))
 
   ;; A word is an identifier run extended over `-`, `/` and `.` - `apt-get`,
   ;; `./run.sh`, `a.b` - so paths and dashed commands stay one token. `$` ends
@@ -45,9 +43,8 @@
         (call $scanIdentRun (i32.const "-"))
         (br_if $done (i32.ge_u (global.get $ptr) (global.get $end)))
         (local.set $c (i32.load8_u (global.get $ptr)))
-        (br_if $done (i32.and
-          (i32.ne (local.get $c) (i32.const "/"))
-          (i32.ne (local.get $c) (i32.const "."))))
+        (br_if $done
+          (i32.and (i32.ne (local.get $c) (i32.const "/")) (i32.ne (local.get $c) (i32.const "."))))
         (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
         (br $l))))
 
@@ -55,7 +52,11 @@
   (func $bashHasNl (param $lhs i32) (param $rhs i32) (result i32)
     (i32.lt_u
       (call $scanFindSpecial
-        (local.get $lhs) (local.get $rhs) (i32.const 10) (i32.const 0) (i32.const 1))
+        (local.get $lhs)
+        (local.get $rhs)
+        (i32.const 10)
+        (i32.const 0)
+        (i32.const 1))
       (local.get $rhs)))
 
   ;; Scan the body of a quoted `$(`/`$((` substitution from $ptr with $depth
@@ -68,14 +69,14 @@
     (local.set $seg (global.get $ptr))
     (block $done
       (loop $sub
-        (global.set $ptr (call $lexFindEither
-          (global.get $ptr) (i32.const "(") (i32.const ")")))
+        (global.set $ptr (call $lexFindEither (global.get $ptr) (i32.const "(") (i32.const ")")))
         (br_if $done (i32.ge_u (global.get $ptr) (global.get $end)))
         (if (i32.eq (i32.load8_u (global.get $ptr)) (i32.const "("))
           (then (local.set $depth (i32.add (local.get $depth) (i32.const 1))))
           (else
             (local.set $depth (i32.sub (local.get $depth) (i32.const 1)))
-            (if (i32.eqz (local.get $depth)) (then (br $done)))))
+            (if (i32.eqz (local.get $depth))
+              (then (br $done)))))
         (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
         (br $sub)))
     (call $emitTok (enum.get $Token.string.special) (local.get $seg) (global.get $ptr))
@@ -95,8 +96,8 @@
   (func $bashBraceScan (result i32)
     (local $seg i32)
     (local.set $seg (global.get $ptr))
-    (global.set $ptr (call $scanFind3
-      (global.get $ptr) (i32.const "}") (i32.const 10) (i32.const 13)))
+    (global.set $ptr
+      (call $scanFind3 (global.get $ptr) (i32.const "}") (i32.const 10) (i32.const 13)))
     (call $emitTok (enum.get $Token.variable) (local.get $seg) (global.get $ptr))
     (if (i32.ge_u (global.get $ptr) (global.get $end))
       (then (return (i32.const 0))))
@@ -128,15 +129,17 @@
       (then
         (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
         (call $emitTok (enum.get $Token.punctuation.special) (local.get $lhs) (global.get $ptr))
-        (if (call $bashBraceScan) (then (return (i32.const 0))))
+        (if (call $bashBraceScan)
+          (then (return (i32.const 0))))
         (return (i32.const -1))))
     (if (i32.eq (local.get $c) (i32.const "("))
       (then
         (local.set $close (i32.const 1))
         (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
-        (if (i32.and
-              (i32.lt_u (global.get $ptr) (global.get $end))
-              (i32.eq (i32.load8_u (global.get $ptr)) (i32.const "(")))
+        (if
+          (i32.and
+            (i32.lt_u (global.get $ptr) (global.get $end))
+            (i32.eq (i32.load8_u (global.get $ptr)) (i32.const "(")))
           (then
             (local.set $close (i32.const 2))
             (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))))
@@ -147,12 +150,11 @@
               (then (global.set $bashArith (i32.add (global.get $bashArith) (i32.const 1)))))
             (return (i32.const 0))))
         (return (call $bashSubstScan (local.get $close)))))
-    (if (i32.and (call $lexIsIdentStart (local.get $c))
-                 (i32.ne (local.get $c) (i32.const "$")))
+    (if (i32.and (call $lexIsIdentStart (local.get $c)) (i32.ne (local.get $c) (i32.const "$")))
       (then (call $scanIdentRun (i32.const 0)))
       (else
-        (if (i32.or (i32.eq (local.get $c) (i32.const "$"))
-                    (call $bashIsSpecialParam (local.get $c)))
+        (if
+          (i32.or (i32.eq (local.get $c) (i32.const "$")) (call $bashIsSpecialParam (local.get $c)))
           (then (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))))))
     (call $emitTok (enum.get $Token.variable) (local.get $lhs) (global.get $ptr))
     (i32.const 0))
@@ -172,12 +174,20 @@
     (local $stop i32)
     (block $done
       (loop $l
-        (local.set $stop (call $scanFindSpecial
-          (global.get $ptr) (global.get $end) (i32.const 34)
-          (i32.const 1) (i32.const 0)))
-        (global.set $ptr (call $scanFindSpecial
-          (global.get $ptr) (local.get $stop) (i32.const "$")
-          (i32.const 0) (i32.const 0)))
+        (local.set $stop
+          (call $scanFindSpecial
+            (global.get $ptr)
+            (global.get $end)
+            (i32.const 34)
+            (i32.const 1)
+            (i32.const 0)))
+        (global.set $ptr
+          (call $scanFindSpecial
+            (global.get $ptr)
+            (local.get $stop)
+            (i32.const "$")
+            (i32.const 0)
+            (i32.const 0)))
         (br_if $done (i32.ge_u (global.get $ptr) (global.get $end)))
         (local.set $c (i32.load8_u (global.get $ptr)))
         (if (i32.eq (local.get $c) (i32.const 34))
@@ -188,8 +198,8 @@
         (if (i32.eq (local.get $c) (i32.const 92))
           (then
             (call $emitTok (enum.get $Token.string) (local.get $seg) (global.get $ptr))
-            (local.set $e (call $utf8SpanEnd
-              (i32.add (global.get $ptr) (i32.const 2)) (global.get $end)))
+            (local.set $e
+              (call $utf8SpanEnd (i32.add (global.get $ptr) (i32.const 2)) (global.get $end)))
             (call $emitTok (enum.get $Token.string.escape) (global.get $ptr) (local.get $e))
             (global.set $ptr (local.get $e))
             (local.set $seg (global.get $ptr))
@@ -204,8 +214,8 @@
         (br $l)))
     (call $emitTok (enum.get $Token.string) (local.get $seg) (global.get $ptr))
     ;; $open is only nonzero when the last expansion ran into $end
-    (global.set $streamA (select
-      (local.get $open) (i32.const 0) (i32.gt_s (local.get $open) (i32.const 0))))
+    (global.set $streamA
+      (select (local.get $open) (i32.const 0) (i32.gt_s (local.get $open) (i32.const 0))))
     (global.set $streamB (i32.eq (local.get $open) (i32.const -1)))
     (i32.const 0))
 
@@ -215,11 +225,10 @@
     (local $lhs i32)
     (local.set $lhs (global.get $ptr))
     (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
-    (if (i32.and
-          (i32.eqz (call $bashDoubleBody (local.get $lhs)))
-          (i32.and
-            (global.get $streaming)
-            (i32.eq (global.get $ptr) (global.get $end))))
+    (if
+      (i32.and
+        (i32.eqz (call $bashDoubleBody (local.get $lhs)))
+        (i32.and (global.get $streaming) (i32.eq (global.get $ptr) (global.get $end))))
       (then
         (global.set $streamMode (i32.const 12))
         (global.set $streamHl (enum.get $Token.string)))))
@@ -229,9 +238,10 @@
     (block $done
       (loop $l
         (br_if $done (i32.ge_u (local.get $i) (local.get $n)))
-        (if (i32.ne
-              (i32.load8_u (i32.add (local.get $a) (local.get $i)))
-              (i32.load8_u (i32.add (local.get $b) (local.get $i))))
+        (if
+          (i32.ne
+            (i32.load8_u (i32.add (local.get $a) (local.get $i)))
+            (i32.load8_u (i32.add (local.get $b) (local.get $i))))
           (then (return (i32.const 0))))
         (local.set $i (i32.add (local.get $i) (i32.const 1)))
         (br $l)))
@@ -240,9 +250,7 @@
   ;; A bare heredoc delimiter is a word: bash ends it at whitespace or at a
   ;; metacharacter, so `<<EOF|tr` and `<<EOF;echo` take `EOF` alone.
   (func $bashIsWordEnd (param $c i32) (result i32)
-    (i32.or
-      (call $lexIsSpace (local.get $c))
-      (byteset.get "&();<>|" (local.get $c))))
+    (i32.or (call $lexIsSpace (local.get $c)) (byteset.get "&();<>|" (local.get $c))))
 
   ;; Consume the body of a here-document from $ptr, the start of the line
   ;; after its opener, through the line holding the $n-byte delimiter at
@@ -266,15 +274,18 @@
                 (br_if $tabsDone (i32.ne (i32.load8_u (local.get $line)) (i32.const 9)))
                 (local.set $line (i32.add (local.get $line) (i32.const 1)))
                 (br $tabs)))))
-        (if (i32.and
-              (i32.le_u (i32.add (local.get $line) (local.get $n)) (global.get $end))
-              (i32.and
-                (call $bashRangeEq (local.get $line) (local.get $delim) (local.get $n))
+        (if
+          (i32.and
+            (i32.le_u (i32.add (local.get $line) (local.get $n)) (global.get $end))
+            (i32.and
+              (call $bashRangeEq (local.get $line) (local.get $delim) (local.get $n))
+              (i32.or
+                (i32.eq (i32.add (local.get $line) (local.get $n)) (global.get $end))
                 (i32.or
-                  (i32.eq (i32.add (local.get $line) (local.get $n)) (global.get $end))
-                  (i32.or
-                    (i32.eq (i32.load8_u (i32.add (local.get $line) (local.get $n))) (i32.const 10))
-                    (i32.eq (i32.load8_u (i32.add (local.get $line) (local.get $n))) (i32.const 13))))))
+                  (i32.eq (i32.load8_u (i32.add (local.get $line) (local.get $n))) (i32.const 10))
+                  (i32.eq
+                    (i32.load8_u (i32.add (local.get $line) (local.get $n)))
+                    (i32.const 13))))))
           (then
             (call $emitTok (enum.get $Token.string) (local.get $body) (global.get $ptr))
             (local.set $lhs (global.get $ptr))
@@ -289,7 +300,9 @@
         (br $lines)))
     (call $emitTok (enum.get $Token.string) (local.get $body) (global.get $ptr))
     (call $streamSetLine
-      (local.get $delim) (local.get $n) (local.get $strip)
+      (local.get $delim)
+      (local.get $n)
+      (local.get $strip)
       (enum.get $Token.string)))
 
   (func $bashIsOp (param $c i32) (result i32)
@@ -316,9 +329,10 @@
     (local $rhs i32)
     ;; a whole-buffer run, a stream reset, or an embedded range starts outside
     ;; any `$((`; a continued stream chunk keeps the count from the last one
-    (if (i32.or
-          (i32.eqz (global.get $streaming))
-          (i32.or (global.get $streamReset) (global.get $streamDepth)))
+    (if
+      (i32.or
+        (i32.eqz (global.get $streaming))
+        (i32.or (global.get $streamReset) (global.get $streamDepth)))
       (then (global.set $bashArith (i32.const 0))))
     (call $lexEmitLeadingContinuation)
     ;; command position holds at a line start; a chunk that resumes after a
@@ -327,9 +341,8 @@
     (if (i32.gt_u (global.get $ptr) (global.get $srcBase))
       (then
         (local.set $c (i32.load8_u (i32.sub (global.get $ptr) (i32.const 1))))
-        (local.set $cmd (i32.or
-          (i32.eq (local.get $c) (i32.const 10))
-          (i32.eq (local.get $c) (i32.const 13))))))
+        (local.set $cmd
+          (i32.or (i32.eq (local.get $c) (i32.const 10)) (i32.eq (local.get $c) (i32.const 13))))))
     (block $done
       (loop $next
         (local.set $gap (global.get $ptr))
@@ -338,25 +351,26 @@
             ;; the pending heredoc body starts after this line's break, so
             ;; skip blanks only and consume just the LF or CRLF
             (global.set $ptr (call $lexSkipSpaceAt (global.get $ptr)))
-            (if (i32.and
-                  (i32.lt_u (global.get $ptr) (global.get $end))
-                  (i32.and
-                    (i32.le_u (i32.add (local.get $hdDelim) (local.get $hdLen)) (global.get $ptr))
-                    (i32.or
-                      (i32.eq (i32.load8_u (global.get $ptr)) (i32.const 10))
-                      (i32.eq (i32.load8_u (global.get $ptr)) (i32.const 13)))))
+            (if
+              (i32.and
+                (i32.lt_u (global.get $ptr) (global.get $end))
+                (i32.and
+                  (i32.le_u (i32.add (local.get $hdDelim) (local.get $hdLen)) (global.get $ptr))
+                  (i32.or
+                    (i32.eq (i32.load8_u (global.get $ptr)) (i32.const 10))
+                    (i32.eq (i32.load8_u (global.get $ptr)) (i32.const 13)))))
               (then
                 (local.set $c (i32.load8_u (global.get $ptr)))
                 (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
-                (if (i32.and
-                      (i32.eq (local.get $c) (i32.const 13))
-                      (i32.and
-                        (i32.lt_u (global.get $ptr) (global.get $end))
-                        (i32.eq (i32.load8_u (global.get $ptr)) (i32.const 10))))
+                (if
+                  (i32.and
+                    (i32.eq (local.get $c) (i32.const 13))
+                    (i32.and
+                      (i32.lt_u (global.get $ptr) (global.get $end))
+                      (i32.eq (i32.load8_u (global.get $ptr)) (i32.const 10))))
                   (then (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))))
                 (call $emitGap (local.get $gap) (global.get $ptr))
-                (call $bashHeredocBody
-                  (local.get $hdDelim) (local.get $hdLen) (local.get $hdStrip))
+                (call $bashHeredocBody (local.get $hdDelim) (local.get $hdLen) (local.get $hdStrip))
                 (local.set $hdLen (i32.const 0))
                 (local.set $cmd (i32.const 1))
                 (br $next)))))
@@ -371,14 +385,16 @@
         (br_if $done (i32.ge_u (global.get $ptr) (global.get $end)))
         (local.set $lhs (global.get $ptr))
         (local.set $c (i32.load8_u (global.get $ptr)))
-        (local.set $c2 (select
-          (i32.load8_u offset=1 (global.get $ptr)) (i32.const 0)
-          (i32.lt_u (i32.add (global.get $ptr) (i32.const 1)) (global.get $end))))
+        (local.set $c2
+          (select
+            (i32.load8_u offset=1 (global.get $ptr))
+            (i32.const 0)
+            (i32.lt_u (i32.add (global.get $ptr) (i32.const 1)) (global.get $end))))
 
-        (if (i32.and
-              (i32.eq (local.get $c) (i32.const "#"))
-              (i32.or (local.get $cmd)
-                      (i32.lt_u (local.get $gap) (global.get $ptr))))
+        (if
+          (i32.and
+            (i32.eq (local.get $c) (i32.const "#"))
+            (i32.or (local.get $cmd) (i32.lt_u (local.get $gap) (global.get $ptr))))
           (then
             (call $lexLineComment (i32.const 1) (enum.get $Token.comment))
             (br $next)))
@@ -415,20 +431,23 @@
         ;; delimiter word; the rest of the line lexes normally and the body
         ;; is consumed at the line break (see $hdLen above). A second heredoc
         ;; on the same line keeps its word but the first delimiter wins.
-        (if (i32.and
-              (i32.and (i32.eq (local.get $c) (i32.const "<"))
-                       (i32.eq (local.get $c2) (i32.const "<")))
-              (i32.and
-                (i32.eqz (global.get $bashArith))
-                (i32.or
-                  (i32.ge_u (i32.add (global.get $ptr) (i32.const 2)) (global.get $end))
-                  (i32.ne (i32.load8_u offset=2 (global.get $ptr)) (i32.const "<")))))
+        (if
+          (i32.and
+            (i32.and
+              (i32.eq (local.get $c) (i32.const "<"))
+              (i32.eq (local.get $c2) (i32.const "<")))
+            (i32.and
+              (i32.eqz (global.get $bashArith))
+              (i32.or
+                (i32.ge_u (i32.add (global.get $ptr) (i32.const 2)) (global.get $end))
+                (i32.ne (i32.load8_u offset=2 (global.get $ptr)) (i32.const "<")))))
           (then
             (global.set $ptr (i32.add (global.get $ptr) (i32.const 2)))
             (local.set $p (i32.const 0))
-            (if (i32.and
-                  (i32.lt_u (global.get $ptr) (global.get $end))
-                  (i32.eq (i32.load8_u (global.get $ptr)) (i32.const "-")))
+            (if
+              (i32.and
+                (i32.lt_u (global.get $ptr) (global.get $end))
+                (i32.eq (i32.load8_u (global.get $ptr)) (i32.const "-")))
               (then
                 (local.set $p (i32.const 1))
                 (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))))
@@ -440,18 +459,25 @@
             (br_if $next (i32.ge_u (global.get $ptr) (global.get $end)))
             (local.set $lhs (global.get $ptr))
             (local.set $quote (i32.load8_u (global.get $ptr)))
-            (if (i32.or (i32.eq (local.get $quote) (i32.const 34))
-                        (i32.eq (local.get $quote) (i32.const 39)))
+            (if
+              (i32.or
+                (i32.eq (local.get $quote) (i32.const 34))
+                (i32.eq (local.get $quote) (i32.const 39)))
               (then
                 (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
                 (local.set $rhs (global.get $ptr))
-                (global.set $ptr (call $scanFindSpecial
-                  (global.get $ptr) (global.get $end) (local.get $quote)
-                  (i32.const 0) (i32.const 1)))
+                (global.set $ptr
+                  (call $scanFindSpecial
+                    (global.get $ptr)
+                    (global.get $end)
+                    (local.get $quote)
+                    (i32.const 0)
+                    (i32.const 1)))
                 (local.set $group (i32.sub (global.get $ptr) (local.get $rhs)))
-                (if (i32.and
-                      (i32.lt_u (global.get $ptr) (global.get $end))
-                      (i32.eq (i32.load8_u (global.get $ptr)) (local.get $quote)))
+                (if
+                  (i32.and
+                    (i32.lt_u (global.get $ptr) (global.get $end))
+                    (i32.eq (i32.load8_u (global.get $ptr)) (local.get $quote)))
                   (then (global.set $ptr (i32.add (global.get $ptr) (i32.const 1))))))
               (else
                 (local.set $rhs (global.get $ptr))
@@ -469,10 +495,10 @@
                 (local.set $hdLen (local.get $group))
                 (local.set $hdStrip (local.get $p))))
             (br $next)))
-        (if (i32.or
-              (call $lexIsDigit (local.get $c))
-              (i32.and (i32.eq (local.get $c) (i32.const "."))
-                       (call $lexIsDigit (local.get $c2))))
+        (if
+          (i32.or
+            (call $lexIsDigit (local.get $c))
+            (i32.and (i32.eq (local.get $c) (i32.const ".")) (call $lexIsDigit (local.get $c2))))
           (then
             (call $lexScanNumber)
             (call $emitTok (enum.get $Token.number) (local.get $lhs) (global.get $ptr))
@@ -482,8 +508,7 @@
           (then
             (call $bashScanWord)
             (local.set $rhs (global.get $ptr))
-            (local.set $group
-              (keyword-table.get $bashWords (local.get $lhs) (local.get $rhs)))
+            (local.set $group (keyword-table.get $bashWords (local.get $lhs) (local.get $rhs)))
             (local.set $hl (call $bashWordHl (local.get $group)))
             (if (local.get $decl)
               (then
@@ -493,26 +518,31 @@
                 (if (i32.eq (local.get $hl) (enum.get $Token.variable))
                   (then
                     (local.set $p (call $lexSkipSpaceAt (local.get $rhs)))
-                    (if (i32.and
-                          (i32.lt_u (i32.add (local.get $p) (i32.const 1)) (global.get $end))
-                          (i32.eq (i32.load16_u (local.get $p)) (i32.const "()")))
+                    (if
+                      (i32.and
+                        (i32.lt_u (i32.add (local.get $p) (i32.const 1)) (global.get $end))
+                        (i32.eq (i32.load16_u (local.get $p)) (i32.const "()")))
                       (then (local.set $hl (enum.get $Token.function.definition)))
                       (else
-                        (if (i32.and (local.get $cmd)
-                                     (i32.or
-                                       (i32.ge_u (global.get $ptr) (global.get $end))
-                                       (i32.ne (i32.load8_u (global.get $ptr)) (i32.const "="))))
+                        (if
+                          (i32.and
+                            (local.get $cmd)
+                            (i32.or
+                              (i32.ge_u (global.get $ptr) (global.get $end))
+                              (i32.ne (i32.load8_u (global.get $ptr)) (i32.const "="))))
                           (then (local.set $hl (enum.get $Token.function))))))))))
             ;; group 3 is `function`; the token test keeps a `function` that was
             ;; itself captured as a definition from opening another one
-            (if (i32.and
-                  (i32.eq (local.get $hl) (enum.get $Token.keyword.declaration))
-                  (i32.eq (local.get $group) (i32.const 3)))
+            (if
+              (i32.and
+                (i32.eq (local.get $hl) (enum.get $Token.keyword.declaration))
+                (i32.eq (local.get $group) (i32.const 3)))
               (then (local.set $decl (i32.const 1))))
             (call $emitTok (local.get $hl) (local.get $lhs) (local.get $rhs))
-            (if (i32.or
-                  (i32.eq (local.get $hl) (enum.get $Token.keyword.control))
-                  (i32.eq (local.get $hl) (enum.get $Token.keyword.declaration)))
+            (if
+              (i32.or
+                (i32.eq (local.get $hl) (enum.get $Token.keyword.control))
+                (i32.eq (local.get $hl) (enum.get $Token.keyword.declaration)))
               (then (local.set $cmd (i32.const 1)))
               (else (local.set $cmd (i32.const 0))))
             (br $next)))
@@ -521,42 +551,48 @@
             (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
             ;; `[[`/`]]` double only when the second bracket is inside the range:
             ;; a bounded scan must never emit a byte the host still owns.
-            (if (i32.and
-                  (i32.or (i32.eq (local.get $c) (i32.const "["))
-                          (i32.eq (local.get $c) (i32.const "]")))
-                  (i32.and
-                    (i32.lt_u (global.get $ptr) (global.get $end))
-                    (i32.eq (i32.load8_u (global.get $ptr)) (local.get $c))))
+            (if
+              (i32.and
+                (i32.or
+                  (i32.eq (local.get $c) (i32.const "["))
+                  (i32.eq (local.get $c) (i32.const "]")))
+                (i32.and
+                  (i32.lt_u (global.get $ptr) (global.get $end))
+                  (i32.eq (i32.load8_u (global.get $ptr)) (local.get $c))))
               (then (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))))
             ;; `))` closes the innermost counted `$((`
-            (if (i32.and
-                  (i32.and (global.get $bashArith)
-                           (i32.eq (local.get $c) (i32.const ")")))
-                  (i32.and
-                    (i32.lt_u (global.get $ptr) (global.get $end))
-                    (i32.eq (i32.load8_u (global.get $ptr)) (i32.const ")"))))
+            (if
+              (i32.and
+                (i32.and (global.get $bashArith) (i32.eq (local.get $c) (i32.const ")")))
+                (i32.and
+                  (i32.lt_u (global.get $ptr) (global.get $end))
+                  (i32.eq (i32.load8_u (global.get $ptr)) (i32.const ")"))))
               (then (global.set $bashArith (i32.sub (global.get $bashArith) (i32.const 1)))))
             (call $emitTok (enum.get $Token.punctuation.bracket) (local.get $lhs) (global.get $ptr))
             (br $next)))
         (if (call $bashIsOp (local.get $c))
           (then
             (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
-            (if (i32.and
-                  (i32.lt_u (global.get $ptr) (global.get $end))
-                  (i32.or
-                    (i32.eq (local.get $c2) (i32.const "="))
-                    (i32.eq (local.get $c) (local.get $c2))))
+            (if
+              (i32.and
+                (i32.lt_u (global.get $ptr) (global.get $end))
+                (i32.or
+                  (i32.eq (local.get $c2) (i32.const "="))
+                  (i32.eq (local.get $c) (local.get $c2))))
               (then
                 (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
-                (if (i32.and
-                      (i32.lt_u (global.get $ptr) (global.get $end))
-                      (i32.eq (i32.load8_u (global.get $ptr)) (local.get $c)))
+                (if
+                  (i32.and
+                    (i32.lt_u (global.get $ptr) (global.get $end))
+                    (i32.eq (i32.load8_u (global.get $ptr)) (local.get $c)))
                   (then (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))))))
             (call $emitTok (enum.get $Token.operator) (local.get $lhs) (global.get $ptr))
-            (if (i32.or
-                  (i32.eq (local.get $c) (i32.const ";"))
-                  (i32.or (i32.eq (local.get $c) (i32.const "&"))
-                          (i32.eq (local.get $c) (i32.const "|"))))
+            (if
+              (i32.or
+                (i32.eq (local.get $c) (i32.const ";"))
+                (i32.or
+                  (i32.eq (local.get $c) (i32.const "&"))
+                  (i32.eq (local.get $c) (i32.const "|"))))
               (then (local.set $cmd (i32.const 1))))
             (br $next)))
         (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
@@ -574,10 +610,12 @@
     (if (global.get $streamA)
       (then
         (global.set $streamA (call $bashSubstScan (global.get $streamA)))
-        (if (global.get $streamA) (then (return (i32.const 1))))))
+        (if (global.get $streamA)
+          (then (return (i32.const 1))))))
     (if (global.get $streamB)
       (then
-        (if (i32.eqz (call $bashBraceScan)) (then (return (i32.const 1))))
+        (if (i32.eqz (call $bashBraceScan))
+          (then (return (i32.const 1))))
         (global.set $streamB (i32.const 0))))
     (if (call $bashDoubleBody (global.get $ptr))
       (then
