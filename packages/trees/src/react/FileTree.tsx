@@ -28,9 +28,6 @@ const useClientLayoutEffect =
   typeof window === 'undefined' ? useEffect : useLayoutEffect;
 
 interface ActiveContextMenuState {
-  // The availability key is compared by identity so an open menu from before a
-  // disable/re-enable cycle cannot reappear.
-  availabilityKey: { hasContextMenu: boolean };
   context: FileTreeContextMenuOpenContext;
   item: FileTreeContextMenuItem;
 }
@@ -197,13 +194,18 @@ export function FileTree({
   const baselineComposition = useBaselineComposition(model);
 
   const hasContextMenu = renderContextMenu != null;
-  // A disabled menu invalidates any open React slot without an effect-driven
-  // state update. Re-enabling creates a fresh key, so stale content cannot
-  // reappear even when the same render function is restored.
-  const contextMenuAvailabilityKey = useMemo(
-    () => ({ hasContextMenu }),
-    [hasContextMenu]
-  );
+  // Disabling the menu discards any open React slot before this render commits,
+  // so re-enabling starts closed. FileTreeView closes its own menu state on
+  // disable, but its onClose reaches the composition that no longer has a
+  // contextMenu entry, so the wrapper has to drop its state here.
+  const [previousHasContextMenu, setPreviousHasContextMenu] =
+    useState(hasContextMenu);
+  if (previousHasContextMenu !== hasContextMenu) {
+    setPreviousHasContextMenu(hasContextMenu);
+    if (activeContextMenu != null) {
+      setActiveContextMenu(null);
+    }
+  }
   const handleContextMenuClose = useCallback(() => {
     setActiveContextMenu(null);
   }, []);
@@ -212,13 +214,9 @@ export function FileTree({
       item: FileTreeContextMenuItem,
       context: FileTreeContextMenuOpenContext
     ) => {
-      setActiveContextMenu({
-        availabilityKey: contextMenuAvailabilityKey,
-        context,
-        item,
-      });
+      setActiveContextMenu({ context, item });
     },
-    [contextMenuAvailabilityKey]
+    []
   );
   const composition = useMemo<FileTreeCompositionOptions | undefined>(
     () =>
@@ -263,12 +261,8 @@ export function FileTree({
     };
   }, [baselineComposition, hostElement, model, preloadedData]);
 
-  const visibleContextMenu =
-    activeContextMenu?.availabilityKey === contextMenuAvailabilityKey
-      ? activeContextMenu
-      : null;
   const children = renderPreloadedShadowDom(
-    renderFileTreeChildren(header, renderContextMenu, visibleContextMenu),
+    renderFileTreeChildren(header, renderContextMenu, activeContextMenu),
     preloadedData
   );
   const resolvedHostId = id ?? preloadedData?.id;
