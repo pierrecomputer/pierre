@@ -25,7 +25,7 @@ export * from './highlighter/languages/resolveLanguage';
 export * from './highlighter/languages/resolveLanguages';
 export * from './highlighter/resolve_highlighter';
 export * from './highlighter/shared_highlighter';
-export { shikiHighlighter } from './highlighter/shiki_highlighter';
+export * from './highlighter/shiki_highlighter';
 export * from './highlighter/themes/areThemesAttached';
 export * from './highlighter/themes/attachResolvedThemes';
 export * from './highlighter/themes/cleanUpResolvedThemes';
@@ -109,7 +109,7 @@ export * from './utils/resolveConflict';
 export * from './utils/resolveRegion';
 export * from './utils/setLanguageOverride';
 export * from './utils/setWrapperNodeProps';
-export * from './utils/tokensToHtml';
+export * from './utils/toHtml';
 export * from './utils/trimPatchContext';
 export type * from './types';
 

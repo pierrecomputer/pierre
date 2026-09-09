@@ -19,7 +19,7 @@ import { renderRows } from '../src/utils/html';
 import { parseDiffFromFile } from '../src/utils/parseDiffFromFile';
 import { renderDiffWithHighlighter } from '../src/utils/renderDiffWithHighlighter';
 import { renderFileWithHighlighter } from '../src/utils/renderFileWithHighlighter';
-import { tokensToHtml } from '../src/utils/tokensToHtml';
+import { toHtml } from '../src/utils/toHtml';
 
 const file: FileContents = {
   name: 'example.ts',
@@ -199,7 +199,7 @@ describe('highlights highlighter', () => {
     expect(themeStyles).toContain('--diffs-dark-bg:#0a0a0a');
     // Raw tokens stay available until the renderer composes visible rows.
     expect(code).toHaveLength(3);
-    const html = tokensToHtml(code);
+    const html = toHtml(code);
     // dual-theme custom properties with highlights's pierre-dark keyword color
     expect(html).toContain('--diffs-token-dark:#ff678d');
     expect(html).toContain('--diffs-token-light:');
@@ -212,7 +212,7 @@ describe('highlights highlighter', () => {
       highlightsHighlighter,
       fileOptions
     );
-    expect(tokensToHtml(code)).toContain('puts ');
+    expect(toHtml(code)).toContain('puts ');
   });
 
   test('sparse file tokens retain UTF-16 offsets across Unicode and CRLF lines', () => {
@@ -287,7 +287,7 @@ describe('highlights highlighter', () => {
       ...fileOptions,
       tokenizeMaxLineLength: 5,
     });
-    const html = tokensToHtml(code);
+    const html = toHtml(code);
     // both lines exceed the cap: content survives, keyword coloring does not
     expect(html).toContain('const a = 1; // hi');
     expect(html).not.toContain('--diffs-token-dark:#ff678d');
@@ -300,7 +300,7 @@ describe('highlights highlighter', () => {
       themes: { dark: 'pierre-dark', light: 'pierre-light' },
       defaultColor: false,
     });
-    const html = tokensToHtml(root.tokens, { transformers: [transformer] });
+    const html = toHtml(root.tokens, { transformers: [transformer] });
     // token styles moved into registered classes (via token htmlAttrs), and
     // no node hooks run in the direct renderer
     expect(html).toContain('__shiki_');

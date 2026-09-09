@@ -1,6 +1,6 @@
 import type { DecorationItem, LineInfo, ThemedToken } from '../types';
 import { attributesToHTML, escapeHTML, type RenderedLine } from './html';
-import { tokenAttributes, tokensToHtml } from './tokensToHtml';
+import { toHtml, tokenAttributes } from './toHtml';
 
 /** Serialize visible tokens with the current line metadata and decorations. */
 export function renderTokenLines(
@@ -75,7 +75,7 @@ export function renderTokenLines(
     const ranges = byLine.get(index) ?? [];
     let html = '';
     if (ranges.length === 0 && !useTokenTransformer) {
-      html = tokensToHtml([tokens]);
+      html = toHtml([tokens]);
     } else if (!useTokenTransformer) {
       // Decoration wrappers stay open across token boundaries so rounded
       // emphasis backgrounds cover the complete changed range.

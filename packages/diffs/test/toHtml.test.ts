@@ -8,8 +8,8 @@ import { codeToTokens as shikiCodeToTokens } from 'shiki';
 import type { ThemedToken } from '../src/types';
 import { createHTMLElement, renderRows } from '../src/utils/html';
 import { renderTokenLines } from '../src/utils/renderTokenLines';
-import type { TokensToHtmlOptions } from '../src/utils/tokensToHtml';
-import { tokensToHtml } from '../src/utils/tokensToHtml';
+import type { ToHtmlOptions } from '../src/utils/toHtml';
+import { toHtml } from '../src/utils/toHtml';
 
 const info = (line: number) => ({
   type: 'context' as const,
@@ -17,7 +17,7 @@ const info = (line: number) => ({
   lineIndex: line - 1,
 });
 
-describe('tokensToHtml', () => {
+describe('toHtml', () => {
   test('accepts tokens from both highlighters with shared token hooks', async () => {
     const source = 'const text = "<&🎉>";\n';
     const shiki = await shikiCodeToTokens(source, {
@@ -29,7 +29,7 @@ describe('tokensToHtml', () => {
       themes: { light: pierreDark },
     });
     const transformer = transformerStyleToClass();
-    const options: TokensToHtmlOptions = {
+    const options: ToHtmlOptions = {
       transformers: [
         {
           tokens(lines) {
@@ -45,7 +45,7 @@ describe('tokensToHtml', () => {
       ],
     };
     for (const tokens of [shiki.tokens, highlights.tokens]) {
-      const html = tokensToHtml(tokens, options);
+      const html = toHtml(tokens, options);
       const fragment = JSDOM.fragment(html);
       expect(fragment.textContent).toBe(source);
       expect(fragment.querySelectorAll('span:not([data-token])')).toHaveLength(
@@ -56,14 +56,14 @@ describe('tokensToHtml', () => {
     }
     expect(transformer.getCSS()).toContain('color:');
     const mixed: ThemedToken[][] = [...shiki.tokens, ...highlights.tokens];
-    expect(JSDOM.fragment(tokensToHtml(mixed, options)).textContent).toBe(
+    expect(JSDOM.fragment(toHtml(mixed, options)).textContent).toBe(
       `${source}\n${source}`
     );
   });
 
   test('escapes source and attribute values without interpreting markup', () => {
     const content = `<img src=x onerror="boom"> & ' 🎉`;
-    const html = tokensToHtml([
+    const html = toHtml([
       [{ offset: 0, content, htmlAttrs: { title: '"<&', class: 'token' } }],
     ]);
     const fragment = JSDOM.fragment(html);
@@ -71,26 +71,20 @@ describe('tokensToHtml', () => {
     expect(fragment.querySelector('img')).toBeNull();
     expect(fragment.querySelector('span')?.getAttribute('title')).toBe('"<&');
     expect(() =>
-      tokensToHtml([
-        [{ offset: 0, content: 'a', htmlAttrs: { 'bad"name': 'x' } }],
-      ])
+      toHtml([[{ offset: 0, content: 'a', htmlAttrs: { 'bad"name': 'x' } }]])
     ).toThrow('Invalid HTML attribute');
   });
 
   test('preserves empty lines and adds no block wrappers', () => {
-    expect(tokensToHtml([])).toBe('');
-    expect(tokensToHtml([[], [], []])).toBe('\n\n');
+    expect(toHtml([])).toBe('');
+    expect(toHtml([[], [], []])).toBe('\n\n');
     expect(
-      tokensToHtml([
-        [{ offset: 0, content: 'a' }],
-        [],
-        [{ offset: 2, content: 'b' }],
-      ])
+      toHtml([[{ offset: 0, content: 'a' }], [], [{ offset: 2, content: 'b' }]])
     ).toBe('<span>a</span>\n\n<span>b</span>');
   });
 
   test('renders foreground, background and every font flag', () => {
-    const html = tokensToHtml([
+    const html = toHtml([
       [
         {
           offset: 0,
@@ -108,7 +102,7 @@ describe('tokensToHtml', () => {
 
   test('explicit styles override token fields, including empty styles', () => {
     expect(
-      tokensToHtml([
+      toHtml([
         [
           {
             offset: 0,
@@ -120,7 +114,7 @@ describe('tokensToHtml', () => {
       ])
     ).toBe('<span style="--dark:blue">x</span>');
     expect(
-      tokensToHtml([
+      toHtml([
         [
           {
             offset: 0,
@@ -133,7 +127,7 @@ describe('tokensToHtml', () => {
       ])
     ).toBe('<span>x</span>');
     expect(
-      tokensToHtml([
+      toHtml([
         [{ offset: 0, content: 'x', htmlAttrs: { style: 'color:green' } }],
       ])
     ).toBe('<span style="color:green">x</span>');
@@ -142,7 +136,7 @@ describe('tokensToHtml', () => {
   test('runs ordered token hooks and chains replacements and mutations', () => {
     const calls: string[] = [];
     const tokens: ThemedToken[][] = [[{ offset: 0, content: 'a' }]];
-    const html = tokensToHtml(tokens, {
+    const html = toHtml(tokens, {
       transformers: [
         {
           enforce: 'post',
@@ -175,7 +169,7 @@ describe('tokensToHtml', () => {
     expect(html).toBe('<span>abcd</span>');
     expect(tokens[0][0].content).toBe('a');
     expect(
-      tokensToHtml(tokens, {
+      toHtml(tokens, {
         transformers: [
           {
             tokens() {
@@ -189,7 +183,7 @@ describe('tokensToHtml', () => {
 
   test('runs the Shiki style-to-class token hook without node hooks', () => {
     const transformer = transformerStyleToClass();
-    const html = tokensToHtml(
+    const html = toHtml(
       [[{ offset: 0, content: 'a', htmlStyle: { color: 'red' } }]],
       { transformers: [transformer] }
     );

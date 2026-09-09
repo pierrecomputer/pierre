@@ -27,7 +27,7 @@ import { getDiffHunksRendererOptions } from '../src/utils/getDiffHunksRendererOp
 import { renderRows } from '../src/utils/html';
 import { renderDiffWithHighlighter } from '../src/utils/renderDiffWithHighlighter';
 import { renderFileWithHighlighter } from '../src/utils/renderFileWithHighlighter';
-import { tokensToHtml } from '../src/utils/tokensToHtml';
+import { toHtml } from '../src/utils/toHtml';
 import type { RenderDiffRequest } from '../src/worker/types';
 import type { WorkerPoolManager } from '../src/worker/WorkerPoolManager';
 import { createRoot, installDom, wait } from './domHarness';
@@ -458,9 +458,7 @@ describe('FileRenderer edit session', () => {
         cachedExternalBefore
       );
       expect(
-        tokensToHtml(
-          manager.getFileResultCache(externalFile)?.result.code ?? []
-        )
+        toHtml(manager.getFileResultCache(externalFile)?.result.code ?? [])
       ).not.toContain('const edited = true;');
     } finally {
       manager.terminate();
@@ -1275,7 +1273,7 @@ describe('DiffHunksRenderer edit session', () => {
       const cachedExternalResult = manager.getDiffResultCache(externalDiff);
       expect(cachedExternalResult).toEqual(cachedExternalSnapshot);
       expect(
-        tokensToHtml(cachedExternalResult?.result.code.additionLines ?? [])
+        toHtml(cachedExternalResult?.result.code.additionLines ?? [])
       ).not.toContain('const edited = true;');
       expect(renderer.diffCache).toBe(sessionDiff);
       expect(sessionDiff.additionLines[0]).toBe('const edited = true;\n');

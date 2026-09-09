@@ -8,7 +8,7 @@ export interface TokenTransformer {
   tokens?(lines: ThemedToken[][]): ThemedToken[][] | void;
 }
 
-export interface TokensToHtmlOptions {
+export interface ToHtmlOptions {
   transformers?: TokenTransformer[];
 }
 
@@ -41,9 +41,9 @@ export function tokenAttributes(token: ThemedToken): Record<string, string> {
 }
 
 /** Render token spans separated by newlines, without code or pre wrappers. */
-export function tokensToHtml(
+export function toHtml(
   tokens: ThemedToken[][],
-  { transformers = [] }: TokensToHtmlOptions = {}
+  { transformers = [] }: ToHtmlOptions = {}
 ): string {
   for (const tier of ['pre', undefined, 'post'] as const) {
     for (const transformer of transformers) {

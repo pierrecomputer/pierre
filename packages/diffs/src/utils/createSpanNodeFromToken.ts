@@ -1,5 +1,5 @@
 import type { ThemedToken } from '../types';
-import { tokenAttributes } from './tokensToHtml';
+import { tokenAttributes } from './toHtml';
 
 export function createSpanFromToken(token: ThemedToken): HTMLSpanElement {
   const element = document.createElement('span');

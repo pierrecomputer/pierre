@@ -129,14 +129,14 @@ This reads SVGs from `node_modules/@pierre/icons/svg` and writes
 
 ## Rendering tokens
 
-`tokensToHtml` renders themed token lines from any `codeToTokens` highlighter.
-It escapes text and attributes, preserves token styles, and separates lines with
+`toHtml` renders themed token lines from any `codeToTokens` highlighter. It
+escapes text and attributes, preserves token styles, and separates lines with
 newlines. It does not add line, `code`, or `pre` wrappers.
 
 ```ts
-import { tokensToHtml } from '@pierre/diffs';
+import { toHtml } from '@pierre/diffs';
 
-const html = tokensToHtml(tokens, {
+const html = toHtml(tokens, {
   transformers: [
     {
       tokens(lines) {
