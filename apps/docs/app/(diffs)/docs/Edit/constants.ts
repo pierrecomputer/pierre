@@ -351,6 +351,46 @@ export const editorOptions = {
     options,
   };
 
+export const EDIT_PREDICTION_RESPONSE_EXAMPLE: PreloadFileOptions<
+  undefined,
+  undefined
+> = {
+  file: {
+    name: 'edit_prediction_response.json',
+    contents: `{
+  "edits": [
+    {
+      "range": {
+        "start": { "line": 10, "character": 4 },
+        "end": { "line": 10, "character": 4 }
+      },
+      "newText": "hello"
+    }
+  ],
+  "newCursor": { "line": 10, "character": 9 }
+}`,
+  },
+  options,
+};
+
+export const EDIT_PREDICTION_CODESTRAL_EXAMPLE: PreloadFileOptions<
+  undefined,
+  undefined
+> = {
+  file: {
+    name: 'edit_prediction_codestral.ts',
+    contents: `const body = {
+  model: 'codestral-latest',
+  prompt: input.excerptText.slice(0, input.cursorOffsetInExcerpt),
+  suffix: input.excerptText.slice(input.cursorOffsetInExcerpt),
+  max_tokens: 128,
+  temperature: 0,
+  stream: false,
+};`,
+  },
+  options,
+};
+
 export const EDIT_SELECTION_ACTION_CONTEXT_TYPE: PreloadFileOptions<
   undefined,
   undefined

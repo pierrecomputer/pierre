@@ -454,7 +454,64 @@ aborts in-progress work through `context.signal`. In `'subtle'` mode, the
 prediction toggles when you tap <kbd>Alt</kbd>. Use `include` and `exclude` to
 filter slash-normalized file paths; exclusions take precedence.
 
+#### Create a prediction API
+
+Create a server endpoint such as `POST /edit/predict` that accepts an
+`EditPredictRequest` as JSON and returns an `EditPredictResponse`. Both types
+are exported from `@pierre/diffs/edit`. The provider above connects the editor
+to this endpoint and forwards `context.signal` to cancel stale requests.
+
+The request contains the context needed to predict an edit:
+
+- `path`, `version`, and `eol` identify the file, its current document version,
+  and its line ending sequence.
+- `excerptText` is a bounded slice around the cursor. `excerptStartLine` is the
+  zero-based document line where that slice begins.
+- `cursorOffsetInExcerpt` is the cursor's UTF-16 offset within the excerpt.
+  `editableRange` contains the allowed `start` and exclusive `end` offsets in
+  the same coordinate system; text outside this range is context only.
+- `editHistory` contains recent changes as unified diffs, in chronological
+  order, with a `source` of `'user'` or `'prediction'`.
+
+Validate the request on the server, call your model, and translate its output
+into edits within `editableRange`. Return JSON with:
+
+- `edits`: non-overlapping `{ range: { start, end }, newText }` edits. Each
+  position uses an absolute, zero-based document `line` and UTF-16 `character`
+  offset in the document before the edits. Equal start and end positions insert
+  text; an empty `newText` deletes the range.
+- `newCursor`: the absolute cursor position after all edits are applied.
+
+Convert excerpt offsets to line and character positions by counting line endings
+within the excerpt, then add `excerptStartLine` to each line number. Preserve
+the request's `eol` in generated text and avoid splitting CRLF sequences or
+UTF-16 surrogate pairs. When there is no suggestion, return `edits: []` with the
+unchanged absolute cursor as `newCursor`.
+
+For example, inserting `hello` at line 10, character 4 returns:
+
+<DocsCodeExample {...editPredictionResponseExample} />
+
+#### Codestral FIM example
+
+The live demo's
+[prediction API route](<https://github.com/pierrecomputer/pierre/blob/main/apps/docs/app/(diffs)/edit/predict/route.ts>)
+uses Mistral's **Codestral fill-in-the-middle (FIM)** model. It calls
+`https://api.mistral.ai/v1/fim/completions` with the following body, where
+`input` is the validated `EditPredictRequest`:
+
+<DocsCodeExample {...editPredictionCodestralExample} />
+
+Codestral generates the missing text between `prompt` and `suffix`. The route
+reads `choices[0].message.content`, normalizes its line endings, and returns a
+single insertion at the cursor with `newCursor` immediately after the inserted
+text. It keeps `MISTRAL_API_KEY` on the server and includes request validation,
+GitHub authentication, rate limiting, size limits, cancellation, and an upstream
+timeout. Use the route as a reference when connecting your own prediction API.
+
 ### API reference
+
+Everything you need to make edit mode your own.
 
 <DocsCodeExample {...editorPublicApi} />
 
