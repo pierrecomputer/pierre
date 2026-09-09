@@ -492,6 +492,40 @@ describe('DiffHunksRenderer', () => {
     expect(countInlineDiffSpans(result)).toBeGreaterThan(0);
   });
 
+  test.each(['split', 'unified'] as const)(
+    'keeps word highlights in large collapsed text diffs (%s)',
+    async (diffStyle) => {
+      const contents =
+        Array.from({ length: 1001 }, (_, i) => `constant line ${i}`).join(
+          '\n'
+        ) + '\n';
+      const diff = parseDiffFromFile(
+        { name: 'large.txt', contents },
+        {
+          name: 'large.txt',
+          contents: contents.replace('constant line 500', 'constant ROW 500'),
+        }
+      );
+      const instance = new DiffHunksRenderer({
+        diffStyle,
+        lineDiffType: 'word',
+      });
+      try {
+        const result = await instance.asyncRender(diff);
+        expect(result.rowCount).toBeLessThan(20);
+        const html = JSDOM.fragment(instance.renderFullHTML(result));
+        expect(
+          Array.from(
+            html.querySelectorAll('[data-diff-span]'),
+            (span) => span.textContent
+          )
+        ).toEqual(['line', 'ROW']);
+      } finally {
+        instance.cleanUp();
+      }
+    }
+  );
+
   test('reuses line diffs across windows and recomputes only edited pairs', async () => {
     const instance = new DiffHunksRenderer({ diffStyle: 'split' });
     const diff = parseDiffFromFile(

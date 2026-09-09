@@ -158,6 +158,7 @@ export class FileStream {
 
     this.pre = pre;
     this.code = getOrCreateCodeNode({ code: this.code, pre });
+    this.code.textContent = '';
     // Re-setup reuses the code node, but clearing the pre above detached it;
     // getOrCreateCodeNode only appends nodes it created itself.
     if (this.code.parentElement !== pre) {

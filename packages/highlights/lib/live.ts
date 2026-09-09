@@ -123,7 +123,7 @@ interface NormalizedEdit {
   newText: string;
 }
 
-const fatalDecoder = new TextDecoder('utf-8', { fatal: true });
+const fatalDecoder = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true });
 
 /** A high or low surrogate without its partner (WTF-8 slow path trigger). */
 const loneSurrogateRe =

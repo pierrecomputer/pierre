@@ -1511,7 +1511,6 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       isDefaultRenderRange(renderRange) &&
       ((this.renderCache?.result === result &&
         this.renderCache.highlighted === false) ||
-        isDiffPlainText(fileDiff) ||
         isDiffMassive(fileDiff, this.getTokenizeMaxLength())) &&
       (fileDiff.unifiedLineCount > 1000 || fileDiff.splitLineCount > 1000);
     if (!skipLineDiff && options.lineDiffType !== 'none') {

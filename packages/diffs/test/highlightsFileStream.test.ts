@@ -118,7 +118,7 @@ describe('FileStream with the highlights highlighter', () => {
     wrapper.remove();
   });
 
-  test('a reused stream keeps the highlighter it captured at setup', async () => {
+  test('a reused stream clears old rows and keeps its captured highlighter', async () => {
     setHighlighter(shikiHighlighter);
     const wrapper = document.createElement('div');
     document.body.appendChild(wrapper);
@@ -133,6 +133,10 @@ describe('FileStream with the highlights highlighter', () => {
       });
     try {
       await feed(['let a = 1;\n']);
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+      const root = wrapper.querySelector('diffs-container')?.shadowRoot;
+      expect(root?.textContent).toContain('let a = 1;');
       // swap the registration between two runs of the same stream instance;
       // the stream captured shiki at setup and must not mix in the newly
       // registered implementation's tokenizer
@@ -157,8 +161,10 @@ describe('FileStream with the highlights highlighter', () => {
       await new Promise((resolve) => requestAnimationFrame(resolve));
       await new Promise((resolve) => requestAnimationFrame(resolve));
       expect(constructed).toBe(0);
-      const root = wrapper.querySelector('diffs-container')?.shadowRoot;
       expect(root?.textContent).toContain('let b = 2;');
+      expect(root?.textContent).not.toContain('let a = 1;');
+      expect(root?.querySelectorAll('[data-content]')).toHaveLength(1);
+      expect(root?.querySelectorAll('[data-gutter]')).toHaveLength(1);
     } finally {
       setHighlighter(highlightsHighlighter);
       stream.cleanUp();

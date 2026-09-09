@@ -850,6 +850,35 @@ void t.test(
   }
 );
 
+void t.test('LiveTokenizer: preserves leading BOMs in document lines', () => {
+  let code = '\uFEFFconst x = 1;\n\uFEFFlet y = 2;';
+  const live = new LiveTokenizer({ lang: 'ts', theme: pierreDark, code });
+  assert.equal(live.getText(), code);
+  assertMatchesFresh(live, code, 'ts', 'leading BOMs');
+
+  const edits = [
+    {
+      range: {
+        start: { line: 0, character: 1 },
+        end: { line: 0, character: 6 },
+      },
+      newText: 'let',
+    },
+    {
+      range: {
+        start: { line: 1, character: 0 },
+        end: { line: 1, character: 1 },
+      },
+      newText: '',
+    },
+  ];
+  live.applyEdits(edits);
+  code = applyToMirror(code, edits);
+  assert.equal(live.getText(), code);
+  assertMatchesFresh(live, code, 'ts', 'edited BOM lines');
+  live.dispose();
+});
+
 void t.test('LiveTokenizer: lone surrogates survive edits as WTF-8', () => {
   const live = new LiveTokenizer({
     lang: 'plain',
