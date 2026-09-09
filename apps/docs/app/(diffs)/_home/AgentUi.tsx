@@ -8,6 +8,7 @@ import {
   useWorkerPool,
   Virtualizer,
 } from '@pierre/diffs/react';
+import { useStableCallback } from '@pierre/diffs/react';
 import {
   IconArrow,
   IconChevronSm,
@@ -22,6 +23,8 @@ import { FileTree, type FileTreeRowDecoration } from '@pierre/trees';
 import { useFileTreeSearch } from '@pierre/trees/react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+
+import './agent-ui.css';
 import {
   type CSSProperties,
   useCallback,
@@ -31,7 +34,6 @@ import {
   useState,
 } from 'react';
 
-import './agent-ui.css';
 import {
   AUI_DIFF_OPTIONS,
   AUI_EXPLORER_NEW_DIR,
@@ -45,11 +47,10 @@ import {
   getSessionGitStatus,
   getSessionPaths,
 } from './mockData';
+import { useLatestValueRef } from '@/lib/useLatestValueRef';
 type AgentUiEditorChangeEvent =
   | EditorChangeEvent<'file', undefined, undefined>
   | EditorChangeEvent<'file-diff', undefined, undefined>;
-
-import { useLatestValueRef } from '@/lib/useLatestValueRef';
 
 // Added/removed line totals for a single file's diff.
 interface DiffStats {
@@ -316,11 +317,7 @@ function FilesTree({
   const containerRef = useRef<HTMLDivElement | null>(null);
   const treeRef = useRef<FileTree | null>(null);
   const onSelectRef = useLatestValueRef(onSelect);
-  const onModelReadyRef = useLatestValueRef(onModelReady);
-  const notifyModelReady = useCallback(
-    (model: FileTree | null) => onModelReadyRef.current(model),
-    [onModelReadyRef]
-  );
+  const notifyModelReady = useStableCallback(onModelReady);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -987,7 +984,6 @@ export function AgentUi({
     },
     [editedPlaceholdersRef, liveSession, filesModel]
   );
-  const recordEditedStatsRef = useLatestValueRef(recordEditedStats);
 
   // One external diff baseline per changed file, created up front for worker
   // priming and reused on every visit so its cache identity remains stable.
@@ -1112,7 +1108,7 @@ export function AgentUi({
     [addSnippet]
   );
 
-  const handleEditChange = useCallback(
+  const handleEditChange = useStableCallback(
     (event: AgentUiEditorChangeEvent) => {
       const target = activeTargetRef.current;
       if (target == null) {
@@ -1121,9 +1117,8 @@ export function AgentUi({
       editedPathsRef.current.add(target);
       // Recompute the edited file's diff against its original snapshot so the
       // Changes tree's +/- totals reflect the live edits.
-      recordEditedStatsRef.current(target, event.file.contents);
-    },
-    [recordEditedStatsRef]
+      recordEditedStats(target, event.file.contents);
+    }
   );
 
   const openFile = useCallback((path: string) => {
