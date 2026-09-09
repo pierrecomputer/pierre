@@ -1,19 +1,19 @@
+import type { CodeToTokensOptions } from 'shiki/core';
+
 import type { RenderersHighlighter } from '../highlighter/resolve_highlighter';
 import type {
-  CodeToHastOptions,
-  DiffsThemeNames,
   FileContents,
   ForceFilePlainTextOptions,
   RenderFileOptions,
   ThemedFileResult,
+  ThemedToken,
 } from '../types';
 import { appendItems } from './appendItems';
 import { linesFromFileContents } from './computeFileOffsets';
-import { createTransformerWithState } from './createTransformerWithState';
 import { formatCSSVariablePrefix } from './formatCSSVariablePrefix';
 import { getFiletypeFromFileName } from './getFiletypeFromFileName';
 import { getHighlighterThemeStyles } from './getHighlighterThemeStyles';
-import { getLineNodes } from './getLineNodes';
+import { updateTokenOffsets } from './updateTokenOffsets';
 
 const DEFAULT_PLAIN_TEXT_OPTIONS: ForceFilePlainTextOptions = {
   forcePlainText: false,
@@ -22,7 +22,7 @@ const DEFAULT_PLAIN_TEXT_OPTIONS: ForceFilePlainTextOptions = {
 export function renderFileWithHighlighter(
   file: FileContents,
   highlighter: RenderersHighlighter,
-  { theme, tokenizeMaxLineLength, useTokenTransformer }: RenderFileOptions,
+  { theme, tokenizeMaxLineLength }: RenderFileOptions,
   {
     forcePlainText,
     startingLine,
@@ -42,8 +42,7 @@ export function renderFileWithHighlighter(
     totalLines = Infinity;
   }
   const isWindowedHighlight = startingLine > 0 || totalLines < Infinity;
-  const { state, transformers } =
-    createTransformerWithState(useTokenTransformer);
+  if (isWindowedHighlight) lines ??= linesFromFileContents(file.contents);
   const lang = forcePlainText
     ? 'text'
     : (file.lang ?? getFiletypeFromFileName(file.name));
@@ -53,23 +52,17 @@ export function renderFileWithHighlighter(
     theme,
     highlighter,
   });
-  state.lineInfo = (shikiLineNumber: number) => ({
-    type: 'context',
-    lineIndex: shikiLineNumber - 1 + startingLine,
-    lineNumber: shikiLineNumber + startingLine,
-  });
   // tokenizeTimeLimit: 0 disables shiki's silent 500ms-per-line tokenization
   // abort. When it trips (slow devices, cold JS-regex-engine compile), the
   // rest of the line collapses to the enclosing scope's color — and since
   // dual-theme rendering tokenizes per theme, the first (dark) pass can smear
   // while the warm second (light) pass stays correct. Pathological content is
   // already guarded by tokenizeMaxLineLength, which renders long lines plain.
-  const hastConfig: CodeToHastOptions<DiffsThemeNames> = (() => {
+  const tokenConfig: CodeToTokensOptions<string, string> = (() => {
     if (typeof theme === 'string') {
       return {
         lang,
         theme,
-        transformers,
         defaultColor: false,
         cssVariablePrefix: formatCSSVariablePrefix('token'),
         tokenizeMaxLineLength,
@@ -79,34 +72,34 @@ export function renderFileWithHighlighter(
     return {
       lang,
       themes: theme,
-      transformers,
       defaultColor: false,
       cssVariablePrefix: formatCSSVariablePrefix('token'),
       tokenizeMaxLineLength,
       tokenizeTimeLimit: 0,
     };
   })();
-  const highlightedLines = getLineNodes(
-    highlighter.codeToHast(
-      normalizeHighlightLineEndings(
-        isWindowedHighlight
-          ? extractWindowedFileContent(
-              lines ?? linesFromFileContents(file.contents),
-              startingLine,
-              totalLines
-            )
-          : file.contents
-      ),
-      hastConfig
-    )
-  );
+  const highlightedLines = highlighter.codeToTokens(
+    normalizeHighlightLineEndings(
+      isWindowedHighlight
+        ? extractWindowedFileContent(
+            lines ?? linesFromFileContents(file.contents),
+            startingLine,
+            totalLines
+          )
+        : file.contents
+    ),
+    tokenConfig
+  ).tokens;
 
   // Create sparse array for windowed rendering
-  const code = isWindowedHighlight ? new Array(startingLine) : highlightedLines;
+  const code: ThemedToken[][] = isWindowedHighlight
+    ? new Array(startingLine)
+    : highlightedLines;
   if (isWindowedHighlight) {
     appendItems(code, highlightedLines);
   }
 
+  if (isWindowedHighlight && lines != null) updateTokenOffsets(code, lines);
   return { code, themeStyles, baseThemeType };
 }
 

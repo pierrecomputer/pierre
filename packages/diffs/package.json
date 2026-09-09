@@ -76,9 +76,7 @@
   "dependencies": {
     "@pierre/theme": "workspace:*",
     "@pierre/theming": "workspace:*",
-    "@shikijs/transformers": "^3.0.0 || ^4.0.0",
     "diff": "catalog:",
-    "hast-util-to-html": "catalog:",
     "lru_map": "catalog:",
     "shiki": "^3.0.0 || ^4.0.0"
   },
@@ -86,8 +84,8 @@
     "@arethetypeswrong/core": "catalog:",
     "@pierre/highlights": "workspace:*",
     "@playwright/test": "catalog:",
+    "@shikijs/transformers": "catalog:",
     "@tsdown/css": "catalog:",
-    "@types/hast": "catalog:",
     "@types/jsdom": "catalog:",
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",

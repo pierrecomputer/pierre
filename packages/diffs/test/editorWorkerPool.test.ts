@@ -1,6 +1,4 @@
 import { afterAll, beforeAll, describe, expect, spyOn, test } from 'bun:test';
-import type { ElementContent } from 'hast';
-import { toHtml } from 'hast-util-to-html';
 
 import { parseDiffFromFile } from '../src';
 import { File } from '../src/components/File';
@@ -23,10 +21,13 @@ import type {
   FileContents,
   FileDiffMetadata,
   HighlightedToken,
+  ThemedToken,
 } from '../src/types';
 import { getDiffHunksRendererOptions } from '../src/utils/getDiffHunksRendererOptions';
+import { renderRows } from '../src/utils/html';
 import { renderDiffWithHighlighter } from '../src/utils/renderDiffWithHighlighter';
 import { renderFileWithHighlighter } from '../src/utils/renderFileWithHighlighter';
+import { tokensToHtml } from '../src/utils/tokensToHtml';
 import type { RenderDiffRequest } from '../src/worker/types';
 import type { WorkerPoolManager } from '../src/worker/WorkerPoolManager';
 import { createRoot, installDom, wait } from './domHarness';
@@ -95,28 +96,23 @@ function createEditSessionFile(file: FileContents): FileContents {
   return editSessionFile;
 }
 
-// A structurally valid plain (non-transformer) worker result for `contents`:
-// one line element per line, the shape processFileResult requires.
-function plainFileCode(contents: string): ElementContent[] {
-  return contents.split('\n').map((text, index) => ({
-    type: 'element',
-    tagName: 'div',
-    properties: {
-      'data-line': index + 1,
-      'data-line-type': 'context',
-      'data-line-index': index,
-    },
-    children: [{ type: 'text', value: text.length > 0 ? text : '\n' }],
-  }));
+// A plain worker result uses one token array per source line.
+function plainFileCode(contents: string): ThemedToken[][] {
+  let offset = 0;
+  return contents.split('\n').map((content) => {
+    const line = content === '' ? [] : [{ content, offset }];
+    offset += content.length + 1;
+    return line;
+  });
 }
 
 function renderedDiffHtml(
   result: ReturnType<DiffHunksRenderer['renderDiff']>
 ): string {
-  return toHtml([
-    ...(result?.unifiedContentAST ?? []),
-    ...(result?.additionsContentAST ?? []),
-    ...(result?.deletionsContentAST ?? []),
+  return renderRows([
+    ...(result?.unifiedContentRows ?? []),
+    ...(result?.additionsContentRows ?? []),
+    ...(result?.deletionsContentRows ?? []),
   ]);
 }
 
@@ -219,7 +215,7 @@ describe('FileRenderer edit session', () => {
       if (result == null) {
         throw new Error('expected a render result');
       }
-      const html = toHtml(result.contentAST);
+      const html = renderRows(result.contentRows);
       expect(html).toContain('data-char');
       expect(html).toContain('<br>');
       expect(worker.fileRequestCount).toBe(1);
@@ -247,13 +243,14 @@ describe('FileRenderer edit session', () => {
       const editSessionFile = createEditSessionFile(file);
       renderer.beginEditSession(editSessionFile, file);
       renderer.renderFile(editSessionFile);
-      const poolMarker: ElementContent[] = [
-        {
-          type: 'element',
-          tagName: 'div',
-          properties: { 'data-line': 1, 'data-pool-result': '' },
-          children: [],
-        },
+      const poolMarker: ThemedToken[][] = [
+        [
+          {
+            offset: 0,
+            content: 'pool',
+            htmlAttrs: { 'data-pool-result': '' },
+          },
+        ],
       ];
       respondToFileRequest(manager, worker, request, poolMarker);
       // Let the refused worker result have a chance to (wrongly) apply before
@@ -264,7 +261,7 @@ describe('FileRenderer edit session', () => {
       if (result == null) {
         throw new Error('expected a render result');
       }
-      expect(toHtml(result.contentAST)).not.toContain('data-pool-result');
+      expect(renderRows(result.contentRows)).not.toContain('data-pool-result');
     } finally {
       manager.terminate();
     }
@@ -290,13 +287,14 @@ describe('FileRenderer edit session', () => {
       const editSessionFile = createEditSessionFile(file);
       renderer.beginEditSession(editSessionFile, file);
       renderer.renderFile(editSessionFile);
-      const poolMarker: ElementContent[] = [
-        {
-          type: 'element',
-          tagName: 'div',
-          properties: { 'data-line': 1, 'data-pool-result': '' },
-          children: [],
-        },
+      const poolMarker: ThemedToken[][] = [
+        [
+          {
+            offset: 0,
+            content: 'pool',
+            htmlAttrs: { 'data-pool-result': '' },
+          },
+        ],
       ];
       // With useTokenTransformer already on, the pool's options equal the
       // session options — the refused result must not sneak back in through
@@ -311,13 +309,13 @@ describe('FileRenderer edit session', () => {
       if (result == null) {
         throw new Error('expected a render result');
       }
-      expect(toHtml(result.contentAST)).not.toContain('data-pool-result');
+      expect(renderRows(result.contentRows)).not.toContain('data-pool-result');
 
       result = renderer.renderFile(editSessionFile);
       if (result == null) {
         throw new Error('expected a render result');
       }
-      const html = toHtml(result.contentAST);
+      const html = renderRows(result.contentRows);
       expect(html).not.toContain('data-pool-result');
       expect(html).toContain('data-char');
       expect(html).toContain('color:');
@@ -388,7 +386,7 @@ describe('FileRenderer edit session', () => {
       }
       expect(file.contents).toBe(FILE_CONTENTS);
       expect(editSessionFile.contents).toContain('const edited = 1;');
-      expect(toHtml(result.contentAST)).toContain('const edited = 1;');
+      expect(renderRows(result.contentRows)).toContain('const edited = 1;');
     } finally {
       manager.terminate();
     }
@@ -460,7 +458,9 @@ describe('FileRenderer edit session', () => {
         cachedExternalBefore
       );
       expect(
-        toHtml(manager.getFileResultCache(externalFile)?.result.code ?? [])
+        tokensToHtml(
+          manager.getFileResultCache(externalFile)?.result.code ?? []
+        )
       ).not.toContain('const edited = true;');
     } finally {
       manager.terminate();
@@ -531,13 +531,17 @@ describe('FileRenderer worker rendering', () => {
       await respondWithRealFileHighlight(manager, worker, currentFile);
       await withTimeout(primeCurrent);
       const currentResult = renderer.renderFile(currentFile);
-      expect(toHtml(currentResult?.contentAST ?? [])).toContain('currentValue');
+      expect(renderRows(currentResult?.contentRows ?? [])).toContain(
+        'currentValue'
+      );
 
       const pendingResult = renderer.renderFile(replacementFile);
       expect(renderer.getFileForNextRender(replacementFile)).toBe(currentFile);
       expect(pendingResult?.file).toBe(currentFile);
-      expect(toHtml(pendingResult?.contentAST ?? [])).toContain('currentValue');
-      expect(toHtml(pendingResult?.contentAST ?? [])).not.toContain(
+      expect(renderRows(pendingResult?.contentRows ?? [])).toContain(
+        'currentValue'
+      );
+      expect(renderRows(pendingResult?.contentRows ?? [])).not.toContain(
         'replacementValue'
       );
 
@@ -568,10 +572,10 @@ describe('FileRenderer worker rendering', () => {
       const replacementResult = renderer.renderFile(replacementFile);
       expect(renderer.fileCache).toBe(replacementFile);
       expect(replacementResult?.file).toBe(replacementFile);
-      expect(toHtml(replacementResult?.contentAST ?? [])).toContain(
+      expect(renderRows(replacementResult?.contentRows ?? [])).toContain(
         'replacementValue'
       );
-      expect(toHtml(replacementResult?.contentAST ?? [])).not.toContain(
+      expect(renderRows(replacementResult?.contentRows ?? [])).not.toContain(
         'currentValue'
       );
     } finally {
@@ -1158,10 +1162,10 @@ describe('DiffHunksRenderer edit session', () => {
       if (result == null) {
         throw new Error('expected a render result');
       }
-      const html = toHtml([
-        ...(result.unifiedContentAST ?? []),
-        ...(result.additionsContentAST ?? []),
-        ...(result.deletionsContentAST ?? []),
+      const html = renderRows([
+        ...(result.unifiedContentRows ?? []),
+        ...(result.additionsContentRows ?? []),
+        ...(result.deletionsContentRows ?? []),
       ]);
       expect(html).toContain('data-char');
       expect(renderer.diffCache).toBe(sessionDiff);
@@ -1271,7 +1275,7 @@ describe('DiffHunksRenderer edit session', () => {
       const cachedExternalResult = manager.getDiffResultCache(externalDiff);
       expect(cachedExternalResult).toEqual(cachedExternalSnapshot);
       expect(
-        toHtml(cachedExternalResult?.result.code.additionLines ?? [])
+        tokensToHtml(cachedExternalResult?.result.code.additionLines ?? [])
       ).not.toContain('const edited = true;');
       expect(renderer.diffCache).toBe(sessionDiff);
       expect(sessionDiff.additionLines[0]).toBe('const edited = true;\n');
@@ -1366,10 +1370,10 @@ describe('DiffHunksRenderer edit session', () => {
       if (result == null) {
         throw new Error('expected an editor-compatible session render');
       }
-      const html = toHtml([
-        ...(result.unifiedContentAST ?? []),
-        ...(result.additionsContentAST ?? []),
-        ...(result.deletionsContentAST ?? []),
+      const html = renderRows([
+        ...(result.unifiedContentRows ?? []),
+        ...(result.additionsContentRows ?? []),
+        ...(result.deletionsContentRows ?? []),
       ]);
 
       expect(html).toContain('data-char');
@@ -1436,10 +1440,10 @@ describe('DiffHunksRenderer edit session', () => {
       if (result == null) {
         throw new Error('expected an editor-compatible session render');
       }
-      const html = toHtml([
-        ...(result.unifiedContentAST ?? []),
-        ...(result.additionsContentAST ?? []),
-        ...(result.deletionsContentAST ?? []),
+      const html = renderRows([
+        ...(result.unifiedContentRows ?? []),
+        ...(result.additionsContentRows ?? []),
+        ...(result.deletionsContentRows ?? []),
       ]);
 
       expect(html).toContain('session');
@@ -1511,10 +1515,10 @@ describe('DiffHunksRenderer edit session', () => {
         if (result == null) {
           throw new Error('expected a session render result');
         }
-        return toHtml([
-          ...(result.unifiedContentAST ?? []),
-          ...(result.additionsContentAST ?? []),
-          ...(result.deletionsContentAST ?? []),
+        return renderRows([
+          ...(result.unifiedContentRows ?? []),
+          ...(result.additionsContentRows ?? []),
+          ...(result.deletionsContentRows ?? []),
         ]);
       };
 
@@ -1825,12 +1829,7 @@ describe('rendering when an editor attaches', () => {
 
       // The late pool result is refused silently and replaces nothing.
       respondToFileRequest(manager, worker, request, [
-        {
-          type: 'element',
-          tagName: 'div',
-          properties: { 'data-line': 1, 'data-pool-result': '' },
-          children: [],
-        },
+        [{ offset: 0, content: 'pool', htmlAttrs: { 'data-pool-result': '' } }],
       ]);
       await wait(50);
       expect(fileContainer.shadowRoot?.innerHTML ?? '').toContain('data-char');

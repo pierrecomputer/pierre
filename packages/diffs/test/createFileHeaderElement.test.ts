@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 
 import { createFileHeaderElement } from '../src/utils/createFileHeaderElement';
+import { rowProperties } from './testUtils';
 
 describe('createFileHeaderElement', () => {
   test('renders default file header AST', () => {
@@ -53,7 +54,7 @@ describe('createFileHeaderElement', () => {
       stickyHeader: true,
     });
 
-    expect(header.properties?.['data-sticky']).toBe('');
+    expect(rowProperties(header)['data-sticky']).toBe('');
     expect(header).toMatchSnapshot();
   });
 });

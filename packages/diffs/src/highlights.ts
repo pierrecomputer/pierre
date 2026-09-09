@@ -1,6 +1,4 @@
 import {
-  codeToHast as highlightsCodeToHast,
-  type CodeToHastOptions as HighlightsCodeToHastOptions,
   codeToTokens as highlightsCodeToTokens,
   type CodeToTokensOptions as HighlightsCodeToTokensOptions,
   StreamTokenizer as HighlightsStreamTokenizer,
@@ -11,7 +9,6 @@ import {
 } from '@pierre/highlights';
 import { themes } from '@pierre/highlights/themes';
 import { createThemeResolver } from '@pierre/theming';
-import type { Root } from 'hast';
 import type { CodeToTokensOptions } from 'shiki/core';
 
 import type {
@@ -24,7 +21,6 @@ import type {
   CodeTextEdit,
 } from './highlighter/code_highlighter';
 import type {
-  CodeToHastOptions,
   DiffsThemeNames,
   HighlightedToken,
   SupportedLanguages,
@@ -157,18 +153,6 @@ function mapTokensOptions(
   return { ...base, theme: resolveHighlightsTheme('pierre-dark') };
 }
 
-function mapHastOptions(
-  options: CodeToHastOptions<DiffsThemeNames>
-): HighlightsCodeToHastOptions {
-  return {
-    ...mapTokensOptions(options as CodeToTokensOptions<string, string>),
-    transformers:
-      options.transformers as unknown as HighlightsCodeToHastOptions['transformers'],
-    decorations:
-      options.decorations as unknown as HighlightsCodeToHastOptions['decorations'],
-  };
-}
-
 /** Zed theme foreground, resolved like highlights's theme compiler. */
 function themeForeground(theme: Theme): string | undefined {
   const style = theme.style ?? {};
@@ -216,11 +200,11 @@ class HighlightsCodeStreamTokenizer implements CodeStreamTokenizer {
   }
 
   pushCode(code: string): ThemedToken[][] {
-    return this.#stream.pushCode(code) as ThemedToken[][];
+    return this.#stream.pushCode(code);
   }
 
   end(): ThemedToken[][] {
-    return this.#stream.end() as ThemedToken[][];
+    return this.#stream.end();
   }
 }
 
@@ -343,15 +327,7 @@ export const highlightsHighlighter: CodeHighlighter = {
     } as ThemeRegistrationResolved;
   },
   codeToTokens(code: string, options: CodeToTokensOptions<string, string>) {
-    return highlightsCodeToTokens(code, mapTokensOptions(options)) as {
-      tokens: ThemedToken[][];
-    };
-  },
-  codeToHast(code: string, options: CodeToHastOptions<DiffsThemeNames>): Root {
-    return highlightsCodeToHast(
-      code,
-      mapHastOptions(options)
-    ) as unknown as Root;
+    return highlightsCodeToTokens(code, mapTokensOptions(options));
   },
   StreamTokenizer: HighlightsCodeStreamTokenizer,
   createLiveTokenizer(options: CodeLiveTokenizerOptions): CodeLiveTokenizer {

@@ -1,16 +1,11 @@
-import { diffChars, diffWordsWithSpace } from 'diff';
+import type { CodeToTokensOptions } from 'shiki/core';
 
 import { DEFAULT_COLLAPSED_CONTEXT_THRESHOLD } from '../constants';
 import type { RenderersHighlighter } from '../highlighter/resolve_highlighter';
 import type {
-  CodeToHastOptions,
-  DecorationItem,
-  DiffsThemeNames,
   FileContents,
   FileDiffMetadata,
   ForceDiffPlainTextOptions,
-  LineDiffTypes,
-  LineInfo,
   RenderDiffFilesResult,
   RenderDiffOptions,
   SupportedLanguages,
@@ -18,16 +13,11 @@ import type {
 } from '../types';
 import { appendItems } from './appendItems';
 import { cleanLastNewline } from './cleanLastNewline';
-import { createTransformerWithState } from './createTransformerWithState';
 import { formatCSSVariablePrefix } from './formatCSSVariablePrefix';
 import { getFiletypeFromFileName } from './getFiletypeFromFileName';
 import { getHighlighterThemeStyles } from './getHighlighterThemeStyles';
-import { getLineNodes } from './getLineNodes';
 import { iterateOverDiff } from './iterateOverDiff';
-import {
-  createDiffSpanDecoration,
-  pushOrJoinSpan,
-} from './parseDiffDecorations';
+import { updateTokenOffsets } from './updateTokenOffsets';
 
 const DEFAULT_PLAIN_TEXT_OPTIONS: ForceDiffPlainTextOptions = {
   forcePlainText: false,
@@ -66,23 +56,11 @@ export function renderDiffWithHighlighter(
     highlighter,
   });
 
-  // If we have a large file and we are rendering the WHOLE plain diff ast,
-  // then we should remove the lineDiffType to make sure things render quickly.
-  // For highlighted ASTs or windowed highlights, we should just inherit the
-  // setting
-  const lineDiffType =
-    forcePlainText &&
-    !isWindowedHighlight &&
-    (diff.unifiedLineCount > 1000 || diff.splitLineCount > 1000)
-      ? 'none'
-      : options.lineDiffType;
-
   const code: RenderDiffFilesResult = {
     deletionLines: [],
     additionLines: [],
   };
 
-  const { maxLineDiffLength } = options;
   const shouldGroupAll = !forcePlainText && !diff.isPartial;
   const expandedHunksForIteration = forcePlainText ? expandedHunks : undefined;
   const buckets = new Map<number, RenderBucket>();
@@ -124,26 +102,8 @@ export function renderDiffWithHighlighter(
     totalLines,
     expandedHunks: isWindowedHighlight ? expandedHunksForIteration : true,
     collapsedContextThreshold,
-    callback: ({ hunkIndex, additionLine, deletionLine, type }) => {
+    callback: ({ hunkIndex, additionLine, deletionLine }) => {
       const bucket = getBucketForHunk(hunkIndex);
-      const splitLineIndex =
-        additionLine != null
-          ? additionLine.splitLineIndex
-          : deletionLine.splitLineIndex;
-
-      if (type === 'change' && additionLine != null && deletionLine != null) {
-        computeLineDiffDecorations({
-          additionLine: diff.additionLines[additionLine.lineIndex],
-          deletionLine: diff.deletionLines[deletionLine.lineIndex],
-          deletionLineIndex: bucket.deletionContent.length,
-          additionLineIndex: bucket.additionContent.length,
-          deletionDecorations: bucket.deletionDecorations,
-          additionDecorations: bucket.additionDecorations,
-          lineDiffType,
-          maxLineDiffLength,
-        });
-      }
-
       if (deletionLine != null) {
         appendContent(
           diff.deletionLines[deletionLine.lineIndex],
@@ -151,15 +111,6 @@ export function renderDiffWithHighlighter(
           bucket.deletionSegments,
           bucket.deletionContent
         );
-        bucket.deletionInfo.push({
-          type: type === 'change' ? 'change-deletion' : type,
-          lineNumber: deletionLine.lineNumber,
-          altLineNumber:
-            type === 'change'
-              ? undefined
-              : (additionLine.lineNumber ?? undefined),
-          lineIndex: `${deletionLine.unifiedLineIndex},${splitLineIndex}`,
-        });
       }
 
       if (additionLine != null) {
@@ -169,15 +120,6 @@ export function renderDiffWithHighlighter(
           bucket.additionSegments,
           bucket.additionContent
         );
-        bucket.additionInfo.push({
-          type: type === 'change' ? 'change-addition' : type,
-          lineNumber: additionLine.lineNumber,
-          altLineNumber:
-            type === 'change'
-              ? undefined
-              : (deletionLine.lineNumber ?? undefined),
-          lineIndex: `${additionLine.unifiedLineIndex},${splitLineIndex}`,
-        });
       }
     },
   });
@@ -200,12 +142,8 @@ export function renderDiffWithHighlighter(
     };
     const { deletionLines, additionLines } = renderTwoFiles({
       deletionFile,
-      deletionInfo: bucket.deletionInfo,
-      deletionDecorations: bucket.deletionDecorations,
 
       additionFile,
-      additionInfo: bucket.additionInfo,
-      additionDecorations: bucket.additionDecorations,
 
       highlighter,
       options,
@@ -240,102 +178,9 @@ export function renderDiffWithHighlighter(
     }
   }
 
+  updateTokenOffsets(code.deletionLines, diff.deletionLines);
+  updateTokenOffsets(code.additionLines, diff.additionLines);
   return { code, themeStyles, baseThemeType };
-}
-
-interface ProcessLineDiffProps {
-  deletionLine: string | undefined;
-  additionLine: string | undefined;
-  deletionLineIndex: number;
-  additionLineIndex: number;
-  deletionDecorations: DecorationItem[];
-  additionDecorations: DecorationItem[];
-  lineDiffType: LineDiffTypes;
-  maxLineDiffLength: number;
-}
-
-function computeLineDiffDecorations({
-  deletionLine,
-  additionLine,
-  deletionLineIndex,
-  additionLineIndex,
-  deletionDecorations,
-  additionDecorations,
-  lineDiffType,
-  maxLineDiffLength,
-}: ProcessLineDiffProps) {
-  if (deletionLine == null || additionLine == null || lineDiffType === 'none') {
-    return;
-  }
-  deletionLine = cleanLastNewline(deletionLine);
-  additionLine = cleanLastNewline(additionLine);
-  // If we have really long lines, we probably shouldn't compute diffs on them.
-  if (
-    deletionLine.length > maxLineDiffLength ||
-    additionLine.length > maxLineDiffLength
-  ) {
-    return;
-  }
-  // NOTE(amadeus): Because we visually trim trailing newlines when rendering,
-  // we also gotta make sure the diff parsing doesn't include the newline
-  // character that could be there...
-  const lineDiff =
-    lineDiffType === 'char'
-      ? diffChars(deletionLine, additionLine)
-      : diffWordsWithSpace(deletionLine, additionLine);
-  const deletionSpans: [0 | 1, string][] = [];
-  const additionSpans: [0 | 1, string][] = [];
-  const enableJoin = lineDiffType === 'word-alt';
-  const lastItem = lineDiff.at(-1);
-  for (const item of lineDiff) {
-    const isLastItem = item === lastItem;
-    if (!item.added && !item.removed) {
-      pushOrJoinSpan({
-        item,
-        arr: deletionSpans,
-        enableJoin,
-        isNeutral: true,
-        isLastItem,
-      });
-      pushOrJoinSpan({
-        item,
-        arr: additionSpans,
-        enableJoin,
-        isNeutral: true,
-        isLastItem,
-      });
-    } else if (item.removed) {
-      pushOrJoinSpan({ item, arr: deletionSpans, enableJoin, isLastItem });
-    } else {
-      pushOrJoinSpan({ item, arr: additionSpans, enableJoin, isLastItem });
-    }
-  }
-  let spanIndex = 0;
-  for (const span of deletionSpans) {
-    if (span[0] === 1) {
-      deletionDecorations.push(
-        createDiffSpanDecoration({
-          line: deletionLineIndex,
-          spanStart: spanIndex,
-          spanLength: span[1].length,
-        })
-      );
-    }
-    spanIndex += span[1].length;
-  }
-  spanIndex = 0;
-  for (const span of additionSpans) {
-    if (span[0] === 1) {
-      additionDecorations.push(
-        createDiffSpanDecoration({
-          line: additionLineIndex,
-          spanStart: spanIndex,
-          spanLength: span[1].length,
-        })
-      );
-    }
-    spanIndex += span[1].length;
-  }
 }
 
 interface HighlightSegment {
@@ -356,10 +201,6 @@ interface FakeArrayType {
 interface RenderBucket {
   deletionContent: FakeArrayType;
   additionContent: FakeArrayType;
-  deletionInfo: (LineInfo | undefined)[];
-  additionInfo: (LineInfo | undefined)[];
-  deletionDecorations: DecorationItem[];
-  additionDecorations: DecorationItem[];
   deletionSegments: HighlightSegment[];
   additionSegments: HighlightSegment[];
 }
@@ -382,10 +223,6 @@ function createBucket(): RenderBucket {
       value: '',
       length: 0,
     },
-    deletionInfo: [],
-    additionInfo: [],
-    deletionDecorations: [],
-    additionDecorations: [],
     deletionSegments: [],
     additionSegments: [],
   };
@@ -394,10 +231,6 @@ function createBucket(): RenderBucket {
 interface RenderTwoFilesProps {
   deletionFile: FileContents;
   additionFile: FileContents;
-  deletionInfo: (LineInfo | undefined)[];
-  additionInfo: (LineInfo | undefined)[];
-  deletionDecorations: DecorationItem[];
-  additionDecorations: DecorationItem[];
   options: RenderDiffOptions;
   highlighter: RenderersHighlighter;
   languageOverride: SupportedLanguages | undefined;
@@ -406,11 +239,7 @@ interface RenderTwoFilesProps {
 function renderTwoFiles({
   deletionFile,
   additionFile,
-  deletionInfo,
-  additionInfo,
   highlighter,
-  deletionDecorations,
-  additionDecorations,
   languageOverride,
   options: { theme: themeOrThemes, ...options },
 }: RenderTwoFilesProps): RenderDiffFilesResult {
@@ -418,20 +247,15 @@ function renderTwoFiles({
     languageOverride ?? getFiletypeFromFileName(deletionFile.name);
   const additionLang =
     languageOverride ?? getFiletypeFromFileName(additionFile.name);
-  const { state, transformers } = createTransformerWithState(
-    options.useTokenTransformer
-  );
   // tokenizeTimeLimit: 0 — never trade silently-wrong token colors for
   // latency; see renderFileWithHighlighter for the full rationale.
-  const hastConfig: CodeToHastOptions<DiffsThemeNames> = (() => {
+  const tokenConfig: CodeToTokensOptions<string, string> = (() => {
     return typeof themeOrThemes === 'string'
       ? {
           ...options,
           // language will be overwritten for each highlight
           lang: 'text',
           theme: themeOrThemes,
-          transformers,
-          decorations: undefined,
           defaultColor: false,
           cssVariablePrefix: formatCSSVariablePrefix('token'),
           tokenizeTimeLimit: 0,
@@ -441,8 +265,6 @@ function renderTwoFiles({
           // language will be overwritten for each highlight
           lang: 'text',
           themes: themeOrThemes,
-          transformers,
-          decorations: undefined,
           defaultColor: false,
           cssVariablePrefix: formatCSSVariablePrefix('token'),
           tokenizeTimeLimit: 0,
@@ -453,29 +275,23 @@ function renderTwoFiles({
     if (deletionFile.contents === '') {
       return [];
     }
-    hastConfig.lang = deletionLang;
-    state.lineInfo = deletionInfo;
-    hastConfig.decorations = deletionDecorations;
-    return getLineNodes(
-      highlighter.codeToHast(
-        cleanLastNewline(deletionFile.contents),
-        hastConfig
-      )
-    );
+    tokenConfig.lang = deletionLang;
+
+    return highlighter.codeToTokens(
+      cleanLastNewline(deletionFile.contents),
+      tokenConfig
+    ).tokens;
   })();
   const additionLines = (() => {
     if (additionFile.contents === '') {
       return [];
     }
-    hastConfig.lang = additionLang;
-    hastConfig.decorations = additionDecorations;
-    state.lineInfo = additionInfo;
-    return getLineNodes(
-      highlighter.codeToHast(
-        cleanLastNewline(additionFile.contents),
-        hastConfig
-      )
-    );
+    tokenConfig.lang = additionLang;
+
+    return highlighter.codeToTokens(
+      cleanLastNewline(additionFile.contents),
+      tokenConfig
+    ).tokens;
   })();
 
   return { deletionLines, additionLines };

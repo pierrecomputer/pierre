@@ -2,18 +2,9 @@ import assert from 'node:assert';
 import t from 'node:test';
 
 import { LANGS } from '../lib/highlighter';
-import type {
-  CodeToHastOptions,
-  CodeToTokensOptions,
-  HastElement,
-  HastText,
-  Theme,
-  ThemedToken,
-} from '../lib/index';
-import { codeToHast, codeToTokens, init, StreamTokenizer } from '../lib/index';
+import type { CodeToTokensOptions, Theme, ThemedToken } from '../lib/index';
+import { codeToTokens, init, StreamTokenizer } from '../lib/index';
 import {
-  buildHast,
-  lineRecordsToRuns,
   resolveOptionThemes,
   runToToken,
   splitRecordLines,
@@ -27,7 +18,6 @@ import { makeRand, themeColor } from './_util';
 /** `init` returns the full internal class; parity tests reach its record APIs. */
 interface InternalHighlighter {
   tokenizeRecords(langId: number, inputLength: number): Uint32Array;
-  tokenizeLineRecords(langId: number, inputLength: number): Uint32Array;
   writeInput(input: string | Uint8Array | ArrayBuffer): number;
 }
 
@@ -43,18 +33,6 @@ t.before(() => {
 /** join a line's token contents back together */
 const lineText = (tokens: ThemedToken[]) =>
   tokens.map((tk) => tk.content).join('');
-
-/** Assert-and-return an element node; tests navigate known tree shapes. */
-const el = (node: HastElement | HastText | undefined): HastElement => {
-  assert.ok(node !== undefined && node.type === 'element');
-  return node;
-};
-
-/** Assert-and-return a text node's value. */
-const textValue = (node: HastElement | HastText | undefined): string => {
-  assert.ok(node !== undefined && node.type === 'text');
-  return node.value;
-};
 
 const langIds = {
   css: LANGS.css,
@@ -96,11 +74,6 @@ function hostTokens(
     runs.map((run) => runToToken(code, run, themes, '--shiki-'))
   );
 }
-
-const hostLineStarts = (code: string) => [
-  0,
-  ...Array.from(code.matchAll(/\n/g), (match) => match.index + 1),
-];
 
 void t.test('codeToTokens: lines, offsets, and terminators', () => {
   const code = 'const a = 1; // hi\n\nlet s = "x";\r\nendé 🎈\n';
@@ -195,13 +168,6 @@ void t.test('codeToTokens: token records tile every input (fuzz)', () => {
         ),
         `${lang}: wasm lines differ for ${JSON.stringify(input)}`
       );
-      const recs = highlighter.tokenizeLineRecords(
-        langIds[lang],
-        highlighter.writeInput(input)
-      );
-      const adapted = lineRecordsToRuns(recs, recs.length >> 1);
-      assert.deepEqual(adapted.lineRuns, expectedRuns);
-      assert.deepEqual(adapted.lineStarts, hostLineStarts(input));
       const expectedLines = input.split(/\r?\n/);
       const terminators = input.match(/\r?\n/g) ?? [];
       assert.equal(tokens.length, expectedLines.length);
@@ -249,222 +215,6 @@ void t.test('codeToTokens: wasm line records match host splitting', () => {
     codeToTokens(code, capped).tokens,
     hostTokens(code, 'ts', capped.tokenizeMaxLineLength)
   );
-});
-
-void t.test('codeToHast: shiki-shaped tree', () => {
-  const root = codeToHast('const a = 1 // x\n', {
-    lang: 'ts',
-    theme: pierreDark,
-  });
-  assert.equal(root.type, 'root');
-  const pre = root.children[0];
-  assert.equal(pre.tagName, 'pre');
-  assert.equal(pre.properties.tabindex, '0');
-  assert.match(
-    pre.properties.style as string,
-    /^background-color:#[0-9a-f]+;color:#/
-  );
-  const codeEl = el(pre.children[0]);
-  assert.equal(codeEl.tagName, 'code');
-  // lines are span.line elements joined by newline text nodes
-  assert.equal(codeEl.children.length, 3);
-  const [line1, sep, line2] = codeEl.children.map(
-    (child) => child as HastElement
-  );
-  assert.equal(line1.properties.class, 'line');
-  assert.deepEqual(sep, { type: 'text', value: '\n' });
-  assert.deepEqual(line2.children, []);
-  const span = el(line1.children[0]);
-  assert.equal(span.tagName, 'span');
-  assert.equal(
-    span.properties.style,
-    `color:${themeColor('keyword.declaration')}`
-  );
-  assert.equal(textValue(span.children[0]), 'const ');
-});
-
-void t.test('codeToHast: wasm line records match host splitting', () => {
-  const samples: [string, keyof typeof langIds][] = [
-    ['', 'ts'],
-    ['const a = 1;\n\nlet b = 2;\r\n', 'ts'],
-    ['const greeting = "日本語 🎈"; // naïve résumé\n', 'ts'],
-    ['.a {\r\n  color: red; /* x\n  y */\r\n}\n', 'css'],
-    ['<div title="a\nb">é</div>\n', 'html'],
-  ];
-  for (const [code, lang] of samples) {
-    const options = { lang, theme: pierreDark };
-    const themes = resolveOptionThemes(options);
-    const lineRuns = hostRuns(code, lang);
-    const lineStarts = hostLineStarts(code);
-    const common = { codeToHast, codeToTokens, meta: {} };
-    assert.deepEqual(
-      codeToHast(code, options),
-      buildHast(code, lineRuns, lineStarts, themes, options, common),
-      lang
-    );
-  }
-
-  const code = 'let a = 1\nlet bb = 22\nlet c = 3';
-  const options: CodeToHastOptions = {
-    lang: 'ts',
-    theme: pierreDark,
-    tokenizeMaxLineLength: 10,
-    decorations: [{ start: 2, end: 15, tagName: 'mark' }],
-  };
-  const themes = resolveOptionThemes(options);
-  assert.deepEqual(
-    codeToHast(code, options),
-    buildHast(
-      code,
-      hostRuns(code, 'ts', options.tokenizeMaxLineLength),
-      hostLineStarts(code),
-      themes,
-      options,
-      { codeToHast, codeToTokens, meta: {} }
-    )
-  );
-});
-
-void t.test('codeToHast: transformer hooks run in shiki order', () => {
-  const calls: string[] = [];
-  const root = codeToHast('a = 1\nb = 2', {
-    lang: 'python',
-    theme: pierreDark,
-    transformers: [
-      {
-        preprocess(code) {
-          calls.push('preprocess');
-          return code.replace('b = 2', 'c = 3');
-        },
-        tokens(lines) {
-          calls.push(`tokens:${lines.length}`);
-          return lines;
-        },
-        span(node, line, col, lineElement, token) {
-          calls.push(`span:${line}:${col}:${token.content}`);
-          node.properties['data-char'] = String(col);
-        },
-        line(node, line) {
-          calls.push(`line:${line}`);
-          delete node.properties.class;
-        },
-        pre() {
-          calls.push('pre');
-        },
-        root() {
-          calls.push('root');
-        },
-      },
-    ],
-  });
-  assert.equal(calls[0], 'preprocess');
-  assert.equal(calls[1], 'tokens:2');
-  assert.ok(calls.includes('span:2:0:c '));
-  assert.deepEqual(calls.slice(-2), ['pre', 'root']);
-  const line1 = el(el(root.children[0].children[0]).children[0]);
-  assert.equal(line1.properties.class, undefined);
-  assert.equal(el(line1.children[0]).properties['data-char'], '0');
-});
-
-void t.test('codeToHast: decorations wrap and split spans', () => {
-  const root = codeToHast('const abc = 1', {
-    lang: 'ts',
-    theme: pierreDark,
-    decorations: [
-      {
-        start: { line: 0, character: 6 },
-        end: { line: 0, character: 9 },
-        properties: { class: 'highlighted-word' },
-      },
-    ],
-  });
-  const line = el(el(root.children[0].children[0]).children[0]);
-  const wrapper = line.children.find(
-    (child): child is HastElement =>
-      child.type === 'element' && child.properties.class === 'highlighted-word'
-  );
-  assert.ok(wrapper !== undefined, 'decoration wrapper exists');
-  const text = wrapper.children
-    .map((span) => textValue(el(span).children[0]))
-    .join('');
-  assert.equal(text, 'abc');
-});
-
-void t.test('codeToHast: nested decorations wrap only their own range', () => {
-  // the inner wrap splices several spans into one wrapper; the outer range
-  // must still resolve its boundaries against the mutated children
-  const code = 'const abc = 1';
-  const root = codeToHast(code, {
-    lang: 'ts',
-    theme: pierreDark,
-    decorations: [
-      { start: 1, end: 12, properties: { class: 'outer' } },
-      { start: 2, end: 11, properties: { class: 'inner' } },
-    ],
-  });
-  const textOf = (node: HastElement | HastText): string =>
-    node.type === 'text'
-      ? node.value
-      : node.children.map((child) => textOf(child)).join('');
-  const line = el(el(root.children[0].children[0]).children[0]);
-  const outer = line.children.find(
-    (child): child is HastElement =>
-      child.type === 'element' && child.properties.class === 'outer'
-  );
-  assert.ok(outer !== undefined, 'outer wrapper exists');
-  assert.equal(textOf(outer), code.slice(1, 12));
-  const inner = outer.children.find(
-    (child): child is HastElement =>
-      child.type === 'element' && child.properties.class === 'inner'
-  );
-  assert.ok(inner !== undefined, 'inner wrapper nests inside the outer one');
-  assert.equal(textOf(inner), code.slice(2, 11));
-  assert.equal(textOf(line), code);
-});
-
-void t.test('codeToHast: transformer context and token htmlAttrs', () => {
-  const seen: Record<string, unknown> = {};
-  const root = codeToHast('let a = 1\nlet b = 2', {
-    lang: 'ts',
-    theme: pierreDark,
-    meta: { 'data-source': 'test', _hidden: 'x' },
-    transformers: [
-      {
-        tokens(lines) {
-          // shiki's transformerStyleToClass pattern: move styling to a class
-          for (const token of lines[0]) {
-            token.htmlAttrs = { class: 'tok' };
-          }
-        },
-        pre(node) {
-          this.addClassToHast(node, 'from-context');
-          seen.meta = this.meta['data-source'];
-          seen.structure = this.structure;
-          seen.lineCount = this.lines.length;
-          seen.codeTag = this.code.tagName;
-          seen.reTokens = this.codeToTokens('a', {
-            lang: 'ts',
-            theme: pierreDark,
-          }).tokens.length;
-        },
-      },
-    ],
-  });
-  const pre = root.children[0];
-  const preClass = pre.properties.class;
-  assert.ok(Array.isArray(preClass));
-  assert.equal(preClass.includes('from-context'), true);
-  assert.equal(pre.properties['data-source'], 'test');
-  assert.equal(pre.properties._hidden, undefined);
-  assert.deepEqual(seen, {
-    meta: 'test',
-    structure: 'classic',
-    lineCount: 2,
-    codeTag: 'code',
-    reTokens: 1,
-  });
-  const span = el(el(el(pre.children[0]).children[0]).children[0]);
-  assert.equal(span.properties.class, 'tok');
 });
 
 void t.test('tokenizeMaxLineLength collapses overlong lines', () => {
@@ -558,7 +308,7 @@ void t.test('codeToTokens: defaultColor applies one theme inline', () => {
   const keyword = themeColor('keyword.declaration');
   const keywordLight = themeColor('keyword.declaration', pierreLight);
   // like shiki, `light` is the default theme: plain color plus one custom
-  // property per other theme, and the <pre> style carries both
+  // property per other theme, and root metadata carries both
   const light = codeToTokens('const a = 1', { lang: 'ts', themes });
   assert.deepEqual(light.tokens[0][0].htmlStyle, {
     color: keywordLight,
@@ -573,11 +323,6 @@ void t.test('codeToTokens: defaultColor applies one theme inline', () => {
     `${themeColor('background', pierreLight)};--hls-dark-bg:${themeColor('background')}`
   );
   assert.equal(light.rootStyle, undefined);
-  const pre = el(codeToHast('const a = 1', { lang: 'ts', themes }).children[0]);
-  assert.equal(
-    pre.properties.style,
-    `background-color:${light.bg};color:${light.fg}`
-  );
   const dark = codeToTokens('const a = 1', {
     lang: 'ts',
     themes,
@@ -613,12 +358,12 @@ void t.test('codeToTokens: defaultColor applies one theme inline', () => {
       }),
     /light-dark/
   );
-  // a theme without colors leaves the <pre> style empty instead of `undefined`
-  const bare = el(
-    codeToHast('x', {
-      lang: 'ts',
-      theme: { name: 'bare', appearance: 'dark', style: {} },
-    }).children[0]
-  );
-  assert.equal(bare.properties.style, '');
+  const bare = codeToTokens('x', {
+    lang: 'ts',
+    theme: { name: 'bare', appearance: 'dark', style: {} },
+  });
+  assert.equal(bare.fg, undefined);
+  assert.equal(bare.bg, undefined);
+  assert.equal(bare.rootStyle, undefined);
+  assert.equal(bare.themeName, 'bare');
 });

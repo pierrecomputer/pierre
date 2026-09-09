@@ -12,21 +12,7 @@ export * from './components/VirtualizedFile';
 export * from './components/VirtualizedFileDiff';
 export * from './components/Virtualizer';
 export * from './constants';
-export {
-  type CodeHighlighter,
-  type CodeHighlighterOptions,
-  type CodeLiveLineChange,
-  type CodeLiveTokenizer,
-  type CodeLiveTokenizerOptions,
-  type CodeLiveTokenizerUpdate,
-  type CodeLiveUpdateOptions,
-  type CodeTextEdit,
-  type CodeTextPosition,
-  type CodeStreamTokenizer,
-  isBuiltinShikiHighlighter,
-  type RenderHighlighter,
-  setHighlighter,
-} from './highlighter/code_highlighter';
+export * from './highlighter/code_highlighter';
 export * from './highlighter/languages/areLanguagesAttached';
 export * from './highlighter/languages/attachResolvedLanguages';
 export * from './highlighter/languages/cleanUpResolvedLanguages';
@@ -37,19 +23,7 @@ export * from './highlighter/languages/hasResolvedLanguages';
 export * from './highlighter/languages/registerCustomLanguage';
 export * from './highlighter/languages/resolveLanguage';
 export * from './highlighter/languages/resolveLanguages';
-export {
-  areHighlighterThemesReady,
-  areHighlighterThemesResolved,
-  customHighlighterOf,
-  getCodeHighlighter,
-  getCustomHighlighter,
-  getHighlighterIfReady,
-  isHighlighterLanguageReady,
-  loadHighlighter,
-  preloadHighlighter,
-  type RenderersHighlighter,
-  resolveRenderHighlighter,
-} from './highlighter/resolve_highlighter';
+export * from './highlighter/resolve_highlighter';
 export * from './highlighter/shared_highlighter';
 export { shikiHighlighter } from './highlighter/shiki_highlighter';
 export * from './highlighter/themes/areThemesAttached';
@@ -101,7 +75,6 @@ export * from './utils/createRowNodes';
 export * from './utils/createSeparator';
 export * from './utils/createSpanNodeFromToken';
 export * from './utils/createStyleElement';
-export * from './utils/createTransformerWithState';
 export * from './utils/createUnsafeCSSStyleNode';
 export * from './utils/createWindowFromScrollPosition';
 export * from './utils/cssWrappers';
@@ -115,12 +88,10 @@ export * from './utils/getHunkSeparatorSlotName';
 export * from './utils/getIconForType';
 export * from './utils/getLineAnnotationName';
 export * from './utils/getLineEndingType';
-export * from './utils/getLineNodes';
 export * from './utils/getOrCreateCodeNode';
 export * from './utils/getSingularPatch';
 export * from './utils/getThemes';
 export * from './utils/getTotalLineCountFromHunks';
-export * from './utils/hast_utils';
 export * from './utils/hydratePartialDiff';
 export * from './utils/isDefaultRenderRange';
 export * from './utils/isWorkerContext';
@@ -131,7 +102,6 @@ export * from './utils/parseLineType';
 export * from './utils/parsePatchFiles';
 export * from './utils/prefersReducedMotion';
 export * from './utils/prerenderHTMLIfNecessary';
-export * from './utils/processLine';
 export * from './utils/renderDiffWithHighlighter';
 export * from './utils/renderFileWithHighlighter';
 export * from './utils/resolveConflict';
@@ -142,3 +112,5 @@ export * from './utils/trimPatchContext';
 export type * from './types';
 
 export { codeToHtml, createCSSVariablesTheme };
+export * from './utils/html';
+export * from './utils/tokensToHtml';

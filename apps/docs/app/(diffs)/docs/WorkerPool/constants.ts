@@ -466,7 +466,7 @@ new WorkerPoolManager(poolOptions, highlighterOptions)
 // - poolOptions: WorkerPoolOptions
 //   - workerFactory: () => Worker - Function that creates a Worker instance
 //   - poolSize?: number (default: 8) - Number of workers
-//   - totalASTLRUCacheSize?: number (default: 100) - Max items per cache
+//   - totalTokenLRUCacheSize?: number (default: 100) - Max items per cache
 //     (Two separate LRU caches are maintained: one for files, one for diffs.
 //      Each cache has this limit, so total cached items can be 2x this value.)
 // - highlighterOptions: WorkerInitializationRenderOptions
@@ -497,17 +497,17 @@ poolManager.setRenderOptions(options)
 poolManager.getRenderOptions()
 // Returns: WorkerRenderingOptions - Current render options (copy)
 
-poolManager.highlightFileAST(fileInstance, file, options)
-// Queues highlighted file render, calls fileInstance.onHighlightSuccess when done
+poolManager.highlightFileTokens(fileInstance, file, options)
+// Queues file tokenization, calls fileInstance.onHighlightSuccess when done
 
-poolManager.getPlainFileAST(file, startingLineNumber?)
-// Returns: ThemedFileResult | undefined - Sync render with 'text' lang
+poolManager.getPlainFileTokens(file, startingLineNumber?)
+// Returns: ThemedFileResult | undefined - Sync tokenize with 'text' lang
 
-poolManager.highlightDiffAST(fileDiffInstance, diff, options)
-// Queues highlighted diff render, calls fileDiffInstance.onHighlightSuccess when done
+poolManager.highlightDiffTokens(fileDiffInstance, diff, options)
+// Queues diff tokenization, calls fileDiffInstance.onHighlightSuccess when done
 
-poolManager.getPlainDiffAST(diff, lineDiffType)
-// Returns: ThemedDiffResult | undefined - Sync render with 'text' lang
+poolManager.getPlainDiffTokens(diff, lineDiffType)
+// Returns: ThemedDiffResult | undefined - Sync tokenize with 'text' lang
 
 poolManager.terminate()
 // Terminates all workers and resets state
@@ -543,7 +543,7 @@ const workerPool = getOrCreateWorkerPoolSingleton({
     // Optional: configure cache size per cache (default: 100)
     // Two separate LRU caches are maintained: one for files,
     // one for diffs, so combined cache size will be double
-    totalASTLRUCacheSize: 200,
+    totalTokenLRUCacheSize: 200,
   },
   highlighterOptions: {
     theme: { dark: 'pierre-dark', light: 'pierre-light' },
@@ -624,12 +624,12 @@ export const WORKER_POOL_ARCHITECTURE_ASCII: PreloadFileOptions<
 │ │                                     │ │
 │ │ * Renders plain text synchronously  │ │
 │ │ * Queue requests to WorkerPool for  │ │
-│ │   highlighted HAST                  │ │
+│ │   themed tokens                     │ │
 │ │ * Automatically render the          │ │
-│ │   highlighted HAST response         │ │
+│ │   token response                    │ │
 │ └─┬─────────────────────────────────┬─┘ │
-│   │ HAST Request                    ↑   │
-│   ↓                   HAST Response │   │
+│   │ Token Request                   ↑   │
+│   ↓                  Token Response │   │
 │ ┌ WorkerPoolManager ────────────────┴─┐ │
 │ │ * Shared singleton                  │ │
 │ │ * Manages WorkerPool instance and   │ │
@@ -637,11 +637,11 @@ export const WORKER_POOL_ARCHITECTURE_ASCII: PreloadFileOptions<
 │ └─┬─────────────────────────────────┬─┘ │
 └───│─────────────────────────────────│───┘
     │ postMessage                     ↑
-    ↓                   HAST Response │
+    ↓                  Token Response │
 ┌───┴───────── Worker Threads ────────│───┐
 │ ┌ worker.js ────────────────────────│─┐ │
 │ │ * 8 threads by default            │ │ │
-│ │ * Runs Shiki's codeToHast() ──────┘ │ │
+│ │ * Runs codeToTokens() ────────────┘ │ │
 │ │ * Manages themes and language       │ │
 │ │   loading automatically             │ │
 │ └─────────────────────────────────────┘ │

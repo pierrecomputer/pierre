@@ -7,7 +7,7 @@
 
 Highlights is a small code highlighter with 65 hand-written language lexers in
 WebAssembly. It has no grammar downloads and can produce HTML, Shiki-compatible
-tokens, HAST, streamed tokens, or incrementally updated editor tokens.
+tokens, streamed tokens, or incrementally updated editor tokens.
 
 Install Highlights from npm:
 
@@ -30,19 +30,13 @@ The returned bytes are a zero-copy view of WebAssembly memory and remain valid
 only until the next call on that highlighter. Send or decode them immediately,
 or call `.slice()` before retaining them.
 
-### Tokens and HAST
+### Tokens
 
 `codeToTokens()` returns one `ThemedToken[]` per line, with absolute UTF-16
 offsets. The result also includes `fg`, `bg`, `themeName`, and `rootStyle` when
-the selected theme provides them. `codeToHast()` returns the classic
-`root > pre > code > span.line` tree used by Shiki.
+the selected theme provides them.
 
-<DocsCodeExample {...highlightsTokensAndHast} />
-
-HAST output supports range `decorations`, mutable `meta`, and Shiki-style
-`preprocess`, `tokens`, `span`, `line`, `code`, `pre`, and `root` transformer
-hooks. It supports the classic structure and does not run Shiki's `postprocess`
-hook.
+<DocsCodeExample {...highlightsTokens} />
 
 The shared token options are:
 
@@ -56,7 +50,7 @@ The shared token options are:
 | `tokenizeMaxLineLength` | Collapses longer lines into one unthemed token for DOM safety                                       |
 
 Choose either `theme` or `themes`. `codeToHtml()` accepts one `theme`, while the
-token and HAST APIs accept either form.
+tokenization APIs accept either form.
 
 ### Streaming
 
@@ -236,8 +230,8 @@ The main entry exports the complete runtime and its public types:
 <DocsCodeExample {...highlightsApiRuntime} />
 
 `codeToHtml()` returns a zero-copy `Uint8Array` view of a complete `<pre>`
-fragment. `codeToTokens()` returns a `TokensResult`, and `codeToHast()` returns
-a `HastRoot`. All three accept a string, `Uint8Array`, or `ArrayBuffer`.
+fragment. `codeToTokens()` returns a `TokensResult`. Both accept a string,
+`Uint8Array`, or `ArrayBuffer`.
 
 `StreamTokenizer` owns an isolated WebAssembly instance. `pushCode(chunk)`
 returns tokens for completed lines, `end()` returns the remaining lines and

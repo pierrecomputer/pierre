@@ -1,13 +1,9 @@
-import type { Element as HASTElement, Properties } from 'hast';
-
 import type { PrePropertiesConfig } from '../types';
-import { createHastElement } from './hast_utils';
+import type { HTMLAttributes } from './html';
+import { createHTMLElement } from './html';
 
-export function createPreElement(options: PrePropertiesConfig): HASTElement {
-  return createHastElement({
-    tagName: 'pre',
-    properties: createPreWrapperProperties(options),
-  });
+export function createPreElement(options: PrePropertiesConfig): string {
+  return createHTMLElement('pre', createPreWrapperProperties(options));
 }
 
 export function createPreWrapperProperties({
@@ -19,8 +15,8 @@ export function createPreWrapperProperties({
   totalLines,
   type,
   customProperties,
-}: PrePropertiesConfig): Properties {
-  const properties: Properties = {
+}: PrePropertiesConfig): HTMLAttributes {
+  const properties: HTMLAttributes = {
     // NOTE: We always apply custom properties first so the important
     // properties cannot be overridden
     ...customProperties,

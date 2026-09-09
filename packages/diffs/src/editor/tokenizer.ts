@@ -1676,7 +1676,7 @@ export function renderLineTokens(
   });
 }
 
-// Shiki special-cases `text` and `ansi` in codeToHast but does not expose grammars.
+// Shiki special-cases `text` and `ansi` during tokenization but does not expose grammars.
 function isGrammarlessLanguage(languageId: string): boolean {
   return languageId === 'text' || languageId === 'ansi';
 }

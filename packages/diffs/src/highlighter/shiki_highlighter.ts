@@ -1,12 +1,6 @@
-import type { Root } from 'hast';
 import type { CodeToTokensOptions, GrammarState } from 'shiki/core';
 
-import type {
-  CodeToHastOptions,
-  DiffsHighlighter,
-  DiffsThemeNames,
-  ThemedToken,
-} from '../types';
+import type { DiffsHighlighter, DiffsThemeNames, ThemedToken } from '../types';
 import type {
   CodeHighlighter,
   CodeHighlighterOptions,
@@ -103,9 +97,6 @@ export const shikiHighlighter: CodeHighlighter = asBuiltinShikiAdapter({
   },
   codeToTokens(code: string, options: CodeToTokensOptions<string, string>) {
     return loadedInstance().codeToTokens(code, options);
-  },
-  codeToHast(code: string, options: CodeToHastOptions<DiffsThemeNames>): Root {
-    return loadedInstance().codeToHast(code, options);
   },
   StreamTokenizer: ShikiCodeStreamTokenizer,
   getShikiInstance: getHighlighterIfLoaded,

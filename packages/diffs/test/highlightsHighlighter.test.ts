@@ -1,8 +1,6 @@
 import oneDarkPro from '@pierre/highlights/themes/one-dark-pro';
 import { transformerStyleToClass } from '@shikijs/transformers';
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
-import type { ElementContent } from 'hast';
-import { toHtml } from 'hast-util-to-html';
 
 import type { CodeHighlighter } from '../src/highlighter/code_highlighter';
 import { setHighlighter } from '../src/highlighter/code_highlighter';
@@ -13,12 +11,15 @@ import {
 import { preloadHighlighter } from '../src/highlighter/resolve_highlighter';
 import { shikiHighlighter } from '../src/highlighter/shiki_highlighter';
 import highlightsHighlighter from '../src/highlights';
+import { DiffHunksRenderer } from '../src/renderers/DiffHunksRenderer';
 import { FileRenderer } from '../src/renderers/FileRenderer';
 import { preloadFile } from '../src/ssr/preloadFile';
 import type { FileContents } from '../src/types';
+import { renderRows } from '../src/utils/html';
 import { parseDiffFromFile } from '../src/utils/parseDiffFromFile';
 import { renderDiffWithHighlighter } from '../src/utils/renderDiffWithHighlighter';
 import { renderFileWithHighlighter } from '../src/utils/renderFileWithHighlighter';
+import { tokensToHtml } from '../src/utils/tokensToHtml';
 
 const file: FileContents = {
   name: 'example.ts',
@@ -37,10 +38,6 @@ beforeAll(async () => {
     themes: ['pierre-dark', 'pierre-light', 'one-dark-pro'],
   });
 });
-
-function linesToHtml(lines: ElementContent[]): string {
-  return lines.map((line) => toHtml(line)).join('\n');
-}
 
 describe('registration', () => {
   test('the registry defaults to the built-in shiki highlighter', () => {
@@ -90,18 +87,18 @@ describe('registration races', () => {
         new Promise<void>((resolve) => {
           resolveLoad = resolve;
         }),
-      codeToHast(code, options) {
+      codeToTokens(code, options) {
         slowRenders++;
-        return highlightsHighlighter.codeToHast(code, options);
+        return highlightsHighlighter.codeToTokens(code, options);
       },
     };
     let highlightsRenders = 0;
     const fast: CodeHighlighter = {
       ...highlightsHighlighter,
       name: 'fast',
-      codeToHast(code, options) {
+      codeToTokens(code, options) {
         highlightsRenders++;
-        return highlightsHighlighter.codeToHast(code, options);
+        return highlightsHighlighter.codeToTokens(code, options);
       },
     };
     setHighlighter(slow);
@@ -200,11 +197,9 @@ describe('highlights highlighter', () => {
     expect(baseThemeType).toBeUndefined();
     expect(themeStyles).toContain('--diffs-dark:#fafafa');
     expect(themeStyles).toContain('--diffs-dark-bg:#0a0a0a');
-    // one hast node per line, tagged by processLine
+    // Raw tokens stay available until the renderer composes visible rows.
     expect(code).toHaveLength(3);
-    const html = linesToHtml(code);
-    expect(html).toContain('data-line="1"');
-    expect(html).toContain('data-line-type="context"');
+    const html = tokensToHtml(code);
     // dual-theme custom properties with highlights's pierre-dark keyword color
     expect(html).toContain('--diffs-token-dark:#ff678d');
     expect(html).toContain('--diffs-token-light:');
@@ -217,10 +212,28 @@ describe('highlights highlighter', () => {
       highlightsHighlighter,
       fileOptions
     );
-    expect(linesToHtml(code)).toContain('puts ');
+    expect(tokensToHtml(code)).toContain('puts ');
   });
 
-  test('renderDiffWithHighlighter emits word-diff decorations', () => {
+  test('sparse file tokens retain UTF-16 offsets across Unicode and CRLF lines', () => {
+    const contents = 'const greeting = "🎉";\r\n\r\nconst value = 2;\n';
+    const { code } = renderFileWithHighlighter(
+      { name: 'window.ts', contents },
+      highlightsHighlighter,
+      fileOptions,
+      { forcePlainText: true, startingLine: 2, totalLines: 1 }
+    );
+    expect(code[0]).toBeUndefined();
+    expect(code[1]).toBeUndefined();
+    expect(code[2][0].offset).toBe(contents.indexOf('const value'));
+    for (const token of code[2]) {
+      expect(
+        contents.slice(token.offset, token.offset + token.content.length)
+      ).toBe(token.content);
+    }
+  });
+
+  test('renders word-diff decorations from cached highlights tokens', async () => {
     const diff = parseDiffFromFile(
       { name: 'file.ts', contents: 'const oldValue = 1;\n' },
       { name: 'file.ts', contents: 'const newValue = 2;\n' }
@@ -230,8 +243,20 @@ describe('highlights highlighter', () => {
       lineDiffType: 'word',
       maxLineDiffLength: 1000,
     });
-    const deletionHtml = linesToHtml(code.deletionLines);
-    const additionHtml = linesToHtml(code.additionLines);
+    expect(code.deletionLines[0].map((token) => token.content).join('')).toBe(
+      'const oldValue = 1;'
+    );
+    const renderer = new DiffHunksRenderer({
+      ...fileOptions,
+      diffStyle: 'split',
+      lineDiffType: 'word',
+    });
+    setHighlighter(highlightsHighlighter);
+    const result = await renderer.asyncRender(diff).finally(() => {
+      setHighlighter(shikiHighlighter);
+    });
+    const deletionHtml = renderRows(result.deletionsContentRows ?? []);
+    const additionHtml = renderRows(result.additionsContentRows ?? []);
     expect(deletionHtml).toContain('data-line-type="change-deletion"');
     expect(additionHtml).toContain('data-line-type="change-addition"');
     // intra-line word diff wraps the changed spans
@@ -262,23 +287,22 @@ describe('highlights highlighter', () => {
       ...fileOptions,
       tokenizeMaxLineLength: 5,
     });
-    const html = linesToHtml(code);
+    const html = tokensToHtml(code);
     // both lines exceed the cap: content survives, keyword coloring does not
     expect(html).toContain('const a = 1; // hi');
     expect(html).not.toContain('--diffs-token-dark:#ff678d');
   });
 
-  test('shiki transformers using the this-context work (styleToClass)', () => {
+  test('Shiki token hooks work without a highlighter context (styleToClass)', () => {
     const transformer = transformerStyleToClass();
-    const root = highlightsHighlighter.codeToHast('const a = 1\n', {
+    const root = highlightsHighlighter.codeToTokens('const a = 1\n', {
       lang: 'typescript',
       themes: { dark: 'pierre-dark', light: 'pierre-light' },
       defaultColor: false,
-      transformers: [transformer],
     });
-    const html = toHtml(root);
+    const html = tokensToHtml(root.tokens, { transformers: [transformer] });
     // token styles moved into registered classes (via token htmlAttrs), and
-    // the pre style moved through the context's addClassToHast
+    // no node hooks run in the direct renderer
     expect(html).toContain('__shiki_');
     expect(html).not.toContain('style=');
     expect(transformer.getCSS()).toContain('--hls-dark:');
@@ -292,9 +316,9 @@ describe('highlights highlighter', () => {
     const replacement: CodeHighlighter = {
       ...highlightsHighlighter,
       name: 'highlights-replacement',
-      codeToHast(code, options) {
+      codeToTokens(code, options) {
         replacementRenders++;
-        return highlightsHighlighter.codeToHast(code, options);
+        return highlightsHighlighter.codeToTokens(code, options);
       },
     };
     setHighlighter(replacement);

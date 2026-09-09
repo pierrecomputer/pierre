@@ -1,14 +1,12 @@
-import type { Element as HASTElement } from 'hast';
+import type { RenderedLine } from './html';
 
-import { createHastElement } from './hast_utils';
-
-export function createEmptyRowBuffer(size: number): HASTElement {
-  return createHastElement({
-    tagName: 'div',
+export function createEmptyRowBuffer(size: number): RenderedLine {
+  return {
+    html: '',
     properties: {
       'data-content-buffer': '',
       'data-buffer-size': size,
       style: `grid-row: span ${size};min-height:calc(${size} * 1lh)`,
     },
-  });
+  };
 }

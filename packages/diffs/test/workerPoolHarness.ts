@@ -1,5 +1,4 @@
-import type { ElementContent } from 'hast';
-
+import type { ThemedToken } from '../src/types';
 import type {
   InitializeWorkerRequest,
   RenderDiffRequest,
@@ -248,7 +247,7 @@ export function respondToFileRequest(
   manager: WorkerPoolManager,
   worker: TestWorker,
   request: RenderFileRequest,
-  code: ElementContent[] = []
+  code: ThemedToken[][] = []
 ): void {
   worker.respond({
     type: 'success',

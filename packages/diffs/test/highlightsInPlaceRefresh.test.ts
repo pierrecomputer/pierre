@@ -67,20 +67,13 @@ describe('in-place highlighter refresh', () => {
     const marked: CodeHighlighter = {
       ...highlightsHighlighter,
       name: 'marked-highlights',
-      codeToHast(code, options) {
-        // mark the line nodes; the render path extracts them from pre > code
-        const root = highlightsHighlighter.codeToHast(code, options);
-        const pre = root.children[0];
-        if (pre?.type !== 'element') return root;
-        for (const codeNode of pre.children) {
-          if (codeNode.type !== 'element') continue;
-          for (const line of codeNode.children) {
-            if (line.type === 'element') {
-              line.properties['data-refresh-marker'] = '';
-            }
+      codeToTokens(code, options) {
+        const result = highlightsHighlighter.codeToTokens(code, options);
+        for (const line of result.tokens)
+          for (const token of line) {
+            token.htmlAttrs = { ...token.htmlAttrs, 'data-refresh-marker': '' };
           }
-        }
-        return root;
+        return result;
       },
     };
     setHighlighter(marked);

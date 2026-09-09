@@ -28,11 +28,11 @@ src/live.wat        incremental-tokenizer core: heap, line table, state
                     interning, per-line driver, edit splicing, compaction
 src/highlights.wat  memory, $Language enum, imports, and dispatch
 lib/index.ts        public types and the export barrel
-lib/highlighter.ts  HighlightsHighlighter, codeToHtml/codeToTokens/codeToHast,
+lib/highlighter.ts  HighlightsHighlighter, codeToHtml/codeToTokens,
                     language aliases, theme cache, StreamTokenizer
 lib/live.ts         LiveTokenizer glue: edit validation, WTF-8 encoding,
                     deferred slicing, themed reads over the live exports
-lib/tokens.ts       token records -> shiki-compatible tokens and hast
+lib/tokens.ts       token records -> Shiki-compatible tokens
 lib/theme.ts        Zed theme -> binary table compiler
 lib/token-types.ts  generated, tracked $Token ABI
 themes/             bundled, pruned Zed theme objects; index.ts re-exports
@@ -211,7 +211,7 @@ output and the open span.
   `$hlEnd`, a post-pass scans the covered input once and emits
   `(endUtf16: u32, hl: u32)` records. Token id `0xffffffff` marks a line ending
   and includes its LF or CRLF terminator. JavaScript can then build each line's
-  tokens or HAST runs without byte conversion or substring searches.
+  tokens without byte conversion or substring searches.
 - `$scanToLineEnd`, `$scanBlockCommentEnd`, and `$scanHexRun` provide bounded
   comment and hexadecimal scans.
 - `$scanFindSpecial`, `$scanWhitespace`, `$scanIdentRun`, and `$utf8SpanEnd`

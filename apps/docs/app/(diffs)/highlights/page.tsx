@@ -14,7 +14,7 @@ import { PierreCompanySection } from '@/components/PierreCompanySection';
 import { pageMetadata } from '@/lib/page-metadata';
 
 const description =
-  'A tiny, fast code highlighter written by hand in WebAssembly Text, with built-in lexers and Shiki-compatible tokens, HAST, themes, and transformers.';
+  'A tiny, fast code highlighter written by hand in WebAssembly Text, with built-in lexers and Shiki-compatible themed tokens, streaming, and live editing.';
 
 export const metadata: Metadata = pageMetadata({
   title: 'Highlights — a fast WebAssembly code highlighter',
@@ -98,16 +98,16 @@ export default async function HighlightsPage() {
                 <div>
                   <dt className="text-sm font-medium">Familiar APIs</dt>
                   <dd className="text-muted-foreground mt-0.5 text-sm text-pretty">
-                    Use <code>codeToHtml()</code>, <code>codeToTokens()</code>,
-                    and <code>codeToHast()</code> in familiar highlighting
-                    workflows.
+                    Use <code>codeToHtml()</code> and{' '}
+                    <code>codeToTokens()</code>
+                    in familiar highlighting workflows.
                   </dd>
                 </div>
                 <div>
-                  <dt className="text-sm font-medium">Tokens & HAST</dt>
+                  <dt className="text-sm font-medium">Themed tokens</dt>
                   <dd className="text-muted-foreground mt-0.5 text-sm text-pretty">
-                    Render Shiki-compatible themed tokens or HAST with
-                    decorations and transformers.
+                    Build custom renderers with Shiki-compatible themed tokens
+                    and UTF-16 offsets.
                   </dd>
                 </div>
                 <div>

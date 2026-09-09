@@ -27,10 +27,10 @@ return new Response(html, {
     },
     options,
   },
-  highlightsTokensAndHast: {
+  highlightsTokens: {
     file: {
-      name: 'tokens-and-hast.ts',
-      contents: `import { codeToHast, codeToTokens } from '@pierre/highlights';
+      name: 'tokens.ts',
+      contents: `import { codeToTokens } from '@pierre/highlights';
 import { pierreDark } from '@pierre/highlights/themes';
 
 const source = 'const answer = 42;';
@@ -39,22 +39,7 @@ const options = { lang: 'ts', theme: pierreDark } as const;
 const { tokens, fg, bg, themeName, rootStyle } = codeToTokens(
   source,
   options
-);
-
-const root = codeToHast(source, {
-  ...options,
-  decorations: [{
-    start: 6,
-    end: 12,
-    properties: { class: 'highlighted-word' },
-  }],
-  transformers: [{
-    name: 'code-class',
-    code(node) {
-      this.addClassToHast(node, 'source-code');
-    },
-  }],
-});`,
+);`,
     },
     options,
   },
@@ -175,7 +160,6 @@ await preloadHighlighter({
     file: {
       name: 'runtime-api.ts',
       contents: `import {
-  codeToHast,
   codeToHtml,
   codeToTokens,
   createHighlighter,
@@ -200,16 +184,6 @@ await preloadHighlighter({
   Lang,
   ThemedToken,
   TokensResult,
-
-  // HAST
-  CodeToHastOptions,
-  Decoration,
-  HastElement,
-  HastRoot,
-  HastText,
-  Transformer,
-  TransformerContext,
-  TransformerContextCommon,
 
   // Themes
   Theme,
@@ -244,5 +218,5 @@ export const {
   highlightsPreload: HIGHLIGHTS_PRELOAD,
   highlightsStream: HIGHLIGHTS_STREAM,
   highlightsThemes: HIGHLIGHTS_THEMES,
-  highlightsTokensAndHast: HIGHLIGHTS_TOKENS_AND_HAST,
+  highlightsTokens: HIGHLIGHTS_TOKENS,
 } = HIGHLIGHTS_HIGHLIGHTER_EXAMPLES;

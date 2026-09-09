@@ -1,7 +1,7 @@
 # Highlights benchmarks
 
 These benchmarks compare Highlights with Shiki and `tree-sitter-highlight`
-across HTML generation, tokens, HAST, streaming, and live editing.
+across HTML generation, tokens, streaming, and live editing.
 
 ## Run
 
@@ -13,7 +13,7 @@ moon run highlights:bench-live
 ```
 
 - `bench`: HTML generation for CSS, HTML, JSONC, and TypeScript.
-- `bench-tokens`: complete `codeToTokens` and `codeToHast` APIs on TypeScript.
+- `bench-tokens`: complete `codeToTokens` output on TypeScript.
 - `bench-stream`: streaming tokenization in 4,096-character chunks.
 - `bench-live`: initialization, edits, cached reads, and retained Wasm memory.
 
@@ -50,11 +50,11 @@ Shiki 4.4.1 is the string-API baseline; Tree-sitter uses `tree-sitter-highlight`
 `highlights (bytes)` accepts and returns bytes. Tree-sitter's HTML support is
 incomplete, so those entries are omitted.
 
-## Tokens and HAST
+## Tokens
 
-Complete token and HAST output on TypeScript, using Pierre Dark for Highlights
-and GitHub Dark for Shiki. The Unicode fixture has 10,000 lines and exercises
-UTF-16 offset conversion.
+Complete token output on TypeScript, using Pierre Dark for Highlights and GitHub
+Dark for Shiki. The Unicode fixture has 10,000 lines and exercises UTF-16 offset
+conversion.
 
 ### `codeToTokens`
 
@@ -64,15 +64,6 @@ UTF-16 offset conversion.
 | `small.ts.txt` (31 KiB)      |    826 |     188 µs |  159 MiB/s | 33.7 ms |    179× |
 | `large.ts.txt` (517 KiB)     | 10,826 |    3009 µs |  168 MiB/s |  507 ms |    168× |
 | `unicode-lines.ts` (527 KiB) | 10,001 |    3251 µs |  158 MiB/s |  443 ms |    136× |
-
-### `codeToHast`
-
-| Input                        |  Lines | Highlights | Throughput |   Shiki | Speedup |
-| ---------------------------- | -----: | ---------: | ---------: | ------: | ------: |
-| `tiny.ts.txt` (2 KiB)        |     76 |    28.6 µs | 65.1 MiB/s | 1209 µs |   42.3× |
-| `small.ts.txt` (31 KiB)      |    826 |     498 µs | 60.0 MiB/s | 33.0 ms |   66.3× |
-| `large.ts.txt` (517 KiB)     | 10,826 |    7653 µs | 65.9 MiB/s |  511 ms |   66.8× |
-| `unicode-lines.ts` (527 KiB) | 10,001 |    6898 µs | 74.7 MiB/s |  451 ms |   65.4× |
 
 ## Streaming
 

@@ -307,102 +307,6 @@ export interface TokensResult {
   rootStyle?: string;
 }
 
-/** Minimal structural HAST nodes compatible with the `hast` package types. */
-export interface HastText {
-  type: 'text';
-  value: string;
-}
-export interface HastElement {
-  type: 'element';
-  tagName: string;
-  properties: Record<string, string | number | boolean | (string | number)[]>;
-  children: (HastElement | HastText)[];
-}
-export interface HastRoot {
-  type: 'root';
-  children: HastElement[];
-}
-
-/**
- * The transformer `this` context shared by every hook, including `preprocess`.
- * Matches Shiki's `ShikiTransformerContextCommon`.
- */
-export interface TransformerContextCommon {
-  readonly source: string;
-  readonly options: CodeToHastOptions;
-  /** Mutable per-call scratch data shared by every hook. */
-  meta: Record<string, unknown>;
-  codeToHast(input: string, options: CodeToHastOptions): HastRoot;
-  codeToTokens(input: string, options: CodeToTokensOptions): TokensResult;
-}
-
-/**
- * The `this` context for tree hooks. It exposes live tree views and
- * `addClassToHast`, matching Shiki's `ShikiTransformerContext`.
- */
-export interface TransformerContext extends TransformerContextCommon {
-  readonly structure: 'classic';
-  readonly tokens: ThemedToken[][];
-  readonly root: HastRoot;
-  readonly pre: HastElement;
-  readonly code: HastElement;
-  readonly lines: HastElement[];
-  addClassToHast(node: HastElement, className: string | string[]): HastElement;
-}
-
-/**
- * Shiki-style hooks for `codeToHast` may mutate or replace nodes. Hooks use a
- * Shiki-compatible `this`; most transformers are structurally compatible.
- * Highlights supports only the classic structure and omits `postprocess`.
- */
-export interface Transformer {
-  name?: string;
-  preprocess?(
-    this: TransformerContextCommon,
-    code: string,
-    options: CodeToHastOptions
-  ): string | void;
-  tokens?(
-    this: TransformerContext,
-    lines: ThemedToken[][]
-  ): ThemedToken[][] | void;
-  span?(
-    this: TransformerContext,
-    node: HastElement,
-    line: number,
-    col: number,
-    lineElement: HastElement,
-    token: ThemedToken
-  ): HastElement | void;
-  line?(
-    this: TransformerContext,
-    node: HastElement,
-    line: number
-  ): HastElement | void;
-  code?(this: TransformerContext, node: HastElement): HastElement | void;
-  pre?(this: TransformerContext, node: HastElement): HastElement | void;
-  root?(this: TransformerContext, node: HastRoot): HastRoot | void;
-}
-
-/** A Shiki-style decoration that wraps a code range in an element. */
-export interface Decoration {
-  /** Absolute offset or 0-based line and character. */
-  start: number | { line: number; character: number };
-  end: number | { line: number; character: number };
-  tagName?: string;
-  properties?: Record<string, string | number | boolean>;
-}
-
-export type CodeToHastOptions = CodeToTokensOptions & {
-  transformers?: Transformer[];
-  decorations?: Decoration[];
-  /**
-   * Extra `<pre>` properties and initial transformer `meta`.
-   * Keys starting with `_` stay off `<pre>`, like Shiki's `meta` option.
-   */
-  meta?: Record<string, unknown>;
-};
-
 /** An initialized highlighter backed by one WebAssembly instance. */
 export interface Highlighter {
   codeToHtml(
@@ -413,14 +317,9 @@ export interface Highlighter {
     input: string | Uint8Array | ArrayBuffer,
     options: CodeToTokensOptions
   ): TokensResult;
-  codeToHast(
-    input: string | Uint8Array | ArrayBuffer,
-    options: CodeToHastOptions
-  ): HastRoot;
 }
 
 export {
-  codeToHast,
   codeToHtml,
   codeToTokens,
   createHighlighter,

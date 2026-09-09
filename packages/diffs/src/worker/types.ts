@@ -164,7 +164,7 @@ export interface WorkerPoolOptions {
    */
   workerInitializationTimeout?: number;
 
-  totalASTLRUCacheSize?: number;
+  totalTokenLRUCacheSize?: number;
 }
 
 export interface WorkerInitializationRenderOptions extends Partial<WorkerRenderingOptions> {

@@ -36,16 +36,16 @@ describe('file.patch fixture', () => {
     const renderer = new DiffHunksRenderer({ diffStyle: 'split' });
     const result = await renderer.asyncRender(file);
     assertDefined(
-      result.additionsContentAST,
-      'additionsContentAST should be defined'
+      result.additionsContentRows,
+      'additionsContentRows should be defined'
     );
     assertDefined(
-      result.deletionsContentAST,
-      'deletionsContentAST should be defined'
+      result.deletionsContentRows,
+      'deletionsContentRows should be defined'
     );
     expect({
-      additions: rowDigests(projectColumn(result.additionsContentAST)),
-      deletions: rowDigests(projectColumn(result.deletionsContentAST)),
+      additions: rowDigests(projectColumn(result.additionsContentRows)),
+      deletions: rowDigests(projectColumn(result.deletionsContentRows)),
     }).toMatchSnapshot('rendered rows');
   });
 });

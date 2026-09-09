@@ -1,8 +1,6 @@
-import type { Root } from 'hast';
 import type { CodeToTokensOptions, GrammarState } from 'shiki/core';
 
 import type {
-  CodeToHastOptions,
   DiffsHighlighter,
   DiffsThemeNames,
   HighlightedToken,
@@ -158,8 +156,6 @@ export interface CodeHighlighter {
     code: string,
     options: CodeToTokensOptions<string, string>
   ): { tokens: ThemedToken[][]; grammarState?: GrammarState };
-  /** Highlight code as a shiki-shaped hast tree (transformers included). */
-  codeToHast(code: string, options: CodeToHastOptions<DiffsThemeNames>): Root;
   /** Streaming tokenizer for `FileStream`; each instance owns its own state. */
   StreamTokenizer: new (
     options: CodeToTokensOptions<string, string>
@@ -172,8 +168,8 @@ export interface CodeHighlighter {
   createLiveTokenizer?(options: CodeLiveTokenizerOptions): CodeLiveTokenizer;
   /**
    * The loaded shiki instance backing this highlighter, when there is one.
-   * Internals use it to keep the exact pre-existing shiki code paths (worker
-   * rendering, TextMate edit mode, grammar-state streaming) byte-identical.
+   * Internals use it for worker tokenization, TextMate edit mode, and
+   * grammar-state streaming.
    */
   getShikiInstance?(): DiffsHighlighter | undefined;
 }
@@ -185,7 +181,7 @@ export interface CodeHighlighter {
  */
 export type RenderHighlighter = Pick<
   CodeHighlighter,
-  'codeToHast' | 'codeToTokens' | 'getTheme'
+  'codeToTokens' | 'getTheme'
 >;
 
 let registeredHighlighter: CodeHighlighter | undefined;

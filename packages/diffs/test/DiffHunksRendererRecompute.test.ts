@@ -11,7 +11,7 @@ import { finishEditSessionForDiff } from '../src/utils/editSessionHunks';
 import { iterateOverDiff } from '../src/utils/iterateOverDiff';
 import {
   collectAllElements,
-  hastTextContent,
+  htmlTextContent,
   projectRenderResult,
 } from './testUtils';
 
@@ -356,11 +356,11 @@ describe('DiffHunksRenderer edit-session hunk updates', () => {
 
     const result = renderer.renderDiff(diff);
     const commentRow = collectAllElements(
-      result?.additionsContentAST ?? []
+      result?.additionsContentRows ?? []
     ).find(
       (node) =>
         node.properties?.['data-line'] === 1 &&
-        hastTextContent(node) === '// test'
+        htmlTextContent(node) === '// test'
     );
 
     expect(commentRow).toBeDefined();
@@ -401,13 +401,13 @@ describe('DiffHunksRenderer edit-session hunk updates', () => {
     // Highlighted rows carry color styles on their token spans; the
     // realign's plain-filled element has none.
     const styledRowTexts = (result: ReturnType<typeof renderer.renderDiff>) =>
-      collectAllElements(result?.additionsContentAST ?? [])
+      collectAllElements(result?.additionsContentRows ?? [])
         .filter(
           (node) =>
             node.properties?.['data-line'] != null &&
             JSON.stringify(node).includes('color:')
         )
-        .map((node) => hastTextContent(node).replace(/\n$/, ''));
+        .map((node) => htmlTextContent(node).replace(/\n$/, ''));
 
     // The exit repaint runs before the fresh highlight lands and must keep
     // serving the fully highlighted current result without a plain-text flash.
@@ -455,13 +455,13 @@ describe('DiffHunksRenderer edit-session hunk updates', () => {
     renderer.renderDiff(diff);
 
     const styledRowTexts = (result: ReturnType<typeof renderer.renderDiff>) =>
-      collectAllElements(result?.additionsContentAST ?? [])
+      collectAllElements(result?.additionsContentRows ?? [])
         .filter(
           (node) =>
             node.properties?.['data-line'] != null &&
             JSON.stringify(node).includes('color:')
         )
-        .map((node) => hastTextContent(node).replace(/\n$/, ''));
+        .map((node) => htmlTextContent(node).replace(/\n$/, ''));
     expect(styledRowTexts(renderer.renderDiff(diff))).toContain(
       lineText(totalLines)
     );

@@ -1,5 +1,4 @@
 import { afterAll, describe, expect, test } from 'bun:test';
-import type { ElementContent, Element as HASTElement } from 'hast';
 
 import {
   DiffHunksRenderer,
@@ -11,19 +10,20 @@ import type {
   FileDiffMetadata,
   LineTypes,
 } from '../src/types';
+import type { RenderedLine, RenderedRow } from '../src/utils/html';
 import { fileNew, fileOld } from './mocks';
+import { rowProperties } from './testUtils';
 import {
   annotationProjection,
   assertDefined,
   collectAllElements,
-  countHastAnnotationElements,
-  findHastSlotElements,
-  getHastAnnotationIndex,
-  getHastLineIndex,
-  getHastLineType,
-  isHastAnnotationElement,
-  isHastElement,
-  isHastLineElement,
+  countAnnotationRows,
+  findSlotElements,
+  getAnnotationIndex,
+  getLineIndex,
+  getLineType,
+  isAnnotationRow,
+  isLineRow,
 } from './testUtils';
 
 afterAll(async () => {
@@ -58,11 +58,8 @@ function createNoHunkDiff(): FileDiffMetadata {
   };
 }
 
-function getSlotNames(node: ElementContent): string[] {
-  if (!isHastElement(node)) {
-    return [];
-  }
-  return findHastSlotElements(node).map((slot) => {
+function getSlotNames(node: RenderedRow): string[] {
+  return findSlotElements(node).map((slot) => {
     const name = slot.properties?.name;
     if (name == null) {
       throw new Error('slot should have a name');
@@ -71,9 +68,9 @@ function getSlotNames(node: ElementContent): string[] {
   });
 }
 
-function getAnnotationIndexes(nodes: ElementContent[]): string[] {
+function getAnnotationIndexes(nodes: RenderedRow[]): string[] {
   return nodes
-    .map((node) => getHastAnnotationIndex(node))
+    .map((node) => getAnnotationIndex(node))
     .filter((index): index is string => index != null);
 }
 
@@ -91,23 +88,21 @@ describe('Annotation Rendering', () => {
       });
       renderer.setLineAnnotations(annotations);
 
-      const { unifiedContentAST } = await renderer.asyncRender(
+      const { unifiedContentRows } = await renderer.asyncRender(
         createDiffWithLeadingSeparator()
       );
-      assertDefined(unifiedContentAST, 'unifiedContentAST should be defined');
-      const firstAnnotationIndex = unifiedContentAST.findIndex(
-        isHastAnnotationElement
+      assertDefined(unifiedContentRows, 'unifiedContentRows should be defined');
+      const firstAnnotationIndex =
+        unifiedContentRows.findIndex(isAnnotationRow);
+      const firstSeparatorIndex = unifiedContentRows.findIndex(
+        (node) => rowProperties(node)['data-separator'] != null
       );
-      const firstSeparatorIndex = unifiedContentAST.findIndex(
-        (node) =>
-          isHastElement(node) && node.properties?.['data-separator'] != null
-      );
-      const firstAnnotation = unifiedContentAST[firstAnnotationIndex];
+      const firstAnnotation = unifiedContentRows[firstAnnotationIndex];
       assertDefined(firstAnnotation, 'firstAnnotation should be defined');
 
       expect(firstAnnotationIndex).toBe(0);
       expect(firstSeparatorIndex).toBeGreaterThan(firstAnnotationIndex);
-      expect(getHastAnnotationIndex(firstAnnotation)).toBe('-1,-1');
+      expect(getAnnotationIndex(firstAnnotation)).toBe('-1,-1');
       expect(getSlotNames(firstAnnotation)).toEqual([
         'annotation-deletions-0',
         'annotation-additions-0',
@@ -130,23 +125,23 @@ describe('Annotation Rendering', () => {
         });
         renderer.setLineAnnotations(annotations);
 
-        const { additionsContentAST, deletionsContentAST } =
+        const { additionsContentRows, deletionsContentRows } =
           await renderer.asyncRender(diff);
         assertDefined(
-          additionsContentAST,
-          'additionsContentAST should be defined'
+          additionsContentRows,
+          'additionsContentRows should be defined'
         );
         assertDefined(
-          deletionsContentAST,
-          'deletionsContentAST should be defined'
+          deletionsContentRows,
+          'deletionsContentRows should be defined'
         );
-        const firstAddition = additionsContentAST[0];
-        const firstDeletion = deletionsContentAST[0];
+        const firstAddition = additionsContentRows[0];
+        const firstDeletion = deletionsContentRows[0];
         assertDefined(firstAddition, 'firstAddition should be defined');
         assertDefined(firstDeletion, 'firstDeletion should be defined');
 
-        expect(getHastAnnotationIndex(firstAddition)).toBe('-1,-1');
-        expect(getHastAnnotationIndex(firstDeletion)).toBe('-1,-1');
+        expect(getAnnotationIndex(firstAddition)).toBe('-1,-1');
+        expect(getAnnotationIndex(firstDeletion)).toBe('-1,-1');
         expect(getSlotNames(firstAddition)).toEqual(['annotation-additions-0']);
         expect(getSlotNames(firstDeletion)).toEqual(['annotation-deletions-0']);
       },
@@ -162,7 +157,7 @@ describe('Annotation Rendering', () => {
         { side: 'additions', lineNumber: 1, metadata: 'new-first-line' },
       ]);
 
-      const { additionsContentAST, deletionsContentAST } =
+      const { additionsContentRows, deletionsContentRows } =
         await renderer.asyncRender(
           parseDiffFromFile(
             { name: 'first-row.ts', contents: 'old\n' },
@@ -170,17 +165,17 @@ describe('Annotation Rendering', () => {
           )
         );
       assertDefined(
-        additionsContentAST,
-        'additionsContentAST should be defined'
+        additionsContentRows,
+        'additionsContentRows should be defined'
       );
       assertDefined(
-        deletionsContentAST,
-        'deletionsContentAST should be defined'
+        deletionsContentRows,
+        'deletionsContentRows should be defined'
       );
 
       const annotationIndexes = getAnnotationIndexes(
-        deletionsContentAST
-      ).concat(getAnnotationIndexes(additionsContentAST));
+        deletionsContentRows
+      ).concat(getAnnotationIndexes(additionsContentRows));
 
       expect(
         annotationIndexes.filter((index) => index === '-1,-1')
@@ -198,18 +193,18 @@ describe('Annotation Rendering', () => {
       const renderer = new DiffHunksRenderer<string>({ diffStyle: 'split' });
       renderer.setLineAnnotations(annotations);
 
-      const { additionsContentAST, deletionsContentAST, rowCount } =
+      const { additionsContentRows, deletionsContentRows, rowCount } =
         await renderer.asyncRender(createNoHunkDiff());
       assertDefined(
-        additionsContentAST,
-        'additionsContentAST should be defined'
+        additionsContentRows,
+        'additionsContentRows should be defined'
       );
       assertDefined(
-        deletionsContentAST,
-        'deletionsContentAST should be defined'
+        deletionsContentRows,
+        'deletionsContentRows should be defined'
       );
-      const additionAnnotation = additionsContentAST[0];
-      const deletionAnnotation = deletionsContentAST[0];
+      const additionAnnotation = additionsContentRows[0];
+      const deletionAnnotation = deletionsContentRows[0];
       assertDefined(additionAnnotation, 'additionAnnotation should be defined');
       assertDefined(deletionAnnotation, 'deletionAnnotation should be defined');
 
@@ -228,18 +223,16 @@ describe('Annotation Rendering', () => {
         { side: 'additions', lineNumber: 0, metadata: 'new-file' },
       ]);
 
-      const { unifiedContentAST } = await renderer.asyncRender(diff, {
+      const { unifiedContentRows } = await renderer.asyncRender(diff, {
         startingLine: 1,
         totalLines: 5,
         bufferBefore: 0,
         bufferAfter: 0,
       });
-      assertDefined(unifiedContentAST, 'unifiedContentAST should be defined');
+      assertDefined(unifiedContentRows, 'unifiedContentRows should be defined');
 
       expect(
-        unifiedContentAST.some(
-          (node) => getHastAnnotationIndex(node) === '-1,-1'
-        )
+        unifiedContentRows.some((node) => getAnnotationIndex(node) === '-1,-1')
       ).toBe(false);
     });
   });
@@ -257,32 +250,32 @@ describe('Annotation Rendering', () => {
         expandUnchanged: true,
       });
       renderer.setLineAnnotations(annotations);
-      const { unifiedContentAST } = await renderer.asyncRender(diff);
-      assertDefined(unifiedContentAST, 'unifiedContentAST should be defined');
-      const unifiedAST = unifiedContentAST;
+      const { unifiedContentRows } = await renderer.asyncRender(diff);
+      assertDefined(unifiedContentRows, 'unifiedContentRows should be defined');
+      const unifiedAST = unifiedContentRows;
 
       let foundAnnotationCount = 0;
-      let lastLineElement: ElementContent | undefined;
+      let lastLineElement: RenderedRow | undefined;
       // Iterate through all elements and verify each annotation follows its line
       const allElements = collectAllElements(unifiedAST);
       for (const node of allElements) {
-        if (isHastLineElement(node)) {
+        if (isLineRow(node)) {
           lastLineElement = node;
           continue;
         }
-        if (!isHastAnnotationElement(node)) {
+        if (!isAnnotationRow(node)) {
           continue;
         }
 
-        const annotationIndex = getHastAnnotationIndex(node);
+        const annotationIndex = getAnnotationIndex(node);
         assertDefined(annotationIndex, 'annotationIndex should be defined');
         const [, lineIdx] = annotationIndex.split(',');
-        const slots = findHastSlotElements(node);
+        const slots = findSlotElements(node);
         foundAnnotationCount += slots.length;
 
         assertDefined(lastLineElement, 'lastLineElement should be defined');
         // The previous line element should be the line this annotation belongs to
-        const prevLineIndex = getHastLineIndex(lastLineElement);
+        const prevLineIndex = getLineIndex(lastLineElement);
         assertDefined(prevLineIndex, 'prevLineIndex should be defined');
         // In unified, the first value of data-line-index is the unified index
         const [unifiedIdx] = prevLineIndex.split(',');
@@ -314,18 +307,18 @@ describe('Annotation Rendering', () => {
         expandUnchanged: true,
       });
       renderer.setLineAnnotations(annotations);
-      const { additionsContentAST, deletionsContentAST } =
+      const { additionsContentRows, deletionsContentRows } =
         await renderer.asyncRender(diff);
       assertDefined(
-        additionsContentAST,
-        'additionsContentAST should be defined'
+        additionsContentRows,
+        'additionsContentRows should be defined'
       );
       assertDefined(
-        deletionsContentAST,
-        'deletionsContentAST should be defined'
+        deletionsContentRows,
+        'deletionsContentRows should be defined'
       );
-      const additionsAST = additionsContentAST;
-      const deletionsAST = deletionsContentAST;
+      const additionsAST = additionsContentRows;
+      const deletionsAST = deletionsContentRows;
 
       const additionsAnnotationIndices = new Set<string>();
       const deletionsAnnotationIndices = new Set<string>();
@@ -338,25 +331,25 @@ describe('Annotation Rendering', () => {
           : deletionsAnnotationIndices;
 
         let foundCount = 0;
-        let lastLineNode: ElementContent | undefined;
+        let lastLineNode: RenderedRow | undefined;
         const allElements = collectAllElements(ast);
         for (const node of allElements) {
-          if (isHastLineElement(node)) {
+          if (isLineRow(node)) {
             lastLineNode = node;
             continue;
           }
-          if (!isHastAnnotationElement(node)) {
+          if (!isAnnotationRow(node)) {
             continue;
           }
 
-          const annotationIndex = getHastAnnotationIndex(node);
+          const annotationIndex = getAnnotationIndex(node);
           assertDefined(annotationIndex, 'annotationIndex should be defined');
           if (indicesSet.has(annotationIndex)) {
             throw new Error(`Duplicate annotation index: ${annotationIndex}`);
           }
           indicesSet.add(annotationIndex);
 
-          const slots = findHastSlotElements(node);
+          const slots = findSlotElements(node);
           if (slots.length === 0) {
             // Empty annotation wrapper (for sync with other side)
             continue;
@@ -367,7 +360,7 @@ describe('Annotation Rendering', () => {
 
           assertDefined(lastLineNode, 'lastLineNode should be defined');
 
-          const prevLineIndex = getHastLineIndex(lastLineNode);
+          const prevLineIndex = getLineIndex(lastLineNode);
           assertDefined(prevLineIndex, 'prevLineIndex should be defined');
           const [, splitIdx] = prevLineIndex.split(',');
           expect(splitIdx).toBe(lineIdx);
@@ -417,24 +410,20 @@ describe('Annotation Rendering', () => {
         expandUnchanged: true,
       });
       renderer.setLineAnnotations(annotations);
-      const { unifiedContentAST } = await renderer.asyncRender(diff);
-      assertDefined(unifiedContentAST, 'unifiedContentAST should be defined');
-      const unifiedAST = unifiedContentAST;
-      expect(countHastAnnotationElements(unifiedAST)).toBe(annotations.length);
+      const { unifiedContentRows } = await renderer.asyncRender(diff);
+      assertDefined(unifiedContentRows, 'unifiedContentRows should be defined');
+      const unifiedAST = unifiedContentRows;
+      expect(countAnnotationRows(unifiedAST)).toBe(annotations.length);
 
       // Iterate and verify each annotation's preceding line type
       for (let i = 1; i < unifiedAST.length; i++) {
-        if (
-          !isHastAnnotationElement(unifiedAST[i]) ||
-          !isHastElement(unifiedAST[i])
-        )
-          continue;
-        const slots = findHastSlotElements(unifiedAST[i] as HASTElement);
+        if (!isAnnotationRow(unifiedAST[i])) continue;
+        const slots = findSlotElements(unifiedAST[i] as RenderedLine);
         const slotName = slots[0]?.properties?.name?.toString();
         if (slots.length === 0 || slotName == null) {
           throw new Error('there should always be slots in unifiedAST');
         }
-        const prevLineType = getHastLineType(unifiedAST[i - 1]);
+        const prevLineType = getLineType(unifiedAST[i - 1]);
         expect(prevLineType).toBe(expectedTypes[slotName]);
       }
     });
@@ -466,30 +455,30 @@ describe('Annotation Rendering', () => {
         expandUnchanged: true,
       });
       renderer.setLineAnnotations(annotations);
-      const { deletionsContentAST, additionsContentAST } =
+      const { deletionsContentRows, additionsContentRows } =
         await renderer.asyncRender(diff);
       assertDefined(
-        additionsContentAST,
-        'additionsContentAST should be defined'
+        additionsContentRows,
+        'additionsContentRows should be defined'
       );
       assertDefined(
-        deletionsContentAST,
-        'deletionsContentAST should be defined'
+        deletionsContentRows,
+        'deletionsContentRows should be defined'
       );
-      const additionsAST = additionsContentAST;
-      const deletionsAST = deletionsContentAST;
+      const additionsAST = additionsContentRows;
+      const deletionsAST = deletionsContentRows;
 
       // Check additions AST
       let additionsAnnotationCount = 0;
-      let lastAdditionLine: ElementContent | undefined;
+      let lastAdditionLine: RenderedRow | undefined;
       const additionsElements = collectAllElements(additionsAST);
       for (const node of additionsElements) {
-        if (isHastLineElement(node)) {
+        if (isLineRow(node)) {
           lastAdditionLine = node;
           continue;
         }
-        if (!isHastAnnotationElement(node)) continue;
-        const slots = findHastSlotElements(node);
+        if (!isAnnotationRow(node)) continue;
+        const slots = findSlotElements(node);
         if (slots.length === 0) continue; // Skip empty annotation wrappers
         const slotName = slots[0].properties?.name?.toString();
         if (slotName == null) {
@@ -497,7 +486,7 @@ describe('Annotation Rendering', () => {
         }
         additionsAnnotationCount++;
         assertDefined(lastAdditionLine, 'lastAdditionLine should be defined');
-        const prevLineType = getHastLineType(lastAdditionLine);
+        const prevLineType = getLineType(lastAdditionLine);
         expect(prevLineType).toBe(additionsExpectedTypes[slotName]);
       }
       expect(additionsAnnotationCount).toBe(
@@ -506,15 +495,15 @@ describe('Annotation Rendering', () => {
 
       // Check deletions AST
       let deletionsAnnotationCount = 0;
-      let lastDeletionLine: ElementContent | undefined;
+      let lastDeletionLine: RenderedRow | undefined;
       const deletionsElements = collectAllElements(deletionsAST);
       for (const node of deletionsElements) {
-        if (isHastLineElement(node)) {
+        if (isLineRow(node)) {
           lastDeletionLine = node;
           continue;
         }
-        if (!isHastAnnotationElement(node)) continue;
-        const slots = findHastSlotElements(node);
+        if (!isAnnotationRow(node)) continue;
+        const slots = findSlotElements(node);
         if (slots.length === 0) continue; // Skip empty annotation wrappers
         const slotName = slots[0].properties?.name?.toString();
         if (slotName == null) {
@@ -522,7 +511,7 @@ describe('Annotation Rendering', () => {
         }
         deletionsAnnotationCount++;
         assertDefined(lastDeletionLine, 'lastDeletionLine should be defined');
-        const prevLineType = getHastLineType(lastDeletionLine);
+        const prevLineType = getLineType(lastDeletionLine);
         expect(prevLineType).toBe(deletionsExpectedTypes[slotName]);
       }
       expect(deletionsAnnotationCount).toBe(
@@ -548,19 +537,19 @@ describe('Annotation Rendering', () => {
 
       const renderer = new DiffHunksRenderer<string>({ diffStyle: 'unified' });
       renderer.setLineAnnotations(annotations);
-      const { unifiedContentAST } = await renderer.asyncRender(diff);
-      assertDefined(unifiedContentAST, 'unifiedContentAST should be defined');
-      const unifiedAST = unifiedContentAST;
+      const { unifiedContentRows } = await renderer.asyncRender(diff);
+      assertDefined(unifiedContentRows, 'unifiedContentRows should be defined');
+      const unifiedAST = unifiedContentRows;
 
       // Should only have 1 annotation element
-      expect(countHastAnnotationElements(unifiedAST)).toBe(1);
+      expect(countAnnotationRows(unifiedAST)).toBe(1);
 
       // Find the annotation and verify it has 2 slots
       const allElements = collectAllElements(unifiedAST);
-      const annotationEl = allElements.find(isHastAnnotationElement);
+      const annotationEl = allElements.find(isAnnotationRow);
       assertDefined(annotationEl, 'annotationEl should be defined');
 
-      const slots = findHastSlotElements(annotationEl);
+      const slots = findSlotElements(annotationEl);
       expect(slots.length).toBe(2);
 
       const slotNames = slots.map((s) => s.properties?.name);
@@ -584,37 +573,33 @@ describe('Annotation Rendering', () => {
 
       const renderer = new DiffHunksRenderer<string>({ diffStyle: 'split' });
       renderer.setLineAnnotations(annotations);
-      const { additionsContentAST, deletionsContentAST } =
+      const { additionsContentRows, deletionsContentRows } =
         await renderer.asyncRender(diff);
       assertDefined(
-        additionsContentAST,
-        'additionsContentAST should be defined'
+        additionsContentRows,
+        'additionsContentRows should be defined'
       );
       assertDefined(
-        deletionsContentAST,
-        'deletionsContentAST should be defined'
+        deletionsContentRows,
+        'deletionsContentRows should be defined'
       );
-      const additionsAST = additionsContentAST;
-      const deletionsAST = deletionsContentAST;
+      const additionsAST = additionsContentRows;
+      const deletionsAST = deletionsContentRows;
 
       // Each side should have 1 annotation
-      expect(countHastAnnotationElements(additionsAST)).toBe(1);
-      expect(countHastAnnotationElements(deletionsAST)).toBe(1);
+      expect(countAnnotationRows(additionsAST)).toBe(1);
+      expect(countAnnotationRows(deletionsAST)).toBe(1);
 
       // Find annotations and verify each has 1 slot
       const additionsElements = collectAllElements(additionsAST);
       const deletionsElements = collectAllElements(deletionsAST);
-      const additionAnnotation = additionsElements.find(
-        isHastAnnotationElement
-      );
-      const deletionAnnotation = deletionsElements.find(
-        isHastAnnotationElement
-      );
+      const additionAnnotation = additionsElements.find(isAnnotationRow);
+      const deletionAnnotation = deletionsElements.find(isAnnotationRow);
       assertDefined(additionAnnotation, 'additionAnnotation should be defined');
       assertDefined(deletionAnnotation, 'deletionAnnotation should be defined');
 
-      const additionSlots = findHastSlotElements(additionAnnotation);
-      const deletionSlots = findHastSlotElements(deletionAnnotation);
+      const additionSlots = findSlotElements(additionAnnotation);
+      const deletionSlots = findSlotElements(deletionAnnotation);
 
       expect(additionSlots.length).toBe(1);
       expect(deletionSlots.length).toBe(1);

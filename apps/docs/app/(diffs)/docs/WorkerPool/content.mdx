@@ -185,10 +185,11 @@ To change themes or other render options dynamically, call
   API is subject to change.
 </Notice>
 
-The worker pool can cache rendered AST results to avoid redundant highlighting
+The worker pool can cache themed token arrays to avoid redundant highlighting
 work. When a file or diff has a `cacheKey`, subsequent requests with the same
 key will return cached results immediately instead of reprocessing through a
-worker. This works automatically for both React and Vanilla JS APIs.
+worker. Renderers turn the tokens into HTML for the current viewport. This works
+automatically for both React and Vanilla JS APIs.
 
 <Notice icon={<IconInfoFill />}>
   Caching is enabled per-file/diff by setting a `cacheKey` property. Files and

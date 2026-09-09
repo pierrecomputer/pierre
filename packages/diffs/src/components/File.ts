@@ -1,6 +1,3 @@
-import type { Element as HASTElement } from 'hast';
-import { toHtml } from 'hast-util-to-html';
-
 import {
   CUSTOM_HEADER_SLOT_ID,
   DEFAULT_THEMES,
@@ -31,6 +28,7 @@ import {
 import { ResizeManager } from '../managers/ResizeManager';
 import { FileRenderer, type FileRenderResult } from '../renderers/FileRenderer';
 import { SVGSpriteSheet } from '../sprite';
+import { renderColumn, renderRows } from '../utils/html';
 export type { FileEditCompleteEvent } from '../editor/types';
 import {
   getCodeHighlighter,
@@ -1168,9 +1166,9 @@ export class File<LAnnotation = undefined, Caret = undefined> {
             fileResult.baseThemeType
           );
         }
-        if (fileResult?.headerAST != null) {
+        if (fileResult?.headerHTML != null) {
           this.applyHeaderToDOM(
-            fileResult.headerAST,
+            fileResult.headerHTML,
             fileContainer,
             fileResult.file
           );
@@ -1231,9 +1229,9 @@ export class File<LAnnotation = undefined, Caret = undefined> {
           themeType,
           fileResult.baseThemeType
         );
-        if (fileResult.headerAST != null) {
+        if (fileResult.headerHTML != null) {
           this.applyHeaderToDOM(
-            fileResult.headerAST,
+            fileResult.headerHTML,
             fileContainer,
             fileResult.file
           );
@@ -1604,18 +1602,17 @@ export class File<LAnnotation = undefined, Caret = undefined> {
     this.cleanupErrorWrapper();
     this.applyPreNodeAttributes(pre, result);
     const code = (this.code = getOrCreateCodeNode({ code: this.code }));
-    const codeAst = this.fileRenderer.renderCodeAST(result);
+    const column = this.fileRenderer.renderCode(result);
     this.editor?.__captureFocusForDOMReplacement();
     const applyColumns = () => {
       if (code.childElementCount >= 2) {
-        for (let i = 0; i < 2; i++) {
+        for (const [i, rows] of [column.gutter, column.content].entries()) {
           const domEl = code.children[i] as HTMLElement;
-          const astEl = codeAst[i] as HASTElement;
-          domEl.innerHTML = toHtml(astEl.children);
-          domEl.style.cssText = astEl.properties.style as string;
+          domEl.innerHTML = renderRows(rows);
+          domEl.style.cssText = `grid-row: span ${column.rowCount}`;
         }
       } else {
-        code.innerHTML = toHtml(codeAst);
+        code.innerHTML = renderColumn(column);
       }
       if (!pre.contains(code)) {
         pre.replaceChildren(code);
@@ -1708,11 +1705,11 @@ export class File<LAnnotation = undefined, Caret = undefined> {
     if (prependResult != null) {
       columns.gutter.insertAdjacentHTML(
         'afterbegin',
-        this.fileRenderer.renderPartialHTML(prependResult.gutterAST)
+        this.fileRenderer.renderPartialHTML(prependResult.gutterRows)
       );
       columns.content.insertAdjacentHTML(
         'afterbegin',
-        this.fileRenderer.renderPartialHTML(prependResult.contentAST)
+        this.fileRenderer.renderPartialHTML(prependResult.contentRows)
       );
       rowCount += prependResult.rowCount;
     }
@@ -1720,11 +1717,11 @@ export class File<LAnnotation = undefined, Caret = undefined> {
     if (appendResult != null) {
       columns.gutter.insertAdjacentHTML(
         'beforeend',
-        this.fileRenderer.renderPartialHTML(appendResult.gutterAST)
+        this.fileRenderer.renderPartialHTML(appendResult.gutterRows)
       );
       columns.content.insertAdjacentHTML(
         'beforeend',
-        this.fileRenderer.renderPartialHTML(appendResult.contentAST)
+        this.fileRenderer.renderPartialHTML(appendResult.contentRows)
       );
       rowCount += appendResult.rowCount;
     }
@@ -1888,14 +1885,14 @@ export class File<LAnnotation = undefined, Caret = undefined> {
   }
 
   private applyHeaderToDOM(
-    headerAST: HASTElement,
+    renderedHeaderHTML: string,
     container: HTMLElement,
     file: FileContents
   ): void {
     this.cleanupErrorWrapper();
     this.placeHolder?.remove();
     this.placeHolder = undefined;
-    const headerHTML = this.cachedHeaderHTML ?? toHtml(headerAST);
+    const headerHTML = this.cachedHeaderHTML ?? renderedHeaderHTML;
     this.cachedHeaderHTML = headerHTML;
     if (headerHTML !== this.lastRenderedHeaderHTML) {
       const tempDiv = document.createElement('div');

@@ -1,8 +1,10 @@
-import type { ElementContent, Element as HASTElement } from 'hast';
+import { JSDOM } from 'jsdom';
 
 import { DEFAULT_COLLAPSED_CONTEXT_THRESHOLD } from '../src/constants';
 import type { HunksRenderResult } from '../src/renderers/DiffHunksRenderer';
 import type { FileDiffMetadata, ParsedPatch } from '../src/types';
+import { type HTMLAttributes, renderRows } from '../src/utils/html';
+import type { RenderedLine, RenderedRow } from '../src/utils/html';
 
 // Async test helpers
 
@@ -33,69 +35,60 @@ export function assertDefined<T>(
   }
 }
 
-// HAST element helpers
-
-export function isHastElement(node: ElementContent): node is HASTElement {
-  return node.type === 'element';
+// HTML projections for assertions. These records are flat; DOM handles parsing.
+export function rowProperties(row: RenderedRow): HTMLAttributes {
+  if (typeof row !== 'string') return row.properties;
+  const element = JSDOM.fragment(row).firstElementChild;
+  const properties: HTMLAttributes = {};
+  for (const attr of element?.attributes ?? []) {
+    properties[attr.name] =
+      /^(data-line|data-alt-line|data-column-number|data-buffer-size)$/.test(
+        attr.name
+      )
+        ? Number(attr.value)
+        : attr.value;
+  }
+  return properties;
 }
 
-export function isHastLineElement(node: ElementContent): boolean {
-  return isHastElement(node) && node.properties?.['data-line'] != null;
+export function isLineRow(row: RenderedRow): boolean {
+  return rowProperties(row)['data-line'] != null;
 }
-
-export function isHastAnnotationElement(node: ElementContent): boolean {
-  return (
-    isHastElement(node) && node.properties?.['data-line-annotation'] != null
+export function isAnnotationRow(row: RenderedRow): boolean {
+  return rowProperties(row)['data-line-annotation'] != null;
+}
+export function getLineIndex(row: RenderedRow): string | undefined {
+  const value = rowProperties(row)['data-line-index'];
+  return typeof value === 'string' ? value : undefined;
+}
+export function getAnnotationIndex(row: RenderedRow): string | undefined {
+  const value = rowProperties(row)['data-line-annotation'];
+  return typeof value === 'string' ? value : undefined;
+}
+export function getLineType(row: RenderedRow): string | undefined {
+  const value = rowProperties(row)['data-line-type'];
+  return typeof value === 'string' ? value : undefined;
+}
+export function findSlotElements(row: RenderedRow): RenderedLine[] {
+  return Array.from(
+    JSDOM.fragment(renderRows([row])).querySelectorAll('slot'),
+    (el) => ({ html: el.innerHTML, properties: rowProperties(el.outerHTML) })
   );
 }
-
-export function getHastLineIndex(node: ElementContent): string | undefined {
-  if (!isHastElement(node)) return undefined;
-  const lineIndex = node.properties?.['data-line-index'];
-  return typeof lineIndex === 'string' ? lineIndex : undefined;
+export function collectAllElements(
+  rows: RenderedRow[]
+): (RenderedLine & { tagName: string })[] {
+  return Array.from(
+    JSDOM.fragment(renderRows(rows)).querySelectorAll('*'),
+    (el) => ({
+      tagName: el.tagName.toLowerCase(),
+      html: el.innerHTML,
+      properties: rowProperties(el.outerHTML),
+    })
+  );
 }
-
-export function getHastAnnotationIndex(
-  node: ElementContent
-): string | undefined {
-  if (!isHastElement(node)) return undefined;
-  const lineAnnotation = node.properties?.['data-line-annotation'];
-  return typeof lineAnnotation === 'string' ? lineAnnotation : undefined;
-}
-
-export function getHastLineType(node: ElementContent): string | undefined {
-  if (!isHastElement(node)) return undefined;
-  const lineType = node.properties?.['data-line-type'];
-  return typeof lineType === 'string' ? lineType : undefined;
-}
-
-export function findHastSlotElements(el: HASTElement): HASTElement[] {
-  const slots: HASTElement[] = [];
-  for (const child of el.children) {
-    if (isHastElement(child)) {
-      if (child.tagName === 'slot') {
-        slots.push(child);
-      }
-      slots.push(...findHastSlotElements(child));
-    }
-  }
-  return slots;
-}
-
-// Helper to recursively collect all elements from AST
-export function collectAllElements(nodes: ElementContent[]): HASTElement[] {
-  const elements: HASTElement[] = [];
-  for (const node of nodes) {
-    if (isHastElement(node)) {
-      elements.push(node);
-      elements.push(...collectAllElements(node.children));
-    }
-  }
-  return elements;
-}
-
-export function countHastAnnotationElements(ast: ElementContent[]): number {
-  return collectAllElements(ast).filter(isHastAnnotationElement).length;
+export function countAnnotationRows(rows: RenderedRow[]): number {
+  return collectAllElements(rows).filter(isAnnotationRow).length;
 }
 
 export interface VerifyResult {
@@ -292,7 +285,7 @@ export function verifyFileDiffHunkValues(diff: FileDiffMetadata): VerifyResult {
   return { valid: errors.length === 0, errors };
 }
 
-export function countRenderedLines(ast: ElementContent[]): number {
+export function countRenderedLines(ast: RenderedRow[]): number {
   return collectAllElements(ast).filter(
     (node) => node.properties?.['data-line'] != null
   ).length;
@@ -302,9 +295,9 @@ export function countRenderedLines(ast: ElementContent[]): number {
 // Each unique line-index represents one visual row in split view
 export function countSplitRows(result: HunksRenderResult): number {
   const lineIndices = new Set<number>();
-  const { additionsContentAST = [], deletionsContentAST = [] } = result;
+  const { additionsContentRows = [], deletionsContentRows = [] } = result;
 
-  for (const nodes of [additionsContentAST, deletionsContentAST]) {
+  for (const nodes of [additionsContentRows, deletionsContentRows]) {
     const allElements = collectAllElements(nodes);
     for (const node of allElements) {
       const lineIndex = node.properties?.['data-line-index'];
@@ -328,18 +321,8 @@ export function countSplitRows(result: HunksRenderResult): number {
 // results that churn on every theme or tokenizer change.
 
 // Recursively concatenates the text nodes under a HAST node.
-export function hastTextContent(node: ElementContent): string {
-  if (node.type === 'text') {
-    return node.value;
-  }
-  if (!isHastElement(node)) {
-    return '';
-  }
-  let text = '';
-  for (const child of node.children) {
-    text += hastTextContent(child);
-  }
-  return text;
+export function htmlTextContent(node: RenderedRow): string {
+  return JSDOM.fragment(renderRows([node])).textContent ?? '';
 }
 
 export interface ProjectedRow {
@@ -359,13 +342,10 @@ export interface ProjectedRow {
 // ProjectedRow per visual row. Line rows capture their indices, numbers, type,
 // and exact text (processLine pads empty rows with a lone newline for
 // copy/paste; that padding is stripped so text matches the source verbatim).
-export function projectColumn(ast: ElementContent[]): ProjectedRow[] {
+export function projectColumn(ast: RenderedRow[]): ProjectedRow[] {
   const rows: ProjectedRow[] = [];
   for (const node of ast) {
-    if (!isHastElement(node)) {
-      continue;
-    }
-    const props = node.properties ?? {};
+    const props = rowProperties(node);
     if (props['data-line'] != null) {
       const lineIndex =
         typeof props['data-line-index'] === 'string'
@@ -374,7 +354,7 @@ export function projectColumn(ast: ElementContent[]): ProjectedRow[] {
       const [unifiedStr, splitStr] = lineIndex.split(',');
       const unifiedIndex = Number.parseInt(unifiedStr, 10);
       const splitIndex = Number.parseInt(splitStr, 10);
-      let text = hastTextContent(node);
+      let text = htmlTextContent(node);
       if (text.endsWith('\n')) {
         text = text.slice(0, -1);
       }
@@ -430,16 +410,16 @@ export function projectRenderResult(
 ): RenderResultProjection {
   return {
     unified:
-      result.unifiedContentAST != null
-        ? projectColumn(result.unifiedContentAST)
+      result.unifiedContentRows != null
+        ? projectColumn(result.unifiedContentRows)
         : undefined,
     deletions:
-      result.deletionsContentAST != null
-        ? projectColumn(result.deletionsContentAST)
+      result.deletionsContentRows != null
+        ? projectColumn(result.deletionsContentRows)
         : undefined,
     additions:
-      result.additionsContentAST != null
-        ? projectColumn(result.additionsContentAST)
+      result.additionsContentRows != null
+        ? projectColumn(result.additionsContentRows)
         : undefined,
     bufferBefore: result.bufferBefore,
     bufferAfter: result.bufferAfter,
@@ -479,26 +459,26 @@ export interface AnnotationProjectionEntry {
 // Walks a rendered column in document order and pairs every annotation
 // element with the data-line-index of the line row preceding it.
 export function annotationProjection(
-  ast: ElementContent[]
+  ast: RenderedRow[]
 ): AnnotationProjectionEntry[] {
   const entries: AnnotationProjectionEntry[] = [];
   let lastLineIndex: string | undefined;
   for (const node of collectAllElements(ast)) {
-    if (isHastLineElement(node)) {
-      lastLineIndex = getHastLineIndex(node);
+    if (isLineRow(node)) {
+      lastLineIndex = getLineIndex(node);
       continue;
     }
-    if (!isHastAnnotationElement(node)) {
+    if (!isAnnotationRow(node)) {
       continue;
     }
-    const annotationIndex = getHastAnnotationIndex(node);
+    const annotationIndex = getAnnotationIndex(node);
     if (annotationIndex == null) {
       continue;
     }
     entries.push({
       lineIndex: lastLineIndex,
       annotationIndex,
-      slotNames: findHastSlotElements(node).map((slot) =>
+      slotNames: findSlotElements(node).map((slot) =>
         typeof slot.properties?.name === 'string'
           ? slot.properties.name
           : undefined
@@ -592,7 +572,7 @@ export function patchDigest(
   }));
 }
 
-export function extractLineNumbers(ast: ElementContent[]): {
+export function extractLineNumbers(ast: RenderedRow[]): {
   unifiedIndices: number[];
   splitIndices: number[];
 } {

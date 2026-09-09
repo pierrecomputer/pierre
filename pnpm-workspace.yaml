@@ -110,7 +110,6 @@ catalog:
   'culori': '4.0.2'
   'diff': '9.0.0'
   'hast-util-heading-rank': '3.0.0'
-  'hast-util-to-html': '9.0.5'
   'hast-util-to-string': '3.0.1'
   'lint-staged': '16.2.7'
   'jsdom': '26.1.0'

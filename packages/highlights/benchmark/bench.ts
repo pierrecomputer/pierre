@@ -140,7 +140,6 @@ interface Contender {
   langs?: readonly FixtureLang[];
   fn: (src: string | Uint8Array, lang: FixtureLang) => unknown;
   tokens?: (src: string, lang: FixtureLang) => { tokens: ThemedToken[][] };
-  hast?: (src: string, lang: FixtureLang) => unknown;
   stream?: (chunks: string[], lang: FixtureLang) => ThemedToken[][];
 }
 
@@ -184,7 +183,6 @@ async function loadContenders(): Promise<Contender[]> {
       name: 'shiki',
       fn: (src, lang) => hl.codeToHtml(src as string, { ...options, lang }),
       tokens: (src, lang) => hl.codeToTokens(src, { ...options, lang }),
-      hast: (src, lang) => hl.codeToHast(src, { ...options, lang }),
       stream: (chunks, lang) => {
         let grammarState: ReturnType<typeof hl.getLastGrammarState> | undefined;
         let tail = '';
@@ -252,63 +250,44 @@ async function loadContenders(): Promise<Contender[]> {
   return contenders;
 }
 
-// Compare highlights's complete codeToTokens and codeToHast APIs against
-// Shiki's, using Pierre Dark for highlights and GitHub Dark for Shiki.
+// Compare complete codeToTokens output using Pierre Dark and GitHub Dark.
 function benchmarkTokens(contenders: Contender[]) {
-  const shiki = contenders.find((c) => c.name === 'shiki');
-  const shikiTokens = shiki?.tokens;
-  const shikiHast = shiki?.hast;
-  if (shikiTokens == null || shikiHast == null) {
+  const shikiTokens = contenders.find((c) => c.name === 'shiki')?.tokens;
+  if (shikiTokens == null) {
     console.log('shiki not installed; tokens benchmark skipped');
     return;
   }
 
-  const apis = [
-    {
-      title: 'codeToTokens',
-      highlightsFn: (src: string, lang: FixtureLang) =>
-        highlights.codeToTokens(src, { lang, theme: pierreDark }),
-      shikiFn: shikiTokens,
-    },
-    {
-      title: 'codeToHast',
-      highlightsFn: (src: string, lang: FixtureLang) =>
-        highlights.codeToHast(src, { lang, theme: pierreDark }),
-      shikiFn: shikiHast,
-    },
-  ];
-  for (const { title, highlightsFn, shikiFn } of apis) {
-    const rows = [];
-    for (const { name, lang, input } of TOKEN_FIXTURES) {
-      const mb = enc.encode(input).length / 1024 / 1024;
-      const lines = input.split('\n').length;
-      const [highlightsResult, shikiResult] = measure([
-        () => highlightsFn(input, lang),
-        () => shikiFn(input, lang),
-      ]);
-      rows.push([
-        name,
-        String(lines),
-        us(highlightsResult.median),
-        fmt(mb / (highlightsResult.median / 1000)) + ' MiB/s',
-        us(shikiResult.median),
-        baselineLabel(highlightsResult.median / shikiResult.median),
-      ]);
-    }
-    console.log(title + ':');
-    printTable(
-      [
-        { title: 'input' },
-        { title: 'lines', align: 'right', hide: 1 },
-        { title: 'highlights', align: 'right' },
-        { title: 'throughput', align: 'right', hide: 2 },
-        { title: 'shiki', align: 'right' },
-        { title: 'vs shiki' },
-      ],
-      rows
-    );
-    console.log();
+  const rows = [];
+  for (const { name, lang, input } of TOKEN_FIXTURES) {
+    const mb = enc.encode(input).length / 1024 / 1024;
+    const lines = input.split('\n').length;
+    const [highlightsResult, shikiResult] = measure([
+      () => highlights.codeToTokens(input, { lang, theme: pierreDark }),
+      () => shikiTokens(input, lang),
+    ]);
+    rows.push([
+      name,
+      String(lines),
+      us(highlightsResult.median),
+      fmt(mb / (highlightsResult.median / 1000)) + ' MiB/s',
+      us(shikiResult.median),
+      baselineLabel(highlightsResult.median / shikiResult.median),
+    ]);
   }
+  console.log('codeToTokens:');
+  printTable(
+    [
+      { title: 'input' },
+      { title: 'lines', align: 'right', hide: 1 },
+      { title: 'highlights', align: 'right' },
+      { title: 'throughput', align: 'right', hide: 2 },
+      { title: 'shiki', align: 'right' },
+      { title: 'vs shiki' },
+    ],
+    rows
+  );
+  console.log();
 }
 
 // Compare fresh streaming tokenizers over Diffs' 4,096-character batches.

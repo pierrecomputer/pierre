@@ -153,8 +153,12 @@ export class WorkerPoolManager {
       maxLineDiffLength,
       tokenizeMaxLineLength,
     };
-    this.fileCache = new LRUMapPkg.LRUMap(options.totalASTLRUCacheSize ?? 100);
-    this.diffCache = new LRUMapPkg.LRUMap(options.totalASTLRUCacheSize ?? 100);
+    this.fileCache = new LRUMapPkg.LRUMap(
+      options.totalTokenLRUCacheSize ?? 100
+    );
+    this.diffCache = new LRUMapPkg.LRUMap(
+      options.totalTokenLRUCacheSize ?? 100
+    );
     this.queueInitialization(langs);
   }
 
@@ -613,7 +617,7 @@ export class WorkerPoolManager {
     this.queueBroadcastStateChanges();
   };
 
-  public highlightFileAST(
+  public highlightFileTokens(
     instance: FileRendererInstance,
     file: FileContents
   ): void {
@@ -683,7 +687,7 @@ export class WorkerPoolManager {
     }
   }
 
-  public getPlainFileAST(
+  public getPlainFileTokens(
     file: FileContents,
     startingLine: number,
     totalLines: number,
@@ -701,7 +705,7 @@ export class WorkerPoolManager {
     );
   }
 
-  public highlightDiffAST(
+  public highlightDiffTokens(
     instance: DiffRendererInstance,
     diff: FileDiffMetadata
   ): void {
@@ -771,7 +775,7 @@ export class WorkerPoolManager {
     }
   }
 
-  public getPlainDiffAST(
+  public getPlainDiffTokens(
     diff: FileDiffMetadata,
     startingLine: number,
     totalLines: number,

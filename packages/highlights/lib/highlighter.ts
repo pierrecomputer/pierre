@@ -1,24 +1,15 @@
 import type {
-  CodeToHastOptions,
   CodeToHtmlOptions,
   CodeToTokensOptions,
-  HastRoot,
   Highlighter,
   Lang,
   Theme,
   ThemedToken,
   TokensResult,
-  TransformerContextCommon,
 } from './index';
 import { compileTheme } from './theme';
 import type { ResolvedTheme } from './tokens';
-import {
-  buildHast,
-  lineRecordsToRuns,
-  lineRecordsToTokens,
-  resolveOptionThemes,
-  themeMeta,
-} from './tokens';
+import { lineRecordsToTokens, resolveOptionThemes, themeMeta } from './tokens';
 
 const enc = new TextEncoder();
 const dec = new TextDecoder();
@@ -415,47 +406,6 @@ export class HighlightsHighlighter implements Highlighter {
     return { tokens, ...themeMeta(themes, cssVariablePrefix) };
   }
 
-  /**
-   * Highlight code as Shiki-compatible HAST (`root > pre > code`) with one
-   * `span.line` per line. Supports Shiki-style transformers and decorations.
-   */
-  codeToHast(
-    input: string | Uint8Array | ArrayBuffer,
-    options: CodeToHastOptions
-  ): HastRoot {
-    let code = toCode(input);
-    // Shiki transformer methods available through `this`, plus one mutable
-    // `meta` object shared by every hook.
-    const common = {
-      codeToHast: (c: string, o: CodeToHastOptions): HastRoot =>
-        this.codeToHast(c, o),
-      codeToTokens: (c: string, o: CodeToTokensOptions): TokensResult =>
-        this.codeToTokens(c, o),
-      meta: { ...options.meta },
-    };
-    const context: TransformerContextCommon = {
-      ...common,
-      source: code,
-      options,
-    };
-    for (const t of options.transformers ?? []) {
-      if (t.preprocess != null) {
-        code = t.preprocess.call(context, code, options) ?? code;
-      }
-    }
-    const themes = resolveOptionThemes(options);
-    const recs = this.tokenizeLineRecords(
-      langIdOf(options.lang),
-      this.writeInput(code)
-    );
-    const { lineRuns, lineStarts } = lineRecordsToRuns(
-      recs,
-      recs.length >> 1,
-      options.tokenizeMaxLineLength
-    );
-    return buildHast(code, lineRuns, lineStarts, themes, options, common);
-  }
-
   /** Grow the wasm linear memory if needed. */
   #growMemoryIfNeeded(len: number): void {
     const neededPages = 1 + Math.ceil(len / pageSize);
@@ -579,18 +529,6 @@ export function codeToTokens(
   options: CodeToTokensOptions
 ): TokensResult {
   return assertShared().codeToTokens(input, options);
-}
-
-/**
- * Highlight code as a Shiki-compatible HAST tree (`root > pre > code`) with
- * one `span.line` per line. WebAssembly lexes and splits lines; JavaScript
- * builds the nodes and runs Shiki-style transformers and decorations.
- */
-export function codeToHast(
-  input: string | Uint8Array | ArrayBuffer,
-  options: CodeToHastOptions
-): HastRoot {
-  return assertShared().codeToHast(input, options);
 }
 
 /**

@@ -1,5 +1,3 @@
-import { toHtml } from 'hast-util-to-html';
-
 import type {
   AnnotationSide,
   DiffLineEventBaseProps,
@@ -1135,7 +1133,7 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
       this.gutterUtilitySlot = undefined;
       if (this.gutterUtilityButton == null) {
         const tempDiv = document.createElement('div');
-        tempDiv.innerHTML = toHtml(createGutterUtilityElement());
+        tempDiv.innerHTML = createGutterUtilityElement();
         const utilityButton = tempDiv.firstElementChild;
         if (!(utilityButton instanceof HTMLButtonElement)) {
           throw new Error(

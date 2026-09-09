@@ -85,11 +85,6 @@ void t.test(
         RangeError,
         lang
       );
-      assert.throws(
-        () => highlighter.codeToHast('x', options),
-        RangeError,
-        lang
-      );
       assert.throws(() => new StreamTokenizer(options), RangeError, lang);
     }
   }
@@ -105,7 +100,6 @@ void t.test(
     const options = { lang: 'ts', theme: pierreDark } as const;
     const html = decoder.decode(highlighter.codeToHtml(code, options));
     const tokens = highlighter.codeToTokens(code, options);
-    const hast = highlighter.codeToHast(code, options);
     for (const input of [
       bytes,
       bytes.buffer,
@@ -116,7 +110,6 @@ void t.test(
         html
       );
       assert.deepEqual(highlighter.codeToTokens(input, options), tokens);
-      assert.deepEqual(highlighter.codeToHast(input, options), hast);
     }
   }
 );

@@ -59,11 +59,12 @@ export async function preloadFile<LAnnotation = undefined, Caret = undefined>({
     children.push(createStyleElement(options.unsafeCSS));
   }
 
-  if (fileResult.headerAST != null) {
-    children.push(fileResult.headerAST);
+  if (fileResult.headerHTML != null) {
+    children.push(fileResult.headerHTML);
   }
-  const code = fileRenderer.renderFullAST(fileResult);
-  code.properties['data-dehydrated'] = '';
+  const code = fileRenderer.renderFullHTML(fileResult, {
+    'data-dehydrated': '',
+  });
   children.push(code);
 
   return {

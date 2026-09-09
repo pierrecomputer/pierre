@@ -47,20 +47,17 @@ file, or decode it with `TextDecoder`.
 
 ## Tokens
 
-`codeToTokens` returns Shiki-compatible themed tokens, and `codeToHast` returns
-a HAST tree. WebAssembly emits line-aware UTF-16 style records for both APIs;
-JavaScript builds the token objects or HAST nodes.
+`codeToTokens` returns Shiki-compatible themed tokens. WebAssembly emits
+line-aware UTF-16 style records; JavaScript builds the token objects.
 
 ```js
-import { codeToTokens, codeToHast } from '@pierre/highlights';
+import { codeToTokens } from '@pierre/highlights';
 
 const { tokens } = codeToTokens('const a = 1', {
   lang: 'ts',
   theme: pierreDark,
 });
 // [[{ content: 'const ', offset: 0, color: '#ff678d', fontStyle: 0 }, ...]]
-const root = codeToHast('const a = 1', { lang: 'ts', theme: pierreDark });
-// { type: 'root', children: [{ tagName: 'pre', ... }] }
 ```
 
 Pass `theme` for one theme or `themes` for multiple color schemes. With
@@ -68,8 +65,7 @@ Pass `theme` for one theme or `themes` for multiple color schemes. With
 the others become `--hls-<name>` custom properties; `defaultColor: false` makes
 every theme a custom property, and `'light-dark()'` merges `light` and `dark`
 into CSS `light-dark()` colors. `tokenizeMaxLineLength` collapses long lines
-into one unthemed token. `codeToHast` also accepts Shiki-style `transformers`
-and `decorations`.
+into one unthemed token.
 
 Use `StreamTokenizer` for streaming and `LiveTokenizer` for editors. Each owns a
 Wasm instance and text buffer. Streams preserve lexer state for every language

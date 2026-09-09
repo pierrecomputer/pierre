@@ -205,7 +205,7 @@ describe('WorkerPoolManager cache priming', () => {
       manager.inspectCaches().diffCache.set(diff.name, sentinel);
       expect(manager.getDiffResultCache(diff)).toBeUndefined();
 
-      manager.highlightDiffAST(instance, diff);
+      manager.highlightDiffTokens(instance, diff);
       const request = await worker.waitForDiffRequest();
       expect(request.diff.cacheKey).toBeUndefined();
 
@@ -321,7 +321,7 @@ describe('WorkerPoolManager cache priming', () => {
 
     try {
       const diff = createCacheableDiff();
-      manager.highlightDiffAST(instance, diff);
+      manager.highlightDiffTokens(instance, diff);
       const request = await worker.waitForDiffRequest();
 
       const prime = manager.primeDiffHighlightCache(diff);

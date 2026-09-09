@@ -131,3 +131,40 @@ moonx root:icons
 This reads SVGs from `node_modules/@pierre/icons/svg` and writes
 `packages/diffs/src/sprite.ts`. Run after updating `@pierre/icons` or changing
 `sprite.config.js`.
+
+## Rendering tokens
+
+`tokensToHtml` renders themed token lines from any `codeToTokens` highlighter.
+It escapes text and attributes, preserves token styles, and separates lines with
+newlines. It does not add line, `code`, or `pre` wrappers.
+
+```ts
+import { tokensToHtml } from '@pierre/diffs';
+
+const html = tokensToHtml(tokens, {
+  transformers: [
+    {
+      tokens(lines) {
+        for (const line of lines) {
+          for (const token of line) {
+            token.htmlAttrs = { ...token.htmlAttrs, class: 'syntax-token' };
+          }
+        }
+      },
+    },
+  ],
+});
+```
+
+Token hooks can mutate the tokens or return a replacement array. Hooks run in
+`enforce: 'pre'`, normal, then `enforce: 'post'` order, preserving their order
+within each tier. Only the Shiki-style `tokens(lines)` hook is supported; node
+hooks and Shiki's highlighter context are not available. Component options do
+not accept these transformers.
+
+Custom `CodeHighlighter` implementations supply `codeToTokens`; diffs owns HTML
+rendering. Highlighting results and worker caches contain `ThemedToken[][]`.
+Renderers serialize visible tokens with current line attributes and diff
+decorations; `renderCode` returns gutter/content rows and `renderFullHTML`
+returns the complete markup. The previous AST methods and utilities have been
+removed.

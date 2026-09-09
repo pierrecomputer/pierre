@@ -1,5 +1,4 @@
 import { afterAll, describe, expect, test } from 'bun:test';
-import type { ElementContent } from 'hast';
 
 import {
   DiffHunksRenderer,
@@ -11,9 +10,11 @@ import {
   type UnifiedInjectedRowPlacement,
 } from '../src';
 import { UnresolvedFileHunksRenderer } from '../src/renderers/UnresolvedFileHunksRenderer';
-import { createGutterGap, createHastElement } from '../src/utils/hast_utils';
+import type { RenderedRow } from '../src/utils/html';
+import { createGutterGap, createHTMLElement } from '../src/utils/html';
 import { parseMergeConflictDiffFromFile } from '../src/utils/parseMergeConflictDiffFromFile';
-import { assertDefined, collectAllElements, isHastElement } from './testUtils';
+import { rowProperties } from './testUtils';
+import { assertDefined, collectAllElements } from './testUtils';
 
 afterAll(async () => {
   await disposeHighlighter();
@@ -23,46 +24,33 @@ const inlineGutter = () => createGutterGap(undefined, 'annotation', 1);
 
 function createInjectedRow(name: string): InjectedRow {
   return {
-    content: createHastElement({
-      tagName: 'div',
-      properties: { 'data-test-inline-row': name },
-    }),
+    content: createHTMLElement('div', { 'data-test-inline-row': name }),
     gutter: inlineGutter(),
   };
 }
 
-function getTopLevelRowNames(rows: ElementContent[]): string[] {
+function getTopLevelRowNames(rows: RenderedRow[]): string[] {
   return rows.flatMap((row) => {
-    if (!isHastElement(row)) {
-      return [];
-    }
-    const name = row.properties?.['data-test-inline-row'];
+    const name = rowProperties(row)['data-test-inline-row'];
     return typeof name === 'string' ? [name] : [];
   });
 }
 
-function getTopLevelRowIndex(rows: ElementContent[], key: string): number {
+function getTopLevelRowIndex(rows: RenderedRow[], key: string): number {
   return rows.findIndex((row) => {
-    return (
-      isHastElement(row) && row.properties?.['data-test-inline-row'] === key
-    );
+    return rowProperties(row)['data-test-inline-row'] === key;
   });
 }
 
-function getTopLevelLineIndex(
-  rows: ElementContent[],
-  lineNumber: number
-): number {
+function getTopLevelLineIndex(rows: RenderedRow[], lineNumber: number): number {
   return rows.findIndex((row) => {
-    return isHastElement(row) && row.properties?.['data-line'] === lineNumber;
+    return rowProperties(row)['data-line'] === lineNumber;
   });
 }
 
-function getTopLevelBufferIndex(rows: ElementContent[]): number {
+function getTopLevelBufferIndex(rows: RenderedRow[]): number {
   return rows.findIndex((row) => {
-    return (
-      isHastElement(row) && row.properties?.['data-content-buffer'] != null
-    );
+    return rowProperties(row)['data-content-buffer'] != null;
   });
 }
 
@@ -111,10 +99,10 @@ describe('injected row hooks', () => {
 
     const result = await renderer.asyncRender(diff);
 
-    assertDefined(result.unifiedContentAST, 'expected unified content AST');
-    const lineIndex = getTopLevelLineIndex(result.unifiedContentAST, 1);
+    assertDefined(result.unifiedContentRows, 'expected unified content AST');
+    const lineIndex = getTopLevelLineIndex(result.unifiedContentRows, 1);
     const inlineRowIndex = getTopLevelRowIndex(
-      result.unifiedContentAST,
+      result.unifiedContentRows,
       'unified-before-line-1'
     );
 
@@ -135,31 +123,37 @@ describe('injected row hooks', () => {
 
     const result = await renderer.asyncRender(diff);
 
-    assertDefined(result.deletionsContentAST, 'expected deletions content AST');
-    assertDefined(result.additionsContentAST, 'expected additions content AST');
+    assertDefined(
+      result.deletionsContentRows,
+      'expected deletions content AST'
+    );
+    assertDefined(
+      result.additionsContentRows,
+      'expected additions content AST'
+    );
 
     expect(result.rowCount).toBe(diff.splitLineCount + 2);
-    expect(getTopLevelRowNames(result.deletionsContentAST)).toEqual([
+    expect(getTopLevelRowNames(result.deletionsContentRows)).toEqual([
       'split-deletion-only',
       'split-deletion-paired',
     ]);
-    expect(getTopLevelRowNames(result.additionsContentAST)).toEqual([
+    expect(getTopLevelRowNames(result.additionsContentRows)).toEqual([
       'split-addition-paired',
     ]);
 
     const additionBufferIndex = getTopLevelBufferIndex(
-      result.additionsContentAST
+      result.additionsContentRows
     );
     const additionPairedIndex = getTopLevelRowIndex(
-      result.additionsContentAST,
+      result.additionsContentRows,
       'split-addition-paired'
     );
     const deletionOnlyIndex = getTopLevelRowIndex(
-      result.deletionsContentAST,
+      result.deletionsContentRows,
       'split-deletion-only'
     );
     const deletionPairedIndex = getTopLevelRowIndex(
-      result.deletionsContentAST,
+      result.deletionsContentRows,
       'split-deletion-paired'
     );
 
@@ -192,22 +186,19 @@ describe('injected row hooks', () => {
 
     const result = await renderer.asyncRender(fileDiff);
 
-    assertDefined(result.unifiedContentAST, 'expected unified content AST');
-    const actionRowIndex = result.unifiedContentAST.findIndex((row) => {
-      return (
-        isHastElement(row) &&
-        row.properties?.['data-merge-conflict-actions'] != null
-      );
+    assertDefined(result.unifiedContentRows, 'expected unified content AST');
+    const actionRowIndex = result.unifiedContentRows.findIndex((row) => {
+      return rowProperties(row)['data-merge-conflict-actions'] != null;
     });
-    const actionButtons = collectAllElements(result.unifiedContentAST).filter(
+    const actionButtons = collectAllElements(result.unifiedContentRows).filter(
       (el) => el.properties?.['data-merge-conflict-action'] != null
     );
-    const actionAnchorIndex = getTopLevelLineIndex(result.unifiedContentAST, 1);
-    const markerRows = result.unifiedContentAST.filter((row) => {
-      return (
-        isHastElement(row) &&
-        row.properties?.['data-merge-conflict-marker-row'] != null
-      );
+    const actionAnchorIndex = getTopLevelLineIndex(
+      result.unifiedContentRows,
+      1
+    );
+    const markerRows = result.unifiedContentRows.filter((row) => {
+      return rowProperties(row)['data-merge-conflict-marker-row'] != null;
     });
 
     // The fixture declares one conflict region with three marker lines

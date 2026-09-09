@@ -2732,18 +2732,18 @@ export class Editor<
             // deleted-text marker reveals it and the editor drops its own
             // selection.
             const target = path[0];
-            const gutterRow =
+            const gutterChild =
               target instanceof HTMLElement
                 ? target.closest('[data-column-number]')
                 : null;
-            if (gutterRow instanceof HTMLElement) {
+            if (gutterChild instanceof HTMLElement) {
               if (this.#isLineSelectionEnabled()) {
                 this.#preserveEditorSelectionsForGutterGesture();
                 return;
               }
               if (
                 this.#beginDeletionGutterSelection(
-                  gutterRow,
+                  gutterChild,
                   deletionsCode,
                   e.pointerType === 'mouse'
                 )
@@ -2803,10 +2803,10 @@ export class Editor<
               this.#preserveEditorSelectionsForGutterGesture();
               return;
             }
-            const gutterRow = resolveGutterTarget(
+            const gutterChild = resolveGutterTarget(
               path[0] as HTMLElement | undefined
             );
-            if (gutterRow !== undefined && this.#isLineSelectionEnabled()) {
+            if (gutterChild !== undefined && this.#isLineSelectionEnabled()) {
               this.#preserveEditorSelectionsForGutterGesture();
               return;
             }
@@ -2815,11 +2815,11 @@ export class Editor<
             // document. This runs before the mouse-only gate below: a deletion
             // tap registers no drag state to strand, so it works on touch too,
             // matching the split deletions column.
-            if (gutterRow?.dataset.lineType === 'change-deletion') {
-              const code = gutterRow.closest('[data-code]');
+            if (gutterChild?.dataset.lineType === 'change-deletion') {
+              const code = gutterChild.closest('[data-code]');
               if (code != null) {
                 this.#beginDeletionGutterSelection(
-                  gutterRow,
+                  gutterChild,
                   code,
                   e.pointerType === 'mouse'
                 );
@@ -2837,7 +2837,7 @@ export class Editor<
             }
 
             const textDocument = this.#editSession?.document;
-            const lineIndex = resolveEditableLine(gutterRow);
+            const lineIndex = resolveEditableLine(gutterChild);
             if (lineIndex === undefined || textDocument === undefined) {
               return;
             }
@@ -4466,14 +4466,14 @@ export class Editor<
   // The content row that lines up with a gutter row: the two columns are
   // parallel, so the gutter row's index is the content row's index.
   #contentRowForGutterRow(
-    gutterRow: HTMLElement,
+    gutterChild: HTMLElement,
     contentColumn: Element | null | undefined
   ): HTMLElement | undefined {
-    const gutterColumn = gutterRow.parentElement;
+    const gutterColumn = gutterChild.parentElement;
     if (gutterColumn == null || contentColumn == null) {
       return undefined;
     }
-    const index = [...gutterColumn.children].indexOf(gutterRow);
+    const index = [...gutterColumn.children].indexOf(gutterChild);
     const row = contentColumn.children[index];
     return row instanceof HTMLElement ? row : undefined;
   }
@@ -4487,13 +4487,13 @@ export class Editor<
   // gutter row has no matching content row, letting the caller fall back to a
   // plain deleted-text selection.
   #beginDeletionGutterSelection(
-    gutterRow: HTMLElement,
+    gutterChild: HTMLElement,
     code: Element,
     isMouse: boolean
   ): boolean {
     const contentColumn = code.querySelector('[data-content]');
     const anchorContent = this.#contentRowForGutterRow(
-      gutterRow,
+      gutterChild,
       contentColumn
     );
     if (anchorContent === undefined) {
@@ -4994,9 +4994,9 @@ export class Editor<
             continue;
           }
           nextSpacers.set(lineElement, count);
-          const gutterRow = this.#gutterElement?.children[rowIndex];
-          if (gutterRow instanceof HTMLElement) {
-            nextSpacers.set(gutterRow, count);
+          const gutterChild = this.#gutterElement?.children[rowIndex];
+          if (gutterChild instanceof HTMLElement) {
+            nextSpacers.set(gutterChild, count);
           }
           const partner = this.#deletionsColumnPartner(rowIndex);
           if (partner != null) {

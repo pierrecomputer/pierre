@@ -1060,29 +1060,26 @@ const fileDiff: FileDiffMetadata = parseDiffFromFile(
 // Render hunks (async - waits for highlighter initialization)
 const result: HunksRenderResult = await instance.asyncRender(fileDiff);
 
-// result contains hast nodes for each column based on diffStyle:
-// - 'split' mode: additionsAST and deletionsAST (side-by-side)
-// - 'unified' mode: unifiedAST only (single column)
-// - preNode: the wrapper <pre> element as a hast node
-// - headerNode: the file header element
+// result contains HTML rows for each column based on diffStyle:
+// - 'split' mode: additionsContentRows and deletionsContentRows (side-by-side)
+// - 'unified' mode: unifiedContentRows only (single column)
+// - preProperties: attributes for the wrapper <pre> element
+// - headerHTML: the file header HTML
 // - hunkData: metadata about each hunk (for custom separators)
 
 // Render to a complete HTML string (includes <pre> and <code> wrappers)
 const fullHTML: string = instance.renderFullHTML(result);
 
 // Or render just a specific column to HTML
-const additionsHTML: string = instance.renderPartialHTML(
-  instance.renderCodeAST('additions', result),
-  'additions' // wraps in <code data-additions>
-);
+const additions = instance.renderCode('additions', result);
+const additionsHTML = additions == null
+  ? ''
+  : instance.renderPartialHTML(additions, 'additions');
 
 // Or render without the <code> wrapper
-const rawHTML: string = instance.renderPartialHTML(
-  instance.renderCodeAST('additions', result)
-);
+const rawHTML = additions == null ? '' : instance.renderPartialHTML(additions);
 
-// Or get the full AST for further transformation
-const fullAST = instance.renderFullAST(result);`,
+`,
   },
   options,
 };
@@ -1143,26 +1140,21 @@ for (const patch of patches) {
     // Render hunks (async - waits for highlighter initialization)
     const result: HunksRenderResult = await instance.asyncRender(fileDiff);
 
-    // result contains hast nodes based on diffStyle:
-    // - 'unified' mode: unifiedGutterAST/unifiedContentAST
-    // - 'split' mode: additionsGutterAST/additionsContentAST and deletionsGutterAST/deletionsContentAST
+    // result contains HTML rows based on diffStyle:
+    // - 'unified' mode: unifiedGutterRows/unifiedContentRows
+    // - 'split' mode: additionsGutterRows/additionsContentRows and deletionsGutterRows/deletionsContentRows
 
     // Render to complete HTML (includes <pre> and <code> wrappers)
     const fullHTML: string = instance.renderFullHTML(result);
 
     // Or render just the unified column with <code> wrapper
-    const unifiedHTML: string = instance.renderPartialHTML(
-      instance.renderCodeAST('unified', result),
-      'unified'
-    );
+    const unified = instance.renderCode('unified', result);
+    const unifiedHTML = unified == null
+      ? ''
+      : instance.renderPartialHTML(unified, 'unified');
 
-    // Or render without any wrapper
-    const rawHTML: string = instance.renderPartialHTML(
-      instance.renderCodeAST('unified', result)
-    );
-
-    // Or get the full AST for custom transformation
-    const fullAST = instance.renderFullAST(result);
+    // Or render without the <code> wrapper
+    const rawHTML = unified == null ? '' : instance.renderPartialHTML(unified);
   }
 }`,
   },
@@ -1208,9 +1200,9 @@ export { greet };\`,
 const result: FileRenderResult = await instance.asyncRender(file);
 
 // result contains:
-// - gutterAST/contentAST: arrays of hast ElementContent nodes for each line
-// - preAST: the wrapper <pre> element as a hast node
-// - headerAST: the file header element (if not disabled)
+// - gutterRows/contentRows: arrays of HTML rows for each line
+// - preProperties: attributes for the wrapper <pre> element
+// - headerHTML: the file header HTML (if not disabled)
 // - totalLines: number of lines in the file
 // - themeStyles: CSS custom properties for theming
 
@@ -1219,11 +1211,11 @@ const fullHTML: string = instance.renderFullHTML(result);
 
 // Or render just the code lines to HTML
 const partialHTML: string = instance.renderPartialHTML(
-  instance.renderCodeAST(result)
+  instance.renderCode(result).content
 );
 
-// Or get the full AST for further transformation
-const fullAST = instance.renderFullAST(result);`,
+// Or get the complete HTML
+const fullHTML = instance.renderFullHTML(result);`,
   },
   options,
 };
