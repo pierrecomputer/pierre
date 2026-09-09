@@ -167,7 +167,10 @@ export class FileRenderer<LAnnotation = undefined> {
     private workerManager?: WorkerPoolManager | undefined
   ) {
     if (workerManager?.isWorkingPool() !== true) {
-      this.highlighter = getHighlighterIfReady(options.theme ?? DEFAULT_THEMES);
+      this.highlighter = getHighlighterIfReady(
+        options.theme ?? DEFAULT_THEMES,
+        this.getCodeHighlighter()
+      );
     }
   }
 
@@ -206,6 +209,7 @@ export class FileRenderer<LAnnotation = undefined> {
     file: FileContents,
     externalFile?: FileContents
   ): void {
+    this.invalidateOnHighlighterChange();
     const { editSessionActive: wasAlreadyActive, renderCache } = this;
     this.editSessionActive = true;
     if (!wasAlreadyActive) {
@@ -315,11 +319,8 @@ export class FileRenderer<LAnnotation = undefined> {
     this.textDocumentCache = new WeakMap();
   }
 
-  // Readiness checks consult the currently registered highlighter, while
-  // rendering uses the cached `this.highlighter` and cached markup. When the
-  // app switches highlighters (setHighlighter) after construction, drop
-  // everything derived from the previous one and re-resolve, or the renderer
-  // would keep rendering with the old implementation.
+  // Outside an edit session, a registration change discards the old
+  // highlighter and its rendered output before resolving the new one.
   private invalidateOnHighlighterChange(): void {
     // An active edit session keeps rendering through the implementation it
     // captured; the registration change applies on the first render after
@@ -336,6 +337,13 @@ export class FileRenderer<LAnnotation = undefined> {
         this.options.theme ?? DEFAULT_THEMES
       );
     }
+  }
+
+  /** The edit session keeps its highlighter until it ends. */
+  public getCodeHighlighter(): CodeHighlighter {
+    return this.editSessionActive
+      ? this.highlighterRegistration
+      : getCodeHighlighter();
   }
 
   // Whether a setHighlighter call since the last render pass is still
@@ -491,7 +499,8 @@ export class FileRenderer<LAnnotation = undefined> {
       return (
         (renderCache.result == null && renderCache.hydrated !== true) ||
         this.workerManager?.isWorkingPool() === true ||
-        (this.highlighter != null && areHighlighterThemesReady(options.theme))
+        (this.highlighter != null &&
+          areHighlighterThemesReady(options.theme, this.getCodeHighlighter()))
       );
     }
     // Hydration has highlighted DOM without local tokens. It is still active
@@ -508,7 +517,10 @@ export class FileRenderer<LAnnotation = undefined> {
       return !renderCache.highlighted;
     }
 
-    return this.highlighter != null && areHighlighterThemesReady(options.theme);
+    return (
+      this.highlighter != null &&
+      areHighlighterThemesReady(options.theme, this.getCodeHighlighter())
+    );
   }
 
   public getOrCreateLineCache(file: FileContents): string[] {
@@ -765,12 +777,19 @@ export class FileRenderer<LAnnotation = undefined> {
       }
     } else {
       this.computedLang = file.lang ?? getFiletypeFromFileName(file.name);
-      this.highlighter ??= getHighlighterIfReady(options.theme);
+      this.highlighter ??= getHighlighterIfReady(
+        options.theme,
+        this.getCodeHighlighter()
+      );
       const hasThemes =
-        this.highlighter != null && areHighlighterThemesReady(options.theme);
+        this.highlighter != null &&
+        areHighlighterThemesReady(options.theme, this.getCodeHighlighter());
       const hasLangs =
         this.highlighter != null &&
-        isHighlighterLanguageReady(this.computedLang);
+        isHighlighterLanguageReady(
+          this.computedLang,
+          this.getCodeHighlighter()
+        );
       const canHighlight = !forcePlainText && hasLangs;
 
       // If we have any semblance of a highlighter with the correct theme(s)
@@ -806,9 +825,9 @@ export class FileRenderer<LAnnotation = undefined> {
       if (!hasThemes || (!forcePlainText && !hasLangs)) {
         // Results are only published when the registration that produced
         // them is still current; a switch mid-highlight re-renders anyway.
-        const registration = getCodeHighlighter();
+        const registration = this.getCodeHighlighter();
         void this.asyncHighlight(file).then(({ result, options }) => {
-          if (getCodeHighlighter() !== registration) return;
+          if (this.getCodeHighlighter() !== registration) return;
           this.applyHighlightResult(file, result, options, !forcePlainText);
         });
       }
@@ -844,11 +863,17 @@ export class FileRenderer<LAnnotation = undefined> {
       : (file.lang ?? getFiletypeFromFileName(file.name));
     const hasThemes =
       this.highlighter != null &&
-      areHighlighterThemesResolved(getThemes(this.getLocalHighlightTheme()));
+      areHighlighterThemesResolved(
+        getThemes(this.getLocalHighlightTheme()),
+        this.getCodeHighlighter()
+      );
     const hasLangs =
       forcePlainText ||
       (this.highlighter != null &&
-        isHighlighterLanguageReady(this.computedLang));
+        isHighlighterLanguageReady(
+          this.computedLang,
+          this.getCodeHighlighter()
+        ));
     // If we don't have the required langs or themes, then we need to
     // initialize the highlighter to load the appropriate languages and themes
     let highlighter = this.highlighter;
@@ -1011,19 +1036,19 @@ export class FileRenderer<LAnnotation = undefined> {
   }
 
   public async initializeHighlighter(): Promise<RenderersHighlighter> {
-    // The load resolves against the registration captured here; if
-    // setHighlighter swapped implementations while it was in flight, the
-    // stale result must not displace what invalidation re-resolved.
-    const registration = getCodeHighlighter();
+    // Retain the loaded instance only while the renderer still uses this
+    // registration, including an active editor that captured it.
+    const registration = this.getCodeHighlighter();
     const highlighter = await loadHighlighter(
       getHighlighterOptions(this.computedLang, {
         theme: this.getLocalHighlightTheme(),
         preferredHighlighter:
           this.workerManager?.getPreferredHighlighter() ??
           this.options.preferredHighlighter,
-      })
+      }),
+      registration
     );
-    if (getCodeHighlighter() === registration) {
+    if (this.getCodeHighlighter() === registration) {
       this.highlighter = highlighter;
     }
     return highlighter;

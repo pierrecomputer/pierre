@@ -84,22 +84,24 @@ export function resolveRenderHighlighter(
 /**
  * The highlighter to render with synchronously, if its themes are ready;
  * `undefined` means an async `loadHighlighter` pass is required first.
+ * Pass a captured highlighter to keep an edit session on its implementation.
  */
 export function getHighlighterIfReady(
-  theme: DiffsThemeNames | ThemesType | undefined
+  theme: DiffsThemeNames | ThemesType | undefined,
+  highlighter: CodeHighlighter = getCodeHighlighter()
 ): RenderersHighlighter | undefined {
-  const highlighter = getCodeHighlighter();
   if (!highlighter.isReady({ langs: [], themes: getThemes(theme) })) {
     return undefined;
   }
   return resolveRenderHighlighter(highlighter);
 }
 
-/** Whether the given theme(s) are ready on the active highlighter. */
+/** Whether the given theme(s) are ready; defaults to the active highlighter. */
 export function areHighlighterThemesReady(
-  theme: DiffsThemeNames | ThemesType | undefined
+  theme: DiffsThemeNames | ThemesType | undefined,
+  highlighter: CodeHighlighter = getCodeHighlighter()
 ): boolean {
-  const custom = getCustomHighlighter();
+  const custom = customHighlighterOf(highlighter);
   if (custom != null) {
     return custom.isReady({ langs: [], themes: getThemes(theme) });
   }
@@ -108,9 +110,10 @@ export function areHighlighterThemesReady(
 
 /** Whether the given theme names have at least been resolved (fetched). */
 export function areHighlighterThemesResolved(
-  themes: DiffsThemeNames[]
+  themes: DiffsThemeNames[],
+  highlighter: CodeHighlighter = getCodeHighlighter()
 ): boolean {
-  const custom = getCustomHighlighter();
+  const custom = customHighlighterOf(highlighter);
   if (custom != null) {
     return custom.isReady({ langs: [], themes });
   }
@@ -119,9 +122,10 @@ export function areHighlighterThemesResolved(
 
 /** Whether the given language can highlight synchronously right now. */
 export function isHighlighterLanguageReady(
-  lang: SupportedLanguages | undefined
+  lang: SupportedLanguages | undefined,
+  highlighter: CodeHighlighter = getCodeHighlighter()
 ): boolean {
-  const custom = getCustomHighlighter();
+  const custom = customHighlighterOf(highlighter);
   if (custom != null) {
     return custom.isReady({ langs: [lang ?? 'text'], themes: [] });
   }
@@ -142,16 +146,18 @@ export async function preloadHighlighter(options: {
 }
 
 /**
- * Load (or get) the active highlighter with the given languages and themes
- * ready. The built-in adapter delegates to the shared shiki instance, which
+ * Load the given languages and themes on a captured highlighter, defaulting
+ * to the active registration. The built-in adapter delegates to shiki, which
  * `resolveRenderHighlighter` returns for the pre-existing render paths.
  */
-export async function loadHighlighter(options: {
-  langs: SupportedLanguages[];
-  themes: DiffsThemeNames[];
-  preferredHighlighter?: HighlighterTypes;
-}): Promise<RenderersHighlighter> {
-  const highlighter = getCodeHighlighter();
+export async function loadHighlighter(
+  options: {
+    langs: SupportedLanguages[];
+    themes: DiffsThemeNames[];
+    preferredHighlighter?: HighlighterTypes;
+  },
+  highlighter: CodeHighlighter = getCodeHighlighter()
+): Promise<RenderersHighlighter> {
   await highlighter.load(options);
   return resolveRenderHighlighter(highlighter);
 }

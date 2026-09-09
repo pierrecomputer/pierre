@@ -3,19 +3,23 @@ import tokenTypes from './token-types';
 
 const colorReg = /^#([a-f0-9]{6})([a-f0-9]{2})?$/i;
 
-/** Walk a dotted scope name up its prefixes until the syntax map has styling. */
+/** Keep the nearest scope's font settings while finding an inherited color. */
 function resolve(
   syntax: Record<string, string | ThemeSyntaxSettings>,
   name: string
 ): ThemeSyntaxSettings | undefined {
+  let settings: ThemeSyntaxSettings | undefined;
   for (let k = name; k !== ''; ) {
     const v = syntax[k];
-    if (typeof v === 'string') return { color: v };
-    if (v != null && typeof v === 'object' && v.color != null) return v;
+    if (typeof v === 'string') return { ...settings, color: v };
+    if (v != null && typeof v === 'object') {
+      settings ??= v;
+      if (v.color != null) return { ...settings, color: v.color };
+    }
     const dot = k.lastIndexOf('.');
     k = dot < 0 ? '' : k.slice(0, dot);
   }
-  return undefined;
+  return settings;
 }
 
 /**
@@ -23,6 +27,8 @@ function resolve(
  */
 export function compileTheme(theme: Theme): Uint8Array {
   const style = theme.style ?? {};
+  const foreground =
+    style['editor.foreground'] ?? style.text ?? style.foreground;
   const syntax = style.syntax ?? {};
   const bytes = new Uint8Array(tokenTypes.length * 5);
   for (let i = 0; i < tokenTypes.length; i++) {
@@ -33,18 +39,20 @@ export function compileTheme(theme: Theme): Uint8Array {
     if (name === 'none') continue;
     else if (name === 'background')
       color = style['editor.background'] ?? style.background;
-    else if (name === 'foreground')
-      color = style['editor.foreground'] ?? style.text ?? style.foreground;
-    else ({ color, font_style, font_weight } = resolve(syntax, name) ?? {});
-    if (typeof color !== 'string') continue;
-    const m = colorReg.exec(color.trim());
-    if (m === null) continue;
+    else if (name === 'foreground') color = foreground;
+    else {
+      ({ color, font_style, font_weight } = resolve(syntax, name) ?? {});
+      if (font_style != null || font_weight != null) color ??= foreground;
+    }
     const o = i * 5;
-    const rgb = parseInt(m[1], 16);
-    bytes[o] = rgb >> 16;
-    bytes[o + 1] = (rgb >> 8) & 0xff;
-    bytes[o + 2] = rgb & 0xff;
-    bytes[o + 3] = m[2] !== undefined ? parseInt(m[2], 16) : 0xff;
+    const m = typeof color === 'string' ? colorReg.exec(color.trim()) : null;
+    if (m !== null) {
+      const rgb = parseInt(m[1], 16);
+      bytes[o] = rgb >> 16;
+      bytes[o + 1] = (rgb >> 8) & 0xff;
+      bytes[o + 2] = rgb & 0xff;
+      bytes[o + 3] = m[2] !== undefined ? parseInt(m[2], 16) : 0xff;
+    }
     let s = font_style === 'italic' ? 0x10 : 0;
     if (font_weight !== undefined && font_weight >= 100 && font_weight <= 900)
       s |= Math.round(font_weight / 100);

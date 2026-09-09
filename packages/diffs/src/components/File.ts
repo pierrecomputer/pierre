@@ -31,7 +31,6 @@ import { SVGSpriteSheet } from '../sprite';
 import { renderColumn, renderRows } from '../utils/html';
 export type { FileEditCompleteEvent } from '../editor/types';
 import {
-  getCodeHighlighter,
   loadHighlighter,
   type RenderersHighlighter,
   resolveRenderHighlighter,
@@ -796,14 +795,14 @@ export class File<LAnnotation = undefined, Caret = undefined> {
     if (editor == null || fileContainer == null || file == null) {
       return;
     }
-    const registration = getCodeHighlighter();
+    const registration = this.fileRenderer.getCodeHighlighter();
     const syncEditor = (highlighter: RenderersHighlighter): void => {
       if (
         !this.enabled ||
         this.editor !== editor ||
         this.fileContainer !== fileContainer ||
         this.getLatestFile() !== file ||
-        getCodeHighlighter() !== registration
+        this.fileRenderer.getCodeHighlighter() !== registration
       ) {
         return;
       }
@@ -826,11 +825,11 @@ export class File<LAnnotation = undefined, Caret = undefined> {
         this.workerManager?.getPreferredHighlighter() ??
         this.options.preferredHighlighter,
     };
-    // Edit mode uses the registered implementation, just like the renderer.
+    // The renderer and editor load themes through the same implementation.
     if (registration.isReady(loadOptions)) {
       syncEditor(resolveRenderHighlighter(registration));
     } else {
-      void loadHighlighter(loadOptions).then(syncEditor);
+      void loadHighlighter(loadOptions, registration).then(syncEditor);
     }
   }
 

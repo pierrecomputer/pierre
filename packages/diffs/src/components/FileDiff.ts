@@ -22,7 +22,6 @@ import type {
   RetainedDiffSessionSnapshot,
 } from '../editor/types';
 import {
-  getCodeHighlighter,
   loadHighlighter,
   type RenderersHighlighter,
   resolveRenderHighlighter,
@@ -1755,14 +1754,14 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
     ) {
       return;
     }
-    const registration = getCodeHighlighter();
+    const registration = this.hunksRenderer.getCodeHighlighter();
     const sync = (highlighter: RenderersHighlighter): void => {
       if (
         !this.enabled ||
         this.editor !== editor ||
         this.fileContainer !== fileContainer ||
         this.getLatestDiff() !== fileDiff ||
-        getCodeHighlighter() !== registration
+        this.hunksRenderer.getCodeHighlighter() !== registration
       ) {
         return;
       }
@@ -1792,11 +1791,11 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
         this.workerManager?.getPreferredHighlighter() ??
         this.options.preferredHighlighter,
     };
-    // Edit mode uses the registered implementation, just like the renderer.
+    // The renderer and editor load themes through the same implementation.
     if (registration.isReady(loadOptions)) {
       sync(resolveRenderHighlighter(registration));
     } else {
-      void loadHighlighter(loadOptions).then(sync);
+      void loadHighlighter(loadOptions, registration).then(sync);
     }
   }
 

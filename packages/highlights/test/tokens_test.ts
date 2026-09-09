@@ -3,7 +3,7 @@ import t from 'node:test';
 
 import { LANGS } from '../lib/highlighter';
 import type { CodeToTokensOptions, Theme, ThemedToken } from '../lib/index';
-import { codeToTokens, init, StreamTokenizer } from '../lib/index';
+import { codeToHtml, codeToTokens, init, StreamTokenizer } from '../lib/index';
 import {
   resolveOptionThemes,
   runToToken,
@@ -33,6 +33,59 @@ t.before(() => {
 /** join a line's token contents back together */
 const lineText = (tokens: ThemedToken[]) =>
   tokens.map((tk) => tk.content).join('');
+
+void t.test('font-only bundled emphasis keeps italic and bold styling', () => {
+  const code = '*hello* **world**';
+  for (const theme of [pierreDark, pierreLight]) {
+    const options = { lang: 'md', theme } as const;
+    const tokens = codeToTokens(code, options).tokens[0];
+    assert.equal(
+      tokens.find((token) => token.content === '*hello*')?.fontStyle,
+      1
+    );
+    assert.equal(
+      tokens.find((token) => token.content === '**world**')?.fontStyle,
+      2
+    );
+    const html = new TextDecoder().decode(codeToHtml(code, options));
+    assert.match(html, /font-style:italic/);
+    assert.match(html, /font-weight:700/);
+  }
+});
+
+void t.test(
+  'font-only syntax inherits a parent color or the foreground',
+  () => {
+    for (const foreground of ['#abcdef', undefined]) {
+      const theme: Theme = {
+        name: 'font-only',
+        appearance: 'dark',
+        style: {
+          foreground,
+          syntax: {
+            keyword: '#123456',
+            'keyword.declaration': { font_weight: 700 },
+            comment: { font_style: 'italic' },
+          },
+        },
+      };
+      const code = 'const a = 1; // hello';
+      const options = { lang: 'ts', theme } as const;
+      const tokens = codeToTokens(code, options).tokens[0];
+      const keyword = tokens.find((token) => token.content.startsWith('const'));
+      assert.equal(keyword?.color, '#123456');
+      assert.equal(keyword?.fontStyle, 2);
+      const comment = tokens.find((token) => token.type === 1);
+      assert.equal(comment?.color, foreground);
+      assert.equal(comment?.fontStyle, 1);
+      const html = new TextDecoder().decode(codeToHtml(code, options));
+      assert.match(html, /color:#123456;font-weight:700/);
+      assert.ok(
+        html.includes(`color:${foreground ?? 'inherit'};font-style:italic`)
+      );
+    }
+  }
+);
 
 const langIds = {
   css: LANGS.css,

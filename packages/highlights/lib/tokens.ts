@@ -10,7 +10,7 @@ import tokenTypes from './token-types';
 
 /** One theme slot's resolved styling for a token type. */
 export interface TokenStyle {
-  color: string;
+  color: string | undefined;
   italic: boolean;
   weight: number;
 }
@@ -111,8 +111,11 @@ export function resolveThemeStyles(
     for (let i = 1; i < tokenTypes.length; i++) {
       const o = i * 5;
       const [r, g, b, a, s] = table.subarray(o, o + 5);
-      if ((r | g | b | a) === 0) continue;
-      const color = '#' + hex(r) + hex(g) + hex(b) + (a !== 0xff ? hex(a) : '');
+      if ((r | g | b | a | s) === 0) continue;
+      const color =
+        (r | g | b | a) === 0
+          ? undefined
+          : '#' + hex(r) + hex(g) + hex(b) + (a !== 0xff ? hex(a) : '');
       const style = {
         color,
         italic: (s & 0x10) !== 0,

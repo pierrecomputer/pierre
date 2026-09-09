@@ -149,7 +149,12 @@
           (then (call $emitCssVariable (local.get $hl)))
           (else
             (local.set $rec (call $themeRec (local.get $hl)))
-            (call $emitColor (local.get $rec))
+            ;; Font-only styles inherit the surrounding foreground.
+            (if (i32.load (local.get $rec))
+              (then (call $emitColor (local.get $rec)))
+              (else
+                (i64.store (global.get $out) (i64.const "inherit"))
+                (global.set $out (i32.add (global.get $out) (i32.const 7)))))
             (call $emitFont (i32.load8_u offset=4 (local.get $rec)))))
         (i32.store16 (global.get $out) (i32.const 0x3e22)) ;; `">`
         (global.set $out (i32.add (global.get $out) (i32.const 2)))
