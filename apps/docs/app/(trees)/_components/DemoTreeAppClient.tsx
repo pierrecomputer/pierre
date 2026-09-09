@@ -8,13 +8,14 @@ import { useFileTree } from '@pierre/trees/react';
 import { TreeApp } from '@trees/_components/TreeApp';
 import type { TreeAppTheme } from '@trees/_components/TreeApp';
 import type { CSSProperties, Dispatch, SetStateAction } from 'react';
-import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 import { TREE_NEW_VIEWPORT_HEIGHTS } from '../_lib/dimensions';
 import {
   TREE_APP_DEMO_GIT_STATUSES,
   TREE_APP_DEMO_UNSAFE_CSS,
 } from '../_lib/treeAppDemoData';
+import { usePortalContainer } from '@/lib/usePortalContainer';
 
 const COMPACT_DENSITY = 'compact' as const;
 
@@ -198,20 +199,6 @@ function useResettableState<T>(source: T): [T, Dispatch<SetStateAction<T>>] {
   return [value, setValue];
 }
 
-// The portal node is owned by the root layout and remains stable after
-// hydration, so there are no subsequent updates to subscribe to.
-function subscribeToPortalContainer(): () => void {
-  return () => {};
-}
-
-function getPortalContainer(): HTMLElement | null {
-  return document.getElementById('dark-mode-portal-container');
-}
-
-function getServerPortalContainer(): null {
-  return null;
-}
-
 export function DemoTreeAppClient({
   files,
   initialActivePath,
@@ -221,11 +208,7 @@ export function DemoTreeAppClient({
   treeId,
   treePreloadedData,
 }: DemoTreeAppClientProps) {
-  const portalContainer = useSyncExternalStore(
-    subscribeToPortalContainer,
-    getPortalContainer,
-    getServerPortalContainer
-  );
+  const portalContainer = usePortalContainer();
   // Owned here (rather than inside TreeApp) so the mobile fade overlay
   // rendered alongside <TreeApp /> below can pick the right gradient color
   // for the active theme.

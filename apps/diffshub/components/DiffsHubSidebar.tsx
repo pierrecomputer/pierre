@@ -21,7 +21,6 @@ import {
   useMemo,
   useRef,
   useState,
-  useSyncExternalStore,
 } from 'react';
 
 import { CHROME_ICON_BUTTON_CLASS } from './chromeButtonStyles';
@@ -29,6 +28,7 @@ import { DiffsHubCommentsList } from './DiffsHubCommentsList';
 import { DiffsHubDiffStats } from './DiffsHubDiffStats';
 import { DiffsHubFileTree } from './DiffsHubFileTree';
 import { useChromeThemeProps } from './useChromeThemeProps';
+import { useMediaQuery } from './useMediaQuery';
 import type { ThemeCycleControls } from './useThemeCycle';
 import { WorkerPoolStatus } from './WorkerPoolStatus';
 import { Button } from '@/components/Button';
@@ -59,29 +59,6 @@ type SidebarTab = 'files' | 'comments';
 type SidebarStatusPanel = 'diffStats' | 'systemMonitor';
 
 const MOBILE_MEDIA_QUERY = '(max-width: 767px)';
-
-// One MediaQueryList shared by the subscribe and snapshot readers below, so
-// renders do not allocate a new list and the change listener is bound to the
-// same object the snapshot reads.
-let mobileMediaQueryList: MediaQueryList | undefined;
-function getMobileMediaQueryList(): MediaQueryList {
-  mobileMediaQueryList ??= window.matchMedia(MOBILE_MEDIA_QUERY);
-  return mobileMediaQueryList;
-}
-
-function subscribeToMobileViewport(onChange: () => void): () => void {
-  const mediaQuery = getMobileMediaQueryList();
-  mediaQuery.addEventListener('change', onChange);
-  return () => mediaQuery.removeEventListener('change', onChange);
-}
-
-function getMobileViewportSnapshot(): boolean {
-  return getMobileMediaQueryList().matches;
-}
-
-function getServerMobileViewportSnapshot(): undefined {
-  return undefined;
-}
 
 interface DiffsHubSidebarProps {
   className?: string;
@@ -136,11 +113,7 @@ export const DiffsHubSidebar = memo(function DiffsHubSidebar({
   );
   const [activeStatusPanel, setActiveStatusPanel] =
     useState<SidebarStatusPanel | null>('diffStats');
-  const isMobileViewport = useSyncExternalStore(
-    subscribeToMobileViewport,
-    getMobileViewportSnapshot,
-    getServerMobileViewportSnapshot
-  );
+  const isMobileViewport = useMediaQuery(MOBILE_MEDIA_QUERY, undefined);
   const [previousMobileOverlayOpen, setPreviousMobileOverlayOpen] =
     useState(false);
   const [fileTreeModel, setFileTreeModel] = useState<FileTree | null>(null);

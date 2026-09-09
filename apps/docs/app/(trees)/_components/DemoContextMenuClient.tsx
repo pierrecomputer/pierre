@@ -9,7 +9,7 @@ import { type FileTreePreloadedData, useFileTree } from '@pierre/trees/react';
 import { TreeApp } from '@trees/_components/TreeApp';
 import Link from 'next/link';
 import type { CSSProperties } from 'react';
-import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 import { sampleFileList } from '../_lib/demo-data';
 import { TREE_NEW_VIEWPORT_HEIGHTS } from '../_lib/dimensions';
@@ -18,6 +18,7 @@ import { FeatureHeader } from '@/components/FeatureHeader';
 import { Button } from '@/components/ui/button';
 import { ButtonGroup, ButtonGroupItem } from '@/components/ui/button-group';
 import { PRODUCTS } from '@/lib/product-config';
+import { usePortalContainer } from '@/lib/usePortalContainer';
 
 const CONTEXT_MENU_EXPANDED_PATHS = ['src', 'src/components'] as const;
 const contextMenuPanelStyle = {
@@ -78,28 +79,6 @@ function buildContextMenuComposition(
       triggerMode,
     },
   };
-}
-
-// The portal node is part of the root layout and does not change while the app
-// is mounted, so there are no updates to subscribe to after hydration.
-function subscribeToPortalContainer(): () => void {
-  return () => {};
-}
-
-function getPortalContainer(): HTMLElement | null {
-  return document.getElementById('dark-mode-portal-container');
-}
-
-function getServerPortalContainer(): null {
-  return null;
-}
-
-function usePortalContainer(): HTMLElement | null {
-  return useSyncExternalStore(
-    subscribeToPortalContainer,
-    getPortalContainer,
-    getServerPortalContainer
-  );
 }
 
 export function DemoContextMenuClient({

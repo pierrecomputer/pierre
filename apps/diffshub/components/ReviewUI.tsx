@@ -20,6 +20,7 @@ import { ThemeSourceProvider } from './ThemeSourceProvider';
 import { useGitHubDiffFileLoader } from './useGitHubDiffFileLoader';
 import { useGitHubToken } from './useGitHubToken';
 import { useIsHydrated } from './useIsHydrated';
+import { useMediaQuery } from './useMediaQuery';
 import { usePatchLoader } from './usePatchLoader';
 import { useThemeCycle } from './useThemeCycle';
 import {
@@ -36,6 +37,8 @@ import type {
   DiffsHubSavedCommentEvent,
 } from '@/lib/types';
 import { upsertSavedCommentSidebarEntry } from '@/lib/upsertSavedCommentSidebarEntry';
+
+const MOBILE_MEDIA_QUERY = '(max-width: 767px)';
 
 interface ReviewUIProps {
   domain?: string;
@@ -160,20 +163,22 @@ function ReviewUIInner({ domain, initialUrl, path }: ReviewUIProps) {
     viewerRef,
   });
 
-  useEffect(() => {
-    const mediaQuery = window.matchMedia('(max-width: 767px)');
-    const updateMobileState = (matches: boolean) => {
-      setDiffStyle(matches ? 'unified' : 'split');
-      if (!matches) setFileTreeOverlayOpen(false);
-    };
-    const handleChange = (event: MediaQueryListEvent) => {
-      updateMobileState(event.matches);
-    };
-
-    updateMobileState(mediaQuery.matches);
-    mediaQuery.addEventListener('change', handleChange);
-    return () => mediaQuery.removeEventListener('change', handleChange);
-  }, []);
+  // Crossing the mobile breakpoint picks the diff style for that width and
+  // closes the file-tree overlay when leaving mobile; the user can still change
+  // the style until the next crossing. Applied before the render commits, so
+  // the first client render after hydration already shows the right style.
+  const isMobileViewport = useMediaQuery(MOBILE_MEDIA_QUERY, undefined);
+  const [previousIsMobileViewport, setPreviousIsMobileViewport] =
+    useState(isMobileViewport);
+  if (previousIsMobileViewport !== isMobileViewport) {
+    setPreviousIsMobileViewport(isMobileViewport);
+    if (isMobileViewport != null) {
+      setDiffStyle(isMobileViewport ? 'unified' : 'split');
+      if (!isMobileViewport) {
+        setFileTreeOverlayOpen(false);
+      }
+    }
+  }
   const handleSelectTreeItem = useCallback((itemId: string) => {
     setFileTreeOverlayOpen(false);
     const viewer = viewerRef.current;

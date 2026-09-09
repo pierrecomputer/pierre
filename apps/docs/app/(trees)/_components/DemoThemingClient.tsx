@@ -15,7 +15,7 @@ import {
   useFileTree,
 } from '@pierre/trees/react';
 import Link from 'next/link';
-import { useEffect, useState, useSyncExternalStore } from 'react';
+import { useEffect, useState } from 'react';
 
 import { sampleFileList } from '../_lib/demo-data';
 import { TREE_NEW_VIEWPORT_HEIGHTS } from '../_lib/dimensions';
@@ -37,6 +37,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { PRODUCTS } from '@/lib/product-config';
+import { useMediaQuery } from '@/lib/useMediaQuery';
 
 type LightThemeName = string;
 type DarkThemeName = string;
@@ -49,20 +50,6 @@ interface DemoThemingClientProps {
 interface ThemeLoadError {
   message: string;
   themeName: string;
-}
-
-function subscribeToPreferredColorScheme(onChange: () => void): () => void {
-  const mediaQueryList = window.matchMedia('(prefers-color-scheme: dark)');
-  mediaQueryList.addEventListener('change', onChange);
-  return () => mediaQueryList.removeEventListener('change', onChange);
-}
-
-function getPrefersDark(): boolean {
-  return window.matchMedia('(prefers-color-scheme: dark)').matches;
-}
-
-function getServerPrefersDark(): boolean {
-  return false;
 }
 
 export function DemoThemingClient({
@@ -91,11 +78,7 @@ export function DemoThemingClient({
   const [themeLoadError, setThemeLoadError] = useState<ThemeLoadError | null>(
     null
   );
-  const prefersDark = useSyncExternalStore(
-    subscribeToPreferredColorScheme,
-    getPrefersDark,
-    getServerPrefersDark
-  );
+  const prefersDark = useMediaQuery('(prefers-color-scheme: dark)', false);
 
   const effectiveTheme =
     colorMode === 'dark'

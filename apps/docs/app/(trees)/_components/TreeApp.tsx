@@ -38,14 +38,7 @@ import type {
   PointerEvent as ReactPointerEvent,
   RefObject,
 } from 'react';
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  useSyncExternalStore,
-} from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import {
   DropdownMenu,
@@ -55,6 +48,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { useLatestValueRef } from '@/lib/useLatestValueRef';
+import { useMediaQuery } from '@/lib/useMediaQuery';
 
 const DEFAULT_EXPLORER_WIDTH = 280;
 const DEFAULT_MIN_EXPLORER_WIDTH = 180;
@@ -552,21 +546,11 @@ function useTreeMutations({
   );
 }
 
-// Returns true when the viewport currently matches the mobile media query.
-// useSyncExternalStore keeps SSR stable (always false) and flips to true after
-// hydration if the viewport is narrow, avoiding a hydration mismatch.
+// True when the viewport matches the mobile media query. SSR and the hydrating
+// render report false, so a narrow viewport flips to true right after hydration
+// without a mismatch.
 function useIsMobile(query = '(max-width: 767px)'): boolean {
-  return useSyncExternalStore(
-    (onChange) => {
-      const mql = window.matchMedia(query);
-      mql.addEventListener('change', onChange);
-      return () => {
-        mql.removeEventListener('change', onChange);
-      };
-    },
-    () => window.matchMedia(query).matches,
-    () => false
-  );
+  return useMediaQuery(query, false);
 }
 
 // Preserves the local file selected after a save until the host acknowledges
