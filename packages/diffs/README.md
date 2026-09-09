@@ -29,14 +29,11 @@ pnpm add @pierre/diffs
 
 ## Highlighters
 
-`@pierre/diffs` highlights with [shiki] out of the box — nothing changes for
-existing consumers. `setHighlighter` swaps the implementation for everything
-rendered afterwards: newly created files, diffs, streams, editors, React
-components, and SSR renderers use it, and an existing file or diff renderer
-adopts it the next time something makes it render (its caches are keyed by the
-registration, so stale markup is never served — but nothing repaints
-spontaneously on the call itself). Already-running streams and attached editors
-keep the implementation they captured until they are re-created.
+`@pierre/diffs` uses [shiki] by default. `setHighlighter` changes the
+implementation used by new components and SSR calls. Existing file and diff
+renderers adopt it on their next render; the call itself does not trigger a
+repaint. Running streams and attached editors keep their highlighter until they
+are recreated.
 
 The experimental [highlights]-backed highlighter runs its built-in lexers in
 WebAssembly and lazy-loads bundled themes by ID.
@@ -56,9 +53,7 @@ exported from `@pierre/diffs`. Notes on the highlights highlighter:
 - Theme names map onto highlights's bundled Zed themes; register custom names
   with `registerHighlightsTheme` from `@pierre/diffs/highlights`.
 - Languages without a highlights lexer render as plain text.
-- The worker pool always highlights with shiki, so a registered custom
-  highlighter routes rendering to the main thread (highlights is fast enough
-  that this is not a regression).
+- The worker pool uses shiki. Custom highlighters render on the main thread.
 - Edit mode tokenizes through highlights's incremental `LiveTokenizer` instead
   of the TextMate incremental tokenizer.
 

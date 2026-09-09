@@ -92,6 +92,7 @@ export * from './utils/getOrCreateCodeNode';
 export * from './utils/getSingularPatch';
 export * from './utils/getThemes';
 export * from './utils/getTotalLineCountFromHunks';
+export * from './utils/html';
 export * from './utils/hydratePartialDiff';
 export * from './utils/isDefaultRenderRange';
 export * from './utils/isWorkerContext';
@@ -108,9 +109,8 @@ export * from './utils/resolveConflict';
 export * from './utils/resolveRegion';
 export * from './utils/setLanguageOverride';
 export * from './utils/setWrapperNodeProps';
+export * from './utils/tokensToHtml';
 export * from './utils/trimPatchContext';
 export type * from './types';
 
 export { codeToHtml, createCSSVariablesTheme };
-export * from './utils/html';
-export * from './utils/tokensToHtml';

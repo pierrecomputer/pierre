@@ -34,6 +34,12 @@ export function tokenStyle(token: ThemedToken): string {
   return styles.join(';');
 }
 
+/** Merge token styles with custom attributes for both HTML and DOM rendering. */
+export function tokenAttributes(token: ThemedToken): Record<string, string> {
+  const style = tokenStyle(token);
+  return style === '' ? (token.htmlAttrs ?? {}) : { ...token.htmlAttrs, style };
+}
+
 /** Render token spans separated by newlines, without code or pre wrappers. */
 export function tokensToHtml(
   tokens: ThemedToken[][],
@@ -50,12 +56,7 @@ export function tokensToHtml(
   for (let lineIndex = 0; lineIndex < tokens.length; lineIndex++) {
     if (lineIndex > 0) html += '\n';
     for (const token of tokens[lineIndex]) {
-      const style = tokenStyle(token);
-      const attrs = {
-        ...token.htmlAttrs,
-        ...(style !== '' ? { style } : undefined),
-      };
-      html += `<span${attributesToHTML(attrs)}>${escapeHTML(token.content)}</span>`;
+      html += `<span${attributesToHTML(tokenAttributes(token))}>${escapeHTML(token.content)}</span>`;
     }
   }
   return html;

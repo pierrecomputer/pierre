@@ -6,7 +6,6 @@ import type {
   CodeHighlighterOptions,
   CodeStreamTokenizer,
 } from './code_highlighter';
-import { markBuiltinShikiHighlighter } from './code_highlighter';
 import { areLanguagesAttached } from './languages/areLanguagesAttached';
 import {
   getHighlighterIfLoaded,
@@ -14,6 +13,7 @@ import {
 } from './shared_highlighter';
 import { areThemesAttached } from './themes/areThemesAttached';
 
+/** Require the shared Shiki instance before a synchronous tokenization call. */
 function loadedInstance(): DiffsHighlighter {
   const instance = getHighlighterIfLoaded();
   if (instance == null) {
@@ -64,23 +64,11 @@ class ShikiCodeStreamTokenizer implements CodeStreamTokenizer {
   }
 }
 
-// The marking must happen inside the exported value's initializer: a
-// standalone top-level call would be dropped by bundlers that treat this
-// module as side-effect free.
-function asBuiltinShikiAdapter(adapter: CodeHighlighter): CodeHighlighter {
-  markBuiltinShikiHighlighter(adapter);
-  return adapter;
-}
-
 /**
- * The default `CodeHighlighter`: shiki, delegating to the shared highlighter
- * machinery this library has always used. The registry resolves to it unless
- * `setHighlighter` picked another implementation; pass it back to
- * `setHighlighter` to restore the default. Identified by identity (not by
- * `getShikiInstance` presence) so the pre-existing shiki code paths engage
- * only for this exact adapter.
+ * The default highlighter, backed by the shared Shiki instance.
+ * Pass it to `setHighlighter` to restore Shiki after using a custom highlighter.
  */
-export const shikiHighlighter: CodeHighlighter = asBuiltinShikiAdapter({
+export const shikiHighlighter: CodeHighlighter = {
   name: 'shiki',
   async load({ langs, themes, preferredHighlighter }: CodeHighlighterOptions) {
     await getSharedHighlighter({ langs, themes, preferredHighlighter });
@@ -100,4 +88,4 @@ export const shikiHighlighter: CodeHighlighter = asBuiltinShikiAdapter({
   },
   StreamTokenizer: ShikiCodeStreamTokenizer,
   getShikiInstance: getHighlighterIfLoaded,
-});
+};

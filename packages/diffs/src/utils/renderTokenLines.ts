@@ -1,6 +1,6 @@
 import type { DecorationItem, LineInfo, ThemedToken } from '../types';
 import { attributesToHTML, escapeHTML, type RenderedLine } from './html';
-import { tokensToHtml, tokenStyle } from './tokensToHtml';
+import { tokenAttributes, tokensToHtml } from './tokensToHtml';
 
 /** Serialize visible tokens with the current line metadata and decorations. */
 export function renderTokenLines(
@@ -83,6 +83,7 @@ export function renderTokenLines(
       let rangeIndex = 0;
       let openRange = false;
       for (const token of tokens) {
+        const opening = `<span${attributesToHTML(tokenAttributes(token))}>`;
         const end = char + token.content.length;
         let offset = 0;
         while (char < end) {
@@ -104,14 +105,7 @@ export function renderTokenLines(
                 ? range.end.character
                 : range.start.character
           );
-          html += tokensToHtml([
-            [
-              {
-                ...token,
-                content: token.content.slice(offset, offset + next - char),
-              },
-            ],
-          ]);
+          html += `${opening}${escapeHTML(token.content.slice(offset, offset + next - char))}</span>`;
           offset += next - char;
           char = next;
           if (openRange && range?.end.character === char) {
@@ -119,7 +113,7 @@ export function renderTokenLines(
             openRange = false;
           }
         }
-        if (token.content === '') html += tokensToHtml([[token]]);
+        if (token.content === '') html += `${opening}</span>`;
       }
       if (openRange) html += '</span>';
     } else {
@@ -135,11 +129,9 @@ export function renderTokenLines(
             cuts.push(range.end.character);
         }
         cuts.sort((a, b) => a - b);
-        const style = tokenStyle(token);
         const attrs = {
-          ...token.htmlAttrs,
+          ...tokenAttributes(token),
           'data-char': start,
-          ...(style !== '' ? { style } : undefined),
         };
         let content = '';
         for (let i = 1; i < cuts.length; i++) {

@@ -2,15 +2,14 @@ import { DEFAULT_THEMES } from '../constants';
 import type {
   DiffsHighlighter,
   DiffsThemeNames,
-  HighlighterTypes,
   SupportedLanguages,
   ThemesType,
 } from '../types';
 import { getThemes } from '../utils/getThemes';
-import type { CodeHighlighter } from './code_highlighter';
 import {
+  type CodeHighlighter,
+  type CodeHighlighterOptions,
   getRegisteredHighlighter,
-  isBuiltinShikiHighlighter,
 } from './code_highlighter';
 import { areLanguagesAttached } from './languages/areLanguagesAttached';
 import { shikiHighlighter } from './shiki_highlighter';
@@ -18,9 +17,7 @@ import { areThemesAttached } from './themes/areThemesAttached';
 import { hasResolvedThemes } from './themes/hasResolvedThemes';
 
 /**
- * What the renderers hold: either the loaded shiki instance (the pre-existing
- * behavior, kept byte-identical) or a custom `CodeHighlighter` registered
- * with `setHighlighter`.
+ * A loaded Shiki instance or a registered custom highlighter.
  */
 export type RenderersHighlighter = DiffsHighlighter | CodeHighlighter;
 
@@ -33,49 +30,40 @@ export function getCodeHighlighter(): CodeHighlighter {
 }
 
 /**
- * The active highlighter when it is NOT the built-in shiki pass-through.
- * The built-in shiki adapter reports `undefined` here so every pre-existing
- * shiki code path (shared instance, worker pool, TextMate edit mode) runs
- * unchanged; the check is by adapter identity, so a custom highlighter that
- * merely implements `getShikiInstance` still loads and renders through its
- * own implementation.
+ * The active custom highlighter, or undefined for the built-in Shiki adapter.
+ * Custom adapters keep their own loading and rendering behavior even when
+ * they expose a Shiki instance.
  */
 export function getCustomHighlighter(): CodeHighlighter | undefined {
   const active = getCodeHighlighter();
-  return isBuiltinShikiHighlighter(active) ? undefined : active;
+  return active === shikiHighlighter ? undefined : active;
 }
 
 /**
- * The custom `CodeHighlighter` behind a resolved renderers highlighter, or
- * `undefined` for the built-in shiki pass-through (a raw shiki instance, or
- * the built-in adapter itself). Lets consumers that captured a highlighter
- * stay on it instead of consulting the mutable registration again.
+ * Get a resolved custom highlighter without consulting the current registration.
+ * Raw Shiki instances and the built-in adapter return undefined.
  */
 export function customHighlighterOf(
   highlighter: RenderersHighlighter
 ): CodeHighlighter | undefined {
-  const candidate = highlighter as CodeHighlighter;
   if (
-    typeof candidate.load === 'function' &&
-    typeof candidate.isReady === 'function' &&
-    !isBuiltinShikiHighlighter(candidate)
+    highlighter !== shikiHighlighter &&
+    'load' in highlighter &&
+    'isReady' in highlighter
   ) {
-    return candidate;
+    return highlighter;
   }
   return undefined;
 }
 
 /**
- * Resolve the object render passes should call. For the built-in shiki
- * implementation this is the raw loaded shiki instance (keeping pre-existing
- * behavior and consumers that expect a `DiffsHighlighter` working); for
- * others — including custom highlighters that expose a shiki instance — it
- * is the `CodeHighlighter` itself.
+ * Unwrap the built-in adapter to its loaded Shiki instance.
+ * Custom adapters render through their own implementation.
  */
 export function resolveRenderHighlighter(
   highlighter: CodeHighlighter
 ): RenderersHighlighter {
-  if (isBuiltinShikiHighlighter(highlighter)) {
+  if (highlighter === shikiHighlighter) {
     return highlighter.getShikiInstance?.() ?? highlighter;
   }
   return highlighter;
@@ -133,29 +121,19 @@ export function isHighlighterLanguageReady(
 }
 
 /**
- * Load the active highlighter — shiki by default, or whichever implementation
- * `setHighlighter` registered — so a later render can highlight the given
- * languages and themes synchronously.
+ * Load languages and themes on the active highlighter for synchronous rendering.
  */
-export async function preloadHighlighter(options: {
-  langs: SupportedLanguages[];
-  themes: DiffsThemeNames[];
-  preferredHighlighter?: HighlighterTypes;
-}): Promise<void> {
+export async function preloadHighlighter(
+  options: CodeHighlighterOptions
+): Promise<void> {
   await getCodeHighlighter().load(options);
 }
 
 /**
- * Load the given languages and themes on a captured highlighter, defaulting
- * to the active registration. The built-in adapter delegates to shiki, which
- * `resolveRenderHighlighter` returns for the pre-existing render paths.
+ * Load languages and themes on a captured highlighter, then resolve it for rendering.
  */
 export async function loadHighlighter(
-  options: {
-    langs: SupportedLanguages[];
-    themes: DiffsThemeNames[];
-    preferredHighlighter?: HighlighterTypes;
-  },
+  options: CodeHighlighterOptions,
   highlighter: CodeHighlighter = getCodeHighlighter()
 ): Promise<RenderersHighlighter> {
   await highlighter.load(options);

@@ -18,7 +18,6 @@ export function createDiffSpanDecoration({
     start: { line, character: spanStart },
     end: { line, character: spanStart + spanLength },
     properties: { 'data-diff-span': '' },
-    alwaysWrap: true,
   };
 }
 
@@ -94,9 +93,6 @@ export function computeLineDiffDecorations({
   ) {
     return;
   }
-  // NOTE(amadeus): Because we visually trim trailing newlines when rendering,
-  // we also gotta make sure the diff parsing doesn't include the newline
-  // character that could be there...
   const lineDiff =
     lineDiffType === 'char'
       ? diffChars(deletionLine, additionLine)

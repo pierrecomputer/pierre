@@ -44,11 +44,9 @@ export interface FileStreamOptions extends BaseCodeOptions {
 
 let instanceId = -1;
 
-// Chunk-coalescing bounds for custom tokenizer streams: hold pending text
-// until a frame passed since the last tokenizer push, unless this many bytes
-// already piled up (a synchronous burst should not wait on wall time).
+// Batch small chunks for at most one frame, flushing large bursts immediately.
 const STREAM_COALESCE_MS = 16;
-const STREAM_COALESCE_BYTES = 4096;
+const STREAM_COALESCE_CHARS = 4096;
 
 export class FileStream {
   readonly __id: string = `file-stream:${++instanceId}`;
@@ -207,9 +205,7 @@ export class FileStream {
   }
 
   /**
-   * The token stream for the active highlighter: the pre-existing shiki
-   * grammar-state stream (with recalls) when shiki is active, or a
-   * `CodeHighlighter.StreamTokenizer` wrapper for custom highlighters.
+   * Use Shiki's grammar-state stream or the custom highlighter's line tokenizer.
    */
   private createTokenStream(
     highlighter: RenderersHighlighter,
@@ -227,18 +223,8 @@ export class FileStream {
       tokenizeTimeLimit: 0,
     };
     if (custom != null) {
-      // Stream over the highlighter's StreamTokenizer: the same token protocol
-      // CodeToTokenTransformStream emits, minus recalls — the tokenizer holds
-      // the trailing incomplete line back until its newline (or the stream
-      // end) arrives, so no token ever needs re-emitting.
-      //
-      // Tokenizers may re-scan their whole buffer on every push (Highlights's
-      // non-TypeScript lexers currently do), which makes one push per tiny
-      // chunk quadratic over the stream.
-      // Chunks are therefore coalesced: push once a newline is pending and
-      // either a frame's worth of time passed (slow streams keep
-      // line-at-a-time latency) or enough bytes piled up (synchronous bursts
-      // tokenize in few large pushes instead of thousands of small ones).
+      // Custom tokenizers return complete lines, so they need no token recalls.
+      // Coalesce small chunks to reduce tokenizer calls while limiting latency.
       const tokenizer = new custom.StreamTokenizer(options);
       let pending = '';
       let lastPushTime = 0;
@@ -269,7 +255,7 @@ export class FileStream {
           }
           const elapsed = performance.now() - lastPushTime;
           if (
-            pending.length < STREAM_COALESCE_BYTES &&
+            pending.length < STREAM_COALESCE_CHARS &&
             elapsed < STREAM_COALESCE_MS
           ) {
             // Hold the completed line for the rest of the coalescing window,

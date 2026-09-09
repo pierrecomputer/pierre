@@ -17,6 +17,27 @@ function token(fontStyle: number): ThemedToken {
 }
 
 describe('createSpanFromToken', () => {
+  test('preserves custom attributes and applies token style precedence', () => {
+    for (const [fields, color] of [
+      [{}, 'green'],
+      [{ color: 'red' }, 'red'],
+      [{ color: 'red', htmlStyle: { color: 'blue' } }, 'blue'],
+      [{ color: 'red', htmlStyle: {} }, 'green'],
+    ] as const) {
+      const element = createSpanFromToken({
+        content: '<&',
+        offset: 0,
+        htmlAttrs: { style: 'color:green', class: 'custom', 'data-token': '' },
+        ...fields,
+      });
+      expect(element.style.color).toBe(color);
+      expect(element.className).toBe('custom');
+      expect(element.hasAttribute('data-token')).toBe(true);
+      expect(element.textContent).toBe('<&');
+      expect(element.childElementCount).toBe(0);
+    }
+  });
+
   test('renders each FontStyle bit', () => {
     expect(createSpanFromToken(token(1)).style.fontStyle).toBe('italic');
     expect(createSpanFromToken(token(2)).style.fontWeight).toBe('bold');

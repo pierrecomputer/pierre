@@ -134,8 +134,8 @@ export interface CodeLiveTokenizerOptions {
  * A pluggable syntax highlighter for `@pierre/diffs`.
  *
  * The library renders with the built-in shiki implementation by default.
- * `setHighlighter` swaps the implementation for subsequently created
- * renderers, e.g. the experimental `@pierre/diffs/highlights`.
+ * `setHighlighter` changes the implementation used on the next render,
+ * e.g. the experimental `@pierre/diffs/highlights`.
  */
 export interface CodeHighlighter {
   /** Implementation name, e.g. `'shiki'` or `'highlights'`. */
@@ -186,37 +186,10 @@ export type RenderHighlighter = Pick<
 
 let registeredHighlighter: CodeHighlighter | undefined;
 
-// Identity of the built-in shiki adapter. The pre-existing shiki code paths
-// (worker pool, TextMate edit mode, raw instances in renderers) must only
-// engage for that exact adapter — a custom highlighter that happens to
-// implement `getShikiInstance` still owns its `load`/`isReady`/render
-// pipeline.
-const builtinShikiAdapters = new WeakSet<CodeHighlighter>();
-
 /**
- * Mark a highlighter as the built-in shiki adapter. Called once when the
- * adapter is created.
- * @internal
- */
-export function markBuiltinShikiHighlighter(
-  highlighter: CodeHighlighter
-): void {
-  builtinShikiAdapters.add(highlighter);
-}
-
-/** Whether this highlighter is the built-in shiki adapter. */
-export function isBuiltinShikiHighlighter(
-  highlighter: CodeHighlighter
-): boolean {
-  return builtinShikiAdapters.has(highlighter);
-}
-
-/**
- * Register the highlighter the library renders with from now on. Renderers,
- * editors, streams, and SSR passes capture the registration when they are
- * created; existing instances keep the implementation they captured. The
- * registry starts on the built-in shiki implementation — restore it by
- * passing `shikiHighlighter`.
+ * Set the highlighter used by subsequent renders and SSR calls. Existing
+ * renderers refresh on their next render; active streams keep the highlighter
+ * selected during setup. Pass `shikiHighlighter` to restore the default.
  */
 export function setHighlighter(highlighter: CodeHighlighter): void {
   registeredHighlighter = highlighter;

@@ -1273,13 +1273,8 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
     setEdit(false);
   }, []);
 
-  // Swap the library's registered highlighter to match the picker. The
-  // highlights implementation (wasm lexers + Zed themes) is imported lazily so
-  // the default shiki path never pays for it. `activeHighlighter` flips after
-  // the swap lands: the resulting commit re-renders the direct File/FileDiff
-  // surfaces IN PLACE (their render pass notices the pending registration
-  // change), keeping scroll position so the two color palettes can be
-  // compared side by side; the imperative list views remount via `key`.
+  // Load Highlights on demand, then re-render File/FileDiff in place to keep
+  // scroll position. Imperative list views remount through activeHighlighter.
   const [activeHighlighter, setActiveHighlighter] =
     useState<PlaygroundHighlighter>('shiki');
   useEffect(() => {
@@ -1300,17 +1295,14 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
     };
   }, [highlighter]);
 
-  // The registry is process-wide: leaving the playground must not leave the
-  // rest of the docs app on the picker's choice.
+  // Restore Shiki for the rest of the docs when leaving the playground.
   useEffect(() => {
     return () => {
       registerHighlighter(shikiHighlighter);
     };
   }, []);
 
-  // The prerendered payload was highlighted by shiki on the server, so it is
-  // only hydrated while shiki is the picked highlighter; picking highlights
-  // renders from scratch instead of adopting shiki markup.
+  // Only hydrate the server's Shiki markup while Shiki is selected.
   const [usePrerenderedHTML, setUsePrerenderedHTML] = useState(
     () => viewMode === 'diff' && urlState.highlighter === 'shiki'
   );

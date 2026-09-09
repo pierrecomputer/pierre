@@ -98,8 +98,6 @@ function warnOnce(message: string): void {
 }
 
 const LANG_ALIASES: Record<string, Lang> = {
-  'angular-html': 'html',
-  'angular-ts': 'ts',
   ansi: 'text',
   'git-commit': 'diff',
   'git-rebase': 'diff',
@@ -108,6 +106,7 @@ const LANG_ALIASES: Record<string, Lang> = {
   shellsession: 'bash',
 };
 
+/** Resolve extra Shiki aliases and report unsupported languages once. */
 function toHighlightsLang(lang: SupportedLanguages | undefined): Lang {
   const name = String(lang ?? 'text').toLowerCase();
   if (isSupportedLanguage(name)) return name;
@@ -120,6 +119,7 @@ function toHighlightsLang(lang: SupportedLanguages | undefined): Lang {
   return 'text';
 }
 
+/** Translate Shiki options to loaded Highlights themes and language names. */
 function mapTokensOptions(
   options: CodeToTokensOptions<string, string>
 ): HighlightsCodeToTokensOptions {
@@ -151,45 +151,6 @@ function mapTokensOptions(
     };
   }
   return { ...base, theme: resolveHighlightsTheme('pierre-dark') };
-}
-
-/** Zed theme foreground, resolved like highlights's theme compiler. */
-function themeForeground(theme: Theme): string | undefined {
-  const style = theme.style ?? {};
-  return style['editor.foreground'] ?? style.text ?? style.foreground;
-}
-
-/** Zed theme background, resolved like highlights's theme compiler. */
-function themeBackground(theme: Theme): string | undefined {
-  const style = theme.style ?? {};
-  return style['editor.background'] ?? style.background;
-}
-
-/**
- * Map a Zed theme's editor colors onto the VS Code color keys the diffs
- * editor reads (`buildEditorThemeCSS` in editor/tokenizer.ts).
- */
-function themeEditorColors(theme: Theme): Record<string, string> {
-  const style = theme.style ?? {};
-  const player = (Array.isArray(style.players) ? style.players[0] : null) ?? {};
-  const mapped: Record<string, string | undefined> = {
-    'editor.selectionBackground': player.selection,
-    'editor.lineHighlightBackground': style['editor.active_line.background'],
-    'editor.findMatchBackground': style['search.match_background'],
-    'editor.findMatchHighlightBackground': style['search.match_background'],
-    'editorBracketMatch.background':
-      style['editor.document_highlight.bracket_background'],
-    'editorCursor.foreground': player.cursor,
-    'editorHint.foreground': style.hint,
-    'editorInfo.foreground': style.info,
-    'editorWarning.foreground': style.warning,
-    'editorError.foreground': style.error,
-  };
-  const colors: Record<string, string> = {};
-  for (const [key, value] of Object.entries(mapped)) {
-    if (typeof value === 'string') colors[key] = value;
-  }
-  return colors;
 }
 
 class HighlightsCodeStreamTokenizer implements CodeStreamTokenizer {
@@ -316,15 +277,35 @@ export const highlightsHighlighter: CodeHighlighter = {
   },
   getTheme(name: DiffsThemeNames): ThemeRegistrationResolved {
     const theme = resolveHighlightsTheme(name);
+    const style = theme.style ?? {};
+    const player = style.players?.[0];
+    // Map Zed colors to the VS Code keys used by the editor's theme CSS.
+    const mapped = {
+      'editor.selectionBackground': player?.selection,
+      'editor.lineHighlightBackground': style['editor.active_line.background'],
+      'editor.findMatchBackground': style['search.match_background'],
+      'editor.findMatchHighlightBackground': style['search.match_background'],
+      'editorBracketMatch.background':
+        style['editor.document_highlight.bracket_background'],
+      'editorCursor.foreground': player?.cursor,
+      'editorHint.foreground': style.hint,
+      'editorInfo.foreground': style.info,
+      'editorWarning.foreground': style.warning,
+      'editorError.foreground': style.error,
+    };
+    const colors: Record<string, string> = {};
+    for (const [key, value] of Object.entries(mapped)) {
+      if (typeof value === 'string') colors[key] = value;
+    }
     return {
       name,
       displayName: theme.name,
       type: theme.appearance === 'light' ? 'light' : 'dark',
-      fg: themeForeground(theme) ?? '',
-      bg: themeBackground(theme) ?? '',
-      colors: themeEditorColors(theme),
+      fg: style['editor.foreground'] ?? style.text ?? style.foreground ?? '',
+      bg: style['editor.background'] ?? style.background ?? '',
+      colors,
       settings: [],
-    } as ThemeRegistrationResolved;
+    };
   },
   codeToTokens(code: string, options: CodeToTokensOptions<string, string>) {
     return highlightsCodeToTokens(code, mapTokensOptions(options));

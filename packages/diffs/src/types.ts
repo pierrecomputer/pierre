@@ -477,9 +477,7 @@ export type BaseDiffOptionsWithDefaults = Required<
 
 export type CustomPreProperties = Record<string, string | number | undefined>;
 
-// NOTE(amadeus): This is the shared config that all `pre` nodes will need to
-// get setup properly. Whether it's via direct DOM manipulation or via HTML
-// html rendering, this interface can be shared across both of these areas.
+// Shared configuration for pre elements created through DOM or HTML rendering.
 export interface PrePropertiesConfig extends Required<
   Pick<
     BaseDiffOptions,
@@ -981,5 +979,4 @@ export interface DecorationItem {
   start: { line: number; character: number };
   end: { line: number; character: number };
   properties?: HTMLAttributes;
-  alwaysWrap?: boolean;
 }

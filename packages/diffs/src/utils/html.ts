@@ -39,8 +39,7 @@ export const escapeHTML = (str: string): string => {
     return str;
   }
 
-  // @ts-ignore use bun's built-in `escapeHTML` function if available
-  if (typeof Bun === 'object' && 'escapeHTML' in Bun)
+  if (typeof Bun !== 'undefined' && typeof Bun.escapeHTML === 'function')
     return Bun.escapeHTML(str);
 
   let escape: string;
@@ -86,7 +85,7 @@ export function attributesToHTML(attributes: HTMLAttributes): string {
     if (value == null || value === false) continue;
     const name =
       key === 'className' ? 'class' : key === 'tabIndex' ? 'tabindex' : key;
-    if (name.includes(String.fromCharCode(0)) || !/^[^\s"'<>/=]+$/.test(name)) {
+    if (name.includes('\0') || !/^[^\s"'<>/=]+$/.test(name)) {
       throw new Error(`Invalid HTML attribute: ${name}`);
     }
     html += ` ${name}`;
@@ -154,10 +153,7 @@ export function createGutterItem(
       'data-line-index': lineIndex,
       ...properties,
     },
-    html:
-      lineNumber != null
-        ? `<span data-line-number-content="">${lineNumber}</span>`
-        : '',
+    html: `<span data-line-number-content="">${lineNumber}</span>`,
   };
 }
 
