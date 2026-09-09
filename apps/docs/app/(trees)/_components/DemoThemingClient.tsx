@@ -106,13 +106,20 @@ export function DemoThemingClient({
           ? selectedDarkTheme
           : selectedLightTheme;
 
+  // Resolve the selected theme's styles. Uncached themes load through a dynamic
+  // import, so a selection made while an earlier load is still in flight must
+  // win: the cleanup marks that earlier load cancelled and both of its outcomes
+  // are dropped instead of overwriting the newer selection's styles or error.
   useEffect(() => {
+    let cancelled = false;
     void resolveTheme(effectiveTheme).then(
       (theme) => {
+        if (cancelled) return;
         setThemeStyles(themeToTreeStyles(theme));
         setThemeLoadError(null);
       },
       (themeError: unknown) => {
+        if (cancelled) return;
         setThemeLoadError({
           message:
             themeError instanceof Error
@@ -122,6 +129,9 @@ export function DemoThemingClient({
         });
       }
     );
+    return () => {
+      cancelled = true;
+    };
   }, [effectiveTheme]);
 
   const error =
