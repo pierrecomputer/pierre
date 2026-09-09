@@ -69,6 +69,19 @@ function readPageHeadings(): HeadingItem[] {
   return headingItems;
 }
 
+// Picks the heading the reader is looking at: the last h2/h3 whose top has
+// scrolled to within 100px of the viewport top. Falls back to the first heading
+// when none has scrolled that far, and to '' when the page has no headings.
+function findActiveHeading(headings: HeadingItem[]): string {
+  for (let i = headings.length - 1; i >= 0; i--) {
+    const heading = headings[i];
+    if (heading.element.getBoundingClientRect().top <= 100) {
+      return heading.id;
+    }
+  }
+  return headings[0]?.id ?? '';
+}
+
 export function DocsSidebar({
   isMobileOpen = false,
   onMobileClose,
@@ -87,57 +100,37 @@ export function DocsSidebar({
 
   // The headings live in the MDX content rendered beside this sidebar, so they
   // are only readable from the committed DOM, and they are fixed for this
-  // mount. Read them once here instead of on every render.
+  // mount. Read them once here instead of on every render. A URL hash scrolls
+  // its target into view first, so the active heading is measured from the
+  // position the reader actually lands on and the sidebar settles in one step.
   useLayoutEffect(() => {
     const headingItems = readPageHeadings();
     const hashId = window.location.hash.trim().slice(1);
-    /* oxlint-disable react/set-state-in-effect -- synchronizing from DOM that
-     * only exists after commit; there is no render-time source for it */
-    setHeadings(headingItems);
-    // A hash names the heading to activate; otherwise the first heading is. A
-    // hash that names a non-heading leaves no link active until the scroll
-    // check below runs.
-    setActiveHeading(hashId !== '' ? hashId : (headingItems[0]?.id ?? ''));
-    /* oxlint-enable react/set-state-in-effect */
-
     if (hashId !== '') {
       const element = document.getElementById(hashId);
       if (element != null) {
         element.scrollIntoView({ behavior: 'instant', block: 'start' });
       }
     }
+    /* oxlint-disable react/set-state-in-effect -- synchronizing from DOM that
+     * only exists after commit; there is no render-time source for it */
+    setHeadings(headingItems);
+    setActiveHeading(findActiveHeading(headingItems));
+    /* oxlint-enable react/set-state-in-effect */
   }, []);
 
-  // Handle scroll-based active heading detection
+  // Follow the reader as they scroll. The initial active heading is set by the
+  // layout effect above, so this only needs the listener.
   useEffect(() => {
-    const handleScroll = () => {
-      let foundActive = false;
-
-      for (let i = headings.length - 1; i >= 0; i--) {
-        const heading = headings[i];
-        const rect = heading.element.getBoundingClientRect();
-        if (rect.top <= 100) {
-          setActiveHeading(heading.id);
-          foundActive = true;
-          break;
-        }
-      }
-
-      // If no heading is active, default to the first one
-      if (!foundActive && headings.length > 0) {
-        setActiveHeading(headings[0].id);
-      }
-    };
-
     if (headings.length === 0) {
       return undefined;
     }
-
+    const handleScroll = () => {
+      setActiveHeading(findActiveHeading(headings));
+    };
     window.addEventListener('scroll', handleScroll);
-    const animationFrame = window.requestAnimationFrame(handleScroll);
     return () => {
       window.removeEventListener('scroll', handleScroll);
-      window.cancelAnimationFrame(animationFrame);
     };
   }, [headings]);
 
