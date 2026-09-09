@@ -117,6 +117,14 @@ export default async function HighlightsPage() {
                     theme objects.
                   </dd>
                 </div>
+                <div>
+                  <dt className="text-sm font-medium">Streaming API</dt>
+                  <dd className="text-muted-foreground mt-0.5 text-sm text-pretty">
+                    <code>StreamTokenizer</code> emits completed lines of themed
+                    tokens as code arrives, preserving lexer state across
+                    chunks.
+                  </dd>
+                </div>
               </dl>
             </div>
 
