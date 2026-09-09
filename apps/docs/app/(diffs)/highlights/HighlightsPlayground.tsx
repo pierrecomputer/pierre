@@ -47,6 +47,10 @@ export function HighlightsPlayground({
   const [selectedColorMode, setSelectedColorMode] = useState<
     'system' | 'light' | 'dark'
   >('system');
+  const [previewTheme, setPreviewTheme] = useState<{
+    name: string;
+    colorScheme: 'light' | 'dark';
+  }>();
   const [file, setFile] = useState<{
     name: string;
     contents: string;
@@ -79,7 +83,11 @@ export function HighlightsPlayground({
     <section id="playground" className="space-y-5 pb-16 md:pb-24">
       <div className="flex flex-wrap gap-3 md:items-center">
         <div className="flex w-full gap-3 md:w-auto">
-          <DropdownMenu>
+          <DropdownMenu
+            onOpenChange={(open) => {
+              if (!open) setPreviewTheme(undefined);
+            }}
+          >
             <DropdownMenuTrigger asChild>
               <Button variant="outline" className="flex-1 justify-start">
                 <IconColorLight />
@@ -93,6 +101,10 @@ export function HighlightsPlayground({
                 .map((theme) => (
                   <DropdownMenuItem
                     key={theme}
+                    onFocus={() =>
+                      setPreviewTheme({ name: theme, colorScheme: 'light' })
+                    }
+                    onBlur={() => setPreviewTheme(undefined)}
                     onClick={() => {
                       setSelectedLightTheme(theme);
                       setSelectedColorMode('light');
@@ -108,7 +120,11 @@ export function HighlightsPlayground({
             </DropdownMenuContent>
           </DropdownMenu>
 
-          <DropdownMenu>
+          <DropdownMenu
+            onOpenChange={(open) => {
+              if (!open) setPreviewTheme(undefined);
+            }}
+          >
             <DropdownMenuTrigger asChild>
               <Button variant="outline" className="flex-1 justify-start">
                 <IconColorDark />
@@ -126,6 +142,10 @@ export function HighlightsPlayground({
                 .map((theme) => (
                   <DropdownMenuItem
                     key={theme}
+                    onFocus={() =>
+                      setPreviewTheme({ name: theme, colorScheme: 'dark' })
+                    }
+                    onBlur={() => setPreviewTheme(undefined)}
                     onClick={() => {
                       setSelectedDarkTheme(theme);
                       setSelectedColorMode('dark');
@@ -201,10 +221,16 @@ export function HighlightsPlayground({
         className="diff-container min-h-80"
         options={{
           theme: {
-            dark: selectedDarkTheme,
-            light: selectedLightTheme,
+            dark:
+              previewTheme?.colorScheme === 'dark'
+                ? previewTheme.name
+                : selectedDarkTheme,
+            light:
+              previewTheme?.colorScheme === 'light'
+                ? previewTheme.name
+                : selectedLightTheme,
           },
-          themeType: selectedColorMode,
+          themeType: previewTheme?.colorScheme ?? selectedColorMode,
           useTokenTransformer: true,
         }}
         prerenderedHTML={
