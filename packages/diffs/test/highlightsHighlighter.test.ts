@@ -247,6 +247,29 @@ describe('highlights highlighter', () => {
     expect(highlightsHighlighter.isReady(options)).toBe(true);
   });
 
+  test('CSS variable themes preserve their foreground and background variables', () => {
+    registerHighlightsTheme('review-css-variables', {
+      name: 'Review CSS Variables',
+      appearance: 'dark',
+      cssVariables: true,
+      style: {},
+    });
+    expect(
+      highlightsHighlighter.getTheme('review-css-variables')
+    ).toMatchObject({
+      fg: 'var(--hls-foreground)',
+      bg: 'var(--hls-background)',
+    });
+    const { code, themeStyles } = renderFileWithHighlighter(
+      file,
+      highlightsHighlighter,
+      { ...fileOptions, theme: 'review-css-variables' }
+    );
+    expect(themeStyles).toContain('color:var(--hls-foreground);');
+    expect(themeStyles).toContain('background-color:var(--hls-background);');
+    expect(toHtml(code)).toContain('var(--hls-keyword-declaration)');
+  });
+
   test('git decoration colors reach single and dual theme diff styles', async () => {
     await highlightsHighlighter.load({ langs: [], themes: ['github-dark'] });
     const { themeStyles } = renderFileWithHighlighter(

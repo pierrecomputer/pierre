@@ -46,9 +46,9 @@ describe('FileRenderer HTML', () => {
     const fragment = JSDOM.fragment(renderer.renderFullHTML(result));
     const token = Array.from(
       fragment.querySelectorAll('[data-content] span')
-    ).find((el) => el.textContent === 'function');
+    ).find((el) => el.textContent?.trim() === 'function');
     expect(token?.getAttribute('style')).toMatch(
-      /--diffs-token-dark:#[A-F0-9]{6};--diffs-token-light:#[A-F0-9]{6}/
+      /--diffs-token-dark:#[A-F0-9]{6};--diffs-token-light:#[A-F0-9]{6}/i
     );
   });
 

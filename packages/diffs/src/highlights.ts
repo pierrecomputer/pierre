@@ -310,8 +310,12 @@ export const highlightsHighlighter: CodeHighlighter = {
       name,
       displayName: theme.name,
       type: theme.appearance === 'light' ? 'light' : 'dark',
-      fg: style['editor.foreground'] ?? style.text ?? style.foreground ?? '',
-      bg: style['editor.background'] ?? style.background ?? '',
+      fg: theme.cssVariables
+        ? 'var(--hls-foreground)'
+        : (style['editor.foreground'] ?? style.text ?? style.foreground ?? ''),
+      bg: theme.cssVariables
+        ? 'var(--hls-background)'
+        : (style['editor.background'] ?? style.background ?? ''),
       colors,
       settings: [],
     };
