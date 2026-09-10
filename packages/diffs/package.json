@@ -107,6 +107,9 @@
     "react-dom": "^18.3.1 || ^19.0.0"
   },
   "peerDependenciesMeta": {
+    "@pierre/highlights": {
+      "optional": true
+    },
     "react": {
       "optional": true
     },

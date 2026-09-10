@@ -19,6 +19,12 @@
         "selection": "#717cb425"
       }
     ],
+    "created": "#5fb3a1",
+    "deleted": "#d0679d",
+    "modified": "#ADD7FF",
+    "terminal.ansi.green": "#5DE4c7",
+    "terminal.ansi.red": "#d0679d",
+    "terminal.ansi.blue": "#89ddff",
     "syntax": {
       "attribute": {
         "color": "#91B4D5",

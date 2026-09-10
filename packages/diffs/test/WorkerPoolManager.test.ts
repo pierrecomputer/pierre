@@ -10,14 +10,17 @@ import {
 } from 'bun:test';
 
 import { parseDiffFromFile } from '../src';
+import { setHighlighter } from '../src/highlighter/code_highlighter';
 import * as sharedHighlighter from '../src/highlighter/shared_highlighter';
 import { disposeHighlighter } from '../src/highlighter/shared_highlighter';
+import { shikiHighlighter } from '../src/highlighter/shiki_highlighter';
 import type {
   DiffsHighlighter,
   FileContents,
   FileDiffMetadata,
 } from '../src/types';
 import type { DiffRendererInstance } from '../src/worker/types';
+import { WorkerPoolManager } from '../src/worker/WorkerPoolManager';
 import { createDeferred } from './testUtils';
 import {
   createInitializedManager,
@@ -25,6 +28,7 @@ import {
   installAnimationFramePolyfill,
   respondToDiffRequest,
   respondToFileRequest,
+  TestWorker,
   withTimeout,
 } from './workerPoolHarness';
 
@@ -40,10 +44,62 @@ afterAll(async () => {
 });
 
 afterEach(() => {
+  setHighlighter(shikiHighlighter);
   mock.restore();
 });
 
 describe('WorkerPoolManager lifecycle', () => {
+  test('accepts the legacy cache limit and prefers the new option', () => {
+    setHighlighter({ ...shikiHighlighter, name: 'custom' });
+    for (const [options, expected] of [
+      [{ totalASTLRUCacheSize: 500 }, 500],
+      [{ totalASTLRUCacheSize: 500, totalTokenLRUCacheSize: 25 }, 25],
+    ] as const) {
+      const manager = new WorkerPoolManager(
+        {
+          workerFactory: () => {
+            throw new Error('Unexpected worker');
+          },
+          ...options,
+        },
+        {}
+      );
+      const { fileCache, diffCache } = manager.inspectCaches();
+      expect(fileCache.limit).toBe(expected);
+      expect(diffCache.limit).toBe(expected);
+      manager.terminate();
+    }
+  });
+
+  test('defers Shiki initialization while a custom highlighter is registered', async () => {
+    const sharedLoad = spyOn(sharedHighlighter, 'getSharedHighlighter');
+    const worker = new TestWorker();
+    const factory = mock(() => worker as unknown as Worker);
+    setHighlighter({ ...shikiHighlighter, name: 'custom' });
+    const manager = new WorkerPoolManager(
+      { poolSize: 1, workerFactory: factory },
+      { theme: 'github-dark' }
+    );
+    await manager.initialize(['typescript']);
+    expect(factory).not.toHaveBeenCalled();
+    expect(sharedLoad).not.toHaveBeenCalled();
+    expect(manager.isWorkingPool()).toBe(false);
+
+    setHighlighter(shikiHighlighter);
+    const initialization = manager.initialize();
+    const request = await worker.waitForInitializeRequest();
+    worker.respond({
+      type: 'success',
+      requestType: 'initialize',
+      id: request.id,
+      sentAt: Date.now(),
+    });
+    await initialization;
+    expect(factory).toHaveBeenCalledTimes(1);
+    expect(manager.isInitialized()).toBe(true);
+    manager.terminate();
+  });
+
   test('fails initialization when a worker emits an error', async () => {
     spyOn(console, 'error').mockImplementation(() => {});
     const { initialization, manager, worker } = createInitializingManager();

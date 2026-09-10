@@ -29,6 +29,8 @@ export type Lang =
   | 'dart'
   | 'delphi'
   | 'diff'
+  | 'git-commit'
+  | 'git-rebase'
   | 'docker'
   | 'dockerfile'
   | 'dpk'
@@ -146,6 +148,8 @@ export type Lang =
   | 'scss'
   | 'sh'
   | 'shell'
+  | 'shellscript'
+  | 'shellsession'
   | 'sql'
   | 'svelte'
   | 'svg'
@@ -259,6 +263,7 @@ export interface ThemedToken {
    * Inline styles for multi-theme output: plain `color`, `font-style`, and
    * `font-weight` for the `defaultColor` theme, custom properties keyed by
    * `${cssVariablePrefix}${themeColor}` for the others.
+   * Equal runs share this map; replace it when customizing one token's styles.
    */
   htmlStyle?: Record<string, string>;
   /** Extra attributes for the token's `<span>` (`htmlAttrs` in Shiki). */

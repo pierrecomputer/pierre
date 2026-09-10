@@ -55,6 +55,12 @@
     "warning": "#e5c890",
     "info": "#81c8be",
     "hint": "#626880",
+    "created": "#a6d189",
+    "deleted": "#e78284",
+    "modified": "#e5c890",
+    "terminal.ansi.green": "#a6d189",
+    "terminal.ansi.red": "#e78284",
+    "terminal.ansi.blue": "#8caaee",
     "syntax": {
       "variable": {
         "color": "#c6d0f5"

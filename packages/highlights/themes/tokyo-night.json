@@ -20,6 +20,12 @@
     "warning": "#e0af68",
     "info": "#0da0ba",
     "hint": "#51597d",
+    "created": "#449dab",
+    "deleted": "#914c54",
+    "modified": "#6183bb",
+    "terminal.ansi.green": "#73daca",
+    "terminal.ansi.red": "#f7768e",
+    "terminal.ansi.blue": "#7aa2f7",
     "syntax": {
       "attribute": {
         "color": "#bb9af7"

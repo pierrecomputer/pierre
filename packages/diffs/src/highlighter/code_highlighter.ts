@@ -164,12 +164,14 @@ export interface CodeHighlighter {
    * Incremental document tokenizer for edit mode. Implementations without
    * one (shiki, whose edit-mode tokenization runs through the editor's own
    * TextMate incremental-state machinery) leave this undefined.
+   * Custom adapters must provide this or a loaded getShikiInstance for edit
+   * mode; adapters with neither support static rendering and streaming only.
    */
   createLiveTokenizer?(options: CodeLiveTokenizerOptions): CodeLiveTokenizer;
   /**
    * The loaded shiki instance backing this highlighter, when there is one.
-   * Internals use it for worker tokenization, TextMate edit mode, and
-   * grammar-state streaming.
+   * Internals use it for TextMate edit mode and grammar-state streaming.
+   * Workers always use the built-in Shiki highlighter, not custom adapters.
    */
   getShikiInstance?(): DiffsHighlighter | undefined;
 }

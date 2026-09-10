@@ -12,6 +12,10 @@
     "error": "#ff5c57",
     "warning": "#b38700",
     "info": "#09a1ed",
+    "modified": "#00A39F",
+    "terminal.ansi.green": "#2DAE58",
+    "terminal.ansi.red": "#FF5C57",
+    "terminal.ansi.blue": "#09A1ED",
     "syntax": {
       "comment": {
         "color": "#adb1c2",

@@ -11,6 +11,9 @@
     "error": "#D32F2F",
     "warning": "#FFE62A",
     "hint": "#757575",
+    "terminal.ansi.green": "#77cc00",
+    "terminal.ansi.red": "#D32F2F",
+    "terminal.ansi.blue": "#e0e0e0",
     "syntax": {
       "attribute": {
         "color": "#6F42C1"

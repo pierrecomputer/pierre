@@ -11,6 +11,10 @@ tasks:
   # above the wait budget.
   test:
     args: '--timeout 15000'
+    # Matches highlights:test: the optimizing wasm tier in Bun 1.4 can
+    # miscompile its SIMD scanner after warm-up.
+    env:
+      BUN_JSC_useOMGJIT: '0'
 
   # No preset: presets force `runInCI: skip` and moon refuses to run such
   # tasks in CI-detected shells (agent harnesses export CI=1). Never

@@ -55,6 +55,12 @@
     "warning": "#ffea7f",
     "info": "#79b8ff",
     "hint": "#848d97",
+    "created": "#34d058",
+    "deleted": "#ea4a5a",
+    "modified": "#79b8ff",
+    "terminal.ansi.green": "#34d058",
+    "terminal.ansi.red": "#ea4a5a",
+    "terminal.ansi.blue": "#2188ff",
     "syntax": {
       "boolean": {
         "color": "#79b8ff"

@@ -1,6 +1,6 @@
 import type { ThemedToken } from '../types';
 
-/** Keep cached token offsets relative to the document after windows or edits. */
+/** Convert freshly highlighted windows to document offsets before caching. */
 export function updateTokenOffsets(
   tokens: ThemedToken[][],
   lines: string[]

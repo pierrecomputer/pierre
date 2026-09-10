@@ -10,6 +10,12 @@
     "error": "#F43E5C",
     "warning": "#1EB980B3",
     "hint": "#969696ff",
+    "created": "#1EB980B3",
+    "deleted": "#F43E5C",
+    "modified": "#AF5427",
+    "terminal.ansi.green": "#29D398",
+    "terminal.ansi.red": "#E95678",
+    "terminal.ansi.blue": "#26BBD9",
     "syntax": {
       "attribute": {
         "color": "#DC3318"

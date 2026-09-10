@@ -12,7 +12,7 @@ import {
   UNSAFE_CSS_ATTRIBUTE,
 } from '../constants';
 import type { Editor } from '../editor/editor';
-import type { TextDocument } from '../editor/textDocument';
+import type { TextDocument, TextDocumentChange } from '../editor/textDocument';
 import type {
   CapturedDiffSessionState,
   EditCompletionDecision,
@@ -2194,6 +2194,7 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
     options: {
       shouldRefreshDiffsView?: boolean;
       lineCountChangeInFlight?: boolean;
+      lineChanges?: TextDocumentChange['changedLineChanges'];
     } = {}
   ): void {
     const editSessionDiff = this.editSession?.diff;
@@ -2204,11 +2205,13 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
     }
     this.detachAdditionLines();
     this.hunksRenderer.beginEditSession(editSessionDiff);
-    const { shouldRefreshDiffsView, lineCountChangeInFlight } = options;
+    const { shouldRefreshDiffsView, lineCountChangeInFlight, lineChanges } =
+      options;
     const regionsChanged = this.hunksRenderer.updateRenderCache(
       dirtyLines,
       themeType,
-      lineCountChangeInFlight
+      lineCountChangeInFlight,
+      lineChanges
     );
     // A same-line-count edit that reshaped the session regions (an edit into
     // a collapsed gap) changes the rendered row set, which the debounced

@@ -49,15 +49,13 @@ async function loadHighlightsTheme(name: string): Promise<void> {
   if (highlightsThemeResolver.hasResolvedTheme(name)) return;
 
   const key = kebab(name);
-  let id = THEME_NAME_ALIASES[key] ?? key;
-  let loader = themes[id];
+  const id = THEME_NAME_ALIASES[key] ?? key;
+  const loader = themes[id];
   if (loader == null) {
-    warnOnce(
-      `@pierre/diffs/highlights: no highlights theme for "${name}"; falling back ` +
-        `to a Pierre default. Register one with registerHighlightsTheme().`
+    throw new Error(
+      `@pierre/diffs/highlights: no theme loader registered for "${name}". ` +
+        'Register one with registerHighlightsTheme().'
     );
-    id = key.includes('light') ? 'pierre-light' : 'pierre-dark';
-    loader = themes[id];
   }
   highlightsThemeResolver.registerThemeIfAbsent(id, loader);
   highlightsThemeResolver.seedResolvedTheme(
@@ -99,11 +97,7 @@ function warnOnce(message: string): void {
 
 const LANG_ALIASES: Record<string, Lang> = {
   ansi: 'text',
-  'git-commit': 'diff',
-  'git-rebase': 'diff',
   riscv: 'asm',
-  shellscript: 'bash',
-  shellsession: 'bash',
 };
 
 /** Resolve extra Shiki aliases and report unsupported languages once. */
@@ -292,10 +286,27 @@ export const highlightsHighlighter: CodeHighlighter = {
       'editorInfo.foreground': style.info,
       'editorWarning.foreground': style.warning,
       'editorError.foreground': style.error,
+      'gitDecoration.addedResourceForeground': style.created,
+      'gitDecoration.deletedResourceForeground': style.deleted,
+      'gitDecoration.modifiedResourceForeground': style.modified,
+      'terminal.ansiGreen': style['terminal.ansi.green'],
+      'terminal.ansiRed': style['terminal.ansi.red'],
+      'terminal.ansiBlue': style['terminal.ansi.blue'],
     };
     const colors: Record<string, string> = {};
     for (const [key, value] of Object.entries(mapped)) {
       if (typeof value === 'string') colors[key] = value;
+    }
+    for (const [status, scope] of [
+      ['added', 'diff.plus'],
+      ['deleted', 'diff.minus'],
+      ['modified', 'diff.delta'],
+    ]) {
+      const syntax = style.syntax?.[scope];
+      const color = typeof syntax === 'string' ? syntax : syntax?.color;
+      if (color != null) {
+        colors[`gitDecoration.${status}ResourceForeground`] ??= color;
+      }
     }
     return {
       name,

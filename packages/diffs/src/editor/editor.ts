@@ -3860,6 +3860,9 @@ export class Editor<
     }
 
     const didLineCountChange = change.lineDelta !== 0;
+    const didLineStructureChange =
+      didLineCountChange ||
+      (change.changedLineChanges?.some(([, , delta]) => delta !== 0) ?? false);
 
     // fix grid layout
     if (didLineCountChange) {
@@ -3877,11 +3880,13 @@ export class Editor<
     }
 
     fileInstance.updateRenderCache(dirtyLines, tokenizer.themeType, {
-      shouldRefreshDiffsView: this.#isDiff && !didLineCountChange,
-      lineCountChangeInFlight: didLineCountChange,
+      shouldRefreshDiffsView: this.#isDiff && !didLineStructureChange,
+      lineCountChangeInFlight: didLineStructureChange,
+      lineChanges: change.changedLineChanges,
     });
-    if (didLineCountChange) {
-      // Line-count change: recompute hunks from the full document and re-render.
+    if (didLineStructureChange) {
+      // Separate insertions and deletions can renumber rows even when their
+      // line-count changes cancel out. Realign against the complete batch.
       applyDocumentChange(textDocument, newLineAnnotations, shouldUpdateBuffer);
     }
 
@@ -3889,7 +3894,10 @@ export class Editor<
     // its content column on every edit. Either can detach the line elements
     // memoized for caret/selection geometry, making offsetTop read as 0 and
     // scrolling the caret to the top. Re-measure against the current rows.
-    if (didLineCountChange || (this.#isDiff && this.#diffSyle === 'unified')) {
+    if (
+      didLineStructureChange ||
+      (this.#isDiff && this.#diffSyle === 'unified')
+    ) {
       this.#resetCache();
     }
 
@@ -3898,7 +3906,7 @@ export class Editor<
       // A structural FileDiff edit rebuilds both columns and their paired
       // annotation rows together. Re-inserting those rows independently by
       // line number would break their visual alignment in split view.
-      if (!this.#isDiff || !didLineCountChange) {
+      if (!this.#isDiff || !didLineStructureChange) {
         renderLineAnnotations(
           newLineAnnotations,
           contentEl,

@@ -1777,3 +1777,101 @@ void t.test(
     live.dispose();
   }
 );
+
+void t.test(
+  'LiveTokenizer: update tuples use the theme foreground for unstyled runs',
+  () => {
+    const live = new LiveTokenizer({
+      lang: 'markdown',
+      theme: pierreDark,
+      code: 'some *text* and `code` here',
+    });
+    try {
+      const update = live.applyEdits(
+        [
+          {
+            range: {
+              start: { line: 0, character: 0 },
+              end: { line: 0, character: 4 },
+            },
+            newText: 'more',
+          },
+        ],
+        { renderRange: [0, 1] }
+      );
+      assert.deepEqual(
+        update.lines.get(0),
+        live
+          .getLineTokens(0)
+          .tokens.map((token) => [token.offset, token.color, token.content])
+      );
+      assert.equal(
+        update.lines.get(0)?.[0][1],
+        pierreDark.style['editor.foreground']
+      );
+    } finally {
+      live.dispose();
+    }
+  }
+);
+
+void t.test(
+  'LiveTokenizer: no-op edits resume a paused deferred tail',
+  async () => {
+    for (const edits of [
+      [],
+      [
+        {
+          range: {
+            start: { line: 5, character: 0 },
+            end: { line: 5, character: 3 },
+          },
+          newText: 'let',
+        },
+      ],
+    ]) {
+      const code = Array.from(
+        { length: 200 },
+        (_, i) => `let v${i} = ${i};`
+      ).join('\n');
+      let deliveries = 0;
+      const live = new LiveTokenizer({
+        lang: 'ts',
+        theme: pierreDark,
+        code,
+        onDeferTokenize: () => {
+          deliveries++;
+        },
+      });
+      try {
+        live.applyEdits(
+          [
+            {
+              range: {
+                start: { line: 0, character: 0 },
+                end: { line: 0, character: 0 },
+              },
+              newText: '/*',
+            },
+          ],
+          { renderRange: [0, 10] }
+        );
+        live.pause();
+        assert.ok(live.pendingTokenization);
+        const revision = live.revision;
+        const before = deliveries;
+        live.applyEdits(edits, { renderRange: [0, 10] });
+        assert.equal(live.revision, revision);
+        const deadline = Date.now() + 2000;
+        while (live.pendingTokenization && Date.now() < deadline) {
+          await new Promise((resolve) => setTimeout(resolve, 0));
+        }
+        assert.equal(live.pendingTokenization, false);
+        assert.ok(deliveries > before);
+        assertMatchesFresh(live, '/*' + code, 'ts', 'no-op resumed document');
+      } finally {
+        live.dispose();
+      }
+    }
+  }
+);

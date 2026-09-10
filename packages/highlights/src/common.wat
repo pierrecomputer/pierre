@@ -221,6 +221,8 @@
     (call $emitTok (local.get $hl) (local.get $seg) (global.get $ptr))
     (local.get $status))
 
+  ;; Checkpoint only at $eof: an embedded lexer can have an earlier $end
+  ;; imposed by its enclosing region, which must not continue into a new chunk.
   ;; Quoted literal beginning at $ptr. Escapes are emitted separately, and a
   ;; malformed escape cannot split a multibyte UTF-8 character.
   (func $lexString (param $quote i32) (param $multiline i32) (param $hl i32)
@@ -238,7 +240,7 @@
       (i32.and
         (global.get $streaming)
         (i32.and
-          (i32.eq (global.get $ptr) (global.get $end))
+          (i32.eq (global.get $ptr) (global.get $eof))
           (i32.and
             (i32.ne (local.get $status) (i32.const 1))
             (i32.or (local.get $multiline) (i32.eq (local.get $status) (i32.const 2))))))
@@ -289,7 +291,7 @@
         (global.get $streaming)
         (i32.and
           (local.get $multiline)
-          (i32.and (i32.eqz (local.get $closed)) (i32.eq (global.get $ptr) (global.get $end)))))
+          (i32.and (i32.eqz (local.get $closed)) (i32.eq (global.get $ptr) (global.get $eof)))))
       (then
         (global.set $streamMode (i32.const 3))
         (global.set $streamA (local.get $quote))
@@ -317,7 +319,7 @@
       (i32.and
         (global.get $streaming)
         (i32.and
-          (i32.eq (global.get $ptr) (global.get $end))
+          (i32.eq (global.get $ptr) (global.get $eof))
           (i32.or
             (i32.lt_u (i32.sub (global.get $ptr) (local.get $lhs)) (i32.const 2))
             (i32.ne (i32.load16_u (i32.sub (global.get $ptr) (i32.const 2))) (i32.const 0x2f2a)))))
@@ -335,7 +337,7 @@
         (global.get $streaming)
         (i32.and
           (i32.le_u (local.get $len) (i32.const 32))
-          (i32.eq (global.get $ptr) (global.get $end))))
+          (i32.eq (global.get $ptr) (global.get $eof))))
       (then
         (memory.copy (i32.const $mem.streamDelimiter) (local.get $delimiter) (local.get $len))
         (global.set $streamMode (i32.const 20))
@@ -354,7 +356,7 @@
         (global.get $streaming)
         (i32.and
           (i32.ne (local.get $depth) (i32.const 0))
-          (i32.eq (global.get $ptr) (global.get $end))))
+          (i32.eq (global.get $ptr) (global.get $eof))))
       (then
         (global.set $streamMode (i32.const 21))
         (global.set $streamA (local.get $depth))
@@ -372,7 +374,7 @@
         (global.get $streaming)
         (i32.and
           (i32.le_u (local.get $len) (i32.const 32))
-          (i32.eq (global.get $ptr) (global.get $end))))
+          (i32.eq (global.get $ptr) (global.get $eof))))
       (then
         (memory.copy (i32.const $mem.streamDelimiter) (local.get $delimiter) (local.get $len))
         (global.set $streamMode (i32.const 22))
@@ -386,7 +388,7 @@
   ;; through thirteen start tags whose attributes continue (html, xml, vue,
   ;; svelte, astro - resumed by the owning lexer through highlights.wat).
   (func $streamSetRegion (param $kind i32)
-    (if (i32.and (global.get $streaming) (i32.eq (global.get $ptr) (global.get $end)))
+    (if (i32.and (global.get $streaming) (i32.eq (global.get $ptr) (global.get $eof)))
       (then
         (global.set $streamRegionKind (local.get $kind))
         (global.set $streamRegionStarted (i32.const 0)))))

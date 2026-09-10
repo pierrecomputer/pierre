@@ -54,6 +54,9 @@
     "warning": "#cc6d00",
     "info": "#5a7785",
     "hint": "#5e857a",
+    "terminal.ansi.green": "#6F894E",
+    "terminal.ansi.red": "#C84053",
+    "terminal.ansi.blue": "#4D699B",
     "syntax": {
       "attribute": {
         "color": "#de9800"

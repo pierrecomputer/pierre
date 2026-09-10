@@ -543,6 +543,7 @@ export class LiveTokenizer {
     const batch = this.#validate(edits, hl, ex);
     const previousLineCount = ex.liveLineCount();
     if (batch.length === 0) {
+      this.resume();
       return {
         revision: this.#revision,
         previousLineCount,
@@ -764,9 +765,9 @@ export class LiveTokenizer {
   }
 
   /**
-   * One line's tokens as editor-shaped `[start, color, text]` tuples. A line
-   * with no styled runs, or one past `tokenizeMaxLineLength`, collapses to a
-   * single unstyled tuple so consumers can render it as plain text.
+   * One line's tokens as editor-shaped `[start, color, text]` tuples. Runs
+   * without a syntax color inherit the theme foreground. Missing records and
+   * lines past `tokenizeMaxLineLength` use one unstyled tuple.
    */
   #lineTuples(
     hl: HighlightsHighlighter,
@@ -777,7 +778,7 @@ export class LiveTokenizer {
     const max = this.#maxLineLength ?? 0;
     const tokens: HighlightedToken[] = [];
     if (max <= 0 || text.length < max) {
-      const styles = this.#themes[0].styles;
+      const { styles, fg } = this.#themes[0];
       const n = ex.liveLineTokCount(line);
       const wide = (ex.liveLineFlags(line) & 4) !== 0;
       const data = new Uint32Array(
@@ -792,7 +793,7 @@ export class LiveTokenizer {
         if (end > start) {
           tokens.push([
             start,
-            styles[hli]?.color ?? '',
+            styles[hli]?.color ?? fg ?? '',
             text.slice(start, end),
           ]);
           start = end;

@@ -8,7 +8,8 @@ import {
   HighlightsEditorTokenizer,
 } from '../src/editor/tokenizer';
 import highlightsHighlighter from '../src/highlights';
-import type { HighlightedToken, RenderRange } from '../src/types';
+import { FileRenderer } from '../src/renderers/FileRenderer';
+import type { HighlightedToken, RenderRange, ThemedToken } from '../src/types';
 import { installDom } from './domHarness';
 
 let dom: ReturnType<typeof installDom>;
@@ -127,6 +128,43 @@ describe('LiveEditorTokenizer', () => {
     expect([...dirty.keys()]).toEqual([1]);
     expect(lineText(dirty.get(1)!)).toBe('let b = 9;');
     tokenizer.cleanUp();
+  });
+
+  test('coincident inserts preserve batch order without resetting the document', () => {
+    const { tokenizer, textDocument } = createHarness(
+      'const a = 1;\nlet b = 2;\nlet c = 3;'
+    );
+    tokenizer.tokenize(fullChange(textDocument));
+    const position = { line: 1, character: 4 };
+    const change = textDocument.applyEdits([
+      { range: { start: position, end: position }, newText: 'X' },
+      { range: { start: position, end: position }, newText: 'Y' },
+      { range: { start: position, end: position }, newText: 'Z' },
+    ]);
+    const dirty = tokenizer.tokenize(change!);
+    expect([...dirty.keys()]).toEqual([1]);
+    expect(lineText(dirty.get(1)!)).toBe('let XYZb = 2;');
+    expect(lineText(dirty.get(1)!)).toBe(textDocument.getLineText(1));
+    tokenizer.cleanUp();
+  });
+
+  test('a custom highlighter without edit support fails explicitly', () => {
+    expect(() =>
+      createEditorTokenizer({
+        highlighter: {
+          ...highlightsHighlighter,
+          createLiveTokenizer: undefined,
+          getShikiInstance: undefined,
+        },
+        textDocument: new TextDocument(
+          'inmemory://unsupported',
+          'const a = 1;'
+        ),
+        codeOptions: { theme: 'pierre-dark' },
+        setStyle() {},
+        onDeferTokenize() {},
+      })
+    ).toThrow('must provide createLiveTokenizer or getShikiInstance');
   });
 
   test('edits inside multi-line constructs re-color later lines', () => {
@@ -259,6 +297,100 @@ describe('LiveEditorTokenizer', () => {
     expect(lineText(delivered.get(0)!)).toBe(textDocument.getLineText(0));
     tokenizer.cleanUp();
   });
+
+  test.each(['one insertion', 'two insertions', 'balanced edits'])(
+    '%s: offscreen structural tokens reach the file cache after its rows realign',
+    async (batch) => {
+      const contents = Array.from(
+        { length: 100 },
+        (_, i) => `const v${i} = ${i};`
+      ).join('\n');
+      const file = { name: 'offscreen.ts', contents };
+      const renderer = new FileRenderer(
+        { theme: 'pierre-dark' },
+        undefined,
+        undefined,
+        undefined,
+        highlightsHighlighter
+      );
+      renderer.beginEditSession(file);
+      await renderer.asyncRender(file);
+      renderer.renderFile(file);
+      const textDocument = new TextDocument<'file', undefined>(
+        'inmemory://offscreen',
+        contents,
+        'ts'
+      );
+      let deliveriesDuringEdit = 0;
+      let editing = false;
+      const tokenizer = createEditorTokenizer({
+        highlighter: highlightsHighlighter,
+        textDocument,
+        codeOptions: { theme: 'pierre-dark' },
+        setStyle() {},
+        onDeferTokenize(lines, themeType) {
+          if (editing) deliveriesDuringEdit++;
+          renderer.updateRenderCache(lines, themeType);
+        },
+      });
+      tokenizer.prebuildStateStack(viewport(50, 30));
+      await settleTimers();
+      const cache = (
+        renderer as unknown as {
+          renderCache: { result: { code: ThemedToken[][] } };
+        }
+      ).renderCache;
+      const retainedRow = cache.result.code[20];
+      const change = textDocument.applyEdits([
+        {
+          range: {
+            start: { line: 3, character: 0 },
+            end: { line: 3, character: 0 },
+          },
+          newText: 'let inserted = 1;\n',
+        },
+        ...(batch === 'one insertion'
+          ? []
+          : [
+              {
+                range: {
+                  start: { line: 90, character: 0 },
+                  end: {
+                    line: batch === 'balanced edits' ? 91 : 90,
+                    character: 0,
+                  },
+                },
+                newText: batch === 'balanced edits' ? '' : 'let second = 2;\n',
+              },
+            ]),
+      ]);
+      editing = true;
+      const dirty = tokenizer.tokenize(change!, viewport(50, 30), true);
+      renderer.updateRenderCache(
+        dirty,
+        tokenizer.themeType,
+        true,
+        change!.changedLineChanges
+      );
+      renderer.applyDocumentChange(textDocument);
+      editing = false;
+      await settleTimers();
+
+      expect(deliveriesDuringEdit).toBe(0);
+      const rows = cache.result.code;
+      expect(rows[21]).toBe(retainedRow);
+      expect(file.contents).toBe(textDocument.getText());
+      for (let line = 0; line < textDocument.lineCount; line++) {
+        expect(rows[line].map((token) => token.content).join('')).toBe(
+          textDocument.getLineText(line)
+        );
+        expect(rows[line].length).toBeGreaterThan(1);
+        expect(rows[line][0].color).toBeDefined();
+      }
+      tokenizer.cleanUp();
+      renderer.cleanUp();
+    }
+  );
 
   test('deferred lines settled by a following edit arrive remapped', async () => {
     const contents = Array.from(
@@ -436,6 +568,24 @@ describe('LiveEditorTokenizer', () => {
     const delivered = new Set(deferred.flatMap((map) => [...map.keys()]));
     for (let line = 3; line < 50; line++) {
       expect(delivered.has(line)).toBe(true);
+    }
+    tokenizer.cleanUp();
+  });
+
+  test('prebuild delivers the lines above its initial viewport', async () => {
+    const contents = Array.from(
+      { length: 20 },
+      (_, i) => `const v${i} = ${i};`
+    ).join('\n');
+    const { tokenizer, deferred, textDocument } = createHarness(contents);
+    tokenizer.prebuildStateStack(viewport(10, 5));
+    await settleTimers();
+    const delivered = new Map(deferred.flatMap((map) => [...map]));
+    for (const line of [...Array(10).keys(), 15, 16, 17, 18, 19]) {
+      expect(lineText(delivered.get(line)!)).toBe(
+        textDocument.getLineText(line)
+      );
+      expect(delivered.get(line)![0][1]).toBe('#ff678d');
     }
     tokenizer.cleanUp();
   });

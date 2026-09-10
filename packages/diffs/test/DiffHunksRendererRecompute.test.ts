@@ -6,7 +6,11 @@ import {
   parseDiffFromFile,
 } from '../src';
 import { TextDocument } from '../src/editor/textDocument';
-import type { FileDiffMetadata, HighlightedToken } from '../src/types';
+import type {
+  FileDiffMetadata,
+  HighlightedToken,
+  ThemedToken,
+} from '../src/types';
 import { finishEditSessionForDiff } from '../src/utils/editSessionHunks';
 import { iterateOverDiff } from '../src/utils/iterateOverDiff';
 import {
@@ -115,6 +119,28 @@ async function createPrimedRenderer(
 }
 
 describe('DiffHunksRenderer content-edit recompute split', () => {
+  test('length-changing edits retain the untouched token rows', async () => {
+    const renderer = await createPrimedRenderer();
+    const cache = (
+      renderer as unknown as {
+        renderCache: { result: { code: { additionLines: ThemedToken[][] } } };
+      }
+    ).renderCache;
+    const originalRows = cache.result.code.additionLines.slice();
+    renderer.updateRenderCache(
+      makeDirtyLines([[1, '  console.log(msg) // edited']]),
+      'light'
+    );
+    expect(cache.result.code.additionLines[1]).not.toBe(originalRows[1]);
+    for (let line = 2; line < originalRows.length; line++) {
+      expect(cache.result.code.additionLines[line]).toBe(originalRows[line]);
+      expect(cache.result.code.additionLines[line][0]).toBe(
+        originalRows[line][0]
+      );
+    }
+    renderer.cleanUp();
+  });
+
   test('updateRenderCache recomputes hunk metadata for changed addition lines', async () => {
     const renderer = await createPrimedRenderer();
     const diffCache = renderer.diffCache;

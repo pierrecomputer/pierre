@@ -20,6 +20,12 @@
     "warning": "#dfa000",
     "info": "#8da101",
     "hint": "#df69ba",
+    "created": "#8da101a0",
+    "deleted": "#f85552a0",
+    "modified": "#3a94c5a0",
+    "terminal.ansi.green": "#8da101",
+    "terminal.ansi.red": "#f85552",
+    "terminal.ansi.blue": "#3a94c5",
     "syntax": {
       "attribute": {
         "color": "#df69ba"

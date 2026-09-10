@@ -120,10 +120,7 @@ const { tokens } = codeToTokens(source, {
   highlightsDiffs: {
     file: {
       name: 'diffs.tsx',
-      contents: `import {
-  setHighlighter,
-  shikiHighlighter,
-} from '@pierre/diffs';
+      contents: `import { setHighlighter } from '@pierre/diffs';
 import { FileDiff } from '@pierre/diffs/react';
 import {
   highlightsHighlighter,
@@ -134,10 +131,7 @@ import customTheme from './custom-theme.json';
 registerHighlightsTheme('custom-dark', customTheme);
 setHighlighter(highlightsHighlighter);
 
-const view = <FileDiff fileDiff={fileDiff} options={{ theme: 'custom-dark' }} />;
-
-// Restore the default when Highlights is only needed temporarily.
-setHighlighter(shikiHighlighter);`,
+const view = <FileDiff fileDiff={fileDiff} options={{ theme: 'custom-dark' }} />;`,
     },
     options,
   },
@@ -153,6 +147,23 @@ await preloadHighlighter({
   langs: [],
   themes: ['pierre-dark', 'pierre-light'],
 });`,
+    },
+    options,
+  },
+  highlightsSsr: {
+    file: {
+      name: 'server.ts',
+      contents: `import { highlightsHighlighter } from '@pierre/diffs/highlights';
+import { preloadFile } from '@pierre/diffs/ssr';
+
+const result = await preloadFile({
+  file: { name: 'example.ts', contents: 'const answer = 42;' },
+  highlighter: highlightsHighlighter,
+  options: { theme: 'pierre-dark' },
+});
+
+// Pass result to <File {...result} /> on the client.
+// Register highlightsHighlighter in the client before hydrating.`,
     },
     options,
   },
@@ -216,6 +227,7 @@ export const {
   highlightsHtml: HIGHLIGHTS_HTML,
   highlightsLive: HIGHLIGHTS_LIVE,
   highlightsPreload: HIGHLIGHTS_PRELOAD,
+  highlightsSsr: HIGHLIGHTS_SSR,
   highlightsStream: HIGHLIGHTS_STREAM,
   highlightsThemes: HIGHLIGHTS_THEMES,
   highlightsTokens: HIGHLIGHTS_TOKENS,

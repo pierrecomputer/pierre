@@ -37,6 +37,10 @@ pinned TextMate source with Zed's official scope mapping. Files retain `name`,
 `appearance`, and the style keys Highlights and `@pierre/diffs` read; unrelated
 editor UI colors are removed.
 
+Bundled Shiki and Pierre themes retain their source git-decoration and terminal
+colors as Zed `created`, `deleted`, `modified`, and `terminal.ansi.*` colors for
+diff rendering.
+
 For CSS-controlled colors, use `cssVariables`. See [Themes](../README.md#themes)
 for the accepted properties and
 [third-party licenses](./THIRD_PARTY_LICENSES.md) for pinned sources and Zed

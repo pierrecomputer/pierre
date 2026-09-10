@@ -41,9 +41,6 @@ export interface ResolvedTheme extends ResolvedThemeStyles {
   role: ThemeRole;
 }
 
-/** A `[start, end, tokenId]` style run within one line. */
-export type StyleRun = [number, number, number];
-
 /**
  * Map each `$Token` slot to Shiki's `ThemedToken.type`.
  *
@@ -70,6 +67,12 @@ function cssVariable(name: string): string {
 // palettes, and a registered theme may be replaced by a new object with the
 // same name.
 const styleCache = new WeakMap<Theme, ResolvedThemeStyles>();
+
+// Multi-theme tokens with the same token id share styles for their theme set.
+const htmlStyleCache = new WeakMap<
+  ResolvedTheme[],
+  Map<string, Record<string, string>[]>
+>();
 
 /**
  * Resolve a Zed theme or family to styles for JavaScript rendering.
@@ -181,123 +184,6 @@ export function resolveOptionThemes(
   ];
 }
 
-/**
- * Split `(end, tokenId)` records into per-line style runs.
- *
- * A positive `maxLineLength` matches Shiki's `tokenizeMaxLineLength`: lines at
- * or above the limit become one unthemed run to avoid creating too many spans.
- */
-export function splitRecordLines(
-  code: string,
-  recs: Uint32Array,
-  count: number,
-  resume?: { byte: number; char: number },
-  maxLineLength?: number
-): StyleRun[][] {
-  const lines: StyleRun[][] = [];
-  let line: StyleRun[] = [];
-  let byte = resume?.byte ?? 0;
-  let char = resume?.char ?? 0;
-  // Start of the line being built; resume positions are line starts.
-  let lineStart = char;
-  const max = maxLineLength ?? 0;
-  // Finish the pending line at endChar, excluding its terminator.
-  const endLine = (endChar: number) => {
-    lines.push(
-      max > 0 && endChar - lineStart >= max ? [[lineStart, endChar, 0]] : line
-    );
-    line = [];
-  };
-  // Records are sorted by end; binary-search the first end greater than `byte`.
-  let rec = 0;
-  if (byte > 0) {
-    let lo = 0;
-    let hi = count;
-    while (lo < hi) {
-      const mid = (lo + hi) >> 1;
-      if (recs[mid * 2] > byte) hi = mid;
-      else lo = mid + 1;
-    }
-    rec = lo;
-  }
-  const ascii = isAscii(code, byte, char, recs, count);
-  // The resume point includes any multibyte prefix. Its byte-to-UTF-16 delta
-  // converts record byte ends to string offsets.
-  const charDelta = char - byte;
-  for (; rec < count; rec++) {
-    const bEnd = recs[rec * 2];
-    if (bEnd <= byte) continue;
-    const hl = recs[rec * 2 + 1];
-    let cEnd;
-    if (ascii) {
-      cEnd = bEnd + charDelta;
-    } else {
-      cEnd = char;
-      let b = byte;
-      while (b < bEnd) {
-        const cp = code.codePointAt(cEnd) ?? 0;
-        if (cp <= 0x7f) b += 1;
-        else if (cp <= 0x7ff) b += 2;
-        else if (cp <= 0xffff) b += 3;
-        else b += 4;
-        cEnd += cp > 0xffff ? 2 : 1;
-      }
-    }
-    // Split records that cross line endings.
-    let start = char;
-    for (;;) {
-      const nl = code.indexOf('\n', start);
-      if (nl === -1 || nl >= cEnd) break;
-      let cut = nl;
-      if (cut > start && code.charCodeAt(cut - 1) === 13) cut--;
-      if (cut > start) line.push([start, cut, hl]);
-      endLine(cut);
-      lineStart = nl + 1;
-      start = nl + 1;
-    }
-    if (cEnd > start) line.push([start, cEnd, hl]);
-    byte = bEnd;
-    char = cEnd;
-  }
-  endLine(char);
-  return lines;
-}
-
-/**
- * Check the remaining range for ASCII in O(1).
- *
- * The final record ends at the input byte length. Equal remaining byte and
- * UTF-16 lengths mean the offsets also match, so no character walk is needed.
- */
-function isAscii(
-  code: string,
-  byte: number,
-  char: number,
-  recs: Uint32Array,
-  count: number
-): boolean {
-  if (count === 0) return true;
-  return recs[(count - 1) * 2] - byte === code.length - char;
-}
-
-/**
- * Convert a `[start, end, tokenId]` run to a Shiki `ThemedToken`.
- *
- * `theme` uses `color` and `fontStyle`. `themes` uses an `htmlStyle` map: plain
- * `color`/`font-style`/`font-weight` for the `defaultColor` theme and
- * `${cssVariablePrefix}${themeColor}` custom properties for the rest, like
- * Shiki's dual-theme output.
- */
-export function runToToken(
-  code: string,
-  run: StyleRun,
-  themes: ResolvedTheme[],
-  cssVariablePrefix: string
-): ThemedToken {
-  const [start, end, hl] = run;
-  return rangeToToken(code, start, end, hl, themes, cssVariablePrefix);
-}
-
 /** Convert an offset range and token id to a Shiki `ThemedToken`. */
 export function rangeToToken(
   code: string,
@@ -320,27 +206,44 @@ export function rangeToToken(
     if (style?.italic === true) bits |= 1;
     if ((style?.weight ?? 0) >= 600) bits |= 2;
     token.fontStyle = bits;
-  } else if (themes[0].role === 'light-dark') {
-    token.htmlStyle = lightDarkStyle(themes, hl, cssVariablePrefix);
   } else {
-    const htmlStyle: Record<string, string> = {};
-    for (const { color, role, styles, fg } of themes) {
-      const style = styles[hl];
-      // the default theme is applied inline; the others are custom
-      // properties the page switches between
-      const plain = role === 'default';
-      htmlStyle[plain ? 'color' : cssVariablePrefix + color] =
-        style?.color ?? fg ?? 'inherit';
-      if (style?.italic === true) {
-        htmlStyle[
-          plain ? 'font-style' : `${cssVariablePrefix}${color}-font-style`
-        ] = 'italic';
+    let prefixes = htmlStyleCache.get(themes);
+    if (prefixes === undefined) {
+      prefixes = new Map();
+      htmlStyleCache.set(themes, prefixes);
+    }
+    let slots = prefixes.get(cssVariablePrefix);
+    if (slots === undefined) {
+      slots = [];
+      prefixes.set(cssVariablePrefix, slots);
+    }
+    let htmlStyle = slots[hl];
+    if (htmlStyle === undefined) {
+      htmlStyle =
+        themes[0].role === 'light-dark'
+          ? lightDarkStyle(themes, hl, cssVariablePrefix)
+          : {};
+      if (themes[0].role !== 'light-dark') {
+        for (const { color, role, styles, fg } of themes) {
+          const style = styles[hl];
+          // The default theme is applied inline; the others are custom
+          // properties the page switches between.
+          const plain = role === 'default';
+          htmlStyle[plain ? 'color' : cssVariablePrefix + color] =
+            style?.color ?? fg ?? 'inherit';
+          if (style?.italic === true) {
+            htmlStyle[
+              plain ? 'font-style' : `${cssVariablePrefix}${color}-font-style`
+            ] = 'italic';
+          }
+          if (style != null && style.weight !== 0) {
+            htmlStyle[
+              plain ? 'font-weight' : `${cssVariablePrefix}${color}-font-weight`
+            ] = String(style.weight);
+          }
+        }
       }
-      if (style != null && style.weight !== 0) {
-        htmlStyle[
-          plain ? 'font-weight' : `${cssVariablePrefix}${color}-font-weight`
-        ] = String(style.weight);
-      }
+      slots[hl] = htmlStyle;
     }
     token.htmlStyle = htmlStyle;
   }

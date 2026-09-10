@@ -374,7 +374,6 @@ const LABEL_OVERRIDES: Record<string, string> = {
   SSR_USAGE_CLIENT: 'Client Component',
   THEMING_REGISTER_THEME: 'Registering Custom Themes',
   THEMING_USE_IN_COMPONENT: 'Using Custom Themes in Components',
-  WORKER_POOL_USAGE: 'Basic Usage',
 };
 
 const LABEL_PREFIXES_TO_STRIP = [

@@ -55,6 +55,9 @@
     "warning": "#cca700ff",
     "info": "#3794ffff",
     "hint": "#969696ff",
+    "terminal.ansi.green": "#86B42B",
+    "terminal.ansi.red": "#C4265E",
+    "terminal.ansi.blue": "#6A7EC8",
     "syntax": {
       "comment": {
         "color": "#88846fff"

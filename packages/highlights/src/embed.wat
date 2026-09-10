@@ -26,24 +26,34 @@
     (global.set $streamReset (local.get $reset))
     (global.set $end (local.get $to))
     (global.set $ptr (local.get $from))
-    (if (i32.eq (local.get $kind) (i32.const 1))
-      (then (call $hlJsStream (local.get $reset)))
-      (else
-        (if (i32.eq (local.get $kind) (i32.const 2))
-          (then (call $hlCss))
-          (else
-            (if (i32.eq (local.get $kind) (i32.const 4))
-              (then
-                ;; a block scalar left open by the previous chunk is a
-                ;; yaml-owned mode that the top-level resume only checks
-                ;; for yaml documents; resume it inside the range first
-                (if
-                  (i32.and
-                    (i32.eqz (local.get $reset))
-                    (i32.eq (global.get $streamMode) (i32.const 11)))
-                  (then (drop (call $yamlStreamResume))))
-                (call $hlYaml))
-              (else (call $hlTsxStream (local.get $reset))))))))
+    (block $bodyDone
+      ;; CSS and YAML use the common comment/string modes. Resume them only
+      ;; after the region end is installed; ECMAScript owns its own machine.
+      (if
+        (i32.and
+          (i32.eqz (local.get $reset))
+          (i32.or
+            (i32.eq (local.get $kind) (i32.const 2))
+            (i32.eq (local.get $kind) (i32.const 4))))
+        (then (br_if $bodyDone (call $streamResumeCommon))))
+      (if (i32.eq (local.get $kind) (i32.const 1))
+        (then (call $hlJsStream (local.get $reset)))
+        (else
+          (if (i32.eq (local.get $kind) (i32.const 2))
+            (then (call $hlCss))
+            (else
+              (if (i32.eq (local.get $kind) (i32.const 4))
+                (then
+                  ;; a block scalar left open by the previous chunk is a
+                  ;; yaml-owned mode that the top-level resume only checks
+                  ;; for yaml documents; resume it inside the range first
+                  (if
+                    (i32.and
+                      (i32.eqz (local.get $reset))
+                      (i32.eq (global.get $streamMode) (i32.const 11)))
+                    (then (drop (call $yamlStreamResume))))
+                  (call $hlYaml))
+                (else (call $hlTsxStream (local.get $reset)))))))))
     (global.set $end (local.get $saveEnd))
     (global.set $ptr (local.get $to))
     (global.set $streamReset (local.get $saveReset))

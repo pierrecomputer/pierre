@@ -12,6 +12,9 @@
         "cursor": "#E6E6E6"
       }
     ],
+    "created": "#ECB22E",
+    "deleted": "#FFF",
+    "modified": "#ECB22E",
     "syntax": {
       "attribute": {
         "color": "#9cdcfe"

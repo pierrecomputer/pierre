@@ -1212,10 +1212,7 @@ const fullHTML: string = instance.renderFullHTML(result);
 // Or render just the code lines to HTML
 const partialHTML: string = instance.renderPartialHTML(
   instance.renderCode(result).content
-);
-
-// Or get the complete HTML
-const fullHTML = instance.renderFullHTML(result);`,
+);`,
   },
   options,
 };

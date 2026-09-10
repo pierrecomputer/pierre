@@ -3,7 +3,7 @@ import {
   DEFAULT_THEMES,
   DEFAULT_TOKENIZE_MAX_LENGTH,
 } from '../constants';
-import type { TextDocument } from '../editor/textDocument';
+import type { TextDocument, TextDocumentChange } from '../editor/textDocument';
 import type { CodeHighlighter } from '../highlighter/code_highlighter';
 import {
   areHighlighterThemesReady,
@@ -58,9 +58,9 @@ import {
 } from '../utils/includesFileAnnotations';
 import { isDefaultRenderRange } from '../utils/isDefaultRenderRange';
 import { isFilePlainText } from '../utils/isFilePlainText';
+import { realignTokenLines } from '../utils/realignTokenLines';
 import { renderFileWithHighlighter } from '../utils/renderFileWithHighlighter';
 import { renderTokenLines } from '../utils/renderTokenLines';
-import { updateTokenOffsets } from '../utils/updateTokenOffsets';
 import type { WorkerPoolManager } from '../worker';
 
 type AnnotationLineMap<LAnnotation> = Record<
@@ -127,7 +127,7 @@ export class FileRenderer<LAnnotation = undefined> {
   // The registered highlighter `this.highlighter` and the render caches were
   // resolved against; a later `setHighlighter` call is detected by comparing
   // against the current registration.
-  private highlighterRegistration: CodeHighlighter = getCodeHighlighter();
+  private highlighterRegistration: CodeHighlighter;
   // The latest file requested by the component. The render cache may
   // intentionally keep displaying an older highlighted file while this one
   // is highlighted in the background.
@@ -142,6 +142,7 @@ export class FileRenderer<LAnnotation = undefined> {
   private lineAnnotations: AnnotationLineMap<LAnnotation> = {};
   private lineCache: LineCache | undefined;
   private pendingStructuralTokens: Map<number, ThemedToken[]> | undefined;
+  private pendingLineChanges: TextDocumentChange['changedLineChanges'];
   private textDocumentCache = new WeakMap<
     FileContents,
     TextDocument<'file', LAnnotation>
@@ -164,8 +165,10 @@ export class FileRenderer<LAnnotation = undefined> {
       annotation: LineAnnotation<LAnnotation>
     ) => string = getLineAnnotationName,
     private onRenderUpdate?: () => unknown,
-    private workerManager?: WorkerPoolManager | undefined
+    private workerManager?: WorkerPoolManager | undefined,
+    private readonly highlighterOverride?: CodeHighlighter
   ) {
+    this.highlighterRegistration = highlighterOverride ?? getCodeHighlighter();
     if (workerManager?.isWorkingPool() !== true) {
       this.highlighter = getHighlighterIfReady(
         options.theme ?? DEFAULT_THEMES,
@@ -326,7 +329,7 @@ export class FileRenderer<LAnnotation = undefined> {
     // captured; the registration change applies on the first render after
     // the session ends (the snapshot below stays stale until then).
     if (this.editSessionActive) return;
-    const registered = getCodeHighlighter();
+    const registered = this.highlighterOverride ?? getCodeHighlighter();
     if (registered === this.highlighterRegistration) return;
     this.highlighterRegistration = registered;
     this.highlighter = undefined;
@@ -334,7 +337,8 @@ export class FileRenderer<LAnnotation = undefined> {
     this.clearRenderCache();
     if (this.workerManager?.isWorkingPool() !== true) {
       this.highlighter = getHighlighterIfReady(
-        this.options.theme ?? DEFAULT_THEMES
+        this.options.theme ?? DEFAULT_THEMES,
+        registered
       );
     }
   }
@@ -343,7 +347,7 @@ export class FileRenderer<LAnnotation = undefined> {
   public getCodeHighlighter(): CodeHighlighter {
     return this.editSessionActive
       ? this.highlighterRegistration
-      : getCodeHighlighter();
+      : (this.highlighterOverride ?? getCodeHighlighter());
   }
 
   // Whether a setHighlighter call since the last render pass is still
@@ -353,12 +357,13 @@ export class FileRenderer<LAnnotation = undefined> {
   public hasPendingHighlighterChange(): boolean {
     return (
       !this.editSessionActive &&
-      getCodeHighlighter() !== this.highlighterRegistration
+      this.getCodeHighlighter() !== this.highlighterRegistration
     );
   }
 
   public clearRenderCache(): void {
     this.pendingStructuralTokens = undefined;
+    this.pendingLineChanges = undefined;
     this.renderCache = undefined;
     this.pendingHighlightResult = undefined;
   }
@@ -547,9 +552,11 @@ export class FileRenderer<LAnnotation = undefined> {
   public updateRenderCache(
     dirtyLines: Map<number, Array<HighlightedToken>>,
     themeType: 'dark' | 'light',
-    lineCountChangeInFlight = false
+    lineCountChangeInFlight = false,
+    lineChanges?: TextDocumentChange['changedLineChanges']
   ): void {
     this.pendingStructuralTokens = undefined;
+    this.pendingLineChanges = lineCountChangeInFlight ? lineChanges : undefined;
     const { renderCache } = this;
     if (renderCache == null) {
       return;
@@ -601,16 +608,16 @@ export class FileRenderer<LAnnotation = undefined> {
     if (pendingStructuralTokens == null && lineCache != null) {
       file.contents = lineCache.lines.join('');
       lineCache.sourceContents = file.contents;
-      updateTokenOffsets(result.code, lineCache.lines);
     }
   }
 
-  // normally triggered by the host when the document line count changes
+  // Triggered when edits insert or remove lines, including net-zero batches.
   public applyDocumentChange(
     textDocument: TextDocument<'file', LAnnotation>
   ): void {
-    const { pendingStructuralTokens, renderCache } = this;
+    const { pendingStructuralTokens, pendingLineChanges, renderCache } = this;
     this.pendingStructuralTokens = undefined;
+    this.pendingLineChanges = undefined;
     if (renderCache == null) {
       return;
     }
@@ -622,63 +629,19 @@ export class FileRenderer<LAnnotation = undefined> {
     if (result == null) {
       return undefined;
     }
-    // Structural edits realign cached tokens. Keep the unchanged prefix
-    // and suffix, and plain-fill only the window that still needs tokenizing.
     const previousLines =
       this.lineCache != null && isLineCacheForFile(this.lineCache, file)
         ? this.lineCache.lines
         : linesFromFileContents(file.contents);
     const nextLines = linesFromFileContents(textDocument.getText());
-    if (previousLines.length !== nextLines.length) {
-      const maxShared = Math.min(previousLines.length, nextLines.length);
-      let prefix = 0;
-      while (
-        prefix < maxShared &&
-        previousLines[prefix] === nextLines[prefix]
-      ) {
-        prefix++;
-      }
-      let suffix = 0;
-      while (
-        suffix < maxShared - prefix &&
-        previousLines[previousLines.length - 1 - suffix] ===
-          nextLines[nextLines.length - 1 - suffix]
-      ) {
-        suffix++;
-      }
-
-      const previousCode = result.code;
-      result.code = new Array(nextLines.length);
-      for (let i = 0; i < prefix; i++) {
-        result.code[i] = previousCode[i];
-      }
-      for (let i = 0; i < suffix; i++) {
-        result.code[nextLines.length - 1 - i] =
-          previousCode[previousLines.length - 1 - i];
-      }
-      if (pendingStructuralTokens !== undefined) {
-        for (const [line, row] of pendingStructuralTokens) {
-          if (line < nextLines.length) {
-            result.code[line] = row;
-          }
-        }
-      }
-      for (let i = prefix; i < nextLines.length - suffix; i++) {
-        const content = textDocument.getLineText(i);
-        result.code[i] ??=
-          content === ''
-            ? []
-            : [
-                {
-                  offset: 0,
-                  content,
-                  htmlAttrs: { 'data-char': '0' },
-                },
-              ];
-      }
-      renderCache.isDirty = true;
-    }
-    updateTokenOffsets(result.code, nextLines);
+    result.code = realignTokenLines(
+      previousLines,
+      nextLines,
+      result.code,
+      pendingLineChanges,
+      pendingStructuralTokens
+    );
+    renderCache.isDirty = true;
     // Replace the old split-line cache with the authoritative edited document.
     this.lineCache = {
       cacheKey: file.cacheKey,

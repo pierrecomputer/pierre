@@ -1,4 +1,6 @@
 import type { Theme } from '../lib/index';
+import { resolveThemeSyntax } from '../lib/theme';
+import tokenTypes from '../lib/token-types';
 import andromeedaJson from './andromeeda.json' with { type: 'json' };
 import auroraXJson from './aurora-x.json' with { type: 'json' };
 import ayuDarkJson from './ayu-dark.json' with { type: 'json' };
@@ -94,13 +96,14 @@ export function toCSS({ style }: Theme): string {
   if (foreground) {
     css += `--hls-foreground: ${foreground};`;
   }
-  if (style.syntax != null) {
-    for (const [name, value] of Object.entries(style.syntax)) {
-      const color = typeof value === 'string' ? value : value.color;
-      if (color) {
-        css += `--hls-${name.replace(/[._]/g, '-')}: ${color};`;
-      }
-    }
+  const syntax = style.syntax ?? {};
+  for (const name of new Set([
+    ...Object.keys(syntax),
+    ...tokenTypes.slice(1, -2),
+  ])) {
+    const color =
+      resolveThemeSyntax(syntax, name)?.color ?? foreground ?? 'inherit';
+    css += `--hls-${name.replace(/[._]/g, '-')}: ${color};`;
   }
   return css;
 }

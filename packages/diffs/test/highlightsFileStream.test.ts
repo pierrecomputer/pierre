@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
+import { afterAll, beforeAll, describe, expect, spyOn, test } from 'bun:test';
 
 import { FileStream } from '../src/components/FileStream';
 import type { CodeHighlighter } from '../src/highlighter/code_highlighter';
@@ -83,6 +83,71 @@ async function streamToText(chunks: string[]): Promise<{
 }
 
 describe('FileStream with the highlights highlighter', () => {
+  test.each(['cleanup', 'source error'] as const)(
+    '%s releases the tokenizer and cancels a pending coalesce timer',
+    async (reason) => {
+      let pushes = 0;
+      let ends = 0;
+      let writes = 0;
+      let firstWrite: (() => void) | undefined;
+      const written = new Promise<void>((resolve) => {
+        firstWrite = resolve;
+      });
+      const wrapped: CodeHighlighter = {
+        ...highlightsHighlighter,
+        StreamTokenizer: class extends highlightsHighlighter.StreamTokenizer {
+          override pushCode(code: string) {
+            pushes++;
+            return super.pushCode(code);
+          }
+          override end() {
+            ends++;
+            return super.end();
+          }
+        },
+      };
+      setHighlighter(wrapped);
+      const wrapper = document.createElement('div');
+      document.body.appendChild(wrapper);
+      let controller: ReadableStreamDefaultController<string> | undefined;
+      const source = new ReadableStream<string>({
+        start(value) {
+          controller = value;
+        },
+      });
+      const stream = new FileStream({
+        lang: 'typescript',
+        theme: 'pierre-dark',
+        onStreamWrite() {
+          writes++;
+          firstWrite?.();
+        },
+      });
+      const errors = spyOn(console, 'error').mockImplementation(() => {});
+      try {
+        await stream.setup(source, wrapper);
+        controller!.enqueue('const a = 1;\n');
+        await written;
+        controller!.enqueue('const b = 2;\npartial');
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        expect(pushes).toBe(1);
+        if (reason === 'cleanup') stream.cleanUp();
+        else controller!.error(new Error('source failed'));
+        const delivered = writes;
+        await new Promise((resolve) => setTimeout(resolve, 40));
+        expect(ends).toBe(1);
+        expect(pushes).toBe(1);
+        expect(writes).toBe(delivered);
+      } finally {
+        stream.cleanUp();
+        errors.mockRestore();
+        setHighlighter(highlightsHighlighter);
+        wrapper.remove();
+      }
+      expect(ends).toBe(1);
+    }
+  );
+
   test('a coalesced line flushes on the timer when the source pauses', async () => {
     const wrapper = document.createElement('div');
     document.body.appendChild(wrapper);

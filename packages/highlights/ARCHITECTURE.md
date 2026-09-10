@@ -107,7 +107,7 @@ padding. Case-insensitive lookups lowercase ASCII 16 bytes at a time.
 [] page 1         (control, static data, and scratch)
   [0]             language id (u8)
   [1]             output mode (u8): 0 inline colors, 1 CSS variables,
-                  2 byte-end records, 3 UTF-16 line records
+                  3 UTF-16 line records
   [2:6)           input length (u32 LE)
   [6:10)          output start (u32 LE)
   [10:14)         output length (u32 LE)
@@ -202,12 +202,12 @@ output and the open span.
 - `$emitGap(lhs, rhs)` copies whitespace or leading UTF-8 continuation bytes
   directly without changing the span, letting equal styles merge across gaps.
   Callers must exclude HTML specials (`& < >`); other text uses `$emitTok`.
-- In mode 2 both write `(endByte: u32, hl: u32)` records instead (`$recTok`): a
-  record's start is the previous record's end, so the records tile the input;
-  same-`hl` neighbors and gaps extend the previous record, the analog of span
-  merging. Offsets are relative to the input start, and the JS glue resolves
-  colors, so no theme table is written.
-- Mode 3 first emits the same byte records to preserve lexer emission order. At
+- In token mode both initially write `(endByte: u32, hl: u32)` records instead
+  (`$recTok`): a record's start is the previous record's end, so the records
+  tile the input; same-`hl` neighbors and gaps extend the previous record, the
+  analog of span merging. Offsets are relative to the input start, and the JS
+  glue resolves colors, so no theme table is written.
+- Mode 3 converts these byte records while preserving lexer emission order. At
   `$hlEnd`, a post-pass scans the covered input once and emits
   `(endUtf16: u32, hl: u32)` records. Token id `0xffffffff` marks a line ending
   and includes its LF or CRLF terminator. JavaScript can then build each line's

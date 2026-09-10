@@ -57,6 +57,19 @@ exported from `@pierre/diffs`. Notes on the highlights highlighter:
 - Edit mode tokenizes through highlights's incremental `LiveTokenizer` instead
   of the TextMate incremental tokenizer.
 
+For server rendering, pass `highlighter` to `preloadFile` to select it for one
+request without changing the process-wide registration:
+
+```ts
+import { preloadFile } from '@pierre/diffs/ssr';
+
+const result = await preloadFile({ file, highlighter: highlightsHighlighter });
+```
+
+The `@pierre/highlights` peer is optional and only needed when importing
+`@pierre/diffs/highlights`. Unknown highlights theme names reject during
+loading; register a custom theme before using its name.
+
 [shiki]: https://shiki.style
 [highlights]: ../highlights/README.md
 

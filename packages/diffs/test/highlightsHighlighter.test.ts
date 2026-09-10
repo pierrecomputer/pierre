@@ -10,7 +10,9 @@ import {
 } from '../src/highlighter/resolve_highlighter';
 import { preloadHighlighter } from '../src/highlighter/resolve_highlighter';
 import { shikiHighlighter } from '../src/highlighter/shiki_highlighter';
-import highlightsHighlighter from '../src/highlights';
+import highlightsHighlighter, {
+  registerHighlightsTheme,
+} from '../src/highlights';
 import { DiffHunksRenderer } from '../src/renderers/DiffHunksRenderer';
 import { FileRenderer } from '../src/renderers/FileRenderer';
 import { preloadFile } from '../src/ssr/preloadFile';
@@ -134,6 +136,43 @@ describe('registration races', () => {
     });
     expect(loads).toHaveLength(1);
   });
+
+  test('concurrent server preloads keep their requested highlighters', async () => {
+    setHighlighter(shikiHighlighter);
+    const baseline = await preloadFile({ file, options: fileOptions });
+    let resolveLoad: (() => void) | undefined;
+    let renders = 0;
+    let ready = false;
+    const scoped: CodeHighlighter = {
+      ...highlightsHighlighter,
+      isReady: () => ready,
+      load: () =>
+        new Promise<void>((resolve) => {
+          resolveLoad = () => {
+            ready = true;
+            resolve();
+          };
+        }),
+      codeToTokens(code, options) {
+        renders++;
+        return highlightsHighlighter.codeToTokens(code, options);
+      },
+    };
+    const pending = preloadFile({
+      file,
+      options: fileOptions,
+      highlighter: scoped,
+    });
+    expect(getCodeHighlighter()).toBe(shikiHighlighter);
+    const concurrent = await preloadFile({ file, options: fileOptions });
+    expect(concurrent.prerenderedHTML).toBe(baseline.prerenderedHTML);
+    expect(resolveLoad).toBeDefined();
+    resolveLoad!();
+    const result = await pending;
+    expect(renders).toBe(1);
+    expect(result.prerenderedHTML).toContain('--diffs-token-dark:#ff678d');
+    expect(getCodeHighlighter()).toBe(shikiHighlighter);
+  });
 });
 
 describe('highlights highlighter', () => {
@@ -186,6 +225,47 @@ describe('highlights highlighter', () => {
     expect(
       highlightsHighlighter.getTheme('pierre-dark-vibrant').colors
     ).toEqual(colors);
+  });
+
+  test('unknown theme names reject until a theme is registered', async () => {
+    const options = { langs: [], themes: ['missing-review-theme'] };
+    const error = await Promise.resolve(
+      highlightsHighlighter.load(options)
+    ).then(
+      () => undefined,
+      (error: unknown) => error
+    );
+    expect(error).toMatchObject({
+      message: expect.stringContaining('no theme loader registered'),
+    });
+    expect(highlightsHighlighter.isReady(options)).toBe(false);
+    expect(() =>
+      highlightsHighlighter.getTheme('missing-review-theme')
+    ).toThrow('not loaded');
+    registerHighlightsTheme('missing-review-theme', oneDarkPro);
+    await highlightsHighlighter.load(options);
+    expect(highlightsHighlighter.isReady(options)).toBe(true);
+  });
+
+  test('git decoration colors reach single and dual theme diff styles', async () => {
+    await highlightsHighlighter.load({ langs: [], themes: ['github-dark'] });
+    const { themeStyles } = renderFileWithHighlighter(
+      file,
+      highlightsHighlighter,
+      {
+        ...fileOptions,
+        theme: 'github-dark',
+      }
+    );
+    expect(themeStyles).toContain('--diffs-addition-color:#34d058;');
+    expect(themeStyles).toContain('--diffs-deletion-color:#ea4a5a;');
+    const dual = renderFileWithHighlighter(
+      file,
+      highlightsHighlighter,
+      fileOptions
+    );
+    expect(dual.themeStyles).toContain('--diffs-dark-addition-color:#07c480;');
+    expect(dual.themeStyles).toContain('--diffs-light-deletion-color:#d52c36;');
   });
 
   test('renderFileWithHighlighter renders highlights tokens per line', () => {

@@ -10,6 +10,12 @@
     "players": [],
     "warning": "#fbe557",
     "hint": "#7d8590",
+    "created": "#3fb950",
+    "deleted": "#f85149",
+    "modified": "#d29922",
+    "terminal.ansi.green": "#3fb950",
+    "terminal.ansi.red": "#ff7b72",
+    "terminal.ansi.blue": "#58a6ff",
     "syntax": {
       "boolean": {
         "color": "#79c0ff"

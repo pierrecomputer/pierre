@@ -1,4 +1,3 @@
-import type { ThemedToken as HighlightsThemedToken } from '@pierre/highlights';
 import type { CreatePatchOptionsNonabortable } from 'diff';
 import type {
   BundledLanguage,
@@ -66,8 +65,10 @@ export type HighlighterTypes = 'shiki-js' | 'shiki-wasm';
 
 export type HighlightedToken = [char: number, fg: string, text: string];
 
-/** Tokens produced by either supported highlighter. */
-export type ThemedToken = ShikiThemedToken | HighlightsThemedToken;
+/** Shared token shape; custom highlighters may supply additional font flags. */
+export type ThemedToken = Omit<ShikiThemedToken, 'fontStyle'> & {
+  fontStyle?: number;
+};
 
 export type {
   BundledLanguage,
@@ -746,16 +747,20 @@ export type AnnotationLineMap<LAnnotation> = Record<
 export type ExpansionDirections = 'up' | 'down' | 'both';
 
 export interface ThemedFileResult {
-  /** Tokens by document line, with absolute UTF-16 offsets; windows may be sparse. */
+  /**
+   * Tokens by document line; windows may be sparse. Full renders use absolute
+   * UTF-16 offsets. Edited caches may contain line-relative offsets; rendering
+   * derives each token's column from its content.
+   */
   code: ThemedToken[][];
   themeStyles: string;
   baseThemeType: 'light' | 'dark' | undefined;
 }
 
 export interface RenderDiffFilesResult {
-  /** Tokens by old-file line, with UTF-16 offsets into the stored deletion text. */
+  /** Old-file tokens; full renders use absolute offsets, edited caches may not. */
   deletionLines: ThemedToken[][];
-  /** Tokens by new-file line, with UTF-16 offsets into the stored addition text. */
+  /** New-file tokens; rendering derives columns from content, not offsets. */
   additionLines: ThemedToken[][];
 }
 

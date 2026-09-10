@@ -54,6 +54,7 @@ export class FileStream {
   private highlighter: RenderersHighlighter | undefined;
   private stream: ReadableStream<string> | undefined;
   private abortController: AbortController | undefined;
+  private disposeTokenStream: (() => void) | undefined;
   private fileContainer: HTMLElement | undefined;
   private pre: HTMLPreElement | undefined;
   private code: HTMLElement | undefined;
@@ -71,6 +72,9 @@ export class FileStream {
     dequeueRender(this.render);
     this.abortController?.abort();
     this.abortController = undefined;
+    this.disposeTokenStream?.();
+    this.disposeTokenStream = undefined;
+    this.queuedTokens.length = 0;
   }
 
   setThemeType(themeType: ThemeTypes): void {
@@ -172,16 +176,22 @@ export class FileStream {
     this.currentLineElement = undefined;
     this.currentLineIndex = this.options.startingLineIndex ?? 1;
     this.abortController?.abort();
+    this.disposeTokenStream?.();
     this.abortController = new AbortController();
     const { onStreamStart, onStreamClose, onStreamAbort } = this.options;
     // Cancel the prior source so upstream producers stop generating tokens.
     // Swallow AbortError / locked-stream rejections since we're tearing down.
     this.stream?.cancel().catch(() => {});
     this.stream = stream;
+    const { stream: tokenStream, dispose } = this.createTokenStream(
+      highlighter,
+      theme
+    );
+    this.disposeTokenStream = dispose;
     this.stream
       // tokenizeTimeLimit: 0 — never trade silently-wrong token colors for
       // latency; see renderFileWithHighlighter for the full rationale.
-      .pipeThrough(this.createTokenStream(highlighter, theme))
+      .pipeThrough(tokenStream)
       .pipeTo(
         new WritableStream({
           start(controller) {
@@ -202,6 +212,12 @@ export class FileStream {
         if (error.name !== 'AbortError') {
           console.error('FileStream pipe error:', error);
         }
+      })
+      .finally(() => {
+        dispose?.();
+        if (this.disposeTokenStream === dispose) {
+          this.disposeTokenStream = undefined;
+        }
       });
   }
 
@@ -211,7 +227,10 @@ export class FileStream {
   private createTokenStream(
     highlighter: RenderersHighlighter,
     theme: DiffsThemeNames | ThemesType
-  ): TransformStream<string, ThemedToken | RecallToken> {
+  ): {
+    stream: TransformStream<string, ThemedToken | RecallToken>;
+    dispose?: () => void;
+  } {
     // Derive the tokenizer from the highlighter this stream captured during
     // setup, not the mutable registration: a setHighlighter call in between
     // must not pair one implementation's theme CSS with another's tokens.
@@ -230,6 +249,18 @@ export class FileStream {
       let pending = '';
       let lastPushTime = 0;
       let coalesceTimer: ReturnType<typeof setTimeout> | undefined;
+      let ended = false;
+      // Release the tokenizer and scheduled work on close, abort, or error.
+      const end = () => {
+        if (coalesceTimer !== undefined) {
+          clearTimeout(coalesceTimer);
+          coalesceTimer = undefined;
+        }
+        pending = '';
+        if (ended) return [];
+        ended = true;
+        return tokenizer.end();
+      };
       const enqueueCompletedLines = (
         controller: TransformStreamDefaultController<ThemedToken>
       ) => {
@@ -248,8 +279,9 @@ export class FileStream {
           controller.enqueue({ content: '\n', offset: 0 });
         }
       };
-      return new TransformStream<string, ThemedToken>({
+      const stream = new TransformStream<string, ThemedToken>({
         transform(chunk, controller) {
+          if (ended) return;
           pending += chunk;
           if (!pending.includes('\n')) {
             return;
@@ -268,8 +300,9 @@ export class FileStream {
                 if (pending.includes('\n')) {
                   enqueueCompletedLines(controller);
                 }
-              } catch {
-                // the stream was closed or errored since scheduling
+              } catch (error) {
+                controller.error(error);
+                end();
               }
             }, STREAM_COALESCE_MS - elapsed);
             return;
@@ -284,7 +317,7 @@ export class FileStream {
           if (pending !== '') {
             enqueueCompletedLines(controller);
           }
-          const lines = tokenizer.end();
+          const lines = end();
           lines.forEach((line, index) => {
             for (const token of line) {
               controller.enqueue(token);
@@ -295,12 +328,20 @@ export class FileStream {
           });
         },
       });
+      return {
+        stream,
+        dispose: () => {
+          end();
+        },
+      };
     }
-    return new CodeToTokenTransformStream({
-      ...options,
-      highlighter: highlighter as DiffsHighlighter,
-      allowRecalls: true,
-    });
+    return {
+      stream: new CodeToTokenTransformStream({
+        ...options,
+        highlighter: highlighter as DiffsHighlighter,
+        allowRecalls: true,
+      }),
+    };
   }
 
   private queuedTokens: (ThemedToken | RecallToken)[] = [];

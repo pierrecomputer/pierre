@@ -50,6 +50,11 @@
     "warning": "#e6e373ff",
     "info": "#73ece5ff",
     "hint": "#6272a4ff",
+    "deleted": "#FF5555",
+    "modified": "#8BE9FD",
+    "terminal.ansi.green": "#50FA7B",
+    "terminal.ansi.red": "#FF5555",
+    "terminal.ansi.blue": "#BD93F9",
     "syntax": {
       "attribute": {
         "color": "#8be9fdff"

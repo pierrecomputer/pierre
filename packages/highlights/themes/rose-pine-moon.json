@@ -39,6 +39,12 @@
     "warning": "#f6c177",
     "info": "#3e8fb0",
     "hint": "#908caa",
+    "created": "#9ccfd8",
+    "deleted": "#908caa",
+    "modified": "#ea9a97",
+    "terminal.ansi.green": "#3e8fb0",
+    "terminal.ansi.red": "#eb6f92",
+    "terminal.ansi.blue": "#9ccfd8",
     "syntax": {
       "attribute": {
         "color": "#c4a7e7"

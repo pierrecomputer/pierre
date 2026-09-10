@@ -13,6 +13,12 @@
         "selection": "#009fff4d"
       }
     ],
+    "created": "#07c480",
+    "deleted": "#ff2e3f",
+    "modified": "#009fff",
+    "terminal.ansi.green": "#0dbe4e",
+    "terminal.ansi.red": "#ff2e3f",
+    "terminal.ansi.blue": "#009fff",
     "syntax": {
       "comment": {
         "color": "#737373"

@@ -1,4 +1,5 @@
 import type { FileOptions } from '../components/File';
+import type { CodeHighlighter } from '../highlighter/code_highlighter';
 import { FileRenderer } from '../renderers/FileRenderer';
 import type { FileContents, LineAnnotation } from '../types';
 import {
@@ -10,6 +11,8 @@ import { shouldUseTokenTransformer } from '../utils/shouldUseTokenTransformer';
 import { renderHTML } from './renderHTML';
 
 export type PreloadFileOptions<LAnnotation, Caret> = {
+  /** Highlighter for this server render, independent of the global registration. */
+  highlighter?: CodeHighlighter;
   file: FileContents;
   options?: FileOptions<LAnnotation, Caret>;
   annotations?: LineAnnotation<LAnnotation>[];
@@ -23,20 +26,27 @@ export interface PreloadedFileResult<LAnnotation, Caret> {
 }
 
 export async function preloadFile<LAnnotation = undefined, Caret = undefined>({
+  highlighter,
   file,
   options,
   annotations,
 }: PreloadFileOptions<LAnnotation, Caret>): Promise<
   PreloadedFileResult<LAnnotation, Caret>
 > {
-  const fileRenderer = new FileRenderer<LAnnotation>({
-    ...options,
-    // Match the client's option snapshot: token callbacks imply the
-    // transformer, so server markup hydrates into identical client renders.
-    useTokenTransformer: shouldUseTokenTransformer(options),
-    headerRenderMode:
-      options?.renderCustomHeader != null ? 'custom' : 'default',
-  });
+  const fileRenderer = new FileRenderer<LAnnotation>(
+    {
+      ...options,
+      // Match the client's option snapshot: token callbacks imply the
+      // transformer, so server markup hydrates into identical client renders.
+      useTokenTransformer: shouldUseTokenTransformer(options),
+      headerRenderMode:
+        options?.renderCustomHeader != null ? 'custom' : 'default',
+    },
+    undefined,
+    undefined,
+    undefined,
+    highlighter
+  );
 
   // Set line annotations if provided
   if (annotations !== undefined && annotations.length > 0) {

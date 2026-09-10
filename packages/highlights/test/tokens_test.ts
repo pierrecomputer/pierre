@@ -1,33 +1,36 @@
 import assert from 'node:assert';
 import t from 'node:test';
 
-import { LANGS } from '../lib/highlighter';
+import { HighlightsHighlighter, LANGS } from '../lib/highlighter';
 import type { CodeToTokensOptions, Theme, ThemedToken } from '../lib/index';
 import { codeToHtml, codeToTokens, init, StreamTokenizer } from '../lib/index';
-import {
-  resolveOptionThemes,
-  runToToken,
-  splitRecordLines,
-} from '../lib/tokens';
+import { rangeToToken, resolveOptionThemes } from '../lib/tokens';
 import { transformWat, wat2wasm } from '../scripts/build';
 import { cssVariables } from '../themes/index';
 import pierreDark from '../themes/pierre-dark.json' with { type: 'json' };
 import pierreLight from '../themes/pierre-light.json' with { type: 'json' };
+import { splitRecordLines, tokenizeRecords } from './_records';
 import { makeRand, themeColor } from './_util';
 
-/** `init` returns the full internal class; parity tests reach its record APIs. */
-interface InternalHighlighter {
-  tokenizeRecords(langId: number, inputLength: number): Uint32Array;
-  writeInput(input: string | Uint8Array | ArrayBuffer): number;
-}
-
-let highlighter: InternalHighlighter;
+let highlighter: HighlightsHighlighter;
 t.before(() => {
-  const url = new URL('../src/highlights.wat', import.meta.url);
-  const { code } = transformWat(url);
-  highlighter = init(
-    new WebAssembly.Module(wat2wasm(url.pathname, code))
-  ) as unknown as InternalHighlighter;
+  const url = new URL('./byte_records.wat', import.meta.url);
+  const { code } = transformWat(
+    url,
+    `(module
+    (import "../src/highlights.wat")
+    (func (export "highlightByteRecords")
+      (global.set $srcBase (i32.const 65536))
+      (global.set $streaming (i32.const 0))
+      (global.set $streamDepth (i32.const 0))
+      (call $sigReset)
+      (call $hlBegin)
+      (call $highlightLang (i32.load8_u (i32.const 0)))
+      (i32.store (i32.const 10) (i32.sub (global.get $out) (i32.load (i32.const 6))))))`
+  );
+  const wasmModule = new WebAssembly.Module(wat2wasm(url.pathname, code));
+  highlighter = new HighlightsHighlighter(wasmModule);
+  init(wasmModule);
 });
 
 /** join a line's token contents back together */
@@ -98,13 +101,14 @@ const langIds = {
   tsx: LANGS.tsx,
 };
 
-/** Run the previous mode-2 host splitter as a parity baseline. */
+/** Run the host byte-record splitter as an independent parity baseline. */
 function hostRuns(
   code: string,
   lang: keyof typeof langIds,
   maxLineLength?: number
 ) {
-  const recs = highlighter.tokenizeRecords(
+  const recs = tokenizeRecords(
+    highlighter,
     langIds[lang],
     highlighter.writeInput(code)
   );
@@ -124,7 +128,7 @@ function hostTokens(
 ) {
   const themes = resolveOptionThemes({ lang, theme: pierreDark });
   return hostRuns(code, lang, maxLineLength).map((runs) =>
-    runs.map((run) => runToToken(code, run, themes, '--shiki-'))
+    runs.map((run) => rangeToToken(code, ...run, themes, '--shiki-'))
   );
 }
 
@@ -217,7 +221,7 @@ void t.test('codeToTokens: token records tile every input (fuzz)', () => {
       assert.deepEqual(
         tokens,
         expectedRuns.map((runs) =>
-          runs.map((run) => runToToken(input, run, themes, '--shiki-'))
+          runs.map((run) => rangeToToken(input, ...run, themes, '--shiki-'))
         ),
         `${lang}: wasm lines differ for ${JSON.stringify(input)}`
       );
@@ -420,3 +424,49 @@ void t.test('codeToTokens: defaultColor applies one theme inline', () => {
   assert.equal(bare.rootStyle, undefined);
   assert.equal(bare.themeName, 'bare');
 });
+
+void t.test(
+  'multi-theme tokens reuse styles by token id without mixing options',
+  () => {
+    const code = 'const a = 1; const b = 2;';
+    for (const defaultColor of [false, 'light', 'light-dark()'] as const) {
+      for (const prefix of ['--one-', '--two-']) {
+        const result = codeToTokens(code, {
+          lang: 'ts',
+          themes: { light: pierreLight, dark: pierreDark },
+          defaultColor,
+          cssVariablePrefix: prefix,
+        });
+        const keywords = result.tokens[0].filter((token) =>
+          token.content.startsWith('const')
+        );
+        assert.equal(keywords.length, 2);
+        assert.equal(keywords[0].htmlStyle, keywords[1].htmlStyle);
+        if (defaultColor === false) {
+          assert.equal(
+            keywords[0].htmlStyle?.[`${prefix}dark`],
+            themeColor('keyword.declaration', pierreDark)
+          );
+          assert.equal(
+            keywords[0].htmlStyle?.[`${prefix}light`],
+            themeColor('keyword.declaration', pierreLight)
+          );
+        }
+      }
+    }
+  }
+);
+
+void t.test(
+  'codeToTokens preserves BOM content and offsets for byte input',
+  () => {
+    const code = '\ufeffconst x = 1;\n\ufefflet y = 2;';
+    const options = { lang: 'ts', theme: pierreDark } as const;
+    const bytes = new TextEncoder().encode(code);
+    const expected = codeToTokens(code, options);
+    assert.deepEqual(codeToTokens(bytes, options), expected);
+    assert.deepEqual(codeToTokens(bytes.buffer, options), expected);
+    assert.equal(lineText(expected.tokens[0]), code.split('\n')[0]);
+    assert.equal(expected.tokens[1][0].offset, code.indexOf('\n') + 1);
+  }
+);

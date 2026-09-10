@@ -12,6 +12,11 @@
     "warning": "#E2931D70",
     "info": "#6182B870",
     "hint": "#969696ff",
+    "deleted": "#E5393590",
+    "modified": "#6182B890",
+    "terminal.ansi.green": "#91B859",
+    "terminal.ansi.red": "#E53935",
+    "terminal.ansi.blue": "#6182B8",
     "syntax": {
       "attribute": {
         "color": "#9C3EDA"

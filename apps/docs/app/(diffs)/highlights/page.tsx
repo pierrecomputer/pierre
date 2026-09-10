@@ -1,10 +1,9 @@
-import { setHighlighter, shikiHighlighter } from '@pierre/diffs';
 import { highlightsHighlighter } from '@pierre/diffs/highlights';
 import { preloadFile } from '@pierre/diffs/ssr';
+import highlightsPackageJson from '@pierre/highlights/package.json';
 import { IconBolt, IconCodeBlock, IconPencil } from '@pierre/icons';
 import type { Metadata } from 'next';
 
-import highlightsPackageJson from '../../../../../packages/highlights/package.json';
 import { HighlightsHero } from './HighlightsHero';
 import { HighlightsPlayground } from './HighlightsPlayground';
 import { PLAYGROUND_LANGUAGES } from './languageExamples';
@@ -24,15 +23,15 @@ export const metadata: Metadata = pageMetadata({
 
 export default async function HighlightsPage() {
   const [lang, , contents] = PLAYGROUND_LANGUAGES[0];
-  setHighlighter(highlightsHighlighter);
   const playground = await preloadFile({
+    highlighter: highlightsHighlighter,
     file: { name: `source.${lang}`, contents, lang },
     options: {
       theme: { dark: 'pierre-dark', light: 'pierre-light' },
       themeType: 'system',
       useTokenTransformer: true,
     },
-  }).finally(() => setHighlighter(shikiHighlighter));
+  });
 
   return (
     <div className="mx-auto min-h-screen max-w-5xl px-5 xl:max-w-[80rem]">

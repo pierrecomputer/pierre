@@ -15,6 +15,12 @@
         "selection": "#AED4FB"
       }
     ],
+    "created": "#ECB22E",
+    "deleted": "#FFF",
+    "modified": "#ECB22E",
+    "terminal.ansi.green": "#91b859",
+    "terminal.ansi.red": "#e53935",
+    "terminal.ansi.blue": "#6182b8",
     "syntax": {
       "attribute": {
         "color": "#df8618",

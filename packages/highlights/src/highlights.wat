@@ -4,7 +4,7 @@
     [] page 1         (control, static data, and scratch)
       [0]             language id (u8)
       [1]             output mode (u8): 0 inline colors, 1 CSS variables,
-                      2 byte-end records, 3 UTF-16 line records
+                      3 UTF-16 line records
       [2:6)           input length (u32 LE)
       [6:10)          output start (u32 LE)
       [10:14)         output length (u32 LE)
@@ -309,6 +309,12 @@
           (then (return)))
         (call $highlightLang (local.get $lang))
         (return)))
+    ;; Embedded regions bound their own open comments and strings before any
+    ;; shared mode resumes, so a closer cannot be consumed by the body lexer.
+    (if (global.get $streamRegionKind)
+      (then
+        (if (call $streamResumeLang (local.get $lang))
+          (then (return)))))
     (if (call $streamResumeCommon)
       (then (return)))
     (if (call $streamResumeLang (local.get $lang))

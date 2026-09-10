@@ -12,7 +12,7 @@ import type { ResolvedTheme } from './tokens';
 import { lineRecordsToTokens, resolveOptionThemes, themeMeta } from './tokens';
 
 const enc = new TextEncoder();
-const dec = new TextDecoder();
+const dec = new TextDecoder('utf-8', { ignoreBOM: true });
 const pageSize = 65536;
 const themePtr = 64; // $mem.themeTable in src/memory.wat
 const themeBytes = 384; // 73 five-byte records, padded for SIMD comparisons
@@ -39,6 +39,8 @@ export const LANGS: Record<string, number> = {
   bash: 4,
   sh: 4,
   shell: 4,
+  shellscript: 4,
+  shellsession: 4,
   zsh: 4,
   c: 5,
   h: 5,
@@ -62,6 +64,8 @@ export const LANGS: Record<string, number> = {
   css: 11,
   dart: 12,
   diff: 13,
+  'git-commit': 13,
+  'git-rebase': 13,
   patch: 13,
   containerfile: 14,
   docker: 14,
@@ -290,7 +294,7 @@ export class HighlightsHighlighter implements Highlighter {
 
   /**
    * Run the lexer over the first `inputLength` bytes: 0 inline colors, 1 CSS
-   * variables, 2 byte-end records, or 3 UTF-16 line records.
+   * variables, or 3 UTF-16 line records.
    * Returns a `Uint8Array` view of Wasm memory, valid until the next call.
    */
   #run(langId: number, mode: number, inputLength: number): Uint8Array {
@@ -343,16 +347,6 @@ export class HighlightsHighlighter implements Highlighter {
       this.#themeWritten = themeTable;
     }
     return this.#run(langId, useCssVariables ? 1 : 0, inputLength);
-  }
-
-  /**
-   * Tokenize the first `inputLength` buffered bytes into `(end, tokenId)` pairs
-   * that tile the input. The `Uint32Array` view expires on the next call.
-   * No theme table is written; JavaScript resolves the colors.
-   */
-  tokenizeRecords(langId: number, inputLength: number): Uint32Array {
-    const out = this.#run(langId, 2, inputLength);
-    return new Uint32Array(out.buffer, out.byteOffset, out.length >> 2);
   }
 
   /** Tokenize one stream chunk to line records while preserving lexer state. */

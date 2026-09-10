@@ -5,7 +5,7 @@ import {
   DEFAULT_THEMES,
   DEFAULT_TOKENIZE_MAX_LENGTH,
 } from '../constants';
-import type { TextDocument } from '../editor/textDocument';
+import type { TextDocument, TextDocumentChange } from '../editor/textDocument';
 import type { CodeHighlighter } from '../highlighter/code_highlighter';
 import {
   areHighlighterThemesReady,
@@ -89,6 +89,7 @@ import { isDiffPlainText } from '../utils/isDiffPlainText';
 import type { DiffLineMetadata } from '../utils/iterateOverDiff';
 import { iterateOverDiff } from '../utils/iterateOverDiff';
 import { computeLineDiffDecorations } from '../utils/parseDiffDecorations';
+import { realignTokenLines } from '../utils/realignTokenLines';
 import { renderDiffWithHighlighter } from '../utils/renderDiffWithHighlighter';
 import { renderTokenLines } from '../utils/renderTokenLines';
 import {
@@ -98,7 +99,6 @@ import {
   shouldTopAlignAdditionRecompute,
   updateDiffHunks,
 } from '../utils/updateDiffHunks';
-import { updateTokenOffsets } from '../utils/updateTokenOffsets';
 import { getTrailingContextRangeSize } from '../utils/virtualDiffLayout';
 import type { WorkerPoolManager } from '../worker';
 
@@ -291,6 +291,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
   // Newly highlighted rows from a line-count edit wait here until the old row
   // cache has been shifted to match the document's new line indexes.
   private pendingStructuralTokens: Map<number, ThemedToken[]> | undefined;
+  private pendingLineChanges: TextDocumentChange['changedLineChanges'];
 
   // Edit-session state: while active, hunk updates go through the frozen
   // region skeleton (editSessionHunks) instead of the full recompute, and
@@ -549,6 +550,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     this.renderCache = undefined;
     this.pendingHighlightResult = undefined;
     this.pendingStructuralTokens = undefined;
+    this.pendingLineChanges = undefined;
   }
 
   public setOptions(options: DiffHunksRendererOptions): void {
@@ -632,9 +634,11 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
   public updateRenderCache(
     dirtyLines: Map<number, Array<HighlightedToken>>,
     themeType: 'dark' | 'light',
-    lineCountChangeInFlight = false
+    lineCountChangeInFlight = false,
+    lineChanges?: TextDocumentChange['changedLineChanges']
   ): boolean {
     this.pendingStructuralTokens = undefined;
+    this.pendingLineChanges = lineCountChangeInFlight ? lineChanges : undefined;
     const { renderCache } = this;
     if (renderCache == null) {
       return false;
@@ -729,9 +733,6 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       }
     }
 
-    if (pendingStructuralTokens == null) {
-      updateTokenOffsets(highlightedLines, diff.additionLines);
-    }
     result.baseThemeType = themeType;
     renderCache.isDirty = true;
     return regionsChanged;
@@ -746,12 +747,13 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     }
   }
 
-  // Normally triggered by the host when the document line count changes.
+  // Triggered when edits insert or remove lines, including net-zero batches.
   public applyDocumentChange(
     textDocument: TextDocument<'file-diff', LAnnotation>
   ): void {
-    const { pendingStructuralTokens, renderCache } = this;
+    const { pendingStructuralTokens, pendingLineChanges, renderCache } = this;
     this.pendingStructuralTokens = undefined;
+    this.pendingLineChanges = undefined;
     if (renderCache == null) {
       return;
     }
@@ -769,11 +771,12 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     // editable empty row after a trailing line break.
     const { additionLines: previousAdditionLines } = diff;
     diff.additionLines = getEditorDocumentLines(textDocument);
-    result.code.additionLines = realignAdditionLines(
+    result.code.additionLines = realignTokenLines(
       previousAdditionLines,
       diff.additionLines,
       result.code.additionLines,
-      textDocument
+      pendingLineChanges,
+      pendingStructuralTokens
     );
     // An empty document splits into zero addition lines, which would recompute
     // to a diff with no editable rows and leave the attached host with no
@@ -796,15 +799,6 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       );
     }
 
-    if (pendingStructuralTokens != null) {
-      for (const [line, row] of pendingStructuralTokens) {
-        if (line < result.code.additionLines.length) {
-          result.code.additionLines[line] = row;
-        }
-      }
-    }
-
-    updateTokenOffsets(result.code.additionLines, diff.additionLines);
     renderCache.isDirty = true;
   }
 
@@ -2565,78 +2559,6 @@ function withContentProperties(
       ...contentProperties,
     },
   };
-}
-
-// Number of entries in a split-line array that hold document content. A
-// document ending in a line break is represented two ways during a session:
-// the parsed-diff shape (`splitFileContents`) has no entry for the empty line
-// that final break implies, while the editor-document shape
-// (`getEditorDocumentLines`) exposes it as a trailing `''` entry. Only that
-// representational tail is ever `''` — every other entry keeps its line break
-// or is the raw final line — so trimming it yields comparable content lines.
-function contentLineCount(lines: string[]): number {
-  return lines.length > 0 && lines[lines.length - 1] === ''
-    ? lines.length - 1
-    : lines.length;
-}
-
-// Realigns the cached per-line addition token array with an edited document.
-// Cached entries are looked up by line index, so a line inserted or removed
-// mid-document must shift the surviving entries to their new indexes —
-// otherwise rows hidden during the edit (collapsed context) render another
-// line's stale tokens once they become visible. Entries outside the changed
-// window keep their highlighted content; changed rows without fresh tokens
-// become plain-text tokens for the editor's next background pass.
-//
-// The bottom-up scan runs over content lines only: a session's first
-// line-count edit still has `previousLines` in the parsed-diff shape while
-// `nextLines` is editor-shaped, and comparing the raw tails would mismatch on
-// the representational trailing `''`, zero out the suffix, and plain-fill
-// every line below the tokenizer's render window.
-function realignAdditionLines<LAnnotation>(
-  previousLines: string[],
-  nextLines: string[],
-  highlightedLines: ThemedToken[][],
-  textDocument: TextDocument<'file-diff', LAnnotation>
-): ThemedToken[][] {
-  const previousContentLength = contentLineCount(previousLines);
-  const nextContentLength = contentLineCount(nextLines);
-  const maxShared = Math.min(previousContentLength, nextContentLength);
-  let prefix = 0;
-  while (prefix < maxShared && previousLines[prefix] === nextLines[prefix]) {
-    prefix++;
-  }
-  let suffix = 0;
-  while (
-    suffix < maxShared - prefix &&
-    previousLines[previousContentLength - 1 - suffix] ===
-      nextLines[nextContentLength - 1 - suffix]
-  ) {
-    suffix++;
-  }
-
-  const realigned: ThemedToken[][] = new Array(nextLines.length);
-  for (let index = 0; index < prefix; index++) {
-    realigned[index] = highlightedLines[index];
-  }
-  for (let offset = 0; offset < suffix; offset++) {
-    realigned[nextContentLength - 1 - offset] =
-      highlightedLines[previousContentLength - 1 - offset];
-  }
-  // A trailing empty entry present on both sides keeps its cached row.
-  if (
-    previousContentLength < previousLines.length &&
-    nextContentLength < nextLines.length
-  ) {
-    realigned[nextLines.length - 1] =
-      highlightedLines[previousLines.length - 1];
-  }
-  for (let index = prefix; index < nextLines.length; index++) {
-    realigned[index] ??= createPlainAdditionTokens(
-      textDocument.getLineText(index)
-    );
-  }
-  return realigned;
 }
 
 function createPlainAdditionTokens(lineText: string): ThemedToken[] {

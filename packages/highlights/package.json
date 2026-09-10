@@ -5,7 +5,6 @@
   "license": "apache-2.0",
   "files": [
     "dist/",
-    "themes/README.md",
     "themes/THIRD_PARTY_LICENSES.md"
   ],
   "type": "module",
@@ -28,7 +27,8 @@
       "types": "./dist/themes/*.d.ts",
       "import": "./dist/themes/*.js",
       "default": "./dist/themes/*.js"
-    }
+    },
+    "./package.json": "./package.json"
   },
   "scripts": {
     "prepublishOnly": "moon run highlights:prepublish"
@@ -42,7 +42,7 @@
     "wabt": "catalog:"
   },
   "meta": {
-    "highlights.wasm": 159556,
-    "highlights.wasm.gz": 70438
+    "highlights.wasm": 159593,
+    "highlights.wasm.gz": 70471
   }
 }

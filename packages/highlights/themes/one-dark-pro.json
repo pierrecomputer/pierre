@@ -54,6 +54,9 @@
     "error": "#c24038",
     "warning": "#d19a66",
     "hint": "#7a849c",
+    "terminal.ansi.green": "#8cc265",
+    "terminal.ansi.red": "#e05561",
+    "terminal.ansi.blue": "#4aa5f0",
     "syntax": {
       "comment": {
         "color": "#7F838C"

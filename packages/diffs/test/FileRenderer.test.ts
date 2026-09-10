@@ -77,6 +77,8 @@ describe('FileRenderer', () => {
     await instance.asyncRender(editSessionFile);
     instance.renderFile(editSessionFile);
     instance.updateRenderCache(new Map([[3, [[0, '#ff0000', 'D']]]]), 'light');
+    const retainedRow = (instance as unknown as FileRendererCacheProbe)
+      .renderCache!.result!.code[3];
 
     const dirtyLines = new Map<number, HighlightedToken[]>([
       [2, [[0, '', 'X']]],
@@ -93,9 +95,8 @@ describe('FileRenderer', () => {
       rows.map((line) => line.map((token) => token.content).join(''))
     ).toEqual(['A', 'B', 'X', 'C', 'D', '']);
     expect(rows[4][0].color).toBe('#ff0000');
-    expect(rows.slice(0, 5).map((line) => line[0].offset)).toEqual([
-      0, 2, 4, 6, 8,
-    ]);
+    expect(rows[4]).toBe(retainedRow);
+    expect(rows[4][0]).toBe(retainedRow[0]);
     expect(
       instance.renderFile(editSessionFile)?.contentRows.map((row) => {
         const props = rowProperties(row);
@@ -109,6 +110,32 @@ describe('FileRenderer', () => {
       [5, 4],
       [6, 5],
     ]);
+  });
+
+  test('length-changing edits preserve every unchanged cached token row', async () => {
+    const instance = new FileRenderer();
+    const file = {
+      name: 'editable.ts',
+      contents: 'const a = 1;\nconst b = 2;\nconst c = 3;',
+    };
+    instance.beginEditSession(file);
+    await instance.asyncRender(file);
+    instance.renderFile(file);
+    const cache = (instance as unknown as FileRendererCacheProbe).renderCache!;
+    const originalRows = cache.result!.code.slice();
+    instance.updateRenderCache(
+      new Map([[0, [[0, '#ff0000', 'const longer = 1;']]]]),
+      'light'
+    );
+    expect(cache.result!.code[0]).not.toBe(originalRows[0]);
+    for (let line = 1; line < originalRows.length; line++) {
+      expect(cache.result!.code[line]).toBe(originalRows[line]);
+      expect(cache.result!.code[line][0]).toBe(originalRows[line][0]);
+    }
+    expect(instance.renderFullHTML(instance.renderFile(file)!)).toContain(
+      'data-char="0"'
+    );
+    instance.cleanUp();
   });
 
   test('reuses editor-compatible markup for a retained edit session', async () => {

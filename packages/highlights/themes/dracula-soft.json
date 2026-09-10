@@ -15,6 +15,11 @@
         "selection": "#44475A"
       }
     ],
+    "deleted": "#ee6666",
+    "modified": "#97e1f1",
+    "terminal.ansi.green": "#62e884",
+    "terminal.ansi.red": "#ee6666",
+    "terminal.ansi.blue": "#bf9eee",
     "syntax": {
       "attribute": {
         "color": "#62e884",

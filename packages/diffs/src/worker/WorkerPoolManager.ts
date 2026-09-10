@@ -154,10 +154,10 @@ export class WorkerPoolManager {
       tokenizeMaxLineLength,
     };
     this.fileCache = new LRUMapPkg.LRUMap(
-      options.totalTokenLRUCacheSize ?? 100
+      options.totalTokenLRUCacheSize ?? options.totalASTLRUCacheSize ?? 100
     );
     this.diffCache = new LRUMapPkg.LRUMap(
-      options.totalTokenLRUCacheSize ?? 100
+      options.totalTokenLRUCacheSize ?? options.totalASTLRUCacheSize ?? 100
     );
     this.queueInitialization(langs);
   }
@@ -407,6 +407,9 @@ export class WorkerPoolManager {
   }
 
   public async initialize(languages: SupportedLanguages[] = []): Promise<void> {
+    // Custom highlighters render locally. Leave initialization pending so a
+    // later switch back to Shiki can initialize the pool on demand.
+    if (getCustomHighlighter() != null) return;
     if (this.initialized === true) {
       return;
     } else if (this.initialized === false) {
@@ -482,6 +485,7 @@ export class WorkerPoolManager {
         })();
       });
       this.queueBroadcastStateChanges();
+      return this.initialized;
     } else {
       return this.initialized;
     }

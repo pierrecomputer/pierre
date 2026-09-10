@@ -1285,11 +1285,18 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
             (m) => m.highlightsHighlighter
           )
         : Promise.resolve(shikiHighlighter);
-    void implementation.then((impl) => {
-      if (cancelled) return;
-      registerHighlighter(impl);
-      setActiveHighlighter(highlighter);
-    });
+    void implementation.then(
+      (impl) => {
+        if (cancelled) return;
+        registerHighlighter(impl);
+        setActiveHighlighter(highlighter);
+      },
+      () => {
+        if (cancelled) return;
+        setHighlighterChoice('shiki');
+        toast.error('Could not load the highlighter. Try again.');
+      }
+    );
     return () => {
       cancelled = true;
     };

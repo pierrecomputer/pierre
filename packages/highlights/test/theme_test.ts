@@ -276,3 +276,60 @@ void test('css variables: bypasses compilation and ignores theme styles', () => 
   assert.match(html, /color:var\(--hls-keyword-declaration\)/);
   assert.doesNotMatch(html, /#000000|font-style|font-weight/);
 });
+
+void test('short hex colors match their expanded RGB and RGBA forms', () => {
+  const palette = (
+    foreground: string,
+    background: string,
+    number: string
+  ): Theme => ({
+    name: 'short hex',
+    appearance: 'dark',
+    style: {
+      'editor.foreground': foreground,
+      'editor.background': background,
+      syntax: { number },
+    },
+  });
+  const short = palette('#FFF', '#1234', '#F008');
+  const long = palette('#FFFFFF', '#11223344', '#FF000088');
+  const code = '1 true';
+  assert.equal(json.hl(code, { theme: short }), json.hl(code, { theme: long }));
+  assert.match(json.hl(code, { theme: short }), /color:#ff000088/);
+  assert.match(
+    json.hl(code, { theme: short }),
+    /background-color:#11223344;color:#ffffff/
+  );
+});
+
+void test('toCSS resolves every token scope through its parents and foreground', () => {
+  for (const theme of [
+    pierreDark,
+    themes.vitesseDark,
+    {
+      name: 'inherited',
+      appearance: 'dark',
+      style: {
+        foreground: '#fff',
+        syntax: {
+          keyword: '#f00',
+          'keyword.declaration': { font_weight: 700 },
+          'keyword.control': '#0f0',
+        },
+      },
+    },
+  ]) {
+    const css = toCSS(theme);
+    for (const name of tokenTypes.slice(1, -2)) {
+      assert.ok(
+        css.includes(`--hls-${name.replace(/[._]/g, '-')}: `),
+        `${theme.name}: ${name}`
+      );
+    }
+    if (theme.name === 'inherited') {
+      assert.ok(css.includes('--hls-keyword-declaration: #f00;'));
+      assert.ok(css.includes('--hls-keyword-control: #0f0;'));
+      assert.ok(css.includes('--hls-variable: #fff;'));
+    }
+  }
+});

@@ -225,85 +225,6 @@ export function workerFactory() {
   options,
 };
 
-export const WORKER_POOL_USAGE: PreloadFileOptions<undefined, undefined> = {
-  file: {
-    name: 'example.ts',
-    contents: `import { createWorkerAPI } from './utils/createWorkerAPI';
-
-// Create worker pool with 8 workers
-const workerAPI = createWorkerAPI({
-  poolSize: 8,
-  initOptions: {
-    themes: ['pierre-dark', 'pierre-light'],
-    langs: ['typescript', 'javascript'],
-  },
-});
-
-// Initialize the pool (optional - auto-initializes on first use)
-await workerAPI.ensureInitialized();
-
-// Render a single file
-const file = {
-  name: 'example.ts',
-  contents: 'const x = 42;',
-};
-
-const result = await workerAPI.renderFileToHast(file, {
-  theme: 'pierre-dark',
-});
-
-console.log(result.lines); // Array of ElementContent
-
-// Render a diff from two files
-const oldFile = { name: 'example.ts', contents: 'const x = 1;' };
-const newFile = { name: 'example.ts', contents: 'const x = 2;' };
-
-const diffResult = await workerAPI.renderDiffToHast(oldFile, newFile, {
-  theme: { dark: 'pierre-dark', light: 'pierre-light' },
-});
-console.log(diffResult.oldLines, diffResult.newLines);
-
-// Check pool status
-console.log(workerAPI.getStats());
-// { totalWorkers: 8, busyWorkers: 0, queuedTasks: 0, pendingTasks: 0 }
-
-// Clean up when done
-workerAPI.terminate();`,
-  },
-  options,
-};
-
-export const WORKER_POOL_REACT_COMPONENT: PreloadFileOptions<
-  undefined,
-  undefined
-> = {
-  file: {
-    name: 'CodeView.tsx',
-    contents: `'use client';
-
-import { createWorkerAPI } from '@/utils/createWorkerAPI';
-import { useEffect, useState } from 'react';
-
-export function CodeView() {
-  const [workerAPI] = useState(() =>
-    createWorkerAPI({
-      poolSize: 8,
-      initOptions: {
-        themes: ['pierre-dark', 'pierre-light'],
-      },
-    })
-  );
-
-  useEffect(() => {
-    return () => workerAPI.terminate();
-  }, [workerAPI]);
-
-  // Use workerAPI.renderFileToHast() etc.
-}`,
-  },
-  options,
-};
-
 export const WORKER_POOL_REACT_USAGE: PreloadFileOptions<undefined, undefined> =
   {
     file: {
@@ -469,6 +390,7 @@ new WorkerPoolManager(poolOptions, highlighterOptions)
 //   - totalTokenLRUCacheSize?: number (default: 100) - Max items per cache
 //     (Two separate LRU caches are maintained: one for files, one for diffs.
 //      Each cache has this limit, so total cached items can be 2x this value.)
+//   - totalASTLRUCacheSize?: number - Deprecated alias; the new name takes precedence
 // - highlighterOptions: WorkerInitializationRenderOptions
 //   - theme?: DiffsThemeNames | ThemesType - Theme name or { dark, light } object
 //   - lineDiffType?: 'word' | 'word-alt' | 'char' - How to diff lines (default: 'word-alt')
@@ -479,7 +401,8 @@ new WorkerPoolManager(poolOptions, highlighterOptions)
 
 // Methods:
 poolManager.initialize()
-// Returns: Promise<void> - Initializes workers (auto-called on first render)
+// Returns: Promise<void> - Initializes Shiki workers; also called by the constructor
+// Initialization is deferred while a custom highlighter is registered.
 
 poolManager.isInitialized()
 // Returns: boolean

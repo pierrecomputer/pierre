@@ -1,10 +1,10 @@
 import type { Theme, ThemeSyntaxSettings } from './index';
 import tokenTypes from './token-types';
 
-const colorReg = /^#([a-f0-9]{6})([a-f0-9]{2})?$/i;
+const colorReg = /^#([a-f0-9]{3,4}|[a-f0-9]{6}|[a-f0-9]{8})$/i;
 
 /** Keep the nearest scope's font settings while finding an inherited color. */
-function resolve(
+export function resolveThemeSyntax(
   syntax: Record<string, string | ThemeSyntaxSettings>,
   name: string
 ): ThemeSyntaxSettings | undefined {
@@ -41,17 +41,19 @@ export function compileTheme(theme: Theme): Uint8Array {
       color = style['editor.background'] ?? style.background;
     else if (name === 'foreground') color = foreground;
     else {
-      ({ color, font_style, font_weight } = resolve(syntax, name) ?? {});
+      ({ color, font_style, font_weight } =
+        resolveThemeSyntax(syntax, name) ?? {});
       if (font_style != null || font_weight != null) color ??= foreground;
     }
     const o = i * 5;
     const m = typeof color === 'string' ? colorReg.exec(color.trim()) : null;
     if (m !== null) {
-      const rgb = parseInt(m[1], 16);
+      const hex = m[1].length <= 4 ? m[1].replace(/./g, '$&$&') : m[1];
+      const rgb = parseInt(hex.slice(0, 6), 16);
       bytes[o] = rgb >> 16;
       bytes[o + 1] = (rgb >> 8) & 0xff;
       bytes[o + 2] = rgb & 0xff;
-      bytes[o + 3] = m[2] !== undefined ? parseInt(m[2], 16) : 0xff;
+      bytes[o + 3] = hex.length === 8 ? parseInt(hex.slice(6), 16) : 0xff;
     }
     let s = font_style === 'italic' ? 0x10 : 0;
     if (font_weight !== undefined && font_weight >= 100 && font_weight <= 900)

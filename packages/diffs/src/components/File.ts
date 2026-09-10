@@ -11,7 +11,7 @@ import {
   UNSAFE_CSS_ATTRIBUTE,
 } from '../constants';
 import type { Editor } from '../editor/editor';
-import type { TextDocument } from '../editor/textDocument';
+import type { TextDocument, TextDocumentChange } from '../editor/textDocument';
 import type {
   EditCompletionDecision,
   EditorActiveLineOptions,
@@ -1052,6 +1052,7 @@ export class File<LAnnotation = undefined, Caret = undefined> {
     themeType: 'dark' | 'light',
     options?: {
       lineCountChangeInFlight?: boolean;
+      lineChanges?: TextDocumentChange['changedLineChanges'];
     }
   ): void {
     const editSessionFile = this.editSession?.file;
@@ -1064,7 +1065,8 @@ export class File<LAnnotation = undefined, Caret = undefined> {
     this.fileRenderer.updateRenderCache(
       dirtyLines,
       themeType,
-      options?.lineCountChangeInFlight
+      options?.lineCountChangeInFlight,
+      options?.lineChanges
     );
   }
 

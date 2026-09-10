@@ -101,15 +101,10 @@ void test(
         );
         assert.deepEqual(output[1], output[0], `${lang}: HTML`);
       }
-      for (const method of [
-        'tokenizeRecords',
-        'tokenizeLineRecords',
-      ] as const) {
-        const output = highlighters.map((hl) =>
-          hl[method](langIdOf(lang), hl.writeInput(code)).slice()
-        );
-        assert.deepEqual(output[1], output[0], `${lang}: ${method}`);
-      }
+      const output = highlighters.map((hl) =>
+        hl.tokenizeLineRecords(langIdOf(lang), hl.writeInput(code)).slice()
+      );
+      assert.deepEqual(output[1], output[0], `${lang}: tokenizeLineRecords`);
     }
   }
 );

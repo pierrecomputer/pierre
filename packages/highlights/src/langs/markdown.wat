@@ -311,6 +311,8 @@
             (i32.and (global.get $streaming) (local.get $resume))
             (i32.eqz (call $markdownFenceIsEcma (local.get $lang))))
           (then
+            (if (global.get $streamRegionKind)
+              (then (br_if $bodyDone (call $markdownFenceResumeLang (local.get $lang)))))
             (br_if $bodyDone (call $streamResumeCommon))
             (br_if $bodyDone (call $markdownFenceResumeLang (local.get $lang)))))
         (call $markdownFenceLexer (local.get $lang) (local.get $resume)))

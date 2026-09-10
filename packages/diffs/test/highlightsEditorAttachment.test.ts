@@ -7,8 +7,9 @@ import type { CodeHighlighter } from '../src/highlighter/code_highlighter';
 import { setHighlighter } from '../src/highlighter/code_highlighter';
 import { shikiHighlighter } from '../src/highlighter/shiki_highlighter';
 import highlightsHighlighter from '../src/highlights';
+import type { ThemedToken } from '../src/types';
 import { parseDiffFromFile } from '../src/utils/parseDiffFromFile';
-import { installDom, waitFor } from './domHarness';
+import { installDom, wait, waitFor } from './domHarness';
 
 let dom: ReturnType<typeof installDom>;
 
@@ -24,6 +25,113 @@ afterAll(() => {
   setHighlighter(shikiHighlighter);
   dom.cleanup();
 });
+
+for (const type of ['file', 'split', 'unified'] as const) {
+  test.each(['two insertions', 'balanced edits'])(
+    `${type}: %s retain cached text and highlighting through undo/redo`,
+    async (batch) => {
+      setHighlighter(highlightsHighlighter);
+      const initialLines = Array.from(
+        { length: 100 },
+        (_, i) => `const v${i} = ${i};`
+      );
+      const contents = initialLines.join('\n') + '\n';
+      const file = { name: 'batch.ts', contents };
+      const fileContainer = document.createElement('div');
+      document.body.appendChild(fileContainer);
+      const options = {
+        theme: 'pierre-dark' as const,
+        themeType: 'dark' as const,
+        disableFileHeader: true,
+      };
+      const instance =
+        type === 'file'
+          ? new File(options)
+          : new FileDiff({ ...options, diffStyle: type });
+      const editor = new Editor(type === 'file' ? 'file' : 'file-diff');
+      try {
+        const renderRange = {
+          startingLine: 50,
+          totalLines: 30,
+          bufferBefore: 0,
+          bufferAfter: 0,
+        };
+        if (instance instanceof File)
+          instance.render({ file, fileContainer, renderRange });
+        else
+          instance.render({
+            fileDiff: parseDiffFromFile({ ...file, contents: '' }, file),
+            fileContainer,
+            renderRange,
+          });
+        editor.edit(instance);
+        await waitFor(() => editor.getText() === contents);
+        await wait(30);
+        editor.applyEdits([
+          {
+            range: {
+              start: { line: 3, character: 0 },
+              end: { line: 3, character: 0 },
+            },
+            newText: 'let inserted = 1;\n',
+          },
+          {
+            range: {
+              start: { line: 90, character: 0 },
+              end: { line: batch === 'balanced edits' ? 91 : 90, character: 0 },
+            },
+            newText: batch === 'balanced edits' ? '' : 'let second = 2;\n',
+          },
+        ]);
+        const editedLines = [...initialLines];
+        if (batch === 'balanced edits') editedLines.splice(90, 1);
+        else editedLines.splice(90, 0, 'let second = 2;');
+        editedLines.splice(3, 0, 'let inserted = 1;');
+
+        for (const step of ['edit', 'undo', 'redo']) {
+          if (step === 'undo') editor.undo();
+          if (step === 'redo') editor.redo();
+          await wait(30);
+          const expected = [
+            ...(step === 'undo' ? initialLines : editedLines),
+            '',
+          ];
+          expect(editor.getText()).toBe(expected.join('\n'));
+          const rows =
+            instance instanceof File
+              ? (
+                  instance as unknown as {
+                    fileRenderer: {
+                      renderCache: { result: { code: ThemedToken[][] } };
+                    };
+                  }
+                ).fileRenderer.renderCache.result.code
+              : (
+                  instance as unknown as {
+                    hunksRenderer: {
+                      renderCache: {
+                        result: { code: { additionLines: ThemedToken[][] } };
+                      };
+                    };
+                  }
+                ).hunksRenderer.renderCache.result.code.additionLines;
+          expect(
+            rows.map((row) => row.map((token) => token.content).join(''))
+          ).toEqual(expected);
+          for (const row of rows.slice(0, -1)) {
+            expect(row.length).toBeGreaterThan(1);
+            expect(row[0].color).toBeDefined();
+          }
+        }
+      } finally {
+        editor.cleanUp();
+        instance.cleanUp();
+        fileContainer.remove();
+        setHighlighter(shikiHighlighter);
+      }
+    }
+  );
+}
 
 for (const type of ['file', 'file-diff'] as const) {
   test(`${type}: an active editor loads new themes on its captured highlighter`, async () => {

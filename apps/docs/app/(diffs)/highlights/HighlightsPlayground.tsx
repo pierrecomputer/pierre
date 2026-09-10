@@ -61,6 +61,7 @@ export function HighlightsPlayground({
     lang: DEFAULT_LANGUAGE,
   });
   const [isReady, setIsReady] = useState(false);
+  const [loadFailed, setLoadFailed] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -70,6 +71,9 @@ export function HighlightsPlayground({
         if (!active) return;
         setHighlighter(highlightsHighlighter);
         setIsReady(true);
+      },
+      () => {
+        if (active) setLoadFailed(true);
       }
     );
 
@@ -215,6 +219,11 @@ export function HighlightsPlayground({
         </Select>
       </div>
 
+      {loadFailed && (
+        <p role="alert" className="text-destructive text-sm">
+          The editor could not load. Reload this page to try again.
+        </p>
+      )}
       <File
         key={isReady ? file.lang : 'prerendered'}
         file={file}

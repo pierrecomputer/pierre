@@ -523,13 +523,13 @@
     (global.set $out (i32.add (global.get $out) (i32.const 13))))
 
   ;; driver prologue shared by highlights.wat and the per-language test harnesses:
-  ;; read the control block ([1]: 0 inline colors, 1 CSS variables, 2 byte-end
-  ;; token records, 3 UTF-16 line records), place the output, emit the wrapper
+  ;; read the control block ([1]: 0 inline colors, 1 CSS variables,
+  ;; 3 UTF-16 line records), place the output, emit the wrapper
   (func $hlBegin
     (local $offset i32)
     (local $changed v128)
     (global.set $cssVariables (i32.eq (i32.load8_u (i32.const 1)) (i32.const 1)))
-    (global.set $tokens (i32.ge_u (i32.load8_u (i32.const 1)) (i32.const 2)))
+    (global.set $tokens (i32.eq (i32.load8_u (i32.const 1)) (i32.const 3)))
     (global.set $eof (i32.add (global.get $srcBase) (i32.load (i32.const 2))))
     (global.set $end (global.get $eof))
     (global.set $ptr (global.get $srcBase))
@@ -573,7 +573,7 @@
   (func $hlEnd
     (if (i32.eqz (global.get $tokens))
       (then (call $epilogue)))
-    (if (i32.eq (i32.load8_u (i32.const 1)) (i32.const 3))
+    (if (global.get $tokens)
       (then (call $recLinesPost)))
     (i32.store (i32.const 10) (i32.sub (global.get $out) (i32.load (i32.const 6)))))
 )

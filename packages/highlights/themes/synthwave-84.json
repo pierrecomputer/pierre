@@ -55,6 +55,12 @@
     "warning": "#fede5d",
     "info": "#03edf9",
     "hint": "#03edf9",
+    "created": "#72f1b8cc",
+    "deleted": "#fe4450",
+    "modified": "#b893ceee",
+    "terminal.ansi.green": "#72f1b8",
+    "terminal.ansi.red": "#fe4450",
+    "terminal.ansi.blue": "#03edf9",
     "syntax": {
       "JSXAttribute": {
         "color": "#fede5d"

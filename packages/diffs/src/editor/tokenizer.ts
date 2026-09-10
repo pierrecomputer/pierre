@@ -11,6 +11,7 @@ import type {
   CodeHighlighter,
   CodeLiveTokenizer,
   CodeLiveTokenizerUpdate,
+  CodeTextEdit,
 } from '../highlighter/code_highlighter';
 import type { RenderersHighlighter } from '../highlighter/resolve_highlighter';
 import type {
@@ -1146,12 +1147,9 @@ export class HighlightsEditorTokenizer extends BaseEditorTokenizer {
   #highlighter: CodeHighlighter;
   #live: CodeLiveTokenizer | undefined;
   #liveLang: string | undefined;
-  #syncedRevision = 0;
-  // Deliveries flushed while a mutating call settles the previous batch:
-  // pre-batch line numbers, remapped once the batch's line changes are known.
-  #settleLines: Map<number, Array<HighlightedToken>> | undefined;
-  // Deliveries flushed during a mutating call AFTER its revision bump (the
-  // update's own off-range work): already post-batch line numbers.
+  // Synchronous off-range deliveries use the new document's line numbers.
+  // Structural edits return these with dirty rows so the host can realign
+  // its cache before applying them.
   #freshLines: Map<number, Array<HighlightedToken>> | undefined;
   #mutating = false;
   #stopped = false;
@@ -1195,60 +1193,51 @@ export class HighlightsEditorTokenizer extends BaseEditorTokenizer {
         ? lineCount
         : Math.min(startingLine + totalLines, lineCount);
 
+    let dirtyLines: Map<number, Array<HighlightedToken>>;
     if (this.#live == null || this.#liveLang !== this.textDocument.languageId) {
       // (Re)built from the already-edited document: the whole viewport is the
       // dirty set. Creation tokenizes only up to the viewport's end; the rest
       // converges through the fresh tokenizer's deferred slices.
-      this.#ensureLive([rangeStart, rangeEnd]);
-      const dirtyLines = new Map<number, Array<HighlightedToken>>();
+      this.#ensureLive([rangeStart, rangeEnd], true);
+      dirtyLines = new Map<number, Array<HighlightedToken>>();
       for (let line = rangeStart; line < rangeEnd; line++) {
         dirtyLines.set(line, this.#lineTokensAt(line));
       }
-      return dirtyLines;
+    } else {
+      const update = this.#applyChange(this.#live, change, [
+        rangeStart,
+        rangeEnd,
+      ]);
+      this.#remapIgnoredRanges(update);
+      if (this.#pausedLines !== undefined) {
+        this.#pausedLines = remapThroughLineChanges(this.#pausedLines, update);
+      }
+      dirtyLines = update.lines;
     }
 
-    const update = this.#applyChange(this.#live, change, [
-      rangeStart,
-      rangeEnd,
-    ]);
-    this.#remapIgnoredRanges(update);
-    if (this.#pausedLines !== undefined) {
-      this.#pausedLines = remapThroughLineChanges(this.#pausedLines, update);
-    }
-    const settled = this.#settleLines;
-    this.#settleLines = undefined;
-    if (settled !== undefined && settled.size > 0) {
-      // Convergence work from the previous batch that completed during this
-      // call's settle: still-valid lines shift to their new numbers and
-      // refresh the host cache like any deferred delivery.
-      const remapped = remapThroughLineChanges(settled, update);
-      for (const line of remapped.keys()) {
-        this.#ignoredRanges[line] = undefined;
-      }
-      if (remapped.size > 0) {
-        this.#deliver(remapped);
-      }
-    }
-    // The update's own off-range flush is already in post-batch coordinates;
-    // it goes out after the remapped settle lines so newer tokens win.
+    const structural =
+      change.lineDelta !== 0 ||
+      (change.changedLineChanges?.some(([, , delta]) => delta !== 0) ?? false);
     const fresh = this.#freshLines;
     this.#freshLines = undefined;
     if (fresh !== undefined && fresh.size > 0) {
       for (const line of fresh.keys()) {
         this.#ignoredRanges[line] = undefined;
       }
-      this.#deliver(fresh);
+      if (structural) {
+        for (const [line, tokens] of fresh) {
+          dirtyLines.set(line, tokens);
+        }
+      } else {
+        this.#deliver(fresh);
+      }
     }
-    const dirtyLines = update.lines;
     for (const line of dirtyLines.keys()) {
       this.#ignoredRanges[line] = undefined;
     }
     // Without host row realignment a structural edit shifts every row below
     // it under unmoved DOM, so the remainder of the viewport must repaint
     // even where tokens did not change.
-    const structural =
-      change.lineDelta !== 0 ||
-      (change.changedLineChanges?.some(([, , delta]) => delta !== 0) ?? false);
     if (structural && !hostRealignsRows) {
       const repaintStart = Math.max(rangeStart, change.startLine);
       for (let line = repaintStart; line < rangeEnd; line++) {
@@ -1348,7 +1337,8 @@ export class HighlightsEditorTokenizer extends BaseEditorTokenizer {
    * the document's full text when missing.
    */
   #ensureLive(
-    initialRenderRange?: readonly [number, number]
+    initialRenderRange?: readonly [number, number],
+    collectForTokenize = false
   ): CodeLiveTokenizer | undefined {
     const { textDocument } = this;
     if (this.#live != null && this.#liveLang === textDocument.languageId) {
@@ -1369,8 +1359,15 @@ export class HighlightsEditorTokenizer extends BaseEditorTokenizer {
     });
     this.#live = live;
     this.#liveLang = textDocument.languageId;
-    this.#syncedRevision = live.revision;
     this.#ignoredRanges = [];
+    // The constructor can finish lines above the initial viewport before the
+    // factory returns. Deliver only after assigning the live tokenizer so
+    // callbacks can safely read it or query bracket ranges.
+    if (!collectForTokenize && this.#freshLines !== undefined) {
+      const lines = this.#freshLines;
+      this.#freshLines = undefined;
+      this.#deliver(lines);
+    }
     return live;
   }
 
@@ -1378,7 +1375,6 @@ export class HighlightsEditorTokenizer extends BaseEditorTokenizer {
     this.#live?.dispose();
     this.#live = undefined;
     this.#liveLang = undefined;
-    this.#settleLines = undefined;
     this.#freshLines = undefined;
     this.#ignoredRanges = [];
   }
@@ -1393,10 +1389,25 @@ export class HighlightsEditorTokenizer extends BaseEditorTokenizer {
   ): CodeLiveTokenizerUpdate {
     let update: CodeLiveTokenizerUpdate | undefined;
     if (change.changes.length > 0) {
-      const edits = change.changes.map((edit) => ({
-        range: edit.range,
-        newText: edit.text,
-      }));
+      const edits: CodeTextEdit[] = [];
+      for (let index = 0; index < change.changes.length; index++) {
+        const edit = change.changes[index];
+        const previous = change.changes[index - 1];
+        // TextDocument preserves batch order for inserts at one position;
+        // combine them before passing its stricter live-tokenizer contract.
+        if (
+          previous?.start === edit.start &&
+          previous.end === edit.start &&
+          edit.end === edit.start
+        ) {
+          edits[edits.length - 1] = {
+            range: edit.range,
+            newText: edits[edits.length - 1].newText + edit.text,
+          };
+        } else {
+          edits.push({ range: edit.range, newText: edit.text });
+        }
+      }
       this.#mutating = true;
       try {
         update = live.applyEdits(edits, { renderRange });
@@ -1410,9 +1421,7 @@ export class HighlightsEditorTokenizer extends BaseEditorTokenizer {
       }
     }
     if (update === undefined) {
-      // Both buffers describe a document state the reset replaces: settle
-      // lines are pre-batch, fresh lines belong to the abandoned attempt.
-      this.#settleLines = undefined;
+      // Discard off-range tokens from an abandoned incremental attempt.
       this.#freshLines = undefined;
       this.#mutating = true;
       try {
@@ -1421,7 +1430,6 @@ export class HighlightsEditorTokenizer extends BaseEditorTokenizer {
         this.#mutating = false;
       }
     }
-    this.#syncedRevision = update.revision;
     return update;
   }
 
@@ -1442,29 +1450,14 @@ export class HighlightsEditorTokenizer extends BaseEditorTokenizer {
     if (this.isCleanedUp || this.#stopped) {
       return;
     }
-    if (this.#mutating) {
-      // The revision tells the two mutating-call delivery classes apart:
-      // settle work for the outgoing batch still carries the synced revision
-      // (pre-batch coordinates), while the in-progress update's off-range
-      // flush arrives after the bump (post-batch coordinates).
-      if (this.#live != null && this.#live.revision !== this.#syncedRevision) {
-        if (this.#freshLines === undefined) {
-          this.#freshLines = lines;
-        } else {
-          for (const [line, tokens] of lines) {
-            this.#freshLines.set(line, tokens);
-          }
-        }
-      } else if (this.#settleLines === undefined) {
-        this.#settleLines = lines;
+    if (this.#mutating || this.#live == null) {
+      if (this.#freshLines === undefined) {
+        this.#freshLines = lines;
       } else {
         for (const [line, tokens] of lines) {
-          this.#settleLines.set(line, tokens);
+          this.#freshLines.set(line, tokens);
         }
       }
-      return;
-    }
-    if (this.#live == null || this.#live.revision !== this.#syncedRevision) {
       return;
     }
     for (const line of lines.keys()) {
@@ -1543,7 +1536,9 @@ export function createEditorTokenizer(
       }
       return new ShikiEditorTokenizer({ ...props, highlighter: shiki });
     }
-    return new HighlightsEditorTokenizer({ ...props, highlighter });
+    throw new Error(
+      'createEditorTokenizer: the highlighter must provide createLiveTokenizer or getShikiInstance for edit mode'
+    );
   }
   return new ShikiEditorTokenizer({ ...props, highlighter });
 }
