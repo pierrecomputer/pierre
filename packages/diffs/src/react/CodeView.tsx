@@ -44,6 +44,7 @@ import {
 } from '../index';
 import { areManagedSnapshotsEqual } from '../utils/areManagedSnapshotsEqual';
 import { useCreateEditor } from './EditContext';
+import { assignRef } from './utils/assignRef';
 import { renderDiffChildren } from './utils/renderDiffChildren';
 import { renderFileChildren } from './utils/renderFileChildren';
 import { useStableCallback } from './utils/useStableCallback';
@@ -77,6 +78,13 @@ interface CodeViewBaseProps<LAnnotation, Caret> {
   getEditStateKey?(item: CodeViewItem<LAnnotation>): string | undefined;
   className?: string;
   style?: CSSProperties;
+  /**
+   * Ref to the scroll container element. A callback ref follows the React 18
+   * protocol: it is called with the element on mount and with `null` on
+   * unmount. A cleanup function returned from the callback (the React 19
+   * form) is ignored, so release resources on the `null` call or use a ref
+   * object.
+   */
   containerRef?: Ref<HTMLDivElement>;
   disableWorkerPool?: boolean;
   selectedLines?: CodeViewLineSelection | null;
@@ -369,11 +377,7 @@ function CodeViewInner<LAnnotation = undefined, Caret = undefined>(
       cachedDataRef.current.instance.setup(node);
     }
 
-    if (typeof containerRef === 'function') {
-      containerRef(node);
-    } else if (containerRef != null) {
-      containerRef.current = node;
-    }
+    assignRef(containerRef, node);
   });
 
   const onSnapshotChange = useStableCallback(

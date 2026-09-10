@@ -8,7 +8,6 @@ import {
   type ReactNode,
   useCallback,
   useEffect,
-  useMemo,
   useRef,
   useState,
 } from 'react';
@@ -18,7 +17,11 @@ import { DiffsHubSidebar } from './DiffsHubSidebar';
 import { DiffsHubStatusPanel } from './DiffsHubStatusPanel';
 import { DiffsHubViewer } from './DiffsHubViewer';
 import { ThemeSourceProvider } from './ThemeSourceProvider';
+import { useGitHubDiffFileLoader } from './useGitHubDiffFileLoader';
 import { useGitHubToken } from './useGitHubToken';
+import { useIsHydrated } from './useIsHydrated';
+import { useMediaQuery } from './useMediaQuery';
+import { useOnValueChange } from './useOnValueChange';
 import { usePatchLoader } from './usePatchLoader';
 import { useThemeCycle } from './useThemeCycle';
 import {
@@ -26,7 +29,6 @@ import {
   themeController,
 } from '@/components/themeController';
 import { preloadAvatars } from '@/lib/annotation';
-import { createGitHubDiffFileLoader } from '@/lib/githubDiffFileLoader';
 import { removeSavedCommentSidebarEntry } from '@/lib/removeSavedCommentSidebarEntry';
 import type { DarkThemeName, LightThemeName } from '@/lib/themeNames';
 import type {
@@ -36,6 +38,8 @@ import type {
   DiffsHubSavedCommentEvent,
 } from '@/lib/types';
 import { upsertSavedCommentSidebarEntry } from '@/lib/upsertSavedCommentSidebarEntry';
+
+const MOBILE_MEDIA_QUERY = '(max-width: 767px)';
 
 interface ReviewUIProps {
   domain?: string;
@@ -73,15 +77,13 @@ function ReviewUIInner({ domain, initialUrl, path }: ReviewUIProps) {
     token: githubToken,
     tokenVersion: githubTokenVersion,
   } = useGitHubToken();
-  const githubTokenRef = useRef(githubToken);
-  const githubTokenVersionRef = useRef(githubTokenVersion);
-  useEffect(() => {
-    githubTokenRef.current = githubToken;
-  }, [githubToken]);
-  useEffect(() => {
-    githubTokenVersionRef.current = githubTokenVersion;
-  }, [githubTokenVersion]);
-  const getGitHubToken = useCallback(() => githubTokenRef.current, []);
+  const { getGitHubToken, loadDiffFiles } = useGitHubDiffFileLoader({
+    domain,
+    hasGitHubToken,
+    path,
+    token: githubToken,
+    tokenVersion: githubTokenVersion,
+  });
   // All theming state — color mode and the light/dark theme-name picks — lives
   // in the single @pierre/theming controller (the same instance the app-wide
   // ThemeProvider is bound to). Reading it here means picking Auto/Light/Dark
@@ -93,14 +95,11 @@ function ReviewUIInner({ domain, initialUrl, path }: ReviewUIProps) {
   // on the client, so useSyncExternalStore would surface them on the very first
   // client render — but the server rendered the defaults. Gate every
   // theme-derived value (rendered into inline chrome styles + the CodeView
-  // themeType) behind a client-mounted flag so the first client render matches
+  // themeType) behind a hydration snapshot so the first client render matches
   // the SSR markup, then flips to the user's selection. This also keeps the
   // long-lived WorkerPool and the CodeView from mounting against the default
   // palette before the persisted values apply.
-  const [themesHydrated, setThemesHydrated] = useState(false);
-  useEffect(() => {
-    setThemesHydrated(true);
-  }, []);
+  const themesHydrated = useIsHydrated();
 
   const colorMode: ColorMode = themesHydrated ? themeState.mode : 'system';
   const appResolvedTheme = themesHydrated
@@ -138,16 +137,6 @@ function ReviewUIInner({ domain, initialUrl, path }: ReviewUIProps) {
   const viewerRef = useRef<CodeViewHandle<CommentMetadata, undefined> | null>(
     null
   );
-  const loadDiffFiles = useMemo(
-    () =>
-      domain == null && hasGitHubToken
-        ? createGitHubDiffFileLoader(path, {
-            getAuthVersion: () => githubTokenVersionRef.current,
-            getToken: () => githubTokenRef.current,
-          })
-        : undefined,
-    [domain, hasGitHubToken, path]
-  );
   const handlePatchLoadStart = useCallback(() => {
     setFileTreeOverlayOpen(false);
   }, []);
@@ -175,20 +164,26 @@ function ReviewUIInner({ domain, initialUrl, path }: ReviewUIProps) {
     viewerRef,
   });
 
-  useEffect(() => {
-    const mediaQuery = window.matchMedia('(max-width: 767px)');
-    const updateMobileState = (matches: boolean) => {
-      setDiffStyle(matches ? 'unified' : 'split');
-      if (!matches) setFileTreeOverlayOpen(false);
-    };
-    const handleChange = (event: MediaQueryListEvent) => {
-      updateMobileState(event.matches);
-    };
-
-    updateMobileState(mediaQuery.matches);
-    mediaQuery.addEventListener('change', handleChange);
-    return () => mediaQuery.removeEventListener('change', handleChange);
-  }, []);
+  // Crossing the mobile breakpoint picks the diff style for that width and
+  // closes the file-tree overlay when leaving mobile; the user can still change
+  // the style until the next crossing. Applied before the render commits, so
+  // the first client render already shows the right style. The comparison is
+  // seeded with `undefined`, the server snapshot: a hydrating render reports
+  // `undefined` first and then the real value, while a client-side mount
+  // reports the real value immediately, and both must count as a crossing.
+  const isMobileViewport = useMediaQuery(MOBILE_MEDIA_QUERY, undefined);
+  useOnValueChange(
+    isMobileViewport,
+    (isMobile) => {
+      if (isMobile != null) {
+        setDiffStyle(isMobile ? 'unified' : 'split');
+        if (!isMobile) {
+          setFileTreeOverlayOpen(false);
+        }
+      }
+    },
+    undefined
+  );
   const handleSelectTreeItem = useCallback((itemId: string) => {
     setFileTreeOverlayOpen(false);
     const viewer = viewerRef.current;

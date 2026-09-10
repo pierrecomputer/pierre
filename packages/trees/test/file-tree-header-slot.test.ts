@@ -38,7 +38,7 @@ describe('file-tree header slot', () => {
               const header = dom.window.document.createElement('button');
               header.dataset.testHeader = 'true';
               header.textContent = 'Header action';
-              return header as unknown as HTMLElement;
+              return header;
             },
           },
         },
@@ -131,7 +131,7 @@ describe('file-tree header slot', () => {
               const header = dom.window.document.createElement('div');
               header.dataset.testHydratedHeader = 'true';
               header.textContent = 'Hydrated header';
-              return header as unknown as HTMLElement;
+              return header;
             },
           },
         },

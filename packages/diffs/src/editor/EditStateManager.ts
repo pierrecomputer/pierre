@@ -83,7 +83,7 @@ class EditStateManagerNamespace<EType extends EditorType> {
       emptyState) as ManagedEditSession<EType, LAnnotation>;
     this.#sessions.set(editStateKey, {
       owner: owner as Editor<EType, unknown>,
-      session: state as ManagedEditSession<EType>,
+      session: state,
     });
     return state;
   }
@@ -103,7 +103,7 @@ class EditStateManagerNamespace<EType extends EditorType> {
     }
     const retainedState = toManagedEditState(activeSession.session);
     if (retainedState != null) {
-      this.#states.set(editStateKey, retainedState as EditState<EType>);
+      this.#states.set(editStateKey, retainedState);
     }
   }
 

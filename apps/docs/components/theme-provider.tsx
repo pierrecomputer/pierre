@@ -8,11 +8,11 @@ import {
   useContext,
   useEffect,
   useMemo,
-  useState,
   useSyncExternalStore,
 } from 'react';
 
 import { themeController } from './themeController';
+import { useIsHydrated } from '@/lib/useIsHydrated';
 
 interface ThemeProviderProps {
   attribute?: 'class' | `data-${string}` | Array<'class' | `data-${string}`>;
@@ -125,10 +125,7 @@ export function ThemeProvider({
   // useTheme() (e.g. diffshub's chrome) matches the SSR markup first, then
   // flips. The DOM application below still uses the real resolved scheme (the
   // pre-paint bootstrap script already painted it), so this gate is invisible.
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => {
-    setMounted(true);
-  }, []);
+  const mounted = useIsHydrated();
 
   const colorMode = mounted ? state.mode : undefined;
   const resolvedColorScheme = mounted ? state.resolvedColorScheme : undefined;

@@ -18,7 +18,6 @@ const config: UserConfig[] = defineConfig([
     loader: {
       '.css': 'text',
     },
-    attw: process.env.ATTW === 'true',
     tsconfig: './tsconfig.json',
     clean: true,
     dts: {
@@ -77,7 +76,7 @@ const config: UserConfig[] = defineConfig([
     tsconfig: './tsconfig.json',
     clean: false,
     unbundle: false,
-    noExternal: [/.*/],
+    deps: { alwaysBundle: [/.*/] },
     dts: { sourcemap: true, tsgo: true },
     platform: 'neutral',
     format: 'esm',

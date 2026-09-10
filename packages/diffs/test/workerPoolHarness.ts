@@ -26,7 +26,7 @@ export function installAnimationFramePolyfill(): () => void {
   let nextFrameId = 0;
   const frames = new Map<number, ReturnType<typeof setTimeout>>();
 
-  globalThis.requestAnimationFrame = ((callback) => {
+  globalThis.requestAnimationFrame = (callback) => {
     const id = ++nextFrameId;
     const timeout = setTimeout(() => {
       frames.delete(id);
@@ -34,15 +34,15 @@ export function installAnimationFramePolyfill(): () => void {
     }, 0);
     frames.set(id, timeout);
     return id;
-  }) as typeof requestAnimationFrame;
+  };
 
-  globalThis.cancelAnimationFrame = ((id) => {
+  globalThis.cancelAnimationFrame = (id) => {
     const timeout = frames.get(id);
     if (timeout != null) {
       clearTimeout(timeout);
       frames.delete(id);
     }
-  }) as typeof cancelAnimationFrame;
+  };
 
   return () => {
     for (const timeout of frames.values()) {

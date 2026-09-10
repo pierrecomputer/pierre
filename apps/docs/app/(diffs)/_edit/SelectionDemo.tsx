@@ -2,7 +2,7 @@
 
 import { DEFAULT_THEMES } from '@pierre/diffs';
 import type { EditorOptions } from '@pierre/diffs/edit';
-import { File } from '@pierre/diffs/react';
+import { File, useStableCallback } from '@pierre/diffs/react';
 import type { PreloadedFileResult } from '@pierre/diffs/ssr';
 import {
   IconArrow,
@@ -98,10 +98,10 @@ export function SelectionDemo({ prerenderedFile }: SelectionDemoProps) {
   const [snippets, setSnippets] = useState<ChatSnippet[]>([]);
   const snippetIdRef = useRef(0);
 
-  // The popover lives inside the editor instance, which is created once. Route
-  // its "Add to chat" click through a ref so it always calls the latest setter
-  // without recreating the editor.
-  const addSnippet = useCallback(
+  // The popover lives inside the editor instance, which is created once. Its
+  // "Add to chat" click needs a callback whose identity never changes but whose
+  // body always sees the latest file, so the editor is never recreated.
+  const addSnippet = useStableCallback(
     (text: string, source: ChatSnippetSource) => {
       const trimmed = text.trim();
       if (trimmed === '') {
@@ -118,11 +118,8 @@ export function SelectionDemo({ prerenderedFile }: SelectionDemoProps) {
           text: trimmed,
         },
       ]);
-    },
-    [prerenderedFile.file.name]
+    }
   );
-  const addSnippetRef = useRef(addSnippet);
-  addSnippetRef.current = addSnippet;
 
   const editorOptions = useMemo<EditorOptions<'file', undefined, undefined>>(
     () => ({
@@ -141,7 +138,7 @@ export function SelectionDemo({ prerenderedFile }: SelectionDemoProps) {
           event.preventDefault()
         );
         addToChat.addEventListener('click', () => {
-          addSnippetRef.current(selectionAction.getSelectionText(), {
+          addSnippet(selectionAction.getSelectionText(), {
             selection: selectionAction.selection,
           });
           selectionAction.close();
@@ -163,7 +160,7 @@ export function SelectionDemo({ prerenderedFile }: SelectionDemoProps) {
         return container;
       },
     }),
-    []
+    [addSnippet]
   );
 
   const clearChat = useCallback(() => setSnippets([]), []);

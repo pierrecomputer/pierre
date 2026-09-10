@@ -84,7 +84,7 @@ function createEditorHarness({
     editor.recycleCleanUps = 0;
 
     const edit = editor.edit.bind(editor);
-    editor.edit = ((instance: TestEditorComponent<EType>) => {
+    editor.edit = (instance: TestEditorComponent<EType>) => {
       editor.edits.push(instance);
       const complete =
         instance.type === 'file'
@@ -94,7 +94,7 @@ function createEditorHarness({
         throw attachmentError;
       }
       return complete;
-    }) as typeof editor.edit;
+    };
 
     const cleanUp = editor.cleanUp.bind(editor);
     editor.cleanUp = (reason) => {

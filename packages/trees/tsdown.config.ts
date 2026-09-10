@@ -8,7 +8,6 @@ const config: UserConfig[] = defineConfig([
     loader: {
       '.css': 'text',
     },
-    attw: process.env.ATTW === 'true',
     tsconfig: './tsconfig.json',
     clean: true,
     dts: {
@@ -17,7 +16,7 @@ const config: UserConfig[] = defineConfig([
     },
     unbundle: true,
     platform: 'neutral',
-    noExternal: ['@pierre/path-store', '@pierre/theming'],
+    deps: { alwaysBundle: ['@pierre/path-store', '@pierre/theming'] },
     plugins: [
       {
         name: 'postcss-autoprefixer',
