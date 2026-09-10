@@ -336,6 +336,13 @@ export interface FileDiffMetadata {
    */
   additionCharacterCount: number;
   /**
+   * Describes what changed and where in the old and new files.
+   *
+   * Undefined when semantic data is unavailable. An empty array means no
+   * semantic changes were found.
+   */
+  semanticOperations?: SemanticDiffOperation[];
+  /**
    * Set while an attached editor's session-scoped hunk updates have reshaped
    * `hunks` away from a plain recompute (regions stay frozen during an edit
    * session). Consumed by the session-exit recompute, which restores
@@ -357,6 +364,149 @@ export interface FileDiffMetadata {
    * hydration segment as a fallback.
    */
   cacheKey?: string;
+}
+
+/** A position in one version of the source file. */
+export interface SemanticDiffTextPosition {
+  /** Source line number, starting at 1. */
+  line: number;
+  /** Zero-based UTF-16 code-unit offset within the line; a tab counts as one. */
+  character: number;
+}
+
+/** A range of text in the old or new file. */
+export interface SemanticDiffTextRange {
+  /** Inclusive start position. */
+  start: SemanticDiffTextPosition;
+  /** Exclusive end position; character 0 excludes text on that end line. */
+  end: SemanticDiffTextPosition;
+}
+
+/** What happened to a piece of code, such as a move, edit, or rename. */
+export type SemanticDiffOperationType =
+  | 'moved'
+  | 'movedWithEdit'
+  | 'edited'
+  | 'added'
+  | 'deleted'
+  | 'renamed'
+  | 'reordered'
+  | 'reformatted'
+  | 'extractedFunction'
+  | 'inlinedFunction';
+
+/**
+ * Which part of a change a span describes: the main node (root), a surrounding
+ * node (container), its body, a call site, or the specific text changed (focus).
+ */
+export type SemanticDiffSpanRole =
+  | 'root'
+  | 'container'
+  | 'body'
+  | 'call'
+  | 'focus';
+
+/** Additional classification of a focus span, independent of its relation. */
+export type SemanticDiffFocusKind = 'reformatted';
+
+interface BaseSemanticDiffPairedSpan {
+  relation: 'mapped' | 'moved' | 'replaced';
+  old: SemanticDiffTextRange[];
+  new: SemanticDiffTextRange[];
+}
+
+interface BaseSemanticDiffIntroducedSpan {
+  relation: 'introduced';
+  old?: never;
+  new: SemanticDiffTextRange[];
+}
+
+interface BaseSemanticDiffRemovedSpan {
+  relation: 'removed';
+  old: SemanticDiffTextRange[];
+  new?: never;
+}
+
+export interface SemanticDiffPairedStructuralSpan extends BaseSemanticDiffPairedSpan {
+  role: Exclude<SemanticDiffSpanRole, 'focus'>;
+  kind?: never;
+}
+
+export interface SemanticDiffPairedFocusSpan extends BaseSemanticDiffPairedSpan {
+  role: 'focus';
+  kind?: SemanticDiffFocusKind;
+}
+
+export interface SemanticDiffIntroducedStructuralSpan extends BaseSemanticDiffIntroducedSpan {
+  role: Exclude<SemanticDiffSpanRole, 'focus'>;
+  kind?: never;
+}
+
+export interface SemanticDiffIntroducedFocusSpan extends BaseSemanticDiffIntroducedSpan {
+  role: 'focus';
+  kind?: SemanticDiffFocusKind;
+}
+
+export interface SemanticDiffRemovedStructuralSpan extends BaseSemanticDiffRemovedSpan {
+  role: Exclude<SemanticDiffSpanRole, 'focus'>;
+  kind?: never;
+}
+
+export interface SemanticDiffRemovedFocusSpan extends BaseSemanticDiffRemovedSpan {
+  role: 'focus';
+  kind?: SemanticDiffFocusKind;
+}
+
+/**
+ * A group of source ranges within an operation. Each side retains one range per
+ * source node, in the original order. Old/new arrays describe corresponding
+ * groups; their entries are not necessarily paired by array index.
+ *
+ * Ranges may overlap within and between spans. A focus may refer to text outside
+ * the operation's root span, such as references to a renamed declaration.
+ */
+export type SemanticDiffSpan =
+  | SemanticDiffPairedStructuralSpan
+  | SemanticDiffPairedFocusSpan
+  | SemanticDiffIntroducedStructuralSpan
+  | SemanticDiffIntroducedFocusSpan
+  | SemanticDiffRemovedStructuralSpan
+  | SemanticDiffRemovedFocusSpan;
+
+export type SemanticDiffSpanRelation = SemanticDiffSpan['relation'];
+
+/** Consecutive source lines classified by one span of their operation. */
+export interface SemanticDiffLineRange {
+  /** Inclusive source line number, starting at 1. */
+  start: number;
+  /** Inclusive source line number, starting at 1. */
+  end: number;
+  /** Zero-based index into the containing operation's spans array. */
+  spanIndex: number;
+}
+
+/**
+ * One change, such as moving a function or renaming a variable.
+ * Spans identify each piece of code involved. For a rename, focus spans point
+ * to the old and new names.
+ */
+export interface SemanticDiffOperation {
+  type: SemanticDiffOperationType;
+  /**
+   * The old and new lines marked with this change. Each range points to the
+   * span that describes it through `spanIndex`.
+   *
+   * Ranges are sorted by line number. Each line belongs to at most one range
+   * across all operations on the same side. Kept bodies have ranges too.
+   *
+   * An empty list means this change marks no lines on that side. The original
+   * spans are still included, even if their lines belong to another operation.
+   */
+  lines: {
+    old: SemanticDiffLineRange[];
+    new: SemanticDiffLineRange[];
+  };
+  spans: SemanticDiffSpan[];
 }
 
 export type MergeConflictMarkerRowType =
@@ -641,17 +791,27 @@ export interface GapSpan {
 
 export type LineSpans = GapSpan | AnnotationSpan;
 
-// Types of rendered lines in a rendered diff
-// Should we have yet another type for files? seems silly for
-// use to have a type in that case?
-export type LineTypes =
+/** Line classification derived from diff hunks. */
+export type BaseLineTypes =
   | 'change-deletion'
   | 'change-addition'
   | 'context'
   | 'context-expanded';
 
+/** Hunk classifications and semantic operation types for lines and gutters. */
+export type LineTypes =
+  | BaseLineTypes
+  | 'change-moved'
+  | 'change-moved-with-edit'
+  | 'change-edited'
+  | 'change-renamed'
+  | 'change-reordered'
+  | 'change-reformatted'
+  | 'change-extracted-function'
+  | 'change-inlined-function';
+
 export interface LineInfo {
-  type: LineTypes;
+  type: BaseLineTypes;
   lineNumber: number;
   altLineNumber?: number;
   lineIndex: number | `${number},${number}`;

@@ -21,6 +21,7 @@ import type {
   BaseCodeOptions,
   BaseDiffOptions,
   BaseDiffOptionsWithDefaults,
+  BaseLineTypes,
   CodeColumnType,
   CustomPreProperties,
   DiffLineAnnotation,
@@ -162,7 +163,7 @@ export interface DiffHunksRendererOptionsWithDefaults extends Omit<
 
 export interface UnifiedLineDecorationProps {
   type: 'context' | 'context-expanded' | 'change';
-  lineType: LineTypes;
+  lineType: BaseLineTypes;
   additionLineIndex: number | undefined;
   deletionLineIndex: number | undefined;
 }
@@ -891,7 +892,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     side,
     type,
   }: SplitLineDecorationProps): LineDecoration {
-    const lineType: LineTypes =
+    const lineType: BaseLineTypes =
       type === 'change'
         ? side === 'deletions'
           ? 'change-deletion'
