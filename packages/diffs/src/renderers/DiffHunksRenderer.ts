@@ -45,6 +45,7 @@ import type {
   BaseCodeOptions,
   BaseDiffOptions,
   BaseDiffOptionsWithDefaults,
+  BaseLineTypes,
   CustomPreProperties,
   DiffLineAnnotation,
   DiffsHighlighter,
@@ -55,7 +56,6 @@ import type {
   HighlightedToken,
   HunkData,
   HunkExpansionRegion,
-  LineTypes,
   RenderDiffOptions,
   RenderDiffResult,
   RenderedDiffASTCache,
@@ -707,7 +707,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     side,
     type,
   }: SplitLineDecorationProps): LineDecoration {
-    const lineType: LineTypes =
+    const lineType: BaseLineTypes =
       type === 'change'
         ? side === 'deletions'
           ? 'change-deletion'
