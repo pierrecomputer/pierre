@@ -352,11 +352,17 @@ export function ThemeDemo() {
     [workingFiles]
   );
 
-  useOnValueChange(resolvedColorScheme, (scheme) => {
-    if (scheme === 'light' || scheme === 'dark') {
-      setColorMode(scheme);
-    }
-  });
+  // Seeded with the current scheme: the useState initializer above already
+  // covers a mount that knows it, so only later changes need to run.
+  useOnValueChange(
+    resolvedColorScheme,
+    (scheme) => {
+      if (scheme === 'light' || scheme === 'dark') {
+        setColorMode(scheme);
+      }
+    },
+    resolvedColorScheme
+  );
 
   // Close dropdown when clicking outside
   useEffect(() => {

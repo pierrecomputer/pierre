@@ -167,16 +167,23 @@ function ReviewUIInner({ domain, initialUrl, path }: ReviewUIProps) {
   // Crossing the mobile breakpoint picks the diff style for that width and
   // closes the file-tree overlay when leaving mobile; the user can still change
   // the style until the next crossing. Applied before the render commits, so
-  // the first client render after hydration already shows the right style.
+  // the first client render already shows the right style. The comparison is
+  // seeded with `undefined`, the server snapshot: a hydrating render reports
+  // `undefined` first and then the real value, while a client-side mount
+  // reports the real value immediately, and both must count as a crossing.
   const isMobileViewport = useMediaQuery(MOBILE_MEDIA_QUERY, undefined);
-  useOnValueChange(isMobileViewport, (isMobile) => {
-    if (isMobile != null) {
-      setDiffStyle(isMobile ? 'unified' : 'split');
-      if (!isMobile) {
-        setFileTreeOverlayOpen(false);
+  useOnValueChange(
+    isMobileViewport,
+    (isMobile) => {
+      if (isMobile != null) {
+        setDiffStyle(isMobile ? 'unified' : 'split');
+        if (!isMobile) {
+          setFileTreeOverlayOpen(false);
+        }
       }
-    }
-  });
+    },
+    undefined
+  );
   const handleSelectTreeItem = useCallback((itemId: string) => {
     setFileTreeOverlayOpen(false);
     const viewer = viewerRef.current;

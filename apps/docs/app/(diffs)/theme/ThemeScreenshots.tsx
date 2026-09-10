@@ -17,11 +17,17 @@ export function ThemeScreenshots() {
   const [activeTheme, setActiveTheme] = useState<'light' | 'dark'>(
     () => resolvedColorScheme ?? 'dark'
   );
-  useOnValueChange(resolvedColorScheme, (scheme) => {
-    if (scheme === 'light' || scheme === 'dark') {
-      setActiveTheme(scheme);
-    }
-  });
+  // Seeded with the current scheme: the useState initializer above already
+  // covers a mount that knows it, so only later changes need to run.
+  useOnValueChange(
+    resolvedColorScheme,
+    (scheme) => {
+      if (scheme === 'light' || scheme === 'dark') {
+        setActiveTheme(scheme);
+      }
+    },
+    resolvedColorScheme
+  );
 
   if (resolvedColorScheme == null) {
     return (
