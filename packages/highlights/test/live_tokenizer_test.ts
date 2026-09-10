@@ -920,6 +920,78 @@ void t.test('LiveTokenizer: lone surrogates survive edits as WTF-8', () => {
   astral.dispose();
 });
 
+void t.test(
+  'LiveTokenizer: rejoined surrogate pairs match fresh tokens',
+  () => {
+    const code = 'const 𝛼 = 1;';
+    for (const separator of ['Q', '\n', '\r', '\r\n']) {
+      const live = new LiveTokenizer({ lang: 'ts', theme: pierreDark, code });
+      try {
+        live.applyEdits([
+          {
+            range: {
+              start: { line: 0, character: 7 },
+              end: { line: 0, character: 7 },
+            },
+            newText: separator,
+          },
+        ]);
+        assert.equal(
+          live.getText(),
+          code.slice(0, 7) + separator + code.slice(7)
+        );
+        live.applyEdits([
+          {
+            range: {
+              start: { line: 0, character: 7 },
+              end:
+                separator === 'Q'
+                  ? { line: 0, character: 8 }
+                  : { line: 1, character: 0 },
+            },
+            newText: '',
+          },
+        ]);
+        assert.equal(live.getText(), code);
+        assertMatchesFresh(live, code, 'ts', JSON.stringify(separator));
+      } finally {
+        live.dispose();
+      }
+    }
+  }
+);
+
+void t.test(
+  'LiveTokenizer: joins surrogate pairs at both replacement boundaries',
+  () => {
+    for (const [code, start, end, newText] of [
+      ['const \uD835 = 1;', 7, 7, '\uDEFC'],
+      ['const \uDEFC = 1;', 6, 6, '\uD835'],
+      ['const \uD835-\uDEFC = 1;', 7, 8, '\uDEFC\uD835'],
+      ['\uD835', 1, 1, '\uDEFC'],
+      ['\uDEFC', 0, 0, '\uD835'],
+    ] as const) {
+      const live = new LiveTokenizer({ lang: 'ts', theme: pierreDark, code });
+      try {
+        live.applyEdits([
+          {
+            range: {
+              start: { line: 0, character: start },
+              end: { line: 0, character: end },
+            },
+            newText,
+          },
+        ]);
+        const expected = code.slice(0, start) + newText + code.slice(end);
+        assert.equal(live.getText(), expected);
+        assertMatchesFresh(live, expected, 'ts', JSON.stringify(code));
+      } finally {
+        live.dispose();
+      }
+    }
+  }
+);
+
 void t.test('LiveTokenizer: final-line terminator edits', () => {
   const live = new LiveTokenizer({ lang: 'ts', theme: pierreDark, code: 'a' });
   // adding a trailing terminator creates the trailing empty line

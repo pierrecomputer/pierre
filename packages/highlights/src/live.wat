@@ -496,6 +496,7 @@
   ;; registers, the live prefixes of the language's own stack - json or toml
   ;; nesting, or the JavaScript template bracket stack - and of the template
   ;; HTML/CSS state, bracket and jsx stacks, then the lexer checkpoints.
+  ;; JSON fences also preserve the surrounding JavaScript template stack.
   ;; The image is a pure function of the
   ;; incoming state and the line bytes, so exact byte identity is a sound
   ;; convergence test. Capture builds the full image; interning and restore
@@ -508,23 +509,45 @@
   (global $lvLang (mut i32) (i32.const 0))
   (global $lvMachineId (mut i32) (i32.const -1)) ;; state the machine holds now
 
-  ;; the stack the current language nests in: json and toml keep their own,
-  ;; every other lexer that has one uses the JavaScript template bracket stack
+  ;; JSON and TOML own nesting stacks. Markdown/MDX may suspend JavaScript
+  ;; while a JSON fence is active, including inside nested Markdown fences.
   (func $lvStackBase (result i32)
+    (local $p i32)
     (if (i32.eq (global.get $lvLang) (enum.get $Language.json))
       (then (return (i32.const $mem.jsonStack))))
     (if (i32.eq (global.get $lvLang) (enum.get $Language.toml))
       (then (return (i32.const $mem.tomlStack))))
+    (if
+      (i32.and
+        (i32.ne (global.get $markdownStreamFence) (i32.const 0))
+        (i32.or
+          (i32.eq (global.get $lvLang) (enum.get $Language.markdown))
+          (i32.eq (global.get $lvLang) (enum.get $Language.mdx))))
+      (then
+        (if
+          (i32.eq
+            (global.get $markdownStreamLang)
+            (i32.or (enum.get $MarkdownFenceLang.json) (i32.const 0x100)))
+          (then (return (i32.const $mem.jsonStack))))
+        (local.set $p (i32.const $mem.markdownFenceStack))
+        (block $done
+          (loop $fence
+            (br_if $done (i32.ge_u (local.get $p) (i32.const $mem.tomlStack)))
+            (br_if $done (i32.eqz (i32.load (local.get $p))))
+            (if
+              (i32.eq
+                (i32.load offset=8 (local.get $p))
+                (i32.or (enum.get $MarkdownFenceLang.json) (i32.const 0x100)))
+              (then (return (i32.const $mem.jsonStack))))
+            (local.set $p (i32.add (local.get $p) (i32.const 12)))
+            (br $fence)))))
     (i32.const $mem.jsTemplateBracketStack))
 
   ;; blob bytes for the current stack prefix: json and toml publish their
   ;; depth through a global; JavaScript uses the template lexer's cursor.
-  (func $lvStackPrefix (result i32)
+  (func $lvStackPrefix (param $base i32) (result i32)
     (local $n i32)
-    (if
-      (i32.or
-        (i32.eq (global.get $lvLang) (enum.get $Language.json))
-        (i32.eq (global.get $lvLang) (enum.get $Language.toml)))
+    (if (i32.ne (local.get $base) (i32.const $mem.jsTemplateBracketStack))
       (then (local.set $n (global.get $liveStackBytes)))
       (else (local.set $n (i32.shl (global.get $jsTemplateLexSp) (i32.const 2)))))
     (if (i32.gt_u (local.get $n) (i32.const 1024))
@@ -533,10 +556,12 @@
 
   (func $lvCaptureBlob (param $dst i32) (result i32)
     (local $p i32)
+    (local $stackBase i32)
     (local $stackLen i32)
     (local $brkLen i32)
     (local $jsxLen i32)
-    (local.set $stackLen (call $lvStackPrefix))
+    (local.set $stackBase (call $lvStackBase))
+    (local.set $stackLen (call $lvStackPrefix (local.get $stackBase)))
     (local.set $brkLen (global.get $brkSp))
     (if (i32.gt_u (local.get $brkLen) (i32.const 1024))
       (then (local.set $brkLen (i32.const 1024))))
@@ -595,8 +620,15 @@
       (i32.const $mem.markdownFenceStack)
       (i32.const 96))
     (local.set $p (i32.add (local.get $dst) (i32.const 300)))
-    (memory.copy (local.get $p) (call $lvStackBase) (local.get $stackLen))
+    (memory.copy (local.get $p) (local.get $stackBase) (local.get $stackLen))
     (local.set $p (i32.add (local.get $p) (local.get $stackLen)))
+    (if (i32.ne (local.get $stackBase) (i32.const $mem.jsTemplateBracketStack))
+      (then
+        (memory.copy
+          (local.get $p)
+          (i32.const $mem.jsTemplateBracketStack)
+          (i32.shl (global.get $jsTemplateLexSp) (i32.const 2)))
+        (local.set $p (i32.add (local.get $p) (i32.shl (global.get $jsTemplateLexSp) (i32.const 2))))))
     (memory.copy
       (local.get $p)
       (i32.const $mem.jsTemplateFn)
@@ -635,6 +667,7 @@
 
   (func $lvRestoreBlob (param $src i32)
     (local $p i32)
+    (local $stackBase i32)
     (local $stackLen i32)
     (local $brkLen i32)
     (local $jsxLen i32)
@@ -691,8 +724,16 @@
       (i32.add (local.get $src) (i32.const 204))
       (i32.const 96))
     (local.set $p (i32.add (local.get $src) (i32.const 300)))
-    (memory.copy (call $lvStackBase) (local.get $p) (local.get $stackLen))
+    (local.set $stackBase (call $lvStackBase))
+    (memory.copy (local.get $stackBase) (local.get $p) (local.get $stackLen))
     (local.set $p (i32.add (local.get $p) (local.get $stackLen)))
+    (if (i32.ne (local.get $stackBase) (i32.const $mem.jsTemplateBracketStack))
+      (then
+        (memory.copy
+          (i32.const $mem.jsTemplateBracketStack)
+          (local.get $p)
+          (i32.shl (global.get $jsTemplateLexSp) (i32.const 2)))
+        (local.set $p (i32.add (local.get $p) (i32.shl (global.get $jsTemplateLexSp) (i32.const 2))))))
     (memory.copy
       (i32.const $mem.jsTemplateFn)
       (local.get $p)
@@ -880,8 +921,8 @@
             (local.set $node
               (i32.load
                 (i32.add (global.get $lvIdTab) (i32.shl (global.get $lvIncoming) (i32.const 2)))))
-            (call $lvGrowTo (i32.add (local.get $inBase) (i32.const $mem.streamStateUsed+7472)))
-            (memory.fill (local.get $inBase) (i32.const 0) (i32.const $mem.streamStateUsed+7472))
+            (call $lvGrowTo (i32.add (local.get $inBase) (i32.const $mem.streamStateUsed+8496)))
+            (memory.fill (local.get $inBase) (i32.const 0) (i32.const $mem.streamStateUsed+8496))
             (memory.copy
               (local.get $inBase)
               (i32.add (local.get $node) (i32.const 24))
@@ -915,9 +956,9 @@
       (i32.and
         (i32.add (i32.add (local.get $recStart) (local.get $recLen)) (i32.const 7))
         (i32.const -8)))
-    ;; head, globals, delimiter, and fence registers (300) plus the four
-    ;; stack prefixes at their caps (1024 + 1024 + 1024 + 4096), then the checkpoints
-    (call $lvGrowTo (i32.add (local.get $blobBase) (i32.const $mem.streamStateUsed+7552)))
+    ;; head, globals, delimiter, and fence registers (300) plus the five
+    ;; stack prefixes at their caps (1024 * 4 + 4096), then the checkpoints
+    (call $lvGrowTo (i32.add (local.get $blobBase) (i32.const $mem.streamStateUsed+8576)))
     (local.set $blobLen
       (call $lvTrimBlob (local.get $blobBase) (call $lvCaptureBlob (local.get $blobBase))))
     (global.set $lvTransLo (local.get $recStart))
@@ -1379,6 +1420,69 @@
           (i32.sub
             (i32.sub (local.get $eByteLen) (local.get $ePos))
             (i32.mul (local.get $eSplit) (i32.const 4))))))
+    ;; Only the two splice boundaries can join WTF-8 surrogate halves. Merge
+    ;; them into UTF-8 from right to left, keeping the earlier boundary fixed.
+    (local.set $p (i32.add (local.get $pre) (local.get $textLen)))
+    (block $joined
+      (loop $join
+        (if
+          (i32.and
+            (i32.ge_u (local.get $p) (i32.const 3))
+            (i32.le_u (i32.add (local.get $p) (i32.const 3)) (local.get $L)))
+          (then
+            (local.set $w (i32.add (local.get $scratch) (local.get $p)))
+            (if
+              (i32.and
+                (i32.eq
+                  (i32.and
+                    (i32.load16_u (i32.sub (local.get $w) (i32.const 3)))
+                    (i32.const 0xf0ff))
+                  (i32.const 0xa0ed))
+                (i32.eq
+                  (i32.and (i32.load16_u (local.get $w)) (i32.const 0xf0ff))
+                  (i32.const 0xb0ed)))
+              (then
+                (local.set $w (i32.sub (local.get $w) (i32.const 3)))
+                (local.set $cp
+                  (i32.add
+                    (i32.const 0x10000)
+                    (i32.or
+                      (i32.shl
+                        (i32.or
+                          (i32.shl
+                            (i32.and (i32.load8_u offset=1 (local.get $w)) (i32.const 15))
+                            (i32.const 6))
+                          (i32.and (i32.load8_u offset=2 (local.get $w)) (i32.const 63)))
+                        (i32.const 10))
+                      (i32.or
+                        (i32.shl
+                          (i32.and (i32.load8_u offset=4 (local.get $w)) (i32.const 15))
+                          (i32.const 6))
+                        (i32.and (i32.load8_u offset=5 (local.get $w)) (i32.const 63))))))
+                (i32.store8
+                  (local.get $w)
+                  (i32.or (i32.const 0xf0) (i32.shr_u (local.get $cp) (i32.const 18))))
+                (i32.store8 offset=1
+                  (local.get $w)
+                  (i32.or
+                    (i32.const 0x80)
+                    (i32.and (i32.shr_u (local.get $cp) (i32.const 12)) (i32.const 63))))
+                (i32.store8 offset=2
+                  (local.get $w)
+                  (i32.or
+                    (i32.const 0x80)
+                    (i32.and (i32.shr_u (local.get $cp) (i32.const 6)) (i32.const 63))))
+                (i32.store8 offset=3
+                  (local.get $w)
+                  (i32.or (i32.const 0x80) (i32.and (local.get $cp) (i32.const 63))))
+                (memory.copy
+                  (i32.add (local.get $w) (i32.const 4))
+                  (i32.add (local.get $w) (i32.const 6))
+                  (i32.sub (local.get $L) (i32.add (local.get $p) (i32.const 3))))
+                (local.set $L (i32.sub (local.get $L) (i32.const 2)))))))
+        (br_if $joined (i32.eq (local.get $p) (local.get $pre)))
+        (local.set $p (local.get $pre))
+        (br $join)))
     ;; the final segment inherits the end line's terminator (with its CR kind)
     (local.set $finalTerm (i32.and (local.get $eFlags) (i32.const 19)))
     ;; When the line above the splice ends in a lone CR and the byte that now
