@@ -20,9 +20,17 @@ export interface OverflowTextProps extends PropsWithChildren {
   className?: string;
   marker?: ComponentChildren | ((props: MarkerProps) => ComponentChildren);
   variant?: 'default' | 'fade';
+  // Stands in for `children` in the hidden copy that detects overflow. Only the
+  // text metrics of that copy matter, so pass a plain-text equivalent when
+  // `children` holds things that should exist once in the DOM: data attributes
+  // that get queried, ids, form controls.
+  measureChildren?: ComponentChildren;
 }
 
-export type MiddleTruncateProps = Omit<OverflowTextProps, 'mode' | 'children'> &
+export type MiddleTruncateProps = Omit<
+  OverflowTextProps,
+  'mode' | 'children' | 'measureChildren'
+> &
   AllowableContentGroups & {
     minimumLength?: number;
     priority?: 'start' | 'end' | 'equal';
@@ -51,10 +59,14 @@ type AllowableContentGroups =
   | {
       children?: never;
       contents: [ComponentChildren, ComponentChildren];
+      // Per-segment stand-ins for the hidden copies that detect overflow, in the
+      // same order as `contents`. See `measureChildren` on OverflowTextProps.
+      measureContents?: [ComponentChildren, ComponentChildren];
     }
   | {
       contents?: never;
       children: string;
+      measureContents?: never;
     };
 
 // When a split boundary lands adjacent to whitespace, the trailing/leading
@@ -210,7 +222,8 @@ function OverflowMarker({
 
 function OverflowContent(options: OverflowTextProps) {
   'use no memo';
-  const { mode, children } = options;
+  const { mode, children, measureChildren } = options;
+  const overflowChildren = measureChildren ?? children;
 
   // The inner span wrapper here is only needed to implement
   // the right aligned internals for fruncate
@@ -220,7 +233,11 @@ function OverflowContent(options: OverflowTextProps) {
         {mode === 'fruncate' ? <span>{children}</span> : children}
       </div>
       <div data-truncate-content="overflow" aria-hidden>
-        {mode === 'fruncate' ? <span>{children}</span> : children}
+        {mode === 'fruncate' ? (
+          <span>{overflowChildren}</span>
+        ) : (
+          overflowChildren
+        )}
       </div>
     </div>
   );
@@ -228,6 +245,7 @@ function OverflowContent(options: OverflowTextProps) {
 
 export function OverflowText({
   children,
+  measureChildren,
   mode = 'truncate',
   marker = '…',
   variant = 'default',
@@ -235,7 +253,11 @@ export function OverflowText({
 }: OverflowTextProps): JSX.Element {
   'use no memo';
   const contentNode = (
-    <OverflowContent key="content" mode={mode}>
+    <OverflowContent
+      key="content"
+      mode={mode}
+      measureChildren={measureChildren}
+    >
       {children}
     </OverflowContent>
   );
@@ -291,6 +313,7 @@ export function Fruncate({
 export function MiddleTruncate({
   children,
   contents,
+  measureContents,
   priority = 'end',
   split = 'center',
   minimumLength = 12,
@@ -306,8 +329,16 @@ export function MiddleTruncate({
       console.error('MiddleTruncate: contents must be an array of two items');
       return null;
     }
-    firstSegment = <Truncate {...props}>{contents[0]}</Truncate>;
-    secondSegment = <Fruncate {...props}>{contents[1]}</Fruncate>;
+    firstSegment = (
+      <Truncate {...props} measureChildren={measureContents?.[0]}>
+        {contents[0]}
+      </Truncate>
+    );
+    secondSegment = (
+      <Fruncate {...props} measureChildren={measureContents?.[1]}>
+        {contents[1]}
+      </Fruncate>
+    );
   } else {
     // TODO: figure out how to support ReactNode children in the future
     if (typeof children !== 'string') {
