@@ -188,8 +188,7 @@ void t.test(
         '# Heading {meta.title}\n\nParagraph with {1 + 1} inline.\n\n> quote {expr}'
       ),
       [
-        ['#', 'punctuation.special'],
-        ['Heading', 'title'],
+        ['# Heading', 'title'],
         ['{', 'punctuation.bracket'],
         ['meta', 'variable'],
         ['.', 'punctuation.delimiter'],

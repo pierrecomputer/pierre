@@ -976,7 +976,7 @@
                   (call $lexIsSpace (i32.load8_u (local.get $p)))))
               (then
                 (call $emitTok
-                  (enum.get $Token.punctuation.special)
+                  (enum.get $Token.title)
                   (global.get $ptr)
                   (local.get $p))
                 (global.set $ptr (local.get $p))

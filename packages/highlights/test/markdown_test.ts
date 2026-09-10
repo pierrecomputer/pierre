@@ -418,14 +418,10 @@ void t.test(
         '# H1\n## H2 with `code`\n### H3\n#  spaced heading  #'
       ),
       [
-        ['#', 'punctuation.special'],
-        ['H1', 'title'],
-        ['##', 'punctuation.special'],
-        ['H2 with `code`', 'title'],
-        ['###', 'punctuation.special'],
-        ['H3', 'title'],
-        ['#', 'punctuation.special'],
-        ['spaced heading  #', 'title'],
+        ['# H1', 'title'],
+        ['## H2 with `code`', 'title'],
+        ['### H3', 'title'],
+        ['#  spaced heading  #', 'title'],
       ]
     );
     // a hash glued to a word is a tag, not a heading
