@@ -140,21 +140,19 @@ function encodeWtf8(s: string): Uint8Array {
     } else if (c < 0x800) {
       out[w++] = 0xc0 | (c >> 6);
       out[w++] = 0x80 | (c & 63);
-    } else if (c >= 0xd800 && c < 0xdc00 && i + 1 < s.length) {
-      const lo = s.charCodeAt(i + 1);
-      if (lo >= 0xdc00 && lo < 0xe000) {
-        const cp = 0x10000 + ((c - 0xd800) << 10) + (lo - 0xdc00);
-        out[w++] = 0xf0 | (cp >> 18);
-        out[w++] = 0x80 | ((cp >> 12) & 63);
-        out[w++] = 0x80 | ((cp >> 6) & 63);
-        out[w++] = 0x80 | (cp & 63);
-        i++;
-        continue;
-      }
-      out[w++] = 0xe0 | (c >> 12);
-      out[w++] = 0x80 | ((c >> 6) & 63);
-      out[w++] = 0x80 | (c & 63);
     } else {
+      if (c >= 0xd800 && c < 0xdc00) {
+        const lo = s.charCodeAt(i + 1);
+        if (lo >= 0xdc00 && lo < 0xe000) {
+          const cp = 0x10000 + ((c - 0xd800) << 10) + (lo - 0xdc00);
+          out[w++] = 0xf0 | (cp >> 18);
+          out[w++] = 0x80 | ((cp >> 12) & 63);
+          out[w++] = 0x80 | ((cp >> 6) & 63);
+          out[w++] = 0x80 | (cp & 63);
+          i++;
+          continue;
+        }
+      }
       out[w++] = 0xe0 | (c >> 12);
       out[w++] = 0x80 | ((c >> 6) & 63);
       out[w++] = 0x80 | (c & 63);
@@ -293,23 +291,13 @@ export class LiveTokenizer {
   ): [HighlightsHighlighter, LiveWasmExports] {
     const hl = new HighlightsHighlighter(assertWasmModule());
     const ex = hl.instance.exports as unknown as LiveWasmExports;
-    LiveTokenizer.#stageDocument(hl, ex, code, langId);
-    return [hl, ex];
-  }
-
-  /** Copy `code` into a staged block and split it into the line table. */
-  static #stageDocument(
-    hl: HighlightsHighlighter,
-    ex: LiveWasmExports,
-    code: string,
-    langId: number
-  ): void {
     const bytes = encodeLiveText(code);
     const ptr = ex.liveStage(bytes.length);
     hl.bindMemory();
     hl.buffer.set(bytes, ptr);
     ex.liveInitDoc(ptr, bytes.length, langId);
     hl.bindMemory();
+    return [hl, ex];
   }
 
   /** The wrapper, or throw when disposed. */
@@ -421,7 +409,7 @@ export class LiveTokenizer {
 
   /**
    * Zero-copy packed records for one line. The view is invalidated by the
-   * next successful edit, reset, or dispose.
+   * next successful edit, reset, dispose, or deferred tokenization slice.
    */
   getLineRecords(line: number): LiveTokenRecords {
     const { hl, ex } = this.#live();
@@ -918,19 +906,19 @@ export class LiveTokenizer {
         throw new RangeError('edit ranges overlap');
       }
     }
-    const kept = items.filter((e) => !this.#isNoopEdit(e, hl, ex));
     // Exactly-touching edits collapse into one range so each boundary is
     // spliced exactly once: a CRLF merge at a shared boundary must not
     // restructure a line another edit's pre-batch coordinates still name.
     const merged: NormalizedEdit[] = [];
-    for (const e of kept) {
+    for (const e of items) {
+      if (this.#isNoopEdit(e, hl, ex)) continue;
       const prev = merged[merged.length - 1];
       if (prev !== undefined && prev.el === e.sl && prev.ec === e.sc) {
         prev.el = e.el;
         prev.ec = e.ec;
         prev.newText += e.newText;
       } else {
-        merged.push({ ...e });
+        merged.push(e);
       }
     }
     return merged;
@@ -953,16 +941,13 @@ export class LiveTokenizer {
     let text = '';
     for (let line = e.sl; line <= e.el; line++) {
       const lineText = this.#lineText(hl, ex, line);
-      text += line === e.sl ? lineText.slice(e.sc) : lineText;
+      text += lineText.slice(
+        line === e.sl ? e.sc : 0,
+        line === e.el ? e.ec : lineText.length
+      );
       if (line < e.el) {
         text += eol(ex.liveLineFlags(line));
       }
-    }
-    if (e.sl < e.el) {
-      const lastLen = ex.liveLineLen(e.el);
-      text = text.slice(0, text.length - (lastLen - e.ec));
-    } else {
-      text = this.#lineText(hl, ex, e.sl).slice(e.sc, e.ec);
     }
     return text === e.newText;
   }

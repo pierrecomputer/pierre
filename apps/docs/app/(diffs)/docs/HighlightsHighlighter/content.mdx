@@ -5,7 +5,7 @@
   playground](/highlights) before replacing Shiki in production.
 </Notice>
 
-Highlights is a small code highlighter with 65 hand-written language lexers in
+Highlights is a small code highlighter with 67 hand-written language lexers in
 WebAssembly. It has no grammar downloads and can produce HTML, Shiki-compatible
 tokens, streamed tokens, or incrementally updated editor tokens.
 
@@ -32,9 +32,9 @@ or call `.slice()` before retaining them.
 
 ### Tokens
 
-`codeToTokens()` returns one `ThemedToken[]` per line, with absolute UTF-16
-offsets. The result also includes `fg`, `bg`, `themeName`, and `rootStyle` when
-the selected theme provides them.
+`codeToTokens()` accepts the same input types as `codeToHtml()` and returns one
+`ThemedToken[]` per line, with absolute UTF-16 offsets. The result also includes
+`fg`, `bg`, `themeName`, and `rootStyle` when the selected theme provides them.
 
 <DocsCodeExample {...highlightsTokens} />
 
@@ -63,7 +63,7 @@ relative to the complete stream.
 `pushCode(chunk)` accepts strings and returns only completed lines. `end()`
 returns the remaining lines, including the empty final line after a trailing
 terminator. Call `dispose()` when the stream is no longer needed; calling
-`end()` also finishes it.
+`end()` also disposes it.
 
 ### Incremental editing
 
@@ -74,12 +74,13 @@ the pre-edit state.
 
 <DocsCodeExample {...highlightsLive} />
 
-Passing a half-open `renderRange: [startLine, endLine]` tokenizes synchronously
-up to `endLine`. Updated lines inside the range are returned in `update.lines`;
-completed lines outside it can arrive synchronously through `onDeferTokenize`,
-and the remaining work runs in background slices. Without a range, updates
-converge synchronously and `update.lines` is empty, so read changed lines with
-`lineChanges` and `getLineTokens()`.
+Passing a half-open `renderRange: [startLine, endLine]` to the constructor,
+`applyEdits()`, or `reset()` tokenizes synchronously up to `endLine`. Updated
+lines inside the range are returned in `update.lines`; completed lines outside
+it can arrive synchronously through `onDeferTokenize`, and the remaining work
+runs in background slices. Without a range, updates converge synchronously and
+`update.lines` is empty, so read changed lines with `lineChanges` and
+`getLineTokens()`.
 
 | Member                                          | Purpose                                                    |
 | ----------------------------------------------- | ---------------------------------------------------------- |
@@ -211,10 +212,10 @@ renderers adopt it on their next render. Running streams and attached editors
 keep the implementation they captured until they are recreated. Pass
 `shikiHighlighter` back to `setHighlighter()` to restore the default.
 
-Theme names resolve to Highlights's bundled Zed themes. Diffs loads bundled
-themes automatically, so components, SSR preload helpers, and streams do not
-need a separate `preloadHighlighter()` call. Use it only to warm themes before
-the first client render or before calling synchronous low-level render APIs. Its
+Theme names resolve to bundled Highlights themes. Diffs loads bundled themes
+automatically, so components, SSR preload helpers, and streams do not need a
+separate `preloadHighlighter()` call. Use it only to warm themes before the
+first client render or before calling synchronous low-level render APIs. Its
 `langs` option has no effect with Highlights because languages are built in.
 Call `registerHighlightsTheme(name, theme)` before rendering to add or replace a
 name. Unknown names reject during loading. The theme's git and terminal colors
@@ -248,33 +249,6 @@ client to use Highlights before hydrating that result.
 The main entry exports the complete runtime and its public types:
 
 <DocsCodeExample {...highlightsApiRuntime} />
-
-`codeToHtml()` returns a zero-copy `Uint8Array` view of a complete `<pre>`
-fragment. `codeToTokens()` returns a `TokensResult`. Both accept a string,
-`Uint8Array`, or `ArrayBuffer`.
-
-`StreamTokenizer` owns an isolated WebAssembly instance. `pushCode(chunk)`
-returns tokens for completed lines, `end()` returns the remaining lines and
-disposes the stream, and `dispose()` discards an unfinished stream.
-
-`LiveTokenizer` owns the editable document and its incremental lexer state:
-
-- `applyEdits()` and `reset()` update the document.
-- `getLineLength()`, `getLineText()`, and `getText()` read the document.
-- `getLineTokens()` returns themed tokens and bracket-ignored ranges.
-- `getLineRecords()` returns zero-copy packed records; copy `data` with
-  `.slice()` before retaining it.
-- `pause()`, `resume()`, and `flush()` control deferred tokenization;
-  `pendingTokenization` reports unfinished work.
-- `revision` and `lineCount` expose document state, and `dispose()` releases the
-  instance.
-
-Pass `renderRange: [startLine, endLine]` to the constructor, `applyEdits()`, or
-`reset()` to bound synchronous work. Remaining lines are delivered in background
-slices through `onDeferTokenize`.
-
-`isSupportedLanguage()` validates language names and aliases. `tokenNames` maps
-raw `LiveTokenRecords` token IDs to syntax-scope names.
 
 Most applications do not call `init()` because the environment-specific entry
 point initializes the shared instance. `init()` and `createHighlighter()` are

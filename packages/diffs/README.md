@@ -29,49 +29,51 @@ pnpm add @pierre/diffs
 
 ## Highlighters
 
-`@pierre/diffs` uses [shiki] by default. `setHighlighter` changes the
+`@pierre/diffs` uses [Shiki] by default. `setHighlighter` changes the
 implementation used by new components and SSR calls. Existing file and diff
 renderers adopt it on their next render; the call itself does not trigger a
 repaint. Running streams and attached editors keep their highlighter until they
 are recreated.
 
-The experimental [highlights]-backed highlighter runs its built-in lexers in
-WebAssembly and lazy-loads bundled themes by ID.
+The experimental [Highlights] adapter runs its built-in lexers in WebAssembly
+and lazy-loads bundled themes by ID.
 
 ```ts
 import { File, setHighlighter } from '@pierre/diffs';
 import { highlightsHighlighter } from '@pierre/diffs/highlights';
 
 setHighlighter(highlightsHighlighter);
-const file = new File(); // use the highlights highlighter
+const view = new File(); // Uses Highlights.
 ```
 
 Pass the `shikiHighlighter` export back to `setHighlighter` to restore the
 default. Custom implementations conform to the `CodeHighlighter` interface
-exported from `@pierre/diffs`. Notes on the highlights highlighter:
+exported from `@pierre/diffs`. Notes on the Highlights adapter:
 
-- Theme names map onto highlights's bundled Zed themes; register custom names
-  with `registerHighlightsTheme` from `@pierre/diffs/highlights`.
-- Languages without a highlights lexer render as plain text.
-- The worker pool uses shiki. Custom highlighters render on the main thread.
-- Edit mode tokenizes through highlights's incremental `LiveTokenizer` instead
-  of the TextMate incremental tokenizer.
+- Theme names map onto bundled Highlights themes; register custom names with
+  `registerHighlightsTheme` from `@pierre/diffs/highlights`.
+- Languages without a Highlights lexer render as plain text.
+- The worker pool uses Shiki. Custom highlighters render on the main thread.
+- Edit mode tokenizes through the incremental `LiveTokenizer` instead of the
+  TextMate incremental tokenizer.
 
 For server rendering, pass `highlighter` to `preloadFile` to select it for one
 request without changing the process-wide registration:
 
 ```ts
+import { highlightsHighlighter } from '@pierre/diffs/highlights';
 import { preloadFile } from '@pierre/diffs/ssr';
 
+const file = { name: 'example.ts', contents: 'const answer = 42;' };
 const result = await preloadFile({ file, highlighter: highlightsHighlighter });
 ```
 
 The `@pierre/highlights` peer is optional and only needed when importing
-`@pierre/diffs/highlights`. Unknown highlights theme names reject during
+`@pierre/diffs/highlights`. Unknown Highlights theme names reject during
 loading; register a custom theme before using its name.
 
-[shiki]: https://shiki.style
-[highlights]: ../highlights/README.md
+[Shiki]: https://shiki.style
+[Highlights]: ../highlights/README.md
 
 ## Agent skill
 

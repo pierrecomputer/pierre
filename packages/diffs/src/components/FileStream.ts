@@ -310,10 +310,6 @@ export class FileStream {
           enqueueCompletedLines(controller);
         },
         flush(controller) {
-          if (coalesceTimer !== undefined) {
-            clearTimeout(coalesceTimer);
-            coalesceTimer = undefined;
-          }
           if (pending !== '') {
             enqueueCompletedLines(controller);
           }
@@ -330,9 +326,7 @@ export class FileStream {
       });
       return {
         stream,
-        dispose: () => {
-          end();
-        },
+        dispose: end,
       };
     }
     return {
@@ -397,9 +391,11 @@ export class FileStream {
     }
     if (gutterFragment.childNodes.length > 0) {
       gutter.appendChild(gutterFragment);
+      gutter.style.gridRow = `span ${this.currentRowCount}`;
     }
     if (contentFragment.childNodes.length > 0) {
       content.appendChild(contentFragment);
+      content.style.gridRow = `span ${this.currentRowCount}`;
     }
     this.queuedTokens.length = 0;
     this.options.onPostRender?.(this);
@@ -426,15 +422,6 @@ export class FileStream {
     return { gutter, content };
   }
 
-  private updateRowSpan(): void {
-    if (this.gutterElement != null) {
-      this.gutterElement.style.gridRow = `span ${this.currentRowCount}`;
-    }
-    if (this.contentElement != null) {
-      this.contentElement.style.gridRow = `span ${this.currentRowCount}`;
-    }
-  }
-
   private createLine(): { gutterLine: HTMLElement; contentLine: HTMLElement } {
     const lineNumber = this.currentLineIndex;
     const lineIndex = `${lineNumber - 1}`;
@@ -454,7 +441,6 @@ export class FileStream {
     contentLine.dataset.lineIndex = lineIndex;
 
     this.currentRowCount += 1;
-    this.updateRowSpan();
     this.currentLineElement = contentLine;
     return { gutterLine, contentLine };
   }

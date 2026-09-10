@@ -88,12 +88,7 @@ export function registerHighlightsTheme(name: string, theme: Theme): void {
   highlightsThemeResolver.seedResolvedTheme(name, theme);
 }
 
-const warned = new Set<string>();
-function warnOnce(message: string): void {
-  if (warned.has(message)) return;
-  warned.add(message);
-  console.warn(message);
-}
+const unsupportedLanguages = new Set<string>();
 
 const LANG_ALIASES: Record<string, Lang> = {
   ansi: 'text',
@@ -102,14 +97,17 @@ const LANG_ALIASES: Record<string, Lang> = {
 
 /** Resolve extra Shiki aliases and report unsupported languages once. */
 function toHighlightsLang(lang: SupportedLanguages | undefined): Lang {
-  const name = String(lang ?? 'text').toLowerCase();
+  const name = (lang ?? 'text').toLowerCase();
   if (isSupportedLanguage(name)) return name;
   const alias = LANG_ALIASES[name];
   if (alias != null) return alias;
-  warnOnce(
-    `@pierre/diffs/highlights: language "${name}" has no highlights lexer; ` +
-      'rendering it as plain text.'
-  );
+  if (!unsupportedLanguages.has(name)) {
+    unsupportedLanguages.add(name);
+    console.warn(
+      `@pierre/diffs/highlights: language "${name}" has no highlights lexer; ` +
+        'rendering it as plain text.'
+    );
+  }
   return 'text';
 }
 

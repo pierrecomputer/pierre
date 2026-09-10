@@ -293,7 +293,6 @@ function lightDarkStyle(
 export function lineRecordsToTokens(
   code: string,
   recs: Uint32Array,
-  count: number,
   themes: ResolvedTheme[],
   cssVariablePrefix: string,
   maxLineLength?: number,
@@ -304,9 +303,9 @@ export function lineRecordsToTokens(
   let start = 0;
   let lineStart = 0;
   const max = maxLineLength ?? 0;
-  for (let rec = 0; rec < count; rec++) {
-    const end = recs[rec * 2];
-    const hl = recs[rec * 2 + 1];
+  for (let rec = 0; rec < recs.length; rec += 2) {
+    const end = recs[rec];
+    const hl = recs[rec + 1];
     if (hl === 0xffffffff) {
       if (max > 0 && start - lineStart >= max) {
         line = [

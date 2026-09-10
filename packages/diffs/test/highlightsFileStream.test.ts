@@ -256,6 +256,12 @@ describe('FileStream with the highlights highlighter', () => {
       (span) => span.getAttribute('style') ?? ''
     );
     expect(spans.some((style) => style.includes('#ff678d'))).toBe(true);
+    for (const column of root.querySelectorAll<HTMLElement>(
+      '[data-gutter], [data-content]'
+    )) {
+      expect(column.children).toHaveLength(3);
+      expect(column.style.gridRow).toBe('span 3');
+    }
   });
 
   test('a trailing line without a newline still renders', async () => {

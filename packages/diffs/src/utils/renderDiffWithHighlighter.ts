@@ -3,12 +3,10 @@ import type { CodeToTokensOptions } from 'shiki/core';
 import { DEFAULT_COLLAPSED_CONTEXT_THRESHOLD } from '../constants';
 import type { RenderersHighlighter } from '../highlighter/resolve_highlighter';
 import type {
-  FileContents,
   FileDiffMetadata,
   ForceDiffPlainTextOptions,
   RenderDiffFilesResult,
   RenderDiffOptions,
-  SupportedLanguages,
   ThemedDiffResult,
 } from '../types';
 import { appendItems } from './appendItems';
@@ -39,10 +37,7 @@ export function renderDiffWithHighlighter(
     startingLine ??= 0;
     totalLines ??= Infinity;
   } else {
-    // If we aren't forcing plain text, then we intentionally do not support
-    // ranges for highlighting as that could break the syntax highlighting, we
-    // we override any values that may have been passed in.  Maybe one day we
-    // warn about this?
+    // Syntax highlighting needs the complete file to preserve parser state.
     startingLine = 0;
     totalLines = Infinity;
   }
@@ -64,18 +59,13 @@ export function renderDiffWithHighlighter(
   const shouldGroupAll = !forcePlainText && !diff.isPartial;
   const expandedHunksForIteration = forcePlainText ? expandedHunks : undefined;
   const buckets = new Map<number, RenderBucket>();
-  function getBucketForHunk(hunkIndex: number) {
-    const index = shouldGroupAll ? 0 : hunkIndex;
-    const bucket = buckets.get(index) ?? createBucket();
-    buckets.set(index, bucket);
-    return bucket;
-  }
 
+  // Track where windowed token rows belong before joining their source text.
   function appendContent(
     lineContent: string,
     lineIndex: number,
     segments: HighlightSegment[],
-    contentWrapper: FakeArrayType
+    content: string[]
   ) {
     if (isWindowedHighlight) {
       let segment = segments.at(-1);
@@ -85,14 +75,14 @@ export function renderDiffWithHighlighter(
       ) {
         segment = {
           targetIndex: lineIndex,
-          originalOffset: contentWrapper.length,
+          originalOffset: content.length,
           count: 0,
         };
         segments.push(segment);
       }
       segment.count++;
     }
-    contentWrapper.push(lineContent);
+    content.push(lineContent);
   }
 
   iterateOverDiff({
@@ -103,7 +93,17 @@ export function renderDiffWithHighlighter(
     expandedHunks: isWindowedHighlight ? expandedHunksForIteration : true,
     collapsedContextThreshold,
     callback: ({ hunkIndex, additionLine, deletionLine }) => {
-      const bucket = getBucketForHunk(hunkIndex);
+      const index = shouldGroupAll ? 0 : hunkIndex;
+      let bucket = buckets.get(index);
+      if (bucket == null) {
+        bucket = {
+          deletionContent: [],
+          additionContent: [],
+          deletionSegments: [],
+          additionSegments: [],
+        };
+        buckets.set(index, bucket);
+      }
       if (deletionLine != null) {
         appendContent(
           diff.deletionLines[deletionLine.lineIndex],
@@ -124,6 +124,21 @@ export function renderDiffWithHighlighter(
     },
   });
 
+  const languageOverride = forcePlainText ? 'text' : diff.lang;
+  const deletionLang =
+    languageOverride ?? getFiletypeFromFileName(diff.prevName ?? diff.name);
+  const additionLang = languageOverride ?? getFiletypeFromFileName(diff.name);
+  // Disable Shiki's silent tokenization timeout; see renderFileWithHighlighter.
+  const tokenConfig: CodeToTokensOptions<string, string> = {
+    lang: deletionLang,
+    ...(typeof options.theme === 'string'
+      ? { theme: options.theme }
+      : { themes: options.theme }),
+    defaultColor: false,
+    cssVariablePrefix: formatCSSVariablePrefix('token'),
+    tokenizeMaxLineLength: options.tokenizeMaxLineLength,
+    tokenizeTimeLimit: 0,
+  };
   for (const bucket of buckets.values()) {
     if (
       bucket.deletionContent.length === 0 &&
@@ -132,23 +147,24 @@ export function renderDiffWithHighlighter(
       continue;
     }
 
-    const deletionFile = {
-      name: diff.prevName ?? diff.name,
-      contents: bucket.deletionContent.value,
-    };
-    const additionFile = {
-      name: diff.name,
-      contents: bucket.additionContent.value,
-    };
-    const { deletionLines, additionLines } = renderTwoFiles({
-      deletionFile,
-
-      additionFile,
-
-      highlighter,
-      options,
-      languageOverride: forcePlainText ? 'text' : diff.lang,
-    });
+    const deletionContent = bucket.deletionContent.join('');
+    const additionContent = bucket.additionContent.join('');
+    tokenConfig.lang = deletionLang;
+    const deletionLines =
+      deletionContent === ''
+        ? []
+        : highlighter.codeToTokens(
+            cleanLastNewline(deletionContent),
+            tokenConfig
+          ).tokens;
+    tokenConfig.lang = additionLang;
+    const additionLines =
+      additionContent === ''
+        ? []
+        : highlighter.codeToTokens(
+            cleanLastNewline(additionContent),
+            tokenConfig
+          ).tokens;
 
     if (shouldGroupAll) {
       code.deletionLines = deletionLines;
@@ -184,7 +200,7 @@ export function renderDiffWithHighlighter(
 }
 
 interface HighlightSegment {
-  // The where the highlighted region starts
+  // Where the highlighted region starts in the bucket's token rows.
   originalOffset: number;
   // Where to place the highlighted line in RenderDiffFilesResult
   targetIndex: number;
@@ -192,107 +208,9 @@ interface HighlightSegment {
   count: number;
 }
 
-interface FakeArrayType {
-  push(value: string): void;
-  value: string;
-  length: number;
-}
-
 interface RenderBucket {
-  deletionContent: FakeArrayType;
-  additionContent: FakeArrayType;
+  deletionContent: string[];
+  additionContent: string[];
   deletionSegments: HighlightSegment[];
   additionSegments: HighlightSegment[];
-}
-
-function createBucket(): RenderBucket {
-  return {
-    deletionContent: {
-      push(value: string) {
-        this.value += value;
-        this.length++;
-      },
-      value: '',
-      length: 0,
-    },
-    additionContent: {
-      push(value: string) {
-        this.value += value;
-        this.length++;
-      },
-      value: '',
-      length: 0,
-    },
-    deletionSegments: [],
-    additionSegments: [],
-  };
-}
-
-interface RenderTwoFilesProps {
-  deletionFile: FileContents;
-  additionFile: FileContents;
-  options: RenderDiffOptions;
-  highlighter: RenderersHighlighter;
-  languageOverride: SupportedLanguages | undefined;
-}
-
-function renderTwoFiles({
-  deletionFile,
-  additionFile,
-  highlighter,
-  languageOverride,
-  options: { theme: themeOrThemes, ...options },
-}: RenderTwoFilesProps): RenderDiffFilesResult {
-  const deletionLang =
-    languageOverride ?? getFiletypeFromFileName(deletionFile.name);
-  const additionLang =
-    languageOverride ?? getFiletypeFromFileName(additionFile.name);
-  // tokenizeTimeLimit: 0 — never trade silently-wrong token colors for
-  // latency; see renderFileWithHighlighter for the full rationale.
-  const tokenConfig: CodeToTokensOptions<string, string> = (() => {
-    return typeof themeOrThemes === 'string'
-      ? {
-          ...options,
-          // language will be overwritten for each highlight
-          lang: 'text',
-          theme: themeOrThemes,
-          defaultColor: false,
-          cssVariablePrefix: formatCSSVariablePrefix('token'),
-          tokenizeTimeLimit: 0,
-        }
-      : {
-          ...options,
-          // language will be overwritten for each highlight
-          lang: 'text',
-          themes: themeOrThemes,
-          defaultColor: false,
-          cssVariablePrefix: formatCSSVariablePrefix('token'),
-          tokenizeTimeLimit: 0,
-        };
-  })();
-
-  const deletionLines = (() => {
-    if (deletionFile.contents === '') {
-      return [];
-    }
-    tokenConfig.lang = deletionLang;
-
-    return highlighter.codeToTokens(
-      cleanLastNewline(deletionFile.contents),
-      tokenConfig
-    ).tokens;
-  })();
-  const additionLines = (() => {
-    if (additionFile.contents === '') {
-      return [];
-    }
-    tokenConfig.lang = additionLang;
-
-    return highlighter.codeToTokens(
-      cleanLastNewline(additionFile.contents),
-      tokenConfig
-    ).tokens;
-  })();
-
-  return { deletionLines, additionLines };
 }

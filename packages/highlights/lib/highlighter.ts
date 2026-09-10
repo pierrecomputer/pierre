@@ -392,7 +392,6 @@ export class HighlightsHighlighter implements Highlighter {
     const tokens = lineRecordsToTokens(
       code,
       recs,
-      recs.length >> 1,
       themes,
       cssVariablePrefix,
       options.tokenizeMaxLineLength
@@ -624,7 +623,6 @@ export class StreamTokenizer {
     const lines = lineRecordsToTokens(
       code,
       recs,
-      recs.length >> 1,
       this.#themes,
       this.#cssVariablePrefix,
       this.#maxLineLength,

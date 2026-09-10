@@ -42,7 +42,7 @@ export function createFileHeaderElement({
           prevName: 'prevName' in fileOrDiff ? fileOrDiff.prevName : undefined,
           iconType: fileDiff?.type ?? 'file',
         }),
-    ...(mode === 'custom' ? [] : [createMetadataElement(fileDiff)])
+    mode === 'custom' ? '' : createMetadataElement(fileDiff)
   );
 }
 

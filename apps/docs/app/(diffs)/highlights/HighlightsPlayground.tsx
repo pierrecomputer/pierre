@@ -42,8 +42,10 @@ export function HighlightsPlayground({
 }: {
   prerenderedHTML: string;
 }) {
-  const [selectedLightTheme, setSelectedLightTheme] = useState('pierre-light');
-  const [selectedDarkTheme, setSelectedDarkTheme] = useState('pierre-dark');
+  const [selectedThemes, setSelectedThemes] = useState({
+    light: 'pierre-light',
+    dark: 'pierre-dark',
+  });
   const [selectedColorMode, setSelectedColorMode] = useState<
     'system' | 'light' | 'dark'
   >('system');
@@ -87,85 +89,56 @@ export function HighlightsPlayground({
     <section id="playground" className="space-y-5 pb-16 md:pb-24">
       <div className="flex flex-wrap gap-3 md:items-center">
         <div className="flex w-full gap-3 md:w-auto">
-          <DropdownMenu
-            onOpenChange={(open) => {
-              if (!open) setPreviewTheme(undefined);
-            }}
-          >
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" className="flex-1 justify-start">
-                <IconColorLight />
-                {selectedLightTheme}
-                <IconChevronSm className="text-muted-foreground ml-auto" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" scrollSelectedIntoView>
-              {docsThemeCatalog
-                .getThemeNames({ colorScheme: 'light' })
-                .map((theme) => (
-                  <DropdownMenuItem
-                    key={theme}
-                    onFocus={() =>
-                      setPreviewTheme({ name: theme, colorScheme: 'light' })
-                    }
-                    onBlur={() => setPreviewTheme(undefined)}
-                    onClick={() => {
-                      setSelectedLightTheme(theme);
-                      setSelectedColorMode('light');
-                    }}
-                    selected={selectedLightTheme === theme}
-                  >
-                    {theme}
-                    {selectedLightTheme === theme && (
-                      <IconCheck className="ml-auto" />
-                    )}
-                  </DropdownMenuItem>
-                ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
-
-          <DropdownMenu
-            onOpenChange={(open) => {
-              if (!open) setPreviewTheme(undefined);
-            }}
-          >
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" className="flex-1 justify-start">
-                <IconColorDark />
-                {selectedDarkTheme}
-                <IconChevronSm className="text-muted-foreground ml-auto" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent
-              align="start"
-              className="max-h-[550px] overflow-auto"
-              scrollSelectedIntoView
+          {(['light', 'dark'] as const).map((colorScheme) => (
+            <DropdownMenu
+              key={colorScheme}
+              onOpenChange={(open) => {
+                if (!open) setPreviewTheme(undefined);
+              }}
             >
-              {docsThemeCatalog
-                .getThemeNames({ colorScheme: 'dark' })
-                .map((theme) => (
-                  <DropdownMenuItem
-                    key={theme}
-                    onFocus={() =>
-                      setPreviewTheme({ name: theme, colorScheme: 'dark' })
-                    }
-                    onBlur={() => setPreviewTheme(undefined)}
-                    onClick={() => {
-                      setSelectedDarkTheme(theme);
-                      setSelectedColorMode('dark');
-                    }}
-                    selected={selectedDarkTheme === theme}
-                  >
-                    {theme}
-                    {selectedDarkTheme === theme ? (
-                      <IconCheck className="ml-auto" />
-                    ) : (
-                      <div className="ml-2 h-4 w-4" />
-                    )}
-                  </DropdownMenuItem>
-                ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" className="flex-1 justify-start">
+                  {colorScheme === 'light' ? (
+                    <IconColorLight />
+                  ) : (
+                    <IconColorDark />
+                  )}
+                  {selectedThemes[colorScheme]}
+                  <IconChevronSm className="text-muted-foreground ml-auto" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent
+                align="start"
+                className="max-h-[550px] overflow-auto"
+                scrollSelectedIntoView
+              >
+                {docsThemeCatalog
+                  .getThemeNames({ colorScheme })
+                  .map((theme) => (
+                    <DropdownMenuItem
+                      key={theme}
+                      onFocus={() =>
+                        setPreviewTheme({ name: theme, colorScheme })
+                      }
+                      onBlur={() => setPreviewTheme(undefined)}
+                      onClick={() => {
+                        setSelectedThemes((themes) => ({
+                          ...themes,
+                          [colorScheme]: theme,
+                        }));
+                        setSelectedColorMode(colorScheme);
+                      }}
+                      selected={selectedThemes[colorScheme] === theme}
+                    >
+                      {theme}
+                      {selectedThemes[colorScheme] === theme && (
+                        <IconCheck className="ml-auto" />
+                      )}
+                    </DropdownMenuItem>
+                  ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ))}
         </div>
 
         <ButtonGroup
@@ -233,11 +206,11 @@ export function HighlightsPlayground({
             dark:
               previewTheme?.colorScheme === 'dark'
                 ? previewTheme.name
-                : selectedDarkTheme,
+                : selectedThemes.dark,
             light:
               previewTheme?.colorScheme === 'light'
                 ? previewTheme.name
-                : selectedLightTheme,
+                : selectedThemes.light,
           },
           themeType: previewTheme?.colorScheme ?? selectedColorMode,
           useTokenTransformer: true,

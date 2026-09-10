@@ -154,12 +154,10 @@ export class WorkerPoolManager {
       maxLineDiffLength,
       tokenizeMaxLineLength,
     };
-    this.fileCache = new LRUMapPkg.LRUMap(
-      options.totalTokenLRUCacheSize ?? options.totalASTLRUCacheSize ?? 100
-    );
-    this.diffCache = new LRUMapPkg.LRUMap(
-      options.totalTokenLRUCacheSize ?? options.totalASTLRUCacheSize ?? 100
-    );
+    const cacheSize =
+      options.totalTokenLRUCacheSize ?? options.totalASTLRUCacheSize ?? 100;
+    this.fileCache = new LRUMapPkg.LRUMap(cacheSize);
+    this.diffCache = new LRUMapPkg.LRUMap(cacheSize);
     this.queueInitialization(langs);
   }
 

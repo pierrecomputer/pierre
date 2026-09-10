@@ -54,7 +54,7 @@ interface LiveEditorTokenizerProps extends Omit<
 /**
  * The tokenizer surface the editor drives. `ShikiEditorTokenizer` implements
  * it over shiki's TextMate grammars with incremental grammar states;
- * `LiveEditorTokenizer` implements it over a `CodeHighlighter`'s incremental
+ * `HighlightsEditorTokenizer` implements it over a `CodeHighlighter`'s incremental
  * live tokenizer. `createEditorTokenizer` picks one.
  */
 export interface EditorTokenizer {
@@ -1185,13 +1185,10 @@ export class HighlightsEditorTokenizer extends BaseEditorTokenizer {
     hostRealignsRows = false
   ): Map<number, Array<HighlightedToken>> {
     this.#stopped = false;
-    const { lineCount } = this.textDocument;
-    const { startingLine = 0, totalLines = Infinity } = renderRange ?? {};
-    const rangeStart = Math.min(startingLine, lineCount);
-    const rangeEnd =
-      totalLines === Infinity
-        ? lineCount
-        : Math.min(startingLine + totalLines, lineCount);
+    const [rangeStart, rangeEnd] = this.#initialRange(renderRange) ?? [
+      0,
+      this.textDocument.lineCount,
+    ];
 
     let dirtyLines: Map<number, Array<HighlightedToken>>;
     if (this.#live == null || this.#liveLang !== this.textDocument.languageId) {
@@ -1521,7 +1518,7 @@ export function createEditorTokenizer(
   }
 ): EditorTokenizer {
   const { highlighter } = props;
-  if (isCodeHighlighter(highlighter)) {
+  if ('load' in highlighter && 'isReady' in highlighter) {
     // An explicit live tokenizer wins over a shiki pass-through, so a custom
     // highlighter that also exposes a shiki instance keeps its own edit mode.
     if (highlighter.createLiveTokenizer != null) {
@@ -1541,15 +1538,6 @@ export function createEditorTokenizer(
     );
   }
   return new ShikiEditorTokenizer({ ...props, highlighter });
-}
-
-function isCodeHighlighter(
-  highlighter: RenderersHighlighter
-): highlighter is CodeHighlighter {
-  return (
-    typeof (highlighter as CodeHighlighter).isReady === 'function' &&
-    typeof (highlighter as CodeHighlighter).load === 'function'
-  );
 }
 
 /**

@@ -98,8 +98,8 @@ export default async function HighlightsPage() {
                   <dt className="text-sm font-medium">Familiar APIs</dt>
                   <dd className="text-muted-foreground mt-0.5 text-sm text-pretty">
                     Use <code>codeToHtml()</code> and{' '}
-                    <code>codeToTokens()</code>
-                    in familiar highlighting workflows.
+                    <code>codeToTokens()</code> in familiar highlighting
+                    workflows.
                   </dd>
                 </div>
                 <div>

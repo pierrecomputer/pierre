@@ -56,10 +56,10 @@ const DIFFS_SECTIONS = [
   'Utilities',
   'Styling',
   'Theming',
-  'HighlightsHighlighter',
   'TokenHooks',
   'WorkerPool',
   'SSR',
+  'HighlightsHighlighter',
 ] as const;
 
 const TREES_SECTIONS = [

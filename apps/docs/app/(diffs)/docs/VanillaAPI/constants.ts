@@ -1077,9 +1077,7 @@ const additionsHTML = additions == null
   : instance.renderPartialHTML(additions, 'additions');
 
 // Or render without the <code> wrapper
-const rawHTML = additions == null ? '' : instance.renderPartialHTML(additions);
-
-`,
+const rawHTML = additions == null ? '' : instance.renderPartialHTML(additions);`,
   },
   options,
 };

@@ -1607,9 +1607,11 @@ export class File<LAnnotation = undefined, Caret = undefined> {
     this.editor?.__captureFocusForDOMReplacement();
     const applyColumns = () => {
       if (code.childElementCount >= 2) {
-        for (const [i, rows] of [column.gutter, column.content].entries()) {
+        for (let i = 0; i < 2; i++) {
           const domEl = code.children[i] as HTMLElement;
-          domEl.innerHTML = renderRows(rows);
+          domEl.innerHTML = renderRows(
+            i === 0 ? column.gutter : column.content
+          );
           domEl.style.cssText = `grid-row: span ${column.rowCount}`;
         }
       } else {

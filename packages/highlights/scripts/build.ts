@@ -217,7 +217,7 @@ export function transformWat(
     if (!inner.includes(leading)) {
       throw new Error(`${name} has no leading-continuation checkpoint`);
     }
-    const live = liveLocalsAtCheckpoint(inner, leading);
+    const live = liveLocalsAtCheckpoint(inner);
     const locals = [...inner.matchAll(/\(local\s+(\$\w+)\s+(\w+)\s*\)/g)];
     // each lexer owns an 8-byte-aligned window of the checkpoint region; the
     // window base lives in $streamRoot so every access is a one-byte offset
@@ -1152,17 +1152,17 @@ function union(a: Set<string>, b: Set<string>): Set<string> {
 
 /**
  * The locals of a stream lexer whose values carry across chunk boundaries:
- * those live right after the checkpoint call `marker` in the function body
+ * those live right after `$lexEmitLeadingContinuation` in the function body
  * `inner`, i.e. read on some path before they are written. Locals dead at
  * that point are recomputed by the lexer before use, so restoring them is
  * pointless and saving them only bloats the state the live tokenizer interns.
  */
-function liveLocalsAtCheckpoint(inner: string, marker: string): Set<string> {
+function liveLocalsAtCheckpoint(inner: string): Set<string> {
   const body = parseSexpr(inner).filter(Array.isArray);
   const at = body.findIndex(
     (n) => n[0] === 'call' && n[1] === '$lexEmitLeadingContinuation'
   );
-  if (at < 0 || !marker.includes('$lexEmitLeadingContinuation')) {
+  if (at < 0) {
     throw new Error('the checkpoint call must be a top-level statement');
   }
   return new LocalLiveness().seq(body.slice(at + 1), new Set());

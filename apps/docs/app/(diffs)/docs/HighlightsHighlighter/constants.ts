@@ -95,10 +95,8 @@ live.dispose();`,
     file: {
       name: 'themes.ts',
       contents: `import { codeToHtml, codeToTokens } from '@pierre/highlights';
-import { cssVariables, toCSS } from '@pierre/highlights/themes';
+import { cssVariables, pierreLight, toCSS } from '@pierre/highlights/themes';
 import vitesseDark from '@pierre/highlights/themes/vitesse-dark';
-// or
-import customZedTheme from './custom-zed-theme.json';
 
 const html = codeToHtml(source, { lang: 'ts', theme: vitesseDark });
 const themeCSS = toCSS(vitesseDark);
@@ -110,7 +108,7 @@ const portable = codeToHtml(source, {
 
 const { tokens } = codeToTokens(source, {
   lang: 'ts',
-  themes: { dark: vitesseDark, light: lightTheme },
+  themes: { dark: vitesseDark, light: pierreLight },
   cssVariablePrefix: '--code-',
   defaultColor: false,
 });`,
