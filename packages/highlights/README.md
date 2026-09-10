@@ -19,7 +19,7 @@ Try it live in the [playground](https://diffs.com/highlights).
 - **Merged spans.** Equal styles share one `<span>` across whitespace.
 - **Hand-written WAT.** No C or Rust compiler overhead.
 
-## Usage
+## Installation
 
 ```bash
 npm install @pierre/highlights
@@ -27,6 +27,10 @@ npm install @pierre/highlights
 
 highlights runs in Node.js, browsers, and Cloudflare Workers. Conditional
 exports select the right WebAssembly loader.
+
+## HTML generation
+
+`codeToHtml` is the main function for HTML generation.
 
 ```js
 import { codeToHtml } from '@pierre/highlights';
@@ -45,7 +49,7 @@ new TextDecoder().decode(html);
 fragment. The view is valid until the next call. Send it to a `Response` or
 file, or decode it with `TextDecoder`.
 
-## Tokens
+## Tokens generation
 
 `codeToTokens` returns Shiki-compatible themed tokens. WebAssembly emits
 line-aware UTF-16 style records; JavaScript builds the token objects.
@@ -56,20 +60,20 @@ import { codeToTokens } from '@pierre/highlights';
 const { tokens } = codeToTokens('const a = 1', {
   lang: 'ts',
   theme: pierreDark,
+  // or use dual themes
+  themes: {
+    dark: pierreDark,
+    light: pierreLight,
+  },
 });
 // [[{ content: 'const ', offset: 0, color: '#ff678d', fontStyle: 0 }, ...]]
 ```
 
-Pass `theme` for one theme or `themes` for multiple color schemes. With
-`themes`, the `defaultColor` theme (`light` unless set) is applied inline and
-the others become `--hls-<name>` custom properties; `defaultColor: false` makes
-every theme a custom property, and `'light-dark()'` merges `light` and `dark`
-into CSS `light-dark()` colors. `tokenizeMaxLineLength` collapses long lines
-into one unthemed token.
+## Streaming mode
 
-Use `StreamTokenizer` for streaming and `LiveTokenizer` for editors. Each owns a
-Wasm instance and text buffer. Streams preserve lexer state for every language
-and scan only newly completed chunks:
+Use `StreamTokenizer` for streaming. it owns a Wasm instance and text buffer.
+Streams preserve lexer state for every language and scan only newly completed
+chunks:
 
 ```js
 import { StreamTokenizer, LiveTokenizer } from '@pierre/highlights';
@@ -83,7 +87,15 @@ try {
 } finally {
   stream.dispose();
 }
+```
 
+## Edit mode
+
+`LiveTokenizer` keeps the document, per-line token records, and interned lexer
+states in Wasm, and doubles as the document model: `getLineText`/`getText` read
+back the exact document.
+
+```ts
 // editing: apply batched UTF-16 range edits; only lines whose lexer state
 // changed are re-tokenized, and the update lists exactly those lines
 const live = new LiveTokenizer({ lang: 'ts', theme: pierreDark, code });
@@ -99,17 +111,6 @@ for (const change of update.lineChanges) {
   }
 }
 ```
-
-`LiveTokenizer` keeps the document, per-line token records, and interned lexer
-states in Wasm, and doubles as the document model: `getLineText`/`getText` read
-back the exact document. A `renderRange: [startLine, endLine)` option on the
-constructor, `applyEdits`, and `reset` bounds synchronous work to the visible
-window — the update's `lines` map carries `[column, color, text]` tuples for the
-re-tokenized in-range lines, while off-range lines converge in background slices
-delivered through the `onDeferTokenize(lines)` constructor option (`flush`
-forces completion, `pendingTokenization` reports it). `getLineRecords` exposes
-zero-copy packed records (`tokenNames` maps their token ids), and `dispose`
-releases the instance.
 
 ## Themes
 
