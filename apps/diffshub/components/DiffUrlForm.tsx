@@ -18,6 +18,10 @@ import { Button } from '@/components/Button';
 import { cn } from '@/lib/cn';
 import { getPatchViewerHref } from '@/lib/getPatchViewerHref';
 
+// The only validation message the form shows. The error popover keeps rendering
+// it while fading out, after `validationError` has already been cleared.
+const INVALID_URL_MESSAGE = 'Please enter a valid URL';
+
 interface DiffUrlFormProps {
   className?: string;
   // When provided, the input restores to this value on blur or Escape. Also
@@ -58,8 +62,6 @@ export function DiffUrlForm({
     top: number;
     left: number;
   } | null>(null);
-  // Preserves the last message so the popover still has content while fading out.
-  const [lastErrorText, setLastErrorText] = useState<string | null>(null);
   // Prevents the onBlur restore from firing when blur is caused by Enter.
   const isSubmittingRef = useRef(false);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -96,8 +98,7 @@ export function DiffUrlForm({
       if (viewerHref == null) {
         const rect = inputRef.current?.getBoundingClientRect();
         if (rect != null) setErrorAnchor({ top: rect.bottom, left: rect.left });
-        setLastErrorText('Please enter a valid URL');
-        setValidationError('Please enter a valid URL');
+        setValidationError(INVALID_URL_MESSAGE);
         return;
       }
       setValidationError(null);
@@ -190,7 +191,7 @@ export function DiffUrlForm({
             }}
           >
             <div className="bg-foreground absolute -top-1 left-3 size-2.5 rotate-45 rounded-[2px]" />
-            {lastErrorText}
+            {INVALID_URL_MESSAGE}
           </div>,
           document.body
         )}
