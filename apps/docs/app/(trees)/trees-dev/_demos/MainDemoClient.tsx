@@ -52,6 +52,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { useResettableState } from '@/lib/useResettableState';
 
 interface MainDemoClientProps {
   children: ReactNode;
@@ -478,16 +479,10 @@ export function MainDemoClient({
     'complete' | 'custom' | 'minimal' | 'standard'
   >('complete');
   const selectedWorkloadName = workloadData.selectedWorkload.name;
-  const [previousSelectedWorkloadName, setPreviousSelectedWorkloadName] =
-    useState(selectedWorkloadName);
+  // The optimistic selection is reconciled before a newly loaded workload
+  // renders.
   const [pendingWorkloadName, setPendingWorkloadName] =
-    useState(selectedWorkloadName);
-
-  // Reconcile the optimistic selection before rendering a newly loaded workload.
-  if (previousSelectedWorkloadName !== selectedWorkloadName) {
-    setPreviousSelectedWorkloadName(selectedWorkloadName);
-    setPendingWorkloadName(selectedWorkloadName);
-  }
+    useResettableState(selectedWorkloadName);
 
   const preparedInput = useMemo(
     () =>
@@ -551,6 +546,7 @@ export function MainDemoClient({
       pathname,
       router,
       searchParams,
+      setPendingWorkloadName,
       startDemoStateTransition,
     ]
   );

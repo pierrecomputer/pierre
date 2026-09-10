@@ -13,6 +13,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { useTheme } from '@/components/theme-provider';
 import { ButtonGroup, ButtonGroupItem } from '@/components/ui/button-group';
+import { useOnValueChange } from '@/lib/useOnValueChange';
 import { cn } from '@/lib/utils';
 
 // Preload themes at module level for earliest possible start
@@ -316,8 +317,6 @@ export function ThemeDemo() {
   const [colorMode, setColorMode] = useState<'light' | 'dark'>(
     () => resolvedColorScheme ?? 'dark'
   );
-  const [previousResolvedColorScheme, setPreviousResolvedColorScheme] =
-    useState(resolvedColorScheme);
   const [activeTab, setActiveTab] = useState<TabId>('typescript');
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -353,12 +352,11 @@ export function ThemeDemo() {
     [workingFiles]
   );
 
-  if (previousResolvedColorScheme !== resolvedColorScheme) {
-    setPreviousResolvedColorScheme(resolvedColorScheme);
-    if (resolvedColorScheme === 'light' || resolvedColorScheme === 'dark') {
-      setColorMode(resolvedColorScheme);
+  useOnValueChange(resolvedColorScheme, (scheme) => {
+    if (scheme === 'light' || scheme === 'dark') {
+      setColorMode(scheme);
     }
-  }
+  });
 
   // Close dropdown when clicking outside
   useEffect(() => {

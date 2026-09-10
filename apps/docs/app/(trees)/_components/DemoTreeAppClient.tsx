@@ -7,7 +7,7 @@ import type { FileTreePreloadedData } from '@pierre/trees/react';
 import { useFileTree } from '@pierre/trees/react';
 import { TreeApp } from '@trees/_components/TreeApp';
 import type { TreeAppTheme } from '@trees/_components/TreeApp';
-import type { CSSProperties, Dispatch, SetStateAction } from 'react';
+import type { CSSProperties } from 'react';
 import { useEffect, useMemo, useState } from 'react';
 
 import { TREE_NEW_VIEWPORT_HEIGHTS } from '../_lib/dimensions';
@@ -16,6 +16,7 @@ import {
   TREE_APP_DEMO_UNSAFE_CSS,
 } from '../_lib/treeAppDemoData';
 import { usePortalContainer } from '@/lib/usePortalContainer';
+import { useResettableState } from '@/lib/useResettableState';
 
 const COMPACT_DENSITY = 'compact' as const;
 
@@ -183,20 +184,6 @@ function isPathInsideIgnoredDirectory(
   }
 
   return false;
-}
-
-// Keeps local edits until the server provides a new source value, then resets
-// them before React commits a render with stale data.
-function useResettableState<T>(source: T): [T, Dispatch<SetStateAction<T>>] {
-  const [previousSource, setPreviousSource] = useState(source);
-  const [value, setValue] = useState(source);
-
-  if (previousSource !== source) {
-    setPreviousSource(source);
-    setValue(source);
-  }
-
-  return [value, setValue];
 }
 
 export function DemoTreeAppClient({

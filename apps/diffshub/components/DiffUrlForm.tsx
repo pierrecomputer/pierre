@@ -13,6 +13,7 @@ import {
 } from 'react';
 import { createPortal } from 'react-dom';
 
+import { useResettableState } from './useResettableState';
 import { Button } from '@/components/Button';
 import { cn } from '@/lib/cn';
 import { getPatchViewerHref } from '@/lib/getPatchViewerHref';
@@ -49,8 +50,7 @@ export function DiffUrlForm({
 }: DiffUrlFormProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
-  const [previousInitialUrl, setPreviousInitialUrl] = useState(initialUrl);
-  const [url, setURL] = useState(initialUrl);
+  const [url, setURL] = useResettableState(initialUrl);
   const [validationError, setValidationError] = useState<string | null>(null);
   // Tracks the input's viewport position when an error is shown so the portal
   // can be fixed-positioned outside any contain-paint boundary.
@@ -63,11 +63,6 @@ export function DiffUrlForm({
   // Prevents the onBlur restore from firing when blur is caused by Enter.
   const isSubmittingRef = useRef(false);
   const inputRef = useRef<HTMLInputElement>(null);
-
-  if (previousInitialUrl !== initialUrl) {
-    setPreviousInitialUrl(initialUrl);
-    setURL(initialUrl);
-  }
 
   useEffect(() => {
     onUrlChange?.(url);

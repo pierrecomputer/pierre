@@ -8,6 +8,7 @@ import pierreDark from '../pierre-dark.png';
 import pierreLight from '../pierre-light.png';
 import { useTheme } from '@/components/theme-provider';
 import { ButtonGroup, ButtonGroupItem } from '@/components/ui/button-group';
+import { useOnValueChange } from '@/lib/useOnValueChange';
 
 export function ThemeScreenshots() {
   const { resolvedColorScheme } = useTheme();
@@ -16,15 +17,11 @@ export function ThemeScreenshots() {
   const [activeTheme, setActiveTheme] = useState<'light' | 'dark'>(
     () => resolvedColorScheme ?? 'dark'
   );
-  const [previousResolvedColorScheme, setPreviousResolvedColorScheme] =
-    useState(resolvedColorScheme);
-
-  if (previousResolvedColorScheme !== resolvedColorScheme) {
-    setPreviousResolvedColorScheme(resolvedColorScheme);
-    if (resolvedColorScheme === 'light' || resolvedColorScheme === 'dark') {
-      setActiveTheme(resolvedColorScheme);
+  useOnValueChange(resolvedColorScheme, (scheme) => {
+    if (scheme === 'light' || scheme === 'dark') {
+      setActiveTheme(scheme);
     }
-  }
+  });
 
   if (resolvedColorScheme == null) {
     return (

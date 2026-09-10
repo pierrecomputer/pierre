@@ -21,6 +21,7 @@ import { useGitHubDiffFileLoader } from './useGitHubDiffFileLoader';
 import { useGitHubToken } from './useGitHubToken';
 import { useIsHydrated } from './useIsHydrated';
 import { useMediaQuery } from './useMediaQuery';
+import { useOnValueChange } from './useOnValueChange';
 import { usePatchLoader } from './usePatchLoader';
 import { useThemeCycle } from './useThemeCycle';
 import {
@@ -168,17 +169,14 @@ function ReviewUIInner({ domain, initialUrl, path }: ReviewUIProps) {
   // the style until the next crossing. Applied before the render commits, so
   // the first client render after hydration already shows the right style.
   const isMobileViewport = useMediaQuery(MOBILE_MEDIA_QUERY, undefined);
-  const [previousIsMobileViewport, setPreviousIsMobileViewport] =
-    useState(isMobileViewport);
-  if (previousIsMobileViewport !== isMobileViewport) {
-    setPreviousIsMobileViewport(isMobileViewport);
-    if (isMobileViewport != null) {
-      setDiffStyle(isMobileViewport ? 'unified' : 'split');
-      if (!isMobileViewport) {
+  useOnValueChange(isMobileViewport, (isMobile) => {
+    if (isMobile != null) {
+      setDiffStyle(isMobile ? 'unified' : 'split');
+      if (!isMobile) {
         setFileTreeOverlayOpen(false);
       }
     }
-  }
+  });
   const handleSelectTreeItem = useCallback((itemId: string) => {
     setFileTreeOverlayOpen(false);
     const viewer = viewerRef.current;

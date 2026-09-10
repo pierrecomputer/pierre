@@ -29,6 +29,7 @@ import {
   ExampleThread,
 } from './PlaygroundComments';
 import { EditSessionButtons } from './PlaygroundEditButtons';
+import { useOnValueChange } from '@/lib/useOnValueChange';
 
 const CODE_VIEW_STYLES = { height: '70vh', overflow: 'auto' } as const;
 
@@ -101,10 +102,6 @@ export function PlaygroundCodeView({
     },
     [onEditingChange]
   );
-  // Starts `true` so mounting with annotations hidden runs the same clearing
-  // pass as toggling them off later.
-  const [previousShowAnnotations, setPreviousShowAnnotations] = useState(true);
-
   // Item ids whose next completion should revert: Cancel marks the id here
   // before turning edit off, and the completion handler consumes the mark.
   const cancelledEdits = useRef<Set<string>>(new Set());
@@ -274,20 +271,24 @@ export function PlaygroundCodeView({
   );
 
   // Annotations live on item data, so hiding them is a data change: turning
-  // the toggle off clears any comments that were added.
-  if (previousShowAnnotations !== showAnnotations) {
-    setPreviousShowAnnotations(showAnnotations);
-    if (!showAnnotations) {
-      setSelectedLines(null);
-      setItems((current) =>
-        current.map((item) =>
-          (item.annotations?.length ?? 0) > 0
-            ? { ...item, annotations: [], version: (item.version ?? 0) + 1 }
-            : item
-        )
-      );
-    }
-  }
+  // the toggle off clears any comments that were added. Measured against
+  // `true` so mounting with annotations hidden runs the same clearing pass.
+  useOnValueChange(
+    showAnnotations,
+    (show) => {
+      if (!show) {
+        setSelectedLines(null);
+        setItems((current) =>
+          current.map((item) =>
+            (item.annotations?.length ?? 0) > 0
+              ? { ...item, annotations: [], version: (item.version ?? 0) + 1 }
+              : item
+          )
+        );
+      }
+    },
+    true
+  );
 
   // Match the direct views' precedence: an open comment form (neither a
   // thread nor a submitted comment) pauses the gutter utility so forms can't

@@ -25,6 +25,7 @@ import { ITEM_UNSAFE_CSS, LONG_README_FILE } from './constants';
 import type { SharedRenderOptions } from './PlaygroundClient';
 import { CommentForm, CommentThread } from './PlaygroundComments';
 import { EditSessionButtons } from './PlaygroundEditButtons';
+import { useOnValueChange } from '@/lib/useOnValueChange';
 
 const SCROLL_REGION_STYLES = { height: '70vh', overflow: 'auto' } as const;
 
@@ -123,10 +124,6 @@ function ElementVirtualizerFile({
   const [selectedLines, setSelectedLines] = useState<SelectedLineRange | null>(
     null
   );
-  // Starts `true` so mounting with annotations hidden clears the selection
-  // the same way toggling them off later does.
-  const [previousShowAnnotations, setPreviousShowAnnotations] = useState(true);
-
   const editorOptions = useMemo<
     EditorOptions<'file', PlaygroundAnnotationMetadata, undefined>
   >(
@@ -199,12 +196,17 @@ function ElementVirtualizerFile({
     []
   );
 
-  if (previousShowAnnotations !== showAnnotations) {
-    setPreviousShowAnnotations(showAnnotations);
-    if (!showAnnotations) {
-      setSelectedLines(null);
-    }
-  }
+  // Hiding annotations clears the selection. Measured against `true` so
+  // mounting with annotations hidden clears it the same way.
+  useOnValueChange(
+    showAnnotations,
+    (show) => {
+      if (!show) {
+        setSelectedLines(null);
+      }
+    },
+    true
+  );
 
   const hasOpenCommentForm = annotations.some(
     (annotation) => annotation.metadata.body == null
@@ -331,10 +333,6 @@ function ElementVirtualizerDiff({
   const [selectedLines, setSelectedLines] = useState<SelectedLineRange | null>(
     null
   );
-  // Starts `true` so mounting with annotations hidden clears the selection
-  // the same way toggling them off later does.
-  const [previousShowAnnotations, setPreviousShowAnnotations] = useState(true);
-
   const editorOptions = useMemo<
     EditorOptions<'file-diff', PlaygroundAnnotationMetadata, undefined>
   >(
@@ -420,12 +418,17 @@ function ElementVirtualizerDiff({
     []
   );
 
-  if (previousShowAnnotations !== showAnnotations) {
-    setPreviousShowAnnotations(showAnnotations);
-    if (!showAnnotations) {
-      setSelectedLines(null);
-    }
-  }
+  // Hiding annotations clears the selection. Measured against `true` so
+  // mounting with annotations hidden clears it the same way.
+  useOnValueChange(
+    showAnnotations,
+    (show) => {
+      if (!show) {
+        setSelectedLines(null);
+      }
+    },
+    true
+  );
 
   // Match the other views' precedence: an open comment form (no submitted
   // body yet) pauses the gutter utility so another form cannot be opened
