@@ -218,8 +218,10 @@ function areSamePathLists(
   return true;
 }
 
-// Quick workaround to allow react compiler to still function in the parent
-// component
+// The selection the tree should show on this render, read from the ref the demo
+// keeps current while restoring selection across option changes. Kept in its own
+// hook because the render-time ref read is deliberate; the boundary lets the demo
+// component stay compilable.
 function useDesiredSelectedPaths(
   desiredSelectedPathsRef: RefObject<readonly string[]>
 ) {

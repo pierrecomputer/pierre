@@ -300,8 +300,12 @@ interface UseEffectiveFileDiffProps<LAnnotation, Caret> {
   parseDiffOptions: FileDiffOptions<LAnnotation, Caret>['parseDiffOptions'];
 }
 
-// This hook breaks the rules of react, so by putting the logic in its own hook
-// we create a boundary so the parent hook can still be compiled
+// Resolves the diff the instance renders: the `fileDiff` prop when given;
+// otherwise the accepted edit's cached diff while the file props still name the
+// pair it was accepted against; otherwise a fresh parse of the file props. A
+// cached pair that no longer matches is dropped on the way. Kept in its own hook
+// because the render-time ref read and write are deliberate; the boundary lets
+// the calling hook stay compilable.
 function useEffectiveFileDiff<LAnnotation, Caret>({
   acceptedCache,
   fileDiff,
