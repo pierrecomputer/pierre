@@ -328,6 +328,119 @@ describe('CodeView worker pool readiness', () => {
     }
   });
 
+  test.each(['resolves', 'rejects'])(
+    'loads a replacement highlighter while the previous load %s late',
+    async (settlement) => {
+      const { cleanup } = installDom();
+      const consoleError = spyOn(console, 'error').mockImplementation(() => {});
+      await highlightsHighlighter.load({ langs: [], themes: ['pierre-dark'] });
+      let resolvePrevious!: () => void;
+      let rejectPrevious!: (error: Error) => void;
+      const previousLoad = new Promise<void>((resolve, reject) => {
+        resolvePrevious = resolve;
+        rejectPrevious = reject;
+      });
+      let resolveReplacement!: () => void;
+      const replacementLoad = new Promise<void>((resolve) => {
+        resolveReplacement = resolve;
+      });
+      let replacementReady = false;
+      const replacement = {
+        ...highlightsHighlighter,
+        isReady: () => replacementReady,
+        load: mock(async () => {
+          await replacementLoad;
+          replacementReady = true;
+        }),
+      };
+      setHighlighter({
+        ...highlightsHighlighter,
+        isReady: () => false,
+        load: () => previousLoad,
+      });
+      const viewer = new CodeView({
+        theme: 'pierre-dark',
+        disableFileHeader: true,
+      });
+
+      try {
+        viewer.setup(createRoot({ height: 1000 }));
+        viewer.setItems([makeFileItem('file:replacement-highlighter', 3)]);
+        viewer.render(true);
+        expect(viewer.getRenderedItems()).toHaveLength(0);
+
+        setHighlighter(replacement);
+        viewer.render(true);
+        expect(replacement.load).toHaveBeenCalledTimes(1);
+
+        if (settlement === 'resolves') resolvePrevious();
+        else rejectPrevious(new Error('obsolete highlighter failed'));
+        await wait(0);
+        expect(replacement.load).toHaveBeenCalledTimes(1);
+        expect(viewer.getRenderedItems()).toHaveLength(0);
+        expect(consoleError).not.toHaveBeenCalled();
+
+        resolveReplacement();
+        await wait(0);
+        expect(viewer.getRenderedItems().map((item) => item.id)).toEqual([
+          'file:replacement-highlighter',
+        ]);
+        expect(consoleError).not.toHaveBeenCalled();
+      } finally {
+        viewer.cleanUp();
+        resolvePrevious();
+        resolveReplacement();
+        setHighlighter(shikiHighlighter);
+        await wait(0);
+        cleanup();
+      }
+    }
+  );
+
+  test('resubscribes to worker readiness after replacing a pending custom highlighter', async () => {
+    const { cleanup } = installDom();
+    const workerManager = new FakeWorkerPoolManager();
+    let resolveLoad!: () => void;
+    const pendingLoad = new Promise<void>((resolve) => {
+      resolveLoad = resolve;
+    });
+    setHighlighter({
+      ...highlightsHighlighter,
+      isReady: () => false,
+      load: () => pendingLoad,
+    });
+    const viewer = new CodeView(
+      { disableFileHeader: true },
+      workerManager.asWorkerPoolManager()
+    );
+
+    try {
+      viewer.setup(createRoot({ height: 1000 }));
+      viewer.setItems([makeFileItem('file:restored-worker', 3)]);
+      viewer.render(true);
+      expect(workerManager.statSubscriberCount).toBe(0);
+
+      setHighlighter(shikiHighlighter);
+      viewer.render(true);
+      expect(workerManager.statSubscriberCount).toBe(1);
+      resolveLoad();
+      await wait(0);
+      expect(workerManager.statSubscriberCount).toBe(1);
+
+      workerManager.markInitialized();
+      expect(viewer.getRenderedItems().map((item) => item.id)).toEqual([
+        'file:restored-worker',
+      ]);
+      expect(workerManager.statSubscriberCount).toBe(0);
+    } finally {
+      viewer.cleanUp();
+      resolveLoad();
+      setHighlighter(shikiHighlighter);
+      await wait(0);
+      cleanup();
+    }
+  });
+
   test('an empty mount kicks initialization for a waiting pool', async () => {
     const { cleanup } = installDom();
     const workerManager = new FakeWorkerPoolManager();

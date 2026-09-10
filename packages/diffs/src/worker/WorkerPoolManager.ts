@@ -107,6 +107,7 @@ export class WorkerPoolManager {
   private renderOptionsRequestVersion = 0;
   private renderOptionsVersion = 0;
   private initialized: Promise<void> | boolean = false;
+  private refreshThemesOnInitialize = false;
   private workers: ManagedWorker[] = [];
   // Tasks that are waiting to get processed by a worker
   private queuedTasks: RenderTask[] = [];
@@ -210,11 +211,13 @@ export class WorkerPoolManager {
     maxLineDiffLength = this.renderOptions.maxLineDiffLength ?? 1000,
     tokenizeMaxLineLength = this.renderOptions.tokenizeMaxLineLength ?? 1000,
   }: Partial<WorkerRenderingOptions>): Promise<void> {
-    const { lifecycleGeneration } = this;
+    let { lifecycleGeneration } = this;
+    const customHighlighter = getCustomHighlighter();
     const renderOptionsRequestVersion = ++this.renderOptionsRequestVersion;
     const isCurrentRequest = (): boolean =>
       this.isCurrentLifecycle(lifecycleGeneration) &&
-      this.renderOptionsRequestVersion === renderOptionsRequestVersion;
+      this.renderOptionsRequestVersion === renderOptionsRequestVersion &&
+      getCustomHighlighter() === customHighlighter;
     try {
       const newRenderOptions: WorkerRenderingOptions = {
         theme,
@@ -223,54 +226,94 @@ export class WorkerPoolManager {
         maxLineDiffLength,
         tokenizeMaxLineLength,
       };
-      if (!this.isInitialized()) {
+      if (
+        customHighlighter == null &&
+        !this.refreshThemesOnInitialize &&
+        !this.isInitialized()
+      ) {
         await this.initialize();
       }
+      let initializeWithNewOptions =
+        customHighlighter == null &&
+        this.refreshThemesOnInitialize &&
+        !this.isInitialized();
       if (
         !isCurrentRequest() ||
-        areDiffRenderOptionsEqual(newRenderOptions, this.renderOptions)
+        (!initializeWithNewOptions &&
+          areDiffRenderOptionsEqual(newRenderOptions, this.renderOptions))
       ) {
         return;
       }
 
       const themeNames = getThemes(theme);
-      let resolvedThemes: ThemeRegistrationResolved[] = [];
-      if (!areThemesEqual(newRenderOptions.theme, this.renderOptions.theme)) {
-        if (hasResolvedThemes(themeNames)) {
-          resolvedThemes = getResolvedThemes(themeNames);
-        } else {
-          resolvedThemes = await resolveThemes(themeNames);
-        }
-      }
-
-      if (!isCurrentRequest()) {
-        return;
-      }
-
-      if (this.highlighter != null) {
-        attachResolvedThemes(resolvedThemes, this.highlighter);
-      } else {
-        const highlighter = await getSharedHighlighter({
-          themes: themeNames,
-          langs: ['text'],
-          preferredHighlighter: this.preferredHighlighter,
-        });
+      let workerSetup: Promise<void> | undefined;
+      if (customHighlighter != null) {
+        await customHighlighter.load({ themes: themeNames, langs: [] });
         if (!isCurrentRequest()) {
           return;
         }
-        this.highlighter = highlighter;
-      }
+        // Retire Shiki work while preserving subscribers. Switching back then
+        // initializes workers with the latest options instead of stale themes.
+        this.terminate();
+        lifecycleGeneration = this.lifecycleGeneration;
+        this.refreshThemesOnInitialize = true;
+      } else {
+        let resolvedThemes: ThemeRegistrationResolved[] = [];
+        if (!areThemesEqual(newRenderOptions.theme, this.renderOptions.theme)) {
+          if (hasResolvedThemes(themeNames)) {
+            resolvedThemes = getResolvedThemes(themeNames);
+          } else {
+            resolvedThemes = await resolveThemes(themeNames);
+          }
+        }
 
-      const workerSetup = this.setRenderOptionsOnWorkers(
-        newRenderOptions,
-        resolvedThemes
-      );
+        if (!isCurrentRequest()) {
+          return;
+        }
+
+        if (this.highlighter != null) {
+          attachResolvedThemes(resolvedThemes, this.highlighter);
+        } else {
+          const highlighter = await getSharedHighlighter({
+            themes: themeNames,
+            langs: ['text'],
+            preferredHighlighter: this.preferredHighlighter,
+          });
+          if (!isCurrentRequest()) {
+            return;
+          }
+          this.highlighter = highlighter;
+        }
+
+        if (initializeWithNewOptions && typeof this.initialized !== 'boolean') {
+          // Finish any bootstrap started while themes loaded before changing
+          // its options. A failed custom-only theme can be retried below.
+          const initialization = this.initialized;
+          try {
+            await initialization;
+          } catch {
+            if (!isCurrentRequest()) return;
+            if (this.initialized === initialization) this.initialized = false;
+          }
+          if (!isCurrentRequest()) return;
+        }
+        initializeWithNewOptions &&= this.initialized === false;
+        if (!initializeWithNewOptions) {
+          workerSetup = this.setRenderOptionsOnWorkers(
+            newRenderOptions,
+            resolvedThemes
+          );
+        }
+      }
 
       this.renderOptions = newRenderOptions;
       this.renderOptionsVersion++;
       this.diffCache.clear();
       this.fileCache.clear();
       this.invalidateRenderTasks();
+      if (initializeWithNewOptions) {
+        workerSetup = this.initialize();
+      }
 
       for (const instance of this.themeSubscribers) {
         instance.onThemeChange();
@@ -409,7 +452,10 @@ export class WorkerPoolManager {
   public async initialize(languages: SupportedLanguages[] = []): Promise<void> {
     // Custom highlighters render locally. Leave initialization pending so a
     // later switch back to Shiki can initialize the pool on demand.
-    if (getCustomHighlighter() != null) return;
+    if (getCustomHighlighter() != null) {
+      this.refreshThemesOnInitialize = true;
+      return;
+    }
     if (this.initialized === true) {
       return;
     } else if (this.initialized === false) {
@@ -450,7 +496,6 @@ export class WorkerPoolManager {
             ]);
 
             if (!this.isCurrentLifecycle(lifecycleGeneration)) {
-              this.terminateWorkers();
               resolve();
               return;
             }
@@ -458,6 +503,12 @@ export class WorkerPoolManager {
             this.initialized = true;
             this.diffCache.clear();
             this.fileCache.clear();
+            if (this.refreshThemesOnInitialize) {
+              this.refreshThemesOnInitialize = false;
+              for (const instance of this.themeSubscribers) {
+                instance.onThemeChange();
+              }
+            }
             this.drainQueue();
             this.queueBroadcastStateChanges();
             resolve();

@@ -10,10 +10,12 @@ import {
 } from 'bun:test';
 
 import { parseDiffFromFile } from '../src';
+import { CodeView } from '../src/components/CodeView';
 import { setHighlighter } from '../src/highlighter/code_highlighter';
 import * as sharedHighlighter from '../src/highlighter/shared_highlighter';
 import { disposeHighlighter } from '../src/highlighter/shared_highlighter';
 import { shikiHighlighter } from '../src/highlighter/shiki_highlighter';
+import highlightsHighlighter from '../src/highlights';
 import type {
   DiffsHighlighter,
   FileContents,
@@ -21,6 +23,7 @@ import type {
 } from '../src/types';
 import type { DiffRendererInstance } from '../src/worker/types';
 import { WorkerPoolManager } from '../src/worker/WorkerPoolManager';
+import { createRoot, installDom, waitFor } from './domHarness';
 import { createDeferred } from './testUtils';
 import {
   createInitializedManager,
@@ -49,6 +52,281 @@ afterEach(() => {
 });
 
 describe('WorkerPoolManager lifecycle', () => {
+  test.each(['updated', 'constructed', 'failed bootstrap'] as const)(
+    'restores a valid Shiki theme after a custom-only theme (%s)',
+    async (state) => {
+      setHighlighter({
+        ...shikiHighlighter,
+        name: 'custom',
+        load: async () => {},
+      });
+      const worker = new TestWorker();
+      const manager = new WorkerPoolManager(
+        { poolSize: 1, workerFactory: () => worker as unknown as Worker },
+        {
+          theme:
+            state === 'constructed'
+              ? 'custom-only-restore-theme'
+              : 'github-dark',
+        }
+      );
+      const appliedThemes: unknown[] = [];
+      manager.subscribeToThemeChanges({
+        onThemeChange: () =>
+          appliedThemes.push(manager.getFileRenderOptions().theme),
+      });
+      try {
+        if (state !== 'constructed') {
+          await manager.setRenderOptions({
+            theme: 'custom-only-restore-theme',
+          });
+        }
+        setHighlighter(shikiHighlighter);
+        if (state === 'failed bootstrap') {
+          void manager.initialize().catch(() => {});
+        }
+        const update = manager.setRenderOptions({ theme: 'github-light' });
+        const request = await withTimeout(worker.waitForInitializeRequest());
+        expect(request.renderOptions.theme).toBe('github-light');
+        expect(request.resolvedThemes.map(({ name }) => name)).toContain(
+          'github-light'
+        );
+        worker.respond({
+          type: 'success',
+          requestType: 'initialize',
+          id: request.id,
+          sentAt: Date.now(),
+        });
+        await update;
+        expect(manager.isInitialized()).toBe(true);
+        expect(manager.getFileRenderOptions().theme).toBe('github-light');
+        expect(appliedThemes.at(-1)).toBe('github-light');
+      } finally {
+        manager.terminate();
+      }
+    }
+  );
+
+  test('updates custom themes without loading Shiki or starting workers', async () => {
+    const load = mock(async () => {});
+    setHighlighter({ ...shikiHighlighter, name: 'custom', load });
+    const sharedLoad = spyOn(sharedHighlighter, 'getSharedHighlighter');
+    const factory = mock(() => new TestWorker() as unknown as Worker);
+    const manager = new WorkerPoolManager(
+      { poolSize: 1, workerFactory: factory },
+      { theme: 'github-dark' }
+    );
+    const onThemeChange = mock(() => {});
+    manager.subscribeToThemeChanges({ onThemeChange });
+    const { fileCache, diffCache } = manager.inspectCaches();
+    fileCache.set('old', {
+      options: manager.getFileRenderOptions(),
+      result: { code: [], themeStyles: '', baseThemeType: undefined },
+    });
+    diffCache.set('old', {
+      options: manager.getDiffRenderOptions(),
+      result: {
+        code: { additionLines: [], deletionLines: [] },
+        themeStyles: '',
+        baseThemeType: undefined,
+      },
+    });
+    try {
+      await manager.setRenderOptions({ theme: 'custom-only-theme' });
+      expect(load).toHaveBeenCalledWith({
+        themes: ['custom-only-theme'],
+        langs: [],
+      });
+      expect(manager.getFileRenderOptions().theme).toBe('custom-only-theme');
+      expect(fileCache.size).toBe(0);
+      expect(diffCache.size).toBe(0);
+      expect(onThemeChange).toHaveBeenCalledTimes(1);
+      expect(sharedLoad).not.toHaveBeenCalled();
+      expect(factory).not.toHaveBeenCalled();
+    } finally {
+      manager.terminate();
+    }
+  });
+
+  test.each(['superseded', 'terminated', 'replaced'] as const)(
+    'ignores a %s custom theme load',
+    async (reason) => {
+      const pending = createDeferred<void>();
+      const load = mock(({ themes }: { themes: string[] }) =>
+        themes.includes('custom-slow') ? pending.promise : Promise.resolve()
+      );
+      setHighlighter({ ...shikiHighlighter, name: 'custom', load });
+      const manager = new WorkerPoolManager(
+        { workerFactory: () => new TestWorker() as unknown as Worker },
+        { theme: 'github-dark' }
+      );
+      const onThemeChange = mock(() => {});
+      manager.subscribeToThemeChanges({ onThemeChange });
+      try {
+        const update = manager.setRenderOptions({ theme: 'custom-slow' });
+        if (reason === 'superseded') {
+          await manager.setRenderOptions({ theme: 'custom-latest' });
+        } else if (reason === 'terminated') {
+          manager.terminate();
+        } else {
+          setHighlighter(shikiHighlighter);
+        }
+        pending.resolve();
+        await update;
+        expect(manager.getFileRenderOptions().theme).toBe(
+          reason === 'superseded' ? 'custom-latest' : 'github-dark'
+        );
+        expect(onThemeChange).toHaveBeenCalledTimes(
+          reason === 'superseded' ? 1 : 0
+        );
+      } finally {
+        pending.resolve();
+        manager.terminate();
+      }
+    }
+  );
+
+  test('ignores a stale Shiki initialization after custom themes restart the pool', async () => {
+    const highlighter = await sharedHighlighter.getSharedHighlighter({
+      themes: ['github-dark', 'github-light'],
+      langs: ['text'],
+    });
+    const pending = createDeferred<DiffsHighlighter>();
+    const sharedLoad = spyOn(
+      sharedHighlighter,
+      'getSharedHighlighter'
+    ).mockImplementationOnce(() => pending.promise);
+    const workers = [new TestWorker(), new TestWorker()];
+    let nextWorker = 0;
+    const factory = mock(() => workers[nextWorker++] as unknown as Worker);
+    const manager = new WorkerPoolManager(
+      { poolSize: 1, workerFactory: factory },
+      { theme: 'github-dark' }
+    );
+    try {
+      const staleInitialization = manager.initialize();
+      const initialRequest = await workers[0].waitForInitializeRequest();
+      workers[0].respond({
+        type: 'success',
+        requestType: 'initialize',
+        id: initialRequest.id,
+        sentAt: Date.now(),
+      });
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      setHighlighter({
+        ...shikiHighlighter,
+        name: 'custom',
+        load: async () => {},
+      });
+      await manager.setRenderOptions({ theme: 'github-light' });
+      expect(sharedLoad).toHaveBeenCalledTimes(1);
+      expect(workers[0].terminated).toBe(true);
+      expect(manager.isInitialized()).toBe(false);
+      expect(factory).toHaveBeenCalledTimes(1);
+
+      setHighlighter(shikiHighlighter);
+      const initialization = manager.initialize();
+      const request = await withTimeout(workers[1].waitForInitializeRequest());
+      expect(request.renderOptions.theme).toBe('github-light');
+      workers[1].respond({
+        type: 'success',
+        requestType: 'initialize',
+        id: request.id,
+        sentAt: Date.now(),
+      });
+      await initialization;
+      pending.resolve(highlighter);
+      await staleInitialization;
+      expect(manager.isInitialized()).toBe(true);
+      expect(factory).toHaveBeenCalledTimes(2);
+      expect(workers[1].terminated).toBe(false);
+      expect(manager.getStats().totalWorkers).toBe(1);
+    } finally {
+      pending.resolve(highlighter);
+      manager.terminate();
+    }
+  });
+
+  test('keeps an existing CodeView attached through custom themes and back to Shiki', async () => {
+    const dom = installDom();
+    const workers = [new TestWorker(), new TestWorker()];
+    let nextWorker = 0;
+    const manager = new WorkerPoolManager(
+      {
+        poolSize: 1,
+        workerFactory: () => workers[nextWorker++] as unknown as Worker,
+      },
+      { theme: 'github-dark' }
+    );
+    const viewer = new CodeView({ disableFileHeader: true }, manager);
+    const root = createRoot();
+    try {
+      const initialRequest = await workers[0].waitForInitializeRequest();
+      workers[0].respond({
+        type: 'success',
+        requestType: 'initialize',
+        id: initialRequest.id,
+        sentAt: Date.now(),
+      });
+      await manager.initialize();
+      viewer.setup(root);
+      viewer.setItems([
+        {
+          id: 'file',
+          type: 'file',
+          file: { name: 'file.txt', lang: 'text', contents: 'hello' },
+        },
+      ]);
+      viewer.render(true);
+      const container = root.querySelector('diffs-container');
+      expect(container).not.toBeNull();
+
+      setHighlighter({
+        ...highlightsHighlighter,
+        getTheme(name) {
+          return { ...highlightsHighlighter.getTheme(name), bg: '#112233' };
+        },
+      });
+      await manager.setRenderOptions({ theme: 'github-light' });
+      await waitFor(
+        () =>
+          container?.shadowRoot?.textContent?.includes(
+            '--diffs-bg:#112233;'
+          ) === true
+      );
+      expect(container?.shadowRoot?.textContent).toContain(
+        '--diffs-bg:#112233;'
+      );
+
+      setHighlighter(shikiHighlighter);
+      viewer.render(true);
+      const initialization = manager.initialize();
+      const request = await withTimeout(workers[1].waitForInitializeRequest());
+      workers[1].respond({
+        type: 'success',
+        requestType: 'initialize',
+        id: request.id,
+        sentAt: Date.now(),
+      });
+      await initialization;
+      const expected = `--diffs-bg:${shikiHighlighter.getTheme('github-light').bg};`;
+      await waitFor(
+        () => container?.shadowRoot?.textContent?.includes(expected) === true
+      );
+      expect(root.querySelector('diffs-container')).toBe(container);
+      expect(container?.shadowRoot?.textContent).toContain(expected);
+      expect(container?.shadowRoot?.textContent).not.toContain(
+        '--diffs-bg:#112233;'
+      );
+      expect(viewer.getRenderedItems()).toHaveLength(1);
+    } finally {
+      viewer.cleanUp();
+      manager.terminate();
+      root.remove();
+      dom.cleanup();
+    }
+  });
+
   test('accepts the legacy cache limit and prefers the new option', () => {
     setHighlighter({ ...shikiHighlighter, name: 'custom' });
     for (const [options, expected] of [

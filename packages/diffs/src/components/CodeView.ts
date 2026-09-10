@@ -16,10 +16,12 @@ import type {
   EditorChangeEvent,
   EditorType,
 } from '../editor/types';
+import type { CodeHighlighter } from '../highlighter/code_highlighter';
 import {
+  getCodeHighlighter,
   getCustomHighlighter,
   getHighlighterIfReady,
-  preloadHighlighter,
+  loadHighlighter,
 } from '../highlighter/resolve_highlighter';
 import type { SelectionWriteOptions } from '../managers/InteractionManager';
 import {
@@ -824,6 +826,7 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
   private options: CodeViewOptions<LAnnotation, Caret>;
   private workerManager: WorkerPoolManager | undefined;
   private isReadySubscription: (() => void) | undefined;
+  private pendingHighlighter: CodeHighlighter | undefined;
   private pendingHighlighterTheme: DiffsThemeNames | ThemesType | undefined;
   private isContainerManaged: boolean;
 
@@ -1848,6 +1851,9 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
     if (workerManager == null || workerManager.getStats().workersFailed) {
       return this.isSharedHighlighterReady();
     }
+    if (this.pendingHighlighter != null) {
+      this.clearReadySubscription();
+    }
     if (workerManager.isInitialized()) {
       this.clearReadySubscription();
       return true;
@@ -1878,30 +1884,39 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
     }
     this.isReadySubscription();
     this.isReadySubscription = undefined;
+    this.pendingHighlighter = undefined;
     this.pendingHighlighterTheme = undefined;
   }
 
   private isSharedHighlighterReady(): boolean {
+    const highlighter = getCodeHighlighter();
     const theme =
       this.workerManager?.getFileRenderOptions().theme ??
       this.options.theme ??
       DEFAULT_THEMES;
-    if (getHighlighterIfReady(theme) != null) {
+    if (getHighlighterIfReady(theme, highlighter) != null) {
       this.clearReadySubscription();
       return true;
     }
-    // A pending request for an obsolete theme must not block the current one.
-    if (!areThemesEqual(this.pendingHighlighterTheme, theme)) {
+    // A previous highlighter or theme load must not block the current one.
+    if (
+      this.pendingHighlighter !== highlighter ||
+      !areThemesEqual(this.pendingHighlighterTheme, theme)
+    ) {
       this.clearReadySubscription();
     }
     this.isReadySubscription ??= (() => {
+      this.pendingHighlighter = highlighter;
       this.pendingHighlighterTheme = theme;
       let cancelled = false;
-      void preloadHighlighter({
-        themes: getThemes(theme),
-        langs: [],
-        preferredHighlighter: this.options.preferredHighlighter,
-      }).then(
+      void loadHighlighter(
+        {
+          themes: getThemes(theme),
+          langs: [],
+          preferredHighlighter: this.options.preferredHighlighter,
+        },
+        highlighter
+      ).then(
         () => {
           if (cancelled) {
             return;
