@@ -1,6 +1,6 @@
 import type { ElementContent, Element as HASTElement, Properties } from 'hast';
 
-import type { LineTypes } from '../types';
+import type { BaseLineTypes, LineTypes } from '../types';
 
 /**
  * One rendered row of a code column: its gutter cell and its content cell,
@@ -65,7 +65,7 @@ export interface LineDecoration {
 
 export interface UnifiedLineDecorationProps {
   type: 'context' | 'context-expanded' | 'change';
-  lineType: LineTypes;
+  lineType: BaseLineTypes;
   additionLineIndex: number | undefined;
   deletionLineIndex: number | undefined;
 }
