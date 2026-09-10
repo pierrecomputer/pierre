@@ -37,6 +37,12 @@ moonx <project>:typecheck
 moonx :typecheck --affected
 ```
 
+The React Compiler lint rules (`react/*` in `.oxlintrc.json`) assume React.
+`packages/trees/src/render/**/*.tsx` and
+`packages/trees/src/components/**/*.tsx` are Preact, so an `overrides` entry
+there turns `react/refs` off for those globs. Put new Preact components under
+those directories instead of adding per-file `oxlint-disable` headers.
+
 ## Unit and Integration Tests
 
 Use Bun's built-in test runner. Tests usually live in a `test/` folder inside

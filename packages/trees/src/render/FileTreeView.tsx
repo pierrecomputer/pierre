@@ -1,5 +1,3 @@
-/* oxlint-disable react/refs -- this code is preact, and therefore not
- * compatible with react compiler */
 /** @jsxImportSource preact */
 import { Fragment } from 'preact';
 import type { JSX } from 'preact';

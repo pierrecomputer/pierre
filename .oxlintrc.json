@@ -72,7 +72,17 @@
     "typescript/no-meaningless-void-operator": "off",
     "typescript/no-duplicate-type-constituents": "off"
   },
-  "overrides": [],
+  "overrides": [
+    {
+      "files": [
+        "packages/trees/src/render/**/*.tsx",
+        "packages/trees/src/components/**/*.tsx"
+      ],
+      "rules": {
+        "react/refs": "off"
+      }
+    }
+  ],
   "settings": {
     "jsx-a11y": {
       "polymorphicPropName": null,
