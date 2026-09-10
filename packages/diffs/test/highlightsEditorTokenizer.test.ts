@@ -10,7 +10,7 @@ import {
 import highlightsHighlighter from '../src/highlights';
 import { FileRenderer } from '../src/renderers/FileRenderer';
 import type { HighlightedToken, RenderRange, ThemedToken } from '../src/types';
-import { installDom } from './domHarness';
+import { installDom, waitFor } from './domHarness';
 
 let dom: ReturnType<typeof installDom>;
 
@@ -627,17 +627,26 @@ describe('LiveEditorTokenizer', () => {
     const { tokenizer, styles, deferred, textDocument } = createHarness(
       'const a = 1;\nlet b = 2;'
     );
-    tokenizer.tokenize(fullChange(textDocument));
-    styles.length = 0;
-    deferred.length = 0;
-    tokenizer.syncTheme({ theme: 'pierre-light', themeType: 'light' });
-    expect(tokenizer.themeType).toBe('light');
-    expect(styles).toHaveLength(1);
-    await settleTimers();
-    const repainted = new Set(deferred.flatMap((map) => [...map.keys()]));
-    expect(repainted.has(0)).toBe(true);
-    expect(repainted.has(1)).toBe(true);
-    tokenizer.cleanUp();
+    try {
+      const initial = tokenizer.tokenize(fullChange(textDocument));
+      expect(initial.get(0)?.[0][1]).toBe('#ff678d');
+      styles.length = 0;
+      deferred.length = 0;
+      tokenizer.syncTheme({ theme: 'pierre-light', themeType: 'light' });
+      expect(tokenizer.themeType).toBe('light');
+      expect(styles).toHaveLength(1);
+      await waitFor(
+        () => new Map(deferred.flatMap((map) => [...map])).size === 2
+      );
+      const repainted = new Map(deferred.flatMap((map) => [...map]));
+      expect([...repainted.keys()]).toEqual([0, 1]);
+      for (const [line, tokens] of repainted) {
+        expect(lineText(tokens)).toBe(textDocument.getLineText(line));
+        expect(tokens[0][1]).toBe('#d32a61');
+      }
+    } finally {
+      tokenizer.cleanUp();
+    }
   });
 
   test('cleanUp drops pending deferred deliveries', async () => {

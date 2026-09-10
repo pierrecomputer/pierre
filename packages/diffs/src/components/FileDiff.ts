@@ -46,11 +46,7 @@ import {
   type HunksRenderResult,
 } from '../renderers/DiffHunksRenderer';
 import { SVGSpriteSheet } from '../sprite';
-import {
-  type RenderedColumn,
-  type RenderedRow,
-  renderRows,
-} from '../utils/html';
+import { renderRows } from '../utils/toHtml';
 export type { FileDiffEditCompleteEvent } from '../editor/types';
 import type {
   AppliedThemeStyleCache,
@@ -68,6 +64,8 @@ import type {
   MaybeDiffFileInput,
   PostRenderPhase,
   PrePropertiesConfig,
+  RenderedColumn,
+  RenderedRow,
   RenderHeaderFilenameSuffixCallback,
   RenderHeaderMetadataCallback,
   RenderHeaderPrefixCallback,

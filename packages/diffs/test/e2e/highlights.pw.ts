@@ -46,11 +46,14 @@ test.describe('highlights highlighter', () => {
   }) => {
     await openFixture(page);
 
-    // Before registration the pool accepts work; after, every render routes
-    // to the main thread because workers always highlight with shiki.
+    // The warm-up file reached the worker. Rendering the connected diff with
+    // Highlights must finish without sending any additional highlight work.
     expect(await page.evaluate(() => window.__poolWorkingWithShiki)).toBe(true);
     expect(await page.evaluate(() => window.__poolWorkingWithHighlights)).toBe(
       false
+    );
+    expect(await page.evaluate(() => window.__highlightWorkerRequests)).toEqual(
+      ['file']
     );
   });
 });

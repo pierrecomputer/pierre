@@ -20,8 +20,11 @@ import type {
   FileContents,
   FileHeaderRenderMode,
   HighlightedToken,
+  HTMLAttributes,
   LineAnnotation,
+  RenderedColumn,
   RenderedFileCache,
+  RenderedRow,
   RenderFileOptions,
   RenderFileResult,
   RenderRange,
@@ -42,15 +45,6 @@ import { getHighlighterOptions } from '../utils/getHighlighterOptions';
 import { getLineAnnotationName } from '../utils/getLineAnnotationName';
 import { getThemes } from '../utils/getThemes';
 import {
-  attributesToHTML,
-  type HTMLAttributes,
-  renderColumn,
-  type RenderedColumn,
-  type RenderedRow,
-  renderRows,
-} from '../utils/html';
-import { createGutterGap, createGutterItem } from '../utils/html';
-import {
   FILE_ANNOTATION_HUNK_INDEX,
   FILE_ANNOTATION_LINE_INDEX,
   getFileAnnotations,
@@ -61,6 +55,13 @@ import { isFilePlainText } from '../utils/isFilePlainText';
 import { realignTokenLines } from '../utils/realignTokenLines';
 import { renderFileWithHighlighter } from '../utils/renderFileWithHighlighter';
 import { renderTokenLines } from '../utils/renderTokenLines';
+import {
+  attributesToHTML,
+  createGutterGap,
+  createGutterItem,
+  renderColumn,
+  renderRows,
+} from '../utils/toHtml';
 import type { WorkerPoolManager } from '../worker';
 
 type AnnotationLineMap<LAnnotation> = Record<

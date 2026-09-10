@@ -24,10 +24,9 @@ import type {
   ThemedToken,
 } from '../src/types';
 import { getDiffHunksRendererOptions } from '../src/utils/getDiffHunksRendererOptions';
-import { renderRows } from '../src/utils/html';
 import { renderDiffWithHighlighter } from '../src/utils/renderDiffWithHighlighter';
 import { renderFileWithHighlighter } from '../src/utils/renderFileWithHighlighter';
-import { toHtml } from '../src/utils/toHtml';
+import { renderRows, toHtml } from '../src/utils/toHtml';
 import type { RenderDiffRequest } from '../src/worker/types';
 import type { WorkerPoolManager } from '../src/worker/WorkerPoolManager';
 import { createRoot, installDom, wait } from './domHarness';

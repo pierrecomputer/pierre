@@ -92,7 +92,6 @@ export * from './utils/getOrCreateCodeNode';
 export * from './utils/getSingularPatch';
 export * from './utils/getThemes';
 export * from './utils/getTotalLineCountFromHunks';
-export * from './utils/html';
 export * from './utils/hydratePartialDiff';
 export * from './utils/isDefaultRenderRange';
 export * from './utils/isWorkerContext';

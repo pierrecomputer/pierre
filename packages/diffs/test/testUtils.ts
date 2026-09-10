@@ -2,9 +2,14 @@ import { JSDOM } from 'jsdom';
 
 import { DEFAULT_COLLAPSED_CONTEXT_THRESHOLD } from '../src/constants';
 import type { HunksRenderResult } from '../src/renderers/DiffHunksRenderer';
-import type { FileDiffMetadata, ParsedPatch } from '../src/types';
-import { type HTMLAttributes, renderRows } from '../src/utils/html';
-import type { RenderedLine, RenderedRow } from '../src/utils/html';
+import type {
+  FileDiffMetadata,
+  HTMLAttributes,
+  ParsedPatch,
+  RenderedLine,
+  RenderedRow,
+} from '../src/types';
+import { renderRows } from '../src/utils/toHtml';
 
 // Async test helpers
 

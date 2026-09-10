@@ -1,5 +1,5 @@
 import type { ExpansionDirections, HunkSeparators } from '../types';
-import { createHTMLElement, createIconElement, escapeHTML } from './html';
+import { createHTMLElement, createIconElement, escapeHTML } from './toHtml';
 
 interface CreateSeparatorProps {
   type: HunkSeparators;

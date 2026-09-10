@@ -46,17 +46,34 @@
         throw new Error('Missing diff mount.');
       }
 
-      // A real worker pool: with the default shiki registration it accepts
-      // work, and registering highlights must route rendering back to the main
-      // thread (workers always highlight with shiki).
+      // Record real highlight requests, including a Shiki request proving the
+      // worker is ready before Highlights takes over rendering.
+      window.__highlightWorkerRequests = [];
       const pool = new WorkerPoolManager(
         {
-          workerFactory: () =>
-            new Worker('/dist/worker/worker.js', { type: 'module' }),
+          workerFactory: () => {
+            const worker = new Worker('/dist/worker/worker.js', {
+              type: 'module',
+            });
+            const postMessage = worker.postMessage.bind(worker);
+            worker.postMessage = (message, ...args) => {
+              if (message.type === 'file' || message.type === 'diff') {
+                window.__highlightWorkerRequests.push(message.type);
+              }
+              postMessage(message, ...args);
+            };
+            return worker;
+          },
           poolSize: 1,
         },
         { langs: ['typescript'] }
       );
+      await pool.initialize();
+      await pool.primeFileHighlightCache({
+        name: 'probe.ts',
+        contents: 'const probe = 1;',
+        cacheKey: 'worker-probe',
+      });
       window.__poolWorkingWithShiki = pool.isWorkingPool();
 
       setHighlighter(highlightsHighlighter);
@@ -77,36 +94,53 @@
 `,
       };
 
-      const instance = new FileDiff({
-        disableFileHeader: true,
-        theme: { dark: 'pierre-dark', light: 'pierre-light' },
-        themeType: 'dark',
-        diffStyle: 'split',
-      });
+      const instance = new FileDiff(
+        {
+          disableFileHeader: true,
+          theme: { dark: 'pierre-dark', light: 'pierre-light' },
+          themeType: 'dark',
+          diffStyle: 'split',
+        },
+        pool
+      );
       instance.render({
         fileDiff: parseDiffFromFile(oldFile, newFile),
         containerWrapper: mount,
       });
 
-      // Wait until the shadow DOM has committed real diff rows before
-      // signalling readiness so tests never race the first paint.
-      const waitForRows = async () => {
+      // Wait for Highlights colors, since the first paint can be plain text.
+      const waitForHighlight = async () => {
         const started = performance.now();
         while (true) {
           const host = mount.querySelector('diffs-container');
-          const row = host?.shadowRoot?.querySelector('[data-line-type]');
-          if (row != null) {
+          const spans = host?.shadowRoot?.querySelectorAll(
+            '[data-content] span'
+          );
+          if (
+            Array.from(spans ?? []).some(
+              (span) =>
+                span.style.getPropertyValue('--diffs-token-dark') === '#ff678d'
+            )
+          ) {
             return;
           }
           if (performance.now() - started > 5000) {
-            throw new Error('Timed out waiting for diff rows.');
+            throw new Error('Timed out waiting for Highlights colors.');
           }
           await new Promise((resolve) => requestAnimationFrame(resolve));
         }
       };
 
-      await waitForRows();
+      await waitForHighlight();
       window.__highlightsReady = true;
+      window.addEventListener(
+        'pagehide',
+        () => {
+          instance.cleanUp();
+          pool.terminate();
+        },
+        { once: true }
+      );
     </script>
   </body>
 </html>

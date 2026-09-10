@@ -1,6 +1,15 @@
-import type { DecorationItem, LineInfo, ThemedToken } from '../types';
-import { attributesToHTML, escapeHTML, type RenderedLine } from './html';
-import { toHtml, tokenAttributes } from './toHtml';
+import type {
+  DecorationItem,
+  LineInfo,
+  RenderedLine,
+  ThemedToken,
+} from '../types';
+import {
+  attributesToHTML,
+  escapeHTML,
+  toHtml,
+  tokenAttributes,
+} from './toHtml';
 
 /** Serialize visible tokens with the current line metadata and decorations. */
 export function renderTokenLines(

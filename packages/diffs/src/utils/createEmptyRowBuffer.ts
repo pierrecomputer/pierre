@@ -1,4 +1,4 @@
-import type { RenderedLine } from './html';
+import type { RenderedLine } from '../types';
 
 export function createEmptyRowBuffer(size: number): RenderedLine {
   return {

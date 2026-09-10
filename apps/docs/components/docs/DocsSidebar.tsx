@@ -180,6 +180,14 @@ export function DocsSidebar({
             </MobileNavLink>
             {product.id === 'diffs' && (
               <MobileNavLink
+                href={`${product.basePath}/highlights`}
+                active={isActivePath(`${product.basePath}/highlights`)}
+              >
+                Highlights
+              </MobileNavLink>
+            )}
+            {product.id === 'diffs' && (
+              <MobileNavLink
                 href={`${product.basePath}/edit`}
                 active={isActivePath(`${product.basePath}/edit`)}
               >
@@ -192,14 +200,6 @@ export function DocsSidebar({
             >
               Docs
             </MobileNavLink>
-            {product.id === 'diffs' && (
-              <MobileNavLink
-                href={`${product.basePath}/highlights`}
-                active={isActivePath(`${product.basePath}/highlights`)}
-              >
-                Highlights
-              </MobileNavLink>
-            )}
             {product.id === 'diffs' && (
               <MobileNavLink
                 href={

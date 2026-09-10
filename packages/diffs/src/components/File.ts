@@ -28,7 +28,7 @@ import {
 import { ResizeManager } from '../managers/ResizeManager';
 import { FileRenderer, type FileRenderResult } from '../renderers/FileRenderer';
 import { SVGSpriteSheet } from '../sprite';
-import { renderColumn, renderRows } from '../utils/html';
+import { renderColumn, renderRows } from '../utils/toHtml';
 export type { FileEditCompleteEvent } from '../editor/types';
 import {
   loadHighlighter,

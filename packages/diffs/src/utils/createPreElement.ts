@@ -1,6 +1,5 @@
-import type { PrePropertiesConfig } from '../types';
-import type { HTMLAttributes } from './html';
-import { createHTMLElement } from './html';
+import type { HTMLAttributes, PrePropertiesConfig } from '../types';
+import { createHTMLElement } from './toHtml';
 
 export function createPreElement(options: PrePropertiesConfig): string {
   return createHTMLElement('pre', createPreWrapperProperties(options));

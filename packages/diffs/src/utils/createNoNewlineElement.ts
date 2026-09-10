@@ -1,5 +1,4 @@
-import type { LineTypes } from '../types';
-import type { RenderedLine } from './html';
+import type { LineTypes, RenderedLine } from '../types';
 
 export function createNoNewlineElement(type: LineTypes): RenderedLine {
   return {

@@ -2,17 +2,22 @@ import { DEFAULT_RENDER_RANGE, DEFAULT_THEMES } from '../constants';
 import type {
   DiffLineAnnotation,
   FileDiffMetadata,
+  HTMLAttributes,
   MergeConflictMarkerRow,
   MergeConflictResolution,
+  RenderedLine,
   RenderRange,
 } from '../types';
 import { getMergeConflictActionSlotName } from '../utils/getMergeConflictActionSlotName';
-import type { HTMLAttributes, RenderedLine } from '../utils/html';
-import { createGutterGap, createHTMLElement, escapeHTML } from '../utils/html';
 import {
   getMergeConflictActionAnchor,
   type MergeConflictDiffAction,
 } from '../utils/parseMergeConflictDiffFromFile';
+import {
+  createGutterGap,
+  createHTMLElement,
+  escapeHTML,
+} from '../utils/toHtml';
 import type { WorkerPoolManager } from '../worker';
 import {
   DiffHunksRenderer,

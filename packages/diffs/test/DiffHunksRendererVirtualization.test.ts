@@ -5,7 +5,7 @@ import {
   disposeHighlighter,
   parseDiffFromFile,
 } from '../src';
-import type { RenderedRow } from '../src/utils/html';
+import type { RenderedRow } from '../src/types';
 import { fileNew, fileOld } from './mocks';
 import { rowProperties } from './testUtils';
 import {

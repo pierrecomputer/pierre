@@ -1,4 +1,5 @@
-import { createHTMLElement, type RenderedRow, renderRows } from './html';
+import type { RenderedRow } from '../types';
+import { createHTMLElement, renderRows } from './toHtml';
 
 export function createContentColumn(
   children: RenderedRow[],

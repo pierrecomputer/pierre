@@ -9,8 +9,9 @@ import type {
   DiffLineAnnotation,
   FileDiffMetadata,
   LineTypes,
+  RenderedLine,
+  RenderedRow,
 } from '../src/types';
-import type { RenderedLine, RenderedRow } from '../src/utils/html';
 import { fileNew, fileOld } from './mocks';
 import { rowProperties } from './testUtils';
 import {

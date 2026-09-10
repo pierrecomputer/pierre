@@ -6,10 +6,13 @@ import { JSDOM } from 'jsdom';
 import { codeToTokens as shikiCodeToTokens } from 'shiki';
 
 import type { ThemedToken } from '../src/types';
-import { createHTMLElement, renderRows } from '../src/utils/html';
 import { renderTokenLines } from '../src/utils/renderTokenLines';
-import type { ToHtmlOptions } from '../src/utils/toHtml';
-import { toHtml } from '../src/utils/toHtml';
+import {
+  createHTMLElement,
+  renderRows,
+  toHtml,
+  type ToHtmlOptions,
+} from '../src/utils/toHtml';
 
 const info = (line: number) => ({
   type: 'context' as const,

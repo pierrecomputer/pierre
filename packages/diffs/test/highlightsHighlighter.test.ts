@@ -1,3 +1,4 @@
+import { isSupportedLanguage } from '@pierre/highlights';
 import oneDarkPro from '@pierre/highlights/themes/one-dark-pro';
 import { transformerStyleToClass } from '@shikijs/transformers';
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
@@ -17,11 +18,10 @@ import { DiffHunksRenderer } from '../src/renderers/DiffHunksRenderer';
 import { FileRenderer } from '../src/renderers/FileRenderer';
 import { preloadFile } from '../src/ssr/preloadFile';
 import type { FileContents } from '../src/types';
-import { renderRows } from '../src/utils/html';
 import { parseDiffFromFile } from '../src/utils/parseDiffFromFile';
 import { renderDiffWithHighlighter } from '../src/utils/renderDiffWithHighlighter';
 import { renderFileWithHighlighter } from '../src/utils/renderFileWithHighlighter';
-import { toHtml } from '../src/utils/toHtml';
+import { renderRows, toHtml } from '../src/utils/toHtml';
 
 const file: FileContents = {
   name: 'example.ts',
@@ -287,12 +287,26 @@ describe('highlights highlighter', () => {
   });
 
   test('unknown languages render as plain text instead of throwing', () => {
+    const lang = 'unsupported-highlights-test';
+    expect(isSupportedLanguage(lang)).toBe(false);
     const { code } = renderFileWithHighlighter(
-      { name: 'main.rb', contents: 'puts "hello"\n' },
+      { ...file, lang },
       highlightsHighlighter,
       fileOptions
     );
-    expect(toHtml(code)).toContain('puts ');
+    expect(code.map((line) => line.map((token) => token.content))).toEqual([
+      ['const a = 1; // hi'],
+      ['let s = "x";'],
+      [],
+    ]);
+    for (const line of code) {
+      for (const token of line) {
+        expect(token.htmlStyle).toEqual({
+          '--diffs-token-dark': '#fafafa',
+          '--diffs-token-light': '#0a0a0a',
+        });
+      }
+    }
   });
 
   test('sparse file tokens retain UTF-16 offsets across Unicode and CRLF lines', () => {

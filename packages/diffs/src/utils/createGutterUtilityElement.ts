@@ -1,4 +1,4 @@
-import { createHTMLElement, createIconElement } from './html';
+import { createHTMLElement, createIconElement } from './toHtml';
 
 export function createGutterUtilityElement(): string {
   return createHTMLElement(

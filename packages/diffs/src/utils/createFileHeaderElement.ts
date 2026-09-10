@@ -9,10 +9,10 @@ import type {
   FileContents,
   FileDiffMetadata,
   FileHeaderRenderMode,
+  HTMLAttributes,
 } from '../types';
 import { getIconForType } from './getIconForType';
-import type { HTMLAttributes } from './html';
-import { createHTMLElement, createIconElement, escapeHTML } from './html';
+import { createHTMLElement, createIconElement, escapeHTML } from './toHtml';
 
 export interface CreateFileHeaderElementProps {
   fileOrDiff: FileDiffMetadata | FileContents;

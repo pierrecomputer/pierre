@@ -1,5 +1,5 @@
 import type { AnnotationSpan } from '../types';
-import { createHTMLElement } from './html';
+import { createHTMLElement } from './toHtml';
 
 export function createAnnotationElement(span: AnnotationSpan): string {
   return createHTMLElement(

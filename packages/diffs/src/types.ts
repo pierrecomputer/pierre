@@ -9,9 +9,27 @@ import type {
   ThemeRegistrationResolved,
 } from 'shiki';
 
-import type { HTMLAttributes } from './utils/html';
-
 export type { CreatePatchOptionsNonabortable };
+
+export type HTMLAttributes = Record<
+  string,
+  string | number | boolean | (string | number)[] | null | undefined
+>;
+
+/** Rendered row content and attributes used when composing columns. */
+export interface RenderedLine {
+  html: string;
+  properties: HTMLAttributes;
+}
+
+export type RenderedRow = string | RenderedLine;
+
+/** Rows stay separate so partial rendering can merge adjacent buffers. */
+export interface RenderedColumn {
+  gutter: RenderedRow[];
+  content: RenderedRow[];
+  rowCount: number;
+}
 
 export type CodeViewScrollBehavior = 'instant' | 'smooth' | 'smooth-auto';
 

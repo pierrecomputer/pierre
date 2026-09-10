@@ -4,7 +4,7 @@ import {
   UNSAFE_CSS_ATTRIBUTE,
 } from '../constants';
 import { wrapCoreCSS, wrapUnsafeCSS } from './cssWrappers';
-import { createHTMLElement } from './html';
+import { createHTMLElement } from './toHtml';
 
 export function createStyleElement(
   content: string,

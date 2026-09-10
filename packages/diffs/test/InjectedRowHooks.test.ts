@@ -10,9 +10,9 @@ import {
   type UnifiedInjectedRowPlacement,
 } from '../src';
 import { UnresolvedFileHunksRenderer } from '../src/renderers/UnresolvedFileHunksRenderer';
-import type { RenderedRow } from '../src/utils/html';
-import { createGutterGap, createHTMLElement } from '../src/utils/html';
+import type { RenderedRow } from '../src/types';
 import { parseMergeConflictDiffFromFile } from '../src/utils/parseMergeConflictDiffFromFile';
+import { createGutterGap, createHTMLElement } from '../src/utils/toHtml';
 import { rowProperties } from './testUtils';
 import { assertDefined, collectAllElements } from './testUtils';
 

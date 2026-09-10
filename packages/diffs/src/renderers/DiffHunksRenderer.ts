@@ -30,13 +30,17 @@ import type {
   FileDiffMetadata,
   FileHeaderRenderMode,
   HighlightedToken,
+  HTMLAttributes,
   HunkData,
   HunkExpansionRegion,
   HunkSeparators,
   LineTypes,
   RenderDiffOptions,
   RenderDiffResult,
+  RenderedColumn,
   RenderedDiffCache,
+  RenderedLine,
+  RenderedRow,
   RenderRange,
   SupportedLanguages,
   ThemedDiffResult,
@@ -65,20 +69,6 @@ import { getHunkSeparatorSlotName } from '../utils/getHunkSeparatorSlotName';
 import { getLineAnnotationName } from '../utils/getLineAnnotationName';
 import { getTotalLineCountFromHunks } from '../utils/getTotalLineCountFromHunks';
 import {
-  attributesToHTML,
-  type HTMLAttributes,
-  renderColumn,
-  type RenderedColumn,
-  type RenderedLine,
-  type RenderedRow,
-  renderRows,
-} from '../utils/html';
-import {
-  createGutterGap,
-  createGutterItem,
-  createHTMLElement,
-} from '../utils/html';
-import {
   FILE_ANNOTATION_HUNK_INDEX,
   FILE_ANNOTATION_LINE_INDEX,
   getFileAnnotations,
@@ -92,6 +82,14 @@ import { computeLineDiffDecorations } from '../utils/parseDiffDecorations';
 import { realignTokenLines } from '../utils/realignTokenLines';
 import { renderDiffWithHighlighter } from '../utils/renderDiffWithHighlighter';
 import { renderTokenLines } from '../utils/renderTokenLines';
+import {
+  attributesToHTML,
+  createGutterGap,
+  createGutterItem,
+  createHTMLElement,
+  renderColumn,
+  renderRows,
+} from '../utils/toHtml';
 import {
   recomputeDiffHunksForEdit,
   recomputeEmptyDocumentDiff,
