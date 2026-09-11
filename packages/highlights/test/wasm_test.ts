@@ -7,6 +7,7 @@ import {
   listTokenTypes,
   optimizeWasm,
   transformWat,
+  wasmToText,
   wat2wasm,
 } from '../scripts/build';
 import { cssVariables, pierreDark } from '../themes/index';
@@ -109,33 +110,145 @@ void test(
   }
 );
 
-void test('compact SIMD constants preserve all byte values, mixed lanes and data', () => {
+// JavaScriptCore compiles a function with the SIMD register convention only
+// when the function's own bytecode uses SIMD, but its optimizing tier inlines
+// small callees. Without the marker the build adds (markSimdReachers in
+// scripts/build.ts), a lexer that inlined a scanner kept the scanner's vector
+// constants in callee-saved registers across calls and lost their upper
+// halves on Bun 1.4. The invariant is local - every direct caller of a SIMD
+// function uses SIMD itself, through an instruction or a v128 local - and
+// covers transitive callers by induction. Binaryen drops unused locals, so
+// the optimized module is checked as well; there, calls name functions by
+// index.
+void test(
+  'every caller of a SIMD function uses SIMD itself, before and after Binaryen',
+  { timeout: 60_000 },
+  () => {
+    const url = new URL('../src/highlights.wat', import.meta.url);
+    const { code } = transformWat(url);
+    const optimized = wasmToText(optimizeWasm(wat2wasm(url.pathname, code)));
+    for (const [label, text] of [
+      ['preprocessed source', code],
+      ['optimized module', optimized],
+    ] as const) {
+      const usesSimd =
+        /\b(?:v128|[if](?:8x16|16x8|32x4|64x2))\.|\(local\b[^()]*\bv128\b/;
+      const imported = (text.match(/\(import\b[^\n]*\(func\b/g) ?? []).length;
+      const funcs: { name: string; body: string }[] = [];
+      const starts = [...text.matchAll(/^\s*\(func(?:\s+(\$[^\s()]+))?/gm)];
+      for (const [i, m] of starts.entries()) {
+        const end = starts[i + 1]?.index ?? text.length;
+        funcs.push({
+          name: m[1] ?? `#${i + imported}`,
+          body: text.slice(m.index, end).replace(/"(?:[^"\\]|\\.)*"/g, '""'),
+        });
+      }
+      assert.ok(funcs.length > 300, `${label}: found the module functions`);
+      const simd = new Set(
+        funcs.flatMap((f, i) =>
+          usesSimd.test(f.body) ? [f.name, `#${i + imported}`] : []
+        )
+      );
+      assert.ok(simd.size > 40, `${label}: found the SIMD scanners`);
+      for (const f of funcs) {
+        if (simd.has(f.name)) continue;
+        const callees = [...f.body.matchAll(/\bcall\s+(\$[^\s()]+|\d+)/g)].map(
+          (m) => (/^\d+$/.test(m[1]) ? `#${m[1]}` : m[1])
+        );
+        const simdCallee = callees.find((c) => simd.has(c));
+        assert.equal(
+          simdCallee,
+          undefined,
+          `${label}: ${f.name} calls ${simdCallee} without using SIMD`
+        );
+        assert.ok(
+          !/\bcall_indirect\b/.test(f.body),
+          `${label}: ${f.name} uses call_indirect without using SIMD`
+        );
+      }
+    }
+  }
+);
+
+void test('SIMD markers resolve numeric calls after imported functions', () => {
+  const url = new URL('./simd-imports.wat', import.meta.url);
+  for (const callee of ['$simd', '1']) {
+    const { code } = transformWat(
+      url,
+      `(module
+        (import "env" "hook" (func $hook))
+        (func $simd (drop (v128.const i32x4 0 0 0 0)))
+        (func $direct (call ${callee}))
+        (func (export "run") (call 2))
+        (func $scalar (call 0)))`
+    );
+    assert.match(code, /\(func \$direct\s+\(local v128\)/, callee);
+    assert.match(code, /\(func \(export "run"\)\s+\(local v128\)/, callee);
+    assert.match(code, /\(func \$scalar\s+\(call 0\)/, callee);
+    assert.ok(WebAssembly.validate(wat2wasm(url.pathname, code)));
+  }
+});
+
+// JavaScriptCore's ccmp fusion (see wrapCompoundNegations in scripts/build.ts)
+// miscompiles a branch whose and/or tree negates a compound condition. The
+// build rewrites every such negation in the preprocessed source and again
+// after Binaryen, which can rebuild one from `and(eqz(a), eqz(b))`.
+void test(
+  'no i32.eqz negates a compound condition, before or after Binaryen',
+  { timeout: 60_000 },
+  () => {
+    const url = new URL('../src/highlights.wat', import.meta.url);
+    const { code } = transformWat(url);
+    const compound = /\(\s*i32\.eqz\s*\(\s*i32\.(?:and|or)\b/;
+    assert.equal(code.match(compound), null, 'preprocessed source');
+    const optimized = wasmToText(optimizeWasm(wat2wasm(url.pathname, code)));
+    assert.equal(optimized.match(compound), null, 'optimized module');
+    // the rewrite must not have removed the negations themselves
+    assert.ok(
+      /\(i32\.shr_u\s*\(i32\.clz/.test(optimized),
+      'rewritten form present'
+    );
+  }
+);
+
+void test('Wasm rewrites preserve all SIMD byte values, mixed lanes and quoted data', () => {
   const stores = Array.from(
     { length: 256 },
     (_, byte) => `(v128.store offset=${byte * 16} (local.get $p)
       (v128.const i8x16 ${Array<number>(16).fill(byte).join(' ')}))`
   );
-  const wasm = wat2wasm(
-    'splats.wat',
-    `(module
+  const data = [
+    'v128.const i32x4 0x01010101 0x01010101 0x01010101 0x01010101',
+    '(v128.const i32x4 0x01010101 0x01010101 0x01010101 0x01010101)',
+    '(i32.eqz (i32.or (i32.const 0) (i32.const 1)))',
+    '"escaped" \\ (i32.eqz (i32.and (i32.const 0) (i32.const 1)))',
+    '(i32.eqz',
+  ].join('\n');
+  const source = `(module
       (memory (export "memory") 1)
-      (data (i32.const 5000)
-        "v128.const i32x4 0x01010101 0x01010101 0x01010101 0x01010101")
+      (data (i32.const 5000) ${JSON.stringify(data)})
       (func (export "write") (param $p i32)
         ${stores.join('\n')}
         (v128.store offset=4096 (local.get $p)
           (v128.const i32x4 0x01020304 0x01020304 0x01020304 0x01020304))
         (v128.store offset=4112 (local.get $p)
-          (v128.const i32x4 0x01010101 0x02020202 0x03030303 0x04040404))))`
-  );
-  const output = [wasm, optimizeWasm(wasm)].map((binary) => {
+          (v128.const i32x4 0x01010101 0x02020202 0x03030303 0x04040404))))`;
+  const url = new URL('./splats.wat', import.meta.url);
+  const wasm = wat2wasm(url.pathname, source);
+  const preprocessed = wat2wasm(url.pathname, transformWat(url, source).code);
+  const output = [
+    wasm,
+    preprocessed,
+    optimizeWasm(wasm),
+    optimizeWasm(preprocessed),
+  ].map((binary) => {
     const instance = new WebAssembly.Instance(new WebAssembly.Module(binary));
     (instance.exports.write as (ptr: number) => void)(0);
     return new Uint8Array(
       (instance.exports.memory as WebAssembly.Memory).buffer
     );
   });
-  assert.deepEqual(output[1], output[0]);
+  for (const actual of output.slice(1)) assert.deepEqual(actual, output[0]);
 });
 
 const preludeUrl = new URL('./preprocessor.wat', import.meta.url);

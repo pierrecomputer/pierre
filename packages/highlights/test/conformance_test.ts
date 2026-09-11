@@ -54,13 +54,13 @@ const languageEnum = compiled.enumMap.get('$Language') as Record<
 /** Every lexer name in enum order; `plain` has no lexer and no sample. */
 const lexers = Object.keys(languageEnum).filter((name) => name !== 'plain');
 
-// Bun 1.4's JavaScriptCore can return one wrong result from a hot SIMD
-// scanner at the moment it tiers up (an identifier run cut after 8 bytes; the
-// next call with the same input is right again, and BUN_JSC_useOMGJIT=0 hides
-// it entirely). Drive every lexer through both output modes before any
-// assertion so the shared scanners and each lexer's own entry cross that
-// point here, not mid-check; the per-lexer functions need a few hundred
-// calls each before the optimizing tier picks them up.
+// Drive every lexer through both output modes before any assertion so the
+// checks below run against JavaScriptCore's optimizing wasm tier and not only
+// its baseline: the per-lexer functions need a few hundred calls each before
+// that tier picks them up, and a miscompile there - Bun 1.4 cut identifier
+// scans after 8 bytes in any lexer that inlined a scanner without the SIMD
+// marker `markSimdReachers` adds in scripts/build.ts - must surface as a
+// failed check, not as a wrong result after the checks have passed.
 for (let round = 0; round < 240; round++) {
   for (const name of lexers) {
     const { code } = samples[name];

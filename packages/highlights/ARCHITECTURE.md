@@ -92,6 +92,30 @@ before preprocessing, so editor warnings are expected.
     path reads before writing - the loop-carried state - so scratch locals cost
     no code and no bytes in the live tokenizer's state blobs. Such lexers cannot
     use `return`.
+12. **SIMD markers:** every function that can reach a SIMD instruction through
+    calls, and holds none itself, gets one unused `v128` local. JavaScriptCore
+    (Bun, Safari) decides whether a function uses SIMD from its own bytecode -
+    an instruction or a `v128` local - yet its optimizing tier inlines small
+    callees: a lexer that only inlines a scanner is compiled with the scalar
+    register convention and may park the scanner's vector constants in
+    callee-saved vector registers across calls, of which the ARM64 ABI preserves
+    only the low 64 bits. Bun 1.4 then cut identifier scans after 8 bytes once
+    such a lexer tiered up. The local switches the caller to the SIMD convention
+    at no runtime cost and two bytes; an instruction marker pushed hot helpers
+    over the inliner's size thresholds. Binaryen drops unused locals, so
+    `optimizeWasm()` re-applies the pass; `test/wasm_test.ts` checks both
+    modules.
+13. **Compound negations:** `(i32.eqz X)` with an `i32.and`/`i32.or` operand
+    becomes `(i32.shr_u (i32.clz X) (i32.const 5))`, the same 0/1 result.
+    JavaScriptCore's optimizing tier fuses and/or trees of comparisons that feed
+    a branch into ARM64 conditional compares and reads `x == 0` inside them as a
+    negated sub-chain; in Bun 1.4 a sub-chain abandoned halfway - at a call
+    result, a load, or two nested and/or nodes - leaves its recorded nodes in
+    the chain, so the branch tests corrupted flags. A shifted
+    count-leading-zeros is not a comparison, so the fuser stops there.
+    `optimizeWasm()` re-applies the rewrite after Binaryen, which rebuilds
+    `eqz(or(a, b))` from `and(eqz(a), eqz(b))`; `test/wasm_test.ts` checks that
+    neither module keeps a negated compound.
 
 `wat2wasm()` enables bulk memory and SIMD. Hot scans classify 16 bytes with
 `i8x16` comparisons, `i8x16.bitmask`, and `i32.ctz`.

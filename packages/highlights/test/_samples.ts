@@ -1763,7 +1763,6 @@ export const samples: Record<string, LangSample> = {
       '---'
     ),
     kinds: [
-      'punctuation.special',
       'title',
       'emphasis',
       'emphasis.strong',

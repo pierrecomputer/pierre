@@ -727,6 +727,7 @@ export function transformWat(
           .join('');
       return `i${bits}.const ${hex}`;
     });
+  code = wrapCompoundNegations(code);
   checkDataSegments(code, url.pathname);
   if (imports.length > 0) {
     code = code.replace(
@@ -734,6 +735,7 @@ export function transformWat(
       `(module\n${imports.map((i) => '  ' + i).join('\n')}$1`
     );
   }
+  code = markSimdReachers(code);
   return {
     code,
     enumMap,
@@ -1170,7 +1172,7 @@ function liveLocalsAtCheckpoint(inner: string): Set<string> {
 
 /**
  * Replace each `(head ...)` form with `fn(innerText)`.
- * Parenthesis scanning preserves nested forms and string operands.
+ * Skip quoted strings when matching, and preserve nested forms and operands.
  */
 function replaceForm(
   code: string,
@@ -1178,13 +1180,14 @@ function replaceForm(
   fn: (inner: string) => string
 ): string {
   const open = new RegExp(
-    `\\(\\s*${head.replace(/[.$]/g, '\\$&')}(?=[\\s(])`,
+    `"(?:[^"\\\\]|\\\\.)*"|\\(\\s*${head.replace(/[.$]/g, '\\$&')}(?=[\\s(])`,
     'g'
   );
   let out = '';
   let last = 0;
   let m;
   while ((m = open.exec(code)) !== null) {
+    if (m[0].startsWith('"')) continue;
     let depth = 0,
       i = m.index,
       inStr = false,
@@ -1213,6 +1216,119 @@ function replaceForm(
     open.lastIndex = last;
   }
   return out + code.slice(last);
+}
+
+/**
+ * Rewrite `(i32.eqz X)` where X is an `i32.and`/`i32.or` form into
+ * `(i32.shr_u (i32.clz X) (i32.const 5))`: the same 0/1 result, since only
+ * zero has 32 leading zeros. JavaScriptCore's optimizing tier (Bun 1.4,
+ * Safari) fuses an and/or tree of comparisons that feeds a branch into ARM64
+ * conditional compares, and reads `x == 0` inside that tree as a negated
+ * sub-chain. When the sub-chain then turns out not to be fusable - it meets a
+ * call result or a load, or two nested and/or nodes side by side - the nodes
+ * it had already recorded stay in the chain, and the branch is compiled
+ * against corrupted flags. Perl's `qq{...}` delimiter test failed this way in
+ * about one process in thirty, depending on how B3 had associated the `or`
+ * chain that run. A shift of a count-leading-zeros is not a comparison, so
+ * the fuser stops there and the tree compiles as plain boolean arithmetic.
+ * Runs on the preprocessed source and again on the optimized module, since
+ * Binaryen rebuilds `eqz(or(a, b))` from `and(eqz(a), eqz(b))`. Upstream
+ * WebKit now discards the recorded nodes; drop this once the pinned Bun ships
+ * that fix.
+ */
+function wrapCompoundNegations(code: string): string {
+  return replaceForm(code, 'i32.eqz', (inner) => {
+    // nested negations first, so an inner compound is wrapped as well
+    const arg = wrapCompoundNegations(inner).trim();
+    if (!/^\(\s*i32\.(?:and|or)\b/.test(arg)) return `(i32.eqz ${arg})`;
+    return `(i32.shr_u (i32.clz ${arg}) (i32.const 5))`;
+  });
+}
+
+/**
+ * Give every function that can reach a SIMD instruction through calls, and
+ * holds none itself, one unused `v128` local. JavaScriptCore (Bun, Safari)
+ * decides whether a function uses SIMD from that function's own bytecode -
+ * a SIMD instruction or a `v128` local both count - yet its optimizing tier
+ * inlines small callees. A caller that only inlines a SIMD scanner is
+ * therefore compiled with the scalar register convention, and its register
+ * allocator may park the scanner's vector constants in callee-saved vector
+ * registers across calls. The ARM64 ABI preserves only the low 64 bits of
+ * those registers, so after the first call that touches them the constants
+ * lose lanes 8-15 and every later scan stops after 8 bytes (Bun 1.4:
+ * identifiers cut after eight characters once a lexer tiered up). The local
+ * switches the caller to the SIMD convention, which keeps vectors out of
+ * those registers across calls. A local costs two bytes and no instructions;
+ * a dropped vector load also works but its seven bytes pushed hot helpers
+ * over the inliner's size thresholds and slowed the HTML lexer by up to 70%.
+ * Binaryen removes unused locals, so `optimizeWasm()` runs this again on the
+ * optimized module, where calls name functions by index.
+ */
+function markSimdReachers(code: string): string {
+  const simdOp =
+    /\b(?:v128|[if](?:8x16|16x8|32x4|64x2))\.|\(\s*local\b[^()]*\bv128\b/;
+  const header = new Set(['export', 'type', 'param', 'result', 'local']);
+  const moduleForm = splitTopLevelForms(code).find((f) => f.head === 'module');
+  if (moduleForm === undefined) throw new Error('markSimdReachers: no module');
+  const innerAt =
+    moduleForm.start + moduleForm.text.indexOf('module') + 'module'.length;
+  const inner = code.slice(innerAt, moduleForm.end - 1);
+  const forms = splitTopLevelForms(inner);
+  // imported functions come first in the index space that `call N` uses
+  const imported = forms.filter(
+    (f) => f.head === 'import' && /\(\s*func\b/.test(f.text)
+  ).length;
+  const funcs = forms
+    .filter((f) => f.head === 'func')
+    .map((f) => {
+      const open = /^\(\s*func(?:\s+(\$[^\s()]+))?/.exec(f.text);
+      if (open === null) throw new Error('markSimdReachers: malformed func');
+      // string literals cannot hold instructions; blank them before matching
+      const text = f.text.replace(/"(?:[^"\\]|\\.)*"/g, '""');
+      return {
+        form: f,
+        openLen: open[0].length,
+        name: open[1],
+        simd: simdOp.test(text),
+        callees: [...text.matchAll(/\bcall\s+(\$[^\s()]+|\d+)/g)].map(
+          (m) => m[1]
+        ),
+        indirect: /\bcall_indirect\b/.test(text),
+      };
+    });
+  // exported entry points may be unnamed, so track functions by index
+  const index = new Map(funcs.map((f, i) => [f.name, i]));
+  const resolve = (callee: string): number | undefined =>
+    /^\d+$/.test(callee) ? Number(callee) - imported : index.get(callee);
+  const reaches = new Set(funcs.flatMap((f, i) => (f.simd ? [i] : [])));
+  for (let changed = true; changed; ) {
+    changed = false;
+    for (const [i, f] of funcs.entries()) {
+      if (reaches.has(i)) continue;
+      const callsReacher = f.callees.some((c) => {
+        const j = resolve(c);
+        return j !== undefined && reaches.has(j);
+      });
+      if (f.indirect || callsReacher) {
+        reaches.add(i);
+        changed = true;
+      }
+    }
+  }
+  // splice the local in after the declarations, from the end so earlier
+  // offsets stay valid; an appended local leaves existing indices alone
+  let out = code;
+  for (const [i, f] of [...funcs.entries()].reverse()) {
+    if (f.simd || !reaches.has(i)) continue;
+    const body = f.form.text.slice(f.openLen, -1);
+    const first = splitTopLevelForms(body).find(
+      (x) => !header.has(x.head) && !x.text.startsWith('(;')
+    );
+    const at =
+      innerAt + f.form.start + f.openLen + (first?.start ?? body.length);
+    out = `${out.slice(0, at)} (local v128)${out.slice(at)}`;
+  }
+  return out;
 }
 
 /**
@@ -1283,6 +1399,16 @@ export function wat2wasm(filename: string, text: string): Uint8Array {
   }
 }
 
+/** Folded WAT text of a WebAssembly binary, for build-invariant tests. */
+export function wasmToText(wasmBytes: Uint8Array): string {
+  const wasmModule = readWasm(wasmBytes, { readDebugNames: false });
+  try {
+    return wasmModule.toText({ foldExprs: true, inlineExport: false });
+  } finally {
+    wasmModule.destroy();
+  }
+}
+
 /**
  * Optimize with Binaryen at `-O3 --shrink-level=1` and emit optimized Stack IR.
  * Each pass exposes more patterns for the next. Pass three still shrinks the
@@ -1313,16 +1439,26 @@ export function optimizeWasm(wasmBytes: Uint8Array): Uint8Array {
     }
   }
   // Binaryen folds byte splats into 18-byte vector constants. Encode them
-  // as a scalar and splat (4–5 bytes) after the final optimization pass.
+  // as a scalar and splat (4–5 bytes) after the final optimization pass, and
+  // re-apply the negation rewrite and the SIMD markers Binaryen may have
+  // undone (see wrapCompoundNegations and markSimdReachers); all three work
+  // on the folded text.
   const compact = readWasm(wasmBytes, { readDebugNames: false });
   try {
-    const code = compact.toText({ foldExprs: false, inlineExport: false });
+    const code = compact.toText({ foldExprs: true, inlineExport: false });
     return wat2wasm(
       'highlights.wat',
-      code.replace(
-        /^[ \t]*v128\.const i32x4 (0x([0-9a-f]{2})\2\2\2) \1 \1 \1$/gm,
-        (_match, _word, byte: string) =>
-          `i32.const ${(parseInt(byte, 16) << 24) >> 24}\n    i8x16.splat`
+      markSimdReachers(
+        wrapCompoundNegations(
+          replaceForm(code, 'v128.const', (inner) => {
+            const byte = inner.match(
+              /^\s*i32x4 (0x([0-9a-f]{2})\2\2\2) \1 \1 \1\s*$/
+            )?.[2];
+            return byte === undefined
+              ? `(v128.const${inner})`
+              : `(i8x16.splat (i32.const ${(parseInt(byte, 16) << 24) >> 24}))`;
+          })
+        )
       )
     );
   } finally {
