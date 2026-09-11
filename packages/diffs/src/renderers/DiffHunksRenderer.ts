@@ -249,7 +249,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
   private deletionAnnotations: AnnotationLineMap<LAnnotation> = {};
   private additionAnnotations: AnnotationLineMap<LAnnotation> = {};
 
-  private computedLang: SupportedLanguages = 'text';
+  private computedLangs: SupportedLanguages[] = ['text'];
   private renderCache: DiffRenderCache | undefined;
   // Completed background work waits here until the next render can update its
   // DOM and layout together.
@@ -883,7 +883,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
 
   public async initializeHighlighter(): Promise<DiffsHighlighter> {
     this.highlighter = await getSharedHighlighter(
-      getHighlighterOptions(this.computedLang, {
+      getHighlighterOptions(this.computedLangs, {
         theme: this.getLocalHighlightTheme(),
         preferredHighlighter:
           this.workerManager?.getPreferredHighlighter() ??
@@ -923,7 +923,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     }
     // Lets attempt to get the highlighter/languages ready immediately
     else if (this.highlighter == null) {
-      this.computedLang = diff.lang ?? getFiletypeFromFileName(diff.name);
+      this.computedLangs = getDiffLanguages(diff);
       void this.initializeHighlighter();
     }
   }
@@ -1147,12 +1147,12 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
         this.workerManager.highlightDiffAST(this, diff);
       }
     } else {
-      this.computedLang = diff.lang ?? getFiletypeFromFileName(diff.name);
+      this.computedLangs = getDiffLanguages(diff);
       this.highlighter ??= getHighlighterIfLoaded();
       const hasThemes =
         this.highlighter != null && areThemesAttached(options.theme);
       const hasLangs =
-        this.highlighter != null && areLanguagesAttached(this.computedLang);
+        this.highlighter != null && areLanguagesAttached(this.computedLangs);
       const canHighlight = !forcePlainText && hasLangs;
 
       // If we have any semblance of a highlighter with the correct theme(s)
@@ -1232,15 +1232,13 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     diff: FileDiffMetadata
   ): Promise<RenderDiffResult> {
     const forcePlainText = isDiffMassive(diff, this.getTokenizeMaxLength());
-    this.computedLang = forcePlainText
-      ? 'text'
-      : (diff.lang ?? getFiletypeFromFileName(diff.name));
+    this.computedLangs = forcePlainText ? ['text'] : getDiffLanguages(diff);
     const hasThemes =
       this.highlighter != null &&
       areThemesAttached(this.getLocalHighlightTheme());
     const hasLangs =
       forcePlainText ||
-      (this.highlighter != null && areLanguagesAttached(this.computedLang));
+      (this.highlighter != null && areLanguagesAttached(this.computedLangs));
     // If we don't have the required langs or themes, then we need to
     // initialize the highlighter to load the appropriate languages and themes
     if (this.highlighter == null || !hasThemes || !hasLangs) {
@@ -2597,6 +2595,19 @@ function getEditorDocumentLines<LAnnotation>(
     lines.push(textDocument.getLineText(line, true));
   }
   return lines;
+}
+
+// Renames can supply 2 different languages, so lets go ahead and figure out
+// the required languages
+function getDiffLanguages(diff: FileDiffMetadata): SupportedLanguages[] {
+  if (diff.lang != null) {
+    return [diff.lang];
+  }
+  const deletionLang = getFiletypeFromFileName(diff.prevName ?? diff.name);
+  const additionLang = getFiletypeFromFileName(diff.name);
+  return deletionLang === additionLang
+    ? [additionLang]
+    : [deletionLang, additionLang];
 }
 
 function isDiffMassive(
