@@ -3,7 +3,7 @@
 `@pierre/highlights` is a fast code highlighter written by hand in WebAssembly
 Text (WAT).
 
-- **Lightweight**: 69.5 KiB (gzipped Wasm) for 67 languages
+- **Lightweight**: 69.1 KiB (gzipped Wasm) for 67 languages
 - **Fast**: 120–582× Shiki's throughput in the latest
   [HTML benchmark](./benchmark/README.md#html-generation)
 - Includes 67 built-in language lexers, no external grammar definitions needed
@@ -25,7 +25,7 @@ Try it live in the [playground](https://diffs.com/highlights).
 npm install @pierre/highlights
 ```
 
-highlights runs in Node.js, browsers, and Cloudflare Workers. Conditional
+Highlights runs in Node.js, browsers, and Cloudflare Workers. Conditional
 exports select the right WebAssembly loader.
 
 ## HTML generation
@@ -49,34 +49,34 @@ new TextDecoder().decode(html);
 fragment. The view is valid until the next call. Send it to a `Response` or
 file, or decode it with `TextDecoder`.
 
-## Tokens generation
+## Token generation
 
 `codeToTokens` returns Shiki-compatible themed tokens. WebAssembly emits
 line-aware UTF-16 style records; JavaScript builds the token objects.
 
 ```js
 import { codeToTokens } from '@pierre/highlights';
+import { pierreDark, pierreLight } from '@pierre/highlights/themes';
 
 const { tokens } = codeToTokens('const a = 1', {
   lang: 'ts',
-  theme: pierreDark,
-  // or use dual themes
   themes: {
     dark: pierreDark,
     light: pierreLight,
   },
 });
-// [[{ content: 'const ', offset: 0, color: '#ff678d', fontStyle: 0 }, ...]]
+// Use `theme: pierreDark` instead of `themes` for single-theme tokens.
 ```
 
 ## Streaming mode
 
-Use `StreamTokenizer` for streaming. it owns a Wasm instance and text buffer.
+Use `StreamTokenizer` for streaming. It owns a Wasm instance and text buffer.
 Streams preserve lexer state for every language and scan only newly completed
 chunks:
 
 ```js
-import { StreamTokenizer, LiveTokenizer } from '@pierre/highlights';
+import { StreamTokenizer } from '@pierre/highlights';
+import { pierreDark } from '@pierre/highlights/themes';
 
 // SSR streaming: push chunks, get newly completed lines of tokens
 const stream = new StreamTokenizer({ lang: 'ts', theme: pierreDark });
@@ -96,25 +96,35 @@ states in Wasm, and doubles as the document model: `getLineText`/`getText` read
 back the exact document.
 
 ```ts
+import { LiveTokenizer } from '@pierre/highlights';
+import { pierreDark } from '@pierre/highlights/themes';
+
 // editing: apply batched UTF-16 range edits; only lines whose lexer state
 // changed are re-tokenized, and the update lists exactly those lines
 const live = new LiveTokenizer({ lang: 'ts', theme: pierreDark, code });
-const update = live.applyEdits([
-  {
-    range: { start: { line: 1, character: 0 }, end: { line: 1, character: 9 } },
-    newText: 'let b = 2',
-  },
-]);
-for (const change of update.lineChanges) {
-  for (let i = change.newStartLine; i < change.newEndLine; i++) {
-    const { tokens, bracketIgnoredRanges } = live.getLineTokens(i);
+try {
+  const update = live.applyEdits([
+    {
+      range: {
+        start: { line: 1, character: 0 },
+        end: { line: 1, character: 9 },
+      },
+      newText: 'let b = 2',
+    },
+  ]);
+  for (const change of update.lineChanges) {
+    for (let i = change.newStartLine; i < change.newEndLine; i++) {
+      const { tokens, bracketIgnoredRanges } = live.getLineTokens(i);
+    }
   }
+} finally {
+  live.dispose();
 }
 ```
 
 ## Themes
 
-highlights uses Zed's theme format:
+Highlights uses Zed's theme format:
 
 ```ts
 interface ThemeSyntaxSettings {
@@ -166,7 +176,7 @@ Define the variables in your CSS:
   --hls-comment-doc: #737373;
   --hls-string: #5ecc71;
   --hls-keyword-declaration: #ff678d;
-  ...
+  /* Set other token variables as needed. */
 }
 ```
 

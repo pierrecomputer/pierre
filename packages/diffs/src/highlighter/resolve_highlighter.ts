@@ -89,9 +89,8 @@ export function areHighlighterThemesReady(
   theme: DiffsThemeNames | ThemesType | undefined,
   highlighter: CodeHighlighter = getCodeHighlighter()
 ): boolean {
-  const custom = customHighlighterOf(highlighter);
-  if (custom != null) {
-    return custom.isReady({ langs: [], themes: getThemes(theme) });
+  if (highlighter !== shikiHighlighter) {
+    return highlighter.isReady({ langs: [], themes: getThemes(theme) });
   }
   return areThemesAttached(theme ?? DEFAULT_THEMES);
 }
@@ -101,9 +100,8 @@ export function areHighlighterThemesResolved(
   themes: DiffsThemeNames[],
   highlighter: CodeHighlighter = getCodeHighlighter()
 ): boolean {
-  const custom = customHighlighterOf(highlighter);
-  if (custom != null) {
-    return custom.isReady({ langs: [], themes });
+  if (highlighter !== shikiHighlighter) {
+    return highlighter.isReady({ langs: [], themes });
   }
   return hasResolvedThemes(themes);
 }
@@ -113,9 +111,8 @@ export function isHighlighterLanguageReady(
   lang: SupportedLanguages | SupportedLanguages[] | undefined,
   highlighter: CodeHighlighter = getCodeHighlighter()
 ): boolean {
-  const custom = customHighlighterOf(highlighter);
-  if (custom != null) {
-    return custom.isReady({
+  if (highlighter !== shikiHighlighter) {
+    return highlighter.isReady({
       langs: Array.isArray(lang) ? lang : [lang ?? 'text'],
       themes: [],
     });

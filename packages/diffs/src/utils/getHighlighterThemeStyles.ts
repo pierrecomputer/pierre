@@ -1,7 +1,7 @@
 import { normalizeThemeColors } from '@pierre/theming/color';
 
 import { DEFAULT_THEMES } from '../constants';
-import type { RenderersHighlighter } from '../highlighter/resolve_highlighter';
+import type { RenderHighlighter } from '../highlighter/code_highlighter';
 import type {
   DiffsThemeNames,
   ThemeRegistrationResolved,
@@ -11,7 +11,7 @@ import { formatCSSVariablePrefix } from './formatCSSVariablePrefix';
 
 interface GetHighlighterThemeStylesProps {
   theme?: DiffsThemeNames | ThemesType;
-  highlighter: RenderersHighlighter;
+  highlighter: RenderHighlighter;
   prefix?: string;
 }
 

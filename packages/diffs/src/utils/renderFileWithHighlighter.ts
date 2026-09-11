@@ -1,6 +1,6 @@
 import type { CodeToTokensOptions } from 'shiki/core';
 
-import type { RenderersHighlighter } from '../highlighter/resolve_highlighter';
+import type { RenderHighlighter } from '../highlighter/code_highlighter';
 import type {
   FileContents,
   ForceFilePlainTextOptions,
@@ -21,7 +21,7 @@ const DEFAULT_PLAIN_TEXT_OPTIONS: ForceFilePlainTextOptions = {
 
 export function renderFileWithHighlighter(
   file: FileContents,
-  highlighter: RenderersHighlighter,
+  highlighter: RenderHighlighter,
   { theme, tokenizeMaxLineLength }: RenderFileOptions,
   {
     forcePlainText,

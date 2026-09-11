@@ -154,22 +154,18 @@ void test('bundled themes: matches Shiki names and metadata', () => {
     'pierreLightSoft',
     'pierreLightTritanopia',
   ];
+  const bundledThemes = new Map(
+    Object.entries(themes).filter(
+      ([, value]) =>
+        typeof value === 'object' && 'name' in value && value !== cssVariables
+    )
+  );
   assert.deepEqual(
-    Object.entries(themes)
-      .filter(
-        ([key, value]) =>
-          key !== 'cssVariables' &&
-          value != null &&
-          typeof value === 'object' &&
-          !Array.isArray(value) &&
-          'name' in value
-      )
-      .map(([key]) => key)
-      .sort(),
+    [...bundledThemes.keys()].sort(),
     [...shikiThemeNames.map(camel), ...pierreExports].sort()
   );
   for (const { id, displayName, type } of bundledThemesInfo) {
-    const theme = themes[camel(id) as keyof typeof themes] as Theme;
+    const theme = bundledThemes.get(camel(id)) as Theme;
     assert.equal(theme.name, displayName, id);
     assert.equal(theme.appearance, type, id);
     assert.ok(Object.keys(theme.style.syntax ?? {}).length > 0, id);

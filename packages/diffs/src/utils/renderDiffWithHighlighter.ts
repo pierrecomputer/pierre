@@ -1,7 +1,7 @@
 import type { CodeToTokensOptions } from 'shiki/core';
 
 import { DEFAULT_COLLAPSED_CONTEXT_THRESHOLD } from '../constants';
-import type { RenderersHighlighter } from '../highlighter/resolve_highlighter';
+import type { RenderHighlighter } from '../highlighter/code_highlighter';
 import type {
   FileDiffMetadata,
   ForceDiffPlainTextOptions,
@@ -23,7 +23,7 @@ const DEFAULT_PLAIN_TEXT_OPTIONS: ForceDiffPlainTextOptions = {
 
 export function renderDiffWithHighlighter(
   diff: FileDiffMetadata,
-  highlighter: RenderersHighlighter,
+  highlighter: RenderHighlighter,
   options: RenderDiffOptions,
   {
     forcePlainText,
