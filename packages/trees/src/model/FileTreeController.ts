@@ -1612,10 +1612,7 @@ export class FileTreeController
     return new PathStore({
       ...this.#baseOptions,
       paths,
-      preparedInput:
-        preparedInput == null
-          ? undefined
-          : (preparedInput as unknown as { paths: readonly string[] }),
+      preparedInput,
       ...(initialExpandedPathsOverride !== undefined
         ? { initialExpandedPaths: initialExpandedPathsOverride }
         : {}),

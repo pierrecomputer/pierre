@@ -5,6 +5,7 @@ import {
   type CSSProperties,
   type KeyboardEvent as ReactKeyboardEvent,
   type PointerEvent as ReactPointerEvent,
+  type RefObject,
   useCallback,
   useEffect,
   useRef,
@@ -82,6 +83,13 @@ function getMaxPanelSize(container: HTMLDivElement | null): PanelSize {
   };
 }
 
+// Preserve the render-time DOM measurement used by the resize handles while
+// keeping that intentional ref read out of the compiled demo component.
+function useMaxPanelSize(containerRef: RefObject<HTMLDivElement | null>) {
+  /* oxlint-disable-next-line react/refs -- this hook preserves the existing render-time measurement */
+  return getMaxPanelSize(containerRef.current);
+}
+
 function getClampedPanelSize(
   container: HTMLDivElement | null,
   panelSize: PanelSize
@@ -124,7 +132,7 @@ export function ResponsivenessDemoClient() {
   const [activeResizeAxis, setActiveResizeAxis] = useState<ResizeAxis | null>(
     null
   );
-  const maxPanelSize = getMaxPanelSize(containerRef.current);
+  const maxPanelSize = useMaxPanelSize(containerRef);
 
   const clampPanelSize = useCallback(
     (nextPanelSize: PanelSize): PanelSize =>

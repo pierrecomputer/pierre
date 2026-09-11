@@ -2,26 +2,34 @@
 
 import { IconColorDark, IconColorLight } from '@pierre/icons';
 import Image, { type StaticImageData } from 'next/image';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 
 import pierreDark from '../pierre-dark.png';
 import pierreLight from '../pierre-light.png';
 import { useTheme } from '@/components/theme-provider';
 import { ButtonGroup, ButtonGroupItem } from '@/components/ui/button-group';
+import { useOnValueChange } from '@/lib/useOnValueChange';
 
 export function ThemeScreenshots() {
   const { resolvedColorScheme } = useTheme();
-  const [activeTheme, setActiveTheme] = useState<'light' | 'dark'>('dark');
-  const [mounted, setMounted] = useState(false);
+  // Seed from the resolved scheme when it is already known (a fresh client
+  // mount); the change tracking below covers hydration and later flips.
+  const [activeTheme, setActiveTheme] = useState<'light' | 'dark'>(
+    () => resolvedColorScheme ?? 'dark'
+  );
+  // Seeded with the current scheme: the useState initializer above already
+  // covers a mount that knows it, so only later changes need to run.
+  useOnValueChange(
+    resolvedColorScheme,
+    (scheme) => {
+      if (scheme === 'light' || scheme === 'dark') {
+        setActiveTheme(scheme);
+      }
+    },
+    resolvedColorScheme
+  );
 
-  useEffect(() => {
-    setMounted(true);
-    if (resolvedColorScheme === 'light' || resolvedColorScheme === 'dark') {
-      setActiveTheme(resolvedColorScheme);
-    }
-  }, [resolvedColorScheme]);
-
-  if (!mounted) {
+  if (resolvedColorScheme == null) {
     return (
       <div className="aspect-[1456/940] w-full animate-pulse rounded-[12px] bg-neutral-200 dark:bg-neutral-800" />
     );

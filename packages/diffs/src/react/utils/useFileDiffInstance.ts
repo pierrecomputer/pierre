@@ -153,27 +153,13 @@ export function useFileDiffInstance<LAnnotation, Caret>({
   // from acceptance time (stale) or the completion event's files (installed),
   // the parse is the accepted diff itself; any other pair clears the record
   // and parses fresh.
-  const effectiveFileDiff = useMemo(() => {
-    if (fileDiff != null) {
-      return fileDiff;
-    }
-    const { current: accepted } = acceptedCache;
-    const filePair = accepted?.filePair;
-    if (accepted != null && filePair != null) {
-      if (
-        isSameFilePair(oldFile, newFile, filePair.stale) ||
-        isSameFilePair(oldFile, newFile, filePair.installed)
-      ) {
-        return filePair.fileDiff;
-      }
-      accepted.filePair = null;
-    }
-    return parseDiffFromFile(
-      oldFile ?? null,
-      newFile ?? null,
-      options?.parseDiffOptions
-    );
-  }, [fileDiff, oldFile, newFile, options?.parseDiffOptions]);
+  const effectiveFileDiff = useEffectiveFileDiff({
+    acceptedCache,
+    fileDiff,
+    newFile,
+    oldFile,
+    parseDiffOptions: options?.parseDiffOptions,
+  });
   const instanceRef = useRef<
     | FileDiff<LAnnotation, Caret>
     | VirtualizedFileDiff<LAnnotation, Caret>
@@ -304,6 +290,55 @@ export function useFileDiffInstance<LAnnotation, Caret>({
     getHoveredLine,
     getAnnotationSlotName,
   };
+}
+
+interface UseEffectiveFileDiffProps<LAnnotation, Caret> {
+  acceptedCache: RefObject<AcceptedCompletion<LAnnotation> | null>;
+  fileDiff: FileDiffMetadata | undefined;
+  newFile: FileContents | null | undefined;
+  oldFile: FileContents | null | undefined;
+  parseDiffOptions: FileDiffOptions<LAnnotation, Caret>['parseDiffOptions'];
+}
+
+// Resolves the diff the instance renders: the `fileDiff` prop when given;
+// otherwise the accepted edit's cached diff while the file props still name the
+// pair it was accepted against; otherwise a fresh parse of the file props. A
+// cached pair that no longer matches is dropped on the way. Kept in its own hook
+// because the render-time ref read and write are deliberate; the boundary lets
+// the calling hook stay compilable.
+function useEffectiveFileDiff<LAnnotation, Caret>({
+  acceptedCache,
+  fileDiff,
+  newFile,
+  oldFile,
+  parseDiffOptions,
+}: UseEffectiveFileDiffProps<LAnnotation, Caret>): FileDiffMetadata {
+  /* oxlint-disable react/immutability react/refs -- accepted edit output must
+   * replace stale file-pair props during render */
+  const effectiveFileDiff = useMemo(() => {
+    if (fileDiff != null) {
+      return fileDiff;
+    }
+    const { current: accepted } = acceptedCache;
+    const filePair = accepted?.filePair;
+    if (accepted != null && filePair != null) {
+      if (
+        isSameFilePair(oldFile, newFile, filePair.stale) ||
+        isSameFilePair(oldFile, newFile, filePair.installed)
+      ) {
+        return filePair.fileDiff;
+      }
+      accepted.filePair = null;
+    }
+    return parseDiffFromFile(
+      oldFile ?? null,
+      newFile ?? null,
+      parseDiffOptions
+    );
+  }, [acceptedCache, fileDiff, oldFile, newFile, parseDiffOptions]);
+  /* oxlint-enable react/immutability react/refs */
+
+  return effectiveFileDiff;
 }
 
 // Whether the file props name the same files as a recorded pair.

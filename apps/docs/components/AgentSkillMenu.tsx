@@ -1,7 +1,7 @@
 'use client';
 
 import { IconArrowUpRight, IconChevronsNarrow } from '@pierre/icons';
-import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { COPY_FEEDBACK_MS, CopyStateIcon } from '@/components/CopyStateIcon';
 import { Button } from '@/components/ui/button';
@@ -17,6 +17,7 @@ import {
   getProductConfig,
   type ProductId,
 } from '@/lib/product-config';
+import { useMediaQuery } from '@/lib/useMediaQuery';
 
 export interface AgentSkillMenuProps {
   productId: ProductId;
@@ -29,27 +30,13 @@ type CopyTarget = 'skillInstall' | 'agentPrompt';
 // to one side rather than sitting under the button.
 const INLINE_BUTTONS_QUERY = '(min-width: 460px)';
 
-function subscribeToInlineButtons(onChange: () => void) {
-  const query = window.matchMedia(INLINE_BUTTONS_QUERY);
-  query.addEventListener('change', onChange);
-  return () => query.removeEventListener('change', onChange);
-}
-
-function useInlineButtons() {
-  return useSyncExternalStore(
-    subscribeToInlineButtons,
-    () => window.matchMedia(INLINE_BUTTONS_QUERY).matches,
-    () => true
-  );
-}
-
 export function AgentSkillMenu({ productId }: AgentSkillMenuProps) {
   const [copiedTarget, setCopiedTarget] = useState<CopyTarget | null>(null);
   const resetTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(
     undefined
   );
   const product = getProductConfig(productId);
-  const inlineButtons = useInlineButtons();
+  const inlineButtons = useMediaQuery(INLINE_BUTTONS_QUERY, true);
 
   const copy = (target: CopyTarget, content: string) => {
     void (async () => {

@@ -9,7 +9,6 @@ import type {
   DiffLineAnnotation,
   FileDiffMetadata,
   LineTypes,
-  RenderedLine,
   RenderedRow,
 } from '../src/types';
 import { fileNew, fileOld } from './mocks';
@@ -419,7 +418,7 @@ describe('Annotation Rendering', () => {
       // Iterate and verify each annotation's preceding line type
       for (let i = 1; i < unifiedAST.length; i++) {
         if (!isAnnotationRow(unifiedAST[i])) continue;
-        const slots = findSlotElements(unifiedAST[i] as RenderedLine);
+        const slots = findSlotElements(unifiedAST[i]);
         const slotName = slots[0]?.properties?.name?.toString();
         if (slots.length === 0 || slotName == null) {
           throw new Error('there should always be slots in unifiedAST');

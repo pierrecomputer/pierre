@@ -122,7 +122,7 @@ function mapTokensOptions(
     defaultColor?: string | false;
   };
   const base = {
-    lang: toHighlightsLang(options.lang as SupportedLanguages),
+    lang: toHighlightsLang(options.lang),
     cssVariablePrefix,
     defaultColor,
     tokenizeMaxLineLength: options.tokenizeMaxLineLength,

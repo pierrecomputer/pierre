@@ -15,6 +15,8 @@ import {
   TREE_APP_DEMO_GIT_STATUSES,
   TREE_APP_DEMO_UNSAFE_CSS,
 } from '../_lib/treeAppDemoData';
+import { usePortalContainer } from '@/lib/usePortalContainer';
+import { useResettableState } from '@/lib/useResettableState';
 
 const COMPACT_DENSITY = 'compact' as const;
 
@@ -193,32 +195,17 @@ export function DemoTreeAppClient({
   treeId,
   treePreloadedData,
 }: DemoTreeAppClientProps) {
-  const [portalContainer, setPortalContainer] = useState<HTMLElement | null>(
-    null
-  );
+  const portalContainer = usePortalContainer();
   // Owned here (rather than inside TreeApp) so the mobile fade overlay
   // rendered alongside <TreeApp /> below can pick the right gradient color
   // for the active theme.
   const [theme, setTheme] = useState<TreeAppTheme>('dark');
-  const [filesByPath, setFilesByPath] = useState(files);
+  const [filesByPath, setFilesByPath] = useResettableState(files);
   const [gitStatusEntries, setGitStatusEntries] = useState(
     TREE_APP_DEMO_GIT_STATUSES
   );
-  const [prerenderedHtmlByPathState, setPrerenderedHtmlByPathState] = useState(
-    prerenderedHTMLByPath
-  );
-
-  useEffect(() => {
-    setPortalContainer(document.getElementById('dark-mode-portal-container'));
-  }, []);
-
-  useEffect(() => {
-    setFilesByPath(files);
-  }, [files]);
-
-  useEffect(() => {
-    setPrerenderedHtmlByPathState(prerenderedHTMLByPath);
-  }, [prerenderedHTMLByPath]);
+  const [prerenderedHtmlByPathState, setPrerenderedHtmlByPathState] =
+    useResettableState(prerenderedHTMLByPath);
 
   const treeOptions = useMemo(
     () => ({
@@ -292,7 +279,7 @@ export function DemoTreeAppClient({
           return nextEntries;
         });
       }),
-    [model]
+    [model, setFilesByPath, setPrerenderedHtmlByPathState]
   );
 
   return (

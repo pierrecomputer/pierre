@@ -1,0 +1,197 @@
+import { afterEach, beforeEach, describe, expect, spyOn, test } from 'bun:test';
+
+import {
+  DiffHunksRenderer,
+  disposeHighlighter,
+  getHighlighterIfLoaded,
+  getSharedHighlighter,
+  parseDiffFromFile,
+} from '../src';
+import { setHighlighter } from '../src/highlighter/code_highlighter';
+import { shikiHighlighter } from '../src/highlighter/shiki_highlighter';
+import { assertDefined, createDeferred } from './testUtils';
+
+beforeEach(disposeHighlighter);
+afterEach(disposeHighlighter);
+
+const python = {
+  name: 'example.py',
+  contents: 'print("python")\n',
+  language: 'python',
+} as const;
+const javascript = {
+  name: 'example.js',
+  contents: 'console.log("javascript");\n',
+  language: 'javascript',
+} as const;
+const renames = [
+  [python, javascript],
+  [javascript, python],
+] as const;
+const options = { theme: 'pierre-dark', diffStyle: 'split' } as const;
+
+describe('DiffHunksRenderer language loading without workers', () => {
+  const cases = [
+    [python, { ...python, contents: 'print("changed")\n' }],
+    [javascript, { ...javascript, contents: 'console.log("changed");\n' }],
+    ...renames,
+  ] as const;
+
+  for (const [oldFile, newFile] of cases) {
+    for (const preloadDestination of [false, true]) {
+      test(`asyncRender ${oldFile.language} -> ${newFile.language}, ${preloadDestination ? 'destination loaded' : 'cold'}`, async () => {
+        if (preloadDestination) {
+          const highlighter = await getSharedHighlighter({
+            themes: [options.theme],
+            langs: [newFile.language],
+          });
+          if (oldFile.language !== newFile.language) {
+            expect(highlighter.getLoadedLanguages()).not.toContain(
+              oldFile.language
+            );
+          }
+        } else {
+          expect(getHighlighterIfLoaded()).toBeUndefined();
+        }
+
+        const renderer = new DiffHunksRenderer(options);
+        try {
+          const diff = parseDiffFromFile(oldFile, newFile);
+          if (oldFile.name === newFile.name) {
+            expect(diff.prevName).toBeUndefined();
+          }
+          await renderer.asyncRender(diff);
+          const highlighter = getHighlighterIfLoaded();
+          assertDefined(highlighter, 'expected the highlighter to be loaded');
+          expect(highlighter.getLoadedLanguages()).toContain(oldFile.language);
+          expect(highlighter.getLoadedLanguages()).toContain(newFile.language);
+        } finally {
+          renderer.cleanUp();
+        }
+      });
+    }
+  }
+
+  for (const [oldFile, newFile] of renames) {
+    test(`renderDiff ${oldFile.language} -> ${newFile.language} loads the missing source grammar`, async () => {
+      const highlighter = await getSharedHighlighter({
+        themes: [options.theme],
+        langs: [newFile.language],
+      });
+      expect(highlighter.getLoadedLanguages()).not.toContain(oldFile.language);
+      const updated = createDeferred<void>();
+      const renderer = new DiffHunksRenderer(options, undefined, () => {
+        updated.resolve();
+      });
+      try {
+        const diff = parseDiffFromFile(oldFile, newFile);
+        const initial = renderer.renderDiff(diff);
+        // Wait for the background render before assertions or cleanup can
+        // dispose a highlighter that is still loading the missing grammar.
+        await updated.promise;
+        expect(initial).toBeDefined();
+        expect(highlighter.getLoadedLanguages()).toContain(oldFile.language);
+        expect(highlighter.getLoadedLanguages()).toContain(newFile.language);
+        expect(renderer.renderDiff(diff)).toBeDefined();
+      } finally {
+        renderer.cleanUp();
+      }
+    });
+
+    test(`hydrate preloads both grammars for ${oldFile.language} -> ${newFile.language}`, async () => {
+      const renderer = new DiffHunksRenderer(options);
+      const initialize = spyOn(renderer, 'initializeHighlighter');
+      try {
+        const diff = parseDiffFromFile(oldFile, newFile);
+        renderer.hydrate(diff);
+        await initialize.mock.results[0]?.value;
+        expect(initialize).toHaveBeenCalledTimes(1);
+        const highlighter = getHighlighterIfLoaded();
+        assertDefined(highlighter, 'expected the highlighter to be loaded');
+        expect(highlighter.getLoadedLanguages()).toContain(oldFile.language);
+        expect(highlighter.getLoadedLanguages()).toContain(newFile.language);
+      } finally {
+        initialize.mockRestore();
+        renderer.cleanUp();
+      }
+    });
+  }
+
+  for (const lang of ['json', 'text'] as const) {
+    test(`an explicit ${lang} override takes precedence over both filenames`, async () => {
+      const renderer = new DiffHunksRenderer(options);
+      try {
+        const diff = { ...parseDiffFromFile(python, javascript), lang };
+        await renderer.asyncRender(diff);
+        const highlighter = getHighlighterIfLoaded();
+        assertDefined(highlighter, 'expected the highlighter to be loaded');
+        const languages = highlighter.getLoadedLanguages();
+        expect(languages).not.toContain('python');
+        expect(languages).not.toContain('javascript');
+        if (lang !== 'text') {
+          expect(languages).toContain(lang);
+        }
+      } finally {
+        renderer.cleanUp();
+      }
+    });
+  }
+
+  for (const method of ['asyncRender', 'renderDiff'] as const) {
+    test(`${method} loads a renamed source grammar through a custom highlighter`, async () => {
+      const highlighter = await getSharedHighlighter({
+        themes: [options.theme],
+        langs: [javascript.language],
+      });
+      const custom = { ...shikiHighlighter, name: 'custom' };
+      const languages: (string | undefined)[] = [];
+      const tokenize = spyOn(custom, 'codeToTokens').mockImplementation(
+        (code, options) => {
+          languages.push(options.lang);
+          return shikiHighlighter.codeToTokens(code, options);
+        }
+      );
+      const updated = createDeferred<void>();
+      const renderer = new DiffHunksRenderer(options, undefined, () => {
+        updated.resolve();
+      });
+      setHighlighter(custom);
+      try {
+        expect(highlighter.getLoadedLanguages()).not.toContain(python.language);
+        const diff = parseDiffFromFile(python, javascript);
+        if (method === 'asyncRender') {
+          await renderer.asyncRender(diff);
+        } else {
+          renderer.renderDiff(diff);
+          await updated.promise;
+        }
+        expect(highlighter.getLoadedLanguages()).toContain(python.language);
+        expect(highlighter.getLoadedLanguages()).toContain(javascript.language);
+        expect(languages).toEqual(
+          expect.arrayContaining([python.language, javascript.language])
+        );
+      } finally {
+        renderer.cleanUp();
+        tokenize.mockRestore();
+        setHighlighter(shikiHighlighter);
+      }
+    });
+  }
+
+  test('a rename above the size threshold does not load either grammar', async () => {
+    const renderer = new DiffHunksRenderer({
+      ...options,
+      tokenizeMaxLength: 0,
+    });
+    try {
+      await renderer.asyncRender(parseDiffFromFile(python, javascript));
+      const highlighter = getHighlighterIfLoaded();
+      assertDefined(highlighter, 'expected the highlighter to be loaded');
+      const languages = highlighter.getLoadedLanguages();
+      expect(languages).not.toContain('python');
+      expect(languages).not.toContain('javascript');
+    } finally {
+      renderer.cleanUp();
+    }
+  });
+});

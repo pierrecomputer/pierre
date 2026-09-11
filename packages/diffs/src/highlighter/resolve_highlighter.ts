@@ -108,14 +108,17 @@ export function areHighlighterThemesResolved(
   return hasResolvedThemes(themes);
 }
 
-/** Whether the given language can highlight synchronously right now. */
+/** Whether the given languages can highlight synchronously right now. */
 export function isHighlighterLanguageReady(
-  lang: SupportedLanguages | undefined,
+  lang: SupportedLanguages | SupportedLanguages[] | undefined,
   highlighter: CodeHighlighter = getCodeHighlighter()
 ): boolean {
   const custom = customHighlighterOf(highlighter);
   if (custom != null) {
-    return custom.isReady({ langs: [lang ?? 'text'], themes: [] });
+    return custom.isReady({
+      langs: Array.isArray(lang) ? lang : [lang ?? 'text'],
+      themes: [],
+    });
   }
   return areLanguagesAttached(lang ?? 'text');
 }

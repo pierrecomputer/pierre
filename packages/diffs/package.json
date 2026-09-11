@@ -1,6 +1,6 @@
 {
   "name": "@pierre/diffs",
-  "version": "1.4.1",
+  "version": "1.4.2",
   "license": "apache-2.0",
   "files": [
     "dist",
@@ -81,7 +81,6 @@
     "shiki": "^3.0.0 || ^4.0.0"
   },
   "devDependencies": {
-    "@arethetypeswrong/core": "catalog:",
     "@pierre/highlights": "workspace:*",
     "@playwright/test": "catalog:",
     "@shikijs/transformers": "catalog:",

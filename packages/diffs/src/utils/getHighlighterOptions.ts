@@ -18,11 +18,11 @@ interface GetHighlighterOptionsReturn {
 }
 
 export function getHighlighterOptions(
-  lang: SupportedLanguages | undefined,
+  lang: SupportedLanguages | SupportedLanguages[] | undefined,
   { theme, preferredHighlighter = 'shiki-js' }: HighlighterOptionsShape
 ): GetHighlighterOptionsReturn {
   return {
-    langs: [lang ?? 'text'],
+    langs: Array.isArray(lang) ? lang : [lang ?? 'text'],
     themes: getThemes(theme),
     preferredHighlighter,
   };

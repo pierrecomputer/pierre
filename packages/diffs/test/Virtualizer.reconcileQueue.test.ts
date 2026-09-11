@@ -33,18 +33,13 @@ test('requestHeightReconcile reconciles instances the pass did not repaint', asy
 
     const virtualizer = new Virtualizer();
     virtualizer.setup(root, content);
-    virtualizer.connect(
-      container,
-      instance as unknown as Parameters<Virtualizer['connect']>[1]
-    );
+    virtualizer.connect(container, instance);
     await wait(20);
 
     // onRender returned false in the connect pass, so nothing reconciled.
     const baseline = reconciles;
 
-    virtualizer.requestHeightReconcile(
-      instance as unknown as Parameters<Virtualizer['connect']>[1]
-    );
+    virtualizer.requestHeightReconcile(instance);
     await wait(20);
     expect(reconciles).toBe(baseline + 1);
 

@@ -2683,7 +2683,7 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
           | CodeViewModeOptions<LAnnotation, Caret, TMode>[TKey]
           | undefined;
         if (wrapped == null) {
-          wrapped = ((range: SelectedLineRange | null) => {
+          wrapped = (range: SelectedLineRange | null) => {
             const latest = this.getItemOptions(state, mode);
             if (latest == null) {
               return undefined;
@@ -2706,7 +2706,7 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
                 ) => unknown)
               | undefined;
             return callback?.(range, latest);
-          }) as CodeViewModeOptions<LAnnotation, Caret, TMode>[TKey];
+          };
 
           callbackCache[key] = wrapped;
         }

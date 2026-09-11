@@ -19,7 +19,6 @@ import type {
   DiffsHighlighter,
   HighlightedToken,
   RenderRange,
-  SupportedLanguages,
 } from '../types';
 import type { TextDocument, TextDocumentChange } from './textDocument';
 import { addEventListener, debounce, h } from './utils';
@@ -1347,7 +1346,7 @@ export class HighlightsEditorTokenizer extends BaseEditorTokenizer {
       return undefined;
     }
     const live = factory.call(this.#highlighter, {
-      lang: textDocument.languageId as SupportedLanguages,
+      lang: textDocument.languageId,
       theme: this.themeName,
       code: textDocument.getText(),
       tokenizeMaxLineLength: this.tokenizeMaxLineLength,
