@@ -135,40 +135,37 @@ file or diff invalidates that cache.
 | `DiffTokenEventBaseProps`    | Adds diff side data to a token event.                           |
 | `ObservedAnnotationNodes`    | Stores DOM nodes for observed annotations.                      |
 | `ObservedGridNodes`          | Stores DOM nodes for observed grid columns.                     |
-| `SharedRenderState`          | Holds shared token transformer render state.                    |
 | `StickySpecs`                | Describes sticky header position and height.                    |
 
 ## Render results and virtualization
 
-| Export                      | Purpose                                                 |
-| --------------------------- | ------------------------------------------------------- |
-| `RenderFileOptions`         | Defines the resolved options for a highlighted file.    |
-| `RenderDiffOptions`         | Defines the resolved options for a highlighted diff.    |
-| `ForceFilePlainTextOptions` | Selects a plain-text file range.                        |
-| `ForceDiffPlainTextOptions` | Selects a plain-text diff range and hunk state.         |
-| `ThemedFileResult`          | Holds the highlighted file syntax tree and line count.  |
-| `ThemedDiffResult`          | Holds highlighted additions and deletions syntax trees. |
-| `RenderDiffFilesResult`     | Holds the resolved old and new file inputs.             |
-| `RenderFileResult`          | Holds file output and the options that produced it.     |
-| `RenderDiffResult`          | Holds diff output and the options that produced it.     |
-| `RenderedFileASTCache`      | Stores one cached file syntax tree by theme.            |
-| `RenderedDiffASTCache`      | Stores one cached diff syntax tree by theme.            |
-| `AppliedThemeStyleCache`    | Stores applied light and dark theme CSS.                |
-| `RenderRange`               | Describes a start row, row count, and buffer sizes.     |
-| `RenderWindow`              | Describes first and last rows in a render window.       |
-| `VirtualWindowSpecs`        | Describes viewport position, height, and row window.    |
-| `VirtualFileMetrics`        | Describes estimated header and line heights.            |
+| Export                      | Purpose                                                              |
+| --------------------------- | -------------------------------------------------------------------- |
+| `RenderFileOptions`         | Defines the resolved options for a highlighted file.                 |
+| `RenderDiffOptions`         | Defines the resolved options for a highlighted diff.                 |
+| `ForceFilePlainTextOptions` | Selects a plain-text file range.                                     |
+| `ForceDiffPlainTextOptions` | Selects a plain-text diff range and hunk state.                      |
+| `ThemedFileResult`          | Holds highlighted file token lines and theme CSS.                    |
+| `ThemedDiffResult`          | Holds highlighted additions and deletions token lines and theme CSS. |
+| `RenderDiffFilesResult`     | Holds old and new file token lines.                                  |
+| `RenderFileResult`          | Holds file output and the options that produced it.                  |
+| `RenderDiffResult`          | Holds diff output and the options that produced it.                  |
+| `RenderedFileCache`         | Stores one cached file token result and render options.              |
+| `RenderedDiffCache`         | Stores one cached diff token result and render options.              |
+| `AppliedThemeStyleCache`    | Stores applied light and dark theme CSS.                             |
+| `RenderRange`               | Describes a start row, row count, and buffer sizes.                  |
+| `RenderWindow`              | Describes first and last rows in a render window.                    |
+| `VirtualWindowSpecs`        | Describes viewport position, height, and row window.                 |
+| `VirtualFileMetrics`        | Describes estimated header and line heights.                         |
 
 ## Shiki and diff types
 
-| Export                           | Purpose                                         |
-| -------------------------------- | ----------------------------------------------- |
-| `BundledLanguage`                | Names a language bundled by Shiki.              |
-| `CodeToHastOptions`              | Configures Shiki code-to-HAST output.           |
-| `DecorationItem`                 | Describes a Shiki source decoration.            |
-| `LanguageRegistration`           | Describes a Shiki language grammar.             |
-| `ShikiTransformer`               | Defines a Shiki syntax tree transformer.        |
-| `ThemeRegistration`              | Describes a raw Shiki theme.                    |
-| `ThemeRegistrationResolved`      | Describes a normalized Shiki theme.             |
-| `ThemedToken`                    | Describes one Shiki token with its theme style. |
-| `CreatePatchOptionsNonabortable` | Configures the underlying patch algorithm.      |
+| Export                           | Purpose                                                      |
+| -------------------------------- | ------------------------------------------------------------ |
+| `BundledLanguage`                | Names a language bundled by Shiki.                           |
+| `DecorationItem`                 | Describes a line-local token decoration.                     |
+| `LanguageRegistration`           | Describes a Shiki language grammar.                          |
+| `ThemeRegistration`              | Describes a raw Shiki theme.                                 |
+| `ThemeRegistrationResolved`      | Describes a normalized Shiki theme.                          |
+| `ThemedToken`                    | Describes the shared token shape accepted from highlighters. |
+| `CreatePatchOptionsNonabortable` | Configures the underlying patch algorithm.                   |

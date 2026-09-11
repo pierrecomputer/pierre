@@ -111,6 +111,9 @@ catalogs:
     babel-plugin-react-compiler:
       specifier: 1.0.0
       version: 1.0.0
+    binaryen:
+      specifier: 132.0.0
+      version: 132.0.0
     class-variance-authority:
       specifier: 0.7.1
       version: 0.7.1
@@ -129,9 +132,6 @@ catalogs:
     hast-util-heading-rank:
       specifier: 3.0.0
       version: 3.0.0
-    hast-util-to-html:
-      specifier: 9.0.5
-      version: 9.0.5
     hast-util-to-string:
       specifier: 3.0.1
       version: 3.0.1
@@ -213,6 +213,9 @@ catalogs:
     tailwindcss:
       specifier: 4.1.13
       version: 4.1.13
+    tree-sitter-highlight:
+      specifier: 1.1.2
+      version: 1.1.2
     tsdown:
       specifier: 0.22.14
       version: 0.22.14
@@ -228,6 +231,9 @@ catalogs:
     vite:
       specifier: 8.1.0
       version: 8.1.0
+    wabt:
+      specifier: 1.0.39
+      version: 1.0.39
     zod:
       specifier: 4.1.11
       version: 4.1.11
@@ -431,6 +437,9 @@ importers:
       '@pierre/diffs':
         specifier: workspace:*
         version: link:../../packages/diffs
+      '@pierre/highlights':
+        specifier: workspace:*
+        version: link:../../packages/highlights
       '@pierre/icons':
         specifier: 'catalog:'
         version: 0.7.1(react@19.2.7)
@@ -609,15 +618,9 @@ importers:
       '@pierre/theming':
         specifier: workspace:*
         version: link:../theming
-      '@shikijs/transformers':
-        specifier: 4.4.1
-        version: 4.4.1
       diff:
         specifier: 'catalog:'
         version: 9.0.0
-      hast-util-to-html:
-        specifier: 'catalog:'
-        version: 9.0.5
       lru_map:
         specifier: 'catalog:'
         version: 0.4.1
@@ -625,15 +628,18 @@ importers:
         specifier: 4.4.1
         version: 4.4.1
     devDependencies:
+      '@pierre/highlights':
+        specifier: workspace:*
+        version: link:../highlights
       '@playwright/test':
         specifier: 'catalog:'
         version: 1.51.1
+      '@shikijs/transformers':
+        specifier: 4.4.1
+        version: 4.4.1
       '@tsdown/css':
         specifier: 'catalog:'
         version: 0.22.14(jiti@2.7.0)(postcss-import@16.1.1(postcss@8.5.6))(postcss@8.5.6)(tsdown@0.22.14)(yaml@2.9.0)
-      '@types/hast':
-        specifier: 'catalog:'
-        version: 3.0.4
       '@types/jsdom':
         specifier: 'catalog:'
         version: 28.0.1
@@ -676,6 +682,27 @@ importers:
       vite:
         specifier: 'catalog:'
         version: 8.1.0(@types/node@25.9.3)(jiti@2.7.0)(yaml@2.9.0)
+
+  packages/highlights:
+    devDependencies:
+      binaryen:
+        specifier: 'catalog:'
+        version: 132.0.0
+      shiki:
+        specifier: 4.4.1
+        version: 4.4.1
+      tree-sitter-highlight:
+        specifier: 'catalog:'
+        version: 1.1.2
+      tsdown:
+        specifier: 'catalog:'
+        version: 0.22.14(@tsdown/css@0.22.14)(typescript@7.0.2)
+      typescript:
+        specifier: 'catalog:'
+        version: 7.0.2
+      wabt:
+        specifier: 'catalog:'
+        version: 1.0.39
 
   packages/path-store:
     devDependencies:
@@ -3445,6 +3472,10 @@ packages:
   baseline-browser-mapping@2.10.33:
     resolution: {integrity: sha512-bA6+tcSLpz2tIEdDXZPpPTIuxBcC4+w6SieaYyfigIa4h8GlFxbA17v22Vx3JUtuZQj9SgOsnbK+aTBzyDyEuw==}
     engines: {node: '>=6.0.0'}
+    hasBin: true
+
+  binaryen@132.0.0:
+    resolution: {integrity: sha512-4Usg7yEvwO3FMso3Oov6qkOOHSod1IEv+boKkh77kTljM+eNBouqCTbqWswGzbG+vDNO/b/v2C4gfEh1WgB9Lg==}
     hasBin: true
 
   binaryextensions@6.11.0:
@@ -6270,6 +6301,9 @@ packages:
     resolution: {integrity: sha512-L0Orpi8qGpRG//Nd+H90vFB+3iHnue1zSSGmNOOCh1GLJ7rUKVwV2HvijphGQS2UmhUZewS9VgvxYIdgr+fG1A==}
     hasBin: true
 
+  tree-sitter-highlight@1.1.2:
+    resolution: {integrity: sha512-1elieTjXXf7S/tmCepKZ83VK7r09LYwoJp3VL5aopvbouUi8iPIyVEpaEJH8RlAFUDA2YqTXyIYrfOJb01iitw==}
+
   trim-lines@3.0.1:
     resolution: {integrity: sha512-kRj8B+YHZCc9kQYdWfJB2/oUl9rA99qbowYYBtr4ui4mZyAQ2JpvVBd/6U2YloATfqBhBTSMhTpgBHtU0Mf3Rg==}
 
@@ -6529,6 +6563,10 @@ packages:
   w3c-xmlserializer@5.0.0:
     resolution: {integrity: sha512-o8qghlI8NZHU1lLPrpi2+Uq7abh4GGPpYANlalzWxyWteJOCsr/P+oPBA49TOLu5FTZO4d3F9MnWJfiMo4BkmA==}
     engines: {node: '>=18'}
+
+  wabt@1.0.39:
+    resolution: {integrity: sha512-ba+dRL/75VQQY7RkU/CgriGbkoWAfS8TDyUlJfJhJ8KhtXgMl5dhNvoPNUcQ9IWRhW8u41glMSuZeTvsYq2rRg==}
+    hasBin: true
 
   web-streams-polyfill@3.3.3:
     resolution: {integrity: sha512-d2JWLCivmZYTSIoge9MsgFCZrt571BikcWGYkjC1khllbTeDlGqZ2D8vD8E/lJa8WGWbb7Plm8/XJYV7IJHZZw==}
@@ -8964,6 +9002,8 @@ snapshots:
     optional: true
 
   baseline-browser-mapping@2.10.33: {}
+
+  binaryen@132.0.0: {}
 
   binaryextensions@6.11.0:
     dependencies:
@@ -12229,6 +12269,8 @@ snapshots:
 
   tree-kill@1.2.2: {}
 
+  tree-sitter-highlight@1.1.2: {}
+
   trim-lines@3.0.1: {}
 
   trough@2.2.0: {}
@@ -12471,6 +12513,8 @@ snapshots:
   w3c-xmlserializer@5.0.0:
     dependencies:
       xml-name-validator: 5.0.0
+
+  wabt@1.0.39: {}
 
   web-streams-polyfill@3.3.3: {}
 

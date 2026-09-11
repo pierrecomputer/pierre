@@ -1,6 +1,12 @@
 import { afterAll, describe, expect, test } from 'bun:test';
 
-import { disposeHighlighter, File, isFileAnnotationCollection } from '../src';
+import {
+  disposeHighlighter,
+  File,
+  getCodeHighlighter,
+  isFileAnnotationCollection,
+  setHighlighter,
+} from '../src';
 import type {
   FileEditCompleteEvent,
   FileEditCompleteHandler,
@@ -341,7 +347,24 @@ describe('editing a File without changing its input', () => {
     }
   });
 
-  test('a file-name change that is replaced immediately does not clear undo history', async () => {
+  test('a pending file-name change that is replaced immediately does not clear undo history', async () => {
+    const highlighter = getCodeHighlighter();
+    let javascriptReady = false;
+    // Keep the intermediate render pending even when JavaScript is already
+    // loaded or the highlighter bundles every language.
+    setHighlighter({
+      ...highlighter,
+      isReady(options) {
+        return (
+          (javascriptReady || !options.langs.includes('javascript')) &&
+          highlighter.isReady(options)
+        );
+      },
+      async load(options) {
+        await highlighter.load(options);
+        if (options.langs.includes('javascript')) javascriptReady = true;
+      },
+    });
     const changes: string[] = [];
     const fixture = await createFixture({
       onChange: (contents) => changes.push(contents),
@@ -380,6 +403,7 @@ describe('editing a File without changing its input', () => {
       expect(fixture.editor.getText()).toBe(EXTERNAL_FILE.contents);
     } finally {
       fixture.cleanup();
+      setHighlighter(highlighter);
     }
   });
 

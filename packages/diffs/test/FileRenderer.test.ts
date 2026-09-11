@@ -1,17 +1,16 @@
 import { afterAll, describe, expect, test } from 'bun:test';
-import type { ElementContent } from 'hast';
 
 import { TextDocument } from '../src/editor/textDocument';
 import { disposeHighlighter } from '../src/highlighter/shared_highlighter';
 import { FileRenderer } from '../src/renderers/FileRenderer';
-import type { FileContents, HighlightedToken } from '../src/types';
+import type { FileContents, HighlightedToken, ThemedToken } from '../src/types';
 import { mockFiles } from './mocks';
-import { hastTextContent } from './testUtils';
+import { rowProperties } from './testUtils';
 
 type FileRendererCacheProbe = {
   renderCache?: {
     result?: {
-      code: ElementContent[];
+      code: ThemedToken[][];
     };
   };
 };
@@ -36,7 +35,7 @@ describe('FileRenderer', () => {
   test('should render TypeScript code to AST matching snapshot', async () => {
     const instance = new FileRenderer();
     const result = await instance.asyncRender(mockFiles.file1);
-    expect(instance.renderCodeAST(result)).toMatchSnapshot();
+    expect(instance.renderFullHTML(result)).toMatchSnapshot();
   });
 
   test('truncates cached code rows when document lines are deleted', async () => {
@@ -58,10 +57,11 @@ describe('FileRenderer', () => {
 
     const cache = (instance as unknown as FileRendererCacheProbe).renderCache;
     expect(cache?.result?.code).toHaveLength(2);
-    expect(cache?.result?.code.map(hastTextContent)).toEqual([
-      'alpha',
-      'gamma',
-    ]);
+    expect(
+      cache?.result?.code.map((line) =>
+        line.map((token) => token.content).join('')
+      )
+    ).toEqual(['alpha', 'gamma']);
   });
 
   test('realigns cached rows when tokenization settles before EOF', async () => {
@@ -77,6 +77,8 @@ describe('FileRenderer', () => {
     await instance.asyncRender(editSessionFile);
     instance.renderFile(editSessionFile);
     instance.updateRenderCache(new Map([[3, [[0, '#ff0000', 'D']]]]), 'light');
+    const retainedRow = (instance as unknown as FileRendererCacheProbe)
+      .renderCache!.result!.code[3];
 
     const dirtyLines = new Map<number, HighlightedToken[]>([
       [2, [[0, '', 'X']]],
@@ -89,22 +91,17 @@ describe('FileRenderer', () => {
 
     const cache = (instance as unknown as FileRendererCacheProbe).renderCache;
     const rows = cache?.result?.code ?? [];
-    expect(rows.map(hastTextContent)).toEqual(['A', 'B', 'X', 'C', 'D', '']);
-    expect(rows[4]).toMatchObject({
-      children: [
-        {
-          properties: {
-            style: 'color:#ff0000;',
-          },
-        },
-      ],
-    });
     expect(
-      rows.map((row) =>
-        row.type === 'element'
-          ? [row.properties['data-line'], row.properties['data-line-index']]
-          : undefined
-      )
+      rows.map((line) => line.map((token) => token.content).join(''))
+    ).toEqual(['A', 'B', 'X', 'C', 'D', '']);
+    expect(rows[4][0].color).toBe('#ff0000');
+    expect(rows[4]).toBe(retainedRow);
+    expect(rows[4][0]).toBe(retainedRow[0]);
+    expect(
+      instance.renderFile(editSessionFile)?.contentRows.map((row) => {
+        const props = rowProperties(row);
+        return [props['data-line'], props['data-line-index']];
+      })
     ).toEqual([
       [1, 0],
       [2, 1],
@@ -113,6 +110,32 @@ describe('FileRenderer', () => {
       [5, 4],
       [6, 5],
     ]);
+  });
+
+  test('length-changing edits preserve every unchanged cached token row', async () => {
+    const instance = new FileRenderer();
+    const file = {
+      name: 'editable.ts',
+      contents: 'const a = 1;\nconst b = 2;\nconst c = 3;',
+    };
+    instance.beginEditSession(file);
+    await instance.asyncRender(file);
+    instance.renderFile(file);
+    const cache = (instance as unknown as FileRendererCacheProbe).renderCache!;
+    const originalRows = cache.result!.code.slice();
+    instance.updateRenderCache(
+      new Map([[0, [[0, '#ff0000', 'const longer = 1;']]]]),
+      'light'
+    );
+    expect(cache.result!.code[0]).not.toBe(originalRows[0]);
+    for (let line = 1; line < originalRows.length; line++) {
+      expect(cache.result!.code[line]).toBe(originalRows[line]);
+      expect(cache.result!.code[line][0]).toBe(originalRows[line][0]);
+    }
+    expect(instance.renderFullHTML(instance.renderFile(file)!)).toContain(
+      'data-char="0"'
+    );
+    instance.cleanUp();
   });
 
   test('reuses editor-compatible markup for a retained edit session', async () => {
@@ -182,15 +205,7 @@ describe('FileRenderer', () => {
       );
 
       const cache = (instance as unknown as FileRendererCacheProbe).renderCache;
-      expect(cache?.result?.code[0]).toMatchObject({
-        children: [
-          {
-            properties: {
-              style: 'color:#ff0000;',
-            },
-          },
-        ],
-      });
+      expect(cache?.result?.code[0][0].color).toBe('#ff0000');
     }
   );
 

@@ -1,0 +1,141 @@
+# Highlights benchmarks
+
+These benchmarks compare Highlights with Shiki and `tree-sitter-highlight`
+across HTML generation, tokens, streaming, and live editing.
+
+## Run
+
+```sh
+moon run highlights:bench
+moon run highlights:bench-tokens
+moon run highlights:bench-stream
+moon run highlights:bench-live
+```
+
+- `bench`: HTML generation for CSS, HTML, JSONC, and TypeScript.
+- `bench-tokens`: complete `codeToTokens` output on TypeScript.
+- `bench-stream`: streaming tokenization in 4,096-character chunks.
+- `bench-live`: initialization, edits, cached reads, and retained Wasm memory.
+
+Pass `-- --wide` to the first three tasks to retain all table columns.
+
+Fixtures live in [`fixtures`](./fixtures).
+
+> Recorded on 2026-09-07 with Bun 1.4.0 on an Apple M4 Pro (14 cores, 48 GB RAM,
+> macOS arm64). All modes use the optimized Wasm build: 156,785 bytes, 69,484
+> bytes gzipped. The tables report one complete run of each mode, run
+> sequentially with the default runtime settings.
+
+## HTML generation
+
+Throughput in MiB/s; parentheses show speedups over Shiki for string I/O.
+
+| Input                       | highlights (bytes) | highlights | tree-sitter (NAPI) | shiki |
+| --------------------------- | -----------------: | ---------: | -----------------: | ----: |
+| `tiny.css.txt` (2 KiB)      |                358 | 303 (582×) |       9.95 (19.1×) |  0.52 |
+| `tiny.html.txt` (2 KiB)     |                505 | 412 (354×) |                  — |  1.16 |
+| `tiny.jsonc.txt` (2 KiB)    |                761 | 589 (145×) |       14.8 (3.66×) |  4.05 |
+| `tiny.ts.txt` (2 KiB)       |                378 | 340 (276×) |       8.02 (6.50×) |  1.23 |
+| `small.css.txt` (24 KiB)    |                253 | 217 (255×) |       7.34 (8.62×) |  0.85 |
+| `small.html.txt` (28 KiB)   |                904 | 816 (496×) |                  — |  1.65 |
+| `small.jsonc.txt` (33 KiB)  |                688 | 601 (182×) |       11.8 (3.57×) |  3.31 |
+| `small.ts.txt` (31 KiB)     |                288 | 257 (325×) |       6.59 (8.36×) |  0.79 |
+| `large.css.txt` (379 KiB)   |                340 | 166 (161×) |       9.06 (8.80×) |  1.03 |
+| `large.html.txt` (474 KiB)  |               1095 | 287 (120×) |                  — |  2.39 |
+| `large.jsonc.txt` (292 KiB) |                962 | 808 (162×) |       20.2 (4.04×) |  5.00 |
+| `large.ts.txt` (517 KiB)    |                308 | 276 (309×) |       7.09 (7.92×) |  0.89 |
+
+Shiki 4.4.1 is the string-API baseline; Tree-sitter uses `tree-sitter-highlight`
+1.1.2. Highlights includes UTF-8 encoding and HTML decoding;
+`highlights (bytes)` accepts and returns bytes. Tree-sitter's HTML support is
+incomplete, so those entries are omitted.
+
+## Tokens
+
+Complete token output on TypeScript, using Pierre Dark for Highlights and GitHub
+Dark for Shiki. The Unicode fixture has 10,000 lines and exercises UTF-16 offset
+conversion.
+
+### `codeToTokens`
+
+| Input                        |  Lines | Highlights | Throughput |   Shiki | Speedup |
+| ---------------------------- | -----: | ---------: | ---------: | ------: | ------: |
+| `tiny.ts.txt` (2 KiB)        |     76 |    9.94 µs |  187 MiB/s | 1205 µs |    121× |
+| `small.ts.txt` (31 KiB)      |    826 |     188 µs |  159 MiB/s | 33.7 ms |    179× |
+| `large.ts.txt` (517 KiB)     | 10,826 |    3009 µs |  168 MiB/s |  507 ms |    168× |
+| `unicode-lines.ts` (527 KiB) | 10,001 |    3251 µs |  158 MiB/s |  443 ms |    136× |
+
+## Streaming
+
+| Input                        |  Lines | Chunks | Highlights | Throughput |   Shiki | Speedup |
+| ---------------------------- | -----: | -----: | ---------: | ---------: | ------: | ------: |
+| `tiny.css.txt` (2 KiB)       |     85 |      1 |    11.3 µs |  132 MiB/s | 2576 µs |    227× |
+| `tiny.html.txt` (2 KiB)      |     51 |      1 |    10.2 µs |  179 MiB/s | 1262 µs |    123× |
+| `tiny.jsonc.txt` (2 KiB)     |     66 |      1 |    9.47 µs |  199 MiB/s |  257 µs |   27.2× |
+| `tiny.ts.txt` (2 KiB)        |     76 |      1 |    11.5 µs |  162 MiB/s | 1204 µs |    105× |
+| `small.css.txt` (24 KiB)     |  1,388 |      6 |     248 µs | 92.6 MiB/s | 21.5 ms |   86.8× |
+| `small.html.txt` (28 KiB)    |    809 |      7 |     170 µs |  161 MiB/s | 12.7 ms |   74.8× |
+| `small.jsonc.txt` (33 KiB)   |  1,105 |      9 |     200 µs |  162 MiB/s | 5947 µs |   29.7× |
+| `small.ts.txt` (31 KiB)      |    826 |      8 |     229 µs |  131 MiB/s | 33.6 ms |    147× |
+| `large.css.txt` (379 KiB)    | 17,455 |     95 |    3169 µs |  117 MiB/s |  293 ms |   92.6× |
+| `large.html.txt` (474 KiB)   | 11,329 |    119 |    2635 µs |  176 MiB/s |  148 ms |   56.1× |
+| `large.jsonc.txt` (292 KiB)  |  8,561 |     74 |    1275 µs |  224 MiB/s | 33.4 ms |   26.2× |
+| `large.ts.txt` (517 KiB)     | 10,826 |    130 |    3591 µs |  140 MiB/s |  519 ms |    145× |
+| `unicode-lines.ts` (527 KiB) | 10,001 |    105 |    3783 µs |  136 MiB/s |  455 ms |    120× |
+
+Each run starts with fresh stream state and processes 4,096-character chunks.
+Highlights preserves lexer state; Shiki carries grammar state between calls.
+Both collect token arrays with document-relative offsets.
+
+## Live editing
+
+Measures initialization, one-character edits, line insertion and deletion, and
+cached reads. Edits update retained records; each rebuild materializes themed
+tokens for the same edited text. The viewport covers 120 lines; flush and undo
+happen outside the measured latency.
+
+| Fixture              | Scenario             |  Median |     p95 | Rebuild median | Changed lines |
+| -------------------- | -------------------- | ------: | ------: | -------------: | ------------: |
+| large.ts (10k lines) | eager init           | 5367 µs | 5612 µs |              — |             — |
+|                      | edit top             | 0.71 µs | 0.92 µs |        3038 µs |             1 |
+|                      | edit middle          | 1.00 µs | 1.25 µs |        3034 µs |             1 |
+|                      | edit end             | 0.79 µs | 1.00 µs |        2947 µs |             2 |
+|                      | insert line          | 1.50 µs | 1.75 µs |        2885 µs |             3 |
+|                      | delete line          | 0.88 µs | 1.08 µs |        2924 µs |             1 |
+|                      | template propagation | 1437 µs | 1493 µs |         557 µs |        10,824 |
+|                      | template + viewport  | 35.4 µs | 49.7 µs |         559 µs |           118 |
+|                      | raw reads ×100       | 3.75 µs | 4.50 µs |              — |             — |
+|                      | themed reads ×100    | 23.3 µs | 32.4 µs |              — |             — |
+| synthetic 100k lines | eager init           | 42.6 ms | 46.2 ms |              — |             — |
+|                      | edit top             | 0.79 µs | 1.04 µs |        30.5 ms |             1 |
+|                      | edit middle          | 0.92 µs | 1.13 µs |        30.7 ms |             1 |
+|                      | edit end             | 0.87 µs | 1.08 µs |        28.9 ms |             2 |
+|                      | insert line          | 1.33 µs | 1.54 µs |        29.2 ms |             4 |
+|                      | delete line          | 0.75 µs | 0.92 µs |        29.3 ms |             2 |
+|                      | template propagation | 35.1 ms | 35.9 ms |        27.8 ms |       108,249 |
+|                      | template + viewport  | 80.0 µs | 90.3 µs |        28.4 ms |           118 |
+|                      | raw reads ×100       | 3.92 µs | 4.63 µs |              — |             — |
+|                      | themed reads ×100    | 23.3 µs | 30.9 µs |              — |             — |
+| unicode 10k lines    | eager init           | 5840 µs | 6543 µs |              — |             — |
+|                      | edit top             | 1.00 µs | 1.21 µs |        3310 µs |             1 |
+|                      | edit middle          | 1.08 µs | 1.33 µs |        3316 µs |             1 |
+|                      | edit end             | 0.92 µs | 1.25 µs |        3312 µs |             1 |
+|                      | insert line          | 1.12 µs | 1.33 µs |        3102 µs |             2 |
+|                      | delete line          | 0.83 µs | 1.00 µs |        3345 µs |             1 |
+|                      | template propagation | 1828 µs | 1871 µs |        1916 µs |         9,999 |
+|                      | template + viewport  | 48.5 µs | 69.3 µs |        1916 µs |           118 |
+|                      | raw reads ×100       | 4.08 µs | 4.75 µs |              — |             — |
+|                      | themed reads ×100    | 25.7 µs | 36.1 µs |              — |             — |
+
+The 100k-line document retains 17.1 MiB of Wasm memory, with 12.8 MiB of live
+heap and 20 interned lexer states.
+
+## Sampling
+
+Both scripts use [`measure.ts`](./measure.ts): a 200 ms warmup, a 1.5-second
+budget per case, at least 20 samples, and rotating contender order. Benchmark
+modes run sequentially; Shiki's line-length and time limits are disabled.
+
+Throughput uses the median of per-call batch averages (~5 ms batches), in MiB/s.
+Live editing measures individual calls and reports median and p95. Cleanup
+counts toward the budget but is excluded from latency.

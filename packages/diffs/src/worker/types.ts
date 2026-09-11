@@ -164,6 +164,8 @@ export interface WorkerPoolOptions {
    */
   workerInitializationTimeout?: number;
 
+  totalTokenLRUCacheSize?: number;
+  /** @deprecated Use totalTokenLRUCacheSize. The new name takes precedence. */
   totalASTLRUCacheSize?: number;
 }
 

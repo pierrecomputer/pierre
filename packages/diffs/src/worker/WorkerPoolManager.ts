@@ -6,6 +6,7 @@ import { areLanguagesAttached } from '../highlighter/languages/areLanguagesAttac
 import { getResolvedLanguages } from '../highlighter/languages/getResolvedLanguages';
 import { hasResolvedLanguages } from '../highlighter/languages/hasResolvedLanguages';
 import { resolveLanguages } from '../highlighter/languages/resolveLanguages';
+import { getCustomHighlighter } from '../highlighter/resolve_highlighter';
 import { getSharedHighlighter } from '../highlighter/shared_highlighter';
 import { attachResolvedThemes } from '../highlighter/themes/attachResolvedThemes';
 import { getResolvedThemes } from '../highlighter/themes/getResolvedThemes';
@@ -106,6 +107,7 @@ export class WorkerPoolManager {
   private renderOptionsRequestVersion = 0;
   private renderOptionsVersion = 0;
   private initialized: Promise<void> | boolean = false;
+  private refreshThemesOnInitialize = false;
   private workers: ManagedWorker[] = [];
   // Tasks that are waiting to get processed by a worker
   private queuedTasks: RenderTask[] = [];
@@ -152,13 +154,17 @@ export class WorkerPoolManager {
       maxLineDiffLength,
       tokenizeMaxLineLength,
     };
-    this.fileCache = new LRUMapPkg.LRUMap(options.totalASTLRUCacheSize ?? 100);
-    this.diffCache = new LRUMapPkg.LRUMap(options.totalASTLRUCacheSize ?? 100);
+    const cacheSize =
+      options.totalTokenLRUCacheSize ?? options.totalASTLRUCacheSize ?? 100;
+    this.fileCache = new LRUMapPkg.LRUMap(cacheSize);
+    this.diffCache = new LRUMapPkg.LRUMap(cacheSize);
     this.queueInitialization(langs);
   }
 
   public isWorkingPool(): boolean {
-    return !this.workersFailed;
+    // Workers always highlight with shiki, so a custom highlighter registered
+    // via setHighlighter routes every render to the local (main-thread) path.
+    return !this.workersFailed && getCustomHighlighter() == null;
   }
 
   public getFileResultCache(file: FileContents): RenderFileResult | undefined {
@@ -203,11 +209,13 @@ export class WorkerPoolManager {
     maxLineDiffLength = this.renderOptions.maxLineDiffLength ?? 1000,
     tokenizeMaxLineLength = this.renderOptions.tokenizeMaxLineLength ?? 1000,
   }: Partial<WorkerRenderingOptions>): Promise<void> {
-    const { lifecycleGeneration } = this;
+    let { lifecycleGeneration } = this;
+    const customHighlighter = getCustomHighlighter();
     const renderOptionsRequestVersion = ++this.renderOptionsRequestVersion;
     const isCurrentRequest = (): boolean =>
       this.isCurrentLifecycle(lifecycleGeneration) &&
-      this.renderOptionsRequestVersion === renderOptionsRequestVersion;
+      this.renderOptionsRequestVersion === renderOptionsRequestVersion &&
+      getCustomHighlighter() === customHighlighter;
     try {
       const newRenderOptions: WorkerRenderingOptions = {
         theme,
@@ -216,54 +224,94 @@ export class WorkerPoolManager {
         maxLineDiffLength,
         tokenizeMaxLineLength,
       };
-      if (!this.isInitialized()) {
+      if (
+        customHighlighter == null &&
+        !this.refreshThemesOnInitialize &&
+        !this.isInitialized()
+      ) {
         await this.initialize();
       }
+      let initializeWithNewOptions =
+        customHighlighter == null &&
+        this.refreshThemesOnInitialize &&
+        !this.isInitialized();
       if (
         !isCurrentRequest() ||
-        areDiffRenderOptionsEqual(newRenderOptions, this.renderOptions)
+        (!initializeWithNewOptions &&
+          areDiffRenderOptionsEqual(newRenderOptions, this.renderOptions))
       ) {
         return;
       }
 
       const themeNames = getThemes(theme);
-      let resolvedThemes: ThemeRegistrationResolved[] = [];
-      if (!areThemesEqual(newRenderOptions.theme, this.renderOptions.theme)) {
-        if (hasResolvedThemes(themeNames)) {
-          resolvedThemes = getResolvedThemes(themeNames);
-        } else {
-          resolvedThemes = await resolveThemes(themeNames);
-        }
-      }
-
-      if (!isCurrentRequest()) {
-        return;
-      }
-
-      if (this.highlighter != null) {
-        attachResolvedThemes(resolvedThemes, this.highlighter);
-      } else {
-        const highlighter = await getSharedHighlighter({
-          themes: themeNames,
-          langs: ['text'],
-          preferredHighlighter: this.preferredHighlighter,
-        });
+      let workerSetup: Promise<void> | undefined;
+      if (customHighlighter != null) {
+        await customHighlighter.load({ themes: themeNames, langs: [] });
         if (!isCurrentRequest()) {
           return;
         }
-        this.highlighter = highlighter;
-      }
+        // Retire Shiki work while preserving subscribers. Switching back then
+        // initializes workers with the latest options instead of stale themes.
+        this.terminate();
+        lifecycleGeneration = this.lifecycleGeneration;
+        this.refreshThemesOnInitialize = true;
+      } else {
+        let resolvedThemes: ThemeRegistrationResolved[] = [];
+        if (!areThemesEqual(newRenderOptions.theme, this.renderOptions.theme)) {
+          if (hasResolvedThemes(themeNames)) {
+            resolvedThemes = getResolvedThemes(themeNames);
+          } else {
+            resolvedThemes = await resolveThemes(themeNames);
+          }
+        }
 
-      const workerSetup = this.setRenderOptionsOnWorkers(
-        newRenderOptions,
-        resolvedThemes
-      );
+        if (!isCurrentRequest()) {
+          return;
+        }
+
+        if (this.highlighter != null) {
+          attachResolvedThemes(resolvedThemes, this.highlighter);
+        } else {
+          const highlighter = await getSharedHighlighter({
+            themes: themeNames,
+            langs: ['text'],
+            preferredHighlighter: this.preferredHighlighter,
+          });
+          if (!isCurrentRequest()) {
+            return;
+          }
+          this.highlighter = highlighter;
+        }
+
+        if (initializeWithNewOptions && typeof this.initialized !== 'boolean') {
+          // Finish any bootstrap started while themes loaded before changing
+          // its options. A failed custom-only theme can be retried below.
+          const initialization = this.initialized;
+          try {
+            await initialization;
+          } catch {
+            if (!isCurrentRequest()) return;
+            if (this.initialized === initialization) this.initialized = false;
+          }
+          if (!isCurrentRequest()) return;
+        }
+        initializeWithNewOptions &&= this.initialized === false;
+        if (!initializeWithNewOptions) {
+          workerSetup = this.setRenderOptionsOnWorkers(
+            newRenderOptions,
+            resolvedThemes
+          );
+        }
+      }
 
       this.renderOptions = newRenderOptions;
       this.renderOptionsVersion++;
       this.diffCache.clear();
       this.fileCache.clear();
       this.invalidateRenderTasks();
+      if (initializeWithNewOptions) {
+        workerSetup = this.initialize();
+      }
 
       for (const instance of this.themeSubscribers) {
         instance.onThemeChange();
@@ -400,6 +448,12 @@ export class WorkerPoolManager {
   }
 
   public async initialize(languages: SupportedLanguages[] = []): Promise<void> {
+    // Custom highlighters render locally. Leave initialization pending so a
+    // later switch back to Shiki can initialize the pool on demand.
+    if (getCustomHighlighter() != null) {
+      this.refreshThemesOnInitialize = true;
+      return;
+    }
     if (this.initialized === true) {
       return;
     } else if (this.initialized === false) {
@@ -440,7 +494,6 @@ export class WorkerPoolManager {
             ]);
 
             if (!this.isCurrentLifecycle(lifecycleGeneration)) {
-              this.terminateWorkers();
               resolve();
               return;
             }
@@ -448,6 +501,12 @@ export class WorkerPoolManager {
             this.initialized = true;
             this.diffCache.clear();
             this.fileCache.clear();
+            if (this.refreshThemesOnInitialize) {
+              this.refreshThemesOnInitialize = false;
+              for (const instance of this.themeSubscribers) {
+                instance.onThemeChange();
+              }
+            }
             this.drainQueue();
             this.queueBroadcastStateChanges();
             resolve();
@@ -475,6 +534,7 @@ export class WorkerPoolManager {
         })();
       });
       this.queueBroadcastStateChanges();
+      return this.initialized;
     } else {
       return this.initialized;
     }
@@ -610,7 +670,7 @@ export class WorkerPoolManager {
     this.queueBroadcastStateChanges();
   };
 
-  public highlightFileAST(
+  public highlightFileTokens(
     instance: FileRendererInstance,
     file: FileContents
   ): void {
@@ -680,7 +740,7 @@ export class WorkerPoolManager {
     }
   }
 
-  public getPlainFileAST(
+  public getPlainFileTokens(
     file: FileContents,
     startingLine: number,
     totalLines: number,
@@ -698,7 +758,7 @@ export class WorkerPoolManager {
     );
   }
 
-  public highlightDiffAST(
+  public highlightDiffTokens(
     instance: DiffRendererInstance,
     diff: FileDiffMetadata
   ): void {
@@ -768,7 +828,7 @@ export class WorkerPoolManager {
     }
   }
 
-  public getPlainDiffAST(
+  public getPlainDiffTokens(
     diff: FileDiffMetadata,
     startingLine: number,
     totalLines: number,

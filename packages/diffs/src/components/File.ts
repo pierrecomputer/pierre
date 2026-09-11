@@ -1,6 +1,3 @@
-import type { Element as HASTElement } from 'hast';
-import { toHtml } from 'hast-util-to-html';
-
 import {
   CUSTOM_HEADER_SLOT_ID,
   DEFAULT_THEMES,
@@ -14,7 +11,7 @@ import {
   UNSAFE_CSS_ATTRIBUTE,
 } from '../constants';
 import type { Editor } from '../editor/editor';
-import type { TextDocument } from '../editor/textDocument';
+import type { TextDocument, TextDocumentChange } from '../editor/textDocument';
 import type {
   EditCompletionDecision,
   EditorActiveLineOptions,
@@ -31,16 +28,17 @@ import {
 import { ResizeManager } from '../managers/ResizeManager';
 import { FileRenderer, type FileRenderResult } from '../renderers/FileRenderer';
 import { SVGSpriteSheet } from '../sprite';
+import { renderColumn, renderRows } from '../utils/toHtml';
 export type { FileEditCompleteEvent } from '../editor/types';
 import {
-  getHighlighterIfLoaded,
-  getSharedHighlighter,
-} from '../highlighter/shared_highlighter';
+  loadHighlighter,
+  type RenderersHighlighter,
+  resolveRenderHighlighter,
+} from '../highlighter/resolve_highlighter';
 import type {
   AppliedThemeStyleCache,
   BaseCodeOptions,
   DiffLineAnnotation,
-  DiffsHighlighter,
   FileContents,
   HighlightedToken,
   LineAnnotation,
@@ -797,12 +795,14 @@ export class File<LAnnotation = undefined, Caret = undefined> {
     if (editor == null || fileContainer == null || file == null) {
       return;
     }
-    const syncEditor = (highlighter: DiffsHighlighter): void => {
+    const registration = this.fileRenderer.getCodeHighlighter();
+    const syncEditor = (highlighter: RenderersHighlighter): void => {
       if (
         !this.enabled ||
         this.editor !== editor ||
         this.fileContainer !== fileContainer ||
-        this.getLatestFile() !== file
+        this.getLatestFile() !== file ||
+        this.fileRenderer.getCodeHighlighter() !== registration
       ) {
         return;
       }
@@ -818,19 +818,18 @@ export class File<LAnnotation = undefined, Caret = undefined> {
 
     const theme = this.getTheme();
     const lang = file.lang ?? getFiletypeFromFileName(file.name);
-    // Sync editor synchronously whenever the shared highlighter is ready;
-    // otherwise load it and sync once it resolves.
-    const highlighter = getHighlighterIfLoaded({ theme, lang });
-    if (highlighter != null) {
-      syncEditor(highlighter);
+    const loadOptions = {
+      themes: getThemes(theme),
+      langs: Array.from(new Set(['text' as const, lang])),
+      preferredHighlighter:
+        this.workerManager?.getPreferredHighlighter() ??
+        this.options.preferredHighlighter,
+    };
+    // The renderer and editor load themes through the same implementation.
+    if (registration.isReady(loadOptions)) {
+      syncEditor(resolveRenderHighlighter(registration));
     } else {
-      void getSharedHighlighter({
-        themes: getThemes(theme),
-        langs: Array.from(new Set(['text', lang])),
-        preferredHighlighter:
-          this.workerManager?.getPreferredHighlighter() ??
-          this.options.preferredHighlighter,
-      }).then(syncEditor);
+      void loadHighlighter(loadOptions, registration).then(syncEditor);
     }
   }
 
@@ -1053,6 +1052,7 @@ export class File<LAnnotation = undefined, Caret = undefined> {
     themeType: 'dark' | 'light',
     options?: {
       lineCountChangeInFlight?: boolean;
+      lineChanges?: TextDocumentChange['changedLineChanges'];
     }
   ): void {
     const editSessionFile = this.editSession?.file;
@@ -1065,7 +1065,8 @@ export class File<LAnnotation = undefined, Caret = undefined> {
     this.fileRenderer.updateRenderCache(
       dirtyLines,
       themeType,
-      options?.lineCountChangeInFlight
+      options?.lineCountChangeInFlight,
+      options?.lineChanges
     );
   }
 
@@ -1093,6 +1094,7 @@ export class File<LAnnotation = undefined, Caret = undefined> {
     const nextRenderRange = collapsed ? undefined : renderRange;
     const previousRenderRange = this.renderRange;
     const themeChanged = this.hasThemeChanged();
+    const highlighterChanged = this.fileRenderer.hasPendingHighlighterChange();
     const annotationsChanged =
       lineAnnotations != null &&
       (lineAnnotations.length > 0 || this.getLatestAnnotations().length > 0)
@@ -1109,7 +1111,8 @@ export class File<LAnnotation = undefined, Caret = undefined> {
       areRenderRangesEqual(nextRenderRange, this.renderRange) &&
       !didFileChange &&
       !annotationsChanged &&
-      !themeChanged
+      !themeChanged &&
+      !highlighterChanged
     ) {
       const rendered = this.applyCachedThemeState(themeType);
       if (rendered) {
@@ -1164,9 +1167,9 @@ export class File<LAnnotation = undefined, Caret = undefined> {
             fileResult.baseThemeType
           );
         }
-        if (fileResult?.headerAST != null) {
+        if (fileResult?.headerHTML != null) {
           this.applyHeaderToDOM(
-            fileResult.headerAST,
+            fileResult.headerHTML,
             fileContainer,
             fileResult.file
           );
@@ -1227,9 +1230,9 @@ export class File<LAnnotation = undefined, Caret = undefined> {
           themeType,
           fileResult.baseThemeType
         );
-        if (fileResult.headerAST != null) {
+        if (fileResult.headerHTML != null) {
           this.applyHeaderToDOM(
-            fileResult.headerAST,
+            fileResult.headerHTML,
             fileContainer,
             fileResult.file
           );
@@ -1600,18 +1603,19 @@ export class File<LAnnotation = undefined, Caret = undefined> {
     this.cleanupErrorWrapper();
     this.applyPreNodeAttributes(pre, result);
     const code = (this.code = getOrCreateCodeNode({ code: this.code }));
-    const codeAst = this.fileRenderer.renderCodeAST(result);
+    const column = this.fileRenderer.renderCode(result);
     this.editor?.__captureFocusForDOMReplacement();
     const applyColumns = () => {
       if (code.childElementCount >= 2) {
         for (let i = 0; i < 2; i++) {
           const domEl = code.children[i] as HTMLElement;
-          const astEl = codeAst[i] as HASTElement;
-          domEl.innerHTML = toHtml(astEl.children);
-          domEl.style.cssText = astEl.properties.style as string;
+          domEl.innerHTML = renderRows(
+            i === 0 ? column.gutter : column.content
+          );
+          domEl.style.cssText = `grid-row: span ${column.rowCount}`;
         }
       } else {
-        code.innerHTML = toHtml(codeAst);
+        code.innerHTML = renderColumn(column);
       }
       if (!pre.contains(code)) {
         pre.replaceChildren(code);
@@ -1704,11 +1708,11 @@ export class File<LAnnotation = undefined, Caret = undefined> {
     if (prependResult != null) {
       columns.gutter.insertAdjacentHTML(
         'afterbegin',
-        this.fileRenderer.renderPartialHTML(prependResult.gutterAST)
+        this.fileRenderer.renderPartialHTML(prependResult.gutterRows)
       );
       columns.content.insertAdjacentHTML(
         'afterbegin',
-        this.fileRenderer.renderPartialHTML(prependResult.contentAST)
+        this.fileRenderer.renderPartialHTML(prependResult.contentRows)
       );
       rowCount += prependResult.rowCount;
     }
@@ -1716,11 +1720,11 @@ export class File<LAnnotation = undefined, Caret = undefined> {
     if (appendResult != null) {
       columns.gutter.insertAdjacentHTML(
         'beforeend',
-        this.fileRenderer.renderPartialHTML(appendResult.gutterAST)
+        this.fileRenderer.renderPartialHTML(appendResult.gutterRows)
       );
       columns.content.insertAdjacentHTML(
         'beforeend',
-        this.fileRenderer.renderPartialHTML(appendResult.contentAST)
+        this.fileRenderer.renderPartialHTML(appendResult.contentRows)
       );
       rowCount += appendResult.rowCount;
     }
@@ -1884,14 +1888,14 @@ export class File<LAnnotation = undefined, Caret = undefined> {
   }
 
   private applyHeaderToDOM(
-    headerAST: HASTElement,
+    renderedHeaderHTML: string,
     container: HTMLElement,
     file: FileContents
   ): void {
     this.cleanupErrorWrapper();
     this.placeHolder?.remove();
     this.placeHolder = undefined;
-    const headerHTML = this.cachedHeaderHTML ?? toHtml(headerAST);
+    const headerHTML = this.cachedHeaderHTML ?? renderedHeaderHTML;
     this.cachedHeaderHTML = headerHTML;
     if (headerHTML !== this.lastRenderedHeaderHTML) {
       const tempDiv = document.createElement('div');

@@ -27,6 +27,9 @@
       ],
       "worker": [
         "dist/worker/index.d.ts"
+      ],
+      "highlights": [
+        "dist/highlights.d.ts"
       ]
     }
   },
@@ -34,6 +37,10 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
+    },
+    "./highlights": {
+      "types": "./dist/highlights.d.ts",
+      "import": "./dist/highlights.js"
     },
     "./edit": {
       "types": "./dist/edit/index.d.ts",
@@ -69,16 +76,15 @@
   "dependencies": {
     "@pierre/theme": "workspace:*",
     "@pierre/theming": "workspace:*",
-    "@shikijs/transformers": "^3.0.0 || ^4.0.0",
     "diff": "catalog:",
-    "hast-util-to-html": "catalog:",
     "lru_map": "catalog:",
     "shiki": "^3.0.0 || ^4.0.0"
   },
   "devDependencies": {
+    "@pierre/highlights": "workspace:*",
     "@playwright/test": "catalog:",
+    "@shikijs/transformers": "catalog:",
     "@tsdown/css": "catalog:",
-    "@types/hast": "catalog:",
     "@types/jsdom": "catalog:",
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",
@@ -95,10 +101,14 @@
     "vite": "catalog:"
   },
   "peerDependencies": {
+    "@pierre/highlights": "0.x",
     "react": "^18.3.1 || ^19.0.0",
     "react-dom": "^18.3.1 || ^19.0.0"
   },
   "peerDependenciesMeta": {
+    "@pierre/highlights": {
+      "optional": true
+    },
     "react": {
       "optional": true
     },

@@ -27,6 +27,54 @@ JavaScript and React components.
 pnpm add @pierre/diffs
 ```
 
+## Highlighters
+
+`@pierre/diffs` uses [Shiki] by default. `setHighlighter` changes the
+implementation used by new components and SSR calls. Existing file and diff
+renderers adopt it on their next render; the call itself does not trigger a
+repaint. Running streams and attached editors keep their highlighter until they
+are recreated.
+
+The experimental [Highlights] adapter runs its built-in lexers in WebAssembly
+and lazy-loads bundled themes by ID.
+
+```ts
+import { File, setHighlighter } from '@pierre/diffs';
+import { highlightsHighlighter } from '@pierre/diffs/highlights';
+
+setHighlighter(highlightsHighlighter);
+const view = new File(); // Uses Highlights.
+```
+
+Pass the `shikiHighlighter` export back to `setHighlighter` to restore the
+default. Custom implementations conform to the `CodeHighlighter` interface
+exported from `@pierre/diffs`. Notes on the Highlights adapter:
+
+- Theme names map onto bundled Highlights themes; register custom names with
+  `registerHighlightsTheme` from `@pierre/diffs/highlights`.
+- Languages without a Highlights lexer render as plain text.
+- The worker pool uses Shiki. Custom highlighters render on the main thread.
+- Edit mode tokenizes through the incremental `LiveTokenizer` instead of the
+  TextMate incremental tokenizer.
+
+For server rendering, pass `highlighter` to `preloadFile` to select it for one
+request without changing the process-wide registration:
+
+```ts
+import { highlightsHighlighter } from '@pierre/diffs/highlights';
+import { preloadFile } from '@pierre/diffs/ssr';
+
+const file = { name: 'example.ts', contents: 'const answer = 42;' };
+const result = await preloadFile({ file, highlighter: highlightsHighlighter });
+```
+
+The `@pierre/highlights` peer is optional and only needed when importing
+`@pierre/diffs/highlights`. Unknown Highlights theme names reject during
+loading; register a custom theme before using its name.
+
+[Shiki]: https://shiki.style
+[Highlights]: ../highlights/README.md
+
 ## Agent skill
 
 Install the agent skill for this package with the
@@ -93,3 +141,40 @@ moonx root:icons
 This reads SVGs from `node_modules/@pierre/icons/svg` and writes
 `packages/diffs/src/sprite.ts`. Run after updating `@pierre/icons` or changing
 `sprite.config.js`.
+
+## Rendering tokens
+
+`toHtml` renders themed token lines from any `codeToTokens` highlighter. It
+escapes text and attributes, preserves token styles, and separates lines with
+newlines. It does not add line, `code`, or `pre` wrappers.
+
+```ts
+import { toHtml } from '@pierre/diffs';
+
+const html = toHtml(tokens, {
+  transformers: [
+    {
+      tokens(lines) {
+        for (const line of lines) {
+          for (const token of line) {
+            token.htmlAttrs = { ...token.htmlAttrs, class: 'syntax-token' };
+          }
+        }
+      },
+    },
+  ],
+});
+```
+
+Token hooks can mutate the tokens or return a replacement array. Hooks run in
+`enforce: 'pre'`, normal, then `enforce: 'post'` order, preserving their order
+within each tier. Only the Shiki-style `tokens(lines)` hook is supported; node
+hooks and Shiki's highlighter context are not available. Component options do
+not accept these transformers.
+
+Custom `CodeHighlighter` implementations supply `codeToTokens`; diffs owns HTML
+rendering. Highlighting results and worker caches contain `ThemedToken[][]`.
+Renderers serialize visible tokens with current line attributes and diff
+decorations; `renderCode` returns gutter/content rows and `renderFullHTML`
+returns the complete markup. The previous AST methods and utilities have been
+removed.

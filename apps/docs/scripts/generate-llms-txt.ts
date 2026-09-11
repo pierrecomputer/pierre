@@ -59,6 +59,7 @@ const DIFFS_SECTIONS = [
   'TokenHooks',
   'WorkerPool',
   'SSR',
+  'HighlightsHighlighter',
 ] as const;
 
 const TREES_SECTIONS = [
@@ -106,6 +107,8 @@ const SECTION_DESCRIPTIONS: Record<string, Record<string, string>> = {
     Styling: 'CSS variables, inline styles, and unsafe CSS injection',
     Theming:
       'Pierre Light/Dark themes, custom theme creation, and registration',
+    HighlightsHighlighter:
+      'Highlights features, APIs, themes, languages, streaming, incremental editing, and Diffs integration',
     TokenHooks:
       'Experimental token-level enter/leave/click callbacks for hover UI and LSP integrations',
     WorkerPool:
@@ -371,7 +374,6 @@ const LABEL_OVERRIDES: Record<string, string> = {
   SSR_USAGE_CLIENT: 'Client Component',
   THEMING_REGISTER_THEME: 'Registering Custom Themes',
   THEMING_USE_IN_COMPONENT: 'Using Custom Themes in Components',
-  WORKER_POOL_USAGE: 'Basic Usage',
 };
 
 const LABEL_PREFIXES_TO_STRIP = [
@@ -382,6 +384,7 @@ const LABEL_PREFIXES_TO_STRIP = [
   'SSR_',
   'STYLING_CODE_',
   'THEMING_',
+  'HIGHLIGHTS_',
   'VIRTUALIZATION_',
   'OVERVIEW_',
   'TREES_',

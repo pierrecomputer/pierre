@@ -1475,6 +1475,16 @@
     box-decoration-break: clone;
   }
 
+  [data-diff-span-start='continued'] {
+    border-start-start-radius: 0;
+    border-end-start-radius: 0;
+  }
+
+  [data-diff-span-end='continued'] {
+    border-start-end-radius: 0;
+    border-end-end-radius: 0;
+  }
+
   [data-line-type='change-addition'] [data-diff-span] {
     background-color: var(--diffs-bg-addition-emphasis);
   }

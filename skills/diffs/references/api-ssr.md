@@ -3,6 +3,10 @@
 This reference lists the SSR-specific exports from `@pierre/diffs/ssr`. The
 entry also re-exports every type in [Shared types](api-types.md).
 
+`preloadFile` accepts an optional `highlighter` for that server render. Use it
+when concurrent requests need different implementations; it does not change the
+global registration or become part of the returned component props.
+
 ## Functions
 
 | Export                      | Purpose                                                       |
@@ -15,7 +19,7 @@ entry also re-exports every type in [Shared types](api-types.md).
 | `preloadUnresolvedFile`     | Renders one merge-conflict file and returns component props.  |
 | `preloadDiffHTML`           | Renders a diff directly to an HTML string.                    |
 | `preloadUnresolvedFileHTML` | Renders a merge-conflict file directly to an HTML string.     |
-| `renderHTML`                | Serializes rendered HAST elements to HTML.                    |
+| `renderHTML`                | Composes rendered HTML strings with the SVG sprite.           |
 
 ## Types
 

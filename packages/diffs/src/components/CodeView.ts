@@ -16,11 +16,13 @@ import type {
   EditorChangeEvent,
   EditorType,
 } from '../editor/types';
+import type { CodeHighlighter } from '../highlighter/code_highlighter';
 import {
-  isHighlighterLoaded,
-  preloadHighlighter,
-} from '../highlighter/shared_highlighter';
-import { areThemesAttached } from '../highlighter/themes/areThemesAttached';
+  getCodeHighlighter,
+  getCustomHighlighter,
+  getHighlighterIfReady,
+  loadHighlighter,
+} from '../highlighter/resolve_highlighter';
 import type { SelectionWriteOptions } from '../managers/InteractionManager';
 import {
   dequeueRender,
@@ -824,6 +826,7 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
   private options: CodeViewOptions<LAnnotation, Caret>;
   private workerManager: WorkerPoolManager | undefined;
   private isReadySubscription: (() => void) | undefined;
+  private pendingHighlighter: CodeHighlighter | undefined;
   private pendingHighlighterTheme: DiffsThemeNames | ThemesType | undefined;
   private isContainerManaged: boolean;
 
@@ -1838,11 +1841,18 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
 
   private isReady(): boolean {
     const { workerManager } = this;
+    // Custom highlighters render on the main thread without worker startup.
+    if (getCustomHighlighter() != null) {
+      return this.isSharedHighlighterReady();
+    }
     // A failed worker pool never reaches the 'initialized' state (it reverts
     // to 'waiting' with workersFailed: true), so it renders through the shared
     // highlighter instead.
     if (workerManager == null || workerManager.getStats().workersFailed) {
       return this.isSharedHighlighterReady();
+    }
+    if (this.pendingHighlighter != null) {
+      this.clearReadySubscription();
     }
     if (workerManager.isInitialized()) {
       this.clearReadySubscription();
@@ -1874,30 +1884,39 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
     }
     this.isReadySubscription();
     this.isReadySubscription = undefined;
+    this.pendingHighlighter = undefined;
     this.pendingHighlighterTheme = undefined;
   }
 
   private isSharedHighlighterReady(): boolean {
+    const highlighter = getCodeHighlighter();
     const theme =
       this.workerManager?.getFileRenderOptions().theme ??
       this.options.theme ??
       DEFAULT_THEMES;
-    if (isHighlighterLoaded() && areThemesAttached(theme)) {
+    if (getHighlighterIfReady(theme, highlighter) != null) {
       this.clearReadySubscription();
       return true;
     }
-    // A pending request for an obsolete theme must not block the current one.
-    if (!areThemesEqual(this.pendingHighlighterTheme, theme)) {
+    // A previous highlighter or theme load must not block the current one.
+    if (
+      this.pendingHighlighter !== highlighter ||
+      !areThemesEqual(this.pendingHighlighterTheme, theme)
+    ) {
       this.clearReadySubscription();
     }
     this.isReadySubscription ??= (() => {
+      this.pendingHighlighter = highlighter;
       this.pendingHighlighterTheme = theme;
       let cancelled = false;
-      void preloadHighlighter({
-        themes: getThemes(theme),
-        langs: [],
-        preferredHighlighter: this.options.preferredHighlighter,
-      }).then(
+      void loadHighlighter(
+        {
+          themes: getThemes(theme),
+          langs: [],
+          preferredHighlighter: this.options.preferredHighlighter,
+        },
+        highlighter
+      ).then(
         () => {
           if (cancelled) {
             return;

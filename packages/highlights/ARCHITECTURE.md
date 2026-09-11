@@ -1,0 +1,365 @@
+# Architecture
+
+highlights uses WebAssembly linear memory throughout highlighting. A
+hand-written WAT lexer walks the input and streams either
+`<span style="color:#...">` fragments or binary token records to the output. The
+lexer builds no AST, token array, or string objects.
+
+```text
+UTF-8 input -> selected `$hl*` lexer -> emitter (emit.wat) -> HTML bytes
+                                                           -> byte-end token records
+                                                           -> UTF-16 line records
+```
+
+## Project structure
+
+```
+src/memory.wat      named addresses for static data and scratch memory
+src/token.wat       $Token enum, CSS-variable table, and theme-record access
+src/scan.wat        read cursors ($ptr/$end/$eof) and SIMD scans
+src/emit.wat        HTML/token-record emitter and driver prologue/epilogue
+src/common.wat      shared ASCII, identifier, number, string, and comment scans
+src/sig.wat         shared parameter-list machine (variable.parameter)
+src/langs/*.wat     67 built-in language modes
+src/embed.wat       stream resumption of embedded regions (script/style
+                    bodies, front matter, framework expressions) shared by
+                    the driver and by markdown fence bodies
+src/live.wat        incremental-tokenizer core: heap, line table, state
+                    interning, per-line driver, edit splicing, compaction
+src/highlights.wat  memory, $Language enum, imports, and dispatch
+lib/index.ts        public types and the export barrel
+lib/highlighter.ts  HighlightsHighlighter, codeToHtml/codeToTokens,
+                    language aliases, theme cache, StreamTokenizer
+lib/live.ts         LiveTokenizer glue: edit validation, WTF-8 encoding,
+                    deferred slicing, themed reads over the live exports
+lib/tokens.ts       token records -> Shiki-compatible tokens
+lib/theme.ts        Zed theme -> binary table compiler
+lib/token-types.ts  generated, tracked $Token ABI
+themes/             bundled, pruned Zed theme objects; index.ts re-exports
+                    them typed and compiles to a self-contained dist/themes.js
+scripts/build.ts    WAT preprocessor and compiler; writes the wasm artifacts
+                    into dist/, where tsdown also compiles the lib/ glue
+test/               tests (bun test)
+```
+
+## WAT preprocessor (scripts/build.ts)
+
+`transformWat()` adds a small source layer over WAT. Its forms are invalid
+before preprocessing, so editor warnings are expected.
+
+1. **Imports:** `(import "./token.wat")` inlines each local module once into one
+   `$name` namespace. Host imports are hoisted.
+2. **Enums:** `(enum $Token "none" ...)` defines sequential indices;
+   `(enum.get $Token.none)` inserts one. Order is ABI. Keep parentheses out of
+   enum comments.
+3. **Addresses:** `(const $mem.name 64)` defines a build-time memory address.
+   Definitions live in `src/memory.wat`.
+4. **CSS variables:** `(css-variable-table ...)` emits kebab-case token names
+   and compact lookup records.
+5. **Bitsets:** `(bitset ...)` emits one byte per enum member;
+   `(bitset.get ...)` becomes a load and mask.
+6. **Character constants:** `(i32.const "true")` packs up to four ASCII bytes
+   little-endian; `i64.const` packs eight. Use hex for escaped quotes.
+7. **Keyword tables:**
+   `(keyword-table $Name <base> <end> (group <value>? "word" ...) ...)` emits a
+   displacement-based perfect hash over (first two bytes, last byte, length)
+   with exact-byte verification; the build picks the smallest bucket and slot
+   counts that place every word. `(keyword-table.get $Name <start> <end>)`
+   returns the 1-based group index or 0. When every group carries a value - a
+   number, or `$Token.member` with an optional `+bias` -
+   `(keyword-table.value $Name <start> <end>)` returns that value directly, or
+   -1 for a miss. Words are 2..31 bytes, matched case-sensitively. Two words
+   sharing first two bytes, last byte, and length collide unfixably - keep one
+   out of the table and match it directly (see rust.wat's `where`). Comments are
+   stripped from every file before any form is matched, so a form name in a
+   comment is inert.
+8. **Byte sets:** `(byteset.get "bytes" (local.get $c))` tests membership of the
+   byte in `$c` against a 256-bit bitmap (one load and two shifts) instead of an
+   equality ladder; identical sets share a bitmap at `$mem.byteSets`.
+9. **Enum maps:**
+   `(enum-map $Name $Enum <base> <default> (value <v> "member" ...) ...)` emits
+   one byte per enum member; `(enum-map.get $Name <expr>)` loads it. It replaces
+   a chain of equality tests that maps one enum onto another.
+10. **Byte switches:**
+    `(byte-switch (local.get $c) (case <byte>... body...) ...)` dispatches on a
+    byte through one `br_table`; a case body that neither branches out nor
+    returns falls through to the code after the switch, like the if-chain it
+    replaces.
+11. **Stream checkpoints:** the lexers listed in `streamLexers` save their
+    locals to `$mem.streamState` at the end of a top-level streaming call and
+    restore them after the `$lexEmitLeadingContinuation` call of the next chunk.
+    A liveness analysis over the function body keeps only the locals that some
+    path reads before writing - the loop-carried state - so scratch locals cost
+    no code and no bytes in the live tokenizer's state blobs. Such lexers cannot
+    use `return`.
+12. **SIMD markers:** every function that can reach a SIMD instruction through
+    calls, and holds none itself, gets one unused `v128` local. JavaScriptCore
+    (Bun, Safari) decides whether a function uses SIMD from its own bytecode -
+    an instruction or a `v128` local - yet its optimizing tier inlines small
+    callees: a lexer that only inlines a scanner is compiled with the scalar
+    register convention and may park the scanner's vector constants in
+    callee-saved vector registers across calls, of which the ARM64 ABI preserves
+    only the low 64 bits. Bun 1.4 then cut identifier scans after 8 bytes once
+    such a lexer tiered up. The local switches the caller to the SIMD convention
+    at no runtime cost and two bytes; an instruction marker pushed hot helpers
+    over the inliner's size thresholds. Binaryen drops unused locals, so
+    `optimizeWasm()` re-applies the pass; `test/wasm_test.ts` checks both
+    modules.
+13. **Compound negations:** `(i32.eqz X)` with an `i32.and`/`i32.or` operand
+    becomes `(i32.shr_u (i32.clz X) (i32.const 5))`, the same 0/1 result.
+    JavaScriptCore's optimizing tier fuses and/or trees of comparisons that feed
+    a branch into ARM64 conditional compares and reads `x == 0` inside them as a
+    negated sub-chain; in Bun 1.4 a sub-chain abandoned halfway - at a call
+    result, a load, or two nested and/or nodes - leaves its recorded nodes in
+    the chain, so the branch tests corrupted flags. A shifted
+    count-leading-zeros is not a comparison, so the fuser stops there.
+    `optimizeWasm()` re-applies the rewrite after Binaryen, which rebuilds
+    `eqz(or(a, b))` from `and(eqz(a), eqz(b))`; `test/wasm_test.ts` checks that
+    neither module keeps a negated compound.
+
+`wat2wasm()` enables bulk memory and SIMD. Hot scans classify 16 bytes with
+`i8x16` comparisons, `i8x16.bitmask`, and `i32.ctz`.
+
+Keyword verification compares one SIMD vector for words up to 16 bytes, or two
+overlapping vectors for longer words. Short-word comparisons mask bytes beyond
+the word, so static keyword records and lowercase scratch copies need no zero
+padding. Case-insensitive lookups lowercase ASCII 16 bytes at a time.
+
+## Memory layout
+
+```
+[] page 1         (control, static data, and scratch)
+  [0]             language id (u8)
+  [1]             output mode (u8): 0 inline colors, 1 CSS variables,
+                  3 UTF-16 line records
+  [2:6)           input length (u32 LE)
+  [6:10)          output start (u32 LE)
+  [10:14)         output length (u32 LE)
+  [14:64)         reserved space
+  [64:448)        theme table written by JavaScript, five bytes per token
+  [448:1360)      CSS-variable name table
+  [1360:1424)     lowercase word copy for case-insensitive keyword lookups
+  [1424:3472)     byte-set bitmaps (byteset.get)
+  [3472:3624)     emitter HTML fragments
+  [3624:8448)     emitter span-open fragment cache
+  [8448:8832)     saved theme bytes for the emitter span cache
+  [8832:8864)     streaming delimiter
+  [8864:10144)    streaming lexer checkpoints
+  [10144:36960)   language keyword tables (Angular's sits at 63760)
+  [36960:37984)   JSON nesting stack
+  [37984:39008)   JavaScript bracket-kind stack
+  [39008:39152)   JavaScript token-class bitset
+  [39152:39296)   JavaScript token-kind to $Token map (enum-map)
+  [39296:40320)   JavaScript template bracket stack
+  [40320:41344)   JavaScript template HTML/CSS resume states
+  [41344:45440)   JSX-mode stack
+  [45440:46496)   markdown fence aliases
+  [46496:46592)   nested markdown fence registers, one record per depth
+  [46592:47616)   TOML nesting stack
+  [47616:63632)   live tokenizer change list
+  [63632:63760)   live tokenizer free-list heads
+  [63760:65536)   Angular keyword table
+[] pages 2..N     (text buffer; a live instance lays them out itself,
+                  see src/live.wat)
+  [65536:EOF)     input, NUL sentinel, then at least 16 bytes of slack
+  [(EOF+47)&~15:) output HTML bytes or (end:u32, hl:u32) token records;
+                  $ensureCap grows memory
+```
+
+Text buffer layout:
+
+```
+↓ input                                          ↓ output
+[65536 ............... EOF) [0] [slack.........] [aligned HTML...]
+                             ↑
+                        NUL sentinel
+```
+
+- NUL sentinel: byte 0 is written at EOF. It gives bounded lookahead a safe zero
+  byte when reading exactly at the end. The authoritative boundary is still
+  $end, because the input itself may contain NUL bytes.
+- SIMD slack: SIMD scans load 16 bytes at once. A load beginning near EOF can
+  read several bytes beyond the input. Reserved slack keeps those wide reads
+  safe and away from output that is already being written.
+- 16-byte alignment: the output begins on a multiple-of-16 address, matching
+  SIMD load/store width. WebAssembly permits unaligned access, but alignment
+  gives a cleaner, potentially faster layout.
+
+Formula: `(EOF + 47) & ~15`
+
+## Theme table
+
+`$Token` uses Zed capture names. For each capture, JavaScript selects the
+longest dot-boundary prefix in `theme.style.syntax` (`function.method` →
+`function`).
+
+Each token gets a five-byte record at 64: `r g b a style`. Colors must be
+`#rrggbb` or `#rrggbbaa`; omitted alpha is `0xff`. Style bit 4 means italic, and
+the low nibble holds `font_weight / 100` (0 means default). Entries without a
+color remain zero, including their font settings.
+
+`background` and `foreground` resolve from
+`style.editor.background ?? style.background` and
+`style.editor.foreground ?? style.text ?? style.foreground`. Slot 0 (`none`)
+stays empty. Any zero record inherits the `<pre>` foreground without a span.
+
+The emitter writes lowercase `#rrggbb`, adds alpha only when non-opaque, and
+appends font attributes. It compares 40-bit records to merge equal styles.
+CSS-variable mode bypasses the table, emits `var(--hls-<token>)`, and merges
+only identical token types.
+
+## Emitter contract (src/emit.wat, src/scan.wat)
+
+`$ptr`, `$end`, and `$eof` track input. `$out`, `$cap`, and `$spanHl` track
+output and the open span.
+
+- `$hlBegin` reads the control block, sets cursors, and opens `<pre><code>`.
+  `$hlEnd` closes it and publishes the output length. Entrypoints and test
+  harnesses call both.
+- HTML runs reuse cached span openers while the theme bytes and
+  inline/CSS-variable mode match. Twelve pairs of SIMD vectors compare the theme
+  against a saved 384-byte copy, catching direct writes to Wasm memory. A change
+  clears the 4,818-byte span cache and updates the saved theme and mode. Token
+  runs preserve the cache and skip the comparison.
+- `$emitTok(hl, lhs, rhs)` emits `[lhs,rhs)` in style `hl`, grows memory,
+  escapes `& < >`, and merges spans. Empty ranges do nothing.
+- `$emitGap(lhs, rhs)` copies whitespace or leading UTF-8 continuation bytes
+  directly without changing the span, letting equal styles merge across gaps.
+  Callers must exclude HTML specials (`& < >`); other text uses `$emitTok`.
+- In token mode both initially write `(endByte: u32, hl: u32)` records instead
+  (`$recTok`): a record's start is the previous record's end, so the records
+  tile the input; same-`hl` neighbors and gaps extend the previous record, the
+  analog of span merging. Offsets are relative to the input start, and the JS
+  glue resolves colors, so no theme table is written.
+- Mode 3 converts these byte records while preserving lexer emission order. At
+  `$hlEnd`, a post-pass scans the covered input once and emits
+  `(endUtf16: u32, hl: u32)` records. Token id `0xffffffff` marks a line ending
+  and includes its LF or CRLF terminator. JavaScript can then build each line's
+  tokens without byte conversion or substring searches.
+- `$scanToLineEnd`, `$scanBlockCommentEnd`, and `$scanHexRun` provide bounded
+  comment and hexadecimal scans.
+- `$scanFindSpecial`, `$scanWhitespace`, `$scanIdentRun`, and `$utf8SpanEnd`
+  scan strings, whitespace, identifiers, and escape spans. They leave an
+  already-past cursor unchanged; moving it backward could duplicate bytes after
+  a split-range scan.
+- `$ensureCap(n)` grows output memory. Every output path reserves space before
+  writing.
+
+## Language lexer contract (src/langs/\*.wat)
+
+A `$hl<Language>` lexer scans `[$ptr, $end)` and returns with `$ptr == $end`.
+
+- **Lossless**: every input byte is emitted exactly once, in order, via
+  `$emitTok`/ `$emitGap`. Stripping tags and decoding entities restores the
+  exact input.
+- **Total**: malformed input neither traps nor loops. Each iteration advances
+  `$ptr`; unterminated constructs run to `$end`.
+- **Bounded**: never emit past `$end`. Top-level scans use `$end == $eof`;
+  embedded scans use subranges. Check `$ptr >= $end`, not the sentinel. SIMD
+  loads may cross `$end` into slack, but matches must be discarded and `$ptr`
+  clamped.
+- **Reusable**: initialize local state on entry and keep stacks inside assigned
+  scratch ranges.
+- Emit inter-token whitespace with `$emitGap`; batch runs of plain bytes into
+  one `$emitTok(none, ...)`.
+
+An embedded lexer uses a bounded subrange:
+
+```wat
+;; highlight [from,to) as TSX, then continue after it
+(local.set $save (global.get $end))
+(global.set $end (local.get $to))
+(global.set $ptr (local.get $from))
+(call $hlTsx)
+(global.set $end (local.get $save))
+;; $ptr == $to here
+```
+
+When streaming, an embedded range that continues in the next chunk resumes like
+a document: html-family lexers record the open script, style, or expression
+region (`$streamSetRegion`) and `src/embed.wat` resumes it; a markdown fence
+body records its fence and language (`$markdownFenceSet`, bit 8 of the language
+once the body's lexer has run) and `$markdownCodeRange` resumes it inside the
+fence bounds - the shared comment/string modes, the language's own resume hook,
+then the lexer at stream depth 0 with `$streamReset` set only for the fence's
+first body chunk. `$streamChunk` gives an open fence the chunk start before any
+top-level resume could consume a mode the body left open.
+
+## HTML output shape
+
+Output is one self-contained fragment:
+
+```html
+<pre
+  class="highlights"
+  style="background-color:BG;color:FG"
+><code>...</code></pre>
+```
+
+It uses inline styles, with no token classes or line spans. Only `& < >` are
+escaped. Spans never nest. Adjacent equal styles merge across whitespace.
+
+## Live tokenizer (src/live.wat, lib/live.ts)
+
+A `LiveTokenizer` instance is a dedicated Wasm instance whose text pages hold
+the whole editor document instead of a one-shot input buffer:
+
+```
+[] page 1                     control, static data, lexer scratch,
+                              line-change list and size-class free-list heads
+[] [65536:heap ceiling)       size-class heap: document text blocks, per-line
+                              token blocks, interned state blobs, line table
+[] [heap ceiling:memory end)  transient per-line scratch: the line's bytes,
+                              terminator, NUL sentinel, SIMD slack, then the
+                              standard aligned record output
+```
+
+Each line is copied into scratch with its terminator. `$srcBase` points at it,
+then `$streamChunk` runs the ordinary mode-3 pipeline. Output matches
+`StreamTokenizer` fed one line per chunk.
+
+The change list holds up to 1,000 16-byte records; past that, new spans merge
+into the last record, so `lineChanges` may then span unedited lines between
+them. It and the 32 free-list heads occupy the end of page 1, leaving the text
+pages for heap and scratch.
+
+Before and after each line the driver saves streaming state: cross-chunk
+globals, the 32-byte stream delimiter, the fence registers of nested markdown
+bodies, the live prefixes of the language's nesting stack (JSON, TOML, or the
+JavaScript template bracket stack), the template HTML/CSS resume states, the
+bracket and JSX stacks, and the used lexer checkpoint region. Blobs are interned
+(FNV-1a 64, then exact bytes) into refcounted ids. Equal ids mean convergence.
+Trailing zeros are trimmed; the checkpoint region comes last so the trim drops
+it entirely for lexers that keep their state in globals and stacks (the
+JavaScript family). If outgoing bytes match the incoming blob, the same id is
+reused without hashing.
+
+The line table is a gap buffer of 32-byte descriptors: text pointer/length,
+UTF-16 length, token block, outgoing state id, terminator and format flags.
+Token records pack as `(tokenId << 24) | endUtf16`, or `[endUtf16, tokenId]`
+once a line's UTF-16 end exceeds 24 bits (the id always fits one byte). Each
+descriptor's UTF-16 length is counted when the line is appended or spliced, so
+reads and edit validation never wait for the driver.
+
+Edits splice descriptors. The last replacement line keeps the old end line's
+state id. The driver re-tokenizes dirty ranges until a line's new outgoing id
+matches its old one, and reports every re-tokenized line.
+
+Driver state is all globals, so `liveRun` can stop at a line budget. With a
+`renderRange`, JavaScript runs until the cursor passes the range, returns those
+tokens, and continues in background slices via `onDeferTokenize`. Slice lines
+come from the change list plus the driver cursor (`liveStats` keys 10/11).
+`pause` holds slices without dropping them.
+
+A new edit does not wait for pending slices. `liveApplyEdits` remaps unreached
+dirty ranges through the batch splices and merges them into the new range list.
+Lines the old run never reached still get re-tokenized; beyond that, matching a
+pre-old-batch state id is enough to stop.
+
+The heap is size-class free lists (8-byte headers, one size per class), no
+coalescing. Compaction slides live blocks when parked free space exceeds live
+data by at least 1 MiB.
+
+Text is WTF-8. JavaScript encodes lone surrogates; edits that split an astral
+pair synthesize the matching halves. `getLineText` round-trips any UTF-16
+document.

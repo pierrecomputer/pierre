@@ -1,5 +1,9 @@
 import { DEFAULT_THEMES, DIFFS_TAG_NAME } from '../constants';
-import { getSharedHighlighter } from '../highlighter/shared_highlighter';
+import {
+  customHighlighterOf,
+  loadHighlighter,
+  type RenderersHighlighter,
+} from '../highlighter/resolve_highlighter';
 import {
   dequeueRender,
   queueRender,
@@ -9,8 +13,10 @@ import type {
   AppliedThemeStyleCache,
   BaseCodeOptions,
   DiffsHighlighter,
+  DiffsThemeNames,
   SupportedLanguages,
   ThemedToken,
+  ThemesType,
   ThemeTypes,
 } from '../types';
 import { createSpanFromToken } from '../utils/createSpanNodeFromToken';
@@ -38,12 +44,17 @@ export interface FileStreamOptions extends BaseCodeOptions {
 
 let instanceId = -1;
 
+// Batch small chunks for at most one frame, flushing large bursts immediately.
+const STREAM_COALESCE_MS = 16;
+const STREAM_COALESCE_CHARS = 4096;
+
 export class FileStream {
   readonly __id: string = `file-stream:${++instanceId}`;
 
-  private highlighter: DiffsHighlighter | undefined;
+  private highlighter: RenderersHighlighter | undefined;
   private stream: ReadableStream<string> | undefined;
   private abortController: AbortController | undefined;
+  private disposeTokenStream: (() => void) | undefined;
   private fileContainer: HTMLElement | undefined;
   private pre: HTMLPreElement | undefined;
   private code: HTMLElement | undefined;
@@ -61,6 +72,9 @@ export class FileStream {
     dequeueRender(this.render);
     this.abortController?.abort();
     this.abortController = undefined;
+    this.disposeTokenStream?.();
+    this.disposeTokenStream = undefined;
+    this.queuedTokens.length = 0;
   }
 
   setThemeType(themeType: ThemeTypes): void {
@@ -83,8 +97,8 @@ export class FileStream {
     );
   }
 
-  private async initializeHighlighter(): Promise<DiffsHighlighter> {
-    this.highlighter = await getSharedHighlighter(
+  private async initializeHighlighter(): Promise<RenderersHighlighter> {
+    this.highlighter = await loadHighlighter(
       getHighlighterOptions(this.options.lang, this.options)
     );
     return this.highlighter;
@@ -115,7 +129,7 @@ export class FileStream {
   private setupStream(
     stream: ReadableStream<string>,
     wrapper: HTMLElement,
-    highlighter: DiffsHighlighter
+    highlighter: RenderersHighlighter
   ): void {
     const {
       disableLineNumbers = false,
@@ -148,42 +162,36 @@ export class FileStream {
 
     this.pre = pre;
     this.code = getOrCreateCodeNode({ code: this.code, pre });
+    this.code.textContent = '';
+    // Re-setup reuses the code node, but clearing the pre above detached it;
+    // getOrCreateCodeNode only appends nodes it created itself.
+    if (this.code.parentElement !== pre) {
+      pre.appendChild(this.code);
+    }
+    // tokens queued by a previous run describe DOM the wipe just discarded
+    this.queuedTokens.length = 0;
     this.gutterElement = undefined;
     this.contentElement = undefined;
     this.currentRowCount = 0;
     this.currentLineElement = undefined;
     this.currentLineIndex = this.options.startingLineIndex ?? 1;
     this.abortController?.abort();
+    this.disposeTokenStream?.();
     this.abortController = new AbortController();
     const { onStreamStart, onStreamClose, onStreamAbort } = this.options;
     // Cancel the prior source so upstream producers stop generating tokens.
     // Swallow AbortError / locked-stream rejections since we're tearing down.
     this.stream?.cancel().catch(() => {});
     this.stream = stream;
+    const { stream: tokenStream, dispose } = this.createTokenStream(
+      highlighter,
+      theme
+    );
+    this.disposeTokenStream = dispose;
     this.stream
       // tokenizeTimeLimit: 0 — never trade silently-wrong token colors for
       // latency; see renderFileWithHighlighter for the full rationale.
-      .pipeThrough(
-        typeof theme === 'string'
-          ? new CodeToTokenTransformStream({
-              ...this.options,
-              theme,
-              highlighter,
-              allowRecalls: true,
-              defaultColor: false,
-              cssVariablePrefix: formatCSSVariablePrefix('token'),
-              tokenizeTimeLimit: 0,
-            })
-          : new CodeToTokenTransformStream({
-              ...this.options,
-              themes: theme,
-              highlighter,
-              allowRecalls: true,
-              defaultColor: false,
-              cssVariablePrefix: formatCSSVariablePrefix('token'),
-              tokenizeTimeLimit: 0,
-            })
-      )
+      .pipeThrough(tokenStream)
       .pipeTo(
         new WritableStream({
           start(controller) {
@@ -204,7 +212,130 @@ export class FileStream {
         if (error.name !== 'AbortError') {
           console.error('FileStream pipe error:', error);
         }
+      })
+      .finally(() => {
+        dispose?.();
+        if (this.disposeTokenStream === dispose) {
+          this.disposeTokenStream = undefined;
+        }
       });
+  }
+
+  /**
+   * Use Shiki's grammar-state stream or the custom highlighter's line tokenizer.
+   */
+  private createTokenStream(
+    highlighter: RenderersHighlighter,
+    theme: DiffsThemeNames | ThemesType
+  ): {
+    stream: TransformStream<string, ThemedToken | RecallToken>;
+    dispose?: () => void;
+  } {
+    // Derive the tokenizer from the highlighter this stream captured during
+    // setup, not the mutable registration: a setHighlighter call in between
+    // must not pair one implementation's theme CSS with another's tokens.
+    const custom = customHighlighterOf(highlighter);
+    const options = {
+      ...this.options,
+      ...(typeof theme === 'string' ? { theme } : { themes: theme }),
+      defaultColor: false as const,
+      cssVariablePrefix: formatCSSVariablePrefix('token'),
+      tokenizeTimeLimit: 0,
+    };
+    if (custom != null) {
+      // Custom tokenizers return complete lines, so they need no token recalls.
+      // Coalesce small chunks to reduce tokenizer calls while limiting latency.
+      const tokenizer = new custom.StreamTokenizer(options);
+      let pending = '';
+      let lastPushTime = 0;
+      let coalesceTimer: ReturnType<typeof setTimeout> | undefined;
+      let ended = false;
+      // Release the tokenizer and scheduled work on close, abort, or error.
+      const end = () => {
+        if (coalesceTimer !== undefined) {
+          clearTimeout(coalesceTimer);
+          coalesceTimer = undefined;
+        }
+        pending = '';
+        if (ended) return [];
+        ended = true;
+        return tokenizer.end();
+      };
+      const enqueueCompletedLines = (
+        controller: TransformStreamDefaultController<ThemedToken>
+      ) => {
+        if (coalesceTimer !== undefined) {
+          clearTimeout(coalesceTimer);
+          coalesceTimer = undefined;
+        }
+        lastPushTime = performance.now();
+        const lines = tokenizer.pushCode(pending);
+        pending = '';
+        // every line pushCode returns was newline-terminated in the source
+        for (const line of lines) {
+          for (const token of line) {
+            controller.enqueue(token);
+          }
+          controller.enqueue({ content: '\n', offset: 0 });
+        }
+      };
+      const stream = new TransformStream<string, ThemedToken>({
+        transform(chunk, controller) {
+          if (ended) return;
+          pending += chunk;
+          if (!pending.includes('\n')) {
+            return;
+          }
+          const elapsed = performance.now() - lastPushTime;
+          if (
+            pending.length < STREAM_COALESCE_CHARS &&
+            elapsed < STREAM_COALESCE_MS
+          ) {
+            // Hold the completed line for the rest of the coalescing window,
+            // but schedule the flush: if the source pauses, the line must
+            // still paint without waiting for the next chunk or close.
+            coalesceTimer ??= setTimeout(() => {
+              coalesceTimer = undefined;
+              try {
+                if (pending.includes('\n')) {
+                  enqueueCompletedLines(controller);
+                }
+              } catch (error) {
+                controller.error(error);
+                end();
+              }
+            }, STREAM_COALESCE_MS - elapsed);
+            return;
+          }
+          enqueueCompletedLines(controller);
+        },
+        flush(controller) {
+          if (pending !== '') {
+            enqueueCompletedLines(controller);
+          }
+          const lines = end();
+          lines.forEach((line, index) => {
+            for (const token of line) {
+              controller.enqueue(token);
+            }
+            if (index < lines.length - 1) {
+              controller.enqueue({ content: '\n', offset: 0 });
+            }
+          });
+        },
+      });
+      return {
+        stream,
+        dispose: end,
+      };
+    }
+    return {
+      stream: new CodeToTokenTransformStream({
+        ...options,
+        highlighter: highlighter as DiffsHighlighter,
+        allowRecalls: true,
+      }),
+    };
   }
 
   private queuedTokens: (ThemedToken | RecallToken)[] = [];
@@ -260,9 +391,11 @@ export class FileStream {
     }
     if (gutterFragment.childNodes.length > 0) {
       gutter.appendChild(gutterFragment);
+      gutter.style.gridRow = `span ${this.currentRowCount}`;
     }
     if (contentFragment.childNodes.length > 0) {
       content.appendChild(contentFragment);
+      content.style.gridRow = `span ${this.currentRowCount}`;
     }
     this.queuedTokens.length = 0;
     this.options.onPostRender?.(this);
@@ -289,15 +422,6 @@ export class FileStream {
     return { gutter, content };
   }
 
-  private updateRowSpan(): void {
-    if (this.gutterElement != null) {
-      this.gutterElement.style.gridRow = `span ${this.currentRowCount}`;
-    }
-    if (this.contentElement != null) {
-      this.contentElement.style.gridRow = `span ${this.currentRowCount}`;
-    }
-  }
-
   private createLine(): { gutterLine: HTMLElement; contentLine: HTMLElement } {
     const lineNumber = this.currentLineIndex;
     const lineIndex = `${lineNumber - 1}`;
@@ -317,7 +441,6 @@ export class FileStream {
     contentLine.dataset.lineIndex = lineIndex;
 
     this.currentRowCount += 1;
-    this.updateRowSpan();
     this.currentLineElement = contentLine;
     return { gutterLine, contentLine };
   }

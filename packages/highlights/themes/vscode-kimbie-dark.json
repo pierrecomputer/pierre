@@ -1,0 +1,176 @@
+{
+  "name": "Kimbie Dark (VS Code)",
+  "appearance": "dark",
+  "style": {
+    "background": "#221a0fff",
+    "text": "#d3af86ff",
+    "editor.background": "#221a0fff",
+    "editor.foreground": "#d3af86ff",
+    "editor.active_line.background": "#5e452bff",
+    "editor.document_highlight.bracket_background": "#d3af861a",
+    "search.match_background": "#d3af8633",
+    "players": [
+      {
+        "cursor": "#d3af86ff",
+        "selection": "#84613daa"
+      }
+    ],
+    "error": "#f44747ff",
+    "warning": "#cca700ff",
+    "info": "#3794ffff",
+    "hint": "#969696ff",
+    "syntax": {
+      "comment": {
+        "color": "#a57a4cff"
+      },
+      "comment.doc": {
+        "color": "#a57a4cff"
+      },
+      "string": {
+        "color": "#889b4aff"
+      },
+      "string.regex": {
+        "color": "#7e602cff"
+      },
+      "string.escape": {
+        "color": "#7e602cff"
+      },
+      "link_text": {
+        "color": "#dc3958ff"
+      },
+      "number": {
+        "color": "#f79a32ff"
+      },
+      "boolean": {
+        "color": "#f79a32ff"
+      },
+      "constant.builtin": {
+        "color": "#f79a32ff"
+      },
+      "constant": {
+        "color": "#f79a32ff"
+      },
+      "variable": {
+        "color": "#dc3958ff"
+      },
+      "variable.special": {
+        "color": "#dc3958ff"
+      },
+      "variable.parameter": {
+        "color": "#d3af86ff"
+      },
+      "keyword": {
+        "color": "#98676aff"
+      },
+      "operator": {
+        "color": "#d3af86ff"
+      },
+      "type": {
+        "color": "#f06431ff"
+      },
+      "type.builtin": {
+        "color": "#f06431ff"
+      },
+      "function": {
+        "color": "#8ab1b0ff"
+      },
+      "function.builtin": {
+        "color": "#7e602cff"
+      },
+      "tag": {
+        "color": "#dc3958ff"
+      },
+      "attribute": {
+        "color": "#f79a32ff"
+      },
+      "punctuation.special": {
+        "color": "#088649ff"
+      },
+      "punctuation.delimiter": {
+        "color": "#889b4aff"
+      },
+      "punctuation": {
+        "color": "#a57a4cff"
+      },
+      "preproc": {
+        "color": "#8ab1b0ff"
+      },
+      "title": {
+        "color": "#8ab1b0ff",
+        "font_weight": 700
+      },
+      "emphasis.strong": {
+        "color": "#f06431ff",
+        "font_weight": 700
+      },
+      "emphasis": {
+        "color": "#98676aff",
+        "font_style": "italic"
+      },
+      "text.literal": {
+        "color": "#889b4aff"
+      },
+      "enum": {
+        "color": "#f06431ff"
+      },
+      "property": {
+        "color": "#dc3958ff"
+      },
+      "label": {
+        "color": "#dc3958ff"
+      },
+      "constructor": {
+        "color": "#8ab1b0ff"
+      },
+      "namespace": {
+        "color": "#f06431ff"
+      },
+      "diff.minus": {
+        "color": "#dc3958ff"
+      },
+      "diff.plus": {
+        "color": "#889b4aff"
+      },
+      "embedded": {
+        "color": "#d3af86ff"
+      },
+      "selector": {
+        "color": "#dc3958ff"
+      },
+      "selector.pseudo": {
+        "color": "#f79a32ff"
+      },
+      "variant": {
+        "color": "#dc3958ff"
+      },
+      "string.special": {
+        "color": "#889b4aff"
+      },
+      "string.special.symbol": {
+        "color": "#889b4aff"
+      },
+      "punctuation.markup": {
+        "color": "#8ab1b0ff",
+        "font_weight": 700
+      },
+      "primary": {
+        "color": "#d3af86ff"
+      },
+      "link_uri": {
+        "color": "#6e583bff"
+      },
+      "hint": {
+        "color": "#d3af8666"
+      },
+      "predictive": {
+        "color": "#d3af8666"
+      },
+      "punctuation.bracket": {
+        "color": "#a57a4cff"
+      },
+      "punctuation.list_marker": {
+        "color": "#a57a4cff"
+      }
+    }
+  }
+}

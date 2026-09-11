@@ -1,0 +1,178 @@
+{
+  "name": "High Contrast Light (VS Code)",
+  "appearance": "light",
+  "style": {
+    "background": "#ffffffff",
+    "text": "#333333ff",
+    "editor.background": "#ffffffff",
+    "editor.foreground": "#333333ff",
+    "editor.active_line.background": "#3333330a",
+    "editor.document_highlight.bracket_background": "#3333331a",
+    "search.match_background": "#33333333",
+    "players": [
+      {
+        "cursor": "#333333ff",
+        "selection": "#33333333"
+      }
+    ],
+    "error": "#f44747ff",
+    "warning": "#cca700ff",
+    "info": "#3794ffff",
+    "hint": "#969696ff",
+    "syntax": {
+      "comment": {
+        "color": "#515151ff"
+      },
+      "comment.doc": {
+        "color": "#515151ff"
+      },
+      "string": {
+        "color": "#0f4a85ff"
+      },
+      "string.regex": {
+        "color": "#811f3fff"
+      },
+      "string.escape": {
+        "color": "#ee0000ff"
+      },
+      "link_text": {
+        "color": "#0f4a85ff"
+      },
+      "number": {
+        "color": "#096d48ff"
+      },
+      "boolean": {
+        "color": "#0f4a85ff"
+      },
+      "constant.builtin": {
+        "color": "#0f4a85ff"
+      },
+      "constant": {
+        "color": "#0f4a85ff"
+      },
+      "variable": {
+        "color": "#001080ff"
+      },
+      "variable.special": {
+        "color": "#0f4a85ff"
+      },
+      "variable.parameter": {
+        "color": "#001080ff"
+      },
+      "keyword": {
+        "color": "#0f4a85ff"
+      },
+      "operator": {
+        "color": "#000000ff"
+      },
+      "type": {
+        "color": "#185e73ff"
+      },
+      "type.builtin": {
+        "color": "#185e73ff"
+      },
+      "function": {
+        "color": "#5e2cbcff"
+      },
+      "function.builtin": {
+        "color": "#5e2cbcff"
+      },
+      "tag": {
+        "color": "#0f4a85ff"
+      },
+      "attribute": {
+        "color": "#264f78ff"
+      },
+      "punctuation.special": {
+        "color": "#0f4a85ff"
+      },
+      "punctuation.bracket": {
+        "color": "#0f4a85ff"
+      },
+      "punctuation.delimiter": {
+        "color": "#185e73ff"
+      },
+      "punctuation.list_marker": {
+        "color": "#0451a5ff"
+      },
+      "punctuation": {
+        "color": "#0451a5ff"
+      },
+      "preproc": {
+        "color": "#0f4a85ff"
+      },
+      "title": {
+        "color": "#0f4a85ff",
+        "font_weight": 700
+      },
+      "emphasis.strong": {
+        "color": "#000080ff",
+        "font_weight": 700
+      },
+      "emphasis": {
+        "color": "#800080ff",
+        "font_style": "italic"
+      },
+      "text.literal": {
+        "color": "#0f4a85ff"
+      },
+      "enum": {
+        "color": "#185e73ff"
+      },
+      "property": {
+        "color": "#001080ff"
+      },
+      "label": {
+        "color": "#0f4a85ff"
+      },
+      "constructor": {
+        "color": "#5e2cbcff"
+      },
+      "namespace": {
+        "color": "#185e73ff"
+      },
+      "diff.minus": {
+        "color": "#5a5a5aff"
+      },
+      "diff.plus": {
+        "color": "#096d48ff"
+      },
+      "embedded": {
+        "color": "#292929ff"
+      },
+      "selector": {
+        "color": "#0f4a85ff"
+      },
+      "selector.pseudo": {
+        "color": "#264f78ff"
+      },
+      "variant": {
+        "color": "#02715dff"
+      },
+      "string.special": {
+        "color": "#0f4a85ff"
+      },
+      "punctuation.markup": {
+        "color": "#0451a5ff"
+      },
+      "property.json_key": {
+        "color": "#0451a5ff"
+      },
+      "primary": {
+        "color": "#333333ff"
+      },
+      "link_uri": {
+        "color": "#007accff"
+      },
+      "hint": {
+        "color": "#33333366"
+      },
+      "predictive": {
+        "color": "#33333366"
+      },
+      "string.special.symbol": {
+        "color": "#0f4a85ff"
+      }
+    }
+  }
+}

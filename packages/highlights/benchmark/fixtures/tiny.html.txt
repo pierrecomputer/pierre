@@ -1,0 +1,50 @@
+<!-- https://github.com/vercel/next.js/blob/1c50e09d1dc3f5be50c5e2f9b99816ad47e11f05/examples/with-stencil/packages/test-component/src/index.html -->
+<!doctype html>
+<html dir="ltr" lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=5.0"
+    />
+    <title>Stencil Component Starter</title>
+
+    <script type="module" src="/build/test-component.esm.js"></script>
+    <script nomodule src="/build/test-component.js"></script>
+    <style>
+      :root { color-scheme: light dark; font-family: system-ui, sans-serif; }
+      body { margin: 0; background: #f8fafc; color: #172033; }
+      main { width: min(42rem, 90%); margin: 3rem auto; }
+      .card { padding: 1.5rem; border: 1px solid #ccd4e0; border-radius: 0.75rem; }
+      [data-status="ready"] { color: #087f5b; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <h1>Web component preview</h1>
+        <p>A small page with markup, styles, scripts &amp; custom elements.</p>
+      </header>
+      <section class="card" aria-labelledby="preview-title">
+        <h2 id="preview-title">Hello &lt;developer&gt;</h2>
+        <my-component
+          first="Stencil"
+          last="Don't call me a framework' JS"
+        ></my-component>
+        <ul>
+          <li data-status="ready">Module build ready</li>
+          <li>Legacy build available</li>
+        </ul>
+        <form action="/components" method="get">
+          <label for="query">Filter components</label>
+          <input id="query" name="query" type="search" placeholder="button" />
+          <button type="submit">Search</button>
+        </form>
+      </section>
+    </main>
+    <script>
+      const component = document.querySelector("my-component");
+      component.addEventListener("componentReady", () => component.setAttribute("ready", ""));
+    </script>
+  </body>
+</html>

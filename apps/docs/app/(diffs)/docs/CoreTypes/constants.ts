@@ -87,8 +87,8 @@ interface FileDiffMetadata {
   oldLines?: string[];
   newLines?: string[];
 
-  // Optional: Cache key for AST caching in Worker Pool.
-  // When provided, rendered diff AST results are cached and reused.
+  // Optional: Cache key for token caching in Worker Pool.
+  // When provided, highlighted diff tokens are cached and reused.
   // IMPORTANT: The key must change whenever the diff changes!
   cacheKey?: string;
 }
@@ -189,7 +189,7 @@ export const PARSE_DIFF_FROM_FILE_EXAMPLE: PreloadFileOptions<
 const oldFile: FileContents = {
   name: 'greeting.ts',
   contents: 'export const greeting = "Hello";',
-  cacheKey: 'greeting-old', // Optional: enables AST caching
+  cacheKey: 'greeting-old', // Optional: enables token caching
 };
 
 const newFile: FileContents = {
@@ -211,7 +211,7 @@ const deletedFileDiff = parseDiffFromFile(oldFile, null);
 // The resulting diff includes oldLines and newLines,
 // which enables "expand unchanged" functionality in the UI.
 // If both existing versions have cacheKey, the diff will have a combined
-// cacheKey of "greeting-old:greeting-new" for AST caching.`,
+// cacheKey of "greeting-old:greeting-new" for token caching.`,
   },
   options,
 };
@@ -238,7 +238,7 @@ const patchString = \`--- a/file.ts
  const z = 4;\`;
 
 // Returns an array of ParsedPatch objects (one per commit in the patch)
-// Pass an optional cacheKeyPrefix to enable AST caching with Worker Pool
+// Pass an optional cacheKeyPrefix to enable token caching with Worker Pool
 const patches: ParsedPatch[] = parsePatchFiles(patchString, 'my-patch-key');
 
 // Each ParsedPatch contains an array of FileDiffMetadata
@@ -246,7 +246,7 @@ const files: FileDiffMetadata[] = patches[0].files;
 
 // With cacheKeyPrefix, each diff gets a cacheKey like "my-patch-0",
 // "my-patch-1", etc.
-// This enables AST caching in Worker Pool for parsed patches.
+// This enables token caching in Worker Pool for parsed patches.
 
 // Note: Diffs from patch files don't include oldLines/newLines.
 // Renderers can hydrate them with loadDiffFiles when full file

@@ -666,10 +666,10 @@ describe('parsePatchFiles', () => {
         for (const file of patch.files) {
           if (file.hunks.length === 0) continue;
           const renderer = new DiffHunksRenderer({ diffStyle: 'unified' });
-          const { unifiedContentAST } = await renderer.asyncRender(file);
+          const { unifiedContentRows } = await renderer.asyncRender(file);
           assertDefined(
-            unifiedContentAST,
-            'unifiedContentAST should be defined'
+            unifiedContentRows,
+            'unifiedContentRows should be defined'
           );
           // In 'unified' style we stack all output as context, deletions,
           // additions. Lets ensure we are mathing correctly and rendering to
@@ -679,7 +679,7 @@ describe('parsePatchFiles', () => {
             0
           );
           expect(expectedUnifiedLines).toBe(
-            countRenderedLines(unifiedContentAST)
+            countRenderedLines(unifiedContentRows)
           );
         }
       }

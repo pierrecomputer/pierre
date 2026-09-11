@@ -1,19 +1,35 @@
 import type { CreatePatchOptionsNonabortable } from 'diff';
-import type { ElementContent } from 'hast';
 import type {
   BundledLanguage,
   BundledTheme,
-  CodeToHastOptions,
-  DecorationItem,
   HighlighterGeneric,
   LanguageRegistration,
-  ShikiTransformer,
-  ThemedToken,
+  ThemedToken as ShikiThemedToken,
   ThemeRegistration,
   ThemeRegistrationResolved,
 } from 'shiki';
 
 export type { CreatePatchOptionsNonabortable };
+
+export type HTMLAttributes = Record<
+  string,
+  string | number | boolean | (string | number)[] | null | undefined
+>;
+
+/** Rendered row content and attributes used when composing columns. */
+export interface RenderedLine {
+  html: string;
+  properties: HTMLAttributes;
+}
+
+export type RenderedRow = string | RenderedLine;
+
+/** Rows stay separate so partial rendering can merge adjacent buffers. */
+export interface RenderedColumn {
+  gutter: RenderedRow[];
+  content: RenderedRow[];
+  rowCount: number;
+}
 
 export type CodeViewScrollBehavior = 'instant' | 'smooth' | 'smooth-auto';
 
@@ -67,15 +83,16 @@ export type HighlighterTypes = 'shiki-js' | 'shiki-wasm';
 
 export type HighlightedToken = [char: number, fg: string, text: string];
 
+/** Shared token shape; custom highlighters may supply additional font flags. */
+export type ThemedToken = Omit<ShikiThemedToken, 'fontStyle'> & {
+  fontStyle?: number;
+};
+
 export type {
   BundledLanguage,
-  CodeToHastOptions,
-  DecorationItem,
   LanguageRegistration,
-  ShikiTransformer,
   ThemeRegistrationResolved,
   ThemeRegistration,
-  ThemedToken,
 };
 
 // Diffs accepts Shiki's bundled theme names and any additional theme name a
@@ -86,7 +103,7 @@ export type ThemesType = Record<'dark' | 'light', DiffsThemeNames>;
 
 /**
  * A Shiki highlighter instance configured with the library's supported
- * languages and themes. Used internally to generate syntax-highlighted AST
+ * languages and themes. Used internally to generate syntax-highlighted HTML
  * from file contents. By default diffs will ensure that only 1 highlighter is
  * instantiated per thread and shared for all syntax highlighting.  This
  * applies to the main thread and worker threads.
@@ -479,9 +496,7 @@ export type BaseDiffOptionsWithDefaults = Required<
 
 export type CustomPreProperties = Record<string, string | number | undefined>;
 
-// NOTE(amadeus): This is the shared config that all `pre` nodes will need to
-// get setup properly. Whether it's via direct DOM manipulation or via HAST
-// html rendering, this interface can be shared across both of these areas.
+// Shared configuration for pre elements created through DOM or HTML rendering.
 export interface PrePropertiesConfig extends Required<
   Pick<
     BaseDiffOptions,
@@ -666,10 +681,6 @@ export interface LineInfo {
   lineIndex: number | `${number},${number}`;
 }
 
-export interface SharedRenderState {
-  lineInfo: (LineInfo | undefined)[] | ((shikiLineNumber: number) => LineInfo);
-}
-
 export interface AnnotationSpan {
   type: 'annotation';
   hunkIndex: number;
@@ -754,14 +765,21 @@ export type AnnotationLineMap<LAnnotation> = Record<
 export type ExpansionDirections = 'up' | 'down' | 'both';
 
 export interface ThemedFileResult {
-  code: ElementContent[];
+  /**
+   * Tokens by document line; windows may be sparse. Full renders use absolute
+   * UTF-16 offsets. Edited caches may contain line-relative offsets; rendering
+   * derives each token's column from its content.
+   */
+  code: ThemedToken[][];
   themeStyles: string;
   baseThemeType: 'light' | 'dark' | undefined;
 }
 
 export interface RenderDiffFilesResult {
-  deletionLines: ElementContent[];
-  additionLines: ElementContent[];
+  /** Old-file tokens; full renders use absolute offsets, edited caches may not. */
+  deletionLines: ThemedToken[][];
+  /** New-file tokens; rendering derives columns from content, not offsets. */
+  additionLines: ThemedToken[][];
 }
 
 export interface ThemedDiffResult {
@@ -815,7 +833,7 @@ export interface RenderDiffResult {
   options: RenderDiffOptions;
 }
 
-export interface RenderedFileASTCache {
+export interface RenderedFileCache {
   file: FileContents;
   highlighted: boolean;
   options: RenderFileOptions;
@@ -824,7 +842,7 @@ export interface RenderedFileASTCache {
   isDirty?: boolean;
 }
 
-export interface RenderedDiffASTCache {
+export interface RenderedDiffCache {
   diff: FileDiffMetadata;
   highlighted: boolean;
   options: RenderDiffOptions;
@@ -836,7 +854,7 @@ export interface RenderedDiffASTCache {
 /**
  * A window of rendered content. Two unit interpretations exist:
  *
- * - Renderer consumers (`iterateOverDiff` window predicates, windowed AST
+ * - Renderer consumers (`iterateOverDiff` window predicates, windowed HTML
  *   requests, buffers, sticky specs) read `startingLine`/`totalLines` as
  *   dense rendered-row indexes for the active diff style.
  * - The editor reads them as zero-based document-line indexes of the new
@@ -977,4 +995,11 @@ export interface AppliedThemeStyleCache {
 export interface StickySpecs {
   topOffset: number;
   height: number;
+}
+
+/** A line-relative range highlighted by a word or character diff. */
+export interface DecorationItem {
+  start: { line: number; character: number };
+  end: { line: number; character: number };
+  properties?: HTMLAttributes;
 }

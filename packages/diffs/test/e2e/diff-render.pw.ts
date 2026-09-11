@@ -1,5 +1,7 @@
 import { expect, type Page, test } from '@playwright/test';
 
+import type { FileDiff } from '../../src/components/FileDiff';
+
 // Playwright CSS locators pierce the open shadow root, so all selectors below
 // resolve against the `diffs-container` shadow DOM without extra ceremony.
 const ADDITIONS = '[data-code][data-additions] [data-content]';
@@ -11,6 +13,43 @@ async function openFixture(page: Page): Promise<void> {
 }
 
 test.describe('diff rendering', () => {
+  test('rounds only the ends of changed ranges across interactive tokens', async ({
+    page,
+  }) => {
+    await openFixture(page);
+    await page.evaluate(() => {
+      const { instance } = Reflect.get(window, '__diffFixture') as {
+        instance: FileDiff;
+      };
+      instance.setOptions({ ...instance.options, useTokenTransformer: true });
+      instance.rerender();
+    });
+    const continued = page.locator('[data-diff-span-end="continued"]');
+    await expect(continued.first()).toBeVisible();
+    const spans = await page
+      .locator('[data-diff-span]')
+      .evaluateAll((elements) =>
+        elements.map((element) => {
+          const style = getComputedStyle(element);
+          return {
+            continuedStart: element.hasAttribute('data-diff-span-start'),
+            continuedEnd: element.hasAttribute('data-diff-span-end'),
+            start: [style.borderStartStartRadius, style.borderEndStartRadius],
+            end: [style.borderStartEndRadius, style.borderEndEndRadius],
+          };
+        })
+      );
+    expect(spans.some((span) => span.continuedStart)).toBe(true);
+    for (const span of spans) {
+      expect(span.start).toEqual(
+        span.continuedStart ? ['0px', '0px'] : ['3px', '3px']
+      );
+      expect(span.end).toEqual(
+        span.continuedEnd ? ['0px', '0px'] : ['3px', '3px']
+      );
+    }
+  });
+
   test('renders additions and deletions with the expected line types', async ({
     page,
   }) => {

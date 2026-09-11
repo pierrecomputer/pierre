@@ -1,7 +1,7 @@
 import { type IGrammar, type StateStack } from 'shiki/textmate';
 
 import { TextDocument } from '../src/editor/textDocument';
-import { EditorTokenizer } from '../src/editor/tokenizer';
+import { ShikiEditorTokenizer } from '../src/editor/tokenizer';
 import type { DiffsHighlighter, RenderRange } from '../src/types';
 
 interface BenchmarkConfig {
@@ -195,7 +195,7 @@ function createTokenizer(
     systemTheme?: boolean;
     onThemeChange?: () => void;
   } = {}
-): EditorTokenizer {
+): ShikiEditorTokenizer {
   const grammar = {
     tokenizeLine2(_lineText: string, ruleStack: StateStack) {
       counters.grammarCalls++;
@@ -218,7 +218,7 @@ function createTokenizer(
       };
     },
   } as unknown as DiffsHighlighter;
-  return new EditorTokenizer({
+  return new ShikiEditorTokenizer({
     highlighter,
     textDocument,
     codeOptions:
@@ -236,7 +236,7 @@ function createTokenizer(
 }
 
 function primeTokenizer(
-  tokenizer: EditorTokenizer,
+  tokenizer: ShikiEditorTokenizer,
   textDocument: TextDocument<unknown>,
   renderRange?: RenderRange
 ): void {
@@ -786,7 +786,7 @@ function main(): void {
     summarize(benchmarkCase, samples[index])
   );
   const result = {
-    benchmark: 'EditorTokenizer',
+    benchmark: 'ShikiEditorTokenizer',
     config,
     measurement: {
       setupExcluded: true,
@@ -804,7 +804,7 @@ function main(): void {
     return;
   }
 
-  console.log('EditorTokenizer benchmark');
+  console.log('ShikiEditorTokenizer benchmark');
   console.log(
     `lines=${config.lines} runsPerCase=${config.runs} warmupRunsPerCase=${config.warmupRuns}`
   );

@@ -7,6 +7,8 @@ import {
   getSharedHighlighter,
   parseDiffFromFile,
 } from '../src';
+import { setHighlighter } from '../src/highlighter/code_highlighter';
+import { shikiHighlighter } from '../src/highlighter/shiki_highlighter';
 import { assertDefined, createDeferred } from './testUtils';
 
 beforeEach(disposeHighlighter);
@@ -131,6 +133,47 @@ describe('DiffHunksRenderer language loading without workers', () => {
         }
       } finally {
         renderer.cleanUp();
+      }
+    });
+  }
+
+  for (const method of ['asyncRender', 'renderDiff'] as const) {
+    test(`${method} loads a renamed source grammar through a custom highlighter`, async () => {
+      const highlighter = await getSharedHighlighter({
+        themes: [options.theme],
+        langs: [javascript.language],
+      });
+      const custom = { ...shikiHighlighter, name: 'custom' };
+      const languages: (string | undefined)[] = [];
+      const tokenize = spyOn(custom, 'codeToTokens').mockImplementation(
+        (code, options) => {
+          languages.push(options.lang);
+          return shikiHighlighter.codeToTokens(code, options);
+        }
+      );
+      const updated = createDeferred<void>();
+      const renderer = new DiffHunksRenderer(options, undefined, () => {
+        updated.resolve();
+      });
+      setHighlighter(custom);
+      try {
+        expect(highlighter.getLoadedLanguages()).not.toContain(python.language);
+        const diff = parseDiffFromFile(python, javascript);
+        if (method === 'asyncRender') {
+          await renderer.asyncRender(diff);
+        } else {
+          renderer.renderDiff(diff);
+          await updated.promise;
+        }
+        expect(highlighter.getLoadedLanguages()).toContain(python.language);
+        expect(highlighter.getLoadedLanguages()).toContain(javascript.language);
+        expect(languages).toEqual(
+          expect.arrayContaining([python.language, javascript.language])
+        );
+      } finally {
+        renderer.cleanUp();
+        tokenize.mockRestore();
+        setHighlighter(shikiHighlighter);
       }
     });
   }
