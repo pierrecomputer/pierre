@@ -486,6 +486,8 @@ export class DiffLayout<LAnnotation = undefined> {
             lineType,
             additionLineIndex: additionLine?.lineIndex,
             deletionLineIndex: deletionLine?.lineIndex,
+            additionLineNumber: additionLine?.lineNumber,
+            deletionLineNumber: deletionLine?.lineNumber,
           });
           const lineIndexText = `${unifiedLineIndex},${splitLineIndex}`;
           // A unified row shows the new line when there is one.
@@ -557,11 +559,13 @@ export class DiffLayout<LAnnotation = undefined> {
             side: 'deletions',
             type,
             lineIndex: deletionLine?.lineIndex,
+            lineNumber: deletionLine?.lineNumber,
           });
           const additionDecoration = host.getSplitLineDecoration({
             side: 'additions',
             type,
             lineIndex: additionLine?.lineIndex,
+            lineNumber: additionLine?.lineNumber,
           });
 
           const missingSide =

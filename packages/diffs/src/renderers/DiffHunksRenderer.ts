@@ -44,7 +44,6 @@ import type {
   BaseCodeOptions,
   BaseDiffOptions,
   BaseDiffOptionsWithDefaults,
-  BaseLineTypes,
   CustomPreProperties,
   DiffLineAnnotation,
   DiffsHighlighter,
@@ -54,6 +53,7 @@ import type {
   HighlightedToken,
   HunkData,
   HunkExpansionRegion,
+  LineTypes,
   RenderDiffOptions,
   RenderDiffResult,
   RenderedDiffASTCache,
@@ -80,6 +80,11 @@ import { endsWithNewline } from '../utils/iterateOverDiff';
 import { renderDiffWithHighlighter } from '../utils/renderDiffWithHighlighter';
 import { reportEditWithoutTokenTransformer } from '../utils/reportEditWithoutTokenTransformer';
 import { resolvePreferredHighlighter } from '../utils/resolvePreferredHighlighter';
+import {
+  createSemanticDiffLineLookup,
+  getSemanticDiffLine,
+  type SemanticDiffLineLookup,
+} from '../utils/semanticDiffLines';
 import type { WorkerPoolManager } from '../worker';
 import { isHandledWorkerPoolError } from '../worker/errors';
 
@@ -165,6 +170,11 @@ export interface HunksRenderResult {
   bufferAfter: number;
 }
 
+interface SemanticLineCache {
+  diff: FileDiffMetadata;
+  lookup: SemanticDiffLineLookup;
+}
+
 let instanceId = -1;
 
 export class DiffHunksRenderer<LAnnotation = undefined> {
@@ -174,6 +184,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
   // intentionally keep displaying an older highlighted diff while this one
   // is highlighted in the background.
   private diff: FileDiffMetadata | undefined;
+  private semanticLineCache: SemanticLineCache | undefined;
 
   private expandedHunks = new Map<number, HunkExpansionRegion>();
 
@@ -222,6 +233,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
 
   public recycle(): void {
     this.diff = undefined;
+    this.semanticLineCache = undefined;
     if (this.editSessionActive) {
       // A recycled editor keeps its document and undo history while offscreen,
       // so its rows and model are kept with it.
@@ -673,36 +685,84 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     }
   }
 
+  // Reuse the prepared source ranges as the viewport or diff style changes.
+  private prepareSemanticLines(diff: FileDiffMetadata): void {
+    const { semanticOperations } = diff;
+    if (semanticOperations == null) {
+      this.semanticLineCache = undefined;
+      return;
+    }
+    const { semanticLineCache: cached } = this;
+    // If we've already computed the semantic lookup, based whether diff has
+    // changed or not, lets early return if we've done the work before
+    if (
+      cached != null &&
+      (((cached.diff.cacheKey != null || diff.cacheKey != null) &&
+        cached.diff.cacheKey === diff.cacheKey) ||
+        cached.diff === diff)
+    ) {
+      return;
+    }
+    this.semanticLineCache = {
+      diff,
+      lookup: createSemanticDiffLineLookup(semanticOperations),
+    };
+  }
+
+  // Use the supplied semantic line type for source rows and gutter numbers.
+  private getSourceLineDecoration(
+    hunkLineType: LineTypes,
+    side: 'additions' | 'deletions',
+    lineNumber: number | undefined
+  ): LineDecoration {
+    const { semanticLineCache } = this;
+    if (semanticLineCache == null || lineNumber == null) {
+      return {
+        gutterLineType: hunkLineType,
+        contentProperties: { 'data-line-type': hunkLineType },
+      };
+    }
+    const line = getSemanticDiffLine(
+      semanticLineCache.lookup,
+      side,
+      lineNumber
+    );
+    const lineType =
+      line?.lineType ??
+      (hunkLineType === 'context-expanded' ? 'context-expanded' : 'context');
+    return {
+      gutterLineType: lineType,
+      contentProperties: { 'data-line-type': lineType },
+    };
+  }
+
   // The decoration and injected-row hooks feed the layout, which reuses rows
   // whose inputs are the same values as last render. What they return is
   // treated as immutable once returned; return a new object to change a row.
   public getUnifiedLineDecoration({
     lineType,
+    additionLineNumber,
+    deletionLineNumber,
   }: UnifiedLineDecorationProps): LineDecoration {
-    return {
-      gutterLineType: lineType,
-      contentProperties: {
-        'data-line-type': lineType,
-      },
-    };
+    return this.getSourceLineDecoration(
+      lineType,
+      additionLineNumber != null ? 'additions' : 'deletions',
+      additionLineNumber ?? deletionLineNumber
+    );
   }
 
   public getSplitLineDecoration({
     side,
     type,
+    lineNumber,
   }: SplitLineDecorationProps): LineDecoration {
-    const lineType: BaseLineTypes =
+    const lineType: LineTypes =
       type === 'change'
         ? side === 'deletions'
           ? 'change-deletion'
           : 'change-addition'
         : type;
-    return {
-      gutterLineType: lineType,
-      contentProperties: {
-        'data-line-type': lineType,
-      },
-    };
+    return this.getSourceLineDecoration(lineType, side, lineNumber);
   }
 
   public createAnnotationElement(span: AnnotationSpan): HASTElement {
@@ -1467,6 +1527,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
   ): HunksRenderResult {
     const { themeStyles, baseThemeType } = result;
     const { disableFileHeader } = this.getOptionsWithDefaults();
+    this.prepareSemanticLines(diff);
     const layout = this.layoutWithOptions(diff);
     const model =
       this.model?.diff === diff

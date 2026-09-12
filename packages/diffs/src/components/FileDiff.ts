@@ -543,6 +543,8 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
       // If we've selected a line between or before a hunk,
       // we should grab its index here
       if (lineNumber < currentLineNumber) {
+        // A partial patch has no source rows outside its stored hunks.
+        if (fileDiff.isPartial) return undefined;
         const difference = currentLineNumber - lineNumber;
         targetUnifiedIndex = Math.max(unifiedIndex - difference, 0);
         targetSplitIndex = Math.max(splitIndex - difference, 0);
@@ -551,6 +553,7 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
 
       if (lineNumber >= currentLineNumber + hunkCount) {
         if (hunk === lastHunk) {
+          if (fileDiff.isPartial) return undefined;
           const difference = lineNumber - (currentLineNumber + hunkCount);
           targetUnifiedIndex =
             unifiedIndex + hunk.unifiedLineCount + difference;
