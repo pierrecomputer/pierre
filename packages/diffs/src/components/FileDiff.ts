@@ -534,6 +534,13 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
     lineNumber: number,
     side: SelectionSide
   ): [number, number] | undefined {
+    // A partial patch has no source rows outside its stored hunks.
+    if (
+      fileDiff?.isPartial === true &&
+      !isLineInHunks(fileDiff, lineNumber, side)
+    ) {
+      return undefined;
+    }
     return getLineIndexForDiff(fileDiff, lineNumber, side);
   }
 
@@ -3446,6 +3453,24 @@ interface HasContentProps {
   fileDiff: FileDiffMetadata | undefined;
   oldFile: FileContents | null | undefined;
   newFile: FileContents | null | undefined;
+}
+
+// Whether a one-based line of one side is inside one of the diff's hunks.
+function isLineInHunks(
+  fileDiff: FileDiffMetadata,
+  lineNumber: number,
+  side: SelectionSide
+): boolean {
+  for (const hunk of fileDiff.hunks) {
+    const [start, end] = getHunkLineRange(hunk, side);
+    if (lineNumber < start) {
+      return false;
+    }
+    if (lineNumber < end) {
+      return true;
+    }
+  }
+  return false;
 }
 
 function getAdditionFile(fileDiff: FileDiffMetadata): FileContents {
