@@ -1311,9 +1311,15 @@ export function FileTreeView({
     item: FileTreeContextMenuItem;
     path: string;
     source: 'button' | 'keyboard' | 'right-click';
+    // Monotonic open-generation token identifying this menu instance. A
+    // superseded menu's async close() carries the token it was opened with, so
+    // a stale close cannot tear down the menu that replaced it (#664).
+    token: number;
   } | null>(null);
   const contextMenuStateRef = useRef(contextMenuState);
   contextMenuStateRef.current = contextMenuState;
+  // Bumped on every open so each opened menu gets a unique identity token.
+  const contextMenuOpenTokenRef = useRef(0);
 
   const pendingStickyFocusPathRef = useRef<string | null>(null);
   const pendingStickyKeyboardFocusPathRef = useRef<string | null>(null);
@@ -1587,13 +1593,24 @@ export function FileTreeView({
   const restoreFocusToTreeRef = useRef(restoreFocusToTree);
   restoreFocusToTreeRef.current = restoreFocusToTree;
   const shouldRestoreContextMenuFocusRef = useRef(true);
-  const closeContextMenuRef = useRef<(restoreFocus?: boolean) => void>(
-    () => {}
-  );
+  const closeContextMenuRef = useRef<
+    (restoreFocus?: boolean, expectedToken?: number) => void
+  >(() => {});
   const closeContextMenu = useCallback(
-    (restoreFocus: boolean = true): void => {
+    (restoreFocus: boolean = true, expectedToken?: number): void => {
       const currentContextMenuState = contextMenuStateRef.current;
       if (currentContextMenuState == null) {
+        return;
+      }
+
+      // Ignore a close() issued by a superseded menu instance. Sequential
+      // right-clicks open a new menu (new token) before the previous menu's
+      // consumer layer fires its async onOpenChange(false); only the menu that
+      // is currently open may close itself (#664).
+      if (
+        expectedToken != null &&
+        expectedToken !== currentContextMenuState.token
+      ) {
         return;
       }
 
@@ -1652,11 +1669,13 @@ export function FileTreeView({
       item.focus();
       updateTriggerPosition(anchorButton);
       shouldRestoreContextMenuFocusRef.current = true;
+      contextMenuOpenTokenRef.current += 1;
       setContextMenuState({
         anchorRect: options?.anchorRect ?? null,
         item: createContextMenuItem(row, targetPath),
         path: targetPath,
         source: options?.source ?? 'keyboard',
+        token: contextMenuOpenTokenRef.current,
       });
     },
     [controller, getTriggerAnchorButton, updateTriggerPosition]
@@ -2918,7 +2937,12 @@ export function FileTreeView({
         currentState.anchorRect ??
         serializeAnchorRect(anchorElement.getBoundingClientRect()),
       close: (options) => {
-        closeContextMenuRef.current(options?.restoreFocus ?? true);
+        // Capture this menu instance's token so a close() from a menu that has
+        // since been superseded by a sequential right-click is ignored (#664).
+        closeContextMenuRef.current(
+          options?.restoreFocus ?? true,
+          currentState.token
+        );
       },
       restoreFocus: () => {
         if (!shouldRestoreContextMenuFocusRef.current) {
@@ -3612,6 +3636,7 @@ export function FileTreeView({
 
     updateTriggerPosition(triggerButton);
     shouldRestoreContextMenuFocusRef.current = true;
+    contextMenuOpenTokenRef.current += 1;
     setContextMenuState({
       anchorRect: null,
       item: {
@@ -3621,6 +3646,7 @@ export function FileTreeView({
       },
       path: triggerItem.getPath(),
       source: 'button',
+      token: contextMenuOpenTokenRef.current,
     });
   };
 
