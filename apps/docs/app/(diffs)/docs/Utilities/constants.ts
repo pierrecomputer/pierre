@@ -215,7 +215,7 @@ export const HELPER_REGISTER_CUSTOM_LANGUAGE: PreloadFileOptions<
     contents: `import { registerCustomLanguage } from '@pierre/diffs';
 
 // Register a custom Shiki language loader before rendering.
-// The language name you register becomes available to Shiki.
+// my-lang.tmLanguage.json must declare "my-lang" as its name or an alias.
 
 // Option 1: Dynamic import (recommended for code splitting)
 registerCustomLanguage('my-lang', () => import('./my-lang.tmLanguage.json'), [

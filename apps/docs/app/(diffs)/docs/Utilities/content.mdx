@@ -138,6 +138,21 @@ Register a custom Shiki language loader and optionally map it to file names or
 extensions. Use this when you're working with languages not bundled by Shiki or
 want custom highlighting grammars.
 
+The grammar file or object returned by your loader has a `name` field and can
+have an `aliases` array. An alias is an additional language ID that uses the
+same highlighting rules. For example, Terraform's grammar has
+`name: 'terraform'` and `aliases: ['tf', 'tfvars']`, so Shiki accepts all three
+IDs (or `lang`/`language`) for that grammar.
+
+The first argument to `registerCustomLanguage` must match the grammar's `name`
+or an entry in its `aliases` array. Registering a loader does not change these
+fields. The optional filename and extension mappings tell Diffs which language
+ID to request; they do not add aliases to the grammar.
+
+If Shiki has already loaded a grammar under its `name`, loading another copy
+with extra aliases will not add them. Load your custom grammar before the
+original, or give your custom grammar a distinct `name` field.
+
 <DocsCodeExample {...registerCustomLanguage} />
 
 ### setLanguageOverride [toc-ignore]

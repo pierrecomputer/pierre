@@ -1060,6 +1060,13 @@ export class WorkerPoolManager {
         }
         throw error;
       } else {
+        // A failed request may not have attached its languages. Only remember
+        // them after success so later tasks resend grammars that were rejected.
+        if (isRenderTask(task)) {
+          for (const { name } of task.request.resolvedLanguages ?? []) {
+            managedWorker.langs.add(name);
+          }
+        }
         switch (response.requestType) {
           case 'initialize':
             if (task.type !== 'initialize') {
@@ -1180,9 +1187,6 @@ export class WorkerPoolManager {
     }
     if (!this.activeTaskById.has(task.id)) {
       this.assignWorkerToTask(task, managedWorker);
-    }
-    for (const lang of getLangsFromTask(task)) {
-      managedWorker.langs.add(lang);
     }
     try {
       // postMessage clones the request now, so keep the matching cache key on
