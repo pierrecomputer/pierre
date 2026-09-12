@@ -400,16 +400,14 @@
             (local.set $p (i32.add (local.get $p) (i32.const 1)))
             (call $recLineWrite (i32.const -1) (local.get $char)))
           (else
-            (local.set $step (i32.const 1))
-            (if (i32.ge_u (local.get $b) (i32.const 0x80))
+            ;; The mask selects only LF or non-ASCII bytes.
+            (local.set $step (i32.const 2))
+            (if (i32.ge_u (local.get $b) (i32.const 0xe0))
+              (then (local.set $step (i32.const 3))))
+            (if (i32.ge_u (local.get $b) (i32.const 0xf0))
               (then
-                (local.set $step (i32.const 2))
-                (if (i32.ge_u (local.get $b) (i32.const 0xe0))
-                  (then (local.set $step (i32.const 3))))
-                (if (i32.ge_u (local.get $b) (i32.const 0xf0))
-                  (then
-                    (local.set $step (i32.const 4))
-                    (local.set $char (i32.add (local.get $char) (i32.const 1)))))))
+                (local.set $step (i32.const 4))
+                (local.set $char (i32.add (local.get $char) (i32.const 1)))))
             (local.set $p (i32.add (local.get $p) (local.get $step)))
             (local.set $char (i32.add (local.get $char) (i32.const 1)))))
         (br $scan)))

@@ -53,30 +53,21 @@
             (i32.const -1))
           (then (unreachable))))))
 
-  ;; size class of a total block size (8-aligned, >= 16). Classes are 8-byte
-  ;; steps up to 64 and quarter-power-of-two steps above, list 31 collects
-  ;; blocks above 64 KiB.
+  ;; Class of a total block size already rounded by $lvRoundSize. Classes
+  ;; use 8-byte steps through 64, then quarter-power-of-two steps; class 31
+  ;; collects blocks above 64 KiB.
   (func $lvClassOf (param $size i32) (result i32)
     (local $p i32)
-    (local $quarter i32)
     (if (i32.le_u (local.get $size) (i32.const 64))
-      (then (return (i32.shr_u (i32.add (local.get $size) (i32.const 7)) (i32.const 3)))))
+      (then (return (i32.shr_u (local.get $size) (i32.const 3)))))
     (local.set $p (i32.sub (i32.const 32) (i32.clz (i32.sub (local.get $size) (i32.const 1)))))
     (if (i32.ge_u (local.get $p) (i32.const 17))
       (then (return (i32.const 31))))
-    (local.set $quarter (i32.shl (i32.const 1) (i32.sub (local.get $p) (i32.const 2))))
-    ;; round up to a quarter step, then map the step to one of two subclasses
-    ;; above the 8-byte classes: sizes 3<<(p-2) and 4<<(p-2) take 9+(p-7)*2
-    ;; and 10+(p-7)*2, so every class holds exactly one block size
+    ;; Rounded sizes have three or four quarters, mapping to the two
+    ;; classes at this power of two without rounding again.
     (i32.add
-      (i32.add (i32.const 8) (i32.shl (i32.sub (local.get $p) (i32.const 7)) (i32.const 1)))
-      (i32.sub
-        (i32.shr_u
-          (i32.and
-            (i32.add (local.get $size) (i32.sub (local.get $quarter) (i32.const 1)))
-            (i32.sub (i32.const 0) (local.get $quarter)))
-          (i32.sub (local.get $p) (i32.const 2)))
-        (i32.const 2))))
+      (i32.add (i32.const 6) (i32.shl (i32.sub (local.get $p) (i32.const 7)) (i32.const 1)))
+      (i32.shr_u (local.get $size) (i32.sub (local.get $p) (i32.const 2)))))
 
   ;; round a total block size up to its class size
   (func $lvRoundSize (param $size i32) (result i32)

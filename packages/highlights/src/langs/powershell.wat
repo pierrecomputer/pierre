@@ -214,7 +214,6 @@
   (func $hlPowershell
     (local $c i32)
     (local $c2 i32)
-    (local $c3 i32)
     (local $gap i32)
     (local $lhs i32)
     (local $rhs i32)
@@ -281,7 +280,6 @@
         (local.set $lhs (global.get $ptr))
         (local.set $c (i32.load8_u (global.get $ptr)))
         (local.set $c2 (call $psByte (i32.add (global.get $ptr) (i32.const 1))))
-        (local.set $c3 (call $psByte (i32.add (global.get $ptr) (i32.const 2))))
 
         (if (i32.eq (local.get $c) (i32.const "#"))
           (then

@@ -1,26 +1,33 @@
 # Highlights themes
 
-Highlights bundles themes matching all 65 IDs, names, and appearances in
-[Shiki's catalog](https://github.com/shikijs/textmate-grammars-themes/blob/main/packages/tm-themes/index.js),
-plus eight Pierre themes. All are Zed-format theme objects.
+Highlights includes 65 Shiki catalog themes, eight Pierre themes, and the
+additional variants listed below. All are Zed-compatible objects. Source
+versions and attribution are recorded in
+[third-party licenses](./THIRD_PARTY_LICENSES.md).
 
 ```js
 import { codeToHtml } from '@pierre/highlights';
-import { pierreDark, vitesseDark } from '@pierre/highlights/themes';
+import { vitesseDark } from '@pierre/highlights/themes';
 
 codeToHtml('const a = 1', { lang: 'js', theme: vitesseDark });
 ```
 
-JSON filenames become camel-case exports: `vitesse-dark.json` → `vitesseDark`.
-Pierre themes remain separate named exports.
+The Shiki catalog and Pierre themes have camel-case named exports:
+`vitesse-dark.json` becomes `vitesseDark`.
 
-Import one theme without loading the barrel through its default export:
+Every theme also has a default export at its filename subpath:
 
 ```js
 import vitesseDark from '@pierre/highlights/themes/vitesse-dark';
 ```
 
-`themes` maps every JSON filename to one of these dynamic imports.
+Use the `themes` map to load by filename without the `.json` extension:
+
+```js
+import { themes } from '@pierre/highlights/themes';
+
+const { default: theme } = await themes['vitesse-dark']();
+```
 
 Use `toCSS` to convert a theme into CSS-variable declarations:
 
@@ -31,20 +38,15 @@ toCSS(pierreDark);
 // --hls-background: #0a0a0a;--hls-foreground: #fafafa;--hls-comment: #737373;...
 ```
 
-Each community theme uses its Zed core, marketplace, or GitHub counterpart when
-a suitable licensed port exists. The remaining themes are converted from Shiki's
-pinned TextMate source with Zed's official scope mapping. Files retain `name`,
-`appearance`, and the style keys Highlights and `@pierre/diffs` read; unrelated
-editor UI colors are removed.
+Community themes use licensed Zed ports where available; the remainder are
+converted from pinned TextMate sources using Zed's scope mapping. Files retain
+the name, appearance, and style keys used by Highlights and `@pierre/diffs`.
 
-Bundled Shiki and Pierre themes retain their source git-decoration and terminal
-colors as Zed `created`, `deleted`, `modified`, and `terminal.ansi.*` colors for
-diff rendering.
+Shiki catalog and Pierre themes also retain git-decoration and terminal colors
+as `created`, `deleted`, `modified`, and `terminal.ansi.*` for diff rendering.
 
 For CSS-controlled colors, use `cssVariables`. See [Themes](../README.md#themes)
-for the accepted properties and
-[third-party licenses](./THIRD_PARTY_LICENSES.md) for pinned sources and Zed
-marketplace versions.
+for accepted properties and scope inheritance.
 
 ## Shiki catalog themes
 

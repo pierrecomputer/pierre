@@ -1,19 +1,6 @@
 (module
   (import "../common.wat")
 
-  (func $xmlNameChar (param $c i32) (result i32)
-    (i32.or
-      (i32.or
-        (i32.ge_u (local.get $c) (i32.const 0x80))
-        (i32.le_u (i32.sub (i32.or (local.get $c) (i32.const 32)) (i32.const "a")) (i32.const 25)))
-      (i32.or
-        (i32.le_u (i32.sub (local.get $c) (i32.const "0")) (i32.const 9))
-        (i32.or
-          (i32.or (i32.eq (local.get $c) (i32.const "_")) (i32.eq (local.get $c) (i32.const "-")))
-          (i32.or
-            (i32.eq (local.get $c) (i32.const "."))
-            (i32.eq (local.get $c) (i32.const ":")))))))
-
   (func $xmlNameStart (param $c i32) (result i32)
     (i32.or
       (i32.ge_u (local.get $c) (i32.const 0x80))

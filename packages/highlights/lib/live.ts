@@ -58,13 +58,10 @@ export type LiveTokenizerOptions = CodeToTokensOptions & {
   /** The initial document; defaults to the empty document. */
   code?: string;
   /**
-   * Receives tokens for lines re-tokenized outside the active `renderRange`:
-   * once synchronously per update for already-finished off-range lines, then
-   * once per background slice until the document converges. Line numbers are
-   * post-edit at delivery time. Construction counts as an update: with a
-   * constructor `renderRange` the callback can run before
-   * `new LiveTokenizer()` returns, so it must not assume the variable that
-   * receives the instance has been assigned yet.
+   * Receives finished tokens outside `renderRange`, once synchronously per
+   * update and once per background slice when either produces lines. Line
+   * numbers refer to the document at delivery time. With a constructor
+   * `renderRange`, this can run before the instance is assigned to a variable.
    */
   onDeferTokenize?: (lines: Map<number, HighlightedToken[]>) => void;
   /**
@@ -251,19 +248,13 @@ function eol(flags: number): string {
 }
 
 /**
- * An incremental tokenizer holding the document, line table, token records,
- * and interned per-line lexer states in an isolated Wasm instance. Lines are
- * terminated by `\r\n`, `\n`, or a lone `\r`, and edits may split or join
- * terminators freely; lexers see every line break as `\n`. It doubles
- * as the document model: the line table is the source of truth for text
- * reads, so a host editor applies its edits here and renders from the
- * returned token maps. Edits are batched UTF-16 range replacements;
- * re-tokenization runs from the first changed line and stops once a line's
- * outgoing lexer state matches the pre-edit state, exactly like a full
- * re-tokenization would from there on. A `renderRange` bounds the synchronous
- * part of that work to the visible window; the rest converges in background
- * slices that report through `onDeferTokenize`. Until a line is reached its
- * reads return pre-edit tokens (`flush` forces completion).
+ * An editable document and incremental tokenizer in an isolated Wasm
+ * instance. Edits use UTF-16 positions and may split or join `\r\n`, `\n`,
+ * or lone `\r` terminators; lexers see each line break as `\n`.
+ * Re-tokenization starts at each changed region and stops when its outgoing
+ * lexer state matches the previous state. A `renderRange` limits synchronous
+ * work; background slices finish the document through `onDeferTokenize`.
+ * Unreached lines retain their previous tokens; `flush` completes them.
  */
 export class LiveTokenizer {
   #hl: HighlightsHighlighter | undefined;
@@ -271,22 +262,16 @@ export class LiveTokenizer {
   #langId: number;
   #themes: ResolvedTheme[];
   #cssVariablePrefix: string;
-  #maxLineLength: number | undefined;
+  #maxLineLength: number;
   #onDeferTokenize:
     | ((lines: Map<number, HighlightedToken[]>) => void)
     | undefined;
   #revision = 0;
-  // Bumped to invalidate scheduled background slices; a slice whose captured
-  // generation no longer matches was superseded by an edit, reset, flush,
-  // pause, or dispose and must not touch the instance.
+  // Incremented by edits, reset, flush, pause, and dispose to cancel old slices.
   #deferGeneration = 0;
-  // Created by the first background slice, closed by dispose; see
-  // #scheduleSlice for why slices are posted through a channel.
+  // Created on first use and closed by dispose.
   #channel: MessageChannel | undefined;
-  // Slice messages posted but not yet received. The port is ref'd while this
-  // is non-zero and unref'd otherwise, so on Node and Bun a pending slice
-  // keeps the process alive exactly like the timer chain it replaces while an
-  // idle, undisposed instance does not.
+  // Keep Node/Bun alive only while slice messages are pending.
   #postedSlices = 0;
   #deferBudget = 64;
   #paused = false;
@@ -299,7 +284,7 @@ export class LiveTokenizer {
     this.#langId = langIdOf(options.lang);
     this.#themes = resolveOptionThemes(options);
     this.#cssVariablePrefix = options.cssVariablePrefix ?? '--hls-';
-    this.#maxLineLength = options.tokenizeMaxLineLength;
+    this.#maxLineLength = options.tokenizeMaxLineLength ?? 0;
     this.#onDeferTokenize = options.onDeferTokenize;
     const renderRange = checkRenderRange(options.renderRange);
     [this.#hl, this.#ex] = LiveTokenizer.#createStaged(
@@ -326,11 +311,11 @@ export class LiveTokenizer {
     return [hl, ex];
   }
 
-  /** The wrapper, or throw when disposed. */
-  #live(): { hl: HighlightsHighlighter; ex: LiveWasmExports } {
+  /** Return the active instance or throw after disposal. */
+  #live(): HighlightsHighlighter {
     const hl = this.#hl;
     if (hl == null) throw new Error('tokenizer is disposed');
-    return { hl, ex: this.#ex };
+    return hl;
   }
 
   /** Monotonic revision; bumps once per successful mutating batch. */
@@ -341,12 +326,14 @@ export class LiveTokenizer {
 
   /** Number of lines in the document (a trailing terminator adds one). */
   get lineCount(): number {
-    return this.#live().ex.liveLineCount();
+    this.#live();
+    return this.#ex.liveLineCount();
   }
 
   /** True while deferred re-tokenization beyond a `renderRange` is pending. */
   get pendingTokenization(): boolean {
-    return this.#live().ex.liveStats(9) !== 0;
+    this.#live();
+    return this.#ex.liveStats(9) !== 0;
   }
 
   /**
@@ -354,9 +341,9 @@ export class LiveTokenizer {
    * finished lines through `onDeferTokenize`. Clears a `pause`.
    */
   flush(): void {
-    const { hl, ex } = this.#live();
+    const hl = this.#live();
     this.#paused = false;
-    this.#settle(hl, ex);
+    this.#settle(hl, this.#ex);
   }
 
   /**
@@ -375,10 +362,12 @@ export class LiveTokenizer {
 
   /** Resume background re-tokenization suspended by `pause`. */
   resume(): void {
-    const { ex } = this.#live();
+    this.#live();
     if (!this.#paused) return;
     this.#paused = false;
-    if (ex.liveStats(9) !== 0) this.#scheduleSlice(this.#deferGeneration);
+    if (this.#ex.liveStats(9) !== 0) {
+      this.#scheduleSlice(this.#deferGeneration);
+    }
   }
 
   /** Release the Wasm instance and drop deferred work; later calls throw. */
@@ -386,8 +375,6 @@ export class LiveTokenizer {
     if (this.#hl == null) return;
     this.#deferGeneration += 1;
     this.#hl = undefined;
-    // a slice already posted is dropped by the generation check above;
-    // closing both ports releases the channel itself
     if (this.#channel !== undefined) {
       this.#channel.port1.close();
       this.#channel.port2.close();
@@ -397,21 +384,24 @@ export class LiveTokenizer {
 
   /** UTF-16 length of one line, excluding its terminator. */
   getLineLength(line: number): number {
-    const { ex } = this.#live();
+    this.#live();
+    const ex = this.#ex;
     this.#checkLine(line, ex);
     return ex.liveLineLen(line);
   }
 
   /** One line's text, excluding its terminator. */
   getLineText(line: number): string {
-    const { hl, ex } = this.#live();
+    const hl = this.#live();
+    const ex = this.#ex;
     this.#checkLine(line, ex);
     return this.#lineText(hl, ex, line);
   }
 
   /** The whole document's text, reconstructing each line's terminator. */
   getText(): string {
-    const { hl, ex } = this.#live();
+    const hl = this.#live();
+    const ex = this.#ex;
     const count = ex.liveLineCount();
     let text = '';
     for (let line = 0; line < count; line++) {
@@ -442,7 +432,8 @@ export class LiveTokenizer {
    * next successful edit, reset, dispose, or deferred tokenization slice.
    */
   getLineRecords(line: number): LiveTokenRecords {
-    const { hl, ex } = this.#live();
+    const hl = this.#live();
+    const ex = this.#ex;
     this.#checkLine(line, ex);
     const n = ex.liveLineTokCount(line);
     const wide = (ex.liveLineFlags(line) & 4) !== 0;
@@ -469,10 +460,11 @@ export class LiveTokenizer {
     tokens: ThemedToken[];
     bracketIgnoredRanges: [start: number, end: number][];
   } {
-    const { hl, ex } = this.#live();
+    const hl = this.#live();
+    const ex = this.#ex;
     this.#checkLine(line, ex);
     const text = this.#lineText(hl, ex, line);
-    const max = this.#maxLineLength ?? 0;
+    const max = this.#maxLineLength;
     if (max > 0 && text.length >= max) {
       return {
         tokens: [
@@ -539,23 +531,20 @@ export class LiveTokenizer {
   }
 
   /**
-   * Apply a validated batch and re-tokenize. Without a `renderRange` the
-   * update runs synchronously to convergence and `update.lines` stays empty.
-   * With one, only lines up to its end are re-tokenized synchronously: the
-   * in-range ones are returned in `update.lines`, already-finished off-range
-   * ones go to `onDeferTokenize` before this returns, and the remainder
-   * converges in background slices that also report through
-   * `onDeferTokenize`. An edit arriving while such work is pending does not
-   * wait for it: the unreached dirty ranges are remapped through the batch
-   * natively and converge with this update's own deferred tail. Calling
-   * `applyEdits` or `reset` from the `onDeferTokenize` delivery made by this
-   * update throws; reads, `pause`, and `flush` are allowed there.
+   * Validate and apply a batch against the current document. Without
+   * `renderRange`, tokenization completes synchronously and `lines` is empty.
+   * With it, finished in-range lines are returned; finished off-range lines
+   * reach `onDeferTokenize` before return, followed by background deliveries.
+   * Pending work is remapped through the edits without waiting for completion.
+   * Calling `applyEdits` or `reset` from this update's synchronous callback
+   * throws; reads, `pause`, and `flush` are allowed.
    */
   applyEdits(
     edits: readonly TextEdit[],
     options?: LiveUpdateOptions
   ): LiveTokenizerUpdate {
-    const { hl, ex } = this.#live();
+    const hl = this.#live();
+    const ex = this.#ex;
     this.#checkNotUpdating();
     const renderRange = checkRenderRange(options?.renderRange);
     const batch = this.#validate(edits, hl, ex);
@@ -587,7 +576,8 @@ export class LiveTokenizer {
 
   /** Replace the document in a fresh Wasm instance and swap it in. */
   reset(code: string, options?: LiveUpdateOptions): LiveTokenizerUpdate {
-    const { ex } = this.#live();
+    this.#live();
+    const ex = this.#ex;
     this.#checkNotUpdating();
     const renderRange = checkRenderRange(options?.renderRange);
     if (typeof code !== 'string') throw new TypeError('code must be a string');
@@ -641,12 +631,12 @@ export class LiveTokenizer {
     ex: LiveWasmExports,
     renderRange: readonly [number, number] | undefined
   ): Map<number, HighlightedToken[]> {
-    const from = ex.liveStats(10);
     if (renderRange === undefined) {
       ex.liveRun(0x7fffffff);
       hl.bindMemory();
       return new Map();
     }
+    const from = ex.liveStats(10);
     const [rangeStart, rangeEnd] = renderRange;
     // a range past the end of the document shows nothing; defer everything
     const end =
@@ -670,14 +660,7 @@ export class LiveTokenizer {
       // an edit above the range re-tokenizes lines before it, and a budget
       // overshoot can pass its end; both are final now, so flush them
       const off = this.#collectLines(hl, ex, from, Math.min(to, rangeStart));
-      for (const [line, tokens] of this.#collectLines(
-        hl,
-        ex,
-        Math.max(from, end),
-        to
-      )) {
-        off.set(line, tokens);
-      }
+      this.#collectLines(hl, ex, Math.max(from, end), to, off);
       if (off.size > 0) this.#onDeferTokenize(off);
     }
     // an onDeferTokenize callback above may have paused the tokenizer; a
@@ -689,13 +672,9 @@ export class LiveTokenizer {
   }
 
   /**
-   * Queue one background slice for `generation` as a macrotask. Slices post
-   * through a MessageChannel rather than `setTimeout(fn, 0)`: browsers clamp
-   * nested zero-delay timers to about 4ms once a chain is a few levels deep,
-   * which stretched thirty chained slices to over 100ms, while message events
-   * are ordinary macrotasks with no clamp and still yield to rendering
-   * between slices. The channel is created on first use and closed by
-   * `dispose`; runtimes without MessageChannel fall back to the timer.
+   * Queue a background slice through MessageChannel to avoid nested timer
+   * clamping while yielding between slices. Fall back to a timer in runtimes
+   * without MessageChannel.
    */
   #scheduleSlice(generation: number): void {
     if (typeof MessageChannel === 'undefined') {
@@ -766,51 +745,36 @@ export class LiveTokenizer {
     if (lines.size > 0) onDeferTokenize(lines);
   }
 
-  /** Tokens for every re-tokenized line in the `[from, to)` window. */
+  /**
+   * Collect finished lines in `[from, to)` directly from the change list.
+   * The active entry ends at the driver's cursor; later entries are pending.
+   */
   #collectLines(
     hl: HighlightsHighlighter,
     ex: LiveWasmExports,
     from: number,
-    to: number
+    to: number,
+    lines = new Map<number, HighlightedToken[]>()
   ): Map<number, HighlightedToken[]> {
-    const lines = new Map<number, HighlightedToken[]>();
-    for (const [start, end] of this.#retokenizedSpans(hl, ex)) {
-      const a = Math.max(start, from);
-      const b = Math.min(end, to);
-      for (let line = a; line < b; line++) {
-        lines.set(line, this.#lineTuples(hl, ex, line));
-      }
-    }
-    return lines;
-  }
-
-  /**
-   * Half-open post-edit line spans whose token records are current.
-   * Completed change entries contribute their whole new range; while the
-   * driver is mid-run its current entry only counts up to the cursor (the
-   * recorded end covers spliced lines the driver may not have reached, and
-   * the cursor runs past it while re-tokenizing the convergence tail), and
-   * entries past the current one are still pending.
-   */
-  #retokenizedSpans(
-    hl: HighlightsHighlighter,
-    ex: LiveWasmExports
-  ): [number, number][] {
+    if (from >= to) return lines;
     const base = ex.liveChangesPtr();
     const count = hl.dv.getUint32(base, true);
     const active = ex.liveStats(9) !== 0;
     const current = ex.liveStats(11);
     const cursor = ex.liveStats(10);
-    const spans: [number, number][] = [];
     const limit = active ? Math.min(count, current + 1) : count;
     for (let i = 0; i < limit; i++) {
       const at = base + 4 + i * 16;
       const start = hl.dv.getUint32(at + 8, true);
-      let end = hl.dv.getUint32(at + 12, true);
-      if (active && i === current) end = Math.max(start, cursor);
-      if (end > start) spans.push([start, end]);
+      if (start >= to) break;
+      const end =
+        active && i === current ? cursor : hl.dv.getUint32(at + 12, true);
+      const stop = Math.min(end, to);
+      for (let line = Math.max(start, from); line < stop; line++) {
+        lines.set(line, this.#lineTuples(hl, ex, line));
+      }
     }
-    return spans;
+    return lines;
   }
 
   /**
@@ -825,7 +789,7 @@ export class LiveTokenizer {
     line: number
   ): HighlightedToken[] {
     const text = this.#lineText(hl, ex, line);
-    const max = this.#maxLineLength ?? 0;
+    const max = this.#maxLineLength;
     const tokens: HighlightedToken[] = [];
     const { styles, fg } = this.#themes[0];
     if (max <= 0 || text.length < max) {
@@ -994,14 +958,13 @@ export class LiveTokenizer {
     hl: HighlightsHighlighter,
     ex: LiveWasmExports
   ): boolean {
-    let rangeLen = 0;
-    for (let line = e.sl; line <= e.el; line++) {
-      const from = line === e.sl ? e.sc : 0;
-      const to = line === e.el ? e.ec : ex.liveLineLen(line);
-      rangeLen += to - from;
-      if (line < e.el) rangeLen += ex.liveLineFlags(line) & 3;
+    let rangeLen = e.ec - e.sc;
+    for (let line = e.sl; line < e.el; line++) {
+      rangeLen += ex.liveLineLen(line) + (ex.liveLineFlags(line) & 3);
+      if (rangeLen > e.newText.length) return false;
     }
     if (rangeLen !== e.newText.length) return false;
+    if (rangeLen === 0) return true;
     let text = '';
     for (let line = e.sl; line <= e.el; line++) {
       const lineText = this.#lineText(hl, ex, line);

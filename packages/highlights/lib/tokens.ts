@@ -317,17 +317,20 @@ export function lineRecordsToTokens(
       start = end;
       lineStart = end;
     } else if (end > start) {
-      line.push(
-        rangeToToken(
-          code,
-          start,
-          end,
-          hl,
-          themes,
-          cssVariablePrefix,
-          offsetBase
-        )
-      );
+      // Overlong lines collapse below; skip tokens that would be discarded.
+      if (!(max > 0 && end - lineStart >= max)) {
+        line.push(
+          rangeToToken(
+            code,
+            start,
+            end,
+            hl,
+            themes,
+            cssVariablePrefix,
+            offsetBase
+          )
+        );
+      }
       start = end;
     }
   }

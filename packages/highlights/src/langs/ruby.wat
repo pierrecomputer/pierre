@@ -299,7 +299,6 @@
     (local $p i32)
     (local $kind i32)
     (local $hl i32)
-    (local $g i32)
     (local $status i32)
     (local $operand i32)
     (local $decl i32)

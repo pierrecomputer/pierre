@@ -247,39 +247,24 @@ export class HighlightsHighlighter implements Highlighter {
     this.dv = new DataView(this.memory.buffer);
   }
 
-  /**
-   * Encode `str` at byte offset `at` relative to the text buffer, growing
-   * memory as needed.
-   * Returns the number of bytes written.
-   */
-  #encodeAt(str: string, at: number): number {
-    // Try an ASCII-sized destination first; grow if UTF-8 needs more room.
-    this.#growMemoryIfNeeded(at + str.length + 96);
-    let { read, written } = enc.encodeInto(
-      str,
-      this.buffer.subarray(pageSize + at, pageSize + at + str.length)
-    );
-    if (read < str.length) {
-      // Allow three bytes per remaining UTF-16 code unit.
-      const rest = str.slice(read);
-      this.#growMemoryIfNeeded(at + written + rest.length * 3 + 96);
-      written += enc.encodeInto(
-        rest,
-        this.buffer.subarray(
-          pageSize + at + written,
-          pageSize + at + written + rest.length * 3
-        )
-      ).written;
-    }
-    return written;
-  }
-
-  /**
-   * Write input to the text buffer and return its byte length.
-   */
+  /** Write input to the text buffer and return its byte length. */
   writeInput(input: string | Uint8Array | ArrayBuffer): number {
     if (typeof input === 'string') {
-      return this.#encodeAt(input, 0);
+      // Use spare capacity for UTF-8, keeping 96 bytes for lexer lookahead.
+      this.#growMemoryIfNeeded(input.length + 96);
+      let { read, written } = enc.encodeInto(
+        input,
+        this.buffer.subarray(pageSize, this.buffer.length - 96)
+      );
+      if (read < input.length) {
+        const rest = input.slice(read);
+        this.#growMemoryIfNeeded(written + rest.length * 3 + 96);
+        written += enc.encodeInto(
+          rest,
+          this.buffer.subarray(pageSize + written, this.buffer.length - 96)
+        ).written;
+      }
+      return written;
     }
     if (input instanceof ArrayBuffer) {
       input = new Uint8Array(input);
@@ -294,22 +279,24 @@ export class HighlightsHighlighter implements Highlighter {
 
   /**
    * Run the lexer over the first `inputLength` bytes: 0 inline colors, 1 CSS
-   * variables, or 3 UTF-16 line records.
-   * Returns a `Uint8Array` view of Wasm memory, valid until the next call.
+   * variables, or 3 UTF-16 line records. `reset` selects streaming mode.
    */
-  #run(langId: number, mode: number, inputLength: number): Uint8Array {
+  #run(
+    langId: number,
+    mode: number,
+    inputLength: number,
+    reset?: boolean
+  ): void {
     this.dv.setUint8(0, langId);
     this.dv.setUint8(1, mode);
     this.dv.setUint32(2, inputLength, true);
     this.buffer[pageSize + inputLength] = 0; // NUL sentinel: lexers treat byte 0 at EOF as end
     try {
-      this.#highlight();
+      if (reset === undefined) this.#highlight();
+      else this.#highlightStream(reset);
     } finally {
       this.bindMemory();
     }
-    const outStart = this.dv.getUint32(6, true);
-    const outLength = this.dv.getUint32(10, true);
-    return this.buffer.subarray(outStart, outStart + outLength);
   }
 
   /**
@@ -337,33 +324,22 @@ export class HighlightsHighlighter implements Highlighter {
       this.buffer.fill(0, themePtr + themeTable.length, themePtr + themeBytes);
       this.#themeWritten = themeTable;
     }
-    return this.#run(langId, useCssVariables ? 1 : 0, inputLength);
+    this.#run(langId, useCssVariables ? 1 : 0, inputLength);
+    const outStart = this.dv.getUint32(6, true);
+    const outLength = this.dv.getUint32(10, true);
+    return this.buffer.subarray(outStart, outStart + outLength);
   }
 
-  /** Tokenize one stream chunk to line records while preserving lexer state. */
-  streamTokenizeLineRecords(
+  /** Return UTF-16 token records; `reset` starts or continues a stream. */
+  tokenizeLineRecords(
     langId: number,
     inputLength: number,
-    reset: boolean
+    reset?: boolean
   ): Uint32Array {
-    this.dv.setUint8(0, langId);
-    this.dv.setUint8(1, 3);
-    this.dv.setUint32(2, inputLength, true);
-    this.buffer[pageSize + inputLength] = 0;
-    try {
-      this.#highlightStream(reset);
-    } finally {
-      this.bindMemory();
-    }
+    this.#run(langId, 3, inputLength, reset);
     const outStart = this.dv.getUint32(6, true);
     const outLength = this.dv.getUint32(10, true);
     return new Uint32Array(this.buffer.buffer, outStart, outLength >> 2);
-  }
-
-  /** Return UTF-16 token records with `0xffffffff` newline markers. */
-  tokenizeLineRecords(langId: number, inputLength: number): Uint32Array {
-    const out = this.#run(langId, 3, inputLength);
-    return new Uint32Array(out.buffer, out.byteOffset, out.length >> 2);
   }
 
   /**
@@ -564,7 +540,9 @@ export class StreamTokenizer {
     if (end === 0) return [];
     const code = this.#tail.slice(0, end);
     this.#tail = this.#tail.slice(end);
-    return this.#tokenizeChunk(code).slice(0, -1);
+    const lines = this.#tokenizeChunk(code);
+    lines.pop(); // The trailing empty line belongs to the next chunk.
+    return lines;
   }
 
   /**
@@ -607,7 +585,7 @@ export class StreamTokenizer {
     const hl = this.#hl;
     if (hl == null) throw new Error('stream has ended');
     const byteLen = hl.writeInput(code);
-    const recs = hl.streamTokenizeLineRecords(
+    const recs = hl.tokenizeLineRecords(
       this.#langId,
       byteLen,
       !this.#streamStarted

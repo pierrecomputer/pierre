@@ -48,6 +48,28 @@ t.before(() => {
 const lineText = (tokens: ThemedToken[]) =>
   tokens.map((tk) => tk.content).join('');
 
+void t.test(
+  'string input preserves UTF-8 across memory growth and reuse',
+  () => {
+    const encoder = new TextEncoder();
+    const hl = new HighlightsHighlighter(highlighter.wasmModule);
+    for (const code of [
+      '',
+      'x'.repeat(65536 - 96),
+      'é'.repeat(65536),
+      '日本語🙂'.repeat(65536),
+      '\ud800',
+      'const text = "日本語🙂";',
+    ]) {
+      const expected = encoder.encode(code);
+      const length = hl.writeInput(code);
+      assert.equal(length, expected.length);
+      assert.deepEqual(hl.buffer.subarray(65536, 65536 + length), expected);
+      assert.ok(hl.buffer.length >= 65536 + length + 96);
+    }
+  }
+);
+
 void t.test('font-only bundled emphasis keeps italic and bold styling', () => {
   const code = '*hello* **world**';
   for (const theme of [pierreDark, pierreLight]) {

@@ -40,7 +40,6 @@
   (func $matBlockComment
     (local $lhs i32)
     (local $line i32)
-    (local $p i32)
     (local.set $lhs (global.get $ptr))
     (call $scanToLineEnd)
     (block $done
