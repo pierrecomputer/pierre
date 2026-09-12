@@ -92,7 +92,7 @@ export class DiffModel {
 
   /**
    * A live model for editing `inputDiff`'s new file. The diff is a shallow
-   * copy without a cache key; its arrays are shared with the input until an
+   * copy without a cache key or semantic data; its arrays are shared with the input until an
    * edit replaces them, and the input is never written to.
    */
   static startEditSession(
@@ -129,6 +129,8 @@ export class DiffModel {
     }
     const diff: FileDiffMetadata = { ...inputDiff };
     delete diff.cacheKey;
+    // The editor uses ordinary diff rows.
+    delete diff.semanticOperations;
     if (inputContents !== inputDiff.additionLines.join('')) {
       // Editing starts on the file with one line ending. The lines whose
       // ending changed differ from the old file now, so the hunks say so
