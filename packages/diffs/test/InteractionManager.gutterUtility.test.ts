@@ -606,6 +606,12 @@ describe('InteractionManager gutter utility', () => {
       controlledSelection: true,
       enableGutterUtility: true,
       enableLineSelection: false,
+      getLineIndex: (lineNumber, side) =>
+        lineNumber === 1 && side === 'deletions'
+          ? [0, 0]
+          : lineNumber === 2 && side === 'additions'
+            ? [1, 1]
+            : undefined,
       onGutterUtilityClick: (range) => {
         events.push(['utility', { ...range }]);
         range.start = 2;

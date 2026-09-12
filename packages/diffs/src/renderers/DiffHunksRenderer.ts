@@ -21,7 +21,6 @@ import type {
   BaseCodeOptions,
   BaseDiffOptions,
   BaseDiffOptionsWithDefaults,
-  BaseLineTypes,
   CodeColumnType,
   CustomPreProperties,
   DiffLineAnnotation,
@@ -84,6 +83,11 @@ import { iterateOverDiff } from '../utils/iterateOverDiff';
 import { renderDiffWithHighlighter } from '../utils/renderDiffWithHighlighter';
 import { resolvePreferredHighlighter } from '../utils/resolvePreferredHighlighter';
 import {
+  createSemanticDiffLineLookup,
+  getSemanticDiffLine,
+  type SemanticDiffLineLookup,
+} from '../utils/semanticDiffLines';
+import {
   recomputeDiffHunksForEdit,
   recomputeEmptyDocumentDiff,
   recomputeTopAlignedAdditionDiff,
@@ -125,6 +129,11 @@ interface DiffRenderCache extends RenderedDiffASTCache {
   hydrated?: boolean;
 }
 
+interface SemanticLineCache {
+  diff: FileDiffMetadata;
+  lookup: SemanticDiffLineLookup;
+}
+
 interface PushSeparatorProps {
   hunkIndex: number;
   collapsedLines: number | 'unknown';
@@ -163,15 +172,18 @@ export interface DiffHunksRendererOptionsWithDefaults extends Omit<
 
 export interface UnifiedLineDecorationProps {
   type: 'context' | 'context-expanded' | 'change';
-  lineType: BaseLineTypes;
+  lineType: LineTypes;
   additionLineIndex: number | undefined;
   deletionLineIndex: number | undefined;
+  additionLineNumber: number | undefined;
+  deletionLineNumber: number | undefined;
 }
 
 export interface SplitLineDecorationProps {
   side: 'deletions' | 'additions';
   type: 'context' | 'context-expanded' | 'change';
   lineIndex: number | undefined;
+  lineNumber: number | undefined;
 }
 
 export interface LineDecoration {
@@ -246,6 +258,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
   // intentionally keep displaying an older highlighted diff while this one
   // is highlighted in the background.
   private diff: FileDiffMetadata | undefined;
+  private semanticLineCache: SemanticLineCache | undefined;
 
   private expandedHunks = new Map<number, HunkExpansionRegion>();
 
@@ -288,6 +301,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
 
   public recycle(): void {
     this.diff = undefined;
+    this.semanticLineCache = undefined;
     if (this.editSessionActive) {
       // The editor keeps its document and undo history while offscreen. Its
       // private highlight result belongs to that session and can resume too.
@@ -877,33 +891,81 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     diff.editSessionDirty = true;
   }
 
-  protected getUnifiedLineDecoration({
-    lineType,
-  }: UnifiedLineDecorationProps): LineDecoration {
+  // Reuse the prepared source ranges as the viewport or diff style changes.
+  private prepareSemanticLines(diff: FileDiffMetadata): void {
+    const { semanticOperations } = diff;
+    if (semanticOperations == null) {
+      this.semanticLineCache = undefined;
+      return;
+    }
+    const { semanticLineCache: cached } = this;
+    // If we've already computed the semantic lookup, based whether diff has
+    // changed or not, lets early return if we've done the work before
+    if (
+      cached != null &&
+      (((cached.diff.cacheKey != null || diff.cacheKey != null) &&
+        cached.diff.cacheKey === diff.cacheKey) ||
+        cached.diff === diff)
+    ) {
+      return;
+    }
+    this.semanticLineCache = {
+      diff,
+      lookup: createSemanticDiffLineLookup(semanticOperations),
+    };
+  }
+
+  // Use the supplied semantic line type for source rows and gutter numbers.
+  private getSourceLineDecoration(
+    hunkLineType: LineTypes,
+    side: 'additions' | 'deletions',
+    lineNumber: number | undefined
+  ): LineDecoration {
+    const { semanticLineCache } = this;
+    if (semanticLineCache == null || lineNumber == null) {
+      return {
+        gutterLineType: hunkLineType,
+        contentProperties: { 'data-line-type': hunkLineType },
+      };
+    }
+    const line = getSemanticDiffLine(
+      semanticLineCache.lookup,
+      side,
+      lineNumber
+    );
+    const lineType =
+      line?.lineType ??
+      (hunkLineType === 'context-expanded' ? 'context-expanded' : 'context');
     return {
       gutterLineType: lineType,
-      contentProperties: {
-        'data-line-type': lineType,
-      },
+      contentProperties: { 'data-line-type': lineType },
     };
+  }
+
+  protected getUnifiedLineDecoration({
+    lineType,
+    additionLineNumber,
+    deletionLineNumber,
+  }: UnifiedLineDecorationProps): LineDecoration {
+    return this.getSourceLineDecoration(
+      lineType,
+      additionLineNumber != null ? 'additions' : 'deletions',
+      additionLineNumber ?? deletionLineNumber
+    );
   }
 
   protected getSplitLineDecoration({
     side,
     type,
+    lineNumber,
   }: SplitLineDecorationProps): LineDecoration {
-    const lineType: BaseLineTypes =
+    const lineType: LineTypes =
       type === 'change'
         ? side === 'deletions'
           ? 'change-deletion'
           : 'change-addition'
         : type;
-    return {
-      gutterLineType: lineType,
-      contentProperties: {
-        'data-line-type': lineType,
-      },
-    };
+    return this.getSourceLineDecoration(lineType, side, lineNumber);
   }
 
   private createAnnotationElement = (span: AnnotationSpan): HASTElement => {
@@ -1535,6 +1597,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     renderRange: RenderRange,
     { code, themeStyles, baseThemeType }: ThemedDiffResult
   ): HunksRenderResult {
+    this.prepareSemanticLines(fileDiff);
     const {
       diffStyle,
       disableFileHeader,
@@ -1737,6 +1800,8 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
             lineType,
             additionLineIndex: additionLine?.lineIndex,
             deletionLineIndex: deletionLine?.lineIndex,
+            additionLineNumber: additionLine?.lineNumber,
+            deletionLineNumber: deletionLine?.lineNumber,
           });
           pushGutterLineNumber(
             'unified',
@@ -1812,11 +1877,13 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
             side: 'deletions',
             type,
             lineIndex: deletionLine?.lineIndex,
+            lineNumber: deletionLine?.lineNumber,
           });
           const additionLineDecoration = this.getSplitLineDecoration({
             side: 'additions',
             type,
             lineIndex: additionLine?.lineIndex,
+            lineNumber: additionLine?.lineNumber,
           });
 
           if (deletionLineContent == null && additionLineContent == null) {

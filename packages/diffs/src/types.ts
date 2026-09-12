@@ -378,7 +378,11 @@ export interface SemanticDiffTextPosition {
 export interface SemanticDiffTextRange {
   /** Inclusive start position. */
   start: SemanticDiffTextPosition;
-  /** Exclusive end position; character 0 excludes text on that end line. */
+  /**
+   * Exclusive end position; character 0 excludes text on that end line. A range
+   * that reaches the end of a file whose last line ends with a newline ends on
+   * the line after it, so this line may be one past the file's last line.
+   */
   end: SemanticDiffTextPosition;
 }
 
@@ -791,16 +795,12 @@ export interface GapSpan {
 
 export type LineSpans = GapSpan | AnnotationSpan;
 
-/** Line classification derived from diff hunks. */
-export type BaseLineTypes =
+/** Line types used by source lines and gutter numbers. */
+export type LineTypes =
   | 'change-deletion'
   | 'change-addition'
   | 'context'
-  | 'context-expanded';
-
-/** Hunk classifications and semantic operation types for lines and gutters. */
-export type LineTypes =
-  | BaseLineTypes
+  | 'context-expanded'
   | 'change-moved'
   | 'change-moved-with-edit'
   | 'change-edited'
@@ -811,7 +811,7 @@ export type LineTypes =
   | 'change-inlined-function';
 
 export interface LineInfo {
-  type: BaseLineTypes;
+  type: LineTypes;
   lineNumber: number;
   altLineNumber?: number;
   lineIndex: number | `${number},${number}`;

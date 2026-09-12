@@ -170,11 +170,12 @@ function canHydrateDiff(fileDiff: FileDiffMetadata): boolean {
   );
 }
 
-// Edit sessions incrementally clone the diff as needed while editing,
-// initially we start with a top level fast clone
+// Start with a private shallow copy and clone nested data as editing needs it.
+// The editor uses ordinary diff rows.
 function createEditSessionDiff(fileDiff: FileDiffMetadata): FileDiffMetadata {
   const editSessionDiff = { ...fileDiff };
   delete editSessionDiff.cacheKey;
+  delete editSessionDiff.semanticOperations;
   return editSessionDiff;
 }
 
@@ -580,6 +581,8 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
       // If we've selected a line between or before a hunk,
       // we should grab its index here
       if (lineNumber < currentLineNumber) {
+        // A partial patch has no source rows outside its stored hunks.
+        if (fileDiff.isPartial) return undefined;
         const difference = currentLineNumber - lineNumber;
         targetUnifiedIndex = Math.max(unifiedIndex - difference, 0);
         targetSplitIndex = Math.max(splitIndex - difference, 0);
@@ -588,6 +591,7 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
 
       if (lineNumber >= currentLineNumber + hunkCount) {
         if (hunk === lastHunk) {
+          if (fileDiff.isPartial) return undefined;
           const difference = lineNumber - (currentLineNumber + hunkCount);
           targetUnifiedIndex =
             unifiedIndex + hunk.unifiedLineCount + difference;
@@ -2189,7 +2193,12 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
       this.loadFilesIfNecessary();
     }
     const editSessionDiff = this.editSession?.diff;
-    if (this.hunksRenderer.editorRenderReady()) {
+    // FOLLOWUP(amadeus): Editing is going to be a whole other can of worms... so
+    // it's worth revisting this when everything is working
+    if (
+      this.hunksRenderer.editorRenderReady() &&
+      this.getRenderedDiff()?.semanticOperations == null
+    ) {
       // Compatible markup can be reused without repainting. Once the renderer
       // transfers that cache to the private session, the existing DOM belongs
       // to the session as well.

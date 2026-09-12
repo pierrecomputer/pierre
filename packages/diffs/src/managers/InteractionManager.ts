@@ -2123,6 +2123,18 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
     }
 
     const splitLineIndex = this.parseLineIndex(lineElement, this.isSplitDiff());
+    const side =
+      this.mode === 'file'
+        ? undefined
+        : this.getAnnotationSide(
+            lineElement,
+            codeElement,
+            lineNumber,
+            lineType
+          );
+    if (this.mode !== 'file' && side == null) {
+      return undefined;
+    }
 
     if (tokenInfo != null) {
       if (this.mode === 'file') {
@@ -2146,7 +2158,7 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
         lineNumber,
         numberColumn,
         numberElement,
-        side: getAnnotationSide(lineType, codeElement),
+        side,
         splitLineIndex,
         ...tokenInfo,
       } as ResolvedPointerTarget<TMode>;
@@ -2173,13 +2185,49 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
       lineNumber,
       numberColumn,
       numberElement,
-      side: getAnnotationSide(lineType, codeElement),
+      side,
       splitLineIndex,
     } as ResolvedPointerTarget<TMode>;
   }
 
   private isSplitDiff(): boolean {
     return this.pre?.getAttribute('data-diff-type') === 'split';
+  }
+
+  // FOLLOWUP(amadeus): Revisit this logic once we have things rendering and
+  // need to start testing things
+  // Match unified rows to the displayed diff's source indexes, because a
+  // semantic operation can label either side with the same line type.
+  private getAnnotationSide(
+    lineElement: HTMLElement,
+    codeElement: HTMLElement,
+    lineNumber: number,
+    lineType: LineTypes
+  ): AnnotationSide | undefined {
+    if (codeElement.hasAttribute('data-deletions')) {
+      return 'deletions';
+    }
+    if (codeElement.hasAttribute('data-additions')) {
+      return 'additions';
+    }
+    if (lineElement.hasAttribute('data-alt-line')) {
+      return 'additions';
+    }
+    const { getLineIndex } = this.options;
+    if (getLineIndex == null) {
+      return lineType === 'change-deletion' ? 'deletions' : 'additions';
+    }
+    const unifiedLineIndex = this.parseLineIndex(lineElement, false);
+    if (unifiedLineIndex == null) {
+      return undefined;
+    }
+    if (getLineIndex(lineNumber, 'additions')?.[0] === unifiedLineIndex) {
+      return 'additions';
+    }
+    if (getLineIndex(lineNumber, 'deletions')?.[0] === unifiedLineIndex) {
+      return 'deletions';
+    }
+    return undefined;
   }
 
   private parseLineIndex(
@@ -2452,22 +2500,6 @@ function areLineRenderStatesEqual(
   );
 }
 
-function getAnnotationSide(
-  lineType: LineTypes,
-  codeElement: HTMLElement
-): AnnotationSide {
-  switch (lineType) {
-    case 'change-deletion':
-      return 'deletions';
-    case 'change-addition':
-      return 'additions';
-    default:
-      return codeElement.hasAttribute('data-deletions')
-        ? 'deletions'
-        : 'additions';
-  }
-}
-
 function getLineTypeFromElement(element: HTMLElement): LineTypes | undefined {
   const lineType = element.getAttribute('data-line-type');
   if (lineType == null) {
@@ -2476,6 +2508,14 @@ function getLineTypeFromElement(element: HTMLElement): LineTypes | undefined {
   switch (lineType) {
     case 'change-deletion':
     case 'change-addition':
+    case 'change-moved':
+    case 'change-moved-with-edit':
+    case 'change-edited':
+    case 'change-renamed':
+    case 'change-reordered':
+    case 'change-reformatted':
+    case 'change-extracted-function':
+    case 'change-inlined-function':
     case 'context':
     case 'context-expanded':
       return lineType;

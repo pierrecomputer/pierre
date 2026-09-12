@@ -28,6 +28,14 @@
     --diffs-deleted-dark: #ff6762;
     --diffs-warning-light: #d5a910;
     --diffs-warning-dark: #ffd452;
+    /* FOLLOWUP: Work with mark to figure out these colors and how to source
+     * them from themes */
+    --diffs-moved-light: #009fff;
+    --diffs-moved-dark: #69b1ff;
+    --diffs-edited-light: #9954d8;
+    --diffs-edited-dark: #bf91f3;
+    --diffs-reformatted-light: #808080;
+    --diffs-reformatted-dark: #a0a0a0;
 
     /*
     // Available CSS Color Overrides
@@ -41,11 +49,17 @@
     --diffs-fg-number-override
     --diffs-fg-number-addition-override
     --diffs-fg-number-deletion-override
+    --diffs-fg-number-moved-override
+    --diffs-fg-number-edited-override
+    --diffs-fg-number-reformatted-override
     --diffs-fg-conflict-marker-override
 
     --diffs-deletion-color-override
     --diffs-addition-color-override
     --diffs-modified-color-override
+    --diffs-moved-color-override
+    --diffs-edited-color-override
+    --diffs-reformatted-color-override
 
     --diffs-bg-deletion-override
     --diffs-bg-deletion-number-override
@@ -54,6 +68,13 @@
     --diffs-bg-addition-override
     --diffs-bg-addition-number-override
     --diffs-bg-addition-emphasis-override
+
+    --diffs-bg-moved-override
+    --diffs-bg-moved-number-override
+    --diffs-bg-edited-override
+    --diffs-bg-edited-number-override
+    --diffs-bg-reformatted-override
+    --diffs-bg-reformatted-number-override
 
     --conflict-bg-current-override
     --conflict-bg-current-number-override
@@ -171,6 +192,45 @@
         var(
           --diffs-dark-modified-color,
           var(--diffs-modified-color, var(--diffs-modified-dark))
+        )
+      )
+    );
+    --diffs-moved-base: var(
+      --diffs-moved-color-override,
+      light-dark(
+        var(
+          --diffs-light-moved-color,
+          var(--diffs-moved-color, var(--diffs-moved-light))
+        ),
+        var(
+          --diffs-dark-moved-color,
+          var(--diffs-moved-color, var(--diffs-moved-dark))
+        )
+      )
+    );
+    --diffs-edited-base: var(
+      --diffs-edited-color-override,
+      light-dark(
+        var(
+          --diffs-light-edited-color,
+          var(--diffs-edited-color, var(--diffs-edited-light))
+        ),
+        var(
+          --diffs-dark-edited-color,
+          var(--diffs-edited-color, var(--diffs-edited-dark))
+        )
+      )
+    );
+    --diffs-reformatted-base: var(
+      --diffs-reformatted-color-override,
+      light-dark(
+        var(
+          --diffs-light-reformatted-color,
+          var(--diffs-reformatted-color, var(--diffs-reformatted-light))
+        ),
+        var(
+          --diffs-dark-reformatted-color,
+          var(--diffs-reformatted-color, var(--diffs-reformatted-dark))
         )
       )
     );
@@ -460,25 +520,8 @@
     [data-no-newline] {
       --diffs-diff-line-mix-target: var(--diffs-bg);
 
-      &[data-line-type='change-deletion'] {
-        --diffs-diff-line-mix-target: var(
-          --diffs-bg-deletion-override,
-          var(--diffs-deletion-base)
-        );
+      &[data-line-type^='change-'] {
         --diffs-hover-mix-target: var(--diffs-diff-line-mix-target);
-
-        &:where([data-gutter-buffer], [data-column-number]) {
-          color: var(
-            --diffs-fg-number-deletion-override,
-            var(--diffs-deletion-base)
-          );
-
-          --diffs-diff-line-mix-target: var(
-            --diffs-bg-deletion-number-override,
-            var(--diffs-deletion-base)
-          );
-        }
-
         --diffs-computed-diff-line-bg: light-dark(
           color-mix(
             in lab,
@@ -493,12 +536,30 @@
         );
       }
 
+      &[data-line-type='change-deletion'] {
+        --diffs-diff-line-mix-target: var(
+          --diffs-bg-deletion-override,
+          var(--diffs-deletion-base)
+        );
+
+        &:where([data-gutter-buffer], [data-column-number]) {
+          color: var(
+            --diffs-fg-number-deletion-override,
+            var(--diffs-deletion-base)
+          );
+
+          --diffs-diff-line-mix-target: var(
+            --diffs-bg-deletion-number-override,
+            var(--diffs-deletion-base)
+          );
+        }
+      }
+
       &[data-line-type='change-addition'] {
         --diffs-diff-line-mix-target: var(
           --diffs-bg-addition-override,
           var(--diffs-addition-base)
         );
-        --diffs-hover-mix-target: var(--diffs-diff-line-mix-target);
 
         &:where([data-gutter-buffer], [data-column-number]) {
           color: var(
@@ -511,19 +572,65 @@
             var(--diffs-addition-base)
           );
         }
+      }
 
-        --diffs-computed-diff-line-bg: light-dark(
-          color-mix(
-            in lab,
-            var(--diffs-computed-decoration-bg) var(--mix-light),
-            var(--diffs-diff-line-mix-target)
-          ),
-          color-mix(
-            in lab,
-            var(--diffs-computed-decoration-bg) var(--mix-dark),
-            var(--diffs-diff-line-mix-target)
-          )
+      &[data-line-type='change-moved'],
+      &[data-line-type='change-reordered'],
+      &[data-line-type='change-extracted-function'],
+      &[data-line-type='change-inlined-function'] {
+        --diffs-diff-line-mix-target: var(
+          --diffs-bg-moved-override,
+          var(--diffs-moved-base)
         );
+
+        &:where([data-gutter-buffer], [data-column-number]) {
+          color: var(--diffs-fg-number-moved-override, var(--diffs-moved-base));
+
+          --diffs-diff-line-mix-target: var(
+            --diffs-bg-moved-number-override,
+            var(--diffs-moved-base)
+          );
+        }
+      }
+
+      &[data-line-type='change-edited'],
+      &[data-line-type='change-moved-with-edit'],
+      &[data-line-type='change-renamed'] {
+        --diffs-diff-line-mix-target: var(
+          --diffs-bg-edited-override,
+          var(--diffs-edited-base)
+        );
+
+        &:where([data-gutter-buffer], [data-column-number]) {
+          color: var(
+            --diffs-fg-number-edited-override,
+            var(--diffs-edited-base)
+          );
+
+          --diffs-diff-line-mix-target: var(
+            --diffs-bg-edited-number-override,
+            var(--diffs-edited-base)
+          );
+        }
+      }
+
+      &[data-line-type='change-reformatted'] {
+        --diffs-diff-line-mix-target: var(
+          --diffs-bg-reformatted-override,
+          var(--diffs-reformatted-base)
+        );
+
+        &:where([data-gutter-buffer], [data-column-number]) {
+          color: var(
+            --diffs-fg-number-reformatted-override,
+            var(--diffs-reformatted-base)
+          );
+
+          --diffs-diff-line-mix-target: var(
+            --diffs-bg-reformatted-number-override,
+            var(--diffs-reformatted-base)
+          );
+        }
       }
 
       &[data-merge-conflict='current'] {
@@ -636,10 +743,7 @@
 
     /* Keep the light-theme emphasis on a selected changed line tied to its
      * resolved diff and selection colors. */
-    &:where([data-line][data-selected-line]):is(
-        [data-line-type='change-addition'],
-        [data-line-type='change-deletion']
-      ) {
+    &:where([data-line][data-selected-line])[data-line-type^='change-'] {
       --diffs-selection-emphasis-mix-target: light-dark(
         color-mix(
           in lab,
@@ -1350,23 +1454,13 @@
           left: 0;
           user-select: none;
         }
-      }
-    }
 
-    [data-line-type='change-addition'] {
-      &[data-line],
-      &[data-no-newline] {
-        &::before {
+        &[data-line-type='change-addition']::before {
           content: '+';
           color: var(--diffs-addition-base);
         }
-      }
-    }
 
-    [data-line-type='change-deletion'] {
-      &[data-line],
-      &[data-no-newline] {
-        &::before {
+        &[data-line-type='change-deletion']::before {
           content: '-';
           color: var(--diffs-deletion-base);
         }
@@ -1375,12 +1469,12 @@
   }
 
   [data-indicators='bars'] {
-    [data-line-type='change-deletion'],
-    [data-line-type='change-addition'] {
+    [data-line-type^='change-'] {
       &[data-column-number] {
         &::before {
           content: '';
           display: block;
+          background-color: currentColor;
           width: 4px;
           height: 100%;
           position: absolute;
@@ -1389,12 +1483,9 @@
           user-select: none;
           contain: strict;
         }
-      }
-    }
 
-    [data-line-type='change-deletion'] {
-      &[data-column-number] {
-        &::before {
+        &[data-line-type='change-deletion']::before {
+          background-color: transparent;
           background-image: linear-gradient(
             0deg,
             var(--diffs-bg-deletion) 50%,
@@ -1405,12 +1496,8 @@
           background-size: calc(1lh / round(1lh / 2px))
             calc(1lh / round(1lh / 2px));
         }
-      }
-    }
 
-    [data-line-type='change-addition'] {
-      &[data-column-number] {
-        &::before {
+        &[data-line-type='change-addition']::before {
           background-color: var(--diffs-addition-base);
         }
       }
