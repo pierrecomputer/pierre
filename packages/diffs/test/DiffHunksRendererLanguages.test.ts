@@ -29,6 +29,30 @@ const renames = [
 const options = { theme: 'pierre-dark', diffStyle: 'split' } as const;
 
 describe('DiffHunksRenderer language loading without workers', () => {
+  test('the bundled Terraform loader renders an ordinary .tf edit and provides its aliases', async () => {
+    const renderer = new DiffHunksRenderer(options);
+    try {
+      const diff = parseDiffFromFile(
+        { name: 'example.tf', contents: 'locals {\n  label = "before"\n}\n' },
+        { name: 'example.tf', contents: 'locals {\n  label = "after"\n}\n' }
+      );
+      expect(await renderer.asyncRender(diff)).toBeDefined();
+      const highlighter = getHighlighterIfLoaded();
+      assertDefined(highlighter, 'expected the highlighter to be loaded');
+      for (const lang of ['terraform', 'tf', 'tfvars']) {
+        expect(highlighter.getLoadedLanguages()).toContain(lang);
+        expect(
+          highlighter.codeToTokens('locals { label = "after" }', {
+            lang,
+            theme: options.theme,
+          }).tokens.length
+        ).toBeGreaterThan(0);
+      }
+    } finally {
+      renderer.cleanUp();
+    }
+  });
+
   const cases = [
     [python, { ...python, contents: 'print("changed")\n' }],
     [javascript, { ...javascript, contents: 'console.log("changed");\n' }],

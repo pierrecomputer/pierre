@@ -5,7 +5,9 @@ import { RegisteredCustomLanguages } from './constants';
 
 /**
  * Register a custom language loader and optionally map it to
- * file names or extensions.
+ * file names or extensions. The registered name must match a returned
+ * grammar's name or aliases; registering a loader does not automatically add a
+ * grammar alias.
  */
 export function registerCustomLanguage(
   lang: string,
