@@ -6,16 +6,12 @@ import {
   parseDiffFromFile,
 } from '../src';
 import { TextDocument } from '../src/editor/textDocument';
-import type {
-  FileDiffMetadata,
-  HighlightedToken,
-  ThemedToken,
-} from '../src/types';
+import type { FileDiffMetadata, HighlightedToken } from '../src/types';
 import { finishEditSessionForDiff } from '../src/utils/editSessionHunks';
 import { iterateOverDiff } from '../src/utils/iterateOverDiff';
 import {
   collectAllElements,
-  htmlTextContent,
+  hastTextContent,
   projectRenderResult,
 } from './testUtils';
 
@@ -119,28 +115,6 @@ async function createPrimedRenderer(
 }
 
 describe('DiffHunksRenderer content-edit recompute split', () => {
-  test('length-changing edits retain the untouched token rows', async () => {
-    const renderer = await createPrimedRenderer();
-    const cache = (
-      renderer as unknown as {
-        renderCache: { result: { code: { additionLines: ThemedToken[][] } } };
-      }
-    ).renderCache;
-    const originalRows = cache.result.code.additionLines.slice();
-    renderer.updateRenderCache(
-      makeDirtyLines([[1, '  console.log(msg) // edited']]),
-      'light'
-    );
-    expect(cache.result.code.additionLines[1]).not.toBe(originalRows[1]);
-    for (let line = 2; line < originalRows.length; line++) {
-      expect(cache.result.code.additionLines[line]).toBe(originalRows[line]);
-      expect(cache.result.code.additionLines[line][0]).toBe(
-        originalRows[line][0]
-      );
-    }
-    renderer.cleanUp();
-  });
-
   test('updateRenderCache recomputes hunk metadata for changed addition lines', async () => {
     const renderer = await createPrimedRenderer();
     const diffCache = renderer.diffCache;
@@ -382,11 +356,11 @@ describe('DiffHunksRenderer edit-session hunk updates', () => {
 
     const result = renderer.renderDiff(diff);
     const commentRow = collectAllElements(
-      result?.additionsContentRows ?? []
+      result?.additionsContentAST ?? []
     ).find(
       (node) =>
         node.properties?.['data-line'] === 1 &&
-        htmlTextContent(node) === '// test'
+        hastTextContent(node) === '// test'
     );
 
     expect(commentRow).toBeDefined();
@@ -427,13 +401,13 @@ describe('DiffHunksRenderer edit-session hunk updates', () => {
     // Highlighted rows carry color styles on their token spans; the
     // realign's plain-filled element has none.
     const styledRowTexts = (result: ReturnType<typeof renderer.renderDiff>) =>
-      collectAllElements(result?.additionsContentRows ?? [])
+      collectAllElements(result?.additionsContentAST ?? [])
         .filter(
           (node) =>
             node.properties?.['data-line'] != null &&
             JSON.stringify(node).includes('color:')
         )
-        .map((node) => htmlTextContent(node).replace(/\n$/, ''));
+        .map((node) => hastTextContent(node).replace(/\n$/, ''));
 
     // The exit repaint runs before the fresh highlight lands and must keep
     // serving the fully highlighted current result without a plain-text flash.
@@ -481,13 +455,13 @@ describe('DiffHunksRenderer edit-session hunk updates', () => {
     renderer.renderDiff(diff);
 
     const styledRowTexts = (result: ReturnType<typeof renderer.renderDiff>) =>
-      collectAllElements(result?.additionsContentRows ?? [])
+      collectAllElements(result?.additionsContentAST ?? [])
         .filter(
           (node) =>
             node.properties?.['data-line'] != null &&
             JSON.stringify(node).includes('color:')
         )
-        .map((node) => htmlTextContent(node).replace(/\n$/, ''));
+        .map((node) => hastTextContent(node).replace(/\n$/, ''));
     expect(styledRowTexts(renderer.renderDiff(diff))).toContain(
       lineText(totalLines)
     );

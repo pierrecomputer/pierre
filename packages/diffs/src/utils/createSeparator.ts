@@ -1,5 +1,11 @@
+import type { ElementContent, Element as HASTElement } from 'hast';
+
 import type { ExpansionDirections, HunkSeparators } from '../types';
-import { createHTMLElement, createIconElement, escapeHTML } from './toHtml';
+import {
+  createHastElement,
+  createIconElement,
+  createTextNodeElement,
+} from './hast_utils';
 
 interface CreateSeparatorProps {
   type: HunkSeparators;
@@ -12,20 +18,22 @@ interface CreateSeparatorProps {
 }
 
 function createExpandButton(type: ExpansionDirections) {
-  return createHTMLElement(
-    'div',
-    {
+  return createHastElement({
+    tagName: 'div',
+    children: [
+      createIconElement({
+        name: type === 'both' ? 'diffs-icon-expand-all' : 'diffs-icon-expand',
+        properties: { 'data-icon': '' },
+      }),
+    ],
+    properties: {
       role: 'button',
       'data-expand-button': '',
       'data-expand-both': type === 'both' ? '' : undefined,
       'data-expand-up': type === 'up' ? '' : undefined,
       'data-expand-down': type === 'down' ? '' : undefined,
     },
-    createIconElement({
-      name: type === 'both' ? 'diffs-icon-expand-all' : 'diffs-icon-expand',
-      properties: { 'data-icon': '' },
-    })
-  );
+  });
 }
 
 export function createSeparator({
@@ -36,20 +44,20 @@ export function createSeparator({
   slotName,
   isFirstHunk,
   isLastHunk,
-}: CreateSeparatorProps): string {
+}: CreateSeparatorProps): HASTElement {
   let buttonCount = 0;
   const children = [];
   if (type === 'metadata' && content != null) {
     children.push(
-      createHTMLElement(
-        'div',
-        { 'data-separator-wrapper': '' },
-        escapeHTML(content)
-      )
+      createHastElement({
+        tagName: 'div',
+        children: [createTextNodeElement(content)],
+        properties: { 'data-separator-wrapper': '' },
+      })
     );
   }
   if ((type === 'line-info' || type === 'line-info-basic') && content != null) {
-    const contentChildren: string[] = [];
+    const contentChildren: ElementContent[] = [];
     if (expandIndex != null) {
       if (!chunked) {
         contentChildren.push(
@@ -70,51 +78,58 @@ export function createSeparator({
       }
     }
     contentChildren.push(
-      createHTMLElement(
-        'div',
-        { 'data-separator-content': '' },
-        createHTMLElement(
-          'span',
-          { 'data-unmodified-lines': '' },
-          escapeHTML(content)
-        )
-      )
+      createHastElement({
+        tagName: 'div',
+        children: [
+          createHastElement({
+            tagName: 'span',
+            children: [createTextNodeElement(content)],
+            properties: { 'data-unmodified-lines': '' },
+          }),
+        ],
+        properties: { 'data-separator-content': '' },
+      })
     );
     if (chunked && expandIndex != null) {
       contentChildren.push(
-        createHTMLElement(
-          'div',
-          {
+        createHastElement({
+          tagName: 'div',
+          children: [createTextNodeElement('Expand all')],
+          properties: {
             role: 'button',
             'data-expand-button': '',
             'data-expand-all-button': '',
           },
-          escapeHTML('Expand all')
-        )
+        })
       );
     }
     children.push(
-      createHTMLElement(
-        'div',
-        {
+      createHastElement({
+        tagName: 'div',
+        children: contentChildren,
+        properties: {
           'data-separator-wrapper': '',
           'data-separator-multi-button': buttonCount > 1 ? '' : undefined,
         },
-        ...contentChildren
-      )
+      })
     );
   }
   if (type === 'custom' && slotName != null) {
-    children.push(createHTMLElement('slot', { name: slotName }));
+    children.push(
+      createHastElement({
+        tagName: 'slot',
+        properties: { name: slotName },
+      })
+    );
   }
-  return createHTMLElement(
-    'div',
-    {
+  return createHastElement({
+    tagName: 'div',
+    children,
+    properties: {
       'data-separator': children.length === 0 ? 'simple' : type,
       'data-expand-index': expandIndex,
       'data-separator-first': isFirstHunk ? '' : undefined,
       'data-separator-last': isLastHunk ? '' : undefined,
     },
-    ...children
-  );
+  });
 }

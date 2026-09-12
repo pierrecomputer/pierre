@@ -6,7 +6,6 @@ export from `@pierre/diffs`.
 ## Contents
 
 - [Shiki passthrough APIs](#shiki-passthrough-apis)
-- [Highlighter selection](#highlighter-selection)
 - [Language APIs](#language-apis)
 - [Theme APIs](#theme-apis)
 - [Shared highlighter APIs](#shared-highlighter-apis)
@@ -19,26 +18,6 @@ export from `@pierre/diffs`.
 | ------------------------- | -------- | ------------------------------------------------ |
 | `codeToHtml`              | Function | Re-exports Shiki's complete code-to-HTML helper. |
 | `createCSSVariablesTheme` | Function | Re-exports Shiki's CSS variable theme factory.   |
-
-## Highlighter selection
-
-Shiki is the default. To use the optional Highlights adapter, install
-`@pierre/highlights` and import `highlightsHighlighter` from
-`@pierre/diffs/highlights`. Pass it to `setHighlighter` before rendering. Pass
-`shikiHighlighter` to restore the default. Custom highlighters render on the
-main thread; the worker pool always uses Shiki.
-
-| Export               | Purpose                                                   |
-| -------------------- | --------------------------------------------------------- |
-| `CodeHighlighter`    | Defines loading, theme metadata, tokens, and streaming.   |
-| `CodeLiveTokenizer`  | Defines the incremental document tokenizer for edit mode. |
-| `setHighlighter`     | Selects the implementation used by subsequent renders.    |
-| `getCodeHighlighter` | Gets the selected implementation.                         |
-| `shikiHighlighter`   | Provides the built-in Shiki adapter.                      |
-| `toHtml`             | Serializes token lines with optional token transformers.  |
-
-The `@pierre/diffs/highlights` entry exports `highlightsHighlighter` and
-`registerHighlightsTheme` for registering custom Highlights themes.
 
 ## Language APIs
 
@@ -93,10 +72,11 @@ The `@pierre/diffs/highlights` entry exports `highlightsHighlighter` and
 
 ## Render APIs
 
-| Export                      | Purpose                                                |
-| --------------------------- | ------------------------------------------------------ |
-| `renderFileWithHighlighter` | Creates highlighted file token lines and theme CSS.    |
-| `renderDiffWithHighlighter` | Creates highlighted deletion and addition token lines. |
+| Export                       | Purpose                                                 |
+| ---------------------------- | ------------------------------------------------------- |
+| `renderFileWithHighlighter`  | Creates a highlighted file syntax tree.                 |
+| `renderDiffWithHighlighter`  | Creates highlighted deletion and addition syntax trees. |
+| `createTransformerWithState` | Creates Shiki transformers with shared render state.    |
 
 ## Stream APIs
 

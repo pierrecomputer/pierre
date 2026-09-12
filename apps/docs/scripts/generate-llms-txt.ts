@@ -108,7 +108,7 @@ const SECTION_DESCRIPTIONS: Record<string, Record<string, string>> = {
     Theming:
       'Pierre Light/Dark themes, custom theme creation, and registration',
     HighlightsHighlighter:
-      'Highlights features, APIs, themes, languages, streaming, incremental editing, and Diffs integration',
+      'Experimental highlighter features, APIs, themes, languages, streaming, incremental editing, and Diffs integration',
     TokenHooks:
       'Experimental token-level enter/leave/click callbacks for hover UI and LSP integrations',
     WorkerPool:

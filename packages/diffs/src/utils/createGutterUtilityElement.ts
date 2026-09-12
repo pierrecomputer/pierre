@@ -1,12 +1,16 @@
-import { createHTMLElement, createIconElement } from './toHtml';
+import type { Element as HASTElement } from 'hast';
 
-export function createGutterUtilityElement(): string {
-  return createHTMLElement(
-    'button',
-    { 'data-utility-button': '', type: 'button' },
-    createIconElement({
-      name: 'diffs-icon-plus',
-      properties: { 'data-icon': '' },
-    })
-  );
+import { createHastElement, createIconElement } from './hast_utils';
+
+export function createGutterUtilityElement(): HASTElement {
+  return createHastElement({
+    tagName: 'button',
+    properties: { 'data-utility-button': '', type: 'button' },
+    children: [
+      createIconElement({
+        name: 'diffs-icon-plus',
+        properties: { 'data-icon': '' },
+      }),
+    ],
+  });
 }

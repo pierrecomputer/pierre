@@ -49,14 +49,6 @@ component.
 
 <DocsCodeExample {...preloadFileResult} />
 
-Pass an optional `highlighter` alongside `file` and `options` to choose the
-implementation for that server render. For example,
-`preloadFile({ file, highlighter: highlightsHighlighter })` uses Highlights
-without changing the process-wide registration. The highlighter is omitted from
-the returned component props. Configure the client to use the same
-implementation for hydration. See
-[Highlights server rendering](#highlights-server-rendering) for an example.
-
 #### preloadUnresolvedFile
 
 Preloads a merge-conflict file for `UnresolvedFile` hydration. Use this when the
@@ -102,9 +94,3 @@ results, one for each file in the patch. Each result can be spread into a
 `FileDiff` component.
 
 <DocsCodeExample {...preloadPatchFile} />
-
-### Composing HTML
-
-Low-level renderers return HTML rows and provide `renderFullHTML(result)` to
-compose their wrappers. `renderHTML(children)` from `@pierre/diffs/ssr` accepts
-an array of rendered HTML strings and prepends the icon sprite used by Diffs.

@@ -85,10 +85,10 @@ function createPrimeWorkerManager(): {
     getDiffResultCache() {
       return undefined;
     },
-    getPlainDiffTokens() {
+    getPlainDiffAST() {
       return undefined;
     },
-    highlightDiffTokens() {},
+    highlightDiffAST() {},
     initialize() {
       return Promise.resolve();
     },
@@ -664,10 +664,10 @@ describe('FileDiff partial hydration', () => {
         getDiffResultCache() {
           return undefined;
         },
-        getPlainDiffTokens() {
+        getPlainDiffAST() {
           return undefined;
         },
-        highlightDiffTokens() {},
+        highlightDiffAST() {},
         initialize() {
           return Promise.resolve();
         },

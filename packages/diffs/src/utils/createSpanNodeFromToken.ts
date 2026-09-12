@@ -1,10 +1,13 @@
-import type { ThemedToken } from '../types';
-import { tokenAttributes } from './toHtml';
+import {
+  getTokenStyleObject,
+  stringifyTokenStyle,
+  type ThemedToken,
+} from 'shiki';
 
 export function createSpanFromToken(token: ThemedToken): HTMLSpanElement {
   const element = document.createElement('span');
-  for (const [name, value] of Object.entries(tokenAttributes(token)))
-    element.setAttribute(name, value);
+  const style = token.htmlStyle ?? getTokenStyleObject(token);
+  element.style = stringifyTokenStyle(style);
   element.textContent = token.content;
   return element;
 }

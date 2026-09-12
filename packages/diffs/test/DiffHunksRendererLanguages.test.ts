@@ -7,8 +7,6 @@ import {
   getSharedHighlighter,
   parseDiffFromFile,
 } from '../src';
-import { setHighlighter } from '../src/highlighter/code_highlighter';
-import { shikiHighlighter } from '../src/highlighter/shiki_highlighter';
 import { assertDefined, createDeferred } from './testUtils';
 
 beforeEach(disposeHighlighter);
@@ -31,6 +29,30 @@ const renames = [
 const options = { theme: 'pierre-dark', diffStyle: 'split' } as const;
 
 describe('DiffHunksRenderer language loading without workers', () => {
+  test('the bundled Terraform loader renders an ordinary .tf edit and provides its aliases', async () => {
+    const renderer = new DiffHunksRenderer(options);
+    try {
+      const diff = parseDiffFromFile(
+        { name: 'example.tf', contents: 'locals {\n  label = "before"\n}\n' },
+        { name: 'example.tf', contents: 'locals {\n  label = "after"\n}\n' }
+      );
+      expect(await renderer.asyncRender(diff)).toBeDefined();
+      const highlighter = getHighlighterIfLoaded();
+      assertDefined(highlighter, 'expected the highlighter to be loaded');
+      for (const lang of ['terraform', 'tf', 'tfvars']) {
+        expect(highlighter.getLoadedLanguages()).toContain(lang);
+        expect(
+          highlighter.codeToTokens('locals { label = "after" }', {
+            lang,
+            theme: options.theme,
+          }).tokens.length
+        ).toBeGreaterThan(0);
+      }
+    } finally {
+      renderer.cleanUp();
+    }
+  });
+
   const cases = [
     [python, { ...python, contents: 'print("changed")\n' }],
     [javascript, { ...javascript, contents: 'console.log("changed");\n' }],
@@ -133,47 +155,6 @@ describe('DiffHunksRenderer language loading without workers', () => {
         }
       } finally {
         renderer.cleanUp();
-      }
-    });
-  }
-
-  for (const method of ['asyncRender', 'renderDiff'] as const) {
-    test(`${method} loads a renamed source grammar through a custom highlighter`, async () => {
-      const highlighter = await getSharedHighlighter({
-        themes: [options.theme],
-        langs: [javascript.language],
-      });
-      const custom = { ...shikiHighlighter, name: 'custom' };
-      const languages: (string | undefined)[] = [];
-      const tokenize = spyOn(custom, 'codeToTokens').mockImplementation(
-        (code, options) => {
-          languages.push(options.lang);
-          return shikiHighlighter.codeToTokens(code, options);
-        }
-      );
-      const updated = createDeferred<void>();
-      const renderer = new DiffHunksRenderer(options, undefined, () => {
-        updated.resolve();
-      });
-      setHighlighter(custom);
-      try {
-        expect(highlighter.getLoadedLanguages()).not.toContain(python.language);
-        const diff = parseDiffFromFile(python, javascript);
-        if (method === 'asyncRender') {
-          await renderer.asyncRender(diff);
-        } else {
-          renderer.renderDiff(diff);
-          await updated.promise;
-        }
-        expect(highlighter.getLoadedLanguages()).toContain(python.language);
-        expect(highlighter.getLoadedLanguages()).toContain(javascript.language);
-        expect(languages).toEqual(
-          expect.arrayContaining([python.language, javascript.language])
-        );
-      } finally {
-        renderer.cleanUp();
-        tokenize.mockRestore();
-        setHighlighter(shikiHighlighter);
       }
     });
   }

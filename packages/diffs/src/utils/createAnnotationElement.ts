@@ -1,18 +1,22 @@
-import type { AnnotationSpan } from '../types';
-import { createHTMLElement } from './toHtml';
+import type { Element as HASTElement } from 'hast';
 
-export function createAnnotationElement(span: AnnotationSpan): string {
-  return createHTMLElement(
-    'div',
-    {
+import type { AnnotationSpan } from '../types';
+import { createHastElement } from './hast_utils';
+
+export function createAnnotationElement(span: AnnotationSpan): HASTElement {
+  return createHastElement({
+    tagName: 'div',
+    children: [
+      createHastElement({
+        tagName: 'div',
+        children: span.annotations?.map((slotId) =>
+          createHastElement({ tagName: 'slot', properties: { name: slotId } })
+        ),
+        properties: { 'data-annotation-content': '' },
+      }),
+    ],
+    properties: {
       'data-line-annotation': `${span.hunkIndex},${span.lineIndex}`,
     },
-    createHTMLElement(
-      'div',
-      { 'data-annotation-content': '' },
-      ...(span.annotations?.map((slotId) =>
-        createHTMLElement('slot', { name: slotId })
-      ) ?? [])
-    )
-  );
+  });
 }

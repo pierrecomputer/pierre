@@ -2,13 +2,13 @@ import type { File } from '../components/File';
 import type { FileDiff } from '../components/FileDiff';
 import type { VirtualizedFile } from '../components/VirtualizedFile';
 import type { VirtualizedFileDiff } from '../components/VirtualizedFileDiff';
-import type { RenderersHighlighter } from '../highlighter/resolve_highlighter';
 import {
   dequeueRender,
   queueRender,
 } from '../managers/UniversalRenderingManager';
 import type {
   DiffLineAnnotation,
+  DiffsHighlighter,
   FileContents,
   FileDiffMetadata,
   HighlightedToken,
@@ -127,11 +127,7 @@ import {
   Metrics,
   snapTextOffsetToUnicodeBoundary,
 } from './textMeasure';
-import {
-  createEditorTokenizer,
-  type EditorTokenizer,
-  renderLineTokens,
-} from './tokenizer';
+import { EditorTokenizer, renderLineTokens } from './tokenizer';
 import type {
   EditorCaret,
   EditorChange,
@@ -235,7 +231,7 @@ interface TrackedCaret<T> {
 }
 
 interface SyncRenderViewBaseProps {
-  highlighter: RenderersHighlighter;
+  highlighter: DiffsHighlighter;
   fileContainer: HTMLElement;
   renderRange: RenderRange | undefined;
   /** Start fresh history instead of retaining or extending the current history. */
@@ -1552,7 +1548,7 @@ export class Editor<
     // skips the rebuild, able to paint edits.
     const textDocument = editSession.document;
     if (this.#tokenizer == null && textDocument != null) {
-      this.#tokenizer = createEditorTokenizer({
+      this.#tokenizer = new EditorTokenizer({
         highlighter,
         textDocument,
         codeOptions: this.#fileInstance?.__getEffectiveCodeOptions() ?? {},
@@ -3860,9 +3856,6 @@ export class Editor<
     }
 
     const didLineCountChange = change.lineDelta !== 0;
-    const didLineStructureChange =
-      didLineCountChange ||
-      (change.changedLineChanges?.some(([, , delta]) => delta !== 0) ?? false);
 
     // fix grid layout
     if (didLineCountChange) {
@@ -3880,13 +3873,11 @@ export class Editor<
     }
 
     fileInstance.updateRenderCache(dirtyLines, tokenizer.themeType, {
-      shouldRefreshDiffsView: this.#isDiff && !didLineStructureChange,
-      lineCountChangeInFlight: didLineStructureChange,
-      lineChanges: change.changedLineChanges,
+      shouldRefreshDiffsView: this.#isDiff && !didLineCountChange,
+      lineCountChangeInFlight: didLineCountChange,
     });
-    if (didLineStructureChange) {
-      // Separate insertions and deletions can renumber rows even when their
-      // line-count changes cancel out. Realign against the complete batch.
+    if (didLineCountChange) {
+      // Line-count change: recompute hunks from the full document and re-render.
       applyDocumentChange(textDocument, newLineAnnotations, shouldUpdateBuffer);
     }
 
@@ -3894,10 +3885,7 @@ export class Editor<
     // its content column on every edit. Either can detach the line elements
     // memoized for caret/selection geometry, making offsetTop read as 0 and
     // scrolling the caret to the top. Re-measure against the current rows.
-    if (
-      didLineStructureChange ||
-      (this.#isDiff && this.#diffSyle === 'unified')
-    ) {
+    if (didLineCountChange || (this.#isDiff && this.#diffSyle === 'unified')) {
       this.#resetCache();
     }
 
@@ -3906,7 +3894,7 @@ export class Editor<
       // A structural FileDiff edit rebuilds both columns and their paired
       // annotation rows together. Re-inserting those rows independently by
       // line number would break their visual alignment in split view.
-      if (!this.#isDiff || !didLineStructureChange) {
+      if (!this.#isDiff || !didLineCountChange) {
         renderLineAnnotations(
           newLineAnnotations,
           contentEl,

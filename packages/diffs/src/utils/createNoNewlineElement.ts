@@ -1,12 +1,21 @@
-import type { LineTypes, RenderedLine } from '../types';
+import type { Element as HASTElement } from 'hast';
 
-export function createNoNewlineElement(type: LineTypes): RenderedLine {
-  return {
-    html: '<span>No newline at end of file</span>',
+import type { LineTypes } from '../types';
+import { createHastElement, createTextNodeElement } from './hast_utils';
+
+export function createNoNewlineElement(type: LineTypes): HASTElement {
+  return createHastElement({
+    tagName: 'div',
+    children: [
+      createHastElement({
+        tagName: 'span',
+        children: [createTextNodeElement('No newline at end of file')],
+      }),
+    ],
     properties: {
       'data-no-newline': '',
       'data-line-type': type,
       'data-column-content': '',
     },
-  };
+  });
 }

@@ -225,6 +225,85 @@ export function workerFactory() {
   options,
 };
 
+export const WORKER_POOL_USAGE: PreloadFileOptions<undefined, undefined> = {
+  file: {
+    name: 'example.ts',
+    contents: `import { createWorkerAPI } from './utils/createWorkerAPI';
+
+// Create worker pool with 8 workers
+const workerAPI = createWorkerAPI({
+  poolSize: 8,
+  initOptions: {
+    themes: ['pierre-dark', 'pierre-light'],
+    langs: ['typescript', 'javascript'],
+  },
+});
+
+// Initialize the pool (optional - auto-initializes on first use)
+await workerAPI.ensureInitialized();
+
+// Render a single file
+const file = {
+  name: 'example.ts',
+  contents: 'const x = 42;',
+};
+
+const result = await workerAPI.renderFileToHast(file, {
+  theme: 'pierre-dark',
+});
+
+console.log(result.lines); // Array of ElementContent
+
+// Render a diff from two files
+const oldFile = { name: 'example.ts', contents: 'const x = 1;' };
+const newFile = { name: 'example.ts', contents: 'const x = 2;' };
+
+const diffResult = await workerAPI.renderDiffToHast(oldFile, newFile, {
+  theme: { dark: 'pierre-dark', light: 'pierre-light' },
+});
+console.log(diffResult.oldLines, diffResult.newLines);
+
+// Check pool status
+console.log(workerAPI.getStats());
+// { totalWorkers: 8, busyWorkers: 0, queuedTasks: 0, pendingTasks: 0 }
+
+// Clean up when done
+workerAPI.terminate();`,
+  },
+  options,
+};
+
+export const WORKER_POOL_REACT_COMPONENT: PreloadFileOptions<
+  undefined,
+  undefined
+> = {
+  file: {
+    name: 'CodeView.tsx',
+    contents: `'use client';
+
+import { createWorkerAPI } from '@/utils/createWorkerAPI';
+import { useEffect, useState } from 'react';
+
+export function CodeView() {
+  const [workerAPI] = useState(() =>
+    createWorkerAPI({
+      poolSize: 8,
+      initOptions: {
+        themes: ['pierre-dark', 'pierre-light'],
+      },
+    })
+  );
+
+  useEffect(() => {
+    return () => workerAPI.terminate();
+  }, [workerAPI]);
+
+  // Use workerAPI.renderFileToHast() etc.
+}`,
+  },
+  options,
+};
+
 export const WORKER_POOL_REACT_USAGE: PreloadFileOptions<undefined, undefined> =
   {
     file: {
@@ -387,10 +466,9 @@ new WorkerPoolManager(poolOptions, highlighterOptions)
 // - poolOptions: WorkerPoolOptions
 //   - workerFactory: () => Worker - Function that creates a Worker instance
 //   - poolSize?: number (default: 8) - Number of workers
-//   - totalTokenLRUCacheSize?: number (default: 100) - Max items per cache
+//   - totalASTLRUCacheSize?: number (default: 100) - Max items per cache
 //     (Two separate LRU caches are maintained: one for files, one for diffs.
 //      Each cache has this limit, so total cached items can be 2x this value.)
-//   - totalASTLRUCacheSize?: number - Deprecated alias; the new name takes precedence
 // - highlighterOptions: WorkerInitializationRenderOptions
 //   - theme?: DiffsThemeNames | ThemesType - Theme name or { dark, light } object
 //   - lineDiffType?: 'word' | 'word-alt' | 'char' - How to diff lines (default: 'word-alt')
@@ -401,8 +479,7 @@ new WorkerPoolManager(poolOptions, highlighterOptions)
 
 // Methods:
 poolManager.initialize()
-// Returns: Promise<void> - Initializes Shiki workers; also called by the constructor
-// Initialization is deferred while a custom highlighter is registered.
+// Returns: Promise<void> - Initializes workers (auto-called on first render)
 
 poolManager.isInitialized()
 // Returns: boolean
@@ -420,17 +497,17 @@ poolManager.setRenderOptions(options)
 poolManager.getRenderOptions()
 // Returns: WorkerRenderingOptions - Current render options (copy)
 
-poolManager.highlightFileTokens(fileInstance, file, options)
-// Queues file tokenization, calls fileInstance.onHighlightSuccess when done
+poolManager.highlightFileAST(fileInstance, file, options)
+// Queues highlighted file render, calls fileInstance.onHighlightSuccess when done
 
-poolManager.getPlainFileTokens(file, startingLineNumber?)
-// Returns: ThemedFileResult | undefined - Sync tokenize with 'text' lang
+poolManager.getPlainFileAST(file, startingLineNumber?)
+// Returns: ThemedFileResult | undefined - Sync render with 'text' lang
 
-poolManager.highlightDiffTokens(fileDiffInstance, diff, options)
-// Queues diff tokenization, calls fileDiffInstance.onHighlightSuccess when done
+poolManager.highlightDiffAST(fileDiffInstance, diff, options)
+// Queues highlighted diff render, calls fileDiffInstance.onHighlightSuccess when done
 
-poolManager.getPlainDiffTokens(diff, lineDiffType)
-// Returns: ThemedDiffResult | undefined - Sync tokenize with 'text' lang
+poolManager.getPlainDiffAST(diff, lineDiffType)
+// Returns: ThemedDiffResult | undefined - Sync render with 'text' lang
 
 poolManager.terminate()
 // Terminates all workers and resets state
@@ -466,7 +543,7 @@ const workerPool = getOrCreateWorkerPoolSingleton({
     // Optional: configure cache size per cache (default: 100)
     // Two separate LRU caches are maintained: one for files,
     // one for diffs, so combined cache size will be double
-    totalTokenLRUCacheSize: 200,
+    totalASTLRUCacheSize: 200,
   },
   highlighterOptions: {
     theme: { dark: 'pierre-dark', light: 'pierre-light' },
@@ -547,12 +624,12 @@ export const WORKER_POOL_ARCHITECTURE_ASCII: PreloadFileOptions<
 │ │                                     │ │
 │ │ * Renders plain text synchronously  │ │
 │ │ * Queue requests to WorkerPool for  │ │
-│ │   themed tokens                     │ │
+│ │   highlighted HAST                  │ │
 │ │ * Automatically render the          │ │
-│ │   token response                    │ │
+│ │   highlighted HAST response         │ │
 │ └─┬─────────────────────────────────┬─┘ │
-│   │ Token Request                   ↑   │
-│   ↓                  Token Response │   │
+│   │ HAST Request                    ↑   │
+│   ↓                   HAST Response │   │
 │ ┌ WorkerPoolManager ────────────────┴─┐ │
 │ │ * Shared singleton                  │ │
 │ │ * Manages WorkerPool instance and   │ │
@@ -560,11 +637,11 @@ export const WORKER_POOL_ARCHITECTURE_ASCII: PreloadFileOptions<
 │ └─┬─────────────────────────────────┬─┘ │
 └───│─────────────────────────────────│───┘
     │ postMessage                     ↑
-    ↓                  Token Response │
+    ↓                   HAST Response │
 ┌───┴───────── Worker Threads ────────│───┐
 │ ┌ worker.js ────────────────────────│─┐ │
 │ │ * 8 threads by default            │ │ │
-│ │ * Runs codeToTokens() ────────────┘ │ │
+│ │ * Runs Shiki's codeToHast() ──────┘ │ │
 │ │ * Manages themes and language       │ │
 │ │   loading automatically             │ │
 │ └─────────────────────────────────────┘ │

@@ -1,3 +1,5 @@
+import type { ElementContent, Element as HASTElement, Properties } from 'hast';
+
 import {
   CUSTOM_HEADER_SLOT_ID,
   HEADER_FILENAME_SUFFIX_SLOT_ID,
@@ -9,10 +11,13 @@ import type {
   FileContents,
   FileDiffMetadata,
   FileHeaderRenderMode,
-  HTMLAttributes,
 } from '../types';
 import { getIconForType } from './getIconForType';
-import { createHTMLElement, createIconElement, escapeHTML } from './toHtml';
+import {
+  createHastElement,
+  createIconElement,
+  createTextNodeElement,
+} from './hast_utils';
 
 export interface CreateFileHeaderElementProps {
   fileOrDiff: FileDiffMetadata | FileContents;
@@ -24,26 +29,32 @@ export function createFileHeaderElement({
   fileOrDiff,
   mode,
   stickyHeader,
-}: CreateFileHeaderElementProps): string {
+}: CreateFileHeaderElementProps): HASTElement {
   const fileDiff = 'type' in fileOrDiff ? fileOrDiff : undefined;
-  const properties: HTMLAttributes = {
+  const properties: Properties = {
     'data-diffs-header': mode,
     'data-change-type': fileDiff?.type,
     'data-sticky': stickyHeader ? '' : undefined,
   };
 
-  return createHTMLElement(
-    'div',
+  return createHastElement({
+    tagName: 'div',
+    children: [
+      mode === 'custom'
+        ? createHastElement({
+            tagName: 'slot',
+            properties: { name: CUSTOM_HEADER_SLOT_ID },
+          })
+        : createHeaderElement({
+            name: fileOrDiff.name,
+            prevName:
+              'prevName' in fileOrDiff ? fileOrDiff.prevName : undefined,
+            iconType: fileDiff?.type ?? 'file',
+          }),
+      ...(mode === 'custom' ? [] : [createMetadataElement(fileDiff)]),
+    ],
     properties,
-    mode === 'custom'
-      ? createHTMLElement('slot', { name: CUSTOM_HEADER_SLOT_ID })
-      : createHeaderElement({
-          name: fileOrDiff.name,
-          prevName: 'prevName' in fileOrDiff ? fileOrDiff.prevName : undefined,
-          iconType: fileDiff?.type ?? 'file',
-        }),
-    mode === 'custom' ? '' : createMetadataElement(fileDiff)
-  );
+  });
 }
 
 interface CreateHeaderElementOptions {
@@ -56,9 +67,12 @@ function createHeaderElement({
   name,
   prevName,
   iconType,
-}: CreateHeaderElementOptions): string {
-  const children: string[] = [
-    createHTMLElement('slot', { name: HEADER_PREFIX_SLOT_ID }),
+}: CreateHeaderElementOptions): HASTElement {
+  const children: ElementContent[] = [
+    createHastElement({
+      tagName: 'slot',
+      properties: { name: HEADER_PREFIX_SLOT_ID },
+    }),
     createIconElement({
       name: getIconForType(iconType),
       properties: { 'data-change-icon': iconType },
@@ -66,13 +80,18 @@ function createHeaderElement({
   ];
   if (prevName != null) {
     children.push(
-      createHTMLElement(
-        'div',
-        {
+      createHastElement({
+        tagName: 'div',
+        children: [
+          createHastElement({
+            tagName: 'bdi',
+            children: [createTextNodeElement(prevName)],
+          }),
+        ],
+        properties: {
           'data-prev-name': '',
         },
-        createHTMLElement('bdi', null, escapeHTML(prevName))
-      )
+      })
     );
     children.push(
       createIconElement({
@@ -84,20 +103,34 @@ function createHeaderElement({
     );
   }
   children.push(
-    createHTMLElement(
-      'div',
-      { 'data-title': '' },
-      createHTMLElement('bdi', null, escapeHTML(name))
-    )
+    createHastElement({
+      tagName: 'div',
+      children: [
+        createHastElement({
+          tagName: 'bdi',
+          children: [createTextNodeElement(name)],
+        }),
+      ],
+      properties: { 'data-title': '' },
+    })
   );
   children.push(
-    createHTMLElement('slot', { name: HEADER_FILENAME_SUFFIX_SLOT_ID })
+    createHastElement({
+      tagName: 'slot',
+      properties: { name: HEADER_FILENAME_SUFFIX_SLOT_ID },
+    })
   );
-  return createHTMLElement('div', { 'data-header-content': '' }, ...children);
+  return createHastElement({
+    tagName: 'div',
+    children,
+    properties: { 'data-header-content': '' },
+  });
 }
 
-function createMetadataElement(fileDiff: FileDiffMetadata | undefined): string {
-  const children: string[] = [];
+function createMetadataElement(
+  fileDiff: FileDiffMetadata | undefined
+): HASTElement {
+  const children: ElementContent[] = [];
   if (fileDiff != null) {
     let additions = 0;
     let deletions = 0;
@@ -107,23 +140,32 @@ function createMetadataElement(fileDiff: FileDiffMetadata | undefined): string {
     }
     if (deletions > 0 || additions === 0) {
       children.push(
-        createHTMLElement(
-          'span',
-          { 'data-deletions-count': '' },
-          escapeHTML(`-${deletions}`)
-        )
+        createHastElement({
+          tagName: 'span',
+          children: [createTextNodeElement(`-${deletions}`)],
+          properties: { 'data-deletions-count': '' },
+        })
       );
     }
     if (additions > 0 || deletions === 0) {
       children.push(
-        createHTMLElement(
-          'span',
-          { 'data-additions-count': '' },
-          escapeHTML(`+${additions}`)
-        )
+        createHastElement({
+          tagName: 'span',
+          children: [createTextNodeElement(`+${additions}`)],
+          properties: { 'data-additions-count': '' },
+        })
       );
     }
   }
-  children.push(createHTMLElement('slot', { name: HEADER_METADATA_SLOT_ID }));
-  return createHTMLElement('div', { 'data-metadata': '' }, ...children);
+  children.push(
+    createHastElement({
+      tagName: 'slot',
+      properties: { name: HEADER_METADATA_SLOT_ID },
+    })
+  );
+  return createHastElement({
+    tagName: 'div',
+    children,
+    properties: { 'data-metadata': '' },
+  });
 }

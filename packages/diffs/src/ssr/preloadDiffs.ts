@@ -277,10 +277,11 @@ function processHunkResult<LAnnotation>(
   if (unsafeCSS != null) {
     children.push(createStyleElement(unsafeCSS));
   }
-  if (hunkResult.headerHTML != null) {
-    children.push(hunkResult.headerHTML);
+  if (hunkResult.headerElement != null) {
+    children.push(hunkResult.headerElement);
   }
-  const code = renderer.renderFullHTML(hunkResult, { 'data-dehydrated': '' });
+  const code = renderer.renderFullAST(hunkResult);
+  code.properties['data-dehydrated'] = '';
   children.push(code);
   return children;
 }

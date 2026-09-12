@@ -9,7 +9,7 @@ exports from `@pierre/diffs`.
 - [Interaction manager](#interaction-manager)
 - [Size, scroll, and render managers](#size-scroll-and-render-managers)
 - [Comparison helpers](#comparison-helpers)
-- [HTML and DOM helpers](#html-and-dom-helpers)
+- [Syntax tree and DOM helpers](#syntax-tree-and-dom-helpers)
 - [Layout and CSS helpers](#layout-and-css-helpers)
 - [Constants](#constants)
 
@@ -17,10 +17,10 @@ exports from `@pierre/diffs`.
 
 | Export                                 | Kind  | Purpose                                                 |
 | -------------------------------------- | ----- | ------------------------------------------------------- |
-| `FileRenderer`                         | Class | Converts one file to highlighted rows, CSS, and HTML.   |
+| `FileRenderer`                         | Class | Converts one file to highlighted HAST, CSS, and HTML.   |
 | `FileRendererOptions`                  | Type  | Adds header mode to base code options.                  |
-| `FileRenderResult`                     | Type  | Holds rendered rows, CSS, row counts, and buffers.      |
-| `DiffHunksRenderer`                    | Class | Converts diff hunks to highlighted column rows and CSS. |
+| `FileRenderResult`                     | Type  | Holds file HAST, CSS, row counts, and buffers.          |
+| `DiffHunksRenderer`                    | Class | Converts diff hunks to highlighted column HAST and CSS. |
 | `DiffHunksRendererOptions`             | Type  | Configures one hunk renderer.                           |
 | `DiffHunksRendererOptionsWithDefaults` | Type  | Describes resolved hunk renderer options.               |
 | `HunksRenderResult`                    | Type  | Holds rendered diff columns, metadata, and row count.   |
@@ -32,11 +32,6 @@ exports from `@pierre/diffs`.
 | `SplitInjectedRowPlacement`            | Type  | Selects side and placement for a split row.             |
 | `UnifiedLineDecorationProps`           | Type  | Supplies one unified row to a decoration.               |
 | `SplitLineDecorationProps`             | Type  | Supplies paired split rows to a decoration.             |
-
-Both renderers expose `renderFullHTML(result)` for composing a complete `pre`
-element. Rendering results store HTML rows and `headerHTML`. `FileRenderResult`
-exposes `gutterRows` and `contentRows`; diff results expose rows for their
-unified or split columns.
 
 ## Interaction manager
 
@@ -90,38 +85,41 @@ unified or split columns.
 | `areVirtualWindowSpecsEqual`  | Compares two virtual window descriptions.         |
 | `areWorkerStatsEqual`         | Compares two worker statistics objects.           |
 
-## HTML and DOM helpers
+## Syntax tree and DOM helpers
 
 | Export                           | Kind     | Purpose                                                    |
 | -------------------------------- | -------- | ---------------------------------------------------------- |
-| `createAnnotationElement`        | Function | Creates annotation row HTML from an annotation span.       |
+| `createAnnotationElement`        | Function | Creates a HAST annotation row from an annotation span.     |
 | `createAnnotationWrapperNode`    | Function | Creates a DOM host for an annotation slot.                 |
 | `createDiffSpanDecoration`       | Function | Creates one Shiki inline diff decoration.                  |
 | `pushOrJoinSpan`                 | Function | Adds or joins one inline diff span.                        |
 | `createEmptyRowBuffer`           | Function | Creates an empty virtual row buffer.                       |
-| `createFileHeaderElement`        | Function | Creates file or diff header HTML.                          |
+| `createFileHeaderElement`        | Function | Creates a file or diff header HAST element.                |
 | `CreateFileHeaderElementProps`   | Type     | Defines header source, mode, and sticky state.             |
-| `createGutterGap`                | Function | Creates gutter gap HTML.                                   |
-| `createGutterItem`               | Function | Creates gutter item HTML.                                  |
-| `createGutterUtilityElement`     | Function | Creates gutter utility HTML.                               |
+| `createGutterGap`                | Function | Creates a gutter gap HAST element.                         |
+| `createGutterItem`               | Function | Creates a gutter item HAST element.                        |
+| `createGutterWrapper`            | Function | Creates a gutter wrapper HAST element.                     |
+| `createGutterUtilityElement`     | Function | Creates a gutter utility HAST element.                     |
 | `createGutterUtilityContentNode` | Function | Creates a gutter utility DOM content host.                 |
-| `createHTMLElement`              | Function | Composes HTML from a tag, attributes, and child HTML.      |
-| `createIconElement`              | Function | Creates sprite icon HTML.                                  |
-| `renderRows`                     | Function | Composes HTML from rendered rows.                          |
-| `renderColumn`                   | Function | Composes gutter and content column HTML.                   |
-| `createNoNewlineElement`         | Function | Creates missing-final-newline HTML.                        |
-| `createPreElement`               | Function | Creates outer `pre` HTML.                                  |
-| `createPreWrapperProperties`     | Function | Creates attributes for a `pre` wrapper.                    |
+| `createHastElement`              | Function | Creates a typed HAST element.                              |
+| `createIconElement`              | Function | Creates a sprite icon HAST element.                        |
+| `createTextNodeElement`          | Function | Creates a HAST text node.                                  |
+| `createNoNewlineElement`         | Function | Creates the missing-final-newline HAST element.            |
+| `createPreElement`               | Function | Creates the outer HAST `pre` element.                      |
+| `createPreWrapperProperties`     | Function | Creates HAST properties for a `pre` wrapper.               |
 | `createRowNodes`                 | Function | Creates DOM row and content elements for one line.         |
-| `createSeparator`                | Function | Creates hunk separator HTML.                               |
-| `createSpanFromToken`            | Function | Creates a DOM span from one highlighted token.             |
-| `createStyleElement`             | Function | Creates style element HTML.                                |
+| `createSeparator`                | Function | Creates a hunk separator HAST element.                     |
+| `createSpanFromToken`            | Function | Creates a HAST span from one highlighted token.            |
+| `createStyleElement`             | Function | Creates a DOM style element with an attribute marker.      |
 | `createThemeStyleElement`        | Function | Creates a marked theme style element.                      |
 | `createUnsafeCSSStyleNode`       | Function | Creates a marked custom CSS style element.                 |
+| `findCodeElement`                | Function | Finds the code element in a HAST tree.                     |
+| `getLineNodes`                   | Function | Gets rendered line nodes from a HAST root.                 |
 | `getOrCreateCodeNode`            | Function | Reuses or creates a code column DOM node.                  |
 | `getLineAnnotationName`          | Function | Creates the slot name for a line annotation.               |
 | `getHunkSeparatorSlotName`       | Function | Creates the slot name for a hunk separator.                |
 | `getIconForType`                 | Function | Maps a file change type to a sprite icon.                  |
+| `processLine`                    | Function | Applies line render state to one HAST line.                |
 | `setPreNodeProperties`           | Function | Applies resolved render properties to a DOM `pre` element. |
 | `prerenderHTMLIfNecessary`       | Function | Adds preloaded HTML to an empty host element.              |
 

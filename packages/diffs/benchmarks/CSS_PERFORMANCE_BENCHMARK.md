@@ -123,16 +123,16 @@ packages/diffs/src/worker/WorkerPoolManager.ts
 Add an immediate `return;` at the start of these methods:
 
 ```text
-highlightFileTokens
+highlightFileAST
 primeFileHighlightCache
-highlightDiffTokens
+highlightDiffAST
 primeDiffHighlightCache
 ```
 
 Example:
 
 ```ts
-public highlightDiffTokens(
+public highlightDiffAST(
   instance: DiffRendererInstance,
   diff: FileDiffMetadata
 ): void {

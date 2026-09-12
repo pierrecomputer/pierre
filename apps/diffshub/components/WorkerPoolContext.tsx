@@ -25,11 +25,11 @@ function isMobileBrowser(): boolean {
 
 function getWorkerResourceLimits(): Pick<
   Required<WorkerPoolOptions>,
-  'poolSize' | 'totalTokenLRUCacheSize'
+  'poolSize' | 'totalASTLRUCacheSize'
 > {
   return isMobileBrowser()
-    ? { poolSize: 1, totalTokenLRUCacheSize: 10 }
-    : { poolSize: 3, totalTokenLRUCacheSize: 100 };
+    ? { poolSize: 1, totalASTLRUCacheSize: 10 }
+    : { poolSize: 3, totalASTLRUCacheSize: 100 };
 }
 
 const WorkerResourceLimits = getWorkerResourceLimits();
@@ -40,7 +40,7 @@ const PoolOptions: WorkerPoolOptions = {
     Math.max(1, (global.navigator?.hardwareConcurrency ?? 1) - 1),
     WorkerResourceLimits.poolSize
   ),
-  totalTokenLRUCacheSize: WorkerResourceLimits.totalTokenLRUCacheSize,
+  totalASTLRUCacheSize: WorkerResourceLimits.totalASTLRUCacheSize,
   workerFactory() {
     return new Worker(
       new URL('@pierre/diffs/worker/worker.js', import.meta.url)

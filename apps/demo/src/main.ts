@@ -689,7 +689,7 @@ export function workerRenderDiff(parsedPatches: ParsedPatch[]) {
   for (const parsedPatch of parsedPatches) {
     for (const fileDiff of parsedPatch.files) {
       const start = Date.now();
-      poolManager?.highlightDiffTokens(
+      poolManager?.highlightDiffAST(
         {
           __id: 'hack',
           onHighlightSuccess(_diff, { code }) {

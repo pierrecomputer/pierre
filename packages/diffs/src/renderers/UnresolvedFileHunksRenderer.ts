@@ -1,23 +1,23 @@
+import type { Element as HASTElement, Properties } from 'hast';
+
 import { DEFAULT_RENDER_RANGE, DEFAULT_THEMES } from '../constants';
 import type {
   DiffLineAnnotation,
   FileDiffMetadata,
-  HTMLAttributes,
   MergeConflictMarkerRow,
   MergeConflictResolution,
-  RenderedLine,
   RenderRange,
 } from '../types';
 import { getMergeConflictActionSlotName } from '../utils/getMergeConflictActionSlotName';
 import {
+  createGutterGap,
+  createHastElement,
+  createTextNodeElement,
+} from '../utils/hast_utils';
+import {
   getMergeConflictActionAnchor,
   type MergeConflictDiffAction,
 } from '../utils/parseMergeConflictDiffFromFile';
-import {
-  createGutterGap,
-  createHTMLElement,
-  escapeHTML,
-} from '../utils/toHtml';
 import type { WorkerPoolManager } from '../worker';
 import {
   DiffHunksRenderer,
@@ -170,11 +170,11 @@ export class UnresolvedFileHunksRenderer<
     return super.asyncRender(diff, renderRange);
   }
 
-  protected override createPreProperties(
+  protected override createPreElement(
     split: boolean,
     totalLines: number
-  ): HTMLAttributes {
-    return super.createPreProperties(split, totalLines, {
+  ): HASTElement {
+    return super.createPreElement(split, totalLines, {
       'data-has-merge-conflict': '',
     });
   }
@@ -266,7 +266,7 @@ export class UnresolvedFileHunksRenderer<
 
 function getMergeConflictGutterProperties(
   mergeConflictType: MergeConflictMarkerType | undefined
-): HTMLAttributes | undefined {
+): Properties | undefined {
   return mergeConflictType != null
     ? { 'data-merge-conflict': mergeConflictType }
     : undefined;
@@ -275,7 +275,7 @@ function getMergeConflictGutterProperties(
 function getMergeConflictContentProperties(
   type: 'change' | 'context' | 'context-expanded',
   mergeConflictType: MergeConflictMarkerType | undefined
-): HTMLAttributes | undefined {
+): Properties | undefined {
   if (mergeConflictType == null) {
     return undefined;
   }
@@ -302,7 +302,7 @@ function getMergeConflictContentProperties(
 function createMergeConflictGutterGap(
   type: 'action' | 'marker',
   markerType?: MergeConflictMarkerInjectedRow['type']
-): RenderedLine {
+): HASTElement {
   const gap = createGutterGap(undefined, 'annotation', 1);
   gap.properties['data-gutter-buffer'] =
     type === 'action'
@@ -321,49 +321,58 @@ function createMergeConflictActionsRowElement({
   row,
   includeDefaultActions,
   includeSlot,
-}: CreateMergeConflictActionsRowElementProps): string {
-  const contentChildren: string[] = includeDefaultActions
+}: CreateMergeConflictActionsRowElementProps): HASTElement {
+  const contentChildren: HASTElement[] = includeDefaultActions
     ? createMergeConflictActionsContent(row.conflictIndex)
     : [];
   if (includeSlot) {
     contentChildren.push(
-      createHTMLElement('slot', {
-        name: getMergeConflictActionSlotName({
-          hunkIndex: row.hunkIndex,
-          lineIndex: row.lineIndex,
-          conflictIndex: row.conflictIndex,
-        }),
-        'data-merge-conflict-action-slot': '',
+      createHastElement({
+        tagName: 'slot',
+        properties: {
+          name: getMergeConflictActionSlotName({
+            hunkIndex: row.hunkIndex,
+            lineIndex: row.lineIndex,
+            conflictIndex: row.conflictIndex,
+          }),
+          'data-merge-conflict-action-slot': '',
+        },
       })
     );
   }
-  return createHTMLElement(
-    'div',
-    {
+  return createHastElement({
+    tagName: 'div',
+    properties: {
       'data-merge-conflict-actions': '',
     },
-    createHTMLElement(
-      'div',
-      { 'data-merge-conflict-actions-content': '' },
-      ...contentChildren
-    )
-  );
+    children: [
+      createHastElement({
+        tagName: 'div',
+        properties: { 'data-merge-conflict-actions-content': '' },
+        children: contentChildren,
+      }),
+    ],
+  });
 }
 
 function createMergeConflictMarkerRowElement(
   row: MergeConflictMarkerInjectedRow
-): string {
-  return createHTMLElement(
-    'div',
-    {
+): HASTElement {
+  return createHastElement({
+    tagName: 'div',
+    properties: {
       'data-merge-conflict': row.type,
       'data-merge-conflict-marker-row': '',
     },
-    escapeHTML(row.lineText.replace(/(?:\r\n|\n|\r)$/, ''))
-  );
+    children: [
+      createTextNodeElement(row.lineText.replace(/(?:\r\n|\n|\r)$/, '')),
+    ],
+  });
 }
 
-function createMergeConflictActionsContent(conflictIndex: number): string[] {
+function createMergeConflictActionsContent(
+  conflictIndex: number
+): HASTElement[] {
   return [
     createMergeConflictActionButton({
       resolution: 'current',
@@ -395,22 +404,22 @@ function createMergeConflictActionButton({
   resolution,
   label,
   conflictIndex,
-}: CreateMergeConflictActionButtonProps): string {
-  return createHTMLElement(
-    'button',
-    {
+}: CreateMergeConflictActionButtonProps): HASTElement {
+  return createHastElement({
+    tagName: 'button',
+    properties: {
       type: 'button',
       'data-merge-conflict-action': resolution,
       'data-merge-conflict-conflict-index': `${conflictIndex}`,
     },
-    escapeHTML(label)
-  );
+    children: [createTextNodeElement(label)],
+  });
 }
 
-function createMergeConflictActionSeparator(): string {
-  return createHTMLElement(
-    'span',
-    { 'data-merge-conflict-action-separator': '' },
-    escapeHTML('|')
-  );
+function createMergeConflictActionSeparator(): HASTElement {
+  return createHastElement({
+    tagName: 'span',
+    properties: { 'data-merge-conflict-action-separator': '' },
+    children: [createTextNodeElement('|')],
+  });
 }

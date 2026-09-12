@@ -19,10 +19,6 @@ the syntax highlighting when we get a response from the worker threads.
 Basic usage differs a bit depending on if you're using React or Vanilla JS APIs,
 so continue reading for more details.
 
-The pool runs Shiki. Registering [Highlights](#highlights) or another custom
-highlighter keeps rendering on the main thread and defers pool initialization.
-Selecting Shiki again allows the pool to initialize when needed.
-
 ### Setup
 
 One unfortunate side effect of using Web Workers is that different bundlers and
@@ -189,16 +185,10 @@ To change themes or other render options dynamically, call
   API is subject to change.
 </Notice>
 
-The worker pool can cache themed token arrays to avoid redundant highlighting
+The worker pool can cache rendered AST results to avoid redundant highlighting
 work. When a file or diff has a `cacheKey`, subsequent requests with the same
 key will return cached results immediately instead of reprocessing through a
-worker. Renderers turn the tokens into HTML for the current viewport. This works
-automatically for both React and Vanilla JS APIs.
-
-`totalTokenLRUCacheSize` sets the limit for each of the file and diff token
-caches, with a default of 100 entries each. The deprecated
-`totalASTLRUCacheSize` spelling remains an alias; the new name takes precedence
-when both are provided.
+worker. This works automatically for both React and Vanilla JS APIs.
 
 <Notice icon={<IconInfoFill />}>
   Caching is enabled per-file/diff by setting a `cacheKey` property. Files and
@@ -212,8 +202,8 @@ when both are provided.
 ### API Reference
 
 These methods are exposed for advanced use cases. In most scenarios, you should
-use `WorkerPoolContextProvider` for React or pass the pool instance as the
-second constructor argument to vanilla `File` and `FileDiff` components.
+use the `WorkerPoolContextProvider` for React or pass the pool instance via the
+`workerPool` option for Vanilla JS rather than calling these methods directly.
 
 <DocsCodeExample {...apiReference} />
 
