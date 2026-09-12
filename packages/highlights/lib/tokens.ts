@@ -5,7 +5,7 @@ import type {
   ThemeFamily,
   TokensResult,
 } from './index';
-import { compileTheme } from './theme';
+import { compileTheme, resolveTheme } from './theme';
 import tokenTypes from './token-types';
 
 /** One theme slot's resolved styling for a token type. */
@@ -84,15 +84,7 @@ const htmlStyleCache = new WeakMap<
 export function resolveThemeStyles(
   theme: Theme | ThemeFamily
 ): ResolvedThemeStyles {
-  const resolved = theme != null && 'themes' in theme ? theme.themes[0] : theme;
-  if (
-    resolved == null ||
-    typeof resolved !== 'object' ||
-    typeof resolved.name !== 'string' ||
-    resolved.name === ''
-  ) {
-    throw new TypeError('invalid theme');
-  }
+  const resolved = resolveTheme(theme);
   const cached = styleCache.get(resolved);
   if (cached !== undefined) return cached;
   const styles: (TokenStyle | null)[] = new Array(tokenTypes.length).fill(null);

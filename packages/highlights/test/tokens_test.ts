@@ -2,8 +2,19 @@ import assert from 'node:assert';
 import t from 'node:test';
 
 import { HighlightsHighlighter, LANGS } from '../lib/highlighter';
-import type { CodeToTokensOptions, Theme, ThemedToken } from '../lib/index';
-import { codeToHtml, codeToTokens, init, StreamTokenizer } from '../lib/index';
+import type {
+  CodeToHtmlOptions,
+  CodeToTokensOptions,
+  Theme,
+  ThemedToken,
+} from '../lib/index';
+import {
+  codeToHtml,
+  codeToTokens,
+  init,
+  LiveTokenizer,
+  StreamTokenizer,
+} from '../lib/index';
 import { rangeToToken, resolveOptionThemes } from '../lib/tokens';
 import { transformWat, wat2wasm } from '../scripts/build';
 import { cssVariables } from '../themes/index';
@@ -470,3 +481,63 @@ void t.test(
     assert.equal(expected.tokens[1][0].offset, code.indexOf('\n') + 1);
   }
 );
+
+void t.test('a theme id string is rejected with a TypeError naming it', () => {
+  // Shiki accepts theme ids; here a string must fail on the `invalid theme`
+  // path at every entry point instead of surfacing a raw engine TypeError
+  const single = {
+    lang: 'ts',
+    theme: 'github-dark',
+  } as unknown as CodeToTokensOptions;
+  const multi = {
+    lang: 'ts',
+    themes: { light: 'github-light' },
+  } as unknown as CodeToTokensOptions;
+  const dark = {
+    name: 'TypeError',
+    message: /^invalid theme: .*the string "github-dark"/,
+  };
+  const light = {
+    name: 'TypeError',
+    message: /^invalid theme: .*the string "github-light"/,
+  };
+  assert.throws(() => codeToTokens('x', single), dark);
+  assert.throws(
+    () => codeToHtml('x', single as unknown as CodeToHtmlOptions),
+    dark
+  );
+  assert.throws(() => new StreamTokenizer(single), dark);
+  assert.throws(() => new LiveTokenizer(single), dark);
+  assert.throws(() => codeToTokens('x', multi), light);
+  assert.throws(() => new StreamTokenizer(multi), light);
+  assert.throws(() => new LiveTokenizer(multi), light);
+  // a family names its first member
+  assert.throws(
+    () =>
+      codeToTokens('x', {
+        lang: 'ts',
+        theme: { themes: ['github-dark'] },
+      } as unknown as CodeToTokensOptions),
+    {
+      name: 'TypeError',
+      message: /ThemeFamily whose first member is the string "github-dark"/,
+    }
+  );
+  // other non-themes stay on the same error path
+  for (const theme of [null, undefined, {}, { name: '' }, 7, ['x']]) {
+    assert.throws(
+      () =>
+        codeToTokens('x', {
+          lang: 'ts',
+          theme,
+        } as unknown as CodeToTokensOptions),
+      { name: 'TypeError', message: /^invalid theme: expected a Theme/ }
+    );
+  }
+  // a rejected stream constructor leaves the pooled instance usable
+  const stream = new StreamTokenizer({ lang: 'ts', theme: pierreDark });
+  assert.deepEqual(
+    [...stream.pushCode('let x\n'), ...stream.end()],
+    codeToTokens('let x\n', { lang: 'ts', theme: pierreDark }).tokens
+  );
+});

@@ -570,12 +570,24 @@
                 (call $emitTok (global.get $streamHl) (local.get $lhs) (global.get $ptr))
                 (global.set $streamMode (i32.const 0))
                 (return (i32.const 0))))))
+        ;; skip to the next candidate line. A lone CR ends a line here exactly
+        ;; as it does for the whole-file heredoc scanners and the live line
+        ;; table, and CRLF counts as one terminator; stopping only at LF would
+        ;; jump past a closer that follows a lone CR.
         (block $lineDone
           (loop $line
             (br_if $lineDone (i32.ge_u (local.get $p) (global.get $end)))
             (local.set $c (i32.load8_u (local.get $p)))
             (local.set $p (i32.add (local.get $p) (i32.const 1)))
             (br_if $lineDone (i32.eq (local.get $c) (i32.const 10)))
+            (if (i32.eq (local.get $c) (i32.const 13))
+              (then
+                (if
+                  (i32.and
+                    (i32.lt_u (local.get $p) (global.get $end))
+                    (i32.eq (i32.load8_u (local.get $p)) (i32.const 10)))
+                  (then (local.set $p (i32.add (local.get $p) (i32.const 1)))))
+                (br $lineDone)))
             (br $line)))
         (br $lines)))
     (global.set $ptr (global.get $end))

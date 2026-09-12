@@ -38,9 +38,9 @@ export interface LiveLineChange {
 
 /**
  * One styled run within a line: the run's UTF-16 start column, its CSS color
- * (`''` for the default foreground), and its text. Colors come from the first
- * resolved theme; use `getLineTokens` when per-theme custom properties or font
- * styles are needed.
+ * (the theme foreground for unstyled runs, `''` when the theme defines none),
+ * and its text. Colors come from the first resolved theme; use
+ * `getLineTokens` when per-theme custom properties or font styles are needed.
  */
 export type HighlightedToken = [char: number, fg: string, text: string];
 
@@ -61,10 +61,17 @@ export type LiveTokenizerOptions = CodeToTokensOptions & {
    * Receives tokens for lines re-tokenized outside the active `renderRange`:
    * once synchronously per update for already-finished off-range lines, then
    * once per background slice until the document converges. Line numbers are
-   * post-edit at delivery time.
+   * post-edit at delivery time. Construction counts as an update: with a
+   * constructor `renderRange` the callback can run before
+   * `new LiveTokenizer()` returns, so it must not assume the variable that
+   * receives the instance has been assigned yet.
    */
   onDeferTokenize?: (lines: Map<number, HighlightedToken[]>) => void;
-  /** Bounds synchronous tokenization of the initial document. */
+  /**
+   * Bounds synchronous tokenization of the initial document. Lines past it
+   * converge through `onDeferTokenize`, whose first delivery may happen inside
+   * the constructor.
+   */
   renderRange?: readonly [startLine: number, endLine: number];
 };
 
@@ -223,6 +230,17 @@ function checkRenderRange(
   return range;
 }
 
+/**
+ * Ref or unref a MessagePort. Node and Bun keep the event loop alive while a
+ * started port is ref'd; browser ports have neither method, so both calls
+ * are optional.
+ */
+function refPort(port: MessagePort, alive: boolean): void {
+  const p = port as MessagePort & { ref?: () => void; unref?: () => void };
+  if (alive) p.ref?.();
+  else p.unref?.();
+}
+
 /** A line's terminator from its descriptor flags: byte-count bits 0-1
  *  (0 none, 1 one byte, 2 CRLF) plus bit 4 marking a one-byte CR. */
 function eol(flags: number): string {
@@ -262,6 +280,14 @@ export class LiveTokenizer {
   // generation no longer matches was superseded by an edit, reset, flush,
   // pause, or dispose and must not touch the instance.
   #deferGeneration = 0;
+  // Created by the first background slice, closed by dispose; see
+  // #scheduleSlice for why slices are posted through a channel.
+  #channel: MessageChannel | undefined;
+  // Slice messages posted but not yet received. The port is ref'd while this
+  // is non-zero and unref'd otherwise, so on Node and Bun a pending slice
+  // keeps the process alive exactly like the timer chain it replaces while an
+  // idle, undisposed instance does not.
+  #postedSlices = 0;
   #deferBudget = 64;
   #paused = false;
   // Set while applyEdits or reset runs, including the synchronous
@@ -352,10 +378,7 @@ export class LiveTokenizer {
     const { ex } = this.#live();
     if (!this.#paused) return;
     this.#paused = false;
-    if (ex.liveStats(9) !== 0) {
-      const generation = this.#deferGeneration;
-      setTimeout(() => this.#deferSlice(generation), 0);
-    }
+    if (ex.liveStats(9) !== 0) this.#scheduleSlice(this.#deferGeneration);
   }
 
   /** Release the Wasm instance and drop deferred work; later calls throw. */
@@ -363,6 +386,13 @@ export class LiveTokenizer {
     if (this.#hl == null) return;
     this.#deferGeneration += 1;
     this.#hl = undefined;
+    // a slice already posted is dropped by the generation check above;
+    // closing both ports releases the channel itself
+    if (this.#channel !== undefined) {
+      this.#channel.port1.close();
+      this.#channel.port2.close();
+      this.#channel = undefined;
+    }
   }
 
   /** UTF-16 length of one line, excluding its terminator. */
@@ -653,10 +683,41 @@ export class LiveTokenizer {
     // an onDeferTokenize callback above may have paused the tokenizer; a
     // paused instance schedules nothing until resume
     if (ex.liveStats(9) !== 0 && !this.#paused) {
-      const generation = this.#deferGeneration;
-      setTimeout(() => this.#deferSlice(generation), 0);
+      this.#scheduleSlice(this.#deferGeneration);
     }
     return lines;
+  }
+
+  /**
+   * Queue one background slice for `generation` as a macrotask. Slices post
+   * through a MessageChannel rather than `setTimeout(fn, 0)`: browsers clamp
+   * nested zero-delay timers to about 4ms once a chain is a few levels deep,
+   * which stretched thirty chained slices to over 100ms, while message events
+   * are ordinary macrotasks with no clamp and still yield to rendering
+   * between slices. The channel is created on first use and closed by
+   * `dispose`; runtimes without MessageChannel fall back to the timer.
+   */
+  #scheduleSlice(generation: number): void {
+    if (typeof MessageChannel === 'undefined') {
+      setTimeout(() => this.#deferSlice(generation), 0);
+      return;
+    }
+    if (this.#channel === undefined) {
+      const created = new MessageChannel();
+      created.port1.onmessage = (event) => {
+        const posted: unknown = event.data;
+        this.#postedSlices -= 1;
+        try {
+          if (typeof posted === 'number') this.#deferSlice(posted);
+        } finally {
+          if (this.#postedSlices === 0) refPort(created.port1, false);
+        }
+      };
+      this.#channel = created;
+    }
+    if (this.#postedSlices === 0) refPort(this.#channel.port1, true);
+    this.#postedSlices += 1;
+    this.#channel.port2.postMessage(generation);
   }
 
   /**
@@ -676,7 +737,7 @@ export class LiveTokenizer {
     const dt = performance.now() - t0;
     if (dt < 0.5 && this.#deferBudget < 1 << 20) this.#deferBudget <<= 1;
     else if (dt > 2 && this.#deferBudget > 16) this.#deferBudget >>= 1;
-    if (more !== 0) setTimeout(() => this.#deferSlice(generation), 0);
+    if (more !== 0) this.#scheduleSlice(generation);
     this.#deliverDeferred(hl, ex, from, ex.liveStats(10));
   }
 
@@ -755,7 +816,8 @@ export class LiveTokenizer {
   /**
    * One line's tokens as editor-shaped `[start, color, text]` tuples. Runs
    * without a syntax color inherit the theme foreground. Missing records and
-   * lines past `tokenizeMaxLineLength` use one unstyled tuple.
+   * lines past `tokenizeMaxLineLength` use one tuple in the theme foreground,
+   * the same color `getLineTokens` gives such a line.
    */
   #lineTuples(
     hl: HighlightsHighlighter,
@@ -765,8 +827,8 @@ export class LiveTokenizer {
     const text = this.#lineText(hl, ex, line);
     const max = this.#maxLineLength ?? 0;
     const tokens: HighlightedToken[] = [];
+    const { styles, fg } = this.#themes[0];
     if (max <= 0 || text.length < max) {
-      const { styles, fg } = this.#themes[0];
       const n = ex.liveLineTokCount(line);
       const wide = (ex.liveLineFlags(line) & 4) !== 0;
       const data = new Uint32Array(
@@ -788,7 +850,9 @@ export class LiveTokenizer {
         }
       }
     }
-    if (tokens.length === 0) tokens.push([0, '', text]);
+    if (tokens.length === 0) {
+      tokens.push([0, text.length > 0 ? (fg ?? '') : '', text]);
+    }
     return tokens;
   }
 

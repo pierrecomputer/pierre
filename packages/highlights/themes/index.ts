@@ -1,5 +1,10 @@
 import type { Theme } from '../lib/index';
-import { resolveThemeSyntax } from '../lib/theme';
+import {
+  isThemeColor,
+  resolveThemeSyntax,
+  themeBackground,
+  themeForeground,
+} from '../lib/theme';
 import tokenTypes from '../lib/token-types';
 import andromeedaJson from './andromeeda.json' with { type: 'json' };
 import auroraXJson from './aurora-x.json' with { type: 'json' };
@@ -83,27 +88,32 @@ export const cssVariables: Theme = {
   style: {},
 };
 
-/** Convert a Zed theme to CSS custom properties. */
+/**
+ * Convert a Zed theme to CSS custom properties. Theme values are interpolated
+ * into a stylesheet, so only the hex colors `compileTheme` accepts are
+ * emitted: a background or foreground that fails validation is omitted, a
+ * syntax color that fails becomes `inherit`, and a syntax scope whose name is
+ * not a plain dotted identifier is skipped.
+ */
 export function toCSS({ style }: Theme): string {
   let css = '';
   if (style == null) return css;
-  const background = style['editor.background'] ?? style.background;
-  const foreground =
-    style['editor.foreground'] ?? style.text ?? style.foreground;
-  if (background) {
-    css += `--hls-background: ${background};`;
+  const background = themeBackground(style);
+  const foreground = themeForeground(style);
+  if (isThemeColor(background)) {
+    css += `--hls-background: ${background.trim()};`;
   }
-  if (foreground) {
-    css += `--hls-foreground: ${foreground};`;
+  if (isThemeColor(foreground)) {
+    css += `--hls-foreground: ${foreground.trim()};`;
   }
   const syntax = style.syntax ?? {};
   for (const name of new Set([
     ...Object.keys(syntax),
     ...tokenTypes.slice(1, -2),
   ])) {
-    const color =
-      resolveThemeSyntax(syntax, name)?.color ?? foreground ?? 'inherit';
-    css += `--hls-${name.replace(/[._]/g, '-')}: ${color};`;
+    if (!/^[a-z0-9_.-]+$/i.test(name)) continue;
+    const color = resolveThemeSyntax(syntax, name)?.color ?? foreground;
+    css += `--hls-${name.replace(/[._]/g, '-')}: ${isThemeColor(color) ? color.trim() : 'inherit'};`;
   }
   return css;
 }

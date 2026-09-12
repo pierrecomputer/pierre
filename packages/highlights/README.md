@@ -122,6 +122,12 @@ try {
 }
 ```
 
+Pass `renderRange` to bound the synchronous work to the visible lines; the rest
+converges in background slices delivered through `onDeferTokenize`. Construction
+counts as an update: with a constructor `renderRange`, `onDeferTokenize` can run
+before `new LiveTokenizer()` returns, so the callback must not assume the
+variable receiving the instance has been assigned yet.
+
 ## Themes
 
 Highlights uses Zed's theme format:
@@ -147,6 +153,11 @@ interface Theme {
   cssVariables?: true;
 }
 ```
+
+Every `theme` option also accepts a Zed `ThemeFamily`
+(`{ name, author, themes: Theme[] }`); it resolves to the family's first member,
+`themes[0]`, so pass a member directly to pick another one. Theme ids are not
+accepted as strings: import theme objects from `@pierre/highlights/themes`.
 
 Highlights bundles themes matching all 65 IDs, names, and appearances in Shiki's
 catalog, plus eight Pierre themes, and ships further variants through the

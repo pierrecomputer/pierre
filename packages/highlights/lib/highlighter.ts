@@ -7,7 +7,7 @@ import type {
   ThemedToken,
   TokensResult,
 } from './index';
-import { compileTheme } from './theme';
+import { compileTheme, resolveTheme } from './theme';
 import type { ResolvedTheme } from './tokens';
 import { lineRecordsToTokens, resolveOptionThemes, themeMeta } from './tokens';
 
@@ -321,16 +321,7 @@ export class HighlightsHighlighter implements Highlighter {
     { lang, theme }: CodeToHtmlOptions
   ): Uint8Array {
     const langId = langIdOf(lang);
-    const resolvedTheme =
-      theme != null && 'themes' in theme ? theme.themes[0] : theme;
-    if (
-      resolvedTheme == null ||
-      typeof resolvedTheme !== 'object' ||
-      typeof resolvedTheme.name !== 'string' ||
-      resolvedTheme.name === ''
-    ) {
-      throw new TypeError('invalid theme');
-    }
+    const resolvedTheme = resolveTheme(theme);
     const useCssVariables = resolvedTheme.cssVariables === true;
     let themeTable: Uint8Array | undefined;
     if (!useCssVariables) {
@@ -540,14 +531,16 @@ export class StreamTokenizer {
   #streamStarted = false;
 
   constructor(options: CodeToTokensOptions) {
+    // validate the options before taking the pooled instance so a rejected
+    // language or theme leaves the pool intact
+    this.#langId = langIdOf(options.lang);
+    this.#themes = resolveOptionThemes(options);
     const compiledWasm = assertWasmModule();
     this.#hl =
       pooledStreamHighlighter?.wasmModule === compiledWasm
         ? pooledStreamHighlighter
         : new HighlightsHighlighter(compiledWasm);
     pooledStreamHighlighter = undefined;
-    this.#langId = langIdOf(options.lang);
-    this.#themes = resolveOptionThemes(options);
     this.#cssVariablePrefix = options.cssVariablePrefix ?? '--hls-';
     this.#maxLineLength = options.tokenizeMaxLineLength;
   }

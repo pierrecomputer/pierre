@@ -240,6 +240,10 @@ export interface ThemeFamily {
 /** Options for highlighting source code. */
 export interface CodeToHtmlOptions {
   lang: Lang;
+  /**
+   * The theme to apply. A `ThemeFamily` resolves to its first member
+   * (`themes[0]`); pass that member directly to pick another one.
+   */
   theme: Theme | ThemeFamily;
 }
 
@@ -296,6 +300,7 @@ export interface CodeToTokensBaseOptions {
 /**
  * Choose exactly one: `theme` for one theme, or `themes` for named color
  * schemes such as `{ dark, light }`. `themes` uses CSS custom properties.
+ * A `ThemeFamily` in either place resolves to its first member (`themes[0]`).
  */
 export type CodeToTokensOptions = CodeToTokensBaseOptions &
   (

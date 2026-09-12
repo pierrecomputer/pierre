@@ -18,7 +18,7 @@ import {
 import { transformWat, wat2wasm } from '../scripts/build';
 import pierreDark from '../themes/pierre-dark.json' with { type: 'json' };
 import { tokenizerSamples } from './_samples';
-import { makeRand } from './_util';
+import { assertLineFedParity, makeRand, themeColor } from './_util';
 
 let wasmModule: WebAssembly.Module;
 
@@ -1944,6 +1944,65 @@ void t.test(
       } finally {
         live.dispose();
       }
+    }
+  }
+);
+
+void t.test(
+  'LiveTokenizer: heredoc closers after a lone CR agree across delivery paths',
+  () => {
+    // the stream resumer used to skip to the next LF while looking for the
+    // closing delimiter, so a closer after a lone CR inside a line-fed chunk
+    // was missed and the heredoc swallowed the rest of the document
+    for (const [lang, code] of [
+      ['bash', 'cat <<EOF\nbody\rEOF\necho done\n'],
+      ['ruby', 'x = <<~EOS\n  a\r  b\rEOS\ny = 1\n'],
+    ] as const) {
+      const whole = assertLineFedParity(lang, code, 'CR before the closer');
+      // the line after the heredoc is code again, not string
+      const after = whole[2][0];
+      assert.notEqual(after.color, whole[1][0].color, `${lang}: closer ends`);
+      const live = new LiveTokenizer({ lang, theme: pierreDark, code });
+      assertMatchesFresh(live, code, lang, `${lang} CR heredoc`);
+      assertMatchesLineStream(live, code, lang, `${lang} CR heredoc`);
+      live.dispose();
+    }
+  }
+);
+
+void t.test(
+  'LiveTokenizer: over-long lines use the theme foreground on every path',
+  () => {
+    // update.lines and onDeferTokenize tuples must carry the same color
+    // getLineTokens reports for a line past tokenizeMaxLineLength
+    const long = `const x = "${'a'.repeat(1188)}";`;
+    assert.equal(long.length, 1201);
+    const code = `${long}\nlet y = 1;\nlet z = 2;\n`;
+    const deferred: Map<number, HighlightedToken[]>[] = [];
+    const live = new LiveTokenizer({
+      lang: 'ts',
+      theme: pierreDark,
+      code,
+      tokenizeMaxLineLength: 1000,
+      renderRange: [0, 0],
+      onDeferTokenize: (lines) => deferred.push(lines),
+    });
+    try {
+      live.flush();
+      const fg = themeColor('foreground');
+      assert.ok(fg !== null);
+      const viaDefer = deferred.find((lines) => lines.has(0))?.get(0);
+      assert.deepEqual(viaDefer, [[0, fg, long]], 'onDeferTokenize tuple');
+      const viaUpdate = live.reset(code, { renderRange: [0, 1] }).lines.get(0);
+      assert.deepEqual(viaUpdate, [[0, fg, long]], 'update.lines tuple');
+      const { tokens } = live.getLineTokens(0);
+      assert.equal(tokens.length, 1);
+      assert.equal(tokens[0].color, fg, 'getLineTokens color');
+      // a line under the limit keeps its syntax colors in the tuples
+      const short = live.reset(code, { renderRange: [1, 2] }).lines.get(1);
+      assert.ok(short !== undefined && short.length > 1);
+    } finally {
+      live.dispose();
     }
   }
 );

@@ -4,6 +4,7 @@ import { bundledThemesInfo } from 'shiki';
 
 import { HighlightsHighlighter } from '../lib/highlighter';
 import type { Theme } from '../lib/index';
+import { isThemeColor, themeBackground, themeForeground } from '../lib/theme';
 import tokenTypes from '../lib/token-types';
 import { transformWat, wat2wasm } from '../scripts/build';
 import * as themes from '../themes/index';
@@ -328,4 +329,65 @@ void test('toCSS resolves every token scope through its parents and foreground',
       assert.ok(css.includes('--hls-variable: #fff;'));
     }
   }
+});
+
+void test('toCSS: only hex colors reach the stylesheet', () => {
+  const css = toCSS({
+    name: 'hostile',
+    appearance: 'dark',
+    style: {
+      'editor.foreground': 'red;} body{display:none} :root{--x',
+      'editor.background': 'url("x")',
+      syntax: {
+        keyword: '#f00;}',
+        string: ' #0f0 ',
+        comment: { color: 'var(--evil)', font_style: 'italic' },
+        'bad;name': '#fff',
+      },
+    },
+  });
+  // every declaration is `--hls-<ident>: <hex|inherit>;` and nothing else, so
+  // no theme value can close the declaration or the rule it is written into
+  assert.match(css, /^(?:--hls-[a-z0-9-]+: (?:#[0-9a-f]{3,8}|inherit);)+$/i);
+  assert.doesNotMatch(css, /--hls-foreground|--hls-background|bad/);
+  assert.ok(css.includes('--hls-keyword: inherit;'));
+  assert.ok(css.includes('--hls-string: #0f0;'));
+  assert.ok(css.includes('--hls-comment: inherit;'));
+  // scopes without their own color would inherit the rejected foreground
+  assert.ok(css.includes('--hls-variable: inherit;'));
+});
+
+void test('theme helpers: color validation and fallback chains', () => {
+  for (const ok of ['#fff', '#FFF8', '#a1b2c3', '#A1B2C3D4', ' #fff ']) {
+    assert.ok(isThemeColor(ok), ok);
+  }
+  for (const bad of [
+    'fff',
+    '#ff',
+    '#fffff',
+    '#ggg',
+    'red',
+    '#fff;',
+    12,
+    null,
+  ]) {
+    assert.equal(isThemeColor(bad), false, String(bad));
+  }
+  assert.equal(
+    themeForeground({
+      'editor.foreground': '#1',
+      text: '#2',
+      foreground: '#3',
+    }),
+    '#1'
+  );
+  assert.equal(themeForeground({ text: '#2', foreground: '#3' }), '#2');
+  assert.equal(themeForeground({ foreground: '#3' }), '#3');
+  assert.equal(themeForeground({}), undefined);
+  assert.equal(
+    themeBackground({ 'editor.background': '#4', background: '#5' }),
+    '#4'
+  );
+  assert.equal(themeBackground({ background: '#5' }), '#5');
+  assert.equal(themeBackground({}), undefined);
 });
