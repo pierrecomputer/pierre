@@ -7,24 +7,20 @@ export const SPLIT_UNIFIED: PreloadMultiFileDiffOptions<undefined, undefined> =
   {
     oldFile: {
       name: 'utils.ts',
-      contents: `import { getTokenStyleObject, stringifyTokenStyle } from 'shiki';
-
-import type {
+      contents: `import type {
   FileDiffMetadata,
   FileTypes,
   DiffsHighlighter,
   DiffsThemeNames,
   RenderCustomFileMetadata,
   ThemeTypes,
-  ThemeRegistrationResolved,
   ThemedToken,
   ThemesType,
 } from '../types';
 
 export function createSpanFromToken(token: ThemedToken) {
   const element = document.createElement('div');
-  const style = getTokenStyleObject(token);
-  element.style = stringifyTokenStyle(style);
+  element.style.color = token.color ?? '';
   return element;
 }
 
@@ -78,24 +74,20 @@ export function createHunkSeparator() {
     },
     newFile: {
       name: 'code_utils.ts',
-      contents: `import { getTokenStyleObject, stringifyTokenStyle } from 'shiki';
-
-import type {
+      contents: `import type {
   FileDiffMetadata,
   FileTypes,
   DiffsHighlighter,
   DiffsThemeNames,
   RenderCustomFileMetadata,
   ThemeTypes,
-  ThemeRegistrationResolved,
   ThemedToken,
   ThemesType,
 } from '../types';
 
 export function createSpanFromToken(token: ThemedToken) {
   const element = document.createElement('span');
-  const style = token.htmlStyle ?? getTokenStyleObject(token);
-  element.style = stringifyTokenStyle(style);
+  Object.assign(element.style, token.htmlStyle ?? { color: token.color });
   element.textContent = token.content;
   element.dataset.span = ''
   return element;

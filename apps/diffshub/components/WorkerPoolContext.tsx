@@ -8,8 +8,6 @@ import {
 } from '@pierre/diffs/react';
 import type { ReactNode } from 'react';
 
-import { getPreferredHighlighter } from '@/lib/getPreferredHighlighter';
-
 function isMobileBrowser(): boolean {
   const navigator = global.navigator;
   if (navigator == null) {
@@ -53,19 +51,6 @@ const HighlighterOptions: WorkerInitializationRenderOptions = {
   // now that the canonical default IS the non-soft pair (shared via theming),
   // every site initializes the pool with the same defaults.
   theme: DEFAULT_THEMES,
-  langs: [
-    'cpp',
-    'css',
-    'go',
-    'python',
-    'rust',
-    'sh',
-    'swift',
-    'tsx',
-    'typescript',
-    'zig',
-  ],
-  preferredHighlighter: getPreferredHighlighter(),
 };
 
 interface WorkerPoolProps {

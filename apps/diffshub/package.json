@@ -5,6 +5,7 @@
   "license": "apache-2.0",
   "dependencies": {
     "@pierre/diffs": "workspace:*",
+    "@pierre/highlights": "workspace:*",
     "@pierre/icons": "catalog:",
     "@pierre/theme": "workspace:*",
     "@pierre/theming": "workspace:*",

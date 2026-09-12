@@ -24,7 +24,6 @@ void preloadHighlighter({
     'pierre-light',
     'pierre-light-soft',
   ],
-  langs: ['tsx', 'html', 'css'],
 });
 
 // Sample code files for demo

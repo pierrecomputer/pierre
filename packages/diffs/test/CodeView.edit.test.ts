@@ -236,8 +236,6 @@ async function expectMissingEditorFactoryOnRender(
 beforeAll(async () => {
   await getSharedHighlighter({
     themes: ['pierre-dark', 'pierre-light'],
-    langs: ['typescript'],
-    preferredHighlighter: 'shiki-js',
   });
 });
 

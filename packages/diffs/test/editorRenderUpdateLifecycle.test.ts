@@ -1,3 +1,4 @@
+import type { Theme } from '@pierre/highlights';
 import { afterAll, describe, expect, test } from 'bun:test';
 import { createTwoFilesPatch } from 'diff';
 
@@ -19,8 +20,8 @@ import type {
   FileContents,
   FileDiffLoadedFiles,
   FileDiffMetadata,
+  RawTheme,
   SupportedLanguages,
-  ThemeRegistration,
 } from '../src/types';
 import { createRoot, installDom, waitFor } from './domHarness';
 import { assertDefined, createDeferred } from './testUtils';
@@ -165,23 +166,21 @@ describe('external replacements from editor onChange', () => {
       test(`${type} retains a callback replacement with a ${deferredTheme ? 'loading' : 'ready'} theme`, async () => {
         await getSharedHighlighter({
           themes: ['pierre-dark', 'pierre-light'],
-          langs: ['text'],
         });
         const themeName = `editor-callback-${type}-${deferredTheme}`;
-        const theme: ThemeRegistration = {
+        const theme: Theme = {
           name: themeName,
-          type: 'dark',
-          colors: {
+          appearance: 'dark',
+          style: {
             'editor.background': '#000000',
             'editor.foreground': '#ffffff',
           },
-          tokenColors: [],
         };
-        const loadedTheme = createDeferred<ThemeRegistration>();
+        const loadedTheme = createDeferred<RawTheme>();
         registerCustomTheme(themeName, () => loadedTheme.promise);
         if (!deferredTheme) {
           loadedTheme.resolve(theme);
-          await getSharedHighlighter({ themes: [themeName], langs: ['text'] });
+          await getSharedHighlighter({ themes: [themeName] });
         }
 
         const dom = installDom();
@@ -284,7 +283,7 @@ describe('external replacements from editor onChange', () => {
           loadedTheme.resolve(theme);
           editor.cleanUp();
           instance.cleanUp();
-          await getSharedHighlighter({ themes: [themeName], langs: ['text'] });
+          await getSharedHighlighter({ themes: [themeName] });
           dom.cleanup();
         }
       });
@@ -302,7 +301,6 @@ describe('virtualized render completion before notifications', () => {
       test(`${type} can dispose its host in ${observer} during an external replacement`, async () => {
         await getSharedHighlighter({
           themes: ['pierre-dark', 'pierre-light'],
-          langs: ['text'],
         });
         const dom = installDom();
         const virtualizer = new Virtualizer();
@@ -442,13 +440,12 @@ describe('external FileDiff updates during editing', () => {
         onChange: (contents) => changes.push(contents),
       });
       const themeName = `old-side-replacement-${deferredTheme}`;
-      const theme: ThemeRegistration = {
+      const theme: Theme = {
         name: themeName,
-        type: 'dark',
-        colors: {},
-        tokenColors: [],
+        appearance: 'dark',
+        style: {},
       };
-      const loadedTheme = createDeferred<ThemeRegistration>();
+      const loadedTheme = createDeferred<RawTheme>();
       const replacement = createDiff({
         cacheKey: 'session:new-base',
         oldContents: 'different base\n',
@@ -507,7 +504,7 @@ describe('external FileDiff updates during editing', () => {
       } finally {
         loadedTheme.resolve(theme);
         if (deferredTheme) {
-          await getSharedHighlighter({ themes: [themeName], langs: ['text'] });
+          await getSharedHighlighter({ themes: [themeName] });
         }
         fixture.cleanup();
       }

@@ -1,5 +1,3 @@
-import type { ElementContent, Element as HASTElement, Properties } from 'hast';
-
 import {
   CUSTOM_HEADER_SLOT_ID,
   HEADER_FILENAME_SUFFIX_SLOT_ID,
@@ -8,16 +6,15 @@ import {
 } from '../constants';
 import type {
   ChangeTypes,
+  ElementContent,
   FileContents,
   FileDiffMetadata,
   FileHeaderRenderMode,
+  HElement as HtmlElement,
+  HProperties as Properties,
 } from '../types';
 import { getIconForType } from './getIconForType';
-import {
-  createHastElement,
-  createIconElement,
-  createTextNodeElement,
-} from './hast_utils';
+import { createHtmlElement, createIconElement, createTextNode } from './html';
 
 export interface CreateFileHeaderElementProps {
   fileOrDiff: FileDiffMetadata | FileContents;
@@ -29,7 +26,7 @@ export function createFileHeaderElement({
   fileOrDiff,
   mode,
   stickyHeader,
-}: CreateFileHeaderElementProps): HASTElement {
+}: CreateFileHeaderElementProps): HtmlElement {
   const fileDiff = 'type' in fileOrDiff ? fileOrDiff : undefined;
   const properties: Properties = {
     'data-diffs-header': mode,
@@ -37,11 +34,11 @@ export function createFileHeaderElement({
     'data-sticky': stickyHeader ? '' : undefined,
   };
 
-  return createHastElement({
+  return createHtmlElement({
     tagName: 'div',
     children: [
       mode === 'custom'
-        ? createHastElement({
+        ? createHtmlElement({
             tagName: 'slot',
             properties: { name: CUSTOM_HEADER_SLOT_ID },
           })
@@ -67,9 +64,9 @@ function createHeaderElement({
   name,
   prevName,
   iconType,
-}: CreateHeaderElementOptions): HASTElement {
+}: CreateHeaderElementOptions): HtmlElement {
   const children: ElementContent[] = [
-    createHastElement({
+    createHtmlElement({
       tagName: 'slot',
       properties: { name: HEADER_PREFIX_SLOT_ID },
     }),
@@ -80,12 +77,12 @@ function createHeaderElement({
   ];
   if (prevName != null) {
     children.push(
-      createHastElement({
+      createHtmlElement({
         tagName: 'div',
         children: [
-          createHastElement({
+          createHtmlElement({
             tagName: 'bdi',
-            children: [createTextNodeElement(prevName)],
+            children: [createTextNode(prevName)],
           }),
         ],
         properties: {
@@ -103,24 +100,24 @@ function createHeaderElement({
     );
   }
   children.push(
-    createHastElement({
+    createHtmlElement({
       tagName: 'div',
       children: [
-        createHastElement({
+        createHtmlElement({
           tagName: 'bdi',
-          children: [createTextNodeElement(name)],
+          children: [createTextNode(name)],
         }),
       ],
       properties: { 'data-title': '' },
     })
   );
   children.push(
-    createHastElement({
+    createHtmlElement({
       tagName: 'slot',
       properties: { name: HEADER_FILENAME_SUFFIX_SLOT_ID },
     })
   );
-  return createHastElement({
+  return createHtmlElement({
     tagName: 'div',
     children,
     properties: { 'data-header-content': '' },
@@ -129,7 +126,7 @@ function createHeaderElement({
 
 function createMetadataElement(
   fileDiff: FileDiffMetadata | undefined
-): HASTElement {
+): HtmlElement {
   const children: ElementContent[] = [];
   if (fileDiff != null) {
     let additions = 0;
@@ -140,30 +137,30 @@ function createMetadataElement(
     }
     if (deletions > 0 || additions === 0) {
       children.push(
-        createHastElement({
+        createHtmlElement({
           tagName: 'span',
-          children: [createTextNodeElement(`-${deletions}`)],
+          children: [createTextNode(`-${deletions}`)],
           properties: { 'data-deletions-count': '' },
         })
       );
     }
     if (additions > 0 || deletions === 0) {
       children.push(
-        createHastElement({
+        createHtmlElement({
           tagName: 'span',
-          children: [createTextNodeElement(`+${additions}`)],
+          children: [createTextNode(`+${additions}`)],
           properties: { 'data-additions-count': '' },
         })
       );
     }
   }
   children.push(
-    createHastElement({
+    createHtmlElement({
       tagName: 'slot',
       properties: { name: HEADER_METADATA_SLOT_ID },
     })
   );
-  return createHastElement({
+  return createHtmlElement({
     tagName: 'div',
     children,
     properties: { 'data-metadata': '' },

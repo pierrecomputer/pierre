@@ -13,6 +13,9 @@
       "path": "../../packages/diffs/tsconfig.json"
     },
     {
+      "path": "../../packages/highlights/tsconfig.json"
+    },
+    {
       "path": "../../packages/trees/tsconfig.json"
     },
     {

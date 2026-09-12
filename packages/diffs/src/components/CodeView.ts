@@ -17,10 +17,9 @@ import type {
   EditorType,
 } from '../editor/types';
 import {
-  isHighlighterLoaded,
+  getHighlighterIfLoaded,
   preloadHighlighter,
 } from '../highlighter/shared_highlighter';
-import { areThemesAttached } from '../highlighter/themes/areThemesAttached';
 import type { SelectionWriteOptions } from '../managers/InteractionManager';
 import {
   dequeueRender,
@@ -306,8 +305,6 @@ export const CODE_VIEW_DIFF_OPTION_KEYS = [
   'themeType',
   'disableFileHeader',
   'disableVirtualizationBuffers',
-  'preferredHighlighter',
-  'useCSSClasses',
   'useTokenTransformer',
   'tokenizeMaxLineLength',
   'tokenizeMaxLength',
@@ -339,8 +336,6 @@ export const CODE_VIEW_FILE_OPTION_KEYS = [
   'themeType',
   'disableFileHeader',
   'disableVirtualizationBuffers',
-  'preferredHighlighter',
-  'useCSSClasses',
   'useTokenTransformer',
   'tokenizeMaxLineLength',
   'tokenizeMaxLength',
@@ -1882,7 +1877,7 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
       this.workerManager?.getFileRenderOptions().theme ??
       this.options.theme ??
       DEFAULT_THEMES;
-    if (isHighlighterLoaded() && areThemesAttached(theme)) {
+    if (getHighlighterIfLoaded({ theme }) != null) {
       this.clearReadySubscription();
       return true;
     }
@@ -1895,8 +1890,6 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
       let cancelled = false;
       void preloadHighlighter({
         themes: getThemes(theme),
-        langs: [],
-        preferredHighlighter: this.options.preferredHighlighter,
       }).then(
         () => {
           if (cancelled) {

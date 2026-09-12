@@ -1,9 +1,8 @@
-import type { Element as HASTElement } from 'hast';
+import type { HElement as HtmlElement } from '../types';
+import { createHtmlElement, createIconElement } from './html';
 
-import { createHastElement, createIconElement } from './hast_utils';
-
-export function createGutterUtilityElement(): HASTElement {
-  return createHastElement({
+export function createGutterUtilityElement(): HtmlElement {
+  return createHtmlElement({
     tagName: 'button',
     properties: { 'data-utility-button': '', type: 'button' },
     children: [

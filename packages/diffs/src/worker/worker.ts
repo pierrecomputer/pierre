@@ -1,13 +1,6 @@
-import { createHighlighterCore } from 'shiki/core';
-import { createJavaScriptRegexEngine } from 'shiki/engine/javascript';
-import { createOnigurumaEngine } from 'shiki/engine/oniguruma';
-
 import { DEFAULT_THEMES } from '../constants';
-import { attachResolvedLanguages } from '../highlighter/languages/attachResolvedLanguages';
-import { attachResolvedThemes } from '../highlighter/themes/attachResolvedThemes';
+import { createDiffsHighlighter } from '../highlighter/createDiffsHighlighter';
 import type {
-  DiffsHighlighter,
-  HighlighterTypes,
   RenderDiffOptions,
   RenderFileOptions,
   ThemedDiffResult,
@@ -30,7 +23,7 @@ import type {
   WorkerRequestId,
 } from './types';
 
-let highlighter: Promise<DiffsHighlighter> | DiffsHighlighter | undefined;
+const highlighter = createDiffsHighlighter();
 let renderOptions: WorkerRenderingOptions = {
   theme: DEFAULT_THEMES,
   useTokenTransformer: false,
@@ -42,28 +35,28 @@ let renderOptions: WorkerRenderingOptions = {
 const EMPTY_REGEXP = /(?:)/;
 
 self.addEventListener('error', (event) => {
-  console.error('[Shiki Worker] Unhandled error:', event.error);
+  console.error('[Diffs Worker] Unhandled error:', event.error);
 });
 
 // Handle incoming messages from the main thread
 self.addEventListener('message', (event: MessageEvent<WorkerRequest>) => {
-  void handleMessage(event.data);
+  handleMessage(event.data);
 });
 
-async function handleMessage(request: WorkerRequest) {
+function handleMessage(request: WorkerRequest) {
   try {
     switch (request.type) {
       case 'initialize':
-        await handleInitialize(request);
+        handleInitialize(request);
         break;
       case 'set-render-options':
-        await handleSetRenderOptions(request);
+        handleSetRenderOptions(request);
         break;
       case 'file':
-        await handleRenderFile(request);
+        handleRenderFile(request);
         break;
       case 'diff':
-        await handleRenderDiff(request);
+        handleRenderDiff(request);
         break;
       default:
         throw new Error(
@@ -80,27 +73,20 @@ async function handleMessage(request: WorkerRequest) {
   }
 }
 
-async function handleInitialize({
+function handleInitialize({
   id,
   renderOptions: options,
-  preferredHighlighter,
   resolvedThemes,
-  resolvedLanguages,
   customExtensionsVersion,
   customExtensionMap,
-}: InitializeWorkerRequest): Promise<void> {
-  let highlighter = getHighlighter(preferredHighlighter);
-  if ('then' in highlighter) {
-    highlighter = await highlighter;
-  }
+}: InitializeWorkerRequest): void {
   syncCustomExtensionsFromRequest({
     customExtensionsVersion,
     customExtensionMap,
   });
-  attachResolvedThemes(resolvedThemes, highlighter);
-  if (resolvedLanguages != null) {
-    attachResolvedLanguages(resolvedLanguages, highlighter);
-  }
+  highlighter.themeResolver.seedResolvedThemes(
+    resolvedThemes.map((theme) => [theme.name, theme])
+  );
   renderOptions = options;
   postMessage({
     type: 'success',
@@ -110,16 +96,14 @@ async function handleInitialize({
   } satisfies InitializeSuccessResponse);
 }
 
-async function handleSetRenderOptions({
+function handleSetRenderOptions({
   id,
   renderOptions: options,
   resolvedThemes,
-}: SetRenderOptionsWorkerRequest): Promise<void> {
-  let highlighter = getHighlighter();
-  if ('then' in highlighter) {
-    highlighter = await highlighter;
-  }
-  attachResolvedThemes(resolvedThemes, highlighter);
+}: SetRenderOptionsWorkerRequest): void {
+  highlighter.themeResolver.seedResolvedThemes(
+    resolvedThemes.map((theme) => [theme.name, theme])
+  );
   renderOptions = options;
   postMessage({
     type: 'success',
@@ -129,25 +113,16 @@ async function handleSetRenderOptions({
   });
 }
 
-async function handleRenderFile({
+function handleRenderFile({
   id,
   file,
-  resolvedLanguages,
   customExtensionsVersion,
   customExtensionMap,
-}: RenderFileRequest): Promise<void> {
-  let highlighter = getHighlighter();
-  if ('then' in highlighter) {
-    highlighter = await highlighter;
-  }
+}: RenderFileRequest): void {
   syncCustomExtensionsFromRequest({
     customExtensionsVersion,
     customExtensionMap,
   });
-  // Load resolved languages if provided
-  if (resolvedLanguages != null) {
-    attachResolvedLanguages(resolvedLanguages, highlighter);
-  }
   const fileOptions = {
     theme: renderOptions.theme,
     useTokenTransformer: renderOptions.useTokenTransformer,
@@ -160,41 +135,18 @@ async function handleRenderFile({
   );
 }
 
-async function handleRenderDiff({
+function handleRenderDiff({
   id,
   diff,
-  resolvedLanguages,
   customExtensionsVersion,
   customExtensionMap,
-}: RenderDiffRequest): Promise<void> {
-  let highlighter = getHighlighter();
-  if ('then' in highlighter) {
-    highlighter = await highlighter;
-  }
+}: RenderDiffRequest): void {
   syncCustomExtensionsFromRequest({
     customExtensionsVersion,
     customExtensionMap,
   });
-  // Load resolved languages if provided
-  if (resolvedLanguages != null) {
-    attachResolvedLanguages(resolvedLanguages, highlighter);
-  }
   const result = renderDiffWithHighlighter(diff, highlighter, renderOptions);
   sendDiffSuccess(id, result, renderOptions);
-}
-
-function getHighlighter(
-  preferredHighlighter: HighlighterTypes = 'shiki-js'
-): Promise<DiffsHighlighter> | DiffsHighlighter {
-  highlighter ??= createHighlighterCore({
-    themes: [],
-    langs: [],
-    engine:
-      preferredHighlighter === 'shiki-wasm'
-        ? createOnigurumaEngine(import('shiki/wasm'))
-        : createJavaScriptRegexEngine(),
-  }) as Promise<DiffsHighlighter>;
-  return highlighter;
 }
 
 function syncCustomExtensionsFromRequest({

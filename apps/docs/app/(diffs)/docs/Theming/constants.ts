@@ -493,21 +493,25 @@ export const THEMING_REGISTER_THEME: ThemingConstant = {
     name: 'register-theme.ts',
     contents: `import { registerCustomTheme } from '@pierre/diffs';
 
-// Register your theme files before rendering.
-// The name must match the "name" field in your theme.
+// Register Highlights theme objects before rendering.
+registerCustomTheme('my-theme-dark', async () => ({
+  name: 'my-theme-dark',
+  appearance: 'dark',
+  style: {
+    'editor.background': '#181818',
+    'editor.foreground': '#eeeeee',
+    syntax: {
+      keyword: { color: '#c792ea' },
+      string: { color: '#c3e88d' },
+      comment: { color: '#676e95', font_style: 'italic' },
+    },
+  },
+}));
 
-// Option 1: Import MJS theme modules (recommended)
-registerCustomTheme('my-theme-dark', () => import('my-theme/dark'));
-registerCustomTheme('my-theme-light', () => import('my-theme/light'));
-
-// Option 2: Import JSON theme files
-registerCustomTheme('my-theme-dark', () => import('./themes/my-theme-dark.json'));
-registerCustomTheme('my-theme-light', () => import('./themes/my-theme-light.json'));
-
-// Option 3: Fetch from a URL (for CDN-hosted themes)
-registerCustomTheme('my-theme-dark', async () => {
-  const response = await fetch('/themes/my-theme-dark.json');
-  return response.json();
+// Select one theme from a generated Zed family.
+registerCustomTheme('my-theme-light', async () => {
+  const { default: family } = await import('./themes/my-theme.json');
+  return { ...family.themes[0], name: 'my-theme-light' };
 });`,
   },
   options,

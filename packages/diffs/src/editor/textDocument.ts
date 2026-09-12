@@ -73,6 +73,7 @@ export class TextDocument<
   #uri: string;
   #languageId: string;
   #version: number;
+  #revision = 0;
   #pieceTable: PieceTable;
   #editStack: EditStack<EType, LAnnotation>;
   #eol: '\n' | '\r\n' | '\r';
@@ -119,6 +120,11 @@ export class TextDocument<
 
   get version(): number {
     return this.#version;
+  }
+
+  /** Increases on every edit, including undo and redo, to track cached state. */
+  get revision(): number {
+    return this.#revision;
   }
 
   get lineCount(): number {
@@ -474,6 +480,7 @@ export class TextDocument<
       endPosition.character ===
         this.#pieceTable.getLineLength(endPosition.line);
     this.#pieceTable.applyEdits(edits);
+    this.#revision++;
     const lineCount = this.#pieceTable.lineCount;
     const change: TextDocumentChange = {
       changes: edits.map((edit, index) => ({

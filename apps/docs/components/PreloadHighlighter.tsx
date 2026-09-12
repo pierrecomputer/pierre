@@ -11,8 +11,6 @@ export function PreloadHighlighter() {
         'pierre-light',
         'pierre-light-soft',
       ],
-      langs: ['zig', 'rust', 'typescript', 'tsx', 'bash'],
-      preferredHighlighter: 'shiki-wasm',
     });
   }, []);
   return null;

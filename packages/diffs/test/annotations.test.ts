@@ -1,5 +1,4 @@
 import { afterAll, describe, expect, test } from 'bun:test';
-import type { ElementContent, Element as HASTElement } from 'hast';
 
 import {
   DiffHunksRenderer,
@@ -8,7 +7,9 @@ import {
 } from '../src';
 import type {
   DiffLineAnnotation,
+  ElementContent,
   FileDiffMetadata,
+  HElement as HtmlElement,
   LineTypes,
 } from '../src/types';
 import { fileNew, fileOld } from './mocks';
@@ -429,7 +430,7 @@ describe('Annotation Rendering', () => {
           !isHastElement(unifiedAST[i])
         )
           continue;
-        const slots = findHastSlotElements(unifiedAST[i] as HASTElement);
+        const slots = findHastSlotElements(unifiedAST[i] as HtmlElement);
         const slotName = slots[0]?.properties?.name?.toString();
         if (slots.length === 0 || slotName == null) {
           throw new Error('there should always be slots in unifiedAST');

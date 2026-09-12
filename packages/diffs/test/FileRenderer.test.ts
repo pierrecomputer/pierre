@@ -1,12 +1,15 @@
 import { afterAll, describe, expect, test } from 'bun:test';
-import type { ElementContent } from 'hast';
 
 import { TextDocument } from '../src/editor/textDocument';
 import { disposeHighlighter } from '../src/highlighter/shared_highlighter';
 import { FileRenderer } from '../src/renderers/FileRenderer';
-import type { FileContents, HighlightedToken } from '../src/types';
+import type {
+  ElementContent,
+  FileContents,
+  HighlightedToken,
+} from '../src/types';
 import { mockFiles } from './mocks';
-import { hastTextContent } from './testUtils';
+import { getTextContent } from './testUtils';
 
 type FileRendererCacheProbe = {
   renderCache?: {
@@ -58,10 +61,7 @@ describe('FileRenderer', () => {
 
     const cache = (instance as unknown as FileRendererCacheProbe).renderCache;
     expect(cache?.result?.code).toHaveLength(2);
-    expect(cache?.result?.code.map(hastTextContent)).toEqual([
-      'alpha',
-      'gamma',
-    ]);
+    expect(cache?.result?.code.map(getTextContent)).toEqual(['alpha', 'gamma']);
   });
 
   test('realigns cached rows when tokenization settles before EOF', async () => {
@@ -89,7 +89,7 @@ describe('FileRenderer', () => {
 
     const cache = (instance as unknown as FileRendererCacheProbe).renderCache;
     const rows = cache?.result?.code ?? [];
-    expect(rows.map(hastTextContent)).toEqual(['A', 'B', 'X', 'C', 'D', '']);
+    expect(rows.map(getTextContent)).toEqual(['A', 'B', 'X', 'C', 'D', '']);
     expect(rows[4]).toMatchObject({
       children: [
         {

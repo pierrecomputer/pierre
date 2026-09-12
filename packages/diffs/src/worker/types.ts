@@ -3,15 +3,12 @@ import type {
   ExtensionFormatMap,
   FileContents,
   FileDiffMetadata,
-  HighlighterTypes,
-  LanguageRegistration,
   LineDiffTypes,
+  RawTheme,
   RenderDiffOptions,
   RenderFileOptions,
-  SupportedLanguages,
   ThemedDiffResult,
   ThemedFileResult,
-  ThemeRegistrationResolved,
   ThemesType,
 } from '../types';
 
@@ -49,7 +46,6 @@ export interface RenderFileRequest {
   type: 'file';
   id: WorkerRequestId;
   file: FileContents;
-  resolvedLanguages?: ResolvedLanguage[];
   customExtensionsVersion?: number;
   customExtensionMap?: ExtensionFormatMap;
 }
@@ -58,7 +54,6 @@ export interface RenderDiffRequest {
   type: 'diff';
   id: WorkerRequestId;
   diff: FileDiffMetadata;
-  resolvedLanguages?: ResolvedLanguage[];
   customExtensionsVersion?: number;
   customExtensionMap?: ExtensionFormatMap;
 }
@@ -67,23 +62,16 @@ export interface InitializeWorkerRequest {
   type: 'initialize';
   id: WorkerRequestId;
   renderOptions: WorkerRenderingOptions;
-  preferredHighlighter: HighlighterTypes;
-  resolvedThemes: ThemeRegistrationResolved[];
-  resolvedLanguages?: ResolvedLanguage[];
+  resolvedThemes: RawTheme[];
   customExtensionsVersion?: number;
   customExtensionMap?: ExtensionFormatMap;
-}
-
-export interface ResolvedLanguage {
-  name: Exclude<SupportedLanguages, 'text'>;
-  data: LanguageRegistration[];
 }
 
 export interface SetRenderOptionsWorkerRequest {
   type: 'set-render-options';
   id: WorkerRequestId;
   renderOptions: WorkerRenderingOptions;
-  resolvedThemes: ThemeRegistrationResolved[];
+  resolvedThemes: RawTheme[];
 }
 
 export type SubmitRequest =
@@ -167,10 +155,7 @@ export interface WorkerPoolOptions {
   totalASTLRUCacheSize?: number;
 }
 
-export interface WorkerInitializationRenderOptions extends Partial<WorkerRenderingOptions> {
-  langs?: SupportedLanguages[];
-  preferredHighlighter?: HighlighterTypes;
-}
+export interface WorkerInitializationRenderOptions extends Partial<WorkerRenderingOptions> {}
 
 export interface InitializeWorkerTask {
   type: 'initialize';

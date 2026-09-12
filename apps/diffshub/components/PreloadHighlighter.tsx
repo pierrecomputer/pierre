@@ -2,8 +2,6 @@
 import { preloadHighlighter } from '@pierre/diffs';
 import { useEffect } from 'react';
 
-import { getPreferredHighlighter } from '@/lib/getPreferredHighlighter';
-
 export function PreloadHighlighter() {
   useEffect(() => {
     void preloadHighlighter({
@@ -13,8 +11,6 @@ export function PreloadHighlighter() {
         'pierre-light',
         'pierre-light-soft',
       ],
-      langs: ['zig', 'rust', 'typescript', 'tsx', 'bash'],
-      preferredHighlighter: getPreferredHighlighter(),
     });
   }, []);
   return null;

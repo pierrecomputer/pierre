@@ -5,91 +5,84 @@ export from `@pierre/diffs`.
 
 ## Contents
 
-- [Shiki passthrough APIs](#shiki-passthrough-apis)
-- [Language APIs](#language-apis)
 - [Theme APIs](#theme-apis)
 - [Shared highlighter APIs](#shared-highlighter-apis)
 - [Render APIs](#render-apis)
 - [Stream APIs](#stream-apis)
 
-## Shiki passthrough APIs
-
-| Export                    | Kind     | Purpose                                          |
-| ------------------------- | -------- | ------------------------------------------------ |
-| `codeToHtml`              | Function | Re-exports Shiki's complete code-to-HTML helper. |
-| `createCSSVariablesTheme` | Function | Re-exports Shiki's CSS variable theme factory.   |
-
-## Language APIs
-
-| Export                         | Kind     | Purpose                                                   |
-| ------------------------------ | -------- | --------------------------------------------------------- |
-| `registerCustomLanguage`       | Function | Registers a lazy language and optional file mappings.     |
-| `resolveLanguage`              | Function | Loads and caches one language registration.               |
-| `resolveLanguages`             | Function | Loads and caches several language registrations.          |
-| `getResolvedOrResolveLanguage` | Function | Returns one cached language or starts its load.           |
-| `getResolvedLanguages`         | Function | Gets cached registrations for the supplied languages.     |
-| `hasResolvedLanguages`         | Function | Tests whether language registrations are cached.          |
-| `attachResolvedLanguages`      | Function | Adds resolved registrations to a highlighter.             |
-| `areLanguagesAttached`         | Function | Tests whether a highlighter has the supplied languages.   |
-| `cleanUpResolvedLanguages`     | Function | Clears language resolution state.                         |
-| `RegisteredCustomLanguages`    | Map      | Stores registered custom language loaders.                |
-| `ResolvedLanguages`            | Map      | Stores resolved language registrations.                   |
-| `ResolvingLanguages`           | Map      | Stores active language load promises.                     |
-| `AttachedLanguages`            | Set      | Stores language names attached to the shared highlighter. |
+Languages are built into Highlights. Use `setLanguageOverride` to assign a
+supported language to a file or diff, or set `file.lang` directly.
 
 ## Theme APIs
 
-| Export                           | Kind     | Purpose                                                |
-| -------------------------------- | -------- | ------------------------------------------------------ |
-| `registerCustomTheme`            | Function | Registers a lazy Shiki theme loader.                   |
-| `CustomThemeLoader`              | Type     | Defines a raw or resolved Shiki theme loader.          |
-| `registerCustomCSSVariableTheme` | Function | Registers a theme that reads CSS variables.            |
-| `resolveTheme`                   | Function | Loads and caches one theme.                            |
-| `resolveThemes`                  | Function | Loads and caches several themes.                       |
-| `getResolvedOrResolveTheme`      | Function | Returns one cached theme or starts its load.           |
-| `getResolvedThemes`              | Function | Gets cached themes by name.                            |
-| `hasResolvedThemes`              | Function | Tests whether themes are cached.                       |
-| `attachResolvedThemes`           | Function | Adds resolved themes to a highlighter.                 |
-| `areThemesAttached`              | Function | Tests whether a highlighter has the supplied themes.   |
-| `cleanUpResolvedThemes`          | Function | Clears theme resolution state.                         |
-| `AttachedThemes`                 | Set      | Stores theme names attached to the shared highlighter. |
+| Export                | Kind     | Purpose                                                |
+| --------------------- | -------- | ------------------------------------------------------ |
+| `registerCustomTheme` | Function | Registers a lazy theme loader for shared highlighters. |
+| `CustomThemeLoader`   | Type     | Defines a loader for the selected provider's theme.    |
+
+Each `DiffsHighlighter` exposes a `themeResolver` implementing the
+`ThemeResolver<RawTheme>` API from `@pierre/theming`. The highlighter owns its
+loaders and cache. Built-in names load themes lazily in the provider's format;
+custom loaders must return that same format. The current provider is Highlights.
+
+```ts
+import { getSharedHighlighter } from '@pierre/diffs';
+
+const highlighter = await getSharedHighlighter({ themes: [] });
+await highlighter.themeResolver.resolveThemes(['github-dark', 'github-light']);
+const theme = highlighter.getTheme('github-dark');
+```
+
+| Resolver method                       | Purpose                                                  |
+| ------------------------------------- | -------------------------------------------------------- |
+| `registerTheme(name, loader)`         | Registers one lazy loader.                               |
+| `registerThemeIfAbsent(name, loader)` | Registers a loader when its name is free.                |
+| `hasRegisteredTheme(name)`            | Tests whether a loader exists.                           |
+| `resolveTheme(name)`                  | Loads and caches one theme.                              |
+| `resolveThemes(names)`                | Loads and caches themes in input order.                  |
+| `getResolvedTheme(name)`              | Reads one cached theme or returns `undefined`.           |
+| `getResolvedThemes(names)`            | Reads cached themes in input order.                      |
+| `getResolvedOrResolveTheme(name)`     | Returns a cached theme or starts its load.               |
+| `hasResolvedTheme(name)`              | Tests whether one theme is cached.                       |
+| `hasResolvedThemes(names)`            | Tests whether all named themes are cached.               |
+| `seedResolvedTheme(name, theme)`      | Adds a resolved object without a loader.                 |
+| `seedResolvedThemes(entries)`         | Adds several resolved objects without loaders.           |
+| `clearResolvedThemes()`               | Clears cached themes and active loads but keeps loaders. |
 
 ## Shared highlighter APIs
 
-| Export                      | Purpose                                                           |
-| --------------------------- | ----------------------------------------------------------------- |
-| `getSharedHighlighter`      | Gets or creates the shared highlighter for themes and languages.  |
-| `preloadHighlighter`        | Loads the shared highlighter before a render.                     |
-| `getHighlighterIfLoaded`    | Gets the shared highlighter after load.                           |
-| `isHighlighterLoaded`       | Tests a highlighter cache value for a loaded instance.            |
-| `isHighlighterLoading`      | Tests a highlighter cache value for an active promise.            |
-| `isHighlighterNull`         | Tests a highlighter cache value for an empty state.               |
-| `disposeHighlighter`        | Disposes and clears the shared highlighter.                       |
-| `getHighlighterOptions`     | Converts one language and component options to highlighter input. |
-| `getHighlighterThemeStyles` | Creates theme CSS from a loaded highlighter.                      |
-| `getThemes`                 | Converts one theme or light/dark pair to a name list.             |
-| `isWorkerContext`           | Tests whether code runs in a worker global scope.                 |
+| Export                      | Purpose                                                          |
+| --------------------------- | ---------------------------------------------------------------- |
+| `getSharedHighlighter`      | Gets or creates the shared highlighter for the requested themes. |
+| `preloadHighlighter`        | Loads the shared highlighter before a render.                    |
+| `getHighlighterIfLoaded`    | Gets the shared highlighter after load.                          |
+| `isHighlighterLoaded`       | Tests a highlighter cache value for a loaded instance.           |
+| `isHighlighterLoading`      | Tests a highlighter cache value for an active promise.           |
+| `isHighlighterNull`         | Tests a highlighter cache value for an empty state.              |
+| `disposeHighlighter`        | Releases the shared instance so the next request creates one.    |
+| `getHighlighterOptions`     | Converts component theme options to highlighter input.           |
+| `getHighlighterThemeStyles` | Creates theme CSS from a loaded highlighter.                     |
+| `getThemes`                 | Converts one theme or light/dark pair to a name list.            |
+| `isWorkerContext`           | Tests whether code runs in a worker global scope.                |
+
+`disposeHighlighter()` keeps loaders registered through `registerCustomTheme`.
+The next shared instance resolves its own themes. Existing highlighter
+references retain their resolver and cached themes; registrations made directly
+on that resolver remain local to that instance.
 
 ## Render APIs
 
-| Export                       | Purpose                                                 |
-| ---------------------------- | ------------------------------------------------------- |
-| `renderFileWithHighlighter`  | Creates a highlighted file syntax tree.                 |
-| `renderDiffWithHighlighter`  | Creates highlighted deletion and addition syntax trees. |
-| `createTransformerWithState` | Creates Shiki transformers with shared render state.    |
+| Export                      | Purpose                                                 |
+| --------------------------- | ------------------------------------------------------- |
+| `renderFileWithHighlighter` | Creates a highlighted file syntax tree.                 |
+| `renderDiffWithHighlighter` | Creates highlighted deletion and addition syntax trees. |
 
 ## Stream APIs
 
-| Export                              | Kind  | Purpose                                                       |
-| ----------------------------------- | ----- | ------------------------------------------------------------- |
-| `FileStream`                        | Class | Renders a readable code stream as highlighted rows.           |
-| `FileStreamOptions`                 | Type  | Configures stream language, theme, start line, and callbacks. |
-| `CodeToTokenTransformStream`        | Class | Converts code chunks to themed or recall tokens.              |
-| `CodeToTokenTransformStreamOptions` | Type  | Configures stream tokenization and recall tokens.             |
-| `ShikiStreamTokenizer`              | Class | Tracks stable and unstable tokens across code chunks.         |
-| `ShikiStreamTokenizerOptions`       | Type  | Supplies Shiki token options and a highlighter.               |
-| `ShikiStreamTokenizerEnqueueResult` | Type  | Returns recalled, stable, and unstable tokens for one chunk.  |
-| `RecallToken`                       | Type  | Requests removal of prior unstable tokens.                    |
+| Export              | Kind  | Purpose                                                       |
+| ------------------- | ----- | ------------------------------------------------------------- |
+| `FileStream`        | Class | Renders a readable code stream as highlighted rows.           |
+| `FileStreamOptions` | Type  | Configures stream language, theme, start line, and callbacks. |
 
 ## `FileStream` members
 
@@ -100,14 +93,5 @@ export from `@pierre/diffs`.
 | `setThemeType(themeType)`  | Selects system, light, or dark theme mode. |
 | `cleanUp()`                | Aborts the stream and releases resources.  |
 
-## `ShikiStreamTokenizer` members
-
-| Member                              | Purpose                              |
-| ----------------------------------- | ------------------------------------ |
-| `new ShikiStreamTokenizer(options)` | Creates a stateful tokenizer.        |
-| `enqueue(chunk)`                    | Tokenizes one code chunk.            |
-| `close()`                           | Finalizes and returns stable tokens. |
-| `clear()`                           | Clears accumulated token state.      |
-| `clone()`                           | Copies current tokenizer state.      |
-
-`CodeToTokenTransformStream` exposes its `tokenizer` and `options` values.
+For standalone HTML, tokenization, streaming, or live edits, import the
+corresponding APIs directly from `@pierre/highlights`.

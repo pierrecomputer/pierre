@@ -28,8 +28,6 @@ let highlighter: DiffsHighlighter;
 beforeAll(async () => {
   highlighter = await getSharedHighlighter({
     themes: ['pierre-dark', 'pierre-light'],
-    langs: ['text'],
-    preferredHighlighter: 'shiki-js',
   });
 });
 

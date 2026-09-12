@@ -14,7 +14,7 @@ import { useEffect, useState } from 'react';
 
 import { FeatureHeader } from '@/components/FeatureHeader';
 import { PierreThemeFootnote } from '@/components/footnotes/PierreThemeFootnote';
-import { docsThemeCatalog } from '@/components/themeCatalog';
+import { docsDiffThemeCatalog } from '@/components/themeCatalog';
 import { Button } from '@/components/ui/button';
 import { ButtonGroup, ButtonGroupItem } from '@/components/ui/button-group';
 import {
@@ -27,13 +27,13 @@ import {
 type LightThemeName = string;
 type DarkThemeName = string;
 
-interface ShikiThemesProps {
+interface HighlightThemesProps {
   prerenderedDiff: PreloadMultiFileDiffResult<undefined, undefined>;
 }
 
-export function ShikiThemes({
+export function HighlightThemes({
   prerenderedDiff: { options, ...props },
-}: ShikiThemesProps) {
+}: HighlightThemesProps) {
   useEffect(() => {
     void preloadHighlighter({
       themes: [
@@ -43,7 +43,6 @@ export function ShikiThemes({
         'github-dark',
         'vitesse-dark',
       ],
-      langs: [],
     });
   }, []);
 
@@ -62,10 +61,10 @@ export function ShikiThemes({
     <div className="space-y-5">
       <FeatureHeader
         id="themes"
-        title="Adapts to any Shiki theme"
+        title="Adapts to your theme"
         description={
           <>
-            We built <code>@pierre/diffs</code> on top of Shiki for syntax
+            We built <code>@pierre/diffs</code> on top of Highlights for syntax
             highlighting and general theming. Our components automatically adapt
             to blend in with your theme selection, including across color modes.
           </>
@@ -82,7 +81,7 @@ export function ShikiThemes({
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" scrollSelectedIntoView>
-              {docsThemeCatalog
+              {docsDiffThemeCatalog
                 .getThemeNames({ colorScheme: 'light' })
                 .map((theme) => (
                   <DropdownMenuItem
@@ -115,7 +114,7 @@ export function ShikiThemes({
               className="max-h-[550px] overflow-auto"
               scrollSelectedIntoView
             >
-              {docsThemeCatalog
+              {docsDiffThemeCatalog
                 .getThemeNames({ colorScheme: 'dark' })
                 .map((theme) => (
                   <DropdownMenuItem

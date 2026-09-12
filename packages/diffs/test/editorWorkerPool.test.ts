@@ -1,6 +1,4 @@
 import { afterAll, beforeAll, describe, expect, spyOn, test } from 'bun:test';
-import type { ElementContent } from 'hast';
-import { toHtml } from 'hast-util-to-html';
 
 import { parseDiffFromFile } from '../src';
 import { File } from '../src/components/File';
@@ -20,11 +18,13 @@ import {
 import { FileRenderer } from '../src/renderers/FileRenderer';
 import type {
   DiffsHighlighter,
+  ElementContent,
   FileContents,
   FileDiffMetadata,
   HighlightedToken,
 } from '../src/types';
 import { getDiffHunksRendererOptions } from '../src/utils/getDiffHunksRendererOptions';
+import { toHtml } from '../src/utils/html';
 import { renderDiffWithHighlighter } from '../src/utils/renderDiffWithHighlighter';
 import { renderFileWithHighlighter } from '../src/utils/renderFileWithHighlighter';
 import type { RenderDiffRequest } from '../src/worker/types';
@@ -73,8 +73,6 @@ beforeAll(async () => {
   restoreAnimationFrame = installAnimationFramePolyfill();
   sharedHighlighter = await getSharedHighlighter({
     themes: ['pierre-dark'],
-    langs: ['typescript'],
-    preferredHighlighter: 'shiki-js',
   });
 });
 
@@ -844,8 +842,6 @@ describe('DiffHunksRenderer worker rendering', () => {
 
       const replacementHighlighter = await getSharedHighlighter({
         themes: ['andromeeda'],
-        langs: ['typescript'],
-        preferredHighlighter: 'shiki-js',
       });
       const replacementInitialization = renderer.initializations[1];
       if (replacementInitialization == null) {
@@ -895,8 +891,6 @@ describe('DiffHunksRenderer worker rendering', () => {
 
       const replacementHighlighter = await getSharedHighlighter({
         themes: ['ayu-dark'],
-        langs: ['typescript'],
-        preferredHighlighter: 'shiki-js',
       });
       const replacementInitialization = renderer.initializations[1];
       if (replacementInitialization == null) {
@@ -939,8 +933,6 @@ describe('DiffHunksRenderer worker rendering', () => {
 
       const githubHighlighter = await getSharedHighlighter({
         themes: ['github-dark'],
-        langs: ['typescript'],
-        preferredHighlighter: 'shiki-js',
       });
       const initialization = renderer.initializations[0];
       if (initialization == null) {
@@ -1489,8 +1481,6 @@ describe('DiffHunksRenderer edit session', () => {
 
       const editHighlighter = await getSharedHighlighter({
         themes: ['nord'],
-        langs: ['typescript'],
-        preferredHighlighter: 'shiki-js',
       });
       sessionInitialization.resolve(editHighlighter);
       await wait(0);
@@ -2036,44 +2026,6 @@ describe('rendering when an editor attaches', () => {
       instance.cleanUp();
     } finally {
       dom.cleanup();
-    }
-  });
-});
-
-describe('local highlighter engine', () => {
-  // The shared highlighter keeps the engine selected by its first caller, so
-  // a local initialization on a pool-backed surface must consult the pool's
-  // configured engine instead of seeding the singleton from component
-  // defaults.
-  test("file and diff renderers use the worker pool's preferred engine for local highlighting", async () => {
-    const { manager } = await createInitializedManager({
-      theme: 'pierre-dark',
-    });
-    try {
-      const preferred = spyOn(manager, 'getPreferredHighlighter');
-      const fileRenderer = new FileRenderer(
-        { theme: 'pierre-dark' },
-        undefined,
-        undefined,
-        manager
-      );
-      await fileRenderer.initializeHighlighter();
-      expect(preferred).toHaveBeenCalled();
-      fileRenderer.cleanUp();
-
-      preferred.mockClear();
-      const diffRenderer = new DiffHunksRenderer(
-        { theme: 'pierre-dark' },
-        undefined,
-        undefined,
-        manager
-      );
-      await diffRenderer.initializeHighlighter();
-      expect(preferred).toHaveBeenCalled();
-      diffRenderer.cleanUp();
-      preferred.mockRestore();
-    } finally {
-      manager.terminate();
     }
   });
 });

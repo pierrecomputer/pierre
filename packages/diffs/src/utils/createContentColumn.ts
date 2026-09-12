@@ -1,12 +1,11 @@
-import type { ElementContent, Element as HASTElement } from 'hast';
-
-import { createHastElement } from './hast_utils';
+import type { ElementContent, HElement } from '../types';
+import { createHtmlElement } from './html';
 
 export function createContentColumn(
   children: ElementContent[],
   rowCount: number
-): HASTElement {
-  return createHastElement({
+): HElement {
+  return createHtmlElement({
     tagName: 'div',
     children,
     properties: {

@@ -67,18 +67,14 @@
     "prepublishOnly": "moon run diffs:prepublish"
   },
   "dependencies": {
-    "@pierre/theme": "workspace:*",
+    "@pierre/highlights": "workspace:*",
     "@pierre/theming": "workspace:*",
-    "@shikijs/transformers": "^3.0.0 || ^4.0.0",
     "diff": "catalog:",
-    "hast-util-to-html": "catalog:",
-    "lru_map": "catalog:",
-    "shiki": "^3.0.0 || ^4.0.0"
+    "lru_map": "catalog:"
   },
   "devDependencies": {
     "@playwright/test": "catalog:",
     "@tsdown/css": "catalog:",
-    "@types/hast": "catalog:",
     "@types/jsdom": "catalog:",
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",

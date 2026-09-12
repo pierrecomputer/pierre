@@ -1,9 +1,12 @@
 import { afterAll, describe, expect, test } from 'bun:test';
-import type { Element, ElementContent } from 'hast';
 
 import { disposeHighlighter } from '../src/highlighter/shared_highlighter';
 import { FileRenderer } from '../src/renderers/FileRenderer';
-import type { LineAnnotation } from '../src/types';
+import type {
+  HElement as Element,
+  ElementContent,
+  LineAnnotation,
+} from '../src/types';
 import { mockFiles } from './mocks';
 import { assertDefined, findHastSlotElements } from './testUtils';
 
@@ -122,20 +125,21 @@ describe('FileRenderer AST Structure', () => {
     expect(styledTokens.length).toBeGreaterThan(0);
 
     // Verify that styled tokens have the expected CSS variable format
-    const tokensWithCSSVars = styledTokens.filter(
-      (node) =>
-        node.style?.match(
-          /--diffs-token-dark:#[A-F0-9]{6};--diffs-token-light:#[A-F0-9]{6}/
-        ) !== null
+    const tokensWithCSSVars = styledTokens.filter((node) =>
+      /--diffs-token-dark:#[A-Fa-f0-9]{6};--diffs-token-light:#[A-Fa-f0-9]{6}/.test(
+        node.style ?? ''
+      )
     );
     expect(tokensWithCSSVars.length).toBeGreaterThan(0);
 
     // Verify specific keyword exists and is highlighted
-    const functionToken = textNodes.find((node) => node.text === 'function');
+    const functionToken = textNodes.find(
+      (node) => node.text.trim() === 'function'
+    );
     assertDefined(functionToken, 'functionToken should be defined');
     assertDefined(functionToken.style, 'functionToken.style should be defined');
     expect(functionToken.style).toMatch(
-      /--diffs-token-dark:#[A-F0-9]{6};--diffs-token-light:#[A-F0-9]{6}/
+      /--diffs-token-dark:#[A-Fa-f0-9]{6};--diffs-token-light:#[A-Fa-f0-9]{6}/
     );
   });
 

@@ -28,7 +28,6 @@ import { installDom, wait, waitFor } from './domHarness';
 beforeAll(async () => {
   await getSharedHighlighter({
     themes: ['pierre-dark', 'pierre-light'],
-    langs: ['text', 'typescript'],
   });
 });
 

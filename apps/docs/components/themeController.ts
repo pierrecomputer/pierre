@@ -1,6 +1,6 @@
 import { createThemeController, type ThemePersistence } from '@pierre/theming';
 
-import { docsThemeCatalog } from './themeCatalog';
+import { docsDiffThemeCatalog as docsThemeCatalog } from './themeCatalog';
 
 export { docsThemeCatalog } from './themeCatalog';
 

@@ -1,11 +1,10 @@
-import type { ElementContent, Element as HASTElement } from 'hast';
-
-import type { ExpansionDirections, HunkSeparators } from '../types';
-import {
-  createHastElement,
-  createIconElement,
-  createTextNodeElement,
-} from './hast_utils';
+import type {
+  ElementContent,
+  ExpansionDirections,
+  HElement as HtmlElement,
+  HunkSeparators,
+} from '../types';
+import { createHtmlElement, createIconElement, createTextNode } from './html';
 
 interface CreateSeparatorProps {
   type: HunkSeparators;
@@ -18,7 +17,7 @@ interface CreateSeparatorProps {
 }
 
 function createExpandButton(type: ExpansionDirections) {
-  return createHastElement({
+  return createHtmlElement({
     tagName: 'div',
     children: [
       createIconElement({
@@ -44,14 +43,14 @@ export function createSeparator({
   slotName,
   isFirstHunk,
   isLastHunk,
-}: CreateSeparatorProps): HASTElement {
+}: CreateSeparatorProps): HtmlElement {
   let buttonCount = 0;
   const children = [];
   if (type === 'metadata' && content != null) {
     children.push(
-      createHastElement({
+      createHtmlElement({
         tagName: 'div',
-        children: [createTextNodeElement(content)],
+        children: [createTextNode(content)],
         properties: { 'data-separator-wrapper': '' },
       })
     );
@@ -78,12 +77,12 @@ export function createSeparator({
       }
     }
     contentChildren.push(
-      createHastElement({
+      createHtmlElement({
         tagName: 'div',
         children: [
-          createHastElement({
+          createHtmlElement({
             tagName: 'span',
-            children: [createTextNodeElement(content)],
+            children: [createTextNode(content)],
             properties: { 'data-unmodified-lines': '' },
           }),
         ],
@@ -92,9 +91,9 @@ export function createSeparator({
     );
     if (chunked && expandIndex != null) {
       contentChildren.push(
-        createHastElement({
+        createHtmlElement({
           tagName: 'div',
-          children: [createTextNodeElement('Expand all')],
+          children: [createTextNode('Expand all')],
           properties: {
             role: 'button',
             'data-expand-button': '',
@@ -104,7 +103,7 @@ export function createSeparator({
       );
     }
     children.push(
-      createHastElement({
+      createHtmlElement({
         tagName: 'div',
         children: contentChildren,
         properties: {
@@ -116,13 +115,13 @@ export function createSeparator({
   }
   if (type === 'custom' && slotName != null) {
     children.push(
-      createHastElement({
+      createHtmlElement({
         tagName: 'slot',
         properties: { name: slotName },
       })
     );
   }
-  return createHastElement({
+  return createHtmlElement({
     tagName: 'div',
     children,
     properties: {

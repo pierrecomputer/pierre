@@ -1,8 +1,7 @@
-import { execFileSync } from 'node:child_process';
 import { defineConfig, type UserConfig } from 'tsdown';
 
 // The two configs share dist/, so neither may clean the other's output.
-// `scripts/build.ts --wasm` emits highlights.wasm and highlights.wasm.mjs
+// `scripts/build.ts` emits highlights.wasm and highlights.wasm.mjs
 // before tsdown runs (see moon.yml); keep ./highlights.wasm* imports as-is for
 // runtime resolution next to the glue. tsdown builds the two configs
 // concurrently, which is why the wasm phase cannot live in a build hook: it
@@ -32,9 +31,8 @@ const config: UserConfig[] = defineConfig([
       neverBundle: [/^\.\/highlights\.wasm/, /^node:/],
     },
   },
-  // The themes barrel bundles (not unbundles) so every theme JSON is inlined
-  // into one self-contained dist/themes.js; the raw JSON files are not
-  // published. The hook fills the loader placeholder once dist/themes.js exists.
+  // Bundle named theme exports into one module. scripts/build.ts writes the
+  // separate loader so lazy imports do not pull in every theme's data.
   {
     entry: { themes: 'themes/index.ts' },
     tsconfig: './tsconfig.json',
@@ -44,14 +42,6 @@ const config: UserConfig[] = defineConfig([
       tsgo: true,
     },
     platform: 'neutral',
-    hooks: {
-      'build:done': () => {
-        execFileSync('bun', ['./scripts/build.ts', '--themes-index'], {
-          cwd: import.meta.dirname,
-          stdio: 'inherit',
-        });
-      },
-    },
   },
 ]);
 

@@ -235,7 +235,6 @@ const workerAPI = createWorkerAPI({
   poolSize: 8,
   initOptions: {
     themes: ['pierre-dark', 'pierre-light'],
-    langs: ['typescript', 'javascript'],
   },
 });
 
@@ -333,10 +332,7 @@ export function HighlightProvider({ children }: { children: ReactNode }) {
         theme: { dark: 'pierre-dark', light: 'pierre-light' },
         // Optional: skip inline line diffs for very long changed lines
         // maxLineDiffLength: 1000,
-        // Optional: pick the Shiki engine ('shiki-js' is default)
-        // preferredHighlighter: 'shiki-wasm',
-        // Optionally preload languages to avoid lazy-loading delays
-        langs: ['typescript', 'javascript', 'css', 'html'],
+
       }}
     >
       {children}
@@ -412,10 +408,7 @@ const workerPool = getOrCreateWorkerPoolSingleton({
     theme: { dark: 'pierre-dark', light: 'pierre-light' },
     // Optional: skip inline line diffs for very long changed lines
     // maxLineDiffLength: 1000,
-    // Optional: pick the Shiki engine ('shiki-js' is default)
-    // preferredHighlighter: 'shiki-wasm',
-    // Optionally preload languages to avoid lazy-loading delays
-    langs: ['typescript', 'javascript', 'css', 'html'],
+
   },
 });
 
@@ -474,8 +467,6 @@ new WorkerPoolManager(poolOptions, highlighterOptions)
 //   - lineDiffType?: 'word' | 'word-alt' | 'char' - How to diff lines (default: 'word-alt')
 //   - maxLineDiffLength?: number - Max changed-line length for inline line diffs (default: 1000)
 //   - tokenizeMaxLineLength?: number - Max line length to tokenize (default: 1000)
-//   - preferredHighlighter?: 'shiki-js' | 'shiki-wasm' - Highlighter engine (default: 'shiki-js')
-//   - langs?: SupportedLanguages[] - Array of languages to preload
 
 // Methods:
 poolManager.initialize()
@@ -624,12 +615,12 @@ export const WORKER_POOL_ARCHITECTURE_ASCII: PreloadFileOptions<
 │ │                                     │ │
 │ │ * Renders plain text synchronously  │ │
 │ │ * Queue requests to WorkerPool for  │ │
-│ │   highlighted HAST                  │ │
+│ │   highlighted HTML                  │ │
 │ │ * Automatically render the          │ │
-│ │   highlighted HAST response         │ │
+│ │   highlighted HTML response         │ │
 │ └─┬─────────────────────────────────┬─┘ │
-│   │ HAST Request                    ↑   │
-│   ↓                   HAST Response │   │
+│   │ HTML Request                    ↑   │
+│   ↓                   HTML Response │   │
 │ ┌ WorkerPoolManager ────────────────┴─┐ │
 │ │ * Shared singleton                  │ │
 │ │ * Manages WorkerPool instance and   │ │
@@ -637,13 +628,13 @@ export const WORKER_POOL_ARCHITECTURE_ASCII: PreloadFileOptions<
 │ └─┬─────────────────────────────────┬─┘ │
 └───│─────────────────────────────────│───┘
     │ postMessage                     ↑
-    ↓                   HAST Response │
+    ↓                   HTML Response │
 ┌───┴───────── Worker Threads ────────│───┐
 │ ┌ worker.js ────────────────────────│─┐ │
 │ │ * 8 threads by default            │ │ │
-│ │ * Runs Shiki's codeToHast() ──────┘ │ │
-│ │ * Manages themes and language       │ │
-│ │   loading automatically             │ │
+│ │ * Runs Highlights tokenization ───┘ │ │
+│ │ * Loads themes on demand            │ │
+│ │ * Includes all supported languages  │ │
 │ └─────────────────────────────────────┘ │
 └─────────────────────────────────────────┘`,
   },

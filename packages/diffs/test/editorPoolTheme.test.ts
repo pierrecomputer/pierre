@@ -15,7 +15,7 @@ import {
 // attached editor's tokenizer must resolve its theme the same pool-preferring
 // way the renderers do. Reading the raw component options pointed it at the
 // default pierre-* themes, which the highlighter never loaded, and the
-// resulting ShikiError aborted editor setup before contentEditable was
+// missing-theme error aborted editor setup before contentEditable was
 // applied — an edit session with no editable element.
 
 let restoreAnimationFrame: (() => void) | undefined;

@@ -1504,40 +1504,11 @@ function writeIfChanged(url: URL, content: string): void {
   if (current !== content) writeFileSync(url, content, 'utf-8');
 }
 
-function listThemeNames(moduleUrl: string): string[] {
-  return readdirSync(new URL('../themes/', moduleUrl))
-    .filter((name) => name.endsWith('.json'))
-    .map((name) => name.slice(0, -'.json'.length))
-    .sort();
-}
-
-// `bun ./scripts/build.ts [--wasm] [--themes-index]`: with no flag both
-// phases run. `--wasm` compiles the WAT, regenerates lib/token-types.ts, and
-// writes the per-theme modules; it runs before tsdown so the token table it
-// rewrites is what tsdown compiles. `--themes-index` fills the loader
-// placeholder in dist/themes.js, which only exists after tsdown.
+// Emit the wasm, theme modules, and lazy loader before tsdown compiles the
+// glue so it picks up the regenerated lib/token-types.ts table.
 if (import.meta.main) {
   const start = performance.now();
-  const flags = new Set(process.argv.slice(2));
-  const phaseWasm = flags.size === 0 || flags.has('--wasm');
-  const phaseIndex = flags.size === 0 || flags.has('--themes-index');
   const moduleUrl = import.meta.url;
-  if (phaseWasm) buildWasmAndThemes(moduleUrl);
-  if (phaseIndex) fillThemesIndex(moduleUrl);
-  const pkg = JSON.parse(
-    readFileSync(new URL('../package.json', moduleUrl), 'utf-8')
-  );
-  console.log(
-    `✨ Done in ${Math.ceil(performance.now() - start)}ms (wasm: ${pkg.meta['highlights.wasm']} bytes, gzipped: ${pkg.meta['highlights.wasm.gz']} bytes, -O3)`
-  );
-}
-
-/**
- * Compile src/highlights.wat into dist/, regenerate the tracked `$Token`
- * table in lib/token-types.ts, write one module per theme JSON, and record
- * the wasm sizes in package.json.
- */
-function buildWasmAndThemes(moduleUrl: string): void {
   const sourceUrl = new URL('../src/highlights.wat', moduleUrl);
   const { code, enumMap } = transformWat(sourceUrl);
   const wasmBytes = optimizeWasm(wat2wasm(sourceUrl.pathname, code));
@@ -1563,7 +1534,10 @@ function buildWasmAndThemes(moduleUrl: string): void {
       '\n];\n\nexport default tokenTypes;\n'
   );
   const themesUrl = new URL('../themes/', moduleUrl);
-  const themeNames = listThemeNames(moduleUrl);
+  const themeNames = readdirSync(themesUrl)
+    .filter((name) => name.endsWith('.json'))
+    .map((name) => name.slice(0, -'.json'.length))
+    .sort();
   const distThemesUrl = new URL('../dist/themes/', moduleUrl);
   mkdirSync(distThemesUrl, { recursive: true });
   const themeDts =
@@ -1578,6 +1552,22 @@ function buildWasmAndThemes(moduleUrl: string): void {
     );
     writeIfChanged(new URL(`${name}.d.ts`, distThemesUrl), themeDts);
   }
+  writeIfChanged(
+    new URL('loader.js', distThemesUrl),
+    'export const themes = {\n' +
+      themeNames
+        .map(
+          (name) =>
+            `  "${name}": () => import("@pierre/highlights/themes/${name}"),`
+        )
+        .join('\n') +
+      '\n};\n'
+  );
+  writeIfChanged(
+    new URL('loader.d.ts', distThemesUrl),
+    "import type { Theme } from '../index.js';\n\n" +
+      'export declare const themes: Record<string, () => Promise<{ default: Theme }>>;\n'
+  );
   const pkgUrl = new URL('../package.json', moduleUrl);
   const pkg = JSON.parse(readFileSync(pkgUrl, 'utf-8'));
   pkg.meta = {
@@ -1585,32 +1575,7 @@ function buildWasmAndThemes(moduleUrl: string): void {
     'highlights.wasm.gz': gzipSync(wasmBytes, { level: 9 }).length,
   };
   writeIfChanged(pkgUrl, JSON.stringify(pkg, null, 2) + '\n');
-}
-
-/**
- * Replace the `themes` placeholder that themes/index.ts exports with one
- * dynamic import per theme JSON, so consumers can lazy-load themes by name.
- */
-function fillThemesIndex(moduleUrl: string): void {
-  const themeNames = listThemeNames(moduleUrl);
-  const themesIndexUrl = new URL('../dist/themes.js', moduleUrl);
-  const themesIndex = readFileSync(themesIndexUrl, 'utf-8');
-  const placeholder = 'const themes = {};';
-  if (!themesIndex.includes(placeholder)) {
-    throw new Error('dist/themes.js has no themes placeholder');
-  }
-  writeIfChanged(
-    themesIndexUrl,
-    themesIndex.replace(
-      placeholder,
-      'const themes = {\n' +
-        themeNames
-          .map(
-            (name) =>
-              `  "${name}": () => import("@pierre/highlights/themes/${name}"),`
-          )
-          .join('\n') +
-        '\n};'
-    )
+  console.log(
+    `✨ Done in ${Math.ceil(performance.now() - start)}ms (wasm: ${pkg.meta['highlights.wasm']} bytes, gzipped: ${pkg.meta['highlights.wasm.gz']} bytes, -O3)`
   );
 }

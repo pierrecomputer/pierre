@@ -1,4 +1,5 @@
-import type { ThemeLike } from '@pierre/theming';
+import { getSharedHighlighter } from '@pierre/diffs';
+import type { Theme } from '@pierre/highlights';
 import { describe, expect, test } from 'bun:test';
 
 import {
@@ -9,15 +10,15 @@ import {
 
 const loadedLightTheme = {
   name: 'loaded-light-test',
-  type: 'light',
-  colors: { 'editor.background': '#fff' },
-} satisfies ThemeLike & { name: string };
+  appearance: 'light',
+  style: { 'editor.background': '#fff' },
+} satisfies Theme;
 
 const loadedDarkTheme = {
   name: 'loaded-dark-test',
-  type: 'dark',
-  colors: { 'editor.background': '#000' },
-} satisfies ThemeLike & { name: string };
+  appearance: 'dark',
+  style: { 'editor.background': '#000' },
+} satisfies Theme;
 
 function acceptDiffThemeInput(_input: DiffThemeInput): void {}
 
@@ -66,7 +67,7 @@ describe('diffThemeProps', () => {
     });
   });
 
-  test('loaded ThemeLike inputs seed by theme.name and resolve to names', () => {
+  test('loaded Theme inputs register their styles and resolve to names', async () => {
     expect(
       diffThemeSelectionFromInput(
         { light: loadedLightTheme, dark: loadedDarkTheme },
@@ -77,32 +78,43 @@ describe('diffThemeProps', () => {
       darkThemeName: 'loaded-dark-test',
       colorScheme: 'dark',
     });
+    const highlighter = await getSharedHighlighter({
+      themes: [loadedDarkTheme.name],
+    });
+    const theme = highlighter.getTheme(loadedDarkTheme.name);
+    expect('style' in theme ? theme.style : undefined).toEqual(
+      loadedDarkTheme.style
+    );
   });
 
-  test('diff override types require names on ThemeLike object inputs', () => {
-    acceptDiffThemeInput({ name: 'named-object', type: 'dark' });
+  test('diff override types require names on Theme object inputs', () => {
     acceptDiffThemeInput({
-      light: { name: 'named-light-object', type: 'light' },
+      name: 'named-object',
+      appearance: 'dark',
+      style: {},
+    });
+    acceptDiffThemeInput({
+      light: { name: 'named-light-object', appearance: 'light', style: {} },
       dark: 'named-dark-theme',
     });
 
     // @ts-expect-error Diff surfaces pass names to the worker/highlighter, so
     // object overrides must expose the name used to register the theme.
-    acceptDiffThemeInput({ type: 'dark', colors: {} });
+    acceptDiffThemeInput({ appearance: 'dark', style: {} });
 
     acceptDiffThemeInput({
       // @ts-expect-error Pair object slots have the same name requirement.
-      light: { type: 'light', colors: {} },
-      dark: { name: 'named-dark-object', type: 'dark' },
+      light: { appearance: 'light', style: {} },
+      dark: { name: 'named-dark-object', appearance: 'dark', style: {} },
     });
   });
 
-  test('nameless ThemeLike inputs still fail with a clear runtime error', () => {
+  test('nameless Theme inputs still fail with a clear runtime error', () => {
     expect(() =>
       diffThemeSelectionFromInput(
-        { type: 'dark', colors: {} } as DiffThemeInput,
+        { appearance: 'dark', style: {} } as DiffThemeInput,
         'dark'
       )
-    ).toThrow('ThemeInput ThemeLike values used by diff wrappers');
+    ).toThrow('Diff theme objects must include a name');
   });
 });

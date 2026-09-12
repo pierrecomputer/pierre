@@ -19,11 +19,8 @@ import { installDom } from './domHarness';
 
 function createTestHighlighter(): DiffsHighlighter {
   return {
-    getLanguage: () => undefined,
-    getLoadedLanguages: () => [],
-    getTheme: () => ({ type: 'light', colors: {} }),
-    loadLanguage: async () => {},
-    setTheme: () => ({ theme: { type: 'light' }, colorMap: [''] }),
+    hasTheme: () => true,
+    getTheme: () => ({ name: 'test', appearance: 'light', style: {} }),
   } as unknown as DiffsHighlighter;
 }
 

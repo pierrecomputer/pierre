@@ -1,3 +1,4 @@
+import { pierreDark } from '@pierre/highlights/themes';
 import { afterAll, describe, expect, test } from 'bun:test';
 
 import { disposeHighlighter, File, isFileAnnotationCollection } from '../src';
@@ -9,9 +10,11 @@ import { Editor, type EditorOptions } from '../src/editor/editor';
 import { EditStateManager } from '../src/editor/EditStateManager';
 import { TextDocument } from '../src/editor/textDocument';
 import type { EditorChangeEvent, EditorViewState } from '../src/editor/types';
+import { registerCustomTheme } from '../src/highlighter/shared_highlighter';
 import type { FileContents, LineAnnotation } from '../src/types';
 import { installDom, waitFor } from './domHarness';
 import { createEditorInstance } from './editorTestUtils';
+import { createDeferred } from './testUtils';
 
 afterAll(async () => {
   await disposeHighlighter();
@@ -341,7 +344,7 @@ describe('editing a File without changing its input', () => {
     }
   });
 
-  test('a file-name change that is replaced immediately does not clear undo history', async () => {
+  test('a pending file-name change that is replaced immediately does not clear undo history', async () => {
     const changes: string[] = [];
     const fixture = await createFixture({
       onChange: (contents) => changes.push(contents),
@@ -357,8 +360,17 @@ describe('editing a File without changing its input', () => {
       cacheKey: 'external:file-v3',
     };
 
+    const pendingTheme = createDeferred<typeof pierreDark>();
+    const themeName = 'test-pending-file-name-change';
+    registerCustomTheme(themeName, () => pendingTheme.promise);
     try {
       replaceDocument(fixture.editor, 'bravo\n');
+      // A pending theme keeps the intermediate render from attaching before
+      // the host replaces it again in the same turn.
+      fixture.instance.setOptions({
+        ...fixture.instance.options,
+        theme: themeName,
+      });
       fixture.instance.render({
         file: intermediate,
         fileContainer: fixture.fileContainer,
@@ -369,6 +381,7 @@ describe('editing a File without changing its input', () => {
         fileContainer: fixture.fileContainer,
         forceRender: true,
       });
+      pendingTheme.resolve(pierreDark);
       await waitFor(() => fixture.editor.getText() === 'charlie\n', {
         timeout: 4_000,
       });

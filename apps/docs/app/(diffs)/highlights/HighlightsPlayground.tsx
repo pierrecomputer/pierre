@@ -1,6 +1,6 @@
 'use client';
 
-import { setHighlighter, shikiHighlighter } from '@pierre/diffs';
+import { preloadHighlighter } from '@pierre/diffs';
 import { File } from '@pierre/diffs/react';
 import {
   IconCheck,
@@ -15,7 +15,7 @@ import {
   PLAYGROUND_LANGUAGES,
   type PlaygroundLanguage,
 } from './languageExamples';
-import { docsThemeCatalog } from '@/components/themeCatalog';
+import { docsDiffThemeCatalog } from '@/components/themeCatalog';
 import { Button } from '@/components/ui/button';
 import { ButtonGroup, ButtonGroupItem } from '@/components/ui/button-group';
 import {
@@ -68,10 +68,11 @@ export function HighlightsPlayground({
   useEffect(() => {
     let active = true;
 
-    void import('@pierre/diffs/highlights').then(
-      ({ highlightsHighlighter }) => {
+    void preloadHighlighter({
+      themes: ['pierre-light', 'pierre-dark'],
+    }).then(
+      () => {
         if (!active) return;
-        setHighlighter(highlightsHighlighter);
         setIsReady(true);
       },
       () => {
@@ -81,7 +82,6 @@ export function HighlightsPlayground({
 
     return () => {
       active = false;
-      setHighlighter(shikiHighlighter);
     };
   }, []);
 
@@ -112,7 +112,7 @@ export function HighlightsPlayground({
                 className="max-h-[550px] overflow-auto"
                 scrollSelectedIntoView
               >
-                {docsThemeCatalog
+                {docsDiffThemeCatalog
                   .getThemeNames({ colorScheme })
                   .map((theme) => (
                     <DropdownMenuItem

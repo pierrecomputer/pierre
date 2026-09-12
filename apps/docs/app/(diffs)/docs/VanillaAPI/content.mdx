@@ -137,12 +137,11 @@ elements:
 
 These renderer classes handle the low-level work of parsing and rendering code
 with syntax highlighting. Useful when you need direct access to the rendered
-output as [HAST](https://github.com/syntax-tree/hast) nodes or HTML strings for
-custom rendering pipelines.
+output as HTML syntax tree nodes or HTML strings for custom rendering pipelines.
 
 #### DiffHunksRenderer
 
-Takes a `FileDiffMetadata` data structure and renders out the raw HAST
+Takes a `FileDiffMetadata` data structure and renders out the raw HTML tree
 (Hypertext Abstract Syntax Tree) elements for diff hunks. You can generate
 `FileDiffMetadata` via `parseDiffFromFile` or `parsePatchFiles` utility
 functions.
@@ -155,7 +154,7 @@ functions.
 #### FileRenderer
 
 Takes a `FileContents` object (just a filename and contents string) and renders
-syntax-highlighted code as HAST elements. Useful for rendering single files
+syntax-highlighted code as HTML tree elements. Useful for rendering single files
 without any diff context.
 
 <DocsCodeExample {...fileRenderer} />

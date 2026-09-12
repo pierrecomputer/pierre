@@ -1,15 +1,13 @@
-import type { Element as HASTElement } from 'hast';
+import type { HElement as HtmlElement, LineTypes } from '../types';
+import { createHtmlElement, createTextNode } from './html';
 
-import type { LineTypes } from '../types';
-import { createHastElement, createTextNodeElement } from './hast_utils';
-
-export function createNoNewlineElement(type: LineTypes): HASTElement {
-  return createHastElement({
+export function createNoNewlineElement(type: LineTypes): HtmlElement {
+  return createHtmlElement({
     tagName: 'div',
     children: [
-      createHastElement({
+      createHtmlElement({
         tagName: 'span',
-        children: [createTextNodeElement('No newline at end of file')],
+        children: [createTextNode('No newline at end of file')],
       }),
     ],
     properties: {

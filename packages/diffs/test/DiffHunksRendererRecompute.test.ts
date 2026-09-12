@@ -11,7 +11,7 @@ import { finishEditSessionForDiff } from '../src/utils/editSessionHunks';
 import { iterateOverDiff } from '../src/utils/iterateOverDiff';
 import {
   collectAllElements,
-  hastTextContent,
+  getTextContent,
   projectRenderResult,
 } from './testUtils';
 
@@ -273,7 +273,7 @@ describe('DiffHunksRenderer edit-session hunk updates', () => {
   }
 
   test('a mid-document insertion realigns cached addition rows', async () => {
-    // Cached per-line HAST is looked up by line index. A run of identical
+    // Cached per-line HTML tree is looked up by line index. A run of identical
     // blank lines with `last` at the bottom hidden behind collapsed context:
     // inserting a line above shifts every following index, and the collapsed
     // rows only become visible after session exit — if the cache is not
@@ -360,7 +360,7 @@ describe('DiffHunksRenderer edit-session hunk updates', () => {
     ).find(
       (node) =>
         node.properties?.['data-line'] === 1 &&
-        hastTextContent(node) === '// test'
+        getTextContent(node) === '// test'
     );
 
     expect(commentRow).toBeDefined();
@@ -407,7 +407,7 @@ describe('DiffHunksRenderer edit-session hunk updates', () => {
             node.properties?.['data-line'] != null &&
             JSON.stringify(node).includes('color:')
         )
-        .map((node) => hastTextContent(node).replace(/\n$/, ''));
+        .map((node) => getTextContent(node).replace(/\n$/, ''));
 
     // The exit repaint runs before the fresh highlight lands and must keep
     // serving the fully highlighted current result without a plain-text flash.
@@ -461,7 +461,7 @@ describe('DiffHunksRenderer edit-session hunk updates', () => {
             node.properties?.['data-line'] != null &&
             JSON.stringify(node).includes('color:')
         )
-        .map((node) => hastTextContent(node).replace(/\n$/, ''));
+        .map((node) => getTextContent(node).replace(/\n$/, ''));
     expect(styledRowTexts(renderer.renderDiff(diff))).toContain(
       lineText(totalLines)
     );

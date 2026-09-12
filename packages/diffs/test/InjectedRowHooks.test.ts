@@ -1,5 +1,4 @@
 import { afterAll, describe, expect, test } from 'bun:test';
-import type { ElementContent } from 'hast';
 
 import {
   DiffHunksRenderer,
@@ -11,7 +10,8 @@ import {
   type UnifiedInjectedRowPlacement,
 } from '../src';
 import { UnresolvedFileHunksRenderer } from '../src/renderers/UnresolvedFileHunksRenderer';
-import { createGutterGap, createHastElement } from '../src/utils/hast_utils';
+import type { ElementContent } from '../src/types';
+import { createGutterGap, createHtmlElement } from '../src/utils/html';
 import { parseMergeConflictDiffFromFile } from '../src/utils/parseMergeConflictDiffFromFile';
 import { assertDefined, collectAllElements, isHastElement } from './testUtils';
 
@@ -23,7 +23,7 @@ const inlineGutter = () => createGutterGap(undefined, 'annotation', 1);
 
 function createInjectedRow(name: string): InjectedRow {
   return {
-    content: createHastElement({
+    content: createHtmlElement({
       tagName: 'div',
       properties: { 'data-test-inline-row': name },
     }),

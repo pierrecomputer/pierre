@@ -1,5 +1,3 @@
-import { toHtml } from 'hast-util-to-html';
-
 import type {
   AnnotationSide,
   DiffLineEventBaseProps,
@@ -16,6 +14,7 @@ import type {
 import { areSelectionPointsEqual } from '../utils/areSelectionPointsEqual';
 import { areSelectionsEqual } from '../utils/areSelectionsEqual';
 import { createGutterUtilityElement } from '../utils/createGutterUtilityElement';
+import { toHtml } from '../utils/html';
 import { isGutterUtilityPath } from '../utils/isGutterUtilityPath';
 import { dequeueRender, queueRender } from './UniversalRenderingManager';
 

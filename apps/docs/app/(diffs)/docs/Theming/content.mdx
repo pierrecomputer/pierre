@@ -134,13 +134,14 @@ palette, roles, theme file, and package.json:
 - Use `npm run test` to validate the theme structure.
 
 After you've built your theme, you can upload the compiled `.vsix` file to the
-VS Code Marketplace or Open VSX, and use the theme JSON files with
-`@pierre/diffs`.
+VS Code Marketplace or Open VSX. The generated Zed theme data can also be used
+with `@pierre/diffs`.
 
 ### Using with Diffs
 
-Once you've built your theme JSON files, you can use them with `@pierre/diffs`
-by registering them before rendering:
+Diffs uses Highlights themes, which follow the Zed format. Register a theme
+object with `name`, `appearance`, and `style` before rendering. When loading a
+Zed theme family, select one member from its `themes` array:
 
 <DocsCodeExample {...registerTheme} />
 
@@ -158,7 +159,7 @@ color conversion algorithm.
 <Notice variant="warning" icon={<IconCiWarningFill />}>
   Display P3 colors are not supported in VS Code or Cursor, so those theme files
   aren't generated. Instead, we only generate the `.json` files for use with
-  `@pierre/diffs` and Shiki on the web.
+  Highlights and Shiki on the web, using the matching format for each.
 </Notice>
 
 The vibrant variants are generated automatically when you run `npm run build`.

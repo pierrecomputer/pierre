@@ -133,8 +133,7 @@ function Patches() {
         <Fragment key={index}>
           {patch.files.map((fileDiff, index) => (
             // Under the hood, all instances of FileDiff will use a
-            // shared Shiki highlighter and manage loading languages
-            // and themes for you
+            // shared Highlights highlighter and load themes for you
             <FileDiff
               key={index}
               // 'fileDiff' is a data structure that includes all
@@ -237,8 +236,7 @@ for (const patch of parsedPatches) {
       theme: { dark: 'pierre-dark', light: 'pierre-light' },
     });
     // Under the hood, all instances of FileDiff will use a shared
-    // Shiki highlighter and manage loading languages and themes for
-    // you automatically
+    // Highlights highlighter and load themes automatically
     instance.render({
       fileDiff,
       containerWrapper: document.body,

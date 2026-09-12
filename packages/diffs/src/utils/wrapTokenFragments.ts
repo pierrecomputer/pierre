@@ -1,6 +1,5 @@
-import type { ElementContent, Element as HASTElement } from 'hast';
-
-import { createHastElement } from './hast_utils';
+import type { ElementContent, HElement as HtmlElement } from '../types';
+import { createHtmlElement } from './html';
 
 const NO_TOKEN: unique symbol = Symbol('no-token');
 const MULTIPLE_TOKENS: unique symbol = Symbol('multiple-tokens');
@@ -8,8 +7,8 @@ const MULTIPLE_TOKENS: unique symbol = Symbol('multiple-tokens');
 type TokenFragmentState = number | typeof NO_TOKEN | typeof MULTIPLE_TOKENS;
 
 // Walk a rendered line and add a single outer token wrapper around all
-// fragments that still belong to the same original Shiki token.
-export function wrapTokenFragments(container: HASTElement): TokenFragmentState {
+// fragments that still belong to the same original token.
+export function wrapTokenFragments(container: HtmlElement): TokenFragmentState {
   const ownTokenChar = getTokenChar(container);
   if (ownTokenChar != null) {
     return ownTokenChar;
@@ -48,7 +47,7 @@ export function wrapTokenFragments(container: HASTElement): TokenFragmentState {
     }
 
     wrappedChildren.push(
-      createHastElement({
+      createHtmlElement({
         tagName: 'span',
         properties: { 'data-char': currentTokenChar },
         children: currentTokenChildren,
@@ -100,7 +99,7 @@ export function wrapTokenFragments(container: HASTElement): TokenFragmentState {
   return containerTokenState;
 }
 
-function getTokenChar(node: HASTElement): number | undefined {
+function getTokenChar(node: HtmlElement): number | undefined {
   const value = node.properties['data-char'];
   if (typeof value === 'number') {
     return value;
@@ -116,6 +115,6 @@ function stripTokenChar(node: ElementContent): void {
   }
 }
 
-function setTokenChar(node: HASTElement, char: number): void {
+function setTokenChar(node: HtmlElement, char: number): void {
   node.properties['data-char'] = char;
 }

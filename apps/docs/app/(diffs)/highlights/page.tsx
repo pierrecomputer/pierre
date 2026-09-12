@@ -1,4 +1,3 @@
-import { highlightsHighlighter } from '@pierre/diffs/highlights';
 import { preloadFile } from '@pierre/diffs/ssr';
 import highlightsPackageJson from '@pierre/highlights/package.json';
 import { IconBolt, IconCodeBlock, IconPencil } from '@pierre/icons';
@@ -24,7 +23,6 @@ export const metadata: Metadata = pageMetadata({
 export default async function HighlightsPage() {
   const [lang, , contents] = PLAYGROUND_LANGUAGES[0];
   const playground = await preloadFile({
-    highlighter: highlightsHighlighter,
     file: { name: `source.${lang}`, contents, lang },
     options: {
       theme: { dark: 'pierre-dark', light: 'pierre-light' },

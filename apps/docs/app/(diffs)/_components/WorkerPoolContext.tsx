@@ -56,20 +56,7 @@ const HighlighterOptions: WorkerInitializationRenderOptions = {
     SITE === 'diffshub'
       ? { dark: 'pierre-dark-soft', light: 'pierre-light-soft' }
       : DEFAULT_THEMES,
-  langs: [
-    'cpp',
-    'css',
-    'go',
-    'markdown',
-    'python',
-    'rust',
-    'sh',
-    'swift',
-    'tsx',
-    'typescript',
-    'zig',
-  ],
-  preferredHighlighter: 'shiki-wasm',
+
   useTokenTransformer: true,
 };
 

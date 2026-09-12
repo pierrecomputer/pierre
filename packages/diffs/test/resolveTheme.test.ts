@@ -1,47 +1,43 @@
-import { afterEach, describe, expect, test } from 'bun:test';
+import { beforeEach, describe, expect, test } from 'bun:test';
 
-// Importing shared_highlighter for its side effect: it registers the four
-// pierre-* themes against the diffs theme registry at module load.
-import '../src/highlighter/shared_highlighter';
-import { cleanUpResolvedThemes } from '../src/highlighter/themes/cleanUpResolvedThemes';
-import { getResolvedThemes } from '../src/highlighter/themes/getResolvedThemes';
-import { hasResolvedThemes } from '../src/highlighter/themes/hasResolvedThemes';
-import { resolveTheme } from '../src/highlighter/themes/resolveTheme';
-import { resolveThemes } from '../src/highlighter/themes/resolveThemes';
+import { createDiffsHighlighter } from '../src/highlighter/createDiffsHighlighter';
+import { getHighlightsTheme } from '../src/highlighter/getHighlightsTheme';
+import type { DiffsHighlighter } from '../src/types';
 
-afterEach(() => {
-  cleanUpResolvedThemes();
+let resolver: DiffsHighlighter['themeResolver'];
+beforeEach(() => {
+  resolver = createDiffsHighlighter().themeResolver;
 });
 
 describe('resolveTheme contract', () => {
-  test('resolves a registered pierre theme to a normalized theme', async () => {
-    const theme = await resolveTheme('pierre-dark');
-    // normalizeTheme derives fg/bg from the colors map (the raw bundle leaves
-    // them undefined), and the registry slug is preserved as the name.
+  test('resolves a bundled Highlights theme with its registry name', async () => {
+    const theme = getHighlightsTheme(
+      await resolver.resolveTheme('pierre-dark')
+    );
     expect(theme.name).toBe('pierre-dark');
-    expect(theme.fg).toBe('#fafafa');
-    expect(theme.bg).toBe('#0a0a0a');
+    expect(theme.style['editor.foreground']).toBe('#fafafa');
+    expect(theme.style['editor.background']).toBe('#0a0a0a');
   });
 
   test('caches the resolved theme for synchronous reuse', async () => {
-    await resolveTheme('pierre-dark');
-    expect(hasResolvedThemes(['pierre-dark'])).toBe(true);
-    const [cached] = getResolvedThemes(['pierre-dark']);
+    await resolver.resolveTheme('pierre-dark');
+    expect(resolver.hasResolvedThemes(['pierre-dark'])).toBe(true);
+    const [cached] = resolver.getResolvedThemes(['pierre-dark']);
     expect(cached.name).toBe('pierre-dark');
   });
 
   test('dedupes concurrent loads of the same theme', async () => {
     const [a, b] = await Promise.all([
-      resolveTheme('pierre-light'),
-      resolveTheme('pierre-light'),
+      resolver.resolveTheme('pierre-light'),
+      resolver.resolveTheme('pierre-light'),
     ]);
     expect(a).toBe(b);
   });
 
   test('resolveThemes preserves input order when mixing cold and cached themes', async () => {
-    await resolveTheme('pierre-dark');
+    await resolver.resolveTheme('pierre-dark');
 
-    const themes = await resolveThemes(['nord', 'pierre-dark']);
+    const themes = await resolver.resolveThemes(['nord', 'pierre-dark']);
 
     expect(themes.map((theme) => theme.name)).toEqual(['nord', 'pierre-dark']);
   });
@@ -49,20 +45,20 @@ describe('resolveTheme contract', () => {
   test('rejects a name with no registered or bundled loader', async () => {
     let caughtErr: unknown;
     try {
-      await resolveTheme('definitely-not-a-real-theme-xyz');
+      await resolver.resolveTheme('definitely-not-a-real-theme-xyz');
     } catch (err) {
       caughtErr = err;
     }
     expect(caughtErr).toBeInstanceOf(Error);
     expect((caughtErr as Error).message).toContain(
-      'No valid theme loader registered'
+      'No loader registered for theme'
     );
   });
 
-  test('cleanUpResolvedThemes clears the resolved cache', async () => {
-    await resolveTheme('pierre-dark');
-    expect(hasResolvedThemes(['pierre-dark'])).toBe(true);
-    cleanUpResolvedThemes();
-    expect(hasResolvedThemes(['pierre-dark'])).toBe(false);
+  test('resolver.clearResolvedThemes clears the resolved cache', async () => {
+    await resolver.resolveTheme('pierre-dark');
+    expect(resolver.hasResolvedThemes(['pierre-dark'])).toBe(true);
+    resolver.clearResolvedThemes();
+    expect(resolver.hasResolvedThemes(['pierre-dark'])).toBe(false);
   });
 });

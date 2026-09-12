@@ -61,8 +61,6 @@ order. If you touch one of these areas, consider adding the missing coverage:
   shift-click extension, single-line unselect.
 - **getFiletypeFromFileName**: filename → language detection and the custom
   extension registry.
-- **shiki-stream** (`src/shiki-stream/`): publicly exported streaming tokenizer
-  with chunk-boundary/grammar-state logic, zero tests.
 - **UnresolvedFile** merge-conflict click-to-resolve wiring.
 - **Interaction option updates, disable direction**: only the enable direction
   of `setOptions` interaction toggles is covered.

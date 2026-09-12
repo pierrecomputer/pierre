@@ -59,7 +59,6 @@ const DIFFS_SECTIONS = [
   'TokenHooks',
   'WorkerPool',
   'SSR',
-  'HighlightsHighlighter',
 ] as const;
 
 const TREES_SECTIONS = [
@@ -107,8 +106,6 @@ const SECTION_DESCRIPTIONS: Record<string, Record<string, string>> = {
     Styling: 'CSS variables, inline styles, and unsafe CSS injection',
     Theming:
       'Pierre Light/Dark themes, custom theme creation, and registration',
-    HighlightsHighlighter:
-      'Experimental highlighter features, APIs, themes, languages, streaming, incremental editing, and Diffs integration',
     TokenHooks:
       'Experimental token-level enter/leave/click callbacks for hover UI and LSP integrations',
     WorkerPool:

@@ -1,7 +1,9 @@
+import { isSupportedLanguage } from '@pierre/highlights';
+
+import { DEFAULT_THEMES } from '../constants';
+import { getHighlightsTheme } from '../highlighter/getHighlightsTheme';
 import type {
-  CodeToHastOptions,
   DiffsHighlighter,
-  DiffsThemeNames,
   FileContents,
   ForceFilePlainTextOptions,
   RenderFileOptions,
@@ -9,11 +11,10 @@ import type {
 } from '../types';
 import { appendItems } from './appendItems';
 import { linesFromFileContents } from './computeFileOffsets';
-import { createTransformerWithState } from './createTransformerWithState';
 import { formatCSSVariablePrefix } from './formatCSSVariablePrefix';
 import { getFiletypeFromFileName } from './getFiletypeFromFileName';
 import { getHighlighterThemeStyles } from './getHighlighterThemeStyles';
-import { getLineNodes } from './getLineNodes';
+import { renderTokenLines } from './renderTokenLines';
 
 const DEFAULT_PLAIN_TEXT_OPTIONS: ForceFilePlainTextOptions = {
   forcePlainText: false,
@@ -22,7 +23,11 @@ const DEFAULT_PLAIN_TEXT_OPTIONS: ForceFilePlainTextOptions = {
 export function renderFileWithHighlighter(
   file: FileContents,
   highlighter: DiffsHighlighter,
-  { theme, tokenizeMaxLineLength, useTokenTransformer }: RenderFileOptions,
+  {
+    theme = DEFAULT_THEMES,
+    tokenizeMaxLineLength,
+    useTokenTransformer,
+  }: RenderFileOptions,
   {
     forcePlainText,
     startingLine,
@@ -42,63 +47,54 @@ export function renderFileWithHighlighter(
     totalLines = Infinity;
   }
   const isWindowedHighlight = startingLine > 0 || totalLines < Infinity;
-  const { state, transformers } =
-    createTransformerWithState(useTokenTransformer);
   const lang = forcePlainText
     ? 'text'
     : (file.lang ?? getFiletypeFromFileName(file.name));
+  const appearance =
+    typeof theme === 'string'
+      ? getHighlightsTheme(highlighter.getTheme(theme)).appearance
+      : undefined;
   const baseThemeType =
-    typeof theme === 'string' ? highlighter.getTheme(theme).type : undefined;
+    appearance === 'light'
+      ? 'light'
+      : appearance === 'dark'
+        ? 'dark'
+        : undefined;
   const themeStyles = getHighlighterThemeStyles({
     theme,
     highlighter,
   });
-  state.lineInfo = (shikiLineNumber: number) => ({
-    type: 'context',
-    lineIndex: shikiLineNumber - 1 + startingLine,
-    lineNumber: shikiLineNumber + startingLine,
-  });
-  // tokenizeTimeLimit: 0 disables shiki's silent 500ms-per-line tokenization
-  // abort. When it trips (slow devices, cold JS-regex-engine compile), the
-  // rest of the line collapses to the enclosing scope's color — and since
-  // dual-theme rendering tokenizes per theme, the first (dark) pass can smear
-  // while the warm second (light) pass stays correct. Pathological content is
-  // already guarded by tokenizeMaxLineLength, which renders long lines plain.
-  const hastConfig: CodeToHastOptions<DiffsThemeNames> = (() => {
-    if (typeof theme === 'string') {
-      return {
-        lang,
-        theme,
-        transformers,
+  // Normalize lone carriage returns so highlighted rows match document lines.
+  const highlightedLines = renderTokenLines(
+    highlighter.codeToTokens(
+      (isWindowedHighlight
+        ? extractWindowedFileContent(
+            lines ?? linesFromFileContents(file.contents),
+            startingLine,
+            totalLines
+          )
+        : file.contents
+      ).replace(/\r(?!\n)/g, '\n'),
+      {
+        lang: isSupportedLanguage(lang) ? lang : 'text',
+        theme:
+          typeof theme === 'string'
+            ? highlighter.getTheme(theme)
+            : {
+                dark: highlighter.getTheme(theme.dark),
+                light: highlighter.getTheme(theme.light),
+              },
         defaultColor: false,
         cssVariablePrefix: formatCSSVariablePrefix('token'),
         tokenizeMaxLineLength,
-        tokenizeTimeLimit: 0,
-      };
-    }
-    return {
-      lang,
-      themes: theme,
-      transformers,
-      defaultColor: false,
-      cssVariablePrefix: formatCSSVariablePrefix('token'),
-      tokenizeMaxLineLength,
-      tokenizeTimeLimit: 0,
-    };
-  })();
-  const highlightedLines = getLineNodes(
-    highlighter.codeToHast(
-      normalizeHighlightLineEndings(
-        isWindowedHighlight
-          ? extractWindowedFileContent(
-              lines ?? linesFromFileContents(file.contents),
-              startingLine,
-              totalLines
-            )
-          : file.contents
-      ),
-      hastConfig
-    )
+      }
+    ).tokens,
+    (line) => ({
+      type: 'context',
+      lineIndex: line - 1 + startingLine,
+      lineNumber: line + startingLine,
+    }),
+    useTokenTransformer ?? false
   );
 
   // Create sparse array for windowed rendering
@@ -108,13 +104,6 @@ export function renderFileWithHighlighter(
   }
 
   return { code, themeStyles, baseThemeType };
-}
-
-// Shiki does not treat a lone carriage return as a line break. Normalize only
-// the text sent to the highlighter so its output stays aligned with the file
-// model while the original document retains its line endings.
-function normalizeHighlightLineEndings(contents: string): string {
-  return contents.replace(/\r(?!\n)/g, '\n');
 }
 
 function extractWindowedFileContent(

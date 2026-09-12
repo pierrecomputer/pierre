@@ -61,15 +61,17 @@ uncontrolled.
 
 ### disposeHighlighter [toc-ignore]
 
-Dispose the shared Shiki highlighter instance to free memory. Useful when
-cleaning up resources in single-page applications.
+Release the shared highlighter reference so the next request creates an instance
+with its own theme cache. Loaders registered through `registerCustomTheme` carry
+over to the new instance. Existing highlighter references keep their themes and
+resolver registrations.
 
 <DocsCodeExample {...disposeHighlighter} />
 
 ### getSharedHighlighter [toc-ignore]
 
-Get direct access to the shared Shiki highlighter instance used internally by
-all components. Useful for custom highlighting operations.
+Get direct access to the shared Highlights highlighter instance used internally
+by all components. Useful for custom highlighting operations.
 
 <DocsCodeExample {...getSharedHighlighter} />
 
@@ -120,40 +122,21 @@ keeping valid diff headers.
 
 ### preloadHighlighter [toc-ignore]
 
-Preload specific themes and languages before rendering to ensure instant
-highlighting with no async loading delay.
+Preload themes before rendering to ensure instant highlighting with no async
+loading delay.
 
 <DocsCodeExample {...preloadHighlighter} />
 
 ### registerCustomTheme [toc-ignore]
 
-Register a custom Shiki theme for use with any component. The theme name you
-register must match the `name` field inside your theme JSON file.
+Register a custom Highlights theme for use with any component. The theme name
+you register must match the `name` field inside your theme JSON file.
 
 <DocsCodeExample {...registerCustomTheme} />
 
-### registerCustomLanguage [toc-ignore]
-
-Register a custom Shiki language loader and optionally map it to file names or
-extensions. Use this when you're working with languages not bundled by Shiki or
-want custom highlighting grammars.
-
-The grammar file or object returned by your loader has a `name` field and can
-have an `aliases` array. An alias is an additional language ID that uses the
-same highlighting rules. For example, Terraform's grammar has
-`name: 'terraform'` and `aliases: ['tf', 'tfvars']`, so Shiki accepts all three
-IDs (or `lang`/`language`) for that grammar.
-
-The first argument to `registerCustomLanguage` must match the grammar's `name`
-or an entry in its `aliases` array. Registering a loader does not change these
-fields. The optional filename and extension mappings tell Diffs which language
-ID to request; they do not add aliases to the grammar.
-
-If Shiki has already loaded a grammar under its `name`, loading another copy
-with extra aliases will not add them. Load your custom grammar before the
-original, or give your custom grammar a distinct `name` field.
-
-<DocsCodeExample {...registerCustomLanguage} />
+Languages are bundled with Highlights. Set `file.lang` to a supported language
+or use `setLanguageOverride` to assign one to a file or diff. Unsupported file
+types render as plain text.
 
 ### setLanguageOverride [toc-ignore]
 

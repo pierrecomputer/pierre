@@ -1,26 +1,15 @@
-// → future @pierre/diffs. Names-now mapping: consumes the selected theme names,
-// not the resolved active-theme snapshot, because diffs' prop is name-based and
-// it resolves internally. Diffs carries both light/dark names because it passes
-// the pair through to Shiki/worker render options (`themes`) so both variants
-// are available for fast mode switches; `themeType` only selects the active
-// branch for CSS/color-scheme. When diffs accepts resolved objects, this is the
-// only mapping that changes.
+// Maps selected theme names to diff options, registering Highlights theme
+// objects before the highlighter or workers resolve those names.
 import {
   registerCustomTheme,
-  type ThemeRegistrationResolved,
   type ThemesType,
   type ThemeTypes,
 } from '@pierre/diffs';
-import type { ThemeLike } from '@pierre/theming';
+import type { Theme } from '@pierre/highlights';
 
-import {
-  isThemePair,
-  requireThemeValueName,
-  type ThemeNameSelection,
-  type ThemePair,
-} from './ThemeSource';
+import type { ThemeNameSelection, ThemePair } from './ThemeSource';
 
-export type DiffThemeValue = string | (ThemeLike & { name: string });
+export type DiffThemeValue = string | Theme;
 export type DiffThemeInput = DiffThemeValue | ThemePair<DiffThemeValue>;
 
 const seededDiffThemeNames = new Set<string>();
@@ -42,7 +31,7 @@ export function diffThemeSelectionFromInput(
   input: DiffThemeInput,
   colorScheme: 'dark' | 'light'
 ): ThemeNameSelection {
-  if (isThemePair(input)) {
+  if (typeof input === 'object' && 'light' in input && 'dark' in input) {
     return {
       lightThemeName: nameForDiffThemeValue(input.light),
       darkThemeName: nameForDiffThemeValue(input.dark),
@@ -56,12 +45,13 @@ export function diffThemeSelectionFromInput(
 function nameForDiffThemeValue(value: DiffThemeValue): string {
   if (typeof value === 'string') return value;
 
-  const name = requireThemeValueName(value);
+  const { name } = value;
+  if (name == null || name === '') {
+    throw new Error('Diff theme objects must include a name');
+  }
   if (!seededDiffThemeNames.has(name)) {
     seededDiffThemeNames.add(name);
-    registerCustomTheme(name, () =>
-      Promise.resolve(value as ThemeRegistrationResolved)
-    );
+    registerCustomTheme(name, () => Promise.resolve(value));
   }
   return name;
 }

@@ -1,11 +1,11 @@
 import { afterAll, describe, expect, test } from 'bun:test';
-import type { ElementContent } from 'hast';
 
 import {
   DiffHunksRenderer,
   disposeHighlighter,
   parseDiffFromFile,
 } from '../src';
+import type { ElementContent } from '../src/types';
 import { fileNew, fileOld } from './mocks';
 import {
   assertDefined,

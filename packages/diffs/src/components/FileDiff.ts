@@ -1,6 +1,3 @@
-import type { ElementContent, Element as HASTElement } from 'hast';
-import { toHtml } from 'hast-util-to-html';
-
 import {
   CUSTOM_HEADER_SLOT_ID,
   DEFAULT_COLLAPSED_CONTEXT_THRESHOLD,
@@ -48,6 +45,8 @@ import {
   type HunksRenderResult,
 } from '../renderers/DiffHunksRenderer';
 import { SVGSpriteSheet } from '../sprite';
+import { toHtml } from '../utils/html';
+
 export type { FileDiffEditCompleteEvent } from '../editor/types';
 import type {
   AppliedThemeStyleCache,
@@ -55,11 +54,13 @@ import type {
   BaseDiffOptions,
   CustomPreProperties,
   DiffLineAnnotation,
-  ExpansionDirections,
   DiffsHighlighter,
+  ElementContent,
+  ExpansionDirections,
   FileContents,
   FileDiffMetadata,
   HighlightedToken,
+  HElement as HtmlElement,
   HunkData,
   HunkSeparators,
   LineAnnotation,
@@ -1777,19 +1778,14 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
       });
     };
     const theme = this.getTheme();
-    const lang = fileDiff.lang ?? getFiletypeFromFileName(fileDiff.name);
     // Sync synchronously whenever the shared highlighter is ready; otherwise
     // load it and sync once it resolves.
-    const highlighter = getHighlighterIfLoaded({ theme, lang });
+    const highlighter = getHighlighterIfLoaded({ theme });
     if (highlighter != null) {
       sync(highlighter);
     } else {
       void getSharedHighlighter({
         themes: getThemes(theme),
-        langs: ['text', lang],
-        preferredHighlighter:
-          this.workerManager?.getPreferredHighlighter() ??
-          this.options.preferredHighlighter,
       }).then(sync);
     }
   }
@@ -2765,7 +2761,7 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
   }
 
   private applyHeaderToDOM(
-    headerAST: HASTElement,
+    headerAST: HtmlElement,
     container: HTMLElement,
     fileDiff: FileDiffMetadata
   ): void {
@@ -3410,7 +3406,7 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
         ) {
           for (let i = 0; i < astChildren.length; i++) {
             const gutterElement = el.children[i] as HTMLElement;
-            const gutterChild = astChildren[i] as HASTElement;
+            const gutterChild = astChildren[i] as HtmlElement;
             const lineType = gutterChild.properties['data-line-type'] as
               | string
               | undefined;
@@ -3502,14 +3498,14 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
     if (gutterChildren == null || contentChildren == null) {
       throw new Error('FileDiff.insertPartialHTML: Unexpected AST structure');
     }
-    const firstHASTElement = contentChildren.at(0);
+    const firstHtmlElement = contentChildren.at(0);
     if (
       insertPosition === 'beforeend' &&
-      firstHASTElement?.type === 'element' &&
-      typeof firstHASTElement.properties['data-buffer-size'] === 'number'
+      firstHtmlElement?.type === 'element' &&
+      typeof firstHtmlElement.properties['data-buffer-size'] === 'number'
     ) {
       this.mergeBuffersIfNecessary(
-        firstHASTElement.properties['data-buffer-size'],
+        firstHtmlElement.properties['data-buffer-size'],
         column.content.children[column.content.children.length - 1],
         column.gutter.children[column.gutter.children.length - 1],
         gutterChildren,
@@ -3517,14 +3513,14 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
         true
       );
     }
-    const lastHASTElement = contentChildren.at(-1);
+    const lastHtmlElement = contentChildren.at(-1);
     if (
       insertPosition === 'afterbegin' &&
-      lastHASTElement?.type === 'element' &&
-      typeof lastHASTElement.properties['data-buffer-size'] === 'number'
+      lastHtmlElement?.type === 'element' &&
+      typeof lastHtmlElement.properties['data-buffer-size'] === 'number'
     ) {
       this.mergeBuffersIfNecessary(
-        lastHASTElement.properties['data-buffer-size'],
+        lastHtmlElement.properties['data-buffer-size'],
         column.content.children[0],
         column.gutter.children[0],
         gutterChildren,

@@ -1,2447 +1,723 @@
-import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
-import { type IGrammar, INITIAL, type StateStack } from 'shiki/textmate';
+import {
+  codeToTokens,
+  isSupportedLanguage,
+  type Theme,
+} from '@pierre/highlights';
+import { pierreDark, pierreLight } from '@pierre/highlights/themes';
+import { afterEach, beforeEach, describe, expect, spyOn, test } from 'bun:test';
 
 import {
   TextDocument,
   type TextDocumentChange,
 } from '../src/editor/textDocument';
-import { EditorTokenizer } from '../src/editor/tokenizer';
-import type { DiffsHighlighter, HighlightedToken } from '../src/types';
+import { EditorTokenizer, renderLineTokens } from '../src/editor/tokenizer';
+import type { TextEdit } from '../src/editor/types';
+import type {
+  BaseCodeOptions,
+  DiffsHighlighter,
+  HighlightedToken,
+  RenderRange,
+  SupportedLanguages,
+} from '../src/types';
+import { installDom, waitFor } from './domHarness';
 
-const noopSetStyle = () => {};
+const highlighter = {
+  getTheme: (name: string) => (name === 'light' ? pierreLight : pierreDark),
+} as unknown as DiffsHighlighter;
 
-function createTestHighlighter(
-  overrides: Record<string, unknown> = {}
-): DiffsHighlighter {
-  return {
-    getLoadedLanguages: () => ['typescript'],
-    getTheme: () => ({ type: 'dark', colors: {} }),
-    setTheme: () => ({ theme: { type: 'dark' }, colorMap: [''] }),
-    ...overrides,
-  } as unknown as DiffsHighlighter;
+function renderRange(startingLine: number, totalLines: number): RenderRange {
+  return { startingLine, totalLines, bufferBefore: 0, bufferAfter: 0 };
 }
 
-function getThemeStyle(colors: Record<string, string>): string {
-  let style = '';
-  const tokenizer = new EditorTokenizer({
-    highlighter: createTestHighlighter({
-      getTheme: () => ({ type: 'dark', colors }),
-    }),
-    textDocument: new TextDocument('test.txt', 'line 0', 'text'),
-    codeOptions: { theme: 'test-theme', themeType: 'dark' },
-    setStyle: (nextStyle) => {
-      style = nextStyle;
+function fullChange(document: TextDocument): TextDocumentChange {
+  return {
+    changes: [],
+    startLine: 0,
+    startCharacter: 0,
+    endCharacter: 0,
+    endLine: document.lineCount - 1,
+    endedAtDocumentEnd: true,
+    previousLineCount: document.lineCount,
+    lineCount: document.lineCount,
+    lineDelta: 0,
+    changedLineRanges: [[0, document.lineCount - 1]],
+  };
+}
+
+function edit(
+  startLine: number,
+  startCharacter: number,
+  endLine: number,
+  endCharacter: number,
+  newText: string
+): TextEdit {
+  return {
+    range: {
+      start: { line: startLine, character: startCharacter },
+      end: { line: endLine, character: endCharacter },
     },
-    onDeferTokenize: () => {},
-  });
-  tokenizer.cleanUp();
-  return style;
+    newText,
+  };
+}
+
+// Compare token colors and text to a fresh full-document highlight, independent
+// of the live tokenizer's retained lexer state and line-number remapping.
+function expectTokens(
+  document: TextDocument,
+  lines: Map<number, HighlightedToken[]>,
+  theme: Theme = pierreDark
+): void {
+  const language = document.languageId;
+  const expected = codeToTokens(document.getText(), {
+    lang: isSupportedLanguage(language) ? language : 'text',
+    theme,
+  }).tokens;
+  for (const [line, tokens] of lines) {
+    expect(tokens.map(([, , text]) => text).join('')).toBe(
+      document.getLineText(line)
+    );
+    expect(
+      tokens.flatMap(([, color, text]) => Array.from(text, () => color))
+    ).toEqual(
+      expected[line].flatMap(({ color, content }) =>
+        Array.from(content, () => color ?? '')
+      )
+    );
+  }
+}
+
+async function waitUntil(predicate: () => boolean): Promise<void> {
+  await waitFor(predicate);
+  expect(predicate()).toBe(true);
 }
 
 describe('EditorTokenizer', () => {
-  const originalWindowDescriptor = Object.getOwnPropertyDescriptor(
-    globalThis,
-    'window'
+  let dom: ReturnType<typeof installDom>;
+  const tokenizers: EditorTokenizer[] = [];
+  beforeEach(() => {
+    dom = installDom();
+  });
+  afterEach(() => {
+    for (const tokenizer of tokenizers) tokenizer.cleanUp();
+    tokenizers.length = 0;
+    dom.cleanup();
+  });
+
+  function create(
+    code: string,
+    options: {
+      lang?: SupportedLanguages;
+      codeOptions?: BaseCodeOptions;
+      matchBrackets?: boolean;
+      theme?: Theme;
+    } = {}
+  ) {
+    const document = new TextDocument(
+      'test.ts',
+      code,
+      options.lang ?? 'typescript'
+    );
+    const deferred = new Map<number, HighlightedToken[]>();
+    const modes: string[] = [];
+    let style = '';
+    let themeChanges = 0;
+    const tokenizer = new EditorTokenizer({
+      highlighter:
+        options.theme === undefined
+          ? highlighter
+          : ({ getTheme: () => options.theme } as unknown as DiffsHighlighter),
+      textDocument: document,
+      codeOptions: { theme: 'dark', themeType: 'dark', ...options.codeOptions },
+      matchBrackets: options.matchBrackets,
+      setStyle: (value) => {
+        style = value;
+      },
+      onDeferTokenize: (lines, themeType) => {
+        modes.push(themeType);
+        for (const [line, tokens] of lines) deferred.set(line, tokens);
+      },
+      onThemeChange: () => {
+        themeChanges++;
+      },
+    });
+    tokenizers.push(tokenizer);
+    return {
+      tokenizer,
+      document,
+      deferred,
+      modes,
+      get style() {
+        return style;
+      },
+      get themeChanges() {
+        return themeChanges;
+      },
+      initialize(range?: RenderRange) {
+        return tokenizer.tokenize(fullChange(document), range);
+      },
+      update(edits: TextEdit[], range?: RenderRange, hostRealignsRows = false) {
+        const change = document.applyEdits(edits);
+        if (change === undefined) throw new Error('Expected an edit');
+        tokenizer.stopBackgroundTokenize();
+        return tokenizer.tokenize(change, range, hostRealignsRows);
+      },
+    };
+  }
+
+  test('a pinned theme keeps its own appearance', () => {
+    const { tokenizer } = create('const x = 1', {
+      codeOptions: { theme: 'dark', themeType: 'light' },
+    });
+    expect(tokenizer.themeType).toBe('dark');
+    tokenizer.syncTheme({ theme: 'dark', themeType: 'light' });
+    expect(tokenizer.themeType).toBe('dark');
+  });
+
+  test('maps Zed editor colors to selection, cursor, search and diagnostic styles', () => {
+    const { style } = create('', {
+      theme: {
+        name: 'Editor colors',
+        appearance: 'dark',
+        style: {
+          players: [{ selection: '#123456', cursor: '#234567' }],
+          'editor.active_line.background': '#34567880',
+          'editor.document_highlight.bracket_background': '#456789',
+          'search.match_background': '#567890',
+          hint: '#678901',
+          info: '#789012',
+          warning: '#890123',
+          error: '#901234',
+        },
+      },
+    });
+    expect(style).toContain('--diffs-editor-selection-bg: #123456;');
+    expect(style).toContain('--diffs-editor-cursor-fg: #234567;');
+    expect(style).toContain('--diffs-editor-active-line-source-mix: 85%;');
+    expect(style).toContain(
+      '--diffs-editor-line-highlight-border: transparent;'
+    );
+    expect(style).toContain('--diffs-editor-bracket-match-bg: #456789;');
+    expect(style).toContain('--diffs-editor-match-bg: #567890;');
+    expect(style).toContain('--diffs-editor-hint-fg: #678901;');
+    expect(style).toContain('--diffs-editor-info-fg: #789012;');
+    expect(style).toContain('--diffs-editor-warning-fg: #890123;');
+    expect(style).toContain('--diffs-editor-error-fg: #901234;');
+  });
+
+  test.each([undefined, '', '#00000000'])(
+    'uses a border for an absent or transparent active-line background (%s)',
+    (background) => {
+      const { style } = create('', {
+        theme: {
+          name: 'Border',
+          appearance: 'dark',
+          style: { 'editor.active_line.background': background },
+        },
+      });
+      expect(style).toContain('--diffs-editor-active-line-source-mix: 100%;');
+      expect(style).toContain(
+        '--diffs-editor-line-highlight-border: color-mix('
+      );
+    }
   );
-  const originalMatchMedia = globalThis.window?.matchMedia;
 
-  beforeAll(() => {
-    Object.defineProperty(globalThis, 'window', {
-      configurable: true,
-      value: globalThis,
-      writable: true,
-    });
-    globalThis.window.matchMedia = () =>
-      ({
-        addEventListener: () => {},
-        addListener: () => {},
-        dispatchEvent: () => false,
-        matches: false,
-        media: '(prefers-color-scheme: dark)',
-        onchange: null,
-        removeEventListener: () => {},
-        removeListener: () => {},
-      }) as MediaQueryList;
-  });
-
-  afterAll(() => {
-    if (originalWindowDescriptor === undefined) {
-      Reflect.deleteProperty(globalThis, 'window');
-    } else {
-      Object.defineProperty(globalThis, 'window', originalWindowDescriptor);
-      globalThis.window.matchMedia = originalMatchMedia;
-    }
-  });
-
-  // A single pinned theme carries its own light/dark classification; the
-  // themeType option (or a system flip) must not relabel it. A wrong label
-  // flows through updateRenderCache into the render cache's baseThemeType
-  // and flips the surface's effective scheme after the first edit.
-  test('a single pinned theme keeps its own light/dark type', () => {
-    const tokenizer = new EditorTokenizer({
-      highlighter: createTestHighlighter(),
-      textDocument: new TextDocument('test.txt', 'line 0', 'text'),
-      codeOptions: { theme: 'test-theme', themeType: 'light' },
-      setStyle: noopSetStyle,
-      onDeferTokenize: () => {},
-    });
-    // The stub highlighter classifies every theme as dark.
-    expect(tokenizer.themeType).toBe('dark');
-
-    // A sync carrying a conflicting themeType option must not relabel.
-    tokenizer.syncTheme({ theme: 'test-theme', themeType: 'light' });
-    expect(tokenizer.themeType).toBe('dark');
-    tokenizer.cleanUp();
-  });
-
-  test('derives the active-line background mix and border treatment', () => {
-    const borderOnlyStyle = getThemeStyle({
-      'editor.lineHighlightBorder': '#303030',
-    });
-    expect(borderOnlyStyle).toContain(
-      '--diffs-editor-line-highlight-border: #303030;'
-    );
-    expect(borderOnlyStyle).toContain(
-      '--diffs-editor-active-line-source-mix: 100%;'
-    );
-
-    const backgroundOnlyStyle = getThemeStyle({
-      'editor.lineHighlightBackground': '#2b3036',
-    });
-    expect(backgroundOnlyStyle).toContain(
-      '--diffs-editor-line-highlight-border: transparent;'
-    );
-    expect(backgroundOnlyStyle).toContain(
-      '--diffs-editor-active-line-source-mix: 85%;'
-    );
-
-    const combinedStyle = getThemeStyle({
-      'editor.lineHighlightBackground': '#3b4252',
-      'editor.lineHighlightBorder': '#434c5e',
-    });
-    expect(combinedStyle).toContain(
-      '--diffs-editor-line-highlight-border: #434c5e;'
-    );
-    expect(combinedStyle).toContain(
-      '--diffs-editor-active-line-source-mix: 85%;'
-    );
-
-    const translucentStyle = getThemeStyle({
-      'editor.lineHighlightBackground': '#19283c8c',
-    });
-    expect(translucentStyle).toContain(
-      '--diffs-editor-line-highlight-border: transparent;'
-    );
-    expect(translucentStyle).toContain(
-      '--diffs-editor-active-line-source-mix: 85%;'
-    );
-
-    const transparentStyle = getThemeStyle({
-      'editor.lineHighlightBackground': '#00000000',
-    });
-    expect(transparentStyle).toContain(
-      '--diffs-editor-line-highlight-border: color-mix(in lab, var(--diffs-bg) 70%, var(--diffs-fg));'
-    );
-    expect(transparentStyle).toContain(
-      '--diffs-editor-active-line-source-mix: 100%;'
-    );
-
-    const missingStyle = getThemeStyle({});
-    expect(missingStyle).toContain(
-      '--diffs-editor-line-highlight-border: color-mix(in lab, var(--diffs-bg) 70%, var(--diffs-fg));'
-    );
-    expect(missingStyle).toContain(
-      '--diffs-editor-active-line-source-mix: 100%;'
-    );
-  });
-
-  test('tokenizes plain text without loading a Shiki grammar', () => {
-    const originalPostMessage = globalThis.postMessage;
-    const postedMessages: unknown[] = [];
-    globalThis.postMessage = ((message: unknown) => {
-      postedMessages.push(message);
-    }) as typeof globalThis.postMessage;
-
-    try {
-      const getLanguage = () => {
-        throw new Error('getLanguage should not be called for plain text');
-      };
-      const loadLanguage = () => {
-        throw new Error('loadLanguage should not be called for plain text');
-      };
-      const textDocument = new TextDocument(
-        'Untitled-1',
-        Array.from({ length: 20 }, (_, i) => `line ${i}`).join('\n'),
-        'text'
-      );
-      const tokenizer = new EditorTokenizer({
-        highlighter: createTestHighlighter({
-          getLanguage,
-          loadLanguage,
-          getLoadedLanguages: () => [],
-        }),
-        textDocument,
-        codeOptions: { theme: 'test-theme', themeType: 'dark' },
-        setStyle: noopSetStyle,
-        onDeferTokenize: () => {},
-      });
-      const renderRange = {
-        startingLine: 0,
-        totalLines: 5,
-        bufferBefore: 0,
-        bufferAfter: 0,
-      };
-
-      const dirtyLines = tokenizer.tokenize(
-        {
-          startLine: 0,
-          startCharacter: 0,
-          endCharacter: 0,
-          endLine: 19,
-          endedAtDocumentEnd: false,
-          previousLineCount: textDocument.lineCount,
-          lineCount: textDocument.lineCount,
-          lineDelta: 0,
-          changes: [],
-          changedLineRanges: [[0, 19]],
-        },
-        renderRange
-      );
-
-      expect([...dirtyLines.keys()]).toEqual([0, 1, 2, 3, 4]);
-      expect(dirtyLines.get(0)?.[0]).toEqual([0, '', 'line 0']);
-      expect(postedMessages).toHaveLength(0);
-    } finally {
-      globalThis.postMessage = originalPostMessage;
-    }
-  });
-
-  test('picks up a grammar the highlighter loads after tokenizer construction', () => {
-    const grammar = {
-      tokenizeLine2(lineText: string, ruleStack: StateStack) {
-        return {
-          tokens: new Uint32Array([0, 0]),
-          ruleStack,
-          stoppedEarly: false,
-          lineText,
-        };
-      },
-    } as unknown as IGrammar;
-    let languageLoaded = false;
-    const textDocument = new TextDocument(
-      'test.ts',
-      'const x = 1\n',
-      'typescript'
-    );
-    const tokenizer = new EditorTokenizer({
-      highlighter: createTestHighlighter({
-        getLoadedLanguages: () => (languageLoaded ? ['typescript'] : []),
-        getLanguage: () => grammar,
-      }),
-      textDocument,
-      codeOptions: { theme: 'test-theme', themeType: 'dark' },
-      setStyle: noopSetStyle,
-      onDeferTokenize: () => {},
-    });
-    const change: TextDocumentChange = {
-      startLine: 0,
-      startCharacter: 0,
-      endCharacter: 0,
-      endLine: 0,
-      endedAtDocumentEnd: false,
-      previousLineCount: textDocument.lineCount,
-      lineCount: textDocument.lineCount,
-      lineDelta: 0,
-      changes: [],
-      changedLineRanges: [[0, 0]],
-    };
-
-    expect(() => tokenizer.tokenize(change)).toThrow(
-      'Grammar for language "typescript" not loaded'
-    );
-
-    languageLoaded = true;
-
-    expect(() => tokenizer.tokenize(change)).not.toThrow();
-  });
-
-  test('does not cache bracket ignored ranges before grammar loads', () => {
-    const stringTokenMetadata = 2 << 8;
-    let languageLoaded = false;
-    let tokenizeLineCount = 0;
-    const grammar = {
-      tokenizeLine2(lineText: string, ruleStack: StateStack) {
-        tokenizeLineCount++;
-        return {
-          tokens: new Uint32Array([0, stringTokenMetadata]),
-          ruleStack,
-          stoppedEarly: false,
-          lineText,
-        };
-      },
-    } as unknown as IGrammar;
-    const textDocument = new TextDocument('test.ts', "'abc['", 'typescript');
-    const tokenizer = new EditorTokenizer({
-      highlighter: createTestHighlighter({
-        getLoadedLanguages: () => (languageLoaded ? ['typescript'] : []),
-        getLanguage: () => grammar,
-      }),
-      textDocument,
-      codeOptions: { theme: 'test-theme', themeType: 'dark' },
-      setStyle: noopSetStyle,
-      onDeferTokenize: () => {},
-    });
-
-    expect(tokenizer.getStringCommentRegexpRangesInLine(0)).toBe(null);
-    expect(tokenizeLineCount).toBe(0);
-
-    languageLoaded = true;
-
-    expect(tokenizer.getStringCommentRegexpRangesInLine(0)).toEqual([[0, 6]]);
-    expect(tokenizeLineCount).toBe(1);
-  });
-
-  test('does not record string/comment/regex ranges when bracket matching is disabled', () => {
-    const stringTokenMetadata = 2 << 8;
-    const grammar = {
-      tokenizeLine2(lineText: string, ruleStack: StateStack) {
-        return {
-          tokens: new Uint32Array([0, stringTokenMetadata]),
-          ruleStack,
-          stoppedEarly: false,
-          lineText,
-        };
-      },
-    } as unknown as IGrammar;
-    const createTokenizer = (matchBrackets: boolean) => {
-      const textDocument = new TextDocument('test.ts', "'abc['", 'typescript');
-      const tokenizer = new EditorTokenizer({
-        highlighter: createTestHighlighter({
-          getLanguage: () => grammar,
-        }),
-        textDocument,
-        codeOptions: { theme: 'test-theme', themeType: 'dark' },
-        matchBrackets,
-        setStyle: noopSetStyle,
-        onDeferTokenize: () => {},
-      });
-      tokenizer.tokenize({
-        startLine: 0,
-        startCharacter: 0,
-        endCharacter: 0,
-        endLine: 0,
-        endedAtDocumentEnd: false,
-        previousLineCount: textDocument.lineCount,
-        lineCount: textDocument.lineCount,
-        lineDelta: 0,
-        changes: [],
-        changedLineRanges: [[0, 0]],
-      });
-      return tokenizer;
-    };
-
-    expect(createTokenizer(true).getStringCommentRegexpRangesInLine(0)).toEqual(
-      [[0, 6]]
-    );
-    expect(createTokenizer(false).getStringCommentRegexpRangesInLine(0)).toBe(
-      null
-    );
-  });
-
-  test('keeps downstream bracket ranges after tokenizer state reconverges', () => {
-    const stringTokenMetadata = 2 << 8;
-    let tokenizeLineCount = 0;
-    const grammar = {
-      tokenizeLine2(lineText: string, ruleStack: StateStack) {
-        tokenizeLineCount++;
-        return {
-          tokens: new Uint32Array([0, stringTokenMetadata]),
-          ruleStack,
-          stoppedEarly: false,
-          lineText,
-        };
-      },
-    } as unknown as IGrammar;
-    const textDocument = new TextDocument(
-      'test.ts',
-      ['first[', 'second[', 'third['].join('\n'),
-      'typescript'
-    );
-    const tokenizer = new EditorTokenizer({
-      highlighter: createTestHighlighter({ getLanguage: () => grammar }),
-      textDocument,
-      codeOptions: { theme: 'test-theme', themeType: 'dark' },
-      setStyle: noopSetStyle,
-      onDeferTokenize: () => {},
-    });
-    tokenizer.tokenize(
-      {
-        startLine: 0,
-        startCharacter: 0,
-        endCharacter: 0,
-        endLine: 2,
-        endedAtDocumentEnd: false,
-        previousLineCount: 3,
-        lineCount: 3,
-        lineDelta: 0,
-        changes: [],
-        changedLineRanges: [[0, 2]],
-      },
-      { startingLine: 0, totalLines: 3, bufferBefore: 0, bufferAfter: 0 }
-    );
-
-    const change = textDocument.applyEdits([
-      {
-        range: {
-          start: { line: 0, character: 0 },
-          end: { line: 0, character: 1 },
-        },
-        newText: 'F',
-      },
-    ])!;
-    tokenizeLineCount = 0;
-    tokenizer.tokenize(change, {
-      startingLine: 0,
-      totalLines: 1,
-      bufferBefore: 0,
-      bufferAfter: 0,
-    });
-
-    expect(tokenizeLineCount).toBe(1);
-    expect(tokenizer.getStringCommentRegexpRangesInLine(2)).toEqual([[0, 6]]);
-    expect(tokenizeLineCount).toBe(1);
-    tokenizer.cleanUp();
-  });
-
-  test('limits foreground tokenization to the render range after prepending lines', () => {
-    const originalAddEventListener = globalThis.addEventListener;
-    const originalPostMessage = globalThis.postMessage;
-    const postedMessages: unknown[] = [];
-
-    globalThis.addEventListener =
-      (() => {}) as typeof globalThis.addEventListener;
-    globalThis.postMessage = ((message: unknown) => {
-      postedMessages.push(message);
-    }) as typeof globalThis.postMessage;
-
-    try {
-      let tokenizeLineCount = 0;
-      const grammar = {
-        tokenizeLine2(lineText: string, ruleStack: StateStack) {
-          tokenizeLineCount++;
-          return {
-            tokens: new Uint32Array([0, 0]),
-            ruleStack,
-            stoppedEarly: false,
-            lineText,
-          };
-        },
-      } as unknown as IGrammar;
-      const textDocument = new TextDocument(
-        'test.ts',
-        Array.from({ length: 1_000 }, (_, i) => `line ${i}`).join('\n'),
-        'typescript'
-      );
-      const tokenizer = new EditorTokenizer({
-        highlighter: createTestHighlighter({
-          getLanguage: () => grammar,
-        }),
-        textDocument,
-        codeOptions: { theme: 'test-theme', themeType: 'dark' },
-        setStyle: noopSetStyle,
-        onDeferTokenize: () => {},
-      });
-      const renderRange = {
-        startingLine: 900,
-        totalLines: 10,
-        bufferBefore: 0,
-        bufferAfter: 0,
-      };
-
-      tokenizer.tokenize(
-        {
-          startLine: 0,
-          startCharacter: 0,
-          endCharacter: 0,
-          endLine: 999,
-          endedAtDocumentEnd: false,
-          previousLineCount: textDocument.lineCount,
-          lineCount: textDocument.lineCount,
-          lineDelta: 1,
-          changes: [],
-          changedLineRanges: [[0, 999]],
-        },
-        renderRange
-      );
-      tokenizeLineCount = 0;
-      postedMessages.length = 0;
-
-      const change = textDocument.applyEdits([
-        {
-          range: {
-            start: { line: 0, character: 0 },
-            end: { line: 0, character: 0 },
-          },
-          newText:
-            Array.from({ length: 100 }, (_, i) => `new ${i}`).join('\n') + '\n',
-        },
-      ])!;
-      const dirtyLines = tokenizer.tokenize(change, renderRange);
-
-      expect(tokenizeLineCount).toBe(10);
-      expect([...dirtyLines.keys()]).toEqual([
-        900, 901, 902, 903, 904, 905, 906, 907, 908, 909,
-      ]);
-      expect(postedMessages).toHaveLength(1);
-    } finally {
-      globalThis.addEventListener = originalAddEventListener;
-      globalThis.postMessage = originalPostMessage;
-    }
-  });
-
-  test('settles only net line-count changes for rerendering hosts', () => {
-    let tokenizeLineCount = 0;
-    const grammar = {
-      tokenizeLine2(lineText: string, ruleStack: StateStack) {
-        tokenizeLineCount++;
-        return {
-          tokens: new Uint32Array([0, 0]),
-          ruleStack,
-          stoppedEarly: false,
-          lineText,
-        };
-      },
-    } as unknown as IGrammar;
-    const textDocument = new TextDocument(
-      'test.ts',
-      Array.from({ length: 200 }, (_, i) => `line ${i}`).join('\n'),
-      'typescript'
-    );
-    const tokenizer = new EditorTokenizer({
-      highlighter: createTestHighlighter({
-        getLanguage: () => grammar,
-      }),
-      textDocument,
-      codeOptions: { theme: 'test-theme', themeType: 'dark' },
-      setStyle: noopSetStyle,
-      onDeferTokenize: () => {},
-    });
-    const renderRange = {
-      startingLine: 0,
-      totalLines: 100,
-      bufferBefore: 0,
-      bufferAfter: 0,
-    };
-
-    tokenizer.tokenize(
-      {
-        startLine: 0,
-        startCharacter: 0,
-        endCharacter: 0,
-        endLine: 199,
-        endedAtDocumentEnd: false,
-        previousLineCount: textDocument.lineCount,
-        lineCount: textDocument.lineCount,
-        lineDelta: 0,
-        changes: [],
-        changedLineRanges: [[0, 199]],
-      },
-      renderRange
-    );
-    tokenizer.stopBackgroundTokenize();
-    tokenizeLineCount = 0;
-
-    const insertLine = textDocument.applyEdits([
-      {
-        range: {
-          start: { line: 50, character: 0 },
-          end: { line: 50, character: 0 },
-        },
-        newText: '\n',
-      },
-    ])!;
-    const insertedLines = tokenizer.tokenize(insertLine, renderRange, true);
-
-    expect([...insertedLines.keys()]).toEqual([50, 51]);
-    expect(tokenizeLineCount).toBe(1);
-    tokenizeLineCount = 0;
-
-    const editLowerLine = textDocument.applyEdits([
-      {
-        range: {
-          start: { line: 80, character: 0 },
-          end: { line: 80, character: 0 },
-        },
-        newText: 'changed ',
-      },
-    ])!;
-    const editedLines = tokenizer.tokenize(editLowerLine, renderRange, true);
-
-    expect([...editedLines.keys()]).toEqual([80]);
-    expect(tokenizeLineCount).toBe(1);
-
-    const netZeroChange = textDocument.applyEdits([
-      {
-        range: {
-          start: { line: 10, character: 0 },
-          end: { line: 10, character: 0 },
-        },
-        newText: 'inserted\n',
-      },
-      {
-        range: {
-          start: { line: 20, character: textDocument.getLineText(20).length },
-          end: { line: 21, character: 0 },
-        },
-        newText: '',
-      },
-    ])!;
-    expect(netZeroChange.lineDelta).toBe(0);
+  test('plain text and empty lines render without a language-loading step', () => {
+    const instance = create('hello\n\nworld', { lang: 'text' });
+    const lines = instance.initialize();
+    expect([...lines.keys()]).toEqual([0, 1, 2]);
+    expectTokens(instance.document, lines);
+    expect(renderLineTokens(lines.get(1) ?? [])[0]).toBeInstanceOf(HTMLElement);
     expect(
-      netZeroChange.changedLineChanges?.map((change) => change[2])
-    ).toEqual([1, -1]);
+      (renderLineTokens(lines.get(1) ?? [])[0] as HTMLElement).tagName
+    ).toBe('BR');
+    expect(instance.tokenizer.getStringCommentRegexpRangesInLine(0)).toBeNull();
+  });
 
-    const netZeroLines = tokenizer.tokenize(netZeroChange, renderRange, true);
-    expect([...netZeroLines.keys()]).toEqual(
-      Array.from({ length: 90 }, (_, index) => index + 10)
+  test('bracket matching excludes strings, comments and regex literals', () => {
+    const instance = create(
+      'const x = "["; // }\nconst r = /[()]/;\n/* {\n} */\n({})'
     );
-    tokenizer.cleanUp();
-  });
-
-  test('flushes offscreen line 0 when select-all delete shrinks the document', () => {
-    const grammar = {
-      tokenizeLine2(lineText: string, ruleStack: StateStack) {
-        return {
-          tokens: new Uint32Array([0, 0]),
-          ruleStack,
-          stoppedEarly: false,
-          lineText,
-        };
-      },
-    } as unknown as IGrammar;
-    const textDocument = new TextDocument(
-      'test.ts',
-      Array.from({ length: 110 }, (_, i) => `line ${i}`).join('\n'),
-      'typescript'
-    );
-    const offscreenUpdates: Map<number, Array<HighlightedToken>>[] = [];
-    const tokenizer = new EditorTokenizer({
-      highlighter: createTestHighlighter({
-        getLanguage: () => grammar,
-      }),
-      textDocument,
-      codeOptions: { theme: 'test-theme', themeType: 'dark' },
-      setStyle: noopSetStyle,
-      onDeferTokenize: (lines) => {
-        offscreenUpdates.push(lines);
-      },
-    });
-    const renderRange = {
-      startingLine: 100,
-      totalLines: 10,
-      bufferBefore: 0,
-      bufferAfter: 0,
-    };
-
-    tokenizer.tokenize(
-      {
-        startLine: 0,
-        startCharacter: 0,
-        endCharacter: 0,
-        endLine: 109,
-        endedAtDocumentEnd: false,
-        previousLineCount: textDocument.lineCount,
-        lineCount: textDocument.lineCount,
-        lineDelta: 0,
-        changes: [],
-        changedLineRanges: [[0, 109]],
-      },
-      renderRange
-    );
-    offscreenUpdates.length = 0;
-
-    const change = textDocument.applyEdits([
-      {
-        range: {
-          start: { line: 0, character: 0 },
-          end: { line: 109, character: `line 109`.length },
-        },
-        newText: '',
-      },
-    ])!;
-    const dirtyLines = tokenizer.tokenize(change, renderRange);
-
-    expect(change.lineDelta).toBeLessThan(0);
-    expect(dirtyLines.size).toBe(0);
-    expect(offscreenUpdates.at(-1)?.has(0)).toBe(true);
-    expect(offscreenUpdates.at(-1)?.get(0)?.[0]?.[2]).toBe('');
-  });
-
-  test('seeds the viewport from the propagated state when an offscreen delete reaches it', () => {
-    const originalAddEventListener = globalThis.addEventListener;
-    const originalRemoveEventListener = globalThis.removeEventListener;
-    const originalPostMessage = globalThis.postMessage;
-    globalThis.addEventListener =
-      (() => {}) as typeof globalThis.addEventListener;
-    globalThis.removeEventListener =
-      (() => {}) as typeof globalThis.removeEventListener;
-    globalThis.postMessage = (() => {}) as typeof globalThis.postMessage;
-
-    try {
-      // Model a `/* ... */` block comment: the grammar state is either inside or
-      // outside the comment, and each line is colored by the state it is
-      // tokenized in (foreground index 1 = comment, 0 = code). The document opens
-      // a comment on line 0 and never closes it, so every later line is inside.
-      const insideComment = {
-        equals: (other: StateStack) => other === insideComment,
-      } as unknown as StateStack;
-      const grammar = {
-        tokenizeLine2(lineText: string, ruleStack: StateStack) {
-          const inside = ruleStack === insideComment;
-          const stillInside = inside
-            ? !lineText.includes('*/')
-            : lineText.includes('/*');
-          return {
-            tokens: new Uint32Array([0, inside ? 1 << 15 : 0]),
-            ruleStack: stillInside ? insideComment : INITIAL,
-            stoppedEarly: false,
-            lineText,
-          };
-        },
-      } as unknown as IGrammar;
-      const textDocument = new TextDocument(
-        'test.ts',
-        Array.from({ length: 150 }, (_, i) =>
-          i === 0 ? '/*' : `mid ${i}`
-        ).join('\n'),
-        'typescript'
-      );
-      const tokenizer = new EditorTokenizer({
-        highlighter: createTestHighlighter({
-          getLanguage: () => grammar,
-          setTheme: () => ({
-            theme: { type: 'dark' },
-            colorMap: ['#code', '#comment'],
-          }),
-        }),
-        textDocument,
-        codeOptions: { theme: 'test-theme', themeType: 'dark' },
-        setStyle: noopSetStyle,
-        onDeferTokenize: () => {},
-      });
-
-      // Build the cached state stack across the whole document so every line
-      // starts out correctly colored as comment.
-      tokenizer.tokenize(
-        {
-          startLine: 0,
-          startCharacter: 0,
-          endCharacter: 0,
-          endLine: textDocument.lineCount - 1,
-          endedAtDocumentEnd: false,
-          previousLineCount: textDocument.lineCount,
-          lineCount: textDocument.lineCount,
-          lineDelta: 0,
-          changes: [],
-          changedLineRanges: [[0, textDocument.lineCount - 1]],
-        },
-        { startingLine: 0, totalLines: 150, bufferBefore: 0, bufferAfter: 0 }
-      );
-
-      // Scroll the viewport to line 100, then delete the single line directly
-      // above it. The deleted range reaches the viewport's first line, so the
-      // offscreen flush rebuilds the cached state right up to it.
-      const renderRange = {
-        startingLine: 100,
-        totalLines: 10,
-        bufferBefore: 0,
-        bufferAfter: 0,
-      };
-      const change = textDocument.applyEdits([
-        {
-          range: {
-            start: { line: 99, character: 0 },
-            end: { line: 100, character: 0 },
-          },
-          newText: '',
-        },
-      ])!;
-      const dirtyLines = tokenizer.tokenize(change, renderRange);
-
-      expect(change.lineDelta).toBeLessThan(0);
-      // The viewport is still inside the never-closed comment, so its first line
-      // must be colored as comment — not re-tokenized from the INITIAL state.
-      expect(dirtyLines.get(100)?.[0]?.[1]).toBe('#comment');
-    } finally {
-      globalThis.addEventListener = originalAddEventListener;
-      globalThis.removeEventListener = originalRemoveEventListener;
-      globalThis.postMessage = originalPostMessage;
-    }
-  });
-
-  test('tokenizes inserted lines past the render range in the background', () => {
-    const originalAddEventListener = globalThis.addEventListener;
-    const originalRemoveEventListener = globalThis.removeEventListener;
-    const originalPostMessage = globalThis.postMessage;
-    let messageListener: ((event: MessageEvent) => void) | undefined;
-    const postedMessages: unknown[] = [];
-
-    globalThis.addEventListener = ((
-      type: string,
-      listener: EventListenerOrEventListenerObject
-    ) => {
-      if (type === 'message' && typeof listener === 'function') {
-        messageListener = listener as (event: MessageEvent) => void;
-      }
-    }) as typeof globalThis.addEventListener;
-    globalThis.removeEventListener = ((
-      type: string,
-      listener: EventListenerOrEventListenerObject
-    ) => {
-      if (type === 'message' && listener === messageListener) {
-        messageListener = undefined;
-      }
-    }) as typeof globalThis.removeEventListener;
-    globalThis.postMessage = ((message: unknown) => {
-      postedMessages.push(message);
-    }) as typeof globalThis.postMessage;
-
-    try {
-      const grammar = {
-        tokenizeLine2(lineText: string, ruleStack: StateStack) {
-          return {
-            tokens: new Uint32Array([0, 0]),
-            ruleStack,
-            stoppedEarly: false,
-            lineText,
-          };
-        },
-      } as unknown as IGrammar;
-      const textDocument = new TextDocument(
-        'test.ts',
-        Array.from({ length: 20 }, (_, i) => `line ${i}`).join('\n'),
-        'typescript'
-      );
-      const deferredUpdates: Map<number, Array<HighlightedToken>>[] = [];
-      const tokenizer = new EditorTokenizer({
-        highlighter: createTestHighlighter({
-          getLanguage: () => grammar,
-        }),
-        textDocument,
-        codeOptions: { theme: 'test-theme', themeType: 'dark' },
-        setStyle: noopSetStyle,
-        onDeferTokenize: (lines) => {
-          deferredUpdates.push(lines);
-        },
-      });
-      const renderRange = {
-        startingLine: 0,
-        totalLines: 10,
-        bufferBefore: 0,
-        bufferAfter: 0,
-      };
-
-      tokenizer.tokenize(
-        {
-          startLine: 0,
-          startCharacter: 0,
-          endCharacter: 0,
-          endLine: 19,
-          endedAtDocumentEnd: false,
-          previousLineCount: textDocument.lineCount,
-          lineCount: textDocument.lineCount,
-          lineDelta: 0,
-          changes: [],
-          changedLineRanges: [[0, 19]],
-        },
-        renderRange
-      );
-      postedMessages.length = 0;
-
-      const change = textDocument.applyEdits([
-        {
-          range: {
-            start: { line: 8, character: 'line 8'.length },
-            end: { line: 8, character: 'line 8'.length },
-          },
-          newText: '\ninserted 9\ninserted 10\ninserted 11',
-        },
-      ])!;
-      const dirtyLines = tokenizer.tokenize(change, renderRange);
-      const activeJobMessage = postedMessages.at(-1);
-
-      expect([...dirtyLines.keys()]).toEqual([8, 9]);
-      expect(activeJobMessage).toBeDefined();
-
-      messageListener?.({ data: activeJobMessage } as MessageEvent);
-      expect(deferredUpdates.at(-1)?.get(10)?.[0]?.[2]).toBe('inserted 10');
-    } finally {
-      globalThis.addEventListener = originalAddEventListener;
-      globalThis.removeEventListener = originalRemoveEventListener;
-      globalThis.postMessage = originalPostMessage;
-    }
-  });
-
-  test('settles background tokenization after newline insertions reconverge', () => {
-    const originalAddEventListener = globalThis.addEventListener;
-    const originalRemoveEventListener = globalThis.removeEventListener;
-    const originalPostMessage = globalThis.postMessage;
-    const originalPerformanceNow = performance.now;
-    let messageListener: ((event: MessageEvent) => void) | undefined;
-    const postedMessages: unknown[] = [];
-
-    globalThis.addEventListener = ((
-      type: string,
-      listener: EventListenerOrEventListenerObject
-    ) => {
-      if (type === 'message' && typeof listener === 'function') {
-        messageListener = listener as (event: MessageEvent) => void;
-      }
-    }) as typeof globalThis.addEventListener;
-    globalThis.removeEventListener = ((
-      type: string,
-      listener: EventListenerOrEventListenerObject
-    ) => {
-      if (type === 'message' && listener === messageListener) {
-        messageListener = undefined;
-      }
-    }) as typeof globalThis.removeEventListener;
-    globalThis.postMessage = ((message: unknown) => {
-      postedMessages.push(message);
-    }) as typeof globalThis.postMessage;
-    Object.defineProperty(performance, 'now', {
-      configurable: true,
-      value: () => 0,
-    });
-
-    try {
-      let tokenizeLineCount = 0;
-      const grammar = {
-        tokenizeLine2(lineText: string, ruleStack: StateStack) {
-          tokenizeLineCount++;
-          return {
-            tokens: new Uint32Array([0, 0]),
-            ruleStack,
-            stoppedEarly: false,
-            lineText,
-          };
-        },
-      } as unknown as IGrammar;
-      const textDocument = new TextDocument(
-        'test.ts',
-        Array.from({ length: 200 }, (_, i) => `line ${i}`).join('\n'),
-        'typescript'
-      );
-      const tokenizer = new EditorTokenizer({
-        highlighter: createTestHighlighter({
-          getLanguage: () => grammar,
-        }),
-        textDocument,
-        codeOptions: { theme: 'test-theme', themeType: 'dark' },
-        setStyle: noopSetStyle,
-        onDeferTokenize: () => {},
-      });
-
-      tokenizer.tokenize(
-        {
-          startLine: 0,
-          startCharacter: 0,
-          endCharacter: 0,
-          endLine: textDocument.lineCount - 1,
-          endedAtDocumentEnd: false,
-          previousLineCount: textDocument.lineCount,
-          lineCount: textDocument.lineCount,
-          lineDelta: 0,
-          changes: [],
-          changedLineRanges: [[0, textDocument.lineCount - 1]],
-        },
-        {
-          startingLine: 0,
-          totalLines: textDocument.lineCount,
-          bufferBefore: 0,
-          bufferAfter: 0,
-        }
-      );
-      tokenizeLineCount = 0;
-      postedMessages.length = 0;
-
-      const change = textDocument.applyEdits([
-        {
-          range: {
-            start: { line: 0, character: 'line 0'.length },
-            end: { line: 0, character: 'line 0'.length },
-          },
-          newText: '\ninserted line',
-        },
-      ])!;
-      tokenizer.tokenize(change, {
-        startingLine: 0,
-        totalLines: 1,
-        bufferBefore: 0,
-        bufferAfter: 0,
-      });
-      const activeJobMessage = postedMessages.at(-1);
-      tokenizeLineCount = 0;
-
-      expect(activeJobMessage).toBeDefined();
-      messageListener?.({ data: activeJobMessage } as MessageEvent);
-
-      expect(tokenizeLineCount).toBe(1);
-      expect(messageListener).toBeUndefined();
-    } finally {
-      globalThis.addEventListener = originalAddEventListener;
-      globalThis.removeEventListener = originalRemoveEventListener;
-      globalThis.postMessage = originalPostMessage;
-      Object.defineProperty(performance, 'now', {
-        configurable: true,
-        value: originalPerformanceNow,
-      });
-    }
-  });
-
-  test('does not seed foreground tokenization from shifted convergence states', () => {
-    const originalAddEventListener = globalThis.addEventListener;
-    const originalRemoveEventListener = globalThis.removeEventListener;
-    const originalPostMessage = globalThis.postMessage;
-    globalThis.addEventListener =
-      (() => {}) as typeof globalThis.addEventListener;
-    globalThis.removeEventListener =
-      (() => {}) as typeof globalThis.removeEventListener;
-    globalThis.postMessage = (() => {}) as typeof globalThis.postMessage;
-
-    try {
-      const insideComment = {
-        equals: (other: StateStack) => other === insideComment,
-      } as unknown as StateStack;
-      const grammar = {
-        tokenizeLine2(lineText: string, ruleStack: StateStack) {
-          const inside = ruleStack === insideComment;
-          const stillInside = inside
-            ? !lineText.includes('*/')
-            : lineText.includes('/*');
-          return {
-            tokens: new Uint32Array([0, inside ? 1 << 15 : 0]),
-            ruleStack: stillInside ? insideComment : INITIAL,
-            stoppedEarly: false,
-            lineText,
-          };
-        },
-      } as unknown as IGrammar;
-      const textDocument = new TextDocument(
-        'test.ts',
-        Array.from({ length: 150 }, (_, i) => `line ${i}`).join('\n'),
-        'typescript'
-      );
-      const tokenizer = new EditorTokenizer({
-        highlighter: createTestHighlighter({
-          getLanguage: () => grammar,
-          setTheme: () => ({
-            theme: { type: 'dark' },
-            colorMap: ['#code', '#comment'],
-          }),
-        }),
-        textDocument,
-        codeOptions: { theme: 'test-theme', themeType: 'dark' },
-        setStyle: noopSetStyle,
-        onDeferTokenize: () => {},
-      });
-
-      tokenizer.tokenize(
-        {
-          startLine: 0,
-          startCharacter: 0,
-          endCharacter: 0,
-          endLine: textDocument.lineCount - 1,
-          endedAtDocumentEnd: false,
-          previousLineCount: textDocument.lineCount,
-          lineCount: textDocument.lineCount,
-          lineDelta: 0,
-          changes: [],
-          changedLineRanges: [[0, textDocument.lineCount - 1]],
-        },
-        { startingLine: 0, totalLines: 150, bufferBefore: 0, bufferAfter: 0 }
-      );
-
-      const insertComment = textDocument.applyEdits([
-        {
-          range: {
-            start: { line: 0, character: 0 },
-            end: { line: 0, character: 0 },
-          },
-          newText: '/*\n',
-        },
-      ])!;
-      tokenizer.tokenize(insertComment, {
-        startingLine: 0,
-        totalLines: 1,
-        bufferBefore: 0,
-        bufferAfter: 0,
-      });
-
-      const lowerLineText = textDocument.getLineText(100);
-      const changeLowerLine = textDocument.applyEdits([
-        {
-          range: {
-            start: { line: 100, character: 0 },
-            end: { line: 100, character: lowerLineText.length },
-          },
-          newText: 'changed inside comment',
-        },
-      ])!;
-      const dirtyLines = tokenizer.tokenize(changeLowerLine, {
-        startingLine: 100,
-        totalLines: 1,
-        bufferBefore: 0,
-        bufferAfter: 0,
-      });
-
-      expect(dirtyLines.get(100)?.[0]?.[1]).toBe('#comment');
-    } finally {
-      globalThis.addEventListener = originalAddEventListener;
-      globalThis.removeEventListener = originalRemoveEventListener;
-      globalThis.postMessage = originalPostMessage;
-    }
-  });
-
-  test('registers global message listener only while background tokenization runs', () => {
-    const originalAddEventListener = globalThis.addEventListener;
-    const originalRemoveEventListener = globalThis.removeEventListener;
-    const originalPostMessage = globalThis.postMessage;
-    const addedListeners: EventListenerOrEventListenerObject[] = [];
-    const removedListeners: EventListenerOrEventListenerObject[] = [];
-
-    globalThis.addEventListener = ((
-      type: string,
-      listener: EventListenerOrEventListenerObject
-    ) => {
-      if (type === 'message') {
-        addedListeners.push(listener);
-      }
-    }) as typeof globalThis.addEventListener;
-    globalThis.removeEventListener = ((
-      type: string,
-      listener: EventListenerOrEventListenerObject
-    ) => {
-      if (type === 'message') {
-        removedListeners.push(listener);
-      }
-    }) as typeof globalThis.removeEventListener;
-    globalThis.postMessage = (() => {}) as typeof globalThis.postMessage;
-
-    try {
-      const grammar = {
-        tokenizeLine2(lineText: string, ruleStack: StateStack) {
-          return {
-            tokens: new Uint32Array([0, 0]),
-            ruleStack,
-            stoppedEarly: false,
-            lineText,
-          };
-        },
-      } as unknown as IGrammar;
-      const textDocument = new TextDocument(
-        'test.ts',
-        ['line 0', 'line 1', 'line 2'].join('\n'),
-        'typescript'
-      );
-      const tokenizer = new EditorTokenizer({
-        highlighter: createTestHighlighter({
-          getLanguage: () => grammar,
-        }),
-        textDocument,
-        codeOptions: { theme: 'test-theme', themeType: 'dark' },
-        setStyle: noopSetStyle,
-        onDeferTokenize: () => {},
-      });
-      expect(addedListeners).toHaveLength(0);
-
-      tokenizer.tokenize(
-        {
-          startLine: 0,
-          startCharacter: 0,
-          endCharacter: 0,
-          endLine: 0,
-          endedAtDocumentEnd: false,
-          previousLineCount: textDocument.lineCount,
-          lineCount: textDocument.lineCount,
-          lineDelta: 0,
-          changes: [],
-          changedLineRanges: [[0, 0]],
-        },
-        { startingLine: 0, totalLines: 1, bufferBefore: 0, bufferAfter: 0 }
-      );
-      expect(addedListeners).toHaveLength(1);
-      expect(removedListeners).toHaveLength(0);
-
-      tokenizer.stopBackgroundTokenize();
-      expect(removedListeners).toHaveLength(1);
-      expect(removedListeners[0]).toBe(addedListeners[0]);
-
-      tokenizer.cleanUp();
-      expect(removedListeners).toHaveLength(1);
-    } finally {
-      globalThis.addEventListener = originalAddEventListener;
-      globalThis.removeEventListener = originalRemoveEventListener;
-      globalThis.postMessage = originalPostMessage;
-    }
-  });
-
-  test('isolates matching background job ids between tokenizer instances', () => {
-    const originalAddEventListener = globalThis.addEventListener;
-    const originalRemoveEventListener = globalThis.removeEventListener;
-    const originalPostMessage = globalThis.postMessage;
-    const messageListeners = new Set<EventListener>();
-    const postedMessages: unknown[] = [];
-    const tokenizers: EditorTokenizer[] = [];
-
-    globalThis.addEventListener = ((
-      type: string,
-      listener: EventListenerOrEventListenerObject
-    ) => {
-      if (type === 'message' && typeof listener === 'function') {
-        messageListeners.add(listener);
-      }
-    }) as typeof globalThis.addEventListener;
-    globalThis.removeEventListener = ((
-      type: string,
-      listener: EventListenerOrEventListenerObject
-    ) => {
-      if (type === 'message' && typeof listener === 'function') {
-        messageListeners.delete(listener);
-      }
-    }) as typeof globalThis.removeEventListener;
-    globalThis.postMessage = ((message: unknown) => {
-      postedMessages.push(message);
-    }) as typeof globalThis.postMessage;
-
-    try {
-      const tokenizeLineCounts = [0, 0];
-      for (let index = 0; index < tokenizeLineCounts.length; index++) {
-        const grammar = {
-          tokenizeLine2(lineText: string, ruleStack: StateStack) {
-            tokenizeLineCounts[index]++;
-            return {
-              tokens: new Uint32Array([0, 0]),
-              ruleStack,
-              stoppedEarly: false,
-              lineText,
-            };
-          },
-        } as unknown as IGrammar;
-        const textDocument = new TextDocument(
-          `test-${index}.ts`,
-          ['line 0', 'line 1', 'line 2'].join('\n'),
-          'typescript'
-        );
-        const tokenizer = new EditorTokenizer({
-          highlighter: createTestHighlighter({
-            getLanguage: () => grammar,
-          }),
-          textDocument,
-          codeOptions: { theme: 'test-theme', themeType: 'dark' },
-          setStyle: noopSetStyle,
-          onDeferTokenize: () => {},
-        });
-        tokenizers.push(tokenizer);
-        tokenizer.tokenize(
-          {
-            startLine: 0,
-            startCharacter: 0,
-            endCharacter: 0,
-            endLine: 0,
-            endedAtDocumentEnd: false,
-            previousLineCount: textDocument.lineCount,
-            lineCount: textDocument.lineCount,
-            lineDelta: 0,
-            changes: [],
-            changedLineRanges: [[0, 0]],
-          },
-          {
-            startingLine: 0,
-            totalLines: 1,
-            bufferBefore: 0,
-            bufferAfter: 0,
-          }
-        );
-      }
-
-      expect(postedMessages).toHaveLength(2);
-      expect((postedMessages[0] as { jobId: number }).jobId).toBe(
-        (postedMessages[1] as { jobId: number }).jobId
-      );
-      tokenizeLineCounts.fill(0);
-
-      const event = { data: postedMessages[0] } as MessageEvent;
-      for (const listener of [...messageListeners]) {
-        listener(event);
-      }
-
-      expect(tokenizeLineCounts[0]).toBeGreaterThan(0);
-      expect(tokenizeLineCounts[1]).toBe(0);
-    } finally {
-      tokenizers.forEach((tokenizer) => tokenizer.cleanUp());
-      globalThis.addEventListener = originalAddEventListener;
-      globalThis.removeEventListener = originalRemoveEventListener;
-      globalThis.postMessage = originalPostMessage;
-    }
-  });
-
-  test('queues state prebuilds and resumes them after foreground work', () => {
-    const originalAddEventListener = globalThis.addEventListener;
-    const originalRemoveEventListener = globalThis.removeEventListener;
-    const originalPostMessage = globalThis.postMessage;
-    const originalSetTimeout = globalThis.setTimeout;
-    const originalPerformanceNow = performance.now;
-    const messageListeners = new Set<EventListener>();
-    const postedMessages: unknown[] = [];
-    let tokenizeLineCount = 0;
-
-    globalThis.addEventListener = ((
-      type: string,
-      listener: EventListenerOrEventListenerObject
-    ) => {
-      if (type === 'message' && typeof listener === 'function') {
-        messageListeners.add(listener);
-      }
-    }) as typeof globalThis.addEventListener;
-    globalThis.removeEventListener = ((
-      type: string,
-      listener: EventListenerOrEventListenerObject
-    ) => {
-      if (type === 'message' && typeof listener === 'function') {
-        messageListeners.delete(listener);
-      }
-    }) as typeof globalThis.removeEventListener;
-    globalThis.postMessage = ((message: unknown) => {
-      postedMessages.push(message);
-    }) as typeof globalThis.postMessage;
-    globalThis.setTimeout = ((callback: () => void) => {
-      callback();
-      return 0;
-    }) as unknown as typeof globalThis.setTimeout;
-    let now = 0;
-    Object.defineProperty(performance, 'now', {
-      configurable: true,
-      value: () => (now += 2),
-    });
-
-    const states = new Map<string, StateStack>();
-    const grammar = {
-      tokenizeLine2(lineText: string) {
-        let nextState = states.get(lineText);
-        if (nextState === undefined) {
-          nextState = {
-            equals(other: StateStack | null) {
-              return other === nextState;
-            },
-          } as unknown as StateStack;
-          states.set(lineText, nextState);
-        }
-        tokenizeLineCount++;
-        return {
-          tokens: new Uint32Array([0, 0]),
-          ruleStack: nextState,
-          stoppedEarly: false,
-          lineText,
-        };
-      },
-    } as unknown as IGrammar;
-    const textDocument = new TextDocument(
-      'test.ts',
-      Array.from({ length: 100 }, (_, line) => `line ${line}`).join('\n'),
-      'typescript'
-    );
-    const tokenizer = new EditorTokenizer({
-      highlighter: createTestHighlighter({
-        getLanguage: () => grammar,
-      }),
-      textDocument,
-      codeOptions: { theme: 'test-theme', themeType: 'dark' },
-      setStyle: noopSetStyle,
-      onDeferTokenize: () => {},
-    });
-
-    try {
-      tokenizer.prebuildStateStack({
-        startingLine: 1,
-        totalLines: 1,
-        bufferBefore: 0,
-        bufferAfter: 0,
-      });
-      tokenizer.prebuildStateStack({
-        startingLine: 3,
-        totalLines: 1,
-        bufferBefore: 0,
-        bufferAfter: 0,
-      });
-
-      expect(tokenizeLineCount).toBe(0);
-      expect(messageListeners.size).toBe(1);
-
-      let messageIndex = 0;
-      while (messageIndex < postedMessages.length) {
-        const event = { data: postedMessages[messageIndex++] } as MessageEvent;
-        for (const listener of [...messageListeners]) {
-          listener(event);
-        }
-      }
-
-      expect(messageIndex).toBe(4);
-      expect(tokenizeLineCount).toBe(4);
-      expect(messageListeners.size).toBe(0);
-
-      tokenizer.getStringCommentRegexpRangesInLine(3);
-      expect(tokenizeLineCount).toBe(4);
-
-      const change = textDocument.applyEdits([
-        {
-          range: {
-            start: { line: 0, character: 0 },
-            end: { line: 0, character: 6 },
-          },
-          newText: 'LINE 0',
-        },
-      ])!;
-      tokenizeLineCount = 0;
-      postedMessages.length = 0;
-      tokenizer.tokenize(change, {
-        startingLine: 0,
-        totalLines: 1,
-        bufferBefore: 0,
-        bufferAfter: 0,
-      });
-      expect(postedMessages).toHaveLength(1);
-
-      tokenizer.prebuildStateStack({
-        startingLine: 99,
-        totalLines: 1,
-        bufferBefore: 0,
-        bufferAfter: 0,
-      });
-      expect(postedMessages).toHaveLength(1);
-
-      messageIndex = 0;
-      while (messageIndex < postedMessages.length) {
-        const event = { data: postedMessages[messageIndex++] } as MessageEvent;
-        for (const listener of [...messageListeners]) {
-          listener(event);
-        }
-      }
-
-      expect(tokenizeLineCount).toBeGreaterThan(2);
-      expect(messageListeners.size).toBe(0);
-
-      const completedTokenizeLineCount = tokenizeLineCount;
-      tokenizer.getStringCommentRegexpRangesInLine(99);
-      expect(tokenizeLineCount).toBe(completedTokenizeLineCount);
-    } finally {
-      tokenizer.cleanUp();
-      globalThis.addEventListener = originalAddEventListener;
-      globalThis.removeEventListener = originalRemoveEventListener;
-      globalThis.postMessage = originalPostMessage;
-      globalThis.setTimeout = originalSetTimeout;
-      Object.defineProperty(performance, 'now', {
-        configurable: true,
-        value: originalPerformanceNow,
-      });
-    }
-  });
-
-  test('settles zero-line edits before the viewport without rebuilding to the viewport', () => {
-    let tokenizeLineCount = 0;
-    const grammar = {
-      tokenizeLine2(lineText: string, ruleStack: StateStack) {
-        tokenizeLineCount++;
-        return {
-          tokens: new Uint32Array([0, 0]),
-          ruleStack,
-          stoppedEarly: false,
-          lineText,
-        };
-      },
-    } as unknown as IGrammar;
-    const textDocument = new TextDocument(
-      'test.ts',
-      Array.from({ length: 110 }, (_, i) => `line ${i}`).join('\n'),
-      'typescript'
-    );
-    const offscreenUpdates: Map<number, Array<HighlightedToken>>[] = [];
-    const tokenizer = new EditorTokenizer({
-      highlighter: createTestHighlighter({
-        getLanguage: () => grammar,
-      }),
-      textDocument,
-      codeOptions: { theme: 'test-theme', themeType: 'dark' },
-      setStyle: noopSetStyle,
-      onDeferTokenize: (lines) => {
-        offscreenUpdates.push(lines);
-      },
-    });
-
-    tokenizer.tokenize(
-      {
-        startLine: 0,
-        startCharacter: 0,
-        endCharacter: 0,
-        endLine: 0,
-        endedAtDocumentEnd: false,
-        previousLineCount: textDocument.lineCount,
-        lineCount: textDocument.lineCount,
-        lineDelta: 0,
-        changes: [],
-        changedLineRanges: [[0, 0]],
-      },
-      { startingLine: 100, totalLines: 10, bufferBefore: 0, bufferAfter: 0 }
-    );
-    tokenizeLineCount = 0;
-
-    const change = textDocument.applyEdits([
-      {
-        range: {
-          start: { line: 0, character: 0 },
-          end: { line: 0, character: 'line 0'.length },
-        },
-        newText: 'LINE 0',
-      },
-    ])!;
-    const dirtyLines = tokenizer.tokenize(change, {
-      startingLine: 100,
-      totalLines: 10,
-      bufferBefore: 0,
-      bufferAfter: 0,
-    });
-
-    expect(tokenizeLineCount).toBe(1);
-    expect(dirtyLines.size).toBe(0);
-    expect(offscreenUpdates.at(-1)?.get(0)?.[0]?.[2]).toBe('LINE 0');
-  });
-
-  test('ignores queued background messages from stopped jobs', () => {
-    const originalAddEventListener = globalThis.addEventListener;
-    const originalRemoveEventListener = globalThis.removeEventListener;
-    const originalPostMessage = globalThis.postMessage;
-    let messageListener: ((event: MessageEvent) => void) | undefined;
-    const postedMessages: unknown[] = [];
-
-    globalThis.addEventListener = ((
-      type: string,
-      listener: EventListenerOrEventListenerObject
-    ) => {
-      if (type === 'message' && typeof listener === 'function') {
-        messageListener = listener as (event: MessageEvent) => void;
-      }
-    }) as typeof globalThis.addEventListener;
-    globalThis.removeEventListener = ((
-      type: string,
-      listener: EventListenerOrEventListenerObject
-    ) => {
-      if (type === 'message' && listener === messageListener) {
-        messageListener = undefined;
-      }
-    }) as typeof globalThis.removeEventListener;
-    globalThis.postMessage = ((message: unknown) => {
-      postedMessages.push(message);
-    }) as typeof globalThis.postMessage;
-
-    try {
-      let tokenizeLineCount = 0;
-      const state = { equals: () => false } as unknown as StateStack;
-      const grammar = {
-        tokenizeLine2() {
-          tokenizeLineCount++;
-          return {
-            tokens: new Uint32Array([0, 0]),
-            ruleStack: state,
-            stoppedEarly: false,
-          };
-        },
-      } as unknown as IGrammar;
-      const textDocument = new TextDocument(
-        'test.ts',
-        ['line 0', 'line 1', 'line 2'].join('\n'),
-        'typescript'
-      );
-      const tokenizer = new EditorTokenizer({
-        highlighter: createTestHighlighter({
-          getLanguage: () => grammar,
-        }),
-        textDocument,
-        codeOptions: { theme: 'test-theme', themeType: 'dark' },
-        setStyle: noopSetStyle,
-        onDeferTokenize: () => {},
-      });
-      const change: TextDocumentChange = {
-        startLine: 0,
-        startCharacter: 0,
-        endCharacter: 0,
-        endLine: 0,
-        endedAtDocumentEnd: false,
-        previousLineCount: textDocument.lineCount,
-        lineCount: textDocument.lineCount,
-        lineDelta: 0,
-        changes: [],
-        changedLineRanges: [[0, 0]],
-      };
-      const renderRange = {
-        startingLine: 0,
-        totalLines: 1,
-        bufferBefore: 0,
-        bufferAfter: 0,
-      };
-
-      tokenizer.tokenize(change, renderRange);
-      const stoppedJobMessage = postedMessages.at(-1);
-      tokenizer.stopBackgroundTokenize();
-      tokenizer.tokenize(change, renderRange);
-      const activeJobMessage = postedMessages.at(-1);
-      tokenizeLineCount = 0;
-
-      messageListener?.({ data: stoppedJobMessage } as MessageEvent);
-      expect(tokenizeLineCount).toBe(0);
-
-      messageListener?.({ data: activeJobMessage } as MessageEvent);
-      expect(tokenizeLineCount).toBeGreaterThan(0);
-    } finally {
-      globalThis.addEventListener = originalAddEventListener;
-      globalThis.removeEventListener = originalRemoveEventListener;
-      globalThis.postMessage = originalPostMessage;
-    }
-  });
-
-  test('pauses and resumes background tokenization', () => {
-    const originalAddEventListener = globalThis.addEventListener;
-    const originalRemoveEventListener = globalThis.removeEventListener;
-    const originalPostMessage = globalThis.postMessage;
-    let messageListener: ((event: MessageEvent) => void) | undefined;
-    const postedMessages: unknown[] = [];
-
-    globalThis.addEventListener = ((
-      type: string,
-      listener: EventListenerOrEventListenerObject
-    ) => {
-      if (type === 'message' && typeof listener === 'function') {
-        messageListener = listener as (event: MessageEvent) => void;
-      }
-    }) as typeof globalThis.addEventListener;
-    globalThis.removeEventListener = ((
-      type: string,
-      listener: EventListenerOrEventListenerObject
-    ) => {
-      if (type === 'message' && listener === messageListener) {
-        messageListener = undefined;
-      }
-    }) as typeof globalThis.removeEventListener;
-    globalThis.postMessage = ((message: unknown) => {
-      postedMessages.push(message);
-    }) as typeof globalThis.postMessage;
-
-    try {
-      let tokenizeLineCount = 0;
-      const state = { equals: () => false } as unknown as StateStack;
-      const grammar = {
-        tokenizeLine2() {
-          tokenizeLineCount++;
-          return {
-            tokens: new Uint32Array([0, 0]),
-            ruleStack: state,
-            stoppedEarly: false,
-          };
-        },
-      } as unknown as IGrammar;
-      const textDocument = new TextDocument(
-        'test.ts',
-        ['line 0', 'line 1', 'line 2'].join('\n'),
-        'typescript'
-      );
-      const tokenizer = new EditorTokenizer({
-        highlighter: createTestHighlighter({
-          getLanguage: () => grammar,
-        }),
-        textDocument,
-        codeOptions: { theme: 'test-theme', themeType: 'dark' },
-        setStyle: noopSetStyle,
-        onDeferTokenize: () => {},
-      });
-      const change: TextDocumentChange = {
-        startLine: 0,
-        startCharacter: 0,
-        endCharacter: 0,
-        endLine: 0,
-        endedAtDocumentEnd: false,
-        previousLineCount: textDocument.lineCount,
-        lineCount: textDocument.lineCount,
-        lineDelta: 0,
-        changes: [],
-        changedLineRanges: [[0, 0]],
-      };
-      const renderRange = {
-        startingLine: 0,
-        totalLines: 1,
-        bufferBefore: 0,
-        bufferAfter: 0,
-      };
-
-      tokenizer.tokenize(change, renderRange);
-      const queuedMessage = postedMessages.at(-1);
-      tokenizeLineCount = 0;
-
-      tokenizer.pauseBackgroundTokenize();
-      messageListener?.({ data: queuedMessage } as MessageEvent);
-      expect(tokenizeLineCount).toBe(0);
-
-      tokenizer.resumeBackgroundTokenize();
-      const resumedMessage = postedMessages.at(-1);
-      messageListener?.({ data: resumedMessage } as MessageEvent);
-      expect(tokenizeLineCount).toBeGreaterThan(0);
-    } finally {
-      globalThis.addEventListener = originalAddEventListener;
-      globalThis.removeEventListener = originalRemoveEventListener;
-      globalThis.postMessage = originalPostMessage;
-    }
-  });
-
-  test('ignores non-tokenize and non-object message payloads safely', () => {
-    const originalAddEventListener = globalThis.addEventListener;
-    const originalRemoveEventListener = globalThis.removeEventListener;
-    const originalPostMessage = globalThis.postMessage;
-    let messageListener: ((event: MessageEvent) => void) | undefined;
-
-    globalThis.addEventListener = ((
-      type: string,
-      listener: EventListenerOrEventListenerObject
-    ) => {
-      if (type === 'message' && typeof listener === 'function') {
-        messageListener = listener as (event: MessageEvent) => void;
-      }
-    }) as typeof globalThis.addEventListener;
-    globalThis.removeEventListener = ((
-      type: string,
-      listener: EventListenerOrEventListenerObject
-    ) => {
-      if (type === 'message' && listener === messageListener) {
-        messageListener = undefined;
-      }
-    }) as typeof globalThis.removeEventListener;
-    globalThis.postMessage = (() => {}) as typeof globalThis.postMessage;
-
-    try {
-      let tokenizeLineCount = 0;
-      const state = { equals: () => false } as unknown as StateStack;
-      const grammar = {
-        tokenizeLine2() {
-          tokenizeLineCount++;
-          return {
-            tokens: new Uint32Array([0, 0]),
-            ruleStack: state,
-            stoppedEarly: false,
-          };
-        },
-      } as unknown as IGrammar;
-      const textDocument = new TextDocument(
-        'test.ts',
-        ['line 0', 'line 1', 'line 2'].join('\n'),
-        'typescript'
-      );
-      const tokenizer = new EditorTokenizer({
-        highlighter: createTestHighlighter({
-          getLanguage: () => grammar,
-        }),
-        textDocument,
-        codeOptions: { theme: 'test-theme', themeType: 'dark' },
-        setStyle: noopSetStyle,
-        onDeferTokenize: () => {},
-      });
-
-      tokenizer.tokenize(
-        {
-          startLine: 0,
-          startCharacter: 0,
-          endCharacter: 0,
-          endLine: 0,
-          endedAtDocumentEnd: false,
-          previousLineCount: textDocument.lineCount,
-          lineCount: textDocument.lineCount,
-          lineDelta: 0,
-          changes: [],
-          changedLineRanges: [[0, 0]],
-        },
-        { startingLine: 0, totalLines: 1, bufferBefore: 0, bufferAfter: 0 }
-      );
-
-      tokenizeLineCount = 0;
-      messageListener?.({ data: 'not-an-object' } as MessageEvent);
-      messageListener?.({ data: { type: 'other', jobId: 1 } } as MessageEvent);
-      messageListener?.({
-        data: { type: 'tokenize', jobId: '1' },
-      } as MessageEvent);
-      expect(tokenizeLineCount).toBe(0);
-    } finally {
-      globalThis.addEventListener = originalAddEventListener;
-      globalThis.removeEventListener = originalRemoveEventListener;
-      globalThis.postMessage = originalPostMessage;
-    }
-  });
-
-  test('jumps between exact changed ranges for multi-cursor edits', () => {
-    let tokenizeLineCount = 0;
-    const grammar = {
-      tokenizeLine2(lineText: string, ruleStack: StateStack) {
-        tokenizeLineCount++;
-        return {
-          tokens: new Uint32Array([0, 0]),
-          ruleStack,
-          stoppedEarly: false,
-          lineText,
-        };
-      },
-    } as unknown as IGrammar;
-    const textDocument = new TextDocument(
-      'test.ts',
-      Array.from({ length: 800 }, (_, i) => `line ${i}`).join('\n'),
-      'typescript'
-    );
-    const tokenizer = new EditorTokenizer({
-      highlighter: createTestHighlighter({
-        getLanguage: () => grammar,
-      }),
-      textDocument,
-      codeOptions: { theme: 'test-theme', themeType: 'dark' },
-      setStyle: noopSetStyle,
-      onDeferTokenize: () => {},
-    });
-
-    tokenizer.tokenize(
-      {
-        startLine: 0,
-        startCharacter: 0,
-        endCharacter: 0,
-        endLine: 799,
-        endedAtDocumentEnd: false,
-        previousLineCount: textDocument.lineCount,
-        lineCount: textDocument.lineCount,
-        lineDelta: 1,
-        changes: [],
-        changedLineRanges: [[0, 799]],
-      },
-      { startingLine: 0, totalLines: 800, bufferBefore: 0, bufferAfter: 0 }
-    );
-    tokenizeLineCount = 0;
-
-    const change = textDocument.applyEdits([
-      {
-        range: {
-          start: { line: 0, character: 0 },
-          end: { line: 0, character: 'line 0'.length },
-        },
-        newText: 'LINE 0',
-      },
-      {
-        range: {
-          start: { line: 750, character: 0 },
-          end: { line: 750, character: 'line 750'.length },
-        },
-        newText: 'LINE 750',
-      },
-    ])!;
-    const dirtyLines = tokenizer.tokenize(change, {
-      startingLine: 0,
-      totalLines: 800,
-      bufferBefore: 0,
-      bufferAfter: 0,
-    });
-
-    expect(change.changedLineRanges).toEqual([
-      [0, 0],
-      [750, 750],
+    const ranges = instance.tokenizer.getStringCommentRegexpRangesInLine(0);
+    expect(
+      ranges?.map(([start, end]) =>
+        instance.document.getLineText(0).slice(start, end)
+      )
+    ).toEqual(['"["', '// }']);
+    expect(
+      instance.tokenizer
+        .getStringCommentRegexpRangesInLine(1)
+        ?.map(([start, end]) =>
+          instance.document.getLineText(1).slice(start, end)
+        )
+    ).toEqual(['/[()]/']);
+    expect(instance.tokenizer.getStringCommentRegexpRangesInLine(3)).toEqual([
+      [0, 4],
     ]);
-    expect(tokenizeLineCount).toBe(2);
-    expect([...dirtyLines.keys()]).toEqual([0, 750]);
+    expect(instance.tokenizer.getStringCommentRegexpRangesInLine(4)).toBeNull();
+    expect(
+      instance.tokenizer.getStringCommentRegexpRangesInLine(-1)
+    ).toBeNull();
+    expect(instance.tokenizer.getStringCommentRegexpRangesInLine(5)).toBeNull();
   });
 
-  test('maps mixed line-count changes and completes an EOF insertion', () => {
-    const originalAddEventListener = globalThis.addEventListener;
-    const originalRemoveEventListener = globalThis.removeEventListener;
-    const originalPostMessage = globalThis.postMessage;
-    const messageListeners = new Set<EventListener>();
-    const postedMessages: unknown[] = [];
-    const states = new Map<string, StateStack>();
-    let tokenizeLineCount = 0;
+  test('disabling bracket matching avoids ignored ranges', () => {
+    const { tokenizer } = create('"["', { matchBrackets: false });
+    expect(tokenizer.getStringCommentRegexpRangesInLine(0)).toBeNull();
+  });
 
-    globalThis.addEventListener = ((
-      type: string,
-      listener: EventListenerOrEventListenerObject
-    ) => {
-      if (type === 'message' && typeof listener === 'function') {
-        messageListeners.add(listener);
-      }
-    }) as typeof globalThis.addEventListener;
-    globalThis.removeEventListener = ((
-      type: string,
-      listener: EventListenerOrEventListenerObject
-    ) => {
-      if (type === 'message' && typeof listener === 'function') {
-        messageListeners.delete(listener);
-      }
-    }) as typeof globalThis.removeEventListener;
-    globalThis.postMessage = ((message: unknown) => {
-      postedMessages.push(message);
-    }) as typeof globalThis.postMessage;
+  test('retains downstream bracket ranges after a same-line edit converges', () => {
+    const instance = create('const x = 1;\n"["\n// {');
+    instance.initialize();
+    const lines = instance.update([edit(0, 10, 0, 11, '2')]);
+    expect([...lines.keys()]).toEqual([0]);
+    expectTokens(instance.document, lines);
+    expect(instance.tokenizer.getStringCommentRegexpRangesInLine(2)).toEqual([
+      [0, 4],
+    ]);
+  });
 
-    const grammar = {
-      tokenizeLine2(lineText: string) {
-        let nextState = states.get(lineText);
-        if (nextState === undefined) {
-          nextState = {
-            equals(other: StateStack | null) {
-              return other === nextState;
-            },
-          } as unknown as StateStack;
-          states.set(lineText, nextState);
-        }
-        tokenizeLineCount++;
-        return {
-          tokens: new Uint32Array([0, 0]),
-          ruleStack: nextState,
-          stoppedEarly: false,
-          lineText,
-        };
+  test('line-length limits retain multiline lexer state', () => {
+    const instance = create('/* a long comment\ninside\n*/ const x = 1;', {
+      codeOptions: { tokenizeMaxLineLength: 15 },
+    });
+    const lines = instance.initialize();
+    expect(lines.get(0)).toHaveLength(1);
+    expect(instance.tokenizer.getStringCommentRegexpRangesInLine(1)).toEqual([
+      [0, 6],
+    ]);
+    expect(instance.tokenizer.getStringCommentRegexpRangesInLine(0)).toBeNull();
+  });
+
+  test('same-line edits propagate changes to multiline state', () => {
+    const instance = create('const x = 1;\nconst y = 2;\nconst z = 3;');
+    instance.initialize();
+    const lines = instance.update([edit(0, 0, 0, 0, '/*')]);
+    expect([...lines.keys()]).toEqual([0, 1, 2]);
+    expectTokens(instance.document, lines);
+    expect(instance.tokenizer.getStringCommentRegexpRangesInLine(2)).toEqual([
+      [0, 12],
+    ]);
+  });
+
+  test('disjoint edits skip unchanged lines after convergence', () => {
+    const instance = create(
+      Array.from({ length: 100 }, (_, line) => `const x${line} = 1;`).join('\n')
+    );
+    instance.initialize();
+    const lines = instance.update([
+      edit(1, 11, 1, 12, '2'),
+      edit(80, 12, 80, 13, '3'),
+    ]);
+    expect([...lines.keys()]).toEqual([1, 80]);
+    expectTokens(instance.document, lines);
+  });
+
+  test('redrawing an unchanged viewport reuses the tokenized document', () => {
+    const instance = create('const a = 1;\nconst b = "value";\n// end');
+    instance.initialize();
+    const getText = spyOn(instance.document, 'getText');
+    try {
+      const lines = instance.initialize(renderRange(1, 2));
+      expect([...lines.keys()]).toEqual([1, 2]);
+      expect(getText).not.toHaveBeenCalled();
+      expectTokens(instance.document, lines);
+    } finally {
+      getText.mockRestore();
+    }
+  });
+
+  test('resets from the current document after an edit was missed', () => {
+    const instance = create('const a = 1;\nconst b = 2;');
+    instance.initialize();
+    instance.document.applyEdits([edit(0, 10, 0, 11, '21')]);
+    const change = instance.document.applyEdits([edit(1, 10, 1, 11, '42')]);
+    if (change === undefined) throw new Error('Expected an edit');
+    const lines = instance.tokenizer.tokenize(change);
+    expect([...lines.keys()]).toEqual([0, 1]);
+    expectTokens(instance.document, lines);
+  });
+
+  test('coalesced undo and redo keep downstream tokens cached', () => {
+    const instance = create('const a = 1;\nconst b = "value";');
+    instance.initialize();
+    instance.update([edit(0, 11, 0, 11, '2')]);
+    instance.update([edit(0, 12, 0, 12, '3')]);
+    const undone = instance.document.undo();
+    if (undone === undefined) throw new Error('Expected an undo');
+    expect(instance.document.getLineText(0)).toBe('const a = 1;');
+    const undoLines = instance.tokenizer.tokenize(undone[0]);
+    expect([...undoLines.keys()]).toEqual([0]);
+    expectTokens(instance.document, undoLines);
+    const redone = instance.document.redo();
+    if (redone === undefined) throw new Error('Expected a redo');
+    expect(instance.document.getLineText(0)).toBe('const a = 123;');
+    const redoLines = instance.tokenizer.tokenize(redone[0]);
+    expect([...redoLines.keys()]).toEqual([0]);
+    expectTokens(instance.document, redoLines);
+  });
+
+  test('insertion shifts visible rows for hosts that replace their content', () => {
+    const instance = create(
+      Array.from({ length: 20 }, (_, line) => `const x${line} = ${line};`).join(
+        '\n'
+      )
+    );
+    instance.initialize();
+    const lines = instance.update(
+      [edit(1, 0, 1, 0, 'const inserted = true;\n')],
+      renderRange(0, 5)
+    );
+    expect([...lines.keys()]).toEqual([1, 2, 3, 4]);
+    expectTokens(instance.document, lines);
+  });
+
+  test('virtualized hosts reuse shifted lines when lexer state converges', () => {
+    const instance = create(
+      Array.from({ length: 20 }, (_, line) => `const x${line} = ${line};`).join(
+        '\n'
+      )
+    );
+    instance.initialize();
+    const lines = instance.update(
+      [edit(1, 0, 1, 0, 'const inserted = true;\n')],
+      renderRange(0, 5),
+      true
+    );
+    expect(lines.has(1)).toBe(true);
+    expect(lines.has(4)).toBe(false);
+    expectTokens(instance.document, lines);
+  });
+
+  test.each([false, true])(
+    'opposite line-count edits repaint shifted rows when hostRealignsRows is %s',
+    (hostRealignsRows) => {
+      const instance = create(
+        Array.from(
+          { length: 10 },
+          (_, line) => `const x${line} = ${line};`
+        ).join('\n')
+      );
+      instance.initialize();
+      const lines = instance.update(
+        [edit(1, 0, 1, 0, 'const inserted = true;\n'), edit(7, 0, 8, 0, '')],
+        renderRange(0, 10),
+        hostRealignsRows
+      );
+      expect(instance.document.lineCount).toBe(10);
+      for (let line = 1; line < 8; line++) {
+        expect(
+          lines
+            .get(line)
+            ?.map(([, , text]) => text)
+            .join('')
+        ).toBe(instance.document.getLineText(line));
+      }
+      expectTokens(instance.document, lines);
+    }
+  );
+
+  test('prepending lines limits foreground output to the viewport and finishes the tail', async () => {
+    const instance = create(
+      Array.from({ length: 40 }, (_, line) => `const x${line} = 1;`).join('\n')
+    );
+    instance.initialize();
+    const lines = instance.update(
+      [edit(0, 0, 0, 0, '/*\n')],
+      renderRange(10, 5)
+    );
+    expect([...lines.keys()]).toEqual([10, 11, 12, 13, 14]);
+    expect(instance.deferred.size).toBe(0);
+    await waitUntil(() => instance.deferred.has(40));
+    expect(instance.deferred.has(0)).toBe(true);
+    expectTokens(instance.document, lines);
+    expectTokens(instance.document, instance.deferred);
+  });
+
+  test('net-zero line shifts refresh cached rows outside the viewport', async () => {
+    const instance = create(
+      Array.from({ length: 12 }, (_, line) => `const x${line} = ${line};`).join(
+        '\n'
+      )
+    );
+    instance.initialize();
+    const lines = instance.update(
+      [edit(1, 0, 1, 0, '// inserted\n'), edit(8, 0, 9, 0, '')],
+      renderRange(5, 2),
+      true
+    );
+    expect([...lines.keys()]).toEqual([5, 6]);
+    await waitUntil(() => instance.deferred.has(7));
+    for (let line = 1; line <= 8; line++) {
+      expect(lines.has(line) || instance.deferred.has(line)).toBe(true);
+    }
+    expectTokens(instance.document, lines);
+    expectTokens(instance.document, instance.deferred);
+  });
+
+  test('deleting across the viewport seeds it from the retained open comment', () => {
+    const instance = create('/*\na\nb\nc\nd\ne\nf\n*/\nconst x = 1;');
+    instance.initialize();
+    const lines = instance.update([edit(1, 0, 4, 0, '')], renderRange(2, 3));
+    expectTokens(instance.document, lines);
+    expectTokens(instance.document, instance.deferred);
+    expect(instance.tokenizer.getStringCommentRegexpRangesInLine(2)).toEqual([
+      [0, 1],
+    ]);
+  });
+
+  test('select-all deletion delivers an empty line even when the viewport is past EOF', async () => {
+    const instance = create('first\nsecond\nlast');
+    instance.initialize();
+    const lines = instance.update([edit(0, 0, 2, 4, '')], renderRange(2, 2));
+    expect(lines.size).toBe(0);
+    instance.tokenizer.getStringCommentRegexpRangesInLine(0);
+    await waitUntil(() => instance.deferred.has(0));
+    expect(instance.deferred.get(0)).toEqual([[0, '', '']]);
+  });
+
+  test('mixed line-count changes and an EOF insertion match a fresh highlight', async () => {
+    const instance = create(
+      'const a = 1;\nconst b = 2;\nconst c = 3;\nconst d = 4;\nconst e = 5;'
+    );
+    instance.initialize();
+    const lines = instance.update(
+      [
+        edit(0, 0, 0, 0, '// header\n'),
+        edit(1, 0, 2, 0, ''),
+        edit(4, 12, 4, 12, '\nconst f = 6;'),
+      ],
+      renderRange(0, 3),
+      true
+    );
+    await waitUntil(() => instance.deferred.has(5));
+    expectTokens(instance.document, lines);
+    expectTokens(instance.document, instance.deferred);
+  });
+
+  test('pauses and resumes deferred work', async () => {
+    const instance = create(
+      Array.from({ length: 200 }, () => 'const x = 1;').join('\n')
+    );
+    instance.initialize();
+    instance.update([edit(0, 0, 0, 0, '/*')], renderRange(0, 1));
+    instance.tokenizer.pauseBackgroundTokenize();
+    await Bun.sleep(20);
+    expect(instance.deferred.size).toBe(0);
+    instance.tokenizer.resumeBackgroundTokenize();
+    await waitUntil(() => instance.deferred.has(199));
+    expectTokens(instance.document, instance.deferred);
+  });
+
+  test('a newer edit cancels stale deferred work and keeps the current document', async () => {
+    const instance = create(
+      Array.from({ length: 100 }, () => 'const x = 1;').join('\n')
+    );
+    instance.initialize();
+    instance.update([edit(0, 0, 0, 0, '/*')], renderRange(0, 1));
+    instance.update([edit(0, 0, 0, 2, '//')], renderRange(0, 1));
+    await Bun.sleep(20);
+    expectTokens(instance.document, instance.deferred);
+    expect(
+      instance.tokenizer.getStringCommentRegexpRangesInLine(99)
+    ).toBeNull();
+  });
+
+  test('deferred jobs remain isolated between editor instances', async () => {
+    const first = create(
+      Array.from({ length: 100 }, () => 'const x = 1;').join('\n')
+    );
+    const second = create(
+      Array.from({ length: 100 }, () => 'const y = 2;').join('\n')
+    );
+    first.initialize();
+    second.initialize();
+    first.update([edit(0, 0, 0, 0, '/*')], renderRange(0, 1));
+    second.update([edit(0, 0, 0, 0, '//')], renderRange(0, 1));
+    await waitUntil(() => first.deferred.has(99));
+    expectTokens(first.document, first.deferred);
+    expect(second.deferred.has(99)).toBe(false);
+    expectTokens(second.document, second.deferred);
+  });
+
+  test('cleanup discards queued work and repeated cleanup is harmless', async () => {
+    const instance = create('const x = 1;\nconst y = 2;');
+    instance.tokenizer.prebuildTokens();
+    instance.tokenizer.cleanUp();
+    instance.tokenizer.cleanUp();
+    await Bun.sleep(20);
+    expect(instance.deferred.size).toBe(0);
+  });
+
+  test('theme swaps update styles and deferred colors once', async () => {
+    const instance = create('const x = "value";');
+    instance.initialize();
+    instance.tokenizer.syncTheme({ theme: 'light' });
+    instance.tokenizer.syncTheme({ theme: 'light' });
+    await waitUntil(() => instance.deferred.has(0));
+    expect(instance.tokenizer.themeType).toBe('light');
+    expect(instance.themeChanges).toBe(1);
+    expectTokens(instance.document, instance.deferred, pierreLight);
+    expect(instance.modes).toEqual(['light']);
+  });
+
+  test('theme swaps recolor cached rows before and after a bounded viewport', async () => {
+    const instance = create(
+      Array.from({ length: 8 }, (_, line) => `const x${line} = "value";`).join(
+        '\n'
+      )
+    );
+    instance.initialize(renderRange(2, 3));
+    await waitUntil(() => instance.deferred.has(7));
+    instance.deferred.clear();
+    instance.modes.length = 0;
+    instance.tokenizer.syncTheme({ theme: 'light' });
+    await waitUntil(() => instance.deferred.has(7));
+    expect([...instance.deferred.keys()].sort((a, b) => a - b)).toEqual([
+      0, 1, 2, 3, 4, 5, 6, 7,
+    ]);
+    expect(instance.modes.every((mode) => mode === 'light')).toBe(true);
+    expectTokens(instance.document, instance.deferred, pierreLight);
+  });
+
+  test('changing the line-length limit refreshes tokens and bracket ranges', async () => {
+    const instance = create('const value = "string";\nconst x = 1;', {
+      codeOptions: { tokenizeMaxLineLength: 100 },
+    });
+    instance.initialize();
+    instance.tokenizer.syncTheme({ theme: 'dark', tokenizeMaxLineLength: 10 });
+    await waitUntil(() => instance.deferred.has(0));
+    expect(instance.deferred.get(0)).toHaveLength(1);
+    expect(instance.tokenizer.getStringCommentRegexpRangesInLine(0)).toBeNull();
+    instance.deferred.clear();
+    instance.tokenizer.syncTheme({ theme: 'dark', tokenizeMaxLineLength: 100 });
+    await waitUntil(() => instance.deferred.has(0));
+    expect(
+      instance.tokenizer
+        .getStringCommentRegexpRangesInLine(0)
+        ?.map(([start, end]) =>
+          instance.document.getLineText(0).slice(start, end)
+        )
+    ).toEqual(['"string"']);
+    expectTokens(instance.document, instance.deferred);
+  });
+
+  test('dual themes honor an explicit appearance and host-forced system changes', async () => {
+    document.body.style.colorScheme = 'light';
+    const instance = create('const x = 1;', {
+      codeOptions: {
+        theme: { dark: 'dark', light: 'light' },
+        themeType: 'dark',
       },
-    } as unknown as IGrammar;
-    const textDocument = new TextDocument(
-      'test.ts',
-      Array.from({ length: 12 }, (_, index) => `line ${index}`).join('\n'),
-      'typescript'
-    );
-    const tokenizer = new EditorTokenizer({
-      highlighter: createTestHighlighter({
-        getLanguage: () => grammar,
-      }),
-      textDocument,
-      codeOptions: { theme: 'test-theme', themeType: 'dark' },
-      matchBrackets: false,
-      setStyle: noopSetStyle,
-      onDeferTokenize: () => {},
     });
-
-    try {
-      tokenizer.tokenize(
-        {
-          startLine: 0,
-          startCharacter: 0,
-          endCharacter: 0,
-          endLine: textDocument.lineCount - 1,
-          endedAtDocumentEnd: false,
-          previousLineCount: textDocument.lineCount,
-          lineCount: textDocument.lineCount,
-          lineDelta: 0,
-          changes: [],
-          changedLineRanges: [[0, textDocument.lineCount - 1]],
-        },
-        {
-          startingLine: 0,
-          totalLines: textDocument.lineCount,
-          bufferBefore: 0,
-          bufferAfter: 0,
-        }
-      );
-
-      const change = textDocument.applyEdits([
-        {
-          range: {
-            start: { line: 1, character: 6 },
-            end: { line: 1, character: 6 },
-          },
-          newText: '\na',
-        },
-        {
-          range: {
-            start: { line: 6, character: 6 },
-            end: { line: 7, character: 0 },
-          },
-          newText: '',
-        },
-      ])!;
-      expect(change.lineDelta).toBe(0);
-      expect(change.changedLineChanges).toEqual([
-        [1, 2, 1, 6, 6, false],
-        [7, 7, -1, 6, 0, false],
-      ]);
-
-      tokenizeLineCount = 0;
-      postedMessages.length = 0;
-      const dirtyLines = tokenizer.tokenize(change, {
-        startingLine: 1,
-        totalLines: 2,
-        bufferBefore: 0,
-        bufferAfter: 0,
-      });
-      expect([...dirtyLines.keys()]).toEqual([1, 2]);
-      expect(tokenizeLineCount).toBe(2);
-
-      tokenizeLineCount = 0;
-      let messageIndex = 0;
-      while (messageIndex < postedMessages.length) {
-        const event = { data: postedMessages[messageIndex++] } as MessageEvent;
-        for (const listener of [...messageListeners]) {
-          listener(event);
-        }
-      }
-
-      // State reconverges on the first unchanged line after the deletion, so
-      // the untouched document tail is not tokenized.
-      expect(tokenizeLineCount).toBe(6);
-      expect(messageListeners.size).toBe(0);
-
-      const lineCount = textDocument.lineCount;
-      tokenizer.tokenize(
-        {
-          startLine: 9,
-          startCharacter: 0,
-          endCharacter: 0,
-          endLine: lineCount - 1,
-          endedAtDocumentEnd: false,
-          previousLineCount: lineCount,
-          lineCount,
-          lineDelta: 0,
-          changes: [],
-          changedLineRanges: [[9, lineCount - 1]],
-        },
-        {
-          startingLine: 9,
-          totalLines: lineCount - 9,
-          bufferBefore: 0,
-          bufferAfter: 0,
-        }
-      );
-
-      const eofChange = textDocument.applyEdits([
-        {
-          range: {
-            start: { line: lineCount - 1, character: 7 },
-            end: { line: lineCount - 1, character: 7 },
-          },
-          newText: '\ntail',
-        },
-      ])!;
-      expect(eofChange.changedLineChanges).toEqual([[11, 12, 1, 7, 7, true]]);
-
-      tokenizeLineCount = 0;
-      postedMessages.length = 0;
-      tokenizer.tokenize(eofChange, {
-        startingLine: 11,
-        totalLines: 1,
-        bufferBefore: 0,
-        bufferAfter: 0,
-      });
-      expect(tokenizeLineCount).toBe(1);
-
-      tokenizeLineCount = 0;
-      messageIndex = 0;
-      while (messageIndex < postedMessages.length) {
-        const event = { data: postedMessages[messageIndex++] } as MessageEvent;
-        for (const listener of [...messageListeners]) {
-          listener(event);
-        }
-      }
-      expect(tokenizeLineCount).toBe(1);
-      expect(messageListeners.size).toBe(0);
-    } finally {
-      tokenizer.cleanUp();
-      globalThis.addEventListener = originalAddEventListener;
-      globalThis.removeEventListener = originalRemoveEventListener;
-      globalThis.postMessage = originalPostMessage;
-    }
+    expect(instance.tokenizer.themeType).toBe('dark');
+    instance.tokenizer.syncTheme({
+      theme: { dark: 'dark', light: 'light' },
+      themeType: 'system',
+    });
+    expect(instance.tokenizer.themeType).toBe('light');
+    document.body.style.colorScheme = 'dark';
+    instance.tokenizer.syncTheme({
+      theme: { dark: 'dark', light: 'light' },
+      themeType: 'system',
+    });
+    expect(instance.tokenizer.themeType).toBe('dark');
+    await waitUntil(() => instance.deferred.has(0));
+    expectTokens(instance.document, instance.deferred);
   });
 
-  test('pins a dual-theme surface to an explicit themeType instead of following the page', () => {
-    const originalMatchMedia = globalThis.window.matchMedia;
-    let mediaListenerCount = 0;
-    globalThis.window.matchMedia = () =>
-      ({
-        addEventListener: () => {
-          mediaListenerCount++;
-        },
-        addListener: () => {},
-        dispatchEvent: () => false,
-        // The page prefers dark, but the surface is forced light: the tokenizer
-        // must ignore this and emit the light theme so its tokens match the
-        // forced-light SSR markup.
-        matches: true,
-        media: '(prefers-color-scheme: dark)',
-        onchange: null,
-        removeEventListener: () => {},
-        removeListener: () => {},
-      }) as MediaQueryList;
-
-    try {
-      const grammar = {
-        tokenizeLine2(lineText: string, ruleStack: StateStack) {
-          return {
-            tokens: new Uint32Array([0, 0]),
-            ruleStack,
-            stoppedEarly: false,
-            lineText,
-          };
-        },
-      } as unknown as IGrammar;
-      const textDocument = new TextDocument('test.ts', 'line 0', 'typescript');
-      const tokenizer = new EditorTokenizer({
-        highlighter: createTestHighlighter({
-          getLanguage: () => grammar,
-        }),
-        textDocument,
-        codeOptions: {
-          theme: { light: 'light-theme', dark: 'dark-theme' },
-          themeType: 'light',
-        },
-        setStyle: noopSetStyle,
-        onDeferTokenize: () => {},
-      });
-
-      expect(tokenizer.themeType).toBe('light');
-      expect(mediaListenerCount).toBe(0);
-    } finally {
-      globalThis.window.matchMedia = originalMatchMedia;
-    }
+  test('system observers ignore mutations that do not change the resolved theme', async () => {
+    document.body.style.colorScheme = 'light';
+    const instance = create('const x = 1;', {
+      codeOptions: {
+        theme: { dark: 'dark', light: 'light' },
+        themeType: 'system',
+      },
+    });
+    document.body.dataset.mode = 'first';
+    await Bun.sleep(0);
+    expect(instance.themeChanges).toBe(0);
+    document.body.style.colorScheme = 'dark';
+    document.body.dataset.mode = 'second';
+    await waitUntil(() => instance.themeChanges === 1);
+    expect(instance.tokenizer.themeType).toBe('dark');
   });
 
-  // Apps can force one scheme via page CSS/classes or advertise support for
-  // both. syncTheme must only use the OS preference in the latter case.
-  test('syncTheme resolves forced and preferred system themes', () => {
-    const originalMatchMedia = globalThis.window.matchMedia;
-    const originalGetComputedStyle = Reflect.get(
-      globalThis,
-      'getComputedStyle'
-    );
-    const originalDocument = Reflect.get(globalThis, 'document');
-    const originalMutationObserver = Reflect.get(
-      globalThis,
-      'MutationObserver'
-    );
-    let colorScheme = 'dark';
-    let prefersDark = false;
-
-    globalThis.window.matchMedia = () =>
-      ({
-        addEventListener: () => {},
-        addListener: () => {},
-        dispatchEvent: () => false,
-        // OS prefers light, but the host document forces dark.
-        get matches() {
-          return prefersDark;
-        },
-        media: '(prefers-color-scheme: dark)',
-        onchange: null,
-        removeEventListener: () => {},
-        removeListener: () => {},
-      }) as MediaQueryList;
-    Reflect.set(globalThis, 'document', {
-      body: {},
-      documentElement: {},
-    });
-    Reflect.set(
-      globalThis,
-      'getComputedStyle',
-      (() =>
-        ({
-          colorScheme,
-        }) as CSSStyleDeclaration) as typeof getComputedStyle
-    );
-    Reflect.set(
-      globalThis,
-      'MutationObserver',
-      class {
-        observe() {}
-        disconnect() {}
-        takeRecords() {
-          return [];
-        }
-      }
-    );
-
-    try {
-      const grammar = {
-        tokenizeLine2(lineText: string, ruleStack: StateStack) {
-          return {
-            tokens: new Uint32Array([0, 1 << 15]),
-            ruleStack,
-            stoppedEarly: false,
-            lineText,
-          };
-        },
-      } as unknown as IGrammar;
-      const textDocument = new TextDocument('test.ts', 'line 0', 'typescript');
-      const dualThemes = { light: 'light-theme', dark: 'dark-theme' };
-      const tokenizer = new EditorTokenizer({
-        highlighter: createTestHighlighter({
-          getLanguage: () => grammar,
-          setTheme: (theme: string) => ({
-            colorMap: ['', theme === 'dark-theme' ? '#dark' : '#light'],
-          }),
-        }),
-        textDocument,
+  test.each(['pinned', 'explicit'] as const)(
+    'system observers use current options after switching to a %s theme',
+    async (mode) => {
+      document.body.style.colorScheme = 'light';
+      const instance = create('const x = "value";', {
         codeOptions: {
-          theme: dualThemes,
+          theme: { dark: 'dark', light: 'light' },
           themeType: 'system',
         },
-        setStyle: noopSetStyle,
-        onDeferTokenize: () => {},
       });
-
-      expect(tokenizer.themeType).toBe('dark');
-
-      // A later render sync must not flip back to the OS light preference.
-      tokenizer.syncTheme({ theme: dualThemes, themeType: 'system' });
-      expect(tokenizer.themeType).toBe('dark');
-
-      // A dual declaration advertises support rather than forcing light.
-      // Let the dark OS preference choose the active token color.
-      colorScheme = 'light dark';
-      prefersDark = true;
-      tokenizer.syncTheme({ theme: dualThemes, themeType: 'system' });
-      const dirtyLines = tokenizer.tokenize({
-        startLine: 0,
-        startCharacter: 0,
-        endCharacter: 0,
-        endLine: 0,
-        endedAtDocumentEnd: false,
-        previousLineCount: textDocument.lineCount,
-        lineCount: textDocument.lineCount,
-        lineDelta: 0,
-        changes: [],
-        changedLineRanges: [[0, 0]],
-      });
-      expect(tokenizer.themeType).toBe('dark');
-      expect(dirtyLines.get(0)?.[0]?.[1]).toBe('#dark');
-
-      tokenizer.cleanUp();
-    } finally {
-      globalThis.window.matchMedia = originalMatchMedia;
-      if (originalGetComputedStyle === undefined) {
-        Reflect.deleteProperty(globalThis, 'getComputedStyle');
-      } else {
-        Reflect.set(globalThis, 'getComputedStyle', originalGetComputedStyle);
-      }
-      if (originalDocument === undefined) {
-        Reflect.deleteProperty(globalThis, 'document');
-      } else {
-        Reflect.set(globalThis, 'document', originalDocument);
-      }
-      if (originalMutationObserver === undefined) {
-        Reflect.deleteProperty(globalThis, 'MutationObserver');
-      } else {
-        Reflect.set(globalThis, 'MutationObserver', originalMutationObserver);
-      }
+      instance.initialize();
+      instance.tokenizer.syncTheme(
+        mode === 'pinned'
+          ? { theme: 'dark' }
+          : { theme: { dark: 'dark', light: 'light' }, themeType: 'dark' }
+      );
+      document.body.dataset.mode = 'host-light';
+      await Bun.sleep(0);
+      expect(instance.tokenizer.themeType).toBe('dark');
+      expect(instance.themeChanges).toBe(1);
+      await waitUntil(() => instance.deferred.has(0));
+      expectTokens(instance.document, instance.deferred);
     }
+  );
+
+  test('system observers start following host changes after an explicit theme', async () => {
+    document.body.style.colorScheme = 'dark';
+    const instance = create('const x = "value";', {
+      codeOptions: {
+        theme: { dark: 'dark', light: 'light' },
+        themeType: 'light',
+      },
+    });
+    instance.initialize();
+    instance.tokenizer.syncTheme({
+      theme: { dark: 'dark', light: 'light' },
+      themeType: 'system',
+    });
+    expect(instance.tokenizer.themeType).toBe('dark');
+    document.body.style.colorScheme = 'light';
+    document.body.dataset.mode = 'host-light';
+    await waitUntil(() => instance.tokenizer.themeType === 'light');
+    await waitUntil(() => instance.modes.at(-1) === 'light');
+    expect(instance.themeChanges).toBe(2);
+    expectTokens(instance.document, instance.deferred, pierreLight);
   });
 
-  test('ignores system-theme mutations until the resolved theme changes', () => {
-    const originalPostMessage = globalThis.postMessage;
-    const originalGetComputedStyle = Reflect.get(
-      globalThis,
-      'getComputedStyle'
-    );
-    const originalDocument = Reflect.get(globalThis, 'document');
-    const originalMutationObserver = Reflect.get(
-      globalThis,
-      'MutationObserver'
-    );
-    const postedMessages: unknown[] = [];
-    let colorScheme: 'light' | 'dark' = 'dark';
-    let observerCallback: MutationCallback | undefined;
-    let themeChangeCount = 0;
-    let tokenizer: EditorTokenizer | undefined;
-    const documentStub = {
-      body: {},
-      documentElement: {},
-    };
-
-    globalThis.postMessage = ((message: unknown) => {
-      postedMessages.push(message);
-    }) as typeof globalThis.postMessage;
-    Reflect.set(globalThis, 'document', documentStub);
-    Reflect.set(
-      globalThis,
-      'getComputedStyle',
-      (() =>
-        ({
-          colorScheme,
-        }) as CSSStyleDeclaration) as typeof getComputedStyle
-    );
-    Reflect.set(
-      globalThis,
-      'MutationObserver',
-      class {
-        constructor(callback: MutationCallback) {
-          observerCallback = callback;
-        }
-        observe() {}
-        disconnect() {}
-        takeRecords() {
-          return [];
-        }
-      }
-    );
-
-    try {
-      const grammar = {
-        tokenizeLine2(lineText: string, ruleStack: StateStack) {
-          return {
-            tokens: new Uint32Array([0, 0]),
-            ruleStack,
-            stoppedEarly: false,
-            lineText,
-          };
-        },
-      } as unknown as IGrammar;
-      const textDocument = new TextDocument(
-        'test.ts',
-        ['line 0', 'line 1'].join('\n'),
-        'typescript'
-      );
-      tokenizer = new EditorTokenizer({
-        highlighter: createTestHighlighter({
-          getLanguage: () => grammar,
-        }),
-        textDocument,
-        codeOptions: {
-          theme: { light: 'light-theme', dark: 'dark-theme' },
-          themeType: 'system',
-        },
-        setStyle: noopSetStyle,
-        onDeferTokenize: () => {},
-        onThemeChange: () => {
-          themeChangeCount++;
-        },
-      });
-
-      const observer = {} as MutationObserver;
-      observerCallback?.(
-        [
-          {
-            attributeName: 'class',
-            target: documentStub.documentElement,
-            type: 'attributes',
-          } as unknown as MutationRecord,
-        ],
-        observer
-      );
-      observerCallback?.(
-        [
-          {
-            attributeName: 'data-layout',
-            target: documentStub.body,
-            type: 'attributes',
-          } as unknown as MutationRecord,
-        ],
-        observer
-      );
-
-      expect(tokenizer.themeType).toBe('dark');
-      expect(themeChangeCount).toBe(0);
-      expect(postedMessages).toHaveLength(0);
-
-      colorScheme = 'light';
-      observerCallback?.(
-        [
-          {
-            attributeName: 'data-theme',
-            target: documentStub.body,
-            type: 'attributes',
-          } as unknown as MutationRecord,
-        ],
-        observer
-      );
-
-      expect(tokenizer.themeType).toBe('light');
-      expect(themeChangeCount).toBe(1);
-      expect(postedMessages).toHaveLength(1);
-    } finally {
-      tokenizer?.cleanUp();
-      globalThis.postMessage = originalPostMessage;
-      if (originalGetComputedStyle === undefined) {
-        Reflect.deleteProperty(globalThis, 'getComputedStyle');
-      } else {
-        Reflect.set(globalThis, 'getComputedStyle', originalGetComputedStyle);
-      }
-      if (originalDocument === undefined) {
-        Reflect.deleteProperty(globalThis, 'document');
-      } else {
-        Reflect.set(globalThis, 'document', originalDocument);
-      }
-      if (originalMutationObserver === undefined) {
-        Reflect.deleteProperty(globalThis, 'MutationObserver');
-      } else {
-        Reflect.set(globalThis, 'MutationObserver', originalMutationObserver);
-      }
-    }
+  test('system observers read replacement theme names', async () => {
+    document.body.style.colorScheme = 'dark';
+    const instance = create('const x = "value";', {
+      codeOptions: {
+        theme: { dark: 'dark', light: 'light' },
+        themeType: 'system',
+      },
+    });
+    instance.initialize();
+    instance.tokenizer.syncTheme({
+      theme: { dark: 'light', light: 'dark' },
+      themeType: 'system',
+    });
+    document.body.style.colorScheme = 'light';
+    document.body.dataset.mode = 'host-light';
+    await waitUntil(() => instance.tokenizer.themeType === 'light');
+    await waitUntil(() => instance.modes.at(-1) === 'light');
+    expectTokens(instance.document, instance.deferred, pierreDark);
   });
 
-  // Dual-theme SSR (`themes: {dark,light}`) leaves the shared highlighter on the
-  // last theme it applied (usually light). The tokenizer caches a single-theme
-  // colorMap from construction; without re-activating that theme before an edit,
-  // grammar color indices are looked up in the wrong map — property names resolve
-  // to a near-foreground gray while types/comments (stable across maps) still
-  // look correct. Switching files recreates the tokenizer and hides the bug.
-  test('re-activates its theme before tokenize so dual-theme SSR cannot desync colorMap', async () => {
-    const { disposeHighlighter, getSharedHighlighter } =
-      await import('../src/highlighter/shared_highlighter');
-    const { DEFAULT_THEMES } = await import('../src/constants');
-    const { renderFileWithHighlighter } =
-      await import('../src/utils/renderFileWithHighlighter');
-
-    const code = `export interface ButtonProps {
-  variant?: 'primary';
-  isLoading?: boolean; //
-}
-`;
-    const highlighter = await getSharedHighlighter({
-      themes: [DEFAULT_THEMES.dark, DEFAULT_THEMES.light],
-      langs: ['tsx'],
-    });
-    const textDocument = new TextDocument('Button.tsx', code, 'tsx');
-    const tokenizer = new EditorTokenizer({
-      highlighter,
-      textDocument,
-      codeOptions: { theme: DEFAULT_THEMES, themeType: 'dark' },
-      setStyle: noopSetStyle,
-      onDeferTokenize: () => {},
-    });
-
-    try {
-      // Same dual-theme pass File/Diff renderers run on first load — leaves the
-      // shared highlighter on the light theme while the tokenizer still holds the
-      // dark colorMap captured at construction.
-      renderFileWithHighlighter(
-        { name: 'Button.tsx', contents: code, lang: 'tsx' },
-        highlighter,
-        {
-          theme: DEFAULT_THEMES,
-          useTokenTransformer: true,
-          tokenizeMaxLineLength: 1000,
-        }
-      );
-
-      const dirtyLines = tokenizer.tokenize({
-        startLine: 2,
-        startCharacter: 20,
-        endCharacter: 20,
-        endLine: 2,
-        endedAtDocumentEnd: false,
-        previousLineCount: textDocument.lineCount,
-        lineCount: textDocument.lineCount,
-        lineDelta: 0,
-        changes: [],
-        changedLineRanges: [[2, 2]],
-      });
-
-      const isLoading = dirtyLines
-        .get(2)
-        ?.find((token) => token[2].includes('isLoading'));
-      expect(isLoading?.[1]).toBe('#FFA359');
-    } finally {
-      tokenizer.cleanUp();
-      await disposeHighlighter();
-    }
+  test('UTF-16 edits and CRLF lines retain exact content and token offsets', () => {
+    const instance = create('const emoji = "😀";\r\nconst x = 1;');
+    instance.initialize();
+    const lines = instance.update([
+      edit(0, 16, 0, 16, 'x'),
+      edit(1, 10, 1, 11, '42'),
+    ]);
+    expectTokens(instance.document, lines);
+    expect(lines.get(1)?.[0]?.[0]).toBe(0);
+    expect(instance.document.getText()).toContain('\r\n');
   });
 });

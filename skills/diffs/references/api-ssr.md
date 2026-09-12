@@ -15,7 +15,7 @@ entry also re-exports every type in [Shared types](api-types.md).
 | `preloadUnresolvedFile`     | Renders one merge-conflict file and returns component props.  |
 | `preloadDiffHTML`           | Renders a diff directly to an HTML string.                    |
 | `preloadUnresolvedFileHTML` | Renders a merge-conflict file directly to an HTML string.     |
-| `renderHTML`                | Serializes rendered HAST elements to HTML.                    |
+| `renderHTML`                | Serializes rendered HTML tree elements to HTML.               |
 
 ## Types
 

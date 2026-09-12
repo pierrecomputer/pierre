@@ -1,7 +1,7 @@
 /**
  * Generic theme resolver: a pure cache + registry with no Shiki, no theme JSON,
- * and no bundled fallbacks. Callers register named loaders; this module dedupes
- * concurrent loads (same loader runs at most once per name per cache cycle) and
+ * and no bundled themes. Callers register named loaders or supply a fallback.
+ * This module dedupes concurrent loads (once per name per cache cycle) and
  * caches resolved ThemeLike objects for synchronous access after the first
  * successful load.
  * The `{ default: theme }` unwrap handles the common pattern of dynamic ESM
@@ -101,9 +101,15 @@ export class UnresolvedThemeError extends Error {
 // Creates an isolated ThemeResolver instance with its own loader registry,
 // resolved-theme cache, and in-flight dedupe map. Multiple instances never
 // share state.
-export function createThemeResolver<
-  TTheme extends ThemeLike = ThemeLike,
->(): ThemeResolver<TTheme> {
+export function createThemeResolver<TTheme extends ThemeLike = ThemeLike>({
+  fallbackLoader,
+  normalizeTheme,
+}: {
+  // Look up a fallback only when an unresolved name has no registered loader.
+  fallbackLoader?: (name: string) => ThemeLoader<TTheme> | undefined;
+  // Normalize or validate themes before caching them, including seeded themes.
+  normalizeTheme?: (theme: TTheme, name: string) => TTheme;
+} = {}): ThemeResolver<TTheme> {
   // Maps theme name → registered loader function (set at register time).
   const loaders = new Map<string, ThemeLoader<TTheme>>();
 
@@ -154,7 +160,11 @@ export function createThemeResolver<
       return existing;
     }
 
-    const loader = loaders.get(name);
+    let loader = loaders.get(name);
+    if (loader === undefined) {
+      loader = fallbackLoader?.(name);
+      if (loader !== undefined) loaders.set(name, loader);
+    }
     if (loader === undefined) {
       return Promise.reject(new UnregisteredThemeError(name));
     }
@@ -169,7 +179,9 @@ export function createThemeResolver<
         // carrying a top-level `default` key as the module-namespace form.
         // Real ThemeLike theme objects never carry a top-level `default` key,
         // so the heuristic is unambiguous in practice.
-        const theme = unwrapDefault(result);
+        const loaded = unwrapDefault(result);
+        const theme =
+          normalizeTheme === undefined ? loaded : normalizeTheme(loaded, name);
         if (generation === cacheGeneration) {
           resolved.set(name, theme);
         }
@@ -200,7 +212,10 @@ export function createThemeResolver<
   // callers (e.g. workers) that obtain a fully-resolved theme object out of
   // band and want it served synchronously without a loader round-trip.
   function seedResolvedTheme(name: string, theme: TTheme): void {
-    resolved.set(name, theme);
+    resolved.set(
+      name,
+      normalizeTheme === undefined ? theme : normalizeTheme(theme, name)
+    );
   }
 
   function seedResolvedThemes(

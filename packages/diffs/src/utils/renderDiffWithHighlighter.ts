@@ -1,11 +1,14 @@
+import { isSupportedLanguage } from '@pierre/highlights';
 import { diffChars, diffWordsWithSpace } from 'diff';
 
-import { DEFAULT_COLLAPSED_CONTEXT_THRESHOLD } from '../constants';
+import {
+  DEFAULT_COLLAPSED_CONTEXT_THRESHOLD,
+  DEFAULT_THEMES,
+} from '../constants';
+import { getHighlightsTheme } from '../highlighter/getHighlightsTheme';
 import type {
-  CodeToHastOptions,
-  DecorationItem,
+  CodeToTokensOptions,
   DiffsHighlighter,
-  DiffsThemeNames,
   FileContents,
   FileDiffMetadata,
   ForceDiffPlainTextOptions,
@@ -18,16 +21,16 @@ import type {
 } from '../types';
 import { appendItems } from './appendItems';
 import { cleanLastNewline } from './cleanLastNewline';
-import { createTransformerWithState } from './createTransformerWithState';
 import { formatCSSVariablePrefix } from './formatCSSVariablePrefix';
 import { getFiletypeFromFileName } from './getFiletypeFromFileName';
 import { getHighlighterThemeStyles } from './getHighlighterThemeStyles';
-import { getLineNodes } from './getLineNodes';
 import { iterateOverDiff } from './iterateOverDiff';
 import {
   createDiffSpanDecoration,
+  type DiffDecoration,
   pushOrJoinSpan,
 } from './parseDiffDecorations';
+import { renderTokenLines } from './renderTokenLines';
 
 const DEFAULT_PLAIN_TEXT_OPTIONS: ForceDiffPlainTextOptions = {
   forcePlainText: false,
@@ -57,10 +60,16 @@ export function renderDiffWithHighlighter(
     totalLines = Infinity;
   }
   const isWindowedHighlight = startingLine > 0 || totalLines < Infinity;
-  const baseThemeType =
+  const appearance =
     typeof options.theme === 'string'
-      ? highlighter.getTheme(options.theme).type
+      ? getHighlightsTheme(highlighter.getTheme(options.theme)).appearance
       : undefined;
+  const baseThemeType =
+    appearance === 'light'
+      ? 'light'
+      : appearance === 'dark'
+        ? 'dark'
+        : undefined;
   const themeStyles = getHighlighterThemeStyles({
     theme: options.theme,
     highlighter,
@@ -248,8 +257,8 @@ interface ProcessLineDiffProps {
   additionLine: string | undefined;
   deletionLineIndex: number;
   additionLineIndex: number;
-  deletionDecorations: DecorationItem[];
-  additionDecorations: DecorationItem[];
+  deletionDecorations: DiffDecoration[];
+  additionDecorations: DiffDecoration[];
   lineDiffType: LineDiffTypes;
   maxLineDiffLength: number;
 }
@@ -358,8 +367,8 @@ interface RenderBucket {
   additionContent: FakeArrayType;
   deletionInfo: (LineInfo | undefined)[];
   additionInfo: (LineInfo | undefined)[];
-  deletionDecorations: DecorationItem[];
-  additionDecorations: DecorationItem[];
+  deletionDecorations: DiffDecoration[];
+  additionDecorations: DiffDecoration[];
   deletionSegments: HighlightSegment[];
   additionSegments: HighlightSegment[];
 }
@@ -396,8 +405,8 @@ interface RenderTwoFilesProps {
   additionFile: FileContents;
   deletionInfo: (LineInfo | undefined)[];
   additionInfo: (LineInfo | undefined)[];
-  deletionDecorations: DecorationItem[];
-  additionDecorations: DecorationItem[];
+  deletionDecorations: DiffDecoration[];
+  additionDecorations: DiffDecoration[];
   options: RenderDiffOptions;
   highlighter: DiffsHighlighter;
   languageOverride: SupportedLanguages | undefined;
@@ -412,71 +421,54 @@ function renderTwoFiles({
   deletionDecorations,
   additionDecorations,
   languageOverride,
-  options: { theme: themeOrThemes, ...options },
+  options: { theme: themeOrThemes = DEFAULT_THEMES, ...options },
 }: RenderTwoFilesProps): RenderDiffFilesResult {
   const deletionLang =
     languageOverride ?? getFiletypeFromFileName(deletionFile.name);
   const additionLang =
     languageOverride ?? getFiletypeFromFileName(additionFile.name);
-  const { state, transformers } = createTransformerWithState(
-    options.useTokenTransformer
-  );
-  // tokenizeTimeLimit: 0 — never trade silently-wrong token colors for
-  // latency; see renderFileWithHighlighter for the full rationale.
-  const hastConfig: CodeToHastOptions<DiffsThemeNames> = (() => {
-    return typeof themeOrThemes === 'string'
-      ? {
-          ...options,
-          // language will be overwritten for each highlight
-          lang: 'text',
-          theme: themeOrThemes,
-          transformers,
-          decorations: undefined,
-          defaultColor: false,
-          cssVariablePrefix: formatCSSVariablePrefix('token'),
-          tokenizeTimeLimit: 0,
-        }
-      : {
-          ...options,
-          // language will be overwritten for each highlight
-          lang: 'text',
-          themes: themeOrThemes,
-          transformers,
-          decorations: undefined,
-          defaultColor: false,
-          cssVariablePrefix: formatCSSVariablePrefix('token'),
-          tokenizeTimeLimit: 0,
-        };
-  })();
-
-  const deletionLines = (() => {
-    if (deletionFile.contents === '') {
-      return [];
-    }
-    hastConfig.lang = deletionLang;
-    state.lineInfo = deletionInfo;
-    hastConfig.decorations = deletionDecorations;
-    return getLineNodes(
-      highlighter.codeToHast(
-        cleanLastNewline(deletionFile.contents),
-        hastConfig
-      )
-    );
-  })();
-  const additionLines = (() => {
-    if (additionFile.contents === '') {
-      return [];
-    }
-    hastConfig.lang = additionLang;
-    hastConfig.decorations = additionDecorations;
-    state.lineInfo = additionInfo;
-    return getLineNodes(
-      highlighter.codeToHast(
-        cleanLastNewline(additionFile.contents),
-        hastConfig
-      )
-    );
-  })();
-
+  const config: CodeToTokensOptions = {
+    lang: 'text',
+    theme:
+      typeof themeOrThemes === 'string'
+        ? highlighter.getTheme(themeOrThemes)
+        : {
+            dark: highlighter.getTheme(themeOrThemes.dark),
+            light: highlighter.getTheme(themeOrThemes.light),
+          },
+    defaultColor: false,
+    cssVariablePrefix: formatCSSVariablePrefix('token'),
+    tokenizeMaxLineLength: options.tokenizeMaxLineLength,
+  };
+  const deletionLines =
+    deletionFile.contents === ''
+      ? []
+      : renderTokenLines(
+          highlighter.codeToTokens(
+            cleanLastNewline(deletionFile.contents).replace(/\r(?!\n)/g, '\n'),
+            {
+              ...config,
+              lang: isSupportedLanguage(deletionLang) ? deletionLang : 'text',
+            }
+          ).tokens,
+          deletionInfo,
+          options.useTokenTransformer ?? false,
+          deletionDecorations
+        );
+  const additionLines =
+    additionFile.contents === ''
+      ? []
+      : renderTokenLines(
+          highlighter.codeToTokens(
+            cleanLastNewline(additionFile.contents).replace(/\r(?!\n)/g, '\n'),
+            {
+              ...config,
+              lang: isSupportedLanguage(additionLang) ? additionLang : 'text',
+            }
+          ).tokens,
+          additionInfo,
+          options.useTokenTransformer ?? false,
+          additionDecorations
+        );
   return { deletionLines, additionLines };
 }
