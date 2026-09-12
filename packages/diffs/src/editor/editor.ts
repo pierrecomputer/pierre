@@ -2124,7 +2124,7 @@ export class Editor<
             return;
           }
 
-          let selection = convertSelection(composedRange, DirectionNone);
+          const selection = convertSelection(composedRange, DirectionNone);
           if (selection === undefined) {
             return;
           }
@@ -2143,17 +2143,15 @@ export class Editor<
             return;
           }
 
-          if (this.#isContentMouseDown) {
-            if (this.#selectionStart !== undefined) {
-              selection = createSelectionFrom(this.#selectionStart, selection);
-            } else {
-              this.#selectionStart = selection;
-            }
-          } else if (this.#selectionStart !== undefined) {
+          if (this.#selectionStart !== undefined) {
+            // Keep the browser's range for word and whole-line drags. Rebuilding
+            // it from the initial start drops that word or line when dragging up.
             selection.direction = createSelectionFrom(
               this.#selectionStart,
               selection
             ).direction;
+          } else if (this.#isContentMouseDown) {
+            this.#selectionStart = selection;
           } else if (
             this.#selections !== undefined &&
             this.#selections.length === 1

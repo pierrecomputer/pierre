@@ -3933,6 +3933,79 @@ async function createEditorFixture(contents: string): Promise<EditorFixture> {
   };
 }
 
+describe('Editor native text selection', () => {
+  test.each([
+    {
+      name: 'whole line',
+      initial: createSelection(2, 0, 3, 0),
+      backward: createSelection(1, 0, 3, 0, DirectionBackward),
+      forward: createSelection(2, 0, 4, 0, DirectionForward),
+    },
+    {
+      name: 'whole word',
+      initial: createSelection(2, 0, 2, 7),
+      backward: createSelection(1, 6, 2, 7, DirectionBackward),
+      forward: createSelection(2, 0, 3, 4, DirectionForward),
+    },
+    {
+      name: 'caret',
+      initial: createSelection(2, 3, 2, 3),
+      backward: createSelection(1, 6, 2, 3, DirectionBackward),
+      forward: createSelection(2, 3, 3, 4, DirectionForward),
+    },
+  ])(
+    'preserves the native range when dragging from a $name',
+    async ({ initial, backward, forward }) => {
+      const { cleanup, content, editor } = await createEditorFixture(
+        'before\nalpha bravo\ncharlie delta\necho foxtrot\nafter'
+      );
+      const originalGetSelection = document.getSelection.bind(document);
+      let nativeRange: StaticRange;
+
+      try {
+        content.dispatchEvent(new Event('focus'));
+        const lines = [...content.querySelectorAll<HTMLElement>('[data-line]')];
+        document.getSelection = (() => ({
+          getComposedRanges: () => [nativeRange],
+        })) as unknown as typeof document.getSelection;
+        content.dispatchEvent(
+          new PointerEvent('pointerdown', { pointerType: 'mouse' })
+        );
+
+        // Native word and line drags keep the initial range when changing
+        // direction. Exercise both reversals before releasing the pointer.
+        for (const selection of [initial, backward, forward, backward]) {
+          const [startContainer, startOffset] = getSelectionAnchor(
+            lines[selection.start.line],
+            selection.start.character
+          );
+          const [endContainer, endOffset] = getSelectionAnchor(
+            lines[selection.end.line],
+            selection.end.character
+          );
+          nativeRange = composedRange(
+            startContainer,
+            startOffset,
+            endContainer,
+            endOffset
+          );
+          document.dispatchEvent(new Event('selectionchange'));
+          expect(editor.getViewState().selections).toEqual([selection]);
+        }
+
+        document.dispatchEvent(
+          new PointerEvent('pointerup', { pointerType: 'mouse' })
+        );
+        document.dispatchEvent(new Event('selectionchange'));
+        expect(editor.getViewState().selections).toEqual([backward]);
+      } finally {
+        document.getSelection = originalGetSelection;
+        cleanup();
+      }
+    }
+  );
+});
+
 describe('Editor Alt-drag column selection', () => {
   test('normalizes short, empty, and Unicode lines independently', async () => {
     const { cleanup, content, editor } = await createEditorFixture(
