@@ -5,7 +5,7 @@ import type { DiffModel } from '../model/DiffModel';
 import type { DiffHunksRenderer } from '../renderers/DiffHunksRenderer';
 import type { LineCuts } from '../rows/LineCuts';
 import { LineDiffRangeCache, lineDiffRangesFor } from '../rows/lineDiffRanges';
-import { markRow } from '../rows/markRow';
+import { markRow, type RowMark } from '../rows/markRow';
 import type { RowSource } from '../rows/RowSource';
 import type {
   AnnotationLineMap,
@@ -21,7 +21,6 @@ import type {
   RenderRange,
 } from '../types';
 import { areRenderRangesEqual } from '../utils/areRenderRangesEqual';
-import type { LineDiffRange } from '../utils/computeLineDiffRanges';
 import { createEmptyRowBuffer } from '../utils/createEmptyRowBuffer';
 import { createNoNewlineElement } from '../utils/createNoNewlineElement';
 import { createSeparator } from '../utils/createSeparator';
@@ -35,6 +34,7 @@ import {
   getFileAnnotations,
   shouldRenderFileAnnotations,
 } from '../utils/includesFileAnnotations';
+import type { SemanticDiffFocus } from '../utils/semanticDiffFocus';
 import { getTrailingContextRangeSize } from '../utils/virtualDiffLayout';
 import {
   type Column,
@@ -76,6 +76,8 @@ export interface DiffLayoutInput<LAnnotation> {
   deletionAnnotations: AnnotationLineMap<LAnnotation>;
   additionAnnotations: AnnotationLineMap<LAnnotation>;
   annotationSlotName(annotation: DiffLineAnnotation<LAnnotation>): string;
+  /** Focus marks of a semantic diff, which replace its word diff marks. */
+  semanticFocus?: SemanticDiffFocus;
   /**
    * Give the empty line after the new file's final line break a row of its
    * own; see DiffRowCursorOptions.includeTrailingNewline.
@@ -185,6 +187,7 @@ function sameInputs<LAnnotation>(
     last.deletionAnnotations === next.deletionAnnotations &&
     last.additionAnnotations === next.additionAnnotations &&
     last.annotationSlotName === next.annotationSlotName &&
+    last.semanticFocus === next.semanticFocus &&
     last.includeTrailingNewline === next.includeTrailingNewline &&
     last.showNoNewlineMarkers === next.showNoNewlineMarkers &&
     areRenderRangesEqual(last.renderRange, next.renderRange)
@@ -192,7 +195,7 @@ function sameInputs<LAnnotation>(
 }
 
 interface MarkedRow {
-  ranges: readonly LineDiffRange[];
+  ranges: readonly RowMark[];
   row: HASTElement;
 }
 
@@ -229,7 +232,7 @@ interface SeparatorProps {
   isExpandable: boolean;
 }
 
-const NO_RANGES: readonly LineDiffRange[] = Object.freeze([]);
+const NO_RANGES: readonly RowMark[] = Object.freeze([]);
 
 /**
  * Places the rows of a diff for one render: which lines show, in which
@@ -1031,17 +1034,21 @@ export class DiffLayout<LAnnotation = undefined> {
     pushRow(column, this.#lineRow(input, row));
   }
 
-  // A line's row: its base row from the row source, marked with its pair's
-  // ranges, stamped with its line attributes, with the gutter cell beside it.
+  // A line's row: its base row from the row source, marked with its semantic
+  // focus or its pair's word diff ranges, stamped with its line attributes,
+  // with the gutter cell beside it.
   #lineRow(input: DiffLayoutInput<LAnnotation>, row: LineRowInputs): RowSpec {
-    const { model, rows } = input;
+    const { model, rows, semanticFocus } = input;
     const base =
       row.side === 'additions'
         ? rows.additionRow(model, row.lineIndex)
         : rows.deletionRow(model, row.lineIndex);
-    const ranges = row.marked
-      ? lineDiffRangesFor(model, row.side, row.lineIndex, this.#ranges)
-      : NO_RANGES;
+    const ranges =
+      semanticFocus != null
+        ? (semanticFocus[row.side].get(row.lineNumber) ?? NO_RANGES)
+        : row.marked
+          ? lineDiffRangesFor(model, row.side, row.lineIndex, this.#ranges)
+          : NO_RANGES;
     const content = this.#line(base, ranges, row, input);
     return {
       key: row.key,
@@ -1058,7 +1065,7 @@ export class DiffLayout<LAnnotation = undefined> {
 
   #line(
     base: HASTElement,
-    ranges: readonly LineDiffRange[],
+    ranges: readonly RowMark[],
     row: LineRowInputs,
     { model }: DiffLayoutInput<LAnnotation>
   ): HASTElement {
@@ -1326,15 +1333,15 @@ function getSplitAnnotationSpans<LAnnotation>(
   return { deletionSpan, additionSpan };
 }
 
-function areRangesEqual(
-  a: readonly LineDiffRange[],
-  b: readonly LineDiffRange[]
-): boolean {
+function areRangesEqual(a: readonly RowMark[], b: readonly RowMark[]): boolean {
   return (
     a === b ||
     (a.length === b.length &&
       a.every(
-        (range, index) => range[0] === b[index][0] && range[1] === b[index][1]
+        (range, index) =>
+          range[0] === b[index][0] &&
+          range[1] === b[index][1] &&
+          range[2] === b[index][2]
       ))
   );
 }
