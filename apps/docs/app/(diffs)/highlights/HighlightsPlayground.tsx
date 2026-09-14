@@ -11,13 +11,7 @@ import {
   IconColorDark,
   IconColorLight,
 } from '@pierre/icons';
-import {
-  type CSSProperties,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from 'react';
+import { type CSSProperties, useEffect, useMemo, useState } from 'react';
 
 import styles from './HighlightsPlayground.module.css';
 import {
@@ -56,7 +50,6 @@ const THEME_OPTIONS = {
 const decoder = new TextDecoder();
 
 export function HighlightsPlayground() {
-  const previewRef = useRef<HTMLDivElement>(null);
   const [selectedThemes, setSelectedThemes] = useState({
     light: 'pierre-light',
     dark: 'pierre-dark',
@@ -256,18 +249,12 @@ export function HighlightsPlayground() {
           aria-label="Source code"
           value={code}
           onChange={(event) => setCode(event.target.value)}
-          onScroll={(event) => {
-            if (previewRef.current === null) return;
-            previewRef.current.scrollTop = event.currentTarget.scrollTop;
-            previewRef.current.scrollLeft = event.currentTarget.scrollLeft;
-          }}
           spellCheck={false}
           autoCapitalize="off"
           autoCorrect="off"
-          wrap="off"
           className={styles.input}
         />
-        <div ref={previewRef} aria-hidden="true" className={styles.preview}>
+        <div aria-hidden="true" className={styles.preview}>
           {(['light', 'dark'] as const).map((colorScheme) => (
             <div
               key={colorScheme}

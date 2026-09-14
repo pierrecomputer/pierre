@@ -1,7 +1,6 @@
 .editor {
   position: relative;
   isolation: isolate;
-  height: 32rem;
   overflow: hidden;
   border: 1px solid var(--border);
   border-radius: 0.5rem;
@@ -23,16 +22,6 @@
 }
 
 .input,
-.preview {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  overflow: auto;
-  scrollbar-gutter: stable;
-}
-
-.input,
 .preview pre {
   margin: 0;
   border: 0;
@@ -45,11 +34,18 @@
   line-height: 1.5rem;
   letter-spacing: normal;
   tab-size: 2;
-  white-space: pre;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
 .input {
+  position: relative;
   z-index: 0;
+  display: block;
+  width: 100%;
+  min-height: 32rem;
+  field-sizing: content;
+  overflow: hidden;
   resize: none;
   outline: none;
   background: transparent;
@@ -63,14 +59,15 @@
 }
 
 .preview {
+  position: absolute;
+  inset: 0;
   z-index: 1;
+  overflow: hidden;
   pointer-events: none;
   user-select: none;
 }
 
 .preview pre {
-  min-width: 100%;
-  width: max-content;
   background: transparent !important;
 }
 
