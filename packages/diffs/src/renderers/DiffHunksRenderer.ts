@@ -79,6 +79,7 @@ import { isDiffPlainText } from '../utils/isDiffPlainText';
 import { endsWithNewline } from '../utils/iterateOverDiff';
 import { renderDiffWithHighlighter } from '../utils/renderDiffWithHighlighter';
 import { resolvePreferredHighlighter } from '../utils/resolvePreferredHighlighter';
+import { getSemanticDiffFocus } from '../utils/semanticDiffFocus';
 import {
   createSemanticDiffLineLookup,
   getSemanticDiffLine,
@@ -1456,6 +1457,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       deletionAnnotations: this.deletionAnnotations,
       additionAnnotations: this.additionAnnotations,
       annotationSlotName: this.annotationSlotName,
+      semanticFocus: getSemanticDiffFocus(model.diff),
       includeTrailingNewline: this.includesTrailingNewline(),
       showNoNewlineMarkers: this.showsNoNewlineMarkers(),
     };

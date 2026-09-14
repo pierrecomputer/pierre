@@ -1,6 +1,5 @@
 import type { ElementContent, Element as HASTElement, Properties } from 'hast';
 
-import type { LineDiffRange } from '../utils/computeLineDiffRanges';
 import {
   DecoratedLineBuilder,
   type LineDecoration,
@@ -8,9 +7,19 @@ import {
 import { wrapTokenFragments } from '../utils/wrapTokenFragments';
 
 /**
- * Returns a copy of a base row with the changed text in `ranges` wrapped in
- * `data-diff-span` spans. The base row is never changed, and it is returned
- * as is when there is nothing to mark.
+ * A range of a row's text to wrap in a span. Without properties it is a word
+ * diff mark, wrapped in a `data-diff-span` span.
+ */
+export type RowMark = readonly [
+  start: number,
+  end: number,
+  properties?: Properties,
+];
+
+/**
+ * Returns a copy of a base row with the text in `ranges` wrapped in spans.
+ * The base row is never changed, and it is returned as is when there is
+ * nothing to mark.
  *
  * A base row has no marks yet: its children are token spans (optionally with
  * `data-char`), plain text, or the single `<br>` or newline of an empty row.
@@ -18,7 +27,7 @@ import { wrapTokenFragments } from '../utils/wrapTokenFragments';
  */
 export function markRow(
   row: HASTElement,
-  ranges: readonly LineDiffRange[]
+  ranges: readonly RowMark[]
 ): HASTElement {
   if (ranges.length === 0) {
     return row;
@@ -34,10 +43,10 @@ export function markRow(
     properties: { ...row.properties },
     children: [],
   };
-  const spans: LineDecoration[] = ranges.map(([start, end]) => ({
+  const spans: LineDecoration[] = ranges.map(([start, end, properties]) => ({
     start: { line: 0, character: start },
     end: { line: 0, character: end },
-    properties: { 'data-diff-span': '' },
+    properties: properties ?? { 'data-diff-span': '' },
     alwaysWrap: true,
   }));
   let lineLength = 0;
