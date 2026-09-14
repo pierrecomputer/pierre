@@ -30,12 +30,20 @@
     --diffs-warning-dark: #ffd452;
     /* FOLLOWUP: Work with mark to figure out these colors and how to source
      * them from themes */
-    --diffs-moved-light: #009fff;
-    --diffs-moved-dark: #69b1ff;
+    --diffs-moved-light: var(--diffs-modified-light);
+    --diffs-moved-dark: var(--diffs-modified-dark);
     --diffs-edited-light: #9954d8;
     --diffs-edited-dark: #bf91f3;
     --diffs-reformatted-light: #808080;
     --diffs-reformatted-dark: #a0a0a0;
+    --diffs-focus-replaced-light: var(--diffs-edited-light);
+    --diffs-focus-replaced-dark: var(--diffs-edited-dark);
+    --diffs-focus-moved-light: var(--diffs-modified-light);
+    --diffs-focus-moved-dark: var(--diffs-modified-dark);
+    --diffs-focus-introduced-light: var(--diffs-added-light);
+    --diffs-focus-introduced-dark: var(--diffs-added-dark);
+    --diffs-focus-removed-light: var(--diffs-deleted-light);
+    --diffs-focus-removed-dark: var(--diffs-deleted-dark);
 
     /*
     // Available CSS Color Overrides
@@ -75,6 +83,11 @@
     --diffs-bg-edited-number-override
     --diffs-bg-reformatted-override
     --diffs-bg-reformatted-number-override
+
+    --diffs-focus-replaced-color-override
+    --diffs-focus-moved-color-override
+    --diffs-focus-introduced-color-override
+    --diffs-focus-removed-color-override
 
     --conflict-bg-current-override
     --conflict-bg-current-number-override
@@ -231,6 +244,64 @@
         var(
           --diffs-dark-reformatted-color,
           var(--diffs-reformatted-color, var(--diffs-reformatted-dark))
+        )
+      )
+    );
+    --diffs-focus-replaced-base: var(
+      --diffs-focus-replaced-color-override,
+      light-dark(
+        var(
+          --diffs-light-focus-replaced-color,
+          var(--diffs-focus-replaced-color, var(--diffs-focus-replaced-light))
+        ),
+        var(
+          --diffs-dark-focus-replaced-color,
+          var(--diffs-focus-replaced-color, var(--diffs-focus-replaced-dark))
+        )
+      )
+    );
+    --diffs-focus-moved-base: var(
+      --diffs-focus-moved-color-override,
+      light-dark(
+        var(
+          --diffs-light-focus-moved-color,
+          var(--diffs-focus-moved-color, var(--diffs-focus-moved-light))
+        ),
+        var(
+          --diffs-dark-focus-moved-color,
+          var(--diffs-focus-moved-color, var(--diffs-focus-moved-dark))
+        )
+      )
+    );
+    --diffs-focus-introduced-base: var(
+      --diffs-focus-introduced-color-override,
+      light-dark(
+        var(
+          --diffs-light-focus-introduced-color,
+          var(
+            --diffs-focus-introduced-color,
+            var(--diffs-focus-introduced-light)
+          )
+        ),
+        var(
+          --diffs-dark-focus-introduced-color,
+          var(
+            --diffs-focus-introduced-color,
+            var(--diffs-focus-introduced-dark)
+          )
+        )
+      )
+    );
+    --diffs-focus-removed-base: var(
+      --diffs-focus-removed-color-override,
+      light-dark(
+        var(
+          --diffs-light-focus-removed-color,
+          var(--diffs-focus-removed-color, var(--diffs-focus-removed-light))
+        ),
+        var(
+          --diffs-dark-focus-removed-color,
+          var(--diffs-focus-removed-color, var(--diffs-focus-removed-dark))
         )
       )
     );
@@ -1580,7 +1651,8 @@
     }
   }
 
-  [data-diff-span] {
+  [data-diff-span],
+  [data-diff-focus] {
     border-radius: 3px;
     box-decoration-break: clone;
   }
@@ -1591,6 +1663,44 @@
 
   [data-line-type='change-deletion'] [data-diff-span] {
     background-color: var(--diffs-bg-deletion-emphasis);
+  }
+
+  [data-line] [data-diff-focus] {
+    --diffs-focus-opacity: 34%;
+
+    background-color: color-mix(
+      in srgb,
+      var(--diffs-focus-color) var(--diffs-focus-opacity),
+      transparent
+    );
+  }
+
+  /* Keep this order: movement overrides replacement, then addition/removal. */
+  [data-diff-focus~='replaced'] {
+    --diffs-focus-color: var(--diffs-focus-replaced-base);
+  }
+
+  [data-diff-focus~='moved'],
+  [data-diff-focus~='reformatted'] {
+    --diffs-focus-color: var(--diffs-focus-moved-base);
+  }
+
+  [data-diff-focus~='introduced'] {
+    --diffs-focus-color: var(--diffs-focus-introduced-base);
+  }
+
+  [data-diff-focus~='removed'] {
+    --diffs-focus-color: var(--diffs-focus-removed-base);
+  }
+
+  [data-line][data-selected-line] [data-diff-focus] {
+    --diffs-focus-opacity: 44%;
+  }
+
+  @media (pointer: fine) {
+    [data-line][data-hovered] [data-diff-focus] {
+      --diffs-focus-opacity: 44%;
+    }
   }
 
   [data-merge-conflict='marker-start'],

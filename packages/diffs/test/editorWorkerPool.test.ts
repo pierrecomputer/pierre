@@ -150,7 +150,12 @@ function respondWithHighlightedDiff(
     type: 'success',
     requestType: 'diff',
     id: request.id,
-    result: renderDiffWithHighlighter(diff, sharedHighlighter, options),
+    result: renderDiffWithHighlighter(
+      diff,
+      undefined,
+      sharedHighlighter,
+      options
+    ),
     options,
     sentAt: Date.now(),
   });
@@ -664,11 +669,13 @@ describe('DiffHunksRenderer worker rendering', () => {
       const options = manager.getDiffRenderOptions();
       const highlightedA = renderDiffWithHighlighter(
         diffA,
+        undefined,
         sharedHighlighter,
         options
       );
       const highlightedB = renderDiffWithHighlighter(
         diffB,
+        undefined,
         sharedHighlighter,
         options
       );
@@ -1957,6 +1964,7 @@ describe('rendering when an editor attaches', () => {
         id: request.id,
         result: renderDiffWithHighlighter(
           fileDiff,
+          undefined,
           sharedHighlighter,
           manager.getDiffRenderOptions()
         ),

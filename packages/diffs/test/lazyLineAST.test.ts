@@ -133,11 +133,22 @@ test('full and partial diffs defer both sides without losing line decorations', 
   ).files[0];
   expect(partial.isPartial).toBe(true);
   for (const diff of [full, partial]) {
-    const expected = renderDiffWithHighlighter(diff, highlighter, options);
-    const result = renderDiffWithHighlighter(diff, highlighter, options, {
-      forcePlainText: false,
-      lazyLineAST: true,
-    });
+    const expected = renderDiffWithHighlighter(
+      diff,
+      undefined,
+      highlighter,
+      options
+    );
+    const result = renderDiffWithHighlighter(
+      diff,
+      undefined,
+      highlighter,
+      options,
+      {
+        forcePlainText: false,
+        lazyLineAST: true,
+      }
+    );
     for (const side of ['deletionLines', 'additionLines'] as const) {
       const rows = result.code[side];
       const last = rows.length - 1;

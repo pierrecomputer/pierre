@@ -151,6 +151,7 @@ async function createFixture() {
           id: request.id,
           result: renderDiffWithHighlighter(
             diffs[version],
+            undefined,
             highlighter,
             renderOptions
           ),
@@ -664,6 +665,7 @@ for (const type of ['file', 'diff'] as const) {
             id: request.id,
             result: renderDiffWithHighlighter(
               request.diff,
+              undefined,
               highlighter,
               renderOptions
             ),
@@ -846,6 +848,7 @@ for (const custom of [false, true]) {
           id: request.id,
           result: renderDiffWithHighlighter(
             request.diff,
+            undefined,
             highlighter,
             renderOptions
           ),

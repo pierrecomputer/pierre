@@ -175,6 +175,7 @@ async function handleRenderFile({
 async function handleRenderDiff({
   id,
   diff,
+  semanticFocus,
   resolvedLanguages,
   customExtensionsVersion,
   customExtensionMap,
@@ -190,7 +191,12 @@ async function handleRenderDiff({
   if (resolvedLanguages != null) {
     attachResolvedLanguages(resolvedLanguages, highlighter);
   }
-  const result = renderDiffWithHighlighter(diff, highlighter, renderOptions);
+  const result = renderDiffWithHighlighter(
+    diff,
+    semanticFocus,
+    highlighter,
+    renderOptions
+  );
   const code = compactResults
     ? {
         deletionLines: encodeHastLines(result.code.deletionLines),

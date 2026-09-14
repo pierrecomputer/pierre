@@ -187,7 +187,7 @@ async function withViewer(
     const results = new Map(
       items.map(({ fileDiff }) => [
         fileDiff.name,
-        renderDiffWithHighlighter(fileDiff, highlighter, options),
+        renderDiffWithHighlighter(fileDiff, undefined, highlighter, options),
       ])
     );
     const postMessage = worker.postMessage.bind(worker);

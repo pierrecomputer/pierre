@@ -119,7 +119,7 @@ async function createFixture(custom: boolean, controlled: boolean) {
       type: 'success',
       requestType: 'diff',
       id: request.id,
-      result: renderDiffWithHighlighter(diff, highlighter, options),
+      result: renderDiffWithHighlighter(diff, undefined, highlighter, options),
       options,
       sentAt: Date.now(),
     });

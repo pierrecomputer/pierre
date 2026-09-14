@@ -113,6 +113,7 @@ describe('worker cache transport', () => {
           );
           const expectedDiff = renderDiffWithHighlighter(
             diff,
+            undefined,
             highlighter,
             manager.getDiffRenderOptions()
           );

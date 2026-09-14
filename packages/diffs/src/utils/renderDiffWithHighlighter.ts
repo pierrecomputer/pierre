@@ -15,6 +15,7 @@ import type {
   ThemedDiffResult,
 } from '../types';
 import { appendItems } from './appendItems';
+import { appendSemanticDiffFocusDecorations } from './appendSemanticDiffFocusDecorations';
 import { cleanLastNewline } from './cleanLastNewline';
 import { getFiletypeFromFileName } from './getFiletypeFromFileName';
 import { getHighlighterThemeStyles } from './getHighlighterThemeStyles';
@@ -25,6 +26,7 @@ import {
   pushOrJoinSpan,
 } from './parseDiffDecorations';
 import { renderTokenLines } from './renderTokenLines';
+import type { SemanticDiffFocus } from './semanticDiffFocus';
 import { setDeferredArrayItem } from './setDeferredArrayItem';
 
 const DEFAULT_PLAIN_TEXT_OPTIONS: ForceDiffPlainTextOptions = {
@@ -33,6 +35,7 @@ const DEFAULT_PLAIN_TEXT_OPTIONS: ForceDiffPlainTextOptions = {
 
 export function renderDiffWithHighlighter(
   diff: FileDiffMetadata,
+  semanticFocus: SemanticDiffFocus | undefined,
   highlighter: DiffsHighlighter,
   options: RenderDiffOptions,
   {
@@ -128,7 +131,12 @@ export function renderDiffWithHighlighter(
           ? additionLine.splitLineIndex
           : deletionLine.splitLineIndex;
 
-      if (type === 'change' && additionLine != null && deletionLine != null) {
+      if (
+        semanticFocus == null &&
+        type === 'change' &&
+        additionLine != null &&
+        deletionLine != null
+      ) {
         computeLineDiffDecorations({
           additionLine: diff.additionLines[additionLine.lineIndex],
           deletionLine: diff.deletionLines[deletionLine.lineIndex],
@@ -142,6 +150,14 @@ export function renderDiffWithHighlighter(
       }
 
       if (deletionLine != null) {
+        if (semanticFocus != null && !shouldGroupAll) {
+          appendSemanticDiffFocusDecorations(
+            semanticFocus.deletions,
+            deletionLine.lineNumber,
+            bucket.deletionContent.length,
+            bucket.deletionDecorations
+          );
+        }
         appendContent(
           diff.deletionLines[deletionLine.lineIndex],
           deletionLine.lineIndex,
@@ -160,6 +176,14 @@ export function renderDiffWithHighlighter(
       }
 
       if (additionLine != null) {
+        if (semanticFocus != null && !shouldGroupAll) {
+          appendSemanticDiffFocusDecorations(
+            semanticFocus.additions,
+            additionLine.lineNumber,
+            bucket.additionContent.length,
+            bucket.additionDecorations
+          );
+        }
         appendContent(
           diff.additionLines[additionLine.lineIndex],
           additionLine.lineIndex,
@@ -198,11 +222,17 @@ export function renderDiffWithHighlighter(
     const { deletionLines, additionLines } = renderTwoFiles({
       deletionFile,
       deletionInfo: bucket.deletionInfo,
-      deletionDecorations: bucket.deletionDecorations,
+      deletionDecorations:
+        shouldGroupAll && semanticFocus != null
+          ? semanticFocus.deletions.decorations
+          : bucket.deletionDecorations,
 
       additionFile,
       additionInfo: bucket.additionInfo,
-      additionDecorations: bucket.additionDecorations,
+      additionDecorations:
+        shouldGroupAll && semanticFocus != null
+          ? semanticFocus.additions.decorations
+          : bucket.additionDecorations,
 
       highlighter,
       options,

@@ -82,6 +82,7 @@ import type { DiffLineMetadata } from '../utils/iterateOverDiff';
 import { iterateOverDiff } from '../utils/iterateOverDiff';
 import { renderDiffWithHighlighter } from '../utils/renderDiffWithHighlighter';
 import { resolvePreferredHighlighter } from '../utils/resolvePreferredHighlighter';
+import { getSemanticDiffFocus } from '../utils/semanticDiffFocus';
 import {
   createSemanticDiffLineLookup,
   getSemanticDiffLine,
@@ -1446,12 +1447,18 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
   ): RenderDiffResult {
     const { options } = this.getRenderOptions(diff);
     const { collapsedContextThreshold } = this.getOptionsWithDefaults();
-    const result = renderDiffWithHighlighter(diff, highlighter, options, {
-      forcePlainText,
-      lazyLineAST,
-      expandedHunks: forcePlainText ? true : undefined,
-      collapsedContextThreshold,
-    });
+    const result = renderDiffWithHighlighter(
+      diff,
+      getSemanticDiffFocus(diff),
+      highlighter,
+      options,
+      {
+        forcePlainText,
+        lazyLineAST,
+        expandedHunks: forcePlainText ? true : undefined,
+        collapsedContextThreshold,
+      }
+    );
     if (
       this.editSessionActive &&
       diff.additionLines.length === 1 &&

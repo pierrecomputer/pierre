@@ -46,6 +46,7 @@ import { isDiffPlainText } from '../utils/isDiffPlainText';
 import { isFilePlainText } from '../utils/isFilePlainText';
 import { renderDiffWithHighlighter } from '../utils/renderDiffWithHighlighter';
 import { renderFileWithHighlighter } from '../utils/renderFileWithHighlighter';
+import { getSemanticDiffFocus } from '../utils/semanticDiffFocus';
 import {
   isHandledWorkerPoolError,
   markWorkerErrorReported,
@@ -984,13 +985,19 @@ export class WorkerPoolManager {
       this.queueInitialization();
       return undefined;
     }
-    return renderDiffWithHighlighter(diff, highlighter, this.renderOptions, {
-      forcePlainText: true,
-      startingLine,
-      totalLines,
-      expandedHunks,
-      collapsedContextThreshold,
-    });
+    return renderDiffWithHighlighter(
+      diff,
+      getSemanticDiffFocus(diff),
+      highlighter,
+      this.renderOptions,
+      {
+        forcePlainText: true,
+        startingLine,
+        totalLines,
+        expandedHunks,
+        collapsedContextThreshold,
+      }
+    );
   }
 
   public terminate(): void {
@@ -1422,6 +1429,10 @@ export class WorkerPoolManager {
         task.cacheKeyAtDispatch = task.request.file.cacheKey;
       } else if (task.type === 'diff') {
         task.cacheKeyAtDispatch = task.request.diff.cacheKey;
+        const semanticFocus = getSemanticDiffFocus(task.request.diff);
+        if (semanticFocus != null) {
+          task.request.semanticFocus = semanticFocus;
+        }
       }
       managedWorker.worker.postMessage(task.request);
     } catch (error) {

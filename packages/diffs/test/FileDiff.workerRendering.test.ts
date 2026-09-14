@@ -202,7 +202,12 @@ async function createHighlightedDiffFixture() {
       type: 'success',
       requestType: 'diff',
       id: request.id,
-      result: renderDiffWithHighlighter(diff, sharedHighlighter, options),
+      result: renderDiffWithHighlighter(
+        diff,
+        undefined,
+        sharedHighlighter,
+        options
+      ),
       options,
       sentAt: Date.now(),
     });

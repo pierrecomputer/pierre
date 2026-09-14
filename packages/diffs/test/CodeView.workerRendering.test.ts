@@ -202,6 +202,7 @@ for (const type of ['file', 'diff'] as const) {
           id: request.id,
           result: renderDiffWithHighlighter(
             count === 1 ? diffA : diffB,
+            undefined,
             sharedHighlighter,
             options
           ),
@@ -345,6 +346,7 @@ for (const type of ['file', 'diff'] as const) {
           id: request.id,
           result: renderDiffWithHighlighter(
             request.diff,
+            undefined,
             sharedHighlighter,
             options
           ),
@@ -493,6 +495,7 @@ describe('CodeView worker rendering', () => {
         id: request.id,
         result: renderDiffWithHighlighter(
           diff,
+          undefined,
           sharedHighlighter,
           renderOptions
         ),
@@ -604,6 +607,7 @@ describe('CodeView worker rendering', () => {
         id: shortRequest.id,
         result: renderDiffWithHighlighter(
           shortDiff,
+          undefined,
           sharedHighlighter,
           renderOptions
         ),
@@ -677,6 +681,7 @@ describe('CodeView worker rendering', () => {
         id: tallRequest.id,
         result: renderDiffWithHighlighter(
           tallDiff,
+          undefined,
           sharedHighlighter,
           renderOptions
         ),
@@ -952,6 +957,7 @@ describe('CodeView worker rendering', () => {
         id: shortRequest.id,
         result: renderDiffWithHighlighter(
           shortDiff,
+          undefined,
           sharedHighlighter,
           renderOptions
         ),

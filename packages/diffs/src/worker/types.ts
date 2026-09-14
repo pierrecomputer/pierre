@@ -15,6 +15,7 @@ import type {
   ThemedFileResult,
   ThemesType,
 } from '../types';
+import type { SemanticDiffFocus } from '../utils/semanticDiffFocus';
 
 export type WorkerRequestId = string;
 
@@ -59,6 +60,7 @@ export interface RenderDiffRequest {
   type: 'diff';
   id: WorkerRequestId;
   diff: FileDiffMetadata;
+  semanticFocus?: SemanticDiffFocus;
   resolvedLanguages?: ResolvedLanguage[];
   customExtensionsVersion?: number;
   customExtensionMap?: ExtensionFormatMap;

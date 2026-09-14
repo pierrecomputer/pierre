@@ -228,6 +228,7 @@ describe('recycled diff edit highlights', () => {
       };
       const sharedResult = renderDiffWithHighlighter(
         external,
+        undefined,
         highlighter,
         options
       );

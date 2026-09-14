@@ -175,6 +175,7 @@ async function createFixture(
         id: request.id,
         result: renderDiffWithHighlighter(
           diffs[version],
+          undefined,
           highlighter,
           renderOptions
         ),
