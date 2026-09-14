@@ -1,0 +1,43 @@
+.preview {
+  height: 32rem;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+}
+
+.preview > div {
+  min-height: 100%;
+}
+
+.preview pre {
+  min-width: fit-content;
+  min-height: 32rem;
+  margin: 0;
+  padding: 1rem;
+  font-family: var(--font-mono);
+  font-size: 0.875rem;
+  line-height: 1.5rem;
+  tab-size: 2;
+}
+
+.preview [data-color-scheme='dark'] {
+  display: none;
+}
+
+.preview[data-color-mode='dark'] [data-color-scheme='light'] {
+  display: none;
+}
+
+.preview[data-color-mode='dark'] [data-color-scheme='dark'] {
+  display: block;
+}
+
+@media (prefers-color-scheme: dark) {
+  .preview[data-color-mode='system'] [data-color-scheme='light'] {
+    display: none;
+  }
+
+  .preview[data-color-mode='system'] [data-color-scheme='dark'] {
+    display: block;
+  }
+}
