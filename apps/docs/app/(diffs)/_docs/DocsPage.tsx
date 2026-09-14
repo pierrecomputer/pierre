@@ -64,7 +64,21 @@ import {
   EDITOR_OPTIONS_TYPE,
   EDITOR_PUBLIC_API,
 } from '../docs/Edit/constants';
-import { HIGHLIGHTS_HIGHLIGHTER_EXAMPLES } from '../docs/HighlightsHighlighter/constants';
+import {
+  HIGHLIGHTS_API_RUNTIME,
+  HIGHLIGHTS_API_TYPES,
+  HIGHLIGHTS_CSS_VARIABLES,
+  HIGHLIGHTS_DUAL_THEMES,
+  HIGHLIGHTS_DUAL_THEMES_CSS,
+  HIGHLIGHTS_HTML,
+  HIGHLIGHTS_INSTALL,
+  HIGHLIGHTS_LIVE,
+  HIGHLIGHTS_STREAM,
+  HIGHLIGHTS_THEME_LOADER,
+  HIGHLIGHTS_THEMES,
+  HIGHLIGHTS_TOKENS,
+  HIGHLIGHTS_VIEWPORT,
+} from '../docs/HighlightsHighlighter/constants';
 import {
   INSTALLATION_EXAMPLES,
   PACKAGE_MANAGERS,
@@ -166,7 +180,7 @@ import { DocsLayout } from '@/components/docs/DocsLayout';
 import { HeadingAnchors } from '@/components/docs/HeadingAnchors';
 import { ProseWrapper } from '@/components/docs/ProseWrapper';
 import Footer from '@/components/Footer';
-import { renderMDX, renderMDXWithPreloadedFiles } from '@/lib/mdx';
+import { renderMDX } from '@/lib/mdx';
 import { pageMetadata } from '@/lib/page-metadata';
 
 const docsTitle = 'Diffs docs';
@@ -646,10 +660,53 @@ async function ThemingSection() {
 }
 
 async function HighlightsHighlighterSection() {
-  const content = await renderMDXWithPreloadedFiles(
-    '(diffs)/docs/HighlightsHighlighter/content.mdx',
-    HIGHLIGHTS_HIGHLIGHTER_EXAMPLES
-  );
+  const [
+    highlightsInstall,
+    highlightsHtml,
+    highlightsTokens,
+    highlightsStream,
+    highlightsLive,
+    highlightsViewport,
+    highlightsThemes,
+    highlightsCssVariables,
+    highlightsDualThemes,
+    highlightsDualThemesCss,
+    highlightsThemeLoader,
+    highlightsApiRuntime,
+    highlightsApiTypes,
+  ] = await Promise.all([
+    preloadFile(HIGHLIGHTS_INSTALL),
+    preloadFile(HIGHLIGHTS_HTML),
+    preloadFile(HIGHLIGHTS_TOKENS),
+    preloadFile(HIGHLIGHTS_STREAM),
+    preloadFile(HIGHLIGHTS_LIVE),
+    preloadFile(HIGHLIGHTS_VIEWPORT),
+    preloadFile(HIGHLIGHTS_THEMES),
+    preloadFile(HIGHLIGHTS_CSS_VARIABLES),
+    preloadFile(HIGHLIGHTS_DUAL_THEMES),
+    preloadFile(HIGHLIGHTS_DUAL_THEMES_CSS),
+    preloadFile(HIGHLIGHTS_THEME_LOADER),
+    preloadFile(HIGHLIGHTS_API_RUNTIME),
+    preloadFile(HIGHLIGHTS_API_TYPES),
+  ]);
+  const content = await renderMDX({
+    filePath: '(diffs)/docs/HighlightsHighlighter/content.mdx',
+    scope: {
+      highlightsInstall,
+      highlightsHtml,
+      highlightsTokens,
+      highlightsStream,
+      highlightsLive,
+      highlightsViewport,
+      highlightsThemes,
+      highlightsCssVariables,
+      highlightsDualThemes,
+      highlightsDualThemesCss,
+      highlightsThemeLoader,
+      highlightsApiRuntime,
+      highlightsApiTypes,
+    },
+  });
   return <ProseWrapper>{content}</ProseWrapper>;
 }
 
