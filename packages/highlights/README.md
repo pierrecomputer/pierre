@@ -39,6 +39,7 @@ streaming, incremental editing, themes, and the API reference.
 
 ```bash
 moonx highlights:build
+moonx highlights:dev
 moonx highlights:test
 moonx highlights:bench
 moonx highlights:bench-live

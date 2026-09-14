@@ -32,6 +32,16 @@ tasks:
     options:
       merge: 'replace'
 
+  # Generate Wasm and lazy themes before bundling, including during development.
+  # Keep dist in place while rebuilding because docs reads it concurrently.
+  dev:
+    command: 'bun ./scripts/dev.ts'
+    options:
+      merge: 'replace'
+      cache: false
+      persistent: true
+      runInCI: 'skip'
+
   # The suite compiles the wasm from the WAT sources itself and imports the
   # glue straight from lib/, so it replaces the inherited deps and needs no
   # build.
