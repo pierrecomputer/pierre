@@ -3,7 +3,7 @@
 Highlights includes the same 65 Shiki catalog themes and ten Pierre themes
 available to the Shiki backends. All are Zed-compatible objects with matching
 IDs and display names. Source versions and attribution are recorded in
-[third-party licenses](./THIRD_PARTY_LICENSES.md).
+[third-party licenses](../NOTICE.md).
 
 ```js
 import { codeToHtml } from '@pierre/highlights';

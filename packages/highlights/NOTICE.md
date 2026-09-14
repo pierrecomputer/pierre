@@ -130,4 +130,4 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 themes retain Copyright 2017 Mattia Astorino. `github-dark-default` also derives
 from the MIT-licensed GitHub/Primer theme credited above. Highlights extracts
 individual themes and prunes unused Zed style properties. The full Apache-2.0
-text is included in the package's [`LICENSE.md`](../LICENSE.md).
+text is included in the package's [`LICENSE.md`](./LICENSE.md).

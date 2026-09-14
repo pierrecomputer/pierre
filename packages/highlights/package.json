@@ -5,7 +5,7 @@
   "license": "apache-2.0",
   "files": [
     "dist/",
-    "themes/THIRD_PARTY_LICENSES.md"
+    "NOTICE.md"
   ],
   "type": "module",
   "main": "./dist/node.js",
