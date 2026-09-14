@@ -64,6 +64,7 @@ import {
   EDITOR_OPTIONS_TYPE,
   EDITOR_PUBLIC_API,
 } from '../docs/Edit/constants';
+import { HIGHLIGHTS_HIGHLIGHTER_EXAMPLES } from '../docs/HighlightsHighlighter/constants';
 import {
   INSTALLATION_EXAMPLES,
   PACKAGE_MANAGERS,
@@ -165,7 +166,7 @@ import { DocsLayout } from '@/components/docs/DocsLayout';
 import { HeadingAnchors } from '@/components/docs/HeadingAnchors';
 import { ProseWrapper } from '@/components/docs/ProseWrapper';
 import Footer from '@/components/Footer';
-import { renderMDX } from '@/lib/mdx';
+import { renderMDX, renderMDXWithPreloadedFiles } from '@/lib/mdx';
 import { pageMetadata } from '@/lib/page-metadata';
 
 const docsTitle = 'Diffs docs';
@@ -201,6 +202,7 @@ export default function DocsPage() {
           <TokenHooksSection />
           <WorkerPoolSection />
           <SSRSection />
+          <HighlightsHighlighterSection />
         </div>
       </DocsLayout>
       <Footer />
@@ -640,6 +642,14 @@ async function ThemingSection() {
   const content = await renderMDX({
     filePath: '(diffs)/docs/Theming/docs-content.mdx',
   });
+  return <ProseWrapper>{content}</ProseWrapper>;
+}
+
+async function HighlightsHighlighterSection() {
+  const content = await renderMDXWithPreloadedFiles(
+    '(diffs)/docs/HighlightsHighlighter/content.mdx',
+    HIGHLIGHTS_HIGHLIGHTER_EXAMPLES
+  );
   return <ProseWrapper>{content}</ProseWrapper>;
 }
 

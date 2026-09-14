@@ -59,6 +59,7 @@ const DIFFS_SECTIONS = [
   'TokenHooks',
   'WorkerPool',
   'SSR',
+  'HighlightsHighlighter',
 ] as const;
 
 const TREES_SECTIONS = [
@@ -111,6 +112,8 @@ const SECTION_DESCRIPTIONS: Record<string, Record<string, string>> = {
     WorkerPool:
       'Off-main-thread syntax highlighting with configurable worker pools',
     SSR: 'Server-side rendering with preload functions for instant first paint',
+    HighlightsHighlighter:
+      'Highlights APIs, themes, languages, streaming, and incremental editing',
   },
   trees: {
     Overview:
@@ -382,6 +385,7 @@ const LABEL_PREFIXES_TO_STRIP = [
   'SSR_',
   'STYLING_CODE_',
   'THEMING_',
+  'HIGHLIGHTS_',
   'VIRTUALIZATION_',
   'OVERVIEW_',
   'TREES_',
