@@ -71,6 +71,8 @@ export interface CodeToHtmlOptions {
    * (`themes[0]`); pass that member directly to pick another one.
    */
   theme: Theme | ThemeFamily;
+  /** Prefix for CSS-variable colors. Defaults to `--hls-`. */
+  cssVariablePrefix?: string;
 }
 
 /**
@@ -80,7 +82,7 @@ export interface CodeToHtmlOptions {
 export interface ThemedToken {
   content: string;
   offset: number;
-  /** Six- or eight-digit hex color, or `var(--hls-*)` for CSS-variable themes. */
+  /** A theme color, or a prefixed `var(...)` for CSS-variable themes. */
   color?: string;
   /** Background color. Highlights never emits it, but transformers may set it. */
   bgColor?: string;
@@ -105,7 +107,7 @@ export interface ThemedToken {
 /** Options shared by every tokenization entry point. */
 export interface CodeToTokensBaseOptions {
   lang: Lang;
-  /** Prefix for per-theme custom properties. Defaults to `--hls-`. */
+  /** Prefix for CSS-variable colors and per-theme properties. Defaults to `--hls-`. */
   cssVariablePrefix?: string;
   /**
    * With `themes`, the key of the theme applied inline through plain `color`,

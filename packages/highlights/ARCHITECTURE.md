@@ -130,13 +130,16 @@ scratch. [`src/memory.wat`](./src/memory.wat) defines the full layout.
 | `[2, 6)`       | Input byte length (`u32`, little-endian)                               |
 | `[6, 10)`      | Output address (`u32`, little-endian)                                  |
 | `[10, 14)`     | Output byte length (`u32`, little-endian)                              |
+| `[14, 18)`     | CSS-variable prefix address (`u32`, little-endian)                     |
+| `[18, 22)`     | CSS-variable prefix byte length (`u32`, little-endian)                 |
 | `[64, 448)`    | Theme table, padded for SIMD comparisons                               |
 | `[65536, EOF)` | Input for a non-live call                                              |
 
 A NUL sentinel follows the input. Output starts at `(EOF + 47) & ~15`, leaving
-slack for 16-byte SIMD loads and aligning output to 16 bytes. `$end` remains the
-authoritative scan boundary because input can contain NUL. Loads may cross a
-scan boundary, but matches and emitted ranges must stay within it.
+slack for 16-byte SIMD loads and aligning output to 16 bytes. CSS-variable HTML
+stores the encoded prefix at that address and starts output after it. `$end`
+remains the authoritative scan boundary because input can contain NUL. Loads may
+cross a scan boundary, but matches and emitted ranges must stay within it.
 
 `$ensureCap` grows output memory before writes. JavaScript rebinds its views
 after growth. HTML and raw live records are borrowed views; callers must copy
@@ -161,13 +164,15 @@ without a span. Font-only records emit an inherited color with font attributes.
 HTML is one `<pre class="highlights" style="..."><code>...</code></pre>`
 fragment. It has inline styles, no token classes or line wrappers, and escapes
 `&`, `<`, and `>`. Spans never nest. Equal 40-bit styles merge across
-whitespace. CSS-variable mode emits `var(--hls-<token>)`, ignores font settings,
-and merges only identical token IDs.
+whitespace. CSS-variable mode emits `var(<cssVariablePrefix><token>)`, defaults
+to the `--hls-` prefix, ignores font settings, and merges only identical token
+IDs.
 
 Span openers are cached by token ID. Each HTML call compares the padded theme
 table and output mode against the cache, including changes written directly to
-Wasm memory. A change clears the span cache. Token calls preserve the cache and
-skip theme comparison.
+Wasm memory. A change clears the span cache. CSS-variable fragments omit the
+prefix from their cached bytes and insert it during output, so prefix changes
+reuse the cache. Token calls preserve the cache and skip theme comparison.
 
 ## Emitter contract
 

@@ -4,6 +4,7 @@ import {
   langIdOf,
 } from './highlighter';
 import type { CodeToTokensOptions, ThemedToken } from './index';
+import { defaultCssVariablePrefix } from './theme';
 import tokenTypes from './token-types';
 import type { ResolvedTheme } from './tokens';
 import { rangeToToken, resolveOptionThemes, standardTypes } from './tokens';
@@ -283,7 +284,8 @@ export class LiveTokenizer {
   constructor(options: LiveTokenizerOptions) {
     this.#langId = langIdOf(options.lang);
     this.#themes = resolveOptionThemes(options);
-    this.#cssVariablePrefix = options.cssVariablePrefix ?? '--hls-';
+    this.#cssVariablePrefix =
+      options.cssVariablePrefix ?? defaultCssVariablePrefix;
     this.#maxLineLength = options.tokenizeMaxLineLength ?? 0;
     this.#onDeferTokenize = options.onDeferTokenize;
     const renderRange = checkRenderRange(options.renderRange);

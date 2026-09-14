@@ -231,6 +231,76 @@ void t.test('codeToTokens: css-variable theme resolves var() colors', () => {
 });
 
 void t.test(
+  'css-variable prefixes agree across tokens, streams, and live edits',
+  () => {
+    const code = 'const a = 1';
+    for (const cssVariablePrefix of [
+      '--code-',
+      '--other-',
+      undefined,
+      '--code-',
+    ]) {
+      const prefix = cssVariablePrefix ?? '--hls-';
+      const options = {
+        lang: 'ts',
+        theme: cssVariables,
+        cssVariablePrefix,
+      } as const;
+      const result = codeToTokens(code, options);
+      assert.equal(
+        result.tokens[0][0].color,
+        `var(${prefix}keyword-declaration)`
+      );
+      assert.equal(result.fg, `var(${prefix}foreground)`);
+      assert.equal(result.bg, `var(${prefix}background)`);
+      const stream = new StreamTokenizer(options);
+      assert.deepEqual(
+        [...stream.pushCode(code), ...stream.end()],
+        result.tokens
+      );
+      const live = new LiveTokenizer({ ...options, code });
+      try {
+        assert.deepEqual(live.getLineTokens(0).tokens, result.tokens[0]);
+        live.applyEdits([
+          {
+            range: {
+              start: { line: 0, character: 10 },
+              end: { line: 0, character: 11 },
+            },
+            newText: '42',
+          },
+        ]);
+        assert.deepEqual(
+          live.getLineTokens(0).tokens,
+          codeToTokens('const a = 42', options).tokens[0]
+        );
+      } finally {
+        live.dispose();
+      }
+      for (const defaultColor of [false, 'light', 'light-dark()'] as const) {
+        const multiple = codeToTokens(code, {
+          lang: 'ts',
+          themes: { light: cssVariables, dark: cssVariables },
+          cssVariablePrefix,
+          defaultColor,
+        });
+        const color = `var(${prefix}keyword-declaration)`;
+        assert.deepEqual(
+          multiple.tokens[0][0].htmlStyle,
+          defaultColor === 'light-dark()'
+            ? { color }
+            : defaultColor === 'light'
+              ? { color, [`${prefix}dark`]: color }
+              : { [`${prefix}dark`]: color, [`${prefix}light`]: color }
+        );
+        assert.equal(multiple.fg?.includes(`var(${prefix}foreground)`), true);
+        assert.equal(multiple.bg?.includes(`var(${prefix}background)`), true);
+      }
+    }
+  }
+);
+
+void t.test(
   'vibrant themes retain P3 colors in tokens, streams, and live edits',
   () => {
     const code = 'const value = 1;';

@@ -11,7 +11,7 @@
     "background-color:"                  ;; 17
     ";font-style:italic"                 ;; 18
     ";font-weight:"                      ;; 13
-    "var(--hls-"                         ;; 10
+    "var("                               ;; 4
     "\22><code>"                         ;; 8
     "</code></pre>"                      ;; 13
   )
@@ -62,12 +62,15 @@
     (if (i32.ne (local.get $a) (i32.const 0xff))
       (then (call $hexByte (local.get $a)))))
 
-  ;; Write `var(--hls-SUFFIX)` for $hl using the generated token table.
-  (func $emitCssVariable (param $hl i32)
+  ;; Write `var(PREFIX-SUFFIX)` using the host prefix and generated token table.
+  ;; Cached span fragments pass zero length; the prefix is inserted on output.
+  (func $emitCssVariable (param $hl i32) (param $prefixLength i32)
     (local $entry i32)
     (local $n i32)
-    (memory.copy (global.get $out) (i32.const $mem.emitterHtml+114) (i32.const 10))
-    (global.set $out (i32.add (global.get $out) (i32.const 10)))
+    (memory.copy (global.get $out) (i32.const $mem.emitterHtml+114) (i32.const 4))
+    (global.set $out (i32.add (global.get $out) (i32.const 4)))
+    (memory.copy (global.get $out) (i32.load (i32.const 14)) (local.get $prefixLength))
+    (global.set $out (i32.add (global.get $out) (local.get $prefixLength)))
     (local.set $entry
       (i32.add (i32.const $mem.tokenCssTable) (i32.mul (local.get $hl) (i32.const 3))))
     (local.set $n (i32.load8_u offset=2 (local.get $entry)))
@@ -133,6 +136,7 @@
     (local $len i32)
     (local $save i32)
     (local $rec i32)
+    (local $prefixLength i32)
     (local.set $slot
       (i32.add (i32.const $mem.emitterSpanCache) (i32.mul (local.get $hl) (i32.const 66))))
     (local.set $len (i32.load8_u (local.get $slot)))
@@ -144,7 +148,7 @@
         (memory.copy (global.get $out) (i32.const $mem.emitterHtml+47) (i32.const 19))
         (global.set $out (i32.add (global.get $out) (i32.const 19)))
         (if (global.get $cssVariables)
-          (then (call $emitCssVariable (local.get $hl)))
+          (then (call $emitCssVariable (local.get $hl) (i32.const 0)))
           (else
             (local.set $rec (call $themeRec (local.get $hl)))
             ;; Font-only styles inherit the surrounding foreground.
@@ -159,6 +163,18 @@
         (local.set $len (i32.sub (global.get $out) (i32.add (local.get $slot) (i32.const 1))))
         (i32.store8 (local.get $slot) (local.get $len))
         (global.set $out (local.get $save))))
+    (if (global.get $cssVariables)
+      (then
+        ;; Insert the prefix after `<span style="color:var(`. The cached
+        ;; fragment stays reusable across prefixes of any byte length.
+        (local.set $prefixLength (i32.load (i32.const 18)))
+        (memory.copy (global.get $out) (i32.add (local.get $slot) (i32.const 1)) (i32.const 23))
+        (global.set $out (i32.add (global.get $out) (i32.const 23)))
+        (memory.copy (global.get $out) (i32.load (i32.const 14)) (local.get $prefixLength))
+        (global.set $out (i32.add (global.get $out) (local.get $prefixLength)))
+        (memory.copy (global.get $out) (i32.add (local.get $slot) (i32.const 24)) (i32.sub (local.get $len) (i32.const 23)))
+        (global.set $out (i32.add (global.get $out) (i32.sub (local.get $len) (i32.const 23))))
+        (return)))
     ;; copy the fragment as four 16-byte stores: an opener is at most 64
     ;; bytes, the slot holds 65, and the caller's capacity covers the
     ;; overshoot, which later output overwrites - cheaper than a bulk copy
@@ -173,7 +189,7 @@
   ;; hold identical bytes share one span (a 40-bit compare), so runs of
   ;; same-styled tokens and the whitespace between them do not churn spans.
   ;; caller has ensured capacity for close (7) + open (19 + 9 + 34 + 2) plus
-  ;; the 64-byte wide copy $emitSpanOpen performs.
+  ;; the 64-byte wide copy $emitSpanOpen performs, or the CSS-variable prefix.
   (func $setSpan (param $hl i32)
     (local $val i64)
     (if (i32.eq (local.get $hl) (global.get $spanHl))
@@ -452,7 +468,9 @@
         (call $recTok (local.get $hl) (local.get $rhs))
         (return)))
     (call $ensureCap
-      (i32.add (i32.mul (i32.sub (local.get $rhs) (local.get $lhs)) (i32.const 5)) (i32.const 96)))
+      (i32.add
+        (i32.add (i32.mul (i32.sub (local.get $rhs) (local.get $lhs)) (i32.const 5)) (i32.const 96))
+        (select (i32.load (i32.const 18)) (i32.const 0) (global.get $cssVariables))))
     (call $setSpan (local.get $hl))
     (call $escCopy (local.get $lhs) (local.get $rhs) (i32.const 0)))
 
@@ -487,6 +505,8 @@
   (func $prologue
     (local $rec i32)
     (call $ensureCap (i32.const 128))
+    (if (global.get $cssVariables)
+      (then (call $ensureCap (i32.add (i32.const 128) (i32.mul (i32.load (i32.const 18)) (i32.const 2))))))
     (memory.copy (global.get $out) (i32.const $mem.emitterHtml+16) (i32.const 31))
     (global.set $out (i32.add (global.get $out) (i32.const 31)))
     (local.set $rec (call $themeRec (enum.get $Token.background)))
@@ -495,7 +515,7 @@
         (memory.copy (global.get $out) (i32.const $mem.emitterHtml+66) (i32.const 17))
         (global.set $out (i32.add (global.get $out) (i32.const 17)))
         (if (global.get $cssVariables)
-          (then (call $emitCssVariable (enum.get $Token.background)))
+          (then (call $emitCssVariable (enum.get $Token.background) (i32.load (i32.const 18))))
           (else (call $emitColor (local.get $rec))))
         (i32.store8 (global.get $out) (i32.const ";"))
         (global.set $out (i32.add (global.get $out) (i32.const 1)))))
@@ -506,18 +526,18 @@
         (global.set $out (i32.add (global.get $out) (i32.const 6)))
         (if (global.get $cssVariables)
           (then
-            (call $emitCssVariable (enum.get $Token.foreground))
+            (call $emitCssVariable (enum.get $Token.foreground) (i32.load (i32.const 18)))
             (i32.store8 (global.get $out) (i32.const ";"))
             (global.set $out (i32.add (global.get $out) (i32.const 1))))
           (else (call $emitColor (local.get $rec))))))
-    (memory.copy (global.get $out) (i32.const $mem.emitterHtml+124) (i32.const 8))
+    (memory.copy (global.get $out) (i32.const $mem.emitterHtml+118) (i32.const 8))
     (global.set $out (i32.add (global.get $out) (i32.const 8))))
 
   ;; `</code></pre>`
   (func $epilogue
     (call $closeSpan)
     (call $ensureCap (i32.const 32))
-    (memory.copy (global.get $out) (i32.const $mem.emitterHtml+132) (i32.const 13))
+    (memory.copy (global.get $out) (i32.const $mem.emitterHtml+126) (i32.const 13))
     (global.set $out (i32.add (global.get $out) (i32.const 13))))
 
   ;; driver prologue shared by highlights.wat and the per-language test harnesses:
@@ -532,6 +552,9 @@
     (global.set $end (global.get $eof))
     (global.set $ptr (global.get $srcBase))
     (global.set $out (i32.and (i32.add (global.get $eof) (i32.const 47)) (i32.const -16)))
+    (if (global.get $cssVariables)
+      (then
+        (global.set $out (i32.add (global.get $out) (i32.load (i32.const 18))))))
     (i32.store (i32.const 6) (global.get $out))
     (global.set $cap (i32.sub (i32.mul (memory.size) (i32.const 65536)) (i32.const 16)))
     (global.set $spanHl (i32.const -1))

@@ -283,6 +283,74 @@ void test('css variables: switching themes does not leak table state', () => {
   assert.equal(tsx.hl('const', { theme: cssVariables }), variable);
 });
 
+void test('css variables: HTML and declarations use the supplied prefix', () => {
+  const { highlighter, spanCache } = cachedEmitter();
+  const code = '1 "<span style=\\"color:var(--hls-number)\\">日本語 &"';
+  const dec = new TextDecoder();
+  const defaults = dec.decode(
+    highlighter.codeToHtml(code, { lang: 'json', theme: cssVariables })
+  );
+  const cached = highlighter.buffer.slice(spanCache, spanCache + 4818);
+  for (const cssVariablePrefix of [
+    '--code-',
+    '--日本語-',
+    `--${'x'.repeat(65536)}-`,
+    '--other-',
+    undefined,
+  ]) {
+    const prefix = cssVariablePrefix ?? '--hls-';
+    const options = {
+      lang: 'json',
+      theme: cssVariables,
+      cssVariablePrefix,
+    } as const;
+    const bytes = new TextEncoder().encode(code);
+    for (const input of [code, bytes, bytes.buffer]) {
+      const html = dec.decode(highlighter.codeToHtml(input, options));
+      assert.equal(
+        html,
+        defaults.replace(/<(?:pre|span)[^>]*>/g, (tag) =>
+          tag.replaceAll('--hls-', prefix)
+        )
+      );
+      assert.deepEqual(
+        highlighter.buffer.slice(spanCache, spanCache + 4818),
+        cached
+      );
+    }
+    const css = toCSS(pierreDark, { cssVariablePrefix });
+    assert.equal(css, toCSS(pierreDark).replaceAll('--hls-', prefix));
+  }
+});
+
+void test('css variables: long prefixes and large tokens grow output safely', () => {
+  const { highlighter } = cachedEmitter();
+  const cssVariablePrefix = `--${'x'.repeat(100000)}-`;
+  const code = `"${'&'.repeat(100000)}"`;
+  const html = new TextDecoder().decode(
+    highlighter.codeToHtml(code, {
+      lang: 'json',
+      theme: cssVariables,
+      cssVariablePrefix,
+    })
+  );
+  assert.ok(html.includes(`color:var(${cssVariablePrefix}string)`));
+  assert.ok(html.endsWith(`"${'&amp;'.repeat(100000)}"</span></code></pre>`));
+});
+
+void test('css variables: prefixes stay inside the HTML style attribute', () => {
+  const { highlighter } = cachedEmitter();
+  const html = new TextDecoder().decode(
+    highlighter.codeToHtml('1', {
+      lang: 'json',
+      theme: cssVariables,
+      cssVariablePrefix: '--"<>&-',
+    })
+  );
+  assert.ok(html.includes('var(--&quot;&lt;&gt;&amp;-number)'));
+  assert.doesNotMatch(html, /var\(--"/);
+});
+
 void test('css variables: bypasses compilation and ignores theme styles', () => {
   let styleReads = 0;
   const theme = {

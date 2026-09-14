@@ -8,7 +8,9 @@
       [2:6)           input length (u32 LE)
       [6:10)          output start (u32 LE)
       [10:14)         output length (u32 LE)
-      [14:64)         reserved space
+      [14:18)         CSS-variable prefix address (u32 LE)
+      [18:22)         CSS-variable prefix byte length (u32 LE)
+      [22:64)         reserved space
       [64:448)        theme table written by JavaScript, five bytes per token
       [448:1360)      CSS-variable name table
       [1360:1424)     lowercase word copy for case-insensitive keyword lookups
@@ -35,7 +37,8 @@
     [] pages 2..N     (text buffer; a live instance lays them out itself,
                       see src/live.wat)
       [65536:EOF)     input, NUL sentinel, then at least 16 bytes of slack
-      [(EOF+47)&~15:) output HTML bytes or (end:u32, hl:u32) token records;
+      [(EOF+47)&~15:) CSS-variable prefix bytes in mode 1, then output HTML;
+                      other modes start output here directly;
                       $ensureCap grows memory
   ;;)
   (memory (export "memory") 3)

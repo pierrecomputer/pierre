@@ -30,6 +30,10 @@ toCSS(pierreDark);
 // --hls-background: #0a0a0a;--hls-foreground: #fafafa;--hls-comment: #737373;...
 ```
 
+Pass `{ cssVariablePrefix: '--code-' }` to `toCSS` as its second argument and to
+the highlighting options to use matching custom variable names. The default
+prefix is `--hls-`.
+
 Community themes use licensed Zed ports where available; the remainder are
 converted from pinned TextMate sources using Zed's scope mapping. Files retain
 the name, appearance, and style keys used by Highlights and `@pierre/diffs`.

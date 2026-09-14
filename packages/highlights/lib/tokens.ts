@@ -6,12 +6,16 @@ import type {
   TokensResult,
 } from './index';
 import type { TokenStyle } from './theme';
-import { resolveTheme, resolveThemeStyle } from './theme';
+import {
+  defaultCssVariablePrefix,
+  resolveTheme,
+  resolveThemeStyle,
+} from './theme';
 import tokenTypes from './token-types';
 
 /**
  * A Zed theme resolved to per-token-id styles for JavaScript rendering.
- * `styles` is indexed by token ID; CSS-variable themes reference `var(--hls-*)`.
+ * `styles` is indexed by token ID; CSS-variable themes reference custom properties.
  */
 export interface ResolvedThemeStyles {
   name: string;
@@ -53,15 +57,15 @@ for (let i = 0; i < tokenTypes.length; i++) {
     standardTypes[i] = 2;
 }
 
-/** `var(--hls-<token>)` for a `$Token` slot, matching the Wasm emitter. */
-function cssVariable(name: string): string {
-  return `var(--hls-${name.replace(/[._]/g, '-')})`;
+/** A prefixed CSS variable for a token slot, matching the Wasm emitter. */
+function cssVariable(name: string, cssVariablePrefix: string): string {
+  return `var(${cssVariablePrefix}${name.replace(/[._]/g, '-')})`;
 }
 
 // Cache by object identity, not name: same-named themes may have different
 // palettes, and a registered theme may be replaced by a new object with the
 // same name.
-const styleCache = new WeakMap<Theme, ResolvedThemeStyles>();
+const styleCache = new WeakMap<Theme, Map<string, ResolvedThemeStyles>>();
 
 // Multi-theme tokens with the same token id share styles for their theme set.
 const htmlStyleCache = new WeakMap<
@@ -73,14 +77,17 @@ const htmlStyleCache = new WeakMap<
  * Resolve a Zed theme or family to styles for JavaScript rendering.
  *
  * `styles` is indexed by token ID. Each slot is `{color, italic, weight}` or
- * `null`; CSS-variable themes set each color to its `var(--hls-*)` reference.
+ * `null`; CSS-variable themes set each color to its prefixed variable reference.
  * The result also includes foreground and background colors.
  */
 export function resolveThemeStyles(
-  theme: Theme | ThemeFamily
+  theme: Theme | ThemeFamily,
+  cssVariablePrefix: string = defaultCssVariablePrefix
 ): ResolvedThemeStyles {
   const resolved = resolveTheme(theme);
-  const cached = styleCache.get(resolved);
+  const prefix = resolved.cssVariables === true ? cssVariablePrefix : '';
+  let prefixes = styleCache.get(resolved);
+  const cached = prefixes?.get(prefix);
   if (cached !== undefined) return cached;
   const styles: (TokenStyle | null)[] = new Array(tokenTypes.length).fill(null);
   let fg: string | undefined;
@@ -89,13 +96,13 @@ export function resolveThemeStyles(
   if (resolved.cssVariables === true) {
     for (let i = 1; i < tokenTypes.length; i++) {
       styles[i] = {
-        color: cssVariable(tokenTypes[i]),
+        color: cssVariable(tokenTypes[i], cssVariablePrefix),
         italic: false,
         weight: 0,
       };
     }
-    fg = cssVariable('foreground');
-    bg = cssVariable('background');
+    fg = cssVariable('foreground', cssVariablePrefix);
+    bg = cssVariable('background', cssVariablePrefix);
   } else {
     const themeStyle = resolved.style ?? {};
     for (let i = 1; i < tokenTypes.length; i++) {
@@ -116,7 +123,11 @@ export function resolveThemeStyles(
     bg,
     usesDisplayP3,
   };
-  styleCache.set(resolved, entry);
+  if (prefixes === undefined) {
+    prefixes = new Map();
+    styleCache.set(resolved, prefixes);
+  }
+  prefixes.set(prefix, entry);
   return entry;
 }
 
@@ -147,7 +158,7 @@ export function resolveOptionThemes(
       return [light, dark].map(([color, theme]) => ({
         color,
         role: 'light-dark' as const,
-        ...resolveThemeStyles(theme),
+        ...resolveThemeStyles(theme, options.cssVariablePrefix),
       }));
     }
     if (defaultColor !== false) {
@@ -162,11 +173,15 @@ export function resolveOptionThemes(
     return entries.map(([color, theme], i) => ({
       color,
       role: defaultColor !== false && i === 0 ? 'default' : 'variable',
-      ...resolveThemeStyles(theme),
+      ...resolveThemeStyles(theme, options.cssVariablePrefix),
     }));
   }
   return [
-    { color: null, role: 'single', ...resolveThemeStyles(options.theme) },
+    {
+      color: null,
+      role: 'single',
+      ...resolveThemeStyles(options.theme, options.cssVariablePrefix),
+    },
   ];
 }
 

@@ -71,7 +71,7 @@ These options are shared by `codeToTokens()`, `StreamTokenizer`, and
 | `lang`                  | A built-in language name or alias                                                                                                                                                                            |
 | `theme`                 | One Zed `Theme` or `ThemeFamily`                                                                                                                                                                             |
 | `themes`                | A non-empty map of named themes such as `{ dark, light }`; emits per-theme styles                                                                                                                            |
-| `cssVariablePrefix`     | Prefix for multi-theme properties; defaults to `--hls-`                                                                                                                                                      |
+| `cssVariablePrefix`     | Prefix for CSS-variable colors and multi-theme properties; defaults to `--hls-`                                                                                                                              |
 | `defaultColor`          | With `themes`, the key applied inline; defaults to `light` and throws if that key is missing. `false` emits only custom properties; `'light-dark()'` combines colors from required `light` and `dark` themes |
 | `tokenizeMaxLineLength` | Collapses lines at or above this UTF-16 length into one token with the theme's foreground color and no syntax styling; `0` or omission disables the limit                                                    |
 
@@ -198,8 +198,10 @@ ancestor. This example includes them in a stylesheet alongside the markup:
 
 Changing those declarations updates the colors without re-highlighting the code.
 CSS-variable mode controls colors only; it ignores the theme's `font_style` and
-`font_weight` values. The `--hls-` scope-variable prefix is fixed;
-`cssVariablePrefix` controls the separate multi-theme properties below.
+`font_weight` values. Set `cssVariablePrefix` in the highlighting options to
+customize the default `--hls-` prefix, and pass the same option to
+`toCSS(theme, { cssVariablePrefix: '--code-' })` for matching declarations. This
+option also controls the multi-theme properties below.
 
 #### Multiple themes
 

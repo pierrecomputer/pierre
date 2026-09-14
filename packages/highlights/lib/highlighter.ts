@@ -8,7 +8,7 @@ import type {
   TokensResult,
 } from './index';
 import languages from './languages';
-import { compileTheme, resolveTheme } from './theme';
+import { compileTheme, defaultCssVariablePrefix, resolveTheme } from './theme';
 import tokenTypes from './token-types';
 import type { ResolvedTheme } from './tokens';
 import {
@@ -54,6 +54,8 @@ export class HighlightsHighlighter implements Highlighter {
   #highlight: () => void;
   #highlightStream: (reset: number | boolean) => void;
   #themeWritten: Uint8Array | undefined;
+  #htmlPrefix: string | undefined;
+  #htmlPrefixBytes = new Uint8Array(0);
   wasmModule: WebAssembly.Module;
   instance: WebAssembly.Instance;
   memory: WebAssembly.Memory;
@@ -137,7 +139,11 @@ export class HighlightsHighlighter implements Highlighter {
    */
   codeToHtml(
     input: string | Uint8Array | ArrayBuffer,
-    { lang, theme }: CodeToHtmlOptions
+    {
+      lang,
+      theme,
+      cssVariablePrefix = defaultCssVariablePrefix,
+    }: CodeToHtmlOptions
   ): Uint8Array {
     const langId = langIdOf(lang);
     const resolvedTheme = resolveTheme(theme);
@@ -155,6 +161,26 @@ export class HighlightsHighlighter implements Highlighter {
       }
     }
     const inputLength = this.writeInput(input);
+    if (useCssVariables || usesDisplayP3) {
+      // P3 rendering uses unprefixed tags as keys for the color replacements below.
+      const prefix = useCssVariables ? cssVariablePrefix : '';
+      if (this.#htmlPrefix !== prefix) {
+        this.#htmlPrefixBytes = enc.encode(
+          prefix
+            .replaceAll('&', '&amp;')
+            .replaceAll('"', '&quot;')
+            .replaceAll('<', '&lt;')
+            .replaceAll('>', '&gt;')
+        );
+        this.#htmlPrefix = prefix;
+      }
+      const bytes = this.#htmlPrefixBytes;
+      this.#growMemoryIfNeeded(inputLength + bytes.length + 96);
+      const prefixPtr = (pageSize + inputLength + 47) & ~15;
+      this.buffer.set(bytes, prefixPtr);
+      this.dv.setUint32(14, prefixPtr, true);
+      this.dv.setUint32(18, bytes.length, true);
+    }
     if (themeTable !== undefined && this.#themeWritten !== themeTable) {
       this.buffer.set(themeTable, themePtr);
       this.buffer.fill(0, themePtr + themeTable.length, themePtr + themeBytes);
@@ -175,7 +201,7 @@ export class HighlightsHighlighter implements Highlighter {
         (styles.bg === undefined ? '' : `background-color:${styles.bg};`) +
         (styles.fg === undefined ? '' : `color:${styles.fg}`);
       htmlStyles.set(
-        '<pre class="highlights" style="background-color:var(--hls-background);color:var(--hls-foreground);">',
+        '<pre class="highlights" style="background-color:var(background);color:var(foreground);">',
         `<pre class="highlights" style="${rootStyle}">`
       );
       for (let i = 1; i < tokenTypes.length; i++) {
@@ -188,7 +214,7 @@ export class HighlightsHighlighter implements Highlighter {
             ? `;font-weight:${style.weight}`
             : '');
         htmlStyles.set(
-          `<span style="color:var(--hls-${name})">`,
+          `<span style="color:var(${name})">`,
           `<span style="${css}">`
         );
       }
@@ -222,7 +248,8 @@ export class HighlightsHighlighter implements Highlighter {
   ): TokensResult {
     const code = toCode(input);
     const themes = resolveOptionThemes(options);
-    const cssVariablePrefix = options.cssVariablePrefix ?? '--hls-';
+    const cssVariablePrefix =
+      options.cssVariablePrefix ?? defaultCssVariablePrefix;
     const recs = this.tokenizeLineRecords(
       langIdOf(options.lang),
       this.writeInput(code)
@@ -388,7 +415,8 @@ export class StreamTokenizer {
         ? pooledStreamHighlighter
         : new HighlightsHighlighter(compiledWasm);
     pooledStreamHighlighter = undefined;
-    this.#cssVariablePrefix = options.cssVariablePrefix ?? '--hls-';
+    this.#cssVariablePrefix =
+      options.cssVariablePrefix ?? defaultCssVariablePrefix;
     this.#maxLineLength = options.tokenizeMaxLineLength;
   }
 

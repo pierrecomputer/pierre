@@ -1,5 +1,6 @@
 import type { Theme } from '../lib/index';
 import {
+  defaultCssVariablePrefix,
   isThemeColor,
   resolveThemeSyntax,
   themeBackground,
@@ -82,7 +83,7 @@ import vitesseBlackJson from './vitesse-black.json' with { type: 'json' };
 import vitesseDarkJson from './vitesse-dark.json' with { type: 'json' };
 import vitesseLightJson from './vitesse-light.json' with { type: 'json' };
 
-/** A pass-through theme: every color resolves to its `var(--hls-*)` variable. */
+/** A pass-through theme: every color resolves to a prefixed CSS variable. */
 export const cssVariables: Theme = {
   name: 'CSS Variables',
   appearance: 'dark',
@@ -97,16 +98,21 @@ export const cssVariables: Theme = {
  * syntax color that fails becomes `inherit`, and a syntax scope whose name is
  * not a plain dotted identifier is skipped.
  */
-export function toCSS({ style }: Theme): string {
+export function toCSS(
+  { style }: Theme,
+  {
+    cssVariablePrefix = defaultCssVariablePrefix,
+  }: { cssVariablePrefix?: string } = {}
+): string {
   let css = '';
   if (style == null) return css;
   const background = themeBackground(style);
   const foreground = themeForeground(style);
   if (isThemeColor(background)) {
-    css += `--hls-background: ${background.trim()};`;
+    css += `${cssVariablePrefix}background: ${background.trim()};`;
   }
   if (isThemeColor(foreground)) {
-    css += `--hls-foreground: ${foreground.trim()};`;
+    css += `${cssVariablePrefix}foreground: ${foreground.trim()};`;
   }
   const syntax = style.syntax ?? {};
   for (const name of new Set([
@@ -115,7 +121,7 @@ export function toCSS({ style }: Theme): string {
   ])) {
     if (!/^[a-z0-9_.-]+$/i.test(name)) continue;
     const color = resolveThemeSyntax(syntax, name)?.color ?? foreground;
-    css += `--hls-${name.replace(/[._]/g, '-')}: ${isThemeColor(color) ? color.trim() : 'inherit'};`;
+    css += `${cssVariablePrefix}${name.replace(/[._]/g, '-')}: ${isThemeColor(color) ? color.trim() : 'inherit'};`;
   }
   return css;
 }
