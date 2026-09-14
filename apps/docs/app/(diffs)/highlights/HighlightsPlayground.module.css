@@ -16,12 +16,27 @@
   color-scheme: dark;
 }
 
+.header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  color: light-dark(var(--light-foreground), var(--dark-foreground));
+  font-family: system-ui, sans-serif;
+  font-size: 13px;
+  line-height: 20px;
+}
+
+.content {
+  position: relative;
+}
+
 .input,
 .lineNumbers,
 .preview pre {
   margin: 0;
   border: 0;
-  padding: 1rem;
+  padding: 0 1rem 1rem;
   padding-left: calc(var(--line-number-width) + 2rem);
   font-family: var(--font-berkeley-mono), monospace;
   font-size: 0.875rem;
@@ -40,7 +55,6 @@
   z-index: 0;
   display: block;
   width: 100%;
-  min-height: 32rem;
   field-sizing: content;
   overflow: hidden;
   resize: none;

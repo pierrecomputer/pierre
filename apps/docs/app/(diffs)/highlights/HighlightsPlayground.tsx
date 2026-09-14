@@ -10,6 +10,7 @@ import {
   IconColorAuto,
   IconColorDark,
   IconColorLight,
+  IconFileCode,
 } from '@pierre/icons';
 import { type CSSProperties, useEffect, useMemo, useState } from 'react';
 
@@ -117,6 +118,13 @@ export function HighlightsPlayground() {
       [
         `--${colorScheme}-background`,
         style['editor.background'] ?? style.background ?? 'Canvas',
+      ],
+      [
+        `--${colorScheme}-foreground`,
+        style['editor.foreground'] ??
+          style.text ??
+          style.foreground ??
+          'CanvasText',
       ],
       [
         `--${colorScheme}-caret`,
@@ -256,30 +264,36 @@ export function HighlightsPlayground() {
           } as CSSProperties
         }
       >
-        <textarea
-          aria-label="Source code"
-          value={code}
-          onChange={(event) => setCode(event.target.value)}
-          spellCheck={false}
-          autoCapitalize="off"
-          autoCorrect="off"
-          className={styles.input}
-        />
-        <div aria-hidden="true" className={styles.lineNumbers}>
-          {lines.map((line, index) => (
-            <div key={index} data-line-number={index + 1}>
-              {line === '' ? '\u200b' : line}
-            </div>
-          ))}
+        <div className={styles.header}>
+          <IconFileCode aria-hidden="true" className="size-4" />
+          <span>source.{language}</span>
         </div>
-        <div aria-hidden="true" className={styles.preview}>
-          {(['light', 'dark'] as const).map((colorScheme) => (
-            <div
-              key={colorScheme}
-              data-color-scheme={colorScheme}
-              dangerouslySetInnerHTML={{ __html: html[colorScheme] }}
-            />
-          ))}
+        <div className={styles.content}>
+          <textarea
+            aria-label="Source code"
+            value={code}
+            onChange={(event) => setCode(event.target.value)}
+            spellCheck={false}
+            autoCapitalize="off"
+            autoCorrect="off"
+            className={styles.input}
+          />
+          <div aria-hidden="true" className={styles.lineNumbers}>
+            {lines.map((line, index) => (
+              <div key={index} data-line-number={index + 1}>
+                {line === '' ? '\u200b' : line}
+              </div>
+            ))}
+          </div>
+          <div aria-hidden="true" className={styles.preview}>
+            {(['light', 'dark'] as const).map((colorScheme) => (
+              <div
+                key={colorScheme}
+                data-color-scheme={colorScheme}
+                dangerouslySetInnerHTML={{ __html: html[colorScheme] }}
+              />
+            ))}
+          </div>
         </div>
       </div>
     </section>
