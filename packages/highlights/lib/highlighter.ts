@@ -7,15 +7,26 @@ import type {
   TokensResult,
 } from './index';
 import languages from './languages';
-import { defaultCssVariablePrefix, prepareTheme } from './theme';
+import {
+  defaultCssVariablePrefix,
+  escapeAttribute,
+  prepareTheme,
+  themeTableBytes,
+} from './theme';
 import type { ResolvedTheme } from './tokens';
-import { lineRecordsToTokens, resolveOptionThemes, themeMeta } from './tokens';
+import {
+  lineRecordsToTokens,
+  multiThemeBlob,
+  multiThemeHtmlTags,
+  resolveOptionThemes,
+  themeMeta,
+} from './tokens';
 
 const enc = new TextEncoder();
 const dec = new TextDecoder('utf-8', { ignoreBOM: true });
 const pageSize = 65536;
 const themePtr = 64; // $mem.themeTable in src/memory.wat
-const themeBytes = 384; // 73 five-byte records, padded for SIMD comparisons
+const themeBytes = themeTableBytes;
 // Unicode identifier classes for the ECMAScript lexers; see #idClass.
 const idClassRegex = [/^\p{ID_Start}$/u, /^[\u200C\u200D\p{ID_Continue}]$/u];
 let idClassCache: Uint8Array | undefined;
@@ -104,7 +115,8 @@ export class HighlightsHighlighter implements Highlighter {
 
   /**
    * Run the lexer over the first `inputLength` bytes: 0 inline colors, 1 CSS
-   * variables, or 3 UTF-16 line records. `reset` selects streaming mode.
+   * variables, 2 a packed theme set, or 3 UTF-16 line records. `reset`
+   * selects streaming mode.
    */
   #run(
     langId: number,
@@ -130,29 +142,44 @@ export class HighlightsHighlighter implements Highlighter {
    */
   codeToHtml(
     input: string | Uint8Array | ArrayBuffer,
-    {
-      lang,
-      theme,
-      cssVariablePrefix = defaultCssVariablePrefix,
-    }: CodeToHtmlOptions
+    options: CodeToHtmlOptions
   ): Uint8Array {
-    const langId = langIdOf(lang);
-    const prepared = prepareTheme(theme, cssVariablePrefix);
-    const { table } = prepared;
+    const langId = langIdOf(options.lang);
+    const cssVariablePrefix =
+      options.cssVariablePrefix ?? defaultCssVariablePrefix;
+    // A hex theme renders inline from its packed table and a theme set from
+    // its packed blob. The rest run the CSS-variable emitter: a CSS-variable
+    // theme with the prefix, while a Display P3 theme or a set containing one
+    // runs it with an empty prefix and has its `var(<token>)` openers
+    // rewritten by the tag replacements below.
+    let table: Uint8Array | undefined;
+    let blob: Uint8Array | undefined;
+    let tags: Map<string, string> | undefined;
+    if (options.themes != null) {
+      const themes = resolveOptionThemes(options);
+      blob = multiThemeBlob(themes, cssVariablePrefix);
+      if (blob === undefined)
+        tags = multiThemeHtmlTags(themes, cssVariablePrefix);
+    } else {
+      const prepared = prepareTheme(options.theme, cssVariablePrefix);
+      table = prepared.table;
+      tags = prepared.htmlTags;
+    }
     const inputLength = this.writeInput(input);
-    if (table === undefined) {
-      // CSS-variable and Display P3 themes render through the variable
-      // emitter. P3 output keeps unprefixed `var(<token>)` openers, the keys
-      // of the tag replacements applied below.
-      const prefix = prepared.usesDisplayP3 ? '' : cssVariablePrefix;
+    let mode: number;
+    if (blob !== undefined) {
+      // the set travels with the input: the blob sits at the output base and
+      // the emitter starts output after it
+      this.#growMemoryIfNeeded(inputLength + blob.length + 96);
+      const blobPtr = (pageSize + inputLength + 47) & ~15;
+      this.buffer.set(blob, blobPtr);
+      this.dv.setUint32(14, blobPtr, true);
+      this.dv.setUint32(18, blob.length, true);
+      mode = 2;
+    } else if (table === undefined) {
+      const prefix = tags === undefined ? cssVariablePrefix : '';
       if (this.#htmlPrefix !== prefix) {
-        this.#htmlPrefixBytes = enc.encode(
-          prefix
-            .replaceAll('&', '&amp;')
-            .replaceAll('"', '&quot;')
-            .replaceAll('<', '&lt;')
-            .replaceAll('>', '&gt;')
-        );
+        this.#htmlPrefixBytes = enc.encode(escapeAttribute(prefix));
         this.#htmlPrefix = prefix;
       }
       const bytes = this.#htmlPrefixBytes;
@@ -161,19 +188,22 @@ export class HighlightsHighlighter implements Highlighter {
       this.buffer.set(bytes, prefixPtr);
       this.dv.setUint32(14, prefixPtr, true);
       this.dv.setUint32(18, bytes.length, true);
-    } else if (this.#themeWritten !== table) {
-      this.buffer.set(table, themePtr);
-      this.buffer.fill(0, themePtr + table.length, themePtr + themeBytes);
-      this.#themeWritten = table;
+      mode = 1;
+    } else {
+      if (this.#themeWritten !== table) {
+        this.buffer.set(table, themePtr);
+        this.buffer.fill(0, themePtr + table.length, themePtr + themeBytes);
+        this.#themeWritten = table;
+      }
+      mode = 0;
     }
-    this.#run(langId, table === undefined ? 1 : 0, inputLength);
+    this.#run(langId, mode, inputLength);
     const outStart = this.dv.getUint32(6, true);
     const outLength = this.dv.getUint32(10, true);
     const output = this.buffer.subarray(outStart, outStart + outLength);
-    const tags = prepared.htmlTags;
     if (tags === undefined) return output;
     // Keep Wasm's escaping and line handling, replacing only generated tags
-    // with colors that cannot fit in its packed RGBA theme table.
+    // with styles that cannot fit in its packed RGBA theme table.
     return enc.encode(
       dec
         .decode(output)
@@ -323,7 +353,8 @@ export function createHighlighter(wasmModule: WebAssembly.Module): Highlighter {
 
 /**
  * Highlight code as a self-contained `<pre class="highlights">` fragment with
- * inline colors.
+ * inline colors. With `themes`, each span carries the default theme inline and
+ * the other themes as custom properties, like `codeToTokens`'s `htmlStyle`.
  */
 export function codeToHtml(
   input: string | Uint8Array | ArrayBuffer,

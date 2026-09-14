@@ -48,6 +48,73 @@ function cachedEmitter() {
   };
 }
 
+void test('multi-theme span cache: openers are reused per set and cleared on a switch', () => {
+  const { highlighter, spanCache } = cachedEmitter();
+  const dec = new TextDecoder();
+  const number = tokenTypes.indexOf('number');
+  // a set borrows the single-theme span cache region as its opener arena
+  const arena = () => ({
+    id: highlighter.dv.getUint32(spanCache, true),
+    used: highlighter.dv.getUint32(spanCache + 4, true),
+    number: highlighter.dv.getUint16(spanCache + 8 + number * 2, true),
+  });
+  const single = { lang: 'json', theme: pierreDark } as const;
+  const a = {
+    lang: 'json',
+    themes: { light: pierreLight, dark: pierreDark },
+  } as const;
+  const b = {
+    lang: 'json',
+    themes: { light: pierreDark, dark: pierreLight },
+  } as const;
+  const fresh = (options: typeof a | typeof single) =>
+    dec.decode(cachedEmitter().highlighter.codeToHtml('1 "s" 2', options));
+  highlighter.codeToHtml('1', a);
+  const first = arena();
+  assert.ok(first.id > 0);
+  assert.equal(first.used, first.number);
+  assert.ok(first.number > 0);
+  // later calls with the set add openers without touching cached ones, and
+  // token calls leave the arena alone
+  assert.equal(dec.decode(highlighter.codeToHtml('1 "s" 2', a)), fresh(a));
+  const second = arena();
+  assert.equal(second.id, first.id);
+  assert.equal(second.number, first.number);
+  assert.ok(second.used > first.used);
+  highlighter.codeToTokens('1 "s" 2', a);
+  assert.deepEqual(arena(), second);
+  // a different set clears the arena
+  assert.equal(dec.decode(highlighter.codeToHtml('1 "s" 2', b)), fresh(b));
+  const third = arena();
+  assert.notEqual(third.id, first.id);
+  assert.ok(third.number > 0);
+  assert.equal(dec.decode(highlighter.codeToHtml('1 "s" 2', a)), fresh(a));
+  assert.equal(arena().id, first.id);
+  // a single theme reclaims the region and renders correctly, after which
+  // the set starts over
+  assert.equal(
+    dec.decode(highlighter.codeToHtml('1 "s" 2', single)),
+    fresh(single)
+  );
+  assert.equal(arena().id, 0);
+  assert.ok(highlighter.buffer[spanCache + number * 66] > 0);
+  assert.equal(dec.decode(highlighter.codeToHtml('1 "s" 2', a)), fresh(a));
+  assert.equal(arena().id, first.id);
+  assert.equal(
+    dec.decode(highlighter.codeToHtml('1 "s" 2', single)),
+    fresh(single)
+  );
+  // openers the arena cannot hold render directly on every use
+  const cssVariablePrefix = `--${'x'.repeat(3000)}-`;
+  const long = { ...a, cssVariablePrefix } as const;
+  const html = dec.decode(highlighter.codeToHtml('1 "s" 2', long));
+  assert.equal(html, fresh(long));
+  assert.ok(html.includes(`${cssVariablePrefix}dark:`));
+  const overflow = arena();
+  assert.equal(overflow.used, 0);
+  assert.equal(overflow.number, 0);
+});
+
 void test('span cache: HTML and token calls retain previously formatted styles', () => {
   const { highlighter, spanCache, themeCache } = cachedEmitter();
   const options = { lang: 'json', theme: pierreDark } as const;

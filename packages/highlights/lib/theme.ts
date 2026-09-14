@@ -8,6 +8,12 @@ import tokenTypes from './token-types';
 
 export const defaultCssVariablePrefix = '--hls-';
 
+/**
+ * Bytes of one packed Wasm theme table: 73 five-byte records padded for the
+ * emitter's SIMD comparisons. Mirrors `$mem.themeTable` in src/memory.wat.
+ */
+export const themeTableBytes = 384;
+
 const colorReg = /^#([a-f0-9]{3,4}|[a-f0-9]{6}|[a-f0-9]{8})$/i;
 const displayP3Reg =
   /^color\(display-p3\s+[+-]?(?:\d+(?:\.\d*)?|\.\d+)\s+[+-]?(?:\d+(?:\.\d*)?|\.\d+)\s+[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:\s*\/\s*[+-]?(?:\d+(?:\.\d*)?|\.\d+))?\s*\)$/i;
@@ -146,6 +152,33 @@ export function resolveThemeStyle(style: ThemeStyle, name: string): TokenStyle {
 /** A prefixed CSS variable for a token slot, matching the Wasm emitter. */
 function cssVariable(name: string, cssVariablePrefix: string): string {
   return `var(${cssVariablePrefix}${name.replace(/[._]/g, '-')})`;
+}
+
+/**
+ * Escape a user string for a double-quoted HTML attribute, the same escaping
+ * the CSS-variable emitter applies to its prefix. Theme colors never need it
+ * (`isThemeColor` rejects anything but hex and numeric Display P3), but
+ * prefixes and theme keys are arbitrary strings.
+ */
+export function escapeAttribute(value: string): string {
+  return value
+    .replaceAll('&', '&amp;')
+    .replaceAll('"', '&quot;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;');
+}
+
+/**
+ * The `<pre>` opener the CSS-variable emitter writes with an empty prefix.
+ * Tag-replacement maps key on it and on `variableSpanTag` openers to rewrite
+ * the emitter's output with colors it cannot carry itself.
+ */
+export const variableRootTag =
+  '<pre class="highlights" style="background-color:var(background);color:var(foreground);">';
+
+/** The `<span>` opener the CSS-variable emitter writes for a token id with an empty prefix. */
+export function variableSpanTag(hl: number): string {
+  return `<span style="color:var(${tokenTypes[hl].replace(/[._]/g, '-')})">`;
 }
 
 /**
@@ -327,20 +360,16 @@ function displayP3HtmlTags(
   const rootStyle =
     (bg === undefined ? '' : `background-color:${bg};`) +
     (fg === undefined ? '' : `color:${fg}`);
-  tags.set(
-    '<pre class="highlights" style="background-color:var(background);color:var(foreground);">',
-    `<pre class="highlights" style="${rootStyle}">`
-  );
+  tags.set(variableRootTag, `<pre class="highlights" style="${rootStyle}">`);
   for (let i = 1; i < tokenTypes.length; i++) {
     const style = styles[i];
-    const name = tokenTypes[i].replace(/[._]/g, '-');
     const css =
       `color:${style?.color ?? 'inherit'}` +
       (style?.italic === true ? ';font-style:italic' : '') +
       (style != null && style.weight !== 0
         ? `;font-weight:${style.weight}`
         : '');
-    tags.set(`<span style="color:var(${name})">`, `<span style="${css}">`);
+    tags.set(variableSpanTag(i), `<span style="${css}">`);
   }
   return tags;
 }

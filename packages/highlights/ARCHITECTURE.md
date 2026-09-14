@@ -100,14 +100,15 @@ and SIMD.
 
 The first 64 KiB page holds controls, static tables, caches, and lexer scratch.
 JavaScript writes language ID (`u8` at 0), output mode (`u8` at 1: 0 inline
-HTML, 1 CSS-variable HTML, 3 UTF-16 line records), and input length (`u32` at
-2). Output address and length follow. Non-live input starts at 65536 with a
-trailing NUL sentinel.
+HTML, 1 CSS-variable HTML, 2 multi-theme HTML, 3 UTF-16 line records), and input
+length (`u32` at 2). Output address and length follow. Non-live input starts at
+65536 with a trailing NUL sentinel.
 
 Output starts at `(EOF + 47) & ~15`, leaving SIMD slack and 16-byte alignment.
-CSS-variable HTML stores the encoded prefix there and starts output after it.
-`$end` is the scan boundary: input can contain NUL. Loads may cross `$end`;
-matches and emitted ranges must not.
+CSS-variable HTML stores the encoded prefix there and starts output after it;
+multi-theme HTML does the same with its packed theme set. `$end` is the scan
+boundary: input can contain NUL. Loads may cross `$end`; matches and emitted
+ranges must not.
 
 `$ensureCap` grows output before writes. JavaScript rebinds views after growth.
 HTML and raw live records are borrowed; copy them before the next operation that
@@ -140,6 +141,20 @@ Span openers are cached by token ID. Each HTML call compares the padded theme
 table and output mode against the cache. A change clears it. CSS-variable
 fragments omit the prefix from cached bytes and insert it on output. Token calls
 preserve the cache.
+
+A `themes` set renders in one lex. JavaScript packs the set once: one theme
+table per member plus each member's escaped custom-property name (`--hls-dark`),
+with the `defaultColor` member marked inline. The emitter writes every member
+into each span, `color:#…;--hls-dark:#…` with per-member `font-style` and
+`font-weight` properties, or merges the `light` and `dark` members into
+`light-dark()` values. A token's style is its record in every member, so
+neighbors merge only when all members agree, and a token no member styles gets
+no span. Openers are cached per set in the span-cache region, used as an arena
+with a per-token directory; one that does not fit renders directly. A set call
+marks the cache mode so the next single-theme call clears the region, and that
+clear invalidates the set's arena in turn. Members with Display P3 or
+CSS-variable colors have no theme table, so such a set renders through the
+CSS-variable emitter with tag replacements, like a single Display P3 theme.
 
 ## Emitter contract
 

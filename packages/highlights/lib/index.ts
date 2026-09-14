@@ -63,18 +63,6 @@ export interface ThemeFamily {
   themes: readonly Theme[];
 }
 
-/** Options for highlighting source code. */
-export interface CodeToHtmlOptions {
-  lang: Lang;
-  /**
-   * The theme to apply. A `ThemeFamily` resolves to its first member
-   * (`themes[0]`); pass that member directly to pick another one.
-   */
-  theme: Theme | ThemeFamily;
-  /** Prefix for CSS-variable colors. Defaults to `--hls-`. */
-  cssVariablePrefix?: string;
-}
-
 /**
  * A Shiki-compatible styled run within one line. `offset` is the absolute
  * UTF-16 index in the input.
@@ -104,8 +92,8 @@ export interface ThemedToken {
   type?: number;
 }
 
-/** Options shared by every tokenization entry point. */
-export interface CodeToTokensBaseOptions {
+/** Options shared by every highlighting and tokenization entry point. */
+export interface CodeToHtmlBaseOptions {
   lang: Lang;
   /** Prefix for CSS-variable colors and per-theme properties. Defaults to `--hls-`. */
   cssVariablePrefix?: string;
@@ -118,6 +106,10 @@ export interface CodeToTokensBaseOptions {
    * themes into CSS `light-dark()` colors.
    */
   defaultColor?: string | false;
+}
+
+/** Options shared by every tokenization entry point. */
+export interface CodeToTokensBaseOptions extends CodeToHtmlBaseOptions {
   /**
    * Lines at or above this length become one unthemed token, matching Shiki's
    * `tokenizeMaxLineLength` DOM-safety limit. `0` or undefined disables it.
@@ -130,11 +122,15 @@ export interface CodeToTokensBaseOptions {
  * schemes such as `{ dark, light }`. `themes` uses CSS custom properties.
  * A `ThemeFamily` in either place resolves to its first member (`themes[0]`).
  */
-export type CodeToTokensOptions = CodeToTokensBaseOptions &
-  (
-    | { theme: Theme | ThemeFamily; themes?: undefined }
-    | { theme?: undefined; themes: Record<string, Theme | ThemeFamily> }
-  );
+export type ThemeOptions =
+  | { theme: Theme | ThemeFamily; themes?: undefined }
+  | { theme?: undefined; themes: Record<string, Theme | ThemeFamily> };
+
+/** Options for highlighting source code as HTML. */
+export type CodeToHtmlOptions = CodeToHtmlBaseOptions & ThemeOptions;
+
+/** Options for tokenizing source code. */
+export type CodeToTokensOptions = CodeToTokensBaseOptions & ThemeOptions;
 
 /** Result of `codeToTokens`, matching Shiki's `TokensResult`. */
 export interface TokensResult {

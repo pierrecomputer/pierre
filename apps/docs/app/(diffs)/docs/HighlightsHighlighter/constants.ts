@@ -180,17 +180,22 @@ const page = '<style>' + stylesheet + '</style>' + markup;`,
   highlightsDualThemes: {
     file: {
       name: 'dual-themes.ts',
-      contents: `import { codeToTokens } from '@pierre/highlights';
+      contents: `import { codeToHtml, codeToTokens } from '@pierre/highlights';
 import { pierreLight } from '@pierre/highlights/themes';
 import vitesseDark from '@pierre/highlights/themes/vitesse-dark';
 
-const { tokens, rootStyle } = codeToTokens('const answer = 42;', {
+const options = {
   lang: 'ts',
   themes: { dark: vitesseDark, light: pierreLight },
   cssVariablePrefix: '--code-',
   defaultColor: false,
-});
+} as const;
 
+const html = new TextDecoder().decode(codeToHtml('const answer = 42;', options));
+// <pre class="highlights" style="--code-dark:...;--code-light:...;--code-dark-bg:...;...">
+//   <code><span style="--code-dark:...;--code-light:...">const</span> ...
+
+const { tokens, rootStyle } = codeToTokens('const answer = 42;', options);
 console.log(rootStyle); // --code-dark:...;--code-light:...;--code-dark-bg:...;...
 console.log(tokens[0][0].htmlStyle); // { '--code-dark': '...', '--code-light': '...' }`,
     },

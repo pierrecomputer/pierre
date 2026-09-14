@@ -104,6 +104,14 @@ export default function HighlightsPage() {
                   </dd>
                 </div>
                 <div>
+                  <dt className="text-sm font-medium">Dual themes</dt>
+                  <dd className="text-muted-foreground mt-0.5 text-sm text-pretty">
+                    Pass <code>themes</code> to render light and dark in one
+                    pass, with Shiki&apos;s CSS custom properties or{' '}
+                    <code>light-dark()</code> colors.
+                  </dd>
+                </div>
+                <div>
                   <dt className="text-sm font-medium">Streaming API</dt>
                   <dd className="text-muted-foreground mt-0.5 text-sm text-pretty">
                     <code>StreamTokenizer</code> emits completed lines of themed

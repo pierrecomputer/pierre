@@ -664,6 +664,359 @@ void t.test(
   }
 );
 
+/** The style attribute of every `<span>` in source order. */
+const spanStyles = (html: string) =>
+  [...html.matchAll(/<span style="([^"]*)">/g)].map((m) => m[1]);
+
+/** The style attribute of the `<pre>` wrapper. */
+const rootStyle = (html: string) =>
+  html.match(/^<pre class="highlights" style="([^"]*)"><code>/)?.[1];
+
+void t.test(
+  'codeToHtml: themes render every theme into each span from one lex',
+  () => {
+    const dec = new TextDecoder();
+    const code =
+      'const label = \'<span style="color:var(--hls-number)">日本語 &\';\r\n1';
+    const themes = { light: pierreLight, dark: pierreDark };
+    const keyword = (theme: Theme) => themeColor('keyword.declaration', theme);
+    const fg = (theme: Theme) => themeColor('foreground', theme);
+    const bg = (theme: Theme) => themeColor('background', theme);
+    const cases: [CodeToHtmlOptions, string, string][] = [
+      [
+        { lang: 'ts', themes },
+        `background-color:${bg(pierreLight)};--hls-dark-bg:${bg(pierreDark)};color:${fg(pierreLight)};--hls-dark:${fg(pierreDark)}`,
+        `color:${keyword(pierreLight)};--hls-dark:${keyword(pierreDark)}`,
+      ],
+      [
+        { lang: 'ts', themes, defaultColor: 'dark' },
+        `background-color:${bg(pierreDark)};--hls-light-bg:${bg(pierreLight)};color:${fg(pierreDark)};--hls-light:${fg(pierreLight)}`,
+        `color:${keyword(pierreDark)};--hls-light:${keyword(pierreLight)}`,
+      ],
+      [
+        { lang: 'ts', themes, defaultColor: false, cssVariablePrefix: '--x-' },
+        `--x-dark:${fg(pierreDark)};--x-light:${fg(pierreLight)};--x-dark-bg:${bg(pierreDark)};--x-light-bg:${bg(pierreLight)}`,
+        `--x-dark:${keyword(pierreDark)};--x-light:${keyword(pierreLight)}`,
+      ],
+      [
+        { lang: 'ts', themes, defaultColor: 'light-dark()' },
+        `background-color:light-dark(${bg(pierreLight)}, ${bg(pierreDark)});color:light-dark(${fg(pierreLight)}, ${fg(pierreDark)})`,
+        `color:light-dark(${keyword(pierreLight)}, ${keyword(pierreDark)})`,
+      ],
+    ];
+    const bytes = new TextEncoder().encode(code);
+    for (const [options, root, first] of cases) {
+      const html = dec.decode(codeToHtml(code, options));
+      assert.equal(rootStyle(html), root);
+      assert.equal(spanStyles(html)[0], first);
+      assert.equal(textOf(html), code);
+      assert.ok(
+        html.includes(
+          '&lt;span style="color:var(--hls-number)"&gt;日本語 &amp;'
+        )
+      );
+      // the root matches what codeToTokens reports for a custom renderer
+      const tokens = codeToTokens(code, options);
+      assert.equal(
+        root,
+        tokens.rootStyle ?? `background-color:${tokens.bg};color:${tokens.fg}`
+      );
+      for (const input of [bytes, bytes.buffer]) {
+        assert.equal(dec.decode(codeToHtml(input, options)), html);
+      }
+      // a fresh instance agrees, so no state leaks between theme sets
+      assert.equal(
+        dec.decode(
+          new HighlightsHighlighter(highlighter.wasmModule).codeToHtml(
+            code,
+            options
+          )
+        ),
+        html
+      );
+    }
+    // single-theme output is unchanged by the sets rendered in between
+    const single = { lang: 'ts', theme: pierreDark } as const;
+    const expected = dec.decode(
+      new HighlightsHighlighter(highlighter.wasmModule).codeToHtml(code, single)
+    );
+    assert.equal(dec.decode(codeToHtml(code, single)), expected);
+    codeToHtml(code, cases[0][0]);
+    assert.equal(dec.decode(codeToHtml(code, single)), expected);
+    // sets merge neighbors only when every theme agrees on their style
+    const doc = (name: string, color: string): Theme => ({
+      name,
+      appearance: 'dark',
+      style: { syntax: { comment: '#222222', 'comment.doc': color } },
+    });
+    const comments = '/** a */ // b';
+    assert.deepEqual(
+      spanStyles(
+        dec.decode(
+          codeToHtml(comments, {
+            lang: 'ts',
+            themes: { light: doc('l', '#222222'), dark: doc('d', '#222222') },
+          })
+        )
+      ),
+      ['color:#222222;--hls-dark:#222222']
+    );
+    assert.deepEqual(
+      spanStyles(
+        dec.decode(
+          codeToHtml(comments, {
+            lang: 'ts',
+            themes: { light: doc('l', '#222222'), dark: doc('d', '#333333') },
+          })
+        )
+      ),
+      ['color:#222222;--hls-dark:#333333', 'color:#222222;--hls-dark:#222222']
+    );
+  }
+);
+
+void t.test(
+  'codeToHtml: theme sets keep fonts, missing colors, and light-dark() sides',
+  () => {
+    const dec = new TextDecoder();
+    const light: Theme = {
+      name: 'light',
+      appearance: 'light',
+      style: {
+        foreground: '#111111',
+        background: '#eeeeee',
+        syntax: {
+          keyword: '#123456',
+          'keyword.declaration': { font_style: 'italic' },
+          comment: { font_style: 'italic' },
+          number: '#00ff0080',
+        },
+      },
+    };
+    const dark: Theme = {
+      name: 'dark',
+      appearance: 'dark',
+      style: {
+        foreground: '#ffffff',
+        syntax: {
+          keyword: '#abcdef',
+          'keyword.declaration': { font_style: 'italic', font_weight: 700 },
+          comment: { font_weight: 300 },
+          number: '#00ff0080',
+        },
+      },
+    };
+    const code = 'const a = 1; // c';
+    const html = dec.decode(
+      codeToHtml(code, { lang: 'ts', themes: { light, dark } })
+    );
+    // a theme without a background contributes no root property; a token
+    // no theme styles gets no span
+    assert.equal(
+      rootStyle(html),
+      'background-color:#eeeeee;color:#111111;--hls-dark:#ffffff'
+    );
+    assert.ok(html.includes('</span>a = <span'));
+    assert.deepEqual(spanStyles(html), [
+      'color:#123456;font-style:italic;--hls-dark:#abcdef;--hls-dark-font-style:italic;--hls-dark-font-weight:700',
+      'color:#00ff0080;--hls-dark:#00ff0080',
+      'color:#111111;font-style:italic;--hls-dark:#ffffff;--hls-dark-font-weight:300',
+    ]);
+    const variables = dec.decode(
+      codeToHtml(code, {
+        lang: 'ts',
+        themes: { light, dark },
+        defaultColor: false,
+      })
+    );
+    assert.equal(
+      rootStyle(variables),
+      '--hls-dark:#ffffff;--hls-light:#111111;--hls-light-bg:#eeeeee'
+    );
+    assert.equal(
+      spanStyles(variables)[0],
+      '--hls-dark:#abcdef;--hls-dark-font-style:italic;--hls-dark-font-weight:700;--hls-light:#123456;--hls-light-font-style:italic'
+    );
+    // light-dark(): shared colors and fonts stay plain, the rest split per
+    // side, and a side without a background or color falls back to a keyword
+    const merged = dec.decode(
+      codeToHtml(code, {
+        lang: 'ts',
+        themes: { light, dark },
+        defaultColor: 'light-dark()',
+      })
+    );
+    assert.equal(
+      rootStyle(merged),
+      'background-color:light-dark(#eeeeee, transparent);color:light-dark(#111111, #ffffff)'
+    );
+    assert.deepEqual(spanStyles(merged), [
+      'color:light-dark(#123456, #abcdef);font-style:italic;--hls-dark-font-weight:700',
+      'color:#00ff0080',
+      'color:light-dark(#111111, #ffffff);--hls-light-font-style:italic;--hls-dark-font-weight:300',
+    ]);
+    const bare: Theme = {
+      name: 'bare',
+      appearance: 'dark',
+      style: { syntax: { keyword: '#abcdef' } },
+    };
+    const partial = dec.decode(
+      codeToHtml(code, {
+        lang: 'ts',
+        themes: { light, dark: bare },
+        defaultColor: 'light-dark()',
+      })
+    );
+    assert.equal(
+      rootStyle(partial),
+      'background-color:light-dark(#eeeeee, transparent);color:light-dark(#111111, currentcolor)'
+    );
+    assert.deepEqual(spanStyles(partial), [
+      'color:light-dark(#123456, #abcdef);--hls-light-font-style:italic',
+      'color:light-dark(#00ff0080, currentcolor)',
+      'color:light-dark(#111111, currentcolor);--hls-light-font-style:italic',
+    ]);
+    // unthemed sets produce the bare wrapper
+    const empty: Theme = { name: 'empty', appearance: 'dark', style: {} };
+    for (const defaultColor of ['light', 'light-dark()'] as const) {
+      assert.equal(
+        dec.decode(
+          codeToHtml('const', {
+            lang: 'ts',
+            themes: { light: empty, dark: empty },
+            defaultColor,
+          })
+        ),
+        '<pre class="highlights" style=""><code>const</code></pre>'
+      );
+    }
+  }
+);
+
+void t.test(
+  'codeToHtml: theme sets escape host names and grow output for long ones',
+  () => {
+    const dec = new TextDecoder();
+    const escaped = dec.decode(
+      codeToHtml('const', {
+        lang: 'ts',
+        themes: { light: pierreLight, 'd<a>"rk&': pierreDark },
+        cssVariablePrefix: '--"<>&-',
+      })
+    );
+    const name = '--&quot;&lt;&gt;&amp;-d&lt;a&gt;&quot;rk&amp;';
+    assert.ok(escaped.includes(`;${name}-bg:`));
+    assert.ok(
+      escaped.includes(`;${name}:${themeColor('keyword.declaration')}"`)
+    );
+    assert.doesNotMatch(escaped, /--"/);
+    const cssVariablePrefix = `--${'x'.repeat(100000)}-`;
+    const long = dec.decode(
+      codeToHtml(`"${'&'.repeat(1000)}"`, {
+        lang: 'json',
+        themes: { light: pierreLight, dark: pierreDark },
+        cssVariablePrefix,
+      })
+    );
+    assert.ok(
+      long.includes(`;${cssVariablePrefix}dark:${themeColor('string')}"`)
+    );
+    assert.ok(long.endsWith(`"${'&amp;'.repeat(1000)}"</span></code></pre>`));
+    const big = 'const a = 1;\n'.repeat(20000);
+    assert.equal(
+      textOf(
+        dec.decode(
+          codeToHtml(big, {
+            lang: 'ts',
+            themes: { light: pierreLight, dark: pierreDark },
+          })
+        )
+      ),
+      big
+    );
+  }
+);
+
+void t.test(
+  'codeToHtml: sets with Display P3 or CSS-variable members render through tag replacement',
+  () => {
+    const dec = new TextDecoder();
+    const html = dec.decode(
+      codeToHtml('const', {
+        lang: 'ts',
+        themes: { light: pierreLightVibrant, dark: cssVariables },
+        cssVariablePrefix: '--x-',
+      })
+    );
+    assert.equal(
+      rootStyle(html),
+      `background-color:${pierreLightVibrant.style['editor.background']};--x-dark-bg:var(--x-background);color:${pierreLightVibrant.style['editor.foreground']};--x-dark:var(--x-foreground)`
+    );
+    assert.deepEqual(spanStyles(html), [
+      `color:${pierreLightVibrant.style.syntax.keyword.color};--x-dark:var(--x-keyword-declaration)`,
+    ]);
+    assert.equal(textOf(html), 'const');
+  }
+);
+
+void t.test(
+  'codeToHtml: theme set options are validated like codeToTokens',
+  () => {
+    assert.throws(
+      () => codeToHtml('x', { lang: 'ts', themes: { dark: pierreDark } }),
+      /must contain the defaultColor key `light`/
+    );
+    assert.throws(
+      () => codeToHtml('x', { lang: 'ts', themes: {} }),
+      /themes must not be empty/
+    );
+    assert.throws(
+      () =>
+        codeToHtml('x', {
+          lang: 'ts',
+          themes: { dark: pierreDark },
+          defaultColor: 'light-dark()',
+        }),
+      /light-dark/
+    );
+    assert.throws(
+      () =>
+        codeToHtml('x', {
+          lang: 'ts',
+          themes: { light: 'github-light' },
+        } as unknown as CodeToHtmlOptions),
+      { name: 'TypeError', message: /^invalid theme: .*"github-light"/ }
+    );
+  }
+);
+
+void t.test(
+  'multi-theme styles are shared across calls that name the same set',
+  () => {
+    const options = {
+      lang: 'ts',
+      themes: { light: pierreLight, dark: pierreDark },
+    } as const;
+    assert.equal(
+      resolveOptionThemes(options),
+      resolveOptionThemes({ ...options, themes: { ...options.themes } })
+    );
+    assert.notEqual(
+      resolveOptionThemes(options),
+      resolveOptionThemes({ ...options, defaultColor: 'dark' })
+    );
+    // prefixes share the list: styles are keyed by prefix downstream
+    assert.equal(
+      resolveOptionThemes(options),
+      resolveOptionThemes({ ...options, cssVariablePrefix: '--x-' })
+    );
+    assert.equal(
+      codeToTokens('const', options).tokens[0][0].htmlStyle,
+      codeToTokens('let', { ...options }).tokens[0][0].htmlStyle
+    );
+  }
+);
+
 void t.test(
   'codeToTokens preserves BOM content and offsets for byte input',
   () => {
@@ -698,13 +1051,11 @@ void t.test('a theme id string is rejected with a TypeError naming it', () => {
     message: /^invalid theme: .*the string "github-light"/,
   };
   assert.throws(() => codeToTokens('x', single), dark);
-  assert.throws(
-    () => codeToHtml('x', single as unknown as CodeToHtmlOptions),
-    dark
-  );
+  assert.throws(() => codeToHtml('x', single), dark);
   assert.throws(() => new StreamTokenizer(single), dark);
   assert.throws(() => new LiveTokenizer(single), dark);
   assert.throws(() => codeToTokens('x', multi), light);
+  assert.throws(() => codeToHtml('x', multi), light);
   assert.throws(() => new StreamTokenizer(multi), light);
   assert.throws(() => new LiveTokenizer(multi), light);
   // a family names its first member

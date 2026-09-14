@@ -30,7 +30,8 @@ language registration is needed.
 `codeToHtml(input, { lang, theme })` returns a
 `<pre class="highlights"><code>…</code></pre>` fragment as a `Uint8Array`.
 `input` can be a `string`, `Uint8Array`, or `ArrayBuffer`; byte input is UTF-8.
-Decode the result to use it as an HTML string.
+Decode the result to use it as an HTML string. Pass `themes` instead of `theme`
+to render several color schemes into the same markup; see Multiple themes below.
 
 <DocsCodeExample {...highlightsHtml} />
 
@@ -63,8 +64,8 @@ The result also includes theme metadata: `fg`, `bg`, `themeName`, and, for
 `defaultColor: false`, `rootStyle`. In multi-theme mode, `fg` and `bg` can
 contain CSS declaration lists rather than single colors.
 
-These options are shared by `codeToTokens()`, `StreamTokenizer`, and
-`LiveTokenizer`:
+These options are shared by `codeToHtml()`, `codeToTokens()`, `StreamTokenizer`,
+and `LiveTokenizer`:
 
 | Option                  | Behavior                                                                                                                                                                                                     |
 | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -75,11 +76,11 @@ These options are shared by `codeToTokens()`, `StreamTokenizer`, and
 | `defaultColor`          | With `themes`, the key applied inline; defaults to `light` and throws if that key is missing. `false` emits only custom properties; `'light-dark()'` combines colors from required `light` and `dark` themes |
 | `tokenizeMaxLineLength` | Collapses lines at or above this UTF-16 length into one token with the theme's foreground color and no syntax styling; `0` or omission disables the limit                                                    |
 
-Choose either `theme` or `themes`. `codeToHtml()` accepts one `theme`, while the
-tokenization APIs accept either form.
+Choose either `theme` or `themes`; every entry point accepts both forms.
 
-`tokenizeMaxLineLength` limits the number of token objects a renderer receives.
-The lexer still processes those lines to preserve state for subsequent lines.
+`tokenizeMaxLineLength` applies to the tokenization APIs only. It limits the
+number of token objects a renderer receives; the lexer still processes those
+lines to preserve state for subsequent lines.
 
 ### Streaming
 
@@ -205,20 +206,26 @@ option also controls the multi-theme properties below.
 
 #### Multiple themes
 
-Use `themes` with the tokenization APIs to produce styles for several color
-schemes in one pass. With `defaultColor: false`, every scheme uses CSS custom
-properties:
+Use `themes` to produce styles for several color schemes in one pass. The code
+is lexed once; `codeToHtml()` writes every scheme into each span's `style`
+attribute inside WebAssembly, and the tokenization APIs return the same styles
+in each token's `htmlStyle`. With `defaultColor: false`, every scheme uses CSS
+custom properties:
 
 <DocsCodeExample {...highlightsDualThemes} />
 
-Apply `rootStyle` to your code container and each token's `htmlStyle` to its
-span. For a container with class `code`, this CSS selects the light or dark
-properties, including font styles:
+`codeToHtml()` applies the root properties to its `<pre>`. A custom renderer
+applies `rootStyle` to its code container and each token's `htmlStyle` to its
+span. For a container with class `code` (use `.highlights` for the HTML output),
+this CSS selects the light or dark properties, including font styles:
 
 <DocsCodeExample {...highlightsDualThemesCss} />
 
 To apply one theme inline, set `defaultColor` to its key, such as `'dark'`. The
-default is `'light'`, so a map without a `light` key must set this option.
+default is `'light'`, so a map without a `light` key must set this option. With
+`defaultColor: 'light-dark()'`, the required `light` and `dark` themes merge
+into CSS `light-dark()` colors that follow the page's `color-scheme`, with no
+custom properties to switch.
 
 ### Languages
 

@@ -12,7 +12,7 @@
 
   ;; [3472:10144) emitter HTML fragments, caches, and streaming state.
   (const $mem.emitterHtml 3472)              ;; 152
-  (const $mem.emitterSpanCache 3624)         ;; 4824
+  (const $mem.emitterSpanCache 3624)         ;; 4824: single-theme slots or a multi-theme arena
   (const $mem.emitterThemeCache 8448)        ;; 384
   (const $mem.streamDelimiter 8832)          ;; 32
   (const $mem.streamState 8864)              ;; 1280
