@@ -1,9 +1,11 @@
+import { preloadFile } from '@pierre/diffs/ssr';
 import highlightsPackageJson from '@pierre/highlights/package.json';
 import { IconBolt, IconCodeBlock, IconPencil } from '@pierre/icons';
 import type { Metadata } from 'next';
 
 import { HighlightsHero } from './HighlightsHero';
 import { HighlightsPlayground } from './HighlightsPlayground';
+import { PLAYGROUND_LANGUAGES } from './languageExamples';
 import Footer from '@/components/Footer';
 import { Header } from '@/components/Header';
 import { PierreCompanySection } from '@/components/PierreCompanySection';
@@ -18,7 +20,17 @@ export const metadata: Metadata = pageMetadata({
   path: '/highlights',
 });
 
-export default function HighlightsPage() {
+export default async function HighlightsPage() {
+  const [lang, , contents] = PLAYGROUND_LANGUAGES[0];
+  const playground = await preloadFile({
+    file: { name: `source.${lang}`, contents, lang },
+    options: {
+      theme: { dark: 'pierre-dark', light: 'pierre-light' },
+      themeType: 'system',
+      useTokenTransformer: true,
+    },
+  });
+
   return (
     <div className="mx-auto min-h-screen max-w-5xl px-5 xl:max-w-[80rem]">
       <Header className="-mb-[1px]" />
@@ -26,7 +38,7 @@ export default function HighlightsPage() {
         <HighlightsHero
           gzipBytes={highlightsPackageJson.meta['highlights.wasm.gz']}
         />
-        <HighlightsPlayground />
+        <HighlightsPlayground prerenderedHTML={playground.prerenderedHTML} />
         <section
           aria-labelledby="highlights-features"
           className="space-y-8 pb-16 md:pb-24"

@@ -1,9 +1,8 @@
-import type { Element as HASTElement } from 'hast';
+import type { HElement as HtmlElement } from '../types';
+import { createHtmlElement } from './html';
 
-import { createHastElement } from './hast_utils';
-
-export function createEmptyRowBuffer(size: number): HASTElement {
-  return createHastElement({
+export function createEmptyRowBuffer(size: number): HtmlElement {
+  return createHtmlElement({
     tagName: 'div',
     properties: {
       'data-content-buffer': '',

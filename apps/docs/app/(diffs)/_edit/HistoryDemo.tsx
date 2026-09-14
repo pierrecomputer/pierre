@@ -2,7 +2,6 @@
 
 import {
   DEFAULT_THEMES,
-  getFiletypeFromFileName,
   getHighlighterIfLoaded,
   preloadHighlighter,
 } from '@pierre/diffs';
@@ -74,18 +73,6 @@ function snapshotIndexFor(text: string): number {
     return exact;
   }
   return NORMALIZED_SNAPSHOTS.indexOf(normalize(text));
-}
-
-// Language the editor tokenizes this file as. Editing before its grammar has
-// loaded throws ("Grammar not loaded"), so we gate the seeded replay on it.
-const LANGUAGE = getFiletypeFromFileName(HISTORY_DEMO_FILE.name);
-
-// True once the shared main-thread highlighter has this file's grammar, which
-// is what the editor tokenizes edits with.
-function isLanguageReady(): boolean {
-  return (
-    getHighlighterIfLoaded()?.getLoadedLanguages().includes(LANGUAGE) ?? false
-  );
 }
 
 function detectMac(): boolean {
@@ -281,9 +268,7 @@ export function HistoryDemo({ prerenderedFile }: HistoryDemoProps) {
   // already fully refactored with history intact. We defer until visible
   // because seeding scrolls the caret into view and would yank the page down
   // to this below-the-fold demo on first load. We poll until the content and
-  // session editor have attached AND the grammar is ready, because seeding an
-  // edit before the editor can tokenize throws ("Grammar not loaded") inside
-  // the editor.
+  // session editor have attached and the shared highlighter is ready.
   useEffect(() => {
     const wrapper = wrapperRef.current;
     if (wrapper == null) {
@@ -300,7 +285,11 @@ export function HistoryDemo({ prerenderedFile }: HistoryDemoProps) {
       }
       attempts += 1;
       const content = getContent();
-      if (content != null && editorRef.current != null && isLanguageReady()) {
+      if (
+        content != null &&
+        editorRef.current != null &&
+        getHighlighterIfLoaded() != null
+      ) {
         if (userEditedBeforeSeedRef.current) {
           return;
         }
@@ -313,12 +302,9 @@ export function HistoryDemo({ prerenderedFile }: HistoryDemoProps) {
     };
 
     const startSeeding = () => {
-      // Warm the shared highlighter before polling so the editor tokenizer can
-      // pick up the grammar synchronously once the component attaches.
+      // Load the theme pair before seeding the editor history.
       void preloadHighlighter({
         themes: [DEFAULT_THEMES.dark, DEFAULT_THEMES.light],
-        langs: [LANGUAGE],
-        preferredHighlighter: 'shiki-wasm',
       })
         .catch(() => {})
         .finally(() => {

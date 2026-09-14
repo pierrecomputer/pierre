@@ -4,7 +4,7 @@ import { parseDiffFromFile } from '../src';
 import { File } from '../src/components/File';
 import { FileDiff } from '../src/components/FileDiff';
 import { Editor } from '../src/editor/editor';
-import { disposeHighlighter } from '../src/highlighter/shared_highlighter';
+import { disposeHighlighter } from '../src/highlighter';
 import { installDom, wait } from './domHarness';
 import {
   createInitializedManager,
@@ -15,7 +15,7 @@ import {
 // attached editor's tokenizer must resolve its theme the same pool-preferring
 // way the renderers do. Reading the raw component options pointed it at the
 // default pierre-* themes, which the highlighter never loaded, and the
-// resulting ShikiError aborted editor setup before contentEditable was
+// missing-theme error aborted editor setup before contentEditable was
 // applied — an edit session with no editable element.
 
 let restoreAnimationFrame: (() => void) | undefined;

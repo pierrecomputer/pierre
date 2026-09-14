@@ -127,8 +127,8 @@ interface DiffOptions {
 
   // Theme for syntax highlighting. Can be a single theme name or an
   // object with 'dark' and 'light' keys for automatic switching.
-  // Built-in options: 'pierre-dark', 'pierre-light', or any Shiki theme.
-  // See: https://shiki.style/themes
+  // Built-in options: 'pierre-dark', 'pierre-light', or any bundled theme.
+  // Import themeNames from '@pierre/diffs' to list bundled names.
   theme: { dark: 'pierre-dark', light: 'pierre-light' },
 
   // When using dark/light theme object, this controls which is used:
@@ -136,10 +136,9 @@ interface DiffOptions {
   // 'dark' or 'light' - forces specific theme
   themeType: 'system',
 
-  // Choose the Shiki engine:
-  // 'shiki-js' (default) - JavaScript regex engine
-  // 'shiki-wasm' - WASM Oniguruma engine
-  preferredHighlighter: 'shiki-js',
+  // Syntax highlighter: 'highlights' (default), 'shiki-wasm', or 'shiki-js'.
+  // With a worker pool, set this in the pool's highlighterOptions instead.
+  preferredHighlighter: 'highlights',
 
   // ─────────────────────────────────────────────────────────────
   // DIFF DISPLAY
@@ -942,8 +941,8 @@ interface FileOptions {
 
   // Theme for syntax highlighting. Can be a single theme name or an
   // object with 'dark' and 'light' keys for automatic switching.
-  // Built-in options: 'pierre-dark', 'pierre-light', or any Shiki theme.
-  // See: https://shiki.style/themes
+  // Built-in options: 'pierre-dark', 'pierre-light', or any bundled theme.
+  // Import themeNames from '@pierre/diffs' to list bundled names.
   theme: { dark: 'pierre-dark', light: 'pierre-light' },
 
   // When using dark/light theme object, this controls which is used:
@@ -951,10 +950,9 @@ interface FileOptions {
   // 'dark' or 'light' - forces specific theme
   themeType: 'system',
 
-  // Choose the Shiki engine:
-  // 'shiki-js' (default) - JavaScript regex engine
-  // 'shiki-wasm' - WASM Oniguruma engine
-  preferredHighlighter: 'shiki-js',
+  // Syntax highlighter: 'highlights' (default), 'shiki-wasm', or 'shiki-js'.
+  // With a worker pool, set this in the pool's highlighterOptions instead.
+  preferredHighlighter: 'highlights',
 
   // ─────────────────────────────────────────────────────────────
   // LAYOUT & DISPLAY

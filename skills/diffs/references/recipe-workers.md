@@ -14,7 +14,6 @@ import { WorkerPoolContextProvider } from '@pierre/diffs/react';
       }),
   }}
   highlighterOptions={{
-    langs: ['typescript', 'tsx'],
     theme: { light: 'pierre-light', dark: 'pierre-dark' },
   }}
 >

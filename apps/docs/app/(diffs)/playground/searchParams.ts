@@ -1,4 +1,8 @@
-import type { DiffIndicators, SelectedLineRange } from '@pierre/diffs';
+import {
+  defaultHighlighter,
+  type DiffIndicators,
+  type SelectedLineRange,
+} from '@pierre/diffs';
 
 // The playground's URL state, parsed identically on the server (to build the
 // prerendered payload) and on the client (to seed component state). The
@@ -28,6 +32,9 @@ export const DARK_THEMES = [
 
 export type PlaygroundLightTheme = (typeof LIGHT_THEMES)[number];
 export type PlaygroundDarkTheme = (typeof DARK_THEMES)[number];
+
+export const HIGHLIGHTERS = ['highlights', 'shiki-wasm', 'shiki-js'] as const;
+export type PlaygroundHighlighter = (typeof HIGHLIGHTERS)[number];
 
 const VIEW_MODES = [
   'diff',
@@ -64,6 +71,7 @@ export const DEFAULTS = {
   viewMode: 'diff' as ViewMode,
   diffStyle: 'split',
   colorMode: 'system',
+  highlighter: defaultHighlighter,
   lightTheme: 'pierre-light',
   darkTheme: 'pierre-dark',
   diffIndicators: 'bars',
@@ -86,6 +94,7 @@ export interface PlaygroundUrlState {
   viewMode: ViewMode;
   diffStyle: (typeof DIFF_STYLES)[number];
   colorMode: (typeof COLOR_MODES)[number];
+  highlighter: PlaygroundHighlighter;
   lightTheme: PlaygroundLightTheme;
   darkTheme: PlaygroundDarkTheme;
   diffIndicators: DiffIndicators;
@@ -156,6 +165,7 @@ export function parsePlaygroundSearchParams(
     viewMode,
     diffStyle: pick(get('layout'), DIFF_STYLES, 'split'),
     colorMode: pick(get('mode'), COLOR_MODES, 'system'),
+    highlighter: pick(get('highlighter'), HIGHLIGHTERS, DEFAULTS.highlighter),
     lightTheme: pick(get('light'), LIGHT_THEMES, DEFAULTS.lightTheme),
     darkTheme: pick(get('dark'), DARK_THEMES, DEFAULTS.darkTheme),
     diffIndicators: pick(get('indicators'), DIFF_INDICATORS, 'bars'),

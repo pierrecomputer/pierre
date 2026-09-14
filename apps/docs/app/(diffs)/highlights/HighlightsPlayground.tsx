@@ -1,25 +1,21 @@
 'use client';
 
-import { codeToHtml } from '@pierre/highlights';
-import { themes as themeLoaders } from '@pierre/highlights/themes/loader';
-import pierreDark from '@pierre/highlights/themes/pierre-dark';
-import pierreLight from '@pierre/highlights/themes/pierre-light';
+import { preloadHighlighter } from '@pierre/diffs';
+import { File } from '@pierre/diffs/react';
 import {
   IconCheck,
   IconChevronSm,
   IconColorAuto,
   IconColorDark,
   IconColorLight,
-  IconFileCode,
 } from '@pierre/icons';
-import { type CSSProperties, useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 
-import styles from './HighlightsPlayground.module.css';
 import {
   PLAYGROUND_LANGUAGES,
   type PlaygroundLanguage,
 } from './languageExamples';
-import { docsThemeCatalog } from '@/components/themeCatalog';
+import { docsDiffThemeCatalog } from '@/components/themeCatalog';
 import { Button } from '@/components/ui/button';
 import { ButtonGroup, ButtonGroupItem } from '@/components/ui/button-group';
 import {
@@ -40,17 +36,12 @@ const [DEFAULT_LANGUAGE, , DEFAULT_CODE] = PLAYGROUND_LANGUAGES[0];
 const LANGUAGE_OPTIONS = [...PLAYGROUND_LANGUAGES].sort(([, a], [, b]) =>
   a.localeCompare(b)
 );
-const THEME_OPTIONS = {
-  light: docsThemeCatalog
-    .getThemeNames({ colorScheme: 'light' })
-    .filter((name) => name in themeLoaders),
-  dark: docsThemeCatalog
-    .getThemeNames({ colorScheme: 'dark' })
-    .filter((name) => name in themeLoaders),
-};
-const decoder = new TextDecoder();
 
-export function HighlightsPlayground() {
+export function HighlightsPlayground({
+  prerenderedHTML,
+}: {
+  prerenderedHTML: string;
+}) {
   const [selectedThemes, setSelectedThemes] = useState({
     light: 'pierre-light',
     dark: 'pierre-dark',
@@ -62,35 +53,27 @@ export function HighlightsPlayground() {
     name: string;
     colorScheme: 'light' | 'dark';
   }>();
-  const [language, setLanguage] =
-    useState<PlaygroundLanguage>(DEFAULT_LANGUAGE);
-  const [code, setCode] = useState<string>(DEFAULT_CODE);
-  const lines = useMemo(() => code.split(/\r\n|\r|\n/), [code]);
-  const [themes, setThemes] = useState({
-    light: pierreLight,
-    dark: pierreDark,
+  const [file, setFile] = useState<{
+    name: string;
+    contents: string;
+    lang: PlaygroundLanguage;
+  }>({
+    name: `source.${DEFAULT_LANGUAGE}`,
+    contents: DEFAULT_CODE,
+    lang: DEFAULT_LANGUAGE,
   });
+  const [isReady, setIsReady] = useState(false);
   const [loadFailed, setLoadFailed] = useState(false);
-  const lightTheme =
-    previewTheme?.colorScheme === 'light'
-      ? previewTheme.name
-      : selectedThemes.light;
-  const darkTheme =
-    previewTheme?.colorScheme === 'dark'
-      ? previewTheme.name
-      : selectedThemes.dark;
 
   useEffect(() => {
     let active = true;
 
-    void Promise.all([
-      themeLoaders[lightTheme](),
-      themeLoaders[darkTheme](),
-    ]).then(
-      ([light, dark]) => {
+    void preloadHighlighter({
+      themes: ['pierre-light', 'pierre-dark'],
+    }).then(
+      () => {
         if (!active) return;
-        setThemes({ light: light.default, dark: dark.default });
-        setLoadFailed(false);
+        setIsReady(true);
       },
       () => {
         if (active) setLoadFailed(true);
@@ -100,52 +83,7 @@ export function HighlightsPlayground() {
     return () => {
       active = false;
     };
-  }, [lightTheme, darkTheme]);
-
-  const html = useMemo(
-    () => ({
-      light: decoder.decode(
-        codeToHtml(code, { lang: language, theme: themes.light })
-      ),
-      dark: decoder.decode(
-        codeToHtml(code, { lang: language, theme: themes.dark })
-      ),
-    }),
-    [code, language, themes]
-  );
-  const themeStyles = Object.fromEntries(
-    Object.entries(themes).flatMap(([colorScheme, { style }]) => [
-      [
-        `--${colorScheme}-background`,
-        style['editor.background'] ?? style.background ?? 'Canvas',
-      ],
-      [
-        `--${colorScheme}-foreground`,
-        style['editor.foreground'] ??
-          style.text ??
-          style.foreground ??
-          'CanvasText',
-      ],
-      [
-        `--${colorScheme}-caret`,
-        style.players?.[0]?.cursor ??
-          style['editor.foreground'] ??
-          style.text ??
-          style.foreground ??
-          'CanvasText',
-      ],
-      [
-        `--${colorScheme}-selection`,
-        style.players?.[0]?.selection ??
-          `color-mix(in srgb, var(--${colorScheme}-caret) 30%, transparent)`,
-      ],
-      [
-        `--${colorScheme}-line-number`,
-        style['editor.line_number'] ??
-          `color-mix(in srgb, ${style['editor.foreground'] ?? style.text ?? style.foreground ?? 'CanvasText'} 50%, transparent)`,
-      ],
-    ])
-  ) as CSSProperties;
+  }, []);
 
   return (
     <section id="playground" className="space-y-5 pb-16 md:pb-24">
@@ -174,28 +112,30 @@ export function HighlightsPlayground() {
                 className="max-h-[550px] overflow-auto"
                 scrollSelectedIntoView
               >
-                {THEME_OPTIONS[colorScheme].map((theme) => (
-                  <DropdownMenuItem
-                    key={theme}
-                    onFocus={() =>
-                      setPreviewTheme({ name: theme, colorScheme })
-                    }
-                    onBlur={() => setPreviewTheme(undefined)}
-                    onClick={() => {
-                      setSelectedThemes((themes) => ({
-                        ...themes,
-                        [colorScheme]: theme,
-                      }));
-                      setSelectedColorMode(colorScheme);
-                    }}
-                    selected={selectedThemes[colorScheme] === theme}
-                  >
-                    {theme}
-                    {selectedThemes[colorScheme] === theme && (
-                      <IconCheck className="ml-auto" />
-                    )}
-                  </DropdownMenuItem>
-                ))}
+                {docsDiffThemeCatalog
+                  .getThemeNames({ colorScheme })
+                  .map((theme) => (
+                    <DropdownMenuItem
+                      key={theme}
+                      onFocus={() =>
+                        setPreviewTheme({ name: theme, colorScheme })
+                      }
+                      onBlur={() => setPreviewTheme(undefined)}
+                      onClick={() => {
+                        setSelectedThemes((themes) => ({
+                          ...themes,
+                          [colorScheme]: theme,
+                        }));
+                        setSelectedColorMode(colorScheme);
+                      }}
+                      selected={selectedThemes[colorScheme] === theme}
+                    >
+                      {theme}
+                      {selectedThemes[colorScheme] === theme && (
+                        <IconCheck className="ml-auto" />
+                      )}
+                    </DropdownMenuItem>
+                  ))}
               </DropdownMenuContent>
             </DropdownMenu>
           ))}
@@ -223,14 +163,17 @@ export function HighlightsPlayground() {
         </ButtonGroup>
 
         <Select
-          value={language}
+          value={file.lang}
           onValueChange={(lang: PlaygroundLanguage) => {
             const example = PLAYGROUND_LANGUAGES.find(
               ([value]) => value === lang
             );
             if (example === undefined) return;
-            setLanguage(lang);
-            setCode(example[2]);
+            setFile({
+              name: `source.${lang}`,
+              contents: example[2],
+              lang,
+            });
           }}
         >
           <SelectTrigger
@@ -251,51 +194,35 @@ export function HighlightsPlayground() {
 
       {loadFailed && (
         <p role="alert" className="text-destructive text-sm">
-          The theme could not load. Choose another theme or reload this page.
+          The editor could not load. Reload this page to try again.
         </p>
       )}
-      <div
-        className={styles.editor}
-        data-color-mode={previewTheme?.colorScheme ?? selectedColorMode}
-        style={
-          {
-            ...themeStyles,
-            '--line-number-width': `${Math.max(2, String(lines.length).length)}ch`,
-          } as CSSProperties
+      <File
+        key={isReady ? file.lang : 'prerendered'}
+        file={file}
+        className="diff-container min-h-80"
+        options={{
+          theme: {
+            dark:
+              previewTheme?.colorScheme === 'dark'
+                ? previewTheme.name
+                : selectedThemes.dark,
+            light:
+              previewTheme?.colorScheme === 'light'
+                ? previewTheme.name
+                : selectedThemes.light,
+          },
+          themeType: previewTheme?.colorScheme ?? selectedColorMode,
+          useTokenTransformer: true,
+        }}
+        prerenderedHTML={
+          !isReady && file.lang === DEFAULT_LANGUAGE
+            ? prerenderedHTML
+            : undefined
         }
-      >
-        <div className={styles.header}>
-          <IconFileCode aria-hidden="true" className="size-4" />
-          <span>source.{language}</span>
-        </div>
-        <div className={styles.content}>
-          <textarea
-            aria-label="Source code"
-            value={code}
-            onChange={(event) => setCode(event.target.value)}
-            spellCheck={false}
-            autoCapitalize="off"
-            autoCorrect="off"
-            className={styles.input}
-          />
-          <div aria-hidden="true" className={styles.lineNumbers}>
-            {lines.map((line, index) => (
-              <div key={index} data-line-number={index + 1}>
-                {line === '' ? '\u200b' : line}
-              </div>
-            ))}
-          </div>
-          <div aria-hidden="true" className={styles.preview}>
-            {(['light', 'dark'] as const).map((colorScheme) => (
-              <div
-                key={colorScheme}
-                data-color-scheme={colorScheme}
-                dangerouslySetInnerHTML={{ __html: html[colorScheme] }}
-              />
-            ))}
-          </div>
-        </div>
-      </div>
+        disableWorkerPool
+        edit={isReady}
+      />
     </section>
   );
 }

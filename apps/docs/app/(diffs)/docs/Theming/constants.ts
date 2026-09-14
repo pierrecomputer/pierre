@@ -488,27 +488,46 @@ export const THEMING_PACKAGE_JSON_EXAMPLE: ThemingConstant = {
   options,
 };
 
-export const THEMING_REGISTER_THEME: ThemingConstant = {
+export const THEMING_REGISTER_CUSTOM_THEME: ThemingConstant = {
   file: {
-    name: 'register-theme.ts',
+    name: 'register-custom-theme.ts',
     contents: `import { registerCustomTheme } from '@pierre/diffs';
 
-// Register your theme files before rendering.
-// The name must match the "name" field in your theme.
+// Register a Zed theme for Highlights before rendering.
+registerCustomTheme('my-theme-dark', async () => ({
+  name: 'my-theme-dark',
+  appearance: 'dark',
+  style: {
+    'editor.background': '#181818',
+    'editor.foreground': '#eeeeee',
+    syntax: {
+      keyword: { color: '#c792ea' },
+      string: { color: '#c3e88d' },
+      comment: { color: '#676e95', font_style: 'italic' },
+    },
+  },
+}), 'zed');
 
-// Option 1: Import MJS theme modules (recommended)
-registerCustomTheme('my-theme-dark', () => import('my-theme/dark'));
-registerCustomTheme('my-theme-light', () => import('my-theme/light'));
+// Register its TextMate equivalent for both Shiki backends.
+registerCustomTheme('my-theme-dark', async () => ({
+  name: 'my-theme-dark',
+  type: 'dark',
+  colors: {
+    'editor.background': '#181818',
+    'editor.foreground': '#eeeeee',
+  },
+  tokenColors: [
+    { scope: ['keyword', 'storage'], settings: { foreground: '#c792ea' } },
+    { scope: 'string', settings: { foreground: '#c3e88d' } },
+    { scope: 'comment', settings: { foreground: '#676e95', fontStyle: 'italic' } },
+  ],
+}), 'textmate');
 
-// Option 2: Import JSON theme files
-registerCustomTheme('my-theme-dark', () => import('./themes/my-theme-dark.json'));
-registerCustomTheme('my-theme-light', () => import('./themes/my-theme-light.json'));
-
-// Option 3: Fetch from a URL (for CDN-hosted themes)
-registerCustomTheme('my-theme-dark', async () => {
-  const response = await fetch('/themes/my-theme-dark.json');
-  return response.json();
-});`,
+// Optional lazy loader for Highlights: select a member from a Zed family.
+registerCustomTheme('my-theme-light', async () => {
+  const { default: family } = await import('./themes/my-theme.json');
+  return { ...family.themes[0], name: 'my-theme-light' };
+}, 'zed');`,
   },
   options,
 };
@@ -523,14 +542,12 @@ export function DiffWithCustomTheme({ fileDiff }) {
     <FileDiff
       fileDiff={fileDiff}
       options={{
-        // Single theme
+        // This name is registered in both formats.
+        preferredHighlighter: 'shiki-js',
         theme: 'my-theme-dark',
 
-        // Or both variants for automatic light/dark mode
-        theme: {
-          dark: 'my-theme-dark',
-          light: 'my-theme-light',
-        },
+        // After registering both variants for the selected backend:
+        // theme: { dark: 'my-theme-dark', light: 'my-theme-light' },
       }}
     />
   );

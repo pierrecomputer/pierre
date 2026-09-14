@@ -1,6 +1,6 @@
 import { afterAll, describe, expect, spyOn, test } from 'bun:test';
 
-import { disposeHighlighter } from '../src/highlighter/shared_highlighter';
+import { disposeHighlighter } from '../src/highlighter';
 import { DiffHunksRenderer } from '../src/renderers/DiffHunksRenderer';
 import { composeCacheKey } from '../src/utils/composeCacheKey';
 import { getTotalLineCountFromHunks } from '../src/utils/getTotalLineCountFromHunks';

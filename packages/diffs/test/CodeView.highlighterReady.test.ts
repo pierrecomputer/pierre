@@ -1,12 +1,10 @@
+import type { Theme } from '@pierre/highlights';
 import { afterAll, expect, mock, spyOn, test } from 'bun:test';
 
 import { CodeView } from '../src/components/CodeView';
-import {
-  disposeHighlighter,
-  getSharedHighlighter,
-} from '../src/highlighter/shared_highlighter';
-import { registerCustomTheme } from '../src/highlighter/themes/registerCustomTheme';
-import type { ThemeRegistration } from '../src/types';
+import { disposeHighlighter, getSharedHighlighter } from '../src/highlighter';
+import { registerCustomTheme } from '../src/highlighter';
+import type { DiffsTheme } from '../src/types';
 import { createRoot, installDom, wait, waitFor } from './domHarness';
 import { createDeferred } from './testUtils';
 
@@ -15,11 +13,10 @@ afterAll(disposeHighlighter);
 test('retries a failed theme load on a later render without automatically retrying', async () => {
   const theme = {
     name: 'codeview-retry-theme',
-    type: 'dark',
-    colors: {},
-    tokenColors: [],
-  } satisfies ThemeRegistration;
-  const firstLoad = createDeferred<ThemeRegistration>();
+    appearance: 'dark',
+    style: {},
+  } satisfies Theme;
+  const firstLoad = createDeferred<DiffsTheme>();
   const loader = mock(() => firstLoad.promise);
   registerCustomTheme(theme.name, loader);
   const error = new Error('Theme chunk failed to load');
@@ -69,18 +66,17 @@ for (const obsoleteFinishesFirst of [false, true]) {
   test(`switches pending themes when the ${obsoleteFinishesFirst ? 'obsolete' : 'current'} loader finishes first`, async () => {
     const obsoleteName = `codeview-obsolete-${obsoleteFinishesFirst}`;
     const currentName = `codeview-current-${obsoleteFinishesFirst}`;
-    const obsoleteTheme: ThemeRegistration = {
+    const obsoleteTheme: Theme = {
       name: obsoleteName,
-      type: 'dark',
-      colors: {},
-      tokenColors: [],
+      appearance: 'dark',
+      style: {},
     };
-    const currentTheme: ThemeRegistration = {
+    const currentTheme: DiffsTheme = {
       ...obsoleteTheme,
       name: currentName,
     };
-    const obsolete = createDeferred<ThemeRegistration>();
-    const current = createDeferred<ThemeRegistration>();
+    const obsolete = createDeferred<DiffsTheme>();
+    const current = createDeferred<DiffsTheme>();
     const started: string[] = [];
     registerCustomTheme(obsoleteName, () => {
       started.push(obsoleteName);
@@ -118,7 +114,7 @@ for (const obsoleteFinishesFirst of [false, true]) {
         await wait(0);
         render.mockClear();
         obsolete.resolve(obsoleteTheme);
-        await getSharedHighlighter({ themes: [obsoleteName], langs: [] });
+        await getSharedHighlighter({ themes: [obsoleteName] });
         await wait(0);
         expect(render).not.toHaveBeenCalled();
         expect(viewer.getRenderedItems()).toHaveLength(0);
@@ -134,7 +130,7 @@ for (const obsoleteFinishesFirst of [false, true]) {
         await wait(0);
         render.mockClear();
         obsolete.resolve(obsoleteTheme);
-        await getSharedHighlighter({ themes: [obsoleteName], langs: [] });
+        await getSharedHighlighter({ themes: [obsoleteName] });
         await wait(0);
         expect(render).not.toHaveBeenCalled();
       }
@@ -144,7 +140,6 @@ for (const obsoleteFinishesFirst of [false, true]) {
       current.resolve(currentTheme);
       await getSharedHighlighter({
         themes: [obsoleteName, currentName],
-        langs: [],
       });
       render.mockRestore();
       dom.cleanup();

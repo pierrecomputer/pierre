@@ -1,8 +1,11 @@
-import type { ElementContent, Element as HASTElement } from 'hast';
-
 import { DEFAULT_COLLAPSED_CONTEXT_THRESHOLD } from '../src/constants';
 import type { HunksRenderResult } from '../src/renderers/DiffHunksRenderer';
-import type { FileDiffMetadata, ParsedPatch } from '../src/types';
+import type {
+  ElementContent,
+  FileDiffMetadata,
+  HElement as HtmlElement,
+  ParsedPatch,
+} from '../src/types';
 
 // Async test helpers
 
@@ -33,9 +36,9 @@ export function assertDefined<T>(
   }
 }
 
-// HAST element helpers
+// HTML tree element helpers
 
-export function isHastElement(node: ElementContent): node is HASTElement {
+export function isHastElement(node: ElementContent): node is HtmlElement {
   return node.type === 'element';
 }
 
@@ -69,8 +72,8 @@ export function getHastLineType(node: ElementContent): string | undefined {
   return typeof lineType === 'string' ? lineType : undefined;
 }
 
-export function findHastSlotElements(el: HASTElement): HASTElement[] {
-  const slots: HASTElement[] = [];
+export function findHastSlotElements(el: HtmlElement): HtmlElement[] {
+  const slots: HtmlElement[] = [];
   for (const child of el.children) {
     if (isHastElement(child)) {
       if (child.tagName === 'slot') {
@@ -83,8 +86,8 @@ export function findHastSlotElements(el: HASTElement): HASTElement[] {
 }
 
 // Helper to recursively collect all elements from AST
-export function collectAllElements(nodes: ElementContent[]): HASTElement[] {
-  const elements: HASTElement[] = [];
+export function collectAllElements(nodes: ElementContent[]): HtmlElement[] {
+  const elements: HtmlElement[] = [];
   for (const node of nodes) {
     if (isHastElement(node)) {
       elements.push(node);
@@ -322,13 +325,13 @@ export function countSplitRows(result: HunksRenderResult): number {
 
 // Behavioral projections
 //
-// These flatten rendered HAST columns and parsed diffs into small, readable
+// These flatten rendered HTML tree columns and parsed diffs into small, readable
 // structures so tests can assert (or snapshot) just the behavior they own —
 // row order, line numbers, types, text — instead of pinning entire render
 // results that churn on every theme or tokenizer change.
 
-// Recursively concatenates the text nodes under a HAST node.
-export function hastTextContent(node: ElementContent): string {
+// Recursively concatenates the text nodes under a HTML tree node.
+export function getTextContent(node: ElementContent): string {
   if (node.type === 'text') {
     return node.value;
   }
@@ -337,7 +340,7 @@ export function hastTextContent(node: ElementContent): string {
   }
   let text = '';
   for (const child of node.children) {
-    text += hastTextContent(child);
+    text += getTextContent(child);
   }
   return text;
 }
@@ -374,7 +377,7 @@ export function projectColumn(ast: ElementContent[]): ProjectedRow[] {
       const [unifiedStr, splitStr] = lineIndex.split(',');
       const unifiedIndex = Number.parseInt(unifiedStr, 10);
       const splitIndex = Number.parseInt(splitStr, 10);
-      let text = hastTextContent(node);
+      let text = getTextContent(node);
       if (text.endsWith('\n')) {
         text = text.slice(0, -1);
       }

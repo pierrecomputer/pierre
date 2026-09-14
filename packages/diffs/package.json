@@ -58,6 +58,10 @@
     "./worker/worker-portable.js": {
       "types": "./dist/worker/worker-portable.d.ts",
       "import": "./dist/worker/worker-portable.js"
+    },
+    "./highlighter/*": {
+      "types": "./dist/highlighter/*.d.ts",
+      "import": "./dist/highlighter/*.js"
     }
   },
   "publishConfig": {
@@ -67,18 +71,16 @@
     "prepublishOnly": "moon run diffs:prepublish"
   },
   "dependencies": {
+    "@pierre/highlights": "workspace:*",
     "@pierre/theme": "workspace:*",
     "@pierre/theming": "workspace:*",
-    "@shikijs/transformers": "^3.0.0 || ^4.0.0",
     "diff": "catalog:",
-    "hast-util-to-html": "catalog:",
     "lru_map": "catalog:",
-    "shiki": "^3.0.0 || ^4.0.0"
+    "shiki": "catalog:"
   },
   "devDependencies": {
     "@playwright/test": "catalog:",
     "@tsdown/css": "catalog:",
-    "@types/hast": "catalog:",
     "@types/jsdom": "catalog:",
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",

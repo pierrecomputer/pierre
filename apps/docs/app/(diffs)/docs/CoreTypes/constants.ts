@@ -24,7 +24,7 @@ interface FileContents {
   contents: string;
 
   // Optional: Override the detected language for syntax highlighting
-  // See: https://shiki.style/languages
+  // See: https://diffs.com/highlights
   lang?: SupportedLanguages;
 
   // Optional revision identity for rendering and Worker Pool

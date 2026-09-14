@@ -27,7 +27,6 @@ function Example({ oldFile, newFile }) {
       poolOptions={{ workerFactory }}
       highlighterOptions={{
         theme: { dark: 'pierre-dark', light: 'pierre-light' },
-        langs: ['typescript', 'javascript', 'css', 'html'],
       }}
     >
       <Virtualizer
@@ -131,7 +130,6 @@ const workerPool = getOrCreateWorkerPoolSingleton({
   poolOptions: { workerFactory },
   highlighterOptions: {
     theme: { dark: 'pierre-dark', light: 'pierre-light' },
-    langs: ['typescript', 'javascript', 'css', 'html'],
   },
 });
 

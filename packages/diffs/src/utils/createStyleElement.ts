@@ -1,23 +1,20 @@
-import type { Element as HASTElement } from 'hast';
-
 import {
   CORE_CSS_ATTRIBUTE,
   THEME_CSS_ATTRIBUTE,
   UNSAFE_CSS_ATTRIBUTE,
 } from '../constants';
+import type { HElement as HtmlElement } from '../types';
 import { wrapCoreCSS, wrapUnsafeCSS } from './cssWrappers';
-import { createHastElement, createTextNodeElement } from './hast_utils';
+import { createHtmlElement, createTextNode } from './html';
 
 export function createStyleElement(
   content: string,
   isCoreCSS: boolean = false
-): HASTElement {
-  return createHastElement({
+): HtmlElement {
+  return createHtmlElement({
     tagName: 'style',
     children: [
-      createTextNodeElement(
-        isCoreCSS ? wrapCoreCSS(content) : wrapUnsafeCSS(content)
-      ),
+      createTextNode(isCoreCSS ? wrapCoreCSS(content) : wrapUnsafeCSS(content)),
     ],
     properties: {
       [CORE_CSS_ATTRIBUTE]: isCoreCSS ? '' : undefined,
@@ -26,10 +23,10 @@ export function createStyleElement(
   });
 }
 
-export function createThemeStyleElement(content: string): HASTElement {
-  return createHastElement({
+export function createThemeStyleElement(content: string): HtmlElement {
+  return createHtmlElement({
     tagName: 'style',
-    children: [createTextNodeElement(content)],
+    children: [createTextNode(content)],
     properties: {
       [THEME_CSS_ATTRIBUTE]: '',
     },

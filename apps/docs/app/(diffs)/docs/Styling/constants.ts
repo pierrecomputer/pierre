@@ -33,7 +33,7 @@ export const STYLING_CODE_GLOBAL: PreloadFileOptions<undefined, undefined> = {
   --diffs-min-number-column-width: 3ch;
 
   /* By default we try to inherit the deletion/addition/modified
-   * colors from the existing Shiki theme, however if you'd like
+   * colors from the selected theme, however if you'd like
    * to override them, you can do so via these css variables: */
   --diffs-deletion-color-override: orange;
   --diffs-addition-color-override: yellow;

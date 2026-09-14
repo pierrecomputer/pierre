@@ -1,6 +1,6 @@
 import { afterAll, describe, expect, test } from 'bun:test';
 
-import { disposeHighlighter } from '../src/highlighter/shared_highlighter';
+import { disposeHighlighter } from '../src/highlighter';
 import {
   preloadDiffHTML,
   type PreloadDiffOptions,

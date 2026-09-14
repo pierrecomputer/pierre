@@ -11,7 +11,7 @@ The root, React, and SSR entries re-export these types.
 - [`CodeView` types](#codeview-types)
 - [Lines, hunks, and render state](#lines-hunks-and-render-state)
 - [Render results and virtualization](#render-results-and-virtualization)
-- [Shiki and diff types](#shiki-and-diff-types)
+- [Highlighting and diff types](#highlighting-and-diff-types)
 
 ## Files and patches
 
@@ -42,13 +42,12 @@ The root, React, and SSR entries re-export these types.
 
 | Export                               | Purpose                                                      |
 | ------------------------------------ | ------------------------------------------------------------ |
-| `SupportedLanguages`                 | Accepts a bundled, text, ANSI, or custom language name.      |
-| `HighlighterTypes`                   | Selects the JavaScript or WebAssembly Shiki engine.          |
+| `SupportedLanguages`                 | Names a built-in Highlights language, including text.        |
 | `HighlightedToken`                   | Stores a character index, foreground, and token text.        |
 | `DiffsThemeNames`                    | Accepts a bundled or custom theme name.                      |
 | `ThemesType`                         | Maps light and dark schemes to theme names.                  |
 | `ThemeTypes`                         | Selects system, light, or dark mode.                         |
-| `DiffsHighlighter`                   | Defines the package's configured Shiki highlighter.          |
+| `DiffsHighlighter`                   | Defines tokenization and a provider-owned theme resolver.    |
 | `BaseCodeOptions`                    | Configures themes, wrapping, headers, tokenization, and CSS. |
 | `BaseDiffOptions`                    | Adds layout, indicators, context, and line diff options.     |
 | `BaseDiffOptionsWithDefaults`        | Describes required diff options after defaults apply.        |
@@ -159,16 +158,10 @@ file or diff invalidates that cache.
 | `VirtualWindowSpecs`        | Describes viewport position, height, and row window.    |
 | `VirtualFileMetrics`        | Describes estimated header and line heights.            |
 
-## Shiki and diff types
+## Highlighting and diff types
 
-| Export                           | Purpose                                         |
-| -------------------------------- | ----------------------------------------------- |
-| `BundledLanguage`                | Names a language bundled by Shiki.              |
-| `CodeToHastOptions`              | Configures Shiki code-to-HAST output.           |
-| `DecorationItem`                 | Describes a Shiki source decoration.            |
-| `LanguageRegistration`           | Describes a Shiki language grammar.             |
-| `ShikiTransformer`               | Defines a Shiki syntax tree transformer.        |
-| `ThemeRegistration`              | Describes a raw Shiki theme.                    |
-| `ThemeRegistrationResolved`      | Describes a normalized Shiki theme.             |
-| `ThemedToken`                    | Describes one Shiki token with its theme style. |
-| `CreatePatchOptionsNonabortable` | Configures the underlying patch algorithm.      |
+| Export                           | Purpose                                                         |
+| -------------------------------- | --------------------------------------------------------------- |
+| `Theme`                          | Describes a Highlights theme with appearance and syntax styles. |
+| `ThemedToken`                    | Describes one Highlights token with its theme style.            |
+| `CreatePatchOptionsNonabortable` | Configures the underlying patch algorithm.                      |

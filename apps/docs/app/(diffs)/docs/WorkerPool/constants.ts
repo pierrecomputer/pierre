@@ -235,7 +235,6 @@ const workerAPI = createWorkerAPI({
   poolSize: 8,
   initOptions: {
     themes: ['pierre-dark', 'pierre-light'],
-    langs: ['typescript', 'javascript'],
   },
 });
 
@@ -331,12 +330,10 @@ export function HighlightProvider({ children }: { children: ReactNode }) {
       }}
       highlighterOptions={{
         theme: { dark: 'pierre-dark', light: 'pierre-light' },
+        // 'highlights' (default), 'shiki-wasm', or 'shiki-js'
+        preferredHighlighter: 'highlights',
         // Optional: skip inline line diffs for very long changed lines
         // maxLineDiffLength: 1000,
-        // Optional: pick the Shiki engine ('shiki-js' is default)
-        // preferredHighlighter: 'shiki-wasm',
-        // Optionally preload languages to avoid lazy-loading delays
-        langs: ['typescript', 'javascript', 'css', 'html'],
       }}
     >
       {children}
@@ -368,13 +365,11 @@ function ThemeSwitcher() {
 
   const switchToGitHub = () => {
     // setRenderOptions accepts a Partial<WorkerRenderingOptions>.
-    // Any omitted options will use defaults:
-    // - theme: { dark: 'pierre-dark', light: 'pierre-light' }
-    // - lineDiffType: 'word-alt'
-    // - maxLineDiffLength: 1000
-    // - tokenizeMaxLineLength: 1000
+    // Omitted options retain their current values.
     void workerPool?.setRenderOptions({
       theme: { dark: 'github-dark', light: 'github-light' },
+      // Optional: switch the backend along with the theme.
+      preferredHighlighter: 'shiki-js',
     });
   };
 
@@ -410,12 +405,10 @@ const workerPool = getOrCreateWorkerPoolSingleton({
   },
   highlighterOptions: {
     theme: { dark: 'pierre-dark', light: 'pierre-light' },
+    // 'highlights' (default), 'shiki-wasm', or 'shiki-js'
+    preferredHighlighter: 'highlights',
     // Optional: skip inline line diffs for very long changed lines
     // maxLineDiffLength: 1000,
-    // Optional: pick the Shiki engine ('shiki-js' is default)
-    // preferredHighlighter: 'shiki-wasm',
-    // Optionally preload languages to avoid lazy-loading delays
-    langs: ['typescript', 'javascript', 'css', 'html'],
   },
 });
 
@@ -434,13 +427,10 @@ const newFile = { name: 'example.ts', contents: 'const x = 2;' };
 instance.render({ oldFile, newFile, containerWrapper: document.body });
 
 // To change render options dynamically, call setRenderOptions on the worker pool.
-// It accepts a Partial<WorkerRenderingOptions>. Any omitted options will use defaults:
-// - theme: { dark: 'pierre-dark', light: 'pierre-light' }
-// - lineDiffType: 'word-alt'
-// - maxLineDiffLength: 1000
-// - tokenizeMaxLineLength: 1000
+// It accepts a Partial<WorkerRenderingOptions>; omitted options retain their values.
 await workerPool.setRenderOptions({
   theme: { dark: 'github-dark', light: 'github-light' },
+  preferredHighlighter: 'shiki-js',
 });
 // WARNING: Changing render options will force all mounted components
 // to re-render and will clear the render cache.
@@ -470,12 +460,12 @@ new WorkerPoolManager(poolOptions, highlighterOptions)
 //     (Two separate LRU caches are maintained: one for files, one for diffs.
 //      Each cache has this limit, so total cached items can be 2x this value.)
 // - highlighterOptions: WorkerInitializationRenderOptions
+//   - preferredHighlighter?: 'highlights' | 'shiki-wasm' | 'shiki-js' (default: 'highlights')
 //   - theme?: DiffsThemeNames | ThemesType - Theme name or { dark, light } object
+//   - useTokenTransformer?: boolean - Preserve token metadata (default: false)
 //   - lineDiffType?: 'word' | 'word-alt' | 'char' - How to diff lines (default: 'word-alt')
 //   - maxLineDiffLength?: number - Max changed-line length for inline line diffs (default: 1000)
 //   - tokenizeMaxLineLength?: number - Max line length to tokenize (default: 1000)
-//   - preferredHighlighter?: 'shiki-js' | 'shiki-wasm' - Highlighter engine (default: 'shiki-js')
-//   - langs?: SupportedLanguages[] - Array of languages to preload
 
 // Methods:
 poolManager.initialize()
@@ -487,12 +477,14 @@ poolManager.isInitialized()
 poolManager.setRenderOptions(options)
 // Returns: Promise<void> - Changes render options dynamically
 // Accepts: Partial<WorkerRenderingOptions>
+//   - preferredHighlighter?: 'highlights' | 'shiki-wasm' | 'shiki-js'
 //   - theme?: DiffsThemeNames | ThemesType
+//   - useTokenTransformer?: boolean
 //   - lineDiffType?: 'word' | 'word-alt' | 'char'
 //   - maxLineDiffLength?: number
 //   - tokenizeMaxLineLength?: number
-// Omitted options will use defaults. WARNING: This forces all mounted
-// components to re-render and clears the render cache.
+// Omitted options retain their current values. WARNING: Changes force mounted
+// components to re-render and clear the render cache.
 
 poolManager.getRenderOptions()
 // Returns: WorkerRenderingOptions - Current render options (copy)
@@ -624,12 +616,12 @@ export const WORKER_POOL_ARCHITECTURE_ASCII: PreloadFileOptions<
 │ │                                     │ │
 │ │ * Renders plain text synchronously  │ │
 │ │ * Queue requests to WorkerPool for  │ │
-│ │   highlighted HAST                  │ │
+│ │   highlighted HTML                  │ │
 │ │ * Automatically render the          │ │
-│ │   highlighted HAST response         │ │
+│ │   highlighted HTML response         │ │
 │ └─┬─────────────────────────────────┬─┘ │
-│   │ HAST Request                    ↑   │
-│   ↓                   HAST Response │   │
+│   │ HTML Request                    ↑   │
+│   ↓                   HTML Response │   │
 │ ┌ WorkerPoolManager ────────────────┴─┐ │
 │ │ * Shared singleton                  │ │
 │ │ * Manages WorkerPool instance and   │ │
@@ -637,13 +629,13 @@ export const WORKER_POOL_ARCHITECTURE_ASCII: PreloadFileOptions<
 │ └─┬─────────────────────────────────┬─┘ │
 └───│─────────────────────────────────│───┘
     │ postMessage                     ↑
-    ↓                   HAST Response │
+    ↓                   HTML Response │
 ┌───┴───────── Worker Threads ────────│───┐
 │ ┌ worker.js ────────────────────────│─┐ │
 │ │ * 8 threads by default            │ │ │
-│ │ * Runs Shiki's codeToHast() ──────┘ │ │
-│ │ * Manages themes and language       │ │
-│ │   loading automatically             │ │
+│ │ * Runs selected highlighter ──────┘ │ │
+│ │ * Loads themes on demand            │ │
+│ │ * Shiki loads languages on demand   │ │
 │ └─────────────────────────────────────┘ │
 └─────────────────────────────────────────┘`,
   },

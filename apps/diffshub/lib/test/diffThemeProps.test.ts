@@ -1,4 +1,4 @@
-import type { ThemeLike } from '@pierre/theming';
+import { getSharedHighlighter } from '@pierre/diffs';
 import { describe, expect, test } from 'bun:test';
 
 import {
@@ -9,15 +9,30 @@ import {
 
 const loadedLightTheme = {
   name: 'loaded-light-test',
-  type: 'light',
-  colors: { 'editor.background': '#fff' },
-} satisfies ThemeLike & { name: string };
+  appearance: 'light',
+  style: { 'editor.background': '#fff' },
+};
 
 const loadedDarkTheme = {
   name: 'loaded-dark-test',
+  appearance: 'dark',
+  style: { 'editor.background': '#000' },
+};
+
+const loadedShikiTheme = {
+  name: 'loaded-shiki-test',
   type: 'dark',
-  colors: { 'editor.background': '#000' },
-} satisfies ThemeLike & { name: string };
+  colors: {
+    'editor.foreground': '#abcdef',
+    'editor.background': '#123456',
+  },
+  tokenColors: [
+    {
+      scope: ['keyword', 'storage'],
+      settings: { foreground: '#ff0000' },
+    },
+  ],
+};
 
 function acceptDiffThemeInput(_input: DiffThemeInput): void {}
 
@@ -66,7 +81,16 @@ describe('diffThemeProps', () => {
     });
   });
 
-  test('loaded ThemeLike inputs seed by theme.name and resolve to names', () => {
+  test('named theme objects with light and dark fields are not theme pairs', () => {
+    const theme = { name: 'custom-palette', light: '#ffffff', dark: '#000000' };
+    expect(diffThemeSelectionFromInput(theme, 'dark')).toEqual({
+      lightThemeName: theme.name,
+      darkThemeName: theme.name,
+      colorScheme: 'dark',
+    });
+  });
+
+  test('Highlights theme inputs register their styles and resolve to names', async () => {
     expect(
       diffThemeSelectionFromInput(
         { light: loadedLightTheme, dark: loadedDarkTheme },
@@ -77,32 +101,70 @@ describe('diffThemeProps', () => {
       darkThemeName: 'loaded-dark-test',
       colorScheme: 'dark',
     });
+    const highlighter = await getSharedHighlighter({
+      themes: [loadedDarkTheme.name],
+      preferredHighlighter: 'highlights',
+    });
+    const theme = highlighter.getTheme(loadedDarkTheme.name);
+    expect('style' in theme ? theme.style : undefined).toEqual(
+      loadedDarkTheme.style
+    );
   });
 
-  test('diff override types require names on ThemeLike object inputs', () => {
-    acceptDiffThemeInput({ name: 'named-object', type: 'dark' });
+  test.each(['shiki-js', 'shiki-wasm'] as const)(
+    '%s resolves theme objects and uses their token colors',
+    async (preferredHighlighter) => {
+      expect(diffThemeSelectionFromInput(loadedShikiTheme, 'dark')).toEqual({
+        lightThemeName: loadedShikiTheme.name,
+        darkThemeName: loadedShikiTheme.name,
+        colorScheme: 'dark',
+      });
+      const highlighter = await getSharedHighlighter({
+        themes: [loadedShikiTheme.name],
+        langs: ['typescript'],
+        preferredHighlighter,
+      });
+      const theme = highlighter.getTheme(loadedShikiTheme.name);
+      expect('colors' in theme ? theme.colors : undefined).toEqual(
+        loadedShikiTheme.colors
+      );
+      expect(
+        highlighter.codeToTokens('const answer = 42;', {
+          lang: 'typescript',
+          theme,
+        }).tokens[0][0].color
+      ).toBe('#FF0000');
+    }
+  );
+
+  test('diff override types require names on theme object inputs', () => {
+    acceptDiffThemeInput(loadedDarkTheme);
     acceptDiffThemeInput({
-      light: { name: 'named-light-object', type: 'light' },
+      light: loadedLightTheme,
       dark: 'named-dark-theme',
+    });
+    acceptDiffThemeInput({
+      light: 'named-light-theme',
+      dark: loadedShikiTheme,
     });
 
     // @ts-expect-error Diff surfaces pass names to the worker/highlighter, so
     // object overrides must expose the name used to register the theme.
-    acceptDiffThemeInput({ type: 'dark', colors: {} });
+    acceptDiffThemeInput({ appearance: 'dark', style: {} });
 
     acceptDiffThemeInput({
       // @ts-expect-error Pair object slots have the same name requirement.
-      light: { type: 'light', colors: {} },
-      dark: { name: 'named-dark-object', type: 'dark' },
+      light: { appearance: 'light', style: {} },
+      dark: loadedDarkTheme,
     });
   });
 
-  test('nameless ThemeLike inputs still fail with a clear runtime error', () => {
+  test('nameless theme inputs still fail with a clear runtime error', () => {
     expect(() =>
       diffThemeSelectionFromInput(
-        { type: 'dark', colors: {} } as DiffThemeInput,
+        { appearance: 'dark', style: {} } as unknown as DiffThemeInput,
         'dark'
       )
-    ).toThrow('ThemeInput ThemeLike values used by diff wrappers');
+    ).toThrow('Diff theme objects must include a name');
   });
 });

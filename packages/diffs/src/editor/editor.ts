@@ -1628,7 +1628,8 @@ export class Editor<
     // wouldn't otherwise reach it. Re-apply the surface's current theme on every
     // sync so the editor's line-highlight/token colors track the active theme.
     this.#tokenizer?.syncTheme(
-      this.#fileInstance?.__getEffectiveCodeOptions() ?? {}
+      this.#fileInstance?.__getEffectiveCodeOptions() ?? {},
+      highlighter
     );
 
     this.#lineAnnotations = lineAnnotations;
@@ -1637,7 +1638,7 @@ export class Editor<
     // can clamp any edit-time widening against it. Refreshed on every scroll;
     // undefined/Infinity windows leave the clamp disabled.
     this.#viewportWindowLines = renderRange?.totalLines;
-    this.#tokenizer?.prebuildStateStack(renderRange);
+    this.#tokenizer?.prebuildTokens(renderRange);
 
     const retainedEditorState = editSession.editor;
     const restoreEditorStateOnSync = this.#restoreEditorStateOnSync;
@@ -2124,7 +2125,7 @@ export class Editor<
             return;
           }
 
-          const selection = convertSelection(composedRange, DirectionNone);
+          let selection = convertSelection(composedRange, DirectionNone);
           if (selection === undefined) {
             return;
           }
@@ -2144,12 +2145,18 @@ export class Editor<
           }
 
           if (this.#selectionStart !== undefined) {
-            // Keep the browser's range for word and whole-line drags. Rebuilding
-            // it from the initial start drops that word or line when dragging up.
-            selection.direction = createSelectionFrom(
+            const anchoredSelection = createSelectionFrom(
               this.#selectionStart,
               selection
-            ).direction;
+            );
+            // Preserve native word/line ranges, including the initial text in
+            // upward drags. Older Chromium reports only the moving caret, so
+            // rebuild its drag range from the initial anchor.
+            if (this.#isContentMouseDown && isCollapsedSelection(selection)) {
+              selection = anchoredSelection;
+            } else {
+              selection.direction = anchoredSelection.direction;
+            }
           } else if (this.#isContentMouseDown) {
             this.#selectionStart = selection;
           } else if (

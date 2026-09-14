@@ -26,6 +26,7 @@ const config: UserConfig[] = defineConfig([
     },
     unbundle: true,
     platform: 'neutral',
+    deps: { neverBundle: [/^@pierre\/diffs\/highlighter\//] },
     plugins: [
       {
         name: 'postcss-diffs-css',
@@ -69,6 +70,7 @@ const config: UserConfig[] = defineConfig([
     clean: false,
     dts: { sourcemap: true, tsgo: true },
     platform: 'neutral',
+    deps: { neverBundle: [/^@pierre\/diffs\/highlighter\//] },
   },
   {
     entry: ['src/worker/worker-portable.ts'],
@@ -77,6 +79,7 @@ const config: UserConfig[] = defineConfig([
     clean: false,
     unbundle: false,
     deps: { alwaysBundle: [/.*/] },
+    outputOptions: { codeSplitting: false },
     dts: { sourcemap: true, tsgo: true },
     platform: 'neutral',
     format: 'esm',

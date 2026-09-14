@@ -2,7 +2,7 @@ import { afterAll, describe, expect, test } from 'bun:test';
 import { createTwoFilesPatch } from 'diff';
 
 import { CodeView } from '../src/components/CodeView';
-import { disposeHighlighter } from '../src/highlighter/shared_highlighter';
+import { disposeHighlighter } from '../src/highlighter';
 import type {
   CodeViewItem,
   FileContents,

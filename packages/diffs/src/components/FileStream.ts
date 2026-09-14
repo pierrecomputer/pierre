@@ -1,14 +1,14 @@
 import { DEFAULT_THEMES, DIFFS_TAG_NAME } from '../constants';
-import { getSharedHighlighter } from '../highlighter/shared_highlighter';
+import { getHighlighterIfLoaded, getSharedHighlighter } from '../highlighter';
 import {
   dequeueRender,
   queueRender,
 } from '../managers/UniversalRenderingManager';
-import { CodeToTokenTransformStream, type RecallToken } from '../shiki-stream';
 import type {
   AppliedThemeStyleCache,
   BaseCodeOptions,
   DiffsHighlighter,
+  DiffsStreamTokenizer,
   SupportedLanguages,
   ThemedToken,
   ThemeTypes,
@@ -19,9 +19,15 @@ import { formatCSSVariablePrefix } from '../utils/formatCSSVariablePrefix';
 import { getHighlighterOptions } from '../utils/getHighlighterOptions';
 import { getHighlighterThemeStyles } from '../utils/getHighlighterThemeStyles';
 import { getOrCreateCodeNode } from '../utils/getOrCreateCodeNode';
+import { getThemeType } from '../utils/getThemeType';
 import { upsertHostThemeStyle } from '../utils/hostTheme';
 import { getMeasuredScrollbarGutter } from '../utils/scrollbarGutter';
 import { setPreNodeProperties } from '../utils/setWrapperNodeProps';
+
+/** Remove provisional tokens from the unfinished streamed line. */
+export interface FileStreamRecallToken {
+  recall: number;
+}
 
 export interface FileStreamOptions extends BaseCodeOptions {
   lang?: SupportedLanguages;
@@ -31,7 +37,7 @@ export interface FileStreamOptions extends BaseCodeOptions {
   onPostRender?(instance: FileStream): unknown;
 
   onStreamStart?(controller: WritableStreamDefaultController): unknown;
-  onStreamWrite?(token: ThemedToken | RecallToken): unknown;
+  onStreamWrite?(token: ThemedToken | FileStreamRecallToken): unknown;
   onStreamClose?(): unknown;
   onStreamAbort?(reason: unknown): unknown;
 }
@@ -41,8 +47,8 @@ let instanceId = -1;
 export class FileStream {
   readonly __id: string = `file-stream:${++instanceId}`;
 
-  private highlighter: DiffsHighlighter | undefined;
   private stream: ReadableStream<string> | undefined;
+  private streamTokenizer: DiffsStreamTokenizer | undefined;
   private abortController: AbortController | undefined;
   private fileContainer: HTMLElement | undefined;
   private pre: HTMLPreElement | undefined;
@@ -58,9 +64,13 @@ export class FileStream {
   }
 
   cleanUp(): void {
+    this.queuedSetupArgs = undefined;
     dequeueRender(this.render);
     this.abortController?.abort();
     this.abortController = undefined;
+    this.streamTokenizer?.dispose();
+    this.streamTokenizer = undefined;
+    this.queuedTokens.length = 0;
   }
 
   setThemeType(themeType: ThemeTypes): void {
@@ -83,33 +93,42 @@ export class FileStream {
     );
   }
 
-  private async initializeHighlighter(): Promise<DiffsHighlighter> {
-    this.highlighter = await getSharedHighlighter(
-      getHighlighterOptions(this.options.lang, this.options)
-    );
-    return this.highlighter;
-  }
-
   private queuedSetupArgs: [ReadableStream<string>, HTMLElement] | undefined;
   async setup(
-    _source: ReadableStream<string>,
-    _wrapper: HTMLElement
+    source: ReadableStream<string>,
+    wrapper: HTMLElement
   ): Promise<void> {
-    const isSettingUp = this.queuedSetupArgs != null;
-    this.queuedSetupArgs = [_source, _wrapper];
-    if (isSettingUp) {
+    if (this.queuedSetupArgs != null) {
+      this.queuedSetupArgs[0] = source;
+      this.queuedSetupArgs[1] = wrapper;
       // TODO(amadeus): Make it so that this function can be properly
       // awaitable, maybe?
       return;
     }
-    this.highlighter ??= await this.initializeHighlighter();
-
-    const [source, wrapper] = this.queuedSetupArgs;
-    this.queuedSetupArgs = undefined;
-
-    const stream = source;
-
-    this.setupStream(stream, wrapper, this.highlighter);
+    const args: [ReadableStream<string>, HTMLElement] = [source, wrapper];
+    this.queuedSetupArgs = args;
+    try {
+      // Resolve the latest options after each load, unless cleanup canceled setup.
+      while (this.queuedSetupArgs === args) {
+        const langs = [this.options.lang ?? 'text'];
+        const highlighter = getHighlighterIfLoaded({
+          theme: this.options.theme ?? DEFAULT_THEMES,
+          preferredHighlighter: this.options.preferredHighlighter,
+          langs,
+        });
+        if (highlighter != null) {
+          this.queuedSetupArgs = undefined;
+          this.setupStream(args[0], args[1], highlighter);
+          return;
+        }
+        await getSharedHighlighter({
+          ...getHighlighterOptions(this.options),
+          langs,
+        });
+      }
+    } finally {
+      if (this.queuedSetupArgs === args) this.queuedSetupArgs = undefined;
+    }
   }
 
   private setupStream(
@@ -128,13 +147,16 @@ export class FileStream {
       wrapper.appendChild(fileContainer);
     }
     this.pre ??= document.createElement('pre');
+    const baseThemeType =
+      typeof theme === 'string'
+        ? (getThemeType(highlighter.getTheme(theme)) ?? 'dark')
+        : undefined;
+    const themeStyles = getHighlighterThemeStyles({ theme, highlighter });
+    this.applyThemeState(fileContainer, themeStyles, themeType, baseThemeType);
     if (this.pre.parentElement == null) {
       fileContainer.shadowRoot?.appendChild(this.pre);
     }
-    const baseThemeType =
-      typeof theme === 'string' ? highlighter.getTheme(theme).type : undefined;
-    const themeStyles = getHighlighterThemeStyles({ theme, highlighter });
-    this.applyThemeState(fileContainer, themeStyles, themeType, baseThemeType);
+
     const pre = setPreNodeProperties(this.pre, {
       type: 'file',
       diffIndicators: 'none',
@@ -147,9 +169,11 @@ export class FileStream {
     pre.textContent = '';
 
     this.pre = pre;
-    this.code = getOrCreateCodeNode({ code: this.code, pre });
+    this.code = getOrCreateCodeNode({ pre });
     this.gutterElement = undefined;
     this.contentElement = undefined;
+    dequeueRender(this.render);
+    this.queuedTokens.length = 0;
     this.currentRowCount = 0;
     this.currentLineElement = undefined;
     this.currentLineIndex = this.options.startingLineIndex ?? 1;
@@ -160,29 +184,66 @@ export class FileStream {
     // Swallow AbortError / locked-stream rejections since we're tearing down.
     this.stream?.cancel().catch(() => {});
     this.stream = stream;
-    this.stream
-      // tokenizeTimeLimit: 0 — never trade silently-wrong token colors for
-      // latency; see renderFileWithHighlighter for the full rationale.
-      .pipeThrough(
+    this.streamTokenizer?.dispose();
+    const tokenizer = highlighter.createStreamTokenizer({
+      lang: this.options.lang ?? 'text',
+      theme:
         typeof theme === 'string'
-          ? new CodeToTokenTransformStream({
-              ...this.options,
-              theme,
-              highlighter,
-              allowRecalls: true,
-              defaultColor: false,
-              cssVariablePrefix: formatCSSVariablePrefix('token'),
-              tokenizeTimeLimit: 0,
-            })
-          : new CodeToTokenTransformStream({
-              ...this.options,
-              themes: theme,
-              highlighter,
-              allowRecalls: true,
-              defaultColor: false,
-              cssVariablePrefix: formatCSSVariablePrefix('token'),
-              tokenizeTimeLimit: 0,
-            })
+          ? highlighter.getTheme(theme)
+          : {
+              dark: highlighter.getTheme(theme.dark),
+              light: highlighter.getTheme(theme.light),
+            },
+      defaultColor: false,
+      cssVariablePrefix: formatCSSVariablePrefix('token'),
+      tokenizeMaxLineLength: this.options.tokenizeMaxLineLength,
+    });
+    this.streamTokenizer = tokenizer;
+    let pending = '';
+    let offset = 0;
+    let provisional = false;
+    this.stream
+      .pipeThrough(
+        new TransformStream<string, ThemedToken | FileStreamRecallToken>({
+          transform(chunk, controller) {
+            if (provisional) controller.enqueue({ recall: 1 });
+            pending += chunk;
+            const lines = tokenizer.pushCode(chunk);
+            let lineIndex = 0;
+            let consumed = 0;
+            for (const match of pending.matchAll(/\r\n|\r|\n/g)) {
+              if (lineIndex === lines.length) break;
+              for (const token of lines[lineIndex]) controller.enqueue(token);
+              lineIndex++;
+              controller.enqueue({
+                content: match[0],
+                offset: offset + match.index,
+              });
+              consumed = match.index + match[0].length;
+            }
+            offset += consumed;
+            pending = pending.slice(consumed);
+            provisional = pending !== '';
+            // Keep new chunks visible while the native tokenizer retains the
+            // unfinished line. Completed lines replace this provisional text.
+            if (provisional) controller.enqueue({ content: pending, offset });
+          },
+          flush(controller) {
+            if (provisional) controller.enqueue({ recall: 1 });
+            const lines = tokenizer.end();
+            let lineIndex = 0;
+            for (const match of pending.matchAll(/\r\n|\r|\n/g)) {
+              for (const token of lines[lineIndex++]) controller.enqueue(token);
+              controller.enqueue({
+                content: match[0],
+                offset: offset + match.index,
+              });
+            }
+            for (const token of lines[lineIndex]) controller.enqueue(token);
+            if (offset === 0 && pending === '')
+              controller.enqueue({ content: '', offset: 0 });
+          },
+        })
       )
       .pipeTo(
         new WritableStream({
@@ -199,6 +260,7 @@ export class FileStream {
         }),
         { signal: this.abortController.signal }
       )
+      .finally(() => tokenizer.dispose())
       .catch((error) => {
         // Ignore AbortError - it's expected when cleaning up
         if (error.name !== 'AbortError') {
@@ -207,8 +269,8 @@ export class FileStream {
       });
   }
 
-  private queuedTokens: (ThemedToken | RecallToken)[] = [];
-  private handleWrite = (token: ThemedToken | RecallToken) => {
+  private queuedTokens: (ThemedToken | FileStreamRecallToken)[] = [];
+  private handleWrite = (token: ThemedToken | FileStreamRecallToken) => {
     // If we've recalled tokens we haven't rendered yet, we can just yeet them
     // and never apply them
     if ('recall' in token && this.queuedTokens.length >= token.recall) {
@@ -250,7 +312,7 @@ export class FileStream {
           contentFragment.appendChild(contentLine);
         }
         this.currentLineElement?.appendChild(span);
-        if (token.content === '\n') {
+        if (/^(?:\r\n|\r|\n)$/.test(token.content)) {
           this.currentLineIndex++;
           const { gutterLine, contentLine } = this.createLine();
           gutterFragment.appendChild(gutterLine);

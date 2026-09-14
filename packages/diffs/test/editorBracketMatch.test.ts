@@ -6,7 +6,7 @@ import { Editor, type EditorOptions } from '../src/editor/editor';
 import { findBracketMatchRanges } from '../src/editor/matchBrackets';
 import { TextDocument } from '../src/editor/textDocument';
 import { EditorTokenizer } from '../src/editor/tokenizer';
-import { disposeHighlighter } from '../src/highlighter/shared_highlighter';
+import { disposeHighlighter } from '../src/highlighter';
 import type { FileContents } from '../src/types';
 import { installDom, wait } from './domHarness';
 
