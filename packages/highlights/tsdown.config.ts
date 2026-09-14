@@ -10,7 +10,7 @@ const tokenTypesPath = fileURLToPath(
 // before tsdown runs (see moon.yml); keep ./highlights.wasm* imports as-is for
 // runtime resolution next to the glue. tsdown builds the two configs
 // concurrently, which is why the wasm phase cannot live in a build hook: it
-// rewrites lib/token-types.ts, which the first config compiles.
+// rewrites the token and language tables, which the first config compiles.
 const config: UserConfig[] = defineConfig([
   {
     entry: [
@@ -20,6 +20,7 @@ const config: UserConfig[] = defineConfig([
       'lib/tokens.ts',
       'lib/theme.ts',
       'lib/token-types.ts',
+      'lib/languages.ts',
       'lib/browser.ts',
       'lib/node.ts',
       'lib/workerd.ts',

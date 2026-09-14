@@ -7,7 +7,7 @@ tags: ['tsdown', 'publishable']
 tasks:
   # Replaces the tsdown tag build. scripts/build.ts first compiles the WAT
   # sources, emits the wasm, theme modules, and loader with declarations, and
-  # regenerates the $Token ABI in lib/token-types.ts; tsdown compiles the glue.
+  # regenerates the token and language tables; tsdown compiles the glue.
   # The wasm artifacts are gitignored, so workspace consumers (docs) reach
   # them through their `^:build` deps.
   build:
@@ -15,11 +15,12 @@ tasks:
     deps:
       - '^:build'
     inputs:
-      # lib/token-types.ts is derived from the $Token enum in the WAT sources
-      # and rewritten by this task, so it must not key the cache.
+      # These tables are derived from WAT and rewritten by this task, so they
+      # must not key the cache.
       - 'src/**/*'
       - 'lib/**/*'
       - '!lib/token-types.ts'
+      - '!lib/languages.ts'
       - 'themes/index.ts'
       - 'themes/*.json'
       - 'scripts/build.ts'
@@ -27,6 +28,7 @@ tasks:
       - 'tsconfig.json'
     outputs:
       - 'dist'
+      - 'lib/languages.ts'
     options:
       merge: 'replace'
 

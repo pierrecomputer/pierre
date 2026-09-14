@@ -11,27 +11,28 @@ UTF-8 input -> language lexer -> HTML bytes
 
 ## Source map
 
-| Source               | Responsibility                                         |
-| -------------------- | ------------------------------------------------------ |
-| `src/highlights.wat` | Memory, language IDs, host imports, dispatch           |
-| `src/memory.wat`     | Static addresses and scratch regions                   |
-| `src/token.wat`      | Token IDs, CSS-variable names, theme access            |
-| `src/scan.wat`       | Input cursors and SIMD scans                           |
-| `src/emit.wat`       | HTML, token records, driver setup and teardown         |
-| `src/common.wat`     | Shared identifier, number, string, and comment scans   |
-| `src/sig.wat`        | Parameter-list classification                          |
-| `src/langs/*.wat`    | Language lexers                                        |
-| `src/embed.wat`      | Resumption of embedded languages                       |
-| `src/live.wat`       | Document heap, line table, state interning, edits      |
-| `lib/index.ts`       | Public types and exports                               |
-| `lib/highlighter.ts` | Wasm instances, aliases, input, themes, streaming      |
-| `lib/live.ts`        | Edit validation, WTF-8 text, deferred work, live reads |
-| `lib/tokens.ts`      | Token records to themed objects                        |
-| `lib/theme.ts`       | Theme resolution and binary compilation                |
-| `lib/token-types.ts` | Generated token ABI, tracked in git                    |
-| `themes/`            | Theme JSON, named exports, CSS conversion              |
-| `scripts/build.ts`   | WAT preprocessing, compilation, generated artifacts    |
-| `test/`              | Bun tests, including lexer and Wasm conformance        |
+| Source               | Responsibility                                            |
+| -------------------- | --------------------------------------------------------- |
+| `src/highlights.wat` | Memory, language IDs, host imports, dispatch              |
+| `src/memory.wat`     | Static addresses and scratch regions                      |
+| `src/token.wat`      | Token IDs, CSS-variable names, theme access               |
+| `src/scan.wat`       | Input cursors and SIMD scans                              |
+| `src/emit.wat`       | HTML, token records, driver setup and teardown            |
+| `src/common.wat`     | Shared identifier, number, string, and comment scans      |
+| `src/sig.wat`        | Parameter-list classification                             |
+| `src/langs/*.wat`    | Language lexers                                           |
+| `src/embed.wat`      | Resumption of embedded languages                          |
+| `src/live.wat`       | Document heap, line table, state interning, edits         |
+| `lib/index.ts`       | Public types and exports                                  |
+| `lib/highlighter.ts` | Wasm instances, aliases, input, themes, streaming         |
+| `lib/languages.ts`   | Generated language lookup and `Lang` type, tracked in git |
+| `lib/live.ts`        | Edit validation, WTF-8 text, deferred work, live reads    |
+| `lib/tokens.ts`      | Token records to themed objects                           |
+| `lib/theme.ts`       | Theme resolution and binary compilation                   |
+| `lib/token-types.ts` | Generated token ABI, tracked in git                       |
+| `themes/`            | Theme JSON, named exports, CSS conversion                 |
+| `scripts/build.ts`   | WAT preprocessing, compilation, generated artifacts       |
+| `test/`              | Bun tests, including lexer and Wasm conformance           |
 
 ## WAT preprocessing
 
@@ -44,6 +45,7 @@ forms are expanded.
 | ---------------------------------------------------------------------- | ---------------------------------------------------------------------- |
 | `(import "./token.wat")`                                               | Inline a local module                                                  |
 | `(enum $Token "none" ...)`                                             | Sequential IDs; `(enum.get $Token.none)` reads one                     |
+| `(language-table (language "name" $lexer "alias" ...) ...)`            | `$Language` IDs, `$hlDispatch`, and the JavaScript name lookup         |
 | `(const $mem.name 64)`                                                 | Build-time address                                                     |
 | `(css-variable-table ...)`                                             | Kebab-case token names and lookup records                              |
 | `(bitset ...)` / `(bitset.get ...)`                                    | Per-enum flag bytes and a load/mask                                    |
@@ -54,6 +56,24 @@ forms are expanded.
 
 Enum order is ABI. Static addresses live in
 [`src/memory.wat`](./src/memory.wat). Use hex constants for escaped quotes.
+
+### Language registration
+
+The `language-table` in [`src/highlights.wat`](./src/highlights.wat) owns each
+language's canonical name, lexer function, and aliases. Declaration order
+assigns the numeric IDs and dispatch slots; append new languages to preserve
+existing IDs. Names are lowercase, unique across the table, and include aliases
+such as `c++` and `c#`. The language control byte allows at most 256 entries.
+
+The build generates [`lib/languages.ts`](./lib/languages.ts) from this table.
+`Lang` derives from the lookup's literal keys. The generated file stays tracked
+so tests and typechecking work without a package build; the conformance test
+checks that it matches the WAT declaration. Individual lexer fixtures omit the
+table entirely.
+
+Lexer imports, stream checkpoint participation, and Markdown fence support
+remain separate: several languages share a lexer implementation, and fence
+support is a distinct subset of the supported languages.
 
 ### Keyword tables
 

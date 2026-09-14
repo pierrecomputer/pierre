@@ -105,80 +105,76 @@
   (import "./live.wat")
   (import "./token.wat")
 
-  ;; Numeric values are the public ABI mirrored by lib/highlighter.ts.
-  (enum $Language
-    "plain"
-    "angular-html"
-    "asm"
-    "astro"
-    "bash"
-    "c"
-    "c3"
-    "clojure"
-    "cmake"
-    "cpp"
-    "csharp"
-    "css"
-    "dart"
-    "diff"
-    "dockerfile"
-    "elixir"
-    "erlang"
-    "fsharp"
-    "gleam"
-    "glsl"
-    "go"
-    "graphql"
-    "groovy"
-    "haskell"
-    "hlsl"
-    "html"
-    "java"
-    "js"
-    "json"
-    "jsx"
-    "julia"
-    "kotlin"
-    "less"
-    "lisp"
-    "lua"
-    "makefile"
-    "markdown"
-    "matlab"
-    "mdx"
-    "nix"
-    "objc"
-    "ocaml"
-    "pascal"
-    "perl"
-    "php"
-    "powershell"
-    "proto"
-    "python"
-    "r"
-    "ruby"
-    "rust"
-    "sass"
-    "scala"
-    "scss"
-    "sql"
-    "svelte"
-    "swift"
-    "terraform"
-    "toml"
-    "ts"
-    "tsrx"
-    "tsx"
-    "vue"
-    "wat"
-    "wgsl"
-    "xml"
-    "yaml"
-    "zig")
-
-  ;; language dispatch table, one entry per $Language member in enum order
-  (table $hlDispatch funcref
-    (elem $hlPlain $hlAngularHtml $hlAsm $hlAstro $hlBash $hlC $hlC3 $hlClojure $hlCmake $hlCpp $hlCsharp $hlCss $hlDart $hlDiff $hlDockerfile $hlElixir $hlErlang $hlFsharp $hlGleam $hlGlsl $hlGo $hlGraphql $hlGroovy $hlHaskell $hlHlsl $hlHtml $hlJava $hlJs $hlJson $hlJsx $hlJulia $hlKotlin $hlLess $hlLisp $hlLua $hlMakefile $hlMarkdown $hlMatlab $hlMdx $hlNix $hlObjc $hlOcaml $hlPascal $hlPerl $hlPhp $hlPowershell $hlProto $hlPython $hlR $hlRuby $hlRust $hlSass $hlScala $hlScss $hlSql $hlSvelte $hlSwift $hlTerraform $hlToml $hlTs $hlTsrx $hlTsx $hlVue $hlWat $hlWgsl $hlXml $hlYaml $hlZig))
+  ;; Declaration order is the language ABI; append new languages to keep IDs stable.
+  (language-table
+    (language "plain" $hlPlain "plaintext" "text" "txt")
+    (language "angular-html" $hlAngularHtml)
+    (language "asm" $hlAsm "assembly" "s")
+    (language "astro" $hlAstro)
+    (language "bash" $hlBash "sh" "shell" "shellscript" "shellsession" "zsh")
+    (language "c" $hlC "h")
+    (language "c3" $hlC3)
+    (language "clojure" $hlClojure "clj" "cljc" "cljs" "edn")
+    (language "cmake" $hlCmake)
+    (language "cpp" $hlCpp "c++" "cc" "cxx" "hh" "hpp" "hxx")
+    (language "csharp" $hlCsharp "c#" "cs")
+    (language "css" $hlCss)
+    (language "dart" $hlDart)
+    (language "diff" $hlDiff "git-commit" "git-rebase" "patch")
+    (language "dockerfile" $hlDockerfile "containerfile" "docker")
+    (language "elixir" $hlElixir "ex" "exs")
+    (language "erlang" $hlErlang "erl" "hrl")
+    (language "fsharp" $hlFsharp "f#" "fs" "fsi" "fsx")
+    (language "gleam" $hlGleam)
+    (language "glsl" $hlGlsl "comp" "frag" "geom" "vert")
+    (language "go" $hlGo "golang")
+    (language "graphql" $hlGraphql "gql")
+    (language "groovy" $hlGroovy "gradle" "gsh" "gvy" "gy")
+    (language "haskell" $hlHaskell "hs")
+    (language "hlsl" $hlHlsl)
+    (language "html" $hlHtml "htm")
+    (language "java" $hlJava)
+    (language "js" $hlJs "cjs" "javascript" "mjs")
+    (language "json" $hlJson "jsonc")
+    (language "jsx" $hlJsx)
+    (language "julia" $hlJulia "jl")
+    (language "kotlin" $hlKotlin "kt" "kts")
+    (language "less" $hlLess)
+    (language "lisp" $hlLisp "cl" "el" "elisp" "emacs-lisp" "lsp" "scheme" "scm")
+    (language "lua" $hlLua)
+    (language "makefile" $hlMakefile "make" "mk")
+    (language "markdown" $hlMarkdown "md")
+    (language "matlab" $hlMatlab "octave")
+    (language "mdx" $hlMdx)
+    (language "nix" $hlNix)
+    (language "objc" $hlObjc "m" "mm" "objcpp" "objective-c" "objective-cpp" "objectivec")
+    (language "ocaml" $hlOcaml "ml" "mli")
+    (language "pascal" $hlPascal "delphi" "dpk" "dpr" "lpr" "object-pascal" "objectpascal" "pas" "pp")
+    (language "perl" $hlPerl "pl" "pm")
+    (language "php" $hlPhp)
+    (language "powershell" $hlPowershell "ps" "ps1" "psd1" "psm1" "pwsh")
+    (language "proto" $hlProto "protobuf")
+    (language "python" $hlPython "py")
+    (language "r" $hlR "rscript")
+    (language "ruby" $hlRuby "rb")
+    (language "rust" $hlRust "rs")
+    (language "sass" $hlSass)
+    (language "scala" $hlScala "sbt" "sc")
+    (language "scss" $hlScss)
+    (language "sql" $hlSql)
+    (language "svelte" $hlSvelte)
+    (language "swift" $hlSwift)
+    (language "terraform" $hlTerraform "hcl" "tf" "tfvars")
+    (language "toml" $hlToml)
+    (language "ts" $hlTs "angular-ts" "cts" "mts" "typescript")
+    (language "tsrx" $hlTsrx)
+    (language "tsx" $hlTsx)
+    (language "vue" $hlVue)
+    (language "wat" $hlWat "wasm")
+    (language "wgsl" $hlWgsl)
+    (language "xml" $hlXml "svg" "xsd")
+    (language "yaml" $hlYaml "yml")
+    (language "zig" $hlZig))
 
   ;; plain text: one unstyled token covering the whole input
   (func $hlPlain

@@ -4,6 +4,7 @@ import test from 'node:test';
 import { HighlightsHighlighter, langIdOf } from '../lib/highlighter';
 import type { Lang } from '../lib/index';
 import {
+  generateLanguages,
   listTokenTypes,
   optimizeWasm,
   transformWat,
@@ -271,6 +272,7 @@ const synthetic = (body: string) =>
 void test('preprocessor: comments cannot define, import, or reference forms', () => {
   const { code, enumMap } = synthetic(`
     ;; (enum $Ghost "a" "b")
+    ;; (language-table (language "ghost" $missing))
     (; (enum $Block "c") (byteset.get "ab" (local.get $x)) ;)
     (enum $Real "x" "y")
     (func $f (result i32)
@@ -283,6 +285,104 @@ void test('preprocessor: comments cannot define, import, or reference forms', ()
   assert.equal(code.includes('old_hook'), false);
   assert.ok(code.includes('i32.const 0x3b3b'));
   wat2wasm(preludeUrl.pathname, code);
+});
+
+void test('preprocessor: language registration derives IDs, aliases, and dispatch', () => {
+  const { code, enumMap, languages } = synthetic(`
+    (language-table
+      (language "plain" $zero "text")
+      (language "cpp" $one "c++" "cc")
+      (language "csharp" $two "c#")
+      (language "fsharp" $two "f#"))
+    (type $value (func (result i32)))
+    (func $zero (result i32) (i32.const 10))
+    (func $one (result i32) (i32.const 20))
+    (func $two (result i32) (i32.const 30))
+    (func (export "dispatch") (param $id i32) (result i32)
+      (call_indirect (type $value) (local.get $id)))`);
+  assert.deepEqual(enumMap.get('$Language'), {
+    plain: 0,
+    cpp: 1,
+    csharp: 2,
+    fsharp: 3,
+  });
+  assert.deepEqual(languages, {
+    plain: 0,
+    text: 0,
+    'c++': 1,
+    cc: 1,
+    cpp: 1,
+    'c#': 2,
+    csharp: 2,
+    'f#': 3,
+    fsharp: 3,
+  });
+  const instance = new WebAssembly.Instance(
+    new WebAssembly.Module(wat2wasm(preludeUrl.pathname, code))
+  );
+  const dispatch = instance.exports.dispatch as (id: number) => number;
+  for (const [name, id] of Object.entries(languages)) {
+    assert.equal(dispatch(id), [10, 20, 30, 30][id], name);
+  }
+  assert.throws(() => dispatch(4), WebAssembly.RuntimeError);
+});
+
+void test('preprocessor: language registration rejects ambiguous or malformed entries', () => {
+  for (const body of [
+    '(language "js" $f "js")',
+    '(language "js" $f "shared") (language "ts" $g "shared")',
+    '(language "js" $f "ts") (language "ts" $g)',
+  ]) {
+    assert.throws(
+      () => synthetic(`(language-table ${body})`),
+      /Duplicate language name/
+    );
+  }
+  for (const [body, message] of [
+    ['(entry "js" $f)', /expects language entries/],
+    ['(language JS $f)', /canonical language name/],
+    ['(language "JS" $f)', /canonical language name/],
+    ['(language "js")', /needs a lexer function/],
+    ['(language "js" 42)', /needs a lexer function/],
+    ['(language "js" $f "JavaScript")', /Invalid language alias/],
+    ['(language "js" $f "two words")', /Invalid language alias/],
+  ] as const) {
+    assert.throws(() => synthetic(`(language-table ${body})`), message);
+  }
+  assert.throws(
+    () =>
+      synthetic(`
+    (language-table (language "js" $f))
+    (language-table (language "ts" $g))`),
+    /Duplicate language-table/
+  );
+  assert.throws(
+    () =>
+      synthetic(`
+    (enum $Language "js")
+    (language-table (language "ts" $g))`),
+    /Duplicate enum/
+  );
+});
+
+void test('preprocessor: language IDs fit the control byte and partial fixtures need no table', () => {
+  const entries = Array.from(
+    { length: 257 },
+    (_, i) => `(language "l${i}" $f)`
+  );
+  const full = synthetic(`(language-table ${entries.slice(0, 256).join(' ')})`);
+  assert.equal(full.languages.l255, 255);
+  assert.throws(
+    () => synthetic(`(language-table ${entries.join(' ')})`),
+    /1–256 languages/
+  );
+  assert.throws(() => synthetic('(language-table )'), /1–256 languages/);
+  const partial = synthetic('(enum $Local "a")');
+  assert.deepEqual(partial.languages, {});
+  assert.throws(
+    () => generateLanguages(partial.languages),
+    /no language-table/
+  );
 });
 
 void test('preprocessor: stream lexers must branch by label name', () => {

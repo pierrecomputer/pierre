@@ -12,7 +12,7 @@ import {
   StreamTokenizer,
 } from '../lib/index';
 import tokenTypes from '../lib/token-types';
-import { transformWat, wat2wasm } from '../scripts/build';
+import { generateLanguages, transformWat, wat2wasm } from '../scripts/build';
 import { samples } from './_samples';
 import {
   bodyOf,
@@ -269,32 +269,32 @@ const openers = [
   '🙂',
 ];
 
-void t.test('conformance: enum, alias table, and Lang type agree', () => {
-  // every lexer is reachable through its own name and keeps its enum id
-  for (const [name, id] of Object.entries(languageEnum)) {
-    assert.equal(LANGS[name], id, name);
+void t.test(
+  'conformance: generated language lookup matches WAT registration',
+  () => {
+    assert.deepEqual(LANGS, compiled.languages);
+    assert.equal(
+      readFileSync(new URL('../lib/languages.ts', import.meta.url), 'utf8'),
+      generateLanguages(compiled.languages),
+      'rebuild highlights to regenerate lib/languages.ts'
+    );
+    // every lexer is reachable through its own name and keeps its enum id
+    for (const [name, id] of Object.entries(languageEnum)) {
+      assert.equal(LANGS[name], id, name);
+    }
+    // every alias points at a lexer that exists
+    const ids = new Set(Object.values(languageEnum));
+    for (const [alias, id] of Object.entries(LANGS)) {
+      assert.ok(ids.has(id), `${alias} -> ${id}`);
+    }
+    // Lookups fold case so `Rust` and `RUST` reach the same lexer as `rust`.
+    for (const alias of Object.keys(LANGS)) {
+      assert.equal(alias, alias.toLowerCase(), alias);
+      assert.ok(isSupportedLanguage(alias.toUpperCase()), alias);
+    }
+    assert.equal(isSupportedLanguage('not-a-language'), false);
   }
-  // every alias points at a lexer that exists
-  const ids = new Set(Object.values(languageEnum));
-  for (const [alias, id] of Object.entries(LANGS)) {
-    assert.ok(ids.has(id), `${alias} -> ${id}`);
-  }
-  // the public `Lang` union lists exactly the alias table, and lookups fold
-  // case so `Rust` and `RUST` reach the same lexer as `rust`
-  const source = readFileSync(
-    new URL('../lib/index.ts', import.meta.url),
-    'utf8'
-  );
-  const union = source.match(/export type Lang =([\s\S]*?);/);
-  assert.ok(union !== null, 'Lang union in lib/index.ts');
-  const typed = [...union[1].matchAll(/'([^']+)'/g)].map((m) => m[1]);
-  assert.deepEqual(typed.sort(), Object.keys(LANGS).sort());
-  for (const alias of Object.keys(LANGS)) {
-    assert.equal(alias, alias.toLowerCase(), alias);
-    assert.ok(isSupportedLanguage(alias.toUpperCase()), alias);
-  }
-  assert.equal(isSupportedLanguage('not-a-language'), false);
-});
+);
 
 void t.test('conformance: every lexer has a corpus sample', () => {
   assert.deepEqual(Object.keys(samples).sort(), [...lexers].sort());
