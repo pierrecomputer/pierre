@@ -964,7 +964,7 @@ describe('DiffHunksRenderer worker rendering', () => {
 });
 
 describe('VirtualizedFileDiff worker rendering', () => {
-  test('recomputes a pending layout when a replacement highlight completes', async () => {
+  test.each([false, true])('updates layout (hidden=%s)', async (hidden) => {
     const dom = installDom();
     const { manager, worker } = await createInitializedManager({
       theme: 'pierre-dark',
@@ -984,7 +984,7 @@ describe('VirtualizedFileDiff worker rendering', () => {
     );
     const replacementDiff = createWorkerDiff(
       'virtualized:replacement',
-      'const replacement = 2;\n'
+      'const replacement = 2;\nconst extra = 3;\nconst last = 4;\n'
     );
     const primeCurrent = manager.primeDiffHighlightCache(currentDiff);
 
@@ -1020,12 +1020,37 @@ describe('VirtualizedFileDiff worker rendering', () => {
       // Observe a completed no-op pass while the worker still holds B. This
       // proves the stale layout exists without assuming a particular delay.
       await waitFor(() => expect(onRender).toHaveReturnedWith(false));
+
+      const previousHeight = instance.height;
+      if (hidden) {
+        dom.triggerIntersectionObserver(fileContainer, false);
+        await waitFor(() =>
+          expect(
+            fileContainer.shadowRoot?.querySelector('[data-placeholder]')
+          ).not.toBeNull()
+        );
+        expect(instance.height).toBe(previousHeight);
+      }
       respondWithHighlightedDiff(
         manager,
         worker,
         replacementRequest,
         replacementDiff
       );
+      if (hidden) {
+        // The completed worker result must update the retained placeholder
+        // layout before the instance is shown again.
+        await waitFor(() =>
+          expect(instance.height).toBeGreaterThan(previousHeight)
+        );
+        expect(
+          fileContainer.shadowRoot?.querySelector<HTMLElement>(
+            '[data-placeholder]'
+          )?.style.height
+        ).toBe(`${instance.height}px`);
+        dom.triggerIntersectionObserver(fileContainer, true);
+      }
+
       await waitFor(() =>
         expect(fileContainer.shadowRoot?.innerHTML ?? '').toContain(
           'replacement'
@@ -1044,7 +1069,7 @@ describe('VirtualizedFileDiff worker rendering', () => {
 });
 
 describe('VirtualizedFile worker rendering', () => {
-  test('recomputes a pending layout when a replacement highlight completes', async () => {
+  test.each([false, true])('updates layout (hidden=%s)', async (hidden) => {
     const dom = installDom();
     const { manager, worker } = await createInitializedManager({
       theme: 'pierre-dark',
@@ -1065,7 +1090,7 @@ describe('VirtualizedFile worker rendering', () => {
     };
     const replacementFile: FileContents = {
       name: 'pending.ts',
-      contents: 'const replacement = 2;\n',
+      contents: 'const replacement = 2;\nconst extra = 3;\nconst last = 4;\n',
       cacheKey: 'virtualized-file:replacement',
     };
 
@@ -1095,7 +1120,32 @@ describe('VirtualizedFile worker rendering', () => {
       // Keep the worker result pending until the real virtualizer has
       // prepared the old file's layout and completed a no-op render pass.
       await waitFor(() => expect(onRender).toHaveReturnedWith(false));
+
+      const previousHeight = instance.height;
+      if (hidden) {
+        dom.triggerIntersectionObserver(fileContainer, false);
+        await waitFor(() =>
+          expect(
+            fileContainer.shadowRoot?.querySelector('[data-placeholder]')
+          ).not.toBeNull()
+        );
+        expect(instance.height).toBe(previousHeight);
+      }
       await respondWithRealFileHighlight(manager, worker, replacementFile);
+      if (hidden) {
+        // The completed worker result must update the retained placeholder
+        // layout before the instance is shown again.
+        await waitFor(() =>
+          expect(instance.height).toBeGreaterThan(previousHeight)
+        );
+        expect(
+          fileContainer.shadowRoot?.querySelector<HTMLElement>(
+            '[data-placeholder]'
+          )?.style.height
+        ).toBe(`${instance.height}px`);
+        dom.triggerIntersectionObserver(fileContainer, true);
+      }
+
       await waitFor(() =>
         expect(fileContainer.shadowRoot?.innerHTML ?? '').toContain(
           'replacement'

@@ -4,16 +4,25 @@ import { VirtualizedFile } from '../src/components/VirtualizedFile';
 import { VirtualizedFileDiff } from '../src/components/VirtualizedFileDiff';
 import { Virtualizer } from '../src/components/Virtualizer';
 import { DEFAULT_VIRTUAL_FILE_METRICS } from '../src/constants';
+import type { DiffLineAnnotation, LineAnnotation } from '../src/types';
 import { parseDiffFromFile } from '../src/utils/parseDiffFromFile';
-import { createRoot, installDom } from './domHarness';
+import { createRoot, installDom, wait, waitFor } from './domHarness';
 
-class TestVirtualizedFile extends VirtualizedFile {
+class TestVirtualizedFile extends VirtualizedFile<string> {
+  getAnnotationsForTest() {
+    return this.getLatestAnnotations();
+  }
+
   getRenderedContentForTest() {
     return this.getRenderedFile();
   }
 }
 
-class TestVirtualizedFileDiff extends VirtualizedFileDiff {
+class TestVirtualizedFileDiff extends VirtualizedFileDiff<string> {
+  getAnnotationsForTest() {
+    return this.getLatestAnnotations();
+  }
+
   getRenderedContentForTest() {
     return this.getRenderedDiff();
   }
@@ -55,8 +64,8 @@ function installFrameHarness() {
   };
 }
 
-// Keep the element beyond the real virtualizer's visibility margin. Geometry
-// follows the placeholder's CSS height because jsdom does not perform layout.
+// Start beyond the real virtualizer's visibility margin, then move with the
+// scroll container. Row measurements are supplied because jsdom has no layout.
 function createOffscreenFixture(kind: 'file' | 'diff') {
   const harness = installFrameHarness();
   const root = createRoot({ height: 600 });
@@ -71,61 +80,179 @@ function createOffscreenFixture(kind: 'file' | 'diff') {
     );
 
   container.getBoundingClientRect = () => ({
-    top: 10_000,
-    bottom: 10_000 + placeholderHeight(),
+    top: 10_000 - root.scrollTop,
+    bottom: 10_000 - root.scrollTop + instance.height,
     left: 0,
     right: 1_000,
     width: 1_000,
-    height: placeholderHeight(),
+    height: instance.height,
     x: 0,
-    y: 10_000,
+    y: 10_000 - root.scrollTop,
     toJSON() {
       return {};
     },
   });
   Object.defineProperty(root, 'scrollHeight', {
-    get: () => 10_000 + placeholderHeight(),
+    value: 20_000,
   });
 
   const virtualizer = new Virtualizer();
-  const options = { disableFileHeader: true };
-  const metrics = {
+  const options = {
+    disableFileHeader: true,
+    renderAnnotation: (annotation: LineAnnotation<string>) => {
+      const node = document.createElement('span');
+      node.textContent = annotation.metadata;
+      return node;
+    },
+    // jsdom cannot measure rows or slotted annotations. Supply their geometry
+    // after each content render using the current line height and 12px notes.
+    onPostRender: (node: HTMLElement) => {
+      for (const row of node.shadowRoot?.querySelectorAll<HTMLElement>(
+        '[data-line], [data-line-annotation]'
+      ) ?? []) {
+        const height = row.hasAttribute('data-line') ? metrics.lineHeight : 12;
+        row.getBoundingClientRect = () => ({
+          top: 0,
+          bottom: height,
+          left: 0,
+          right: 1_000,
+          width: 1_000,
+          height,
+          x: 0,
+          y: 0,
+          toJSON() {
+            return {};
+          },
+        });
+      }
+    },
+  };
+  let metrics = {
     ...DEFAULT_VIRTUAL_FILE_METRICS,
     lineHeight: 20,
     paddingTop: 0,
     paddingBottom: 0,
   };
-  const instance =
+  let layoutOptions: { collapsed?: boolean; diffStyle?: 'split' | 'unified' } =
+    {};
+  const createInstance = () =>
     kind === 'file'
-      ? new TestVirtualizedFile(options, virtualizer, metrics)
-      : new TestVirtualizedFileDiff(options, virtualizer, metrics);
-  const onRender = spyOn(instance, 'onRender');
+      ? new TestVirtualizedFile(
+          { ...options, ...layoutOptions },
+          virtualizer,
+          metrics
+        )
+      : new TestVirtualizedFileDiff(
+          { ...options, ...layoutOptions },
+          virtualizer,
+          metrics
+        );
+  let instance = createInstance();
+  let onRender = spyOn(instance, 'onRender');
   const consoleError = spyOn(console, 'error').mockImplementation(() => {});
+
+  // The file omits a final empty editor line; the diff includes a final
+  // newline so it has no extra "no newline" metadata row. Both initially have
+  // three rows.
+  let file = { name: 'offscreen.txt', contents: 'first\nsecond\nthird' };
+  let fileDiff = parseDiffFromFile(null, {
+    ...file,
+    contents: `${file.contents}\n`,
+  });
+  const render = (lineAnnotations?: DiffLineAnnotation<string>[]) => {
+    if (instance instanceof TestVirtualizedFile) {
+      instance.render({ file, fileContainer: container, lineAnnotations });
+    } else {
+      instance.render({ fileDiff, fileContainer: container, lineAnnotations });
+    }
+  };
+  const expectHidden = (height: number) => {
+    harness.flushFrames(10);
+    expect(harness.frames.size).toBe(0);
+    expect(placeholderHeight()).toBe(height);
+    expect(instance.height).toBe(height);
+    expect(
+      container.shadowRoot?.querySelector('[data-placeholder]')
+    ).not.toBeNull();
+    expect(consoleError).not.toHaveBeenCalled();
+    expect(harness.flushFrames(10)).toBe(0);
+  };
 
   return {
     ...harness,
     container,
-    instance,
-    onRender,
+    get instance() {
+      return instance;
+    },
+    get onRender() {
+      return onRender;
+    },
     consoleError,
     placeholderHeight,
+    render,
+    expectHidden,
     mount() {
       virtualizer.setup(root, content);
-      // Both fixtures have three 20px rows. The diff ends with a newline to
-      // avoid an extra "no newline" metadata row; the file omits a trailing
-      // newline to avoid an extra empty editor line.
-      const file = { name: 'offscreen.txt', contents: 'first\nsecond\nthird' };
-      if (instance instanceof TestVirtualizedFile) {
-        instance.render({ file, fileContainer: container });
-      } else {
-        instance.render({
-          fileDiff: parseDiffFromFile(null, {
-            ...file,
-            contents: `${file.contents}\n`,
-          }),
-          fileContainer: container,
-        });
-      }
+      render();
+      harness.dom.triggerIntersectionObserver(container, false);
+    },
+    // A content render can wait for highlighter startup. Wait for its DOM before
+    // checking idle frames, rather than treating an empty queue as completion.
+    async show(expectedText: string) {
+      virtualizer.scrollTo({ top: 10_000 });
+      harness.dom.triggerIntersectionObserver(container, true);
+      await waitFor(() => {
+        harness.flushFrames(10);
+        return (
+          container.shadowRoot?.querySelector('[data-line]') != null &&
+          (container.shadowRoot
+            .querySelector('pre')
+            ?.textContent?.includes(expectedText) ??
+            false)
+        );
+      });
+      expect(
+        container.shadowRoot?.querySelector('[data-placeholder]')
+      ).toBeNull();
+      expect(container.shadowRoot?.querySelector('pre')?.textContent).toContain(
+        expectedText
+      );
+      expect(instance.getRenderedContentForTest()).toBeDefined();
+      await wait(0);
+      harness.flushFrames(10);
+      expect(consoleError).not.toHaveBeenCalled();
+      expect(harness.frames.size).toBe(0);
+      expect(harness.flushFrames(10)).toBe(0);
+    },
+    hide() {
+      // Keep the scroll window unchanged to catch stale render-range reuse.
+      harness.dom.triggerIntersectionObserver(container, false);
+      harness.flushFrames(10);
+    },
+    replaceContents(contents: string, oldContents?: string) {
+      file = { ...file, contents };
+      fileDiff = parseDiffFromFile(
+        oldContents == null ? null : { ...file, contents: `${oldContents}\n` },
+        { ...file, contents: `${contents}\n` }
+      );
+      render();
+    },
+    setLineHeight(lineHeight: number) {
+      metrics = { ...metrics, lineHeight };
+      instance.setMetrics(metrics);
+      render();
+    },
+    setLayout(next: typeof layoutOptions) {
+      layoutOptions = { ...layoutOptions, ...next };
+      instance.setOptions({ ...options, ...layoutOptions });
+      render();
+    },
+    remount() {
+      instance.cleanUp();
+      onRender.mockRestore();
+      instance = createInstance();
+      onRender = spyOn(instance, 'onRender');
+      render();
       harness.dom.triggerIntersectionObserver(container, false);
     },
     cleanup() {
@@ -203,5 +330,99 @@ describe.each(['file', 'diff'] as const)(
         placeholderHeight: fixture.placeholderHeight(),
       }).toEqual({ instanceHeight: 60, placeholderHeight: 60 });
     });
+
+    test('renders on first visibility and after hiding with the same window', async () => {
+      fixture.expectHidden(60);
+      await fixture.show('first');
+      expect(fixture.instance.height).toBe(60);
+      fixture.hide();
+      fixture.expectHidden(60);
+      await fixture.show('third');
+      expect(fixture.instance.height).toBe(60);
+    });
+
+    test('accepts replacement content while hidden and displays it on entry', async () => {
+      fixture.expectHidden(60);
+      fixture.replaceContents('replacement one\nreplacement two');
+      // The hidden data-change path may render content before returning to a
+      // placeholder, so let highlighter readiness complete before checking it.
+      await waitFor(() => {
+        fixture.flushFrames(10);
+        return fixture.instance.getRenderedContentForTest() != null;
+      });
+      expect(fixture.instance.getRenderedContentForTest()).toBeDefined();
+      fixture.expectHidden(40);
+      await fixture.show('replacement two');
+      expect(fixture.container.shadowRoot?.textContent).not.toContain('first');
+      expect(fixture.instance.height).toBe(40);
+    });
+
+    test('accepts annotation-only updates while retaining the same file', async () => {
+      fixture.expectHidden(60);
+      const annotations: DiffLineAnnotation<string>[] = [
+        { side: 'additions', lineNumber: 2, metadata: 'latest note' },
+      ];
+      fixture.render(annotations);
+      fixture.expectHidden(60);
+      fixture.render(annotations);
+      fixture.expectHidden(60);
+      expect(fixture.instance.getAnnotationsForTest()).toBe(annotations);
+      await fixture.show('second');
+      expect(fixture.container.textContent).toContain('latest note');
+      expect(
+        fixture.container.shadowRoot?.querySelector('[data-line-annotation]')
+      ).not.toBeNull();
+      expect(fixture.instance.height).toBe(72);
+      fixture.hide();
+      fixture.expectHidden(72);
+    });
+
+    test('recomputes hidden metrics and collapse state before first visibility', async () => {
+      fixture.expectHidden(60);
+      fixture.setLineHeight(30);
+      fixture.expectHidden(90);
+      fixture.setLayout({ collapsed: true });
+      fixture.expectHidden(0);
+      fixture.setLayout({ collapsed: false });
+      fixture.expectHidden(90);
+      await fixture.show('third');
+      expect(fixture.instance.height).toBe(90);
+    });
+
+    test('settles after remounting a hidden instance following a layout change', async () => {
+      fixture.expectHidden(60);
+      const previous = fixture.instance;
+      fixture.setLineHeight(30);
+      fixture.remount();
+      expect(fixture.instance).not.toBe(previous);
+      expect(fixture.instance.getRenderedContentForTest()).toBeUndefined();
+      fixture.expectHidden(90);
+      await fixture.show('first');
+      expect(fixture.instance.height).toBe(90);
+    });
+
+    if (kind === 'diff') {
+      test('updates placeholder height for split and unified rows', async () => {
+        fixture.replaceContents(
+          'new one\nnew two\nnew three',
+          'old one\nold two\nold three'
+        );
+        await waitFor(() => {
+          fixture.flushFrames(10);
+          return fixture.instance.getRenderedContentForTest() != null;
+        });
+        expect(fixture.instance.getRenderedContentForTest()).toBeDefined();
+        fixture.expectHidden(60);
+        fixture.setLayout({ diffStyle: 'unified' });
+        fixture.expectHidden(120);
+        fixture.remount();
+        fixture.expectHidden(120);
+        await fixture.show('new three');
+        expect(fixture.container.shadowRoot?.textContent).toContain(
+          'old three'
+        );
+        expect(fixture.instance.height).toBe(120);
+      });
+    }
   }
 );

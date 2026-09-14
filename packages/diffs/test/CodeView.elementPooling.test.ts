@@ -1,7 +1,11 @@
-import { describe, expect, test } from 'bun:test';
+import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 
 import { CodeView, type CodeViewCoordinator } from '../src/components/CodeView';
 import { DEFAULT_THEMES } from '../src/constants';
+import {
+  disposeHighlighter,
+  preloadHighlighter,
+} from '../src/highlighter/shared_highlighter';
 import type { CodeViewItem, FileContents } from '../src/types';
 import { parseDiffFromFile } from '../src/utils/parseDiffFromFile';
 import {
@@ -96,6 +100,19 @@ async function waitForShellCounts(
 }
 
 describe('CodeView element pooling', () => {
+  // Pooling assertions expect mounted items immediately after renderItems().
+  // Load the fixtures' themes and language before testing shell reuse.
+  beforeAll(async () => {
+    await preloadHighlighter({
+      themes: ['pierre-dark', 'pierre-light'],
+      langs: ['typescript'],
+    });
+  });
+
+  afterAll(async () => {
+    await disposeHighlighter();
+  });
+
   test('reuses sanitized item shells without duplicating shared assets', async () => {
     const { cleanup } = installDom();
     const viewer = new CodeView({
