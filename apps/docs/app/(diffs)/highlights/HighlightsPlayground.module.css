@@ -17,16 +17,18 @@
 }
 
 .input,
+.lineNumbers,
 .preview pre {
   margin: 0;
   border: 0;
   padding: 1rem;
+  padding-left: calc(var(--line-number-width) + 2rem);
   font-family: var(--font-berkeley-mono), monospace;
   font-size: 0.875rem;
   font-style: normal;
   font-weight: 400;
   font-variant-ligatures: none;
-  line-height: 1.5rem;
+  line-height: var(--diffs-line-height, 20px);
   letter-spacing: normal;
   tab-size: 2;
   white-space: pre-wrap;
@@ -53,13 +55,33 @@
   color: transparent;
 }
 
-.preview {
+.preview,
+.lineNumbers {
   position: absolute;
   inset: 0;
   z-index: 1;
   overflow: hidden;
   pointer-events: none;
   user-select: none;
+}
+
+.lineNumbers {
+  color: transparent;
+}
+
+/* Mirror wrapping so each number stays beside its source line. */
+.lineNumbers > div {
+  position: relative;
+}
+
+.lineNumbers > div::before {
+  position: absolute;
+  right: calc(100% + 1rem);
+  width: var(--line-number-width);
+  color: light-dark(var(--light-line-number), var(--dark-line-number));
+  text-align: right;
+  white-space: nowrap;
+  content: attr(data-line-number);
 }
 
 .preview pre {

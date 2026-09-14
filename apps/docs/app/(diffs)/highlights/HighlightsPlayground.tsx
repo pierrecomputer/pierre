@@ -64,6 +64,7 @@ export function HighlightsPlayground() {
   const [language, setLanguage] =
     useState<PlaygroundLanguage>(DEFAULT_LANGUAGE);
   const [code, setCode] = useState<string>(DEFAULT_CODE);
+  const lines = useMemo(() => code.split(/\r\n|\r|\n/), [code]);
   const [themes, setThemes] = useState({
     light: pierreLight,
     dark: pierreDark,
@@ -129,6 +130,11 @@ export function HighlightsPlayground() {
         `--${colorScheme}-selection`,
         style.players?.[0]?.selection ??
           `color-mix(in srgb, var(--${colorScheme}-caret) 30%, transparent)`,
+      ],
+      [
+        `--${colorScheme}-line-number`,
+        style['editor.line_number'] ??
+          `color-mix(in srgb, ${style['editor.foreground'] ?? style.text ?? style.foreground ?? 'CanvasText'} 50%, transparent)`,
       ],
     ])
   ) as CSSProperties;
@@ -243,7 +249,12 @@ export function HighlightsPlayground() {
       <div
         className={styles.editor}
         data-color-mode={previewTheme?.colorScheme ?? selectedColorMode}
-        style={themeStyles}
+        style={
+          {
+            ...themeStyles,
+            '--line-number-width': `${Math.max(2, String(lines.length).length)}ch`,
+          } as CSSProperties
+        }
       >
         <textarea
           aria-label="Source code"
@@ -254,6 +265,13 @@ export function HighlightsPlayground() {
           autoCorrect="off"
           className={styles.input}
         />
+        <div aria-hidden="true" className={styles.lineNumbers}>
+          {lines.map((line, index) => (
+            <div key={index} data-line-number={index + 1}>
+              {line === '' ? '\u200b' : line}
+            </div>
+          ))}
+        </div>
         <div aria-hidden="true" className={styles.preview}>
           {(['light', 'dark'] as const).map((colorScheme) => (
             <div
