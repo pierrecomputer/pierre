@@ -37,8 +37,9 @@ the name, appearance, and style keys used by Highlights and `@pierre/diffs`.
 Shiki catalog and Pierre themes also retain git-decoration and terminal colors
 as `created`, `deleted`, `modified`, and `terminal.ansi.*` for diff rendering.
 
-For CSS-controlled colors, use `cssVariables`. See [Themes](../README.md#themes)
-for accepted properties and scope inheritance.
+For CSS-controlled colors, use `cssVariables`. See the
+[theme docs](https://diffs.com/docs#highlights-themes) for accepted properties
+and scope inheritance.
 
 ## Shiki catalog themes
 
