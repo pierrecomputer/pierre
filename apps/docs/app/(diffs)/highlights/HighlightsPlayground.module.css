@@ -8,11 +8,6 @@
   color-scheme: light dark;
 }
 
-.editor:focus-within {
-  outline: 2px solid var(--ring);
-  outline-offset: 2px;
-}
-
 .editor[data-color-mode='light'] {
   color-scheme: light;
 }
