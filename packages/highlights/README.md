@@ -21,11 +21,11 @@ WebAssembly automatically; highlighting calls are synchronous after import.
 import { codeToHtml } from '@pierre/highlights';
 import { pierreDark } from '@pierre/highlights/themes';
 
-const html = codeToHtml("console.log('Hello world!')", {
+const htmlBytes = codeToHtml("console.log('Hello world!')", {
   lang: 'js',
   theme: pierreDark,
 });
-const markup = new TextDecoder().decode(html);
+const html = new TextDecoder().decode(htmlBytes);
 ```
 
 `codeToHtml()` returns UTF-8 HTML bytes. Decode them immediately, or copy them
