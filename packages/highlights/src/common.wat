@@ -735,6 +735,10 @@
     (call $emitTok (enum.get $Token.preproc) (local.get $p) (local.get $rhs))
     (i32.const 1))
 
+  ;; The word bytes of every keyword table, packed by the build; descriptors
+  ;; address them with 13-bit offsets, so the pool holds at most 8191 bytes.
+  (keyword-pool $mem.keywordPool $mem.jsonStack)
+
   ;; Look a word up in a keyword table - see scripts/build.ts - using a
   ;; displacement-based perfect hash over the first two bytes, last byte, and
   ;; length. Returns the word's 1-based group index, or 0 for a miss - one
@@ -746,7 +750,7 @@
     (param $end i32)
     (param $base i32)
     (param $bucketMask i32)
-    (param $slotMask i32)
+    (param $slots i32)
     (result i32)
     (local $len i32)
     (local $h i32)
@@ -767,39 +771,49 @@
         (i32.xor (local.get $h) (i32.shr_u (local.get $h) (i32.const 16)))
         (i32.const 0xe51fac89)))
     (local.set $h (i32.xor (local.get $h) (i32.shr_u (local.get $h) (i32.const 24))))
-    ;; base: displacement bytes; base+buckets: u16 (len<<11 | recOffset+1).
-    ;; The slot is the bucket's displacement times an odd second hash plus
-    ;; the base slot - double hashing, so the build can pack tables densely
+    ;; base: displacement bytes; base+buckets: 3-byte descriptors
+    ;; (len<<19 | group<<13 | pool offset). The slot is the hash plus the
+    ;; bucket's displacement times an odd second hash, rotated so the
+    ;; displacement reaches the high bits, then reduced to the slot count by
+    ;; a multiply and shift - any count works, so the build packs tables
+    ;; almost full. The 4-byte load takes one byte past the last descriptor,
+    ;; which the mask drops.
     (local.set $entry
-      (i32.load16_u
-        (i32.add
-          (i32.add (local.get $base) (i32.add (local.get $bucketMask) (i32.const 1)))
-          (i32.shl
-            (i32.and
-              (i32.add
-                (i32.shr_u (local.get $h) (i32.const 4))
-                (i32.mul
-                  (i32.load8_u
-                    (i32.add (local.get $base) (i32.and (local.get $h) (local.get $bucketMask))))
-                  (i32.or (i32.shr_u (local.get $h) (i32.const 12)) (i32.const 1))))
-              (local.get $slotMask))
-            (i32.const 1)))))
+      (i32.and
+        (i32.load
+          (i32.add
+            (i32.add (local.get $base) (i32.add (local.get $bucketMask) (i32.const 1)))
+            (i32.mul
+              (i32.wrap_i64
+                (i64.shr_u
+                  (i64.mul
+                    (i64.extend_i32_u
+                      (i32.rotl
+                        (i32.add
+                          (local.get $h)
+                          (i32.mul
+                            (i32.load8_u
+                              (i32.add
+                                (local.get $base)
+                                (i32.and (local.get $h) (local.get $bucketMask))))
+                            (i32.or (i32.shr_u (local.get $h) (i32.const 12)) (i32.const 1))))
+                        (i32.const 16)))
+                    (i64.extend_i32_u (local.get $slots)))
+                  (i64.const 32)))
+              (i32.const 3))))
+        (i32.const 0xffffff)))
     ;; a length mismatch also rejects empty slots (their length field is 0)
-    (if (i32.ne (local.get $len) (i32.shr_u (local.get $entry) (i32.const 11)))
+    (if (i32.ne (local.get $len) (i32.shr_u (local.get $entry) (i32.const 19)))
       (then (return (i32.const 0))))
-    ;; records follow the descriptors: [group:u8, exact word bytes]
+    ;; the exact word bytes sit in the shared pool
     (local.set $rec
-      (i32.add
-        (i32.add
-          (i32.add (local.get $base) (i32.add (local.get $bucketMask) (i32.const 1)))
-          (i32.shl (i32.add (local.get $slotMask) (i32.const 1)) (i32.const 1)))
-        (i32.sub (i32.and (local.get $entry) (i32.const 2047)) (i32.const 1))))
+      (i32.add (i32.const $mem.keywordPool) (i32.and (local.get $entry) (i32.const 8191))))
     ;; Compare up to 16 bytes at once. Longer words use an overlapping tail
     ;; inside the word. Short words mask lookahead into input slack or the
-    ;; memory following a static table record; neither needs zero padding.
+    ;; pool bytes after the word; neither needs zero padding.
     (local.set $mask
       (i8x16.bitmask
-        (i8x16.ne (v128.load (local.get $start)) (v128.load offset=1 (local.get $rec)))))
+        (i8x16.ne (v128.load (local.get $start)) (v128.load (local.get $rec)))))
     (if (i32.gt_u (local.get $len) (i32.const 16))
       (then
         (if
@@ -808,7 +822,7 @@
             (i8x16.bitmask
               (i8x16.ne
                 (v128.load (i32.sub (local.get $end) (i32.const 16)))
-                (v128.load (i32.add (local.get $rec) (i32.sub (local.get $len) (i32.const 15)))))))
+                (v128.load (i32.add (local.get $rec) (i32.sub (local.get $len) (i32.const 16)))))))
           (then (return (i32.const 0)))))
       (else
         (if
@@ -816,7 +830,7 @@
             (local.get $mask)
             (i32.sub (i32.shl (i32.const 1) (local.get $len)) (i32.const 1)))
           (then (return (i32.const 0))))))
-    (i32.load8_u (local.get $rec)))
+    (i32.and (i32.shr_u (local.get $entry) (i32.const 13)) (i32.const 63)))
 
   ;; The value a keyword table assigns to a word's group - see the
   ;; keyword-table.value form - or -1 when the word is not in the table or
@@ -826,7 +840,7 @@
     (param $end i32)
     (param $base i32)
     (param $bucketMask i32)
-    (param $slotMask i32)
+    (param $slots i32)
     (param $values i32)
     (result i32)
     (local $g i32)
@@ -836,7 +850,7 @@
         (local.get $end)
         (local.get $base)
         (local.get $bucketMask)
-        (local.get $slotMask)))
+        (local.get $slots)))
     (if (i32.eqz (local.get $g))
       (then (return (i32.const -1))))
     (i32.load16_s (i32.add (local.get $values) (i32.shl (local.get $g) (i32.const 1)))))

@@ -81,6 +81,7 @@ support is a distinct subset of the supported languages.
 (keyword-table $Name <base> <end> (group <value>? "word" ...) ...)
 (keyword-table.get $Name <start> <end>)
 (keyword-table.value $Name <start> <end>)
+(keyword-pool <base> <end>)
 ```
 
 The build creates a displacement-based perfect hash from the first two bytes,
@@ -88,10 +89,19 @@ last byte, and length, then verifies exact bytes. `get` returns a 1-based group
 index or `0`. When every group has a numeric or `$Token.member[+bias]` value,
 `value` returns that value or `-1`.
 
+A table holds one displacement byte per bucket and one 3-byte descriptor per
+slot: the word length, its group (at most 63 per table), and a 13-bit offset
+into the keyword pool. The pool, declared once in `src/common.wat`, packs the
+distinct words of every table into one string of at most 8191 bytes, so a word
+that many languages share is stored once and a word contained in another costs
+nothing. The lookup reduces the hash to a slot with a multiply and shift, so
+slot counts need not be powers of two and the build packs each table to within a
+few percent of full.
+
 Words are 2–31 bytes and case-sensitive. Words with identical hash inputs cannot
 share a table; match one directly, as `rust.wat` does for `where`. Verification
 uses one SIMD vector up to 16 bytes and two overlapping vectors for longer
-words. Short comparisons mask bytes after the word, so table entries and
+words. Short comparisons mask bytes after the word, so pool entries and
 lowercase scratch copies need no zero padding. Case-insensitive lexers lowercase
 ASCII before lookup.
 

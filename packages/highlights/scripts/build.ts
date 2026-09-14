@@ -533,16 +533,28 @@ export function transformWat(
 
   // `(keyword-table $Name <base> <end> (group <value>? "word" ...) ...)`
   // emits a displacement-based perfect hash table for keyword lookup:
-  // [buckets] displacement bytes, [slots] u16 descriptors
-  // (len<<11 | recOffset+1), [group:u8, word bytes] records, and, when every
-  // group carries a value, a u16 value per group.
-  // `(keyword-table.get $Name <start> <end>)` looks a word
-  // up and returns its 1-based group index, or 0 for a miss;
-  // `(keyword-table.value $Name <start> <end>)` returns the group's value, or
-  // -1 for a miss (a group whose value is -1 also reads as a miss). The hash mixes the first two bytes, last byte, and length,
-  // so words must be 2..31 bytes long. The bucket and slot counts are chosen
-  // here: the smallest pair of powers of two that places every word, so a
-  // table costs little more than its records.
+  // [buckets] displacement bytes, [slots] 3-byte descriptors
+  // (len<<19 | group<<13 | word offset) and, when every group carries a
+  // value, a u16 value per group. The word bytes themselves live in one
+  // shared pool - see `keyword-pool` - so a word that many languages share
+  // is stored once and a word contained in another costs nothing.
+  // `(keyword-table.get $Name <start> <end>)` looks a word up and returns its
+  // 1-based group index, or 0 for a miss; `(keyword-table.value $Name <start>
+  // <end>)` returns the group's value, or -1 for a miss (a group whose value
+  // is -1 also reads as a miss). The hash mixes the first two bytes, last
+  // byte, and length, so words must be 2..31 bytes long; a table holds at
+  // most 63 groups. Slot counts need not be powers of two - the lookup
+  // reduces the hash with a multiply and shift - so each table is packed
+  // almost full: the cheapest bucket and slot pair that places every word
+  // wins. Tables are laid out once every table and the pool are known.
+  interface PendingKeywordTable {
+    name: string;
+    base: number;
+    rangeEnd: number;
+    words: { word: string; group: number; h: number }[];
+    values: (number | null)[];
+  }
+  const pendingTables: PendingKeywordTable[] = [];
   const keywordTables = new Map<
     string,
     { base: number; buckets: number; slots: number; values?: number }
@@ -553,12 +565,9 @@ export function transformWat(
     if (head === null)
       throw new Error(`Malformed keyword-table in ${url.pathname}`);
     const [, name, baseStr, endStr] = head;
-    if (keywordTables.has(name))
+    if (pendingTables.some((t) => t.name === name))
       throw new Error(`Duplicate keyword-table ${name}`);
-    const base = Number(baseStr);
-    const rangeEnd = Number(endStr);
-    const words: { word: string; group: number; h: number; desc: number }[] =
-      [];
+    const words: PendingKeywordTable['words'] = [];
     // a group may carry a value - a number, or an enum member reference with
     // an optional `+bias`, e.g. $Token.keyword.declaration+256 - which the
     // keyword-table.value form returns instead of the group index
@@ -568,8 +577,8 @@ export function transformWat(
       /\(group(?:\s+(\$[\w.-]+(?:\+\d+)?|-?\d+))?((?:\s+"[\w.$@#!-]+")+)\s*\)/g
     )) {
       group += 1;
-      if (group > 255)
-        throw new Error(`keyword-table ${name} has more than 255 groups`);
+      if (group > 63)
+        throw new Error(`keyword-table ${name} has more than 63 groups`);
       values.push(
         value === undefined ? null : resolveEnumValue(value, enumMap)
       );
@@ -581,25 +590,11 @@ export function transformWat(
           );
         if (words.some((w) => w.word === word))
           throw new Error(`keyword-table ${name}: duplicate word '${word}'`);
-        words.push({ word, group, h: 0, desc: 0 });
+        words.push({ word, group, h: keywordHash(word) });
       }
     }
     if (words.length === 0)
       throw new Error(`keyword-table ${name} has no words`);
-    // records blob: group byte + exact word bytes, offsets biased by one
-    const records: number[] = [];
-    let recOffset = 0;
-    for (const w of words) {
-      w.h = keywordHash(w.word);
-      w.desc = (w.word.length << 11) | (recOffset + 1);
-      // Code units equal code points here: words are validated ASCII.
-      records.push(w.group, ...w.word.split('').map((c) => c.charCodeAt(0)));
-      recOffset += 1 + w.word.length;
-    }
-    if (recOffset + 1 > 2047)
-      throw new Error(
-        `keyword-table ${name}: records exceed the 11-bit offset`
-      );
     for (const a of words) {
       const twin = words.find((b) => b !== a && b.h === a.h);
       if (twin !== undefined)
@@ -607,64 +602,112 @@ export function transformWat(
           `keyword-table ${name}: '${a.word}' and '${twin.word}' share a hash; match one directly`
         );
     }
-    // Try every geometry from the cheapest up; the first that places wins.
-    let slots = 1;
-    while (slots < words.length) slots *= 2;
-    const geometries: { buckets: number; slots: number }[] = [];
-    for (; slots <= 4096; slots *= 2)
-      for (let buckets = 4; buckets <= 256; buckets *= 2)
-        geometries.push({ buckets, slots });
-    geometries.sort(
-      (a, b) => a.buckets + 2 * a.slots - (b.buckets + 2 * b.slots)
-    );
-    let placed:
-      | { buckets: number; slots: number; disp: Uint8Array; table: Uint16Array }
-      | undefined;
-    for (const g of geometries) {
-      const result = placeKeywords(words, g.buckets, g.slots);
-      if (result !== undefined) {
-        placed = { ...g, ...result };
-        break;
-      }
-    }
-    if (placed === undefined)
-      throw new Error(`keyword-table ${name}: no geometry places every word`);
-    const bytes = [
-      ...placed.disp,
-      ...[...placed.table].flatMap((v) => [v & 0xff, v >> 8]),
-      ...records,
-    ];
-    // group values follow as signed 16-bit entries indexed by group (entry 0
-    // unused); -1 marks a group the value lookup reports as a miss
-    const valued = values.every((v) => v !== null);
-    const valuesAt = base + bytes.length;
-    if (valued) {
-      for (const v of values) {
-        if (v < -1 || v > 0x7fff)
-          throw new Error(
-            `keyword-table ${name}: group value ${v} is out of range`
-          );
-        bytes.push(v & 0xff, (v >> 8) & 0xff);
-      }
-    }
-    if (base + bytes.length > rangeEnd)
-      throw new Error(
-        `keyword-table ${name} needs ${bytes.length} bytes, range holds ${rangeEnd - base}`
-      );
-    keywordTables.set(name, {
-      base,
-      buckets: placed.buckets,
-      slots: placed.slots,
-      values: valued ? valuesAt : undefined,
+    pendingTables.push({
+      name,
+      base: Number(baseStr),
+      rangeEnd: Number(endStr),
+      words,
+      values,
     });
-    const data = bytes
-      .map((b) => '\\' + b.toString(16).padStart(2, '0'))
-      .join('');
-    return `;; ${name}: ${words.length} words, ${placed.buckets} buckets, ${placed.slots} slots, ${bytes.length} bytes\n  (data (i32.const ${base}) "${data}")`;
+    return `@@keyword-table ${name}@@`;
   });
 
+  // `(keyword-pool <base> <end>)` reserves the region that holds the word
+  // bytes of every keyword table: the distinct words packed into one string
+  // (see packKeywordPool), at most 8191 bytes since descriptors carry 13-bit
+  // offsets. Declared once, next to $lexKeywordLookup in src/common.wat.
+  let keywordPool: { base: number; rangeEnd: number } | undefined;
+  code = replaceForm(code, 'keyword-pool', (inner) => {
+    const m = inner.match(/^\s*(\d+)\s+(\d+)\s*$/);
+    if (m === null)
+      throw new Error(`Malformed keyword-pool in ${url.pathname}`);
+    if (keywordPool !== undefined)
+      throw new Error(`Duplicate keyword-pool in ${url.pathname}`);
+    keywordPool = { base: Number(m[1]), rangeEnd: Number(m[2]) };
+    return '@@keyword-pool@@';
+  });
+  if (pendingTables.length > 0) {
+    if (keywordPool === undefined)
+      throw new Error(`keyword-table needs a keyword-pool in ${url.pathname}`);
+    const pool = packKeywordPool(
+      pendingTables.flatMap((t) => t.words.map((w) => w.word))
+    );
+    const poolCapacity = Math.min(
+      8191,
+      keywordPool.rangeEnd - keywordPool.base
+    );
+    if (pool.length > poolCapacity)
+      throw new Error(
+        `keyword-pool needs ${pool.length} bytes, range holds ${poolCapacity}`
+      );
+    for (const table of pendingTables) {
+      const placed = placeKeywordTable(table.words);
+      if (placed === undefined)
+        throw new Error(
+          `keyword-table ${table.name}: no geometry places every word`
+        );
+      const bytes = [...placed.disp];
+      for (const index of placed.at) {
+        if (index < 0) {
+          bytes.push(0, 0, 0);
+          continue;
+        }
+        const w = table.words[index];
+        const desc =
+          (w.word.length << 19) | (w.group << 13) | pool.indexOf(w.word);
+        bytes.push(desc & 0xff, (desc >> 8) & 0xff, desc >> 16);
+      }
+      // group values follow as signed 16-bit entries indexed by group (entry
+      // 0 unused); -1 marks a group the value lookup reports as a miss
+      const groupValues = table.values.every((v): v is number => v !== null)
+        ? table.values
+        : undefined;
+      const valuesAt = table.base + bytes.length;
+      if (groupValues !== undefined) {
+        for (const v of groupValues) {
+          if (v < -1 || v > 0x7fff)
+            throw new Error(
+              `keyword-table ${table.name}: group value ${v} is out of range`
+            );
+          bytes.push(v & 0xff, (v >> 8) & 0xff);
+        }
+      }
+      if (table.base + bytes.length > table.rangeEnd)
+        throw new Error(
+          `keyword-table ${table.name} needs ${bytes.length} bytes, range holds ${table.rangeEnd - table.base}`
+        );
+      keywordTables.set(table.name, {
+        base: table.base,
+        buckets: placed.buckets,
+        slots: placed.slots,
+        values: groupValues !== undefined ? valuesAt : undefined,
+      });
+      const data = bytes
+        .map((b) => '\\' + b.toString(16).padStart(2, '0'))
+        .join('');
+      // a replacer function keeps `$` in names out of the pattern syntax
+      code = code.replace(
+        `@@keyword-table ${table.name}@@`,
+        () =>
+          `;; ${table.name}: ${table.words.length} words, ${placed.buckets} buckets, ${placed.slots} slots, ${bytes.length} bytes\n  (data (i32.const ${table.base}) "${data}")`
+      );
+    }
+    const data = pool
+      .split('')
+      .map((c) => '\\' + c.charCodeAt(0).toString(16).padStart(2, '0'))
+      .join('');
+    const poolBase = keywordPool.base;
+    code = code.replace(
+      '@@keyword-pool@@',
+      () =>
+        `;; keyword pool: ${pool.length} bytes\n  (data (i32.const ${poolBase}) "${data}")`
+    );
+  } else {
+    code = code.replace('@@keyword-pool@@', '');
+  }
+
   // (keyword-table.get $Name <start> <end>) -> the shared lookup call with the
-  // table's base and masks filled in
+  // table's base, bucket mask, and slot count filled in
   code = replaceForm(code, 'keyword-table.get', (inner) => {
     const m = inner.match(/^\s*(\$\w+)\s+([\s\S]+)$/);
     if (m === null)
@@ -674,7 +717,7 @@ export function transformWat(
       throw new Error(
         `keyword-table '${m[1]}' is undefined in ${url.pathname}`
       );
-    return `(call $lexKeywordLookup ${m[2].trim()} (i32.const ${table.base}) (i32.const ${table.buckets - 1}) (i32.const ${table.slots - 1}))`;
+    return `(call $lexKeywordLookup ${m[2].trim()} (i32.const ${table.base}) (i32.const ${table.buckets - 1}) (i32.const ${table.slots}))`;
   });
 
   // (keyword-table.value $Name <start> <end>) -> the value lookup call, which
@@ -688,7 +731,7 @@ export function transformWat(
       throw new Error(
         `keyword-table '${m[1]}' has no group values in ${url.pathname}`
       );
-    return `(call $lexKeywordValue ${m[2].trim()} (i32.const ${table.base}) (i32.const ${table.buckets - 1}) (i32.const ${table.slots - 1}) (i32.const ${table.values}))`;
+    return `(call $lexKeywordValue ${m[2].trim()} (i32.const ${table.base}) (i32.const ${table.buckets - 1}) (i32.const ${table.slots}) (i32.const ${table.values}))`;
   });
 
   // `(byteset.get "bytes" (local.get $x))` tests whether the byte in $x is
@@ -906,51 +949,117 @@ function keywordHash(w: string): number {
 }
 
 /**
- * The slot a word probes for a bucket displacement `d`: double hashing, so
- * two words of one bucket that share the base slot still separate for some
- * displacement. Mirrors the runtime lookup.
+ * The slot a word probes for a bucket displacement `d`: the hash plus the
+ * displacement times an odd second hash, rotated so the displacement reaches
+ * the high bits, then reduced to `slots` by a multiply and shift - so any
+ * slot count works, not only powers of two. Two words of one bucket that
+ * share the base slot still separate for some displacement. Mirrors the
+ * runtime lookup exactly.
  */
 function keywordSlot(h: number, d: number, slots: number): number {
-  return (((h >>> 4) + Math.imul(d, (h >>> 12) | 1)) >>> 0) & (slots - 1);
+  const x = (h + Math.imul(d, (h >>> 12) | 1)) >>> 0;
+  const rotated = ((x << 16) | (x >>> 16)) >>> 0;
+  // exact: the product stays below 2^53
+  return Math.floor((rotated * slots) / 4294967296);
 }
 
 /**
  * Place the words of a keyword table (CHD): words fall into `buckets` by
  * their low hash bits, and each bucket searches for a displacement that
  * puts all of its words into free slots, largest buckets first. Returns the
- * displacement and descriptor tables, or undefined when a bucket finds no
- * displacement in 0..255.
+ * displacement bytes and the word index placed in each slot (-1 when
+ * empty), or undefined when a bucket finds no displacement in 0..255.
  */
 function placeKeywords(
-  words: { h: number; desc: number }[],
+  words: { h: number }[],
   buckets: number,
   slots: number
-): { disp: Uint8Array; table: Uint16Array } | undefined {
-  const byBucket = new Map<number, typeof words>();
-  for (const w of words) {
+): { disp: Uint8Array; at: Int32Array } | undefined {
+  const byBucket = new Map<number, number[]>();
+  words.forEach((w, i) => {
     const b = w.h & (buckets - 1);
     let bucket = byBucket.get(b);
     if (bucket === undefined) byBucket.set(b, (bucket = []));
-    bucket.push(w);
-  }
+    bucket.push(i);
+  });
   const disp = new Uint8Array(buckets);
-  const table = new Uint16Array(slots);
+  const at = new Int32Array(slots).fill(-1);
   const order = [...byBucket.entries()].sort(
     (a, b) => b[1].length - a[1].length
   );
   for (const [b, ws] of order) {
     let placed = false;
     for (let d = 0; d < 256 && !placed; d++) {
-      const at = ws.map((w) => keywordSlot(w.h, d, slots));
-      if (new Set(at).size === ws.length && at.every((s) => table[s] === 0)) {
-        ws.forEach((w, i) => (table[at[i]] = w.desc));
+      const s = ws.map((i) => keywordSlot(words[i].h, d, slots));
+      if (new Set(s).size === ws.length && s.every((x) => at[x] === -1)) {
+        ws.forEach((i, k) => (at[s[k]] = i));
         disp[b] = d;
         placed = true;
       }
     }
     if (!placed) return undefined;
   }
-  return { disp, table };
+  return { disp, at };
+}
+
+/**
+ * Choose the cheapest geometry that places every word of a keyword table.
+ * Slot counts run from the word count up in small steps, bucket counts are
+ * powers of two, and a table costs one byte per bucket and three per slot;
+ * the first geometry in cost order that places wins, which packs tables to
+ * within a few percent of full.
+ */
+function placeKeywordTable(
+  words: { h: number }[]
+):
+  | { buckets: number; slots: number; disp: Uint8Array; at: Int32Array }
+  | undefined {
+  const n = words.length;
+  const step = Math.max(1, Math.floor(n / 64));
+  const geometries: { buckets: number; slots: number }[] = [];
+  for (let slots = n; slots <= 2 * n + 4; slots += step)
+    for (let buckets = 4; buckets <= 512; buckets *= 2)
+      geometries.push({ buckets, slots });
+  geometries.sort(
+    (a, b) => a.buckets + 3 * a.slots - (b.buckets + 3 * b.slots)
+  );
+  for (const g of geometries) {
+    const placed = placeKeywords(words, g.buckets, g.slots);
+    if (placed !== undefined) return { ...g, ...placed };
+  }
+  return undefined;
+}
+
+/**
+ * Pack the distinct words of every keyword table into one string. A word
+ * contained in another needs no bytes of its own; the rest are appended
+ * greedily, longest words first, each time choosing the word whose head
+ * overlaps the pool's tail the most. Descriptors locate a word by its first
+ * occurrence.
+ */
+function packKeywordPool(all: string[]): string {
+  const distinct = [...new Set(all)].sort((a, b) =>
+    a.length === b.length ? (a < b ? -1 : 1) : b.length - a.length
+  );
+  const words = distinct.filter(
+    (w) => !distinct.some((o) => o !== w && o.includes(w))
+  );
+  let pool = words.shift() ?? '';
+  while (words.length > 0) {
+    let best = 0;
+    let overlap = 0;
+    for (const [i, w] of words.entries()) {
+      for (let n = Math.min(pool.length, w.length - 1); n > overlap; n--) {
+        if (pool.endsWith(w.slice(0, n))) {
+          best = i;
+          overlap = n;
+          break;
+        }
+      }
+    }
+    pool += words.splice(best, 1)[0].slice(overlap);
+  }
+  return pool;
 }
 
 /**

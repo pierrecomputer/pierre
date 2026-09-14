@@ -22,6 +22,7 @@
   (global $spanVal (mut i64) (i64.const 0)) ;; style value of the open span, 0 when none
   (global $cssVariables (mut i32) (i32.const 0))
   (global $spanCacheMode (mut i32) (i32.const -1)) ;; cached style mode, unchanged by token calls
+  (global $spanReserve (mut i32) (i32.const 96)) ;; output bytes a token may add beyond its escaped text
   (global $tokens (mut i32) (i32.const 0))  ;; token-record mode: emit (end:u32, hl:u32) records instead of HTML
   (global $recCarryHl (mut i32) (i32.const -1))
   (global $streaming (mut i32) (i32.const 0))
@@ -239,13 +240,14 @@
         (block $special
           (loop $wide
             (local.set $w (v128.load (local.get $lhs)))
+            ;; `<` and `>` differ only in bit 1, so one masked compare finds both
             (local.set $mask
               (i8x16.bitmask
                 (v128.or
-                  (v128.or
-                    (i8x16.eq (local.get $w) (i8x16.splat (i32.const "&")))
-                    (i8x16.eq (local.get $w) (i8x16.splat (i32.const "<"))))
-                  (i8x16.eq (local.get $w) (i8x16.splat (i32.const ">"))))))
+                  (i8x16.eq
+                    (v128.and (local.get $w) (i8x16.splat (i32.const 0xfd)))
+                    (i8x16.splat (i32.const "<")))
+                  (i8x16.eq (local.get $w) (i8x16.splat (i32.const "&"))))))
             (local.set $rem (i32.sub (local.get $rhs) (local.get $lhs)))
             ;; ignore specials past $rhs
             (if (i32.lt_u (local.get $rem) (i32.const 16))
@@ -469,8 +471,8 @@
         (return)))
     (call $ensureCap
       (i32.add
-        (i32.add (i32.mul (i32.sub (local.get $rhs) (local.get $lhs)) (i32.const 5)) (i32.const 96))
-        (select (i32.load (i32.const 18)) (i32.const 0) (global.get $cssVariables))))
+        (i32.mul (i32.sub (local.get $rhs) (local.get $lhs)) (i32.const 5))
+        (global.get $spanReserve)))
     (call $setSpan (local.get $hl))
     (call $escCopy (local.get $lhs) (local.get $rhs) (i32.const 0)))
 
@@ -559,6 +561,13 @@
     (global.set $cap (i32.sub (i32.mul (memory.size) (i32.const 65536)) (i32.const 16)))
     (global.set $spanHl (i32.const -1))
     (global.set $spanVal (i64.const 0))
+    ;; per-token output reserve beyond the escaped bytes: close (7) + open
+    ;; (19 + 9 + 34 + 2) and the 64-byte wide copy $emitSpanOpen performs,
+    ;; plus the CSS-variable prefix when that mode inserts one
+    (global.set $spanReserve
+      (i32.add
+        (i32.const 96)
+        (select (i32.load (i32.const 18)) (i32.const 0) (global.get $cssVariables))))
     (if (i32.eqz (global.get $tokens))
       (then
         ;; Compare all 73 five-byte records, padded to 384 bytes, in twelve

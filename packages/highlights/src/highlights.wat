@@ -20,20 +20,21 @@
       [8448:8832)     saved theme bytes for the emitter span cache
       [8832:8864)     streaming delimiter
       [8864:10144)    streaming lexer checkpoints
-      [10144:36960)   language keyword tables
-      [36960:37984)   JSON nesting stack
-      [37984:39008)   JavaScript bracket-kind stack
-      [39008:39152)   JavaScript token-class bitset
-      [39152:39296)   JavaScript token-kind to $Token map (enum-map)
-      [39296:40320)   JavaScript template bracket stack
-      [40320:41344)   JavaScript template HTML/CSS resume states
-      [41344:45440)   JSX-mode stack
-      [45440:46496)   markdown fence aliases
-      [46496:46592)   nested markdown fence registers, one record per depth
-      [46592:47616)   TOML nesting stack
-      [47616:63632)   live tokenizer change list
-      [63632:63760)   live tokenizer free-list heads
-      [63760:65536)   Angular keyword table
+      [10144:20544)   language keyword tables (displacements and descriptors)
+      [20544:28736)   keyword pool: the word bytes every table shares
+      [28736:29760)   JSON nesting stack
+      [29760:30784)   JavaScript bracket-kind stack
+      [30784:30928)   JavaScript token-class bitset
+      [30928:31072)   JavaScript token-kind to $Token map (enum-map)
+      [31072:32096)   JavaScript template bracket stack
+      [32096:33120)   JavaScript template HTML/CSS resume states
+      [33120:37216)   JSX-mode stack
+      [37216:38272)   markdown fence aliases
+      [38272:38368)   nested markdown fence registers, one record per depth
+      [38368:39392)   TOML nesting stack
+      [39392:55408)   live tokenizer change list
+      [55408:55536)   live tokenizer free-list heads
+      [55536:65536)   free
     [] pages 2..N     (text buffer; a live instance lays them out itself,
                       see src/live.wat)
       [65536:EOF)     input, NUL sentinel, then at least 16 bytes of slack
