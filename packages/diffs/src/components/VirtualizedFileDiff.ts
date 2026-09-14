@@ -149,8 +149,10 @@ export class VirtualizedFileDiff<
   private currentCollapsed: boolean | undefined;
   private pendingHydratedDiff: PendingLoadedDiff | undefined;
   private pendingExpansions: PendingExpansion[] | undefined;
-  // CodeView calculates the next layout before its DOM pass. Keep that
-  // selection separate from renderedDiff until render() applies it.
+  // Remember which diff the layout was calculated from, even when only a
+  // placeholder is rendered. Async highlighting clears this through rerender()
+  // so layout can use the newly available content. CodeView updates it during
+  // its layout pass.
   private pendingRender: PendingRender | undefined;
 
   constructor(
@@ -405,6 +407,11 @@ export class VirtualizedFileDiff<
   // Definitely need to optimize this in cases where there aren't any custom
   // line heights or in cases of extremely large files...
   public reconcileHeights(): boolean {
+    // A placeholder has no rendered rows to measure. Keep the height that
+    // its prepared layout reserves until content is rendered again.
+    if (this.placeHolder != null) {
+      return false;
+    }
     let hasHeightChange = false;
     const {
       options: { overflow = 'scroll' },
@@ -1414,7 +1421,7 @@ export class VirtualizedFileDiff<
           pendingRenderDiff: this.pendingRender.diff,
           layoutDiffChanged: false,
           renderedDiffChanged: false,
-          annotationsChanged: false,
+          annotationsChanged: this.syncLineAnnotations(lineAnnotations),
         };
       }
       return this.updatePendingRender(nextFileDiff, lineAnnotations);
@@ -1447,7 +1454,7 @@ export class VirtualizedFileDiff<
       this.isSetup = true;
     } else {
       this.top ??= this.getVirtualizedTop();
-      if (layoutDiffChanged) {
+      if (this.layoutDirty && this.isSimpleMode()) {
         this.getSimpleVirtualizer()?.markDOMDirty();
         this.computeApproximateSize(false, pendingRenderDiff);
       }
@@ -1461,7 +1468,6 @@ export class VirtualizedFileDiff<
       if (targetChanged) {
         this.clearReusableHeader();
       }
-      this.pendingRender = undefined;
       return this.renderPlaceholder(this.height);
     }
 

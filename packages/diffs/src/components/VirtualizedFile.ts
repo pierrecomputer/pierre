@@ -91,6 +91,10 @@ export class VirtualizedFile<
     fileAnnotationHeight: 0,
     ghostTextRows: NO_GHOST_TEXT_ROWS,
   };
+  // Remember which file the layout was calculated from, even when only a
+  // placeholder is rendered. Async highlighting clears this through rerender()
+  // so layout can use the newly available content. CodeView updates it during
+  // its layout pass.
   private pendingRender: PendingRender | undefined;
   private isVisible: boolean = false;
   private isSetup: boolean = false;
@@ -285,6 +289,11 @@ export class VirtualizedFile<
   // Measure rendered lines and update height cache.
   // Called after render to reconcile estimated vs actual heights.
   public reconcileHeights(): boolean {
+    // A placeholder has no rendered rows to measure. Keep the height that
+    // its prepared layout reserves until content is rendered again.
+    if (this.placeHolder != null) {
+      return false;
+    }
     let hasHeightChange = false;
     if (this.fileContainer == null || this.getLayoutFile() == null) {
       if (this.height !== 0) {
@@ -858,7 +867,7 @@ export class VirtualizedFile<
           pendingRenderFile: this.pendingRender.file,
           layoutFileChanged: false,
           renderedFileChanged: false,
-          annotationsChanged: false,
+          annotationsChanged: this.syncLineAnnotations(lineAnnotations),
         };
       }
       return this.updatePendingRender(file, lineAnnotations);
@@ -892,9 +901,8 @@ export class VirtualizedFile<
       this.isSetup = true;
     } else {
       this.top ??= this.getVirtualizedTop();
-      if (layoutFileChanged && this.isSimpleMode()) {
+      if (this.layoutDirty && this.isSimpleMode()) {
         this.getSimpleVirtualizer()?.markDOMDirty();
-        this.resetLayoutCache(false);
         this.computeApproximateSize(false, pendingRenderFile);
       }
     }
@@ -907,7 +915,6 @@ export class VirtualizedFile<
       this.isSimpleMode() &&
       (!didFileChange || !isSetup)
     ) {
-      this.pendingRender = undefined;
       return this.renderPlaceholder(this.height);
     }
 
