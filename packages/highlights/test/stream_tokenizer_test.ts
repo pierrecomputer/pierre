@@ -158,6 +158,26 @@ void t.test('StreamTokenizer: empty stream yields one empty line', () => {
   assert.throws(() => stream.end(), /stream has ended/);
 });
 
+void t.test(
+  'StreamTokenizer: small chunks preserve long unfinished lines',
+  () => {
+    const options = { lang: 'text', theme: pierreDark } as const;
+    const chunk = 'x'.repeat(32);
+    const code = chunk.repeat(8192);
+    for (const terminate of [false, true]) {
+      const stream = new StreamTokenizer(options);
+      for (let i = 0; i < 8192; i++) {
+        assert.deepEqual(stream.pushCode(chunk), []);
+      }
+      const suffix = terminate ? '\r\nnext\nlast' : '';
+      assert.deepEqual(
+        [...stream.pushCode(suffix), ...stream.end()],
+        codeToTokens(code + suffix, options).tokens
+      );
+    }
+  }
+);
+
 void t.test('StreamTokenizer: dispose abandons the stream', () => {
   const stream = new StreamTokenizer({ lang: 'ts', theme: pierreDark });
   stream.pushCode('/* open\nbuffered');

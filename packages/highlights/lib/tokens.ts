@@ -75,7 +75,8 @@ const htmlTagsCache = new WeakMap<
 // themes again. `prepareTheme` returns one object per theme (and per prefix
 // for CSS-variable themes), so a set is identified by those objects plus the
 // color key and role the options give each one. Entries hang off the first
-// prepared theme and are only reachable while it is.
+// prepared theme and are only reachable while it is. Keep at most 128 sets
+// per first theme so a fixed theme cannot retain unlimited discarded partners.
 const resolvedSetCache = new WeakMap<
   PreparedTheme,
   Map<string, ResolvedTheme[]>
@@ -107,8 +108,8 @@ function tagTheme(
  * `defaultColor` theme (Shiki's default is `light`) comes first and is applied
  * inline; the others follow in name order as custom properties.
  * `defaultColor: false` makes every theme a custom property, and
- * `'light-dark()'` pairs the `light` and `dark` themes. Equal `themes` options
- * return the same list object, so caches keyed by it are shared.
+ * `'light-dark()'` pairs the `light` and `dark` themes. Recently cached `themes`
+ * options return the same list object, so caches keyed by it are shared.
  */
 export function resolveOptionThemes(
   options: CodeToHtmlOptions
@@ -166,6 +167,10 @@ export function resolveOptionThemes(
     resolvedSetCache.set(prepared[0], sets);
   }
   sets.set(key, themes);
+  if (sets.size > 128) {
+    const oldest = sets.keys().next().value;
+    if (oldest !== undefined) sets.delete(oldest);
+  }
   return themes;
 }
 
@@ -379,8 +384,8 @@ function lightDarkStyle(
   const [light, dark] = themes;
   const a = light.styles[hl];
   const b = dark.styles[hl];
-  const ac = a?.color ?? light.fg ?? 'inherit';
-  const bc = b?.color ?? dark.fg ?? 'inherit';
+  const ac = a?.color ?? light.fg ?? 'currentcolor';
+  const bc = b?.color ?? dark.fg ?? 'currentcolor';
   const htmlStyle: Record<string, string> = {
     color: ac === bc ? ac : `light-dark(${ac}, ${bc})`,
   };
@@ -493,14 +498,18 @@ export function themeMeta(
   }
   const themeName = `highlights-themes ${themes.map((t) => t.name).join(' ')}`;
   if (themes[0].role === 'light-dark') {
-    const pair = (a: string | undefined, b: string | undefined) => {
-      const x = a ?? 'inherit';
-      const y = b ?? 'inherit';
+    const pair = (
+      a: string | undefined,
+      b: string | undefined,
+      fallback: string
+    ) => {
+      const x = a ?? fallback;
+      const y = b ?? fallback;
       return x === y ? x : `light-dark(${x}, ${y})`;
     };
     return {
-      fg: pair(themes[0].fg, themes[1].fg),
-      bg: pair(themes[0].bg, themes[1].bg),
+      fg: pair(themes[0].fg, themes[1].fg, 'currentcolor'),
+      bg: pair(themes[0].bg, themes[1].bg, 'transparent'),
       themeName,
     };
   }

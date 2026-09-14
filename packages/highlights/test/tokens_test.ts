@@ -990,6 +990,70 @@ void t.test(
   }
 );
 
+void t.test('light-dark(): missing colors use valid CSS fallbacks', () => {
+  const dark: Theme = { name: 'empty', appearance: 'dark', style: {} };
+  for (const color of ['#123456', 'color(display-p3 0.1 0.2 0.3)']) {
+    const light: Theme = {
+      name: 'partial',
+      appearance: 'light',
+      style: {
+        foreground: '#111111',
+        background: '#eeeeee',
+        syntax: { keyword: color },
+      },
+    };
+    const options = {
+      lang: 'ts',
+      themes: { light, dark },
+      defaultColor: 'light-dark()',
+    } as const;
+    const result = codeToTokens('const x', options);
+    assert.equal(result.fg, 'light-dark(#111111, currentcolor)');
+    assert.equal(result.bg, 'light-dark(#eeeeee, transparent)');
+    assert.equal(
+      result.tokens[0][0].htmlStyle?.color,
+      `light-dark(${color}, currentcolor)`
+    );
+    const html = new TextDecoder().decode(codeToHtml('const x', options));
+    assert.equal(
+      rootStyle(html),
+      `background-color:${result.bg};color:${result.fg}`
+    );
+    assert.equal(
+      spanStyles(html)[0],
+      `color:light-dark(${color}, currentcolor)`
+    );
+    assert.doesNotMatch(html, /inherit/);
+  }
+});
+
+void t.test(
+  'multi-theme caches release discarded partners of a fixed theme',
+  async () => {
+    const light = { ...pierreLight };
+    let first: WeakRef<Record<string, string>> | undefined;
+    for (let i = 0; i < 256; i++) {
+      const token = codeToTokens('const', {
+        lang: 'ts',
+        themes: { light, dark: { ...pierreDark } },
+      }).tokens[0][0];
+      assert.ok(token.htmlStyle !== undefined);
+      if (i === 0) first = new WeakRef(token.htmlStyle);
+    }
+    for (let i = 0; i < 3; i++) {
+      await new Promise<void>((resolve) => setTimeout(resolve, 0));
+      Bun.gc(true);
+    }
+    assert.ok(first !== undefined);
+    assert.equal(first.deref(), undefined);
+    // The fixed theme remains in use, so collecting it cannot explain eviction.
+    assert.equal(
+      codeToTokens('const', { lang: 'ts', theme: light }).themeName,
+      light.name
+    );
+  }
+);
+
 void t.test(
   'multi-theme styles are shared across calls that name the same set',
   () => {

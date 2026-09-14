@@ -259,7 +259,6 @@ function eol(flags: number): string {
  */
 export class LiveTokenizer {
   #hl: HighlightsHighlighter | undefined;
-  #ex: LiveWasmExports;
   #langId: number;
   #themes: ResolvedTheme[];
   #cssVariablePrefix: string;
@@ -289,19 +288,13 @@ export class LiveTokenizer {
     this.#maxLineLength = options.tokenizeMaxLineLength ?? 0;
     this.#onDeferTokenize = options.onDeferTokenize;
     const renderRange = checkRenderRange(options.renderRange);
-    [this.#hl, this.#ex] = LiveTokenizer.#createStaged(
-      options.code ?? '',
-      this.#langId
-    );
+    this.#hl = LiveTokenizer.#createStaged(options.code ?? '', this.#langId);
     this.#runSlice(this.#hl, this.#ex, renderRange);
   }
 
   /** Instantiate an isolated Wasm instance and stage `code` into its line
    *  table; the caller drives tokenization. */
-  static #createStaged(
-    code: string,
-    langId: number
-  ): [HighlightsHighlighter, LiveWasmExports] {
+  static #createStaged(code: string, langId: number): HighlightsHighlighter {
     const hl = new HighlightsHighlighter(assertWasmModule());
     const ex = hl.instance.exports as unknown as LiveWasmExports;
     const bytes = encodeLiveText(code);
@@ -310,7 +303,7 @@ export class LiveTokenizer {
     hl.buffer.set(bytes, ptr);
     ex.liveInitDoc(ptr, bytes.length, langId);
     hl.bindMemory();
-    return [hl, ex];
+    return hl;
   }
 
   /** Return the active instance or throw after disposal. */
@@ -318,6 +311,11 @@ export class LiveTokenizer {
     const hl = this.#hl;
     if (hl == null) throw new Error('tokenizer is disposed');
     return hl;
+  }
+
+  /** Resolve exports through the active instance so disposal releases both. */
+  get #ex(): LiveWasmExports {
+    return this.#live().instance.exports as unknown as LiveWasmExports;
   }
 
   /** Monotonic revision; bumps once per successful mutating batch. */
@@ -596,24 +594,25 @@ export class LiveTokenizer {
   /** Replace the document in a fresh Wasm instance and swap it in. */
   reset(code: string, options?: LiveUpdateOptions): LiveTokenizerUpdate {
     this.#live();
-    const ex = this.#ex;
     this.#checkNotUpdating();
     const renderRange = checkRenderRange(options?.renderRange);
     if (typeof code !== 'string') throw new TypeError('code must be a string');
     // pending tokens describe the outgoing document; drop them, don't settle
     this.#deferGeneration += 1;
     this.#paused = false;
-    const previousLineCount = ex.liveLineCount();
-    [this.#hl, this.#ex] = LiveTokenizer.#createStaged(code, this.#langId);
+    const previousLineCount = this.#ex.liveLineCount();
+    const hl = LiveTokenizer.#createStaged(code, this.#langId);
+    this.#hl = hl;
+    const ex = this.#ex;
     this.#revision += 1;
     this.#updating = true;
     let lines: Map<number, HighlightedToken[]>;
     try {
-      lines = this.#runSlice(this.#hl, this.#ex, renderRange);
+      lines = this.#runSlice(hl, ex, renderRange);
     } finally {
       this.#updating = false;
     }
-    const lineCount = this.#ex.liveLineCount();
+    const lineCount = ex.liveLineCount();
     return {
       revision: this.#revision,
       previousLineCount,
@@ -681,9 +680,8 @@ export class LiveTokenizer {
       const off = this.#collectLines(hl, ex, from, Math.min(to, rangeStart));
       if (off.size > 0) this.#onDeferTokenize(off);
     }
-    // an onDeferTokenize callback above may have paused the tokenizer; a
-    // paused instance schedules nothing until resume
-    if (ex.liveStats(9) !== 0 && !this.#paused) {
+    // The callback may pause or dispose the tokenizer before scheduling.
+    if (this.#hl === hl && ex.liveStats(9) !== 0 && !this.#paused) {
       this.#scheduleSlice(this.#deferGeneration);
     }
     return lines;
@@ -940,17 +938,25 @@ export class LiveTokenizer {
         throw new RangeError('edit ranges overlap');
       }
     }
-    // Exactly-touching edits collapse into one range so each boundary is
-    // spliced exactly once: a CRLF merge at a shared boundary must not
-    // restructure a line another edit's pre-batch coordinates still name.
+    // Edits sharing a line collapse into one splice, preserving untouched
+    // text between them. Reuse decoded text for no-op checks and gaps.
+    let lastLine = -1;
+    let lastText = '';
+    const readLine = (line: number) => {
+      if (line !== lastLine) {
+        lastText = this.#lineText(hl, ex, line);
+        lastLine = line;
+      }
+      return lastText;
+    };
     const merged: NormalizedEdit[] = [];
     for (const e of items) {
-      if (this.#isNoopEdit(e, hl, ex)) continue;
+      if (this.#isNoopEdit(e, ex, readLine)) continue;
       const prev = merged[merged.length - 1];
-      if (prev !== undefined && prev.el === e.sl && prev.ec === e.sc) {
+      if (prev !== undefined && prev.el === e.sl) {
+        prev.newText += readLine(e.sl).slice(prev.ec, e.sc) + e.newText;
         prev.el = e.el;
         prev.ec = e.ec;
-        prev.newText += e.newText;
       } else {
         merged.push(e);
       }
@@ -961,8 +967,8 @@ export class LiveTokenizer {
   /** True when the replacement text equals the range's current text. */
   #isNoopEdit(
     e: NormalizedEdit,
-    hl: HighlightsHighlighter,
-    ex: LiveWasmExports
+    ex: LiveWasmExports,
+    readLine: (line: number) => string
   ): boolean {
     let rangeLen = e.ec - e.sc;
     for (let line = e.sl; line < e.el; line++) {
@@ -973,7 +979,7 @@ export class LiveTokenizer {
     if (rangeLen === 0) return true;
     let text = '';
     for (let line = e.sl; line <= e.el; line++) {
-      const lineText = this.#lineText(hl, ex, line);
+      const lineText = readLine(line);
       text += lineText.slice(
         line === e.sl ? e.sc : 0,
         line === e.el ? e.ec : lineText.length

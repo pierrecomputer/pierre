@@ -268,8 +268,8 @@ void t.test(
       for (let round = 0; round < 6; round++) {
         const batch = randomBatch(rand, plain);
         const update = plain.applyEdits(batch);
-        const startLine = Math.floor(rand() * (update.lineCount + 1));
-        const endLine = startLine + Math.floor(rand() * (update.lineCount + 2));
+        const startLine = rand() % (update.lineCount + 1);
+        const endLine = startLine + (rand() % (update.lineCount + 2));
         deliveries.length = 0;
         const rangedUpdate = ranged.applyEdits(batch, {
           renderRange: [startLine, endLine],
@@ -281,7 +281,7 @@ void t.test(
             `${label}: line ${line} inside [${startLine}, ${endLine})`
           );
         }
-        if (rand() < 0.5) {
+        if (rand() % 2 === 0) {
           carriedPending = ranged.pendingTokenization;
           continue;
         }
@@ -1509,6 +1509,96 @@ void t.test('LiveTokenizer: dispose invalidates the instance', () => {
   assert.throws(() => live.reset(''), /disposed/);
   live.dispose(); // idempotent
 });
+
+void t.test(
+  'LiveTokenizer: disposal releases the document buffer',
+  async () => {
+    const live = new LiveTokenizer({
+      lang: 'text',
+      theme: pierreDark,
+      code: 'x'.repeat(1_000_000),
+    });
+    const buffer = new WeakRef(live.getLineRecords(0).data.buffer);
+    live.dispose();
+    for (let i = 0; i < 3; i++) {
+      await new Promise<void>((resolve) => setTimeout(resolve, 0));
+      Bun.gc(true);
+    }
+    assert.equal(buffer.deref(), undefined);
+    assert.throws(() => live.getText(), /disposed/);
+  }
+);
+
+void t.test(
+  'LiveTokenizer: grouped edits preserve gaps and pre-edit coordinates',
+  () => {
+    const code = 'a🙂b\rc\ud800d\nefg\r\nhijk';
+    const batches: LiveTextEdit[][] = [
+      [
+        {
+          range: {
+            start: { line: 0, character: 1 },
+            end: { line: 0, character: 2 },
+          },
+          newText: 'x\r',
+        },
+        {
+          range: {
+            start: { line: 0, character: 3 },
+            end: { line: 1, character: 1 },
+          },
+          newText: '\n',
+        },
+        {
+          range: {
+            start: { line: 1, character: 2 },
+            end: { line: 2, character: 1 },
+          },
+          newText: 'é',
+        },
+        {
+          range: {
+            start: { line: 2, character: 2 },
+            end: { line: 2, character: 3 },
+          },
+          newText: 'z\n',
+        },
+      ],
+      [
+        {
+          range: {
+            start: { line: 2, character: 0 },
+            end: { line: 2, character: 1 },
+          },
+          newText: 'E',
+        },
+        {
+          range: {
+            start: { line: 2, character: 1 },
+            end: { line: 2, character: 2 },
+          },
+          newText: 'f',
+        },
+        {
+          range: {
+            start: { line: 2, character: 2 },
+            end: { line: 2, character: 3 },
+          },
+          newText: 'G',
+        },
+      ],
+    ];
+    for (const batch of batches) {
+      const live = new LiveTokenizer({ lang: 'text', theme: pierreDark, code });
+      const expected = applyToMirror(code, batch);
+      live.applyEdits([...batch].reverse(), { renderRange: [0, 1] });
+      assert.equal(live.getText(), expected);
+      live.flush();
+      assertMatchesLineStream(live, expected, 'text', 'grouped edits');
+      live.dispose();
+    }
+  }
+);
 
 void t.test('LiveTokenizer: line accessors check bounds', () => {
   const live = new LiveTokenizer({

@@ -154,7 +154,9 @@ with a per-token directory; one that does not fit renders directly. A set call
 marks the cache mode so the next single-theme call clears the region, and that
 clear invalidates the set's arena in turn. Members with Display P3 or
 CSS-variable colors have no theme table, so such a set renders through the
-CSS-variable emitter with tag replacements, like a single Display P3 theme.
+CSS-variable emitter with tag replacements, like a single Display P3 theme. The
+host caches up to 128 resolved sets per first theme, allowing discarded partners
+and their derived styles and blobs to be collected.
 
 ## Emitter contract
 
@@ -213,9 +215,11 @@ active stack prefixes, embedded template state, and lexer checkpoints. Blobs
 trim trailing zeros and intern by FNV-1a 64-bit hash plus exact-byte comparison.
 Matching state IDs prove convergence.
 
-Edits splice descriptors and retain the old end line's state ID on the last
-replacement line. The driver re-tokenizes dirty ranges until outgoing state
-matches retained state.
+Edits sharing a line are combined before splicing, preserving the unchanged text
+between them so each affected line is rebuilt once per batch. Edits splice
+descriptors and retain the old end line's state ID on the last replacement line.
+The driver re-tokenizes dirty ranges until outgoing state matches retained
+state.
 
 With `renderRange`, synchronous work runs through the range's end, including
 preceding dirty lines needed for its state. Completed off-range tokens arrive

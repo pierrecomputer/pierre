@@ -419,11 +419,13 @@ export class StreamTokenizer {
       this.#pendingSurrogate = chunk.slice(-1);
       chunk = chunk.slice(0, -1);
     }
-    this.#tail += chunk;
-    const end = this.#tail.lastIndexOf('\n') + 1;
-    if (end === 0) return [];
-    const code = this.#tail.slice(0, end);
-    this.#tail = this.#tail.slice(end);
+    const end = chunk.lastIndexOf('\n') + 1;
+    if (end === 0) {
+      this.#tail += chunk;
+      return [];
+    }
+    const code = this.#tail + chunk.slice(0, end);
+    this.#tail = chunk.slice(end);
     const lines = this.#tokenizeChunk(code);
     lines.pop(); // The trailing empty line belongs to the next chunk.
     return lines;
