@@ -4,8 +4,7 @@
 with 67 built-in languages and Zed-compatible themes. It generates HTML or
 themed tokens and supports streaming input and incremental edits.
 
-[Documentation](https://diffs.com/docs#highlights) ·
-[Playground](https://diffs.com/highlights)
+Read the [Documentation](https://diffs.com/docs#highlights).
 
 ## Installation
 
