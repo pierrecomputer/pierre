@@ -11,7 +11,13 @@ import {
   IconColorDark,
   IconColorLight,
 } from '@pierre/icons';
-import { useEffect, useMemo, useState } from 'react';
+import {
+  type CSSProperties,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 
 import styles from './HighlightsPlayground.module.css';
 import {
@@ -50,6 +56,7 @@ const THEME_OPTIONS = {
 const decoder = new TextDecoder();
 
 export function HighlightsPlayground() {
+  const previewRef = useRef<HTMLDivElement>(null);
   const [selectedThemes, setSelectedThemes] = useState({
     light: 'pierre-light',
     dark: 'pierre-dark',
@@ -111,6 +118,27 @@ export function HighlightsPlayground() {
     }),
     [code, language, themes]
   );
+  const themeStyles = Object.fromEntries(
+    Object.entries(themes).flatMap(([colorScheme, { style }]) => [
+      [
+        `--${colorScheme}-background`,
+        style['editor.background'] ?? style.background ?? 'Canvas',
+      ],
+      [
+        `--${colorScheme}-caret`,
+        style.players?.[0]?.cursor ??
+          style['editor.foreground'] ??
+          style.text ??
+          style.foreground ??
+          'CanvasText',
+      ],
+      [
+        `--${colorScheme}-selection`,
+        style.players?.[0]?.selection ??
+          `color-mix(in srgb, var(--${colorScheme}-caret) 30%, transparent)`,
+      ],
+    ])
+  ) as CSSProperties;
 
   return (
     <section id="playground" className="space-y-5 pb-16 md:pb-24">
@@ -219,43 +247,34 @@ export function HighlightsPlayground() {
           The theme could not load. Choose another theme or reload this page.
         </p>
       )}
-      <div className="grid gap-5 lg:grid-cols-2">
-        <div className="min-w-0 space-y-2">
-          <label
-            htmlFor="highlights-source"
-            className="block text-sm font-medium"
-          >
-            Source code
-          </label>
-          <textarea
-            id="highlights-source"
-            value={code}
-            onChange={(event) => setCode(event.target.value)}
-            spellCheck={false}
-            autoCapitalize="off"
-            autoCorrect="off"
-            wrap="off"
-            className="bg-background focus-visible:ring-ring block h-[32rem] w-full resize-y rounded-lg border p-4 font-mono text-sm leading-6 outline-none [tab-size:2] focus-visible:ring-2"
-          />
-        </div>
-        <div className="min-w-0 space-y-2">
-          <h2 id="highlights-preview-label" className="text-sm font-medium">
-            Highlighted output
-          </h2>
-          <div
-            role="region"
-            aria-labelledby="highlights-preview-label"
-            className={styles.preview}
-            data-color-mode={previewTheme?.colorScheme ?? selectedColorMode}
-          >
-            {(['light', 'dark'] as const).map((colorScheme) => (
-              <div
-                key={colorScheme}
-                data-color-scheme={colorScheme}
-                dangerouslySetInnerHTML={{ __html: html[colorScheme] }}
-              />
-            ))}
-          </div>
+      <div
+        className={styles.editor}
+        data-color-mode={previewTheme?.colorScheme ?? selectedColorMode}
+        style={themeStyles}
+      >
+        <textarea
+          aria-label="Source code"
+          value={code}
+          onChange={(event) => setCode(event.target.value)}
+          onScroll={(event) => {
+            if (previewRef.current === null) return;
+            previewRef.current.scrollTop = event.currentTarget.scrollTop;
+            previewRef.current.scrollLeft = event.currentTarget.scrollLeft;
+          }}
+          spellCheck={false}
+          autoCapitalize="off"
+          autoCorrect="off"
+          wrap="off"
+          className={styles.input}
+        />
+        <div ref={previewRef} aria-hidden="true" className={styles.preview}>
+          {(['light', 'dark'] as const).map((colorScheme) => (
+            <div
+              key={colorScheme}
+              data-color-scheme={colorScheme}
+              dangerouslySetInnerHTML={{ __html: html[colorScheme] }}
+            />
+          ))}
         </div>
       </div>
     </section>

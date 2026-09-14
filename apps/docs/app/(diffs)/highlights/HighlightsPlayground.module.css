@@ -1,43 +1,107 @@
-.preview {
+.editor {
+  position: relative;
+  isolation: isolate;
   height: 32rem;
-  overflow: auto;
+  overflow: hidden;
   border: 1px solid var(--border);
   border-radius: 0.5rem;
+  background: light-dark(var(--light-background), var(--dark-background));
+  color-scheme: light dark;
 }
 
-.preview > div {
-  min-height: 100%;
+.editor:focus-within {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+.editor[data-color-mode='light'] {
+  color-scheme: light;
+}
+
+.editor[data-color-mode='dark'] {
+  color-scheme: dark;
+}
+
+.input,
+.preview {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: auto;
+  scrollbar-gutter: stable;
+}
+
+.input,
+.preview pre {
+  margin: 0;
+  border: 0;
+  padding: 1rem;
+  font-family: var(--font-berkeley-mono), monospace;
+  font-size: 0.875rem;
+  font-style: normal;
+  font-weight: 400;
+  font-variant-ligatures: none;
+  line-height: 1.5rem;
+  letter-spacing: normal;
+  tab-size: 2;
+  white-space: pre;
+}
+
+.input {
+  z-index: 0;
+  resize: none;
+  outline: none;
+  background: transparent;
+  color: transparent;
+  caret-color: light-dark(var(--light-caret), var(--dark-caret));
+}
+
+.input::selection {
+  background: light-dark(var(--light-selection), var(--dark-selection));
+  color: transparent;
+}
+
+.preview {
+  z-index: 1;
+  pointer-events: none;
+  user-select: none;
 }
 
 .preview pre {
-  min-width: fit-content;
-  min-height: 32rem;
-  margin: 0;
-  padding: 1rem;
-  font-family: var(--font-mono);
-  font-size: 0.875rem;
-  line-height: 1.5rem;
-  tab-size: 2;
+  min-width: 100%;
+  width: max-content;
+  background: transparent !important;
+}
+
+.preview code {
+  font: inherit;
+  letter-spacing: inherit;
+}
+
+/* Preserve the textarea's empty final line in the highlighted layer. */
+.preview code::after {
+  content: '\200b';
 }
 
 .preview [data-color-scheme='dark'] {
   display: none;
 }
 
-.preview[data-color-mode='dark'] [data-color-scheme='light'] {
+.editor[data-color-mode='dark'] [data-color-scheme='light'] {
   display: none;
 }
 
-.preview[data-color-mode='dark'] [data-color-scheme='dark'] {
+.editor[data-color-mode='dark'] [data-color-scheme='dark'] {
   display: block;
 }
 
 @media (prefers-color-scheme: dark) {
-  .preview[data-color-mode='system'] [data-color-scheme='light'] {
+  .editor[data-color-mode='system'] [data-color-scheme='light'] {
     display: none;
   }
 
-  .preview[data-color-mode='system'] [data-color-scheme='dark'] {
+  .editor[data-color-mode='system'] [data-color-scheme='dark'] {
     display: block;
   }
 }
