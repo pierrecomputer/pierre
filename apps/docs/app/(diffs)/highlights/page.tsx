@@ -58,6 +58,14 @@ export default function HighlightsPage() {
                   </dd>
                 </div>
                 <div>
+                  <dt className="text-sm font-medium">Linear memory</dt>
+                  <dd className="text-muted-foreground mt-0.5 text-sm text-pretty">
+                    Source bytes, lexer state, and output live in WebAssembly
+                    linear memory, keeping the lexer&apos;s working data off the
+                    JavaScript heap.
+                  </dd>
+                </div>
+                <div>
                   <dt className="text-sm font-medium">Zero-copy output</dt>
                   <dd className="text-muted-foreground mt-0.5 text-sm text-pretty">
                     <code>codeToHtml()</code> returns a view into WebAssembly
@@ -89,17 +97,10 @@ export default function HighlightsPage() {
                   </dd>
                 </div>
                 <div>
-                  <dt className="text-sm font-medium">Themed tokens</dt>
-                  <dd className="text-muted-foreground mt-0.5 text-sm text-pretty">
-                    Build custom renderers with Shiki-compatible themed tokens
-                    and UTF-16 offsets.
-                  </dd>
-                </div>
-                <div>
                   <dt className="text-sm font-medium">Themes included</dt>
                   <dd className="text-muted-foreground mt-0.5 text-sm text-pretty">
-                    Use bundled Zed themes or supply your own light and dark
-                    theme objects.
+                    Includes all of Shiki&apos;s built-in community themes, plus
+                    Pierre&apos;s light and dark themes.
                   </dd>
                 </div>
                 <div>
