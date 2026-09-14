@@ -7,13 +7,12 @@ import {
   init,
   StreamTokenizer,
 } from '../lib/index';
-import { compileTheme } from '../lib/theme';
+import { prepareTheme } from '../lib/theme';
 import tokenTypes from '../lib/token-types';
 import { listTokenTypes, transformWat, wat2wasm } from '../scripts/build';
 import pierreDark from '../themes/pierre-dark.json' with { type: 'json' };
 
 const dec = new TextDecoder();
-const tableCache = new WeakMap<Theme, Uint8Array>();
 
 /** Options tests may pass through `loadLang`'s `hl` to `codeToHtml`. */
 export interface TestHlOptions {
@@ -35,7 +34,8 @@ export interface TestLang {
 /**
  * Return the emitter's lowercase `#rrggbb[aa]` for a token capture. Defaults to
  * Pierre Dark, uses the theme table's longest-prefix fallback, and returns
- * `null` when unthemed. Tests use it instead of hard-coded colors.
+ * `null` when unthemed. Tests use it instead of hard-coded colors. Only hex
+ * themes have a packed table, so Display P3 themes are rejected.
  *
  * `name` is a `$Token` name, such as `"string.escape"`.
  */
@@ -45,10 +45,8 @@ export function themeColor(
 ): string | null {
   const i = tokenTypes.indexOf(name);
   assert.ok(i >= 0, `unknown token type: ${name}`);
-  let table = tableCache.get(theme);
-  if (table === undefined) {
-    tableCache.set(theme, (table = compileTheme(theme)));
-  }
+  const { table } = prepareTheme(theme);
+  assert.ok(table !== undefined, `${theme.name} has no packed theme table`);
   const [r, g, b, a] = table.subarray(i * 5, i * 5 + 4);
   if ((r | g | b | a) === 0) return null;
   const hex = (n: number) => n.toString(16).padStart(2, '0');

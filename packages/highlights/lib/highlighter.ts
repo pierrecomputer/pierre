@@ -3,28 +3,19 @@ import type {
   CodeToTokensOptions,
   Highlighter,
   Lang,
-  Theme,
   ThemedToken,
   TokensResult,
 } from './index';
 import languages from './languages';
-import { compileTheme, defaultCssVariablePrefix, resolveTheme } from './theme';
-import tokenTypes from './token-types';
+import { defaultCssVariablePrefix, prepareTheme } from './theme';
 import type { ResolvedTheme } from './tokens';
-import {
-  lineRecordsToTokens,
-  resolveOptionThemes,
-  resolveThemeStyles,
-  themeMeta,
-} from './tokens';
+import { lineRecordsToTokens, resolveOptionThemes, themeMeta } from './tokens';
 
 const enc = new TextEncoder();
 const dec = new TextDecoder('utf-8', { ignoreBOM: true });
 const pageSize = 65536;
 const themePtr = 64; // $mem.themeTable in src/memory.wat
 const themeBytes = 384; // 73 five-byte records, padded for SIMD comparisons
-const themeBuildCache = new WeakMap<Theme, Uint8Array>();
-const themeHtmlCache = new WeakMap<Theme, Map<string, string>>();
 // Unicode identifier classes for the ECMAScript lexers; see #idClass.
 const idClassRegex = [/^\p{ID_Start}$/u, /^[\u200C\u200D\p{ID_Continue}]$/u];
 let idClassCache: Uint8Array | undefined;
@@ -146,24 +137,14 @@ export class HighlightsHighlighter implements Highlighter {
     }: CodeToHtmlOptions
   ): Uint8Array {
     const langId = langIdOf(lang);
-    const resolvedTheme = resolveTheme(theme);
-    const useCssVariables = resolvedTheme.cssVariables === true;
-    const styles = useCssVariables
-      ? undefined
-      : resolveThemeStyles(resolvedTheme);
-    const usesDisplayP3 = styles?.usesDisplayP3 === true;
-    let themeTable: Uint8Array | undefined;
-    if (!useCssVariables && !usesDisplayP3) {
-      themeTable = themeBuildCache.get(resolvedTheme);
-      if (themeTable === undefined) {
-        themeTable = compileTheme(resolvedTheme);
-        themeBuildCache.set(resolvedTheme, themeTable);
-      }
-    }
+    const prepared = prepareTheme(theme, cssVariablePrefix);
+    const { table } = prepared;
     const inputLength = this.writeInput(input);
-    if (useCssVariables || usesDisplayP3) {
-      // P3 rendering uses unprefixed tags as keys for the color replacements below.
-      const prefix = useCssVariables ? cssVariablePrefix : '';
+    if (table === undefined) {
+      // CSS-variable and Display P3 themes render through the variable
+      // emitter. P3 output keeps unprefixed `var(<token>)` openers, the keys
+      // of the tag replacements applied below.
+      const prefix = prepared.usesDisplayP3 ? '' : cssVariablePrefix;
       if (this.#htmlPrefix !== prefix) {
         this.#htmlPrefixBytes = enc.encode(
           prefix
@@ -180,50 +161,23 @@ export class HighlightsHighlighter implements Highlighter {
       this.buffer.set(bytes, prefixPtr);
       this.dv.setUint32(14, prefixPtr, true);
       this.dv.setUint32(18, bytes.length, true);
+    } else if (this.#themeWritten !== table) {
+      this.buffer.set(table, themePtr);
+      this.buffer.fill(0, themePtr + table.length, themePtr + themeBytes);
+      this.#themeWritten = table;
     }
-    if (themeTable !== undefined && this.#themeWritten !== themeTable) {
-      this.buffer.set(themeTable, themePtr);
-      this.buffer.fill(0, themePtr + themeTable.length, themePtr + themeBytes);
-      this.#themeWritten = themeTable;
-    }
-    this.#run(langId, useCssVariables || usesDisplayP3 ? 1 : 0, inputLength);
+    this.#run(langId, table === undefined ? 1 : 0, inputLength);
     const outStart = this.dv.getUint32(6, true);
     const outLength = this.dv.getUint32(10, true);
     const output = this.buffer.subarray(outStart, outStart + outLength);
-    if (!usesDisplayP3 || styles === undefined) return output;
-
+    const tags = prepared.htmlTags;
+    if (tags === undefined) return output;
     // Keep Wasm's escaping and line handling, replacing only generated tags
     // with colors that cannot fit in its packed RGBA theme table.
-    let htmlStyles = themeHtmlCache.get(resolvedTheme);
-    if (htmlStyles === undefined) {
-      htmlStyles = new Map();
-      const rootStyle =
-        (styles.bg === undefined ? '' : `background-color:${styles.bg};`) +
-        (styles.fg === undefined ? '' : `color:${styles.fg}`);
-      htmlStyles.set(
-        '<pre class="highlights" style="background-color:var(background);color:var(foreground);">',
-        `<pre class="highlights" style="${rootStyle}">`
-      );
-      for (let i = 1; i < tokenTypes.length; i++) {
-        const style = styles.styles[i];
-        const name = tokenTypes[i].replace(/[._]/g, '-');
-        const css =
-          `color:${style?.color ?? 'inherit'}` +
-          (style?.italic === true ? ';font-style:italic' : '') +
-          (style != null && style.weight !== 0
-            ? `;font-weight:${style.weight}`
-            : '');
-        htmlStyles.set(
-          `<span style="color:var(${name})">`,
-          `<span style="${css}">`
-        );
-      }
-      themeHtmlCache.set(resolvedTheme, htmlStyles);
-    }
     return enc.encode(
       dec
         .decode(output)
-        .replace(/<(?:pre|span)[^>]*>/g, (tag) => htmlStyles.get(tag) ?? tag)
+        .replace(/<(?:pre|span)[^>]*>/g, (tag) => tags.get(tag) ?? tag)
     );
   }
 

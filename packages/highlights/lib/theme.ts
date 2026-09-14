@@ -143,24 +143,204 @@ export function resolveThemeStyle(style: ThemeStyle, name: string): TokenStyle {
   };
 }
 
+/** A prefixed CSS variable for a token slot, matching the Wasm emitter. */
+function cssVariable(name: string, cssVariablePrefix: string): string {
+  return `var(${cssVariablePrefix}${name.replace(/[._]/g, '-')})`;
+}
+
 /**
- * Compile hex colors and font settings into Wasm's binary style table.
- * Display P3 colors use JavaScript rendering to preserve their wider gamut.
+ * One theme prepared for every output path. `styles` is indexed by token id,
+ * with `null` for unstyled slots; the foreground and background live in `fg`
+ * and `bg` instead. Which extra representation is present depends on the
+ * theme: hex themes carry the packed Wasm `table`, Display P3 themes carry
+ * the HTML tag replacements, and CSS-variable themes carry neither because
+ * every color is a prefixed custom property. Representations that only some
+ * callers need are built on first read: the tag replacements, and the
+ * variable references of a CSS-variable theme, which HTML output never reads.
  */
-export function compileTheme(theme: Theme): Uint8Array {
-  const style = theme.style ?? {};
-  const bytes = new Uint8Array(tokenTypes.length * 5);
-  for (let i = 1; i < tokenTypes.length; i++) {
-    const { color, italic, weight } = resolveThemeStyle(style, tokenTypes[i]);
-    const o = i * 5;
-    if (color?.startsWith('#') === true) {
-      const rgb = parseInt(color.slice(1, 7), 16);
-      bytes[o] = rgb >> 16;
-      bytes[o + 1] = (rgb >> 8) & 0xff;
-      bytes[o + 2] = rgb & 0xff;
-      bytes[o + 3] = color.length === 9 ? parseInt(color.slice(7), 16) : 0xff;
-    }
-    bytes[o + 4] = (italic ? 0x10 : 0) | (weight / 100);
+export interface PreparedTheme {
+  name: string;
+  styles: (TokenStyle | null)[];
+  fg?: string;
+  bg?: string;
+  /** True when any color is `color(display-p3 …)`. */
+  usesDisplayP3: boolean;
+  /**
+   * Five bytes per token id (`r g b a style`) for the Wasm theme table, or
+   * `undefined` when HTML must render through the CSS-variable emitter
+   * because the colors are custom properties or Display P3.
+   */
+  table: Uint8Array | undefined;
+  /**
+   * For Display P3 themes, the CSS-variable emitter's unprefixed `<pre>` and
+   * `<span>` openers mapped to openers with the theme's colors and font
+   * settings inlined; built on first read, so token-only callers never pay
+   * for it. `undefined` for other themes.
+   */
+  readonly htmlTags: Map<string, string> | undefined;
+}
+
+// Cache by object identity, not name: same-named themes may have different
+// palettes, and a registered theme may be replaced by a new object with the
+// same name. CSS-variable themes get one entry per prefix; the others use ''.
+const preparedCache = new WeakMap<Theme, Map<string, PreparedTheme>>();
+
+/**
+ * Prepare a theme or family for rendering, resolving every token slot once.
+ * Results are cached by theme object identity (and by prefix for
+ * CSS-variable themes), so HTML, token, stream, and live output share one
+ * prepared object per theme.
+ */
+export function prepareTheme(
+  theme: Theme | ThemeFamily,
+  cssVariablePrefix: string = defaultCssVariablePrefix
+): PreparedTheme {
+  const resolved = resolveTheme(theme);
+  const prefix = resolved.cssVariables === true ? cssVariablePrefix : '';
+  let prefixes = preparedCache.get(resolved);
+  const cached = prefixes?.get(prefix);
+  if (cached !== undefined) return cached;
+  const prepared =
+    resolved.cssVariables === true
+      ? prepareCssVariables(resolved.name, cssVariablePrefix)
+      : prepareStyles(resolved);
+  if (prefixes === undefined) {
+    prefixes = new Map();
+    preparedCache.set(resolved, prefixes);
   }
-  return bytes;
+  prefixes.set(prefix, prepared);
+  return prepared;
+}
+
+/**
+ * A CSS-variable theme: every slot references its prefixed custom property
+ * and the theme's own `style` is never read. The references are built on
+ * first read, since HTML output only needs to know there is no table.
+ */
+function prepareCssVariables(
+  name: string,
+  cssVariablePrefix: string
+): PreparedTheme {
+  let variables: Pick<PreparedTheme, 'styles' | 'fg' | 'bg'> | undefined;
+  const resolve = () => (variables ??= cssVariableStyles(cssVariablePrefix));
+  return {
+    name,
+    get styles() {
+      return resolve().styles;
+    },
+    get fg() {
+      return resolve().fg;
+    },
+    get bg() {
+      return resolve().bg;
+    },
+    usesDisplayP3: false,
+    table: undefined,
+    htmlTags: undefined,
+  };
+}
+
+/** Variable references for every token slot plus the foreground and background. */
+function cssVariableStyles(
+  cssVariablePrefix: string
+): Pick<PreparedTheme, 'styles' | 'fg' | 'bg'> {
+  const styles: (TokenStyle | null)[] = new Array(tokenTypes.length).fill(null);
+  for (let i = 1; i < tokenTypes.length; i++) {
+    styles[i] = {
+      color: cssVariable(tokenTypes[i], cssVariablePrefix),
+      italic: false,
+      weight: 0,
+    };
+  }
+  return {
+    styles,
+    fg: cssVariable('foreground', cssVariablePrefix),
+    bg: cssVariable('background', cssVariablePrefix),
+  };
+}
+
+/**
+ * Resolve every token slot of a hex or Display P3 theme in one pass, packing
+ * each hex color and its font settings into the Wasm theme table as it goes.
+ * Font settings stay in the table even without a color. Display P3 colors
+ * cannot fit the packed RGBA records, so such a theme drops the table and
+ * gets HTML tag replacements instead.
+ */
+function prepareStyles(theme: Theme): PreparedTheme {
+  const themeStyle = theme.style ?? {};
+  const styles: (TokenStyle | null)[] = new Array(tokenTypes.length).fill(null);
+  const table = new Uint8Array(tokenTypes.length * 5);
+  let fg: string | undefined;
+  let bg: string | undefined;
+  let usesDisplayP3 = false;
+  for (let i = 1; i < tokenTypes.length; i++) {
+    const name = tokenTypes[i];
+    const style = resolveThemeStyle(themeStyle, name);
+    const { color, italic, weight } = style;
+    const o = i * 5;
+    if (color !== undefined) {
+      if (color.startsWith('#')) {
+        const rgb = parseInt(color.slice(1, 7), 16);
+        table[o] = rgb >> 16;
+        table[o + 1] = (rgb >> 8) & 0xff;
+        table[o + 2] = rgb & 0xff;
+        table[o + 3] = color.length === 9 ? parseInt(color.slice(7), 16) : 0xff;
+      } else {
+        // `resolveThemeStyle` only returns hex or `color(display-p3 …)`.
+        usesDisplayP3 = true;
+      }
+    }
+    table[o + 4] = (italic ? 0x10 : 0) | (weight / 100);
+    if (color === undefined && !italic && weight === 0) continue;
+    if (name === 'foreground') fg = color;
+    else if (name === 'background') bg = color;
+    else styles[i] = style;
+  }
+  let htmlTags: Map<string, string> | undefined;
+  return {
+    name: theme.name,
+    styles,
+    fg,
+    bg,
+    usesDisplayP3,
+    table: usesDisplayP3 ? undefined : table,
+    get htmlTags() {
+      if (!usesDisplayP3) return undefined;
+      return (htmlTags ??= displayP3HtmlTags(styles, fg, bg));
+    },
+  };
+}
+
+/**
+ * Tag replacements for Display P3 HTML. The CSS-variable emitter runs with an
+ * empty prefix, so its openers read `var(<token>)`; each maps to an opener
+ * with the theme's color and font settings inlined, the shape the packed-table
+ * emitter produces. Every color passed `isThemeColor`, so none can escape the
+ * style attribute.
+ */
+function displayP3HtmlTags(
+  styles: (TokenStyle | null)[],
+  fg: string | undefined,
+  bg: string | undefined
+): Map<string, string> {
+  const tags = new Map<string, string>();
+  const rootStyle =
+    (bg === undefined ? '' : `background-color:${bg};`) +
+    (fg === undefined ? '' : `color:${fg}`);
+  tags.set(
+    '<pre class="highlights" style="background-color:var(background);color:var(foreground);">',
+    `<pre class="highlights" style="${rootStyle}">`
+  );
+  for (let i = 1; i < tokenTypes.length; i++) {
+    const style = styles[i];
+    const name = tokenTypes[i].replace(/[._]/g, '-');
+    const css =
+      `color:${style?.color ?? 'inherit'}` +
+      (style?.italic === true ? ';font-style:italic' : '') +
+      (style != null && style.weight !== 0
+        ? `;font-weight:${style.weight}`
+        : '');
+    tags.set(`<span style="color:var(${name})">`, `<span style="${css}">`);
+  }
+  return tags;
 }

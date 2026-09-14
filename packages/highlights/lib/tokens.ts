@@ -5,25 +5,9 @@ import type {
   ThemeFamily,
   TokensResult,
 } from './index';
-import type { TokenStyle } from './theme';
-import {
-  defaultCssVariablePrefix,
-  resolveTheme,
-  resolveThemeStyle,
-} from './theme';
+import type { PreparedTheme } from './theme';
+import { prepareTheme } from './theme';
 import tokenTypes from './token-types';
-
-/**
- * A Zed theme resolved to per-token-id styles for JavaScript rendering.
- * `styles` is indexed by token ID; CSS-variable themes reference custom properties.
- */
-export interface ResolvedThemeStyles {
-  name: string;
-  styles: (TokenStyle | null)[];
-  fg?: string;
-  bg?: string;
-  usesDisplayP3: boolean;
-}
 
 /**
  * How one resolved theme reaches the output: `single` for the `theme` option
@@ -34,8 +18,14 @@ export interface ResolvedThemeStyles {
  */
 export type ThemeRole = 'single' | 'default' | 'variable' | 'light-dark';
 
-/** Resolved styles tagged with the option color key (`null` for `theme`). */
-export interface ResolvedTheme extends ResolvedThemeStyles {
+/**
+ * A prepared theme's rendering fields tagged with the option color key
+ * (`null` for `theme`) and its role in the output.
+ */
+export interface ResolvedTheme extends Pick<
+  PreparedTheme,
+  'name' | 'styles' | 'fg' | 'bg'
+> {
   color: string | null;
   role: ThemeRole;
 }
@@ -57,78 +47,21 @@ for (let i = 0; i < tokenTypes.length; i++) {
     standardTypes[i] = 2;
 }
 
-/** A prefixed CSS variable for a token slot, matching the Wasm emitter. */
-function cssVariable(name: string, cssVariablePrefix: string): string {
-  return `var(${cssVariablePrefix}${name.replace(/[._]/g, '-')})`;
-}
-
-// Cache by object identity, not name: same-named themes may have different
-// palettes, and a registered theme may be replaced by a new object with the
-// same name.
-const styleCache = new WeakMap<Theme, Map<string, ResolvedThemeStyles>>();
-
 // Multi-theme tokens with the same token id share styles for their theme set.
 const htmlStyleCache = new WeakMap<
   ResolvedTheme[],
   Map<string, Record<string, string>[]>
 >();
 
-/**
- * Resolve a Zed theme or family to styles for JavaScript rendering.
- *
- * `styles` is indexed by token ID. Each slot is `{color, italic, weight}` or
- * `null`; CSS-variable themes set each color to its prefixed variable reference.
- * The result also includes foreground and background colors.
- */
-export function resolveThemeStyles(
+/** Prepare one option theme and tag it with its color key and role. */
+function tagTheme(
   theme: Theme | ThemeFamily,
-  cssVariablePrefix: string = defaultCssVariablePrefix
-): ResolvedThemeStyles {
-  const resolved = resolveTheme(theme);
-  const prefix = resolved.cssVariables === true ? cssVariablePrefix : '';
-  let prefixes = styleCache.get(resolved);
-  const cached = prefixes?.get(prefix);
-  if (cached !== undefined) return cached;
-  const styles: (TokenStyle | null)[] = new Array(tokenTypes.length).fill(null);
-  let fg: string | undefined;
-  let bg: string | undefined;
-  let usesDisplayP3 = false;
-  if (resolved.cssVariables === true) {
-    for (let i = 1; i < tokenTypes.length; i++) {
-      styles[i] = {
-        color: cssVariable(tokenTypes[i], cssVariablePrefix),
-        italic: false,
-        weight: 0,
-      };
-    }
-    fg = cssVariable('foreground', cssVariablePrefix);
-    bg = cssVariable('background', cssVariablePrefix);
-  } else {
-    const themeStyle = resolved.style ?? {};
-    for (let i = 1; i < tokenTypes.length; i++) {
-      const name = tokenTypes[i];
-      const style = resolveThemeStyle(themeStyle, name);
-      const { color } = style;
-      if (color?.startsWith('color(') === true) usesDisplayP3 = true;
-      if (color === undefined && !style.italic && style.weight === 0) continue;
-      if (name === 'foreground') fg = color;
-      else if (name === 'background') bg = color;
-      else styles[i] = style;
-    }
-  }
-  const entry: ResolvedThemeStyles = {
-    name: resolved.name,
-    styles,
-    fg,
-    bg,
-    usesDisplayP3,
-  };
-  if (prefixes === undefined) {
-    prefixes = new Map();
-    styleCache.set(resolved, prefixes);
-  }
-  prefixes.set(prefix, entry);
-  return entry;
+  cssVariablePrefix: string | undefined,
+  color: string | null,
+  role: ThemeRole
+): ResolvedTheme {
+  const { name, styles, fg, bg } = prepareTheme(theme, cssVariablePrefix);
+  return { color, role, name, styles, fg, bg };
 }
 
 /**
@@ -155,11 +88,9 @@ export function resolveOptionThemes(
           "`themes` must contain `light` and `dark` when defaultColor is 'light-dark()'"
         );
       }
-      return [light, dark].map(([color, theme]) => ({
-        color,
-        role: 'light-dark' as const,
-        ...resolveThemeStyles(theme, options.cssVariablePrefix),
-      }));
+      return [light, dark].map(([color, theme]) =>
+        tagTheme(theme, options.cssVariablePrefix, color, 'light-dark')
+      );
     }
     if (defaultColor !== false) {
       const at = entries.findIndex(([key]) => key === defaultColor);
@@ -170,19 +101,16 @@ export function resolveOptionThemes(
       }
       entries.unshift(...entries.splice(at, 1));
     }
-    return entries.map(([color, theme], i) => ({
-      color,
-      role: defaultColor !== false && i === 0 ? 'default' : 'variable',
-      ...resolveThemeStyles(theme, options.cssVariablePrefix),
-    }));
+    return entries.map(([color, theme], i) =>
+      tagTheme(
+        theme,
+        options.cssVariablePrefix,
+        color,
+        defaultColor !== false && i === 0 ? 'default' : 'variable'
+      )
+    );
   }
-  return [
-    {
-      color: null,
-      role: 'single',
-      ...resolveThemeStyles(options.theme, options.cssVariablePrefix),
-    },
-  ];
+  return [tagTheme(options.theme, options.cssVariablePrefix, null, 'single')];
 }
 
 /** Convert an offset range and token id to a Shiki `ThemedToken`. */
