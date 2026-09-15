@@ -1,6 +1,6 @@
 {
   "name": "@pierre/highlights",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "description": "A fast code highlighter written in WebAssembly Text(Wat), from Pierre",
   "license": "apache-2.0",
   "files": [
