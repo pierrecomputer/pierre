@@ -10,9 +10,187 @@ import { initFullModule, makeRand } from './_util';
 
 t.before(initFullModule);
 
+const encoder = new TextEncoder();
+
 /** Join a line's token contents back together. */
 const lineText = (tokens: ThemedToken[]) =>
   tokens.map((token) => token.content).join('');
+
+void t.test(
+  'StreamTokenizer: pipeThrough decodes UTF-8 bytes and flushes on close',
+  async () => {
+    const options = {
+      lang: 'ts',
+      themes: { dark: pierreDark, light: pierreLight },
+    } as const;
+    for (const input of [
+      ...[
+        '',
+        '\n',
+        '/* é€🙂\r\nstill */\nlast',
+        'const x = 1\n',
+        '\ufefflet x = 1\n',
+      ].map((code) => encoder.encode(code)),
+      new Uint8Array([0xe2, 0x82]), // Incomplete UTF-8 at the end of the stream.
+      new Uint8Array([0x61, 0xff, 0x0a, 0xf0, 0x9f]), // Invalid and incomplete UTF-8.
+    ]) {
+      const stream = new StreamTokenizer(options);
+      assert.ok(stream instanceof TransformStream);
+      const source = new ReadableStream<Uint8Array>({
+        start(controller) {
+          // Split multi-byte UTF-8 characters and CRLF, including empty chunks.
+          for (let i = 0; i < input.length; i++) {
+            controller.enqueue(input.subarray(i, i + 1));
+            controller.enqueue(new Uint8Array());
+          }
+          controller.close();
+        },
+      });
+      const actual: ThemedToken[][] = [];
+      for await (const line of source.pipeThrough(stream)) actual.push(line);
+      assert.deepEqual(actual, codeToTokens(input, options).tokens);
+      assert.throws(() => stream.pushCode('next'), /stream has ended/);
+      assert.throws(() => stream.end(), /stream has ended/);
+    }
+  }
+);
+
+void t.test(
+  'StreamTokenizer: writable waits for reads and emits completed lines',
+  async () => {
+    const options = { lang: 'ts', theme: pierreDark } as const;
+    const expected = codeToTokens('const x = 1\nlast', options).tokens;
+    const stream = new StreamTokenizer(options);
+    const writer = stream.writable.getWriter();
+    const reader = stream.readable.getReader();
+    let written = false;
+    const writing = writer
+      .write(encoder.encode('const x = 1\nlast'))
+      .then(() => {
+        written = true;
+      });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    assert.equal(written, false);
+    assert.deepEqual(await reader.read(), { value: expected[0], done: false });
+    await writing;
+    const closing = writer.close();
+    assert.deepEqual(await reader.read(), { value: expected[1], done: false });
+    assert.deepEqual(await reader.read(), { value: undefined, done: true });
+    await closing;
+  }
+);
+
+void t.test(
+  'StreamTokenizer: cancellation and abort discard buffered code',
+  async () => {
+    const options = { lang: 'ts', theme: pierreDark } as const;
+    for (const cancelReadable of [true, false]) {
+      const stream = new StreamTokenizer(options);
+      const writer = stream.writable.getWriter();
+      const reader = stream.readable.getReader();
+      const reason = new Error('stop tokenizing');
+      const reading = reader.read();
+      const result = cancelReadable
+        ? reading.then((value) => assert.equal(value.done, true))
+        : assert.rejects(reading, reason);
+      const closed = assert.rejects(writer.closed, reason);
+      await writer.write(encoder.encode('/* buffered'));
+      await writer.write(new Uint8Array([0xf0, 0x9f]));
+      if (cancelReadable) await reader.cancel(reason);
+      else await writer.abort(reason);
+      await Promise.all([result, closed]);
+      assert.throws(() => stream.pushCode('next'), /stream has ended/);
+      assert.throws(() => stream.end(), /stream has ended/);
+      stream.dispose();
+    }
+    const next = new StreamTokenizer(options);
+    assert.deepEqual(next.end(), codeToTokens('', options).tokens);
+  }
+);
+
+void t.test(
+  'StreamTokenizer: pushCode accepts UTF-8 bytes at every split',
+  () => {
+    const options = { lang: 'ts', theme: pierreDark } as const;
+    for (const input of [
+      encoder.encode(''),
+      encoder.encode('\ufeff/* é€🙂\r\nstill */\nlast'),
+      encoder.encode('const x = 1\n'),
+      new Uint8Array([0x61, 0xff, 0x0a, 0xf0, 0x9f]),
+    ]) {
+      const expected = codeToTokens(input, options).tokens;
+      for (let at = 0; at <= input.length; at++) {
+        const stream = new StreamTokenizer(options);
+        const actual = [
+          ...stream.pushCode(input.subarray(0, at)),
+          ...stream.pushCode(''),
+          ...stream.pushCode(new Uint8Array()),
+          ...stream.pushCode(input.subarray(at)),
+          ...stream.end(),
+        ];
+        assert.deepEqual(actual, expected, `byte split at ${at}`);
+        assert.throws(() => stream.pushCode(input), /stream has ended/);
+      }
+    }
+  }
+);
+
+void t.test(
+  'StreamTokenizer: mixed strings and bytes preserve chunk order',
+  () => {
+    const options = { lang: 'ts', theme: pierreDark } as const;
+    const cases: { chunks: (string | Uint8Array)[]; code: string }[] = [
+      {
+        chunks: [
+          '/* ',
+          encoder.encode('é🙂'),
+          '\r',
+          encoder.encode('\nstill */\n'),
+          'last',
+        ],
+        code: '/* é🙂\r\nstill */\nlast',
+      },
+      {
+        chunks: [new Uint8Array([0xe2]), 'x\n', new Uint8Array([0x82, 0xac])],
+        code: '\ufffdx\n\ufffd\ufffd',
+      },
+      {
+        chunks: ['"\ud83d', encoder.encode('x'), '\ude42"\n'],
+        code: '"\ud83dx\ude42"\n',
+      },
+      {
+        chunks: ['"\ud83d', new Uint8Array([0xf0, 0x9f])],
+        code: '"\ud83d\ufffd',
+      },
+    ];
+    for (const { chunks, code } of cases) {
+      const stream = new StreamTokenizer(options);
+      const actual: ThemedToken[][] = [];
+      for (const chunk of chunks) actual.push(...stream.pushCode(chunk));
+      actual.push(...stream.end());
+      assert.deepEqual(actual, codeToTokens(code, options).tokens);
+    }
+  }
+);
+
+void t.test('StreamTokenizer: buffered bytes survive caller mutation', () => {
+  const options = { lang: 'ts', theme: pierreDark } as const;
+  const code = '/* é🙂\nstill */\nlast';
+  for (const split of [false, true]) {
+    const stream = new StreamTokenizer(options);
+    const first = encoder.encode(split ? '/* é' : '');
+    const second = encoder.encode(split ? '🙂\nstill' : '/* é🙂\nstill');
+    const actual = stream.pushCode(first);
+    first.fill(0);
+    actual.push(...stream.pushCode(second));
+    second.fill(0);
+    actual.push(
+      ...stream.pushCode(encoder.encode(' */\nlast')),
+      ...stream.end()
+    );
+    assert.deepEqual(actual, codeToTokens(code, options).tokens);
+  }
+});
 
 void t.test(
   'StreamTokenizer: emits completed lines and buffers the final line',
@@ -135,12 +313,13 @@ void t.test(
     for (const [lang, code] of tokenizerSamples) {
       const direct = codeToTokens(code, { lang, theme: pierreDark }).tokens;
       for (let round = 0; round < 16; round++) {
+        const input = round % 2 === 0 ? code : encoder.encode(code);
         const stream = new StreamTokenizer({ lang, theme: pierreDark });
         const streamed: ThemedToken[][] = [];
         let at = 0;
-        while (at < code.length) {
+        while (at < input.length) {
           const step = 1 + (rand() % 9);
-          streamed.push(...stream.pushCode(code.slice(at, at + step)));
+          streamed.push(...stream.pushCode(input.slice(at, at + step)));
           at += step;
         }
         streamed.push(...stream.end());
@@ -164,16 +343,23 @@ void t.test(
     const options = { lang: 'text', theme: pierreDark } as const;
     const chunk = 'x'.repeat(32);
     const code = chunk.repeat(8192);
-    for (const terminate of [false, true]) {
-      const stream = new StreamTokenizer(options);
-      for (let i = 0; i < 8192; i++) {
-        assert.deepEqual(stream.pushCode(chunk), []);
+    for (const input of [chunk, encoder.encode(chunk)]) {
+      for (const terminate of [false, true]) {
+        const stream = new StreamTokenizer(options);
+        for (let i = 0; i < 8192; i++) {
+          assert.deepEqual(stream.pushCode(input), []);
+        }
+        const suffix = terminate ? '\r\nnext\nlast' : '';
+        assert.deepEqual(
+          [
+            ...stream.pushCode(
+              typeof input === 'string' ? suffix : encoder.encode(suffix)
+            ),
+            ...stream.end(),
+          ],
+          codeToTokens(code + suffix, options).tokens
+        );
       }
-      const suffix = terminate ? '\r\nnext\nlast' : '';
-      assert.deepEqual(
-        [...stream.pushCode(suffix), ...stream.end()],
-        codeToTokens(code + suffix, options).tokens
-      );
     }
   }
 );

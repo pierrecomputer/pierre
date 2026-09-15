@@ -197,6 +197,19 @@ open script, style, and expression regions for `src/embed.wat` to resume.
 Markdown fences retain delimiter, language, and body state; the first body chunk
 resets the lexer and later chunks resume it within fence bounds.
 
+## Stream tokenizer
+
+`StreamTokenizer` passes completed UTF-8 byte chunks directly to Wasm. It
+decodes each completed chunk once for token contents and UTF-16 offsets;
+malformed UTF-8 is normalized before lexing. An owned byte buffer retains
+unfinished lines and grows geometrically, so callers can reuse their input
+arrays after `pushCode()` returns.
+
+String input keeps its UTF-16 tail and any trailing high surrogate until the
+next chunk. This preserves split surrogate pairs and original string content.
+When strings and bytes share an unfinished line, only the string prefix needs
+encoding before the byte chunk reaches Wasm.
+
 ## Live tokenizer
 
 Each `LiveTokenizer` has a dedicated Wasm instance. After the static page, a

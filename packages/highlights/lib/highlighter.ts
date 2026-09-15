@@ -24,6 +24,7 @@ import {
 
 const enc = new TextEncoder();
 const dec = new TextDecoder('utf-8', { ignoreBOM: true });
+const strictDec = new TextDecoder('utf-8', { ignoreBOM: true, fatal: true });
 const pageSize = 65536;
 const themePtr = 64; // $mem.themeTable in src/memory.wat
 const themeBytes = themeTableBytes;
@@ -375,21 +376,47 @@ export function codeToTokens(
 }
 
 /**
- * Tokenize streamed code for SSR in an isolated Wasm instance. Every language
- * scans each completed chunk once and preserves lexer state in Wasm.
+ * Transform UTF-8 byte chunks into themed token arrays, one per completed line.
+ * Also supports synchronous pushCode/end calls with strings or UTF-8 bytes.
+ * An isolated Wasm instance scans each completed chunk once and preserves
+ * lexer state between chunks.
  */
-export class StreamTokenizer {
+export class StreamTokenizer extends TransformStream<
+  Uint8Array,
+  ThemedToken[]
+> {
   #hl: HighlightsHighlighter | undefined;
   #langId: number;
   #themes: ResolvedTheme[];
   #cssVariablePrefix: string;
   #maxLineLength: number | undefined;
+  #pendingBytes: Uint8Array = new Uint8Array(0);
+  #pendingByteLength = 0;
   #pendingSurrogate = '';
   #tail = '';
   #streamChar = 0;
   #streamStarted = false;
 
   constructor(options: CodeToTokensOptions) {
+    const transformer = {
+      transform: (
+        chunk: Uint8Array,
+        controller: TransformStreamDefaultController<ThemedToken[]>
+      ) => {
+        try {
+          for (const line of this.pushCode(chunk)) controller.enqueue(line);
+        } catch (error) {
+          this.dispose();
+          throw error;
+        }
+      },
+      flush: (controller: TransformStreamDefaultController<ThemedToken[]>) => {
+        for (const line of this.end()) controller.enqueue(line);
+      },
+      cancel: () => this.dispose(),
+    };
+    super(transformer);
+
     // validate the options before taking the pooled instance so a rejected
     // language or theme leaves the pool intact
     this.#langId = langIdOf(options.lang);
@@ -406,12 +433,42 @@ export class StreamTokenizer {
   }
 
   /**
-   * Append a chunk and return one token array per completed line, with offsets
-   * relative to the full streamed input. The incomplete final line stays
-   * buffered until a newline or `end()`.
+   * Append text or UTF-8 bytes and return one token array per completed line,
+   * with offsets relative to the full streamed input. Incomplete UTF-8 stays
+   * buffered across byte chunks; a nonempty string flushes it first. The
+   * incomplete final line stays buffered until a newline or `end()`.
    */
-  pushCode(chunk: string): ThemedToken[][] {
+  pushCode(chunk: string | Uint8Array): ThemedToken[][] {
     if (this.#hl == null) throw new Error('stream has ended');
+    if (chunk.length === 0) return [];
+    if (typeof chunk !== 'string') {
+      let end = chunk.lastIndexOf(10) + 1;
+      if (end === 0) {
+        this.#bufferBytes(chunk);
+        return [];
+      }
+      if (this.#pendingByteLength > 0) {
+        end += this.#pendingByteLength;
+        chunk = this.#bufferBytes(chunk);
+      }
+      const lines = this.#tokenizeChunk(
+        chunk.subarray(0, end),
+        this.#tail + this.#pendingSurrogate
+      );
+      this.#tail = '';
+      this.#pendingSurrogate = '';
+      this.#pendingByteLength = 0;
+      if (end < chunk.length) this.#bufferBytes(chunk.subarray(end));
+      lines.pop(); // The trailing empty line belongs to the next chunk.
+      return lines;
+    }
+    if (this.#pendingByteLength > 0) {
+      // Finish pending UTF-8 before appending text to preserve chunk order.
+      chunk =
+        dec.decode(this.#pendingBytes.subarray(0, this.#pendingByteLength)) +
+        chunk;
+      this.#pendingByteLength = 0;
+    }
     chunk = this.#pendingSurrogate + chunk;
     this.#pendingSurrogate = '';
     const lastCode = chunk.charCodeAt(chunk.length - 1);
@@ -432,12 +489,18 @@ export class StreamTokenizer {
   }
 
   /**
-   * Finish the stream and return the remaining lines, including the final line
-   * after a trailing terminator, matching codeToTokens line splitting.
+   * Finish decoding UTF-8 and return the remaining lines, including the final
+   * line after a trailing terminator, matching codeToTokens line splitting.
    */
   end(): ThemedToken[][] {
     if (this.#hl == null) throw new Error('stream has ended');
     try {
+      if (this.#pendingByteLength > 0) {
+        return this.#tokenizeChunk(
+          this.#pendingBytes.subarray(0, this.#pendingByteLength),
+          this.#tail + this.#pendingSurrogate
+        );
+      }
       this.#tail += this.#pendingSurrogate;
       this.#pendingSurrogate = '';
       if (this.#tail === '') return [[]];
@@ -462,15 +525,52 @@ export class StreamTokenizer {
       pooledStreamHighlighter = hl;
     }
     this.#hl = undefined;
+    this.#pendingBytes = new Uint8Array(0);
+    this.#pendingByteLength = 0;
     this.#pendingSurrogate = '';
     this.#tail = '';
   }
 
-  /** Tokenize one chunk and apply stream-absolute offsets. */
-  #tokenizeChunk(code: string): ThemedToken[][] {
+  /** Own unfinished bytes so callers can reuse chunks; grow geometrically for long lines. */
+  #bufferBytes(chunk: Uint8Array): Uint8Array {
+    const length = this.#pendingByteLength + chunk.length;
+    if (length > this.#pendingBytes.length) {
+      const buffer = new Uint8Array(
+        Math.max(length, this.#pendingBytes.length * 2, 1024)
+      );
+      buffer.set(this.#pendingBytes.subarray(0, this.#pendingByteLength));
+      this.#pendingBytes = buffer;
+    }
+    this.#pendingBytes.set(chunk, this.#pendingByteLength);
+    this.#pendingByteLength = length;
+    return this.#pendingBytes.subarray(0, length);
+  }
+
+  /** Tokenize completed input; a string prefix preserves original UTF-16 when mixing inputs. */
+  #tokenizeChunk(input: string | Uint8Array, prefix = ''): ThemedToken[][] {
     const hl = this.#hl;
     if (hl == null) throw new Error('stream has ended');
-    const byteLen = hl.writeInput(code);
+    let code: string;
+    if (typeof input === 'string') {
+      code = input;
+    } else {
+      try {
+        code = strictDec.decode(input);
+      } catch {
+        // Normalize malformed UTF-8 before lexing, matching codeToTokens.
+        code = dec.decode(input);
+        input = enc.encode(code);
+      }
+      if (prefix !== '') {
+        const bytes = enc.encode(prefix);
+        const combined = new Uint8Array(bytes.length + input.length);
+        combined.set(bytes);
+        combined.set(input, bytes.length);
+        input = combined;
+        code = prefix + code;
+      }
+    }
+    const byteLen = hl.writeInput(input);
     const recs = hl.tokenizeLineRecords(
       this.#langId,
       byteLen,

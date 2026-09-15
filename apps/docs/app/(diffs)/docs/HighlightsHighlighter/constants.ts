@@ -62,7 +62,8 @@ const stream = new StreamTokenizer({ lang: 'ts', theme: pierreDark });
 
 try {
   console.log(stream.pushCode('const answer =')); // []: no complete line yet
-  console.log(stream.pushCode(' 42;\\nconsole.log(answer);')); // First line
+  const bytes = new TextEncoder().encode(' 42;\\nconsole.log(answer);');
+  console.log(stream.pushCode(bytes)); // First line
   console.log(stream.end()); // Final line; also disposes the stream
 } finally {
   // Also release the instance if consuming the stream throws.

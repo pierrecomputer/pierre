@@ -84,22 +84,45 @@ lines to preserve state for subsequent lines.
 
 ### Streaming
 
-`StreamTokenizer` owns an isolated WebAssembly instance, preserves lexer state
+`StreamTokenizer` extends
+[`TransformStream`](https://developer.mozilla.org/en-US/docs/Web/API/TransformStream).
+It accepts UTF-8 `Uint8Array` chunks and emits one `ThemedToken[]` per completed
+line, so you can pass it directly to `readable.pipeThrough(tokenizer)`. Closing
+the writable side emits the final line and releases the WebAssembly instance;
+cancellation or abort discards buffered input and releases the instance.
+
+Each tokenizer owns an isolated WebAssembly instance, preserves lexer state
 between chunks, and tokenizes each completed chunk once. Token offsets stay
-relative to the complete stream.
+relative to the complete stream. UTF-8 decoding is handled internally, including
+characters split across chunks.
+
+```ts
+const lines = response.body.pipeThrough(
+  new StreamTokenizer({ lang: 'ts', theme: pierreDark })
+);
+
+for await (const tokens of lines) {
+  console.log(tokens);
+}
+```
+
+You can also use the synchronous `pushCode()` and `end()` methods:
 
 <DocsCodeExample {...highlightsStream} />
 
-`pushCode(chunk)` accepts strings and buffers the unfinished line until an `LF`
-(`\n`) arrives or you call `end()`. This also handles `CRLF` input. An input
-chunk can produce zero, one, or several lines; chunk boundaries do not need to
-match line or token boundaries.
+`pushCode(chunk: string | Uint8Array)` accepts strings or UTF-8 bytes and
+buffers the unfinished line until an `LF` (`\n`) arrives or you call `end()`.
+This also handles `CRLF` input. An input chunk can produce zero, one, or several
+lines; chunk boundaries do not need to match line or token boundaries.
 
-Call `end()` once after the last chunk to retrieve the remaining lines,
-including an empty final line after a trailing line break. It also disposes the
-stream. Use `dispose()` to cancel and discard buffered input; repeated disposal
-is safe, but `pushCode()` or `end()` after disposal throws. For byte streams,
-decode chunks to strings with a streaming `TextDecoder` first.
+UTF-8 characters can span consecutive byte chunks. You can mix strings and
+bytes; a nonempty string flushes any incomplete UTF-8 sequence as a replacement
+character before appending the string. Empty chunks leave buffered input intact.
+
+Call `end()` once after the last chunk to finish decoding and retrieve the
+remaining lines, including an empty final line after a trailing line break. It
+also disposes the stream. Use `dispose()` to cancel and discard buffered input;
+repeated disposal is safe, but `pushCode()` or `end()` after disposal throws.
 
 ### Incremental editing
 
