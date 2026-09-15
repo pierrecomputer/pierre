@@ -4,6 +4,8 @@ import { VirtualizedFile } from '../src/components/VirtualizedFile';
 import { VirtualizedFileDiff } from '../src/components/VirtualizedFileDiff';
 import { Virtualizer } from '../src/components/Virtualizer';
 import { DEFAULT_VIRTUAL_FILE_METRICS } from '../src/constants';
+import { Editor } from '../src/editor/editor';
+import type { EditorType } from '../src/editor/types';
 import type { DiffLineAnnotation, LineAnnotation } from '../src/types';
 import { parseDiffFromFile } from '../src/utils/parseDiffFromFile';
 import { createRoot, installDom, wait, waitFor } from './domHarness';
@@ -148,6 +150,10 @@ function createOffscreenFixture(kind: 'file' | 'diff') {
           metrics
         );
   let instance = createInstance();
+  // Scroll anchoring uses offsetHeight as well as the bounding rectangle.
+  Object.defineProperty(container, 'offsetHeight', {
+    get: () => instance.height,
+  });
   let onRender = spyOn(instance, 'onRender');
   const consoleError = spyOn(console, 'error').mockImplementation(() => {});
 
@@ -181,6 +187,7 @@ function createOffscreenFixture(kind: 'file' | 'diff') {
   return {
     ...harness,
     container,
+    virtualizer,
     get instance() {
       return instance;
     },
@@ -424,5 +431,159 @@ describe.each(['file', 'diff'] as const)(
         expect(fixture.instance.height).toBe(120);
       });
     }
+  }
+);
+
+// Model a following item's DOM position from the preceding item's rendered
+// height. Reading the following instance's cached top then checks that the
+// virtualizer notices height changes and updates downstream layout.
+function createFollowingFile(
+  fixture: ReturnType<typeof createOffscreenFixture>
+) {
+  const container = document.createElement('diffs-container');
+  fixture.container.after(container);
+  const instance = new VirtualizedFile(
+    { disableFileHeader: true },
+    fixture.virtualizer
+  );
+  container.getBoundingClientRect = () => {
+    const previous = fixture.container.getBoundingClientRect();
+    const placeholder =
+      fixture.container.shadowRoot?.querySelector<HTMLElement>(
+        '[data-placeholder]'
+      );
+    const top =
+      previous.top +
+      (placeholder == null
+        ? previous.height
+        : parseFloat(placeholder.style.height));
+    return {
+      x: previous.x,
+      left: previous.left,
+      right: previous.right,
+      width: previous.width,
+      top,
+      y: top,
+      bottom: top + instance.height,
+      height: instance.height,
+      toJSON() {
+        return {};
+      },
+    };
+  };
+  Object.defineProperty(container, 'offsetHeight', {
+    get: () => instance.height,
+  });
+  instance.render({
+    file: { name: 'following.txt', contents: 'following item' },
+    fileContainer: container,
+  });
+  fixture.dom.triggerIntersectionObserver(container, true);
+  return { instance, container };
+}
+
+describe.each(['file', 'split', 'unified'] as const)(
+  'off-screen %s prediction',
+  (surface) => {
+    test('removes dismissed ghost rows from the placeholder and following offset', async () => {
+      const fixture = createOffscreenFixture(
+        surface === 'file' ? 'file' : 'diff'
+      );
+      const anchor = { line: 1, character: 'second'.length };
+      const editor = new Editor<EditorType, string>(
+        surface === 'file' ? 'file' : 'file-diff',
+        {
+          editPrediction: {
+            provider: {
+              predict() {
+                return Promise.resolve({
+                  edits: [
+                    {
+                      range: { start: anchor, end: anchor },
+                      newText: '\nghostOne();\nghostTwo();',
+                    },
+                  ],
+                  newCursor: { line: 3, character: 'ghostTwo();'.length },
+                });
+              },
+            },
+          },
+        }
+      );
+      let following: ReturnType<typeof createFollowingFile> | undefined;
+      try {
+        fixture.mount();
+        if (surface !== 'file') {
+          fixture.setLayout({ diffStyle: surface });
+          fixture.replaceContents(
+            'first\nsecond\nthird',
+            'first\nbefore\nthird'
+          );
+        }
+        await fixture.show('second');
+        editor.edit(fixture.instance);
+        const hasEditableContent = () =>
+          Array.from(
+            fixture.container.shadowRoot?.querySelectorAll<HTMLElement>(
+              '[data-content]'
+            ) ?? []
+          ).some(
+            (element) =>
+              element.contentEditable === 'true' ||
+              element.getAttribute('contenteditable') === 'true'
+          );
+        await waitFor(() => {
+          fixture.flushFrames(10);
+          return hasEditableContent();
+        });
+        expect(hasEditableContent()).toBe(true);
+        following = createFollowingFile(fixture);
+        await wait(0);
+        fixture.flushFrames(10);
+        const baselineHeight = fixture.instance.height;
+        const baselineTop = 10_000 + baselineHeight;
+        expect(following.instance.top).toBe(baselineTop);
+
+        editor.setSelections([
+          { start: anchor, end: anchor, direction: 'none' },
+        ]);
+        await waitFor(
+          () => {
+            fixture.flushFrames(10);
+            return editor.__getGhostTextRows().size > 0;
+          },
+          { timeout: 2_000 }
+        );
+        expect(editor.__getGhostTextRows()).toEqual(new Map([[1, 2]]));
+        expect(fixture.instance.height).toBe(baselineHeight + 40);
+        expect(following.instance.top).toBe(baselineTop + 40);
+
+        fixture.virtualizer.scrollTo({ top: 0 });
+        fixture.hide();
+        fixture.dom.triggerIntersectionObserver(following.container, false);
+        fixture.expectHidden(baselineHeight + 40);
+
+        editor.setOptions({ editPrediction: undefined });
+        expect(editor.__getGhostTextRows().size).toBe(0);
+        expect(fixture.frames.size).toBeGreaterThan(0);
+        fixture.flushFrames(10);
+        expect(fixture.consoleError).not.toHaveBeenCalled();
+        expect(fixture.frames.size).toBe(0);
+        expect(fixture.flushFrames(10)).toBe(0);
+        expect({
+          instanceHeight: fixture.instance.height,
+          placeholderHeight: fixture.placeholderHeight(),
+          followingTop: following.instance.top,
+        }).toEqual({
+          instanceHeight: baselineHeight,
+          placeholderHeight: baselineHeight,
+          followingTop: baselineTop,
+        });
+      } finally {
+        editor.cleanUp();
+        following?.instance.cleanUp();
+        fixture.cleanup();
+      }
+    });
   }
 );
