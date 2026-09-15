@@ -77,7 +77,7 @@ export function HighlightsHero({ gzipBytes }: { gzipBytes: number }) {
         </Button>
         <Button variant="secondary" asChild size="xl">
           <Link
-            href="https://github.com/pierrecomputer/pierre/tree/ije/highlights/packages/highlights"
+            href="https://github.com/pierrecomputer/pierre/tree/main/packages/highlights"
             target="_blank"
             rel="noopener noreferrer"
           >
@@ -95,7 +95,7 @@ export function HighlightsHero({ gzipBytes }: { gzipBytes: number }) {
           target="_blank"
           rel="noopener noreferrer"
           className="hover:text-foreground muted-foreground hover:decoration-foreground underline decoration-[1px] underline-offset-4 transition-colors"
-          href="https://github.com/pierrecomputer/pierre/tree/ije/highlights/packages/highlights/benchmark#html-generation"
+          href="https://github.com/pierrecomputer/pierre/tree/main/packages/highlights/benchmark#html-generation"
         >
           Benchmark
         </Link>
