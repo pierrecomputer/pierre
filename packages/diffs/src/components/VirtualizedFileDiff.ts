@@ -407,18 +407,16 @@ export class VirtualizedFileDiff<
   // Definitely need to optimize this in cases where there aren't any custom
   // line heights or in cases of extremely large files...
   public reconcileHeights(): boolean {
-    // A placeholder has no rendered rows to measure. Keep the height that
-    // its prepared layout reserves until content is rendered again.
-    if (this.placeHolder != null) {
-      return false;
-    }
     let hasHeightChange = false;
     const {
       options: { overflow = 'scroll' },
       cache: { ghostTextRowsByIndex },
       metrics: { lineHeight },
     } = this;
-    const fileDiff = this.getRenderedDiff();
+    // A placeholder may have a prepared layout before any content has
+    // rendered.
+    const fileDiff =
+      this.placeHolder != null ? this.getLayoutDiff() : this.getRenderedDiff();
     if (this.fileContainer == null || fileDiff == null) {
       if (this.height !== 0) {
         hasHeightChange = true;
@@ -432,17 +430,17 @@ export class VirtualizedFileDiff<
       this.editor?.__getGhostTextRows() ?? NO_GHOST_TEXT_ROWS
     );
     const lineAnnotations = this.getLatestAnnotations();
-    // NOTE(amadeus): We can probably be a lot smarter about this, and we
-    // should be thinking about ways to improve this
-    // If the file has no annotations and we are using the scroll variant, then
-    // we can probably skip everything
+    // Ghost-row changes affect placeholders too, but placeholders have no DOM
+    // rows to measure. Unwrapped rows without annotations also need no measurement.
     if (
-      overflow === 'scroll' &&
-      lineAnnotations.length === 0 &&
-      !this.isResizeDebuggingEnabled()
+      this.placeHolder != null ||
+      (overflow === 'scroll' &&
+        lineAnnotations.length === 0 &&
+        !this.isResizeDebuggingEnabled())
     ) {
       if (hasHeightChange) {
         this.computeApproximateSize(true);
+        this.setPlaceholderHeight(this.height);
       }
       return hasHeightChange;
     }

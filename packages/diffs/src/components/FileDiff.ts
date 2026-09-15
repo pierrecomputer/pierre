@@ -2459,6 +2459,13 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
       this.placeHolder.dataset.placeholder = '';
       shadowRoot.appendChild(this.placeHolder);
     }
+    return this.setPlaceholderHeight(height);
+  }
+
+  protected setPlaceholderHeight(height: number): boolean {
+    if (this.placeHolder == null) {
+      return false;
+    }
     this.placeHolder.style.setProperty('height', `${height}px`);
     return true;
   }

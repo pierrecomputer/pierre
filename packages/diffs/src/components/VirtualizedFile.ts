@@ -289,11 +289,6 @@ export class VirtualizedFile<
   // Measure rendered lines and update height cache.
   // Called after render to reconcile estimated vs actual heights.
   public reconcileHeights(): boolean {
-    // A placeholder has no rendered rows to measure. Keep the height that
-    // its prepared layout reserves until content is rendered again.
-    if (this.placeHolder != null) {
-      return false;
-    }
     let hasHeightChange = false;
     if (this.fileContainer == null || this.getLayoutFile() == null) {
       if (this.height !== 0) {
@@ -308,16 +303,17 @@ export class VirtualizedFile<
       this.editor?.__getGhostTextRows() ?? NO_GHOST_TEXT_ROWS;
     hasHeightChange = this.applyGhostTextRows(ghostTextRows);
 
-    // If the file has no annotations and we are using the scroll variant, every
-    // line is one line height tall apart from those with ghost text under them,
-    // so nothing needs measuring.
+    // Ghost-row changes affect placeholders too, but placeholders have no DOM
+    // rows to measure. Unwrapped rows without annotations also need no measurement.
     if (
-      overflow === 'scroll' &&
-      this.getLatestAnnotations().length === 0 &&
-      !this.isResizeDebuggingEnabled()
+      this.placeHolder != null ||
+      (overflow === 'scroll' &&
+        this.getLatestAnnotations().length === 0 &&
+        !this.isResizeDebuggingEnabled())
     ) {
       if (hasHeightChange) {
         this.computeApproximateSize(true);
+        this.setPlaceholderHeight(this.height);
       }
       return hasHeightChange;
     }

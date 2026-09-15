@@ -485,105 +485,117 @@ function createFollowingFile(
 describe.each(['file', 'split', 'unified'] as const)(
   'off-screen %s prediction',
   (surface) => {
-    test('removes dismissed ghost rows from the placeholder and following offset', async () => {
-      const fixture = createOffscreenFixture(
-        surface === 'file' ? 'file' : 'diff'
-      );
-      const anchor = { line: 1, character: 'second'.length };
-      const editor = new Editor<EditorType, string>(
-        surface === 'file' ? 'file' : 'file-diff',
-        {
-          editPrediction: {
-            provider: {
-              predict() {
-                return Promise.resolve({
-                  edits: [
-                    {
-                      range: { start: anchor, end: anchor },
-                      newText: '\nghostOne();\nghostTwo();',
-                    },
-                  ],
-                  newCursor: { line: 3, character: 'ghostTwo();'.length },
-                });
+    test.each([false, true])(
+      'removes dismissed ghost rows from the placeholder (wrapperDirty=%s)',
+      async (wrapperDirty) => {
+        const fixture = createOffscreenFixture(
+          surface === 'file' ? 'file' : 'diff'
+        );
+        const anchor = { line: 1, character: 'second'.length };
+        const editor = new Editor<EditorType, string>(
+          surface === 'file' ? 'file' : 'file-diff',
+          {
+            editPrediction: {
+              provider: {
+                predict() {
+                  return Promise.resolve({
+                    edits: [
+                      {
+                        range: { start: anchor, end: anchor },
+                        newText: '\nghostOne();\nghostTwo();',
+                      },
+                    ],
+                    newCursor: { line: 3, character: 'ghostTwo();'.length },
+                  });
+                },
               },
             },
-          },
-        }
-      );
-      let following: ReturnType<typeof createFollowingFile> | undefined;
-      try {
-        fixture.mount();
-        if (surface !== 'file') {
-          fixture.setLayout({ diffStyle: surface });
-          fixture.replaceContents(
-            'first\nsecond\nthird',
-            'first\nbefore\nthird'
-          );
-        }
-        await fixture.show('second');
-        editor.edit(fixture.instance);
-        const hasEditableContent = () =>
-          Array.from(
-            fixture.container.shadowRoot?.querySelectorAll<HTMLElement>(
-              '[data-content]'
-            ) ?? []
-          ).some(
-            (element) =>
-              element.contentEditable === 'true' ||
-              element.getAttribute('contenteditable') === 'true'
-          );
-        await waitFor(() => {
-          fixture.flushFrames(10);
-          return hasEditableContent();
-        });
-        expect(hasEditableContent()).toBe(true);
-        following = createFollowingFile(fixture);
-        await wait(0);
-        fixture.flushFrames(10);
-        const baselineHeight = fixture.instance.height;
-        const baselineTop = 10_000 + baselineHeight;
-        expect(following.instance.top).toBe(baselineTop);
-
-        editor.setSelections([
-          { start: anchor, end: anchor, direction: 'none' },
-        ]);
-        await waitFor(
-          () => {
-            fixture.flushFrames(10);
-            return editor.__getGhostTextRows().size > 0;
-          },
-          { timeout: 2_000 }
+          }
         );
-        expect(editor.__getGhostTextRows()).toEqual(new Map([[1, 2]]));
-        expect(fixture.instance.height).toBe(baselineHeight + 40);
-        expect(following.instance.top).toBe(baselineTop + 40);
+        let following: ReturnType<typeof createFollowingFile> | undefined;
+        try {
+          fixture.mount();
+          if (surface !== 'file') {
+            fixture.setLayout({ diffStyle: surface });
+            fixture.replaceContents(
+              'first\nsecond\nthird',
+              'first\nbefore\nthird'
+            );
+          }
+          await fixture.show('second');
+          editor.edit(fixture.instance);
+          const hasEditableContent = () =>
+            Array.from(
+              fixture.container.shadowRoot?.querySelectorAll<HTMLElement>(
+                '[data-content]'
+              ) ?? []
+            ).some(
+              (element) =>
+                element.contentEditable === 'true' ||
+                element.getAttribute('contenteditable') === 'true'
+            );
+          await waitFor(() => {
+            fixture.flushFrames(10);
+            return hasEditableContent();
+          });
+          expect(hasEditableContent()).toBe(true);
+          following = createFollowingFile(fixture);
+          await wait(0);
+          fixture.flushFrames(10);
+          const baselineHeight = fixture.instance.height;
+          const baselineTop = 10_000 + baselineHeight;
+          expect(following.instance.top).toBe(baselineTop);
 
-        fixture.virtualizer.scrollTo({ top: 0 });
-        fixture.hide();
-        fixture.dom.triggerIntersectionObserver(following.container, false);
-        fixture.expectHidden(baselineHeight + 40);
+          editor.setSelections([
+            { start: anchor, end: anchor, direction: 'none' },
+          ]);
+          await waitFor(
+            () => {
+              fixture.flushFrames(10);
+              return editor.__getGhostTextRows().size > 0;
+            },
+            { timeout: 2_000 }
+          );
+          expect(editor.__getGhostTextRows()).toEqual(new Map([[1, 2]]));
+          expect(fixture.instance.height).toBe(baselineHeight + 40);
+          expect(following.instance.top).toBe(baselineTop + 40);
 
-        editor.setOptions({ editPrediction: undefined });
-        expect(editor.__getGhostTextRows().size).toBe(0);
-        expect(fixture.frames.size).toBeGreaterThan(0);
-        fixture.flushFrames(10);
-        expect(fixture.consoleError).not.toHaveBeenCalled();
-        expect(fixture.frames.size).toBe(0);
-        expect(fixture.flushFrames(10)).toBe(0);
-        expect({
-          instanceHeight: fixture.instance.height,
-          placeholderHeight: fixture.placeholderHeight(),
-          followingTop: following.instance.top,
-        }).toEqual({
-          instanceHeight: baselineHeight,
-          placeholderHeight: baselineHeight,
-          followingTop: baselineTop,
-        });
-      } finally {
-        editor.cleanUp();
-        following?.instance.cleanUp();
-        fixture.cleanup();
+          fixture.virtualizer.scrollTo({ top: 0 });
+          fixture.hide();
+          fixture.dom.triggerIntersectionObserver(following.container, false);
+          fixture.expectHidden(baselineHeight + 40);
+
+          if (wrapperDirty) {
+            // A pending full repaint paints the placeholder before this pass
+            // reconciles it. The repaint must not leave the old height behind.
+            fixture.virtualizer.markDOMDirty();
+          }
+          editor.setOptions({ editPrediction: undefined });
+          expect(editor.__getGhostTextRows().size).toBe(0);
+          expect(fixture.frames.size).toBeGreaterThan(0);
+          fixture.flushFrames(10);
+          expect(fixture.consoleError).not.toHaveBeenCalled();
+          expect(fixture.frames.size).toBe(0);
+          expect(fixture.flushFrames(10)).toBe(0);
+          expect({
+            instanceHeight: fixture.instance.height,
+            placeholderHeight: fixture.placeholderHeight(),
+          }).toEqual({
+            instanceHeight: baselineHeight,
+            placeholderHeight: baselineHeight,
+          });
+          // After a placeholder resizes, following items reposition from the
+          // content ResizeObserver, which jsdom does not provide. The clean-pass
+          // variant checks the virtualizer's own change notification instead.
+          if (!wrapperDirty) {
+            expect(following.instance.top).toBe(baselineTop);
+          }
+        } finally {
+          editor.cleanUp();
+          following?.instance.cleanUp();
+          fixture.cleanup();
+        }
       }
-    });
+    );
   }
 );
