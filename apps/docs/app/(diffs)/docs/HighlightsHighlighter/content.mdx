@@ -251,82 +251,78 @@ Language names and aliases are case-insensitive. Unsupported names throw a
 it to `Lang`, or fall back to `plain` (also available as `text`, `plaintext`,
 and `txt`). No language detection or filename resolution is performed.
 
-The built-in language names are:
+Built-in languages and their aliases are included in the `Lang` type:
 
-- `plain`
-- `angular-html`
-- `asm`
-- `astro`
-- `bash`
-- `c`
-- `c3`
-- `clojure`
-- `cmake`
-- `cpp`
-- `csharp`
-- `css`
-- `dart`
-- `diff`
-- `dockerfile`
-- `elixir`
-- `erlang`
-- `fsharp`
-- `gleam`
-- `glsl`
-- `go`
-- `graphql`
-- `groovy`
-- `haskell`
-- `hlsl`
-- `html`
-- `java`
-- `js`
-- `json`
-- `jsx`
-- `julia`
-- `kotlin`
-- `less`
-- `lisp`
-- `lua`
-- `makefile`
-- `markdown`
-- `matlab`
-- `mdx`
-- `nix`
-- `objc`
-- `ocaml`
-- `pascal`
-- `perl`
-- `php`
-- `powershell`
-- `proto`
-- `python`
-- `r`
-- `ruby`
-- `rust`
-- `sass`
-- `scala`
-- `scss`
-- `sql`
-- `svelte`
-- `swift`
-- `terraform`
-- `toml`
-- `ts`
-- `tsrx`
-- `tsx`
-- `vue`
-- `wat`
-- `wgsl`
-- `xml`
-- `yaml`
-- `zig`
-
-The `Lang` type includes aliases such as `sh`, `shell`, `zsh`, `py`, `rs`,
-`javascript`, `typescript`, `jsonc`, `patch`, `wasm`, `yml`, `cs`, `rb`, `ex`,
-`ml`, `tf`, `hcl`, `protobuf`, `objective-c`, `m`, `mm`, `docker`, `erl`, `gql`,
-`ps1`, `pwsh`, `sbt`, `clj`, `fs`, `gradle`, `jl`, `make`, `octave`, and
-`delphi`.
+| Language       | Aliases                                                                     |
+| -------------- | --------------------------------------------------------------------------- |
+| `plain`        | `plaintext`, `text`, `txt`                                                  |
+| `angular-html` | —                                                                           |
+| `asm`          | `assembly`, `s`                                                             |
+| `astro`        | —                                                                           |
+| `bash`         | `sh`, `shell`, `shellscript`, `shellsession`, `zsh`                         |
+| `c`            | `h`                                                                         |
+| `c3`           | —                                                                           |
+| `clojure`      | `clj`, `cljc`, `cljs`, `edn`                                                |
+| `cmake`        | —                                                                           |
+| `cpp`          | `c++`, `cc`, `cxx`, `hh`, `hpp`, `hxx`                                      |
+| `csharp`       | `c#`, `cs`                                                                  |
+| `css`          | —                                                                           |
+| `dart`         | —                                                                           |
+| `diff`         | `git-commit`, `git-rebase`, `patch`                                         |
+| `dockerfile`   | `containerfile`, `docker`                                                   |
+| `elixir`       | `ex`, `exs`                                                                 |
+| `erlang`       | `erl`, `hrl`                                                                |
+| `fsharp`       | `f#`, `fs`, `fsi`, `fsx`                                                    |
+| `gleam`        | —                                                                           |
+| `glsl`         | `comp`, `frag`, `geom`, `vert`                                              |
+| `go`           | `golang`                                                                    |
+| `graphql`      | `gql`                                                                       |
+| `groovy`       | `gradle`, `gsh`, `gvy`, `gy`                                                |
+| `haskell`      | `hs`                                                                        |
+| `hlsl`         | —                                                                           |
+| `html`         | `htm`                                                                       |
+| `java`         | —                                                                           |
+| `js`           | `cjs`, `javascript`, `mjs`                                                  |
+| `json`         | `jsonc`                                                                     |
+| `jsx`          | —                                                                           |
+| `julia`        | `jl`                                                                        |
+| `kotlin`       | `kt`, `kts`                                                                 |
+| `less`         | —                                                                           |
+| `lisp`         | `cl`, `el`, `elisp`, `emacs-lisp`, `lsp`, `scheme`, `scm`                   |
+| `lua`          | —                                                                           |
+| `makefile`     | `make`, `mk`                                                                |
+| `markdown`     | `md`                                                                        |
+| `matlab`       | `octave`                                                                    |
+| `mdx`          | —                                                                           |
+| `nix`          | —                                                                           |
+| `objc`         | `m`, `mm`, `objcpp`, `objective-c`, `objective-cpp`, `objectivec`           |
+| `ocaml`        | `ml`, `mli`                                                                 |
+| `pascal`       | `delphi`, `dpk`, `dpr`, `lpr`, `object-pascal`, `objectpascal`, `pas`, `pp` |
+| `perl`         | `pl`, `pm`                                                                  |
+| `php`          | —                                                                           |
+| `powershell`   | `ps`, `ps1`, `psd1`, `psm1`, `pwsh`                                         |
+| `proto`        | `protobuf`                                                                  |
+| `python`       | `py`                                                                        |
+| `r`            | `rscript`                                                                   |
+| `ruby`         | `rb`                                                                        |
+| `rust`         | `rs`                                                                        |
+| `sass`         | —                                                                           |
+| `scala`        | `sbt`, `sc`                                                                 |
+| `scss`         | —                                                                           |
+| `sql`          | —                                                                           |
+| `svelte`       | —                                                                           |
+| `swift`        | —                                                                           |
+| `terraform`    | `hcl`, `tf`, `tfvars`                                                       |
+| `toml`         | —                                                                           |
+| `ts`           | `angular-ts`, `cts`, `mts`, `typescript`                                    |
+| `tsrx`         | —                                                                           |
+| `tsx`          | —                                                                           |
+| `vue`          | —                                                                           |
+| `wat`          | `wasm`                                                                      |
+| `wgsl`         | —                                                                           |
+| `xml`          | `svg`, `xsd`                                                                |
+| `yaml`         | `yml`                                                                       |
+| `zig`          | —                                                                           |
 
 ### API reference
 
