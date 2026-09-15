@@ -193,6 +193,7 @@ export function getPlaygroundPreloadOptions(
   return {
     fileDiff: PLAYGROUND_FILE_DIFF,
     options: {
+      preferredHighlighter: state.highlighter,
       theme: { dark: state.darkTheme, light: state.lightTheme },
       themeType: state.colorMode,
       diffStyle: state.diffStyle,

@@ -12,7 +12,7 @@ import {
   type EditPredictResponse,
 } from '../src/editor/editor';
 import type { EditorType } from '../src/editor/types';
-import { disposeHighlighter } from '../src/highlighter/shared_highlighter';
+import { disposeHighlighter } from '../src/highlighter';
 import type { CodeViewItem } from '../src/types';
 import { parseDiffFromFile } from '../src/utils/parseDiffFromFile';
 import {

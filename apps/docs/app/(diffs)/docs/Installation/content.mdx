@@ -10,10 +10,22 @@ Install Diffs with the package manager of your choice:
 
 The package provides several entry points for different use cases:
 
-| Package                | Description                                                                                           |
-| ---------------------- | ----------------------------------------------------------------------------------------------------- |
-| `@pierre/diffs`        | [Vanilla JS components](#vanilla-js-api), plus [utility functions](#utilities)                        |
-| `@pierre/diffs/react`  | [React components](#react-api) for rendering diffs and files                                          |
-| `@pierre/diffs/edit`   | Low-level [edit mode](#edit-mode) `Editor` for attaching editing to rendered file and diff components |
-| `@pierre/diffs/ssr`    | [Server-side rendering utilities](#ssr) for pre-rendering diffs with syntax highlighting              |
-| `@pierre/diffs/worker` | [Worker pool utilities](#worker-pool) for offloading syntax highlighting to background threads        |
+| Package                                | Description                                                                                           |
+| -------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| `@pierre/diffs`                        | [Vanilla JS components](#vanilla-js-api), plus [utility functions](#utilities)                        |
+| `@pierre/diffs/react`                  | [React components](#react-api) for rendering diffs and files                                          |
+| `@pierre/diffs/edit`                   | Low-level [edit mode](#edit-mode) `Editor` for attaching editing to rendered file and diff components |
+| `@pierre/diffs/ssr`                    | [Server-side rendering utilities](#ssr) for pre-rendering diffs with syntax highlighting              |
+| `@pierre/diffs/worker`                 | [Worker pool utilities](#worker-pool) for offloading syntax highlighting to background threads        |
+| `@pierre/diffs/highlighter/highlights` | Highlights backend factory (WebAssembly, default)                                                     |
+| `@pierre/diffs/highlighter/shiki-wasm` | Shiki backend factory using WebAssembly Oniguruma                                                     |
+| `@pierre/diffs/highlighter/shiki-js`   | Shiki backend factory using JavaScript regular expressions                                            |
+
+Component and worker pool options load these backends automatically through
+`preferredHighlighter`. Use the backend factories for independent low-level
+instances, or [getSharedHighlighter](#utilities-getsharedhighlighter) to reuse
+the instance for a selected backend.
+
+The main `@pierre/diffs` entry also exports `themeNames`, a readonly list of
+bundled theme names shared by all three backends. Reading it does not initialize
+a highlighter.

@@ -167,6 +167,45 @@ index abc123..def456 100644
   options,
 };
 
+export const HELPER_REGISTER_CUSTOM_LANGUAGE: PreloadFileOptions<
+  undefined,
+  undefined
+> = {
+  file: {
+    name: 'registerCustomLanguage.ts',
+    contents: `import { getSharedHighlighter, registerCustomLanguage } from '@pierre/diffs';
+
+// The loader returns a module with an array of Shiki grammars.
+registerCustomLanguage('my-language', async () => ({
+  default: [{
+    name: 'my-language',
+    scopeName: 'source.my-language',
+    aliases: ['my-lang'],
+    patterns: [{ name: 'keyword.control', match: '\\\\bhello\\\\b' }],
+    repository: {},
+  }],
+}), ['mylang', 'mylang.config', 'MyLanguagefile']);
+
+// A separate grammar module can use () => import('./my-language') instead.
+// Both Shiki engines use the loader. Highlights ignores it.
+const highlighter = await getSharedHighlighter({
+  preferredHighlighter: 'shiki-js', // Or 'shiki-wasm'
+  themes: ['pierre-dark'],
+  langs: ['my-language'],
+});
+
+const { tokens } = highlighter.codeToTokens('hello world', {
+  lang: 'my-language',
+  theme: highlighter.getTheme('pierre-dark'),
+});
+
+// Components using Shiki load grammars automatically when rendering.
+// The mappings above select my-language for file.mylang,
+// file.mylang.config, and MyLanguagefile.`,
+  },
+  options,
+};
+
 export const HELPER_REGISTER_CUSTOM_THEME: PreloadFileOptions<
   undefined,
   undefined
@@ -175,60 +214,28 @@ export const HELPER_REGISTER_CUSTOM_THEME: PreloadFileOptions<
     name: 'registerCustomTheme.ts',
     contents: `import { registerCustomTheme } from '@pierre/diffs';
 
-// Register a custom Shiki theme before using it.
-// The theme name you register must match the 'name' field
-// inside your theme JSON file.
+// The loader must return the format used by your selected backend.
+// This example uses Highlights (Zed format).
 
 // Option 1: Dynamic import (recommended for code splitting)
-registerCustomTheme('my-custom-theme', () => import('./my-theme.json'));
+registerCustomTheme('my-custom-theme', () => import('./my-theme.json'), 'zed');
 
-// Option 2: Inline theme object
+// Register the same name in TextMate format for both Shiki backends:
+registerCustomTheme('my-custom-theme', () => import('./my-theme.textmate.json'), 'textmate');
+
+// Option 2: Inline Zed theme loader
 registerCustomTheme('inline-theme', async () => ({
   name: 'inline-theme',
-  type: 'dark',
-  colors: {
+  appearance: 'dark',
+  style: {
     'editor.background': '#1a1a2e',
     'editor.foreground': '#eaeaea',
-    // ... other VS Code theme colors
+    syntax: { comment: { color: '#6a6a8a' } },
   },
-  tokenColors: [
-    {
-      scope: ['comment'],
-      settings: { foreground: '#6a6a8a' },
-    },
-    // ... other token rules
-  ],
-}));
+}), 'zed');
 
 // Once registered, use the theme name in your components:
 // <FileDiff options={{ theme: 'my-custom-theme' }} ... />`,
-  },
-  options,
-};
-
-export const HELPER_REGISTER_CUSTOM_LANGUAGE: PreloadFileOptions<
-  undefined,
-  undefined
-> = {
-  file: {
-    name: 'registerCustomLanguage.ts',
-    contents: `import { registerCustomLanguage } from '@pierre/diffs';
-
-// Register a custom Shiki language loader before rendering.
-// my-lang.tmLanguage.json must declare "my-lang" as its name or an alias.
-
-// Option 1: Dynamic import (recommended for code splitting)
-registerCustomLanguage('my-lang', () => import('./my-lang.tmLanguage.json'), [
-  // File names (exact match)
-  'MySpecialFile',
-  // Extensions (without leading dot)
-  'mylang',
-  // Compound extensions
-  'spec.mylang',
-]);
-
-// Option 2: No extension mapping (use setLanguageOverride instead)
-registerCustomLanguage('my-lang', () => import('./my-lang.tmLanguage.json'));`,
   },
   options,
 };
@@ -241,13 +248,9 @@ export const HELPER_DISPOSE_HIGHLIGHTER: PreloadFileOptions<
     name: 'disposeHighlighter.ts',
     contents: `import { disposeHighlighter } from '@pierre/diffs';
 
-// Dispose the shared highlighter instance to free memory.
-// This is useful when you're done rendering diffs and want
-// to clean up resources (e.g., in a single-page app when
-// navigating away from a diff view).
-//
-// Note: After calling this, all themes and languages will
-// need to be reloaded on the next render.
+// Release the shared reference. The next request creates an instance
+// for each backend. Custom theme and language registrations carry over.
+// Existing highlighter references keep their resolver and cached themes.
 disposeHighlighter();`,
   },
   options,
@@ -259,20 +262,24 @@ export const HELPER_GET_SHARED_HIGHLIGHTER: PreloadFileOptions<
 > = {
   file: {
     name: 'getSharedHighlighter.ts',
-    contents: `import { getSharedHighlighter, DiffsHighlighter } from '@pierre/diffs';
+    contents: `import { getSharedHighlighter, type DiffsHighlighter } from '@pierre/diffs';
 
-// Get the shared Shiki highlighter instance.
-// This is the same instance used internally by all FileDiff
-// and File components. Useful if you need direct access to
-// Shiki for custom highlighting operations.
-//
-// The highlighter is initialized lazily - themes and languages
-// are loaded on demand as you render different files.
-const highlighter: DiffsHighlighter = await getSharedHighlighter();
+// Each backend has its own shared instance.
+// Use the same backend as your component or worker pool options.
+const highlighter: DiffsHighlighter = await getSharedHighlighter({
+  preferredHighlighter: 'shiki-js', // Default: 'highlights'; also 'shiki-wasm'
+  themes: ['pierre-light', 'pierre-dark'],
+  langs: ['typescript'], // Load Shiki grammars before direct tokenization
+});
 
-// You can use it directly for custom highlighting, see the Shiki
-// docs at https://shiki.style/ for details
-const tokens = highlighter.codeToTokens('const x = 1;'); `,
+// Tokenize code with a language and the loaded theme pair.
+const tokens = highlighter.codeToTokens('const x = 1;', {
+  lang: 'typescript',
+  theme: {
+    light: highlighter.getTheme('pierre-light'),
+    dark: highlighter.getTheme('pierre-dark'),
+  },
+});`,
   },
   options,
 };
@@ -285,22 +292,19 @@ export const HELPER_PRELOAD_HIGHLIGHTER: PreloadFileOptions<
     name: 'preloadHighlighter.ts',
     contents: `import { preloadHighlighter } from '@pierre/diffs';
 
-// Preload specific themes and languages before rendering.
-// This ensures the highlighter is ready with the assets you
-// need, avoiding any flash of unstyled content on first render.
-//
-// By default, themes and languages are loaded on demand,
-// but preloading is useful when you know which languages
-// you'll be rendering ahead of time.
+// Highlights is the default backend and bundles its supported languages.
 await preloadHighlighter({
-  // Themes to preload
   themes: ['pierre-dark', 'pierre-light', 'github-dark'],
-  // Languages to preload
-  langs: ['typescript', 'javascript', 'python', 'rust', 'go'],
 });
 
-// After preloading, rendering diffs in these languages
-// will be instant with no async loading delay.`,
+// If your components use Shiki, preload that backend and its languages.
+await preloadHighlighter({
+  preferredHighlighter: 'shiki-js', // Or 'shiki-wasm'
+  themes: ['pierre-dark', 'pierre-light'],
+  langs: ['typescript', 'javascript'],
+});
+
+// The requested assets are ready for each backend on this thread.`,
   },
   options,
 };

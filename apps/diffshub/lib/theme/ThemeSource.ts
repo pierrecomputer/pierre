@@ -76,16 +76,6 @@ export function nameOf(slot: ThemeValue | undefined): string | undefined {
   return typeof slot === 'string' ? slot : slot?.name;
 }
 
-export function requireThemeValueName(value: ThemeValue): string {
-  const name = nameOf(value);
-  if (name == null || name === '') {
-    throw new Error(
-      'ThemeInput ThemeLike values used by diff wrappers must include a `name`'
-    );
-  }
-  return name;
-}
-
 // Wraps the theming controller — the stateful, "follows the selector" source.
 // Maps controller state to a singular ActiveThemeSnapshot. Reproduces the
 // no-flash "keep previous resolved theme until the cold one settles" semantics:

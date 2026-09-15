@@ -372,9 +372,8 @@ const LABEL_OVERRIDES: Record<string, string> = {
   CUSTOM_HUNK_SEPARATORS_SWITCHER: 'React Example',
   SSR_USAGE_SERVER: 'Server Component',
   SSR_USAGE_CLIENT: 'Client Component',
-  THEMING_REGISTER_THEME: 'Registering Custom Themes',
+  THEMING_REGISTER_CUSTOM_THEME: 'Registering Custom Themes',
   THEMING_USE_IN_COMPONENT: 'Using Custom Themes in Components',
-  WORKER_POOL_USAGE: 'Basic Usage',
 };
 
 const LABEL_PREFIXES_TO_STRIP = [

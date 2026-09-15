@@ -132,9 +132,6 @@ catalogs:
     hast-util-heading-rank:
       specifier: 3.0.0
       version: 3.0.0
-    hast-util-to-html:
-      specifier: 9.0.5
-      version: 9.0.5
     hast-util-to-string:
       specifier: 3.0.1
       version: 3.0.1
@@ -245,7 +242,6 @@ overrides:
   '@shikijs/core': 4.4.1
   '@shikijs/engine-javascript': 4.4.1
   '@shikijs/themes': 4.4.1
-  '@shikijs/transformers': 4.4.1
   '@types/react': 19.2.7
   '@types/react-dom': 19.2.3
   '@rolldown/binding-wasm32-wasi>@napi-rs/wasm-runtime': 1.1.5
@@ -318,9 +314,6 @@ importers:
       react-dom:
         specifier: 19.2.7
         version: 19.2.7(react@19.2.7)
-      shiki:
-        specifier: 4.4.1
-        version: 4.4.1
     devDependencies:
       '@types/react':
         specifier: 19.2.7
@@ -500,9 +493,6 @@ importers:
       '@radix-ui/react-use-controllable-state':
         specifier: 'catalog:'
         version: 1.2.2(@types/react@19.2.7)(react@19.2.7)
-      '@shikijs/transformers':
-        specifier: 4.4.1
-        version: 4.4.1
       '@vercel/analytics':
         specifier: 'catalog:'
         version: 2.0.1(next@16.3.3(@playwright/test@1.51.1)(@types/node@20.19.41)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(react@19.2.7)
@@ -560,9 +550,6 @@ importers:
       shadcn:
         specifier: 'catalog:'
         version: 3.3.1(@types/node@20.19.41)(typescript@7.0.2)
-      shiki:
-        specifier: 4.4.1
-        version: 4.4.1
       sonner:
         specifier: 'catalog:'
         version: 2.0.7(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
@@ -615,21 +602,18 @@ importers:
 
   packages/diffs:
     dependencies:
+      '@pierre/highlights':
+        specifier: workspace:*
+        version: link:../highlights
       '@pierre/theme':
         specifier: workspace:*
         version: link:../theme
       '@pierre/theming':
         specifier: workspace:*
         version: link:../theming
-      '@shikijs/transformers':
-        specifier: 4.4.1
-        version: 4.4.1
       diff:
         specifier: 'catalog:'
         version: 9.0.0
-      hast-util-to-html:
-        specifier: 'catalog:'
-        version: 9.0.5
       lru_map:
         specifier: 'catalog:'
         version: 0.4.1
@@ -643,9 +627,6 @@ importers:
       '@tsdown/css':
         specifier: 'catalog:'
         version: 0.22.14(jiti@2.7.0)(postcss-import@16.1.1(postcss@8.5.6))(postcss@8.5.6)(tsdown@0.22.14)(yaml@2.9.0)
-      '@types/hast':
-        specifier: 'catalog:'
-        version: 3.0.4
       '@types/jsdom':
         specifier: 'catalog:'
         version: 28.0.1
@@ -2727,10 +2708,6 @@ packages:
 
   '@shikijs/themes@4.4.1':
     resolution: {integrity: sha512-wudOaoFro+/Zl9gQv2W1Ur5XlVduqvTuYLI483Xi0wgc1A+cy1hfB2r6ac6ufBgF+ID7KJEW7L41MHrzQ4wH+w==}
-    engines: {node: '>=20'}
-
-  '@shikijs/transformers@4.4.1':
-    resolution: {integrity: sha512-Sb9Eehas+5EhClpFgNuklwY3aWf354FLaKRCiAWmjdNbHAjoQUpv6WmSj+N19eTXO6GLIWh1dIOH9dxyauhVWw==}
     engines: {node: '>=20'}
 
   '@shikijs/types@4.4.1':
@@ -8395,11 +8372,6 @@ snapshots:
 
   '@shikijs/themes@4.4.1':
     dependencies:
-      '@shikijs/types': 4.4.1
-
-  '@shikijs/transformers@4.4.1':
-    dependencies:
-      '@shikijs/core': 4.4.1
       '@shikijs/types': 4.4.1
 
   '@shikijs/types@4.4.1':

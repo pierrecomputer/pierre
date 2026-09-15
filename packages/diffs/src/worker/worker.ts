@@ -1,19 +1,19 @@
-import { createHighlighterCore } from 'shiki/core';
-import { createJavaScriptRegexEngine } from 'shiki/engine/javascript';
-import { createOnigurumaEngine } from 'shiki/engine/oniguruma';
+import type { DynamicImportLanguageRegistration } from 'shiki/core';
 
 import { DEFAULT_THEMES } from '../constants';
-import { attachResolvedLanguages } from '../highlighter/languages/attachResolvedLanguages';
-import { attachResolvedThemes } from '../highlighter/themes/attachResolvedThemes';
+import { defaultHighlighter, highlighters } from '../highlighter';
 import type {
   DiffsHighlighter,
-  HighlighterTypes,
+  DiffsTheme,
   RenderDiffOptions,
   RenderFileOptions,
   ThemedDiffResult,
   ThemedFileResult,
 } from '../types';
-import { replaceCustomExtensions } from '../utils/getFiletypeFromFileName';
+import {
+  getFiletypeFromFileName,
+  replaceCustomExtensions,
+} from '../utils/getFiletypeFromFileName';
 import { renderDiffWithHighlighter } from '../utils/renderDiffWithHighlighter';
 import { renderFileWithHighlighter } from '../utils/renderFileWithHighlighter';
 import type {
@@ -30,8 +30,13 @@ import type {
   WorkerRequestId,
 } from './types';
 
-let highlighter: Promise<DiffsHighlighter> | DiffsHighlighter | undefined;
+let highlighter: DiffsHighlighter | undefined;
+const customLanguageLoaders = new Map<
+  string,
+  DynamicImportLanguageRegistration
+>();
 let renderOptions: WorkerRenderingOptions = {
+  preferredHighlighter: defaultHighlighter,
   theme: DEFAULT_THEMES,
   useTokenTransformer: false,
   tokenizeMaxLineLength: 1000,
@@ -40,18 +45,29 @@ let renderOptions: WorkerRenderingOptions = {
 };
 
 const EMPTY_REGEXP = /(?:)/;
+let pendingRequest = Promise.resolve();
 
 self.addEventListener('error', (event) => {
-  console.error('[Shiki Worker] Unhandled error:', event.error);
+  console.error('[Diffs Worker] Unhandled error:', event.error);
 });
 
-// Handle incoming messages from the main thread
+// Preserve message order while backends and language grammars load asynchronously.
 self.addEventListener('message', (event: MessageEvent<WorkerRequest>) => {
-  void handleMessage(event.data);
+  pendingRequest = pendingRequest.then(() => handleMessage(event.data));
 });
 
 async function handleMessage(request: WorkerRequest) {
   try {
+    if (
+      highlighter?.name !== 'highlights' &&
+      (request.type === 'file' || request.type === 'diff')
+    ) {
+      for (const { name, data } of request.resolvedCustomLanguages ?? []) {
+        customLanguageLoaders.set(name, () =>
+          Promise.resolve({ default: data })
+        );
+      }
+    }
     switch (request.type) {
       case 'initialize':
         await handleInitialize(request);
@@ -83,25 +99,15 @@ async function handleMessage(request: WorkerRequest) {
 async function handleInitialize({
   id,
   renderOptions: options,
-  preferredHighlighter,
   resolvedThemes,
-  resolvedLanguages,
   customExtensionsVersion,
   customExtensionMap,
 }: InitializeWorkerRequest): Promise<void> {
-  let highlighter = getHighlighter(preferredHighlighter);
-  if ('then' in highlighter) {
-    highlighter = await highlighter;
-  }
   syncCustomExtensionsFromRequest({
     customExtensionsVersion,
     customExtensionMap,
   });
-  attachResolvedThemes(resolvedThemes, highlighter);
-  if (resolvedLanguages != null) {
-    attachResolvedLanguages(resolvedLanguages, highlighter);
-  }
-  renderOptions = options;
+  await setHighlighter(options, resolvedThemes);
   postMessage({
     type: 'success',
     id,
@@ -115,12 +121,7 @@ async function handleSetRenderOptions({
   renderOptions: options,
   resolvedThemes,
 }: SetRenderOptionsWorkerRequest): Promise<void> {
-  let highlighter = getHighlighter();
-  if ('then' in highlighter) {
-    highlighter = await highlighter;
-  }
-  attachResolvedThemes(resolvedThemes, highlighter);
-  renderOptions = options;
+  await setHighlighter(options, resolvedThemes);
   postMessage({
     type: 'success',
     id,
@@ -129,26 +130,44 @@ async function handleSetRenderOptions({
   });
 }
 
+// Both setup messages resolve the backend before installing its matching themes.
+async function setHighlighter(
+  options: WorkerRenderingOptions,
+  resolvedThemes: DiffsTheme[]
+): Promise<void> {
+  const preferredHighlighter =
+    options.preferredHighlighter ?? defaultHighlighter;
+  const nextHighlighter =
+    highlighter?.name === preferredHighlighter
+      ? highlighter
+      : await (
+          await highlighters[preferredHighlighter]()
+        ).createDiffsHighlighter(undefined, customLanguageLoaders);
+  nextHighlighter.themeResolver.seedResolvedThemes(
+    resolvedThemes.map((theme) => [theme.name, theme])
+  );
+  highlighter = nextHighlighter;
+  renderOptions = { ...options, preferredHighlighter };
+}
+
 async function handleRenderFile({
   id,
   file,
-  resolvedLanguages,
   customExtensionsVersion,
   customExtensionMap,
 }: RenderFileRequest): Promise<void> {
-  let highlighter = getHighlighter();
-  if ('then' in highlighter) {
-    highlighter = await highlighter;
+  if (highlighter == null) {
+    throw new Error('Worker highlighter is not initialized');
   }
   syncCustomExtensionsFromRequest({
     customExtensionsVersion,
     customExtensionMap,
   });
-  // Load resolved languages if provided
-  if (resolvedLanguages != null) {
-    attachResolvedLanguages(resolvedLanguages, highlighter);
-  }
+  await highlighter.loadLanguages?.([
+    file.lang ?? getFiletypeFromFileName(file.name),
+  ]);
   const fileOptions = {
+    preferredHighlighter: renderOptions.preferredHighlighter,
     theme: renderOptions.theme,
     useTokenTransformer: renderOptions.useTokenTransformer,
     tokenizeMaxLineLength: renderOptions.tokenizeMaxLineLength,
@@ -163,38 +182,22 @@ async function handleRenderFile({
 async function handleRenderDiff({
   id,
   diff,
-  resolvedLanguages,
   customExtensionsVersion,
   customExtensionMap,
 }: RenderDiffRequest): Promise<void> {
-  let highlighter = getHighlighter();
-  if ('then' in highlighter) {
-    highlighter = await highlighter;
+  if (highlighter == null) {
+    throw new Error('Worker highlighter is not initialized');
   }
   syncCustomExtensionsFromRequest({
     customExtensionsVersion,
     customExtensionMap,
   });
-  // Load resolved languages if provided
-  if (resolvedLanguages != null) {
-    attachResolvedLanguages(resolvedLanguages, highlighter);
-  }
+  await highlighter.loadLanguages?.([
+    diff.lang ?? getFiletypeFromFileName(diff.name),
+    diff.lang ?? getFiletypeFromFileName(diff.prevName ?? diff.name),
+  ]);
   const result = renderDiffWithHighlighter(diff, highlighter, renderOptions);
   sendDiffSuccess(id, result, renderOptions);
-}
-
-function getHighlighter(
-  preferredHighlighter: HighlighterTypes = 'shiki-js'
-): Promise<DiffsHighlighter> | DiffsHighlighter {
-  highlighter ??= createHighlighterCore({
-    themes: [],
-    langs: [],
-    engine:
-      preferredHighlighter === 'shiki-wasm'
-        ? createOnigurumaEngine(import('shiki/wasm'))
-        : createJavaScriptRegexEngine(),
-  }) as Promise<DiffsHighlighter>;
-  return highlighter;
 }
 
 function syncCustomExtensionsFromRequest({

@@ -19,12 +19,12 @@ import { DIFF_STYLES } from '../_examples/DiffStyles/constants';
 import { DiffStyles } from '../_examples/DiffStyles/DiffStyles';
 import { FONT_STYLES } from '../_examples/FontStyles/constants';
 import { FontStyles } from '../_examples/FontStyles/FontStyles';
+import { HIGHLIGHT_THEMES } from '../_examples/HighlightThemes/constants';
+import { HighlightThemes } from '../_examples/HighlightThemes/HighlightThemes';
 import { LINE_SELECTION_EXAMPLE } from '../_examples/LineSelection/constants';
 import { LineSelection } from '../_examples/LineSelection/LineSelection';
 import { MERGE_CONFLICT_EXAMPLE } from '../_examples/MergeConflict/constants';
 import { MergeConflict } from '../_examples/MergeConflict/MergeConflict';
-import { SHIKI_THEMES } from '../_examples/ShikiThemes/constants';
-import { ShikiThemes } from '../_examples/ShikiThemes/ShikiThemes';
 import { SPLIT_UNIFIED } from '../_examples/SplitUnified/constants';
 import { SplitUnified } from '../_examples/SplitUnified/SplitUnified';
 import { TOKEN_HOVER_EXAMPLE } from '../_examples/TokenHover/constants';
@@ -59,7 +59,7 @@ export default function Home() {
 
             <hr />
 
-            <ShikiThemesSection />
+            <HighlightThemesSection />
             <FontStylesSection />
             <CustomHunkSeparatorsSection />
             <CustomHeaderSection />
@@ -88,9 +88,11 @@ async function SplitUnifiedSection() {
   );
 }
 
-async function ShikiThemesSection() {
+async function HighlightThemesSection() {
   return (
-    <ShikiThemes prerenderedDiff={await preloadMultiFileDiff(SHIKI_THEMES)} />
+    <HighlightThemes
+      prerenderedDiff={await preloadMultiFileDiff(HIGHLIGHT_THEMES)}
+    />
   );
 }
 

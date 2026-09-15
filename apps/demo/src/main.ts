@@ -15,7 +15,6 @@ import {
   type ParsedPatch,
   parsePatchFiles,
   preloadHighlighter,
-  type SupportedLanguages,
   type ThemesType,
   UnresolvedFile,
   VirtualizedFile,
@@ -202,8 +201,7 @@ const poolManager: WorkerPoolManager | undefined = WORKER_POOL
   ? (() => {
       const manager = createWorkerAPI({
         theme: DEMO_THEME,
-        langs: ['typescript', 'tsx'],
-        preferredHighlighter: 'shiki-wasm',
+
         useTokenTransformer: true,
       });
       void manager.initialize().then(() => {
@@ -714,12 +712,8 @@ export function workerRenderDiff(parsedPatches: ParsedPatch[]) {
 
 function handlePreload() {
   if (isHighlighterNull() !== true) return;
-  const langs: SupportedLanguages[] = [];
   const themes: DiffsThemeNames[] = [];
   for (const item of FileStreamCodeConfigs) {
-    if (item.options.lang != null) {
-      langs.push(item.options.lang);
-    }
     if (item.options.theme == null) {
       continue;
     } else if (typeof item.options.theme === 'string') {
@@ -729,7 +723,7 @@ function handlePreload() {
       themes.push(item.options.theme.light);
     }
   }
-  void preloadHighlighter({ langs, themes });
+  void preloadHighlighter({ themes });
 }
 
 document.getElementById('toggle-theme')?.addEventListener('click', toggleTheme);

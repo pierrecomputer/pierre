@@ -17,7 +17,7 @@ async function computeAuiPrerenderedDiffs(): Promise<Record<string, string>> {
 }
 
 // The agent demo's snapshot is fully static mock data, so the highlighted markup
-// is identical on every render. Highlighting five diffs with Shiki on each
+// is identical on every render. Highlighting five diffs with Highlights on each
 // request is the bulk of the /edit/live navigation cost (it blocks the route's
 // async render, which the windowed->fullscreen View Transition waits on before
 // it can animate). Memoize the work in a module-scoped promise so it runs once

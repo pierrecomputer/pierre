@@ -1,6 +1,5 @@
 'use client';
 
-import { resolveTheme } from '@pierre/diffs';
 import {
   IconCheck,
   IconChevronSm,
@@ -8,6 +7,7 @@ import {
   IconColorDark,
   IconColorLight,
 } from '@pierre/icons';
+import { createThemeResolver } from '@pierre/theming';
 import { themeToTreeStyles, type TreeThemeStyles } from '@pierre/trees';
 import {
   FileTree,
@@ -38,6 +38,9 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { PRODUCTS } from '@/lib/product-config';
 import { useMediaQuery } from '@/lib/useMediaQuery';
+
+const themeResolver = createThemeResolver();
+docsThemeCatalog.registerInto(themeResolver);
 
 type LightThemeName = string;
 type DarkThemeName = string;
@@ -95,7 +98,7 @@ export function DemoThemingClient({
   // are dropped instead of overwriting the newer selection's styles or error.
   useEffect(() => {
     let cancelled = false;
-    void resolveTheme(effectiveTheme).then(
+    void themeResolver.resolveTheme(effectiveTheme).then(
       (theme) => {
         if (cancelled) return;
         setThemeStyles(themeToTreeStyles(theme));

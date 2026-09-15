@@ -9,8 +9,8 @@
   Import worker utilities from `@pierre/diffs/worker`.
 </Notice>
 
-By default, syntax highlighting runs on the main thread using Shiki. If you're
-rendering large files or many diffs, this can cause a bottleneck on your
+By default, syntax highlighting runs on the main thread using Highlights. If
+you're rendering large files or many diffs, this can cause a bottleneck on your
 JavaScript thread resulting in jank or unresponsiveness. To work around this,
 we've provided some APIs to run all syntax highlighting in worker threads. The
 main thread will still attempt to render plain text synchronously and then apply
@@ -119,15 +119,18 @@ automatically. If you're using the Vanilla JS APIs, we provide a
 you can then manually pass to all your File/FileDiff instances.
 
 <Notice icon={<IconInfoFill />} variant="warning">
-  When using the worker pool, the `theme`, `lineDiffType`,
-  `tokenizeMaxLineLength`, and `useTokenTransformer` render options are
-  controlled by `WorkerPoolManager`, not individual components. Passing these
-  options into component instances will be ignored.
+  When using the worker pool, the `preferredHighlighter`, `theme`,
+  `lineDiffType`, `maxLineDiffLength`, `tokenizeMaxLineLength`, and
+  `useTokenTransformer` render options are controlled by `WorkerPoolManager`,
+  not individual components. Passing these options into component instances will
+  be ignored.
 </Notice>
 
-To change render options after `WorkerPoolManager` instantiates, call
-`setRenderOptions()`. Changing render options will force mounted components to
-re-render and clear the render cache.
+Set `preferredHighlighter` in the pool's `highlighterOptions` to `'highlights'`
+(default), `'shiki-wasm'`, or `'shiki-js'`. To change the backend, theme, or
+other render options later, call `setRenderOptions()`. Omitted options retain
+their current values. Changing render options forces mounted components to
+re-render and clears the render cache.
 
 If you need token callbacks or experimental token selectors such as `data-char`,
 enable `useTokenTransformer: true` on the worker pool itself. Worker pools can
@@ -142,8 +145,16 @@ pool is an optional optimization for edit-heavy apps — pool markup is then
 already editor-compatible, so entering edit mode skips a one-time re-render of
 that file.
 
-If you need to control which Shiki engine is used, set `preferredHighlighter`
-when initializing the pool (`'shiki-js'` by default, `'shiki-wasm'` optional).
+Highlights and `'shiki-wasm'` use WebAssembly; `'shiki-js'` uses JavaScript
+regular expressions. Each worker loads its own backend and themes. Highlights
+bundles its supported languages, while Shiki loads languages as files arrive.
+
+For custom Shiki languages, call
+[`registerCustomLanguage`](#utilities-registercustomlanguage) on the main thread
+before requesting a render. The pool resolves each requested custom grammar and
+sends it to its workers, including filename and extension mappings. Set the
+pool's `preferredHighlighter` to `'shiki-js'` or `'shiki-wasm'`; Highlights
+ignores custom language loaders.
 
 #### React
 
@@ -210,8 +221,8 @@ use the `WorkerPoolContextProvider` for React or pass the pool instance via the
 ### Architecture
 
 The worker pool manages a configurable number of worker threads that each
-initialize their own Shiki highlighter instance. Tasks are distributed across
-available workers, with queuing when all workers are busy.
+initialize their own instance of the selected highlighter. Tasks are distributed
+across available workers, with queuing when all workers are busy.
 
 <DocsCodeExample
   {...architectureASCII}

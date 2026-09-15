@@ -28,7 +28,7 @@ import type {
   EditorFactory,
   EditorType,
 } from '../src/editor/types';
-import { disposeHighlighter } from '../src/highlighter/shared_highlighter';
+import { disposeHighlighter } from '../src/highlighter';
 import {
   MultiFileDiff,
   type MultiFileDiffProps,

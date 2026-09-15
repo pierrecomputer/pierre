@@ -13,17 +13,16 @@ import type {
   EditorViewState,
   FileEditState,
 } from '../src/editor/types';
+import { createDiffsHighlighter } from '../src/highlighter/highlights';
 import type { DiffsHighlighter, FileContents } from '../src/types';
 import { getFiletypeFromFileName } from '../src/utils/getFiletypeFromFileName';
 import { installDom } from './domHarness';
 
 function createTestHighlighter(): DiffsHighlighter {
   return {
-    getLanguage: () => undefined,
-    getLoadedLanguages: () => [],
-    getTheme: () => ({ type: 'light', colors: {} }),
-    loadLanguage: async () => {},
-    setTheme: () => ({ theme: { type: 'light' }, colorMap: [''] }),
+    ...createDiffsHighlighter(),
+    hasTheme: () => true,
+    getTheme: () => ({ name: 'test', appearance: 'light', style: {} }),
   } as unknown as DiffsHighlighter;
 }
 

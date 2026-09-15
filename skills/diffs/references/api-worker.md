@@ -16,7 +16,7 @@ This reference lists every export from `@pierre/diffs/worker`, every public
 | Member                                                         | Purpose                                           |
 | -------------------------------------------------------------- | ------------------------------------------------- |
 | `new WorkerPoolManager(options, renderOptions)`                | Creates a worker pool.                            |
-| `initialize(languages?)`                                       | Starts workers and loads languages.               |
+| `initialize()`                                                 | Starts workers and loads themes.                  |
 | `isInitialized()`                                              | Reports whether initialization finished.          |
 | `isWorkingPool()`                                              | Reports whether workers can accept work.          |
 | `setRenderOptions(options)`                                    | Updates theme and render settings in each worker. |
@@ -42,24 +42,23 @@ This reference lists every export from `@pierre/diffs/worker`, every public
 
 ## Configuration and state types
 
-| Export                              | Purpose                                                           |
-| ----------------------------------- | ----------------------------------------------------------------- |
-| `SetupWorkerPoolProps`              | Combines pool and highlighter options for the singleton.          |
-| `WorkerPoolOptions`                 | Defines the worker factory, pool size, and cache size.            |
-| `WorkerInitializationRenderOptions` | Defines initial languages, theme, highlighter, and diff settings. |
-| `WorkerRenderingOptions`            | Defines the complete worker render settings.                      |
-| `WorkerStats`                       | Describes pool state, work counts, subscribers, and cache sizes.  |
-| `WorkerRequestId`                   | Identifies one worker request.                                    |
-| `ResolvedLanguage`                  | Holds a resolved language registration.                           |
-| `FileRendererInstance`              | Defines callbacks for a file render consumer.                     |
-| `DiffRendererInstance`              | Defines callbacks for a diff render consumer.                     |
+| Export                              | Purpose                                                          |
+| ----------------------------------- | ---------------------------------------------------------------- |
+| `SetupWorkerPoolProps`              | Combines pool and highlighter options for the singleton.         |
+| `WorkerPoolOptions`                 | Defines the worker factory, pool size, and cache size.           |
+| `WorkerInitializationRenderOptions` | Defines the initial theme and diff settings.                     |
+| `WorkerRenderingOptions`            | Defines the complete worker render settings.                     |
+| `WorkerStats`                       | Describes pool state, work counts, subscribers, and cache sizes. |
+| `WorkerRequestId`                   | Identifies one worker request.                                   |
+| `FileRendererInstance`              | Defines callbacks for a file render consumer.                    |
+| `DiffRendererInstance`              | Defines callbacks for a diff render consumer.                    |
 
 ## Request and response types
 
 | Export                          | Purpose                                                 |
 | ------------------------------- | ------------------------------------------------------- |
 | `WorkerRequest`                 | Represents any request sent to a worker.                |
-| `InitializeWorkerRequest`       | Starts a worker with themes, languages, and options.    |
+| `InitializeWorkerRequest`       | Starts a worker with themes and render options.         |
 | `SetRenderOptionsWorkerRequest` | Updates render options and themes.                      |
 | `RenderFileRequest`             | Requests one file render.                               |
 | `RenderDiffRequest`             | Requests one diff render.                               |

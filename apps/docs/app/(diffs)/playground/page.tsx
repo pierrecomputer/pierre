@@ -49,7 +49,14 @@ export default async function PlaygroundPage({
             </div>
           }
         >
-          <WorkerPoolContext>
+          <WorkerPoolContext
+            highlighterOptions={{
+              preferredHighlighter: urlState.highlighter,
+              theme: { dark: urlState.darkTheme, light: urlState.lightTheme },
+              lineDiffType: urlState.lineDiffType,
+              useTokenTransformer: true,
+            }}
+          >
             <PlaygroundClient prerenderedDiff={prerenderedDiff} />
           </WorkerPoolContext>
         </Suspense>

@@ -4,7 +4,7 @@ import { FileDiff } from '../src/components/FileDiff';
 import { DEFAULT_THEMES } from '../src/constants';
 import { Editor } from '../src/editor/editor';
 import { isMoveCursorShortcut } from '../src/editor/platform';
-import { disposeHighlighter } from '../src/highlighter/shared_highlighter';
+import { disposeHighlighter } from '../src/highlighter';
 import type { FileDiffMetadata } from '../src/types';
 import { installDom, wait } from './domHarness';
 

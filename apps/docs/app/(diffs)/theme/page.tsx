@@ -16,7 +16,7 @@ import {
   THEMING_PALETTE_LIGHT,
   THEMING_PALETTE_ROLES,
   THEMING_PROJECT_STRUCTURE,
-  THEMING_REGISTER_THEME,
+  THEMING_REGISTER_CUSTOM_THEME,
   THEMING_TOKEN_COLORS_EXAMPLE,
   THEMING_USE_IN_COMPONENT,
 } from '../docs/Theming/constants';
@@ -51,7 +51,7 @@ export default async function ThemePage() {
     paletteLightPreload,
     tokenColorsExamplePreload,
     packageJsonExamplePreload,
-    registerThemePreload,
+    registerCustomThemePreload,
     useInComponentPreload,
   ] = await Promise.all([
     preloadFile(THEMING_PROJECT_STRUCTURE),
@@ -60,7 +60,7 @@ export default async function ThemePage() {
     preloadFile(THEMING_PALETTE_LIGHT),
     preloadFile(THEMING_TOKEN_COLORS_EXAMPLE),
     preloadFile(THEMING_PACKAGE_JSON_EXAMPLE),
-    preloadFile(THEMING_REGISTER_THEME),
+    preloadFile(THEMING_REGISTER_CUSTOM_THEME),
     preloadFile(THEMING_USE_IN_COMPONENT),
   ]);
 
@@ -83,7 +83,7 @@ export default async function ThemePage() {
     href: THEMING_TOKEN_COLORS_EXAMPLE.href,
   };
   const packageJsonExample = { ...packageJsonExamplePreload };
-  const registerTheme = { ...registerThemePreload };
+  const registerCustomTheme = { ...registerCustomThemePreload };
   const useInComponent = { ...useInComponentPreload };
 
   const content = await renderMDX({
@@ -95,7 +95,7 @@ export default async function ThemePage() {
       paletteLight,
       tokenColorsExample,
       packageJsonExample,
-      registerTheme,
+      registerCustomTheme,
       useInComponent,
     },
   });

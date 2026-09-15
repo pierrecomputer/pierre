@@ -1,28 +1,21 @@
-import type {
-  DiffsThemeNames,
-  HighlighterTypes,
-  SupportedLanguages,
-  ThemesType,
-} from '../types';
+import type { BaseCodeOptions, DiffsThemeNames, ThemesType } from '../types';
 import { getThemes } from './getThemes';
 
 interface HighlighterOptionsShape {
   theme?: DiffsThemeNames | ThemesType;
-  preferredHighlighter?: HighlighterTypes;
+  preferredHighlighter?: BaseCodeOptions['preferredHighlighter'];
 }
 
 interface GetHighlighterOptionsReturn {
-  langs: SupportedLanguages[];
   themes: DiffsThemeNames[];
-  preferredHighlighter: HighlighterTypes;
+  preferredHighlighter?: BaseCodeOptions['preferredHighlighter'];
 }
 
-export function getHighlighterOptions(
-  lang: SupportedLanguages | SupportedLanguages[] | undefined,
-  { theme, preferredHighlighter = 'shiki-js' }: HighlighterOptionsShape
-): GetHighlighterOptionsReturn {
+export function getHighlighterOptions({
+  theme,
+  preferredHighlighter,
+}: HighlighterOptionsShape): GetHighlighterOptionsReturn {
   return {
-    langs: Array.isArray(lang) ? lang : [lang ?? 'text'],
     themes: getThemes(theme),
     preferredHighlighter,
   };

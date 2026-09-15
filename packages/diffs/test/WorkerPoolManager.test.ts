@@ -1,3 +1,4 @@
+import { pierreDark, pierreLight } from '@pierre/highlights/themes';
 import {
   afterAll,
   afterEach,
@@ -8,20 +9,13 @@ import {
   spyOn,
   test,
 } from 'bun:test';
-import { bundledLanguages } from 'shiki';
 
-import { parseDiffFromFile, registerCustomLanguage } from '../src';
-import { RegisteredCustomLanguages } from '../src/highlighter/languages/constants';
-import * as sharedHighlighter from '../src/highlighter/shared_highlighter';
-import { disposeHighlighter } from '../src/highlighter/shared_highlighter';
-import type {
-  DiffsHighlighter,
-  FileContents,
-  FileDiffMetadata,
-} from '../src/types';
+import { parseDiffFromFile, registerCustomTheme } from '../src';
+import { disposeHighlighter, getSharedHighlighter } from '../src/highlighter';
+import type { FileContents, FileDiffMetadata } from '../src/types';
 import type {
   DiffRendererInstance,
-  RenderFileRequest,
+  SetRenderOptionsWorkerRequest,
 } from '../src/worker/types';
 import { createDeferred } from './testUtils';
 import {
@@ -144,96 +138,264 @@ describe('WorkerPoolManager lifecycle', () => {
   });
 });
 
-describe('WorkerPoolManager cache priming', () => {
-  for (const rejectLanguage of [true, false]) {
-    test(`a worker ${rejectLanguage ? 'rejection resends' : 'success reuses'} the requested language on the next task`, async () => {
-      await disposeHighlighter();
-      const { manager, worker } = await createInitializedManager();
-      const mismatch =
-        'attachResolvedLanguages: No returned grammar declares "tf" as its name or an alias.';
-      if (rejectLanguage) {
-        registerCustomLanguage('tf', bundledLanguages.hcl);
-        spyOn(console, 'error').mockImplementation(() => {});
+describe('WorkerPoolManager themes', () => {
+  test.each(['highlights', 'shiki-wasm', 'shiki-js'] as const)(
+    'sends registered %s themes to workers',
+    async (preferredHighlighter) => {
+      const name = `registered-worker-theme-${preferredHighlighter}`;
+      if (preferredHighlighter === 'highlights') {
+        registerCustomTheme(
+          name,
+          () => Promise.resolve({ ...pierreDark, name }),
+          'zed'
+        );
+      } else {
+        registerCustomTheme(
+          name,
+          () =>
+            Promise.resolve({
+              name,
+              type: 'dark',
+              colors: { 'editor.foreground': '#abcdef' },
+            }),
+          'textmate'
+        );
       }
+      const { manager, worker } = await createInitializedManager({
+        preferredHighlighter,
+        theme: name,
+      });
       try {
-        for (let attempt = 0; attempt < 2; attempt++) {
-          const posted = createDeferred<RenderFileRequest>();
-          spyOn(worker, 'postMessage').mockImplementation((request) => {
-            if (request.type === 'file') {
-              posted.resolve(structuredClone(request));
-            }
-          });
-          const prime = manager.primeFileHighlightCache({
-            name: 'example.tf',
-            contents: `locals { label = "${attempt}" }`,
-            cacheKey: `terraform:${attempt}`,
-          });
-          const settled = prime.catch((error: unknown) => error);
-          const request = await withTimeout(posted.promise);
-          if (rejectLanguage) {
-            worker.respond({
-              type: 'error',
-              id: request.id,
-              error: mismatch,
-            });
-            expect(await withTimeout(settled)).toEqual(new Error(mismatch));
-            expect(request.resolvedLanguages?.map(({ name }) => name)).toEqual([
-              'tf',
-            ]);
-            expect(
-              request.resolvedLanguages?.[0]?.data.map(({ name }) => name)
-            ).toEqual(['hcl']);
-          } else {
-            respondToFileRequest(manager, worker, request);
-            expect(await withTimeout(settled)).toBeUndefined();
-            if (attempt === 0) {
-              expect(
-                request.resolvedLanguages?.map(({ name }) => name)
-              ).toEqual(['tf']);
-            } else {
-              expect(request.resolvedLanguages).toBeUndefined();
-            }
-          }
-        }
+        const request = await worker.waitForInitializeRequest();
+        const highlighter = await getSharedHighlighter({
+          preferredHighlighter,
+          themes: [name],
+        });
+        expect(request.renderOptions.theme).toBe(name);
+        expect(request.resolvedThemes).toEqual([highlighter.getTheme(name)]);
       } finally {
         manager.terminate();
-        RegisteredCustomLanguages.delete('tf');
-        await disposeHighlighter();
       }
-    });
-  }
+    }
+  );
 
-  test('reports a background preload failure without blocking worker rendering', async () => {
-    await disposeHighlighter();
+  test('resolves worker themes through the retained highlighter after shared disposal', async () => {
     const { manager, worker } = await createInitializedManager();
-    const highlighter = await sharedHighlighter.getSharedHighlighter({
-      themes: [],
-      langs: [],
-    });
-    const preload = createDeferred<DiffsHighlighter>();
-    const logged = createDeferred<unknown>();
-    const error = new Error('Shared highlighter preload failed');
-    spyOn(sharedHighlighter, 'getSharedHighlighter').mockImplementation(
-      () => preload.promise
-    );
-    const logError = spyOn(console, 'error').mockImplementation((error) => {
-      logged.resolve(error);
-    });
     try {
-      const file = { ...createCacheableFile(), lang: 'css' as const };
+      const retained = await getSharedHighlighter({ themes: ['github-dark'] });
+      const name = 'retained-worker-theme';
+      const retainedTheme = { ...pierreDark, name };
+      const loader = mock(() => Promise.resolve(retainedTheme));
+      retained.themeResolver.registerTheme(name, loader);
+      await disposeHighlighter();
+      const active = await getSharedHighlighter({ themes: ['github-dark'] });
+      const activeTheme = { ...pierreLight, name };
+      active.themeResolver.seedResolvedTheme(name, activeTheme);
+      const posted = createDeferred<SetRenderOptionsWorkerRequest>();
+      spyOn(worker, 'postMessage').mockImplementation((request) => {
+        if (request.type === 'set-render-options') posted.resolve(request);
+      });
+
+      const update = manager.setRenderOptions({ theme: name });
+      const request = await withTimeout(posted.promise);
+      expect(loader).toHaveBeenCalledTimes(1);
+      expect(request.resolvedThemes).toEqual([retainedTheme]);
+      expect(retained.getTheme(name)).toEqual(retainedTheme);
+      expect(active.getTheme(name)).toEqual(activeTheme);
+      worker.respond({
+        type: 'success',
+        requestType: 'set-render-options',
+        id: request.id,
+        sentAt: Date.now(),
+      });
+      await withTimeout(update);
+    } finally {
+      manager.terminate();
+    }
+  });
+
+  test('posts already resolved theme changes before yielding', async () => {
+    const { manager, worker } = await createInitializedManager();
+    try {
+      const highlighter = await getSharedHighlighter({
+        themes: ['github-light'],
+      });
+      const postMessage = spyOn(worker, 'postMessage');
+      const update = manager.setRenderOptions({ theme: 'github-light' });
+      const request = postMessage.mock.calls[0]?.[0];
+      if (request?.type !== 'set-render-options') {
+        throw new Error('Expected a synchronous render-options request');
+      }
+      expect(request.resolvedThemes).toEqual([
+        highlighter.getTheme('github-light'),
+      ]);
+      expect(manager.getFileRenderOptions().theme).toBe('github-light');
+      worker.respond({
+        type: 'success',
+        requestType: 'set-render-options',
+        id: request.id,
+        sentAt: Date.now(),
+      });
+      await withTimeout(update);
+    } finally {
+      manager.terminate();
+    }
+  });
+});
+
+describe('WorkerPoolManager highlighters', () => {
+  test('a backend setup failure falls back to the selected main-thread highlighter', async () => {
+    spyOn(console, 'error').mockImplementation(() => {});
+    const { manager, worker } = await createInitializedManager();
+    try {
+      const onThemeChange = mock(() => {});
+      manager.subscribeToThemeChanges({ onThemeChange });
+      const posted = createDeferred<SetRenderOptionsWorkerRequest>();
+      spyOn(worker, 'postMessage').mockImplementation((request) => {
+        if (request.type === 'set-render-options') posted.resolve(request);
+      });
+      const updateError = getRejection(
+        manager.setRenderOptions({ preferredHighlighter: 'shiki-js' })
+      );
+      const request = await withTimeout(posted.promise);
+      const primeError = getRejection(
+        manager.primeFileHighlightCache(createCacheableFile())
+      );
+      worker.respond({
+        type: 'error',
+        id: request.id,
+        error: 'Failed to fetch backend module',
+      });
+
+      expect((await updateError).message).toBe(
+        'Failed to fetch backend module'
+      );
+      expect((await primeError).message).toContain('canceled');
+      expect(manager.isWorkingPool()).toBe(false);
+      expect(worker.terminated).toBe(true);
+      expect(manager.getStats()).toMatchObject({
+        activeTasks: 0,
+        queuedTasks: 0,
+        totalWorkers: 0,
+      });
+      expect(onThemeChange).toHaveBeenCalledTimes(2);
+      expect(manager.getFileRenderOptions().preferredHighlighter).toBe(
+        'shiki-js'
+      );
+      expect(
+        manager.getPlainFileAST(createCacheableFile(), 0, 1)
+      ).toBeDefined();
+      expect(
+        manager.getPlainDiffAST(createCacheableDiff(), 0, 1)
+      ).toBeDefined();
+    } finally {
+      manager.terminate();
+    }
+  });
+
+  test.each(['highlights', 'shiki-wasm', 'shiki-js'] as const)(
+    'initializes workers with %s and its resolved themes',
+    async (preferredHighlighter) => {
+      const { manager, worker } = await createInitializedManager({
+        preferredHighlighter,
+      });
+      try {
+        const request = await worker.waitForInitializeRequest();
+        const highlighter = await getSharedHighlighter({
+          preferredHighlighter,
+          themes: ['github-dark'],
+        });
+        expect(request.renderOptions.preferredHighlighter).toBe(
+          preferredHighlighter
+        );
+        expect(request.resolvedThemes).toEqual([
+          highlighter.getTheme('github-dark'),
+        ]);
+        expect(manager.getFileRenderOptions().preferredHighlighter).toBe(
+          preferredHighlighter
+        );
+        expect(manager.getDiffRenderOptions().preferredHighlighter).toBe(
+          preferredHighlighter
+        );
+      } finally {
+        manager.terminate();
+      }
+    }
+  );
+
+  test('switching backend with the same theme clears cached and pending results', async () => {
+    const { manager, worker } = await createInitializedManager();
+    try {
+      const file = createCacheableFile();
+      const cachedPrime = manager.primeFileHighlightCache(file);
+      respondToFileRequest(manager, worker, await worker.waitForFileRequest());
+      await withTimeout(cachedPrime);
+      expect(manager.getFileResultCache(file)).toBeDefined();
+
+      const diff = createCacheableDiff();
+      const pendingError = getRejection(manager.primeDiffHighlightCache(diff));
+      const staleRequest = await worker.waitForDiffRequest();
+      const posted = createDeferred<SetRenderOptionsWorkerRequest>();
+      const originalPostMessage = worker.postMessage.bind(worker);
+      spyOn(worker, 'postMessage').mockImplementation((request) => {
+        originalPostMessage(request);
+        if (request.type === 'set-render-options') posted.resolve(request);
+      });
+
+      const update = manager.setRenderOptions({
+        preferredHighlighter: 'shiki-js',
+      });
+      const request = await withTimeout(posted.promise);
+      const highlighter = await getSharedHighlighter({
+        preferredHighlighter: 'shiki-js',
+        themes: ['github-dark'],
+      });
+      expect(request.resolvedThemes).toEqual([
+        highlighter.getTheme('github-dark'),
+      ]);
+      expect(manager.getFileResultCache(file)).toBeUndefined();
+      expect((await pendingError).message).toContain('canceled');
+      respondToDiffRequest(manager, worker, staleRequest);
+      expect(manager.getDiffResultCache(diff)).toBeUndefined();
+
+      const nextPrime = manager.primeFileHighlightCache(file);
+      expect(worker.fileRequestCount).toBe(1);
+      worker.respond({
+        type: 'success',
+        requestType: 'set-render-options',
+        id: request.id,
+        sentAt: Date.now(),
+      });
+      await withTimeout(update);
+      await new Promise<void>((resolve) => setTimeout(resolve, 0));
+      expect(worker.fileRequestCount).toBe(2);
+      respondToFileRequest(manager, worker, await worker.waitForFileRequest());
+      await withTimeout(nextPrime);
+      expect(
+        manager.getFileResultCache(file)?.options.preferredHighlighter
+      ).toBe('shiki-js');
+    } finally {
+      manager.terminate();
+    }
+  });
+});
+
+describe('WorkerPoolManager cache priming', () => {
+  test('sends files without language grammar payloads', async () => {
+    const { manager, worker } = await createInitializedManager();
+    try {
+      const file = {
+        name: 'example.tf',
+        contents: 'locals { label = "example" }',
+        cacheKey: 'terraform',
+      };
       const prime = manager.primeFileHighlightCache(file);
       const request = await withTimeout(worker.waitForFileRequest());
+      expect(request).not.toHaveProperty('resolvedLanguages');
       respondToFileRequest(manager, worker, request);
       await withTimeout(prime);
       expect(manager.getFileResultCache(file)).toBeDefined();
-
-      preload.reject(error);
-      expect(await withTimeout(logged.promise)).toBe(error);
-      expect(logError).toHaveBeenCalledTimes(1);
-      expect(manager.isWorkingPool()).toBe(true);
-      expect(manager.getStats().activeTasks).toBe(0);
     } finally {
-      preload.resolve(highlighter);
       manager.terminate();
     }
   });

@@ -1,17 +1,8 @@
+import type { ThemeResolver } from '@pierre/theming';
 import type { CreatePatchOptionsNonabortable } from 'diff';
-import type { ElementContent } from 'hast';
-import type {
-  BundledLanguage,
-  BundledTheme,
-  CodeToHastOptions,
-  DecorationItem,
-  HighlighterGeneric,
-  LanguageRegistration,
-  ShikiTransformer,
-  ThemedToken,
-  ThemeRegistration,
-  ThemeRegistrationResolved,
-} from 'shiki';
+
+import type { TextDocument, TextDocumentChange } from './editor/textDocument';
+import type { BundledTheme } from './highlighter/themeNames';
 
 export type { CreatePatchOptionsNonabortable };
 
@@ -63,38 +54,121 @@ export type FileDiffContentsLoader = (
   fileDiff: FileDiffMetadata
 ) => Promise<FileDiffLoadedFiles>;
 
-export type HighlighterTypes = 'shiki-js' | 'shiki-wasm';
-
 export type HighlightedToken = [char: number, fg: string, text: string];
 
-export type {
-  BundledLanguage,
-  CodeToHastOptions,
-  DecorationItem,
-  LanguageRegistration,
-  ShikiTransformer,
-  ThemeRegistrationResolved,
-  ThemeRegistration,
-  ThemedToken,
-};
+/** A styled token with a UTF-16 offset in its source. */
+export interface ThemedToken {
+  content: string;
+  offset: number;
+  color?: string;
+  bgColor?: string;
+  /** Bit flags: italic 1, bold 2, underline 4, strikethrough 8. */
+  fontStyle?: number;
+  htmlStyle?: Record<string, string>;
+  htmlAttrs?: Record<string, string>;
+  /** 0 or absent: other; 1: comment; 2: string; 3: regular expression. */
+  type?: number;
+}
 
-// Diffs accepts Shiki's bundled theme names and any additional theme name a
-// consumer registers through the highlighter/theming catalog.
+export interface TokensResult {
+  tokens: ThemedToken[][];
+  fg?: string;
+  bg?: string;
+  themeName?: string;
+  rootStyle?: string;
+}
+
 export type DiffsThemeNames = BundledTheme | (string & {});
 
-export type ThemesType = Record<'dark' | 'light', DiffsThemeNames>;
+export type ThemesType = {
+  dark: DiffsThemeNames;
+  light: DiffsThemeNames;
+};
 
-/**
- * A Shiki highlighter instance configured with the library's supported
- * languages and themes. Used internally to generate syntax-highlighted AST
- * from file contents. By default diffs will ensure that only 1 highlighter is
- * instantiated per thread and shared for all syntax highlighting.  This
- * applies to the main thread and worker threads.
- */
-export type DiffsHighlighter = HighlighterGeneric<
-  SupportedLanguages,
-  DiffsThemeNames
->;
+export type DiffsTheme = {
+  name: string;
+};
+
+export interface DiffsThemeStyle {
+  background?: string;
+  foreground?: string;
+  text?: string;
+  'editor.background'?: string;
+  'editor.foreground'?: string;
+  'editor.active_line.background'?: string;
+  'editor.active_line.border'?: string;
+  'editor.document_highlight.bracket_background'?: string;
+  'editor.document_highlight.bracket_border'?: string;
+  'search.match_background'?: string;
+  players?: readonly { cursor?: string; selection?: string }[];
+  error?: string;
+  warning?: string;
+  info?: string;
+  hint?: string;
+  created?: string;
+  deleted?: string;
+  modified?: string;
+  'terminal.ansi.green'?: string;
+  'terminal.ansi.red'?: string;
+  'terminal.ansi.blue'?: string;
+}
+
+export type CodeToTokensOptions = {
+  lang: string;
+  theme: DiffsTheme | Record<'dark' | 'light', DiffsTheme>;
+  cssVariablePrefix?: string;
+  defaultColor?: string | false;
+  useTokenTransformer?: boolean;
+  tokenizeMaxLineLength?: number;
+};
+
+export interface DiffsLiveTokenizerOptions extends CodeToTokensOptions {
+  textDocument: TextDocument;
+  renderRange?: readonly [startLine: number, endLine: number];
+  onDeferTokenize?(lines: Map<number, HighlightedToken[]>): void;
+}
+
+/** Token cache for a shared editor document; token offsets are line-relative. */
+export interface DiffsLiveTokenizer {
+  readonly pendingTokenization: boolean;
+  getLineTokens(line: number): {
+    tokens: ThemedToken[];
+    bracketIgnoredRanges: [number, number][];
+  };
+  tokenize(
+    change: TextDocumentChange,
+    options?: Pick<DiffsLiveTokenizerOptions, 'renderRange'>
+  ): { lines: Map<number, HighlightedToken[]> };
+  reset(options?: Pick<DiffsLiveTokenizerOptions, 'renderRange'>): {
+    lines: Map<number, HighlightedToken[]>;
+  };
+  /** Finish pending lines before the exclusive end; omit it to finish all. */
+  flush(endLine?: number): void;
+  pause(): void;
+  resume(): void;
+  dispose(): void;
+}
+
+/** Streaming tokenization; returned token offsets are document-relative. */
+export interface DiffsStreamTokenizer {
+  pushCode(chunk: string): ThemedToken[][];
+  end(): ThemedToken[][];
+  dispose(): void;
+}
+
+/** Tokenization and theme resolution owned by one highlighter backend. */
+export interface DiffsHighlighter {
+  readonly name: NonNullable<
+    HighlighterRenderBaseOptions['preferredHighlighter']
+  >;
+  readonly themeResolver: ThemeResolver<DiffsTheme>;
+  getTheme(name: string): DiffsTheme;
+  codeToTokens(code: string, options: CodeToTokensOptions): TokensResult;
+  createStreamTokenizer(options: CodeToTokensOptions): DiffsStreamTokenizer;
+  createLiveTokenizer(options: DiffsLiveTokenizerOptions): DiffsLiveTokenizer;
+  loadLanguages?(languages: readonly string[]): Promise<void>;
+  hasLoadedLanguages?(languages: readonly string[]): boolean;
+}
 
 /**
  * Describes the type of change for a file in a diff.
@@ -387,11 +461,7 @@ export interface MergeConflictMarkerRow {
   lineIndex: number;
 }
 
-export type SupportedLanguages =
-  | BundledLanguage
-  | 'text'
-  | 'ansi'
-  | (string & {});
+export type SupportedLanguages = string;
 
 // Line types that we can parse from a patch file
 export type HunkLineType =
@@ -419,8 +489,18 @@ export type LineDiffTypes = 'word-alt' | 'word' | 'char' | 'none';
 
 export type DiffIndicators = 'classic' | 'bars' | 'none';
 
-export interface BaseCodeOptions {
+export interface HighlighterRenderBaseOptions {
+  /** Syntax highlighter to load on demand. @default 'highlights' */
+  preferredHighlighter?: 'highlights' | 'shiki-wasm' | 'shiki-js';
+  /** Theme to use for rendering. @default 'system' */
   theme?: DiffsThemeNames | ThemesType;
+  /** Whether to use the token transformer. @default false */
+  useTokenTransformer?: boolean;
+  /** Maximum line length to tokenize. @default 1000 */
+  tokenizeMaxLineLength?: number;
+}
+
+export interface BaseCodeOptions extends HighlighterRenderBaseOptions {
   disableLineNumbers?: boolean;
   overflow?: 'scroll' | 'wrap'; // 'scroll' is default
   themeType?: ThemeTypes; // 'system' is default
@@ -428,12 +508,6 @@ export interface BaseCodeOptions {
   disableFileHeader?: boolean;
   disableVirtualizationBuffers?: boolean;
   stickyHeader?: boolean;
-
-  // Shiki config options, ignored if you're using a WorkerPoolManager
-  preferredHighlighter?: HighlighterTypes;
-  useCSSClasses?: boolean;
-  useTokenTransformer?: boolean;
-  tokenizeMaxLineLength?: number;
   tokenizeMaxLength?: number;
 
   // Custom CSS injection
@@ -471,16 +545,13 @@ export interface BaseDiffOptions extends BaseCodeOptions {
 }
 
 export type BaseDiffOptionsWithDefaults = Required<
-  Omit<
-    BaseDiffOptions,
-    'unsafeCSS' | 'preferredHighlighter' | 'parseDiffOptions' | 'loadDiffFiles'
-  >
+  Omit<BaseDiffOptions, 'unsafeCSS' | 'parseDiffOptions' | 'loadDiffFiles'>
 >;
 
 export type CustomPreProperties = Record<string, string | number | undefined>;
 
 // NOTE(amadeus): This is the shared config that all `pre` nodes will need to
-// get setup properly. Whether it's via direct DOM manipulation or via HAST
+// get setup properly. Whether it's via direct DOM manipulation or via HTML tree
 // html rendering, this interface can be shared across both of these areas.
 export interface PrePropertiesConfig extends Required<
   Pick<
@@ -498,19 +569,19 @@ export type FileHeaderRenderMode = 'default' | 'custom';
 
 export type RenderHeaderMetadataCallback = (
   fileDiff: FileDiffMetadata
-) => Element | string | number | null | undefined;
+) => globalThis.Element | string | number | null | undefined;
 
 export type RenderHeaderPrefixCallback = (
   fileDiff: FileDiffMetadata
-) => Element | string | number | null | undefined;
+) => globalThis.Element | string | number | null | undefined;
 
 export type RenderHeaderFilenameSuffixCallback = (
   fileDiff: FileDiffMetadata
-) => Element | string | number | null | undefined;
+) => globalThis.Element | string | number | null | undefined;
 
 export type RenderFileMetadata = (
   file: FileContents
-) => Element | string | number | null | undefined;
+) => globalThis.Element | string | number | null | undefined;
 
 export type ExtensionFormatMap = Record<string, SupportedLanguages | undefined>;
 
@@ -667,7 +738,7 @@ export interface LineInfo {
 }
 
 export interface SharedRenderState {
-  lineInfo: (LineInfo | undefined)[] | ((shikiLineNumber: number) => LineInfo);
+  lineInfo: (LineInfo | undefined)[] | ((lineNumber: number) => LineInfo);
 }
 
 export interface AnnotationSpan {
@@ -753,6 +824,30 @@ export type AnnotationLineMap<LAnnotation> = Record<
 
 export type ExpansionDirections = 'up' | 'down' | 'both';
 
+export interface HText {
+  type: 'text';
+  value: string;
+}
+
+export interface HComment {
+  type: 'comment';
+  value: string;
+}
+
+export type HProperties = Record<
+  string,
+  string | number | boolean | null | undefined | (string | number)[]
+>;
+
+export interface HElement {
+  type: 'element';
+  tagName: string;
+  properties: HProperties;
+  children: ElementContent[];
+}
+
+export type ElementContent = HElement | HText | HComment;
+
 export interface ThemedFileResult {
   code: ElementContent[];
   themeStyles: string;
@@ -791,16 +886,9 @@ export interface ForceFilePlainTextOptions {
   lines?: string[];
 }
 
-export interface RenderFileOptions {
-  theme: DiffsThemeNames | Record<'dark' | 'light', DiffsThemeNames>;
-  useTokenTransformer: boolean;
-  tokenizeMaxLineLength: number;
-}
+export interface RenderFileOptions extends HighlighterRenderBaseOptions {}
 
-export interface RenderDiffOptions {
-  theme: DiffsThemeNames | Record<'dark' | 'light', DiffsThemeNames>;
-  useTokenTransformer: boolean;
-  tokenizeMaxLineLength: number;
+export interface RenderDiffOptions extends HighlighterRenderBaseOptions {
   lineDiffType: LineDiffTypes;
   maxLineDiffLength: number;
 }

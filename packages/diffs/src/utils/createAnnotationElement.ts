@@ -1,16 +1,14 @@
-import type { Element as HASTElement } from 'hast';
+import type { AnnotationSpan, HElement as HtmlElement } from '../types';
+import { createHtmlElement } from './html';
 
-import type { AnnotationSpan } from '../types';
-import { createHastElement } from './hast_utils';
-
-export function createAnnotationElement(span: AnnotationSpan): HASTElement {
-  return createHastElement({
+export function createAnnotationElement(span: AnnotationSpan): HtmlElement {
+  return createHtmlElement({
     tagName: 'div',
     children: [
-      createHastElement({
+      createHtmlElement({
         tagName: 'div',
         children: span.annotations?.map((slotId) =>
-          createHastElement({ tagName: 'slot', properties: { name: slotId } })
+          createHtmlElement({ tagName: 'slot', properties: { name: slotId } })
         ),
         properties: { 'data-annotation-content': '' },
       }),
