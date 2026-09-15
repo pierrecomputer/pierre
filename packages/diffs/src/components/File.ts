@@ -30,7 +30,6 @@ import {
 } from '../managers/InteractionManager';
 import { ResizeManager } from '../managers/ResizeManager';
 import { FileRenderer, type FileRenderResult } from '../renderers/FileRenderer';
-import { SVGSpriteSheet } from '../sprite';
 export type { FileEditCompleteEvent } from '../editor/types';
 import {
   getHighlighterIfLoaded,
@@ -58,6 +57,7 @@ import { areRenderRangesEqual } from '../utils/areRenderRangesEqual';
 import { areThemesEqual } from '../utils/areThemesEqual';
 import { createAnnotationWrapperNode } from '../utils/createAnnotationWrapperNode';
 import { createGutterUtilityContentNode } from '../utils/createGutterUtilityContentNode';
+import { createSVGSpriteElement } from '../utils/createSVGSpriteElement';
 import { createUnsafeCSSStyleNode } from '../utils/createUnsafeCSSStyleNode';
 import {
   patchScrollbarGutterSize,
@@ -2073,14 +2073,7 @@ export class File<LAnnotation = undefined, Caret = undefined> {
   private ensureSpriteSVG(fileContainer: HTMLElement): void {
     const shadowRoot =
       fileContainer.shadowRoot ?? fileContainer.attachShadow({ mode: 'open' });
-    if (this.spriteSVG == null) {
-      const fragment = document.createElement('div');
-      fragment.innerHTML = SVGSpriteSheet;
-      const firstChild = fragment.firstChild;
-      if (firstChild instanceof SVGElement) {
-        this.spriteSVG = firstChild;
-      }
-    }
+    this.spriteSVG ??= createSVGSpriteElement();
     if (this.spriteSVG != null && this.spriteSVG.parentNode !== shadowRoot) {
       shadowRoot.appendChild(this.spriteSVG);
     }
