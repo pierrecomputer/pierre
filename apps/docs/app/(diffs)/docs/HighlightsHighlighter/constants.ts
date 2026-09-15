@@ -10,13 +10,6 @@ const options = {
 } as const;
 
 export const HIGHLIGHTS_HIGHLIGHTER_EXAMPLES = {
-  highlightsInstall: {
-    file: {
-      name: 'install.sh',
-      contents: 'pnpm add @pierre/highlights',
-    },
-    options,
-  },
   highlightsHtml: {
     file: {
       name: 'html.ts',
@@ -313,7 +306,6 @@ export const {
   highlightsDualThemes: HIGHLIGHTS_DUAL_THEMES,
   highlightsDualThemesCss: HIGHLIGHTS_DUAL_THEMES_CSS,
   highlightsHtml: HIGHLIGHTS_HTML,
-  highlightsInstall: HIGHLIGHTS_INSTALL,
   highlightsLive: HIGHLIGHTS_LIVE,
   highlightsStream: HIGHLIGHTS_STREAM,
   highlightsStreamPipe: HIGHLIGHTS_STREAM_PIPE,
