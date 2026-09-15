@@ -96,15 +96,7 @@ between chunks, and tokenizes each completed chunk once. Token offsets stay
 relative to the complete stream. UTF-8 decoding is handled internally, including
 characters split across chunks.
 
-```ts
-const lines = response.body.pipeThrough(
-  new StreamTokenizer({ lang: 'ts', theme: pierreDark })
-);
-
-for await (const tokens of lines) {
-  console.log(tokens);
-}
-```
+<DocsCodeExample {...highlightsStreamPipe} />
 
 You can also use the synchronous `pushCode()` and `end()` methods:
 

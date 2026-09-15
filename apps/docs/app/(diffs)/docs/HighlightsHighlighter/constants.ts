@@ -52,6 +52,19 @@ console.log(fg, bg); // The theme's foreground and background colors`,
     },
     options,
   },
+  highlightsStreamPipe: {
+    file: {
+      name: 'stream-pipe.ts',
+      contents: `const lines = response.body.pipeThrough(
+  new StreamTokenizer({ lang: 'ts', theme: pierreDark })
+);
+
+for await (const tokens of lines) {
+  console.log(tokens);
+}`,
+    },
+    options,
+  },
   highlightsStream: {
     file: {
       name: 'stream.ts',
@@ -303,6 +316,7 @@ export const {
   highlightsInstall: HIGHLIGHTS_INSTALL,
   highlightsLive: HIGHLIGHTS_LIVE,
   highlightsStream: HIGHLIGHTS_STREAM,
+  highlightsStreamPipe: HIGHLIGHTS_STREAM_PIPE,
   highlightsThemeLoader: HIGHLIGHTS_THEME_LOADER,
   highlightsThemes: HIGHLIGHTS_THEMES,
   highlightsTokens: HIGHLIGHTS_TOKENS,
