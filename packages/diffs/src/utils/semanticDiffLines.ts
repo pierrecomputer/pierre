@@ -39,7 +39,6 @@ export function createSemanticDiffLineLookup(
   const additions: SemanticDiffLine[] = [];
   const deletions: SemanticDiffLine[] = [];
   for (const operation of operations) {
-    const lineType = LINE_TYPE_BY_OPERATION[operation.type];
     for (const side of ['old', 'new'] as const) {
       const entries = side === 'old' ? deletions : additions;
       for (const range of operation.lines[side]) {
@@ -47,7 +46,7 @@ export function createSemanticDiffLineLookup(
         entries.push({
           start: range.start,
           end: range.end,
-          lineType,
+          lineType: semanticLineType(operation, span),
           operation,
           span,
         });
@@ -57,6 +56,33 @@ export function createSemanticDiffLineLookup(
   additions.sort((a, b) => a.start - b.start);
   deletions.sort((a, b) => a.start - b.start);
   return { additions, deletions };
+}
+
+// Decides a LineType based on the semantic operation and span data we have
+function semanticLineType(
+  operation: SemanticDiffOperation,
+  span: SemanticDiffSpan
+): LineTypes {
+  if (span.role === 'focus' && span.kind === 'reformatted') {
+    return 'change-reformatted';
+  }
+  if (span.relation === 'introduced') {
+    return 'change-addition';
+  }
+  if (span.relation === 'removed') {
+    return 'change-deletion';
+  }
+  if (span.role === 'focus') {
+    switch (span.relation) {
+      case 'moved':
+        return 'change-moved';
+      case 'replaced':
+        return operation.type === 'renamed'
+          ? 'change-renamed'
+          : 'change-edited';
+    }
+  }
+  return LINE_TYPE_BY_OPERATION[operation.type];
 }
 
 // FOLLOWUP: This is dumb, and goes back to my thinking that we should probably

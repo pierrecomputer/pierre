@@ -5,9 +5,7 @@ import type {
   DecorationItem,
   FileDiffMetadata,
   SemanticDiffFocusKind,
-  SemanticDiffLineRange,
   SemanticDiffOperation,
-  SemanticDiffSpan,
   SemanticDiffSpanRelation,
   SemanticDiffTextPosition,
   SemanticDiffTextRange,
@@ -20,14 +18,14 @@ type FocusKind = SemanticDiffSpanRelation | SemanticDiffFocusKind;
 interface FocusRange extends SemanticDiffTextRange {
   relation: SemanticDiffSpanRelation;
   kind?: SemanticDiffFocusKind;
+  // All ranges from this focus on this side, before body cuts.
+  sourceRanges: SemanticDiffTextRange[];
 }
 
 interface SemanticDiffFocusState {
   ranges: FocusRange[];
   nextRange: number;
   active: FocusRange[];
-  wholeLineRanges: SemanticDiffLineRange[];
-  nextWholeLineRange: number;
 }
 
 interface SemanticDiffFocusStates {
@@ -177,6 +175,7 @@ function createSemanticDiffFocusStates(
               ...range,
               relation: span.relation,
               kind: span.kind,
+              sourceRanges: ranges,
             });
           }
           continue;
@@ -187,25 +186,15 @@ function createSemanticDiffFocusStates(
               ...fragment,
               relation: span.relation,
               kind: span.kind,
+              sourceRanges: ranges,
             });
           }
-        }
-      }
-    }
-    for (const side of sides) {
-      const state = side === 'old' ? result.deletions : result.additions;
-      for (const range of operation.lines[side]) {
-        if (
-          preservesWholeLineFocus(operation, operation.spans[range.spanIndex])
-        ) {
-          state.wholeLineRanges.push(range);
         }
       }
     }
   }
   for (const state of [result.deletions, result.additions]) {
     state.ranges.sort((a, b) => comparePositions(a.start, b.start));
-    state.wholeLineRanges.sort((a, b) => a.start - b.start);
   }
   return result;
 }
@@ -215,8 +204,6 @@ function createFocusState(): SemanticDiffFocusState {
     ranges: [],
     nextRange: 0,
     active: [],
-    wholeLineRanges: [],
-    nextWholeLineRange: 0,
   };
 }
 
@@ -260,21 +247,37 @@ function subtractEnclosedBodies(
   return fragments;
 }
 
-// FOLLOWUP: Not sure i like the way these things look in practice, so may want
-// to have a discussion around upserting these into full line styles
-// Sema retains whole-line introduced/removed focus on edited paired spans.
-// This controls focus filtering only; line colors still use the operation type.
-function preservesWholeLineFocus(
-  operation: SemanticDiffOperation,
-  span: SemanticDiffSpan
+// A span can have several unsorted ranges. Together they must cover every
+// non-whitespace character; a gap containing only spaces is fine.
+function coversLineContent(
+  ranges: SemanticDiffTextRange[],
+  sourceLine: number,
+  text: string
 ): boolean {
-  return (
-    (span.old?.length ?? 0) > 0 &&
-    (span.new?.length ?? 0) > 0 &&
-    !(span.role === 'body' && span.relation === 'mapped') &&
-    operation.type !== 'reformatted' &&
-    (span.relation !== 'moved' || operation.type === 'movedWithEdit')
-  );
+  let offset = 0;
+  let coveredUntil = 0;
+  for (const character of text) {
+    const end = offset + character.length;
+    if (character.trim() !== '') {
+      coveredUntil = Math.max(coveredUntil, offset);
+      while (coveredUntil < end) {
+        let next = coveredUntil;
+        for (const range of ranges) {
+          if (range.start.line > sourceLine || range.end.line < sourceLine)
+            continue;
+          const start =
+            range.start.line === sourceLine ? range.start.character : 0;
+          const stop =
+            range.end.line === sourceLine ? range.end.character : text.length;
+          if (start <= coveredUntil && stop > next) next = stop;
+        }
+        if (next === coveredUntil) return false;
+        coveredUntil = next;
+      }
+    }
+    offset = end;
+  }
+  return true;
 }
 
 // Filter focuses against the source text and keep only ranges overlapping this
@@ -291,20 +294,12 @@ function prepareSemanticDiffFocusLine(
   ) {
     focus.active.push(focus.ranges[focus.nextRange++]);
   }
-  while (
-    focus.nextWholeLineRange < focus.wholeLineRanges.length &&
-    focus.wholeLineRanges[focus.nextWholeLineRange].end < sourceLine
-  ) {
-    focus.nextWholeLineRange++;
-  }
-  const wholeLineRange = focus.wholeLineRanges[focus.nextWholeLineRange];
-  const preserveWholeLine =
-    wholeLineRange != null && wholeLineRange.start <= sourceLine;
   if (focus.active.length === 0) return;
   const text = cleanLastNewline(lineContent);
   const contentStart = text.length - text.trimStart().length;
   const contentEnd = text.trimEnd().length;
   const boundaries: FocusBoundary[] = [];
+  const fullLineFocus = new Map<SemanticDiffTextRange[], boolean>();
   let activeCount = 0;
   for (const range of focus.active) {
     if (range.end.line < sourceLine) continue;
@@ -315,12 +310,16 @@ function prepareSemanticDiffFocusLine(
       range.end.line === sourceLine ? range.end.character : text.length
     );
     if (start >= end || text.slice(start, end).trim() === '') continue;
-    const coversLine = start <= contentStart && end >= contentEnd;
-    const keepWholeLine =
-      range.relation === 'replaced' ||
-      (preserveWholeLine &&
-        (range.relation === 'introduced' || range.relation === 'removed'));
-    if (coversLine && !keepWholeLine) continue;
+    // The line background already represents full-line focus. Check the whole
+    // span once, so disjoint ranges do not leave redundant text highlights.
+    let coversLine = fullLineFocus.get(range.sourceRanges);
+    if (coversLine == null) {
+      coversLine =
+        (start <= contentStart && end >= contentEnd) ||
+        coversLineContent(range.sourceRanges, sourceLine, text);
+      fullLineFocus.set(range.sourceRanges, coversLine);
+    }
+    if (coversLine) continue;
     const kind = range.kind ?? range.relation;
     // Mapped focus without a formatting kind has no visual emphasis in Sema.
     if (kind === 'mapped') continue;
