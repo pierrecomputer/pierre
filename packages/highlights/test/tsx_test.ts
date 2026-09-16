@@ -41,7 +41,6 @@ void t.test(
     const { code, enumMap } = transformWat(
       url,
       `(module
-      (memory (export "memory") 3)
       (import "../src/langs/tsx.wat")
       (export "keyword" (func $isKeyword)))`
     );
@@ -1097,7 +1096,6 @@ void t.test(
     // scan live bytes sit past $end and no NUL sentinel stops the lexer
     const watUrl = new URL('./test_tsx_sub.wat', import.meta.url);
     const src = `(module
-  (memory (export "memory") 3)
   (import "../src/langs/tsx.wat")
   (func (export "highlight")
     (local $mid i32)

@@ -42,6 +42,7 @@ moonx highlights:dev
 moonx highlights:test
 moonx highlights:bench
 moonx highlights:bench-live
+moonx highlights:bench-memory
 ```
 
 [Benchmarks](./benchmark/README.md) · [Architecture](./ARCHITECTURE.md) ·

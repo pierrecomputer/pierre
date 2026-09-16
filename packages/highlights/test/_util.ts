@@ -78,7 +78,6 @@ export function loadLang(
   // the css preprocessors share css.wat
   const file = ['less', 'sass', 'scss'].includes(name) ? 'css' : name;
   const src = `(module
-  (memory (export "memory") 3)
   (import "../src/langs/${file}.wat")
   (func (export "highlight")
     (call $hlBegin)
@@ -137,7 +136,6 @@ export function loadSplitLang(name: Lang): TestSplitHl {
       : name;
   const watUrl = new URL(`./split_${name}.wat`, import.meta.url);
   const src = `(module
-  (memory (export "memory") 3)
   (import "../src/langs/${file}.wat")
   (func (export "highlight")
     (call $hlBegin)

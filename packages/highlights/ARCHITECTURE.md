@@ -1,244 +1,258 @@
 # Architecture
 
-Highlights lexes UTF-8 in WebAssembly linear memory. Hand-written WAT lexers
-emit HTML or binary token records without building an AST. JavaScript handles
-input encoding, theme resolution, and themed token objects.
+Highlights uses WAT lexers to scan UTF-8 bytes in WebAssembly memory and emit
+HTML or token records. Lexers classify code with local context and state
+machines, without building a syntax tree. A TypeScript host handles encoding,
+themes, token objects, and scheduling incremental work.
+
+The same lexer and emitter pipeline serves three uses:
 
 ```text
-UTF-8 input -> language lexer -> HTML bytes
-                             -> byte-end records -> UTF-16 line records
+Whole input ───── highlight ─────────┬─ HTML bytes
+                                    └─ UTF-16 records → themed tokens
+Stream lines ──── highlightStream ───── UTF-16 records → themed tokens
+Document edits ── liveRun ───────────── per-line streaming → cached records
 ```
 
-WAT lives in `src/`, JavaScript in `lib/`, and the compiler in
-[`scripts/build.ts`](./scripts/build.ts). Named addresses live in
-[`src/memory.wat`](./src/memory.wat); the first-page map is at the top of
-[`src/highlights.wat`](./src/highlights.wat).
+## Source map
 
-| Layer                       | Source                                                              |
-| --------------------------- | ------------------------------------------------------------------- |
-| Memory, dispatch, languages | `src/highlights.wat`, `src/memory.wat`                              |
-| Tokens, scans, HTML/records | `src/token.wat`, `src/scan.wat`, `src/emit.wat`                     |
-| Shared scans and lexers     | `src/common.wat`, `src/sig.wat`, `src/langs/*.wat`, `src/embed.wat` |
-| Live document               | `src/live.wat`, `lib/live.ts`                                       |
-| Host, themes, tokens        | `lib/highlighter.ts`, `lib/theme.ts`, `lib/tokens.ts`               |
-| Generated ABI               | `lib/languages.ts`, `lib/token-types.ts` (tracked)                  |
+| Source                                                                                                | Responsibility                                                    |
+| ----------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
+| [`lib/index.ts`](./lib/index.ts), [`lib/highlighter.ts`](./lib/highlighter.ts)                        | Public API, Wasm instances, input/output, and streaming           |
+| [`lib/live.ts`](./lib/live.ts)                                                                        | Edit validation, document reads, and deferred work                |
+| [`lib/theme.ts`](./lib/theme.ts), [`lib/tokens.ts`](./lib/tokens.ts)                                  | Theme preparation and conversion of records to token objects      |
+| [`src/highlights.wat`](./src/highlights.wat), [`src/memory.wat`](./src/memory.wat)                    | Language dispatch, drivers, and memory layout                     |
+| [`src/scan.wat`](./src/scan.wat), [`src/common.wat`](./src/common.wat)                                | Bounded scans, shared lexical rules, and multiline continuation   |
+| [`src/token.wat`](./src/token.wat), [`src/emit.wat`](./src/emit.wat)                                  | Token IDs, HTML emission, and binary records                      |
+| [`src/langs/*.wat`](./src/langs/), [`src/sig.wat`](./src/sig.wat), [`src/embed.wat`](./src/embed.wat) | Language lexers, parameter classification, and embedded languages |
+| [`src/live.wat`](./src/live.wat)                                                                      | Document storage, edit splicing, and incremental tokenization     |
+| [`scripts/build.ts`](./scripts/build.ts)                                                              | WAT preprocessing, compilation, and generated assets              |
+| [`themes/`](./themes/)                                                                                | Zed-compatible themes, CSS-variable theme, and `toCSS`            |
 
-## WAT preprocessing
+## Runtime and memory
 
-[`scripts/build.ts`](./scripts/build.ts) expands forms that are not valid WAT.
-Local imports share one `$name` namespace; each file is included once and host
-imports are hoisted. Comments are stripped first. Enum order is ABI. Use hex
-constants for escaped quotes.
+Package export conditions select a synchronous loader: Node reads the Wasm file,
+browsers compile embedded bytes, and workerd imports a Wasm module. Each loader
+calls `init` and re-exports the public API.
 
-| Form                                                                   | Expansion                                                              |
-| ---------------------------------------------------------------------- | ---------------------------------------------------------------------- |
-| `(import "./token.wat")`                                               | Inline a local module                                                  |
-| `(enum $Token "none" ...)`                                             | Sequential IDs; `(enum.get $Token.none)` reads one                     |
-| `(language-table (language "name" $lexer "alias" ...) ...)`            | `$Language` IDs, `$hlDispatch`, and the JavaScript name lookup         |
-| `(const $mem.name 64)`                                                 | Build-time address                                                     |
-| `(css-variable-table ...)`                                             | Kebab-case token names and lookup records                              |
-| `(bitset ...)` / `(bitset.get ...)`                                    | Per-enum flag bytes and a load/mask                                    |
-| `(i32.const "true")`                                                   | Up to four ASCII bytes packed little-endian; `i64.const` accepts eight |
-| `(byteset.get "bytes" (local.get $c))`                                 | Membership test in a shared 256-bit bitmap                             |
-| `(enum-map $Name $Enum <base> <default> (value <v> "member" ...) ...)` | Per-enum byte table; `(enum-map.get $Name <expr>)` loads it            |
-| `(byte-switch (local.get $c) (case <byte>... body...) ...)`            | `br_table` dispatch; a case without an exit continues after the switch |
+`init(module)` creates the shared instance used by `codeToHtml` and
+`codeToTokens`. `createHighlighter(module)` creates an independent instance.
+Each active stream or live document owns its own instance and lexer state.
+Completed streams can reuse a single pooled instance; live documents are not
+pooled.
 
-### Languages
+The first 64 KiB memory page holds controls, static tables, caches, and lexer
+scratch. Ordinary input starts at byte 65536, followed by a NUL sentinel and
+lookahead space. `$ptr` is the read cursor, `$eof` is the input end, and `$end`
+is the current scan boundary, which can be earlier for an embedded lexer.
+Embedded NUL bytes are data; end checks use the boundary.
+
+The host writes a language ID, input length, and output mode into the control
+block. Wasm writes back the output address and length:
+
+| Mode | Output                        |
+| ---- | ----------------------------- |
+| 0    | HTML with inline colors       |
+| 1    | HTML with CSS-variable colors |
+| 2    | HTML for a packed theme set   |
+| 3    | UTF-16 line records           |
+
+Output starts after the input at a 16-byte-aligned address. Modes 1 and 2 place
+the variable prefix or theme set before the output. `$ensureCap` grows memory
+before writes, and the host rebinds typed array views after growth. SIMD scans
+may load into reserved lookahead space but must discard out-of-range matches.
+See [`src/memory.wat`](./src/memory.wat) for exact addresses and region sizes.
+
+`codeToHtml` normally returns a borrowed `Uint8Array` into Wasm memory. Copy it
+before another call on the same instance: later writes can overwrite it and
+memory growth can detach it.
+
+## Lexers and emission
 
 The `language-table` in [`src/highlights.wat`](./src/highlights.wat) owns each
-canonical name, lexer, and aliases. Append new languages to keep IDs stable.
-Names are lowercase, unique across the table, and include aliases such as `c++`
-and `c#`. At most 256 entries.
+language's canonical name, aliases, and dispatch function. The build derives
+Wasm IDs and the JavaScript lookup from this list. Declaration order defines
+IDs, so append new languages to preserve existing IDs. Host lookups ignore case
+and reject unknown names.
 
-The build writes [`lib/languages.ts`](./lib/languages.ts) from this table.
-`Lang` is the lookup's literal keys. The file stays tracked so tests typecheck
-without a package build; conformance checks it against the WAT. Lexer fixtures
-omit the table.
+Several languages share implementations. CSS dialects use `css.wat`. The
+ECMAScript family combines `js.wat` scanning, `ts.wat` classification, `jsx.wat`
+markup modes, and the `tsx.wat` driver. Feature flags select JS, TS, JSX, and
+TSRX behavior. `sig.wat` tracks parameter lists for participating lexers.
 
-Lexer imports, stream checkpoint participation, and Markdown fence support are
-separate lists: several languages share a lexer, and fence support is a subset.
+A lexer consumes `[$ptr, $end)` and leaves `$ptr` at the boundary. It must:
 
-### Keyword tables
+- Preserve input bytes and emit ranges in order.
+- Advance on every iteration, including malformed input, and stop unterminated
+  constructs at `$end`.
+- Keep UTF-8 code points together and bound lookahead by the scan range.
+- Initialize fresh state on a new run and preserve all state needed to resume.
 
-```wat
-(keyword-table $Name <base> <end> (group <value>? "word" ...) ...)
-(keyword-table.get $Name <start> <end>)
-(keyword-table.value $Name <start> <end>)
-(keyword-pool <base> <end>)
-```
+The emitter exposes two operations:
 
-The build hashes the first two bytes, last byte, and length, then verifies exact
-bytes. `get` returns a 1-based group index or `0`. When every group has a
-numeric or `$Token.member[+bias]` value, `value` returns that value or `-1`.
+- `$emitTok(hl, lhs, rhs)` emits a token range, escaping `&`, `<`, and `>` for
+  HTML. Empty or reversed ranges do nothing.
+- `$emitGap(lhs, rhs)` copies whitespace or leading UTF-8 continuation bytes
+  while retaining the preceding style. Gaps must not contain HTML specials.
 
-Words are 2–31 bytes and case-sensitive. Words with identical hash inputs cannot
-share a table; match one directly, as `rust.wat` does for `where`.
-Case-insensitive lexers lowercase ASCII into `$mem.lexLowerScratch` before
-lookup. Distinct words share one pool in `src/common.wat`, capped at 8191 bytes.
+HTML output is one `<pre class="highlights" style="..."><code>...</code></pre>`
+fragment with non-nested spans and no line wrappers. Adjacent equal styles share
+a span, including intervening gaps. Record output merges adjacent equal token
+IDs; gaps extend the preceding record or use `none` at the start.
 
-### Stream checkpoints
+### Embedded languages
 
-Registered stream lexers save loop-carried locals to `$mem.streamState` after a
-top-level chunk and restore them after `$lexEmitLeadingContinuation` on the next
-chunk. Locals always written before being read are omitted. These lexers cannot
-`return`, which would skip the checkpoint.
+An embedding lexer temporarily narrows `$end` to a body range, calls the child
+lexer, then restores the outer boundary. Continuation must respect this range:
+an unfinished script comment must not consume the enclosing script closer.
 
-### Runtime workarounds
+`embed.wat` resumes script/style bodies, front matter, and framework
+expressions. Markup lexers resume their own unfinished start tags. Markdown and
+MDX retain fence delimiter, language, and nesting state. Fence aliases are
+registered separately in `markdown.wat`.
 
-The build retains two JavaScriptCore workarounds exercised by
-[`test/wasm_test.ts`](./test/wasm_test.ts):
+## Token records
 
-- Functions that transitively call SIMD code receive an unused `v128` local,
-  which selects the SIMD calling convention.
-- Compound negations `(i32.eqz (i32.and/or ...))` become
-  `(i32.shr_u (i32.clz X) (i32.const 5))`.
+Mode 3 first emits `(endByte: u32, tokenId: u32)` pairs. Each record starts at
+the preceding end, or zero for the first record. After lexing, `$recLinesPost`
+converts these to `(endUtf16: u32, tokenId: u32)` pairs and splits LF/CRLF
+boundaries. ID `0xffffffff` marks a line terminator and ends after it.
 
-`optimizeWasm()` reapplies both after Binaryen. `wat2wasm()` enables bulk memory
-and SIMD.
+`lineRecordsToTokens` slices the source string into per-line `ThemedToken`
+arrays, excluding terminators. Whole-input and stream offsets are absolute
+UTF-16 indices; live offsets are line-relative. Comment, string, and regex IDs
+also provide standard token types for uses such as bracket matching.
 
-## Memory
+`codeToTokens` normalizes malformed UTF-8 byte input before lexing and retains
+original strings for token content. Styling happens after lexing, so records are
+independent of themes. `tokenizeMaxLineLength` collapses long lines during
+object conversion; it does not skip lexing or change live raw records.
 
-The first 64 KiB page holds controls, static tables, caches, and lexer scratch.
-JavaScript writes language ID (`u8` at 0), output mode (`u8` at 1: 0 inline
-HTML, 1 CSS-variable HTML, 2 multi-theme HTML, 3 UTF-16 line records), and input
-length (`u32` at 2). Output address and length follow. Non-live input starts at
-65536 with a trailing NUL sentinel.
+## Themes
 
-Output starts at `(EOF + 47) & ~15`, leaving SIMD slack and 16-byte alignment.
-CSS-variable HTML stores the encoded prefix there and starts output after it;
-multi-theme HTML does the same with its packed theme set. `$end` is the scan
-boundary: input can contain NUL. Loads may cross `$end`; matches and emitted
-ranges must not.
+`prepareTheme` resolves a `ThemeFamily` to its first member and caches by theme
+object identity, plus prefix for CSS-variable themes. Replace a theme object to
+change its prepared values.
 
-`$ensureCap` grows output before writes. JavaScript rebinds views after growth.
-HTML and raw live records are borrowed; copy them before the next operation that
-can overwrite or detach memory.
+Syntax colors fall back through dotted parents, such as `function.method` to
+`function`, while keeping the nearest scope's font settings. Font-only scopes
+can inherit the foreground. Foreground resolves from `editor.foreground`,
+`text`, then `foreground`; background resolves from `editor.background`, then
+`background`.
 
-## Themes and HTML
+Hex themes pack each token into five bytes: RGBA and font settings. An all-zero
+record inherits without a span. HTML selects a rendering path based on the
+prepared theme:
 
-JavaScript prepares each theme once per object identity, resolving every token
-slot into per-token styles plus the packed Wasm theme table. Display P3 colors
-cannot fit the table, so such a theme has none and instead gets HTML tag
-replacements, built on its first HTML render. Syntax scopes resolve through
-dot-separated parents, keeping the nearest scope's font settings while searching
-for a color. A font-only scope falls back to the theme foreground.
+| Theme input                                                    | Rendering path                                                                |
+| -------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| Single hex theme                                               | Mode 0 reads the packed theme table                                           |
+| `cssVariables: true`                                           | Mode 1 emits `var(<prefix><token-name>)`, with `--hls-` as the default prefix |
+| Multiple hex themes                                            | Mode 2 renders the packed set in one lex                                      |
+| Display P3, or a set containing Display P3/CSS-variable themes | Mode 1 emits placeholder tags that the host replaces with prepared styles     |
 
-Each token has a five-byte `r g b a style` record. Hex colors accept 3–8 digits;
-omitted alpha is `0xff`. Style bit 4 is italic; the low nibble is weight in
-hundreds (`0` is default). Slot 0 (`none`) stays empty.
+With `themes`, `defaultColor` selects the inline theme and defaults to `light`.
+Other themes become custom properties such as `--hls-dark`. `false` makes every
+theme a custom property; `'light-dark()'` combines the light/dark pair. Token
+objects carry the corresponding shared `htmlStyle` maps.
 
-Background is `editor.background ?? background`; foreground is
-`editor.foreground ?? text ?? foreground`. Zero records inherit foreground
-without a span. Font-only records emit an inherited color with font attributes.
+Wasm caches span openers and invalidates them when the theme or output mode
+changes. Merging compares packed styles for hex themes, token IDs for variable
+output, and every member's style for theme sets. Token calls preserve HTML
+caches.
 
-HTML is one `<pre class="highlights" style="..."><code>...</code></pre>`
-fragment with inline styles, no token classes or line wrappers. `&`, `<`, and
-`>` are escaped. Spans never nest. Equal 40-bit styles merge across whitespace.
-CSS-variable mode emits `var(<cssVariablePrefix><token>)`, defaults to `--hls-`,
-ignores font settings, and merges only identical token IDs.
+[`themes/index.ts`](./themes/index.ts) exports bundled themes, `cssVariables`,
+and `toCSS` for generating custom-property declarations. The build also emits
+individual theme modules and a lazy loader.
 
-Span openers are cached by token ID. Each HTML call compares the padded theme
-table and output mode against the cache. A change clears it. CSS-variable
-fragments omit the prefix from cached bytes and insert it on output. Token calls
-preserve the cache.
+## Streaming
 
-A `themes` set renders in one lex. JavaScript packs the set once: one theme
-table per member plus each member's escaped custom-property name (`--hls-dark`),
-with the `defaultColor` member marked inline. The emitter writes every member
-into each span, `color:#…;--hls-dark:#…` with per-member `font-style` and
-`font-weight` properties, or merges the `light` and `dark` members into
-`light-dark()` values. A token's style is its record in every member, so
-neighbors merge only when all members agree, and a token no member styles gets
-no span. Openers are cached per set in the span-cache region, used as an arena
-with a per-token directory; one that does not fit renders directly. A set call
-marks the cache mode so the next single-theme call clears the region, and that
-clear invalidates the set's arena in turn. Members with Display P3 or
-CSS-variable colors have no theme table, so such a set renders through the
-CSS-variable emitter with tag replacements, like a single Display P3 theme. The
-host caches up to 128 resolved sets per first theme, allowing discarded partners
-and their derived styles and blobs to be collected.
+`StreamTokenizer` is a `TransformStream<Uint8Array, ThemedToken[]>` with
+synchronous `pushCode`, `end`, and `dispose` methods. It sends completed lines
+through the last LF to Wasm and buffers the unfinished tail. `end` emits the
+remainder, including a final empty line after a trailing terminator.
 
-## Emitter contract
+Buffered bytes are owned by the tokenizer, so callers can reuse input arrays.
+Valid completed bytes reach Wasm directly; malformed UTF-8 is normalized. String
+chunks preserve trailing high surrogates so pairs can span calls.
 
-`$ptr`, `$end`, and `$eof` track input; `$out`, `$cap`, and `$spanHl` track
-output.
+`highlightStream(reset)` starts or resumes lexer state. `$streamChunk`
+coordinates multiline constructs, embedded regions, and language-specific
+continuation. Record state also persists so leading whitespace keeps the
+preceding token's style.
 
-- `$hlBegin` reads controls and initializes the driver; HTML mode opens the
-  fragment. `$hlEnd` finishes output and publishes its length.
-- `$emitTok(hl, lhs, rhs)` emits `[lhs, rhs)`, escaping HTML and merging equal
-  styles. Empty ranges do nothing.
-- `$emitGap(lhs, rhs)` retains the previous style. Use it for whitespace or
-  leading UTF-8 continuation bytes; exclude `&`, `<`, and `>`.
-- Token mode writes `(endByte: u32, tokenId: u32)` records. Starts are implicit.
-  Equal adjacent IDs and gaps extend the preceding record.
-- Mode 3 converts those to `(endUtf16: u32, tokenId: u32)`. ID `0xffffffff`
-  marks a line ending and includes its terminator.
+The ECMAScript family has an explicit resumable driver. For other registered
+stream lexers, the build saves needed locals in `$mem.streamState` and restores
+them on the next chunk. These functions must use named branches and cannot
+return early, which would bypass the injected save. Reset clears carried state
+before an instance is reused.
 
-Shared scanners leave an already-past cursor unchanged. Every output path
-reserves capacity before writing.
+## Live documents
 
-## Lexer contract
+`LiveTokenizer` adds editable document storage to the streaming pipeline.
+JavaScript validates UTF-16 edits, exposes reads, and schedules work. Wasm owns
+the text, line table, tokens, lexer states, and dirty ranges.
 
-A `$hl<Language>` lexer scans `[$ptr, $end)` and returns with `$ptr == $end`.
+A size-class heap after the static page stores document data. The line table is
+a gap buffer whose descriptors point to text, tokens, and outgoing lexer states.
+Scratch above the heap holds one line and its emitted records.
 
-- Emit every byte exactly once, in order, through `$emitTok` or `$emitGap`.
-- Advance on every iteration, including malformed input. Unterminated constructs
-  stop at `$end`.
-- Check `$ptr >= $end`, not the sentinel. Discard SIMD matches beyond the range
-  and clamp the cursor.
-- Initialize fresh state on a non-resuming entry and use assigned scratch
-  regions for stacks.
-- Emit inter-token whitespace with `$emitGap` and batch unstyled bytes into one
-  `$emitTok(none, ...)` call.
+For each dirty line, the driver restores the incoming state, runs the streaming
+lexer, stores tokens, and interns the outgoing state. Once it passes the dirty
+range and the outgoing state matches the retained state, the unchanged suffix
+can reuse its tokens. Equality uses a hash lookup followed by exact comparison
+of all carried state, including stacks, embedded regions, and checkpoints.
 
-Embedded lexers temporarily replace `$end` with a subrange, set `$ptr` to its
-start, call the language lexer, then restore `$end`. HTML-family lexers record
-open script, style, and expression regions for `src/embed.wat` to resume.
-Markdown fences retain delimiter, language, and body state; the first body chunk
-resets the lexer and later chunks resume it within fence bounds.
+Line records normally pack into `(tokenId << 24) | endUtf16`; larger offsets use
+`[endUtf16, tokenId]` pairs. Text uses WTF-8 to preserve lone surrogates. Reads
+retain LF, CRLF, and lone CR; lexers see normalized LF terminators.
 
-## Stream tokenizer
+Edit batches refer to the pre-edit document. The host validates and sorts them,
+rejects overlaps, removes no-ops, and combines edits sharing a line. Wasm
+splices line descriptors and remaps any pending dirty ranges through the edits.
 
-`StreamTokenizer` passes completed UTF-8 byte chunks directly to Wasm. It
-decodes each completed chunk once for token contents and UTF-16 offsets;
-malformed UTF-8 is normalized before lexing. An owned byte buffer retains
-unfinished lines and grows geometrically, so callers can reuse their input
-arrays after `pushCode()` returns.
+Without `renderRange`, tokenization completes synchronously. With it, work
+reaches the range's end, including preceding dirty lines needed for state.
+Finished in-range tokens are returned; off-range tokens reach `onDeferTokenize`.
+Remaining work runs in adaptive slices on the host event loop through
+`MessageChannel`, with a timer fallback.
 
-String input keeps its UTF-16 tail and any trailing high surrogate until the
-next chunk. This preserves split surrogate pairs and original string content.
-When strings and bytes share an unfinished line, only the string prefix needs
-encoding before the byte chunk reaches Wasm.
+`pause` retains pending work, `resume` schedules it, and `flush` completes it
+through an optional end line. Unreached lines keep previous tokens; new lines
+without records read as unthemed text. `reset` replaces the Wasm instance, and
+`dispose` releases it and cancels deferred work.
 
-## Live tokenizer
+`getLineTokens` returns themed objects and bracket-ignored ranges.
+`getLineRecords` returns a borrowed view: copy it before edits, reset, disposal,
+or deferred tokenization. Deferred slices do not change the document revision,
+so revision equality alone does not establish the view's validity.
 
-Each `LiveTokenizer` has a dedicated Wasm instance. After the static page, a
-size-class heap holds document text, per-line tokens, interned states, and the
-line table. Scratch after the heap holds one line, its terminator, a sentinel,
-SIMD slack, and record output. The driver copies a line into scratch and runs
-the streaming mode-3 pipeline. See [`src/live.wat`](./src/live.wat) for the
-heap.
+## Build and verification
 
-The line table is a gap buffer of descriptors. UTF-16 lengths are stored during
-splicing. Records pack as `(tokenId << 24) | endUtf16`, switching to
-`[endUtf16, tokenId]` pairs when an end exceeds 24 bits.
+`moon run highlights:build` runs [`scripts/build.ts`](./scripts/build.ts) before
+tsdown compiles the host. The WAT preprocessor flattens local imports into one
+namespace and expands enums, language registrations, named addresses, byte sets,
+dispatch tables, and keyword tables. Keyword tables share a word pool and use
+perfect hashing followed by exact byte comparison.
 
-Saved states include cross-chunk globals, delimiters, nested fence registers,
-active stack prefixes, embedded template state, and lexer checkpoints. Blobs
-trim trailing zeros and intern by FNV-1a 64-bit hash plus exact-byte comparison.
-Matching state IDs prove convergence.
+WABT compiles with SIMD and bulk memory enabled. Binaryen optimizes the module,
+then the build reapplies JavaScriptCore workarounds for SIMD calling conventions
+and compound negations. Outputs include Wasm, the browser byte module, themes,
+and the tracked [`lib/languages.ts`](./lib/languages.ts) and
+[`lib/token-types.ts`](./lib/token-types.ts) tables. tsdown emits the host and
+declarations.
 
-Edits sharing a line are combined before splicing, preserving the unchanged text
-between them so each affected line is rebuilt once per batch. Edits splice
-descriptors and retain the old end line's state ID on the last replacement line.
-The driver re-tokenizes dirty ranges until outgoing state matches retained
-state.
+When adding a language, update its import, registration, stream checkpoint
+participation, and fence aliases where needed. Add a language test and a corpus
+entry in [`test/_samples.ts`](./test/_samples.ts). Changes to carried state must
+also update live capture/reset/restore logic. Token IDs define the theme ABI;
+growing `$Token` requires checking the fixed theme and emitter capacities.
 
-With `renderRange`, synchronous work runs through the range's end, including
-preceding dirty lines needed for its state. Completed off-range tokens arrive
-through the host callback; the rest run in background slices. `pause` retains
-pending work; `flush` finishes it. New edits remap pending dirty ranges through
-the batch.
+Tests compile WAT directly and import `lib/`, so no package build is needed.
+Language tests cover classification and bounds; conformance tests compare HTML,
+whole-input, and streamed output. Wasm tests check preprocessing and optimizer
+rewrites, while stream/live tests cover continuation, edits, and deferred work.
 
-Document text uses WTF-8. CRLF, LF, and lone CR remain intact in text reads;
-lexers see normalized line endings.
+Run `moon run highlights:test` and `moon run highlights:typecheck` for
+implementation changes, plus `moon run root:format root:lint`.
+Documentation-only changes need formatting and linting.

@@ -25,7 +25,6 @@ const emitterUrl = new URL('./theme_cache.wat', import.meta.url);
 const emitterWat = transformWat(
   emitterUrl,
   `(module
-    (memory (export "memory") 3)
     (import "../src/langs/json.wat")
     (global (export "spanCache") i32 (i32.const $mem.emitterSpanCache))
     (global (export "themeTable") i32 (i32.const $mem.themeTable))

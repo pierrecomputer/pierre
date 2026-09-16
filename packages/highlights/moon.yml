@@ -89,3 +89,10 @@ tasks:
     options:
       cache: false
       runInCI: 'always'
+
+  # Compile in the parent; measure startup and highlighting in fresh processes.
+  bench-memory:
+    command: 'bun ./benchmark/bench-memory.ts'
+    options:
+      cache: false
+      runInCI: 'always'

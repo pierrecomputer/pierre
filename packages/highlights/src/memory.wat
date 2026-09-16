@@ -1,5 +1,37 @@
 (module
-  ;; memory map for highlights.wat
+  (;;
+    memory structure
+    [] page 1         (control, static data, and scratch)
+      [0]             language id (u8)
+      [1]             output mode (u8): 0 inline colors, 1 CSS variables, 3 UTF-16 line records
+      [2:6)           input length (u32 LE)
+      [6:10)          output start (u32 LE)
+      [10:14)         output length (u32 LE)
+      [14:18)         CSS-variable prefix address (u32 LE)
+      [18:22)         CSS-variable prefix byte length (u32 LE)
+      [22:64)         reserved space
+      [64:448)        theme table written by JavaScript, five bytes per token
+      [448:1360)      CSS-variable name table
+      [1360:1424)     lowercase word copy for case-insensitive keyword lookups
+      [1424:3472)     byte-set bitmaps (byteset.get)
+      [3472:3624)     emitter HTML fragments
+      [3624:8448)     emitter span-open fragment cache
+      [8448:8832)     saved theme bytes for the emitter span cache
+      [8832:8864)     streaming delimiter
+      [8864:10144)    streaming lexer checkpoints
+      [10144:20544)   language keyword tables (displacements and descriptors)
+      [20544:28736)   keyword pool: the word bytes every table shares
+      [28736:39392)   per-language stacks and lookup tables
+      [39392:55408)   live tokenizer change list
+      [55408:55536)   live tokenizer free-list heads
+      [55536:65536)   free
+    [] pages 2..N     (text buffer; a live instance lays them out itself, see src/live.wat)
+      [65536:EOF)     input, NUL sentinel, then at least 16 bytes of slack
+      [(EOF+47)&~15:) CSS-variable prefix bytes in mode 1, then output HTML;
+                      other modes start output here directly;
+                      $ensureCap grows memory
+  ;;)
+  (memory (export "memory") 3)
 
   ;; [64:1360) per-token theme and CSS-variable name tables.
   ;; lib/highlighter.ts mirrors the theme-table address and size.

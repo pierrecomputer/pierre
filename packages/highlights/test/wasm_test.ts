@@ -21,7 +21,6 @@ const commonUrl = new URL('./common.wat', import.meta.url);
 const common = transformWat(
   commonUrl,
   `(module
-    (memory (export "memory") 3)
     (import "../src/common.wat")
     (keyword-table $Test $mem.cWords $mem.cppWords
       ${words.map((word) => `(group ${word.length} "${word}")`).join('\n')})
