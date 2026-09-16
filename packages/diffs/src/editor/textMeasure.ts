@@ -10,6 +10,7 @@ const COMBINING_MARK_PATTERN = /\p{Mark}/u;
 
 export class Metrics {
   #root?: HTMLElement;
+  #canvas?: HTMLCanvasElement;
   #canvasCtx?: CanvasRenderingContext2D;
   #font?: string;
 
@@ -37,8 +38,8 @@ export class Metrics {
     }
 
     this.#root = root;
-    this.#canvasCtx ??=
-      document.createElement('canvas').getContext('2d') ?? undefined;
+    this.#canvas ??= h('canvas', { style: { display: 'none' } });
+    this.#canvasCtx ??= this.#canvas.getContext('2d') ?? undefined;
     if (this.#canvasCtx === undefined) {
       throw new Error('Could not get canvas context');
     }
@@ -63,7 +64,7 @@ export class Metrics {
     const font = fontSize + ' ' + fontFamily;
     if (this.#font !== font || this.ch === -1) {
       this.#font = font;
-      this.#canvasCtx.font = font;
+      this.#setCanvasFont(font);
       this.ch = this.canvasMeasureTextWidth('0');
       // Cached DOM widths were measured against the previous font.
       this.clearTextWidthCache();
@@ -93,7 +94,7 @@ export class Metrics {
     if (this.#canvasCtx === undefined || this.#font === undefined) {
       return false;
     }
-    this.#canvasCtx.font = this.#font;
+    this.#setCanvasFont(this.#font);
     const ch = this.canvasMeasureTextWidth('0');
     const characterWidthChanged = ch !== this.ch;
     if (characterWidthChanged) {
@@ -101,6 +102,31 @@ export class Metrics {
     }
     const textWidthCacheCleared = this.#clearTextWidthCache();
     return characterWidthChanged || textWidthCacheCleared;
+  }
+
+  /**
+   * Set the canvas font while the canvas is connected to the document.
+   *
+   * WebKit resolves a canvas font from the canvas element's computed style at
+   * assignment. A detached canvas has none, so WebKit ignores user-installed
+   * fonts and measures the fallback family while the DOM renders the real font,
+   * shifting every caret and selection in hosts that allow user-installed fonts
+   * (WKWebView, Playwright WebKit). Connecting the canvas for the assignment
+   * makes it measure the same font the DOM renders.
+   */
+  #setCanvasFont(font: string): void {
+    const root = this.#root;
+    const canvas = this.#canvas;
+    const canvasCtx = this.#canvasCtx;
+    if (root == null || canvas == null || canvasCtx == null) {
+      throw new Error('Metrics not initialized');
+    }
+    root.append(canvas);
+    try {
+      canvasCtx.font = font;
+    } finally {
+      canvas.remove();
+    }
   }
 
   /** measure the width of the text */
