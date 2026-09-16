@@ -1,5 +1,7 @@
-import type { AnnotationSide, SelectedLineRange } from '@pierre/diffs';
+import type { FileDiffMetadata, SelectedLineRange } from '@pierre/diffs';
 import type { FileTreeGitStatusPatch, GitStatusEntry } from '@pierre/trees';
+
+import type { GitHubCodeComment } from './githubTypes';
 
 export type ViewerLoadState =
   | 'fetching'
@@ -11,8 +13,7 @@ export type ViewerLoadState =
 export interface SavedCommentMetadata {
   kind: 'saved';
   key: string;
-  author: string;
-  message: string;
+  comment: GitHubCodeComment;
   range: SelectedLineRange;
 }
 
@@ -28,6 +29,7 @@ export type CommentMetadata = SavedCommentMetadata | DraftCommentMetadata;
 export interface DiffsHubCommentSidebarFile {
   fileOrder: number;
   path: string;
+  fileDiff: FileDiffMetadata;
 }
 
 export type DiffsHubCommentFileByItemId = ReadonlyMap<
@@ -40,31 +42,10 @@ export type DiffsHubCommentFileByItemId = ReadonlyMap<
 // render "Line N" without a misleading + / - sigil for context lines.
 export type CommentLineType = 'change' | 'context';
 
-export interface DiffsHubSavedCommentEvent {
-  author: string;
-  itemId: string;
-  key: string;
-  lineNumber: number;
-  lineType: CommentLineType;
-  message: string;
-  range: SelectedLineRange;
-  side: AnnotationSide;
-}
-
-export interface DiffsHubDeletedCommentEvent {
-  itemId: string;
-  key: string;
-}
-
 export interface DiffsHubSavedCommentEntry {
-  author: string;
   itemId: string;
-  key: string;
-  lineNumber: number;
+  comment: GitHubCodeComment;
   lineType: CommentLineType;
-  message: string;
-  range: SelectedLineRange;
-  side: AnnotationSide;
 }
 
 export interface DiffsHubSavedCommentItem {

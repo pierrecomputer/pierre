@@ -8,9 +8,7 @@ import {
 } from '@pierre/diffs';
 import { type CodeViewHandle, useStableCallback } from '@pierre/diffs/react';
 import {
-  type Dispatch,
   type RefObject,
-  type SetStateAction,
   useCallback,
   useEffect,
   useRef,
@@ -42,7 +40,6 @@ import type {
   DiffsHubCommentFileByItemId,
   DiffsHubDiffStats,
   DiffsHubFileTreeSource,
-  DiffsHubSavedCommentItem,
   ViewerLoadState,
 } from '@/lib/types';
 
@@ -67,7 +64,7 @@ interface UsePatchLoaderOptions {
 interface UsePatchLoaderResult {
   applyCollapseModeToLoaded(mode: 'expanded' | 'collapsed'): void;
   commentFileByItemId: DiffsHubCommentFileByItemId | null;
-  commentSections: DiffsHubSavedCommentItem[];
+  commitId: string | null;
   diffStats: DiffsHubDiffStats | null;
   errorMessage: string | null;
   initialItems: CodeViewItem<CommentMetadata>[];
@@ -75,7 +72,6 @@ interface UsePatchLoaderResult {
   onLineLinkChange(selection: CodeViewLineSelection | null): void;
   onViewerReady(): void;
   retryLoad(): void;
-  setCommentSections: Dispatch<SetStateAction<DiffsHubSavedCommentItem[]>>;
   treeSource: DiffsHubFileTreeSource | null;
   viewerKey: number;
 }
@@ -101,9 +97,7 @@ export function usePatchLoader({
   const [diffStats, setDiffStats] = useState<DiffsHubDiffStats | null>(null);
   const [commentFileByItemId, setCommentFileByItemId] =
     useState<DiffsHubCommentFileByItemId | null>(null);
-  const [commentSections, setCommentSections] = useState<
-    DiffsHubSavedCommentItem[]
-  >([]);
+  const [commitId, setCommitId] = useState<string | null>(null);
   const [loadState, setLoadState] = useState<ViewerLoadState>('fetching');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [loadAttempt, setLoadAttempt] = useState(0);
@@ -237,7 +231,7 @@ export function usePatchLoader({
     setTreeSource(null);
     setDiffStats(null);
     setCommentFileByItemId(null);
-    setCommentSections([]);
+    setCommitId(null);
     onLoadStart();
     setErrorMessage(null);
     setLoadState('fetching');
@@ -262,7 +256,6 @@ export function usePatchLoader({
 
           setTreeSource(loadedData.treeSource);
           setCommentFileByItemId(loadedData.itemIdToFile);
-          setCommentSections([]);
           setDiffStats(loadedData.diffStats);
           prepareItemsForViewer(loadedData.items);
           setInitialItems(loadedData.items);
@@ -290,6 +283,8 @@ export function usePatchLoader({
             detail.length > 0 ? detail : `Request failed (${response.status}).`
           );
         }
+        if (!isCurrentRequest()) return;
+        setCommitId(response.headers.get('X-GitHub-Commit-Id'));
 
         if (response.body == null) {
           const patchContent = await response.text();
@@ -512,7 +507,7 @@ export function usePatchLoader({
   return {
     applyCollapseModeToLoaded,
     commentFileByItemId,
-    commentSections,
+    commitId,
     diffStats,
     errorMessage,
     initialItems,
@@ -520,7 +515,6 @@ export function usePatchLoader({
     onLineLinkChange: handleLineLinkChange,
     onViewerReady: tryApplyLineHashTarget,
     retryLoad,
-    setCommentSections,
     treeSource,
     viewerKey,
   };
