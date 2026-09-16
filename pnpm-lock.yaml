@@ -13,8 +13,8 @@ catalogs:
       specifier: 2.3.3
       version: 2.3.3
     '@pierre/icons':
-      specifier: 0.7.1
-      version: 0.7.1
+      specifier: 0.8.0
+      version: 0.8.0
     '@pierre/vscode-icons':
       specifier: 0.0.9
       version: 0.0.9
@@ -269,7 +269,7 @@ importers:
         version: 2.3.3
       '@pierre/icons':
         specifier: 'catalog:'
-        version: 0.7.1(react@19.2.7)
+        version: 0.8.0(react@19.2.7)
       '@types/bun':
         specifier: 'catalog:'
         version: 1.4.0
@@ -308,7 +308,7 @@ importers:
         version: link:../../packages/diffs
       '@pierre/icons':
         specifier: 'catalog:'
-        version: 0.7.1(react@19.2.7)
+        version: 0.8.0(react@19.2.7)
       diff:
         specifier: 'catalog:'
         version: 9.0.0
@@ -345,7 +345,7 @@ importers:
         version: link:../../packages/diffs
       '@pierre/icons':
         specifier: 'catalog:'
-        version: 0.7.1(react@19.2.7)
+        version: 0.8.0(react@19.2.7)
       '@pierre/theme':
         specifier: workspace:*
         version: link:../../packages/theme
@@ -445,7 +445,7 @@ importers:
         version: link:../../packages/highlights
       '@pierre/icons':
         specifier: 'catalog:'
-        version: 0.7.1(react@19.2.7)
+        version: 0.8.0(react@19.2.7)
       '@pierre/theme':
         specifier: workspace:*
         version: link:../../packages/theme
@@ -1951,8 +1951,8 @@ packages:
     cpu: [x64]
     os: [win32]
 
-  '@pierre/icons@0.7.1':
-    resolution: {integrity: sha512-GzuvLVd8Hp86DuENXvQNNqlVDW7JQ3H4y7KNTK1bP42NA7+WeM8BuagFTq50jnYhrfG7I1YUju7e2k3exw/0fQ==}
+  '@pierre/icons@0.8.0':
+    resolution: {integrity: sha512-+nWaG+w1d03GaujorOtxBJVaFjwh461W891w9fUuKdDgoH+XGTs+t8Uyfj/ovoP0suAElRbNJ6H8OS7tcndV3w==}
     peerDependencies:
       react: 19.2.7
 
@@ -7689,7 +7689,7 @@ snapshots:
   '@oxlint/binding-win32-x64-msvc@1.80.0':
     optional: true
 
-  '@pierre/icons@0.7.1(react@19.2.7)':
+  '@pierre/icons@0.8.0(react@19.2.7)':
     dependencies:
       react: 19.2.7
 
