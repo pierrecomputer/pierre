@@ -20,7 +20,6 @@ export interface GitHubCodeComment {
   author: GitHubUser | null;
   url: string;
   anchor: GitHubCommentAnchor;
-  canDelete: boolean;
 }
 
 /** The revision is checked before posting so comments cannot silently move. */

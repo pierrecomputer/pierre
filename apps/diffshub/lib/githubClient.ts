@@ -76,8 +76,6 @@ export function parseGitHubCodeComment(
     typeof value.body !== 'string' ||
     !('url' in value) ||
     typeof value.url !== 'string' ||
-    !('canDelete' in value) ||
-    typeof value.canDelete !== 'boolean' ||
     !('author' in value) ||
     !('anchor' in value) ||
     value.anchor == null ||
@@ -95,7 +93,6 @@ export function parseGitHubCodeComment(
     body: value.body,
     url: url.href,
     author,
-    canDelete: value.canDelete,
   };
   if (value.anchor.kind === 'file')
     return { ...base, anchor: { kind: 'file' } };

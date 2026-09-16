@@ -94,20 +94,19 @@ export function isSameOriginRequest(request: Request): boolean {
   return request.headers.get('origin') === getGitHubOrigin(request);
 }
 
+/** Uses a session secret from validated OAuth configuration. */
 export function createGitHubOAuthCookie(
   request: Request,
+  secret: string,
   flow: GitHubOAuthFlow
-): string | undefined {
-  const secret = getGitHubOAuthConfig()?.sessionSecret;
-  return secret == null
-    ? undefined
-    : serializeCookie(
-        request,
-        OAUTH_COOKIE,
-        seal(flow, secret),
-        Math.max(0, Math.ceil((flow.expiresAt - Date.now()) / 1_000)),
-        OAUTH_PATH
-      );
+): string {
+  return serializeCookie(
+    request,
+    OAUTH_COOKIE,
+    seal(flow, secret),
+    Math.max(0, Math.ceil((flow.expiresAt - Date.now()) / 1_000)),
+    OAUTH_PATH
+  );
 }
 
 export function readGitHubOAuthFlow(
@@ -123,20 +122,19 @@ export function readGitHubOAuthFlow(
   return flow != null && flow.expiresAt > Date.now() ? flow : undefined;
 }
 
+/** Uses a session secret from validated OAuth configuration. */
 export function createGitHubSessionCookie(
   request: Request,
+  secret: string,
   session: StoredGitHubSession
-): string | undefined {
-  const secret = getGitHubOAuthConfig()?.sessionSecret;
-  return secret == null
-    ? undefined
-    : serializeCookie(
-        request,
-        SESSION_COOKIE,
-        seal(session, secret),
-        Math.max(0, Math.ceil((session.expiresAt - Date.now()) / 1_000)),
-        '/'
-      );
+): string {
+  return serializeCookie(
+    request,
+    SESSION_COOKIE,
+    seal(session, secret),
+    Math.max(0, Math.ceil((session.expiresAt - Date.now()) / 1_000)),
+    '/'
+  );
 }
 
 export function clearGitHubOAuthCookie(request: Request): string {
@@ -229,7 +227,7 @@ function readStoredSession(value: unknown): StoredGitHubSession | undefined {
   const expiresAt = 'expiresAt' in value ? value.expiresAt : undefined;
   const token = 'token' in value ? value.token : undefined;
   const user = 'user' in value ? value.user : undefined;
-  const parsedUser = readGitHubUser(user);
+  const parsedUser = parseGitHubUser(user);
   if (
     !isExpiry(expiresAt) ||
     typeof token !== 'string' ||
@@ -265,7 +263,8 @@ function readOAuthFlow(value: unknown): GitHubOAuthFlow | undefined {
   return { expiresAt, returnTo, state, verifier };
 }
 
-function readGitHubUser(value: unknown): GitHubUser | undefined {
+/** Rejects invalid identities and avatar URLs with credentials or without HTTPS. */
+export function parseGitHubUser(value: unknown): GitHubUser | undefined {
   if (typeof value !== 'object' || value == null) {
     return undefined;
   }
@@ -329,7 +328,8 @@ function serializeCookie(
   return `${name}=${encodeURIComponent(value)}; Path=${path}; HttpOnly; SameSite=Lax; Max-Age=${String(maxAge)}${secure ? '; Secure' : ''}`;
 }
 
-function parseBearerToken(value: string | null): string | undefined {
+/** Returns no token for an empty or non-Bearer authorization header. */
+export function parseBearerToken(value: string | null): string | undefined {
   if (value == null) {
     return undefined;
   }

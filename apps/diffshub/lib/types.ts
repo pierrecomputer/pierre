@@ -20,7 +20,6 @@ export interface SavedCommentMetadata {
 export interface DraftCommentMetadata {
   kind: 'draft';
   key: string;
-  message: string;
   range: SelectedLineRange;
 }
 

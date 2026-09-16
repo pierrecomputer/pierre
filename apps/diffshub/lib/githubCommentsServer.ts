@@ -26,13 +26,7 @@ interface CommitDiff {
   files: Map<string, PatchMap>;
 }
 
-interface ParsedComment {
-  id: number;
-  path: string;
-  body: string;
-  author: GitHubUser | null;
-  url: string;
-}
+type ParsedComment = Omit<GitHubCodeComment, 'anchor'>;
 
 interface PatchMap {
   byPosition: Map<number, SelectedLineRange>;
@@ -56,7 +50,6 @@ export async function getGitHubComments(
   path: string,
   options: {
     token: string;
-    viewerId?: number;
     signal?: AbortSignal;
   }
 ): Promise<GitHubComments> {
@@ -70,7 +63,7 @@ export async function getGitHubComments(
     return {
       commitId,
       comments: records.flatMap((record) => {
-        const comment = parsePullComment(record, options.viewerId);
+        const comment = parsePullComment(record);
         return comment == null ? [] : [comment];
       }),
     };
@@ -84,12 +77,7 @@ export async function getGitHubComments(
   return {
     commitId: commit.sha,
     comments: records.flatMap((record) => {
-      const comment = parseCommitComment(
-        record,
-        commit.sha,
-        commit.files,
-        options.viewerId
-      );
+      const comment = parseCommitComment(record, commit.sha, commit.files);
       return comment == null ? [] : [comment];
     }),
   };
@@ -98,7 +86,7 @@ export async function getGitHubComments(
 /** Creates one file or line comment without creating a review or issue comment. */
 export async function postGitHubComment(
   input: unknown,
-  options: { token: string; userId: number; signal?: AbortSignal }
+  options: { token: string; signal?: AbortSignal }
 ): Promise<GitHubCodeComment> {
   const comment = parseCreateComment(input);
   const source = parseSource(comment.path);
@@ -114,7 +102,7 @@ export async function postGitHubComment(
         body: JSON.stringify(makePullBody(comment, commitId)),
       }
     );
-    const created = parsePullComment(data, options.userId);
+    const created = parsePullComment(data);
     if (created == null) {
       throw new GitHubCommentsError(
         502,
@@ -161,12 +149,7 @@ export async function postGitHubComment(
       }),
     }
   );
-  const created = parseCommitComment(
-    data,
-    commit.sha,
-    commit.files,
-    options.userId
-  );
+  const created = parseCommitComment(data, commit.sha, commit.files);
   if (created == null) {
     throw new GitHubCommentsError(
       502,
@@ -349,10 +332,7 @@ function makePullBody(comment: CreateGitHubComment, commitId: string): object {
       };
 }
 
-function parsePullComment(
-  value: unknown,
-  viewerId: number | undefined
-): GitHubCodeComment | undefined {
+function parsePullComment(value: unknown): GitHubCodeComment | undefined {
   const record = readRecord(value);
   const base = parseComment(record);
   if (record == null || base == null) {
@@ -363,7 +343,6 @@ function parsePullComment(
     return {
       ...base,
       anchor: { kind: 'file' },
-      canDelete: viewerId != null && base.author?.id === viewerId,
     };
   }
   if (record.subject_type !== 'line') {
@@ -399,15 +378,13 @@ function parsePullComment(
   return {
     ...base,
     anchor: { kind: 'line', range },
-    canDelete: viewerId != null && base.author?.id === viewerId,
   };
 }
 
 function parseCommitComment(
   value: unknown,
   commitId: string,
-  files: Map<string, PatchMap>,
-  viewerId: number | undefined
+  files: Map<string, PatchMap>
 ): GitHubCodeComment | undefined {
   const record = readRecord(value);
   const base = parseComment(record);
@@ -428,7 +405,6 @@ function parseCommitComment(
   return {
     ...base,
     anchor: { kind: 'line', range },
-    canDelete: viewerId != null && base.author?.id === viewerId,
   };
 }
 

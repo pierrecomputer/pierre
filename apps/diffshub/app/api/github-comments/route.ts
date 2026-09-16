@@ -26,12 +26,10 @@ export async function GET(request: Request): Promise<Response> {
     return jsonError(400, 'A GitHub diff path is required.');
   }
 
-  const session = getGitHubSession(request);
   try {
     return json(
       await getGitHubComments(path, {
         token,
-        viewerId: session?.user.id,
         signal: request.signal,
       })
     );
@@ -63,7 +61,6 @@ export async function POST(request: Request): Promise<Response> {
     return json(
       await postGitHubComment(input, {
         token: session.token,
-        userId: session.user.id,
         signal: request.signal,
       }),
       201

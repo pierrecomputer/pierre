@@ -55,7 +55,7 @@ export function GitHubComment({
               Show lines
             </Button>
           )}
-          {comment.canDelete && comment.author?.id === userId && (
+          {userId != null && comment.author?.id === userId && (
             <Button
               variant="muted"
               size="sm"

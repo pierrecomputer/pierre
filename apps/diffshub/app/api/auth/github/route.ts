@@ -9,6 +9,7 @@ import {
   getGitHubOrigin,
   getGitHubSession,
   parseGitHubReturnTo,
+  parseGitHubUser,
   readGitHubOAuthFlow,
 } from '@/lib/githubAuth';
 import type { GitHubUser } from '@/lib/githubTypes';
@@ -48,15 +49,12 @@ export async function GET(request: Request): Promise<Response> {
 
   const state = randomBytes(32).toString('base64url');
   const verifier = randomBytes(32).toString('base64url');
-  const flowCookie = createGitHubOAuthCookie(request, {
+  const flowCookie = createGitHubOAuthCookie(request, config.sessionSecret, {
     expiresAt: Date.now() + OAUTH_MAX_AGE_MS,
     returnTo,
     state,
     verifier,
   });
-  if (flowCookie == null) {
-    return textResponse('GitHub sign-in is not configured.', 503);
-  }
 
   const callbackUrl = new URL(CALLBACK_PATH, origin);
   const authorizeUrl = new URL('https://github.com/login/oauth/authorize');
@@ -153,14 +151,15 @@ async function finishGitHubOAuth(request: Request): Promise<Response> {
 
   const tokenAgeMs =
     token.expiresIn == null ? SESSION_MAX_AGE_MS : token.expiresIn * 1_000;
-  const sessionCookie = createGitHubSessionCookie(request, {
-    expiresAt: Date.now() + Math.min(SESSION_MAX_AGE_MS, tokenAgeMs),
-    token: token.accessToken,
-    user,
-  });
-  if (sessionCookie == null) {
-    return oauthError(request, 'GitHub sign-in is not configured.', 503);
-  }
+  const sessionCookie = createGitHubSessionCookie(
+    request,
+    config.sessionSecret,
+    {
+      expiresAt: Date.now() + Math.min(SESSION_MAX_AGE_MS, tokenAgeMs),
+      token: token.accessToken,
+      user,
+    }
+  );
 
   const response = redirectResponse(new URL(flow.returnTo, origin).href);
   response.headers.append('Set-Cookie', clearGitHubOAuthCookie(request));
@@ -205,33 +204,11 @@ function readGitHubUser(value: unknown): GitHubUser | undefined {
   if (typeof value !== 'object' || value == null) {
     return undefined;
   }
-  const id = 'id' in value ? value.id : undefined;
-  const login = 'login' in value ? value.login : undefined;
-  const avatarUrl = 'avatar_url' in value ? value.avatar_url : undefined;
-  if (
-    typeof id !== 'number' ||
-    !Number.isSafeInteger(id) ||
-    id <= 0 ||
-    typeof login !== 'string' ||
-    login.length === 0 ||
-    login.length > 100 ||
-    typeof avatarUrl !== 'string'
-  ) {
-    return undefined;
-  }
-  try {
-    const avatar = new URL(avatarUrl);
-    if (
-      avatar.protocol !== 'https:' ||
-      avatar.username !== '' ||
-      avatar.password !== ''
-    ) {
-      return undefined;
-    }
-  } catch {
-    return undefined;
-  }
-  return { avatarUrl, id, login };
+  return parseGitHubUser({
+    id: 'id' in value ? value.id : undefined,
+    login: 'login' in value ? value.login : undefined,
+    avatarUrl: 'avatar_url' in value ? value.avatar_url : undefined,
+  });
 }
 
 async function readJSON(response: Response): Promise<unknown> {

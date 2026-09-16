@@ -8,7 +8,6 @@ import type { GitHubUser } from '@/lib/githubTypes';
 
 interface CommentFormProps {
   user: GitHubUser;
-  initialMessage?: string;
   disabled?: boolean;
   onCancel(): void;
   onSave(message: string): Promise<string | undefined>;
@@ -17,12 +16,11 @@ interface CommentFormProps {
 /** Keeps the draft until GitHub confirms the comment was published. */
 export function CommentForm({
   user,
-  initialMessage = '',
   disabled = false,
   onCancel,
   onSave,
 }: CommentFormProps) {
-  const [message, setMessage] = useState(initialMessage);
+  const [message, setMessage] = useState('');
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string>();
   const pending = useRef(false);

@@ -1,6 +1,10 @@
 import { type NextRequest } from 'next/server';
 
-import { getGitHubRequestToken, getGitHubSession } from '@/lib/githubAuth';
+import {
+  getGitHubRequestToken,
+  getGitHubSession,
+  parseBearerToken,
+} from '@/lib/githubAuth';
 import {
   encodeURLSegment,
   type GitHubDiffSource,
@@ -476,16 +480,6 @@ function createGitHubJSONAPIHeaders(token: string): Record<string, string> {
     Authorization: `Bearer ${token}`,
     'X-GitHub-Api-Version': GITHUB_API_VERSION,
   };
-}
-
-function parseBearerToken(value: string | null): string | undefined {
-  if (value == null) {
-    return undefined;
-  }
-
-  const match = /^Bearer\s+(.+)$/i.exec(value.trim());
-  const token = match?.[1]?.trim();
-  return token == null || token === '' ? undefined : token;
 }
 
 function getAuthorizationToken(

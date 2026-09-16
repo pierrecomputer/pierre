@@ -174,7 +174,6 @@ export const DiffsHubViewer = memo(function DiffsHubViewer({
         metadata: {
           kind: 'draft',
           key: commentKey,
-          message: '',
           range,
         },
       };
@@ -313,7 +312,6 @@ export const DiffsHubViewer = memo(function DiffsHubViewer({
           <CommentForm
             key={annotation.metadata.key}
             user={user}
-            initialMessage={annotation.metadata.message}
             disabled={!canComment}
             onCancel={() =>
               handleRemoveComment(item.id, annotation.metadata.key)

@@ -65,7 +65,6 @@ describe('GitHub pull request comments', () => {
 
     const result = await getGitHubComments('/owner/repo/pull/12', {
       token: 'secret',
-      viewerId: USER.id,
     });
 
     expect(result.commitId).toBe(SHA);
@@ -97,7 +96,6 @@ describe('GitHub pull request comments', () => {
         range: { start: 200, side: 'additions', end: 200 },
       }),
       author: null,
-      canDelete: false,
     });
   });
 
@@ -157,7 +155,7 @@ describe('GitHub pull request comments', () => {
           },
         },
       },
-      { token: 'secret', userId: USER.id }
+      { token: 'secret' }
     );
     await postGitHubComment(
       {
@@ -167,7 +165,7 @@ describe('GitHub pull request comments', () => {
         body: 'File note',
         anchor: { kind: 'file' },
       },
-      { token: 'secret', userId: USER.id }
+      { token: 'secret' }
     );
 
     expect(bodies).toEqual([
@@ -213,7 +211,7 @@ describe('GitHub pull request comments', () => {
             range: { start: 1, side: 'additions', end: 1 },
           },
         },
-        { token: 'secret', userId: USER.id }
+        { token: 'secret' }
       ).catch((error: unknown) => error)
     ).toMatchObject({ status: 409 });
     expect(methods).toEqual(['GET']);
@@ -234,7 +232,7 @@ describe('GitHub pull request comments', () => {
           body: 'Unsafe path',
           anchor: { kind: 'file' },
         },
-        { token: 'secret', userId: USER.id }
+        { token: 'secret' }
       ).catch((error: unknown) => error)
     ).toMatchObject({ status: 400 });
   });
@@ -280,7 +278,6 @@ describe('GitHub commit comments', () => {
 
     const result = await getGitHubComments('/owner/repo/commit/abc1234', {
       token: 'secret',
-      viewerId: USER.id,
     });
 
     expect(result.commitId).toBe(SHA);
@@ -335,7 +332,7 @@ describe('GitHub commit comments', () => {
           range: { start: 21, side: 'additions', end: 21 },
         },
       },
-      { token: 'secret', userId: USER.id }
+      { token: 'secret' }
     );
 
     expect(posted).toEqual({
@@ -359,7 +356,7 @@ describe('GitHub commit comments', () => {
     expect(
       await postGitHubComment(
         { ...base, anchor: { kind: 'file' } },
-        { token: 'secret', userId: USER.id }
+        { token: 'secret' }
       ).catch((error: unknown) => error)
     ).toMatchObject({ status: 400 });
     expect(
@@ -371,11 +368,11 @@ describe('GitHub commit comments', () => {
             range: { start: 10, side: 'additions', end: 11 },
           },
         },
-        { token: 'secret', userId: USER.id }
+        { token: 'secret' }
       ).catch((error: unknown) => error)
     ).toMatchObject({ status: 400 });
     expect(
-      await postGitHubComment(base, { token: 'secret', userId: USER.id }).catch(
+      await postGitHubComment(base, { token: 'secret' }).catch(
         (error: unknown) => error
       )
     ).toMatchObject({ status: 400 });
@@ -498,7 +495,6 @@ function codeComment(id: number, anchor: GitHubCommentAnchor) {
     },
     url: 'https://github.com/owner/repo/pull/12#discussion_r1',
     anchor,
-    canDelete: true,
   };
 }
 
