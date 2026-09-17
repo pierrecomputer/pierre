@@ -333,8 +333,8 @@ export function HighlightProvider({ children }: { children: ReactNode }) {
         theme: { dark: 'pierre-dark', light: 'pierre-light' },
         // Optional: skip inline line diffs for very long changed lines
         // maxLineDiffLength: 1000,
-        // Optional: pick the Shiki engine ('shiki-js' is default)
-        // preferredHighlighter: 'shiki-wasm',
+        // Optional: pick the highlighter backend ('shiki-wasm' is default)
+        // preferredHighlighter: 'highlights',
         // Optionally preload languages to avoid lazy-loading delays
         langs: ['typescript', 'javascript', 'css', 'html'],
       }}
@@ -412,8 +412,8 @@ const workerPool = getOrCreateWorkerPoolSingleton({
     theme: { dark: 'pierre-dark', light: 'pierre-light' },
     // Optional: skip inline line diffs for very long changed lines
     // maxLineDiffLength: 1000,
-    // Optional: pick the Shiki engine ('shiki-js' is default)
-    // preferredHighlighter: 'shiki-wasm',
+    // Optional: pick the highlighter backend ('shiki-wasm' is default)
+    // preferredHighlighter: 'highlights',
     // Optionally preload languages to avoid lazy-loading delays
     langs: ['typescript', 'javascript', 'css', 'html'],
   },
@@ -474,8 +474,8 @@ new WorkerPoolManager(poolOptions, highlighterOptions)
 //   - lineDiffType?: 'word' | 'word-alt' | 'char' - How to diff lines (default: 'word-alt')
 //   - maxLineDiffLength?: number - Max changed-line length for inline line diffs (default: 1000)
 //   - tokenizeMaxLineLength?: number - Max line length to tokenize (default: 1000)
-//   - preferredHighlighter?: 'shiki-js' | 'shiki-wasm' - Highlighter engine (default: 'shiki-js')
-//   - langs?: SupportedLanguages[] - Array of languages to preload
+//   - preferredHighlighter?: 'shiki-wasm' | 'shiki-js' | 'highlights' - Highlighter backend (default: 'shiki-wasm')
+//   - langs?: SupportedLanguages[] - Shiki languages to preload (ignored by 'highlights')
 
 // Methods:
 poolManager.initialize()
@@ -488,6 +488,7 @@ poolManager.setRenderOptions(options)
 // Returns: Promise<void> - Changes render options dynamically
 // Accepts: Partial<WorkerRenderingOptions>
 //   - theme?: DiffsThemeNames | ThemesType
+//   - preferredHighlighter?: 'shiki-wasm' | 'shiki-js' | 'highlights'
 //   - lineDiffType?: 'word' | 'word-alt' | 'char'
 //   - maxLineDiffLength?: number
 //   - tokenizeMaxLineLength?: number

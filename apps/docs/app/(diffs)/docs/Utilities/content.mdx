@@ -61,15 +61,19 @@ uncontrolled.
 
 ### disposeHighlighter [toc-ignore]
 
-Dispose the shared Shiki highlighter instance to free memory. Useful when
-cleaning up resources in single-page applications.
+Clear the shared highlighter instances for every backend so the next render
+creates fresh ones. Useful when cleaning up resources in single-page
+applications. Custom theme and language registrations are kept.
 
 <DocsCodeExample {...disposeHighlighter} />
 
 ### getSharedHighlighter [toc-ignore]
 
-Get direct access to the shared Shiki highlighter instance used internally by
-all components. Useful for custom highlighting operations.
+Get direct access to the shared highlighter instance for a backend
+(`'shiki-wasm'` by default), the same instance components use internally. Pass
+the `themes` to resolve, optional Shiki `langs` to load, and
+`preferredHighlighter`. The instance exposes `codeToTokens`, stream and live
+tokenizers, `getTheme`, and a theme resolver for custom highlighting operations.
 
 <DocsCodeExample {...getSharedHighlighter} />
 
@@ -121,14 +125,20 @@ keeping valid diff headers.
 ### preloadHighlighter [toc-ignore]
 
 Preload specific themes and languages before rendering to ensure instant
-highlighting with no async loading delay.
+highlighting with no async loading delay. Set `preferredHighlighter` to preload
+a specific backend; `'highlights'` bundles its languages and ignores `langs`.
 
 <DocsCodeExample {...preloadHighlighter} />
 
 ### registerCustomTheme [toc-ignore]
 
-Register a custom Shiki theme for use with any component. The theme name you
-register must match the `name` field inside your theme JSON file.
+Register a custom theme for use with any component. Themes are registered per
+format: pass `'textmate'` as the third argument for the Shiki backends
+(`'shiki-wasm'` and `'shiki-js'`) or `'zed'` for Highlights. Omit it to register
+the loader for every backend, in which case the loader must return the format of
+whichever backend loads it. The registered name is applied to the theme even
+when the loaded object declares a different `name`. Duplicate names within a
+format are logged and ignored.
 
 <DocsCodeExample {...registerCustomTheme} />
 
@@ -136,7 +146,9 @@ register must match the `name` field inside your theme JSON file.
 
 Register a custom Shiki language loader and optionally map it to file names or
 extensions. Use this when you're working with languages not bundled by Shiki or
-want custom highlighting grammars.
+want custom highlighting grammars. Both Shiki backends load the grammar on
+demand, and it is forwarded to Shiki worker pools. The Highlights backend uses
+its built-in lexers and ignores custom grammars.
 
 The grammar file or object returned by your loader has a `name` field and can
 have an `aliases` array. An alias is an additional language ID that uses the

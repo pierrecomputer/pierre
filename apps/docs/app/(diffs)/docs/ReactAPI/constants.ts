@@ -136,10 +136,11 @@ interface DiffOptions {
   // 'dark' or 'light' - forces specific theme
   themeType: 'system',
 
-  // Choose the Shiki engine:
-  // 'shiki-js' (default) - JavaScript regex engine
-  // 'shiki-wasm' - WASM Oniguruma engine
-  preferredHighlighter: 'shiki-js',
+  // Choose the highlighter backend (each loads on demand):
+  // 'shiki-wasm' (default) - Shiki with the WASM Oniguruma engine
+  // 'shiki-js' - Shiki with the JavaScript regex engine
+  // 'highlights' - Pierre Highlights WASM lexers
+  preferredHighlighter: 'shiki-wasm',
 
   // ─────────────────────────────────────────────────────────────
   // DIFF DISPLAY
@@ -951,10 +952,11 @@ interface FileOptions {
   // 'dark' or 'light' - forces specific theme
   themeType: 'system',
 
-  // Choose the Shiki engine:
-  // 'shiki-js' (default) - JavaScript regex engine
-  // 'shiki-wasm' - WASM Oniguruma engine
-  preferredHighlighter: 'shiki-js',
+  // Choose the highlighter backend (each loads on demand):
+  // 'shiki-wasm' (default) - Shiki with the WASM Oniguruma engine
+  // 'shiki-js' - Shiki with the JavaScript regex engine
+  // 'highlights' - Pierre Highlights WASM lexers
+  preferredHighlighter: 'shiki-wasm',
 
   // ─────────────────────────────────────────────────────────────
   // LAYOUT & DISPLAY
