@@ -3,8 +3,8 @@ name: diffs
 description:
   Use when an app uses @pierre/diffs to render or edit code files, diffs,
   patches, merge conflicts, or CodeView review surfaces, including React,
-  vanilla JavaScript, SSR, workers, annotations, selection, and custom Shiki
-  languages or themes.
+  vanilla JavaScript, SSR, workers, annotations, selection, highlighter
+  backends, and custom languages or themes.
 ---
 
 # `@pierre/diffs`
@@ -23,12 +23,20 @@ pnpm add @pierre/diffs
 
 Install `react` and `react-dom` when the app uses the React entry.
 
+## Select a highlighter
+
+Syntax highlighting defaults to Shiki with WebAssembly (`'shiki-wasm'`). Set
+`preferredHighlighter` to `'highlights'` or `'shiki-js'` in file, diff, or
+worker pool options to use `@pierre/highlights` or Shiki's JavaScript engine.
+Each backend loads on demand from `@pierre/diffs/highlighter/<name>`; Shiki
+themes and languages also load on demand.
+
 ## Select an API reference
 
 | Surface                                                      | Reference                                              |
 | ------------------------------------------------------------ | ------------------------------------------------------ |
 | Root components, parsing, and file extension APIs            | [Core API](references/api-core.md)                     |
-| Languages, themes, highlighter state, and streams            | [Highlighting API](references/api-highlighting.md)     |
+| Highlighter backends, languages, themes, and streams         | [Highlighting API](references/api-highlighting.md)     |
 | Renderers, managers, DOM helpers, comparisons, and constants | [Low-level rendering API](references/api-rendering.md) |
 | Shared data, option, render, selection, and editor types     | [Shared types](references/api-types.md)                |
 | `@pierre/diffs/react`                                        | [React API](references/api-react.md)                   |
@@ -48,4 +56,4 @@ Install `react` and `react-dom` when the app uses the React entry.
 | Preload markup on the server        | [Use SSR](references/recipe-ssr.md)                                      |
 | Highlight through a worker pool     | [Use workers](references/recipe-workers.md)                              |
 | Add line annotations and selection  | [Add annotations and selection](references/recipe-annotations.md)        |
-| Register a Shiki language or theme  | [Register custom highlighting](references/recipe-custom-highlighting.md) |
+| Register a custom language or theme | [Register custom highlighting](references/recipe-custom-highlighting.md) |

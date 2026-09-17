@@ -33,4 +33,6 @@ registration.
 | Tokenize streamed strings or bytes                                         | [Streaming](references/streaming.md)      |
 | Apply edits, prioritize a viewport, or read packed token records           | [Incremental editing](references/live.md) |
 
-For file, diff, or editor components, read the [diffs skill](../diffs/SKILL.md).
+For file, diff, or editor components, or to use Highlights as the
+`@pierre/diffs` backend with `preferredHighlighter: 'highlights'`, read the
+[diffs skill](../diffs/SKILL.md).

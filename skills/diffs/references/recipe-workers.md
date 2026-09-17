@@ -26,3 +26,8 @@ For vanilla JavaScript, call `getOrCreateWorkerPoolSingleton` and pass the
 result as the second constructor argument to a render class. Call
 `terminateWorkerPoolSingleton()` when the application tears down the shared
 pool.
+
+`highlighterOptions.preferredHighlighter` selects the pool's backend:
+`'shiki-wasm'` (default), `'shiki-js'`, or `'highlights'`. The pool's choice
+applies to every component it renders. `langs` preloads Shiki grammars;
+`'highlights'` bundles its languages and ignores it.

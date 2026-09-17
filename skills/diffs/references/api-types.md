@@ -11,7 +11,7 @@ The root, React, and SSR entries re-export these types.
 - [`CodeView` types](#codeview-types)
 - [Lines, hunks, and render state](#lines-hunks-and-render-state)
 - [Render results and virtualization](#render-results-and-virtualization)
-- [Shiki and diff types](#shiki-and-diff-types)
+- [Tokens, HTML tree, and diff types](#tokens-html-tree-and-diff-types)
 
 ## Files and patches
 
@@ -40,30 +40,37 @@ The root, React, and SSR entries re-export these types.
 
 ## Themes and options
 
-| Export                               | Purpose                                                      |
-| ------------------------------------ | ------------------------------------------------------------ |
-| `SupportedLanguages`                 | Accepts a bundled, text, ANSI, or custom language name.      |
-| `HighlighterTypes`                   | Selects the JavaScript or WebAssembly Shiki engine.          |
-| `HighlightedToken`                   | Stores a character index, foreground, and token text.        |
-| `DiffsThemeNames`                    | Accepts a bundled or custom theme name.                      |
-| `ThemesType`                         | Maps light and dark schemes to theme names.                  |
-| `ThemeTypes`                         | Selects system, light, or dark mode.                         |
-| `DiffsHighlighter`                   | Defines the package's configured Shiki highlighter.          |
-| `BaseCodeOptions`                    | Configures themes, wrapping, headers, tokenization, and CSS. |
-| `BaseDiffOptions`                    | Adds layout, indicators, context, and line diff options.     |
-| `BaseDiffOptionsWithDefaults`        | Describes required diff options after defaults apply.        |
-| `DiffIndicators`                     | Selects classic, bar, or hidden diff indicators.             |
-| `HunkSeparators`                     | Selects the hunk separator presentation.                     |
-| `LineDiffTypes`                      | Selects word, alternate word, character, or no inline diff.  |
-| `FileHeaderRenderMode`               | Selects a default or custom file header.                     |
-| `CustomPreProperties`                | Defines custom properties for the rendered `pre` element.    |
-| `PrePropertiesConfig`                | Describes calculated `pre` element properties.               |
-| `ExtensionFormatMap`                 | Maps file names or extensions to languages.                  |
-| `RenderHeaderPrefixCallback`         | Produces prefix content for a diff header.                   |
-| `RenderHeaderFilenameSuffixCallback` | Produces filename suffix content for a diff header.          |
-| `RenderHeaderMetadataCallback`       | Produces metadata content for a diff header.                 |
-| `RenderFileMetadata`                 | Produces header content for a file.                          |
-| `PostRenderPhase`                    | Names mount, update, or unmount callback phases.             |
+| Export                               | Purpose                                                        |
+| ------------------------------------ | -------------------------------------------------------------- |
+| `SupportedLanguages`                 | Accepts a bundled, text, ANSI, or custom language name.        |
+| `HighlighterRenderBaseOptions`       | Selects the backend, theme, token transformer, and line limit. |
+| `HighlightedToken`                   | Stores a character index, foreground, and token text.          |
+| `DiffsThemeNames`                    | Accepts a bundled or custom theme name.                        |
+| `ThemesType`                         | Maps light and dark schemes to theme names.                    |
+| `ThemeTypes`                         | Selects system, light, or dark mode.                           |
+| `DiffsTheme`                         | Names one backend theme object.                                |
+| `DiffsThemeStyle`                    | Lists editor UI colors read from a theme.                      |
+| `DiffsHighlighter`                   | Defines one backend's tokenizers and theme resolver.           |
+| `CodeToTokensOptions`                | Configures language, theme, and limits for tokenization.       |
+| `TokensResult`                       | Holds themed token lines and root colors.                      |
+| `DiffsLiveTokenizer`                 | Tokenizes an editor document incrementally.                    |
+| `DiffsLiveTokenizerOptions`          | Adds the document, render range, and deferral callback.        |
+| `DiffsStreamTokenizer`               | Tokenizes append-only code chunks.                             |
+| `BaseCodeOptions`                    | Configures themes, wrapping, headers, tokenization, and CSS.   |
+| `BaseDiffOptions`                    | Adds layout, indicators, context, and line diff options.       |
+| `BaseDiffOptionsWithDefaults`        | Describes required diff options after defaults apply.          |
+| `DiffIndicators`                     | Selects classic, bar, or hidden diff indicators.               |
+| `HunkSeparators`                     | Selects the hunk separator presentation.                       |
+| `LineDiffTypes`                      | Selects word, alternate word, character, or no inline diff.    |
+| `FileHeaderRenderMode`               | Selects a default or custom file header.                       |
+| `CustomPreProperties`                | Defines custom properties for the rendered `pre` element.      |
+| `PrePropertiesConfig`                | Describes calculated `pre` element properties.                 |
+| `ExtensionFormatMap`                 | Maps file names or extensions to languages.                    |
+| `RenderHeaderPrefixCallback`         | Produces prefix content for a diff header.                     |
+| `RenderHeaderFilenameSuffixCallback` | Produces filename suffix content for a diff header.            |
+| `RenderHeaderMetadataCallback`       | Produces metadata content for a diff header.                   |
+| `RenderFileMetadata`                 | Produces header content for a file.                            |
+| `PostRenderPhase`                    | Names mount, update, or unmount callback phases.               |
 
 ## Annotations and selection
 
@@ -159,16 +166,17 @@ file or diff invalidates that cache.
 | `VirtualWindowSpecs`        | Describes viewport position, height, and row window.    |
 | `VirtualFileMetrics`        | Describes estimated header and line heights.            |
 
-## Shiki and diff types
+## Tokens, HTML tree, and diff types
 
-| Export                           | Purpose                                         |
-| -------------------------------- | ----------------------------------------------- |
-| `BundledLanguage`                | Names a language bundled by Shiki.              |
-| `CodeToHastOptions`              | Configures Shiki code-to-HAST output.           |
-| `DecorationItem`                 | Describes a Shiki source decoration.            |
-| `LanguageRegistration`           | Describes a Shiki language grammar.             |
-| `ShikiTransformer`               | Defines a Shiki syntax tree transformer.        |
-| `ThemeRegistration`              | Describes a raw Shiki theme.                    |
-| `ThemeRegistrationResolved`      | Describes a normalized Shiki theme.             |
-| `ThemedToken`                    | Describes one Shiki token with its theme style. |
-| `CreatePatchOptionsNonabortable` | Configures the underlying patch algorithm.      |
+| Export                           | Purpose                                                       |
+| -------------------------------- | ------------------------------------------------------------- |
+| `ThemedToken`                    | Describes one token's text, offset, colors, and font style.   |
+| `HElement`                       | Describes one HTML tree element with properties and children. |
+| `HText`                          | Describes one HTML tree text node.                            |
+| `HComment`                       | Describes one HTML tree comment node.                         |
+| `HProperties`                    | Maps HTML tree attribute names to values.                     |
+| `ElementContent`                 | Represents any HTML tree node.                                |
+| `CreatePatchOptionsNonabortable` | Configures the underlying patch algorithm.                    |
+
+Rendered output uses the package's own HTML tree nodes, serialized with
+`toHtml`; Shiki and HAST types are no longer re-exported.

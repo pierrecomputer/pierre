@@ -54,8 +54,13 @@ from `@pierre/theming/themes`.
 | `themes`             | Value    | Combines the Pierre and Shiki collections in stable order.                    |
 | `pierreThemes`       | Value    | Provides lazy descriptors for the ten Pierre themes.                          |
 | `shikiThemes`        | Value    | Provides lazy descriptors for the bundled Shiki themes.                       |
+| `highlightsThemes`   | Value    | Provides lazy descriptors for the Zed-format themes in `@pierre/highlights`.  |
 | `createTheme`        | Function | Creates a descriptor whose loader normalizes a raw Shiki or VS Code theme.    |
 | `CreateThemeOptions` | Type     | Defines the name, loader, and optional descriptor metadata for `createTheme`. |
 
 Use `createTheme` for a raw Shiki or VS Code theme. Use a `ThemeDescriptor`
 directly when the loader already returns a compatible `ThemeLike` object.
+
+`highlightsThemes` keeps each theme's native `appearance` and `style` fields and
+uses the catalog slug as `name`. Its names overlap with `themes`, so register it
+into its own resolver rather than combining the two.
