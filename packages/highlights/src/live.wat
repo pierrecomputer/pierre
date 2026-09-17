@@ -523,7 +523,7 @@
         (local.set $p (i32.const $mem.markdownFenceStack))
         (block $done
           (loop $fence
-            (br_if $done (i32.ge_u (local.get $p) (i32.const $mem.tomlStack)))
+            (br_if $done (i32.ge_u (local.get $p) (i32.const $mem.markdownFenceStack+96)))
             (br_if $done (i32.eqz (i32.load (local.get $p))))
             (if
               (i32.eq

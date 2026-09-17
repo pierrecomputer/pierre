@@ -118,7 +118,9 @@ registered separately in `markdown.wat`.
 Mode 3 first emits `(endByte: u32, tokenId: u32)` pairs. Each record starts at
 the preceding end, or zero for the first record. After lexing, `$recLinesPost`
 converts these to `(endUtf16: u32, tokenId: u32)` pairs and splits LF/CRLF
-boundaries. ID `0xffffffff` marks a line terminator and ends after it.
+boundaries; it scans the input for line breaks and non-ASCII bytes once, so a
+plain ASCII record converts with one subtraction. ID `0xffffffff` marks a line
+terminator and ends after it.
 
 `lineRecordsToTokens` slices the source string into per-line `ThemedToken`
 arrays, excluding terminators. Whole-input and stream offsets are absolute
@@ -248,7 +250,9 @@ When adding a language, update its import, registration, stream checkpoint
 participation, and fence aliases where needed. Add a language test and a corpus
 entry in [`test/_samples.ts`](./test/_samples.ts). Changes to carried state must
 also update live capture/reset/restore logic. Token IDs define the theme ABI;
-growing `$Token` requires checking the fixed theme and emitter capacities.
+growing `$Token` requires checking the fixed theme and emitter capacities. The
+enum lists members alphabetically, with the rarely emitted ones last so every
+common member keeps a one-byte constant.
 
 Tests compile WAT directly and import `lib/`, so no package build is needed.
 Language tests cover classification and bounds; conformance tests compare HTML,

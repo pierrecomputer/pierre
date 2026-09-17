@@ -225,10 +225,7 @@
     (global.set $markdownStreamFence (i32.const 0))
     (global.set $markdownStreamFenceLen (i32.const 0))
     (global.set $markdownStreamLang (i32.const 0))
-    (memory.fill
-      (i32.const $mem.markdownFenceStack)
-      (i32.const 0)
-      (i32.sub (i32.const $mem.tomlStack) (i32.const $mem.markdownFenceStack)))
+    (memory.fill (i32.const $mem.markdownFenceStack) (i32.const 0) (i32.const 96))
     (global.set $phpStreamingCode (i32.const 0))
     (global.set $phpStreamDecl (i32.const 0))
     (global.set $phpStreamMember (i32.const 0)))

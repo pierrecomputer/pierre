@@ -226,12 +226,12 @@
   (func $markdownFenceClearDeeper
     (local $from i32)
     (local.set $from (call $markdownFenceSlot (i32.add (global.get $markdownDepth) (i32.const 1))))
-    (if (i32.lt_u (local.get $from) (i32.const $mem.tomlStack))
+    (if (i32.lt_u (local.get $from) (i32.const $mem.markdownFenceStack+96))
       (then
         (memory.fill
           (local.get $from)
           (i32.const 0)
-          (i32.sub (i32.const $mem.tomlStack) (local.get $from))))))
+          (i32.sub (i32.const $mem.markdownFenceStack+96) (local.get $from))))))
 
   ;; Transient: did the last $markdownCodeRange call run a body lexer? The
   ;; caller folds it into the fence registers (bit 8 of the language slot) so

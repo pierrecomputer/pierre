@@ -261,6 +261,7 @@ const synthetic = (body: string) =>
       (global $streaming (mut i32) (i32.const 0))
       (global $streamDepth (mut i32) (i32.const 0))
       (global $streamReset (mut i32) (i32.const 0))
+      (global $streamWindow (mut i32) (i32.const 0))
       (const $mem.streamState 8864)
       (const $mem.bashWords 10144)
       (const $mem.byteSets 1424)
@@ -398,7 +399,7 @@ void test('preprocessor: stream lexers must branch by label name', () => {
           (br_if $done (i32.gt_u (local.get $i) (i32.const 10)))
           (br $l))))`;
   const named = synthetic(lexer('$outer $inner')).code;
-  assert.match(named, /i32\.load offset=\d+ \(local\.get \$streamRoot\)/);
+  assert.match(named, /i32\.load offset=\d+ \(global\.get \$streamWindow\)/);
   assert.throws(() => synthetic(lexer('1 0')), /branch by index/);
 });
 

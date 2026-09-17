@@ -1,6 +1,8 @@
 (module
   (import "./memory.wat")
 
+  ;; Alphabetical, except that the members lexers rarely name come last so
+  ;; every frequently emitted member keeps a one-byte constant (ids below 64).
   (enum $Token
     "none" ;; plain text
     "attribute"
@@ -16,20 +18,15 @@
     "embedded"
     "emphasis"
     "emphasis.strong"
-    "enum"
     "function"
     "function.definition"
     "function.method"
-    "hint"
     "keyword"
     "keyword.control"
     "keyword.declaration"
     "keyword.import"
-    "keyword.jsdoc"
     "keyword.operator"
     "label"
-    "link_text"
-    "link_uri"
     "namespace"
     "number"
     "operator"
@@ -51,14 +48,12 @@
     "selector"
     "selector.class"
     "selector.id"
-    "selector.pseudo"
     "string"
     "string.escape"
     "string.regex"
     "string.special"
     "string.special.symbol"
     "tag"
-    "tag.component.jsx"
     "tag.doctype"
     "tag.jsx"
     "text.jsx"
@@ -67,11 +62,19 @@
     "type"
     "type.builtin"
     "type.class"
-    "type.jsdoc"
     "variable"
-    "variable.jsdoc"
     "variable.parameter"
     "variable.special"
+    ;; rarely named by lexers
+    "enum"
+    "hint"
+    "keyword.jsdoc"
+    "link_text"
+    "link_uri"
+    "selector.pseudo"
+    "tag.component.jsx"
+    "type.jsdoc"
+    "variable.jsdoc"
     "variant"
     ;; resolved from theme.style, not from syntax
     "background"
