@@ -217,7 +217,7 @@ export function transformWat(
     '$hlElixir',
     '$hlElm',
     '$hlErlang',
-    '$hlFortran',
+    '$hlFortranImpl',
     '$hlFsharp',
     '$hlGleam',
     '$hlGlsl',

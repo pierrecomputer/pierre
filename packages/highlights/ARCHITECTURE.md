@@ -77,10 +77,12 @@ remaining canonical names alphabetically. Reordering entries regenerates IDs in
 both artifacts, which must be used together. Host lookups ignore case and reject
 unknown names.
 
-Several languages share implementations. CSS dialects use `css.wat`. The
-ECMAScript family combines `js.wat` scanning, `ts.wat` classification, `jsx.wat`
-markup modes, and the `tsx.wat` driver. Feature flags select JS, TS, JSX, and
-TSRX behavior. `sig.wat` tracks parameter lists for participating lexers.
+Several languages share implementations. CSS dialects use `css.wat`. Free-form
+and fixed-form Fortran share `fortran.wat` through a dialect flag that each
+entry point sets. The ECMAScript family combines `js.wat` scanning, `ts.wat`
+classification, `jsx.wat` markup modes, and the `tsx.wat` driver. Feature flags
+select JS, TS, JSX, and TSRX behavior. `sig.wat` tracks parameter lists for
+participating lexers.
 
 A lexer consumes `[$ptr, $end)` and leaves `$ptr` at the boundary. It must:
 

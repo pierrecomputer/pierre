@@ -73,7 +73,8 @@
     "cuda"
     "fortran"
     "solidity"
-    "zig")
+    "zig"
+    "fortran-fixed-form")
 
   ;; Public language aliases: 16-byte records containing length, enum id, and
   ;; up to ten lowercase bytes. A compact linear table keeps fence lookups small.
@@ -93,9 +94,9 @@
     "\02\22\63\75\00\00\00\00\00\00\00\00\00\00\00\00"
     "\03\22\63\75\68\00\00\00\00\00\00\00\00\00\00\00"
     "\07\23\66\6f\72\74\72\61\6e\00\00\00\00\00\00\00"
-    "\01\23\66\00\00\00\00\00\00\00\00\00\00\00\00\00"
-    "\03\23\66\6f\72\00\00\00\00\00\00\00\00\00\00\00"
-    "\03\23\66\37\37\00\00\00\00\00\00\00\00\00\00\00"
+    "\01\26\66\00\00\00\00\00\00\00\00\00\00\00\00\00"
+    "\03\26\66\6f\72\00\00\00\00\00\00\00\00\00\00\00"
+    "\03\26\66\37\37\00\00\00\00\00\00\00\00\00\00\00"
     "\03\23\66\39\30\00\00\00\00\00\00\00\00\00\00\00"
     "\03\23\66\39\35\00\00\00\00\00\00\00\00\00\00\00"
     "\03\23\66\30\33\00\00\00\00\00\00\00\00\00\00\00"
@@ -124,6 +125,38 @@
             (i32.or (i32.load offset=8 (local.get $lhs)) (i32.const 0x20202020))
             (i32.const "html"))))
       (then (return (enum.get $MarkdownFenceLang.angular-html))))
+    ;; So are the Fortran form names: `fortran-fixed-form` selects the
+    ;; fixed-form dialect and `fortran-free-form` the default lexer.
+    (if
+      (i32.and
+        (i32.eq (local.get $len) (i32.const 18))
+        (i32.and
+          (i64.eq
+            (i64.or (i64.load (local.get $lhs)) (i64.const 0x2020202020202020))
+            (i64.const "fortran-"))
+          (i32.and
+            (i64.eq
+              (i64.or (i64.load offset=8 (local.get $lhs)) (i64.const 0x2020202020202020))
+              (i64.const "fixed-fo"))
+            (i32.eq
+              (i32.or (i32.load16_u offset=16 (local.get $lhs)) (i32.const 0x2020))
+              (i32.const "rm")))))
+      (then (return (enum.get $MarkdownFenceLang.fortran-fixed-form))))
+    (if
+      (i32.and
+        (i32.eq (local.get $len) (i32.const 17))
+        (i32.and
+          (i64.eq
+            (i64.or (i64.load (local.get $lhs)) (i64.const 0x2020202020202020))
+            (i64.const "fortran-"))
+          (i32.and
+            (i64.eq
+              (i64.or (i64.load offset=8 (local.get $lhs)) (i64.const 0x2020202020202020))
+              (i64.const "free-for"))
+            (i32.eq
+              (i32.or (i32.load8_u offset=16 (local.get $lhs)) (i32.const 0x20))
+              (i32.const "m")))))
+      (then (return (enum.get $MarkdownFenceLang.fortran))))
     (if (i32.or (i32.eqz (local.get $len)) (i32.gt_u (local.get $len) (i32.const 10)))
       (then (return (enum.get $MarkdownFenceLang.unknown))))
     (local.set $record (i32.const $mem.markdownFence))
@@ -378,6 +411,8 @@
       (then (call $hlCuda) (return)))
     (if (i32.eq (local.get $lang) (enum.get $MarkdownFenceLang.fortran))
       (then (call $hlFortran) (return)))
+    (if (i32.eq (local.get $lang) (enum.get $MarkdownFenceLang.fortran-fixed-form))
+      (then (call $hlFortranFixed) (return)))
     (if (i32.eq (local.get $lang) (enum.get $MarkdownFenceLang.solidity))
       (then (call $hlSolidity) (return)))
     (if (i32.eq (local.get $lang) (enum.get $MarkdownFenceLang.tsx))

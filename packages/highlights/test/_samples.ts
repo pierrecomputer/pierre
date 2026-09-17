@@ -157,6 +157,38 @@ export const samples: Record<string, LangSample> = {
       'function',
     ],
   },
+  'fortran-fixed-form': {
+    code: lines(
+      'C     Fixed-form comments start with C in column one',
+      'Cthis marker needs no blank after it',
+      '      PROGRAM DEMO',
+      '      INTEGER I, N',
+      '      REAL X(10)',
+      '      DATA N /10/',
+      '      DO 10 I = 1, N',
+      '        X(I) = SQRT(REAL(I)) * 2.0E0',
+      '   10 CONTINUE',
+      "      IF (X(1) .GT. 0.5) WRITE (*, '(A, F6.2)') 'first: ', X(1)",
+      '* an asterisk comment',
+      '      END'
+    ),
+    kinds: [
+      'comment',
+      'keyword.declaration',
+      'namespace',
+      'type.builtin',
+      'variable',
+      'punctuation.delimiter',
+      'function',
+      'punctuation.bracket',
+      'number',
+      'operator',
+      'keyword.control',
+      'keyword.operator',
+      'string',
+      'keyword',
+    ],
+  },
   solidity: {
     code: lines(
       'pragma solidity ^0.8.20;',
@@ -3672,6 +3704,7 @@ export const tokenizerSamples: [Lang, string][] = [
   ['elm', samples.elm.code],
   ['cuda', samples.cuda.code],
   ['fortran', samples.fortran.code],
+  ['fortran-fixed-form', samples['fortran-fixed-form'].code],
   ['solidity', samples.solidity.code],
   [
     'angular-html',

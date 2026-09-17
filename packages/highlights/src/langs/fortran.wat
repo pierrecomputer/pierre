@@ -46,9 +46,16 @@
       (then (return (enum.get $Token.function))))
     (keyword-table.value $fortranWords (local.get $lhs) (local.get $rhs)))
 
+  ;; 1 while lexing the fixed-form dialect (`fortran-fixed-form`: .f, .for,
+  ;; and .f77 sources), where any C or c in column one opens a comment line;
+  ;; 0 for free-form source, where only a C set apart from its text does.
+  ;; Every entry point sets it, so streamed chunks and fence bodies never
+  ;; inherit another run's form.
+  (global $fortranFixed (mut i32) (i32.const 0))
+
   ;; Column position recognizes traditional fixed-form comments. Quoted text
   ;; carries only its quote and continuation flag, never an input pointer.
-  (func $hlFortran
+  (func $hlFortranImpl
     (local $c i32)
     (local $c2 i32)
     (local $lhs i32)
@@ -137,13 +144,17 @@
                 (br $string)))
             (call $emitTok (enum.get $Token.string) (local.get $lhs) (global.get $ptr))
             (br $next)))
-        ;; A C in column one is a comment marker only when separated from the
-        ;; text; assignments such as c = 1 remain ordinary free-form code.
+        ;; A C or * in column one opens a comment line. Fixed-form source
+        ;; takes any column-one C, with or without a blank after it (Ccomment),
+        ;; because its statements start in column seven. Free-form source only
+        ;; takes a C separated from its text, so assignments such as c = 1 and
+        ;; words such as contains remain ordinary code.
         (if (i32.and (i32.eqz (local.get $column))
               (i32.or (i32.eq (local.get $c) (i32.const "*"))
                 (i32.and (i32.eq (i32.or (local.get $c) (i32.const 32)) (i32.const "c"))
-                  (i32.and (i32.eq (local.get $c2) (i32.const 32))
-                    (i32.ne (call $fortranByte (call $lexSkipSpaceAt (i32.add (local.get $lhs) (i32.const 1)))) (i32.const "="))))))
+                  (i32.or (global.get $fortranFixed)
+                    (i32.and (i32.eq (local.get $c2) (i32.const 32))
+                      (i32.ne (call $fortranByte (call $lexSkipSpaceAt (i32.add (local.get $lhs) (i32.const 1)))) (i32.const "=")))))))
           (then (call $lexLineComment (i32.const 1) (enum.get $Token.comment)) (br $next)))
         (if (i32.eq (local.get $c) (i32.const "#"))
           (then (call $lexLineComment (i32.const 1) (enum.get $Token.preproc)) (br $next)))
@@ -244,4 +255,14 @@
         (local.set $member (i32.eq (local.get $c) (i32.const "%")))
         (call $emitTok (local.get $hl) (local.get $lhs) (global.get $ptr))
         (br $next))))
+
+  ;; The entry points: free-form Fortran, and the fixed-form dialect that
+  ;; shares its lexer but accepts column-one comment markers without a
+  ;; following blank.
+  (func $hlFortran
+    (global.set $fortranFixed (i32.const 0))
+    (call $hlFortranImpl))
+  (func $hlFortranFixed
+    (global.set $fortranFixed (i32.const 1))
+    (call $hlFortranImpl))
 )

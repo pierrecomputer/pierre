@@ -52,6 +52,70 @@ test('fortran: fixed-form comments and free-form C variables', () => {
   }
 });
 
+test('fortran-fixed-form: column-one C needs no blank after the marker', () => {
+  const code =
+    'Ccomment without a blank\n      INTEGER n\nc = 1\nC\n      contains\n      call work(c) ! trailing\n';
+  for (const lang of ['fortran-fixed-form', 'f', 'for', 'f77'] as const) {
+    const kinds = tokenKinds(lang, code);
+    for (const expected of [
+      ['Ccomment without a blank', 'comment'],
+      ['INTEGER', 'type.builtin'],
+      ['c = 1', 'comment'],
+      ['C', 'comment'],
+      ['contains', 'keyword'],
+      ['call', 'keyword.control'],
+      ['! trailing', 'comment'],
+    ] satisfies [string, string][]) {
+      expect(kinds).toContainEqual(expected);
+    }
+    assertLineFedParity(lang, code);
+  }
+});
+
+test('fortran: free-form names keep column-one C words as code', () => {
+  const code = 'c = 1\ncontains\ncall work(c)\nC separated comment\n';
+  for (const lang of [
+    'fortran',
+    'fortran-free-form',
+    'f90',
+    'f95',
+    'f03',
+    'f08',
+  ] as const) {
+    const kinds = tokenKinds(lang, code);
+    expect(kinds).toContainEqual(['c', 'variable']);
+    expect(kinds).toContainEqual(['contains', 'keyword']);
+    expect(kinds).toContainEqual(['call', 'keyword.control']);
+    expect(kinds).toContainEqual(['C separated comment', 'comment']);
+    expect(kinds).not.toContainEqual(['c = 1', 'comment']);
+  }
+});
+
+test('fortran: markdown fences accept both long form names', () => {
+  const body = 'Ccomment\n';
+  expect(
+    tokenKinds('markdown', `\`\`\`fortran-fixed-form\n${body}\`\`\`\n`)
+  ).toEqual([
+    ['```fortran-fixed-form', 'punctuation.delimiter'],
+    ['Ccomment', 'comment'],
+    ['```', 'punctuation.delimiter'],
+  ]);
+  expect(
+    tokenKinds('markdown', `\`\`\`Fortran-Free-Form\n${body}\`\`\`\n`)
+  ).toEqual([
+    ['```Fortran-Free-Form', 'punctuation.delimiter'],
+    ['Ccomment', 'variable'],
+    ['```', 'punctuation.delimiter'],
+  ]);
+  expect(
+    tokenKinds('markdown', `\`\`\`fortran-fixed-forms\n${body}\`\`\`\n`)
+  ).toEqual([
+    ['```fortran-fixed-forms', 'punctuation.delimiter'],
+    ['Ccomment', 'text.literal'],
+    ['```', 'punctuation.delimiter'],
+  ]);
+});
+
 test('fortran: decimal exponents stay separate from dotted operators', () => {
   expect(tokenKinds('fortran', '1.d0 + 1.e+3 + 1._dp == 1.eq.2')).toEqual([
     ['1.d0', 'number'],

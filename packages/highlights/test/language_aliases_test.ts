@@ -15,7 +15,8 @@ const additions = [
   ['batch', ['batch', 'bat', 'batchfile', 'cmd', 'dos']],
   ['elm', ['elm']],
   ['cuda', ['cuda', 'cu', 'cuh']],
-  ['fortran', ['fortran', 'f', 'for', 'f77', 'f90', 'f95', 'f03', 'f08']],
+  ['fortran', ['fortran', 'fortran-free-form', 'f90', 'f95', 'f03', 'f08']],
+  ['fortran-fixed-form', ['fortran-fixed-form', 'f', 'for', 'f77']],
   ['solidity', ['solidity', 'sol']],
   ['zig', ['zig', 'zon']],
 ] as const satisfies readonly (readonly [Lang, readonly Lang[]])[];

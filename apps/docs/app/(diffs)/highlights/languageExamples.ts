@@ -486,6 +486,22 @@ handle_cast(_Msg, State) -> {noreply, State}.`,
 end program demo`,
   ],
   [
+    'fortran-fixed-form',
+    'Fortran (fixed form)',
+    `C     Column-one C opens a comment line
+Cno blank is needed after the marker
+      PROGRAM DEMO
+      INTEGER I, N
+      REAL X(10)
+      DATA N /10/
+      DO 10 I = 1, N
+        X(I) = SQRT(REAL(I)) * 2.0E0
+   10 CONTINUE
+      IF (X(1) .GT. 0.5) WRITE (*, '(A, F6.2)') 'first: ', X(1)
+* an asterisk comment
+      END`,
+  ],
+  [
     'fsharp',
     'F#',
     `/// A shape module.
