@@ -15,6 +15,8 @@ export const spriteConfig = {
     'IconSymbolDeleted',
     'IconSymbolIgnored',
     'IconSymbolModified',
+    'IconSymbolExtracted',
+    'IconSymbolInlined',
     'IconSymbolMoved',
     'IconSymbolRef',
     'IconSymbolAddedFill',

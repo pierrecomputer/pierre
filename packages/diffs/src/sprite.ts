@@ -19,11 +19,13 @@ export type SVGSpriteNames =
   | 'diffs-icon-symbol-diffstat'
   | 'diffs-icon-symbol-diffstat-duo'
   | 'diffs-icon-symbol-diffstat-fill'
+  | 'diffs-icon-symbol-extracted'
   | 'diffs-icon-symbol-extracted-duo'
   | 'diffs-icon-symbol-extracted-fill'
   | 'diffs-icon-symbol-ignored'
   | 'diffs-icon-symbol-ignored-duo'
   | 'diffs-icon-symbol-ignored-fill'
+  | 'diffs-icon-symbol-inlined'
   | 'diffs-icon-symbol-inlined-duo'
   | 'diffs-icon-symbol-inlined-fill'
   | 'diffs-icon-symbol-modified'
@@ -95,6 +97,9 @@ export const SVGSpriteSheet = `<svg data-icon-sprite aria-hidden="true" width="0
   <symbol id="diffs-icon-symbol-diffstat-fill" viewBox="0 0 16 16">
     <path fill-rule="evenodd" d="M8 0c6.588 0 8 1.412 8 8s-1.412 8-8 8-8-1.412-8-8 1.412-8 8-8M5.25 10a.75.75 0 0 0 0 1.5h5.5a.75.75 0 0 0 0-1.5zM8 3.546a.75.75 0 0 0-.75.75V6.25h-2a.75.75 0 0 0 0 1.5h2v1.5h1.5v-1.5h2a.75.75 0 0 0 0-1.5h-2V4.296a.75.75 0 0 0-.75-.75" clip-rule="evenodd"/>
   </symbol>
+  <symbol id="diffs-icon-symbol-extracted" viewBox="0 0 16 16">
+    <path d="M8.25 4.25a.75.75 0 0 1 0 1.5H6.81l3.302 3.302a1.5 1.5 0 1 1-1.06 1.06L5.75 6.811V8.25a.75.75 0 0 1-1.5 0V5A.75.75 0 0 1 5 4.25z"/><path fill-rule="evenodd" d="M8 0c6.588 0 8 1.412 8 8s-1.412 8-8 8-8-1.412-8-8 1.412-8 8-8m0 1.5c-1.613 0-2.807.089-3.704.288-.88.196-1.382.477-1.706.802-.325.324-.606.826-.802 1.706C1.588 5.193 1.5 6.387 1.5 8s.089 2.807.288 3.704c.196.88.477 1.382.802 1.706.324.325.826.606 1.706.802.897.2 2.091.288 3.704.288s2.807-.089 3.704-.288c.88-.196 1.382-.477 1.706-.802.325-.324.606-.826.802-1.706.2-.897.288-2.091.288-3.704s-.089-2.807-.288-3.704c-.196-.88-.477-1.382-.802-1.706-.324-.325-.826-.606-1.706-.802C10.807 1.588 9.613 1.5 8 1.5" clip-rule="evenodd"/>
+  </symbol>
   <symbol id="diffs-icon-symbol-extracted-duo" viewBox="0 0 16 16">
     <path fill-rule="evenodd" d="M8 0c6.588 0 8 1.412 8 8s-1.412 8-8 8-8-1.412-8-8 1.412-8 8-8" clip-rule="evenodd" opacity=".2"/><path d="M8.25 4.25a.75.75 0 0 1 0 1.5H6.81l3.302 3.302a1.5 1.5 0 1 1-1.06 1.06L5.75 6.811V8.25a.75.75 0 0 1-1.5 0V5A.75.75 0 0 1 5 4.25z"/>
   </symbol>
@@ -109,6 +114,9 @@ export const SVGSpriteSheet = `<svg data-icon-sprite aria-hidden="true" width="0
   </symbol>
   <symbol id="diffs-icon-symbol-ignored-fill" viewBox="0 0 16 16">
     <path fill-rule="evenodd" d="M8 0c6.588 0 8 1.412 8 8s-1.412 8-8 8-8-1.412-8-8 1.412-8 8-8m3.53 4.47a.75.75 0 0 0-1.06 0l-6 6a.75.75 0 1 0 1.06 1.06l6-6a.75.75 0 0 0 0-1.06" clip-rule="evenodd"/>
+  </symbol>
+  <symbol id="diffs-icon-symbol-inlined" viewBox="0 0 16 16">
+    <path d="M7.75 11.75a.75.75 0 0 1 0-1.5h1.44L5.887 6.948a1.5 1.5 0 1 1 1.06-1.06l3.302 3.301V7.75a.75.75 0 0 1 1.5 0V11a.75.75 0 0 1-.75.75z"/><path fill-rule="evenodd" d="M8 16c-6.588 0-8-1.412-8-8s1.412-8 8-8 8 1.412 8 8-1.412 8-8 8m0-1.5c1.613 0 2.807-.089 3.704-.288.88-.196 1.382-.477 1.706-.802.325-.324.606-.826.802-1.706.2-.897.288-2.091.288-3.704s-.089-2.807-.288-3.704c-.196-.88-.477-1.382-.802-1.706-.324-.325-.826-.606-1.706-.802C10.807 1.588 9.613 1.5 8 1.5s-2.807.089-3.704.288c-.88.196-1.382.477-1.706.802-.325.324-.606.826-.802 1.706C1.588 5.193 1.5 6.387 1.5 8s.089 2.807.288 3.704c.196.88.477 1.382.802 1.706.324.325.826.606 1.706.802.897.2 2.091.288 3.704.288" clip-rule="evenodd"/>
   </symbol>
   <symbol id="diffs-icon-symbol-inlined-duo" viewBox="0 0 16 16">
     <path fill-rule="evenodd" d="M8 16c-6.588 0-8-1.412-8-8s1.412-8 8-8 8 1.412 8 8-1.412 8-8 8" clip-rule="evenodd" opacity=".2"/><path d="M7.75 11.75a.75.75 0 0 1 0-1.5h1.44L5.887 6.948a1.5 1.5 0 1 1 1.06-1.06l3.302 3.301V7.75a.75.75 0 0 1 1.5 0V11a.75.75 0 0 1-.75.75z"/>
