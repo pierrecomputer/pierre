@@ -71,9 +71,11 @@ memory growth can detach it.
 
 The `language-table` in [`src/highlights.wat`](./src/highlights.wat) owns each
 language's canonical name, aliases, and dispatch function. The build derives
-Wasm IDs and the JavaScript lookup from this list. Declaration order defines
-IDs, so append new languages to preserve existing IDs. Host lookups ignore case
-and reject unknown names.
+Wasm IDs and the JavaScript lookup from this list. Keep `plain` first so it and
+its aliases (`plaintext`, `text`, `txt`) always have ID 0, then sort the
+remaining canonical names alphabetically. Reordering entries regenerates IDs in
+both artifacts, which must be used together. Host lookups ignore case and reject
+unknown names.
 
 Several languages share implementations. CSS dialects use `css.wat`. The
 ECMAScript family combines `js.wat` scanning, `ts.wat` classification, `jsx.wat`

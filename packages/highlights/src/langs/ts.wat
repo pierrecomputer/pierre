@@ -273,6 +273,39 @@
   ;; a contextual word in keyword position: its keyword bucket, or -1 when it
   ;; reads as an ordinary name here (cheap neighbour heuristics)
   (func $ctxwordHl (param $prev i32) (param $t i32) (param $next i32) (result i32)
+    ;; At a completed line, the next operand may not have arrived yet. Use
+    ;; the preceding clause or statement boundary instead of requiring it.
+    (if (i32.and (i32.eq (local.get $next) (enum.get $Lex.eof)) (global.get $nlBefore))
+      (then
+        (if (i32.and
+              (i32.and (global.get $ecmaImport) (i32.eq (local.get $t) (enum.get $Lex.ctxword_from)))
+              (i32.or
+                (i32.eq (local.get $prev) (enum.get $Lex.identifier))
+                (i32.or
+                  (i32.or
+                    (i32.eq (local.get $prev) (enum.get $Lex.ctxword_from))
+                    (i32.eq (local.get $prev) (enum.get $Lex.ctxword_type)))
+                  (i32.or
+                    (i32.eq (local.get $prev) (enum.get $Lex.r_brace))
+                    (i32.eq (local.get $prev) (enum.get $Lex.asterisk))))))
+          (then (return (enum.get $Token.keyword.import))))
+        (if (i32.and
+              (i32.and (call $ecmaHasTypeScript) (i32.eq (local.get $t) (enum.get $Lex.ctxword_type)))
+              (i32.or
+                (i32.or
+                  (i32.eq (local.get $prev) (enum.get $Lex.eof))
+                  (i32.eq (local.get $prev) (enum.get $Lex.semicolon)))
+                (i32.or
+                  (i32.or
+                    (i32.eq (local.get $prev) (enum.get $Lex.r_brace))
+                    (i32.eq (local.get $prev) (enum.get $Lex.keyword_export)))
+                  (i32.and (global.get $ecmaImport)
+                    (i32.or
+                      (i32.eq (local.get $prev) (enum.get $Lex.keyword_import))
+                      (i32.or
+                        (i32.eq (local.get $prev) (enum.get $Lex.l_brace))
+                        (i32.eq (local.get $prev) (enum.get $Lex.comma))))))))
+          (then (return (enum.get $Token.keyword.declaration))))))
     (if (i32.eq (local.get $t) (enum.get $Lex.ctxword_await))
       (then (return (enum.get $Token.keyword.control))))
     (if (i32.eq (local.get $t) (enum.get $Lex.ctxword_async))

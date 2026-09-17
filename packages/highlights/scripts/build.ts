@@ -203,18 +203,21 @@ export function transformWat(
     '$hlAsm',
     '$hlAstro',
     '$hlBash',
+    '$hlBatch',
     '$hlC',
     '$hlC3',
     '$hlClojure',
     '$hlCmake',
-    '$hlCpp',
+    '$hlCppImpl',
     '$hlCsharp',
     '$hlCssImpl',
     '$hlDart',
     '$hlDiff',
     '$hlDockerfile',
     '$hlElixir',
+    '$hlElm',
     '$hlErlang',
+    '$hlFortran',
     '$hlFsharp',
     '$hlGleam',
     '$hlGlsl',
@@ -247,6 +250,7 @@ export function transformWat(
     '$hlRuby',
     '$hlRust',
     '$hlScala',
+    '$hlSolidity',
     '$hlSql',
     '$hlSvelte',
     '$hlSwift',
@@ -351,7 +355,7 @@ export function transformWat(
   for (const name of constExprs.keys()) resolveConst(name, new Set());
   if (
     streamStateOffset >
-    (constMap.get('$mem.bashWords') ?? 0) -
+    (constMap.get('$mem.angularWords') ?? constMap.get('$mem.bashWords') ?? 0) -
       (constMap.get('$mem.streamState') ?? 0)
   ) {
     throw new Error('stream lexer state exceeds reserved memory');
@@ -754,8 +758,8 @@ export function transformWat(
     let index = byteSets.get(key);
     if (index === undefined) {
       index = byteSets.size;
-      if (index >= 64)
-        throw new Error(`More than 64 distinct byte sets in ${url.pathname}`);
+      if (index >= 80)
+        throw new Error(`More than 80 distinct byte sets in ${url.pathname}`);
       byteSets.set(key, index);
     }
     const table = byteSetBase + index * 32;

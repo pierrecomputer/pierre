@@ -396,7 +396,22 @@
           (then (return (enum.get $Token.type.builtin))))))
     (keyword-table.value $cppWords (local.get $lhs) (local.get $rhs)))
 
+  (keyword-table $cudaWords $mem.cudaWords $mem.dartWords
+    (group $Token.keyword
+      "__global__" "__host__" "__constant__" "__managed__"
+      "__forceinline__" "__launch_bounds__" "__align__")
+    (group $Token.variable.special "threadIdx" "blockIdx" "blockDim" "gridDim" "warpSize")
+    (group $Token.type.builtin
+      "dim3" "uint3" "int2" "int3" "int4" "float2" "float3" "float4" "double2"
+      "cudaError_t" "cudaStream_t")
+    (group $Token.function
+      "__syncthreads" "__syncwarp" "__threadfence" "__threadfence_block"
+      "__threadfence_system" "__shfl_sync" "atomicAdd" "atomicCAS"))
+
   (func $hlCpp
+    (call $hlCppImpl (i32.const 0)))
+
+  (func $hlCppImpl (param $cuda i32)
     (local $c i32)
     (local $c2 i32)
     (local $c3 i32)
@@ -522,6 +537,38 @@
             (call $lexScanIdent)
             (local.set $rhs (global.get $ptr))
             (local.set $kind (call $cppWordHl (local.get $lhs) (local.get $rhs)))
+            (if (i32.and (local.get $cuda) (i32.lt_s (local.get $kind) (i32.const 0)))
+              (then
+                (local.set $kind
+                  (keyword-table.value $cudaWords (local.get $lhs) (local.get $rhs)))
+                ;; These qualifiers collide under the table's prefix/suffix hash.
+                (if
+                  (i32.and
+                    (i32.eq (i32.sub (local.get $rhs) (local.get $lhs)) (i32.const 10))
+                    (i32.and
+                      (i32.eq (i32.load16_u offset=8 (local.get $lhs)) (i32.const "__"))
+                      (i32.or
+                        (i64.eq (i64.load (local.get $lhs)) (i64.const "__device"))
+                        (i64.eq (i64.load (local.get $lhs)) (i64.const "__shared")))))
+                  (then (local.set $kind (enum.get $Token.keyword))))
+                (if
+                  (i32.and
+                    (i32.eq (i32.sub (local.get $rhs) (local.get $lhs)) (i32.const 12))
+                    (i32.or
+                      (i32.and
+                        (i64.eq (i64.load (local.get $lhs)) (i64.const "__restri"))
+                        (i32.eq (i32.load offset=8 (local.get $lhs)) (i32.const "ct__")))
+                      (i32.and
+                        (i64.eq (i64.load (local.get $lhs)) (i64.const "__noinli"))
+                        (i32.eq (i32.load offset=8 (local.get $lhs)) (i32.const "ne__")))))
+                  (then (local.set $kind (enum.get $Token.keyword))))
+                (if
+                  (i32.and
+                    (i32.eq (i32.sub (local.get $rhs) (local.get $lhs)) (i32.const 11))
+                    (i32.and
+                      (i64.eq (i64.load (local.get $lhs)) (i64.const "cudaEven"))
+                      (i32.eq (i32.and (i32.load offset=8 (local.get $lhs)) (i32.const 0xffffff)) (i32.const "t_t"))))
+                  (then (local.set $kind (enum.get $Token.type.builtin))))))
             (if (i32.ge_s (local.get $kind) (i32.const 0))
               (then
                 (local.set $hl (i32.and (local.get $kind) (i32.const 255)))
@@ -541,7 +588,14 @@
                         (i32.eq (local.get $expectType) (i32.const 1))))
                     (local.set $expectType (i32.const 0)))
                   (else
-                    (if (i32.eq (call $cppByte (local.get $p)) (i32.const "("))
+                    (if
+                      (i32.or
+                        (i32.eq (call $cppByte (local.get $p)) (i32.const "("))
+                        (i32.and
+                          (local.get $cuda)
+                          (i32.and
+                            (i32.le_u (i32.add (local.get $p) (i32.const 3)) (global.get $end))
+                            (i32.eq (i32.and (i32.load (local.get $p)) (i32.const 0xffffff)) (i32.const "<<<")))))
                       (then
                         (local.set $hl
                           (select

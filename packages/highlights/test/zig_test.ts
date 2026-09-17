@@ -1,6 +1,9 @@
 import assert from 'node:assert';
 import t from 'node:test';
 
+import { isSupportedLanguage } from '../lib/index';
+import languages from '../lib/languages';
+import { zonSample } from './_samples';
 import {
   assertLineFedParity,
   checkInvariants,
@@ -19,6 +22,129 @@ import {
 
 let zig: TestLang;
 t.before(() => (zig = loadLang('zig', '$hlZig')));
+
+void t.test('zig: ZON is an alias sharing the Zig language ID', () => {
+  assert.equal(languages.zon, languages.zig);
+  assert.ok(isSupportedLanguage('zon'));
+  assert.ok(isSupportedLanguage('ZON'));
+  assert.deepEqual(tokenKinds('zon', zonSample), tokenKinds('zig', zonSample));
+});
+
+void t.test(
+  'zig: ZON manifests highlight fields, enums, and nested containers',
+  () => {
+    assert.deepEqual(
+      tokenKinds('zon', '.{ .name = .demo, .deps = .{ .local = null } }'),
+      [
+        ['.', 'punctuation.delimiter'],
+        ['{', 'punctuation.bracket'],
+        ['.', 'punctuation.delimiter'],
+        ['name', 'property'],
+        ['=', 'operator'],
+        ['.', 'punctuation.delimiter'],
+        ['demo', 'property'],
+        [', .', 'punctuation.delimiter'],
+        ['deps', 'property'],
+        ['=', 'operator'],
+        ['.', 'punctuation.delimiter'],
+        ['{', 'punctuation.bracket'],
+        ['.', 'punctuation.delimiter'],
+        ['local', 'property'],
+        ['=', 'operator'],
+        ['null', 'constant.builtin'],
+        ['} }', 'punctuation.bracket'],
+      ]
+    );
+  }
+);
+
+void t.test('zig: ZON primitive values work at the document root', () => {
+  for (const [input, kind] of [
+    ['true', 'boolean'],
+    ['false', 'boolean'],
+    ['null', 'constant.builtin'],
+    ['42', 'number'],
+    ['1_000', 'number'],
+    ['0b10_10', 'number'],
+    ['0o75', 'number'],
+    ['0x1.fp+3', 'number'],
+    ['1.25e-3', 'number'],
+    ['inf', 'number'],
+    ['nan', 'number'],
+    ['"hello λ😀"', 'string'],
+    ["'λ'", 'string'],
+  ]) {
+    assert.deepEqual(tokenKinds('zon', input), [[input, kind]], input);
+  }
+  for (const value of ['42', 'inf', 'nan']) {
+    assert.deepEqual(tokenKinds('zon', `-${value}`), [
+      ['-', 'operator'],
+      [value, 'number'],
+    ]);
+  }
+});
+
+void t.test('zig: ZON quoted fields and enum tags retain their names', () => {
+  assert.deepEqual(tokenKinds('zon', '.@"quoted key" = .@"enum-tag"'), [
+    ['.', 'punctuation.delimiter'],
+    ['@"quoted key"', 'property'],
+    ['=', 'operator'],
+    ['.', 'punctuation.delimiter'],
+    ['@"enum-tag"', 'property'],
+  ]);
+  assert.deepEqual(tokenKinds('zon', '"\\x41\\u{1f600}\\n"'), [
+    ['"', 'string'],
+    ['\\x41\\u{1f600}\\n', 'string.escape'],
+    ['"', 'string'],
+  ]);
+});
+
+void t.test(
+  'zig: ZON special numbers do not capture Zig declarations or members',
+  () => {
+    assert.deepEqual(tokenKinds('zig', 'const inf = nan;'), [
+      ['const', 'keyword.declaration'],
+      ['inf', 'variable'],
+      ['=', 'operator'],
+      ['nan', 'number'],
+      [';', 'punctuation.delimiter'],
+    ]);
+    for (const [code, name, kind] of [
+      ['var nan: f64 = 0;', 'nan', 'variable'],
+      ['fn inf() void {}', 'inf', 'function.definition'],
+      ['inf: while (true) {}', 'inf', 'label'],
+      ['struct { nan: f64 }', 'nan', 'property'],
+      ['std.math.inf(f64)', 'inf', 'function.method'],
+      ['nan()', 'nan', 'function'],
+      ['.inf', 'inf', 'property'],
+      ['.@"nan"', '@"nan"', 'property'],
+      ['@"inf"', '@"inf"', 'variable'],
+    ]) {
+      assert.ok(
+        tokenKinds('zig', code).some(
+          ([text, type]) => text === name && type === kind
+        ),
+        code
+      );
+    }
+    for (const name of ['infinite', 'nanosecond', 'inf_', 'nan0']) {
+      assert.deepEqual(tokenKinds('zig', name), [[name, 'variable']]);
+    }
+  }
+);
+
+void t.test(
+  'zig: ZON multiline strings keep comments and escapes literal',
+  () => {
+    assert.deepEqual(tokenKinds('zon', '\\\\one // inf\\n\n  \\\\two nan\n'), [
+      ['\\\\one // inf\\n', 'string'],
+      ['\\\\two nan', 'string'],
+    ]);
+    assertLineFedParity('zig', zonSample);
+    assertLineFedParity('zon', zonSample);
+    assertLineFedParity('zon', zonSample.replaceAll('\n', '\r\n'));
+  }
+);
 
 void t.test('zig: declarations, control flow, types, and values', () => {
   const src = `const std = @import("std");

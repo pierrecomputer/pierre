@@ -94,6 +94,27 @@ void t.test('css: empty input', () => {
   );
 });
 
+void t.test(
+  'css: multiline statements keep their selector or declaration role',
+  () => {
+    for (const [code, word, kind] of [
+      ['a { color:red\n; }', 'color', 'property'],
+      ['@media screen { h1\n { color: red; } }', 'h1', 'tag'],
+      ['@keyframes spin { from\n { opacity: 0; } }', 'from', 'tag'],
+    ]) {
+      for (const lang of ['css', 'scss', 'less'] as const) {
+        assert.ok(
+          tokenKinds(lang, code).some(
+            ([text, capture]) => text === word && capture === kind
+          )
+        );
+        assertLineFedParity(lang, code);
+        assertLineFedParity(lang, code.replaceAll('\n', '\r\n'));
+      }
+    }
+  }
+);
+
 void t.test('css: selector kinds', () => {
   const html = checkInvariants(
     css.hl,

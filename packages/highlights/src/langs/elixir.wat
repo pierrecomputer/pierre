@@ -8,7 +8,7 @@
   ;; family is a prefix check there. `receive` is matched directly: it shares
   ;; its hash features with `require`, as `defguardp` does with `defmacrop`
   ;; and `reraise` with both, and those two rare words stay out.
-  (keyword-table $exWords $mem.elixirWords $mem.erlangWords
+  (keyword-table $exWords $mem.elixirWords $mem.elmWords
     (group ;; 1: control
       "do" "if" "fn" "end" "for" "case" "cond" "else" "then" "with" "after" "catch" "raise" "throw"
       "unless" "rescue" "quote" "unquote" "try")

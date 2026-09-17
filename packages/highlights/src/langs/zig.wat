@@ -140,7 +140,7 @@
   ;; words can never share a table and `comptime` is matched directly. The
   ;; one-byte names `c` and `_` are below the table's minimum length and are
   ;; matched directly too.
-  (keyword-table $zigWords $mem.zigWords $mem.jsonStack
+  (keyword-table $zigWords $mem.zigWords $mem.keywordPool
     (group "fn") ;; 1: declaration, next name is a function
     (group "const" "var") ;; 2: declaration, next name is a variable
     (group "struct" "enum" "union" "opaque") ;; 3: declaration
@@ -569,6 +569,18 @@
                             (i32.and (call $sigActive) (global.get $sigPattern))
                             (i32.eqz (global.get $sigObscure)))
                           (then (local.set $hl (enum.get $Token.variable.parameter))))))))))
+            ;; ZON adds bare nan/inf values to Zig's literal syntax. Keep
+            ;; declarations, members, calls, and labels in their name roles.
+            (if
+              (i32.and
+                (i32.and (i32.eq (local.get $hl) (enum.get $Token.variable))
+                  (i32.eqz (local.get $expectVar)))
+                (i32.and
+                  (i32.eq (i32.sub (global.get $ptr) (local.get $lhs)) (i32.const 3))
+                  (i32.or
+                    (i32.eq (i32.and (i32.load (local.get $lhs)) (i32.const 0xffffff)) (i32.const "nan"))
+                    (i32.eq (i32.and (i32.load (local.get $lhs)) (i32.const 0xffffff)) (i32.const "inf")))))
+              (then (local.set $hl (enum.get $Token.number))))
             (call $emitTok (local.get $hl) (local.get $lhs) (global.get $ptr))
             (local.set $expectFunc (i32.const 0))
             (local.set $expectLabel (i32.const 0))
