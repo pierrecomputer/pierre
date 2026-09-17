@@ -1,5 +1,30 @@
 import { expect, test } from '@playwright/test';
 
+test('refreshes search after typing and undo without a host update', async ({
+  page,
+}) => {
+  await page.goto('/test/e2e/fixtures/code-view-search.html');
+  const root = page.locator('[data-code-view-root]');
+  const content = root.locator('[contenteditable="true"]');
+  await content.click();
+  await page.keyboard.press('ControlOrMeta+f');
+  const panel = root.locator('[data-search-panel-overlay]');
+  await panel.getByRole('textbox', { name: 'Search' }).fill('github');
+  await expect(panel.locator('[data-matches]')).toHaveText('1 of 4');
+
+  const line = content.locator('[data-line="125"]');
+  await line.click();
+  await page.keyboard.press('Home');
+  await page.keyboard.type('github ');
+  await expect(panel.locator('[data-matches]')).toContainText('5');
+  await expect(line.locator('[data-search-match]')).toHaveCount(2);
+  await expect(content).toBeFocused();
+
+  await page.keyboard.press('ControlOrMeta+z');
+  await expect(panel.locator('[data-matches]')).toContainText('4');
+  await expect(line.locator('[data-search-match]')).toHaveCount(1);
+});
+
 test('find from an editable CodeView uses its panel and reaches offscreen matches', async ({
   page,
 }) => {
