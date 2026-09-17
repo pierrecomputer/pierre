@@ -36,15 +36,14 @@ test('fortran: doubled quotes, BOZ literals, and kind suffixes', () => {
   }
 });
 
-test('fortran: fixed-form comments and free-form C variables', () => {
+test('fortran: separated column-one C comments and C variables', () => {
   const kinds = tokenKinds(
     'fortran',
-    'C fixed comment\n      INTEGER n\n* another comment\nc = 3\ncall work(c) ! trailing'
+    'C fixed comment\n      INTEGER n\nc = 3\ncall work(c) ! trailing'
   );
   for (const expected of [
     ['C fixed comment', 'comment'],
     ['INTEGER', 'type.builtin'],
-    ['* another comment', 'comment'],
     ['c', 'variable'],
     ['! trailing', 'comment'],
   ] satisfies [string, string][]) {
@@ -52,9 +51,20 @@ test('fortran: fixed-form comments and free-form C variables', () => {
   }
 });
 
+test('fortran: free-form column-one * continues a statement', () => {
+  expect(tokenKinds('fortran', 'total = left &\n* right\n')).toEqual([
+    ['total', 'variable'],
+    ['=', 'operator'],
+    ['left', 'variable'],
+    ['&', 'operator'],
+    ['*', 'operator'],
+    ['right', 'variable'],
+  ]);
+});
+
 test('fortran-fixed-form: column-one C needs no blank after the marker', () => {
   const code =
-    'Ccomment without a blank\n      INTEGER n\nc = 1\nC\n      contains\n      call work(c) ! trailing\n';
+    'Ccomment without a blank\n      INTEGER n\nc = 1\nC\n* star comment\n      contains\n      call work(c) ! trailing\n';
   for (const lang of ['fortran-fixed-form', 'f', 'for', 'f77'] as const) {
     const kinds = tokenKinds(lang, code);
     for (const expected of [
@@ -62,6 +72,7 @@ test('fortran-fixed-form: column-one C needs no blank after the marker', () => {
       ['INTEGER', 'type.builtin'],
       ['c = 1', 'comment'],
       ['C', 'comment'],
+      ['* star comment', 'comment'],
       ['contains', 'keyword'],
       ['call', 'keyword.control'],
       ['! trailing', 'comment'],
@@ -70,6 +81,51 @@ test('fortran-fixed-form: column-one C needs no blank after the marker', () => {
     }
     assertLineFedParity(lang, code);
   }
+});
+
+test('fortran-fixed-form: strings continue across column-six markers', () => {
+  const code =
+    "      s = 'hello\n     1 world'\n      t = 'a\nC note\n\n     + b'\n      u = 'open\n      print *, u\n      v = 'zero\n     0 x = 1\n";
+  for (const lang of ['fortran-fixed-form', 'f77'] as const) {
+    expect(tokenKinds(lang, code)).toEqual([
+      ['s', 'variable'],
+      ['=', 'operator'],
+      ["'hello", 'string'],
+      ['1', 'operator'],
+      ["world'", 'string'],
+      ['t', 'variable'],
+      ['=', 'operator'],
+      ["'a", 'string'],
+      ['C note', 'comment'],
+      ['+', 'operator'],
+      ["b'", 'string'],
+      ['u', 'variable'],
+      ['=', 'operator'],
+      ["'open", 'string'],
+      ['print', 'function'],
+      ['*', 'operator'],
+      [',', 'punctuation.delimiter'],
+      ['u', 'variable'],
+      ['v', 'variable'],
+      ['=', 'operator'],
+      ["'zero", 'string'],
+      ['0', 'number'],
+      ['x', 'variable'],
+      ['=', 'operator'],
+      ['1', 'number'],
+    ]);
+    assertLineFedParity(lang, code);
+    assertLineFedParity(lang, code.replaceAll('\n', '\r\n'));
+  }
+  // free-form source has no column-six markers: the string ends with its line
+  expect(tokenKinds('fortran', "      s = 'hello\n     1 world'\n")).toEqual([
+    ['s', 'variable'],
+    ['=', 'operator'],
+    ["'hello", 'string'],
+    ['1', 'number'],
+    ['world', 'variable'],
+    ["'", 'string'],
+  ]);
 });
 
 test('fortran: free-form names keep column-one C words as code', () => {

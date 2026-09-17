@@ -53,8 +53,38 @@
   ;; inherit another run's form.
   (global $fortranFixed (mut i32) (i32.const 0))
 
+  ;; Classifies the fixed-form line at $p when the previous line left a
+  ;; string open: 1 when columns one to five are blank and column six holds
+  ;; a continuation marker (any character but blank or 0), 2 for a comment
+  ;; line (C, c, * or ! in column one), 3 for a blank line, and 0 for an
+  ;; ordinary statement line.
+  (func $fortranFixedLineKind (param $p i32) (result i32)
+    (local $c i32)
+    (local $i i32)
+    (local.set $c (call $fortranByte (local.get $p)))
+    (if (byteset.get "Cc*!" (local.get $c))
+      (then (return (i32.const 2))))
+    (block $initial
+      (loop $blank
+        (br_if $initial
+          (i32.ne (call $fortranByte (i32.add (local.get $p) (local.get $i))) (i32.const 32)))
+        (local.set $i (i32.add (local.get $i) (i32.const 1)))
+        (br_if $blank (i32.lt_u (local.get $i) (i32.const 5))))
+      (local.set $c (call $fortranByte (i32.add (local.get $p) (i32.const 5))))
+      (br_if $initial
+        (i32.or (i32.eqz (local.get $c))
+          (i32.or (call $lexIsSpace (local.get $c)) (i32.eq (local.get $c) (i32.const "0")))))
+      (return (i32.const 1)))
+    (local.set $c (call $fortranByte (call $lexSkipSpaceAt (local.get $p))))
+    (select (i32.const 3) (i32.const 0)
+      (i32.or (i32.eqz (local.get $c))
+        (i32.or (i32.eq (local.get $c) (i32.const 10)) (i32.eq (local.get $c) (i32.const 13))))))
+
   ;; Column position recognizes traditional fixed-form comments. Quoted text
   ;; carries only its quote and continuation flag, never an input pointer.
+  ;; The continuation flag is 1 after a free-form `&` inside a string and 2
+  ;; after a fixed-form line ended inside a string, where the next line's
+  ;; column six decides whether the string goes on.
   (func $hlFortranImpl
     (local $c i32)
     (local $c2 i32)
@@ -80,6 +110,28 @@
         (local.set $lhs (global.get $ptr))
         (local.set $c (i32.load8_u (local.get $lhs)))
         (local.set $c2 (call $fortranByte (i32.add (local.get $lhs) (i32.const 1))))
+        ;; A fixed-form line after an unterminated string: a nonblank, non-zero
+        ;; column six continues the statement, so the string resumes at column
+        ;; seven. Comment and blank lines in between leave the question open;
+        ;; any other line means the string ended with the previous one.
+        (if (i32.eq (local.get $continued) (i32.const 2))
+          (then
+            (local.set $n (call $fortranFixedLineKind (local.get $lhs)))
+            (if (i32.eq (local.get $n) (i32.const 1))
+              (then
+                (global.set $ptr (i32.add (local.get $lhs) (i32.const 5)))
+                (call $emitGap (local.get $lhs) (global.get $ptr))
+                (local.set $lhs (global.get $ptr))
+                (global.set $ptr (i32.add (local.get $lhs) (i32.const 1)))
+                (call $emitTok (enum.get $Token.operator) (local.get $lhs) (global.get $ptr))
+                (local.set $continued (i32.const 0))
+                (br $next)))
+            (if (i32.eq (local.get $n) (i32.const 2))
+              (then (call $lexLineComment (i32.const 1) (enum.get $Token.comment)) (br $next)))
+            (if (i32.eqz (local.get $n))
+              (then
+                (local.set $quote (i32.const 0))
+                (local.set $continued (i32.const 0))))))
         (if (i32.or (i32.eq (local.get $c) (i32.const 10)) (i32.eq (local.get $c) (i32.const 13)))
           (then
             (global.set $ptr (i32.add (local.get $lhs) (i32.const 1)))
@@ -87,8 +139,13 @@
             (local.set $previous (global.get $ptr))
             (local.set $column (i32.const 0))
             (local.set $member (i32.const 0))
+            ;; A string still open at a fixed-form line end may resume on a
+            ;; column-six continuation line; the next line start decides.
             (if (i32.eqz (local.get $continued))
-              (then (local.set $quote (i32.const 0))))
+              (then
+                (if (i32.and (global.get $fortranFixed) (i32.ne (local.get $quote) (i32.const 0)))
+                  (then (local.set $continued (i32.const 2)))
+                  (else (local.set $quote (i32.const 0))))))
             (br $next)))
         (if (i32.and (call $lexIsSpace (local.get $c))
               (i32.or (i32.eqz (local.get $quote)) (local.get $continued)))
@@ -145,16 +202,20 @@
             (call $emitTok (enum.get $Token.string) (local.get $lhs) (global.get $ptr))
             (br $next)))
         ;; A C or * in column one opens a comment line. Fixed-form source
-        ;; takes any column-one C, with or without a blank after it (Ccomment),
-        ;; because its statements start in column seven. Free-form source only
-        ;; takes a C separated from its text, so assignments such as c = 1 and
-        ;; words such as contains remain ordinary code.
+        ;; takes any column-one * or C, with or without a blank after it
+        ;; (Ccomment), because its statements start in column seven. Free-form
+        ;; source has no * comments - a column-one * there is an operator on a
+        ;; continuation line - and only takes a C separated from its text, so
+        ;; assignments such as c = 1 and words such as contains remain
+        ;; ordinary code.
         (if (i32.and (i32.eqz (local.get $column))
-              (i32.or (i32.eq (local.get $c) (i32.const "*"))
+              (i32.or
+                (i32.and (global.get $fortranFixed)
+                  (i32.or (i32.eq (local.get $c) (i32.const "*"))
+                    (i32.eq (i32.or (local.get $c) (i32.const 32)) (i32.const "c"))))
                 (i32.and (i32.eq (i32.or (local.get $c) (i32.const 32)) (i32.const "c"))
-                  (i32.or (global.get $fortranFixed)
-                    (i32.and (i32.eq (local.get $c2) (i32.const 32))
-                      (i32.ne (call $fortranByte (call $lexSkipSpaceAt (i32.add (local.get $lhs) (i32.const 1)))) (i32.const "=")))))))
+                  (i32.and (i32.eq (local.get $c2) (i32.const 32))
+                    (i32.ne (call $fortranByte (call $lexSkipSpaceAt (i32.add (local.get $lhs) (i32.const 1)))) (i32.const "="))))))
           (then (call $lexLineComment (i32.const 1) (enum.get $Token.comment)) (br $next)))
         (if (i32.eq (local.get $c) (i32.const "#"))
           (then (call $lexLineComment (i32.const 1) (enum.get $Token.preproc)) (br $next)))
