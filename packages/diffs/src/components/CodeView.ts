@@ -1645,11 +1645,71 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
         break;
       }
 
+      if (item.item.collapsed === true) {
+        continue;
+      }
       const nextMatches =
-        item.type === 'file'
+        this.searchEditedItem(item, searchParams, remaining) ??
+        (item.type === 'file'
           ? this.searchFileItem(item, searchParams, remaining)
-          : this.searchDiffItem(item, searchParams, remaining);
+          : this.searchDiffItem(item, searchParams, remaining));
       matches.push(...nextMatches);
+    }
+    return matches;
+  }
+
+  // Retained editor documents include edits the host has not echoed back yet.
+  // Diff matches belong to additions; map their row indexes in one diff pass
+  // instead of scanning all hunks separately for every match.
+  private searchEditedItem(
+    item: CodeViewContextItem<LAnnotation, Caret>,
+    searchParams: SearchParams,
+    limit: number
+  ): CodeViewSearchMatch[] | undefined {
+    const document = this.itemEditors
+      .get(item.item.id)
+      ?.editor.getEditState()?.document;
+    if (document === undefined) {
+      return undefined;
+    }
+
+    const matches = document
+      .search(searchParams, limit)
+      .map(([start, end]): CodeViewSearchMatch => {
+        const position = document.positionAt(start);
+        return {
+          itemId: item.item.id,
+          itemIndex: item.index,
+          itemType: item.type,
+          side: item.type === 'diff' ? 'additions' : undefined,
+          lineNumber: position.line + 1,
+          lineIndex: position.line,
+          renderedLineIndex: position.line,
+          startCharacter: position.character,
+          endCharacter: position.character + end - start,
+        };
+      });
+    if (item.type === 'diff' && matches.length > 0) {
+      const diffStyle = this.options.diffStyle ?? 'split';
+      let matchIndex = 0;
+      iterateOverDiff({
+        diff: item.instance.getDiffForSearch() ?? item.item.fileDiff,
+        diffStyle,
+        expandedHunks: true,
+        callback: ({ additionLine }) => {
+          if (additionLine === undefined) {
+            return;
+          }
+          while (matches[matchIndex]?.lineIndex === additionLine.lineIndex) {
+            matches[matchIndex].renderedLineIndex =
+              diffStyle === 'unified'
+                ? additionLine.unifiedLineIndex
+                : additionLine.splitLineIndex;
+            matchIndex++;
+          }
+          return matchIndex === matches.length;
+        },
+      });
     }
     return matches;
   }
@@ -1659,10 +1719,6 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
     searchParams: SearchParams,
     limit: number
   ): CodeViewSearchMatch[] {
-    if (item.item.collapsed === true) {
-      return [];
-    }
-
     const lines = linesFromFileContents(item.item.file.contents).map(
       (text, lineIndex): CodeViewSearchLine => ({
         text,
@@ -1686,14 +1742,10 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
     searchParams: SearchParams,
     limit: number
   ): CodeViewSearchMatch[] {
-    if (item.item.collapsed === true) {
-      return [];
-    }
-
     const fileDiff = item.item.fileDiff;
     const diffStyle = this.options.diffStyle ?? 'split';
     const expandedHunks =
-      this.options.expandUnchanged === true
+      item.item.edit === true || this.options.expandUnchanged === true
         ? true
         : item.instance.getExpandedHunksForSearch();
     const lines: CodeViewSearchLine[] = [];
@@ -1738,6 +1790,10 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
         this.options.collapsedContextThreshold ??
         DEFAULT_COLLAPSED_CONTEXT_THRESHOLD,
       callback: ({ additionLine, deletionLine }) => {
+        if (item.item.edit === true) {
+          addLine('additions', additionLine);
+          return;
+        }
         if (diffStyle === 'unified') {
           if (
             additionLine !== undefined &&
@@ -2685,6 +2741,7 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
           if (latest == null) {
             return;
           }
+          this.markSearchMatchesDirty();
           this.options.onItemEditChange?.(event, latest.item);
         };
         const editStateKey = this.options.getEditStateKey?.(item.item);

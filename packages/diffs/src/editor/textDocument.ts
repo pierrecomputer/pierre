@@ -213,8 +213,8 @@ export class TextDocument<
     return this.#pieceTable.findNextNonOverlappingSubstring(needle, occupied);
   }
 
-  search(searchParams: SearchParams): MatchRange[] {
-    return this.#pieceTable.search(searchParams);
+  search(searchParams: SearchParams, limit?: number): MatchRange[] {
+    return this.#pieceTable.search(searchParams, limit);
   }
 
   applyEdits(
