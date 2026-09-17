@@ -417,7 +417,20 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
             "children": [
               {
                 "type": "text",
-                "value": " type",
+                "value": " ",
+              },
+            ],
+            "properties": {
+              "style": "--diffs-token-dark:#FAFAFA;--diffs-token-light:#0A0A0A",
+            },
+            "tagName": "span",
+            "type": "element",
+          },
+          {
+            "children": [
+              {
+                "type": "text",
+                "value": "type",
               },
             ],
             "properties": {
@@ -430,7 +443,20 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
             "children": [
               {
                 "type": "text",
-                "value": " {",
+                "value": " ",
+              },
+            ],
+            "properties": {
+              "style": "--diffs-token-dark:#FAFAFA;--diffs-token-light:#0A0A0A",
+            },
+            "tagName": "span",
+            "type": "element",
+          },
+          {
+            "children": [
+              {
+                "type": "text",
+                "value": "{",
               },
             ],
             "properties": {
@@ -443,7 +469,20 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
             "children": [
               {
                 "type": "text",
-                "value": " DiffsThemeNames",
+                "value": " ",
+              },
+            ],
+            "properties": {
+              "style": "--diffs-token-dark:#FAFAFA;--diffs-token-light:#0A0A0A",
+            },
+            "tagName": "span",
+            "type": "element",
+          },
+          {
+            "children": [
+              {
+                "type": "text",
+                "value": "DiffsThemeNames",
               },
             ],
             "properties": {
@@ -469,7 +508,20 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
             "children": [
               {
                 "type": "text",
-                "value": " ThemesType",
+                "value": " ",
+              },
+            ],
+            "properties": {
+              "style": "--diffs-token-dark:#FAFAFA;--diffs-token-light:#0A0A0A",
+            },
+            "tagName": "span",
+            "type": "element",
+          },
+          {
+            "children": [
+              {
+                "type": "text",
+                "value": "ThemesType",
               },
             ],
             "properties": {
@@ -482,7 +534,20 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
             "children": [
               {
                 "type": "text",
-                "value": " }",
+                "value": " ",
+              },
+            ],
+            "properties": {
+              "style": "--diffs-token-dark:#FAFAFA;--diffs-token-light:#0A0A0A",
+            },
+            "tagName": "span",
+            "type": "element",
+          },
+          {
+            "children": [
+              {
+                "type": "text",
+                "value": "}",
               },
             ],
             "properties": {
@@ -495,7 +560,20 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
             "children": [
               {
                 "type": "text",
-                "value": " from",
+                "value": " ",
+              },
+            ],
+            "properties": {
+              "style": "--diffs-token-dark:#FAFAFA;--diffs-token-light:#0A0A0A",
+            },
+            "tagName": "span",
+            "type": "element",
+          },
+          {
+            "children": [
+              {
+                "type": "text",
+                "value": "from",
               },
             ],
             "properties": {
@@ -508,7 +586,20 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
             "children": [
               {
                 "type": "text",
-                "value": " '../types'",
+                "value": " ",
+              },
+            ],
+            "properties": {
+              "style": "--diffs-token-dark:#FAFAFA;--diffs-token-light:#0A0A0A",
+            },
+            "tagName": "span",
+            "type": "element",
+          },
+          {
+            "children": [
+              {
+                "type": "text",
+                "value": "'../types'",
               },
             ],
             "properties": {
@@ -578,7 +669,20 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
             "children": [
               {
                 "type": "text",
-                "value": " function",
+                "value": " ",
+              },
+            ],
+            "properties": {
+              "style": "--diffs-token-dark:#FAFAFA;--diffs-token-light:#0A0A0A",
+            },
+            "tagName": "span",
+            "type": "element",
+          },
+          {
+            "children": [
+              {
+                "type": "text",
+                "value": "function",
               },
             ],
             "properties": {
@@ -591,7 +695,20 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
             "children": [
               {
                 "type": "text",
-                "value": " areThemesEqual",
+                "value": " ",
+              },
+            ],
+            "properties": {
+              "style": "--diffs-token-dark:#FAFAFA;--diffs-token-light:#0A0A0A",
+            },
+            "tagName": "span",
+            "type": "element",
+          },
+          {
+            "children": [
+              {
+                "type": "text",
+                "value": "areThemesEqual",
               },
             ],
             "properties": {
@@ -629,7 +746,20 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
             "children": [
               {
                 "type": "text",
-                "value": "  themeA",
+                "value": "  ",
+              },
+            ],
+            "properties": {
+              "style": "--diffs-token-dark:#FAFAFA;--diffs-token-light:#0A0A0A",
+            },
+            "tagName": "span",
+            "type": "element",
+          },
+          {
+            "children": [
+              {
+                "type": "text",
+                "value": "themeA",
               },
             ],
             "properties": {
@@ -655,7 +785,20 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
             "children": [
               {
                 "type": "text",
-                "value": " DiffsThemeNames",
+                "value": " ",
+              },
+            ],
+            "properties": {
+              "style": "--diffs-token-dark:#FAFAFA;--diffs-token-light:#0A0A0A",
+            },
+            "tagName": "span",
+            "type": "element",
+          },
+          {
+            "children": [
+              {
+                "type": "text",
+                "value": "DiffsThemeNames",
               },
             ],
             "properties": {
@@ -668,7 +811,20 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
             "children": [
               {
                 "type": "text",
-                "value": " |",
+                "value": " ",
+              },
+            ],
+            "properties": {
+              "style": "--diffs-token-dark:#FAFAFA;--diffs-token-light:#0A0A0A",
+            },
+            "tagName": "span",
+            "type": "element",
+          },
+          {
+            "children": [
+              {
+                "type": "text",
+                "value": "|",
               },
             ],
             "properties": {
@@ -681,7 +837,20 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
             "children": [
               {
                 "type": "text",
-                "value": " ThemesType",
+                "value": " ",
+              },
+            ],
+            "properties": {
+              "style": "--diffs-token-dark:#FAFAFA;--diffs-token-light:#0A0A0A",
+            },
+            "tagName": "span",
+            "type": "element",
+          },
+          {
+            "children": [
+              {
+                "type": "text",
+                "value": "ThemesType",
               },
             ],
             "properties": {
@@ -694,7 +863,20 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
             "children": [
               {
                 "type": "text",
-                "value": " |",
+                "value": " ",
+              },
+            ],
+            "properties": {
+              "style": "--diffs-token-dark:#FAFAFA;--diffs-token-light:#0A0A0A",
+            },
+            "tagName": "span",
+            "type": "element",
+          },
+          {
+            "children": [
+              {
+                "type": "text",
+                "value": "|",
               },
             ],
             "properties": {
@@ -707,7 +889,20 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
             "children": [
               {
                 "type": "text",
-                "value": " undefined",
+                "value": " ",
+              },
+            ],
+            "properties": {
+              "style": "--diffs-token-dark:#FAFAFA;--diffs-token-light:#0A0A0A",
+            },
+            "tagName": "span",
+            "type": "element",
+          },
+          {
+            "children": [
+              {
+                "type": "text",
+                "value": "undefined",
               },
             ],
             "properties": {
@@ -745,7 +940,20 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
             "children": [
               {
                 "type": "text",
-                "value": "  themeB",
+                "value": "  ",
+              },
+            ],
+            "properties": {
+              "style": "--diffs-token-dark:#FAFAFA;--diffs-token-light:#0A0A0A",
+            },
+            "tagName": "span",
+            "type": "element",
+          },
+          {
+            "children": [
+              {
+                "type": "text",
+                "value": "themeB",
               },
             ],
             "properties": {
@@ -771,7 +979,20 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
             "children": [
               {
                 "type": "text",
-                "value": " DiffsThemeNames",
+                "value": " ",
+              },
+            ],
+            "properties": {
+              "style": "--diffs-token-dark:#FAFAFA;--diffs-token-light:#0A0A0A",
+            },
+            "tagName": "span",
+            "type": "element",
+          },
+          {
+            "children": [
+              {
+                "type": "text",
+                "value": "DiffsThemeNames",
               },
             ],
             "properties": {
@@ -784,7 +1005,20 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
             "children": [
               {
                 "type": "text",
-                "value": " |",
+                "value": " ",
+              },
+            ],
+            "properties": {
+              "style": "--diffs-token-dark:#FAFAFA;--diffs-token-light:#0A0A0A",
+            },
+            "tagName": "span",
+            "type": "element",
+          },
+          {
+            "children": [
+              {
+                "type": "text",
+                "value": "|",
               },
             ],
             "properties": {
@@ -797,7 +1031,20 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
             "children": [
               {
                 "type": "text",
-                "value": " ThemesType",
+                "value": " ",
+              },
+            ],
+            "properties": {
+              "style": "--diffs-token-dark:#FAFAFA;--diffs-token-light:#0A0A0A",
+            },
+            "tagName": "span",
+            "type": "element",
+          },
+          {
+            "children": [
+              {
+                "type": "text",
+                "value": "ThemesType",
               },
             ],
             "properties": {
@@ -810,7 +1057,20 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
             "children": [
               {
                 "type": "text",
-                "value": " |",
+                "value": " ",
+              },
+            ],
+            "properties": {
+              "style": "--diffs-token-dark:#FAFAFA;--diffs-token-light:#0A0A0A",
+            },
+            "tagName": "span",
+            "type": "element",
+          },
+          {
+            "children": [
+              {
+                "type": "text",
+                "value": "|",
               },
             ],
             "properties": {
@@ -823,7 +1083,20 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
             "children": [
               {
                 "type": "text",
-                "value": " undefined",
+                "value": " ",
+              },
+            ],
+            "properties": {
+              "style": "--diffs-token-dark:#FAFAFA;--diffs-token-light:#0A0A0A",
+            },
+            "tagName": "span",
+            "type": "element",
+          },
+          {
+            "children": [
+              {
+                "type": "text",
+                "value": "undefined",
               },
             ],
             "properties": {
@@ -861,7 +1134,20 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
             "children": [
               {
                 "type": "text",
-                "value": " boolean",
+                "value": " ",
+              },
+            ],
+            "properties": {
+              "style": "--diffs-token-dark:#FAFAFA;--diffs-token-light:#0A0A0A",
+            },
+            "tagName": "span",
+            "type": "element",
+          },
+          {
+            "children": [
+              {
+                "type": "text",
+                "value": "boolean",
               },
             ],
             "properties": {
@@ -874,7 +1160,20 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
             "children": [
               {
                 "type": "text",
-                "value": " {",
+                "value": " ",
+              },
+            ],
+            "properties": {
+              "style": "--diffs-token-dark:#FAFAFA;--diffs-token-light:#0A0A0A",
+            },
+            "tagName": "span",
+            "type": "element",
+          },
+          {
+            "children": [
+              {
+                "type": "text",
+                "value": "{",
               },
             ],
             "properties": {
@@ -899,7 +1198,20 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
             "children": [
               {
                 "type": "text",
-                "value": "  if",
+                "value": "  ",
+              },
+            ],
+            "properties": {
+              "style": "--diffs-token-dark:#FAFAFA;--diffs-token-light:#0A0A0A",
+            },
+            "tagName": "span",
+            "type": "element",
+          },
+          {
+            "children": [
+              {
+                "type": "text",
+                "value": "if",
               },
             ],
             "properties": {
@@ -912,7 +1224,20 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
             "children": [
               {
                 "type": "text",
-                "value": " (",
+                "value": " ",
+              },
+            ],
+            "properties": {
+              "style": "--diffs-token-dark:#FAFAFA;--diffs-token-light:#0A0A0A",
+            },
+            "tagName": "span",
+            "type": "element",
+          },
+          {
+            "children": [
+              {
+                "type": "text",
+                "value": "(",
               },
             ],
             "properties": {
@@ -937,7 +1262,20 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
             "children": [
               {
                 "type": "text",
-                "value": "    themeA",
+                "value": "    ",
+              },
+            ],
+            "properties": {
+              "style": "--diffs-token-dark:#FAFAFA;--diffs-token-light:#0A0A0A",
+            },
+            "tagName": "span",
+            "type": "element",
+          },
+          {
+            "children": [
+              {
+                "type": "text",
+                "value": "themeA",
               },
             ],
             "properties": {
@@ -950,7 +1288,20 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
             "children": [
               {
                 "type": "text",
-                "value": " ==",
+                "value": " ",
+              },
+            ],
+            "properties": {
+              "style": "--diffs-token-dark:#FAFAFA;--diffs-token-light:#0A0A0A",
+            },
+            "tagName": "span",
+            "type": "element",
+          },
+          {
+            "children": [
+              {
+                "type": "text",
+                "value": "==",
               },
             ],
             "properties": {
@@ -963,7 +1314,20 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
             "children": [
               {
                 "type": "text",
-                "value": " null",
+                "value": " ",
+              },
+            ],
+            "properties": {
+              "style": "--diffs-token-dark:#FAFAFA;--diffs-token-light:#0A0A0A",
+            },
+            "tagName": "span",
+            "type": "element",
+          },
+          {
+            "children": [
+              {
+                "type": "text",
+                "value": "null",
               },
             ],
             "properties": {
@@ -976,7 +1340,20 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
             "children": [
               {
                 "type": "text",
-                "value": " ||",
+                "value": " ",
+              },
+            ],
+            "properties": {
+              "style": "--diffs-token-dark:#FAFAFA;--diffs-token-light:#0A0A0A",
+            },
+            "tagName": "span",
+            "type": "element",
+          },
+          {
+            "children": [
+              {
+                "type": "text",
+                "value": "||",
               },
             ],
             "properties": {
@@ -1001,7 +1378,20 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
             "children": [
               {
                 "type": "text",
-                "value": "    themeB",
+                "value": "    ",
+              },
+            ],
+            "properties": {
+              "style": "--diffs-token-dark:#FAFAFA;--diffs-token-light:#0A0A0A",
+            },
+            "tagName": "span",
+            "type": "element",
+          },
+          {
+            "children": [
+              {
+                "type": "text",
+                "value": "themeB",
               },
             ],
             "properties": {
@@ -1014,7 +1404,20 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
             "children": [
               {
                 "type": "text",
-                "value": " ==",
+                "value": " ",
+              },
+            ],
+            "properties": {
+              "style": "--diffs-token-dark:#FAFAFA;--diffs-token-light:#0A0A0A",
+            },
+            "tagName": "span",
+            "type": "element",
+          },
+          {
+            "children": [
+              {
+                "type": "text",
+                "value": "==",
               },
             ],
             "properties": {
@@ -1027,7 +1430,20 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
             "children": [
               {
                 "type": "text",
-                "value": " null",
+                "value": " ",
+              },
+            ],
+            "properties": {
+              "style": "--diffs-token-dark:#FAFAFA;--diffs-token-light:#0A0A0A",
+            },
+            "tagName": "span",
+            "type": "element",
+          },
+          {
+            "children": [
+              {
+                "type": "text",
+                "value": "null",
               },
             ],
             "properties": {
@@ -1040,7 +1456,20 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
             "children": [
               {
                 "type": "text",
-                "value": " ||",
+                "value": " ",
+              },
+            ],
+            "properties": {
+              "style": "--diffs-token-dark:#FAFAFA;--diffs-token-light:#0A0A0A",
+            },
+            "tagName": "span",
+            "type": "element",
+          },
+          {
+            "children": [
+              {
+                "type": "text",
+                "value": "||",
               },
             ],
             "properties": {
@@ -1065,7 +1494,20 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
             "children": [
               {
                 "type": "text",
-                "value": "    typeof",
+                "value": "    ",
+              },
+            ],
+            "properties": {
+              "style": "--diffs-token-dark:#FAFAFA;--diffs-token-light:#0A0A0A",
+            },
+            "tagName": "span",
+            "type": "element",
+          },
+          {
+            "children": [
+              {
+                "type": "text",
+                "value": "typeof",
               },
             ],
             "properties": {
@@ -1078,7 +1520,20 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
             "children": [
               {
                 "type": "text",
-                "value": " themeA",
+                "value": " ",
+              },
+            ],
+            "properties": {
+              "style": "--diffs-token-dark:#FAFAFA;--diffs-token-light:#0A0A0A",
+            },
+            "tagName": "span",
+            "type": "element",
+          },
+          {
+            "children": [
+              {
+                "type": "text",
+                "value": "themeA",
               },
             ],
             "properties": {
@@ -1091,7 +1546,20 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
             "children": [
               {
                 "type": "text",
-                "value": " ===",
+                "value": " ",
+              },
+            ],
+            "properties": {
+              "style": "--diffs-token-dark:#FAFAFA;--diffs-token-light:#0A0A0A",
+            },
+            "tagName": "span",
+            "type": "element",
+          },
+          {
+            "children": [
+              {
+                "type": "text",
+                "value": "===",
               },
             ],
             "properties": {
@@ -1104,7 +1572,20 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
             "children": [
               {
                 "type": "text",
-                "value": " 'string'",
+                "value": " ",
+              },
+            ],
+            "properties": {
+              "style": "--diffs-token-dark:#FAFAFA;--diffs-token-light:#0A0A0A",
+            },
+            "tagName": "span",
+            "type": "element",
+          },
+          {
+            "children": [
+              {
+                "type": "text",
+                "value": "'string'",
               },
             ],
             "properties": {
@@ -1117,7 +1598,20 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
             "children": [
               {
                 "type": "text",
-                "value": " ||",
+                "value": " ",
+              },
+            ],
+            "properties": {
+              "style": "--diffs-token-dark:#FAFAFA;--diffs-token-light:#0A0A0A",
+            },
+            "tagName": "span",
+            "type": "element",
+          },
+          {
+            "children": [
+              {
+                "type": "text",
+                "value": "||",
               },
             ],
             "properties": {
@@ -1142,7 +1636,20 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
             "children": [
               {
                 "type": "text",
-                "value": "    typeof",
+                "value": "    ",
+              },
+            ],
+            "properties": {
+              "style": "--diffs-token-dark:#FAFAFA;--diffs-token-light:#0A0A0A",
+            },
+            "tagName": "span",
+            "type": "element",
+          },
+          {
+            "children": [
+              {
+                "type": "text",
+                "value": "typeof",
               },
             ],
             "properties": {
@@ -1155,7 +1662,20 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
             "children": [
               {
                 "type": "text",
-                "value": " themeB",
+                "value": " ",
+              },
+            ],
+            "properties": {
+              "style": "--diffs-token-dark:#FAFAFA;--diffs-token-light:#0A0A0A",
+            },
+            "tagName": "span",
+            "type": "element",
+          },
+          {
+            "children": [
+              {
+                "type": "text",
+                "value": "themeB",
               },
             ],
             "properties": {
@@ -1168,7 +1688,20 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
             "children": [
               {
                 "type": "text",
-                "value": " ===",
+                "value": " ",
+              },
+            ],
+            "properties": {
+              "style": "--diffs-token-dark:#FAFAFA;--diffs-token-light:#0A0A0A",
+            },
+            "tagName": "span",
+            "type": "element",
+          },
+          {
+            "children": [
+              {
+                "type": "text",
+                "value": "===",
               },
             ],
             "properties": {
@@ -1181,7 +1714,20 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
             "children": [
               {
                 "type": "text",
-                "value": " 'string'",
+                "value": " ",
+              },
+            ],
+            "properties": {
+              "style": "--diffs-token-dark:#FAFAFA;--diffs-token-light:#0A0A0A",
+            },
+            "tagName": "span",
+            "type": "element",
+          },
+          {
+            "children": [
+              {
+                "type": "text",
+                "value": "'string'",
               },
             ],
             "properties": {
@@ -1206,7 +1752,20 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
             "children": [
               {
                 "type": "text",
-                "value": "  )",
+                "value": "  ",
+              },
+            ],
+            "properties": {
+              "style": "--diffs-token-dark:#FAFAFA;--diffs-token-light:#0A0A0A",
+            },
+            "tagName": "span",
+            "type": "element",
+          },
+          {
+            "children": [
+              {
+                "type": "text",
+                "value": ")",
               },
             ],
             "properties": {
@@ -1219,7 +1778,20 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
             "children": [
               {
                 "type": "text",
-                "value": " {",
+                "value": " ",
+              },
+            ],
+            "properties": {
+              "style": "--diffs-token-dark:#FAFAFA;--diffs-token-light:#0A0A0A",
+            },
+            "tagName": "span",
+            "type": "element",
+          },
+          {
+            "children": [
+              {
+                "type": "text",
+                "value": "{",
               },
             ],
             "properties": {
@@ -1244,7 +1816,20 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
             "children": [
               {
                 "type": "text",
-                "value": "    return",
+                "value": "    ",
+              },
+            ],
+            "properties": {
+              "style": "--diffs-token-dark:#FAFAFA;--diffs-token-light:#0A0A0A",
+            },
+            "tagName": "span",
+            "type": "element",
+          },
+          {
+            "children": [
+              {
+                "type": "text",
+                "value": "return",
               },
             ],
             "properties": {
@@ -1257,7 +1842,20 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
             "children": [
               {
                 "type": "text",
-                "value": " themeA",
+                "value": " ",
+              },
+            ],
+            "properties": {
+              "style": "--diffs-token-dark:#FAFAFA;--diffs-token-light:#0A0A0A",
+            },
+            "tagName": "span",
+            "type": "element",
+          },
+          {
+            "children": [
+              {
+                "type": "text",
+                "value": "themeA",
               },
             ],
             "properties": {
@@ -1270,7 +1868,20 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
             "children": [
               {
                 "type": "text",
-                "value": " ===",
+                "value": " ",
+              },
+            ],
+            "properties": {
+              "style": "--diffs-token-dark:#FAFAFA;--diffs-token-light:#0A0A0A",
+            },
+            "tagName": "span",
+            "type": "element",
+          },
+          {
+            "children": [
+              {
+                "type": "text",
+                "value": "===",
               },
             ],
             "properties": {
@@ -1283,7 +1894,20 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
             "children": [
               {
                 "type": "text",
-                "value": " themeB",
+                "value": " ",
+              },
+            ],
+            "properties": {
+              "style": "--diffs-token-dark:#FAFAFA;--diffs-token-light:#0A0A0A",
+            },
+            "tagName": "span",
+            "type": "element",
+          },
+          {
+            "children": [
+              {
+                "type": "text",
+                "value": "themeB",
               },
             ],
             "properties": {
@@ -1321,7 +1945,20 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
             "children": [
               {
                 "type": "text",
-                "value": "  }",
+                "value": "  ",
+              },
+            ],
+            "properties": {
+              "style": "--diffs-token-dark:#FAFAFA;--diffs-token-light:#0A0A0A",
+            },
+            "tagName": "span",
+            "type": "element",
+          },
+          {
+            "children": [
+              {
+                "type": "text",
+                "value": "}",
               },
             ],
             "properties": {
@@ -1346,7 +1983,20 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
             "children": [
               {
                 "type": "text",
-                "value": "  return",
+                "value": "  ",
+              },
+            ],
+            "properties": {
+              "style": "--diffs-token-dark:#FAFAFA;--diffs-token-light:#0A0A0A",
+            },
+            "tagName": "span",
+            "type": "element",
+          },
+          {
+            "children": [
+              {
+                "type": "text",
+                "value": "return",
               },
             ],
             "properties": {
@@ -1359,7 +2009,20 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
             "children": [
               {
                 "type": "text",
-                "value": " themeA",
+                "value": " ",
+              },
+            ],
+            "properties": {
+              "style": "--diffs-token-dark:#FAFAFA;--diffs-token-light:#0A0A0A",
+            },
+            "tagName": "span",
+            "type": "element",
+          },
+          {
+            "children": [
+              {
+                "type": "text",
+                "value": "themeA",
               },
             ],
             "properties": {
@@ -1398,7 +2061,20 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
             "children": [
               {
                 "type": "text",
-                "value": " ===",
+                "value": " ",
+              },
+            ],
+            "properties": {
+              "style": "--diffs-token-dark:#FAFAFA;--diffs-token-light:#0A0A0A",
+            },
+            "tagName": "span",
+            "type": "element",
+          },
+          {
+            "children": [
+              {
+                "type": "text",
+                "value": "===",
               },
             ],
             "properties": {
@@ -1411,7 +2087,20 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
             "children": [
               {
                 "type": "text",
-                "value": " themeB",
+                "value": " ",
+              },
+            ],
+            "properties": {
+              "style": "--diffs-token-dark:#FAFAFA;--diffs-token-light:#0A0A0A",
+            },
+            "tagName": "span",
+            "type": "element",
+          },
+          {
+            "children": [
+              {
+                "type": "text",
+                "value": "themeB",
               },
             ],
             "properties": {
@@ -1450,7 +2139,20 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
             "children": [
               {
                 "type": "text",
-                "value": " &&",
+                "value": " ",
+              },
+            ],
+            "properties": {
+              "style": "--diffs-token-dark:#FAFAFA;--diffs-token-light:#0A0A0A",
+            },
+            "tagName": "span",
+            "type": "element",
+          },
+          {
+            "children": [
+              {
+                "type": "text",
+                "value": "&&",
               },
             ],
             "properties": {
@@ -1463,7 +2165,20 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
             "children": [
               {
                 "type": "text",
-                "value": " themeA",
+                "value": " ",
+              },
+            ],
+            "properties": {
+              "style": "--diffs-token-dark:#FAFAFA;--diffs-token-light:#0A0A0A",
+            },
+            "tagName": "span",
+            "type": "element",
+          },
+          {
+            "children": [
+              {
+                "type": "text",
+                "value": "themeA",
               },
             ],
             "properties": {
@@ -1502,7 +2217,20 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
             "children": [
               {
                 "type": "text",
-                "value": " ===",
+                "value": " ",
+              },
+            ],
+            "properties": {
+              "style": "--diffs-token-dark:#FAFAFA;--diffs-token-light:#0A0A0A",
+            },
+            "tagName": "span",
+            "type": "element",
+          },
+          {
+            "children": [
+              {
+                "type": "text",
+                "value": "===",
               },
             ],
             "properties": {
@@ -1515,7 +2243,20 @@ exports[`FileRenderer should render TypeScript code to AST matching snapshot 1`]
             "children": [
               {
                 "type": "text",
-                "value": " themeB",
+                "value": " ",
+              },
+            ],
+            "properties": {
+              "style": "--diffs-token-dark:#FAFAFA;--diffs-token-light:#0A0A0A",
+            },
+            "tagName": "span",
+            "type": "element",
+          },
+          {
+            "children": [
+              {
+                "type": "text",
+                "value": "themeB",
               },
             ],
             "properties": {

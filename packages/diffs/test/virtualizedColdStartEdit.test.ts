@@ -14,7 +14,7 @@ import { Virtualizer } from '../src/components/Virtualizer';
 import { DEFAULT_THEMES } from '../src/constants';
 import { Editor } from '../src/editor/editor';
 import type { EditorType } from '../src/editor/types';
-import { disposeHighlighter } from '../src/highlighter/shared_highlighter';
+import { disposeHighlighter } from '../src/highlighter';
 import type { FileContents, FileDiffMetadata } from '../src/types';
 import { parseDiffFromFile } from '../src/utils/parseDiffFromFile';
 import {

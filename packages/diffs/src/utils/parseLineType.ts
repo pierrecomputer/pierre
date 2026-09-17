@@ -20,11 +20,7 @@ export function parseLineType(line: string): ParsedLine | undefined {
   }
   const processedLine = line.substring(1);
   return {
-    // NOTE(amadeus): If the line is empty, we should make it a
-    // newline to force shiki to highlight the row. This should
-    // only really ever apply as the last line of a hunk that was most likely
-    // processed via a string and not a file since patch files will include a
-    // newline here by default
+    // Empty patch rows still need a line ending to appear in the rendered hunk.
     line: processedLine === '' ? '\n' : processedLine,
     type:
       firstChar === ' '

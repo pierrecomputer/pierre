@@ -4,6 +4,7 @@ import { VirtualizedFile } from '../src/components/VirtualizedFile';
 import { Virtualizer } from '../src/components/Virtualizer';
 import { DEFAULT_THEMES } from '../src/constants';
 import { Editor } from '../src/editor/editor';
+import { createDiffsHighlighter } from '../src/highlighter/highlights';
 import type { DiffsHighlighter } from '../src/types';
 import { installDom, waitFor } from './domHarness';
 
@@ -11,11 +12,9 @@ const MODEL_LINE_TOP = 20;
 
 function createTestHighlighter(): DiffsHighlighter {
   return {
-    getLanguage: () => undefined,
-    getLoadedLanguages: () => [],
-    getTheme: () => ({ type: 'light', colors: {} }),
-    loadLanguage: async () => {},
-    setTheme: () => ({ theme: { type: 'light' }, colorMap: [''] }),
+    ...createDiffsHighlighter(),
+    hasTheme: () => true,
+    getTheme: () => ({ name: 'test', appearance: 'light', style: {} }),
   } as unknown as DiffsHighlighter;
 }
 

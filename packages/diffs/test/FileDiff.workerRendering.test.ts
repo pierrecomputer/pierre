@@ -2,10 +2,7 @@ import { afterAll, beforeAll, expect, spyOn, test } from 'bun:test';
 
 import { File } from '../src/components/File';
 import { FileDiff } from '../src/components/FileDiff';
-import {
-  disposeHighlighter,
-  getSharedHighlighter,
-} from '../src/highlighter/shared_highlighter';
+import { disposeHighlighter, getSharedHighlighter } from '../src/highlighter';
 import type {
   DiffLineAnnotation,
   DiffsHighlighter,
@@ -29,7 +26,6 @@ beforeAll(async () => {
   sharedHighlighter = await getSharedHighlighter({
     themes: ['pierre-dark'],
     langs: ['typescript'],
-    preferredHighlighter: 'shiki-js',
   });
 });
 

@@ -1,10 +1,12 @@
-import type { Element as HASTElement, Properties } from 'hast';
+import type {
+  HElement as HtmlElement,
+  PrePropertiesConfig,
+  HProperties as Properties,
+} from '../types';
+import { createHtmlElement } from './html';
 
-import type { PrePropertiesConfig } from '../types';
-import { createHastElement } from './hast_utils';
-
-export function createPreElement(options: PrePropertiesConfig): HASTElement {
-  return createHastElement({
+export function createPreElement(options: PrePropertiesConfig): HtmlElement {
+  return createHtmlElement({
     tagName: 'pre',
     properties: createPreWrapperProperties(options),
   });

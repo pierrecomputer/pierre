@@ -1,23 +1,28 @@
+import type { LanguageRegistration } from 'shiki/core';
+
 import type {
+  DiffsTheme,
   DiffsThemeNames,
   ExtensionFormatMap,
   FileContents,
   FileDiffMetadata,
-  HighlighterTypes,
-  LanguageRegistration,
   LineDiffTypes,
   RenderDiffOptions,
   RenderFileOptions,
-  SupportedLanguages,
   ThemedDiffResult,
   ThemedFileResult,
-  ThemeRegistrationResolved,
   ThemesType,
 } from '../types';
 
 export type WorkerRequestId = string;
 
+export interface ResolvedCustomLanguage {
+  name: string;
+  data: LanguageRegistration[];
+}
+
 export interface WorkerRenderingOptions {
+  preferredHighlighter?: RenderFileOptions['preferredHighlighter'];
   theme: DiffsThemeNames | ThemesType;
   useTokenTransformer: boolean;
   tokenizeMaxLineLength: number;
@@ -49,7 +54,7 @@ export interface RenderFileRequest {
   type: 'file';
   id: WorkerRequestId;
   file: FileContents;
-  resolvedLanguages?: ResolvedLanguage[];
+  resolvedCustomLanguages?: ResolvedCustomLanguage[];
   customExtensionsVersion?: number;
   customExtensionMap?: ExtensionFormatMap;
 }
@@ -58,7 +63,7 @@ export interface RenderDiffRequest {
   type: 'diff';
   id: WorkerRequestId;
   diff: FileDiffMetadata;
-  resolvedLanguages?: ResolvedLanguage[];
+  resolvedCustomLanguages?: ResolvedCustomLanguage[];
   customExtensionsVersion?: number;
   customExtensionMap?: ExtensionFormatMap;
 }
@@ -67,23 +72,18 @@ export interface InitializeWorkerRequest {
   type: 'initialize';
   id: WorkerRequestId;
   renderOptions: WorkerRenderingOptions;
-  preferredHighlighter: HighlighterTypes;
-  resolvedThemes: ThemeRegistrationResolved[];
-  resolvedLanguages?: ResolvedLanguage[];
+  resolvedThemes: DiffsTheme[];
+  langs?: string[];
+  resolvedCustomLanguages?: ResolvedCustomLanguage[];
   customExtensionsVersion?: number;
   customExtensionMap?: ExtensionFormatMap;
-}
-
-export interface ResolvedLanguage {
-  name: Exclude<SupportedLanguages, 'text'>;
-  data: LanguageRegistration[];
 }
 
 export interface SetRenderOptionsWorkerRequest {
   type: 'set-render-options';
   id: WorkerRequestId;
   renderOptions: WorkerRenderingOptions;
-  resolvedThemes: ThemeRegistrationResolved[];
+  resolvedThemes: DiffsTheme[];
 }
 
 export type SubmitRequest =
@@ -168,8 +168,8 @@ export interface WorkerPoolOptions {
 }
 
 export interface WorkerInitializationRenderOptions extends Partial<WorkerRenderingOptions> {
-  langs?: SupportedLanguages[];
-  preferredHighlighter?: HighlighterTypes;
+  /** Languages to preload before the pool is ready. Ignored by Highlights. */
+  langs?: string[];
 }
 
 export interface InitializeWorkerTask {

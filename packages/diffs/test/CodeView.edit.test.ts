@@ -19,10 +19,7 @@ import type {
   EditorType,
   EditorViewState,
 } from '../src/editor/types';
-import {
-  disposeHighlighter,
-  getSharedHighlighter,
-} from '../src/highlighter/shared_highlighter';
+import { disposeHighlighter, getSharedHighlighter } from '../src/highlighter';
 import type {
   CodeViewItem,
   DiffLineAnnotation,
@@ -236,8 +233,6 @@ async function expectMissingEditorFactoryOnRender(
 beforeAll(async () => {
   await getSharedHighlighter({
     themes: ['pierre-dark', 'pierre-light'],
-    langs: ['typescript'],
-    preferredHighlighter: 'shiki-js',
   });
 });
 

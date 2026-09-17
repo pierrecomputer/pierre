@@ -16,6 +16,146 @@ const makeTheme = (name: string): ThemeLike => ({
 });
 
 describe('createThemeResolver', () => {
+  test('fallback loaders are discovered lazily, deduped, and retained after clearing', async () => {
+    const lookups: string[] = [];
+    let loads = 0;
+    const resolver = createThemeResolver({
+      fallbackLoader: (name) => {
+        lookups.push(name);
+        return () => {
+          loads++;
+          return Promise.resolve(makeTheme(name));
+        };
+      },
+    });
+    const custom = makeTheme('custom');
+    const seeded = makeTheme('seeded');
+    resolver.registerTheme('custom', () => Promise.resolve(custom));
+    resolver.seedResolvedTheme('seeded', seeded);
+
+    expect(resolver.hasRegisteredTheme('bundled')).toBe(false);
+    expect(resolver.getResolvedTheme('bundled')).toBeUndefined();
+    expect(await resolver.resolveThemes(['custom', 'seeded'])).toEqual([
+      custom,
+      seeded,
+    ]);
+    expect(lookups).toEqual([]);
+
+    const [first, second] = await resolver.resolveThemes([
+      'bundled',
+      'bundled',
+    ]);
+    expect(first).toBe(second);
+    expect(loads).toBe(1);
+    expect(lookups).toEqual(['bundled']);
+    expect(resolver.hasRegisteredTheme('bundled')).toBe(true);
+    expect(() =>
+      resolver.registerTheme('bundled', () => Promise.resolve(custom))
+    ).toThrow(DuplicateThemeError);
+
+    resolver.clearResolvedThemes();
+    expect(await resolver.resolveTheme('bundled')).toEqual(first);
+    expect(loads).toBe(2);
+    expect(lookups).toEqual(['bundled']);
+  });
+
+  test('an unknown fallback name rejects without registering a loader', async () => {
+    const resolver = createThemeResolver({ fallbackLoader: () => undefined });
+
+    let caught: unknown;
+    try {
+      await resolver.resolveTheme('missing');
+    } catch (error) {
+      caught = error;
+    }
+    expect(caught).toBeInstanceOf(UnregisteredThemeError);
+    expect(resolver.hasRegisteredTheme('missing')).toBe(false);
+  });
+
+  test('loaded themes are unwrapped and normalized before caching, and validation failures can retry', async () => {
+    let loaded: ThemeLike = {};
+    const resolver = createThemeResolver({
+      fallbackLoader: () => () => Promise.resolve({ default: loaded }),
+      normalizeTheme: (theme, name) => {
+        if (theme.fg === undefined) throw new Error('Missing foreground');
+        return { ...theme, name };
+      },
+    });
+
+    let caught: unknown;
+    try {
+      await resolver.resolveTheme('alias');
+    } catch (error) {
+      caught = error;
+    }
+    expect(caught).toBeInstanceOf(Error);
+    expect((caught as Error).message).toBe('Missing foreground');
+    expect(resolver.hasResolvedTheme('alias')).toBe(false);
+
+    loaded = makeTheme('original-name');
+    const theme = await resolver.resolveTheme('alias');
+    expect(theme).toEqual({ ...loaded, name: 'alias' });
+    expect(resolver.getResolvedTheme('alias')).toBe(theme);
+    expect(await resolver.resolveTheme('alias')).toBe(theme);
+    expect(loaded.name).toBe('original-name');
+  });
+
+  test('single and batch seeds are normalized and validated before caching', () => {
+    const resolver = createThemeResolver({
+      normalizeTheme: (theme, name) => {
+        if (theme.fg === undefined) throw new Error('Missing foreground');
+        return { ...theme, name };
+      },
+    });
+    const original = makeTheme('original-name');
+
+    resolver.seedResolvedTheme('single', original);
+    resolver.seedResolvedThemes([
+      ['batch-first', original],
+      ['batch-second', original],
+    ]);
+    expect(
+      resolver.getResolvedThemes(['single', 'batch-first', 'batch-second'])
+    ).toEqual([
+      { ...original, name: 'single' },
+      { ...original, name: 'batch-first' },
+      { ...original, name: 'batch-second' },
+    ]);
+    expect(() => resolver.seedResolvedTheme('single', {})).toThrow(
+      'Missing foreground'
+    );
+    expect(resolver.getResolvedTheme('single')).toEqual({
+      ...original,
+      name: 'single',
+    });
+    expect(() => resolver.seedResolvedThemes([['invalid', {}]])).toThrow(
+      'Missing foreground'
+    );
+    expect(resolver.hasResolvedTheme('invalid')).toBe(false);
+    expect(original.name).toBe('original-name');
+  });
+
+  test('resolvers can load the same name with independent backend theme shapes', async () => {
+    const paletteTheme = { name: 'shared', palette: ['#123456'] };
+    const tokenTheme = { name: 'shared', tokenColors: [{ scope: 'keyword' }] };
+    const paletteResolver = createThemeResolver<typeof paletteTheme>({
+      fallbackLoader: () => () => Promise.resolve(paletteTheme),
+    });
+    const tokenResolver = createThemeResolver<typeof tokenTheme>({
+      fallbackLoader: () => () => Promise.resolve(tokenTheme),
+    });
+
+    const [palette, tokens] = await Promise.all([
+      paletteResolver.resolveTheme('shared'),
+      tokenResolver.resolveTheme('shared'),
+    ]);
+    expect(palette.palette).toEqual(['#123456']);
+    expect(tokens.tokenColors).toEqual([{ scope: 'keyword' }]);
+    paletteResolver.clearResolvedThemes();
+    expect(paletteResolver.hasResolvedTheme('shared')).toBe(false);
+    expect(tokenResolver.getResolvedTheme('shared')).toBe(tokenTheme);
+  });
+
   test('resolver.registerTheme duplicate throws DuplicateThemeError naming the theme', () => {
     const resolver = createThemeResolver();
     resolver.registerTheme('dup', () => Promise.resolve(makeTheme('dup')));

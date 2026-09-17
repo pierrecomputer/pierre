@@ -1,5 +1,4 @@
-import type { ElementContent } from 'hast';
-
+import type { ElementContent } from '../src/types';
 import type {
   InitializeWorkerRequest,
   RenderDiffRequest,
@@ -192,8 +191,6 @@ export function createInitializingManager(
       ...poolOptions,
     },
     {
-      langs: [],
-      preferredHighlighter: 'shiki-js',
       theme: 'github-dark',
       ...initOptions,
     }

@@ -1,10 +1,7 @@
 import { afterAll, beforeAll, describe, expect, spyOn, test } from 'bun:test';
 
 import { CodeView } from '../src/components/CodeView';
-import {
-  disposeHighlighter,
-  getSharedHighlighter,
-} from '../src/highlighter/shared_highlighter';
+import { disposeHighlighter, getSharedHighlighter } from '../src/highlighter';
 import type {
   CodeViewItem,
   DiffsHighlighter,
@@ -29,7 +26,6 @@ beforeAll(async () => {
   sharedHighlighter = await getSharedHighlighter({
     themes: ['pierre-dark'],
     langs: ['typescript'],
-    preferredHighlighter: 'shiki-js',
   });
 });
 

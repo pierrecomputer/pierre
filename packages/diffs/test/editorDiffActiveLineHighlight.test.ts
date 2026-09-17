@@ -4,7 +4,7 @@ import { FileDiff, type FileDiffOptions } from '../src/components/FileDiff';
 import { DEFAULT_THEMES } from '../src/constants';
 import { Editor } from '../src/editor/editor';
 import { DirectionForward } from '../src/editor/selection';
-import { disposeHighlighter } from '../src/highlighter/shared_highlighter';
+import { disposeHighlighter } from '../src/highlighter';
 import type { FileContents, SelectedLineRange } from '../src/types';
 import { installDom, wait, waitFor } from './domHarness';
 

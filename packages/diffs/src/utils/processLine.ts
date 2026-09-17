@@ -1,10 +1,12 @@
-import type { ElementContent, Element as HASTElement } from 'hast';
-
-import type { SharedRenderState } from '../types';
-import { createTextNodeElement } from './hast_utils';
+import type {
+  ElementContent,
+  HElement as HtmlElement,
+  SharedRenderState,
+} from '../types';
+import { createTextNode } from './html';
 
 export function processLine(
-  node: HASTElement,
+  node: HtmlElement,
   line: number,
   state: SharedRenderState
 ): ElementContent {
@@ -28,7 +30,7 @@ export function processLine(
   // NOTE(amadeus): We need to push newline characters into empty rows or else
   // copy/pasta will have issues
   if (node.children.length === 0) {
-    node.children.push(createTextNodeElement('\n'));
+    node.children.push(createTextNode('\n'));
   }
 
   return node;

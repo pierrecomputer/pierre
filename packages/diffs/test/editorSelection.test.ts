@@ -46,7 +46,7 @@ import type {
   ResolvedTextEdit,
   SelectionDirection,
 } from '../src/editor/types';
-import { disposeHighlighter } from '../src/highlighter/shared_highlighter';
+import { disposeHighlighter } from '../src/highlighter';
 import type { FileContents } from '../src/types';
 import { installDom, wait } from './domHarness';
 
@@ -3934,6 +3934,62 @@ async function createEditorFixture(contents: string): Promise<EditorFixture> {
 }
 
 describe('Editor native text selection', () => {
+  test.each(['composed', 'shadow'])(
+    'keeps the drag anchor when the %s selection API reports only a caret',
+    async (api) => {
+      const { cleanup, content, editor } = await createEditorFixture(
+        'before\nalpha bravo\ncharlie delta\necho foxtrot\nafter'
+      );
+      const originalGetSelection = document.getSelection.bind(document);
+      let nativeRange: StaticRange;
+
+      try {
+        content.dispatchEvent(new Event('focus'));
+        const lines = [...content.querySelectorAll<HTMLElement>('[data-line]')];
+        document.getSelection = (() =>
+          api === 'composed'
+            ? { getComposedRanges: () => [nativeRange] }
+            : {}) as unknown as typeof document.getSelection;
+        Reflect.set(content.getRootNode(), 'getSelection', () => ({
+          rangeCount: 1,
+          getRangeAt: () => nativeRange,
+        }));
+        content.dispatchEvent(
+          new PointerEvent('pointerdown', { pointerType: 'mouse' })
+        );
+
+        // Drag both ways and back to the anchor using caret-only native ranges.
+        const initial = createSelection(2, 3, 2, 3);
+        const forward = createSelection(2, 3, 3, 4, DirectionForward);
+        const backward = createSelection(1, 6, 2, 3, DirectionBackward);
+        for (const selection of [
+          initial,
+          forward,
+          backward,
+          initial,
+          forward,
+        ]) {
+          const focus = getCaretPosition(selection);
+          const [node, offset] = getSelectionAnchor(
+            lines[focus.line],
+            focus.character
+          );
+          nativeRange = composedRange(node, offset, node, offset);
+          document.dispatchEvent(new Event('selectionchange'));
+          expect(editor.getViewState().selections).toEqual([selection]);
+        }
+
+        document.dispatchEvent(
+          new PointerEvent('pointerup', { pointerType: 'mouse' })
+        );
+        expect(editor.getViewState().selections).toEqual([forward]);
+      } finally {
+        document.getSelection = originalGetSelection;
+        cleanup();
+      }
+    }
+  );
+
   test.each([
     {
       name: 'whole line',

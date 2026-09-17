@@ -18,7 +18,7 @@ import {
   disposeHighlighter,
   getHighlighterIfLoaded,
   getSharedHighlighter,
-} from '../src/highlighter/shared_highlighter';
+} from '../src/highlighter';
 import { queueRender } from '../src/managers/UniversalRenderingManager';
 import type { FileContents, LineAnnotation } from '../src/types';
 import { parseDiffFromFile } from '../src/utils/parseDiffFromFile';
@@ -28,7 +28,6 @@ import { installDom, wait, waitFor } from './domHarness';
 beforeAll(async () => {
   await getSharedHighlighter({
     themes: ['pierre-dark', 'pierre-light'],
-    langs: ['text', 'typescript'],
   });
 });
 

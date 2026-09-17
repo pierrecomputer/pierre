@@ -1,9 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 
-import {
-  disposeHighlighter,
-  getSharedHighlighter,
-} from '../src/highlighter/shared_highlighter';
+import { disposeHighlighter, getSharedHighlighter } from '../src/highlighter';
 import type { DiffsHighlighter } from '../src/types';
 import { getHighlighterThemeStyles } from '../src/utils/getHighlighterThemeStyles';
 
@@ -28,8 +25,6 @@ let highlighter: DiffsHighlighter;
 beforeAll(async () => {
   highlighter = await getSharedHighlighter({
     themes: ['pierre-dark', 'pierre-light'],
-    langs: ['text'],
-    preferredHighlighter: 'shiki-js',
   });
 });
 
@@ -61,5 +56,45 @@ describe('getHighlighterThemeStyles --diffs-* parity', () => {
         prefix: 'custom',
       })
     ).toBe(SINGLE_LIGHT_PREFIXED);
+  });
+
+  test('preserves CSS variable themes and style-based git colors', () => {
+    const raw = {
+      name: 'css-variables',
+      cssVariables: true,
+      style: {
+        'terminal.ansi.green': '#00ff00',
+        deleted: '#ff0000',
+        modified: '#0000ff',
+      },
+    };
+    expect(
+      getHighlighterThemeStyles({
+        theme: 'pierre-dark',
+        highlighter: { ...highlighter, getTheme: () => raw },
+      })
+    ).toBe(
+      'color:var(--hls-foreground);background-color:var(--hls-background);--diffs-fg:var(--hls-foreground);--diffs-bg:var(--hls-background);--diffs-addition-color:#00ff00;--diffs-deletion-color:#ff0000;--diffs-modified-color:#0000ff;'
+    );
+  });
+
+  test('preserves TextMate surfaces and git color fallbacks', () => {
+    const raw = {
+      name: 'workbench-colors',
+      colors: {
+        'editor.foreground': '#123456',
+        'editor.background': '#abcdef',
+        'terminal.ansiGreen': '#00ff00',
+        'editorGutter.deletedBackground': '#ff0000',
+      },
+    };
+    expect(
+      getHighlighterThemeStyles({
+        theme: 'pierre-dark',
+        highlighter: { ...highlighter, getTheme: () => raw },
+      })
+    ).toBe(
+      'color:#123456;background-color:#abcdef;--diffs-fg:#123456;--diffs-bg:#abcdef;--diffs-addition-color:#00ff00;--diffs-deletion-color:#ff0000;'
+    );
   });
 });

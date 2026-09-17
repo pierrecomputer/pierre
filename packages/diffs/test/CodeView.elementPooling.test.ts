@@ -2,10 +2,7 @@ import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 
 import { CodeView, type CodeViewCoordinator } from '../src/components/CodeView';
 import { DEFAULT_THEMES } from '../src/constants';
-import {
-  disposeHighlighter,
-  preloadHighlighter,
-} from '../src/highlighter/shared_highlighter';
+import { disposeHighlighter, preloadHighlighter } from '../src/highlighter';
 import type { CodeViewItem, FileContents } from '../src/types';
 import { parseDiffFromFile } from '../src/utils/parseDiffFromFile';
 import {

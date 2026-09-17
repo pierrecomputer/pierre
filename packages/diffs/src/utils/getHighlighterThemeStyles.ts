@@ -1,13 +1,13 @@
-import { normalizeThemeColors } from '@pierre/theming/color';
-
 import { DEFAULT_THEMES } from '../constants';
 import type {
   DiffsHighlighter,
+  DiffsTheme,
   DiffsThemeNames,
-  ThemeRegistrationResolved,
+  DiffsThemeStyle,
   ThemesType,
 } from '../types';
 import { formatCSSVariablePrefix } from './formatCSSVariablePrefix';
+import { getThemeStyle } from './getThemeStyle';
 
 interface GetHighlighterThemeStylesProps {
   theme?: DiffsThemeNames | ThemesType;
@@ -15,16 +15,6 @@ interface GetHighlighterThemeStylesProps {
   prefix?: string;
 }
 
-// FIXME(amadeus): We'll probably need to
-// re-think this when it comes to removing inline
-// styles
-//
-// The base foreground/background now flow through @pierre/theming's
-// normalizeThemeColors, which preserves the theme's top-level fg/bg. The git
-// colors deliberately stay on the diffs-local 2-link lookup below (see
-// getGitVariables) to keep this output byte-identical; adopting
-// normalizeThemeColors' longer git chain is a separate, independently verified
-// follow-up rather than a side effect of this migration.
 export function getHighlighterThemeStyles({
   theme = DEFAULT_THEMES,
   highlighter,
@@ -33,58 +23,65 @@ export function getHighlighterThemeStyles({
   let styles = '';
   if (typeof theme === 'string') {
     const themeData = highlighter.getTheme(theme);
-    const normalized = normalizeThemeColors(themeData);
+    const normalized = getThemeColors(themeData);
     styles += `color:${normalized.fg};`;
     styles += `background-color:${normalized.bg};`;
     styles += `${formatCSSVariablePrefix('global')}fg:${normalized.fg};`;
     styles += `${formatCSSVariablePrefix('global')}bg:${normalized.bg};`;
-    styles += getGitVariables(themeData, prefix);
+    styles += getGitVariables(getThemeStyle(themeData), prefix);
   } else {
     let themeData = highlighter.getTheme(theme.dark);
-    let normalized = normalizeThemeColors(themeData);
+    let normalized = getThemeColors(themeData);
     styles += `${formatCSSVariablePrefix('global')}dark:${normalized.fg};`;
     styles += `${formatCSSVariablePrefix('global')}dark-bg:${normalized.bg};`;
-    styles += getGitVariables(themeData, 'dark');
+    styles += getGitVariables(getThemeStyle(themeData), 'dark');
 
     themeData = highlighter.getTheme(theme.light);
-    normalized = normalizeThemeColors(themeData);
+    normalized = getThemeColors(themeData);
     styles += `${formatCSSVariablePrefix('global')}light:${normalized.fg};`;
     styles += `${formatCSSVariablePrefix('global')}light-bg:${normalized.bg};`;
-    styles += getGitVariables(themeData, 'light');
+    styles += getGitVariables(getThemeStyle(themeData), 'light');
   }
   return styles;
 }
 
-// Emits the diffs git-status CSS variables (addition/deletion/modified colors)
-// for a resolved theme. This intentionally uses the diffs-local 2-link lookup
-// (gitDecoration.* → terminal.ansi*) and STOPS before the editorGutter.* tail
-// that @pierre/theming's normalizeThemeColors adds, so the emitted string stays
-// byte-identical to the pre-theming output. Adopting the gutter fallback for
-// diffs is a deliberate follow-up. A variable is omitted entirely when neither
-// source key is present, matching the previous behavior.
-function getGitVariables(
-  themeData: ThemeRegistrationResolved,
-  modePrefix?: string
-) {
+// Read the git colors from the theme, falling back to terminal colors.
+function getGitVariables(style: DiffsThemeStyle, modePrefix?: string) {
   modePrefix = modePrefix != null ? `${modePrefix}-` : '';
   let styles = '';
-  const additionGreen =
-    themeData.colors?.['gitDecoration.addedResourceForeground'] ??
-    themeData.colors?.['terminal.ansiGreen'];
-  if (additionGreen != null) {
+  const additionGreen = style.created ?? style['terminal.ansi.green'];
+  if (typeof additionGreen === 'string') {
     styles += `${formatCSSVariablePrefix('global')}${modePrefix}addition-color:${additionGreen};`;
   }
-  const deletionRed =
-    themeData.colors?.['gitDecoration.deletedResourceForeground'] ??
-    themeData.colors?.['terminal.ansiRed'];
-  if (deletionRed != null) {
+  const deletionRed = style.deleted ?? style['terminal.ansi.red'];
+  if (typeof deletionRed === 'string') {
     styles += `${formatCSSVariablePrefix('global')}${modePrefix}deletion-color:${deletionRed};`;
   }
-  const modifiedBlue =
-    themeData.colors?.['gitDecoration.modifiedResourceForeground'] ??
-    themeData.colors?.['terminal.ansiBlue'];
-  if (modifiedBlue != null) {
+  const modifiedBlue = style.modified ?? style['terminal.ansi.blue'];
+  if (typeof modifiedBlue === 'string') {
     styles += `${formatCSSVariablePrefix('global')}${modePrefix}modified-color:${modifiedBlue};`;
   }
   return styles;
+}
+
+// Resolve the same foreground/background defaults used by Highlights.
+function getThemeColors(raw: DiffsTheme): {
+  fg: string;
+  bg: string;
+} {
+  const style = getThemeStyle(raw);
+  const cssVariables = 'cssVariables' in raw && raw.cssVariables === true;
+  return {
+    fg:
+      cssVariables === true
+        ? 'var(--hls-foreground)'
+        : (style['editor.foreground'] ??
+          style.text ??
+          style.foreground ??
+          'inherit'),
+    bg:
+      cssVariables === true
+        ? 'var(--hls-background)'
+        : (style['editor.background'] ?? style.background ?? 'transparent'),
+  };
 }

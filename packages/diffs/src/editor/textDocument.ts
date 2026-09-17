@@ -25,6 +25,8 @@ export type { Position, Range, TextEdit } from './types';
 export interface TextDocumentChange {
   /** The edits that were applied to the text document. */
   readonly changes: EditorChange[];
+  /** Normalized ranges cannot represent raw edit boundaries inside CRLF. */
+  readonly hasInexactRanges?: boolean;
   /** First line whose rendered content or tokenizer state may have changed. */
   readonly startLine: number;
   /** Character on the first changed line where the edit began. */
@@ -73,6 +75,7 @@ export class TextDocument<
   #uri: string;
   #languageId: string;
   #version: number;
+  #revision = 0;
   #pieceTable: PieceTable;
   #editStack: EditStack<EType, LAnnotation>;
   #eol: '\n' | '\r\n' | '\r';
@@ -119,6 +122,11 @@ export class TextDocument<
 
   get version(): number {
     return this.#version;
+  }
+
+  /** Increases on every edit, including undo and redo, to track cached state. */
+  get revision(): number {
+    return this.#revision;
   }
 
   get lineCount(): number {
@@ -460,9 +468,16 @@ export class TextDocument<
 
   #applyResolvedEditsToBuffer(edits: ResolvedTextEdit[]): TextDocumentChange {
     const previousLineCount = this.#pieceTable.lineCount;
-    const editPositions = this.positionsAt(
+    const editPositions = this.#pieceTable.positionsAt(
       edits.flatMap((edit) => [edit.start, edit.end])
     );
+    let hasInexactRanges = false;
+    for (let i = 0; i < editPositions.length; i++) {
+      const position = editPositions[i];
+      const normalized = this.normalizePosition(position);
+      if (normalized.character !== position.character) hasInexactRanges = true;
+      editPositions[i] = normalized;
+    }
     const changedLineRange = this.#computeChangedLineRange(
       edits,
       editPositions
@@ -474,8 +489,10 @@ export class TextDocument<
       endPosition.character ===
         this.#pieceTable.getLineLength(endPosition.line);
     this.#pieceTable.applyEdits(edits);
+    this.#revision++;
     const lineCount = this.#pieceTable.lineCount;
     const change: TextDocumentChange = {
+      ...(hasInexactRanges ? { hasInexactRanges } : undefined),
       changes: edits.map((edit, index) => ({
         ...edit,
         range: {
