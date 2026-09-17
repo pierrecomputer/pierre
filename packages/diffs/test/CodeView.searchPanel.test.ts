@@ -200,6 +200,19 @@ describe('CodeView search panel', () => {
       expect(input).not.toBeNull();
       expect(panelRoot.activeElement).toBe(input ?? null);
 
+      for (const composing of [{ isComposing: true }, { keyCode: 229 }]) {
+        const event = new window.KeyboardEvent('keydown', {
+          key: 'Escape',
+          bubbles: true,
+          cancelable: true,
+          composed: true,
+          ...composing,
+        });
+        input?.dispatchEvent(event);
+        expect(event.defaultPrevented).toBe(false);
+        expect(root.querySelector('[data-search-panel]')).toBe(panel);
+      }
+
       const escapeEvent = dispatchEscape(root);
 
       expect(escapeEvent.defaultPrevented).toBe(true);
@@ -211,6 +224,7 @@ describe('CodeView search panel', () => {
 
       viewer.cleanUp();
       expect(root.querySelector('[data-search-panel]')).toBeNull();
+      expect(dispatchPrimaryFind(root).defaultPrevented).toBe(false);
     } finally {
       viewer.cleanUp();
       dom.cleanup();
