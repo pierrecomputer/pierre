@@ -1143,6 +1143,12 @@ export class VirtualizedFileDiff<
     return this.hunksRenderer.getExpandedHunksMap();
   }
 
+  // Search maps live editor lines against the session's hunks, including while
+  // the item is offscreen and its rendered diff may be out of date.
+  public getDiffForSearch(): FileDiffMetadata | undefined {
+    return this.getLatestDiff();
+  }
+
   public setVisibility(visible: boolean): void {
     if (this.isAdvancedMode() || this.fileContainer == null) {
       return;

@@ -1,6 +1,12 @@
-import { describe, expect, test } from 'bun:test';
+import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 
 import { CodeView } from '../src/components/CodeView';
+import { Editor } from '../src/editor/editor';
+import { TextDocument } from '../src/editor/textDocument';
+import {
+  disposeHighlighter,
+  getSharedHighlighter,
+} from '../src/highlighter/shared_highlighter';
 import { parseDiffFromFile } from '../src/utils/parseDiffFromFile';
 import { createRoot, installDom, renderItems, wait } from './domHarness';
 
@@ -175,7 +181,229 @@ function getSearchMatchSide(element: HTMLElement): string | undefined {
   return undefined;
 }
 
+beforeAll(async () => {
+  await getSharedHighlighter({
+    themes: ['pierre-dark', 'pierre-light'],
+    langs: ['typescript'],
+    preferredHighlighter: 'shiki-js',
+  });
+});
+
+afterAll(async () => {
+  await disposeHighlighter();
+});
+
 describe('CodeView search panel', () => {
+  test('refreshes live file matches and highlights without a host update', async () => {
+    const dom = installDom();
+    const viewer = new CodeView({
+      createEditor: (type, options, key) => new Editor(type, options, key),
+    });
+    const file = { name: 'live.txt', contents: 'old target\r\nlast line' };
+    try {
+      const root = createRoot();
+      viewer.setup(root);
+      await renderItems(viewer, [
+        { id: 'file', type: 'file', edit: true, file },
+      ]);
+      dispatchPrimaryFind(root);
+      await wait(0);
+      fillSearch(root, 'target');
+      const editor = viewer.getEditor('file')!;
+      editor.applyEdits([
+        {
+          range: {
+            start: { line: 0, character: 0 },
+            end: { line: 0, character: 10 },
+          },
+          newText: 'unchanged prefix\r\ntarget target',
+        },
+      ]);
+      await wait(0);
+      viewer.render(true);
+
+      expect(file.contents).toBe('old target\r\nlast line');
+      expect(
+        getSearchState(viewer).matches.map(
+          ({ lineNumber, startCharacter, endCharacter }) => ({
+            lineNumber,
+            startCharacter,
+            endCharacter,
+          })
+        )
+      ).toEqual([
+        { lineNumber: 2, startCharacter: 0, endCharacter: 6 },
+        { lineNumber: 2, startCharacter: 7, endCharacter: 13 },
+      ]);
+      expect(
+        getRenderedSearchMatches(root).map((element) => element.textContent)
+      ).toEqual(['target', 'target']);
+      editor.undo();
+      await wait(0);
+      viewer.render(true);
+      expect(
+        getSearchState(viewer).matches.map((match) => match.lineNumber)
+      ).toEqual([1]);
+      expect(getRenderedSearchMatches(root)).toHaveLength(1);
+    } finally {
+      viewer.cleanUp();
+      dom.cleanup();
+    }
+  });
+
+  test.each(['split', 'unified'] as const)(
+    'searches and highlights only live additions in %s edit mode',
+    async (diffStyle) => {
+      const dom = installDom();
+      const viewer = new CodeView({
+        diffStyle,
+        createEditor: (type, options, key) => new Editor(type, options, key),
+      });
+      const fileDiff = parseDiffFromFile(
+        { name: 'live.txt', contents: 'target deleted\nunchanged\n' },
+        { name: 'live.txt', contents: 'target added\nunchanged\n' }
+      );
+      try {
+        const root = createRoot();
+        viewer.setup(root);
+        await renderItems(viewer, [
+          { id: 'diff', type: 'diff', edit: true, fileDiff },
+        ]);
+        dispatchPrimaryFind(root);
+        await wait(0);
+        fillSearch(root, 'target');
+        expect(
+          getSearchState(viewer).matches.map((match) => match.side)
+        ).toEqual(['additions']);
+        viewer.getEditor('diff')!.applyEdits([
+          {
+            range: {
+              start: { line: 0, character: 0 },
+              end: { line: 0, character: 12 },
+            },
+            newText: 'prefix\ntarget live\ntarget again',
+          },
+        ]);
+        await wait(0);
+        viewer.render(true);
+
+        expect(fileDiff.additionLines.join('')).toBe(
+          'target added\nunchanged\n'
+        );
+        const matches = getSearchState(viewer).matches;
+        expect(
+          matches.map(({ side, lineNumber }) => ({ side, lineNumber }))
+        ).toEqual([
+          { side: 'additions', lineNumber: 2 },
+          { side: 'additions', lineNumber: 3 },
+        ]);
+        const instance = viewer.getRenderedItems()[0].instance;
+        if (instance.type !== 'file-diff') {
+          throw new Error('Expected an editable diff');
+        }
+        for (const match of matches) {
+          expect(
+            instance.getLineIndex(match.lineNumber, 'additions')?.[
+              diffStyle === 'unified' ? 0 : 1
+            ]
+          ).toBe(match.renderedLineIndex);
+        }
+        const highlights = getRenderedSearchMatches(root);
+        expect(highlights.map((element) => element.textContent)).toEqual([
+          'target',
+          'target',
+        ]);
+        expect(
+          highlights.every(
+            (element) => element.closest('[data-deletions]') === null
+          )
+        ).toBe(true);
+      } finally {
+        viewer.cleanUp();
+        dom.cleanup();
+      }
+    }
+  );
+
+  test('searches retained edits after the item scrolls offscreen', async () => {
+    const dom = installDom();
+    const viewer = new CodeView({
+      createEditor: (type, options, key) => new Editor(type, options, key),
+    });
+    try {
+      const root = createRoot();
+      viewer.setup(root);
+      await renderItems(viewer, [
+        {
+          id: 'file',
+          type: 'file',
+          edit: true,
+          file: { name: 'live.txt', contents: 'original' },
+        },
+        {
+          id: 'other',
+          type: 'file',
+          file: {
+            name: 'other.txt',
+            contents: Array.from({ length: 1000 }, () => 'padding').join('\n'),
+          },
+        },
+      ]);
+      const editor = viewer.getEditor('file')!;
+      editor.applyEdits([
+        {
+          range: {
+            start: { line: 0, character: 0 },
+            end: { line: 0, character: 8 },
+          },
+          newText: 'retained target',
+        },
+      ]);
+      viewer.scrollTo({
+        type: 'position',
+        position: 5000,
+        behavior: 'instant',
+      });
+      viewer.render(true);
+      await wait(0);
+      expect(viewer.getRenderedItems().some((item) => item.id === 'file')).toBe(
+        false
+      );
+      expect(viewer.getEditor('file')).toBe(editor);
+      dispatchPrimaryFind(root);
+      await wait(0);
+      fillSearch(root, 'target');
+      expect(
+        getSearchState(viewer).matches.map((match) => match.itemId)
+      ).toEqual(['file']);
+    } finally {
+      viewer.cleanUp();
+      dom.cleanup();
+    }
+  });
+
+  test('limits live-document results to the remaining search budget', () => {
+    const document = new TextDocument(
+      'file:///live.txt',
+      'target target\ntarget'
+    );
+    expect(
+      document.search(
+        {
+          text: 'target',
+          replaceText: '',
+          caseSensitive: false,
+          wholeWord: false,
+          regex: false,
+        },
+        2
+      )
+    ).toEqual([
+      [0, 6],
+      [7, 13],
+    ]);
+  });
+
   test('opens a find-only panel from the primary find shortcut', async () => {
     const dom = installDom();
     const viewer = new CodeView();
