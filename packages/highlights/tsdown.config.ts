@@ -22,7 +22,6 @@ const config: UserConfig[] = defineConfig([
       'lib/token-types.ts',
       'lib/languages.ts',
       'lib/browser.ts',
-      'lib/node.ts',
       'lib/workerd.ts',
     ],
     tsconfig: './tsconfig.json',
