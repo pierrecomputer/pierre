@@ -14,6 +14,7 @@ import {
 } from '../src/utils/editSessionHunks';
 import { iterateOverDiff } from '../src/utils/iterateOverDiff';
 import { parseDiffFromFile } from '../src/utils/parseDiffFromFile';
+import { splitFileContents } from '../src/utils/splitFileContents';
 import { getTrailingContextRangeSize } from '../src/utils/virtualDiffLayout';
 import { verifyFileDiffHunkValues } from './testUtils';
 
@@ -282,7 +283,7 @@ describe('rebuildSessionHunks', () => {
     expectPairingParity(diff);
   });
 
-  test('keeps blank insertion pairing identical to the exit parse', () => {
+  test('slides a live blank insertion and restores its parsed position on exit', () => {
     const oldContents = 'a\nb\ntarget\n\nafter\nz1\nz2\nz3\nz4\nz5\n';
     const newContents = oldContents.replace('target\n', 'target!\n');
     const diff = parseDiffFromFile(
@@ -293,7 +294,103 @@ describe('rebuildSessionHunks', () => {
 
     rebuildSessionHunks(diff);
 
+    expect(pairingProjection(diff)).toEqual([
+      {
+        deletionIndex: 2,
+        deletionText: 'target\n',
+        additionIndex: 2,
+        additionText: 'target!\n',
+      },
+      {
+        deletionIndex: undefined,
+        deletionText: undefined,
+        additionIndex: 3,
+        additionText: '\n',
+      },
+    ]);
+    expect(verifyFileDiffHunkValues(diff)).toEqual({ valid: true, errors: [] });
+    const livePairing = pairingProjection(diff);
+    rebuildSessionHunks(diff);
+    expect(pairingProjection(diff)).toEqual(livePairing);
+
+    expect(finishEditSessionForDiff(diff)).toBe(true);
+    expect(diff.editSessionDirty).toBeUndefined();
+    expect(pairingProjection(diff)[1].additionIndex).toBe(4);
     expectPairingParity(diff);
+    expect(finishEditSessionForDiff(diff)).toBe(false);
+  });
+
+  test.each([
+    ['blank insertion', 'anchor\n\ntail\n', 'anchor\n\n\ntail\n', 1, 0, 1],
+    ['blank deletion', 'anchor\n\n\ntail\n', 'anchor\n\ntail\n', 1, 1, 0],
+    [
+      'long blank run',
+      'anchor\n\n\n\ntail\n',
+      'anchor\n\n\n\n\ntail\n',
+      1,
+      0,
+      1,
+    ],
+    [
+      'matching whitespace',
+      'anchor\n \ntail\n',
+      'anchor\n \n \ntail\n',
+      1,
+      0,
+      1,
+    ],
+    ['unequal whitespace', 'anchor\n \ntail\n', 'anchor\n \n\ntail\n', 2, 0, 1],
+    [
+      'non-blank insertion',
+      'function a() {\n}\n',
+      'function a() {\n}\nfunction b() {\n}\n',
+      2,
+      0,
+      2,
+    ],
+  ] as const)(
+    'keeps session alignment for %s',
+    (_name, oldContents, newContents, index, deletions, additions) => {
+      const diff = parseDiffFromFile(
+        { name: 'blanks.ts', contents: oldContents },
+        { name: 'blanks.ts', contents: oldContents }
+      );
+      diff.additionLines = splitFileContents(newContents);
+      for (let pass = 0; pass < 2; pass++) {
+        rebuildSessionHunks(diff);
+        expect(
+          diff.hunks.flatMap((hunk) =>
+            hunk.hunkContent.filter((c) => c.type === 'change')
+          )
+        ).toEqual([
+          {
+            type: 'change',
+            additions,
+            deletions,
+            additionLineIndex: index,
+            deletionLineIndex: index,
+          },
+        ]);
+        expect(verifyFileDiffHunkValues(diff)).toEqual({
+          valid: true,
+          errors: [],
+        });
+      }
+      expect(finishEditSessionForDiff(diff)).toBe(true);
+      expectPairingParity(diff);
+    }
+  );
+
+  test('does not slide a blank insertion without parsed context', () => {
+    const options = { context: 0 };
+    const diff = parseDiffFromFile(
+      { name: 'blanks.ts', contents: 'anchor\n\ntail\n' },
+      { name: 'blanks.ts', contents: 'anchor\n\n\ntail\n' },
+      options
+    );
+    rebuildSessionHunks(diff, options);
+    expect(pairingProjection(diff)[0].additionIndex).toBe(2);
+    expectPairingParity(diff, options);
   });
 
   test('supports a pure insertion into an unchanged file', () => {
@@ -376,6 +473,101 @@ describe('rebuildSessionHunks', () => {
 });
 
 describe('applySessionChangedLines', () => {
+  test.each(['insertion', 'deletion'] as const)(
+    'preserves two untouched blank %s blocks through unrelated edits',
+    (kind) => {
+      const context = makeLines(12).join('');
+      const original = `top\n\n${context}mid\n\n${context}bottom\n`;
+      const withBlanks = `top\n\n\n${context}mid\n\n\n${context}bottom\n`;
+      const diff = parseDiffFromFile(
+        {
+          name: 'blanks.ts',
+          contents: kind === 'insertion' ? original : withBlanks,
+        },
+        {
+          name: 'blanks.ts',
+          contents: kind === 'insertion' ? withBlanks : original,
+        }
+      );
+      const initialHunks = structuredClone(diff.hunks);
+      const initialBounds = hunkBounds(diff);
+      const initialPairing = pairingProjection(diff);
+      expect(initialHunks).toHaveLength(2);
+
+      const bottom = diff.additionLines.length - 1;
+      const previousLine = diff.additionLines[bottom];
+      diff.additionLines[bottom] = 'bottom!\n';
+      applySessionChangedLines(
+        diff,
+        [bottom],
+        undefined,
+        new Map([[bottom, previousLine]])
+      );
+      expect(hunkBounds(diff).slice(0, 2)).toEqual(initialBounds);
+      expect(diff.hunks.slice(0, 2).map((hunk) => hunk.hunkContent)).toEqual(
+        initialHunks.map((hunk) => hunk.hunkContent)
+      );
+      expect(pairingProjection(diff).slice(0, 2)).toEqual(initialPairing);
+
+      // A structural edit above both blocks shifts only their new-side indexes.
+      const previousLines = diff.additionLines;
+      diff.additionLines = ['new first line\n', ...previousLines];
+      rebuildSessionHunks(diff, undefined, (index) => previousLines[index]);
+      const shifted = initialPairing.map((row) => ({
+        ...row,
+        additionIndex:
+          row.additionIndex == null ? undefined : row.additionIndex + 1,
+      }));
+      expect(pairingProjection(diff).slice(1, 3)).toEqual(shifted);
+      expect(verifyFileDiffHunkValues(diff)).toEqual({
+        valid: true,
+        errors: [],
+      });
+
+      const beforeRepeat = pairingProjection(diff);
+      rebuildSessionHunks(diff);
+      expect(pairingProjection(diff)).toEqual(beforeRepeat);
+      finishEditSessionForDiff(diff);
+      expect(pairingProjection(diff)).toEqual(beforeRepeat);
+    }
+  );
+
+  test('does not report a region change when an untouched blank shares the edited hunk', () => {
+    const diff = parseDiffFromFile(
+      { name: 'blanks.ts', contents: 'anchor\n\ntail\n' },
+      { name: 'blanks.ts', contents: 'anchor!\n\n\ntail\n' }
+    );
+    const before = diff.hunks.map((hunk) => hunk.hunkContent);
+    diff.additionLines[0] = 'anchor!!\n';
+    expect(
+      applySessionChangedLines(
+        diff,
+        [0],
+        undefined,
+        new Map([[0, 'anchor!\n']])
+      )
+    ).toBeUndefined();
+    expect(diff.hunks.map((hunk) => hunk.hunkContent)).toEqual(before);
+  });
+
+  test('slides an insertion changed to blank without changing its block size', () => {
+    const diff = parseDiffFromFile(
+      { name: 'blanks.ts', contents: 'anchor\n\ntail\n' },
+      { name: 'blanks.ts', contents: 'anchor\n\nX\ntail\n' }
+    );
+    diff.additionLines[2] = '\n';
+    applySessionChangedLines(diff, [2], undefined, new Map([[2, 'X\n']]));
+    expect(pairingProjection(diff)[0].additionIndex).toBe(1);
+
+    // A later unrelated edit must retain the live block's shifted position.
+    diff.additionLines[3] = 'tail!\n';
+    applySessionChangedLines(diff, [3], undefined, new Map([[3, 'tail\n']]));
+    expect(pairingProjection(diff)[0].additionIndex).toBe(1);
+    finishEditSessionForDiff(diff);
+    expect(pairingProjection(diff)[0].additionIndex).toBe(2);
+    expectPairingParity(diff);
+  });
+
   test('uses the contained one-region fast path without replacing other hunks', () => {
     const diff = makeDiff();
     const hunksBefore = diff.hunks;
@@ -522,9 +714,11 @@ describe('applySessionChangedLines', () => {
       { name: 'slid-realignment.ts', contents: 'anchor\n\ntarget\n' },
       {
         name: 'slid-realignment.ts',
-        contents: 'anchor\n\n\ntarget!\n',
+        contents: 'anchor\n\ntarget!\n',
       }
     );
+    diff.additionLines.splice(1, 0, '\n');
+    rebuildSessionHunks(diff);
     const hunksBefore = diff.hunks;
     const previousLine = diff.additionLines[3];
     diff.additionLines[3] = 'other\n';

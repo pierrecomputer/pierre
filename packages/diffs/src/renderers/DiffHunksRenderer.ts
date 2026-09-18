@@ -733,7 +733,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
         textDocument.getLineText(0)
       );
     } else if (this.editSessionActive) {
-      this.applySessionDocumentChange(diff);
+      this.applySessionDocumentChange(diff, previousAdditionLines);
     } else {
       Object.assign(
         diff,
@@ -754,7 +754,10 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
 
   // Session-mode counterpart of the line-count recompute: derive canonical
   // old/current pairing and rebuild the old-side region skeleton from it.
-  private applySessionDocumentChange(diff: FileDiffMetadata): void {
+  private applySessionDocumentChange(
+    diff: FileDiffMetadata,
+    previousAdditionLines: readonly string[]
+  ): void {
     const { parseDiffOptions } = this.options;
     const rawLines = diff.additionLines;
     if (shouldTopAlignAdditionRecompute(diff, rawLines)) {
@@ -764,7 +767,13 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       );
       return;
     }
-    this.applyExpansionRemap(rebuildSessionHunks(diff, parseDiffOptions));
+    this.applyExpansionRemap(
+      rebuildSessionHunks(
+        diff,
+        parseDiffOptions,
+        (index) => previousAdditionLines[index]
+      )
+    );
   }
 
   // Empty-document and top-aligned recomputes rebuild the complete diff. While

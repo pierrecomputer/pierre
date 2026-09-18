@@ -903,6 +903,172 @@ describe('__completeEditSession', () => {
     }
   });
 
+  test.each([false, true])(
+    'accepts parsed blank-line positions (insert blank: %s)',
+    async (insertBlank) => {
+      const externalDiff = parseDiffFromFile(
+        { name: 'blanks.ts', contents: 'anchor\n\ntail' },
+        { name: 'blanks.ts', contents: 'anchor\n\n\ntail' }
+      );
+      const externalBefore = captureExternalDiffState(externalDiff);
+      const events: FileDiffEditCompleteEvent<undefined, undefined>[] = [];
+      const fixture = await createCompletionFixture({
+        externalDiff,
+        onEditComplete(event) {
+          events.push(event);
+          return 'accept';
+        },
+      });
+      try {
+        const { editor, instance, fileContainer } = fixture;
+        const content = fileContainer.shadowRoot?.querySelector<HTMLElement>(
+          '[data-code]:not([data-deletions]) [data-content]'
+        );
+        if (content == null) {
+          throw new Error('Expected editable addition content');
+        }
+        const session = instance.getLatestDiffForTest();
+        if (session == null) {
+          throw new Error('Expected an active diff session');
+        }
+        expect(session.hunks).toEqual(externalBefore.value.hunks);
+
+        if (insertBlank) {
+          const position = { line: 0, character: 6 };
+          editor.setSelections([
+            { start: position, end: position, direction: 'none' },
+          ]);
+          const InputEvent = content.ownerDocument.defaultView!.InputEvent;
+          content.dispatchEvent(
+            new InputEvent('beforeinput', {
+              bubbles: true,
+              cancelable: true,
+              composed: true,
+              inputType: 'insertParagraph',
+            })
+          );
+          expect(editor.getText()).toBe('anchor\n\n\n\ntail');
+          expect(
+            session.hunks[0].hunkContent.find((c) => c.type === 'change')
+          ).toMatchObject({
+            additionLineIndex: 1,
+            additions: 2,
+          });
+          expect(
+            content
+              .querySelector('[data-line="2"]')
+              ?.getAttribute('data-line-type')
+          ).toBe('change-addition');
+          expect(editor.getViewState().selections).toEqual([
+            {
+              start: { line: 1, character: 0 },
+              end: { line: 1, character: 0 },
+              direction: 0,
+            },
+          ]);
+        }
+        expectExternalDiffUnchanged(instance, externalDiff, externalBefore);
+        editor.cleanUp('complete');
+
+        expect(events).toHaveLength(1);
+        const completed = events[0].fileDiff;
+        expect(
+          completed.hunks[0].hunkContent.find((c) => c.type === 'change')
+        ).toMatchObject({
+          additionLineIndex: 2,
+          additions: insertBlank ? 2 : 1,
+        });
+        expect(completed.editSessionDirty).toBeUndefined();
+        expect(instance.fileDiff).toBe(completed);
+        expect(externalDiff).toEqual(externalBefore.value);
+        if (!insertBlank) {
+          expect(completed.hunks).toEqual(externalBefore.value.hunks);
+        }
+      } finally {
+        fixture.cleanup();
+      }
+    }
+  );
+
+  test('unrelated text and structural edits preserve an existing blank insertion', async () => {
+    const context = Array.from(
+      { length: 12 },
+      (_, index) => `ctx${index}\n`
+    ).join('');
+    const externalDiff = parseDiffFromFile(
+      { name: 'blanks.ts', contents: `anchor\n\n${context}bottom` },
+      { name: 'blanks.ts', contents: `anchor\n\n\n${context}bottom` }
+    );
+    const before = captureExternalDiffState(externalDiff);
+    const fixture = await createCompletionFixture({ externalDiff });
+    try {
+      const { editor, instance } = fixture;
+      const end = { line: 15, character: 6 };
+      editor.applyEdits([{ range: { start: end, end }, newText: '!' }]);
+      const session = instance.getLatestDiffForTest();
+      if (session == null) throw new Error('Expected an active diff session');
+      expect(session.hunks[0].hunkContent).toEqual(
+        before.value.hunks[0].hunkContent
+      );
+
+      const start = { line: 0, character: 0 };
+      editor.applyEdits([
+        { range: { start, end: start }, newText: 'prefix\n' },
+      ]);
+      expect(
+        session.hunks
+          .flatMap((hunk) => hunk.hunkContent)
+          .find(
+            (block) => block.type === 'change' && block.additionLineIndex === 3
+          )
+      ).toMatchObject({
+        type: 'change',
+        additions: 1,
+        deletions: 0,
+        deletionLineIndex: 2,
+      });
+      expectExternalDiffUnchanged(instance, externalDiff, before);
+    } finally {
+      fixture.cleanup();
+    }
+  });
+
+  test.each([false, true])(
+    'slides a same-size insertion edited to blank (structural edit: %s)',
+    async (structural) => {
+      const externalDiff = parseDiffFromFile(
+        { name: 'blanks.ts', contents: 'anchor\n\ntail' },
+        { name: 'blanks.ts', contents: 'anchor\n\nX\ntail' }
+      );
+      const before = captureExternalDiffState(externalDiff);
+      const fixture = await createCompletionFixture({ externalDiff });
+      try {
+        const { editor, instance } = fixture;
+        replaceDocument(
+          editor,
+          `${structural ? 'prefix\n' : ''}anchor\n\n\ntail`
+        );
+        const session = instance.getLatestDiffForTest();
+        if (session == null) throw new Error('Expected an active diff session');
+        const blank = session.hunks
+          .flatMap((hunk) => hunk.hunkContent)
+          .find(
+            (block) =>
+              block.type === 'change' &&
+              block.deletions === 0 &&
+              session.additionLines[block.additionLineIndex] === '\n'
+          );
+        expect(blank).toMatchObject({
+          additions: 1,
+          additionLineIndex: structural ? 2 : 1,
+        });
+        expectExternalDiffUnchanged(instance, externalDiff, before);
+      } finally {
+        fixture.cleanup();
+      }
+    }
+  );
+
   test('a new external annotation mid-session survives a revert', async () => {
     const externalAnnotations: DiffLineAnnotation<undefined>[] = [
       { side: 'additions', lineNumber: 2 },

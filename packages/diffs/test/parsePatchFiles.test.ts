@@ -20,6 +20,7 @@ import {
   countRenderedLines,
   countSplitRows,
   patchDigest,
+  verifyFileDiffHunkValues,
   verifyPatchHunkValues,
 } from './testUtils';
 
@@ -58,6 +59,87 @@ function createFilePatch(name: string): string {
 
 describe('parsePatchFiles', () => {
   const result = parsePatchFiles(diffPatch);
+  test('preserves the line-16 blank insertion from issue 1139', () => {
+    const patch = [
+      'diff --git a/x.ts b/x.ts',
+      '--- a/x.ts',
+      '+++ b/x.ts',
+      '@@ -13,6 +13,7 @@',
+      ' // the cheap failure is charging full price for a discount we could not see,',
+      ' // and a provider that renames a field should not silently start billing double.',
+      ' ',
+      '+',
+      " /** One completion's token cost, split by what it actually costs to serve. */",
+      ' export interface CompletionUsage {',
+      '   /** Prompt tokens the upstream had to process, cache reads EXCLUDED. */',
+      '',
+    ].join('\n');
+
+    const files = [
+      processFile(patch, { isGitDiff: true, throwOnError: true }),
+      processPatch(patch, undefined, true).files[0],
+      parsePatchFiles(patch, undefined, true)[0].files[0],
+    ];
+    for (const file of files) {
+      assertDefined(file, 'Expected the issue patch to parse');
+      expect(file.isPartial).toBe(true);
+      const hunk = file.hunks[0];
+      const change = hunk.hunkContent.find((c) => c.type === 'change');
+      assertDefined(change, 'Expected a blank-line insertion');
+      expect(change.additionLineIndex).toBe(3);
+      expect(
+        hunk.additionStart + change.additionLineIndex - hunk.additionLineIndex
+      ).toBe(16);
+      expect(verifyFileDiffHunkValues(file)).toEqual({
+        valid: true,
+        errors: [],
+      });
+    }
+  });
+
+  test.each([
+    ['+', 0],
+    ['+', 1],
+    ['+', 2],
+    ['-', 0],
+    ['-', 1],
+    ['-', 2],
+  ] as const)(
+    'preserves %s at blank-run offset %i in each hunk',
+    (prefix, offset) => {
+      const blankLines = [' ', ' '];
+      blankLines.splice(offset, 0, prefix);
+      const body = [' anchor', ...blankLines, ' tail', ''].join('\n');
+      const oldCount = prefix === '-' ? 5 : 4;
+      const newCount = prefix === '+' ? 5 : 4;
+      const patch = [
+        'diff --git a/blanks.ts b/blanks.ts\n',
+        '--- a/blanks.ts\n+++ b/blanks.ts\n',
+        `@@ -13,${oldCount} +13,${newCount} @@\n`,
+        body,
+        `@@ -40,${oldCount} +${40 + newCount - oldCount},${newCount} @@\n`,
+        body,
+      ].join('');
+      const file = processFile(patch, { throwOnError: true });
+      assertDefined(file, 'Expected the blank-run patch to parse');
+      expect(file.hunks).toHaveLength(2);
+      for (const hunk of file.hunks) {
+        const change = hunk.hunkContent.find((c) => c.type === 'change');
+        expect(change).toEqual({
+          type: 'change',
+          additions: prefix === '+' ? 1 : 0,
+          deletions: prefix === '-' ? 1 : 0,
+          additionLineIndex: hunk.additionLineIndex + 1 + offset,
+          deletionLineIndex: hunk.deletionLineIndex + 1 + offset,
+        });
+      }
+      expect(verifyFileDiffHunkValues(file)).toEqual({
+        valid: true,
+        errors: [],
+      });
+    }
+  );
+
   test('should parse diff.patch and match its digest snapshot', () => {
     // Per-file hunk geometry of the whole 400KB patch; line-level accuracy
     // is covered by the invariant and render-count tests below
