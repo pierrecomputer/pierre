@@ -332,6 +332,7 @@ public sealed record Counter(string Label, int Count)
     'cuda',
     'CUDA',
     `#include <cuda_runtime.h>
+
 // Scale values on the GPU
 __global__ void scale(float *values, int count) {
   int i = blockIdx.x * blockDim.x + threadIdx.x;
@@ -340,7 +341,10 @@ __global__ void scale(float *values, int count) {
   if (i < count) values[i] *= 2.0f;
   __syncthreads();
 }
-void run(float *values) { scale<<<1, 256>>>(values, 256); }`,
+
+void run(float *values) {
+  scale<<<1, 256>>>(values, 256);
+}`,
   ],
   [
     'dart',
