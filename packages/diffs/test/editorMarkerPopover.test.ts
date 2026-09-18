@@ -265,6 +265,42 @@ function createDirectMarkerFixture({
 }
 
 describe('Editor marker popover placement', () => {
+  test.each([false, true])(
+    'hovers a marker inside a token with leading whitespace (nested: %s)',
+    async (nested) => {
+      const { cleanup, editor, content } =
+        await createMarkerFixture('  return conut;\n');
+      try {
+        editor.setMarkers([
+          {
+            start: { line: 0, character: 9 },
+            end: { line: 0, character: 14 },
+            severity: 'error',
+            message: 'Cannot find name conut',
+          },
+        ]);
+        const token = content.querySelector<HTMLElement>('[data-char="8"]');
+        expect(token?.textContent).toBe(' conut');
+        if (token == null) throw new Error('Missing marker token');
+        let target = token;
+        if (nested) {
+          target = document.createElement('span');
+          target.textContent = token.textContent;
+          token.replaceChildren(target);
+        }
+        target.dispatchEvent(
+          new Event('mouseover', { bubbles: true, composed: true })
+        );
+        await wait(350);
+        expect(findMarkerPopover(content).textContent).toBe(
+          'Cannot find name conut'
+        );
+      } finally {
+        cleanup();
+      }
+    }
+  );
+
   // Default, unchanged by the viewport-aware flip: anchor below the marker.
   test('places the popover below the marker by default', async () => {
     const MULTILINE = 'l0\nl1\nl2\nl3\nl4\nl5\nl6\nl7\nl8\nl9';

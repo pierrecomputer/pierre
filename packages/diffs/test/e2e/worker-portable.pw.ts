@@ -45,6 +45,7 @@ test('the portable worker highlights from a blob without fetching dependencies',
           type: 'initialize',
           id: 'initialize',
           renderOptions: {
+            preferredHighlighter: 'highlights',
             theme: { dark: 'portable-dark', light: 'portable-light' },
             useTokenTransformer: true,
             tokenizeMaxLineLength: 1000,
@@ -75,7 +76,9 @@ test('the portable worker highlights from a blob without fetching dependencies',
       }),
     source
   );
-  expect(result.type).toBe('success');
+  expect(result.type, result.type === 'error' ? result.error : undefined).toBe(
+    'success'
+  );
   if (result.type !== 'success' || result.requestType !== 'file')
     throw new Error('Expected highlighted file');
   expect(result.result.code).toHaveLength(2);

@@ -58,14 +58,16 @@ export { greeting, count };
       if (requestedTheme === 'missing-active-background') {
         registerCustomTheme(requestedTheme, async () => ({
           name: requestedTheme,
-          appearance: 'dark',
-          style: {
-            background: '#202020',
-            foreground: '#eeeeee',
-            created: '#40c060',
-            deleted: '#e05050',
-            syntax: { keyword: '#ff8090' },
+          type: 'dark',
+          colors: {
+            'editor.background': '#202020',
+            'editor.foreground': '#eeeeee',
+            'gitDecoration.addedResourceForeground': '#40c060',
+            'gitDecoration.deletedResourceForeground': '#e05050',
           },
+          tokenColors: [
+            { scope: 'keyword', settings: { foreground: '#ff8090' } },
+          ],
         }));
       }
       const theme = requestedTheme ?? {
