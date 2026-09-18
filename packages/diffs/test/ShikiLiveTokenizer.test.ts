@@ -493,6 +493,51 @@ for (const engine of ['wasm', 'js']) {
       }
     });
 
+    test('omitInitialTokens reports only lines an edit changes until a reset', () => {
+      const code = Array.from(
+        { length: 30 },
+        (_, i) => `const n${i} = ${i};`
+      ).join('\n');
+      const document = new TextDocument('example.ts', code);
+      const delivered = new Map<number, HighlightedToken[]>();
+      const tokenizer = new ShikiLiveTokenizer(highlighter, {
+        ...options,
+        textDocument: document,
+        renderRange: [2, 4],
+        omitInitialTokens: true,
+        onDeferTokenize(lines) {
+          for (const [line, tokens] of lines) delivered.set(line, tokens);
+        },
+      });
+      try {
+        expect(delivered.size).toBe(0);
+        tokenizer.flush(10);
+        expect(delivered.size).toBe(0);
+        expect(tokenizer.getLineTokens(9).tokens.length).toBeGreaterThan(1);
+        expect(tokenizer.pendingTokenization).toBe(true);
+        // An unclosed comment at line 5 changes every following line, while
+        // the initial pass past line 10 still stays silent.
+        const result = tokenizer.tokenize(
+          document.applyEdits([edit(5, 0, 5, 0, '/*')])!,
+          { renderRange: [4, 7] }
+        );
+        expect([...result.lines.keys()]).toEqual([5, 6]);
+        expect([...delivered.keys()]).toEqual([]);
+        tokenizer.flush();
+        expect([...delivered.keys()].sort((a, b) => a - b)).toEqual(
+          Array.from({ length: 23 }, (_, i) => i + 7)
+        );
+        expectTokens(tokenizer, document.getText());
+        delivered.clear();
+        tokenizer.reset({ renderRange: [0, 1] });
+        tokenizer.flush();
+        expect(delivered.size).toBe(29);
+        expect(delivered.has(0)).toBe(false);
+      } finally {
+        tokenizer.dispose();
+      }
+    });
+
     test('handles plain languages, empty lines, and maximum line length', () => {
       for (const tokenOptions of [
         { ...options, tokenizeMaxLineLength: 15 },

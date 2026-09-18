@@ -78,3 +78,35 @@ test('styles preserve both theme variables and font decorations', () => {
     'font-style:italic;font-weight:bold;text-decoration:underline line-through'
   );
 });
+
+test('whitespace-only tokens merge into the following token', () => {
+  const rows = renderTokenLines(
+    [
+      [
+        { content: '  ', offset: 0, color: '#111111' },
+        { content: 'type', offset: 2, color: '#222222' },
+        { content: ' ', offset: 6, color: '#111111' },
+        { content: 'X', offset: 7, color: '#333333', fontStyle: 4 },
+        { content: '  ', offset: 8, color: '#111111' },
+      ],
+    ],
+    [{ type: 'change-addition', lineIndex: '0,0', lineNumber: 1 }],
+    true
+  );
+  const spans = collectAllElements(rows).filter(
+    (node) => node.tagName === 'span'
+  );
+  expect(spans.map((node) => getTextContent(node))).toEqual([
+    '  type',
+    ' ',
+    'X',
+    '  ',
+  ]);
+  expect(spans.map((node) => node.properties['data-char'])).toEqual([
+    0, 6, 7, 8,
+  ]);
+  expect(spans[0].properties.style).toBe(
+    getTokenStyle({ content: '', offset: 0, color: '#222222' })
+  );
+  expect(spans[1].properties.style).toBeUndefined();
+});

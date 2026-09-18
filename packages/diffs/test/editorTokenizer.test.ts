@@ -742,6 +742,104 @@ describe('EditorTokenizer', () => {
     expectTokens(instance.document, instance.deferred, pierreDark);
   });
 
+  // Shiki honors `omitInitialTokens`; the default Highlights harness above
+  // reports every line, so these tests build a Shiki-backed tokenizer.
+  async function createShikiInstance(code: string) {
+    const highlighter = await createShikiHighlighter();
+    await Promise.all([
+      highlighter.themeResolver.resolveThemes(['github-dark', 'github-light']),
+      highlighter.loadLanguages?.(['typescript']),
+    ]);
+    const document = new TextDocument('test.ts', code, 'typescript');
+    const deferred = new Map<number, HighlightedToken[]>();
+    const tokenizer = new EditorTokenizer({
+      highlighter,
+      textDocument: document,
+      codeOptions: { theme: 'github-dark' },
+      setStyle() {},
+      onDeferTokenize(lines) {
+        for (const [line, tokens] of lines) deferred.set(line, tokens);
+      },
+    });
+    tokenizers.push(tokenizer);
+    return { document, deferred, tokenizer };
+  }
+
+  function expectLineText(
+    document: TextDocument,
+    lines: Map<number, HighlightedToken[]>
+  ): void {
+    for (const [line, tokens] of lines) {
+      expect(tokens.map(([, , text]) => text).join('')).toBe(
+        document.getLineText(line)
+      );
+    }
+  }
+
+  test('prebuilt state for rendered rows only reports rows an edit changes', async () => {
+    const instance = await createShikiInstance(
+      Array.from({ length: 40 }, (_, line) => `const x${line} = ${line};`).join(
+        '\n'
+      )
+    );
+    instance.tokenizer.prebuildTokens();
+    // The bracket query finishes the whole document synchronously.
+    expect(
+      instance.tokenizer.getStringCommentRegexpRangesInLine(39)
+    ).toBeNull();
+    await Bun.sleep(10);
+    expect(instance.deferred.size).toBe(0);
+    const change = instance.document.applyEdits([edit(10, 0, 10, 0, '/*')]);
+    if (change === undefined) throw new Error('Expected an edit');
+    instance.tokenizer.stopBackgroundTokenize();
+    instance.tokenizer.tokenize(change, renderRange(0, 5));
+    await waitUntil(() => instance.deferred.has(39));
+    expect(Math.min(...instance.deferred.keys())).toBe(10);
+    expectLineText(instance.document, instance.deferred);
+  });
+
+  test('theme swaps report every row after a silent prebuild', async () => {
+    const instance = await createShikiInstance(
+      Array.from({ length: 8 }, (_, line) => `const x${line} = "v";`).join('\n')
+    );
+    instance.tokenizer.prebuildTokens();
+    expect(instance.tokenizer.getStringCommentRegexpRangesInLine(7)).toEqual([
+      [11, 14],
+    ]);
+    await Bun.sleep(10);
+    expect(instance.deferred.size).toBe(0);
+    instance.tokenizer.syncTheme({ theme: 'github-light' });
+    await waitUntil(() => instance.deferred.has(7));
+    expect([...instance.deferred.keys()].sort((a, b) => a - b)).toEqual([
+      0, 1, 2, 3, 4, 5, 6, 7,
+    ]);
+    expect(instance.tokenizer.themeType).toBe('light');
+    expectLineText(instance.document, instance.deferred);
+  });
+
+  test('system observers skip inline styles that keep the color scheme', async () => {
+    document.body.style.colorScheme = 'light';
+    const instance = create('const x = 1;', {
+      codeOptions: {
+        theme: { dark: 'dark', light: 'light' },
+        themeType: 'system',
+      },
+    });
+    const computed = spyOn(globalThis, 'getComputedStyle');
+    try {
+      document.body.style.overflow = 'hidden';
+      document.documentElement.style.setProperty('--scroll-lock', '1');
+      await Bun.sleep(0);
+      expect(computed).not.toHaveBeenCalled();
+      expect(instance.tokenizer.themeType).toBe('light');
+      document.body.style.colorScheme = 'dark';
+      await waitUntil(() => instance.tokenizer.themeType === 'dark');
+      expect(computed).toHaveBeenCalled();
+    } finally {
+      computed.mockRestore();
+    }
+  });
+
   test('UTF-16 edits and CRLF lines retain exact content and token offsets', () => {
     const instance = create('const emoji = "😀";\r\nconst x = 1;');
     instance.initialize();

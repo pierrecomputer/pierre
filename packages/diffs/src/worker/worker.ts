@@ -152,6 +152,9 @@ async function setHighlighter(
   nextHighlighter.themeResolver.seedResolvedThemes(
     resolvedThemes.map((theme) => [theme.name, theme])
   );
+  // Requests are handled in order, so no render still uses the outgoing
+  // backend; release it instead of keeping one instance per switch alive.
+  if (highlighter !== nextHighlighter) highlighter?.dispose?.();
   highlighter = nextHighlighter;
   renderOptions = { ...options, preferredHighlighter };
 }

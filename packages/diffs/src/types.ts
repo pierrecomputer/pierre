@@ -127,6 +127,13 @@ export interface DiffsLiveTokenizerOptions extends CodeToTokensOptions {
   textDocument: TextDocument;
   renderRange?: readonly [startLine: number, endLine: number];
   onDeferTokenize?(lines: Map<number, HighlightedToken[]>): void;
+  /**
+   * Keep lines of the initial document out of `onDeferTokenize` unless an edit
+   * changes them. Set this when the host already renders every row and only
+   * needs edited rows; a later `reset()` reports every line again. Shiki
+   * backends honor this flag; Highlights reports every finished line.
+   */
+  omitInitialTokens?: boolean;
 }
 
 /** Token cache for a shared editor document; token offsets are line-relative. */
@@ -169,6 +176,8 @@ export interface DiffsHighlighter {
   createLiveTokenizer(options: DiffsLiveTokenizerOptions): DiffsLiveTokenizer;
   loadLanguages?(languages: readonly string[]): Promise<void>;
   hasLoadedLanguages?(languages: readonly string[]): boolean;
+  /** Release backend resources. The instance is unusable afterward. */
+  dispose?(): void;
 }
 
 /**

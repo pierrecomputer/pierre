@@ -40,37 +40,37 @@ The root, React, and SSR entries re-export these types.
 
 ## Themes and options
 
-| Export                               | Purpose                                                        |
-| ------------------------------------ | -------------------------------------------------------------- |
-| `SupportedLanguages`                 | Accepts a bundled, text, ANSI, or custom language name.        |
-| `HighlighterRenderBaseOptions`       | Selects the backend, theme, token transformer, and line limit. |
-| `HighlightedToken`                   | Stores a character index, foreground, and token text.          |
-| `DiffsThemeNames`                    | Accepts a bundled or custom theme name.                        |
-| `ThemesType`                         | Maps light and dark schemes to theme names.                    |
-| `ThemeTypes`                         | Selects system, light, or dark mode.                           |
-| `DiffsTheme`                         | Names one backend theme object.                                |
-| `DiffsThemeStyle`                    | Lists editor UI colors read from a theme.                      |
-| `DiffsHighlighter`                   | Defines one backend's tokenizers and theme resolver.           |
-| `CodeToTokensOptions`                | Configures language, theme, and limits for tokenization.       |
-| `TokensResult`                       | Holds themed token lines and root colors.                      |
-| `DiffsLiveTokenizer`                 | Tokenizes an editor document incrementally.                    |
-| `DiffsLiveTokenizerOptions`          | Adds the document, render range, and deferral callback.        |
-| `DiffsStreamTokenizer`               | Tokenizes append-only code chunks.                             |
-| `BaseCodeOptions`                    | Configures themes, wrapping, headers, tokenization, and CSS.   |
-| `BaseDiffOptions`                    | Adds layout, indicators, context, and line diff options.       |
-| `BaseDiffOptionsWithDefaults`        | Describes required diff options after defaults apply.          |
-| `DiffIndicators`                     | Selects classic, bar, or hidden diff indicators.               |
-| `HunkSeparators`                     | Selects the hunk separator presentation.                       |
-| `LineDiffTypes`                      | Selects word, alternate word, character, or no inline diff.    |
-| `FileHeaderRenderMode`               | Selects a default or custom file header.                       |
-| `CustomPreProperties`                | Defines custom properties for the rendered `pre` element.      |
-| `PrePropertiesConfig`                | Describes calculated `pre` element properties.                 |
-| `ExtensionFormatMap`                 | Maps file names or extensions to languages.                    |
-| `RenderHeaderPrefixCallback`         | Produces prefix content for a diff header.                     |
-| `RenderHeaderFilenameSuffixCallback` | Produces filename suffix content for a diff header.            |
-| `RenderHeaderMetadataCallback`       | Produces metadata content for a diff header.                   |
-| `RenderFileMetadata`                 | Produces header content for a file.                            |
-| `PostRenderPhase`                    | Names mount, update, or unmount callback phases.               |
+| Export                               | Purpose                                                                      |
+| ------------------------------------ | ---------------------------------------------------------------------------- |
+| `SupportedLanguages`                 | Accepts a bundled, text, ANSI, or custom language name.                      |
+| `HighlighterRenderBaseOptions`       | Selects the backend, theme, token transformer, and line limit.               |
+| `HighlightedToken`                   | Stores a character index, foreground, and token text.                        |
+| `DiffsThemeNames`                    | Accepts a bundled or custom theme name.                                      |
+| `ThemesType`                         | Maps light and dark schemes to theme names.                                  |
+| `ThemeTypes`                         | Selects system, light, or dark mode.                                         |
+| `DiffsTheme`                         | Names one backend theme object.                                              |
+| `DiffsThemeStyle`                    | Lists editor UI colors read from a theme.                                    |
+| `DiffsHighlighter`                   | Defines one backend's tokenizers and theme resolver.                         |
+| `CodeToTokensOptions`                | Configures language, theme, and limits for tokenization.                     |
+| `TokensResult`                       | Holds themed token lines and root colors.                                    |
+| `DiffsLiveTokenizer`                 | Tokenizes an editor document incrementally.                                  |
+| `DiffsLiveTokenizerOptions`          | Adds the document, render range, deferral callback, and `omitInitialTokens`. |
+| `DiffsStreamTokenizer`               | Tokenizes append-only code chunks.                                           |
+| `BaseCodeOptions`                    | Configures themes, wrapping, headers, tokenization, and CSS.                 |
+| `BaseDiffOptions`                    | Adds layout, indicators, context, and line diff options.                     |
+| `BaseDiffOptionsWithDefaults`        | Describes required diff options after defaults apply.                        |
+| `DiffIndicators`                     | Selects classic, bar, or hidden diff indicators.                             |
+| `HunkSeparators`                     | Selects the hunk separator presentation.                                     |
+| `LineDiffTypes`                      | Selects word, alternate word, character, or no inline diff.                  |
+| `FileHeaderRenderMode`               | Selects a default or custom file header.                                     |
+| `CustomPreProperties`                | Defines custom properties for the rendered `pre` element.                    |
+| `PrePropertiesConfig`                | Describes calculated `pre` element properties.                               |
+| `ExtensionFormatMap`                 | Maps file names or extensions to languages.                                  |
+| `RenderHeaderPrefixCallback`         | Produces prefix content for a diff header.                                   |
+| `RenderHeaderFilenameSuffixCallback` | Produces filename suffix content for a diff header.                          |
+| `RenderHeaderMetadataCallback`       | Produces metadata content for a diff header.                                 |
+| `RenderFileMetadata`                 | Produces header content for a file.                                          |
+| `PostRenderPhase`                    | Names mount, update, or unmount callback phases.                             |
 
 ## Annotations and selection
 

@@ -58,7 +58,9 @@ function nameForDiffThemeValue(value: DiffThemeValue): string {
   const name = requireThemeValueName(value);
   if (!seededDiffThemeNames.has(name)) {
     seededDiffThemeNames.add(name);
-    registerCustomTheme(name, () => Promise.resolve(value));
+    // These are TextMate themes; registering them for Highlights as well would
+    // make that backend reject the name at render time.
+    registerCustomTheme(name, () => Promise.resolve(value), 'textmate');
   }
   return name;
 }

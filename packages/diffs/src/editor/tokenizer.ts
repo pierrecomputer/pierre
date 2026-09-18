@@ -38,7 +38,6 @@ export class EditorTokenizer {
   #documentRevision = -1;
   #codeOptions: BaseCodeOptions;
   #theme!: DiffsTheme;
-  #renderRange?: RenderRange;
   #deferredLines?: Map<number, HighlightedToken[]>;
   #mediaQueryList: MediaQueryList;
   #themeType: 'light' | 'dark' = 'dark';
@@ -77,9 +76,12 @@ export class EditorTokenizer {
   }
 
   // Attach the document only when needed; the backend owns the lexer state and
-  // finishes lines beyond the initial viewport in background slices.
+  // finishes lines beyond the initial viewport in background slices. Pass
+  // `omitInitialTokens` when the host already renders every row, so that pass
+  // only builds lexer state instead of sending rows the host has.
   #createTokenizer(
-    renderRange: readonly [number, number] = [0, 0]
+    renderRange: readonly [number, number] = [0, 0],
+    omitInitialTokens = false
   ): DiffsLiveTokenizer {
     this.#documentRevision = this.#textDocument.revision;
     this.#tokenizer = this.#highlighter.createLiveTokenizer({
@@ -88,6 +90,7 @@ export class EditorTokenizer {
       theme: this.#theme,
       tokenizeMaxLineLength: this.#tokenizeMaxLineLength,
       renderRange,
+      omitInitialTokens,
       onDeferTokenize: (lines) => this.#queueDeferredLines(lines),
     });
     return this.#tokenizer;
@@ -157,16 +160,22 @@ export class EditorTokenizer {
     this.#codeOptions = codeOptions;
     const followsSystem = typeof theme !== 'string' && themeType === 'system';
     if (followsSystem && this.#disposes === undefined) {
+      // Resolving the theme reads computed styles, which forces a style
+      // recalculation. Class and data attributes usually carry the host's
+      // theme, so they always resolve. Inline styles also change on every
+      // scroll-lock or drag frame, so they only resolve when the inline
+      // `color-scheme` changed; reading that does not force a recalculation.
+      let inlineColorScheme = getInlineColorScheme();
       const observer = new MutationObserver((mutations) => {
-        if (
-          mutations.some(
-            ({ attributeName }) =>
-              attributeName === 'class' ||
-              attributeName === 'style' ||
-              attributeName?.startsWith('data-') === true
-          )
-        )
-          this.syncTheme(this.#codeOptions);
+        const next = getInlineColorScheme();
+        const mayChangeTheme = mutations.some(
+          ({ attributeName }) =>
+            attributeName === 'class' ||
+            attributeName?.startsWith('data-') === true ||
+            (attributeName === 'style' && next !== inlineColorScheme)
+        );
+        inlineColorScheme = next;
+        if (mayChangeTheme) this.syncTheme(this.#codeOptions);
       });
       observer.observe(document.documentElement, { attributes: true });
       observer.observe(document.body, { attributes: true });
@@ -232,16 +241,11 @@ export class EditorTokenizer {
       --diffs-editor-error-fg: ${colors.error ?? 'initial'};
     }`);
     if (initialized) {
-      this.prebuildTokens(this.#renderRange);
-      if (this.#renderRange !== undefined) {
-        const { startingLine, totalLines } = this.#renderRange;
-        const end = Math.min(
-          startingLine + totalLines,
-          this.#textDocument.lineCount
-        );
-        this.#tokenizer!.flush(end);
-        this.#queueDeferredLines(this.#readLines(0, end));
-      }
+      // Rendered rows carry literal token colors, so every row needs new
+      // tokens. Recolor from line 0 in background slices: tokenizing up to a
+      // deep viewport synchronously would block the main thread for the whole
+      // prefix, while slices reach the visible rows within a few frames.
+      this.#createTokenizer().resume();
       this.#onThemeChange?.();
     }
   }
@@ -257,8 +261,9 @@ export class EditorTokenizer {
     )
       return null;
     // Resolve preceding state changes without pulling the deferred tail into
-    // a synchronous bracket query.
-    const tokenizer = this.#tokenizer ?? this.#createTokenizer();
+    // a synchronous bracket query. Rows are already rendered when a query
+    // arrives before any edit, so the lazy tokenizer only builds state.
+    const tokenizer = this.#tokenizer ?? this.#createTokenizer([0, 0], true);
     if (tokenizer.pendingTokenization) tokenizer.flush(lineIndex + 1);
     const { bracketIgnoredRanges } = tokenizer.getLineTokens(lineIndex);
     return bracketIgnoredRanges.length === 0 ? null : bracketIgnoredRanges;
@@ -273,7 +278,6 @@ export class EditorTokenizer {
     // A second edit in this turn starts with rows from the preceding edit.
     // Finish that delivery before moving the native document forward again.
     this.#deliverDeferredLines();
-    this.#renderRange = renderRange;
     const { startingLine = 0, totalLines = Infinity } = renderRange ?? {};
     const endLine = Math.min(
       startingLine + totalLines,
@@ -346,13 +350,15 @@ export class EditorTokenizer {
     return lines;
   }
 
-  prebuildTokens(renderRange?: RenderRange): void {
+  // Build lexer state for rows the host already renders. Backends finish the
+  // document in background slices, so no viewport bound is needed here.
+  prebuildTokens(): void {
     if (this.#isCleanedUp) return;
-    this.#renderRange = renderRange;
     if (this.#tokenizer === undefined) {
       // Existing rows already carry highlighted markup. Build their state in
-      // background slices so attaching at a deep viewport stays responsive.
-      this.#createTokenizer();
+      // background slices so attaching at a deep viewport stays responsive,
+      // without sending the host tokens for rows it already shows.
+      this.#createTokenizer([0, 0], true);
     }
     this.#tokenizer!.resume();
   }
@@ -377,6 +383,16 @@ export class EditorTokenizer {
     this.#disposes?.forEach((dispose) => dispose());
     this.#disposes = undefined;
   }
+}
+
+// Inline `color-scheme` declarations on the root and body, read from their
+// style attributes without a computed-style lookup.
+function getInlineColorScheme(): string {
+  return (
+    document.documentElement.style.colorScheme +
+    '\n' +
+    document.body.style.colorScheme
+  );
 }
 
 export function renderLineTokens(

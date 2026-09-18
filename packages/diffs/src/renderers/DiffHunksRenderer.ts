@@ -1159,14 +1159,19 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
         this.workerManager.highlightDiffAST(this, diff);
       }
     } else {
+      // A backend with its themes can render at once. When only the grammar
+      // is missing, render plain text now and swap in the highlighted result
+      // once the grammar loads, instead of showing nothing until then.
       this.highlighter = getHighlighterIfLoaded({
         theme: options.theme ?? DEFAULT_THEMES,
         preferredHighlighter: options.preferredHighlighter,
-        langs: forcePlainText ? [] : getDiffLanguages(diff),
       });
-      const canHighlight = !forcePlainText;
+      const hasLangs =
+        forcePlainText ||
+        this.highlighter?.hasLoadedLanguages?.(getDiffLanguages(diff)) !==
+          false;
+      const canHighlight = !forcePlainText && hasLangs;
 
-      // Render immediately when the backend, themes, and language are ready.
       if (
         canRenderDiff &&
         this.highlighter != null &&
@@ -1178,7 +1183,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
         const { result, options } = this.renderDiffWithHighlighter(
           diff,
           this.highlighter,
-          forcePlainText
+          forcePlainText || !hasLangs
         );
         this.renderCache = {
           diff,
@@ -1189,8 +1194,8 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
         };
       }
 
-      // Load the missing backend, themes, or language before retrying.
-      if (this.highlighter == null) {
+      // Load the missing backend, themes, or grammar before retrying.
+      if (this.highlighter == null || !hasLangs) {
         void this.asyncHighlight(diff).then(({ result, options }) => {
           this.applyHighlightResult(diff, result, options, !forcePlainText);
         });

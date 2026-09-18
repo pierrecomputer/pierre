@@ -6,7 +6,9 @@ import {
   getHighlighterIfLoaded,
   getSharedHighlighter,
   parseDiffFromFile,
+  preloadHighlighter,
 } from '../src';
+import { waitFor } from './domHarness';
 import { assertDefined } from './testUtils';
 
 beforeEach(disposeHighlighter);
@@ -96,6 +98,37 @@ describe('DiffHunksRenderer languages', () => {
       }
     });
   }
+
+  test('renders plain text at once when only the grammar is missing', async () => {
+    await preloadHighlighter({ themes: [options.theme] });
+    const zig = (contents: string) => ({ name: 'example.zig', contents });
+    const diff = parseDiffFromFile(
+      zig('const a = 1;\n'),
+      zig('const a = 2;\n')
+    );
+    expect(
+      getHighlighterIfLoaded({ theme: options.theme, langs: ['zig'] })
+    ).toBeUndefined();
+    let updated = false;
+    const renderer = new DiffHunksRenderer(options, undefined, () => {
+      updated = true;
+    });
+    const cache = renderer as unknown as {
+      renderCache?: { highlighted: boolean };
+    };
+    try {
+      // Themes are ready, so the first pass paints plain text instead of
+      // nothing while the grammar loads.
+      expect(renderer.renderDiff(diff)).toBeDefined();
+      expect(cache.renderCache?.highlighted).toBe(false);
+      await waitFor(() => updated);
+      expect(updated).toBe(true);
+      expect(renderer.renderDiff(diff)).toBeDefined();
+      expect(cache.renderCache?.highlighted).toBe(true);
+    } finally {
+      renderer.cleanUp();
+    }
+  });
 
   test('files above the tokenization size threshold use plain text', async () => {
     const highlighter = await getSharedHighlighter({ themes: [options.theme] });

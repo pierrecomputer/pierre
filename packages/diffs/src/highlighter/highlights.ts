@@ -37,6 +37,8 @@ export function createDiffsHighlighter(
       textDocument,
       renderRange,
       onDeferTokenize,
+      // Highlights reports every finished line; it cannot skip unedited ones.
+      omitInitialTokens: _omitInitialTokens,
       ...options
     }) {
       const tokenizer = new LiveTokenizer({

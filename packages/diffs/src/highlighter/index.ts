@@ -9,6 +9,7 @@ import type {
 } from '../types';
 import { setCustomExtension } from '../utils/getFiletypeFromFileName';
 import { getThemes } from '../utils/getThemes';
+import { bundledThemeNames } from './themeNames';
 export * from './themeNames';
 
 type CustomThemeLoader = ThemeLoader<DiffsTheme>;
@@ -78,13 +79,12 @@ export async function getSharedHighlighter({
       ];
     const pending = highlighters[preferredHighlighter]()
       .then(async ({ createDiffsHighlighter }) => {
+        // The backend reads this registry lazily through its resolver's
+        // fallback loader, so themes registered later reach it as well.
         const instance = await createDiffsHighlighter(
           themeLoaders,
           customLanguageLoaders
         );
-        for (const [name, loader] of themeLoaders) {
-          instance.themeResolver.registerTheme(name, loader);
-        }
         // A backend finishing after disposal belongs only to its original callers.
         if (cache.get(preferredHighlighter) === pending)
           cache.set(preferredHighlighter, instance);
@@ -200,7 +200,8 @@ export function registerCustomLanguage(
 
 /**
  * Register a lazy theme loader for current and future backend instances.
- * Duplicate names in the selected registries log an error and are ignored.
+ * Bundled theme names and duplicate names in the selected registries log an
+ * error and are ignored, whether or not a backend has loaded them yet.
  *
  * @param type Theme format: `textmate` for Shiki or `zed` for Highlights.
  * Omit to register with both; the theme must be compatible with each backend used.
@@ -221,6 +222,7 @@ export function registerCustomTheme(
         (highlighter.name === 'highlights' ? 'zed' : 'textmate') === type)
   );
   if (
+    bundledThemeNames.includes(name) ||
     registries.some((registry) => registry.has(name)) ||
     instances.some((highlighter) =>
       highlighter.themeResolver.hasRegisteredTheme(name)
@@ -229,9 +231,8 @@ export function registerCustomTheme(
     console.error('registerCustomTheme: theme name already registered', name);
     return;
   }
-  for (const highlighter of instances) {
-    highlighter.themeResolver.registerTheme(name, loader);
-  }
+  // Backends resolve these registries lazily, so existing instances see the
+  // loader without registering it on each resolver.
   for (const registry of registries) registry.set(name, loader);
 }
 

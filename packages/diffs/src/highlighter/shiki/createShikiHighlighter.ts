@@ -141,5 +141,8 @@ export async function createShikiHighlighter(
         throw new Error('Theme "' + themeName + '" is not loaded');
       return theme;
     },
+    dispose() {
+      highlighter.dispose();
+    },
   };
 }

@@ -205,3 +205,26 @@ test('a loaded theme in the other format does not block registration', async () 
   expect(highlights.getTheme(name)).toEqual({ ...zedTheme, name });
   expect(shiki.getTheme(name)).toBe(original);
 });
+
+test('rejects bundled theme names whether or not a backend has loaded them', async () => {
+  const error = spyOn(console, 'error').mockImplementation(() => {});
+  const loader = mock(() =>
+    Promise.resolve({ ...textmateTheme, name: 'github-dark' })
+  );
+  try {
+    registerCustomTheme('github-dark', loader, 'textmate');
+    expect(error).toHaveBeenCalledTimes(1);
+    const highlighter = await getSharedHighlighter({
+      preferredHighlighter: 'shiki-js',
+      themes: ['github-dark'],
+    });
+    expect(loader).not.toHaveBeenCalled();
+    expect(highlighter.getTheme('github-dark')).not.toMatchObject({
+      colors: textmateTheme.colors,
+    });
+    registerCustomTheme('github-dark', loader, 'textmate');
+    expect(error).toHaveBeenCalledTimes(2);
+  } finally {
+    error.mockRestore();
+  }
+});

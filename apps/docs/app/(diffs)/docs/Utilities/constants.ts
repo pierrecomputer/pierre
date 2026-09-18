@@ -179,7 +179,8 @@ export const HELPER_REGISTER_CUSTOM_THEME: PreloadFileOptions<
 // registered per format: 'textmate' for the Shiki backends
 // ('shiki-wasm', 'shiki-js') and 'zed' for Highlights. Omit the
 // format to register the loader for every backend; its result must
-// then match whichever backend loads it.
+// then match whichever backend loads it. Names of bundled themes
+// and already registered names are rejected.
 
 // Option 1: Dynamic import of a TextMate / VS Code theme
 // (recommended for code splitting)

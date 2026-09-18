@@ -28,6 +28,14 @@ interface Line {
   bracketIgnoredRanges?: [number, number][];
 }
 
+// A dirty span starting at `line`. Spans from edits report their finished
+// lines through `onDeferTokenize`; the initial pass may skip that when the
+// host already renders the document.
+interface PendingSpan {
+  line: number;
+  emit: boolean;
+}
+
 let nextLiveTokenizerId = 0;
 
 /** Retain each line's outgoing grammar state so edits stop at convergence. */
@@ -39,7 +47,7 @@ export class ShikiLiveTokenizer implements DiffsLiveTokenizer {
   #textDocument: TextDocument;
   #documentRevision = -1;
   #lines: (Line | undefined)[] = [];
-  #pending: number[] = [];
+  #pending: PendingSpan[] = [];
   #tokenizerId = ++nextLiveTokenizerId;
   #jobId = 0;
   #scheduled = false;
@@ -74,8 +82,13 @@ export class ShikiLiveTokenizer implements DiffsLiveTokenizer {
     highlighter: HighlighterCore,
     options: DiffsLiveTokenizerOptions
   ) {
-    const { textDocument, renderRange, onDeferTokenize, ...tokenOptions } =
-      options;
+    const {
+      textDocument,
+      renderRange,
+      onDeferTokenize,
+      omitInitialTokens = false,
+      ...tokenOptions
+    } = options;
     this.#textDocument = textDocument;
     this.#highlighter = highlighter;
     this.#options = getShikiOptions(tokenOptions, highlighter);
@@ -93,7 +106,7 @@ export class ShikiLiveTokenizer implements DiffsLiveTokenizer {
       );
     }
     this.#onDeferTokenize = onDeferTokenize;
-    this.reset({ renderRange });
+    this.#reset({ renderRange }, !omitInitialTokens);
   }
 
   get pendingTokenization(): boolean {
@@ -191,14 +204,18 @@ export class ShikiLiveTokenizer implements DiffsLiveTokenizer {
           .slice(0, start)
           .concat(replacement, this.#lines.slice(oldEnd + 1));
       }
-      this.#pending = [
-        ...new Set([
-          ...this.#pending.map((line) =>
-            line < start ? line : line <= oldEnd ? start : line + delta
-          ),
-          start,
-        ]),
-      ].sort((a, b) => a - b);
+      // Spans that land on the same line merge, and an edited span always
+      // reports its lines.
+      const remapped = new Map<number, boolean>();
+      for (const { line, emit } of this.#pending) {
+        const next =
+          line < start ? line : line <= oldEnd ? start : line + delta;
+        remapped.set(next, (remapped.get(next) ?? false) || emit);
+      }
+      remapped.set(start, true);
+      this.#pending = [...remapped]
+        .map(([line, emit]) => ({ line, emit }))
+        .sort((a, b) => a.line - b.line);
     }
     if (this.#lines.length !== this.#textDocument.lineCount)
       return this.reset(options);
@@ -209,6 +226,14 @@ export class ShikiLiveTokenizer implements DiffsLiveTokenizer {
   reset(
     options?: Pick<DiffsLiveTokenizerOptions, 'renderRange'>
   ): ReturnType<DiffsLiveTokenizer['reset']> {
+    return this.#reset(options, true);
+  }
+
+  /** Rebuild every line; `emit` decides whether unedited lines are reported. */
+  #reset(
+    options: Pick<DiffsLiveTokenizerOptions, 'renderRange'> | undefined,
+    emit: boolean
+  ): ReturnType<DiffsLiveTokenizer['reset']> {
     this.#check(options);
     if (this.#updating)
       throw new Error('Cannot reset during a tokenizer update');
@@ -216,7 +241,7 @@ export class ShikiLiveTokenizer implements DiffsLiveTokenizer {
     this.#paused = false;
     this.#documentRevision = this.#textDocument.revision;
     this.#lines = new Array(this.#textDocument.lineCount);
-    this.#pending = [0];
+    this.#pending = [{ line: 0, emit }];
     return { lines: this.#update(options?.renderRange) };
   }
 
@@ -323,7 +348,7 @@ export class ShikiLiveTokenizer implements DiffsLiveTokenizer {
     if (
       this.#documentRevision !== this.#textDocument.revision ||
       this.#pending.length === 0 ||
-      this.#pending[0] >= end
+      this.#pending[0].line >= end
     )
       return finished;
     // Resolve the editor's single theme once per slice and retain TextMate's
@@ -338,8 +363,8 @@ export class ShikiLiveTokenizer implements DiffsLiveTokenizer {
       singleTheme === undefined
         ? undefined
         : this.#highlighter.getLanguage(this.#options.lang ?? 'text');
-    while (this.#pending.length > 0 && this.#pending[0] < end) {
-      const index = this.#pending[0];
+    while (this.#pending.length > 0 && this.#pending[0].line < end) {
+      const { line: index, emit } = this.#pending[0];
       const line = (this.#lines[index] ??= {});
       const text = this.#textDocument.getLineText(index);
       const incoming = this.#lines[index - 1]?.state;
@@ -474,7 +499,7 @@ export class ShikiLiveTokenizer implements DiffsLiveTokenizer {
         else ignored.push([token.offset, end]);
       }
       line.bracketIgnoredRanges = ignored;
-      if (collect)
+      if (collect && emit)
         finished.set(
           index,
           typedTokens.length > 0
@@ -486,9 +511,17 @@ export class ShikiLiveTokenizer implements DiffsLiveTokenizer {
             : [[0, '', '']]
         );
       if (converged || index + 1 === this.#lines.length) this.#pending.shift();
-      else this.#pending[0] = index + 1;
-      while (this.#pending.length > 1 && this.#pending[0] >= this.#pending[1])
+      else this.#pending[0].line = index + 1;
+      // A span that reaches the next span continues as that span. Its lines
+      // still carry this span's edit, so reporting stays on when either did.
+      while (
+        this.#pending.length > 1 &&
+        this.#pending[0].line >= this.#pending[1].line
+      ) {
+        const [{ emit: carried }] = this.#pending;
         this.#pending.shift();
+        this.#pending[0].emit ||= carried;
+      }
       if (deadline !== Infinity && performance.now() >= deadline) break;
     }
     return finished;

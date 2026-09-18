@@ -776,16 +776,20 @@ export class FileRenderer<LAnnotation = undefined> {
         this.workerManager.highlightFileAST(this, file);
       }
     } else {
+      // A backend with its themes can render at once. When only the grammar
+      // is missing, render plain text now and swap in the highlighted result
+      // once the grammar loads, instead of showing nothing until then.
       this.highlighter = getHighlighterIfLoaded({
         theme: options.theme ?? DEFAULT_THEMES,
         preferredHighlighter: options.preferredHighlighter,
-        langs: forcePlainText
-          ? []
-          : [file.lang ?? getFiletypeFromFileName(file.name)],
       });
-      const canHighlight = !forcePlainText;
+      const hasLangs =
+        forcePlainText ||
+        this.highlighter?.hasLoadedLanguages?.([
+          file.lang ?? getFiletypeFromFileName(file.name),
+        ]) !== false;
+      const canHighlight = !forcePlainText && hasLangs;
 
-      // Render immediately when the backend, themes, and language are ready.
       if (
         canRenderFile &&
         this.highlighter != null &&
@@ -797,7 +801,7 @@ export class FileRenderer<LAnnotation = undefined> {
         const { result, options } = this.renderFileWithHighlighter(
           file,
           this.highlighter,
-          forcePlainText
+          forcePlainText || !hasLangs
         );
         this.renderCache = {
           file,
@@ -808,8 +812,8 @@ export class FileRenderer<LAnnotation = undefined> {
         };
       }
 
-      // Load the missing backend, themes, or language before retrying.
-      if (this.highlighter == null) {
+      // Load the missing backend, themes, or grammar before retrying.
+      if (this.highlighter == null || !hasLangs) {
         void this.asyncHighlight(file).then(({ result, options }) => {
           this.applyHighlightResult(file, result, options, !forcePlainText);
         });

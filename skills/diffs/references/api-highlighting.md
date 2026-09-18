@@ -58,10 +58,10 @@ languages as `text`, and takes Zed themes.
 
 ## Theme APIs
 
-| Export                                      | Purpose                                                                            |
-| ------------------------------------------- | ---------------------------------------------------------------------------------- |
-| `registerCustomTheme(name, loader, type?)`  | Registers a lazy theme loader for current and future backend instances.            |
-| `resolveTheme(name, preferredHighlighter?)` | Loads and caches one bundled or registered theme in the selected backend's format. |
+| Export                                      | Purpose                                                                                             |
+| ------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| `registerCustomTheme(name, loader, type?)`  | Registers a lazy theme loader for current and future backend instances; bundled names are rejected. |
+| `resolveTheme(name, preferredHighlighter?)` | Loads and caches one bundled or registered theme in the selected backend's format.                  |
 
 `type` is `'textmate'` for the Shiki backends or `'zed'` for Highlights. Omit it
 to register the loader for every backend; the loader must then return the format
@@ -97,10 +97,14 @@ backend ignores these loaders.
 | `createLiveTokenizer(options)`   | Creates a `DiffsLiveTokenizer` for an editor `TextDocument`.  |
 | `loadLanguages(languages)`       | Loads grammars on demand; Shiki backends only.                |
 | `hasLoadedLanguages(languages)`  | Tests whether grammars are loaded; Shiki backends only.       |
+| `dispose()`                      | Releases backend resources; Shiki backends only.              |
 
 `CodeToTokensOptions` supplies `lang`, a theme object or light/dark pair,
 `cssVariablePrefix`, `defaultColor`, `useTokenTransformer`, and
-`tokenizeMaxLineLength`.
+`tokenizeMaxLineLength`. `DiffsLiveTokenizerOptions` adds `textDocument`,
+`renderRange`, `onDeferTokenize`, and `omitInitialTokens`, which keeps unedited
+lines of the initial document out of `onDeferTokenize` when the host already
+renders them (Shiki backends only).
 
 ## Render APIs
 

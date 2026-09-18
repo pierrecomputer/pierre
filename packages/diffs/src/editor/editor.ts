@@ -1638,7 +1638,7 @@ export class Editor<
     // can clamp any edit-time widening against it. Refreshed on every scroll;
     // undefined/Infinity windows leave the clamp disabled.
     this.#viewportWindowLines = renderRange?.totalLines;
-    this.#tokenizer?.prebuildTokens(renderRange);
+    this.#tokenizer?.prebuildTokens();
 
     const retainedEditorState = editSession.editor;
     const restoreEditorStateOnSync = this.#restoreEditorStateOnSync;

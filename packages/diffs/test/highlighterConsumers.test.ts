@@ -1,8 +1,13 @@
 import { afterEach, describe, expect, spyOn, test } from 'bun:test';
 
+import { DEFAULT_THEMES } from '../src/constants';
 import { TextDocument } from '../src/editor/textDocument';
 import { EditorTokenizer } from '../src/editor/tokenizer';
-import { disposeHighlighter, getSharedHighlighter } from '../src/highlighter';
+import {
+  disposeHighlighter,
+  getHighlighterIfLoaded,
+  getSharedHighlighter,
+} from '../src/highlighter';
 import { DiffHunksRenderer } from '../src/renderers/DiffHunksRenderer';
 import { FileRenderer } from '../src/renderers/FileRenderer';
 import { preloadDiffHTML } from '../src/ssr/preloadDiffs';
@@ -55,12 +60,7 @@ describe('highlighter consumers', () => {
         },
       });
       try {
-        tokenizer.prebuildTokens({
-          startingLine: 200,
-          totalLines: 10,
-          bufferBefore: 0,
-          bufferAfter: 0,
-        });
+        tokenizer.prebuildTokens();
         const result = create.mock.results[0];
         if (result.type !== 'return')
           throw new Error('Expected a live tokenizer');
@@ -179,7 +179,7 @@ describe('highlighter consumers', () => {
     }
   });
 
-  test('loads a newly requested Shiki grammar before rendering', async () => {
+  test('renders plain text until a newly requested Shiki grammar loads', async () => {
     let updated = false;
     const renderer = new FileRenderer(
       { preferredHighlighter: 'shiki-js' },
@@ -188,15 +188,29 @@ describe('highlighter consumers', () => {
         updated = true;
       }
     );
+    const cache = renderer as unknown as {
+      renderCache?: { highlighted: boolean };
+    };
     await renderer.initializeHighlighter();
     const rust = {
       name: 'main.rs',
       contents: 'fn main() { println!("hello"); }',
     };
-    expect(renderer.renderFile(rust)).toBeUndefined();
+    expect(
+      getHighlighterIfLoaded({
+        preferredHighlighter: 'shiki-js',
+        theme: DEFAULT_THEMES,
+        langs: ['rust'],
+      })
+    ).toBeUndefined();
+    // Themes are ready, so the first pass paints plain text instead of
+    // nothing while the grammar loads.
+    expect(renderer.renderFile(rust)?.rowCount).toBe(1);
+    expect(cache.renderCache?.highlighted).toBe(false);
     await waitFor(() => updated);
     expect(updated).toBe(true);
-    expect(renderer.renderFile(rust)).toBeDefined();
+    expect(renderer.renderFile(rust)?.rowCount).toBe(1);
+    expect(cache.renderCache?.highlighted).toBe(true);
   });
 
   test('an attached editor switches its existing tokenizer to a new backend', async () => {

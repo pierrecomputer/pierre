@@ -1,6 +1,7 @@
 import type { HElement, SharedRenderState, ThemedToken } from '../types';
 import { getTokenStyle } from './getTokenStyle';
 import { createHtmlElement, createTextNode } from './html';
+import { mergeWhitespaceTokens } from './mergeWhitespaceTokens';
 import type { DiffDecoration } from './parseDiffDecorations';
 import { processLine } from './processLine';
 import { wrapTokenFragments } from './wrapTokenFragments';
@@ -21,7 +22,7 @@ export function renderTokenLines(
     while (decorations[decorationIndex]?.line < lineIndex) {
       decorationIndex++;
     }
-    for (const token of lines[lineIndex]) {
+    for (const token of mergeWhitespaceTokens(lines[lineIndex])) {
       const tokenStart = column;
       const tokenEnd = column + token.content.length;
       const style = getTokenStyle(token);
