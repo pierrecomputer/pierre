@@ -313,13 +313,11 @@ describe('dist export smoke', () => {
     expect(core.createTheme).toBeUndefined();
     expect(core.themes).toBeUndefined();
     expect(core.shikiThemes).toBeUndefined();
-    expect(core.highlightsThemes).toBeUndefined();
     expect(typeof react.useThemeController).toBe('function');
     expect(typeof themes.createTheme).toBe('function');
     expect(typeof themes.themes).toBe('object');
     expect(typeof themes.pierreThemes).toBe('object');
     expect(typeof themes.shikiThemes).toBe('object');
-    expect(typeof themes.highlightsThemes).toBe('object');
     expect(themes.defineShikiTheme).toBeUndefined();
     expect(themes.registerPierreThemes).toBeUndefined();
     expect(themes.bundledShikiThemes).toBeUndefined();

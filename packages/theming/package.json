@@ -51,7 +51,6 @@
   },
   "dependencies": {},
   "devDependencies": {
-    "@pierre/highlights": "workspace:*",
     "@pierre/theme": "workspace:*",
     "@shikijs/themes": "catalog:",
     "@types/react": "catalog:",
@@ -63,7 +62,6 @@
     "typescript": "catalog:"
   },
   "peerDependencies": {
-    "@pierre/highlights": "^0.0.3",
     "@pierre/theme": "^1.1.0 || ^2.0.0",
     "@shikijs/themes": "^3.0.0 || ^4.0.0",
     "react": "^18.3.1 || ^19.0.0",
@@ -71,9 +69,6 @@
     "shiki": "^3.0.0 || ^4.0.0"
   },
   "peerDependenciesMeta": {
-    "@pierre/highlights": {
-      "optional": true
-    },
     "react": {
       "optional": true
     },

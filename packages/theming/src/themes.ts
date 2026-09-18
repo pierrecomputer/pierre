@@ -1,7 +1,7 @@
 /**
  * Bundled theme collections for @pierre/theming.
  * This is the only public package entry that imports Shiki normalization,
- * Shiki, Highlights, or first-party Pierre theme modules.
+ * Shiki or first-party Pierre theme modules.
  */
 
 import { pierreThemes } from './collections/pierre';
@@ -9,7 +9,6 @@ import { shikiThemes } from './collections/shiki';
 import { createThemeCollection, type ThemeCollection } from './index';
 
 export { createTheme, type CreateThemeOptions } from './modules/createTheme';
-export { highlightsThemes } from './collections/highlights';
 export { pierreThemes } from './collections/pierre';
 export { shikiThemes } from './collections/shiki';
 

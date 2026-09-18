@@ -84,11 +84,7 @@ The core entry exports two closely-related composition primitives:
 - A `ThemeCollection` is an ordered set of theme descriptors and lazy loaders.
   The `/themes` entry exports `themes`, the bundled Pierre-then-Shiki
   collection, plus `pierreThemes` and `shikiThemes` source collections when an
-  app wants one source or wants to compose its own order. `highlightsThemes`
-  provides the native themes from `@pierre/highlights` (an optional peer). Its
-  loaders preserve Highlights' `appearance` and `style` fields and use the
-  catalog slug as `name`. Use it separately from `themes`, since their names
-  overlap.
+  app wants one source or wants to compose its own order.
 - A `ThemeCatalog` is the app-level collection, plus `defaultLightThemeName` and
   `defaultDarkThemeName`.
 
