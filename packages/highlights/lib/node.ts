@@ -1,11 +1,10 @@
 import { readFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { init } from './index';
 
 const wasmBytes = readFileSync(
-  join(dirname(fileURLToPath(import.meta.url)), 'highlights.wasm')
+  fileURLToPath(new URL('highlights.wasm', import.meta.url))
 );
 init(new WebAssembly.Module(wasmBytes));
 
