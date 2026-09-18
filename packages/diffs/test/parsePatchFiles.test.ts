@@ -617,6 +617,157 @@ describe('parsePatchFiles', () => {
     expect(file?.additionLines[0]).toBe('new\ud800\n');
   });
 
+  test.each([
+    ['a/sp ace.ts b/sp ace.ts', 'sp ace.ts', 'sp ace.ts'],
+    ['a/日本語.ts b/日本語.ts', '日本語.ts', '日本語.ts'],
+    [
+      String.raw`a/literal\303.ts b/literal\303.ts`,
+      String.raw`literal\303.ts`,
+      String.raw`literal\303.ts`,
+    ],
+    [String.raw`"a/\303\274ber.ts" "b/\303\274ber.ts"`, 'über.ts', 'über.ts'],
+    [String.raw`"a/\303\274ber.ts" b/sp ace.ts`, 'über.ts', 'sp ace.ts'],
+    [String.raw`a/sp ace.ts "b/\303\274ber.ts"`, 'sp ace.ts', 'über.ts'],
+    [
+      String.raw`"a/a/\303\274ber.ts" "b/b/\303\274ber.ts"`,
+      'a/über.ts',
+      'b/über.ts',
+    ],
+    [
+      String.raw`"a/old\" b/inside.ts" "b/new\"name.ts"`,
+      'old" b/inside.ts',
+      'new"name.ts',
+    ],
+    ['"a/ leading.ts " "b/ trailing.ts "', ' leading.ts ', ' trailing.ts '],
+  ])('reads Git header paths %s', (paths, prevName, name) => {
+    const file = processFile(`diff --git ${paths}\nsimilarity index 100%\n`, {
+      throwOnError: true,
+    });
+    expect(file?.name).toBe(name);
+    expect(file?.prevName).toBe(prevName === name ? undefined : prevName);
+    expect(file?.hunks).toEqual([]);
+  });
+
+  test('decodes quoted Git file headers before removing one prefix', () => {
+    const file = processFile(
+      [
+        'diff --git a/fallback.ts b/fallback.ts\n',
+        'similarity index 80%\n',
+        String.raw`--- "a/a/\303\274ber.ts"` + '\n',
+        String.raw`+++ "b/b/\303\274ber.ts"` + '\n',
+        '@@ -1 +1 @@\n-old\n+new\n',
+      ].join(''),
+      { throwOnError: true }
+    );
+    expect(file?.prevName).toBe('a/über.ts');
+    expect(file?.name).toBe('b/über.ts');
+    expect(file?.deletionLines).toEqual(['old\n']);
+    expect(file?.additionLines).toEqual(['new\n']);
+  });
+
+  test('decodes multiple unified files with timestamps and literal directories', () => {
+    const patch = [
+      String.raw`--- "a/\303\274ber.ts"` + '\told timestamp\n',
+      String.raw`+++ "b/\303\274ber.ts"` + '\tnew timestamp\n',
+      '@@ -1 +1 @@\n-old\n+new\n',
+      '--- sp ace.ts\told timestamp\n',
+      '+++ sp ace.ts\tnew timestamp\n',
+      '@@ -1 +1 @@\n-before\n+after\n',
+    ].join('');
+    const files = parsePatchFiles(patch, undefined, true)[0]?.files;
+    expect(
+      files?.map(({ name, prevName, type }) => ({ name, prevName, type }))
+    ).toEqual([
+      { name: 'b/über.ts', prevName: 'a/über.ts', type: 'rename-changed' },
+      { name: 'sp ace.ts', prevName: undefined, type: 'change' },
+    ]);
+  });
+
+  test.each(['rename', 'copy'])(
+    'decodes %s metadata without stripping real directories',
+    (kind) => {
+      const file = processFile(
+        [
+          'diff --git a/fallback-old.ts b/fallback-new.ts\n',
+          'similarity index 100%\n',
+          `${kind} from ` + String.raw`"a/\303\274ber.ts"` + '\n',
+          `${kind} to ` + String.raw`"b/new\"name.ts"` + '\n',
+        ].join(''),
+        { throwOnError: true }
+      );
+      expect(file?.prevName).toBe('a/über.ts');
+      expect(file?.name).toBe('b/new"name.ts');
+      expect(file?.type).toBe('rename-pure');
+      expect(file?.hunks).toEqual([]);
+    }
+  );
+
+  test.each(['new', 'deleted'])(
+    'keeps /dev/null absent for a quoted %s file',
+    (type) => {
+      const added = type === 'new';
+      const file = processFile(
+        [
+          String.raw`diff --git "a/\303\274ber.ts" "b/\303\274ber.ts"` + '\n',
+          `${added ? 'new' : 'deleted'} file mode 100644\n`,
+          added ? '--- /dev/null\n' : String.raw`--- "a/\303\274ber.ts"` + '\n',
+          added ? String.raw`+++ "b/\303\274ber.ts"` + '\n' : '+++ /dev/null\n',
+          added ? '@@ -0,0 +1 @@\n+new\n' : '@@ -1 +0,0 @@\n-old\n',
+        ].join(''),
+        { throwOnError: true }
+      );
+      expect(file?.name).toBe('über.ts');
+      expect(file?.prevName).toBeUndefined();
+      expect(file?.type).toBe(type);
+    }
+  );
+
+  test.each([
+    ['old mode 100644\nnew mode 100755\n', 'change'],
+    [
+      'new file mode 100644\nBinary files /dev/null and b/filename differ\n',
+      'new',
+    ],
+  ] as const)(
+    'decodes a hunkless Git file with metadata %j',
+    (metadata, type) => {
+      const file = parsePatchFiles(
+        String.raw`diff --git "a/\303\274ber.ts" "b/\303\274ber.ts"` +
+          '\n' +
+          metadata,
+        undefined,
+        true
+      )[0]?.files[0];
+      expect(file?.name).toBe('über.ts');
+      expect(file?.type).toBe(type);
+      expect(file?.hunks).toEqual([]);
+    }
+  );
+
+  test('compares decoded unified names and keeps malformed quoted tokens intact', () => {
+    const file = processFile(
+      [
+        String.raw`--- "\303\274ber.ts"` + '\n',
+        '+++ über.ts\n',
+        '@@ -1 +1 @@\n-old\n+new\n',
+      ].join(''),
+      { throwOnError: true }
+    );
+    expect(file?.name).toBe('über.ts');
+    expect(file?.prevName).toBeUndefined();
+    expect(file?.type).toBe('change');
+
+    const malformed = processFile(
+      [
+        String.raw`--- "bad\q.ts"` + '\n',
+        String.raw`+++ "bad\q.ts"` + '\n',
+        '@@ -1 +1 @@\n-old\n+new\n',
+      ].join(''),
+      { throwOnError: true }
+    );
+    expect(malformed?.name).toBe(String.raw`"bad\q.ts"`);
+  });
+
   test('parses quoted git diff headers with escaped file names', () => {
     const oldName =
       'test/integration/image-optimizer/app/public/\\303\\244\\303\\266\\303\\274\\305\\241\\304\\215\\305\\231\\303\\255.png';
@@ -630,8 +781,10 @@ describe('parsePatchFiles', () => {
       { isGitDiff: true }
     );
 
-    expect(file?.name).toBe(newName);
-    expect(file?.prevName).toBe(oldName);
+    expect(file?.name).toBe('test/e2e/image-optimizer/app/public/äöüščří.png');
+    expect(file?.prevName).toBe(
+      'test/integration/image-optimizer/app/public/äöüščří.png'
+    );
     expect(file?.type).toBe('rename-pure');
   });
 

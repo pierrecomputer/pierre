@@ -1,8 +1,6 @@
 import {
-  ALTERNATE_FILE_NAMES_GIT,
   COMMIT_METADATA_SPLIT,
   FILENAME_HEADER_REGEX,
-  FILENAME_HEADER_REGEX_GIT,
   GIT_DIFF_FILE_BREAK_REGEX,
   INDEX_LINE_METADATA,
 } from '../constants';
@@ -22,7 +20,13 @@ import {
   getHunkSideEndBoundary,
   getHunkSideStartBoundary,
 } from './getHunkSideBoundaries';
+import { parseQuotedDiffFileName } from './parseQuotedDiffFileName';
 import { realignChangeContentBySimilarity } from './realignChangeContent';
+
+// Keep quotes and transport prefixes until decoding, while allowing spaces in
+// unquoted paths and escaped quotes inside quoted paths.
+const GIT_DIFF_HEADER_FILENAMES =
+  /^diff --git ("a\/(?:[^"\\]|\\.)*"|a\/.+?) ("b\/(?:[^"\\]|\\.)*"|b\/.+?)$/;
 
 interface ParsedHunkHeader {
   additionCount: number;
@@ -205,10 +209,8 @@ function _processFile(
 
       for (const line of lines) {
         if (line.startsWith('diff --git')) {
-          const filenameMatch = line.trim().match(ALTERNATE_FILE_NAMES_GIT);
-          const prevName = filenameMatch?.[1] ?? filenameMatch?.[2];
-          const name = filenameMatch?.[3] ?? filenameMatch?.[4];
-          if (prevName == null || name == null) {
+          const filenameMatch = line.trim().match(GIT_DIFF_HEADER_FILENAMES);
+          if (filenameMatch == null) {
             if (throwOnError) {
               throw Error('parsePatchContent: invalid git diff header');
             } else {
@@ -216,27 +218,28 @@ function _processFile(
             }
             continue;
           }
-          currentFile.name = detachString(name.trim());
+          const prevName = decodeDiffFileName(filenameMatch[1], true);
+          const name = decodeDiffFileName(filenameMatch[2], true);
+          currentFile.name = detachString(name);
           if (prevName !== name) {
-            currentFile.prevName = detachString(prevName.trim());
+            currentFile.prevName = detachString(prevName);
           }
           continue;
         }
 
         const filenameMatch =
           line.startsWith('---') || line.startsWith('+++')
-            ? line.match(
-                isGitDiff ? FILENAME_HEADER_REGEX_GIT : FILENAME_HEADER_REGEX
-              )
+            ? line.match(FILENAME_HEADER_REGEX)
             : null;
         if (filenameMatch != null) {
-          const [, type, fileName] = filenameMatch;
+          const [, type, rawFileName] = filenameMatch;
+          const fileName = decodeDiffFileName(rawFileName, isGitDiff);
           if (type === '---' && fileName !== '/dev/null') {
-            const detachedFileName = detachString(fileName.trim());
+            const detachedFileName = detachString(fileName);
             currentFile.prevName = detachedFileName;
             currentFile.name = detachedFileName;
           } else if (type === '+++' && fileName !== '/dev/null') {
-            currentFile.name = detachString(fileName.trim());
+            currentFile.name = detachString(fileName);
           }
         }
         // Git diffs have a bunch of additional metadata we can pull from
@@ -283,16 +286,31 @@ function _processFile(
               currentFile.mode = detachString(mode);
             }
           }
-          // We have to handle these for pure renames because there won't be
-          // --- and +++ lines
-          if (line.startsWith('rename from ')) {
+          // Pure renames and copies have no --- / +++ headers. These paths
+          // are already relative to the repository, without transport prefixes.
+          if (
+            line.startsWith('rename from ') ||
+            line.startsWith('copy from ')
+          ) {
             currentFile.prevName = detachString(
-              line.slice('rename from '.length).trim()
+              decodeDiffFileName(
+                line.slice(
+                  line.startsWith('rename')
+                    ? 'rename from '.length
+                    : 'copy from '.length
+                )
+              )
             );
           }
-          if (line.startsWith('rename to ')) {
+          if (line.startsWith('rename to ') || line.startsWith('copy to ')) {
             currentFile.name = detachString(
-              line.slice('rename to '.length).trim()
+              decodeDiffFileName(
+                line.slice(
+                  line.startsWith('rename')
+                    ? 'rename to '.length
+                    : 'copy to '.length
+                )
+              )
             );
           }
         }
@@ -688,6 +706,18 @@ export function parsePatchFiles(
     }
   }
   return patches;
+}
+
+// Decode only quoted tokens, preserving whitespace inside them. Git's a/ and
+// b/ prefixes are part of the quoted token and must be removed after decoding.
+function decodeDiffFileName(value: string, stripGitPrefix = false): string {
+  const rawName = value.trim();
+  const name = rawName.startsWith('"')
+    ? (parseQuotedDiffFileName(rawName)?.fileName ?? rawName)
+    : rawName;
+  return stripGitPrefix && (name.startsWith('a/') || name.startsWith('b/'))
+    ? name.slice(2)
+    : name;
 }
 
 function hasCommitMetadataBoundary(data: string): boolean {

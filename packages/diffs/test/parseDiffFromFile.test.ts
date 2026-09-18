@@ -1,12 +1,62 @@
 import { describe, expect, test } from 'bun:test';
 
 import type { FileContents } from '../src/types';
+import { getFiletypeFromFileName } from '../src/utils/getFiletypeFromFileName';
 import { parseDiffFromFile } from '../src/utils/parseDiffFromFile';
 import { splitFileContents } from '../src/utils/splitFileContents';
 import { fileNew, fileOld } from './mocks';
 import { assertDefined, hunkDigest, verifyHunkLineValues } from './testUtils';
 
 describe('parseDiffFromFile', () => {
+  test.each([
+    'docs/über.md',
+    'src/日本語.ts',
+    'src/😀.ts',
+    'weird"quote.ts',
+    'slash\\name.ts',
+    'control\tname\n.ts',
+    'space name.ts',
+    'src/normal.ts',
+    'a/über.ts',
+    'b/über.ts',
+    ' leading-über.ts ',
+    String.raw`literal\303\274.ts`,
+  ])('preserves filename %j across changes and missing sides', (name) => {
+    const oldFile = { name, contents: 'old\n' };
+    const newFile = { name, contents: 'new\n' };
+    for (const [oldSide, newSide, type] of [
+      [oldFile, newFile, 'change'],
+      [oldFile, oldFile, 'change'],
+      [null, newFile, 'new'],
+      [oldFile, null, 'deleted'],
+    ] as const) {
+      const diff = parseDiffFromFile(oldSide, newSide);
+      expect(diff.name).toBe(name);
+      expect(diff.prevName).toBeUndefined();
+      expect(diff.type).toBe(type);
+      expect(verifyHunkLineValues(diff)).toEqual([]);
+    }
+  });
+
+  test.each([false, true])(
+    'decodes renamed files with content changes: %s',
+    (changed) => {
+      const diff = parseDiffFromFile(
+        { name: 'docs/über.md', contents: 'old\n' },
+        { name: 'src/日本語.ts', contents: changed ? 'new\n' : 'old\n' }
+      );
+      expect(diff.prevName).toBe('docs/über.md');
+      expect(diff.name).toBe('src/日本語.ts');
+      expect(diff.type).toBe(changed ? 'rename-changed' : 'rename-pure');
+      assertDefined(
+        diff.prevName,
+        'expected the original filename for a rename'
+      );
+      expect(getFiletypeFromFileName(diff.prevName)).toBe('markdown');
+      expect(getFiletypeFromFileName(diff.name)).toBe('typescript');
+    }
+  );
+
   const result = parseDiffFromFile(
     { name: 'fileOld.txt', contents: fileOld },
     { name: 'fileNew.txt', contents: fileNew }
