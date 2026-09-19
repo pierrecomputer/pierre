@@ -1,6 +1,11 @@
 import { type NextRequest } from 'next/server';
 
 import {
+  getGitHubRequestToken,
+  getGitHubSession,
+  parseBearerToken,
+} from '@/lib/githubAuth';
+import {
   encodeURLSegment,
   type GitHubDiffSource,
   type GitHubRepo,
@@ -13,6 +18,7 @@ const GITHUB_API_ROOT = 'https://api.github.com';
 const GITHUB_API_VERSION = '2022-11-28';
 const GITHUB_DIFF_MEDIA_TYPE = 'application/vnd.github.diff';
 const GITHUB_JSON_MEDIA_TYPE = 'application/vnd.github+json';
+const FULL_GITHUB_SHA_PATTERN = /^[0-9a-f]{40}$/i;
 const GITHUB_HOST = 'github.com';
 const GITHUB_RAW_DIFF_HOST = 'patch-diff.githubusercontent.com';
 const NON_DIFF_RESPONSE_MESSAGE = 'GitHub did not return a diff for this URL.';
@@ -51,6 +57,7 @@ const HIDDEN_PATCH_DOMAIN_RULES = [
 
 interface DirectPatchFetchTarget {
   kind?: 'direct';
+  commitId?: string;
   label?: string;
   patchURL: string;
   requestHeaders?: Record<string, string>;
@@ -67,11 +74,24 @@ interface GitHubPullPatchFetchTarget {
   token: string;
 }
 
-type PatchFetchTarget = DirectPatchFetchTarget | GitHubPullPatchFetchTarget;
-
-interface ResolvedPatchRequest extends DirectPatchFetchTarget {
-  fallbacks?: PatchFetchTarget[];
+interface GitHubCommitPatchFetchTarget {
+  kind: 'github-commit';
+  commitURL: string;
+  label?: string;
+  repo: GitHubRepo;
+  requestHeaders: Record<string, string>;
+  sourceURL: string;
+  token: string;
 }
+
+type PatchFetchTarget =
+  | DirectPatchFetchTarget
+  | GitHubPullPatchFetchTarget
+  | GitHubCommitPatchFetchTarget;
+
+type ResolvedPatchRequest = PatchFetchTarget & {
+  fallbacks?: PatchFetchTarget[];
+};
 
 interface PatchFetchResult {
   response: Response;
@@ -86,8 +106,8 @@ export async function GET(request: NextRequest) {
   const path = searchParams.get('path');
   const domain = searchParams.get('domain');
   const url = searchParams.get('url');
-  const token = parseBearerToken(request.headers.get('authorization'));
-
+  const session = getGitHubSession(request);
+  const token = session?.token ?? getGitHubRequestToken(request);
   if (path == null && url == null) {
     return createTextResponse('Path or URL parameter is required', {
       status: 400,
@@ -99,7 +119,13 @@ export async function GET(request: NextRequest) {
     // exposes raw PR diffs through patch-diff.githubusercontent.com. Tangled
     // paths use an explicit domain query parameter and are normalized to their
     // patch endpoint.
-    const patchRequest = resolvePatchRequest(path, domain, url, token);
+    const patchRequest = resolvePatchRequest(
+      path,
+      domain,
+      url,
+      token,
+      session != null
+    );
     if (patchRequest == null) {
       return createTextResponse('Invalid GitHub patch URL format', {
         status: 400,
@@ -122,10 +148,11 @@ function resolvePatchRequest(
   path: string | null,
   domain: string | null,
   url: string | null,
-  token: string | undefined
+  token: string | undefined,
+  pinRevision: boolean
 ): ResolvedPatchRequest | undefined {
   if (url != null) {
-    return resolvePatchURLInput(url, token);
+    return resolvePatchURLInput(url, token, pinRevision);
   }
 
   if (path == null) {
@@ -137,15 +164,16 @@ function resolvePatchRequest(
     return patchURL == null ? undefined : { patchURL };
   }
 
-  return resolvePatchURLInput(path, token);
+  return resolvePatchURLInput(path, token, pinRevision);
 }
 
 function resolvePatchURLInput(
   input: string,
-  token: string | undefined
+  token: string | undefined,
+  pinRevision: boolean
 ): ResolvedPatchRequest | undefined {
   if (input.startsWith('/')) {
-    return resolveGitHubPatchRequest(input, token);
+    return resolveGitHubPatchRequest(input, token, pinRevision);
   }
 
   let parsedURL: URL;
@@ -160,7 +188,7 @@ function resolvePatchURLInput(
   }
 
   if (parsedURL.hostname === GITHUB_HOST) {
-    return resolveGitHubPatchRequest(parsedURL.pathname, token);
+    return resolveGitHubPatchRequest(parsedURL.pathname, token, pinRevision);
   }
 
   if (
@@ -173,13 +201,17 @@ function resolvePatchURLInput(
     };
     if (token != null) {
       const gitHubPath = parsedURL.pathname.slice('/raw'.length);
+      if (pinRevision) {
+        return resolveAuthenticatedGitHubPatchRequest(gitHubPath, token, true);
+      }
       const authenticatedWebRequest = resolveAuthenticatedGitHubWebPatchRequest(
         gitHubPath,
         token
       );
       const authenticatedAPIRequest = resolveAuthenticatedGitHubPatchRequest(
         gitHubPath,
-        token
+        token,
+        false
       );
       return {
         ...publicRequest,
@@ -200,8 +232,12 @@ function resolvePatchURLInput(
 
 function resolveGitHubPatchRequest(
   path: string,
-  token: string | undefined
+  token: string | undefined,
+  pinRevision: boolean
 ): ResolvedPatchRequest | undefined {
+  if (token != null && pinRevision) {
+    return resolveAuthenticatedGitHubPatchRequest(path, token, true);
+  }
   const patchURL = resolveGitHubPath(path);
   const publicRequest =
     patchURL == null
@@ -217,7 +253,8 @@ function resolveGitHubPatchRequest(
     );
     const authenticatedAPIRequest = resolveAuthenticatedGitHubPatchRequest(
       path,
-      token
+      token,
+      false
     );
     if (publicRequest != null) {
       return {
@@ -252,7 +289,8 @@ function resolveAuthenticatedGitHubWebPatchRequest(
 
 function resolveAuthenticatedGitHubPatchRequest(
   path: string,
-  token: string
+  token: string,
+  pinRevision: boolean
 ): PatchFetchTarget | undefined {
   const normalizedPath = normalizeGitHubPath(path);
   const source = parseGitHubDiffSource(normalizedPath);
@@ -266,6 +304,17 @@ function resolveAuthenticatedGitHubPatchRequest(
       kind: 'github-pull',
       label: 'authenticated pull metadata',
       pullURL: createGitHubDiffAPIURL(source),
+      repo: source.repo,
+      requestHeaders: createGitHubJSONAPIHeaders(token),
+      sourceURL,
+      token,
+    };
+  }
+  if (source.kind === 'commit' && pinRevision) {
+    return {
+      kind: 'github-commit',
+      commitURL: createGitHubDiffAPIURL(source),
+      label: 'authenticated commit metadata',
       repo: source.repo,
       requestHeaders: createGitHubJSONAPIHeaders(token),
       sourceURL,
@@ -433,16 +482,6 @@ function createGitHubJSONAPIHeaders(token: string): Record<string, string> {
   };
 }
 
-function parseBearerToken(value: string | null): string | undefined {
-  if (value == null) {
-    return undefined;
-  }
-
-  const match = /^Bearer\s+(.+)$/i.exec(value.trim());
-  const token = match?.[1]?.trim();
-  return token == null || token === '' ? undefined : token;
-}
-
 function getAuthorizationToken(
   requestHeaders: Record<string, string> | undefined
 ): string | undefined {
@@ -450,6 +489,7 @@ function getAuthorizationToken(
 }
 
 interface TextResponseOptions {
+  commitId?: string;
   status?: number;
   sourceURL?: string;
 }
@@ -527,6 +567,7 @@ async function createPatchStreamResponse(
   }
 
   const options = {
+    commitId: responseTarget.commitId,
     sourceURL: responseTarget.sourceURL ?? responseTarget.patchURL,
   } satisfies Omit<TextResponseOptions, 'status'>;
 
@@ -562,7 +603,9 @@ function fetchPatchTarget(
   if (target.kind === 'github-pull') {
     return fetchGitHubPullPatchTarget(target, signal);
   }
-
+  if (target.kind === 'github-commit') {
+    return fetchGitHubCommitPatchTarget(target, signal);
+  }
   return fetchDirectPatchTarget(target, signal);
 }
 
@@ -576,6 +619,50 @@ async function fetchDirectPatchTarget(
     signal,
   });
   return { response, target };
+}
+
+async function fetchGitHubCommitPatchTarget(
+  target: GitHubCommitPatchFetchTarget,
+  signal: AbortSignal
+): Promise<PatchFetchResult> {
+  const commitResponse = await fetch(target.commitURL, {
+    cache: 'no-store',
+    headers: { 'User-Agent': 'pierre-diffshub', ...target.requestHeaders },
+    signal,
+  });
+  const commitTarget: DirectPatchFetchTarget = {
+    label: target.label,
+    patchURL: target.commitURL,
+    requestHeaders: target.requestHeaders,
+    sourceURL: target.sourceURL,
+  };
+  if (!commitResponse.ok) {
+    return { response: commitResponse, target: commitTarget };
+  }
+
+  const commitData = await commitResponse.json();
+  const commitId = readStringPath(commitData, ['sha']);
+  if (commitId == null || !FULL_GITHUB_SHA_PATTERN.test(commitId)) {
+    return {
+      response: new Response('GitHub commit response did not include a SHA.', {
+        status: 502,
+      }),
+      target: commitTarget,
+    };
+  }
+
+  return fetchDirectPatchTarget(
+    {
+      commitId,
+      label: 'authenticated pinned commit diff API',
+      patchURL: createGitHubAPIURL(
+        `/repos/${encodeURLSegment(target.repo.owner)}/${encodeURLSegment(target.repo.repo)}/commits/${commitId}`
+      ),
+      requestHeaders: createGitHubDiffAPIHeaders(target.token),
+      sourceURL: target.sourceURL,
+    },
+    signal
+  );
 }
 
 async function fetchGitHubPullPatchTarget(
@@ -603,7 +690,12 @@ async function fetchGitHubPullPatchTarget(
   const headSha = readStringPath(pullData, ['head', 'sha']);
   const baseRepo = readRepoFullName(pullData, ['base', 'repo', 'full_name']);
   const headRepo = readRepoFullName(pullData, ['head', 'repo', 'full_name']);
-  if (baseSha == null || headSha == null) {
+  if (
+    baseSha == null ||
+    !FULL_GITHUB_SHA_PATTERN.test(baseSha) ||
+    headSha == null ||
+    !FULL_GITHUB_SHA_PATTERN.test(headSha)
+  ) {
     return {
       response: new Response('GitHub pull response did not include refs.', {
         status: 502,
@@ -620,6 +712,7 @@ async function fetchGitHubPullPatchTarget(
 
   return fetchDirectPatchTarget(
     {
+      commitId: headSha,
       patchURL: createGitHubAPIURL(
         `/repos/${encodeURLSegment(compareBaseRepo.owner)}/${encodeURLSegment(compareBaseRepo.repo)}/compare/${encodeURLSegment(compareRange)}`
       ),
@@ -835,13 +928,16 @@ async function pumpPatchBody(
 // responses can replay poorly and delay the first useful diff bytes.
 function createTextResponse(
   body: string | ReadableStream<Uint8Array>,
-  { status = 200, sourceURL }: TextResponseOptions = {}
+  { commitId, status = 200, sourceURL }: TextResponseOptions = {}
 ): Response {
   const headers = new Headers({
     'Content-Type': 'text/plain; charset=utf-8',
     'Cache-Control': CACHE_CONTROL,
-    Vary: 'Authorization',
+    Vary: 'Authorization, Cookie',
   });
+  if (commitId != null) {
+    headers.set('X-GitHub-Commit-Id', commitId);
+  }
   if (sourceURL != null) {
     headers.set('X-Patch-Source', sourceURL);
   }
