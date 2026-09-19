@@ -4,8 +4,8 @@ import { shouldUseTokenTransformer } from './shouldUseTokenTransformer';
 
 // Build the renderer option snapshot with direct property reads. CodeView item
 // options may inherit prototype getters, so object spread can miss values.
-export function getFileRendererOptions<LAnnotation, Caret>(
-  options: FileOptions<LAnnotation, Caret> | undefined
+export function getFileRendererOptions<LAnnotation, LDecoration, Caret>(
+  options: FileOptions<LAnnotation, LDecoration, Caret> | undefined
 ): FileRendererOptions {
   return {
     theme: options?.theme,

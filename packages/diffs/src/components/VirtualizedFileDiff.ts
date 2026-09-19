@@ -122,8 +122,9 @@ let instanceId = -1;
 
 export class VirtualizedFileDiff<
   LAnnotation = undefined,
+  LDecoration = undefined,
   Caret = undefined,
-> extends FileDiff<LAnnotation, Caret> {
+> extends FileDiff<LAnnotation, LDecoration, Caret> {
   override readonly __id: string = `little-virtualized-file-diff:${++instanceId}`;
   public readonly renderType = 'virtualized';
 
@@ -143,7 +144,7 @@ export class VirtualizedFileDiff<
   };
   private isVisible: boolean = false;
   private isSetup: boolean = false;
-  private virtualizer: Virtualizer | CodeView<LAnnotation, Caret>;
+  private virtualizer: Virtualizer | CodeView<LAnnotation, LDecoration, Caret>;
   private layoutDirty = true;
   private forceRenderOverride: true | undefined;
   private currentCollapsed: boolean | undefined;
@@ -156,8 +157,8 @@ export class VirtualizedFileDiff<
   private pendingRender: PendingRender | undefined;
 
   constructor(
-    options: FileDiffOptions<LAnnotation, Caret> | undefined,
-    virtualizer: Virtualizer | CodeView<LAnnotation, Caret>,
+    options: FileDiffOptions<LAnnotation, LDecoration, Caret> | undefined,
+    virtualizer: Virtualizer | CodeView<LAnnotation, LDecoration, Caret>,
     metrics?: Partial<VirtualFileMetrics>,
     workerManager?: WorkerPoolManager,
     isContainerManaged = false
@@ -258,7 +259,7 @@ export class VirtualizedFileDiff<
   }
 
   override setOptions(
-    options: FileDiffOptions<LAnnotation, Caret> | undefined
+    options: FileDiffOptions<LAnnotation, LDecoration, Caret> | undefined
   ): void {
     if (this.isAdvancedMode()) {
       throw new Error(
@@ -1362,7 +1363,7 @@ export class VirtualizedFileDiff<
     forceRender = false,
     lineAnnotations,
     ...fileInputProps
-  }: FileDiffRenderProps<LAnnotation> = {}): boolean {
+  }: FileDiffRenderProps<LAnnotation, LDecoration> = {}): boolean {
     const fileInput = getDiffFileInput(
       fileInputProps,
       'VirtualizedFileDiff.render'
@@ -1570,7 +1571,9 @@ export class VirtualizedFileDiff<
     return this.virtualizer.type === 'simple' ? this.virtualizer : undefined;
   }
 
-  private getAdvancedVirtualizer(): CodeView<LAnnotation, Caret> | undefined {
+  private getAdvancedVirtualizer():
+    | CodeView<LAnnotation, LDecoration, Caret>
+    | undefined {
     return this.virtualizer.type === 'advanced' ? this.virtualizer : undefined;
   }
 
@@ -2319,9 +2322,9 @@ function getHunkMetadataOffsets({
   return offsets;
 }
 
-function hasDiffLayoutOptionChanged<LAnnotation, Caret>(
-  previousOptions: FileDiffOptions<LAnnotation, Caret>,
-  nextOptions: FileDiffOptions<LAnnotation, Caret>
+function hasDiffLayoutOptionChanged<LAnnotation, LDecoration, Caret>(
+  previousOptions: FileDiffOptions<LAnnotation, LDecoration, Caret>,
+  nextOptions: FileDiffOptions<LAnnotation, LDecoration, Caret>
 ): boolean {
   return (
     (previousOptions.diffStyle ?? 'split') !==
@@ -2349,9 +2352,9 @@ function hasDiffLayoutOptionChanged<LAnnotation, Caret>(
   );
 }
 
-function hasDiffEstimateOptionChanged<LAnnotation, Caret>(
-  previousOptions: FileDiffOptions<LAnnotation, Caret>,
-  nextOptions: FileDiffOptions<LAnnotation, Caret>
+function hasDiffEstimateOptionChanged<LAnnotation, LDecoration, Caret>(
+  previousOptions: FileDiffOptions<LAnnotation, LDecoration, Caret>,
+  nextOptions: FileDiffOptions<LAnnotation, LDecoration, Caret>
 ): boolean {
   return (
     (previousOptions.disableFileHeader ?? false) !==
@@ -2380,9 +2383,9 @@ function canHydrateCollapsedContext(
   );
 }
 
-function getOptionHunkSeparatorType<LAnnotation, Caret>(
+function getOptionHunkSeparatorType<LAnnotation, LDecoration, Caret>(
   hunkSeparators:
-    | FileDiffOptions<LAnnotation, Caret>['hunkSeparators']
+    | FileDiffOptions<LAnnotation, LDecoration, Caret>['hunkSeparators']
     | undefined
 ): HunkSeparators {
   return typeof hunkSeparators === 'function'

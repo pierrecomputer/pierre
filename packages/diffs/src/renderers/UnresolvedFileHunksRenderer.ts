@@ -73,7 +73,8 @@ export interface UnresolvedFileHunksRendererOptions extends DiffHunksRendererOpt
 
 export class UnresolvedFileHunksRenderer<
   LAnnotation = undefined,
-> extends DiffHunksRenderer<LAnnotation> {
+  LDecoration = undefined,
+> extends DiffHunksRenderer<LAnnotation, LDecoration> {
   private pendingConflictActions: (MergeConflictDiffAction | undefined)[] = [];
   private pendingMarkerRows: MergeConflictMarkerRow[] = [];
   private injectedRows = new Map<string, MergeConflictInjectedRowData[]>();

@@ -1,6 +1,10 @@
 import type { FileOptions } from '../components/File';
 import { FileRenderer } from '../renderers/FileRenderer';
-import type { FileContents, LineAnnotation } from '../types';
+import type {
+  FileContents,
+  FileDecorationItem,
+  LineAnnotation,
+} from '../types';
 import {
   createStyleElement,
   createThemeStyleElement,
@@ -9,27 +13,42 @@ import { wrapThemeCSS } from '../utils/cssWrappers';
 import { shouldUseTokenTransformer } from '../utils/shouldUseTokenTransformer';
 import { renderHTML } from './renderHTML';
 
-export type PreloadFileOptions<LAnnotation, Caret> = {
+export type PreloadFileOptions<
+  LAnnotation = undefined,
+  LDecoration = undefined,
+  Caret = undefined,
+> = {
   file: FileContents;
-  options?: FileOptions<LAnnotation, Caret>;
+  options?: FileOptions<LAnnotation, LDecoration, Caret>;
   annotations?: LineAnnotation<LAnnotation>[];
+  decorations?: FileDecorationItem<LDecoration>[];
 };
 
-export interface PreloadedFileResult<LAnnotation, Caret> {
+export interface PreloadedFileResult<
+  LAnnotation = undefined,
+  LDecoration = undefined,
+  Caret = undefined,
+> {
   file: FileContents;
-  options?: FileOptions<LAnnotation, Caret>;
+  options?: FileOptions<LAnnotation, LDecoration, Caret>;
   annotations?: LineAnnotation<LAnnotation>[];
+  decorations?: FileDecorationItem<LDecoration>[];
   prerenderedHTML: string;
 }
 
-export async function preloadFile<LAnnotation = undefined, Caret = undefined>({
+export async function preloadFile<
+  LAnnotation = undefined,
+  LDecoration = undefined,
+  Caret = undefined,
+>({
   file,
   options,
   annotations,
-}: PreloadFileOptions<LAnnotation, Caret>): Promise<
-  PreloadedFileResult<LAnnotation, Caret>
+  decorations,
+}: PreloadFileOptions<LAnnotation, LDecoration, Caret>): Promise<
+  PreloadedFileResult<LAnnotation, LDecoration, Caret>
 > {
-  const fileRenderer = new FileRenderer<LAnnotation>({
+  const fileRenderer = new FileRenderer<LAnnotation, LDecoration>({
     ...options,
     // Match the client's option snapshot: token callbacks imply the
     // transformer, so server markup hydrates into identical client renders.
@@ -42,7 +61,9 @@ export async function preloadFile<LAnnotation = undefined, Caret = undefined>({
   if (annotations !== undefined && annotations.length > 0) {
     fileRenderer.setLineAnnotations(annotations);
   }
-
+  if (decorations !== undefined && decorations.length > 0) {
+    fileRenderer.setDecorations(decorations);
+  }
   const fileResult = await fileRenderer.asyncRender(file);
   const children = [createStyleElement(fileResult.css, true)];
 
@@ -70,6 +91,7 @@ export async function preloadFile<LAnnotation = undefined, Caret = undefined>({
     file,
     options,
     annotations,
+    decorations,
     prerenderedHTML: renderHTML(children),
   };
 }

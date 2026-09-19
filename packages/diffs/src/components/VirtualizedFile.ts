@@ -60,9 +60,9 @@ const NO_GHOST_TEXT_ROWS: ReadonlyMap<number, number> = new Map();
 
 let instanceId = -1;
 
-function hasFileLayoutOptionChanged<LAnnotation, Caret>(
-  previousOptions: FileOptions<LAnnotation, Caret>,
-  nextOptions: FileOptions<LAnnotation, Caret>
+function hasFileLayoutOptionChanged<LAnnotation, LDecoration, Caret>(
+  previousOptions: FileOptions<LAnnotation, LDecoration, Caret>,
+  nextOptions: FileOptions<LAnnotation, LDecoration, Caret>
 ): boolean {
   return (
     (previousOptions.overflow ?? 'scroll') !==
@@ -78,8 +78,9 @@ function hasFileLayoutOptionChanged<LAnnotation, Caret>(
 
 export class VirtualizedFile<
   LAnnotation = undefined,
+  LDecoration = undefined,
   Caret = undefined,
-> extends File<LAnnotation, Caret> {
+> extends File<LAnnotation, LDecoration, Caret> {
   override readonly __id: string = `virtualized-file:${++instanceId}`;
   public readonly renderType = 'virtualized';
 
@@ -103,8 +104,10 @@ export class VirtualizedFile<
   private currentCollapsed: boolean | undefined;
 
   constructor(
-    options: FileOptions<LAnnotation, Caret> | undefined,
-    private virtualizer: Virtualizer | CodeView<LAnnotation, Caret>,
+    options: FileOptions<LAnnotation, LDecoration, Caret> | undefined,
+    private virtualizer:
+      | Virtualizer
+      | CodeView<LAnnotation, LDecoration, Caret>,
     private metrics: VirtualFileMetrics = DEFAULT_VIRTUAL_FILE_METRICS,
     workerManager?: WorkerPoolManager,
     isContainerManaged = false
@@ -191,7 +194,7 @@ export class VirtualizedFile<
   }
 
   override setOptions(
-    options: FileOptions<LAnnotation, Caret> | undefined
+    options: FileOptions<LAnnotation, LDecoration, Caret> | undefined
   ): void {
     if (this.isAdvancedMode()) {
       throw new Error(
@@ -843,7 +846,7 @@ export class VirtualizedFile<
     forceRender = false,
     lineAnnotations,
     ...props
-  }: FileRenderProps<LAnnotation>): boolean {
+  }: FileRenderProps<LAnnotation, LDecoration>): boolean {
     const didFileChange = !areFileTargetsEqual(this.file, file);
     if (didFileChange) {
       this.updateExternalFile(file, lineAnnotations);
@@ -1096,7 +1099,9 @@ export class VirtualizedFile<
     return this.virtualizer.type === 'simple' ? this.virtualizer : undefined;
   }
 
-  private getAdvancedVirtualizer(): CodeView<LAnnotation, Caret> | undefined {
+  private getAdvancedVirtualizer():
+    | CodeView<LAnnotation, LDecoration, Caret>
+    | undefined {
     return this.virtualizer.type === 'advanced' ? this.virtualizer : undefined;
   }
 

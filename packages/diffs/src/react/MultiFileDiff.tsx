@@ -9,20 +9,25 @@ import { useFileDiffInstance } from './utils/useFileDiffInstance';
 
 export type { FileContents };
 
-interface MultiFileDiffBaseProps<LAnnotation, Caret> extends DiffBasePropsReact<
+interface MultiFileDiffBaseProps<
   LAnnotation,
-  Caret
-> {
+  LDecoration,
+  Caret,
+> extends DiffBasePropsReact<LAnnotation, LDecoration, Caret> {
   disableWorkerPool?: boolean;
 }
 
-export type MultiFileDiffProps<LAnnotation, Caret> = MultiFileDiffBaseProps<
+export type MultiFileDiffProps<
   LAnnotation,
-  Caret
-> &
-  DiffFileInput;
+  LDecoration = undefined,
+  Caret = undefined,
+> = MultiFileDiffBaseProps<LAnnotation, LDecoration, Caret> & DiffFileInput;
 
-export function MultiFileDiff<LAnnotation = undefined, Caret = undefined>({
+export function MultiFileDiff<
+  LAnnotation = undefined,
+  LDecoration = undefined,
+  Caret = undefined,
+>({
   oldFile,
   newFile,
   options,
@@ -30,6 +35,7 @@ export function MultiFileDiff<LAnnotation = undefined, Caret = undefined>({
   editStateKey,
   metrics,
   lineAnnotations,
+  decorations,
   selectedLines,
   className,
   style,
@@ -44,7 +50,7 @@ export function MultiFileDiff<LAnnotation = undefined, Caret = undefined>({
   edit = false,
   onEditChange,
   onEditComplete,
-}: MultiFileDiffProps<LAnnotation, Caret>): React.JSX.Element {
+}: MultiFileDiffProps<LAnnotation, LDecoration, Caret>): React.JSX.Element {
   const { fileDiff, ref, getHoveredLine, getAnnotationSlotName } =
     useFileDiffInstance({
       oldFile,
@@ -54,6 +60,7 @@ export function MultiFileDiff<LAnnotation = undefined, Caret = undefined>({
       editStateKey,
       metrics,
       lineAnnotations,
+      decorations,
       selectedLines,
       prerenderedHTML,
       hasGutterRenderUtility: renderGutterUtility != null,

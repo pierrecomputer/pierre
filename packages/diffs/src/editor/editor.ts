@@ -259,18 +259,38 @@ type SyncRenderViewProps<
   ? SyncFileRenderViewProps<LAnnotation>
   : SyncDiffRenderViewProps<LAnnotation>;
 
+// oxlint-disable-next-line typescript/no-explicit-any
+type ErasedDecoration = any;
+
 type EditorComponent<
   EType extends EditorType,
   LAnnotation,
   Caret,
 > = EType extends 'file'
-  ? File<LAnnotation, Caret>
-  : FileDiff<LAnnotation, Caret>;
+  ? File<LAnnotation, ErasedDecoration, Caret>
+  : FileDiff<LAnnotation, ErasedDecoration, Caret>;
+
+type EditableEditorComponent<
+  EType extends EditorType,
+  LAnnotation,
+  Caret,
+  T,
+> = EType extends 'file'
+  ? T extends File<LAnnotation, infer _LDecoration, Caret>
+    ? T
+    : never
+  : T extends FileDiff<LAnnotation, infer _LDecoration, Caret>
+    ? T extends { readonly type: 'unresolved-file' }
+      ? never
+      : T
+    : never;
 
 type EditorVirtualizedComponent<LAnnotation, Caret> =
-  | VirtualizedFile<LAnnotation, Caret>
-  | VirtualizedFileDiff<LAnnotation, Caret>;
+  | VirtualizedFile<LAnnotation, ErasedDecoration, Caret>
+  | VirtualizedFileDiff<LAnnotation, ErasedDecoration, Caret>;
 
+// Decorations are renderer-only metadata, so the editor deliberately erases
+// that generic while retaining the annotation and caret contracts it owns.
 // Narrow an editor host through the virtualized components' runtime marker
 // without importing either component class as a runtime dependency.
 function isVirtualizedEditorComponent<LAnnotation, Caret>(
@@ -720,8 +740,11 @@ export class Editor<
 
   // UnresolvedFile extends FileDiff for rendering, but its conflict-specific
   // document model is not supported by Editor.
-  edit<T extends EditorComponent<EType, LAnnotation, Caret>>(
-    fileInstance: T extends { readonly type: 'unresolved-file' } ? never : T
+  edit<T>(
+    fileInstance: T &
+      ([T] extends [EditableEditorComponent<EType, LAnnotation, Caret, T>]
+        ? unknown
+        : never)
   ): () => void;
   edit(fileInstance: EditorComponent<EType, LAnnotation, Caret>): () => void {
     const editor = this.#getTypedEditor;
@@ -1789,7 +1812,9 @@ export class Editor<
     }
   }
 
-  get #fileDiffInstance(): FileDiff<LAnnotation, Caret> | undefined {
+  get #fileDiffInstance():
+    | FileDiff<LAnnotation, ErasedDecoration, Caret>
+    | undefined {
     return this.#fileInstance?.type === 'file-diff'
       ? this.#fileInstance
       : undefined;

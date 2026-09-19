@@ -32,24 +32,30 @@ export type MergeConflictActionsTypeOption =
   | 'default'
   | RenderMergeConflictActions;
 
-export interface UnresolvedFileReactOptions<LAnnotation>
+export interface UnresolvedFileReactOptions<
+  LAnnotation = undefined,
+  LDecoration = undefined,
+>
   extends
     Omit<
-      FileDiffOptions<LAnnotation, undefined>,
+      FileDiffOptions<LAnnotation, LDecoration, undefined>,
       'hunkSeparators' | 'diffStyle' | 'onMergeConflictAction' | 'onPostRender'
     >,
     UnresolvedFileHunksRendererOptions {
   hunkSeparators?: HunkSeparators;
   onPostRender?(
     node: HTMLElement,
-    instance: UnresolvedFileClass<LAnnotation>,
+    instance: UnresolvedFileClass<LAnnotation, LDecoration>,
     phase: PostRenderPhase
   ): unknown;
   maxContextLines?: number;
 }
 
-export interface UnresolvedFileProps<LAnnotation> extends Omit<
-  FileDiffProps<LAnnotation, undefined>,
+export interface UnresolvedFileProps<
+  LAnnotation,
+  LDecoration = undefined,
+> extends Omit<
+  FileDiffProps<LAnnotation, LDecoration, undefined>,
   | 'fileDiff'
   | 'options'
   | 'edit'
@@ -58,18 +64,22 @@ export interface UnresolvedFileProps<LAnnotation> extends Omit<
   | 'onEditComplete'
 > {
   file: FileContents;
-  options?: UnresolvedFileReactOptions<LAnnotation>;
+  options?: UnresolvedFileReactOptions<LAnnotation, LDecoration>;
   renderMergeConflictUtility?(
     action: MergeConflictDiffAction,
-    getInstance: () => UnresolvedFileClass<LAnnotation> | undefined
+    getInstance: () => UnresolvedFileClass<LAnnotation, LDecoration> | undefined
   ): ReactNode;
   disableWorkerPool?: boolean;
 }
 
-export function UnresolvedFile<LAnnotation = undefined>({
+export function UnresolvedFile<
+  LAnnotation = undefined,
+  LDecoration = undefined,
+>({
   file,
   options,
   lineAnnotations,
+  decorations,
   selectedLines,
   className,
   style,
@@ -82,12 +92,13 @@ export function UnresolvedFile<LAnnotation = undefined>({
   renderGutterUtility,
   renderMergeConflictUtility,
   disableWorkerPool = false,
-}: UnresolvedFileProps<LAnnotation>): React.JSX.Element {
+}: UnresolvedFileProps<LAnnotation, LDecoration>): React.JSX.Element {
   const { ref, getHoveredLine, fileDiff, actions, getInstance } =
-    useUnresolvedFileInstance({
+    useUnresolvedFileInstance<LAnnotation, LDecoration>({
       file,
       options,
       lineAnnotations,
+      decorations,
       selectedLines,
       prerenderedHTML,
       hasConflictUtility: renderMergeConflictUtility != null,

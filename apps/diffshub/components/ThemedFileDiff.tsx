@@ -9,6 +9,7 @@ import type { DiffThemeInput } from '@/lib/theme/diffThemeProps';
 
 interface ThemedFileDiffProps<LAnnotation, Caret> extends FileDiffProps<
   LAnnotation,
+  undefined,
   Caret
 > {
   // Names-now override (omitted => follow the provider/source).
@@ -34,7 +35,7 @@ export function ThemedFileDiff<LAnnotation = undefined, Caret = undefined>({
     [diffTheme, options]
   );
   return (
-    <FileDiff<LAnnotation, Caret>
+    <FileDiff<LAnnotation, undefined, Caret>
       {...props}
       disableWorkerPool={disableWorkerPool}
       options={themedOptions}
