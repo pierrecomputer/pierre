@@ -669,21 +669,7 @@ function assertEditorFactory<LAnnotation, Caret>(
 }
 
 // A vibe slopped heuristic to detect mobile safari only
-const MOBILE_SAFARI = (() => {
-  const { navigator } = globalThis;
-
-  const userAgent = navigator.userAgent;
-  const isIOS = /iP(?:hone|ad|od)/.test(userAgent);
-  const isIPadOS =
-    navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1;
-
-  return (
-    (isIOS || isIPadOS) &&
-    /AppleWebKit/.test(userAgent) &&
-    /Safari/.test(userAgent) &&
-    !/(CriOS|FxiOS|EdgiOS|OPiOS)/.test(userAgent)
-  );
-})();
+const MOBILE_SAFARI = false;
 
 type PendingAlignTypes = Exclude<CodeViewLineScrollTarget['align'], 'nearest'>;
 
