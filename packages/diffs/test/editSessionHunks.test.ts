@@ -12,8 +12,10 @@ import {
   rebuildSessionHunks,
   remapExpandedHunksForRegionChange,
 } from '../src/utils/editSessionHunks';
+import { hydratePartialDiff } from '../src/utils/hydratePartialDiff';
 import { iterateOverDiff } from '../src/utils/iterateOverDiff';
 import { parseDiffFromFile } from '../src/utils/parseDiffFromFile';
+import { processFile } from '../src/utils/parsePatchFiles';
 import { splitFileContents } from '../src/utils/splitFileContents';
 import { getTrailingContextRangeSize } from '../src/utils/virtualDiffLayout';
 import { verifyFileDiffHunkValues } from './testUtils';
@@ -529,6 +531,101 @@ describe('applySessionChangedLines', () => {
       expect(pairingProjection(diff)).toEqual(beforeRepeat);
       finishEditSessionForDiff(diff);
       expect(pairingProjection(diff)).toEqual(beforeRepeat);
+    }
+  );
+
+  test.each(['+', '-'] as const)(
+    'keeps a hydrated patch blank %s at its mid-run position through unrelated edits',
+    (prefix) => {
+      // A patch may place a blank-run change anywhere in the run, while the
+      // session's canonical parse reports it at the run's bottom. The hydrated
+      // block keeps the patch's position until exit.
+      const oldCount = prefix === '-' ? 7 : 6;
+      const newCount = prefix === '+' ? 7 : 6;
+      const patch = [
+        'diff --git a/blanks.ts b/blanks.ts',
+        '--- a/blanks.ts',
+        '+++ b/blanks.ts',
+        `@@ -1,${oldCount} +1,${newCount} @@`,
+        ' anchor',
+        ' ',
+        prefix,
+        ' ',
+        ' tail',
+        ' x1',
+        ' x2',
+        '',
+      ].join('\n');
+      const twoBlanks = 'anchor\n\n\ntail\nx1\nx2\nx3\n';
+      const threeBlanks = 'anchor\n\n\n\ntail\nx1\nx2\nx3\n';
+      const partial = processFile(patch, {
+        isGitDiff: true,
+        throwOnError: true,
+      });
+      if (partial == null) {
+        throw new Error('Expected the blank-run patch to parse');
+      }
+      const diff = hydratePartialDiff('merge', partial, {
+        oldFile: {
+          name: 'blanks.ts',
+          contents: prefix === '-' ? threeBlanks : twoBlanks,
+        },
+        newFile: {
+          name: 'blanks.ts',
+          contents: prefix === '+' ? threeBlanks : twoBlanks,
+        },
+      });
+      const additions = prefix === '+' ? 1 : 0;
+      const deletions = prefix === '-' ? 1 : 0;
+      const blank = () =>
+        diff.hunks
+          .flatMap((hunk) => hunk.hunkContent)
+          .find(
+            (content) =>
+              content.type === 'change' &&
+              content.additions === additions &&
+              content.deletions === deletions &&
+              (prefix === '-' ||
+                diff.additionLines[content.additionLineIndex] === '\n')
+          );
+      expect(blank()).toMatchObject({
+        additionLineIndex: 2,
+        deletionLineIndex: 2,
+      });
+
+      const bottom = diff.additionLines.length - 1;
+      const previousLine = diff.additionLines[bottom];
+      diff.additionLines[bottom] = 'x3!\n';
+      applySessionChangedLines(
+        diff,
+        [bottom],
+        undefined,
+        new Map([[bottom, previousLine]])
+      );
+      expect(blank()).toMatchObject({
+        additionLineIndex: 2,
+        deletionLineIndex: 2,
+      });
+
+      // A structural edit above the run shifts only the new-side index.
+      const previousLines = diff.additionLines;
+      diff.additionLines = ['first\n', ...previousLines];
+      rebuildSessionHunks(diff, undefined, (index) => previousLines[index]);
+      expect(blank()).toMatchObject({
+        additionLineIndex: 3,
+        deletionLineIndex: 2,
+      });
+      expect(verifyFileDiffHunkValues(diff)).toEqual({
+        valid: true,
+        errors: [],
+      });
+
+      expect(finishEditSessionForDiff(diff)).toBe(true);
+      expect(blank()).toMatchObject({
+        additionLineIndex: 4,
+        deletionLineIndex: 3,
+      });
+      expectPairingParity(diff);
     }
   );
 

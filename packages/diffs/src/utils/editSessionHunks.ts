@@ -476,37 +476,45 @@ function parseSessionChangeBlocks(
   // Built on the first blank block that qualifies to slide, so passes without
   // one never scan the previous skeleton.
   let previousBlocks: Map<number, ChangeContent> | undefined;
-  const shouldSlideBlock = (block: ChangeContent): boolean => {
+  // The parsed block sits at the bottom of its blank run. A previous block of
+  // the same shape anywhere between there and the run's top is the same change
+  // and keeps its position: offset 0 is untouched at the parsed position, and
+  // `maxSlide` is one already slid to the top. A block with no previous
+  // counterpart, or an insertion whose text changed in place, is new to this
+  // pass and slides to the top.
+  const resolveSlide = (block: ChangeContent, maxSlide: number): number => {
     previousBlocks ??= collectPureChangeBlocks(diff.hunks);
-    const previous = previousBlocks.get(block.deletionLineIndex);
-    if (
-      previous == null ||
-      previous.additions !== block.additions ||
-      previous.deletions !== block.deletions
-    ) {
-      return true;
-    }
-    // Old-side text is immutable. For insertions, compare the previous text at
-    // its previous indexes because structural edits can shift the new side.
-    if (block.additions === 0 || getPreviousAdditionLine == null) {
-      return false;
-    }
-    for (let offset = 0; offset < block.additions; offset++) {
+    for (let offset = 0; offset <= maxSlide; offset++) {
+      const previous = previousBlocks.get(block.deletionLineIndex - offset);
       if (
-        getPreviousAdditionLine(previous.additionLineIndex + offset) !==
-        parsed.additionLines[block.additionLineIndex + offset]
+        previous == null ||
+        previous.additions !== block.additions ||
+        previous.deletions !== block.deletions
       ) {
-        return true;
+        continue;
       }
+      // Old-side text is immutable. For insertions, compare the previous text
+      // at its previous indexes because structural edits shift the new side.
+      if (block.additions > 0 && getPreviousAdditionLine != null) {
+        for (let line = 0; line < block.additions; line++) {
+          if (
+            getPreviousAdditionLine(previous.additionLineIndex + line) !==
+            parsed.additionLines[block.additionLineIndex + line]
+          ) {
+            return maxSlide;
+          }
+        }
+      }
+      return offset;
     }
-    return false;
+    return maxSlide;
   };
 
   const blocks: ChangeContent[] = [];
   let coveredAdditions = 0;
   let coveredDeletions = 0;
   for (const hunk of parsed.hunks) {
-    slideBlankBoundaryBlocksUp(hunk, parsed, shouldSlideBlock);
+    slideBlankBoundaryBlocksUp(hunk, parsed, resolveSlide);
     const contextLines =
       hunk.additionCount > 0
         ? hunk.additionLineIndex - coveredAdditions

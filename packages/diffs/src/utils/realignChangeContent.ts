@@ -59,10 +59,12 @@ export function realignChangeContentBySimilarity(
  * context. Sliding up anchors the change to the content above it (the caret
  * line after an Enter) instead.
  *
- * Returning false from `shouldSlideBlock` keeps the block at its parsed position.
+ * `resolveSlide` receives each block that qualifies along with the full
+ * distance to the run's top and returns how far to actually move it; 0 keeps
+ * the parsed position. Without it, every qualifying block slides to the top.
  *
- * The slide is all-or-nothing: it only applies when the block comes to rest
- * directly beneath remaining in-hunk content. A slide that would consume the
+ * The slide only applies when the block comes to rest directly beneath
+ * remaining in-hunk content. A slide that would consume the
  * hunk's entire leading context was stopped by the hunk's edge — a context
  * window cut, not the top of the blank run — and that landing spot is
  * arbitrary, so the block keeps the library's bottom-of-run anchor (which
@@ -73,7 +75,7 @@ export function realignChangeContentBySimilarity(
 export function slideBlankBoundaryBlocksUp(
   hunk: Hunk,
   diff: Pick<FileDiffMetadata, 'additionLines' | 'deletionLines'>,
-  shouldSlideBlock?: (block: ChangeContent) => boolean
+  resolveSlide?: (block: ChangeContent, maxSlide: number) => number
 ): void {
   const { hunkContent } = hunk;
   for (let index = 1; index < hunkContent.length; index++) {
@@ -131,8 +133,11 @@ export function slideBlankBoundaryBlocksUp(
     if (index === 1 && slide === previous.lines) {
       continue;
     }
-    if (shouldSlideBlock?.(block) === false) {
-      continue;
+    if (resolveSlide != null) {
+      slide = resolveSlide(block, slide);
+      if (slide === 0) {
+        continue;
+      }
     }
 
     block.additionLineIndex -= slide;
