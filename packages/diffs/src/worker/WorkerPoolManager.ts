@@ -1186,7 +1186,16 @@ export class WorkerPoolManager {
           } else if (task.type === 'diff') {
             task.request.diff = { ...task.request.diff };
           }
-          task.request.resolvedCustomLanguages = await Promise.all(pending);
+          try {
+            task.request.resolvedCustomLanguages = await Promise.all(pending);
+          } finally {
+            if (this.activeTaskById.get(task.id) !== task) {
+              // Canceled grammar loads never post a request, so no response
+              // will release their worker or resume the queue.
+              this.cleanWorkerAndTask(managedWorker, task);
+              this.queueDrain();
+            }
+          }
           if (this.activeTaskById.get(task.id) !== task) return;
           if (isRenderTask(task) && !this.isCurrentRenderTask(task)) {
             this.cleanWorkerAndTask(managedWorker, task);

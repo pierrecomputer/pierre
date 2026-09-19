@@ -16,7 +16,11 @@ import { TextDocument } from '../src/editor/textDocument';
 import { renderDiffWithHighlighter } from '../src/utils/renderDiffWithHighlighter';
 import { renderFileWithHighlighter } from '../src/utils/renderFileWithHighlighter';
 import { WorkerPoolManager } from '../src/worker';
-import type { RenderFileRequest } from '../src/worker/types';
+import type {
+  FileRendererInstance,
+  RenderFileRequest,
+  SetRenderOptionsWorkerRequest,
+} from '../src/worker/types';
 import { createDeferred } from './testUtils';
 import {
   createInitializedManager,
@@ -482,3 +486,91 @@ test.each(['terminate', 'mutate'] as const)(
     }
   }
 );
+
+for (const action of ['backend', 'theme', 'cleanup'] as const) {
+  test.each(['resolve', 'reject'] as const)(
+    `canceled worker grammar loads release the queue after ${action} and %s`,
+    async (outcome) => {
+      const restore = installAnimationFramePolyfill();
+      const { manager, worker } = await createInitializedManager({
+        preferredHighlighter: 'shiki-js',
+      });
+      const name = `test-custom-worker-${action}-${outcome}`;
+      const started = createDeferred<void>();
+      const deferred = createDeferred<{ default: LanguageRegistration[] }>();
+      registerCustomLanguage(name, () => {
+        started.resolve();
+        return deferred.promise;
+      });
+      const instance: FileRendererInstance = {
+        __id: name,
+        onHighlightSuccess: mock(() => {}),
+        onHighlightError: mock(() => {}),
+      };
+      const posted = createDeferred<SetRenderOptionsWorkerRequest>();
+      const originalPostMessage = worker.postMessage.bind(worker);
+      const post = spyOn(worker, 'postMessage').mockImplementation(
+        (request) => {
+          originalPostMessage(request);
+          if (request.type === 'set-render-options') posted.resolve(request);
+        }
+      );
+      try {
+        manager.highlightFileAST(instance, {
+          name: 'file',
+          lang: name,
+          contents: code,
+        });
+        await withTimeout(started.promise);
+        if (action === 'cleanup') {
+          manager.cleanUpTasks(instance);
+        } else {
+          const update = manager.setRenderOptions(
+            action === 'backend'
+              ? { preferredHighlighter: 'highlights' }
+              : { theme: 'github-light' }
+          );
+          const request = await withTimeout(posted.promise);
+          worker.respond({
+            type: 'success',
+            requestType: 'set-render-options',
+            id: request.id,
+            sentAt: Date.now(),
+          });
+          await withTimeout(update);
+        }
+        const nextFile = { name: 'next.ts', contents: code, cacheKey: 'next' };
+        const next = manager
+          .primeFileHighlightCache(nextFile)
+          .catch((error: unknown) => error);
+        await Promise.resolve();
+        expect(worker.fileRequestCount).toBe(0);
+
+        if (outcome === 'resolve') {
+          deferred.resolve({ default: [grammar(name)] });
+        } else {
+          deferred.reject(new Error('grammar load failed'));
+        }
+        await Bun.sleep(0);
+        expect(worker.fileRequestCount).toBe(1);
+        const request = await withTimeout(worker.waitForFileRequest());
+        expect(request.file).toEqual(nextFile);
+        respondToFileRequest(manager, worker, request);
+        expect(await withTimeout(next)).toBeUndefined();
+        expect(manager.getFileResultCache(nextFile)).toBeDefined();
+        expect(manager.getStats()).toMatchObject({
+          busyWorkers: 0,
+          queuedTasks: 0,
+          activeTasks: 0,
+        });
+        expect(instance.onHighlightSuccess).not.toHaveBeenCalled();
+        expect(instance.onHighlightError).not.toHaveBeenCalled();
+      } finally {
+        deferred.resolve({ default: [grammar(name)] });
+        manager.terminate();
+        post.mockRestore();
+        restore();
+      }
+    }
+  );
+}
