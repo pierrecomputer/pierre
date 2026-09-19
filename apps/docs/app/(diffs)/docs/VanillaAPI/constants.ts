@@ -375,10 +375,11 @@ const instance = new FileDiff<ThreadMetadata>({
   // 'dark' or 'light' - forces specific theme
   themeType: 'system',
 
-  // Choose the Shiki engine:
-  // 'shiki-js' (default) - JavaScript regex engine
-  // 'shiki-wasm' - WASM Oniguruma engine
-  preferredHighlighter: 'shiki-js',
+  // Choose the highlighter backend (each loads on demand):
+  // 'shiki-wasm' (default) - Shiki with the WASM Oniguruma engine
+  // 'shiki-js' - Shiki with the JavaScript regex engine
+  // 'highlights' - Pierre Highlights WASM lexers
+  preferredHighlighter: 'shiki-wasm',
 
   // ─────────────────────────────────────────────────────────────
   // DIFF DISPLAY
@@ -731,10 +732,11 @@ const instance = new File<CommentMetadata>({
   // 'dark' or 'light' - forces specific theme
   themeType: 'system',
 
-  // Choose the Shiki engine:
-  // 'shiki-js' (default) - JavaScript regex engine
-  // 'shiki-wasm' - WASM Oniguruma engine
-  preferredHighlighter: 'shiki-js',
+  // Choose the highlighter backend (each loads on demand):
+  // 'shiki-wasm' (default) - Shiki with the WASM Oniguruma engine
+  // 'shiki-js' - Shiki with the JavaScript regex engine
+  // 'highlights' - Pierre Highlights WASM lexers
+  preferredHighlighter: 'shiki-wasm',
 
   // ─────────────────────────────────────────────────────────────
   // LAYOUT & DISPLAY
@@ -1060,10 +1062,10 @@ const fileDiff: FileDiffMetadata = parseDiffFromFile(
 // Render hunks (async - waits for highlighter initialization)
 const result: HunksRenderResult = await instance.asyncRender(fileDiff);
 
-// result contains hast nodes for each column based on diffStyle:
+// result contains HTML tree nodes for each column based on diffStyle:
 // - 'split' mode: additionsAST and deletionsAST (side-by-side)
 // - 'unified' mode: unifiedAST only (single column)
-// - preNode: the wrapper <pre> element as a hast node
+// - preNode: the wrapper <pre> element as an HTML tree node
 // - headerNode: the file header element
 // - hunkData: metadata about each hunk (for custom separators)
 
@@ -1143,7 +1145,7 @@ for (const patch of patches) {
     // Render hunks (async - waits for highlighter initialization)
     const result: HunksRenderResult = await instance.asyncRender(fileDiff);
 
-    // result contains hast nodes based on diffStyle:
+    // result contains HTML tree nodes based on diffStyle:
     // - 'unified' mode: unifiedGutterAST/unifiedContentAST
     // - 'split' mode: additionsGutterAST/additionsContentAST and deletionsGutterAST/deletionsContentAST
 
@@ -1208,8 +1210,8 @@ export { greet };\`,
 const result: FileRenderResult = await instance.asyncRender(file);
 
 // result contains:
-// - gutterAST/contentAST: arrays of hast ElementContent nodes for each line
-// - preAST: the wrapper <pre> element as a hast node
+// - gutterAST/contentAST: arrays of ElementContent HTML tree nodes for each line
+// - preAST: the wrapper <pre> element as an HTML tree node
 // - headerAST: the file header element (if not disabled)
 // - totalLines: number of lines in the file
 // - themeStyles: CSS custom properties for theming

@@ -51,16 +51,27 @@ function openScrolledMarkerNearGutter(page: Page): Promise<{
 
     const code = root.querySelector<HTMLElement>('[data-code]');
     const gutter = root.querySelector<HTMLElement>('[data-gutter]');
-    const target = root.querySelector<HTMLElement>(
-      '[data-line="6"] [data-char="80"]'
-    );
-    if (code == null || gutter == null || target == null) {
+    const line = root.querySelector('[data-content] [data-line="6"]');
+    if (code == null || gutter == null || line == null) {
       return null;
     }
 
+    // Measure the marked character even when its token includes indentation.
+    const walker = document.createTreeWalker(line, NodeFilter.SHOW_TEXT);
+    let text = walker.nextNode();
+    let offset = 80;
+    while (text != null && offset >= (text.textContent?.length ?? 0)) {
+      offset -= text.textContent?.length ?? 0;
+      text = walker.nextNode();
+    }
+    const target = text?.parentElement;
+    if (text == null || target == null) return null;
+    const range = document.createRange();
+    range.setStart(text, offset);
+    range.setEnd(text, offset + 1);
     const codeRect = code.getBoundingClientRect();
     const gutterWidth = gutter.getBoundingClientRect().width;
-    const targetRect = target.getBoundingClientRect();
+    const targetRect = range.getBoundingClientRect();
     const targetX = targetRect.left - codeRect.left + code.scrollLeft;
     code.scrollLeft = Math.max(0, targetX - gutterWidth - 4);
     code.dispatchEvent(new Event('scroll', { bubbles: true }));

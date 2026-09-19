@@ -89,7 +89,7 @@ const lang = isSupportedLanguage(requestedLanguage)
 
 `isSupportedLanguage()` narrows a string to `Lang`. Plain text aliases include
 `plain`, `text`, `plaintext`, and `txt`. Lexers are built in; custom TextMate
-grammar registration belongs to the Shiki APIs in `@pierre/diffs`.
+grammar registration belongs to the Shiki backends of `@pierre/diffs`.
 
 ## Runtime and types
 

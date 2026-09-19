@@ -40,7 +40,6 @@ minimumReleaseAgeExclude:
   - '@shikijs/langs@4.4.1'
   - '@shikijs/primitive@4.4.1'
   - '@shikijs/themes@4.4.1'
-  - '@shikijs/transformers@4.4.1'
   - '@shikijs/types@4.4.1'
   - shiki@4.4.1
   - bun-types@1.4.0
@@ -73,7 +72,6 @@ catalog:
   '@shikijs/core': '4.4.1'
   '@shikijs/engine-javascript': '4.4.1'
   '@shikijs/themes': '4.4.1'
-  '@shikijs/transformers': '4.4.1'
   '@tailwindcss/postcss': '4.1.13'
   '@tsdown/css': '0.22.14'
   '@types/bun': '1.4.0'
@@ -101,7 +99,6 @@ catalog:
   'culori': '4.0.2'
   'diff': '9.0.0'
   'hast-util-heading-rank': '3.0.0'
-  'hast-util-to-html': '9.0.5'
   'hast-util-to-string': '3.0.1'
   'lint-staged': '16.2.7'
   'jsdom': '26.1.0'
@@ -152,7 +149,6 @@ overrides:
   '@shikijs/core': 'catalog:'
   '@shikijs/engine-javascript': 'catalog:'
   '@shikijs/themes': 'catalog:'
-  '@shikijs/transformers': 'catalog:'
   '@types/react': 'catalog:'
   '@types/react-dom': 'catalog:'
   '@rolldown/binding-wasm32-wasi>@napi-rs/wasm-runtime': '1.1.5'

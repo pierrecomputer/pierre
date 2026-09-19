@@ -22,6 +22,9 @@
     "module": "esnext",
     "moduleResolution": "bundler",
     "resolveJsonModule": true,
-    "rootDir": "."
+    "rootDir": ".",
+    "paths": {
+      "@pierre/diffs/highlighter/*": ["./src/highlighter/*"]
+    }
   }
 }

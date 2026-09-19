@@ -1,9 +1,10 @@
-import { parseDiffFromFile, resolveTheme } from '@pierre/diffs';
+import { parseDiffFromFile } from '@pierre/diffs';
 import { themeToTreeStyles } from '@pierre/trees';
 import type { Metadata } from 'next';
 import { Suspense } from 'react';
 
 import { ThemesGridClient } from './ThemesGridClient';
+import { docsThemeResolver } from '@/components/themeController';
 import { pageMetadata } from '@/lib/page-metadata';
 
 const SAMPLE_OLD_FILE = {
@@ -182,10 +183,10 @@ export default async function ThemeGalleryPage() {
   const resolvedThemes = await Promise.all(
     THEMES.map(async (themeName) => {
       try {
-        const theme = await resolveTheme(themeName);
+        const theme = await docsThemeResolver.resolveTheme(themeName);
         return {
           name: themeName,
-          type: theme.type,
+          type: theme.type ?? 'dark',
           styles: themeToTreeStyles(theme),
         };
       } catch {

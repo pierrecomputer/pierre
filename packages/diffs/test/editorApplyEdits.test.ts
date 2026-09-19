@@ -13,7 +13,7 @@ import {
 } from '../src/editor/selection';
 import { TextDocument } from '../src/editor/textDocument';
 import type { EditorSelection, TextEdit } from '../src/editor/types';
-import { disposeHighlighter } from '../src/highlighter/shared_highlighter';
+import { disposeHighlighter } from '../src/highlighter';
 import type { FileContents } from '../src/types';
 import { installDom, wait, waitFor } from './domHarness';
 

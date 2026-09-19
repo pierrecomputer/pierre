@@ -9,14 +9,14 @@ export function getDiffHunksRendererOptions<LAnnotation, Caret>(
 ): DiffHunksRendererOptions {
   return {
     theme: options?.theme,
+    preferredHighlighter: options?.preferredHighlighter,
     disableLineNumbers: options?.disableLineNumbers,
     overflow: options?.overflow,
     collapsed: options?.collapsed,
     disableFileHeader: options?.disableFileHeader,
     disableVirtualizationBuffers: options?.disableVirtualizationBuffers,
     stickyHeader: options?.stickyHeader,
-    preferredHighlighter: options?.preferredHighlighter,
-    useCSSClasses: options?.useCSSClasses,
+
     useTokenTransformer: shouldUseTokenTransformer<'diff'>(options),
     tokenizeMaxLineLength: options?.tokenizeMaxLineLength,
     tokenizeMaxLength: options?.tokenizeMaxLength,

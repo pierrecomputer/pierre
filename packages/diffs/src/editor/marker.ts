@@ -6,7 +6,7 @@ import {
 } from './popover';
 import { selectionIntersects } from './selection';
 import type { TextDocument } from './textDocument';
-import type { Position, Range } from './types';
+import type { Range } from './types';
 import { addEventListener, getLineNumberAttr, h } from './utils';
 
 const MARKER_POPOVER_SHOW_DELAY_MS = 300;
@@ -142,9 +142,11 @@ export class MarkerRenderer {
       return;
     }
 
-    let character: number | undefined;
-    if (target.tagName === 'SPAN') {
-      const char = target.dataset.char;
+    let character: number;
+    let length = 0;
+    const token = target.closest<HTMLElement>('[data-char]');
+    if (token != null) {
+      const char = token.dataset.char;
       if (char === undefined) {
         return;
       }
@@ -152,20 +154,21 @@ export class MarkerRenderer {
       if (Number.isNaN(character)) {
         return;
       }
+      length = token.textContent?.length ?? 0;
     } else if (target.tagName === 'BR') {
       character = 0;
     } else {
       return;
     }
 
-    const position: Position = { line: lineNumber - 1, character };
+    // Tokens can include leading whitespace or several marker fragments.
+    // Match their full range, including when an inner span receives the hover.
+    const range: Range = {
+      start: { line: lineNumber - 1, character },
+      end: { line: lineNumber - 1, character: character + length },
+    };
     for (let i = this.#markers.length - 1; i >= 0; i--) {
-      if (
-        selectionIntersects(
-          { start: position, end: position },
-          this.#markers[i]
-        )
-      ) {
+      if (selectionIntersects(range, this.#markers[i])) {
         return i;
       }
     }

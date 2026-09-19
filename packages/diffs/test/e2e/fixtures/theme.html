@@ -34,7 +34,7 @@
     <div data-diff-mount></div>
 
     <script type="module">
-      import { File } from '/dist/index.js';
+      import { File, registerCustomTheme } from '/dist/index.js';
       import { Editor } from '/dist/edit/index.js';
 
       const mount = document.querySelector('[data-diff-mount]');
@@ -55,6 +55,21 @@ export { greeting, count };
 
       const searchParams = new URLSearchParams(window.location.search);
       const requestedTheme = searchParams.get('theme');
+      if (requestedTheme === 'missing-active-background') {
+        registerCustomTheme(requestedTheme, async () => ({
+          name: requestedTheme,
+          type: 'dark',
+          colors: {
+            'editor.background': '#202020',
+            'editor.foreground': '#eeeeee',
+            'gitDecoration.addedResourceForeground': '#40c060',
+            'gitDecoration.deletedResourceForeground': '#e05050',
+          },
+          tokenColors: [
+            { scope: 'keyword', settings: { foreground: '#ff8090' } },
+          ],
+        }));
+      }
       const theme = requestedTheme ?? {
         dark: 'pierre-dark',
         light: 'pierre-light',

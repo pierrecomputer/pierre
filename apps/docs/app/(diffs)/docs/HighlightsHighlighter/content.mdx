@@ -324,6 +324,31 @@ Built-in languages and their aliases are included in the `Lang` type:
 | `yaml`         | `yml`                                                                       |
 | `zig`          | —                                                                           |
 
+### Use with Diffs
+
+`@pierre/diffs` can highlight with Highlights instead of Shiki. Set
+`preferredHighlighter: 'highlights'` in file, diff, or
+[worker pool](#worker-pool) options. The backend loads on demand from
+`@pierre/diffs/highlighter/highlights`, and rendering, streaming, and
+[edit mode](#edit-mode) all tokenize through it.
+
+```tsx
+import { FileDiff } from '@pierre/diffs/react';
+
+<FileDiff
+  oldFile={oldFile}
+  newFile={newFile}
+  options={{ theme: 'pierre-dark', preferredHighlighter: 'highlights' }}
+/>;
+```
+
+Bundled theme names such as `pierre-dark` resolve to their Zed-format versions.
+Register custom themes for this backend with
+`registerCustomTheme(name, loader, 'zed')`. Highlights uses its built-in lexers,
+so the `langs` preload option and `registerCustomLanguage` grammars are ignored,
+and unsupported languages render as plain text. See [Utilities](#utilities) for
+the registration APIs.
+
 ### API reference
 
 #### `@pierre/highlights`

@@ -1,95 +1,125 @@
 # Highlighting API
 
-This reference lists every language, theme, shared highlighter, and stream
-export from `@pierre/diffs`.
+This reference lists every highlighter backend, shared highlighter, theme,
+language, render, and stream export from `@pierre/diffs`.
 
 ## Contents
 
-- [Shiki passthrough APIs](#shiki-passthrough-apis)
-- [Language APIs](#language-apis)
-- [Theme APIs](#theme-apis)
+- [Highlighter backends](#highlighter-backends)
 - [Shared highlighter APIs](#shared-highlighter-apis)
+- [Theme APIs](#theme-apis)
+- [Language APIs](#language-apis)
+- [`DiffsHighlighter` members](#diffshighlighter-members)
 - [Render APIs](#render-apis)
 - [Stream APIs](#stream-apis)
 
-## Shiki passthrough APIs
+## Highlighter backends
 
-| Export                    | Kind     | Purpose                                          |
-| ------------------------- | -------- | ------------------------------------------------ |
-| `codeToHtml`              | Function | Re-exports Shiki's complete code-to-HTML helper. |
-| `createCSSVariablesTheme` | Function | Re-exports Shiki's CSS variable theme factory.   |
+`preferredHighlighter` in file, diff, editor, or worker pool options selects one
+backend. Each backend loads on demand from its own entry, and the package keeps
+one shared instance per backend.
 
-## Language APIs
+| Name           | Entry                                  | Engine                                                |
+| -------------- | -------------------------------------- | ----------------------------------------------------- |
+| `'shiki-wasm'` | `@pierre/diffs/highlighter/shiki-wasm` | Shiki with the Oniguruma WebAssembly engine. Default. |
+| `'shiki-js'`   | `@pierre/diffs/highlighter/shiki-js`   | Shiki with the JavaScript regex engine.               |
+| `'highlights'` | `@pierre/diffs/highlighter/highlights` | `@pierre/highlights` WebAssembly lexers.              |
 
-| Export                         | Kind     | Purpose                                                   |
-| ------------------------------ | -------- | --------------------------------------------------------- |
-| `registerCustomLanguage`       | Function | Registers a lazy language and optional file mappings.     |
-| `resolveLanguage`              | Function | Loads and caches one language registration.               |
-| `resolveLanguages`             | Function | Loads and caches several language registrations.          |
-| `getResolvedOrResolveLanguage` | Function | Returns one cached language or starts its load.           |
-| `getResolvedLanguages`         | Function | Gets cached registrations for the supplied languages.     |
-| `hasResolvedLanguages`         | Function | Tests whether language registrations are cached.          |
-| `attachResolvedLanguages`      | Function | Adds resolved registrations to a highlighter.             |
-| `areLanguagesAttached`         | Function | Tests whether a highlighter has the supplied languages.   |
-| `cleanUpResolvedLanguages`     | Function | Clears language resolution state.                         |
-| `RegisteredCustomLanguages`    | Map      | Stores registered custom language loaders.                |
-| `ResolvedLanguages`            | Map      | Stores resolved language registrations.                   |
-| `ResolvingLanguages`           | Map      | Stores active language load promises.                     |
-| `AttachedLanguages`            | Set      | Stores language names attached to the shared highlighter. |
+Each entry exports
+`createDiffsHighlighter(customThemeLoaders?, customLanguageLoaders?)`, which
+returns a `DiffsHighlighter`. The Shiki backends load bundled and registered
+grammars on demand and take TextMate themes. The Highlights backend bundles its
+languages, ignores `langs` and custom grammar loaders, tokenizes unsupported
+languages as `text`, and takes Zed themes.
 
-## Theme APIs
-
-| Export                           | Kind     | Purpose                                                |
-| -------------------------------- | -------- | ------------------------------------------------------ |
-| `registerCustomTheme`            | Function | Registers a lazy Shiki theme loader.                   |
-| `CustomThemeLoader`              | Type     | Defines a raw or resolved Shiki theme loader.          |
-| `registerCustomCSSVariableTheme` | Function | Registers a theme that reads CSS variables.            |
-| `resolveTheme`                   | Function | Loads and caches one theme.                            |
-| `resolveThemes`                  | Function | Loads and caches several themes.                       |
-| `getResolvedOrResolveTheme`      | Function | Returns one cached theme or starts its load.           |
-| `getResolvedThemes`              | Function | Gets cached themes by name.                            |
-| `hasResolvedThemes`              | Function | Tests whether themes are cached.                       |
-| `attachResolvedThemes`           | Function | Adds resolved themes to a highlighter.                 |
-| `areThemesAttached`              | Function | Tests whether a highlighter has the supplied themes.   |
-| `cleanUpResolvedThemes`          | Function | Clears theme resolution state.                         |
-| `AttachedThemes`                 | Set      | Stores theme names attached to the shared highlighter. |
+| Export               | Kind     | Purpose                                          |
+| -------------------- | -------- | ------------------------------------------------ |
+| `defaultHighlighter` | Constant | Names the default backend, `'shiki-wasm'`.       |
+| `highlighters`       | Object   | Maps each backend name to its lazy entry import. |
+| `bundledThemeNames`  | Array    | Lists the theme names bundled by every backend.  |
+| `BundledTheme`       | Type     | Names one bundled theme.                         |
 
 ## Shared highlighter APIs
 
-| Export                      | Purpose                                                           |
-| --------------------------- | ----------------------------------------------------------------- |
-| `getSharedHighlighter`      | Gets or creates the shared highlighter for themes and languages.  |
-| `preloadHighlighter`        | Loads the shared highlighter before a render.                     |
-| `getHighlighterIfLoaded`    | Gets the shared highlighter after load.                           |
-| `isHighlighterLoaded`       | Tests a highlighter cache value for a loaded instance.            |
-| `isHighlighterLoading`      | Tests a highlighter cache value for an active promise.            |
-| `isHighlighterNull`         | Tests a highlighter cache value for an empty state.               |
-| `disposeHighlighter`        | Disposes and clears the shared highlighter.                       |
-| `getHighlighterOptions`     | Converts one language and component options to highlighter input. |
-| `getHighlighterThemeStyles` | Creates theme CSS from a loaded highlighter.                      |
-| `getThemes`                 | Converts one theme or light/dark pair to a name list.             |
-| `isWorkerContext`           | Tests whether code runs in a worker global scope.                 |
+| Export                                                               | Purpose                                                                                                 |
+| -------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| `getSharedHighlighter({ themes, langs?, preferredHighlighter? })`    | Gets or creates the backend's shared instance, then resolves the themes and loads the languages.        |
+| `preloadHighlighter(options)`                                        | Loads a backend with its themes and languages before a render; takes the same options.                  |
+| `getHighlighterIfLoaded({ theme?, langs?, preferredHighlighter? }?)` | Gets a loaded backend synchronously when the requested themes and languages are ready; starts no loads. |
+| `isHighlighterLoaded(value?)`                                        | Tests a cache value for a loaded instance; defaults to the `'shiki-wasm'` entry.                        |
+| `isHighlighterLoading(value?)`                                       | Tests a cache value for an active initialization promise.                                               |
+| `isHighlighterNull(value?)`                                          | Tests a cache value for an empty state.                                                                 |
+| `disposeHighlighter()`                                               | Clears every cached backend so the next request creates a fresh instance; registrations remain.         |
+| `getHighlighterOptions(options)`                                     | Selects theme names and the preferred backend from component options.                                   |
+| `getHighlighterThemeStyles({ theme, highlighter, prefix? })`         | Creates theme CSS from a loaded highlighter.                                                            |
+| `getThemes(theme)`                                                   | Converts one theme or light/dark pair to a name list.                                                   |
+| `getThemeStyle(theme)`                                               | Reads editor UI colors from a Zed or TextMate theme as `DiffsThemeStyle`.                               |
+| `isWorkerContext()`                                                  | Tests whether code runs in a worker global scope.                                                       |
+
+## Theme APIs
+
+| Export                                      | Purpose                                                                                             |
+| ------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| `registerCustomTheme(name, loader, type?)`  | Registers a lazy theme loader for current and future backend instances; bundled names are rejected. |
+| `resolveTheme(name, preferredHighlighter?)` | Loads and caches one bundled or registered theme in the selected backend's format.                  |
+
+`type` is `'textmate'` for the Shiki backends or `'zed'` for Highlights. Omit it
+to register the loader for every backend; the loader must then return the format
+of whichever backend loads it. Names are registered separately per format, and a
+duplicate name in a format is logged and ignored. Registration does not load a
+backend or run the loader. Loaders return the theme object or a module with it
+on `default`; the registered name replaces the theme's own name. `resolveTheme`
+defaults to `'shiki-wasm'`.
+
+## Language APIs
+
+| Export                                                         | Kind     | Purpose                                                           |
+| -------------------------------------------------------------- | -------- | ----------------------------------------------------------------- |
+| `registerCustomLanguage(lang, loader, extensionsOrFilenames?)` | Function | Registers a lazy Shiki grammar loader and optional file mappings. |
+| `customLanguageLoaders`                                        | Map      | Stores registered custom grammar loaders by language name.        |
+
+The loader returns a module whose `default` export is an array of Shiki
+grammars; one grammar must declare `lang` as its `name` or an alias. `text` and
+`ansi` are reserved and throw. Duplicate names are logged and ignored, and a
+failed load can retry. Register an alias before Shiki loads its grammar. Both
+Shiki backends and Shiki worker pools load the grammar on demand; the Highlights
+backend ignores these loaders.
+
+## `DiffsHighlighter` members
+
+| Member                           | Purpose                                                       |
+| -------------------------------- | ------------------------------------------------------------- |
+| `name`                           | Names the backend.                                            |
+| `themeResolver`                  | Exposes the backend's `@pierre/theming` `ThemeResolver`.      |
+| `getTheme(name)`                 | Gets one resolved theme object; throws when it is not loaded. |
+| `codeToTokens(code, options)`    | Tokenizes a string into a `TokensResult`.                     |
+| `createStreamTokenizer(options)` | Creates a `DiffsStreamTokenizer` for append-only input.       |
+| `createLiveTokenizer(options)`   | Creates a `DiffsLiveTokenizer` for an editor `TextDocument`.  |
+| `loadLanguages(languages)`       | Loads grammars on demand; Shiki backends only.                |
+| `hasLoadedLanguages(languages)`  | Tests whether grammars are loaded; Shiki backends only.       |
+| `dispose()`                      | Releases backend resources; Shiki backends only.              |
+
+`CodeToTokensOptions` supplies `lang`, a theme object or light/dark pair,
+`cssVariablePrefix`, `defaultColor`, `useTokenTransformer`, and
+`tokenizeMaxLineLength`. `DiffsLiveTokenizerOptions` adds `textDocument`,
+`renderRange`, `onDeferTokenize`, and `omitInitialTokens`, which keeps unedited
+lines of the initial document out of `onDeferTokenize` when the host already
+renders them (Shiki backends only).
 
 ## Render APIs
 
-| Export                       | Purpose                                                 |
-| ---------------------------- | ------------------------------------------------------- |
-| `renderFileWithHighlighter`  | Creates a highlighted file syntax tree.                 |
-| `renderDiffWithHighlighter`  | Creates highlighted deletion and addition syntax trees. |
-| `createTransformerWithState` | Creates Shiki transformers with shared render state.    |
+| Export                                                          | Purpose                                               |
+| --------------------------------------------------------------- | ----------------------------------------------------- |
+| `renderFileWithHighlighter(file, highlighter, options, range?)` | Creates a highlighted file HTML tree.                 |
+| `renderDiffWithHighlighter(diff, highlighter, options, range?)` | Creates highlighted deletion and addition HTML trees. |
 
 ## Stream APIs
 
-| Export                              | Kind  | Purpose                                                       |
-| ----------------------------------- | ----- | ------------------------------------------------------------- |
-| `FileStream`                        | Class | Renders a readable code stream as highlighted rows.           |
-| `FileStreamOptions`                 | Type  | Configures stream language, theme, start line, and callbacks. |
-| `CodeToTokenTransformStream`        | Class | Converts code chunks to themed or recall tokens.              |
-| `CodeToTokenTransformStreamOptions` | Type  | Configures stream tokenization and recall tokens.             |
-| `ShikiStreamTokenizer`              | Class | Tracks stable and unstable tokens across code chunks.         |
-| `ShikiStreamTokenizerOptions`       | Type  | Supplies Shiki token options and a highlighter.               |
-| `ShikiStreamTokenizerEnqueueResult` | Type  | Returns recalled, stable, and unstable tokens for one chunk.  |
-| `RecallToken`                       | Type  | Requests removal of prior unstable tokens.                    |
+| Export                  | Kind  | Purpose                                                       |
+| ----------------------- | ----- | ------------------------------------------------------------- |
+| `FileStream`            | Class | Renders a readable code stream as highlighted rows.           |
+| `FileStreamOptions`     | Type  | Configures stream language, theme, start line, and callbacks. |
+| `FileStreamRecallToken` | Type  | Removes provisional tokens from the unfinished streamed line. |
 
 ## `FileStream` members
 
@@ -100,14 +130,6 @@ export from `@pierre/diffs`.
 | `setThemeType(themeType)`  | Selects system, light, or dark theme mode. |
 | `cleanUp()`                | Aborts the stream and releases resources.  |
 
-## `ShikiStreamTokenizer` members
-
-| Member                              | Purpose                              |
-| ----------------------------------- | ------------------------------------ |
-| `new ShikiStreamTokenizer(options)` | Creates a stateful tokenizer.        |
-| `enqueue(chunk)`                    | Tokenizes one code chunk.            |
-| `close()`                           | Finalizes and returns stable tokens. |
-| `clear()`                           | Clears accumulated token state.      |
-| `clone()`                           | Copies current tokenizer state.      |
-
-`CodeToTokenTransformStream` exposes its `tokenizer` and `options` values.
+`FileStream` tokenizes through the selected backend's `DiffsStreamTokenizer`,
+which exposes `pushCode(chunk)`, `end()`, and `dispose()`. `onStreamWrite`
+receives each `ThemedToken` or `FileStreamRecallToken`.

@@ -20,4 +20,5 @@ trees with the selected theme.
 
 `@pierre/highlights` generates standalone HTML or tokens using Zed-compatible
 themes from `@pierre/highlights/themes`. Its theme objects use a different
-format from the Shiki and VS Code themes in `@pierre/theme`.
+format from the Shiki and VS Code themes in `@pierre/theme`. `@pierre/diffs` can
+also highlight with it by setting `preferredHighlighter: 'highlights'`.

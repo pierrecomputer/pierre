@@ -17,16 +17,17 @@ import type {
   EditorType,
 } from '../editor/types';
 import {
-  isHighlighterLoaded,
+  defaultHighlighter,
+  getHighlighterIfLoaded,
   preloadHighlighter,
-} from '../highlighter/shared_highlighter';
-import { areThemesAttached } from '../highlighter/themes/areThemesAttached';
+} from '../highlighter';
 import type { SelectionWriteOptions } from '../managers/InteractionManager';
 import {
   dequeueRender,
   queueRender,
 } from '../managers/UniversalRenderingManager';
 import type {
+  BaseCodeOptions,
   CodeViewDiffItem,
   CodeViewFileItem,
   CodeViewItem,
@@ -301,13 +302,12 @@ type CodeViewOptionCallback<
 
 export const CODE_VIEW_DIFF_OPTION_KEYS = [
   'theme',
+  'preferredHighlighter',
   'disableLineNumbers',
   'overflow',
   'themeType',
   'disableFileHeader',
   'disableVirtualizationBuffers',
-  'preferredHighlighter',
-  'useCSSClasses',
   'useTokenTransformer',
   'tokenizeMaxLineLength',
   'tokenizeMaxLength',
@@ -334,13 +334,12 @@ type CodeViewDiffOptionKeys = (typeof CODE_VIEW_DIFF_OPTION_KEYS)[number];
 
 export const CODE_VIEW_FILE_OPTION_KEYS = [
   'theme',
+  'preferredHighlighter',
   'disableLineNumbers',
   'overflow',
   'themeType',
   'disableFileHeader',
   'disableVirtualizationBuffers',
-  'preferredHighlighter',
-  'useCSSClasses',
   'useTokenTransformer',
   'tokenizeMaxLineLength',
   'tokenizeMaxLength',
@@ -825,6 +824,7 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
   private workerManager: WorkerPoolManager | undefined;
   private isReadySubscription: (() => void) | undefined;
   private pendingHighlighterTheme: DiffsThemeNames | ThemesType | undefined;
+  private pendingHighlighterPreference: BaseCodeOptions['preferredHighlighter'];
   private isContainerManaged: boolean;
 
   constructor(
@@ -1875,6 +1875,7 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
     this.isReadySubscription();
     this.isReadySubscription = undefined;
     this.pendingHighlighterTheme = undefined;
+    this.pendingHighlighterPreference = undefined;
   }
 
   private isSharedHighlighterReady(): boolean {
@@ -1882,21 +1883,28 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
       this.workerManager?.getFileRenderOptions().theme ??
       this.options.theme ??
       DEFAULT_THEMES;
-    if (isHighlighterLoaded() && areThemesAttached(theme)) {
+    const preferredHighlighter =
+      this.workerManager?.getFileRenderOptions().preferredHighlighter ??
+      this.options.preferredHighlighter ??
+      defaultHighlighter;
+    if (getHighlighterIfLoaded({ theme, preferredHighlighter }) != null) {
       this.clearReadySubscription();
       return true;
     }
     // A pending request for an obsolete theme must not block the current one.
-    if (!areThemesEqual(this.pendingHighlighterTheme, theme)) {
+    if (
+      !areThemesEqual(this.pendingHighlighterTheme, theme) ||
+      this.pendingHighlighterPreference !== preferredHighlighter
+    ) {
       this.clearReadySubscription();
     }
     this.isReadySubscription ??= (() => {
       this.pendingHighlighterTheme = theme;
+      this.pendingHighlighterPreference = preferredHighlighter;
       let cancelled = false;
       void preloadHighlighter({
         themes: getThemes(theme),
-        langs: [],
-        preferredHighlighter: this.options.preferredHighlighter,
+        preferredHighlighter,
       }).then(
         () => {
           if (cancelled) {

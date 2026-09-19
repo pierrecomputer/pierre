@@ -80,6 +80,7 @@ const defaultComponents = {
   h2: MdxHeading2,
   Link,
   Button,
+  BetaBadge,
   Notice,
   IconArrowRight,
   IconCiWarningFill,

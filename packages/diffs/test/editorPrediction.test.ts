@@ -15,7 +15,7 @@ import { recordEditPrediction } from '../src/editor/editPrediction';
 import { TextDocument } from '../src/editor/textDocument';
 import { getTextDocumentChangeTransaction } from '../src/editor/textDocumentChangeTransaction';
 import type { EditorType } from '../src/editor/types';
-import { disposeHighlighter } from '../src/highlighter/shared_highlighter';
+import { disposeHighlighter } from '../src/highlighter';
 import type { RenderRange } from '../src/types';
 import { installDom, wait, waitFor } from './domHarness';
 

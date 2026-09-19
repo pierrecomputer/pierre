@@ -1,6 +1,3 @@
-import type { Element as HASTElement } from 'hast';
-import { toHtml } from 'hast-util-to-html';
-
 import {
   CUSTOM_HEADER_SLOT_ID,
   DEFAULT_THEMES,
@@ -31,11 +28,14 @@ import {
 import { ResizeManager } from '../managers/ResizeManager';
 import { FileRenderer, type FileRenderResult } from '../renderers/FileRenderer';
 import { SVGSpriteSheet } from '../sprite';
+import { toHtml } from '../utils/html';
+
 export type { FileEditCompleteEvent } from '../editor/types';
 import {
+  defaultHighlighter,
   getHighlighterIfLoaded,
   getSharedHighlighter,
-} from '../highlighter/shared_highlighter';
+} from '../highlighter';
 import type {
   AppliedThemeStyleCache,
   BaseCodeOptions,
@@ -43,6 +43,7 @@ import type {
   DiffsHighlighter,
   FileContents,
   HighlightedToken,
+  HElement as HtmlElement,
   LineAnnotation,
   PostRenderPhase,
   PrePropertiesConfig,
@@ -798,11 +799,17 @@ export class File<LAnnotation = undefined, Caret = undefined> {
       return;
     }
     const syncEditor = (highlighter: DiffsHighlighter): void => {
+      const {
+        theme = DEFAULT_THEMES,
+        preferredHighlighter = defaultHighlighter,
+      } = this.__getEffectiveCodeOptions();
       if (
         !this.enabled ||
         this.editor !== editor ||
         this.fileContainer !== fileContainer ||
-        this.getLatestFile() !== file
+        this.getLatestFile() !== file ||
+        highlighter.name !== preferredHighlighter ||
+        !highlighter.themeResolver.hasResolvedThemes(getThemes(theme))
       ) {
         return;
       }
@@ -816,20 +823,23 @@ export class File<LAnnotation = undefined, Caret = undefined> {
       });
     };
 
-    const theme = this.getTheme();
-    const lang = file.lang ?? getFiletypeFromFileName(file.name);
+    const { theme = DEFAULT_THEMES, preferredHighlighter } =
+      this.__getEffectiveCodeOptions();
+    const langs = [file.lang ?? getFiletypeFromFileName(file.name)];
     // Sync editor synchronously whenever the shared highlighter is ready;
     // otherwise load it and sync once it resolves.
-    const highlighter = getHighlighterIfLoaded({ theme, lang });
+    const highlighter = getHighlighterIfLoaded({
+      theme,
+      preferredHighlighter,
+      langs,
+    });
     if (highlighter != null) {
       syncEditor(highlighter);
     } else {
       void getSharedHighlighter({
         themes: getThemes(theme),
-        langs: Array.from(new Set(['text', lang])),
-        preferredHighlighter:
-          this.workerManager?.getPreferredHighlighter() ??
-          this.options.preferredHighlighter,
+        preferredHighlighter,
+        langs,
       }).then(syncEditor);
     }
   }
@@ -1613,7 +1623,7 @@ export class File<LAnnotation = undefined, Caret = undefined> {
       if (code.childElementCount >= 2) {
         for (let i = 0; i < 2; i++) {
           const domEl = code.children[i] as HTMLElement;
-          const astEl = codeAst[i] as HASTElement;
+          const astEl = codeAst[i] as HtmlElement;
           domEl.innerHTML = toHtml(astEl.children);
           domEl.style.cssText = astEl.properties.style as string;
         }
@@ -1891,7 +1901,7 @@ export class File<LAnnotation = undefined, Caret = undefined> {
   }
 
   private applyHeaderToDOM(
-    headerAST: HASTElement,
+    headerAST: HtmlElement,
     container: HTMLElement,
     file: FileContents
   ): void {

@@ -3,7 +3,7 @@ name: theming
 description:
   Use when an app uses @pierre/theming to list, resolve, select, switch,
   persist, or apply themes, including color modes, theme controllers, React
-  state, UI colors, and bundled Pierre or Shiki collections.
+  state, UI colors, and bundled Pierre, Shiki, or Highlights collections.
 ---
 
 # `@pierre/theming`
@@ -18,8 +18,8 @@ pnpm add @pierre/theming
 ```
 
 Install optional peer dependencies only for the selected entry. The React entry
-needs `react`. The themes entry needs `@pierre/theme`, `@shikijs/themes`, and
-`shiki`.
+needs `react`. The themes entry needs `@pierre/theme`, `@shikijs/themes`,
+`shiki`, and `@pierre/highlights`.
 
 ## Select an API reference
 

@@ -108,7 +108,21 @@ test.describe('multi-cursor and indentation', () => {
       };
       const short = rect('[data-line="3"]');
       const empty = rect('[data-line="4"]');
-      const token = rect('[data-line="2"] [data-char="18"]');
+      // Character positions are stable across highlighters' token boundaries.
+      const line = element.querySelector('[data-line="2"]');
+      if (line == null) throw new Error('Missing column selection line');
+      const walker = document.createTreeWalker(line, NodeFilter.SHOW_TEXT);
+      let text = walker.nextNode();
+      let offset = 18;
+      while (text != null && offset >= (text.textContent?.length ?? 0)) {
+        offset -= text.textContent?.length ?? 0;
+        text = walker.nextNode();
+      }
+      if (text == null) throw new Error('Missing column selection character');
+      const range = document.createRange();
+      range.setStart(text, offset);
+      range.setEnd(text, offset + 1);
+      const token = range.getBoundingClientRect();
       return {
         x: token.left + token.width / 2,
         startY: token.top + token.height / 2,

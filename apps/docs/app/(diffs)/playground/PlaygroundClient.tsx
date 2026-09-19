@@ -28,6 +28,7 @@ import {
 import type { PreloadFileDiffResult } from '@pierre/diffs/ssr';
 import {
   IconBrandGithub,
+  IconBrush,
   IconCheck,
   IconChevronSm,
   IconCiWarning,
@@ -77,11 +78,13 @@ import { PlaygroundVirtualizerView } from './PlaygroundVirtualizerView';
 import type {
   HunkSeparatorValue,
   LineHoverHighlight,
+  PlaygroundHighlighter,
   ViewMode,
 } from './searchParams';
 import {
   DARK_THEMES,
   DEFAULTS,
+  HIGHLIGHTERS,
   LIGHT_THEMES,
   parsePlaygroundSearchParams,
 } from './searchParams';
@@ -174,6 +177,7 @@ export type SharedRenderOptions = Pick<
   | 'overflow'
   | 'themeType'
   | 'theme'
+  | 'preferredHighlighter'
 > & {
   // The full `hunkSeparators` type includes an LAnnotation-typed render
   // callback; the playground only uses the string presets, so narrow it here to
@@ -195,6 +199,8 @@ interface PlaygroundControlsContentProps {
   setDiffStyle: (v: 'split' | 'unified') => void;
   colorMode: 'system' | 'light' | 'dark';
   setColorMode: (v: 'system' | 'light' | 'dark') => void;
+  highlighter: PlaygroundHighlighter;
+  setHighlighter: (v: PlaygroundHighlighter) => void;
   selectedLightTheme: (typeof LIGHT_THEMES)[number];
   setSelectedLightTheme: (v: (typeof LIGHT_THEMES)[number]) => void;
   selectedDarkTheme: (typeof DARK_THEMES)[number];
@@ -240,6 +246,8 @@ function PlaygroundControlsContent({
   setDiffStyle,
   colorMode,
   setColorMode,
+  highlighter,
+  setHighlighter,
   selectedLightTheme,
   setSelectedLightTheme,
   selectedDarkTheme,
@@ -350,6 +358,38 @@ function PlaygroundControlsContent({
 
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
+            <Button
+              variant="outline"
+              className="justify-start"
+              aria-label={`Highlighter: ${highlighter}`}
+            >
+              <IconBrush />
+              {highlighter}
+              <IconChevronSm className="text-muted-foreground ml-auto" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent
+            align="start"
+            scrollSelectedIntoView
+            className={dropdownContentClassName}
+          >
+            {HIGHLIGHTERS.map((option) => (
+              <DropdownMenuItem
+                key={option}
+                onClick={() => setHighlighter(option)}
+                selected={highlighter === option}
+              >
+                {option}
+                {highlighter === option && <IconCheck className="ml-auto" />}
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
+
+        <div className="bg-border h-6 w-px" />
+
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
             <Button variant="outline" className="justify-start">
               <IconColorLight />
               {selectedLightTheme}
@@ -446,37 +486,6 @@ function PlaygroundControlsContent({
           </ButtonGroupItem>
         </ButtonGroup>
 
-        <div className="bg-border h-6 w-px" />
-
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="outline" className="justify-start px-3">
-              <IconCodeStyleInline />
-              {LINE_DIFF_OPTIONS.find((opt) => opt.value === lineDiffType)
-                ?.label ?? lineDiffType}
-              <IconChevronSm className="text-muted-foreground ml-auto" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent
-            align="start"
-            scrollSelectedIntoView
-            className={dropdownContentClassName}
-          >
-            {LINE_DIFF_OPTIONS.map((option) => (
-              <DropdownMenuItem
-                key={option.value}
-                onClick={() => setLineDiffType(option.value)}
-                selected={lineDiffType === option.value}
-              >
-                {option.label}
-                {lineDiffType === option.value && (
-                  <IconCheck className="ml-auto" />
-                )}
-              </DropdownMenuItem>
-            ))}
-          </DropdownMenuContent>
-        </DropdownMenu>
-
         {!hideShare && (
           <>
             <div className="bg-border h-6 w-px xl:hidden" />
@@ -541,6 +550,37 @@ function PlaygroundControlsContent({
             title={!editing ? 'Start editing to show lint markers' : undefined}
           />
         )}
+      </div>
+
+      <div className="flex flex-wrap items-center gap-3">
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline" className="justify-start px-3">
+              <IconCodeStyleInline />
+              {LINE_DIFF_OPTIONS.find((opt) => opt.value === lineDiffType)
+                ?.label ?? lineDiffType}
+              <IconChevronSm className="text-muted-foreground ml-auto" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent
+            align="start"
+            scrollSelectedIntoView
+            className={dropdownContentClassName}
+          >
+            {LINE_DIFF_OPTIONS.map((option) => (
+              <DropdownMenuItem
+                key={option.value}
+                onClick={() => setLineDiffType(option.value)}
+                selected={lineDiffType === option.value}
+              >
+                {option.label}
+                {lineDiffType === option.value && (
+                  <IconCheck className="ml-auto" />
+                )}
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
 
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
@@ -571,9 +611,7 @@ function PlaygroundControlsContent({
             ))}
           </DropdownMenuContent>
         </DropdownMenu>
-      </div>
 
-      <div className="flex flex-wrap items-center gap-3">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="outline" className="justify-start px-3">
@@ -691,6 +729,7 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
   const [viewMode, setViewMode] = useState<ViewMode>(urlState.viewMode);
   const [diffStyle, setDiffStyle] = useState(urlState.diffStyle);
   const [colorMode, setColorMode] = useState(urlState.colorMode);
+  const [highlighter, setHighlighter] = useState(urlState.highlighter);
   const [selectedLightTheme, setSelectedLightTheme] = useState(
     urlState.lightTheme
   );
@@ -996,6 +1035,8 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
     if (viewMode !== DEFAULTS.viewMode) params.set('view', viewMode);
     if (diffStyle !== DEFAULTS.diffStyle) params.set('layout', diffStyle);
     if (colorMode !== DEFAULTS.colorMode) params.set('mode', colorMode);
+    if (highlighter !== DEFAULTS.highlighter)
+      params.set('highlighter', highlighter);
     if (selectedLightTheme !== DEFAULTS.lightTheme)
       params.set('light', selectedLightTheme);
     if (selectedDarkTheme !== DEFAULTS.darkTheme)
@@ -1045,6 +1086,7 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
     viewMode,
     diffStyle,
     colorMode,
+    highlighter,
     selectedLightTheme,
     selectedDarkTheme,
     diffIndicators,
@@ -1239,6 +1281,8 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
     setDiffStyle,
     colorMode,
     setColorMode,
+    highlighter,
+    setHighlighter,
     selectedLightTheme,
     setSelectedLightTheme,
     selectedDarkTheme,
@@ -1298,6 +1342,7 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
       overflow,
       themeType: effectiveColorMode,
       theme: { dark: selectedDarkTheme, light: selectedLightTheme },
+      preferredHighlighter: highlighter,
     }),
     [
       diffStyle,
@@ -1311,10 +1356,11 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
       effectiveColorMode,
       selectedDarkTheme,
       selectedLightTheme,
+      highlighter,
     ]
   );
 
-  // With a worker pool, highlight render options (theme, line-diff granularity)
+  // With a worker pool, highlighting options (backend, theme, diff granularity)
   // are pool-global — the workers render with the pool's config, not each
   // component's options — so picker changes must be pushed into the pool.
   // setRenderOptions no-ops when nothing changed, re-resolves themes, updates
@@ -1322,10 +1368,16 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
   const workerPool = useWorkerPool();
   useEffect(() => {
     void workerPool?.setRenderOptions({
+      preferredHighlighter: renderOptions.preferredHighlighter,
       theme: renderOptions.theme,
       lineDiffType: renderOptions.lineDiffType,
     });
-  }, [workerPool, renderOptions.theme, renderOptions.lineDiffType]);
+  }, [
+    workerPool,
+    renderOptions.preferredHighlighter,
+    renderOptions.theme,
+    renderOptions.lineDiffType,
+  ]);
 
   // CodeView adds its own layout/sticky-header options on top of the shared
   // rendering options; its scrollbar styling mirrors the direct views.

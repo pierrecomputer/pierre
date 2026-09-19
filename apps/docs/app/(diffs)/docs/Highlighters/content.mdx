@@ -1,0 +1,32 @@
+## Highlighters
+
+Diffs supports three syntax highlighting backends. Shiki with WebAssembly
+(`'shiki-wasm'`) is the default. Set `preferredHighlighter` in file or diff
+options to choose a different backend.
+
+| Backend                                                                   | Engine                                                | Languages and themes                                 |
+| ------------------------------------------------------------------------- | ----------------------------------------------------- | ---------------------------------------------------- |
+| `'shiki-wasm'`                                                            | Shiki with the Oniguruma WebAssembly engine (default) | Shiki grammars and TextMate themes, loaded on demand |
+| `'shiki-js'`                                                              | Shiki with the JavaScript regex engine                | Shiki grammars and TextMate themes, loaded on demand |
+| [`'highlights'`](#highlights) <BetaBadge className="ml-1 align-middle" /> | Pierre's WebAssembly highlighter                      | Built-in language lexers and Zed themes              |
+
+Each backend loads on demand when selected. Both Shiki backends and Highlights
+support streaming and incremental editing.
+
+<DocsCodeExample {...highlightersReactExample} />
+
+The same `preferredHighlighter` option works with the
+[Vanilla JS API](#vanilla-js-api). When using a [worker pool](#worker-pool), set
+it in the pool's `highlighterOptions` instead; the pool's choice applies to
+every component it renders.
+
+Use [`preloadHighlighter`](#utilities-preloadhighlighter) with the same
+`preferredHighlighter` to load themes and languages before rendering. Shiki
+loads bundled and [custom languages](#utilities-registercustomlanguage) on
+demand. Highlights bundles its languages and ignores the `langs` option.
+
+[Highlights](#highlights) includes all themes of shiki bundled themes. Custom
+themes must match the selected backend: TextMate themes for Shiki, Zed themes
+for Highlights. See [`registerCustomTheme`](#utilities-registercustomtheme) for
+registration and the [Highlights reference](#highlights) for its languages,
+themes, and standalone APIs.

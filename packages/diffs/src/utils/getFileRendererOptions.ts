@@ -9,6 +9,7 @@ export function getFileRendererOptions<LAnnotation, Caret>(
 ): FileRendererOptions {
   return {
     theme: options?.theme,
+    preferredHighlighter: options?.preferredHighlighter,
     disableLineNumbers: options?.disableLineNumbers,
     overflow: options?.overflow,
     themeType: options?.themeType,
@@ -16,8 +17,7 @@ export function getFileRendererOptions<LAnnotation, Caret>(
     disableFileHeader: options?.disableFileHeader,
     disableVirtualizationBuffers: options?.disableVirtualizationBuffers,
     stickyHeader: options?.stickyHeader,
-    preferredHighlighter: options?.preferredHighlighter,
-    useCSSClasses: options?.useCSSClasses,
+
     useTokenTransformer: shouldUseTokenTransformer(options),
     tokenizeMaxLineLength: options?.tokenizeMaxLineLength,
     tokenizeMaxLength: options?.tokenizeMaxLength,

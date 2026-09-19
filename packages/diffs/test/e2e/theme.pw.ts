@@ -303,7 +303,10 @@ test.describe('theme line highlights', () => {
   test('a missing active background preserves the resolved line color', async ({
     page,
   }) => {
-    await openFixture(page, { name: 'dark-plus', type: 'dark' });
+    await openFixture(page, {
+      name: 'missing-active-background',
+      type: 'dark',
+    });
     const row = page.locator('[data-content] > [data-line="2"]');
     await row.evaluate((element) => {
       const background = element.closest('pre');

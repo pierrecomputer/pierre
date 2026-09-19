@@ -13,6 +13,11 @@ This reference covers the resolver exports from `@pierre/theming`.
 | `UnregisteredThemeError` | Class    | Reports a resolve request for a name with no loader.          |
 | `UnresolvedThemeError`   | Class    | Reports a synchronous batch read with an unresolved name.     |
 
+`createThemeResolver(options?)` accepts `fallbackLoader(name)`, which supplies a
+loader the first time an unregistered name is resolved, and
+`normalizeTheme(theme, name)`, which validates or converts every loaded or
+seeded theme before it is cached.
+
 ## `ThemeResolver` methods
 
 | Method                                | Purpose                                                  |
