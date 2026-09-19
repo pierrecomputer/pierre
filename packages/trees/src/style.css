@@ -856,8 +856,10 @@
       z-index: 2;
 
       /* Flattened segment markers sit high enough to cover the row outline unless
-       * their painted background is inset by the focus ring width. */
-      [data-item-flattened-subitems] {
+       * their painted background is inset by the focus ring width. The marker
+       * sits outside the segments themselves, so inset from the section that
+       * contains them. */
+      [data-item-section='content']:has([data-item-flattened-subitems]) {
         --truncate-marker-block-inset: var(--trees-focus-ring-width);
       }
 
@@ -930,7 +932,21 @@
   }
 
   /* Flattened Directory Parts */
+  /*
+  Outside renaming the segments are a middle-truncate group, so the leading run
+  can shrink while the terminal directory holds its width. As flex items each
+  segment shrank and truncated on its own, which spent a narrow row on ellipses
+  rather than on the path.
+  */
   [data-item-flattened-subitems] {
+    display: block;
+    min-width: 0;
+  }
+  /*
+  Renaming swaps the terminal segment for an input, which sizes itself against a
+  flex item rather than against the row.
+  */
+  [data-item-flattened-subitems]:has([data-item-rename-input]) {
     display: inline-flex;
     align-items: center;
     gap: 2px;
