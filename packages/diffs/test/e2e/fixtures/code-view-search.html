@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>CodeView editable search</title>
+    <style>
+      [data-code-view-root] {
+        height: 560px;
+        overflow: auto;
+      }
+    </style>
+  </head>
+  <body>
+    <div data-code-view-root></div>
+    <script type="module">
+      import { CodeView } from '/dist/index.js';
+      import { Editor } from '/dist/edit/index.js';
+
+      const view = new CodeView({
+        createEditor: (type, options, key) => new Editor(type, options, key),
+      });
+      view.setup(document.querySelector('[data-code-view-root]'));
+      view.setItems([
+        {
+          id: 'file',
+          type: 'file',
+          edit: true,
+          version: 1,
+          file: {
+            name: 'example.txt',
+            contents: Array.from({ length: 800 }, (_, index) =>
+              [125, 126, 128, 201].includes(index + 1)
+                ? `github match at ${index + 1}`
+                : `line ${index + 1}`
+            ).join('\n'),
+          },
+        },
+      ]);
+    </script>
+  </body>
+</html>
