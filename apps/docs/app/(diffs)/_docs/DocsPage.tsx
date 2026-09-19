@@ -64,6 +64,7 @@ import {
   EDITOR_OPTIONS_TYPE,
   EDITOR_PUBLIC_API,
 } from '../docs/Edit/constants';
+import { HIGHLIGHTERS_REACT_EXAMPLE } from '../docs/Highlighters/constants';
 import {
   HIGHLIGHTS_API_RUNTIME,
   HIGHLIGHTS_API_TYPES,
@@ -204,6 +205,7 @@ export default function DocsPage() {
           <InstallationSection />
           <BuildWithAgentsSection />
           <CoreTypesSection />
+          <HighlightersSection />
           <ReactAPISection />
           <VanillaAPISection />
           <CodeViewSection />
@@ -315,6 +317,17 @@ async function OverviewSection() {
       vanillaSingleFile,
       vanillaPatchFile,
     },
+  });
+  return <ProseWrapper>{content}</ProseWrapper>;
+}
+
+async function HighlightersSection() {
+  const highlightersReactExample = await preloadFile(
+    HIGHLIGHTERS_REACT_EXAMPLE
+  );
+  const content = await renderMDX({
+    filePath: '(diffs)/docs/Highlighters/content.mdx',
+    scope: { highlightersReactExample },
   });
   return <ProseWrapper>{content}</ProseWrapper>;
 }
