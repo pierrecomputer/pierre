@@ -200,8 +200,12 @@ void test('span cache: direct theme writes invalidate colors, alpha, and fonts',
 });
 
 void test('token types: syntax captures are sorted and complete', () => {
+  // One alphabetical run, then the rarely emitted members in a second run so
+  // every common member keeps a one-byte Wasm constant (see src/token.wat).
   const syntax = tokenTypes.slice(1, -2);
-  assert.deepEqual(syntax, [...syntax].sort());
+  const descents = syntax.filter((name, i) => i > 0 && name < syntax[i - 1]);
+  assert.equal(descents.length, 1, `runs start at: ${descents.join(', ')}`);
+  assert.equal(descents[0], 'enum');
   for (const name of ['namespace', 'punctuation.markup', 'selector'])
     assert.ok(syntax.includes(name));
 });

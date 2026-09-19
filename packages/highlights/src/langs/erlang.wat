@@ -8,7 +8,7 @@
   ;; reserved words and well-known atoms; groups 6-10 are module attribute
   ;; names, looked up only after the `-` that starts a form, where the
   ;; group also says what the name after it is.
-  (keyword-table $erlangWords $mem.erlangWords $mem.fsharpWords
+  (keyword-table $erlangWords $mem.erlangWords $mem.fortranWords
     (group $Token.keyword.control ;; 1: control
       "after" "begin" "case" "catch" "cond" "end" "if" "of" "receive" "try" "maybe" "else")
     (group $Token.keyword "fun") ;; 2: anonymous function

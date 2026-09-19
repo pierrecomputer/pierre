@@ -5,7 +5,7 @@
     (select (i32.load8_u (local.get $p)) (i32.const 0) (i32.lt_u (local.get $p) (global.get $end))))
 
   ;; Group order is the dispatch order in $scalaWordHl below.
-  (keyword-table $scalaWords $mem.scalaWords $mem.swiftWords
+  (keyword-table $scalaWords $mem.scalaWords $mem.solidityWords
     (group $Token.keyword.control ;; 1: control
       "if" "else" "then" "match" "case" "do" "while" "for" "yield" "return" "throw" "try" "catch"
       "finally" "end")

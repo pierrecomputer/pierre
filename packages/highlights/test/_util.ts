@@ -122,18 +122,23 @@ export type TestSplitHl = (
  * the theme table.
  *
  * `name` is the language name; the lexer file and export follow the usual
- * naming (`js`/`jsx`/`ts` live in `tsx.wat`, the css dialects in `css.wat`).
+ * naming (`js`/`jsx`/`ts` live in `tsx.wat`, the css dialects in `css.wat`,
+ * fixed-form Fortran in `fortran.wat`).
  */
 export function loadSplitLang(name: Lang): TestSplitHl {
   const entry =
     name === 'angular-html'
       ? '$hlAngularHtml'
-      : `$hl${name[0].toUpperCase()}${name.slice(1)}`;
+      : name === 'fortran-fixed-form'
+        ? '$hlFortranFixed'
+        : `$hl${name[0].toUpperCase()}${name.slice(1)}`;
   const file = ['js', 'jsx', 'ts'].includes(name)
     ? 'tsx'
     : ['less', 'sass', 'scss'].includes(name)
       ? 'css'
-      : name;
+      : name === 'fortran-fixed-form'
+        ? 'fortran'
+        : name;
   const watUrl = new URL(`./split_${name}.wat`, import.meta.url);
   const src = `(module
   (import "../src/langs/${file}.wat")

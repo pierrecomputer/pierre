@@ -203,18 +203,21 @@ export function transformWat(
     '$hlAsm',
     '$hlAstro',
     '$hlBash',
+    '$hlBatch',
     '$hlC',
     '$hlC3',
     '$hlClojure',
     '$hlCmake',
-    '$hlCpp',
+    '$hlCppImpl',
     '$hlCsharp',
     '$hlCssImpl',
     '$hlDart',
     '$hlDiff',
     '$hlDockerfile',
     '$hlElixir',
+    '$hlElm',
     '$hlErlang',
+    '$hlFortranImpl',
     '$hlFsharp',
     '$hlGleam',
     '$hlGlsl',
@@ -247,6 +250,7 @@ export function transformWat(
     '$hlRuby',
     '$hlRust',
     '$hlScala',
+    '$hlSolidity',
     '$hlSql',
     '$hlSvelte',
     '$hlSwift',
@@ -272,8 +276,12 @@ export function transformWat(
     }
     const live = liveLocalsAtCheckpoint(inner);
     const locals = [...inner.matchAll(/\(local\s+(\$\w+)\s+(\w+)\s*\)/g)];
-    // each lexer owns an 8-byte-aligned window of the checkpoint region; the
-    // window base lives in $streamRoot so every access is a one-byte offset
+    // each lexer owns an 8-byte-aligned window of the checkpoint region. The
+    // window base goes through the mutable global $streamWindow rather than
+    // a local: Binaryen would fold a constant local into every access as a
+    // three-byte absolute address, while a global base keeps each access at
+    // a two-byte global.get plus a one-byte offset. $streamRoot marks the
+    // lexer that owns the checkpoint for this chunk.
     streamStateOffset = (streamStateOffset + 7) & -8;
     const base = streamStateOffset;
     const state = locals
@@ -293,13 +301,13 @@ export function transformWat(
     const load = state
       .map(
         ({ local, type, at }) =>
-          `(local.set ${local} (${type}.load offset=${at} (local.get $streamRoot)))`
+          `(local.set ${local} (${type}.load offset=${at} (global.get $streamWindow)))`
       )
       .join('\n          ');
     const save = state
       .map(
         ({ local, type, at }) =>
-          `(${type}.store offset=${at} (local.get $streamRoot) (local.get ${local}))`
+          `(${type}.store offset=${at} (global.get $streamWindow) (local.get ${local}))`
       )
       .join('\n        ');
     let body = inner.replace(
@@ -308,7 +316,7 @@ export function transformWat(
     );
     body = body.replace(
       leading,
-      `${leading}\n    (if (i32.and\n          (global.get $streaming)\n          (i32.eqz (global.get $streamDepth)))\n      (then\n        (local.set $streamRoot (i32.const $mem.streamState+${base}))\n        (global.set $streamDepth (i32.const 1))\n        (if (i32.eqz (global.get $streamReset))\n          (then\n            ${load}))))`
+      `${leading}\n    (if (i32.and\n          (global.get $streaming)\n          (i32.eqz (global.get $streamDepth)))\n      (then\n        (local.set $streamRoot (i32.const 1))\n        (global.set $streamWindow (i32.const $mem.streamState+${base}))\n        (global.set $streamDepth (i32.const 1))\n        (if (i32.eqz (global.get $streamReset))\n          (then\n            ${load}))))`
     );
     return `(func${body}\n    (if (local.get $streamRoot)\n      (then\n        ${save}\n        (global.set $streamDepth (i32.const 0)))))`;
   });
@@ -349,11 +357,12 @@ export function transformWat(
     return base + expr.bias;
   };
   for (const name of constExprs.keys()) resolveConst(name, new Set());
-  if (
-    streamStateOffset >
-    (constMap.get('$mem.bashWords') ?? 0) -
-      (constMap.get('$mem.streamState') ?? 0)
-  ) {
+  // the checkpoint region ends at the next named address above its base
+  const streamStateBase = constMap.get('$mem.streamState') ?? 0;
+  const streamStateEnd = Math.min(
+    ...[...constMap.values()].filter((v) => v > streamStateBase)
+  );
+  if (streamStateOffset > streamStateEnd - streamStateBase) {
     throw new Error('stream lexer state exceeds reserved memory');
   }
   code = code.replace(/(\$[\w.]+)([+-]\d+)?/g, (all, name, bias) => {
@@ -720,8 +729,8 @@ export function transformWat(
     return `(call $lexKeywordLookup ${m[2].trim()} (i32.const ${table.base}) (i32.const ${table.buckets - 1}) (i32.const ${table.slots}))`;
   });
 
-  // (keyword-table.value $Name <start> <end>) -> the value lookup call, which
-  // needs the table's u16 value array
+  // (keyword-table.value $Name <start> <end>) -> the value lookup call; the
+  // table must declare a value for every group
   code = replaceForm(code, 'keyword-table.value', (inner) => {
     const m = inner.match(/^\s*(\$\w+)\s+([\s\S]+)$/);
     if (m === null)
@@ -731,7 +740,7 @@ export function transformWat(
       throw new Error(
         `keyword-table '${m[1]}' has no group values in ${url.pathname}`
       );
-    return `(call $lexKeywordValue ${m[2].trim()} (i32.const ${table.base}) (i32.const ${table.buckets - 1}) (i32.const ${table.slots}) (i32.const ${table.values}))`;
+    return `(call $lexKeywordValue ${m[2].trim()} (i32.const ${table.base}) (i32.const ${table.buckets - 1}) (i32.const ${table.slots}))`;
   });
 
   // `(byteset.get "bytes" (local.get $x))` tests whether the byte in $x is
@@ -754,8 +763,8 @@ export function transformWat(
     let index = byteSets.get(key);
     if (index === undefined) {
       index = byteSets.size;
-      if (index >= 64)
-        throw new Error(`More than 64 distinct byte sets in ${url.pathname}`);
+      if (index >= 80)
+        throw new Error(`More than 80 distinct byte sets in ${url.pathname}`);
       byteSets.set(key, index);
     }
     const table = byteSetBase + index * 32;

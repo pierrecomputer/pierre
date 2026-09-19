@@ -122,6 +122,56 @@ function assertLineFedParity(lang: Lang, code: string): void {
   assert.deepEqual(streamed, whole, `${lang}: ${JSON.stringify(code)}`);
 }
 
+void t.test(
+  'ecma: multiline contextual keywords keep their classification',
+  () => {
+    for (const lang of ['js', 'jsx', 'ts', 'tsx', 'tsrx'] as const) {
+      for (const newline of ['\n', '\r\n']) {
+        const code = `import {x} from${newline} 'm';${newline}`;
+        assert.ok(
+          tokenKinds(lang, code).some(
+            ([text, kind]) => text === 'from' && kind === 'keyword.import'
+          )
+        );
+        assertLineFedParity(lang, code);
+      }
+    }
+    for (const lang of ['ts', 'tsx', 'tsrx'] as const) {
+      for (const code of [
+        'type\n Result = string;\n',
+        'export type\n Result = string;\n',
+        'import {x, type\n Result} from "m";\n',
+      ]) {
+        assert.ok(
+          tokenKinds(lang, code).some(
+            ([text, kind]) =>
+              text.split(/\s+/).includes('type') &&
+              kind === 'keyword.declaration'
+          )
+        );
+        assertLineFedParity(lang, code);
+      }
+    }
+  }
+);
+
+void t.test(
+  'ecma: ordinary contextual-word variables do not become import clauses',
+  () => {
+    for (const lang of ['js', 'ts', 'tsx'] as const) {
+      for (const code of [
+        'const from = 2;\nconst result = 3 * from\n + 1;\n',
+        'import x from "m";\nconst result = 3 * from\n + 1;\n',
+        'export const result = 3 * from\n + 1;\n',
+        'const type = 2;\nconst result = type\n + 1;\n',
+        'const result = obj.from\n + obj.type;\n',
+      ]) {
+        assertLineFedParity(lang, code);
+      }
+    }
+  }
+);
+
 /** The color of the span whose text is exactly `text`. */
 function spanColor(html: string, text: string): string | null | undefined {
   return spansOf(html).find((s) => s.text === text)?.color;

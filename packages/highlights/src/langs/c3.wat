@@ -8,7 +8,7 @@
   ;; compile-time words that only exist behind a `$` - `$sizeof`, `$vaarg` -
   ;; and is accepted only there; `$vaconst` and `$vasplat` share their hash
   ;; features with `$vacount` and get direct compares instead.
-  (keyword-table $c3Words $mem.c3Words $mem.cWords
+  (keyword-table $c3Words $mem.c3Words $mem.clojureWords
     (group ;; 1: control
       "if" "do" "asm" "for" "try" "case" "else" "break" "catch" "defer" "while" "assert" "return"
       "switch" "default" "foreach" "continue" "nextcase" "foreach_r")

@@ -2,7 +2,7 @@
   (import "../common.wat")
   (import "./html.wat")
 
-  (keyword-table $angularWords $mem.angularWords $mem.liveHeapStart
+  (keyword-table $angularWords $mem.angularWords $mem.bashWords
     (group $Token.keyword.control
       "if" "else" "for" "empty" "switch" "case" "default" "defer" "placeholder" "loading" "error")
     (group $Token.keyword.declaration "let")

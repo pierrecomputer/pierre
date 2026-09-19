@@ -71,14 +71,18 @@ memory growth can detach it.
 
 The `language-table` in [`src/highlights.wat`](./src/highlights.wat) owns each
 language's canonical name, aliases, and dispatch function. The build derives
-Wasm IDs and the JavaScript lookup from this list. Declaration order defines
-IDs, so append new languages to preserve existing IDs. Host lookups ignore case
-and reject unknown names.
+Wasm IDs and the JavaScript lookup from this list. Keep `plain` first so it and
+its aliases (`plaintext`, `text`, `txt`) always have ID 0, then sort the
+remaining canonical names alphabetically. Reordering entries regenerates IDs in
+both artifacts, which must be used together. Host lookups ignore case and reject
+unknown names.
 
-Several languages share implementations. CSS dialects use `css.wat`. The
-ECMAScript family combines `js.wat` scanning, `ts.wat` classification, `jsx.wat`
-markup modes, and the `tsx.wat` driver. Feature flags select JS, TS, JSX, and
-TSRX behavior. `sig.wat` tracks parameter lists for participating lexers.
+Several languages share implementations. CSS dialects use `css.wat`. Free-form
+and fixed-form Fortran share `fortran.wat` through a dialect flag that each
+entry point sets. The ECMAScript family combines `js.wat` scanning, `ts.wat`
+classification, `jsx.wat` markup modes, and the `tsx.wat` driver. Feature flags
+select JS, TS, JSX, and TSRX behavior. `sig.wat` tracks parameter lists for
+participating lexers.
 
 A lexer consumes `[$ptr, $end)` and leaves `$ptr` at the boundary. It must:
 
@@ -116,7 +120,9 @@ registered separately in `markdown.wat`.
 Mode 3 first emits `(endByte: u32, tokenId: u32)` pairs. Each record starts at
 the preceding end, or zero for the first record. After lexing, `$recLinesPost`
 converts these to `(endUtf16: u32, tokenId: u32)` pairs and splits LF/CRLF
-boundaries. ID `0xffffffff` marks a line terminator and ends after it.
+boundaries; it scans the input for line breaks and non-ASCII bytes once, so a
+plain ASCII record converts with one subtraction. ID `0xffffffff` marks a line
+terminator and ends after it.
 
 `lineRecordsToTokens` slices the source string into per-line `ThemedToken`
 arrays, excluding terminators. Whole-input and stream offsets are absolute
@@ -246,7 +252,9 @@ When adding a language, update its import, registration, stream checkpoint
 participation, and fence aliases where needed. Add a language test and a corpus
 entry in [`test/_samples.ts`](./test/_samples.ts). Changes to carried state must
 also update live capture/reset/restore logic. Token IDs define the theme ABI;
-growing `$Token` requires checking the fixed theme and emitter capacities.
+growing `$Token` requires checking the fixed theme and emitter capacities. The
+enum lists members alphabetically, with the rarely emitted ones last so every
+common member keeps a one-byte constant.
 
 Tests compile WAT directly and import `lib/`, so no package build is needed.
 Language tests cover classification and bounds; conformance tests compare HTML,

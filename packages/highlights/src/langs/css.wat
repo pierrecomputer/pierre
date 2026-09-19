@@ -228,26 +228,17 @@
     (local $mask i32)
     (local $rem i32)
     (local $colon i32) ;; first `:` seen: 1 before a blank or $end, 2 otherwise
-    (local $stop i32)  ;; $end, or the line end in the indented sass syntax
+    (local $stop i32)  ;; the current line end, also used by streamed calls
     (local $w v128)
     (local.set $p (global.get $ptr))
-    ;; the indented syntax ends every statement at its line break, so the
-    ;; look-ahead never reads past it - and a document without braces stays
-    ;; linear instead of rescanning to $end at every statement
+    ;; Live documents expose one line at a time. Whole-input decisions must
+    ;; use that same lookahead so a later delimiter cannot change this line.
     (local.set $stop (global.get $end))
-    (if (i32.eq (global.get $cssDialect) (i32.const 3))
-      (then
-        (local.set $stop
-          (call $scanFindSpecial
-            (local.get $p)
-            (global.get $end)
-            (i32.const 10)
-            (i32.const 0)
-            (i32.const 1)))))
     (block $decl
       (loop $scan
         (br_if $decl (i32.ge_u (local.get $p) (local.get $stop)))
-        ;; hop to the next of `{` `}` `;` `:` `/` or a quote, 16 bytes per step
+        ;; Stop on a delimiter or line break without rescanning the line for
+        ;; every declaration in a minified stylesheet.
         (block $found
           (loop $wide
             (local.set $w (v128.load (local.get $p)))
@@ -255,17 +246,21 @@
               (i8x16.bitmask
                 (v128.or
                   (v128.or
-                    (v128.or
-                      (i8x16.eq (local.get $w) (i8x16.splat (i32.const "{")))
-                      (i8x16.eq (local.get $w) (i8x16.splat (i32.const "}"))))
-                    (v128.or
-                      (i8x16.eq (local.get $w) (i8x16.splat (i32.const ";")))
-                      (i8x16.eq (local.get $w) (i8x16.splat (i32.const "/")))))
+                    (i8x16.eq (local.get $w) (i8x16.splat (i32.const 10)))
+                    (i8x16.eq (local.get $w) (i8x16.splat (i32.const 13))))
                   (v128.or
                     (v128.or
-                      (i8x16.eq (local.get $w) (i8x16.splat (i32.const 34)))
-                      (i8x16.eq (local.get $w) (i8x16.splat (i32.const 39))))
-                    (i8x16.eq (local.get $w) (i8x16.splat (i32.const ":")))))))
+                      (v128.or
+                        (i8x16.eq (local.get $w) (i8x16.splat (i32.const "{")))
+                        (i8x16.eq (local.get $w) (i8x16.splat (i32.const "}"))))
+                      (v128.or
+                        (i8x16.eq (local.get $w) (i8x16.splat (i32.const ";")))
+                        (i8x16.eq (local.get $w) (i8x16.splat (i32.const "/")))))
+                    (v128.or
+                      (v128.or
+                        (i8x16.eq (local.get $w) (i8x16.splat (i32.const 34)))
+                        (i8x16.eq (local.get $w) (i8x16.splat (i32.const 39))))
+                      (i8x16.eq (local.get $w) (i8x16.splat (i32.const ":"))))))))
             (local.set $rem (i32.sub (local.get $stop) (local.get $p)))
             (if (i32.lt_u (local.get $rem) (i32.const 16))
               (then
@@ -281,6 +276,10 @@
             (local.set $p (i32.add (local.get $p) (i32.const 16)))
             (br $wide)))
         (local.set $c (i32.load8_u (local.get $p)))
+        (if (byteset.get "\0a\0d" (local.get $c))
+          (then
+            (local.set $stop (local.get $p))
+            (br $decl)))
         (if (i32.eq (local.get $c) (i32.const "{"))
           (then
             ;; the brace of a `#{}` or `@{}` interpolation is not structural:
@@ -330,8 +329,14 @@
                 (local.set $p (i32.add (local.get $p) (i32.const 2)))
                 (block $cDone
                   (loop $cl
-                    (local.set $p (call $lexFindByte (local.get $p) (i32.const "*")))
+                    (local.set $p
+                      (call $scanFindSpecial (local.get $p) (local.get $stop) (i32.const "*") (i32.const 0) (i32.const 1)))
                     (br_if $cDone (i32.ge_u (local.get $p) (local.get $stop)))
+                    (local.set $c (i32.load8_u (local.get $p)))
+                    (if (byteset.get "\0a\0d" (local.get $c))
+                      (then
+                        (local.set $stop (local.get $p))
+                        (br $decl)))
                     (if
                       (i32.and
                         (i32.lt_u (i32.add (local.get $p) (i32.const 1)) (local.get $stop))
@@ -389,24 +394,20 @@
         (br $scan)))
     (call $cssDecideAtEnd (local.get $depth) (local.get $colon) (local.get $stop)))
 
-  ;; The verdict for a statement that reached $end without a `{`, `;`, or
-  ;; `}`: the last statement of an unfinished document, or - since a streamed
-  ;; chunk is one line - any statement whose verdict byte sits on a later
-  ;; line. Both runs guess from the text's shape so they agree: a `: ` opens
-  ;; a declaration value and any other `:` names a pseudo-class. Without a
-  ;; colon the text is a selector whose `{` is still to come - `h1,` /
-  ;; `.a > .b` / `&` - except for a bare identifier inside a block, which is
-  ;; a property name still being typed. That last guess reads only the
-  ;; statement's first line, the most a streamed run can see.
+  ;; Decide unfinished statements from this line's shape. A bare name with
+  ;; a colon inside a block is a declaration even without a following space;
+  ;; selector prefixes and comma lists keep their selector role. Without a
+  ;; colon, leave the selector open for a brace on a later line.
   (func $cssDecideAtEnd (param $depth i32) (param $colon i32) (param $stop i32) (result i32)
     (local $p i32)
     (local $c i32)
-    (if (local.get $colon)
-      (then (return (i32.eq (local.get $colon) (i32.const 2)))))
+    (if (i32.eqz (local.get $colon))
+      (then (return (i32.const 1))))
+    (if (i32.eq (local.get $colon) (i32.const 1))
+      (then (return (i32.const 0))))
     (if (i32.eqz (local.get $depth))
       (then (return (i32.const 1))))
-    ;; one identifier run, then blanks to the end, is a bare property name;
-    ;; anything else on the line makes it a selector
+    ;; A selector prefix before the colon rules out a property name.
     (local.set $p (global.get $ptr))
     (block $word
       (loop $ident
@@ -428,9 +429,12 @@
         (br_if $blank (i32.eqz (call $lexIsSpace (local.get $c))))
         (local.set $p (i32.add (local.get $p) (i32.const 1)))
         (br $space)))
-    (if (i32.ge_u (local.get $p) (local.get $stop))
-      (then (return (i32.const 0))))
-    (i32.and (i32.ne (local.get $c) (i32.const 10)) (i32.ne (local.get $c) (i32.const 13))))
+    (if (i32.ne (i32.load8_u (local.get $p)) (i32.const ":"))
+      (then (return (i32.const 1))))
+    ;; A comma before any function argument list continues a selector list.
+    (i32.lt_u
+      (call $scanFindSpecial (local.get $p) (local.get $stop) (i32.const ",") (i32.const 0) (i32.const 0))
+      (call $scanFindSpecial (local.get $p) (local.get $stop) (i32.const "(") (i32.const 0) (i32.const 0))))
 
   ;; The entry points: css proper, and the three preprocessor dialects that
   ;; share its lexer with a few extra forms - `//` comments, `$var` and

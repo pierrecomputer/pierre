@@ -36,7 +36,9 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 
-const [DEFAULT_LANGUAGE, , DEFAULT_CODE] = PLAYGROUND_LANGUAGES[0];
+const [DEFAULT_LANGUAGE, , DEFAULT_CODE] = PLAYGROUND_LANGUAGES.find(
+  ([lang]) => lang === 'ts'
+)!;
 const LANGUAGE_OPTIONS = [...PLAYGROUND_LANGUAGES].sort(([, a], [, b]) =>
   a.localeCompare(b)
 );

@@ -834,14 +834,14 @@
 
   ;; The value a keyword table assigns to a word's group - see the
   ;; keyword-table.value form - or -1 when the word is not in the table or
-  ;; its group declares no value.
+  ;; its group declares no value. The signed 16-bit values follow the
+  ;; table's displacement bytes and 3-byte descriptors, indexed by group.
   (func $lexKeywordValue
     (param $start i32)
     (param $end i32)
     (param $base i32)
     (param $bucketMask i32)
     (param $slots i32)
-    (param $values i32)
     (result i32)
     (local $g i32)
     (local.set $g
@@ -853,7 +853,10 @@
         (local.get $slots)))
     (if (i32.eqz (local.get $g))
       (then (return (i32.const -1))))
-    (i32.load16_s (i32.add (local.get $values) (i32.shl (local.get $g) (i32.const 1)))))
+    (i32.load16_s
+      (i32.add
+        (i32.add (local.get $base) (i32.add (local.get $bucketMask) (i32.const 1)))
+        (i32.add (i32.mul (local.get $slots) (i32.const 3)) (i32.shl (local.get $g) (i32.const 1))))))
 
   ;; Copy a word as lowercase ASCII for case-insensitive keyword lookup.
   ;; Wide loads use input slack; stores fit the 64-byte scratch buffer.

@@ -523,7 +523,7 @@
         (local.set $p (i32.const $mem.markdownFenceStack))
         (block $done
           (loop $fence
-            (br_if $done (i32.ge_u (local.get $p) (i32.const $mem.tomlStack)))
+            (br_if $done (i32.ge_u (local.get $p) (i32.const $mem.markdownFenceStack+96)))
             (br_if $done (i32.eqz (i32.load (local.get $p))))
             (if
               (i32.eq
@@ -610,7 +610,8 @@
       (i32.add (local.get $dst) (i32.const 204))
       (i32.const $mem.markdownFenceStack)
       (i32.const 96))
-    (local.set $p (i32.add (local.get $dst) (i32.const 300)))
+    (i32.store offset=300 (local.get $dst) (global.get $ecmaImport))
+    (local.set $p (i32.add (local.get $dst) (i32.const 304)))
     (memory.copy (local.get $p) (local.get $stackBase) (local.get $stackLen))
     (local.set $p (i32.add (local.get $p) (local.get $stackLen)))
     (if (i32.ne (local.get $stackBase) (i32.const $mem.jsTemplateBracketStack))
@@ -714,7 +715,8 @@
       (i32.const $mem.markdownFenceStack)
       (i32.add (local.get $src) (i32.const 204))
       (i32.const 96))
-    (local.set $p (i32.add (local.get $src) (i32.const 300)))
+    (global.set $ecmaImport (i32.load offset=300 (local.get $src)))
+    (local.set $p (i32.add (local.get $src) (i32.const 304)))
     (local.set $stackBase (call $lvStackBase))
     (memory.copy (local.get $stackBase) (local.get $p) (local.get $stackLen))
     (local.set $p (i32.add (local.get $p) (local.get $stackLen)))
@@ -746,6 +748,7 @@
     (global.set $lto (i32.const 0))
     (global.set $prevLto (i32.const 0))
     (global.set $prevTok (i32.const 0))
+    (global.set $ecmaImport (i32.const 0))
     (global.set $nlBefore (i32.const 0))
     (global.set $braceDepth (i32.const 0))
     (global.set $rxCloser (i32.const 0))
@@ -947,7 +950,7 @@
       (i32.and
         (i32.add (i32.add (local.get $recStart) (local.get $recLen)) (i32.const 7))
         (i32.const -8)))
-    ;; head, globals, delimiter, and fence registers (300) plus the five
+    ;; head, globals, delimiter, and fence registers (304) plus the five
     ;; stack prefixes at their caps (1024 * 4 + 4096), then the checkpoints
     (call $lvGrowTo (i32.add (local.get $blobBase) (i32.const $mem.streamStateUsed+8576)))
     (local.set $blobLen

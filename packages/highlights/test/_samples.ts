@@ -18,12 +18,211 @@ import type { Lang } from '../lib/index';
 /** Join lines with `\n` and end with a trailing newline, like a saved file. */
 const lines = (...ls: string[]): string => ls.join('\n') + '\n';
 
+// ZON exercises Zig's data syntax without registering another lexer.
+export const zonSample: string = lines(
+  '// Package metadata and data literals',
+  '.{',
+  '    .name = .demo,',
+  '    .version = "0.1.0",',
+  '    .fingerprint = 0x1234_abcd,',
+  '    .dependencies = .{ .local = .{ .path = "../local" } },',
+  '    .paths = .{ "build.zig", "build.zig.zon", "src" },',
+  '    .enabled = true,',
+  '    .optional = null,',
+  '    .values = .{ -42, 1.25e-3, 0x1.fp+3, inf, -inf, nan },',
+  '    .@"quoted key" = "λ😀\\n\\u{1f600}",',
+  '    .message =',
+  '        \\\\first // literal',
+  '        \\\\second <>&',
+  '    ,',
+  '}'
+);
+
 export interface LangSample {
   code: string;
   kinds: readonly string[];
 }
 
 export const samples: Record<string, LangSample> = {
+  batch: {
+    code: lines(
+      '@echo off',
+      'REM Build selected files',
+      'setlocal enabledelayedexpansion',
+      'set "ROOT=%~dp0"',
+      ':build',
+      'for %%F in (*.txt) do (',
+      '  echo "%%~fF: !ROOT!"',
+      ')',
+      'echo first ^',
+      '  second ^& third',
+      'if not exist "%ROOT%out" mkdir "%ROOT%out"',
+      'exit /b 0'
+    ),
+    kinds: [
+      'operator',
+      'function',
+      'comment',
+      'keyword.declaration',
+      'string',
+      'variable.special',
+      'label',
+      'keyword.control',
+      'number',
+    ],
+  },
+  elm: {
+    code: lines(
+      'module Main exposing (main)',
+      'import Html exposing (text)',
+      '{-| A nested {- comment -}',
+      '    describing the program. -}',
+      'type alias Model = { count : Int }',
+      'message = """Hello',
+      'world!"""',
+      'update model =',
+      '    if model.count > 0 then True else False',
+      'main = text (message ++ "\\n")'
+    ),
+    kinds: [
+      'keyword.import',
+      'namespace',
+      'punctuation.bracket',
+      'comment.doc',
+      'keyword.declaration',
+      'type',
+      'type.builtin',
+      'string',
+      'keyword.control',
+      'number',
+      'boolean',
+      'string.escape',
+    ],
+  },
+  cuda: {
+    code: lines(
+      '#include <cuda_runtime.h>',
+      '// Scale values on the GPU',
+      '__global__ void scale(float *values, int count) {',
+      '  int i = blockIdx.x * blockDim.x + threadIdx.x;',
+      '  /* Each thread',
+      '     handles one value. */',
+      '  if (i < count) values[i] *= 2.0f;',
+      '  __syncthreads();',
+      '}',
+      'void run(float *values) { scale<<<1, 256>>>(values, 256); }'
+    ),
+    kinds: [
+      'preproc',
+      'string',
+      'comment',
+      'keyword',
+      'type.builtin',
+      'function',
+      'variable.special',
+      'property',
+      'operator',
+      'keyword.control',
+      'number',
+    ],
+  },
+  fortran: {
+    code: lines(
+      'program demo',
+      '  use iso_fortran_env, only: real64',
+      '  implicit none',
+      '  real(real64) :: x = 1.5d+2',
+      '  logical :: ready = .true.',
+      '  character(len=*), parameter :: message = "hello &',
+      '    &world"',
+      '  ! Print the result',
+      '  if (ready .and. x > 0) then',
+      '    print *, message, sqrt(x)',
+      '  end if',
+      'end program demo'
+    ),
+    kinds: [
+      'keyword.declaration',
+      'namespace',
+      'keyword.import',
+      'type.builtin',
+      'punctuation.bracket',
+      'number',
+      'boolean',
+      'string',
+      'operator',
+      'comment',
+      'keyword.control',
+      'keyword.operator',
+      'function',
+    ],
+  },
+  'fortran-fixed-form': {
+    code: lines(
+      'C     Fixed-form comments start with C in column one',
+      'Cthis marker needs no blank after it',
+      '      PROGRAM DEMO',
+      '      INTEGER I, N',
+      '      REAL X(10)',
+      '      DATA N /10/',
+      '      DO 10 I = 1, N',
+      '        X(I) = SQRT(REAL(I)) * 2.0E0',
+      '   10 CONTINUE',
+      "      IF (X(1) .GT. 0.5) WRITE (*, '(A, F6.2)') 'first: ', X(1)",
+      '* an asterisk comment',
+      '      END'
+    ),
+    kinds: [
+      'comment',
+      'keyword.declaration',
+      'namespace',
+      'type.builtin',
+      'variable',
+      'punctuation.delimiter',
+      'function',
+      'punctuation.bracket',
+      'number',
+      'operator',
+      'keyword.control',
+      'keyword.operator',
+      'string',
+      'keyword',
+    ],
+  },
+  solidity: {
+    code: lines(
+      'pragma solidity ^0.8.20;',
+      '/// A counter contract',
+      'contract Counter {',
+      '  uint256 public count = 0;',
+      '  event Changed(uint256 value);',
+      '  /* Update the',
+      '     stored count. */',
+      '  function increment() external {',
+      '    require(msg.sender != address(0), "invalid\\ncaller");',
+      '    count += 1;',
+      '    emit Changed(count);',
+      '  }',
+      '}'
+    ),
+    kinds: [
+      'keyword',
+      'operator',
+      'number',
+      'comment.doc',
+      'keyword.declaration',
+      'type',
+      'type.builtin',
+      'function.definition',
+      'comment',
+      'function',
+      'variable.special',
+      'property',
+      'string',
+      'string.escape',
+      'keyword.control',
+    ],
+  },
   'angular-html': {
     code: lines(
       '<!-- Angular template -->',
@@ -3501,6 +3700,12 @@ export const samples: Record<string, LangSample> = {
 /** Short documents with multiline constructs and Unicode for tokenizer tests. */
 export const tokenizerSamples: [Lang, string][] = [
   ['plain', 'one\ntwo\n'],
+  ['batch', samples.batch.code],
+  ['elm', samples.elm.code],
+  ['cuda', samples.cuda.code],
+  ['fortran', samples.fortran.code],
+  ['fortran-fixed-form', samples['fortran-fixed-form'].code],
+  ['solidity', samples.solidity.code],
   [
     'angular-html',
     '<section\n [title]="user.\nname">{{\n user.name | uppercase\n}}</section>\n@if (ready) {\n <p>你好 🌍</p>\n}\n',
@@ -3611,6 +3816,7 @@ export const tokenizerSamples: [Lang, string][] = [
   ],
   ['pascal', '{ open\nstill }\n(* also\nopen *)\nx := 1;\n'],
   ['zig', 'const s = \\\\one\n  \\\\two\n;\n'],
+  ['zon', zonSample],
   // parameter lists split across lines: the signature-tracking state must
   // ride the interned line-state blobs
   [

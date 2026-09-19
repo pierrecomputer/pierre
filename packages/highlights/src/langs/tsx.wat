@@ -5,6 +5,9 @@
   (import "./ts.wat")
   (import "./tsrx.wat")
 
+  ;; Static import/export clauses can continue after a completed stream line.
+  (global $ecmaImport (mut i32) (i32.const 0))
+
   ;; One feature-gated pipeline composes JS, JSX, TS, and TSX.
   ;; emit one classified token, splitting the multi-part kinds
   (func $emitCur (param $t i32) (param $lhs i32) (param $rhs i32) (param $next i32)
@@ -206,6 +209,7 @@
         (global.set $lto (enum.get $Lex.eof))
         (global.set $prevLto (enum.get $Lex.eof))
         (global.set $prevTok (enum.get $Lex.eof))
+        (global.set $ecmaImport (i32.const 0))
         (global.set $nlBefore (i32.const 0))
         (global.set $braceDepth (i32.const 0))
         (global.set $jsTemplateLexSp (i32.const 0))
@@ -363,6 +367,23 @@
         (local.set $nxtLhs (global.get $lhs))
         (local.set $nxtRhs (global.get $rhs))
         (local.set $haveNext (i32.const 1))
+        (if (i32.or
+              (i32.eq (local.get $curT) (enum.get $Lex.keyword_import))
+              (i32.eq (local.get $curT) (enum.get $Lex.keyword_export)))
+          (then (global.set $ecmaImport (i32.const 1)))
+          (else
+            (if (global.get $ecmaImport)
+              (then
+                (if (i32.or
+                      (i32.or
+                        (i32.eq (local.get $curT) (enum.get $Lex.string_literal))
+                        (i32.eq (local.get $curT) (enum.get $Lex.semicolon)))
+                      (i32.or
+                        (i32.or
+                          (i32.eq (local.get $curT) (enum.get $Lex.l_paren))
+                          (i32.eq (local.get $curT) (enum.get $Lex.equal)))
+                        (i32.eq (enum-map.get $LexHl (local.get $curT)) (enum.get $Token.keyword.declaration))))
+                  (then (global.set $ecmaImport (i32.const 0))))))))
         (local.set $metadataMarker (i32.const 0))
         (if
           (i32.and

@@ -5,6 +5,7 @@
   (import "./langs/asm.wat")
   (import "./langs/astro.wat")
   (import "./langs/bash.wat")
+  (import "./langs/batch.wat")
   (import "./langs/c.wat")
   (import "./langs/c3.wat")
   (import "./langs/clojure.wat")
@@ -12,11 +13,14 @@
   (import "./langs/cpp.wat")
   (import "./langs/csharp.wat")
   (import "./langs/css.wat")
+  (import "./langs/cuda.wat")
   (import "./langs/dart.wat")
   (import "./langs/diff.wat")
   (import "./langs/dockerfile.wat")
   (import "./langs/elixir.wat")
+  (import "./langs/elm.wat")
   (import "./langs/erlang.wat")
+  (import "./langs/fortran.wat")
   (import "./langs/fsharp.wat")
   (import "./langs/gleam.wat")
   (import "./langs/glsl.wat")
@@ -49,6 +53,7 @@
   (import "./langs/ruby.wat")
   (import "./langs/rust.wat")
   (import "./langs/scala.wat")
+  (import "./langs/solidity.wat")
   (import "./langs/sql.wat")
   (import "./langs/svelte.wat")
   (import "./langs/swift.wat")
@@ -65,13 +70,14 @@
   (import "./live.wat")
   (import "./token.wat")
 
-  ;; Declaration order is the language ABI; append new languages to keep IDs stable.
+  ;; Plain text and its aliases stay at ID 0; sort the remaining canonical names.
   (language-table
     (language "plain" $hlPlain "plaintext" "text" "txt")
     (language "angular-html" $hlAngularHtml)
     (language "asm" $hlAsm "assembly" "s")
     (language "astro" $hlAstro)
     (language "bash" $hlBash "sh" "shell" "shellscript" "shellsession" "zsh")
+    (language "batch" $hlBatch "bat" "batchfile" "cmd" "dos")
     (language "c" $hlC "h")
     (language "c3" $hlC3)
     (language "clojure" $hlClojure "clj" "cljc" "cljs" "edn")
@@ -79,11 +85,15 @@
     (language "cpp" $hlCpp "c++" "cc" "cxx" "hh" "hpp" "hxx")
     (language "csharp" $hlCsharp "c#" "cs")
     (language "css" $hlCss)
+    (language "cuda" $hlCuda "cu" "cuh")
     (language "dart" $hlDart)
     (language "diff" $hlDiff "git-commit" "git-rebase" "patch")
     (language "dockerfile" $hlDockerfile "containerfile" "docker")
     (language "elixir" $hlElixir "ex" "exs")
+    (language "elm" $hlElm)
     (language "erlang" $hlErlang "erl" "hrl")
+    (language "fortran" $hlFortran "f90" "f95" "f03" "f08" "fortran-free-form")
+    (language "fortran-fixed-form" $hlFortranFixed "f" "for" "f77")
     (language "fsharp" $hlFsharp "f#" "fs" "fsi" "fsx")
     (language "gleam" $hlGleam)
     (language "glsl" $hlGlsl "comp" "frag" "geom" "vert")
@@ -121,6 +131,7 @@
     (language "sass" $hlSass)
     (language "scala" $hlScala "sbt" "sc")
     (language "scss" $hlScss)
+    (language "solidity" $hlSolidity "sol")
     (language "sql" $hlSql)
     (language "svelte" $hlSvelte)
     (language "swift" $hlSwift)
@@ -134,7 +145,7 @@
     (language "wgsl" $hlWgsl)
     (language "xml" $hlXml "svg" "xsd")
     (language "yaml" $hlYaml "yml")
-    (language "zig" $hlZig))
+    (language "zig" $hlZig "zon"))
 
   ;; plain text: one unstyled token covering the whole input
   (func $hlPlain
@@ -202,6 +213,7 @@
   ;; markdown fence body) restores its window, which must not hold the
   ;; previous stream's locals.
   (func $streamResetGlobals
+    (global.set $ecmaImport (i32.const 0))
     (memory.fill (i32.const $mem.streamDelimiter) (i32.const 0) (i32.const 32))
     (memory.fill (i32.const $mem.streamState) (i32.const 0) (i32.const $mem.streamStateUsed))
     (global.set $streamMode (i32.const 0))
@@ -214,10 +226,7 @@
     (global.set $markdownStreamFence (i32.const 0))
     (global.set $markdownStreamFenceLen (i32.const 0))
     (global.set $markdownStreamLang (i32.const 0))
-    (memory.fill
-      (i32.const $mem.markdownFenceStack)
-      (i32.const 0)
-      (i32.sub (i32.const $mem.tomlStack) (i32.const $mem.markdownFenceStack)))
+    (memory.fill (i32.const $mem.markdownFenceStack) (i32.const 0) (i32.const 96))
     (global.set $phpStreamingCode (i32.const 0))
     (global.set $phpStreamDecl (i32.const 0))
     (global.set $phpStreamMember (i32.const 0)))

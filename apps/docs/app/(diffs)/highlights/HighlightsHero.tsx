@@ -89,8 +89,8 @@ export function HighlightsHero({ gzipBytes }: { gzipBytes: number }) {
       </div>
 
       <p className="text-muted-foreground mt-2 text-sm">
-        {(gzipBytes / 1024).toFixed(1)} KiB gzipped Wasm · 67 built-in languages
-        · 132–559× Shiki HTML throughput (
+        {(gzipBytes / 1024).toFixed(1)} KiB gzipped Wasm · 73 built-in languages
+        · 131–590× Shiki HTML throughput (
         <Link
           target="_blank"
           rel="noopener noreferrer"

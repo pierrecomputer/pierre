@@ -5,7 +5,7 @@
     (select (i32.load8_u (local.get $p)) (i32.const 0) (i32.lt_u (local.get $p) (global.get $end))))
 
   ;; group order is the dispatch order in $goWordHl below
-  (keyword-table $goWords $mem.goWords $mem.groovyWords
+  (keyword-table $goWords $mem.goWords $mem.graphqlWords
     (group $Token.keyword.control ;; 1: control
       "go" "if" "for" "case" "else" "goto" "break" "defer" "range" "return" "select" "switch"
       "default" "continue" "fallthrough")
