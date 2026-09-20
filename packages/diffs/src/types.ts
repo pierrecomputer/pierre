@@ -425,7 +425,11 @@ export interface SemanticDiffLinePair {
   new: SemanticDiffLineRegion;
 }
 
-/** Source code that an addition or deletion sits before, after, or inside. */
+/**
+ * Source code that an addition or deletion sits before, after, or inside.
+ * Semantic context from the producer. Connector endpoints come from
+ * `SemanticDiffLineRange.attachment`, not from these ranges.
+ */
 export interface SemanticDiffSpanAnchor {
   relation: 'before' | 'after' | 'inside';
   /** Old-side ranges anchoring introduced code, in their original order. */
@@ -433,12 +437,21 @@ export interface SemanticDiffSpanAnchor {
   /** New-side ranges anchoring removed code, in their original order. */
   new?: SemanticDiffTextRange[];
   /**
-   * The connector points just before this line instead of using the ranges.
+   * The content sits directly above this line on the anchor's side.
    * Additions use a line in the old file; deletions use a line in the new file.
-   * Line numbers start at 1.
+   * Line numbers start at 1. An anchor with no ranges names only this line.
    */
   lineAnchor?: number;
 }
+
+/**
+ * Where a one-sided connector ends on the side that has no source lines.
+ * A row edge names a source line on that side, starting at 1. `empty` means
+ * that side's file has no lines, so the connector ends at the column's origin.
+ */
+export type SemanticDiffConnectorAttachment =
+  | { line: number; edge: 'before' | 'after' }
+  | { empty: true };
 
 interface BaseSemanticDiffPairedSpan {
   relation: 'mapped' | 'moved' | 'replaced';
@@ -524,6 +537,11 @@ export interface SemanticDiffLineRange extends SemanticDiffLineRegion {
   spanIndex: number;
   /** Index into that span's anchors; required when a one-sided span has several. */
   anchorIndex?: number;
+  /**
+   * Where this run's connector ends on the other side. Required for runs of an
+   * `introduced` or `removed` span. The converter computes it.
+   */
+  attachment?: SemanticDiffConnectorAttachment;
 }
 
 /**
