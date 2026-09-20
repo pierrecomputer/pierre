@@ -16,6 +16,7 @@ export function createPreWrapperProperties({
   disableLineNumbers,
   overflow,
   split,
+  semantic,
   totalLines,
   type,
   customProperties,
@@ -28,6 +29,7 @@ export function createPreWrapperProperties({
     'data-file': type === 'file' ? '' : undefined,
     'data-diff-type':
       type === 'diff' ? (split ? 'split' : 'single') : undefined,
+    'data-semantic': semantic ? '' : undefined,
     'data-overflow': overflow,
     'data-disable-line-numbers': disableLineNumbers ? '' : undefined,
     'data-background': !disableBackground ? '' : undefined,

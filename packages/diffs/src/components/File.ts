@@ -2340,6 +2340,7 @@ export class File<LAnnotation = undefined, Caret = undefined> {
       diffIndicators: 'none',
       disableBackground: true,
       totalLines,
+      semantic: false,
     };
     if (arePrePropertiesEqual(preProperties, this.appliedPreAttributes)) {
       return;
