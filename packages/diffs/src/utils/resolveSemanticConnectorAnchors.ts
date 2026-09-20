@@ -1,4 +1,7 @@
-import type { FileDiffMetadata } from '../types';
+import type {
+  FileDiffMetadata,
+  SemanticDiffConnectorAttachment,
+} from '../types';
 import { getHunkSideStartBoundary } from './getHunkSideBoundaries';
 import type {
   SemanticDiffConnector,
@@ -6,19 +9,18 @@ import type {
 } from './semanticDiffConnectors';
 
 /** A real source row's edge on the connector's missing side. */
-export interface SemanticDiffConnectorLineAnchor {
-  line: number;
-  edge: 'before' | 'after';
-}
+export type SemanticDiffConnectorLineAnchor = Extract<
+  SemanticDiffConnectorAttachment,
+  { line: number }
+>;
 
 /** The opposite file is empty, so its content origin is the only boundary. */
-export interface SemanticDiffConnectorEmptyAnchor {
-  empty: true;
-}
+export type SemanticDiffConnectorEmptyAnchor = Extract<
+  SemanticDiffConnectorAttachment,
+  { empty: true }
+>;
 
-export type SemanticDiffConnectorAnchor =
-  | SemanticDiffConnectorLineAnchor
-  | SemanticDiffConnectorEmptyAnchor;
+export type SemanticDiffConnectorAnchor = SemanticDiffConnectorAttachment;
 
 interface SourceSegment extends SemanticDiffConnectorRange {
   row: number;
