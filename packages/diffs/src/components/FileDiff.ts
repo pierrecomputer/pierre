@@ -121,11 +121,16 @@ import { isDefaultRenderRange } from '../utils/isDefaultRenderRange';
 import { isDiffPlainText } from '../utils/isDiffPlainText';
 import { isStyleNode } from '../utils/isStyleNode';
 import { iterateOverDiff } from '../utils/iterateOverDiff';
+import { measureSemanticDiffConnectors } from '../utils/measureSemanticDiffConnectors';
 import { parseDiffFromFile } from '../utils/parseDiffFromFile';
 import { isSafari } from '../utils/platform';
 import { prerenderHTMLIfNecessary } from '../utils/prerenderHTMLIfNecessary';
 import { resolvePreferredHighlighter } from '../utils/resolvePreferredHighlighter';
 import { getMeasuredScrollbarGutter } from '../utils/scrollbarGutter';
+import {
+  prepareSemanticDiffConnectors,
+  type SemanticDiffConnector,
+} from '../utils/semanticDiffConnectors';
 import { setPreNodeProperties } from '../utils/setWrapperNodeProps';
 import { splitFileContents } from '../utils/splitFileContents';
 import { recomputeDiffRenderLineCounts } from '../utils/updateDiffHunks';
@@ -138,6 +143,7 @@ import {
 } from '../utils/virtualDiffLayout';
 import type { WorkerPoolManager } from '../worker';
 import { isHandledWorkerPoolError } from '../worker/errors';
+import { SemanticConnector } from './SemanticConnector';
 import { DiffsContainerLoaded } from './web-components';
 
 type LoadedPartialDiffContents = Awaited<
@@ -373,6 +379,12 @@ type HydrationSetup<LAnnotation> = {
   lineAnnotations: DiffLineAnnotation<LAnnotation>[] | undefined;
 } & MaybeDiffFileInput;
 
+interface SemanticConnectorCache {
+  instance: SemanticConnector | undefined;
+  fileDiff: FileDiffMetadata | undefined;
+  regions: SemanticDiffConnector[];
+}
+
 interface HeaderCache {
   lastRenderedHTML: string | undefined;
   html: string | undefined;
@@ -418,6 +430,12 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
   protected codeUnified: HTMLElement | undefined;
   protected codeDeletions: HTMLElement | undefined;
   protected codeAdditions: HTMLElement | undefined;
+  protected semanticConnectorColumn: HTMLElement | undefined;
+  protected semanticConnector: SemanticConnectorCache = {
+    instance: undefined,
+    fileDiff: undefined,
+    regions: [],
+  };
   protected bufferBefore: HTMLElement | undefined;
   protected bufferAfter: HTMLElement | undefined;
   protected themeCSSStyle: HTMLStyleElement | undefined;
@@ -892,6 +910,10 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
       columnVariables: this.shouldApplyColumnVariables(overflow)
         ? 'apply'
         : 'measure',
+      onGeometryChange:
+        this.semanticConnectorColumn != null
+          ? this.renderSemanticConnectors
+          : undefined,
     });
     if (overflow === 'scroll' && diffStyle === 'split') {
       this.scrollSyncManager.setup(
@@ -903,6 +925,75 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
       this.scrollSyncManager.cleanUp();
     }
     this.managersDirty = false;
+    this.renderSemanticConnectors();
+  }
+
+  // Attach the center column once and refresh its source regions when
+  // the diff changes.
+  private syncSemanticConnectorColumn(
+    pre: HTMLPreElement,
+    fileDiff: FileDiffMetadata | undefined
+  ): void {
+    if (
+      fileDiff?.semanticOperations == null ||
+      this.codeDeletions == null ||
+      this.codeAdditions == null
+    ) {
+      this.clearSemanticConnectors();
+      return;
+    }
+    if (this.semanticConnectorColumn == null) {
+      const column = document.createElement('div');
+      column.setAttribute('data-semantic-connectors', '');
+      column.setAttribute('aria-hidden', 'true');
+      this.semanticConnectorColumn = column;
+      pre.append(column);
+    }
+    if (!areDiffTargetsEqual(fileDiff, this.semanticConnector.fileDiff)) {
+      this.semanticConnector.regions = prepareSemanticDiffConnectors(fileDiff);
+      this.semanticConnector.fileDiff = fileDiff;
+    }
+  }
+
+  // Measure the source rows and let SemanticConnector handle when to draw.
+  private renderSemanticConnectors = (): void => {
+    const column = this.semanticConnectorColumn;
+    const deletions = this.getColumnPair(this.codeDeletions);
+    const additions = this.getColumnPair(this.codeAdditions);
+    if (
+      column == null ||
+      !column.isConnected ||
+      deletions == null ||
+      additions == null
+    ) {
+      return;
+    }
+    const bounds = column.getBoundingClientRect();
+    if (bounds.width === 0 || bounds.height === 0) {
+      return;
+    }
+    // FOLLOWUP: Think about how this work could maybe be better memoized?
+    const connectors = measureSemanticDiffConnectors(
+      this.semanticConnector.regions,
+      deletions.content,
+      additions.content,
+      bounds.top
+    );
+    this.semanticConnector.instance ??= new SemanticConnector();
+    this.semanticConnector.instance.render({
+      container: column,
+      bounds: { left: 0, top: 0, width: bounds.width, height: bounds.height },
+      connectors,
+    });
+  };
+
+  private clearSemanticConnectors(): void {
+    this.semanticConnector.instance?.cleanUp();
+    this.semanticConnector.instance = undefined;
+    this.semanticConnectorColumn?.remove();
+    this.semanticConnectorColumn = undefined;
+    this.semanticConnector.fileDiff = undefined;
+    this.semanticConnector.regions = [];
   }
 
   protected shouldApplyColumnVariables(overflow: 'scroll' | 'wrap'): boolean {
@@ -942,6 +1033,7 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
 
   public cleanUp(recycle: boolean = false): void {
     const { editor } = this;
+    this.clearSemanticConnectors();
     dequeueRender(this.handleEditSessionRender);
     this.emitPostRender(true);
     // Tear the editor down while the code scrollers still exist. A recycle
@@ -1185,6 +1277,7 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
 
     this.syncInteractionOptions();
     this.hunksRenderer.hydrate(this.fileDiff);
+    this.syncSemanticConnectorColumn(this.pre, this.getRenderedDiff());
     // FIXME(amadeus): not sure how to handle this yet...
     // this.renderSeparators();
     this.renderAnnotations();
@@ -1536,6 +1629,7 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
     this.additionFile = files.newFile;
     this.workerManager?.cleanUpTasks(this.hunksRenderer);
     this.hunksRenderer.clearRenderCache();
+    this.semanticConnector.fileDiff = undefined;
   }
 
   public render({
@@ -1792,6 +1886,7 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
         ) {
           this.applyHunksToDOM(pre, hunksResult);
         } else if (this.pre != null) {
+          this.clearSemanticConnectors();
           this.pre.remove();
           this.pre = undefined;
         }
@@ -2638,6 +2733,7 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
   };
 
   private removeRenderedCode(): void {
+    this.clearSemanticConnectors();
     this.resizeManager.cleanUp();
     this.scrollSyncManager.cleanUp();
     this.interactionManager.cleanUp();
@@ -2735,6 +2831,7 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
   }
 
   private cleanChildNodes() {
+    this.clearSemanticConnectors();
     this.resizeManager.cleanUp();
     this.scrollSyncManager.cleanUp();
     this.interactionManager.cleanUp();
@@ -3007,6 +3104,8 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
         this.codeDeletions = child;
       } else if (child.hasAttribute('data-additions')) {
         this.codeAdditions = child;
+      } else if (child.hasAttribute('data-semantic-connectors')) {
+        this.semanticConnectorColumn = child;
       }
     }
   }
@@ -3437,6 +3536,7 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
       pre.replaceChildren(...codeElements);
     }
 
+    this.syncSemanticConnectorColumn(pre, result.fileDiff);
     this.lastRowCount = result.rowCount;
   }
 
@@ -4188,7 +4288,12 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
 
   protected applyPreNodeAttributes(
     pre: HTMLPreElement,
-    { additionsContentAST, deletionsContentAST, totalLines }: HunksRenderResult,
+    {
+      additionsContentAST,
+      deletionsContentAST,
+      totalLines,
+      fileDiff,
+    }: HunksRenderResult,
     customProperties?: CustomPreProperties
   ): void {
     const {
@@ -4208,6 +4313,7 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
         diffStyle === 'unified'
           ? false
           : additionsContentAST != null && deletionsContentAST != null,
+      semantic: fileDiff.semanticOperations != null,
       totalLines,
       customProperties,
     };
@@ -4220,6 +4326,7 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
 
   private applyErrorToDOM(error: Error, container: HTMLElement) {
     this.cleanupErrorWrapper();
+    this.clearSemanticConnectors();
     this.pre?.remove();
     this.pre = undefined;
     this.appliedPreAttributes = undefined;

@@ -18,6 +18,7 @@ export type ResizeManagerColumnVariableMode = 'apply' | 'measure';
 export interface ResizeManagerSetupOptions {
   disableAnnotations: boolean;
   columnVariables?: ResizeManagerColumnVariableMode;
+  onGeometryChange?(): void;
 }
 
 interface AnnotationSetup {
@@ -66,12 +67,23 @@ export class ResizeManager {
     HTMLElement,
     ObservedAnnotationNodes | ObservedGridNodes
   >();
+  private geometryNodes = new Set<HTMLElement>();
+  private onGeometryChange: (() => void) | undefined;
 
   setup(
     pre: HTMLPreElement,
-    { disableAnnotations, columnVariables = 'apply' }: ResizeManagerSetupOptions
+    {
+      disableAnnotations,
+      columnVariables = 'apply',
+      onGeometryChange,
+    }: ResizeManagerSetupOptions
   ): void {
     const annotationUpdates = new Set<AnnotationSetup>();
+    const geometryNodes = new Set<HTMLElement>();
+    this.onGeometryChange = onGeometryChange;
+    if (onGeometryChange != null) {
+      geometryNodes.add(pre);
+    }
     const applyColumnVariables = columnVariables === 'apply';
     let columnCount = 0;
     const observedNodes = new Map(this.observedNodes);
@@ -91,6 +103,18 @@ export class ResizeManager {
         continue;
       }
       columnCount++;
+      // CODE has no box in wrap mode; its content box still reports height changes.
+      if (onGeometryChange != null) {
+        for (const child of codeElement.children) {
+          if (
+            child instanceof HTMLElement &&
+            child.hasAttribute('data-content')
+          ) {
+            geometryNodes.add(child);
+            break;
+          }
+        }
+      }
       let item: ObservedGridNodes | ObservedAnnotationNodes | undefined =
         observedNodes.get(codeElement);
       if (item != null && item.type !== 'code') {
@@ -251,13 +275,30 @@ export class ResizeManager {
       }
     }
     observedNodes.clear();
+
+    for (const element of this.geometryNodes) {
+      if (!geometryNodes.has(element)) {
+        this.unobserve(element);
+      }
+    }
+    for (const element of geometryNodes) {
+      if (!this.geometryNodes.has(element)) {
+        this.observe(element);
+      }
+    }
+    this.geometryNodes = geometryNodes;
   }
 
   cleanUp(): void {
+    this.onGeometryChange = undefined;
     for (const element of this.observedNodes.keys()) {
       this.unobserve(element);
     }
     this.observedNodes.clear();
+    for (const element of this.geometryNodes) {
+      this.unobserve(element);
+    }
+    this.geometryNodes.clear();
   }
 
   private observe(element: HTMLElement): void {
@@ -309,6 +350,9 @@ export class ResizeManager {
         );
         continue;
       }
+      if (this.geometryNodes.has(target)) {
+        continue;
+      }
       const item = this.observedNodes.get(target);
       if (item == null) {
         console.error(
@@ -353,6 +397,7 @@ export class ResizeManager {
     annotationUpdates.clear();
     this.applyColumnUpdates(codeUpdates);
     codeUpdates.clear();
+    this.onGeometryChange?.();
   }
 
   private applyAnnotationUpdates(

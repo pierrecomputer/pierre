@@ -11,6 +11,7 @@
 
     --diffs-mixer: light-dark(black, white);
     --diffs-gap-fallback: 8px;
+    --diffs-connector-column-width: 40px;
     --diffs-scrollbar-gutter-fallback: 6px;
     --diffs-scrollbar-gutter: var(
       --diffs-scrollbar-gutter-override,
@@ -22,8 +23,10 @@
 
     --diffs-added-light: #0dbe4e;
     --diffs-added-dark: #5ecc71;
-    --diffs-modified-light: #009fff;
-    --diffs-modified-dark: #69b1ff;
+    /* NOTE(amadeus): Playing around with colors, see below where we
+     * use reformatted */
+    /* --diffs-modified-light: #009fff; */
+    /* --diffs-modified-dark: #69b1ff; */
     --diffs-deleted-light: #ff2e3f;
     --diffs-deleted-dark: #ff6762;
     --diffs-warning-light: #d5a910;
@@ -36,6 +39,10 @@
     --diffs-edited-dark: #bf91f3;
     --diffs-reformatted-light: #808080;
     --diffs-reformatted-dark: #a0a0a0;
+    /* modified is just a move without changes i think, so like trying to make
+     * it grey for now... but may not keep it */
+    --diffs-modified-light: var(--diffs-reformatted-light);
+    --diffs-modified-dark: var(--diffs-reformatted-dark);
     --diffs-focus-replaced-light: var(--diffs-edited-light);
     --diffs-focus-replaced-dark: var(--diffs-edited-dark);
     --diffs-focus-moved-light: var(--diffs-modified-light);
@@ -896,12 +903,57 @@
     display: grid;
     grid-template-columns: 1fr 1fr;
 
+    &[data-semantic] {
+      grid-template-columns:
+        minmax(0, 1fr) var(--diffs-connector-column-width)
+        minmax(0, 1fr);
+
+      [data-additions] {
+        grid-column: 3;
+      }
+    }
+
     [data-additions] {
       border-left: 1px solid var(--diffs-bg);
     }
 
     [data-deletions] {
       border-right: 1px solid var(--diffs-bg);
+    }
+  }
+
+  [data-semantic-connectors] {
+    position: relative;
+    background-color: var(--diffs-bg);
+    grid-column: 2;
+    grid-row: 1;
+    align-self: stretch;
+    min-width: 0;
+    pointer-events: none;
+    user-select: none;
+
+    [data-connector-kind] {
+      opacity: 0.15;
+    }
+
+    [data-connector-kind='added'] {
+      fill: var(--diffs-addition-base);
+    }
+
+    [data-connector-kind='deleted'] {
+      fill: var(--diffs-deletion-base);
+    }
+
+    [data-connector-kind='moved'] {
+      fill: var(--diffs-moved-base);
+    }
+
+    [data-connector-kind='modified'] {
+      fill: var(--diffs-edited-base);
+    }
+
+    [data-connector-kind='reformatted'] {
+      fill: var(--diffs-reformatted-base);
     }
   }
 
@@ -1053,6 +1105,28 @@
     grid-auto-flow: dense;
     grid-template-columns: repeat(2, var(--diffs-code-grid));
     padding-block: var(--diffs-gap-block, var(--diffs-gap-fallback));
+
+    &[data-semantic] {
+      position: relative;
+      grid-template-columns:
+        var(--diffs-code-grid) var(--diffs-connector-column-width)
+        var(--diffs-code-grid);
+
+      [data-semantic-connectors] {
+        position: absolute;
+        grid-column: 3 / 4;
+        grid-row: auto;
+        inset: 0;
+      }
+
+      [data-additions] [data-gutter] {
+        grid-column: 4;
+      }
+
+      [data-additions] [data-content] {
+        grid-column: 5;
+      }
+    }
 
     [data-code] {
       display: contents;

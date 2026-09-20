@@ -413,22 +413,61 @@ export type SemanticDiffSpanRole =
 /** Additional classification of a focus span, independent of its relation. */
 export type SemanticDiffFocusKind = 'reformatted';
 
+/** Source lines starting at 1, with both ends included. */
+export interface SemanticDiffLineRegion {
+  start: number;
+  end: number;
+}
+
+/** These old lines correspond to these new lines within one span. */
+export interface SemanticDiffLinePair {
+  old: SemanticDiffLineRegion;
+  new: SemanticDiffLineRegion;
+}
+
+/** Source code that an addition or deletion sits before, after, or inside. */
+export interface SemanticDiffSpanAnchor {
+  relation: 'before' | 'after' | 'inside';
+  /** Old-side ranges anchoring introduced code, in their original order. */
+  old?: SemanticDiffTextRange[];
+  /** New-side ranges anchoring removed code, in their original order. */
+  new?: SemanticDiffTextRange[];
+  /**
+   * The connector points just before this line instead of using the ranges.
+   * Additions use a line in the old file; deletions use a line in the new file.
+   * Line numbers start at 1.
+   */
+  lineAnchor?: number;
+}
+
 interface BaseSemanticDiffPairedSpan {
   relation: 'mapped' | 'moved' | 'replaced';
   old: SemanticDiffTextRange[];
   new: SemanticDiffTextRange[];
+  /**
+   * Pairs of old and new line regions for this span.
+   * Each region contains consecutive lines in both the file and the diff.
+   * Paired regions can have different line counts.
+   * An empty array means this span has no paired line regions.
+   */
+  linePairs: SemanticDiffLinePair[];
 }
 
 interface BaseSemanticDiffIntroducedSpan {
   relation: 'introduced';
   old?: never;
+  /** Empty when the span owns only blank lines; its line runs still mark them. */
   new: SemanticDiffTextRange[];
+  /** Original anchor groups. An empty array means there is no known anchor. */
+  anchors?: SemanticDiffSpanAnchor[];
 }
 
 interface BaseSemanticDiffRemovedSpan {
   relation: 'removed';
   old: SemanticDiffTextRange[];
   new?: never;
+  /** Original anchor groups. An empty array means there is no known anchor. */
+  anchors?: SemanticDiffSpanAnchor[];
 }
 
 export interface SemanticDiffPairedStructuralSpan extends BaseSemanticDiffPairedSpan {
@@ -480,13 +519,11 @@ export type SemanticDiffSpan =
 export type SemanticDiffSpanRelation = SemanticDiffSpan['relation'];
 
 /** Consecutive source lines classified by one span of their operation. */
-export interface SemanticDiffLineRange {
-  /** Inclusive source line number, starting at 1. */
-  start: number;
-  /** Inclusive source line number, starting at 1. */
-  end: number;
+export interface SemanticDiffLineRange extends SemanticDiffLineRegion {
   /** Zero-based index into the containing operation's spans array. */
   spanIndex: number;
+  /** Index into that span's anchors; required when a one-sided span has several. */
+  anchorIndex?: number;
 }
 
 /**
@@ -635,6 +672,7 @@ export interface PrePropertiesConfig extends Required<
 > {
   type: 'diff' | 'file';
   split: boolean;
+  semantic: boolean;
   totalLines: number;
   customProperties?: CustomPreProperties;
 }

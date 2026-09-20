@@ -1,3 +1,5 @@
+let reducedMotionQuery: MediaQueryList | undefined;
+
 export function prefersReducedMotion(): boolean {
   if (
     typeof window === 'undefined' ||
@@ -5,5 +7,6 @@ export function prefersReducedMotion(): boolean {
   ) {
     return false;
   }
-  return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  reducedMotionQuery ??= window.matchMedia('(prefers-reduced-motion: reduce)');
+  return reducedMotionQuery.matches;
 }

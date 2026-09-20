@@ -22,7 +22,7 @@ function focus(
   if (relation === 'introduced')
     return { role: 'focus', relation, new: ranges };
   if (relation === 'removed') return { role: 'focus', relation, old: ranges };
-  return { role: 'focus', relation, old: ranges, new: ranges };
+  return { role: 'focus', relation, old: ranges, new: ranges, linePairs: [] };
 }
 
 function operation(span: SemanticDiffSpan): SemanticDiffOperation {

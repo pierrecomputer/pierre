@@ -18,6 +18,7 @@ export function arePrePropertiesEqual(
     propsA.disableLineNumbers === propsB.disableLineNumbers &&
     propsA.overflow === propsB.overflow &&
     propsA.split === propsB.split &&
+    propsA.semantic === propsB.semantic &&
     propsA.totalLines === propsB.totalLines
   );
 }
