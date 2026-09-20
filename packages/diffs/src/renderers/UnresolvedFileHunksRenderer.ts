@@ -170,7 +170,7 @@ export class UnresolvedFileHunksRenderer<
     split: boolean,
     totalLines: number
   ): HASTElement {
-    return super.createPreElement(split, totalLines, {
+    return super.createPreElement(split, totalLines, false, {
       'data-has-merge-conflict': '',
     });
   }

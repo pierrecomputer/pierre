@@ -1362,6 +1362,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
   protected createPreElement(
     split: boolean,
     totalLines: number,
+    semantic: boolean,
     customProperties?: CustomPreProperties
   ): HASTElement {
     const { diffIndicators, disableBackground, disableLineNumbers, overflow } =
@@ -1373,6 +1374,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       disableLineNumbers,
       overflow,
       split,
+      semantic,
       totalLines,
       customProperties,
     });
@@ -1667,7 +1669,8 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       hunkData,
       preNode: this.createPreElement(
         columns.deletions != null && columns.additions != null,
-        totalLines
+        totalLines,
+        diff.semanticOperations != null
       ),
       themeStyles,
       baseThemeType,
@@ -1786,6 +1789,21 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
             'data-code': '',
             'data-container-size': containerSize ? '' : undefined,
             'data-additions': '',
+          },
+        })
+      );
+    }
+    if (
+      deletionsAST != null &&
+      additionsAST != null &&
+      result.fileDiff.semanticOperations != null
+    ) {
+      children.push(
+        createHastElement({
+          tagName: 'div',
+          properties: {
+            'data-semantic-connectors': '',
+            'aria-hidden': 'true',
           },
         })
       );

@@ -1258,6 +1258,7 @@ export class FileRenderer<LAnnotation = undefined> {
       overflow,
       split: false,
       totalLines,
+      semantic: false,
     });
   }
 }

@@ -144,6 +144,7 @@ export class FileStream {
       overflow,
       split: false,
       totalLines: 0,
+      semantic: false,
     });
     pre.textContent = '';
 
