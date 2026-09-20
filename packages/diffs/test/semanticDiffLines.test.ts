@@ -56,6 +56,9 @@ describe('semantic line types', () => {
           relation: 'moved',
           old: [range(6, 1, 6, 13), range(7, 1, 7, 13)],
           new: [range(10, 1, 10, 13), range(11, 1, 11, 13)],
+          linePairs: [
+            { old: { start: 6, end: 7 }, new: { start: 10, end: 11 } },
+          ],
         },
         {
           role: 'call',
@@ -117,6 +120,9 @@ describe('semantic line types', () => {
           relation: 'moved',
           old: [range(8, 1, 10, 2), range(11, 1, 13, 2), range(14, 1, 14, 13)],
           new: [range(4, 1, 6, 2), range(7, 1, 9, 2), range(10, 1, 10, 13)],
+          linePairs: [
+            { old: { start: 8, end: 14 }, new: { start: 4, end: 10 } },
+          ],
         },
         {
           role: 'call',
@@ -218,6 +224,7 @@ describe('semantic line types', () => {
           relation: 'replaced',
           old: [range(1, 0, 1, 3)],
           new: [range(1, 0, 1, 3)],
+          linePairs: [{ old: { start: 1, end: 1 }, new: { start: 1, end: 1 } }],
         },
       ],
       lines: {

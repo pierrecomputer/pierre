@@ -9,6 +9,7 @@ export function setPreNodeProperties(
     disableLineNumbers,
     overflow,
     split,
+    semantic,
     totalLines,
     customProperties,
   }: PrePropertiesConfig
@@ -55,6 +56,11 @@ export function setPreNodeProperties(
     pre.removeAttribute('data-diff-type');
   }
   pre.setAttribute('data-overflow', overflow);
+  if (semantic) {
+    pre.setAttribute('data-semantic', '');
+  } else {
+    pre.removeAttribute('data-semantic');
+  }
   // Set CSS custom property for line number column width
   pre.style.setProperty(
     '--diffs-min-number-column-width-default',

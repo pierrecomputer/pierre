@@ -59,7 +59,7 @@ export function createSemanticDiffLineLookup(
 }
 
 // Decides a LineType based on the semantic operation and span data we have
-function semanticLineType(
+export function semanticLineType(
   operation: SemanticDiffOperation,
   span: SemanticDiffSpan
 ): LineTypes {
