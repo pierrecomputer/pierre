@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>diffs CodeView annotation scroll fixture</title>
+    <style>
+      body {
+        margin: 0;
+        padding: 16px;
+        font-family: system-ui, sans-serif;
+      }
+      [data-code-view-root] {
+        width: 1000px;
+        height: 600px;
+        overflow: auto;
+      }
+      [data-test-annotation] {
+        box-sizing: border-box;
+        background: #e8e0ff;
+        color: #231344;
+      }
+    </style>
+  </head>
+  <body>
+    <a data-fixtures-index href="/test/e2e/fixtures/index.html"
+      >&larr; All fixtures</a
+    >
+    <button type="button" data-add-annotation>
+      Add annotation on line 191
+    </button>
+    <div data-code-view-root></div>
+
+    <script type="module">
+      import { CodeView, parseDiffFromFile } from '/dist/index.js';
+
+      const root = document.querySelector('[data-code-view-root]');
+      if (!(root instanceof HTMLElement)) {
+        throw new Error('Missing CodeView root.');
+      }
+
+      const params = new URLSearchParams(location.search);
+      const type = params.get('type') === 'file' ? 'file' : 'diff';
+      const heights = params.get('multiple') === 'true' ? [40, 80] : [80];
+      const file = {
+        name: 'annotations.ts',
+        contents: Array.from(
+          { length: 200 },
+          (_, index) => `const line${index + 1} = ${index + 1};`
+        ).join('\n'),
+      };
+      let item = {
+        id: 'annotated',
+        type,
+        version: 0,
+        ...(type === 'file'
+          ? { file }
+          : {
+              fileDiff: parseDiffFromFile(
+                { ...file, contents: file.contents.replaceAll('const', 'let') },
+                file
+              ),
+            }),
+        annotations: heights.map((height, index) => ({
+          lineNumber: 191 - heights.length + index,
+          side: 'additions',
+          metadata: { height, label: `Existing comment ${index + 1}` },
+        })),
+      };
+
+      const viewer = new CodeView({
+        diffStyle: 'split',
+        renderAnnotation({ metadata }) {
+          const element = document.createElement('div');
+          element.dataset.testAnnotation = '';
+          element.style.height = `${metadata.height}px`;
+          element.textContent = metadata.label;
+          return element;
+        },
+      });
+      viewer.setup(root);
+      viewer.setItems([item]);
+
+      function addAnnotation() {
+        item = {
+          ...item,
+          version: item.version + 1,
+          annotations: [
+            ...item.annotations,
+            {
+              lineNumber: 191,
+              side: 'additions',
+              metadata: { height: 120, label: 'New composer' },
+            },
+          ],
+        };
+        viewer.updateItem(item);
+      }
+
+      // These short, unwrapped lines have uniform code height. Any extra space
+      // between lines 188 and 192 must come from measured annotations, allowing
+      // the test to wait for layout data as well as rendered annotation content.
+      function getMeasuredAnnotationHeight() {
+        const instance = viewer.getRenderedItems()[0]?.instance;
+        const before = instance?.getLinePosition(188);
+        const after = instance?.getLinePosition(192);
+        return before != null && after != null
+          ? after.top - before.top - before.height * 4
+          : undefined;
+      }
+
+      window.__annotationScroll = {
+        root,
+        addAnnotation,
+        getMeasuredAnnotationHeight,
+        getScrollTop: () => viewer.getScrollTop(),
+      };
+      document
+        .querySelector('[data-add-annotation]')
+        .addEventListener('click', addAnnotation);
+    </script>
+  </body>
+</html>

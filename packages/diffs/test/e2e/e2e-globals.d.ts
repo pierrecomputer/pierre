@@ -65,6 +65,14 @@ interface Window {
   __selectionActionReady?: boolean;
   __selectionActionEdgesReady?: boolean;
 
+  // code-view-annotations.html helpers for annotation layout and scroll state.
+  __annotationScroll?: {
+    root: HTMLElement;
+    addAnnotation(): void;
+    getMeasuredAnnotationHeight(): number | undefined;
+    getScrollTop(): number;
+  };
+
   // Interaction logs populated by fixture callbacks.
   __editorEvents?: string[];
   __conflictResolutions?: string[];
