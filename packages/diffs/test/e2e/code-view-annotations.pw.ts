@@ -2,6 +2,7 @@ import { expect, type Page, test } from '@playwright/test';
 
 interface ViewportMeasurement {
   scrollTop: number;
+  logicalScrollTop: number;
   scrollHeight: number;
   anchorTop: number;
   viewportHeight: number;
@@ -11,23 +12,85 @@ interface ViewportMeasurement {
 // both the line's viewport position and the root's scroll position unchanged.
 function measureViewport(page: Page): Promise<ViewportMeasurement> {
   return page.evaluate(() => {
-    const root = window.__annotationScroll?.root;
+    const fixture = window.__annotationScroll;
+    const root = fixture?.root;
     const line = root
       ?.querySelector('diffs-container')
       ?.shadowRoot?.querySelector(
         '[data-code]:not([data-deletions]) [data-line="180"]'
       );
-    if (root == null || line == null) {
+    if (fixture == null || root == null || line == null) {
       throw new Error('Missing annotation fixture root or anchor line.');
     }
     return {
       scrollTop: root.scrollTop,
+      logicalScrollTop: fixture.getScrollTop(),
       scrollHeight: root.scrollHeight,
       anchorTop:
         line.getBoundingClientRect().top - root.getBoundingClientRect().top,
       viewportHeight: root.clientHeight,
     };
   });
+}
+
+// Position against the measured scroll range and wait for CodeView to consume
+// the scroll event before an annotation update captures its anchor.
+async function setDistanceFromBottom(
+  page: Page,
+  distance: number
+): Promise<void> {
+  await page.evaluate((distance) => {
+    const fixture = window.__annotationScroll;
+    if (fixture == null) throw new Error('Missing annotation fixture.');
+    const { root } = fixture;
+    root.scrollTop = root.scrollHeight - root.clientHeight - distance;
+  }, distance);
+  await page.waitForFunction((distance) => {
+    const fixture = window.__annotationScroll;
+    if (fixture == null) return false;
+    const { root } = fixture;
+    return (
+      root.scrollHeight - root.clientHeight - root.scrollTop === distance &&
+      fixture.getScrollTop() === root.scrollTop
+    );
+  }, distance);
+}
+
+// Capture consecutive frames inside the browser so a later correction cannot
+// hide a transient jump or disagreement between the model and DOM scroll state.
+function shrinkAnnotationAndMeasureFrames(
+  page: Page,
+  height: 0 | 40
+): Promise<ViewportMeasurement[]> {
+  return page.evaluate(async (height) => {
+    const fixture = window.__annotationScroll;
+    if (fixture == null) throw new Error('Missing annotation fixture.');
+    if (height === 0) {
+      fixture.clearAnnotations();
+    } else {
+      fixture.resizeAnnotations(height);
+    }
+    const { root } = fixture;
+    const frames = [];
+    for (let index = 0; index < 4; index++) {
+      await new Promise(requestAnimationFrame);
+      const line = root
+        .querySelector('diffs-container')
+        ?.shadowRoot?.querySelector(
+          '[data-code]:not([data-deletions]) [data-line="180"]'
+        );
+      if (line == null) throw new Error('Missing anchor line.');
+      frames.push({
+        scrollTop: root.scrollTop,
+        logicalScrollTop: fixture.getScrollTop(),
+        scrollHeight: root.scrollHeight,
+        anchorTop:
+          line.getBoundingClientRect().top - root.getBoundingClientRect().top,
+        viewportHeight: root.clientHeight,
+      });
+    }
+    return frames;
+  }, height);
 }
 
 // Wait for annotation height to reach CodeView's layout model, not just for
@@ -139,27 +202,62 @@ test.describe('CodeView annotation scroll anchoring', () => {
       expect(errors).toEqual([]);
     });
 
-    test(`remeasures a resized annotation and removes the final annotation height (${type})`, async ({
-      page,
-    }) => {
-      await openMeasuredFixture(page, type);
-      const before = await measureViewport(page);
+    for (const distance of [0, 20, 100]) {
+      test(`preserves the anchor or clamps to the bottom when annotations shrink ${distance}px from the bottom (${type})`, async ({
+        page,
+      }) => {
+        const errors: string[] = [];
+        page.on('pageerror', (error) => errors.push(error.message));
+        page.on('console', (message) => {
+          if (message.type() === 'error') errors.push(message.text());
+        });
+        await openMeasuredFixture(page, type);
+        await setDistanceFromBottom(page, distance);
+        await expect(page.locator('[data-test-annotation]')).toBeVisible();
+        let before = await measureViewport(page);
+        expect(before.anchorTop).toBeGreaterThan(0);
+        expect(before.anchorTop).toBeLessThan(before.viewportHeight);
 
-      await page.evaluate(() =>
-        window.__annotationScroll?.resizeAnnotations(40)
-      );
-      await waitForAnnotationHeight(page, 40);
-      expect((await measureViewport(page)).scrollHeight).toBe(
-        before.scrollHeight - 40
-      );
-
-      await page.evaluate(() => window.__annotationScroll?.clearAnnotations());
-      await expect(page.locator('[data-test-annotation]')).toHaveCount(0);
-      await waitForAnnotationHeight(page, 0);
-      expect((await measureViewport(page)).scrollHeight).toBe(
-        before.scrollHeight - 80
-      );
-    });
+        for (const height of [40, 0] as const) {
+          await test.step(
+            height === 0
+              ? 'remove the final annotation'
+              : 'shrink the annotation',
+            async () => {
+              // Both changes remove 40px below our anchor. Its position can stay
+              // fixed unless the smaller scroll range forces a bottom clamp.
+              const expectedHeight = before.scrollHeight - 40;
+              const expectedScrollTop = Math.min(
+                before.scrollTop,
+                expectedHeight - before.viewportHeight
+              );
+              const expectedAnchorTop =
+                before.anchorTop + before.scrollTop - expectedScrollTop;
+              const frames = await shrinkAnnotationAndMeasureFrames(
+                page,
+                height
+              );
+              for (const frame of frames) {
+                expect.soft(frame.scrollHeight).toBe(expectedHeight);
+                expect.soft(frame.scrollTop).toBe(expectedScrollTop);
+                expect.soft(frame.logicalScrollTop).toBe(frame.scrollTop);
+                expect.soft(frame.anchorTop).toBeCloseTo(expectedAnchorTop, 1);
+              }
+              await waitForAnnotationHeight(page, height);
+              await expect(page.locator('[data-test-annotation]')).toHaveCount(
+                height === 0 ? 0 : 1
+              );
+              before = await measureViewport(page);
+              expect(before.scrollHeight).toBe(expectedHeight);
+              expect(before.scrollTop).toBe(expectedScrollTop);
+              expect(before.logicalScrollTop).toBe(before.scrollTop);
+              expect(before.anchorTop).toBeCloseTo(expectedAnchorTop, 1);
+              expect(errors).toEqual([]);
+            }
+          );
+        }
+      });
+    }
 
     test(`corrects a removed offscreen annotation when its row renders again (${type})`, async ({
       page,
@@ -227,21 +325,7 @@ test.describe('CodeView annotation scroll anchoring', () => {
 
         // The first scroll reveals the annotations; their measurements grow
         // the range. Position against that measured range before reproducing.
-        await page.evaluate((distance) => {
-          const fixture = window.__annotationScroll;
-          if (fixture == null) throw new Error('Missing annotation fixture.');
-          const { root } = fixture;
-          root.scrollTop = root.scrollHeight - root.clientHeight - distance;
-        }, distance);
-        await page.waitForFunction((distance) => {
-          const fixture = window.__annotationScroll;
-          if (fixture == null) return false;
-          const { root } = fixture;
-          return (
-            root.scrollHeight - root.clientHeight - root.scrollTop ===
-              distance && fixture.getScrollTop() === root.scrollTop
-          );
-        }, distance);
+        await setDistanceFromBottom(page, distance);
         const before = await measureViewport(page);
         expect(before.anchorTop).toBeGreaterThan(0);
         expect(before.anchorTop).toBeLessThan(before.viewportHeight);
