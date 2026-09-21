@@ -47,7 +47,7 @@ function expectLines(
 
 describe('semantic line types', () => {
   test('extraction adds the call and helper boundaries, while preserving moved body lines', () => {
-    // Converted metadata from Sema's go-method-extracted example.
+    // A body moved into a new helper; the call and the helper's braces are new.
     const operation: SemanticDiffOperation = {
       type: 'extractedFunction',
       spans: [
@@ -111,7 +111,7 @@ describe('semantic line types', () => {
   });
 
   test('inlining removes the call and helper boundaries, while preserving moved body lines', () => {
-    // Converted metadata from Sema's op-inlined-function example.
+    // A helper's body moved to its call site; the call and the helper's braces are gone.
     const operation: SemanticDiffOperation = {
       type: 'inlinedFunction',
       spans: [

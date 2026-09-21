@@ -32,7 +32,7 @@ export interface Connector {
   rank: number;
 }
 
-export interface SemanticConnectorOptions {
+interface SemanticConnectorOptions {
   /** Draw connectors on the first render; additions join an active entrance. Defaults to false. */
   animateIn?: boolean;
   /** Entrance duration per connector in milliseconds. */
@@ -41,14 +41,14 @@ export interface SemanticConnectorOptions {
   stagger?: number;
 }
 
-export interface SemanticConnectorBounds {
+interface SemanticConnectorBounds {
   left: number;
   top: number;
   width: number;
   height: number;
 }
 
-export interface SemanticConnectorRenderProps {
+interface SemanticConnectorRenderProps {
   /** Supplies the SVG's positioning context and layout space. */
   container: HTMLElement;
   /** Pixel bounds within the container; connector regions are local to this origin. */

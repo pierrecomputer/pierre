@@ -67,8 +67,6 @@ export interface LineDecoration {
 export interface UnifiedLineDecorationProps {
   type: 'context' | 'context-expanded' | 'change';
   lineType: LineTypes;
-  additionLineIndex: number | undefined;
-  deletionLineIndex: number | undefined;
   additionLineNumber: number | undefined;
   deletionLineNumber: number | undefined;
 }
@@ -76,7 +74,6 @@ export interface UnifiedLineDecorationProps {
 export interface SplitLineDecorationProps {
   side: 'deletions' | 'additions';
   type: 'context' | 'context-expanded' | 'change';
-  lineIndex: number | undefined;
   lineNumber: number | undefined;
 }
 
