@@ -2,7 +2,16 @@
   "name": "@pierre/highlights",
   "version": "0.0.3",
   "description": "A fast code highlighter written in WebAssembly Text(Wat), from Pierre",
+  "homepage": "https://github.com/pierrecomputer/pierre/tree/main/packages/highlights",
+  "bugs": {
+    "url": "https://github.com/pierrecomputer/pierre/issues"
+  },
   "license": "apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/pierrecomputer/pierre.git",
+    "directory": "packages/highlights"
+  },
   "files": [
     "dist/",
     "NOTICE.md"
