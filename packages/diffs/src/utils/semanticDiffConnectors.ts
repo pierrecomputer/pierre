@@ -74,10 +74,10 @@ const CONNECTOR_KIND_BY_LINE_TYPE: Record<
 };
 
 // Build a diff's connectors from its metadata alone: a band for each line pair
-// of a paired span, and a nub for each run a one-sided span owns, ending at the
-// run's attachment. Nothing here depends on which rows are mounted, so the
-// connectors and their IDs stay the same while the viewport changes. Measuring
-// them against the DOM happens separately.
+// of a paired span that colors its lines, and a nub for each run a one-sided
+// span owns, ending at the run's attachment. Nothing here depends on which
+// rows are mounted, so the connectors and their IDs stay the same while the
+// viewport changes. Measuring them against the DOM happens separately.
 export function prepareSemanticDiffConnectors(
   fileDiff: FileDiffMetadata
 ): SemanticDiffConnector[] {
@@ -87,7 +87,6 @@ export function prepareSemanticDiffConnectors(
   const connectors: SemanticDiffConnector[] = [];
   for (const [operationIndex, operation] of operations.entries()) {
     for (const [spanIndex, span] of operation.spans.entries()) {
-      if (span.role === 'body' && span.relation === 'mapped') continue;
       const kind =
         CONNECTOR_KIND_BY_LINE_TYPE[semanticLineType(operation, span)];
       if (kind == null) continue;
@@ -117,15 +116,8 @@ export function prepareSemanticDiffConnectors(
         }
         continue;
       }
-      // A paired span draws only with text on both sides, and a focus span
-      // only for a rename.
-      if (
-        span.old.length === 0 ||
-        span.new.length === 0 ||
-        (span.role === 'focus' && operation.type !== 'renamed')
-      ) {
-        continue;
-      }
+      // A paired span draws only with text on both sides.
+      if (span.old.length === 0 || span.new.length === 0) continue;
       const rank =
         operation.type === 'inlinedFunction' && kind === 'moved' ? 1 : 0;
       for (const pair of mergeSemanticDiffLinePairs(span.linePairs, breaks)) {
