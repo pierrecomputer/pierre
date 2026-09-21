@@ -487,8 +487,6 @@ export class DiffLayout<LAnnotation = undefined> {
           const decoration = host.getUnifiedLineDecoration({
             type,
             lineType,
-            additionLineIndex: additionLine?.lineIndex,
-            deletionLineIndex: deletionLine?.lineIndex,
             additionLineNumber: additionLine?.lineNumber,
             deletionLineNumber: deletionLine?.lineNumber,
           });
@@ -561,13 +559,11 @@ export class DiffLayout<LAnnotation = undefined> {
           const deletionDecoration = host.getSplitLineDecoration({
             side: 'deletions',
             type,
-            lineIndex: deletionLine?.lineIndex,
             lineNumber: deletionLine?.lineNumber,
           });
           const additionDecoration = host.getSplitLineDecoration({
             side: 'additions',
             type,
-            lineIndex: additionLine?.lineIndex,
             lineNumber: additionLine?.lineNumber,
           });
 

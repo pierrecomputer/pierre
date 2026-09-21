@@ -715,11 +715,10 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
   private getSourceLineDecoration(
     hunkLineType: LineTypes,
     side: 'additions' | 'deletions',
-    lineIndex: number | undefined,
     lineNumber: number | undefined
   ): LineDecoration {
     const { semanticLineCache } = this;
-    if (semanticLineCache == null || lineIndex == null || lineNumber == null) {
+    if (semanticLineCache == null || lineNumber == null) {
       return {
         gutterLineType: hunkLineType,
         contentProperties: { 'data-line-type': hunkLineType },
@@ -730,17 +729,11 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       side,
       lineNumber
     );
-    let lineType = line?.lineType;
-    if (lineType == null) {
-      const { additionLines, deletionLines } = semanticLineCache.diff;
-      const content = (side === 'additions' ? additionLines : deletionLines)[
-        lineIndex
-      ];
-      lineType =
-        hunkLineType === 'context-expanded' || !/\S/.test(content)
-          ? hunkLineType
-          : 'context';
-    }
+    // Only owned lines take a semantic color; the converter owns every changed
+    // line, blank lines included, so an unowned line is context.
+    const lineType =
+      line?.lineType ??
+      (hunkLineType === 'context-expanded' ? 'context-expanded' : 'context');
     return {
       gutterLineType: lineType,
       contentProperties: { 'data-line-type': lineType },
@@ -752,16 +745,12 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
   // treated as immutable once returned; return a new object to change a row.
   public getUnifiedLineDecoration({
     lineType,
-    additionLineIndex,
-    deletionLineIndex,
     additionLineNumber,
     deletionLineNumber,
   }: UnifiedLineDecorationProps): LineDecoration {
-    const side = additionLineNumber != null ? 'additions' : 'deletions';
     return this.getSourceLineDecoration(
       lineType,
-      side,
-      side === 'additions' ? additionLineIndex : deletionLineIndex,
+      additionLineNumber != null ? 'additions' : 'deletions',
       additionLineNumber ?? deletionLineNumber
     );
   }
@@ -769,7 +758,6 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
   public getSplitLineDecoration({
     side,
     type,
-    lineIndex,
     lineNumber,
   }: SplitLineDecorationProps): LineDecoration {
     const lineType: LineTypes =
@@ -778,7 +766,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
           ? 'change-deletion'
           : 'change-addition'
         : type;
-    return this.getSourceLineDecoration(lineType, side, lineIndex, lineNumber);
+    return this.getSourceLineDecoration(lineType, side, lineNumber);
   }
 
   public createAnnotationElement(span: AnnotationSpan): HASTElement {
