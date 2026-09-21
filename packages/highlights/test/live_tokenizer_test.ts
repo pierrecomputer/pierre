@@ -98,6 +98,9 @@ void t.test(
     for (const [lang, code] of [
       ['js', 'import {x}\nfrom\n "m";\nconst value = 1;\n'],
       ['ts', 'export\ntype\n Result = string;\n'],
+      ['ts', 'type\n= value;\n'],
+      ['tsx', 'let type;\ntype\n= value;\n'],
+      ['tsrx', 'if (ready) {}\ntype\n= value;\n'],
       ['css', 'a {\ncolor:red\n; }'],
       ['css', '@media screen {\nh1\n { color: red; } }'],
       ['elm', 'import List\nmain = 1\n'],

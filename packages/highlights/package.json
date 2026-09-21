@@ -8,7 +8,7 @@
     "NOTICE.md"
   ],
   "type": "module",
-  "main": "./dist/node.js",
+  "main": "./dist/browser.js",
   "types": "./dist/index.d.ts",
   "exports": {
     ".": {
@@ -42,6 +42,6 @@
   },
   "meta": {
     "highlights.wasm": 158514,
-    "highlights.wasm.gz": 70922
+    "highlights.wasm.gz": 70919
   }
 }

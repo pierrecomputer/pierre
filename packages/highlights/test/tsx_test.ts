@@ -138,7 +138,7 @@ void t.test(
     }
     for (const lang of ['ts', 'tsx', 'tsrx'] as const) {
       for (const code of [
-        'type\n Result = string;\n',
+        'type Result =\n string;\n',
         'export type\n Result = string;\n',
         'import {x, type\n Result} from "m";\n',
       ]) {
@@ -171,6 +171,24 @@ void t.test(
     }
   }
 );
+
+void t.test('ecma: line-ending type identifiers stay variables', () => {
+  for (const lang of ['js', 'ts', 'tsx', 'tsrx'] as const) {
+    for (const newline of ['\n', '\r\n']) {
+      for (const prefix of ['', 'let type;', 'if (ready) {}']) {
+        for (const suffix of ['= value;', 'value = 1;']) {
+          const code = `${prefix}${newline}type${newline}${suffix}${newline}`;
+          assert.ok(
+            tokenKinds(lang, code).some(
+              ([text, kind]) => text === 'type' && kind === 'variable'
+            )
+          );
+          assertLineFedParity(lang, code);
+        }
+      }
+    }
+  }
+});
 
 /** The color of the span whose text is exactly `text`. */
 function spanColor(html: string, text: string): string | null | undefined {
