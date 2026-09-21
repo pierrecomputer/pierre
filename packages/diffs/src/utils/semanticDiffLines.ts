@@ -5,7 +5,7 @@ import type {
   SemanticDiffSpan,
 } from '../types';
 
-export interface SemanticDiffLine {
+interface SemanticDiffLine {
   start: number;
   end: number;
   lineType: LineTypes;
