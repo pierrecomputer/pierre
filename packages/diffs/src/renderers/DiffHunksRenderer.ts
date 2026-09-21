@@ -174,8 +174,6 @@ export interface DiffHunksRendererOptionsWithDefaults extends Omit<
 export interface UnifiedLineDecorationProps {
   type: 'context' | 'context-expanded' | 'change';
   lineType: LineTypes;
-  additionLineIndex: number | undefined;
-  deletionLineIndex: number | undefined;
   additionLineNumber: number | undefined;
   deletionLineNumber: number | undefined;
 }
@@ -183,7 +181,6 @@ export interface UnifiedLineDecorationProps {
 export interface SplitLineDecorationProps {
   side: 'deletions' | 'additions';
   type: 'context' | 'context-expanded' | 'change';
-  lineIndex: number | undefined;
   lineNumber: number | undefined;
 }
 
@@ -921,11 +918,10 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
   private getSourceLineDecoration(
     hunkLineType: LineTypes,
     side: 'additions' | 'deletions',
-    lineIndex: number | undefined,
     lineNumber: number | undefined
   ): LineDecoration {
     const { semanticLineCache } = this;
-    if (semanticLineCache == null || lineIndex == null || lineNumber == null) {
+    if (semanticLineCache == null || lineNumber == null) {
       return {
         gutterLineType: hunkLineType,
         contentProperties: { 'data-line-type': hunkLineType },
@@ -936,17 +932,11 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       side,
       lineNumber
     );
-    let lineType = line?.lineType;
-    if (lineType == null) {
-      const { additionLines, deletionLines } = semanticLineCache.diff;
-      const content = (side === 'additions' ? additionLines : deletionLines)[
-        lineIndex
-      ];
-      lineType =
-        hunkLineType === 'context-expanded' || !/\S/.test(content)
-          ? hunkLineType
-          : 'context';
-    }
+    // Only owned lines take a semantic color; the converter owns every changed
+    // line, blank lines included, so an unowned line is context.
+    const lineType =
+      line?.lineType ??
+      (hunkLineType === 'context-expanded' ? 'context-expanded' : 'context');
     return {
       gutterLineType: lineType,
       contentProperties: { 'data-line-type': lineType },
@@ -955,16 +945,12 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
 
   protected getUnifiedLineDecoration({
     lineType,
-    additionLineIndex,
-    deletionLineIndex,
     additionLineNumber,
     deletionLineNumber,
   }: UnifiedLineDecorationProps): LineDecoration {
-    const side = additionLineNumber != null ? 'additions' : 'deletions';
     return this.getSourceLineDecoration(
       lineType,
-      side,
-      side === 'additions' ? additionLineIndex : deletionLineIndex,
+      additionLineNumber != null ? 'additions' : 'deletions',
       additionLineNumber ?? deletionLineNumber
     );
   }
@@ -972,7 +958,6 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
   protected getSplitLineDecoration({
     side,
     type,
-    lineIndex,
     lineNumber,
   }: SplitLineDecorationProps): LineDecoration {
     const lineType: LineTypes =
@@ -981,7 +966,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
           ? 'change-deletion'
           : 'change-addition'
         : type;
-    return this.getSourceLineDecoration(lineType, side, lineIndex, lineNumber);
+    return this.getSourceLineDecoration(lineType, side, lineNumber);
   }
 
   private createAnnotationElement = (span: AnnotationSpan): HASTElement => {
@@ -1822,8 +1807,6 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
             // these extra props
             type,
             lineType,
-            additionLineIndex: additionLine?.lineIndex,
-            deletionLineIndex: deletionLine?.lineIndex,
             additionLineNumber: additionLine?.lineNumber,
             deletionLineNumber: deletionLine?.lineNumber,
           });
@@ -1900,13 +1883,11 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
           const deletionLineDecoration = this.getSplitLineDecoration({
             side: 'deletions',
             type,
-            lineIndex: deletionLine?.lineIndex,
             lineNumber: deletionLine?.lineNumber,
           });
           const additionLineDecoration = this.getSplitLineDecoration({
             side: 'additions',
             type,
-            lineIndex: additionLine?.lineIndex,
             lineNumber: additionLine?.lineNumber,
           });
 

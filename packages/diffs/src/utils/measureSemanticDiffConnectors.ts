@@ -1,5 +1,5 @@
 import type { Connector, SideBounds } from '../components/SemanticConnector';
-import type { SemanticDiffConnectorAnchor } from './resolveSemanticConnectorAnchors';
+import type { SemanticDiffConnectorAttachment } from '../types';
 import type {
   SemanticDiffConnector,
   SemanticDiffConnectorRange,
@@ -28,11 +28,23 @@ export function measureSemanticDiffConnectors(
     const base =
       region.base != null
         ? measureRun(region.base, oldLines, rects, originTop)
-        : measureAnchor(region.anchor, oldLines, deletions, rects, originTop);
+        : measureAttachment(
+            region.attachment,
+            oldLines,
+            deletions,
+            rects,
+            originTop
+          );
     const target =
       region.target != null
         ? measureRun(region.target, newLines, rects, originTop)
-        : measureAnchor(region.anchor, newLines, additions, rects, originTop);
+        : measureAttachment(
+            region.attachment,
+            newLines,
+            additions,
+            rects,
+            originTop
+          );
     if (base == null || target == null) {
       continue;
     }
@@ -87,22 +99,21 @@ function measureRun(
 
 // Find the row edge where an addition or deletion connector ends.
 // Use the content's top for an empty file; skip rows that aren't rendered.
-function measureAnchor(
-  anchor: SemanticDiffConnectorAnchor | undefined,
+function measureAttachment(
+  attachment: SemanticDiffConnectorAttachment,
   lines: Map<number, MountedLine>,
   content: HTMLElement,
   rects: Map<HTMLElement, DOMRect>,
   originTop: number
 ): SideBounds | undefined {
-  if (anchor == null) return;
   let y: number;
-  if ('empty' in anchor) {
+  if ('empty' in attachment) {
     y = getRowRect(content, rects).top - originTop;
   } else {
-    const line = lines.get(anchor.line);
+    const line = lines.get(attachment.line);
     if (line == null) return;
     const rect = getRowRect(line.element, rects);
-    y = (anchor.edge === 'before' ? rect.top : rect.bottom) - originTop;
+    y = (attachment.edge === 'before' ? rect.top : rect.bottom) - originTop;
   }
   return { top: y, bottom: y };
 }

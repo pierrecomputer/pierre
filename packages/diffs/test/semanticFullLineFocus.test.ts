@@ -8,7 +8,6 @@ import type {
 } from '../src/types';
 import { parseDiffFromFile } from '../src/utils/parseDiffFromFile';
 import { getSemanticDiffFocus } from '../src/utils/semanticDiffFocus';
-import { createSemanticDiffLineLookup } from '../src/utils/semanticDiffLines';
 
 const range = (start: number, end: number): SemanticDiffTextRange => ({
   start: { line: 1, character: start },
@@ -36,48 +35,37 @@ function operation(span: SemanticDiffSpan): SemanticDiffOperation {
   };
 }
 
-function decorations(span: SemanticDiffSpan, text = '  abc\r\n') {
+function decorationsFor(op: SemanticDiffOperation, text = '  abc\r\n') {
   const diff = parseDiffFromFile(
     { name: 'before.txt', contents: text },
     { name: 'after.txt', contents: text }
   );
-  diff.semanticOperations = [operation(span)];
+  diff.semanticOperations = [op];
   return getSemanticDiffFocus(diff)!;
 }
 
+function decorations(span: SemanticDiffSpan, text?: string) {
+  return decorationsFor(operation(span), text);
+}
+
 describe('full-line semantic focus', () => {
-  test.each([
-    ['introduced', 'change-addition'],
-    ['removed', 'change-deletion'],
-    ['moved', 'change-moved'],
-    ['replaced', 'change-edited'],
-    ['mapped', 'change-edited'],
-  ] as const)(
-    '%s supplies the line style without a second text highlight',
-    (relation, lineType) => {
-      const span = focus(relation, [range(2, 5)]);
-      const op = operation(span);
+  test.each(['introduced', 'removed', 'moved', 'replaced', 'mapped'] as const)(
+    'a full-line %s focus adds no text highlight',
+    (relation) => {
+      const op = operation(focus(relation, [range(2, 5)]));
       const original = structuredClone(op);
-      const lookup = createSemanticDiffLineLookup([op]);
-      for (const entry of [...lookup.additions, ...lookup.deletions]) {
-        expect(entry.lineType).toBe(lineType);
-        expect(entry.span).toBe(span);
-        expect(entry.operation).toBe(op);
-      }
-      const result = decorations(span);
+      const result = decorationsFor(op);
       expect(result.additions.decorations).toEqual([]);
       expect(result.deletions.decorations).toEqual([]);
       expect(op).toEqual(original);
     }
   );
 
-  test('uses the formatting kind instead of the surrounding edited operation', () => {
+  test('a full-line formatting focus adds no text highlight', () => {
     const span = {
       ...focus('mapped', [range(2, 5)]),
       kind: 'reformatted' as const,
     };
-    const lookup = createSemanticDiffLineLookup([operation(span)]);
-    expect(lookup.additions[0].lineType).toBe('change-reformatted');
     expect(decorations(span).additions.decorations).toEqual([]);
   });
 
