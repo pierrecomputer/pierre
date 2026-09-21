@@ -68,8 +68,17 @@
         })),
       };
 
+      if (params.get('fileAnnotation') === 'true') {
+        item.annotations.unshift({
+          lineNumber: 0,
+          side: 'additions',
+          metadata: { height: 100, label: 'File comment' },
+        });
+      }
+
       const viewer = new CodeView({
         diffStyle: 'split',
+        __devOnlyValidateItemHeights: true,
         renderAnnotation({ metadata }) {
           const element = document.createElement('div');
           element.dataset.testAnnotation = '';
@@ -112,6 +121,33 @@
       window.__annotationScroll = {
         root,
         addAnnotation,
+        resizeAnnotations(height) {
+          item = {
+            ...item,
+            version: item.version + 1,
+            annotations: item.annotations.map((annotation) => ({
+              ...annotation,
+              metadata: { ...annotation.metadata, height },
+            })),
+          };
+          viewer.updateItem(item);
+        },
+        clearAnnotations() {
+          item = { ...item, version: item.version + 1, annotations: [] };
+          viewer.updateItem(item);
+        },
+        removeFileAnnotation() {
+          item = {
+            ...item,
+            version: item.version + 1,
+            annotations: item.annotations.filter(
+              ({ lineNumber }) => lineNumber !== 0
+            ),
+          };
+          viewer.updateItem(item);
+        },
+        getFirstLineTop: () =>
+          viewer.getRenderedItems()[0]?.instance.getLinePosition(1)?.top,
         getMeasuredAnnotationHeight,
         getScrollTop: () => viewer.getScrollTop(),
       };

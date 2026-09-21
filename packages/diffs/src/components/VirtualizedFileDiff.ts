@@ -184,10 +184,12 @@ export class VirtualizedFileDiff<
     lineAnnotations: DiffLineAnnotation<LAnnotation>[]
   ): void {
     if (this.syncLineAnnotations(lineAnnotations)) {
-      this.resetLayoutCache({ includeEstimatedHeights: false });
+      this.forceRenderOverride = true;
     }
   }
 
+  // Keep measured row heights as estimates when annotations change; rendering
+  // will replace them with the updated heights without discarding other rows.
   private syncLineAnnotations(
     lineAnnotations: DiffLineAnnotation<LAnnotation>[] | undefined
   ): boolean {
@@ -206,7 +208,7 @@ export class VirtualizedFileDiff<
     lineAnnotations: DiffLineAnnotation<LAnnotation>[]
   ): boolean {
     if (super.syncEditSessionAnnotationsFromEditor(lineAnnotations)) {
-      this.resetLayoutCache({ includeEstimatedHeights: false });
+      this.forceRenderOverride = true;
       return true;
     }
     return false;
@@ -429,14 +431,18 @@ export class VirtualizedFileDiff<
       fileDiff,
       this.editor?.__getGhostTextRows() ?? NO_GHOST_TEXT_ROWS
     );
-    const lineAnnotations = this.getLatestAnnotations();
+    const measureAllRows =
+      overflow !== 'scroll' ||
+      this.getLatestAnnotations().length > 0 ||
+      this.isResizeDebuggingEnabled();
     // Ghost-row changes affect placeholders too, but placeholders have no DOM
-    // rows to measure. Unwrapped rows without annotations also need no measurement.
+    // rows to measure. After the last annotation is removed, keep measuring
+    // rendered rows until their previously cached heights have been corrected.
     if (
       this.placeHolder != null ||
-      (overflow === 'scroll' &&
-        lineAnnotations.length === 0 &&
-        !this.isResizeDebuggingEnabled())
+      (!measureAllRows &&
+        this.cache.heightDeltas.size === 0 &&
+        this.cache.fileAnnotationHeight === 0)
     ) {
       if (hasHeightChange) {
         this.computeApproximateSize(true);
@@ -450,10 +456,10 @@ export class VirtualizedFileDiff<
         ? [this.codeDeletions, this.codeAdditions]
         : [this.codeUnified];
 
-    const hasFileAnnotations = this.hasFileAnnotations(fileDiff);
+    // Keep offscreen file annotation measurements consistent with the buffers
+    // computed for this render. A rendered top row can confirm their removal.
     if (
       this.renderRange != null &&
-      hasFileAnnotations &&
       shouldRenderFileAnnotations(this.renderRange)
     ) {
       const fileAnnotationHeight = measureFileAnnotationHeight(codeGroups);
@@ -461,8 +467,6 @@ export class VirtualizedFileDiff<
       if (this.setFileAnnotationHeight(nextFileAnnotationHeight)) {
         hasHeightChange = true;
       }
-    } else if (!hasFileAnnotations && this.setFileAnnotationHeight(0)) {
-      hasHeightChange = true;
     }
 
     for (const codeGroup of codeGroups) {
@@ -484,6 +488,12 @@ export class VirtualizedFileDiff<
         const lineIndex = parseLineIndex(lineIndexAttr, diffStyle);
         const ghostRows = ghostTextRowsByIndex.get(lineIndex) ?? 0;
         if (skipsGhostRows && ghostRows > 0) continue;
+        const previousDelta = this.cache.heightDeltas.get(lineIndex) ?? 0;
+        // With no annotations or wrapping, only stale custom measurements need
+        // DOM reads. Ghost rows already have known heights from the editor.
+        if (!measureAllRows && previousDelta === ghostRows * lineHeight) {
+          continue;
+        }
         let measuredHeight =
           line.getBoundingClientRect().height + ghostRows * lineHeight;
         let hasMetadata = false;
@@ -501,7 +511,6 @@ export class VirtualizedFileDiff<
             line.nextElementSibling.getBoundingClientRect().height;
         }
         const estimatedHeight = this.getEstimatedLineHeight(hasMetadata);
-        const previousDelta = this.cache.heightDeltas.get(lineIndex) ?? 0;
         const nextDelta = measuredHeight - estimatedHeight;
 
         if (nextDelta === previousDelta) {
@@ -606,11 +615,7 @@ export class VirtualizedFileDiff<
       this.forceRenderOverride = true;
     }
 
-    if (
-      reset?.resetDiffLayoutCache === true ||
-      layoutDiffChanged ||
-      annotationsChanged
-    ) {
+    if (reset?.resetDiffLayoutCache === true || layoutDiffChanged) {
       resetLayoutCache = true;
     }
     if (
@@ -1425,9 +1430,9 @@ export class VirtualizedFileDiff<
       return this.updatePendingRender(nextFileDiff, lineAnnotations);
     })();
 
-    if (annotationsChanged || layoutDiffChanged) {
+    if (layoutDiffChanged) {
       this.resetLayoutCache({
-        includeEstimatedHeights: layoutDiffChanged,
+        includeEstimatedHeights: true,
       });
     }
 

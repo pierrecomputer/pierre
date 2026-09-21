@@ -333,6 +333,37 @@ async function showGhost(fixture: Fixture): Promise<void> {
 }
 
 describe('CodeView edit prediction ghost rows', () => {
+  for (const itemType of ['file', 'diff'] as const) {
+    test(`does not measure code rows just because ghost heights are cached (${itemType})`, async () => {
+      const fixture = await createFixture({ itemType });
+      try {
+        await showGhost(fixture);
+        const before = snapshotLayout(fixture.viewer, fixture.instanceA);
+        let measurements = 0;
+        const rows = fixture.elementA.shadowRoot?.querySelectorAll<HTMLElement>(
+          '[data-content] > [data-line]'
+        );
+        expect(rows?.length).toBeGreaterThan(0);
+        for (const row of rows ?? []) {
+          const measure = row.getBoundingClientRect.bind(row);
+          row.getBoundingClientRect = () => {
+            measurements++;
+            return measure();
+          };
+        }
+
+        fixture.instanceA.reconcileHeights();
+
+        expect(measurements).toBe(0);
+        expect(snapshotLayout(fixture.viewer, fixture.instanceA)).toEqual(
+          before
+        );
+      } finally {
+        await fixture.cleanup();
+      }
+    });
+  }
+
   test('folds ghost rows under a file item into the layout', async () => {
     const fixture = await createFixture();
     const { viewer, instanceA } = fixture;

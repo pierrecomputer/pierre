@@ -69,6 +69,10 @@ interface Window {
   __annotationScroll?: {
     root: HTMLElement;
     addAnnotation(): void;
+    resizeAnnotations(height: number): void;
+    clearAnnotations(): void;
+    removeFileAnnotation(): void;
+    getFirstLineTop(): number | undefined;
     getMeasuredAnnotationHeight(): number | undefined;
     getScrollTop(): number;
   };
