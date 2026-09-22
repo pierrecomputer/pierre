@@ -25,8 +25,8 @@
     --diffs-added-dark: #5ecc71;
     /* NOTE(amadeus): Playing around with colors, see below where we
      * use reformatted */
-    /* --diffs-modified-light: #009fff; */
-    /* --diffs-modified-dark: #69b1ff; */
+    --diffs-modified-light: #009fff;
+    --diffs-modified-dark: #69b1ff;
     --diffs-deleted-light: #ff2e3f;
     --diffs-deleted-dark: #ff6762;
     --diffs-warning-light: #d5a910;
@@ -39,10 +39,6 @@
     --diffs-edited-dark: #bf91f3;
     --diffs-reformatted-light: #808080;
     --diffs-reformatted-dark: #a0a0a0;
-    /* modified is just a move without changes i think, so like trying to make
-     * it grey for now... but may not keep it */
-    --diffs-modified-light: var(--diffs-reformatted-light);
-    --diffs-modified-dark: var(--diffs-reformatted-dark);
     --diffs-focus-replaced-light: var(--diffs-edited-light);
     --diffs-focus-replaced-dark: var(--diffs-edited-dark);
     --diffs-focus-moved-light: var(--diffs-modified-light);
