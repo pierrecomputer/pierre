@@ -524,32 +524,47 @@ export interface SelectedLineRange {
   endSide?: SelectionSide;
 }
 
-type OptionalMetadata<LAnnotation> = LAnnotation extends undefined
+type OptionalMetadata<Metadata> = Metadata extends undefined
   ? { metadata?: undefined }
-  : { metadata: LAnnotation };
+  : { metadata: Metadata };
 
 /**
  * Annotation rendered for a file line. Use `lineNumber: 0` to render a
  * file-level annotation above the first rendered file line.
  */
-export type LineAnnotation<LAnnotation = undefined> = {
+export type LineAnnotation<Metadata = undefined> = {
   lineNumber: number;
-} & OptionalMetadata<LAnnotation>;
+} & OptionalMetadata<Metadata>;
 
 /**
  * Annotation rendered for one side of a diff line. Use `lineNumber: 0` to
  * render a side-specific file-level annotation above the first hunk/separator.
  */
-export type DiffLineAnnotation<LAnnotation = undefined> = {
+export type DiffLineAnnotation<Metadata = undefined> = {
   side: AnnotationSide;
   lineNumber: number;
-} & OptionalMetadata<LAnnotation>;
+} & OptionalMetadata<Metadata>;
 
-export type CodeViewFileItem<LAnnotation = undefined> = {
+export type DecorationRange<Metadata = undefined> = {
+  lineNumber: number;
+  endLineNumber?: number;
+  bar?: boolean;
+  color?: string;
+  background?: boolean | string;
+} & OptionalMetadata<Metadata>;
+export type FileDecorationItem<Metadata = undefined> =
+  DecorationRange<Metadata>;
+export type DiffDecorationItem<Metadata = undefined> =
+  DecorationRange<Metadata> & { side: AnnotationSide };
+export type CodeViewFileItem<
+  LAnnotation = undefined,
+  LDecoration = undefined,
+> = {
   id: string;
   type: 'file';
   file: FileContents;
   annotations?: LineAnnotation<LAnnotation>[];
+  decorations?: FileDecorationItem<LDecoration>[];
   version?: number;
   collapsed?: boolean;
   /**
@@ -560,11 +575,15 @@ export type CodeViewFileItem<LAnnotation = undefined> = {
   edit?: boolean;
 };
 
-export type CodeViewDiffItem<LAnnotation = undefined> = {
+export type CodeViewDiffItem<
+  LAnnotation = undefined,
+  LDecoration = undefined,
+> = {
   id: string;
   type: 'diff';
   fileDiff: FileDiffMetadata;
   annotations?: DiffLineAnnotation<LAnnotation>[];
+  decorations?: DiffDecorationItem<LDecoration>[];
   version?: number;
   collapsed?: boolean;
   /**
@@ -575,9 +594,9 @@ export type CodeViewDiffItem<LAnnotation = undefined> = {
   edit?: boolean;
 };
 
-export type CodeViewItem<LAnnotation> =
-  | CodeViewFileItem<LAnnotation>
-  | CodeViewDiffItem<LAnnotation>;
+export type CodeViewItem<LAnnotation = undefined, LDecoration = undefined> =
+  | CodeViewFileItem<LAnnotation, LDecoration>
+  | CodeViewDiffItem<LAnnotation, LDecoration>;
 
 export interface CodeViewPositionScrollTarget {
   type: 'position';

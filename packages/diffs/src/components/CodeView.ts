@@ -151,58 +151,72 @@ interface CodeViewVirtualizedInstanceKey {
 
 interface CodeViewDiffItemContext<
   LAnnotation,
+  LDecoration,
   Caret,
 > extends AdvancedVirtualizedBaseItem {
   type: 'diff';
   /** Latest item snapshot for this record. Controlled updates can replace it. */
-  item: CodeViewDiffItem<LAnnotation>;
+  item: CodeViewDiffItem<LAnnotation, LDecoration>;
   /** Virtualized diff instance responsible for rendering this item. */
-  instance: VirtualizedFileDiff<LAnnotation, Caret>;
+  instance: VirtualizedFileDiff<LAnnotation, LDecoration, Caret>;
 }
 
 interface CodeViewFileItemContext<
   LAnnotation,
+  LDecoration,
   Caret,
 > extends AdvancedVirtualizedBaseItem {
   type: 'file';
   /** Latest item snapshot for this record. Controlled updates can replace it. */
-  item: CodeViewFileItem<LAnnotation>;
+  item: CodeViewFileItem<LAnnotation, LDecoration>;
   /** Virtualized file instance responsible for rendering this item. */
-  instance: VirtualizedFile<LAnnotation, Caret>;
+  instance: VirtualizedFile<LAnnotation, LDecoration, Caret>;
 }
 
-type CodeViewContextItem<LAnnotation, Caret> =
-  | CodeViewDiffItemContext<LAnnotation, Caret>
-  | CodeViewFileItemContext<LAnnotation, Caret>;
+type CodeViewContextItem<LAnnotation, LDecoration, Caret> =
+  | CodeViewDiffItemContext<LAnnotation, LDecoration, Caret>
+  | CodeViewFileItemContext<LAnnotation, LDecoration, Caret>;
 
-export interface CodeViewRenderedDiffItem<LAnnotation, Caret> {
+export interface CodeViewRenderedDiffItem<
+  LAnnotation,
+  LDecoration,
+  Caret = undefined,
+> {
   id: string;
   type: 'diff';
-  item: CodeViewDiffItem<LAnnotation>;
+  item: CodeViewDiffItem<LAnnotation, LDecoration>;
   version: number | undefined;
   element: HTMLElement;
-  instance: VirtualizedFileDiff<LAnnotation, Caret>;
+  instance: VirtualizedFileDiff<LAnnotation, LDecoration, Caret>;
 }
 
-export interface CodeViewRenderedFileItem<LAnnotation, Caret> {
+export interface CodeViewRenderedFileItem<
+  LAnnotation,
+  LDecoration,
+  Caret = undefined,
+> {
   id: string;
   type: 'file';
-  item: CodeViewFileItem<LAnnotation>;
+  item: CodeViewFileItem<LAnnotation, LDecoration>;
   version: number | undefined;
   element: HTMLElement;
-  instance: VirtualizedFile<LAnnotation, Caret>;
+  instance: VirtualizedFile<LAnnotation, LDecoration, Caret>;
 }
 
-export type CodeViewRenderedItem<LAnnotation, Caret> =
-  | CodeViewRenderedDiffItem<LAnnotation, Caret>
-  | CodeViewRenderedFileItem<LAnnotation, Caret>;
+export type CodeViewRenderedItem<LAnnotation, LDecoration, Caret = undefined> =
+  | CodeViewRenderedDiffItem<LAnnotation, LDecoration, Caret>
+  | CodeViewRenderedFileItem<LAnnotation, LDecoration, Caret>;
 
 // Everything the React layer portals into, published together so a single store
 // subscription drives per-item slots AND the global header/footer.
-export interface CodeViewSlotSnapshot<LAnnotation, Caret> {
+export interface CodeViewSlotSnapshot<
+  LAnnotation,
+  LDecoration = undefined,
+  Caret = undefined,
+> {
   // Rendered items that need React-managed slot content (per-item headers,
   // annotations, gutter utilities), or undefined when none.
-  items: CodeViewRenderedItem<LAnnotation, Caret>[] | undefined;
+  items: CodeViewRenderedItem<LAnnotation, LDecoration, Caret>[] | undefined;
   // The always-rendered header/footer host elements React portals into, or
   // undefined when the corresponding renderCodeViewHeader/Footer callback is not
   // set. Because these live in the snapshot, a host mounting/unmounting changes
@@ -217,18 +231,22 @@ export interface CodeViewLineSelection {
   range: SelectedLineRange;
 }
 
-export interface CodeViewCoordinator<LAnnotation, Caret> {
+export interface CodeViewCoordinator<
+  LAnnotation,
+  LDecoration = undefined,
+  Caret = undefined,
+> {
   hasHeaderRenderers: boolean;
   hasAnnotationRenderer: boolean;
   hasGutterRenderer: boolean;
   onSnapshotChange(
-    snapshot: CodeViewSlotSnapshot<LAnnotation, Caret> | undefined
+    snapshot: CodeViewSlotSnapshot<LAnnotation, LDecoration, Caret> | undefined
   ): void;
 }
 
-export type CodeViewScrollListener<LAnnotation, Caret> = (
+export type CodeViewScrollListener<LAnnotation, LDecoration, Caret> = (
   scrollTop: number,
-  viewer: CodeView<LAnnotation, Caret>
+  viewer: CodeView<LAnnotation, LDecoration, Caret>
 ) => void;
 
 type OverloadCallbackArgs<TCallback> = TCallback extends (
@@ -245,58 +263,73 @@ type CallbackReturn<TCallback> = TCallback extends (
 
 type OverloadFileCallbackArgs<
   LAnnotation,
+  LDecoration,
   Caret,
-  TKey extends keyof FileOptions<LAnnotation, Caret>,
-> = OverloadCallbackArgs<NonNullable<FileOptions<LAnnotation, Caret>[TKey]>>;
+  TKey extends keyof FileOptions<LAnnotation, LDecoration, Caret>,
+> = OverloadCallbackArgs<
+  NonNullable<FileOptions<LAnnotation, LDecoration, Caret>[TKey]>
+>;
 
 type OverloadDiffCallbackArgs<
   LAnnotation,
+  LDecoration,
   Caret,
-  TKey extends keyof FileDiffOptions<LAnnotation, Caret>,
+  TKey extends keyof FileDiffOptions<LAnnotation, LDecoration, Caret>,
 > = OverloadCallbackArgs<
-  NonNullable<FileDiffOptions<LAnnotation, Caret>[TKey]>
+  NonNullable<FileDiffOptions<LAnnotation, LDecoration, Caret>[TKey]>
 >;
 
 type CodeViewFileOptionCallback<
   LAnnotation,
+  LDecoration,
   Caret,
-  TKey extends keyof FileOptions<LAnnotation, Caret>,
+  TKey extends keyof FileOptions<LAnnotation, LDecoration, Caret>,
 > = (
   ...args: [
-    ...OverloadFileCallbackArgs<LAnnotation, Caret, TKey>,
-    context: CodeViewFileItemContext<LAnnotation, Caret>,
+    ...OverloadFileCallbackArgs<LAnnotation, LDecoration, Caret, TKey>,
+    context: CodeViewFileItemContext<LAnnotation, LDecoration, Caret>,
   ]
-) => CallbackReturn<NonNullable<FileOptions<LAnnotation, Caret>[TKey]>>;
+) => CallbackReturn<
+  NonNullable<FileOptions<LAnnotation, LDecoration, Caret>[TKey]>
+>;
 
 type CodeViewDiffOptionCallback<
   LAnnotation,
+  LDecoration,
   Caret,
-  TKey extends keyof FileDiffOptions<LAnnotation, Caret>,
+  TKey extends keyof FileDiffOptions<LAnnotation, LDecoration, Caret>,
 > = (
   ...args: [
-    ...OverloadDiffCallbackArgs<LAnnotation, Caret, TKey>,
-    context: CodeViewDiffItemContext<LAnnotation, Caret>,
+    ...OverloadDiffCallbackArgs<LAnnotation, LDecoration, Caret, TKey>,
+    context: CodeViewDiffItemContext<LAnnotation, LDecoration, Caret>,
   ]
-) => CallbackReturn<NonNullable<FileDiffOptions<LAnnotation, Caret>[TKey]>>;
+) => CallbackReturn<
+  NonNullable<FileDiffOptions<LAnnotation, LDecoration, Caret>[TKey]>
+>;
 
 type CodeViewOptionCallback<
   LAnnotation,
+  LDecoration,
   Caret,
-  TKey extends keyof FileOptions<LAnnotation, Caret> &
-    keyof FileDiffOptions<LAnnotation, Caret>,
+  TKey extends keyof FileOptions<LAnnotation, LDecoration, Caret> &
+    keyof FileDiffOptions<LAnnotation, LDecoration, Caret>,
 > = {
   (
     ...args: [
-      ...OverloadFileCallbackArgs<LAnnotation, Caret, TKey>,
-      context: CodeViewFileItemContext<LAnnotation, Caret>,
+      ...OverloadFileCallbackArgs<LAnnotation, LDecoration, Caret, TKey>,
+      context: CodeViewFileItemContext<LAnnotation, LDecoration, Caret>,
     ]
-  ): CallbackReturn<NonNullable<FileOptions<LAnnotation, Caret>[TKey]>>;
+  ): CallbackReturn<
+    NonNullable<FileOptions<LAnnotation, LDecoration, Caret>[TKey]>
+  >;
   (
     ...args: [
-      ...OverloadDiffCallbackArgs<LAnnotation, Caret, TKey>,
-      context: CodeViewDiffItemContext<LAnnotation, Caret>,
+      ...OverloadDiffCallbackArgs<LAnnotation, LDecoration, Caret, TKey>,
+      context: CodeViewDiffItemContext<LAnnotation, LDecoration, Caret>,
     ]
-  ): CallbackReturn<NonNullable<FileDiffOptions<LAnnotation, Caret>[TKey]>>;
+  ): CallbackReturn<
+    NonNullable<FileDiffOptions<LAnnotation, LDecoration, Caret>[TKey]>
+  >;
 };
 
 export const CODE_VIEW_DIFF_OPTION_KEYS = [
@@ -356,8 +389,8 @@ export const CODE_VIEW_FILE_OPTION_KEYS = [
 
 type CodeViewFileOptionKeys = (typeof CODE_VIEW_FILE_OPTION_KEYS)[number];
 
-type CodeViewPassThroughOptions<LAnnotation, Caret> = Pick<
-  FileDiffOptions<LAnnotation, Caret>,
+type CodeViewPassThroughOptions<LAnnotation, LDecoration, Caret> = Pick<
+  FileDiffOptions<LAnnotation, LDecoration, Caret>,
   CodeViewDiffOptionKeys
 >;
 
@@ -370,59 +403,65 @@ export interface CodeViewItemEditCompleteEventMap<LAnnotation, Caret> {
   diff: FileDiffEditCompleteEvent<LAnnotation, Caret>;
 }
 
-export interface CodeViewModeItemMap<LAnnotation> {
-  file: CodeViewFileItem<LAnnotation>;
-  diff: CodeViewDiffItem<LAnnotation>;
+export interface CodeViewModeItemMap<LAnnotation, LDecoration> {
+  file: CodeViewFileItem<LAnnotation, LDecoration>;
+  diff: CodeViewDiffItem<LAnnotation, LDecoration>;
 }
 
-export type CodeViewItemEditCompleteHandler<LAnnotation, Caret> = <
+export type CodeViewItemEditCompleteHandler<LAnnotation, LDecoration, Caret> = <
   TMode extends CodeViewMode,
 >(
   event: CodeViewItemEditCompleteEventMap<LAnnotation, Caret>[TMode],
-  item: CodeViewModeItemMap<LAnnotation>[TMode],
-  nextItem: CodeViewModeItemMap<LAnnotation>[TMode]
+  item: CodeViewModeItemMap<LAnnotation, LDecoration>[TMode],
+  nextItem: CodeViewModeItemMap<LAnnotation, LDecoration>[TMode]
 ) => EditCompletionDecision;
 
 type CodeViewModeItemContext<
   LAnnotation,
+  LDecoration,
   Caret,
   TMode extends CodeViewMode,
 > = TMode extends 'file'
-  ? CodeViewFileItemContext<LAnnotation, Caret>
-  : CodeViewDiffItemContext<LAnnotation, Caret>;
+  ? CodeViewFileItemContext<LAnnotation, LDecoration, Caret>
+  : CodeViewDiffItemContext<LAnnotation, LDecoration, Caret>;
 
 type CodeViewModeOptionCallback<
   LAnnotation,
+  LDecoration,
   Caret,
   TMode extends CodeViewMode,
   TKey extends CodeViewSharedCallbackKeys | CodeViewSelectionCallbackKeys,
 > = TMode extends 'file'
-  ? CodeViewFileOptionCallback<LAnnotation, Caret, TKey>
-  : CodeViewDiffOptionCallback<LAnnotation, Caret, TKey>;
+  ? CodeViewFileOptionCallback<LAnnotation, LDecoration, Caret, TKey>
+  : CodeViewDiffOptionCallback<LAnnotation, LDecoration, Caret, TKey>;
 
 type CodeViewModeInternalOptionCallback<
   LAnnotation,
+  LDecoration,
   Caret,
   TMode extends CodeViewMode,
   TKey extends CodeViewSharedCallbackKeys | CodeViewSelectionCallbackKeys,
 > = (
   ...args: [
     ...OverloadCallbackArgs<
-      NonNullable<CodeViewModeOptions<LAnnotation, Caret, TMode>[TKey]>
+      NonNullable<
+        CodeViewModeOptions<LAnnotation, LDecoration, Caret, TMode>[TKey]
+      >
     >,
-    CodeViewModeItemContext<LAnnotation, Caret, TMode>,
+    CodeViewModeItemContext<LAnnotation, LDecoration, Caret, TMode>,
   ]
 ) => CallbackReturn<
-  NonNullable<CodeViewModeOptions<LAnnotation, Caret, TMode>[TKey]>
+  NonNullable<CodeViewModeOptions<LAnnotation, LDecoration, Caret, TMode>[TKey]>
 >;
 
 type CodeViewModeOptions<
   LAnnotation,
+  LDecoration,
   Caret,
   TMode extends CodeViewMode,
 > = TMode extends 'file'
-  ? FileOptions<LAnnotation, Caret>
-  : FileDiffOptions<LAnnotation, Caret>;
+  ? FileOptions<LAnnotation, LDecoration, Caret>
+  : FileDiffOptions<LAnnotation, LDecoration, Caret>;
 
 const CODE_VIEW_SHARED_CALLBACK_KEYS = [
   'renderCustomHeader',
@@ -465,7 +504,7 @@ type CodeViewItemCallbackCache = Partial<
 // come from a shared prototype. This avoids retaining dozens of getter closures
 // and property descriptors per item while still letting the item instance read
 // the latest CodeView options whenever it renders.
-interface CodeViewItemOptionsState<LAnnotation> {
+interface CodeViewItemOptionsState<LAnnotation, LDecoration> {
   // Store the id instead of the item object so item -> instance -> options does
   // not form a strong cycle back to the item context. The id also lets
   // updateItemId() keep reused instances pointed at the current record.
@@ -475,15 +514,19 @@ interface CodeViewItemOptionsState<LAnnotation> {
   callbackCache?: CodeViewItemCallbackCache;
   // Set when the item is removed while completing an edit session, so the
   // completion adapter can still resolve the item.
-  removedItem?: CodeViewItem<LAnnotation>;
+  removedItem?: CodeViewItem<LAnnotation, LDecoration>;
 }
 
 type CodeViewItemOptions<
   LAnnotation,
+  LDecoration,
   Caret,
   TMode extends CodeViewMode,
-> = CodeViewModeOptions<LAnnotation, Caret, TMode> & {
-  [CODE_VIEW_ITEM_OPTIONS_STATE]: CodeViewItemOptionsState<LAnnotation>;
+> = CodeViewModeOptions<LAnnotation, LDecoration, Caret, TMode> & {
+  [CODE_VIEW_ITEM_OPTIONS_STATE]: CodeViewItemOptionsState<
+    LAnnotation,
+    LDecoration
+  >;
 };
 
 // Editor bookkeeping for one edit-mode item. `state` is the attached
@@ -491,15 +534,20 @@ type CodeViewItemOptions<
 // current serves the onChange closure and the completion adapter alike.
 // `dispose` comes from the latest `editor.edit()` attachment: it tears the
 // editor down and completes the session on the instance it attached to.
-interface CodeViewItemEditorRecord<LAnnotation, Caret> {
+interface CodeViewItemEditorRecord<LAnnotation, LDecoration, Caret> {
   editor: CodeViewEditor<LAnnotation, Caret>;
-  state: CodeViewItemOptionsState<LAnnotation>;
+  state: CodeViewItemOptionsState<LAnnotation, LDecoration>;
   dispose(): void;
 }
 
-function defineOptionsState<LAnnotation, Caret, TMode extends CodeViewMode>(
-  options: CodeViewModeOptions<LAnnotation, Caret, TMode>,
-  state: CodeViewItemOptionsState<LAnnotation>
+function defineOptionsState<
+  LAnnotation,
+  LDecoration,
+  Caret,
+  TMode extends CodeViewMode,
+>(
+  options: CodeViewModeOptions<LAnnotation, LDecoration, Caret, TMode>,
+  state: CodeViewItemOptionsState<LAnnotation, LDecoration>
 ): void {
   // Keep the state hidden from option enumeration. Renderer option builders
   // should copy known keys explicitly and must not depend on object spread.
@@ -515,25 +563,32 @@ function defineOptionsState<LAnnotation, Caret, TMode extends CodeViewMode>(
 // sometimes this can trigger on the options prototype directly which won't
 // have access to an internal state.  This forces us to be defensive later on
 // which is important
-function getItemOptionsState<LAnnotation, Caret, TMode extends CodeViewMode>(
-  options: CodeViewModeOptions<LAnnotation, Caret, TMode>
-): CodeViewItemOptionsState<LAnnotation> | undefined {
-  return (options as CodeViewItemOptions<LAnnotation, Caret, TMode>)[
-    CODE_VIEW_ITEM_OPTIONS_STATE
-  ];
+function getItemOptionsState<
+  LAnnotation,
+  LDecoration,
+  Caret,
+  TMode extends CodeViewMode,
+>(
+  options: CodeViewModeOptions<LAnnotation, LDecoration, Caret, TMode>
+): CodeViewItemOptionsState<LAnnotation, LDecoration> | undefined {
+  return (
+    options as CodeViewItemOptions<LAnnotation, LDecoration, Caret, TMode>
+  )[CODE_VIEW_ITEM_OPTIONS_STATE];
 }
 
-type CodeViewSharedCallbackOptions<LAnnotation, Caret> = {
+type CodeViewSharedCallbackOptions<LAnnotation, LDecoration, Caret> = {
   [TKey in CodeViewSharedCallbackKeys]?: CodeViewOptionCallback<
     LAnnotation,
+    LDecoration,
     Caret,
     TKey
   >;
 };
 
-type CodeViewSelectionCallbackOptions<LAnnotation, Caret> = {
+type CodeViewSelectionCallbackOptions<LAnnotation, LDecoration, Caret> = {
   [TKey in CodeViewSelectionCallbackKeys]?: CodeViewOptionCallback<
     LAnnotation,
+    LDecoration,
     Caret,
     TKey
   >;
@@ -556,11 +611,15 @@ function defineItemOption<TOptions extends object, TKey extends keyof TOptions>(
   });
 }
 
-export interface CodeViewOptions<LAnnotation, Caret>
+export interface CodeViewOptions<
+  LAnnotation,
+  LDecoration = undefined,
+  Caret = undefined,
+>
   extends
-    CodeViewPassThroughOptions<LAnnotation, Caret>,
-    CodeViewSharedCallbackOptions<LAnnotation, Caret>,
-    CodeViewSelectionCallbackOptions<LAnnotation, Caret> {
+    CodeViewPassThroughOptions<LAnnotation, LDecoration, Caret>,
+    CodeViewSharedCallbackOptions<LAnnotation, LDecoration, Caret>,
+    CodeViewSelectionCallbackOptions<LAnnotation, LDecoration, Caret> {
   hunkSeparators?: Exclude<HunkSeparators, 'custom'>;
   itemMetrics?: Partial<VirtualFileMetrics>;
   pointerEventsOnScroll?: boolean;
@@ -573,7 +632,9 @@ export interface CodeViewOptions<LAnnotation, Caret>
    * Return an in-memory retention key for an item's editable draft and
    * undo/redo history. Called only when CodeView creates the item's editor.
    */
-  getEditStateKey?(item: CodeViewItem<LAnnotation>): string | undefined;
+  getEditStateKey?(
+    item: CodeViewItem<LAnnotation, LDecoration>
+  ): string | undefined;
   /**
    * Create an editor for an item entering edit mode (`edit: true`). Providing
    * this option is what enables item editing. Pass the given options into the
@@ -598,7 +659,7 @@ export interface CodeViewOptions<LAnnotation, Caret>
    */
   onItemEditChange?(
     event: EditorChangeEvent<EditorType, LAnnotation, Caret>,
-    item: CodeViewItem<LAnnotation>
+    item: CodeViewItem<LAnnotation, LDecoration>
   ): void;
   /**
    * Called once when an edit session ends: edit to false, the item is removed
@@ -617,7 +678,11 @@ export interface CodeViewOptions<LAnnotation, Caret>
    * '…'`) before accepting. The event contains the detached editor with its
    * final pre-detach state.
    */
-  onItemEditComplete?: CodeViewItemEditCompleteHandler<LAnnotation, Caret>;
+  onItemEditComplete?: CodeViewItemEditCompleteHandler<
+    LAnnotation,
+    LDecoration,
+    Caret
+  >;
 
   /** Render a non-virtualized element at the very start of the scroll content,
    * before the first item. It is always rendered and scrolls with the content.
@@ -656,10 +721,10 @@ interface SpringStepResult {
   velocity: number;
 }
 
-function assertEditorFactory<LAnnotation, Caret>(
-  createEditor: CodeViewOptions<LAnnotation, Caret>['createEditor']
+function assertEditorFactory<LAnnotation, LDecoration, Caret>(
+  createEditor: CodeViewOptions<LAnnotation, LDecoration, Caret>['createEditor']
 ): asserts createEditor is NonNullable<
-  CodeViewOptions<LAnnotation, Caret>['createEditor']
+  CodeViewOptions<LAnnotation, LDecoration, Caret>['createEditor']
 > {
   if (createEditor == null) {
     throw new Error(
@@ -705,12 +770,16 @@ type PendingScrollTarget =
   | PendingRangeTarget
   | PendingItemTarget;
 
-type CodeViewItemMap<LAnnotation, Caret> = Map<
+type CodeViewItemMap<LAnnotation, LDecoration, Caret> = Map<
   string,
-  CodeViewContextItem<LAnnotation, Caret>
+  CodeViewContextItem<LAnnotation, LDecoration, Caret>
 >;
 
-export class CodeView<LAnnotation = undefined, Caret = undefined> {
+export class CodeView<
+  LAnnotation = undefined,
+  LDecoration = undefined,
+  Caret = undefined,
+> {
   static __STOP = false;
   static __lastScrollPosition = 0;
 
@@ -720,8 +789,9 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
     intersectionObserverMargin: 0,
     resizeDebugging: false,
   };
-  private items: CodeViewContextItem<LAnnotation, Caret>[] = [];
-  private idToItem: CodeViewItemMap<LAnnotation, Caret> = new Map();
+  private items: CodeViewContextItem<LAnnotation, LDecoration, Caret>[] = [];
+  private idToItem: CodeViewItemMap<LAnnotation, LDecoration, Caret> =
+    new Map();
   private selectedLines: CodeViewLineSelection | null = null;
   // One editor per edit-mode item, created lazily via options.createEditor.
   // Entries survive virtualization unmounts with their editor association;
@@ -730,22 +800,27 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
   // state, whose `id` updateItemId keeps pointed at the current item.
   private itemEditors: Map<
     string,
-    CodeViewItemEditorRecord<LAnnotation, Caret>
+    CodeViewItemEditorRecord<LAnnotation, LDecoration, Caret>
   > = new Map();
   private attachedEditors: Set<string> = new Set();
   // NOTE(amadeus): We should probably attach an id to instances and use that
   // for lookups, instead of maintaining this map...
   private instanceToItem: Map<
     CodeViewVirtualizedInstanceKey,
-    CodeViewContextItem<LAnnotation, Caret>
+    CodeViewContextItem<LAnnotation, LDecoration, Caret>
   > = new Map();
   private layoutDirtyIndex: number | undefined;
   private pendingLayoutReset: PendingCodeViewLayoutReset | undefined;
   private renderOptionsRevision = 0;
-  private slotCoordinator: CodeViewCoordinator<LAnnotation, Caret> | undefined;
-  private slotSnapshot: CodeViewSlotSnapshot<LAnnotation, Caret> | undefined;
-  private scrollListeners: Set<CodeViewScrollListener<LAnnotation, Caret>> =
-    new Set();
+  private slotCoordinator:
+    | CodeViewCoordinator<LAnnotation, LDecoration, Caret>
+    | undefined;
+  private slotSnapshot:
+    | CodeViewSlotSnapshot<LAnnotation, LDecoration, Caret>
+    | undefined;
+  private scrollListeners: Set<
+    CodeViewScrollListener<LAnnotation, LDecoration, Caret>
+  > = new Set();
   private scrollHeight = 0;
   private containerHeight = -1;
   private scrollTop: number = 0;
@@ -766,8 +841,16 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
     stickyBottom: -1,
   };
   private itemMetricsCache: VirtualFileMetrics = DEFAULT_CODE_VIEW_FILE_METRICS;
-  private readonly fileOptionsPrototype: FileOptions<LAnnotation, Caret>;
-  private readonly diffOptionsPrototype: FileDiffOptions<LAnnotation, Caret>;
+  private readonly fileOptionsPrototype: FileOptions<
+    LAnnotation,
+    LDecoration,
+    Caret
+  >;
+  private readonly diffOptionsPrototype: FileDiffOptions<
+    LAnnotation,
+    LDecoration,
+    Caret
+  >;
   // Pending scroll target, either instant or smooth. The next render cycle
   // will attempt to resolve it's position instantly or as part of a dynamic
   // animation.
@@ -821,14 +904,16 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
   // i.e. the react CodeView component will require a separate react cleanup
   // phase that we don't want to interrupt
   private pendingElementPool: HTMLElement[] = [];
-  private options: CodeViewOptions<LAnnotation, Caret>;
+  private options: CodeViewOptions<LAnnotation, LDecoration, Caret>;
   private workerManager: WorkerPoolManager | undefined;
   private isReadySubscription: (() => void) | undefined;
   private pendingHighlighterTheme: DiffsThemeNames | ThemesType | undefined;
   private isContainerManaged: boolean;
 
   constructor(
-    options: CodeViewOptions<LAnnotation, Caret> = { theme: DEFAULT_THEMES },
+    options: CodeViewOptions<LAnnotation, LDecoration, Caret> = {
+      theme: DEFAULT_THEMES,
+    },
     workerManager?: WorkerPoolManager | undefined,
     isContainerManaged = false
   ) {
@@ -897,7 +982,7 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
   }
 
   private validateRenderedItemHeight(
-    item: CodeViewContextItem<LAnnotation, Caret>
+    item: CodeViewContextItem<LAnnotation, LDecoration, Caret>
   ): void {
     if (!this.shouldValidateItemHeights() || item.element == null) {
       return;
@@ -1371,7 +1456,7 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
   }
 
   private releaseRenderedItem(
-    item: CodeViewContextItem<LAnnotation, Caret>
+    item: CodeViewContextItem<LAnnotation, LDecoration, Caret>
   ): void {
     const { element } = item;
     if (element != null && this.renderedItemOwnsFocus(element)) {
@@ -1567,7 +1652,9 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
     this.applySelectedLines(null, options);
   }
 
-  public getItem(itemId: string): CodeViewItem<LAnnotation> | undefined {
+  public getItem(
+    itemId: string
+  ): CodeViewItem<LAnnotation, LDecoration> | undefined {
     return this.idToItem.get(itemId)?.item;
   }
 
@@ -1583,7 +1670,7 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
     return this.itemEditors.get(itemId)?.editor;
   }
 
-  public updateItem(input: CodeViewItem<LAnnotation>): boolean {
+  public updateItem(input: CodeViewItem<LAnnotation, LDecoration>): boolean {
     const item = this.idToItem.get(input.id);
     if (item == null) {
       console.error(`CodeView.updateItem: unknown item id "${input.id}"`);
@@ -1641,11 +1728,13 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
     return true;
   }
 
-  public addItem(input: CodeViewItem<LAnnotation>): void {
+  public addItem(input: CodeViewItem<LAnnotation, LDecoration>): void {
     this.addItems([input]);
   }
 
-  public addItems(inputs: readonly CodeViewItem<LAnnotation>[]): void {
+  public addItems(
+    inputs: readonly CodeViewItem<LAnnotation, LDecoration>[]
+  ): void {
     this.appendItemsInternal(inputs);
     this.syncItemEditors();
     this.syncSelection();
@@ -1658,7 +1747,7 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
       return false;
     }
 
-    const nextItems: CodeViewItem<LAnnotation>[] = [];
+    const nextItems: CodeViewItem<LAnnotation, LDecoration>[] = [];
     for (const current of this.items) {
       if (current !== item) {
         nextItems.push(current.item);
@@ -1668,9 +1757,11 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
     return true;
   }
 
-  public setItems(items: readonly CodeViewItem<LAnnotation>[]): void {
+  public setItems(
+    items: readonly CodeViewItem<LAnnotation, LDecoration>[]
+  ): void {
     let removedItemsById:
-      | Readonly<CodeViewItemMap<LAnnotation, Caret>>
+      | Readonly<CodeViewItemMap<LAnnotation, LDecoration, Caret>>
       | undefined;
     if (this.items.length === 0) {
       this.appendItemsInternal(items);
@@ -1688,7 +1779,7 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
    * once at the end.
    */
   private appendItemsInternal(
-    inputs: readonly CodeViewItem<LAnnotation>[],
+    inputs: readonly CodeViewItem<LAnnotation, LDecoration>[],
     render = true
   ): void {
     if (inputs.length === 0) {
@@ -1742,7 +1833,7 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
   }
 
   public setOptions(
-    options: CodeViewOptions<LAnnotation, Caret> | undefined
+    options: CodeViewOptions<LAnnotation, LDecoration, Caret> | undefined
   ): void {
     if (options == null) {
       return;
@@ -1808,7 +1899,8 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
   }
 
   public capturePendingLayoutAnchor(
-    nextItems: Readonly<CodeViewItemMap<LAnnotation, Caret>> = this.idToItem
+    nextItems: Readonly<CodeViewItemMap<LAnnotation, LDecoration, Caret>> = this
+      .idToItem
   ): void {
     if (
       this.root == null ||
@@ -1961,13 +2053,21 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
     return this.footer.element;
   }
 
-  public getRenderedItems(): CodeViewRenderedItem<LAnnotation, Caret>[] {
+  public getRenderedItems(): CodeViewRenderedItem<
+    LAnnotation,
+    LDecoration,
+    Caret
+  >[] {
     const { firstIndex, lastIndex } = this.renderState;
     if (firstIndex === -1 || lastIndex === -1 || lastIndex < firstIndex) {
       return [];
     }
 
-    const renderedItems: CodeViewRenderedItem<LAnnotation, Caret>[] = [];
+    const renderedItems: CodeViewRenderedItem<
+      LAnnotation,
+      LDecoration,
+      Caret
+    >[] = [];
 
     for (let index = firstIndex; index <= lastIndex; index++) {
       const item = this.items[index];
@@ -2000,7 +2100,7 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
   }
 
   public setSlotCoordinator(
-    coordinator?: CodeViewCoordinator<LAnnotation, Caret>
+    coordinator?: CodeViewCoordinator<LAnnotation, LDecoration, Caret>
   ): boolean {
     if (coordinator === this.slotCoordinator) {
       return false;
@@ -2011,8 +2111,8 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
   }
 
   public getSlotSnapshot(
-    coordinator: CodeViewCoordinator<LAnnotation, Caret>
-  ): CodeViewSlotSnapshot<LAnnotation, Caret> | undefined {
+    coordinator: CodeViewCoordinator<LAnnotation, LDecoration, Caret>
+  ): CodeViewSlotSnapshot<LAnnotation, LDecoration, Caret> | undefined {
     return this.buildSlotSnapshot(coordinator);
   }
 
@@ -2020,8 +2120,8 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
   // into a single snapshot. Returns undefined only when there is nothing for
   // React to portal.
   private buildSlotSnapshot(
-    coordinator: CodeViewCoordinator<LAnnotation, Caret>
-  ): CodeViewSlotSnapshot<LAnnotation, Caret> | undefined {
+    coordinator: CodeViewCoordinator<LAnnotation, LDecoration, Caret>
+  ): CodeViewSlotSnapshot<LAnnotation, LDecoration, Caret> | undefined {
     const items = getSlotItems(this.getRenderedItems(), coordinator);
     const { element: header } = this.header;
     const { element: footer } = this.footer;
@@ -2032,7 +2132,7 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
   }
 
   public subscribeToScroll(
-    listener: CodeViewScrollListener<LAnnotation, Caret>
+    listener: CodeViewScrollListener<LAnnotation, LDecoration, Caret>
   ): () => void {
     this.scrollListeners.add(listener);
     return () => {
@@ -2061,13 +2161,13 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
   }
 
   private createItem(
-    input: CodeViewItem<LAnnotation>,
+    input: CodeViewItem<LAnnotation, LDecoration>,
     index: number,
     top: number
-  ): CodeViewContextItem<LAnnotation, Caret> {
+  ): CodeViewContextItem<LAnnotation, LDecoration, Caret> {
     const { itemMetricsCache: itemMetrics } = this;
     if (input.type === 'diff') {
-      const instance = new VirtualizedFileDiff<LAnnotation, Caret>(
+      const instance = new VirtualizedFileDiff<LAnnotation, LDecoration, Caret>(
         this.createDiffOptions(input.id),
         this,
         itemMetrics,
@@ -2084,10 +2184,10 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
         element: undefined,
         renderedOptionsRevision: this.renderOptionsRevision,
         instance,
-      } satisfies CodeViewDiffItemContext<LAnnotation, Caret>;
+      } satisfies CodeViewDiffItemContext<LAnnotation, LDecoration, Caret>;
     }
 
-    const instance = new VirtualizedFile<LAnnotation, Caret>(
+    const instance = new VirtualizedFile<LAnnotation, LDecoration, Caret>(
       this.createFileOptions(input.id),
       this,
       itemMetrics,
@@ -2104,7 +2204,7 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
       element: undefined,
       renderedOptionsRevision: this.renderOptionsRevision,
       instance,
-    } satisfies CodeViewFileItemContext<LAnnotation, Caret>;
+    } satisfies CodeViewFileItemContext<LAnnotation, LDecoration, Caret>;
   }
 
   private applySelectedLines(
@@ -2153,7 +2253,7 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
 
   // Collapsing an edited item suspends editing until it expands again.
   private isItemInEditMode(
-    item: CodeViewContextItem<LAnnotation, Caret>
+    item: CodeViewContextItem<LAnnotation, LDecoration, Caret>
   ): boolean {
     return item.item.edit === true && item.item.collapsed !== true;
   }
@@ -2168,7 +2268,7 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
    * paints the edited text without changing the host input.
    */
   private attachItemEditor(
-    item: CodeViewContextItem<LAnnotation, Caret>
+    item: CodeViewContextItem<LAnnotation, LDecoration, Caret>
   ): void {
     const { id } = item.item;
     const { createEditor } = this.options;
@@ -2184,7 +2284,7 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
     let createdEditor: CodeViewEditor<LAnnotation, Caret> | undefined;
     try {
       if (record == null) {
-        assertEditorFactory(createEditor);
+        assertEditorFactory<LAnnotation, LDecoration, Caret>(createEditor);
         const state = getItemOptionsState(item.instance.options);
         if (state == null) {
           throw new Error(
@@ -2251,13 +2351,17 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
    * via attachItemEditor.
    */
   private syncItemEditors(
-    removedItems?: Readonly<CodeViewItemMap<LAnnotation, Caret>>
+    removedItems?: Readonly<CodeViewItemMap<LAnnotation, LDecoration, Caret>>
   ): void {
     if (this.itemEditors.size === 0) {
       return;
     }
 
-    const completions: CodeViewItemEditorRecord<LAnnotation, Caret>[] = [];
+    const completions: CodeViewItemEditorRecord<
+      LAnnotation,
+      LDecoration,
+      Caret
+    >[] = [];
     for (const [id, record] of this.itemEditors) {
       const item = this.idToItem.get(id);
       const removedItem = removedItems?.get(id);
@@ -2318,8 +2422,8 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
   // The item a completion event belongs to: the live record when the item
   // still exists, or the removal-time record left on the options state.
   private requireItemFromState(
-    state: CodeViewItemOptionsState<LAnnotation>
-  ): CodeViewItem<LAnnotation> {
+    state: CodeViewItemOptionsState<LAnnotation, LDecoration>
+  ): CodeViewItem<LAnnotation, LDecoration> {
     const item = this.idToItem.get(state.id)?.item ?? state.removedItem;
     if (item == null) {
       throw new Error(
@@ -2336,7 +2440,7 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
    * the component return contract.
    */
   private completeFileItemEdit(
-    state: CodeViewItemOptionsState<LAnnotation>,
+    state: CodeViewItemOptionsState<LAnnotation, LDecoration>,
     event: FileEditCompleteEvent<LAnnotation, Caret>
   ): EditCompletionDecision {
     const item = this.requireItemFromState(state);
@@ -2345,7 +2449,7 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
         `CodeView.onItemEditComplete: item "${state.id}" is not a file item`
       );
     }
-    const nextItem: CodeViewFileItem<LAnnotation> = {
+    const nextItem: CodeViewFileItem<LAnnotation, LDecoration> = {
       ...item,
       file: event.file,
       annotations: event.lineAnnotations,
@@ -2371,7 +2475,7 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
    * completeFileItemEdit.
    */
   private completeDiffItemEdit(
-    state: CodeViewItemOptionsState<LAnnotation>,
+    state: CodeViewItemOptionsState<LAnnotation, LDecoration>,
     event: FileDiffEditCompleteEvent<LAnnotation, Caret>
   ): EditCompletionDecision {
     const item = this.requireItemFromState(state);
@@ -2380,7 +2484,7 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
         `CodeView.onItemEditComplete: item "${state.id}" is not a diff item`
       );
     }
-    const nextItem: CodeViewDiffItem<LAnnotation> = {
+    const nextItem: CodeViewDiffItem<LAnnotation, LDecoration> = {
       ...item,
       fileDiff: event.fileDiff,
       annotations: event.lineAnnotations,
@@ -2424,15 +2528,18 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
   // answer current option reads for the item instance that keeps them for its
   // lifetime. The accessors live on per-CodeView prototypes so large viewers do
   // not allocate the full option surface for every file or diff item.
-  private createFileOptionsPrototype(): FileOptions<LAnnotation, Caret> {
-    const prototype = {} as FileOptions<LAnnotation, Caret>;
+  private createFileOptionsPrototype(): FileOptions<
+    LAnnotation,
+    LDecoration,
+    Caret
+  > {
+    const prototype = {} as FileOptions<LAnnotation, LDecoration, Caret>;
 
     for (const key of CODE_VIEW_FILE_OPTION_KEYS) {
-      defineItemOption<FileOptions<LAnnotation, Caret>, CodeViewFileOptionKeys>(
-        prototype,
-        key,
-        () => this.options[key]
-      );
+      defineItemOption<
+        FileOptions<LAnnotation, LDecoration, Caret>,
+        CodeViewFileOptionKeys
+      >(prototype, key, () => this.options[key]);
     }
 
     // Mapped options: served from CodeView-level names or per-item state
@@ -2471,12 +2578,16 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
     return prototype;
   }
 
-  private createDiffOptionsPrototype(): FileDiffOptions<LAnnotation, Caret> {
-    const prototype = {} as FileDiffOptions<LAnnotation, Caret>;
+  private createDiffOptionsPrototype(): FileDiffOptions<
+    LAnnotation,
+    LDecoration,
+    Caret
+  > {
+    const prototype = {} as FileDiffOptions<LAnnotation, LDecoration, Caret>;
 
     for (const key of CODE_VIEW_DIFF_OPTION_KEYS) {
       defineItemOption<
-        FileDiffOptions<LAnnotation, Caret>,
+        FileDiffOptions<LAnnotation, LDecoration, Caret>,
         CodeViewDiffOptionKeys
       >(prototype, key, () => this.options[key]);
     }
@@ -2522,38 +2633,44 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
     return prototype;
   }
 
-  private createFileOptions(id: string): FileOptions<LAnnotation, Caret> {
+  private createFileOptions(
+    id: string
+  ): FileOptions<LAnnotation, LDecoration, Caret> {
     // The per-item options object intentionally owns only hidden state. All
     // public option reads fall through to the shared prototype above.
     const options = Object.create(this.fileOptionsPrototype) as FileOptions<
       LAnnotation,
+      LDecoration,
       Caret
     >;
-    const state: CodeViewItemOptionsState<LAnnotation> = {
+    const state: CodeViewItemOptionsState<LAnnotation, LDecoration> = {
       id,
     };
     defineOptionsState(options, state);
     return options;
   }
 
-  private createDiffOptions(id: string): FileDiffOptions<LAnnotation, Caret> {
+  private createDiffOptions(
+    id: string
+  ): FileDiffOptions<LAnnotation, LDecoration, Caret> {
     // The per-item options object intentionally owns only hidden state. All
     // public option reads fall through to the shared prototype above.
     const options = Object.create(this.diffOptionsPrototype) as FileDiffOptions<
       LAnnotation,
+      LDecoration,
       Caret
     >;
-    const state: CodeViewItemOptionsState<LAnnotation> = {
+    const state: CodeViewItemOptionsState<LAnnotation, LDecoration> = {
       id,
     };
-    defineOptionsState(options, state);
+    defineOptionsState<LAnnotation, LDecoration, Caret, 'diff'>(options, state);
     return options;
   }
 
   private updateItemOptionsId(
     options:
-      | FileOptions<LAnnotation, Caret>
-      | FileDiffOptions<LAnnotation, Caret>,
+      | FileOptions<LAnnotation, LDecoration, Caret>
+      | FileDiffOptions<LAnnotation, LDecoration, Caret>,
     id: string
   ): void {
     const state = getItemOptionsState(options);
@@ -2564,40 +2681,59 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
   }
 
   private getItemOptions<TMode extends CodeViewMode>(
-    state: CodeViewItemOptionsState<LAnnotation>,
+    state: CodeViewItemOptionsState<LAnnotation, LDecoration>,
     mode: TMode
-  ): CodeViewModeItemContext<LAnnotation, Caret, TMode> | undefined {
+  ):
+    | CodeViewModeItemContext<LAnnotation, LDecoration, Caret, TMode>
+    | undefined {
     const item = this.idToItem.get(state.id);
     if (item == null || item.type !== mode) {
       return undefined;
     }
-    return item as CodeViewModeItemContext<LAnnotation, Caret, TMode>;
+    return item as CodeViewModeItemContext<
+      LAnnotation,
+      LDecoration,
+      Caret,
+      TMode
+    >;
   }
 
   private defineItemSharedCallback<
     TMode extends CodeViewMode,
     TKey extends CodeViewSharedCallbackKeys,
   >(
-    options: CodeViewModeOptions<LAnnotation, Caret, TMode>,
+    options: CodeViewModeOptions<LAnnotation, LDecoration, Caret, TMode>,
     mode: TMode,
     key: TKey
   ): void {
     defineItemOption(
       options as Record<
         TKey,
-        CodeViewModeOptions<LAnnotation, Caret, TMode>[TKey] | undefined
+        | CodeViewModeOptions<LAnnotation, LDecoration, Caret, TMode>[TKey]
+        | undefined
       >,
       key,
       (receiver) => {
         const current = this.options[key] as
-          | CodeViewModeOptionCallback<LAnnotation, Caret, TMode, TKey>
+          | CodeViewModeOptionCallback<
+              LAnnotation,
+              LDecoration,
+              Caret,
+              TMode,
+              TKey
+            >
           | undefined;
         if (current == null) {
           return undefined;
         }
 
         const state = getItemOptionsState(
-          receiver as CodeViewModeOptions<LAnnotation, Caret, TMode>
+          receiver as CodeViewModeOptions<
+            LAnnotation,
+            LDecoration,
+            Caret,
+            TMode
+          >
         );
         if (state == null) {
           return undefined;
@@ -2606,7 +2742,7 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
         // observed. Most large CodeViews never read these callback properties.
         const callbackCache = (state.callbackCache ??= {});
         let wrapped = callbackCache[key] as
-          | CodeViewModeOptions<LAnnotation, Caret, TMode>[TKey]
+          | CodeViewModeOptions<LAnnotation, LDecoration, Caret, TMode>[TKey]
           | undefined;
         if (wrapped == null) {
           wrapped = ((...args: unknown[]) => {
@@ -2617,6 +2753,7 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
             const callback = this.options[key] as
               | CodeViewModeInternalOptionCallback<
                   LAnnotation,
+                  LDecoration,
                   Caret,
                   TMode,
                   TKey
@@ -2625,7 +2762,12 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
             return (
               callback as ((...callbackArgs: unknown[]) => unknown) | undefined
             )?.(...args, latest);
-          }) as CodeViewModeOptions<LAnnotation, Caret, TMode>[TKey];
+          }) as CodeViewModeOptions<
+            LAnnotation,
+            LDecoration,
+            Caret,
+            TMode
+          >[TKey];
 
           callbackCache[key] = wrapped;
         }
@@ -2639,19 +2781,25 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
     TMode extends CodeViewMode,
     TKey extends CodeViewSelectionCallbackKeys,
   >(
-    options: CodeViewModeOptions<LAnnotation, Caret, TMode>,
+    options: CodeViewModeOptions<LAnnotation, LDecoration, Caret, TMode>,
     mode: TMode,
     key: TKey
   ): void {
     defineItemOption(
       options as Record<
         TKey,
-        CodeViewModeOptions<LAnnotation, Caret, TMode>[TKey] | undefined
+        | CodeViewModeOptions<LAnnotation, LDecoration, Caret, TMode>[TKey]
+        | undefined
       >,
       key,
       (receiver) => {
         const state = getItemOptionsState(
-          receiver as CodeViewModeOptions<LAnnotation, Caret, TMode>
+          receiver as CodeViewModeOptions<
+            LAnnotation,
+            LDecoration,
+            Caret,
+            TMode
+          >
         );
         if (state == null) {
           return undefined;
@@ -2661,7 +2809,7 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
         // latest user callback, if one exists.
         const callbackCache = (state.callbackCache ??= {});
         let wrapped = callbackCache[key] as
-          | CodeViewModeOptions<LAnnotation, Caret, TMode>[TKey]
+          | CodeViewModeOptions<LAnnotation, LDecoration, Caret, TMode>[TKey]
           | undefined;
         if (wrapped == null) {
           wrapped = (range: SelectedLineRange | null) => {
@@ -2683,7 +2831,12 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
             const callback = this.options[key] as
               | ((
                   nextRange: SelectedLineRange | null,
-                  context: CodeViewModeItemContext<LAnnotation, Caret, TMode>
+                  context: CodeViewModeItemContext<
+                    LAnnotation,
+                    LDecoration,
+                    Caret,
+                    TMode
+                  >
                 ) => unknown)
               | undefined;
             return callback?.(range, latest);
@@ -2712,7 +2865,7 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
    * the viewer holds a very large number of items.
    */
   private markItemLayoutDirty(
-    item: CodeViewContextItem<LAnnotation, Caret>
+    item: CodeViewContextItem<LAnnotation, LDecoration, Caret>
   ): void {
     if (this.items[item.index] !== item) {
       throw new Error(
@@ -2729,7 +2882,9 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
    * record in place, sync any versioned payload changes, and append only the new
    * tail instead of rebuilding the whole list.
    */
-  private tryAppendItems(items: readonly CodeViewItem<LAnnotation>[]): boolean {
+  private tryAppendItems(
+    items: readonly CodeViewItem<LAnnotation, LDecoration>[]
+  ): boolean {
     if (items.length <= this.items.length) {
       return false;
     }
@@ -2778,21 +2933,23 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
    * membership, or versioned item data changes.
    */
   private reconcileItems(
-    items: readonly CodeViewItem<LAnnotation>[]
-  ): Readonly<CodeViewItemMap<LAnnotation, Caret>> | undefined {
+    items: readonly CodeViewItem<LAnnotation, LDecoration>[]
+  ): Readonly<CodeViewItemMap<LAnnotation, LDecoration, Caret>> | undefined {
     const { items: previousItems, idToItem: previousById } = this;
     const removedItems = new Set(previousItems);
-    const nextItems: CodeViewContextItem<LAnnotation, Caret>[] = [];
+    const nextItems: CodeViewContextItem<LAnnotation, LDecoration, Caret>[] =
+      [];
     const nextIdToItem: Map<
       string,
-      CodeViewContextItem<LAnnotation, Caret>
+      CodeViewContextItem<LAnnotation, LDecoration, Caret>
     > = new Map();
     const nextInstanceToItem: Map<
-      | VirtualizedFileDiff<LAnnotation, Caret>
-      | VirtualizedFile<LAnnotation, Caret>,
-      CodeViewContextItem<LAnnotation, Caret>
+      | VirtualizedFileDiff<LAnnotation, LDecoration, Caret>
+      | VirtualizedFile<LAnnotation, LDecoration, Caret>,
+      CodeViewContextItem<LAnnotation, LDecoration, Caret>
     > = new Map();
-    const removedItemsById: CodeViewItemMap<LAnnotation, Caret> = new Map();
+    const removedItemsById: CodeViewItemMap<LAnnotation, LDecoration, Caret> =
+      new Map();
     let firstDirtyIndex: number | undefined;
 
     for (let index = 0; index < items.length; index++) {
@@ -2873,8 +3030,8 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
    * intentionally publishes a newer version.
    */
   private syncItemRecord(
-    item: CodeViewContextItem<LAnnotation, Caret>,
-    nextItem: CodeViewItem<LAnnotation>
+    item: CodeViewContextItem<LAnnotation, LDecoration, Caret>,
+    nextItem: CodeViewItem<LAnnotation, LDecoration>
   ): boolean {
     if (item.type !== nextItem.type) {
       throw new Error(
@@ -3234,7 +3391,7 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
   }
 
   private getLineScrollPosition(
-    item: CodeViewContextItem<LAnnotation, Caret>,
+    item: CodeViewContextItem<LAnnotation, LDecoration, Caret>,
     target: CodeViewLineScrollTarget
   ): LineScrollPosition | undefined {
     if (item.type === 'diff') {
@@ -3245,7 +3402,7 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
   }
 
   private getRangeScrollPosition(
-    item: CodeViewContextItem<LAnnotation, Caret>,
+    item: CodeViewContextItem<LAnnotation, LDecoration, Caret>,
     target: CodeViewRangeScrollTarget
   ): LineScrollPosition | undefined {
     const { range } = target;
@@ -3512,7 +3669,9 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
     const hostsChanged = this.reconcileHeaderFooterHosts();
 
     let prevElement: HTMLElement | undefined;
-    const updatedItems = new Set<CodeViewContextItem<LAnnotation, Caret>>();
+    const updatedItems = new Set<
+      CodeViewContextItem<LAnnotation, LDecoration, Caret>
+    >();
     const startingIndex = this.findFirstVisibleIndex(top);
     const lastRenderedIndex = this.findLastVisibleIndex(bottom);
 
@@ -3659,7 +3818,7 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
   };
 
   private flushManagers(
-    updatedItems: Set<CodeViewContextItem<LAnnotation, Caret>>
+    updatedItems: Set<CodeViewContextItem<LAnnotation, LDecoration, Caret>>
   ): void {
     for (const item of updatedItems) {
       item.instance.flushManagers();
@@ -3743,7 +3902,7 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
   }
 
   private reconcileRenderedItems(
-    updatedItems?: Set<CodeViewContextItem<LAnnotation, Caret>>
+    updatedItems?: Set<CodeViewContextItem<LAnnotation, LDecoration, Caret>>
   ): void {
     const { firstIndex, lastIndex } = this.renderState;
     if (firstIndex === -1) {
@@ -3966,10 +4125,12 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
     scrollTop: number,
     availableItems: ReadonlyMap<
       string,
-      CodeViewContextItem<LAnnotation, Caret>
+      CodeViewContextItem<LAnnotation, LDecoration, Caret>
     > = this.idToItem
   ): ScrollAnchor | undefined {
-    let skippedItem: CodeViewContextItem<LAnnotation, Caret> | undefined;
+    let skippedItem:
+      | CodeViewContextItem<LAnnotation, LDecoration, Caret>
+      | undefined;
 
     const { pendingLayoutAnchor } = this;
     if (pendingLayoutAnchor != null) {
@@ -4352,8 +4513,8 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
   }
 }
 
-function prepareItemInstance<LAnnotation, Caret>(
-  item: CodeViewContextItem<LAnnotation, Caret>
+function prepareItemInstance<LAnnotation, LDecoration, Caret>(
+  item: CodeViewContextItem<LAnnotation, LDecoration, Caret>
 ): number {
   item.instance.cleanUp(true);
   if (item.type === 'diff') {
@@ -4373,9 +4534,9 @@ function prepareItemInstance<LAnnotation, Caret>(
   }
 }
 
-function shouldClearPool<LAnnotation, Caret>(
-  previousOptions: CodeViewOptions<LAnnotation, Caret>,
-  nextOptions: CodeViewOptions<LAnnotation, Caret>
+function shouldClearPool<LAnnotation, LDecoration, Caret>(
+  previousOptions: CodeViewOptions<LAnnotation, LDecoration, Caret>,
+  nextOptions: CodeViewOptions<LAnnotation, LDecoration, Caret>
 ): boolean {
   return (
     !areThemesEqual(
@@ -4388,9 +4549,9 @@ function shouldClearPool<LAnnotation, Caret>(
   );
 }
 
-function hasItemLayoutOptionChanged<LAnnotation, Caret>(
-  previousOptions: CodeViewOptions<LAnnotation, Caret>,
-  nextOptions: CodeViewOptions<LAnnotation, Caret>
+function hasItemLayoutOptionChanged<LAnnotation, LDecoration, Caret>(
+  previousOptions: CodeViewOptions<LAnnotation, LDecoration, Caret>,
+  nextOptions: CodeViewOptions<LAnnotation, LDecoration, Caret>
 ): boolean {
   return (
     (previousOptions.overflow ?? 'scroll') !==
@@ -4415,9 +4576,9 @@ function hasItemLayoutOptionChanged<LAnnotation, Caret>(
   );
 }
 
-function hasCodeViewDiffEstimateOptionChanged<LAnnotation, Caret>(
-  previousOptions: CodeViewOptions<LAnnotation, Caret>,
-  nextOptions: CodeViewOptions<LAnnotation, Caret>
+function hasCodeViewDiffEstimateOptionChanged<LAnnotation, LDecoration, Caret>(
+  previousOptions: CodeViewOptions<LAnnotation, LDecoration, Caret>,
+  nextOptions: CodeViewOptions<LAnnotation, LDecoration, Caret>
 ): boolean {
   return (
     (previousOptions.disableFileHeader ?? false) !==
@@ -4462,8 +4623,8 @@ function formatSelectedLinePoint(
   return `${side === 'deletions' ? 'D' : 'A'}${lineNumber}`;
 }
 
-function renderItem<LAnnotation, Caret>(
-  item: CodeViewContextItem<LAnnotation, Caret>,
+function renderItem<LAnnotation, LDecoration, Caret>(
+  item: CodeViewContextItem<LAnnotation, LDecoration, Caret>,
   fileContainer?: HTMLElement,
   forceRender = false
 ): boolean {
@@ -4474,6 +4635,7 @@ function renderItem<LAnnotation, Caret>(
       fileDiff: item.item.fileDiff,
       forceRender,
       lineAnnotations: item.item.annotations ?? [],
+      decorations: item.item.decorations,
     });
   } else {
     return item.instance.render({
@@ -4482,6 +4644,7 @@ function renderItem<LAnnotation, Caret>(
       file: item.item.file,
       forceRender,
       lineAnnotations: item.item.annotations ?? [],
+      decorations: item.item.decorations,
     });
   }
 }
@@ -4509,18 +4672,20 @@ function syncRenderedItemOrder(
   }
 }
 
-function hasAnnotations<LAnnotation>(item: CodeViewItem<LAnnotation>): boolean {
+function hasAnnotations<LAnnotation, LDecoration>(
+  item: CodeViewItem<LAnnotation, LDecoration>
+): boolean {
   return (item.annotations?.length ?? 0) > 0;
 }
 
-function getSlotItems<LAnnotation, Caret>(
-  renderedItems: CodeViewRenderedItem<LAnnotation, Caret>[],
+function getSlotItems<LAnnotation, LDecoration, Caret>(
+  renderedItems: CodeViewRenderedItem<LAnnotation, LDecoration, Caret>[],
   {
     hasHeaderRenderers,
     hasAnnotationRenderer,
     hasGutterRenderer,
-  }: CodeViewCoordinator<LAnnotation, Caret>
-): CodeViewRenderedItem<LAnnotation, Caret>[] | undefined {
+  }: CodeViewCoordinator<LAnnotation, LDecoration, Caret>
+): CodeViewRenderedItem<LAnnotation, LDecoration, Caret>[] | undefined {
   if (renderedItems.length === 0) {
     return undefined;
   }
@@ -4533,7 +4698,8 @@ function getSlotItems<LAnnotation, Caret>(
     return undefined;
   }
 
-  const slotSnapshot: CodeViewRenderedItem<LAnnotation, Caret>[] = [];
+  const slotSnapshot: CodeViewRenderedItem<LAnnotation, LDecoration, Caret>[] =
+    [];
 
   for (const renderedItem of renderedItems) {
     if (hasAnnotations(renderedItem.item)) {

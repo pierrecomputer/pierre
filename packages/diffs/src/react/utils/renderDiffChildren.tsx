@@ -17,41 +17,54 @@ import {
 import { GutterUtilitySlotStyles, MergeConflictSlotStyles } from '../constants';
 import type { DiffBasePropsReact } from '../types';
 
-interface RenderDiffChildrenProps<LAnnotation, Caret, T> {
+interface RenderDiffChildrenProps<LAnnotation, LDecoration, Caret, T> {
   fileDiff: FileDiffMetadata;
   actions?: (MergeConflictDiffAction | undefined)[];
   renderCustomHeader: DiffBasePropsReact<
     LAnnotation,
+    LDecoration,
     Caret
   >['renderCustomHeader'];
   renderHeaderPrefix: DiffBasePropsReact<
     LAnnotation,
+    LDecoration,
     Caret
   >['renderHeaderPrefix'];
   renderHeaderFilenameSuffix?: DiffBasePropsReact<
     LAnnotation,
+    LDecoration,
     Caret
   >['renderHeaderFilenameSuffix'];
   renderHeaderMetadata: DiffBasePropsReact<
     LAnnotation,
+    LDecoration,
     Caret
   >['renderHeaderMetadata'];
-  renderAnnotation: DiffBasePropsReact<LAnnotation, Caret>['renderAnnotation'];
+  renderAnnotation: DiffBasePropsReact<
+    LAnnotation,
+    LDecoration,
+    Caret
+  >['renderAnnotation'];
   renderGutterUtility: DiffBasePropsReact<
     LAnnotation,
+    LDecoration,
     Caret
   >['renderGutterUtility'];
   renderMergeConflictUtility?(
     action: MergeConflictDiffAction,
     getInstance: () => T | undefined
   ): ReactNode;
-  lineAnnotations: DiffBasePropsReact<LAnnotation, Caret>['lineAnnotations'];
+  lineAnnotations: DiffBasePropsReact<
+    LAnnotation,
+    LDecoration,
+    Caret
+  >['lineAnnotations'];
   getHoveredLine(): GetHoveredLineResult<'diff'> | undefined;
   getInstance?(): T | undefined;
   getAnnotationSlotName?(annotation: DiffLineAnnotation<LAnnotation>): string;
 }
 
-export function renderDiffChildren<LAnnotation, Caret, T>({
+export function renderDiffChildren<LAnnotation, LDecoration, Caret, T>({
   fileDiff,
   actions,
   renderCustomHeader,
@@ -65,7 +78,7 @@ export function renderDiffChildren<LAnnotation, Caret, T>({
   getHoveredLine,
   getInstance,
   getAnnotationSlotName = getLineAnnotationName,
-}: RenderDiffChildrenProps<LAnnotation, Caret, T>): ReactNode {
+}: RenderDiffChildrenProps<LAnnotation, LDecoration, Caret, T>): ReactNode {
   const customHeader = renderCustomHeader?.(fileDiff);
   const prefix = renderHeaderPrefix?.(fileDiff);
   const suffix = renderHeaderFilenameSuffix?.(fileDiff);

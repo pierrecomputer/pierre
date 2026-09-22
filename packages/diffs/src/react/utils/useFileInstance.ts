@@ -19,6 +19,7 @@ import type { Editor, EditorChangeEvent, EditorOptions } from '../../edit';
 import type { GetHoveredLineResult } from '../../managers/InteractionManager';
 import type {
   FileContents,
+  FileDecorationItem,
   LineAnnotation,
   SelectedLineRange,
   VirtualFileMetrics,
@@ -46,12 +47,13 @@ interface AcceptedCompletion<LAnnotation> {
   } | null;
 }
 
-interface UseFileInstanceProps<LAnnotation, Caret> {
+interface UseFileInstanceProps<LAnnotation, LDecoration, Caret> {
   file: FileContents;
-  options: FileOptions<LAnnotation, Caret> | undefined;
+  options: FileOptions<LAnnotation, LDecoration, Caret> | undefined;
   editorOptions: EditorOptions<'file', LAnnotation, Caret> | undefined;
   editStateKey: string | undefined;
   lineAnnotations: LineAnnotation<LAnnotation>[] | undefined;
+  decorations: FileDecorationItem<LDecoration>[] | undefined;
   selectedLines: SelectedLineRange | null | undefined;
   prerenderedHTML: string | undefined;
   metrics?: VirtualFileMetrics;
@@ -69,12 +71,13 @@ interface UseFileInstanceReturn<LAnnotation> {
   getAnnotationSlotName(annotation: LineAnnotation<LAnnotation>): string;
 }
 
-export function useFileInstance<LAnnotation, Caret>({
+export function useFileInstance<LAnnotation, LDecoration, Caret>({
   file,
   options,
   editorOptions,
   editStateKey,
   lineAnnotations,
+  decorations,
   selectedLines,
   prerenderedHTML,
   metrics,
@@ -86,6 +89,7 @@ export function useFileInstance<LAnnotation, Caret>({
   onEditComplete: _onEditComplete,
 }: UseFileInstanceProps<
   LAnnotation,
+  LDecoration,
   Caret
 >): UseFileInstanceReturn<LAnnotation> {
   const simpleVirtualizer = useVirtualizer();
@@ -120,7 +124,9 @@ export function useFileInstance<LAnnotation, Caret>({
   const onEditComplete =
     _onEditComplete != null ? handleOnEditComplete : undefined;
   const instanceRef = useRef<
-    File<LAnnotation, Caret> | VirtualizedFile<LAnnotation, Caret> | null
+    | File<LAnnotation, LDecoration, Caret>
+    | VirtualizedFile<LAnnotation, LDecoration, Caret>
+    | null
   >(null);
   const disposeEditorRef = useRef<() => void>(null);
   const getEditor = useStableCallback(() => {
@@ -172,6 +178,7 @@ export function useFileInstance<LAnnotation, Caret>({
         file,
         fileContainer: node,
         lineAnnotations,
+        decorations,
         prerenderedHTML,
       });
     } else {
@@ -216,6 +223,7 @@ export function useFileInstance<LAnnotation, Caret>({
     void instance.render({
       file: resolved.file,
       lineAnnotations: resolved.lineAnnotations,
+      decorations,
       forceRender,
     });
     if (selectedLines !== undefined) {
@@ -279,8 +287,8 @@ function resolveAcceptedValues<LAnnotation>(
   return { file: resolvedFile, lineAnnotations: resolvedAnnotations };
 }
 
-interface MergeFileOptionsProps<LAnnotation, Caret> {
-  options: FileOptions<LAnnotation, Caret> | undefined;
+interface MergeFileOptionsProps<LAnnotation, LDecoration, Caret> {
+  options: FileOptions<LAnnotation, LDecoration, Caret> | undefined;
   controlledSelection: boolean;
   hasGutterRenderUtility: boolean;
   hasCustomHeader: boolean;
@@ -288,15 +296,15 @@ interface MergeFileOptionsProps<LAnnotation, Caret> {
   onEditComplete: FileEditCompleteHandler<LAnnotation, Caret> | undefined;
 }
 
-function mergeFileOptions<LAnnotation, Caret>({
+function mergeFileOptions<LAnnotation, LDecoration, Caret>({
   options,
   controlledSelection,
   hasCustomHeader,
   hasGutterRenderUtility,
   onEditChange,
   onEditComplete,
-}: MergeFileOptionsProps<LAnnotation, Caret>):
-  | FileOptions<LAnnotation, Caret>
+}: MergeFileOptionsProps<LAnnotation, LDecoration, Caret>):
+  | FileOptions<LAnnotation, LDecoration, Caret>
   | undefined {
   const needsReactOverrides =
     controlledSelection ||
@@ -323,8 +331,8 @@ function mergeFileOptions<LAnnotation, Caret>({
   };
 }
 
-function applyEdit<LAnnotation, Caret>(
-  instance: File<LAnnotation, Caret>,
+function applyEdit<LAnnotation, LDecoration, Caret>(
+  instance: File<LAnnotation, LDecoration, Caret>,
   getEditor: () => Editor<'file', LAnnotation, Caret>
 ): () => void {
   const editor = getEditor();

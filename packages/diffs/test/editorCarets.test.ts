@@ -47,7 +47,7 @@ async function createEditorFixture(
   const dom = installDom();
   const fileContainer = document.createElement('div');
   document.body.appendChild(fileContainer);
-  const file = new File<undefined, CaretMetadata>({
+  const file = new File<undefined, undefined, CaretMetadata>({
     disableFileHeader: true,
     theme: DEFAULT_THEMES,
   });
@@ -728,12 +728,12 @@ describe('Editor carets', () => {
       name: 'carets.ts',
       contents: 'alpha\nbravo',
     };
-    const files: File<undefined, CaretMetadata>[] = [];
+    const files: File<undefined, undefined, CaretMetadata>[] = [];
 
     const attach = async (): Promise<HTMLElement> => {
       const fileContainer = document.createElement('div');
       document.body.appendChild(fileContainer);
-      const file = new File<undefined, CaretMetadata>({
+      const file = new File<undefined, undefined, CaretMetadata>({
         disableFileHeader: true,
         theme: DEFAULT_THEMES,
       });
