@@ -296,11 +296,19 @@ async function createFixture({
 
   viewer.setup(root);
   await renderItems(viewer, items);
+  // A cold highlighter can defer the first render beyond renderItems' single
+  // event-loop tick. Wait for the item and its editor before reading either.
+  await waitFor(
+    () => {
+      const rendered = viewer
+        .getRenderedItems()
+        .find((item) => item.id === 'a');
+      return rendered != null && findEditableContent(rendered.element) != null;
+    },
+    { timeout: EDITABLE_TIMEOUT }
+  );
   const renderedA = findRendered(viewer, 'a');
   expect(renderedA.type).toBe(itemType);
-  await waitFor(() => findEditableContent(renderedA.element) != null, {
-    timeout: EDITABLE_TIMEOUT,
-  });
   expect(findEditableContent(renderedA.element)).toBeInstanceOf(HTMLElement);
   const editorA = viewer.getEditor('a');
   assertDefined(editorA, 'expected an editor for item A');
