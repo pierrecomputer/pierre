@@ -69,9 +69,18 @@ interface Window {
   __annotationScroll?: {
     root: HTMLElement;
     addAnnotation(): void;
+    setChildAnnotations(): void;
     resizeAnnotations(height: number): void;
     clearAnnotations(): void;
     removeFileAnnotation(): void;
+    setLineCount(lineCount: number): void;
+    addTail(): void;
+    removeTail(): boolean;
+    setDiffStyle(diffStyle: 'split' | 'unified'): void;
+    scrollToLine(lineNumber: number, behavior: 'instant' | 'smooth'): void;
+    editAnnotationLine(remove: boolean): void;
+    getEditorAnnotationLines(): number[] | undefined;
+    isEditorReady(): boolean;
     getFirstLineTop(): number | undefined;
     getMeasuredAnnotationHeight(): number | undefined;
     getScrollTop(): number;

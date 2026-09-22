@@ -111,10 +111,11 @@ async function waitForAnnotationHeight(
 async function openMeasuredFixture(
   page: Page,
   type: 'file' | 'diff',
-  fileAnnotation = false
+  fileAnnotation = false,
+  query = ''
 ): Promise<void> {
   await page.goto(
-    `/test/e2e/fixtures/code-view-annotations.html?type=${type}&fileAnnotation=${fileAnnotation}`
+    `/test/e2e/fixtures/code-view-annotations.html?type=${type}&fileAnnotation=${fileAnnotation}${query}`
   );
   await expect(page.locator('[data-line="1"]').first()).toBeVisible();
   if (fileAnnotation) {
@@ -134,7 +135,249 @@ async function openMeasuredFixture(
 }
 
 test.describe('CodeView annotation scroll anchoring', () => {
+  test('remeasures annotations across split and unified layout changes', async ({
+    page,
+  }) => {
+    const errors: string[] = [];
+    page.on('pageerror', (error) => errors.push(error.message));
+    page.on('console', (message) => {
+      if (message.type() === 'error') errors.push(message.text());
+    });
+    await openMeasuredFixture(page, 'diff');
+    const before = await measureViewport(page);
+    await page.evaluate(() =>
+      window.__annotationScroll?.setDiffStyle('unified')
+    );
+    await page.waitForFunction(
+      (height) =>
+        (window.__annotationScroll?.root.scrollHeight ?? 0) > height + 3000,
+      before.scrollHeight
+    );
+    await page.evaluate(() =>
+      window.__annotationScroll?.scrollToLine(200, 'instant')
+    );
+    await expect(page.locator('[data-test-annotation]')).toBeVisible();
+    await waitForAnnotationHeight(page, 80);
+    await page.evaluate(() => window.__annotationScroll?.resizeAnnotations(40));
+    await waitForAnnotationHeight(page, 40);
+    await page.evaluate(() => window.__annotationScroll?.setDiffStyle('split'));
+    await page.waitForFunction(
+      (height) =>
+        (window.__annotationScroll?.root.scrollHeight ?? Infinity) < height,
+      before.scrollHeight + 500
+    );
+    await page.evaluate(() =>
+      window.__annotationScroll?.scrollToLine(200, 'instant')
+    );
+    await expect(page.locator('[data-test-annotation]')).toBeVisible();
+    await waitForAnnotationHeight(page, 40);
+    expect((await measureViewport(page)).scrollHeight).toBe(
+      before.scrollHeight - 40
+    );
+    expect(
+      await page.evaluate(() => window.__annotationScroll?.getScrollTop())
+    ).toBe(
+      await page.evaluate(() => window.__annotationScroll?.root.scrollTop)
+    );
+    expect(errors).toEqual([]);
+  });
+
   for (const type of ['file', 'diff'] as const) {
+    for (const { name, query } of [
+      { name: 'controlled React props', query: '&react=controlled' },
+      { name: 'imperative React ref', query: '&react=imperative' },
+    ]) {
+      test(`reconciles annotation additions, resizing, and removal through ${name} (${type})`, async ({
+        page,
+      }) => {
+        const errors: string[] = [];
+        page.on('pageerror', (error) => errors.push(error.message));
+        page.on('console', (message) => {
+          if (message.type() === 'error') errors.push(message.text());
+        });
+        await openMeasuredFixture(page, type, false, query);
+        await setDistanceFromBottom(page, 100);
+        const before = await measureViewport(page);
+        await page.evaluate(() => window.__annotationScroll?.addAnnotation());
+        await waitForAnnotationHeight(page, 200);
+        expect((await measureViewport(page)).scrollHeight).toBe(
+          before.scrollHeight + 120
+        );
+        for (const height of [40, 0] as const) {
+          const frames = await shrinkAnnotationAndMeasureFrames(page, height);
+          for (const frame of frames) {
+            expect.soft(frame.anchorTop).toBeCloseTo(before.anchorTop, 1);
+            expect.soft(frame.scrollTop).toBe(before.scrollTop);
+            expect.soft(frame.logicalScrollTop).toBe(frame.scrollTop);
+          }
+          await waitForAnnotationHeight(page, height * 2);
+          await expect(page.locator('[data-test-annotation]')).toHaveCount(
+            height === 0 ? 0 : 2
+          );
+          const after = await measureViewport(page);
+          expect(after.scrollHeight).toBe(
+            before.scrollHeight - 80 + height * 2
+          );
+          expect(after.anchorTop).toBeCloseTo(before.anchorTop, 1);
+          expect(after.scrollTop).toBe(before.scrollTop);
+          expect(after.logicalScrollTop).toBe(after.scrollTop);
+        }
+        expect(errors).toEqual([]);
+      });
+    }
+
+    test(`keeps CodeView's item annotations authoritative over child setters (${type})`, async ({
+      page,
+    }) => {
+      await openMeasuredFixture(page, type);
+      const before = await measureViewport(page);
+      await page.evaluate(async () => {
+        window.__annotationScroll?.setChildAnnotations();
+        await new Promise(requestAnimationFrame);
+      });
+      await expect(page.locator('[data-test-annotation]')).toHaveCount(1);
+      expect(
+        await page.evaluate(() =>
+          window.__annotationScroll?.getMeasuredAnnotationHeight()
+        )
+      ).toBe(80);
+      expect(await measureViewport(page)).toEqual(before);
+    });
+
+    test(`moves and removes annotations through editor document changes (${type})`, async ({
+      page,
+    }) => {
+      const errors: string[] = [];
+      page.on('pageerror', (error) => errors.push(error.message));
+      page.on('console', (message) => {
+        if (message.type() === 'error') errors.push(message.text());
+      });
+      await openMeasuredFixture(page, type, false, '&edit=true');
+      await page.waitForFunction(() =>
+        window.__annotationScroll?.isEditorReady()
+      );
+      await setDistanceFromBottom(page, 100);
+      const before = await measureViewport(page);
+      await page.evaluate(() =>
+        window.__annotationScroll?.editAnnotationLine(false)
+      );
+      await page.waitForFunction(
+        () => window.__annotationScroll?.getEditorAnnotationLines()?.[0] === 191
+      );
+      await waitForAnnotationHeight(page, 80);
+      const moved = await measureViewport(page);
+      expect(moved.scrollHeight).toBe(before.scrollHeight + 20);
+      expect(moved.anchorTop).toBeCloseTo(before.anchorTop, 1);
+      expect(moved.logicalScrollTop).toBe(moved.scrollTop);
+      await page.evaluate(() =>
+        window.__annotationScroll?.editAnnotationLine(true)
+      );
+      await page.waitForFunction(
+        () =>
+          window.__annotationScroll?.getEditorAnnotationLines()?.length === 0
+      );
+      await waitForAnnotationHeight(page, 0);
+      await expect(page.locator('[data-test-annotation]')).toHaveCount(0);
+      await page.waitForFunction(
+        (height) => window.__annotationScroll?.root.scrollHeight === height,
+        before.scrollHeight - 80
+      );
+      const removed = await measureViewport(page);
+      expect(removed.scrollHeight).toBe(before.scrollHeight - 80);
+      expect(removed.anchorTop).toBeCloseTo(before.anchorTop, 1);
+      expect(removed.logicalScrollTop).toBe(removed.scrollTop);
+      expect(errors).toEqual([]);
+    });
+
+    for (const behavior of ['instant', 'smooth'] as const) {
+      test(`reaches a growing scroll target with ${behavior} scrolling (${type})`, async ({
+        page,
+      }) => {
+        await openMeasuredFixture(page, type);
+        const before = await measureViewport(page);
+        await page.evaluate(() => window.__annotationScroll?.setLineCount(400));
+        // Replacement highlighting is asynchronous; the new lines must enter
+        // the displayed layout before a line scroll target can resolve them.
+        await page.waitForFunction(
+          (height) =>
+            (window.__annotationScroll?.root.scrollHeight ?? 0) > height,
+          before.scrollHeight + 3000
+        );
+        await page.evaluate((behavior) => {
+          const fixture = window.__annotationScroll;
+          if (fixture == null) throw new Error('Missing annotation fixture.');
+          fixture.scrollToLine(400, behavior);
+        }, behavior);
+        await expect(page.locator('[data-line="400"]').last()).toBeVisible();
+        await page.waitForFunction(() => {
+          const fixture = window.__annotationScroll;
+          if (fixture == null) return false;
+          const { root } = fixture;
+          const last = root
+            .querySelector('diffs-container')
+            ?.shadowRoot?.querySelector(
+              '[data-code]:not([data-deletions]) [data-line="400"]'
+            );
+          // A diff's final line includes its "No newline" metadata row in
+          // the scroll target height; plain files have no such trailing row.
+          const metadata = last?.nextElementSibling;
+          const targetEnd =
+            metadata != null && metadata.hasAttribute('data-no-newline')
+              ? metadata
+              : last;
+          return (
+            targetEnd != null &&
+            Math.abs(
+              targetEnd.getBoundingClientRect().bottom -
+                root.getBoundingClientRect().bottom
+            ) <= 1 &&
+            Math.abs(fixture.getScrollTop() - root.scrollTop) <= 1
+          );
+        });
+        expect(
+          await page.evaluate(() => window.__annotationScroll?.root.scrollTop)
+        ).toBeGreaterThan(before.scrollHeight);
+      });
+    }
+
+    test(`shrinks the scroll range after shorter content and item removal (${type})`, async ({
+      page,
+    }) => {
+      await openMeasuredFixture(page, type);
+      const before = await measureViewport(page);
+      await page.evaluate(() => window.__annotationScroll?.setLineCount(100));
+      await expect(page.locator('[data-line="100"]').last()).toBeVisible();
+      const shorter = await page.evaluate(() => {
+        const fixture = window.__annotationScroll;
+        if (fixture == null) throw new Error('Missing annotation fixture.');
+        return {
+          height: fixture.root.scrollHeight,
+          top: fixture.root.scrollTop,
+          logical: fixture.getScrollTop(),
+          viewport: fixture.root.clientHeight,
+        };
+      });
+      expect(shorter.height).toBeLessThan(before.scrollHeight - 80);
+      expect(shorter.top).toBe(shorter.height - shorter.viewport);
+      expect(shorter.logical).toBe(shorter.top);
+      await page.evaluate(() => window.__annotationScroll?.addTail());
+      await page.waitForFunction(
+        (height) => (window.__annotationScroll?.root.scrollTop ?? 0) > height,
+        shorter.height
+      );
+      await page.evaluate(() => window.__annotationScroll?.removeTail());
+      await page.waitForFunction(
+        (height) => window.__annotationScroll?.root.scrollHeight === height,
+        shorter.height
+      );
+      expect(
+        await page.evaluate(() => window.__annotationScroll?.root.scrollTop)
+      ).toBe(shorter.top);
+      expect(
+        await page.evaluate(() => window.__annotationScroll?.getScrollTop())
+      ).toBe(shorter.top);
+    });
+
     test(`keeps every frame stable when removing an offscreen file annotation (${type})`, async ({
       page,
     }) => {
