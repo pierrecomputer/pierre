@@ -10,7 +10,16 @@
     "webgl",
     "webgl2"
   ],
+  "homepage": "https://github.com/pierrecomputer/pierre/tree/main/packages/pipes",
+  "bugs": {
+    "url": "https://github.com/pierrecomputer/pierre/issues"
+  },
   "license": "apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/pierrecomputer/pierre.git",
+    "directory": "packages/pipes"
+  },
   "files": [
     "dist",
     "LICENSE.md",

@@ -1,7 +1,16 @@
 {
   "name": "@pierre/diffs",
   "version": "1.4.3",
+  "homepage": "https://diffs.com/",
+  "bugs": {
+    "url": "https://github.com/pierrecomputer/pierre/issues"
+  },
   "license": "apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/pierrecomputer/pierre.git",
+    "directory": "packages/diffs"
+  },
   "files": [
     "dist",
     "LICENSE.md",
