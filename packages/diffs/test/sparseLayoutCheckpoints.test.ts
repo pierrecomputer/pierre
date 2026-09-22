@@ -494,7 +494,7 @@ describe('sparse layout checkpoints', () => {
     }
   });
 
-  test('VirtualizedFile clears measured file-level annotation height when annotations change', () => {
+  test('VirtualizedFile retains removed file-level annotation height until the top renders', () => {
     const { cleanup } = installFakeHTMLElement();
     try {
       const file = createLargeFile();
@@ -521,6 +521,25 @@ describe('sparse layout checkpoints', () => {
 
       instance.updateCodeViewLayout(file, 0, undefined, [{ lineNumber: 1 }]);
 
+      expect(inspectFile(instance).cache.fileAnnotationHeight).toBe(25);
+      const retainedHeight = instance.getVirtualizedHeight();
+      inspectFile(instance).renderRange = createRenderRange(
+        metrics.hunkLineCount
+      );
+      inspectFile(instance).code = createMeasuredFileCode(
+        '1',
+        () => metrics.lineHeight
+      );
+      expect(instance.reconcileHeights()).toBe(false);
+      expect(inspectFile(instance).cache.fileAnnotationHeight).toBe(25);
+      expect(instance.getVirtualizedHeight()).toBe(retainedHeight);
+
+      inspectFile(instance).renderRange = createRenderRange();
+      inspectFile(instance).code = createMeasuredFileCode(
+        '0',
+        () => metrics.lineHeight
+      );
+      expect(instance.reconcileHeights()).toBe(true);
       expect(inspectFile(instance).cache.fileAnnotationHeight).toBe(0);
       expect(instance.getVirtualizedHeight()).toBe(
         metrics.diffHeaderHeight + 12_000 * metrics.lineHeight + metrics.spacing

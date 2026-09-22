@@ -412,7 +412,6 @@ export class VirtualizedFileDiff<
     let hasHeightChange = false;
     const {
       options: { overflow = 'scroll' },
-      cache: { ghostTextRowsByIndex },
       metrics: { lineHeight },
     } = this;
     // A placeholder may have a prepared layout before any content has
@@ -431,6 +430,9 @@ export class VirtualizedFileDiff<
       fileDiff,
       this.editor?.__getGhostTextRows() ?? NO_GHOST_TEXT_ROWS
     );
+    // Folding replaces the row-index map; measure against the newly folded
+    // counts so reconciliation does not overwrite their height contribution.
+    const { ghostTextRowsByIndex } = this.cache;
     const measureAllRows =
       overflow !== 'scroll' ||
       this.getLatestAnnotations().length > 0 ||
