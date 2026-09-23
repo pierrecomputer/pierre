@@ -1499,7 +1499,9 @@ export class VirtualizedFileDiff<
   }
 
   protected override finalizeRender(): void {
-    if (this.getRenderedDiff() !== this.pendingRender?.diff) {
+    if (
+      !areDiffTargetsEqual(this.getRenderedDiff(), this.pendingRender?.diff)
+    ) {
       throw new Error(
         'VirtualizedFileDiff.render: rendered a different diff than its prepared layout'
       );
