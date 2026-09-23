@@ -77,6 +77,7 @@ describe('CodeView partial hydration', () => {
     try {
       viewer.setup(createRoot());
       await renderItems(viewer, [item]);
+      await waitFor(() => viewer.getRenderedItems().length === 1);
 
       const renderedItem = viewer.getRenderedItems()[0];
       assertDefined(renderedItem, 'expected partial diff to render');
