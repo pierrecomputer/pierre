@@ -1,4 +1,3 @@
-import highlightsPackageJson from '@pierre/highlights/package.json';
 import { IconBolt, IconCodeBlock, IconPencil } from '@pierre/icons';
 import type { Metadata } from 'next';
 
@@ -23,10 +22,9 @@ export default function HighlightsPage() {
     <div className="mx-auto min-h-screen max-w-5xl px-5 xl:max-w-[80rem]">
       <Header className="-mb-[1px]" />
       <main>
-        <HighlightsHero
-          gzipBytes={highlightsPackageJson.meta['highlights.wasm.gz']}
-        />
+        <HighlightsHero />
         <HighlightsPlayground />
+        <HighlightsPlayground variant="languages" />
         <section
           aria-labelledby="highlights-features"
           className="space-y-8 pb-16 md:pb-24"
