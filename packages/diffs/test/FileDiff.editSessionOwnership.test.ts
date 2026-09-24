@@ -464,7 +464,7 @@ describe('FileDiff edit-session ownership', () => {
     }
   });
 
-  test('recycling clears renderer state without writing edits to the external diff', async () => {
+  test('recycling keeps the edited session result without writing to the external diff', async () => {
     const fixture = await createAttachedFixture();
     const { externalDiff, instance } = fixture;
     const externalBefore = captureExternalDiffState(externalDiff);
@@ -480,7 +480,8 @@ describe('FileDiff edit-session ownership', () => {
       instance.cleanUp(true);
 
       expect(instance.getLatestDiffForTest()).toBe(sessionDiff);
-      expect(instance.getRendererDiffForTest()).toBeUndefined();
+      expect(instance.getRendererDiffForTest()).toBe(sessionDiff);
+      expect(instance.isEditorRenderReadyForTest()).toBe(true);
       expectExternalDiffUnchanged(instance, externalDiff, externalBefore);
     } finally {
       fixture.cleanup();
@@ -701,6 +702,9 @@ describe('__completeEditSession', () => {
       forceRender: true,
       lineAnnotations: config?.lineAnnotations,
     });
+    if (externalDiff.isPartial) {
+      await instance.__prepareForEditing();
+    }
     editor.edit(instance);
     await waitFor(
       () => editor.getText() === externalDiff.additionLines.join(''),

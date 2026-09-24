@@ -505,6 +505,10 @@ export class Editor<
     newLineAnnotations: EditorLineAnnotation<EType, LAnnotation>[] | undefined,
     shouldUpdateBuffer?: boolean
   ) => void;
+  #applySuspendedDocumentChange?: (
+    textDocument: TextDocument<EType, LAnnotation>,
+    newLineAnnotations: EditorLineAnnotation<EType, LAnnotation>[] | undefined
+  ) => void;
   #publishChange?: (
     changes: EditorChange[],
     file: FileContents,
@@ -719,7 +723,8 @@ export class Editor<
   }
 
   // UnresolvedFile extends FileDiff for rendering, but its conflict-specific
-  // document model is not supported by Editor.
+  // document model is not supported by Editor. For a partial diff, await
+  // FileDiff.prepareForEditing() before starting a new session.
   edit<T extends EditorComponent<EType, LAnnotation, Caret>>(
     fileInstance: T extends { readonly type: 'unresolved-file' } ? never : T
   ): () => void;
@@ -734,6 +739,15 @@ export class Editor<
     if (this.#fileInstance != null && this.#fileInstance !== fileInstance) {
       throw new Error(
         'Editor.edit: a recycled edit session cannot attach to a different component'
+      );
+    }
+    if (
+      fileInstance.type === 'file-diff' &&
+      this.#editSession == null &&
+      !fileInstance.__canAttachEditor()
+    ) {
+      throw new Error(
+        'Editor.edit: a complete diff is required before editing'
       );
     }
     const initialState = this.#initialState;
@@ -757,6 +771,8 @@ export class Editor<
       if (fileInstance.type === 'file' && editor.type === 'file') {
         editor.#applyDocumentChange =
           fileInstance.applyDocumentChange.bind(fileInstance);
+        editor.#applySuspendedDocumentChange =
+          fileInstance.applySuspendedDocumentChange.bind(fileInstance);
         editor.#publishChange = (changes, file, lineAnnotations) => {
           const event: EditorChangeEvent<'file', LAnnotation, Caret> = {
             changes,
@@ -782,6 +798,8 @@ export class Editor<
       ) {
         editor.#applyDocumentChange =
           fileInstance.applyDocumentChange.bind(fileInstance);
+        editor.#applySuspendedDocumentChange =
+          fileInstance.applySuspendedDocumentChange.bind(fileInstance);
         editor.#publishChange = (changes, file, lineAnnotations) => {
           const event: EditorChangeEvent<'file-diff', LAnnotation, Caret> = {
             changes,
@@ -824,6 +842,7 @@ export class Editor<
       if (this.#detach == null) {
         this.#fileInstance = undefined;
         this.#applyDocumentChange = undefined;
+        this.#applySuspendedDocumentChange = undefined;
         this.#publishChange = undefined;
       }
       if (initialState != null && initialEditorState != null) {
@@ -1245,6 +1264,7 @@ export class Editor<
         this.#editSession = undefined;
         this.#fileInstance = undefined;
         this.#applyDocumentChange = undefined;
+        this.#applySuspendedDocumentChange = undefined;
         this.#publishChange = undefined;
       }
     }
@@ -1274,10 +1294,12 @@ export class Editor<
     }
 
     const capturedDiffSession = fileInstance.__captureDocumentSessionState();
-    editSession.diffSession = capturedDiffSession?.diffSession;
     if (capturedDiffSession == null) {
+      editSession.diffSession = undefined;
       return false;
     }
+
+    editSession.diffSession = capturedDiffSession.diffSession;
 
     const document = editSession.document;
     return (
@@ -6996,7 +7018,26 @@ export class Editor<
         }
       }
     }
-    this.#rerender(change, newLineAnnotations, renderRange, shouldUpdateBuffer);
+    if (
+      this.#isRendering &&
+      this.#tokenizer != null &&
+      this.#contentElement != null
+    ) {
+      this.#rerender(
+        change,
+        newLineAnnotations,
+        renderRange,
+        shouldUpdateBuffer
+      );
+    } else if (textDocument != null) {
+      // Recycling or pending hydration can leave the document editable
+      // without editor markup. Keep the host session current before the
+      // change callback observes it or a later mount renders from it.
+      this.#applySuspendedDocumentChange?.(textDocument, newLineAnnotations);
+      if (newLineAnnotations != null) {
+        this.#lineAnnotations = newLineAnnotations;
+      }
+    }
 
     if (newSelections != null) {
       // Install the resulting selections before publishing so event state and

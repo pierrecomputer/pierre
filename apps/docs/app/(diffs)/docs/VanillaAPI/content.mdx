@@ -57,12 +57,14 @@ for each existing side. Use `oldFile: null` for a new file, or `newFile: null`
 for a deleted file.
 
 For partial diffs parsed from patches, pass `loadDiffFiles` to `FileDiff`
-constructor options when you want collapsed unchanged context to expand from
-full file contents. The loader receives the partial `FileDiffMetadata` and
-returns `{ oldFile, newFile }`: changed and rename-changed diffs return both
-sides, while pure renames return `{ oldFile: null, newFile }`. Added and deleted
-patch diffs do not need loader hydration. Components catch loader errors by
-default; set `disableErrorHandling: true` when you want errors to rethrow.
+constructor options. It is required whenever the component needs full file
+contents: `expandUnchanged`, `expandHunk`, or editing. Without it those paths
+throw. The loader receives the partial `FileDiffMetadata` and returns
+`{ oldFile, newFile }`: changed and rename-changed diffs return both sides,
+while pure renames return `{ oldFile: null, newFile }`. Added and deleted patch
+diffs do not need loader hydration and cannot be edited from a patch. Components
+catch loader errors by default; set `disableErrorHandling: true` when you want
+errors to rethrow.
 
 <DocsCodeExample {...loadDiffFilesExample} />
 

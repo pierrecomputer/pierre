@@ -1048,6 +1048,18 @@ export class File<LAnnotation = undefined, Caret = undefined> {
     }
   }
 
+  /** Update the session source without editor DOM, then rehighlight on return. */
+  public applySuspendedDocumentChange(
+    textDocument: TextDocument<'file', LAnnotation>,
+    newLineAnnotations?: LineAnnotation<LAnnotation>[]
+  ): void {
+    if (this.editSession == null) {
+      return;
+    }
+    this.applyDocumentChange(textDocument, newLineAnnotations);
+    this.fileRenderer.clearRenderCache();
+  }
+
   public updateRenderCache(
     dirtyLines: Map<number, Array<HighlightedToken>>,
     themeType: 'dark' | 'light',

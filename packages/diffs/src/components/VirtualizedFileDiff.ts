@@ -578,7 +578,7 @@ export class VirtualizedFileDiff<
         // and treat it as a mutation
         Object.assign(fileDiff, pendingHydratedDiff.nextDiff);
         this.setHydratedState(pendingHydratedDiff.files);
-        this.startHydratedEditSession(fileDiff);
+        this.installHydratedSessionDiff(fileDiff);
         this.forceRenderOverride = true;
         resetLayoutCache = true;
         resetEstimatedHeights = true;
@@ -979,6 +979,7 @@ export class VirtualizedFileDiff<
     if (this.fileDiff == null) {
       return;
     }
+    this.loadFilesIfNecessary();
     if (this.isAdvancedMode()) {
       this.pendingExpansions ??= [];
       this.pendingExpansions.push({
@@ -995,7 +996,6 @@ export class VirtualizedFileDiff<
       this.resetLayoutCache({ includeEstimatedHeights: true });
       this.computeApproximateSize();
     }
-    this.loadFilesIfNecessary();
     this.forceRenderOverride = true;
     this.virtualizer.instanceChanged(this, true);
   };
@@ -1014,7 +1014,7 @@ export class VirtualizedFileDiff<
     if (this.isAdvancedMode()) {
       const nextDiff = hydratePartialDiff('clone', expectedDiff, files);
       await awaitWithTimeout(() => this.primeHighlightCache(nextDiff));
-      if (!this.enabled || this.fileDiff !== expectedDiff) {
+      if (this.fileDiff !== expectedDiff) {
         return;
       }
       this.pendingHydratedDiff = {
@@ -1025,9 +1025,9 @@ export class VirtualizedFileDiff<
     } else {
       hydratePartialDiff('merge', expectedDiff, files);
       this.setHydratedState(files);
-      if (!this.startHydratedEditSession(expectedDiff)) {
+      if (!this.installHydratedSessionDiff(expectedDiff)) {
         await awaitWithTimeout(() => this.primeHighlightCache(expectedDiff));
-        if (!this.enabled || this.fileDiff !== expectedDiff) {
+        if (this.fileDiff !== expectedDiff) {
           return;
         }
       }

@@ -6,6 +6,7 @@ import {
   useLayoutEffect,
   useMemo,
   useRef,
+  useState,
 } from 'react';
 
 import {
@@ -111,6 +112,7 @@ export function useFileDiffInstance<LAnnotation, Caret>({
   const controlledSelection = selectedLines !== undefined;
   const poolManager = useContext(WorkerPoolContext);
   const createEditor = useCreateEditor<LAnnotation, Caret>();
+  const [asyncAttachError, setAsyncAttachError] = useState<unknown>();
   const handleOnEditChange = useStableCallback(
     (event: EditorChangeEvent<'file-diff', LAnnotation, Caret>) =>
       _onEditChange?.(event)
@@ -166,6 +168,7 @@ export function useFileDiffInstance<LAnnotation, Caret>({
     | null
   >(null);
   const disposeEditorRef = useRef<() => void>(null);
+  const pendingAttachRef = useRef<{ promise: Promise<void> } | null>(null);
   const getEditor = useStableCallback(() => {
     if (createEditor == null) {
       throw new Error('FileDiff: EditContext is not attached');
@@ -208,9 +211,6 @@ export function useFileDiffInstance<LAnnotation, Caret>({
           true
         );
       }
-      if (edit && disposeEditorRef.current == null) {
-        disposeEditorRef.current = applyEdit(instanceRef.current, getEditor);
-      }
       void instanceRef.current.hydrate({
         fileDiff: effectiveFileDiff,
         fileContainer,
@@ -223,6 +223,7 @@ export function useFileDiffInstance<LAnnotation, Caret>({
           'useFileDiffInstance: A FileDiff instance should exist when unmounting'
         );
       }
+      pendingAttachRef.current = null;
       instanceRef.current.cleanUp();
       instanceRef.current = null;
       disposeEditorRef.current = null;
@@ -248,10 +249,13 @@ export function useFileDiffInstance<LAnnotation, Caret>({
       !areOptionsEqual(instance.options, newOptions);
     instance.setOptions(newOptions);
     // Detach editor before rendering if required
-    if (!edit && disposeEditorRef.current != null) {
-      const { current: disposeEditor } = disposeEditorRef;
-      disposeEditorRef.current = null;
-      disposeEditor();
+    if (!edit) {
+      pendingAttachRef.current = null;
+      if (disposeEditorRef.current != null) {
+        const { current: disposeEditor } = disposeEditorRef;
+        disposeEditorRef.current = null;
+        disposeEditor();
+      }
     }
     const resolved = resolveAcceptedValues(
       effectiveFileDiff,
@@ -266,10 +270,58 @@ export function useFileDiffInstance<LAnnotation, Caret>({
     if (selectedLines !== undefined) {
       instance.setSelectedLines(selectedLines);
     }
-    // Attach editor after rendering if required
-    if (edit && disposeEditorRef.current == null) {
-      disposeEditorRef.current = applyEdit(instance, getEditor);
+    if (!edit || disposeEditorRef.current != null) {
+      return;
     }
+    if (createEditor == null) {
+      throw new Error('FileDiff: EditContext is not attached');
+    }
+
+    const attach = (): void => {
+      if (
+        instanceRef.current !== instance ||
+        disposeEditorRef.current != null ||
+        !instance.__canAttachEditor()
+      ) {
+        return;
+      }
+      disposeEditorRef.current = applyEdit(instance, getEditor);
+    };
+    // If we're all ready to attach the editor, lets go ahead
+    // and do that synchronously
+    if (instance.__canAttachEditor()) {
+      pendingAttachRef.current = null;
+      attach();
+      return;
+    }
+    const promise = instance.__prepareForEditing();
+    // If we can't hydrate the files... this will come back undefined,
+    // which means there's nothing we can do
+    if (promise == null) {
+      pendingAttachRef.current = null;
+      return;
+    }
+    // If we are already waiting on a hydration to finish, then there's nothing
+    // we need to do
+    if (pendingAttachRef.current?.promise === promise) {
+      return;
+    }
+    const pending = { promise };
+    pendingAttachRef.current = pending;
+    void promise
+      .then(() => {
+        if (pendingAttachRef.current !== pending) {
+          return;
+        }
+        attach();
+        pendingAttachRef.current = null;
+      })
+      .catch((error: unknown) => {
+        if (pendingAttachRef.current === pending) {
+          pendingAttachRef.current = null;
+          setAsyncAttachError(error);
+        }
+      });
   });
 
   const getHoveredLine = useCallback(():
@@ -283,6 +335,10 @@ export function useFileDiffInstance<LAnnotation, Caret>({
       getLineAnnotationName(annotation),
     []
   );
+
+  if (asyncAttachError != null) {
+    throw asyncAttachError;
+  }
 
   return {
     fileDiff: effectiveFileDiff,

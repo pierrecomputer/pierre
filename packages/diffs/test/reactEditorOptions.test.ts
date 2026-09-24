@@ -49,6 +49,7 @@ import type {
   LineAnnotation,
 } from '../src/types';
 import { parseDiffFromFile } from '../src/utils/parseDiffFromFile';
+import { parsePatchFiles } from '../src/utils/parsePatchFiles';
 import { installDom, wait, waitFor } from './domHarness';
 
 afterAll(async () => {
@@ -1095,6 +1096,94 @@ describe('React editor factory lifecycle', () => {
       }
     });
   }
+
+  test('partial FileDiff reports a missing provider before loading completes', async () => {
+    const { cleanup } = installDom();
+    const cleanupActEnvironment = installReactActEnvironment();
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const patch = createTwoFilesPatch(
+      'edit.ts',
+      'edit.ts',
+      'const value = 1;\n',
+      'const value = 2;\n'
+    );
+    const partial = parsePatchFiles(patch, 'edit.ts', true)[0]?.files[0];
+    if (partial == null) throw new Error('Expected partial diff');
+    let root: Root | undefined;
+
+    try {
+      root = createReactRoot(container);
+      const error = await captureRenderError(
+        root,
+        createElement(ReactFileDiffComponent, {
+          edit: true,
+          fileDiff: partial,
+          options: {
+            loadDiffFiles: () =>
+              new Promise<{ oldFile: FileContents; newFile: FileContents }>(
+                () => {}
+              ),
+          },
+        })
+      );
+      expect(error).toBeInstanceOf(Error);
+      expect((error as Error).message).toBe(
+        'FileDiff: EditContext is not attached'
+      );
+    } finally {
+      await unmountRoot(root);
+      cleanupActEnvironment();
+      cleanup();
+    }
+  });
+
+  test('partial FileDiff reports an editor factory failure after loading', async () => {
+    const { cleanup } = installDom();
+    const cleanupActEnvironment = installReactActEnvironment();
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const oldFile = { name: 'edit.ts', contents: 'const value = 1;\n' };
+    const newFile = { name: 'edit.ts', contents: 'const value = 2;\n' };
+    const patch = createTwoFilesPatch(
+      oldFile.name,
+      newFile.name,
+      oldFile.contents,
+      newFile.contents
+    );
+    const partial = parsePatchFiles(patch, 'edit.ts', true)[0]?.files[0];
+    if (partial == null) throw new Error('Expected partial diff');
+    let root: Root | undefined;
+
+    try {
+      root = createReactRoot(container);
+      const error = await captureRenderError(
+        root,
+        createElement(
+          EditProviderComponent,
+          {
+            createEditor() {
+              throw new Error('editor factory failed');
+            },
+          },
+          createElement(ReactFileDiffComponent, {
+            edit: true,
+            fileDiff: partial,
+            options: {
+              disableErrorHandling: true,
+              loadDiffFiles: () => Promise.resolve({ oldFile, newFile }),
+            },
+          })
+        )
+      );
+      expect(error).toBeInstanceOf(Error);
+      expect((error as Error).message).toBe('editor factory failed');
+    } finally {
+      await unmountRoot(root);
+      cleanupActEnvironment();
+      cleanup();
+    }
+  });
 
   for (const surface of ['File', 'FileDiff'] as const) {
     for (const termination of ['edit-off', 'unmount'] as const) {

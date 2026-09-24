@@ -282,6 +282,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
   }
 
   public cleanUp(): void {
+    this.endEditSession();
     this.recycle();
     this.expandedHunks.clear();
     this.workerManager = undefined;
@@ -291,11 +292,20 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
   public recycle(): void {
     this.highlighter = undefined;
     this.diff = undefined;
-    this.clearRenderCache();
+    if (this.editSessionActive) {
+      // The editor keeps its document and undo history while offscreen. Its
+      // private highlight result belongs to that session and can resume too.
+      if (this.renderCache != null) {
+        this.renderCache.renderRange = undefined;
+      }
+      this.pendingHighlightResult = undefined;
+      this.pendingStructuralRows = undefined;
+    } else {
+      this.clearRenderCache();
+    }
     this.additionAnnotations = {};
     this.deletionAnnotations = {};
     this.workerManager?.cleanUpTasks(this);
-    this.endEditSession();
   }
 
   /**
@@ -311,12 +321,22 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     diff: FileDiffMetadata,
     externalDiff?: FileDiffMetadata
   ): void {
-    const { editSessionActive: wasAlreadyActive, renderCache } = this;
+    const { editSessionActive: wasAlreadyActive } = this;
     this.editSessionActive = true;
     if (!wasAlreadyActive) {
       this.pendingHighlightResult = undefined;
     }
     this.diff = diff;
+    // A replacement creates a new session diff. The old session's result
+    // cannot become the new one's private editor markup.
+    if (
+      wasAlreadyActive &&
+      this.renderCache != null &&
+      this.renderCache.diff !== diff
+    ) {
+      this.clearRenderCache();
+    }
+    const { renderCache } = this;
 
     if (!diff.isPartial && diff.additionLines.length === 0) {
       Object.assign(
@@ -376,6 +396,9 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
   public endEditSession(): void {
     this.editSessionActive = false;
     this.pendingHighlightResult = undefined;
+    if (this.diff == null) {
+      this.clearRenderCache();
+    }
   }
 
   /**
@@ -690,19 +713,18 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     }
   }
 
-  // Normally triggered by the host when the document line count changes.
+  // Rebuild the session diff from the document even without a highlighted
+  // result; suspended programmatic edits still need current hunks on return.
   public applyDocumentChange(
     textDocument: TextDocument<'file-diff', LAnnotation>
   ): void {
     const { pendingStructuralRows, renderCache } = this;
     this.pendingStructuralRows = undefined;
-    if (renderCache == null) {
+    const diff = this.diff ?? renderCache?.diff;
+    if (diff == null) {
       return;
     }
-    const { diff, result } = renderCache;
-    if (result == null) {
-      return;
-    }
+    const result = renderCache?.result;
     if (diff.isPartial) {
       throw new Error('Could not apply document change for partial diff');
     }
@@ -713,12 +735,14 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     // editable empty row after a trailing line break.
     const { additionLines: previousAdditionLines } = diff;
     diff.additionLines = getEditorDocumentLines(textDocument);
-    result.code.additionLines = realignAdditionHastLines(
-      previousAdditionLines,
-      diff.additionLines,
-      result.code.additionLines,
-      textDocument
-    );
+    if (result != null) {
+      result.code.additionLines = realignAdditionHastLines(
+        previousAdditionLines,
+        diff.additionLines,
+        result.code.additionLines,
+        textDocument
+      );
+    }
     // An empty document splits into zero addition lines, which would recompute
     // to a diff with no editable rows and leave the attached host with no
     // line element for its caret (the additions column vanishes in split;
@@ -728,10 +752,12 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
         diff,
         recomputeEmptyDocumentDiff(diff, this.options.parseDiffOptions)
       );
-      result.code.additionLines[0] = createPlainAdditionLineElement(
-        0,
-        textDocument.getLineText(0)
-      );
+      if (result != null) {
+        result.code.additionLines[0] = createPlainAdditionLineElement(
+          0,
+          textDocument.getLineText(0)
+        );
+      }
     } else if (this.editSessionActive) {
       this.applySessionDocumentChange(diff, previousAdditionLines);
     } else {
@@ -741,7 +767,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       );
     }
 
-    if (pendingStructuralRows != null) {
+    if (pendingStructuralRows != null && result != null) {
       for (const [line, row] of pendingStructuralRows) {
         if (line < result.code.additionLines.length) {
           result.code.additionLines[line] = row;
@@ -749,7 +775,9 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       }
     }
 
-    renderCache.isDirty = true;
+    if (renderCache != null) {
+      renderCache.isDirty = true;
+    }
   }
 
   // Session-mode counterpart of the line-count recompute: derive canonical

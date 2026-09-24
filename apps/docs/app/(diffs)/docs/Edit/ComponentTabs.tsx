@@ -72,14 +72,17 @@ export function EditComponentTabs({
             </li>
             <li>
               You supplied <code>loadDiffFiles</code> so a partial diff can load
-              its complete old and new files after the editor attaches.
+              its complete old and new files. The editor attaches only after
+              that load finishes.
             </li>
           </ul>
           <p>
             Without any source for the complete files — for example, when the
             diff was parsed from a raw patch with no accompanying source files —{' '}
-            <code>editor.edit()</code> will attach, but editing will have no
-            effect.
+            <code>editor.edit()</code> throws while the diff is partial, and
+            React and <code>CodeView</code> throw during render. Added and
+            deleted files parsed from a patch have nothing to load and cannot be
+            edited without full contents.
           </p>
         </Notice>
       ) : null}

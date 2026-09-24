@@ -1218,6 +1218,7 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
     this.clearReadySubscription();
     this.restoreScrollInteractions();
     this.cleanAllRenderedItems();
+    const { items: discardedItems } = this;
     // Ending an edit session must fire onItemEditComplete. All items are being
     // discarded, so sessions end like item removals: nothing gets installed or
     // written back. Sessions settle after the item maps below are cleared, to
@@ -1227,20 +1228,29 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
       if (item != null) {
         record.state.removedItem = item.item;
       }
-      return { record, instance: item?.instance };
+      return record;
     });
     this.itemEditors.clear();
     this.attachedEditors.clear();
     this.selectedLines = null;
-    this.items.length = 0;
+    this.items = [];
     this.idToItem.clear();
     this.instanceToItem.clear();
     let failed = false;
     let failure: unknown;
-    for (const { record, instance } of teardownSessions) {
+    for (const record of teardownSessions) {
       try {
         record.editor.cleanUp('discard');
-        instance?.cleanUp();
+      } catch (error) {
+        if (!failed) {
+          failed = true;
+          failure = error;
+        }
+      }
+    }
+    for (const item of discardedItems) {
+      try {
+        item.instance.cleanUp();
       } catch (error) {
         if (!failed) {
           failed = true;
@@ -1572,10 +1582,8 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
   }
 
   /**
-   * Get the live editor for an item currently in edit mode. Use this to drive
-   * editor APIs CodeView does not wrap (applyEdits, undo, setMarkers, …).
-   * Returns undefined once the item's session ends (edit off or removal); a
-   * collapsed item keeps its suspended editor.
+   * Returns the editor while this item is being edited. Partial diffs get an
+   * editor after their files load; scrolling away or collapsing keeps it.
    */
   public getEditor(
     itemId: string
@@ -1677,7 +1685,13 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
     } else if (!this.tryAppendItems(items)) {
       removedItemsById = this.reconcileItems(items);
     }
-    this.syncItemEditors(removedItemsById);
+    try {
+      this.syncItemEditors(removedItemsById);
+    } finally {
+      for (const removedItem of removedItemsById?.values() ?? []) {
+        removedItem.instance.cleanUp();
+      }
+    }
     this.syncSelection();
   }
 
@@ -2183,6 +2197,14 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
     const record = this.itemEditors.get(id);
     let createdEditor: CodeViewEditor<LAnnotation, Caret> | undefined;
     try {
+      if (
+        record == null &&
+        item.type === 'diff' &&
+        !item.instance.__canAttachEditor()
+      ) {
+        void item.instance.__prepareForEditing();
+        return;
+      }
       if (record == null) {
         assertEditorFactory(createEditor);
         const state = getItemOptionsState(item.instance.options);
