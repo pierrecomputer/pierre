@@ -1,9 +1,5 @@
 import '@/app/prose.css';
-import {
-  preloadFile,
-  preloadMultiFileDiff,
-  preloadUnresolvedFile,
-} from '@pierre/diffs/ssr';
+import { preloadMultiFileDiff, preloadUnresolvedFile } from '@pierre/diffs/ssr';
 import type { Metadata } from 'next';
 
 import { DEFAULT_KEYMAP_FILE_EXAMPLE } from '../_edit/constants';
@@ -182,6 +178,7 @@ import { ProseWrapper } from '@/components/docs/ProseWrapper';
 import Footer from '@/components/Footer';
 import { renderMDX } from '@/lib/mdx';
 import { pageMetadata } from '@/lib/page-metadata';
+import { preloadCodeExample } from '@/lib/preloadCodeExample';
 
 const docsTitle = 'Diffs docs';
 const docsDescription =
@@ -242,7 +239,7 @@ async function InstallationSection() {
   const installationExampleEntries = await Promise.all(
     PACKAGE_MANAGERS.map(async (pm) => [
       pm,
-      await preloadFile(INSTALLATION_EXAMPLES[pm]),
+      await preloadCodeExample(INSTALLATION_EXAMPLES[pm]),
     ])
   );
   const installationExamples = Object.fromEntries(installationExampleEntries);
@@ -255,8 +252,8 @@ async function InstallationSection() {
 
 async function BuildWithAgentsSection() {
   const [agentSkillInstall, agentPrompt] = await Promise.all([
-    preloadFile(AGENT_SKILL_INSTALL),
-    preloadFile(AGENT_PROMPT),
+    preloadCodeExample(AGENT_SKILL_INSTALL),
+    preloadCodeExample(AGENT_PROMPT),
   ]);
   const content = await renderMDX({
     filePath: '(diffs)/docs/BuildWithAgents/content.mdx',
@@ -273,11 +270,11 @@ async function CoreTypesSection() {
     parseDiffFromFileExample,
     parsePatchFilesExample,
   ] = await Promise.all([
-    preloadFile(FILE_CONTENTS_TYPE),
-    preloadFile(FILE_DIFF_METADATA_TYPE),
-    preloadFile(LINE_ANNOTATION_TYPES),
-    preloadFile(PARSE_DIFF_FROM_FILE_EXAMPLE),
-    preloadFile(PARSE_PATCH_FILES_EXAMPLE),
+    preloadCodeExample(FILE_CONTENTS_TYPE),
+    preloadCodeExample(FILE_DIFF_METADATA_TYPE),
+    preloadCodeExample(LINE_ANNOTATION_TYPES),
+    preloadCodeExample(PARSE_DIFF_FROM_FILE_EXAMPLE),
+    preloadCodeExample(PARSE_PATCH_FILES_EXAMPLE),
   ]);
   const content = await renderMDX({
     filePath: '(diffs)/docs/CoreTypes/content.mdx',
@@ -301,10 +298,10 @@ async function OverviewSection() {
     vanillaPatchFile,
   ] = await Promise.all([
     preloadMultiFileDiff(OVERVIEW_INITIAL_EXAMPLE),
-    preloadFile(OVERVIEW_REACT_SINGLE_FILE),
-    preloadFile(OVERVIEW_REACT_PATCH_FILE),
-    preloadFile(OVERVIEW_VANILLA_SINGLE_FILE),
-    preloadFile(OVERVIEW_VANILLA_PATCH_FILE),
+    preloadCodeExample(OVERVIEW_REACT_SINGLE_FILE),
+    preloadCodeExample(OVERVIEW_REACT_PATCH_FILE),
+    preloadCodeExample(OVERVIEW_VANILLA_SINGLE_FILE),
+    preloadCodeExample(OVERVIEW_VANILLA_PATCH_FILE),
   ]);
   const content = await renderMDX({
     filePath: '(diffs)/docs/Overview/content.mdx',
@@ -334,18 +331,18 @@ async function ReactAPISection() {
     sharedFileOptions,
     sharedFileRenderProps,
   ] = await Promise.all([
-    preloadFile(REACT_API_CODE_VIEW),
-    preloadFile(REACT_API_MULTI_FILE_DIFF),
-    preloadFile(REACT_API_FILE),
-    preloadFile(REACT_API_PATCH_DIFF),
-    preloadFile(REACT_API_FILE_DIFF),
-    preloadFile(REACT_API_UNRESOLVED_FILE),
-    preloadFile(REACT_API_POST_RENDER_LIFECYCLE),
-    preloadFile(REACT_API_LOAD_DIFF_FILES),
-    preloadFile(REACT_API_SHARED_DIFF_OPTIONS),
-    preloadFile(REACT_API_SHARED_DIFF_RENDER_PROPS),
-    preloadFile(REACT_API_SHARED_FILE_OPTIONS),
-    preloadFile(REACT_API_SHARED_FILE_RENDER_PROPS),
+    preloadCodeExample(REACT_API_CODE_VIEW),
+    preloadCodeExample(REACT_API_MULTI_FILE_DIFF),
+    preloadCodeExample(REACT_API_FILE),
+    preloadCodeExample(REACT_API_PATCH_DIFF),
+    preloadCodeExample(REACT_API_FILE_DIFF),
+    preloadCodeExample(REACT_API_UNRESOLVED_FILE),
+    preloadCodeExample(REACT_API_POST_RENDER_LIFECYCLE),
+    preloadCodeExample(REACT_API_LOAD_DIFF_FILES),
+    preloadCodeExample(REACT_API_SHARED_DIFF_OPTIONS),
+    preloadCodeExample(REACT_API_SHARED_DIFF_RENDER_PROPS),
+    preloadCodeExample(REACT_API_SHARED_FILE_OPTIONS),
+    preloadCodeExample(REACT_API_SHARED_FILE_RENDER_PROPS),
   ]);
   const content = await renderMDX({
     filePath: '(diffs)/docs/ReactAPI/content.mdx',
@@ -382,18 +379,18 @@ async function VanillaAPISection() {
     diffHunksRendererPatch,
     fileRenderer,
   ] = await Promise.all([
-    preloadFile(VANILLA_API_CODE_VIEW_EXAMPLE),
-    preloadFile(VANILLA_API_FILE_DIFF_EXAMPLE),
-    preloadFile(VANILLA_API_FILE_EXAMPLE),
-    preloadFile(VANILLA_API_FILE_DIFF_PROPS),
-    preloadFile(VANILLA_API_FILE_PROPS),
-    preloadFile(VANILLA_API_UNRESOLVED_FILE_EXAMPLE),
-    preloadFile(VANILLA_API_LOAD_DIFF_FILES),
-    preloadFile(VANILLA_API_POST_RENDER_LIFECYCLE),
-    preloadFile(VANILLA_API_CUSTOM_HUNK_FILE),
-    preloadFile(VANILLA_API_HUNKS_RENDERER_FILE),
-    preloadFile(VANILLA_API_HUNKS_RENDERER_PATCH_FILE),
-    preloadFile(VANILLA_API_FILE_RENDERER),
+    preloadCodeExample(VANILLA_API_CODE_VIEW_EXAMPLE),
+    preloadCodeExample(VANILLA_API_FILE_DIFF_EXAMPLE),
+    preloadCodeExample(VANILLA_API_FILE_EXAMPLE),
+    preloadCodeExample(VANILLA_API_FILE_DIFF_PROPS),
+    preloadCodeExample(VANILLA_API_FILE_PROPS),
+    preloadCodeExample(VANILLA_API_UNRESOLVED_FILE_EXAMPLE),
+    preloadCodeExample(VANILLA_API_LOAD_DIFF_FILES),
+    preloadCodeExample(VANILLA_API_POST_RENDER_LIFECYCLE),
+    preloadCodeExample(VANILLA_API_CUSTOM_HUNK_FILE),
+    preloadCodeExample(VANILLA_API_HUNKS_RENDERER_FILE),
+    preloadCodeExample(VANILLA_API_HUNKS_RENDERER_PATCH_FILE),
+    preloadCodeExample(VANILLA_API_FILE_RENDERER),
   ]);
   const content = await renderMDX({
     filePath: '(diffs)/docs/VanillaAPI/content.mdx',
@@ -426,14 +423,14 @@ async function CodeViewSection() {
     codeViewHeaderFooterReactExample,
     codeViewHeaderFooterVanillaExample,
   ] = await Promise.all([
-    preloadFile(CODE_VIEW_ITEM_TYPE_EXAMPLE),
-    preloadFile(CODE_VIEW_LAYOUT_OPTIONS_EXAMPLE),
-    preloadFile(CODE_VIEW_ITEM_METRICS_OPTIONS_EXAMPLE),
-    preloadFile(CODE_VIEW_REACT_EXAMPLE),
-    preloadFile(CODE_VIEW_SCROLL_TARGETS_EXAMPLE),
-    preloadFile(CODE_VIEW_VANILLA_EXAMPLE),
-    preloadFile(CODE_VIEW_HEADER_FOOTER_REACT_EXAMPLE),
-    preloadFile(CODE_VIEW_HEADER_FOOTER_VANILLA_EXAMPLE),
+    preloadCodeExample(CODE_VIEW_ITEM_TYPE_EXAMPLE),
+    preloadCodeExample(CODE_VIEW_LAYOUT_OPTIONS_EXAMPLE),
+    preloadCodeExample(CODE_VIEW_ITEM_METRICS_OPTIONS_EXAMPLE),
+    preloadCodeExample(CODE_VIEW_REACT_EXAMPLE),
+    preloadCodeExample(CODE_VIEW_SCROLL_TARGETS_EXAMPLE),
+    preloadCodeExample(CODE_VIEW_VANILLA_EXAMPLE),
+    preloadCodeExample(CODE_VIEW_HEADER_FOOTER_REACT_EXAMPLE),
+    preloadCodeExample(CODE_VIEW_HEADER_FOOTER_VANILLA_EXAMPLE),
   ]);
   const content = await renderMDX({
     filePath: '(diffs)/docs/CodeView/content.mdx',
@@ -483,35 +480,35 @@ async function EditSection() {
     editWorkerPoolReactExample,
     editWorkerPoolVanillaExample,
   ] = await Promise.all([
-    preloadFile(DEFAULT_KEYMAP_FILE_EXAMPLE),
-    preloadFile(EDIT_VANILLA_FILE_EXAMPLE),
-    preloadFile(EDIT_VANILLA_FILE_DIFF_EXAMPLE),
-    preloadFile(EDIT_VANILLA_CODE_VIEW_EXAMPLE),
-    preloadFile(EDIT_LAZY_FILE_EXAMPLE),
-    preloadFile(EDIT_PREDICTION_EXAMPLE),
-    preloadFile(EDIT_PREDICTION_RESPONSE_EXAMPLE),
-    preloadFile(EDIT_PREDICTION_CODESTRAL_EXAMPLE),
-    preloadFile(EDITOR_OPTIONS_TYPE),
-    preloadFile(EDIT_ON_CHANGE_EXAMPLE),
-    preloadFile(EDIT_PERSISTED_DRAFT_EXAMPLE),
-    preloadFile(EDIT_ON_ATTACH_REACT_EXAMPLE),
-    preloadFile(EDIT_ON_ATTACH_VANILLA_EXAMPLE),
-    preloadFile(EDIT_FOCUS_POSITION_EXAMPLE),
-    preloadFile(EDITOR_PUBLIC_API),
-    preloadFile(EDIT_CARET_TYPE),
-    preloadFile(EDIT_CARET_EXAMPLE),
-    preloadFile(EDIT_SELECTION_ACTION_CONTEXT_TYPE),
-    preloadFile(EDIT_SELECTION_ACTION_EXAMPLE),
-    preloadFile(EDIT_MARKER_TYPE),
-    preloadFile(EDIT_MARKER_EXAMPLE),
-    preloadFile(EDIT_REACT_CREATE_EDITOR_EXAMPLE),
-    preloadFile(EDIT_REACT_CODE_VIEW_EXAMPLE),
-    preloadFile(EDIT_REACT_EXAMPLE),
-    preloadFile(EDIT_REACT_FILE_DIFF_EXAMPLE),
-    preloadFile(EDIT_REACT_MULTI_FILE_DIFF_EXAMPLE),
-    preloadFile(EDIT_UNDO_REDO_EXAMPLE),
-    preloadFile(EDIT_WORKER_POOL_REACT_EXAMPLE),
-    preloadFile(EDIT_WORKER_POOL_VANILLA_EXAMPLE),
+    preloadCodeExample(DEFAULT_KEYMAP_FILE_EXAMPLE),
+    preloadCodeExample(EDIT_VANILLA_FILE_EXAMPLE),
+    preloadCodeExample(EDIT_VANILLA_FILE_DIFF_EXAMPLE),
+    preloadCodeExample(EDIT_VANILLA_CODE_VIEW_EXAMPLE),
+    preloadCodeExample(EDIT_LAZY_FILE_EXAMPLE),
+    preloadCodeExample(EDIT_PREDICTION_EXAMPLE),
+    preloadCodeExample(EDIT_PREDICTION_RESPONSE_EXAMPLE),
+    preloadCodeExample(EDIT_PREDICTION_CODESTRAL_EXAMPLE),
+    preloadCodeExample(EDITOR_OPTIONS_TYPE),
+    preloadCodeExample(EDIT_ON_CHANGE_EXAMPLE),
+    preloadCodeExample(EDIT_PERSISTED_DRAFT_EXAMPLE),
+    preloadCodeExample(EDIT_ON_ATTACH_REACT_EXAMPLE),
+    preloadCodeExample(EDIT_ON_ATTACH_VANILLA_EXAMPLE),
+    preloadCodeExample(EDIT_FOCUS_POSITION_EXAMPLE),
+    preloadCodeExample(EDITOR_PUBLIC_API),
+    preloadCodeExample(EDIT_CARET_TYPE),
+    preloadCodeExample(EDIT_CARET_EXAMPLE),
+    preloadCodeExample(EDIT_SELECTION_ACTION_CONTEXT_TYPE),
+    preloadCodeExample(EDIT_SELECTION_ACTION_EXAMPLE),
+    preloadCodeExample(EDIT_MARKER_TYPE),
+    preloadCodeExample(EDIT_MARKER_EXAMPLE),
+    preloadCodeExample(EDIT_REACT_CREATE_EDITOR_EXAMPLE),
+    preloadCodeExample(EDIT_REACT_CODE_VIEW_EXAMPLE),
+    preloadCodeExample(EDIT_REACT_EXAMPLE),
+    preloadCodeExample(EDIT_REACT_FILE_DIFF_EXAMPLE),
+    preloadCodeExample(EDIT_REACT_MULTI_FILE_DIFF_EXAMPLE),
+    preloadCodeExample(EDIT_UNDO_REDO_EXAMPLE),
+    preloadCodeExample(EDIT_WORKER_POOL_REACT_EXAMPLE),
+    preloadCodeExample(EDIT_WORKER_POOL_VANILLA_EXAMPLE),
   ]);
   const content = await renderMDX({
     filePath: '(diffs)/docs/Edit/content.mdx',
@@ -556,9 +553,9 @@ async function VirtualizationSection() {
     reactVirtualizerConfig,
     vanillaVirtualizedFileDiff,
   ] = await Promise.all([
-    preloadFile(VIRTUALIZATION_REACT_BASIC),
-    preloadFile(VIRTUALIZATION_REACT_CONFIG),
-    preloadFile(VIRTUALIZATION_VANILLA_DIFF),
+    preloadCodeExample(VIRTUALIZATION_REACT_BASIC),
+    preloadCodeExample(VIRTUALIZATION_REACT_CONFIG),
+    preloadCodeExample(VIRTUALIZATION_VANILLA_DIFF),
   ]);
   const content = await renderMDX({
     filePath: '(diffs)/docs/Virtualization/content.mdx',
@@ -586,18 +583,18 @@ async function UtilitiesSection() {
     setLanguageOverride,
     trimPatchContext,
   ] = await Promise.all([
-    preloadFile(HELPER_DIFF_ACCEPT_REJECT),
-    preloadFile(HELPER_DIFF_ACCEPT_REJECT_REACT),
-    preloadFile(HELPER_DISPOSE_HIGHLIGHTER),
-    preloadFile(HELPER_GET_SHARED_HIGHLIGHTER),
-    preloadFile(HELPER_PARSE_DIFF_FROM_FILE),
-    preloadFile(HELPER_PARSE_PATCH_FILES),
-    preloadFile(HELPER_PRELOAD_HIGHLIGHTER),
-    preloadFile(HELPER_REGISTER_CUSTOM_LANGUAGE),
-    preloadFile(HELPER_REGISTER_CUSTOM_THEME),
-    preloadFile(HELPER_RESOLVE_MERGE_CONFLICT),
-    preloadFile(HELPER_SET_LANGUAGE_OVERRIDE),
-    preloadFile(HELPER_TRIM_PATCH_CONTEXT),
+    preloadCodeExample(HELPER_DIFF_ACCEPT_REJECT),
+    preloadCodeExample(HELPER_DIFF_ACCEPT_REJECT_REACT),
+    preloadCodeExample(HELPER_DISPOSE_HIGHLIGHTER),
+    preloadCodeExample(HELPER_GET_SHARED_HIGHLIGHTER),
+    preloadCodeExample(HELPER_PARSE_DIFF_FROM_FILE),
+    preloadCodeExample(HELPER_PARSE_PATCH_FILES),
+    preloadCodeExample(HELPER_PRELOAD_HIGHLIGHTER),
+    preloadCodeExample(HELPER_REGISTER_CUSTOM_LANGUAGE),
+    preloadCodeExample(HELPER_REGISTER_CUSTOM_THEME),
+    preloadCodeExample(HELPER_RESOLVE_MERGE_CONFLICT),
+    preloadCodeExample(HELPER_SET_LANGUAGE_OVERRIDE),
+    preloadCodeExample(HELPER_TRIM_PATCH_CONTEXT),
   ]);
   const content = await renderMDX({
     filePath: '(diffs)/docs/Utilities/content.mdx',
@@ -623,7 +620,7 @@ async function CustomHunkSeparatorsSection() {
   const [customHunkSeparatorsExample, customHunkSeparatorsSwitcher] =
     await Promise.all([
       preloadMultiFileDiff(CUSTOM_HUNK_SEPARATORS_EXAMPLE),
-      preloadFile(CUSTOM_HUNK_SEPARATORS_SWITCHER),
+      preloadCodeExample(CUSTOM_HUNK_SEPARATORS_SWITCHER),
     ]);
   const content = await renderMDX({
     filePath: '(diffs)/docs/CustomHunkSeparators/content.mdx',
@@ -637,9 +634,9 @@ async function CustomHunkSeparatorsSection() {
 
 async function StylingSection() {
   const [stylingGlobal, stylingInline, stylingUnsafe] = await Promise.all([
-    preloadFile(STYLING_CODE_GLOBAL),
-    preloadFile(STYLING_CODE_INLINE),
-    preloadFile(STYLING_CODE_UNSAFE),
+    preloadCodeExample(STYLING_CODE_GLOBAL),
+    preloadCodeExample(STYLING_CODE_INLINE),
+    preloadCodeExample(STYLING_CODE_UNSAFE),
   ]);
   const content = await renderMDX({
     filePath: '(diffs)/docs/Styling/content.mdx',
@@ -675,19 +672,19 @@ async function HighlightsHighlighterSection() {
     highlightsApiRuntime,
     highlightsApiTypes,
   ] = await Promise.all([
-    preloadFile(HIGHLIGHTS_HTML),
-    preloadFile(HIGHLIGHTS_TOKENS),
-    preloadFile(HIGHLIGHTS_STREAM_PIPE),
-    preloadFile(HIGHLIGHTS_STREAM),
-    preloadFile(HIGHLIGHTS_LIVE),
-    preloadFile(HIGHLIGHTS_VIEWPORT),
-    preloadFile(HIGHLIGHTS_THEMES),
-    preloadFile(HIGHLIGHTS_CSS_VARIABLES),
-    preloadFile(HIGHLIGHTS_DUAL_THEMES),
-    preloadFile(HIGHLIGHTS_DUAL_THEMES_CSS),
-    preloadFile(HIGHLIGHTS_THEME_LOADER),
-    preloadFile(HIGHLIGHTS_API_RUNTIME),
-    preloadFile(HIGHLIGHTS_API_TYPES),
+    preloadCodeExample(HIGHLIGHTS_HTML),
+    preloadCodeExample(HIGHLIGHTS_TOKENS),
+    preloadCodeExample(HIGHLIGHTS_STREAM_PIPE),
+    preloadCodeExample(HIGHLIGHTS_STREAM),
+    preloadCodeExample(HIGHLIGHTS_LIVE),
+    preloadCodeExample(HIGHLIGHTS_VIEWPORT),
+    preloadCodeExample(HIGHLIGHTS_THEMES),
+    preloadCodeExample(HIGHLIGHTS_CSS_VARIABLES),
+    preloadCodeExample(HIGHLIGHTS_DUAL_THEMES),
+    preloadCodeExample(HIGHLIGHTS_DUAL_THEMES_CSS),
+    preloadCodeExample(HIGHLIGHTS_THEME_LOADER),
+    preloadCodeExample(HIGHLIGHTS_API_RUNTIME),
+    preloadCodeExample(HIGHLIGHTS_API_TYPES),
   ]);
   const content = await renderMDX({
     filePath: '(diffs)/docs/HighlightsHighlighter/content.mdx',
@@ -712,8 +709,8 @@ async function HighlightsHighlighterSection() {
 
 async function TokenHooksSection() {
   const [reactTokenHooks, vanillaTokenHooks] = await Promise.all([
-    preloadFile(TOKEN_HOOKS_REACT),
-    preloadFile(TOKEN_HOOKS_VANILLA),
+    preloadCodeExample(TOKEN_HOOKS_REACT),
+    preloadCodeExample(TOKEN_HOOKS_VANILLA),
   ]);
   const content = await renderMDX({
     filePath: '(diffs)/docs/TokenHooks/content.mdx',
@@ -736,14 +733,14 @@ async function SSRSection() {
     preloadUnresolvedFileResult,
     preloadPatchFile,
   ] = await Promise.all([
-    preloadFile(SSR_USAGE_SERVER),
-    preloadFile(SSR_USAGE_CLIENT),
-    preloadFile(SSR_PRELOAD_FILE_DIFF),
-    preloadFile(SSR_PRELOAD_MULTI_FILE_DIFF),
-    preloadFile(SSR_PRELOAD_PATCH_DIFF),
-    preloadFile(SSR_PRELOAD_FILE),
-    preloadFile(SSR_PRELOAD_UNRESOLVED_FILE),
-    preloadFile(SSR_PRELOAD_PATCH_FILE),
+    preloadCodeExample(SSR_USAGE_SERVER),
+    preloadCodeExample(SSR_USAGE_CLIENT),
+    preloadCodeExample(SSR_PRELOAD_FILE_DIFF),
+    preloadCodeExample(SSR_PRELOAD_MULTI_FILE_DIFF),
+    preloadCodeExample(SSR_PRELOAD_PATCH_DIFF),
+    preloadCodeExample(SSR_PRELOAD_FILE),
+    preloadCodeExample(SSR_PRELOAD_UNRESOLVED_FILE),
+    preloadCodeExample(SSR_PRELOAD_PATCH_FILE),
   ]);
   const content = await renderMDX({
     filePath: '(diffs)/docs/SSR/content.mdx',
@@ -782,24 +779,24 @@ async function WorkerPoolSection() {
     cachingExample,
     architectureASCII,
   ] = await Promise.all([
-    preloadFile(WORKER_POOL_HELPER_VITE),
-    preloadFile(WORKER_POOL_HELPER_NEXTJS),
-    preloadFile(WORKER_POOL_VSCODE_LOCAL_ROOTS),
-    preloadFile(WORKER_POOL_VSCODE_WORKER_URI),
-    preloadFile(WORKER_POOL_VSCODE_INLINE_SCRIPT),
-    preloadFile(WORKER_POOL_VSCODE_CSP),
-    preloadFile(WORKER_POOL_VSCODE_GLOBAL),
-    preloadFile(WORKER_POOL_VSCODE_BLOB_URL),
-    preloadFile(WORKER_POOL_VSCODE_FACTORY),
-    preloadFile(WORKER_POOL_HELPER_WEBPACK),
-    preloadFile(WORKER_POOL_HELPER_ESBUILD),
-    preloadFile(WORKER_POOL_HELPER_STATIC),
-    preloadFile(WORKER_POOL_HELPER_VANILLA),
-    preloadFile(WORKER_POOL_VANILLA_USAGE),
-    preloadFile(WORKER_POOL_REACT_USAGE),
-    preloadFile(WORKER_POOL_API_REFERENCE),
-    preloadFile(WORKER_POOL_CACHING),
-    preloadFile(WORKER_POOL_ARCHITECTURE_ASCII),
+    preloadCodeExample(WORKER_POOL_HELPER_VITE),
+    preloadCodeExample(WORKER_POOL_HELPER_NEXTJS),
+    preloadCodeExample(WORKER_POOL_VSCODE_LOCAL_ROOTS),
+    preloadCodeExample(WORKER_POOL_VSCODE_WORKER_URI),
+    preloadCodeExample(WORKER_POOL_VSCODE_INLINE_SCRIPT),
+    preloadCodeExample(WORKER_POOL_VSCODE_CSP),
+    preloadCodeExample(WORKER_POOL_VSCODE_GLOBAL),
+    preloadCodeExample(WORKER_POOL_VSCODE_BLOB_URL),
+    preloadCodeExample(WORKER_POOL_VSCODE_FACTORY),
+    preloadCodeExample(WORKER_POOL_HELPER_WEBPACK),
+    preloadCodeExample(WORKER_POOL_HELPER_ESBUILD),
+    preloadCodeExample(WORKER_POOL_HELPER_STATIC),
+    preloadCodeExample(WORKER_POOL_HELPER_VANILLA),
+    preloadCodeExample(WORKER_POOL_VANILLA_USAGE),
+    preloadCodeExample(WORKER_POOL_REACT_USAGE),
+    preloadCodeExample(WORKER_POOL_API_REFERENCE),
+    preloadCodeExample(WORKER_POOL_CACHING),
+    preloadCodeExample(WORKER_POOL_ARCHITECTURE_ASCII),
   ]);
   const content = await renderMDX({
     filePath: '(diffs)/docs/WorkerPool/content.mdx',

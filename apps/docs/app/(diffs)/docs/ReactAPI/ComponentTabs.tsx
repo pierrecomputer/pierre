@@ -1,10 +1,10 @@
 'use client';
 
-import type { PreloadedFileResult } from '@pierre/diffs/ssr';
 import { type CSSProperties, useState } from 'react';
 
 import { DocsCodeExample } from '@/components/docs/DocsCodeExample';
 import { ButtonGroup, ButtonGroupItem } from '@/components/ui/button-group';
+import type { PreloadedCodeExample } from '@/lib/preloadCodeExample';
 
 const NumberColumnWidthOverride = {
   '--diffs-min-number-column-width': '3ch',
@@ -24,12 +24,12 @@ type SharedPropsTypes =
   | 'file-render-props';
 
 interface ComponentTabsProps {
-  reactAPICodeView: PreloadedFileResult<undefined, undefined>;
-  reactAPIMultiFileDiff: PreloadedFileResult<undefined, undefined>;
-  reactAPIFileDiff: PreloadedFileResult<undefined, undefined>;
-  reactAPIPatch: PreloadedFileResult<undefined, undefined>;
-  reactAPIFile: PreloadedFileResult<undefined, undefined>;
-  reactAPIUnresolvedFile: PreloadedFileResult<undefined, undefined>;
+  reactAPICodeView: PreloadedCodeExample<undefined, undefined>;
+  reactAPIMultiFileDiff: PreloadedCodeExample<undefined, undefined>;
+  reactAPIFileDiff: PreloadedCodeExample<undefined, undefined>;
+  reactAPIPatch: PreloadedCodeExample<undefined, undefined>;
+  reactAPIFile: PreloadedCodeExample<undefined, undefined>;
+  reactAPIUnresolvedFile: PreloadedCodeExample<undefined, undefined>;
 }
 
 export function ComponentTabs({
@@ -81,10 +81,10 @@ export function ComponentTabs({
 }
 
 interface SharedPropTabsProps {
-  sharedDiffOptions: PreloadedFileResult<undefined, undefined>;
-  sharedDiffRenderProps: PreloadedFileResult<undefined, undefined>;
-  sharedFileOptions: PreloadedFileResult<undefined, undefined>;
-  sharedFileRenderProps: PreloadedFileResult<undefined, undefined>;
+  sharedDiffOptions: PreloadedCodeExample<undefined, undefined>;
+  sharedDiffRenderProps: PreloadedCodeExample<undefined, undefined>;
+  sharedFileOptions: PreloadedCodeExample<undefined, undefined>;
+  sharedFileRenderProps: PreloadedCodeExample<undefined, undefined>;
 }
 
 export function SharedPropTabs({
