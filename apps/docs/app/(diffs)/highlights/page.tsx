@@ -1,6 +1,7 @@
 import { IconBolt, IconCodeBlock, IconPencil } from '@pierre/icons';
 import type { Metadata } from 'next';
 
+import { HighlightsBenchmarks } from './HighlightsBenchmarks';
 import { HighlightsHero } from './HighlightsHero';
 import { HighlightsPlayground } from './HighlightsPlayground';
 import Footer from '@/components/Footer';
@@ -24,6 +25,7 @@ export default function HighlightsPage() {
       <main>
         <HighlightsHero />
         <HighlightsPlayground />
+        <HighlightsBenchmarks />
         <HighlightsPlayground variant="languages" />
         <section
           aria-labelledby="highlights-features"
