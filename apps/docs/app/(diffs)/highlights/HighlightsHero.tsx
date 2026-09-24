@@ -72,7 +72,6 @@ export function HighlightsHero() {
       </div>
 
       <p className="text-muted-foreground mt-2 text-sm">
-        73 built-in languages ·{' '}
         <Link
           target="_blank"
           rel="noopener noreferrer"
@@ -80,17 +79,7 @@ export function HighlightsHero() {
           href="https://github.com/pierrecomputer/pierre/tree/main/packages/highlights"
         >
           View on GitHub
-        </Link>{' '}
-        ·{' '}
-        <Link
-          target="_blank"
-          rel="noopener noreferrer"
-          className="hover:text-foreground muted-foreground hover:decoration-foreground underline decoration-[1px] underline-offset-4 transition-colors"
-          href="https://github.com/pierrecomputer/pierre/tree/main/packages/highlights/benchmark#html-generation"
-        >
-          Benchmark methodology
         </Link>
-        .
       </p>
     </section>
   );
