@@ -32,6 +32,16 @@
 }
 
 .content {
+  overflow: visible;
+}
+
+.editor[data-variant='hero'] .content {
+  max-height: clamp(20rem, 75vh, 40rem);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.layers {
   position: relative;
 }
 
