@@ -1,19 +1,19 @@
 'use client';
 
-import type { PreloadedFileResult } from '@pierre/diffs/ssr';
 import { IconInfoFill } from '@pierre/icons';
 import { useState } from 'react';
 
 import { DocsCodeExample } from '@/components/docs/DocsCodeExample';
 import { ButtonGroup, ButtonGroupItem } from '@/components/ui/button-group';
 import { Notice } from '@/components/ui/notice';
+import type { PreloadedCodeExample } from '@/lib/preloadCodeExample';
 
 type EditComponentMode = 'file' | 'file-diff' | 'multi-file-diff';
 
 interface EditComponentTabsProps {
-  fileExample: PreloadedFileResult<undefined, undefined>;
-  fileDiffExample: PreloadedFileResult<undefined, undefined>;
-  multiFileDiffExample?: PreloadedFileResult<undefined, undefined>;
+  fileExample: PreloadedCodeExample<undefined, undefined>;
+  fileDiffExample: PreloadedCodeExample<undefined, undefined>;
+  multiFileDiffExample?: PreloadedCodeExample<undefined, undefined>;
 }
 
 export function EditComponentTabs({
