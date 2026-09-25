@@ -28,31 +28,21 @@
   ;; else/empty/pending are clause heads that a block follows, so they share
   ;; keyword_else. Any other word returns $Lex.invalid
   (func $tsrxDirectiveKind (param $lhs i32) (param $rhs i32) (result i32)
+    (local $k i32)
     (local $len i32)
-    (local $w i64)
+    ;; eight of the words are JavaScript keywords: the keyword table names them
+    (local.set $k (call $isKeyword (local.get $lhs) (local.get $rhs)))
+    (if (bitset.get $LexBits.tsrxDirective (local.get $k))
+      (then (return (local.get $k))))
     (local.set $len (i32.sub (local.get $rhs) (local.get $lhs)))
-    (if (i32.gt_u (i32.sub (local.get $len) (i32.const 2)) (i32.const 5))
-      (then (return (enum.get $Lex.invalid))))
-    (local.set $w (call $tsrxWord (local.get $lhs) (local.get $len)))
-    (if (i64.eq (local.get $w) (i64.const "if"))
-      (then (return (enum.get $Lex.keyword_if))))
-    (if (i64.eq (local.get $w) (i64.const "for"))
-      (then (return (enum.get $Lex.keyword_for))))
-    (if (i64.eq (local.get $w) (i64.const "try"))
-      (then (return (enum.get $Lex.keyword_try))))
-    (if (i64.eq (local.get $w) (i64.const "else"))
-      (then (return (enum.get $Lex.keyword_else))))
-    (if (i64.eq (local.get $w) (i64.const "case"))
-      (then (return (enum.get $Lex.keyword_case))))
-    (if (i64.eq (local.get $w) (i64.const "empty"))
-      (then (return (enum.get $Lex.keyword_else))))
-    (if (i64.eq (local.get $w) (i64.const "catch"))
-      (then (return (enum.get $Lex.keyword_catch))))
-    (if (i64.eq (local.get $w) (i64.const "switch"))
-      (then (return (enum.get $Lex.keyword_switch))))
-    (if (i64.eq (local.get $w) (i64.const "default"))
-      (then (return (enum.get $Lex.keyword_default))))
-    (if (i64.eq (local.get $w) (i64.const "pending"))
+    (if
+      (i32.or
+        (i32.and
+          (i32.eq (local.get $len) (i32.const 5))
+          (i64.eq (call $tsrxWord (local.get $lhs) (i32.const 5)) (i64.const "empty")))
+        (i32.and
+          (i32.eq (local.get $len) (i32.const 7))
+          (i64.eq (call $tsrxWord (local.get $lhs) (i32.const 7)) (i64.const "pending"))))
       (then (return (enum.get $Lex.keyword_else))))
     (enum.get $Lex.invalid))
 
@@ -76,7 +66,6 @@
   (func $tsrxWordKind (param $lhs i32) (param $rhs i32) (result i32)
     (local $len i32)
     (local $c i32)
-    (local $p i32)
     (local.set $len (i32.sub (local.get $rhs) (local.get $lhs)))
     (if (i32.eq (local.get $len) (i32.const 8))
       (then
@@ -88,17 +77,7 @@
         (if (i64.ne (call $tsrxWord (local.get $lhs) (i32.const 6)) (i64.const "module"))
           (then (return (enum.get $Lex.identifier))))))
     ;; the next non-blank byte decides
-    (local.set $p (local.get $rhs))
-    (block $stop
-      (loop $skip
-        (local.set $c (call $tsxByte (local.get $p)))
-        (br_if $stop
-          (i32.eqz
-            (i32.or
-              (i32.eq (local.get $c) (i32.const 32))
-              (i32.le_u (i32.sub (local.get $c) (i32.const 9)) (i32.const 4)))))
-        (local.set $p (i32.add (local.get $p) (i32.const 1)))
-        (br $skip)))
+    (local.set $c (call $tsxByte (call $jsxSpaceEndAt (local.get $rhs))))
     (if (i32.eq (local.get $len) (i32.const 8))
       (then
         (if
@@ -217,18 +196,8 @@
   ;; `finally` after the blanks at $p, itself followed by blanks and `{`: the
   ;; bare clause head of a template `@try`. Returns its position, else 0
   (func $tsrxFinallyAhead (param $p i32) (result i32)
-    (local $c i32)
     (local $q i32)
-    (block $stop
-      (loop $skip
-        (local.set $c (call $tsxByte (local.get $p)))
-        (br_if $stop
-          (i32.eqz
-            (i32.or
-              (i32.eq (local.get $c) (i32.const 32))
-              (i32.le_u (i32.sub (local.get $c) (i32.const 9)) (i32.const 4)))))
-        (local.set $p (i32.add (local.get $p) (i32.const 1)))
-        (br $skip)))
+    (local.set $p (call $jsxSpaceEndAt (local.get $p)))
     (if (i32.gt_u (i32.add (local.get $p) (i32.const 7)) (global.get $end))
       (then (return (i32.const 0))))
     (if (i64.ne (call $tsrxWord (local.get $p) (i32.const 7)) (i64.const "finally"))
@@ -236,17 +205,10 @@
     (local.set $q (i32.add (local.get $p) (i32.const 7)))
     (if (call $tsrxIdentByte (call $tsxByte (local.get $q)))
       (then (return (i32.const 0))))
-    (block $stop2
-      (loop $skip2
-        (local.set $c (call $tsxByte (local.get $q)))
-        (br_if $stop2
-          (i32.eqz
-            (i32.or
-              (i32.eq (local.get $c) (i32.const 32))
-              (i32.le_u (i32.sub (local.get $c) (i32.const 9)) (i32.const 4)))))
-        (local.set $q (i32.add (local.get $q) (i32.const 1)))
-        (br $skip2)))
-    (select (local.get $p) (i32.const 0) (i32.eq (local.get $c) (i32.const "{"))))
+    (select
+      (local.get $p)
+      (i32.const 0)
+      (i32.eq (call $tsxByte (call $jsxSpaceEndAt (local.get $q))) (i32.const "{"))))
 
   ;; one step inside a `<style>` body (mode 6): CSS up to `</style`, then
   ;; the close tag. The CSS lexer's resumable state lives in the stack

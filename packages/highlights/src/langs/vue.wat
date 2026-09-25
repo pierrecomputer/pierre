@@ -43,11 +43,12 @@
   ;; a chunk end resumes mid-attribute: $state 0 expects a name, 1 sits
   ;; after a name (an `=` may still follow), 2 sits after `=`, 3 sits inside
   ;; a quoted value whose open quote is $quote; $directive marks the pending
-  ;; value as an expression. Returns 1 for `>`, 2 for `/>`, 0 for a stray
-  ;; `<` (the next tag starts there) or input end. At a real chunk end the
-  ;; open tag becomes stream region 11 with $streamA = $kind (1 script,
-  ;; 2 style), $streamB = state | directive << 4, $streamC = quote, and a
-  ;; directive value continues as a TSX stream.
+  ;; value as an expression. Returns, packed like $htmlAttrs, 1 for `>`, 2
+  ;; for `/>`, 0 for a stray `<` (the next tag starts there) or input end,
+  ;; with the raw-text kind above (a style's `lang` may refine it). At a real
+  ;; chunk end the open tag becomes stream region 11 with $streamA = $kind,
+  ;; $streamB = state | directive << 4, $streamC = quote, and a directive
+  ;; value continues as a TSX stream.
   (func $vueAttrs
     (param $state i32)
     (param $directive i32)
@@ -58,6 +59,7 @@
     (local $lhs i32)
     (local $p i32)
     (local $tsxOpen i32)
+    (local $fresh i32) ;; the quoted value opened in this call, not a resumed one
     ;; a directive value already streaming continues the TSX stream
     (local.set $tsxOpen (i32.and (i32.eq (local.get $state) (i32.const 3)) (local.get $directive)))
     (block $done
@@ -108,7 +110,20 @@
                     (global.set $ptr (i32.add (local.get $p) (i32.const 1)))
                     (local.set $state (i32.const 0)))
                   (else (global.set $ptr (global.get $end))))
-                (call $emitTok (enum.get $Token.string) (local.get $lhs) (global.get $ptr))))
+                (call $emitTok (enum.get $Token.string) (local.get $lhs) (global.get $ptr))
+                ;; a `lang` value counts only whole: one cut by a chunk end
+                ;; spans a line break, which no dialect name holds
+                (if (i32.and (local.get $kind) (i32.const 64))
+                  (then
+                    (local.set $kind
+                      (call $htmlLangValue
+                        (local.get $kind)
+                        (local.get $lhs)
+                        (select
+                          (local.get $p)
+                          (local.get $lhs)
+                          (i32.and (local.get $fresh) (i32.eqz (local.get $state))))))))))
+            (local.set $fresh (i32.const 0))
             (br $next)))
         (local.set $lhs (global.get $ptr))
         (local.set $c (i32.load8_u (global.get $ptr)))
@@ -125,7 +140,8 @@
               (enum.get $Token.punctuation.bracket.html)
               (local.get $lhs)
               (global.get $ptr))
-            (br $done (i32.const 1))))
+            (br $done
+              (i32.or (i32.const 1) (i32.shl (i32.and (local.get $kind) (i32.const 63)) (i32.const 8))))))
         (if (i32.eq (local.get $c) (i32.const "<"))
           (then (br $done (i32.const 0))))
         ;; after a name only `=` continues the attribute
@@ -152,6 +168,7 @@
                 (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
                 (call $emitTok (enum.get $Token.string) (local.get $lhs) (global.get $ptr))
                 (local.set $state (i32.const 3))
+                (local.set $fresh (i32.const 1))
                 (br $next)))
             (if (i32.eq (local.get $c) (i32.const "/"))
               (then
@@ -166,11 +183,18 @@
                       (enum.get $Token.punctuation.bracket.html)
                       (local.get $lhs)
                       (global.get $ptr))
-                    (br $done (i32.const 2))))))
+                    (br $done
+                      (i32.or
+                        (i32.const 2)
+                        (i32.shl (i32.and (local.get $kind) (i32.const 63)) (i32.const 8))))))))
             (global.set $ptr (call $htmlValueEnd (global.get $ptr)))
             (if (local.get $directive)
               (then (call $vueTsxRange (local.get $lhs) (global.get $ptr)))
               (else (call $emitTok (enum.get $Token.string) (local.get $lhs) (global.get $ptr))))
+            (if (i32.and (local.get $kind) (i32.const 64))
+              (then
+                (local.set $kind
+                  (call $htmlLangValue (local.get $kind) (local.get $lhs) (global.get $ptr)))))
             (br $next)))
         ;; an attribute name; `/>` closes, other stray punctuation is plain
         (if (i32.eq (local.get $c) (i32.const "/"))
@@ -186,7 +210,10 @@
                   (enum.get $Token.punctuation.bracket.html)
                   (local.get $lhs)
                   (global.get $ptr))
-                (br $done (i32.const 2))))
+                (br $done
+                  (i32.or
+                    (i32.const 2)
+                    (i32.shl (i32.and (local.get $kind) (i32.const 63)) (i32.const 8))))))
             (call $emitTok (enum.get $Token.none) (local.get $lhs) (global.get $ptr))
             (br $next)))
         (if
@@ -211,6 +238,9 @@
         ;; never empty
         (global.set $ptr (call $htmlNameEnd (global.get $ptr)))
         (call $emitTok (enum.get $Token.attribute) (local.get $lhs) (global.get $ptr))
+        (if (local.get $kind)
+          (then
+            (local.set $kind (call $htmlLangName (local.get $kind) (local.get $lhs) (global.get $ptr)))))
         (local.set $state (i32.const 1))
         (br $next))
       (unreachable)))
@@ -237,20 +267,13 @@
       (then (local.set $kind (call $rawTextKind (global.get $ptr) (local.get $q)))))
     (call $emitTok (enum.get $Token.tag) (global.get $ptr) (local.get $q))
     (global.set $ptr (local.get $q))
-    (if
-      (i32.and
-        (i32.ne
-          (call $vueAttrs (i32.const 0) (i32.const 0) (i32.const 0) (local.get $kind))
-          (i32.const 0))
-        (i32.ne (local.get $kind) (i32.const 0)))
-      (then (call $htmlRawText (local.get $kind)))))
+    (call $htmlTagEnd
+      (call $vueAttrs (i32.const 0) (i32.const 0) (i32.const 0) (local.get $kind))))
 
   (func $hlVue
     (local $c i32)
-    (local $complete i32)
     (local $from i32)
     (local $p i32)
-    (local $to i32)
     (call $lexEmitLeadingContinuation)
     (local.set $from (global.get $ptr))
     (local.set $p (global.get $ptr))
@@ -299,41 +322,23 @@
               (i32.lt_u (i32.add (local.get $p) (i32.const 1)) (global.get $end))
               (i32.eq (i32.load8_u offset=1 (local.get $p)) (i32.const "{"))))
           (then
-            (local.set $to (call $tsxExpressionEnd (local.get $p) (local.get $p)))
-            (local.set $complete
-              (i32.and
-                (i32.ge_u (i32.sub (local.get $to) (local.get $p)) (i32.const 4))
-                (i32.eq
-                  (i32.and (i32.load (i32.sub (local.get $to) (i32.const 2))) (i32.const 0xffff))
-                  (i32.const "}}"))))
+            ;; one pass: the TSX lexer stops at the closing `}}` itself, and
+            ;; an expression still open at a chunk end streams as region 6
             (call $vueHtmlRange (local.get $from) (local.get $p))
             (call $emitTok
               (enum.get $Token.punctuation.special)
               (local.get $p)
               (i32.add (local.get $p) (i32.const 2)))
-            (if (i32.and (global.get $streaming) (i32.eqz (local.get $complete)))
-              (then
-                (global.set $ptr (global.get $end))
-                (call $streamSetRegion (i32.const 6))
-                (global.set $ptr (i32.add (local.get $p) (i32.const 2)))
-                (drop (call $hlTsxExpressionStream (i32.const 1) (i32.const 2)))
-                (global.set $ptr (global.get $end))
-                (global.set $streamRegionStarted (i32.const 1)))
-              (else
-                (call $vueTsxRange
-                  (i32.add (local.get $p) (i32.const 2))
-                  (select
-                    (i32.sub (local.get $to) (i32.const 2))
-                    (local.get $to)
-                    (local.get $complete)))))
-            (if (local.get $complete)
+            (global.set $ptr (i32.add (local.get $p) (i32.const 2)))
+            (if (call $hlTsxExpression (i32.const 2) (i32.const 0) (i32.const 6) (i32.const 0))
               (then
                 (call $emitTok
                   (enum.get $Token.punctuation.special)
-                  (i32.sub (local.get $to) (i32.const 2))
-                  (local.get $to))))
-            (local.set $from (local.get $to))
-            (local.set $p (local.get $to))
+                  (global.get $ptr)
+                  (i32.add (global.get $ptr) (i32.const 2)))
+                (global.set $ptr (i32.add (global.get $ptr) (i32.const 2)))))
+            (local.set $from (global.get $ptr))
+            (local.set $p (global.get $ptr))
             (br $scan)))
         (local.set $p (i32.add (local.get $p) (i32.const 1)))
         (br $scan)))
@@ -344,14 +349,15 @@
   ;; the previous chunk end. Returns 1 when the region consumed the whole
   ;; chunk, 0 when the language lexer should continue from $ptr.
   (func $vueStreamResumeTag (result i32)
-    (local $kind i32)
-    (local.set $kind (global.get $streamA))
+    (local $r i32)
     (global.set $streamDepth (i32.const 1))
-    (call $htmlTagResumeEnd
+    (local.set $r
       (call $vueAttrs
         (i32.and (global.get $streamB) (i32.const 15))
         (i32.shr_u (global.get $streamB) (i32.const 4))
         (global.get $streamC)
-        (local.get $kind))
-      (local.get $kind)))
+        (global.get $streamA)))
+    (call $htmlTagResumeEnd
+      (i32.and (local.get $r) (i32.const 3))
+      (i32.shr_u (local.get $r) (i32.const 8))))
 )

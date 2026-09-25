@@ -76,126 +76,150 @@
     "zig"
     "fortran-fixed-form")
 
-  ;; Public language aliases: 16-byte records containing length, enum id, and
-  ;; up to ten lowercase bytes. A compact linear table keeps fence lookups small.
+  ;; Public language aliases, grouped by name length: a u16 offset (from
+  ;; the table start) per length 0..19, where group L spans [L, L+1), then
+  ;; each group's records - the enum id and the lowercase name, L + 1 bytes.
   (data (i32.const $mem.markdownFence)
-    "\03\01\74\73\78\00\00\00\00\00\00\00\00\00\00\00\02\1e\74\73\00\00\00\00\00\00\00\00\00\00\00\00\0a\1e\74\79\70\65\73\63\72\69\70\74\00\00\00\00\0a\1c\6a\61\76\61\73\63\72\69\70\74\00\00\00\00\02\1c\6a\73\00\00\00\00\00\00\00\00\00\00\00\00\03\1d\6a\73\78\00\00\00\00\00\00\00\00\00\00\00\03\1c\63\6a\73\00\00\00\00\00\00\00\00\00\00\00\03\1c\6d\6a\73\00\00\00\00\00\00\00\00\00\00\00\03\1e\63\74\73\00\00\00\00\00\00\00\00\00\00\00\03\1e\6d\74\73\00\00\00\00\00\00\00\00\00\00\00\04\02\68\74\6d\6c\00\00\00\00\00\00\00\00\00\00\03\02\68\74\6d\00\00\00\00\00\00\00\00\00\00\00\03\03\63\73\73\00\00\00\00\00\00\00\00\00\00\00\04\04\6a\73\6f\6e\00\00\00\00\00\00\00\00\00\00\05\04\6a\73\6f\6e\63\00\00\00\00\00\00\00\00\00\04\05\62\61\73\68\00\00\00\00\00\00\00\00\00\00"
-    "\02\05\73\68\00\00\00\00\00\00\00\00\00\00\00\00\05\05\73\68\65\6c\6c\00\00\00\00\00\00\00\00\00\03\05\7a\73\68\00\00\00\00\00\00\00\00\00\00\00\01\06\63\00\00\00\00\00\00\00\00\00\00\00\00\00\01\06\68\00\00\00\00\00\00\00\00\00\00\00\00\00\03\07\63\70\70\00\00\00\00\00\00\00\00\00\00\00\03\07\63\2b\2b\00\00\00\00\00\00\00\00\00\00\00\02\07\63\63\00\00\00\00\00\00\00\00\00\00\00\00\03\07\63\78\78\00\00\00\00\00\00\00\00\00\00\00\02\07\68\68\00\00\00\00\00\00\00\00\00\00\00\00\03\07\68\70\70\00\00\00\00\00\00\00\00\00\00\00\03\07\68\78\78\00\00\00\00\00\00\00\00\00\00\00\02\08\67\6f\00\00\00\00\00\00\00\00\00\00\00\00\06\08\67\6f\6c\61\6e\67\00\00\00\00\00\00\00\00\06\09\70\79\74\68\6f\6e\00\00\00\00\00\00\00\00\02\09\70\79\00\00\00\00\00\00\00\00\00\00\00\00"
-    "\04\0a\72\75\73\74\00\00\00\00\00\00\00\00\00\00\02\0a\72\73\00\00\00\00\00\00\00\00\00\00\00\00\04\0b\79\61\6d\6c\00\00\00\00\00\00\00\00\00\00\03\0b\79\6d\6c\00\00\00\00\00\00\00\00\00\00\00\03\0c\70\68\70\00\00\00\00\00\00\00\00\00\00\00\03\0d\73\71\6c\00\00\00\00\00\00\00\00\00\00\00\05\0e\73\77\69\66\74\00\00\00\00\00\00\00\00\00\07\0f\68\61\73\6b\65\6c\6c\00\00\00\00\00\00\00\02\0f\68\73\00\00\00\00\00\00\00\00\00\00\00\00\06\10\6b\6f\74\6c\69\6e\00\00\00\00\00\00\00\00\02\10\6b\74\00\00\00\00\00\00\00\00\00\00\00\00\03\10\6b\74\73\00\00\00\00\00\00\00\00\00\00\00\05\11\61\73\74\72\6f\00\00\00\00\00\00\00\00\00\03\12\76\75\65\00\00\00\00\00\00\00\00\00\00\00\06\13\73\76\65\6c\74\65\00\00\00\00\00\00\00\00\03\14\78\6d\6c\00\00\00\00\00\00\00\00\00\00\00"
-    "\03\14\73\76\67\00\00\00\00\00\00\00\00\00\00\00\03\14\78\73\64\00\00\00\00\00\00\00\00\00\00\00\08\15\6d\61\72\6b\64\6f\77\6e\00\00\00\00\00\00\02\15\6d\64\00\00\00\00\00\00\00\00\00\00\00\00\03\16\6d\64\78\00\00\00\00\00\00\00\00\00\00\00\03\17\61\73\6d\00\00\00\00\00\00\00\00\00\00\00\08\17\61\73\73\65\6d\62\6c\79\00\00\00\00\00\00\01\17\73\00\00\00\00\00\00\00\00\00\00\00\00\00\03\18\77\61\74\00\00\00\00\00\00\00\00\00\00\00\04\18\77\61\73\6d\00\00\00\00\00\00\00\00\00\00\04\19\64\69\66\66\00\00\00\00\00\00\00\00\00\00\05\19\70\61\74\63\68\00\00\00\00\00\00\00\00\00\04\1a\67\6c\73\6c\00\00\00\00\00\00\00\00\00\00\04\1a\63\6f\6d\70\00\00\00\00\00\00\00\00\00\00\04\1a\66\72\61\67\00\00\00\00\00\00\00\00\00\00\04\1a\67\65\6f\6d\00\00\00\00\00\00\00\00\00\00"
-    "\04\1a\76\65\72\74\00\00\00\00\00\00\00\00\00\00\03\1b\6c\75\61\00\00\00\00\00\00\00\00\00\00\00"
-    "\05\20\62\61\74\63\68\00\00\00\00\00\00\00\00\00"
-    "\03\20\62\61\74\00\00\00\00\00\00\00\00\00\00\00"
-    "\09\20\62\61\74\63\68\66\69\6c\65\00\00\00\00\00"
-    "\03\20\63\6d\64\00\00\00\00\00\00\00\00\00\00\00"
-    "\03\20\64\6f\73\00\00\00\00\00\00\00\00\00\00\00"
-    "\03\21\65\6c\6d\00\00\00\00\00\00\00\00\00\00\00"
-    "\04\22\63\75\64\61\00\00\00\00\00\00\00\00\00\00"
-    "\02\22\63\75\00\00\00\00\00\00\00\00\00\00\00\00"
-    "\03\22\63\75\68\00\00\00\00\00\00\00\00\00\00\00"
-    "\07\23\66\6f\72\74\72\61\6e\00\00\00\00\00\00\00"
-    "\01\26\66\00\00\00\00\00\00\00\00\00\00\00\00\00"
-    "\03\26\66\6f\72\00\00\00\00\00\00\00\00\00\00\00"
-    "\03\26\66\37\37\00\00\00\00\00\00\00\00\00\00\00"
-    "\03\23\66\39\30\00\00\00\00\00\00\00\00\00\00\00"
-    "\03\23\66\39\35\00\00\00\00\00\00\00\00\00\00\00"
-    "\03\23\66\30\33\00\00\00\00\00\00\00\00\00\00\00"
-    "\03\23\66\30\38\00\00\00\00\00\00\00\00\00\00\00"
-    "\08\24\73\6f\6c\69\64\69\74\79\00\00\00\00\00\00"
-    "\03\24\73\6f\6c\00\00\00\00\00\00\00\00\00\00\00"
-    "\03\25\7a\69\67\00\00\00\00\00\00\00\00\00\00\00"
-    "\03\25\7a\6f\6e\00\00\00\00\00\00\00\00\00\00\00")
+    "\28\00\28\00\30\00\54\00\f4\00\35\01\59\01\75\01\85\01\a0\01\aa\01\c0\01\c0\01\cd\01\cd\01\cd\01\cd\01\cd\01\df\01\f2\01"  ;; group offsets by name length 0..19
+    "\06c"  ;; c
+    "\06h"  ;; c
+    "\17s"  ;; asm
+    "\26f"  ;; fortran-fixed-form
+    "\1ets"  ;; ts
+    "\1cjs"  ;; js
+    "\05sh"  ;; bash
+    "\07cc"  ;; cpp
+    "\07hh"  ;; cpp
+    "\08go"  ;; go
+    "\09py"  ;; python
+    "\0ars"  ;; rust
+    "\0fhs"  ;; haskell
+    "\10kt"  ;; kotlin
+    "\15md"  ;; markdown
+    "\22cu"  ;; cuda
+    "\01tsx"  ;; tsx
+    "\1djsx"  ;; jsx
+    "\1ccjs"  ;; js
+    "\1cmjs"  ;; js
+    "\1ects"  ;; ts
+    "\1emts"  ;; ts
+    "\02htm"  ;; html
+    "\03css"  ;; css
+    "\05zsh"  ;; bash
+    "\07cpp"  ;; cpp
+    "\07c++"  ;; cpp
+    "\07cxx"  ;; cpp
+    "\07hpp"  ;; cpp
+    "\07hxx"  ;; cpp
+    "\0byml"  ;; yaml
+    "\0cphp"  ;; php
+    "\0dsql"  ;; sql
+    "\10kts"  ;; kotlin
+    "\12vue"  ;; vue
+    "\14xml"  ;; xml
+    "\14svg"  ;; xml
+    "\14xsd"  ;; xml
+    "\16mdx"  ;; mdx
+    "\17asm"  ;; asm
+    "\18wat"  ;; wat
+    "\1blua"  ;; lua
+    "\20bat"  ;; batch
+    "\20cmd"  ;; batch
+    "\20dos"  ;; batch
+    "\21elm"  ;; elm
+    "\22cuh"  ;; cuda
+    "\26for"  ;; fortran-fixed-form
+    "\26f77"  ;; fortran-fixed-form
+    "\23f90"  ;; fortran
+    "\23f95"  ;; fortran
+    "\23f03"  ;; fortran
+    "\23f08"  ;; fortran
+    "\24sol"  ;; solidity
+    "\25zig"  ;; zig
+    "\25zon"  ;; zig
+    "\02html"  ;; html
+    "\04json"  ;; json
+    "\05bash"  ;; bash
+    "\0arust"  ;; rust
+    "\0byaml"  ;; yaml
+    "\18wasm"  ;; wat
+    "\19diff"  ;; diff
+    "\1aglsl"  ;; glsl
+    "\1acomp"  ;; glsl
+    "\1afrag"  ;; glsl
+    "\1ageom"  ;; glsl
+    "\1avert"  ;; glsl
+    "\22cuda"  ;; cuda
+    "\04jsonc"  ;; json
+    "\05shell"  ;; bash
+    "\0eswift"  ;; swift
+    "\11astro"  ;; astro
+    "\19patch"  ;; diff
+    "\20batch"  ;; batch
+    "\08golang"  ;; go
+    "\09python"  ;; python
+    "\10kotlin"  ;; kotlin
+    "\13svelte"  ;; svelte
+    "\0fhaskell"  ;; haskell
+    "\23fortran"  ;; fortran
+    "\15markdown"  ;; markdown
+    "\17assembly"  ;; asm
+    "\24solidity"  ;; solidity
+    "\20batchfile"  ;; batch
+    "\1etypescript"  ;; ts
+    "\1cjavascript"  ;; js
+    "\1fangular-html"  ;; angular-html
+    "\23fortran-free-form"  ;; fortran
+    "\26fortran-fixed-form") ;; fortran-fixed-form
 
+  ;; The fence language named by the info word [$lhs,$rhs), or unknown. Only
+  ;; the names of the same length are compared, eight bytes at a time with
+  ;; the tail masked off, ASCII case-insensitively (`| 0x20`; the names are
+  ;; lowercase). Loads past the word or a record read slack or neighboring
+  ;; bytes that the mask discards.
   (func $markdownFenceLang (param $lhs i32) (param $rhs i32) (result i32)
+    (local $i i32)
     (local $len i32)
-    (local $rem i32)
     (local $record i32)
-    (local $mask i64)
-    (local $word i64)
+    (local $rem i32)
+    (local $stop i32)
     (local.set $len (i32.sub (local.get $rhs) (local.get $lhs)))
-    ;; Angular's public name is longer than the compact alias records.
-    (if
-      (i32.and
-        (i32.eq (local.get $len) (i32.const 12))
-        (i32.and
-          (i64.eq
-            (i64.or (i64.load (local.get $lhs)) (i64.const 0x2020202020202020))
-            (i64.const "angular-"))
-          (i32.eq
-            (i32.or (i32.load offset=8 (local.get $lhs)) (i32.const 0x20202020))
-            (i32.const "html"))))
-      (then (return (enum.get $MarkdownFenceLang.angular-html))))
-    ;; So are the Fortran form names: `fortran-fixed-form` selects the
-    ;; fixed-form dialect and `fortran-free-form` the default lexer.
-    (if
-      (i32.and
-        (i32.eq (local.get $len) (i32.const 18))
-        (i32.and
-          (i64.eq
-            (i64.or (i64.load (local.get $lhs)) (i64.const 0x2020202020202020))
-            (i64.const "fortran-"))
-          (i32.and
-            (i64.eq
-              (i64.or (i64.load offset=8 (local.get $lhs)) (i64.const 0x2020202020202020))
-              (i64.const "fixed-fo"))
-            (i32.eq
-              (i32.or (i32.load16_u offset=16 (local.get $lhs)) (i32.const 0x2020))
-              (i32.const "rm")))))
-      (then (return (enum.get $MarkdownFenceLang.fortran-fixed-form))))
-    (if
-      (i32.and
-        (i32.eq (local.get $len) (i32.const 17))
-        (i32.and
-          (i64.eq
-            (i64.or (i64.load (local.get $lhs)) (i64.const 0x2020202020202020))
-            (i64.const "fortran-"))
-          (i32.and
-            (i64.eq
-              (i64.or (i64.load offset=8 (local.get $lhs)) (i64.const 0x2020202020202020))
-              (i64.const "free-for"))
-            (i32.eq
-              (i32.or (i32.load8_u offset=16 (local.get $lhs)) (i32.const 0x20))
-              (i32.const "m")))))
-      (then (return (enum.get $MarkdownFenceLang.fortran))))
-    (if (i32.or (i32.eqz (local.get $len)) (i32.gt_u (local.get $len) (i32.const 10)))
+    (if (i32.gt_u (i32.sub (local.get $len) (i32.const 1)) (i32.const 17))
       (then (return (enum.get $MarkdownFenceLang.unknown))))
-    (local.set $record (i32.const $mem.markdownFence))
+    (local.set $record
+      (i32.add
+        (i32.const $mem.markdownFence)
+        (i32.load16_u offset=$mem.markdownFence (i32.shl (local.get $len) (i32.const 1)))))
+    (local.set $stop
+      (i32.add
+        (i32.const $mem.markdownFence)
+        (i32.load16_u offset=$mem.markdownFence+2 (i32.shl (local.get $len) (i32.const 1)))))
     (block $done
       (loop $alias
-        (br_if $done (i32.ge_u (local.get $record) (i32.const $mem.markdownFenceStack)))
-        (if (i32.eq (local.get $len) (i32.load8_u (local.get $record)))
-          (then
-            (local.set $word (i64.or (i64.load (local.get $lhs)) (i64.const 0x2020202020202020)))
-            (if (i32.le_u (local.get $len) (i32.const 8))
-              (then
-                (local.set $mask
+        (br_if $done (i32.ge_u (local.get $record) (local.get $stop)))
+        (local.set $i (i32.const 0))
+        (block $miss
+          (loop $chunk
+            (local.set $rem (i32.sub (local.get $len) (local.get $i)))
+            (br_if $miss
+              (i64.ne
+                (i64.and
+                  (i64.xor
+                    (i64.or
+                      (i64.load (i32.add (local.get $lhs) (local.get $i)))
+                      (i64.const 0x2020202020202020))
+                    (i64.load offset=1 (i32.add (local.get $record) (local.get $i))))
                   (select
                     (i64.const -1)
                     (i64.sub
-                      (i64.shl
-                        (i64.const 1)
-                        (i64.extend_i32_u (i32.shl (local.get $len) (i32.const 3))))
+                      (i64.shl (i64.const 1) (i64.extend_i32_u (i32.shl (local.get $rem) (i32.const 3))))
                       (i64.const 1))
-                    (i32.eq (local.get $len) (i32.const 8)))))
-              (else (local.set $mask (i64.const -1))))
-            (if
-              (i64.eq
-                (i64.and (local.get $word) (local.get $mask))
-                (i64.load offset=2 (local.get $record)))
-              (then
-                (if (i32.le_u (local.get $len) (i32.const 8))
-                  (then (return (i32.load8_u offset=1 (local.get $record)))))
-                (local.set $rem (i32.sub (local.get $len) (i32.const 8)))
-                (if
-                  (i32.eq
-                    (i32.and
-                      (i32.or (i32.load offset=8 (local.get $lhs)) (i32.const 0x20202020))
-                      (i32.sub
-                        (i32.shl (i32.const 1) (i32.shl (local.get $rem) (i32.const 3)))
-                        (i32.const 1)))
-                    (i32.load offset=10 (local.get $record)))
-                  (then (return (i32.load8_u offset=1 (local.get $record)))))))))
-        (local.set $record (i32.add (local.get $record) (i32.const 16)))
+                    (i32.ge_u (local.get $rem) (i32.const 8))))
+                (i64.const 0)))
+            (local.set $i (i32.add (local.get $i) (i32.const 8)))
+            (br_if $chunk (i32.lt_u (local.get $i) (local.get $len))))
+          (return (i32.load8_u (local.get $record))))
+        (local.set $record (i32.add (local.get $record) (i32.add (local.get $len) (i32.const 1))))
         (br $alias)))
     (enum.get $MarkdownFenceLang.unknown))
 
@@ -211,7 +235,8 @@
   ;; body keeps its registers in $mem.markdownFenceStack at its nesting
   ;; depth, so an inner fence survives the chunk boundary alongside the outer
   ;; one instead of being overwritten by it. The live tokenizer captures both
-  ;; and $streamResetGlobals clears both.
+  ;; and $streamResetGlobals clears both. MDX records an open ESM block here
+  ;; too, under the pseudo fence byte 1 (see $mdxEsmRange).
   (global $markdownStreamFence (mut i32) (i32.const 0))
   (global $markdownStreamFenceLen (mut i32) (i32.const 0))
   (global $markdownStreamLang (mut i32) (i32.const 0))
@@ -285,18 +310,8 @@
   ;; embedded regions first, then the modes owned by one language. Returns 1
   ;; when the construct consumed the whole (fence-bounded) range.
   (func $markdownFenceResumeLang (param $lang i32) (result i32)
-    (if (i32.eq (global.get $streamRegionKind) (i32.const 9))
-      (then (return (call $htmlStreamResumeTag))))
-    (if (i32.eq (global.get $streamRegionKind) (i32.const 10))
-      (then (return (call $xmlStreamResumeTag))))
-    (if (i32.eq (global.get $streamRegionKind) (i32.const 11))
-      (then (return (call $vueStreamResumeTag))))
-    (if (i32.eq (global.get $streamRegionKind) (i32.const 12))
-      (then (return (call $svelteStreamResumeTag))))
-    (if (i32.eq (global.get $streamRegionKind) (i32.const 13))
-      (then (return (call $astroStreamResumeTag))))
     (if (global.get $streamRegionKind)
-      (then (return (call $streamResumeRegion))))
+      (then (return (call $streamResumeAnyRegion))))
     (if (i32.eq (local.get $lang) (enum.get $MarkdownFenceLang.python))
       (then (return (call $pyStreamResume))))
     (if (i32.eq (local.get $lang) (enum.get $MarkdownFenceLang.php))
@@ -387,6 +402,114 @@
           (global.set $streamReset (local.get $saveReset)))))
     (global.set $markdownDepth (i32.sub (global.get $markdownDepth) (i32.const 1)))
     (global.set $end (local.get $save))
+    (global.set $ptr (local.get $to)))
+
+  ;; Emit the block-quote prefix of the line at $p - up to $quotes levels of
+  ;; at most three spaces, `>`, and one optional blank, as the fence closer
+  ;; scan accepts them - and return where the line's content starts. A lazy
+  ;; line that lacks some of the markers keeps the rest as content.
+  (func $markdownQuotePrefix (param $p i32) (param $lineEnd i32) (param $quotes i32) (result i32)
+    (local $q i32)
+    (block $done
+      (loop $level
+        (br_if $done (i32.eqz (local.get $quotes)))
+        (local.set $q (call $markdownSkipIndent (local.get $p) (local.get $lineEnd)))
+        (br_if $done (i32.ge_u (local.get $q) (local.get $lineEnd)))
+        (br_if $done (i32.ne (i32.load8_u (local.get $q)) (i32.const ">")))
+        (call $emitGap (local.get $p) (local.get $q))
+        (local.set $p (i32.add (local.get $q) (i32.const 1)))
+        (call $emitTok (enum.get $Token.punctuation.markup) (local.get $q) (local.get $p))
+        (if
+          (i32.and
+            (i32.lt_u (local.get $p) (local.get $lineEnd))
+            (i32.eq (i32.load8_u (local.get $p)) (i32.const 32)))
+          (then
+            (local.set $p (i32.add (local.get $p) (i32.const 1)))
+            (call $emitGap (i32.sub (local.get $p) (i32.const 1)) (local.get $p))))
+        (local.set $quotes (i32.sub (local.get $quotes) (i32.const 1)))
+        (br $level)))
+    (local.get $p))
+
+  ;; Highlight the fence body [$from,$to): line by line behind block-quote
+  ;; markers, else with its language's lexer, else as literal text.
+  (func $markdownFenceBody
+    (param $lang i32) (param $from i32) (param $to i32) (param $quotes i32) (param $resume i32)
+    (if (call $markdownQuotedLines (local.get $quotes) (local.get $lang))
+      (then
+        (call $markdownQuotedBody
+          (local.get $lang)
+          (local.get $from)
+          (local.get $to)
+          (local.get $quotes)
+          (local.get $resume))
+        (return)))
+    (if (local.get $lang)
+      (then
+        (call $markdownCodeRange (local.get $lang) (local.get $from) (local.get $to) (local.get $resume))
+        (return)))
+    (call $emitTok (enum.get $Token.text.literal) (local.get $from) (local.get $to)))
+
+  ;; Emit the closing fence line at $ptr - its block-quote prefix as markup,
+  ;; then the fence through the line break - and move $ptr past it.
+  (func $markdownFenceCloser (param $quotes i32)
+    (local $after i32)
+    (local $lineEnd i32)
+    (local.set $lineEnd (call $markdownLineEnd (global.get $ptr)))
+    (local.set $after (call $markdownAfterLine (local.get $lineEnd)))
+    (call $emitTok
+      (enum.get $Token.punctuation.delimiter)
+      (call $markdownQuotePrefix (global.get $ptr) (local.get $lineEnd) (local.get $quotes))
+      (local.get $after))
+    (global.set $ptr (local.get $after)))
+
+  ;; Is the body of a fence opened behind $quotes block-quote markers lexed
+  ;; line by line ($markdownQuotedBody)? Not for nested markdown and MDX,
+  ;; which read the `>` prefixes as their own block quotes.
+  (func $markdownQuotedLines (param $quotes i32) (param $lang i32) (result i32)
+    (i32.and
+      (i32.ne (local.get $quotes) (i32.const 0))
+      (i32.and
+        (i32.ne (local.get $lang) (enum.get $MarkdownFenceLang.markdown))
+        (i32.ne (local.get $lang) (enum.get $MarkdownFenceLang.mdx)))))
+
+  ;; Highlight the body [$from,$to) of a fence opened behind $quotes
+  ;; block-quote markers. Each line's `>` prefix is markup, not code, so the
+  ;; body lexer runs on each line's content through its stream entry, even
+  ;; for whole input. Keep its state across lines and actual stream chunks.
+  (func $markdownQuotedBody
+    (param $lang i32) (param $from i32) (param $to i32) (param $quotes i32) (param $resume i32)
+    (local $after i32)
+    (local $lineEnd i32)
+    (local $p i32)
+    (local $saveEof i32)
+    (local $saveStreaming i32)
+    (local.set $saveEof (global.get $eof))
+    (local.set $saveStreaming (global.get $streaming))
+    (global.set $streaming (i32.const 1))
+    (block $done
+      (loop $lines
+        (br_if $done (i32.ge_u (local.get $from) (local.get $to)))
+        (local.set $lineEnd (call $markdownLineEnd (local.get $from)))
+        (if (i32.gt_u (local.get $lineEnd) (local.get $to))
+          (then (local.set $lineEnd (local.get $to))))
+        (local.set $p
+          (call $markdownQuotePrefix (local.get $from) (local.get $lineEnd) (local.get $quotes)))
+        (local.set $after (call $markdownAfterLine (local.get $lineEnd)))
+        (if (i32.gt_u (local.get $after) (local.get $to))
+          (then (local.set $after (local.get $to))))
+        (if (local.get $lang)
+          (then
+            (global.set $eof (local.get $after))
+            (call $markdownCodeRange (local.get $lang) (local.get $p) (local.get $after) (local.get $resume))
+            (local.set $resume (i32.or (local.get $resume) (global.get $markdownBodyRan))))
+          (else (call $emitTok (enum.get $Token.text.literal) (local.get $p) (local.get $after))))
+        (local.set $from (local.get $after))
+        (br $lines)))
+    (global.set $eof (local.get $saveEof))
+    (global.set $streaming (local.get $saveStreaming))
+    (if (i32.eqz (local.get $saveStreaming))
+      (then (call $markdownClearEmbeddedStream)))
+    (global.set $markdownBodyRan (local.get $resume))
     (global.set $ptr (local.get $to)))
 
   (func $markdownFenceIsEcma (param $lang i32) (result i32)
@@ -559,6 +682,45 @@
         (i32.le_u (i32.sub (local.get $c) (i32.const "[")) (i32.const 5))
         (i32.le_u (i32.sub (local.get $c) (i32.const "{")) (i32.const 3)))))
 
+  ;; End of the code span whose opening backtick run starts at $lhs: just
+  ;; past the first later run of exactly the same length before $lineEnd, or
+  ;; 0 when the line has none. $hlMarkdown's inline-code branch pairs spans
+  ;; with it, and the emphasis closer scan uses it so it never pairs a marker
+  ;; inside a code span.
+  (func $markdownCodeSpanEnd (param $lhs i32) (param $lineEnd i32) (result i32)
+    (local $count i32)
+    (local $p i32)
+    (local $q i32)
+    (local.set $p (call $markdownTickRunEnd (local.get $lhs) (local.get $lineEnd)))
+    (local.set $count (i32.sub (local.get $p) (local.get $lhs)))
+    (block $none
+      (loop $code
+        ;; hop backtick to backtick with SIMD, bounded to the line
+        (local.set $p
+          (call $scanFindSpecial
+            (local.get $p)
+            (local.get $lineEnd)
+            (i32.const "`")
+            (i32.const 0)
+            (i32.const 0)))
+        (br_if $none (i32.ge_u (local.get $p) (local.get $lineEnd)))
+        (local.set $q (call $markdownTickRunEnd (local.get $p) (local.get $lineEnd)))
+        (if (i32.eq (i32.sub (local.get $q) (local.get $p)) (local.get $count))
+          (then (return (local.get $q))))
+        (local.set $p (local.get $q))
+        (br $code)))
+    (i32.const 0))
+
+  ;; End of the backtick run starting at $p, bounded by $stop.
+  (func $markdownTickRunEnd (param $p i32) (param $stop i32) (result i32)
+    (block $done
+      (loop $run
+        (br_if $done (i32.ge_u (local.get $p) (local.get $stop)))
+        (br_if $done (i32.ne (i32.load8_u (local.get $p)) (i32.const "`")))
+        (local.set $p (i32.add (local.get $p) (i32.const 1)))
+        (br $run)))
+    (local.get $p))
+
   (func $markdownAfterLine (param $p i32) (result i32)
     (if (i32.lt_u (local.get $p) (global.get $end))
       (then
@@ -570,6 +732,37 @@
               (i32.eq (i32.load8_u offset=1 (local.get $p)) (i32.const 10))))
           (then (return (i32.add (local.get $p) (i32.const 2)))))
         (return (i32.add (local.get $p) (i32.const 1)))))
+    (local.get $p))
+
+  ;; End of a list marker at $p (below $end) - `-`, `+`, `*`, or digits then
+  ;; `.` or `)` - or $p when none starts there. The blank that must follow
+  ;; is the caller's check. Shared with the MDX fence pre-scan so both read
+  ;; list items alike.
+  (func $markdownListMarkerEnd (param $p i32) (result i32)
+    (local $c i32)
+    (local $q i32)
+    (local.set $c (i32.load8_u (local.get $p)))
+    (if
+      (i32.or
+        (i32.eq (local.get $c) (i32.const "-"))
+        (i32.or (i32.eq (local.get $c) (i32.const "+")) (i32.eq (local.get $c) (i32.const "*"))))
+      (then (return (i32.add (local.get $p) (i32.const 1)))))
+    (local.set $q (local.get $p))
+    (block $digitsDone
+      (loop $digits
+        (br_if $digitsDone (i32.ge_u (local.get $q) (global.get $end)))
+        (br_if $digitsDone (i32.eqz (call $lexIsDigit (i32.load8_u (local.get $q)))))
+        (local.set $q (i32.add (local.get $q) (i32.const 1)))
+        (br $digits)))
+    (if
+      (i32.and
+        (i32.gt_u (local.get $q) (local.get $p))
+        (i32.and
+          (i32.lt_u (local.get $q) (global.get $end))
+          (i32.or
+            (i32.eq (i32.load8_u (local.get $q)) (i32.const "."))
+            (i32.eq (i32.load8_u (local.get $q)) (i32.const ")")))))
+      (then (return (i32.add (local.get $q) (i32.const 1)))))
     (local.get $p))
 
   ;; Skip up to three spaces from $p, bounded by $stop: the indentation a
@@ -677,27 +870,30 @@
     (local $lang i32)
     (local $len i32)
     (local $lineEnd i32)
+    (local $quotes i32)
     (local $reg i32)
     (local.set $fence (call $markdownFenceReg))
     (if (i32.eqz (local.get $fence))
       (then (return (i32.const 0))))
     (local.set $len (call $markdownFenceLenReg))
     (local.set $reg (call $markdownFenceLangReg))
+    ;; pseudo fence byte 1: an MDX ESM block, which a blank line ends
+    (if (i32.eq (local.get $fence) (i32.const 1))
+      (then (return (call $mdxEsmResume (local.get $reg)))))
     (local.set $lang (i32.and (local.get $reg) (i32.const 0xff)))
+    (local.set $quotes (i32.shr_u (local.get $len) (i32.const 16)))
     (local.set $close
       (call $markdownFenceClose
         (global.get $ptr)
         (local.get $fence)
         (i32.and (local.get $len) (i32.const 0xffff))
-        (i32.shr_u (local.get $len) (i32.const 16))))
-    (if (local.get $lang)
-      (then
-        (call $markdownCodeRange
-          (local.get $lang)
-          (global.get $ptr)
-          (local.get $close)
-          (i32.ne (i32.and (local.get $reg) (i32.const 0x100)) (i32.const 0))))
-      (else (call $emitTok (enum.get $Token.text.literal) (global.get $ptr) (local.get $close))))
+        (local.get $quotes)))
+    (call $markdownFenceBody
+      (local.get $lang)
+      (global.get $ptr)
+      (local.get $close)
+      (local.get $quotes)
+      (i32.ne (i32.and (local.get $reg) (i32.const 0x100)) (i32.const 0)))
     (if (i32.eq (local.get $close) (global.get $end))
       (then
         ;; still open: the body's stream state stays live for the next chunk
@@ -711,10 +907,7 @@
     ;; closed in this chunk: whatever the body left open is finished text
     (call $markdownClearEmbeddedStream)
     (global.set $ptr (local.get $close))
-    (local.set $lineEnd (call $markdownLineEnd (global.get $ptr)))
-    (local.set $after (call $markdownAfterLine (local.get $lineEnd)))
-    (call $emitTok (enum.get $Token.punctuation.delimiter) (global.get $ptr) (local.get $after))
-    (global.set $ptr (local.get $after))
+    (call $markdownFenceCloser (local.get $quotes))
     ;; a nested body records its own fences one depth down, so the registers
     ;; at this depth still describe the fence being closed
     (call $markdownFenceSet (i32.const 0) (i32.const 0) (i32.const 0))
@@ -874,6 +1067,297 @@
             (return (global.get $end))))))
     (local.get $p))
 
+  ;; End (just past `>`) of a CommonMark autolink opening at the `<` at $lhs,
+  ;; or 0. A URI autolink is a scheme - a letter, then 1-31 letters, digits,
+  ;; `+`, `.`, or `-` - a colon, and bytes other than blanks, controls, `<`,
+  ;; and `>`; an email autolink is `local@domain`, approximated with the
+  ;; usual address bytes. Both stay on one line, and both take precedence
+  ;; over inline HTML, which cannot name a tag with `:` or `@`.
+  (func $markdownAutolinkEnd (param $lhs i32) (param $lineEnd i32) (result i32)
+    (local $c i32)
+    (local $p i32)
+    (local.set $p (i32.add (local.get $lhs) (i32.const 1)))
+    ;; the scheme, or an email's local part: ASCII letters, the range `+`
+    ;; through `9` (digits, `+`, `-`, `.`, and also `,` and `/`), `_`, and
+    ;; non-ASCII bytes - one range test instead of four compares. A tag name
+    ;; ends this loop within a few bytes, at a blank or `>`.
+    (block $wordDone
+      (loop $word
+        (br_if $wordDone (i32.ge_u (local.get $p) (local.get $lineEnd)))
+        (local.set $c (i32.load8_u (local.get $p)))
+        (br_if $wordDone
+          (i32.eqz
+            (i32.or
+              (i32.or
+                (i32.le_u
+                  (i32.sub (i32.or (local.get $c) (i32.const 32)) (i32.const "a"))
+                  (i32.const 25))
+                (i32.le_u (i32.sub (local.get $c) (i32.const "+")) (i32.const 14)))
+              (i32.or
+                (i32.eq (local.get $c) (i32.const "_"))
+                (i32.ge_u (local.get $c) (i32.const 0x80))))))
+        (local.set $p (i32.add (local.get $p) (i32.const 1)))
+        (br $word)))
+    (if (i32.ge_u (local.get $p) (local.get $lineEnd))
+      (then (return (i32.const 0))))
+    (local.set $c (i32.load8_u (local.get $p)))
+    (if
+      (i32.and
+        (i32.eq (local.get $c) (i32.const ":"))
+        (i32.and
+          (i32.le_u
+            (i32.sub (i32.sub (local.get $p) (local.get $lhs)) (i32.const 3))
+            (i32.const 30))
+          (i32.le_u
+            (i32.sub
+              (i32.or (i32.load8_u offset=1 (local.get $lhs)) (i32.const 32))
+              (i32.const "a"))
+            (i32.const 25))))
+      (then
+        (block $uriDone
+          (loop $uri
+            (local.set $p (i32.add (local.get $p) (i32.const 1)))
+            (br_if $uriDone (i32.ge_u (local.get $p) (local.get $lineEnd)))
+            (local.set $c (i32.load8_u (local.get $p)))
+            (if (i32.eq (local.get $c) (i32.const ">"))
+              (then (return (i32.add (local.get $p) (i32.const 1)))))
+            (br_if $uriDone
+              (i32.or
+                (i32.le_u (local.get $c) (i32.const 32))
+                (i32.or
+                  (i32.eq (local.get $c) (i32.const "<"))
+                  (i32.eq (local.get $c) (i32.const 127)))))
+            (br $uri)))
+        (return (i32.const 0))))
+    ;; email: a non-empty local part, `@`, a non-empty domain, then `>`
+    (if
+      (i32.or
+        (i32.ne (local.get $c) (i32.const "@"))
+        (i32.eq (local.get $p) (i32.add (local.get $lhs) (i32.const 1))))
+      (then (return (i32.const 0))))
+    (local.set $c (local.get $p))
+    (block $domainDone
+      (loop $domain
+        (local.set $p (i32.add (local.get $p) (i32.const 1)))
+        (br_if $domainDone (i32.ge_u (local.get $p) (local.get $lineEnd)))
+        (br_if $domainDone
+          (i32.eqz
+            (i32.or
+              (call $markdownIsAlnum (i32.load8_u (local.get $p)))
+              (i32.or
+                (i32.eq (i32.load8_u (local.get $p)) (i32.const "."))
+                (i32.eq (i32.load8_u (local.get $p)) (i32.const "-"))))))
+        (br $domain)))
+    (if
+      (i32.and
+        (i32.gt_u (local.get $p) (i32.add (local.get $c) (i32.const 1)))
+        (i32.and
+          (i32.lt_u (local.get $p) (local.get $lineEnd))
+          (i32.eq (i32.load8_u (local.get $p)) (i32.const ">"))))
+      (then (return (i32.add (local.get $p) (i32.const 1)))))
+    (i32.const 0))
+
+  ;; A link whose text is an image, `[![alt](src)](href)` - the badge rows
+  ;; that open most READMEs. The generic link scan pairs the outer `[` with
+  ;; the image's `]`, so this shape is matched first: when the whole of it
+  ;; lies on the line, emit the image inside the outer link and return the
+  ;; end past the final `)`; otherwise emit nothing and return 0.
+  (func $markdownImageLink (param $lhs i32) (param $lineEnd i32) (result i32)
+    (local $alt i32)
+    (local $src i32)
+    (local $href i32)
+    (if
+      (i32.or
+        (i32.ge_u (i32.add (local.get $lhs) (i32.const 3)) (local.get $lineEnd))
+        (i32.ne (i32.load16_u offset=1 (local.get $lhs)) (i32.const "![")))
+      (then (return (i32.const 0))))
+    ;; each of `](`, `)](`, and `)` must follow on the line
+    (local.set $alt
+      (call $scanFindSpecial
+        (i32.add (local.get $lhs) (i32.const 3))
+        (local.get $lineEnd)
+        (i32.const "]")
+        (i32.const 0)
+        (i32.const 0)))
+    (if
+      (i32.or
+        (i32.ge_u (i32.add (local.get $alt) (i32.const 1)) (local.get $lineEnd))
+        (i32.ne (i32.load8_u offset=1 (local.get $alt)) (i32.const "(")))
+      (then (return (i32.const 0))))
+    (local.set $src
+      (call $scanFindSpecial
+        (i32.add (local.get $alt) (i32.const 2))
+        (local.get $lineEnd)
+        (i32.const ")")
+        (i32.const 0)
+        (i32.const 0)))
+    (if
+      (i32.or
+        (i32.ge_u (i32.add (local.get $src) (i32.const 2)) (local.get $lineEnd))
+        (i32.ne (i32.load16_u offset=1 (local.get $src)) (i32.const "](")))
+      (then (return (i32.const 0))))
+    (local.set $href
+      (call $scanFindSpecial
+        (i32.add (local.get $src) (i32.const 3))
+        (local.get $lineEnd)
+        (i32.const ")")
+        (i32.const 0)
+        (i32.const 0)))
+    (if (i32.ge_u (local.get $href) (local.get $lineEnd))
+      (then (return (i32.const 0))))
+    (call $emitTok
+      (enum.get $Token.punctuation.bracket)
+      (local.get $lhs)
+      (i32.add (local.get $lhs) (i32.const 1)))
+    (call $emitTok
+      (enum.get $Token.none)
+      (i32.add (local.get $lhs) (i32.const 1))
+      (i32.add (local.get $lhs) (i32.const 2)))
+    (call $markdownLink (i32.add (local.get $lhs) (i32.const 2)) (local.get $alt) (local.get $src))
+    (call $markdownLinkTail (i32.add (local.get $src) (i32.const 1)) (local.get $href))
+    (i32.add (local.get $href) (i32.const 1)))
+
+  ;; Emit the link `[text](uri)` whose `[` is at $lhs, `]` at $close, and
+  ;; `)` at $rhs.
+  (func $markdownLink (param $lhs i32) (param $close i32) (param $rhs i32)
+    (call $emitTok
+      (enum.get $Token.punctuation.bracket)
+      (local.get $lhs)
+      (i32.add (local.get $lhs) (i32.const 1)))
+    (call $emitTok
+      (enum.get $Token.link_text)
+      (i32.add (local.get $lhs) (i32.const 1))
+      (local.get $close))
+    (call $markdownLinkTail (local.get $close) (local.get $rhs)))
+
+  ;; Emit a link's `](uri)`: `]` at $close, `)` at $rhs.
+  (func $markdownLinkTail (param $close i32) (param $rhs i32)
+    (call $emitTok
+      (enum.get $Token.punctuation.bracket)
+      (local.get $close)
+      (i32.add (local.get $close) (i32.const 2)))
+    (call $emitTok
+      (enum.get $Token.link_uri)
+      (i32.add (local.get $close) (i32.const 2))
+      (local.get $rhs))
+    (call $emitTok
+      (enum.get $Token.punctuation.bracket)
+      (local.get $rhs)
+      (i32.add (local.get $rhs) (i32.const 1))))
+
+  ;; Failed-scan memo of the emphasis closer scan, reset by each $hlMarkdown
+  ;; call: no closer for a `_` opener of width $markdownUnderNoCloseCount
+  ;; exists before $markdownUnderNoClose. Closers glued to an alphanumeric
+  ;; byte are skipped, so a line of such openers would otherwise rescan to
+  ;; the line end from each one. Positions only grow within a call, so the
+  ;; memo expires by itself; a nested markdown body resets it, which only
+  ;; costs the outer lexer a rescan.
+  (global $markdownUnderNoClose (mut i32) (i32.const 0))
+  (global $markdownUnderNoCloseCount (mut i32) (i32.const 0))
+
+  ;; The next $c or backtick in [$p,$stop), or $stop - one SIMD comparison
+  ;; pair per 16 bytes. Wide loads may pass $stop into the buffer slack;
+  ;; matches there are clamped away.
+  (func $markdownFindEither (param $p i32) (param $stop i32) (param $c i32) (result i32)
+    (local $mask i32)
+    (local $w v128)
+    (if (i32.ge_u (local.get $p) (local.get $stop))
+      (then (return (local.get $stop))))
+    (block $done
+      (loop $simd
+        (local.set $w (v128.load (local.get $p)))
+        (local.set $mask
+          (i8x16.bitmask
+            (v128.or
+              (i8x16.eq (local.get $w) (i8x16.splat (local.get $c)))
+              (i8x16.eq (local.get $w) (i8x16.splat (i32.const "`"))))))
+        (if (local.get $mask)
+          (then
+            (local.set $p (i32.add (local.get $p) (i32.ctz (local.get $mask))))
+            (br $done)))
+        (local.set $p (i32.add (local.get $p) (i32.const 16)))
+        (br_if $simd (i32.lt_u (local.get $p) (local.get $stop)))))
+    (select (local.get $p) (local.get $stop) (i32.lt_u (local.get $p) (local.get $stop))))
+
+  ;; End of the emphasis opened at $lhs by $count (1 or 2) `$c` markers
+  ;; (`*` or `_`) and closed by an equal run on the line [.., $lineEnd), or
+  ;; 0. A marker inside a code span never closes, and a `_` run neither opens
+  ;; glued to a preceding alphanumeric byte nor closes before one.
+  (func $markdownEmphasisEnd (param $lhs i32) (param $c i32) (param $count i32) (param $lineEnd i32) (result i32)
+    (local $p i32)
+    (local $q i32)
+    (local.set $p (i32.add (local.get $lhs) (local.get $count)))
+    (if (i32.eq (local.get $c) (i32.const "_"))
+      (then
+        ;; `_` opens only when left-flanking: not glued to a preceding
+        ;; alphanumeric byte and not followed by a blank, so
+        ;; `snake_case_name` stays plain. The byte before the chunk start is
+        ;; a line break, which never flanks.
+        (if
+          (i32.or
+            (i32.and
+              (i32.gt_u (local.get $lhs) (global.get $srcBase))
+              (call $markdownIsAlnum (i32.load8_u (i32.sub (local.get $lhs) (i32.const 1)))))
+            (i32.or
+              (i32.ge_u (local.get $p) (local.get $lineEnd))
+              (call $lexIsSpace (i32.load8_u (local.get $p)))))
+          (then (return (i32.const 0))))
+        (if
+          (i32.and
+            (i32.lt_u (local.get $lhs) (global.get $markdownUnderNoClose))
+            (i32.eq (local.get $count) (global.get $markdownUnderNoCloseCount)))
+          (then (return (i32.const 0))))))
+    (loop $em
+      ;; hop to the next marker or backtick with SIMD, bounded to the line
+      (local.set $p (call $markdownFindEither (local.get $p) (local.get $lineEnd) (local.get $c)))
+      (if (i32.ge_u (local.get $p) (local.get $lineEnd))
+        (then
+          (if (i32.eq (local.get $c) (i32.const "_"))
+            (then
+              (global.set $markdownUnderNoClose (local.get $lineEnd))
+              (global.set $markdownUnderNoCloseCount (local.get $count))))
+          (return (i32.const 0))))
+      ;; A code span hides the markers inside it: resume after the span, or
+      ;; after an unmatched backtick run, which is literal text.
+      (if (i32.eq (i32.load8_u (local.get $p)) (i32.const "`"))
+        (then
+          (local.set $q (call $markdownCodeSpanEnd (local.get $p) (local.get $lineEnd)))
+          (local.set $p
+            (if (result i32) (local.get $q)
+              (then (local.get $q))
+              (else (call $markdownTickRunEnd (local.get $p) (local.get $lineEnd)))))
+          (br $em)))
+      ;; the candidate run's end, 0 when a `**`/`__` opener meets a single
+      ;; marker
+      (local.set $q (i32.add (local.get $p) (i32.const 1)))
+      (if (i32.eq (local.get $count) (i32.const 2))
+        (then
+          (local.set $q
+            (select
+              (i32.add (local.get $p) (i32.const 2))
+              (i32.const 0)
+              (i32.and
+                (i32.lt_u (local.get $q) (local.get $lineEnd))
+                (i32.eq (i32.load8_u (local.get $q)) (local.get $c)))))))
+      ;; `_` cannot close right before an ASCII letter or digit, so
+      ;; `_private_method` stays plain. A non-ASCII byte after it is taken as
+      ;; punctuation: `_word_—` and `_word_’s` are far more common than a
+      ;; non-ASCII letter glued to the closer.
+      (if
+        (i32.and
+          (i32.ne (local.get $q) (i32.const 0))
+          (i32.or
+            (i32.ne (local.get $c) (i32.const "_"))
+            (i32.or
+              (i32.ge_u (local.get $q) (local.get $lineEnd))
+              (i32.or
+                (i32.ge_u (i32.load8_u (local.get $q)) (i32.const 0x80))
+                (i32.eqz (call $markdownIsAlnum (i32.load8_u (local.get $q))))))))
+        (then (return (local.get $q))))
+      (local.set $p (i32.add (local.get $p) (i32.const 1)))
+      (br $em))
+    (i32.const 0))
+
   (func $markdownHtmlRange (param $from i32) (param $to i32)
     (local $save i32)
     (local.set $save (global.get $end))
@@ -893,7 +1377,6 @@
     (global.set $ptr (local.get $to)))
 
   (func $hlMarkdown
-    (local $after i32)
     (local $body i32)
     (local $c i32)
     (local $close i32)
@@ -930,65 +1413,31 @@
     (local.set $lineCache (i32.const 0))
     (local.set $htmlNoClose (i32.const 0))
     (local.set $linkNoClose (i32.const 0))
+    (global.set $markdownUnderNoClose (i32.const 0))
+    (global.set $markdownUnderNoCloseCount (i32.const 0))
     (local.set $quotes (i32.const 0))
 
     ;; YAML front matter is recognized only at the beginning of the source and
     ;; only when the opener occupies its own line. Every stream chunk starts
     ;; at $srcBase, so streaming also demands the first chunk: otherwise a
     ;; thematic break `---` mid-document would open front matter.
-    (if
-      (i32.and
-        (i32.and
-          (i32.eq (global.get $ptr) (global.get $srcBase))
-          (i32.or (i32.eqz (global.get $streaming)) (global.get $streamReset)))
-        (i32.and
-          (i32.le_u (i32.add (global.get $ptr) (i32.const 3)) (global.get $end))
-          (i32.eq (i32.and (i32.load (global.get $ptr)) (i32.const 0xffffff)) (i32.const "---"))))
+    (local.set $body (call $frontMatterOpen))
+    (if (local.get $body)
       (then
-        (local.set $lineEnd (call $markdownLineEnd (global.get $ptr)))
-        (if (i32.eq (local.get $lineEnd) (i32.add (global.get $ptr) (i32.const 3)))
+        (call $emitTok
+          (enum.get $Token.punctuation.special)
+          (global.get $ptr)
+          (local.get $body))
+        (local.set $close (call $frontMatterClose (local.get $body)))
+        (call $markdownYamlRange (local.get $body) (local.get $close))
+        (if (i32.and (global.get $streaming) (i32.eq (local.get $close) (global.get $end)))
           (then
-            (local.set $after (call $markdownAfterLine (local.get $lineEnd)))
-            (call $emitTok
-              (enum.get $Token.punctuation.special)
-              (global.get $ptr)
-              (local.get $after))
-            (local.set $body (local.get $after))
-            (local.set $p (local.get $body))
-            (local.set $close (global.get $end))
-            (block $frontDone
-              (loop $front
-                (br_if $frontDone (i32.ge_u (local.get $p) (global.get $end)))
-                (local.set $lineEnd (call $markdownLineEnd (local.get $p)))
-                (if
-                  (i32.and
-                    (i32.eq (i32.sub (local.get $lineEnd) (local.get $p)) (i32.const 3))
-                    (i32.eq
-                      (i32.and (i32.load (local.get $p)) (i32.const 0xffffff))
-                      (i32.const "---")))
-                  (then
-                    (local.set $close (local.get $p))
-                    (br $frontDone)))
-                (local.set $p (call $markdownAfterLine (local.get $lineEnd)))
-                (br $front)))
-            (call $markdownYamlRange (local.get $body) (local.get $close))
-            (if (i32.and (global.get $streaming) (i32.eq (local.get $close) (global.get $end)))
-              (then
-                (call $streamSetRegion (i32.const 4))
-                (global.set $streamRegionStarted (i32.const 1)))
-              (else
-                (if (global.get $streaming)
-                  (then (call $markdownClearEmbeddedStream)))))
-            (if (i32.lt_u (local.get $close) (global.get $end))
-              (then
-                (global.set $ptr (local.get $close))
-                (local.set $lineEnd (call $markdownLineEnd (global.get $ptr)))
-                (local.set $after (call $markdownAfterLine (local.get $lineEnd)))
-                (call $emitTok
-                  (enum.get $Token.punctuation.special)
-                  (global.get $ptr)
-                  (local.get $after))
-                (global.set $ptr (local.get $after))))))))
+            (call $streamSetRegion (i32.const 4))
+            (global.set $streamRegionStarted (i32.const 1)))
+          (else
+            (if (global.get $streaming)
+              (then (call $markdownClearEmbeddedStream)))))
+        (call $frontMatterCloser (local.get $close))))
 
     (local.set $lineStart
       (i32.or
@@ -1105,11 +1554,36 @@
                     (br_if $infoStart (i32.eqz (call $lexIsSpace (i32.load8_u (local.get $q)))))
                     (local.set $q (i32.add (local.get $q) (i32.const 1)))
                     (br $infoSpace)))
+                ;; Pandoc and Quarto brace the language: `{python}`, `{.rust}`,
+                ;; `{r, echo=FALSE}`.
+                (if
+                  (i32.and
+                    (i32.lt_u (local.get $q) (local.get $lineEnd))
+                    (i32.eq (i32.load8_u (local.get $q)) (i32.const "{")))
+                  (then
+                    (local.set $q (i32.add (local.get $q) (i32.const 1)))
+                    (if
+                      (i32.and
+                        (i32.lt_u (local.get $q) (local.get $lineEnd))
+                        (i32.eq (i32.load8_u (local.get $q)) (i32.const ".")))
+                      (then (local.set $q (i32.add (local.get $q) (i32.const 1)))))))
                 (local.set $info (local.get $q))
+                ;; The language word also ends at attributes glued to it:
+                ;; rustdoc `rust,ignore`, VitePress `js{4}` and
+                ;; `ts:line-numbers`. No alias contains these bytes.
                 (block $infoDone
                   (loop $infoWord
                     (br_if $infoDone (i32.ge_u (local.get $q) (local.get $lineEnd)))
-                    (br_if $infoDone (call $lexIsSpace (i32.load8_u (local.get $q))))
+                    (local.set $c (i32.load8_u (local.get $q)))
+                    (br_if $infoDone (call $lexIsSpace (local.get $c)))
+                    (br_if $infoDone
+                      (i32.or
+                        (i32.or
+                          (i32.eq (local.get $c) (i32.const ","))
+                          (i32.eq (local.get $c) (i32.const ":")))
+                        (i32.or
+                          (i32.eq (local.get $c) (i32.const "{"))
+                          (i32.eq (local.get $c) (i32.const "}")))))
                     (local.set $q (i32.add (local.get $q) (i32.const 1)))
                     (br $infoWord)))
                 (local.set $lang (call $markdownFenceLang (local.get $info) (local.get $q)))
@@ -1124,18 +1598,12 @@
                     (local.get $fence)
                     (local.get $fenceLen)
                     (local.get $quotes)))
-                (if (local.get $lang)
-                  (then
-                    (call $markdownCodeRange
-                      (local.get $lang)
-                      (local.get $body)
-                      (local.get $close)
-                      (i32.const 0)))
-                  (else
-                    (call $emitTok
-                      (enum.get $Token.text.literal)
-                      (local.get $body)
-                      (local.get $close))))
+                (call $markdownFenceBody
+                  (local.get $lang)
+                  (local.get $body)
+                  (local.get $close)
+                  (local.get $quotes)
+                  (i32.const 0))
                 (if (global.get $streaming)
                   (then
                     (if (i32.eq (local.get $close) (global.get $end))
@@ -1174,46 +1642,17 @@
                         (call $markdownFenceClearDeeper)))))
                 (global.set $ptr (local.get $close))
                 (if (i32.lt_u (local.get $close) (global.get $end))
-                  (then
-                    (local.set $lineEnd (call $markdownLineEnd (global.get $ptr)))
-                    (local.set $after (call $markdownAfterLine (local.get $lineEnd)))
-                    (call $emitTok
-                      (enum.get $Token.punctuation.delimiter)
-                      (global.get $ptr)
-                      (local.get $after))
-                    (global.set $ptr (local.get $after))))
+                  (then (call $markdownFenceCloser (local.get $quotes))))
+                ;; the closer consumed its line break: the next line starts
+                ;; outside the block quote until it shows its own `>`
                 (local.set $lineStart (i32.const 1))
+                (local.set $quotes (i32.const 0))
                 (br $next)))))
 
         ;; Unordered and ordered list markers.
         (if (local.get $lineStart)
           (then
-            (local.set $p (global.get $ptr))
-            (if
-              (i32.or
-                (i32.eq (local.get $c) (i32.const "-"))
-                (i32.or
-                  (i32.eq (local.get $c) (i32.const "+"))
-                  (i32.eq (local.get $c) (i32.const "*"))))
-              (then (local.set $p (i32.add (local.get $p) (i32.const 1))))
-              (else
-                (if (call $lexIsDigit (local.get $c))
-                  (then
-                    (block $digitsDone
-                      (loop $digits
-                        (br_if $digitsDone (i32.ge_u (local.get $p) (global.get $end)))
-                        (br_if $digitsDone
-                          (i32.eqz (call $lexIsDigit (i32.load8_u (local.get $p)))))
-                        (local.set $p (i32.add (local.get $p) (i32.const 1)))
-                        (br $digits)))
-                    (if
-                      (i32.and
-                        (i32.lt_u (local.get $p) (global.get $end))
-                        (i32.or
-                          (i32.eq (i32.load8_u (local.get $p)) (i32.const "."))
-                          (i32.eq (i32.load8_u (local.get $p)) (i32.const ")"))))
-                      (then (local.set $p (i32.add (local.get $p) (i32.const 1))))
-                      (else (local.set $p (global.get $ptr))))))))
+            (local.set $p (call $markdownListMarkerEnd (global.get $ptr)))
             (if
               (i32.and
                 (i32.gt_u (local.get $p) (global.get $ptr))
@@ -1240,11 +1679,27 @@
             (call $emitTok (enum.get $Token.punctuation.markup) (local.get $lhs) (global.get $ptr))
             (br $next)))
 
-        ;; Inline HTML: give exactly one bounded construct to the HTML lexer.
+        ;; Autolinks, else inline HTML: give exactly one bounded construct to
+        ;; the HTML lexer.
         (if (i32.eq (local.get $c) (i32.const "<"))
           (then
             (if (i32.ge_u (global.get $ptr) (local.get $lineCache))
               (then (local.set $lineCache (call $markdownLineEnd (global.get $ptr)))))
+            (local.set $q (call $markdownAutolinkEnd (global.get $ptr) (local.get $lineCache)))
+            (if (local.get $q)
+              (then
+                (local.set $p (i32.sub (local.get $q) (i32.const 1)))
+                (call $emitTok
+                  (enum.get $Token.punctuation.bracket)
+                  (global.get $ptr)
+                  (i32.add (global.get $ptr) (i32.const 1)))
+                (call $emitTok
+                  (enum.get $Token.link_uri)
+                  (i32.add (global.get $ptr) (i32.const 1))
+                  (local.get $p))
+                (call $emitTok (enum.get $Token.punctuation.bracket) (local.get $p) (local.get $q))
+                (global.set $ptr (local.get $q))
+                (br $next)))
             (if (i32.ge_u (global.get $ptr) (local.get $htmlNoClose))
               (then
                 (local.set $htmlEnd
@@ -1267,44 +1722,11 @@
         ;; Inline code run. A missing closer consumes to the current line end.
         (if (i32.eq (local.get $c) (i32.const "`"))
           (then
-            (local.set $p (global.get $ptr))
-            (block $ticksDone
-              (loop $ticks
-                (br_if $ticksDone (i32.ge_u (local.get $p) (global.get $end)))
-                (br_if $ticksDone (i32.ne (i32.load8_u (local.get $p)) (i32.const "`")))
-                (local.set $p (i32.add (local.get $p) (i32.const 1)))
-                (br $ticks)))
-            (local.set $count (i32.sub (local.get $p) (global.get $ptr)))
-            ;; the opener's backticks hold no CR/LF, so the cached line end
-            ;; also bounds the scan that starts at $p
             (if (i32.ge_u (global.get $ptr) (local.get $lineCache))
               (then (local.set $lineCache (call $markdownLineEnd (global.get $ptr)))))
-            (local.set $close (local.get $lineCache))
-            (block $codeDone
-              (loop $code
-                ;; hop backtick to backtick with SIMD, bounded to the line
-                (local.set $p
-                  (call $scanFindSpecial
-                    (local.get $p)
-                    (local.get $lineCache)
-                    (i32.const "`")
-                    (i32.const 0)
-                    (i32.const 0)))
-                (br_if $codeDone (i32.ge_u (local.get $p) (local.get $lineCache)))
-                (local.set $q (local.get $p))
-                (block $closeTicksDone
-                  (loop $closeTicks
-                    (br_if $closeTicksDone (i32.ge_u (local.get $q) (local.get $lineCache)))
-                    (br_if $closeTicksDone (i32.ne (i32.load8_u (local.get $q)) (i32.const "`")))
-                    (local.set $q (i32.add (local.get $q) (i32.const 1)))
-                    (br $closeTicks)))
-                (if (i32.eq (i32.sub (local.get $q) (local.get $p)) (local.get $count))
-                  (then
-                    (local.set $close (local.get $q))
-                    (br $codeDone)))
-                (local.set $p (local.get $q))
-                (br $code)))
-            (global.set $ptr (local.get $close))
+            (global.set $ptr (call $markdownCodeSpanEnd (global.get $ptr) (local.get $lineCache)))
+            (if (i32.eqz (global.get $ptr))
+              (then (global.set $ptr (local.get $lineCache))))
             (call $emitTok (enum.get $Token.text.literal) (local.get $lhs) (global.get $ptr))
             (br $next)))
 
@@ -1316,6 +1738,11 @@
               (then (local.set $lineCache (call $markdownLineEnd (global.get $ptr)))))
             (if (i32.gt_u (i32.add (global.get $ptr) (i32.const 1)) (local.get $linkNoClose))
               (then
+                (local.set $q (call $markdownImageLink (global.get $ptr) (local.get $lineCache)))
+                (if (local.get $q)
+                  (then
+                    (global.set $ptr (local.get $q))
+                    (br $next)))
                 (local.set $p
                   (call $scanFindSpecial
                     (i32.add (global.get $ptr) (i32.const 1))
@@ -1339,26 +1766,7 @@
                         (i32.const 0)))
                     (if (i32.lt_u (local.get $q) (local.get $lineCache))
                       (then
-                        (call $emitTok
-                          (enum.get $Token.punctuation.bracket)
-                          (global.get $ptr)
-                          (i32.add (global.get $ptr) (i32.const 1)))
-                        (call $emitTok
-                          (enum.get $Token.link_text)
-                          (i32.add (global.get $ptr) (i32.const 1))
-                          (local.get $p))
-                        (call $emitTok
-                          (enum.get $Token.punctuation.bracket)
-                          (local.get $p)
-                          (i32.add (local.get $p) (i32.const 2)))
-                        (call $emitTok
-                          (enum.get $Token.link_uri)
-                          (i32.add (local.get $p) (i32.const 2))
-                          (local.get $q))
-                        (call $emitTok
-                          (enum.get $Token.punctuation.bracket)
-                          (local.get $q)
-                          (i32.add (local.get $q) (i32.const 1)))
+                        (call $markdownLink (global.get $ptr) (local.get $p) (local.get $q))
                         (global.set $ptr (i32.add (local.get $q) (i32.const 1)))
                         (br $next)))
                     ;; no `)` from here to the line end: every later `[` on
@@ -1386,47 +1794,12 @@
                   (i32.eq (i32.load8_u offset=1 (global.get $ptr)) (local.get $c)))))
             (if (i32.ge_u (global.get $ptr) (local.get $lineCache))
               (then (local.set $lineCache (call $markdownLineEnd (global.get $ptr)))))
-            (local.set $p (i32.add (global.get $ptr) (local.get $count)))
-            (local.set $close (i32.const 0))
-            (block $emDone
-              ;; `_` opens emphasis only when left-flanking: not glued to a
-              ;; preceding alphanumeric byte and not followed by a blank, so
-              ;; `snake_case_name` stays plain. The byte before the chunk
-              ;; start is a line break, which never flanks.
-              (br_if $emDone
-                (i32.and
-                  (i32.eq (local.get $c) (i32.const "_"))
-                  (i32.or
-                    (i32.and
-                      (i32.gt_u (local.get $lhs) (global.get $srcBase))
-                      (call $markdownIsAlnum
-                        (i32.load8_u (i32.sub (local.get $lhs) (i32.const 1)))))
-                    (i32.or
-                      (i32.ge_u (local.get $p) (local.get $lineCache))
-                      (call $lexIsSpace (i32.load8_u (local.get $p)))))))
-              (loop $em
-                ;; hop marker to marker with SIMD, bounded to the line
-                (local.set $p
-                  (call $scanFindSpecial
-                    (local.get $p)
-                    (local.get $lineCache)
-                    (local.get $c)
-                    (i32.const 0)
-                    (i32.const 0)))
-                (br_if $emDone (i32.ge_u (local.get $p) (local.get $lineCache)))
-                (if (i32.eq (local.get $count) (i32.const 1))
-                  (then
-                    (local.set $close (i32.add (local.get $p) (i32.const 1)))
-                    (br $emDone)))
-                (if
-                  (i32.and
-                    (i32.lt_u (i32.add (local.get $p) (i32.const 1)) (local.get $lineCache))
-                    (i32.eq (i32.load8_u offset=1 (local.get $p)) (local.get $c)))
-                  (then
-                    (local.set $close (i32.add (local.get $p) (i32.const 2)))
-                    (br $emDone)))
-                (local.set $p (i32.add (local.get $p) (i32.const 1)))
-                (br $em)))
+            (local.set $close
+              (call $markdownEmphasisEnd
+                (local.get $lhs)
+                (local.get $c)
+                (local.get $count)
+                (local.get $lineCache)))
             (if (local.get $close)
               (then
                 (global.set $ptr (local.get $close))

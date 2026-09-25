@@ -22,6 +22,34 @@ import {
   wordColor,
 } from './_util';
 
+void t.test('swift: closure arguments preserve the enclosing condition', () => {
+  for (const condition of [
+    'values.contains(where: { $0 > 0 })',
+    'values.contains(where: {\n  $0 > 0\n})',
+    '[values.contains(where: { $0 > 0 })][0]',
+    'values.contains(where: { let x = $0; return x > 0 })',
+    'values.contains(where: { if valid { return true }; return false })',
+    'values.contains(where: { work { print("ok") }; return true })',
+  ]) {
+    const code = `if ${condition} && enabled { print("ok") }\nwork { print("done") }\n`;
+    assertLineFedParity('swift', code);
+    const kinds = tokenKinds('swift', code);
+    assert.ok(
+      kinds.some(([text, kind]) => text === 'enabled' && kind === 'variable')
+    );
+    assert.ok(
+      kinds
+        .filter(([text]) => text === 'work')
+        .every(([, kind]) => kind === 'function')
+    );
+    assert.ok(
+      kinds
+        .filter(([text]) => text === 'valid')
+        .every(([, kind]) => kind === 'variable')
+    );
+  }
+});
+
 let swift: TestLang;
 t.before(() => {
   swift = loadLang('swift', '$hlSwift');
@@ -506,7 +534,7 @@ void t.test(
 
 void t.test('swift: modifiers and contextual keywords', () => {
   const html = distinctHl(
-    'mutating; lazy; weak; unowned; open; fileprivate; internal; public; override; rethrows; inout; some; any; subscript; x is Y; x as! Y'
+    'mutating; lazy var; weak var; unowned; open class; fileprivate; internal; public; override; rethrows; inout; some View; any P; subscript; x is Y; x as! Y'
   );
   for (const word of [
     'mutating',
@@ -586,5 +614,135 @@ void t.test(
       'swift',
       'let s = """\n  a \\(b)\n  """\n/* c\n d */\nlet r = #"x\ny"#\n'
     );
+  }
+);
+
+void t.test('swift: soft modifiers are names unless a word follows', () => {
+  const code =
+    'var open = true\nlet some = f(open)\nlazy var v = 0\nvar body: some View { x }\n{ [weak self] in }';
+  assertLineFedParity('swift', code);
+  assert.deepEqual(tokenKinds('swift', code), [
+    ['var', 'keyword.declaration'],
+    ['open', 'variable'],
+    ['=', 'operator'],
+    ['true', 'boolean'],
+    ['let', 'keyword.declaration'],
+    ['some', 'variable'],
+    ['=', 'operator'],
+    ['f', 'function'],
+    ['(', 'punctuation.bracket'],
+    ['open', 'variable'],
+    [')', 'punctuation.bracket'],
+    ['lazy', 'keyword'],
+    ['var', 'keyword.declaration'],
+    ['v', 'variable'],
+    ['=', 'operator'],
+    ['0', 'number'],
+    ['var', 'keyword.declaration'],
+    ['body', 'variable'],
+    [':', 'punctuation.delimiter'],
+    ['some', 'keyword'],
+    ['View', 'type'],
+    ['{', 'punctuation.bracket'],
+    ['x', 'variable'],
+    ['}', 'punctuation.bracket'],
+    ['{ [', 'punctuation.bracket'],
+    ['weak', 'keyword'],
+    ['self', 'variable.special'],
+    [']', 'punctuation.bracket'],
+    ['in', 'keyword.operator'],
+    ['}', 'punctuation.bracket'],
+  ]);
+});
+
+void t.test(
+  'swift: trailing closures call, but not in conditions or accessors',
+  () => {
+    const code =
+      'items.forEach { print($0) }\nwithAnimation { x = 1 }\nif isValid {\n}\nfor item in items {\n}\nvar x: Int {\n    get { 1 }\n}';
+    assertLineFedParity('swift', code);
+    assert.deepEqual(tokenKinds('swift', code), [
+      ['items', 'variable'],
+      ['.', 'punctuation.delimiter'],
+      ['forEach', 'function.method'],
+      ['{', 'punctuation.bracket'],
+      ['print', 'function'],
+      ['(', 'punctuation.bracket'],
+      ['$0', 'variable'],
+      [') }', 'punctuation.bracket'],
+      ['withAnimation', 'function'],
+      ['{', 'punctuation.bracket'],
+      ['x', 'variable'],
+      ['=', 'operator'],
+      ['1', 'number'],
+      ['}', 'punctuation.bracket'],
+      ['if', 'keyword.control'],
+      ['isValid', 'variable'],
+      ['{', 'punctuation.bracket'],
+      ['}', 'punctuation.bracket'],
+      ['for', 'keyword.control'],
+      ['item', 'variable'],
+      ['in', 'keyword.operator'],
+      ['items', 'variable'],
+      ['{', 'punctuation.bracket'],
+      ['}', 'punctuation.bracket'],
+      ['var', 'keyword.declaration'],
+      ['x', 'variable'],
+      [':', 'punctuation.delimiter'],
+      ['Int', 'type.builtin'],
+      ['{', 'punctuation.bracket'],
+      ['get', 'variable'],
+      ['{', 'punctuation.bracket'],
+      ['1', 'number'],
+      ['}', 'punctuation.bracket'],
+      ['}', 'punctuation.bracket'],
+    ]);
+  }
+);
+
+void t.test(
+  'swift: operator functions, class var, init?, and subscript heads',
+  () => {
+    const code =
+      'static func == (lhs: P, rhs: P) -> Bool { }\nclass var shared: Foo { }\ninit?(rawValue: String) { }\nsubscript(index: Int) -> T { }';
+    assertLineFedParity('swift', code);
+    assert.deepEqual(tokenKinds('swift', code), [
+      ['static', 'keyword'],
+      ['func', 'keyword.declaration'],
+      ['==', 'operator'],
+      ['(', 'punctuation.bracket'],
+      ['lhs', 'variable.parameter'],
+      [':', 'punctuation.delimiter'],
+      ['P', 'type'],
+      [',', 'punctuation.delimiter'],
+      ['rhs', 'variable.parameter'],
+      [':', 'punctuation.delimiter'],
+      ['P', 'type'],
+      [')', 'punctuation.bracket'],
+      ['->', 'operator'],
+      ['Bool', 'type.builtin'],
+      ['{ }', 'punctuation.bracket'],
+      ['class var', 'keyword.declaration'],
+      ['shared', 'variable'],
+      [':', 'punctuation.delimiter'],
+      ['Foo', 'type'],
+      ['{ }', 'punctuation.bracket'],
+      ['init', 'function'],
+      ['?', 'operator'],
+      ['(', 'punctuation.bracket'],
+      ['rawValue', 'variable.parameter'],
+      [':', 'punctuation.delimiter'],
+      ['String', 'type.builtin'],
+      [') { }', 'punctuation.bracket'],
+      ['subscript', 'keyword.declaration'],
+      ['(', 'punctuation.bracket'],
+      ['index', 'variable.parameter'],
+      [':', 'punctuation.delimiter'],
+      ['Int', 'type.builtin'],
+      [')', 'punctuation.bracket'],
+      ['->', 'operator'],
+      ['T', 'type'],
+      ['{ }', 'punctuation.bracket'],
+    ]);
   }
 );

@@ -129,11 +129,12 @@ void t.test('svelte: runes and reactive statements inside script', () => {
 void t.test(
   'svelte: element directives, spreads, and shorthand attributes',
   () => {
+    // the blanks between expressions are attribute gaps, so equal braces merge
     assert.deepEqual(
       tokenKinds(
         'svelte',
         '<button on:click|preventDefault={h} {...spread} {shorthand}>x</button>'
-      ).slice(0, 14),
+      ),
       [
         ['<', 'punctuation.bracket.html'],
         ['button', 'tag'],
@@ -141,14 +142,17 @@ void t.test(
         ['=', 'punctuation.delimiter.html'],
         ['{', 'punctuation.special'],
         ['h', 'variable'],
-        ['}', 'punctuation.special'],
-        ['{', 'punctuation.special'],
+        ['} {', 'punctuation.special'],
         ['...', 'operator'],
         ['spread', 'variable'],
-        ['}', 'punctuation.special'],
-        ['{', 'punctuation.special'],
+        ['} {', 'punctuation.special'],
         ['shorthand', 'variable'],
         ['}', 'punctuation.special'],
+        ['>', 'punctuation.bracket.html'],
+        ['x', null],
+        ['</', 'punctuation.bracket.html'],
+        ['button', 'tag'],
+        ['>', 'punctuation.bracket.html'],
       ]
     );
   }
@@ -255,5 +259,88 @@ void t.test(
     }
     const split = loadLang('svelte', '$hlSvelte', 16);
     checkInvariants(split.hl, '{#if ok}<p>{value}</p>{/if}');
+  }
+);
+
+void t.test(
+  'svelte: a start tag continues after an attribute expression',
+  () => {
+    assert.deepEqual(
+      tokenKinds('svelte', '<div class={cls} id="x" data-a=1>hi</div>\n'),
+      [
+        ['<', 'punctuation.bracket.html'],
+        ['div', 'tag'],
+        ['class', 'attribute'],
+        ['=', 'punctuation.delimiter.html'],
+        ['{', 'punctuation.special'],
+        ['cls', 'variable'],
+        ['}', 'punctuation.special'],
+        ['id', 'attribute'],
+        ['=', 'punctuation.delimiter.html'],
+        ['"x"', 'string'],
+        ['data-a', 'attribute'],
+        ['=', 'punctuation.delimiter.html'],
+        ['1', 'string'],
+        ['>', 'punctuation.bracket.html'],
+        ['hi', null],
+        ['</', 'punctuation.bracket.html'],
+        ['div', 'tag'],
+        ['>', 'punctuation.bracket.html'],
+      ]
+    );
+    // a spread, then more attributes and a self-closing end
+    assert.deepEqual(
+      tokenKinds('svelte', '<Foo {...props} title="t" />').slice(-4),
+      [
+        ['title', 'attribute'],
+        ['=', 'punctuation.delimiter.html'],
+        ['"t"', 'string'],
+        ['/>', 'punctuation.bracket.html'],
+      ]
+    );
+    // interpolation inside a quoted value keeps the rest of the value a string
+    assert.deepEqual(
+      tokenKinds('svelte', '<p class="a {b} c" id=x>t</p>').slice(2, 10),
+      [
+        ['class', 'attribute'],
+        ['=', 'punctuation.delimiter.html'],
+        ['"a', 'string'],
+        ['{', 'punctuation.special'],
+        ['b', 'variable'],
+        ['}', 'punctuation.special'],
+        ['c"', 'string'],
+        ['id', 'attribute'],
+      ]
+    );
+  }
+);
+
+void t.test(
+  'svelte: attributes after multi-line expressions stream line-fed',
+  () => {
+    for (const code of [
+      '<Card\n  title={t}\n  size="lg"\n/>\n',
+      '<button on:click={() => {\n  count += 1;\n}} disabled>x</button>\n',
+      '<div class={\n  a\n} id="z">\n',
+      '<p title={`x\n${y}`} class="k">t</p>\n',
+      '<a {b}{c} d="e">\n',
+      '<p class="a {\n  b\n} c" id=x>t</p>\n',
+      '<div\n{...props}\nclass="x">\n',
+    ]) {
+      const kinds = assertLineFedParity('svelte', code)
+        .flat()
+        .map((tok) => tok.content.trim());
+      assert.ok(!kinds.some((text) => /=["x]/.test(text)), code);
+    }
+    // malformed and unterminated expression bodies stay bounded
+    for (const code of [
+      '<div class={"}" id=1>\n',
+      '<div class={`a\n} id=1>\n',
+      '<div on:x={<b>} id=1>\n',
+      '<div {a\n',
+      '{#if a <b}\n<p>{x}</p>\n{/if}\n',
+    ]) {
+      assertLineFedParity('svelte', code);
+    }
   }
 );

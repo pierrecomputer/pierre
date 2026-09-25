@@ -1,5 +1,6 @@
 (module
   (import "../common.wat")
+  (import "./string-templates.wat")
 
   (func $scalaByte (param $p i32) (result i32)
     (select (i32.load8_u (local.get $p)) (i32.const 0) (i32.lt_u (local.get $p) (global.get $end))))
@@ -43,14 +44,10 @@
     (param $seg i32)
     (result i32)
     (local $c i32)
-    (local $c2 i32)
-    (local $e i32)
-    (local $template i32)
     (local $stop i32)
     (local $dollar i32)
     (local $status i32)
     (local.set $stop (global.get $ptr))
-    (local.set $dollar (global.get $ptr))
     (block $done
       (loop $scan
         (if (i32.ge_u (global.get $ptr) (local.get $stop))
@@ -62,26 +59,18 @@
                 (i32.const 34)
                 (i32.eqz (local.get $triple))
                 (i32.eqz (local.get $triple))))
-            (local.set $dollar (local.get $stop))
-            (if (local.get $expand)
-              (then
-                (local.set $dollar
-                  (call $scanFindSpecial
-                    (global.get $ptr)
-                    (local.get $stop)
-                    (i32.const "$")
-                    (i32.const 0)
-                    (i32.const 0))))))
-          (else
-            (if (i32.and (local.get $expand) (i32.gt_u (global.get $ptr) (local.get $dollar)))
-              (then
-                (local.set $dollar
-                  (call $scanFindSpecial
-                    (global.get $ptr)
-                    (local.get $stop)
-                    (i32.const "$")
-                    (i32.const 0)
-                    (i32.const 0)))))))
+            ;; a plain body has no `$` stop; zero, below $ptr, makes an
+            ;; interpolated one search for the next
+            (local.set $dollar (select (i32.const 0) (local.get $stop) (local.get $expand)))))
+        (if (i32.gt_u (global.get $ptr) (local.get $dollar))
+          (then
+            (local.set $dollar
+              (call $scanFindSpecial
+                (global.get $ptr)
+                (local.get $stop)
+                (i32.const "$")
+                (i32.const 0)
+                (i32.const 0)))))
         (global.set $ptr
           (select
             (local.get $dollar)
@@ -116,52 +105,14 @@
           (i32.or (i32.eq (local.get $c) (i32.const 10)) (i32.eq (local.get $c) (i32.const 13))))
         (if (i32.eq (local.get $c) (i32.const 92))
           (then
-            (call $emitTok (enum.get $Token.string) (local.get $seg) (global.get $ptr))
-            (local.set $e (call $lexEscapeEnd (global.get $ptr)))
-            (call $emitTok (enum.get $Token.string.escape) (global.get $ptr) (local.get $e))
-            (global.set $ptr (local.get $e))
-            (local.set $seg (global.get $ptr))
-            (if
-              (i32.and
-                (i32.eq (global.get $ptr) (global.get $end))
-                (i32.or
-                  (i32.eq (i32.load8_u (i32.sub (global.get $ptr) (i32.const 1))) (i32.const 10))
-                  (i32.eq (i32.load8_u (i32.sub (global.get $ptr) (i32.const 1))) (i32.const 13))))
+            (if (call $stringEscapeAt (local.get $seg))
               (then (local.set $status (i32.const 3))))
+            (local.set $seg (global.get $ptr))
             (br $scan)))
         ;; `$`: a splice, an escaped dollar, or a name
-        (local.set $c2 (call $scalaByte (i32.add (global.get $ptr) (i32.const 1))))
-        (if (i32.and (i32.eq (local.get $c2) (i32.const "{")) (i32.eqz (local.get $nested)))
-          (then
-            (call $emitTok (enum.get $Token.string) (local.get $seg) (global.get $ptr))
-            (global.set $ptr (i32.add (global.get $ptr) (i32.const 2)))
-            (call $emitTok
-              (enum.get $Token.punctuation.special)
-              (i32.sub (global.get $ptr) (i32.const 2))
-              (global.get $ptr))
-            (return (i32.const 2))))
-        (if (i32.eq (local.get $c2) (i32.const "$"))
-          (then
-            (call $emitTok (enum.get $Token.string) (local.get $seg) (global.get $ptr))
-            (global.set $ptr (i32.add (global.get $ptr) (i32.const 2)))
-            (call $emitTok
-              (enum.get $Token.string.escape)
-              (i32.sub (global.get $ptr) (i32.const 2))
-              (global.get $ptr))
-            (local.set $seg (global.get $ptr))
-            (br $scan)))
-        (if
-          (i32.and (call $lexIsIdentStart (local.get $c2)) (i32.ne (local.get $c2) (i32.const "$")))
-          (then
-            (call $emitTok (enum.get $Token.string) (local.get $seg) (global.get $ptr))
-            (local.set $template (global.get $ptr))
-            (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
-            (call $scanIdentRun (i32.const "_"))
-            (call $emitTok (enum.get $Token.variable) (local.get $template) (global.get $ptr))
-            (local.set $seg (global.get $ptr))
-            (br $scan)))
-        (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
-        (br $scan)))
+        (local.set $seg (call $stringDollarAt (local.get $seg) (i32.const 8) (local.get $nested)))
+        (br_if $scan (i32.ge_s (local.get $seg) (i32.const 0)))
+        (return (i32.const 2))))
     (call $emitTok (enum.get $Token.string) (local.get $seg) (global.get $ptr))
     (local.get $status))
 
@@ -239,16 +190,10 @@
         (local.set $gap (global.get $ptr))
         (call $scanWhitespace)
         ;; an import line ends at its line break
-        (if
-          (i32.lt_u
-            (call $scanFindSpecial
-              (local.get $gap)
-              (global.get $ptr)
-              (i32.const 10)
-              (i32.const 0)
-              (i32.const 1))
-            (global.get $ptr))
-          (then (local.set $importCtx (i32.const 0))))
+        (if (local.get $importCtx)
+          (then
+            (if (call $lexGapHasBreak (local.get $gap) (global.get $ptr))
+              (then (local.set $importCtx (i32.const 0))))))
         (call $emitGap (local.get $gap) (global.get $ptr))
         (br_if $done (i32.ge_u (global.get $ptr) (global.get $end)))
         (local.set $lhs (global.get $ptr))
@@ -365,11 +310,19 @@
                 (local.set $member (i32.const 0))
                 (local.set $expect (i32.const 0))
                 (br $next)))
-            (local.set $kind
-              (select
-                (i32.const -1)
-                (call $scalaWordHl (local.get $lhs) (local.get $rhs))
-                (i32.or (local.get $member) (local.get $importCtx))))
+            ;; `package object util`: `object` ends the package line
+            (if (local.get $importCtx)
+              (then
+                (if
+                  (i32.and
+                    (i32.eq (i32.sub (local.get $rhs) (local.get $lhs)) (i32.const 6))
+                    (i64.eq
+                      (i64.and (i64.load (local.get $lhs)) (i64.const 0xffffffffffff))
+                      (i64.const "object")))
+                  (then (local.set $importCtx (i32.const 0))))))
+            (local.set $kind (i32.const -1))
+            (if (i32.eqz (i32.or (local.get $member) (local.get $importCtx)))
+              (then (local.set $kind (call $scalaWordHl (local.get $lhs) (local.get $rhs)))))
             (if (i32.ge_s (local.get $kind) (i32.const 0))
               (then
                 (local.set $hl (i32.and (local.get $kind) (i32.const 255)))
@@ -396,7 +349,11 @@
                             (local.set $hl (enum.get $Token.property))
                             (if (i32.le_u (i32.sub (local.get $c) (i32.const "A")) (i32.const 25))
                               (then (local.set $hl (enum.get $Token.type))))
-                            (if (i32.eq (call $scalaByte (local.get $p)) (i32.const "("))
+                            ;; a block argument calls too: `xs.foreach { … }`
+                            (if
+                              (i32.or
+                                (i32.eq (call $scalaByte (local.get $p)) (i32.const "("))
+                                (i32.eq (call $scalaByte (local.get $p)) (i32.const "{")))
                               (then (local.set $hl (enum.get $Token.function.method)))))
                           (else
                             (if (call $lexIsConstCase (local.get $lhs) (local.get $rhs))
@@ -410,9 +367,11 @@
                                       (select
                                         (enum.get $Token.function)
                                         (enum.get $Token.variable)
-                                        (i32.eq
-                                          (call $scalaByte (local.get $p))
-                                          (i32.const "("))))))))))))))))
+                                        (i32.or
+                                          (i32.eq (call $scalaByte (local.get $p)) (i32.const "("))
+                                          (i32.eq
+                                            (call $scalaByte (local.get $p))
+                                            (i32.const "{")))))))))))))))))
             (call $emitTok (local.get $hl) (local.get $lhs) (local.get $rhs))
             (local.set $member (i32.const 0))
             (br $next)))

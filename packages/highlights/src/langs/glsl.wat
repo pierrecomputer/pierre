@@ -29,6 +29,7 @@
     (local $len i32)
     (local $last i32)
     (local $w i32)
+    (local $x i64)
     (local.set $g (keyword-table.value $glslWords (local.get $lhs) (local.get $rhs)))
     (if (i32.ne (local.get $g) (i32.const -1))
       (then (return (local.get $g))))
@@ -123,58 +124,43 @@
                 (i32.eq (i32.load8_u offset=5 (local.get $lhs)) (i32.const "x")))))
           (then (return (enum.get $Token.type.builtin))))))
 
-    ;; Opaque sampler/image/texture families have many dimensional suffixes.
-    (if
-      (i32.and
-        (i32.ge_u (local.get $len) (i32.const 7))
-        (i64.eq
-          (i64.and (i64.load (local.get $lhs)) (i64.const 0x00ffffffffffffff))
-          (i64.const "sampler")))
-      (then (return (enum.get $Token.type.builtin))))
-    (if
-      (i32.and
-        (i32.ge_u (local.get $len) (i32.const 8))
-        (i32.or
-          (i64.eq (i64.load (local.get $lhs)) (i64.const "isampler"))
-          (i64.eq (i64.load (local.get $lhs)) (i64.const "usampler"))))
-      (then (return (enum.get $Token.type.builtin))))
-    (if
-      (i32.and
-        (i32.ge_u (local.get $len) (i32.const 5))
-        (i64.eq
-          (i64.and (i64.load (local.get $lhs)) (i64.const 0x000000ffffffffff))
-          (i64.const "image")))
-      (then (return (enum.get $Token.type.builtin))))
-    (if
-      (i32.and
-        (i32.ge_u (local.get $len) (i32.const 6))
-        (i32.or
-          (i64.eq
-            (i64.and (i64.load (local.get $lhs)) (i64.const 0x0000ffffffffffff))
-            (i64.const "iimage"))
-          (i64.eq
-            (i64.and (i64.load (local.get $lhs)) (i64.const 0x0000ffffffffffff))
-            (i64.const "uimage"))))
-      (then (return (enum.get $Token.type.builtin))))
+    ;; Opaque sampler/image/texture families have many dimensional suffixes,
+    ;; and all but coopmat an optional `i`/`u` element prefix: $w is that
+    ;; prefix's length and $x the next seven bytes. Bare `texture` is a
+    ;; function, so that family needs a suffix byte whatever the prefix.
+    (local.set $w
+      (i32.or
+        (i32.eq (i32.load8_u (local.get $lhs)) (i32.const "i"))
+        (i32.eq (i32.load8_u (local.get $lhs)) (i32.const "u"))))
+    (local.set $x
+      (i64.and
+        (i64.load (i32.add (local.get $lhs) (local.get $w)))
+        (i64.const 0x00ffffffffffffff)))
     (if
       (i32.or
-        (i32.and
-          (i32.ge_u (local.get $len) (i32.const 8))
-          (i64.eq
-            (i64.and (i64.load (local.get $lhs)) (i64.const 0x00ffffffffffffff))
-            (i64.const "texture")))
-        (i32.and
-          (i32.ge_u (local.get $len) (i32.const 7))
-          (i64.eq
-            (i64.and (i64.load (local.get $lhs)) (i64.const 0x00ffffffffffffff))
-            (i64.const "coopmat"))))
-      (then (return (enum.get $Token.type.builtin))))
-    (if
-      (i32.and
-        (i32.ge_u (local.get $len) (i32.const 8))
         (i32.or
-          (i64.eq (i64.load (local.get $lhs)) (i64.const "itexture"))
-          (i64.eq (i64.load (local.get $lhs)) (i64.const "utexture"))))
+          (i32.and
+            (i32.ge_u (i32.sub (local.get $len) (local.get $w)) (i32.const 7))
+            (i32.or
+              (i64.eq (local.get $x) (i64.const "sampler"))
+              (i32.and (i32.eqz (local.get $w)) (i64.eq (local.get $x) (i64.const "coopmat")))))
+          (i32.and
+            (i32.ge_u (local.get $len) (i32.const 8))
+            (i64.eq (local.get $x) (i64.const "texture"))))
+        ;; `image` itself starts with the `i` taken for a prefix
+        (i32.and
+          (local.get $w)
+          (i32.or
+            (i32.and
+              (i32.ge_u (local.get $len) (i32.const 5))
+              (i64.eq
+                (i64.and (i64.load (local.get $lhs)) (i64.const 0x000000ffffffffff))
+                (i64.const "image")))
+            (i32.and
+              (i32.ge_u (local.get $len) (i32.const 6))
+              (i64.eq
+                (i64.and (local.get $x) (i64.const 0x000000ffffffffff))
+                (i64.const "image"))))))
       (then (return (enum.get $Token.type.builtin))))
 
     (enum.get $Token.none))
@@ -190,7 +176,11 @@
     (local $afterDot i32)
     (local $wantType i32)
     (local $include i32)
+    ;; the quote of a string the previous chunk left open at an escaped line
+    ;; break, or 0: it resumes with C escape rules ($lexCStringResume)
+    (local $strCont i32)
     (call $lexEmitLeadingContinuation)
+    (local.set $strCont (call $lexCStringResume (local.get $strCont)))
     (block $done
       (loop $next
         (local.set $gap (global.get $ptr))
@@ -288,7 +278,7 @@
 
         (if (i32.or (i32.eq (local.get $c) (i32.const 34)) (i32.eq (local.get $c) (i32.const 39)))
           (then
-            (call $lexString (local.get $c) (i32.const 0) (enum.get $Token.string))
+            (local.set $strCont (call $lexCString (enum.get $Token.string)))
             (local.set $include (i32.const 0))
             (local.set $afterDot (i32.const 0))
             (local.set $wantType (i32.const 0))

@@ -51,8 +51,9 @@
       (then (return (enum.get $Token.type))))
     (enum.get $Token.variable))
 
+  ;; `#` counts as an operator only after the directive check in $hlC
   (func $cIsOp (param $c i32) (result i32)
-    (byteset.get "!%&*+-/<=>?^|~" (local.get $c)))
+    (byteset.get "!#%&*+-/<=>?^|~" (local.get $c)))
 
   (func $hlC
     (local $c i32)
@@ -62,7 +63,11 @@
     (local $lhs i32)
     (local $rhs i32)
     (local $hl i32)
+    ;; the quote of a string the previous chunk left open at an escaped line
+    ;; break, or 0: it resumes with C escape rules ($lexCStringResume)
+    (local $strCont i32)
     (call $lexEmitLeadingContinuation)
+    (local.set $strCont (call $lexCStringResume (local.get $strCont)))
     (block $done
       (loop $next
         ;; whitespace gaps
@@ -109,20 +114,24 @@
                   (i32.eq (local.get $c3) (i32.const "!")))))
             (br $next)))
 
-        ;; A directive occupies its physical line. This also handles # and ##
-        ;; inside macro definitions without a second state machine.
+        ;; A `#` that opens its line starts a directive, which occupies the
+        ;; physical line. Anywhere else - `#` stringify and `##` paste on a
+        ;; macro's continuation lines - it is an operator (see $cIsOp).
         (if (i32.eq (local.get $c) (i32.const "#"))
           (then
-            (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
-            (call $scanToLineEnd)
-            (if (i32.eqz (call $lexEmitIncludeDirective (local.get $lhs) (global.get $ptr)))
-              (then (call $emitTok (enum.get $Token.preproc) (local.get $lhs) (global.get $ptr))))
-            (br $next)))
+            (if (i32.eqz (call $lexLineByteBefore (local.get $lhs)))
+              (then
+                (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
+                (call $scanToLineEnd)
+                (if (i32.eqz (call $lexEmitIncludeDirective (local.get $lhs) (global.get $ptr)))
+                  (then
+                    (call $emitTok (enum.get $Token.preproc) (local.get $lhs) (global.get $ptr))))
+                (br $next)))))
 
         ;; strings and character literals
         (if (i32.or (i32.eq (local.get $c) (i32.const 34)) (i32.eq (local.get $c) (i32.const 39)))
           (then
-            (call $lexString (local.get $c) (i32.const 0) (enum.get $Token.string))
+            (local.set $strCont (call $lexCString (enum.get $Token.string)))
             (br $next)))
 
         ;; identifiers, including C literal prefixes
@@ -130,6 +139,8 @@
           (then
             (call $lexScanIdent)
             (local.set $rhs (global.get $ptr))
+            ;; the byte after the name; the input slack keeps the read safe
+            (local.set $c2 (i32.load8_u (global.get $ptr)))
             (if
               (i32.and
                 (i32.lt_u (global.get $ptr) (global.get $end))
@@ -138,22 +149,19 @@
                     (i32.and
                       (i32.eq (i32.sub (local.get $rhs) (local.get $lhs)) (i32.const 1))
                       (i32.or
-                        (i32.eq (i32.load8_u (local.get $lhs)) (i32.const "L"))
+                        (i32.eq (local.get $c) (i32.const "L"))
                         (i32.or
-                          (i32.eq (i32.load8_u (local.get $lhs)) (i32.const "u"))
-                          (i32.eq (i32.load8_u (local.get $lhs)) (i32.const "U")))))
+                          (i32.eq (local.get $c) (i32.const "u"))
+                          (i32.eq (local.get $c) (i32.const "U")))))
                     (i32.and
                       (i32.eq (i32.sub (local.get $rhs) (local.get $lhs)) (i32.const 2))
                       (i32.eq (i32.load16_u (local.get $lhs)) (i32.const "u8"))))
                   (i32.or
-                    (i32.eq (i32.load8_u (global.get $ptr)) (i32.const 34))
-                    (i32.eq (i32.load8_u (global.get $ptr)) (i32.const 39)))))
+                    (i32.eq (local.get $c2) (i32.const 34))
+                    (i32.eq (local.get $c2) (i32.const 39)))))
               (then
                 (call $emitTok (enum.get $Token.string) (local.get $lhs) (local.get $rhs))
-                (call $lexString
-                  (i32.load8_u (global.get $ptr))
-                  (i32.const 0)
-                  (enum.get $Token.string))
+                (local.set $strCont (call $lexCString (enum.get $Token.string)))
                 (br $next)))
             (local.set $hl (call $cWordHl (local.get $lhs) (local.get $rhs)))
             (call $emitTok (local.get $hl) (local.get $lhs) (local.get $rhs))
@@ -235,7 +243,7 @@
                     (i32.or
                       (i32.eq (local.get $c) (i32.const 34))
                       (i32.eq (local.get $c) (i32.const 39)))))
-                (i32.or (i32.eq (local.get $c) (i32.const "#")) (call $lexIsSpace (local.get $c)))))
+                (call $lexIsSpace (local.get $c))))
             (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
             (br $plain)))
         (call $emitTok (enum.get $Token.none) (local.get $lhs) (global.get $ptr))

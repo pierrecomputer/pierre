@@ -19,6 +19,21 @@ import {
   wordColor,
 } from './_util';
 
+void t.test('ruby: shifts with constant operands do not start heredocs', () => {
+  for (const operator of ['|', '+', '&']) {
+    const code = `flags = 1\nn = flags <<BITS ${operator} 1\nputs n\n`;
+    assertLineFedParity('ruby', code);
+    const kinds = tokenKinds('ruby', code);
+    assert.ok(
+      kinds.some(([text, kind]) => text === '<<' && kind === 'operator')
+    );
+    assert.ok(
+      kinds.some(([text, kind]) => text === 'puts' && kind === 'function')
+    );
+    assert.ok(kinds.every(([, kind]) => kind !== 'string'));
+  }
+});
+
 // one unique color per token type so equal styles cannot merge neighboring
 // spans and hide a classification behind a same-colored token
 const distinct = {
@@ -408,3 +423,105 @@ void t.test(
     );
   }
 );
+
+void t.test('ruby: =end closes with a trailing blank or comment', () => {
+  const code =
+    '=begin\ndoc\n=end \nputs 1\n=begin\nx\n=end # done\nputs 2\n=begin\ny\n=endx\n=end\nz\n';
+  assert.deepEqual(tokenKinds('ruby', code), [
+    ['=begin', 'comment'],
+    ['doc', 'comment'],
+    ['=end', 'comment'],
+    ['puts', 'function'],
+    ['1', 'number'],
+    ['=begin', 'comment'],
+    ['x', 'comment'],
+    ['=end # done', 'comment'],
+    ['puts', 'function'],
+    ['2', 'number'],
+    ['=begin', 'comment'],
+    ['y', 'comment'],
+    ['=endx', 'comment'],
+    ['=end', 'comment'],
+    ['z', 'variable'],
+  ]);
+  assertLineFedParity('ruby', code);
+});
+
+void t.test('ruby: heredoc argument after a member call', () => {
+  const code =
+    '$stderr.puts <<EOS\nDon\'t panic\nEOS\nx = 1\narr << "a"\nmask = 1 <<BITS\n';
+  assert.deepEqual(tokenKinds('ruby', code), [
+    ['$stderr', 'variable.special'],
+    ['.', 'punctuation.delimiter'],
+    ['puts', 'function.method'],
+    ['<<EOS', 'string'],
+    ["Don't panic", 'string'],
+    ['EOS', 'string'],
+    ['x', 'variable'],
+    ['=', 'operator'],
+    ['1', 'number'],
+    ['arr', 'variable'],
+    ['<<', 'operator'],
+    ['"a"', 'string'],
+    ['mask', 'variable'],
+    ['=', 'operator'],
+    ['1', 'number'],
+    ['<<', 'operator'],
+    ['BITS', 'constant'],
+  ]);
+  assertLineFedParity('ruby', code);
+});
+
+void t.test('ruby: many interpolations in one literal', () => {
+  const code = 'x = "a#{b} \\n#{c}d\n#{e}"\ny = 1\n';
+  assert.deepEqual(tokenKinds('ruby', code), [
+    ['x', 'variable'],
+    ['=', 'operator'],
+    ['"a', 'string'],
+    ['#{', 'punctuation.special'],
+    ['b', 'variable'],
+    ['}', 'punctuation.special'],
+    ['\\n', 'string.escape'],
+    ['#{', 'punctuation.special'],
+    ['c', 'variable'],
+    ['}', 'punctuation.special'],
+    ['d', 'string'],
+    ['#{', 'punctuation.special'],
+    ['e', 'variable'],
+    ['}', 'punctuation.special'],
+    ['"', 'string'],
+    ['y', 'variable'],
+    ['=', 'operator'],
+    ['1', 'number'],
+  ]);
+  assertLineFedParity('ruby', code);
+});
+
+void t.test('ruby: character literals in value position', () => {
+  const code =
+    'delim = ?"\nnl = ?\\n\nw = [?(, ?a]\nx = cond ? "a" : "b"\nputs "done"\n';
+  assert.deepEqual(tokenKinds('ruby', code), [
+    ['delim', 'variable'],
+    ['=', 'operator'],
+    ['?"', 'string'],
+    ['nl', 'variable'],
+    ['=', 'operator'],
+    ['?\\n', 'string'],
+    ['w', 'variable'],
+    ['=', 'operator'],
+    ['[', 'punctuation.bracket'],
+    ['?(', 'string'],
+    [',', 'punctuation.delimiter'],
+    ['?a', 'string'],
+    [']', 'punctuation.bracket'],
+    ['x', 'variable'],
+    ['=', 'operator'],
+    ['cond', 'variable'],
+    ['?', 'operator'],
+    ['"a"', 'string'],
+    [':', 'punctuation.delimiter'],
+    ['"b"', 'string'],
+    ['puts', 'function'],
+    ['"done"', 'string'],
+  ]);
+});

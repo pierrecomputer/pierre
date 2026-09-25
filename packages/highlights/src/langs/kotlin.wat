@@ -1,5 +1,6 @@
 (module
   (import "../common.wat")
+  (import "./string-templates.wat")
 
   (func $kotlinByte (param $p i32) (result i32)
     (select (i32.load8_u (local.get $p)) (i32.const 0) (i32.lt_u (local.get $p) (global.get $end))))
@@ -21,7 +22,7 @@
       "val" "var" "enum" "init" "constructor")
     (group $Token.keyword.import "package" "import") ;; 5: import
     (group $Token.keyword.operator "in" "is" "as")     ;; 6: operator keywords
-    (group $Token.keyword ;; 7: modifiers
+    (group $Token.keyword+1024 ;; 7: modifiers, contextual - see $kotlinModifies
       "by" "out" "open" "data" "const" "final" "infix" "inner" "inline" "public" "sealed" "vararg"
       "private" "reified" "suspend" "abstract" "internal" "lateinit" "operator" "override"
       "companion" "protected")
@@ -31,8 +32,35 @@
     (group $Token.constant.builtin "null")         ;; 10: built-in constant
     (group $Token.variable.special "this" "super")) ;; 11: special variables
 
-  ;; Token in the low byte; the high byte selects the next-name capture:
-  ;; 1=function, 2=type.
+  ;; Whether a modifier word ending at $rhs modifies something: another word
+  ;; follows on the line, as in `data class` or `by lazy`, and it is not
+  ;; `in`, `is`, or `as`. Otherwise the word is a name - `val data = …`,
+  ;; `show(data, open)`, `out.append(x)` - since the modifiers are soft
+  ;; keywords that Kotlin code uses freely as identifiers. The blank skip is
+  ;; local: another call site of a shared scan helper in $hlKotlin could
+  ;; stop the engine inlining the hot one.
+  (func $kotlinModifies (param $rhs i32) (result i32)
+    (local $p i32)
+    (local $w i32)
+    (local.set $p (local.get $rhs))
+    (block $done
+      (loop $blank
+        (local.set $w (call $kotlinByte (local.get $p)))
+        (br_if $done (i32.and (i32.ne (local.get $w) (i32.const 32)) (i32.ne (local.get $w) (i32.const 9))))
+        (local.set $p (i32.add (local.get $p) (i32.const 1)))
+        (br $blank)))
+    (if (i32.eqz (call $lexIsIdentStart (call $kotlinByte (local.get $p))))
+      (then (return (i32.const 0))))
+    (if (call $lexIsIdentContinue (call $kotlinByte (i32.add (local.get $p) (i32.const 2))))
+      (then (return (i32.const 1))))
+    (local.set $w (i32.load16_u (local.get $p)))
+    (i32.eqz
+      (i32.or
+        (i32.eq (local.get $w) (i32.const "in"))
+        (i32.or (i32.eq (local.get $w) (i32.const "is")) (i32.eq (local.get $w) (i32.const "as"))))))
+
+  ;; Token in the low byte; bits 8-9 select the next-name capture:
+  ;; 1=function, 2=type. Bit 10 flags a contextual modifier.
   (func $kotlinWordHl (param $lhs i32) (param $rhs i32) (result i32)
     (local $hl i32)
     (local.set $hl (keyword-table.value $kotlinWords (local.get $lhs) (local.get $rhs)))
@@ -68,14 +96,10 @@
   ;; them, so the scan stays linear whether `$` is dense, sparse, or absent.
   (func $kotlinStringBody (param $triple i32) (param $interp i32) (param $seg i32) (result i32)
     (local $c i32)
-    (local $c2 i32)
-    (local $e i32)
-    (local $template i32)
     (local $stop i32)
     (local $dollar i32)
     (local $status i32)
     (local.set $stop (global.get $ptr))
-    (local.set $dollar (global.get $ptr))
     (block $done
       (loop $scan
         (if (i32.ge_u (global.get $ptr) (local.get $stop))
@@ -87,23 +111,17 @@
                 (i32.const 34)
                 (i32.eqz (local.get $triple))
                 (i32.eqz (local.get $triple))))
+            ;; below $ptr, so the `$` search runs for the new stop
+            (local.set $dollar (i32.const 0))))
+        (if (i32.gt_u (global.get $ptr) (local.get $dollar))
+          (then
             (local.set $dollar
               (call $scanFindSpecial
                 (global.get $ptr)
                 (local.get $stop)
                 (i32.const "$")
                 (i32.const 0)
-                (i32.const 0))))
-          (else
-            (if (i32.gt_u (global.get $ptr) (local.get $dollar))
-              (then
-                (local.set $dollar
-                  (call $scanFindSpecial
-                    (global.get $ptr)
-                    (local.get $stop)
-                    (i32.const "$")
-                    (i32.const 0)
-                    (i32.const 0)))))))
+                (i32.const 0)))))
         (global.set $ptr
           (select
             (local.get $dollar)
@@ -138,42 +156,14 @@
           (i32.or (i32.eq (local.get $c) (i32.const 10)) (i32.eq (local.get $c) (i32.const 13))))
         (if (i32.eq (local.get $c) (i32.const 92))
           (then
-            (call $emitTok (enum.get $Token.string) (local.get $seg) (global.get $ptr))
-            (local.set $e (call $lexEscapeEnd (global.get $ptr)))
-            (call $emitTok (enum.get $Token.string.escape) (global.get $ptr) (local.get $e))
-            (global.set $ptr (local.get $e))
-            (local.set $seg (global.get $ptr))
-            (if
-              (i32.and
-                (i32.eq (global.get $ptr) (global.get $end))
-                (i32.or
-                  (i32.eq (i32.load8_u (i32.sub (global.get $ptr) (i32.const 1))) (i32.const 10))
-                  (i32.eq (i32.load8_u (i32.sub (global.get $ptr) (i32.const 1))) (i32.const 13))))
+            (if (call $stringEscapeAt (local.get $seg))
               (then (local.set $status (i32.const 3))))
+            (local.set $seg (global.get $ptr))
             (br $scan)))
         ;; `$`: a template opener when a brace or a name follows
-        (local.set $c2 (call $kotlinByte (i32.add (global.get $ptr) (i32.const 1))))
-        (if (i32.and (i32.eq (local.get $c2) (i32.const "{")) (i32.eqz (local.get $interp)))
-          (then
-            (call $emitTok (enum.get $Token.string) (local.get $seg) (global.get $ptr))
-            ;; the `{` was read below $end, so this cannot overshoot
-            (global.set $ptr (i32.add (global.get $ptr) (i32.const 2)))
-            (call $emitTok
-              (enum.get $Token.punctuation.special)
-              (i32.sub (global.get $ptr) (i32.const 2))
-              (global.get $ptr))
-            (return (i32.const 2))))
-        (if (call $lexIsIdentStart (local.get $c2))
-          (then
-            (call $emitTok (enum.get $Token.string) (local.get $seg) (global.get $ptr))
-            (local.set $template (global.get $ptr))
-            (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
-            (call $lexScanIdent)
-            (call $emitTok (enum.get $Token.variable) (local.get $template) (global.get $ptr))
-            (local.set $seg (global.get $ptr))
-            (br $scan)))
-        (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
-        (br $scan)))
+        (local.set $seg (call $stringDollarAt (local.get $seg) (i32.const 0) (local.get $interp)))
+        (br_if $scan (i32.ge_s (local.get $seg) (i32.const 0)))
+        (return (i32.const 2))))
     (call $emitTok (enum.get $Token.string) (local.get $seg) (global.get $ptr))
     (local.get $status))
 
@@ -278,24 +268,15 @@
 
         ;; a string opener is emitted at once; its body is scanned at the top
         ;; of the loop, where it can also resume after a chunk boundary
-        (if
-          (i32.and
-            (i32.eq (local.get $c) (i32.const 34))
-            (i32.and
-              (i32.eq (local.get $c2) (i32.const 34))
-              (i32.eq (local.get $c3) (i32.const 34))))
-          (then
-            (global.set $ptr (i32.add (global.get $ptr) (i32.const 3)))
-            (call $emitTok (enum.get $Token.string) (local.get $lhs) (global.get $ptr))
-            (local.set $strKind (i32.const 2))
-            (local.set $seg (global.get $ptr))
-            (local.set $member (i32.const 0))
-            (br $next)))
         (if (i32.eq (local.get $c) (i32.const 34))
           (then
+            (local.set $strKind (i32.const 1))
+            (if (i32.and (i32.eq (local.get $c2) (i32.const 34)) (i32.eq (local.get $c3) (i32.const 34)))
+              (then
+                (local.set $strKind (i32.const 2))
+                (global.set $ptr (i32.add (global.get $ptr) (i32.const 2)))))
             (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
             (call $emitTok (enum.get $Token.string) (local.get $lhs) (global.get $ptr))
-            (local.set $strKind (i32.const 1))
             (local.set $seg (global.get $ptr))
             (local.set $member (i32.const 0))
             (br $next)))
@@ -316,12 +297,17 @@
             (call $lexScanIdent)
             (local.set $rhs (global.get $ptr))
             (local.set $kind (call $kotlinWordHl (local.get $lhs) (local.get $rhs)))
+            (if (i32.gt_s (local.get $kind) (i32.const 1023))
+              (then
+                (if (i32.eqz (call $kotlinModifies (local.get $rhs)))
+                  (then (local.set $kind (i32.const -1))))))
             (if (i32.ge_s (local.get $kind) (i32.const 0))
               (then
                 (local.set $hl (i32.and (local.get $kind) (i32.const 255)))
-                (if (i32.shr_u (local.get $kind) (i32.const 8))
+                (if (i32.and (local.get $kind) (i32.const 0x300))
                   (then
-                    (local.set $expect (i32.shr_u (local.get $kind) (i32.const 8)))
+                    (local.set $expect
+                      (i32.and (i32.shr_u (local.get $kind) (i32.const 8)) (i32.const 3)))
                     (local.set $fnAngle (i32.const 0)))))
               (else
                 (local.set $p (call $lexSkipSpaceAt (local.get $rhs)))
@@ -353,7 +339,18 @@
                                 (i32.eq (local.get $expect) (i32.const 1))))
                             (local.set $expect (i32.const 0)))))))
                   (else
-                    (if (i32.eq (call $kotlinByte (local.get $p)) (i32.const "("))
+                    ;; `f(` calls, and so does a trailing lambda: `items.forEach {`,
+                    ;; `launch {` - but a capitalized `Name {` is a type
+                    (if
+                      (i32.or
+                        (i32.eq (call $kotlinByte (local.get $p)) (i32.const "("))
+                        (i32.and
+                          (i32.eq (call $kotlinByte (local.get $p)) (i32.const "{"))
+                          (i32.or
+                            (local.get $member)
+                            (i32.gt_u
+                              (i32.sub (local.get $c) (i32.const "A"))
+                              (i32.const 25)))))
                       (then
                         (local.set $hl
                           (select
@@ -369,7 +366,7 @@
                               (else
                                 (if
                                   (i32.le_u
-                                    (i32.sub (i32.load8_u (local.get $lhs)) (i32.const "A"))
+                                    (i32.sub (local.get $c) (i32.const "A"))
                                     (i32.const 25))
                                   (then (local.set $hl (enum.get $Token.type)))
                                   (else (local.set $hl (enum.get $Token.variable))))))))))))))

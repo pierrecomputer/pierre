@@ -18,6 +18,26 @@ import {
   wordColor,
 } from './_util';
 
+void t.test(
+  'dockerfile: quoted shell option values remain complete strings',
+  () => {
+    for (const quote of ['"', "'"]) {
+      const value = `${quote}Content-Type: application/json${quote}`;
+      const code = `RUN curl --header=${value} https://example.com\n`;
+      assertLineFedParity('dockerfile', code);
+      const kinds = tokenKinds('dockerfile', code);
+      assert.ok(
+        kinds.some(([text, kind]) => text === value && kind === 'string')
+      );
+      assert.ok(
+        kinds.some(
+          ([text, kind]) => text === 'https://example.com' && kind === null
+        )
+      );
+    }
+  }
+);
+
 // one unique color per token type so equal styles cannot merge neighboring
 // spans and hide a classification behind a same-colored token
 const distinct = {
@@ -379,3 +399,73 @@ void t.test('dockerfile: continuations and heredocs stream line-fed', () => {
     '# syntax=docker/dockerfile:1\nFROM node:20 AS build\nRUN npm ci --omit=dev \\\n    && npm cache clean --force \\\n    && echo done\nRUN <<EOF\necho "multi line"\napk add curl\nEOF\nCOPY <<-\'EOT\' /app/x\n\tliteral $var\n\tEOT\nCMD ["node", "server.js"]\n'
   );
 });
+
+void t.test(
+  'dockerfile: comment and empty lines inside a continuation keep it',
+  () => {
+    const code =
+      'RUN apt-get update && \\\n    # install deps\n    apt-get install -y curl && \\\n\n    rm -rf /var/lib/apt/lists/*\nENV A=1\n';
+    assertLineFedParity('dockerfile', code);
+    assert.deepEqual(tokenKinds('dockerfile', code), [
+      ['RUN', 'keyword'],
+      ['apt-get', 'function'],
+      ['update', null],
+      ['&&', 'operator'],
+      ['\\', 'punctuation.special'],
+      ['# install deps', 'comment'],
+      ['apt-get', 'function'],
+      ['install -y curl', null],
+      ['&&', 'operator'],
+      ['\\', 'punctuation.special'],
+      ['rm', 'function'],
+      ['-rf /var/lib/apt/lists/*', null],
+      ['ENV', 'keyword'],
+      ['A', null],
+      ['=', 'operator'],
+      ['1', null],
+    ]);
+  }
+);
+
+void t.test(
+  'dockerfile: option values and wrapped HEALTHCHECK/ONBUILD instructions',
+  () => {
+    const code =
+      'RUN --mount=type=cache,target=/root/.cache pip install -r req.txt\nHEALTHCHECK --interval=5m \\\n  CMD curl -f http://x/ || exit 1\nHEALTHCHECK NONE\nONBUILD RUN make\n';
+    assertLineFedParity('dockerfile', code);
+    assert.deepEqual(tokenKinds('dockerfile', code), [
+      ['RUN', 'keyword'],
+      ['--mount', 'variable.parameter'],
+      ['=type=cache,target=/root/.cache', null],
+      ['pip', 'function'],
+      ['install -r req.txt', null],
+      ['HEALTHCHECK', 'keyword'],
+      ['--interval', 'variable.parameter'],
+      ['=5m', null],
+      ['\\', 'punctuation.special'],
+      ['CMD', 'keyword'],
+      ['curl', 'function'],
+      ['-f http://x/', null],
+      ['||', 'operator'],
+      ['exit', 'function'],
+      ['1', 'number'],
+      ['HEALTHCHECK', 'keyword'],
+      ['NONE', null],
+      ['ONBUILD RUN', 'keyword'],
+      ['make', 'function'],
+    ]);
+    assert.deepEqual(
+      tokenKinds('dockerfile', 'RUN --mount=target=${D}/x,id=$ID pip i'),
+      [
+        ['RUN', 'keyword'],
+        ['--mount', 'variable.parameter'],
+        ['=target=', null],
+        ['${D}', 'variable'],
+        ['/x,id=', null],
+        ['$ID', 'variable'],
+        ['pip', 'function'],
+        ['i', null],
+      ]
+    );
+  }
+);

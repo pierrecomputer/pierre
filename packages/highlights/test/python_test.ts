@@ -596,3 +596,35 @@ void t.test(
     );
   }
 );
+
+void t.test('python: 3.14 t-strings have template fields', () => {
+  const code =
+    'a = t"hi {name}"\nb = tr"\\d {x}"\nc = T"""\n{z}\n"""\nd = br"{x}"\n';
+  assert.deepEqual(tokenKinds('python', code), [
+    ['a', 'variable'],
+    ['=', 'operator'],
+    ['t"hi', 'string'],
+    ['{', 'punctuation.special'],
+    ['name', 'string'],
+    ['}', 'punctuation.special'],
+    ['"', 'string'],
+    ['b', 'variable'],
+    ['=', 'operator'],
+    ['tr"\\d', 'string'],
+    ['{', 'punctuation.special'],
+    ['x', 'string'],
+    ['}', 'punctuation.special'],
+    ['"', 'string'],
+    ['c', 'variable'],
+    ['=', 'operator'],
+    ['T"""', 'string'],
+    ['{', 'punctuation.special'],
+    ['z', 'string'],
+    ['}', 'punctuation.special'],
+    ['"""', 'string'],
+    ['d', 'variable'],
+    ['=', 'operator'],
+    ['br"{x}"', 'string'],
+  ]);
+  assertLineFedParity('python', code);
+});

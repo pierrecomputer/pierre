@@ -1,5 +1,6 @@
 (module
   (import "../common.wat")
+  (import "./string-templates.wat")
 
   (func $swiftByte (param $p i32) (result i32)
     (select (i32.load8_u (local.get $p)) (i32.const 0) (i32.lt_u (local.get $p) (global.get $end))))
@@ -10,8 +11,8 @@
   ;; can never share a table and `where` is matched directly in $swiftWordHl.
   (keyword-table $swiftWords $mem.swiftWords $mem.terraformWords
     (group $Token.keyword.control ;; 1: control
-      "do" "if" "for" "try" "case" "else" "defer" "guard" "while" "break" "catch" "throw" "async"
-      "await" "repeat" "return" "switch" "default" "continue")
+      "do" "try" "case" "else" "defer" "break" "throw" "async" "await" "repeat" "return" "default"
+      "continue")
     (group $Token.keyword.declaration+256 "func") ;; 2: declaration, next name is a function
     (group $Token.keyword.declaration+512 ;; 3: declaration, next name is a type
       "enum" "class" "actor" "struct" "protocol" "typealias" "extension")
@@ -24,11 +25,17 @@
     (group $Token.constant.builtin "nil")          ;; 9: built-in constant
     (group $Token.variable.special "self" "super") ;; 10: special variables
     (group $Token.keyword ;; 11: modifiers
-      "any" "some" "lazy" "weak" "open" "final" "inout" "static" "public" "throws" "private"
-      "unowned" "internal" "mutating" "override" "rethrows" "fileprivate"))
+      "final" "inout" "static" "public" "throws" "private" "unowned" "internal" "mutating"
+      "override" "rethrows" "fileprivate")
+    (group $Token.keyword.control+1024 ;; 12: control that opens a condition
+      "if" "for" "guard" "while" "catch" "switch")
+    (group $Token.keyword+2048 ;; 13: soft modifiers, keywords only before a word
+      "any" "some" "lazy" "weak" "open"))
 
-  ;; Token in the low byte; the high byte selects the next-name capture:
-  ;; 1=function, 2=type.
+  ;; Token in the low byte; bits 8-9 select the next-name capture:
+  ;; 1=function, 2=type. Bit 10 marks a word whose condition runs to the
+  ;; next `{`, where a name before `{` is no trailing-closure call, and bit
+  ;; 11 a soft modifier: `var open = true` names a variable.
   (func $swiftWordHl (param $lhs i32) (param $rhs i32) (result i32)
     (local $hl i32)
     (local.set $hl (keyword-table.value $swiftWords (local.get $lhs) (local.get $rhs)))
@@ -141,11 +148,82 @@
   (func $swiftIsOp (param $c i32) (result i32)
     (byteset.get "!%&*+-/<=>?^|~" (local.get $c)))
 
+  ;; Whether a word starts after the blanks at $p on the same line, as a soft
+  ;; modifier needs: `open class`, `some View`, `[weak self]`. The blank skip
+  ;; is local: another call site of a shared scan helper in $hlSwift could
+  ;; stop the engine inlining the hot one.
+  (func $swiftWordFollows (param $p i32) (result i32)
+    (local $c i32)
+    (block $done
+      (loop $blank
+        (local.set $c (call $swiftByte (local.get $p)))
+        (br_if $done (i32.and (i32.ne (local.get $c) (i32.const 32)) (i32.ne (local.get $c) (i32.const 9))))
+        (local.set $p (i32.add (local.get $p) (i32.const 1)))
+        (br $blank)))
+    (call $lexIsIdentStart (local.get $c)))
+
+  ;; Whether the name [lhs,rhs), with $p its next non-blank byte, is called
+  ;; by something other than a plain `(`: a failable `init?(`/`init!(` head,
+  ;; or a trailing closure - `items.forEach {`, `withAnimation {`. A
+  ;; condition's `{` ($cond) opens its body instead, a capitalized name before
+  ;; `{` is a type, and `get`/`set`/`didSet`/`willSet` open accessor blocks.
+  (func $swiftCallAhead
+    (param $lhs i32)
+    (param $rhs i32)
+    (param $p i32)
+    (param $member i32)
+    (param $cond i32)
+    (result i32)
+    (local $c i32)
+    (local $n i32)
+    (local.set $c (call $swiftByte (local.get $p)))
+    (local.set $n (i32.sub (local.get $rhs) (local.get $lhs)))
+    (if (i32.or (i32.eq (local.get $c) (i32.const "?")) (i32.eq (local.get $c) (i32.const "!")))
+      (then
+        (return
+          (i32.and
+            (i32.and
+              (i32.eqz (local.get $member))
+              (i32.eq (call $swiftByte (i32.add (local.get $p) (i32.const 1))) (i32.const "(")))
+            (i32.and
+              (i32.eq (local.get $n) (i32.const 4))
+              (i32.eq (i32.load (local.get $lhs)) (i32.const "init")))))))
+    (if (i32.or (i32.ne (local.get $c) (i32.const "{")) (local.get $cond))
+      (then (return (i32.const 0))))
+    (if (local.get $member)
+      (then (return (i32.const 1))))
+    (if (i32.le_u (i32.sub (i32.load8_u (local.get $lhs)) (i32.const "A")) (i32.const 25))
+      (then (return (i32.const 0))))
+    (if (i32.eq (local.get $n) (i32.const 3))
+      (then
+        (local.set $c (i32.and (i32.load (local.get $lhs)) (i32.const 0xffffff)))
+        (return
+          (i32.eqz
+            (i32.or
+              (i32.eq (local.get $c) (i32.const "get"))
+              (i32.eq (local.get $c) (i32.const "set")))))))
+    (if (i32.eq (local.get $n) (i32.const 6))
+      (then
+        (return
+          (i64.ne
+            (i64.and (i64.load (local.get $lhs)) (i64.const 0xffffffffffff))
+            (i64.const "didSet")))))
+    (if (i32.eq (local.get $n) (i32.const 7))
+      (then
+        (return
+          (i64.ne
+            (i64.and (i64.load (local.get $lhs)) (i64.const 0xffffffffffffff))
+            (i64.const "willSet")))))
+    (i32.const 1))
+
   ;; $stringMode marks an open `"` body with $seg the start of its bytes not
   ;; yet emitted - zero across a chunk boundary, where the body resumes at
   ;; the chunk start; $interp counts parens inside a `\(` interpolation; and
   ;; $rawOpen holds an open hash-delimited or triple-quoted body as packed by
-  ;; $swiftHashOpen. All of these are checkpointed between stream chunks.
+  ;; $swiftHashOpen; $cond marks open conditions by paren/bracket depth
+  ;; ($condParen). A closure argument can have its own condition without
+  ;; clearing the enclosing one. All are
+  ;; checkpointed between stream chunks.
   (func $hlSwift
     (local $c i32)
     (local $c2 i32)
@@ -164,6 +242,8 @@
     (local $stringMode i32)
     (local $openedInterp i32)
     (local $rawOpen i32)
+    (local $cond i32)
+    (local $condParen i32)
     (call $lexEmitLeadingContinuation)
     (block $done
       (loop $next
@@ -233,23 +313,11 @@
                         (local.set $interp (i32.const 1))
                         (local.set $openedInterp (i32.const 1))
                         (br $stringDone)))
-                    (call $emitTok (enum.get $Token.string) (local.get $seg) (global.get $ptr))
-                    (local.set $e (call $lexEscapeEnd (global.get $ptr)))
-                    (call $emitTok (enum.get $Token.string.escape) (global.get $ptr) (local.get $e))
-                    (global.set $ptr (local.get $e))
+                    (local.set $e (call $stringEscapeAt (local.get $seg)))
                     (local.set $seg (global.get $ptr))
                     ;; an escaped line break ending at $end continues the
                     ;; string in the next chunk
-                    (if
-                      (i32.and
-                        (i32.eq (global.get $ptr) (global.get $end))
-                        (i32.or
-                          (i32.eq
-                            (i32.load8_u (i32.sub (global.get $ptr) (i32.const 1)))
-                            (i32.const 10))
-                          (i32.eq
-                            (i32.load8_u (i32.sub (global.get $ptr) (i32.const 1)))
-                            (i32.const 13))))
+                    (if (local.get $e)
                       (then
                         (local.set $stringMode (i32.const 1))
                         (local.set $seg (i32.const 0))
@@ -295,11 +363,13 @@
                 (i32.eq (local.get $c3) (i32.const "*"))))
             (br $next)))
 
-        (if (i32.and (i32.eq (local.get $c) (i32.const "#")) (call $swiftRawStart))
+        (if (i32.eq (local.get $c) (i32.const "#"))
           (then
-            (local.set $rawOpen (call $swiftHashOpen))
-            (local.set $member (i32.const 0))
-            (br $next)))
+            (if (call $swiftRawStart)
+              (then
+                (local.set $rawOpen (call $swiftHashOpen))
+                (local.set $member (i32.const 0))
+                (br $next)))))
         (if
           (i32.and
             (i32.eq (local.get $c) (i32.const 34))
@@ -341,11 +411,38 @@
             (call $lexScanIdent)
             (local.set $rhs (global.get $ptr))
             (local.set $kind (call $swiftWordHl (local.get $lhs) (local.get $rhs)))
+            (if (i32.gt_s (local.get $kind) (i32.const 2047))
+              (then
+                (if (i32.eqz (call $swiftWordFollows (local.get $rhs)))
+                  (then (local.set $kind (i32.const -1))))))
             (if (i32.ge_s (local.get $kind) (i32.const 0))
               (then
                 (local.set $hl (i32.and (local.get $kind) (i32.const 255)))
-                (if (i32.shr_u (local.get $kind) (i32.const 8))
-                  (then (local.set $expect (i32.shr_u (local.get $kind) (i32.const 8))))))
+                (if (i32.and (local.get $kind) (i32.const 0x300))
+                  (then
+                    (local.set $expect
+                      (i32.and (i32.shr_u (local.get $kind) (i32.const 8)) (i32.const 3))))
+                  (else
+                    ;; `let`/`var` end a pending type capture: `class var
+                    ;; shared`; `subscript(` opens a parameter list, like a
+                    ;; func head
+                    (if (i32.eq (local.get $kind) (enum.get $Token.keyword.declaration))
+                      (then
+                        (local.set $expect (i32.const 0))
+                        (if
+                          (i32.and
+                            (i32.eq (i32.sub (local.get $rhs) (local.get $lhs)) (i32.const 9))
+                            (i64.eq (i64.load (local.get $lhs)) (i64.const "subscrip")))
+                          (then
+                            (global.set $sigFnPend (i32.const 1))
+                            (global.set $sigFnAngle (i32.const 0))))))))
+                (if
+                  (i32.and
+                    (i32.ne (i32.and (local.get $kind) (i32.const 1024)) (i32.const 0))
+                    (i32.lt_u (local.get $condParen) (i32.const 32)))
+                  (then
+                    (local.set $cond
+                      (i32.or (local.get $cond) (i32.shl (i32.const 1) (local.get $condParen)))))))
               (else
                 (local.set $p (call $lexSkipSpaceAt (local.get $rhs)))
                 (if (local.get $expect)
@@ -363,14 +460,34 @@
                         (global.set $sigFnAngle (i32.const 0))))
                     (local.set $expect (i32.const 0)))
                   (else
-                    (if (i32.eq (call $swiftByte (local.get $p)) (i32.const "("))
+                    (local.set $c2 (call $swiftByte (local.get $p)))
+                    (if
+                      (if (result i32) (i32.eq (local.get $c2) (i32.const "("))
+                        (then (i32.const 1))
+                        (else
+                          (if (result i32)
+                            (i32.or
+                              (i32.eq (local.get $c2) (i32.const "{"))
+                              (i32.or
+                                (i32.eq (local.get $c2) (i32.const "?"))
+                                (i32.eq (local.get $c2) (i32.const "!"))))
+                            (then
+                              (call $swiftCallAhead
+                                (local.get $lhs)
+                                (local.get $rhs)
+                                (local.get $p)
+                                (local.get $member)
+                                (if (result i32) (i32.lt_u (local.get $condParen) (i32.const 32))
+                                  (then (i32.and (local.get $cond) (i32.shl (i32.const 1) (local.get $condParen))))
+                                  (else (i32.const 0)))))
+                            (else (i32.const 0)))))
                       (then
                         (local.set $hl
                           (select
                             (enum.get $Token.function.method)
                             (enum.get $Token.function)
                             (local.get $member)))
-                        ;; a bare `init(` head opens a parameter list too
+                        ;; a bare `init(` or `init?(` head opens a parameter list too
                         (if
                           (i32.and
                             (i32.eqz (local.get $member))
@@ -448,6 +565,24 @@
                   (then (local.set $interp (i32.add (local.get $interp) (i32.const 1)))))
                 (if (i32.eq (local.get $c) (i32.const ")"))
                   (then (local.set $interp (i32.sub (local.get $interp) (i32.const 1)))))))
+            (if
+              (i32.and
+                (i32.lt_u (local.get $condParen) (i32.const 32))
+                (i32.or
+                  (i32.or (i32.eq (local.get $c) (i32.const "{")) (i32.eq (local.get $c) (i32.const "}")))
+                  (i32.or (i32.eq (local.get $c) (i32.const ")")) (i32.eq (local.get $c) (i32.const "]")))))
+              (then
+                (local.set $cond
+                  (i32.and
+                    (local.get $cond)
+                    (i32.xor (i32.shl (i32.const 1) (local.get $condParen)) (i32.const -1))))))
+            (if (i32.or (i32.eq (local.get $c) (i32.const "(")) (i32.eq (local.get $c) (i32.const "[")))
+              (then (local.set $condParen (i32.add (local.get $condParen) (i32.const 1)))))
+            (if
+              (i32.and
+                (i32.ne (local.get $condParen) (i32.const 0))
+                (i32.or (i32.eq (local.get $c) (i32.const ")")) (i32.eq (local.get $c) (i32.const "]"))))
+              (then (local.set $condParen (i32.sub (local.get $condParen) (i32.const 1)))))
             ;; parameter machine: a paren may open the armed func list and
             ;; puts the next name in parameter position; other brackets
             ;; inside a marked list obscure its top level
@@ -503,11 +638,16 @@
             ;; a comma returns to parameter position; `:`/`;` leave it, and a
             ;; top-level `;` proves the marked list was not a parameter list
             (global.set $sigPattern (i32.eq (local.get $c) (i32.const ",")))
-            (if
-              (i32.and
-                (i32.eq (local.get $c) (i32.const ";"))
-                (i32.and (call $sigActive) (i32.eqz (global.get $sigObscure))))
-              (then (call $sigUnmark)))
+            (if (i32.eq (local.get $c) (i32.const ";"))
+              (then
+                (if (i32.lt_u (local.get $condParen) (i32.const 32))
+                  (then
+                    (local.set $cond
+                      (i32.and
+                        (local.get $cond)
+                        (i32.xor (i32.shl (i32.const 1) (local.get $condParen)) (i32.const -1))))))
+                (if (i32.and (call $sigActive) (i32.eqz (global.get $sigObscure)))
+                  (then (call $sigUnmark)))))
             (br $next)))
         (if (i32.eq (local.get $c) (i32.const "."))
           (then
@@ -548,9 +688,27 @@
                 (br $op)))
             (call $emitTok (enum.get $Token.operator) (local.get $lhs) (global.get $ptr))
             (local.set $member (i32.const 0))
-            ;; a pending func head rides `<`/`>` generic operators
-            (if (global.get $sigFnPend)
-              (then (call $sigAngleOps (local.get $lhs) (global.get $ptr))))
+            (if (i32.eq (local.get $expect) (i32.const 1))
+              (then
+                ;; an operator function's name: `static func == (lhs:`
+                (local.set $expect (i32.const 0))
+                (global.set $sigFnPend (i32.const 1))
+                (global.set $sigFnAngle (i32.const 0)))
+              (else
+                ;; a pending func head rides `<`/`>` generic operators, and
+                ;; `init?(` keeps its head across the `?`
+                (if (global.get $sigFnPend)
+                  (then
+                    (if
+                      (i32.eqz
+                        (i32.and
+                          (i32.eq (i32.sub (global.get $ptr) (local.get $lhs)) (i32.const 1))
+                          (i32.and
+                            (i32.or
+                              (i32.eq (local.get $c) (i32.const "?"))
+                              (i32.eq (local.get $c) (i32.const "!")))
+                            (i32.eq (call $swiftByte (global.get $ptr)) (i32.const "(")))))
+                      (then (call $sigAngleOps (local.get $lhs) (global.get $ptr))))))))
             (global.set $sigPattern (i32.const 0))
             (br $next)))
 

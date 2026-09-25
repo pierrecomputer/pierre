@@ -320,12 +320,71 @@
       (then (call $streamSetFixed (local.get $lhs) (local.get $n) (enum.get $Token.string))))
     (i32.const 1))
 
+  ;; Whether the name at $lhs follows INTO or TABLE, through blanks and one
+  ;; `schema.` qualifier: there a glued `t(a, b)` is the table and its column
+  ;; list rather than a call. The walk back stays on the current line, which
+  ;; is where every stream chunk starts, so whole-buffer and line-fed runs
+  ;; agree without carrying state.
+  (func $sqlTableBefore (param $lhs i32) (result i32)
+    (local $p i32)
+    (local $w i32)
+    (local.set $p (local.get $lhs))
+    (if
+      (i32.and
+        (i32.gt_u (local.get $p) (global.get $srcBase))
+        (i32.eq (i32.load8_u (i32.sub (local.get $p) (i32.const 1))) (i32.const ".")))
+      (then
+        (local.set $p (i32.sub (local.get $p) (i32.const 1)))
+        (block $qualDone
+          (loop $qual
+            (br_if $qualDone (i32.le_u (local.get $p) (global.get $srcBase)))
+            (br_if $qualDone
+              (i32.eqz
+                (call $lexIsIdentContinue (i32.load8_u (i32.sub (local.get $p) (i32.const 1))))))
+            (local.set $p (i32.sub (local.get $p) (i32.const 1)))
+            (br $qual)))))
+    (block $blankDone
+      (loop $blank
+        (br_if $blankDone (i32.le_u (local.get $p) (global.get $srcBase)))
+        (local.set $w (i32.load8_u (i32.sub (local.get $p) (i32.const 1))))
+        (br_if $blankDone
+          (i32.and (i32.ne (local.get $w) (i32.const 32)) (i32.ne (local.get $w) (i32.const 9))))
+        (local.set $p (i32.sub (local.get $p) (i32.const 1)))
+        (br $blank)))
+    (local.set $w (local.get $p))
+    (block $wordDone
+      (loop $word
+        (br_if $wordDone (i32.le_u (local.get $p) (global.get $srcBase)))
+        (br_if $wordDone
+          (i32.eqz (call $lexIsIdentContinue (i32.load8_u (i32.sub (local.get $p) (i32.const 1))))))
+        (local.set $p (i32.sub (local.get $p) (i32.const 1)))
+        (br $word)))
+    (local.set $w (i32.sub (local.get $w) (local.get $p)))
+    (i32.or
+      (i32.and
+        (i32.eq (local.get $w) (i32.const 4))
+        (i32.eq
+          (i32.or (i32.load (local.get $p)) (i32.const 0x20202020))
+          (i32.const "into")))
+      (i32.and
+        (i32.eq (local.get $w) (i32.const 5))
+        (i64.eq
+          (i64.and
+            (i64.or (i64.load (local.get $p)) (i64.const 0x2020202020))
+            (i64.const 0xffffffffff))
+          (i64.const "table")))))
+
+  ;; $temp is 1 when the token is a T-SQL temp table name, `#name` or
+  ;; `##name`. The name after the hashes is re-derived from $next where it is
+  ;; scanned, so no position carries between tokens: every local here is
+  ;; dead at the loop head and the stream checkpoint stays empty.
   (func $hlSql
     (local $c i32)
     (local $hl i32)
     (local $lhs i32)
     (local $next i32)
     (local $p i32)
+    (local $temp i32)
     (call $lexEmitLeadingContinuation)
     (block $done
       (loop $token
@@ -341,12 +400,38 @@
             (i32.const 0)
             (i32.lt_u (i32.add (global.get $ptr) (i32.const 1)) (global.get $end))))
 
+        ;; `#` is MySQL's line comment only where no other dialect gives it
+        ;; a meaning: PostgreSQL's `#>`, `#>>` and `#-` are JSON operators,
+        ;; and a `#`/`##` glued to a name is a T-SQL temp table
+        (local.set $temp (i32.const 0))
+        (if (i32.eq (local.get $c) (i32.const "#"))
+          (then
+            (if (i32.or (i32.eq (local.get $next) (i32.const ">")) (i32.eq (local.get $next) (i32.const "-")))
+              (then
+                (global.set $ptr (i32.add (global.get $ptr) (i32.const 2)))
+                (if
+                  (i32.and
+                    (i32.eq (local.get $next) (i32.const ">"))
+                    (i32.and
+                      (i32.lt_u (global.get $ptr) (global.get $end))
+                      (i32.eq (i32.load8_u (global.get $ptr)) (i32.const ">"))))
+                  (then (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))))
+                (call $emitTok (enum.get $Token.operator) (local.get $lhs) (global.get $ptr))
+                (br $token)))
+            (local.set $p
+              (i32.add
+                (global.get $ptr)
+                (select (i32.const 2) (i32.const 1) (i32.eq (local.get $next) (i32.const "#")))))
+            (local.set $temp
+              (i32.and
+                (i32.lt_u (local.get $p) (global.get $end))
+                (call $lexIsIdentStart (i32.load8_u (local.get $p)))))))
         (if
           (i32.or
             (i32.and
               (i32.eq (local.get $c) (i32.const "-"))
               (i32.eq (local.get $next) (i32.const "-")))
-            (i32.eq (local.get $c) (i32.const "#")))
+            (i32.and (i32.eq (local.get $c) (i32.const "#")) (i32.eqz (local.get $temp))))
           (then
             (call $lexLineComment
               (select (i32.const 2) (i32.const 1) (i32.eq (local.get $c) (i32.const "-")))
@@ -385,17 +470,32 @@
             (call $lexScanNumber)
             (call $emitTok (enum.get $Token.number) (local.get $lhs) (global.get $ptr))
             (br $token)))
-        (if (call $lexIsIdentStart (local.get $c))
+        ;; A name is a call only with its `(` glued on - `COUNT(*)`, `NOW()` -
+        ;; since `INSERT INTO t (a, b)` and `CREATE TABLE users (` put a
+        ;; column list after a blank; right after INTO or TABLE, through a
+        ;; schema prefix such as `dbo.`, even a glued list belongs to the
+        ;; table. Temp table names skip the keywords.
+        (if (i32.or (call $lexIsIdentStart (local.get $c)) (local.get $temp))
           (then
-            (call $lexScanIdent)
-            (local.set $hl (call $sqlWordHl (local.get $lhs) (global.get $ptr)))
-            (if (i32.eq (local.get $hl) (enum.get $Token.variable))
+            (local.set $hl (enum.get $Token.variable))
+            (if (local.get $temp)
               (then
-                (local.set $p (call $lexSkipSpaceAt (global.get $ptr)))
-                (if
-                  (i32.and
-                    (i32.lt_u (local.get $p) (global.get $end))
-                    (i32.eq (i32.load8_u (local.get $p)) (i32.const "(")))
+                (global.set $ptr
+                  (i32.add
+                    (global.get $ptr)
+                    (select (i32.const 2) (i32.const 1) (i32.eq (local.get $next) (i32.const "#")))))
+                (call $lexScanIdent))
+              (else
+                (call $lexScanIdent)
+                (local.set $hl (call $sqlWordHl (local.get $lhs) (global.get $ptr)))))
+            (if
+              (i32.and
+                (i32.eq (local.get $hl) (enum.get $Token.variable))
+                (i32.and
+                  (i32.lt_u (global.get $ptr) (global.get $end))
+                  (i32.eq (i32.load8_u (global.get $ptr)) (i32.const "("))))
+              (then
+                (if (i32.eqz (call $sqlTableBefore (local.get $lhs)))
                   (then (local.set $hl (enum.get $Token.function))))))
             (call $emitTok (local.get $hl) (local.get $lhs) (global.get $ptr))
             (br $token)))

@@ -4,31 +4,30 @@
   (func $protoByte (param $p i32) (result i32)
     (select (i32.load8_u (local.get $p)) (i32.const 0) (i32.lt_u (local.get $p) (global.get $end))))
 
-  ;; Group order is the dispatch order in $protoWordHl below. `required` and
-  ;; `reserved` are absent on purpose: the table hash sees only the first two
-  ;; bytes, the last byte, and the length, which `repeated` shares, so
+  ;; Each value is the token in the low byte and the next-name capture
+  ;; above it: 1 type, 2 function, 3 namespace. `required` and `reserved`
+  ;; are absent on purpose: the table hash sees only the first two bytes,
+  ;; the last byte, and the length, which `repeated` shares, so
   ;; $protoWordHl matches both directly.
   (keyword-table $protoWords $mem.protoWords $mem.pythonWords
-    (group ;; 1: declaration, next name is a type
-      "enum" "extend" "message" "service")
-    (group "rpc")     ;; 2: declaration, next name is a function
-    (group "package") ;; 3: declaration, next name is a namespace
-    (group "import")  ;; 4: import
-    (group ;; 5: keywords
+    (group $Token.keyword.declaration+256 "enum" "extend" "message" "service")
+    (group $Token.keyword.declaration+512 "rpc")
+    (group $Token.keyword.declaration+768 "package")
+    (group $Token.keyword.import "import")
+    (group $Token.keyword
       "to" "map" "max" "weak" "group" "oneof" "syntax" "option" "public" "stream" "edition"
       "returns" "optional" "repeated" "extensions")
-    (group ;; 6: scalar types
+    (group $Token.type.builtin
       "bool" "bytes" "float" "int32" "int64" "double" "string" "sint32" "sint64" "uint32" "uint64"
       "fixed32" "fixed64" "sfixed32" "sfixed64")
-    (group "true" "false")) ;; 7: booleans
+    (group $Token.boolean "true" "false"))
 
-  ;; Token in the low byte; the high byte selects the next-name capture:
-  ;; 1=type, 2=function, 3=namespace. -1 means an ordinary identifier.
+  ;; The table value of [lhs,rhs), or -1 for an ordinary identifier.
   (func $protoWordHl (param $lhs i32) (param $rhs i32) (result i32)
     (local $g i32)
     (local $w i64)
-    (local.set $g (keyword-table.get $protoWords (local.get $lhs) (local.get $rhs)))
-    (if (i32.eqz (local.get $g))
+    (local.set $g (keyword-table.value $protoWords (local.get $lhs) (local.get $rhs)))
+    (if (i32.lt_s (local.get $g) (i32.const 0))
       (then
         ;; the two words the table cannot hold; the wide load stays inside
         ;; the input slack, as in the table's own compare
@@ -39,19 +38,8 @@
               (i32.or
                 (i64.eq (local.get $w) (i64.const "required"))
                 (i64.eq (local.get $w) (i64.const "reserved")))
-              (then (return (enum.get $Token.keyword))))))
-        (return (i32.const -1))))
-    (if (i32.le_u (local.get $g) (i32.const 3))
-      (then
-        (return
-          (i32.or (enum.get $Token.keyword.declaration) (i32.shl (local.get $g) (i32.const 8))))))
-    (if (i32.eq (local.get $g) (i32.const 4))
-      (then (return (enum.get $Token.keyword.import))))
-    (if (i32.eq (local.get $g) (i32.const 5))
-      (then (return (enum.get $Token.keyword))))
-    (if (i32.eq (local.get $g) (i32.const 6))
-      (then (return (enum.get $Token.type.builtin))))
-    (enum.get $Token.boolean))
+              (then (return (enum.get $Token.keyword))))))))
+    (local.get $g))
 
   ;; $expect is the pending next-name capture from $protoWordHl and $member
   ;; is 1 after `.`, where a lowercase name is a package segment and a
@@ -100,6 +88,8 @@
             (call $lexScanIdent)
             (local.set $rhs (global.get $ptr))
             (local.set $p (call $lexSkipSpaceAt (local.get $rhs)))
+            ;; the byte after the name and its blanks
+            (local.set $c2 (call $protoByte (local.get $p)))
             (local.set $kind
               (select
                 (i32.const -1)
@@ -124,13 +114,13 @@
                     (if
                       (i32.or
                         (i32.ne (local.get $expect) (i32.const 3))
-                        (i32.ne (call $protoByte (local.get $p)) (i32.const ".")))
+                        (i32.ne (local.get $c2) (i32.const ".")))
                       (then (local.set $expect (i32.const 0)))))
                   (else
                     (if (call $lexIsConstCase (local.get $lhs) (local.get $rhs))
                       (then (local.set $hl (enum.get $Token.constant)))
                       (else
-                        (if (i32.eq (call $protoByte (local.get $p)) (i32.const "="))
+                        (if (i32.eq (local.get $c2) (i32.const "="))
                           (then (local.set $hl (enum.get $Token.property)))
                           (else
                             (if
@@ -146,7 +136,7 @@
                                     (i32.or
                                       (local.get $member)
                                       (i32.eq
-                                        (call $protoByte (local.get $p))
+                                        (local.get $c2)
                                         (i32.const ".")))))))))))))))
             (call $emitTok (local.get $hl) (local.get $lhs) (local.get $rhs))
             (local.set $member (i32.const 0))

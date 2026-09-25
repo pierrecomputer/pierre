@@ -410,3 +410,113 @@ void t.test('lisp: block comments and multi-line forms stream line-fed', () => {
     '#| a\n b |#\n(defun f (x)\n  "doc\n string"\n  (+ x 1))\n'
   );
 });
+
+void t.test('lisp: parameter and let binding lists bind variables', () => {
+  const code = '(defun add (a b)\n  (let ((x 1) (y (f 2)))\n    (+ a b x y)))';
+  assertLineFedParity('lisp', code);
+  assert.deepEqual(tokenKinds('lisp', code), [
+    ['(', 'punctuation.bracket'],
+    ['defun', 'keyword.declaration'],
+    ['add', 'function.definition'],
+    ['(', 'punctuation.bracket'],
+    ['a b', 'variable'],
+    [')', 'punctuation.bracket'],
+    ['(', 'punctuation.bracket'],
+    ['let', 'keyword'],
+    ['((', 'punctuation.bracket'],
+    ['x', 'variable'],
+    ['1', 'number'],
+    [') (', 'punctuation.bracket'],
+    ['y', 'variable'],
+    ['(', 'punctuation.bracket'],
+    ['f', 'function'],
+    ['2', 'number'],
+    [')))', 'punctuation.bracket'],
+    ['(', 'punctuation.bracket'],
+    ['+', 'function'],
+    ['a b x y', 'variable'],
+    [')))', 'punctuation.bracket'],
+  ]);
+});
+
+void t.test('lisp: flet, lambda, named let, and Scheme define', () => {
+  const code =
+    '(flet ((helper (n) (* n 2))) (helper 3))\n(lambda (x) x)\n(define (square x) (* x x))\n(let iter ((i 0)) (iter i))';
+  assertLineFedParity('lisp', code);
+  assert.deepEqual(tokenKinds('lisp', code), [
+    ['(', 'punctuation.bracket'],
+    ['flet', 'keyword'],
+    ['((', 'punctuation.bracket'],
+    ['helper', 'function.definition'],
+    ['(', 'punctuation.bracket'],
+    ['n', 'variable'],
+    [') (', 'punctuation.bracket'],
+    ['*', 'function'],
+    ['n', 'variable'],
+    ['2', 'number'],
+    ['))) (', 'punctuation.bracket'],
+    ['helper', 'function'],
+    ['3', 'number'],
+    ['))', 'punctuation.bracket'],
+    ['(', 'punctuation.bracket'],
+    ['lambda', 'keyword'],
+    ['(', 'punctuation.bracket'],
+    ['x', 'variable'],
+    [')', 'punctuation.bracket'],
+    ['x', 'variable'],
+    [')', 'punctuation.bracket'],
+    ['(', 'punctuation.bracket'],
+    ['define', 'keyword.declaration'],
+    ['(', 'punctuation.bracket'],
+    ['square', 'function.definition'],
+    ['x', 'variable'],
+    [') (', 'punctuation.bracket'],
+    ['*', 'function'],
+    ['x x', 'variable'],
+    ['))', 'punctuation.bracket'],
+    ['(', 'punctuation.bracket'],
+    ['let', 'keyword'],
+    ['iter', 'function.definition'],
+    ['((', 'punctuation.bracket'],
+    ['i', 'variable'],
+    ['0', 'number'],
+    [')) (', 'punctuation.bracket'],
+    ['iter', 'function'],
+    ['i', 'variable'],
+    ['))', 'punctuation.bracket'],
+  ]);
+});
+
+void t.test('lisp: exponent markers, character escapes, and banners', () => {
+  const code =
+    '(setq a 1.5d0 b 1.0f0 c 1.5D-3 d 1+ e e1)\n(insert ?\\( ?\\\\)\n(list #\\\nfoo)\n#| |||| (x #| y |#) |||| |#\n(f)';
+  assertLineFedParity('lisp', code);
+  assert.deepEqual(tokenKinds('lisp', code), [
+    ['(', 'punctuation.bracket'],
+    ['setq', 'keyword'],
+    ['a', 'variable'],
+    ['1.5d0', 'number'],
+    ['b', 'variable'],
+    ['1.0f0', 'number'],
+    ['c', 'variable'],
+    ['1.5D-3', 'number'],
+    ['d', 'variable'],
+    ['1+', 'operator'],
+    ['e e1', 'variable'],
+    [')', 'punctuation.bracket'],
+    ['(', 'punctuation.bracket'],
+    ['insert', 'function'],
+    ['?\\( ?\\\\', 'string.special'],
+    [')', 'punctuation.bracket'],
+    ['(', 'punctuation.bracket'],
+    ['list', 'function'],
+    // `#\` before a line break leaves the next line's symbol alone
+    ['#\\', 'string.special'],
+    ['foo', 'variable'],
+    [')', 'punctuation.bracket'],
+    ['#| |||| (x #| y |#) |||| |#', 'comment'],
+    ['(', 'punctuation.bracket'],
+    ['f', 'function'],
+    [')', 'punctuation.bracket'],
+  ]);
+});

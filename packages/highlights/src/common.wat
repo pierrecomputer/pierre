@@ -298,6 +298,178 @@
         (global.set $streamB (local.get $multiline))
         (global.set $streamHl (local.get $hl)))))
 
+  ;; End of the C escape that starts at the backslash $p, so the whole escape
+  ;; is one string.escape span: `\uXXXX`, `\UXXXXXXXX`, a hex run `\x…`
+  ;; (bounded to 64 digits), up to three octal digits, a named `\N{…}` that
+  ;; stops at its `}` or before a quote, backslash, or line break, or else one
+  ;; escaped character or line continuation ($lexEscapeEnd). An escaped
+  ;; multibyte UTF-8 character stays whole. Clamped to $end.
+  (func $lexCEscapeEnd (param $p i32) (result i32)
+    (local $c i32)
+    (local $e i32)
+    (local.set $c
+      (select
+        (i32.load8_u offset=1 (local.get $p))
+        (i32.const 0)
+        (i32.lt_u (i32.add (local.get $p) (i32.const 1)) (global.get $end))))
+    (local.set $e (i32.add (local.get $p) (i32.const 2)))
+    (block $done
+      (if (i32.eq (local.get $c) (i32.const "u"))
+        (then
+          (local.set $e (call $scanHexRun (local.get $e) (i32.const 4)))
+          (br $done)))
+      (if (i32.eq (local.get $c) (i32.const "U"))
+        (then
+          (local.set $e (call $scanHexRun (local.get $e) (i32.const 8)))
+          (br $done)))
+      (if (i32.eq (local.get $c) (i32.const "x"))
+        (then
+          (local.set $e (call $scanHexRun (local.get $e) (i32.const 64)))
+          (br $done)))
+      (if
+        (i32.and
+          (i32.eq (local.get $c) (i32.const "N"))
+          (i32.and
+            (i32.lt_u (local.get $e) (global.get $end))
+            (i32.eq (i32.load8_u (local.get $e)) (i32.const "{"))))
+        (then
+          (local.set $e (i32.add (local.get $e) (i32.const 1)))
+          (loop $named
+            (br_if $done (i32.ge_u (local.get $e) (global.get $end)))
+            (local.set $c (i32.load8_u (local.get $e)))
+            (br_if $done
+              (i32.or
+                (i32.or (i32.eq (local.get $c) (i32.const 10)) (i32.eq (local.get $c) (i32.const 13)))
+                (i32.or
+                  (i32.eq (local.get $c) (i32.const 34))
+                  (i32.or (i32.eq (local.get $c) (i32.const 39)) (i32.eq (local.get $c) (i32.const 92))))))
+            (local.set $e (i32.add (local.get $e) (i32.const 1)))
+            (br_if $done (i32.eq (local.get $c) (i32.const "}")))
+            (br $named))))
+      (if (i32.le_u (i32.sub (local.get $c) (i32.const "0")) (i32.const 7))
+        (then
+          ;; the first digit is already in; take up to two more
+          (loop $oct
+            (br_if $done
+              (i32.or
+                (i32.ge_u (local.get $e) (global.get $end))
+                (i32.ge_u (i32.sub (local.get $e) (local.get $p)) (i32.const 4))))
+            (br_if $done
+              (i32.gt_u (i32.sub (i32.load8_u (local.get $e)) (i32.const "0")) (i32.const 7)))
+            (local.set $e (i32.add (local.get $e) (i32.const 1)))
+            (br $oct))))
+      (local.set $e (call $lexEscapeEnd (local.get $p))))
+    (call $utf8SpanEnd (local.get $e) (global.get $end)))
+
+  ;; Scan a C-family literal body from $ptr, whose bytes from $seg on are
+  ;; still unemitted: the body as $hl and each C escape ($lexCEscapeEnd) as
+  ;; string.escape. A backslash before a line break continues the literal.
+  ;; With $suffix set, an identifier glued to the closing quote (a C++
+  ;; user-defined-literal suffix) joins the literal. Returns 1 after the
+  ;; closing quote, 2 when the scan reached $end right after an escaped line
+  ;; break - the caller resumes the literal in the next chunk through its own
+  ;; checkpointed local, because the shared string mode would resume with
+  ;; generic escapes - or 0 when a raw line break or $end left it unterminated.
+  (func $lexCStringBody (param $q i32) (param $hl i32) (param $seg i32) (param $suffix i32) (result i32)
+    (local $c i32)
+    (local $e i32)
+    (local $status i32)
+    (block $done
+      (loop $scan
+        ;; hop to the next quote, backslash, or line break, 16 bytes per step
+        (global.set $ptr
+          (call $scanFindSpecial
+            (global.get $ptr)
+            (global.get $end)
+            (local.get $q)
+            (i32.const 1)
+            (i32.const 1)))
+        (br_if $done (i32.ge_u (global.get $ptr) (global.get $end)))
+        (local.set $c (i32.load8_u (global.get $ptr)))
+        (if (i32.eq (local.get $c) (local.get $q))
+          (then
+            (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
+            (if (local.get $suffix)
+              (then
+                (if
+                  (i32.and
+                    (i32.lt_u (global.get $ptr) (global.get $end))
+                    (call $lexIsIdentStart (i32.load8_u (global.get $ptr))))
+                  (then (call $lexScanIdent)))))
+            (local.set $status (i32.const 1))
+            (br $done)))
+        ;; a raw line break: unterminated, left unconsumed
+        (br_if $done (i32.ne (local.get $c) (i32.const 92)))
+        (call $emitTok (local.get $hl) (local.get $seg) (global.get $ptr))
+        (local.set $e (call $lexCEscapeEnd (global.get $ptr)))
+        (call $emitTok (enum.get $Token.string.escape) (global.get $ptr) (local.get $e))
+        (global.set $ptr (local.get $e))
+        (local.set $seg (local.get $e))
+        ;; an escaped line break that ends the chunk leaves the literal open
+        (if
+          (i32.and
+            (i32.eq (global.get $ptr) (global.get $end))
+            (i32.or
+              (i32.eq (i32.load8_u (i32.sub (global.get $ptr) (i32.const 1))) (i32.const 10))
+              (i32.eq (i32.load8_u (i32.sub (global.get $ptr) (i32.const 1))) (i32.const 13))))
+          (then
+            (local.set $status (i32.const 2))
+            (br $done)))
+        (br $scan)))
+    (call $emitTok (local.get $hl) (local.get $seg) (global.get $ptr))
+    (local.get $status))
+
+  ;; A C-family literal whose opening quote sits at $ptr (any prefix already
+  ;; emitted), without a suffix. Returns the quote byte when the chunk ended
+  ;; right after an escaped line break inside it - the caller keeps that in a
+  ;; checkpointed local and resumes with $lexCStringBody - and 0 otherwise.
+  (func $lexCString (param $hl i32) (result i32)
+    (local $lhs i32)
+    (local $q i32)
+    (local.set $lhs (global.get $ptr))
+    (local.set $q (i32.load8_u (local.get $lhs)))
+    (global.set $ptr (i32.add (local.get $lhs) (i32.const 1)))
+    (select
+      (local.get $q)
+      (i32.const 0)
+      (i32.eq
+        (call $lexCStringBody (local.get $q) (local.get $hl) (local.get $lhs) (i32.const 0))
+        (i32.const 2))))
+
+  ;; The nearest byte before $p on its line that is not a blank (space or
+  ;; TAB), or 0 when only blanks separate $p from the line start. The walk
+  ;; stops at a line break or $srcBase: a line-fed chunk starts at a line
+  ;; start, so whole-buffer and streamed runs agree.
+  (func $lexLineByteBefore (param $p i32) (result i32)
+    (local $c i32)
+    (block $done
+      (loop $back
+        (br_if $done (i32.le_u (local.get $p) (global.get $srcBase)))
+        (local.set $p (i32.sub (local.get $p) (i32.const 1)))
+        (local.set $c (i32.load8_u (local.get $p)))
+        (br_if $done (i32.or (i32.eq (local.get $c) (i32.const 10)) (i32.eq (local.get $c) (i32.const 13))))
+        (br_if $back (i32.or (i32.eq (local.get $c) (i32.const 32)) (i32.eq (local.get $c) (i32.const 9))))
+        (return (local.get $c))))
+    (i32.const 0))
+
+  ;; Resume at $ptr the string literal $lexCString left open with quote $q
+  ;; (0: nothing open). Returns the quote again when this chunk also ends
+  ;; right after an escaped line break inside it, and 0 otherwise.
+  (func $lexCStringResume (param $q i32) (result i32)
+    (if (result i32) (local.get $q)
+      (then
+        (select
+          (local.get $q)
+          (i32.const 0)
+          (i32.eq
+            (call $lexCStringBody
+              (local.get $q)
+              (enum.get $Token.string)
+              (global.get $ptr)
+              (i32.const 0))
+            (i32.const 2))))
+      (else (i32.const 0))))
+
   (func $lexLineComment (param $skip i32) (param $hl i32)
     (local $lhs i32)
     (local.set $lhs (global.get $ptr))
@@ -364,10 +536,63 @@
         (global.set $streamC (local.get $close))
         (global.set $streamHl (local.get $hl)))))
 
+  ;; Perl and Ruby accept a bare heredoc argument after a filehandle or
+  ;; method. An operator following its name instead makes `<<BITS | 1` a shift.
+  (func $lexHeredocArgument (param $p i32) (result i32)
+    (local $c i32)
+    (local.set $c (i32.load8_u (local.get $p)))
+    (if (i32.or (i32.eq (local.get $c) (i32.const 34)) (i32.eq (local.get $c) (i32.const 39)))
+      (then (return (i32.const 1))))
+    (block $nameDone
+      (loop $name
+        (br_if $nameDone (i32.ge_u (local.get $p) (global.get $end)))
+        (br_if $nameDone (i32.eqz (call $lexIsIdentContinue (i32.load8_u (local.get $p)))))
+        (local.set $p (i32.add (local.get $p) (i32.const 1)))
+        (br $name)))
+    (local.set $p (call $lexSkipSpaceAt (local.get $p)))
+    (if (i32.ge_u (local.get $p) (global.get $end))
+      (then (return (i32.const 1))))
+    (local.set $c (i32.load8_u (local.get $p)))
+    (i32.or
+      (i32.or (i32.eq (local.get $c) (i32.const 10)) (i32.eq (local.get $c) (i32.const 13)))
+      (i32.or
+        (i32.or (i32.eq (local.get $c) (i32.const ";")) (i32.eq (local.get $c) (i32.const ",")))
+        (i32.or
+          (i32.eq (local.get $c) (i32.const ")"))
+          (i32.or (i32.eq (local.get $c) (i32.const ".")) (i32.eq (local.get $c) (i32.const "#")))))))
+
+  ;; Whether a line delimiter whose bytes end at $p closes its body. A
+  ;; heredoc terminator must end the line (LF, CR, or $end). A word closer
+  ;; may be followed by more text, which then belongs to the closer's line:
+  ;; $trim bit 4 accepts a following blank (Ruby `=end # done`), bit 8 any
+  ;; non-letter (Perl `=cut`).
+  (func $lineDelimiterEnds (param $p i32) (param $trim i32) (result i32)
+    (local $c i32)
+    (if (i32.ge_u (local.get $p) (global.get $end))
+      (then (return (i32.const 1))))
+    (local.set $c (i32.load8_u (local.get $p)))
+    (if (i32.or (i32.eq (local.get $c) (i32.const 10)) (i32.eq (local.get $c) (i32.const 13)))
+      (then (return (i32.const 1))))
+    (if (i32.and (local.get $trim) (i32.const 4))
+      (then
+        ;; space, or \t \n \v \f \r
+        (return
+          (i32.or
+            (i32.eq (local.get $c) (i32.const 32))
+            (i32.le_u (i32.sub (local.get $c) (i32.const 9)) (i32.const 4))))))
+    (if (i32.and (local.get $trim) (i32.const 8))
+      (then
+        (return
+          (i32.gt_u
+            (i32.sub (i32.or (local.get $c) (i32.const 32)) (i32.const "a"))
+            (i32.const 25)))))
+    (i32.const 0))
+
   ;; Save a delimiter that must occupy a whole line (bash and terraform
   ;; heredocs). $trim is one when leading tabs are allowed before it (`<<-`)
-  ;; and two when spaces are too. Delimiters longer than the 32-byte region
-  ;; are not checkpointed (see $streamSetFixed).
+  ;; and two when spaces are too; bits 4 and 8 mark word closers (see
+  ;; $lineDelimiterEnds). Delimiters longer than the 32-byte region are not
+  ;; checkpointed (see $streamSetFixed).
   (func $streamSetLine (param $delimiter i32) (param $len i32) (param $trim i32) (param $hl i32)
     (if
       (i32.and
@@ -437,39 +662,59 @@
   ;; Advance $ptr through a nested two-byte-delimited region, returning the
   ;; depth still open at $end (0 when the region closed). $open/$close are
   ;; packed in source byte order, for example `/*` and `*/`. Long bodies hop
-  ;; between delimiter first-bytes with SIMD instead of stepping per byte.
+  ;; with SIMD to the next whole opener or closer pair, comparing each byte
+  ;; and its successor, so banners such as `(* **** *)` or `{- ---- -}` don't
+  ;; stop on every delimiter first byte.
   (func $lexNestedScan (param $depth i32) (param $open i32) (param $close i32) (result i32)
-    (local $pair i32)
+    (local $mask i32)
+    (local $w v128)
+    (local $w1 v128)
+    (local $o0 v128)
+    (local $o1 v128)
+    (local $c0 v128)
+    (local $c1 v128)
+    (local.set $o0 (i8x16.splat (local.get $open)))
+    (local.set $o1 (i8x16.splat (i32.shr_u (local.get $open) (i32.const 8))))
+    (local.set $c0 (i8x16.splat (local.get $close)))
+    (local.set $c1 (i8x16.splat (i32.shr_u (local.get $close) (i32.const 8))))
     (block $done
       (loop $scan
-        (global.set $ptr
-          (call $lexFindEither
-            (global.get $ptr)
-            (i32.and (local.get $open) (i32.const 255))
-            (i32.and (local.get $close) (i32.const 255))))
-        (br_if $done (i32.ge_u (global.get $ptr) (global.get $end)))
-        ;; the byte past $end reads as 0, which matches no printable delimiter
-        (local.set $pair
-          (i32.or
-            (i32.load8_u (global.get $ptr))
-            (i32.shl
-              (select
-                (i32.load8_u offset=1 (global.get $ptr))
-                (i32.const 0)
-                (i32.lt_u (i32.add (global.get $ptr) (i32.const 1)) (global.get $end)))
-              (i32.const 8))))
-        (if (i32.eq (local.get $pair) (local.get $open))
+        ;; the earliest opener or closer at or after $ptr; wide loads may run
+        ;; into the input slack, past $end
+        (block $found
+          (loop $wide
+            (br_if $found (i32.ge_u (global.get $ptr) (global.get $end)))
+            (local.set $w (v128.load (global.get $ptr)))
+            (local.set $w1 (v128.load offset=1 (global.get $ptr)))
+            (local.set $mask
+              (i8x16.bitmask
+                (v128.or
+                  (v128.and
+                    (i8x16.eq (local.get $w) (local.get $o0))
+                    (i8x16.eq (local.get $w1) (local.get $o1)))
+                  (v128.and
+                    (i8x16.eq (local.get $w) (local.get $c0))
+                    (i8x16.eq (local.get $w1) (local.get $c1))))))
+            (if (local.get $mask)
+              (then
+                (global.set $ptr (i32.add (global.get $ptr) (i32.ctz (local.get $mask))))
+                (br $found)))
+            (global.set $ptr (i32.add (global.get $ptr) (i32.const 16)))
+            (br $wide)))
+        ;; a pair whose second byte is at or past $end lies partly in the
+        ;; slack (or the enclosing region's bytes) and doesn't count
+        (if (i32.ge_u (i32.add (global.get $ptr) (i32.const 1)) (global.get $end))
+          (then
+            (global.set $ptr (global.get $end))
+            (br $done)))
+        (if (i32.eq (i32.load16_u (global.get $ptr)) (local.get $open))
           (then
             (local.set $depth (i32.add (local.get $depth) (i32.const 1)))
             (global.set $ptr (i32.add (global.get $ptr) (i32.const 2)))
             (br $scan)))
-        (if (i32.eq (local.get $pair) (local.get $close))
-          (then
-            (local.set $depth (i32.sub (local.get $depth) (i32.const 1)))
-            (global.set $ptr (i32.add (global.get $ptr) (i32.const 2)))
-            (br_if $done (i32.eqz (local.get $depth)))
-            (br $scan)))
-        (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
+        (local.set $depth (i32.sub (local.get $depth) (i32.const 1)))
+        (global.set $ptr (i32.add (global.get $ptr) (i32.const 2)))
+        (br_if $done (i32.eqz (local.get $depth)))
         (br $scan)))
     (local.get $depth))
 
@@ -512,7 +757,7 @@
       (loop $lines
         (br_if $notFound (i32.ge_u (local.get $p) (global.get $end)))
         (local.set $candidate (local.get $p))
-        (if (global.get $streamB)
+        (if (i32.and (global.get $streamB) (i32.const 3))
           (then
             (block $trimDone
               (loop $trim
@@ -524,7 +769,7 @@
                       (i32.eq (local.get $c) (i32.const 9))
                       (i32.and
                         (i32.eq (local.get $c) (i32.const 32))
-                        (i32.eq (global.get $streamB) (i32.const 2))))))
+                        (i32.eq (i32.and (global.get $streamB) (i32.const 3)) (i32.const 2))))))
                 (local.set $candidate (i32.add (local.get $candidate) (i32.const 1)))
                 (br $trim)))))
         (local.set $matched
@@ -546,16 +791,14 @@
         (if (local.get $matched)
           (then
             (global.set $ptr (i32.add (local.get $candidate) (global.get $streamA)))
-            ;; the delimiter must occupy the whole line; consume its LF/CRLF
-            (if
-              (i32.and
-                (i32.lt_u (global.get $ptr) (global.get $end))
-                (i32.and
-                  (i32.ne (i32.load8_u (global.get $ptr)) (i32.const 10))
-                  (i32.ne (i32.load8_u (global.get $ptr)) (i32.const 13))))
+            ;; the delimiter must occupy the whole line, or start it for a
+            ;; word closer; consume the line and its LF/CRLF
+            (if (i32.eqz (call $lineDelimiterEnds (global.get $ptr) (global.get $streamB)))
               (then (local.set $matched (i32.const 0))))
             (if (local.get $matched)
               (then
+                (if (i32.and (global.get $streamB) (i32.const 12))
+                  (then (call $scanToLineEnd)))
                 (if (i32.lt_u (global.get $ptr) (global.get $end))
                   (then
                     (local.set $c (i32.load8_u (global.get $ptr)))
@@ -948,6 +1191,21 @@
         (local.set $lhs (i32.add (local.get $lhs) (i32.const 1)))
         (br $l)))
     (i32.const 1))
+
+  ;; Whether the gap [p, stop) between two tokens holds a CR or LF. A scalar
+  ;; walk: gaps are short and usually break on their first byte, so this is
+  ;; cheaper per token than a SIMD scan.
+  (func $lexGapHasBreak (param $p i32) (param $stop i32) (result i32)
+    (local $c i32)
+    (block $done
+      (loop $l
+        (br_if $done (i32.ge_u (local.get $p) (local.get $stop)))
+        (local.set $c (i32.load8_u (local.get $p)))
+        (if (i32.or (i32.eq (local.get $c) (i32.const 10)) (i32.eq (local.get $c) (i32.const 13)))
+          (then (return (i32.const 1))))
+        (local.set $p (i32.add (local.get $p) (i32.const 1)))
+        (br $l)))
+    (i32.const 0))
 
   ;; SCREAMING_CASE test for a name: at least one uppercase letter and only
   ;; [A-Z0-9_]. Single letters are excluded - `T` is a type parameter, not a

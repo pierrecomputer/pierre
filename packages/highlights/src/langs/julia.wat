@@ -88,13 +88,14 @@
     (local $c i32)
     (local $c2 i32)
     (local $e i32)
-    (local $p i32)
     (local $stop i32)
     (local $dollar i32)
     (local.set $stop (global.get $ptr))
     (local.set $dollar (global.get $ptr))
     (block $done
       (loop $scan
+        ;; a new quote/backslash stop also forces a new `$` search below;
+        ;; without interpolation a `$` never stops the scan
         (if (i32.ge_u (global.get $ptr) (local.get $stop))
           (then
             (local.set $stop
@@ -104,26 +105,16 @@
                 (local.get $q)
                 (i32.const 1)
                 (i32.const 0)))
-            (local.set $dollar (local.get $stop))
-            (if (local.get $expand)
-              (then
-                (local.set $dollar
-                  (call $scanFindSpecial
-                    (global.get $ptr)
-                    (local.get $stop)
-                    (i32.const "$")
-                    (i32.const 0)
-                    (i32.const 0))))))
-          (else
-            (if (i32.and (local.get $expand) (i32.gt_u (global.get $ptr) (local.get $dollar)))
-              (then
-                (local.set $dollar
-                  (call $scanFindSpecial
-                    (global.get $ptr)
-                    (local.get $stop)
-                    (i32.const "$")
-                    (i32.const 0)
-                    (i32.const 0)))))))
+            (local.set $dollar (select (i32.const 0) (local.get $stop) (local.get $expand)))))
+        (if (i32.and (local.get $expand) (i32.gt_u (global.get $ptr) (local.get $dollar)))
+          (then
+            (local.set $dollar
+              (call $scanFindSpecial
+                (global.get $ptr)
+                (local.get $stop)
+                (i32.const "$")
+                (i32.const 0)
+                (i32.const 0)))))
         (global.set $ptr
           (select
             (local.get $dollar)
@@ -148,9 +139,12 @@
                 (return (i32.const 1))))
             (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
             (br $scan)))
+        ;; a backslash or `$`: flush the body so far - a `$` that starts
+        ;; nothing just rejoins the next flush, which merges with this one
+        (call $emitTok (local.get $hl) (local.get $seg) (global.get $ptr))
+        (local.set $seg (global.get $ptr))
         (if (i32.eq (local.get $c) (i32.const 92))
           (then
-            (call $emitTok (local.get $hl) (local.get $seg) (global.get $ptr))
             (local.set $e (call $lexEscapeEnd (global.get $ptr)))
             (call $emitTok (enum.get $Token.string.escape) (global.get $ptr) (local.get $e))
             (global.set $ptr (local.get $e))
@@ -160,21 +154,15 @@
         (local.set $c2 (call $jlByte (i32.add (global.get $ptr) (i32.const 1))))
         (if (i32.and (i32.eq (local.get $c2) (i32.const "(")) (i32.eqz (local.get $nested)))
           (then
-            (call $emitTok (local.get $hl) (local.get $seg) (global.get $ptr))
             (global.set $ptr (i32.add (global.get $ptr) (i32.const 2)))
-            (call $emitTok
-              (enum.get $Token.punctuation.special)
-              (i32.sub (global.get $ptr) (i32.const 2))
-              (global.get $ptr))
+            (call $emitTok (enum.get $Token.punctuation.special) (local.get $seg) (global.get $ptr))
             (return (i32.const 2))))
         (if
           (i32.and (call $lexIsIdentStart (local.get $c2)) (i32.ne (local.get $c2) (i32.const "$")))
           (then
-            (call $emitTok (local.get $hl) (local.get $seg) (global.get $ptr))
-            (local.set $p (global.get $ptr))
             (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
             (call $scanIdentRun (i32.const "_"))
-            (call $emitTok (enum.get $Token.variable) (local.get $p) (global.get $ptr))
+            (call $emitTok (enum.get $Token.variable) (local.get $seg) (global.get $ptr))
             (local.set $seg (global.get $ptr))
             (br $scan)))
         (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
@@ -210,7 +198,11 @@
   ;; module. $member is 1 after `.`, $importCtx 1 on a using/import line,
   ;; $stmtHead 1 before the first token of a statement - where `f(x) = ...`
   ;; defines `f` - and $afterValue 1 after a value, where `'` is the adjoint
-  ;; operator rather than a character literal. All are checkpointed.
+  ;; operator rather than a character literal. $depth counts open brackets
+  ;; outside `$(` splices: a `;` inside them separates keyword arguments or
+  ;; matrix rows, not statements, so only a top-level `;` starts one. That
+  ;; also keeps `;f(` chains from rescanning the rest of the line for every
+  ;; call. All are checkpointed.
   (func $hlJulia
     (local $c i32)
     (local $c2 i32)
@@ -233,6 +225,7 @@
     (local $importCtx i32)
     (local $stmtHead i32)
     (local $afterValue i32)
+    (local $depth i32)
     (local.set $stmtHead (i32.const 1))
     (call $lexEmitLeadingContinuation)
     (block $done
@@ -431,17 +424,25 @@
                   (then (local.set $expect (i32.shr_u (local.get $kind) (i32.const 8)))))
                 (if (i32.eq (local.get $hl) (enum.get $Token.keyword.import))
                   (then (local.set $importCtx (i32.const 1))))
-                ;; `end` closes an index or a block and stands as a value
+                ;; `end` closes an index or a block and stands as a value, as
+                ;; does `begin` in `x[begin:end]`; a block `begin` ends its
+                ;; line, whose break clears the flag again
                 (local.set $afterValue
                   (i32.or
                     (i32.or
                       (i32.eq (local.get $hl) (enum.get $Token.boolean))
                       (i32.eq (local.get $hl) (enum.get $Token.constant.builtin)))
-                    (i32.and
-                      (i32.eq (i32.sub (local.get $rhs) (local.get $lhs)) (i32.const 3))
-                      (i32.eq
-                        (i32.and (i32.load (local.get $lhs)) (i32.const 0xffffff))
-                        (i32.const "end"))))))
+                    (i32.or
+                      (i32.and
+                        (i32.eq (i32.sub (local.get $rhs) (local.get $lhs)) (i32.const 3))
+                        (i32.eq
+                          (i32.and (i32.load (local.get $lhs)) (i32.const 0xffffff))
+                          (i32.const "end")))
+                      (i32.and
+                        (i32.eq (i32.sub (local.get $rhs) (local.get $lhs)) (i32.const 5))
+                        (i64.eq
+                          (i64.and (i64.load (local.get $lhs)) (i64.const 0xffffffffff))
+                          (i64.const "begin")))))))
               (else
                 (local.set $afterValue (i32.const 1))
                 (if (local.get $importCtx)
@@ -478,14 +479,15 @@
                                   (else
                                     (if (i32.eq (call $jlByte (local.get $p)) (i32.const "("))
                                       (then
-                                        ;; `f(x) = ...` at a statement head defines f
-                                        (local.set $hl
-                                          (select
-                                            (enum.get $Token.function.definition)
-                                            (enum.get $Token.function)
-                                            (i32.and
-                                              (local.get $stmtHead)
-                                              (call $jlDefinedAhead (local.get $p))))))
+                                        ;; `f(x) = ...` at a statement head defines
+                                        ;; f; the line scan runs only there
+                                        (local.set $hl (enum.get $Token.function))
+                                        (if (local.get $stmtHead)
+                                          (then
+                                            (if (call $jlDefinedAhead (local.get $p))
+                                              (then
+                                                (local.set $hl
+                                                  (enum.get $Token.function.definition)))))))
                                       (else (local.set $hl (enum.get $Token.variable))))))))))))))))
             (call $emitTok (local.get $hl) (local.get $lhs) (local.get $rhs))
             (local.set $member (i32.const 0))
@@ -526,6 +528,11 @@
                         (local.set $seg (global.get $ptr))
                         (local.set $member (i32.const 0))
                         (br $next)))))))
+            (if (byteset.get ")]}" (local.get $c))
+              (then
+                (if (local.get $depth)
+                  (then (local.set $depth (i32.sub (local.get $depth) (i32.const 1))))))
+              (else (local.set $depth (i32.add (local.get $depth) (i32.const 1)))))
             (call $emitTok (enum.get $Token.punctuation.bracket) (local.get $lhs) (global.get $ptr))
             (local.set $afterValue (byteset.get ")]}" (local.get $c)))
             (local.set $member (i32.const 0))
@@ -544,7 +551,7 @@
             (local.set $afterValue (i32.const 0))
             (if (i32.eq (local.get $c) (i32.const ";"))
               (then
-                (local.set $stmtHead (i32.const 1))
+                (local.set $stmtHead (i32.eqz (local.get $depth)))
                 (local.set $expect (i32.const 0))
                 (local.set $importCtx (i32.const 0))))
             (br $next)))

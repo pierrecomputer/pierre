@@ -255,3 +255,38 @@ void t.test('asm: malformed and split ranges stay lossless', () => {
   const split = loadLang('asm', '$hlAsm', 5);
   checkInvariants(split.hl, 'main:\n mov r0, r1\n');
 });
+
+void t.test('asm: numeric local labels keep the mnemonic position', () => {
+  assert.deepEqual(tokenKinds('asm', '1:  jmp 1b\n2:\n  mov $2, %eax'), [
+    ['1', 'label'],
+    [':', 'punctuation.delimiter'],
+    ['jmp', 'keyword'],
+    ['1b', 'number'],
+    ['2', 'label'],
+    [':', 'punctuation.delimiter'],
+    ['mov', 'keyword'],
+    ['$2', 'number'],
+    [',', 'punctuation.delimiter'],
+    ['%eax', 'variable.special'],
+  ]);
+  assertLineFedParity('asm', '1:\n  jmp 1b\n');
+});
+
+void t.test('asm: x86 byte, word, and segment and RISC-V ABI registers', () => {
+  const registers = (code: string) =>
+    tokenKinds('asm', code)
+      .filter(([, kind]) => kind === 'variable.special')
+      .map(([text]) => text);
+  assert.deepEqual(
+    registers(
+      'mov al, [ebx+4]\nxor ax, dh\nmov sil, bpl\nmov ds, cx\nmov si, bp'
+    ),
+    ['al', 'ebx', 'ax', 'dh', 'sil', 'bpl', 'ds', 'cx', 'si', 'bp']
+  );
+  assert.deepEqual(
+    registers('li a0, 10\naddi t0, s11, 1\nmv ra, zero\nld gp, 0(tp)'),
+    ['a0', 't0', 's11', 'ra', 'zero', 'gp', 'tp']
+  );
+  // operands that only look similar stay symbols
+  assert.deepEqual(registers('call a12b\nmov eax, as\njmp zeros'), ['eax']);
+});

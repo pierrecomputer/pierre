@@ -493,3 +493,16 @@ void t.test(
     );
   }
 );
+
+void t.test(
+  'glsl: C hex escapes are one escape each, also when continued',
+  () => {
+    const code = 'x = "ab\\\n\\x41cd";\n';
+    assert.ok(
+      tokenKinds('glsl', code).some(
+        ([text, kind]) => text === '\\x41cd' && kind === 'string.escape'
+      )
+    );
+    assertLineFedParity('glsl', code);
+  }
+);

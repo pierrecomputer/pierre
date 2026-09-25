@@ -156,21 +156,15 @@
               (i32.add (local.get $pi) (i32.const 1))
               (local.get $hl)))))))
 
-  ;; tag / attribute name: `<` excluded so a stray tag start ends the run
+  ;; tag / attribute name: ends at whitespace, `=`, `>`, `/`, a quote, or `<`
+  ;; (so a stray tag start ends the run) - one byte-set test per byte
   (func $htmlNameEnd (param $q i32) (result i32)
     (local $c i32)
     (block $done
       (loop $l
         (br_if $done (i32.ge_u (local.get $q) (global.get $end)))
         (local.set $c (i32.load8_u (local.get $q)))
-        (br_if $done (i32.eq (local.get $c) (i32.const 32)))
-        (br_if $done (i32.le_u (i32.sub (local.get $c) (i32.const 9)) (i32.const 4)))
-        (br_if $done (i32.eq (local.get $c) (i32.const "=")))
-        (br_if $done (i32.eq (local.get $c) (i32.const ">")))
-        (br_if $done (i32.eq (local.get $c) (i32.const "/")))
-        (br_if $done (i32.eq (local.get $c) (i32.const "<")))
-        (br_if $done (i32.eq (local.get $c) (i32.const 34)))
-        (br_if $done (i32.eq (local.get $c) (i32.const 39)))
+        (br_if $done (byteset.get "\09\0a\0b\0c\0d \22'/<=>" (local.get $c)))
         (local.set $q (i32.add (local.get $q) (i32.const 1)))
         (br $l)))
     (local.get $q))
@@ -183,12 +177,7 @@
       (loop $l
         (br_if $done (i32.ge_u (local.get $q) (global.get $end)))
         (local.set $c (i32.load8_u (local.get $q)))
-        (br_if $done (i32.eq (local.get $c) (i32.const 32)))
-        (br_if $done (i32.le_u (i32.sub (local.get $c) (i32.const 9)) (i32.const 4)))
-        (br_if $done (i32.eq (local.get $c) (i32.const ">")))
-        (br_if $done (i32.eq (local.get $c) (i32.const "<")))
-        (br_if $done (i32.eq (local.get $c) (i32.const 34)))
-        (br_if $done (i32.eq (local.get $c) (i32.const 39)))
+        (br_if $done (byteset.get "\09\0a\0b\0c\0d \22'<>" (local.get $c)))
         (local.set $q (i32.add (local.get $q) (i32.const 1)))
         (br $l)))
     (local.get $q))
@@ -209,16 +198,63 @@
     (call $emitTok (enum.get $Token.string) (local.get $lhs) (global.get $ptr))
     (local.get $quote))
 
-  ;; Attributes after a tag name until `>` / `/>`. Returns 1 when the tag was
-  ;; closed by a plain `>`, 2 for `/>`, 0 for a stray `<` (the caller
-  ;; reparses it in text mode) or input end. The loop is re-enterable so a
-  ;; tag cut by a chunk end resumes where it stopped: $afterEq is set when
-  ;; the value after `=` is still expected, $quote is the open quote of an
-  ;; unterminated value. At a real chunk end (never a bounded sub-range end)
-  ;; the open tag becomes stream region $region with $streamA = $kind
-  ;; (1 script, 2 style: a raw-text body must follow the tag), $streamB =
+  ;; Svelte and Astro cut their html ranges at every `{`, including one inside
+  ;; a start tag (`class={x}`, `{...props}`). When a range ends inside a start
+  ;; tag, the attribute loop leaves its state here for the owner, packed as
+  ;; 1 | after-`=` << 1 | open quote << 8 | raw-text kind << 16 (0: no open
+  ;; tag). The owner clears it before each range, reads it right after, and
+  ;; continues the tag's attributes once the expression is highlighted.
+  (global $htmlOpenTag (mut i32) (i32.const 0))
+
+  ;; Raw-text kinds: 1 script, 2 style, and a style whose `lang` attribute
+  ;; names a css preprocessor: 14 less, 15 scss, 16 sass (13 + the css.wat
+  ;; dialect). The kind doubles as the stream region of a body cut by a chunk
+  ;; end. Bit 6 marks a style tag whose `lang` still waits for its value.
+
+  ;; A style tag's attribute name [$lhs,$rhs): `lang` sets the waiting mark,
+  ;; any other name clears it. Scripts keep their kind.
+  (func $htmlLangName (param $kind i32) (param $lhs i32) (param $rhs i32) (result i32)
+    (local.set $kind (i32.and (local.get $kind) (i32.const 63)))
+    (if
+      (i32.and
+        (i32.ne (local.get $kind) (i32.const 1))
+        (i32.and
+          (i32.eq (i32.sub (local.get $rhs) (local.get $lhs)) (i32.const 4))
+          (i32.eq (i32.or (i32.load (local.get $lhs)) (i32.const 0x20202020)) (i32.const "lang"))))
+      (then (local.set $kind (i32.or (local.get $kind) (i32.const 64)))))
+    (local.get $kind))
+
+  ;; The value [$lhs,$rhs) of an attribute: after a waiting `lang`, `less`,
+  ;; `scss`, or `sass` (any case) selects that dialect's style kind. The mark
+  ;; clears either way; an unterminated value passes an empty range.
+  (func $htmlLangValue (param $kind i32) (param $lhs i32) (param $rhs i32) (result i32)
+    (local $w i32)
+    (if (i32.eqz (i32.and (local.get $kind) (i32.const 64)))
+      (then (return (local.get $kind))))
+    (local.set $kind (i32.and (local.get $kind) (i32.const 63)))
+    (if (i32.ne (i32.sub (local.get $rhs) (local.get $lhs)) (i32.const 4))
+      (then (return (local.get $kind))))
+    (local.set $w (i32.or (i32.load (local.get $lhs)) (i32.const 0x20202020)))
+    (if (i32.eq (local.get $w) (i32.const "less"))
+      (then (return (i32.const 14))))
+    (if (i32.eq (local.get $w) (i32.const "scss"))
+      (then (return (i32.const 15))))
+    (if (i32.eq (local.get $w) (i32.const "sass"))
+      (then (return (i32.const 16))))
+    (local.get $kind))
+
+  ;; Attributes after a tag name until `>` / `/>`. Returns the status in the
+  ;; low byte - 1 when the tag was closed by a plain `>`, 2 for `/>`, 0 for a
+  ;; stray `<` (the caller reparses it in text mode) or input end - and the
+  ;; raw-text kind above it (a style's `lang` may refine it). The loop is
+  ;; re-enterable so a tag cut by a chunk end resumes where it stopped:
+  ;; $afterEq is set when the value after `=` is still expected, $quote is
+  ;; the open quote of an unterminated value. At a real chunk end (never a
+  ;; bounded sub-range end) the open tag becomes stream region $region with
+  ;; $streamA = $kind (a raw-text body must follow the tag), $streamB =
   ;; after-`=` flag, $streamC = open quote; the owning lexer's resume hook
-  ;; calls back into this loop with them.
+  ;; calls back into this loop with them. A bounded end in a svelte or astro
+  ;; range (regions 12 and 13) sets $htmlOpenTag instead.
   (func $htmlAttrs
     (param $afterEq i32)
     (param $quote i32)
@@ -239,7 +275,16 @@
                 (call $streamSetRegion (local.get $region))
                 (global.set $streamA (local.get $kind))
                 (global.set $streamB (local.get $afterEq))
-                (global.set $streamC (local.get $quote))))
+                (global.set $streamC (local.get $quote)))
+              (else
+                (if (i32.ge_u (local.get $region) (i32.const 12))
+                  (then
+                    (global.set $htmlOpenTag
+                      (i32.or
+                        (i32.or (i32.const 1) (i32.shl (local.get $afterEq) (i32.const 1)))
+                        (i32.or
+                          (i32.shl (local.get $quote) (i32.const 8))
+                          (i32.shl (local.get $kind) (i32.const 16)))))))))
             (br $done (i32.const 0))))
         (local.set $c (i32.load8_u (global.get $ptr)))
         (local.set $lhs (global.get $ptr))
@@ -259,7 +304,8 @@
               (enum.get $Token.punctuation.bracket.html)
               (local.get $lhs)
               (global.get $ptr))
-            (br $done (i32.const 1))))
+            (br $done
+              (i32.or (i32.const 1) (i32.shl (i32.and (local.get $kind) (i32.const 63)) (i32.const 8))))))
         ;; the value right after `=`: quoted, or an unquoted run (which may
         ;; contain `/` and `=`, so this comes before those branches)
         (if (local.get $afterEq)
@@ -270,11 +316,25 @@
               (then
                 (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
                 (local.set $quote (call $htmlQuotedBody (local.get $c) (local.get $lhs)))
+                (if (i32.and (local.get $kind) (i32.const 64))
+                  (then
+                    (local.set $kind
+                      (call $htmlLangValue
+                        (local.get $kind)
+                        (i32.add (local.get $lhs) (i32.const 1))
+                        (select
+                          (i32.sub (global.get $ptr) (i32.const 1))
+                          (i32.add (local.get $lhs) (i32.const 1))
+                          (i32.eqz (local.get $quote)))))))
                 (br $next)))
             (if (i32.eq (local.get $c) (i32.const "<"))
               (then (br $done (i32.const 0)))) ;; stray tag start: reparse in TEXT mode
             (global.set $ptr (call $htmlValueEnd (global.get $ptr)))
             (call $emitTok (enum.get $Token.string) (local.get $lhs) (global.get $ptr))
+            (if (i32.and (local.get $kind) (i32.const 64))
+              (then
+                (local.set $kind
+                  (call $htmlLangValue (local.get $kind) (local.get $lhs) (global.get $ptr)))))
             (br $next)))
         (if (i32.eq (local.get $c) (i32.const "/"))
           (then
@@ -290,7 +350,10 @@
                   (enum.get $Token.punctuation.bracket.html)
                   (local.get $lhs)
                   (global.get $ptr))
-                (br $done (i32.const 2))))
+                (br $done
+                  (i32.or
+                    (i32.const 2)
+                    (i32.shl (i32.and (local.get $kind) (i32.const 63)) (i32.const 8))))))
             (call $emitTok (enum.get $Token.none) (local.get $lhs) (global.get $ptr))
             (br $next)))
         (if (i32.eq (local.get $c) (i32.const "="))
@@ -314,8 +377,28 @@
         ;; name is never empty
         (global.set $ptr (call $htmlNameEnd (global.get $ptr)))
         (call $emitTok (enum.get $Token.attribute) (local.get $lhs) (global.get $ptr))
+        (if (local.get $kind)
+          (then
+            (local.set $kind (call $htmlLangName (local.get $kind) (local.get $lhs) (global.get $ptr)))))
         (br $next))
       (unreachable)))
+
+  ;; a style body [$ptr, $end) as css, or as the preprocessor its `lang`
+  ;; named (raw-text kinds 14-16)
+  (func $htmlStyleBody (param $kind i32)
+    (if (i32.eq (local.get $kind) (i32.const 14))
+      (then
+        (call $hlLess)
+        (return)))
+    (if (i32.eq (local.get $kind) (i32.const 15))
+      (then
+        (call $hlScss)
+        (return)))
+    (if (i32.eq (local.get $kind) (i32.const 16))
+      (then
+        (call $hlSass)
+        (return)))
+    (call $hlCss))
 
   ;; raw-text body: emit [$ptr, the matching close tag) with the embedded
   ;; lexer, leaving $ptr on the `<` of the close tag
@@ -351,7 +434,7 @@
           (then
             (global.set $streamDepth (i32.const 0))
             (global.set $streamReset (i32.const 1))))
-        (call $hlCss)
+        (call $htmlStyleBody (local.get $kind))
         (if (local.get $continued)
           (then
             (global.set $streamDepth (i32.const 1))
@@ -377,13 +460,17 @@
     (local.set $kind (call $rawTextKind (global.get $ptr) (local.get $q)))
     (call $emitTok (enum.get $Token.tag) (global.get $ptr) (local.get $q))
     (global.set $ptr (local.get $q))
+    (call $htmlTagEnd
+      (call $htmlAttrs (i32.const 0) (i32.const 0) (local.get $kind) (local.get $region))))
+
+  ;; Finish a start tag from its attribute loop's packed result (see
+  ;; $htmlAttrs): a closed script/style tag is followed by its raw-text body.
+  (func $htmlTagEnd (param $r i32)
     (if
       (i32.and
-        (i32.ne
-          (call $htmlAttrs (i32.const 0) (i32.const 0) (local.get $kind) (local.get $region))
-          (i32.const 0))
-        (i32.ne (local.get $kind) (i32.const 0)))
-      (then (call $htmlRawText (local.get $kind)))))
+        (i32.ne (i32.and (local.get $r) (i32.const 3)) (i32.const 0))
+        (i32.gt_u (local.get $r) (i32.const 255)))
+      (then (call $htmlRawText (i32.shr_u (local.get $r) (i32.const 8))))))
 
   ;; The html main loop over [$ptr, $end). Frameworks that lex html between
   ;; their own constructs call it with their own $region (svelte 12, astro
@@ -495,16 +582,17 @@
   ;; Continue a start tag checkpointed by $htmlAttrs as region $region from
   ;; the chunk start, within the current [$ptr, $end).
   (func $htmlTagResume (param $region i32) (result i32)
-    (local $kind i32)
-    (local.set $kind (global.get $streamA))
+    (local $r i32)
     (global.set $streamDepth (i32.const 1))
-    (call $htmlTagResumeEnd
+    (local.set $r
       (call $htmlAttrs
         (global.get $streamB)
         (global.get $streamC)
-        (local.get $kind)
-        (local.get $region))
-      (local.get $kind)))
+        (global.get $streamA)
+        (local.get $region)))
+    (call $htmlTagResumeEnd
+      (i32.and (local.get $r) (i32.const 3))
+      (i32.shr_u (local.get $r) (i32.const 8))))
 
   ;; Resume stream region 9: a start tag whose attributes continue past
   ;; the previous chunk end. Returns 1 when the region consumed the whole

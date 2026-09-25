@@ -19,6 +19,17 @@ import {
   wordColor,
 } from './_util';
 
+void t.test('java: record declarations allow horizontal whitespace', () => {
+  for (const gap of [' ', '  ', '\t', ' \t ']) {
+    const code = `record${gap}Point(int x) {}\n`;
+    assertLineFedParity('java', code);
+    assert.deepEqual(tokenKinds('java', code)[0], [
+      'record',
+      'keyword.declaration',
+    ]);
+  }
+});
+
 // one unique color per token type so equal styles cannot merge neighboring
 // spans and hide a classification behind a same-colored token
 const distinct = {
@@ -435,5 +446,88 @@ void t.test(
       'java',
       'String s = """\n  a\n  b""";\n/**\n * doc\n */\nclass X {}\n'
     );
+  }
+);
+
+void t.test(
+  'java: `record` is a variable unless it heads a declaration',
+  () => {
+    const code =
+      'for (ConsumerRecord<String, String> record : records) {\n    process(record.key());\n}\npublic record Point(int x) { }';
+    assertLineFedParity('java', code);
+    assert.deepEqual(tokenKinds('java', code), [
+      ['for', 'keyword.control'],
+      ['(', 'punctuation.bracket'],
+      ['ConsumerRecord', 'type'],
+      ['<', 'operator'],
+      ['String', 'type'],
+      [',', 'punctuation.delimiter'],
+      ['String', 'type'],
+      ['>', 'operator'],
+      ['record', 'variable'],
+      [':', 'punctuation.delimiter'],
+      ['records', 'variable'],
+      [') {', 'punctuation.bracket'],
+      ['process', 'function'],
+      ['(', 'punctuation.bracket'],
+      ['record', 'variable'],
+      ['.', 'punctuation.delimiter'],
+      ['key', 'function.method'],
+      ['())', 'punctuation.bracket'],
+      [';', 'punctuation.delimiter'],
+      ['}', 'punctuation.bracket'],
+      ['public record', 'keyword.declaration'],
+      ['Point', 'type'],
+      ['(', 'punctuation.bracket'],
+      ['int', 'type.builtin'],
+      ['x', 'variable'],
+      [') { }', 'punctuation.bracket'],
+    ]);
+  }
+);
+
+void t.test(
+  'java: comparisons and explicit type arguments end a pending type',
+  () => {
+    const code =
+      'if (Foo.MAX > limit()) reset();\nList<String> xs = Collections.<String>emptyList();\nMap<String, List<Integer>> build() { }';
+    assertLineFedParity('java', code);
+    assert.deepEqual(tokenKinds('java', code), [
+      ['if', 'keyword.control'],
+      ['(', 'punctuation.bracket'],
+      ['Foo', 'type'],
+      ['.', 'punctuation.delimiter'],
+      ['MAX', 'type'],
+      ['>', 'operator'],
+      ['limit', 'function'],
+      ['())', 'punctuation.bracket'],
+      ['reset', 'function'],
+      ['()', 'punctuation.bracket'],
+      [';', 'punctuation.delimiter'],
+      ['List', 'type'],
+      ['<', 'operator'],
+      ['String', 'type'],
+      ['>', 'operator'],
+      ['xs', 'variable'],
+      ['=', 'operator'],
+      ['Collections', 'type'],
+      ['.', 'punctuation.delimiter'],
+      ['<', 'operator'],
+      ['String', 'type'],
+      ['>', 'operator'],
+      ['emptyList', 'function'],
+      ['()', 'punctuation.bracket'],
+      [';', 'punctuation.delimiter'],
+      ['Map', 'type'],
+      ['<', 'operator'],
+      ['String', 'type'],
+      [',', 'punctuation.delimiter'],
+      ['List', 'type'],
+      ['<', 'operator'],
+      ['Integer', 'type'],
+      ['>>', 'operator'],
+      ['build', 'function.definition'],
+      ['() { }', 'punctuation.bracket'],
+    ]);
   }
 );

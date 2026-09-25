@@ -178,20 +178,18 @@
             (call $lexLineComment (i32.const 3) (enum.get $Token.comment))
             (br $next)))
 
-        (if (i32.eq (local.get $c) (i32.const 34))
+        ;; `"` opens a string; `'` glued to a value transposes it, and
+        ;; elsewhere opens a char array
+        (if (i32.or (i32.eq (local.get $c) (i32.const 34)) (i32.eq (local.get $c) (i32.const 39)))
           (then
-            (call $matQuoted (i32.const 34))
-            (local.set $afterValue (i32.const 1))
-            (local.set $member (i32.const 0))
-            (br $next)))
-        ;; `'` glued to a value transposes it; elsewhere it opens a char array
-        (if (i32.eq (local.get $c) (i32.const 39))
-          (then
-            (if (i32.and (local.get $afterValue) (i32.eq (local.get $gap) (local.get $lhs)))
+            (if
+              (i32.and
+                (i32.eq (local.get $c) (i32.const 39))
+                (i32.and (local.get $afterValue) (i32.eq (local.get $gap) (local.get $lhs))))
               (then
                 (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
                 (call $emitTok (enum.get $Token.operator) (local.get $lhs) (global.get $ptr)))
-              (else (call $matQuoted (i32.const 39))))
+              (else (call $matQuoted (local.get $c))))
             (local.set $afterValue (i32.const 1))
             (local.set $member (i32.const 0))
             (br $next)))

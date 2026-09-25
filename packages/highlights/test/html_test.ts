@@ -435,3 +435,28 @@ void t.test(
     );
   }
 );
+
+void t.test('html: a style lang names the css dialect of its body', () => {
+  const kinds = tokenKinds(
+    'html',
+    '<style lang="scss">\n$a: 1px;\n// note\n.b { width: $a; }\n</style>\n<p>x</p>\n'
+  );
+  assert.ok(kinds.some(([text, kind]) => text === '$a' && kind === 'variable'));
+  assert.ok(
+    kinds.some(([text, kind]) => text === '// note' && kind === 'comment')
+  );
+  // unknown dialects and scripts keep their usual bodies
+  assert.ok(
+    tokenKinds(
+      'html',
+      '<style lang="stylus">\n.a { color: red }\n</style>'
+    ).some(([text, kind]) => text === 'color' && kind === 'property')
+  );
+  for (const code of [
+    '<style lang="less">\n@c: red;\n/* x\n*/\n</style>\n<p>x</p>\n',
+    '<style\n  lang="sass"\n>\n.a\n  color: red\n</style>\n',
+    '<style lang="scss">\n.a {\n  // c\n}\n</style>\n<style>\n.b { c: d }\n</style>\n',
+  ]) {
+    assertLineFedParity('html', code);
+  }
+});

@@ -34,7 +34,10 @@
   ;; name after a receiver's closing paren, which is a method definition only
   ;; when its own parameter list follows - `func (s *T) Name(` - and an
   ;; ordinary name otherwise, as in a literal's result type `func(x int) T {`.
-  ;; $recv is 1 inside the paren that directly follows `func`.
+  ;; $recv is 1 inside the paren that directly follows `func`. $typeGroup
+  ;; is the bracket depth inside a grouped `type ( ... )` declaration, 0
+  ;; outside one: at depth 1 each line starts a new type spec, so a line
+  ;; break re-arms the type capture for its name.
   (func $hlGo
     (local $c i32)
     (local $c2 i32)
@@ -48,11 +51,24 @@
     (local $expect i32)
     (local $member i32)
     (local $recv i32)
+    (local $typeGroup i32)
     (call $lexEmitLeadingContinuation)
     (block $done
       (loop $next
         (local.set $gap (global.get $ptr))
         (call $scanWhitespace)
+        (if (i32.eq (local.get $typeGroup) (i32.const 1))
+          (then
+            (if
+              (i32.lt_u
+                (call $scanFindSpecial
+                  (local.get $gap)
+                  (global.get $ptr)
+                  (i32.const 10)
+                  (i32.const 0)
+                  (i32.const 1))
+                (global.get $ptr))
+              (then (local.set $expect (i32.const 2))))))
         (call $emitGap (local.get $gap) (global.get $ptr))
         (br_if $done (i32.ge_u (global.get $ptr) (global.get $end)))
         (local.set $lhs (global.get $ptr))
@@ -60,29 +76,23 @@
         (local.set $c2 (call $goByte (i32.add (global.get $ptr) (i32.const 1))))
         (local.set $c3 (call $goByte (i32.add (global.get $ptr) (i32.const 2))))
 
+        ;; `//` and `/*` comments; `///`, `//!`, `/**`, and `/*!` are doc
+        ;; comments - the third byte repeats the second or is `!`
         (if
-          (i32.and (i32.eq (local.get $c) (i32.const "/")) (i32.eq (local.get $c2) (i32.const "/")))
+          (i32.and
+            (i32.eq (local.get $c) (i32.const "/"))
+            (i32.or (i32.eq (local.get $c2) (i32.const "/")) (i32.eq (local.get $c2) (i32.const "*"))))
           (then
-            (call $lexLineComment
-              (i32.const 2)
+            (local.set $hl
               (select
                 (enum.get $Token.comment.doc)
                 (enum.get $Token.comment)
                 (i32.or
-                  (i32.eq (local.get $c3) (i32.const "/"))
+                  (i32.eq (local.get $c3) (local.get $c2))
                   (i32.eq (local.get $c3) (i32.const "!")))))
-            (br $next)))
-        (if
-          (i32.and (i32.eq (local.get $c) (i32.const "/")) (i32.eq (local.get $c2) (i32.const "*")))
-          (then
-            (call $lexBlockComment
-              (i32.const 2)
-              (select
-                (enum.get $Token.comment.doc)
-                (enum.get $Token.comment)
-                (i32.or
-                  (i32.eq (local.get $c3) (i32.const "*"))
-                  (i32.eq (local.get $c3) (i32.const "!")))))
+            (if (i32.eq (local.get $c2) (i32.const "/"))
+              (then (call $lexLineComment (i32.const 2) (local.get $hl)))
+              (else (call $lexBlockComment (i32.const 2) (local.get $hl))))
             (br $next)))
 
         (if (i32.or (i32.eq (local.get $c) (i32.const 34)) (i32.eq (local.get $c) (i32.const 39)))
@@ -149,7 +159,7 @@
                               (else
                                 (if
                                   (i32.le_u
-                                    (i32.sub (i32.load8_u (local.get $lhs)) (i32.const "A"))
+                                    (i32.sub (local.get $c) (i32.const "A"))
                                     (i32.const 25))
                                   (then (local.set $hl (enum.get $Token.type)))
                                   (else (local.set $hl (enum.get $Token.variable))))))))))))))
@@ -177,8 +187,22 @@
             ;; re-arms the conditional one when a name follows on the same
             ;; line - a line break ends the statement instead. Braces end
             ;; any pending capture.
+            (if (local.get $typeGroup)
+              (then
+                (if (i32.or (i32.eq (local.get $c) (i32.const ")"))
+                      (i32.or (i32.eq (local.get $c) (i32.const "]"))
+                        (i32.eq (local.get $c) (i32.const "}"))))
+                  (then
+                    (local.set $typeGroup (i32.sub (local.get $typeGroup) (i32.const 1)))
+                    ;; the group's own `)` must not leave a capture armed by
+                    ;; the line break before it
+                    (if (i32.eqz (local.get $typeGroup))
+                      (then (local.set $expect (i32.const 0)))))
+                  (else (local.set $typeGroup (i32.add (local.get $typeGroup) (i32.const 1)))))))
             (if (i32.eq (local.get $c) (i32.const "("))
               (then
+                (if (i32.and (i32.eq (local.get $expect) (i32.const 2)) (i32.eqz (local.get $typeGroup)))
+                  (then (local.set $typeGroup (i32.const 1))))
                 (local.set $recv (i32.eq (local.get $expect) (i32.const 1)))
                 (local.set $expect (i32.const 0))))
             (if (i32.and (i32.eq (local.get $c) (i32.const ")")) (local.get $recv))
@@ -194,30 +218,22 @@
                 (local.set $recv (i32.const 0))
                 (local.set $expect (i32.const 0))))
             (br $next)))
+        ;; `.` puts the next name in member position
         (if
           (i32.or
             (i32.or (i32.eq (local.get $c) (i32.const ",")) (i32.eq (local.get $c) (i32.const ";")))
-            (i32.eq (local.get $c) (i32.const ":")))
+            (i32.or (i32.eq (local.get $c) (i32.const ":")) (i32.eq (local.get $c) (i32.const "."))))
           (then
             (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
             (call $emitTok
               (enum.get $Token.punctuation.delimiter)
               (local.get $lhs)
               (global.get $ptr))
-            (local.set $member (i32.const 0))
+            (local.set $member (i32.eq (local.get $c) (i32.const ".")))
             (if (i32.eq (local.get $c) (i32.const ";"))
               (then
                 (local.set $recv (i32.const 0))
                 (local.set $expect (i32.const 0))))
-            (br $next)))
-        (if (i32.eq (local.get $c) (i32.const "."))
-          (then
-            (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
-            (call $emitTok
-              (enum.get $Token.punctuation.delimiter)
-              (local.get $lhs)
-              (global.get $ptr))
-            (local.set $member (i32.const 1))
             (br $next)))
 
         (if (call $goIsOp (local.get $c))
