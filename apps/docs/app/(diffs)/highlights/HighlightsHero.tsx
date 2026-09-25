@@ -1,6 +1,6 @@
 'use client';
 
-import { IconArrowUpRight, IconBook, IconBrandGithub } from '@pierre/icons';
+import { IconBook } from '@pierre/icons';
 import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
 
@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button';
 
 const INSTALL_COMMAND = 'pnpm add @pierre/highlights';
 
-export function HighlightsHero({ gzipBytes }: { gzipBytes: number }) {
+export function HighlightsHero() {
   const [copied, setCopied] = useState(false);
   const resetTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(
     undefined
@@ -37,26 +37,20 @@ export function HighlightsHero({ gzipBytes }: { gzipBytes: number }) {
   };
 
   return (
-    <section className="flex max-w-3xl flex-col gap-3 pt-20 pb-10 md:pb-20 lg:max-w-4xl">
+    <section className="flex max-w-3xl flex-col gap-3 pt-20 pb-10 md:pb-20 lg:max-w-5xl">
       <span className="mb-2 self-start rounded-full bg-purple-100 px-3 py-1 text-sm font-medium tracking-wide text-purple-600 dark:bg-purple-900 dark:text-purple-400">
         Experimental
       </span>
 
       <h1 className="text-4xl font-semibold tracking-tight text-balance md:text-5xl lg:text-6xl">
-        Highlight code at native speed
+        Syntax highlighting at native speed
       </h1>
-      <p className="text-md text-muted-foreground mb-2 max-w-[740px] text-pretty md:text-lg lg:text-xl">
-        <code>@pierre/highlights</code> is a fast code highlighter written by
-        hand in WebAssembly Text. It ships with built-in language lexers, works
-        across runtimes, and speaks familiar Shiki-compatible formats. Made by{' '}
-        <Link
-          target="_blank"
-          href="https://pierre.computer"
-          className="hover:text-foreground muted-foreground hover:decoration-foreground underline decoration-[1px] underline-offset-4 transition-colors"
-        >
-          The Pierre Computer Company
-        </Link>
-        .
+      <p className="text-md text-muted-foreground mb-2 max-w-[760px] text-pretty md:text-lg lg:text-xl">
+        <code>@pierre/highlights</code> is a fast, lightweight syntax
+        highlighter hand-written in WebAssembly Text. Ships with built-in
+        language lexers, runs across JavaScript runtimes, and supports familiar
+        Shiki-compatible formats. Generates large-file HTML up to 279× faster
+        than Shiki.
       </p>
 
       <div className="flex flex-col gap-3 min-[460px]:flex-row min-[460px]:flex-wrap min-[460px]:items-center">
@@ -69,37 +63,23 @@ export function HighlightsHero({ gzipBytes }: { gzipBytes: number }) {
           <span className="mx-auto min-[460px]:mx-0">{INSTALL_COMMAND}</span>
           <CopyStateIcon copied={copied} />
         </Button>
-        <Button asChild size="xl">
+        <Button variant="secondary" asChild size="xl">
           <Link href="/docs#highlights">
             <IconBook />
             Documentation
           </Link>
         </Button>
-        <Button variant="secondary" asChild size="xl">
-          <Link
-            href="https://github.com/pierrecomputer/pierre/tree/main/packages/highlights"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <IconBrandGithub />
-            View on GitHub
-            <IconArrowUpRight />
-          </Link>
-        </Button>
       </div>
 
       <p className="text-muted-foreground mt-2 text-sm">
-        {(gzipBytes / 1024).toFixed(1)} KiB gzipped Wasm · 73 built-in languages
-        · 131–590× Shiki HTML throughput (
         <Link
           target="_blank"
           rel="noopener noreferrer"
           className="hover:text-foreground muted-foreground hover:decoration-foreground underline decoration-[1px] underline-offset-4 transition-colors"
-          href="https://github.com/pierrecomputer/pierre/tree/main/packages/highlights/benchmark#html-generation"
+          href="https://github.com/pierrecomputer/pierre/tree/main/packages/highlights"
         >
-          Benchmark
+          View on GitHub
         </Link>
-        ).
       </p>
     </section>
   );
