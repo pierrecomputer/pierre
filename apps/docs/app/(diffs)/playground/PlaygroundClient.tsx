@@ -77,6 +77,7 @@ import { PlaygroundVirtualizerView } from './PlaygroundVirtualizerView';
 import type {
   HunkSeparatorValue,
   LineHoverHighlight,
+  PlaygroundLineDiffType,
   ViewMode,
 } from './searchParams';
 import {
@@ -99,6 +100,7 @@ import { ToggleSwitch } from '@/components/ui/toggle-switch';
 const LINE_DIFF_OPTIONS = [
   { value: 'word-alt', label: 'Word-Alt' },
   { value: 'word', label: 'Word' },
+  { value: 'word-line', label: 'Word-Line' },
   { value: 'char', label: 'Character' },
   { value: 'none', label: 'None' },
 ] as const;
@@ -201,8 +203,8 @@ interface PlaygroundControlsContentProps {
   setSelectedDarkTheme: (v: (typeof DARK_THEMES)[number]) => void;
   diffIndicators: DiffIndicators;
   setDiffIndicators: (v: DiffIndicators) => void;
-  lineDiffType: 'word-alt' | 'word' | 'char' | 'none';
-  setLineDiffType: (v: 'word-alt' | 'word' | 'char' | 'none') => void;
+  lineDiffType: PlaygroundLineDiffType;
+  setLineDiffType: (v: PlaygroundLineDiffType) => void;
   lineHoverHighlight: LineHoverHighlight;
   setLineHoverHighlight: (v: LineHoverHighlight) => void;
   hunkSeparators: HunkSeparatorValue;

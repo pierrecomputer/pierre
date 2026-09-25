@@ -471,7 +471,8 @@ new WorkerPoolManager(poolOptions, highlighterOptions)
 //      Each cache has this limit, so total cached items can be 2x this value.)
 // - highlighterOptions: WorkerInitializationRenderOptions
 //   - theme?: DiffsThemeNames | ThemesType - Theme name or { dark, light } object
-//   - lineDiffType?: 'word' | 'word-alt' | 'char' - How to diff lines (default: 'word-alt')
+//   - lineDiffType?: 'word' | 'word-alt' | 'word-line' | 'char' | 'none'
+//     How to diff lines (default: 'word-alt')
 //   - maxLineDiffLength?: number - Max changed-line length for inline line diffs (default: 1000)
 //   - tokenizeMaxLineLength?: number - Max line length to tokenize (default: 1000)
 //   - preferredHighlighter?: 'shiki-js' | 'shiki-wasm' - Highlighter engine (default: 'shiki-js')
@@ -488,7 +489,7 @@ poolManager.setRenderOptions(options)
 // Returns: Promise<void> - Changes render options dynamically
 // Accepts: Partial<WorkerRenderingOptions>
 //   - theme?: DiffsThemeNames | ThemesType
-//   - lineDiffType?: 'word' | 'word-alt' | 'char'
+//   - lineDiffType?: 'word' | 'word-alt' | 'word-line' | 'char' | 'none'
 //   - maxLineDiffLength?: number
 //   - tokenizeMaxLineLength?: number
 // Omitted options will use defaults. WARNING: This forces all mounted

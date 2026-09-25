@@ -203,6 +203,7 @@ interface DiffOptions {
 
   // Highlight changed portions within modified lines:
   // 'word-alt' (default) - word boundaries, minimizes single-char gaps
+  // 'word-line' - one highlight from the first changed word to the last
   // 'word' - word boundaries
   // 'char' - character-level granularity
   // 'none' - disable inline highlighting
