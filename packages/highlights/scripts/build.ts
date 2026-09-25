@@ -103,7 +103,13 @@ export function transformWat(
         languages[alias] = id;
       }
     }
-    return `(enum $Language ${names.join(' ')})\n  (table $hlDispatch funcref\n    (elem ${functions.join(' ')}))`;
+    return (
+      `(enum $Language ${names.join(' ')})\n  (table $hlDispatch funcref\n    (elem ${functions.join(' ')}))\n` +
+      // partial fixtures without the memory layout carry no name table
+      (/\(const\s+\$mem\.languageNames\b/.test(code)
+        ? languageNamesData(languages, names)
+        : '')
+    );
   });
 
   code = code.replace(
@@ -1086,6 +1092,44 @@ function packKeywordPool(all: string[]): string {
     pool += words.splice(best, 1)[0].slice(overlap);
   }
   return pool;
+}
+
+/**
+ * The data segment `$languageByName` (src/languages.wat) searches: every
+ * language name and alias, grouped by length. A u16 offset from the table
+ * start per length 0..19 (group L spans [L, L+1)) comes first, then each
+ * group's records - the language id byte and the lowercase name. The search
+ * is linear within a group, so canonical names (`ts`, `js`, `go`), which
+ * fences use most, come before aliases.
+ */
+function languageNamesData(
+  languages: Record<string, number>,
+  canonical: string[]
+): string {
+  const isCanonical = new Set(canonical.map((quoted) => quoted.slice(1, -1)));
+  const maxLength = 18; // $languageByName rejects longer words
+  // plain text's names resolve to id 0, the same as no match
+  const names = Object.keys(languages)
+    .filter((name) => languages[name] !== 0)
+    .sort((a, b) => {
+      if (a.length !== b.length) return a.length - b.length;
+      const rank = Number(isCanonical.has(b)) - Number(isCanonical.has(a));
+      if (rank !== 0) return rank;
+      return a < b ? -1 : 1;
+    });
+  const long = names.find((name) => name.length > maxLength);
+  if (long !== undefined)
+    throw new Error(`Language name "${long}" exceeds ${maxLength} bytes`);
+  const offsets: number[] = [];
+  const records: number[] = [];
+  for (let length = 0; length <= maxLength + 1; length++) {
+    offsets.push(2 * (maxLength + 2) + records.length);
+    for (const name of names.filter((n) => n.length === length))
+      records.push(languages[name], ...Buffer.from(name, 'latin1'));
+  }
+  const bytes = [...offsets.flatMap((o) => [o & 255, o >> 8]), ...records];
+  const text = bytes.map((b) => '\\' + b.toString(16).padStart(2, '0'));
+  return `  (data (i32.const $mem.languageNames) "${text.join('')}")`;
 }
 
 /**

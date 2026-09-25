@@ -112,7 +112,7 @@
   (const $mem.jsTemplateBracketStack 34528)  ;; 1024
   (const $mem.jsTemplateFn 35552)            ;; 1024
   (const $mem.jsxStack 36576)                ;; 4096
-  (const $mem.markdownFence 40672)           ;; 1392
+  (const $mem.languageNames 40672)           ;; 1392
   (const $mem.markdownFenceStack 42064)      ;; 96
   (const $mem.tomlStack 42160)               ;; 1024
 

@@ -1,6 +1,5 @@
 (module
   (import "../common.wat")
-  (import "./string-templates.wat")
 
   (func $groovyByte (param $p i32) (result i32)
     (select (i32.load8_u (local.get $p)) (i32.const 0) (i32.lt_u (local.get $p) (global.get $end))))
@@ -233,7 +232,7 @@
         ;; a `#!` line opens a script
         (if
           (i32.and
-            (i32.eq (local.get $lhs) (global.get $srcBase))
+            (i32.eq (local.get $lhs) (global.get $docStart))
             (i32.and
               (i32.eq (local.get $c) (i32.const "#"))
               (i32.eq (local.get $c2) (i32.const "!"))))

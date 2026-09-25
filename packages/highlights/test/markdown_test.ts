@@ -3,12 +3,15 @@ import t from 'node:test';
 
 import type { Lang, ThemedToken } from '../lib/index';
 import { codeToTokens, init, StreamTokenizer } from '../lib/index';
+import languages from '../lib/languages';
 import { transformWat, wat2wasm } from '../scripts/build';
 import pierreDark from '../themes/pierre-dark.json' with { type: 'json' };
+import { samples } from './_samples';
 import {
   assertLineFedParity,
   checkInvariants,
   colorOf,
+  distinctTheme,
   flatTokens,
   kindOfColor,
   loadLang,
@@ -211,6 +214,61 @@ void t.test(
     );
   }
 );
+
+void t.test(
+  'markdown: fence info words resolve every language-table name',
+  () => {
+    // fences share the host's name lookup: each name or alias highlights its
+    // body exactly as that language highlights the same code on its own
+    const sampleOf = new Map<number, string>();
+    for (const [name, sample] of Object.entries(samples)) {
+      const id = languages[name as Lang];
+      if (!sampleOf.has(id))
+        sampleOf.set(id, sample.code.replace(/\n*$/, '\n'));
+    }
+    for (const [name, id] of Object.entries(languages)) {
+      if (id === 0) continue;
+      const body = sampleOf.get(id)!.split('\n').slice(0, 6).join('\n') + '\n';
+      if (body.includes('```')) continue;
+      const own = codeToTokens(body, {
+        lang: name as Lang,
+        theme: distinctTheme,
+      }).tokens.slice(0, -1);
+      const fenced = codeToTokens(`\`\`\`${name}\n${body}\`\`\``, {
+        lang: 'markdown',
+        theme: distinctTheme,
+      }).tokens.slice(1, 1 + own.length);
+      assert.equal(flatTokens(fenced), flatTokens(own), name);
+    }
+    // plain text's names keep the literal body of an unknown language
+    for (const name of ['plain', 'plaintext', 'text', 'txt']) {
+      const out = markdown.hl(`\`\`\`${name}\nconst x = 1;\n\`\`\``);
+      assert.equal(colorOf(out, 'const x = 1;'), LITERAL, name);
+    }
+  }
+);
+
+void t.test('markdown: a fenced body starts a document of its own', () => {
+  for (const [code, text, kind] of [
+    [
+      '```groovy\n#!/usr/bin/env groovy\nprintln 1\n```',
+      '#!/usr/bin/env groovy',
+      'comment',
+    ],
+    [
+      '```astro\n---\nconst a = 1;\n---\n<p>{a}</p>\n```',
+      '---',
+      'punctuation.special',
+    ],
+  ] as const) {
+    for (const host of ['markdown', 'mdx'] as const) {
+      const tokens = assertLineFedParity(host, `intro\n\n${code}\n\nafter`);
+      const line = tokens[3];
+      assert.equal(line[0].content, text, `${host} ${code}`);
+      assert.equal(kindOfColor(line[0].color), kind, `${host} ${code}`);
+    }
+  }
+});
 
 void t.test('markdown: unknown fence languages remain literal', () => {
   const out = checkInvariants(markdown.hl, '```unknown\nconst x = 1;\n```');

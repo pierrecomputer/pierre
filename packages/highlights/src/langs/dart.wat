@@ -1,6 +1,5 @@
 (module
   (import "../common.wat")
-  (import "./string-templates.wat")
 
   (func $dartByte (param $p i32) (result i32)
     (select (i32.load8_u (local.get $p)) (i32.const 0) (i32.lt_u (local.get $p) (global.get $end))))

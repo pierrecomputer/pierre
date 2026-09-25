@@ -1,227 +1,6 @@
 (module
   (import "../common.wat")
-  (import "./tsx.wat")
-  (import "./html.wat")
-  (import "./angular-html.wat")
-  (import "./css.wat")
-  (import "./json.wat")
-  (import "./bash.wat")
-  (import "./c.wat")
-  (import "./cpp.wat")
-  (import "./go.wat")
-  (import "./python.wat")
-  (import "./rust.wat")
-  (import "./yaml.wat")
-  (import "./php.wat")
-  (import "./sql.wat")
-  (import "./swift.wat")
-  (import "./haskell.wat")
-  (import "./kotlin.wat")
-  (import "./astro.wat")
-  (import "./vue.wat")
-  (import "./svelte.wat")
-  (import "./xml.wat")
-  (import "./mdx.wat")
-  (import "./asm.wat")
-  (import "./wat.wat")
-  (import "./diff.wat")
-  (import "./glsl.wat")
-  (import "./lua.wat")
-  (import "./batch.wat")
-  (import "./elm.wat")
-  (import "./cuda.wat")
-  (import "./fortran.wat")
-  (import "./solidity.wat")
-  (import "./zig.wat")
-  (import "../embed.wat")
-
-  (enum $MarkdownFenceLang
-    "unknown"
-    "tsx"
-    "html"
-    "css"
-    "json"
-    "bash"
-    "c"
-    "cpp"
-    "go"
-    "python"
-    "rust"
-    "yaml"
-    "php"
-    "sql"
-    "swift"
-    "haskell"
-    "kotlin"
-    "astro"
-    "vue"
-    "svelte"
-    "xml"
-    "markdown"
-    "mdx"
-    "asm"
-    "wat"
-    "diff"
-    "glsl"
-    "lua"
-    "js"
-    "jsx"
-    "ts"
-    "angular-html"
-    "batch"
-    "elm"
-    "cuda"
-    "fortran"
-    "solidity"
-    "zig"
-    "fortran-fixed-form")
-
-  ;; Public language aliases, grouped by name length: a u16 offset (from
-  ;; the table start) per length 0..19, where group L spans [L, L+1), then
-  ;; each group's records - the enum id and the lowercase name, L + 1 bytes.
-  (data (i32.const $mem.markdownFence)
-    "\28\00\28\00\30\00\54\00\f4\00\35\01\59\01\75\01\85\01\a0\01\aa\01\c0\01\c0\01\cd\01\cd\01\cd\01\cd\01\cd\01\df\01\f2\01"  ;; group offsets by name length 0..19
-    "\06c"  ;; c
-    "\06h"  ;; c
-    "\17s"  ;; asm
-    "\26f"  ;; fortran-fixed-form
-    "\1ets"  ;; ts
-    "\1cjs"  ;; js
-    "\05sh"  ;; bash
-    "\07cc"  ;; cpp
-    "\07hh"  ;; cpp
-    "\08go"  ;; go
-    "\09py"  ;; python
-    "\0ars"  ;; rust
-    "\0fhs"  ;; haskell
-    "\10kt"  ;; kotlin
-    "\15md"  ;; markdown
-    "\22cu"  ;; cuda
-    "\01tsx"  ;; tsx
-    "\1djsx"  ;; jsx
-    "\1ccjs"  ;; js
-    "\1cmjs"  ;; js
-    "\1ects"  ;; ts
-    "\1emts"  ;; ts
-    "\02htm"  ;; html
-    "\03css"  ;; css
-    "\05zsh"  ;; bash
-    "\07cpp"  ;; cpp
-    "\07c++"  ;; cpp
-    "\07cxx"  ;; cpp
-    "\07hpp"  ;; cpp
-    "\07hxx"  ;; cpp
-    "\0byml"  ;; yaml
-    "\0cphp"  ;; php
-    "\0dsql"  ;; sql
-    "\10kts"  ;; kotlin
-    "\12vue"  ;; vue
-    "\14xml"  ;; xml
-    "\14svg"  ;; xml
-    "\14xsd"  ;; xml
-    "\16mdx"  ;; mdx
-    "\17asm"  ;; asm
-    "\18wat"  ;; wat
-    "\1blua"  ;; lua
-    "\20bat"  ;; batch
-    "\20cmd"  ;; batch
-    "\20dos"  ;; batch
-    "\21elm"  ;; elm
-    "\22cuh"  ;; cuda
-    "\26for"  ;; fortran-fixed-form
-    "\26f77"  ;; fortran-fixed-form
-    "\23f90"  ;; fortran
-    "\23f95"  ;; fortran
-    "\23f03"  ;; fortran
-    "\23f08"  ;; fortran
-    "\24sol"  ;; solidity
-    "\25zig"  ;; zig
-    "\25zon"  ;; zig
-    "\02html"  ;; html
-    "\04json"  ;; json
-    "\05bash"  ;; bash
-    "\0arust"  ;; rust
-    "\0byaml"  ;; yaml
-    "\18wasm"  ;; wat
-    "\19diff"  ;; diff
-    "\1aglsl"  ;; glsl
-    "\1acomp"  ;; glsl
-    "\1afrag"  ;; glsl
-    "\1ageom"  ;; glsl
-    "\1avert"  ;; glsl
-    "\22cuda"  ;; cuda
-    "\04jsonc"  ;; json
-    "\05shell"  ;; bash
-    "\0eswift"  ;; swift
-    "\11astro"  ;; astro
-    "\19patch"  ;; diff
-    "\20batch"  ;; batch
-    "\08golang"  ;; go
-    "\09python"  ;; python
-    "\10kotlin"  ;; kotlin
-    "\13svelte"  ;; svelte
-    "\0fhaskell"  ;; haskell
-    "\23fortran"  ;; fortran
-    "\15markdown"  ;; markdown
-    "\17assembly"  ;; asm
-    "\24solidity"  ;; solidity
-    "\20batchfile"  ;; batch
-    "\1etypescript"  ;; ts
-    "\1cjavascript"  ;; js
-    "\1fangular-html"  ;; angular-html
-    "\23fortran-free-form"  ;; fortran
-    "\26fortran-fixed-form") ;; fortran-fixed-form
-
-  ;; The fence language named by the info word [$lhs,$rhs), or unknown. Only
-  ;; the names of the same length are compared, eight bytes at a time with
-  ;; the tail masked off, ASCII case-insensitively (`| 0x20`; the names are
-  ;; lowercase). Loads past the word or a record read slack or neighboring
-  ;; bytes that the mask discards.
-  (func $markdownFenceLang (param $lhs i32) (param $rhs i32) (result i32)
-    (local $i i32)
-    (local $len i32)
-    (local $record i32)
-    (local $rem i32)
-    (local $stop i32)
-    (local.set $len (i32.sub (local.get $rhs) (local.get $lhs)))
-    (if (i32.gt_u (i32.sub (local.get $len) (i32.const 1)) (i32.const 17))
-      (then (return (enum.get $MarkdownFenceLang.unknown))))
-    (local.set $record
-      (i32.add
-        (i32.const $mem.markdownFence)
-        (i32.load16_u offset=$mem.markdownFence (i32.shl (local.get $len) (i32.const 1)))))
-    (local.set $stop
-      (i32.add
-        (i32.const $mem.markdownFence)
-        (i32.load16_u offset=$mem.markdownFence+2 (i32.shl (local.get $len) (i32.const 1)))))
-    (block $done
-      (loop $alias
-        (br_if $done (i32.ge_u (local.get $record) (local.get $stop)))
-        (local.set $i (i32.const 0))
-        (block $miss
-          (loop $chunk
-            (local.set $rem (i32.sub (local.get $len) (local.get $i)))
-            (br_if $miss
-              (i64.ne
-                (i64.and
-                  (i64.xor
-                    (i64.or
-                      (i64.load (i32.add (local.get $lhs) (local.get $i)))
-                      (i64.const 0x2020202020202020))
-                    (i64.load offset=1 (i32.add (local.get $record) (local.get $i))))
-                  (select
-                    (i64.const -1)
-                    (i64.sub
-                      (i64.shl (i64.const 1) (i64.extend_i32_u (i32.shl (local.get $rem) (i32.const 3))))
-                      (i64.const 1))
-                    (i32.ge_u (local.get $rem) (i32.const 8))))
-                (i64.const 0)))
-            (local.set $i (i32.add (local.get $i) (i32.const 8)))
-            (br_if $chunk (i32.lt_u (local.get $i) (local.get $len))))
-          (return (i32.load8_u (local.get $record))))
-        (local.set $record (i32.add (local.get $record) (i32.add (local.get $len) (i32.const 1))))
-        (br $alias)))
-    (enum.get $MarkdownFenceLang.unknown))
+  (import "../languages.wat")
 
   ;; A fence can name `markdown` (or `mdx`, which re-enters markdown), so the
   ;; nesting depth is chosen by the input. The counter is raised and lowered
@@ -297,37 +76,6 @@
   ;; for this fence.
   (global $markdownBodyRan (mut i32) (i32.const 0))
 
-  ;; Run the ECMAScript pipeline over a fence body: the stream entry while
-  ;; streaming, so an open template or comment carries to the next chunk of
-  ;; the fence, and the whole-buffer entry otherwise.
-  (func $markdownEcmaBody (param $features i32) (param $resume i32)
-    (if (global.get $streaming)
-      (then (call $hlEcmaStream (local.get $features) (i32.eqz (local.get $resume))))
-      (else (call $hlEcma (local.get $features)))))
-
-  ;; Resume a construct the body's lexer left open at the previous chunk end,
-  ;; mirroring $streamResumeLang for the fence languages: start tags and
-  ;; embedded regions first, then the modes owned by one language. Returns 1
-  ;; when the construct consumed the whole (fence-bounded) range.
-  (func $markdownFenceResumeLang (param $lang i32) (result i32)
-    (if (global.get $streamRegionKind)
-      (then (return (call $streamResumeAnyRegion))))
-    (if (i32.eq (local.get $lang) (enum.get $MarkdownFenceLang.python))
-      (then (return (call $pyStreamResume))))
-    (if (i32.eq (local.get $lang) (enum.get $MarkdownFenceLang.php))
-      (then (return (call $phpStreamResume))))
-    (if
-      (i32.and
-        (i32.eq (local.get $lang) (enum.get $MarkdownFenceLang.yaml))
-        (i32.eq (global.get $streamMode) (i32.const 11)))
-      (then (return (call $yamlStreamResume))))
-    (if
-      (i32.and
-        (i32.eq (local.get $lang) (enum.get $MarkdownFenceLang.bash))
-        (i32.eq (global.get $streamMode) (i32.const 12)))
-      (then (return (call $bashStreamResume))))
-    (i32.const 0))
-
   ;; Highlight the fence body [$from,$to) as $lang. A whole-buffer run and
   ;; the first chunk of a streamed body start the body's lexer fresh; a later
   ;; chunk of a streamed body ($resume) continues it the way the top-level
@@ -338,6 +86,7 @@
   ;; its state lives in the per-depth fence registers.
   (func $markdownCodeRange (param $lang i32) (param $from i32) (param $to i32) (param $resume i32)
     (local $save i32)
+    (local $saveDoc i32)
     (local $saveDepth i32)
     (local $saveReset i32)
     (global.set $markdownBodyRan (i32.const 0))
@@ -357,11 +106,18 @@
     (local.set $save (global.get $end))
     (global.set $end (local.get $to))
     (global.set $ptr (local.get $from))
+    ;; the body is a document of its own, starting here unless it resumes
+    (local.set $saveDoc (global.get $docStart))
+    (global.set $docStart
+      (select
+        (local.get $from)
+        (i32.const 0)
+        (i32.eqz (i32.and (global.get $streaming) (local.get $resume)))))
     (block $codeDone
       (if
         (i32.or
-          (i32.eq (local.get $lang) (enum.get $MarkdownFenceLang.markdown))
-          (i32.eq (local.get $lang) (enum.get $MarkdownFenceLang.mdx)))
+          (i32.eq (local.get $lang) (enum.get $Language.markdown))
+          (i32.eq (local.get $lang) (enum.get $Language.mdx)))
         (then
           ;; A `markdown` or `mdx` body first resumes the fence its previous
           ;; chunk left open at this depth, as the document does at top level;
@@ -370,7 +126,7 @@
             (then
               (br_if $codeDone (call $markdownStreamResume))
               (br_if $codeDone (i32.ge_u (global.get $ptr) (global.get $end)))))
-          (if (i32.eq (local.get $lang) (enum.get $MarkdownFenceLang.markdown))
+          (if (i32.eq (local.get $lang) (enum.get $Language.markdown))
             (then (call $hlMarkdown))
             (else (call $hlMdx)))
           (br $codeDone)))
@@ -389,18 +145,19 @@
         (if
           (i32.and
             (i32.and (global.get $streaming) (local.get $resume))
-            (i32.eqz (call $markdownFenceIsEcma (local.get $lang))))
+            (i32.eqz (call $isEcmaLang (local.get $lang))))
           (then
             (if (global.get $streamRegionKind)
-              (then (br_if $bodyDone (call $markdownFenceResumeLang (local.get $lang)))))
+              (then (br_if $bodyDone (call $streamResumeLang (local.get $lang)))))
             (br_if $bodyDone (call $streamResumeCommon))
-            (br_if $bodyDone (call $markdownFenceResumeLang (local.get $lang)))))
+            (br_if $bodyDone (call $streamResumeLang (local.get $lang)))))
         (call $markdownFenceLexer (local.get $lang) (local.get $resume)))
       (if (global.get $streaming)
         (then
           (global.set $streamDepth (local.get $saveDepth))
           (global.set $streamReset (local.get $saveReset)))))
     (global.set $markdownDepth (i32.sub (global.get $markdownDepth) (i32.const 1)))
+    (global.set $docStart (local.get $saveDoc))
     (global.set $end (local.get $save))
     (global.set $ptr (local.get $to)))
 
@@ -469,8 +226,8 @@
     (i32.and
       (i32.ne (local.get $quotes) (i32.const 0))
       (i32.and
-        (i32.ne (local.get $lang) (enum.get $MarkdownFenceLang.markdown))
-        (i32.ne (local.get $lang) (enum.get $MarkdownFenceLang.mdx)))))
+        (i32.ne (local.get $lang) (enum.get $Language.markdown))
+        (i32.ne (local.get $lang) (enum.get $Language.mdx)))))
 
   ;; Highlight the body [$from,$to) of a fence opened behind $quotes
   ;; block-quote markers. Each line's `>` prefix is markup, not code, so the
@@ -512,148 +269,16 @@
     (global.set $markdownBodyRan (local.get $resume))
     (global.set $ptr (local.get $to)))
 
-  (func $markdownFenceIsEcma (param $lang i32) (result i32)
-    (i32.or
-      (i32.or
-        (i32.eq (local.get $lang) (enum.get $MarkdownFenceLang.tsx))
-        (i32.eq (local.get $lang) (enum.get $MarkdownFenceLang.js)))
-      (i32.or
-        (i32.eq (local.get $lang) (enum.get $MarkdownFenceLang.jsx))
-        (i32.eq (local.get $lang) (enum.get $MarkdownFenceLang.ts)))))
-
-  ;; Dispatch a fence body to its lexer; $ptr, $end, and the stream globals
-  ;; are already set up by $markdownCodeRange.
+  ;; Dispatch a fence body to its language's lexer; $ptr, $end, and the
+  ;; stream globals are already set up by $markdownCodeRange. While
+  ;; streaming, the ECMAScript family runs its resumable entry so an open
+  ;; template or comment carries to the next chunk of the fence.
   (func $markdownFenceLexer (param $lang i32) (param $resume i32)
-    (if (i32.eq (local.get $lang) (enum.get $MarkdownFenceLang.zig))
-      (then (call $hlZig) (return)))
-    (if (i32.eq (local.get $lang) (enum.get $MarkdownFenceLang.batch))
-      (then (call $hlBatch) (return)))
-    (if (i32.eq (local.get $lang) (enum.get $MarkdownFenceLang.elm))
-      (then (call $hlElm) (return)))
-    (if (i32.eq (local.get $lang) (enum.get $MarkdownFenceLang.cuda))
-      (then (call $hlCuda) (return)))
-    (if (i32.eq (local.get $lang) (enum.get $MarkdownFenceLang.fortran))
-      (then (call $hlFortran) (return)))
-    (if (i32.eq (local.get $lang) (enum.get $MarkdownFenceLang.fortran-fixed-form))
-      (then (call $hlFortranFixed) (return)))
-    (if (i32.eq (local.get $lang) (enum.get $MarkdownFenceLang.solidity))
-      (then (call $hlSolidity) (return)))
-    (if (i32.eq (local.get $lang) (enum.get $MarkdownFenceLang.tsx))
+    (if (global.get $streaming)
       (then
-        (call $markdownEcmaBody (i32.const 3) (local.get $resume))
-        (return)))
-    (if (i32.eq (local.get $lang) (enum.get $MarkdownFenceLang.js))
-      (then
-        (call $markdownEcmaBody (i32.const 0) (local.get $resume))
-        (return)))
-    (if (i32.eq (local.get $lang) (enum.get $MarkdownFenceLang.jsx))
-      (then
-        (call $markdownEcmaBody (i32.const 2) (local.get $resume))
-        (return)))
-    (if (i32.eq (local.get $lang) (enum.get $MarkdownFenceLang.ts))
-      (then
-        (call $markdownEcmaBody (i32.const 1) (local.get $resume))
-        (return)))
-    (if (i32.eq (local.get $lang) (enum.get $MarkdownFenceLang.html))
-      (then
-        (call $hlHtml)
-        (return)))
-    (if (i32.eq (local.get $lang) (enum.get $MarkdownFenceLang.angular-html))
-      (then
-        (call $hlAngularHtml)
-        (return)))
-    (if (i32.eq (local.get $lang) (enum.get $MarkdownFenceLang.css))
-      (then
-        (call $hlCss)
-        (return)))
-    (if (i32.eq (local.get $lang) (enum.get $MarkdownFenceLang.json))
-      (then
-        (call $hlJson)
-        (return)))
-    (if (i32.eq (local.get $lang) (enum.get $MarkdownFenceLang.bash))
-      (then
-        (call $hlBash)
-        (return)))
-    (if (i32.eq (local.get $lang) (enum.get $MarkdownFenceLang.c))
-      (then
-        (call $hlC)
-        (return)))
-    (if (i32.eq (local.get $lang) (enum.get $MarkdownFenceLang.cpp))
-      (then
-        (call $hlCpp)
-        (return)))
-    (if (i32.eq (local.get $lang) (enum.get $MarkdownFenceLang.go))
-      (then
-        (call $hlGo)
-        (return)))
-    (if (i32.eq (local.get $lang) (enum.get $MarkdownFenceLang.python))
-      (then
-        (call $hlPython)
-        (return)))
-    (if (i32.eq (local.get $lang) (enum.get $MarkdownFenceLang.rust))
-      (then
-        (call $hlRust)
-        (return)))
-    (if (i32.eq (local.get $lang) (enum.get $MarkdownFenceLang.yaml))
-      (then
-        (call $hlYaml)
-        (return)))
-    (if (i32.eq (local.get $lang) (enum.get $MarkdownFenceLang.php))
-      (then
-        (call $hlPhp)
-        (return)))
-    (if (i32.eq (local.get $lang) (enum.get $MarkdownFenceLang.sql))
-      (then
-        (call $hlSql)
-        (return)))
-    (if (i32.eq (local.get $lang) (enum.get $MarkdownFenceLang.swift))
-      (then
-        (call $hlSwift)
-        (return)))
-    (if (i32.eq (local.get $lang) (enum.get $MarkdownFenceLang.haskell))
-      (then
-        (call $hlHaskell)
-        (return)))
-    (if (i32.eq (local.get $lang) (enum.get $MarkdownFenceLang.kotlin))
-      (then
-        (call $hlKotlin)
-        (return)))
-    (if (i32.eq (local.get $lang) (enum.get $MarkdownFenceLang.astro))
-      (then
-        (call $hlAstro)
-        (return)))
-    (if (i32.eq (local.get $lang) (enum.get $MarkdownFenceLang.vue))
-      (then
-        (call $hlVue)
-        (return)))
-    (if (i32.eq (local.get $lang) (enum.get $MarkdownFenceLang.svelte))
-      (then
-        (call $hlSvelte)
-        (return)))
-    (if (i32.eq (local.get $lang) (enum.get $MarkdownFenceLang.xml))
-      (then
-        (call $hlXml)
-        (return)))
-    (if (i32.eq (local.get $lang) (enum.get $MarkdownFenceLang.asm))
-      (then
-        (call $hlAsm)
-        (return)))
-    (if (i32.eq (local.get $lang) (enum.get $MarkdownFenceLang.wat))
-      (then
-        (call $hlWat)
-        (return)))
-    (if (i32.eq (local.get $lang) (enum.get $MarkdownFenceLang.diff))
-      (then
-        (call $hlDiff)
-        (return)))
-    (if (i32.eq (local.get $lang) (enum.get $MarkdownFenceLang.glsl))
-      (then
-        (call $hlGlsl)
-        (return)))
-    (if (i32.eq (local.get $lang) (enum.get $MarkdownFenceLang.lua))
-      (then
-        (call $hlLua)
-        (return))))
+        (if (call $ecmaStreamLang (local.get $lang) (i32.eqz (local.get $resume)))
+          (then (return)))))
+    (call $highlightLang (local.get $lang)))
 
   ;; First CR or LF at or after $p, or $end - one SIMD compare per 16 bytes.
   ;; Every caller passes $p <= $end, so the shared finder's clamp to $end
@@ -1586,7 +1211,7 @@
                           (i32.eq (local.get $c) (i32.const "}")))))
                     (local.set $q (i32.add (local.get $q) (i32.const 1)))
                     (br $infoWord)))
-                (local.set $lang (call $markdownFenceLang (local.get $info) (local.get $q)))
+                (local.set $lang (call $languageByName (local.get $info) (local.get $q)))
                 (local.set $body (call $markdownAfterLine (local.get $lineEnd)))
                 (call $emitTok
                   (enum.get $Token.punctuation.delimiter)

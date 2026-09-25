@@ -292,7 +292,7 @@
         (local.set $p (call $markdownAfterLine (local.get $lineEnd)))
         (global.set $eof (local.get $p))
         (call $markdownCodeRange
-          (enum.get $MarkdownFenceLang.tsx)
+          (enum.get $Language.tsx)
           (local.get $from)
           (local.get $p)
           (local.get $resume))
@@ -306,7 +306,7 @@
         (call $markdownFenceSet
           (i32.const 1)
           (i32.const 0)
-          (i32.or (enum.get $MarkdownFenceLang.tsx) (i32.shl (local.get $resume) (i32.const 8)))))
+          (i32.or (enum.get $Language.tsx) (i32.shl (local.get $resume) (i32.const 8)))))
       (else (call $markdownClearEmbeddedStream)))
     (global.set $ptr (local.get $from))
     (local.get $from))

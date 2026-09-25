@@ -1,6 +1,6 @@
 (module
   (import "../common.wat")
-  (import "./brace-markup.wat")
+  (import "./html.wat")
 
   ;; first CR or LF at or after $p, or $end - one SIMD compare per 16 bytes
   (func $astroLineEnd (param $p i32) (result i32)
@@ -20,16 +20,13 @@
     (local.get $p))
 
   ;; Front matter between standalone `---` lines, shared by astro, markdown,
-  ;; and mdx. Only the document start opens it: in a stream every chunk
-  ;; starts at $srcBase, so the first chunk is told apart by the reset flag.
-  ;; Returns the offset after the opener's line break, or 0 when $ptr does
-  ;; not open front matter.
+  ;; and mdx. Only the document start ($docStart) opens it, which includes a
+  ;; fenced body's first line. Returns the offset after the opener's line
+  ;; break, or 0 when $ptr does not open front matter.
   (func $frontMatterOpen (result i32)
     (if
       (i32.and
-        (i32.and
-          (i32.eq (global.get $ptr) (global.get $srcBase))
-          (i32.or (i32.eqz (global.get $streaming)) (global.get $streamReset)))
+        (i32.eq (global.get $ptr) (global.get $docStart))
         (i32.and
           (i32.le_u (i32.add (global.get $ptr) (i32.const 3)) (global.get $end))
           (i32.eq (i32.and (i32.load (global.get $ptr)) (i32.const 0xffffff)) (i32.const "---"))))
