@@ -8,17 +8,21 @@ import {
   type ReactNode,
   useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState,
 } from 'react';
+import { toast } from 'sonner';
 
 import { DiffsHubHeader } from './DiffsHubHeader';
 import { DiffsHubSidebar } from './DiffsHubSidebar';
 import { DiffsHubStatusPanel } from './DiffsHubStatusPanel';
 import { DiffsHubViewer } from './DiffsHubViewer';
 import { ThemeSourceProvider } from './ThemeSourceProvider';
+import { useGitHubComments } from './useGitHubComments';
 import { useGitHubDiffFileLoader } from './useGitHubDiffFileLoader';
 import { useGitHubToken } from './useGitHubToken';
+import { useGitHubUser } from './useGitHubUser';
 import { useIsHydrated } from './useIsHydrated';
 import { useMediaQuery } from './useMediaQuery';
 import { useOnValueChange } from './useOnValueChange';
@@ -29,13 +33,23 @@ import {
   themeController,
 } from '@/components/themeController';
 import { preloadAvatars } from '@/lib/annotation';
+import {
+  type GitHubCommentWire,
+  mapAnnotationSideToGitHub,
+} from '@/lib/githubComments';
+import {
+  GitHubCommentPostError,
+  postGitHubCommentRequest,
+} from '@/lib/githubCommentsClient';
+import { parseGitHubDiffSource } from '@/lib/githubDiffSource';
 import { removeSavedCommentSidebarEntry } from '@/lib/removeSavedCommentSidebarEntry';
 import type { DarkThemeName, LightThemeName } from '@/lib/themeNames';
 import type {
   CommentMetadata,
   DiffsHubDeletedCommentEvent,
+  DiffsHubPostDraftRequest,
+  DiffsHubPostReplyRequest,
   DiffsHubSavedCommentEntry,
-  DiffsHubSavedCommentEvent,
 } from '@/lib/types';
 import { upsertSavedCommentSidebarEntry } from '@/lib/upsertSavedCommentSidebarEntry';
 
@@ -71,6 +85,7 @@ function ReviewUIInner({ domain, initialUrl, path }: ReviewUIProps) {
   const [diffIndicators, setDiffIndicators] = useState<DiffIndicators>('bars');
   const [lineNumbers, setLineNumbers] = useState(true);
   const {
+    capability: githubTokenCapability,
     clearToken: clearGitHubToken,
     hasToken: hasGitHubToken,
     setToken: setGitHubToken,
@@ -81,7 +96,7 @@ function ReviewUIInner({ domain, initialUrl, path }: ReviewUIProps) {
     domain,
     hasGitHubToken,
     path,
-    token: githubToken,
+    token: githubToken ?? '',
     tokenVersion: githubTokenVersion,
   });
   // All theming state — color mode and the light/dark theme-name picks — lives
@@ -163,6 +178,20 @@ function ReviewUIInner({ domain, initialUrl, path }: ReviewUIProps) {
     path,
     viewerRef,
   });
+  // Real GitHub comments for the viewed source, fed into the same sidebar
+  // sections local demo comments use. Fetches in parallel with the patch and
+  // applies once the viewer is ready.
+  const { payload: githubCommentsPayload } = useGitHubComments({
+    commentFileByItemId,
+    domain,
+    getToken: getGitHubToken,
+    loadState,
+    path,
+    setCommentSections,
+    tokenVersion: githubTokenVersion,
+    treeSource,
+    viewerRef,
+  });
 
   // Crossing the mobile breakpoint picks the diff style for that width and
   // closes the file-tree overlay when leaving mobile; the user can still change
@@ -184,6 +213,161 @@ function ReviewUIInner({ domain, initialUrl, path }: ReviewUIProps) {
     },
     undefined
   );
+  // The token owner's identity, shown on the comment form so posting reads
+  // as "you", not a random persona.
+  const githubUser = useGitHubUser({
+    getToken: getGitHubToken,
+    hasToken: hasGitHubToken,
+    tokenVersion: githubTokenVersion,
+  });
+
+  // Posting is available only on pull sources with a write-declared token and
+  // a known head sha (GitHub needs it as the commit_id of new comments).
+  const githubDiffSource = useMemo(
+    () => (domain == null ? parseGitHubDiffSource(path) : undefined),
+    [domain, path]
+  );
+  const githubHeadSha = githubCommentsPayload?.headSha;
+  const canPostGitHubComments =
+    githubDiffSource?.kind === 'pull' &&
+    hasGitHubToken &&
+    githubTokenCapability === 'read-write' &&
+    githubHeadSha != null;
+
+  const handleGitHubPostError = useCallback((error: unknown) => {
+    // 403 means no write access to THIS repo, which for fine-grained tokens
+    // is usually resource-owner scoping (they can never write to repos
+    // outside their owner), not a globally read-only token — so explain
+    // rather than downgrading the stored capability. Rate limiting arrives
+    // as 429, not 403.
+    if (error instanceof GitHubCommentPostError && error.status === 403) {
+      toast.error(
+        "GitHub rejected the comment: this token has no write access to this repo. A fine-grained PAT must have the repo's owner (user or org) as its resource owner — or use a classic token with repo scope."
+      );
+      return;
+    }
+    toast.error(
+      error instanceof Error ? error.message : 'Posting to GitHub failed.'
+    );
+  }, []);
+
+  const postGitHubDraftComment = useCallback(
+    async (request: DiffsHubPostDraftRequest): Promise<GitHubCommentWire> => {
+      const token = getGitHubToken();
+      const filePath = commentFileByItemId?.get(request.itemId)?.path;
+      if (token === '' || githubHeadSha == null || filePath == null) {
+        const error = new Error('Missing GitHub posting context.');
+        handleGitHubPostError(error);
+        throw error;
+      }
+      try {
+        return await postGitHubCommentRequest(path, token, {
+          kind: 'comment',
+          body: request.message,
+          commitId: githubHeadSha,
+          filePath,
+          line: request.lineNumber,
+          side: mapAnnotationSideToGitHub(request.side),
+          ...(request.range.start !== request.range.end
+            ? {
+                startLine: request.range.start,
+                startSide: mapAnnotationSideToGitHub(
+                  request.range.side ?? request.side
+                ),
+              }
+            : {}),
+        });
+      } catch (error) {
+        handleGitHubPostError(error);
+        throw error;
+      }
+    },
+    [
+      commentFileByItemId,
+      getGitHubToken,
+      githubHeadSha,
+      handleGitHubPostError,
+      path,
+    ]
+  );
+
+  const postGitHubReply = useCallback(
+    async ({ body, itemId, key, rootCommentId }: DiffsHubPostReplyRequest) => {
+      const token = getGitHubToken();
+      if (token === '') {
+        const error = new Error('Missing GitHub posting context.');
+        handleGitHubPostError(error);
+        throw error;
+      }
+      let reply: GitHubCommentWire;
+      try {
+        reply = await postGitHubCommentRequest(path, token, {
+          kind: 'reply',
+          body,
+          commentId: rootCommentId,
+        });
+      } catch (error) {
+        handleGitHubPostError(error);
+        throw error;
+      }
+      // Append the reply to the inline thread annotation…
+      const viewer = viewerRef.current;
+      const item = viewer?.getItem(itemId);
+      if (viewer != null && item != null && item.type === 'diff') {
+        item.annotations = (item.annotations ?? []).map((annotation) =>
+          annotation.metadata.kind === 'github' &&
+          annotation.metadata.key === key
+            ? {
+                ...annotation,
+                metadata: {
+                  ...annotation.metadata,
+                  thread: {
+                    root: annotation.metadata.thread.root,
+                    replies: [...annotation.metadata.thread.replies, reply],
+                  },
+                },
+              }
+            : annotation
+        );
+        item.version = typeof item.version === 'number' ? item.version + 1 : 1;
+        viewer.updateItem(item);
+      }
+      // …and mirror it into the sidebar entry.
+      setCommentSections((previous) =>
+        previous.map((section) =>
+          section.itemId !== itemId
+            ? section
+            : {
+                ...section,
+                comments: section.comments.map((comment) =>
+                  comment.key !== key
+                    ? comment
+                    : {
+                        ...comment,
+                        replyCount: (comment.replyCount ?? 0) + 1,
+                        thread:
+                          comment.thread == null
+                            ? undefined
+                            : {
+                                root: comment.thread.root,
+                                replies: [...comment.thread.replies, reply],
+                              },
+                      }
+                ),
+              }
+        )
+      );
+    },
+    [getGitHubToken, handleGitHubPostError, path, setCommentSections]
+  );
+
+  const draftHint =
+    githubDiffSource?.kind === 'pull'
+      ? canPostGitHubComments
+        ? 'Posts to the pull request on GitHub.'
+        : 'Saved locally only — add a GitHub token with write access to post.'
+      : undefined;
+
   const handleSelectTreeItem = useCallback((itemId: string) => {
     setFileTreeOverlayOpen(false);
     const viewer = viewerRef.current;
@@ -209,7 +393,7 @@ function ReviewUIInner({ domain, initialUrl, path }: ReviewUIProps) {
     applyCollapseModeToLoaded(next);
   }, [applyCollapseModeToLoaded, collapseMode]);
   const handleCommentSaved = useCallback(
-    (comment: DiffsHubSavedCommentEvent) => {
+    (comment: DiffsHubSavedCommentEntry) => {
       setCommentSections((prev) =>
         upsertSavedCommentSidebarEntry(prev, commentFileByItemId, comment)
       );
@@ -233,6 +417,17 @@ function ReviewUIInner({ domain, initialUrl, path }: ReviewUIProps) {
   const handleSelectComment = useCallback(
     (comment: DiffsHubSavedCommentEntry) => {
       setFileTreeOverlayOpen(false);
+      // File-level and outdated comments have no selectable lines in the
+      // current diff; jump to the file instead.
+      if (comment.anchor != null) {
+        viewerRef.current?.scrollTo({
+          type: 'item',
+          id: comment.itemId,
+          align: 'start',
+          behavior: 'smooth-auto',
+        });
+        return;
+      }
       viewerRef.current?.setSelectedLines({
         id: comment.itemId,
         range: comment.range,
@@ -274,7 +469,9 @@ function ReviewUIInner({ domain, initialUrl, path }: ReviewUIProps) {
         overflow={overflow}
         fileTreeOverlayOpen={fileTreeOverlayOpen}
         fileTreeAvailable={treeSource != null}
+        githubRepoOwner={githubDiffSource?.repo.owner}
         githubTokenActive={hasGitHubToken}
+        githubTokenCapability={githubTokenCapability}
         onClearGitHubToken={clearGitHubToken}
         onSaveGitHubToken={setGitHubToken}
         onToggleCollapseMode={handleToggleCollapseMode}
@@ -293,6 +490,7 @@ function ReviewUIInner({ domain, initialUrl, path }: ReviewUIProps) {
         <>
           <DiffsHubSidebar
             className="[grid-area:viewer] md:[grid-area:tree]"
+            commentsPostToGitHub={canPostGitHubComments}
             commentSections={commentSections}
             diffStats={diffStats}
             mobileOverlayOpen={fileTreeOverlayOpen}
@@ -318,10 +516,16 @@ function ReviewUIInner({ domain, initialUrl, path }: ReviewUIProps) {
             viewerRef={viewerRef}
             initialItems={initialItems}
             loadDiffFiles={loadDiffFiles}
+            draftAuthor={canPostGitHubComments ? githubUser : undefined}
+            draftHint={draftHint}
             onCommentDeleted={handleCommentDeleted}
             onCommentSaved={handleCommentSaved}
             onLineLinkChange={onLineLinkChange}
             onViewerReady={onViewerReady}
+            postComment={
+              canPostGitHubComments ? postGitHubDraftComment : undefined
+            }
+            postReply={canPostGitHubComments ? postGitHubReply : undefined}
           />
         </>
       ) : (
