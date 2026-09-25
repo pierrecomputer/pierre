@@ -129,6 +129,18 @@ describe('shared highlighter cache state', () => {
     expect(isHighlighterNull()).toBe(true);
   });
 
+  test('an explicit undefined instance does not fall back to the default backend', async () => {
+    const shared = await getSharedHighlighter({ themes: [], langs: [] });
+    expect(isHighlighterLoaded()).toBe(true);
+    const missing:
+      | Awaited<ReturnType<typeof getSharedHighlighter>>
+      | undefined = undefined;
+    expect(isHighlighterNull(missing)).toBe(true);
+    expect(isHighlighterLoaded(missing)).toBe(false);
+    expect(isHighlighterLoading(missing)).toBe(false);
+    expect(isHighlighterLoaded(shared)).toBe(true);
+  });
+
   for (const preferredHighlighter of backends) {
     test(`${preferredHighlighter} retained instances keep used themes after disposeHighlighter`, async () => {
       const highlighter = await createHighlighter({ preferredHighlighter });

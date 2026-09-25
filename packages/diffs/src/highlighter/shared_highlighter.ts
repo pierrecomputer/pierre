@@ -68,6 +68,16 @@ function getCachedHighlighter(
   return typeof state === 'string' ? highlighters.get(state) : state;
 }
 
+// Resolves the cache entry a load-state predicate should inspect. A bare call
+// checks the default `shiki-js` backend, but an explicit `undefined` argument
+// comes from the instance type-guard overload and means "no instance", so it
+// must not fall back to the default backend the way a parameter default would.
+function resolvePredicateTarget(
+  args: [state?: HighlighterState]
+): CachedHighlighter | undefined {
+  return getCachedHighlighter(args.length === 0 ? 'shiki-js' : args[0]);
+}
+
 function isLoadedInstance(
   cached: CachedHighlighter | undefined
 ): cached is DiffsHighlighter {
@@ -83,9 +93,9 @@ export function isHighlighterLoaded(
 ): h is DiffsHighlighter;
 export function isHighlighterLoaded(backend?: HighlighterTypes): boolean;
 export function isHighlighterLoaded(
-  state: HighlighterState = 'shiki-js'
+  ...args: [state?: HighlighterState]
 ): boolean {
-  return isLoadedInstance(getCachedHighlighter(state));
+  return isLoadedInstance(resolvePredicateTarget(args));
 }
 
 interface GetHighlighterIfLoadedProps {
@@ -119,9 +129,9 @@ export function isHighlighterLoading(
 ): h is Promise<DiffsHighlighter>;
 export function isHighlighterLoading(backend?: HighlighterTypes): boolean;
 export function isHighlighterLoading(
-  state: HighlighterState = 'shiki-js'
+  ...args: [state?: HighlighterState]
 ): boolean {
-  const cached = getCachedHighlighter(state);
+  const cached = resolvePredicateTarget(args);
   return cached != null && 'then' in cached;
 }
 
@@ -131,9 +141,9 @@ export function isHighlighterNull(
 ): h is undefined;
 export function isHighlighterNull(backend?: HighlighterTypes): boolean;
 export function isHighlighterNull(
-  state: HighlighterState = 'shiki-js'
+  ...args: [state?: HighlighterState]
 ): boolean {
-  return getCachedHighlighter(state) == null;
+  return resolvePredicateTarget(args) == null;
 }
 
 export async function preloadHighlighter(
