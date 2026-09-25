@@ -9,12 +9,11 @@
   ;; so `Set<int>` stays a type and `set(x)` a call.
   (keyword-table $dartWords $mem.dartWords $mem.dockerfileWords
     (group ;; 1: control
-      "if" "do" "on" "for" "try" "case" "else" "await" "break" "catch" "throw" "while" "yield"
+      "if" "do" "for" "try" "case" "else" "await" "break" "catch" "throw" "while" "yield"
       "assert" "return" "switch" "default" "finally" "rethrow" "continue")
     (group "enum" "class" "mixin" "typedef" "extension") ;; 2: declaration, next name is a type
     (group "get" "set")                                  ;; 3: accessor, next name is a function
-    (group ;; 4: import
-      "hide" "part" "show" "export" "import" "library" "deferred")
+    (group "export" "import" "library" "deferred")      ;; 4: import
     (group ;; 5: declaration and modifiers
       "var" "base" "late" "with" "async" "const" "final" "static" "sealed" "extends" "factory"
       "abstract" "external" "operator" "required" "covariant" "interface" "implements")
@@ -24,15 +23,21 @@
     (group "true" "false")    ;; 7: booleans
     (group "null")            ;; 8: built-in constant
     (group "this" "super")    ;; 9: special variables
-    (group "in" "is" "as" "new" "sync")) ;; 10: word operators
+    (group "in" "is" "as" "new" "sync") ;; 10: word operators
+    (group "hide" "part" "show")        ;; 11: import combinators and `part`, contextual
+    (group "on"))                       ;; 12: `on` clauses, contextual
 
   ;; Token in the low byte; the high byte selects the next-name capture:
-  ;; 1=type, 2=function. -1 means an ordinary identifier; group 3 is left to
-  ;; the caller, which knows what follows the word.
+  ;; 1=type, 2=function. -1 means an ordinary identifier; groups 3, 11, and
+  ;; 12 are left to the caller, which knows what follows the word.
   (func $dartWordHl (param $g i32) (result i32)
     (if (i32.eqz (local.get $g))
       (then (return (i32.const -1))))
     (if (i32.eq (local.get $g) (i32.const 1))
+      (then (return (enum.get $Token.keyword.control))))
+    (if (i32.eq (local.get $g) (i32.const 11))
+      (then (return (enum.get $Token.keyword.import))))
+    (if (i32.eq (local.get $g) (i32.const 12))
       (then (return (enum.get $Token.keyword.control))))
     (if (i32.le_u (local.get $g) (i32.const 3))
       (then
@@ -73,19 +78,16 @@
     (param $seg i32)
     (result i32)
     (local $c i32)
-    (local $c2 i32)
-    (local $e i32)
-    (local $template i32)
     (local $stop i32)
     (local $dollar i32)
     (local $status i32)
     (local.set $stop (global.get $ptr))
-    (local.set $dollar (global.get $ptr))
     (block $done
       (loop $scan
         ;; the next stop byte - the quote, plus backslash and CR/LF in a
         ;; single-line string - and the next `$` before it are each found
-        ;; with one SIMD hop and rescanned only once $ptr passes them
+        ;; with one SIMD hop and rescanned only once $ptr passes them; a raw
+        ;; literal has no `$` stop, and zero, below $ptr, forces the search
         (if (i32.ge_u (global.get $ptr) (local.get $stop))
           (then
             (local.set $stop
@@ -95,29 +97,16 @@
                 (local.get $quote)
                 (i32.eqz (local.get $raw))
                 (i32.eqz (local.get $triple))))
+            (local.set $dollar (select (local.get $stop) (i32.const 0) (local.get $raw)))))
+        (if (i32.gt_u (global.get $ptr) (local.get $dollar))
+          (then
             (local.set $dollar
-              (select
+              (call $scanFindSpecial
+                (global.get $ptr)
                 (local.get $stop)
-                (call $scanFindSpecial
-                  (global.get $ptr)
-                  (local.get $stop)
-                  (i32.const "$")
-                  (i32.const 0)
-                  (i32.const 0))
-                (local.get $raw))))
-          (else
-            (if (i32.gt_u (global.get $ptr) (local.get $dollar))
-              (then
-                (local.set $dollar
-                  (select
-                    (local.get $stop)
-                    (call $scanFindSpecial
-                      (global.get $ptr)
-                      (local.get $stop)
-                      (i32.const "$")
-                      (i32.const 0)
-                      (i32.const 0))
-                    (local.get $raw)))))))
+                (i32.const "$")
+                (i32.const 0)
+                (i32.const 0)))))
         (global.set $ptr
           (select
             (local.get $dollar)
@@ -152,42 +141,14 @@
           (i32.or (i32.eq (local.get $c) (i32.const 10)) (i32.eq (local.get $c) (i32.const 13))))
         (if (i32.eq (local.get $c) (i32.const 92))
           (then
-            (call $emitTok (enum.get $Token.string) (local.get $seg) (global.get $ptr))
-            (local.set $e (call $lexEscapeEnd (global.get $ptr)))
-            (call $emitTok (enum.get $Token.string.escape) (global.get $ptr) (local.get $e))
-            (global.set $ptr (local.get $e))
-            (local.set $seg (global.get $ptr))
-            (if
-              (i32.and
-                (i32.eq (global.get $ptr) (global.get $end))
-                (i32.or
-                  (i32.eq (i32.load8_u (i32.sub (global.get $ptr) (i32.const 1))) (i32.const 10))
-                  (i32.eq (i32.load8_u (i32.sub (global.get $ptr) (i32.const 1))) (i32.const 13))))
+            (if (call $stringEscapeAt (local.get $seg))
               (then (local.set $status (i32.const 3))))
+            (local.set $seg (global.get $ptr))
             (br $scan)))
         ;; `$`: an interpolation when a brace or a name follows
-        (local.set $c2 (call $dartByte (i32.add (global.get $ptr) (i32.const 1))))
-        (if (i32.and (i32.eq (local.get $c2) (i32.const "{")) (i32.eqz (local.get $interp)))
-          (then
-            (call $emitTok (enum.get $Token.string) (local.get $seg) (global.get $ptr))
-            ;; the `{` was read below $end, so this cannot overshoot
-            (global.set $ptr (i32.add (global.get $ptr) (i32.const 2)))
-            (call $emitTok
-              (enum.get $Token.punctuation.special)
-              (i32.sub (global.get $ptr) (i32.const 2))
-              (global.get $ptr))
-            (return (i32.const 2))))
-        (if (call $lexIsIdentStart (local.get $c2))
-          (then
-            (call $emitTok (enum.get $Token.string) (local.get $seg) (global.get $ptr))
-            (local.set $template (global.get $ptr))
-            (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
-            (call $lexScanIdent)
-            (call $emitTok (enum.get $Token.variable) (local.get $template) (global.get $ptr))
-            (local.set $seg (global.get $ptr))
-            (br $scan)))
-        (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
-        (br $scan)))
+        (local.set $seg (call $stringDollarAt (local.get $seg) (i32.const 0) (local.get $interp)))
+        (br_if $scan (i32.ge_s (local.get $seg) (i32.const 0)))
+        (return (i32.const 2))))
     (call $emitTok (enum.get $Token.string) (local.get $seg) (global.get $ptr))
     (local.get $status))
 
@@ -351,12 +312,24 @@
             (local.set $rhs (global.get $ptr))
             (local.set $p (call $lexSkipSpaceAt (local.get $rhs)))
             (local.set $g (keyword-table.get $dartWords (local.get $lhs) (local.get $rhs)))
-            ;; `get`/`set` are accessor keywords only before a name
+            ;; `get`/`set`, `on`, and `show`/`hide`/`part` are keywords only
+            ;; before a name - or, for `part`, its quoted path - so `var show
+            ;; = true` and `hide(show)` keep them as names
             (if
-              (i32.and
+              (i32.or
                 (i32.eq (local.get $g) (i32.const 3))
-                (i32.eqz (call $lexIsIdentStart (call $dartByte (local.get $p)))))
-              (then (local.set $g (i32.const 0))))
+                (i32.ge_u (local.get $g) (i32.const 11)))
+              (then
+                (if
+                  (i32.eqz
+                    (i32.or
+                      (call $lexIsIdentStart (call $dartByte (local.get $p)))
+                      (i32.and
+                        (i32.eq (local.get $g) (i32.const 11))
+                        (i32.or
+                          (i32.eq (call $dartByte (local.get $p)) (i32.const 34))
+                          (i32.eq (call $dartByte (local.get $p)) (i32.const 39))))))
+                  (then (local.set $g (i32.const 0))))))
             (local.set $kind (call $dartWordHl (local.get $g)))
             (if (i32.ge_s (local.get $kind) (i32.const 0))
               (then
@@ -388,7 +361,7 @@
                           (else
                             (local.set $afterType
                               (i32.le_u
-                                (i32.sub (i32.load8_u (local.get $lhs)) (i32.const "A"))
+                                (i32.sub (local.get $c) (i32.const "A"))
                                 (i32.const 25)))
                             (local.set $hl
                               (select
@@ -402,7 +375,7 @@
                             ;; a type is the function being declared
                             (if
                               (i32.le_u
-                                (i32.sub (i32.load8_u (local.get $lhs)) (i32.const "A"))
+                                (i32.sub (local.get $c) (i32.const "A"))
                                 (i32.const 25))
                               (then (local.set $hl (enum.get $Token.type)))
                               (else
@@ -420,7 +393,7 @@
                               (else
                                 (local.set $afterType
                                   (i32.le_u
-                                    (i32.sub (i32.load8_u (local.get $lhs)) (i32.const "A"))
+                                    (i32.sub (local.get $c) (i32.const "A"))
                                     (i32.const 25)))
                                 (local.set $hl
                                   (select
@@ -559,6 +532,7 @@
                       (i32.eq (local.get $c) (local.get $c2))
                       (byteset.get "&+-<>?|" (local.get $c))))
                   (then
+                    ;; two bytes in, so the third is $c3
                     (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
                     (if
                       (i32.and
@@ -566,8 +540,8 @@
                           (i32.eq (local.get $c) (i32.const ">"))
                           (i32.eq (local.get $c) (i32.const "?")))
                         (i32.or
-                          (i32.eq (call $dartByte (global.get $ptr)) (i32.const ">"))
-                          (i32.eq (call $dartByte (global.get $ptr)) (i32.const "="))))
+                          (i32.eq (local.get $c3) (i32.const ">"))
+                          (i32.eq (local.get $c3) (i32.const "="))))
                       (then
                         (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
                         (if
@@ -578,14 +552,18 @@
                     (if
                       (i32.and
                         (i32.eq (local.get $c) (i32.const "<"))
-                        (i32.eq (call $dartByte (global.get $ptr)) (i32.const "=")))
+                        (i32.eq (local.get $c3) (i32.const "=")))
                       (then (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))))))))
             (call $emitTok (enum.get $Token.operator) (local.get $lhs) (global.get $ptr))
             (local.set $member (i32.const 0))
             ;; the angles of a generic - `>>` closes two - and a nullable
             ;; `?` keep the type pending; any other operator ends it
-            (if (i32.eqz (call $lexIsTypeGlue (local.get $lhs) (global.get $ptr)))
-              (then (local.set $afterType (i32.const 0))))
+            ;; a spaced operator is never type syntax: `count > limit()`
+            (if (call $lexIsTypeGlue (local.get $lhs) (global.get $ptr))
+              (then
+                (if (i32.ne (local.get $gap) (local.get $lhs))
+                  (then (local.set $afterType (i32.const 0)))))
+              (else (local.set $afterType (i32.const 0))))
             (br $next)))
 
         (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))

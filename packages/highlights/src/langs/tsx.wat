@@ -202,6 +202,10 @@
     (local $markerBefore i32)
     (local $markerLhs i32)
     (local $markerRhs i32)
+    (local $markerWord i32)
+    (local $markerLen i32)
+    (local $jsx i32)
+    (local $exprClose i32)
     (call $lexEmitLeadingContinuation)
     (if (local.get $reset)
       (then
@@ -230,26 +234,21 @@
         (global.set $ptr (global.get $end))
         (return)))
     (local.set $done (global.get $ptr))
+    ;; feature and embedding flags are fixed for the whole run
+    (local.set $jsx (call $ecmaHasJsx))
+    (local.set $exprClose (global.get $tsxStreamExpressionClose))
     (block $out
       (loop $main
         ;; jsx TAG/CONTENT modes scan bytes, not tokens. An `if`, not a
         ;; select: select is eager and would pay the stack loads per token
         ;; even for plain JS/TS.
         (local.set $m (i32.const 0))
-        (if (call $ecmaHasJsx)
+        (if (local.get $jsx)
           (then (local.set $m (call $jsxTopMode))))
         (if (call $jsxByteMode (local.get $m))
           (then
             (br_if $out (i32.ge_u (global.get $ptr) (global.get $end)))
-            (if (i32.eq (local.get $m) (i32.const 1))
-              (then (call $jsxTagStep))
-              (else
-                (if (i32.eq (local.get $m) (i32.const 2))
-                  (then (call $jsxContentStep))
-                  (else
-                    (if (i32.eq (local.get $m) (i32.const 6))
-                      (then (call $tsrxStyleStep))
-                      (else (call $jsxCloseTailStep)))))))
+            (call $jsxRunBytes (local.get $m))
             (local.set $done (global.get $ptr))
             (br $main)))
         ;; pull the current token (the previous iteration's lookahead, if any)
@@ -291,27 +290,25 @@
         ;; jsx expression container is pulled by $jsxOpenContainer and skips
         ;; the depth count, so `<li>{i}</li>` in a streamed `{...}` used to
         ;; close the expression at the container's `}`.
-        (if
-          (i32.and
-            (i32.ne (global.get $tsxStreamExpressionClose) (i32.const 0))
-            (i32.and
-              (i32.eq (local.get $curT) (enum.get $Lex.r_brace))
-              (i32.and
-                (i32.eqz (global.get $tsxStreamExpressionDepth))
-                (i32.eqz (global.get $jsxSp)))))
+        (if (local.get $exprClose)
           (then
             (if
-              (i32.or
-                (i32.eq (global.get $tsxStreamExpressionClose) (i32.const 1))
+              (i32.and
+                (i32.eq (local.get $curT) (enum.get $Lex.r_brace))
                 (i32.and
-                  (i32.le_u (i32.add (local.get $curLhs) (i32.const 2)) (global.get $end))
-                  (i32.eq (i32.load16_u (local.get $curLhs)) (i32.const "}}"))))
+                  (i32.eqz (global.get $tsxStreamExpressionDepth))
+                  (i32.eqz (global.get $jsxSp))))
               (then
-                (global.set $ptr (local.get $curLhs))
-                (global.set $tsxStreamExpressionClosed (i32.const 1))
-                (br $out)))))
-        (if (i32.ne (global.get $tsxStreamExpressionClose) (i32.const 0))
-          (then
+                (if
+                  (i32.or
+                    (i32.eq (local.get $exprClose) (i32.const 1))
+                    (i32.and
+                      (i32.le_u (i32.add (local.get $curLhs) (i32.const 2)) (global.get $end))
+                      (i32.eq (i32.load16_u (local.get $curLhs)) (i32.const "}}"))))
+                  (then
+                    (global.set $ptr (local.get $curLhs))
+                    (global.set $tsxStreamExpressionClosed (i32.const 1))
+                    (br $out)))))
             (if (i32.eq (local.get $curT) (enum.get $Lex.l_brace))
               (then
                 (global.set $tsxStreamExpressionDepth
@@ -326,9 +323,13 @@
         ;; a `}` that closes a jsx expression container - or a TSRX directive
         ;; block - resumes the tag/content
         (if
-          (i32.and
-            (i32.eq (local.get $curT) (enum.get $Lex.r_brace))
-            (i32.or (i32.eq (local.get $m) (i32.const 3)) (i32.eq (local.get $m) (i32.const 4))))
+          (if (result i32)
+            (local.get $m)
+            (then
+              (i32.and
+                (i32.eq (local.get $curT) (enum.get $Lex.r_brace))
+                (i32.or (i32.eq (local.get $m) (i32.const 3)) (i32.eq (local.get $m) (i32.const 4)))))
+            (else (i32.const 0)))
           (then
             (if (i32.le_s (global.get $braceDepth) (call $jsxTopTarget))
               (then
@@ -342,11 +343,12 @@
         ;; a `<` in operand position with a tag-like shape opens JSX; without
         ;; the shape it falls through and stays a comparison operator
         (if
-          (i32.and
-            (call $ecmaHasJsx)
+          (if (result i32)
             (i32.and
-              (i32.eq (local.get $curT) (enum.get $Lex.l_angle))
-              (call $jsxCanStart (global.get $prevTok))))
+              (local.get $jsx)
+              (i32.eq (local.get $curT) (enum.get $Lex.l_angle)))
+            (then (call $jsxCanStart (global.get $prevTok)))
+            (else (i32.const 0)))
           (then
             (if (call $jsxValidate (local.get $curRhs))
               (then
@@ -415,15 +417,17 @@
                   (i64.const "styles")))
               (then (local.set $metadataMarker (i32.const 0x40000104))))))
         (if
-          (i32.and
-            (i32.ne (local.get $metadataMarker) (i32.const 0))
-            (i32.and
-              (i32.eq (local.get $curT) (enum.get $Lex.identifier))
-              (i32.or
-                (i32.eq (local.get $nxtT) (enum.get $Lex.colon))
+          (if (result i32)
+            (local.get $metadataMarker)
+            (then
+              (i32.and
+                (i32.eq (local.get $curT) (enum.get $Lex.identifier))
                 (i32.or
-                  (i32.eq (local.get $nxtT) (enum.get $Lex.eof))
-                  (i32.ne (bitset.get $LexBits.comment (local.get $nxtT)) (i32.const 0))))))
+                  (i32.eq (local.get $nxtT) (enum.get $Lex.colon))
+                  (i32.or
+                    (i32.eq (local.get $nxtT) (enum.get $Lex.eof))
+                    (i32.ne (bitset.get $LexBits.comment (local.get $nxtT)) (i32.const 0))))))
+            (else (i32.const 0)))
           (then (call $emitTok (enum.get $Token.property) (local.get $curLhs) (local.get $curRhs)))
           (else
             (call $emitCur
@@ -456,39 +460,33 @@
                     (i32.const 32)))
                 (local.set $markerRhs (i32.sub (local.get $markerRhs) (i32.const 1)))
                 (br $right)))))
-        (if (i32.eq (i32.sub (local.get $markerRhs) (local.get $markerLhs)) (i32.const 4))
+        ;; a 3- or 4-byte tag identifier, or a whole comment (not one cut at
+        ;; a chunk end): the tag word is exact, while a marker comment ignores
+        ;; ASCII case, so its word loads with each byte's lowercase bit set
+        (local.set $markerLen (i32.sub (local.get $markerRhs) (local.get $markerLhs)))
+        (if
+          (i32.and
+            (i32.le_u (i32.sub (local.get $markerLen) (i32.const 3)) (i32.const 1))
+            (i32.or
+              (i32.eq (local.get $curT) (enum.get $Lex.identifier))
+              (i32.and
+                (i32.eqz (local.get $cut))
+                (i32.eq (local.get $curT) (enum.get $Lex.multiline_comment)))))
           (then
-            (global.set $jsTemplateMarker
+            (local.set $markerWord
               (i32.or
-                (i32.and
-                  (i32.eq (local.get $curT) (enum.get $Lex.identifier))
-                  (i32.eq (i32.load (local.get $markerLhs)) (i32.const "html")))
-                (i32.and
-                  (i32.and
-                    (i32.eqz (local.get $cut))
-                    (i32.eq (local.get $curT) (enum.get $Lex.multiline_comment)))
-                  (i32.eq
-                    (i32.or (i32.load (local.get $markerLhs)) (i32.const 0x20202020))
-                    (i32.const "html")))))))
-        (if (i32.eq (i32.sub (local.get $markerRhs) (local.get $markerLhs)) (i32.const 3))
-          (then
-            (if
-              (i32.or
-                (i32.and
-                  (i32.eq (local.get $curT) (enum.get $Lex.identifier))
-                  (i32.eq
-                    (i32.and (i32.load (local.get $markerLhs)) (i32.const 0xffffff))
-                    (i32.const "css")))
-                (i32.and
-                  (i32.and
-                    (i32.eqz (local.get $cut))
-                    (i32.eq (local.get $curT) (enum.get $Lex.multiline_comment)))
-                  (i32.eq
-                    (i32.or
-                      (i32.and (i32.load (local.get $markerLhs)) (i32.const 0xffffff))
-                      (i32.const 0x202020))
-                    (i32.const "css"))))
-              (then (global.set $jsTemplateMarker (i32.const 260))))))
+                (i32.load (local.get $markerLhs))
+                (select
+                  (i32.const 0x20202020)
+                  (i32.const 0)
+                  (i32.eq (local.get $curT) (enum.get $Lex.multiline_comment)))))
+            (if (i32.eq (local.get $markerLen) (i32.const 4))
+              (then
+                (global.set $jsTemplateMarker
+                  (i32.eq (local.get $markerWord) (i32.const "html"))))
+              (else
+                (if (i32.eq (i32.and (local.get $markerWord) (i32.const 0xffffff)) (i32.const "css"))
+                  (then (global.set $jsTemplateMarker (i32.const 260))))))))
         ;; Component metadata keys select the language after their colon.
         ;; Bit 30 marks a key awaiting its colon; comments preserve that decision.
         (if
@@ -546,4 +544,40 @@
       (then (global.set $tsxStreamExpressionDepth (i32.const 0))))
     (call $hlEcmaImpl (local.get $reset))
     (global.get $tsxStreamExpressionClosed))
+
+  ;; Highlight a framework expression body from $ptr in one pass: the lexer
+  ;; stops before the outer `}` or `}}` by itself, so no scan for the closer
+  ;; runs first. With $open set, $ptr is on the opening `{`, which the lexer
+  ;; consumes as its first token (Astro and MDX color it as TSX does, and an
+  ;; object key right after it stays a key): the brace depth starts at -1 so
+  ;; that brace brings it to zero. Returns one with $ptr on the closing
+  ;; delimiter, zero when the body runs to $end. In a stream the body keeps
+  ;; the ECMAScript state, and one still open at the chunk end becomes stream
+  ;; region $region with $tag (the start tag the expression sits in, or 0) in
+  ;; $streamA, which $hlTsxExpressionStream continues.
+  (func $hlTsxExpression
+    (param $closeLen i32)
+    (param $open i32)
+    (param $region i32)
+    (param $tag i32)
+    (result i32)
+    (local $closed i32)
+    (global.set $ecmaFeatures (i32.const 3))
+    (global.set $tsxStreaming (global.get $streaming))
+    (global.set $tsxStreamExpressionClose (local.get $closeLen))
+    (global.set $tsxStreamExpressionClosed (i32.const 0))
+    (global.set $tsxStreamExpressionDepth (i32.sub (i32.const 0) (local.get $open)))
+    (call $hlEcmaImpl (i32.const 1))
+    (local.set $closed (global.get $tsxStreamExpressionClosed))
+    (global.set $tsxStreamExpressionClose (i32.const 0))
+    (global.set $tsxStreamExpressionClosed (i32.const 0))
+    (if
+      (i32.and
+        (i32.eqz (local.get $closed))
+        (i32.and (global.get $streaming) (i32.eq (global.get $ptr) (global.get $eof))))
+      (then
+        (call $streamSetRegion (local.get $region))
+        (global.set $streamA (local.get $tag))
+        (global.set $streamRegionStarted (i32.const 1))))
+    (local.get $closed))
 )

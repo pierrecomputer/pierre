@@ -133,35 +133,35 @@
         (br $scan)))
     (call $emitTok (local.get $hl) (local.get $seg) (global.get $ptr)))
 
-  ;; Group order is the dispatch order in $zigWordHl below; the groups that
-  ;; also drive lexer context are checked by number in $hlZig. `comptime` is
-  ;; absent on purpose: the table hash sees only the first two bytes, the last
-  ;; byte, and the length, which are identical for `continue`, so the two
-  ;; words can never share a table and `comptime` is matched directly. The
-  ;; one-byte names `c` and `_` are below the table's minimum length and are
-  ;; matched directly too.
+  ;; Each group's value is its token with the group number in the high byte;
+  ;; the groups that also drive lexer context are checked by number in
+  ;; $hlZig. `comptime` is absent on purpose: the table hash sees only the
+  ;; first two bytes, the last byte, and the length, which are identical for
+  ;; `continue`, so the two words can never share a table and `comptime` is
+  ;; matched directly. The one-byte names `c` and `_` are below the table's
+  ;; minimum length and are matched directly too.
   (keyword-table $zigWords $mem.zigWords $mem.keywordPool
-    (group "fn") ;; 1: declaration, next name is a function
-    (group "const" "var") ;; 2: declaration, next name is a variable
-    (group "struct" "enum" "union" "opaque") ;; 3: declaration
-    (group "if") ;; 4: control, a payload paren may follow
-    (group "for" "while") ;; 5: control, payload paren, label target
-    (group "switch") ;; 6: control, label target unless inline
-    (group "break" "continue") ;; 7: control, a label may follow
-    (group "else" "catch" "errdefer") ;; 8: control, payload bars may follow
-    (group ;; 9: control
+    (group $Token.keyword.declaration+256 "fn") ;; 1: declaration, next name is a function
+    (group $Token.keyword.declaration+512 "const" "var") ;; 2: declaration, next name is a variable
+    (group $Token.keyword.declaration+768 "struct" "enum" "union" "opaque") ;; 3: declaration
+    (group $Token.keyword.control+1024 "if") ;; 4: control, a payload paren may follow
+    (group $Token.keyword.control+1280 "for" "while") ;; 5: control, payload paren, label target
+    (group $Token.keyword.control+1536 "switch") ;; 6: control, label target unless inline
+    (group $Token.keyword.control+1792 "break" "continue") ;; 7: control, a label may follow
+    (group $Token.keyword.control+2048 "else" "catch" "errdefer") ;; 8: control, payload bars may follow
+    (group $Token.keyword.control+2304 ;; 9: control
       "return" "defer" "try" "suspend" "nosuspend" "resume")
-    (group "export") ;; 10: import
-    (group "and" "or" "orelse") ;; 11: word operators
-    (group ;; 12: primitive types
+    (group $Token.keyword.import "export") ;; 10: import
+    (group $Token.keyword.operator "and" "or" "orelse") ;; 11: word operators
+    (group $Token.type.builtin ;; 12: primitive types
       "bool" "void" "noreturn" "type" "anyerror" "anyframe" "anytype" "comptime_int"
       "comptime_float" "anyopaque" "isize" "usize" "f16" "f32" "f64" "f80" "f128" "c_char"
       "c_short" "c_ushort" "c_int" "c_uint" "c_long" "c_ulong" "c_longlong" "c_ulonglong"
       "c_longdouble")
-    (group "true" "false") ;; 13: booleans
-    (group "null" "unreachable" "undefined") ;; 14: builtin constants
-    (group "inline") ;; 15: keyword, may prefix a labeled loop
-    (group ;; 16: keywords
+    (group $Token.boolean "true" "false") ;; 13: booleans
+    (group $Token.constant.builtin "null" "unreachable" "undefined") ;; 14: builtin constants
+    (group $Token.keyword+3840 "inline") ;; 15: keyword, may prefix a labeled loop
+    (group $Token.keyword+4096 ;; 16: keywords
       "asm" "test" "error" "pub" "noinline" "extern" "packed" "threadlocal" "volatile" "allowzero"
       "noalias" "addrspace" "align" "callconv" "linksection"))
 
@@ -172,8 +172,8 @@
     (local $g i32)
     (local $p i32)
     (local $width i32)
-    (local.set $g (keyword-table.get $zigWords (local.get $lhs) (local.get $rhs)))
-    (if (i32.eqz (local.get $g))
+    (local.set $g (keyword-table.value $zigWords (local.get $lhs) (local.get $rhs)))
+    (if (i32.lt_s (local.get $g) (i32.const 0))
       (then
         (if (i32.eq (i32.sub (local.get $rhs) (local.get $lhs)) (i32.const 1))
           (then
@@ -213,24 +213,7 @@
                 (br $digit)))
             (return (enum.get $Token.type.builtin))))
         (return (i32.const -1))))
-    (if (i32.le_u (local.get $g) (i32.const 3))
-      (then
-        (return
-          (i32.or (enum.get $Token.keyword.declaration) (i32.shl (local.get $g) (i32.const 8))))))
-    (if (i32.le_u (local.get $g) (i32.const 9))
-      (then
-        (return (i32.or (enum.get $Token.keyword.control) (i32.shl (local.get $g) (i32.const 8))))))
-    (if (i32.eq (local.get $g) (i32.const 10))
-      (then (return (enum.get $Token.keyword.import))))
-    (if (i32.eq (local.get $g) (i32.const 11))
-      (then (return (enum.get $Token.keyword.operator))))
-    (if (i32.eq (local.get $g) (i32.const 12))
-      (then (return (enum.get $Token.type.builtin))))
-    (if (i32.eq (local.get $g) (i32.const 13))
-      (then (return (enum.get $Token.boolean))))
-    (if (i32.eq (local.get $g) (i32.const 14))
-      (then (return (enum.get $Token.constant.builtin))))
-    (i32.or (enum.get $Token.keyword) (i32.shl (local.get $g) (i32.const 8))))
+    (local.get $g))
 
   (func $zigIsOp (param $c i32) (result i32)
     (byteset.get "!%&*+-/<=>?^|~" (local.get $c)))
@@ -267,65 +250,58 @@
         (local.set $c (i32.load8_u (global.get $ptr)))
         (local.set $p (call $zigByte (i32.add (global.get $ptr) (i32.const 1))))
 
-        ;; Context may cross whitespace and comments, but not another token.
-        (if
-          (i32.eqz
-            (i32.and
-              (i32.eq (local.get $c) (i32.const "/"))
-              (i32.eq (local.get $p) (i32.const "/"))))
-          (then
-            (if (i32.and (local.get $wantBreakLabel) (i32.ne (local.get $c) (i32.const ":")))
-              (then (local.set $wantBreakLabel (i32.const 0))))
-            (if (i32.and (local.get $labelColon) (i32.ne (local.get $c) (i32.const ":")))
-              (then (local.set $labelColon (i32.const 0))))
-            (if
-              (i32.and
-                (i32.or (local.get $expectFunc) (local.get $expectLabel))
-                (i32.eqz
-                  (i32.or
-                    (call $zigIsIdentStart (local.get $c))
-                    (i32.and
-                      (i32.eq (local.get $c) (i32.const "@"))
-                      (i32.eq (local.get $p) (i32.const 34))))))
-              (then
-                (local.set $expectFunc (i32.const 0))
-                (local.set $expectLabel (i32.const 0))))
-            (if (i32.and (local.get $wantPayloadParen) (i32.ne (local.get $c) (i32.const "(")))
-              (then (local.set $wantPayloadParen (i32.const 0))))
-            ;; an armed fn head expects its parameter paren immediately
-            (if (i32.and (global.get $sigFnPend) (i32.ne (local.get $c) (i32.const "(")))
-              (then (global.set $sigFnPend (i32.const 0))))
-            (if
-              (i32.and
-                (local.get $payloadReady)
-                (i32.eqz
-                  (i32.and
-                    (i32.eq (local.get $c) (i32.const "|"))
-                    (i32.and
-                      (i32.ne (local.get $p) (i32.const "|"))
-                      (i32.ne (local.get $p) (i32.const "="))))))
-              (then (local.set $payloadReady (i32.const 0))))))
-
         ;; Zig has only line comments. `///` and `//!` are documentation;
         ;; `////` starts an ordinary line comment.
         (if
           (i32.and (i32.eq (local.get $c) (i32.const "/")) (i32.eq (local.get $p) (i32.const "/")))
           (then
+            (local.set $q (call $zigByte (i32.add (global.get $ptr) (i32.const 2))))
             (local.set $hl
               (select
                 (enum.get $Token.comment.doc)
                 (enum.get $Token.comment)
                 (i32.or
-                  (i32.eq (call $zigByte (i32.add (global.get $ptr) (i32.const 2))) (i32.const "!"))
+                  (i32.eq (local.get $q) (i32.const "!"))
                   (i32.and
-                    (i32.eq
-                      (call $zigByte (i32.add (global.get $ptr) (i32.const 2)))
-                      (i32.const "/"))
+                    (i32.eq (local.get $q) (i32.const "/"))
                     (i32.ne
                       (call $zigByte (i32.add (global.get $ptr) (i32.const 3)))
                       (i32.const "/"))))))
             (call $lexLineComment (i32.const 2) (local.get $hl))
             (br $next)))
+
+        ;; Context may cross whitespace and comments, but not another token.
+        (if (i32.and (local.get $wantBreakLabel) (i32.ne (local.get $c) (i32.const ":")))
+          (then (local.set $wantBreakLabel (i32.const 0))))
+        (if (i32.and (local.get $labelColon) (i32.ne (local.get $c) (i32.const ":")))
+          (then (local.set $labelColon (i32.const 0))))
+        (if
+          (i32.and
+            (i32.or (local.get $expectFunc) (local.get $expectLabel))
+            (i32.eqz
+              (i32.or
+                (call $zigIsIdentStart (local.get $c))
+                (i32.and
+                  (i32.eq (local.get $c) (i32.const "@"))
+                  (i32.eq (local.get $p) (i32.const 34))))))
+          (then
+            (local.set $expectFunc (i32.const 0))
+            (local.set $expectLabel (i32.const 0))))
+        (if (i32.and (local.get $wantPayloadParen) (i32.ne (local.get $c) (i32.const "(")))
+          (then (local.set $wantPayloadParen (i32.const 0))))
+        ;; an armed fn head expects its parameter paren immediately
+        (if (i32.and (global.get $sigFnPend) (i32.ne (local.get $c) (i32.const "(")))
+          (then (global.set $sigFnPend (i32.const 0))))
+        (if
+          (i32.and
+            (local.get $payloadReady)
+            (i32.eqz
+              (i32.and
+                (i32.eq (local.get $c) (i32.const "|"))
+                (i32.and
+                  (i32.ne (local.get $p) (i32.const "|"))
+                  (i32.ne (local.get $p) (i32.const "="))))))
+          (then (local.set $payloadReady (i32.const 0))))
 
         ;; Each `\\` line is one segment of a raw multiline string.
         (if (i32.and (i32.eq (local.get $c) (i32.const 92)) (i32.eq (local.get $p) (i32.const 92)))
@@ -483,6 +459,8 @@
                 (br $next)))
 
             (local.set $p (call $lexSkipSpaceAt (global.get $ptr)))
+            ;; the byte after the name's blanks
+            (local.set $q (call $zigByte (local.get $p)))
             (local.set $hl (enum.get $Token.variable))
             (if (local.get $expectFunc)
               (then
@@ -499,11 +477,11 @@
                   (select
                     (enum.get $Token.function.method)
                     (enum.get $Token.property)
-                    (i32.eq (call $zigByte (local.get $p)) (i32.const "("))))))
+                    (i32.eq (local.get $q) (i32.const "("))))))
             (if
               (i32.and
                 (i32.eq (local.get $hl) (enum.get $Token.variable))
-                (i32.eq (call $zigByte (local.get $p)) (i32.const "(")))
+                (i32.eq (local.get $q) (i32.const "(")))
               (then (local.set $hl (enum.get $Token.function))))
             (if
               (i32.and
@@ -518,11 +496,18 @@
 
             ;; Container fields are properties; block/loop prefixes are labels.
             ;; A `const` inside a preceding type (`[]const u8`) sets
-            ;; $expectVar, so a marked parameter list overrides that gate.
+            ;; $expectVar, so a marked parameter list overrides that gate. A
+            ;; name right after `..` or `[` is a slice or array sentinel
+            ;; (`buf[0..n :0]`, `[N:0]u8`), neither field nor label.
             (if
-              (i32.and
-                (i32.or (i32.eqz (local.get $expectVar)) (call $sigActive))
-                (i32.eq (call $zigByte (local.get $p)) (i32.const ":")))
+              (if (result i32)
+                (i32.and
+                  (i32.or (i32.eqz (local.get $expectVar)) (call $sigActive))
+                  (i32.eq (local.get $q) (i32.const ":")))
+                (then
+                  (local.set $q (call $lexLineByteBefore (local.get $lhs)))
+                  (i32.and (i32.ne (local.get $q) (i32.const ".")) (i32.ne (local.get $q) (i32.const "["))))
+                (else (i32.const 0)))
               (then
                 (local.set $q (call $lexSkipSpaceAt (i32.add (local.get $p) (i32.const 1))))
                 (local.set $base (i32.const 0))
@@ -732,8 +717,16 @@
                     (local.set $expectLabel (i32.const 1))
                     (local.set $wantBreakLabel (i32.const 0)))
                   (else
+                    ;; `: (` opens a while loop's continue expression
+                    ;; (`while (i < n) : (i += 1)`), not a type annotation
                     (if (i32.eqz (local.get $labelColon))
-                      (then (local.set $expectType (i32.const 1))))))))
+                      (then
+                        (if
+                          (i32.ne
+                            (call $zigByte
+                              (call $lexSkipSpaceAt (i32.add (global.get $ptr) (i32.const 1))))
+                            (i32.const "("))
+                          (then (local.set $expectType (i32.const 1))))))))))
             (local.set $labelColon (i32.const 0))
             (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
             (call $emitTok

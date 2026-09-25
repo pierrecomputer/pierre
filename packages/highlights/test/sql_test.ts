@@ -346,3 +346,56 @@ void t.test('sql: malformed and split ranges stay lossless', () => {
   const split = loadLang('sql', '$hlSql', 7);
   checkInvariants(split.hl, "SELECT 'x' -- y\n");
 });
+
+void t.test(
+  'sql: `#` temp tables and JSON operators beside `#` comments',
+  () => {
+    assert.deepEqual(
+      tokenKinds('sql', 'SELECT * INTO ##g FROM #Orders WHERE id > 1; # note'),
+      [
+        ['SELECT', 'keyword'],
+        ['*', 'operator'],
+        ['INTO', 'keyword'],
+        ['##g', 'variable'],
+        ['FROM', 'keyword'],
+        ['#Orders', 'variable'],
+        ['WHERE', 'keyword'],
+        ['id', 'variable'],
+        ['>', 'operator'],
+        ['1', 'number'],
+        [';', 'punctuation.delimiter'],
+        ['# note', 'comment'],
+      ]
+    );
+    assert.deepEqual(
+      tokenKinds('sql', "SELECT a #> '{b}', a #>> '{c}', a #- '{d}'").filter(
+        ([, kind]) => kind === 'operator'
+      ),
+      [
+        ['#>', 'operator'],
+        ['#>>', 'operator'],
+        ['#-', 'operator'],
+      ]
+    );
+    assertLineFedParity(
+      'sql',
+      'CREATE TABLE #t (id INT);\n#\n# c\nSELECT 1 #x\n'
+    );
+  }
+);
+
+void t.test('sql: a table name before a column list is not a call', () => {
+  const kindOf = (code: string, word: string) =>
+    tokenKinds('sql', code).find(([text]) => text === word)?.[1];
+  assert.equal(kindOf('INSERT INTO t (a, b) VALUES (1);', 't'), 'variable');
+  assert.equal(kindOf('CREATE TABLE users (id INT);', 'users'), 'variable');
+  // right after INTO or TABLE, through a schema, a glued list is columns too
+  assert.equal(kindOf('INSERT INTO t(a, b) VALUES (1);', 't'), 'variable');
+  assert.equal(
+    kindOf('insert into dbo.Orders(a) select 1', 'Orders'),
+    'variable'
+  );
+  assert.equal(kindOf('INSERT INTO #t(a) SELECT 1', '#t'), 'variable');
+  assert.equal(kindOf('SELECT COUNT(*) FROM t', 'COUNT'), 'function');
+  assert.equal(kindOf('VALUES (NOW())', 'NOW'), 'function');
+});

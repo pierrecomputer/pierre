@@ -441,3 +441,65 @@ void t.test('dart: multi-line strings and doc comments stream line-fed', () => {
     "var s = '''a\n$b\n''';\n/// doc\n/* c\n */\nvoid f() {}\n"
   );
 });
+
+void t.test('dart: show, hide, part, and on are names outside a clause', () => {
+  const code =
+    "import 'a.dart' show A hide B;\npart 'x.dart';\nvar show = true;\nhide(show); var on = x;\ntry { f(); } on FormatException catch (e) { }";
+  assertLineFedParity('dart', code);
+  assert.deepEqual(tokenKinds('dart', code), [
+    ['import', 'keyword.import'],
+    ["'a.dart'", 'string'],
+    ['show', 'keyword.import'],
+    ['A', 'type'],
+    ['hide', 'keyword.import'],
+    ['B', 'type'],
+    [';', 'punctuation.delimiter'],
+    ['part', 'keyword.import'],
+    ["'x.dart'", 'string'],
+    [';', 'punctuation.delimiter'],
+    ['var', 'keyword.declaration'],
+    ['show', 'variable'],
+    ['=', 'operator'],
+    ['true', 'boolean'],
+    [';', 'punctuation.delimiter'],
+    ['hide', 'function'],
+    ['(', 'punctuation.bracket'],
+    ['show', 'variable'],
+    [')', 'punctuation.bracket'],
+    [';', 'punctuation.delimiter'],
+    ['var', 'keyword.declaration'],
+    ['on', 'variable'],
+    ['=', 'operator'],
+    ['x', 'variable'],
+    [';', 'punctuation.delimiter'],
+    ['try', 'keyword.control'],
+    ['{', 'punctuation.bracket'],
+    ['f', 'function'],
+    ['()', 'punctuation.bracket'],
+    [';', 'punctuation.delimiter'],
+    ['}', 'punctuation.bracket'],
+    ['on', 'keyword.control'],
+    ['FormatException', 'type'],
+    ['catch', 'keyword.control'],
+    ['(', 'punctuation.bracket'],
+    ['e', 'variable'],
+    [') { }', 'punctuation.bracket'],
+  ]);
+});
+
+void t.test('dart: a spaced comparison ends a pending type', () => {
+  const code = 'if (count > limit()) {}\nString? name() {}';
+  assertLineFedParity('dart', code);
+  assert.deepEqual(tokenKinds('dart', code), [
+    ['if', 'keyword.control'],
+    ['(', 'punctuation.bracket'],
+    ['count', 'variable'],
+    ['>', 'operator'],
+    ['limit', 'function'],
+    ['()) {}', 'punctuation.bracket'],
+    ['String', 'type.builtin'],
+    ['?', 'operator'],
+    ['name', 'function.definition'],
+    ['() {}', 'punctuation.bracket'],
+  ]);
+});

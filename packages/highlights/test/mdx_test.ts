@@ -9,9 +9,7 @@ import {
   assertLineFedParity,
   checkInvariants,
   colorOf,
-  distinctColor,
-  distinctTheme,
-  exactColor,
+  flatTokens,
   loadLang,
   spansOf,
   type TestLang,
@@ -174,10 +172,6 @@ void t.test('mdx: many unclosed `<` stay linear', () => {
   const out = checkInvariants(mdx.hl, 'a <b c\n<Card />\n');
   assert.equal(colorOf(out, 'Card'), COMPONENT);
 });
-
-/** Highlight under the distinct theme after checking the lexer invariants. */
-const distinctHl = (src: string) =>
-  checkInvariants(mdx.hl, src, { theme: distinctTheme });
 
 void t.test(
   'mdx: expressions inside headings, paragraphs, and block quotes',
@@ -373,15 +367,82 @@ void t.test(
   }
 );
 
-void t.test('mdx: braces on ESM lines still open expressions', () => {
-  const html = distinctHl(
-    "export const meta = { title: 'x' };\nexport function Foo() { return 1; }"
-  );
-  assert.equal(exactColor(html, 'title'), distinctColor('property'));
-  assert.equal(exactColor(html, "'x'"), distinctColor('string'));
-  assert.equal(exactColor(html, 'return'), distinctColor('keyword.control'));
-  assert.equal(exactColor(html, '1'), distinctColor('number'));
+/**
+ * Whole-buffer tokens of `code` as `"text":kind` lines under the distinct
+ * theme, after checking that line-fed streaming produces the same.
+ */
+function flat(code: string): string {
+  return flatTokens(assertLineFedParity('mdx', code));
+}
+
+void t.test('mdx: ESM boundaries follow JavaScript lexical state', () => {
+  for (const statement of [
+    'export const re = /[(]/;',
+    'export const re = /[{}]/;',
+    'export const n = 1; /* ( */',
+    'export const n = 1; // (',
+    'export const text = "a\\\"(";',
+    'export const text = `start\n\nmiddle\nend`;',
+    'export const n = 1; /* start\n\nmiddle\nend */',
+  ]) {
+    const code = `${statement}\n\n# Heading\n`;
+    assertLineFedParity('mdx', code);
+    assert.ok(
+      tokenKinds('mdx', code).some(
+        ([text, kind]) => text === '# Heading' && kind === 'title'
+      )
+    );
+    if (statement.includes('middle')) {
+      const expected = statement.includes('/*') ? 'comment' : 'string';
+      assert.ok(
+        tokenKinds('mdx', code).some(
+          ([text, kind]) => text === 'middle' && kind === expected
+        )
+      );
+    }
+  }
 });
+
+void t.test(
+  'mdx: import/export blocks are JavaScript up to a blank line',
+  () => {
+    assert.equal(
+      flat(
+        "import { Tabs } from '@theme/Tabs';\nimport Chart from './chart.js'\nexport const meta = { title: 'x' }\n\n# Hi {1}"
+      ),
+      [
+        '"import ":keyword.import "{ ":punctuation.bracket "Tabs ":type "} ":punctuation.bracket "from ":keyword.import "\'@theme/Tabs\'":string ";":punctuation.delimiter',
+        '"import ":keyword.import "Chart ":type "from ":keyword.import "\'./chart.js\'":string',
+        '"export ":keyword.import "const ":keyword.declaration "meta ":variable "= ":operator "{ ":punctuation.bracket "title":property ": ":punctuation.delimiter "\'x\' ":string "}":punctuation.bracket',
+        '',
+        '"# Hi ":title "{":punctuation.bracket "1":number "}":punctuation.bracket',
+      ].join('\n')
+    );
+    // a blank line inside an open function body does not end the block
+    assert.equal(
+      flat("export function a() {\n\n  return 'b'\n}\n\ntext *x*"),
+      [
+        '"export ":keyword.import "function ":keyword.declaration "a":function "() {":punctuation.bracket',
+        '',
+        '"  ":punctuation.bracket "return ":keyword.control "\'b\'":string',
+        '"}":punctuation.bracket',
+        '',
+        '"text ":none "*x*":emphasis',
+      ].join('\n')
+    );
+    // not at the line start, or inside a fence, `import` is text
+    assert.equal(
+      flat('a\n import x\n```js\nimport y\n```'),
+      [
+        '"a":none',
+        '" import x":none',
+        '"```js":punctuation.delimiter',
+        '"import ":keyword.import "y":variable',
+        '"```":punctuation.delimiter',
+      ].join('\n')
+    );
+  }
+);
 
 void t.test(
   'mdx: expressions, components, and comments spanning lines stream line-fed',
@@ -408,6 +469,28 @@ void t.test(
       '````md\n```\ninner\n```\n````\n',
       '<Card>\n````md\n```\ninner\n```\n````\n</Card>\n',
       '````mdx\n<Card>\n```\ninner\n```\n</Card>\n````\n',
+    ]) {
+      assertLineFedParity('mdx', code);
+    }
+  }
+);
+
+void t.test(
+  'mdx: expressions lex in one pass, braces included, whole and line-fed',
+  () => {
+    // the expression's `{` is TSX's first token, so a key after it stays a key
+    const kinds = tokenKinds('mdx', 'Text {\n  a: 1,\n} end\n');
+    assert.ok(
+      kinds.some(([text, kind]) => text === 'a' && kind === 'property')
+    );
+    for (const code of [
+      '{\n  a: 1,\n}\n',
+      'text {a +\n b} end\n',
+      'x {"}"} y {`}`} z\n',
+      'x {`a\n} y\n\n# after\n',
+      'x {<b>} y\n',
+      '{items.map((i) => <li key={i}>{i}</li>)}\n',
+      'x {/* c\n */} y\n',
     ]) {
       assertLineFedParity('mdx', code);
     }

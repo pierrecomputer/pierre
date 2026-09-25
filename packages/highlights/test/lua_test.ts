@@ -409,3 +409,16 @@ void t.test('lua: comments, long strings, and blocks stream line-fed', () => {
     '--[==[ a\nb ]==]\nlocal s = [[x\ny]] .. "z"\nfunction f()\n  return {\n    a = 1,\n  }\nend\n'
   );
 });
+
+void t.test('lua: a shebang line is a comment', () => {
+  const code = '#!/usr/bin/env lua\nprint(#t)\n';
+  assert.deepEqual(tokenKinds('lua', code), [
+    ['#!/usr/bin/env lua', 'comment'],
+    ['print', 'function'],
+    ['(', 'punctuation.bracket'],
+    ['#', 'operator'],
+    ['t', 'variable'],
+    [')', 'punctuation.bracket'],
+  ]);
+  assertLineFedParity('lua', code);
+});

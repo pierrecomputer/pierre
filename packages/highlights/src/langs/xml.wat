@@ -115,12 +115,16 @@
   ;; and returns 1 once the declaration closed. At a real chunk end an open
   ;; declaration is checkpointed as stream region 10 with $streamC = 1,
   ;; $streamA = depth, $streamB = quote; $xmlStreamResumeTag continues it.
-  ;; Hops between the bytes that matter with the 16-byte finders.
+  ;; Hops between the bytes that matter with the 16-byte finders. Each
+  ;; finder's last hit stays valid until the cursor passes it, so a subset
+  ;; with many declarations and no quotes scans for a quote once, not once
+  ;; per `[`/`]`/`>` stop.
   (func $xmlDoctypeBody (param $lhs i32) (param $depth i32) (param $quote i32) (result i32)
     (local $c i32)
     (local $closed i32)
     (local $p i32)
-    (local $q i32)
+    (local $nextQuote i32)
+    (local $nextStop i32)
     (local.set $p (global.get $ptr))
     (block $done
       (loop $l
@@ -132,11 +136,18 @@
             (local.set $quote (i32.const 0))
             (local.set $p (i32.add (local.get $p) (i32.const 1)))
             (br $l)))
-        (local.set $q
-          (call $scanFind3 (local.get $p) (i32.const "[") (i32.const "]") (i32.const ">")))
-        (local.set $p (call $lexFindEither (local.get $p) (i32.const 34) (i32.const 39)))
-        (if (i32.lt_u (local.get $q) (local.get $p))
-          (then (local.set $p (local.get $q))))
+        (if (i32.lt_u (local.get $nextStop) (local.get $p))
+          (then
+            (local.set $nextStop
+              (call $scanFind3 (local.get $p) (i32.const "[") (i32.const "]") (i32.const ">")))))
+        (if (i32.lt_u (local.get $nextQuote) (local.get $p))
+          (then
+            (local.set $nextQuote (call $lexFindEither (local.get $p) (i32.const 34) (i32.const 39)))))
+        (local.set $p
+          (select
+            (local.get $nextStop)
+            (local.get $nextQuote)
+            (i32.lt_u (local.get $nextStop) (local.get $nextQuote))))
         (br_if $done (i32.ge_u (local.get $p) (global.get $end)))
         (local.set $c (i32.load8_u (local.get $p)))
         (local.set $p (i32.add (local.get $p) (i32.const 1)))

@@ -248,6 +248,26 @@ void t.test('less: comment forms', () => {
   );
 });
 
+void t.test('less: `&:extend()` and detached-ruleset calls', () => {
+  const src = '.a {\n  &:extend(.banner all);\n  @detached();\n}\n';
+  assert.deepEqual(
+    tokenKinds('less', src).filter(
+      ([, kind]) => kind !== 'punctuation.bracket'
+    ),
+    [
+      ['.a', 'selector.class'],
+      ['&', 'operator'],
+      [':extend', 'selector.pseudo'],
+      ['.banner', 'selector.class'],
+      ['all', 'tag'],
+      [';', 'punctuation.delimiter'],
+      ['@detached', 'variable'],
+      [';', 'punctuation.delimiter'],
+    ]
+  );
+  assertLineFedParity('less', src);
+});
+
 void t.test(
   'less: block comments and multi-line mixin calls stream line-fed',
   () => {

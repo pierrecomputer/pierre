@@ -11,7 +11,7 @@
     (group $Token.keyword.control ;; 1: control
       "if" "do" "for" "try" "case" "else" "goto" "break" "catch" "throw" "while" "yield" "assert"
       "return" "switch" "default" "finally" "continue")
-    (group $Token.keyword.declaration+256 "enum" "class" "record" "interface") ;; 2: declaration, next name is a type
+    (group $Token.keyword.declaration+256 "enum" "class" "interface") ;; 2: declaration, next name is a type
     (group $Token.keyword.declaration+512 "package")                           ;; 3: declaration, next name is a namespace
     (group $Token.keyword.import "import")                            ;; 4: import
     (group $Token.keyword.declaration ;; 5: declaration and modifiers
@@ -22,10 +22,12 @@
     (group $Token.boolean "true" "false")    ;; 7: booleans
     (group $Token.constant.builtin "null")            ;; 8: built-in constant
     (group $Token.variable.special "this" "super")    ;; 9: special variables
-    (group $Token.keyword.operator "new" "instanceof")) ;; 10: word operators
+    (group $Token.keyword.operator "new" "instanceof") ;; 10: word operators
+    (group $Token.keyword.declaration+1280 "record")) ;; 11: contextual declaration, next name is a type
 
-  ;; Token in the low byte; the high byte selects the next-name capture:
-  ;; 1=type, 2=namespace. -1 means an ordinary identifier.
+  ;; Token in the low byte; bits 8-9 select the next-name capture: 1=type,
+  ;; 2=namespace. Bit 10 flags the contextual `record`. -1 means an ordinary
+  ;; identifier.
   (func $javaWordHl (param $lhs i32) (param $rhs i32) (result i32)
     (keyword-table.value $javaWords (local.get $lhs) (local.get $rhs)))
 
@@ -35,7 +37,6 @@
   ;; closed and 0 when it runs past $end.
   (func $javaTextBlockBody (param $seg i32) (result i32)
     (local $c i32)
-    (local $e i32)
     (block $done
       (loop $scan
         (global.set $ptr
@@ -60,11 +61,8 @@
                 (return (i32.const 1))))
             (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
             (br $scan)))
-        (call $emitTok (enum.get $Token.string) (local.get $seg) (global.get $ptr))
-        (local.set $e (call $lexEscapeEnd (global.get $ptr)))
-        (call $emitTok (enum.get $Token.string.escape) (global.get $ptr) (local.get $e))
-        (global.set $ptr (local.get $e))
-        (local.set $seg (local.get $e))
+        (drop (call $stringEscapeAt (local.get $seg)))
+        (local.set $seg (global.get $ptr))
         (br $scan)))
     (call $emitTok (enum.get $Token.string) (local.get $seg) (global.get $ptr))
     (i32.const 0))
@@ -176,6 +174,21 @@
             (call $lexScanIdent)
             (local.set $rhs (global.get $ptr))
             (local.set $kind (call $javaWordHl (local.get $lhs) (local.get $rhs)))
+            ;; `record` heads a declaration only before a name - `record
+            ;; Point(` - so `record : records` and `record.key()` keep it a
+            ;; variable that arms no type capture
+            (if (i32.gt_s (local.get $kind) (i32.const 1023))
+              (then
+                (local.set $p (call $lexSkipSpaceAt (local.get $rhs)))
+                (local.set $kind
+                  (select
+                    (i32.and (local.get $kind) (i32.const 1023))
+                    (i32.const -1)
+                    (i32.and
+                      (i32.and
+                        (i32.eqz (local.get $member))
+                        (i32.gt_u (local.get $p) (local.get $rhs)))
+                      (call $lexIsIdentStart (call $javaByte (local.get $p))))))))
             (if (i32.ge_s (local.get $kind) (i32.const 0))
               (then
                 (local.set $hl (i32.and (local.get $kind) (i32.const 255)))
@@ -212,7 +225,7 @@
                           (else
                             (local.set $afterType
                               (i32.le_u
-                                (i32.sub (i32.load8_u (local.get $lhs)) (i32.const "A"))
+                                (i32.sub (local.get $c) (i32.const "A"))
                                 (i32.const 25)))
                             (local.set $hl
                               (select
@@ -226,7 +239,7 @@
                             ;; a type is the method being declared
                             (if
                               (i32.le_u
-                                (i32.sub (i32.load8_u (local.get $lhs)) (i32.const "A"))
+                                (i32.sub (local.get $c) (i32.const "A"))
                                 (i32.const 25))
                               (then (local.set $hl (enum.get $Token.type)))
                               (else
@@ -244,7 +257,7 @@
                               (else
                                 (local.set $afterType
                                   (i32.le_u
-                                    (i32.sub (i32.load8_u (local.get $lhs)) (i32.const "A"))
+                                    (i32.sub (local.get $c) (i32.const "A"))
                                     (i32.const 25)))
                                 (local.set $hl
                                   (select
@@ -307,6 +320,8 @@
             ;; `Type::method` references a member
             (local.set $member (i32.eq (local.get $c2) (i32.const ":")))
             (local.set $afterType (i32.const 0))
+            ;; a stale capture never crosses `:` onto the name after it
+            (local.set $expect (i32.const 0))
             (br $next)))
         (if (i32.eq (local.get $c) (i32.const "."))
           (then
@@ -347,13 +362,14 @@
                       (i32.eq (local.get $c) (local.get $c2))
                       (byteset.get "&+-<>|" (local.get $c))))
                   (then
+                    ;; two bytes in, so the third is $c3
                     (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
                     (if
                       (i32.and
                         (i32.eq (local.get $c) (i32.const ">"))
                         (i32.or
-                          (i32.eq (call $javaByte (global.get $ptr)) (i32.const ">"))
-                          (i32.eq (call $javaByte (global.get $ptr)) (i32.const "="))))
+                          (i32.eq (local.get $c3) (i32.const ">"))
+                          (i32.eq (local.get $c3) (i32.const "="))))
                       (then
                         (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
                         (if (i32.eq (call $javaByte (global.get $ptr)) (i32.const "="))
@@ -361,14 +377,25 @@
                     (if
                       (i32.and
                         (i32.eq (local.get $c) (i32.const "<"))
-                        (i32.eq (call $javaByte (global.get $ptr)) (i32.const "=")))
+                        (i32.eq (local.get $c3) (i32.const "=")))
                       (then (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))))))))
             (call $emitTok (enum.get $Token.operator) (local.get $lhs) (global.get $ptr))
             (local.set $member (i32.const 0))
             ;; the angles of a generic - `>>` closes two - and a nullable
             ;; `?` keep the type pending; any other operator ends it
-            (if (i32.eqz (call $lexIsTypeGlue (local.get $lhs) (global.get $ptr)))
-              (then (local.set $afterType (i32.const 0))))
+            ;; so does a spaced one, which type syntax never is - `Foo.MAX >
+            ;; limit()` - and a `>` directly before a name: the explicit type
+            ;; arguments of `Collections.<T>emptyList()`
+            (if (call $lexIsTypeGlue (local.get $lhs) (global.get $ptr))
+              (then
+                (if
+                  (i32.or
+                    (i32.ne (local.get $gap) (local.get $lhs))
+                    (i32.and
+                      (i32.eq (local.get $c) (i32.const ">"))
+                      (call $lexIsIdentStart (call $javaByte (global.get $ptr)))))
+                  (then (local.set $afterType (i32.const 0)))))
+              (else (local.set $afterType (i32.const 0))))
             (br $next)))
 
         (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))

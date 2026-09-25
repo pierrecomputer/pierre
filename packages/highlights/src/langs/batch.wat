@@ -183,22 +183,24 @@
               (then (local.set $hl (enum.get $Token.variable))))
             (if (local.get $label)
               (then (local.set $hl (enum.get $Token.label))))
-            (local.set $label
-              (i32.and (i32.eq (local.get $n) (i32.const 4))
-                (i32.eq (i32.load (i32.const $mem.lexLowerScratch)) (i32.const "goto"))))
+            ;; a four-letter word, or 0: `goto`, `call`, and `else` compare whole
+            (local.set $p
+              (select
+                (i32.load (i32.const $mem.lexLowerScratch))
+                (i32.const 0)
+                (i32.eq (local.get $n) (i32.const 4))))
+            (local.set $label (i32.eq (local.get $p) (i32.const "goto")))
             (local.set $argument (i32.const 1))
             (if (i32.eq (local.get $hl) (enum.get $Token.keyword.control))
               (then
                 (if (i32.or
                       (i32.and (i32.eq (local.get $n) (i32.const 2))
                         (i32.eq (i32.load16_u (i32.const $mem.lexLowerScratch)) (i32.const "do")))
-                      (i32.and (i32.eq (local.get $n) (i32.const 4))
-                        (i32.or (i32.eq (i32.load (i32.const $mem.lexLowerScratch)) (i32.const "call"))
-                          (i32.eq (i32.load (i32.const $mem.lexLowerScratch)) (i32.const "else")))))
+                      (i32.or (i32.eq (local.get $p) (i32.const "call"))
+                        (i32.eq (local.get $p) (i32.const "else"))))
                   (then (local.set $argument (i32.const 0))))))
             ;; CALL's :label is one argument, unlike a line-start label.
-            (if (i32.and (i32.eq (local.get $n) (i32.const 4))
-                  (i32.eq (i32.load (i32.const $mem.lexLowerScratch)) (i32.const "call")))
+            (if (i32.eq (local.get $p) (i32.const "call"))
               (then
                 (if (i32.eq (call $batchByte (call $lexSkipSpaceAt (global.get $ptr))) (i32.const ":"))
                   (then

@@ -424,3 +424,55 @@ void t.test(
     );
   }
 );
+
+void t.test(
+  'cpp: a multi-line raw string keeps its literal suffix when streamed',
+  () => {
+    const code = 'auto j = R"({\n  "a": 1\n})"_json;\n';
+    assert.deepEqual(tokenKinds('cpp', code).slice(-2), [
+      ['})"_json', 'string'],
+      [';', 'punctuation.delimiter'],
+    ]);
+    assertLineFedParity('cpp', code);
+  }
+);
+
+void t.test('cpp: a named escape ends at the quote or line break', () => {
+  const code = 'auto s = "\\N{LATIN";\nint main() {\n  return 0;\n}\n';
+  assert.deepEqual(tokenKinds('cpp', code).slice(0, 7), [
+    ['auto', 'type.builtin'],
+    ['s', 'variable'],
+    ['=', 'operator'],
+    ['"', 'string'],
+    ['\\N{LATIN', 'string.escape'],
+    ['"', 'string'],
+    [';', 'punctuation.delimiter'],
+  ]);
+  assertLineFedParity('cpp', code);
+  assert.deepEqual(tokenKinds('cpp', '"\\N{DIGIT ONE}x";').slice(0, 3), [
+    ['"', 'string'],
+    ['\\N{DIGIT ONE}', 'string.escape'],
+    ['x"', 'string'],
+  ]);
+});
+
+void t.test(
+  'cpp: qualifiers in namespace and using paths are namespaces',
+  () => {
+    assert.deepEqual(
+      tokenKinds('cpp', 'namespace a::b {}\nusing std::vector;'),
+      [
+        ['namespace', 'keyword.declaration'],
+        ['a', 'namespace'],
+        ['::', 'punctuation.delimiter'],
+        ['b', 'namespace'],
+        ['{}', 'punctuation.bracket'],
+        ['using', 'keyword.declaration'],
+        ['std', 'namespace'],
+        ['::', 'punctuation.delimiter'],
+        ['vector', 'type'],
+        [';', 'punctuation.delimiter'],
+      ]
+    );
+  }
+);

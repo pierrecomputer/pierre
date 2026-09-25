@@ -71,6 +71,23 @@
     (global.set $ptr (local.get $stop))
     (call $emitTok (enum.get $Token.comment) (local.get $lhs) (global.get $ptr)))
 
+  ;; The token for a bare uppercase-first name that is not a call: the class
+  ;; before `::` (`User::class`, `Foo::bar()`), a SCREAMING_CASE constant
+  ;; (`PHP_EOL`), or a plain name. Kept out of line so lowercase names -
+  ;; functions, and the `self`/`parent`/`static` scopes - pay one compare.
+  (func $phpUpperName (param $lhs i32) (param $rhs i32) (result i32)
+    (if
+      (i32.and
+        (i32.lt_u (i32.add (local.get $rhs) (i32.const 1)) (global.get $end))
+        (i32.eq (i32.load16_u (local.get $rhs)) (i32.const "::")))
+      (then (return (enum.get $Token.type))))
+    ;; a lowercase second letter rules SCREAMING_CASE out without a scan
+    (if (i32.le_u (i32.sub (i32.load8_u offset=1 (local.get $lhs)) (i32.const "a")) (i32.const 25))
+      (then (return (enum.get $Token.variable))))
+    (if (call $lexIsConstCase (local.get $lhs) (local.get $rhs))
+      (then (return (enum.get $Token.constant))))
+    (enum.get $Token.variable))
+
   ;; PHP keywords are case-insensitive: fold the first eight bytes once with
   ;; OR 0x20, then dispatch on length so only one length group's compares run.
   ;; Words longer than eight bytes compare their folded tail separately. The
@@ -498,6 +515,51 @@
     (drop (call $phpHeredocBody (local.get $body) (local.get $delim) (local.get $n)))
     (i32.const 1))
 
+  ;; A single-quoted string body from $ptr, $seg holding its first unemitted
+  ;; byte. PHP escapes only `\'` and `\\` here, so regex patterns (`'/\d+/'`)
+  ;; and Windows paths stay plain string text. Returns 1 after the closing
+  ;; quote, 0 when the body runs to $end; a body that reaches the end of a
+  ;; streamed chunk becomes php-owned stream mode 15, resumed by
+  ;; $phpStreamResume, so later lines keep these escape rules.
+  (func $phpSingleBody (param $seg i32) (result i32)
+    (local $c i32)
+    (local $status i32)
+    (block $done
+      (loop $l
+        (global.set $ptr
+          (call $scanFindSpecial
+            (global.get $ptr)
+            (global.get $end)
+            (i32.const 39)
+            (i32.const 1)
+            (i32.const 0)))
+        (br_if $done (i32.ge_u (global.get $ptr) (global.get $end)))
+        (if (i32.eq (i32.load8_u (global.get $ptr)) (i32.const 39))
+          (then
+            (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
+            (local.set $status (i32.const 1))
+            (br $done)))
+        ;; a backslash escapes only a quote or another backslash
+        (local.set $c (i32.load8_u offset=1 (global.get $ptr)))
+        (if
+          (i32.and
+            (i32.lt_u (i32.add (global.get $ptr) (i32.const 1)) (global.get $end))
+            (i32.or (i32.eq (local.get $c) (i32.const 39)) (i32.eq (local.get $c) (i32.const 92))))
+          (then
+            (call $emitTok (enum.get $Token.string) (local.get $seg) (global.get $ptr))
+            (local.set $seg (i32.add (global.get $ptr) (i32.const 2)))
+            (call $emitTok (enum.get $Token.string.escape) (global.get $ptr) (local.get $seg))
+            (global.set $ptr (local.get $seg)))
+          (else (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))))
+        (br $l)))
+    (call $emitTok (enum.get $Token.string) (local.get $seg) (global.get $ptr))
+    (if
+      (i32.and
+        (i32.eqz (local.get $status))
+        (i32.and (global.get $streaming) (i32.eq (global.get $ptr) (global.get $eof))))
+      (then (global.set $streamMode (i32.const 15))))
+    (local.get $status))
+
   ;; PHP code, stopping before a live `?>` delimiter. $resume is 1 when the
   ;; previous chunk ended inside code: the declaration and member lookahead
   ;; it checkpointed continues into this chunk.
@@ -568,7 +630,11 @@
             (i32.eq (local.get $c) (i32.const 34))
             (i32.or (i32.eq (local.get $c) (i32.const 39)) (i32.eq (local.get $c) (i32.const "`"))))
           (then
-            (call $lexString (local.get $c) (i32.const 1) (enum.get $Token.string))
+            (if (i32.eq (local.get $c) (i32.const 39))
+              (then
+                (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
+                (drop (call $phpSingleBody (local.get $lhs))))
+              (else (call $lexString (local.get $c) (i32.const 1) (enum.get $Token.string))))
             (local.set $decl (i32.const 0))
             (local.set $member (i32.const 0))
             (br $token)))
@@ -597,12 +663,28 @@
             (local.set $hl (call $phpWordHl (local.get $lhs) (global.get $ptr)))
             (if (local.get $decl)
               (then
-                (local.set $hl
-                  (select
-                    (enum.get $Token.function.definition)
-                    (enum.get $Token.type.class)
-                    (i32.eq (local.get $decl) (i32.const 1))))
-                (local.set $decl (i32.const 0)))
+                ;; `new` (decl 3) names a class unless a keyword follows
+                ;; (`new class`, `new static`)
+                (if
+                  (i32.or
+                    (i32.lt_u (local.get $decl) (i32.const 3))
+                    (i32.eq (local.get $hl) (enum.get $Token.variable)))
+                  (then
+                    (local.set $hl
+                      (select
+                        (enum.get $Token.function.definition)
+                        (enum.get $Token.type.class)
+                        (i32.eq (local.get $decl) (i32.const 1))))))
+                ;; in a qualified `new A\B` the segments before `\` are
+                ;; namespaces and the class name is still pending
+                (if
+                  (i32.and
+                    (i32.eq (local.get $decl) (i32.const 3))
+                    (i32.and
+                      (i32.lt_u (global.get $ptr) (global.get $end))
+                      (i32.eq (i32.load8_u (global.get $ptr)) (i32.const 92))))
+                  (then (local.set $hl (enum.get $Token.namespace)))
+                  (else (local.set $decl (i32.const 0)))))
               (else
                 (if (local.get $member)
                   (then
@@ -614,6 +696,16 @@
                         (i32.and
                           (i32.lt_u (local.get $p) (global.get $end))
                           (i32.eq (i32.load8_u (local.get $p)) (i32.const "(")))))
+                    ;; a class constant after `::` (`Attribute::TARGET_CLASS`)
+                    (if (i32.eq (local.get $member) (i32.const 2))
+                      (then
+                        (if
+                          (i32.and
+                            (i32.eq (local.get $hl) (enum.get $Token.property))
+                            (i32.le_u (i32.sub (local.get $c) (i32.const "A")) (i32.const 25)))
+                          (then
+                            (if (call $lexIsConstCase (local.get $lhs) (global.get $ptr))
+                              (then (local.set $hl (enum.get $Token.constant))))))))
                     (local.set $member (i32.const 0)))
                   (else
                     (if (i32.eq (local.get $hl) (enum.get $Token.variable))
@@ -623,7 +715,12 @@
                           (i32.and
                             (i32.lt_u (local.get $p) (global.get $end))
                             (i32.eq (i32.load8_u (local.get $p)) (i32.const "(")))
-                          (then (local.set $hl (enum.get $Token.function))))
+                          (then (local.set $hl (enum.get $Token.function)))
+                          (else
+                            (if (i32.le_u (i32.sub (local.get $c) (i32.const "A")) (i32.const 25))
+                              (then
+                                (local.set $hl
+                                  (call $phpUpperName (local.get $lhs) (global.get $ptr)))))))
                         ;; a PHP 8 named call argument - `name:` after `(` or
                         ;; `,`, never `::` - is Zed's argument name capture
                         (if
@@ -641,18 +738,31 @@
                                     (i32.add (local.get $p) (i32.const 1))
                                     (global.get $end)))
                                 (i32.const ":"))))
-                          (then (local.set $hl (enum.get $Token.variable.parameter))))))))))
-            (if (i32.eq (local.get $hl) (enum.get $Token.keyword.declaration))
-              (then
-                (local.set $decl
-                  (select
-                    (i32.const 1)
-                    (i32.const 2)
-                    (i32.and
-                      (i32.eq (i32.sub (global.get $ptr) (local.get $lhs)) (i32.const 8))
-                      (i64.eq
-                        (i64.or (i64.load (local.get $lhs)) (i64.const 0x2020202020202020))
-                        (i64.const "function")))))))
+                          (then (local.set $hl (enum.get $Token.variable.parameter)))))
+                      (else
+                        ;; a declaration keyword primes the name that follows:
+                        ;; 1 a function, 2 a class-like; `new` (3) a class
+                        (if (i32.eq (local.get $hl) (enum.get $Token.keyword.declaration))
+                          (then
+                            (local.set $decl
+                              (select
+                                (i32.const 1)
+                                (i32.const 2)
+                                (i32.and
+                                  (i32.eq (i32.sub (global.get $ptr) (local.get $lhs)) (i32.const 8))
+                                  (i64.eq
+                                    (i64.or (i64.load (local.get $lhs)) (i64.const 0x2020202020202020))
+                                    (i64.const "function"))))))
+                          (else
+                            (if
+                              (i32.and
+                                (i32.eq (i32.sub (global.get $ptr) (local.get $lhs)) (i32.const 3))
+                                (i32.eq
+                                  (i32.and
+                                    (i32.or (i32.load (local.get $lhs)) (i32.const 0x202020))
+                                    (i32.const 0xffffff))
+                                  (i32.const "new")))
+                              (then (local.set $decl (i32.const 3))))))))))))
             (call $emitTok (local.get $hl) (local.get $lhs) (global.get $ptr))
             (global.set $sigPattern (i32.const 0))
             (br $token)))
@@ -668,7 +778,8 @@
             (global.set $ptr (i32.add (global.get $ptr) (i32.const 2)))
             (call $emitTok (enum.get $Token.operator) (local.get $lhs) (global.get $ptr))
             (local.set $decl (i32.const 0))
-            (local.set $member (i32.const 1))
+            ;; 2 after `::`, where SCREAMING_CASE names class constants
+            (local.set $member (select (i32.const 2) (i32.const 1) (i32.eq (local.get $c) (i32.const ":"))))
             (global.set $sigPattern (i32.const 0))
             (br $token)))
         (if (byteset.get "()[]{}" (local.get $c))
@@ -706,8 +817,11 @@
               (i32.eq (local.get $next) (i32.const "["))))
           (local.get $lhs)
           (global.get $ptr))
-        (if (i32.ne (local.get $c) (i32.const "&"))
-          (then (local.set $decl (i32.const 0))))
+        ;; `function &name` and the `\` of `new \A\B` keep the pending name
+        (if (local.get $decl)
+          (then
+            (if (i32.and (i32.ne (local.get $c) (i32.const "&")) (i32.ne (local.get $c) (i32.const 92)))
+              (then (local.set $decl (i32.const 0))))))
         (local.set $member (i32.const 0))
         (br $token)))
     (if (global.get $streaming)
@@ -716,9 +830,10 @@
         (global.set $phpStreamMember (local.get $member)))))
 
   ;; Resume the php stream state the previous chunk left: first a heredoc
-  ;; body (mode 14), then - when the chunk ended inside PHP code - the code
-  ;; itself up to `?>`. Returns 1 when the whole chunk was consumed; on 0
-  ;; $hlPhp continues from $ptr, in markup mode after a `?>`.
+  ;; body (mode 14) or single-quoted string (mode 15), then - when the chunk
+  ;; ended inside PHP code - the code itself up to `?>`. Returns 1 when the
+  ;; whole chunk was consumed; on 0 $hlPhp continues from $ptr, in markup
+  ;; mode after a `?>`.
   (func $phpStreamResume (result i32)
     (local $code i32)
     (local $lhs i32)
@@ -728,6 +843,12 @@
         (if (call $phpHeredocResume)
           (then (return (i32.const 1))))
         ;; a heredoc only opens inside code, so its closer continues code
+        (local.set $code (i32.const 1))))
+    (if (i32.eq (global.get $streamMode) (i32.const 15))
+      (then
+        (if (i32.eqz (call $phpSingleBody (global.get $ptr)))
+          (then (return (i32.const 1))))
+        (global.set $streamMode (i32.const 0))
         (local.set $code (i32.const 1))))
     (if (i32.eqz (local.get $code))
       (then (return (i32.const 0))))

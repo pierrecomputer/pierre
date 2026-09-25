@@ -508,3 +508,67 @@ void t.test('scala: triple-quoted strings and scaladoc stream line-fed', () => {
     'val s = """a\n  |b""".stripMargin\n/** doc\n * @param x\n */\ndef f = 1\n'
   );
 });
+
+void t.test('scala: a block argument makes a call; package objects', () => {
+  const code =
+    'xs.foreach { x => f(x) }\nxs foreach { x => f(x) }\nval f = Future { 1 }\npackage object util {\n  def g = 1\n}';
+  assertLineFedParity('scala', code);
+  assert.deepEqual(tokenKinds('scala', code), [
+    ['xs', 'variable'],
+    ['.', 'punctuation.delimiter'],
+    ['foreach', 'function.method'],
+    ['{', 'punctuation.bracket'],
+    ['x', 'variable'],
+    ['=>', 'operator'],
+    ['f', 'function'],
+    ['(', 'punctuation.bracket'],
+    ['x', 'variable'],
+    [') }', 'punctuation.bracket'],
+    ['xs', 'variable'],
+    ['foreach', 'function'],
+    ['{', 'punctuation.bracket'],
+    ['x', 'variable'],
+    ['=>', 'operator'],
+    ['f', 'function'],
+    ['(', 'punctuation.bracket'],
+    ['x', 'variable'],
+    [') }', 'punctuation.bracket'],
+    ['val', 'keyword.declaration'],
+    ['f', 'variable'],
+    ['=', 'operator'],
+    ['Future', 'type'],
+    ['{', 'punctuation.bracket'],
+    ['1', 'number'],
+    ['}', 'punctuation.bracket'],
+    ['package', 'keyword.import'],
+    ['object', 'keyword.declaration'],
+    ['util', 'type'],
+    ['{', 'punctuation.bracket'],
+    ['def', 'keyword.declaration'],
+    ['g', 'function.definition'],
+    ['=', 'operator'],
+    ['1', 'number'],
+    ['}', 'punctuation.bracket'],
+  ]);
+});
+
+void t.test('scala: an LF or CRLF gap ends an import line', () => {
+  const code = 'import a.b\r\nval c = 1\nimport x.y\nobject Z';
+  assertLineFedParity('scala', code);
+  assert.deepEqual(tokenKinds('scala', code), [
+    ['import', 'keyword.import'],
+    ['a', 'namespace'],
+    ['.', 'punctuation.delimiter'],
+    ['b', 'namespace'],
+    ['val', 'keyword.declaration'],
+    ['c', 'variable'],
+    ['=', 'operator'],
+    ['1', 'number'],
+    ['import', 'keyword.import'],
+    ['x', 'namespace'],
+    ['.', 'punctuation.delimiter'],
+    ['y', 'namespace'],
+    ['object', 'keyword.declaration'],
+    ['Z', 'type'],
+  ]);
+});

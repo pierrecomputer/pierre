@@ -473,3 +473,16 @@ void t.test(
     );
   }
 );
+
+void t.test('erlang: `$ ` is the space character', () => {
+  assert.deepEqual(tokenKinds('erlang', 'X = $ , Y = $\\s.'), [
+    ['X', 'variable'],
+    ['=', 'operator'],
+    ['$', 'string.special'],
+    [',', 'punctuation.delimiter'],
+    ['Y', 'variable'],
+    ['=', 'operator'],
+    ['$\\s', 'string.special'],
+    ['.', 'punctuation.delimiter'],
+  ]);
+});

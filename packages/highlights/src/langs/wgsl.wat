@@ -4,22 +4,23 @@
   (func $wgslByte (param $p i32) (result i32)
     (select (i32.load8_u (local.get $p)) (i32.const 0) (i32.lt_u (local.get $p) (global.get $end))))
 
-  ;; Group order is the dispatch order in $wgslWordHl below. The vector,
+  ;; Each group's value is its token, with the next-name capture of the
+  ;; declaration groups in the high byte (see $wgslWordHl). The vector,
   ;; matrix, and texture families are prefix checks in $wgslTypeHl: `mat2x2`
   ;; and `mat3x2` share every hash feature the table can use.
   (keyword-table $wgslWords $mem.wgslWords $mem.zigWords
-    (group ;; 1: control
+    (group $Token.keyword.control ;; 1: control
       "if" "for" "case" "else" "loop" "break" "while" "return" "switch" "default" "discard"
       "continue" "continuing")
-    (group "fn")              ;; 2: declaration, next name is a function
-    (group "alias" "struct")  ;; 3: declaration, next name is a type
-    (group ;; 4: declaration
+    (group $Token.keyword.declaration+256 "fn") ;; 2: declaration, next name is a function
+    (group $Token.keyword.declaration+512 "alias" "struct") ;; 3: declaration, next name is a type
+    (group $Token.keyword.declaration ;; 4: declaration
       "let" "var" "const" "enable" "override" "requires" "diagnostic" "const_assert")
-    (group ;; 5: address spaces and access modes
+    (group $Token.keyword ;; 5: address spaces and access modes
       "read" "write" "private" "storage" "uniform" "function" "workgroup" "read_write")
-    (group ;; 6: built-in types without a family suffix
+    (group $Token.type.builtin ;; 6: built-in types without a family suffix
       "ptr" "f16" "f32" "i32" "u32" "bool" "array" "atomic" "sampler" "sampler_comparison")
-    (group "true" "false")) ;; 7: booleans
+    (group $Token.boolean "true" "false")) ;; 7: booleans
 
   ;; The built-in type families the table cannot hold: `vec2`..`vec4` with
   ;; an optional `f`/`i`/`u`/`h` suffix, `mat2x2`..`mat4x4` with an optional
@@ -73,29 +74,12 @@
   ;; 1=function, 2=type. -1 means an ordinary identifier.
   (func $wgslWordHl (param $lhs i32) (param $rhs i32) (result i32)
     (local $g i32)
-    (local $hl i32)
-    (local.set $g (keyword-table.get $wgslWords (local.get $lhs) (local.get $rhs)))
-    (if (i32.eqz (local.get $g))
+    (local.set $g (keyword-table.value $wgslWords (local.get $lhs) (local.get $rhs)))
+    (if (i32.lt_s (local.get $g) (i32.const 0))
       (then
-        (local.set $hl (call $wgslTypeHl (local.get $lhs) (local.get $rhs)))
-        (if (local.get $hl)
-          (then (return (local.get $hl))))
-        (return (i32.const -1))))
-    (if (i32.eq (local.get $g) (i32.const 1))
-      (then (return (enum.get $Token.keyword.control))))
-    (if (i32.le_u (local.get $g) (i32.const 3))
-      (then
-        (return
-          (i32.or
-            (enum.get $Token.keyword.declaration)
-            (i32.shl (i32.sub (local.get $g) (i32.const 1)) (i32.const 8))))))
-    (if (i32.eq (local.get $g) (i32.const 4))
-      (then (return (enum.get $Token.keyword.declaration))))
-    (if (i32.eq (local.get $g) (i32.const 5))
-      (then (return (enum.get $Token.keyword))))
-    (if (i32.eq (local.get $g) (i32.const 6))
-      (then (return (enum.get $Token.type.builtin))))
-    (enum.get $Token.boolean))
+        (local.set $g (call $wgslTypeHl (local.get $lhs) (local.get $rhs)))
+        (return (select (local.get $g) (i32.const -1) (local.get $g)))))
+    (local.get $g))
 
   (func $wgslIsOp (param $c i32) (result i32)
     (byteset.get "!%&*+-/<=>^|~" (local.get $c)))

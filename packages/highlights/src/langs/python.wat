@@ -374,11 +374,19 @@
             (local.set $annotName (i32.const 0))
             (local.set $lineHead (i32.const 0))
             (br $next)))
-        (if (i32.lt_u (i32.add (local.get $lhs) (i32.const 2)) (global.get $end))
+        ;; two-byte raw prefixes before a quote; the f and 3.14 t-string forms
+        ;; have format fields. The quote is tested first: it rules out almost
+        ;; every token before the prefix compares run.
+        (if
+          (i32.and
+            (i32.lt_u (i32.add (local.get $lhs) (i32.const 2)) (global.get $end))
+            (i32.or
+              (i32.eq (i32.load8_u offset=2 (local.get $lhs)) (i32.const 34))
+              (i32.eq (i32.load8_u offset=2 (local.get $lhs)) (i32.const 39))))
           (then
             (local.set $p (i32.or (i32.load16_u (local.get $lhs)) (i32.const 0x2020)))
             (if
-              (i32.and
+              (i32.or
                 (i32.or
                   (i32.or
                     (i32.eq (local.get $p) (i32.const "br"))
@@ -387,16 +395,16 @@
                     (i32.eq (local.get $p) (i32.const "fr"))
                     (i32.eq (local.get $p) (i32.const "rf"))))
                 (i32.or
-                  (i32.eq (i32.load8_u offset=2 (local.get $lhs)) (i32.const 34))
-                  (i32.eq (i32.load8_u offset=2 (local.get $lhs)) (i32.const 39))))
+                  (i32.eq (local.get $p) (i32.const "tr"))
+                  (i32.eq (local.get $p) (i32.const "rt"))))
               (then
                 (call $pyString
                   (i32.const 2)
                   (i32.load8_u offset=2 (local.get $lhs))
                   (i32.const 1)
-                  (i32.or
-                    (i32.eq (local.get $p) (i32.const "fr"))
-                    (i32.eq (local.get $p) (i32.const "rf"))))
+                  (i32.and
+                    (i32.ne (local.get $p) (i32.const "br"))
+                    (i32.ne (local.get $p) (i32.const "rb"))))
                 (local.set $annotName (i32.const 0))
                 (local.set $lineHead (i32.const 0))
                 (local.set $afterDot (i32.const 0))
@@ -422,7 +430,8 @@
             (br $next)))
         (if (call $lexIsIdentStart (local.get $c))
           (then
-            ;; Recognize case-insensitive r/u/b/f and br/rb/fr/rf prefixes.
+            ;; Recognize case-insensitive r/u/b/f/t prefixes (the two-byte
+            ;; ones are handled above); 3.14 t-strings format like f-strings.
             (local.set $prefix (i32.const 0))
             (local.set $raw (i32.const 0))
             (local.set $format (i32.const 0))
@@ -430,15 +439,18 @@
             (if
               (i32.or
                 (i32.or
-                  (i32.eq (local.get $c) (i32.const "r"))
-                  (i32.eq (local.get $c) (i32.const "u")))
-                (i32.or
-                  (i32.eq (local.get $c) (i32.const "b"))
-                  (i32.eq (local.get $c) (i32.const "f"))))
+                  (i32.or
+                    (i32.eq (local.get $c) (i32.const "r"))
+                    (i32.eq (local.get $c) (i32.const "u")))
+                  (i32.or
+                    (i32.eq (local.get $c) (i32.const "b"))
+                    (i32.eq (local.get $c) (i32.const "f"))))
+                (i32.eq (local.get $c) (i32.const "t")))
               (then
                 (local.set $prefix (i32.const 1))
                 (local.set $raw (i32.eq (local.get $c) (i32.const "r")))
-                (local.set $format (i32.eq (local.get $c) (i32.const "f")))))
+                (local.set $format
+                  (i32.or (i32.eq (local.get $c) (i32.const "f")) (i32.eq (local.get $c) (i32.const "t"))))))
             (local.set $q (i32.add (local.get $lhs) (local.get $prefix)))
             (if
               (i32.and

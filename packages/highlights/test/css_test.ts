@@ -953,3 +953,56 @@ void t.test(
     }
   }
 );
+
+void t.test('css: backslash escapes continue a class name', () => {
+  // compiled utility css escapes `:`, `/`, `.`, brackets, and leading digits
+  const src =
+    '.md\\:flex{a:b}\n.w-1\\/2:hover{a:b}\n.mt-\\[2px\\]{a:b}\n.\\32xl\\:p-0{a:b}\n.a\\\n{a:b}\n';
+  assert.deepEqual(
+    tokenKinds('css', src).filter(([, kind]) => kind !== 'punctuation.bracket'),
+    [
+      ['.md\\:flex', 'selector.class'],
+      ['a', 'property'],
+      [':', 'punctuation.delimiter'],
+      ['b', 'constant.builtin'],
+      ['.w-1\\/2', 'selector.class'],
+      [':hover', 'selector.pseudo'],
+      ['a', 'property'],
+      [':', 'punctuation.delimiter'],
+      ['b', 'constant.builtin'],
+      ['.mt-\\[2px\\]', 'selector.class'],
+      ['a', 'property'],
+      [':', 'punctuation.delimiter'],
+      ['b', 'constant.builtin'],
+      ['.\\32xl\\:p-0', 'selector.class'],
+      ['a', 'property'],
+      [':', 'punctuation.delimiter'],
+      ['b', 'constant.builtin'],
+      // a backslash before a line break is no escape
+      ['.a', 'selector.class'],
+      ['\\', null],
+      ['a', 'property'],
+      [':', 'punctuation.delimiter'],
+      ['b', 'constant.builtin'],
+    ]
+  );
+  assertLineFedParity('css', src);
+});
+
+void t.test('css: unclosed interpolations do not scan ahead', () => {
+  // the statement decider counts `#{`/`@{` instead of searching the rest of
+  // the input for their closers, which made unclosed ones quadratic and let
+  // a later line decide this one
+  for (const [lang, src] of [
+    ['sass', '#{\n'.repeat(4000)],
+    ['scss', ';#{'.repeat(4000)],
+    ['less', ';@{'.repeat(4000)],
+    ['scss', '#d#{\n  };\n'],
+  ] as const) {
+    assertLineFedParity(lang, src);
+  }
+  assert.deepEqual(tokenKinds('scss', '#d#{\n  };\n')[0], [
+    '#d',
+    'selector.id',
+  ]);
+});

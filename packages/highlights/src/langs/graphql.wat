@@ -4,19 +4,20 @@
   (func $gqlByte (param $p i32) (result i32)
     (select (i32.load8_u (local.get $p)) (i32.const 0) (i32.lt_u (local.get $p) (global.get $end))))
 
-  ;; Group order is the dispatch order in $hlGraphql. Groups 1-3 are
+  ;; Each value is the token in the low byte and, above it, the $expect
+  ;; capture the word primes for the next name. The keyword groups are
   ;; contextual: `type`, `on`, or `input` is also an ordinary field name,
   ;; so they count as keywords only when a name, brace, directive, paren,
   ;; or `&` follows on the same line.
   (keyword-table $graphqlWords $mem.graphqlWords $mem.groovyWords
-    (group ;; 1: definitions, next name is a type
+    (group $Token.keyword+256 ;; definitions, next name is a type
       "type" "interface" "union" "enum" "input" "scalar" "on" "implements")
-    (group ;; 2: operations, next name is an operation or fragment
+    (group $Token.keyword+512 ;; operations, next name is an operation or fragment
       "query" "mutation" "subscription" "fragment")
-    (group "extend" "schema" "directive" "repeatable") ;; 3: other keywords
-    (group "true" "false")                             ;; 4: booleans
-    (group "null")                                     ;; 5: built-in constant
-    (group "Int" "Float" "String" "Boolean" "ID"))     ;; 6: built-in scalars
+    (group $Token.keyword "extend" "schema" "directive" "repeatable")
+    (group $Token.boolean "true" "false")
+    (group $Token.constant.builtin "null")
+    (group $Token.type.builtin "Int" "Float" "String" "Boolean" "ID"))
 
   ;; Scan a `"""` block string whose opener sits at $ptr; `\"""` does not
   ;; close it. Streaming keeps looking for the closer in the next chunk.
@@ -122,39 +123,29 @@
             (call $scanIdentRun (i32.const "_"))
             (local.set $rhs (global.get $ptr))
             (local.set $p (call $lexSkipSpaceAt (local.get $rhs)))
-            (local.set $g (keyword-table.get $graphqlWords (local.get $lhs) (local.get $rhs)))
-            ;; the contextual groups need a name, brace, directive, paren,
+            ;; the byte after the name and its blanks
+            (local.set $c3 (call $gqlByte (local.get $p)))
+            (local.set $g (keyword-table.value $graphqlWords (local.get $lhs) (local.get $rhs)))
+            ;; the contextual keywords need a name, brace, directive, paren,
             ;; or `&` after them on the same line
             (if
               (i32.and
-                (i32.and
-                  (i32.ge_u (local.get $g) (i32.const 1))
-                  (i32.le_u (local.get $g) (i32.const 3)))
+                (i32.eq (i32.and (local.get $g) (i32.const 255)) (enum.get $Token.keyword))
                 (i32.eqz
                   (i32.or
                     (i32.or
-                      (call $lexIsIdentStart (call $gqlByte (local.get $p)))
-                      (i32.eq (call $gqlByte (local.get $p)) (i32.const "{")))
+                      (call $lexIsIdentStart (local.get $c3))
+                      (i32.eq (local.get $c3) (i32.const "{")))
                     (i32.or
                       (i32.or
-                        (i32.eq (call $gqlByte (local.get $p)) (i32.const "@"))
-                        (i32.eq (call $gqlByte (local.get $p)) (i32.const "(")))
-                      (i32.eq (call $gqlByte (local.get $p)) (i32.const "&"))))))
-              (then (local.set $g (i32.const 0))))
-            (if (local.get $g)
+                        (i32.eq (local.get $c3) (i32.const "@"))
+                        (i32.eq (local.get $c3) (i32.const "(")))
+                      (i32.eq (local.get $c3) (i32.const "&"))))))
+              (then (local.set $g (i32.const -1))))
+            (if (i32.ge_s (local.get $g) (i32.const 0))
               (then
-                (local.set $hl (enum.get $Token.keyword))
-                (if (i32.eq (local.get $g) (i32.const 4))
-                  (then (local.set $hl (enum.get $Token.boolean))))
-                (if (i32.eq (local.get $g) (i32.const 5))
-                  (then (local.set $hl (enum.get $Token.constant.builtin))))
-                (if (i32.eq (local.get $g) (i32.const 6))
-                  (then (local.set $hl (enum.get $Token.type.builtin))))
-                (local.set $expect (i32.const 0))
-                (if (i32.eq (local.get $g) (i32.const 1))
-                  (then (local.set $expect (i32.const 1))))
-                (if (i32.eq (local.get $g) (i32.const 2))
-                  (then (local.set $expect (i32.const 2)))))
+                (local.set $hl (i32.and (local.get $g) (i32.const 255)))
+                (local.set $expect (i32.shr_u (local.get $g) (i32.const 8))))
               (else
                 (if (local.get $expect)
                   (then
@@ -181,12 +172,12 @@
                         ;; `name:` is an argument inside parens and a field
                         ;; elsewhere; `name(` a field with arguments
                         (local.set $hl (enum.get $Token.property))
-                        (if (i32.eq (call $gqlByte (local.get $p)) (i32.const ":"))
+                        (if (i32.eq (local.get $c3) (i32.const ":"))
                           (then
                             (if (local.get $paren)
                               (then (local.set $hl (enum.get $Token.variable.parameter)))))
                           (else
-                            (if (i32.eq (call $gqlByte (local.get $p)) (i32.const "("))
+                            (if (i32.eq (local.get $c3) (i32.const "("))
                               (then (local.set $hl (enum.get $Token.function))))))))))))
             (call $emitTok (local.get $hl) (local.get $lhs) (local.get $rhs))
             (br $next)))

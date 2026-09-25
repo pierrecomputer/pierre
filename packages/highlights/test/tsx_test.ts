@@ -1401,3 +1401,360 @@ void t.test('tsx: JSDoc tag families as an exact token sequence', () => {
     ]
   );
 });
+
+void t.test('tsx: comments between jsx attributes', () => {
+  // an apostrophe in a `//` comment used to open an attribute string that
+  // swallowed the rest of the file
+  const code =
+    '<Button\n  // it\'s the primary action\n  variant="primary"\n  /* block */ disabled\n>\n  Save\n</Button>;\nconst b = 1;';
+  const expected = [
+    ['<', 'punctuation.bracket.jsx'],
+    ['Button', 'tag.component.jsx'],
+    ["// it's the primary action", 'comment'],
+    ['variant', 'attribute.jsx'],
+    ['=', 'punctuation.delimiter.jsx'],
+    ['"primary"', 'string'],
+    ['/* block */', 'comment'],
+    ['disabled', 'attribute.jsx'],
+    ['>', 'punctuation.bracket.jsx'],
+    ['Save', 'text.jsx'],
+    ['</', 'punctuation.bracket.jsx'],
+    ['Button', 'tag.component.jsx'],
+    ['>', 'punctuation.bracket.jsx'],
+    [';', 'punctuation.delimiter'],
+    ['const', 'keyword.declaration'],
+    ['b', 'variable'],
+    ['=', 'operator'],
+    ['1', 'number'],
+    [';', 'punctuation.delimiter'],
+  ];
+  for (const lang of ['tsx', 'jsx', 'tsrx'] as const) {
+    assert.deepEqual(tokenKinds(lang, code), expected, lang);
+    assertLineFedParity(lang, code);
+  }
+  // a block comment across lines resumes inside the tag
+  assertLineFedParity('tsx', '<a\n  /* multi\n  line */\n  b="c">t</a>;\nx');
+  // the non-emitting scan that finds a framework expression's end agrees:
+  // the expression closes at its own `}` and the markup after it is HTML
+  assert.deepEqual(
+    tokenKinds(
+      'svelte',
+      "{ok && <li\n  // it's one\n  data-x={i}>{i}</li>}\n<p>after</p>"
+    ).slice(-8),
+    [
+      ['}', 'punctuation.special'],
+      ['<', 'punctuation.bracket.html'],
+      ['p', 'tag'],
+      ['>', 'punctuation.bracket.html'],
+      ['after', null],
+      ['</', 'punctuation.bracket.html'],
+      ['p', 'tag'],
+      ['>', 'punctuation.bracket.html'],
+    ]
+  );
+});
+
+void t.test('tsx: jsx elements with type arguments', () => {
+  const child =
+    'const t = (\n  <div>\n    <Select<Option>\n      options={opts}\n    />\n  </div>\n);\nconst c = 4;';
+  assert.deepEqual(tokenKinds('tsx', child), [
+    ['const', 'keyword.declaration'],
+    ['t', 'variable'],
+    ['=', 'operator'],
+    ['(', 'punctuation.bracket'],
+    ['<', 'punctuation.bracket.jsx'],
+    ['div', 'tag.jsx'],
+    ['>', 'punctuation.bracket.jsx'],
+    ['<', 'punctuation.bracket.jsx'],
+    ['Select', 'tag.component.jsx'],
+    ['<', 'punctuation.bracket'],
+    ['Option', 'type'],
+    ['>', 'punctuation.bracket'],
+    ['options', 'attribute.jsx'],
+    ['=', 'punctuation.delimiter.jsx'],
+    ['{', 'punctuation.bracket'],
+    ['opts', 'variable'],
+    ['}', 'punctuation.bracket'],
+    ['/>', 'punctuation.bracket.jsx'],
+    ['</', 'punctuation.bracket.jsx'],
+    ['div', 'tag.jsx'],
+    ['>', 'punctuation.bracket.jsx'],
+    [')', 'punctuation.bracket'],
+    [';', 'punctuation.delimiter'],
+    ['const', 'keyword.declaration'],
+    ['c', 'variable'],
+    ['=', 'operator'],
+    ['4', 'number'],
+    [';', 'punctuation.delimiter'],
+  ]);
+  assertLineFedParity('tsx', child);
+  // expression position, nested lists, and a function type's `=>`
+  const expr = 'const e = <List<Map<K, V>, (a: T) => void> render={r} />;';
+  const kinds = tokenKinds('tsx', expr);
+  assert.deepEqual(kinds.slice(3, 11), [
+    ['<', 'punctuation.bracket.jsx'],
+    ['List', 'tag.component.jsx'],
+    ['<', 'punctuation.bracket'],
+    ['Map', 'type'],
+    ['<', 'punctuation.bracket'],
+    ['K', 'type'],
+    [',', 'punctuation.delimiter'],
+    ['V', 'type'],
+  ]);
+  assert.deepEqual(kinds.slice(-7), [
+    ['render', 'attribute.jsx'],
+    ['=', 'punctuation.delimiter.jsx'],
+    ['{', 'punctuation.bracket'],
+    ['r', 'variable'],
+    ['}', 'punctuation.bracket'],
+    ['/>', 'punctuation.bracket.jsx'],
+    [';', 'punctuation.delimiter'],
+  ]);
+  // a type-argument list spanning lines keeps its depth across chunks
+  assertLineFedParity(
+    'tsx',
+    '<Grid<\n  Row\n> rows={r}>\n  x\n</Grid>;\nconst z = 1;\n'
+  );
+  // plain jsx has no type arguments: `<` stays a lenient byte
+  assertLineFedParity('jsx', '<a<b> c="d" />;\n');
+});
+
+void t.test('tsx: generic arrow type parameters are not jsx', () => {
+  // TypeScript's own .tsx rule: after an optional `const`, a name followed
+  // by `,`/`=`, or by `extends` and anything but `=`, `>`, or `/`
+  assert.deepEqual(
+    tokenKinds(
+      'tsx',
+      'const y = <const T,>(a: T) => a;\nconst g = <T extends object>(x: T) => x;\nconst h = <Foo extends="x" />;'
+    ),
+    [
+      ['const', 'keyword.declaration'],
+      ['y', 'variable'],
+      ['= <', 'operator'],
+      ['const', 'keyword.declaration'],
+      ['T', 'type'],
+      [',', 'punctuation.delimiter'],
+      ['>', 'operator'],
+      ['(', 'punctuation.bracket'],
+      ['a', 'variable.parameter'],
+      [':', 'punctuation.special'],
+      ['T', 'type'],
+      [')', 'punctuation.bracket'],
+      ['=>', 'operator'],
+      ['a', 'variable'],
+      [';', 'punctuation.delimiter'],
+      ['const', 'keyword.declaration'],
+      ['g', 'variable'],
+      ['= <', 'operator'],
+      ['T', 'type'],
+      ['extends', 'keyword'],
+      ['object', 'type.class'],
+      ['>', 'operator'],
+      ['(', 'punctuation.bracket'],
+      ['x', 'variable.parameter'],
+      [':', 'punctuation.special'],
+      ['T', 'type'],
+      [')', 'punctuation.bracket'],
+      ['=>', 'operator'],
+      ['x', 'variable'],
+      [';', 'punctuation.delimiter'],
+      ['const', 'keyword.declaration'],
+      ['h', 'variable'],
+      ['=', 'operator'],
+      ['<', 'punctuation.bracket.jsx'],
+      ['Foo', 'tag.component.jsx'],
+      ['extends', 'attribute.jsx'],
+      ['=', 'punctuation.delimiter.jsx'],
+      ['"x"', 'string'],
+      ['/>', 'punctuation.bracket.jsx'],
+      [';', 'punctuation.delimiter'],
+    ]
+  );
+  for (const src of [
+    'const y = <const T,>(a: T) => a;\nconst z = 1;\n',
+    'const g = <T extends object>(x: T) => x;\nconst y = 1;\n',
+    'const q = <Foo extends />;\n',
+  ]) {
+    assertLineFedParity('tsx', src);
+  }
+});
+
+void t.test('ts: an arrow return type before `=>` is not a parameter', () => {
+  // the token right before `=>`: a return type after `): `, `is`, or `|`,
+  // while an object value keeps its sole arrow parameter
+  for (const [src, word, kind] of [
+    ['const f = (a: number): number => a;', 'number', 'type.builtin'],
+    [
+      'const u = (s): string | undefined => s;',
+      'undefined',
+      'constant.builtin',
+    ],
+    ['const k = (x): x is Foo => true;', 'Foo', 'type'],
+    ['const r = (a): A | T => a;', 'T', 'type'],
+    ['const o = { onClick: e => go(e) };', 'e', 'variable.parameter'],
+    ['const c = ok ? a : b => b;', 'b', 'variable.parameter'],
+  ] as const) {
+    const kinds = tokenKinds('ts', src);
+    const arrow = kinds.findIndex(([text]) => text === '=>');
+    assert.deepEqual(kinds[arrow - 1], [word, kind], src);
+    assertLineFedParity('tsx', src + '\n');
+  }
+});
+
+void t.test('ts: SCREAMING_CASE names in type positions are types', () => {
+  const kinds = tokenKinds(
+    'ts',
+    'type M<T> = { readonly [K in keyof T]: string };\nconst App: FC<Props> = null;\nfunction id<T>(x: T): T {}\nconst o = { timeout: DEFAULT_TIMEOUT };\nif (i < MAX_SIZE) f(MAX, MIN);'
+  );
+  const caps = kinds.filter(([text]) => /^[A-Z_]+$/.test(text));
+  assert.deepEqual(caps, [
+    ['M', 'type'],
+    ['T', 'type'],
+    ['K', 'type'],
+    ['T', 'type'],
+    ['FC', 'type'],
+    ['T', 'type'],
+    ['T', 'type'],
+    ['T', 'type'],
+    ['DEFAULT_TIMEOUT', 'constant'],
+    ['MAX_SIZE', 'constant'],
+    ['MAX', 'constant'],
+    ['MIN', 'constant'],
+  ]);
+  // plain JS keeps the constant rule everywhere
+  assert.deepEqual(
+    tokenKinds('js', 'f(a < MAX, B)').filter(([text]) => text === 'MAX'),
+    [['MAX', 'constant']]
+  );
+  // the rules read the next token only on the same line
+  assertLineFedParity(
+    'ts',
+    'let a: T\n<b>c;\nfunction f<\n  T,\n  U\n>() {}\n'
+  );
+});
+
+void t.test('ts: contextual keywords outside the keyword table', () => {
+  assert.deepEqual(
+    tokenKinds(
+      'ts',
+      "declare module 'foo' {}\ndeclare global {}\nfunction f(v: unknown): asserts v {}\nlet u: unique symbol;\nclass A { accessor n = 1; get #x() {} set #y(v) {} }\nusing res = open();\nmodule.exports = using;"
+    ),
+    [
+      ['declare module', 'keyword'],
+      ["'foo'", 'string'],
+      ['{}', 'punctuation.bracket'],
+      ['declare global', 'keyword'],
+      ['{}', 'punctuation.bracket'],
+      ['function', 'keyword.declaration'],
+      ['f', 'function'],
+      ['(', 'punctuation.bracket'],
+      ['v', 'variable.parameter'],
+      [':', 'punctuation.special'],
+      ['unknown', 'type.builtin'],
+      [')', 'punctuation.bracket'],
+      [':', 'punctuation.delimiter'],
+      ['asserts', 'keyword'],
+      ['v', 'variable'],
+      ['{}', 'punctuation.bracket'],
+      ['let', 'keyword.declaration'],
+      ['u', 'variable'],
+      [':', 'punctuation.delimiter'],
+      ['unique', 'keyword'],
+      ['symbol', 'variable'],
+      [';', 'punctuation.delimiter'],
+      ['class', 'keyword.declaration'],
+      ['A', 'type.class'],
+      ['{', 'punctuation.bracket'],
+      ['accessor', 'keyword'],
+      ['n', 'variable'],
+      ['=', 'operator'],
+      ['1', 'number'],
+      [';', 'punctuation.delimiter'],
+      ['get', 'keyword'],
+      ['#x', 'property'],
+      ['() {}', 'punctuation.bracket'],
+      ['set', 'keyword'],
+      ['#y', 'property'],
+      ['(', 'punctuation.bracket'],
+      ['v', 'variable.parameter'],
+      [') {} }', 'punctuation.bracket'],
+      ['using', 'keyword.declaration'],
+      ['res', 'variable'],
+      ['=', 'operator'],
+      ['open', 'function'],
+      ['()', 'punctuation.bracket'],
+      [';', 'punctuation.delimiter'],
+      ['module', 'variable'],
+      ['.', 'punctuation.delimiter'],
+      ['exports', 'property'],
+      ['=', 'operator'],
+      ['using', 'variable'],
+      [';', 'punctuation.delimiter'],
+    ]
+  );
+  assertLineFedParity('ts', 'using\nres = 1;\ndeclare global\n{}\nget\n#x;\n');
+  // `readonly [` marks an index signature, but not after a member dot
+  assert.deepEqual(
+    tokenKinds(
+      'ts',
+      'interface I { readonly [k: string]: T }\nx.readonly[0];'
+    ).filter(([text]) => text === 'readonly'),
+    [
+      ['readonly', 'keyword'],
+      ['readonly', 'property'],
+    ]
+  );
+});
+
+void t.test('ts: `new ns.Class()` colors the class, not the namespace', () => {
+  assert.deepEqual(
+    tokenKinds('ts', 'new vscode.Position(1);\nnew Foo();\nobj.Bar();'),
+    [
+      ['new', 'keyword'],
+      ['vscode', 'variable'],
+      ['.', 'punctuation.delimiter'],
+      ['Position', 'type.class'],
+      ['(', 'punctuation.bracket'],
+      ['1', 'number'],
+      [')', 'punctuation.bracket'],
+      [';', 'punctuation.delimiter'],
+      ['new', 'keyword'],
+      ['Foo', 'type.class'],
+      ['()', 'punctuation.bracket'],
+      [';', 'punctuation.delimiter'],
+      ['obj', 'variable'],
+      ['.', 'punctuation.delimiter'],
+      ['Bar', 'function.method'],
+      ['()', 'punctuation.bracket'],
+      [';', 'punctuation.delimiter'],
+    ]
+  );
+  assertLineFedParity('ts', 'new vscode\n  .Position(1);\nnew a.b.C();\n');
+});
+
+void t.test(
+  'tsx: a `template:` key selects markup only for markup text',
+  () => {
+    // Next.js title patterns stay strings; component templates are markup
+    const kinds = tokenKinds(
+      'tsx',
+      'const m = { title: { template: `%s | Site` } };\nconst p = { template: `${PREFIX}%s` };\nconst n = { template: `<b>{{ x }}</b>` };'
+    );
+    assert.ok(
+      kinds.some(([text, kind]) => text === '`%s | Site`' && kind === 'string')
+    );
+    assert.ok(
+      kinds.some(([text, kind]) => text === '%s`' && kind === 'string')
+    );
+    assert.ok(kinds.some(([text, kind]) => text === 'b' && kind === 'tag'));
+    // a body that starts on the next line stays markup, in both run shapes
+    const next = 'const d = { template: `\n  <p>hi</p>\n` };\n';
+    assert.ok(
+      tokenKinds('tsx', next).some(
+        ([text, kind]) => text === 'p' && kind === 'tag'
+      )
+    );
+    assertLineFedParity('tsx', next);
+    assertLineFedParity('tsx', 'const m = { template: `%s | Site` };\n');
+  }
+);

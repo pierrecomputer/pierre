@@ -430,3 +430,29 @@ void t.test(
     );
   }
 );
+
+void t.test('hlsl: C hex and octal escapes are one escape each', () => {
+  assert.deepEqual(tokenKinds('hlsl', 'string s = "\\x41\\101!";'), [
+    ['string', 'type.builtin'],
+    ['s', 'variable'],
+    ['=', 'operator'],
+    ['"', 'string'],
+    ['\\x41\\101', 'string.escape'],
+    ['!"', 'string'],
+    [';', 'punctuation.delimiter'],
+  ]);
+  assertLineFedParity('hlsl', 'string s = "ab\\\n\\x41cd";\nfloat y;\n');
+});
+
+void t.test('hlsl: a capitalized declarator after a type is a variable', () => {
+  const code =
+    'cbuffer PerFrame : register(b0) {\n  float4x4 ViewProj;\n  float Time;\n};\nStructuredBuffer<Light> Lights;\nLight Sun;\n';
+  const kinds = new Map(tokenKinds('hlsl', code));
+  for (const name of ['ViewProj', 'Time', 'Lights', 'Sun']) {
+    assert.equal(kinds.get(name), 'variable', name);
+  }
+  for (const name of ['PerFrame', 'Light']) {
+    assert.equal(kinds.get(name), 'type', name);
+  }
+  assertLineFedParity('hlsl', code);
+});

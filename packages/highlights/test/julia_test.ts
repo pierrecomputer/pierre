@@ -238,3 +238,46 @@ void t.test('julia: multi-line constructs stream line-fed', () => {
     assertLineFedParity('julia', code);
   }
 });
+
+void t.test('julia: only a top-level `;` starts a statement', () => {
+  const calls = (code: string) =>
+    tokenKinds('julia', code).filter(
+      ([, kind]) => kind?.startsWith('function') === true
+    );
+  // inside a call `;` separates keyword arguments, in `[]` matrix rows
+  assert.deepEqual(calls('plot(x; g(y) = 1)\nf(x) = 1; g(y) = 2\n'), [
+    ['plot', 'function'],
+    ['g', 'function'],
+    ['f', 'function.definition'],
+    ['g', 'function.definition'],
+  ]);
+  assert.deepEqual(calls('a = [1 2; f(x) = 3]\nh(x) = 2\n'), [
+    ['f', 'function'],
+    ['h', 'function.definition'],
+  ]);
+  // long unclosed call chains stay calls (and stay linear)
+  assert.deepEqual(calls(';f('.repeat(3)), [
+    ['f', 'function'],
+    ['f', 'function'],
+    ['f', 'function'],
+  ]);
+  assertLineFedParity('julia', 'm = [1 2;\n  f(x) = 3]\nh(x) = 2; k(y) = 3\n');
+});
+
+void t.test('julia: `begin` in an index is a value before a range', () => {
+  assert.deepEqual(tokenKinds('julia', 'y = x[begin:end]'), [
+    ['y', 'variable'],
+    ['=', 'operator'],
+    ['x', 'variable'],
+    ['[', 'punctuation.bracket'],
+    ['begin', 'keyword.control'],
+    [':', 'operator'],
+    ['end', 'keyword.control'],
+    [']', 'punctuation.bracket'],
+  ]);
+  // a block `begin` still lets the next line quote a symbol
+  assert.deepEqual(
+    tokenKinds('julia', 'begin\n  :sym\nend').map(([, kind]) => kind),
+    ['keyword.control', 'string.special.symbol', 'keyword.control']
+  );
+});

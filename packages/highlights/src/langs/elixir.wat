@@ -80,52 +80,70 @@
     (local.get $open))
 
   ;; Scan a literal body from $ptr with the bytes since $seg still
-  ;; unemitted: up to the $close byte - tripled when $flags bit 3 is set -
-  ;; at nesting depth zero, where $open is the byte that nests, zero when
-  ;; none, and $depth the nesting already open. $flags bit 0 enables
+  ;; unemitted. $lit packs the body: its $close byte in bits 0-7, the $open
+  ;; byte that nests in bits 8-15 (zero when none), and $flags above. The
+  ;; body ends at $close - tripled when $flags bit 3 is set - at nesting
+  ;; depth zero, with $depth the nesting already open. $flags bit 0 enables
   ;; escapes and `#{}` interpolation, bit 1 marks a sigil that carries
   ;; modifier letters, bit 2 colors the body as a documentation comment,
-  ;; bit 4 keeps the body on one line, and bit 5 colors it as a regex.
-  ;; $nested is nonzero inside an interpolation, where a nested literal
-  ;; keeps `#{` plain. Returns the status in the low two bits - 1 past the
-  ;; closer, 2 past a `#{` that opens an interpolation, emitted as
-  ;; punctuation.special, 0 at $end or at the line break of a one-line body
-  ;; - and the nesting depth still open in the bits above.
+  ;; bit 4 keeps the body on one line, bit 5 colors it as a regex, bit 6
+  ;; lets a backslash escape only the delimiters (uppercase sigils such as
+  ;; `~S"a\"b"`), and bit 7 colors it as a quoted atom. $nested is nonzero
+  ;; inside an interpolation, where a nested literal keeps `#{` plain.
+  ;; Returns the status in the low two bits - 1 past the closer, 2 past a
+  ;; `#{` that opens an interpolation, emitted as punctuation.special, 0 at
+  ;; $end or at the line break of a one-line body - and the nesting depth
+  ;; still open in the bits above.
   (func $exLiteralBody
-    (param $close i32)
-    (param $open i32)
+    (param $lit i32)
     (param $depth i32)
-    (param $flags i32)
     (param $nested i32)
     (param $seg i32)
     (result i32)
+    (local $close i32)
+    (local $open i32)
+    (local $flags i32)
     (local $c i32)
     (local $e i32)
     (local $hl i32)
     (local $status i32)
     (local $stop i32)
     (local $hash i32)
+    (local.set $close (i32.and (local.get $lit) (i32.const 255)))
+    (local.set $open (i32.and (i32.shr_u (local.get $lit) (i32.const 8)) (i32.const 255)))
+    (local.set $flags (i32.shr_u (local.get $lit) (i32.const 16)))
     (local.set $hl
       (select
         (enum.get $Token.string.regex)
         (select
           (enum.get $Token.comment.doc)
-          (enum.get $Token.string)
+          (select
+            (enum.get $Token.string.special.symbol)
+            (enum.get $Token.string)
+            (i32.and (local.get $flags) (i32.const 128)))
           (i32.and (local.get $flags) (i32.const 4)))
         (i32.and (local.get $flags) (i32.const 32))))
     (local.set $stop (global.get $ptr))
-    (local.set $hash (global.get $ptr))
+    ;; $hash is the next `#` or nesting byte. It starts one below $ptr so the
+    ;; first pass searches; after that a found byte stays valid until $ptr
+    ;; passes it, so escapes before it don't rescan the rest of the body.
+    (local.set $hash (i32.sub (global.get $ptr) (i32.const 1)))
     (block $done
       (loop $scan
         (if (i32.ge_u (global.get $ptr) (local.get $stop))
           (then
+            ;; the line-break stop is a flag test: bit 5 alone (a multi-line
+            ;; regex sigil) would otherwise stop at every line break without
+            ;; advancing
             (local.set $stop
               (call $scanFindSpecial
                 (global.get $ptr)
                 (global.get $end)
                 (local.get $close)
-                (i32.and (local.get $flags) (i32.const 1))
-                (i32.shr_u (local.get $flags) (i32.const 4))))
+                (i32.and (local.get $flags) (i32.const 65))
+                (i32.and (local.get $flags) (i32.const 16))))))
+        (if (i32.gt_u (global.get $ptr) (local.get $hash))
+          (then
             (local.set $hash
               (call $lexFindEither
                 (global.get $ptr)
@@ -133,18 +151,7 @@
                   (i32.const "#")
                   (local.get $close)
                   (i32.and (local.get $flags) (i32.const 1)))
-                (select (local.get $open) (local.get $close) (local.get $open)))))
-          (else
-            (if (i32.gt_u (global.get $ptr) (local.get $hash))
-              (then
-                (local.set $hash
-                  (call $lexFindEither
-                    (global.get $ptr)
-                    (select
-                      (i32.const "#")
-                      (local.get $close)
-                      (i32.and (local.get $flags) (i32.const 1)))
-                    (select (local.get $open) (local.get $close) (local.get $open))))))))
+                (select (local.get $open) (local.get $close) (local.get $open))))))
         (global.set $ptr
           (select
             (local.get $hash)
@@ -197,6 +204,23 @@
           (i32.or (i32.eq (local.get $c) (i32.const 10)) (i32.eq (local.get $c) (i32.const 13))))
         (if (i32.eq (local.get $c) (i32.const 92))
           (then
+            ;; an uppercase sigil keeps `\` literal, but it still hides a
+            ;; delimiter that follows it
+            (if (i32.eqz (i32.and (local.get $flags) (i32.const 1)))
+              (then
+                (local.set $e (call $exByte (i32.add (global.get $ptr) (i32.const 1))))
+                (global.set $ptr
+                  (i32.add
+                    (global.get $ptr)
+                    (select
+                      (i32.const 2)
+                      (i32.const 1)
+                      (i32.or
+                        (i32.eq (local.get $e) (local.get $close))
+                        (i32.and
+                          (i32.ne (local.get $open) (i32.const 0))
+                          (i32.eq (local.get $e) (local.get $open)))))))
+                (br $scan)))
             (call $emitTok (local.get $hl) (local.get $seg) (global.get $ptr))
             (local.set $e (call $lexEscapeEnd (global.get $ptr)))
             (call $emitTok (enum.get $Token.string.escape) (global.get $ptr) (local.get $e))
@@ -223,11 +247,10 @@
   (func $exIsOp (param $c i32) (result i32)
     (byteset.get "!&*+-/<=>?\5c^|~" (local.get $c)))
 
-  ;; An open literal body is described by $sClose, $sOpen, $sDepth, and
-  ;; $sFlags - see $exLiteralBody - with $sActive 1 while it is being
-  ;; scanned and $seg the start of its bytes not yet emitted; the $i*
-  ;; copies hold the literal suspended by a `#{` interpolation whose braces
-  ;; $interp counts. $decl is 1 after `def` and 2 after `defmodule`;
+  ;; An open literal body is described by $lit and $depth - see
+  ;; $exLiteralBody; $lit is nonzero while it is being scanned - with $seg
+  ;; the start of its bytes not yet emitted; $iLit and $iDepth hold the
+  ;; literal suspended by a `#{` interpolation whose braces $interp counts. $decl is 1 after `def` and 2 after `defmodule`;
   ;; $member is 1 after `.`; $docAttr is 1 after `@doc`, `@moduledoc`, or
   ;; `@typedoc`, whose string is documentation. All are checkpointed.
   (func $hlElixir
@@ -246,21 +269,16 @@
     (local $docAttr i32)
     (local $seg i32)
     (local $interp i32)
-    (local $sActive i32)
-    (local $sClose i32)
-    (local $sOpen i32)
-    (local $sDepth i32)
-    (local $sFlags i32)
-    (local $iClose i32)
-    (local $iOpen i32)
+    (local $lit i32)
+    (local $depth i32)
+    (local $iLit i32)
     (local $iDepth i32)
-    (local $iFlags i32)
     (call $lexEmitLeadingContinuation)
     (block $done
       (loop $next
         ;; an open literal body; $seg is zero across a chunk boundary, where
         ;; the body resumes at the chunk start
-        (if (local.get $sActive)
+        (if (local.get $lit)
           (then
             (if (i32.ge_u (global.get $ptr) (global.get $end))
               (then
@@ -270,31 +288,28 @@
               (then (local.set $seg (global.get $ptr))))
             (local.set $status
               (call $exLiteralBody
-                (local.get $sClose)
-                (local.get $sOpen)
-                (local.get $sDepth)
-                (local.get $sFlags)
+                (local.get $lit)
+                (local.get $depth)
                 (local.get $interp)
                 (local.get $seg)))
-            (local.set $sDepth (i32.shr_u (local.get $status) (i32.const 2)))
+            (local.set $depth (i32.shr_u (local.get $status) (i32.const 2)))
             (local.set $status (i32.and (local.get $status) (i32.const 3)))
             (local.set $seg (global.get $ptr))
             (if (i32.eq (local.get $status) (i32.const 2))
               (then
-                (local.set $iClose (local.get $sClose))
-                (local.set $iOpen (local.get $sOpen))
-                (local.set $iDepth (local.get $sDepth))
-                (local.set $iFlags (local.get $sFlags))
+                (local.set $iLit (local.get $lit))
+                (local.set $iDepth (local.get $depth))
                 (local.set $interp (i32.const 1))
-                (local.set $sActive (i32.const 0))
+                (local.set $lit (i32.const 0))
                 (local.set $seg (i32.const 0)))
               (else
+                ;; flag bit 4 (a one-line body) sits at bit 20 of $lit
                 (if
                   (i32.or
                     (i32.eq (local.get $status) (i32.const 1))
-                    (i32.and (local.get $sFlags) (i32.const 16)))
+                    (i32.and (local.get $lit) (i32.const 0x100000)))
                   (then
-                    (local.set $sActive (i32.const 0))
+                    (local.set $lit (i32.const 0))
                     (local.set $seg (i32.const 0))))))
             (br $next)))
 
@@ -317,27 +332,27 @@
         ;; loop.
         (if (i32.or (i32.eq (local.get $c) (i32.const 34)) (i32.eq (local.get $c) (i32.const 39)))
           (then
-            (local.set $sFlags (i32.const 1))
             (if
               (i32.and
                 (i32.eq (local.get $c2) (local.get $c))
                 (i32.eq (local.get $c3) (local.get $c)))
               (then
-                (local.set $sFlags
-                  (i32.or (i32.const 9) (i32.shl (local.get $docAttr) (i32.const 2))))
+                (local.set $lit (i32.const 9))
                 (global.set $ptr (i32.add (global.get $ptr) (i32.const 3))))
               (else
-                (local.set $sFlags
-                  (i32.or (i32.const 17) (i32.shl (local.get $docAttr) (i32.const 2))))
+                (local.set $lit (i32.const 17))
                 (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))))
+            (local.set $lit
+              (i32.or
+                (local.get $c)
+                (i32.shl
+                  (i32.or (local.get $lit) (i32.shl (local.get $docAttr) (i32.const 2)))
+                  (i32.const 16))))
             (call $emitTok
               (select (enum.get $Token.comment.doc) (enum.get $Token.string) (local.get $docAttr))
               (local.get $lhs)
               (global.get $ptr))
-            (local.set $sActive (i32.const 1))
-            (local.set $sClose (local.get $c))
-            (local.set $sOpen (i32.const 0))
-            (local.set $sDepth (i32.const 0))
+            (local.set $depth (i32.const 0))
             (local.set $seg (global.get $ptr))
             (local.set $member (i32.const 0))
             (local.set $docAttr (i32.const 0))
@@ -357,60 +372,68 @@
                   (i32.lt_u (local.get $c3) (i32.const 128))
                   (i32.eqz (call $lexIsIdentContinue (local.get $c3)))))))
           (then
-            (local.set $sOpen (local.get $c3))
-            (local.set $sClose (call $exCloser (local.get $sOpen)))
-            (if (i32.eq (local.get $sClose) (local.get $sOpen))
-              (then (local.set $sOpen (i32.const 0))))
-            (local.set $sDepth (i32.const 0))
-            (local.set $sFlags
+            ;; the opener in $p, its closer in $kind, and the flags in $hl
+            (local.set $p (local.get $c3))
+            (local.set $kind (call $exCloser (local.get $p)))
+            (if (i32.eq (local.get $kind) (local.get $p))
+              (then (local.set $p (i32.const 0))))
+            (local.set $hl
               (i32.or
                 (i32.const 2)
-                (i32.le_u (i32.sub (local.get $c2) (i32.const "a")) (i32.const 25))))
+                (select
+                  (i32.const 1)
+                  (i32.const 64)
+                  (i32.le_u (i32.sub (local.get $c2) (i32.const "a")) (i32.const 25)))))
             (if (i32.eq (i32.or (local.get $c2) (i32.const 32)) (i32.const "r"))
-              (then (local.set $sFlags (i32.or (local.get $sFlags) (i32.const 32)))))
+              (then (local.set $hl (i32.or (local.get $hl) (i32.const 32)))))
             (global.set $ptr (i32.add (global.get $ptr) (i32.const 3)))
             (if
               (i32.and
-                (i32.eqz (local.get $sOpen))
+                (i32.eqz (local.get $p))
                 (i32.and
                   (i32.or
-                    (i32.eq (local.get $sClose) (i32.const 34))
-                    (i32.eq (local.get $sClose) (i32.const 39)))
+                    (i32.eq (local.get $kind) (i32.const 34))
+                    (i32.eq (local.get $kind) (i32.const 39)))
                   (i32.and
-                    (i32.eq (call $exByte (global.get $ptr)) (local.get $sClose))
+                    (i32.eq (call $exByte (global.get $ptr)) (local.get $kind))
                     (i32.eq
                       (call $exByte (i32.add (global.get $ptr) (i32.const 1)))
-                      (local.get $sClose)))))
+                      (local.get $kind)))))
               (then
-                (local.set $sFlags (i32.or (local.get $sFlags) (i32.const 8)))
+                (local.set $hl (i32.or (local.get $hl) (i32.const 8)))
                 (global.set $ptr (i32.add (global.get $ptr) (i32.const 2)))))
             (call $emitTok
               (select
                 (enum.get $Token.string.regex)
                 (enum.get $Token.string)
-                (i32.and (local.get $sFlags) (i32.const 32)))
+                (i32.and (local.get $hl) (i32.const 32)))
               (local.get $lhs)
               (global.get $ptr))
-            (local.set $sActive (i32.const 1))
+            (local.set $lit
+              (i32.or
+                (i32.or (local.get $kind) (i32.shl (local.get $p) (i32.const 8)))
+                (i32.shl (local.get $hl) (i32.const 16))))
+            (local.set $depth (i32.const 0))
             (local.set $seg (global.get $ptr))
             (local.set $member (i32.const 0))
             (br $next)))
 
-        ;; atoms: `:name`, `:"quoted"`, `:+`; `::` is a typespec operator
+        ;; atoms: `:name`, `:"quoted"`, `:'quoted'`, `:+`; `::` is a typespec
+        ;; operator. A quoted atom is a one-line literal body in the atom
+        ;; color, so it keeps escapes and `#{}` interpolation.
         (if
           (i32.and (i32.eq (local.get $c) (i32.const ":")) (i32.ne (local.get $c2) (i32.const ":")))
           (then
-            (if (i32.eq (local.get $c2) (i32.const 34))
+            (if (i32.or (i32.eq (local.get $c2) (i32.const 34)) (i32.eq (local.get $c2) (i32.const 39)))
               (then
-                (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
+                (global.set $ptr (i32.add (global.get $ptr) (i32.const 2)))
                 (call $emitTok
                   (enum.get $Token.string.special.symbol)
                   (local.get $lhs)
                   (global.get $ptr))
-                (call $lexString
-                  (i32.const 34)
-                  (i32.const 0)
-                  (enum.get $Token.string.special.symbol))
+                (local.set $lit (i32.or (local.get $c2) (i32.const 0x910000)))
+                (local.set $depth (i32.const 0))
+                (local.set $seg (global.get $ptr))
                 (local.set $member (i32.const 0))
                 (br $next)))
             (if (call $lexIsIdentStart (local.get $c2))
@@ -460,22 +483,29 @@
             (call $emitTok (enum.get $Token.attribute) (local.get $lhs) (global.get $ptr))
             (local.set $member (i32.const 0))
             (br $next)))
-        ;; `?c` character codes
-        (if
-          (i32.and
-            (i32.eq (local.get $c) (i32.const "?"))
-            (i32.and
-              (i32.gt_u (local.get $c2) (i32.const 32))
-              (i32.eqz (call $lexIsIdentContinue (local.get $c3)))))
+        ;; `?c` character codes: `?a`, `?é`, and escapes such as `?\n`. A
+        ;; plain character must not run into a name (`?ab` is not one); an
+        ;; escape is always one, but never takes a line break.
+        (if (i32.and (i32.eq (local.get $c) (i32.const "?")) (i32.gt_u (local.get $c2) (i32.const 32)))
           (then
-            (global.set $ptr
-              (call $utf8SpanEnd (i32.add (global.get $ptr) (i32.const 2)) (global.get $end)))
             (if (i32.eq (local.get $c2) (i32.const 92))
               (then
-                (global.set $ptr (call $lexEscapeEnd (i32.add (local.get $lhs) (i32.const 1))))))
-            (call $emitTok (enum.get $Token.string.special) (local.get $lhs) (global.get $ptr))
-            (local.set $member (i32.const 0))
-            (br $next)))
+                (local.set $p
+                  (select
+                    (call $lexEscapeEnd (i32.add (local.get $lhs) (i32.const 1)))
+                    (i32.const 0)
+                    (i32.gt_u (local.get $c3) (i32.const 13)))))
+              (else
+                (local.set $p
+                  (call $utf8SpanEnd (i32.add (global.get $ptr) (i32.const 2)) (global.get $end)))
+                (if (call $lexIsIdentContinue (call $exByte (local.get $p)))
+                  (then (local.set $p (i32.const 0))))))
+            (if (local.get $p)
+              (then
+                (global.set $ptr (local.get $p))
+                (call $emitTok (enum.get $Token.string.special) (local.get $lhs) (global.get $ptr))
+                (local.set $member (i32.const 0))
+                (br $next)))))
 
         (if (call $lexIsIdentStart (local.get $c))
           (then
@@ -596,11 +626,8 @@
                           (enum.get $Token.punctuation.special)
                           (local.get $lhs)
                           (global.get $ptr))
-                        (local.set $sClose (local.get $iClose))
-                        (local.set $sOpen (local.get $iOpen))
-                        (local.set $sDepth (local.get $iDepth))
-                        (local.set $sFlags (local.get $iFlags))
-                        (local.set $sActive (i32.const 1))
+                        (local.set $lit (local.get $iLit))
+                        (local.set $depth (local.get $iDepth))
                         (local.set $seg (global.get $ptr))
                         (local.set $member (i32.const 0))
                         (local.set $decl (i32.const 0))

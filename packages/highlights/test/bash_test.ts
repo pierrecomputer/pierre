@@ -14,6 +14,21 @@ import {
   tokenKinds,
 } from './_util';
 
+void t.test('bash: case and for may put in on a later line', () => {
+  for (const code of [
+    'case "$x"\nin\na) echo one ;;\nesac\n',
+    'case "$x"\n# comment\nin\na) echo one ;;\nesac\n',
+    'for x\nin a b; do echo "$x"; done\n',
+  ]) {
+    assertLineFedParity('bash', code);
+    assert.ok(
+      tokenKinds('bash', code).some(
+        ([text, kind]) => text === 'in' && kind === 'keyword.control'
+      )
+    );
+  }
+});
+
 let bash: TestLang;
 
 t.before(() => {
@@ -400,6 +415,174 @@ void t.test(
       ['a', 'variable'],
       ['c', 'function'],
       ['}', 'punctuation.bracket'],
+    ]);
+  }
+);
+
+void t.test(
+  'bash: `((` arithmetic commands and nested `$((` keep `<<` a shift',
+  () => {
+    const code =
+      '(( mask = 1 << 4 ))\necho "it\'s here"\nx=$(( $((1)) + 2 ))\ncat <<EOF\nbody\nEOF\necho after\n';
+    assertLineFedParity('bash', code);
+    assert.deepEqual(tokenKinds('bash', code), [
+      ['((', 'punctuation.bracket'],
+      ['mask', 'variable'],
+      ['=', 'operator'],
+      ['1', 'number'],
+      ['<<', 'operator'],
+      ['4', 'number'],
+      ['))', 'punctuation.bracket'],
+      ['echo', 'function'],
+      ['"it\'s here"', 'string'],
+      ['x', 'variable'],
+      ['=', 'operator'],
+      ['$(( $((', 'punctuation.special'],
+      ['1', 'number'],
+      ['))', 'punctuation.bracket'],
+      ['+', null],
+      ['2', 'number'],
+      ['))', 'punctuation.bracket'],
+      ['cat', 'function'],
+      ['<<', 'operator'],
+      ['EOF', 'string'],
+      ['body', 'string'],
+      ['EOF', 'string'],
+      ['echo', 'function'],
+      ['after', 'variable'],
+    ]);
+    // `;` separates the expressions of a C-style for, not commands
+    assert.deepEqual(
+      tokenKinds('bash', 'for (( i=0; i<n; i++ )); do :; done').slice(0, 11),
+      [
+        ['for', 'keyword.control'],
+        ['((', 'punctuation.bracket'],
+        ['i', 'variable'],
+        ['=', 'operator'],
+        ['0', 'number'],
+        [';', 'operator'],
+        ['i', 'variable'],
+        ['<', 'operator'],
+        ['n', 'variable'],
+        [';', 'operator'],
+        ['i', 'variable'],
+      ]
+    );
+  }
+);
+
+void t.test(
+  'bash: a double-quoted string with many expansions and escapes',
+  () => {
+    // the quote/backslash search is reused across expansions
+    const body = Array.from({ length: 50 }, (_, i) => `$v${i} \\" `).join('');
+    const code = `echo "${body}$(echo "x") tail" next\n`;
+    assertLineFedParity('bash', code);
+    const kinds = tokenKinds('bash', code);
+    assert.equal(kinds.filter(([, k]) => k === 'string.escape').length, 50);
+    assert.deepEqual(kinds.slice(-3), [
+      [')', 'punctuation.special'],
+      ['tail"', 'string'],
+      ['next', 'variable'],
+    ]);
+  }
+);
+
+void t.test(
+  'bash: command position after `$(`, `<(`, `{`, prefixes, and case arms',
+  () => {
+    const code =
+      'result=$(git rev-parse HEAD)\ndiff <(sort a) >(tee b)\ndie() { echo "$*" >&2; exit 1; }\nDEBIAN_FRONTEND=noninteractive apt-get install -y curl\nA=1; echo hi there\necho {a,b}c\ncase "$1" in\n  start|stop) run "$1" ;;\n  *) usage ;;\nesac\n';
+    assertLineFedParity('bash', code);
+    const kinds = tokenKinds('bash', code);
+    const kindOf = (word: string) => kinds.find(([t]) => t === word)?.[1];
+    for (const command of ['git', 'sort', 'tee', 'echo', 'apt-get', 'run']) {
+      assert.equal(kindOf(command), 'function', command);
+    }
+    assert.equal(kindOf('usage'), 'function');
+    for (const word of ['rev-parse HEAD', 'noninteractive', 'hi there']) {
+      assert.equal(kindOf(word), 'variable', word);
+    }
+    // case patterns are not commands, and brace expansions not groups
+    assert.equal(kindOf('start'), 'variable');
+    assert.equal(kindOf('stop'), 'variable');
+    assert.equal(kindOf('a'), 'variable');
+  }
+);
+
+void t.test(
+  'bash: keywords only where a command starts; array lines are elements',
+  () => {
+    const code =
+      'arr=(\n  one\n  $(two) three\n)\necho in progress\nfor f in a b; do\n  echo "$f"\ndone < list.txt\nif [ -f x ]; then :; fi > /dev/null\nlocal y\n';
+    assertLineFedParity('bash', code);
+    assert.deepEqual(tokenKinds('bash', code), [
+      ['arr', 'variable'],
+      ['=', 'operator'],
+      ['(', 'punctuation.bracket'],
+      ['one', 'variable'],
+      ['$(', 'punctuation.special'],
+      ['two', 'function'],
+      [')', 'punctuation.bracket'],
+      ['three', 'variable'],
+      [')', 'punctuation.bracket'],
+      ['echo', 'function'],
+      ['in progress', 'variable'],
+      ['for', 'keyword.control'],
+      ['f', 'variable'],
+      ['in', 'keyword.control'],
+      ['a b', 'variable'],
+      [';', 'operator'],
+      ['do', 'keyword.control'],
+      ['echo', 'function'],
+      ['"', 'string'],
+      ['$f', 'variable'],
+      ['"', 'string'],
+      ['done', 'keyword.control'],
+      ['<', 'operator'],
+      ['list.txt', 'variable'],
+      ['if', 'keyword.control'],
+      ['[', 'punctuation.bracket'],
+      ['-f x', 'variable'],
+      [']', 'punctuation.bracket'],
+      [';', 'operator'],
+      ['then', 'keyword.control'],
+      [':', null],
+      [';', 'operator'],
+      ['fi', 'keyword.control'],
+      ['>', 'operator'],
+      ['/dev/null', 'variable'],
+      ['local', 'keyword.declaration'],
+      ['y', 'variable'],
+    ]);
+    // a multi-line assignment value still ends in command position
+    assertLineFedParity(
+      'bash',
+      'A="x\ny" cmd arg\ncase "a\nb" in\n  x) y ;;\nesac\n'
+    );
+  }
+);
+
+void t.test(
+  'bash: flags, relative and absolute paths, and `~` are words',
+  () => {
+    const code =
+      'npm install --save lodash\n./configure --prefix=/usr\n/usr/bin/env python3 x.py\ncd ~/src && ls -la ../x\n';
+    assertLineFedParity('bash', code);
+    assert.deepEqual(tokenKinds('bash', code), [
+      ['npm', 'function'],
+      ['install --save lodash', 'variable'],
+      ['./configure', 'function'],
+      ['--prefix', 'variable'],
+      ['=', 'operator'],
+      ['/usr', 'variable'],
+      ['/usr/bin/env', 'function'],
+      ['python3 x.py', 'variable'],
+      ['cd', 'function'],
+      ['~/src', 'variable'],
+      ['&&', 'operator'],
+      ['ls', 'function'],
+      ['-la ../x', 'variable'],
     ]);
   }
 );
