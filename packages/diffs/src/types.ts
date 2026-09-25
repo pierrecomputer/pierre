@@ -415,7 +415,7 @@ export type HunkSeparators =
   | 'line-info-basic'
   | 'custom';
 
-export type LineDiffTypes = 'word-alt' | 'word' | 'char' | 'none';
+export type LineDiffTypes = 'word-alt' | 'word-line' | 'word' | 'char' | 'none';
 
 export type DiffIndicators = 'classic' | 'bars' | 'none';
 
@@ -457,6 +457,7 @@ export interface BaseDiffOptions extends BaseCodeOptions {
   collapsedContextThreshold?: number; // 2 is default
   // NOTE(amadeus): 'word-alt' attempts to join word regions that are separated
   // by a single character
+  // 'word-line' joins all changed word regions into one highlight per line.
   lineDiffType?: LineDiffTypes; // 'word-alt' is default
   maxLineDiffLength?: number; // 1000 is default
 

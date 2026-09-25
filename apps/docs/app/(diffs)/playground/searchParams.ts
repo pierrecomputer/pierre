@@ -40,7 +40,13 @@ const VIEW_MODES = [
 const DIFF_STYLES = ['split', 'unified'] as const;
 const COLOR_MODES = ['system', 'light', 'dark'] as const;
 const DIFF_INDICATORS = ['bars', 'classic', 'none'] as const;
-const LINE_DIFF_TYPES = ['word-alt', 'word', 'char', 'none'] as const;
+const LINE_DIFF_TYPES = [
+  'word-alt',
+  'word-line',
+  'word',
+  'char',
+  'none',
+] as const;
 const HUNK_SEPARATOR_VALUES = [
   'line-info',
   'line-info-basic',
