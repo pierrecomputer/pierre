@@ -14,6 +14,7 @@ import {
   GET as getSession,
 } from '../app/api/auth/session/route';
 import { GET as getDiff } from '../app/api/diff/route';
+import { GET as getDiffFile } from '../app/api/github-diff-file/route';
 
 const ORIGIN = 'https://diffshub.test';
 const originalFetch = globalThis.fetch;
@@ -233,16 +234,24 @@ describe('GitHub OAuth routes', () => {
     ]);
   });
 
-  test('bypasses the public patch cache for an authenticated pull diff', async () => {
+  test.each([
+    { authorization: undefined, token: 'github-token' },
+    { authorization: 'Bearer personal-token', token: 'personal-token' },
+  ])('loads a pinned pull diff with %j', async ({ authorization, token }) => {
     installGitHubFetch();
     const sessionCookie = await createSessionCookie();
     const baseSha = '1'.repeat(40);
     const headSha = '2'.repeat(40);
     const urls: string[] = [];
     globalThis.fetch = Object.assign(
-      async (input: RequestInfo | URL) => {
+      async (input: RequestInfo | URL, init?: RequestInit) => {
         const url = readFetchURL(input);
         urls.push(url.href);
+        if (
+          new Headers(init?.headers).get('authorization') !== `Bearer ${token}`
+        ) {
+          return new Response(null, { status: 403 });
+        }
         if (url.pathname === '/repos/oven-sh/bun/pulls/30412') {
           return Promise.resolve(
             Response.json({
@@ -261,13 +270,18 @@ describe('GitHub OAuth routes', () => {
       { preconnect: originalFetch.preconnect }
     );
 
+    const headers = new Headers({ Cookie: sessionCookie });
+    if (authorization != null) {
+      headers.set('Authorization', authorization);
+    }
     const response = await getDiff(
       new NextRequest(
         `${ORIGIN}/api/diff?path=${encodeURIComponent('/oven-sh/bun/pull/30412')}`,
-        { headers: { Cookie: sessionCookie } }
+        { headers }
       )
     );
 
+    expect(response.status).toBe(200);
     expect(response.headers.get('x-github-commit-id')).toBe(headSha);
     expect(await response.text()).toStartWith('diff --git');
     expect(urls).toEqual([
@@ -275,6 +289,61 @@ describe('GitHub OAuth routes', () => {
       `https://api.github.com/repos/oven-sh/bun/compare/${baseSha}...${headSha}`,
     ]);
   });
+
+  test('expands a private file with an explicit PAT instead of the OAuth token', async () => {
+    installGitHubFetch();
+    const sessionCookie = await createSessionCookie();
+    const baseSha = '1'.repeat(40);
+    const headSha = '2'.repeat(40);
+    globalThis.fetch = Object.assign(
+      async (input: RequestInfo | URL, init?: RequestInit) => {
+        if (
+          new Headers(init?.headers).get('authorization') !==
+          'Bearer personal-token'
+        ) {
+          return new Response(null, { status: 403 });
+        }
+        const url = readFetchURL(input);
+        if (url.pathname === '/repos/owner/repo/commits/abc1234') {
+          return Promise.resolve(
+            Response.json({ sha: headSha, parents: [{ sha: baseSha }] })
+          );
+        }
+        if (url.pathname === '/repos/owner/repo/contents/file.ts') {
+          const ref = url.searchParams.get('ref');
+          if (ref === baseSha) {
+            return new Response('export const value = 1;\n');
+          }
+          if (ref === headSha) {
+            return new Response('export const value = 2;\n');
+          }
+        }
+        return new Response(null, { status: 404 });
+      },
+      { preconnect: originalFetch.preconnect }
+    );
+
+    const params = new URLSearchParams({
+      path: '/owner/repo/commit/abc1234',
+      name: 'file.ts',
+      type: 'change',
+    });
+    const response = await getDiffFile(
+      new NextRequest(`${ORIGIN}/api/github-diff-file?${params}`, {
+        headers: {
+          Cookie: sessionCookie,
+          Authorization: 'Bearer personal-token',
+        },
+      })
+    );
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({
+      oldFile: { contents: 'export const value = 1;\n' },
+      newFile: { contents: 'export const value = 2;\n' },
+    });
+  });
+
   test('disables sign-in when the public origin is invalid', async () => {
     process.env.GITHUB_OAUTH_ORIGIN = 'not a URL';
     const response = await githubAuth(new Request(`${ORIGIN}/api/auth/github`));

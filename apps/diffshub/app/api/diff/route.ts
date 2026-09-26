@@ -1,10 +1,6 @@
 import { type NextRequest } from 'next/server';
 
-import {
-  getGitHubRequestToken,
-  getGitHubSession,
-  parseBearerToken,
-} from '@/lib/githubAuth';
+import { getGitHubSession, parseBearerToken } from '@/lib/githubAuth';
 import {
   encodeURLSegment,
   type GitHubDiffSource,
@@ -107,7 +103,8 @@ export async function GET(request: NextRequest) {
   const domain = searchParams.get('domain');
   const url = searchParams.get('url');
   const session = getGitHubSession(request);
-  const token = session?.token ?? getGitHubRequestToken(request);
+  const token =
+    parseBearerToken(request.headers.get('authorization')) ?? session?.token;
   if (path == null && url == null) {
     return createTextResponse('Path or URL parameter is required', {
       status: 400,

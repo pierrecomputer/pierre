@@ -68,10 +68,11 @@ export function getGitHubSession(request: Request): GitHubSession | undefined {
   return { token: session.token, user: session.user };
 }
 
+/** Explicit bearer tokens take priority over the signed-in user's OAuth token. */
 export function getGitHubRequestToken(request: Request): string | undefined {
   return (
-    getGitHubSession(request)?.token ??
-    parseBearerToken(request.headers.get('authorization'))
+    parseBearerToken(request.headers.get('authorization')) ??
+    getGitHubSession(request)?.token
   );
 }
 
