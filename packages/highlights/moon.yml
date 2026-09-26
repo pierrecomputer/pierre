@@ -1,0 +1,98 @@
+$schema: 'https://moonrepo.dev/schemas/project.json'
+
+language: 'typescript'
+layer: 'library'
+tags: ['tsdown', 'publishable']
+
+tasks:
+  # Replaces the tsdown tag build. scripts/build.ts first compiles the WAT
+  # sources, emits the wasm, theme modules, and loader with declarations, and
+  # regenerates the token and language tables; tsdown compiles the glue.
+  # The wasm artifacts are gitignored, so workspace consumers (docs) reach
+  # them through their `^:build` deps.
+  build:
+    script: 'rm -rf dist && bun ./scripts/build.ts && tsdown'
+    deps:
+      - '^:build'
+    inputs:
+      # These tables are derived from WAT and rewritten by this task, so they
+      # must not key the cache.
+      - 'src/**/*'
+      - 'lib/**/*'
+      - '!lib/token-types.ts'
+      - '!lib/languages.ts'
+      - 'themes/index.ts'
+      - 'themes/*.json'
+      - 'scripts/build.ts'
+      - 'tsdown.config.ts'
+      - 'tsconfig.json'
+    outputs:
+      - 'dist'
+      - 'lib/languages.ts'
+    options:
+      merge: 'replace'
+
+  # Generate Wasm and lazy themes before bundling, including during development.
+  # Keep dist in place while rebuilding because docs reads it concurrently.
+  dev:
+    command: 'bun ./scripts/dev.ts'
+    options:
+      merge: 'replace'
+      cache: false
+      persistent: true
+      runInCI: 'skip'
+
+  # The suite compiles the wasm from the WAT sources itself and imports the
+  # glue straight from lib/, so it replaces the inherited deps and needs no
+  # build.
+  test:
+    command: 'bun test'
+    options:
+      merge: 'replace'
+
+  prepublish:
+    deps:
+      - 'test'
+
+  # Local-only benchmarks; explicit options instead of a preset so they stay
+  # runnable in CI-marked agent shells (see .moon/tasks/tag-tsdown.yml). They
+  # need `build` for the shipped-size table (dist glue sizes).
+  bench:
+    command: 'bun ./benchmark/bench.ts'
+    deps:
+      - 'build'
+    options:
+      cache: false
+      runInCI: 'always'
+
+  bench-tokens:
+    command: 'bun ./benchmark/bench.ts --tokens'
+    deps:
+      - 'build'
+    options:
+      cache: false
+      runInCI: 'always'
+
+  bench-stream:
+    command: 'bun ./benchmark/bench.ts --stream'
+    deps:
+      - 'build'
+    options:
+      cache: false
+      runInCI: 'always'
+
+  # Incremental LiveTokenizer benchmarks: eager indexing, cached reads, edit
+  # latency versus the full-rebuild baseline, and retained-memory footprints.
+  # Compiles the WAT in-process, so it needs no build.
+  bench-live:
+    command: 'bun ./benchmark/bench-live.ts'
+    options:
+      cache: false
+      runInCI: 'always'
+
+  # Compile in the parent; measure startup and highlighting in fresh processes.
+  bench-memory:
+    command: 'bun ./benchmark/bench-memory.ts'
+    options:
+      cache: false
+      runInCI: 'always'

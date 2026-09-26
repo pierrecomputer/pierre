@@ -10,8 +10,9 @@ import {
   getCaretPosition,
 } from '../src/editor/selection';
 import type { SelectionActionContext } from '../src/editor/selectionAction';
+import type { EditorSelection } from '../src/editor/types';
 import { disposeHighlighter } from '../src/highlighter/shared_highlighter';
-import type { EditorSelection, FileContents, RenderRange } from '../src/types';
+import type { FileContents, RenderRange } from '../src/types';
 import { installDom, wait } from './domHarness';
 
 afterAll(async () => {
@@ -39,7 +40,7 @@ async function waitForEditableContent(
 interface SelectionActionFixture {
   cleanup(): void;
   content: HTMLElement;
-  editor: Editor<undefined>;
+  editor: Editor<'file', undefined>;
   triggerResizeObserver(target: Element): void;
   window: Window & {
     CompositionEvent: {
@@ -53,7 +54,7 @@ interface SelectionActionFixture {
 
 async function createSelectionActionFixture(
   contents: string,
-  editorOptions: EditorOptions<undefined>,
+  editorOptions: EditorOptions<'file', undefined, undefined>,
   renderRange?: RenderRange
 ): Promise<SelectionActionFixture> {
   const dom = installDom();
@@ -64,7 +65,7 @@ async function createSelectionActionFixture(
     disableFileHeader: true,
     theme: DEFAULT_THEMES,
   });
-  const editor = new Editor<undefined>(editorOptions);
+  const editor = new Editor('file', editorOptions);
   const initialFile: FileContents = { name: 'edits.ts', contents };
 
   file.render({
@@ -121,7 +122,7 @@ describe('Editor selection action', () => {
   // drag the popover is first created from the initial single-character
   // selection.
   test('forward-grown selection: acts on the full selection, not the first character', async () => {
-    let captured: SelectionActionContext<undefined> | undefined;
+    let captured: SelectionActionContext<'file', undefined> | undefined;
     const { cleanup, editor, content } = await createSelectionActionFixture(
       'hello world',
       {
@@ -168,7 +169,7 @@ describe('Editor selection action', () => {
   // the last character, so a stale snapshot would be the selection's last
   // letter.
   test('backward-grown selection: acts on the full selection, not the last character', async () => {
-    let captured: SelectionActionContext<undefined> | undefined;
+    let captured: SelectionActionContext<'file', undefined> | undefined;
     const { cleanup, editor, content } = await createSelectionActionFixture(
       'hello world',
       {
@@ -403,10 +404,10 @@ describe('Editor selection action', () => {
         return POPOVER_HEIGHT;
       },
     });
-    globalThis.getComputedStyle = (() =>
+    globalThis.getComputedStyle = () =>
       ({
         overflowY: 'auto',
-      }) as CSSStyleDeclaration) as typeof getComputedStyle;
+      }) as CSSStyleDeclaration;
 
     try {
       const shadowRoot = content.getRootNode() as ShadowRoot;
@@ -415,20 +416,19 @@ describe('Editor selection action', () => {
       document.body.appendChild(scrollContainer);
       scrollContainer.appendChild(fileContainer);
 
-      const stubRect = (top: number, bottom: number): DOMRect =>
-        ({
-          top,
-          bottom,
-          left: 0,
-          right: 0,
-          width: 0,
-          height: bottom - top,
-          x: 0,
-          y: top,
-          toJSON() {
-            return {};
-          },
-        }) as DOMRect;
+      const stubRect = (top: number, bottom: number): DOMRect => ({
+        top,
+        bottom,
+        left: 0,
+        right: 0,
+        width: 0,
+        height: bottom - top,
+        x: 0,
+        y: top,
+        toJSON() {
+          return {};
+        },
+      });
 
       // A 200px-tall viewport fixed at the screen's top edge.
       Object.defineProperty(scrollContainer, 'getBoundingClientRect', {
@@ -539,10 +539,10 @@ describe('Editor selection action', () => {
           : ROW_HEIGHT;
       },
     });
-    globalThis.getComputedStyle = (() =>
+    globalThis.getComputedStyle = () =>
       ({
         overflowY: 'auto',
-      }) as CSSStyleDeclaration) as typeof getComputedStyle;
+      }) as CSSStyleDeclaration;
 
     try {
       const shadowRoot = content.getRootNode() as ShadowRoot;
@@ -551,20 +551,19 @@ describe('Editor selection action', () => {
       document.body.appendChild(scrollContainer);
       scrollContainer.appendChild(fileContainer);
 
-      const stubRect = (top: number, bottom: number): DOMRect =>
-        ({
-          top,
-          bottom,
-          left: 0,
-          right: 0,
-          width: 0,
-          height: bottom - top,
-          x: 0,
-          y: top,
-          toJSON() {
-            return {};
-          },
-        }) as DOMRect;
+      const stubRect = (top: number, bottom: number): DOMRect => ({
+        top,
+        bottom,
+        left: 0,
+        right: 0,
+        width: 0,
+        height: bottom - top,
+        x: 0,
+        y: top,
+        toJSON() {
+          return {};
+        },
+      });
 
       Object.defineProperty(scrollContainer, 'getBoundingClientRect', {
         configurable: true,
@@ -703,7 +702,7 @@ describe('Editor selection action', () => {
           direction: 'backward',
         },
       ]);
-      expect(editor.getState().selections?.[0]?.direction).toBe(
+      expect(editor.getViewState().selections?.[0]?.direction).toBe(
         DirectionBackward
       );
       // setSelections ends by re-focusing the caret, which sets
@@ -732,7 +731,7 @@ describe('Editor selection action', () => {
 
       document.dispatchEvent(new Event('selectionchange'));
 
-      const primarySelection = editor.getState().selections?.at(-1);
+      const primarySelection = editor.getViewState().selections?.at(-1);
       expect(primarySelection?.direction).toBe(DirectionBackward);
       expect(getCaretPosition(primarySelection!)).toEqual({
         line: 0,
@@ -769,7 +768,7 @@ describe('Editor selection action', () => {
           direction: 'backward',
         },
       ]);
-      expect(editor.getState().selections?.[0]?.direction).toBe(
+      expect(editor.getViewState().selections?.[0]?.direction).toBe(
         DirectionBackward
       );
       // Flush setSelections' own re-focus (see the refocus test above) so the
@@ -805,7 +804,7 @@ describe('Editor selection action', () => {
       document.dispatchEvent(new Event('selectionchange'));
 
       // Ignored: the pre-composition backward selection must be untouched.
-      const primarySelection = editor.getState().selections?.at(-1);
+      const primarySelection = editor.getViewState().selections?.at(-1);
       expect(primarySelection?.direction).toBe(DirectionBackward);
       expect(primarySelection?.start).toEqual({ line: 0, character: 0 });
       expect(primarySelection?.end).toEqual({ line: 1, character: 0 });
@@ -1005,7 +1004,7 @@ describe('Editor selection action', () => {
       editor.setMarkers([]);
       await wait(0);
 
-      expect(editor.getState().selections).toEqual([
+      expect(editor.getViewState().selections).toEqual([
         { start, end, direction: DirectionForward },
       ]);
       expect(renderCount).toBe(0);
@@ -1038,11 +1037,11 @@ describe('Editor selection action', () => {
         end: { line: 0, character: 5 },
         direction: DirectionForward,
       };
-      editor.setState({ selections: [selection] });
+      editor.setViewState({ selections: [selection] });
       editor.setMarkers([]);
       await wait(0);
 
-      expect(editor.getState().selections).toEqual([selection]);
+      expect(editor.getViewState().selections).toEqual([selection]);
       expect(renderCount).toBe(0);
       expect(
         (content.getRootNode() as ShadowRoot).querySelector(

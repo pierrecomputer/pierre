@@ -42,7 +42,7 @@ const CAPABILITY_GROUPS: ReferenceGroup[] = [
       {
         term: 'Multiple cursors',
         description:
-          'Cmd/Ctrl-click adds carets; one edit applies to every selection and overlapping ranges merge.',
+          'Cmd/Ctrl-click adds carets; Alt/Option-drag starts a fresh column selection; edits apply to every range and overlaps merge.',
       },
       {
         term: 'Smart indentation',
@@ -108,7 +108,7 @@ const CAPABILITY_GROUPS: ReferenceGroup[] = [
       {
         term: 'Themes & color modes',
         description:
-          'Tokens and editor chrome follow the surface theme, re-tokenizing live when you switch themes or toggle light and dark.',
+          'Tokens and editor chrome follow the component theme, re-tokenizing live when you switch themes or toggle light and dark.',
       },
       {
         term: 'UI adapts to container',

@@ -8,7 +8,7 @@ const options = {
   unsafeCSS: CustomScrollbarCSS,
 } as const;
 
-export const TOKEN_HOOKS_REACT: PreloadFileOptions<undefined> = {
+export const TOKEN_HOOKS_REACT: PreloadFileOptions<undefined, undefined> = {
   file: {
     name: 'token_interactions.tsx',
     contents: `import type { DiffTokenEventBaseProps } from '@pierre/diffs';
@@ -87,7 +87,7 @@ export function TokenHoverExample() {
   options,
 };
 
-export const TOKEN_HOOKS_VANILLA: PreloadFileOptions<undefined> = {
+export const TOKEN_HOOKS_VANILLA: PreloadFileOptions<undefined, undefined> = {
   file: {
     name: 'token_interactions.ts',
     contents: `import { FileDiff, type DiffTokenEventBaseProps } from '@pierre/diffs';

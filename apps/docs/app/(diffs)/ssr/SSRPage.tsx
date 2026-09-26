@@ -33,7 +33,7 @@ function ErrorAnnotation({ message }: { message: string }) {
 }
 
 interface SSRPageProps {
-  preloadedFileDiff: PreloadMultiFileDiffResult<AnnotationMetadata>;
+  preloadedFileDiff: PreloadMultiFileDiffResult<AnnotationMetadata, undefined>;
 }
 
 export function SSRPage({ preloadedFileDiff }: SSRPageProps) {

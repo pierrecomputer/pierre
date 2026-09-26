@@ -7,24 +7,28 @@ import {
   HEADER_PREFIX_SLOT_ID,
 } from '../../constants';
 import type { GetHoveredLineResult } from '../../managers/InteractionManager';
-import type { FileContents } from '../../types';
+import type { FileContents, LineAnnotation } from '../../types';
 import { getLineAnnotationName } from '../../utils/getLineAnnotationName';
 import { GutterUtilitySlotStyles } from '../constants';
 import type { FileProps } from '../types';
 
-interface RenderFileChildrenProps<LAnnotation> {
+interface RenderFileChildrenProps<LAnnotation, Caret> {
   file: FileContents;
-  renderCustomHeader: FileProps<LAnnotation>['renderCustomHeader'];
-  renderHeaderPrefix: FileProps<LAnnotation>['renderHeaderPrefix'];
-  renderHeaderFilenameSuffix?: FileProps<LAnnotation>['renderHeaderFilenameSuffix'];
-  renderHeaderMetadata: FileProps<LAnnotation>['renderHeaderMetadata'];
-  renderAnnotation: FileProps<LAnnotation>['renderAnnotation'];
-  lineAnnotations: FileProps<LAnnotation>['lineAnnotations'];
-  renderGutterUtility: FileProps<LAnnotation>['renderGutterUtility'];
+  renderCustomHeader: FileProps<LAnnotation, Caret>['renderCustomHeader'];
+  renderHeaderPrefix: FileProps<LAnnotation, Caret>['renderHeaderPrefix'];
+  renderHeaderFilenameSuffix?: FileProps<
+    LAnnotation,
+    Caret
+  >['renderHeaderFilenameSuffix'];
+  renderHeaderMetadata: FileProps<LAnnotation, Caret>['renderHeaderMetadata'];
+  renderAnnotation: FileProps<LAnnotation, Caret>['renderAnnotation'];
+  lineAnnotations: FileProps<LAnnotation, Caret>['lineAnnotations'];
+  renderGutterUtility: FileProps<LAnnotation, Caret>['renderGutterUtility'];
   getHoveredLine(): GetHoveredLineResult<'file'> | undefined;
+  getAnnotationSlotName?(annotation: LineAnnotation<LAnnotation>): string;
 }
 
-export function renderFileChildren<LAnnotation>({
+export function renderFileChildren<LAnnotation, Caret>({
   file,
   renderCustomHeader,
   renderHeaderPrefix,
@@ -34,7 +38,8 @@ export function renderFileChildren<LAnnotation>({
   lineAnnotations,
   renderGutterUtility,
   getHoveredLine,
-}: RenderFileChildrenProps<LAnnotation>): ReactNode {
+  getAnnotationSlotName = getLineAnnotationName,
+}: RenderFileChildrenProps<LAnnotation, Caret>): ReactNode {
   const customHeader = renderCustomHeader?.(file);
   const prefix = renderHeaderPrefix?.(file);
   const suffix = renderHeaderFilenameSuffix?.(file);
@@ -56,7 +61,7 @@ export function renderFileChildren<LAnnotation>({
       )}
       {renderAnnotation != null &&
         lineAnnotations?.map((annotation, index) => (
-          <div key={index} slot={getLineAnnotationName(annotation)}>
+          <div key={index} slot={getAnnotationSlotName(annotation)}>
             {renderAnnotation(annotation)}
           </div>
         ))}

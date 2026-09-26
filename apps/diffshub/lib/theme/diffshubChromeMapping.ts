@@ -31,7 +31,7 @@ export const diffshubChromeMapping: ChromeMapping = (chrome, theme) => {
   // bg-only theme). Mirror the previous behavior: paint just the background when
   // we have one, otherwise contribute nothing.
   if (chrome == null) {
-    return bg != null ? ({ backgroundColor: bg } as CSSProperties) : undefined;
+    return bg != null ? { backgroundColor: bg } : undefined;
   }
 
   const fg = chrome.fg;
@@ -108,5 +108,5 @@ export const diffshubChromeMapping: ChromeMapping = (chrome, theme) => {
   if (chrome.scrollbarTrack != null) {
     style['--diffshub-scrollbar-track-bg'] = chrome.scrollbarTrack;
   }
-  return style as CSSProperties;
+  return style;
 };

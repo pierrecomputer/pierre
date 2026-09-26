@@ -1,14 +1,14 @@
 'use client';
 
-import type { PreloadedFileResult } from '@pierre/diffs/ssr';
 import { useState } from 'react';
 
 import { DocsCodeExample } from '@/components/docs/DocsCodeExample';
 import { ButtonGroup, ButtonGroupItem } from '@/components/ui/button-group';
+import type { PreloadedCodeExample } from '@/lib/preloadCodeExample';
 
 interface AcceptRejectTabsProps {
-  diffAcceptReject: PreloadedFileResult<undefined>;
-  diffAcceptRejectReact: PreloadedFileResult<undefined>;
+  diffAcceptReject: PreloadedCodeExample<undefined, undefined>;
+  diffAcceptRejectReact: PreloadedCodeExample<undefined, undefined>;
 }
 
 export function AcceptRejectTabs({

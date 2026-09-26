@@ -1,17 +1,17 @@
 'use client';
 
-import type { PreloadedFileResult } from '@pierre/diffs/ssr';
 import { useState } from 'react';
 
 import { DocsCodeExample } from '@/components/docs/DocsCodeExample';
 import type { DocsExampleTypes } from '@/components/docs/types';
 import { ButtonGroup, ButtonGroupItem } from '@/components/ui/button-group';
+import type { PreloadedCodeExample } from '@/lib/preloadCodeExample';
 
 interface CodeToggleProps {
-  reactSingleFile: PreloadedFileResult<undefined>;
-  reactPatchFile: PreloadedFileResult<undefined>;
-  vanillaSingleFile: PreloadedFileResult<undefined>;
-  vanillaPatchFile: PreloadedFileResult<undefined>;
+  reactSingleFile: PreloadedCodeExample<undefined, undefined>;
+  reactPatchFile: PreloadedCodeExample<undefined, undefined>;
+  vanillaSingleFile: PreloadedCodeExample<undefined, undefined>;
+  vanillaPatchFile: PreloadedCodeExample<undefined, undefined>;
 }
 
 export function CodeToggle({

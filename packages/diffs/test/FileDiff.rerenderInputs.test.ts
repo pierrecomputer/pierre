@@ -1,7 +1,9 @@
 import { afterAll, expect, test } from 'bun:test';
 
-import { disposeHighlighter, FileDiff } from '../src';
-import { installDom, wait } from './domHarness';
+import { disposeHighlighter, FileDiff, parseDiffFromFile } from '../src';
+import type { FileDiffMetadata, HighlightedToken } from '../src/types';
+import { installDom, wait, waitFor } from './domHarness';
+import { createEditorInstance } from './editorTestUtils';
 
 afterAll(async () => {
   await disposeHighlighter();
@@ -30,6 +32,13 @@ async function waitForStableRow(
     await wait(25);
   }
   return row;
+}
+
+function createDiff(name: string, marker: string): FileDiffMetadata {
+  return parseDiffFromFile(
+    { name, contents: 'const base = 0;\n' },
+    { name, contents: `const ${marker} = 1;\n` }
+  );
 }
 
 // FileDiff.render stored deletionFile/additionFile from the render input even
@@ -69,6 +78,91 @@ test('a host render after an internal rerender takes the early-return path', asy
     expect(rowAfter === rowBefore).toBe(true);
   } finally {
     instance?.cleanUp();
+    cleanup();
+  }
+});
+
+test('parsed unkeyed diffs with the same filename render fresh contents', async () => {
+  const { cleanup } = installDom();
+  let instance: FileDiff<undefined> | undefined;
+  try {
+    const firstDiff = parseDiffFromFile(
+      { name: 'same.ts', contents: 'const base = 0;\n' },
+      { name: 'same.ts', contents: 'const firstMarker = 1;\n' }
+    );
+    const secondDiff = parseDiffFromFile(
+      { name: 'same.ts', contents: 'const base = 0;\n' },
+      { name: 'same.ts', contents: 'const secondMarker = 2;\n' }
+    );
+    const fileContainer = document.createElement('div');
+    document.body.appendChild(fileContainer);
+    instance = new FileDiff<undefined>({
+      disableFileHeader: true,
+      diffStyle: 'unified',
+    });
+
+    expect(firstDiff.cacheKey).toBeUndefined();
+    expect(secondDiff.cacheKey).toBeUndefined();
+
+    instance.render({ fileDiff: firstDiff, fileContainer });
+    await waitFor(
+      () =>
+        fileContainer.shadowRoot?.textContent?.includes('firstMarker') === true
+    );
+    expect(fileContainer.shadowRoot?.textContent).toContain('firstMarker');
+
+    instance.render({ fileDiff: secondDiff, fileContainer });
+    await waitFor(
+      () =>
+        fileContainer.shadowRoot?.textContent?.includes('secondMarker') === true
+    );
+
+    expect(fileContainer.shadowRoot?.textContent).toContain('secondMarker');
+    expect(fileContainer.shadowRoot?.textContent).not.toContain('firstMarker');
+    expect(firstDiff.cacheKey).toBeUndefined();
+    expect(secondDiff.cacheKey).toBeUndefined();
+  } finally {
+    instance?.cleanUp();
+    cleanup();
+  }
+});
+
+test('a dirty unkeyed session remains authoritative when the same object is re-passed', async () => {
+  const { cleanup } = installDom();
+  const externalDiff = createDiff('same.ts', 'firstMarker');
+  const externalAdditionLines = externalDiff.additionLines;
+  const fileContainer = document.createElement('div');
+  document.body.appendChild(fileContainer);
+  const instance = new FileDiff<undefined>({ disableFileHeader: true });
+
+  try {
+    instance.render({ fileDiff: externalDiff, fileContainer });
+    await waitForStableRow(fileContainer);
+    const detach = instance.__attachEditor(createEditorInstance('file-diff'));
+    instance.updateRenderCache(
+      new Map<number, HighlightedToken[]>([
+        [0, [[0, '', 'const editedMarker = 3;']]],
+      ]),
+      'light'
+    );
+
+    instance.render({
+      fileDiff: externalDiff,
+      fileContainer,
+      forceRender: true,
+    });
+    await waitFor(
+      () =>
+        fileContainer.shadowRoot?.textContent?.includes('editedMarker') === true
+    );
+
+    expect(instance.fileDiff).toBe(externalDiff);
+    expect(externalDiff.additionLines).toBe(externalAdditionLines);
+    expect(externalDiff.additionLines.join('')).toContain('firstMarker');
+    expect(externalDiff.additionLines.join('')).not.toContain('editedMarker');
+    detach();
+  } finally {
+    instance.cleanUp();
     cleanup();
   }
 });

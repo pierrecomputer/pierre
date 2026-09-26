@@ -10,26 +10,32 @@ import {
 import { IconBrandGithub } from '@pierre/icons';
 
 import { CopyCodeButton } from './CopyCodeButton';
+import type { CodeExampleHTML } from '@/lib/preloadCodeExample';
 import { cn } from '@/lib/utils';
 
-interface DocsCodeExampleProps<LAnnotation> {
+interface DocsCodeExampleProps<LAnnotation, Caret> {
   file: FileContents;
-  options?: FileOptions<LAnnotation>;
+  options?: FileOptions<LAnnotation, Caret>;
   annotations?: LineAnnotation<LAnnotation>[];
-  prerenderedHTML?: string;
-  style?: FileProps<LAnnotation>['style'];
+  prerenderedHTML?: string | CodeExampleHTML;
+  style?: FileProps<LAnnotation, undefined>['style'];
   className?: string | undefined;
   /** Optional link to the source file on GitHub */
   href?: string;
 }
 
-export function DocsCodeExample<LAnnotation = undefined>(
-  props: DocsCodeExampleProps<LAnnotation>
+export function DocsCodeExample<LAnnotation = undefined, Caret = undefined>(
+  props: DocsCodeExampleProps<LAnnotation, Caret>
 ) {
-  const { href, ...rest } = props;
+  const { href, prerenderedHTML, ...rest } = props;
   return (
     <File
       {...rest}
+      prerenderedHTML={
+        typeof prerenderedHTML === 'object'
+          ? prerenderedHTML.shared.html + prerenderedHTML.content
+          : prerenderedHTML
+      }
       className={cn(
         'overflow-hidden rounded-md border-1 contain-layout contain-paint',
         props.className

@@ -11,6 +11,9 @@ description:
 Use `@pierre/theme` for Pierre syntax and editor themes. The package supplies
 ten immutable Shiki and VS Code theme objects.
 
+For Zed-compatible themes used by `@pierre/highlights`, read the
+[highlights skill](../highlights/SKILL.md).
+
 ## Install
 
 ```bash

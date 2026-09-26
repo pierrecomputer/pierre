@@ -3,7 +3,7 @@ import type { PreloadMultiFileDiffOptions } from '@pierre/diffs/ssr';
 
 import { CustomScrollbarCSS } from '@/components/CustomScrollbarCSS';
 
-export const SHIKI_THEMES: PreloadMultiFileDiffOptions<undefined> = {
+export const SHIKI_THEMES: PreloadMultiFileDiffOptions<undefined, undefined> = {
   oldFile: {
     name: 'main.rs',
     contents: `use std::io;

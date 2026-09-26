@@ -1,4 +1,3 @@
-import { DEFAULT_THEMES } from '../constants';
 import type {
   CodeToHastOptions,
   DiffsHighlighter,
@@ -8,6 +7,7 @@ import type {
   RenderFileOptions,
   ThemedFileResult,
 } from '../types';
+import { appendItems } from './appendItems';
 import { linesFromFileContents } from './computeFileOffsets';
 import { createTransformerWithState } from './createTransformerWithState';
 import { formatCSSVariablePrefix } from './formatCSSVariablePrefix';
@@ -22,11 +22,7 @@ const DEFAULT_PLAIN_TEXT_OPTIONS: ForceFilePlainTextOptions = {
 export function renderFileWithHighlighter(
   file: FileContents,
   highlighter: DiffsHighlighter,
-  {
-    theme = DEFAULT_THEMES,
-    tokenizeMaxLineLength,
-    useTokenTransformer,
-  }: RenderFileOptions,
+  { theme, tokenizeMaxLineLength, useTokenTransformer }: RenderFileOptions,
   {
     forcePlainText,
     startingLine,
@@ -138,14 +134,14 @@ export function renderFileWithHighlighter(
     };
   })();
   const highlightedLines = getLineNodes(
-    highlighter.codeToHast(contents, hastConfig)
+    highlighter.codeToHast(normalizeHighlightLineEndings(contents), hastConfig)
   );
 
   // Create sparse array for windowed rendering
   const code = isWindowedHighlight ? new Array(startingLine) : highlightedLines;
   if (isWindowedHighlight) {
     if (renderedLineIndexes == null) {
-      code.push(...highlightedLines);
+      appendItems(code, highlightedLines);
     } else {
       for (let index = 0; index < renderedLineIndexes.length; index++) {
         const line = highlightedLines[index];
@@ -157,4 +153,11 @@ export function renderFileWithHighlighter(
   }
 
   return { code, themeStyles, baseThemeType };
+}
+
+// Shiki does not treat a lone carriage return as a line break. Normalize only
+// the text sent to the highlighter so its output stays aligned with the file
+// model while the original document retains its line endings.
+function normalizeHighlightLineEndings(contents: string): string {
+  return contents.replace(/\r(?!\n)/g, '\n');
 }

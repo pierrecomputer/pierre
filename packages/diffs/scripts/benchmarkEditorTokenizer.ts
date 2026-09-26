@@ -469,7 +469,7 @@ function createBenchmarkCases(
     {
       name: 'bracket-cache-invalidation',
       description:
-        'Edit one character at line 0 after caching bracket ranges for every line.',
+        'Edit one character at line 0, then query an unchanged cached line at the document tail.',
       run() {
         resetMessages();
         const counters = { grammarCalls: 0, setThemeCalls: 0 };
@@ -501,9 +501,12 @@ function createBenchmarkCases(
           ...fullRange,
           totalLines: 1,
         });
+        const editGrammarCalls = counters.grammarCalls;
+        tokenizer.getStringCommentRegexpRangesInLine(config.lines - 1);
         const elapsedMs = performance.now() - started;
         const operations = {
-          grammarCalls: counters.grammarCalls,
+          editGrammarCalls,
+          downstreamGrammarCalls: counters.grammarCalls - editGrammarCalls,
           dirtyLines: dirtyLines.size,
         };
         tokenizer.cleanUp();

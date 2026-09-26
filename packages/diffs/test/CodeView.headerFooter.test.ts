@@ -19,13 +19,13 @@ import {
 const ROOT_HEIGHT = 800;
 const { paddingTop, paddingBottom } = DEFAULT_CODE_VIEW_LAYOUT;
 
-function makeItems(count = 12, lineCount = 20): CodeViewItem[] {
+function makeItems(count = 12, lineCount = 20): CodeViewItem<undefined>[] {
   return Array.from({ length: count }, (_, index) =>
     makeFileItem(`file:${index}`, lineCount)
   );
 }
 
-function headerOption(): CodeViewOptions<undefined> {
+function headerOption(): CodeViewOptions<undefined, undefined> {
   return { renderCodeViewHeader: () => document.createElement('div') };
 }
 

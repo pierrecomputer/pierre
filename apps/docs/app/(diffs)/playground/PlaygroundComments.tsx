@@ -77,6 +77,7 @@ export function CommentForm({
                 <textarea
                   ref={textareaRef}
                   placeholder="Leave a comment…"
+                  aria-label="Leave a comment"
                   className="text-foreground bg-background min-h-[60px] w-full resize-none rounded-md border p-2 text-sm focus:ring-2 focus:ring-offset-[-1px]"
                 />
                 <div className="mt-1 flex items-center gap-2">

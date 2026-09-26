@@ -1,8 +1,12 @@
 'use client';
 
 import type { FileContents, FileOptions } from '@pierre/diffs';
-import type { Editor, EditorOptions } from '@pierre/diffs/edit';
-import { File, Virtualizer } from '@pierre/diffs/react';
+import type {
+  Editor,
+  EditorChangeEvent,
+  EditorOptions,
+} from '@pierre/diffs/edit';
+import { File, useStableCallback, Virtualizer } from '@pierre/diffs/react';
 import {
   IconFilePlus,
   IconFolderPlus,
@@ -32,15 +36,9 @@ import type {
   CSSProperties,
   ReactNode,
   PointerEvent as ReactPointerEvent,
+  RefObject,
 } from 'react';
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  useSyncExternalStore,
-} from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import {
   DropdownMenu,
@@ -49,6 +47,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { useLatestValueRef } from '@/lib/useLatestValueRef';
+import { useMediaQuery } from '@/lib/useMediaQuery';
 
 const DEFAULT_EXPLORER_WIDTH = 280;
 const DEFAULT_MIN_EXPLORER_WIDTH = 180;
@@ -205,15 +205,17 @@ export interface TreeAppProps<LAnnotation = unknown> {
   // Editor side: files keyed by their tree path. Mirrors the
   // preloadedDataById pattern already used by tree demos. Both the prerendered
   // HTML map and the file options may be scoped per theme so the active File
-  // picks up the right syntax-highlight colors when the theme toggles. Give
-  // files unique, rename-stable cacheKeys so render caches follow moves;
-  // without one, TreeApp uses the current path.
+  // picks up the right syntax-highlight colors when the theme toggles. Omitted
+  // cacheKeys disable shared render caching. A supplied key must change when
+  // file contents or other render-affecting identity changes; TreeApp never
+  // derives one from the file path.
   files?: Readonly<Record<string, FileContents>>;
   prerenderedHTMLByPath?: TreeAppThemeValue<Readonly<Record<string, string>>>;
-  fileOptions?: TreeAppThemeValue<FileOptions<LAnnotation>>;
+  fileOptions?: TreeAppThemeValue<FileOptions<LAnnotation, undefined>>;
   // Fired on Cmd/Ctrl+S after TreeApp clears the tab's unsaved indicator.
   // Hosts that own the `files` map should update it here so the next edit
-  // cycle compares against the saved contents.
+  // cycle compares against the saved contents, advancing any explicit
+  // cacheKey according to the host's versioning scheme.
   onSave?: (path: string, file: FileContents) => void;
 
   // Light/dark theming. TreeApp owns the state by default; callers can observe
@@ -544,21 +546,32 @@ function useTreeMutations({
   );
 }
 
-// Returns true when the viewport currently matches the mobile media query.
-// useSyncExternalStore keeps SSR stable (always false) and flips to true after
-// hydration if the viewport is narrow, avoiding a hydration mismatch.
+// True when the viewport matches the mobile media query. SSR and the hydrating
+// render report false, so a narrow viewport flips to true right after hydration
+// without a mismatch.
 function useIsMobile(query = '(max-width: 767px)'): boolean {
-  return useSyncExternalStore(
-    (onChange) => {
-      const mql = window.matchMedia(query);
-      mql.addEventListener('change', onChange);
-      return () => {
-        mql.removeEventListener('change', onChange);
-      };
-    },
-    () => window.matchMedia(query).matches,
-    () => false
-  );
+  return useMediaQuery(query, false);
+}
+
+// True when the active tab shows its locally edited file rather than the host's:
+// the path is unsaved, or it was saved and the host has not yet replaced the file
+// object it held at save time. Kept in its own hook because the render-time ref
+// read is deliberate; the boundary lets TreeApp stay compilable.
+function useUsesLocalFile(
+  activePath: string | null,
+  activeHostFile: FileContents | undefined,
+  unsavedPaths: ReadonlySet<string>,
+  hostFilesAtSaveByPathRef: RefObject<Map<string, FileContents | undefined>>
+): boolean {
+  /* oxlint-disable react/refs -- isolate the existing render-time host acknowledgement snapshot */
+  const usesLocalFile =
+    activePath != null &&
+    (unsavedPaths.has(activePath) ||
+      (hostFilesAtSaveByPathRef.current.has(activePath) &&
+        hostFilesAtSaveByPathRef.current.get(activePath) === activeHostFile));
+  /* oxlint-enable react/refs */
+
+  return usesLocalFile;
 }
 
 // Owns the explorer sidebar width and exposes a pointer-down handler for the
@@ -691,22 +704,15 @@ function useOpenTabs({
     }
   }, [isMobile, model, selectedPaths]);
 
-  // When the viewport flips into mobile, drop any extra tabs from a previous
-  // desktop session so only the active file remains. We never re-expand the
-  // tab list when going back to desktop; the user can reopen what they want.
-  useEffect(() => {
-    if (!isMobile) {
-      return;
-    }
-    setOpenPaths((current) => {
-      if (activePath == null) {
-        return current.length === 0 ? current : [];
-      }
-      return current.length === 1 && current[0] === activePath
-        ? current
-        : [activePath];
-    });
-  }, [activePath, isMobile]);
+  // When the viewport flips into mobile, discard any extra desktop tabs before
+  // committing the mobile layout. Returning to desktop does not restore them.
+  if (
+    isMobile &&
+    (openPaths.length !== (activePath == null ? 0 : 1) ||
+      (activePath != null && openPaths[0] !== activePath))
+  ) {
+    setOpenPaths(activePath == null ? [] : [activePath]);
+  }
 
   const closeTab = useCallback(
     (path: string) => {
@@ -1177,7 +1183,14 @@ export function TreeApp<LAnnotation = unknown>({
   const theme = themeProp ?? internalTheme;
   const chrome = CHROME_STYLES[theme];
 
-  const activePathRef = useRef<string | null>(initialActivePath ?? null);
+  const isMobile = useIsMobile();
+  const { activePath, activateTab, closeTab, openPaths } = useOpenTabs({
+    initialActivePath,
+    initialOpenPaths,
+    isMobile,
+    model,
+  });
+  const activePathRef = useLatestValueRef(activePath);
   // Edited buffers keyed by path. Prefer these over the caller-supplied `files`
   // map so tab switches keep unsaved text without requiring the host to own
   // the edit loop.
@@ -1200,19 +1213,14 @@ export function TreeApp<LAnnotation = unknown>({
   const hostFilesAtSaveByPathRef = useRef(
     new Map<string, FileContents | undefined>()
   );
-  const unsavedPathsRef = useRef(unsavedPaths);
-  unsavedPathsRef.current = unsavedPaths;
+  const unsavedPathsRef = useLatestValueRef(unsavedPaths);
   const containerRef = useRef<HTMLDivElement | null>(null);
 
-  const handleEditorChangeRef = useRef<(file: FileContents) => void>(() => {});
-  const editorRef = useRef<Editor<LAnnotation> | null>(null);
-  const editorOptions = useMemo<EditorOptions<LAnnotation>>(
+  const editorRef = useRef<Editor<'file', LAnnotation> | null>(null);
+  const editorOptions = useMemo<EditorOptions<'file', LAnnotation, undefined>>(
     () => ({
       onAttach(editor) {
         editorRef.current = editor;
-      },
-      onChange(file) {
-        handleEditorChangeRef.current(file);
       },
     }),
     []
@@ -1257,7 +1265,7 @@ export function TreeApp<LAnnotation = unknown>({
         return rest;
       });
     },
-    []
+    [unsavedPathsRef]
   );
 
   const toggleTheme = useCallback(() => {
@@ -1289,7 +1297,14 @@ export function TreeApp<LAnnotation = unknown>({
       const isUnsaved = baseline == null || file.contents !== baseline.contents;
       syncUnsavedPath(path, file, isUnsaved);
     },
-    [files, savedBaselinesByPath, syncUnsavedPath]
+    [activePathRef, files, savedBaselinesByPath, syncUnsavedPath]
+  );
+  // The editor keeps the first onEditChange it is given, so hand it a callback
+  // whose identity never changes but whose body always sees the latest handler.
+  const handleEditChange = useStableCallback(
+    (event: EditorChangeEvent<'file', LAnnotation, undefined>) => {
+      handleEditorChange(event.file);
+    }
   );
 
   // Cmd/Ctrl+S: treat the current buffer as saved. Clears the tab's unsaved
@@ -1337,7 +1352,7 @@ export function TreeApp<LAnnotation = unknown>({
     }
     onSave?.(path, snapshot);
     return true;
-  }, [editedFilesByPath, files, onSave]);
+  }, [activePathRef, editedFilesByPath, files, onSave, unsavedPathsRef]);
 
   useEffect(() => {
     const acknowledgedPaths = new Set<string>();
@@ -1373,7 +1388,7 @@ export function TreeApp<LAnnotation = unknown>({
       }
       return changed ? next : current;
     });
-  }, [files]);
+  }, [files, unsavedPathsRef]);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -1409,20 +1424,11 @@ export function TreeApp<LAnnotation = unknown>({
   const treeStyleRecord = resolvedTreeStyle as
     | Record<string, string | number>
     | undefined;
-  const isMobile = useIsMobile();
   const explorer = useExplorerWidth(
     initialExplorerWidth,
     minExplorerWidth,
     maxExplorerWidth
   );
-
-  const { activePath, activateTab, closeTab, openPaths } = useOpenTabs({
-    initialActivePath,
-    initialOpenPaths,
-    isMobile,
-    model,
-  });
-  activePathRef.current = activePath;
 
   useEffect(
     () =>
@@ -1470,10 +1476,8 @@ export function TreeApp<LAnnotation = unknown>({
           return next;
         });
       }),
-    [model]
+    [model, unsavedPathsRef]
   );
-
-  handleEditorChangeRef.current = handleEditorChange;
 
   const mutations = useTreeMutations({
     model,
@@ -1489,7 +1493,7 @@ export function TreeApp<LAnnotation = unknown>({
     search.open();
   }, [search]);
 
-  const fileOptions = useMemo<FileOptions<LAnnotation>>(
+  const fileOptions = useMemo<FileOptions<LAnnotation, undefined>>(
     () => ({
       ...resolvedFileOptions,
       overflow: 'wrap',
@@ -1516,7 +1520,7 @@ export function TreeApp<LAnnotation = unknown>({
       Object.entries(treeStyleRecord).filter(([key]) =>
         key.startsWith('--trees-')
       )
-    ) as CSSProperties;
+    );
   }, [treeStyleRecord]);
 
   const containerStyle = useMemo<CSSProperties>(() => {
@@ -1652,23 +1656,24 @@ export function TreeApp<LAnnotation = unknown>({
   );
 
   const activeHostFile = activePath == null ? undefined : files?.[activePath];
-  const usesLocalFile =
-    activePath != null &&
-    (unsavedPaths.has(activePath) ||
-      (hostFilesAtSaveByPathRef.current.has(activePath) &&
-        hostFilesAtSaveByPathRef.current.get(activePath) === activeHostFile));
+  const usesLocalFile = useUsesLocalFile(
+    activePath,
+    activeHostFile,
+    unsavedPaths,
+    hostFilesAtSaveByPathRef
+  );
   const activeFile =
     activePath != null && usesLocalFile
       ? (editedFilesByPath[activePath] ?? activeHostFile)
       : activeHostFile;
-  // File names are commonly only basenames, so use the unique tree path as
-  // the persistence identity unless the caller supplied a stable cache key.
+  // Keep unkeyed caller files isolated from edit-session mutation without
+  // inventing a shared renderer-cache identity.
   const activeEditorFile = useMemo(
     () =>
-      activeFile == null || activePath == null || activeFile.cacheKey != null
+      activeFile == null || activeFile.cacheKey != null
         ? activeFile
-        : { ...activeFile, cacheKey: activePath },
-    [activeFile, activePath]
+        : { ...activeFile },
+    [activeFile]
   );
   // Skip stale prerendered HTML while the editor is showing local contents.
   const activePrerenderedHTML =
@@ -1902,6 +1907,7 @@ export function TreeApp<LAnnotation = unknown>({
                     prerenderedHTML={activePrerenderedHTML}
                     edit
                     editorOptions={editorOptions}
+                    onEditChange={handleEditChange}
                   />
                 )}
               </Virtualizer>

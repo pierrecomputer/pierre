@@ -14,7 +14,7 @@ const INSTALL_COMMANDS: Record<PackageManager, string> = {
 
 export const INSTALLATION_EXAMPLES: Record<
   PackageManager,
-  PreloadFileOptions<undefined>
+  PreloadFileOptions<undefined, undefined>
 > = Object.fromEntries(
   PACKAGE_MANAGERS.map((pm) => [
     pm,
@@ -30,4 +30,4 @@ export const INSTALLATION_EXAMPLES: Record<
       },
     },
   ])
-) as Record<PackageManager, PreloadFileOptions<undefined>>;
+) as Record<PackageManager, PreloadFileOptions<undefined, undefined>>;

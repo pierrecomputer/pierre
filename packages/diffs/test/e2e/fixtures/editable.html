@@ -54,16 +54,15 @@ const baz = foo;
       const events = [];
       window.__editorEvents = events;
 
-      const editor = new Editor({
-        onChange(next) {
-          events.push(next.contents);
-        },
-      });
+      const editor = new Editor('file');
       window.__editor = editor;
 
       // Editable single-file surface: `useTokenTransformer` mirrors what the
       // React <File edit> path enables before attaching an editor.
       const instance = new File({
+        onEditChange({ file }) {
+          events.push(file.contents);
+        },
         disableFileHeader: true,
         theme: { dark: 'pierre-dark', light: 'pierre-light' },
         themeType: 'dark',

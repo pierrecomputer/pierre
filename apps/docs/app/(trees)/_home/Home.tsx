@@ -73,38 +73,40 @@ export default function TreesPage() {
   return (
     <div className="mx-auto min-h-screen max-w-5xl px-5 xl:max-w-[80rem]">
       <Header className="-mb-[1px]" />
-      <Hero productId={PRODUCT_ID} />
+      <main>
+        <Hero productId={PRODUCT_ID} />
 
-      <section className="relative mb-16 max-md:-mr-5 max-md:-ml-5 max-md:overflow-x-clip max-md:pl-5 md:-mt-6">
-        <DemoTreeApp />
-      </section>
+        <section className="relative mb-16 max-md:-mr-5 max-md:-ml-5 max-md:overflow-x-clip max-md:pl-5 md:-mt-6">
+          <DemoTreeApp />
+        </section>
 
-      <HeadingAnchors />
-      <section className="space-y-12 pb-8">
-        <DemoFlatten
-          preloadedData={{
-            flattened: flattenFlattenedPreloadedData,
-            hierarchical: flattenHierarchicalPreloadedData,
-          }}
-        />
-        <DemoGitStatus
-          preloadedData={{
-            filteredViewport: gitStatusFilteredViewportPreloadedData,
-            fullViewport: gitStatusFullViewportPreloadedData,
-          }}
-        />
-        <DemoContextMenu />
-        <DemoDragDrop />
-        <DemoSearch />
-        <DemoVirtualization />
-        <DemoA11y />
-        <DemoCustomIcons />
-        <DemoTheming />
-        <DemoStyling />
-        <DemoDensity />
-      </section>
+        <HeadingAnchors />
+        <section className="space-y-12 pb-8">
+          <DemoFlatten
+            preloadedData={{
+              flattened: flattenFlattenedPreloadedData,
+              hierarchical: flattenHierarchicalPreloadedData,
+            }}
+          />
+          <DemoGitStatus
+            preloadedData={{
+              filteredViewport: gitStatusFilteredViewportPreloadedData,
+              fullViewport: gitStatusFullViewportPreloadedData,
+            }}
+          />
+          <DemoContextMenu />
+          <DemoDragDrop />
+          <DemoSearch />
+          <DemoVirtualization />
+          <DemoA11y />
+          <DemoCustomIcons />
+          <DemoTheming />
+          <DemoStyling />
+          <DemoDensity />
+        </section>
 
-      <PierreCompanySection />
+        <PierreCompanySection />
+      </main>
       <Footer />
     </div>
   );

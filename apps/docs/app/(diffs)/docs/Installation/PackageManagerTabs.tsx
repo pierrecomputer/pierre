@@ -1,14 +1,17 @@
 'use client';
 
-import type { PreloadedFileResult } from '@pierre/diffs/ssr';
 import { useState } from 'react';
 
 import { PACKAGE_MANAGERS, type PackageManager } from './constants';
 import { DocsCodeExample } from '@/components/docs/DocsCodeExample';
 import { ButtonGroup, ButtonGroupItem } from '@/components/ui/button-group';
+import type { PreloadedCodeExample } from '@/lib/preloadCodeExample';
 
 interface PackageManagerTabsProps {
-  installationExamples: Record<PackageManager, PreloadedFileResult<undefined>>;
+  installationExamples: Record<
+    PackageManager,
+    PreloadedCodeExample<undefined, undefined>
+  >;
 }
 
 export function PackageManagerTabs({

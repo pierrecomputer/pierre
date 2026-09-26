@@ -34,15 +34,17 @@ export function ThemeLayout({ header, children }: ThemeLayoutProps) {
         className="-mb-[1px]"
       />
 
-      {header}
+      <main>
+        {header}
 
-      <div className="relative gap-6 pt-6 md:grid md:grid-cols-[220px_1fr] md:gap-12">
-        <SidebarWrapper
-          isMobileMenuOpen={isMobileMenuOpen}
-          onMobileMenuClose={handleMobileMenuClose}
-        />
-        {children}
-      </div>
+        <div className="relative gap-6 pt-6 md:grid md:grid-cols-[220px_1fr] md:gap-12">
+          <SidebarWrapper
+            isMobileMenuOpen={isMobileMenuOpen}
+            onMobileMenuClose={handleMobileMenuClose}
+          />
+          {children}
+        </div>
+      </main>
     </>
   );
 }

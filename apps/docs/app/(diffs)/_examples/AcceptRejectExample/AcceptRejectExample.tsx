@@ -14,7 +14,7 @@ import { FeatureHeader } from '@/components/FeatureHeader';
 import { Button } from '@/components/ui/button';
 
 interface AcceptRejectExampleProps {
-  prerenderedDiff: PreloadFileDiffResult<AcceptRejectMetadata>;
+  prerenderedDiff: PreloadFileDiffResult<AcceptRejectMetadata, undefined>;
 }
 
 export function AcceptRejectExample({

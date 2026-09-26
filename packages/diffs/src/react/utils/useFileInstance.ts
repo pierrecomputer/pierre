@@ -1,4 +1,5 @@
 import {
+  type RefObject,
   useCallback,
   useContext,
   useEffect,
@@ -6,9 +7,15 @@ import {
   useRef,
 } from 'react';
 
-import { File, type FileOptions } from '../../components/File';
+import {
+  File,
+  type FileEditChangeHandler,
+  type FileEditCompleteEvent,
+  type FileEditCompleteHandler,
+  type FileOptions,
+} from '../../components/File';
 import { VirtualizedFile } from '../../components/VirtualizedFile';
-import type { EditorOptions } from '../../edit';
+import type { Editor, EditorChangeEvent, EditorOptions } from '../../edit';
 import type { GetHoveredLineResult } from '../../managers/InteractionManager';
 import type {
   FileContents,
@@ -16,7 +23,9 @@ import type {
   SelectedLineRange,
   VirtualFileMetrics,
 } from '../../types';
+import { areFileTargetsEqual } from '../../utils/areFileTargetsEqual';
 import { areOptionsEqual } from '../../utils/areOptionsEqual';
+import { getLineAnnotationName } from '../../utils/getLineAnnotationName';
 import { noopRender } from '../constants';
 import { useCreateEditor } from '../EditContext';
 import { useVirtualizer } from '../Virtualizer';
@@ -26,10 +35,22 @@ import { useStableCallback } from './useStableCallback';
 const useIsomorphicLayoutEffect =
   typeof window === 'undefined' ? useEffect : useLayoutEffect;
 
-interface UseFileInstanceProps<LAnnotation> {
+interface AcceptedCompletion<LAnnotation> {
+  file: {
+    installed: FileContents;
+    stale: FileContents;
+  } | null;
+  annotations: {
+    installed: LineAnnotation<LAnnotation>[] | undefined;
+    stale: LineAnnotation<LAnnotation>[];
+  } | null;
+}
+
+interface UseFileInstanceProps<LAnnotation, Caret> {
   file: FileContents;
-  options: FileOptions<LAnnotation> | undefined;
-  editorOptions: EditorOptions<LAnnotation> | undefined;
+  options: FileOptions<LAnnotation, Caret> | undefined;
+  editorOptions: EditorOptions<'file', LAnnotation, Caret> | undefined;
+  editStateKey: string | undefined;
   lineAnnotations: LineAnnotation<LAnnotation>[] | undefined;
   selectedLines: SelectedLineRange | null | undefined;
   prerenderedHTML: string | undefined;
@@ -38,21 +59,21 @@ interface UseFileInstanceProps<LAnnotation> {
   hasCustomHeader: boolean;
   disableWorkerPool: boolean;
   edit: boolean;
-  onChange?: (
-    file: FileContents,
-    lineAnnotations?: LineAnnotation<LAnnotation>[]
-  ) => void;
+  onEditChange?: FileEditChangeHandler<LAnnotation, Caret>;
+  onEditComplete?: FileEditCompleteHandler<LAnnotation, Caret>;
 }
 
-interface UseFileInstanceReturn {
+interface UseFileInstanceReturn<LAnnotation> {
   ref(node: HTMLElement | null): void;
   getHoveredLine(): GetHoveredLineResult<'file'> | undefined;
+  getAnnotationSlotName(annotation: LineAnnotation<LAnnotation>): string;
 }
 
-export function useFileInstance<LAnnotation>({
+export function useFileInstance<LAnnotation, Caret>({
   file,
   options,
   editorOptions,
+  editStateKey,
   lineAnnotations,
   selectedLines,
   prerenderedHTML,
@@ -61,14 +82,53 @@ export function useFileInstance<LAnnotation>({
   hasCustomHeader,
   disableWorkerPool,
   edit,
-}: UseFileInstanceProps<LAnnotation>): UseFileInstanceReturn {
+  onEditChange: _onEditChange,
+  onEditComplete: _onEditComplete,
+}: UseFileInstanceProps<
+  LAnnotation,
+  Caret
+>): UseFileInstanceReturn<LAnnotation> {
   const simpleVirtualizer = useVirtualizer();
   const controlledSelection = selectedLines !== undefined;
   const poolManager = useContext(WorkerPoolContext);
-  const createEditor = useCreateEditor<LAnnotation>();
+  const createEditor = useCreateEditor<LAnnotation, Caret>();
+  const handleOnEditChange = useStableCallback(
+    (event: EditorChangeEvent<'file', LAnnotation, Caret>) =>
+      _onEditChange?.(event)
+  );
+  const onEditChange = _onEditChange != null ? handleOnEditChange : undefined;
+  // An accepted completion installs its file on the instance immediately,
+  // but the file/lineAnnotations props stay pre-edit until the owner's state
+  // update lands. This holds the accepted values so the renders in between do
+  // not repaint pre-edit state.
+  const acceptedCache = useRef<AcceptedCompletion<LAnnotation> | null>(null);
+  const handleOnEditComplete = useStableCallback(
+    (event: FileEditCompleteEvent<LAnnotation, Caret>) => {
+      const decision = _onEditComplete?.(event) ?? 'reject';
+      if (decision === 'accept') {
+        acceptedCache.current = {
+          file: { installed: event.file, stale: event.originalFile },
+          annotations: {
+            installed: event.lineAnnotations,
+            stale: event.originalLineAnnotations,
+          },
+        };
+      }
+      return decision;
+    }
+  );
+  const onEditComplete =
+    _onEditComplete != null ? handleOnEditComplete : undefined;
   const instanceRef = useRef<
-    File<LAnnotation> | VirtualizedFile<LAnnotation> | null
+    File<LAnnotation, Caret> | VirtualizedFile<LAnnotation, Caret> | null
   >(null);
+  const disposeEditorRef = useRef<() => void>(null);
+  const getEditor = useStableCallback(() => {
+    if (createEditor == null) {
+      throw new Error('File: EditContext is not attached');
+    }
+    return createEditor('file', editorOptions ?? {}, editStateKey);
+  });
   const ref = useStableCallback((node: HTMLElement | null) => {
     if (node != null) {
       if (instanceRef.current != null) {
@@ -82,6 +142,8 @@ export function useFileInstance<LAnnotation>({
             controlledSelection,
             hasCustomHeader,
             hasGutterRenderUtility,
+            onEditChange,
+            onEditComplete,
             options,
           }),
           simpleVirtualizer,
@@ -95,11 +157,16 @@ export function useFileInstance<LAnnotation>({
             controlledSelection,
             hasCustomHeader,
             hasGutterRenderUtility,
+            onEditChange,
+            onEditComplete,
             options,
           }),
           !disableWorkerPool ? poolManager : undefined,
           true
         );
+      }
+      if (edit && disposeEditorRef.current == null) {
+        disposeEditorRef.current = applyEdit(instanceRef.current, getEditor);
       }
       void instanceRef.current.hydrate({
         file,
@@ -113,15 +180,19 @@ export function useFileInstance<LAnnotation>({
       }
       instanceRef.current.cleanUp();
       instanceRef.current = null;
+      disposeEditorRef.current = null;
     }
   });
 
   useIsomorphicLayoutEffect(() => {
-    if (instanceRef.current == null) return;
+    const { current: instance } = instanceRef;
+    if (instance == null) return;
     const newOptions = mergeFileOptions({
       controlledSelection,
       hasCustomHeader,
       hasGutterRenderUtility,
+      onEditChange,
+      onEditComplete,
       options,
     });
     // setOptions(undefined) is a no-op, so an undefined merge result never
@@ -129,58 +200,110 @@ export function useFileInstance<LAnnotation>({
     // constructor-default options would force a full render on every commit.
     const forceRender =
       newOptions !== undefined &&
-      !areOptionsEqual(instanceRef.current.options, newOptions);
-    instanceRef.current.setOptions(newOptions);
-    void instanceRef.current.render({ file, lineAnnotations, forceRender });
+      !areOptionsEqual(instance.options, newOptions);
+    instance.setOptions(newOptions);
+    // Detach editor before rendering if required
+    if (!edit && disposeEditorRef.current != null) {
+      const { current: disposeEditor } = disposeEditorRef;
+      disposeEditorRef.current = null;
+      disposeEditor();
+    }
+    const resolved = resolveAcceptedValues(
+      file,
+      lineAnnotations,
+      acceptedCache
+    );
+    void instance.render({
+      file: resolved.file,
+      lineAnnotations: resolved.lineAnnotations,
+      forceRender,
+    });
     if (selectedLines !== undefined) {
-      instanceRef.current.setSelectedLines(selectedLines);
+      instance.setSelectedLines(selectedLines);
+    }
+    // Attach editor after rendering if required
+    if (edit && disposeEditorRef.current == null) {
+      disposeEditorRef.current = applyEdit(instance, getEditor);
     }
   });
-
-  useIsomorphicLayoutEffect(() => {
-    if (edit && instanceRef.current != null) {
-      if (createEditor === undefined) {
-        throw new Error('File: EditContext is not attached');
-      }
-      const editor = createEditor(editorOptions ?? {});
-      if (editor == null) {
-        throw new Error(
-          'File: EditProvider.createEditor must return an editor instance'
-        );
-      }
-      try {
-        return editor.edit(instanceRef.current);
-      } catch (error) {
-        editor.cleanUp();
-        throw error;
-      }
-    }
-    return undefined;
-  }, [edit]);
 
   const getHoveredLine = useCallback(():
     | GetHoveredLineResult<'file'>
     | undefined => {
     return instanceRef.current?.getHoveredLine();
   }, []);
-  return { ref, getHoveredLine };
+  const getAnnotationSlotName = useCallback(
+    (annotation: LineAnnotation<LAnnotation>): string =>
+      instanceRef.current?.getAnnotationSlotName(annotation) ??
+      getLineAnnotationName(annotation),
+    []
+  );
+  return { ref, getHoveredLine, getAnnotationSlotName };
 }
 
-interface MergeFileOptionsProps<LAnnotation> {
-  options: FileOptions<LAnnotation> | undefined;
+// Return the installed values in place of props that still match their stale
+// counterparts. Any other prop value clears its half, and the ref clears once
+// both halves have.
+function resolveAcceptedValues<LAnnotation>(
+  file: FileContents,
+  lineAnnotations: LineAnnotation<LAnnotation>[] | undefined,
+  acceptedCache: RefObject<AcceptedCompletion<LAnnotation> | null>
+): {
+  file: FileContents;
+  lineAnnotations: LineAnnotation<LAnnotation>[] | undefined;
+} {
+  const { current: accepted } = acceptedCache;
+  if (accepted == null) {
+    return { file, lineAnnotations };
+  }
+  const { file: acceptedFiles, annotations: acceptedAnnotations } = accepted;
+  let resolvedFile = file;
+  if (acceptedFiles != null) {
+    if (areFileTargetsEqual(file, acceptedFiles.stale)) {
+      resolvedFile = acceptedFiles.installed;
+    } else {
+      accepted.file = null;
+    }
+  }
+  let resolvedAnnotations = lineAnnotations;
+  if (acceptedAnnotations != null) {
+    if (lineAnnotations === acceptedAnnotations.stale) {
+      resolvedAnnotations = acceptedAnnotations.installed;
+    } else {
+      accepted.annotations = null;
+    }
+  }
+  if (accepted.file == null && accepted.annotations == null) {
+    acceptedCache.current = null;
+  }
+  return { file: resolvedFile, lineAnnotations: resolvedAnnotations };
+}
+
+interface MergeFileOptionsProps<LAnnotation, Caret> {
+  options: FileOptions<LAnnotation, Caret> | undefined;
   controlledSelection: boolean;
   hasGutterRenderUtility: boolean;
   hasCustomHeader: boolean;
+  onEditChange: FileEditChangeHandler<LAnnotation, Caret> | undefined;
+  onEditComplete: FileEditCompleteHandler<LAnnotation, Caret> | undefined;
 }
 
-function mergeFileOptions<LAnnotation>({
+function mergeFileOptions<LAnnotation, Caret>({
   options,
   controlledSelection,
   hasCustomHeader,
   hasGutterRenderUtility,
-}: MergeFileOptionsProps<LAnnotation>): FileOptions<LAnnotation> | undefined {
+  onEditChange,
+  onEditComplete,
+}: MergeFileOptionsProps<LAnnotation, Caret>):
+  | FileOptions<LAnnotation, Caret>
+  | undefined {
   const needsReactOverrides =
-    controlledSelection || hasGutterRenderUtility || hasCustomHeader;
+    controlledSelection ||
+    hasGutterRenderUtility ||
+    hasCustomHeader ||
+    onEditChange != null ||
+    onEditComplete != null;
 
   if (!needsReactOverrides) {
     return options;
@@ -195,5 +318,20 @@ function mergeFileOptions<LAnnotation>({
     renderGutterUtility: hasGutterRenderUtility
       ? noopRender
       : options?.renderGutterUtility,
+    onEditChange,
+    onEditComplete,
   };
+}
+
+function applyEdit<LAnnotation, Caret>(
+  instance: File<LAnnotation, Caret>,
+  getEditor: () => Editor<'file', LAnnotation, Caret>
+): () => void {
+  const editor = getEditor();
+  try {
+    return editor.edit(instance);
+  } catch (error) {
+    editor.cleanUp();
+    throw error;
+  }
 }

@@ -5,6 +5,7 @@ import type {
   Hunk,
 } from '../types';
 import { cloneFileDiffMetadata } from './cloneFileDiffMetadata';
+import { composeCacheKey } from './composeCacheKey';
 import {
   getHunkSideEndBoundary,
   getHunkSideStartBoundary,
@@ -231,7 +232,7 @@ function getLoadedFileCacheKey(
 ): string | undefined {
   if (oldFile != null && newFile != null) {
     return oldFile.cacheKey != null && newFile.cacheKey != null
-      ? `${oldFile.cacheKey}:${newFile.cacheKey}`
+      ? composeCacheKey('hydrated-files', oldFile.cacheKey, newFile.cacheKey)
       : undefined;
   }
   return oldFile?.cacheKey ?? newFile?.cacheKey;

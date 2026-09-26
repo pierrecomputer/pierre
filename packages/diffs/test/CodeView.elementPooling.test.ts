@@ -1,7 +1,11 @@
-import { describe, expect, test } from 'bun:test';
+import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 
 import { CodeView, type CodeViewCoordinator } from '../src/components/CodeView';
 import { DEFAULT_THEMES } from '../src/constants';
+import {
+  disposeHighlighter,
+  preloadHighlighter,
+} from '../src/highlighter/shared_highlighter';
 import type { CodeViewItem, FileContents } from '../src/types';
 import { parseDiffFromFile } from '../src/utils/parseDiffFromFile';
 import {
@@ -96,6 +100,19 @@ async function waitForShellCounts(
 }
 
 describe('CodeView element pooling', () => {
+  // Pooling assertions expect mounted items immediately after renderItems().
+  // Load the fixtures' themes and language before testing shell reuse.
+  beforeAll(async () => {
+    await preloadHighlighter({
+      themes: ['pierre-dark', 'pierre-light'],
+      langs: ['typescript'],
+    });
+  });
+
+  afterAll(async () => {
+    await disposeHighlighter();
+  });
+
   test('reuses sanitized item shells without duplicating shared assets', async () => {
     const { cleanup } = installDom();
     const viewer = new CodeView({
@@ -319,6 +336,11 @@ describe('CodeView element pooling', () => {
       const firstElement = renderedItems[0].element;
       expect(getSpriteCount(firstElement)).toBe(1);
 
+      // Commit the initial height correction before testing the large-jump
+      // recycle path below.
+      viewer.render(true);
+      await wait(0);
+
       // Jump past one: the fit-perfectly pass releases one (its shell and
       // sprite go to the pool, and the instance is recycled) and mounts two
       // into that shell, adopting the pooled sprite. The follow-up fill pass
@@ -352,9 +374,13 @@ describe('CodeView element pooling', () => {
 
   test('waits for managed slot children to clear before reusing a shell', async () => {
     const { cleanup } = installDom();
-    const viewer = new CodeView({ disableFileHeader: true }, undefined, true);
+    const viewer = new CodeView<undefined, undefined>(
+      { disableFileHeader: true },
+      undefined,
+      true
+    );
     const root = createRoot({ height: 120 });
-    const coordinator: CodeViewCoordinator<undefined> = {
+    const coordinator: CodeViewCoordinator<undefined, undefined> = {
       hasAnnotationRenderer: false,
       hasGutterRenderer: false,
       hasHeaderRenderers: true,

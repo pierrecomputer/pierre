@@ -1,0 +1,349 @@
+{
+  "name": "Pierre Light Vibrant",
+  "appearance": "light",
+  "style": {
+    "background": "color(display-p3 0.960784 0.960784 0.960784)",
+    "text": "color(display-p3 0.039216 0.039216 0.039216)",
+    "editor.background": "color(display-p3 1.000000 1.000000 1.000000)",
+    "editor.foreground": "color(display-p3 0.039216 0.039216 0.039216)",
+    "editor.active_line.background": "color(display-p3 0.883107 0.920057 0.992610 / 0.550000)",
+    "players": [
+      {
+        "cursor": "color(display-p3 0.308664 0.645271 1.000000)",
+        "selection": "color(display-p3 0.308664 0.645271 1.000000 / 0.250000)"
+      }
+    ],
+    "created": "color(display-p3 0.266455 0.667541 0.435918)",
+    "deleted": "color(display-p3 0.838044 0.219378 0.220424)",
+    "modified": "color(display-p3 0.308664 0.645271 1.000000)",
+    "terminal.ansi.green": "color(display-p3 0.266455 0.667541 0.435918)",
+    "terminal.ansi.red": "color(display-p3 0.838044 0.219378 0.220424)",
+    "terminal.ansi.blue": "color(display-p3 0.227104 0.537899 0.881328)",
+    "syntax": {
+      "comment": {
+        "color": "color(display-p3 0.450980 0.450980 0.450980)"
+      },
+      "comment.doc": {
+        "color": "color(display-p3 0.450980 0.450980 0.450980)"
+      },
+      "string": {
+        "color": "color(display-p3 0.259723 0.647032 0.276349)"
+      },
+      "string.escape": {
+        "color": "color(display-p3 0.272343 0.688141 0.603353)"
+      },
+      "string.regex": {
+        "color": "color(display-p3 0.262058 0.668164 0.717478)"
+      },
+      "string.special": {
+        "color": "color(display-p3 0.272343 0.688141 0.603353)"
+      },
+      "string.special.symbol": {
+        "color": "color(display-p3 0.883654 0.721037 0.210874)"
+      },
+      "number": {
+        "color": "color(display-p3 0.246852 0.642335 0.817202)"
+      },
+      "constant": {
+        "color": "color(display-p3 0.883654 0.721037 0.210874)"
+      },
+      "boolean": {
+        "color": "color(display-p3 0.246852 0.642335 0.817202)"
+      },
+      "keyword": {
+        "color": "color(display-p3 0.834880 0.207921 0.387456)"
+      },
+      "keyword.operator": {
+        "color": "color(display-p3 0.327292 0.790977 0.995660)"
+      },
+      "function": {
+        "color": "color(display-p3 0.391345 0.215644 0.853560)"
+      },
+      "function.method": {
+        "color": "color(display-p3 0.391345 0.215644 0.853560)"
+      },
+      "function.builtin": {
+        "color": "color(display-p3 0.391345 0.215644 0.853560)"
+      },
+      "function.special.definition": {
+        "color": "color(display-p3 0.391345 0.215644 0.853560)"
+      },
+      "function.call": {
+        "color": "color(display-p3 0.391345 0.215644 0.853560)"
+      },
+      "type": {
+        "color": "color(display-p3 0.660755 0.179954 0.815400)"
+      },
+      "type.builtin": {
+        "color": "color(display-p3 0.660755 0.179954 0.815400)"
+      },
+      "constructor": {
+        "color": "color(display-p3 0.660755 0.179954 0.815400)"
+      },
+      "variable": {
+        "color": "color(display-p3 0.854172 0.502144 0.209646)"
+      },
+      "variable.builtin": {
+        "color": "color(display-p3 0.870477 0.613222 0.203432)"
+      },
+      "variable.member": {
+        "color": "color(display-p3 0.854172 0.502144 0.209646)"
+      },
+      "variable.parameter": {
+        "color": "color(display-p3 0.388235 0.388235 0.388235)"
+      },
+      "variable.special": {
+        "color": "color(display-p3 0.870477 0.613222 0.203432)"
+      },
+      "property": {
+        "color": "color(display-p3 0.854172 0.502144 0.209646)"
+      },
+      "property.css": {
+        "color": "color(display-p3 0.308664 0.645271 1.000000)"
+      },
+      "property.definition": {
+        "color": "color(display-p3 0.308664 0.645271 1.000000)"
+      },
+      "property_name": {
+        "color": "color(display-p3 0.308664 0.645271 1.000000)"
+      },
+      "value": {
+        "color": "color(display-p3 0.246852 0.642335 0.817202)"
+      },
+      "constant.css": {
+        "color": "color(display-p3 0.883654 0.721037 0.210874)"
+      },
+      "string.plain": {
+        "color": "color(display-p3 0.246852 0.642335 0.817202)"
+      },
+      "plain_value": {
+        "color": "color(display-p3 0.246852 0.642335 0.817202)"
+      },
+      "tag.css": {
+        "color": "color(display-p3 0.846123 0.351499 0.208754)"
+      },
+      "tag_name": {
+        "color": "color(display-p3 0.846123 0.351499 0.208754)"
+      },
+      "class": {
+        "color": "color(display-p3 0.266455 0.667541 0.435918)"
+      },
+      "class_name": {
+        "color": "color(display-p3 0.266455 0.667541 0.435918)"
+      },
+      "selector.class": {
+        "color": "color(display-p3 0.266455 0.667541 0.435918)"
+      },
+      "selector.id": {
+        "color": "color(display-p3 0.391345 0.215644 0.853560)"
+      },
+      "id_name": {
+        "color": "color(display-p3 0.391345 0.215644 0.853560)"
+      },
+      "selector.pseudo": {
+        "color": "color(display-p3 0.327292 0.790977 0.995660)"
+      },
+      "pseudo_class_selector": {
+        "color": "color(display-p3 0.327292 0.790977 0.995660)"
+      },
+      "pseudo_element_selector": {
+        "color": "color(display-p3 0.327292 0.790977 0.995660)"
+      },
+      "keyword.directive": {
+        "color": "color(display-p3 0.834880 0.207921 0.387456)"
+      },
+      "keyword.control.at-rule": {
+        "color": "color(display-p3 0.834880 0.207921 0.387456)"
+      },
+      "at_keyword": {
+        "color": "color(display-p3 0.834880 0.207921 0.387456)"
+      },
+      "variable.scss": {
+        "color": "color(display-p3 0.854172 0.502144 0.209646)"
+      },
+      "variable.css": {
+        "color": "color(display-p3 0.854172 0.502144 0.209646)"
+      },
+      "property.custom": {
+        "color": "color(display-p3 0.854172 0.502144 0.209646)"
+      },
+      "unit": {
+        "color": "color(display-p3 0.246852 0.642335 0.817202)"
+      },
+      "number.unit": {
+        "color": "color(display-p3 0.246852 0.642335 0.817202)"
+      },
+      "color": {
+        "color": "color(display-p3 0.883654 0.721037 0.210874)"
+      },
+      "constant.color": {
+        "color": "color(display-p3 0.883654 0.721037 0.210874)"
+      },
+      "keyword.important": {
+        "color": "color(display-p3 0.834880 0.207921 0.387456)"
+      },
+      "variable.language": {
+        "color": "color(display-p3 0.870477 0.613222 0.203432)"
+      },
+      "this": {
+        "color": "color(display-p3 0.870477 0.613222 0.203432)"
+      },
+      "self": {
+        "color": "color(display-p3 0.870477 0.613222 0.203432)"
+      },
+      "type.class": {
+        "color": "color(display-p3 0.660755 0.179954 0.815400)"
+      },
+      "property.object": {
+        "color": "color(display-p3 0.854172 0.502144 0.209646)"
+      },
+      "property_identifier": {
+        "color": "color(display-p3 0.854172 0.502144 0.209646)"
+      },
+      "shorthand_property_identifier": {
+        "color": "color(display-p3 0.854172 0.502144 0.209646)"
+      },
+      "shorthand_property_identifier_pattern": {
+        "color": "color(display-p3 0.854172 0.502144 0.209646)"
+      },
+      "method_definition": {
+        "color": "color(display-p3 0.391345 0.215644 0.853560)"
+      },
+      "function.method.call": {
+        "color": "color(display-p3 0.391345 0.215644 0.853560)"
+      },
+      "string.template": {
+        "color": "color(display-p3 0.259723 0.647032 0.276349)"
+      },
+      "template_string": {
+        "color": "color(display-p3 0.259723 0.647032 0.276349)"
+      },
+      "tag.jsx": {
+        "color": "color(display-p3 0.846123 0.351499 0.208754)"
+      },
+      "tag.component": {
+        "color": "color(display-p3 0.660755 0.179954 0.815400)"
+      },
+      "punctuation": {
+        "color": "color(display-p3 0.388235 0.388235 0.388235)"
+      },
+      "punctuation.bracket": {
+        "color": "color(display-p3 0.388235 0.388235 0.388235)"
+      },
+      "punctuation.delimiter": {
+        "color": "color(display-p3 0.388235 0.388235 0.388235)"
+      },
+      "punctuation.list_marker": {
+        "color": "color(display-p3 0.388235 0.388235 0.388235)"
+      },
+      "punctuation.special": {
+        "color": "color(display-p3 0.834880 0.207921 0.387456)"
+      },
+      "operator": {
+        "color": "color(display-p3 0.327292 0.790977 0.995660)"
+      },
+      "tag": {
+        "color": "color(display-p3 0.846123 0.351499 0.208754)"
+      },
+      "attribute": {
+        "color": "color(display-p3 0.266455 0.667541 0.435918)"
+      },
+      "label": {
+        "color": "color(display-p3 0.870477 0.613222 0.203432)"
+      },
+      "namespace": {
+        "color": "color(display-p3 0.870477 0.613222 0.203432)"
+      },
+      "decorator": {
+        "color": "color(display-p3 0.227104 0.537899 0.881328)"
+      },
+      "attribute.builtin": {
+        "color": "color(display-p3 0.227104 0.537899 0.881328)"
+      },
+      "embedded": {
+        "color": "color(display-p3 0.039216 0.039216 0.039216)"
+      },
+      "preproc": {
+        "color": "color(display-p3 0.834880 0.207921 0.387456)"
+      },
+      "text.literal": {
+        "color": "color(display-p3 0.259723 0.647032 0.276349)"
+      },
+      "markup.heading": {
+        "color": "color(display-p3 0.846123 0.351499 0.208754)",
+        "font_weight": 700
+      },
+      "markup.bold": {
+        "color": "color(display-p3 0.883654 0.721037 0.210874)",
+        "font_weight": 700
+      },
+      "markup.italic": {
+        "color": "color(display-p3 0.834880 0.207921 0.387456)",
+        "font_style": "italic"
+      },
+      "markup.strikethrough": {
+        "color": "color(display-p3 0.450980 0.450980 0.450980)"
+      },
+      "markup.link.url": {
+        "color": "color(display-p3 0.308664 0.645271 1.000000)"
+      },
+      "markup.link.text": {
+        "color": "color(display-p3 0.391345 0.215644 0.853560)"
+      },
+      "markup.quote": {
+        "color": "color(display-p3 0.450980 0.450980 0.450980)",
+        "font_style": "italic"
+      },
+      "markup.list": {
+        "color": "color(display-p3 0.846123 0.351499 0.208754)"
+      },
+      "markup.list.numbered": {
+        "color": "color(display-p3 0.846123 0.351499 0.208754)"
+      },
+      "markup.list.unnumbered": {
+        "color": "color(display-p3 0.846123 0.351499 0.208754)"
+      },
+      "markup.raw": {
+        "color": "color(display-p3 0.259723 0.647032 0.276349)"
+      },
+      "markup.raw.inline": {
+        "color": "color(display-p3 0.259723 0.647032 0.276349)"
+      },
+      "markup.raw.block": {
+        "color": "color(display-p3 0.259723 0.647032 0.276349)"
+      },
+      "diff.plus": {
+        "color": "color(display-p3 0.266455 0.667541 0.435918)"
+      },
+      "diff.minus": {
+        "color": "color(display-p3 0.838044 0.219378 0.220424)"
+      },
+      "diff.delta": {
+        "color": "color(display-p3 0.883654 0.721037 0.210874)"
+      },
+      "link_text": {
+        "color": "color(display-p3 0.308664 0.645271 1.000000)"
+      },
+      "link_uri": {
+        "color": "color(display-p3 0.834880 0.207921 0.387456)"
+      },
+      "emphasis": {
+        "font_style": "italic"
+      },
+      "emphasis.strong": {
+        "font_weight": 700
+      },
+      "primary": {
+        "color": "color(display-p3 0.308664 0.645271 1.000000)"
+      },
+      "title": {
+        "color": "color(display-p3 0.846123 0.351499 0.208754)",
+        "font_weight": 700
+      },
+      "predictive": {
+        "color": "color(display-p3 0.541176 0.541176 0.541176)",
+        "font_style": "italic"
+      }
+    }
+  }
+}

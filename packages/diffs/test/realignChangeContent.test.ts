@@ -159,11 +159,8 @@ describe('parseDiffFromFile change-block realignment', () => {
   });
 });
 
-describe('blank-run slide canonicalization', () => {
-  test('a blank inserted beside an existing blank slides up to the change above', () => {
-    // Enter at the end of an edited line inserts a blank before an existing
-    // one; the library reports the insert at the run's bottom, the slide
-    // anchors it to the edited line (where the caret is).
+describe('parsed blank-run positions', () => {
+  test('a blank inserted beside an existing blank keeps its parsed position', () => {
     const diff = parse('const a = 1;\n\nrest\n', 'const a = 2;\n\n\nrest\n');
     expect(changeBlocks(diff)).toEqual([
       {
@@ -177,13 +174,13 @@ describe('blank-run slide canonicalization', () => {
         type: 'change',
         deletions: 0,
         additions: 1,
-        deletionLineIndex: 5,
-        additionLineIndex: 5,
+        deletionLineIndex: 6,
+        additionLineIndex: 6,
       },
     ]);
   });
 
-  test('a blank removed beside an existing blank slides up', () => {
+  test('a blank removed beside an existing blank keeps its parsed position', () => {
     const diff = parse('const a = 1;\n\n\nrest\n', 'const a = 2;\n\nrest\n');
     expect(changeBlocks(diff)).toEqual([
       {
@@ -197,8 +194,8 @@ describe('blank-run slide canonicalization', () => {
         type: 'change',
         deletions: 1,
         additions: 0,
-        deletionLineIndex: 5,
-        additionLineIndex: 5,
+        deletionLineIndex: 6,
+        additionLineIndex: 6,
       },
     ]);
   });
@@ -243,7 +240,7 @@ describe('blank-run slide canonicalization', () => {
     ]);
   });
 
-  test('slides to the top of a multi-blank run', () => {
+  test('keeps the parsed position at the bottom of a multi-blank run', () => {
     const diff = parse('head;\n\n\n\ntail;\n', 'head!;\n\n\n\n\ntail;\n');
     expect(changeBlocks(diff)).toEqual([
       {
@@ -257,19 +254,17 @@ describe('blank-run slide canonicalization', () => {
         type: 'change',
         deletions: 0,
         additions: 1,
-        deletionLineIndex: 5,
-        additionLineIndex: 5,
+        deletionLineIndex: 8,
+        additionLineIndex: 8,
       },
     ]);
   });
 
-  test('keeps the bottom-of-run anchor when the slide stops at a hunk edge', () => {
+  test('keeps the parsed blank-line position across separate hunks', () => {
     // A blank run longer than the diff context splits the change and the
     // insert into separate hunks, with the run continuing through the
-    // collapsed gap. Sliding would consume the second hunk's entire leading
-    // context and park the insert at the hunk's top — an anchor that means
-    // nothing (it abuts a context-window cut, not the run's top). The insert
-    // keeps the library's bottom-of-run position against the content below.
+    // collapsed gap. The insert keeps the library's bottom-of-run position
+    // against the content below.
     const oldContents = 'first\n' + '\n'.repeat(9) + 'last\n';
     const newContents = 'changed\n' + '\n'.repeat(10) + 'last\n';
     const diff = parseDiffFromFile(

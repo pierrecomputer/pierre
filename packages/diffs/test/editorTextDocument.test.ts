@@ -2,11 +2,8 @@ import { describe, expect, test } from 'bun:test';
 
 import { DirectionNone } from '../src/editor/selection';
 import { TextDocument } from '../src/editor/textDocument';
-import type {
-  DiffLineAnnotation,
-  EditorSelection,
-  TextEdit,
-} from '../src/types';
+import type { EditorSelection, TextEdit } from '../src/editor/types';
+import type { DiffLineAnnotation } from '../src/types';
 
 function doc(text: string) {
   return new TextDocument('inmemory://1', text, 'plain');

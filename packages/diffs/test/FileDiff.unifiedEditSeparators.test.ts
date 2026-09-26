@@ -1,8 +1,11 @@
 import { afterAll, describe, expect, test } from 'bun:test';
 
 import { disposeHighlighter, FileDiff, parseDiffFromFile } from '../src';
-import type { DiffsTextDocument } from '../src/types';
 import { installDom } from './domHarness';
+import {
+  createEditorInstance,
+  createTextDocumentFromLines,
+} from './editorTestUtils';
 
 const twoHunkFileLineCount = 140;
 const twoHunkChangedLines = [40, 100];
@@ -33,18 +36,6 @@ function createTwoHunkDiff() {
   return fileDiff;
 }
 
-function makeTextDocument(lines: string[]): DiffsTextDocument {
-  const text = lines.join('\n');
-  return {
-    lineCount: lines.length,
-    getText: () => text,
-    getLineText: (lineNumber: number, includeLineBreak = false) => {
-      const line = lines[lineNumber] ?? '';
-      return includeLineBreak ? line : line.replace(/\r?\n$/, '');
-    },
-  };
-}
-
 async function waitForRenderedCode(container: HTMLElement): Promise<void> {
   for (let attempt = 0; attempt < 50; attempt++) {
     if (container.shadowRoot?.querySelector('code') != null) {
@@ -64,8 +55,9 @@ describe('FileDiff unified edit separators', () => {
     await disposeHighlighter();
   });
 
-  test('applyDocumentChange refreshes function hunk separators', async () => {
+  test('applyDocumentChange refreshes function hunk separators from the session diff', async () => {
     const { cleanup } = installDom();
+    let detach: ReturnType<FileDiff<string>['__attachEditor']> | undefined;
     let instance: FileDiff<string> | undefined;
     try {
       const fileDiff = createTwoHunkDiff();
@@ -88,13 +80,29 @@ describe('FileDiff unified edit separators', () => {
         deferManagers: true,
       });
       await waitForRenderedCode(fileContainer);
+      detach = instance.__attachEditor(
+        createEditorInstance<'file-diff', string>('file-diff')
+      );
 
-      expect(countSeparatorSlots(fileContainer)).toBeGreaterThan(0);
+      const initialSeparatorCount = countSeparatorSlots(fileContainer);
+      expect(initialSeparatorCount).toBeGreaterThan(0);
 
-      instance.applyDocumentChange(makeTextDocument(fileDiff.deletionLines));
+      const sessionLines = [...fileDiff.additionLines];
+      sessionLines[69] = 'changed-70\n';
+      instance.applyDocumentChange(
+        createTextDocumentFromLines<'file-diff', string>(
+          'file-diff',
+          sessionLines,
+          'inmemory://file-diff-unified-separators'
+        )
+      );
 
-      expect(countSeparatorSlots(fileContainer)).toBe(0);
+      expect(countSeparatorSlots(fileContainer)).toBeGreaterThan(
+        initialSeparatorCount
+      );
+      expect(fileDiff.additionLines[69]).toBe('70\n');
     } finally {
+      detach?.();
       instance?.cleanUp();
       cleanup();
     }

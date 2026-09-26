@@ -223,14 +223,14 @@ describe('Metrics.measureTextWidth (tab stops)', () => {
   } {
     const { cleanup } = installDom();
     const realGetComputedStyle = globalThis.getComputedStyle;
-    globalThis.getComputedStyle = (() =>
+    globalThis.getComputedStyle = () =>
       ({
         fontSize: '12px',
         fontFamily: 'monospace',
         tabSize: '4',
         lineHeight: '20px',
         paddingTop: '0px',
-      }) as CSSStyleDeclaration) as typeof getComputedStyle;
+      }) as CSSStyleDeclaration;
 
     // ASCII and spaces are 1ch. CJK characters are 2ch, matching common
     // monospace rendering where East Asian glyphs are double-width.
@@ -265,6 +265,17 @@ describe('Metrics.measureTextWidth (tab stops)', () => {
       expect(metrics.measureTextWidth('a\tvalue')).toBe(90);
       expect(metrics.measureTextWidth('変\tvalue')).toBe(90);
       expect(metrics.measureTextWidth('変数\tvalue')).toBe(130);
+    } finally {
+      cleanup();
+    }
+  });
+
+  test('measures text relative to a wrapped segment start', () => {
+    const { cleanup, metrics } = installTabMetrics();
+    try {
+      expect(metrics.segmentTextWidth('prefixabcx\t', 6, 9)).toBe(30);
+      expect(metrics.segmentTextWidth('prefixabcx\t', 6, 11)).toBe(80);
+      expect(metrics.segmentTextWidth('prefix', 6, 6)).toBe(0);
     } finally {
       cleanup();
     }
@@ -419,14 +430,14 @@ describe('Metrics.measureTextWidth (DOM path)', () => {
     let fontFamily = 'monospace';
     // Drive the font Metrics.init() reads so the test controls when the font
     // string changes, independent of jsdom's computed-style behavior.
-    globalThis.getComputedStyle = (() =>
+    globalThis.getComputedStyle = () =>
       ({
         fontSize: '12px',
         fontFamily,
         tabSize: '2',
         lineHeight: '20px',
         paddingTop: '0px',
-      }) as CSSStyleDeclaration) as typeof getComputedStyle;
+      }) as CSSStyleDeclaration;
     try {
       const rootA = document.createElement('div');
       document.body.appendChild(rootA);

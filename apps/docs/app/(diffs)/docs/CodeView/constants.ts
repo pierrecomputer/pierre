@@ -8,7 +8,10 @@ const options = {
   unsafeCSS: CustomScrollbarCSS,
 } as const;
 
-export const CODE_VIEW_ITEM_TYPE_EXAMPLE: PreloadFileOptions<undefined> = {
+export const CODE_VIEW_ITEM_TYPE_EXAMPLE: PreloadFileOptions<
+  undefined,
+  undefined
+> = {
   file: {
     name: 'code_view_items.ts',
     contents: `type CodeViewFileItem<T = undefined> = {
@@ -44,7 +47,10 @@ type CodeViewItem<T = undefined> = CodeViewFileItem<T> | CodeViewDiffItem<T>;`,
   options,
 };
 
-export const CODE_VIEW_LAYOUT_OPTIONS_EXAMPLE: PreloadFileOptions<undefined> = {
+export const CODE_VIEW_LAYOUT_OPTIONS_EXAMPLE: PreloadFileOptions<
+  undefined,
+  undefined
+> = {
   file: {
     name: 'code_view_layout.ts',
     contents: `options: {
@@ -61,11 +67,13 @@ export const CODE_VIEW_LAYOUT_OPTIONS_EXAMPLE: PreloadFileOptions<undefined> = {
   options,
 };
 
-export const CODE_VIEW_ITEM_METRICS_OPTIONS_EXAMPLE: PreloadFileOptions<undefined> =
-  {
-    file: {
-      name: 'code_view_item_metrics.ts',
-      contents: `const options: CodeViewOptions = {
+export const CODE_VIEW_ITEM_METRICS_OPTIONS_EXAMPLE: PreloadFileOptions<
+  undefined,
+  undefined
+> = {
+  file: {
+    name: 'code_view_item_metrics.ts',
+    contents: `const options: CodeViewOptions = {
   // As a general rule if you are using any \`unsafeCSS\` or custom line-height,
   // you should test with \`__devOnlyValidateItemHeights\` enabled to ensure
   // that estimations are working correctly. Otherwise CodeView's layout and
@@ -119,11 +127,14 @@ export const CODE_VIEW_ITEM_METRICS_OPTIONS_EXAMPLE: PreloadFileOptions<undefine
     paddingBottom: number | undefined;
   }
 }`,
-    },
-    options,
-  };
+  },
+  options,
+};
 
-export const CODE_VIEW_SCROLL_TARGETS_EXAMPLE: PreloadFileOptions<undefined> = {
+export const CODE_VIEW_SCROLL_TARGETS_EXAMPLE: PreloadFileOptions<
+  undefined,
+  undefined
+> = {
   file: {
     name: 'code_view_scroll_targets.ts',
     contents: `// Scroll directly to a file or diff
@@ -157,10 +168,11 @@ viewer.scrollTo({ type: 'position', position: 0 });`,
   options,
 };
 
-export const CODE_VIEW_REACT_EXAMPLE: PreloadFileOptions<undefined> = {
-  file: {
-    name: 'code_view_react.tsx',
-    contents: `import {
+export const CODE_VIEW_REACT_EXAMPLE: PreloadFileOptions<undefined, undefined> =
+  {
+    file: {
+      name: 'code_view_react.tsx',
+      contents: `import {
   parseDiffFromFile,
   type CodeViewItem,
   type CodeViewLineSelection,
@@ -295,11 +307,14 @@ export function ReviewSurface() {
     </>
   );
 }`,
-  },
-  options,
-};
+    },
+    options,
+  };
 
-export const CODE_VIEW_VANILLA_EXAMPLE: PreloadFileOptions<undefined> = {
+export const CODE_VIEW_VANILLA_EXAMPLE: PreloadFileOptions<
+  undefined,
+  undefined
+> = {
   file: {
     name: 'code_view_vanilla.ts',
     contents: `import {
@@ -412,11 +427,13 @@ window.addEventListener('beforeunload', () => {
   options,
 };
 
-export const CODE_VIEW_HEADER_FOOTER_REACT_EXAMPLE: PreloadFileOptions<undefined> =
-  {
-    file: {
-      name: 'code_view_header_footer.tsx',
-      contents: `import { parseDiffFromFile, type CodeViewItem } from '@pierre/diffs';
+export const CODE_VIEW_HEADER_FOOTER_REACT_EXAMPLE: PreloadFileOptions<
+  undefined,
+  undefined
+> = {
+  file: {
+    name: 'code_view_header_footer.tsx',
+    contents: `import { parseDiffFromFile, type CodeViewItem } from '@pierre/diffs';
 import { CodeView } from '@pierre/diffs/react';
 import { useCallback, useMemo, useState } from 'react';
 
@@ -488,15 +505,17 @@ export function ReviewSurface() {
     />
   );
 }`,
-    },
-    options,
-  };
+  },
+  options,
+};
 
-export const CODE_VIEW_HEADER_FOOTER_VANILLA_EXAMPLE: PreloadFileOptions<undefined> =
-  {
-    file: {
-      name: 'code_view_header_footer.ts',
-      contents: `import { CodeView, parseDiffFromFile } from '@pierre/diffs';
+export const CODE_VIEW_HEADER_FOOTER_VANILLA_EXAMPLE: PreloadFileOptions<
+  undefined,
+  undefined
+> = {
+  file: {
+    name: 'code_view_header_footer.ts',
+    contents: `import { CodeView, parseDiffFromFile } from '@pierre/diffs';
 
 const root = document.getElementById('review-root');
 if (root == null) {
@@ -567,6 +586,6 @@ viewer.setItems([
 window.addEventListener('beforeunload', () => {
   viewer.cleanUp();
 });`,
-    },
-    options,
-  };
+  },
+  options,
+};

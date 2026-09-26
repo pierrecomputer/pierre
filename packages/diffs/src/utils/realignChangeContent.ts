@@ -28,10 +28,9 @@ const MIN_IMPROVEMENT_PER_PAIR = 0.5;
 
 /**
  * Re-split count-mismatched change blocks in every hunk so paired lines are
- * chosen by content similarity instead of position, then slide blank-line
- * insert/delete blocks to the top of their blank run. Mutates `hunks` in
- * place; rendered row counts are unchanged (a split block covers the same
- * split/unified rows as the original).
+ * chosen by content similarity instead of position. Mutates `hunks` in place
+ * without moving changes across context lines; rendered row counts are
+ * unchanged (a split block covers the same split/unified rows as the original).
  */
 export function realignChangeContentBySimilarity(
   diff: Pick<FileDiffMetadata, 'hunks' | 'additionLines' | 'deletionLines'>
@@ -48,21 +47,24 @@ export function realignChangeContentBySimilarity(
         index += replacement.length - 1;
       }
     }
-    slideBlankBoundaryBlocksUp(hunk, diff);
   }
 }
 
 /**
- * Slide pure insert/delete blocks made entirely of blank lines to the top of
- * the blank run they sit in. Adding or removing a blank line next to
+ * During editing, slide pure insert/delete blocks made entirely of blank lines
+ * to the top of the blank run they sit in. Adding or removing a blank line next to
  * existing blanks is ambiguous, and the diff library reports the change at
  * the run's bottom — so pressing Enter at the end of a line marks a blank
  * *below* the caret as inserted while the caret's own new line renders as
  * context. Sliding up anchors the change to the content above it (the caret
  * line after an Enter) instead.
  *
- * The slide is all-or-nothing: it only applies when the block comes to rest
- * directly beneath remaining in-hunk content. A slide that would consume the
+ * `resolveSlide` receives each block that qualifies along with the full
+ * distance to the run's top and returns how far to actually move it; 0 keeps
+ * the parsed position. Without it, every qualifying block slides to the top.
+ *
+ * The slide only applies when the block comes to rest directly beneath
+ * remaining in-hunk content. A slide that would consume the
  * hunk's entire leading context was stopped by the hunk's edge — a context
  * window cut, not the top of the blank run — and that landing spot is
  * arbitrary, so the block keeps the library's bottom-of-run anchor (which
@@ -72,7 +74,8 @@ export function realignChangeContentBySimilarity(
  */
 export function slideBlankBoundaryBlocksUp(
   hunk: Hunk,
-  diff: Pick<FileDiffMetadata, 'additionLines' | 'deletionLines'>
+  diff: Pick<FileDiffMetadata, 'additionLines' | 'deletionLines'>,
+  resolveSlide?: (block: ChangeContent, maxSlide: number) => number
 ): void {
   const { hunkContent } = hunk;
   for (let index = 1; index < hunkContent.length; index++) {
@@ -129,6 +132,12 @@ export function slideBlankBoundaryBlocksUp(
     // in-hunk line to anchor beneath. Keep the bottom-of-run position.
     if (index === 1 && slide === previous.lines) {
       continue;
+    }
+    if (resolveSlide != null) {
+      slide = resolveSlide(block, slide);
+      if (slide === 0) {
+        continue;
+      }
     }
 
     block.additionLineIndex -= slide;

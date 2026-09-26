@@ -18,7 +18,11 @@ const config: UserConfig[] = defineConfig([
     loader: {
       '.css': 'text',
     },
-    attw: process.env.ATTW === 'true',
+    // Inline CSS is repeated in every SSR example and its hydration data.
+    // tsdown processes `?inline` separately from the PostCSS transform below.
+    css: {
+      minify: true,
+    },
     tsconfig: './tsconfig.json',
     clean: true,
     dts: {
@@ -31,6 +35,16 @@ const config: UserConfig[] = defineConfig([
       {
         name: 'postcss-diffs-css',
         async transform(code, id) {
+          if (id.endsWith('.css?inline')) {
+            // Minification drops empty layers. Keep their order for styles
+            // that are added to the shadow root after the core stylesheet.
+            return {
+              code: code.startsWith(LAYER_ORDER)
+                ? code
+                : `${LAYER_ORDER}${code}`,
+              map: null,
+            };
+          }
           if (!id.endsWith('.css')) return;
 
           const result = await postcss([
@@ -77,7 +91,7 @@ const config: UserConfig[] = defineConfig([
     tsconfig: './tsconfig.json',
     clean: false,
     unbundle: false,
-    noExternal: [/.*/],
+    deps: { alwaysBundle: [/.*/] },
     dts: { sourcemap: true, tsgo: true },
     platform: 'neutral',
     format: 'esm',

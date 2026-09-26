@@ -23,13 +23,16 @@ export default function Footer() {
         </div>
         <div className="hidden md:block" />
         <div>
-          <h4 className="mb-2 text-sm font-medium">Diffs</h4>
+          <p className="mb-2 text-sm font-medium">Diffs</p>
           <nav className="flex flex-col gap-1">
             {isDiffs ? (
               <>
                 <Link href="/" className={linkClass}>
                   Home
                 </Link>
+                {/* <Link href="/highlights" className={linkClass}>
+                  Highlights
+                </Link> */}
                 <Link href="/edit" className={linkClass}>
                   Edit
                 </Link>
@@ -48,6 +51,9 @@ export default function Footer() {
                 <a href={diffsExternal} className={linkClass}>
                   Home
                 </a>
+                <a href={`${diffsExternal}/highlights`} className={linkClass}>
+                  Highlights
+                </a>
                 <a href={`${diffsExternal}/edit`} className={linkClass}>
                   Edit
                 </a>
@@ -65,7 +71,7 @@ export default function Footer() {
           </nav>
         </div>
         <div>
-          <h4 className="mb-2 text-sm font-medium">Trees</h4>
+          <p className="mb-2 text-sm font-medium">Trees</p>
           <nav className="flex flex-col gap-1">
             {isTrees ? (
               <>
@@ -96,7 +102,7 @@ export default function Footer() {
           </nav>
         </div>
         <div>
-          <h4 className="mb-2 text-sm font-medium">DiffsHub</h4>
+          <p className="mb-2 text-sm font-medium">DiffsHub</p>
           <nav className="flex flex-col gap-1">
             {/* diffshub is a separate app on its own domain, so this is
                 always an external link. */}
@@ -106,7 +112,7 @@ export default function Footer() {
           </nav>
         </div>
         <div>
-          <h4 className="mb-2 text-sm font-medium">Community</h4>
+          <p className="mb-2 text-sm font-medium">Community</p>
           <nav className="flex flex-col gap-1">
             <Link
               href="https://x.com/pierrecomputer"

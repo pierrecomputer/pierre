@@ -18,6 +18,7 @@ import { FeatureHeader } from '@/components/FeatureHeader';
 import { Button } from '@/components/ui/button';
 import { ButtonGroup, ButtonGroupItem } from '@/components/ui/button-group';
 import { PRODUCTS } from '@/lib/product-config';
+import { usePortalContainer } from '@/lib/usePortalContainer';
 
 const CONTEXT_MENU_EXPANDED_PATHS = ['src', 'src/components'] as const;
 const contextMenuPanelStyle = {
@@ -84,14 +85,8 @@ export function DemoContextMenuClient({
   preloadedDataById,
 }: DemoContextMenuClientProps) {
   const [activeMode, setActiveMode] = useState<ContextMenuTriggerMode>('both');
-  const [portalContainer, setPortalContainer] = useState<HTMLElement | null>(
-    null
-  );
+  const portalContainer = usePortalContainer();
   const [hasMutated, setHasMutated] = useState(false);
-
-  useEffect(() => {
-    setPortalContainer(document.getElementById('dark-mode-portal-container'));
-  }, []);
 
   const modeByName = useMemo(
     () =>

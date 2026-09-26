@@ -28,25 +28,30 @@ import { parseMergeConflictDiffFromFile } from '../utils/parseMergeConflictDiffF
 import { shouldUseTokenTransformer } from '../utils/shouldUseTokenTransformer';
 import { renderHTML } from './renderHTML';
 
-interface PreloadDiffBaseOptions<LAnnotation> {
-  options?: FileDiffOptions<LAnnotation>;
+interface PreloadDiffBaseOptions<LAnnotation, Caret> {
+  options?: FileDiffOptions<LAnnotation, Caret>;
   annotations?: DiffLineAnnotation<LAnnotation>[];
 }
 
-export type PreloadDiffOptions<LAnnotation> =
-  PreloadDiffBaseOptions<LAnnotation> &
-    (
-      | ({ fileDiff: FileDiffMetadata } & MaybeDiffFileInput)
-      | ({ fileDiff?: undefined } & DiffFileInput)
-    );
+export type PreloadDiffOptions<LAnnotation, Caret> = PreloadDiffBaseOptions<
+  LAnnotation,
+  Caret
+> &
+  (
+    | ({ fileDiff: FileDiffMetadata } & MaybeDiffFileInput)
+    | ({ fileDiff?: undefined } & DiffFileInput)
+  );
 
-export async function preloadDiffHTML<LAnnotation = undefined>({
+export async function preloadDiffHTML<
+  LAnnotation = undefined,
+  Caret = undefined,
+>({
   fileDiff,
   oldFile,
   newFile,
   options,
   annotations,
-}: PreloadDiffOptions<LAnnotation>): Promise<string> {
+}: PreloadDiffOptions<LAnnotation, Caret>): Promise<string> {
   const fileInput = getDiffFileInput({ oldFile, newFile }, 'preloadDiffHTML');
   if (fileDiff == null && fileInput != null) {
     fileDiff = parseDiffFromFile(
@@ -102,26 +107,29 @@ export async function preloadUnresolvedFileHTML<LAnnotation = undefined>({
   );
 }
 
-interface PreloadMultiFileDiffBaseOptions<LAnnotation> {
-  options?: FileDiffOptions<LAnnotation>;
+interface PreloadMultiFileDiffBaseOptions<LAnnotation, Caret> {
+  options?: FileDiffOptions<LAnnotation, Caret>;
   annotations?: DiffLineAnnotation<LAnnotation>[];
 }
 
-export type PreloadMultiFileDiffOptions<LAnnotation> =
-  PreloadMultiFileDiffBaseOptions<LAnnotation> & DiffFileInput;
+export type PreloadMultiFileDiffOptions<LAnnotation, Caret> =
+  PreloadMultiFileDiffBaseOptions<LAnnotation, Caret> & DiffFileInput;
 
-export type PreloadMultiFileDiffResult<LAnnotation> =
-  PreloadMultiFileDiffOptions<LAnnotation> & {
+export type PreloadMultiFileDiffResult<LAnnotation, Caret> =
+  PreloadMultiFileDiffOptions<LAnnotation, Caret> & {
     prerenderedHTML: string;
   };
 
-export async function preloadMultiFileDiff<LAnnotation = undefined>({
+export async function preloadMultiFileDiff<
+  LAnnotation = undefined,
+  Caret = undefined,
+>({
   oldFile,
   newFile,
   options,
   annotations,
-}: PreloadMultiFileDiffOptions<LAnnotation>): Promise<
-  PreloadMultiFileDiffResult<LAnnotation>
+}: PreloadMultiFileDiffOptions<LAnnotation, Caret>): Promise<
+  PreloadMultiFileDiffResult<LAnnotation, Caret>
 > {
   const fileInput = getDiffFileInput(
     { oldFile, newFile },
@@ -144,24 +152,28 @@ export async function preloadMultiFileDiff<LAnnotation = undefined>({
   };
 }
 
-export interface PreloadFileDiffOptions<LAnnotation> {
+export interface PreloadFileDiffOptions<LAnnotation, Caret> {
   fileDiff: FileDiffMetadata;
-  options?: FileDiffOptions<LAnnotation>;
+  options?: FileDiffOptions<LAnnotation, Caret>;
   annotations?: DiffLineAnnotation<LAnnotation>[];
 }
 
 export interface PreloadFileDiffResult<
   LAnnotation,
-> extends PreloadFileDiffOptions<LAnnotation> {
+  Caret,
+> extends PreloadFileDiffOptions<LAnnotation, Caret> {
   prerenderedHTML: string;
 }
 
-export async function preloadFileDiff<LAnnotation = undefined>({
+export async function preloadFileDiff<
+  LAnnotation = undefined,
+  Caret = undefined,
+>({
   fileDiff,
   options,
   annotations,
-}: PreloadFileDiffOptions<LAnnotation>): Promise<
-  PreloadFileDiffResult<LAnnotation>
+}: PreloadFileDiffOptions<LAnnotation, Caret>): Promise<
+  PreloadFileDiffResult<LAnnotation, Caret>
 > {
   return {
     fileDiff,
@@ -209,24 +221,28 @@ export async function preloadUnresolvedFile<LAnnotation = undefined>({
   };
 }
 
-export interface PreloadPatchDiffOptions<LAnnotation> {
+export interface PreloadPatchDiffOptions<LAnnotation, Caret> {
   patch: string;
-  options?: FileDiffOptions<LAnnotation>;
+  options?: FileDiffOptions<LAnnotation, Caret>;
   annotations?: DiffLineAnnotation<LAnnotation>[];
 }
 
 export interface PreloadPatchDiffResult<
   LAnnotation,
-> extends PreloadPatchDiffOptions<LAnnotation> {
+  Caret,
+> extends PreloadPatchDiffOptions<LAnnotation, Caret> {
   prerenderedHTML: string;
 }
 
-export async function preloadPatchDiff<LAnnotation = undefined>({
+export async function preloadPatchDiff<
+  LAnnotation = undefined,
+  Caret = undefined,
+>({
   patch,
   options,
   annotations,
-}: PreloadPatchDiffOptions<LAnnotation>): Promise<
-  PreloadPatchDiffResult<LAnnotation>
+}: PreloadPatchDiffOptions<LAnnotation, Caret>): Promise<
+  PreloadPatchDiffResult<LAnnotation, Caret>
 > {
   const fileDiff = getSingularPatch(patch);
   return {
@@ -270,8 +286,8 @@ function processHunkResult<LAnnotation>(
   return children;
 }
 
-function getHunksRendererOptions<LAnnotation>(
-  options: FileDiffOptions<LAnnotation> | undefined
+function getHunksRendererOptions<LAnnotation, Caret>(
+  options: FileDiffOptions<LAnnotation, Caret> | undefined
 ): DiffHunksRendererOptions {
   return {
     ...options,

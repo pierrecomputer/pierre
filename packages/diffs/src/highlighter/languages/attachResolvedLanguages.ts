@@ -17,7 +17,25 @@ export function attachResolvedLanguages(
       lang = resolvedLang;
       ResolvedLanguages.set(resolvedLang.name, lang);
     }
-    AttachedLanguages.add(lang.name);
+    const grammar = lang.data.find(
+      (grammar) =>
+        grammar.name === lang.name ||
+        grammar.aliases?.includes(lang.name) === true
+    );
+    if (grammar == null) {
+      throw new Error(
+        `attachResolvedLanguages: No returned grammar declares "${lang.name}" as its name or an alias.`
+      );
+    }
     highlighter.loadLanguageSync(lang.data);
+    // Shiki can skip an already-loaded grammar, including any newly added aliases.
+    try {
+      highlighter.getLanguage(lang.name);
+    } catch {
+      throw new Error(
+        `attachResolvedLanguages: "${grammar.name}" is already loaded without alias "${lang.name}". Load the alias first or give the grammar a unique name.`
+      );
+    }
+    AttachedLanguages.add(lang.name);
   }
 }

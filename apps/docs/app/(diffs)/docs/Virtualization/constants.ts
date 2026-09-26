@@ -8,7 +8,10 @@ const options = {
   unsafeCSS: CustomScrollbarCSS,
 } as const;
 
-export const VIRTUALIZATION_REACT_BASIC: PreloadFileOptions<undefined> = {
+export const VIRTUALIZATION_REACT_BASIC: PreloadFileOptions<
+  undefined,
+  undefined
+> = {
   file: {
     name: 'react_virtualizer_basic.tsx',
     contents: `import {
@@ -54,7 +57,10 @@ function Example({ oldFile, newFile }) {
   options,
 };
 
-export const VIRTUALIZATION_REACT_CONFIG: PreloadFileOptions<undefined> = {
+export const VIRTUALIZATION_REACT_CONFIG: PreloadFileOptions<
+  undefined,
+  undefined
+> = {
   file: {
     name: 'react_virtualizer_config.tsx',
     contents: `import { MultiFileDiff, Virtualizer } from '@pierre/diffs/react';
@@ -87,7 +93,10 @@ function Example({ oldFile, newFile }) {
   options,
 };
 
-export const VIRTUALIZATION_VANILLA_DIFF: PreloadFileOptions<undefined> = {
+export const VIRTUALIZATION_VANILLA_DIFF: PreloadFileOptions<
+  undefined,
+  undefined
+> = {
   file: {
     name: 'vanilla_virtualized_file_diff.ts',
     contents: `import {

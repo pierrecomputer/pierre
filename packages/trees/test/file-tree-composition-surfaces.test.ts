@@ -104,7 +104,7 @@ describe('file-tree composition surfaces', () => {
               const header = dom.window.document.createElement('button');
               header.dataset.testHeader = 'true';
               header.textContent = 'Header action';
-              return header as unknown as HTMLElement;
+              return header;
             },
           },
         },
@@ -152,7 +152,7 @@ describe('file-tree composition surfaces', () => {
                 context.close();
               });
               menu.append(closeButton);
-              return menu as unknown as HTMLElement;
+              return menu;
             },
           },
         },
@@ -243,7 +243,7 @@ describe('file-tree composition surfaces', () => {
               capturedContext = context;
               const menu = dom.window.document.createElement('div');
               menu.textContent = 'Context Menu';
-              return menu as unknown as HTMLElement;
+              return menu;
             },
           },
         },
@@ -308,7 +308,7 @@ describe('file-tree composition surfaces', () => {
                 context.close();
               });
               menu.append(closeButton);
-              return menu as unknown as HTMLElement;
+              return menu;
             },
           },
         },
@@ -368,7 +368,7 @@ describe('file-tree composition surfaces', () => {
             render: (): HTMLElement => {
               const menu = dom.window.document.createElement('div');
               menu.textContent = 'Menu';
-              return menu as unknown as HTMLElement;
+              return menu;
             },
           },
         },
@@ -424,7 +424,7 @@ describe('file-tree composition surfaces', () => {
             render: (): HTMLElement => {
               const menu = dom.window.document.createElement('div');
               menu.textContent = 'Menu';
-              return menu as unknown as HTMLElement;
+              return menu;
             },
             triggerMode: 'button',
           },
@@ -506,7 +506,7 @@ describe('file-tree composition surfaces', () => {
               const closeButton = dom.window.document.createElement('button');
               closeButton.textContent = 'Close';
               menu.append(closeButton);
-              return menu as unknown as HTMLElement;
+              return menu;
             },
           },
         },
@@ -570,7 +570,7 @@ describe('file-tree composition surfaces', () => {
             render: (): HTMLElement => {
               const menu = dom.window.document.createElement('div');
               menu.textContent = 'Menu';
-              return menu as unknown as HTMLElement;
+              return menu;
             },
           },
         },
@@ -641,7 +641,7 @@ describe('file-tree composition surfaces', () => {
             render: (item): HTMLElement => {
               openedPath.current = item.path;
               const menu = dom.window.document.createElement('div');
-              return menu as unknown as HTMLElement;
+              return menu;
             },
             triggerMode: 'button',
           },
@@ -728,7 +728,7 @@ describe('file-tree composition surfaces', () => {
             render: (item): HTMLElement => {
               openedPath.current = item.path;
               const menu = dom.window.document.createElement('div');
-              return menu as unknown as HTMLElement;
+              return menu;
             },
             triggerMode: 'button',
           },
@@ -1236,7 +1236,7 @@ describe('file-tree composition surfaces', () => {
               capturedContext = context;
               const menu = dom.window.document.createElement('div');
               menu.dataset.testMenu = 'true';
-              return menu as unknown as HTMLElement;
+              return menu;
             },
             triggerMode: 'right-click',
           },
@@ -1303,7 +1303,7 @@ describe('file-tree composition surfaces', () => {
             render: (): HTMLElement => {
               const menu = dom.window.document.createElement('div');
               menu.dataset.testMenu = 'true';
-              return menu as unknown as HTMLElement;
+              return menu;
             },
             triggerMode: 'right-click',
           },
@@ -1474,7 +1474,7 @@ describe('file-tree composition surfaces', () => {
               const header = dom.window.document.createElement('div');
               header.dataset.testHydratedHeader = 'true';
               header.textContent = 'Hydrated header';
-              return header as unknown as HTMLElement;
+              return header;
             },
           },
         },

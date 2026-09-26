@@ -5,7 +5,7 @@ import type { Virtualizer } from './Virtualizer';
 declare global {
   interface Window {
     // oxlint-disable-next-line typescript/no-explicit-any
-    __INSTANCE?: CodeView<any> | Virtualizer;
+    __INSTANCE?: CodeView<any, any> | Virtualizer;
     __TOGGLE?: () => void;
     __LOG?: boolean;
   }

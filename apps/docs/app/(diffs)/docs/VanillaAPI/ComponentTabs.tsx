@@ -1,20 +1,20 @@
 'use client';
 
-import type { PreloadedFileResult } from '@pierre/diffs/ssr';
 import { useState } from 'react';
 
 import { DocsCodeExample } from '@/components/docs/DocsCodeExample';
 import { ButtonGroup, ButtonGroupItem } from '@/components/ui/button-group';
+import type { PreloadedCodeExample } from '@/lib/preloadCodeExample';
 
 type ComponentType = 'code-view' | 'file-diff' | 'file' | 'unresolved-file';
 type PropsType = 'file-diff' | 'file';
 type DiffHunksType = 'from-file' | 'from-patch';
 
 interface VanillaComponentTabsProps {
-  codeViewExample: PreloadedFileResult<undefined>;
-  fileDiffExample: PreloadedFileResult<undefined>;
-  fileExample: PreloadedFileResult<undefined>;
-  unresolvedFileExample: PreloadedFileResult<undefined>;
+  codeViewExample: PreloadedCodeExample<undefined, undefined>;
+  fileDiffExample: PreloadedCodeExample<undefined, undefined>;
+  fileExample: PreloadedCodeExample<undefined, undefined>;
+  unresolvedFileExample: PreloadedCodeExample<undefined, undefined>;
 }
 
 export function VanillaComponentTabs({
@@ -78,8 +78,8 @@ export function VanillaComponentTabs({
 }
 
 interface VanillaPropTabsProps {
-  fileDiffProps: PreloadedFileResult<undefined>;
-  fileProps: PreloadedFileResult<undefined>;
+  fileDiffProps: PreloadedCodeExample<undefined, undefined>;
+  fileProps: PreloadedCodeExample<undefined, undefined>;
 }
 
 export function VanillaPropTabs({
@@ -107,8 +107,8 @@ export function VanillaPropTabs({
 }
 
 interface DiffHunksTabsProps {
-  diffHunksRenderer: PreloadedFileResult<undefined>;
-  diffHunksRendererPatch: PreloadedFileResult<undefined>;
+  diffHunksRenderer: PreloadedCodeExample<undefined, undefined>;
+  diffHunksRendererPatch: PreloadedCodeExample<undefined, undefined>;
 }
 
 export function DiffHunksTabs({

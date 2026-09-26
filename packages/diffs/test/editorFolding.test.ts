@@ -4,6 +4,7 @@ import { File, type FileOptions } from '../src/components/File';
 import { FileDiff } from '../src/components/FileDiff';
 import { DEFAULT_THEMES } from '../src/constants';
 import { Editor, type EditorOptions } from '../src/editor/editor';
+import { EditStateManager } from '../src/editor/EditStateManager';
 import { disposeHighlighter } from '../src/highlighter/shared_highlighter';
 import type { FileContents, LineRange } from '../src/types';
 import { installDom, wait, waitFor } from './domHarness';
@@ -26,7 +27,7 @@ const FOLDABLE_CONTENTS = [
 interface FileEditorFixture {
   cleanup(): void;
   container: HTMLElement;
-  editor: Editor<undefined>;
+  editor: Editor<'file', undefined>;
   file: File<undefined>;
 }
 
@@ -48,12 +49,14 @@ async function waitForEditableContent(container: HTMLElement): Promise<void> {
 }
 
 interface FileEditorFixtureProps {
-  editorOptions?: EditorOptions<undefined>;
-  fileOptions?: Partial<FileOptions<undefined>>;
+  editStateKey?: string;
+  editorOptions?: EditorOptions<'file', undefined, undefined>;
+  fileOptions?: Partial<FileOptions<undefined, undefined>>;
   contents?: string;
 }
 
 async function createFileEditorFixture({
+  editStateKey,
   editorOptions,
   fileOptions,
   contents = FOLDABLE_CONTENTS,
@@ -67,7 +70,7 @@ async function createFileEditorFixture({
     theme: DEFAULT_THEMES,
     ...fileOptions,
   });
-  const editor = new Editor<undefined>(editorOptions);
+  const editor = new Editor('file', editorOptions, editStateKey);
   const fileContents: FileContents = {
     name: 'foldable.ts',
     contents,
@@ -313,15 +316,15 @@ describe('editor folding on File', () => {
       foldToggle(container, 1).click();
       await waitForLines(container, [1, 7, 8]);
 
-      expect(editor.getState().foldRanges).toEqual([
+      expect(editor.getViewState().foldRanges).toEqual([
         { startLine: 0, endLine: 5 },
         { startLine: 2, endLine: 3 },
       ]);
 
-      editor.setState({ foldRanges: [] });
+      editor.setViewState({ foldRanges: [] });
       await waitForLines(container, [1, 2, 3, 4, 5, 6, 7, 8]);
 
-      editor.setState({
+      editor.setViewState({
         foldRanges: [
           { startLine: 0, endLine: 6 },
           { startLine: 2, endLine: 3 },
@@ -333,7 +336,7 @@ describe('editor folding on File', () => {
         ],
       });
       await waitForLines(container, [1, 7, 8]);
-      expect(editor.getState().foldRanges).toEqual([
+      expect(editor.getViewState().foldRanges).toEqual([
         { startLine: 0, endLine: 5 },
         { startLine: 2, endLine: 3 },
       ]);
@@ -346,13 +349,88 @@ describe('editor folding on File', () => {
     }
   });
 
-  test('reveals a folded caret restored through setState', async () => {
+  test('restores nested folds from a keyed edit session on a fresh mount', async () => {
+    const editStateKey = 'folding-keyed-remount';
+    const first = await createFileEditorFixture({ editStateKey });
+    try {
+      foldToggle(first.container, 3).click();
+      await waitForLines(first.container, [1, 2, 3, 5, 6, 7, 8]);
+      foldToggle(first.container, 1).click();
+      await waitForLines(first.container, [1, 7, 8]);
+      const state = first.editor.getViewState();
+      state.foldRanges![0] = { startLine: 0, endLine: 99 };
+      expect(first.editor.getViewState().foldRanges).toEqual([
+        { startLine: 0, endLine: 5 },
+        { startLine: 2, endLine: 3 },
+      ]);
+    } finally {
+      first.cleanup();
+    }
+
+    const second = await createFileEditorFixture({ editStateKey });
+    try {
+      await waitForLines(second.container, [1, 7, 8]);
+      expect(second.editor.getViewState().foldRanges).toEqual([
+        { startLine: 0, endLine: 5 },
+        { startLine: 2, endLine: 3 },
+      ]);
+      foldToggle(second.container, 1).click();
+      await waitForLines(second.container, [1, 2, 3, 5, 6, 7, 8]);
+    } finally {
+      second.cleanup();
+      EditStateManager.clear('file', editStateKey);
+    }
+  });
+
+  test('restores folds and edited contents after the host is recycled', async () => {
+    const { cleanup, container, editor, file } =
+      await createFileEditorFixture();
+    try {
+      editor.applyEdits([
+        {
+          range: {
+            start: { line: 7, character: 14 },
+            end: { line: 7, character: 18 },
+          },
+          newText: 'false',
+        },
+      ]);
+      foldToggle(container, 1).click();
+      await waitForLines(container, [1, 7, 8]);
+      const text = editor.getText();
+      file.cleanUp(true);
+      file.virtualizedSetup();
+      const remountedContainer = document.createElement('div');
+      document.body.appendChild(remountedContainer);
+      file.render({
+        file: file.file!,
+        fileContainer: remountedContainer,
+        forceRender: true,
+      });
+      editor.edit(file);
+      await waitForEditableContent(remountedContainer);
+      await waitForLines(remountedContainer, [1, 7, 8]);
+      expect(editor.getText()).toBe(text);
+      expect(editor.getViewState().foldRanges).toEqual([
+        { startLine: 0, endLine: 5 },
+      ]);
+      expect(
+        shadowRoot(remountedContainer).querySelector(
+          '[data-content] > [data-line="8"]'
+        )?.textContent
+      ).toContain('false');
+    } finally {
+      cleanup();
+    }
+  });
+
+  test('reveals a folded caret restored through setViewState', async () => {
     const { cleanup, container, editor } = await createFileEditorFixture();
     try {
       foldToggle(container, 1).click();
       await waitForLines(container, [1, 7, 8]);
 
-      editor.setState({
+      editor.setViewState({
         selections: [
           {
             start: { line: 3, character: 4 },
@@ -363,7 +441,7 @@ describe('editor folding on File', () => {
       });
 
       await waitForLines(container, [1, 2, 3, 4, 5, 6, 7, 8]);
-      expect(editor.getState().selections?.at(-1)?.start).toEqual({
+      expect(editor.getViewState().selections?.at(-1)?.start).toEqual({
         line: 3,
         character: 4,
       });
@@ -378,7 +456,7 @@ describe('editor folding on File', () => {
       foldToggle(container, 1).click();
       await waitForLines(container, [1, 7, 8]);
 
-      editor.setState({
+      editor.setViewState({
         foldRanges: [{ startLine: 0, endLine: 5 }],
         selections: [
           {
@@ -390,10 +468,10 @@ describe('editor folding on File', () => {
       });
 
       await waitForLines(container, [1, 7, 8]);
-      expect(editor.getState().foldRanges).toEqual([
+      expect(editor.getViewState().foldRanges).toEqual([
         { startLine: 0, endLine: 5 },
       ]);
-      expect(editor.getState().selections?.at(-1)?.start).toEqual({
+      expect(editor.getViewState().selections?.at(-1)?.start).toEqual({
         line: 6,
         character: 0,
       });
@@ -457,7 +535,7 @@ describe('editor folding on File', () => {
       let foldRangesDuringChange: LineRange[] | undefined;
       editor.setOptions({
         onChange: () => {
-          foldRangesDuringChange = editor.getState().foldRanges;
+          foldRangesDuringChange = editor.getViewState().foldRanges;
         },
       });
 
@@ -478,7 +556,7 @@ describe('editor folding on File', () => {
         '#diffs-icon-fold-chevron-right'
       );
       expect(foldRangesDuringChange).toEqual([{ startLine: 1, endLine: 6 }]);
-      expect(editor.getState().foldRanges).toEqual([
+      expect(editor.getViewState().foldRanges).toEqual([
         { startLine: 1, endLine: 6 },
       ]);
     } finally {
@@ -506,7 +584,7 @@ describe('editor folding on File', () => {
 
       await waitForLines(container, [1, 7, 8]);
       expect(foldToggle(container, 1).hasAttribute('data-folded')).toBe(true);
-      expect(editor.getState().foldRanges).toEqual([
+      expect(editor.getViewState().foldRanges).toEqual([
         { startLine: 0, endLine: 5 },
       ]);
     } finally {
@@ -566,7 +644,7 @@ describe('editor folding on File', () => {
       ]);
 
       await waitForLines(container, [1, 3, 4, 5]);
-      expect(editor.getState().foldRanges).toEqual([
+      expect(editor.getViewState().foldRanges).toEqual([
         { startLine: 0, endLine: 1 },
       ]);
     } finally {
@@ -606,7 +684,7 @@ describe('editor folding on FileDiff', () => {
       theme: DEFAULT_THEMES,
       folding: true,
     });
-    const editor = new Editor<undefined>();
+    const editor = new Editor('file-diff');
     const oldFile: FileContents = {
       name: 'foldable.ts',
       contents: FOLDABLE_CONTENTS,

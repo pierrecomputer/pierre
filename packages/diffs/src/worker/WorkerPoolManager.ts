@@ -1,6 +1,8 @@
 import LRUMapPkg from 'lru_map';
+import type { LRUMap } from 'lru_map';
 
 import { DEFAULT_THEMES } from '../constants';
+import { areLanguagesAttached } from '../highlighter/languages/areLanguagesAttached';
 import { getResolvedLanguages } from '../highlighter/languages/getResolvedLanguages';
 import { hasResolvedLanguages } from '../highlighter/languages/hasResolvedLanguages';
 import { resolveLanguages } from '../highlighter/languages/resolveLanguages';
@@ -62,6 +64,7 @@ import type {
 } from './types';
 
 const IGNORE_RESPONSE = Symbol('IGNORE_RESPONSE');
+const DEFAULT_WORKER_INITIALIZATION_TIMEOUT = 10_000;
 
 class WorkerPoolTerminatedError extends Error {
   constructor() {
@@ -76,8 +79,8 @@ class WorkerPoolTaskCanceledError extends Error {
 }
 
 interface GetCachesResult {
-  fileCache: LRUMapPkg.LRUMap<string, RenderFileResult>;
-  diffCache: LRUMapPkg.LRUMap<string, RenderDiffResult>;
+  fileCache: LRUMap<string, RenderFileResult>;
+  diffCache: LRUMap<string, RenderDiffResult>;
 }
 
 interface ManagedWorker {
@@ -124,8 +127,8 @@ export class WorkerPoolManager {
   private themeSubscribers = new Set<ThemeSubscriber>();
   private workersFailed = false;
   private statSubscribers = new Set<(stats: WorkerStats) => unknown>();
-  private fileCache: LRUMapPkg.LRUMap<string, RenderFileResult>;
-  private diffCache: LRUMapPkg.LRUMap<string, RenderDiffResult>;
+  private fileCache: LRUMap<string, RenderFileResult>;
+  private diffCache: LRUMap<string, RenderDiffResult>;
   private _queuedBroadcast: number | undefined;
   // Incremented on terminate so async lifecycle work can identify stale results.
   private lifecycleGeneration = 0;
@@ -459,6 +462,11 @@ export class WorkerPoolManager {
             }
             this.initialized = false;
             this.workersFailed = true;
+            // A partial pool is not supported, so stop every worker before
+            // consumers rerender through the main-thread fallback.
+            this.cancelActiveWorkerTasks();
+            this.terminateWorkers();
+            this.activeTaskById.clear();
             for (const task of this.queuedTasks) {
               this.rejectRenderTaskCallbacks(task, normalizeWorkerError(e));
             }
@@ -502,7 +510,7 @@ export class WorkerPoolManager {
         }
       );
       worker.addEventListener('error', (error) =>
-        console.error('Worker error:', error, managedWorker)
+        this.handleWorkerError(managedWorker, error)
       );
       this.workers.push(managedWorker);
       initPromises.push(
@@ -529,12 +537,51 @@ export class WorkerPoolManager {
             reject,
             requestStart: Date.now(),
           };
+          managedWorker.pendingSetupRequestId = id;
           this.activeTaskById.set(id, task);
           this.executeTask(managedWorker, task);
         })
       );
     }
-    await Promise.all(initPromises);
+    const timeoutMs =
+      this.options.workerInitializationTimeout ??
+      DEFAULT_WORKER_INITIALIZATION_TIMEOUT;
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
+    try {
+      await Promise.race([
+        Promise.all(initPromises),
+        new Promise<never>((_, reject) => {
+          timeoutId = setTimeout(() => {
+            reject(
+              new Error(
+                `WorkerPoolManager: worker initialization timed out after ${timeoutMs}ms`
+              )
+            );
+          }, timeoutMs);
+        }),
+      ]);
+    } finally {
+      if (timeoutId != null) {
+        clearTimeout(timeoutId);
+      }
+    }
+  }
+
+  private handleWorkerError(
+    managedWorker: ManagedWorker,
+    error: unknown
+  ): void {
+    console.error('Worker error:', error, managedWorker);
+    const { pendingSetupRequestId } = managedWorker;
+    if (pendingSetupRequestId == null) {
+      return;
+    }
+    const task = this.activeTaskById.get(pendingSetupRequestId);
+    if (task?.type !== 'initialize') {
+      return;
+    }
+    task.reject(normalizeWorkerError(error));
+    this.cleanWorkerAndTask(managedWorker, task);
   }
 
   private drainQueue = () => {
@@ -945,6 +992,20 @@ export class WorkerPoolManager {
     langs: SupportedLanguages[]
   ): Promise<void> {
     try {
+      // Lets keep the main thread highlighter in sync with loaded themes so
+      // edits can be more seamless
+      const mainThreadLangs = langs.filter(
+        (lang) => !areLanguagesAttached(lang)
+      );
+      if (mainThreadLangs.length > 0) {
+        void getSharedHighlighter({
+          themes: getThemes(this.renderOptions.theme),
+          langs: ['text', ...mainThreadLangs],
+          preferredHighlighter: this.preferredHighlighter,
+        }).catch((error: unknown) => {
+          console.error(error);
+        });
+      }
       // Add resolved languages if required
       const workerMissingLangs = langs.filter(
         (lang) => !availableWorker.langs.has(lang)
@@ -1007,6 +1068,13 @@ export class WorkerPoolManager {
         }
         throw error;
       } else {
+        // A failed request may not have attached its languages. Only remember
+        // them after success so later tasks resend grammars that were rejected.
+        if (isRenderTask(task)) {
+          for (const { name } of task.request.resolvedLanguages ?? []) {
+            managedWorker.langs.add(name);
+          }
+        }
         switch (response.requestType) {
           case 'initialize':
             if (task.type !== 'initialize') {
@@ -1127,9 +1195,6 @@ export class WorkerPoolManager {
     }
     if (!this.activeTaskById.has(task.id)) {
       this.assignWorkerToTask(task, managedWorker);
-    }
-    for (const lang of getLangsFromTask(task)) {
-      managedWorker.langs.add(lang);
     }
     try {
       // postMessage clones the request now, so keep the matching cache key on
@@ -1510,9 +1575,20 @@ function isRenderTask(task: AllWorkerTasks | undefined): task is RenderTask {
 function getInstances(
   task: RenderTask
 ): Set<FileRendererInstance | DiffRendererInstance> {
-  return task.instances as Set<FileRendererInstance | DiffRendererInstance>;
+  return task.instances;
 }
 
 function normalizeWorkerError(error: unknown): Error {
-  return error instanceof Error ? error : new Error(String(error));
+  if (error instanceof Error) {
+    return error;
+  }
+  if (error != null && typeof error === 'object') {
+    if ('error' in error && error.error instanceof Error) {
+      return error.error;
+    }
+    if ('message' in error && typeof error.message === 'string') {
+      return new Error(error.message);
+    }
+  }
+  return new Error(String(error));
 }

@@ -1,6 +1,6 @@
 'use client';
 
-import type { DiffIndicators } from '@pierre/diffs';
+import type { DiffIndicators, LineDiffTypes } from '@pierre/diffs';
 import { MultiFileDiff } from '@pierre/diffs/react';
 import type { PreloadMultiFileDiffResult } from '@pierre/diffs/ssr';
 import {
@@ -25,7 +25,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Switch } from '@/components/ui/switch';
+import { ToggleSwitch } from '@/components/ui/toggle-switch';
 
 const diffStyleOptions = [
   {
@@ -37,6 +37,11 @@ const diffStyleOptions = [
     value: 'word',
     label: 'Word',
     description: 'Highlight changed words within lines',
+  },
+  {
+    value: 'word-line',
+    label: 'Word-Line',
+    description: 'Highlight one region from the first change to the last',
   },
   {
     value: 'char',
@@ -51,16 +56,14 @@ const diffStyleOptions = [
 ] as const;
 
 interface DiffStylesProps {
-  prerenderedDiff: PreloadMultiFileDiffResult<undefined>;
+  prerenderedDiff: PreloadMultiFileDiffResult<undefined, undefined>;
 }
 
 export function DiffStyles({
   prerenderedDiff: { options, ...props },
 }: DiffStylesProps) {
   const [diffIndicators, setDiffStyle] = useState<DiffIndicators>('bars');
-  const [lineDiffType, setLineDiffType] = useState<
-    'word-alt' | 'word' | 'char' | 'none'
-  >('word-alt');
+  const [lineDiffType, setLineDiffType] = useState<LineDiffTypes>('word-alt');
   const [disableBackground, setDisableBackground] = useState(false);
   const [overflow, setOverflow] = useState<'wrap' | 'scroll'>(
     options?.overflow ?? 'wrap'
@@ -142,69 +145,31 @@ export function DiffStyles({
             </DropdownMenuContent>
           </DropdownMenu>
 
-          <div className="gridstack">
-            <Button
-              variant="outline"
-              className="w-full justify-between gap-3 pr-11 pl-3 md:w-auto"
-              onClick={() => setDisableBackground(!disableBackground)}
-            >
-              <div className="flex items-center gap-2">
-                <IconCodeStyleBg />
-                Backgrounds
-              </div>
-            </Button>
-            <Switch
-              checked={!disableBackground}
-              onCheckedChange={(checked: boolean) =>
-                setDisableBackground(!checked)
-              }
-              onClick={(e) => e.stopPropagation()}
-              className="pointer-events-none mr-3 place-self-center justify-self-end"
-            />
-          </div>
+          <ToggleSwitch
+            icon={<IconCodeStyleBg />}
+            label="Backgrounds"
+            checked={!disableBackground}
+            onCheckedChange={(checked) => setDisableBackground(!checked)}
+            className="w-full md:w-auto"
+          />
 
-          <div className="gridstack">
-            <Button
-              variant="outline"
-              className="w-full justify-between gap-3 pr-11 pl-3 md:w-auto"
-              onClick={() =>
-                setOverflow(overflow === 'wrap' ? 'scroll' : 'wrap')
-              }
-            >
-              <div className="flex items-center gap-2">
-                <IconWordWrap />
-                Wrapping
-              </div>
-            </Button>
-            <Switch
-              checked={overflow === 'wrap'}
-              onCheckedChange={(checked: boolean) =>
-                setOverflow(checked ? 'wrap' : 'scroll')
-              }
-              onClick={(e) => e.stopPropagation()}
-              className="pointer-events-none mr-3 place-self-center justify-self-end"
-            />
-          </div>
-          <div className="gridstack">
-            <Button
-              variant="outline"
-              className="w-full justify-between gap-3 pr-11 pl-3 md:w-auto"
-              onClick={() => setDisableLineNumbers(!disableLineNumbers)}
-            >
-              <div className="flex items-center gap-2">
-                <IconListOrdered />
-                Line Numbers
-              </div>
-            </Button>
-            <Switch
-              checked={!disableLineNumbers}
-              onCheckedChange={(checked: boolean) =>
-                setDisableLineNumbers(!checked)
-              }
-              onClick={(e) => e.stopPropagation()}
-              className="pointer-events-none mr-3 place-self-center justify-self-end"
-            />
-          </div>
+          <ToggleSwitch
+            icon={<IconWordWrap />}
+            label="Wrapping"
+            checked={overflow === 'wrap'}
+            onCheckedChange={(checked) =>
+              setOverflow(checked ? 'wrap' : 'scroll')
+            }
+            className="w-full md:w-auto"
+          />
+
+          <ToggleSwitch
+            icon={<IconListOrdered />}
+            label="Line Numbers"
+            checked={!disableLineNumbers}
+            onCheckedChange={(checked) => setDisableLineNumbers(!checked)}
+            className="w-full md:w-auto"
+          />
         </div>
       </div>
       <MultiFileDiff

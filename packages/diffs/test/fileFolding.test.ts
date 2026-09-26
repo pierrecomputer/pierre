@@ -29,7 +29,7 @@ interface ReadOnlyFileFixture {
 }
 
 async function createReadOnlyFileFixture(
-  fileOptions?: Partial<FileOptions<undefined>>,
+  fileOptions?: Partial<FileOptions<undefined, undefined>>,
   contents = FOLDABLE_CONTENTS
 ): Promise<ReadOnlyFileFixture> {
   const dom = installDom();
@@ -279,7 +279,7 @@ describe('read-only File folding', () => {
 
   test('hands folding to an attached editor and restores it on detach', async () => {
     const { cleanup, container, file } = await createReadOnlyFileFixture();
-    const editor = new Editor<undefined>();
+    const editor = new Editor('file');
     try {
       await waitFor(() => foldToggle(container, 1) != null);
       foldToggle(container, 1).click();
@@ -293,7 +293,7 @@ describe('read-only File folding', () => {
       foldToggle(container, 1).click();
       await waitForLines(container, [1, 7, 8]);
 
-      editor.cleanUp();
+      editor.cleanUp('complete');
       // Editor teardown clears its folds; read-only controls keep working.
       await waitForLines(container, [1, 2, 3, 4, 5, 6, 7, 8]);
       await waitFor(() => foldToggle(container, 1) != null);

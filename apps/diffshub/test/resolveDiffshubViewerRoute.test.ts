@@ -12,6 +12,39 @@ describe('resolveDiffshubViewerRoute', () => {
     });
   });
 
+  describe('paths too short to be a diff target', () => {
+    test('single segment is not found', () => {
+      expect(resolveDiffshubViewerRoute(['owner'], undefined)).toEqual({
+        kind: 'not-found',
+      });
+    });
+
+    test('static file names are not found rather than rendered', () => {
+      // These used to be swallowed by the catch-all and answered with HTML,
+      // which shadowed the real robots.txt and sitemap.xml routes.
+      for (const file of ['robots.txt', 'sitemap.xml', 'llms.txt']) {
+        expect(resolveDiffshubViewerRoute([file], undefined)).toEqual({
+          kind: 'not-found',
+        });
+      }
+    });
+
+    test('a requested domain does not make a single segment valid', () => {
+      expect(resolveDiffshubViewerRoute(['owner'], 'gitlab.com')).toEqual({
+        kind: 'not-found',
+      });
+    });
+
+    test('owner/repo is the shortest renderable path', () => {
+      expect(resolveDiffshubViewerRoute(['owner', 'repo'], undefined)).toEqual({
+        domain: undefined,
+        kind: 'render',
+        upstreamPath: '/owner/repo',
+        url: 'https://github.com/owner/repo',
+      });
+    });
+  });
+
   describe('GitHub (default host) canonical paths', () => {
     test('PR path renders without rewrite', () => {
       expect(

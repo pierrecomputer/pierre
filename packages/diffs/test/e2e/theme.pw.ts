@@ -16,7 +16,7 @@ async function openFixture(
 }
 
 const selections = (page: Page): Promise<E2ESelection[] | undefined> =>
-  page.evaluate(() => window.__editor?.getState().selections);
+  page.evaluate(() => window.__editor?.getViewState().selections);
 
 const squaredRgbDistance = (left: number[], right: number[]): number =>
   left

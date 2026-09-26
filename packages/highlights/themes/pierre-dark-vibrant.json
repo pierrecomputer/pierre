@@ -1,0 +1,349 @@
+{
+  "name": "Pierre Dark Vibrant",
+  "appearance": "dark",
+  "style": {
+    "background": "color(display-p3 0.090196 0.090196 0.090196)",
+    "text": "color(display-p3 0.980392 0.980392 0.980392)",
+    "editor.background": "color(display-p3 0.039216 0.039216 0.039216)",
+    "editor.foreground": "color(display-p3 0.980392 0.980392 0.980392)",
+    "editor.active_line.background": "color(display-p3 0.098734 0.152326 0.240886 / 0.550000)",
+    "players": [
+      {
+        "cursor": "color(display-p3 0.308664 0.645271 1.000000)",
+        "selection": "color(display-p3 0.308664 0.645271 1.000000 / 0.250000)"
+      }
+    ],
+    "created": "color(display-p3 0.304148 0.801790 0.517191)",
+    "deleted": "color(display-p3 1.000000 0.250216 0.262337)",
+    "modified": "color(display-p3 0.308664 0.645271 1.000000)",
+    "terminal.ansi.green": "color(display-p3 0.298067 0.776115 0.322484)",
+    "terminal.ansi.red": "color(display-p3 1.000000 0.250216 0.262337)",
+    "terminal.ansi.blue": "color(display-p3 0.308664 0.645271 1.000000)",
+    "syntax": {
+      "comment": {
+        "color": "color(display-p3 0.450980 0.450980 0.450980)"
+      },
+      "comment.doc": {
+        "color": "color(display-p3 0.450980 0.450980 0.450980)"
+      },
+      "string": {
+        "color": "color(display-p3 0.451324 0.823458 0.446819)"
+      },
+      "string.escape": {
+        "color": "color(display-p3 0.466798 0.860904 0.775090)"
+      },
+      "string.regex": {
+        "color": "color(display-p3 0.520590 0.857139 0.902107)"
+      },
+      "string.special": {
+        "color": "color(display-p3 0.466798 0.860904 0.775090)"
+      },
+      "string.special.symbol": {
+        "color": "color(display-p3 1.000000 0.868456 0.454295)"
+      },
+      "number": {
+        "color": "color(display-p3 0.452682 0.814110 0.989434)"
+      },
+      "constant": {
+        "color": "color(display-p3 1.000000 0.868456 0.454295)"
+      },
+      "boolean": {
+        "color": "color(display-p3 0.452682 0.814110 0.989434)"
+      },
+      "keyword": {
+        "color": "color(display-p3 0.994741 0.445201 0.573499)"
+      },
+      "keyword.operator": {
+        "color": "color(display-p3 0.327292 0.790977 0.995660)"
+      },
+      "function": {
+        "color": "color(display-p3 0.615613 0.445256 1.000000)"
+      },
+      "function.method": {
+        "color": "color(display-p3 0.615613 0.445256 1.000000)"
+      },
+      "function.builtin": {
+        "color": "color(display-p3 0.615613 0.445256 1.000000)"
+      },
+      "function.special.definition": {
+        "color": "color(display-p3 0.615613 0.445256 1.000000)"
+      },
+      "function.call": {
+        "color": "color(display-p3 0.615613 0.445256 1.000000)"
+      },
+      "type": {
+        "color": "color(display-p3 0.829375 0.434619 0.954315)"
+      },
+      "type.builtin": {
+        "color": "color(display-p3 0.829375 0.434619 0.954315)"
+      },
+      "constructor": {
+        "color": "color(display-p3 0.829375 0.434619 0.954315)"
+      },
+      "variable": {
+        "color": "color(display-p3 1.000000 0.688063 0.418777)"
+      },
+      "variable.builtin": {
+        "color": "color(display-p3 1.000000 0.719280 0.270071)"
+      },
+      "variable.member": {
+        "color": "color(display-p3 1.000000 0.688063 0.418777)"
+      },
+      "variable.parameter": {
+        "color": "color(display-p3 0.639216 0.639216 0.639216)"
+      },
+      "variable.special": {
+        "color": "color(display-p3 1.000000 0.719280 0.270071)"
+      },
+      "property": {
+        "color": "color(display-p3 1.000000 0.688063 0.418777)"
+      },
+      "property.css": {
+        "color": "color(display-p3 0.308664 0.645271 1.000000)"
+      },
+      "property.definition": {
+        "color": "color(display-p3 0.308664 0.645271 1.000000)"
+      },
+      "property_name": {
+        "color": "color(display-p3 0.308664 0.645271 1.000000)"
+      },
+      "value": {
+        "color": "color(display-p3 0.452682 0.814110 0.989434)"
+      },
+      "constant.css": {
+        "color": "color(display-p3 1.000000 0.868456 0.454295)"
+      },
+      "string.plain": {
+        "color": "color(display-p3 0.452682 0.814110 0.989434)"
+      },
+      "plain_value": {
+        "color": "color(display-p3 0.452682 0.814110 0.989434)"
+      },
+      "tag.css": {
+        "color": "color(display-p3 1.000000 0.566977 0.409224)"
+      },
+      "tag_name": {
+        "color": "color(display-p3 1.000000 0.566977 0.409224)"
+      },
+      "class": {
+        "color": "color(display-p3 0.460672 0.843934 0.608755)"
+      },
+      "class_name": {
+        "color": "color(display-p3 0.460672 0.843934 0.608755)"
+      },
+      "selector.class": {
+        "color": "color(display-p3 0.460672 0.843934 0.608755)"
+      },
+      "selector.id": {
+        "color": "color(display-p3 0.615613 0.445256 1.000000)"
+      },
+      "id_name": {
+        "color": "color(display-p3 0.615613 0.445256 1.000000)"
+      },
+      "selector.pseudo": {
+        "color": "color(display-p3 0.327292 0.790977 0.995660)"
+      },
+      "pseudo_class_selector": {
+        "color": "color(display-p3 0.327292 0.790977 0.995660)"
+      },
+      "pseudo_element_selector": {
+        "color": "color(display-p3 0.327292 0.790977 0.995660)"
+      },
+      "keyword.directive": {
+        "color": "color(display-p3 0.994741 0.445201 0.573499)"
+      },
+      "keyword.control.at-rule": {
+        "color": "color(display-p3 0.994741 0.445201 0.573499)"
+      },
+      "at_keyword": {
+        "color": "color(display-p3 0.994741 0.445201 0.573499)"
+      },
+      "variable.scss": {
+        "color": "color(display-p3 1.000000 0.688063 0.418777)"
+      },
+      "variable.css": {
+        "color": "color(display-p3 1.000000 0.688063 0.418777)"
+      },
+      "property.custom": {
+        "color": "color(display-p3 1.000000 0.688063 0.418777)"
+      },
+      "unit": {
+        "color": "color(display-p3 0.452682 0.814110 0.989434)"
+      },
+      "number.unit": {
+        "color": "color(display-p3 0.452682 0.814110 0.989434)"
+      },
+      "color": {
+        "color": "color(display-p3 1.000000 0.868456 0.454295)"
+      },
+      "constant.color": {
+        "color": "color(display-p3 1.000000 0.868456 0.454295)"
+      },
+      "keyword.important": {
+        "color": "color(display-p3 0.994741 0.445201 0.573499)"
+      },
+      "variable.language": {
+        "color": "color(display-p3 1.000000 0.719280 0.270071)"
+      },
+      "this": {
+        "color": "color(display-p3 1.000000 0.719280 0.270071)"
+      },
+      "self": {
+        "color": "color(display-p3 1.000000 0.719280 0.270071)"
+      },
+      "type.class": {
+        "color": "color(display-p3 0.829375 0.434619 0.954315)"
+      },
+      "property.object": {
+        "color": "color(display-p3 1.000000 0.688063 0.418777)"
+      },
+      "property_identifier": {
+        "color": "color(display-p3 1.000000 0.688063 0.418777)"
+      },
+      "shorthand_property_identifier": {
+        "color": "color(display-p3 1.000000 0.688063 0.418777)"
+      },
+      "shorthand_property_identifier_pattern": {
+        "color": "color(display-p3 1.000000 0.688063 0.418777)"
+      },
+      "method_definition": {
+        "color": "color(display-p3 0.615613 0.445256 1.000000)"
+      },
+      "function.method.call": {
+        "color": "color(display-p3 0.615613 0.445256 1.000000)"
+      },
+      "string.template": {
+        "color": "color(display-p3 0.451324 0.823458 0.446819)"
+      },
+      "template_string": {
+        "color": "color(display-p3 0.451324 0.823458 0.446819)"
+      },
+      "tag.jsx": {
+        "color": "color(display-p3 1.000000 0.566977 0.409224)"
+      },
+      "tag.component": {
+        "color": "color(display-p3 0.829375 0.434619 0.954315)"
+      },
+      "punctuation": {
+        "color": "color(display-p3 0.388235 0.388235 0.388235)"
+      },
+      "punctuation.bracket": {
+        "color": "color(display-p3 0.388235 0.388235 0.388235)"
+      },
+      "punctuation.delimiter": {
+        "color": "color(display-p3 0.388235 0.388235 0.388235)"
+      },
+      "punctuation.list_marker": {
+        "color": "color(display-p3 0.388235 0.388235 0.388235)"
+      },
+      "punctuation.special": {
+        "color": "color(display-p3 0.994741 0.445201 0.573499)"
+      },
+      "operator": {
+        "color": "color(display-p3 0.327292 0.790977 0.995660)"
+      },
+      "tag": {
+        "color": "color(display-p3 1.000000 0.566977 0.409224)"
+      },
+      "attribute": {
+        "color": "color(display-p3 0.460672 0.843934 0.608755)"
+      },
+      "label": {
+        "color": "color(display-p3 1.000000 0.719280 0.270071)"
+      },
+      "namespace": {
+        "color": "color(display-p3 1.000000 0.719280 0.270071)"
+      },
+      "decorator": {
+        "color": "color(display-p3 0.453315 0.683106 1.000000)"
+      },
+      "attribute.builtin": {
+        "color": "color(display-p3 0.453315 0.683106 1.000000)"
+      },
+      "embedded": {
+        "color": "color(display-p3 0.980392 0.980392 0.980392)"
+      },
+      "preproc": {
+        "color": "color(display-p3 0.994741 0.445201 0.573499)"
+      },
+      "text.literal": {
+        "color": "color(display-p3 0.451324 0.823458 0.446819)"
+      },
+      "markup.heading": {
+        "color": "color(display-p3 1.000000 0.566977 0.409224)",
+        "font_weight": 700
+      },
+      "markup.bold": {
+        "color": "color(display-p3 1.000000 0.868456 0.454295)",
+        "font_weight": 700
+      },
+      "markup.italic": {
+        "color": "color(display-p3 0.994741 0.445201 0.573499)",
+        "font_style": "italic"
+      },
+      "markup.strikethrough": {
+        "color": "color(display-p3 0.450980 0.450980 0.450980)"
+      },
+      "markup.link.url": {
+        "color": "color(display-p3 0.308664 0.645271 1.000000)"
+      },
+      "markup.link.text": {
+        "color": "color(display-p3 0.615613 0.445256 1.000000)"
+      },
+      "markup.quote": {
+        "color": "color(display-p3 0.450980 0.450980 0.450980)",
+        "font_style": "italic"
+      },
+      "markup.list": {
+        "color": "color(display-p3 1.000000 0.566977 0.409224)"
+      },
+      "markup.list.numbered": {
+        "color": "color(display-p3 1.000000 0.566977 0.409224)"
+      },
+      "markup.list.unnumbered": {
+        "color": "color(display-p3 1.000000 0.566977 0.409224)"
+      },
+      "markup.raw": {
+        "color": "color(display-p3 0.451324 0.823458 0.446819)"
+      },
+      "markup.raw.inline": {
+        "color": "color(display-p3 0.451324 0.823458 0.446819)"
+      },
+      "markup.raw.block": {
+        "color": "color(display-p3 0.451324 0.823458 0.446819)"
+      },
+      "diff.plus": {
+        "color": "color(display-p3 0.304148 0.801790 0.517191)"
+      },
+      "diff.minus": {
+        "color": "color(display-p3 1.000000 0.250216 0.262337)"
+      },
+      "diff.delta": {
+        "color": "color(display-p3 1.000000 0.832068 0.300621)"
+      },
+      "link_text": {
+        "color": "color(display-p3 0.308664 0.645271 1.000000)"
+      },
+      "link_uri": {
+        "color": "color(display-p3 0.994741 0.445201 0.573499)"
+      },
+      "emphasis": {
+        "font_style": "italic"
+      },
+      "emphasis.strong": {
+        "font_weight": 700
+      },
+      "primary": {
+        "color": "color(display-p3 0.308664 0.645271 1.000000)"
+      },
+      "title": {
+        "color": "color(display-p3 1.000000 0.566977 0.409224)",
+        "font_weight": 700
+      },
+      "predictive": {
+        "color": "color(display-p3 0.388235 0.388235 0.388235)",
+        "font_style": "italic"
+      }
+    }
+  }
+}

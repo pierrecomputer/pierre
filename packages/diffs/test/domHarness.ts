@@ -30,6 +30,8 @@ export interface DomHandle {
    * (e.g. gutter drag selection) must declare their targets explicitly.
    */
   setElementFromPoint(x: number, y: number, element: Element): void;
+  /** Delivers a visibility change to observers currently watching `target`. */
+  triggerIntersectionObserver(target: Element, isIntersecting: boolean): void;
   triggerResizeObserver(target: Element): void;
 }
 
@@ -118,20 +120,20 @@ export function installDom(options: InstallDomOptions = {}): DomHandle {
       if (!this.#targets.has(target)) {
         return;
       }
-      this.#callback(
-        [{ target } as ResizeObserverEntry],
-        this as unknown as ResizeObserver
-      );
+      this.#callback([{ target } as ResizeObserverEntry], this);
     }
   }
 
   // jsdom does not implement IntersectionObserver either; observation
   // bookkeeping is enough for components (e.g. the Virtualizer) to construct
-  // and manage observers. Entries never intersect on their own — tests drive
-  // visibility through explicit renders and scroll events instead.
+  // and manage observers. Entries never intersect on their own; tests deliver
+  // visibility changes through triggerIntersectionObserver when needed.
+  const intersectionObservers = new Set<MockIntersectionObserver>();
   class MockIntersectionObserver {
     observed = new Set<Element>();
-    constructor(public callback: IntersectionObserverCallback) {}
+    constructor(public callback: IntersectionObserverCallback) {
+      intersectionObservers.add(this);
+    }
     observe(target: Element): void {
       this.observed.add(target);
     }
@@ -213,13 +215,13 @@ export function installDom(options: InstallDomOptions = {}): DomHandle {
   });
 
   Object.assign(globalThis, {
-    cancelAnimationFrame: ((id: number) => {
+    cancelAnimationFrame: (id: number) => {
       const timeout = frames.get(id);
       if (timeout != null) {
         clearTimeout(timeout);
         frames.delete(id);
       }
-    }) as typeof cancelAnimationFrame,
+    },
     document: dom.window.document,
     Document: dom.window.Document,
     DocumentFragment: dom.window.DocumentFragment,
@@ -238,7 +240,7 @@ export function installDom(options: InstallDomOptions = {}): DomHandle {
     MutationObserver: dom.window.MutationObserver,
     Node: dom.window.Node,
     PointerEvent: MockPointerEvent,
-    requestAnimationFrame: ((callback: FrameRequestCallback) => {
+    requestAnimationFrame: (callback: FrameRequestCallback) => {
       const id = ++nextFrameId;
       const timeout = setTimeout(() => {
         frames.delete(id);
@@ -246,7 +248,7 @@ export function installDom(options: InstallDomOptions = {}): DomHandle {
       }, 0);
       frames.set(id, timeout);
       return id;
-    }) as typeof requestAnimationFrame,
+    },
     ResizeObserver: MockResizeObserver,
     SVGElement: dom.window.SVGElement,
     SVGSVGElement: dom.window.SVGSVGElement,
@@ -271,6 +273,20 @@ export function installDom(options: InstallDomOptions = {}): DomHandle {
     setElementFromPoint(x: number, y: number, element: Element): void {
       pointTargets.set(`${x},${y}`, element);
     },
+    triggerIntersectionObserver(
+      target: Element,
+      isIntersecting: boolean
+    ): void {
+      for (const intersectionObserver of intersectionObservers) {
+        if (!intersectionObserver.observed.has(target)) {
+          continue;
+        }
+        intersectionObserver.callback(
+          [{ isIntersecting, target } as IntersectionObserverEntry],
+          intersectionObserver as unknown as IntersectionObserver
+        );
+      }
+    },
     triggerResizeObserver(target: Element): void {
       for (const resizeObserver of resizeObservers) {
         resizeObserver.trigger(target);
@@ -282,6 +298,7 @@ export function installDom(options: InstallDomOptions = {}): DomHandle {
         clearTimeout(timeout);
       }
       frames.clear();
+      intersectionObservers.clear();
       resizeObservers.clear();
 
       for (const [key, value] of Object.entries(originalValues)) {
@@ -386,9 +403,9 @@ export function makeFileItem(
 }
 
 // Pushes items into the viewer and flushes the rAF-scheduled render pass.
-export async function renderItems(
-  viewer: CodeView,
-  items: readonly CodeViewItem[]
+export async function renderItems<LAnnotation, Caret>(
+  viewer: CodeView<LAnnotation, Caret>,
+  items: readonly CodeViewItem<LAnnotation>[]
 ): Promise<void> {
   viewer.setItems(items);
   viewer.render(true);

@@ -37,6 +37,15 @@ export function h<K extends keyof HTMLElementTagNameMap>(
   return el;
 }
 
+export function isPromise<T>(value: T | Promise<T>): value is Promise<T> {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'then' in value &&
+    typeof value.then === 'function'
+  );
+}
+
 export function addEventListener<K extends keyof HTMLElementEventMap>(
   el: HTMLElement,
   event: K,

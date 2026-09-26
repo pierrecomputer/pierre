@@ -32,11 +32,7 @@ export interface FileContents {
   lang?: SupportedLanguages;
   /** Optional header passed to the jsdiff library's `createTwoFilesPatch`. */
   header?: string;
-  /**
-   * Identifies a file for caching. Optional for read-only rendering, but
-   * required and expected to be unique and stable when Editor `persistState`
-   * is enabled.
-   */
+  /** Identifies a file for worker pool highlight caching. */
   cacheKey?: string;
 }
 
@@ -419,7 +415,7 @@ export type HunkSeparators =
   | 'line-info-basic'
   | 'custom';
 
-export type LineDiffTypes = 'word-alt' | 'word' | 'char' | 'none';
+export type LineDiffTypes = 'word-alt' | 'word-line' | 'word' | 'char' | 'none';
 
 export type DiffIndicators = 'classic' | 'bars' | 'none';
 
@@ -468,6 +464,7 @@ export interface BaseDiffOptions extends BaseCodeOptions {
   collapsedContextThreshold?: number; // 2 is default
   // NOTE(amadeus): 'word-alt' attempts to join word regions that are separated
   // by a single character
+  // 'word-line' joins all changed word regions into one highlight per line.
   lineDiffType?: LineDiffTypes; // 'word-alt' is default
   maxLineDiffLength?: number; // 1000 is default
 
@@ -540,32 +537,32 @@ export interface SelectedLineRange {
   endSide?: SelectionSide;
 }
 
-type OptionalMetadata<T> = T extends undefined
+type OptionalMetadata<LAnnotation> = LAnnotation extends undefined
   ? { metadata?: undefined }
-  : { metadata: T };
+  : { metadata: LAnnotation };
 
 /**
  * Annotation rendered for a file line. Use `lineNumber: 0` to render a
  * file-level annotation above the first rendered file line.
  */
-export type LineAnnotation<T = undefined> = {
+export type LineAnnotation<LAnnotation = undefined> = {
   lineNumber: number;
-} & OptionalMetadata<T>;
+} & OptionalMetadata<LAnnotation>;
 
 /**
  * Annotation rendered for one side of a diff line. Use `lineNumber: 0` to
  * render a side-specific file-level annotation above the first hunk/separator.
  */
-export type DiffLineAnnotation<T = undefined> = {
+export type DiffLineAnnotation<LAnnotation = undefined> = {
   side: AnnotationSide;
   lineNumber: number;
-} & OptionalMetadata<T>;
+} & OptionalMetadata<LAnnotation>;
 
-export type CodeViewFileItem<T = undefined> = {
+export type CodeViewFileItem<LAnnotation = undefined> = {
   id: string;
   type: 'file';
   file: FileContents;
-  annotations?: LineAnnotation<T>[];
+  annotations?: LineAnnotation<LAnnotation>[];
   version?: number;
   collapsed?: boolean;
   /**
@@ -576,11 +573,11 @@ export type CodeViewFileItem<T = undefined> = {
   edit?: boolean;
 };
 
-export type CodeViewDiffItem<T = undefined> = {
+export type CodeViewDiffItem<LAnnotation = undefined> = {
   id: string;
   type: 'diff';
   fileDiff: FileDiffMetadata;
-  annotations?: DiffLineAnnotation<T>[];
+  annotations?: DiffLineAnnotation<LAnnotation>[];
   version?: number;
   collapsed?: boolean;
   /**
@@ -591,9 +588,9 @@ export type CodeViewDiffItem<T = undefined> = {
   edit?: boolean;
 };
 
-export type CodeViewItem<T = undefined> =
-  | CodeViewFileItem<T>
-  | CodeViewDiffItem<T>;
+export type CodeViewItem<LAnnotation> =
+  | CodeViewFileItem<LAnnotation>
+  | CodeViewDiffItem<LAnnotation>;
 
 export interface CodeViewPositionScrollTarget {
   type: 'position';
@@ -848,9 +845,6 @@ export interface RenderedDiffASTCache {
   result: ThemedDiffResult | undefined;
   renderRange: RenderRange | undefined;
   isDirty?: boolean;
-  // A render was skipped while a highlight was in progress; its completion
-  // will trigger a re-render.
-  highlightPending?: boolean;
 }
 
 /**
@@ -999,327 +993,7 @@ export interface StickySpecs {
   height: number;
 }
 
-export interface DiffsComponentOptions extends BaseCodeOptions {
-  enableGutterUtility?: boolean;
-  enableLineSelection?: boolean;
-  expandUnchanged?: boolean;
-  diffStyle?: 'unified' | 'split';
-  lineHoverHighlight?: 'disabled' | 'both' | 'number' | 'line';
-}
-
-export interface EditorActiveLineOptions {
-  lineNumberOnly?: boolean;
-  side?: SelectionSide;
-}
-
-export interface DiffsBaseComponent {
-  readonly type: 'file' | 'file-diff' | 'unresolved-file';
-  readonly top?: number;
-  readonly options: DiffsComponentOptions;
-  setOptions: (options: Partial<DiffsComponentOptions>) => void;
-  setSelectedLines: (
-    range: { start: number; end: number } | null,
-    options?: {
-      notify?: boolean;
-      activeLineSide?: SelectionSide;
-      lineNumberOnly?: boolean;
-    }
-  ) => void;
-  render(options: {
-    file?: FileContents;
-    fileDiff?: FileDiffMetadata;
-    // oxlint-disable-next-line typescript/no-explicit-any
-    lineAnnotations?: any[];
-    renderRange?: RenderRange;
-  }): void;
-  rerender(): void;
-  cleanUp(): void;
-}
-
-export interface DiffsEditableComponent<
-  LAnnotation,
-> extends DiffsBaseComponent {
-  /** @internal Return the current file when this component renders one. */
-  __getCurrentFile?: () => FileContents | undefined;
-  /**
-   * @internal Code options with worker-pool overrides applied: the theme the
-   * shared highlighter is actually loaded with and the pool's tokenize limit.
-   */
-  __getEffectiveCodeOptions(): BaseCodeOptions;
-  /** @internal Keep the editor caret decoration separate from line selection. */
-  setEditorActiveLine: (
-    lineNumber: number | null,
-    options?: EditorActiveLineOptions
-  ) => void;
-  /** Return the horizontal code scroll position (`scrollLeft`). */
-  getCodeScrollLeft: () => number;
-  /** Set the horizontal code scroll position (`scrollLeft`). */
-  setCodeScrollLeft: (position: number) => void;
-  /**
-   * @internal Hide inclusive zero-based document-line ranges while an editor
-   * fold is active. FileDiff intentionally leaves this unimplemented.
-   */
-  __setFoldRanges?: (ranges: LineRange[]) => void;
-  /**
-   * Return the position and height of a one-based line relative to this component.
-   * The host uses it to scroll to virtualized lines before their DOM nodes exist.
-   * A zero height means the line is not currently renderable.
-   * In a file diff, `lineNumber` is the line number in the new file.
-   */
-  getLinePosition?: (
-    lineNumber: number
-  ) => { top: number; height: number } | undefined;
-  /**
-   * Return an explicit viewport that bounds visible editor rows. Components
-   * without one fall back to their nearest scrollable ancestor or document.
-   */
-  getEditorViewport?: () => HTMLElement | Document | undefined;
-  /**
-   * Whether the given one-based new-file line currently has (or will have on
-   * scroll) a rendered row. False only for lines hidden inside a collapsed
-   * unchanged region. Components without collapsible regions leave this
-   * unimplemented and the editor treats every line as renderable.
-   */
-  isLineRenderable?: (lineNumber: number) => boolean;
-  /**
-   * The nearest renderable one-based new-file line at or beyond `lineNumber`
-   * in the given direction, or undefined when every line that way is hidden
-   * inside collapsed regions. Sequential caret motion uses this to skip
-   * collapsed regions like code folds.
-   */
-  getNearestRenderableLine?: (
-    lineNumber: number,
-    direction: 'up' | 'down'
-  ) => number | undefined;
-  /**
-   * Expand collapsed context so the given one-based new-file line can
-   * render. Returns true when an expansion was performed (a re-render will
-   * follow, possibly deferred).
-   */
-  revealLine?: (lineNumber: number) => boolean;
-  /**
-   * Attach an editor to this component. The returned detach closure receives
-   * `recycle: true` when the editor is only being released by a virtualized
-   * unmount (the session continues on remount) and no argument/false on a
-   * genuine session end.
-   */
-  attachEditor: (
-    editor: DiffsEditor<LAnnotation>
-  ) => (recycle?: boolean) => void;
-  applyDocumentChange: (
-    textDocument: DiffsTextDocument,
-    newLineAnnotations?: DiffLineAnnotation<LAnnotation>[],
-    shouldUpdateBuffer?: boolean
-  ) => void;
-  updateRenderCache: (
-    lines: Map<number, Array<HighlightedToken>>,
-    themeType: 'dark' | 'light',
-    options?: {
-      /**
-       * Whether to refresh the diffs view.
-       * Deferred background-tokenize passes always pass false.
-       */
-      shouldRefreshDiffsView?: boolean;
-      /**
-       * Whether the line count has changed in flight.
-       * True only during an edit pass whose line count changed,
-       * deferred background-tokenize passes always pass false.
-       */
-      lineCountChangeInFlight?: boolean;
-    }
-  ) => void;
-}
-
-// Narrows an editor-attachable instance to exclude UnresolvedFile, which is
-// not editable: a `type: 'unresolved-file'` instance maps to `never`, turning
-// `editor.edit(new UnresolvedFile())` into a compile error.
-export type EditableInstance<T extends { type: string }> = T extends {
-  type: 'unresolved-file';
-}
-  ? never
-  : T;
-
-export interface DiffsEditor<LAnnotation> {
-  /** @internal */
-  __prepareFile?(file: FileContents): FileContents;
-  /**
-   * @internal Notify the editor that the host component's options changed.
-   * The editor reads shared code options (e.g. `folding`) from its host, so
-   * hosts call this after an options swap that does not re-render.
-   */
-  __hostOptionsChanged?(): void;
-  __postponeBgTokenizeToNextFrame(): void;
-  /** @internal Capture focus intent before replacing the editable view. */
-  __captureFocusForDOMReplacement(): void;
-  __syncRenderView(
-    highlighter: DiffsHighlighter,
-    fileContainer: HTMLElement,
-    fileOrDiff: FileContents | FileDiffMetadata,
-    lineAnnotations:
-      | LineAnnotation<LAnnotation>[]
-      | DiffLineAnnotation<LAnnotation>[]
-      | undefined,
-    renderRange: RenderRange | undefined
-  ): void;
-  edit<T extends DiffsEditableComponent<LAnnotation>>(
-    fileInstance: EditableInstance<T>
-  ): () => void;
-  cleanUp(recycle?: boolean): void;
-}
-
-/**
- * Position in a text document expressed as zero-based line and character offset.
- * The offsets are based on a UTF-16 string representation. So a string of the form
- * `a𐐀b` the character offset of the character `a` is 0, the character offset of `𐐀`
- * is 1 and the character offset of b is 3 since `𐐀` is represented using two code
- * units in UTF-16.
- *
- * Positions are line end character agnostic. So you can not specify a position that
- * denotes `\r|\n` or `\n|` where `|` represents the character offset.
- */
-export interface Position {
-  /**
-   * Line position in a document (zero-based).
-   *
-   * If a line number is greater than the number of lines in a document, it
-   * defaults back to the number of lines in the document.
-   * If a line number is negative, it defaults to 0.
-   *
-   * The above two properties are implementation specific.
-   */
-  readonly line: number;
-  /**
-   * Character offset on a line in a document (zero-based).
-   *
-   * The meaning of this offset is determined by the negotiated
-   * `PositionEncodingKind`.
-   *
-   * If the character value is greater than the line length it defaults back
-   * to the line length. This property is implementation specific.
-   */
-  readonly character: number;
-}
-
-/**
- * A range in a text document expressed as (zero-based) start and end positions.
- *
- * If you want to specify a range that contains a line including the line ending
- * character(s) then use an end position denoting the start of the next line.
- * For example:
- * ```ts
- * {
- *     start: { line: 5, character: 23 }
- *     end : { line 6, character : 0 }
- * }
- * ```
- */
-export interface Range {
-  /**
-   * The range's start position.
-   */
-  readonly start: Position;
-  /**
-   * The range's end position.
-   */
-  readonly end: Position;
-}
-
-/**
- * A text edit applicable to a text document.
- */
-export interface TextEdit {
-  /**
-   * The range of the text document to be manipulated. To insert
-   * text into a document create a range where start === end.
-   */
-  readonly range: Range;
-  /**
-   * The string to be inserted. For delete operations use an
-   * empty string.
-   */
-  readonly newText: string;
-}
-
-/** Different with `TextEdit`, the range has been resolved to offsets. */
-export interface ResolvedTextEdit {
-  /** The start offset of the text change. */
-  readonly start: number;
-  /** The end offset of the text change. */
-  readonly end: number;
-  /** The string to be inserted. For delete operations use an empty string. */
-  readonly text: string;
-}
-
-/** A normalized text change reported by the editor. */
-export interface EditorChange extends ResolvedTextEdit {
-  /** The replaced range in the document before the change. */
-  range: Range;
-}
-
-/** The document state and normalized edits reported after an editor change. */
-export interface EditorChangeEvent<LAnnotation> {
-  changes: EditorChange[];
-  file: FileContents;
-  lineAnnotations?:
-    | LineAnnotation<LAnnotation>[]
-    | DiffLineAnnotation<LAnnotation>[];
-}
-
-/**
- * The direction of a selection.
- * -1: backward
- *  0: none
- *  1: forward
- */
-export type SelectionDirection = -1 | 0 | 1;
-
-export interface EditorSelection extends Range {
-  direction: SelectionDirection;
-}
-
-export interface EditorViewState {
-  /** Horizontal position owned by the current editable code scroller. */
-  scrollLeft: number;
-  /** Vertical position of the editor viewport. */
-  scrollTop?: number;
-}
-
-export interface EditorState {
-  selections?: EditorSelection[];
-  /**
-   * Active indentation folds. Lines are zero-based; `endLine` is the last
-   * collapsed body line. A standalone closing delimiter remains visible.
-   */
-  foldRanges?: LineRange[];
-  view?: EditorViewState;
-}
-
-export interface DiffsTextDocument {
-  readonly lineCount: number;
-  getLineText: (lineNumber: number, includeLineBreak?: boolean) => string;
-  getText: () => string;
-}
-
 export interface LineRange {
   readonly startLine: number;
   readonly endLine: number;
-}
-
-/**
- * Options CodeView passes to its `createEditor` factory. A structural subset
- * of `EditorOptions` from `@pierre/diffs/edit`, so factories can spread
- * them straight into the constructor — `new Editor({ ...options })` — and
- * layer any editor configuration of their own on top. Forwarding `onChange`
- * is what lets CodeView resolve document changes back to the owning item and
- * emit them through its own `onItemEditChange` option.
- */
-export interface CodeViewCreateEditorOptions<LAnnotation> {
-  onChange: (
-    file: FileContents,
-    lineAnnotations:
-      | LineAnnotation<LAnnotation>[]
-      | DiffLineAnnotation<LAnnotation>[]
-      | undefined,
-    event: EditorChangeEvent<LAnnotation>
-  ) => void;
 }

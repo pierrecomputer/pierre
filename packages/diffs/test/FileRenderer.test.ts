@@ -16,6 +16,12 @@ type FileRendererCacheProbe = {
   };
 };
 
+function createEditSessionFile(file: FileContents): FileContents {
+  const editSessionFile = { ...file };
+  delete editSessionFile.cacheKey;
+  return editSessionFile;
+}
+
 afterAll(async () => {
   await disposeHighlighter();
 });
@@ -41,8 +47,10 @@ describe('FileRenderer', () => {
       name: 'editable.txt',
     };
 
-    await instance.asyncRender(file);
-    expect(instance.renderFile(file)?.rowCount).toBe(3);
+    const editSessionFile = createEditSessionFile(file);
+    instance.beginEditSession(editSessionFile);
+    await instance.asyncRender(editSessionFile);
+    expect(instance.renderFile(editSessionFile)?.rowCount).toBe(3);
 
     instance.applyDocumentChange(
       new TextDocument('inmemory://editable-file', 'alpha\ngamma')
@@ -64,8 +72,10 @@ describe('FileRenderer', () => {
       name: 'editable.txt',
     };
 
-    await instance.asyncRender(file);
-    instance.renderFile(file);
+    const editSessionFile = createEditSessionFile(file);
+    instance.beginEditSession(editSessionFile);
+    await instance.asyncRender(editSessionFile);
+    instance.renderFile(editSessionFile);
     instance.updateRenderCache(new Map([[3, [[0, '#ff0000', 'D']]]]), 'light');
 
     const dirtyLines = new Map<number, HighlightedToken[]>([
@@ -105,6 +115,110 @@ describe('FileRenderer', () => {
     ]);
   });
 
+  test('reuses editor-compatible markup for a retained edit session', async () => {
+    const instance = new FileRenderer({
+      theme: 'pierre-light',
+      useTokenTransformer: true,
+    });
+    const editSessionFile = createEditSessionFile({
+      cacheKey: 'external-file',
+      contents: 'const value = 1;\n',
+      name: 'editable.ts',
+    });
+
+    instance.beginEditSession(editSessionFile);
+    await instance.asyncRender(editSessionFile);
+    instance.renderFile(editSessionFile);
+    instance.endEditSession();
+
+    instance.renderFile(editSessionFile);
+    const cacheBeforeReattach = (instance as unknown as FileRendererCacheProbe)
+      .renderCache;
+    expect(cacheBeforeReattach?.result).toBeDefined();
+
+    instance.beginEditSession(editSessionFile);
+
+    expect((instance as unknown as FileRendererCacheProbe).renderCache).toBe(
+      cacheBeforeReattach
+    );
+    expect(instance.editorRenderReady()).toBe(true);
+  });
+
+  test('keeps edited rows and document line counts across an active recycle', async () => {
+    const instance = new FileRenderer();
+    const file = createEditSessionFile({
+      contents: 'alpha\nbeta',
+      name: 'editable.txt',
+    });
+    instance.beginEditSession(file);
+    await instance.asyncRender(file);
+    instance.renderFile(file);
+    instance.applyDocumentChange(
+      new TextDocument('inmemory://editable-file', 'alpha\nnew\nbeta')
+    );
+    const cachedResult = (instance as unknown as FileRendererCacheProbe)
+      .renderCache?.result;
+
+    instance.recycle();
+    instance.beginEditSession(file);
+
+    expect(
+      (instance as unknown as FileRendererCacheProbe).renderCache?.result
+    ).toBe(cachedResult);
+    expect(instance.renderFile(file)?.rowCount).toBe(3);
+  });
+
+  test('releases an offscreen session and invalidates a replacement', async () => {
+    const instance = new FileRenderer();
+    const first = createEditSessionFile({
+      contents: 'first',
+      name: 'editable.txt',
+    });
+    instance.beginEditSession(first);
+    await instance.asyncRender(first);
+    instance.renderFile(first);
+    instance.recycle();
+    expect(
+      (instance as unknown as FileRendererCacheProbe).renderCache?.result
+    ).toBeDefined();
+
+    const replacement = createEditSessionFile({
+      contents: 'replacement',
+      name: 'editable.txt',
+    });
+    instance.beginEditSession(replacement);
+    expect(
+      (instance as unknown as FileRendererCacheProbe).renderCache?.result
+    ).toBeUndefined();
+
+    await instance.asyncRender(replacement);
+    instance.renderFile(replacement);
+    instance.recycle();
+    instance.endEditSession();
+    expect(
+      (instance as unknown as FileRendererCacheProbe).renderCache?.result
+    ).toBeUndefined();
+  });
+
+  test('discards non-editable highlights on recycle', async () => {
+    const instance = new FileRenderer();
+    const file: FileContents = {
+      contents: 'const value = 1;',
+      name: 'ordinary.ts',
+    };
+    await instance.asyncRender(file);
+    instance.renderFile(file);
+    expect(
+      (instance as unknown as FileRendererCacheProbe).renderCache?.result
+    ).toBeDefined();
+
+    instance.recycle();
+
+    expect(
+      (instance as unknown as FileRendererCacheProbe).renderCache?.result
+    ).toBeUndefined();
+  });
+
   test.each([
     {
       change: 'adding',
@@ -133,8 +247,10 @@ describe('FileRenderer', () => {
         name: 'terminal.ts',
       };
 
-      await instance.asyncRender(file);
-      instance.renderFile(file);
+      const editSessionFile = createEditSessionFile(file);
+      instance.beginEditSession(editSessionFile);
+      await instance.asyncRender(editSessionFile);
+      instance.renderFile(editSessionFile);
       instance.updateRenderCache(dirtyLines, 'light', true);
       instance.applyDocumentChange(
         new TextDocument('inmemory://terminal-newline', nextText, 'typescript')
@@ -153,17 +269,17 @@ describe('FileRenderer', () => {
     }
   );
 
-  test('rebuilds an unkeyed file mutated in place', async () => {
+  test('renders a distinct unkeyed file with new contents', async () => {
     const instance = new FileRenderer();
-    const file: FileContents = {
+    const firstFile: FileContents = {
       contents: 'alpha',
       name: 'mutable.ts',
     };
 
-    await instance.asyncRender(file);
-    expect(instance.renderFile(file)?.rowCount).toBe(1);
+    await instance.asyncRender(firstFile);
+    expect(instance.renderFile(firstFile)?.rowCount).toBe(1);
 
-    file.contents = 'alpha\nbeta\ngamma';
-    expect(instance.renderFile(file)?.rowCount).toBe(3);
+    const nextFile = { ...firstFile, contents: 'alpha\nbeta\ngamma' };
+    expect(instance.renderFile(nextFile)?.rowCount).toBe(3);
   });
 });

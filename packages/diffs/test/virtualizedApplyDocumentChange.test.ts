@@ -1,11 +1,9 @@
 import { describe, expect, test } from 'bun:test';
 
 import { VirtualizedFile } from '../src/components/VirtualizedFile';
-import type {
-  DiffsTextDocument,
-  FileContents,
-  RenderRange,
-} from '../src/types';
+import { TextDocument } from '../src/editor/textDocument';
+import type { FileContents, RenderRange } from '../src/types';
+import { createEditorInstance } from './editorTestUtils';
 
 function createStubVirtualizer(type: 'simple' | 'advanced') {
   return {
@@ -36,13 +34,11 @@ function makeContents(lineCount: number): string {
   );
 }
 
-function makeDocument(lineCount: number): DiffsTextDocument {
-  const text = makeContents(lineCount);
-  return {
-    lineCount,
-    getLineText: (lineNumber: number) => `line ${lineNumber + 1}`,
-    getText: () => text,
-  };
+function makeDocument(lineCount: number): TextDocument<'file', undefined> {
+  return new TextDocument<'file', undefined>(
+    'inmemory://virtualized-file',
+    makeContents(lineCount)
+  );
 }
 
 function makeFile(lineCount: number): FileContents {
@@ -61,6 +57,17 @@ class BufferRecordingFile extends VirtualizedFile<undefined> {
   }
 }
 
+// The buffer update runs after a content edit against the file represented by
+// the existing DOM. These tests do not build DOM, so establish that ownership
+// explicitly after attaching the private edit session.
+function setRenderedEditSession(instance: BufferRecordingFile): void {
+  const state = instance as unknown as {
+    editSession: { file: FileContents } | undefined;
+    renderedFile: FileContents | undefined;
+  };
+  state.renderedFile = state.editSession?.file;
+}
+
 describe('applyDocumentChange buffer updates', () => {
   test('the buffer spacer update only runs in simple mode', () => {
     const seeded: RenderRange = {
@@ -74,18 +81,30 @@ describe('applyDocumentChange buffer updates', () => {
       {},
       createStubVirtualizer('advanced')
     );
-    advancedInstance.prepareCodeViewItem(makeFile(50), 0);
+    advancedInstance.updateCodeViewLayout(makeFile(50), 0);
+    const detachAdvancedEditor = advancedInstance.__attachEditor(
+      createEditorInstance('file')
+    );
+    setRenderedEditSession(advancedInstance);
     advancedInstance.seedRenderRange(seeded);
     advancedInstance.applyDocumentChange(makeDocument(1), undefined, true);
     expect(advancedInstance.bufferUpdates).toBe(0);
+    detachAdvancedEditor();
+    advancedInstance.cleanUp();
 
     const simpleInstance = new BufferRecordingFile(
       {},
       createStubVirtualizer('simple')
     );
-    simpleInstance.prepareCodeViewItem(makeFile(50), 0);
+    simpleInstance.updateCodeViewLayout(makeFile(50), 0);
+    const detachSimpleEditor = simpleInstance.__attachEditor(
+      createEditorInstance('file')
+    );
+    setRenderedEditSession(simpleInstance);
     simpleInstance.seedRenderRange(seeded);
     simpleInstance.applyDocumentChange(makeDocument(1), undefined, true);
     expect(simpleInstance.bufferUpdates).toBe(1);
+    detachSimpleEditor();
+    simpleInstance.cleanUp();
   });
 });

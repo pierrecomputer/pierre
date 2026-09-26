@@ -11,7 +11,6 @@ The root, React, and SSR entries re-export these types.
 - [`CodeView` types](#codeview-types)
 - [Lines, hunks, and render state](#lines-hunks-and-render-state)
 - [Render results and virtualization](#render-results-and-virtualization)
-- [Component and editor contracts](#component-and-editor-contracts)
 - [Shiki and diff types](#shiki-and-diff-types)
 
 ## Files and patches
@@ -68,36 +67,51 @@ The root, React, and SSR entries re-export these types.
 
 ## Annotations and selection
 
-| Export                    | Purpose                                                      |
-| ------------------------- | ------------------------------------------------------------ |
-| `AnnotationSide`          | Selects deletions or additions for an annotation.            |
-| `LineAnnotation`          | Associates metadata with one file line.                      |
-| `DiffLineAnnotation`      | Associates metadata with one side and line.                  |
-| `AnnotationLineMap`       | Groups diff annotations by line number.                      |
-| `SelectedLineRange`       | Describes a selected start and end across diff sides.        |
-| `SelectionSide`           | Selects deletions or additions for a selection.              |
-| `SelectionPoint`          | Describes one line and optional side.                        |
-| `SelectionDirection`      | Describes backward, neutral, or forward selection direction. |
-| `EditorActiveLineOptions` | Configures reveal behavior for an editor active line.        |
+| Export               | Purpose                                               |
+| -------------------- | ----------------------------------------------------- |
+| `AnnotationSide`     | Selects deletions or additions for an annotation.     |
+| `LineAnnotation`     | Associates metadata with one file line.               |
+| `DiffLineAnnotation` | Associates metadata with one side and line.           |
+| `AnnotationLineMap`  | Groups diff annotations by line number.               |
+| `SelectedLineRange`  | Describes a selected start and end across diff sides. |
+| `SelectionSide`      | Selects deletions or additions for a selection.       |
+| `SelectionPoint`     | Describes one line and optional side.                 |
 
 ## `CodeView` types
 
-| Export                         | Purpose                                                  |
-| ------------------------------ | -------------------------------------------------------- |
-| `CodeViewFileItem`             | Describes one file item in a virtualized list.           |
-| `CodeViewDiffItem`             | Describes one diff item in a virtualized list.           |
-| `CodeViewItem`                 | Represents a file or diff list item.                     |
-| `CodeViewCreateEditorOptions`  | Adds an item ID to editor creation options.              |
-| `CodeViewScrollBehavior`       | Selects instant, smooth, or automatic smooth scroll.     |
-| `CodeViewScrollTarget`         | Represents any supported list scroll target.             |
-| `CodeViewPositionScrollTarget` | Scrolls to an absolute list position.                    |
-| `CodeViewLineScrollTarget`     | Scrolls to one item line.                                |
-| `CodeViewRangeScrollTarget`    | Scrolls to one item line range.                          |
-| `CodeViewItemScrollTarget`     | Scrolls to one item boundary.                            |
-| `NumericScrollLineAnchor`      | Describes a numeric position inside a line.              |
-| `CodeViewLayout`               | Stores item offsets, heights, and total list height.     |
-| `PendingCodeViewLayoutReset`   | Describes a deferred list layout reset.                  |
-| `SmoothScrollSettings`         | Configures duration and distance for smooth list scroll. |
+| Export                            | Purpose                                                  |
+| --------------------------------- | -------------------------------------------------------- |
+| `CodeViewFileItem`                | Describes one file item in a virtualized list.           |
+| `CodeViewDiffItem`                | Describes one diff item in a virtualized list.           |
+| `CodeViewItem`                    | Represents a file or diff list item.                     |
+| `CodeViewCreateEditorOptions`     | Provides CodeView's routed editor option subset.         |
+| `CodeViewItemEditCompleteHandler` | Handles completion with correlated event and item types. |
+| `CodeViewScrollBehavior`          | Selects instant, smooth, or automatic smooth scroll.     |
+| `CodeViewScrollTarget`            | Represents any supported list scroll target.             |
+| `CodeViewPositionScrollTarget`    | Scrolls to an absolute list position.                    |
+| `CodeViewLineScrollTarget`        | Scrolls to one item line.                                |
+| `CodeViewRangeScrollTarget`       | Scrolls to one item line range.                          |
+| `CodeViewItemScrollTarget`        | Scrolls to one item boundary.                            |
+| `NumericScrollLineAnchor`         | Describes a numeric position inside a line.              |
+| `CodeViewLayout`                  | Stores item offsets, heights, and total list height.     |
+| `PendingCodeViewLayoutReset`      | Describes a deferred list layout reset.                  |
+| `SmoothScrollSettings`            | Configures duration and distance for smooth list scroll. |
+
+`CodeViewCreateEditorOptions` currently contains the routed `onChange(event)`
+callback that `CodeView` uses to emit `onItemEditChange(event, item)`; it does
+not add an item ID. A `CodeViewOptions.createEditor` factory also receives the
+optional `editStateKey` returned by `getEditStateKey(item)` as its third
+argument. Forward that key separately to the editor constructor. It retains the
+editable draft, undo/redo history, selections, and horizontal code scroll. Item
+editors never own CodeView's shared vertical position.
+
+`onItemEditComplete(event, item, nextItem)` must return `'accept'` to accept the
+completed item or `'reject'` to restore the original while the item remains
+present; a missing callback rejects. During removal or teardown, neither
+decision reinserts the item. Controlled owners must put the supplied `nextItem`
+into their item state when accepting an item that should remain. If the item
+uses keyed render caching, assigning a fresh `cacheKey` to the accepted event
+file or diff invalidates that cache.
 
 ## Lines, hunks, and render state
 
@@ -144,22 +158,6 @@ The root, React, and SSR entries re-export these types.
 | `RenderWindow`              | Describes first and last rows in a render window.       |
 | `VirtualWindowSpecs`        | Describes viewport position, height, and row window.    |
 | `VirtualFileMetrics`        | Describes estimated header and line heights.            |
-
-## Component and editor contracts
-
-| Export                   | Purpose                                                     |
-| ------------------------ | ----------------------------------------------------------- |
-| `DiffsComponentOptions`  | Defines shared options for a render component.              |
-| `DiffsBaseComponent`     | Defines the common file and diff component methods.         |
-| `DiffsEditableComponent` | Adds editor attachment and document updates to a component. |
-| `EditableInstance`       | Selects an editable file or diff instance.                  |
-| `DiffsEditor`            | Defines the editor interface that render components use.    |
-| `DiffsTextDocument`      | Defines the text document interface that components use.    |
-| `Position`               | Identifies a zero-based line and character.                 |
-| `Range`                  | Identifies start and end positions.                         |
-| `TextEdit`               | Replaces one range with new text.                           |
-| `EditorSelection`        | Adds direction to a range.                                  |
-| `EditorState`            | Holds editor selections and view state.                     |
 
 ## Shiki and diff types
 

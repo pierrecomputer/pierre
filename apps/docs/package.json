@@ -6,6 +6,7 @@
   "dependencies": {
     "@icons-pack/react-simple-icons": "catalog:",
     "@pierre/diffs": "workspace:*",
+    "@pierre/highlights": "workspace:*",
     "@pierre/icons": "catalog:",
     "@pierre/theme": "workspace:*",
     "@pierre/theming": "workspace:*",
@@ -26,6 +27,9 @@
     "@radix-ui/react-tooltip": "catalog:",
     "@radix-ui/react-use-controllable-state": "catalog:",
     "@shikijs/transformers": "catalog:",
+    "@vercel/analytics": "catalog:",
+    "@vercel/firewall": "catalog:",
+    "@vercel/speed-insights": "catalog:",
     "@vscode/web-custom-data": "catalog:",
     "babel-plugin-react-compiler": "catalog:",
     "class-variance-authority": "catalog:",

@@ -59,7 +59,7 @@ const after = true;`,
         themeType: 'dark',
         useTokenTransformer: true,
       });
-      const editor = new Editor();
+      const editor = new Editor('file');
 
       instance.render({ file, containerWrapper: mount });
       editor.edit(instance);

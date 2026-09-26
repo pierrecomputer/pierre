@@ -131,7 +131,7 @@ export const DiffsHubHeader = memo(function DiffsHubHeader({
   return (
     <div
       className={cn(
-        'z-10 contain-layout contain-paint flex flex-wrap md:flex-nowrap items-center gap-2.5 pt-3 pb-2 px-4 md:px-3 md:py-1.5 border-b border-[var(--color-border-opaque)]',
+        'diffshub-theme-bootstrap z-10 contain-layout contain-paint flex flex-wrap md:flex-nowrap items-center gap-2.5 pt-3 pb-2 px-4 md:px-3 md:py-1.5 border-b border-[var(--color-border-opaque)]',
         themeChromeStyle == null &&
           'bg-background md:bg-[var(--diffshub-sidebar-bg)]',
         className
@@ -325,10 +325,10 @@ export const DiffsHubHeader = memo(function DiffsHubHeader({
   );
 });
 
-function colorModeIcon(colorMode: ColorMode) {
-  if (colorMode === 'light') return IconColorLight;
-  if (colorMode === 'dark') return IconColorDark;
-  return IconColorAuto;
+function renderColorModeIcon(colorMode: ColorMode, className: string) {
+  if (colorMode === 'light') return <IconColorLight className={className} />;
+  if (colorMode === 'dark') return <IconColorDark className={className} />;
+  return <IconColorAuto className={className} />;
 }
 
 interface ThemeDropdownProps {
@@ -357,7 +357,6 @@ function ThemeDropdown({
   setLightThemeName,
   themeDropdownStyle,
 }: ThemeDropdownProps) {
-  const TriggerIcon = colorModeIcon(colorMode);
   const [view, setView] = useState<'main' | 'light' | 'dark'>('main');
   // Only offer a reset when at least one slot drifts from the default
   // pierre pair, so the link stays out of the way until it's useful.
@@ -383,7 +382,7 @@ function ThemeDropdown({
           title="Theme settings"
           className={CHROME_ICON_BUTTON_CLASS}
         >
-          <TriggerIcon className="size-4 md:size-3" />
+          {renderColorModeIcon(colorMode, 'size-4 md:size-3')}
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent

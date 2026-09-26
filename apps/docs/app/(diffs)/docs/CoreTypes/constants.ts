@@ -2,13 +2,13 @@ import type { PreloadFileOptions } from '@pierre/diffs/ssr';
 
 import { CustomScrollbarCSS } from '@/components/CustomScrollbarCSS';
 
-const options: PreloadFileOptions<undefined>['options'] = {
+const options: PreloadFileOptions<undefined, undefined>['options'] = {
   theme: { dark: 'pierre-dark', light: 'pierre-light' },
   disableFileHeader: true,
   unsafeCSS: CustomScrollbarCSS,
 };
 
-export const FILE_CONTENTS_TYPE: PreloadFileOptions<undefined> = {
+export const FILE_CONTENTS_TYPE: PreloadFileOptions<undefined, undefined> = {
   file: {
     name: 'FileContents.ts',
     contents: `import type { FileContents } from '@pierre/diffs';
@@ -27,9 +27,8 @@ interface FileContents {
   // See: https://shiki.style/languages
   lang?: SupportedLanguages;
 
-  // Optional identity for Worker Pool caching. Required when
-  // Editor.persistState is enabled; use a unique, stable key for that editing
-  // session and reuse it only when the cached document should resume.
+  // Optional revision identity for rendering and Worker Pool
+  // highlight caching
   cacheKey?: string;
 }
 
@@ -53,10 +52,11 @@ const jsonFile: FileContents = {
   options,
 };
 
-export const FILE_DIFF_METADATA_TYPE: PreloadFileOptions<undefined> = {
-  file: {
-    name: 'FileDiffMetadata.ts',
-    contents: `import type { FileDiffMetadata, Hunk } from '@pierre/diffs';
+export const FILE_DIFF_METADATA_TYPE: PreloadFileOptions<undefined, undefined> =
+  {
+    file: {
+      name: 'FileDiffMetadata.ts',
+      contents: `import type { FileDiffMetadata, Hunk } from '@pierre/diffs';
 
 // FileDiffMetadata represents a parsed file change.
 interface FileDiffMetadata {
@@ -135,11 +135,11 @@ interface ChangeContent {
   noEOFCRDeletions: boolean;
   noEOFCRAdditions: boolean;
 }`,
-  },
-  options,
-};
+    },
+    options,
+  };
 
-export const LINE_ANNOTATION_TYPES: PreloadFileOptions<undefined> = {
+export const LINE_ANNOTATION_TYPES: PreloadFileOptions<undefined, undefined> = {
   file: {
     name: 'line_annotations.ts',
     contents: `import type {
@@ -173,7 +173,10 @@ const diffAnnotations: DiffLineAnnotation<ThreadMetadata>[] = [
   options,
 };
 
-export const PARSE_DIFF_FROM_FILE_EXAMPLE: PreloadFileOptions<undefined> = {
+export const PARSE_DIFF_FROM_FILE_EXAMPLE: PreloadFileOptions<
+  undefined,
+  undefined
+> = {
   file: {
     name: 'parseDiffFromFile.ts',
     contents: `import {
@@ -213,7 +216,10 @@ const deletedFileDiff = parseDiffFromFile(oldFile, null);
   options,
 };
 
-export const PARSE_PATCH_FILES_EXAMPLE: PreloadFileOptions<undefined> = {
+export const PARSE_PATCH_FILES_EXAMPLE: PreloadFileOptions<
+  undefined,
+  undefined
+> = {
   file: {
     name: 'parsePatchFiles.ts',
     contents: `import {

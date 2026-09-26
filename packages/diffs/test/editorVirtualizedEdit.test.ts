@@ -54,7 +54,7 @@ function renderedLineNumbers(content: HTMLElement): number[] {
 }
 
 type EditableSelection = Parameters<
-  Editor<undefined>['setSelections']
+  Editor<'file', undefined>['setSelections']
 >[0][number];
 
 function collapsedCaret(line: number): EditableSelection {
@@ -68,7 +68,7 @@ function collapsedCaret(line: number): EditableSelection {
 interface WindowedEditor {
   cleanup(): void;
   content: HTMLElement;
-  editor: Editor<undefined>;
+  editor: Editor<'file', undefined>;
   fileContainer: HTMLElement;
 }
 
@@ -86,7 +86,7 @@ async function createWindowedEditor(
     disableFileHeader: true,
     theme: DEFAULT_THEMES,
   });
-  const editor = new Editor<undefined>();
+  const editor = new Editor('file');
   const initialFile: FileContents = {
     name: 'edits.ts',
     contents: makeContents(lineCount),
@@ -166,7 +166,7 @@ describe('Editor edits at the bottom of a virtualized window', () => {
       );
       await wait(0);
 
-      expect(editor.getState().selections?.at(-1)?.start.line).toBe(1_000);
+      expect(editor.getViewState().selections?.at(-1)?.start.line).toBe(1_000);
       expect(
         fileContainer.shadowRoot?.querySelector<HTMLElement>('[data-caret]')
           ?.style.transform
@@ -211,7 +211,7 @@ describe('Editor edits at the bottom of a virtualized window', () => {
       ]);
       await wait(0);
 
-      const selections = editor.getState().selections ?? [];
+      const selections = editor.getViewState().selections ?? [];
       expect(selections).toHaveLength(1);
       const caretLine = selections[0].start.line + 1;
       expect(caretLine).toBe(152);
@@ -248,7 +248,7 @@ describe('Editor edits at the bottom of a virtualized window', () => {
       ]);
       await wait(0);
 
-      const selections = editor.getState().selections ?? [];
+      const selections = editor.getViewState().selections ?? [];
       expect(selections).toHaveLength(1);
       const caretLine = selections[0].start.line + 1;
       expect(caretLine).toBe(153);
@@ -288,7 +288,7 @@ describe('Editor edits at the bottom of a virtualized window', () => {
       expect(rendered).toBeLessThan(insertedLines);
 
       // The caret lands far below the window and is not rendered synchronously.
-      const selections = editor.getState().selections ?? [];
+      const selections = editor.getViewState().selections ?? [];
       const caretLine = selections[0].start.line + 1;
       expect(caretLine).toBeGreaterThan(1000);
       expect(renderedLineNumbers(content)).not.toContain(caretLine);
@@ -379,7 +379,7 @@ describe('Editor selections in a virtualized window', () => {
     editor.setOptions({ roundedSelection: false });
 
     try {
-      editor.setState({
+      editor.setViewState({
         selections: [
           {
             start: { line: 0, character: 0 },

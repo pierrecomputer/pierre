@@ -10,7 +10,10 @@ const fileOptions = {
   unsafeCSS: CustomScrollbarCSS,
 } as const;
 
-export const CUSTOM_HUNK_SEPARATORS_SWITCHER: PreloadFileOptions<undefined> = {
+export const CUSTOM_HUNK_SEPARATORS_SWITCHER: PreloadFileOptions<
+  undefined,
+  undefined
+> = {
   file: {
     name: 'custom_hunk_separators.tsx',
     contents: `import type { FileContents } from '@pierre/diffs';

@@ -15,7 +15,7 @@ import {
   useFileTree,
 } from '@pierre/trees/react';
 import Link from 'next/link';
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 
 import { sampleFileList } from '../_lib/demo-data';
 import { TREE_NEW_VIEWPORT_HEIGHTS } from '../_lib/dimensions';
@@ -37,6 +37,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { PRODUCTS } from '@/lib/product-config';
+import { useMediaQuery } from '@/lib/useMediaQuery';
 
 type LightThemeName = string;
 type DarkThemeName = string;
@@ -44,6 +45,11 @@ type DarkThemeName = string;
 interface DemoThemingClientProps {
   initialThemeStyles: TreeThemeStyles;
   preloadedData: FileTreePreloadedData;
+}
+
+interface ThemeLoadError {
+  message: string;
+  themeName: string;
 }
 
 export function DemoThemingClient({
@@ -69,17 +75,10 @@ export function DemoThemingClient({
   const [themeStyles, setThemeStyles] = useState<TreeThemeStyles | null>(
     initialThemeStyles
   );
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [prefersDark, setPrefersDark] = useState(false);
-
-  useEffect(() => {
-    const mediaQueryList = window.matchMedia('(prefers-color-scheme: dark)');
-    setPrefersDark(mediaQueryList.matches);
-    const listener = () => setPrefersDark(mediaQueryList.matches);
-    mediaQueryList.addEventListener('change', listener);
-    return () => mediaQueryList.removeEventListener('change', listener);
-  }, []);
+  const [themeLoadError, setThemeLoadError] = useState<ThemeLoadError | null>(
+    null
+  );
+  const prefersDark = useMediaQuery('(prefers-color-scheme: dark)', false);
 
   const effectiveTheme =
     colorMode === 'dark'
@@ -90,26 +89,38 @@ export function DemoThemingClient({
           ? selectedDarkTheme
           : selectedLightTheme;
 
-  const loadTheme = useCallback(async (themeName: string) => {
-    setError(null);
-    setLoading(true);
-    try {
-      const theme = await resolveTheme(
-        themeName as Parameters<typeof resolveTheme>[0]
-      );
-      setThemeStyles(themeToTreeStyles(theme));
-    } catch (themeError) {
-      setError(
-        themeError instanceof Error ? themeError.message : String(themeError)
-      );
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
+  // Resolve the selected theme's styles. Uncached themes load through a dynamic
+  // import, so a selection made while an earlier load is still in flight must
+  // win: the cleanup marks that earlier load cancelled and both of its outcomes
+  // are dropped instead of overwriting the newer selection's styles or error.
   useEffect(() => {
-    void loadTheme(effectiveTheme);
-  }, [effectiveTheme, loadTheme]);
+    let cancelled = false;
+    void resolveTheme(effectiveTheme).then(
+      (theme) => {
+        if (cancelled) return;
+        setThemeStyles(themeToTreeStyles(theme));
+        setThemeLoadError(null);
+      },
+      (themeError: unknown) => {
+        if (cancelled) return;
+        setThemeLoadError({
+          message:
+            themeError instanceof Error
+              ? themeError.message
+              : String(themeError),
+          themeName: effectiveTheme,
+        });
+      }
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [effectiveTheme]);
+
+  const error =
+    themeLoadError?.themeName === effectiveTheme
+      ? themeLoadError.message
+      : null;
 
   return (
     <TreeExampleSection>
@@ -225,9 +236,6 @@ export function DemoThemingClient({
       </div>
 
       <div>
-        {loading && themeStyles == null ? (
-          <p className="text-muted-foreground py-4 text-sm">Loading theme…</p>
-        ) : null}
         {error != null ? (
           <p className="text-destructive py-4 text-sm">{error}</p>
         ) : null}

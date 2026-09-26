@@ -34,7 +34,7 @@ Shared behavior:
   attributes are preserved. On large files or many mounted diffs, this can have
   a noticeable performance cost.
 - If you are using a [Worker Pool](#worker-pool), set
-  `useTokenTransformer: true` on `WorkerPoolManager` — pool-rendered surfaces
+  `useTokenTransformer: true` on `WorkerPoolManager` — pool-rendered components
   follow the pool's options, not component callbacks. Worker pools can move
   highlighting work off the main thread, but they do not reduce the extra DOM
   size created by token metadata.

@@ -1,16 +1,16 @@
 'use client';
 
-import type { PreloadedFileResult } from '@pierre/diffs/ssr';
 import { useState } from 'react';
 
 import { DocsCodeExample } from '@/components/docs/DocsCodeExample';
 import { ButtonGroup, ButtonGroupItem } from '@/components/ui/button-group';
+import type { PreloadedCodeExample } from '@/lib/preloadCodeExample';
 
 type TokenInteractionMode = 'react' | 'vanilla';
 
 interface TokenHookTabsProps {
-  reactExample: PreloadedFileResult<undefined>;
-  vanillaExample: PreloadedFileResult<undefined>;
+  reactExample: PreloadedCodeExample<undefined, undefined>;
+  vanillaExample: PreloadedCodeExample<undefined, undefined>;
 }
 
 export function TokenHookTabs({

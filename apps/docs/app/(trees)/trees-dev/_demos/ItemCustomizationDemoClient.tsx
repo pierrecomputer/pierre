@@ -9,6 +9,7 @@ import type { FileTreePathOptions } from '@trees/_lib/fileTreePathOptions';
 import { useWindowScrollLock } from '@trees/_lib/useWindowScrollLock';
 import {
   type ChangeEvent,
+  type RefObject,
   useCallback,
   useEffect,
   useMemo,
@@ -215,6 +216,18 @@ function areSamePathLists(
   }
 
   return true;
+}
+
+// The selection the tree should show on this render, read from the ref the demo
+// keeps current while restoring selection across option changes. Kept in its own
+// hook because the render-time ref read is deliberate; the boundary lets the demo
+// component stay compilable.
+function useDesiredSelectedPaths(
+  desiredSelectedPathsRef: RefObject<readonly string[]>
+) {
+  /* oxlint-disable-next-line react/refs -- this hook preserves the existing
+   * render-time selection snapshot */
+  return desiredSelectedPathsRef.current;
 }
 
 function HydratedItemCustomizationTree({
@@ -450,6 +463,7 @@ export function ItemCustomizationDemoClient({
     gitStatusEnabled ? gitStatusPresetId : 'git-status-off',
     decorationPresetId,
   ].join(':');
+  const desiredSelectedPaths = useDesiredSelectedPaths(desiredSelectedPathsRef);
 
   return (
     <div className="space-y-6">
@@ -649,7 +663,7 @@ export function ItemCustomizationDemoClient({
             containerHtml={containerHtml}
             contextMenuRootRef={contextMenuRootRef}
             contextMenuSlotRef={contextMenuSlotRef}
-            desiredSelectedPaths={desiredSelectedPathsRef.current}
+            desiredSelectedPaths={desiredSelectedPaths}
             gitStatus={gitStatus}
             hasHydratedTreeRef={hasHydratedTreeRef}
             isRestoringSelectionRef={isRestoringSelectionRef}

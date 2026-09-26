@@ -111,6 +111,9 @@ export function FileDiffSSR<LAnnotation>({
   return (
     <div
       ref={wrapperRef}
+      // Serialized once on the first render and reused verbatim after, so React
+      // never replaces the server markup the annotation roots hydrated into.
+      // oxlint-disable-next-line react/refs
       dangerouslySetInnerHTML={htmlObjectRef.current}
       suppressHydrationWarning
     />

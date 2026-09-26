@@ -1,1 +1,4 @@
-export { DiffsHubViewByPathPage as default } from './DiffsHubViewByPathPage';
+export {
+  DiffsHubViewByPathPage as default,
+  generateMetadata,
+} from './DiffsHubViewByPathPage';

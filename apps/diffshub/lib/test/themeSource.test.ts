@@ -20,7 +20,7 @@ function makeResolver(
   const warm = new Map<string, { name: string; type: 'dark' | 'light' }>();
   return {
     getResolvedTheme(name) {
-      return warm.get(name) as never;
+      return warm.get(name);
     },
     resolveTheme(name) {
       const theme = themes[name];
@@ -30,7 +30,7 @@ function makeResolver(
     },
     getResolvedOrResolveTheme(name) {
       const cached = warm.get(name);
-      if (cached != null) return cached as never;
+      if (cached != null) return cached;
       return this.resolveTheme(name);
     },
     // Unused by the adapters; present to satisfy the interface.

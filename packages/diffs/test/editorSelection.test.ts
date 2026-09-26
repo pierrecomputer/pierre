@@ -41,13 +41,13 @@ import {
 } from '../src/editor/selection';
 import { DirectionBackward } from '../src/editor/selection';
 import { TextDocument } from '../src/editor/textDocument';
-import { disposeHighlighter } from '../src/highlighter/shared_highlighter';
 import type {
   EditorSelection,
-  FileContents,
   ResolvedTextEdit,
   SelectionDirection,
-} from '../src/types';
+} from '../src/editor/types';
+import { disposeHighlighter } from '../src/highlighter/shared_highlighter';
+import type { FileContents } from '../src/types';
 import { installDom, wait } from './domHarness';
 
 afterAll(async () => {
@@ -83,7 +83,7 @@ function composedRange(
     endContainer,
     endOffset,
     collapsed: startContainer === endContainer && startOffset === endOffset,
-  } as StaticRange;
+  };
 }
 
 function editorSelection(
@@ -3926,7 +3926,8 @@ async function waitForEditableContent(
 
 interface EditorFixture {
   cleanup(): void;
-  editor: Editor<undefined>;
+  content: HTMLElement;
+  editor: Editor<'file', undefined>;
 }
 
 async function createEditorFixture(contents: string): Promise<EditorFixture> {
@@ -3938,12 +3939,12 @@ async function createEditorFixture(contents: string): Promise<EditorFixture> {
     disableFileHeader: true,
     theme: DEFAULT_THEMES,
   });
-  const editor = new Editor<undefined>();
+  const editor = new Editor('file');
   const initialFile: FileContents = { name: 'selections.txt', contents };
 
   file.render({ file: initialFile, fileContainer, forceRender: true });
   editor.edit(file);
-  await waitForEditableContent(fileContainer);
+  const content = await waitForEditableContent(fileContainer);
 
   return {
     cleanup() {
@@ -3951,9 +3952,217 @@ async function createEditorFixture(contents: string): Promise<EditorFixture> {
       file.cleanUp();
       dom.cleanup();
     },
+    content,
     editor,
   };
 }
+
+describe('Editor native text selection', () => {
+  test.each([
+    {
+      name: 'whole line',
+      initial: createSelection(2, 0, 3, 0),
+      backward: createSelection(1, 0, 3, 0, DirectionBackward),
+      forward: createSelection(2, 0, 4, 0, DirectionForward),
+    },
+    {
+      name: 'whole word',
+      initial: createSelection(2, 0, 2, 7),
+      backward: createSelection(1, 6, 2, 7, DirectionBackward),
+      forward: createSelection(2, 0, 3, 4, DirectionForward),
+    },
+    {
+      name: 'caret',
+      initial: createSelection(2, 3, 2, 3),
+      backward: createSelection(1, 6, 2, 3, DirectionBackward),
+      forward: createSelection(2, 3, 3, 4, DirectionForward),
+    },
+  ])(
+    'preserves the native range when dragging from a $name',
+    async ({ initial, backward, forward }) => {
+      const { cleanup, content, editor } = await createEditorFixture(
+        'before\nalpha bravo\ncharlie delta\necho foxtrot\nafter'
+      );
+      const originalGetSelection = document.getSelection.bind(document);
+      let nativeRange: StaticRange;
+
+      try {
+        content.dispatchEvent(new Event('focus'));
+        const lines = [...content.querySelectorAll<HTMLElement>('[data-line]')];
+        document.getSelection = (() => ({
+          getComposedRanges: () => [nativeRange],
+        })) as unknown as typeof document.getSelection;
+        content.dispatchEvent(
+          new PointerEvent('pointerdown', { pointerType: 'mouse' })
+        );
+
+        // Native word and line drags keep the initial range when changing
+        // direction. Exercise both reversals before releasing the pointer.
+        for (const selection of [initial, backward, forward, backward]) {
+          const [startContainer, startOffset] = getSelectionAnchor(
+            lines[selection.start.line],
+            selection.start.character
+          );
+          const [endContainer, endOffset] = getSelectionAnchor(
+            lines[selection.end.line],
+            selection.end.character
+          );
+          nativeRange = composedRange(
+            startContainer,
+            startOffset,
+            endContainer,
+            endOffset
+          );
+          document.dispatchEvent(new Event('selectionchange'));
+          expect(editor.getViewState().selections).toEqual([selection]);
+        }
+
+        document.dispatchEvent(
+          new PointerEvent('pointerup', { pointerType: 'mouse' })
+        );
+        document.dispatchEvent(new Event('selectionchange'));
+        expect(editor.getViewState().selections).toEqual([backward]);
+      } finally {
+        document.getSelection = originalGetSelection;
+        cleanup();
+      }
+    }
+  );
+});
+
+describe('Editor Alt-drag column selection', () => {
+  test('normalizes short, empty, and Unicode lines independently', async () => {
+    const { cleanup, content, editor } = await createEditorFixture(
+      'keep\nalpha\nx\na😀\nae\u0301\n\u1112\u1161\u11ab\n\nbravo'
+    );
+    const originalGetSelection = document.getSelection.bind(document);
+    let nativeRange: StaticRange;
+
+    try {
+      content.dispatchEvent(new Event('focus'));
+      editor.setSelections([
+        {
+          start: { line: 0, character: 0 },
+          end: { line: 0, character: 1 },
+          direction: 'forward',
+        },
+      ]);
+      await wait(0);
+      await wait(0);
+
+      const lines = [...content.querySelectorAll<HTMLElement>('[data-line]')];
+      const [startContainer, startOffset] = getSelectionAnchor(lines[1], 2);
+      const rangeTo = (endLine: number, endCharacter: number): StaticRange => {
+        const [endContainer, endOffset] = getSelectionAnchor(
+          lines[endLine],
+          endCharacter
+        );
+        return composedRange(
+          startContainer,
+          startOffset,
+          endContainer,
+          endOffset
+        );
+      };
+
+      const selections = [
+        caret(1, 2),
+        caret(2, 1),
+        caret(3, 3),
+        caret(4, 3),
+        caret(5, 3),
+        caret(6, 0),
+        caret(7, 2),
+      ];
+
+      nativeRange = rangeTo(1, 2);
+      document.getSelection = (() => ({
+        getComposedRanges: () => [nativeRange],
+      })) as unknown as typeof document.getSelection;
+      content.dispatchEvent(
+        new PointerEvent('pointerdown', {
+          altKey: true,
+          bubbles: true,
+          button: 0,
+          clientX: 100,
+          pointerType: 'mouse',
+        })
+      );
+      expect(editor.getViewState().selections).toBeUndefined();
+      document.dispatchEvent(new Event('selectionchange'));
+
+      nativeRange = rangeTo(2, 1);
+      document.dispatchEvent(new Event('selectionchange'));
+      expect(editor.getViewState().selections).toEqual(selections.slice(0, 2));
+
+      nativeRange = rangeTo(3, 0);
+      document.dispatchEvent(new Event('selectionchange'));
+      expect(editor.getViewState().selections).toEqual(selections.slice(0, 3));
+
+      nativeRange = rangeTo(4, 0);
+      document.dispatchEvent(new Event('selectionchange'));
+      expect(editor.getViewState().selections).toEqual(selections.slice(0, 4));
+
+      nativeRange = rangeTo(5, 0);
+      document.dispatchEvent(new Event('selectionchange'));
+      expect(editor.getViewState().selections).toEqual(selections.slice(0, 5));
+
+      nativeRange = rangeTo(6, 0);
+      document.dispatchEvent(new Event('selectionchange'));
+      expect(editor.getViewState().selections).toEqual(selections.slice(0, 6));
+
+      // An empty focus line may not produce another native selectionchange, so
+      // pointer movement must update the rectangle on its own.
+      document.dispatchEvent(
+        new PointerEvent('pointermove', {
+          clientX: 116,
+          pointerType: 'mouse',
+        })
+      );
+      expect(editor.getViewState().selections).toEqual([
+        createSelection(1, 2, 1, 4, DirectionForward),
+        caret(2, 1),
+        caret(3, 3),
+        caret(4, 3),
+        caret(5, 3),
+        caret(6, 0),
+      ]);
+
+      document.dispatchEvent(
+        new PointerEvent('pointermove', {
+          clientX: 100,
+          pointerType: 'mouse',
+        })
+      );
+      expect(editor.getViewState().selections).toEqual(selections.slice(0, 6));
+
+      nativeRange = rangeTo(7, 0);
+      document.dispatchEvent(new Event('selectionchange'));
+      expect(editor.getViewState().selections).toEqual(selections);
+
+      nativeRange = rangeTo(7, 2);
+      document.dispatchEvent(new Event('selectionchange'));
+      expect(editor.getViewState().selections).toEqual(selections);
+
+      // Cancellation tears down both native-selection and pointer tracking.
+      document.dispatchEvent(
+        new PointerEvent('pointercancel', { pointerType: 'mouse' })
+      );
+      document.dispatchEvent(
+        new PointerEvent('pointermove', {
+          clientX: 116,
+          pointerType: 'mouse',
+        })
+      );
+      nativeRange = rangeTo(1, 0);
+      document.dispatchEvent(new Event('selectionchange'));
+      expect(editor.getViewState().selections).toEqual(selections);
+    } finally {
+      document.getSelection = originalGetSelection;
+      cleanup();
+    }
+  });
+});
 
 describe('Editor.setSelections position clamping', () => {
   test('positions past a line length or past the last line clamp instead of throwing', async () => {
@@ -3975,7 +4184,7 @@ describe('Editor.setSelections position clamping', () => {
           direction: 'none',
         },
       ]);
-      expect(editor.getState().selections).toEqual([caret(1, 5)]);
+      expect(editor.getViewState().selections).toEqual([caret(1, 5)]);
 
       // Both line and character overshoot: the primary caret lands exactly at
       // the document end ("charlie" is line 2, length 7).
@@ -3986,7 +4195,7 @@ describe('Editor.setSelections position clamping', () => {
           direction: 'none',
         },
       ]);
-      expect(editor.getState().selections).toEqual([caret(2, 7)]);
+      expect(editor.getViewState().selections).toEqual([caret(2, 7)]);
     } finally {
       cleanup();
     }
@@ -4006,7 +4215,7 @@ describe('Editor.setSelections position clamping', () => {
       ]);
       // The valid start edge is untouched; the end edge clamps to doc end and
       // the direction survives.
-      expect(editor.getState().selections).toEqual([
+      expect(editor.getViewState().selections).toEqual([
         {
           start: { line: 0, character: 2 },
           end: { line: 2, character: 7 },
@@ -4032,7 +4241,7 @@ describe('Editor.setSelections with a reversed range', () => {
           direction: 'forward',
         },
       ]);
-      expect(editor.getState().selections).toEqual([
+      expect(editor.getViewState().selections).toEqual([
         {
           start: { line: 0, character: 2 },
           end: { line: 1, character: 3 },
@@ -4096,7 +4305,7 @@ function remapRange(
 // positions are never read by the remap (only its direction is), so a dummy
 // caret suffices; `target` must already reflect `edits`.
 function mapOffset(
-  target: TextDocument<unknown>,
+  target: TextDocument,
   offset: number,
   edits: readonly ResolvedTextEdit[]
 ): number {
@@ -4352,14 +4561,8 @@ describe('bidirectional round-trip through history inverse edits', () => {
   // being hand-built. The entry's inverseEdits are expressed in POST-edit
   // offsets, which is exactly the coordinate space the return leg needs.
   function buildHistoryEntry() {
-    const stack = new EditStack<unknown>();
-    const post = new TextDocument<unknown>(
-      'inmemory://1',
-      baseText,
-      'plain',
-      0,
-      stack
-    );
+    const stack = new EditStack<'file'>();
+    const post = new TextDocument('inmemory://1', baseText, 'plain', 0, stack);
     post.applyResolvedEdits(hunks, true);
     const entry = stack.peekUndo();
     if (entry === undefined) {

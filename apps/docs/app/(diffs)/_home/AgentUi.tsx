@@ -1,8 +1,14 @@
 'use client';
 
 import { DEFAULT_THEMES, type FileDiffMetadata } from '@pierre/diffs';
-import type { EditorOptions } from '@pierre/diffs/edit';
-import { File, FileDiff, Virtualizer } from '@pierre/diffs/react';
+import type { EditorChangeEvent, EditorOptions } from '@pierre/diffs/edit';
+import {
+  File,
+  FileDiff,
+  useWorkerPool,
+  Virtualizer,
+} from '@pierre/diffs/react';
+import { useStableCallback } from '@pierre/diffs/react';
 import {
   IconArrow,
   IconChevronSm,
@@ -17,6 +23,8 @@ import { FileTree, type FileTreeRowDecoration } from '@pierre/trees';
 import { useFileTreeSearch } from '@pierre/trees/react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+
+import './agent-ui.css';
 import {
   type CSSProperties,
   useCallback,
@@ -26,7 +34,6 @@ import {
   useState,
 } from 'react';
 
-import './agent-ui.css';
 import {
   AUI_DIFF_OPTIONS,
   AUI_EXPLORER_NEW_DIR,
@@ -40,6 +47,11 @@ import {
   getSessionGitStatus,
   getSessionPaths,
 } from './mockData';
+import { useLatestValueRef } from '@/lib/useLatestValueRef';
+type AgentUiEditorChangeEvent =
+  | EditorChangeEvent<'file', undefined, undefined>
+  | EditorChangeEvent<'file-diff', undefined, undefined>;
+
 // Added/removed line totals for a single file's diff.
 interface DiffStats {
   additions: number;
@@ -122,6 +134,16 @@ function formatSelectionLineLabel(
     : `(${String(snippet.lineStart)}-${String(snippet.lineEnd)})`;
 }
 
+// The edited-path set is intentionally imperative; isolate its render-time
+// lookup so the surrounding demo component remains compiler-safe.
+function useHasEditedPath(
+  editedPathsRef: { current: ReadonlySet<string> },
+  path: string | null
+): boolean {
+  /* oxlint-disable-next-line react/refs -- preserves the existing prerender eligibility check */
+  return path != null && editedPathsRef.current.has(path);
+}
+
 // Renders the active session's changed files as a @pierre/trees FileTree, with
 // git-status colours and per-row +/- decorations. The tree is an imperative web
 // component, so it's created in an effect and torn down on session change.
@@ -138,13 +160,11 @@ function ChangesTree({
 }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const treeRef = useRef<FileTree | null>(null);
-  const onSelectRef = useRef(onSelect);
-  onSelectRef.current = onSelect;
+  const onSelectRef = useLatestValueRef(onSelect);
   // The FileTree lives for the whole session, so its renderRowDecoration closure
   // is created once. Reading the latest stats through a ref keeps the decoration
   // in sync with edits without recreating the tree.
-  const statsRef = useRef(statsByPath);
-  statsRef.current = statsByPath;
+  const statsRef = useLatestValueRef(statsByPath);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -215,7 +235,7 @@ function ChangesTree({
       tree.cleanUp();
       treeRef.current = null;
     };
-  }, [session]);
+  }, [onSelectRef, session, statsRef]);
 
   // Inline color-scheme beats the tree's `:host { color-scheme: light dark }`,
   // pinning its light-dark() colours to the demo's dark mode.
@@ -296,10 +316,8 @@ function FilesTree({
 }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const treeRef = useRef<FileTree | null>(null);
-  const onSelectRef = useRef(onSelect);
-  onSelectRef.current = onSelect;
-  const onModelReadyRef = useRef(onModelReady);
-  onModelReadyRef.current = onModelReady;
+  const onSelectRef = useLatestValueRef(onSelect);
+  const notifyModelReady = useStableCallback(onModelReady);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -337,14 +355,14 @@ function FilesTree({
     treeRef.current = tree;
     container.innerHTML = '';
     tree.render({ fileTreeContainer: container });
-    onModelReadyRef.current(tree);
+    notifyModelReady(tree);
 
     return () => {
       tree.cleanUp();
       treeRef.current = null;
-      onModelReadyRef.current(null);
+      notifyModelReady(null);
     };
-  }, [session]);
+  }, [notifyModelReady, onSelectRef, session]);
 
   // Inline color-scheme beats the tree's `:host { color-scheme: light dark }`,
   // pinning its light-dark() colours to the demo's dark mode.
@@ -677,6 +695,7 @@ export function AgentUi({
 }: AgentUiProps) {
   const session = AUI_SESSIONS[0];
   const router = useRouter();
+  const workerPool = useWorkerPool();
 
   // Expands the windowed card into the fullscreen route, morphing the shared
   // `.aui` element via the View Transition.
@@ -776,8 +795,7 @@ export function AgentUi({
   >([]);
   // Mirror for the tree mutation handlers (whose closures would otherwise read a
   // stale snapshot) so they can tell explorer-created rows from anything else.
-  const creationsRef = useRef(explorerCreations);
-  creationsRef.current = explorerCreations;
+  const creationsRef = useLatestValueRef(explorerCreations);
 
   // New file / New folder: add a placeholder row, track it, and drop it into
   // inline rename (`removeIfCanceled` discards an unnamed row). Folder paths end
@@ -846,7 +864,7 @@ export function AgentUi({
       offMove();
       offRemove();
     };
-  }, [filesModel]);
+  }, [creationsRef, filesModel]);
 
   // Files created in the explorer, surfaced in the Changes panel as added files
   // (whole contents counted as additions).
@@ -887,8 +905,7 @@ export function AgentUi({
   const [editedPlaceholders, setEditedPlaceholders] = useState<string[]>([]);
   // Mirror the latest edits so the stable editor callback can rebuild a
   // placeholder's Changes entry without depending on edit state.
-  const editedPlaceholdersRef = useRef(editedPlaceholders);
-  editedPlaceholdersRef.current = editedPlaceholders;
+  const editedPlaceholdersRef = useLatestValueRef(editedPlaceholders);
 
   // Snippets sent from the selection action's "Add to chat" land here as
   // composer attachments.
@@ -965,21 +982,21 @@ export function AgentUi({
         filesModel?.applyGitStatusPatch({ remove: [target] });
       }
     },
-    [liveSession, filesModel]
+    [editedPlaceholdersRef, liveSession, filesModel]
   );
-  const recordEditedStatsRef = useRef(recordEditedStats);
-  recordEditedStatsRef.current = recordEditedStats;
 
-  // One FileDiffMetadata per changed file, parsed on first visit and reused
-  // on every revisit. Edit sessions write edits back into the metadata (the
-  // library treats the host's metadata as the diff's content owner and
-  // self-heals session-shaped metadata on re-render), so reusing the object
-  // is what keeps a diff's edited content across file switches — the editor's
-  // persist-state API covers only selections and scroll for diffs.
-  // Placeholder File surfaces need no equivalent: with `persistState` on the
-  // shared editor, the per-cacheKey document cache restores their edited
-  // contents (and undo history) on re-attach.
-  const diffsRef = useRef<Map<string, FileDiffMetadata>>(new Map());
+  // One external diff baseline per changed file, created up front for worker
+  // priming and reused on every visit so its cache identity remains stable.
+  const [diffs] = useState<Map<string, FileDiffMetadata>>(() => {
+    const diffs = new Map<string, FileDiffMetadata>();
+    for (const file of session.changedFiles) {
+      const diff = getFileDiff(file);
+      diffs.set(file.path, diff);
+      void workerPool?.primeDiffHighlightCache(diff);
+    }
+    return diffs;
+  });
+
   // Paths the user has edited. Only consulted to stop an edited file from
   // hydrating out of its prerendered (pristine) server HTML on revisit.
   const editedPathsRef = useRef<Set<string>>(new Set());
@@ -996,9 +1013,7 @@ export function AgentUi({
 
   // Edited placeholder files listed in the Changes panel as "modified". The
   // entries carry zero snapshot counts because the tree's row decoration
-  // always finds live counts in `liveStats` for tracked placeholders; the
-  // edited contents themselves live in the shared editor's persist-state
-  // document cache, not here.
+  // always finds live counts in `liveStats` for tracked placeholders.
   const editedPlaceholderFiles = useMemo<AuiChangedFile[]>(
     () =>
       editedPlaceholders.map((path) => {
@@ -1018,7 +1033,7 @@ export function AgentUi({
   // The session shown in the Changes panel: the live session (agent changes plus
   // explorer-added files) augmented with any edited placeholders. Kept separate
   // from `liveSession` so editing a placeholder lists it here without flipping
-  // its center surface from the editable File view to a diff.
+  // its center view from the editable File component to a diff.
   const changesSession = useMemo<AuiSession>(
     () => ({
       ...liveSession,
@@ -1027,10 +1042,12 @@ export function AgentUi({
     [liveSession, editedPlaceholderFiles]
   );
 
-  const editorOptions = useMemo<EditorOptions<undefined>>(
+  const editorOptions = useMemo<
+    EditorOptions<'file-diff' | 'file', undefined, undefined>
+  >(
     () => ({
-      persistState: true,
       enabledSelectionAction: true,
+      ownsVerticalViewport: true,
       renderSelectionAction(selectionAction) {
         const container = document.createElement('div');
         container.style.cssText = 'display: flex; gap: 4px;';
@@ -1073,10 +1090,10 @@ export function AgentUi({
       onAttach(editor) {
         // Selecting a file leaves keyboard focus in the tree, so undo/redo
         // shortcuts would silently go nowhere until the user clicks back into
-        // the code — reading as a lost edit history even though the
-        // persist-state document cache restored it. When a file switch lands,
-        // hand focus to the editor; preventScroll keeps the restored viewport
-        // position. The initial auto-opened file must not steal page focus.
+        // the code — reading as a lost edit history even though the retained
+        // document restored it. When a file switch lands, hand focus to the
+        // editor; preventScroll keeps the restored viewport position. The
+        // initial auto-opened file must not steal page focus.
         const target = activeTargetRef.current;
         if (
           lastAttachedPathRef.current !== null &&
@@ -1086,19 +1103,22 @@ export function AgentUi({
         }
         lastAttachedPathRef.current = target;
       },
-      onChange(file) {
-        const target = activeTargetRef.current;
-        if (target == null) {
-          return;
-        }
-        editedPathsRef.current.add(target);
-        // Recompute the edited file's diff against its original snapshot so the
-        // Changes tree's +/- totals reflect the live edits.
-        recordEditedStatsRef.current(target, file.contents);
-      },
       __debug: true,
     }),
     [addSnippet]
+  );
+
+  const handleEditChange = useStableCallback(
+    (event: AgentUiEditorChangeEvent) => {
+      const target = activeTargetRef.current;
+      if (target == null) {
+        return;
+      }
+      editedPathsRef.current.add(target);
+      // Recompute the edited file's diff against its original snapshot so the
+      // Changes tree's +/- totals reflect the live edits.
+      recordEditedStats(target, event.file.contents);
+    }
   );
 
   const openFile = useCallback((path: string) => {
@@ -1113,10 +1133,12 @@ export function AgentUi({
         : null,
     [liveSession, activePath]
   );
+  const fileDiff = activeFile != null ? diffs.get(activeFile.path) : undefined;
+  const activePathIsEdited = useHasEditedPath(editedPathsRef, activePath);
 
   // When the active path isn't a changed/added file (e.g. browsing the root
   // README or another explorer file), open editable placeholder contents
-  // instead of a diff so the surface is never blank.
+  // instead of a diff so the view is never blank.
   const placeholderContents = useMemo<string | null>(
     () =>
       activePath != null && activeFile == null
@@ -1125,27 +1147,16 @@ export function AgentUi({
     [activePath, activeFile]
   );
 
-  // The active file's diff metadata: parsed once on first visit, then reused
-  // from the cache so revisits render the content the last edit session wrote
-  // back into it.
-  const fileDiff = useMemo(() => {
-    if (activeFile == null) {
-      return null;
-    }
-    let diff = diffsRef.current.get(activeFile.path);
-    if (diff == null) {
-      diff = getFileDiff(activeFile);
-      diffsRef.current.set(activeFile.path, diff);
-    }
-    return diff;
-  }, [activeFile]);
-
   // Server-rendered, already-highlighted HTML for the active diff. Only safe
   // when the file is unedited so the markup matches `fileDiff`.
   const activePrerenderedHTML =
-    activePath != null && !editedPathsRef.current.has(activePath)
+    activePath != null && !activePathIsEdited
       ? prerenderedDiffs?.[activePath]
       : undefined;
+  const fileDiffEditStateKey =
+    activePath != null ? `homepage-agent:file-diff:${activePath}` : undefined;
+  const fileEditStateKey =
+    activePath != null ? `homepage-agent:file:${activePath}` : undefined;
 
   const breadcrumbSegments = activePath != null ? activePath.split('/') : [];
 
@@ -1239,17 +1250,18 @@ export function AgentUi({
                 options={{ ...AUI_DIFF_OPTIONS, theme }}
                 prerenderedHTML={activePrerenderedHTML}
                 edit
+                editStateKey={fileDiffEditStateKey}
                 editorOptions={editorOptions}
+                onEditChange={handleEditChange}
               />
             ) : placeholderContents != null && activePath != null ? (
               // Editable view for explorer files that aren't part of the change
               // set (e.g. the root README or a generated stub). Always mounts
-              // with the pristine placeholder contents: `cacheKey` is required
-              // by the shared editor's `persistState`, whose per-file document
-              // cache substitutes any previously edited contents (and their
-              // undo history) when the surface re-attaches.
+              // with the latest placeholder contents. The per-path edit history
+              // restores undo history when the component re-attaches; cacheKey
+              // remains only a render-cache identity.
               // Highlighted on the main thread since this File is mounted
-              // dynamically outside the editable surface's worker pool.
+              // dynamically outside the editable component's worker pool.
               <File
                 key={activePath}
                 file={{
@@ -1266,7 +1278,9 @@ export function AgentUi({
                 }}
                 disableWorkerPool
                 edit
+                editStateKey={fileEditStateKey}
                 editorOptions={editorOptions}
+                onEditChange={handleEditChange}
               />
             ) : (
               <div className="aui-empty">Select a file to review.</div>
@@ -1299,7 +1313,7 @@ export function AgentUi({
                         disableLineNumbers: true,
                       }}
                       // The page's shared worker pool is wired up for the
-                      // editable editor surface; a dynamically mounted
+                      // editable editor component; a dynamically mounted
                       // read-only File isn't highlighted through it, so
                       // highlight on the main thread.
                       disableWorkerPool
@@ -1323,6 +1337,7 @@ export function AgentUi({
             <textarea
               className="aui-composer-input"
               placeholder="Ask for changes, @mention files, or run commands…"
+              aria-label="Ask for changes, @mention files, or run commands"
               rows={2}
               disabled
             />

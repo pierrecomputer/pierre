@@ -7,6 +7,14 @@ import type { FileTreePathOptions } from '@trees/_lib/fileTreePathOptions';
 import { readSettingsCookies } from '../_components/readSettingsCookies';
 import { SearchDemoClient } from '../_demos/SearchDemoClient';
 import { sharedDemoPaths, sharedInitialExpandedPaths } from '../demo-data';
+import { pageMetadata } from '@/lib/page-metadata';
+
+export const metadata = pageMetadata({
+  title: 'Search modes demo — Pierre Trees',
+  description:
+    'Compare the @pierre/trees search modes: expand-matches, collapse-non-matches, and hide-non-matches, each running on the same tree.',
+  path: '/trees-dev/search',
+});
 
 function getPayload(options: Omit<FileTreePathOptions, 'id'>, id: string) {
   return preloadFileTree({

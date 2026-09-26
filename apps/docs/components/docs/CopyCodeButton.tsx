@@ -36,15 +36,16 @@ export function CopyCodeButton({ content }: CopyButtonProps) {
     []
   );
   return (
-    <div
+    <button
+      type="button"
       onClick={copyToClipboard}
-      tabIndex={0}
+      aria-label={copied ? 'Copied' : 'Copy code'}
       className={cn(
         'hover:bg-accent -mr-[10px] cursor-pointer rounded-sm p-2 opacity-60 hover:opacity-100',
         copied ? 'text-emerald-500' : undefined
       )}
     >
       {copied ? <IconCheck /> : <IconCopy />}
-    </div>
+    </button>
   );
 }

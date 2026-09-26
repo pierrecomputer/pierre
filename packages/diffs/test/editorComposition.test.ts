@@ -33,7 +33,7 @@ async function waitForEditableContent(
 interface EditorFixture {
   cleanup(): void;
   content: HTMLElement;
-  editor: Editor<undefined>;
+  editor: Editor<'file', undefined>;
   window: EditorTestWindow;
 }
 
@@ -50,7 +50,7 @@ interface EditorTestWindow extends Window {
 }
 
 type EditableSelection = Parameters<
-  Editor<undefined>['setSelections']
+  Editor<'file', undefined>['setSelections']
 >[0][number];
 
 interface CreateEditorFixtureOptions {
@@ -75,7 +75,7 @@ async function createEditorFixture(
     name: 'editor.ts',
     contents,
   };
-  const editor = new Editor<undefined>();
+  const editor = new Editor('file');
 
   file.render({
     file: initialFile,
@@ -166,6 +166,14 @@ function findReplaceInput(panel: HTMLElement): HTMLInputElement {
   return input;
 }
 
+function findSearchInput(panel: HTMLElement): HTMLInputElement {
+  const input = panel.querySelector<HTMLInputElement>('input[data-search]');
+  if (input == null) {
+    throw new Error('search input was not rendered');
+  }
+  return input;
+}
+
 function updateInputValue(input: HTMLInputElement, value: string): void {
   input.value = value;
   input.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
@@ -243,6 +251,37 @@ describe('Editor composition input', () => {
     }
   });
 
+  test('leaves the caret alone for a composing ArrowDown', async () => {
+    const { cleanup, content, editor, window } = await createEditorFixture({
+      contents: 'alpha\nbeta',
+      selections: [
+        {
+          start: { line: 0, character: 2 },
+          end: { line: 0, character: 2 },
+          direction: 'none',
+        },
+      ],
+    });
+
+    try {
+      const event = dispatchKeydown(window, content, {
+        key: 'ArrowDown',
+        isComposing: true,
+      });
+
+      expect(event.defaultPrevented).toBe(false);
+      expect(editor.getViewState().selections).toEqual([
+        {
+          start: { line: 0, character: 2 },
+          end: { line: 0, character: 2 },
+          direction: DirectionNone,
+        },
+      ]);
+    } finally {
+      cleanup();
+    }
+  });
+
   test('survives selection changes when getComposedRanges is unavailable', async () => {
     // The editor renders inside a shadow root and reads the selection via
     // Selection.getComposedRanges, a newly available API. On browsers and
@@ -293,7 +332,7 @@ describe('Editor keyboard editing', () => {
       });
 
       expect(event.defaultPrevented).toBe(true);
-      expect(editor.getState().selections).toEqual([
+      expect(editor.getViewState().selections).toEqual([
         {
           start: { line: 0, character: 0 },
           end: { line: 1, character: 4 },
@@ -391,6 +430,70 @@ describe('Editor keyboard editing', () => {
     }
   });
 
+  test('lets composing Enter commit IME text in the search input', async () => {
+    const { cleanup, content, window } = await createEditorFixture({
+      contents: 'alpha beta',
+    });
+
+    try {
+      const panel = await openSearchReplacePanel({ content, window });
+      const searchInput = findSearchInput(panel);
+      updateInputValue(searchInput, 'beta');
+
+      const event = dispatchKeydown(window, searchInput, {
+        key: 'Enter',
+        isComposing: true,
+      });
+
+      expect(event.defaultPrevented).toBe(false);
+      expect(panel.isConnected).toBe(true);
+    } finally {
+      cleanup();
+    }
+  });
+
+  test('keeps the panel open when Escape cancels a composition', async () => {
+    const { cleanup, content, window } = await createEditorFixture({
+      contents: 'alpha beta',
+    });
+
+    try {
+      const panel = await openSearchReplacePanel({ content, window });
+      const searchInput = findSearchInput(panel);
+
+      const event = dispatchKeydown(window, searchInput, {
+        key: 'Escape',
+        keyCode: 229,
+      });
+
+      expect(event.defaultPrevented).toBe(false);
+      expect(panel.isConnected).toBe(true);
+    } finally {
+      cleanup();
+    }
+  });
+
+  test('keeps the panel open when Escape cancels a replace input composition', async () => {
+    const { cleanup, content, window } = await createEditorFixture({
+      contents: 'alpha beta',
+    });
+
+    try {
+      const panel = await openSearchReplacePanel({ content, window });
+      const replaceInput = findReplaceInput(panel);
+
+      const event = dispatchKeydown(window, replaceInput, {
+        key: 'Escape',
+        keyCode: 229,
+      });
+
+      expect(event.defaultPrevented).toBe(false);
+      expect(panel.isConnected).toBe(true);
+    } finally {
+      cleanup();
+    }
+  });
+
   test('closes the search panel on Escape from the replace input', async () => {
     const { cleanup, content, window } = await createEditorFixture({
       contents: 'alpha beta',
@@ -465,7 +568,7 @@ describe('Editor keyboard editing', () => {
 
       expect(event.defaultPrevented).toBe(true);
       expect(editor.getText()).toBe('foo');
-      expect(editor.getState().selections).toEqual([
+      expect(editor.getViewState().selections).toEqual([
         {
           start: { line: 0, character: 0 },
           end: { line: 0, character: 0 },
@@ -494,7 +597,7 @@ describe('Editor keyboard editing', () => {
 
       expect(event.defaultPrevented).toBe(true);
       expect(editor.getText()).toBe('foo');
-      expect(editor.getState().selections).toEqual([
+      expect(editor.getViewState().selections).toEqual([
         {
           start: { line: 0, character: 0 },
           end: { line: 0, character: 0 },
@@ -523,7 +626,7 @@ describe('Editor keyboard editing', () => {
 
       expect(event.defaultPrevented).toBe(true);
       expect(editor.getText()).toBe(' foo');
-      expect(editor.getState().selections).toEqual([
+      expect(editor.getViewState().selections).toEqual([
         {
           start: { line: 0, character: 1 },
           end: { line: 0, character: 1 },
@@ -559,7 +662,7 @@ describe('Editor keyboard editing', () => {
       expect(editor.getText()).toBe('  abcde  fgh');
       // The second caret follows its own inserted indent (column 9), not the
       // pre-shift column 7 that lands before it.
-      expect(editor.getState().selections).toEqual([
+      expect(editor.getViewState().selections).toEqual([
         {
           start: { line: 0, character: 2 },
           end: { line: 0, character: 2 },

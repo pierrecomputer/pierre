@@ -8,6 +8,8 @@ import {
 } from '@pierre/diffs/react';
 import type { ReactNode } from 'react';
 
+import { getPreferredHighlighter } from '@/lib/getPreferredHighlighter';
+
 function isMobileBrowser(): boolean {
   const navigator = global.navigator;
   if (navigator == null) {
@@ -63,7 +65,7 @@ const HighlighterOptions: WorkerInitializationRenderOptions = {
     'typescript',
     'zig',
   ],
-  preferredHighlighter: 'shiki-wasm',
+  preferredHighlighter: getPreferredHighlighter(),
 };
 
 interface WorkerPoolProps {

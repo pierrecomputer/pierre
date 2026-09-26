@@ -45,6 +45,7 @@ const ROOT = join(import.meta.dir, '..');
 const DIFFS_SECTIONS = [
   'Overview',
   'Installation',
+  'BuildWithAgents',
   'CoreTypes',
   'ReactAPI',
   'VanillaAPI',
@@ -58,10 +59,12 @@ const DIFFS_SECTIONS = [
   'TokenHooks',
   'WorkerPool',
   'SSR',
+  'HighlightsHighlighter',
 ] as const;
 
 const TREES_SECTIONS = [
   'Overview',
+  'BuildWithAgents',
   'Guides/ChooseYourIntegration',
   'Guides/GetStartedWithReact',
   'Guides/GetStartedWithVanilla',
@@ -85,6 +88,8 @@ const SECTION_DESCRIPTIONS: Record<string, Record<string, string>> = {
   diffs: {
     Overview: 'What diffs is, architecture, and getting started',
     Installation: 'Package installation and entry points',
+    BuildWithAgents:
+      'The diffs agent skill, a paste-ready prompt for agents without skill support, and the plain-text docs',
     CoreTypes:
       'FileContents, FileDiffMetadata, and creating diffs from files or patches',
     ReactAPI:
@@ -93,7 +98,7 @@ const SECTION_DESCRIPTIONS: Record<string, Record<string, string>> = {
       'Vanilla classes for CodeView, FileDiff, File, UnresolvedFile, props, and low-level renderers',
     CodeView:
       'One virtualized scroll region for mixed file and diff lists, with scrollTo targeting, viewer-wide selection, sticky headers, and header/footer regions',
-    Edit: 'Edit mode for File surfaces via Editor and EditProvider, with selections, history, search, actions, and shortcuts',
+    Edit: 'Edit mode for File components via Editor and EditProvider, with selections, history, search, actions, and shortcuts',
     Virtualization: 'Virtual scrolling for large diffs and files',
     CustomHunkSeparators:
       'Built-in separator presets, CSS customization hooks, and the discouraged vanilla escape hatch',
@@ -107,10 +112,14 @@ const SECTION_DESCRIPTIONS: Record<string, Record<string, string>> = {
     WorkerPool:
       'Off-main-thread syntax highlighting with configurable worker pools',
     SSR: 'Server-side rendering with preload functions for instant first paint',
+    HighlightsHighlighter:
+      'Highlights APIs, themes, languages, streaming, and incremental editing',
   },
   trees: {
     Overview:
       'What trees is, the path-first model, and the React, vanilla, and SSR entry points',
+    BuildWithAgents:
+      'The trees agent skill, a paste-ready prompt for agents without skill support, and the plain-text docs',
     'Guides/ChooseYourIntegration':
       'Choosing between React and vanilla, with the shared path-first model',
     'Guides/GetStartedWithReact':
@@ -350,7 +359,7 @@ function hasFileContents(
   if (typeof value !== 'object' || value === null || !('file' in value)) {
     return false;
   }
-  const file = (value as { file: unknown }).file;
+  const file = value.file;
   if (typeof file !== 'object' || file === null) return false;
   const f = file as { name?: unknown; contents?: unknown };
   return typeof f.contents === 'string' && typeof f.name === 'string';
@@ -376,6 +385,7 @@ const LABEL_PREFIXES_TO_STRIP = [
   'SSR_',
   'STYLING_CODE_',
   'THEMING_',
+  'HIGHLIGHTS_',
   'VIRTUALIZATION_',
   'OVERVIEW_',
   'TREES_',

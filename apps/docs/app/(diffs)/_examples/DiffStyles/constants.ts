@@ -3,7 +3,7 @@ import type { PreloadMultiFileDiffOptions } from '@pierre/diffs/ssr';
 
 import { CustomScrollbarCSS } from '@/components/CustomScrollbarCSS';
 
-export const DIFF_STYLES: PreloadMultiFileDiffOptions<undefined> = {
+export const DIFF_STYLES: PreloadMultiFileDiffOptions<undefined, undefined> = {
   oldFile: {
     name: 'main.zig',
     contents: `const std = @import("std");

@@ -76,7 +76,6 @@ export function DemoDragDropClient({ preloadedData }: DemoDragDropClientProps) {
 
   useEffect(() => {
     activeModel.resetPaths(sampleFileList);
-    setHasDragged(false);
   }, [activeModel]);
 
   return (
@@ -107,17 +106,23 @@ export function DemoDragDropClient({ preloadedData }: DemoDragDropClientProps) {
             <Button
               variant="outline"
               className="w-full justify-between gap-3 pr-11 pl-3 md:w-auto"
-              onClick={() => setLockPackageJson((previous) => !previous)}
+              onClick={() => {
+                setLockPackageJson((previous) => !previous);
+                setHasDragged(false);
+              }}
             >
               <div className="flex items-center gap-2">
                 <IconLock />
                 Lock package.json
               </div>
             </Button>
+            {/* Visual-only indicator stacked over the Button, which is the
+                interactive control. Keep the Switch out of the tab order and
+                hidden from assistive tech to avoid an unnamed duplicate toggle. */}
             <Switch
               checked={lockPackageJson}
-              onCheckedChange={setLockPackageJson}
-              onClick={(event) => event.stopPropagation()}
+              tabIndex={-1}
+              aria-hidden
               className="pointer-events-none mr-3 place-self-center justify-self-end"
             />
           </div>

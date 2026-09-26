@@ -1,9 +1,6 @@
-import { diffChars, diffWordsWithSpace } from 'diff';
+import { type ChangeObject, diffChars, diffWordsWithSpace } from 'diff';
 
-import {
-  DEFAULT_COLLAPSED_CONTEXT_THRESHOLD,
-  DEFAULT_THEMES,
-} from '../constants';
+import { DEFAULT_COLLAPSED_CONTEXT_THRESHOLD } from '../constants';
 import type {
   CodeToHastOptions,
   DecorationItem,
@@ -19,6 +16,7 @@ import type {
   SupportedLanguages,
   ThemedDiffResult,
 } from '../types';
+import { appendItems } from './appendItems';
 import { cleanLastNewline } from './cleanLastNewline';
 import { createTransformerWithState } from './createTransformerWithState';
 import { formatCSSVariablePrefix } from './formatCSSVariablePrefix';
@@ -228,7 +226,7 @@ export function renderDiffWithHighlighter(
         }
       }
     } else {
-      code.deletionLines.push(...deletionLines);
+      appendItems(code.deletionLines, deletionLines);
     }
     if (bucket.additionSegments.length > 0) {
       for (const seg of bucket.additionSegments) {
@@ -238,22 +236,78 @@ export function renderDiffWithHighlighter(
         }
       }
     } else {
-      code.additionLines.push(...additionLines);
+      appendItems(code.additionLines, additionLines);
     }
   }
 
   return { code, themeStyles, baseThemeType };
 }
 
-interface ProcessLineDiffProps {
-  deletionLine: string | undefined;
-  additionLine: string | undefined;
+// The line indexes and decoration arrays a line diff writes its highlights to
+interface LineDiffDecorationTargets {
   deletionLineIndex: number;
   additionLineIndex: number;
   deletionDecorations: DecorationItem[];
   additionDecorations: DecorationItem[];
+}
+
+interface ProcessLineDiffProps extends LineDiffDecorationTargets {
+  deletionLine: string | undefined;
+  additionLine: string | undefined;
   lineDiffType: LineDiffTypes;
   maxLineDiffLength: number;
+}
+
+// Push one decoration per side covering the first through last changed
+// token, so each line only has one highlight. Offsets come straight from the
+// diff items, skipping the span arrays the other word modes build.
+function pushWordLineDecorations(
+  lineDiff: ChangeObject<string>[],
+  {
+    deletionLineIndex,
+    additionLineIndex,
+    deletionDecorations,
+    additionDecorations,
+  }: LineDiffDecorationTargets
+): void {
+  let deletionOffset = 0;
+  let additionOffset = 0;
+  let deletionStart = -1;
+  let deletionEnd = 0;
+  let additionStart = -1;
+  let additionEnd = 0;
+  for (const { value, added, removed } of lineDiff) {
+    if (removed) {
+      if (deletionStart === -1) deletionStart = deletionOffset;
+      deletionOffset += value.length;
+      deletionEnd = deletionOffset;
+    } else if (added) {
+      if (additionStart === -1) additionStart = additionOffset;
+      additionOffset += value.length;
+      additionEnd = additionOffset;
+    } else {
+      deletionOffset += value.length;
+      additionOffset += value.length;
+    }
+  }
+  if (deletionStart !== -1) {
+    deletionDecorations.push(
+      createDiffSpanDecoration({
+        line: deletionLineIndex,
+        spanStart: deletionStart,
+        spanLength: deletionEnd - deletionStart,
+      })
+    );
+  }
+  if (additionStart !== -1) {
+    additionDecorations.push(
+      createDiffSpanDecoration({
+        line: additionLineIndex,
+        spanStart: additionStart,
+        spanLength: additionEnd - additionStart,
+      })
+    );
+  }
 }
 
 function computeLineDiffDecorations({
@@ -285,6 +339,15 @@ function computeLineDiffDecorations({
     lineDiffType === 'char'
       ? diffChars(deletionLine, additionLine)
       : diffWordsWithSpace(deletionLine, additionLine);
+  if (lineDiffType === 'word-line') {
+    pushWordLineDecorations(lineDiff, {
+      deletionLineIndex,
+      additionLineIndex,
+      deletionDecorations,
+      additionDecorations,
+    });
+    return;
+  }
   const deletionSpans: [0 | 1, string][] = [];
   const additionSpans: [0 | 1, string][] = [];
   const enableJoin = lineDiffType === 'word-alt';
@@ -414,7 +477,7 @@ function renderTwoFiles({
   deletionDecorations,
   additionDecorations,
   languageOverride,
-  options: { theme: themeOrThemes = DEFAULT_THEMES, ...options },
+  options: { theme: themeOrThemes, ...options },
 }: RenderTwoFilesProps): RenderDiffFilesResult {
   const deletionLang =
     languageOverride ?? getFiletypeFromFileName(deletionFile.name);

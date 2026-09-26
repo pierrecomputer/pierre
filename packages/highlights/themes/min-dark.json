@@ -1,0 +1,91 @@
+{
+  "name": "Min Dark",
+  "appearance": "dark",
+  "style": {
+    "background": "#141414",
+    "text": "#999999",
+    "editor.background": "#1A1A1A",
+    "editor.foreground": "#BBBBBB",
+    "search.match_background": "#FFAB7064",
+    "players": [],
+    "error": "#F97583",
+    "warning": "#FFE62A",
+    "hint": "#969696ff",
+    "syntax": {
+      "attribute": {
+        "color": "#B392F1"
+      },
+      "boolean": {
+        "color": "#79B8FF"
+      },
+      "comment": {
+        "color": "#888888"
+      },
+      "comment.doc": {
+        "color": "#888888"
+      },
+      "constant": {
+        "color": "#79B8FF"
+      },
+      "enum": {
+        "color": "#B392F1"
+      },
+      "function": {
+        "color": "#B392F1"
+      },
+      "keyword": {
+        "color": "#FA7584"
+      },
+      "number": {
+        "color": "#F8F8F8"
+      },
+      "operator": {
+        "color": "#FA7584"
+      },
+      "property": {
+        "color": "#BBBBBB"
+      },
+      "punctuation": {
+        "color": "#D1D1D1"
+      },
+      "string": {
+        "color": "#FFAB70"
+      },
+      "string.escape": {
+        "color": "#FA7584",
+        "font_style": "normal",
+        "font_weight": 400
+      },
+      "tag": {
+        "color": "#FFAB70",
+        "font_style": "normal",
+        "font_weight": 400
+      },
+      "text.literal": {
+        "color": "#E394DC",
+        "font_style": "normal",
+        "font_weight": 400
+      },
+      "type": {
+        "color": "#79B8FF",
+        "font_style": "normal",
+        "font_weight": 400
+      },
+      "type.builtin": {
+        "color": "#79B8FF",
+        "font_style": "normal",
+        "font_weight": 400
+      },
+      "variable": {
+        "color": "#bbbbbb",
+        "font_style": "normal",
+        "font_weight": 400
+      },
+      "variable.special": {
+        "color": "#79B8FF",
+        "font_style": "normal",
+        "font_weight": 400
+      }
+    }
+  }
+}

@@ -190,7 +190,9 @@ export function AgentUi({
     activeTargetRef.current = activePath;
   }, [activePath]);
 
-  const editorOptions = useMemo<EditorOptions<undefined>>(
+  const editorOptions = useMemo<
+    EditorOptions<'file-diff', undefined, undefined>
+  >(
     () => ({
       enabledSelectionAction: true,
       renderSelectionAction({ close, getSelectionText, replaceSelectionText }) {
@@ -206,7 +208,7 @@ export function AgentUi({
         container.append(button);
         return container;
       },
-      onChange(file) {
+      onChange({ file }) {
         const target = activeTargetRef.current;
         if (target == null) {
           return;

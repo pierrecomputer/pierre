@@ -5,9 +5,12 @@ const DELETIONS = '[data-code][data-deletions] [data-content]';
 
 async function openFixture(
   page: Page,
-  options: { gutterUtility?: boolean } = {}
+  options: { annotations?: boolean; gutterUtility?: boolean } = {}
 ): Promise<void> {
-  const query = options.gutterUtility === true ? '?gutterUtility' : '';
+  const searchParams = new URLSearchParams();
+  if (options.annotations === true) searchParams.set('annotations', '');
+  if (options.gutterUtility === true) searchParams.set('gutterUtility', '');
+  const query = searchParams.size === 0 ? '' : `?${searchParams}`;
   await page.goto(`/test/e2e/fixtures/edit.html${query}`);
   await page.waitForFunction(() => window.__editReady === true);
 }
@@ -184,6 +187,35 @@ test.describe('edit mode', () => {
     await expect(page.locator(ADDITIONS)).toContainText('Z');
     await expect.poll(() => changeCount(page)).toBeGreaterThan(0);
     await expect.poll(() => canUndo(page)).toBe(true);
+  });
+
+  test('inserting a line keeps split annotations aligned', async ({ page }) => {
+    await openFixture(page, { annotations: true });
+
+    const annotationRows = page.locator('[data-line-annotation]');
+    await expect(annotationRows).toHaveCount(2);
+    const getAnnotationTops = () =>
+      annotationRows.evaluateAll((rows) =>
+        rows.map((row) => row.getBoundingClientRect().top)
+      );
+    const before = await getAnnotationTops();
+    expect(Math.abs(before[0] - before[1])).toBeLessThan(1);
+
+    const annotatedLine = page.locator(
+      `${ADDITIONS} [data-line="2"][data-line-type="change-addition"]`
+    );
+    await annotatedLine.click();
+    await page.keyboard.press('End');
+    await page.keyboard.press('Enter');
+    await expect.poll(() => changeCount(page)).toBeGreaterThan(0);
+
+    await expect(annotationRows).toHaveCount(2);
+    await expect
+      .poll(async () => {
+        const [deletionTop, additionTop] = await getAnnotationTops();
+        return Math.abs(deletionTop - additionTop);
+      })
+      .toBeLessThan(1);
   });
 
   test('focused editor survives a full render and accepts input', async ({
@@ -397,7 +429,9 @@ test.describe('edit mode', () => {
       .toContain('removed');
     await expect
       .poll(() =>
-        page.evaluate(() => window.__editor?.getState().selections?.length ?? 0)
+        page.evaluate(
+          () => window.__editor?.getViewState().selections?.length ?? 0
+        )
       )
       .toBe(0);
     await expect(page.locator('pre[data-deleted-text-selection]')).toHaveCount(

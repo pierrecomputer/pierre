@@ -165,10 +165,13 @@ export function DemoGitStatus({ preloadedData }: DemoGitStatusProps) {
             >
               Show unmodified
             </Button>
+            {/* Visual-only indicator stacked over the Button, which is the
+                interactive control. Keep the Switch out of the tab order and
+                hidden from assistive tech to avoid an unnamed duplicate toggle. */}
             <Switch
               checked={showUnmodified}
-              onCheckedChange={setShowUnmodified}
-              onClick={(event) => event.stopPropagation()}
+              tabIndex={-1}
+              aria-hidden
               className="pointer-events-none mr-3 place-self-center justify-self-end"
             />
           </div>

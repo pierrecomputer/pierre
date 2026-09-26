@@ -1,8 +1,6 @@
 import {
-  ALTERNATE_FILE_NAMES_GIT,
   COMMIT_METADATA_SPLIT,
   FILENAME_HEADER_REGEX,
-  FILENAME_HEADER_REGEX_GIT,
   GIT_DIFF_FILE_BREAK_REGEX,
   INDEX_LINE_METADATA,
 } from '../constants';
@@ -16,12 +14,19 @@ import type {
   ParsedPatch,
 } from '../types';
 import { cleanLastNewline } from './cleanLastNewline';
+import { composeCacheKey } from './composeCacheKey';
 import { detachString, releaseStringDetachBuffer } from './detachString';
 import {
   getHunkSideEndBoundary,
   getHunkSideStartBoundary,
 } from './getHunkSideBoundaries';
+import { parseQuotedDiffFileName } from './parseQuotedDiffFileName';
 import { realignChangeContentBySimilarity } from './realignChangeContent';
+
+// Keep quotes and transport prefixes until decoding, while allowing spaces in
+// unquoted paths and escaped quotes inside quoted paths.
+const GIT_DIFF_HEADER_FILENAMES =
+  /^diff --git ("a\/(?:[^"\\]|\\.)*"|a\/.+?) ("b\/(?:[^"\\]|\\.)*"|b\/.+?)$/;
 
 interface ParsedHunkHeader {
   additionCount: number;
@@ -46,7 +51,8 @@ export function processPatch(
 function _processPatch(
   data: string,
   cacheKeyPrefix?: string,
-  throwOnError = false
+  throwOnError = false,
+  patchIndex?: number
 ): ParsedPatch {
   const isGitDiff = isGitDiffPatch(data);
   const rawFiles = isGitDiff
@@ -92,7 +98,18 @@ function _processPatch(
     const currentFile = _processFile(fileOrPatchMetadata, {
       cacheKey:
         cacheKeyPrefix != null
-          ? `${cacheKeyPrefix}-${files.length}`
+          ? patchIndex == null
+            ? composeCacheKey(
+                'patch-file',
+                cacheKeyPrefix,
+                String(files.length)
+              )
+            : composeCacheKey(
+                'patch-file',
+                cacheKeyPrefix,
+                String(patchIndex),
+                String(files.length)
+              )
           : undefined,
       isGitDiff,
       throwOnError,
@@ -192,10 +209,8 @@ function _processFile(
 
       for (const line of lines) {
         if (line.startsWith('diff --git')) {
-          const filenameMatch = line.trim().match(ALTERNATE_FILE_NAMES_GIT);
-          const prevName = filenameMatch?.[1] ?? filenameMatch?.[2];
-          const name = filenameMatch?.[3] ?? filenameMatch?.[4];
-          if (prevName == null || name == null) {
+          const filenameMatch = line.trim().match(GIT_DIFF_HEADER_FILENAMES);
+          if (filenameMatch == null) {
             if (throwOnError) {
               throw Error('parsePatchContent: invalid git diff header');
             } else {
@@ -203,27 +218,28 @@ function _processFile(
             }
             continue;
           }
-          currentFile.name = detachString(name.trim());
+          const prevName = decodeDiffFileName(filenameMatch[1], true);
+          const name = decodeDiffFileName(filenameMatch[2], true);
+          currentFile.name = detachString(name);
           if (prevName !== name) {
-            currentFile.prevName = detachString(prevName.trim());
+            currentFile.prevName = detachString(prevName);
           }
           continue;
         }
 
         const filenameMatch =
           line.startsWith('---') || line.startsWith('+++')
-            ? line.match(
-                isGitDiff ? FILENAME_HEADER_REGEX_GIT : FILENAME_HEADER_REGEX
-              )
+            ? line.match(FILENAME_HEADER_REGEX)
             : null;
         if (filenameMatch != null) {
-          const [, type, fileName] = filenameMatch;
+          const [, type, rawFileName] = filenameMatch;
+          const fileName = decodeDiffFileName(rawFileName, isGitDiff);
           if (type === '---' && fileName !== '/dev/null') {
-            const detachedFileName = detachString(fileName.trim());
+            const detachedFileName = detachString(fileName);
             currentFile.prevName = detachedFileName;
             currentFile.name = detachedFileName;
           } else if (type === '+++' && fileName !== '/dev/null') {
-            currentFile.name = detachString(fileName.trim());
+            currentFile.name = detachString(fileName);
           }
         }
         // Git diffs have a bunch of additional metadata we can pull from
@@ -270,16 +286,31 @@ function _processFile(
               currentFile.mode = detachString(mode);
             }
           }
-          // We have to handle these for pure renames because there won't be
-          // --- and +++ lines
-          if (line.startsWith('rename from ')) {
+          // Pure renames and copies have no --- / +++ headers. These paths
+          // are already relative to the repository, without transport prefixes.
+          if (
+            line.startsWith('rename from ') ||
+            line.startsWith('copy from ')
+          ) {
             currentFile.prevName = detachString(
-              line.slice('rename from '.length).trim()
+              decodeDiffFileName(
+                line.slice(
+                  line.startsWith('rename')
+                    ? 'rename from '.length
+                    : 'copy from '.length
+                )
+              )
             );
           }
-          if (line.startsWith('rename to ')) {
+          if (line.startsWith('rename to ') || line.startsWith('copy to ')) {
             currentFile.name = detachString(
-              line.slice('rename to '.length).trim()
+              decodeDiffFileName(
+                line.slice(
+                  line.startsWith('rename')
+                    ? 'rename to '.length
+                    : 'copy to '.length
+                )
+              )
             );
           }
         }
@@ -345,14 +376,14 @@ function _processFile(
         parsedDeletionLines >= hunkData.deletionCount &&
         !rawLine.startsWith('\\')
       ) {
-        if (
-          throwOnError &&
-          isHunkBodyLine(rawLine) &&
-          !isFormatPatchVersionSeparator(rawLine)
-        ) {
+        const isUnexpectedBodyLine =
+          isHunkBodyLine(rawLine) && !isFormatPatchVersionSeparator(rawLine);
+        if (!isUnexpectedBodyLine) {
+          break;
+        }
+        if (throwOnError) {
           throw Error('parsePatchContent: hunk has more lines than expected');
         }
-        break;
       }
 
       const firstChar = rawLine[0];
@@ -482,11 +513,47 @@ function _processFile(
     }
 
     if (
-      throwOnError &&
-      (parsedAdditionLines !== hunkData.additionCount ||
-        parsedDeletionLines !== hunkData.deletionCount)
+      parsedAdditionLines !== hunkData.additionCount ||
+      parsedDeletionLines !== hunkData.deletionCount
     ) {
-      throw Error('parsePatchContent: hunk line count mismatch');
+      if (throwOnError) {
+        throw Error('parsePatchContent: hunk line count mismatch');
+      }
+      console.error(
+        `parsePatchContent: hunk line count mismatch: "${firstLine.trimEnd()}", declared old/new ${hunkData.deletionCount}/${hunkData.additionCount}, parsed old/new ${parsedDeletionLines}/${parsedAdditionLines}`
+      );
+      // Re-encode each original boundary using the repaired count. Zero-count
+      // ranges use the boundary itself as their start; positive ranges use +1.
+      const repairedAdditionStart =
+        getHunkSideStartBoundary(
+          hunkData.additionStart,
+          hunkData.additionCount
+        ) + (parsedAdditionLines === 0 ? 0 : 1);
+      const repairedDeletionStart =
+        getHunkSideStartBoundary(
+          hunkData.deletionStart,
+          hunkData.deletionCount
+        ) + (parsedDeletionLines === 0 ? 0 : 1);
+
+      // Hydrated hunks index into full-file line arrays, so their indexes must
+      // move with repaired starts. Partial hunks index patch-built arrays.
+      if (!isPartial) {
+        const additionStartDelta =
+          repairedAdditionStart - hunkData.additionStart;
+        const deletionStartDelta =
+          repairedDeletionStart - hunkData.deletionStart;
+        hunkData.additionLineIndex += additionStartDelta;
+        hunkData.deletionLineIndex += deletionStartDelta;
+        for (const content of hunkData.hunkContent) {
+          content.additionLineIndex += additionStartDelta;
+          content.deletionLineIndex += deletionStartDelta;
+        }
+      }
+
+      hunkData.additionStart = repairedAdditionStart;
+      hunkData.deletionStart = repairedDeletionStart;
+      hunkData.additionCount = parsedAdditionLines;
+      hunkData.deletionCount = parsedDeletionLines;
     }
 
     hunkData.additionLines = additionLines;
@@ -600,9 +667,12 @@ function _processFile(
  * Parses a patch file string into an array of parsed patches.
  *
  * @param data - The raw patch file content (supports multi-commit patches)
- * @param cacheKeyPrefix - Optional prefix for generating cache keys. When provided,
- *   each file in the patch will get a cache key in the format `prefix-patchIndex-fileIndex`.
- *   This enables caching of rendered diff results in the worker pool.
+ * @param cacheKeyPrefix - Optional prefix for collision-safe cache keys derived
+ *   from the prefix, patch index, and file index. This enables caching of
+ *   rendered diff results in the worker pool.
+ * @param throwOnError - When true, invalid data throws. When false, invalid data
+ *   is reported with `console.error` and the parser attempts to recover when
+ *   possible. Recovery is best-effort and does not guarantee valid output.
  */
 export function parsePatchFiles(
   data: string,
@@ -618,12 +688,11 @@ export function parsePatchFiles(
   for (const patch of rawPatches) {
     try {
       patches.push(
-        processPatch(
+        _processPatch(
           patch,
-          cacheKeyPrefix != null
-            ? `${cacheKeyPrefix}-${patches.length}`
-            : undefined,
-          throwOnError
+          cacheKeyPrefix,
+          throwOnError,
+          cacheKeyPrefix != null ? patches.length : undefined
         )
       );
     } catch (error) {
@@ -632,9 +701,23 @@ export function parsePatchFiles(
       } else {
         console.error(error);
       }
+    } finally {
+      releaseStringDetachBuffer();
     }
   }
   return patches;
+}
+
+// Decode only quoted tokens, preserving whitespace inside them. Git's a/ and
+// b/ prefixes are part of the quoted token and must be removed after decoding.
+function decodeDiffFileName(value: string, stripGitPrefix = false): string {
+  const rawName = value.trim();
+  const name = rawName.startsWith('"')
+    ? (parseQuotedDiffFileName(rawName)?.fileName ?? rawName)
+    : rawName;
+  return stripGitPrefix && (name.startsWith('a/') || name.startsWith('b/'))
+    ? name.slice(2)
+    : name;
 }
 
 function hasCommitMetadataBoundary(data: string): boolean {

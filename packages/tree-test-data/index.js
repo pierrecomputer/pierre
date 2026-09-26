@@ -76,6 +76,7 @@ function deriveExpandedFolders(paths) {
     }
   }
 
+  // oxlint-disable-next-line typescript/no-unsafe-return
   return [...folders];
 }
 

@@ -90,7 +90,7 @@ function leadingWindow(height: number) {
 describe('VirtualizedFileDiff.getAdvancedStickySpecs', () => {
   test('reports a fully rendered item at its top with its full height', () => {
     const instance = new VirtualizedFileDiff({}, virtualizer, metrics);
-    instance.prepareCodeViewItem(makeDiff(), ITEM_TOP);
+    instance.updateCodeViewLayout(makeDiff(), ITEM_TOP);
     const height = instance.getVirtualizedHeight();
 
     expect(
@@ -103,7 +103,7 @@ describe('VirtualizedFileDiff.getAdvancedStickySpecs', () => {
 
   test('anchors a trailing header-only item at its top (no bufferAfter)', () => {
     const instance = new VirtualizedFileDiff({}, virtualizer, metrics);
-    instance.prepareCodeViewItem(makeDiff(), ITEM_TOP);
+    instance.updateCodeViewLayout(makeDiff(), ITEM_TOP);
 
     expect(instance.getAdvancedStickySpecs(trailingWindow())).toEqual({
       topOffset: ITEM_TOP,
@@ -113,7 +113,7 @@ describe('VirtualizedFileDiff.getAdvancedStickySpecs', () => {
 
   test('anchors a leading header-only item at its bottom (offset by bufferAfter)', () => {
     const instance = new VirtualizedFileDiff({}, virtualizer, metrics);
-    instance.prepareCodeViewItem(makeDiff(), ITEM_TOP);
+    instance.updateCodeViewLayout(makeDiff(), ITEM_TOP);
     const height = instance.getVirtualizedHeight();
     const bufferAfter = height - HEADER_ONLY_HEIGHT;
 
@@ -133,7 +133,7 @@ describe('VirtualizedFileDiff.getAdvancedStickySpecs', () => {
       virtualizer,
       metrics
     );
-    instance.prepareCodeViewItem(makeDiff(), ITEM_TOP);
+    instance.updateCodeViewLayout(makeDiff(), ITEM_TOP);
     const height = instance.getVirtualizedHeight();
 
     expect(instance.getAdvancedStickySpecs(trailingWindow())).toEqual({
@@ -146,7 +146,7 @@ describe('VirtualizedFileDiff.getAdvancedStickySpecs', () => {
 describe('VirtualizedFile.getAdvancedStickySpecs', () => {
   test('reports a fully rendered item at its top with its full height', () => {
     const instance = new VirtualizedFile({}, virtualizer, metrics);
-    instance.prepareCodeViewItem(makeFile(), ITEM_TOP);
+    instance.updateCodeViewLayout(makeFile(), ITEM_TOP);
     const height = instance.getVirtualizedHeight();
 
     expect(
@@ -159,7 +159,7 @@ describe('VirtualizedFile.getAdvancedStickySpecs', () => {
 
   test('anchors a trailing header-only item at its top (no bufferAfter)', () => {
     const instance = new VirtualizedFile({}, virtualizer, metrics);
-    instance.prepareCodeViewItem(makeFile(), ITEM_TOP);
+    instance.updateCodeViewLayout(makeFile(), ITEM_TOP);
 
     expect(instance.getAdvancedStickySpecs(trailingWindow())).toEqual({
       topOffset: ITEM_TOP,
@@ -169,7 +169,7 @@ describe('VirtualizedFile.getAdvancedStickySpecs', () => {
 
   test('anchors a leading header-only item at its bottom (offset by bufferAfter)', () => {
     const instance = new VirtualizedFile({}, virtualizer, metrics);
-    instance.prepareCodeViewItem(makeFile(), ITEM_TOP);
+    instance.updateCodeViewLayout(makeFile(), ITEM_TOP);
     const height = instance.getVirtualizedHeight();
     const bufferAfter = height - HEADER_ONLY_HEIGHT;
 
@@ -187,7 +187,7 @@ describe('VirtualizedFile.getAdvancedStickySpecs', () => {
       virtualizer,
       metrics
     );
-    instance.prepareCodeViewItem(makeFile(), ITEM_TOP);
+    instance.updateCodeViewLayout(makeFile(), ITEM_TOP);
     const height = instance.getVirtualizedHeight();
 
     expect(instance.getAdvancedStickySpecs(trailingWindow())).toEqual({

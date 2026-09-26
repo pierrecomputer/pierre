@@ -9,7 +9,7 @@ import { FeatureHeader } from '@/components/FeatureHeader';
 import { ButtonGroup, ButtonGroupItem } from '@/components/ui/button-group';
 
 interface SplitUnifiedProps {
-  prerenderedDiff: PreloadMultiFileDiffResult<undefined>;
+  prerenderedDiff: PreloadMultiFileDiffResult<undefined, undefined>;
 }
 
 export function SplitUnified({

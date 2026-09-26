@@ -11,16 +11,30 @@ import type {
   FileContents,
   FileDiffLoadedFiles,
   FileDiffMetadata,
+  HighlightedToken,
 } from '../src/types';
 import type { WorkerPoolManager } from '../src/worker';
 import { installDom, wait } from './domHarness';
-import { assertDefined } from './testUtils';
+import { createEditorInstance } from './editorTestUtils';
+import { assertDefined, createDeferred } from './testUtils';
 
 afterAll(async () => {
   await disposeHighlighter();
 });
 
 class TestFileDiff extends FileDiff<undefined> {
+  initializeHighlighterForTest() {
+    return this.hunksRenderer.initializeHighlighter();
+  }
+
+  getLatestDiffForTest() {
+    return this.getLatestDiff();
+  }
+
+  getRendererDiffForTest() {
+    return this.hunksRenderer.diffCache;
+  }
+
   getExpandedHunkForTest(index: number) {
     return this.hunksRenderer.getExpandedHunk(index);
   }
@@ -44,18 +58,10 @@ class TestFileDiff extends FileDiff<undefined> {
   }
 }
 
-function createDeferred<T>(): {
-  promise: Promise<T>;
-  resolve(value: T): void;
-  reject(error: unknown): void;
-} {
-  let resolve: (value: T) => void = () => {};
-  let reject: (error: unknown) => void = () => {};
-  const promise = new Promise<T>((promiseResolve, promiseReject) => {
-    resolve = promiseResolve;
-    reject = promiseReject;
-  });
-  return { promise, resolve, reject };
+function makeDirtyLines(
+  edits: ReadonlyArray<[number, string]>
+): Map<number, HighlightedToken[]> {
+  return new Map(edits.map(([line, text]) => [line, [[0, '', text]]]));
 }
 
 function createPrimeWorkerManager(): {
@@ -240,11 +246,11 @@ function querySyntheticBottomSeparator(
   );
 }
 
-function expectOneSidedPartialDoesNotStartHydration({
+async function expectOneSidedPartialDoesNotStartHydration({
   partial,
 }: {
   partial: FileDiffMetadata;
-}): void {
+}): Promise<void> {
   const { cleanup } = installDom();
   let instance: TestFileDiff | undefined;
   try {
@@ -274,6 +280,20 @@ function expectOneSidedPartialDoesNotStartHydration({
     expect(instance.fileDiff).toBe(partial);
     expect(instance.fileDiff?.isPartial).toBe(true);
     expect(instance.getPendingFileLoadPromiseForTest()).toBeUndefined();
+    expect(() => instance?.__prepareForEditing()).toThrow(
+      'this partial diff cannot be hydrated'
+    );
+    let preparationError: unknown;
+    try {
+      await instance.prepareForEditing();
+    } catch (error) {
+      preparationError = error;
+    }
+    expect(preparationError).toBeInstanceOf(Error);
+    expect(preparationError).toHaveProperty(
+      'message',
+      expect.stringContaining('this partial diff cannot be hydrated')
+    );
   } finally {
     instance?.cleanUp();
     cleanup();
@@ -281,6 +301,258 @@ function expectOneSidedPartialDoesNotStartHydration({
 }
 
 describe('FileDiff partial hydration', () => {
+  test('a new edit waits for its external baseline before creating a keyless session', async () => {
+    const { cleanup } = installDom();
+    const { oldFile, newFile, partial } = createPartialChange('session.ts');
+    partial.cacheKey = 'external:partial-session';
+    const deferred = createDeferred<FileDiffLoadedFiles>();
+    const fileContainer = document.createElement('div');
+    document.body.appendChild(fileContainer);
+    const instance = new TestFileDiff({
+      disableErrorHandling: true,
+      disableFileHeader: true,
+      loadDiffFiles: (fileDiff) => {
+        expect(fileDiff).toBe(partial);
+        return deferred.promise;
+      },
+    });
+    let detach: ReturnType<TestFileDiff['__attachEditor']> | undefined;
+
+    try {
+      instance.render({
+        fileDiff: partial,
+        fileContainer,
+        forceRender: true,
+      });
+      expect(() =>
+        instance.__attachEditor(createEditorInstance('file-diff'))
+      ).toThrow('a complete diff is required before editing');
+      const readyForEditing = instance.prepareForEditing();
+
+      const partialSession = instance.getLatestDiffForTest();
+      expect(partialSession).toBeDefined();
+      // Partial inputs remain external-only until the complete files arrive;
+      // session ownership begins with the fully hydrated value.
+      expect(partialSession).toBe(partial);
+
+      const loadPromise = instance.getPendingFileLoadPromiseForTest();
+      expect(loadPromise).toBeDefined();
+      deferred.resolve({ oldFile, newFile });
+      await readyForEditing;
+      detach = instance.__attachEditor(createEditorInstance('file-diff'));
+
+      const hydratedSession = instance.getLatestDiffForTest();
+      expect(hydratedSession).toBeDefined();
+      expect(hydratedSession).not.toBe(partial);
+      expect(instance.fileDiff).toBe(partial);
+      expect(partial.isPartial).toBe(false);
+      expect(partial.cacheKey).toBe('external:partial-session:hydrated');
+      expect(hydratedSession?.isPartial).toBe(false);
+      expect(hydratedSession?.cacheKey).toBeUndefined();
+      expect(hydratedSession?.additionLines).toBe(partial.additionLines);
+      expect(hydratedSession?.deletionLines).toBe(partial.deletionLines);
+      expect(hydratedSession?.hunks).toBe(partial.hunks);
+      expect(hydratedSession?.additionLines.join('')).toBe(newFile.contents);
+      expect(hydratedSession?.deletionLines.join('')).toBe(oldFile.contents);
+    } finally {
+      detach?.();
+      instance.cleanUp();
+      cleanup();
+    }
+  });
+
+  test('a full replacement can start editing before the old partial load completes', async () => {
+    const { cleanup } = installDom();
+    const { oldFile, newFile, partial } = createPartialChange('replaced.txt');
+    partial.cacheKey = 'external:partial';
+    const replacement = parseDiffFromFile(
+      { name: 'replaced.txt', contents: 'previous\n' },
+      { name: 'replaced.txt', contents: 'replacement\n' }
+    );
+    replacement.cacheKey = 'external:full';
+    const deferred = createDeferred<FileDiffLoadedFiles>();
+    const fileContainer = document.createElement('div');
+    document.body.appendChild(fileContainer);
+    const instance = new TestFileDiff({
+      disableErrorHandling: true,
+      disableFileHeader: true,
+      loadDiffFiles: () => deferred.promise,
+    });
+    let detach: ReturnType<TestFileDiff['__attachEditor']> | undefined;
+    let loadPromise: Promise<void> | undefined;
+
+    try {
+      await instance.initializeHighlighterForTest();
+      instance.render({
+        fileDiff: partial,
+        fileContainer,
+        forceRender: true,
+      });
+      void instance.__prepareForEditing();
+      loadPromise = instance.getPendingFileLoadPromiseForTest();
+      assertDefined(loadPromise, 'expected partial hydration to be pending');
+
+      instance.render({
+        fileDiff: replacement,
+        fileContainer,
+        forceRender: true,
+      });
+      detach = instance.__attachEditor(createEditorInstance('file-diff'));
+
+      const editSessionDiff = instance.getLatestDiffForTest();
+      expect(instance.fileDiff).toBe(replacement);
+      expect(editSessionDiff).not.toBe(replacement);
+      expect(editSessionDiff?.cacheKey).toBeUndefined();
+      expect(editSessionDiff?.additionLines).toBe(replacement.additionLines);
+      expect(() =>
+        instance.updateRenderCache(makeDirtyLines([[0, 'edited']]), 'light')
+      ).not.toThrow();
+      expect(editSessionDiff?.additionLines[0]).toBe('edited\n');
+      expect(replacement.additionLines[0]).toBe('replacement\n');
+
+      deferred.resolve({ oldFile, newFile });
+      await loadPromise;
+      expect(partial.isPartial).toBe(true);
+      expect(instance.fileDiff).toBe(replacement);
+      expect(instance.getLatestDiffForTest()).toBe(editSessionDiff);
+    } finally {
+      deferred.resolve({ oldFile, newFile });
+      await loadPromise;
+      detach?.();
+      instance.cleanUp();
+      cleanup();
+    }
+  });
+
+  test('recycle reuses an in-flight load before the editor attaches', async () => {
+    const { cleanup } = installDom();
+    const { oldFile, newFile, partial } = createPartialChange(
+      'recycled-session.ts'
+    );
+    partial.cacheKey = 'external:recycled-partial-session';
+    const deferred = createDeferred<FileDiffLoadedFiles>();
+    const fileContainer = document.createElement('div');
+    document.body.appendChild(fileContainer);
+    let loadCalls = 0;
+    const instance = new TestFileDiff({
+      disableErrorHandling: true,
+      disableFileHeader: true,
+      loadDiffFiles: (fileDiff) => {
+        loadCalls++;
+        expect(fileDiff).toBe(partial);
+        return deferred.promise;
+      },
+    });
+    let detach: ReturnType<TestFileDiff['__attachEditor']> | undefined;
+
+    try {
+      instance.render({
+        fileDiff: partial,
+        fileContainer,
+        forceRender: true,
+      });
+      void instance.__prepareForEditing();
+      const loadPromise = instance.getPendingFileLoadPromiseForTest();
+      expect(loadPromise).toBeDefined();
+      expect(loadCalls).toBe(1);
+
+      instance.cleanUp(true);
+      instance.virtualizedSetup();
+      instance.rerender();
+      void instance.__prepareForEditing();
+
+      expect(loadCalls).toBe(1);
+      deferred.resolve({ oldFile, newFile });
+      await loadPromise;
+      detach = instance.__attachEditor(createEditorInstance('file-diff'));
+
+      const hydratedSession = instance.getLatestDiffForTest();
+      expect(hydratedSession).toBeDefined();
+      expect(hydratedSession).not.toBe(partial);
+      expect(instance.fileDiff).toBe(partial);
+      expect(partial.isPartial).toBe(false);
+      expect(partial.cacheKey).toBe(
+        'external:recycled-partial-session:hydrated'
+      );
+      expect(hydratedSession?.isPartial).toBe(false);
+      expect(hydratedSession?.cacheKey).toBeUndefined();
+      expect(hydratedSession?.additionLines).toBe(partial.additionLines);
+      expect(hydratedSession?.deletionLines).toBe(partial.deletionLines);
+      expect(hydratedSession?.hunks).toBe(partial.hunks);
+      expect(hydratedSession?.additionLines.join('')).toBe(newFile.contents);
+      expect(hydratedSession?.deletionLines.join('')).toBe(oldFile.contents);
+      expect(loadCalls).toBe(1);
+    } finally {
+      detach?.();
+      instance.cleanUp();
+      cleanup();
+    }
+  });
+
+  test('the first edit after pure-rename hydration separates the aliased file sides', async () => {
+    const { cleanup } = installDom();
+    const { newFile, partial } = createPartialPureRename();
+    partial.cacheKey = 'external:partial-rename';
+    const deferred = createDeferred<FileDiffLoadedFiles>();
+    const fileContainer = document.createElement('div');
+    document.body.appendChild(fileContainer);
+    const instance = new TestFileDiff({
+      disableErrorHandling: true,
+      disableFileHeader: true,
+      loadDiffFiles: (fileDiff) => {
+        expect(fileDiff).toBe(partial);
+        return deferred.promise;
+      },
+    });
+    let detach: ReturnType<TestFileDiff['__attachEditor']> | undefined;
+
+    try {
+      instance.render({
+        fileDiff: partial,
+        fileContainer,
+        forceRender: true,
+      });
+      void instance.__prepareForEditing();
+      const loadPromise = instance.getPendingFileLoadPromiseForTest();
+      expect(loadPromise).toBeDefined();
+      deferred.resolve({ oldFile: null, newFile });
+      await loadPromise;
+      detach = instance.__attachEditor(createEditorInstance('file-diff'));
+
+      const hydratedSession = instance.getLatestDiffForTest();
+      expect(hydratedSession).toBeDefined();
+      if (hydratedSession == null) return;
+      expect(hydratedSession).not.toBe(partial);
+      expect(hydratedSession.isPartial).toBe(false);
+      expect(hydratedSession.cacheKey).toBeUndefined();
+      expect(partial.isPartial).toBe(false);
+      expect(partial.cacheKey).toBe('external:partial-rename:hydrated');
+      // hydratePartialDiff intentionally reuses one owned line array for both
+      // sides of a pure rename. The first addition-side write must break that
+      // alias instead of changing the read-only deletion side.
+      expect(hydratedSession.additionLines).toBe(hydratedSession.deletionLines);
+      expect(hydratedSession.additionLines).toBe(partial.additionLines);
+      expect(partial.additionLines).toBe(partial.deletionLines);
+      const hydratedBaseBefore = structuredClone(partial);
+
+      instance.updateRenderCache(makeDirtyLines([[0, 'ALPHA']]), 'light');
+
+      expect(instance.getRendererDiffForTest()).toBe(hydratedSession);
+      expect(hydratedSession.additionLines).not.toBe(
+        hydratedSession.deletionLines
+      );
+      expect(hydratedSession.deletionLines).toEqual(['alpha\n', 'beta\n']);
+      expect(hydratedSession.deletionLines).toBe(partial.deletionLines);
+      expect(instance.fileDiff).toBe(partial);
+      expect(partial.additionLines).toBe(partial.deletionLines);
+      expect(partial).toEqual(hydratedBaseBefore);
+    } finally {
+      detach?.();
+      instance.cleanUp();
+      cleanup();
+    }
+  });
+
   test('expandHunk hydrates once and preserves expansion state changes made while loading', async () => {
     const { cleanup } = installDom();
     let instance: TestFileDiff | undefined;
@@ -349,7 +621,7 @@ describe('FileDiff partial hydration', () => {
     }
   });
 
-  test('expandHunk without a file loader leaves partial diffs unhydrated', () => {
+  test('expandHunk without a file loader throws before changing the hunk', () => {
     const { cleanup } = installDom();
     let instance: TestFileDiff | undefined;
     try {
@@ -366,24 +638,29 @@ describe('FileDiff partial hydration', () => {
         deferManagers: true,
         preventEmit: true,
       });
-      instance.expandHunk(0, 'down', 1);
+      const expandedBefore = instance.getExpandedHunkForTest(0);
+      expect(() => instance?.expandHunk(0, 'down', 1)).toThrow(
+        'loadDiffFiles is required to load full files'
+      );
 
       expect(instance.fileDiff).toBe(partial);
       expect(instance.fileDiff?.isPartial).toBe(true);
       expect(instance.getPendingFileLoadPromiseForTest()).toBeUndefined();
-      expect(instance.getExpandedHunkForTest(0)).toEqual({
-        fromStart: 0,
-        fromEnd: 1,
-      });
+      expect(instance.getExpandedHunkForTest(0)).toEqual(expandedBefore);
+      expect(() => instance?.__prepareForEditing()).toThrow(
+        'loadDiffFiles is required to load full files'
+      );
     } finally {
       instance?.cleanUp();
       cleanup();
     }
   });
 
-  test('expandUnchanged and expandHunk do not hydrate added or deleted partial diffs', () => {
-    expectOneSidedPartialDoesNotStartHydration(createPartialAddedFile());
-    expectOneSidedPartialDoesNotStartHydration(createPartialDeletedFile());
+  test('expandUnchanged and expandHunk do not hydrate added or deleted partial diffs', async () => {
+    await expectOneSidedPartialDoesNotStartHydration(createPartialAddedFile());
+    await expectOneSidedPartialDoesNotStartHydration(
+      createPartialDeletedFile()
+    );
   });
 
   test('ignores loaded files if the source diff is already full', async () => {

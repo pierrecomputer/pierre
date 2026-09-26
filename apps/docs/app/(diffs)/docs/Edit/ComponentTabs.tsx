@@ -1,19 +1,19 @@
 'use client';
 
-import type { PreloadedFileResult } from '@pierre/diffs/ssr';
 import { IconInfoFill } from '@pierre/icons';
 import { useState } from 'react';
 
 import { DocsCodeExample } from '@/components/docs/DocsCodeExample';
 import { ButtonGroup, ButtonGroupItem } from '@/components/ui/button-group';
 import { Notice } from '@/components/ui/notice';
+import type { PreloadedCodeExample } from '@/lib/preloadCodeExample';
 
 type EditComponentMode = 'file' | 'file-diff' | 'multi-file-diff';
 
 interface EditComponentTabsProps {
-  fileExample: PreloadedFileResult<undefined>;
-  fileDiffExample: PreloadedFileResult<undefined>;
-  multiFileDiffExample?: PreloadedFileResult<undefined>;
+  fileExample: PreloadedCodeExample<undefined, undefined>;
+  fileDiffExample: PreloadedCodeExample<undefined, undefined>;
+  multiFileDiffExample?: PreloadedCodeExample<undefined, undefined>;
 }
 
 export function EditComponentTabs({
@@ -55,8 +55,8 @@ export function EditComponentTabs({
           <p>
             Editing a <code>FileDiff</code> requires the full file contents. The
             editor targets the addition side (the new version of the file) and
-            cannot reconstruct it from a partial diff. Make sure one of the
-            following is true before attaching the editor:
+            cannot reconstruct it from patch context alone. Make sure one of the
+            following is true before editing begins:
           </p>
           <ul className="list-disc pl-5">
             <li>
@@ -70,12 +70,19 @@ export function EditComponentTabs({
               <code>additionLines</code> contains the complete new-file contents
               (not just the patch context lines).
             </li>
+            <li>
+              You supplied <code>loadDiffFiles</code> so a partial diff can load
+              its complete old and new files. The editor attaches only after
+              that load finishes.
+            </li>
           </ul>
           <p>
-            If neither condition is met — for example, when the diff was parsed
-            from a raw patch with no accompanying source files —{' '}
-            <code>editor.edit()</code> will attach, but editing will have no
-            effect.
+            Without any source for the complete files — for example, when the
+            diff was parsed from a raw patch with no accompanying source files —{' '}
+            <code>editor.edit()</code> throws while the diff is partial, and
+            React and <code>CodeView</code> throw during render. Added and
+            deleted files parsed from a patch have nothing to load and cannot be
+            edited without full contents.
           </p>
         </Notice>
       ) : null}

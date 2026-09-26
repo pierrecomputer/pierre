@@ -28,6 +28,7 @@ import { DiffsHubCommentsList } from './DiffsHubCommentsList';
 import { DiffsHubDiffStats } from './DiffsHubDiffStats';
 import { DiffsHubFileTree } from './DiffsHubFileTree';
 import { useChromeThemeProps } from './useChromeThemeProps';
+import { useMediaQuery } from './useMediaQuery';
 import type { ThemeCycleControls } from './useThemeCycle';
 import { WorkerPoolStatus } from './WorkerPoolStatus';
 import { Button } from '@/components/Button';
@@ -71,7 +72,7 @@ interface DiffsHubSidebarProps {
   source: DiffsHubFileTreeSource;
   streaming: boolean;
   themeCycle: ThemeCycleControls;
-  viewerRef: RefObject<CodeViewHandle<CommentMetadata> | null>;
+  viewerRef: RefObject<CodeViewHandle<CommentMetadata, undefined> | null>;
 }
 
 export const DiffsHubSidebar = memo(function DiffsHubSidebar({
@@ -112,6 +113,9 @@ export const DiffsHubSidebar = memo(function DiffsHubSidebar({
   );
   const [activeStatusPanel, setActiveStatusPanel] =
     useState<SidebarStatusPanel | null>('diffStats');
+  const isMobileViewport = useMediaQuery(MOBILE_MEDIA_QUERY, undefined);
+  const [previousMobileOverlayOpen, setPreviousMobileOverlayOpen] =
+    useState(false);
   const [fileTreeModel, setFileTreeModel] = useState<FileTree | null>(null);
   // Inclusion filter: the statuses the tree should show. Empty means "no
   // filter" — every file is shown — so the menu opens with nothing checked and
@@ -162,14 +166,20 @@ export const DiffsHubSidebar = memo(function DiffsHubSidebar({
     });
   }, []);
 
-  useEffect(() => {
-    if (mobileOverlayOpen && window.matchMedia(MOBILE_MEDIA_QUERY).matches) {
+  // Reset the panel once when a mobile overlay opens, while still allowing the
+  // user to reopen it during that same overlay session.
+  if (
+    isMobileViewport !== undefined &&
+    previousMobileOverlayOpen !== mobileOverlayOpen
+  ) {
+    setPreviousMobileOverlayOpen(mobileOverlayOpen);
+    if (mobileOverlayOpen && isMobileViewport) {
       setActiveStatusPanel(null);
     }
-  }, [mobileOverlayOpen]);
+  }
 
   useEffect(() => {
-    if (!mobileOverlayOpen || !window.matchMedia(MOBILE_MEDIA_QUERY).matches) {
+    if (!mobileOverlayOpen || isMobileViewport !== true) {
       return undefined;
     }
 
@@ -193,7 +203,7 @@ export const DiffsHubSidebar = memo(function DiffsHubSidebar({
         codeViewScroll.style.overflow = previousCodeViewOverflow ?? '';
       }
     };
-  }, [mobileOverlayOpen, scrollRef]);
+  }, [isMobileViewport, mobileOverlayOpen, scrollRef]);
 
   return (
     <>
@@ -343,7 +353,7 @@ function SidebarWrapper({
     <div
       className={cn(
         className,
-        'contain-strict z-30 flex h-full min-h-0 flex-col transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] will-change-transform motion-reduce:transition-none md:z-auto md:translate-y-0 md:will-change-auto',
+        'diffshub-theme-bootstrap contain-strict z-30 flex h-full min-h-0 flex-col transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] will-change-transform motion-reduce:transition-none md:z-auto md:translate-y-0 md:will-change-auto',
         // Fall back to the neutral diffshub chrome background when no Shiki
         // theme bg is available yet (initial render before the resolver
         // returns).

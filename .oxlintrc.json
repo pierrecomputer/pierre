@@ -19,6 +19,18 @@
       { "argsIgnorePattern": "^_", "varsIgnorePattern": "^_" }
     ],
 
+    "react/error-boundaries": "error",
+    "react/globals": "error",
+    "react/immutability": "error",
+    "react/incompatible-library": "error",
+    "react/preserve-manual-memoization": "error",
+    "react/purity": "error",
+    "react/refs": "error",
+    "react/set-state-in-effect": "error",
+    "react/set-state-in-render": "error",
+    "react/static-components": "error",
+    "react/use-memo": "error",
+
     "sort-imports": [
       "error",
       {
@@ -60,7 +72,17 @@
     "typescript/no-meaningless-void-operator": "off",
     "typescript/no-duplicate-type-constituents": "off"
   },
-  "overrides": [],
+  "overrides": [
+    {
+      "files": [
+        "packages/trees/src/render/**/*.tsx",
+        "packages/trees/src/components/**/*.tsx"
+      ],
+      "rules": {
+        "react/refs": "off"
+      }
+    }
+  ],
   "settings": {
     "jsx-a11y": {
       "polymorphicPropName": null,

@@ -13,9 +13,14 @@ import {
 } from 'react';
 import { createPortal } from 'react-dom';
 
+import { useResettableState } from './useResettableState';
 import { Button } from '@/components/Button';
 import { cn } from '@/lib/cn';
 import { getPatchViewerHref } from '@/lib/getPatchViewerHref';
+
+// The only validation message the form shows. The error popover keeps rendering
+// it while fading out, after `validationError` has already been cleared.
+const INVALID_URL_MESSAGE = 'Please enter a valid URL';
 
 interface DiffUrlFormProps {
   className?: string;
@@ -49,7 +54,7 @@ export function DiffUrlForm({
 }: DiffUrlFormProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
-  const [url, setURL] = useState(initialUrl);
+  const [url, setURL] = useResettableState(initialUrl);
   const [validationError, setValidationError] = useState<string | null>(null);
   // Tracks the input's viewport position when an error is shown so the portal
   // can be fixed-positioned outside any contain-paint boundary.
@@ -57,15 +62,9 @@ export function DiffUrlForm({
     top: number;
     left: number;
   } | null>(null);
-  // Preserves the last message so the popover still has content while fading out.
-  const lastErrorText = useRef<string | null>(null);
   // Prevents the onBlur restore from firing when blur is caused by Enter.
   const isSubmittingRef = useRef(false);
   const inputRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    setURL(initialUrl);
-  }, [initialUrl]);
 
   useEffect(() => {
     onUrlChange?.(url);
@@ -99,8 +98,7 @@ export function DiffUrlForm({
       if (viewerHref == null) {
         const rect = inputRef.current?.getBoundingClientRect();
         if (rect != null) setErrorAnchor({ top: rect.bottom, left: rect.left });
-        lastErrorText.current = 'Please enter a valid URL';
-        setValidationError('Please enter a valid URL');
+        setValidationError(INVALID_URL_MESSAGE);
         return;
       }
       setValidationError(null);
@@ -193,7 +191,7 @@ export function DiffUrlForm({
             }}
           >
             <div className="bg-foreground absolute -top-1 left-3 size-2.5 rotate-45 rounded-[2px]" />
-            {lastErrorText.current}
+            {INVALID_URL_MESSAGE}
           </div>,
           document.body
         )}

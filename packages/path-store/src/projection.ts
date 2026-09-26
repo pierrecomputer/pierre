@@ -1003,9 +1003,7 @@ function materializeVisibleRow(
     isLoading: loadState === 'loading',
     kind: isDirectoryNode(terminalNode) ? 'directory' : 'file',
     loadState:
-      loadState == null || loadState === 'loaded'
-        ? undefined
-        : (loadState as PathStoreDirectoryLoadState),
+      loadState == null || loadState === 'loaded' ? undefined : loadState,
     name,
     path,
   };

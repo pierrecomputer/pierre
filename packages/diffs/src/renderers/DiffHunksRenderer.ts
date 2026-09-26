@@ -8,6 +8,7 @@ import {
   DEFAULT_THEMES,
   DEFAULT_TOKENIZE_MAX_LENGTH,
 } from '../constants';
+import type { TextDocument } from '../editor/textDocument';
 import { areLanguagesAttached } from '../highlighter/languages/areLanguagesAttached';
 import {
   getHighlighterIfLoaded,
@@ -24,7 +25,6 @@ import type {
   CustomPreProperties,
   DiffLineAnnotation,
   DiffsHighlighter,
-  DiffsTextDocument,
   ExpansionDirections,
   FileDiffMetadata,
   FileHeaderRenderMode,
@@ -108,6 +108,17 @@ interface PushLineWithAnnotation {
 interface GetRenderOptionsReturn {
   options: RenderDiffOptions;
   forceHighlight: boolean;
+}
+
+interface PendingHighlightResult extends RenderDiffResult {
+  diff: FileDiffMetadata;
+  highlighted: boolean;
+}
+
+interface DiffRenderCache extends RenderedDiffASTCache {
+  // hydrate() describes DOM that already exists, even when no reusable AST
+  // was available for that server-rendered content.
+  hydrated?: boolean;
 }
 
 interface PushSeparatorProps {
@@ -203,6 +214,7 @@ export interface SplitInjectedRowPlacement {
 }
 
 export interface HunksRenderResult {
+  fileDiff: FileDiffMetadata;
   unifiedGutterAST: ElementContent[] | undefined;
   unifiedContentAST: ElementContent[] | undefined;
   deletionsGutterAST: ElementContent[] | undefined;
@@ -227,6 +239,9 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
   readonly __id: string = `diff-hunks-renderer:${++instanceId}`;
 
   private highlighter: DiffsHighlighter | undefined;
+  // The latest diff requested by the component. The render cache may
+  // intentionally keep displaying an older highlighted diff while this one
+  // is highlighted in the background.
   private diff: FileDiffMetadata | undefined;
 
   private expandedHunks = new Map<number, HunkExpansionRegion>();
@@ -234,8 +249,14 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
   private deletionAnnotations: AnnotationLineMap<LAnnotation> = {};
   private additionAnnotations: AnnotationLineMap<LAnnotation> = {};
 
-  private computedLang: SupportedLanguages = 'text';
-  private renderCache: RenderedDiffASTCache | undefined;
+  private computedLangs: SupportedLanguages[] = ['text'];
+  private renderCache: DiffRenderCache | undefined;
+  // Completed background work waits here until the next render can update its
+  // DOM and layout together.
+  private pendingHighlightResult: PendingHighlightResult | undefined;
+  // Newly highlighted rows from a line-count edit wait here until the old row
+  // cache has been shifted to match the document's new line indexes.
+  private pendingStructuralRows: Map<number, HASTElement> | undefined;
 
   // Edit-session state: while active, hunk updates go through the frozen
   // region skeleton (editSessionHunks) instead of the full recompute, and
@@ -247,6 +268,9 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
 
   constructor(
     public options: DiffHunksRendererOptions = { theme: DEFAULT_THEMES },
+    private annotationSlotName: (
+      annotation: DiffLineAnnotation<LAnnotation>
+    ) => string = getLineAnnotationName,
     private onRenderUpdate?: () => unknown,
     private workerManager?: WorkerPoolManager | undefined
   ) {
@@ -258,6 +282,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
   }
 
   public cleanUp(): void {
+    this.endEditSession();
     this.recycle();
     this.expandedHunks.clear();
     this.workerManager = undefined;
@@ -267,30 +292,113 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
   public recycle(): void {
     this.highlighter = undefined;
     this.diff = undefined;
-    this.clearRenderCache();
+    if (this.editSessionActive) {
+      // The editor keeps its document and undo history while offscreen. Its
+      // private highlight result belongs to that session and can resume too.
+      if (this.renderCache != null) {
+        this.renderCache.renderRange = undefined;
+      }
+      this.pendingHighlightResult = undefined;
+      this.pendingStructuralRows = undefined;
+    } else {
+      this.clearRenderCache();
+    }
     this.additionAnnotations = {};
     this.deletionAnnotations = {};
     this.workerManager?.cleanUpTasks(this);
-    // Session hunks and the metadata dirty marker survive recycle in the
-    // shared FileDiffMetadata; the renderer-local state re-seeds on the next
-    // attach (beginEditSession).
-    this.endEditSession();
   }
 
   /**
    * Enter edit-session mode: hunk updates preserve the current region
    * skeleton instead of recomputing hunks, and rendering happens locally
    * with the token transformer forced on (worker-pool requests/results are
-   * suspended for this renderer). Called on every editor attach, including
-   * a re-attach after recycle.
+   * suspended for this renderer). When the session was freshly cloned from
+   * `externalDiff`, compatible highlighted markup is detached from its external
+   * cache owner so the editor can reuse it without mutating shared data. An
+   * empty additions document gets one row for the editor's caret.
    */
-  public beginEditSession(): void {
+  public beginEditSession(
+    diff: FileDiffMetadata,
+    externalDiff?: FileDiffMetadata
+  ): void {
+    const { editSessionActive: wasAlreadyActive } = this;
     this.editSessionActive = true;
+    if (!wasAlreadyActive) {
+      this.pendingHighlightResult = undefined;
+    }
+    this.diff = diff;
+    // A replacement creates a new session diff. The old session's result
+    // cannot become the new one's private editor markup.
+    if (
+      wasAlreadyActive &&
+      this.renderCache != null &&
+      this.renderCache.diff !== diff
+    ) {
+      this.clearRenderCache();
+    }
+    const { renderCache } = this;
+
+    if (!diff.isPartial && diff.additionLines.length === 0) {
+      Object.assign(
+        diff,
+        recomputeEmptyDocumentDiff(diff, this.options.parseDiffOptions)
+      );
+      this.markEditSessionPass(diff);
+      this.clearRenderCache();
+      return;
+    }
+
+    if (renderCache == null) {
+      return;
+    }
+    // Edit updates call this again before each write. That cache is already
+    // private and must retain plain-text session results.
+    if (wasAlreadyActive && renderCache.diff === diff) {
+      return;
+    }
+    const { options } = this.getRenderOptions(diff);
+    const cacheBelongsToSession = renderCache.diff === diff;
+    const cacheBelongsToExternal =
+      externalDiff != null &&
+      areDiffTargetsEqual(renderCache.diff, externalDiff);
+    const { result } = renderCache;
+    if (
+      !renderCache.highlighted ||
+      result == null ||
+      !areDiffRenderOptionsEqual(renderCache.options, options) ||
+      (!cacheBelongsToSession && !cacheBelongsToExternal)
+    ) {
+      this.clearRenderCache();
+      return;
+    }
+    if (cacheBelongsToSession) {
+      return;
+    }
+
+    // Edit paths replace addition entries and their containing array,
+    // but only read the existing HAST nodes and deletion entries.
+    this.renderCache = {
+      diff,
+      options,
+      highlighted: true,
+      result: {
+        ...result,
+        code: {
+          ...result.code,
+          additionLines: [...result.code.additionLines],
+        },
+      },
+      renderRange: renderCache.renderRange,
+    };
   }
 
   /** Leave edit-session mode. The exit recompute is the host's concern. */
   public endEditSession(): void {
     this.editSessionActive = false;
+    this.pendingHighlightResult = undefined;
+    if (this.diff == null) {
+      this.clearRenderCache();
+    }
   }
 
   /**
@@ -305,26 +413,25 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
   }
 
   /**
-   * Re-highlights the current diff in the background and swaps the fresh
-   * result in (with a re-render) once it completes. Needed after an edit
-   * session's exit recompute: session passes plain-fill shifted lines in the
-   * cached result, and the recompute mutates the diff in place (same object,
-   * same cacheKey), so identity/cacheKey checks would otherwise treat the
-   * stale highlight as current forever. The current result — content-correct,
-   * mostly highlighted — keeps rendering until the fresh one lands, so no
-   * interim paint drops highlighting.
+   * Re-highlights the current diff in the background and stages the fresh
+   * result for the next render. Needed after an edit session's exit recompute:
+   * session passes plain-fill shifted lines in the cached result, and the
+   * recompute mutates the keyless session diff in place, so object identity
+   * alone would otherwise treat the stale highlight as current forever. The
+   * current result — content-correct, mostly highlighted — keeps rendering
+   * until the fresh one is promoted, so no interim paint drops highlighting.
    */
   public refreshHighlightedResult(): Promise<void> {
-    const { renderCache } = this;
+    const { diff, renderCache, workerManager } = this;
     if (
+      diff == null ||
       renderCache == null ||
-      isDiffPlainText(renderCache.diff) ||
-      isDiffMassive(renderCache.diff, this.getTokenizeMaxLength())
+      !areDiffTargetsEqual(renderCache.diff, diff) ||
+      isDiffPlainText(diff) ||
+      isDiffMassive(diff, this.getTokenizeMaxLength())
     ) {
       return Promise.resolve();
     }
-    const { diff } = renderCache;
-    const { workerManager } = this;
     // The pool's diff cache is keyed by cacheKey, so a worker refresh needs
     // one; a keyless diff uses the local highlighter fallback below instead.
     if (
@@ -348,31 +455,33 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       .catch((error: unknown) => this.onHighlightError(error));
   }
 
-  // Installs a freshly highlighted result for the same diff, unless the
-  // renderer moved on while the highlight ran (new diff, options change, or
-  // a new edit session whose passes the fresh result wouldn't reflect).
+  // Holds a freshly highlighted result for the next render transaction, unless
+  // the renderer moved on while the highlight ran (new diff, options change,
+  // or a new edit session whose passes the fresh result wouldn't reflect).
   private applyRefreshedResult(
     diff: FileDiffMetadata,
     fresh: RenderDiffResult | undefined
   ): void {
+    const { diff: currentDiff, renderCache } = this;
     if (
       fresh == null ||
-      this.renderCache == null ||
-      this.renderCache.diff !== diff ||
+      currentDiff == null ||
+      renderCache == null ||
+      !areDiffTargetsEqual(currentDiff, diff) ||
+      !areDiffTargetsEqual(renderCache.diff, diff) ||
       this.editSessionActive
     ) {
       return;
     }
-    const { options } = this.getRenderOptions(diff);
+    const { options } = this.getRenderOptions(currentDiff);
     if (!areDiffRenderOptionsEqual(options, fresh.options)) {
       return;
     }
-    this.renderCache = {
-      diff,
+    this.pendingHighlightResult = {
+      diff: currentDiff,
       options: fresh.options,
       highlighted: true,
       result: fresh.result,
-      renderRange: undefined,
     };
     this.onRenderUpdate?.();
   }
@@ -382,17 +491,9 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
   }
 
   public clearRenderCache(): void {
-    const renderCache = this.renderCache;
     this.renderCache = undefined;
-    if (
-      renderCache != null &&
-      renderCache.isDirty === true &&
-      renderCache.diff.cacheKey != null
-    ) {
-      // The render cache has been updated by the host, let's purge it
-      // from the worker manager cache.
-      this.workerManager?.evictDiffFromCache(renderCache.diff.cacheKey);
-    }
+    this.pendingHighlightResult = undefined;
+    this.pendingStructuralRows = undefined;
   }
 
   public setOptions(options: DiffHunksRendererOptions): void {
@@ -478,10 +579,12 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     themeType: 'dark' | 'light',
     lineCountChangeInFlight = false
   ): boolean {
-    if (this.renderCache == null) {
+    this.pendingStructuralRows = undefined;
+    const { renderCache } = this;
+    if (renderCache == null) {
       return false;
     }
-    const { result, diff } = this.renderCache;
+    const { result, diff } = renderCache;
     if (result == null) {
       return false;
     }
@@ -490,6 +593,11 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     }
 
     const hastLines = result.code.additionLines;
+    const pendingStructuralRows = (this.pendingStructuralRows =
+      lineCountChangeInFlight ? new Map<number, HASTElement>() : undefined);
+    // Structural rows use post-edit indexes while the current diff and HAST
+    // still use pre-edit indexes. Hold those rows until applyDocumentChange
+    // has shifted the old data into its authoritative positions.
     const changedAdditionLines: number[] = [];
     const previousAdditionLines = new Map<number, string>();
     for (const [line, tokens] of dirtyLines) {
@@ -502,14 +610,14 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       // The host text document can expose one extra trailing empty line when
       // the file ends with a newline. Deferred tokenization must not grow
       // additionLines from that mismatch or hunk trailing context desyncs.
-      if (canSyncDiffLine) {
+      if (pendingStructuralRows == null && canSyncDiffLine) {
         diff.additionLines[line] = applyLineTextWithNewline(prevLine, lineText);
         if (prevText !== lineText) {
           changedAdditionLines.push(line);
           previousAdditionLines.set(line, prevLine);
         }
       }
-      hastLines[line] = {
+      const row: HASTElement = {
         type: 'element',
         tagName: 'div',
         properties: {
@@ -540,51 +648,44 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
           };
         }),
       };
+      if (pendingStructuralRows != null) {
+        pendingStructuralRows.set(line, row);
+      } else {
+        hastLines[line] = row;
+      }
     }
 
     let regionsChanged = false;
     if (changedAdditionLines.length > 0) {
-      if (this.editSessionActive && !diff.isPartial) {
-        // On a line-count pass the tokenizer emits shifted-but-unedited lines
-        // as dirty and the writes above land at stale indexes, so hunk work
-        // must wait for the authoritative applyDocumentChange in this same
-        // pass. Otherwise (including deferred background passes, which carry
-        // genuine changes and are never followed by applyDocumentChange) the
-        // explicit changed indexes are current.
-        if (!lineCountChangeInFlight) {
-          if (
-            diff.additionLines.length <= 1 &&
-            diff.additionLines.join('') === ''
-          ) {
-            Object.assign(
+      if (this.editSessionActive) {
+        if (
+          diff.additionLines.length <= 1 &&
+          diff.additionLines.join('') === ''
+        ) {
+          this.applyRecomputePreservingSessionType(
+            diff,
+            recomputeEmptyDocumentDiff(diff, this.options.parseDiffOptions)
+          );
+          regionsChanged = true;
+        } else if (shouldTopAlignAdditionRecompute(diff, diff.additionLines)) {
+          this.applyRecomputePreservingSessionType(
+            diff,
+            recomputeTopAlignedAdditionDiff(
               diff,
-              recomputeEmptyDocumentDiff(diff, this.options.parseDiffOptions)
-            );
-            this.markEditSessionPass(diff);
-            regionsChanged = true;
-          } else if (
-            shouldTopAlignAdditionRecompute(diff, diff.additionLines)
-          ) {
-            Object.assign(
-              diff,
-              recomputeTopAlignedAdditionDiff(
-                diff,
-                diff.additionLines,
-                this.options.parseDiffOptions
-              )
-            );
-            this.markEditSessionPass(diff);
-            regionsChanged = true;
-          } else {
-            const change = applySessionChangedLines(
-              diff,
-              changedAdditionLines,
-              this.options.parseDiffOptions,
-              previousAdditionLines
-            );
-            this.applyExpansionRemap(change);
-            regionsChanged = change != null;
-          }
+              diff.additionLines,
+              this.options.parseDiffOptions
+            )
+          );
+          regionsChanged = true;
+        } else {
+          const change = applySessionChangedLines(
+            diff,
+            changedAdditionLines,
+            this.options.parseDiffOptions,
+            previousAdditionLines
+          );
+          this.applyExpansionRemap(change);
+          regionsChanged = change != null;
         }
       } else {
         Object.assign(
@@ -599,7 +700,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     }
 
     result.baseThemeType = themeType;
-    this.renderCache.isDirty = true;
+    renderCache.isDirty = true;
     return regionsChanged;
   }
 
@@ -612,51 +713,53 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     }
   }
 
-  // Normally triggered by the host when the document line count changes.
-  public applyDocumentChange(textDocument: DiffsTextDocument): void {
-    if (this.renderCache == null) {
+  // Rebuild the session diff from the document even without a highlighted
+  // result; suspended programmatic edits still need current hunks on return.
+  public applyDocumentChange(
+    textDocument: TextDocument<'file-diff', LAnnotation>
+  ): void {
+    const { pendingStructuralRows, renderCache } = this;
+    this.pendingStructuralRows = undefined;
+    const diff = this.diff ?? renderCache?.diff;
+    if (diff == null) {
       return;
     }
-    const { diff, result } = this.renderCache;
-    if (result == null) {
-      return;
-    }
+    const result = renderCache?.result;
     if (diff.isPartial) {
       throw new Error('Could not apply document change for partial diff');
     }
 
-    // updateRenderCache may already have extended diff.additionLines for the
-    // same edit pass, so never bail out purely on matching lengths here.
-    // Read line-by-line from the editor document instead of materializing the
-    // entire text. This preserves blank documents and the final editable empty
-    // row after a trailing line break.
+    // The structural token pass leaves the diff in its pre-edit shape so this
+    // document remains the single source of truth for shifting its lines.
+    // Reading line-by-line also preserves blank documents and the final
+    // editable empty row after a trailing line break.
     const { additionLines: previousAdditionLines } = diff;
-    diff.additionLines = getEditorDocumentLines(
-      textDocument,
-      previousAdditionLines
-    );
-    result.code.additionLines = realignAdditionHastLines(
-      previousAdditionLines,
-      diff.additionLines,
-      result.code.additionLines,
-      textDocument
-    );
+    diff.additionLines = getEditorDocumentLines(textDocument);
+    if (result != null) {
+      result.code.additionLines = realignAdditionHastLines(
+        previousAdditionLines,
+        diff.additionLines,
+        result.code.additionLines,
+        textDocument
+      );
+    }
     // An empty document splits into zero addition lines, which would recompute
     // to a diff with no editable rows and leave the attached host with no
     // line element for its caret (the additions column vanishes in split;
     // unified shows only deletions). Keep one empty editable line instead.
     if (diff.additionLines.length <= 1 && diff.additionLines.join('') === '') {
-      Object.assign(
+      this.applyRecomputePreservingSessionType(
         diff,
         recomputeEmptyDocumentDiff(diff, this.options.parseDiffOptions)
       );
-      result.code.additionLines[0] = createPlainAdditionLineElement(
-        0,
-        textDocument
-      );
-      this.markEditSessionPass(diff);
+      if (result != null) {
+        result.code.additionLines[0] = createPlainAdditionLineElement(
+          0,
+          textDocument.getLineText(0)
+        );
+      }
     } else if (this.editSessionActive) {
-      this.applySessionDocumentChange(diff);
+      this.applySessionDocumentChange(diff, previousAdditionLines);
     } else {
       Object.assign(
         diff,
@@ -664,27 +767,58 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       );
     }
 
-    this.renderCache.isDirty = true;
+    if (pendingStructuralRows != null && result != null) {
+      for (const [line, row] of pendingStructuralRows) {
+        if (line < result.code.additionLines.length) {
+          result.code.additionLines[line] = row;
+        }
+      }
+    }
+
+    if (renderCache != null) {
+      renderCache.isDirty = true;
+    }
   }
 
   // Session-mode counterpart of the line-count recompute: derive canonical
   // old/current pairing and rebuild the old-side region skeleton from it.
-  private applySessionDocumentChange(diff: FileDiffMetadata): void {
+  private applySessionDocumentChange(
+    diff: FileDiffMetadata,
+    previousAdditionLines: readonly string[]
+  ): void {
     const { parseDiffOptions } = this.options;
     const rawLines = diff.additionLines;
     if (shouldTopAlignAdditionRecompute(diff, rawLines)) {
-      Object.assign(
+      this.applyRecomputePreservingSessionType(
         diff,
         recomputeTopAlignedAdditionDiff(diff, rawLines, parseDiffOptions)
       );
-      this.markEditSessionPass(diff);
       return;
     }
-    this.applyExpansionRemap(rebuildSessionHunks(diff, parseDiffOptions));
+    this.applyExpansionRemap(
+      rebuildSessionHunks(
+        diff,
+        parseDiffOptions,
+        (index) => previousAdditionLines[index]
+      )
+    );
   }
 
-  // Records a session pass that replaced hunks wholesale (empty-document or
-  // top-aligned shims).
+  // Empty-document and top-aligned recomputes rebuild the complete diff. While
+  // editing, keep the session's original classification until finalization.
+  private applyRecomputePreservingSessionType(
+    diff: FileDiffMetadata,
+    update: ReturnType<typeof recomputeEmptyDocumentDiff>
+  ): void {
+    const sessionType = this.editSessionActive ? diff.type : undefined;
+    Object.assign(diff, update);
+    if (sessionType != null) {
+      diff.type = sessionType;
+    }
+    this.markEditSessionPass(diff);
+  }
+
+  // Records a session pass that replaced hunks wholesale.
   private markEditSessionPass(diff: FileDiffMetadata): void {
     if (!this.editSessionActive) {
       return;
@@ -786,7 +920,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
 
   public async initializeHighlighter(): Promise<DiffsHighlighter> {
     this.highlighter = await getSharedHighlighter(
-      getHighlighterOptions(this.computedLang, {
+      getHighlighterOptions(this.computedLangs, {
         theme: this.getLocalHighlightTheme(),
         preferredHighlighter:
           this.workerManager?.getPreferredHighlighter() ??
@@ -809,6 +943,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     }
     this.renderCache ??= {
       diff,
+      hydrated: true,
       highlighted: !massiveDiff && !isDiffPlainText(diff),
       options,
       result: massiveDiff ? undefined : cache?.result,
@@ -825,7 +960,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     }
     // Lets attempt to get the highlighter/languages ready immediately
     else if (this.highlighter == null) {
-      this.computedLang = diff.lang ?? getFiletypeFromFileName(diff.name);
+      this.computedLangs = getDiffLanguages(diff);
       void this.initializeHighlighter();
     }
   }
@@ -892,23 +1027,87 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     return { options, forceHighlight: false };
   }
 
+  /**
+   * Returns the diff that the next synchronous render can commit without
+   * changing the renderer's current diff or render cache. Components use this
+   * to prepare state that must match the following DOM render.
+   */
+  public getDiffForNextRender(diff: FileDiffMetadata): FileDiffMetadata {
+    const { options } = this.getRenderOptions(diff);
+    if (this.getReadyRenderResult(diff, options) != null) {
+      return diff;
+    }
+
+    if (this.renderCache == null) {
+      return diff;
+    }
+    if (areDiffTargetsEqual(this.renderCache.diff, diff)) {
+      return this.renderCache.diff;
+    }
+
+    const hasContent =
+      diff.additionLines.length > 0 || diff.deletionLines.length > 0;
+    const forcePlainText =
+      !hasContent ||
+      isDiffPlainText(diff) ||
+      isDiffMassive(diff, this.getTokenizeMaxLength());
+    return this.canRenderDiff(diff, options, forcePlainText)
+      ? diff
+      : this.renderCache.diff;
+  }
+
+  private canRenderDiff(
+    diff: FileDiffMetadata,
+    options: RenderDiffOptions,
+    forcePlainText: boolean
+  ): boolean {
+    const { renderCache } = this;
+    if (renderCache == null || areDiffTargetsEqual(renderCache.diff, diff)) {
+      return true;
+    }
+    if (forcePlainText) {
+      return (
+        (renderCache.result == null && renderCache.hydrated !== true) ||
+        this.workerManager?.isWorkingPool() === true ||
+        (this.highlighter != null && areThemesAttached(options.theme))
+      );
+    }
+    // Hydration has highlighted DOM without a local AST. It is still active
+    // rendered content and must remain visible while a non-plain replacement
+    // is prepared.
+    if (renderCache.result == null && renderCache.hydrated !== true) {
+      return true;
+    }
+
+    if (
+      !this.editSessionActive &&
+      this.workerManager?.isWorkingPool() === true
+    ) {
+      return !renderCache.highlighted;
+    }
+
+    return this.highlighter != null && areThemesAttached(options.theme);
+  }
+
   public renderDiff(
-    diff: FileDiffMetadata | undefined = this.renderCache?.diff,
+    diff: FileDiffMetadata | undefined = this.diff,
     renderRange: RenderRange = DEFAULT_RENDER_RANGE
   ): HunksRenderResult | undefined {
+    this.diff = diff;
     if (diff == null) {
+      this.pendingHighlightResult = undefined;
       return undefined;
     }
     const { expandUnchanged, collapsedContextThreshold } =
       this.getOptionsWithDefaults();
     let { options, forceHighlight } = this.getRenderOptions(diff);
-    const cache = this.getMatchingWorkerResultCache(diff, options);
-    if (cache != null && !this.hasHighlightedRenderCache(diff, options)) {
+    const readyResult = this.getReadyRenderResult(diff, options);
+    this.pendingHighlightResult = undefined;
+    if (readyResult != null) {
       this.renderCache = {
+        ...readyResult,
         diff,
-        highlighted: true,
         renderRange: undefined,
-        ...cache,
       };
       forceHighlight = false;
     }
@@ -925,6 +1124,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       !hasContent ||
       isDiffPlainText(diff) ||
       isDiffMassive(diff, this.getTokenizeMaxLength());
+    const canRenderDiff = this.canRenderDiff(diff, options, forcePlainText);
     const newContent = !areDiffTargetsEqual(diff, this.renderCache.diff);
     const newRenderRange = !areRenderRangesEqual(
       this.renderCache.renderRange,
@@ -934,23 +1134,17 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       !this.editSessionActive &&
       this.workerManager?.isWorkingPool() === true
     ) {
-      // An already-highlighted view is waiting on a fresh highlight for the
-      // same diff. Returning no result keeps the host's current content in
-      // place instead of downgrading it to a plain AST; the pending
-      // highlight's completion will re-render. A different diff or a
-      // sub-range window still paints plain — the current content cannot
-      // serve those.
-      const highlightPending =
+      // Hydration has highlighted DOM but no local AST. Keep that DOM until
+      // its corresponding worker result is ready.
+      const preserveHydratedContent =
         this.renderCache.result == null &&
         this.renderCache.highlighted &&
         !forcePlainText &&
         !newContent &&
         isDefaultRenderRange(renderRange);
-      if (highlightPending) {
-        this.renderCache.highlightPending = true;
-      }
       if (
-        !highlightPending &&
+        canRenderDiff &&
+        !preserveHydratedContent &&
         (forcePlainText ||
           this.renderCache.result == null ||
           (!this.renderCache.highlighted && (newContent || newRenderRange)))
@@ -990,11 +1184,12 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
         this.workerManager.highlightDiffAST(this, diff);
       }
     } else {
-      this.computedLang = diff.lang ?? getFiletypeFromFileName(diff.name);
+      this.computedLangs = getDiffLanguages(diff);
+      this.highlighter ??= getHighlighterIfLoaded();
       const hasThemes =
         this.highlighter != null && areThemesAttached(options.theme);
       const hasLangs =
-        this.highlighter != null && areLanguagesAttached(this.computedLang);
+        this.highlighter != null && areLanguagesAttached(this.computedLangs);
       const canHighlight = !forcePlainText && hasLangs;
 
       // If we have any semblance of a highlighter with the correct theme(s)
@@ -1002,6 +1197,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       // the correct language, then we can render plain text and after kick off
       // an async job to get the highlighted AST
       if (
+        canRenderDiff &&
         this.highlighter != null &&
         hasThemes &&
         (forceHighlight ||
@@ -1028,11 +1224,6 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       // and languages
       if (!hasThemes || (!forcePlainText && !hasLangs)) {
         void this.asyncHighlight(diff).then(({ result, options }) => {
-          // In this case we need to force a re-render, so we can do that by
-          // reaching into renderCache
-          if (this.renderCache != null) {
-            this.renderCache.highlighted = false;
-          }
           this.applyHighlightResult(diff, result, options, !forcePlainText);
         });
       }
@@ -1050,6 +1241,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     diff: FileDiffMetadata,
     renderRange: RenderRange = DEFAULT_RENDER_RANGE
   ): Promise<HunksRenderResult> {
+    this.diff = diff;
     const { result } = await this.asyncHighlight(diff);
     return this.processDiffResult(diff, renderRange, result);
   }
@@ -1077,15 +1269,13 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     diff: FileDiffMetadata
   ): Promise<RenderDiffResult> {
     const forcePlainText = isDiffMassive(diff, this.getTokenizeMaxLength());
-    this.computedLang = forcePlainText
-      ? 'text'
-      : (diff.lang ?? getFiletypeFromFileName(diff.name));
+    this.computedLangs = forcePlainText ? ['text'] : getDiffLanguages(diff);
     const hasThemes =
       this.highlighter != null &&
       areThemesAttached(this.getLocalHighlightTheme());
     const hasLangs =
       forcePlainText ||
-      (this.highlighter != null && areLanguagesAttached(this.computedLang));
+      (this.highlighter != null && areLanguagesAttached(this.computedLangs));
     // If we don't have the required langs or themes, then we need to
     // initialize the highlighter to load the appropriate languages and themes
     if (this.highlighter == null || !hasThemes || !hasLangs) {
@@ -1110,6 +1300,34 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       expandedHunks: forcePlainText ? true : undefined,
       collapsedContextThreshold,
     });
+    if (
+      this.editSessionActive &&
+      diff.additionLines.length === 1 &&
+      diff.additionLines[0] === '' &&
+      result.code.additionLines[0] == null
+    ) {
+      let fallbackLine: DiffLineMetadata | undefined;
+      iterateOverDiff({
+        diff,
+        diffStyle: 'both',
+        expandedHunks: forcePlainText ? true : undefined,
+        collapsedContextThreshold,
+        callback: ({ additionLine }) => {
+          if (additionLine?.lineIndex !== 0) return;
+          fallbackLine = additionLine;
+          return true;
+        },
+      });
+      if (fallbackLine == null) {
+        throw new Error('DiffHunksRenderer: missing empty addition line');
+      }
+      result.code.additionLines[0] = createPlainAdditionLineElement(
+        0,
+        '',
+        fallbackLine.unifiedLineIndex,
+        fallbackLine.splitLineIndex
+      );
+    }
     return { result, options };
   }
 
@@ -1131,29 +1349,35 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     options: RenderDiffOptions,
     highlighted = true
   ): void {
-    // NOTE(amadeus): This is a bad assumption, and I should figure out
-    // something better... If renderCache was blown away, we can assume we've
-    // run cleanUp()
-    if (this.renderCache == null) {
+    const { diff: currentDiff, renderCache } = this;
+    if (
+      currentDiff == null ||
+      renderCache == null ||
+      !areDiffTargetsEqual(currentDiff, diff) ||
+      !areDiffRenderOptionsEqual(
+        options,
+        this.getRenderOptions(currentDiff).options
+      )
+    ) {
       return;
     }
 
-    const triggerRenderUpdate =
-      this.renderCache.highlightPending === true ||
-      !this.renderCache.highlighted ||
-      !areDiffRenderOptionsEqual(this.renderCache.options, options) ||
-      !areDiffTargetsEqual(this.renderCache.diff, diff);
+    const triggerRender =
+      renderCache.result == null ||
+      !renderCache.highlighted ||
+      !areDiffRenderOptionsEqual(renderCache.options, options) ||
+      !areDiffTargetsEqual(renderCache.diff, currentDiff);
+    if (!triggerRender) {
+      return;
+    }
 
-    this.renderCache = {
-      diff,
+    this.pendingHighlightResult = {
+      diff: currentDiff,
       options,
       highlighted,
       result,
-      renderRange: undefined,
     };
-    if (triggerRenderUpdate) {
-      this.onRenderUpdate?.();
-    }
+    this.onRenderUpdate?.();
   }
 
   private getMatchingWorkerResultCache(
@@ -1168,6 +1392,31 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       return undefined;
     }
     return cache;
+  }
+
+  // Returns completed background work that can replace the rendered AST on
+  // the next render. Reading it does not promote or discard pending work.
+  private getReadyRenderResult(
+    diff: FileDiffMetadata,
+    options: RenderDiffOptions
+  ): PendingHighlightResult | undefined {
+    const { pendingHighlightResult } = this;
+    if (
+      pendingHighlightResult != null &&
+      areDiffTargetsEqual(pendingHighlightResult.diff, diff) &&
+      areDiffRenderOptionsEqual(pendingHighlightResult.options, options)
+    ) {
+      return pendingHighlightResult;
+    }
+
+    const workerCache = this.getMatchingWorkerResultCache(diff, options);
+    // Return nothing when the worker has not finished, or when this diff is
+    // already rendered with matching highlighted markup. In both cases the
+    // current render cache should remain unchanged.
+    if (workerCache == null || this.hasHighlightedRenderCache(diff, options)) {
+      return undefined;
+    }
+    return { diff, highlighted: true, ...workerCache };
   }
 
   private hasHighlightedRenderCache(
@@ -1206,7 +1455,6 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     } = this.getOptionsWithDefaults();
     const isRenderCacheDirty = this.renderCache?.isDirty ?? false;
 
-    this.diff = fileDiff;
     const unified = diffStyle === 'unified';
     const canHydrateContext = canHydrateCollapsedContext(
       fileDiff,
@@ -1722,6 +1970,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     );
 
     return {
+      fileDiff,
       unifiedGutterAST:
         unified && hasContent ? context.unifiedGutterAST.children : undefined,
       unifiedContentAST,
@@ -1740,7 +1989,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       themeStyles,
       baseThemeType,
       headerElement: !disableFileHeader
-        ? this.renderHeader(this.diff)
+        ? this.renderHeader(fileDiff)
         : undefined,
       totalLines,
       rowCount: context.rowCount,
@@ -1874,11 +2123,11 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
 
     const deletionAnnotationNames =
       fileDiff.type !== 'new'
-        ? getAnnotationNames(getFileAnnotations(this.deletionAnnotations))
+        ? this.getAnnotationNames(getFileAnnotations(this.deletionAnnotations))
         : [];
     const additionAnnotationNames =
       fileDiff.type !== 'deleted'
-        ? getAnnotationNames(getFileAnnotations(this.additionAnnotations))
+        ? this.getAnnotationNames(getFileAnnotations(this.additionAnnotations))
         : [];
     if (
       deletionAnnotationNames.length === 0 &&
@@ -1959,7 +2208,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     };
     if (deletionLineNumber != null) {
       for (const anno of this.deletionAnnotations[deletionLineNumber] ?? []) {
-        deletionSpan.annotations.push(getLineAnnotationName(anno));
+        deletionSpan.annotations.push(this.annotationSlotName(anno));
       }
     }
     const additionSpan: AnnotationSpan = {
@@ -1971,7 +2220,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     if (additionLineNumber != null) {
       for (const anno of this.additionAnnotations[additionLineNumber] ?? []) {
         (type === 'unified' ? deletionSpan : additionSpan).annotations.push(
-          getLineAnnotationName(anno)
+          this.annotationSlotName(anno)
         );
       }
     }
@@ -1990,6 +2239,15 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     return { deletionSpan, additionSpan };
   }
 
+  private getAnnotationNames(
+    annotations: DiffLineAnnotation<LAnnotation>[] | undefined
+  ): string[] {
+    return (
+      annotations?.map((annotation) => this.annotationSlotName(annotation)) ??
+      []
+    );
+  }
+
   private renderHeader(diff: FileDiffMetadata): HASTElement {
     const { headerRenderMode, stickyHeader } = this.getOptionsWithDefaults();
     return createFileHeaderElement({
@@ -1998,14 +2256,6 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       stickyHeader,
     });
   }
-}
-
-function getAnnotationNames<LAnnotation>(
-  annotations: DiffLineAnnotation<LAnnotation>[] | undefined
-): string[] {
-  return (
-    annotations?.map((annotation) => getLineAnnotationName(annotation)) ?? []
-  );
 }
 
 // Use the platform's English plural rules to pick "line" vs "lines" so a
@@ -2288,19 +2538,19 @@ function contentLineCount(lines: string[]): number {
 // mid-document must shift the surviving entries to their new indexes —
 // otherwise rows hidden during the edit (collapsed context) render another
 // line's stale tokens once they become visible. Entries outside the changed
-// window keep their highlighted content; entries inside it become plain-text
-// elements that the editor re-tokenizes on its next background pass.
+// window keep their highlighted content; changed rows without fresh tokens
+// become plain-text elements for the editor's next background pass.
 //
 // The bottom-up scan runs over content lines only: a session's first
 // line-count edit still has `previousLines` in the parsed-diff shape while
 // `nextLines` is editor-shaped, and comparing the raw tails would mismatch on
 // the representational trailing `''`, zero out the suffix, and plain-fill
 // every line below the tokenizer's render window.
-function realignAdditionHastLines(
+function realignAdditionHastLines<LAnnotation>(
   previousLines: string[],
   nextLines: string[],
   hastLines: ElementContent[],
-  textDocument: DiffsTextDocument
+  textDocument: TextDocument<'file-diff', LAnnotation>
 ): ElementContent[] {
   const previousContentLength = contentLineCount(previousLines);
   const nextContentLength = contentLineCount(nextLines);
@@ -2333,27 +2583,27 @@ function realignAdditionHastLines(
   ) {
     realigned[nextLines.length - 1] = hastLines[previousLines.length - 1];
   }
-  // Deferred tokenization can write entries past the previous line count;
-  // those were produced with post-edit indexes and are already in place.
-  for (let index = previousLines.length; index < nextLines.length; index++) {
-    realigned[index] ??= hastLines[index];
-  }
   for (let index = prefix; index < nextLines.length; index++) {
-    realigned[index] ??= createPlainAdditionLineElement(index, textDocument);
+    realigned[index] ??= createPlainAdditionLineElement(
+      index,
+      textDocument.getLineText(index)
+    );
   }
   return realigned;
 }
 
 function createPlainAdditionLineElement(
   lineIndex: number,
-  textDocument: DiffsTextDocument
+  lineText: string,
+  unifiedLineIndex = lineIndex,
+  splitLineIndex = lineIndex
 ): HASTElement {
   return {
     type: 'element',
     tagName: 'div',
     properties: {
       'data-line': lineIndex + 1,
-      'data-line-index': `${lineIndex},${lineIndex}`,
+      'data-line-index': `${unifiedLineIndex},${splitLineIndex}`,
       'data-line-type': 'context',
     },
     children: [
@@ -2366,7 +2616,7 @@ function createPlainAdditionLineElement(
         children: [
           {
             type: 'text',
-            value: textDocument.getLineText(lineIndex),
+            value: lineText,
           },
         ],
       },
@@ -2374,40 +2624,27 @@ function createPlainAdditionLineElement(
   };
 }
 
-function getEditorDocumentLines(
-  textDocument: DiffsTextDocument,
-  previousLines: string[]
+function getEditorDocumentLines<LAnnotation>(
+  textDocument: TextDocument<'file-diff', LAnnotation>
 ): string[] {
   const lines: string[] = [];
-  const fallbackLineBreak = getFallbackLineBreak(previousLines);
   for (let line = 0; line < textDocument.lineCount; line++) {
-    const lineText = textDocument.getLineText(line, true);
-    lines.push(
-      line < textDocument.lineCount - 1 && !hasLineBreakSuffix(lineText)
-        ? lineText + fallbackLineBreak
-        : lineText
-    );
+    lines.push(textDocument.getLineText(line, true));
   }
   return lines;
 }
 
-function hasLineBreakSuffix(line: string): boolean {
-  return line.endsWith('\n') || line.endsWith('\r');
-}
-
-function getFallbackLineBreak(lines: string[]): string {
-  for (const line of lines) {
-    if (line.endsWith('\r\n')) {
-      return '\r\n';
-    }
-    if (line.endsWith('\n')) {
-      return '\n';
-    }
-    if (line.endsWith('\r')) {
-      return '\r';
-    }
+// Renames can supply 2 different languages, so lets go ahead and figure out
+// the required languages
+function getDiffLanguages(diff: FileDiffMetadata): SupportedLanguages[] {
+  if (diff.lang != null) {
+    return [diff.lang];
   }
-  return '\n';
+  const deletionLang = getFiletypeFromFileName(diff.prevName ?? diff.name);
+  const additionLang = getFiletypeFromFileName(diff.name);
+  return deletionLang === additionLang
+    ? [additionLang]
+    : [deletionLang, additionLang];
 }
 
 function isDiffMassive(

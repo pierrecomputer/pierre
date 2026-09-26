@@ -14,7 +14,7 @@ import { ButtonGroup, ButtonGroupItem } from '@/components/ui/button-group';
 type HeaderMode = 'custom' | 'slots';
 
 interface CustomHeaderProps {
-  prerenderedDiff: PreloadMultiFileDiffResult<undefined>;
+  prerenderedDiff: PreloadMultiFileDiffResult<undefined, undefined>;
 }
 
 export function CustomHeader({ prerenderedDiff }: CustomHeaderProps) {

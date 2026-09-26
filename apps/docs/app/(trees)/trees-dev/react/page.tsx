@@ -2,6 +2,14 @@ import { preloadFileTree } from '@pierre/trees/ssr';
 
 import { readSettingsCookies } from '../_components/readSettingsCookies';
 import { ReactDemoClient } from '../_demos/ReactDemoClient';
+import { pageMetadata } from '@/lib/page-metadata';
+
+export const metadata = pageMetadata({
+  title: 'React API demo — Pierre Trees',
+  description:
+    'The @pierre/trees React component rendering a server-prepared file tree, hydrating from SSR markup with search enabled and no flash of unstyled rows.',
+  path: '/trees-dev/react',
+});
 
 const DEMO_PATHS = [
   'README.md',

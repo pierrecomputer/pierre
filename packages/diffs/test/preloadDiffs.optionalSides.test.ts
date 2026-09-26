@@ -58,7 +58,10 @@ describe('preload diff optional sides', () => {
     let error: unknown;
 
     try {
-      await preloadDiffHTML({ newFile } as PreloadDiffOptions<undefined>);
+      await preloadDiffHTML({ newFile } as PreloadDiffOptions<
+        undefined,
+        undefined
+      >);
     } catch (caught) {
       error = caught;
     }
@@ -71,7 +74,7 @@ describe('preload diff optional sides', () => {
     let error: unknown;
 
     try {
-      await preloadDiffHTML({} as PreloadDiffOptions<undefined>);
+      await preloadDiffHTML({} as PreloadDiffOptions<undefined, undefined>);
     } catch (caught) {
       error = caught;
     }

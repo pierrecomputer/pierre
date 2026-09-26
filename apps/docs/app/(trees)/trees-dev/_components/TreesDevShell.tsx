@@ -2,7 +2,7 @@
 
 import { Menu, X } from 'lucide-react';
 import { usePathname } from 'next/navigation';
-import { type ReactNode, useEffect, useState } from 'react';
+import { type ReactNode, useEffect, useMemo, useState } from 'react';
 
 import { TreesDevSidebar } from './TreesDevSidebar';
 
@@ -11,13 +11,14 @@ import { TreesDevSidebar } from './TreesDevSidebar';
  * handling the mobile hamburger menu toggle and backdrop.
  */
 export function TreesDevShell({ children }: { children: ReactNode }) {
-  const [mobileOpen, setMobileOpen] = useState(false);
   const pathname = usePathname();
-
-  // Close mobile menu on navigation
-  useEffect(() => {
-    setMobileOpen(false);
-  }, [pathname]);
+  // Comparing by identity prevents a menu from reappearing if navigation later
+  // returns to the same pathname.
+  const navigationKey = useMemo(() => ({ pathname }), [pathname]);
+  const [openNavigationKey, setOpenNavigationKey] = useState<
+    typeof navigationKey | null
+  >(null);
+  const mobileOpen = openNavigationKey === navigationKey;
 
   // Lock body scroll when mobile menu is open
   useEffect(() => {
@@ -36,7 +37,11 @@ export function TreesDevShell({ children }: { children: ReactNode }) {
         type="button"
         className="bg-background fixed top-3 right-3 z-[60] rounded-md border p-1.5 md:hidden"
         style={{ borderColor: 'var(--color-border)' }}
-        onClick={() => setMobileOpen((prev) => !prev)}
+        onClick={() =>
+          setOpenNavigationKey((currentKey) =>
+            currentKey === navigationKey ? null : navigationKey
+          )
+        }
         aria-label={mobileOpen ? 'Close menu' : 'Open menu'}
       >
         {mobileOpen ? <X size={18} /> : <Menu size={18} />}
@@ -46,7 +51,7 @@ export function TreesDevShell({ children }: { children: ReactNode }) {
       {mobileOpen && (
         <div
           className="bg-background/50 fixed inset-0 z-[50] backdrop-blur-sm md:hidden"
-          onClick={() => setMobileOpen(false)}
+          onClick={() => setOpenNavigationKey(null)}
         />
       )}
 
@@ -56,7 +61,7 @@ export function TreesDevShell({ children }: { children: ReactNode }) {
           mobileOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
-        <TreesDevSidebar onNavigate={() => setMobileOpen(false)} />
+        <TreesDevSidebar onNavigate={() => setOpenNavigationKey(null)} />
       </div>
 
       <main className="min-w-0 flex-1 p-6 pb-12">{children}</main>

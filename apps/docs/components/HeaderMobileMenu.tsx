@@ -71,6 +71,14 @@ export function HeaderMobileMenu({
         <MobileNavLink href={homePath} active={isActivePath(homePath)}>
           Home
         </MobileNavLink>
+        {/* {product.id === 'diffs' && (
+          <MobileNavLink
+            href={`${product.basePath}/highlights`}
+            active={isActivePath(`${product.basePath}/highlights`)}
+          >
+            Highlights
+          </MobileNavLink>
+        )} */}
         {product.id === 'diffs' && (
           <MobileNavLink
             href={`${product.basePath}/edit`}

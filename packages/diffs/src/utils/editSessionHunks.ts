@@ -9,9 +9,11 @@ import type {
 } from '../types';
 import { getHunkSideStartBoundary } from './getHunkSideBoundaries';
 import { parseDiffFromFile } from './parseDiffFromFile';
+import { slideBlankBoundaryBlocksUp } from './realignChangeContent';
 import {
   offsetHunkContent,
   preserveTrailingEditorBlankLine,
+  recomputeDiffHunks,
   recomputeDiffHunksForEdit,
   recomputeDiffRenderLineCounts,
   recomputeHunkRenderLineCounts,
@@ -25,7 +27,7 @@ import {
 // While an editor is attached to a FileDiff, each hunk is a persistent region
 // identified by its old-side range. Structural passes rebuild those regions
 // from one canonical old/current diff; a reverted region remains as context so
-// its rows keep rendering until the genuine session-exit recompute.
+// its rows keep rendering until the session-exit recompute.
 
 export interface DivergenceCore {
   start: number;
@@ -104,13 +106,15 @@ export function findDivergenceCore(
 }
 
 /**
- * Rebuild the session skeleton as a pure function of the immutable old lines,
- * current new lines, and old-side ranges of the previous regions. One
- * canonical parse supplies the same change blocks that session exit will use.
+ * Rebuild session regions from old/current lines and the previous change blocks.
+ * A full parse supplies changes, preserving existing blank positions while
+ * sliding new or edited blank changes up for the live editor. Previous line text
+ * distinguishes edits to an insertion from untouched blocks of the same size.
  */
 export function rebuildSessionHunks(
   diff: FileDiffMetadata,
-  parseDiffOptions?: CreatePatchOptionsNonabortable
+  parseDiffOptions?: CreatePatchOptionsNonabortable,
+  getPreviousAdditionLine?: (index: number) => string | undefined
 ): SessionRegionChange | undefined {
   const previousHunks = diff.hunks;
   const editorAdditionLines = diff.additionLines;
@@ -119,7 +123,11 @@ export function rebuildSessionHunks(
     canonicalAdditionLines === editorAdditionLines
       ? diff
       : { ...diff, additionLines: canonicalAdditionLines };
-  const blocks = parseCanonicalChangeBlocks(canonicalDiff, parseDiffOptions);
+  const blocks = parseSessionChangeBlocks(
+    canonicalDiff,
+    parseDiffOptions,
+    getPreviousAdditionLine
+  );
   const plans = buildRegionPlans(
     previousHunks,
     blocks,
@@ -152,12 +160,17 @@ export function applySessionChangedLines(
   parseDiffOptions?: CreatePatchOptionsNonabortable,
   previousAdditionLines?: ReadonlyMap<number, string>
 ): SessionRegionChange | undefined {
-  const lines = Array.from(new Set(changedAdditionLineIndexes))
+  const changedLines = new Set(changedAdditionLineIndexes);
+  const lines = Array.from(changedLines)
     .filter((line) => line >= 0 && line < diff.additionLines.length)
     .sort((a, b) => a - b);
   if (lines.length === 0) {
     return undefined;
   }
+  const getPreviousAdditionLine = (index: number) =>
+    changedLines.has(index)
+      ? previousAdditionLines?.get(index)
+      : diff.additionLines[index];
 
   const { hunks } = diff;
   let regionIndex: number | undefined;
@@ -176,7 +189,11 @@ export function applySessionChangedLines(
       line < start ||
       (regionIndex != null && regionIndex !== hunkIndex)
     ) {
-      return rebuildSessionHunks(diff, parseDiffOptions);
+      return rebuildSessionHunks(
+        diff,
+        parseDiffOptions,
+        getPreviousAdditionLine
+      );
     }
     regionIndex = hunkIndex;
   }
@@ -196,7 +213,7 @@ export function applySessionChangedLines(
     diff.editSessionDirty = true;
     return undefined;
   }
-  return rebuildSessionHunks(diff, parseDiffOptions);
+  return rebuildSessionHunks(diff, parseDiffOptions, getPreviousAdditionLine);
 }
 
 // Existing balanced change blocks remain canonical when every edited line was
@@ -407,9 +424,11 @@ export function rebuildExpansionFromAnchors(
 }
 
 /**
- * Genuine session exit: when session passes reshaped the hunks, run the real
- * full recompute so exit state matches a non-session edit pipeline, and clear
- * the marker. Returns true when a recompute ran.
+ * While editing, hunk updates keep a lightweight session-specific shape and
+ * mark the diff with `editSessionDirty`. Called at session end, this
+ * recomputes the hunks in full from the diff's current lines — the same
+ * hunks a non-session edit would have produced — and clears the flag.
+ * Returns true when a recompute ran.
  */
 export function finishEditSessionForDiff(
   diff: FileDiffMetadata,
@@ -418,18 +437,25 @@ export function finishEditSessionForDiff(
   if (diff.editSessionDirty !== true) {
     return false;
   }
-  diff.editSessionDirty = undefined;
-  Object.assign(diff, recomputeDiffHunksForEdit(diff, parseDiffOptions));
+  delete diff.editSessionDirty;
+  // The empty editor row only hosts a caret; it is not file content after exit.
+  Object.assign(
+    diff,
+    diff.additionLines.length <= 1 && diff.additionLines.join('') === ''
+      ? recomputeDiffHunks(diff, parseDiffOptions)
+      : recomputeDiffHunksForEdit(diff, parseDiffOptions)
+  );
   return true;
 }
 
 // Parse the complete old/current files once with the same context policy as
-// session exit. Equal boundary lines affect Myers tie-breaking, while parsed
-// context is required for the blank-run alignment post-pass; only canonical
-// change blocks are retained. Running cursors normalize unified N,0 indexes.
-function parseCanonicalChangeBlocks(
+// session exit, then slide new or edited blank changes before extracting blocks.
+// Use the parsed context window so a larger persistent session region cannot
+// extend the slide. Running cursors normalize unified N,0 indexes.
+function parseSessionChangeBlocks(
   diff: FileDiffMetadata,
-  parseDiffOptions?: CreatePatchOptionsNonabortable
+  parseDiffOptions: CreatePatchOptionsNonabortable | undefined,
+  getPreviousAdditionLine: ((index: number) => string | undefined) | undefined
 ): ChangeContent[] {
   if (findDivergenceCore(diff.deletionLines, diff.additionLines) == null) {
     return [];
@@ -447,10 +473,48 @@ function parseCanonicalChangeBlocks(
     parseDiffOptions
   );
 
+  // Built on the first blank block that qualifies to slide, so passes without
+  // one never scan the previous skeleton.
+  let previousBlocks: Map<number, ChangeContent> | undefined;
+  // The parsed block sits at the bottom of its blank run. A previous block of
+  // the same shape anywhere between there and the run's top is the same change
+  // and keeps its position: offset 0 is untouched at the parsed position, and
+  // `maxSlide` is one already slid to the top. A block with no previous
+  // counterpart, or an insertion whose text changed in place, is new to this
+  // pass and slides to the top.
+  const resolveSlide = (block: ChangeContent, maxSlide: number): number => {
+    previousBlocks ??= collectPureChangeBlocks(diff.hunks);
+    for (let offset = 0; offset <= maxSlide; offset++) {
+      const previous = previousBlocks.get(block.deletionLineIndex - offset);
+      if (
+        previous == null ||
+        previous.additions !== block.additions ||
+        previous.deletions !== block.deletions
+      ) {
+        continue;
+      }
+      // Old-side text is immutable. For insertions, compare the previous text
+      // at its previous indexes because structural edits shift the new side.
+      if (block.additions > 0 && getPreviousAdditionLine != null) {
+        for (let line = 0; line < block.additions; line++) {
+          if (
+            getPreviousAdditionLine(previous.additionLineIndex + line) !==
+            parsed.additionLines[block.additionLineIndex + line]
+          ) {
+            return maxSlide;
+          }
+        }
+      }
+      return offset;
+    }
+    return maxSlide;
+  };
+
   const blocks: ChangeContent[] = [];
   let coveredAdditions = 0;
   let coveredDeletions = 0;
   for (const hunk of parsed.hunks) {
+    slideBlankBoundaryBlocksUp(hunk, parsed, resolveSlide);
     const contextLines =
       hunk.additionCount > 0
         ? hunk.additionLineIndex - coveredAdditions
@@ -473,6 +537,25 @@ function parseCanonicalChangeBlocks(
       blocks.push(block);
       coveredAdditions += block.additions;
       coveredDeletions += block.deletions;
+    }
+  }
+  return blocks;
+}
+
+// Pure insert/delete blocks keyed by old-side index. The old side is immutable
+// during a session, so that index identifies a block across passes while
+// new-side rows shift around it. Adjacent insert and delete runs parse as one
+// mixed block, so two pure blocks never share an index.
+function collectPureChangeBlocks(hunks: Hunk[]): Map<number, ChangeContent> {
+  const blocks = new Map<number, ChangeContent>();
+  for (const hunk of hunks) {
+    for (const content of hunk.hunkContent) {
+      if (
+        content.type === 'change' &&
+        (content.additions === 0 || content.deletions === 0)
+      ) {
+        blocks.set(content.deletionLineIndex, content);
+      }
     }
   }
   return blocks;

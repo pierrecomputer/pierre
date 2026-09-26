@@ -95,7 +95,7 @@ describe('VirtualizedFile editor folding', () => {
       createVirtualizer(layoutChanges),
       metrics
     );
-    instance.prepareCodeViewItem(file, 0);
+    instance.updateCodeViewLayout(file, 0);
 
     expect(instance.getVirtualizedHeight()).toBe(234);
 
@@ -120,7 +120,7 @@ describe('VirtualizedFile editor folding', () => {
   test('maps uniform-height windows through visible indexes to raw lines', () => {
     const file = createFile(20);
     const instance = new VirtualizedFile({}, createVirtualizer([]), metrics);
-    instance.prepareCodeViewItem(file, 0);
+    instance.updateCodeViewLayout(file, 0);
     instance.__setFoldRanges([{ startLine: 2, endLine: 11 }]);
 
     const range = inspect(instance).computeRenderRangeFromWindow(file, 0, {
@@ -149,7 +149,7 @@ describe('VirtualizedFile editor folding', () => {
       createVirtualizer([]),
       metrics
     );
-    instance.prepareCodeViewItem(file, 0);
+    instance.updateCodeViewLayout(file, 0);
     instance.__setFoldRanges([{ startLine: 3, endLine: 7 }]);
 
     expect(instance.getVirtualizedHeight()).toBe(184);
@@ -164,7 +164,7 @@ describe('VirtualizedFile editor folding', () => {
       createVirtualizer([]),
       metrics
     );
-    instance.prepareCodeViewItem(file, 0);
+    instance.updateCodeViewLayout(file, 0);
     const layout = inspect(instance);
     layout.cache.heights.set(8, 25);
     layout.cache.fileAnnotationHeight = 12;
@@ -202,7 +202,7 @@ describe('VirtualizedFile editor folding', () => {
       metrics,
       workerManager
     );
-    instance.prepareCodeViewItem(file, 0);
+    instance.updateCodeViewLayout(file, 0);
     instance.__setFoldRanges([{ startLine: 1, endLine: 19_990 }]);
 
     const layout = inspect(instance);

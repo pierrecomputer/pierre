@@ -2002,7 +2002,7 @@ exports[`parsePatchFiles should warn on malformed patch with bare newline in hun
             "additionLines": 0,
             "additionStart": 0,
             "collapsedBefore": 0,
-            "deletionCount": 87,
+            "deletionCount": 86,
             "deletionLineIndex": 0,
             "deletionLines": 86,
             "deletionStart": 1,

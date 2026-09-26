@@ -58,13 +58,15 @@ const ACCEPT_REJECT_ANNOTATIONS: DiffLineAnnotation<AcceptRejectMetadata>[] = [
   { side: 'additions', lineNumber: 11, metadata: { key: 'del-11' } },
 ];
 
-export const ACCEPT_REJECT_EXAMPLE: PreloadFileDiffOptions<AcceptRejectMetadata> =
-  {
-    fileDiff: parseDiffFromFile(ACCEPT_REJECT_OLD_FILE, ACCEPT_REJECT_NEW_FILE),
-    options: {
-      theme: DEFAULT_THEMES,
-      themeType: 'dark',
-      diffStyle: 'unified',
-    },
-    annotations: ACCEPT_REJECT_ANNOTATIONS,
-  };
+export const ACCEPT_REJECT_EXAMPLE: PreloadFileDiffOptions<
+  AcceptRejectMetadata,
+  undefined
+> = {
+  fileDiff: parseDiffFromFile(ACCEPT_REJECT_OLD_FILE, ACCEPT_REJECT_NEW_FILE),
+  options: {
+    theme: DEFAULT_THEMES,
+    themeType: 'dark',
+    diffStyle: 'unified',
+  },
+  annotations: ACCEPT_REJECT_ANNOTATIONS,
+};

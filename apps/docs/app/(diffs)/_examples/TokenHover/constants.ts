@@ -3,7 +3,10 @@ import type { PreloadMultiFileDiffOptions } from '@pierre/diffs/ssr';
 
 import { CustomScrollbarCSS } from '@/components/CustomScrollbarCSS';
 
-export const TOKEN_HOVER_EXAMPLE: PreloadMultiFileDiffOptions<undefined> = {
+export const TOKEN_HOVER_EXAMPLE: PreloadMultiFileDiffOptions<
+  undefined,
+  undefined
+> = {
   oldFile: {
     name: 'styles.css',
     contents: `.card-grid {

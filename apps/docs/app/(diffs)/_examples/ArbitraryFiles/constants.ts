@@ -3,7 +3,10 @@ import type { PreloadMultiFileDiffOptions } from '@pierre/diffs/ssr';
 
 import { CustomScrollbarCSS } from '@/components/CustomScrollbarCSS';
 
-export const ARBITRARY_DIFF_EXAMPLE: PreloadMultiFileDiffOptions<undefined> = {
+export const ARBITRARY_DIFF_EXAMPLE: PreloadMultiFileDiffOptions<
+  undefined,
+  undefined
+> = {
   oldFile: {
     name: 'example.css',
     contents: `.pizza {

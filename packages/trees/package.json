@@ -59,7 +59,6 @@
     "preact-render-to-string": "catalog:"
   },
   "devDependencies": {
-    "@arethetypeswrong/core": "catalog:",
     "@pierre/tree-test-data": "workspace:*",
     "@pierre/vscode-icons": "catalog:",
     "@playwright/test": "catalog:",
@@ -80,5 +79,13 @@
   "peerDependencies": {
     "react": "^18.3.1 || ^19.0.0",
     "react-dom": "^18.3.1 || ^19.0.0"
+  },
+  "peerDependenciesMeta": {
+    "react": {
+      "optional": true
+    },
+    "react-dom": {
+      "optional": true
+    }
   }
 }

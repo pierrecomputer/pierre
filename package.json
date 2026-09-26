@@ -10,7 +10,6 @@
     "@moonrepo/cli": "catalog:",
     "@pierre/icons": "catalog:",
     "@types/bun": "catalog:",
-    "@typescript/native-preview": "catalog:",
     "lint-staged": "catalog:",
     "oxfmt": "catalog:",
     "oxlint": "catalog:",
@@ -23,11 +22,11 @@
   },
   "lint-staged": {
     "**/*.{js,jsx,ts,tsx}": [
-      "oxfmt --write",
+      "oxfmt --write --no-error-on-unmatched-pattern",
       "oxlint --type-aware --tsconfig tsconfig.oxlint.json --fix"
     ],
     "**/*.{json,jsonc,yml,yaml}": [
-      "oxfmt --write"
+      "oxfmt --write --no-error-on-unmatched-pattern"
     ],
     "**/*.{css,pcss,postcss}": [
       "stylelint --fix"

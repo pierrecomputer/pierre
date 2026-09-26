@@ -1,4 +1,5 @@
 import { HUNK_HEADER } from '../constants';
+import { appendItems } from './appendItems';
 
 interface CurrentHunk {
   additionStart: number;
@@ -143,7 +144,7 @@ function flushContextLines(
   }
 
   if (hunk.contextLines.length > 0) {
-    hunk.hunkLines.push(...hunk.contextLines);
+    appendItems(hunk.hunkLines, hunk.contextLines);
     hunk.additionCount += hunk.contextLines.length;
     hunk.deletionCount += hunk.contextLines.length;
     hunk.contextLines.length = 0;
@@ -155,7 +156,7 @@ function flushHunk(hunk: CurrentHunk, lines: string[]) {
   lines.push(
     `@@ -${formatHunkRange(hunk.deletionStart, hunk.deletionCount)} +${formatHunkRange(hunk.additionStart, hunk.additionCount)} @@`
   );
-  lines.push(...hunk.hunkLines);
+  appendItems(lines, hunk.hunkLines);
 }
 
 function formatHunkRange(start: number, count: number): string {

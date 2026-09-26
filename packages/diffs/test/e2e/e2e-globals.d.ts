@@ -23,7 +23,7 @@ interface E2ESelection {
   direction?: 'none' | 'backward' | 'forward';
 }
 
-interface E2EEditorState {
+interface E2EEditorViewState {
   selections?: E2ESelection[];
   view?: {
     scrollLeft: number;
@@ -44,7 +44,7 @@ interface E2EEditor {
   canRedo: boolean;
   getText: () => string;
   getFile: () => { contents: string } | undefined;
-  getState: () => E2EEditorState;
+  getViewState: () => E2EEditorViewState;
   setSelections: (selections: E2ESelection[]) => void;
   applyEdits: (edits: E2ETextEdit[], updateHistory?: boolean) => void;
   focus: () => void;
@@ -66,6 +66,27 @@ interface Window {
   __selectionActionReady?: boolean;
   __selectionActionEdgesReady?: boolean;
 
+  // code-view-annotations.html helpers for annotation layout and scroll state.
+  __annotationScroll?: {
+    root: HTMLElement;
+    addAnnotation(): void;
+    setChildAnnotations(): void;
+    resizeAnnotations(height: number): void;
+    clearAnnotations(): void;
+    removeFileAnnotation(): void;
+    setLineCount(lineCount: number): void;
+    addTail(): void;
+    removeTail(): boolean;
+    setDiffStyle(diffStyle: 'split' | 'unified'): void;
+    scrollToLine(lineNumber: number, behavior: 'instant' | 'smooth'): void;
+    editAnnotationLine(remove: boolean): void;
+    getEditorAnnotationLines(): number[] | undefined;
+    isEditorReady(): boolean;
+    getFirstLineTop(): number | undefined;
+    getMeasuredAnnotationHeight(): number | undefined;
+    getScrollTop(): number;
+  };
+
   // Interaction logs populated by fixture callbacks.
   __editorEvents?: string[];
   __conflictResolutions?: string[];
@@ -80,6 +101,7 @@ interface Window {
   // Editor handle exposed by the editable fixtures.
   __editor?: E2EEditor;
   __setFoldingTheme?: () => void;
+  __completeEdit?: () => void;
   __forceEditorFullRender?: () => void;
   __moveEditorContainer?: () => void;
   __syncCount?: number;

@@ -18,7 +18,7 @@ import { FeatureHeader } from '@/components/FeatureHeader';
 import { Button } from '@/components/ui/button';
 
 interface LineSelectionProps {
-  prerenderedDiff: PreloadMultiFileDiffResult<undefined>;
+  prerenderedDiff: PreloadMultiFileDiffResult<undefined, undefined>;
 }
 
 export function LineSelection({ prerenderedDiff }: LineSelectionProps) {
@@ -98,6 +98,8 @@ export function LineSelection({ prerenderedDiff }: LineSelectionProps) {
             }}
             className="aspect-square px-0"
             disabled={selectedRange == null}
+            title="Clear selection"
+            aria-label="Clear selection"
           >
             <IconXSquircle className="text-muted-foreground" />
           </Button>

@@ -87,7 +87,7 @@ function resolveCompoundToken(
 }
 
 interface TokenHoverProps {
-  prerenderedDiff: PreloadMultiFileDiffResult<undefined>;
+  prerenderedDiff: PreloadMultiFileDiffResult<undefined, undefined>;
 }
 
 interface HoverState {

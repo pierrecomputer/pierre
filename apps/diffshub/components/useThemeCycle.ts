@@ -1,8 +1,9 @@
 'use client';
 
 import { type ColorMode } from '@pierre/theming';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
+import { useLatestValueRef } from './useLatestValueRef';
 import { docsThemeCatalog } from '@/components/themeCatalog';
 import type { DarkThemeName, LightThemeName } from '@/lib/themeNames';
 
@@ -54,13 +55,11 @@ export function useThemeCycle({
 
   // Capture the latest theme state in refs so the cycle effect doesn't
   // restart its interval (and re-anchor the rotation order) every time
-  // the cycle advances. Each tick reads the same captured sequence.
-  const lightThemeNameRef = useRef(lightThemeName);
-  const darkThemeNameRef = useRef(darkThemeName);
-  const resolvedModeRef = useRef(resolvedThemeMode);
-  lightThemeNameRef.current = lightThemeName;
-  darkThemeNameRef.current = darkThemeName;
-  resolvedModeRef.current = resolvedThemeMode;
+  // the cycle advances. Each tick reads the same captured sequence. One ref
+  // per value, so each only updates when its own value changes.
+  const lightThemeNameRef = useLatestValueRef(lightThemeName);
+  const darkThemeNameRef = useLatestValueRef(darkThemeName);
+  const resolvedThemeModeRef = useLatestValueRef(resolvedThemeMode);
 
   const bumpDuration = useCallback(() => {
     setStepSeconds((prev) => {
@@ -77,7 +76,7 @@ export function useThemeCycle({
 
   useEffect(() => {
     if (!cycling) return undefined;
-    const startMode = resolvedModeRef.current ?? 'light';
+    const startMode = resolvedThemeModeRef.current ?? 'light';
     // Snapshot the catalog once per cycle start; each tick reads the same
     // captured sequence.
     const lightThemes = docsThemeCatalog.getThemeNames({
@@ -132,7 +131,16 @@ export function useThemeCycle({
     tick();
     const intervalId = window.setInterval(tick, stepSeconds * 1000);
     return () => window.clearInterval(intervalId);
-  }, [cycling, stepSeconds, setLightThemeName, setDarkThemeName, setColorMode]);
+  }, [
+    lightThemeNameRef,
+    darkThemeNameRef,
+    resolvedThemeModeRef,
+    cycling,
+    stepSeconds,
+    setLightThemeName,
+    setDarkThemeName,
+    setColorMode,
+  ]);
 
   return useMemo(
     () => ({ cycling, stepSeconds, bumpDuration, toggleCycle }),

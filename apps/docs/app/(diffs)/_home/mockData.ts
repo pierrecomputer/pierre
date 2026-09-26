@@ -14,7 +14,10 @@ import { GENERATED_AUI_SESSIONS } from './mockData.generated';
 // attached editor. Sharing one constant also keeps the server and client
 // diffStyle in lockstep so the prerendered HTML always matches what the client
 // renders.
-export const AUI_DIFF_OPTIONS: DiffBasePropsReact<undefined>['options'] = {
+export const AUI_DIFF_OPTIONS: DiffBasePropsReact<
+  undefined,
+  undefined
+>['options'] = {
   theme: DEFAULT_THEMES,
   themeType: 'dark',
   disableFileHeader: true,
@@ -144,7 +147,7 @@ const AUI_PLACEHOLDER_CONTENTS: Record<string, string> = {
 // Contents shown when the fullscreen explorer opens a file that isn't part of
 // the agent's change set. Real files (e.g. the root README) come through
 // verbatim; everything else gets a friendly stand-in so browsing the full tree
-// never lands on a blank surface.
+// never lands on a blank view.
 export function getPlaceholderContents(path: string): string {
   const verbatim = AUI_PLACEHOLDER_CONTENTS[path];
   if (verbatim != null) {
@@ -175,7 +178,15 @@ export function getFileDiff(
   nextAfter?: string
 ): FileDiffMetadata {
   return parseDiffFromFile(
-    { name: file.path, contents: file.before },
-    { name: file.path, contents: nextAfter ?? file.after }
+    {
+      name: file.path,
+      contents: file.before,
+      cacheKey: `${file.path}:before`,
+    },
+    {
+      name: file.path,
+      contents: nextAfter ?? file.after,
+      cacheKey: `${file.path}:after`,
+    }
   );
 }

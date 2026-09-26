@@ -4,6 +4,10 @@ import { preloadFileTree } from '@pierre/trees/ssr';
 import type { Metadata } from 'next';
 import { Fragment } from 'react';
 
+import {
+  AGENT_PROMPT,
+  AGENT_SKILL_INSTALL,
+} from '../docs/BuildWithAgents/constants';
 import * as chooseYourIntegrationConstants from '../docs/Guides/ChooseYourIntegration/constants';
 import * as customizeIconsConstants from '../docs/Guides/CustomizeIcons/constants';
 import * as getStartedWithReactConstants from '../docs/Guides/GetStartedWithReact/constants';
@@ -29,11 +33,13 @@ import { HeadingAnchors } from '@/components/docs/HeadingAnchors';
 import { ProseWrapper } from '@/components/docs/ProseWrapper';
 import Footer from '@/components/Footer';
 import { renderMDX, renderMDXWithPreloadedFiles } from '@/lib/mdx';
+import { pageMetadata } from '@/lib/page-metadata';
+import { preloadCodeExample } from '@/lib/preloadCodeExample';
 
 interface DocsSection {
   filePath: string;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  constants?: Readonly<Record<string, PreloadFileOptions<any>>>;
+  constants?: Readonly<Record<string, PreloadFileOptions<any, any>>>;
 }
 
 const GUIDE_SECTIONS: readonly DocsSection[] = [
@@ -104,28 +110,15 @@ const REFERENCE_SECTIONS: readonly DocsSection[] = [
   { filePath: '(trees)/docs/Reference/Icons/content.mdx' },
 ];
 
-const treesDocsTitle = 'Trees, from Pierre';
+const treesDocsTitle = 'Trees docs';
 const treesDocsDescription =
   'Guide-first documentation for @pierre/trees, covering React, vanilla, prepared input, styling, icons, Git status, large trees, and SSR hydration.';
 
-// Next.js replaces (does not deep-merge) nested metadata objects like
-// `openGraph` and `twitter` from parent segments. Re-declare `images` here
-// so the trees OG/Twitter cards from `app/layout.tsx` survive on `/docs`.
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMetadata({
   title: treesDocsTitle,
   description: treesDocsDescription,
-  openGraph: {
-    title: treesDocsTitle,
-    description: treesDocsDescription,
-    images: ['/trees-brand/opengraph-image.png'],
-  },
-  twitter: {
-    card: 'summary_large_image',
-    title: treesDocsTitle,
-    description: treesDocsDescription,
-    images: ['/trees-brand/twitter-image.png'],
-  },
-};
+  path: '/docs',
+});
 
 export default function TreesDocsPage() {
   return (
@@ -134,6 +127,7 @@ export default function TreesDocsPage() {
         <div className="min-w-0 space-y-10">
           <HeadingAnchors />
           <OverviewSection />
+          <BuildWithAgentsSection />
           <DocsSectionGroup
             id="guides"
             title="Guides"
@@ -168,6 +162,18 @@ async function OverviewSection() {
         shadowHtml: ssrPayload.shadowHtml,
       },
     },
+  });
+  return <ProseWrapper>{content}</ProseWrapper>;
+}
+
+async function BuildWithAgentsSection() {
+  const [agentSkillInstall, agentPrompt] = await Promise.all([
+    preloadCodeExample(AGENT_SKILL_INSTALL),
+    preloadCodeExample(AGENT_PROMPT),
+  ]);
+  const content = await renderMDX({
+    filePath: '(trees)/docs/BuildWithAgents/content.mdx',
+    scope: { agentSkillInstall, agentPrompt },
   });
   return <ProseWrapper>{content}</ProseWrapper>;
 }

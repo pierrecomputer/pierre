@@ -1,0 +1,361 @@
+## Highlights
+
+<Notice variant="warning" icon={<IconCiWarningFill />}>
+  Highlights is experimental and subject to change. Try the [interactive
+  playground](/highlights) before replacing Shiki in production.
+</Notice>
+
+Highlights is a syntax highlighter with 73 built-in language lexers written in
+WebAssembly Text (WAT). It produces HTML or Shiki-compatible token objects
+without downloading language grammars.
+
+| Use case                     | API               | Result                               |
+| ---------------------------- | ----------------- | ------------------------------------ |
+| Render a complete code block | `codeToHtml()`    | HTML bytes with inline styles        |
+| Build a custom renderer      | `codeToTokens()`  | Themed tokens grouped by line        |
+| Append code as it arrives    | `StreamTokenizer` | Completed lines from each chunk      |
+| Update an editable document  | `LiveTokenizer`   | Changed lines and tokens after edits |
+
+Install Highlights from npm:
+
+```bash
+pnpm add @pierre/highlights
+```
+
+The package runs in Node.js, browsers, and Cloudflare Workers. Its conditional
+exports select and initialize the matching WebAssembly loader automatically.
+After importing it, highlighting calls are synchronous; no `init()` call or
+language registration is needed.
+
+### HTML
+
+`codeToHtml(input, { lang, theme })` returns a
+`<pre class="highlights"><code>…</code></pre>` fragment as a `Uint8Array`.
+`input` can be a `string`, `Uint8Array`, or `ArrayBuffer`; byte input is UTF-8.
+Decode the result to use it as an HTML string. Pass `themes` instead of `theme`
+to render several color schemes into the same markup; see Multiple themes below.
+
+<DocsCodeExample {...highlightsHtml} />
+
+The returned bytes may reference WebAssembly memory. Decode them immediately, or
+call `.slice()` before retaining them across another highlighting or
+tokenization call on the same highlighter. The top-level `codeToHtml()` and
+`codeToTokens()` functions share one highlighter instance.
+
+Code is HTML-escaped and theme styles are applied inline. The `cssVariables`
+theme requires CSS declarations, shown in the Themes section below.
+
+### Tokens
+
+`codeToTokens()` accepts the same input types as `codeToHtml()` and returns a
+`TokensResult`. Its `tokens` property contains one `ThemedToken[]` per line.
+Each token has `content` and an `offset` measured in UTF-16 code units from the
+start of the complete input. Line terminators are excluded from token content; a
+trailing line break adds an empty final line.
+
+<DocsCodeExample {...highlightsTokens} />
+
+With a single `theme`, tokens have `color` and `fontStyle` fields. With
+`themes`, styles are in each token's `htmlStyle` map, including any CSS custom
+properties. A custom renderer must apply these styles as well as the result's
+root colors; rendering only `token.color` loses multi-theme styling. The token
+object format is compatible with Shiki, but lexer boundaries and syntax
+classifications can differ.
+
+The result also includes theme metadata: `fg`, `bg`, `themeName`, and, for
+`defaultColor: false`, `rootStyle`. In multi-theme mode, `fg` and `bg` can
+contain CSS declaration lists rather than single colors.
+
+These options are shared by `codeToHtml()`, `codeToTokens()`, `StreamTokenizer`,
+and `LiveTokenizer`:
+
+| Option                  | Behavior                                                                                                                                                                                                     |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `lang`                  | A built-in language name or alias                                                                                                                                                                            |
+| `theme`                 | One Zed `Theme` or `ThemeFamily`                                                                                                                                                                             |
+| `themes`                | A non-empty map of named themes such as `{ dark, light }`; emits per-theme styles                                                                                                                            |
+| `cssVariablePrefix`     | Prefix for CSS-variable colors and multi-theme properties; defaults to `--hls-`                                                                                                                              |
+| `defaultColor`          | With `themes`, the key applied inline; defaults to `light` and throws if that key is missing. `false` emits only custom properties; `'light-dark()'` combines colors from required `light` and `dark` themes |
+| `tokenizeMaxLineLength` | Collapses lines at or above this UTF-16 length into one token with the theme's foreground color and no syntax styling; `0` or omission disables the limit                                                    |
+
+Choose either `theme` or `themes`; every entry point accepts both forms.
+
+`tokenizeMaxLineLength` applies to the tokenization APIs only. It limits the
+number of token objects a renderer receives; the lexer still processes those
+lines to preserve state for subsequent lines.
+
+### Streaming
+
+`StreamTokenizer` extends
+[`TransformStream`](https://developer.mozilla.org/en-US/docs/Web/API/TransformStream).
+It accepts UTF-8 `Uint8Array` chunks and emits one `ThemedToken[]` per completed
+line, so you can pass it directly to `readable.pipeThrough(tokenizer)`. Closing
+the writable side emits the final line and releases the WebAssembly instance;
+cancellation or abort discards buffered input and releases the instance.
+
+Each tokenizer owns an isolated WebAssembly instance, preserves lexer state
+between chunks, and tokenizes each completed chunk once. Token offsets stay
+relative to the complete stream. UTF-8 decoding is handled internally, including
+characters split across chunks.
+
+<DocsCodeExample {...highlightsStreamPipe} />
+
+You can also use the synchronous `pushCode()` and `end()` methods:
+
+<DocsCodeExample {...highlightsStream} />
+
+`pushCode(chunk: string | Uint8Array)` accepts strings or UTF-8 bytes and
+buffers the unfinished line until an `LF` (`\n`) arrives or you call `end()`.
+This also handles `CRLF` input. An input chunk can produce zero, one, or several
+lines; chunk boundaries do not need to match line or token boundaries.
+
+UTF-8 characters can span consecutive byte chunks. You can mix strings and
+bytes; a nonempty string flushes any incomplete UTF-8 sequence as a replacement
+character before appending the string. Empty chunks leave buffered input intact.
+
+Call `end()` once after the last chunk to finish decoding and retrieve the
+remaining lines, including an empty final line after a trailing line break. It
+also disposes the stream. Use `dispose()` to cancel and discard buffered input;
+repeated disposal is safe, but `pushCode()` or `end()` after disposal throws.
+
+### Incremental editing
+
+`LiveTokenizer` keeps a document and its lexer state in an isolated WebAssembly
+instance. It re-tokenizes edited lines and any following lines whose syntax
+changes, stopping when the lexer state matches the retained state.
+
+Edit positions use zero-based line numbers and UTF-16 character offsets. Every
+range in a batch refers to the document before the batch is applied and excludes
+its end position. Overlapping ranges are rejected before the document is
+changed. The example replaces `41` with `42` on the first line.
+
+<DocsCodeExample {...highlightsLive} />
+
+Without `renderRange`, tokenization finishes synchronously. `update.lines` is
+empty; use `lineChanges` to find changed or re-tokenized lines, then read them
+with `getLineTokens()`. Each change maps `[oldStartLine, oldEndLine)` in the
+previous document to `[newStartLine, newEndLine)` in the updated document, so
+renderers can also remove deleted lines.
+
+`getLineTokens(line)` returns `ThemedToken[]` with offsets relative to that
+line, plus `bracketIgnoredRanges`: end-exclusive UTF-16 ranges covering strings,
+comments, and regexes that bracket matching should skip.
+
+#### Prioritize a viewport
+
+Pass `renderRange: [startLine, endLine]` to the constructor, `applyEdits()`, or
+`reset()` to limit synchronous work. The range uses zero-based line numbers in
+the updated document and excludes `endLine`. Dirty lines before the viewport are
+processed first to establish its lexer state; remaining work runs in background
+slices. Pass the range on each update that should prioritize it.
+
+<DocsCodeExample {...highlightsViewport} />
+
+`update.lines` contains only lines re-tokenized inside the requested range, not
+every visible line. Read the initial viewport with `getLineTokens()` after
+construction. Completed lines outside the range arrive through
+`onDeferTokenize`, sometimes synchronously during an update.
+
+Both `update.lines` and the callback use `Map<number, HighlightedToken[]>`,
+where each token is `[character, color, text]`. These tuples contain colors from
+the first resolved theme. Use `getLineTokens()` for font styles or multi-theme
+token objects.
+
+`onDeferTokenize` can run synchronously, including before the constructor
+returns. Its callback must not depend on the variable receiving the instance.
+
+While `pendingTokenization` is true, lines not yet re-tokenized can still have
+their previous tokens; newly inserted lines can have only foreground styling.
+Call `flush()` before reading tokens that must be current, or `flush(endLine)`
+to finish pending lines before an exclusive line bound.
+
+#### Document and lifecycle methods
+
+| Member                                         | Purpose                                                       |
+| ---------------------------------------------- | ------------------------------------------------------------- |
+| `revision`, `lineCount`, `pendingTokenization` | Current document and deferred-work state                      |
+| `applyEdits(edits, options?)`                  | Apply a validated edit batch                                  |
+| `reset(code, options?)`                        | Replace the complete document                                 |
+| `getLineLength(line)`, `getLineText(line)`     | Read a line's UTF-16 length or text, excluding its terminator |
+| `getText()`                                    | Read the whole document, preserving `LF`, `CRLF`, and `CR`    |
+| `getLineTokens(line)`                          | Read themed tokens and bracket-ignored ranges for one line    |
+| `getLineRecords(line)`                         | Read a zero-copy packed token-record view                     |
+| `flush(endLine?)`, `pause()`, `resume()`       | Control deferred tokenization                                 |
+| `dispose()`                                    | Release the isolated WebAssembly instance                     |
+
+`getLineRecords()` views are invalidated by the next edit, reset, deferred
+slice, or disposal. Copy `.data` when ownership is required. `tokenNames` maps
+each packed token ID to its syntax-scope name.
+
+`applyEdits()`, including a no-op batch, `reset()`, and `flush()` resume work
+suspended by `pause()`.
+
+### Themes
+
+Highlights accepts Zed `Theme` and `ThemeFamily` objects. It bundles Pierre
+themes and Zed-compatible versions of themes from Shiki's catalog. Import a
+named theme from `@pierre/highlights/themes` or use a per-theme default export:
+
+<DocsCodeExample {...highlightsThemes} />
+
+Theme options take objects, not string IDs. A `ThemeFamily` resolves to its
+first member; pass `family.themes[index]` to choose another. Theme objects are
+cached by identity, so create a new object when changing their values.
+
+For custom themes, colors accept three-, four-, six-, and eight-digit hex values
+and numeric `color(display-p3 ...)` values. Syntax scopes such as
+`keyword.control` inherit colors from their nearest configured parent.
+
+#### CSS variables
+
+Use `cssVariables` to emit `var(--hls-*)` colors. `toCSS(theme)` returns the
+matching declarations without a selector; apply them to the code block or an
+ancestor. This example includes them in a stylesheet alongside the markup:
+
+<DocsCodeExample {...highlightsCssVariables} />
+
+Changing those declarations updates the colors without re-highlighting the code.
+CSS-variable mode controls colors only; it ignores the theme's `font_style` and
+`font_weight` values. Set `cssVariablePrefix` in the highlighting options to
+customize the default `--hls-` prefix, and pass the same option to
+`toCSS(theme, { cssVariablePrefix: '--code-' })` for matching declarations. This
+option also controls the multi-theme properties below.
+
+#### Multiple themes
+
+Use `themes` to produce styles for several color schemes in one pass. The code
+is lexed once; `codeToHtml()` writes every scheme into each span's `style`
+attribute inside WebAssembly, and the tokenization APIs return the same styles
+in each token's `htmlStyle`. With `defaultColor: false`, every scheme uses CSS
+custom properties:
+
+<DocsCodeExample {...highlightsDualThemes} />
+
+`codeToHtml()` applies the root properties to its `<pre>`. A custom renderer
+applies `rootStyle` to its code container and each token's `htmlStyle` to its
+span. For a container with class `code` (use `.highlights` for the HTML output),
+this CSS selects the light or dark properties, including font styles:
+
+<DocsCodeExample {...highlightsDualThemesCss} />
+
+To apply one theme inline, set `defaultColor` to its key, such as `'dark'`. The
+default is `'light'`, so a map without a `light` key must set this option. With
+`defaultColor: 'light-dark()'`, the required `light` and `dark` themes merge
+into CSS `light-dark()` colors that follow the page's `color-scheme`, with no
+custom properties to switch.
+
+### Languages
+
+Language names and aliases are case-insensitive. Unsupported names throw a
+`RangeError`; use `isSupportedLanguage(value)` to validate a string and narrow
+it to `Lang`, or fall back to `plain` (also available as `text`, `plaintext`,
+and `txt`). No language detection or filename resolution is performed.
+
+Built-in languages and their aliases are included in the `Lang` type:
+
+| Language             | Aliases                                                                     |
+| -------------------- | --------------------------------------------------------------------------- |
+| `plain`              | `plaintext`, `text`, `txt`                                                  |
+| `angular-html`       | —                                                                           |
+| `asm`                | `assembly`, `s`                                                             |
+| `astro`              | —                                                                           |
+| `bash`               | `sh`, `shell`, `shellscript`, `shellsession`, `zsh`                         |
+| `batch`              | `bat`, `batchfile`, `cmd`, `dos`                                            |
+| `c`                  | `h`                                                                         |
+| `c3`                 | —                                                                           |
+| `clojure`            | `clj`, `cljc`, `cljs`, `edn`                                                |
+| `cmake`              | —                                                                           |
+| `cpp`                | `c++`, `cc`, `cxx`, `hh`, `hpp`, `hxx`                                      |
+| `csharp`             | `c#`, `cs`                                                                  |
+| `css`                | —                                                                           |
+| `cuda`               | `cu`, `cuh`                                                                 |
+| `dart`               | —                                                                           |
+| `diff`               | `git-commit`, `git-rebase`, `patch`                                         |
+| `dockerfile`         | `containerfile`, `docker`                                                   |
+| `elixir`             | `ex`, `exs`                                                                 |
+| `elm`                | —                                                                           |
+| `erlang`             | `erl`, `hrl`                                                                |
+| `fortran`            | `f90`, `f95`, `f03`, `f08`, `fortran-free-form`                             |
+| `fortran-fixed-form` | `f`, `for`, `f77`                                                           |
+| `fsharp`             | `f#`, `fs`, `fsi`, `fsx`                                                    |
+| `gleam`              | —                                                                           |
+| `glsl`               | `comp`, `frag`, `geom`, `vert`                                              |
+| `go`                 | `golang`                                                                    |
+| `graphql`            | `gql`                                                                       |
+| `groovy`             | `gradle`, `gsh`, `gvy`, `gy`                                                |
+| `haskell`            | `hs`                                                                        |
+| `hlsl`               | —                                                                           |
+| `html`               | `htm`                                                                       |
+| `java`               | —                                                                           |
+| `js`                 | `cjs`, `javascript`, `mjs`                                                  |
+| `json`               | `jsonc`                                                                     |
+| `jsx`                | —                                                                           |
+| `julia`              | `jl`                                                                        |
+| `kotlin`             | `kt`, `kts`                                                                 |
+| `less`               | —                                                                           |
+| `lisp`               | `cl`, `el`, `elisp`, `emacs-lisp`, `lsp`, `scheme`, `scm`                   |
+| `lua`                | —                                                                           |
+| `makefile`           | `make`, `mk`                                                                |
+| `markdown`           | `md`                                                                        |
+| `matlab`             | `octave`                                                                    |
+| `mdx`                | —                                                                           |
+| `nix`                | —                                                                           |
+| `objc`               | `m`, `mm`, `objcpp`, `objective-c`, `objective-cpp`, `objectivec`           |
+| `ocaml`              | `ml`, `mli`                                                                 |
+| `pascal`             | `delphi`, `dpk`, `dpr`, `lpr`, `object-pascal`, `objectpascal`, `pas`, `pp` |
+| `perl`               | `pl`, `pm`                                                                  |
+| `php`                | —                                                                           |
+| `powershell`         | `ps`, `ps1`, `psd1`, `psm1`, `pwsh`                                         |
+| `proto`              | `protobuf`                                                                  |
+| `python`             | `py`                                                                        |
+| `r`                  | `rscript`                                                                   |
+| `ruby`               | `rb`                                                                        |
+| `rust`               | `rs`                                                                        |
+| `sass`               | —                                                                           |
+| `scala`              | `sbt`, `sc`                                                                 |
+| `scss`               | —                                                                           |
+| `solidity`           | `sol`                                                                       |
+| `sql`                | —                                                                           |
+| `svelte`             | —                                                                           |
+| `swift`              | —                                                                           |
+| `terraform`          | `hcl`, `tf`, `tfvars`                                                       |
+| `toml`               | —                                                                           |
+| `ts`                 | `angular-ts`, `cts`, `mts`, `typescript`                                    |
+| `tsrx`               | —                                                                           |
+| `tsx`                | —                                                                           |
+| `vue`                | —                                                                           |
+| `wat`                | `wasm`                                                                      |
+| `wgsl`               | —                                                                           |
+| `xml`                | `svg`, `xsd`                                                                |
+| `yaml`               | `yml`                                                                       |
+| `zig`                | `zon`                                                                       |
+
+### API reference
+
+#### `@pierre/highlights`
+
+The main entry exports the complete runtime and its public types:
+
+<DocsCodeExample {...highlightsApiRuntime} />
+
+The environment-specific entry point initializes the shared instance.
+`init(module)` replaces it; `createHighlighter(module)` creates an isolated
+`Highlighter` without changing the shared instance. Both accept a compiled
+`WebAssembly.Module` and are intended for embedders managing their own module.
+
+The public type surface is available from the same entry:
+
+<DocsCodeExample {...highlightsApiTypes} />
+
+#### `@pierre/highlights/themes`
+
+The themes entry exports `cssVariables`, `toCSS()`, and every bundled theme as a
+named `Theme`. Each theme is also available from a per-theme default subpath
+such as `@pierre/highlights/themes/vitesse-dark`.
+
+#### `@pierre/highlights/themes/loader`
+
+The `themes` map contains lazy loaders keyed by bundled theme ID. Each loader
+returns a promise for a module whose default export is a `Theme`.
+
+<DocsCodeExample {...highlightsThemeLoader} />

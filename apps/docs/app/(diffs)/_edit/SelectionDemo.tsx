@@ -2,7 +2,7 @@
 
 import { DEFAULT_THEMES } from '@pierre/diffs';
 import type { EditorOptions } from '@pierre/diffs/edit';
-import { File } from '@pierre/diffs/react';
+import { File, useStableCallback } from '@pierre/diffs/react';
 import type { PreloadedFileResult } from '@pierre/diffs/ssr';
 import {
   IconArrow,
@@ -24,7 +24,7 @@ import { Button } from '@/components/ui/button';
 
 interface SelectionDemoProps {
   // Server-preloaded, highlighted File; hydrating from it avoids a highlight flash on load.
-  prerenderedFile: PreloadedFileResult<undefined>;
+  prerenderedFile: PreloadedFileResult<undefined, undefined>;
 }
 
 // `renderSelectionAction` returns a plain DOM node, not React, so IconCommentFill
@@ -93,15 +93,15 @@ function formatSelectionLineLabel(
 // selecting text immediately reveals a floating popover (anchored below the
 // selection) whose contents come from `renderSelectionAction`. Here it mimics an
 // editor's "Add to chat": the primary action sends the selected snippet to a
-// mock chat panel beside the surface, and a secondary action copies it.
+// mock chat panel beside the editor, and a secondary action copies it.
 export function SelectionDemo({ prerenderedFile }: SelectionDemoProps) {
   const [snippets, setSnippets] = useState<ChatSnippet[]>([]);
   const snippetIdRef = useRef(0);
 
-  // The popover lives inside the editor instance, which is created once. Route
-  // its "Add to chat" click through a ref so it always calls the latest setter
-  // without recreating the editor.
-  const addSnippet = useCallback(
+  // The popover lives inside the editor instance, which is created once. Its
+  // "Add to chat" click needs a callback whose identity never changes but whose
+  // body always sees the latest file, so the editor is never recreated.
+  const addSnippet = useStableCallback(
     (text: string, source: ChatSnippetSource) => {
       const trimmed = text.trim();
       if (trimmed === '') {
@@ -118,13 +118,10 @@ export function SelectionDemo({ prerenderedFile }: SelectionDemoProps) {
           text: trimmed,
         },
       ]);
-    },
-    [prerenderedFile.file.name]
+    }
   );
-  const addSnippetRef = useRef(addSnippet);
-  addSnippetRef.current = addSnippet;
 
-  const editorOptions = useMemo<EditorOptions<undefined>>(
+  const editorOptions = useMemo<EditorOptions<'file', undefined, undefined>>(
     () => ({
       enabledSelectionAction: true,
       renderSelectionAction(selectionAction) {
@@ -141,7 +138,7 @@ export function SelectionDemo({ prerenderedFile }: SelectionDemoProps) {
           event.preventDefault()
         );
         addToChat.addEventListener('click', () => {
-          addSnippetRef.current(selectionAction.getSelectionText(), {
+          addSnippet(selectionAction.getSelectionText(), {
             selection: selectionAction.selection,
           });
           selectionAction.close();
@@ -163,7 +160,7 @@ export function SelectionDemo({ prerenderedFile }: SelectionDemoProps) {
         return container;
       },
     }),
-    []
+    [addSnippet]
   );
 
   const clearChat = useCallback(() => setSnippets([]), []);
@@ -237,7 +234,7 @@ export function SelectionDemo({ prerenderedFile }: SelectionDemoProps) {
                         disableLineNumbers: true,
                       }}
                       // The page's shared worker pool is wired up for the editable
-                      // editor surface; a dynamically mounted read-only File isn't
+                      // editor component; a dynamically mounted read-only File isn't
                       // highlighted through it, so highlight on the main thread.
                       disableWorkerPool
                       className="max-h-32 overflow-auto"
@@ -253,6 +250,7 @@ export function SelectionDemo({ prerenderedFile }: SelectionDemoProps) {
             <textarea
               className="min-h-10 w-full resize-none bg-transparent px-1 text-[13px] leading-normal text-white placeholder:text-neutral-500 focus:outline-none"
               placeholder="Ask for changes…"
+              aria-label="Ask for changes"
               rows={2}
               disabled
             />

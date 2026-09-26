@@ -12,11 +12,14 @@ import type {
   HighlighterTypes,
   SupportedLanguages,
   ThemeRegistrationResolved,
+  ThemesType,
 } from '../types';
 import type { ResolvedLanguage } from '../worker/types';
+import { areLanguagesAttached } from './languages/areLanguagesAttached';
 import { attachResolvedLanguages } from './languages/attachResolvedLanguages';
 import { cleanUpResolvedLanguages } from './languages/cleanUpResolvedLanguages';
 import { getResolvedOrResolveLanguage } from './languages/getResolvedOrResolveLanguage';
+import { areThemesAttached } from './themes/areThemesAttached';
 import { attachResolvedThemes } from './themes/attachResolvedThemes';
 import { cleanUpResolvedThemes } from './themes/cleanUpResolvedThemes';
 import { getResolvedOrResolveTheme } from './themes/getResolvedOrResolveTheme';
@@ -55,7 +58,7 @@ export async function getSharedHighlighter({
   highlighter = instance;
 
   const languageLoaders: Promise<ResolvedLanguage>[] = [];
-  for (const language of langs) {
+  for (const language of Array.from(new Set(langs))) {
     if (language === 'text' || language === 'ansi') continue;
     const maybeResolvedLanguage = getResolvedOrResolveLanguage(language);
     if ('then' in maybeResolvedLanguage) {
@@ -96,11 +99,25 @@ export function isHighlighterLoaded(
   return h != null && !('then' in h);
 }
 
-export function getHighlighterIfLoaded(): DiffsHighlighter | undefined {
-  if (highlighter != null && !('then' in highlighter)) {
-    return highlighter;
+interface GetHighlighterIfLoadedProps {
+  theme: DiffsThemeNames | ThemesType;
+  lang: SupportedLanguages;
+}
+
+export function getHighlighterIfLoaded(
+  withSettings?: GetHighlighterIfLoadedProps
+): DiffsHighlighter | undefined {
+  if (highlighter == null || 'then' in highlighter) {
+    return undefined;
   }
-  return undefined;
+  if (
+    withSettings != null &&
+    (!areThemesAttached(withSettings.theme) ||
+      !areLanguagesAttached(withSettings.lang))
+  ) {
+    return undefined;
+  }
+  return highlighter;
 }
 
 export function isHighlighterLoading(

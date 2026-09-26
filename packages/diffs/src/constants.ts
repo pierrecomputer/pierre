@@ -28,10 +28,6 @@ export const HUNK_HEADER: RegExp =
   /^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@(?: (.*))?/m;
 export const SPLIT_WITH_NEWLINES: RegExp = /(?<=\n)/;
 export const FILENAME_HEADER_REGEX: RegExp = /^(---|\+\+\+)\s+([^\t\r\n]+)/;
-export const FILENAME_HEADER_REGEX_GIT: RegExp =
-  /^(---|\+\+\+)\s+[ab]\/([^\t\r\n]+)/;
-export const ALTERNATE_FILE_NAMES_GIT: RegExp =
-  /^diff --git (?:"a\/(.+?)"|a\/(.+?)) (?:"b\/(.+?)"|b\/(.+?))$/;
 export const INDEX_LINE_METADATA: RegExp =
   /^index ([0-9a-f]+)\.\.([0-9a-f]+)(?: (\d+))?$/i;
 

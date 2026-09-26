@@ -36,7 +36,7 @@ class AutoScrollTester<LAnnotation> {
   private direction = 1;
 
   constructor(
-    private viewerRef: RefObject<CodeViewHandle<LAnnotation> | null>,
+    private viewerRef: RefObject<CodeViewHandle<LAnnotation, undefined> | null>,
     private onStateChange?: (running: boolean) => unknown
   ) {}
 
@@ -102,7 +102,7 @@ interface WorkerPoolStatusProps {
   expanded: boolean;
   onToggle(): void;
   themeCycle: ThemeCycleControls;
-  viewerRef: RefObject<CodeViewHandle<CommentMetadata> | null>;
+  viewerRef: RefObject<CodeViewHandle<CommentMetadata, undefined> | null>;
 }
 
 export const WorkerPoolStatus = memo(function WorkerPoolStatus({
@@ -115,25 +115,24 @@ export const WorkerPoolStatus = memo(function WorkerPoolStatus({
   const [stats, setStats] = useState<WorkerStats | undefined>(undefined);
   useEffect(() => {
     if (pool == null) {
-      setStats(undefined);
       return undefined;
-    } else {
-      return pool.subscribeToStatChanges((newStats) => {
-        setStats((prevStats): WorkerStats | undefined => {
-          if (areWorkerStatsEqual(prevStats, newStats)) {
-            return prevStats;
-          }
-          return newStats;
-        });
-      });
     }
+    return pool.subscribeToStatChanges((newStats) => {
+      setStats((prevStats): WorkerStats | undefined => {
+        if (areWorkerStatsEqual(prevStats, newStats)) {
+          return prevStats;
+        }
+        return newStats;
+      });
+    });
   }, [pool]);
+  const visibleStats = pool == null ? undefined : stats;
   return (
-    stats != null && (
+    visibleStats != null && (
       <StatsDisplay
         expanded={expanded}
         onToggle={onToggle}
-        stats={stats}
+        stats={visibleStats}
         themeCycle={themeCycle}
         viewerRef={viewerRef}
       />
@@ -146,7 +145,7 @@ interface StatsDisplayProps {
   onToggle(): void;
   stats: WorkerStats;
   themeCycle: ThemeCycleControls;
-  viewerRef: RefObject<CodeViewHandle<CommentMetadata> | null>;
+  viewerRef: RefObject<CodeViewHandle<CommentMetadata, undefined> | null>;
 }
 
 // Map worker pool status to a single icon component + color so the legend row

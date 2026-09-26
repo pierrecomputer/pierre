@@ -354,12 +354,28 @@ export const EXTENSION_TO_FILE_FORMAT: ExtensionFormatMap = {
 };
 
 export function getFiletypeFromFileName(fileName: string): SupportedLanguages {
+  const format = matchFiletypeFromName(fileName);
+  if (format != null) {
+    return format;
+  }
+
+  // Special files are keyed by their exact name (Dockerfile, CMakeLists.txt), but callers
+  // routinely pass a repository-relative path. Retry on the basename so `docker/Dockerfile`
+  // resolves the same way a top-level `Dockerfile` does. The retry only runs once the full
+  // path has matched nothing, so real extensions still win (e.g. `docker/Dockerfile.ts`).
+  const baseName = fileName.split(/[/\\]/).pop() ?? fileName;
+  return baseName === fileName
+    ? 'text'
+    : (matchFiletypeFromName(baseName) ?? 'text');
+}
+
+function matchFiletypeFromName(fileName: string): SupportedLanguages | null {
   if (CUSTOM_EXTENSION_TO_FILE_FORMAT.has(fileName)) {
     return CUSTOM_EXTENSION_TO_FILE_FORMAT.get(fileName) ?? 'text';
   }
   // Handle special files without extensions first
-  if (EXTENSION_TO_FILE_FORMAT[fileName] != null) {
-    return EXTENSION_TO_FILE_FORMAT[fileName];
+  if (Object.hasOwn(EXTENSION_TO_FILE_FORMAT, fileName)) {
+    return EXTENSION_TO_FILE_FORMAT[fileName] ?? null;
   }
 
   // Try compound extensions first (e.g., .blade.php, .component.ts)
@@ -368,7 +384,7 @@ export function getFiletypeFromFileName(fileName: string): SupportedLanguages {
     if (CUSTOM_EXTENSION_TO_FILE_FORMAT.has(compoundMatch[1])) {
       return CUSTOM_EXTENSION_TO_FILE_FORMAT.get(compoundMatch[1]) ?? 'text';
     }
-    if (EXTENSION_TO_FILE_FORMAT[compoundMatch[1]] != null) {
+    if (Object.hasOwn(EXTENSION_TO_FILE_FORMAT, compoundMatch[1])) {
       return EXTENSION_TO_FILE_FORMAT[compoundMatch[1]] ?? 'text';
     }
   }
@@ -378,7 +394,9 @@ export function getFiletypeFromFileName(fileName: string): SupportedLanguages {
   if (CUSTOM_EXTENSION_TO_FILE_FORMAT.has(simpleMatch)) {
     return CUSTOM_EXTENSION_TO_FILE_FORMAT.get(simpleMatch) ?? 'text';
   }
-  return EXTENSION_TO_FILE_FORMAT[simpleMatch] ?? 'text';
+  return Object.hasOwn(EXTENSION_TO_FILE_FORMAT, simpleMatch)
+    ? (EXTENSION_TO_FILE_FORMAT[simpleMatch] ?? 'text')
+    : null;
 }
 
 export function replaceCustomExtensions(
@@ -422,7 +440,5 @@ export function setCustomExtension(
 }
 
 export function getCustomExtensionsMap(): ExtensionFormatMap {
-  return Object.fromEntries(
-    CUSTOM_EXTENSION_TO_FILE_FORMAT
-  ) as ExtensionFormatMap;
+  return Object.fromEntries(CUSTOM_EXTENSION_TO_FILE_FORMAT);
 }

@@ -1,0 +1,298 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>diffs CodeView annotation scroll fixture</title>
+    <style>
+      body {
+        margin: 0;
+        padding: 16px;
+        font-family: system-ui, sans-serif;
+      }
+      [data-code-view-root] {
+        width: 1000px;
+        height: 600px;
+        overflow: auto;
+      }
+      [data-test-annotation] {
+        box-sizing: border-box;
+        background: #e8e0ff;
+        color: #231344;
+      }
+    </style>
+  </head>
+  <body>
+    <a data-fixtures-index href="/test/e2e/fixtures/index.html"
+      >&larr; All fixtures</a
+    >
+    <button type="button" data-add-annotation>
+      Add annotation on line 191
+    </button>
+    <div data-code-view-root></div>
+
+    <script type="module">
+      import { CodeView, parseDiffFromFile } from '/dist/index.js';
+      import { Editor } from '/dist/edit/index.js';
+
+      let root = document.querySelector('[data-code-view-root]');
+      if (!(root instanceof HTMLElement)) {
+        throw new Error('Missing CodeView root.');
+      }
+
+      const params = new URLSearchParams(location.search);
+      const type = params.get('type') === 'file' ? 'file' : 'diff';
+      const heights = params.get('multiple') === 'true' ? [40, 80] : [80];
+      const file = {
+        name: 'annotations.ts',
+        contents: Array.from(
+          { length: 200 },
+          (_, index) => `const line${index + 1} = ${index + 1};`
+        ).join('\n'),
+      };
+      let item = {
+        id: 'annotated',
+        type,
+        version: 0,
+        edit: params.get('edit') === 'true',
+        ...(type === 'file'
+          ? { file }
+          : {
+              fileDiff: parseDiffFromFile(
+                { ...file, contents: file.contents.replaceAll('const', 'let') },
+                file
+              ),
+            }),
+        annotations: heights.map((height, index) => ({
+          lineNumber: 191 - heights.length + index,
+          side: 'additions',
+          metadata: { height, label: `Existing comment ${index + 1}` },
+        })),
+      };
+
+      if (params.get('fileAnnotation') === 'true') {
+        item.annotations.unshift({
+          lineNumber: 0,
+          side: 'additions',
+          metadata: { height: 100, label: 'File comment' },
+        });
+      }
+
+      const options = {
+        diffStyle: 'split',
+        __devOnlyValidateItemHeights: true,
+      };
+      let viewer;
+      let viewerOptions;
+      let editorAnnotationLines;
+      let reactHandle;
+      let renderReact;
+      const renderer = params.get('react');
+      if (renderer != null) {
+        const { createElement, createRef } = await import('react');
+        const { createRoot } = await import('react-dom/client');
+        const { CodeView: ReactCodeView } =
+          await import('/dist/react/index.js');
+        const reactRoot = createRoot(root);
+        reactHandle = createRef();
+        const containerRef = (node) => {
+          if (node != null) root = node;
+        };
+        renderReact = () =>
+          reactRoot.render(
+            createElement(ReactCodeView, {
+              ref: reactHandle,
+              containerRef,
+              options,
+              style: { height: 600, width: 1000, overflow: 'auto' },
+              ...(renderer === 'controlled'
+                ? { items: [item] }
+                : { initialItems: [item] }),
+              renderAnnotation: ({ metadata }) =>
+                createElement(
+                  'div',
+                  {
+                    'data-test-annotation': '',
+                    style: { height: metadata.height },
+                  },
+                  metadata.label
+                ),
+            })
+          );
+        renderReact();
+        while (reactHandle.current?.getInstance() == null) {
+          await new Promise(requestAnimationFrame);
+        }
+        viewer = reactHandle.current.getInstance();
+      } else {
+        viewerOptions = {
+          ...options,
+          createEditor: (type, options, key) => new Editor(type, options, key),
+          onItemEditChange(event) {
+            editorAnnotationLines = event.lineAnnotations?.map(
+              ({ lineNumber }) => lineNumber
+            );
+          },
+          renderAnnotation({ metadata }) {
+            const element = document.createElement('div');
+            element.dataset.testAnnotation = '';
+            element.style.height = `${metadata.height}px`;
+            element.textContent = metadata.label;
+            return element;
+          },
+        };
+        viewer = new CodeView(viewerOptions);
+        viewer.setup(root);
+        viewer.setItems([item]);
+      }
+
+      // Exercise each owner's normal update path, including React's layout
+      // effect for controlled props and its slot coordinator for ref updates.
+      function publishItem() {
+        if (renderer === 'controlled') {
+          renderReact();
+        } else if (reactHandle != null) {
+          reactHandle.current.updateItem(item);
+        } else {
+          viewer.updateItem(item);
+        }
+      }
+
+      function addAnnotation() {
+        item = {
+          ...item,
+          version: item.version + 1,
+          annotations: [
+            ...item.annotations,
+            {
+              lineNumber: 191,
+              side: 'additions',
+              metadata: { height: 120, label: 'New composer' },
+            },
+          ],
+        };
+        publishItem();
+      }
+
+      // These short, unwrapped lines have uniform code height. Any extra space
+      // between lines 188 and 192 must come from measured annotations, allowing
+      // the test to wait for layout data as well as rendered annotation content.
+      function getMeasuredAnnotationHeight() {
+        const instance = viewer.getRenderedItems()[0]?.instance;
+        const before = instance?.getLinePosition(188);
+        const after = instance?.getLinePosition(192);
+        return before != null && after != null
+          ? after.top - before.top - before.height * 4
+          : undefined;
+      }
+
+      window.__annotationScroll = {
+        root,
+        addAnnotation,
+        setChildAnnotations() {
+          viewer.getRenderedItems()[0].instance.setLineAnnotations([]);
+          viewer.render(true);
+        },
+        resizeAnnotations(height) {
+          item = {
+            ...item,
+            version: item.version + 1,
+            annotations: item.annotations.map((annotation) => ({
+              ...annotation,
+              metadata: { ...annotation.metadata, height },
+            })),
+          };
+          publishItem();
+        },
+        clearAnnotations() {
+          item = { ...item, version: item.version + 1, annotations: [] };
+          publishItem();
+        },
+        removeFileAnnotation() {
+          item = {
+            ...item,
+            version: item.version + 1,
+            annotations: item.annotations.filter(
+              ({ lineNumber }) => lineNumber !== 0
+            ),
+          };
+          publishItem();
+        },
+        setLineCount(lineCount) {
+          const nextFile = {
+            ...file,
+            contents: Array.from(
+              { length: lineCount },
+              (_, index) => `const line${index + 1} = ${index + 1};`
+            ).join('\n'),
+          };
+          item = {
+            ...item,
+            version: item.version + 1,
+            annotations: item.annotations.filter(
+              ({ lineNumber }) => lineNumber <= lineCount
+            ),
+            ...(type === 'file'
+              ? { file: nextFile }
+              : {
+                  fileDiff: parseDiffFromFile(
+                    {
+                      ...nextFile,
+                      contents: nextFile.contents.replaceAll('const', 'let'),
+                    },
+                    nextFile
+                  ),
+                }),
+          };
+          publishItem();
+        },
+        addTail() {
+          viewer.addItems([{ id: 'tail', type: 'file', file }]);
+          viewer.scrollTo({
+            type: 'item',
+            id: 'tail',
+            align: 'end',
+            behavior: 'instant',
+          });
+        },
+        removeTail: () => viewer.removeItem('tail'),
+        setDiffStyle(diffStyle) {
+          options.diffStyle = diffStyle;
+          viewerOptions = { ...viewerOptions, diffStyle };
+          viewer.setOptions(viewerOptions);
+        },
+        scrollToLine: (lineNumber, behavior) =>
+          viewer.scrollTo({
+            type: 'line',
+            id: item.id,
+            lineNumber,
+            side: 'additions',
+            align: 'end',
+            behavior,
+          }),
+        editAnnotationLine(remove) {
+          const editor = viewer.getEditor(item.id);
+          if (editor == null) throw new Error('Missing editor.');
+          editor.applyEdits([
+            {
+              range: {
+                start: { line: remove ? 190 : 189, character: 0 },
+                end: { line: remove ? 191 : 189, character: 0 },
+              },
+              newText: remove ? '' : '\n',
+            },
+          ]);
+        },
+        getEditorAnnotationLines: () => editorAnnotationLines,
+        isEditorReady: () => viewer.getEditor(item.id)?.getFile() != null,
+        getFirstLineTop: () =>
+          viewer.getRenderedItems()[0]?.instance.getLinePosition(1)?.top,
+        getMeasuredAnnotationHeight,
+        getScrollTop: () => viewer.getScrollTop(),
+      };
+      document
+        .querySelector('[data-add-annotation]')
+        .addEventListener('click', addAnnotation);
+    </script>
+  </body>
+</html>

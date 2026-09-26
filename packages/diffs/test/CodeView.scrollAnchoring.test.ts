@@ -109,7 +109,7 @@ describe('CodeView scroll anchoring', () => {
     const { cleanup } = installDom();
     const viewer = new CodeView({ diffStyle: 'split' });
     const root = createClampingRoot();
-    const anchorItem: CodeViewItem = {
+    const anchorItem: CodeViewItem<undefined> = {
       id: 'file:anchor',
       type: 'file',
       file: makeFile('anchor.ts', 90),
@@ -326,7 +326,7 @@ describe('CodeView scroll anchoring', () => {
     const root = createRoot({ height: ROOT_HEIGHT });
     const removedId = 'diff:removed-anchor';
     const nextId = 'file:after-anchor';
-    const items: CodeViewItem[] = [
+    const items: CodeViewItem<undefined>[] = [
       makeFileItem('file:before-anchor', 120),
       makeReplacementDiffItem(removedId, 240),
       makeFileItem(nextId, 80),
@@ -379,7 +379,7 @@ describe('CodeView scroll anchoring', () => {
     const root = createRoot({ height: ROOT_HEIGHT });
     const removedId = 'diff:visible-removed-anchor';
     const nextId = 'file:visible-after-anchor';
-    const items: CodeViewItem[] = [
+    const items: CodeViewItem<undefined>[] = [
       makeFileItem('file:visible-before-anchor', 100),
       makeReplacementDiffItem(removedId, 12),
       makeFileItem(nextId, 40),

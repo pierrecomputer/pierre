@@ -1,6 +1,5 @@
 import darkSoftTheme from '@pierre/theme/pierre-dark-soft';
 import lightSoftTheme from '@pierre/theme/pierre-light-soft';
-import type { ThemeLike } from '@pierre/theming';
 import { describe, expect, test } from 'bun:test';
 import type { CSSProperties } from 'react';
 
@@ -142,7 +141,7 @@ const DARK_SOFT_CHROME: Record<string, string> = {
 describe('chromeThemeProps + diffshubChromeMapping', () => {
   test('matches the pre-theming chrome byte-for-byte (pierre-light-soft)', () => {
     const { style } = chromeThemeProps(
-      { theme: lightSoftTheme as ThemeLike, colorScheme: 'light' },
+      { theme: lightSoftTheme, colorScheme: 'light' },
       diffshubChromeMapping
     );
     expect(style).toEqual(LIGHT_SOFT_CHROME as CSSProperties);
@@ -150,7 +149,7 @@ describe('chromeThemeProps + diffshubChromeMapping', () => {
 
   test('matches the pre-theming chrome byte-for-byte (pierre-dark-soft)', () => {
     const { style } = chromeThemeProps(
-      { theme: darkSoftTheme as ThemeLike, colorScheme: 'dark' },
+      { theme: darkSoftTheme, colorScheme: 'dark' },
       diffshubChromeMapping
     );
     expect(style).toEqual(DARK_SOFT_CHROME as CSSProperties);

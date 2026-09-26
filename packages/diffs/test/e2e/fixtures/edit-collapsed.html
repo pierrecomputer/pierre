@@ -62,14 +62,16 @@
       const events = [];
       window.__editorEvents = events;
 
-      const editor = new Editor({
-        onChange(file) {
-          events.push(file.contents);
-        },
-      });
+      const editor = new Editor('file-diff');
       window.__editor = editor;
 
       const instance = new FileDiff({
+        onEditChange({ file }) {
+          events.push(file.contents);
+        },
+        onEditComplete() {
+          return 'accept';
+        },
         disableFileHeader: true,
         theme: { dark: 'pierre-dark', light: 'pierre-light' },
         themeType: 'dark',
@@ -82,7 +84,7 @@
         newFile: { name: 'edit.ts', contents: newContents },
         containerWrapper: mount,
       });
-      editor.edit(instance);
+      window.__completeEdit = editor.edit(instance);
 
       const findEditableContent = () => {
         const host = mount.querySelector('diffs-container');
@@ -118,7 +120,7 @@
       };
 
       window.__caretLine = () => {
-        const selection = editor.getState().selections?.at(-1);
+        const selection = editor.getViewState().selections?.at(-1);
         return selection == null ? undefined : selection.end.line;
       };
 

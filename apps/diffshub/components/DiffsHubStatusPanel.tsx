@@ -45,7 +45,7 @@ export function DiffsHubStatusPanel({
   return (
     <div
       className={cn(
-        'col-span-full flex min-h-0 items-center justify-center p-6',
+        'diffshub-theme-bootstrap col-span-full flex min-h-0 items-center justify-center p-6',
         themeChromeStyle == null && 'bg-background'
       )}
       style={themeChromeStyle}

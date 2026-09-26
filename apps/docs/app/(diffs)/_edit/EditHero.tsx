@@ -26,7 +26,7 @@ export function EditHero() {
         variant="link"
         asChild
         size="xl"
-        className="text-md h-[auto] self-start rounded-lg px-0 md:mt-auto lg:text-lg"
+        className="text-md h-[auto] self-start rounded-lg px-0 md:mt-auto md:h-[auto] md:text-sm lg:text-lg"
       >
         <Link href="/docs#edit-mode">
           <IconBook className="opacity-65" />

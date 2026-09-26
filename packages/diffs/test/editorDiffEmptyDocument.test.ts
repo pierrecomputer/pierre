@@ -4,7 +4,7 @@ import { FileDiff } from '../src/components/FileDiff';
 import { DEFAULT_THEMES } from '../src/constants';
 import { Editor } from '../src/editor/editor';
 import { disposeHighlighter } from '../src/highlighter/shared_highlighter';
-import type { FileContents } from '../src/types';
+import type { FileContents, FileDiffMetadata } from '../src/types';
 import { installDom, wait } from './domHarness';
 
 afterAll(async () => {
@@ -53,9 +53,17 @@ function countEditableLineEls(content: HTMLElement): number {
   return count;
 }
 
+function getEditSessionDiff(
+  fileDiff: FileDiff<undefined>
+): FileDiffMetadata | undefined {
+  return (fileDiff as unknown as { editSession?: { diff: FileDiffMetadata } })
+    .editSession?.diff;
+}
+
 interface DiffEditorFixture {
   container: HTMLElement;
-  editor: Editor<undefined>;
+  editor: Editor<'file-diff', undefined>;
+  fileDiff: FileDiff<undefined>;
   cleanup(): Promise<void>;
 }
 
@@ -75,7 +83,7 @@ async function createDiffEditorFixture(
   });
   const oldFile: FileContents = { name: 'edit.ts', contents: oldContents };
   const newFile: FileContents = { name: 'edit.ts', contents: newContents };
-  const editor = new Editor<undefined>();
+  const editor = new Editor('file-diff');
 
   fileDiff.render({
     oldFile,
@@ -96,6 +104,7 @@ async function createDiffEditorFixture(
   return {
     container,
     editor,
+    fileDiff,
     async cleanup() {
       // Drain any pending highlighter/sync callbacks before tearing down the DOM
       // so a late re-attach does not run against a destroyed document.
@@ -110,7 +119,10 @@ async function createDiffEditorFixture(
 
 // Replaces the whole document with `newText`, mirroring select-all then a
 // delete or paste.
-function replaceAll(editor: Editor<undefined>, newText: string): void {
+function replaceAll(
+  editor: Editor<'file-diff', undefined>,
+  newText: string
+): void {
   const lines = editor.getText().split('\n');
   const end = { line: lines.length - 1, character: lines.at(-1)!.length };
   editor.setSelections([
@@ -122,8 +134,76 @@ function replaceAll(editor: Editor<undefined>, newText: string): void {
   );
 }
 
-describe('diff editor: select-all then delete', () => {
+describe('diff editor: empty document', () => {
   for (const diffStyle of ['split', 'unified'] as const) {
+    test(`renders line 1 and a caret when the new file starts empty (${diffStyle})`, async () => {
+      const fixture = await createDiffEditorFixture(diffStyle, 'removed\n', '');
+      const { editor, container } = fixture;
+
+      try {
+        const content = findAdditionContent(container);
+        expect(content).toBeDefined();
+        if (content == null) return;
+        expect(countEditableLineEls(content)).toBe(1);
+        expect(
+          [...content.children].some(
+            (child) => (child as HTMLElement).dataset.line === '1'
+          )
+        ).toBe(true);
+        const editableLine = [...content.children].find((child) => {
+          const el = child as HTMLElement;
+          return (
+            el.dataset.line === '1' && el.dataset.lineType !== 'change-deletion'
+          );
+        }) as HTMLElement | undefined;
+        expect(editableLine?.dataset.lineIndex).toBe('1,0');
+
+        editor.setSelections([
+          {
+            start: { line: 0, character: 0 },
+            end: { line: 0, character: 0 },
+            direction: 'none',
+          },
+        ]);
+        expect(
+          container.shadowRoot?.querySelector('[data-caret]') != null
+        ).toBe(true);
+      } finally {
+        await fixture.cleanup();
+      }
+    });
+
+    test(`keeps the external zero-line diff unchanged after an attach-only session (${diffStyle})`, async () => {
+      const fixture = await createDiffEditorFixture(
+        diffStyle,
+        'removed 1\nremoved 2\n',
+        ''
+      );
+
+      try {
+        expect(fixture.fileDiff.fileDiff?.additionLines).toEqual([]);
+        expect(getEditSessionDiff(fixture.fileDiff)?.additionLines).toEqual([
+          '',
+        ]);
+
+        fixture.editor.cleanUp();
+        for (let attempt = 0; attempt < 40; attempt++) {
+          const content = findAdditionContent(fixture.container);
+          if (content == null || countEditableLineEls(content) === 0) {
+            break;
+          }
+          await wait(0);
+        }
+
+        expect(fixture.fileDiff.fileDiff?.additionLines).toEqual([]);
+        expect(getEditSessionDiff(fixture.fileDiff)).toBeUndefined();
+        const content = findAdditionContent(fixture.container);
+        expect(content == null ? 0 : countEditableLineEls(content)).toBe(0);
+      } finally {
+        await fixture.cleanup();
+      }
+    });
+
     test(`keeps an editable line, accepts typing, and undoes (${diffStyle})`, async () => {
       const fixture = await createDiffEditorFixture(
         diffStyle,

@@ -1,6 +1,6 @@
 'use client';
 
-import { Fragment, useEffect, useState } from 'react';
+import { Fragment, useSyncExternalStore } from 'react';
 
 interface ShortcutProps {
   /** The non-modifier key(s), e.g. `A` for Cmd/Ctrl + A. */
@@ -26,15 +26,28 @@ function detectIsMac(): boolean {
   return /Mac|iP(?:hone|ad|od)/i.test(navigator.platform);
 }
 
-// Resolves the platform modifier label. Platform is only knowable on the
-// client, so this returns `Cmd` during SSR and the first client render (keeping
-// hydration stable), then corrects to `Ctrl` after mount on non-Mac devices.
-function usePlatformModifier(): string {
-  const [isMac, setIsMac] = useState(true);
+// The platform never changes while the page is open,
+// so there is nothing to subscribe to
+function nullSubscription(): () => void {
+  return () => {};
+}
 
-  useEffect(() => {
-    setIsMac(detectIsMac());
-  }, []);
+// Server-side snapshot: the platform is unknowable during SSR, so assume Mac.
+function getServerIsMac(): boolean {
+  return true;
+}
+
+// Resolves the platform modifier label. Platform is only knowable on the
+// client, so the server snapshot reports `Cmd` (keeping hydration stable) and
+// React swaps in the real value right after hydration on non-Mac devices.
+// useSyncExternalStore is the sanctioned way to read a browser-only value:
+// it avoids the set-state-in-effect round trip while staying hydration-safe.
+function usePlatformModifier(): string {
+  const isMac = useSyncExternalStore(
+    nullSubscription,
+    detectIsMac,
+    getServerIsMac
+  );
 
   return isMac ? 'Cmd' : 'Ctrl';
 }
