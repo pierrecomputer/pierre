@@ -81,6 +81,37 @@ Common entry points:
 | `moon run root:format root:lint`                | Repo-wide format + type-aware lint                                             |
 | `moonx root:wt -- new <slug>`                   | Create a git worktree with isolated dev-server ports (see `scripts/README.md`) |
 
+## Diffshub GitHub sign-in
+
+Diffshub posts file and line comments to GitHub without approvals or general
+pull request comments. Pull requests accept file comments and line ranges.
+Commit pages accept single-line comments.
+
+1. Register a GitHub OAuth app for your Diffshub server.
+2. Set its callback URL to `<origin>/api/auth/github?callback=1`. The default
+   local origin is `http://localhost:3692`. Worktrees use their assigned port.
+3. Set these variables in `apps/diffshub/.env.local`, or in the deployment
+   environment:
+
+   | Variable                     | Value                                                      |
+   | ---------------------------- | ---------------------------------------------------------- |
+   | `GITHUB_OAUTH_CLIENT_ID`     | OAuth app client ID                                        |
+   | `GITHUB_OAUTH_CLIENT_SECRET` | OAuth app client secret                                    |
+   | `GITHUB_SESSION_SECRET`      | A random secret with at least 32 characters                |
+   | `GITHUB_OAUTH_ORIGIN`        | Public origin when a reverse proxy changes the request URL |
+
+4. Generate the session secret with `openssl rand -hex 32`.
+5. Restart the server after changes to these variables.
+
+GitHub OAuth uses the `repo` scope for comments on public and private
+repositories. Diffshub stores the token in an encrypted, HttpOnly session
+cookie. Production requires HTTPS. A different session secret signs out existing
+users. Without OAuth credentials, users can still view diffs.
+
+For a remote development preview, set `DIFFSHUB_DEV_HOST` to the permitted
+hostname without a protocol or port. This variable controls Next.js development
+asset access, not OAuth redirects.
+
 ## Before you push
 
 ```bash

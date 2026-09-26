@@ -1,6 +1,7 @@
 import type { ChangeTypes } from '@pierre/diffs';
 import { type NextRequest } from 'next/server';
 
+import { getGitHubRequestToken } from '@/lib/githubAuth';
 import { loadGitHubDiffFiles } from '@/lib/githubDiffFileServer';
 
 const CACHE_CONTROL = 'no-store';
@@ -18,7 +19,7 @@ export async function GET(request: NextRequest) {
   const name = params.get('name');
   const type = parseChangeType(params.get('type'));
   const prevName = params.get('prevName') ?? undefined;
-  const token = parseBearerToken(request.headers.get('authorization'));
+  const token = getGitHubRequestToken(request);
 
   if (path == null || name == null || type == null) {
     return createJSONResponse(
@@ -49,16 +50,6 @@ export async function GET(request: NextRequest) {
   }
 }
 
-function parseBearerToken(value: string | null): string | undefined {
-  if (value == null) {
-    return undefined;
-  }
-
-  const match = /^Bearer\s+(.+)$/i.exec(value.trim());
-  const token = match?.[1]?.trim();
-  return token == null || token === '' ? undefined : token;
-}
-
 function parseChangeType(value: string | null): ChangeTypes | undefined {
   if (value == null) {
     return undefined;
@@ -76,7 +67,7 @@ function createJSONResponse(
     status: options.status ?? 200,
     headers: {
       'Cache-Control': CACHE_CONTROL,
-      Vary: 'Authorization',
+      Vary: 'Authorization, Cookie',
     },
   });
 }
