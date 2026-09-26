@@ -143,6 +143,43 @@ describe('backend rendering', () => {
       }
     });
 
+    test(`${preferredHighlighter} places decorations on blank CRLF and mixed-ending lines`, async () => {
+      const highlighter = await getSharedHighlighter({
+        preferredHighlighter,
+        themes: ['pierre-dark'],
+        langs: ['typescript'],
+      });
+      for (const [code, offset, line] of [
+        ['\r\n\r\nx', 2, 1],
+        ['\r\n\r\n', 2, 1],
+        ['\r\n\r\n', 4, 2],
+        ['a\n\nb\r\n\r\nc', 6, 3],
+        ['a\r\n\r\nb\n\nc', 7, 3],
+        ['a\rb\n\nc', 5, 2],
+      ] as const) {
+        for (const lang of ['text', 'typescript']) {
+          const fragment = JSDOM.fragment(
+            highlighter.codeToHtml(code, {
+              lang,
+              theme: 'pierre-dark',
+              decorations: [
+                {
+                  start: offset,
+                  end: offset,
+                  properties: { class: 'marker' },
+                  alwaysWrap: true,
+                },
+              ],
+            })
+          );
+          expect(fragment.querySelectorAll('.marker')).toHaveLength(1);
+          expect(
+            fragment.querySelectorAll('.line')[line].querySelector('.marker')
+          ).not.toBeNull();
+        }
+      }
+    });
+
     test(`${preferredHighlighter} preserves nested decorations across tokens`, async () => {
       const highlighter = await getSharedHighlighter({
         preferredHighlighter,

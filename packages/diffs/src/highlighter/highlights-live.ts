@@ -6,6 +6,7 @@ import {
 
 import type { TextDocumentChange } from '../editor/textDocument';
 import type { HighlightedToken, RenderRange } from '../types';
+import { formatCSSVariablePrefix } from '../utils/formatCSSVariablePrefix';
 import type {
   DiffsLiveTokenizer,
   DiffsLiveTokenizerOptions,
@@ -45,6 +46,7 @@ export class HighlightsLiveTokenizer implements DiffsLiveTokenizer {
       ...this.resolveOptions({
         lang: this.options.textDocument.languageId,
         theme: this.options.theme,
+        cssVariablePrefix: formatCSSVariablePrefix('token'),
         tokenizeMaxLineLength: this.options.tokenizeMaxLineLength ?? 1000,
       }),
       code: this.options.textDocument.getText(),

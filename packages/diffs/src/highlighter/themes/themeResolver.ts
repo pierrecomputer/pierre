@@ -94,7 +94,10 @@ function createHighlightsTheme(
     const source = sources.find((key) => colors[key] !== undefined);
     if (source !== undefined) colors[target] = colors[source];
   }
-  if (typeof zed.cssVariables === 'object') {
+  if (zed.cssVariables === true) {
+    colors['editor.foreground'] = 'var(--hls-foreground)';
+    colors['editor.background'] = 'var(--hls-background)';
+  } else if (typeof zed.cssVariables === 'object') {
     colors['editor.foreground'] ??=
       colors.text ?? colors.foreground ?? 'foreground';
     colors['editor.background'] ??= colors.background ?? 'background';

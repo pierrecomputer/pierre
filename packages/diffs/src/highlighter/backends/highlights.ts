@@ -37,7 +37,11 @@ export function createHighlightsHighlighter(): DiffsHighlighter {
       return raw.codeToTokens(code, resolveOptions(options));
     },
     codeToHtml(code, options) {
-      return tokensToHtml(highlighter.codeToTokens(code, options), options);
+      return tokensToHtml(
+        code,
+        highlighter.codeToTokens(code, options),
+        options
+      );
     },
     createLiveTokenizer(options) {
       if (raw == null) throw new Error('Highlighter is disposed');

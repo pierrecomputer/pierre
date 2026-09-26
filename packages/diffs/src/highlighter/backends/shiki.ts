@@ -67,7 +67,11 @@ export async function createShikiHighlighter(
       return raw.codeToTokens(code, resolveOptions(options));
     },
     codeToHtml(code, options) {
-      return tokensToHtml(highlighter.codeToTokens(code, options), options);
+      return tokensToHtml(
+        code,
+        highlighter.codeToTokens(code, options),
+        options
+      );
     },
     createLiveTokenizer(options) {
       return new ShikiLiveTokenizer(raw, options, highlighter);

@@ -6,9 +6,23 @@ import { renderTokenLines } from './renderTokenLines';
 
 /** Serialize highlighted tokens without loading a backend's HTML renderer. */
 export function tokensToHtml(
+  source: string,
   result: TokensResult,
   options: CodeToHtmlOptions
 ): string {
+  const lineOffsets = [0];
+  if (
+    options.decorations?.some(
+      (item) => typeof item.start === 'number' || typeof item.end === 'number'
+    ) === true
+  ) {
+    for (
+      let index = source.indexOf('\n');
+      index !== -1;
+      index = source.indexOf('\n', index + 1)
+    )
+      lineOffsets.push(index + 1);
+  }
   const code: Element = {
     type: 'element',
     tagName: 'code',
@@ -18,6 +32,7 @@ export function tokensToHtml(
   const lines = renderTokenLines(result.tokens, {
     decorations: options.decorations,
     mergeWhitespaces: options.mergeWhitespaces,
+    lineOffsets,
   });
   for (let i = 0; i < lines.length; i++) {
     if (i > 0) code.children.push({ type: 'text', value: '\n' });
