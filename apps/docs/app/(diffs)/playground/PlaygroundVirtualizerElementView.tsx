@@ -21,7 +21,7 @@ import {
 import { useCallback, useMemo, useRef, useState } from 'react';
 
 import type { PlaygroundAnnotationMetadata } from './constants';
-import { ITEM_UNSAFE_CSS, LONG_README_FILE } from './constants';
+import { ITEM_UNSAFE_CSS, LONG_CODE_FILE } from './constants';
 import type { SharedRenderOptions } from './PlaygroundClient';
 import { CommentForm, CommentThread } from './PlaygroundComments';
 import { EditSessionButtons } from './PlaygroundEditButtons';
@@ -49,7 +49,7 @@ interface PlaygroundVirtualizerElementViewProps {
 // fixed-height scroll region, in contrast to the window-scroll variant that
 // drives the vanilla Virtualizer against `document`. Any React <FileDiff>
 // nested under <Virtualizer> auto-virtualizes through context; no imperative
-// wiring is needed. The long README plain file leads the list (as in
+// wiring is needed. The long foldable plain file leads the list (as in
 // CodeView), rendered through <File>, which virtualizes the same way.
 export function PlaygroundVirtualizerElementView({
   diffs,
@@ -103,7 +103,7 @@ interface ElementVirtualizerFileProps {
 const EMPTY_FILE_ANNOTATIONS: LineAnnotation<PlaygroundAnnotationMetadata>[] =
   [];
 
-// The long README plain-file component leading the list. It owns the same edit,
+// The long foldable plain-file component leading the list. It owns the same edit,
 // line-selection, and gutter-comment behavior as each diff below it.
 function ElementVirtualizerFile({
   options,
@@ -112,7 +112,7 @@ function ElementVirtualizerFile({
   showAnnotations,
   editPrediction,
 }: ElementVirtualizerFileProps) {
-  const [file, setFile] = useState(LONG_README_FILE);
+  const [file, setFile] = useState(LONG_CODE_FILE);
   const [editing, setEditing] = useState(false);
   // Cancel marks the session before turning edit off; the completion handler
   // consumes the mark to revert instead of accept.

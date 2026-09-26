@@ -3,6 +3,12 @@ import type { FileDiff } from '../components/FileDiff';
 import type { VirtualizedFile } from '../components/VirtualizedFile';
 import type { VirtualizedFileDiff } from '../components/VirtualizedFileDiff';
 import {
+  computeIndentFoldingRanges,
+  isFoldingClosingDelimiter,
+  LineRangeIndex,
+  mergeHiddenLineRanges,
+} from '../managers/FoldManager';
+import {
   dequeueRender,
   queueRender,
 } from '../managers/UniversalRenderingManager';
@@ -13,10 +19,16 @@ import type {
   FileDiffMetadata,
   HighlightedToken,
   LineAnnotation,
+  LineRange,
   RenderRange,
   SelectionSide,
 } from '../types';
 import { computeLineOffsets } from '../utils/computeFileOffsets';
+import {
+  FOLD_ELLIPSIS_ICON_SIZE,
+  FOLD_TOGGLE_ICON_SIZE,
+  getFoldIconSvg,
+} from '../utils/foldControls';
 import { getFiletypeFromFileName } from '../utils/getFiletypeFromFileName';
 import { isGutterUtilityPath } from '../utils/isGutterUtilityPath';
 import { cloneRetainedDiffSessionSnapshot } from './cloneRetainedDiffSessionSnapshot';
@@ -486,6 +498,7 @@ export class Editor<
   #themeStyleElement?: HTMLStyleElement;
   #spriteElement?: SVGSVGElement;
   #fileContainer?: HTMLElement;
+  #codeElement?: HTMLElement;
   #gutterElement?: HTMLElement;
   #contentElement?: HTMLElement;
   #deletionsColumn?: ColumnElements;
@@ -574,6 +587,27 @@ export class Editor<
   #retainSearchPanelFocus = false;
   #fontRemeasureScheduled = false;
   #themeSelectionRefreshFrame?: number;
+  #foldRanges: LineRange[] = [];
+  #foldRangesByStart = new Map<number, LineRange>();
+  #foldEndLines = new Set<number>();
+  #foldClosingDelimiterLines = new Set<number>();
+  #foldedStartLines = new Set<number>();
+  #hiddenLineRanges: LineRange[] = [];
+  #hiddenLineIndex = new LineRangeIndex();
+  #hiddenLineRangeVersion = 0;
+  #syncedFoldRangeHost?: EditorComponent<EType, LAnnotation, Caret>;
+  #syncedFoldRangeVersion = -1;
+  #syncedFoldingEnabled?: boolean;
+  // Cached `folding` option from the attached host component; refreshed on
+  // attach, on every render-view sync, and via __hostOptionsChanged.
+  #hostFoldingEnabled = false;
+  #foldRangeDocument?: TextDocument<EType, LAnnotation>;
+  #foldRangeVersion = -1;
+  #renderViewGeneration = 0;
+  #pendingFoldFocus?: { line: number; generation: number };
+  #hasFoldIndicators = false;
+  #initializedFoldButtons = new WeakSet<HTMLButtonElement>();
+
   #editPredictionTimer?: ReturnType<typeof setTimeout>;
   #editPredictionAbortController?: AbortController;
   #editPredictionGeneration = 0;
@@ -628,7 +662,7 @@ export class Editor<
         if (line >= startingLine && line < endLine) {
           const lineElement = this.#getLineElement(line);
           if (lineElement !== undefined) {
-            lineElement.replaceChildren(...renderLineTokens(tokens));
+            this.#replaceLineTokens(lineElement, tokens);
             refreshPrediction ||= predictionLines?.has(line) === true;
           }
         }
@@ -683,6 +717,15 @@ export class Editor<
       this.#editPredictionHistory = [];
       this.#scheduleEditPrediction();
     }
+  }
+
+  /**
+   * @internal Called by the host component after its options change. The
+   * `folding` option lives on the host (`BaseCodeOptions`), so this is how an
+   * option flip reaches an already-attached editor without a host re-render.
+   */
+  __hostOptionsChanged(): void {
+    this.#refreshHostFoldingOption();
   }
 
   __emitEditComplete(
@@ -763,6 +806,12 @@ export class Editor<
     const previousDiffSession = editSession.diffSession;
     this.#initialState = undefined;
     this.#editSession = editSession;
+    this.#hostFoldingEnabled =
+      fileInstance.type === 'file' &&
+      fileInstance.__getEffectiveCodeOptions().folding !== false;
+    if (!this.#hostFoldingEnabled || fileInstance.type !== 'file') {
+      this.#resetFoldingState();
+    }
     this.#fileInstance = fileInstance;
     this.#isRendering = true;
     this.#restoreEditorStateOnSync = editSession.editor != null;
@@ -871,6 +920,7 @@ export class Editor<
     if (textDocument == null) {
       throw new Error('Editor.applyEdits: Editor is not attached');
     }
+    this.#unfoldFoldsIntersectingRanges(edits.map((edit) => edit.range));
     // Only reposition focus and scroll when the editor already holds focus. A
     // programmatic edit must not pull focus from another input the user is
     // typing in; the selection state below is re-anchored either way.
@@ -981,22 +1031,32 @@ export class Editor<
     if (!this.#isRendering && this.#editSession?.editor != null) {
       return cloneEditorViewState(this.#editSession.editor);
     }
+    let foldRanges: LineRange[] | undefined;
+    if (this.#isFoldingEnabled && this.#foldedStartLines.size > 0) {
+      foldRanges = [];
+      for (const range of this.#foldRanges) {
+        if (this.#foldedStartLines.has(range.startLine)) {
+          foldRanges.push({ ...range });
+        }
+      }
+    }
     const selections = this.#selections?.map((selection) => ({
       ...selection,
       start: { ...selection.start },
       end: { ...selection.end },
     }));
     if (fileInstance == null) {
-      return { selections };
+      return { selections, foldRanges };
     }
 
     const viewport = this.#getOwnedVerticalViewport();
     const scrollLeft = fileInstance.getCodeScrollLeft();
     if (viewport == null) {
-      return { selections, view: { scrollLeft } };
+      return { selections, foldRanges, view: { scrollLeft } };
     }
     return {
       selections,
+      foldRanges,
       view: { scrollLeft, scrollTop: viewport.scrollTop },
     };
   }
@@ -1019,7 +1079,7 @@ export class Editor<
     return toManagedEditState<EType, LAnnotation>(editSession);
   }
 
-  setViewState({ selections, view }: EditorViewState): void {
+  setViewState({ selections, foldRanges, view }: EditorViewState): void {
     if (
       !this.#isRendering ||
       this.#fileInstance === undefined ||
@@ -1028,6 +1088,11 @@ export class Editor<
       throw new Error('Editor.setViewState: Editor is not attached');
     }
     this.#canMountSelectionAction = false;
+    this.#restoreFoldRanges(foldRanges ?? []);
+    const primarySelection = selections?.at(-1);
+    if (primarySelection !== undefined) {
+      this.#revealLineIfCollapsed(getCaretPosition(primarySelection).line);
+    }
     this.#updateSelections(selections ?? []);
     // When a saved view is present, honor its scroll offsets exactly. Scrolling
     // the caret into view afterward would overwrite them whenever the caret
@@ -1200,10 +1265,17 @@ export class Editor<
     this.#globalEventDisposes = undefined;
     this.#editorEventDisposes?.forEach((dispose) => dispose());
     this.#editorEventDisposes = undefined;
+    this.#removeFoldingControls();
     if (!recycle) {
+      if (fileInstance?.type === 'file') fileInstance.__setFoldRanges([]);
+      this.#resetFoldingState();
       this.#detach?.();
       this.#detach = undefined;
     }
+    this.#pendingFoldFocus = undefined;
+    this.#syncedFoldRangeHost = undefined;
+    this.#syncedFoldRangeVersion = -1;
+    this.#syncedFoldingEnabled = undefined;
 
     // cache
     this.#gutterWidthCache = undefined;
@@ -1223,6 +1295,7 @@ export class Editor<
     this.#spriteElement?.remove();
     this.#spriteElement = undefined;
     this.#fileContainer = undefined;
+    this.#codeElement = undefined;
     this.#popoverManager?.cleanUp();
     this.#popoverManager = undefined;
     this.#gutterElement = undefined;
@@ -1286,7 +1359,10 @@ export class Editor<
     const { view } = editorState;
     const hasNonDefaultView =
       view != null && (view.scrollLeft !== 0 || (view.scrollTop ?? 0) !== 0);
-    const hasEditorState = editorState.selections != null || hasNonDefaultView;
+    const hasEditorState =
+      editorState.selections != null ||
+      (editorState.foldRanges?.length ?? 0) > 0 ||
+      hasNonDefaultView;
     editSession.editor = cloneEditorViewState(editorState);
 
     if (editSession.type === 'file') {
@@ -1405,6 +1481,7 @@ export class Editor<
     if (!this.#isRendering || fileInstance == null || editSession == null) {
       return;
     }
+    this.#renderViewGeneration++;
     const shadowRoot = fileContainer.shadowRoot;
     if (shadowRoot == null) {
       console.error('[editor] Could not find the shadow root.');
@@ -1457,6 +1534,7 @@ export class Editor<
       this.#replacementFocusRequest = undefined;
       return;
     }
+    this.#codeElement = codeElement;
 
     this.#getPopoverManager().setViewportElements(fileContainer, codeElement);
 
@@ -1536,6 +1614,7 @@ export class Editor<
       }
       editSession.fileInfo = { name, lang };
       editSession.document = textDocument;
+      this.#resetFoldingState();
       if (resetForExternalDocument) {
         editSession.diffSession = undefined;
       }
@@ -1643,6 +1722,10 @@ export class Editor<
       }
     }
 
+    this.#refreshHostFoldingOption();
+    this.#refreshFoldingRanges();
+    this.#syncFoldedRangesToHost();
+    this.#renderFoldingControls();
     this.#resetCache();
 
     // The tokenizer is created once per attached document and reused across
@@ -1811,6 +1894,659 @@ export class Editor<
     }
   }
 
+  get #isFoldingEnabled(): boolean {
+    return (
+      this.#hostFoldingEnabled &&
+      this.#fileInstance?.type === 'file' &&
+      this.#fileInstance.__setFoldRanges !== undefined
+    );
+  }
+
+  // Re-read the host's `folding` option and rebuild or clear the fold state
+  // when it flipped. Host option changes always re-render the host, which
+  // lands in #syncRenderView, so polling there plus the explicit
+  // __hostOptionsChanged hook covers both render-driven and direct flips.
+  #refreshHostFoldingOption(): void {
+    const fileInstance = this.#fileInstance;
+    if (fileInstance?.type !== 'file') {
+      return;
+    }
+    const enabled = fileInstance.__getEffectiveCodeOptions().folding !== false;
+    if (this.#hostFoldingEnabled === enabled) {
+      return;
+    }
+    this.#hostFoldingEnabled = enabled;
+    this.#handleFoldingOptionChange();
+  }
+
+  #resetFoldingState(): void {
+    this.#foldRanges = [];
+    this.#foldRangesByStart.clear();
+    this.#foldEndLines.clear();
+    this.#foldClosingDelimiterLines.clear();
+    this.#foldedStartLines.clear();
+    this.#hiddenLineRanges = [];
+    this.#hiddenLineIndex = new LineRangeIndex();
+    this.#hiddenLineRangeVersion++;
+    this.#foldRangeDocument = undefined;
+    this.#foldRangeVersion = -1;
+  }
+
+  #setHiddenLineRanges(ranges: LineRange[]): boolean {
+    if (
+      ranges.length === this.#hiddenLineRanges.length &&
+      ranges.every((range, index) => {
+        const previous = this.#hiddenLineRanges[index];
+        return (
+          previous?.startLine === range.startLine &&
+          previous.endLine === range.endLine
+        );
+      })
+    ) {
+      return false;
+    }
+    this.#hiddenLineRanges = ranges;
+    this.#hiddenLineIndex = new LineRangeIndex(ranges);
+    this.#hiddenLineRangeVersion++;
+    return true;
+  }
+
+  // Fold candidates are cached by document version and computed in one pass.
+  // Active folded headers stay separate so nested state survives an outer
+  // fold being toggled off.
+  #refreshFoldingRanges(force = false): boolean {
+    const textDocument = this.#editSession?.document;
+    if (!this.#isFoldingEnabled || textDocument === undefined) {
+      return false;
+    }
+    if (
+      !force &&
+      this.#foldRangeDocument === textDocument &&
+      this.#foldRangeVersion === textDocument.version
+    ) {
+      return false;
+    }
+
+    this.#foldRanges = computeIndentFoldingRanges(
+      textDocument,
+      this.#metrics.tabSize
+    );
+    const rangesByStart = new Map<number, LineRange>();
+    const endLines = new Set<number>();
+    const closingDelimiterLines = new Set<number>();
+    for (const range of this.#foldRanges) {
+      rangesByStart.set(range.startLine, range);
+      endLines.add(range.endLine);
+      const closingLine = range.endLine + 1;
+      if (
+        closingLine < textDocument.lineCount &&
+        isFoldingClosingDelimiter(textDocument.getLineText(closingLine))
+      ) {
+        closingDelimiterLines.add(closingLine);
+      }
+    }
+    this.#foldRangesByStart = rangesByStart;
+    this.#foldEndLines = endLines;
+    this.#foldClosingDelimiterLines = closingDelimiterLines;
+    for (const startLine of this.#foldedStartLines) {
+      if (!this.#foldRangesByStart.has(startLine)) {
+        this.#foldedStartLines.delete(startLine);
+      }
+    }
+    this.#foldRangeDocument = textDocument;
+    this.#foldRangeVersion = textDocument.version;
+    return this.#setHiddenLineRanges(
+      mergeHiddenLineRanges(this.#foldRanges, this.#foldedStartLines)
+    );
+  }
+
+  #restoreFoldRanges(foldRanges: readonly LineRange[]): void {
+    if (!this.#isFoldingEnabled) {
+      return;
+    }
+    this.#refreshFoldingRanges();
+
+    const nextFoldedStartLines = new Set<number>();
+    for (const range of foldRanges) {
+      if (
+        range == null ||
+        !Number.isInteger(range.startLine) ||
+        !Number.isInteger(range.endLine)
+      ) {
+        continue;
+      }
+      const candidate = this.#foldRangesByStart.get(range.startLine);
+      if (candidate?.endLine === range.endLine) {
+        nextFoldedStartLines.add(range.startLine);
+      }
+    }
+
+    let changed = nextFoldedStartLines.size !== this.#foldedStartLines.size;
+    if (!changed) {
+      for (const startLine of nextFoldedStartLines) {
+        if (!this.#foldedStartLines.has(startLine)) {
+          changed = true;
+          break;
+        }
+      }
+    }
+    if (!changed) {
+      return;
+    }
+
+    this.#foldedStartLines = nextFoldedStartLines;
+    this.#refreshFoldedView();
+  }
+
+  #syncFoldedRangesToHost(): void {
+    const host = this.#fileInstance;
+    if (host?.type !== 'file' || host.__setFoldRanges === undefined) {
+      return;
+    }
+    const foldingEnabled = this.#isFoldingEnabled;
+    if (
+      this.#syncedFoldRangeHost === host &&
+      this.#syncedFoldRangeVersion === this.#hiddenLineRangeVersion &&
+      this.#syncedFoldingEnabled === foldingEnabled
+    ) {
+      return;
+    }
+    this.#syncedFoldRangeHost = host;
+    this.#syncedFoldRangeVersion = this.#hiddenLineRangeVersion;
+    this.#syncedFoldingEnabled = foldingEnabled;
+    host.__setFoldRanges(foldingEnabled ? this.#hiddenLineRanges : []);
+  }
+
+  #removeFoldingControls(): void {
+    this.#codeElement?.removeAttribute('data-folding');
+    this.#gutterElement
+      ?.querySelectorAll('[data-fold]')
+      .forEach((element) => element.remove());
+    if (this.#hasFoldIndicators) {
+      this.#contentElement
+        ?.querySelectorAll('[data-fold-indicator]')
+        .forEach((element) => element.remove());
+      this.#hasFoldIndicators = false;
+    }
+  }
+
+  // Attach toggle listeners once per button. Buttons can be adopted from
+  // read-only fold markup the file renderer emitted before the editor
+  // attached, so creation and initialization are tracked separately.
+  #initializeFoldButton(button: HTMLButtonElement): void {
+    if (this.#initializedFoldButtons.has(button)) {
+      return;
+    }
+    this.#initializedFoldButtons.add(button);
+    button.addEventListener('pointerdown', (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+    });
+    button.addEventListener('keydown', (event) => {
+      if (event.key !== 'Escape') {
+        event.stopPropagation();
+      }
+    });
+    button.addEventListener('click', (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      const lineIndex = Number(
+        button.closest<HTMLElement>('[data-line-index]')?.dataset.lineIndex
+      );
+      if (Number.isInteger(lineIndex)) {
+        this.#toggleFold(lineIndex, event.detail === 0);
+      }
+    });
+  }
+
+  #renderFoldingControls(): void {
+    const codeElement = this.#codeElement;
+    const gutterElement = this.#gutterElement;
+    const contentElement = this.#contentElement;
+    const textDocument = this.#editSession?.document;
+    if (
+      !this.#isFoldingEnabled ||
+      codeElement === undefined ||
+      gutterElement === undefined ||
+      contentElement === undefined ||
+      textDocument === undefined
+    ) {
+      this.#removeFoldingControls();
+      return;
+    }
+
+    codeElement.setAttribute('data-folding', '');
+    const foldedLineElements = new Map<number, HTMLElement>();
+    if (this.#foldedStartLines.size === 0) {
+      if (this.#hasFoldIndicators) {
+        contentElement
+          .querySelectorAll('[data-fold-indicator]')
+          .forEach((element) => element.remove());
+        this.#hasFoldIndicators = false;
+      }
+    } else {
+      let hasFoldIndicators = false;
+      for (const child of contentElement.children) {
+        if (!(child instanceof HTMLElement)) {
+          continue;
+        }
+        const lineIndex = Number(child.dataset.lineIndex);
+        const isFolded =
+          Number.isInteger(lineIndex) &&
+          this.#foldedStartLines.has(lineIndex) &&
+          this.#foldRangesByStart.has(lineIndex);
+        const indicator = child.querySelector<HTMLElement>(
+          ':scope > [data-fold-indicator]'
+        );
+        if (!isFolded) {
+          indicator?.remove();
+          continue;
+        }
+        foldedLineElements.set(lineIndex, child);
+        hasFoldIndicators ||= indicator !== null;
+      }
+      this.#hasFoldIndicators = hasFoldIndicators;
+    }
+
+    for (const child of gutterElement.children) {
+      if (!(child instanceof HTMLElement)) {
+        continue;
+      }
+      const lineIndex = Number(child.dataset.lineIndex);
+      const existingZone = child.querySelector<HTMLElement>(
+        ':scope > [data-fold]'
+      );
+      if (
+        child.dataset.columnNumber === undefined ||
+        !Number.isInteger(lineIndex)
+      ) {
+        existingZone?.remove();
+        continue;
+      }
+
+      const range = this.#foldRangesByStart.get(lineIndex);
+      if (range === undefined) {
+        existingZone?.remove();
+        continue;
+      }
+
+      const folded = this.#foldedStartLines.has(lineIndex);
+      const zone = existingZone ?? h('span', { dataset: 'fold' }, child);
+      let button = zone.querySelector<HTMLButtonElement>(
+        ':scope > [data-fold-toggle]'
+      );
+      let buttonCreated = false;
+      if (button === null) {
+        button = h(
+          'button',
+          {
+            dataset: 'foldToggle',
+            type: 'button',
+          },
+          zone
+        );
+        buttonCreated = true;
+      }
+      this.#initializeFoldButton(button);
+
+      const wasFolded = button.dataset.folded !== undefined;
+      button.ariaExpanded = folded ? 'false' : 'true';
+      button.ariaLabel = `${folded ? 'Unfold' : 'Fold'} line ${lineIndex + 1}`;
+      button.title = folded ? 'Unfold' : 'Fold';
+      button.toggleAttribute('data-folded', folded);
+      if (buttonCreated || wasFolded !== folded) {
+        button.innerHTML = getFoldIconSvg(
+          folded ? 'chevron-right' : 'chevron-down',
+          FOLD_TOGGLE_ICON_SIZE
+        );
+      }
+
+      if (!folded) {
+        continue;
+      }
+
+      const lineElement = foldedLineElements.get(lineIndex);
+      if (lineElement === undefined) {
+        continue;
+      }
+
+      const indicator =
+        lineElement.querySelector<HTMLElement>(
+          ':scope > [data-fold-indicator]'
+        ) ??
+        h(
+          'span',
+          {
+            dataset: 'foldIndicator',
+            contentEditable: 'false',
+            spellcheck: false,
+          },
+          lineElement
+        );
+      this.#hasFoldIndicators = true;
+      indicator.setAttribute('contenteditable', 'false');
+      indicator.dataset.foldCharacter = textDocument
+        .getLineLength(lineIndex)
+        .toString();
+      let ellipsis = indicator.querySelector<HTMLButtonElement>(
+        ':scope > [data-fold-ellipsis]'
+      );
+      if (ellipsis === null) {
+        ellipsis = h('button', {
+          dataset: 'foldEllipsis',
+          type: 'button',
+          innerHTML: getFoldIconSvg('ellipsis', FOLD_ELLIPSIS_ICON_SIZE),
+        });
+        indicator.prepend(ellipsis);
+      }
+      this.#initializeFoldButton(ellipsis);
+      ellipsis.ariaLabel = `Unfold line ${lineIndex + 1}`;
+      ellipsis.title = 'Unfold';
+    }
+    this.#restorePendingFoldFocus();
+  }
+
+  #refreshFoldedView(updateHiddenLineRanges = true): void {
+    if (updateHiddenLineRanges) {
+      this.#setHiddenLineRanges(
+        mergeHiddenLineRanges(this.#foldRanges, this.#foldedStartLines)
+      );
+    }
+    this.#syncFoldedRangesToHost();
+    this.#resetCache();
+    this.#renderFoldingControls();
+    if (this.#selections !== undefined) {
+      this.#updateSelections(this.#selections);
+    }
+    this.#markerRenderer?.removePopover();
+  }
+
+  #toggleFold(startLine: number, restoreFocus = false): void {
+    this.#refreshFoldingRanges();
+    const range = this.#foldRangesByStart.get(startLine);
+    const textDocument = this.#editSession?.document;
+    if (range === undefined || textDocument === undefined) {
+      return;
+    }
+    if (restoreFocus) {
+      this.#pendingFoldFocus = {
+        line: startLine,
+        generation: this.#renderViewGeneration + 1,
+      };
+    }
+
+    if (this.#foldedStartLines.has(startLine)) {
+      this.#foldedStartLines.delete(startLine);
+    } else {
+      this.#foldedStartLines.add(startLine);
+    }
+    this.#setHiddenLineRanges(
+      mergeHiddenLineRanges(this.#foldRanges, this.#foldedStartLines)
+    );
+
+    // A selection whose caret is swallowed by the new fold maps to the end of
+    // its header, matching the display-map behavior of native editors.
+    if (this.#selections !== undefined) {
+      let didMoveCaret = false;
+      const nextSelections = this.#selections.map<EditorSelection>(
+        (selection) => {
+          if (
+            !this.#hiddenLineIndex.isHidden(getCaretPosition(selection).line)
+          ) {
+            return selection;
+          }
+          didMoveCaret = true;
+          const caret = {
+            line: startLine,
+            character: textDocument.getLineLength(startLine),
+          };
+          return { start: caret, end: caret, direction: DirectionNone };
+        }
+      );
+      if (didMoveCaret) {
+        this.#selections = nextSelections;
+      }
+    }
+
+    this.#refreshFoldedView(false);
+  }
+
+  #restorePendingFoldFocus(): void {
+    const pending = this.#pendingFoldFocus;
+    if (
+      pending === undefined ||
+      this.#renderViewGeneration < pending.generation
+    ) {
+      return;
+    }
+    const toggle = this.#gutterElement?.querySelector<HTMLButtonElement>(
+      `[data-line-index="${pending.line}"] [data-fold-toggle]`
+    );
+    if (toggle?.isConnected !== true) {
+      return;
+    }
+    toggle.focus({ preventScroll: true });
+    this.#pendingFoldFocus = undefined;
+  }
+
+  #unfoldFoldsIntersectingRanges(ranges: readonly Range[]): void {
+    const textDocument = this.#editSession?.document;
+    if (
+      !this.#isFoldingEnabled ||
+      this.#foldedStartLines.size === 0 ||
+      textDocument === undefined
+    ) {
+      return;
+    }
+    const normalizedRanges = ranges.map((range) => {
+      const start = textDocument.normalizePosition(range.start);
+      const end = textDocument.normalizePosition(range.end);
+      return {
+        startLine: Math.min(start.line, end.line),
+        endLine: Math.max(start.line, end.line),
+      };
+    });
+    let changed = false;
+    for (const startLine of this.#foldedStartLines) {
+      const foldRange = this.#foldRangesByStart.get(startLine);
+      if (
+        foldRange !== undefined &&
+        normalizedRanges.some(
+          (range) =>
+            range.endLine >= foldRange.startLine + 1 &&
+            range.startLine <= foldRange.endLine
+        )
+      ) {
+        this.#foldedStartLines.delete(startLine);
+        changed = true;
+      }
+    }
+    if (changed) {
+      this.#refreshFoldedView();
+    }
+  }
+
+  #unfoldLine(line: number): boolean {
+    if (!this.#isFoldingEnabled) {
+      return false;
+    }
+    let changed = false;
+    for (const startLine of this.#foldedStartLines) {
+      const range = this.#foldRangesByStart.get(startLine);
+      if (
+        range !== undefined &&
+        line > range.startLine &&
+        line <= range.endLine
+      ) {
+        this.#foldedStartLines.delete(startLine);
+        changed = true;
+      }
+    }
+    if (changed) {
+      this.#refreshFoldedView();
+    }
+    return changed;
+  }
+
+  #remapFoldingAfterChange(change: TextDocumentChange): boolean {
+    if (!this.#isFoldingEnabled) {
+      return false;
+    }
+
+    const shouldRefreshRanges = this.#changeMayAffectFolding(change);
+    this.#remapFoldedRangesAfterChange(change);
+
+    if (shouldRefreshRanges) {
+      this.#foldRangeVersion = -1;
+      this.#refreshFoldingRanges(true);
+    } else if (this.#editSession?.document !== undefined) {
+      this.#foldRangeDocument = this.#editSession?.document;
+      this.#foldRangeVersion = this.#editSession?.document.version;
+    }
+    return shouldRefreshRanges;
+  }
+
+  // Remap active ranges through each line-changing edit in document order.
+  // Aggregate change bounds are insufficient for multi-edit batches because
+  // folds between edits can stay valid even when the batch has a net delta.
+  #remapFoldedRangesAfterChange(change: TextDocumentChange): void {
+    const lineChanges =
+      change.changedLineChanges ??
+      ([[change.startLine, change.endLine, change.lineDelta]] as const);
+    if (
+      this.#foldedStartLines.size === 0 ||
+      !lineChanges.some(([, , lineDelta]) => lineDelta !== 0)
+    ) {
+      return;
+    }
+
+    let activeRanges = [...this.#foldedStartLines]
+      .map((startLine) => this.#foldRangesByStart.get(startLine))
+      .filter((range): range is LineRange => range !== undefined)
+      .map((range) => ({ ...range }));
+
+    for (const [
+      startLine,
+      endLine,
+      lineDelta,
+      startCharacter,
+      endCharacter,
+    ] of lineChanges) {
+      if (lineDelta === 0) {
+        continue;
+      }
+      const oldEndLine = Math.max(startLine, endLine - lineDelta);
+      const insertsBeforeLine =
+        lineDelta > 0 && startCharacter === 0 && endCharacter === 0;
+      const deletesBeforeLine = lineDelta < 0 && endCharacter === 0;
+      const nextRanges: LineRange[] = [];
+      for (const range of activeRanges) {
+        if (range.endLine < startLine) {
+          nextRanges.push(range);
+        } else if (
+          range.startLine > oldEndLine ||
+          (insertsBeforeLine && range.startLine >= startLine) ||
+          (deletesBeforeLine && range.startLine === oldEndLine)
+        ) {
+          nextRanges.push({
+            startLine: range.startLine + lineDelta,
+            endLine: range.endLine + lineDelta,
+          });
+        }
+      }
+      activeRanges = nextRanges;
+    }
+
+    const nextFoldedStartLines = new Set(
+      activeRanges.map((range) => range.startLine)
+    );
+    let changed = nextFoldedStartLines.size !== this.#foldedStartLines.size;
+    if (!changed) {
+      for (const startLine of nextFoldedStartLines) {
+        if (!this.#foldedStartLines.has(startLine)) {
+          changed = true;
+          break;
+        }
+      }
+    }
+    if (changed) {
+      this.#foldedStartLines = nextFoldedStartLines;
+    }
+  }
+
+  // Ordinary character edits cannot change indentation folds. Re-scan only
+  // when an edit touches indentation, blank headers/ends, closing delimiters,
+  // or the document's line structure.
+  #changeMayAffectFolding(change: TextDocumentChange): boolean {
+    const textDocument = this.#editSession?.document;
+    if (textDocument === undefined || change.lineDelta !== 0) {
+      return true;
+    }
+
+    const lineChanges =
+      change.changedLineChanges ??
+      ([
+        [
+          change.startLine,
+          change.endLine,
+          change.lineDelta,
+          change.startCharacter,
+          change.endCharacter,
+        ],
+      ] as const);
+    for (const [
+      startLine,
+      endLine,
+      lineDelta,
+      startCharacter = 0,
+      endCharacter = startCharacter,
+    ] of lineChanges) {
+      if (lineDelta !== 0) {
+        return true;
+      }
+      for (let line = startLine; line <= endLine; line++) {
+        const text = textDocument.getLineText(line);
+        const indentationLength = text.length - text.trimStart().length;
+        const trimmedText = text.trim();
+        if (
+          startCharacter <= indentationLength ||
+          endCharacter <= indentationLength ||
+          this.#foldClosingDelimiterLines.has(line) ||
+          isFoldingClosingDelimiter(trimmedText) ||
+          (trimmedText.length === 0 &&
+            (this.#foldRangesByStart.has(line) || this.#foldEndLines.has(line)))
+        ) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  #handleFoldingOptionChange(): void {
+    if (this.#isFoldingEnabled) {
+      this.#foldRangeVersion = -1;
+      this.#refreshFoldingRanges(true);
+    } else {
+      this.#foldRanges = [];
+      this.#foldRangesByStart.clear();
+      this.#foldEndLines.clear();
+      this.#foldClosingDelimiterLines.clear();
+      this.#foldedStartLines.clear();
+      this.#setHiddenLineRanges([]);
+      this.#foldRangeDocument = undefined;
+      this.#foldRangeVersion = -1;
+    }
+    this.#syncFoldedRangesToHost();
+    this.#resetCache();
+    this.#gutterWidthCache = undefined;
+    this.#contentWidthCache = undefined;
+    this.#renderFoldingControls();
+    if (this.#selections !== undefined) {
+      this.#updateSelections(this.#selections);
+    }
+  }
+
   get #fileDiffInstance(): FileDiff<LAnnotation, Caret> | undefined {
     return this.#fileInstance?.type === 'file-diff'
       ? this.#fileInstance
@@ -1825,28 +2561,59 @@ export class Editor<
       : undefined;
   }
 
-  // Whether a zero-based document line has (or will have on scroll) a
-  // rendered row. False only for lines hidden inside a collapsed unchanged
-  // region of a diff host; hosts without collapsible regions treat every
-  // line as renderable.
+  // Whether a zero-based document line has (or will have on scroll) a rendered
+  // row. File folds and collapsed diff regions share this visibility gate.
   #isLineRenderable(line: number): boolean {
-    return this.#fileDiffInstance?.isLineRenderable?.(line + 1) ?? true;
+    return (
+      (!this.#isFoldingEnabled || !this.#hiddenLineIndex.isHidden(line)) &&
+      (this.#fileDiffInstance?.isLineRenderable?.(line + 1) ?? true)
+    );
   }
 
   // Fold-skip resolver for vertical caret motion (zero-based lines), or
-  // undefined for hosts without collapsible regions so motion stays plain
-  // line arithmetic.
+  // undefined when neither the editor nor its host hides document lines.
   get #resolveRenderableLine(): ResolveRenderableLine | undefined {
     const fileInstance = this.#fileDiffInstance;
-    if (fileInstance == null) {
+    const textDocument = this.#editSession?.document;
+    const hasEditorFolds =
+      this.#isFoldingEnabled && this.#hiddenLineRanges.length > 0;
+    if (!hasEditorFolds && fileInstance?.getNearestRenderableLine == null) {
       return undefined;
     }
     return (line, direction) => {
-      const nearest = fileInstance.getNearestRenderableLine(
-        line + 1,
-        direction
-      );
-      return nearest == null ? undefined : nearest - 1;
+      let candidate = line;
+      for (let attempt = 0; attempt < 4; attempt++) {
+        if (hasEditorFolds) {
+          const nearest = this.#hiddenLineIndex.nearestVisibleLine(
+            candidate,
+            direction,
+            textDocument?.lineCount ?? 0
+          );
+          if (nearest === undefined) {
+            return undefined;
+          }
+          candidate = nearest;
+        }
+        if (fileInstance?.getNearestRenderableLine == null) {
+          return candidate;
+        }
+        const nearest = fileInstance.getNearestRenderableLine(
+          candidate + 1,
+          direction
+        );
+        if (nearest == null) {
+          return undefined;
+        }
+        const hostCandidate = nearest - 1;
+        if (
+          hostCandidate === candidate &&
+          !this.#hiddenLineIndex.isHidden(hostCandidate)
+        ) {
+          return hostCandidate;
+        }
+        candidate = hostCandidate;
+      }
+      return this.#isLineRenderable(candidate) ? candidate : undefined;
     };
   }
 
@@ -1854,6 +2621,7 @@ export class Editor<
   // moves) may land inside a collapsed region; expand it minimally so the
   // caret's row can render before the scroll below retries toward it.
   #revealLineIfCollapsed(line: number): void {
+    this.#unfoldLine(line);
     if (!this.#isLineRenderable(line)) {
       this.#fileDiffInstance?.revealLine?.(line + 1);
     }
@@ -3722,6 +4490,36 @@ export class Editor<
     });
   }
 
+  // Retokenizing a folded header keeps its focused inline indicator attached.
+  #replaceLineTokens(
+    lineElement: HTMLElement,
+    tokens: Array<HighlightedToken>
+  ): void {
+    const lastElement = lineElement.lastElementChild;
+    const foldIndicator =
+      lastElement instanceof HTMLElement &&
+      lastElement.dataset.foldIndicator !== undefined
+        ? lastElement
+        : undefined;
+    if (foldIndicator === undefined) {
+      lineElement.replaceChildren(...renderLineTokens(tokens));
+      return;
+    }
+
+    let child = lineElement.firstChild;
+    while (child !== null && child !== foldIndicator) {
+      const next = child.nextSibling;
+      child.remove();
+      child = next;
+    }
+    foldIndicator.before(...renderLineTokens(tokens));
+    const lineIndex = Number(lineElement.dataset.lineIndex);
+    if (Number.isInteger(lineIndex)) {
+      foldIndicator.dataset.foldCharacter =
+        this.#editSession?.document?.getLineLength(lineIndex).toString() ?? '0';
+    }
+  }
+
   #rerender(
     change: TextDocumentChange,
     newLineAnnotations?: EditorLineAnnotation<EType, LAnnotation>[],
@@ -3784,7 +4582,7 @@ export class Editor<
           const lineIndex = lineNumber - 1;
           if (dirtyLineIndexes.has(lineIndex)) {
             const tokens = dirtyLines.get(lineIndex)!;
-            child.replaceChildren(...renderLineTokens(tokens));
+            this.#replaceLineTokens(child, tokens);
             dirtyLineIndexes.delete(lineIndex);
             if (dirtyLineIndexes.size === 0) {
               break;
@@ -6873,6 +7671,7 @@ export class Editor<
       editSource?: 'user' | 'prediction';
     }
   ) {
+    const foldingControlsChanged = this.#remapFoldingAfterChange(change);
     // Cancel first so a line-count change, which rebuilds the component's
     // layout, folds the now-empty ghost rows rather than rows keyed by pre-edit
     // lines. Every change ends the prediction anyway.
@@ -7037,6 +7836,11 @@ export class Editor<
       if (newLineAnnotations != null) {
         this.#lineAnnotations = newLineAnnotations;
       }
+    }
+
+    this.#syncFoldedRangesToHost();
+    if (foldingControlsChanged) {
+      this.#renderFoldingControls();
     }
 
     if (newSelections != null) {

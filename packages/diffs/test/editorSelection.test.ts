@@ -375,6 +375,30 @@ describe('convertSelection', () => {
     );
   });
 
+  test('maps an inline fold indicator to the folded header end', () => {
+    const icon = element('SVG', [element('USE')]);
+    const ellipsis = element('BUTTON', [icon]);
+    const indicator = element('SPAN', [ellipsis]);
+    indicator.dataset.foldIndicator = '';
+    indicator.dataset.foldCharacter = '18';
+    const renderedLine = pre(6, [span('function outer() {', 0), indicator]);
+
+    expect(
+      convertSelection(composedRange(renderedLine as unknown as Node, 2))
+    ).toEqual({
+      start: { line: 6, character: 18 },
+      end: { line: 6, character: 18 },
+      direction: DirectionNone,
+    });
+    expect(
+      convertSelection(composedRange(ellipsis as unknown as Node, 0))
+    ).toEqual({
+      start: { line: 6, character: 18 },
+      end: { line: 6, character: 18 },
+      direction: DirectionNone,
+    });
+  });
+
   test('maps a text node inside a nested diff-span token', () => {
     const diffToken = span('_diff', 15);
     const diff = diffSpan(diffToken, span(':', 20), span(' FileMetadata', 22));

@@ -28,6 +28,7 @@ export function renderFileWithHighlighter(
     startingLine,
     totalLines,
     lines,
+    hiddenLineRanges,
   }: ForceFilePlainTextOptions = DEFAULT_PLAIN_TEXT_OPTIONS
 ): ThemedFileResult {
   if (forcePlainText) {
@@ -42,6 +43,45 @@ export function renderFileWithHighlighter(
     totalLines = Infinity;
   }
   const isWindowedHighlight = startingLine > 0 || totalLines < Infinity;
+  let windowEndLine = startingLine;
+  let renderedLineIndexes: number[] | undefined;
+  let contents = file.contents;
+  if (isWindowedHighlight) {
+    const sourceLines = lines ?? linesFromFileContents(file.contents);
+    windowEndLine = Math.min(startingLine + totalLines, sourceLines.length);
+    if (hiddenLineRanges != null && hiddenLineRanges.length > 0) {
+      renderedLineIndexes = [];
+      const renderedLines: string[] = [];
+      let low = 0;
+      let high = hiddenLineRanges.length;
+      while (low < high) {
+        const middle = low + ((high - low) >> 1);
+        if (hiddenLineRanges[middle].endLine < startingLine) {
+          low = middle + 1;
+        } else {
+          high = middle;
+        }
+      }
+      let foldedRangeIndex = low;
+      for (let lineIndex = startingLine; lineIndex < windowEndLine; ) {
+        while (hiddenLineRanges[foldedRangeIndex]?.endLine < lineIndex) {
+          foldedRangeIndex++;
+        }
+        const foldedRange = hiddenLineRanges[foldedRangeIndex];
+        if (foldedRange != null && lineIndex >= foldedRange.startLine) {
+          lineIndex = foldedRange.endLine + 1;
+          foldedRangeIndex++;
+          continue;
+        }
+        renderedLineIndexes.push(lineIndex);
+        renderedLines.push(sourceLines[lineIndex] ?? '');
+        lineIndex++;
+      }
+      contents = renderedLines.join('');
+    } else {
+      contents = sourceLines.slice(startingLine, windowEndLine).join('');
+    }
+  }
   const { state, transformers } =
     createTransformerWithState(useTokenTransformer);
   const lang = forcePlainText
@@ -53,11 +93,18 @@ export function renderFileWithHighlighter(
     theme,
     highlighter,
   });
-  state.lineInfo = (shikiLineNumber: number) => ({
-    type: 'context',
-    lineIndex: shikiLineNumber - 1 + startingLine,
-    lineNumber: shikiLineNumber + startingLine,
-  });
+  state.lineInfo = (shikiLineNumber: number) => {
+    const lineIndex =
+      renderedLineIndexes?.[shikiLineNumber - 1] ??
+      (renderedLineIndexes == null
+        ? shikiLineNumber - 1 + startingLine
+        : windowEndLine);
+    return {
+      type: 'context',
+      lineIndex,
+      lineNumber: lineIndex + 1,
+    };
+  };
   // tokenizeTimeLimit: 0 disables shiki's silent 500ms-per-line tokenization
   // abort. When it trips (slow devices, cold JS-regex-engine compile), the
   // rest of the line collapses to the enclosing scope's color — and since
@@ -87,24 +134,22 @@ export function renderFileWithHighlighter(
     };
   })();
   const highlightedLines = getLineNodes(
-    highlighter.codeToHast(
-      normalizeHighlightLineEndings(
-        isWindowedHighlight
-          ? extractWindowedFileContent(
-              lines ?? linesFromFileContents(file.contents),
-              startingLine,
-              totalLines
-            )
-          : file.contents
-      ),
-      hastConfig
-    )
+    highlighter.codeToHast(normalizeHighlightLineEndings(contents), hastConfig)
   );
 
   // Create sparse array for windowed rendering
   const code = isWindowedHighlight ? new Array(startingLine) : highlightedLines;
   if (isWindowedHighlight) {
-    appendItems(code, highlightedLines);
+    if (renderedLineIndexes == null) {
+      appendItems(code, highlightedLines);
+    } else {
+      for (let index = 0; index < renderedLineIndexes.length; index++) {
+        const line = highlightedLines[index];
+        if (line != null) {
+          code[renderedLineIndexes[index]] = line;
+        }
+      }
+    }
   }
 
   return { code, themeStyles, baseThemeType };
@@ -115,16 +160,4 @@ export function renderFileWithHighlighter(
 // model while the original document retains its line endings.
 function normalizeHighlightLineEndings(contents: string): string {
   return contents.replace(/\r(?!\n)/g, '\n');
-}
-
-function extractWindowedFileContent(
-  lines: string[],
-  startingLine: number,
-  totalLines: number
-): string {
-  if (lines.length === 0) {
-    return '';
-  }
-  const endLine = Math.min(startingLine + totalLines, lines.length);
-  return lines.slice(startingLine, endLine).join('');
 }

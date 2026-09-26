@@ -5,6 +5,7 @@ import type {
   FileDiffMetadata,
   Hunk,
   LineAnnotation,
+  LineRange,
   SelectionSide,
 } from '../types';
 import type { Editor, EditorOptions } from './editor';
@@ -193,6 +194,8 @@ export interface EditorViewportState {
 
 export interface EditorViewState {
   selections?: EditorSelection[];
+  /** Active indentation folds, using zero-based document lines. */
+  foldRanges?: LineRange[];
   view?: EditorViewportState;
 }
 

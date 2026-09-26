@@ -14,6 +14,7 @@ import {
 } from '../highlighter/shared_highlighter';
 import { areThemesAttached } from '../highlighter/themes/areThemesAttached';
 import { hasResolvedThemes } from '../highlighter/themes/hasResolvedThemes';
+import type { FoldManager } from '../managers/FoldManager';
 import type {
   BaseCodeOptions,
   DiffsHighlighter,
@@ -21,6 +22,7 @@ import type {
   FileHeaderRenderMode,
   HighlightedToken,
   LineAnnotation,
+  LineRange,
   RenderedFileASTCache,
   RenderFileOptions,
   RenderFileResult,
@@ -37,6 +39,10 @@ import { createAnnotationElement } from '../utils/createAnnotationElement';
 import { createContentColumn } from '../utils/createContentColumn';
 import { createFileHeaderElement } from '../utils/createFileHeaderElement';
 import { createPreElement } from '../utils/createPreElement';
+import {
+  createFoldIndicatorElement,
+  createFoldToggleElement,
+} from '../utils/foldControls';
 import { getFiletypeFromFileName } from '../utils/getFiletypeFromFileName';
 import { getHighlighterOptions } from '../utils/getHighlighterOptions';
 import { getLineAnnotationName } from '../utils/getLineAnnotationName';
@@ -71,6 +77,7 @@ interface GetRenderOptionsReturn {
 interface PendingHighlightResult extends RenderFileResult {
   file: FileContents;
   highlighted: boolean;
+  renderRange?: RenderRange;
 }
 
 interface FileRenderCache extends RenderedFileASTCache {
@@ -131,6 +138,10 @@ export class FileRenderer<LAnnotation = undefined> {
 
   private computedLang: SupportedLanguages = 'text';
   private lineAnnotations: AnnotationLineMap<LAnnotation> = {};
+  private foldRanges: LineRange[] = [];
+  // Owns fold candidates and collapsed-fold state for read-only rendering.
+  // Shared by the owning File component, which routes toggles through it.
+  private foldManager: FoldManager | undefined;
   private lineCache: LineCache | undefined;
   private pendingStructuralRows: Map<number, HASTElement> | undefined;
   private textDocumentCache = new WeakMap<
@@ -181,6 +192,31 @@ export class FileRenderer<LAnnotation = undefined> {
       this.lineAnnotations[annotation.lineNumber] = arr;
       arr.push(annotation);
     }
+  }
+
+  public setFoldRanges(ranges: LineRange[]): void {
+    this.foldRanges = ranges;
+    if (this.renderCache?.highlighted === false) {
+      this.renderCache.result = undefined;
+      this.renderCache.renderRange = undefined;
+    }
+  }
+
+  public setFoldManager(foldManager: FoldManager): void {
+    this.foldManager = foldManager;
+  }
+
+  /**
+   * Whether rendered output should include fold controls: a fold manager is
+   * present, the folding option is on, and no editor session is active (an
+   * attached editor renders its own controls against its live document).
+   */
+  public showsFoldControls(): boolean {
+    return (
+      this.foldManager != null &&
+      this.options.folding !== false &&
+      !this.editSessionActive
+    );
   }
 
   public cleanUp(): void {
@@ -321,6 +357,7 @@ export class FileRenderer<LAnnotation = undefined> {
     }
     this.highlighter = undefined;
     this.workerManager?.cleanUpTasks(this);
+    this.foldRanges = [];
     this.file = undefined;
   }
 
@@ -710,7 +747,7 @@ export class FileRenderer<LAnnotation = undefined> {
       this.renderCache = {
         ...readyResult,
         file,
-        renderRange: undefined,
+        renderRange: readyResult.renderRange,
       };
       forceHighlight = false;
     }
@@ -765,7 +802,8 @@ export class FileRenderer<LAnnotation = undefined> {
             file,
             renderRange.startingLine,
             renderRange.totalLines,
-            lines
+            lines,
+            this.foldRanges
           );
         }
         this.renderCache.renderRange = renderRange;
@@ -797,20 +835,23 @@ export class FileRenderer<LAnnotation = undefined> {
         hasThemes &&
         (forceHighlight ||
           forcePlainText ||
+          (!this.renderCache.highlighted && newRenderRange) ||
           (!this.renderCache.highlighted && canHighlight) ||
           this.renderCache.result == null)
       ) {
+        const renderedPlainText = forcePlainText || !hasLangs;
         const { result, options } = this.renderFileWithHighlighter(
           file,
           this.highlighter,
-          forcePlainText || !hasLangs
+          renderedPlainText,
+          renderedPlainText ? renderRange : undefined
         );
         this.renderCache = {
           file,
           options,
           highlighted: canHighlight,
           result,
-          renderRange: undefined,
+          renderRange: renderedPlainText ? renderRange : undefined,
         };
       }
 
@@ -818,9 +859,17 @@ export class FileRenderer<LAnnotation = undefined> {
       // process which will involve initializing the highlighter with new themes
       // and languages
       if (!hasThemes || (!forcePlainText && !hasLangs)) {
-        void this.asyncHighlight(file).then(({ result, options }) => {
-          this.applyHighlightResult(file, result, options, !forcePlainText);
-        });
+        void this.asyncHighlight(file, renderRange).then(
+          ({ result, options }) => {
+            this.applyHighlightResult(
+              file,
+              result,
+              options,
+              !forcePlainText,
+              renderRange
+            );
+          }
+        );
       }
     }
 
@@ -838,16 +887,19 @@ export class FileRenderer<LAnnotation = undefined> {
     renderRange: RenderRange = DEFAULT_RENDER_RANGE
   ): Promise<FileRenderResult> {
     this.file = file;
-    const { result } = await this.asyncHighlight(file);
+    const { result } = await this.asyncHighlight(file, renderRange);
     return this.processFileResult(file, renderRange, result);
   }
 
-  private async asyncHighlight(file: FileContents): Promise<RenderFileResult> {
+  private async asyncHighlight(
+    file: FileContents,
+    renderRange?: RenderRange
+  ): Promise<RenderFileResult> {
     const lines = this.getOrCreateLineCache(file);
-    const forcePlainText = isFileMassive(
-      lines.length,
-      this.getTokenizeMaxLength()
-    );
+    const forcePlainText =
+      file.contents.length === 0 ||
+      isFilePlainText(file) ||
+      isFileMassive(lines.length, this.getTokenizeMaxLength());
     this.computedLang = forcePlainText
       ? 'text'
       : (file.lang ?? getFiletypeFromFileName(file.name));
@@ -865,18 +917,24 @@ export class FileRenderer<LAnnotation = undefined> {
     return this.renderFileWithHighlighter(
       file,
       this.highlighter,
-      forcePlainText
+      forcePlainText,
+      forcePlainText ? renderRange : undefined
     );
   }
 
   private renderFileWithHighlighter(
     file: FileContents,
     highlighter: DiffsHighlighter,
-    forcePlainText = false
+    forcePlainText = false,
+    renderRange?: RenderRange
   ): RenderFileResult {
     const { options } = this.getRenderOptions(file);
     const result = renderFileWithHighlighter(file, highlighter, options, {
       forcePlainText,
+      startingLine: renderRange?.startingLine,
+      totalLines: renderRange?.totalLines,
+      lines: renderRange == null ? undefined : this.getOrCreateLineCache(file),
+      hiddenLineRanges: renderRange == null ? undefined : this.foldRanges,
     });
     return { result, options };
   }
@@ -888,6 +946,10 @@ export class FileRenderer<LAnnotation = undefined> {
   ): FileRenderResult {
     const totalLines = this.getLineCount(file);
     const { disableFileHeader = false } = this.options;
+    const foldManager = this.showsFoldControls() ? this.foldManager : undefined;
+    const foldableRangesByStart = foldManager?.getFoldableRangesByStart(
+      this.getOrCreateLineCache(file)
+    );
     const contentArray: ElementContent[] = [];
     const gutter = createGutterWrapper();
     const endLine = Math.min(
@@ -914,11 +976,35 @@ export class FileRenderer<LAnnotation = undefined> {
       rowCount++;
     }
 
+    let low = 0;
+    let high = this.foldRanges.length;
+    while (low < high) {
+      const middle = low + ((high - low) >> 1);
+      if (this.foldRanges[middle].endLine < renderRange.startingLine) {
+        low = middle + 1;
+      } else {
+        high = middle;
+      }
+    }
+    let foldedRangeIndex = low;
     for (
       let lineIndex = renderRange.startingLine;
       lineIndex < endLine;
       lineIndex++
     ) {
+      while (this.foldRanges[foldedRangeIndex]?.endLine < lineIndex) {
+        foldedRangeIndex++;
+      }
+      const foldedRange = this.foldRanges[foldedRangeIndex];
+      if (
+        foldedRange !== undefined &&
+        lineIndex >= foldedRange.startLine &&
+        lineIndex <= foldedRange.endLine
+      ) {
+        lineIndex = foldedRange.endLine;
+        continue;
+      }
+
       const lineNumber = lineIndex + 1;
 
       // Sparse array - directly indexed by lineIndex
@@ -933,11 +1019,34 @@ export class FileRenderer<LAnnotation = undefined> {
         throw new Error(message);
       }
 
-      // Add gutter line number
-      gutter.children.push(
-        createGutterItem('context', lineNumber, `${lineIndex}`)
+      // Add gutter line number, with a fold toggle on foldable headers
+      const gutterItem = createGutterItem(
+        'context',
+        lineNumber,
+        `${lineIndex}`
       );
-      contentArray.push(line);
+      const foldable = foldableRangesByStart?.get(lineIndex) != null;
+      const isFoldedHeader =
+        foldable && foldManager?.isFolded(lineIndex) === true;
+      if (foldable) {
+        gutterItem.children.push(
+          createFoldToggleElement(lineIndex, isFoldedHeader)
+        );
+      }
+      gutter.children.push(gutterItem);
+      // The cached HAST row is shared across renders; clone before appending
+      // the folded-block indicator so unfolding never leaves one behind.
+      contentArray.push(
+        isFoldedHeader && line.type === 'element'
+          ? {
+              ...line,
+              children: [
+                ...line.children,
+                createFoldIndicatorElement(lineIndex),
+              ],
+            }
+          : line
+      );
       rowCount++;
 
       // Check annotations using ACTUAL line number from file
@@ -997,7 +1106,10 @@ export class FileRenderer<LAnnotation = undefined> {
       createHastElement({
         tagName: 'code',
         children: this.renderCodeAST(result),
-        properties: { 'data-code': '' },
+        properties: {
+          'data-code': '',
+          'data-folding': this.showsFoldControls() ? '' : undefined,
+        },
       })
     );
     return { ...result.preAST, children };
@@ -1046,19 +1158,21 @@ export class FileRenderer<LAnnotation = undefined> {
     file: FileContents,
     result: ThemedFileResult,
     options: RenderFileOptions,
-    highlighted = true
+    highlighted = true,
+    renderRange?: RenderRange
   ): void {
     if (this.editSessionActive) {
       return;
     }
-    this.applyHighlightResult(file, result, options, highlighted);
+    this.applyHighlightResult(file, result, options, highlighted, renderRange);
   }
 
   private applyHighlightResult(
     file: FileContents,
     result: ThemedFileResult,
     options: RenderFileOptions,
-    highlighted = true
+    highlighted = true,
+    renderRange?: RenderRange
   ): void {
     const { file: currentFile, renderCache } = this;
     if (
@@ -1087,6 +1201,7 @@ export class FileRenderer<LAnnotation = undefined> {
       options,
       highlighted,
       result,
+      renderRange: highlighted ? undefined : renderRange,
     };
     this.onRenderUpdate?.();
   }
