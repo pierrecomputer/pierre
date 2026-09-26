@@ -13,11 +13,12 @@ makes our themes compatible with Shiki, Visual Studio Code, Cursor, and Zed.
 | Zed                | [Zed Extensions](https://zed.dev/extensions/pierre-theme)                                              |
 | Shiki              | [Theme repository](https://github.com/pierrecomputer/theme/tree/main/themes)                           |
 
-While you can use any Shiki theme with Pierre Diffs by passing the theme name to
-the `theme` option, you can also create and register custom themes compatible
-with Shiki and Visual Studio Code. We recommend using our themes as a starting
-point for your own custom themes—head to our [themes documentation](/theme) to
-get started.
+Pass a bundled theme name to the `theme` option, or use
+[`registerCustomTheme`](#utilities-registercustomtheme) to load a custom
+TextMate theme for Shiki, a Zed-compatible Highlights theme or family, or a
+portable `DiffsTheme`. For Zed themes, also set
+`preferredHighlighter: 'highlights'`. Our [themes documentation](/theme)
+explains how to build custom themes from a shared palette.
 
 <Button asChild>
   <Link

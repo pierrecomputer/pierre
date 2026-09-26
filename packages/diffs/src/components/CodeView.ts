@@ -17,10 +17,9 @@ import type {
   EditorType,
 } from '../editor/types';
 import {
-  isHighlighterLoaded,
+  getHighlighterIfLoaded,
   preloadHighlighter,
 } from '../highlighter/shared_highlighter';
-import { areThemesAttached } from '../highlighter/themes/areThemesAttached';
 import type { SelectionWriteOptions } from '../managers/InteractionManager';
 import {
   dequeueRender,
@@ -38,6 +37,7 @@ import type {
   CodeViewScrollBehavior,
   CodeViewScrollTarget,
   DiffsThemeNames,
+  HighlighterTypes,
   HunkSeparators,
   PendingCodeViewLayoutReset,
   SelectedLineRange,
@@ -57,6 +57,7 @@ import { createWindowFromScrollPosition } from '../utils/createWindowFromScrollP
 import { getThemes } from '../utils/getThemes';
 import { isStyleNode } from '../utils/isStyleNode';
 import { prefersReducedMotion } from '../utils/prefersReducedMotion';
+import { resolvePreferredHighlighter } from '../utils/resolvePreferredHighlighter';
 import { roundToDevicePixel } from '../utils/roundToDevicePixel';
 import type { WorkerPoolManager } from '../worker';
 import type { FileEditCompleteEvent, FileOptions } from './File';
@@ -824,6 +825,7 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
   private options: CodeViewOptions<LAnnotation, Caret>;
   private workerManager: WorkerPoolManager | undefined;
   private isReadySubscription: (() => void) | undefined;
+  private pendingHighlighterType: HighlighterTypes | undefined;
   private pendingHighlighterTheme: DiffsThemeNames | ThemesType | undefined;
   private isContainerManaged: boolean;
 
@@ -1889,28 +1891,42 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
     this.isReadySubscription();
     this.isReadySubscription = undefined;
     this.pendingHighlighterTheme = undefined;
+    this.pendingHighlighterType = undefined;
   }
 
   private isSharedHighlighterReady(): boolean {
+    const preferredHighlighter = resolvePreferredHighlighter(
+      this.workerManager,
+      this.options
+    );
     const theme =
       this.workerManager?.getFileRenderOptions().theme ??
       this.options.theme ??
       DEFAULT_THEMES;
-    if (isHighlighterLoaded() && areThemesAttached(theme)) {
+    if (
+      getHighlighterIfLoaded({
+        theme,
+        preferredHighlighter,
+      }) != null
+    ) {
       this.clearReadySubscription();
       return true;
     }
-    // A pending request for an obsolete theme must not block the current one.
-    if (!areThemesEqual(this.pendingHighlighterTheme, theme)) {
+    // An obsolete theme or backend request must not block the current one.
+    if (
+      !areThemesEqual(this.pendingHighlighterTheme, theme) ||
+      this.pendingHighlighterType !== preferredHighlighter
+    ) {
       this.clearReadySubscription();
     }
     this.isReadySubscription ??= (() => {
       this.pendingHighlighterTheme = theme;
+      this.pendingHighlighterType = preferredHighlighter;
       let cancelled = false;
       void preloadHighlighter({
         themes: getThemes(theme),
         langs: [],
-        preferredHighlighter: this.options.preferredHighlighter,
+        preferredHighlighter,
       }).then(
         () => {
           if (cancelled) {

@@ -144,6 +144,16 @@ by registering them before rendering:
 
 <DocsCodeExample {...registerTheme} />
 
+`registerCustomTheme(name, loader, type = 'textmate')` accepts `'textmate'` for
+Shiki, `'zed'` for Highlights, and `'diffs'` for portable `DiffsTheme` objects.
+A Zed family uses its first theme; return another member from the loader to
+select it. The registered name replaces the Zed theme's display name.
+
+Use `preferredHighlighter: 'highlights'` with a Zed theme. Register one loader
+per name and type. For a portable `DiffsTheme` with both syntax palettes,
+register its loader with `'diffs'`. `registerCustomCSSVariableTheme` does this
+automatically.
+
 Then reference your theme in any component:
 
 <DocsCodeExample {...useInComponent} />

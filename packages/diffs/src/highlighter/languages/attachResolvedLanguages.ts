@@ -2,40 +2,28 @@ import type { DiffsHighlighter } from '../../types';
 import type { ResolvedLanguage } from '../../worker';
 import { AttachedLanguages, ResolvedLanguages } from './constants';
 
+/**
+ * Record resolved grammars in the shared language cache and attach them to a
+ * highlighter. Backends without grammar support (Highlights bundles its
+ * lexers) are left untouched, and so are the caches, which only describe
+ * grammars some Shiki instance has attached.
+ */
 export function attachResolvedLanguages(
   resolvedLanguages: ResolvedLanguage | ResolvedLanguage[],
   highlighter: DiffsHighlighter
 ): void {
-  resolvedLanguages = Array.isArray(resolvedLanguages)
+  if (highlighter.attachLanguages === undefined) return;
+  for (const resolvedLang of Array.isArray(resolvedLanguages)
     ? resolvedLanguages
-    : [resolvedLanguages];
-
-  for (const resolvedLang of resolvedLanguages) {
-    if (AttachedLanguages.has(resolvedLang.name)) continue;
+    : [resolvedLanguages]) {
+    // The first resolution of a name wins so every instance and worker
+    // attaches the same grammar data for it.
     let lang = ResolvedLanguages.get(resolvedLang.name);
     if (lang == null) {
       lang = resolvedLang;
       ResolvedLanguages.set(resolvedLang.name, lang);
     }
-    const grammar = lang.data.find(
-      (grammar) =>
-        grammar.name === lang.name ||
-        grammar.aliases?.includes(lang.name) === true
-    );
-    if (grammar == null) {
-      throw new Error(
-        `attachResolvedLanguages: No returned grammar declares "${lang.name}" as its name or an alias.`
-      );
-    }
-    highlighter.loadLanguageSync(lang.data);
-    // Shiki can skip an already-loaded grammar, including any newly added aliases.
-    try {
-      highlighter.getLanguage(lang.name);
-    } catch {
-      throw new Error(
-        `attachResolvedLanguages: "${grammar.name}" is already loaded without alias "${lang.name}". Load the alias first or give the grammar a unique name.`
-      );
-    }
+    highlighter.attachLanguages([lang]);
     AttachedLanguages.add(lang.name);
   }
 }

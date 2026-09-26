@@ -8,6 +8,7 @@ import {
   type FileDiffOptions,
   type FileEditCompleteEvent,
   type FileOptions,
+  type HighlighterTypes,
   type LineAnnotation,
   type SelectedLineRange,
 } from '@pierre/diffs';
@@ -28,6 +29,7 @@ import {
 import type { PreloadFileDiffResult } from '@pierre/diffs/ssr';
 import {
   IconBrandGithub,
+  IconBrush,
   IconCheck,
   IconChevronSm,
   IconCiWarning,
@@ -53,7 +55,14 @@ import {
   IconXSquircle,
 } from '@pierre/icons';
 import { useSearchParams } from 'next/navigation';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  Fragment,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { toast } from 'sonner';
 
 import { CodestralIcon } from '../_edit/CodestralIcon';
@@ -74,6 +83,7 @@ import {
 import { EditSessionButtons } from './PlaygroundEditButtons';
 import { PlaygroundVirtualizerElementView } from './PlaygroundVirtualizerElementView';
 import { PlaygroundVirtualizerView } from './PlaygroundVirtualizerView';
+import { PlaygroundWorkerPool } from './PlaygroundWorkerPool';
 import type {
   HunkSeparatorValue,
   LineHoverHighlight,
@@ -83,6 +93,7 @@ import type {
 import {
   DARK_THEMES,
   DEFAULTS,
+  HIGHLIGHTERS,
   LIGHT_THEMES,
   parsePlaygroundSearchParams,
 } from './searchParams';
@@ -96,6 +107,12 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { ToggleSwitch } from '@/components/ui/toggle-switch';
+
+const HIGHLIGHTER_LABELS: Record<HighlighterTypes, string> = {
+  'shiki-js': 'Shiki JS',
+  'shiki-wasm': 'Shiki WASM',
+  highlights: 'Highlights',
+};
 
 const LINE_DIFF_OPTIONS = [
   { value: 'word-alt', label: 'Word-Alt' },
@@ -176,6 +193,7 @@ export type SharedRenderOptions = Pick<
   | 'overflow'
   | 'themeType'
   | 'theme'
+  | 'preferredHighlighter'
 > & {
   // The full `hunkSeparators` type includes an LAnnotation-typed render
   // callback; the playground only uses the string presets, so narrow it here to
@@ -191,6 +209,8 @@ interface PlaygroundClientProps {
 }
 
 interface PlaygroundControlsContentProps {
+  highlighter: HighlighterTypes;
+  setHighlighter: (value: HighlighterTypes) => void;
   viewMode: ViewMode;
   setViewMode: (v: ViewMode) => void;
   diffStyle: 'split' | 'unified';
@@ -236,6 +256,8 @@ interface PlaygroundControlsContentProps {
 }
 
 function PlaygroundControlsContent({
+  highlighter,
+  setHighlighter,
   viewMode,
   setViewMode,
   diffStyle,
@@ -306,6 +328,34 @@ function PlaygroundControlsContent({
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-3">
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="outline"
+              aria-label="Highlighter"
+              className="justify-start px-3"
+            >
+              <IconBrush aria-hidden="true" />
+              {HIGHLIGHTER_LABELS[highlighter]}
+              <IconChevronSm className="text-muted-foreground ml-auto" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent
+            align="start"
+            className={dropdownContentClassName}
+          >
+            {HIGHLIGHTERS.map((value) => (
+              <DropdownMenuItem
+                key={value}
+                selected={highlighter === value}
+                onClick={() => setHighlighter(value)}
+              >
+                {HIGHLIGHTER_LABELS[value]}
+                {highlighter === value && <IconCheck className="ml-auto" />}
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="outline" className="justify-start px-3">
@@ -677,6 +727,30 @@ function PlaygroundControlsContent({
 
 export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
   const searchParams = useSearchParams();
+  const [highlighter, setHighlighter] = useState<HighlighterTypes>(
+    () =>
+      parsePlaygroundSearchParams((key) => searchParams.get(key)).highlighter
+  );
+  return (
+    <PlaygroundWorkerPool highlighter={highlighter}>
+      <PlaygroundContent
+        prerenderedDiff={prerenderedDiff}
+        highlighter={highlighter}
+        setHighlighter={setHighlighter}
+      />
+    </PlaygroundWorkerPool>
+  );
+}
+
+function PlaygroundContent({
+  prerenderedDiff,
+  highlighter,
+  setHighlighter,
+}: PlaygroundClientProps & {
+  highlighter: HighlighterTypes;
+  setHighlighter: (value: HighlighterTypes) => void;
+}) {
+  const searchParams = useSearchParams();
 
   // The app-wide color scheme resolved by @pierre/theming (the shared theme
   // controller). The diff's "system" mode must follow this so the editor stays
@@ -994,6 +1068,9 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
   const buildUrl = useCallback(() => {
     const params = new URLSearchParams();
 
+    if (highlighter !== DEFAULTS.highlighter)
+      params.set('highlighter', highlighter);
+
     // Only add non-default values to keep URL clean
     if (viewMode !== DEFAULTS.viewMode) params.set('view', viewMode);
     if (diffStyle !== DEFAULTS.diffStyle) params.set('layout', diffStyle);
@@ -1044,6 +1121,7 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
       ? `/playground?${queryString}`
       : '/playground';
   }, [
+    highlighter,
     viewMode,
     diffStyle,
     colorMode,
@@ -1230,11 +1308,16 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
   const [usePrerenderedHTML, setUsePrerenderedHTML] = useState(
     () => viewMode === 'diff'
   );
-  if (usePrerenderedHTML && viewMode !== 'diff') {
+  if (
+    usePrerenderedHTML &&
+    (viewMode !== 'diff' || highlighter !== urlState.highlighter)
+  ) {
     setUsePrerenderedHTML(false);
   }
 
   const controlsContentProps = {
+    highlighter,
+    setHighlighter,
     viewMode,
     setViewMode: setViewModeAndResetEditor,
     diffStyle,
@@ -1290,6 +1373,7 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
   // edit-specific options are layered on per component below.
   const renderOptions = useMemo<SharedRenderOptions>(
     () => ({
+      preferredHighlighter: highlighter,
       diffStyle,
       diffIndicators,
       lineDiffType,
@@ -1302,6 +1386,7 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
       theme: { dark: selectedDarkTheme, light: selectedLightTheme },
     }),
     [
+      highlighter,
       diffStyle,
       diffIndicators,
       lineDiffType,
@@ -1564,38 +1649,42 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
           </div>
         </div>
       )}
-      {viewMode === 'diff' ? (
-        fileDiff
-      ) : viewMode === 'file' ? (
-        file
-      ) : viewMode === 'virtualizer' ? (
-        <PlaygroundVirtualizerView
-          diffs={VIRTUALIZER_FILE_DIFFS}
-          options={renderOptions}
-          enableLineSelection={enableLineSelection}
-          enableGutterComments={enableGutterUtility}
-          showAnnotations={showAnnotations}
-          editPrediction={editPrediction}
-        />
-      ) : viewMode === 'virtualizer-element' ? (
-        <PlaygroundVirtualizerElementView
-          diffs={VIRTUALIZER_FILE_DIFFS}
-          options={renderOptions}
-          enableLineSelection={enableLineSelection}
-          enableGutterComments={enableGutterUtility}
-          showAnnotations={showAnnotations}
-          editPrediction={editPrediction}
-        />
-      ) : (
-        <PlaygroundCodeView
-          items={CODE_VIEW_ITEMS}
-          options={codeViewOptions}
-          enableLineSelection={enableLineSelection}
-          enableGutterComments={enableGutterUtility}
-          showAnnotations={showAnnotations}
-          editPrediction={editPrediction}
-        />
-      )}
+      <Fragment
+        key={`${highlighter}:${workerPool == null ? 'main' : 'workers'}`}
+      >
+        {viewMode === 'diff' ? (
+          fileDiff
+        ) : viewMode === 'file' ? (
+          file
+        ) : viewMode === 'virtualizer' ? (
+          <PlaygroundVirtualizerView
+            diffs={VIRTUALIZER_FILE_DIFFS}
+            options={renderOptions}
+            enableLineSelection={enableLineSelection}
+            enableGutterComments={enableGutterUtility}
+            showAnnotations={showAnnotations}
+            editPrediction={editPrediction}
+          />
+        ) : viewMode === 'virtualizer-element' ? (
+          <PlaygroundVirtualizerElementView
+            diffs={VIRTUALIZER_FILE_DIFFS}
+            options={renderOptions}
+            enableLineSelection={enableLineSelection}
+            enableGutterComments={enableGutterUtility}
+            showAnnotations={showAnnotations}
+            editPrediction={editPrediction}
+          />
+        ) : (
+          <PlaygroundCodeView
+            items={CODE_VIEW_ITEMS}
+            options={codeViewOptions}
+            enableLineSelection={enableLineSelection}
+            enableGutterComments={enableGutterUtility}
+            showAnnotations={showAnnotations}
+            editPrediction={editPrediction}
+          />
+        )}
+      </Fragment>
     </div>
   );
 }

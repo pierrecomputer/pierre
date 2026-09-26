@@ -1,9 +1,6 @@
-import { createHighlighterCore } from 'shiki/core';
-import { createJavaScriptRegexEngine } from 'shiki/engine/javascript';
-import { createOnigurumaEngine } from 'shiki/engine/oniguruma';
-
 import { DEFAULT_THEMES } from '../constants';
 import { attachResolvedLanguages } from '../highlighter/languages/attachResolvedLanguages';
+import { createHighlighter } from '../highlighter/shared_highlighter';
 import { attachResolvedThemes } from '../highlighter/themes/attachResolvedThemes';
 import type {
   DiffsHighlighter,
@@ -42,7 +39,7 @@ let renderOptions: WorkerRenderingOptions = {
 const EMPTY_REGEXP = /(?:)/;
 
 self.addEventListener('error', (event) => {
-  console.error('[Shiki Worker] Unhandled error:', event.error);
+  console.error('[Diffs Worker] Unhandled error:', event.error);
 });
 
 // Handle incoming messages from the main thread
@@ -186,14 +183,7 @@ async function handleRenderDiff({
 function getHighlighter(
   preferredHighlighter: HighlighterTypes = 'shiki-js'
 ): Promise<DiffsHighlighter> | DiffsHighlighter {
-  highlighter ??= createHighlighterCore({
-    themes: [],
-    langs: [],
-    engine:
-      preferredHighlighter === 'shiki-wasm'
-        ? createOnigurumaEngine(import('shiki/wasm'))
-        : createJavaScriptRegexEngine(),
-  }) as Promise<DiffsHighlighter>;
+  highlighter ??= createHighlighter({ preferredHighlighter });
   return highlighter;
 }
 

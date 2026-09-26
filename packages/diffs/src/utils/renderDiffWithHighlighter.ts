@@ -2,10 +2,9 @@ import { type ChangeObject, diffChars, diffWordsWithSpace } from 'diff';
 
 import { DEFAULT_COLLAPSED_CONTEXT_THRESHOLD } from '../constants';
 import type {
-  CodeToHastOptions,
+  CodeToTokensOptions,
   DecorationItem,
   DiffsHighlighter,
-  DiffsThemeNames,
   FileContents,
   FileDiffMetadata,
   ForceDiffPlainTextOptions,
@@ -13,21 +12,21 @@ import type {
   LineInfo,
   RenderDiffFilesResult,
   RenderDiffOptions,
+  SharedRenderState,
   SupportedLanguages,
   ThemedDiffResult,
 } from '../types';
 import { appendItems } from './appendItems';
 import { cleanLastNewline } from './cleanLastNewline';
-import { createTransformerWithState } from './createTransformerWithState';
 import { formatCSSVariablePrefix } from './formatCSSVariablePrefix';
 import { getFiletypeFromFileName } from './getFiletypeFromFileName';
 import { getHighlighterThemeStyles } from './getHighlighterThemeStyles';
-import { getLineNodes } from './getLineNodes';
 import { iterateOverDiff } from './iterateOverDiff';
 import {
   createDiffSpanDecoration,
   pushOrJoinSpan,
 } from './parseDiffDecorations';
+import { renderTokenLines } from './renderTokenLines';
 
 const DEFAULT_PLAIN_TEXT_OPTIONS: ForceDiffPlainTextOptions = {
   forcePlainText: false,
@@ -483,63 +482,55 @@ function renderTwoFiles({
     languageOverride ?? getFiletypeFromFileName(deletionFile.name);
   const additionLang =
     languageOverride ?? getFiletypeFromFileName(additionFile.name);
-  const { state, transformers } = createTransformerWithState(
-    options.useTokenTransformer
-  );
+  const state: SharedRenderState = { lineInfo: [] };
   // tokenizeTimeLimit: 0 — never trade silently-wrong token colors for
   // latency; see renderFileWithHighlighter for the full rationale.
-  const hastConfig: CodeToHastOptions<DiffsThemeNames> = (() => {
-    return typeof themeOrThemes === 'string'
-      ? {
-          ...options,
-          // language will be overwritten for each highlight
-          lang: 'text',
-          theme: themeOrThemes,
-          transformers,
-          decorations: undefined,
-          defaultColor: false,
-          cssVariablePrefix: formatCSSVariablePrefix('token'),
-          tokenizeTimeLimit: 0,
-        }
-      : {
-          ...options,
-          // language will be overwritten for each highlight
-          lang: 'text',
-          themes: themeOrThemes,
-          transformers,
-          decorations: undefined,
-          defaultColor: false,
-          cssVariablePrefix: formatCSSVariablePrefix('token'),
-          tokenizeTimeLimit: 0,
-        };
-  })();
+  const tokenOptions: CodeToTokensOptions = {
+    ...(typeof themeOrThemes === 'string'
+      ? { theme: themeOrThemes }
+      : { themes: themeOrThemes }),
+    // Each side may have a different language after a rename.
+    lang: 'text',
+    defaultColor: false,
+    cssVariablePrefix: formatCSSVariablePrefix('token'),
+    tokenizeMaxLineLength: options.tokenizeMaxLineLength,
+    tokenizeTimeLimit: 0,
+  };
 
   const deletionLines = (() => {
     if (deletionFile.contents === '') {
       return [];
     }
-    hastConfig.lang = deletionLang;
+    tokenOptions.lang = deletionLang;
     state.lineInfo = deletionInfo;
-    hastConfig.decorations = deletionDecorations;
-    return getLineNodes(
-      highlighter.codeToHast(
+    return renderTokenLines(
+      highlighter.codeToTokens(
         cleanLastNewline(deletionFile.contents),
-        hastConfig
-      )
+        tokenOptions
+      ).tokens,
+      {
+        state,
+        useTokenTransformer: options.useTokenTransformer,
+        decorations: deletionDecorations,
+      }
     );
   })();
   const additionLines = (() => {
     if (additionFile.contents === '') {
       return [];
     }
-    hastConfig.lang = additionLang;
-    hastConfig.decorations = additionDecorations;
+    tokenOptions.lang = additionLang;
     state.lineInfo = additionInfo;
-    return getLineNodes(
-      highlighter.codeToHast(
+    return renderTokenLines(
+      highlighter.codeToTokens(
         cleanLastNewline(additionFile.contents),
-        hastConfig
-      )
+        tokenOptions
+      ).tokens,
+      {
+        state,
+        useTokenTransformer: options.useTokenTransformer,
+        decorations: additionDecorations,
+      }
     );
   })();
 

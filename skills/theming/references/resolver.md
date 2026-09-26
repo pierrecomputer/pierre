@@ -33,3 +33,25 @@ This reference covers the resolver exports from `@pierre/theming`.
 
 Each loader returns a `ThemeLike` object or a module object with that value on
 `default`.
+
+## Fallback loading and normalization
+
+`createThemeResolver<TTheme>(options?)` accepts `ThemeResolverOptions<TTheme>`:
+
+```ts
+const resolver = createThemeResolver({
+  fallbackLoader: async (name) => {
+    const loader = bundledLoaders[name];
+    return loader === undefined ? undefined : loader();
+  },
+  normalizeTheme: (theme, name) => ({ ...theme, name }),
+});
+```
+
+Explicit registrations take precedence over `fallbackLoader`. A fallback may
+return a theme, a `{ default: theme }` module, or `undefined` for an unknown
+name. `normalizeTheme(theme, name)` can be synchronous or asynchronous and runs
+before successful loads enter the cache. Seeded values are already normalized.
+Concurrent calls share fallback loading and normalization; rejected loads can be
+retried. Clearing caches prevents an earlier in-flight load from repopulating
+them. The core resolver still imports no backend or bundled theme data.

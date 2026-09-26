@@ -1,7 +1,6 @@
 import { preloadFileDiff } from '@pierre/diffs/ssr';
 import { Suspense } from 'react';
 
-import { WorkerPoolContext } from '../_components/WorkerPoolContext';
 import { getPlaygroundPreloadOptions } from './constants';
 import { PlaygroundClient } from './PlaygroundClient';
 import { parsePlaygroundSearchParams } from './searchParams';
@@ -49,9 +48,7 @@ export default async function PlaygroundPage({
             </div>
           }
         >
-          <WorkerPoolContext>
-            <PlaygroundClient prerenderedDiff={prerenderedDiff} />
-          </WorkerPoolContext>
+          <PlaygroundClient prerenderedDiff={prerenderedDiff} />
         </Suspense>
       </main>
       <Footer />

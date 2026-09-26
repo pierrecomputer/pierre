@@ -3,8 +3,8 @@ import { normalizeThemeColors } from '@pierre/theming/color';
 import { DEFAULT_THEMES } from '../constants';
 import type {
   DiffsHighlighter,
+  DiffsTheme,
   DiffsThemeNames,
-  ThemeRegistrationResolved,
   ThemesType,
 } from '../types';
 import { formatCSSVariablePrefix } from './formatCSSVariablePrefix';
@@ -33,7 +33,7 @@ export function getHighlighterThemeStyles({
   let styles = '';
   if (typeof theme === 'string') {
     const themeData = highlighter.getTheme(theme);
-    const normalized = normalizeThemeColors(themeData);
+    const normalized = getThemeColors(themeData, highlighter);
     styles += `color:${normalized.fg};`;
     styles += `background-color:${normalized.bg};`;
     styles += `${formatCSSVariablePrefix('global')}fg:${normalized.fg};`;
@@ -41,18 +41,26 @@ export function getHighlighterThemeStyles({
     styles += getGitVariables(themeData, prefix);
   } else {
     let themeData = highlighter.getTheme(theme.dark);
-    let normalized = normalizeThemeColors(themeData);
+    let normalized = getThemeColors(themeData, highlighter);
     styles += `${formatCSSVariablePrefix('global')}dark:${normalized.fg};`;
     styles += `${formatCSSVariablePrefix('global')}dark-bg:${normalized.bg};`;
     styles += getGitVariables(themeData, 'dark');
 
     themeData = highlighter.getTheme(theme.light);
-    normalized = normalizeThemeColors(themeData);
+    normalized = getThemeColors(themeData, highlighter);
     styles += `${formatCSSVariablePrefix('global')}light:${normalized.fg};`;
     styles += `${formatCSSVariablePrefix('global')}light-bg:${normalized.bg};`;
     styles += getGitVariables(themeData, 'light');
   }
   return styles;
+}
+
+function getThemeColors(theme: DiffsTheme, highlighter: DiffsHighlighter) {
+  if (highlighter.name === 'highlights' && theme.zed?.cssVariables === true) {
+    const prefix = formatCSSVariablePrefix('token');
+    return { fg: `var(${prefix}foreground)`, bg: `var(${prefix}background)` };
+  }
+  return normalizeThemeColors(theme);
 }
 
 // Emits the diffs git-status CSS variables (addition/deletion/modified colors)
@@ -62,10 +70,7 @@ export function getHighlighterThemeStyles({
 // byte-identical to the pre-theming output. Adopting the gutter fallback for
 // diffs is a deliberate follow-up. A variable is omitted entirely when neither
 // source key is present, matching the previous behavior.
-function getGitVariables(
-  themeData: ThemeRegistrationResolved,
-  modePrefix?: string
-) {
+function getGitVariables(themeData: DiffsTheme, modePrefix?: string) {
   modePrefix = modePrefix != null ? `${modePrefix}-` : '';
   let styles = '';
   const additionGreen =

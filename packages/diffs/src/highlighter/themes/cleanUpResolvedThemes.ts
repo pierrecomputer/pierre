@@ -1,11 +1,11 @@
-import { AttachedThemes } from './constants';
-import { themeResolver } from './themeResolver';
+import type { HighlighterTypes } from '../../types';
+import { createDiffsThemeResolver } from './themeResolver';
 
-// Clears the resolved-theme cache (and any in-flight loads) plus the set of
-// themes attached to the highlighter. Registered loaders are intentionally
-// preserved, so previously registered custom/pierre/bundled themes can be
-// resolved again without re-registering.
-export function cleanUpResolvedThemes(): void {
-  themeResolver.clearResolvedThemes();
-  AttachedThemes.clear();
+/** Clear cached themes while preserving custom registrations for future instances. */
+export function cleanUpResolvedThemes(backend?: HighlighterTypes): void {
+  for (const name of backend === undefined
+    ? (['shiki-js', 'shiki-wasm', 'highlights'] as const)
+    : [backend]) {
+    createDiffsThemeResolver(name).clearResolvedThemes();
+  }
 }

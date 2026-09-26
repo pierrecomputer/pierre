@@ -85,7 +85,16 @@ This reference lists every export from `@pierre/diffs/worker`, every public
 
 ## Worker script entries
 
-| Import                                    | Purpose                                                    |
-| ----------------------------------------- | ---------------------------------------------------------- |
-| `@pierre/diffs/worker/worker.js`          | Supplies the module worker that uses package dependencies. |
-| `@pierre/diffs/worker/worker-portable.js` | Supplies a bundled module worker.                          |
+| Import                                    | Purpose                                                                          |
+| ----------------------------------------- | -------------------------------------------------------------------------------- |
+| `@pierre/diffs/worker/worker.js`          | Supplies the module worker that uses package dependencies.                       |
+| `@pierre/diffs/worker/worker-portable.js` | Supplies a single script with all highlighter backends and dependencies bundled. |
+
+For static hosting, copy `dist/worker/worker-portable.js` and start it with
+`new Worker(url)`. It also supports module workers and blob URLs, including VS
+Code webviews, without another bundling step. All backends are included in the
+download; only the selected backend is initialized. For lazy backend loading,
+use the regular worker entry with your bundler.
+
+The pool resolves themes and Shiki grammars on the main thread and sends them to
+the worker. Their catalogs are excluded from the portable script.

@@ -84,7 +84,10 @@ const LANGUAGE = getFiletypeFromFileName(HISTORY_DEMO_FILE.name);
 // is what the editor tokenizes edits with.
 function isLanguageReady(): boolean {
   return (
-    getHighlighterIfLoaded()?.getLoadedLanguages().includes(LANGUAGE) ?? false
+    getHighlighterIfLoaded({
+      preferredHighlighter: 'shiki-wasm',
+      lang: LANGUAGE,
+    }) != null
   );
 }
 

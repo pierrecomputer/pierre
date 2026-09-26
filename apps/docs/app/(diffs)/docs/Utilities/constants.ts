@@ -175,9 +175,8 @@ export const HELPER_REGISTER_CUSTOM_THEME: PreloadFileOptions<
     name: 'registerCustomTheme.ts',
     contents: `import { registerCustomTheme } from '@pierre/diffs';
 
-// Register a custom Shiki theme before using it.
-// The theme name you register must match the 'name' field
-// inside your theme JSON file.
+// Register themes before rendering.
+// TextMate themes must have a matching 'name' field.
 
 // Option 1: Dynamic import (recommended for code splitting)
 registerCustomTheme('my-custom-theme', () => import('./my-theme.json'));
@@ -200,8 +199,12 @@ registerCustomTheme('inline-theme', async () => ({
   ],
 }));
 
-// Once registered, use the theme name in your components:
-// <FileDiff options={{ theme: 'my-custom-theme' }} ... />`,
+// Option 3: A Zed-compatible Highlights theme or theme family
+registerCustomTheme('my-zed-theme', () => import('./my-zed-theme.json'), 'zed');
+
+// Use the registered name and the matching backend:
+// <FileDiff options={{ theme: 'my-custom-theme' }} ... />
+// <FileDiff options={{ theme: 'my-zed-theme', preferredHighlighter: 'highlights' }} ... />`,
   },
   options,
 };
@@ -241,7 +244,7 @@ export const HELPER_DISPOSE_HIGHLIGHTER: PreloadFileOptions<
     name: 'disposeHighlighter.ts',
     contents: `import { disposeHighlighter } from '@pierre/diffs';
 
-// Dispose the shared highlighter instance to free memory.
+// Dispose all shared highlighter instances to free memory.
 // This is useful when you're done rendering diffs and want
 // to clean up resources (e.g., in a single-page app when
 // navigating away from a diff view).
@@ -259,20 +262,19 @@ export const HELPER_GET_SHARED_HIGHLIGHTER: PreloadFileOptions<
 > = {
   file: {
     name: 'getSharedHighlighter.ts',
-    contents: `import { getSharedHighlighter, DiffsHighlighter } from '@pierre/diffs';
+    contents: `import { getSharedHighlighter } from '@pierre/diffs';
 
-// Get the shared Shiki highlighter instance.
-// This is the same instance used internally by all FileDiff
-// and File components. Useful if you need direct access to
-// Shiki for custom highlighting operations.
-//
-// The highlighter is initialized lazily - themes and languages
-// are loaded on demand as you render different files.
-const highlighter: DiffsHighlighter = await getSharedHighlighter();
+// Each backend has its own lazily created shared instance.
+const highlighter = await getSharedHighlighter({
+  preferredHighlighter: 'highlights', // defaults to 'shiki-js'
+  themes: ['pierre-dark'],
+  langs: ['typescript'],
+});
 
-// You can use it directly for custom highlighting, see the Shiki
-// docs at https://shiki.style/ for details
-const tokens = highlighter.codeToTokens('const x = 1;'); `,
+const { tokens } = highlighter.codeToTokens('const x = 1;', {
+  lang: 'typescript',
+  theme: 'pierre-dark',
+});`,
   },
   options,
 };

@@ -1,5 +1,40 @@
 ## Highlights
 
+Select Highlights in `@pierre/diffs` with `preferredHighlighter: 'highlights'`.
+The same option works for File, FileDiff, Editor, FileStream, SSR preload
+helpers, and worker pools. The default is `shiki-js`; `shiki-wasm` is also
+available. Each backend loads on demand.
+
+```tsx
+<FileDiff
+  oldFile={oldFile}
+  newFile={newFile}
+  options={{ preferredHighlighter: 'highlights' }}
+/>
+```
+
+When using a worker pool, set `preferredHighlighter` in the provider's
+`highlighterOptions`. The pool owns the backend used by its components. Try all
+three backends in the [diffs playground](/playground?highlighter=highlights).
+
+Built-in theme names work across backends.
+`registerCustomTheme(name, loader, 'zed')` accepts Zed-compatible Highlights
+themes, theme families, and portable `DiffsTheme` objects. Use `'textmate'` to
+register a loader for Shiki under the same name. A Zed family uses its first
+theme. See [registerCustomTheme](#utilities-registercustomtheme) for examples.
+
+`createCSSVariablesTheme` returns a portable theme with `--diffs-` as its
+default `variablePrefix`; it no longer re-exports Shiki's helper, whose default
+is `--shiki-`. Pass `variablePrefix: '--shiki-'` to keep stylesheets written for
+that default, or import `createCssVariablesTheme` from `shiki` for a raw
+registration. `registerCustomCSSVariableTheme` keeps its existing arguments and
+`--diffs-*` variables. Highlights includes its lexers; custom TextMate language
+registrations apply only to Shiki.
+
+The shared `DiffsHighlighter` exposes tokens, themes, live editing and streaming
+without exposing Shiki internals. Import Shiki-specific helpers and types
+directly from `shiki` when you need them.
+
 <Notice variant="warning" icon={<IconCiWarningFill />}>
   Highlights is experimental and subject to change. Try the [interactive
   playground](/highlights) before replacing Shiki in production.
@@ -339,9 +374,9 @@ The main entry exports the complete runtime and its public types:
 <DocsCodeExample {...highlightsApiRuntime} />
 
 The environment-specific entry point initializes the shared instance.
-`init(module)` replaces it; `createHighlighter(module)` creates an isolated
-`Highlighter` without changing the shared instance. Both accept a compiled
-`WebAssembly.Module` and are intended for embedders managing their own module.
+`createHighlighter()` creates an isolated `Highlighter` using the initialized
+module. Embedders can pass their own compiled `WebAssembly.Module` to
+`createHighlighter(module)` or replace the shared instance with `init(module)`.
 
 The public type surface is available from the same entry:
 

@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>diffs portable worker fixture</title>
+    <style>
+      body {
+        margin: 0;
+        padding: 16px;
+        font-family: system-ui, sans-serif;
+      }
+      [data-file-mount] {
+        max-width: 900px;
+      }
+    </style>
+  </head>
+  <body>
+    <a
+      data-fixtures-index
+      href="/test/e2e/fixtures/index.html"
+      style="
+        display: inline-block;
+        margin-bottom: 16px;
+        font-family: system-ui, sans-serif;
+        font-size: 14px;
+        font-weight: 600;
+        color: #0b62d6;
+        text-decoration: none;
+      "
+      >&larr; All fixtures</a
+    >
+    <div data-file-mount></div>
+
+    <script type="module">
+      import { File } from '/dist/index.js';
+      import { getOrCreateWorkerPoolSingleton } from '/dist/worker/index.js';
+
+      const mount = document.querySelector('[data-file-mount]');
+      if (!(mount instanceof HTMLElement)) {
+        throw new Error('Missing file mount.');
+      }
+
+      // Tests can relocate the script to verify it needs no sibling files.
+      const params = new URLSearchParams(location.search);
+      const preferredHighlighter = params.get('highlighter') ?? 'shiki-js';
+      const mode = params.get('mode') ?? 'classic';
+      let workerUrl =
+        params.get('workerUrl') ?? '/dist/worker/worker-portable.js';
+      if (mode === 'blob') {
+        const response = await fetch(workerUrl);
+        workerUrl = URL.createObjectURL(
+          new Blob([await response.text()], { type: 'text/javascript' })
+        );
+      }
+
+      const recordError = (message) => {
+        window.__workerPortableError ??= message;
+      };
+
+      const workerPool = getOrCreateWorkerPoolSingleton({
+        poolOptions: {
+          poolSize: 1,
+          workerInitializationTimeout: 10000,
+          workerFactory: () => {
+            const worker =
+              mode === 'module'
+                ? new Worker(workerUrl, { type: 'module' })
+                : new Worker(workerUrl);
+            worker.addEventListener('error', (event) => {
+              recordError(event.message ?? 'Worker error');
+            });
+            return worker;
+          },
+        },
+        highlighterOptions: {
+          theme: { dark: 'pierre-dark', light: 'pierre-light' },
+          langs: ['typescript'],
+          preferredHighlighter,
+          // Token spans only carry data-char through the token transformer,
+          // which is what the readiness wait below looks for.
+          useTokenTransformer: true,
+        },
+      });
+
+      try {
+        await workerPool.initialize(['typescript']);
+        window.__workerPortableInitialized = workerPool.isInitialized();
+      } catch (error) {
+        recordError(error instanceof Error ? error.message : String(error));
+      } finally {
+        if (mode === 'blob') URL.revokeObjectURL(workerUrl);
+      }
+
+      const file = {
+        name: 'example.ts',
+        contents: 'const answer = 42;\nexport default answer;\n',
+      };
+      const instance = new File(
+        {
+          disableFileHeader: true,
+          theme: { dark: 'pierre-dark', light: 'pierre-light' },
+          themeType: 'dark',
+        },
+        workerPool
+      );
+      instance.render({ file, containerWrapper: mount });
+
+      // Wait for highlighted token spans so the spec never races the worker's
+      // first paint.
+      const started = performance.now();
+      while (true) {
+        const host = mount.querySelector('diffs-container');
+        const token = host?.shadowRoot?.querySelector(
+          '[data-content] [data-char]'
+        );
+        if (token != null) {
+          break;
+        }
+        if (performance.now() - started > 10000) {
+          recordError('Timed out waiting for highlighted tokens.');
+          break;
+        }
+        await new Promise((resolve) => requestAnimationFrame(resolve));
+      }
+      window.__workerPortableReady = true;
+    </script>
+  </body>
+</html>

@@ -348,7 +348,9 @@ export function init(wasm: WebAssembly.Module): Highlighter {
  * Create a highlighter with its own WebAssembly instance.
  * The shared highlighter is unchanged.
  */
-export function createHighlighter(wasmModule: WebAssembly.Module): Highlighter {
+export function createHighlighter(
+  wasmModule: WebAssembly.Module = assertWasmModule()
+): Highlighter {
   return new HighlightsHighlighter(wasmModule);
 }
 

@@ -1,6 +1,9 @@
-import type { DiffsThemeNames } from '../../types';
-import { themeResolver } from './themeResolver';
+import type { DiffsThemeNames, HighlighterTypes } from '../../types';
+import { createDiffsThemeResolver } from './themeResolver';
 
-export function hasResolvedThemes(themeNames: DiffsThemeNames[]): boolean {
-  return themeResolver.hasResolvedThemes(themeNames);
+export function hasResolvedThemes(
+  themeNames: DiffsThemeNames[],
+  backend: HighlighterTypes = 'shiki-js'
+): boolean {
+  return createDiffsThemeResolver(backend).hasResolvedThemes(themeNames);
 }

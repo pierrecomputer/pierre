@@ -1,14 +1,19 @@
-import type { DiffsThemeNames, ThemesType } from '../../types';
+import type {
+  DiffsHighlighter,
+  DiffsThemeNames,
+  HighlighterTypes,
+  ThemesType,
+} from '../../types';
 import { getThemes } from '../../utils/getThemes';
-import { AttachedThemes } from './constants';
+import { createDiffsThemeResolver } from './themeResolver';
 
 export function areThemesAttached(
-  themes: DiffsThemeNames | ThemesType
+  themes: DiffsThemeNames | ThemesType,
+  highlighter: DiffsHighlighter | HighlighterTypes = 'shiki-js'
 ): boolean {
-  for (const theme of getThemes(themes)) {
-    if (!AttachedThemes.has(theme)) {
-      return false;
-    }
-  }
-  return true;
+  const resolver =
+    typeof highlighter === 'string'
+      ? createDiffsThemeResolver(highlighter)
+      : highlighter.themeResolver;
+  return resolver.hasResolvedThemes(getThemes(themes));
 }

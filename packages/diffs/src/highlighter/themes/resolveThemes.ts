@@ -1,21 +1,10 @@
-import type { DiffsThemeNames, ThemeRegistrationResolved } from '../../types';
-import {
-  prepareThemeResolution,
-  validateResolvedThemeName,
-} from './themeResolution';
-import { themeResolver } from './themeResolver';
+import type { DiffsThemeNames, HighlighterTypes } from '../../types';
+import { createDiffsThemeResolver } from './themeResolver';
+import type { DiffsTheme } from './types';
 
-export async function resolveThemes(
-  themes: DiffsThemeNames[]
-): Promise<ThemeRegistrationResolved[]> {
-  for (const themeName of themes) {
-    prepareThemeResolution(themeName);
-  }
-
-  const resolvedThemes = await themeResolver.resolveThemes(themes);
-  for (let i = 0; i < themes.length; i++) {
-    validateResolvedThemeName(themes[i], resolvedThemes[i]);
-  }
-
-  return resolvedThemes;
+export function resolveThemes(
+  themes: DiffsThemeNames[],
+  backend: HighlighterTypes = 'shiki-js'
+): Promise<DiffsTheme[]> {
+  return createDiffsThemeResolver(backend).resolveThemes(themes);
 }

@@ -1,16 +1,14 @@
-import type { SupportedLanguages } from '../../types';
+import type { DiffsHighlighter, SupportedLanguages } from '../../types';
 import { AttachedLanguages } from './constants';
 
 export function areLanguagesAttached(
-  languages: SupportedLanguages | SupportedLanguages[]
+  languages: SupportedLanguages | SupportedLanguages[],
+  highlighter?: DiffsHighlighter
 ): boolean {
-  for (const language of Array.isArray(languages) ? languages : [languages]) {
-    if (language === 'text' || language === 'ansi') {
-      continue;
-    }
-    if (!AttachedLanguages.has(language)) {
-      return false;
-    }
-  }
-  return true;
+  const names = Array.isArray(languages) ? languages : [languages];
+  if (highlighter != null)
+    return highlighter.hasLoadedLanguages?.(names) ?? true;
+  return names.every(
+    (name) => name === 'text' || name === 'ansi' || AttachedLanguages.has(name)
+  );
 }

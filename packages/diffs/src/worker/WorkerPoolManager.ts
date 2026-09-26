@@ -13,6 +13,7 @@ import { hasResolvedThemes } from '../highlighter/themes/hasResolvedThemes';
 import { resolveThemes } from '../highlighter/themes/resolveThemes';
 import type {
   DiffsHighlighter,
+  DiffsTheme,
   FileContents,
   FileDiffMetadata,
   HighlighterTypes,
@@ -24,7 +25,6 @@ import type {
   SupportedLanguages,
   ThemedDiffResult,
   ThemedFileResult,
-  ThemeRegistrationResolved,
 } from '../types';
 import { areDiffRenderOptionsEqual } from '../utils/areDiffRenderOptionsEqual';
 import { areDiffTargetsEqual } from '../utils/areDiffTargetsEqual';
@@ -227,13 +227,14 @@ export class WorkerPoolManager {
       }
 
       const themeNames = getThemes(theme);
-      let resolvedThemes: ThemeRegistrationResolved[] = [];
+      let resolvedThemes: DiffsTheme[] = [];
       if (!areThemesEqual(newRenderOptions.theme, this.renderOptions.theme)) {
-        if (hasResolvedThemes(themeNames)) {
-          resolvedThemes = getResolvedThemes(themeNames);
-        } else {
-          resolvedThemes = await resolveThemes(themeNames);
-        }
+        resolvedThemes = hasResolvedThemes(
+          themeNames,
+          this.preferredHighlighter
+        )
+          ? getResolvedThemes(themeNames, this.preferredHighlighter)
+          : await resolveThemes(themeNames, this.preferredHighlighter);
       }
 
       if (!isCurrentRequest()) {
@@ -294,7 +295,7 @@ export class WorkerPoolManager {
 
   private async setRenderOptionsOnWorkers(
     renderOptions: WorkerRenderingOptions,
-    resolvedThemes: ThemeRegistrationResolved[]
+    resolvedThemes: DiffsTheme[]
   ): Promise<void> {
     if (this.workersFailed) {
       return;
@@ -408,22 +409,22 @@ export class WorkerPoolManager {
         void (async () => {
           try {
             const themes = getThemes(this.renderOptions.theme);
-            let resolvedThemes: ThemeRegistrationResolved[] = [];
-            if (hasResolvedThemes(themes)) {
-              resolvedThemes = getResolvedThemes(themes);
-            } else {
-              resolvedThemes = await resolveThemes(themes);
-            }
+            const resolvedThemes = hasResolvedThemes(
+              themes,
+              this.preferredHighlighter
+            )
+              ? getResolvedThemes(themes, this.preferredHighlighter)
+              : await resolveThemes(themes, this.preferredHighlighter);
             if (!this.isCurrentLifecycle(lifecycleGeneration)) {
               resolve();
               return;
             }
 
             let resolvedLanguages: ResolvedLanguage[] = [];
-            if (hasResolvedLanguages(languages)) {
-              resolvedLanguages = getResolvedLanguages(languages);
-            } else {
-              resolvedLanguages = await resolveLanguages(languages);
+            if (this.preferredHighlighter !== 'highlights') {
+              resolvedLanguages = hasResolvedLanguages(languages)
+                ? getResolvedLanguages(languages)
+                : await resolveLanguages(languages);
             }
             if (!this.isCurrentLifecycle(lifecycleGeneration)) {
               resolve();
@@ -481,7 +482,7 @@ export class WorkerPoolManager {
   }
 
   private async initializeWorkers(
-    resolvedThemes: ThemeRegistrationResolved[],
+    resolvedThemes: DiffsTheme[],
     resolvedLanguages: ResolvedLanguage[]
   ): Promise<void> {
     this.workersFailed = false;
@@ -984,10 +985,9 @@ export class WorkerPoolManager {
     langs: SupportedLanguages[]
   ): Promise<void> {
     try {
-      // Lets keep the main thread highlighter in sync with loaded themes so
-      // edits can be more seamless
+      // Preload the same languages on the main thread for editing.
       const mainThreadLangs = langs.filter(
-        (lang) => !areLanguagesAttached(lang)
+        (lang) => !areLanguagesAttached(lang, this.highlighter)
       );
       if (mainThreadLangs.length > 0) {
         void getSharedHighlighter({
@@ -999,9 +999,10 @@ export class WorkerPoolManager {
         });
       }
       // Add resolved languages if required
-      const workerMissingLangs = langs.filter(
-        (lang) => !availableWorker.langs.has(lang)
-      );
+      const workerMissingLangs =
+        this.preferredHighlighter === 'highlights'
+          ? []
+          : langs.filter((lang) => !availableWorker.langs.has(lang));
 
       if (workerMissingLangs.length > 0) {
         if (hasResolvedLanguages(workerMissingLangs)) {

@@ -1,8 +1,3 @@
-import {
-  codeToHtml,
-  createCssVariablesTheme as createCSSVariablesTheme,
-} from 'shiki';
-
 export * from './components/CodeView';
 export * from './components/File';
 export * from './components/FileDiff';
@@ -26,7 +21,6 @@ export * from './highlighter/shared_highlighter';
 export * from './highlighter/themes/areThemesAttached';
 export * from './highlighter/themes/attachResolvedThemes';
 export * from './highlighter/themes/cleanUpResolvedThemes';
-export * from './highlighter/themes/constants';
 export * from './highlighter/themes/getResolvedOrResolveTheme';
 export * from './highlighter/themes/getResolvedThemes';
 export * from './highlighter/themes/hasResolvedThemes';
@@ -72,7 +66,6 @@ export * from './utils/createRowNodes';
 export * from './utils/createSeparator';
 export * from './utils/createSpanNodeFromToken';
 export * from './utils/createStyleElement';
-export * from './utils/createTransformerWithState';
 export * from './utils/createUnsafeCSSStyleNode';
 export * from './utils/createWindowFromScrollPosition';
 export * from './utils/cssWrappers';
@@ -112,4 +105,5 @@ export * from './utils/setWrapperNodeProps';
 export * from './utils/trimPatchContext';
 export type * from './types';
 
-export { codeToHtml, createCSSVariablesTheme };
+export * from './highlighter/themes/createCSSVariablesTheme';
+export type { CSSVariablesThemeOptions } from './highlighter/themes/types';

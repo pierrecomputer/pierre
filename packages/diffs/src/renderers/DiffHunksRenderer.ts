@@ -80,6 +80,7 @@ import { isDiffPlainText } from '../utils/isDiffPlainText';
 import type { DiffLineMetadata } from '../utils/iterateOverDiff';
 import { iterateOverDiff } from '../utils/iterateOverDiff';
 import { renderDiffWithHighlighter } from '../utils/renderDiffWithHighlighter';
+import { resolvePreferredHighlighter } from '../utils/resolvePreferredHighlighter';
 import {
   recomputeDiffHunksForEdit,
   recomputeEmptyDocumentDiff,
@@ -275,9 +276,13 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     private workerManager?: WorkerPoolManager | undefined
   ) {
     if (workerManager?.isWorkingPool() !== true) {
-      this.highlighter = areThemesAttached(options.theme ?? DEFAULT_THEMES)
-        ? getHighlighterIfLoaded()
-        : undefined;
+      this.highlighter = getHighlighterIfLoaded({
+        theme: options.theme ?? DEFAULT_THEMES,
+        preferredHighlighter: resolvePreferredHighlighter(
+          workerManager,
+          options
+        ),
+      });
     }
   }
 
@@ -450,8 +455,12 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
         })
         .catch((error: unknown) => this.onHighlightError(error));
     }
+    const preferredHighlighter = this.options.preferredHighlighter;
     return this.asyncHighlight(diff)
-      .then((fresh) => this.applyRefreshedResult(diff, fresh))
+      .then((fresh) => {
+        if (preferredHighlighter !== this.options.preferredHighlighter) return;
+        this.applyRefreshedResult(diff, fresh);
+      })
       .catch((error: unknown) => this.onHighlightError(error));
   }
 
@@ -497,11 +506,15 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
   }
 
   public setOptions(options: DiffHunksRendererOptions): void {
+    if (this.options.preferredHighlighter !== options.preferredHighlighter) {
+      this.highlighter = undefined;
+      this.clearRenderCache();
+    }
     this.options = options;
   }
 
   public mergeOptions(options: Partial<DiffHunksRendererOptions>): void {
-    this.options = { ...this.options, ...options };
+    this.setOptions({ ...this.options, ...options });
   }
 
   public expandHunk(
@@ -919,15 +932,24 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
   }
 
   public async initializeHighlighter(): Promise<DiffsHighlighter> {
-    this.highlighter = await getSharedHighlighter(
+    const preferredHighlighter = resolvePreferredHighlighter(
+      this.workerManager,
+      this.options
+    );
+    const highlighter = await getSharedHighlighter(
       getHighlighterOptions(this.computedLangs, {
         theme: this.getLocalHighlightTheme(),
-        preferredHighlighter:
-          this.workerManager?.getPreferredHighlighter() ??
-          this.options.preferredHighlighter,
+        preferredHighlighter,
       })
     );
-    return this.highlighter;
+    if (
+      preferredHighlighter !==
+      resolvePreferredHighlighter(this.workerManager, this.options)
+    ) {
+      return this.initializeHighlighter();
+    }
+    this.highlighter = highlighter;
+    return highlighter;
   }
 
   public hydrate(diff: FileDiffMetadata | undefined): void {
@@ -1069,7 +1091,8 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       return (
         (renderCache.result == null && renderCache.hydrated !== true) ||
         this.workerManager?.isWorkingPool() === true ||
-        (this.highlighter != null && areThemesAttached(options.theme))
+        (this.highlighter != null &&
+          areThemesAttached(options.theme, this.highlighter))
       );
     }
     // Hydration has highlighted DOM without a local AST. It is still active
@@ -1086,7 +1109,10 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       return !renderCache.highlighted;
     }
 
-    return this.highlighter != null && areThemesAttached(options.theme);
+    return (
+      this.highlighter != null &&
+      areThemesAttached(options.theme, this.highlighter)
+    );
   }
 
   public renderDiff(
@@ -1185,11 +1211,18 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       }
     } else {
       this.computedLangs = getDiffLanguages(diff);
-      this.highlighter ??= getHighlighterIfLoaded();
+      this.highlighter ??= getHighlighterIfLoaded({
+        preferredHighlighter: resolvePreferredHighlighter(
+          this.workerManager,
+          this.options
+        ),
+      });
       const hasThemes =
-        this.highlighter != null && areThemesAttached(options.theme);
+        this.highlighter != null &&
+        areThemesAttached(options.theme, this.highlighter);
       const hasLangs =
-        this.highlighter != null && areLanguagesAttached(this.computedLangs);
+        this.highlighter != null &&
+        areLanguagesAttached(this.computedLangs, this.highlighter);
       const canHighlight = !forcePlainText && hasLangs;
 
       // If we have any semblance of a highlighter with the correct theme(s)
@@ -1223,7 +1256,10 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       // process which will involve initializing the highlighter with new themes
       // and languages
       if (!hasThemes || (!forcePlainText && !hasLangs)) {
+        const preferredHighlighter = this.options.preferredHighlighter;
         void this.asyncHighlight(diff).then(({ result, options }) => {
+          if (preferredHighlighter !== this.options.preferredHighlighter)
+            return;
           this.applyHighlightResult(diff, result, options, !forcePlainText);
         });
       }
@@ -1272,10 +1308,11 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     this.computedLangs = forcePlainText ? ['text'] : getDiffLanguages(diff);
     const hasThemes =
       this.highlighter != null &&
-      areThemesAttached(this.getLocalHighlightTheme());
+      areThemesAttached(this.getLocalHighlightTheme(), this.highlighter);
     const hasLangs =
       forcePlainText ||
-      (this.highlighter != null && areLanguagesAttached(this.computedLangs));
+      (this.highlighter != null &&
+        areLanguagesAttached(this.computedLangs, this.highlighter));
     // If we don't have the required langs or themes, then we need to
     // initialize the highlighter to load the appropriate languages and themes
     if (this.highlighter == null || !hasThemes || !hasLangs) {

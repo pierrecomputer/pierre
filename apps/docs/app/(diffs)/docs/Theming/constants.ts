@@ -494,7 +494,7 @@ export const THEMING_REGISTER_THEME: ThemingConstant = {
     contents: `import { registerCustomTheme } from '@pierre/diffs';
 
 // Register your theme files before rendering.
-// The name must match the "name" field in your theme.
+// TextMate themes must have a matching "name" field.
 
 // Option 1: Import MJS theme modules (recommended)
 registerCustomTheme('my-theme-dark', () => import('my-theme/dark'));
@@ -508,7 +508,11 @@ registerCustomTheme('my-theme-light', () => import('./themes/my-theme-light.json
 registerCustomTheme('my-theme-dark', async () => {
   const response = await fetch('/themes/my-theme-dark.json');
   return response.json();
-});`,
+});
+
+// Option 4: A Zed-compatible theme or family for Highlights
+registerCustomTheme('my-zed-theme', () => import('./themes/my-zed-theme.json'), 'zed');
+// Use options: { theme: 'my-zed-theme', preferredHighlighter: 'highlights' }`,
   },
   options,
 };

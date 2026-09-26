@@ -40,7 +40,7 @@ describe('DiffHunksRenderer language loading without workers', () => {
       const highlighter = getHighlighterIfLoaded();
       assertDefined(highlighter, 'expected the highlighter to be loaded');
       for (const lang of ['terraform', 'tf', 'tfvars']) {
-        expect(highlighter.getLoadedLanguages()).toContain(lang);
+        expect(highlighter.hasLoadedLanguages?.([lang])).toBe(true);
         expect(
           highlighter.codeToTokens('locals { label = "after" }', {
             lang,
@@ -68,8 +68,8 @@ describe('DiffHunksRenderer language loading without workers', () => {
             langs: [newFile.language],
           });
           if (oldFile.language !== newFile.language) {
-            expect(highlighter.getLoadedLanguages()).not.toContain(
-              oldFile.language
+            expect(highlighter.hasLoadedLanguages?.([oldFile.language])).toBe(
+              false
             );
           }
         } else {
@@ -85,8 +85,12 @@ describe('DiffHunksRenderer language loading without workers', () => {
           await renderer.asyncRender(diff);
           const highlighter = getHighlighterIfLoaded();
           assertDefined(highlighter, 'expected the highlighter to be loaded');
-          expect(highlighter.getLoadedLanguages()).toContain(oldFile.language);
-          expect(highlighter.getLoadedLanguages()).toContain(newFile.language);
+          expect(highlighter.hasLoadedLanguages?.([oldFile.language])).toBe(
+            true
+          );
+          expect(highlighter.hasLoadedLanguages?.([newFile.language])).toBe(
+            true
+          );
         } finally {
           renderer.cleanUp();
         }
@@ -100,7 +104,7 @@ describe('DiffHunksRenderer language loading without workers', () => {
         themes: [options.theme],
         langs: [newFile.language],
       });
-      expect(highlighter.getLoadedLanguages()).not.toContain(oldFile.language);
+      expect(highlighter.hasLoadedLanguages?.([oldFile.language])).toBe(false);
       const updated = createDeferred<void>();
       const renderer = new DiffHunksRenderer(options, undefined, () => {
         updated.resolve();
@@ -112,8 +116,8 @@ describe('DiffHunksRenderer language loading without workers', () => {
         // dispose a highlighter that is still loading the missing grammar.
         await updated.promise;
         expect(initial).toBeDefined();
-        expect(highlighter.getLoadedLanguages()).toContain(oldFile.language);
-        expect(highlighter.getLoadedLanguages()).toContain(newFile.language);
+        expect(highlighter.hasLoadedLanguages?.([oldFile.language])).toBe(true);
+        expect(highlighter.hasLoadedLanguages?.([newFile.language])).toBe(true);
         expect(renderer.renderDiff(diff)).toBeDefined();
       } finally {
         renderer.cleanUp();
@@ -130,8 +134,8 @@ describe('DiffHunksRenderer language loading without workers', () => {
         expect(initialize).toHaveBeenCalledTimes(1);
         const highlighter = getHighlighterIfLoaded();
         assertDefined(highlighter, 'expected the highlighter to be loaded');
-        expect(highlighter.getLoadedLanguages()).toContain(oldFile.language);
-        expect(highlighter.getLoadedLanguages()).toContain(newFile.language);
+        expect(highlighter.hasLoadedLanguages?.([oldFile.language])).toBe(true);
+        expect(highlighter.hasLoadedLanguages?.([newFile.language])).toBe(true);
       } finally {
         initialize.mockRestore();
         renderer.cleanUp();
@@ -147,11 +151,10 @@ describe('DiffHunksRenderer language loading without workers', () => {
         await renderer.asyncRender(diff);
         const highlighter = getHighlighterIfLoaded();
         assertDefined(highlighter, 'expected the highlighter to be loaded');
-        const languages = highlighter.getLoadedLanguages();
-        expect(languages).not.toContain('python');
-        expect(languages).not.toContain('javascript');
+        expect(highlighter.hasLoadedLanguages?.(['python'])).toBe(false);
+        expect(highlighter.hasLoadedLanguages?.(['javascript'])).toBe(false);
         if (lang !== 'text') {
-          expect(languages).toContain(lang);
+          expect(highlighter.hasLoadedLanguages?.([lang])).toBe(true);
         }
       } finally {
         renderer.cleanUp();
@@ -168,9 +171,8 @@ describe('DiffHunksRenderer language loading without workers', () => {
       await renderer.asyncRender(parseDiffFromFile(python, javascript));
       const highlighter = getHighlighterIfLoaded();
       assertDefined(highlighter, 'expected the highlighter to be loaded');
-      const languages = highlighter.getLoadedLanguages();
-      expect(languages).not.toContain('python');
-      expect(languages).not.toContain('javascript');
+      expect(highlighter.hasLoadedLanguages?.(['python'])).toBe(false);
+      expect(highlighter.hasLoadedLanguages?.(['javascript'])).toBe(false);
     } finally {
       renderer.cleanUp();
     }

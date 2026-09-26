@@ -583,3 +583,47 @@ void test('theme helpers: color validation and fallback chains', () => {
   assert.equal(themeBackground({ background: '#5' }), '#5');
   assert.equal(themeBackground({}), undefined);
 });
+
+void test('named CSS palettes preserve defaults and syntax font styles in tokens and HTML', () => {
+  const { highlighter } = cachedEmitter();
+  const theme: Theme = {
+    name: 'Application palette',
+    appearance: 'dark',
+    cssVariables: { prefix: '--app-', defaults: { numeric: '#123456' } },
+    style: {
+      syntax: {
+        number: { color: 'numeric', font_style: 'italic', font_weight: 700 },
+      },
+    },
+  };
+  const options = {
+    lang: 'json',
+    theme,
+    cssVariablePrefix: '--schemes-',
+  } as const;
+  const tokens = highlighter.codeToTokens('42', options);
+  assert.equal(tokens.tokens[0][0].color, 'var(--app-numeric, #123456)');
+  assert.equal(tokens.tokens[0][0].fontStyle, 3);
+  assert.equal(tokens.fg, 'var(--app-foreground)');
+  const html = new TextDecoder().decode(highlighter.codeToHtml('42', options));
+  assert.ok(
+    html.includes(
+      'var(--app-numeric, #123456);font-style:italic;font-weight:700'
+    )
+  );
+  assert.ok(!html.includes('--schemes-numeric'));
+});
+
+void test('named CSS palette HTML escapes variable prefixes and defaults', () => {
+  const theme: Theme = {
+    name: 'Escaped palette',
+    appearance: 'dark',
+    cssVariables: { prefix: '--app-"<&', defaults: { numeric: '"<&' } },
+    style: { syntax: { number: 'numeric' } },
+  };
+  const html = json.hl('42', { theme });
+  assert.ok(
+    html.includes('var(--app-&quot;&lt;&amp;numeric, &quot;&lt;&amp;)')
+  );
+  assert.ok(!html.includes('var(--app-"'));
+});

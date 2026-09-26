@@ -1,22 +1,40 @@
 import { describe, expect, spyOn, test } from 'bun:test';
+import type { HighlighterCore } from 'shiki/core';
 
 import { VirtualizedFile } from '../src/components/VirtualizedFile';
 import { Virtualizer } from '../src/components/Virtualizer';
 import { DEFAULT_THEMES } from '../src/constants';
 import { Editor } from '../src/editor/editor';
+import { ShikiLiveTokenizer } from '../src/highlighter/shiki-live';
 import type { DiffsHighlighter } from '../src/types';
 import { installDom, waitFor } from './domHarness';
 
 const MODEL_LINE_TOP = 20;
 
 function createTestHighlighter(): DiffsHighlighter {
-  return {
+  const raw = {
     getLanguage: () => undefined,
     getLoadedLanguages: () => [],
     getTheme: () => ({ type: 'light', colors: {} }),
     loadLanguage: async () => {},
     setTheme: () => ({ theme: { type: 'light' }, colorMap: [''] }),
-  } as unknown as DiffsHighlighter;
+  } as unknown as HighlighterCore;
+  return {
+    getTheme: (name): ReturnType<DiffsHighlighter['getTheme']> => {
+      const theme = raw.getTheme(name);
+      return {
+        ...theme,
+        name,
+        type: theme.type ?? 'dark',
+        fg: theme.fg ?? '',
+        bg: theme.bg ?? '',
+      };
+    },
+    createLiveTokenizer: (
+      options
+    ): ReturnType<DiffsHighlighter['createLiveTokenizer']> =>
+      new ShikiLiveTokenizer(raw, options),
+  } as DiffsHighlighter;
 }
 
 function createVirtualizedFile(modelLineHeight: number): {

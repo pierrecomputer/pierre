@@ -185,10 +185,10 @@ export function variableSpanTag(hl: number): string {
  * One theme prepared for every output path. `styles` is indexed by token id,
  * with `null` for unstyled slots; the foreground and background live in `fg`
  * and `bg` instead. Which extra representation is present depends on the
- * theme: hex themes carry the packed Wasm `table`, Display P3 themes carry
- * the HTML tag replacements, and CSS-variable themes carry neither because
- * every color is a prefixed custom property. Representations that only some
- * callers need are built on first read: the tag replacements, and the
+ * theme: hex themes carry the packed Wasm `table`, Display P3 and named CSS
+ * palettes carry HTML tag replacements, and token-slot CSS themes carry neither.
+ * Representations that only some callers need are built on first read:
+ * the tag replacements, and the
  * variable references of a CSS-variable theme, which HTML output never reads.
  */
 export interface PreparedTheme {
@@ -205,7 +205,7 @@ export interface PreparedTheme {
    */
   table: Uint8Array | undefined;
   /**
-   * For Display P3 themes, the CSS-variable emitter's unprefixed `<pre>` and
+   * For Display P3 and named CSS palettes, the emitter's unprefixed `<pre>` and
    * `<span>` openers mapped to openers with the theme's colors and font
    * settings inlined; built on first read, so token-only callers never pay
    * for it. `undefined` for other themes.
@@ -236,13 +236,53 @@ export function prepareTheme(
   const prepared =
     resolved.cssVariables === true
       ? prepareCssVariables(resolved.name, cssVariablePrefix)
-      : prepareStyles(resolved);
+      : typeof resolved.cssVariables === 'object'
+        ? prepareCssPalette(resolved)
+        : prepareStyles(resolved);
   if (prefixes === undefined) {
     prefixes = new Map();
     preparedCache.set(resolved, prefixes);
   }
   prefixes.set(prefix, prepared);
   return prepared;
+}
+
+/** Resolve portable palette names without treating arbitrary CSS as theme colors. */
+function prepareCssPalette(theme: Theme): PreparedTheme {
+  const config = theme.cssVariables;
+  if (typeof config !== 'object') throw new Error('Expected CSS palette');
+  const prefix = config.prefix ?? defaultCssVariablePrefix;
+  const variable = (name: string): string => {
+    const fallback = config.defaults?.[name];
+    return `var(${prefix}${name}${fallback ? `, ${fallback}` : ''})`;
+  };
+  const styles: (TokenStyle | null)[] = new Array(tokenTypes.length).fill(null);
+  const syntax = theme.style.syntax ?? {};
+  for (let i = 1; i < tokenTypes.length; i++) {
+    const setting = resolveThemeSyntax(syntax, tokenTypes[i]);
+    styles[i] = {
+      color: variable(setting?.color ?? 'foreground'),
+      italic: setting?.font_style === 'italic',
+      weight:
+        setting?.font_weight === undefined
+          ? 0
+          : Math.round(setting.font_weight / 100) * 100,
+    };
+  }
+  const fg = variable(themeForeground(theme.style) ?? 'foreground');
+  const bg = variable(themeBackground(theme.style) ?? 'background');
+  let htmlTags: Map<string, string> | undefined;
+  return {
+    name: theme.name,
+    styles,
+    fg,
+    bg,
+    usesDisplayP3: false,
+    table: undefined,
+    get htmlTags() {
+      return (htmlTags ??= themeHtmlTags(styles, fg, bg));
+    },
+  };
 }
 
 /**
@@ -339,19 +379,19 @@ function prepareStyles(theme: Theme): PreparedTheme {
     table: usesDisplayP3 ? undefined : table,
     get htmlTags() {
       if (!usesDisplayP3) return undefined;
-      return (htmlTags ??= displayP3HtmlTags(styles, fg, bg));
+      return (htmlTags ??= themeHtmlTags(styles, fg, bg));
     },
   };
 }
 
 /**
- * Tag replacements for Display P3 HTML. The CSS-variable emitter runs with an
+ * Tag replacements for Display P3 and named CSS palettes. The emitter runs with an
  * empty prefix, so its openers read `var(<token>)`; each maps to an opener
  * with the theme's color and font settings inlined, the shape the packed-table
- * emitter produces. Every color passed `isThemeColor`, so none can escape the
- * style attribute.
+ * emitter produces. Escape attributes because CSS prefixes and defaults may
+ * contain arbitrary strings.
  */
-function displayP3HtmlTags(
+function themeHtmlTags(
   styles: (TokenStyle | null)[],
   fg: string | undefined,
   bg: string | undefined
@@ -360,7 +400,10 @@ function displayP3HtmlTags(
   const rootStyle =
     (bg === undefined ? '' : `background-color:${bg};`) +
     (fg === undefined ? '' : `color:${fg}`);
-  tags.set(variableRootTag, `<pre class="highlights" style="${rootStyle}">`);
+  tags.set(
+    variableRootTag,
+    `<pre class="highlights" style="${escapeAttribute(rootStyle)}">`
+  );
   for (let i = 1; i < tokenTypes.length; i++) {
     const style = styles[i];
     const css =
@@ -369,7 +412,7 @@ function displayP3HtmlTags(
       (style != null && style.weight !== 0
         ? `;font-weight:${style.weight}`
         : '');
-    tags.set(variableSpanTag(i), `<span style="${css}">`);
+    tags.set(variableSpanTag(i), `<span style="${escapeAttribute(css)}">`);
   }
   return tags;
 }

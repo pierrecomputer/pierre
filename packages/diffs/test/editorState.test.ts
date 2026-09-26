@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test';
+import type { HighlighterCore } from 'shiki/core';
 
 import { File, type FileRenderProps } from '../src/components/File';
 import { VirtualizedFile } from '../src/components/VirtualizedFile';
@@ -13,18 +14,35 @@ import type {
   EditorViewState,
   FileEditState,
 } from '../src/editor/types';
+import { ShikiLiveTokenizer } from '../src/highlighter/shiki-live';
 import type { DiffsHighlighter, FileContents } from '../src/types';
 import { getFiletypeFromFileName } from '../src/utils/getFiletypeFromFileName';
 import { installDom } from './domHarness';
 
 function createTestHighlighter(): DiffsHighlighter {
-  return {
+  const raw = {
     getLanguage: () => undefined,
     getLoadedLanguages: () => [],
     getTheme: () => ({ type: 'light', colors: {} }),
     loadLanguage: async () => {},
     setTheme: () => ({ theme: { type: 'light' }, colorMap: [''] }),
-  } as unknown as DiffsHighlighter;
+  } as unknown as HighlighterCore;
+  return {
+    getTheme: (name): ReturnType<DiffsHighlighter['getTheme']> => {
+      const theme = raw.getTheme(name);
+      return {
+        ...theme,
+        name,
+        type: theme.type ?? 'dark',
+        fg: theme.fg ?? '',
+        bg: theme.bg ?? '',
+      };
+    },
+    createLiveTokenizer: (
+      options
+    ): ReturnType<DiffsHighlighter['createLiveTokenizer']> =>
+      new ShikiLiveTokenizer(raw, options),
+  } as DiffsHighlighter;
 }
 
 function createInitialState(

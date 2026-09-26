@@ -615,15 +615,15 @@ importers:
 
   packages/diffs:
     dependencies:
+      '@pierre/highlights':
+        specifier: workspace:*
+        version: link:../highlights
       '@pierre/theme':
         specifier: workspace:*
         version: link:../theme
       '@pierre/theming':
         specifier: workspace:*
         version: link:../theming
-      '@shikijs/transformers':
-        specifier: 4.4.1
-        version: 4.4.1
       diff:
         specifier: 'catalog:'
         version: 9.0.0

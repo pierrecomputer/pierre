@@ -9,7 +9,10 @@
   ],
   "type": "module",
   "sideEffects": [
-    "dist/components/web-components.js"
+    "dist/components/web-components.js",
+    "dist/worker/worker.js",
+    "dist/worker/worker-portable.js",
+    "src/worker/worker.ts"
   ],
   "typesVersions": {
     "*": {
@@ -67,9 +70,9 @@
     "prepublishOnly": "moon run diffs:prepublish"
   },
   "dependencies": {
+    "@pierre/highlights": "workspace:*",
     "@pierre/theme": "workspace:*",
     "@pierre/theming": "workspace:*",
-    "@shikijs/transformers": "^3.0.0 || ^4.0.0",
     "diff": "catalog:",
     "hast-util-to-html": "catalog:",
     "lru_map": "catalog:",

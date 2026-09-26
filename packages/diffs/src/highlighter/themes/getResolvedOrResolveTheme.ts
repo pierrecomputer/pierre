@@ -1,13 +1,10 @@
-import type { DiffsThemeNames, ThemeRegistrationResolved } from '../../types';
-import { resolveTheme } from './resolveTheme';
-import { themeResolver } from './themeResolver';
+import type { DiffsThemeNames, HighlighterTypes } from '../../types';
+import { createDiffsThemeResolver } from './themeResolver';
+import type { DiffsTheme } from './types';
 
-// Returns the resolved theme synchronously when it is already cached, otherwise
-// kicks off (and returns the Promise for) a full resolveTheme. Uses the diffs
-// resolveTheme wrapper for the cold path so the worker guard, bundled fallback,
-// and name validation still apply.
 export function getResolvedOrResolveTheme(
-  themeName: DiffsThemeNames
-): ThemeRegistrationResolved | Promise<ThemeRegistrationResolved> {
-  return themeResolver.getResolvedTheme(themeName) ?? resolveTheme(themeName);
+  themeName: DiffsThemeNames,
+  backend: HighlighterTypes = 'shiki-js'
+): DiffsTheme | Promise<DiffsTheme> {
+  return createDiffsThemeResolver(backend).getResolvedOrResolveTheme(themeName);
 }

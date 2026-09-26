@@ -86,16 +86,20 @@ const config: UserConfig[] = defineConfig([
     platform: 'neutral',
   },
   {
+    // Keep portable workers self-contained for classic workers and blob URLs.
     entry: ['src/worker/worker-portable.ts'],
     outDir: 'dist/worker',
     tsconfig: './tsconfig.json',
     clean: false,
     unbundle: false,
     deps: { alwaysBundle: [/.*/] },
+    // The pool sends resolved themes and grammars; omit their main-thread catalogs.
+    define: { __DIFFS_WORKER__: 'true' },
+    minify: true,
     dts: { sourcemap: true, tsgo: true },
     platform: 'neutral',
     format: 'esm',
-    treeshake: false,
+    outputOptions: { codeSplitting: false },
   },
 ]);
 

@@ -1,4 +1,5 @@
 import { afterAll, expect, mock, spyOn, test } from 'bun:test';
+import type { ThemeRegistration } from 'shiki';
 
 import { CodeView } from '../src/components/CodeView';
 import {
@@ -6,7 +7,6 @@ import {
   getSharedHighlighter,
 } from '../src/highlighter/shared_highlighter';
 import { registerCustomTheme } from '../src/highlighter/themes/registerCustomTheme';
-import type { ThemeRegistration } from '../src/types';
 import { createRoot, installDom, wait, waitFor } from './domHarness';
 import { createDeferred } from './testUtils';
 
