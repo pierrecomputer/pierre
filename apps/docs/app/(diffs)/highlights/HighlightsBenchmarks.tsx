@@ -55,7 +55,7 @@ function PerformanceBar({
   const formattedValue = formatValue(value);
 
   return (
-    <div className="text-md grid grid-cols-[minmax(0,1fr)_7.5rem] items-center gap-x-3 gap-y-1.5">
+    <div className="text-md grid grid-cols-[minmax(0,1fr)_5.75rem] items-center gap-x-1.5 gap-y-1.5 sm:grid-cols-[minmax(0,1fr)_7.5rem] sm:gap-x-3">
       <dt className="text-muted-foreground col-start-1 row-start-2">{name}</dt>
       <dd className="contents">
         <div
@@ -72,7 +72,7 @@ function PerformanceBar({
         />
         <span
           className={cn(
-            'col-start-2 row-span-2 row-start-1 mt-[-16px] w-full min-w-0 self-center whitespace-nowrap text-right text-2xl font-normal tabular-nums sm:text-3xl',
+            'col-start-2 row-span-2 row-start-1 mt-[-16px] w-full min-w-0 self-center whitespace-nowrap text-left text-2xl font-normal tabular-nums sm:text-right sm:text-3xl',
             highlights
               ? 'font-semibold text-blue-500 dark:text-blue-400'
               : 'text-foreground/50'
@@ -107,7 +107,7 @@ export function HighlightsBenchmarks() {
       <div className="grid min-w-0 gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
         <figure
           aria-labelledby="highlights-language-performance"
-          className="bg-muted/50 min-w-0 rounded-2xl p-5 sm:p-8 lg:p-10"
+          className="bg-muted/50 min-w-0 rounded-2xl p-4 sm:p-8 lg:p-10"
         >
           <figcaption className="mb-6 max-w-2xl">
             <h3
@@ -145,7 +145,7 @@ export function HighlightsBenchmarks() {
 
         <figure
           aria-labelledby="highlights-memory-performance"
-          className="bg-muted/50 min-w-0 rounded-2xl p-5 sm:p-8 lg:p-10"
+          className="bg-muted/50 min-w-0 rounded-2xl p-4 sm:p-8 lg:p-10"
         >
           <figcaption className="mb-8 max-w-3xl">
             <h3
