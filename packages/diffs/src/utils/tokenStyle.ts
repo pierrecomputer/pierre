@@ -1,11 +1,21 @@
 import type { ThemedToken } from '../types';
 
+// Highlights hands every token of one style the same `htmlStyle` object, so
+// the serialized CSS is cached per object instead of rebuilt for each token.
+const htmlStyleCache = new WeakMap<Record<string, string>, string>();
+
 /** Convert a backend token's colors and font flags to inline CSS. */
 export function tokenStyle(token: ThemedToken): string {
-  if (token.htmlStyle != null) {
-    return Object.entries(token.htmlStyle)
-      .map(([name, value]) => `${name}:${value}`)
-      .join(';');
+  const { htmlStyle } = token;
+  if (htmlStyle != null) {
+    let style = htmlStyleCache.get(htmlStyle);
+    if (style == null) {
+      style = Object.entries(htmlStyle)
+        .map(([name, value]) => `${name}:${value}`)
+        .join(';');
+      htmlStyleCache.set(htmlStyle, style);
+    }
+    return style;
   }
   let style = token.color != null ? `color:${token.color}` : '';
   if (token.bgColor != null) style += `;background-color:${token.bgColor}`;

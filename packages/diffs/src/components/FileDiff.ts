@@ -1,5 +1,4 @@
 import type { ElementContent, Element as HASTElement } from 'hast';
-import { toHtml } from 'hast-util-to-html';
 
 import {
   CUSTOM_HEADER_SLOT_ID,
@@ -113,6 +112,7 @@ import { getLineAnnotationName } from '../utils/getLineAnnotationName';
 import { getOrCreateCodeNode } from '../utils/getOrCreateCodeNode';
 import { getThemes } from '../utils/getThemes';
 import { guardWebKitScrollDuringRebuild } from '../utils/guardWebKitScrollDuringRebuild';
+import { hastToHtml } from '../utils/hastToHtml';
 import { upsertHostThemeStyle } from '../utils/hostTheme';
 import { hydratePartialDiff } from '../utils/hydratePartialDiff';
 import { isDefaultRenderRange } from '../utils/isDefaultRenderRange';
@@ -2805,7 +2805,7 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
       areDiffTargetsEqual(cachedHeaderDiff, fileDiff)
         ? cachedHeaderHTML
         : undefined;
-    const headerHTML = reusableHeaderHTML ?? toHtml(headerAST);
+    const headerHTML = reusableHeaderHTML ?? hastToHtml(headerAST);
     this.headerCache.html = headerHTML;
     this.headerCache.fileDiff = fileDiff;
     if (headerHTML !== lastRenderedHTML) {
@@ -3071,8 +3071,8 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
     if (gutterChildren == null || contentChildren == null) {
       return false;
     }
-    columns.gutter.innerHTML = toHtml(gutterChildren);
-    columns.content.innerHTML = toHtml(contentChildren);
+    columns.gutter.innerHTML = hastToHtml(gutterChildren);
+    columns.content.innerHTML = hastToHtml(contentChildren);
     if (rowCount !== this.lastRowCount) {
       columns.gutter.style.setProperty('grid-row', `span ${rowCount}`);
       columns.content.style.setProperty('grid-row', `span ${rowCount}`);
@@ -3483,7 +3483,7 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
         [columns.content, contentChildren],
       ] as const) {
         if (astChildren != null) {
-          el.innerHTML = toHtml(astChildren);
+          el.innerHTML = hastToHtml(astChildren);
         }
       }
 

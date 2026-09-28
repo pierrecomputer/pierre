@@ -1,5 +1,4 @@
 import type { Element as HASTElement } from 'hast';
-import { toHtml } from 'hast-util-to-html';
 
 import {
   CUSTOM_HEADER_SLOT_ID,
@@ -76,6 +75,7 @@ import { getLineAnnotationName } from '../utils/getLineAnnotationName';
 import { getOrCreateCodeNode } from '../utils/getOrCreateCodeNode';
 import { getThemes } from '../utils/getThemes';
 import { guardWebKitScrollDuringRebuild } from '../utils/guardWebKitScrollDuringRebuild';
+import { hastToHtml } from '../utils/hastToHtml';
 import { upsertHostThemeStyle } from '../utils/hostTheme';
 import { isFilePlainText } from '../utils/isFilePlainText';
 import { isStyleNode } from '../utils/isStyleNode';
@@ -1625,11 +1625,11 @@ export class File<LAnnotation = undefined, Caret = undefined> {
         for (let i = 0; i < 2; i++) {
           const domEl = code.children[i] as HTMLElement;
           const astEl = codeAst[i] as HASTElement;
-          domEl.innerHTML = toHtml(astEl.children);
+          domEl.innerHTML = hastToHtml(astEl.children);
           domEl.style.cssText = astEl.properties.style as string;
         }
       } else {
-        code.innerHTML = toHtml(codeAst);
+        code.innerHTML = hastToHtml(codeAst);
       }
       if (!pre.contains(code)) {
         pre.replaceChildren(code);
@@ -1909,7 +1909,7 @@ export class File<LAnnotation = undefined, Caret = undefined> {
     this.cleanupErrorWrapper();
     this.placeHolder?.remove();
     this.placeHolder = undefined;
-    const headerHTML = this.cachedHeaderHTML ?? toHtml(headerAST);
+    const headerHTML = this.cachedHeaderHTML ?? hastToHtml(headerAST);
     this.cachedHeaderHTML = headerHTML;
     if (headerHTML !== this.lastRenderedHeaderHTML) {
       const tempDiv = document.createElement('div');

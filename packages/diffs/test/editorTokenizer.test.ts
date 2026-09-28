@@ -184,9 +184,6 @@ describe('EditorTokenizer', () => {
       const getLanguage = () => {
         throw new Error('getLanguage should not be called for plain text');
       };
-      const loadLanguage = () => {
-        throw new Error('loadLanguage should not be called for plain text');
-      };
       const textDocument = new TextDocument(
         'Untitled-1',
         Array.from({ length: 20 }, (_, i) => `line ${i}`).join('\n'),
@@ -195,7 +192,6 @@ describe('EditorTokenizer', () => {
       const tokenizer = new EditorTokenizer({
         highlighter: createTestHighlighter({
           getLanguage,
-          loadLanguage,
           getLoadedLanguages: () => [],
         }),
         textDocument,

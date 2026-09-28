@@ -1,7 +1,7 @@
 import type { Element, Root } from 'hast';
-import { toHtml } from 'hast-util-to-html';
 
 import type { CodeToHtmlOptions, TokensResult } from '../types';
+import { hastToHtml } from './hastToHtml';
 import { renderTokenLines } from './renderTokenLines';
 
 /** Serialize highlighted tokens without loading a backend's HTML renderer. */
@@ -62,5 +62,5 @@ export function tokensToHtml(
       },
     ],
   };
-  return toHtml(root);
+  return hastToHtml(root);
 }

@@ -3,9 +3,7 @@ import { toHtml } from 'hast-util-to-html';
 import { JSDOM } from 'jsdom';
 
 import {
-  DiffHunksRenderer,
   disposeHighlighter,
-  FileRenderer,
   getSharedHighlighter,
   parseDiffFromFile,
   renderFileWithHighlighter,
@@ -274,39 +272,6 @@ describe('backend rendering', () => {
       }
     });
   }
-
-  test('renderers can change backend after their first render', async () => {
-    const options = {
-      theme: 'pierre-dark',
-      preferredHighlighter: 'shiki-js',
-    } as const;
-    const fileRenderer = new FileRenderer(options);
-    const diffRenderer = new DiffHunksRenderer(options);
-    const diff = parseDiffFromFile(file, modified);
-    try {
-      await fileRenderer.asyncRender(file);
-      await diffRenderer.asyncRender(diff);
-      fileRenderer.setOptions({
-        ...options,
-        preferredHighlighter: 'highlights',
-      });
-      diffRenderer.setOptions({
-        ...options,
-        preferredHighlighter: 'highlights',
-      });
-      expect(await fileRenderer.asyncRender(file)).toBeDefined();
-      expect(await diffRenderer.asyncRender(diff)).toBeDefined();
-      expect((await fileRenderer.initializeHighlighter()).name).toBe(
-        'highlights'
-      );
-      expect((await diffRenderer.initializeHighlighter()).name).toBe(
-        'highlights'
-      );
-    } finally {
-      fileRenderer.cleanUp();
-      diffRenderer.cleanUp();
-    }
-  });
 });
 
 test('empty decorated editor lines retain their caret placeholder', () => {

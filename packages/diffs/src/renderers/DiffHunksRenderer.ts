@@ -1,5 +1,4 @@
 import type { ElementContent, Element as HASTElement, Properties } from 'hast';
-import { toHtml } from 'hast-util-to-html';
 
 import {
   DEFAULT_COLLAPSED_CONTEXT_THRESHOLD,
@@ -69,6 +68,8 @@ import {
   createGutterWrapper,
   createHastElement,
 } from '../utils/hast_utils';
+import { hastToHtml } from '../utils/hastToHtml';
+import { highlightsInWorkers } from '../utils/highlightsInWorkers';
 import {
   FILE_ANNOTATION_HUNK_INDEX,
   FILE_ANNOTATION_LINE_INDEX,
@@ -275,7 +276,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     private onRenderUpdate?: () => unknown,
     private workerManager?: WorkerPoolManager | undefined
   ) {
-    if (workerManager?.isWorkingPool() !== true) {
+    if (!highlightsInWorkers(workerManager)) {
       this.highlighter = getHighlighterIfLoaded({
         theme: options.theme ?? DEFAULT_THEMES,
         preferredHighlighter: resolvePreferredHighlighter(
@@ -418,7 +419,8 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     // one; a keyless diff uses the local highlighter fallback below instead.
     if (
       !this.editSessionActive &&
-      workerManager?.isWorkingPool() === true &&
+      workerManager != null &&
+      highlightsInWorkers(workerManager) &&
       diff.cacheKey != null
     ) {
       workerManager.evictDiffFromCache(diff.cacheKey);
@@ -945,7 +947,8 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     };
     if (
       !this.editSessionActive &&
-      this.workerManager?.isWorkingPool() === true
+      this.workerManager != null &&
+      highlightsInWorkers(this.workerManager)
     ) {
       if (this.renderCache.result == null && !massiveDiff) {
         // We should only kick off a preload of the AST if we have a WorkerPool
@@ -1074,10 +1077,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       return true;
     }
 
-    if (
-      !this.editSessionActive &&
-      this.workerManager?.isWorkingPool() === true
-    ) {
+    if (!this.editSessionActive && highlightsInWorkers(this.workerManager)) {
       return !renderCache.highlighted;
     }
 
@@ -1130,7 +1130,8 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     );
     if (
       !this.editSessionActive &&
-      this.workerManager?.isWorkingPool() === true
+      this.workerManager?.isWorkingPool() === true &&
+      (forcePlainText || highlightsInWorkers(this.workerManager))
     ) {
       // Hydration has highlighted DOM but no local AST. Keep that DOM until
       // its corresponding worker result is ready.
@@ -2094,7 +2095,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     result: HunksRenderResult,
     tempChildren: ElementContent[] = []
   ): string {
-    return toHtml(this.renderFullAST(result, tempChildren));
+    return hastToHtml(this.renderFullAST(result, tempChildren));
   }
 
   public renderPartialHTML(
@@ -2102,9 +2103,9 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     columnType?: 'unified' | 'deletions' | 'additions'
   ): string {
     if (columnType == null) {
-      return toHtml(children);
+      return hastToHtml(children);
     }
-    return toHtml(
+    return hastToHtml(
       createHastElement({
         tagName: 'code',
         children,
