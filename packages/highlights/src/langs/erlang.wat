@@ -99,11 +99,11 @@
             (call $lexString (i32.const 39) (i32.const 0) (enum.get $Token.string.special.symbol))
             (local.set $attr (i32.const 0))
             (br $next)))
-        ;; `$c` and `$\n` character literals
+        ;; `$c`, `$ ` (the space character), and `$\n` character literals
         (if
           (i32.and
             (i32.eq (local.get $c) (i32.const "$"))
-            (i32.gt_u (local.get $c2) (i32.const 32)))
+            (i32.ge_u (local.get $c2) (i32.const 32)))
           (then
             (if (i32.eq (local.get $c2) (i32.const 92))
               (then

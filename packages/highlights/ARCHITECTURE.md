@@ -21,7 +21,8 @@ Document edits ── liveRun ───────────── per-line s
 | [`lib/index.ts`](./lib/index.ts), [`lib/highlighter.ts`](./lib/highlighter.ts)                        | Public API, Wasm instances, input/output, and streaming           |
 | [`lib/live.ts`](./lib/live.ts)                                                                        | Edit validation, document reads, and deferred work                |
 | [`lib/theme.ts`](./lib/theme.ts), [`lib/tokens.ts`](./lib/tokens.ts)                                  | Theme preparation and conversion of records to token objects      |
-| [`src/highlights.wat`](./src/highlights.wat), [`src/memory.wat`](./src/memory.wat)                    | Language dispatch, drivers, and memory layout                     |
+| [`src/highlights.wat`](./src/highlights.wat), [`src/memory.wat`](./src/memory.wat)                    | Drivers and memory layout                                         |
+| [`src/languages.wat`](./src/languages.wat)                                                            | Language table, name lookup, and dispatch by language ID          |
 | [`src/scan.wat`](./src/scan.wat), [`src/common.wat`](./src/common.wat)                                | Bounded scans, shared lexical rules, and multiline continuation   |
 | [`src/token.wat`](./src/token.wat), [`src/emit.wat`](./src/emit.wat)                                  | Token IDs, HTML emission, and binary records                      |
 | [`src/langs/*.wat`](./src/langs/), [`src/sig.wat`](./src/sig.wat), [`src/embed.wat`](./src/embed.wat) | Language lexers, parameter classification, and embedded languages |
@@ -69,13 +70,13 @@ memory growth can detach it.
 
 ## Lexers and emission
 
-The `language-table` in [`src/highlights.wat`](./src/highlights.wat) owns each
+The `language-table` in [`src/languages.wat`](./src/languages.wat) owns each
 language's canonical name, aliases, and dispatch function. The build derives
-Wasm IDs and the JavaScript lookup from this list. Keep `plain` first so it and
-its aliases (`plaintext`, `text`, `txt`) always have ID 0, then sort the
-remaining canonical names alphabetically. Reordering entries regenerates IDs in
-both artifacts, which must be used together. Host lookups ignore case and reject
-unknown names.
+Wasm IDs, the JavaScript lookup, and the name list Markdown fences resolve their
+info words against from this list. Keep `plain` first so it and its aliases
+(`plaintext`, `text`, `txt`) always have ID 0, then sort the remaining canonical
+names alphabetically. Reordering entries regenerates IDs in both artifacts,
+which must be used together. Host lookups ignore case and reject unknown names.
 
 Several languages share implementations. CSS dialects use `css.wat`. Free-form
 and fixed-form Fortran share `fortran.wat` through a dialect flag that each
@@ -112,8 +113,9 @@ an unfinished script comment must not consume the enclosing script closer.
 
 `embed.wat` resumes script/style bodies, front matter, and framework
 expressions. Markup lexers resume their own unfinished start tags. Markdown and
-MDX retain fence delimiter, language, and nesting state. Fence aliases are
-registered separately in `markdown.wat`.
+MDX retain fence delimiter, language, and nesting state. A fence body is a
+document of its own: `$docStart` marks its first line, so document-start syntax
+such as a `#!` line or front matter applies there too.
 
 ## Token records
 
@@ -248,13 +250,13 @@ and the tracked [`lib/languages.ts`](./lib/languages.ts) and
 [`lib/token-types.ts`](./lib/token-types.ts) tables. tsdown emits the host and
 declarations.
 
-When adding a language, update its import, registration, stream checkpoint
-participation, and fence aliases where needed. Add a language test and a corpus
-entry in [`test/_samples.ts`](./test/_samples.ts). Changes to carried state must
-also update live capture/reset/restore logic. Token IDs define the theme ABI;
-growing `$Token` requires checking the fixed theme and emitter capacities. The
-enum lists members alphabetically, with the rarely emitted ones last so every
-common member keeps a one-byte constant.
+When adding a language, update its import, registration, and stream checkpoint
+participation where needed; Markdown fences pick up its names automatically. Add
+a language test and a corpus entry in [`test/_samples.ts`](./test/_samples.ts).
+Changes to carried state must also update live capture/reset/restore logic.
+Token IDs define the theme ABI; growing `$Token` requires checking the fixed
+theme and emitter capacities. The enum lists members alphabetically, with the
+rarely emitted ones last so every common member keeps a one-byte constant.
 
 Tests compile WAT directly and import `lib/`, so no package build is needed.
 Language tests cover classification and bounds; conformance tests compare HTML,

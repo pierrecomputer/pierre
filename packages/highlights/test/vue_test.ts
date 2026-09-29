@@ -233,3 +233,59 @@ void t.test('vue: malformed and split ranges remain bounded', () => {
   const split = loadLang('vue', '$hlVue', 17);
   checkInvariants(split.hl, '<template><p v-if="ok">{{ msg }}</p></template>');
 });
+
+void t.test('vue: a style lang selects the css preprocessor dialect', () => {
+  const scss = tokenKinds(
+    'vue',
+    '<style lang="scss" scoped>\n$primary: #333;\n.a {\n  // line comment\n  color: $primary;\n}\n</style>\n'
+  );
+  assert.ok(
+    scss.some(([text, kind]) => text === '$primary' && kind === 'variable')
+  );
+  assert.ok(
+    scss.some(
+      ([text, kind]) => text === '// line comment' && kind === 'comment'
+    )
+  );
+  const less = tokenKinds('vue', '<style lang=less>\n@c: red;\n</style>\n');
+  assert.ok(less.some(([text, kind]) => text === '@c' && kind === 'variable'));
+  const sass = tokenKinds(
+    'vue',
+    '<style\n  lang="SASS">\n.a\n  color: red\n</style>\n'
+  );
+  assert.ok(
+    sass.some(([text, kind]) => text === 'color' && kind === 'property')
+  );
+  // another attribute between `lang` and its value, or another name, is css
+  const css = tokenKinds(
+    'vue',
+    '<style lang data-x="scss">\n$a: 1;\n</style>\n'
+  );
+  assert.ok(!css.some(([text]) => text === '$a'));
+  for (const code of [
+    '<style lang="scss">\n/* a\n   b */\n$x: 1px;\n// c\n</style>\n<p>{{ a }}</p>\n',
+    '<style lang="less"\n  scoped>\n@a: 1;\n/* x\n*/\n</style>\n',
+    '<style lang=\n"scss">\n$a: 1;\n</style>\n',
+  ]) {
+    assertLineFedParity('vue', code);
+  }
+});
+
+void t.test('vue: interpolations close at their own `}}` in one pass', () => {
+  assert.deepEqual(tokenKinds('vue', '<p>{{ a } b }}</p>').slice(3, 9), [
+    ['{{', 'punctuation.special'],
+    ['a', 'variable'],
+    ['}', 'punctuation.bracket'],
+    ['b', 'variable'],
+    ['}}', 'punctuation.special'],
+    ['</', 'punctuation.bracket.html'],
+  ]);
+  for (const code of [
+    '<p>{{ {a: 1}.a }} {{ `x}}` }}</p>\n',
+    '<p>{{ a +\n  b }}</p>\n',
+    '{{ unclosed\n<p>x</p>\n',
+    '{{ "}}\n<p>x</p>\n',
+  ]) {
+    assertLineFedParity('vue', code);
+  }
+});

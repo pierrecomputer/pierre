@@ -71,6 +71,27 @@ interface Window {
   __workerPortableInitialized?: boolean;
   __workerPortableError?: string;
 
+  // code-view-annotations.html helpers for annotation layout and scroll state.
+  __annotationScroll?: {
+    root: HTMLElement;
+    addAnnotation(): void;
+    setChildAnnotations(): void;
+    resizeAnnotations(height: number): void;
+    clearAnnotations(): void;
+    removeFileAnnotation(): void;
+    setLineCount(lineCount: number): void;
+    addTail(): void;
+    removeTail(): boolean;
+    setDiffStyle(diffStyle: 'split' | 'unified'): void;
+    scrollToLine(lineNumber: number, behavior: 'instant' | 'smooth'): void;
+    editAnnotationLine(remove: boolean): void;
+    getEditorAnnotationLines(): number[] | undefined;
+    isEditorReady(): boolean;
+    getFirstLineTop(): number | undefined;
+    getMeasuredAnnotationHeight(): number | undefined;
+    getScrollTop(): number;
+  };
+
   // Interaction logs populated by fixture callbacks.
   __editorEvents?: string[];
   __conflictResolutions?: string[];

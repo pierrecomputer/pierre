@@ -106,36 +106,53 @@
             (local.set $afterValue (i32.const 1))
             (br $next)))
         (if
-          (i32.and
-            (i32.eq (local.get $c) (i32.const "{"))
-            (i32.or
-              (i32.eq (local.get $c2) (i32.const "|"))
-              (i32.and
-                (i32.le_u (i32.sub (local.get $c2) (i32.const "a")) (i32.const 25))
-                (i32.eq
-                  (call $mlByte (call $mlIdEnd (i32.add (global.get $ptr) (i32.const 1))))
-                  (i32.const "|")))))
+          (if (result i32) (i32.eq (local.get $c) (i32.const "{"))
+            (then
+              (i32.or
+                (i32.eq (local.get $c2) (i32.const "|"))
+                (if (result i32) (i32.le_u (i32.sub (local.get $c2) (i32.const "a")) (i32.const 25))
+                  (then
+                    (i32.eq
+                      (call $mlByte (call $mlIdEnd (i32.add (global.get $ptr) (i32.const 1))))
+                      (i32.const "|")))
+                  (else (i32.const 0)))))
+            (else (i32.const 0)))
           (then
-            ;; the closer is `|` + id + `}`: build it in the delimiter region
             (local.set $q (i32.add (global.get $ptr) (i32.const 1)))
-            (local.set $p (call $mlIdEnd (local.get $q)))
-            (local.set $n (i32.sub (local.get $p) (local.get $q)))
-            (if (i32.gt_u (local.get $n) (i32.const 30))
-              (then (local.set $n (i32.const 30))))
-            (i32.store8 (i32.const $mem.streamDelimiter) (i32.const "|"))
-            (memory.copy (i32.const $mem.streamDelimiter+1) (local.get $q) (local.get $n))
-            (i32.store8 (i32.add (i32.const $mem.streamDelimiter+1) (local.get $n)) (i32.const "}"))
-            (global.set $ptr (i32.add (local.get $p) (i32.const 1)))
-            (call $mlQuotedBody (i32.add (local.get $n) (i32.const 2)))
-            (call $emitTok (enum.get $Token.string) (local.get $lhs) (global.get $ptr))
-            (call $streamSetFixed
-              (i32.const $mem.streamDelimiter)
-              (i32.add (local.get $n) (i32.const 2))
-              (enum.get $Token.string))
+            (call $mlQuoted (local.get $lhs) (local.get $q) (call $mlIdEnd (local.get $q)))
             (local.set $member (i32.const 0))
+            (local.set $afterValue (i32.const 1))
             (br $next)))
+        ;; `{%ext|...|}` and `{%%ext id|...|id}` quoted extensions: the marker
+        ;; and name as in `[%ext]`, then a quoted string keyed by the id
+        (if (i32.and (i32.eq (local.get $c) (i32.const "{")) (i32.eq (local.get $c2) (i32.const "%")))
+          (then
+            (local.set $p (i32.add (global.get $ptr) (i32.const 2)))
+            (if (i32.eq (call $mlByte (local.get $p)) (i32.const "%"))
+              (then (local.set $p (i32.add (local.get $p) (i32.const 1)))))
+            (global.set $ptr (local.get $p))
+            (call $scanIdentRun (i32.const "."))
+            (local.set $rhs (global.get $ptr))
+            (local.set $q (local.get $rhs))
+            (if (i32.eq (call $mlByte (local.get $q)) (i32.const " "))
+              (then (local.set $q (i32.add (local.get $q) (i32.const 1)))))
+            (local.set $n (call $mlIdEnd (local.get $q)))
+            (if
+              (i32.and
+                (i32.gt_u (local.get $rhs) (local.get $p))
+                (i32.eq (call $mlByte (local.get $n)) (i32.const "|")))
+              (then
+                (call $emitTok (enum.get $Token.punctuation.special) (local.get $lhs) (local.get $p))
+                (call $emitTok (enum.get $Token.attribute) (local.get $p) (local.get $rhs))
+                (call $mlQuoted (local.get $rhs) (local.get $q) (local.get $n))
+                (local.set $member (i32.const 0))
+                (local.set $afterValue (i32.const 1))
+                (br $next)))
+            (global.set $ptr (local.get $lhs))))
         (if
-          (i32.and (i32.eq (local.get $c) (i32.const 39)) (call $mlIsCharLiteral (global.get $ptr)))
+          (if (result i32) (i32.eq (local.get $c) (i32.const 39))
+            (then (call $mlIsCharLiteral (global.get $ptr)))
+            (else (i32.const 0)))
           (then
             (call $lexString (i32.const 39) (i32.const 0) (enum.get $Token.string))
             (local.set $member (i32.const 0))
@@ -158,7 +175,9 @@
             (call $emitTok (enum.get $Token.variant) (local.get $lhs) (global.get $ptr))
             (local.set $member (i32.const 0))
             (br $next)))
-        ;; `~label`, `~label:`, `?opt` argument labels
+        ;; `~label`, `~label:`, `?opt` argument labels. The `:` glued to a
+        ;; label introduces its argument, not a type, and that argument is
+        ;; one atom, so a name after it does not head an application.
         (if
           (i32.and
             (i32.or (i32.eq (local.get $c) (i32.const "~")) (i32.eq (local.get $c) (i32.const "?")))
@@ -168,6 +187,15 @@
             (call $lexScanIdent)
             (call $emitTok (enum.get $Token.variable.parameter) (local.get $lhs) (global.get $ptr))
             (local.set $member (i32.const 0))
+            (if
+              (i32.and
+                (i32.eq (call $mlByte (global.get $ptr)) (i32.const ":"))
+                (i32.ne (call $mlByte (i32.add (global.get $ptr) (i32.const 1))) (i32.const ":")))
+              (then
+                (local.set $lhs (global.get $ptr))
+                (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
+                (call $emitTok (enum.get $Token.operator) (local.get $lhs) (global.get $ptr))
+                (local.set $afterValue (i32.const 1))))
             (br $next)))
         ;; `[@attr]`, `[@@attr]`, `[@@@attr]`, `[%ext]`, `[%%ext]`
         (if
@@ -216,7 +244,8 @@
                 (if
                   (i32.le_u (i32.sub (i32.load8_u (local.get $lhs)) (i32.const "A")) (i32.const 25))
                   (then
-                    ;; `Foo.bar` names a module, a bare `Foo` a constructor
+                    ;; `Foo.bar` names a module, a bare `Foo` a constructor;
+                    ;; after `module type` the name is a module type
                     (local.set $lastModule (i32.eq (call $mlByte (local.get $rhs)) (i32.const ".")))
                     (local.set $hl
                       (select
@@ -225,7 +254,9 @@
                         (i32.or
                           (local.get $lastModule)
                           (i32.eq (local.get $expect) (i32.const 3)))))
-                    (if (i32.eq (local.get $expect) (i32.const 3))
+                    (if (i32.eq (local.get $expect) (i32.const 2))
+                      (then (local.set $hl (enum.get $Token.type))))
+                    (if (i32.ge_u (local.get $expect) (i32.const 2))
                       (then (local.set $expect (i32.const 0)))))
                   (else
                     (if (i32.eq (local.get $expect) (i32.const 1))
@@ -268,17 +299,19 @@
                                       (select
                                         (enum.get $Token.function)
                                         (enum.get $Token.variable)
-                                        (i32.and
-                                          (i32.eqz (local.get $afterValue))
-                                          (call $mlIsArgStart
-                                            (call $mlByte (local.get $p))))))))))))))))))
+                                        (if (result i32) (local.get $afterValue)
+                                          (then (i32.const 0))
+                                          (else (call $mlIsArgAt (local.get $p))))))))))))))))))
             (call $emitTok (local.get $hl) (local.get $lhs) (local.get $rhs))
             (local.set $member (i32.const 0))
+            ;; a defined name counts too, so `let add x y` keeps `x` a value
             (local.set $afterValue
               (i32.or
                 (i32.or
-                  (i32.eq (local.get $hl) (enum.get $Token.variable))
-                  (i32.eq (local.get $hl) (enum.get $Token.function)))
+                  (i32.or
+                    (i32.eq (local.get $hl) (enum.get $Token.variable))
+                    (i32.eq (local.get $hl) (enum.get $Token.function)))
+                  (i32.eq (local.get $hl) (enum.get $Token.function.definition)))
                 (i32.or
                   (i32.eq (local.get $hl) (enum.get $Token.constructor))
                   (i32.eq (local.get $hl) (enum.get $Token.property)))))
@@ -290,6 +323,7 @@
             (i32.and (i32.eq (local.get $c) (i32.const ".")) (call $lexIsDigit (local.get $c2))))
           (then
             (call $lexScanHexNumber (i32.const 1))
+            (call $mlFloatDot)
             (call $emitTok (enum.get $Token.number) (local.get $lhs) (global.get $ptr))
             (local.set $member (i32.const 0))
             (local.set $afterValue (i32.const 1))
@@ -348,7 +382,7 @@
             (if (i32.eq (local.get $member) (i32.const 2))
               (then
                 (local.set $p (call $lexSkipSpaceAt (call $mlIdEnd (global.get $ptr))))
-                (if (i32.eqz (call $mlIsArgStart (call $mlByte (local.get $p))))
+                (if (i32.eqz (call $mlIsArgAt (local.get $p)))
                   (then (local.set $member (i32.const 1))))))
             (local.set $afterValue (i32.const 0))
             (br $next)))
@@ -401,6 +435,21 @@
         (local.set $member (i32.const 0))
         (br $next))))
 
+  ;; A number's trailing `.` belongs to it: `0.` and `1.` are floats, and a
+  ;; separate `.` would start member access. `..` stays a range and `.x`
+  ;; (with `1.e5` rare enough to ignore) stays an access.
+  (func $mlFloatDot
+    (local $c i32)
+    (if (i32.ne (call $mlByte (global.get $ptr)) (i32.const "."))
+      (then (return)))
+    (local.set $c (call $mlByte (i32.add (global.get $ptr) (i32.const 1))))
+    (if
+      (i32.or
+        (i32.eq (local.get $c) (i32.const "."))
+        (call $lexIsIdentStart (local.get $c)))
+      (then (return)))
+    (global.set $ptr (i32.add (global.get $ptr) (i32.const 1))))
+
   ;; whether $c can begin an argument: a name, a literal, a paren, a label,
   ;; a polymorphic variant, or a record
   (func $mlIsArgStart (param $c i32) (result i32)
@@ -421,6 +470,48 @@
         (local.set $p (i32.add (local.get $p) (i32.const 1)))
         (br $l)))
     (local.get $p))
+
+  ;; Lex a quoted string from $lhs whose key id is [$idStart, $idEnd), with
+  ;; the opener's `|` at $idEnd: build the closer `|` + id + `}` in the
+  ;; delimiter region, where a chunk boundary can resume it, scan to it, and
+  ;; emit everything from $lhs as one string.
+  (func $mlQuoted (param $lhs i32) (param $idStart i32) (param $idEnd i32)
+    (local $n i32)
+    (local.set $n (i32.sub (local.get $idEnd) (local.get $idStart)))
+    (if (i32.gt_u (local.get $n) (i32.const 30))
+      (then (local.set $n (i32.const 30))))
+    (i32.store8 (i32.const $mem.streamDelimiter) (i32.const "|"))
+    (memory.copy (i32.const $mem.streamDelimiter+1) (local.get $idStart) (local.get $n))
+    (i32.store8 (i32.add (i32.const $mem.streamDelimiter+1) (local.get $n)) (i32.const "}"))
+    (global.set $ptr (i32.add (local.get $idEnd) (i32.const 1)))
+    (call $mlQuotedBody (i32.add (local.get $n) (i32.const 2)))
+    (call $emitTok (enum.get $Token.string) (local.get $lhs) (global.get $ptr))
+    (call $streamSetFixed
+      (i32.const $mem.streamDelimiter)
+      (i32.add (local.get $n) (i32.const 2))
+      (enum.get $Token.string)))
+
+  ;; Whether the bytes at $p begin an argument of an application: a value
+  ;; start that is not a keyword, so `match x with` does not apply `x`.
+  ;; Keywords are all lowercase letters, so a run that continues with a
+  ;; digit, capital, or prime is a name; true and false are values.
+  (func $mlIsArgAt (param $p i32) (result i32)
+    (local $c i32)
+    (local $e i32)
+    (local $kind i32)
+    (local.set $c (call $mlByte (local.get $p)))
+    (if (i32.eqz (call $mlIsArgStart (local.get $c)))
+      (then (return (i32.const 0))))
+    (if (i32.gt_u (i32.sub (local.get $c) (i32.const "a")) (i32.const 25))
+      (then (return (i32.const 1))))
+    (local.set $e (call $mlIdEnd (local.get $p)))
+    (local.set $c (call $mlByte (local.get $e)))
+    (if (i32.or (call $lexIsIdentContinue (local.get $c)) (i32.eq (local.get $c) (i32.const 39)))
+      (then (return (i32.const 1))))
+    (local.set $kind (call $mlWordHl (local.get $p) (local.get $e)))
+    (i32.or
+      (i32.lt_s (local.get $kind) (i32.const 0))
+      (i32.eq (i32.and (local.get $kind) (i32.const 255)) (enum.get $Token.boolean))))
 
   ;; Advance $ptr through a quoted string body to just past the $n-byte
   ;; closer held in the delimiter region, or to $end: hop between `|` bytes

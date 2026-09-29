@@ -587,3 +587,64 @@ void t.test(
     );
   }
 );
+
+void t.test(
+  'powershell: hashtable and splat keys, including keyword names',
+  () => {
+    const code =
+      '$splat = @{ Path = "C:\\x"; Filter = "*.log"; Recurse = $true }\n$h = @{\n  Data = 1\n  Process = \'p\'\n  Class = 2\n  Value = 3\n}\nfilter Keep { $_ }\n';
+    assertLineFedParity('powershell', code);
+    const kinds = tokenKinds('powershell', code);
+    for (const key of [
+      'Path',
+      'Filter',
+      'Recurse',
+      'Data',
+      'Process',
+      'Class',
+      'Value',
+    ]) {
+      assert.deepEqual(
+        kinds.find(([text]) => text === key),
+        [key, 'property'],
+        key
+      );
+    }
+    // the keyword still declares where it is not a key
+    assert.deepEqual(kinds.slice(-5), [
+      ['filter', 'keyword.declaration'],
+      ['Keep', 'function.definition'],
+      ['{', 'punctuation.bracket'],
+      ['$_', 'variable.special'],
+      ['}', 'punctuation.bracket'],
+    ]);
+  }
+);
+
+void t.test('powershell: a class base type after `:`', () => {
+  assert.deepEqual(tokenKinds('powershell', 'class C : Base { }'), [
+    ['class', 'keyword.declaration'],
+    ['C', 'type'],
+    [':', null],
+    ['Base', 'type'],
+    ['{ }', 'punctuation.bracket'],
+  ]);
+});
+
+void t.test(
+  'powershell: long dash-free input stays linear and classifies cmdlets',
+  () => {
+    // the Verb-Noun test looks for `-` only inside the word
+    const code =
+      "@{ NodeName = 'server01'; Role = 'Web' }\n".repeat(200) + 'Get-Item x\n';
+    const kinds = tokenKinds('powershell', code);
+    assert.deepEqual(kinds.slice(-2), [
+      ['Get-Item', 'function'],
+      ['x', null],
+    ]);
+    assert.deepEqual(
+      kinds.find(([text]) => text === 'NodeName'),
+      ['NodeName', 'property']
+    );
+  }
+);

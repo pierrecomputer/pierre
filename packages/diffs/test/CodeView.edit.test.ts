@@ -129,7 +129,10 @@ function setSessionText(editor: AnyTrackedEditor, contents: string): void {
   ]);
 }
 
-function insertAtStart(editor: AnyTrackedEditor, text: string): void {
+function insertAtStart(
+  editor: Editor<'file', undefined> | Editor<'file-diff', undefined>,
+  text: string
+): void {
   editor.applyEdits([
     {
       range: {
@@ -161,6 +164,19 @@ function getRendererDiff(instance: unknown): FileDiffMetadata | undefined {
       hunksRenderer?: { diffCache?: FileDiffMetadata };
     }
   ).hunksRenderer?.diffCache;
+}
+
+function getCachedRenderTarget(
+  instance: unknown
+): FileContents | FileDiffMetadata | undefined {
+  const renderers = instance as {
+    fileRenderer?: { renderCache?: { file: FileContents } };
+    hunksRenderer?: { renderCache?: { diff: FileDiffMetadata } };
+  };
+  return (
+    renderers.fileRenderer?.renderCache?.file ??
+    renderers.hunksRenderer?.renderCache?.diff
+  );
 }
 
 function makeEditFileItem(
@@ -241,11 +257,561 @@ beforeAll(async () => {
   });
 });
 
+describe('programmatic edits on suspended CodeView editors', () => {
+  for (const hydrateWhileSuspended of [false, true]) {
+    test(`retained diff attaches after partial hydration ${hydrateWhileSuspended ? 'while offscreen' : 'while mounted'}`, async () => {
+      const { cleanup } = installDom();
+      const key = `partial-delayed-edit-${hydrateWhileSuspended}`;
+      const initial = makeEditDiffItem('target');
+      if (initial.type !== 'diff') throw new Error('Expected diff item');
+      const createEditor = <EType extends EditorType>(
+        type: EType,
+        options: CodeViewCreateEditorOptions<EType, undefined, undefined>,
+        editStateKey?: string
+      ): Editor<EType, undefined> => new Editor(type, options, editStateKey);
+      const firstViewer = new CodeView({
+        createEditor,
+        getEditStateKey: () => key,
+      });
+      let secondViewer: CodeView | undefined;
+      try {
+        firstViewer.setup(createRoot());
+        await renderItems(firstViewer, [initial]);
+        const firstEditor = firstViewer.getEditor('target');
+        if (firstEditor == null) throw new Error('Expected initial editor');
+        insertAtStart(firstEditor, '// prior\n');
+        firstViewer.cleanUp();
+
+        const loadedFiles: FileDiffLoadedFiles = {
+          oldFile: { name: 'target.txt', contents: 'one\ntwo\nthree\n' },
+          newFile: {
+            name: 'target.txt',
+            contents: 'one\ntwo changed\nthree\n',
+          },
+        };
+        const patch = createTwoFilesPatch(
+          'target.txt',
+          'target.txt',
+          loadedFiles.oldFile.contents,
+          loadedFiles.newFile.contents
+        );
+        const partial = parsePatchFiles(patch, 'partial', true)[0]?.files[0];
+        if (partial == null) throw new Error('Expected partial diff');
+        let finishLoading: ((files: FileDiffLoadedFiles) => void) | undefined;
+        const loadPromise = new Promise<FileDiffLoadedFiles>((resolve) => {
+          finishLoading = resolve;
+        });
+        const changes: string[] = [];
+        let attaches = 0;
+        secondViewer = new CodeView({
+          createEditor: (type, options, editStateKey) =>
+            new Editor(
+              type,
+              {
+                ...options,
+                onAttach() {
+                  attaches++;
+                },
+                onChange(event) {
+                  changes.push(event.file.contents);
+                },
+              },
+              editStateKey
+            ),
+          getEditStateKey: () => key,
+          loadDiffFiles: () => loadPromise,
+        });
+        const root = createRoot();
+        secondViewer.setup(root);
+        await renderItems(secondViewer, [
+          { ...initial, fileDiff: partial },
+          ...Array.from({ length: 39 }, (_, index) =>
+            makeEditFileItem(`filler-${index}`, false, 30)
+          ),
+        ]);
+        expect(secondViewer.getEditor('target')).toBeUndefined();
+        expect(attaches).toBe(0);
+        const instance = secondViewer.getRenderedItems()[0]?.instance;
+        expect(getEditSessionDiff(instance)).toBeUndefined();
+
+        if (hydrateWhileSuspended) {
+          root.scrollTop = 20_000;
+          dispatchScroll(root);
+          secondViewer.render(true);
+          await wait(0);
+          expect(
+            secondViewer.getRenderedItems().some(({ id }) => id === 'target')
+          ).toBe(false);
+        }
+        finishLoading?.(loadedFiles);
+        if (hydrateWhileSuspended) {
+          await wait(0);
+          secondViewer.scrollTo({
+            type: 'item',
+            id: 'target',
+            align: 'start',
+            behavior: 'instant',
+          });
+        }
+        await waitFor(() => partial.isPartial === false);
+        secondViewer.render(true);
+        await waitFor(() => secondViewer?.getEditor('target') != null);
+        const editor = secondViewer.getEditor('target');
+        if (editor == null) throw new Error('Expected hydrated editor');
+        await waitFor(() => attaches === 1);
+        expect(editor.getText()).toStartWith('// prior\n');
+        expect(getEditSessionDiff(instance)?.additionLines.join('')).toBe(
+          editor.getText()
+        );
+        insertAtStart(editor, '// after\n');
+        expect(changes.at(-1)).toBe(editor.getText());
+        expect(
+          secondViewer.getRenderedItems()[0]?.element.shadowRoot?.textContent
+        ).toContain('// after');
+      } finally {
+        secondViewer?.cleanUp();
+        firstViewer.cleanUp();
+        await wait(0);
+        cleanup();
+      }
+    });
+  }
+
+  for (const suspension of ['mounted', 'offscreen'] as const) {
+    test(`retained edits restore after a replacement hydrates while ${suspension}`, async () => {
+      const { cleanup } = installDom();
+      const key = `partial-replacement-${suspension}`;
+      const initial = makeEditDiffItem('target');
+      if (initial.type !== 'diff') throw new Error('Expected diff item');
+      const createEditor = <EType extends EditorType>(
+        type: EType,
+        options: CodeViewCreateEditorOptions<EType, undefined, undefined>,
+        editStateKey?: string
+      ): Editor<EType, undefined> => new Editor(type, options, editStateKey);
+      const firstViewer = new CodeView({
+        createEditor,
+        getEditStateKey: () => key,
+      });
+      let secondViewer: CodeView | undefined;
+      try {
+        firstViewer.setup(createRoot());
+        await renderItems(firstViewer, [initial]);
+        const firstEditor = firstViewer.getEditor('target');
+        if (firstEditor == null) throw new Error('Expected initial editor');
+        insertAtStart(firstEditor, '// prior\n');
+        firstViewer.cleanUp();
+
+        const oldFile = { name: 'target.txt', contents: 'one\ntwo\nthree\n' };
+        const newFile = {
+          name: 'target.txt',
+          contents: 'one\ntwo changed\nthree\n',
+        };
+        const patch = createTwoFilesPatch(
+          oldFile.name,
+          newFile.name,
+          oldFile.contents,
+          newFile.contents
+        );
+        const partial = parsePatchFiles(patch, 'partial', true)[0]?.files[0];
+        if (partial == null) throw new Error('Expected partial diff');
+        const remoteFile = {
+          name: newFile.name,
+          contents: 'one\nremote value\nthree\n',
+        };
+        const replacementPatch = createTwoFilesPatch(
+          oldFile.name,
+          remoteFile.name,
+          oldFile.contents,
+          remoteFile.contents
+        );
+        const replacementPartial = parsePatchFiles(
+          replacementPatch,
+          'replacement',
+          true
+        )[0]?.files[0];
+        if (replacementPartial == null) {
+          throw new Error('Expected replacement partial diff');
+        }
+        secondViewer = new CodeView({
+          createEditor,
+          getEditStateKey: () => key,
+          loadDiffFiles: (fileDiff) =>
+            fileDiff === partial
+              ? new Promise<FileDiffLoadedFiles>(() => {})
+              : Promise.resolve({ oldFile, newFile: remoteFile }),
+        });
+        const root = createRoot();
+        secondViewer.setup(root);
+        await renderItems(secondViewer, [
+          { ...initial, fileDiff: partial },
+          ...Array.from({ length: 39 }, (_, index) =>
+            makeEditFileItem(`filler-${index}`, false, 30)
+          ),
+        ]);
+        expect(secondViewer.getEditor('target')).toBeUndefined();
+        if (suspension === 'offscreen') {
+          root.scrollTop = 20_000;
+          dispatchScroll(root);
+          secondViewer.render(true);
+          await wait(0);
+        }
+
+        const replacement: CodeViewItem<undefined> = {
+          ...initial,
+          fileDiff: replacementPartial,
+          version: 1,
+        };
+        await applyItemUpdate(secondViewer, replacement);
+        if (suspension === 'offscreen') {
+          secondViewer.scrollTo({
+            type: 'item',
+            id: 'target',
+            align: 'start',
+            behavior: 'instant',
+          });
+          secondViewer.render(true);
+        }
+        await waitFor(
+          () =>
+            secondViewer?.getEditor('target')?.getText() ===
+            '// prior\n' + newFile.contents
+        );
+        const editor = secondViewer.getEditor('target');
+        if (editor == null) throw new Error('Expected restored editor');
+        expect(editor.getText()).toBe('// prior\n' + newFile.contents);
+        expect(editor.canUndo).toBe(true);
+        expect(replacementPartial.isPartial).toBe(false);
+        expect(
+          getEditSessionDiff(
+            secondViewer.getRenderedItems()[0]?.instance
+          )?.additionLines.join('')
+        ).toBe(editor.getText());
+        await waitFor(() =>
+          Boolean(
+            secondViewer
+              ?.getRenderedItems()[0]
+              ?.element.shadowRoot?.textContent?.includes('prior')
+          )
+        );
+        expect(
+          secondViewer.getRenderedItems()[0]?.element.shadowRoot?.textContent
+        ).toContain('prior');
+      } finally {
+        secondViewer?.cleanUp();
+        firstViewer.cleanUp();
+        await wait(0);
+        cleanup();
+      }
+    });
+  }
+
+  test('retained edits restore when a full diff replaces an item before its first attach', async () => {
+    const { cleanup } = installDom();
+    const key = 'full-replacement-before-attach';
+    const initial = makeEditDiffItem('target');
+    if (initial.type !== 'diff') throw new Error('Expected diff item');
+    const createEditor = <EType extends EditorType>(
+      type: EType,
+      options: CodeViewCreateEditorOptions<EType, undefined, undefined>,
+      editStateKey?: string
+    ): Editor<EType, undefined> => new Editor(type, options, editStateKey);
+    const firstViewer = new CodeView({
+      createEditor,
+      getEditStateKey: () => key,
+    });
+    let secondViewer: CodeView | undefined;
+    try {
+      firstViewer.setup(createRoot());
+      await renderItems(firstViewer, [initial]);
+      const firstEditor = firstViewer.getEditor('target');
+      if (firstEditor == null) throw new Error('Expected initial editor');
+      insertAtStart(firstEditor, '// prior\n');
+      firstViewer.cleanUp();
+
+      const replacement: CodeViewItem<undefined> = {
+        ...initial,
+        fileDiff: parseDiffFromFile(
+          { name: 'target.txt', contents: 'one\ntwo\nthree\n' },
+          { name: 'target.txt', contents: 'one\nremote value\nthree\n' }
+        ),
+        version: 1,
+      };
+      secondViewer = new CodeView({
+        createEditor,
+        getEditStateKey: () => key,
+      });
+      secondViewer.setup(createRoot());
+      await renderItems(secondViewer, [replacement]);
+      const editor = secondViewer.getEditor('target');
+      if (editor == null) throw new Error('Expected restored editor');
+      expect(editor.getText()).toBe('// prior\none\ntwo changed\nthree\n');
+      expect(editor.canUndo).toBe(true);
+      expect(
+        getEditSessionDiff(
+          secondViewer.getRenderedItems()[0]?.instance
+        )?.additionLines.join('')
+      ).toBe(editor.getText());
+    } finally {
+      secondViewer?.cleanUp();
+      firstViewer.cleanUp();
+      await wait(0);
+      cleanup();
+    }
+  });
+
+  for (const type of ['file', 'diff'] as const) {
+    for (const suspension of ['scroll', 'collapse'] as const) {
+      test(`${type} edits stay visible after ${suspension} suspension`, async () => {
+        const { cleanup } = installDom();
+        const item =
+          type === 'file'
+            ? makeEditFileItem('target', true, 30)
+            : makeEditDiffItem('target', true);
+        const fillers =
+          suspension === 'scroll'
+            ? Array.from({ length: 39 }, (_, index) =>
+                makeEditFileItem(`filler-${index}`, false, 30)
+              )
+            : [];
+        const changes: Array<{ document: string; session: string }> = [];
+        let instance: unknown;
+        const sessionText = (): string => {
+          if (type === 'file') {
+            return getEditSessionFile(instance)?.contents ?? '';
+          }
+          return getEditSessionDiff(instance)?.additionLines.join('') ?? '';
+        };
+        const viewer = new CodeView({
+          createEditor: (editorType, options, key) =>
+            new Editor(
+              editorType,
+              {
+                ...options,
+                onChange(event) {
+                  changes.push({
+                    document: event.file.contents,
+                    session: sessionText(),
+                  });
+                },
+              },
+              key
+            ),
+        });
+        const root = createRoot();
+        try {
+          viewer.setup(root);
+          await renderItems(viewer, [item, ...fillers]);
+          instance = viewer.getRenderedItems()[0]?.instance;
+          const editor = viewer.getEditor('target');
+          if (editor == null) throw new Error('Expected target editor');
+          const insert = (text: string): void => {
+            editor.applyEdits([
+              {
+                range: {
+                  start: { line: 0, character: 0 },
+                  end: { line: 0, character: 0 },
+                },
+                newText: text,
+              },
+            ]);
+          };
+
+          if (suspension === 'scroll') {
+            root.scrollTop = 20_000;
+            dispatchScroll(root);
+            viewer.render(true);
+            await wait(0);
+            expect(
+              viewer.getRenderedItems().some(({ id }) => id === 'target')
+            ).toBe(false);
+          } else {
+            await applyItemUpdate(viewer, {
+              ...item,
+              collapsed: true,
+              version: 1,
+            });
+            // Theme invalidation can leave a suspended session without a
+            // highlighted result. Its source still has to accept edits.
+            viewer.getRenderedItems()[0]?.instance.onThemeChange();
+          }
+
+          insert('// changed ');
+          insert('// inserted\n');
+          expect(editor.getText()).toStartWith('// inserted\n// changed ');
+          expect(sessionText()).toStartWith('// inserted\n// changed ');
+          expect(changes.at(-1)?.session).toStartWith(
+            '// inserted\n// changed '
+          );
+          editor.undo();
+          expect(sessionText()).toStartWith('// changed ');
+          editor.redo();
+          expect(sessionText()).toStartWith('// inserted\n// changed ');
+          editor.applyEdits([
+            {
+              range: {
+                start: { line: 0, character: 0 },
+                end: { line: 1, character: 0 },
+              },
+              newText: '',
+            },
+          ]);
+          expect(sessionText()).toStartWith('// changed ');
+          editor.undo();
+          expect(sessionText()).toStartWith('// inserted\n// changed ');
+          expect(
+            changes.every(({ document, session }) => document === session)
+          ).toBe(true);
+          expect(getCachedRenderTarget(instance)).toBeUndefined();
+
+          if (suspension === 'scroll') {
+            viewer.scrollTo({
+              type: 'item',
+              id: 'target',
+              align: 'start',
+              behavior: 'instant',
+            });
+            viewer.render(true);
+            await waitFor(() =>
+              viewer.getRenderedItems().some(({ id }) => id === 'target')
+            );
+          } else {
+            await applyItemUpdate(viewer, {
+              ...item,
+              collapsed: false,
+              version: 2,
+            });
+          }
+          const remounted = viewer
+            .getRenderedItems()
+            .find(({ id }) => id === 'target');
+          expect(remounted).toBeDefined();
+          expect(remounted?.element.shadowRoot?.textContent).toContain(
+            '// inserted'
+          );
+          expect(remounted?.element.shadowRoot?.textContent).toContain(
+            '// changed'
+          );
+          expect(viewer.getEditor('target')).toBe(editor);
+        } finally {
+          viewer.cleanUp();
+          await wait(0);
+          cleanup();
+        }
+      });
+    }
+  }
+
+  for (const type of ['file', 'diff'] as const) {
+    for (const finish of ['edit off', 'removal'] as const) {
+      test(`${type} completion after a suspended edit and ${finish} uses current text`, async () => {
+        const { cleanup } = installDom();
+        const item =
+          type === 'file'
+            ? makeEditFileItem('target')
+            : makeEditDiffItem('target');
+        const completions: string[] = [];
+        const viewer = new CodeView({
+          createEditor: (editorType, options, key) =>
+            new Editor(editorType, options, key),
+          onItemEditComplete(event) {
+            const completedFile = 'file' in event ? event.file : event.newFile;
+            if (completedFile == null) {
+              throw new Error('Expected completed file contents');
+            }
+            completions.push(completedFile.contents);
+            return 'reject';
+          },
+        });
+        try {
+          viewer.setup(createRoot());
+          await renderItems(viewer, [item]);
+          const instance = viewer.getRenderedItems()[0]?.instance;
+          const sessionTarget =
+            type === 'file'
+              ? getEditSessionFile(instance)
+              : getEditSessionDiff(instance);
+          const editor = viewer.getEditor('target');
+          if (editor == null) throw new Error('Expected target editor');
+          await applyItemUpdate(viewer, {
+            ...item,
+            collapsed: true,
+            version: 1,
+          });
+          editor.applyEdits([
+            {
+              range: {
+                start: { line: 0, character: 0 },
+                end: { line: 0, character: 0 },
+              },
+              newText: '// completion\n',
+            },
+          ]);
+          expect(editor.getText()).toStartWith('// completion\n');
+
+          if (finish === 'edit off') {
+            await applyItemUpdate(viewer, {
+              ...item,
+              collapsed: true,
+              edit: false,
+              version: 2,
+            });
+          } else {
+            await renderItems(viewer, []);
+          }
+          expect(completions).toHaveLength(1);
+          expect(completions[0]).toStartWith('// completion\n');
+          expect(viewer.getEditor('target')).toBeUndefined();
+          expect(getCachedRenderTarget(instance)).not.toBe(sessionTarget);
+        } finally {
+          viewer.cleanUp();
+          await wait(0);
+          cleanup();
+        }
+      });
+    }
+  }
+});
+
 afterAll(async () => {
   await disposeHighlighter();
 });
 
 describe('CodeView item edit mode', () => {
+  test('releases an unhydratable partial item when editor preparation throws', () => {
+    const { cleanup } = installDom();
+    const root = createRoot();
+    const viewer = new CodeView({
+      createEditor: (type, options) => new Editor(type, options),
+    });
+    const partial = parsePatchFiles(
+      [
+        'diff --git a/new.txt b/new.txt\n',
+        'new file mode 100644\n',
+        'index 0000000..1111111\n',
+        '--- /dev/null\n',
+        '+++ b/new.txt\n',
+        '@@ -0,0 +1 @@\n',
+        '+hello\n',
+      ].join(''),
+      'new.txt',
+      true
+    )[0]?.files[0];
+    if (partial == null) throw new Error('Expected partial diff');
+    try {
+      viewer.setup(root);
+      viewer.setItems([
+        { id: 'new', type: 'diff', fileDiff: partial, version: 0, edit: true },
+      ]);
+      expect(() => viewer.render(true)).toThrow(
+        'this partial diff cannot be hydrated'
+      );
+      expect(root.querySelector('diffs-container')).toBeNull();
+    } finally {
+      viewer.cleanUp();
+      cleanup();
+    }
+  });
+
   test('validates the factory only when a rendered item needs an editor', async () => {
     await expectMissingEditorFactoryOnRender((viewer) => {
       const initial = makeTextEditFileItem('initial', true, 2);
@@ -774,7 +1340,7 @@ describe('CodeView item edit mode', () => {
       );
 
       // Scroll the edited item out (recycle) and back in. The private session
-      // survives the renderer cache reset, so the remount renders its grown
+      // keeps its patched render cache, so the remount renders its grown
       // document without changing the caller-owned item.
       root.scrollTop = 20_000;
       dispatchScroll(root);
@@ -930,7 +1496,7 @@ describe('CodeView item edit mode', () => {
       edited.instance.updateRenderCache(new Map([[0, tokens]]), 'light');
 
       // Scroll the edited item out (recycle) and back in. The private session
-      // remains authoritative after the renderer cache is discarded.
+      // retains its patched render cache across the remount.
       root.scrollTop = 20_000;
       dispatchScroll(root);
       viewer.render(true);

@@ -13,76 +13,50 @@
   (enum $Lex
     "eof"
     "invalid"
-    ;; operators and punctuation
-    "ampersand_ampersand_equal"
-    "ampersand_ampersand"
-    "ampersand_equal"
-    "ampersand"
-    "asterisk_asterisk_equal"
-    "asterisk_asterisk"
-    "asterisk_equal"
-    "asterisk"
+    ;; operators and punctuation. Each operator family lists its longer forms
+    ;; right before the plain operator - `XX=`, `XX`, `X=`, `X` - so the
+    ;; scanner derives them from the plain kind (see $scanToken). Members the
+    ;; lexer compares against sit below 64, where their constants take one
+    ;; byte; the unreferenced ones follow
+    "ampersand_ampersand_equal" "ampersand_ampersand" "ampersand_equal" "ampersand"
+    "asterisk_asterisk_equal" "asterisk_asterisk" "asterisk_equal" "asterisk"
     "at_identifier"
     "backtick"
-    "bang_bang"
-    "bang_equal_equal"
-    "bang_equal"
-    "bang"
-    "bigint_literal"
-    "caret_equal"
-    "caret"
+    "bang_equal_equal" "bang_equal" "bang"
     "colon"
     "comma"
     "comment"
     "dollar_brace"
     "dot"
-    "equal_equal_equal"
-    "equal_equal"
-    "equal"
-    "function_arrow"
+    "equal_equal_equal" "equal_equal" "function_arrow" "equal"
     "hash_bang"
     "hash_identifier"
     "identifier"
     "l_brace"
     "l_bracket"
-    "l_angle_equal"
-    "l_angle"
+    "l_shift_equal" "l_shift" "l_angle_equal" "l_angle"
     "l_paren"
-    "l_shift_equal"
-    "l_shift"
-    "minus_equal"
-    "minus_minus"
-    "minus"
+    "minus_minus" "minus_equal" "minus"
     "multiline_comment"
-    "nullish_equal"
-    "nullish"
+    "nullish_equal" "nullish" "question_mark_dot" "question_mark"
     "number_literal"
-    "percent_equal"
-    "percent"
-    "pipe_equal"
-    "pipe_pipe_equal"
-    "pipe_pipe"
-    "pipe"
-    "plus_equal"
-    "plus_plus"
-    "plus"
-    "question_mark_dot"
-    "question_mark"
+    "pipe_pipe_equal" "pipe_pipe" "pipe_equal" "pipe"
+    "plus_plus" "plus_equal" "plus"
     "r_brace"
     "r_bracket"
-    "r_angle_equal"
-    "r_angle"
+    "r_shift_equal" "r_shift" "r_angle_equal" "r_angle"
     "r_paren"
-    "r_shift_equal"
-    "r_shift"
-    "r_unsigned_shift_equal"
     "r_unsigned_shift"
     "regexp_literal"
     "semicolon"
-    "slash_equal"
-    "slash"
+    "slash_equal" "slash"
     "spread"
     "string_literal"
+    "caret_equal" "caret"
+    "percent_equal" "percent"
+    "bang_bang"
+    "bigint_literal"
+    "r_unsigned_shift_equal"
     "tilde"
     "yield_asterisk"
     ;; keywords and reserved words
@@ -243,7 +217,24 @@
     ;; TS constructor-property modifiers
     (sigParamPrev
       "l_paren" "comma" "spread" "keyword_public" "keyword_private" "keyword_protected"
-      "ctxword_readonly" "ctxword_override"))
+      "ctxword_readonly" "ctxword_override")
+    ;; the only tokens $sigStep reacts to while no head is pending and no
+    ;; parameter list is marked
+    (sigIdle
+      "l_paren" "r_paren" "keyword_function" "keyword_catch" "identifier" "ctxword_get"
+      "ctxword_set")
+    ;; tokens after a plain identifier that can complete a contextual word
+    ;; the keyword table does not carry (see $ctxIdentHl)
+    (ctxIdentNext
+      "identifier" "l_brace" "string_literal" "hash_identifier" "keyword_this" "ctxword_as"
+      "ctxword_async" "ctxword_await" "ctxword_from" "ctxword_get" "ctxword_set"
+      "ctxword_abstract" "ctxword_declare" "ctxword_infer" "ctxword_is" "ctxword_keyof"
+      "ctxword_namespace" "ctxword_override" "ctxword_readonly" "ctxword_satisfies"
+      "ctxword_type")
+    ;; the keywords a TSRX `@` directive head spells (see $tsrxDirectiveKind)
+    (tsrxDirective
+      "keyword_if" "keyword_for" "keyword_try" "keyword_else" "keyword_case" "keyword_catch"
+      "keyword_switch" "keyword_default"))
 
   ;; keyword perfect-hash table (displacements, descriptors, word records),
   (data (i32.const $mem.tsxWords)
@@ -717,9 +708,15 @@
     (local.set $c2 (call $tsxByte (i32.add (global.get $ptr) (i32.const 1))))
 
     ;; punctuation leaves through one common epilogue: the branch result packs
-    ;; token kind above the low three-bit byte length
+    ;; token kind above the low three-bit byte length. An operator family
+    ;; instead branches to $family with its plain operator's kind in the same
+    ;; place and, in the low bits, which longer forms exist - 1 `X=`, 2 `XX`,
+    ;; 4 `XX=` - whose kinds the $Lex order puts right before the plain one
     (block $takeDone
       (result i32)
+      (local.set $take
+        (block $family
+          (result i32)
       (byte-switch (local.get $c)
         (case "("
           (call $brkPush (call $parenIsCtrl))
@@ -770,21 +767,11 @@
           (global.set $braceDepth (i32.sub (global.get $braceDepth) (i32.const 1)))
           (br $takeDone (i32.or (i32.shl (enum.get $Lex.r_brace) (i32.const 3)) (i32.const 1))))
         (case "="
-          (if (i32.eq (local.get $c2) (i32.const "="))
-            (then
-              (if (i32.eq (call $tsxByte (i32.add (global.get $ptr) (i32.const 2))) (i32.const "="))
-                (then
-                  (br $takeDone
-                    (i32.or
-                      (i32.shl (enum.get $Lex.equal_equal_equal) (i32.const 3))
-                      (i32.const 3)))))
-              (br $takeDone
-                (i32.or (i32.shl (enum.get $Lex.equal_equal) (i32.const 3)) (i32.const 2)))))
           (if (i32.eq (local.get $c2) (i32.const ">"))
             (then
               (br $takeDone
                 (i32.or (i32.shl (enum.get $Lex.function_arrow) (i32.const 3)) (i32.const 2)))))
-          (br $takeDone (i32.or (i32.shl (enum.get $Lex.equal) (i32.const 3)) (i32.const 1))))
+          (br $family (i32.or (i32.shl (enum.get $Lex.equal) (i32.const 3)) (i32.const 6))))
         (case "/"
           (if (i32.eq (local.get $c2) (i32.const "/"))
             (then
@@ -798,29 +785,9 @@
               (return (enum.get $Lex.multiline_comment))))
           (if (call $regexpAllowed)
             (then (return (call $scanRegexp))))
-          (if (i32.eq (local.get $c2) (i32.const "="))
-            (then
-              (br $takeDone
-                (i32.or (i32.shl (enum.get $Lex.slash_equal) (i32.const 3)) (i32.const 2)))))
-          (br $takeDone (i32.or (i32.shl (enum.get $Lex.slash) (i32.const 3)) (i32.const 1))))
+          (br $family (i32.or (i32.shl (enum.get $Lex.slash) (i32.const 3)) (i32.const 1))))
         (case "&"
-          (if (i32.eq (local.get $c2) (i32.const "&"))
-            (then
-              (if (i32.eq (call $tsxByte (i32.add (global.get $ptr) (i32.const 2))) (i32.const "="))
-                (then
-                  (br $takeDone
-                    (i32.or
-                      (i32.shl (enum.get $Lex.ampersand_ampersand_equal) (i32.const 3))
-                      (i32.const 3)))))
-              (br $takeDone
-                (i32.or
-                  (i32.shl (enum.get $Lex.ampersand_ampersand) (i32.const 3))
-                  (i32.const 2)))))
-          (if (i32.eq (local.get $c2) (i32.const "="))
-            (then
-              (br $takeDone
-                (i32.or (i32.shl (enum.get $Lex.ampersand_equal) (i32.const 3)) (i32.const 2)))))
-          (br $takeDone (i32.or (i32.shl (enum.get $Lex.ampersand) (i32.const 3)) (i32.const 1))))
+          (br $family (i32.or (i32.shl (enum.get $Lex.ampersand) (i32.const 3)) (i32.const 7))))
         (case "!"
           (if (i32.eq (local.get $c2) (i32.const "="))
             (then
@@ -834,21 +801,7 @@
                 (i32.or (i32.shl (enum.get $Lex.bang_equal) (i32.const 3)) (i32.const 2)))))
           (br $takeDone (i32.or (i32.shl (enum.get $Lex.bang) (i32.const 3)) (i32.const 1))))
         (case "|"
-          (if (i32.eq (local.get $c2) (i32.const "|"))
-            (then
-              (if (i32.eq (call $tsxByte (i32.add (global.get $ptr) (i32.const 2))) (i32.const "="))
-                (then
-                  (br $takeDone
-                    (i32.or
-                      (i32.shl (enum.get $Lex.pipe_pipe_equal) (i32.const 3))
-                      (i32.const 3)))))
-              (br $takeDone
-                (i32.or (i32.shl (enum.get $Lex.pipe_pipe) (i32.const 3)) (i32.const 2)))))
-          (if (i32.eq (local.get $c2) (i32.const "="))
-            (then
-              (br $takeDone
-                (i32.or (i32.shl (enum.get $Lex.pipe_equal) (i32.const 3)) (i32.const 2)))))
-          (br $takeDone (i32.or (i32.shl (enum.get $Lex.pipe) (i32.const 3)) (i32.const 1))))
+          (br $family (i32.or (i32.shl (enum.get $Lex.pipe) (i32.const 3)) (i32.const 7))))
         (case "?"
           (if (i32.eq (local.get $c2) (i32.const "."))
             (then
@@ -864,16 +817,7 @@
                     (i32.or (i32.shl (enum.get $Lex.question_mark) (i32.const 3)) (i32.const 1)))))
               (br $takeDone
                 (i32.or (i32.shl (enum.get $Lex.question_mark_dot) (i32.const 3)) (i32.const 2)))))
-          (if (i32.eq (local.get $c2) (i32.const "?"))
-            (then
-              (if (i32.eq (call $tsxByte (i32.add (global.get $ptr) (i32.const 2))) (i32.const "="))
-                (then
-                  (br $takeDone
-                    (i32.or (i32.shl (enum.get $Lex.nullish_equal) (i32.const 3)) (i32.const 3)))))
-              (br $takeDone
-                (i32.or (i32.shl (enum.get $Lex.nullish) (i32.const 3)) (i32.const 2)))))
-          (br $takeDone
-            (i32.or (i32.shl (enum.get $Lex.question_mark) (i32.const 3)) (i32.const 1))))
+          (br $family (i32.or (i32.shl (enum.get $Lex.question_mark) (i32.const 3)) (i32.const 6))))
         (case "["
           (call $brkPush (i32.const 0))
           (br $takeDone (i32.or (i32.shl (enum.get $Lex.l_bracket) (i32.const 3)) (i32.const 1))))
@@ -894,19 +838,7 @@
                   (i32.eq (call $jsxTopMode) (i32.const 5))
                   (call $tsrxRawClose (global.get $ptr) (i32.const 1)))
                 (then (return (enum.get $Lex.eof))))))
-          (if (i32.eq (local.get $c2) (i32.const "<"))
-            (then
-              (if (i32.eq (call $tsxByte (i32.add (global.get $ptr) (i32.const 2))) (i32.const "="))
-                (then
-                  (br $takeDone
-                    (i32.or (i32.shl (enum.get $Lex.l_shift_equal) (i32.const 3)) (i32.const 3)))))
-              (br $takeDone
-                (i32.or (i32.shl (enum.get $Lex.l_shift) (i32.const 3)) (i32.const 2)))))
-          (if (i32.eq (local.get $c2) (i32.const "="))
-            (then
-              (br $takeDone
-                (i32.or (i32.shl (enum.get $Lex.l_angle_equal) (i32.const 3)) (i32.const 2)))))
-          (br $takeDone (i32.or (i32.shl (enum.get $Lex.l_angle) (i32.const 3)) (i32.const 1))))
+          (br $family (i32.or (i32.shl (enum.get $Lex.l_angle) (i32.const 3)) (i32.const 7))))
         (case ">"
           (if (i32.eq (local.get $c2) (i32.const ">"))
             (then
@@ -924,66 +856,18 @@
                   (br $takeDone
                     (i32.or
                       (i32.shl (enum.get $Lex.r_unsigned_shift) (i32.const 3))
-                      (i32.const 3)))))
-              (if (i32.eq (call $tsxByte (i32.add (global.get $ptr) (i32.const 2))) (i32.const "="))
-                (then
-                  (br $takeDone
-                    (i32.or (i32.shl (enum.get $Lex.r_shift_equal) (i32.const 3)) (i32.const 3)))))
-              (br $takeDone
-                (i32.or (i32.shl (enum.get $Lex.r_shift) (i32.const 3)) (i32.const 2)))))
-          (if (i32.eq (local.get $c2) (i32.const "="))
-            (then
-              (br $takeDone
-                (i32.or (i32.shl (enum.get $Lex.r_angle_equal) (i32.const 3)) (i32.const 2)))))
-          (br $takeDone (i32.or (i32.shl (enum.get $Lex.r_angle) (i32.const 3)) (i32.const 1))))
+                      (i32.const 3)))))))
+          (br $family (i32.or (i32.shl (enum.get $Lex.r_angle) (i32.const 3)) (i32.const 7))))
         (case "+"
-          (if (i32.eq (local.get $c2) (i32.const "+"))
-            (then
-              (br $takeDone
-                (i32.or (i32.shl (enum.get $Lex.plus_plus) (i32.const 3)) (i32.const 2)))))
-          (if (i32.eq (local.get $c2) (i32.const "="))
-            (then
-              (br $takeDone
-                (i32.or (i32.shl (enum.get $Lex.plus_equal) (i32.const 3)) (i32.const 2)))))
-          (br $takeDone (i32.or (i32.shl (enum.get $Lex.plus) (i32.const 3)) (i32.const 1))))
+          (br $family (i32.or (i32.shl (enum.get $Lex.plus) (i32.const 3)) (i32.const 3))))
         (case "-"
-          (if (i32.eq (local.get $c2) (i32.const "-"))
-            (then
-              (br $takeDone
-                (i32.or (i32.shl (enum.get $Lex.minus_minus) (i32.const 3)) (i32.const 2)))))
-          (if (i32.eq (local.get $c2) (i32.const "="))
-            (then
-              (br $takeDone
-                (i32.or (i32.shl (enum.get $Lex.minus_equal) (i32.const 3)) (i32.const 2)))))
-          (br $takeDone (i32.or (i32.shl (enum.get $Lex.minus) (i32.const 3)) (i32.const 1))))
+          (br $family (i32.or (i32.shl (enum.get $Lex.minus) (i32.const 3)) (i32.const 3))))
         (case "*"
-          (if (i32.eq (local.get $c2) (i32.const "*"))
-            (then
-              (if (i32.eq (call $tsxByte (i32.add (global.get $ptr) (i32.const 2))) (i32.const "="))
-                (then
-                  (br $takeDone
-                    (i32.or
-                      (i32.shl (enum.get $Lex.asterisk_asterisk_equal) (i32.const 3))
-                      (i32.const 3)))))
-              (br $takeDone
-                (i32.or (i32.shl (enum.get $Lex.asterisk_asterisk) (i32.const 3)) (i32.const 2)))))
-          (if (i32.eq (local.get $c2) (i32.const "="))
-            (then
-              (br $takeDone
-                (i32.or (i32.shl (enum.get $Lex.asterisk_equal) (i32.const 3)) (i32.const 2)))))
-          (br $takeDone (i32.or (i32.shl (enum.get $Lex.asterisk) (i32.const 3)) (i32.const 1))))
+          (br $family (i32.or (i32.shl (enum.get $Lex.asterisk) (i32.const 3)) (i32.const 7))))
         (case "%"
-          (if (i32.eq (local.get $c2) (i32.const "="))
-            (then
-              (br $takeDone
-                (i32.or (i32.shl (enum.get $Lex.percent_equal) (i32.const 3)) (i32.const 2)))))
-          (br $takeDone (i32.or (i32.shl (enum.get $Lex.percent) (i32.const 3)) (i32.const 1))))
+          (br $family (i32.or (i32.shl (enum.get $Lex.percent) (i32.const 3)) (i32.const 1))))
         (case "^"
-          (if (i32.eq (local.get $c2) (i32.const "="))
-            (then
-              (br $takeDone
-                (i32.or (i32.shl (enum.get $Lex.caret_equal) (i32.const 3)) (i32.const 2)))))
-          (br $takeDone (i32.or (i32.shl (enum.get $Lex.caret) (i32.const 3)) (i32.const 1))))
+          (br $family (i32.or (i32.shl (enum.get $Lex.caret) (i32.const 3)) (i32.const 1))))
         (case "~"
           (br $takeDone (i32.or (i32.shl (enum.get $Lex.tilde) (i32.const 3)) (i32.const 1))))
         (case "`"
@@ -1048,7 +932,21 @@
           (return (enum.get $Lex.invalid))))
       ;; unrecognized ASCII byte: consume it
       (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
-      (return (enum.get $Lex.invalid)))
+      (return (enum.get $Lex.invalid))))
+      ;; the operator family tail: `XX=`, `XX`, `X=`, or the plain `X`
+      (local.set $kw (i32.and (local.get $take) (i32.const -8)))
+      (if (i32.eq (local.get $c2) (local.get $c))
+        (then
+          (if (i32.and (local.get $take) (i32.const 2))
+            (then
+              (if (i32.and (local.get $take) (i32.const 4))
+                (then
+                  (if (i32.eq (call $tsxByte (i32.add (global.get $ptr) (i32.const 2))) (i32.const "="))
+                    (then (br $takeDone (i32.sub (local.get $kw) (i32.const 21)))))))
+              (br $takeDone (i32.sub (local.get $kw) (i32.const 14)))))))
+      (if (i32.and (i32.and (local.get $take) (i32.const 1)) (i32.eq (local.get $c2) (i32.const "=")))
+        (then (br $takeDone (i32.sub (local.get $kw) (i32.const 6)))))
+      (i32.or (local.get $kw) (i32.const 1)))
     (local.set $take)
     (global.set $ptr (i32.add (global.get $ptr) (i32.and (local.get $take) (i32.const 7))))
     (i32.shr_u (local.get $take) (i32.const 3)))
@@ -1057,20 +955,23 @@
   ;; update $lto so the regexp/division decision sees through them.
   (func $nextToken (result i32)
     (local $t i32)
+    (local $c i32)
     (local.set $t (call $scanToken))
     (global.set $rhs (global.get $ptr))
     (if (i32.and (global.get $tsxStreaming) (i32.eq (global.get $ptr) (global.get $end)))
       (then
         (if (i32.eq (local.get $t) (enum.get $Lex.invalid))
           (then
-            (if (i32.eq (i32.load8_u (global.get $lhs)) (i32.const "`"))
-              (then (global.set $tsxStreamMode (i32.const 1))))
-            (if (i32.eq (i32.load8_u (global.get $lhs)) (i32.const "}"))
-              (then (global.set $tsxStreamMode (i32.const 1))))
-            (if (i32.eq (i32.load8_u (global.get $lhs)) (i32.const 34))
-              (then (global.set $tsxStreamMode (i32.const 4))))
-            (if (i32.eq (i32.load8_u (global.get $lhs)) (i32.const 39))
-              (then (global.set $tsxStreamMode (i32.const 5))))
+            ;; a cut template (from its backtick or a resuming `}`) or string
+            (local.set $c (i32.load8_u (global.get $lhs)))
+            (global.set $tsxStreamMode
+              (select
+                (i32.const 1)
+                (select
+                  (i32.const 4)
+                  (select (i32.const 5) (global.get $tsxStreamMode) (i32.eq (local.get $c) (i32.const 39)))
+                  (i32.eq (local.get $c) (i32.const 34)))
+                (i32.or (i32.eq (local.get $c) (i32.const "`")) (i32.eq (local.get $c) (i32.const "}")))))
             ;; a quoted string cut by a `\` line continuation: $scanStringBody
             ;; only consumes a line break behind a backslash, so a trailing LF
             ;; means the string goes on in the next chunk. Report it as a
@@ -1102,28 +1003,28 @@
 
   ;; Return the byte after the `}` balancing the `{` at $from. This reuses the
   ;; real token scanner, then restores $ptr; unterminated expressions reach
-  ;; $end. $body may start after a Svelte block/directive marker.
+  ;; $end, and a $from that is not on a `{` returns the byte after it. Every
+  ;; caller scans from the `{` itself, so $body always equals $from.
   ;; INVARIANT: when $from < $end the result is strictly greater than $from -
-  ;; the vue/svelte/astro main loops rely on this to always advance.
-  ;; Every caller highlights the body with the TSX feature set, so the scan
-  ;; enables JSX too and skips elements with the non-emitting jsx steps:
-  ;; otherwise `</li>` inside `{items.map((i) => <li>{i}</li>)}` reads as
-  ;; `<` and a regexp that swallows the closing brace, and the scanner and
-  ;; the lexer disagree about where the expression ends.
+  ;; MDX's tag scans rely on this to always advance. Expressions that are
+  ;; highlighted use $hlTsxExpression instead, which finds the closer while
+  ;; lexing. Every caller highlights the body with the TSX feature set, so the scan
+  ;; enables JSX too and walks elements with the lexer's own jsx steps,
+  ;; silenced by $jsxMute: otherwise `</li>` inside
+  ;; `{items.map((i) => <li>{i}</li>)}` reads as `<` and a regexp that
+  ;; swallows the closing brace, and the scanner and the lexer disagree about
+  ;; where the expression ends.
   (func $tsxExpressionEnd (param $from i32) (param $body i32) (result i32)
     (local $save i32)
     (local $to i32)
     (local $t i32)
     (local $m i32)
-    (if
-      (i32.or
-        (i32.ge_u (local.get $from) (global.get $end))
-        (i32.ge_u (local.get $body) (global.get $end)))
+    (if (i32.ge_u (local.get $from) (global.get $end))
       (then (return (global.get $end))))
     (local.set $save (global.get $ptr))
     (global.set $ecmaFeatures (i32.const 3))
-    (global.set $ptr (local.get $body))
-    (global.set $sourceStart (local.get $body))
+    (global.set $ptr (local.get $from))
+    (global.set $sourceStart (local.get $from))
     (global.set $lto (enum.get $Lex.eof))
     (global.set $prevLto (enum.get $Lex.eof))
     (global.set $prevTok (enum.get $Lex.eof))
@@ -1133,16 +1034,9 @@
     (global.set $brkSp (i32.const 0))
     (global.set $rxCloser (i32.const 0))
     (global.set $jsxSp (i32.const 0))
+    (global.set $jsxMute (i32.const 1))
     (call $sigReset)
-    (if (i32.eq (local.get $body) (local.get $from))
-      (then (local.set $t (call $nextToken)))
-      (else
-        (call $brkPush (i32.const 1))
-        (global.set $braceDepth (i32.const 1))))
-    (if
-      (i32.and
-        (i32.eq (local.get $body) (local.get $from))
-        (i32.ne (local.get $t) (enum.get $Lex.l_brace)))
+    (if (i32.ne (call $nextToken) (enum.get $Lex.l_brace))
       (then (local.set $to (i32.add (local.get $from) (i32.const 1))))
       (else
         (block $done
@@ -1156,9 +1050,7 @@
                   (then
                     (local.set $to (global.get $end))
                     (br $done)))
-                (if (i32.eq (local.get $m) (i32.const 1))
-                  (then (call $jsxSkipTagStep))
-                  (else (call $jsxSkipContentStep)))
+                (call $jsxRunBytes (local.get $m))
                 (br $token)))
             (local.set $t (call $nextToken))
             (if (i32.eq (local.get $t) (enum.get $Lex.eof))
@@ -1179,22 +1071,26 @@
                   (then
                     (local.set $to (global.get $rhs))
                     (br $done)))))
-            ;; a `<` in operand position with a tag-like shape opens jsx
+            ;; a `<` in operand position with a tag-like shape opens jsx;
+            ;; nested ifs, so the shape checks run only on a `<`
             (if
-              (i32.and
+              (if (result i32)
                 (i32.eq (local.get $t) (enum.get $Lex.l_angle))
-                (i32.and
-                  (call $jsxCanStart (global.get $prevTok))
-                  (call $jsxValidate (global.get $rhs))))
+                (then
+                  (if (result i32)
+                    (call $jsxCanStart (global.get $prevTok))
+                    (then (call $jsxValidate (global.get $rhs)))
+                    (else (i32.const 0))))
+                (else (i32.const 0)))
               (then
                 (global.set $ptr (global.get $rhs))
-                (call $jsxSkipName)
-                (call $jsxPush (i32.const 1) (i32.const 0))
+                (call $jsxPush (i32.const 1) (call $jsxEmitName))
                 (br $token)))
             ;; comments are transparent to prev, as in the lexer
             (if (i32.eqz (bitset.get $LexBits.comment (local.get $t)))
               (then (global.set $prevTok (local.get $t))))
             (br $token)))))
+    (global.set $jsxMute (i32.const 0))
     (global.set $ptr (local.get $save))
     (local.get $to))
 
@@ -1250,6 +1146,50 @@
         (br $l)))
     (call $emitTok (local.get $hl) (local.get $seg) (local.get $to)))
 
+  ;; the first byte at or after $p that is not a space or tab, or $rhs
+  (func $blanksEnd (param $p i32) (param $rhs i32) (result i32)
+    (local $c i32)
+    (block $done
+      (loop $blank
+        (br_if $done (i32.ge_u (local.get $p) (local.get $rhs)))
+        (local.set $c (i32.load8_u (local.get $p)))
+        (br_if $done
+          (i32.eqz (i32.or (i32.eq (local.get $c) (i32.const 32)) (i32.eq (local.get $c) (i32.const 9)))))
+        (local.set $p (i32.add (local.get $p) (i32.const 1)))
+        (br $blank)))
+    (local.get $p))
+
+  ;; the embedded language the opening backtick of the template token
+  ;; [$lhs,$rhs) takes from the pending marker - none while a metadata key
+  ;; still awaits its colon. A component `template:` key (the Angular bit)
+  ;; marks markup only when the text on the backtick's own line starts with
+  ;; `<`, `@`, or `{`, or the line holds nothing more: a Next.js title
+  ;; pattern such as `%s | Site` stays a string. The look stays on the line,
+  ;; so line-fed chunks decide the same way
+  (func $jsTemplateOpenState (param $lhs i32) (param $rhs i32) (result i32)
+    (local $m i32)
+    (local $p i32)
+    (local $c i32)
+    (local.set $m (global.get $jsTemplateMarker))
+    (if (i32.and (local.get $m) (i32.const 0x40000000))
+      (then (return (i32.const 0))))
+    (if (i32.ge_s (local.get $m) (i32.const 0))
+      (then (return (local.get $m))))
+    (local.set $p (call $blanksEnd (i32.add (local.get $lhs) (i32.const 1)) (local.get $rhs)))
+    (if (i32.ge_u (local.get $p) (local.get $rhs))
+      (then (return (local.get $m))))
+    (local.set $c (i32.load8_u (local.get $p)))
+    (if
+      (i32.or
+        (i32.or
+          (i32.eq (local.get $c) (i32.const "<"))
+          (i32.eq (local.get $c) (i32.const "@")))
+        (i32.or
+          (i32.eq (local.get $c) (i32.const "{"))
+          (i32.or (i32.eq (local.get $c) (i32.const 10)) (i32.eq (local.get $c) (i32.const 13)))))
+      (then (return (local.get $m))))
+    (i32.const 0))
+
   ;; emit a template token: a trailing `${` is punctuation.special, and so is
   ;; a leading `}` when $leadBrace is set - the token picked the template up
   ;; after a substitution. Marked templates emit HTML or CSS; other templates emit
@@ -1265,16 +1205,15 @@
     (param $closed i32)
     (local $p i32)
     (local $e i32)
+    (local $c i32)
     (local.set $p (local.get $lhs))
+    (local.set $c (i32.load8_u (local.get $lhs)))
     (if (local.get $leadBrace)
       (then
-        (if (i32.eq (i32.load8_u (local.get $lhs)) (i32.const 96))
+        (if (i32.eq (local.get $c) (i32.const 96))
           (then
             (global.set $jsTemplateState
-              (select
-                (i32.const 0)
-                (global.get $jsTemplateMarker)
-                (i32.and (global.get $jsTemplateMarker) (i32.const 0x40000000)))))
+              (call $jsTemplateOpenState (local.get $lhs) (local.get $rhs))))
           (else
             (if (global.get $jsTemplateEmitSp)
               (then
@@ -1285,7 +1224,7 @@
                     (i32.add
                       (i32.const $mem.jsTemplateFn)
                       (i32.shl (global.get $jsTemplateEmitSp) (i32.const 2)))))))))))
-    (if (i32.and (local.get $leadBrace) (i32.eq (i32.load8_u (local.get $lhs)) (i32.const "}")))
+    (if (i32.and (local.get $leadBrace) (i32.eq (local.get $c) (i32.const "}")))
       (then
         (local.set $p (i32.add (local.get $lhs) (i32.const 1)))
         (call $emitTok (enum.get $Token.punctuation.special) (local.get $lhs) (local.get $p))))
@@ -1297,7 +1236,7 @@
           (then (local.set $e (local.get $p))))))
     (if (global.get $jsTemplateState)
       (then
-        (if (i32.and (local.get $leadBrace) (i32.eq (i32.load8_u (local.get $lhs)) (i32.const 96)))
+        (if (i32.and (local.get $leadBrace) (i32.eq (local.get $c) (i32.const 96)))
           (then
             (local.set $p (i32.add (local.get $lhs) (i32.const 1)))
             (call $emitTok (enum.get $Token.string) (local.get $lhs) (local.get $p))))
@@ -1379,9 +1318,8 @@
   ;; - same line, balanced - is a type.jsdoc in punctuation.bracket braces;
   ;; after the param-like tags the next identifier path is variable.jsdoc.
   ;; Everything else, including every malformed shape, stays comment.doc. The
-  ;; token [$lhs,$rhs) is already clamped, so scans bound on $rhs, not $end;
-  ;; wide loads may read past $rhs into the buffer slack, and any `@` found
-  ;; at or past $rhs is masked off
+  ;; token [$lhs,$rhs) is already clamped, so scans - the `@` search
+  ;; included - bound on $rhs, not $end
   (func $emitDocCommentRange (param $lhs i32) (param $rhs i32) (param $skip i32)
     (local $seg i32)   ;; start of the pending comment.doc run
     (local $p i32)     ;; scan cursor
@@ -1389,30 +1327,16 @@
     (local $q i32)     ;; whitespace lookahead
     (local $b i32)     ;; brace / name scan cursor
     (local $c i32)
-    (local $mask i32)
-    (local $rem i32)
     (local $depth i32)
     (local $isParam i32)
     (local.set $seg (local.get $lhs))
     (local.set $p (i32.add (local.get $lhs) (local.get $skip)))
     (block $done
       (loop $scan
-        (br_if $done (i32.ge_u (local.get $p) (local.get $rhs)))
         ;; find the next `@` - 16 bytes per step
-        (local.set $mask
-          (i8x16.bitmask (i8x16.eq (v128.load (local.get $p)) (i8x16.splat (i32.const "@")))))
-        (local.set $rem (i32.sub (local.get $rhs) (local.get $p)))
-        (if (i32.lt_u (local.get $rem) (i32.const 16))
-          (then
-            (local.set $mask
-              (i32.and
-                (local.get $mask)
-                (i32.sub (i32.shl (i32.const 1) (local.get $rem)) (i32.const 1))))))
-        (if (i32.eqz (local.get $mask))
-          (then
-            (local.set $p (i32.add (local.get $p) (i32.const 16)))
-            (br $scan)))
-        (local.set $p (i32.add (local.get $p) (i32.ctz (local.get $mask))))
+        (local.set $p
+          (call $scanFindSpecial (local.get $p) (local.get $rhs) (i32.const "@") (i32.const 0) (i32.const 0)))
+        (br_if $done (i32.ge_u (local.get $p) (local.get $rhs)))
         ;; a tag needs start-of-word context - whitespace, `*`, `{`, `(` -
         ;; so `user@host` in prose stays plain
         (local.set $c (i32.const 32))
@@ -1464,16 +1388,9 @@
         (local.set $p (local.get $e))
         ;; optional `{type}` after the tag
         (block $noType
-          (local.set $q (local.get $p))
-          (loop $sp
-            (br_if $noType (i32.ge_u (local.get $q) (local.get $rhs)))
-            (local.set $c (i32.load8_u (local.get $q)))
-            (if
-              (i32.or (i32.eq (local.get $c) (i32.const 32)) (i32.eq (local.get $c) (i32.const 9)))
-              (then
-                (local.set $q (i32.add (local.get $q) (i32.const 1)))
-                (br $sp))))
-          (br_if $noType (i32.ne (local.get $c) (i32.const "{")))
+          (local.set $q (call $blanksEnd (local.get $p) (local.get $rhs)))
+          (br_if $noType (i32.ge_u (local.get $q) (local.get $rhs)))
+          (br_if $noType (i32.ne (i32.load8_u (local.get $q)) (i32.const "{")))
           ;; scan to the balanced `}` - an unclosed group, or one running
           ;; past the line, stays plain
           (local.set $b (i32.add (local.get $q) (i32.const 1)))
@@ -1510,17 +1427,8 @@
         (if (local.get $isParam)
           (then
             (block $noName
-              (local.set $q (local.get $p))
-              (loop $sp2
-                (br_if $noName (i32.ge_u (local.get $q) (local.get $rhs)))
-                (local.set $c (i32.load8_u (local.get $q)))
-                (if
-                  (i32.or
-                    (i32.eq (local.get $c) (i32.const 32))
-                    (i32.eq (local.get $c) (i32.const 9)))
-                  (then
-                    (local.set $q (i32.add (local.get $q) (i32.const 1)))
-                    (br $sp2))))
+              (local.set $q (call $blanksEnd (local.get $p) (local.get $rhs)))
+              (br_if $noName (i32.ge_u (local.get $q) (local.get $rhs)))
               (local.set $b (local.get $q))
               (block $nameEnd
                 (loop $name

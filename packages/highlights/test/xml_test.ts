@@ -112,6 +112,27 @@ void t.test('xml: external and internal doctype declarations', () => {
 });
 
 void t.test(
+  'xml: a long internal subset keeps quotes and brackets straight',
+  () => {
+    // many quote-free declarations, then a quoted `>` and `]` that must not
+    // close the subset or the declaration
+    const subset = '<!ELEMENT a (b)>\n'.repeat(200) + '<!ENTITY q "x]>y">\n';
+    const kinds = tokenKinds('xml', `<!DOCTYPE r [\n${subset}]>\n<r a="1"/>`);
+    assert.deepEqual(kinds.slice(-8), [
+      ['<!ENTITY q "x]>y">', 'tag.doctype'],
+      [']>', 'tag.doctype'],
+      ['<', 'punctuation.bracket.html'],
+      ['r', 'tag'],
+      ['a', 'attribute'],
+      ['=', 'punctuation.delimiter.html'],
+      ['"1"', 'string'],
+      ['/>', 'punctuation.bracket.html'],
+    ]);
+    assertLineFedParity('xml', `<!DOCTYPE r [\n${subset}]>\n<r/>\n`);
+  }
+);
+
+void t.test(
   'xml: character references, while bare ampersands stay text',
   () => {
     assert.deepEqual(

@@ -1,5 +1,5 @@
 import '@/app/prose.css';
-import { preloadFile, type PreloadFileOptions } from '@pierre/diffs/ssr';
+import type { PreloadFileOptions } from '@pierre/diffs/ssr';
 import { preloadFileTree } from '@pierre/trees/ssr';
 import type { Metadata } from 'next';
 import { Fragment } from 'react';
@@ -34,6 +34,7 @@ import { ProseWrapper } from '@/components/docs/ProseWrapper';
 import Footer from '@/components/Footer';
 import { renderMDX, renderMDXWithPreloadedFiles } from '@/lib/mdx';
 import { pageMetadata } from '@/lib/page-metadata';
+import { preloadCodeExample } from '@/lib/preloadCodeExample';
 
 interface DocsSection {
   filePath: string;
@@ -167,8 +168,8 @@ async function OverviewSection() {
 
 async function BuildWithAgentsSection() {
   const [agentSkillInstall, agentPrompt] = await Promise.all([
-    preloadFile(AGENT_SKILL_INSTALL),
-    preloadFile(AGENT_PROMPT),
+    preloadCodeExample(AGENT_SKILL_INSTALL),
+    preloadCodeExample(AGENT_PROMPT),
   ]);
   const content = await renderMDX({
     filePath: '(trees)/docs/BuildWithAgents/content.mdx',

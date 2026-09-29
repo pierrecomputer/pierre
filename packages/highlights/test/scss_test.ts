@@ -311,6 +311,24 @@ void t.test('scss: comment forms', () => {
 });
 
 void t.test(
+  'scss: nested properties and interpolated values are declarations',
+  () => {
+    const src = '.a {\n  font: { family: x; }\n  width: calc(1% - #{$g});\n}\n';
+    const kinds = tokenKinds('scss', src);
+    assert.deepEqual(kinds[2], ['font', 'property']);
+    assert.deepEqual(
+      kinds.find(([text]) => text === 'width'),
+      ['width', 'property']
+    );
+    assert.deepEqual(
+      kinds.find(([text]) => text === 'calc'),
+      ['calc', 'function']
+    );
+    assertLineFedParity('scss', src);
+  }
+);
+
+void t.test(
   'scss: nested rules, interpolation, and block comments stream line-fed',
   () => {
     assertLineFedParity(

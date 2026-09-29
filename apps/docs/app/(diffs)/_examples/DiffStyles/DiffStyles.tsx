@@ -1,6 +1,6 @@
 'use client';
 
-import type { DiffIndicators } from '@pierre/diffs';
+import type { DiffIndicators, LineDiffTypes } from '@pierre/diffs';
 import { MultiFileDiff } from '@pierre/diffs/react';
 import type { PreloadMultiFileDiffResult } from '@pierre/diffs/ssr';
 import {
@@ -39,6 +39,11 @@ const diffStyleOptions = [
     description: 'Highlight changed words within lines',
   },
   {
+    value: 'word-line',
+    label: 'Word-Line',
+    description: 'Highlight one region from the first change to the last',
+  },
+  {
     value: 'char',
     label: 'Character',
     description: 'Highlight individual character changes',
@@ -58,9 +63,7 @@ export function DiffStyles({
   prerenderedDiff: { options, ...props },
 }: DiffStylesProps) {
   const [diffIndicators, setDiffStyle] = useState<DiffIndicators>('bars');
-  const [lineDiffType, setLineDiffType] = useState<
-    'word-alt' | 'word' | 'char' | 'none'
-  >('word-alt');
+  const [lineDiffType, setLineDiffType] = useState<LineDiffTypes>('word-alt');
   const [disableBackground, setDisableBackground] = useState(false);
   const [overflow, setOverflow] = useState<'wrap' | 'scroll'>(
     options?.overflow ?? 'wrap'

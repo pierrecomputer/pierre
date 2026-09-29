@@ -129,10 +129,12 @@ export class VirtualizedFile<
     lineAnnotations: LineAnnotation<LAnnotation>[]
   ): void {
     if (this.syncLineAnnotations(lineAnnotations)) {
-      this.resetLayoutCache();
+      this.forceRenderOverride = true;
     }
   }
 
+  // Keep measured row heights as estimates when annotations change; rendering
+  // will replace them with the updated heights without discarding other rows.
   private syncLineAnnotations(
     lineAnnotations: LineAnnotation<LAnnotation>[] | undefined
   ): boolean {
@@ -154,7 +156,7 @@ export class VirtualizedFile<
     lineAnnotations: LineAnnotation<LAnnotation>[]
   ): boolean {
     if (super.syncEditSessionAnnotationsFromEditor(lineAnnotations)) {
-      this.resetLayoutCache();
+      this.forceRenderOverride = true;
       return true;
     }
     return false;
@@ -302,14 +304,19 @@ export class VirtualizedFile<
     const ghostTextRows =
       this.editor?.__getGhostTextRows() ?? NO_GHOST_TEXT_ROWS;
     hasHeightChange = this.applyGhostTextRows(ghostTextRows);
+    const measureAllRows =
+      overflow !== 'scroll' ||
+      this.getLatestAnnotations().length > 0 ||
+      this.isResizeDebuggingEnabled();
 
     // Ghost-row changes affect placeholders too, but placeholders have no DOM
-    // rows to measure. Unwrapped rows without annotations also need no measurement.
+    // rows to measure. After the last annotation is removed, keep measuring
+    // rendered rows until their previously cached heights have been corrected.
     if (
       this.placeHolder != null ||
-      (overflow === 'scroll' &&
-        this.getLatestAnnotations().length === 0 &&
-        !this.isResizeDebuggingEnabled())
+      (!measureAllRows &&
+        this.cache.heights.size === 0 &&
+        this.cache.fileAnnotationHeight === 0)
     ) {
       if (hasHeightChange) {
         this.computeApproximateSize(true);
@@ -328,12 +335,10 @@ export class VirtualizedFile<
       return hasHeightChange;
     }
 
-    const hasFileAnnotations = includesFileAnnotations(
-      this.getLatestAnnotations()
-    );
+    // Keep offscreen file annotation measurements consistent with the buffers
+    // computed for this render. A rendered top row can confirm their removal.
     if (
       this.renderRange != null &&
-      hasFileAnnotations &&
       shouldRenderFileAnnotations(this.renderRange)
     ) {
       const fileAnnotationHeight = measureFileAnnotationHeight(content);
@@ -342,9 +347,6 @@ export class VirtualizedFile<
         this.cache.fileAnnotationHeight = nextFileAnnotationHeight;
         hasHeightChange = true;
       }
-    } else if (!hasFileAnnotations && this.cache.fileAnnotationHeight !== 0) {
-      this.cache.fileAnnotationHeight = 0;
-      hasHeightChange = true;
     }
 
     for (const line of content.children) {
@@ -354,9 +356,17 @@ export class VirtualizedFile<
       if (lineIndexAttr == null) continue;
 
       const lineIndex = Number(lineIndexAttr);
-      let measuredHeight =
-        line.getBoundingClientRect().height +
-        (ghostTextRows.get(lineIndex) ?? 0) * lineHeight;
+      const ghostHeight = (ghostTextRows.get(lineIndex) ?? 0) * lineHeight;
+      const cachedHeight = this.cache.heights.get(lineIndex);
+      // With no annotations or wrapping, only stale custom measurements need
+      // DOM reads. Ghost rows already have known heights from the editor.
+      if (
+        !measureAllRows &&
+        (cachedHeight == null || cachedHeight === lineHeight + ghostHeight)
+      ) {
+        continue;
+      }
+      let measuredHeight = line.getBoundingClientRect().height + ghostHeight;
       let hasMetadata = false;
 
       // Annotations or noNewline metadata increase the size of their attached line
@@ -425,9 +435,7 @@ export class VirtualizedFile<
       annotationsChanged,
     } = this.updatePendingRender(file, lineAnnotations);
     let shouldResetLayoutCache =
-      reset?.resetFileLayoutCache === true ||
-      layoutFileChanged ||
-      annotationsChanged;
+      reset?.resetFileLayoutCache === true || layoutFileChanged;
     if (reset?.metrics != null) {
       this.metrics = reset.metrics;
       shouldResetLayoutCache = true;
@@ -870,7 +878,7 @@ export class VirtualizedFile<
     })();
     const { forceRenderOverride, isSetup } = this;
     this.forceRenderOverride = undefined;
-    if (annotationsChanged || layoutFileChanged) {
+    if (layoutFileChanged) {
       this.resetLayoutCache();
     }
 

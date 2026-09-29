@@ -367,7 +367,7 @@
                     ;; pattern
                     (if
                       (i32.and
-                        (i32.eq (call $nixByte (local.get $p)) (i32.const "="))
+                        (i32.eq (local.get $pc) (i32.const "="))
                         (i32.ne
                           (call $nixByte (i32.add (local.get $p) (i32.const 1)))
                           (i32.const "=")))
@@ -375,7 +375,7 @@
                       (else
                         (if
                           (i32.or
-                            (i32.eq (call $nixByte (local.get $p)) (i32.const ":"))
+                            (i32.eq (local.get $pc) (i32.const ":"))
                             (i32.and
                               (i32.eq (local.get $top) (i32.const 3))
                               (i32.and

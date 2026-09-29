@@ -1,15 +1,18 @@
-import { afterAll, describe, expect, test } from 'bun:test';
+import { afterAll, describe, expect, spyOn, test } from 'bun:test';
 import { createTwoFilesPatch } from 'diff';
 import {
   act,
   type ComponentType,
   createElement,
+  type PropsWithChildren,
   type ReactElement,
 } from 'react';
 import { createRoot as createReactRoot, type Root } from 'react-dom/client';
 
 import { disposeHighlighter, parsePatchFiles } from '../src';
 import { HEADER_METADATA_SLOT_ID } from '../src/constants';
+import { Editor } from '../src/editor/editor';
+import { EditProvider, type EditProviderProps } from '../src/react/EditContext';
 import {
   FileDiff as ReactFileDiff,
   type FileDiffProps as ReactFileDiffProps,
@@ -19,7 +22,7 @@ import {
   type PatchDiffProps as ReactPatchDiffProps,
 } from '../src/react/PatchDiff';
 import type { FileContents, FileDiffMetadata } from '../src/types';
-import { installDom, wait } from './domHarness';
+import { installDom, wait, waitFor } from './domHarness';
 import { assertDefined } from './testUtils';
 
 afterAll(async () => {
@@ -38,6 +41,9 @@ const ReactFileDiffComponent = ReactFileDiff as ComponentType<
 >;
 const ReactPatchDiffComponent = PatchDiff as ComponentType<
   ReactPatchDiffProps<undefined, undefined>
+>;
+const EditProviderComponent = EditProvider as ComponentType<
+  PropsWithChildren<EditProviderProps<undefined, undefined>>
 >;
 
 function createPartialChange(name = 'partial.txt'): PartialChange {
@@ -133,6 +139,157 @@ async function unmountRoot(root: Root | undefined): Promise<void> {
 }
 
 describe('React partial diff hydration', () => {
+  test('editable FileDiff creates its editor only after the partial diff hydrates', async () => {
+    const { cleanup } = installDom();
+    const cleanupActEnvironment = installReactActEnvironment();
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const { oldFile, newFile, partial } = createPartialChange('edit.ts');
+    let finishLoading:
+      | ((files: { oldFile: FileContents; newFile: FileContents }) => void)
+      | undefined;
+    const loading = new Promise<{
+      oldFile: FileContents;
+      newFile: FileContents;
+    }>((resolve) => {
+      finishLoading = resolve;
+    });
+    let editorsCreated = 0;
+    let loads = 0;
+    let attachedText: string | undefined;
+    let instance:
+      | { __prepareForEditing(): Promise<void> | undefined }
+      | undefined;
+    let root: Root | undefined;
+    const renderEditable = (revision: number): ReactElement =>
+      createElement(
+        EditProviderComponent,
+        {
+          createEditor(type, options, key) {
+            editorsCreated++;
+            return new Editor(type, options, key);
+          },
+        },
+        createElement(ReactFileDiffComponent, {
+          className: `revision-${revision}`,
+          fileDiff: partial,
+          edit: true,
+          editorOptions: {
+            onAttach(editor) {
+              attachedText = editor.getText();
+            },
+          },
+          options: {
+            disableErrorHandling: true,
+            expandUnchanged: true,
+            loadDiffFiles() {
+              loads++;
+              return loading;
+            },
+            onPostRender(_node, current, phase) {
+              if (phase !== 'unmount') {
+                instance = current;
+              }
+            },
+          },
+        })
+      );
+    try {
+      root = createReactRoot(container);
+      await act(async () => {
+        root!.render(renderEditable(0));
+        await wait(0);
+      });
+      expect(editorsCreated).toBe(0);
+      expect(attachedText).toBeUndefined();
+      const pending = instance?.__prepareForEditing();
+      assertDefined(pending, 'expected a pending partial-diff load');
+      const thenSpy = spyOn(pending, 'then');
+      try {
+        for (let revision = 1; revision <= 5; revision++) {
+          await act(async () => {
+            root!.render(renderEditable(revision));
+            await wait(0);
+          });
+        }
+        expect(loads).toBe(1);
+        expect(thenSpy).not.toHaveBeenCalled();
+      } finally {
+        thenSpy.mockRestore();
+      }
+
+      finishLoading?.({ oldFile, newFile });
+      await waitFor(() => attachedText === newFile.contents);
+      expect(editorsCreated).toBe(1);
+    } finally {
+      await unmountRoot(root);
+      cleanupActEnvironment();
+      cleanup();
+    }
+  });
+
+  test('turning edit off during a partial load prevents late attachment', async () => {
+    const { cleanup } = installDom();
+    const cleanupActEnvironment = installReactActEnvironment();
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const { oldFile, newFile, partial } = createPartialChange('edit-off.ts');
+    let finishLoading:
+      | ((files: { oldFile: FileContents; newFile: FileContents }) => void)
+      | undefined;
+    const loading = new Promise<{
+      oldFile: FileContents;
+      newFile: FileContents;
+    }>((resolve) => {
+      finishLoading = resolve;
+    });
+    let editorsCreated = 0;
+    const renderDiff = (edit: boolean): ReactElement =>
+      createElement(
+        EditProviderComponent,
+        {
+          createEditor(type, editorOptions, key) {
+            editorsCreated++;
+            return new Editor(type, editorOptions, key);
+          },
+        },
+        createElement(ReactFileDiffComponent, {
+          edit,
+          fileDiff: partial,
+          options: {
+            disableErrorHandling: true,
+            loadDiffFiles: () => loading,
+          },
+        })
+      );
+    let root: Root | undefined;
+    try {
+      root = createReactRoot(container);
+      await act(async () => {
+        root!.render(renderDiff(true));
+        await wait(0);
+      });
+      await act(async () => {
+        root!.render(renderDiff(false));
+        await wait(0);
+      });
+      finishLoading?.({ oldFile, newFile });
+      await waitForHydratedMetadata(partial);
+      await wait(0);
+      expect(editorsCreated).toBe(0);
+
+      await act(async () => {
+        root!.render(renderDiff(true));
+        await wait(0);
+      });
+      await waitFor(() => editorsCreated === 1);
+    } finally {
+      await unmountRoot(root);
+      cleanupActEnvironment();
+      cleanup();
+    }
+  });
+
   test('FileDiff uses the hydrated full diff for React-owned slots on parent rerender', async () => {
     const { cleanup } = installDom();
     const cleanupActEnvironment = installReactActEnvironment();

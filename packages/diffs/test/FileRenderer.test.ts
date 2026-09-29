@@ -144,6 +144,81 @@ describe('FileRenderer', () => {
     expect(instance.editorRenderReady()).toBe(true);
   });
 
+  test('keeps edited rows and document line counts across an active recycle', async () => {
+    const instance = new FileRenderer();
+    const file = createEditSessionFile({
+      contents: 'alpha\nbeta',
+      name: 'editable.txt',
+    });
+    instance.beginEditSession(file);
+    await instance.asyncRender(file);
+    instance.renderFile(file);
+    instance.applyDocumentChange(
+      new TextDocument('inmemory://editable-file', 'alpha\nnew\nbeta')
+    );
+    const cachedResult = (instance as unknown as FileRendererCacheProbe)
+      .renderCache?.result;
+
+    instance.recycle();
+    instance.beginEditSession(file);
+
+    expect(
+      (instance as unknown as FileRendererCacheProbe).renderCache?.result
+    ).toBe(cachedResult);
+    expect(instance.renderFile(file)?.rowCount).toBe(3);
+  });
+
+  test('releases an offscreen session and invalidates a replacement', async () => {
+    const instance = new FileRenderer();
+    const first = createEditSessionFile({
+      contents: 'first',
+      name: 'editable.txt',
+    });
+    instance.beginEditSession(first);
+    await instance.asyncRender(first);
+    instance.renderFile(first);
+    instance.recycle();
+    expect(
+      (instance as unknown as FileRendererCacheProbe).renderCache?.result
+    ).toBeDefined();
+
+    const replacement = createEditSessionFile({
+      contents: 'replacement',
+      name: 'editable.txt',
+    });
+    instance.beginEditSession(replacement);
+    expect(
+      (instance as unknown as FileRendererCacheProbe).renderCache?.result
+    ).toBeUndefined();
+
+    await instance.asyncRender(replacement);
+    instance.renderFile(replacement);
+    instance.recycle();
+    instance.endEditSession();
+    expect(
+      (instance as unknown as FileRendererCacheProbe).renderCache?.result
+    ).toBeUndefined();
+  });
+
+  test('discards non-editable highlights on recycle', async () => {
+    const instance = new FileRenderer();
+    const file: FileContents = {
+      contents: 'const value = 1;',
+      name: 'ordinary.ts',
+    };
+    await instance.asyncRender(file);
+    instance.renderFile(file);
+    expect(
+      (instance as unknown as FileRendererCacheProbe).renderCache?.result
+    ).toBeDefined();
+
+    instance.recycle();
+
+    expect(
+      (instance as unknown as FileRendererCacheProbe).renderCache?.result
+    ).toBeUndefined();
+  });
+
   test.each([
     {
       change: 'adding',

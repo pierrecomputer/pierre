@@ -5,54 +5,46 @@
   ;; escape, or one code point - sits between it and a closing tick. Any other
   ;; tick is a name quote: a promoted constructor like 'True or '[] under
   ;; DataKinds, or a Template Haskell 'name / ''Type.
+  ;; A line break never sits inside one, so the test stays on the line - a
+  ;; stream chunk ends there.
   (func $hsIsCharLiteral (param $p i32) (result i32)
     (local $e i32)
+    (local $c i32)
     (if (i32.ge_u (i32.add (local.get $p) (i32.const 1)) (global.get $end))
       (then (return (i32.const 0))))
-    (if (i32.eq (i32.load8_u offset=1 (local.get $p)) (i32.const 92))
+    (local.set $c (i32.load8_u offset=1 (local.get $p)))
+    (if (i32.eq (local.get $c) (i32.const 92))
       (then (return (i32.const 1))))
+    (if (i32.or (i32.eq (local.get $c) (i32.const 10)) (i32.eq (local.get $c) (i32.const 13)))
+      (then (return (i32.const 0))))
     (local.set $e (call $utf8SpanEnd (i32.add (local.get $p) (i32.const 2)) (global.get $end)))
     (i32.and
       (i32.lt_u (local.get $e) (global.get $end))
       (i32.eq (i32.load8_u (local.get $e)) (i32.const 39))))
 
-  ;; group order is the dispatch order in $hsWordHl below; let and where keep
-  ;; dedicated groups so the caller can prime the next name as a definition
+  ;; Each group's value is its token; bit 8 marks `let` and `where`, which
+  ;; prime the next name as a definition.
   (keyword-table $hsWords $mem.haskellWords $mem.hlslWords
-    (group "True" "False")                              ;; 1: booleans
-    (group "module" "import" "qualified" "hiding")      ;; 2: import
-    (group "data" "newtype" "type" "class" "instance")  ;; 3: declaration
-    (group "let")                                       ;; 4: control, binds
-    (group "where")                                     ;; 5: control, binds
-    (group ;; 6: control keywords
-      "case" "of" "if" "then" "else" "do" "in" "deriving" "guard" "mdo" "rec" "proc")
-    (group ;; 7: other keywords
+    (group $Token.boolean "True" "False")
+    (group $Token.keyword.import "module" "import" "qualified" "hiding")
+    (group $Token.keyword.declaration "data" "newtype" "type" "class" "instance")
+    (group $Token.keyword.control+256 "let" "where")
+    ;; control keywords; the extension-only `rec` and `proc` are left out,
+    ;; since both are common variable names
+    (group $Token.keyword.control
+      "case" "of" "if" "then" "else" "do" "in" "deriving" "guard" "mdo")
+    (group $Token.keyword ;; other keywords
       "as" "forall" "family" "role" "pattern" "foreign" "default" "infix" "infixl" "infixr")
-    (group ;; 8: prelude functions
+    (group $Token.function ;; prelude functions
       "map" "fmap" "foldl" "foldr" "pure" "return" "print" "show" "read" "error" "undefined" "id"
       "const" "flip" "zip" "head" "tail" "null" "length" "filter" "concat" "sequence" "traverse"))
-
-  ;; Map a $hsWords group index to its token; zero (not a keyword) stays none.
-  (func $hsWordHl (param $g i32) (result i32)
-    (if (i32.eqz (local.get $g))
-      (then (return (enum.get $Token.none))))
-    (if (i32.eq (local.get $g) (i32.const 1))
-      (then (return (enum.get $Token.boolean))))
-    (if (i32.eq (local.get $g) (i32.const 2))
-      (then (return (enum.get $Token.keyword.import))))
-    (if (i32.eq (local.get $g) (i32.const 3))
-      (then (return (enum.get $Token.keyword.declaration))))
-    (if (i32.le_u (local.get $g) (i32.const 6)) ;; let, where, other control
-      (then (return (enum.get $Token.keyword.control))))
-    (if (i32.eq (local.get $g) (i32.const 7))
-      (then (return (enum.get $Token.keyword))))
-    (enum.get $Token.function))
 
   (func $hsIsSymbol (param $c i32) (result i32)
     (byteset.get "!#$%&*+-./:<=>?@\5c^|~" (local.get $c)))
 
   (func $hlHaskell
     (local $atHead i32)
+    (local $braces i32)
     (local $c i32)
     (local $c2 i32)
     (local $g i32)
@@ -171,7 +163,9 @@
             (local.set $lineHead (i32.const 0))
             (br $next)))
         (if
-          (i32.and (i32.eq (local.get $c) (i32.const 39)) (call $hsIsCharLiteral (global.get $ptr)))
+          (if (result i32) (i32.eq (local.get $c) (i32.const 39))
+            (then (call $hsIsCharLiteral (global.get $ptr)))
+            (else (i32.const 0)))
           (then
             (call $lexString (i32.const 39) (i32.const 0) (enum.get $Token.string.special))
             (local.set $lineHead (i32.const 0))
@@ -206,9 +200,10 @@
             ;; identifier bytes plus prime, which marks variants like foldl';
             ;; 16 bytes per step
             (call $scanIdentRun (i32.const 39))
-            (local.set $g (keyword-table.get $hsWords (local.get $lhs) (global.get $ptr)))
-            (local.set $hl (call $hsWordHl (local.get $g)))
-            (if (i32.eq (local.get $hl) (enum.get $Token.none))
+            ;; the group value, or -1 for a name that is not a keyword
+            (local.set $g (keyword-table.value $hsWords (local.get $lhs) (global.get $ptr)))
+            (local.set $hl (i32.and (local.get $g) (i32.const 255)))
+            (if (i32.lt_s (local.get $g) (i32.const 0))
               (then
                 (if
                   (i32.or
@@ -254,17 +249,24 @@
                 (if (i32.eq (local.get $hl) (enum.get $Token.keyword.import))
                   (then (local.set $importLine (i32.const 1)))
                   (else (local.set $wantType (i32.const 0))))))
-            (local.set $wantFunction
-              (i32.or
-                (i32.eq (local.get $g) (i32.const 4)) ;; let
-                (i32.eq (local.get $g) (i32.const 5)))) ;; where
+            (local.set $wantFunction (i32.gt_s (local.get $g) (i32.const 255)))
             (local.set $lineHead (i32.const 0))
             (br $next)))
 
+        ;; $braces is a stack of open brackets, one bit each with 1 for `{`,
+        ;; so a `,` directly inside a record ends a field's type while one
+        ;; inside a tuple type keeps it
         (if (byteset.get "()[]{}" (local.get $c))
           (then
             (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
             (call $emitTok (enum.get $Token.punctuation.bracket) (local.get $lhs) (global.get $ptr))
+            (if (byteset.get ")]}" (local.get $c))
+              (then (local.set $braces (i32.shr_u (local.get $braces) (i32.const 1))))
+              (else
+                (local.set $braces
+                  (i32.or
+                    (i32.shl (local.get $braces) (i32.const 1))
+                    (i32.eq (local.get $c) (i32.const "{"))))))
             (local.set $lineHead (i32.const 0))
             (br $next)))
         (if (i32.or (i32.eq (local.get $c) (i32.const ",")) (i32.eq (local.get $c) (i32.const ";")))
@@ -274,6 +276,8 @@
               (enum.get $Token.punctuation.delimiter)
               (local.get $lhs)
               (global.get $ptr))
+            (if (i32.and (local.get $braces) (i32.const 1))
+              (then (local.set $typeMode (i32.const 0))))
             (local.set $lineHead (i32.const 0))
             (br $next)))
         (if (call $hsIsSymbol (local.get $c))

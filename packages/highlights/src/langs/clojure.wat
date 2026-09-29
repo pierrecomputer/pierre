@@ -73,7 +73,7 @@
   ;; whether $c ends a symbol: whitespace, brackets, quotes, and the reader
   ;; characters that never join a name
   (func $cljIsDelim (param $c i32) (result i32)
-    (i32.or (call $lexIsSpace (local.get $c)) (byteset.get "\00\22()@[]^`{}~,;\5c" (local.get $c))))
+    (byteset.get "\00\09\0a\0b\0c\0d \22()@[]^`{}~,;\5c" (local.get $c)))
 
   ;; advance $ptr over the symbol that starts at it
   (func $cljScanSymbol
@@ -85,38 +85,27 @@
           (call $utf8SpanEnd (i32.add (global.get $ptr) (i32.const 1)) (global.get $end)))
         (br $l))))
 
-  ;; The offset of the `/` that splits a namespace-qualified symbol
-  ;; [lhs,rhs), or 0 when the symbol is not qualified: a `/` alone or at
-  ;; either end is part of an ordinary symbol.
-  (func $cljNsSplit (param $lhs i32) (param $rhs i32) (result i32)
+  ;; The offset of the first $b strictly inside the symbol [lhs,rhs), or 0
+  ;; when there is none: with `/` it splits a namespace-qualified symbol (a
+  ;; `/` alone or at either end is part of an ordinary symbol), and with `.`
+  ;; it marks the shape of a namespace name.
+  (func $cljFindInside (param $lhs i32) (param $rhs i32) (param $b i32) (result i32)
     (local $p i32)
     (local.set $p (i32.add (local.get $lhs) (i32.const 1)))
     (block $done
       (loop $l
         (br_if $done (i32.ge_u (i32.add (local.get $p) (i32.const 1)) (local.get $rhs)))
-        (if (i32.eq (i32.load8_u (local.get $p)) (i32.const "/"))
+        (if (i32.eq (i32.load8_u (local.get $p)) (local.get $b))
           (then (return (i32.sub (local.get $p) (local.get $lhs)))))
         (local.set $p (i32.add (local.get $p) (i32.const 1)))
         (br $l)))
     (i32.const 0))
 
-  ;; whether the symbol [lhs,rhs) has a `.` strictly inside it, the shape
-  ;; of a namespace name
-  (func $cljIsDotted (param $lhs i32) (param $rhs i32) (result i32)
-    (local $p i32)
-    (local.set $p (i32.add (local.get $lhs) (i32.const 1)))
-    (block $done
-      (loop $l
-        (br_if $done (i32.ge_u (i32.add (local.get $p) (i32.const 1)) (local.get $rhs)))
-        (if (i32.eq (i32.load8_u (local.get $p)) (i32.const "."))
-          (then (return (i32.const 1))))
-        (local.set $p (i32.add (local.get $p) (i32.const 1)))
-        (br $l)))
-    (i32.const 0))
-
-  ;; $expect is the pending next-symbol capture from a definition form and
-  ;; $head is 1 right after `(`, where the symbol is the operator of the
-  ;; form. Both are checkpointed.
+  ;; $expect is the pending next-symbol capture from a definition form in
+  ;; its low three bits, and above them the bracket depth inside `^{...}`
+  ;; metadata, which leaves the capture pending (the capture is only
+  ;; written at depth zero). $head is 1 right after `(`, where the symbol is
+  ;; the operator of the form. Both are checkpointed.
   (func $hlClojure
     (local $c i32)
     (local $c2 i32)
@@ -178,12 +167,40 @@
             (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
             (call $emitTok (enum.get $Token.punctuation.bracket) (local.get $lhs) (global.get $ptr))
             (local.set $head (i32.eq (local.get $c) (i32.const "(")))
+            ;; inside `^{...}` metadata only the nesting is tracked, so a
+            ;; definition name after the map is still pending
+            (if (i32.ge_u (local.get $expect) (i32.const 8))
+              (then
+                (local.set $expect
+                  (i32.add
+                    (local.get $expect)
+                    (select
+                      (i32.const 8)
+                      (i32.const -8)
+                      (i32.or
+                        (i32.eq (local.get $c) (i32.const "("))
+                        (i32.or
+                          (i32.eq (local.get $c) (i32.const "["))
+                          (i32.eq (local.get $c) (i32.const "{")))))))
+                (br $next)))
             ;; a definition names the symbol after its head; any bracket
             ;; other than that `(` ends the capture
             (if (i32.ne (local.get $c) (i32.const "("))
               (then (local.set $expect (i32.const 0))))
             (br $next)))
 
+        ;; `^{...}` metadata map, as in `(defn ^{:private true} name ...)`
+        (if (i32.and (i32.eq (local.get $c) (i32.const "^")) (i32.eq (local.get $c2) (i32.const "{")))
+          (then
+            (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
+            (call $emitTok (enum.get $Token.punctuation.special) (local.get $lhs) (global.get $ptr))
+            (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
+            (call $emitTok
+              (enum.get $Token.punctuation.bracket)
+              (i32.add (local.get $lhs) (i32.const 1))
+              (global.get $ptr))
+            (local.set $expect (i32.add (local.get $expect) (i32.const 8)))
+            (br $next)))
         ;; reader macros: quote, syntax-quote, unquote, deref, metadata
         (if (byteset.get "'@^`~" (local.get $c))
           (then
@@ -331,12 +348,12 @@
         (if (i32.ge_s (local.get $kind) (i32.const 0))
           (then
             (local.set $hl (i32.and (local.get $kind) (i32.const 255)))
-            (if (local.get $head)
+            (if (i32.and (local.get $head) (i32.lt_u (local.get $expect) (i32.const 8)))
               (then (local.set $expect (i32.shr_u (local.get $kind) (i32.const 8)))))
             (call $emitTok (local.get $hl) (local.get $lhs) (local.get $rhs))
             (local.set $head (i32.const 0))
             (br $next)))
-        (if (local.get $expect)
+        (if (i32.le_u (i32.sub (local.get $expect) (i32.const 1)) (i32.const 6))
           (then
             (local.set $hl (enum.get $Token.function.definition))
             (if (i32.eq (local.get $expect) (i32.const 2))
@@ -350,7 +367,7 @@
             (local.set $head (i32.const 0))
             (br $next)))
         ;; `ns/name`: the namespace or class, the slash, then the name
-        (local.set $q (call $cljNsSplit (local.get $lhs) (local.get $rhs)))
+        (local.set $q (call $cljFindInside (local.get $lhs) (local.get $rhs) (i32.const "/")))
         (if (local.get $q)
           (then
             (local.set $q (i32.add (local.get $lhs) (local.get $q)))
@@ -373,9 +390,9 @@
           (then (local.set $hl (enum.get $Token.type)))
           (else
             (if
-              (i32.and
-                (call $lexIsIdentStart (local.get $c))
-                (call $cljIsDotted (local.get $lhs) (local.get $rhs)))
+              (if (result i32) (call $lexIsIdentStart (local.get $c))
+                (then (call $cljFindInside (local.get $lhs) (local.get $rhs) (i32.const ".")))
+                (else (i32.const 0)))
               (then (local.set $hl (enum.get $Token.namespace)))
               (else
                 (if (local.get $head)

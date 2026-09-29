@@ -120,9 +120,10 @@
     (call $emitTok (local.get $hl) (local.get $lhs) (global.get $ptr))
     (if (i32.eqz (local.get $closed))
       (then
-        (if (local.get $paren)
-          (then (call $streamSetFixed32 (i32.const "*)") (i32.const 2) (local.get $hl)))
-          (else (call $streamSetFixed32 (i32.const "}") (i32.const 1) (local.get $hl)))))))
+        (call $streamSetFixed32
+          (select (i32.const "*)") (i32.const "}") (local.get $paren))
+          (i32.add (local.get $paren) (i32.const 1))
+          (local.get $hl)))))
 
   ;; A quoted string from $ptr: a doubled quote escapes itself, and the
   ;; literal ends at the quote or the line break.
@@ -197,14 +198,12 @@
           (then
             (call $lexLineComment (i32.const 2) (enum.get $Token.comment))
             (br $next)))
-        (if (i32.eq (local.get $c) (i32.const "{"))
-          (then
-            (call $pasBraced (i32.const 0))
-            (br $next)))
         (if
-          (i32.and (i32.eq (local.get $c) (i32.const "(")) (i32.eq (local.get $c2) (i32.const "*")))
+          (i32.or
+            (i32.eq (local.get $c) (i32.const "{"))
+            (i32.and (i32.eq (local.get $c) (i32.const "(")) (i32.eq (local.get $c2) (i32.const "*"))))
           (then
-            (call $pasBraced (i32.const 1))
+            (call $pasBraced (i32.eq (local.get $c) (i32.const "(")))
             (br $next)))
         (if (i32.eq (local.get $c) (i32.const 39))
           (then
@@ -295,52 +294,50 @@
                         (enum.get $Token.property)
                         (i32.eq (local.get $pc) (i32.const "(")))))
                   (else
-                    (if (i32.eq (local.get $expect) (i32.const 3))
+                    ;; module and `uses` names are namespaces
+                    (if (i32.gt_u (local.get $expect) (i32.const 1))
                       (then (local.set $hl (enum.get $Token.namespace)))
                       (else
-                        (if (i32.eq (local.get $expect) (i32.const 2))
-                          (then (local.set $hl (enum.get $Token.namespace)))
-                          (else
-                            (if (i32.eq (local.get $expect) (i32.const 1))
-                              (then
-                                ;; `procedure TForm1.Click(` names the class first
-                                (if (i32.eq (call $pasByte (local.get $rhs)) (i32.const "."))
-                                  (then (local.set $hl (enum.get $Token.type)))
-                                  (else
-                                    (local.set $hl (enum.get $Token.function.definition))
-                                    (local.set $expect (i32.const 0))
-                                    (local.set $fnHead (i32.const 1)))))
+                        (if (i32.eq (local.get $expect) (i32.const 1))
+                          (then
+                            ;; `procedure TForm1.Click(` names the class first
+                            (if (i32.eq (call $pasByte (local.get $rhs)) (i32.const "."))
+                              (then (local.set $hl (enum.get $Token.type)))
                               (else
-                                (if (local.get $typeCtx)
-                                  (then (local.set $hl (enum.get $Token.type)))
+                                (local.set $hl (enum.get $Token.function.definition))
+                                (local.set $expect (i32.const 0))
+                                (local.set $fnHead (i32.const 1)))))
+                          (else
+                            (if (local.get $typeCtx)
+                              (then (local.set $hl (enum.get $Token.type)))
+                              (else
+                                (if
+                                  (i32.and
+                                    (i32.ne (local.get $paramDepth) (i32.const 0))
+                                    (i32.eq (local.get $paren) (local.get $paramDepth)))
+                                  (then (local.set $hl (enum.get $Token.variable.parameter)))
                                   (else
-                                    (if
-                                      (i32.and
-                                        (i32.ne (local.get $paramDepth) (i32.const 0))
-                                        (i32.eq (local.get $paren) (local.get $paramDepth)))
-                                      (then (local.set $hl (enum.get $Token.variable.parameter)))
+                                    (if (local.get $propName)
+                                      (then
+                                        (local.set $hl (enum.get $Token.property))
+                                        (local.set $propName (i32.const 0)))
                                       (else
-                                        (if (local.get $propName)
-                                          (then
-                                            (local.set $hl (enum.get $Token.property))
-                                            (local.set $propName (i32.const 0)))
+                                        (if (i32.eq (local.get $pc) (i32.const "("))
+                                          (then (local.set $hl (enum.get $Token.function)))
                                           (else
-                                            (if (i32.eq (local.get $pc) (i32.const "("))
-                                              (then (local.set $hl (enum.get $Token.function)))
+                                            (if
+                                              (call $lexIsConstCase
+                                                (local.get $lhs)
+                                                (local.get $rhs))
+                                              (then (local.set $hl (enum.get $Token.constant)))
                                               (else
-                                                (if
-                                                  (call $lexIsConstCase
-                                                    (local.get $lhs)
-                                                    (local.get $rhs))
-                                                  (then (local.set $hl (enum.get $Token.constant)))
-                                                  (else
-                                                    (local.set $hl
-                                                      (select
-                                                        (enum.get $Token.type)
-                                                        (enum.get $Token.variable)
-                                                        (call $pasIsTypeName
-                                                          (local.get $lhs)
-                                                          (local.get $rhs))))))))))))))))))))))))
+                                                (local.set $hl
+                                                  (select
+                                                    (enum.get $Token.type)
+                                                    (enum.get $Token.variable)
+                                                    (call $pasIsTypeName
+                                                      (local.get $lhs)
+                                                      (local.get $rhs))))))))))))))))))))))
             (call $emitTok (local.get $hl) (local.get $lhs) (local.get $rhs))
             (local.set $member (i32.const 0))
             (br $next)))

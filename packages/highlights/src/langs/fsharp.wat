@@ -55,32 +55,37 @@
     (local $interp i32)
     (local.set $verbatim (i32.ne (i32.and (local.get $kind) (i32.const 2)) (i32.const 0)))
     (local.set $interp (i32.ne (i32.and (local.get $kind) (i32.const 4)) (i32.const 0)))
+    ;; $p is the next special byte; one below $ptr so the first pass searches,
+    ;; and a `}` or `}}` handled before it keeps it valid
+    (local.set $p (i32.sub (global.get $ptr) (i32.const 1)))
     (block $done
       (loop $scan
-        (if (local.get $verbatim)
+        (if (i32.gt_u (global.get $ptr) (local.get $p))
           (then
-            (if (local.get $interp)
+            (if (local.get $verbatim)
               (then
-                (local.set $p
-                  (call $lexFindEither (global.get $ptr) (i32.const 34) (i32.const "{"))))
-              (else (local.set $p (call $lexFindByte (global.get $ptr) (i32.const 34))))))
-          (else
-            (if (local.get $interp)
-              (then
-                (local.set $p
-                  (call $scanFind3
-                    (global.get $ptr)
-                    (i32.const 34)
-                    (i32.const 92)
-                    (i32.const "{"))))
+                (if (local.get $interp)
+                  (then
+                    (local.set $p
+                      (call $lexFindEither (global.get $ptr) (i32.const 34) (i32.const "{"))))
+                  (else (local.set $p (call $lexFindByte (global.get $ptr) (i32.const 34))))))
               (else
-                (local.set $p
-                  (call $scanFindSpecial
-                    (global.get $ptr)
-                    (global.get $end)
-                    (i32.const 34)
-                    (i32.const 1)
-                    (i32.const 0)))))))
+                (if (local.get $interp)
+                  (then
+                    (local.set $p
+                      (call $scanFind3
+                        (global.get $ptr)
+                        (i32.const 34)
+                        (i32.const 92)
+                        (i32.const "{"))))
+                  (else
+                    (local.set $p
+                      (call $scanFindSpecial
+                        (global.get $ptr)
+                        (global.get $end)
+                        (i32.const 34)
+                        (i32.const 1)
+                        (i32.const 0)))))))))
         ;; an interpolated body also escapes `}}`, found inside the run
         (if (local.get $interp)
           (then
@@ -173,6 +178,25 @@
         (local.set $p (i32.add (local.get $p) (i32.const 1)))
         (br $l)))
     (local.get $p))
+
+  ;; The end of a ``double-backtick`` identifier opening at $p - just past
+  ;; its closing ``` `` ``` on the same line - or 0 when the line has none.
+  (func $fsTickIdEnd (param $p i32) (result i32)
+    (local $c i32)
+    (local.set $p (i32.add (local.get $p) (i32.const 2)))
+    (block $done
+      (loop $scan
+        (br_if $done (i32.ge_u (local.get $p) (global.get $end)))
+        (local.set $c (i32.load8_u (local.get $p)))
+        (br_if $done (i32.or (i32.eq (local.get $c) (i32.const 10)) (i32.eq (local.get $c) (i32.const 13))))
+        (if
+          (i32.and
+            (i32.eq (local.get $c) (i32.const "`"))
+            (i32.eq (call $fsByte (i32.add (local.get $p) (i32.const 1))) (i32.const "`")))
+          (then (return (i32.add (local.get $p) (i32.const 2)))))
+        (local.set $p (i32.add (local.get $p) (i32.const 1)))
+        (br $scan)))
+    (i32.const 0))
 
   ;; Whether the bytes at $p begin an argument of an application: a value
   ;; start that is not a keyword, so `match s with` does not apply `s`.
@@ -349,7 +373,9 @@
             (local.set $member (i32.const 0))
             (br $next)))
         (if
-          (i32.and (i32.eq (local.get $c) (i32.const 39)) (call $mlIsCharLiteral (global.get $ptr)))
+          (if (result i32) (i32.eq (local.get $c) (i32.const 39))
+            (then (call $mlIsCharLiteral (global.get $ptr)))
+            (else (i32.const 0)))
           (then
             (call $lexString (i32.const 39) (i32.const 0) (enum.get $Token.string))
             (local.set $member (i32.const 0))
@@ -381,10 +407,19 @@
             (local.set $attr (i32.const 0))
             (br $next)))
 
-        (if (i32.and (call $lexIsIdentStart (local.get $c)) (i32.ne (local.get $c) (i32.const "$")))
+        ;; a ``double-backtick name`` is one identifier
+        (local.set $n (i32.const 0))
+        (if (i32.and (i32.eq (local.get $c) (i32.const "`")) (i32.eq (local.get $c2) (i32.const "`")))
+          (then (local.set $n (call $fsTickIdEnd (global.get $ptr)))))
+        (if
+          (i32.or
+            (local.get $n)
+            (i32.and (call $lexIsIdentStart (local.get $c)) (i32.ne (local.get $c) (i32.const "$"))))
           (then
             ;; primes continue a name: x', f''
-            (call $scanIdentRun (i32.const 39))
+            (if (local.get $n)
+              (then (global.set $ptr (local.get $n)))
+              (else (call $scanIdentRun (i32.const 39))))
             (local.set $rhs (global.get $ptr))
             (local.set $p (call $lexSkipSpaceAt (local.get $rhs)))
             (local.set $pc (call $fsByte (local.get $p)))
@@ -495,15 +530,20 @@
                                                   (select
                                                     (enum.get $Token.function)
                                                     (enum.get $Token.variable)
-                                                    (i32.and
-                                                      (i32.eqz (local.get $afterValue))
-                                                      (call $fsIsArgAt
-                                                        (local.get $p)))))))))))))))))))))
+                                                    (if (result i32) (local.get $afterValue)
+                                                      (then (i32.const 0))
+                                                      (else (call $fsIsArgAt (local.get $p))))))))))))))))))))))
+                ;; defined and member names count too, so `let add x y` and
+                ;; `obj.Add x y` keep `x` a value
                 (local.set $afterValue
                   (i32.or
                     (i32.or
-                      (i32.eq (local.get $hl) (enum.get $Token.variable))
-                      (i32.eq (local.get $hl) (enum.get $Token.function)))
+                      (i32.or
+                        (i32.eq (local.get $hl) (enum.get $Token.variable))
+                        (i32.eq (local.get $hl) (enum.get $Token.function)))
+                      (i32.or
+                        (i32.eq (local.get $hl) (enum.get $Token.function.definition))
+                        (i32.eq (local.get $hl) (enum.get $Token.function.method))))
                     (i32.or
                       (i32.eq (local.get $hl) (enum.get $Token.constructor))
                       (i32.eq (local.get $hl) (enum.get $Token.property)))))))
@@ -511,12 +551,21 @@
             (local.set $member (i32.const 0))
             (br $next)))
 
+        ;; `..` is a range, `.. ..` a stepped one
+        (if (i32.and (i32.eq (local.get $c) (i32.const ".")) (i32.eq (local.get $c2) (i32.const ".")))
+          (then
+            (global.set $ptr (i32.add (global.get $ptr) (i32.const 2)))
+            (call $emitTok (enum.get $Token.operator) (local.get $lhs) (global.get $ptr))
+            (local.set $member (i32.const 0))
+            (local.set $afterValue (i32.const 0))
+            (br $next)))
         (if
           (i32.or
             (call $lexIsDigit (local.get $c))
             (i32.and (i32.eq (local.get $c) (i32.const ".")) (call $lexIsDigit (local.get $c2))))
           (then
             (call $lexScanNumber)
+            (call $mlFloatDot)
             (call $emitTok (enum.get $Token.number) (local.get $lhs) (global.get $ptr))
             (local.set $member (i32.const 0))
             (local.set $afterValue (i32.const 1))

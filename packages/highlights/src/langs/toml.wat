@@ -99,21 +99,38 @@
       (i32.le_u (i32.sub (local.get $c) (i32.const 9)) (i32.const 1))
       (byteset.get "\0d\20#,]}" (local.get $c))))
 
-  (func $tomlTwoDigits (param $p i32) (param $min i32) (param $max i32) (result i32)
-    (local $n i32)
+  ;; The two-digit decimal number at $p, or -1 unless both bytes are digits
+  ;; before $end.
+  (func $tomlTwoDigitValue (param $p i32) (result i32)
     (if (i32.gt_u (i32.add (local.get $p) (i32.const 2)) (global.get $end))
-      (then (return (i32.const 0))))
+      (then (return (i32.const -1))))
     (if
       (i32.eqz
         (i32.and
           (call $lexIsDigit (i32.load8_u (local.get $p)))
           (call $lexIsDigit (i32.load8_u offset=1 (local.get $p)))))
-      (then (return (i32.const 0))))
-    (local.set $n
-      (i32.add
-        (i32.mul (i32.sub (i32.load8_u (local.get $p)) (i32.const "0")) (i32.const 10))
-        (i32.sub (i32.load8_u offset=1 (local.get $p)) (i32.const "0"))))
-    (i32.and (i32.ge_u (local.get $n) (local.get $min)) (i32.le_u (local.get $n) (local.get $max))))
+      (then (return (i32.const -1))))
+    (i32.add
+      (i32.mul (i32.sub (i32.load8_u (local.get $p)) (i32.const "0")) (i32.const 10))
+      (i32.sub (i32.load8_u offset=1 (local.get $p)) (i32.const "0"))))
+
+  ;; Whether two digits at $p read a number in [$min, $max]. The unsigned
+  ;; compare sends a missing number (-1) out of range.
+  (func $tomlTwoDigits (param $p i32) (param $min i32) (param $max i32) (result i32)
+    (i32.le_u
+      (i32.sub (call $tomlTwoDigitValue (local.get $p)) (local.get $min))
+      (i32.sub (local.get $max) (local.get $min))))
+
+  ;; Whether $p starts an `HH:MM` hour and minute. The colon is tested first:
+  ;; most values are not times.
+  (func $tomlHourMinute (param $p i32) (result i32)
+    (if (result i32)
+      (i32.eq (call $tomlByte (i32.add (local.get $p) (i32.const 2))) (i32.const ":"))
+      (then
+        (i32.and
+          (call $tomlTwoDigits (local.get $p) (i32.const 0) (i32.const 23))
+          (call $tomlTwoDigits (i32.add (local.get $p) (i32.const 3)) (i32.const 0) (i32.const 59))))
+      (else (i32.const 0))))
 
   ;; End of the whitespace a line-ending backslash trims: spaces, tabs, LFs,
   ;; and CRLFs from $q, clamped to $end.
@@ -152,6 +169,7 @@
     (result i32)
     (local $c i32)
     (local $closed i32)
+    (local $digits i32)
     (local $e i32)
     (local $escape i32)
     (local $line i32)
@@ -218,27 +236,23 @@
               (then
                 (local.set $e (i32.add (global.get $ptr) (i32.const 2)))
                 (local.set $escape (i32.const 1))))
-            (if (i32.eq (local.get $c) (i32.const "x"))
+            ;; `\xHH`, `\uHHHH`, and `\UHHHHHHHH` need all their hex digits
+            (local.set $digits
+              (select
+                (i32.const 2)
+                (select
+                  (i32.const 4)
+                  (select (i32.const 8) (i32.const 0) (i32.eq (local.get $c) (i32.const "U")))
+                  (i32.eq (local.get $c) (i32.const "u")))
+                (i32.eq (local.get $c) (i32.const "x"))))
+            (if (local.get $digits)
               (then
                 (local.set $q
-                  (call $scanHexRun (i32.add (global.get $ptr) (i32.const 2)) (i32.const 2)))
-                (if (i32.eq (local.get $q) (i32.add (global.get $ptr) (i32.const 4)))
-                  (then
-                    (local.set $e (local.get $q))
-                    (local.set $escape (i32.const 1))))))
-            (if (i32.eq (local.get $c) (i32.const "u"))
-              (then
-                (local.set $q
-                  (call $scanHexRun (i32.add (global.get $ptr) (i32.const 2)) (i32.const 4)))
-                (if (i32.eq (local.get $q) (i32.add (global.get $ptr) (i32.const 6)))
-                  (then
-                    (local.set $e (local.get $q))
-                    (local.set $escape (i32.const 1))))))
-            (if (i32.eq (local.get $c) (i32.const "U"))
-              (then
-                (local.set $q
-                  (call $scanHexRun (i32.add (global.get $ptr) (i32.const 2)) (i32.const 8)))
-                (if (i32.eq (local.get $q) (i32.add (global.get $ptr) (i32.const 10)))
+                  (call $scanHexRun (i32.add (global.get $ptr) (i32.const 2)) (local.get $digits)))
+                (if
+                  (i32.eq
+                    (local.get $q)
+                    (i32.add (global.get $ptr) (i32.add (local.get $digits) (i32.const 2))))
                   (then
                     (local.set $e (local.get $q))
                     (local.set $escape (i32.const 1))))))
@@ -381,9 +395,9 @@
     (local $p i32)
     (local $q i32)
     (local $r i32)
+    (local $s i32)
     (local $sawNewline i32)
     (local $time i32)
-    (local $valid i32)
     (local $year i32)
     (local.set $key (i32.const 1))
     (call $lexEmitLeadingContinuation)
@@ -574,22 +588,22 @@
             (global.set $ptr (local.get $p))
             (call $emitTok (enum.get $Token.constant) (local.get $lhs) (global.get $ptr))
             (br $next)))
-        (local.set $p (local.get $lhs))
-        (if
-          (i32.and
-            (i32.lt_u (local.get $p) (global.get $end))
+        ;; $s skips an optional sign, for special and decimal floats; $lhs is
+        ;; before $end here
+        (local.set $s
+          (i32.add
+            (local.get $lhs)
             (i32.or
-              (i32.eq (i32.load8_u (local.get $p)) (i32.const "+"))
-              (i32.eq (i32.load8_u (local.get $p)) (i32.const "-"))))
-          (then (local.set $p (i32.add (local.get $p) (i32.const 1)))))
-        (local.set $q (i32.add (local.get $p) (i32.const 3)))
+              (i32.eq (local.get $c) (i32.const "+"))
+              (i32.eq (local.get $c) (i32.const "-")))))
+        (local.set $q (i32.add (local.get $s) (i32.const 3)))
         (if
           (i32.and
             (i32.le_u (local.get $q) (global.get $end))
             (i32.and
               (i32.or
-                (i32.eq (i32.and (i32.load (local.get $p)) (i32.const 0xffffff)) (i32.const "inf"))
-                (i32.eq (i32.and (i32.load (local.get $p)) (i32.const 0xffffff)) (i32.const "nan")))
+                (i32.eq (i32.and (i32.load (local.get $s)) (i32.const 0xffffff)) (i32.const "inf"))
+                (i32.eq (i32.and (i32.load (local.get $s)) (i32.const 0xffffff)) (i32.const "nan")))
               (call $tomlIsValueEnd (local.get $q))))
           (then
             (global.set $ptr (local.get $q))
@@ -597,198 +611,122 @@
             (br $next)))
 
         ;; Date/time recognition follows the fixed-width RFC 3339 grammar.
-        ;; A space delimiter remains part of the date-time token.
+        ;; A space delimiter remains part of the date-time token. Anything
+        ;; that is not a full date tries a bare time from $lhs.
         (local.set $date (i32.const 0))
-        (local.set $time (i32.const 0))
-        (local.set $valid (i32.le_u (i32.add (local.get $lhs) (i32.const 10)) (global.get $end)))
-        (if (local.get $valid)
+        (local.set $time (i32.const 1))
+        (local.set $q (local.get $lhs))
+        (if
+          (if (result i32)
+            (i32.le_u (i32.add (local.get $lhs) (i32.const 10)) (global.get $end))
+            (then
+              (i32.and
+                (i32.eq (i32.load8_u offset=4 (local.get $lhs)) (i32.const "-"))
+                (i32.eq (i32.load8_u offset=7 (local.get $lhs)) (i32.const "-"))))
+            (else (i32.const 0)))
           (then
-            (local.set $valid
+            ;; the year's two-digit halves and the month, -1 where not digits
+            (local.set $year (call $tomlTwoDigitValue (local.get $lhs)))
+            (local.set $r (call $tomlTwoDigitValue (i32.add (local.get $lhs) (i32.const 2))))
+            (local.set $n (call $tomlTwoDigitValue (i32.add (local.get $lhs) (i32.const 5))))
+            (if
               (i32.and
-                (i32.and
-                  (call $lexIsDigit (i32.load8_u (local.get $lhs)))
-                  (call $lexIsDigit (i32.load8_u offset=1 (local.get $lhs))))
-                (i32.and
-                  (call $lexIsDigit (i32.load8_u offset=2 (local.get $lhs)))
-                  (call $lexIsDigit (i32.load8_u offset=3 (local.get $lhs))))))
-            (local.set $valid
-              (i32.and
-                (local.get $valid)
-                (i32.and
-                  (i32.eq (i32.load8_u offset=4 (local.get $lhs)) (i32.const "-"))
-                  (i32.and
-                    (call $tomlTwoDigits
-                      (i32.add (local.get $lhs) (i32.const 5))
-                      (i32.const 1)
-                      (i32.const 12))
-                    (i32.eq (i32.load8_u offset=7 (local.get $lhs)) (i32.const "-"))))))
-            (if (local.get $valid)
+                (i32.ge_s (i32.or (local.get $year) (local.get $r)) (i32.const 0))
+                (i32.le_u (i32.sub (local.get $n) (i32.const 1)) (i32.const 11)))
               (then
-                (local.set $n
+                ;; days in the month: 28 plus the month's two bits of
+                ;; 0x3bbeecc, plus one in a leap February. A year is a
+                ;; multiple of 4 when its low half is, or, for a year ending
+                ;; in 00, its century half; that also covers the 400 rule.
+                (local.set $limit
                   (i32.add
-                    (i32.mul
-                      (i32.sub (i32.load8_u offset=5 (local.get $lhs)) (i32.const "0"))
-                      (i32.const 10))
-                    (i32.sub (i32.load8_u offset=6 (local.get $lhs)) (i32.const "0"))))
-                (local.set $valid
-                  (i32.and
-                    (i32.ge_u (local.get $n) (i32.const 1))
-                    (i32.le_u (local.get $n) (i32.const 12))))
-                (local.set $limit (i32.const 31))
-                (if
-                  (i32.or
-                    (i32.eq (local.get $n) (i32.const 4))
-                    (i32.or
-                      (i32.eq (local.get $n) (i32.const 6))
-                      (i32.or
-                        (i32.eq (local.get $n) (i32.const 9))
-                        (i32.eq (local.get $n) (i32.const 11)))))
-                  (then (local.set $limit (i32.const 30))))
-                (if (i32.eq (local.get $n) (i32.const 2))
+                    (i32.add
+                      (i32.const 28)
+                      (i32.and
+                        (i32.shr_u (i32.const 0x3bbeecc) (i32.shl (local.get $n) (i32.const 1)))
+                        (i32.const 3)))
+                    (i32.and
+                      (i32.eq (local.get $n) (i32.const 2))
+                      (i32.eqz
+                        (i32.and
+                          (select (local.get $r) (local.get $year) (local.get $r))
+                          (i32.const 3))))))
+                (if (call $tomlTwoDigits (i32.add (local.get $lhs) (i32.const 8)) (i32.const 1) (local.get $limit))
                   (then
-                    (local.set $limit (i32.const 28))
-                    (local.set $year
-                      (i32.add
-                        (i32.mul
-                          (i32.add
-                            (i32.mul
-                              (i32.add
-                                (i32.mul
-                                  (i32.sub (i32.load8_u (local.get $lhs)) (i32.const "0"))
-                                  (i32.const 10))
-                                (i32.sub (i32.load8_u offset=1 (local.get $lhs)) (i32.const "0")))
-                              (i32.const 10))
-                            (i32.sub (i32.load8_u offset=2 (local.get $lhs)) (i32.const "0")))
-                          (i32.const 10))
-                        (i32.sub (i32.load8_u offset=3 (local.get $lhs)) (i32.const "0"))))
+                    (local.set $p (i32.add (local.get $lhs) (i32.const 10)))
+                    (local.set $c (call $tomlByte (local.get $p)))
+                    (if
+                      (i32.or
+                        (i32.eq (i32.or (local.get $c) (i32.const 32)) (i32.const "t"))
+                        (i32.and
+                          (i32.eq (local.get $c) (i32.const 32))
+                          (call $tomlHourMinute (i32.add (local.get $p) (i32.const 1)))))
+                      (then
+                        (local.set $date (i32.const 1))
+                        (local.set $q (i32.add (local.get $p) (i32.const 1))))
+                      (else
+                        (local.set $time (i32.const 0))
+                        (if (call $tomlIsValueEnd (local.get $p))
+                          (then
+                            (global.set $ptr (local.get $p))
+                            (call $emitTok
+                              (enum.get $Token.string.special)
+                              (local.get $lhs)
+                              (global.get $ptr))
+                            (br $next)))))))))))
+
+        (if (i32.and (local.get $time) (call $tomlHourMinute (local.get $q)))
+          (then
+            (local.set $p (i32.add (local.get $q) (i32.const 5)))
+            (local.set $r (i32.const 0))
+            (if
+              (i32.and
+                (i32.eq (call $tomlByte (local.get $p)) (i32.const ":"))
+                (call $tomlTwoDigits
+                  (i32.add (local.get $p) (i32.const 1))
+                  (i32.const 0)
+                  (i32.const 60)))
+              (then
+                (local.set $p (i32.add (local.get $p) (i32.const 3)))
+                (local.set $r (i32.const 1))))
+            (if
+              (i32.and
+                (local.get $r)
+                (i32.and
+                  (i32.lt_u (i32.add (local.get $p) (i32.const 1)) (global.get $end))
+                  (i32.and
+                    (i32.eq (i32.load8_u (local.get $p)) (i32.const "."))
+                    (call $lexIsDigit (i32.load8_u offset=1 (local.get $p))))))
+              (then
+                (local.set $p (i32.add (local.get $p) (i32.const 1)))
+                (block $fractionDone
+                  (loop $fraction
+                    (br_if $fractionDone (i32.ge_u (local.get $p) (global.get $end)))
+                    (br_if $fractionDone
+                      (i32.eqz (call $lexIsDigit (i32.load8_u (local.get $p)))))
+                    (local.set $p (i32.add (local.get $p) (i32.const 1)))
+                    (br $fraction)))))
+            (if (local.get $date)
+              (then
+                (local.set $c (call $tomlByte (local.get $p)))
+                (if (i32.eq (i32.or (local.get $c) (i32.const 32)) (i32.const "z"))
+                  (then (local.set $p (i32.add (local.get $p) (i32.const 1))))
+                  (else
                     (if
                       (i32.and
-                        (i32.eqz (i32.rem_u (local.get $year) (i32.const 4)))
                         (i32.or
-                          (i32.ne (i32.rem_u (local.get $year) (i32.const 100)) (i32.const 0))
-                          (i32.eqz (i32.rem_u (local.get $year) (i32.const 400)))))
-                      (then (local.set $limit (i32.const 29))))))
-                (local.set $valid
-                  (i32.and
-                    (local.get $valid)
-                    (call $tomlTwoDigits
-                      (i32.add (local.get $lhs) (i32.const 8))
-                      (i32.const 1)
-                      (local.get $limit))))))))
-        (if (local.get $valid)
-          (then
-            (local.set $p (i32.add (local.get $lhs) (i32.const 10)))
-            (local.set $c (call $tomlByte (local.get $p)))
-            (if
-              (i32.or
-                (i32.eq (i32.or (local.get $c) (i32.const 32)) (i32.const "t"))
-                (i32.and
-                  (i32.eq (local.get $c) (i32.const 32))
-                  (i32.and
-                    (call $tomlTwoDigits
-                      (i32.add (local.get $p) (i32.const 1))
-                      (i32.const 0)
-                      (i32.const 23))
-                    (i32.and
-                      (i32.eq
-                        (call $tomlByte (i32.add (local.get $p) (i32.const 3)))
-                        (i32.const ":"))
-                      (call $tomlTwoDigits
-                        (i32.add (local.get $p) (i32.const 4))
-                        (i32.const 0)
-                        (i32.const 59))))))
+                          (i32.eq (local.get $c) (i32.const "+"))
+                          (i32.eq (local.get $c) (i32.const "-")))
+                        (call $tomlHourMinute (i32.add (local.get $p) (i32.const 1))))
+                      (then (local.set $p (i32.add (local.get $p) (i32.const 6)))))))))
+            (if (call $tomlIsValueEnd (local.get $p))
               (then
-                (local.set $date (i32.const 1))
-                (local.set $time (i32.const 1))
-                (local.set $q (i32.add (local.get $p) (i32.const 1))))
-              (else
-                (if (call $tomlIsValueEnd (local.get $p))
-                  (then
-                    (global.set $ptr (local.get $p))
-                    (call $emitTok
-                      (enum.get $Token.string.special)
-                      (local.get $lhs)
-                      (global.get $ptr))
-                    (br $next))))))
-          (else
-            (local.set $time (i32.const 1))
-            (local.set $q (local.get $lhs))))
-
-        (if (local.get $time)
-          (then
-            (local.set $valid
-              (i32.and
-                (call $tomlTwoDigits (local.get $q) (i32.const 0) (i32.const 23))
-                (i32.and
-                  (i32.eq (call $tomlByte (i32.add (local.get $q) (i32.const 2))) (i32.const ":"))
-                  (call $tomlTwoDigits
-                    (i32.add (local.get $q) (i32.const 3))
-                    (i32.const 0)
-                    (i32.const 59)))))
-            (if (local.get $valid)
-              (then
-                (local.set $p (i32.add (local.get $q) (i32.const 5)))
-                (local.set $r (i32.const 0))
-                (if
-                  (i32.and
-                    (i32.eq (call $tomlByte (local.get $p)) (i32.const ":"))
-                    (call $tomlTwoDigits
-                      (i32.add (local.get $p) (i32.const 1))
-                      (i32.const 0)
-                      (i32.const 60)))
-                  (then
-                    (local.set $p (i32.add (local.get $p) (i32.const 3)))
-                    (local.set $r (i32.const 1))))
-                (if
-                  (i32.and
-                    (local.get $r)
-                    (i32.and
-                      (i32.lt_u (i32.add (local.get $p) (i32.const 1)) (global.get $end))
-                      (i32.and
-                        (i32.eq (i32.load8_u (local.get $p)) (i32.const "."))
-                        (call $lexIsDigit (i32.load8_u offset=1 (local.get $p))))))
-                  (then
-                    (local.set $p (i32.add (local.get $p) (i32.const 1)))
-                    (block $fractionDone
-                      (loop $fraction
-                        (br_if $fractionDone (i32.ge_u (local.get $p) (global.get $end)))
-                        (br_if $fractionDone
-                          (i32.eqz (call $lexIsDigit (i32.load8_u (local.get $p)))))
-                        (local.set $p (i32.add (local.get $p) (i32.const 1)))
-                        (br $fraction)))))
-                (if (local.get $date)
-                  (then
-                    (local.set $c (call $tomlByte (local.get $p)))
-                    (if (i32.eq (i32.or (local.get $c) (i32.const 32)) (i32.const "z"))
-                      (then (local.set $p (i32.add (local.get $p) (i32.const 1))))
-                      (else
-                        (if
-                          (i32.and
-                            (i32.or
-                              (i32.eq (local.get $c) (i32.const "+"))
-                              (i32.eq (local.get $c) (i32.const "-")))
-                            (i32.and
-                              (call $tomlTwoDigits
-                                (i32.add (local.get $p) (i32.const 1))
-                                (i32.const 0)
-                                (i32.const 23))
-                              (i32.and
-                                (i32.eq
-                                  (call $tomlByte (i32.add (local.get $p) (i32.const 3)))
-                                  (i32.const ":"))
-                                (call $tomlTwoDigits
-                                  (i32.add (local.get $p) (i32.const 4))
-                                  (i32.const 0)
-                                  (i32.const 59)))))
-                          (then (local.set $p (i32.add (local.get $p) (i32.const 6)))))))))
-                (if (call $tomlIsValueEnd (local.get $p))
-                  (then
-                    (global.set $ptr (local.get $p))
-                    (call $emitTok
-                      (enum.get $Token.string.special)
-                      (local.get $lhs)
-                      (global.get $ptr))
-                    (br $next)))))))
+                (global.set $ptr (local.get $p))
+                (call $emitTok
+                  (enum.get $Token.string.special)
+                  (local.get $lhs)
+                  (global.get $ptr))
+                (br $next)))))
 
         ;; Radix integers are unsigned and require at least one base digit.
         (local.set $base (i32.const 0))
@@ -816,14 +754,7 @@
 
         ;; Decimal integers and floats reject leading zeroes, trailing
         ;; underscores, incomplete fractions, and incomplete exponents.
-        (local.set $p (local.get $lhs))
-        (if
-          (i32.and
-            (i32.lt_u (local.get $p) (global.get $end))
-            (i32.or
-              (i32.eq (i32.load8_u (local.get $p)) (i32.const "+"))
-              (i32.eq (i32.load8_u (local.get $p)) (i32.const "-"))))
-          (then (local.set $p (i32.add (local.get $p) (i32.const 1)))))
+        (local.set $p (local.get $s))
         (if
           (i32.and
             (i32.lt_u (local.get $p) (global.get $end))

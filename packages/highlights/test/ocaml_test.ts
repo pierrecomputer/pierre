@@ -387,3 +387,132 @@ void t.test(
     );
   }
 );
+
+void t.test(
+  'ocaml: parameters and names before keywords are values, not applications',
+  () => {
+    assert.deepEqual(
+      tokenKinds('ocaml', 'let add x y = if x > y then x else y in add 1 2'),
+      [
+        ['let', 'keyword.declaration'],
+        ['add', 'function.definition'],
+        ['x y', 'variable'],
+        ['=', 'operator'],
+        ['if', 'keyword.control'],
+        ['x', 'variable'],
+        ['>', 'operator'],
+        ['y', 'variable'],
+        ['then', 'keyword.control'],
+        ['x', 'variable'],
+        ['else', 'keyword.control'],
+        ['y', 'variable'],
+        ['in', 'keyword.declaration'],
+        ['add', 'function'],
+        ['1 2', 'number'],
+      ]
+    );
+    assert.deepEqual(tokenKinds('ocaml', 'let f v = match v with _ -> Foo.x'), [
+      ['let', 'keyword.declaration'],
+      ['f', 'function.definition'],
+      ['v', 'variable'],
+      ['=', 'operator'],
+      ['match', 'keyword.control'],
+      ['v', 'variable'],
+      ['with', 'keyword.control'],
+      ['_', 'variable'],
+      ['->', 'operator'],
+      ['Foo', 'namespace'],
+      ['.', 'punctuation.delimiter'],
+      ['x', 'property'],
+    ]);
+  }
+);
+
+void t.test('ocaml: a trailing-dot float does not start member access', () => {
+  assert.deepEqual(
+    tokenKinds('ocaml', 'let sign x = if x > 0. then 1. else 0.\nlet y = 2'),
+    [
+      ['let', 'keyword.declaration'],
+      ['sign', 'function.definition'],
+      ['x', 'variable'],
+      ['=', 'operator'],
+      ['if', 'keyword.control'],
+      ['x', 'variable'],
+      ['>', 'operator'],
+      ['0.', 'number'],
+      ['then', 'keyword.control'],
+      ['1.', 'number'],
+      ['else', 'keyword.control'],
+      ['0.', 'number'],
+      ['let', 'keyword.declaration'],
+      ['y', 'variable'],
+      ['=', 'operator'],
+      ['2', 'number'],
+    ]
+  );
+});
+
+void t.test("ocaml: a labeled argument's colon does not open a type", () => {
+  assert.deepEqual(
+    tokenKinds(
+      'ocaml',
+      'List.iter l ~f:print_endline; Array.sort ~cmp:compare arr'
+    ),
+    [
+      ['List', 'namespace'],
+      ['.', 'punctuation.delimiter'],
+      ['iter', 'function'],
+      ['l', 'variable'],
+      ['~f', 'variable.parameter'],
+      [':', 'operator'],
+      ['print_endline', 'variable'],
+      [';', 'punctuation.delimiter'],
+      ['Array', 'namespace'],
+      ['.', 'punctuation.delimiter'],
+      ['sort', 'function'],
+      ['~cmp', 'variable.parameter'],
+      [':', 'operator'],
+      ['compare arr', 'variable'],
+    ]
+  );
+});
+
+void t.test('ocaml: module type names and quoted extensions', () => {
+  assert.deepEqual(tokenKinds('ocaml', 'module type S = sig end'), [
+    ['module type', 'keyword.declaration'],
+    ['S', 'type'],
+    ['=', 'operator'],
+    ['sig end', 'keyword.declaration'],
+  ]);
+  assert.deepEqual(
+    tokenKinds('ocaml', 'let q = {%sql|select 1|} and r = {x with y = 1}'),
+    [
+      ['let', 'keyword.declaration'],
+      ['q', 'variable'],
+      ['=', 'operator'],
+      ['{%', 'punctuation.special'],
+      ['sql', 'attribute'],
+      ['|select 1|}', 'string'],
+      ['and', 'keyword.declaration'],
+      ['r', 'variable'],
+      ['=', 'operator'],
+      ['{', 'punctuation.bracket'],
+      ['x', 'variable'],
+      ['with', 'keyword.control'],
+      ['y', 'variable'],
+      ['=', 'operator'],
+      ['1', 'number'],
+      ['}', 'punctuation.bracket'],
+    ]
+  );
+  // a keyed extension body spans lines and resumes at the keyed closer
+  const lines = assertLineFedParity(
+    'ocaml',
+    'let r = {%%ext.name id|body |} still\nmore|id} + 1\n'
+  );
+  assert.equal(
+    lines[1][0].content,
+    'more|id} ',
+    'the keyed closer ends the string'
+  );
+});

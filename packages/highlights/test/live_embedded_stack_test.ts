@@ -71,6 +71,63 @@ void t.test(
   }
 );
 
+void t.test('LiveTokenizer: edits restore TOML stacks inside fences', () => {
+  // `b` is a key only while the innermost container is an inline table; the
+  // later fence leaves an array in that stack slot, so a resumed line reads
+  // the fence's captured stack rather than whatever memory holds
+  for (const lang of ['markdown', 'mdx'] as const) {
+    const lines = [
+      '```toml',
+      'data = [',
+      '  {',
+      '    a = 1, b = 2,',
+      '  },',
+      ']',
+      '```',
+      '```toml',
+      'y = [ [ 1,',
+      '] ]',
+      '```',
+    ];
+    const live = new LiveTokenizer({
+      lang,
+      theme: distinctTheme,
+      code: lines.join('\n'),
+    });
+    try {
+      for (const value of ['3', '1']) {
+        live.applyEdits([
+          {
+            range: {
+              start: { line: 3, character: 8 },
+              end: { line: 3, character: 9 },
+            },
+            newText: value,
+          },
+        ]);
+        lines[3] = `    a = ${value}, b = 2,`;
+        const code = lines.join('\n');
+        assert.equal(live.getText(), code);
+        const fresh = codeToTokens(code, { lang, theme: distinctTheme }).tokens;
+        let offset = 0;
+        for (let line = 0; line < lines.length; line++) {
+          assert.deepEqual(
+            live.getLineTokens(line).tokens,
+            fresh[line].map((token) => ({
+              ...token,
+              offset: token.offset - offset,
+            })),
+            `${lang}, line ${line}`
+          );
+          offset += lines[line].length + 1;
+        }
+      }
+    } finally {
+      live.dispose();
+    }
+  }
+});
+
 void t.test(
   'LiveTokenizer: JSON fence stacks survive comments and full templates',
   () => {

@@ -516,3 +516,51 @@ void t.test(
     );
   }
 );
+
+void t.test('c: hex, octal, and universal escapes are one escape each', () => {
+  assert.deepEqual(tokenKinds('c', 'printf("\\x1b[31m\\033[0m\\u00e9");'), [
+    ['printf', 'function'],
+    ['(', 'punctuation.bracket'],
+    ['"', 'string'],
+    ['\\x1b', 'string.escape'],
+    ['[31m', 'string'],
+    ['\\033', 'string.escape'],
+    ['[0m', 'string'],
+    ['\\u00e9', 'string.escape'],
+    ['"', 'string'],
+    [')', 'punctuation.bracket'],
+    [';', 'punctuation.delimiter'],
+  ]);
+  // a literal continued by an escaped line break keeps C escapes when its
+  // next line arrives as a new chunk
+  assertLineFedParity('c', 'char *s = "ab\\\n\\x41\\101";\nint y;\n');
+  assertLineFedParity('c', 'char *s = "ab\\\r\n\\x41";\r\nint y;\r\n');
+});
+
+void t.test(
+  'c: `#` and `##` on macro continuation lines are operators, not directives',
+  () => {
+    const code =
+      '#define DECL(n) \\\n  int n##_count; \\\n  const char *n##_s = #n\n  #include <x.h>\n';
+    assert.deepEqual(tokenKinds('c', code), [
+      ['#define DECL(n) \\', 'preproc'],
+      ['int', 'type.builtin'],
+      ['n', 'variable'],
+      ['##', 'operator'],
+      ['_count', 'variable'],
+      [';', 'punctuation.delimiter'],
+      ['\\', null],
+      ['const', 'keyword'],
+      ['char', 'type.builtin'],
+      ['*', 'operator'],
+      ['n', 'variable'],
+      ['##', 'operator'],
+      ['_s', 'variable'],
+      ['= #', 'operator'],
+      ['n', 'variable'],
+      ['#include', 'preproc'],
+      ['<x.h>', 'string'],
+    ]);
+    assertLineFedParity('c', code);
+  }
+);

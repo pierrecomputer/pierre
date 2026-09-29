@@ -246,3 +246,31 @@ void t.test('groovy: multi-line constructs stream line-fed', () => {
     assertLineFedParity('groovy', code);
   }
 });
+
+void t.test('groovy: an LF or CRLF gap ends an import line', () => {
+  const code =
+    'import java.util.List\r\nList xs = []\nimport a.B\nB b = new B()';
+  assertLineFedParity('groovy', code);
+  assert.deepEqual(tokenKinds('groovy', code), [
+    ['import', 'keyword.import'],
+    ['java', 'namespace'],
+    ['.', 'punctuation.delimiter'],
+    ['util', 'namespace'],
+    ['.', 'punctuation.delimiter'],
+    ['List', 'namespace'],
+    ['List', 'type'],
+    ['xs', 'variable'],
+    ['=', 'operator'],
+    ['[]', 'punctuation.bracket'],
+    ['import', 'keyword.import'],
+    ['a', 'namespace'],
+    ['.', 'punctuation.delimiter'],
+    ['B', 'namespace'],
+    ['B', 'type'],
+    ['b', 'variable'],
+    ['=', 'operator'],
+    ['new', 'keyword'],
+    ['B', 'type'],
+    ['()', 'punctuation.bracket'],
+  ]);
+});

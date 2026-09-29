@@ -154,8 +154,9 @@ void t.test('astro: spread and expression attribute values', () => {
   assert.ok(
     kinds.some(([text, kind]) => text === 'html' && kind === 'variable')
   );
+  // the start tag's `>` still closes it after the expression, merging with `</`
   assert.deepEqual(kinds.slice(-3), [
-    ['</', 'punctuation.bracket.html'],
+    ['></', 'punctuation.bracket.html'],
     ['div', 'tag'],
     ['>', 'punctuation.bracket.html'],
   ]);
@@ -278,3 +279,73 @@ void t.test('astro: malformed and split ranges remain bounded', () => {
   const split = loadLang('astro', '$hlAstro', 21);
   checkInvariants(split.hl, '---\nconst a = 1;\n---\n<div>{value}</div>');
 });
+
+void t.test(
+  'astro: a start tag continues after an attribute expression',
+  () => {
+    assert.deepEqual(tokenKinds('astro', '<Layout title={title}>\n'), [
+      ['<', 'punctuation.bracket.html'],
+      ['Layout', 'tag'],
+      ['title', 'attribute'],
+      ['=', 'punctuation.delimiter.html'],
+      ['{', 'punctuation.bracket'],
+      ['title', 'variable'],
+      ['}', 'punctuation.bracket'],
+      ['>', 'punctuation.bracket.html'],
+    ]);
+    assert.deepEqual(
+      tokenKinds('astro', '<div class={cls} id="x" data-a=1>hi</div>').slice(
+        7,
+        14
+      ),
+      [
+        ['id', 'attribute'],
+        ['=', 'punctuation.delimiter.html'],
+        ['"x"', 'string'],
+        ['data-a', 'attribute'],
+        ['=', 'punctuation.delimiter.html'],
+        ['1', 'string'],
+        ['>', 'punctuation.bracket.html'],
+      ]
+    );
+    // quoted values are literal in Astro: the braces stay part of the string
+    assert.deepEqual(
+      tokenKinds('astro', '<a href="/x/{id}" class:active={a}>x</a>').slice(
+        2,
+        9
+      ),
+      [
+        ['href', 'attribute'],
+        ['=', 'punctuation.delimiter.html'],
+        ['"/x/{id}"', 'string'],
+        ['class:active', 'attribute'],
+        ['=', 'punctuation.delimiter.html'],
+        ['{', 'punctuation.bracket'],
+        ['a', 'variable'],
+      ]
+    );
+  }
+);
+
+void t.test(
+  'astro: expressions and tags spanning lines stream line-fed',
+  () => {
+    for (const code of [
+      '<Card\n  title={t}\n  size="lg"\n/>\n',
+      '<a href="/x\n  {id}" title="t">l</a>\n',
+      '<div class={\n  a\n} id="z">\n',
+      // the expression's own `{` is lexed as TSX, so an object key stays a key
+      '<p>{\n  a: 1,\n}</p>\n',
+      '<div class={"}" id=1>\n',
+      '<div class={`a\n} id=1>\n',
+      '{items.map((i) => <li>{i}</li>)}\n<div {a\n',
+    ]) {
+      assertLineFedParity('astro', code);
+    }
+    assert.ok(
+      tokenKinds('astro', '<p>{\n  a: 1,\n}</p>').some(
+        ([text, kind]) => text === 'a' && kind === 'property'
+      )
+    );
+  }
+);

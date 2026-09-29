@@ -20,9 +20,11 @@ tasks:
   # filters a task's own outputs), making the two hashes ping-pong and
   # forcing rebuilds on every pipeline. Vercel does not run these tasks
   # (its builder writes plain `.next`, which would fail the declared
-  # outputs): vercel.json runs build-deps below, then next build directly.
+  # outputs): build-vercel.sh runs build-deps below, then next build directly.
   build:
-    script: 'bun scripts/generate-llms-txt.ts && next build'
+    script:
+      'bun scripts/generate-llms-txt.ts && next build && bun
+      scripts/check-prerender-size.ts'
     env:
       NEXT_PUBLIC_SITE: 'diffs'
     deps:
@@ -41,7 +43,9 @@ tasks:
       mutex: 'docs-build'
 
   build-trees-site:
-    script: 'bun scripts/generate-llms-txt.ts && next build'
+    script:
+      'bun scripts/generate-llms-txt.ts && next build && bun
+      scripts/check-prerender-size.ts'
     env:
       NEXT_PUBLIC_SITE: 'trees'
     deps:

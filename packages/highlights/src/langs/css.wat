@@ -15,9 +15,35 @@
         (i32.eq (local.get $c) (i32.const "_")))
       (i32.ge_u (local.get $c) (i32.const 128))))
 
-  ;; advance $ptr over identifier-continuation bytes, bounded by $end
+  ;; advance $ptr over identifier-continuation bytes, bounded by $end. A
+  ;; backslash escape continues the name, as in compiled utility classes
+  ;; (`.md\:flex`, `.w-1\/2`, `.\32xl`): up to six hex digits and one
+  ;; optional blank, or any single character. A backslash before a line
+  ;; break or $end is not an escape and ends the name.
   (func $cssScanIdent
-    (call $scanIdentRun (i32.const "-")))
+    (local $e i32)
+    (block $done
+      (loop $run
+        (call $scanIdentRun (i32.const "-"))
+        (br_if $done (i32.ge_u (i32.add (global.get $ptr) (i32.const 1)) (global.get $end)))
+        (br_if $done (i32.ne (i32.load8_u (global.get $ptr)) (i32.const 92)))
+        (br_if $done
+          (i32.le_u (i32.sub (i32.load8_u offset=1 (global.get $ptr)) (i32.const 10)) (i32.const 3)))
+        (local.set $e (call $scanHexRun (i32.add (global.get $ptr) (i32.const 1)) (i32.const 6)))
+        (if (i32.eq (local.get $e) (i32.add (global.get $ptr) (i32.const 1)))
+          (then
+            (local.set $e
+              (call $utf8SpanEnd (i32.add (global.get $ptr) (i32.const 2)) (global.get $end))))
+          (else
+            (if
+              (i32.and
+                (i32.lt_u (local.get $e) (global.get $end))
+                (i32.or
+                  (i32.eq (i32.load8_u (local.get $e)) (i32.const 32))
+                  (i32.eq (i32.load8_u (local.get $e)) (i32.const 9))))
+              (then (local.set $e (i32.add (local.get $e) (i32.const 1)))))))
+        (global.set $ptr (local.get $e))
+        (br $run))))
 
   ;; loose numeric tail + unit; the first byte, and any sign, is already
   ;; consumed. Digits, dots, exponents, then `%` or one trailing identifier run so
@@ -229,11 +255,32 @@
     (local $rem i32)
     (local $colon i32) ;; first `:` seen: 1 before a blank or $end, 2 otherwise
     (local $stop i32)  ;; the current line end, also used by streamed calls
+    (local $interp i32) ;; `#{` / `@{` interpolations still open
     (local $w v128)
     (local.set $p (global.get $ptr))
     ;; Live documents expose one line at a time. Whole-input decisions must
     ;; use that same lookahead so a later delimiter cannot change this line.
     (local.set $stop (global.get $end))
+    ;; fast path: inside a block, `name: ` (a name, a colon, then a blank)
+    ;; can only open a declaration, so skip the scan to the delimiter
+    (if (local.get $depth)
+      (then
+        (local.set $c (i32.load8_u (local.get $p)))
+        (if
+          (i32.or
+            (call $cssIdentStart (local.get $c))
+            (i32.eq (local.get $c) (i32.const "-")))
+          (then
+            (local.set $q (global.get $ptr))
+            (call $scanIdentRun (i32.const "-"))
+            (local.set $p (global.get $ptr))
+            (global.set $ptr (local.get $q))
+            (if
+              (i32.and
+                (i32.lt_u (i32.add (local.get $p) (i32.const 1)) (local.get $stop))
+                (i32.eq (i32.load16_u (local.get $p)) (i32.const 0x203a)))
+              (then (return (i32.const 0))))
+            (local.set $p (global.get $ptr))))))
     (block $decl
       (loop $scan
         (br_if $decl (i32.ge_u (local.get $p) (local.get $stop)))
@@ -295,11 +342,18 @@
                     (i32.eq (i32.load8_u (i32.sub (local.get $p) (i32.const 1))) (i32.const "@"))
                     (i32.eq (global.get $cssDialect) (i32.const 1)))))
               (then
-                (local.set $p (call $lexFindByte (local.get $p) (i32.const "}")))
-                (if (i32.lt_u (local.get $p) (local.get $stop))
-                  (then (local.set $p (i32.add (local.get $p) (i32.const 1)))))
+                ;; count it instead of searching ahead for its closer: a search
+                ;; past this line or past later `;` would rescan the rest of
+                ;; the input at every statement start of an unclosed `#{`
+                (local.set $interp (i32.add (local.get $interp) (i32.const 1)))
+                (local.set $p (i32.add (local.get $p) (i32.const 1)))
                 (br $scan)))
             (return (i32.const 1))))
+        (if (i32.and (i32.eq (local.get $c) (i32.const "}")) (i32.ne (local.get $interp) (i32.const 0)))
+          (then
+            (local.set $interp (i32.sub (local.get $interp) (i32.const 1)))
+            (local.set $p (i32.add (local.get $p) (i32.const 1)))
+            (br $scan)))
         (if (i32.or (i32.eq (local.get $c) (i32.const "}")) (i32.eq (local.get $c) (i32.const ";")))
           (then (return (i32.const 0))))
         (if (i32.eq (local.get $c) (i32.const ":"))
@@ -507,18 +561,18 @@
         (local.set $gap (global.get $ptr))
         (call $scanWhitespace)
         ;; the indented syntax ends a statement at its line break
-        (if
-          (i32.and
-            (i32.eq (global.get $cssDialect) (i32.const 3))
-            (i32.lt_u
-              (call $scanFindSpecial
-                (local.get $gap)
-                (global.get $ptr)
-                (i32.const 10)
-                (i32.const 0)
-                (i32.const 1))
-              (global.get $ptr)))
-          (then (local.set $decide (i32.const 1))))
+        (if (i32.eq (global.get $cssDialect) (i32.const 3))
+          (then
+            (if
+              (i32.lt_u
+                (call $scanFindSpecial
+                  (local.get $gap)
+                  (global.get $ptr)
+                  (i32.const 10)
+                  (i32.const 0)
+                  (i32.const 1))
+                (global.get $ptr))
+              (then (local.set $decide (i32.const 1))))))
         (call $emitGap (local.get $gap) (global.get $ptr))
         (br_if $done (i32.ge_u (global.get $ptr) (global.get $end)))
         (local.set $lhs (global.get $ptr))
@@ -599,20 +653,24 @@
                 (local.set $mode (i32.const 1))
                 (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
                 (call $cssScanIdent)
-                ;; less `@name: value` declares a variable
-                (if
-                  (i32.and
-                    (i32.eq (global.get $cssDialect) (i32.const 1))
-                    (i32.eq
-                      (select
-                        (i32.load8_u (call $lexSkipSpaceAt (global.get $ptr)))
-                        (i32.const 0)
-                        (i32.lt_u (call $lexSkipSpaceAt (global.get $ptr)) (global.get $end)))
-                      (i32.const ":")))
+                ;; less `@name: value` declares a variable, and `@name()`
+                ;; calls a detached ruleset (whose parentheses are always
+                ;; empty, which no real at-rule is)
+                (if (i32.eq (global.get $cssDialect) (i32.const 1))
                   (then
-                    (call $emitTok (enum.get $Token.variable) (local.get $lhs) (global.get $ptr))
-                    (local.set $mode (i32.const 2))
-                    (br $next)))
+                    (local.set $p (call $lexSkipSpaceAt (global.get $ptr)))
+                    (if
+                      (i32.or
+                        (i32.and
+                          (i32.lt_u (local.get $p) (global.get $end))
+                          (i32.eq (i32.load8_u (local.get $p)) (i32.const ":")))
+                        (i32.and
+                          (i32.lt_u (i32.add (global.get $ptr) (i32.const 1)) (global.get $end))
+                          (i32.eq (i32.load16_u (global.get $ptr)) (i32.const "()"))))
+                      (then
+                        (call $emitTok (enum.get $Token.variable) (local.get $lhs) (global.get $ptr))
+                        (local.set $mode (i32.const 2))
+                        (br $next)))))
                 (local.set $namespace
                   (i32.and
                     (i32.eq (i32.sub (global.get $ptr) (local.get $lhs)) (i32.const 10))
@@ -653,13 +711,19 @@
                 (br $next))
               ;; the look-ahead runs at every statement start, nested or not, so
               ;; a bare-declaration fragment (style attribute, docs snippet)
-              ;; colors as property/value, not as selectors
+              ;; colors as property/value, not as selectors. A leading `&`
+              ;; always opens a nested selector, as in less
+              ;; `&:extend(.a);`, whose `;` would read as a declaration.
               (else
                 (local.set $mode
                   (select
                     (i32.const 0)
                     (i32.const 2)
-                    (call $cssDecide (i32.or (local.get $depth) (local.get $sassDepth)))))))))
+                    (if (result i32)
+                      (i32.eq (local.get $c) (i32.const "&"))
+                      (then (i32.const 1))
+                      (else
+                        (call $cssDecide (i32.or (local.get $depth) (local.get $sassDepth)))))))))))
 
         ;; `#{...}` in scss and sass, `@{...}` in less: an expression
         ;; interpolated into any context; its braces are tracked so the

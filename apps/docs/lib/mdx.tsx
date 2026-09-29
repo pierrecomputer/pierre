@@ -1,5 +1,5 @@
 import { MultiFileDiff } from '@pierre/diffs/react';
-import { preloadFile, type PreloadFileOptions } from '@pierre/diffs/ssr';
+import type { PreloadFileOptions } from '@pierre/diffs/ssr';
 import {
   IconArrowRight,
   IconBulbFill,
@@ -35,6 +35,7 @@ import {
 import { OverviewFileTree } from '../app/(trees)/docs/Overview/OverviewFileTree';
 import { BetaBadge } from '../components/BetaBadge';
 import { DocsCodeExample } from '../components/docs/DocsCodeExample';
+import { preloadCodeExample } from './preloadCodeExample';
 import rehypeHierarchicalSlug from './rehype-hierarchical-slug';
 import remarkTocIgnore from './remark-toc-ignore';
 import { Button } from '@/components/ui/button';
@@ -138,7 +139,7 @@ export async function renderMDX({ filePath, scope = {} }: RenderMDXOptions) {
   return content;
 }
 
-// Preload every file snippet in parallel via `preloadFile` and expose each
+// Preload every file snippet in parallel via `preloadCodeExample` and expose each
 // preloaded result to the MDX scope under its original export key. Authors can
 // then use `<DocsCodeExample {...foo} />` inside MDX, where `foo` is the name
 // of the exported `PreloadFileOptions` constant in a sibling `constants.ts`.
@@ -148,7 +149,7 @@ export async function renderMDXWithPreloadedFiles(
 ) {
   const entries = Object.entries(files);
   const results = await Promise.all(
-    entries.map(([, opts]) => preloadFile(opts))
+    entries.map(([, opts]) => preloadCodeExample(opts))
   );
   const scope: Record<string, unknown> = {};
   for (let i = 0; i < entries.length; i++) {

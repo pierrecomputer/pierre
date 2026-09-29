@@ -1,30 +1,53 @@
 (module
   (import "../common.wat")
 
+  ;; the byte at $p, or 0 at or past $end
+  (func $bashByte (param $p i32) (result i32)
+    (select (i32.load8_u (local.get $p)) (i32.const 0) (i32.lt_u (local.get $p) (global.get $end))))
+
   ;; open `$((` arithmetic expansions: inside one, `<<` is a left shift and
   ;; must not be mistaken for a heredoc opener
   (global $bashArith (mut i32) (i32.const 0))
 
-  ;; group order is the dispatch order in $bashWordHl below
+  ;; group order is the dispatch order in $bashWordHl below; the control
+  ;; groups differ only in what may follow them (see $hlBash)
   (keyword-table $bashWords $mem.bashWords $mem.batchWords
-    (group ;; 1: control
-      "do" "fi" "if" "in" "for" "case" "done" "elif" "else" "esac" "then" "break" "until" "while"
-      "return" "select" "continue")
-    (group ;; 2: declaration
+    (group ;; 1: control, a command follows
+      "do" "if" "elif" "else" "then" "until" "while")
+    (group ;; 2: control, arguments follow
+      "fi" "done" "break" "return" "continue")
+    (group "esac")             ;; 3: control, the only keyword among case patterns
+    (group "in")               ;; 4: control after `for NAME` or `case WORD` only
+    (group "for" "select")     ;; 5: control, a name then `in` follow
+    (group "case")             ;; 6: control, a word, `in`, then patterns
+    (group ;; 7: declaration, names follow
       "local" "export" "declare" "readonly" "typeset")
-    (group "function")       ;; 3: declaration, next name is a function
-    (group "time" "coproc")) ;; 4: plain keyword
+    (group "function")         ;; 8: declaration, next name is a function
+    (group "time" "coproc"))   ;; 9: plain keyword, a command follows
 
   ;; Map a $bashWords group index to its token. Group 0 - a table miss - is an
   ;; ordinary word, which $hlBash may still promote to a command or a name.
   (func $bashWordHl (param $group i32) (result i32)
     (if (i32.eqz (local.get $group))
       (then (return (enum.get $Token.variable))))
-    (if (i32.eq (local.get $group) (i32.const 1))
+    (if (i32.le_u (local.get $group) (i32.const 6))
       (then (return (enum.get $Token.keyword.control))))
-    (if (i32.le_u (local.get $group) (i32.const 3))
+    (if (i32.le_u (local.get $group) (i32.const 8))
       (then (return (enum.get $Token.keyword.declaration))))
     (enum.get $Token.keyword))
+
+  ;; Besides identifier bytes, a word starts at the punctuation $c - one of
+  ;; `-`, `.`, `/`, `~` - that opens the flag, path, and home forms `-x`,
+  ;; `--flag`, `./run.sh`, `/usr/bin`, and `~/src` when $c2 continues it; a
+  ;; lone `-`, `.`, `/`, or `~` stays an operator or none.
+  (func $bashIsPunctWordStart (param $c i32) (param $c2 i32) (result i32)
+    (i32.or
+      (i32.and (call $lexIsIdentStart (local.get $c2)) (i32.ne (local.get $c2) (i32.const "$")))
+      (select
+        (i32.eq (local.get $c2) (i32.const "-"))
+        ;; `.` or `/` (46-47)
+        (i32.le_u (i32.sub (local.get $c2) (i32.const ".")) (i32.const 1))
+        (i32.eq (local.get $c) (i32.const "-")))))
 
   ;; `$@`, `$*`, `$#`, `$?`, `$!`, `$-` and `$1`..`$9`. A `$` before anything
   ;; else - a quote, a space, end of input - is a literal dollar sign.
@@ -47,17 +70,6 @@
           (i32.and (i32.ne (local.get $c) (i32.const "/")) (i32.ne (local.get $c) (i32.const "."))))
         (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
         (br $l))))
-
-  ;; does the whitespace gap [$lhs,$rhs) contain a line break?
-  (func $bashHasNl (param $lhs i32) (param $rhs i32) (result i32)
-    (i32.lt_u
-      (call $scanFindSpecial
-        (local.get $lhs)
-        (local.get $rhs)
-        (i32.const 10)
-        (i32.const 0)
-        (i32.const 1))
-      (local.get $rhs)))
 
   ;; Scan the body of a quoted `$(`/`$((` substitution from $ptr with $depth
   ;; parens open, emitting it as string.special and the closing paren as
@@ -137,9 +149,7 @@
         (local.set $close (i32.const 1))
         (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
         (if
-          (i32.and
-            (i32.lt_u (global.get $ptr) (global.get $end))
-            (i32.eq (i32.load8_u (global.get $ptr)) (i32.const "(")))
+          (i32.eq (call $bashByte (global.get $ptr)) (i32.const "("))
           (then
             (local.set $close (i32.const 2))
             (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))))
@@ -164,7 +174,9 @@
   ;; The string ends at `"`, and only a backslash escape or a `$` expansion
   ;; interrupts it, so each step hops to the first of the three: one SIMD pass
   ;; locates the quote or the backslash, then a second - bounded by that hit,
-  ;; so it never runs past the string - locates an earlier `$`. Returns 1
+  ;; so it never runs past the string - locates an earlier `$`. The quote or
+  ;; backslash hit stays valid until $ptr passes it, so it is searched again
+  ;; only then: a fresh search per `$` made long strings quadratic. Returns 1
   ;; after the closing quote, else 0 with the expansion left open at $end
   ;; recorded in $streamA (paren depth) and $streamB (inside `${`).
   (func $bashDoubleBody (param $seg i32) (result i32)
@@ -174,13 +186,16 @@
     (local $stop i32)
     (block $done
       (loop $l
-        (local.set $stop
-          (call $scanFindSpecial
-            (global.get $ptr)
-            (global.get $end)
-            (i32.const 34)
-            (i32.const 1)
-            (i32.const 0)))
+        ;; an expansion such as `$(...)` may consume past the old hit
+        (if (i32.or (i32.eqz (local.get $stop)) (i32.gt_u (global.get $ptr) (local.get $stop)))
+          (then
+            (local.set $stop
+              (call $scanFindSpecial
+                (global.get $ptr)
+                (global.get $end)
+                (i32.const 34)
+                (i32.const 1)
+                (i32.const 0)))))
         (global.set $ptr
           (call $scanFindSpecial
             (global.get $ptr)
@@ -308,10 +323,39 @@
   (func $bashIsOp (param $c i32) (result i32)
     (byteset.get "!&;<=>|~" (local.get $c)))
 
+  ;; Does the `(` at $p open an array, `NAME=(`, `NAME+=(`, or `a[i]=(`,
+  ;; outside arithmetic? Its lines then hold elements, not commands.
+  (func $bashIsArrayOpen (param $p i32) (result i32)
+    (local $c i32)
+    (if
+      (i32.or
+        (global.get $bashArith)
+        (i32.lt_u (local.get $p) (i32.add (global.get $srcBase) (i32.const 2))))
+      (then (return (i32.const 0))))
+    (if (i32.ne (i32.load8_u (i32.sub (local.get $p) (i32.const 1))) (i32.const "="))
+      (then (return (i32.const 0))))
+    (local.set $c (i32.load8_u (i32.sub (local.get $p) (i32.const 2))))
+    (i32.or
+      (call $lexIsIdentContinue (local.get $c))
+      (i32.or (i32.eq (local.get $c) (i32.const "+")) (i32.eq (local.get $c) (i32.const "]")))))
+
+  ;; $cmd is 1 where a word is a command: at a line start, after `;`, `&`,
+  ;; `|`, a command-list keyword, an unquoted `$(`, a subshell or process
+  ;; substitution `(`, a group `{`, a case arm's `)`, and after a `VAR=x`
+  ;; prefix. Keywords apply only there, except an awaited `in`. $flow packs
+  ;; the rest of the statement state, carried across chunks in one local:
+  ;; bits 0-1 are the case state - 1 after `case` until its `in`, 2 at a
+  ;; pattern (no commands, only `esac`), 3 in an arm body - bit 2 (4) marks
+  ;; the `in` awaited after `for NAME`/`case WORD`, and bit 3 (8) an
+  ;; assignment at command position waiting for the blank that starts its
+  ;; command. $arrayOpen counts the parens of an open `NAME=(` array, whose
+  ;; lines hold elements rather than commands.
   (func $hlBash
     (local $c i32)
     (local $c2 i32)
     (local $cmd i32)
+    (local $flow i32)
+    (local $arrayOpen i32)
     (local $decl i32)
     (local $gap i32)
     (local $group i32)
@@ -335,14 +379,17 @@
         (i32.or (global.get $streamReset) (global.get $streamDepth)))
       (then (global.set $bashArith (i32.const 0))))
     (call $lexEmitLeadingContinuation)
-    ;; command position holds at a line start; a chunk that resumes after a
-    ;; string closed mid-line - `"a\n"# c` - continues that line instead
-    (local.set $cmd (i32.const 1))
+    ;; command position holds at a line start outside an array; a chunk that
+    ;; resumes after a string closed mid-line - `"a\n"# c` - continues that
+    ;; line instead
+    (local.set $cmd (i32.eqz (local.get $arrayOpen)))
     (if (i32.gt_u (global.get $ptr) (global.get $srcBase))
       (then
         (local.set $c (i32.load8_u (i32.sub (global.get $ptr) (i32.const 1))))
         (local.set $cmd
-          (i32.or (i32.eq (local.get $c) (i32.const 10)) (i32.eq (local.get $c) (i32.const 13))))))
+          (i32.and
+            (local.get $cmd)
+            (i32.or (i32.eq (local.get $c) (i32.const 10)) (i32.eq (local.get $c) (i32.const 13)))))))
     (block $done
       (loop $next
         (local.set $gap (global.get $ptr))
@@ -365,9 +412,7 @@
                 (if
                   (i32.and
                     (i32.eq (local.get $c) (i32.const 13))
-                    (i32.and
-                      (i32.lt_u (global.get $ptr) (global.get $end))
-                      (i32.eq (i32.load8_u (global.get $ptr)) (i32.const 10))))
+                    (i32.eq (call $bashByte (global.get $ptr)) (i32.const 10)))
                   (then (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))))
                 (call $emitGap (local.get $gap) (global.get $ptr))
                 (call $bashHeredocBody (local.get $hdDelim) (local.get $hdLen) (local.get $hdStrip))
@@ -376,12 +421,23 @@
                 (br $next)))))
         (call $scanWhitespace)
         (call $emitGap (local.get $gap) (global.get $ptr))
-        (if (call $bashHasNl (local.get $gap) (global.get $ptr))
+        (if (call $lexGapHasBreak (local.get $gap) (global.get $ptr))
           (then
-            (local.set $cmd (i32.const 1))
+            (local.set $cmd (i32.eqz (local.get $arrayOpen)))
+            ;; `case WORD` and `for NAME` may put `in` on the next line
+            (local.set $flow (i32.and (local.get $flow) (i32.const 7)))
             ;; a line break without a body - the opener was the final line
             ;; of a bounded range - drops the pending heredoc
-            (local.set $hdLen (i32.const 0))))
+            (local.set $hdLen (i32.const 0)))
+          (else
+            ;; the blank after `VAR=x` starts the command it prefixes (bit 3
+            ;; is the top bit of $flow)
+            (if (i32.ge_u (local.get $flow) (i32.const 8))
+              (then
+                (if (i32.lt_u (local.get $gap) (global.get $ptr))
+                  (then
+                    (local.set $cmd (i32.const 1))
+                    (local.set $flow (i32.and (local.get $flow) (i32.const -9)))))))))
         (br_if $done (i32.ge_u (global.get $ptr) (global.get $end)))
         (local.set $lhs (global.get $ptr))
         (local.set $c (i32.load8_u (global.get $ptr)))
@@ -422,8 +478,24 @@
                 (call $lexString (i32.const 39) (i32.const 1) (enum.get $Token.string))
                 (local.set $cmd (i32.const 0))
                 (br $next)))
+            (local.set $p (global.get $bashArith))
             (drop (call $bashDollar (i32.const 0)))
-            (local.set $cmd (i32.const 0))
+            ;; an unquoted `$(` opens a command; `$((` (which counted itself
+            ;; into $bashArith) opens arithmetic
+            (local.set $cmd
+              (i32.and
+                (i32.eq (local.get $c2) (i32.const "("))
+                (i32.eq (global.get $bashArith) (local.get $p))))
+            (if (i32.eq (local.get $c2) (i32.const "("))
+              (then
+                (local.set $flow (i32.and (local.get $flow) (i32.const -9)))
+                ;; both parens of `$((` close separately
+                (if (local.get $arrayOpen)
+                  (then
+                    (local.set $arrayOpen
+                      (i32.add
+                        (local.get $arrayOpen)
+                        (i32.sub (i32.const 2) (local.get $cmd))))))))
             (br $next)))
         ;; `<<` opens a heredoc only as a redirection: `<<<` is a here-string and
         ;; a `<<` inside `$(( ))` is a left shift, and both fall through to the
@@ -445,9 +517,7 @@
             (global.set $ptr (i32.add (global.get $ptr) (i32.const 2)))
             (local.set $p (i32.const 0))
             (if
-              (i32.and
-                (i32.lt_u (global.get $ptr) (global.get $end))
-                (i32.eq (i32.load8_u (global.get $ptr)) (i32.const "-")))
+              (i32.eq (call $bashByte (global.get $ptr)) (i32.const "-"))
               (then
                 (local.set $p (i32.const 1))
                 (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))))
@@ -475,9 +545,7 @@
                     (i32.const 1)))
                 (local.set $group (i32.sub (global.get $ptr) (local.get $rhs)))
                 (if
-                  (i32.and
-                    (i32.lt_u (global.get $ptr) (global.get $end))
-                    (i32.eq (i32.load8_u (global.get $ptr)) (local.get $quote)))
+                  (i32.eq (call $bashByte (global.get $ptr)) (local.get $quote))
                   (then (global.set $ptr (i32.add (global.get $ptr) (i32.const 1))))))
               (else
                 (local.set $rhs (global.get $ptr))
@@ -504,11 +572,40 @@
             (call $emitTok (enum.get $Token.number) (local.get $lhs) (global.get $ptr))
             (local.set $cmd (i32.const 0))
             (br $next)))
-        (if (call $lexIsIdentStart (local.get $c))
+        ;; a word; `$` never reaches here
+        (if
+          (if (result i32) (call $lexIsIdentStart (local.get $c))
+            (then (i32.const 1))
+            (else
+              ;; `-`, `.`, `/` (45-47), or `~`
+              (if (result i32)
+                (i32.or
+                  (i32.le_u (i32.sub (local.get $c) (i32.const "-")) (i32.const 2))
+                  (i32.eq (local.get $c) (i32.const "~")))
+                (then (call $bashIsPunctWordStart (local.get $c) (local.get $c2)))
+                (else (i32.const 0)))))
           (then
+            (if (i32.eq (local.get $c) (i32.const "~"))
+              (then (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))))
             (call $bashScanWord)
             (local.set $rhs (global.get $ptr))
-            (local.set $group (keyword-table.get $bashWords (local.get $lhs) (local.get $rhs)))
+            ;; keywords only where a command may start, or the awaited `in`;
+            ;; among case patterns only `esac`
+            (local.set $group (i32.const 0))
+            (if (i32.or (local.get $cmd) (i32.and (local.get $flow) (i32.const 4)))
+              (then
+                (local.set $group (keyword-table.get $bashWords (local.get $lhs) (local.get $rhs)))
+                (if (local.get $group)
+                  (then
+                    (if
+                      (i32.or
+                        (i32.ne
+                          (i32.eq (local.get $group) (i32.const 4))
+                          (i32.ne (i32.and (local.get $flow) (i32.const 4)) (i32.const 0)))
+                        (i32.and
+                          (i32.eq (i32.and (local.get $flow) (i32.const 3)) (i32.const 2))
+                          (i32.ne (local.get $group) (i32.const 3))))
+                      (then (local.set $group (i32.const 0))))))))
             (local.set $hl (call $bashWordHl (local.get $group)))
             (if (local.get $decl)
               (then
@@ -524,50 +621,123 @@
                         (i32.eq (i32.load16_u (local.get $p)) (i32.const "()")))
                       (then (local.set $hl (enum.get $Token.function.definition)))
                       (else
-                        (if
-                          (i32.and
-                            (local.get $cmd)
-                            (i32.or
-                              (i32.ge_u (global.get $ptr) (global.get $end))
-                              (i32.ne (i32.load8_u (global.get $ptr)) (i32.const "="))))
-                          (then (local.set $hl (enum.get $Token.function))))))))))
-            ;; group 3 is `function`; the token test keeps a `function` that was
-            ;; itself captured as a definition from opening another one
-            (if
-              (i32.and
-                (i32.eq (local.get $hl) (enum.get $Token.keyword.declaration))
-                (i32.eq (local.get $group) (i32.const 3)))
-              (then (local.set $decl (i32.const 1))))
+                        (if (local.get $cmd)
+                          (then
+                            (if
+                              (i32.eq (call $bashByte (global.get $ptr)) (i32.const "="))
+                              (then (local.set $flow (i32.or (local.get $flow) (i32.const 8))))
+                              (else
+                                ;; a case pattern is never a command
+                                (if (i32.ne (i32.and (local.get $flow) (i32.const 3)) (i32.const 2))
+                                  (then (local.set $hl (enum.get $Token.function))))))))))))))
             (call $emitTok (local.get $hl) (local.get $lhs) (local.get $rhs))
-            (if
-              (i32.or
-                (i32.eq (local.get $hl) (enum.get $Token.keyword.control))
-                (i32.eq (local.get $hl) (enum.get $Token.keyword.declaration)))
-              (then (local.set $cmd (i32.const 1)))
-              (else (local.set $cmd (i32.const 0))))
+            ;; what may follow: arguments after a plain word or most keywords,
+            ;; a command after a command-list keyword (bits 1 and 9 of 0x202)
+            (local.set $cmd (i32.and (i32.shr_u (i32.const 0x202) (local.get $group)) (i32.const 1)))
+            (if (i32.ge_u (local.get $group) (i32.const 3))
+              (then
+                ;; `esac` closes the case
+                (if (i32.eq (local.get $group) (i32.const 3))
+                  (then (local.set $flow (i32.and (local.get $flow) (i32.const -4)))))
+                ;; `in` arrives; after `case WORD`, patterns follow
+                (if (i32.eq (local.get $group) (i32.const 4))
+                  (then
+                    (local.set $flow (i32.and (local.get $flow) (i32.const -5)))
+                    (if (i32.eq (i32.and (local.get $flow) (i32.const 3)) (i32.const 1))
+                      (then (local.set $flow (i32.add (local.get $flow) (i32.const 1)))))))
+                (if (i32.ge_u (local.get $group) (i32.const 5))
+                  (then
+                    ;; `for`, `select`, and `case` await an `in`
+                    (local.set $flow
+                      (i32.or
+                        (i32.and (local.get $flow) (i32.const -5))
+                        (select (i32.const 4) (i32.const 0) (i32.le_u (local.get $group) (i32.const 6)))))
+                    (if (i32.eq (local.get $group) (i32.const 6))
+                      (then
+                        (local.set $flow
+                          (i32.or (i32.and (local.get $flow) (i32.const -4)) (i32.const 1)))))
+                    ;; `function` names the next word; the token test keeps a
+                    ;; `function` captured as a definition from opening another
+                    (if
+                      (i32.and
+                        (i32.eq (local.get $hl) (enum.get $Token.keyword.declaration))
+                        (i32.eq (local.get $group) (i32.const 8)))
+                      (then (local.set $decl (i32.const 1))))))))
             (br $next)))
         (if (byteset.get "()[]{}" (local.get $c))
           (then
             (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
-            ;; `[[`/`]]` double only when the second bracket is inside the range:
-            ;; a bounded scan must never emit a byte the host still owns.
+            (local.set $p (local.get $cmd))
+            (local.set $cmd (i32.const 0))
+            (if (i32.gt_u (local.get $c) (i32.const ")"))
+              (then
+                ;; `[[`/`]]` double only when the second bracket is inside the
+                ;; range: a bounded scan must never emit a byte the host still
+                ;; owns
+                (if
+                  (i32.eq (call $bashByte (global.get $ptr)) (local.get $c))
+                  (then
+                    (if (i32.le_u (local.get $c) (i32.const "]"))
+                      (then (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))))))
+                ;; a `{` group holds commands; `{a,b}` is a brace expansion
+                (if (i32.eq (local.get $c) (i32.const "{"))
+                  (then
+                    (local.set $cmd
+                      (i32.or
+                        (i32.ge_u (global.get $ptr) (global.get $end))
+                        (call $lexIsSpace (i32.load8_u (global.get $ptr)))))))
+                (call $emitTok (enum.get $Token.punctuation.bracket) (local.get $lhs) (global.get $ptr))
+                (br $next)))
+            ;; `))` closes the innermost counted `$((` or `((`
             (if
               (i32.and
-                (i32.or
-                  (i32.eq (local.get $c) (i32.const "["))
-                  (i32.eq (local.get $c) (i32.const "]")))
                 (i32.and
-                  (i32.lt_u (global.get $ptr) (global.get $end))
-                  (i32.eq (i32.load8_u (global.get $ptr)) (local.get $c))))
-              (then (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))))
-            ;; `))` closes the innermost counted `$((`
-            (if
-              (i32.and
-                (i32.and (global.get $bashArith) (i32.eq (local.get $c) (i32.const ")")))
+                  (i32.ne (global.get $bashArith) (i32.const 0))
+                  (i32.eq (local.get $c) (i32.const ")")))
                 (i32.and
                   (i32.lt_u (global.get $ptr) (global.get $end))
                   (i32.eq (i32.load8_u (global.get $ptr)) (i32.const ")"))))
               (then (global.set $bashArith (i32.sub (global.get $bashArith) (i32.const 1)))))
+            (if (i32.eq (local.get $c) (i32.const "("))
+              (then
+                (local.set $flow (i32.and (local.get $flow) (i32.const -9)))
+                (if
+                  (i32.and
+                    (i32.or (local.get $p) (i32.ne (i32.and (local.get $flow) (i32.const 4)) (i32.const 0)))
+                    (i32.eq (call $bashByte (global.get $ptr)) (i32.const "(")))
+                  (then
+                    ;; `((` at command position, or the C-style header of a
+                    ;; `for ((`, is arithmetic, where `<<` is a shift and not
+                    ;; a heredoc and `;` separates expressions
+                    (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
+                    (global.set $bashArith (i32.add (global.get $bashArith) (i32.const 1)))
+                    (local.set $flow (i32.and (local.get $flow) (i32.const -5)))
+                    (local.set $p (i32.const 0))))
+                (if (call $bashIsArrayOpen (local.get $lhs))
+                  (then (local.set $arrayOpen (i32.const 1)))
+                  (else
+                    (if (local.get $arrayOpen)
+                      (then
+                        (local.set $arrayOpen
+                          (i32.add (local.get $arrayOpen) (i32.sub (global.get $ptr) (local.get $lhs))))))
+                    ;; a subshell, or the command of a `<(`/`>(` substitution
+                    (local.set $cmd
+                      (i32.or
+                        (local.get $p)
+                        (i32.and
+                          (i32.gt_u (local.get $lhs) (global.get $srcBase))
+                          (i32.eq
+                            (i32.or (i32.load8_u (i32.sub (local.get $lhs) (i32.const 1))) (i32.const 2))
+                            (i32.const ">")))))))))
+            (if (i32.eq (local.get $c) (i32.const ")"))
+              (then
+                (if (local.get $arrayOpen)
+                  (then (local.set $arrayOpen (i32.sub (local.get $arrayOpen) (i32.const 1)))))
+                ;; a case pattern's `)` opens its arm
+                (if (i32.eq (i32.and (local.get $flow) (i32.const 3)) (i32.const 2))
+                  (then
+                    (local.set $flow (i32.add (local.get $flow) (i32.const 1)))
+                    (local.set $cmd (i32.const 1))))))
             (call $emitTok (enum.get $Token.punctuation.bracket) (local.get $lhs) (global.get $ptr))
             (br $next)))
         (if (call $bashIsOp (local.get $c))
@@ -582,18 +752,31 @@
               (then
                 (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
                 (if
-                  (i32.and
-                    (i32.lt_u (global.get $ptr) (global.get $end))
-                    (i32.eq (i32.load8_u (global.get $ptr)) (local.get $c)))
+                  (i32.eq (call $bashByte (global.get $ptr)) (local.get $c))
                   (then (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))))))
             (call $emitTok (enum.get $Token.operator) (local.get $lhs) (global.get $ptr))
+            ;; separators start a command, except inside `(( ))`/`$(( ))`
             (if
-              (i32.or
-                (i32.eq (local.get $c) (i32.const ";"))
+              (i32.and
+                (i32.eqz (global.get $bashArith))
                 (i32.or
-                  (i32.eq (local.get $c) (i32.const "&"))
-                  (i32.eq (local.get $c) (i32.const "|"))))
-              (then (local.set $cmd (i32.const 1))))
+                  (i32.eq (local.get $c) (i32.const ";"))
+                  (i32.or
+                    (i32.eq (local.get $c) (i32.const "&"))
+                    (i32.eq (local.get $c) (i32.const "|")))))
+              (then
+                (local.set $cmd (i32.const 1))
+                (local.set $flow (i32.and (local.get $flow) (i32.const 3)))
+                ;; `;;`, `;&`, and `;;&` end a case arm: a pattern follows
+                (if (i32.eq (local.get $flow) (i32.const 3))
+                  (then
+                    (if
+                      (i32.and
+                        (i32.eq (local.get $c) (i32.const ";"))
+                        (i32.or
+                          (i32.eq (local.get $c2) (i32.const ";"))
+                          (i32.eq (local.get $c2) (i32.const "&"))))
+                      (then (local.set $flow (i32.const 2))))))))
             (br $next)))
         (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
         (call $emitTok (enum.get $Token.none) (local.get $lhs) (global.get $ptr))

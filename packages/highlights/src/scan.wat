@@ -2,6 +2,13 @@
   ;; input base: 65536 for whole-buffer runs, the live scratch base otherwise.
   ;; token-record offsets and start-of-input checks are relative to it.
   (global $srcBase (mut i32) (i32.const 65536))
+  ;; Where the current lexer run starts a document, or 0 when it does not:
+  ;; the input start of a whole-buffer run and of a stream's (or live
+  ;; document's) first chunk, and the start of a fenced body's first piece
+  ;; ($markdownCodeRange). Document-start syntax - a `#!` line, front
+  ;; matter - counts only here, so whole-buffer and streamed runs agree.
+  ;; Starts at the default $srcBase, which single-lexer harnesses keep.
+  (global $docStart (mut i32) (i32.const 65536))
   (global $eof (mut i32) (i32.const 0)) ;; input end (the NUL sentinel sits there)
   (global $end (mut i32) (i32.const 0)) ;; scan end: $eof, or a sub-range end for embedded scans
   (global $ptr (mut i32) (i32.const 0)) ;; read cursor

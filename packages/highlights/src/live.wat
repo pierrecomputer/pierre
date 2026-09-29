@@ -502,8 +502,19 @@
 
   ;; JSON and TOML own nesting stacks. Markdown/MDX may suspend JavaScript
   ;; while a JSON fence is active, including inside nested Markdown fences.
+  ;; The stack an open markdown fence body keeps its lexer state in, from
+  ;; its language register (bit 8 set once the body's lexer ran): json and
+  ;; toml bodies use their own stacks; 0 for every other body.
+  (func $lvFenceStack (param $reg i32) (result i32)
+    (if (i32.eq (local.get $reg) (i32.or (enum.get $Language.json) (i32.const 0x100)))
+      (then (return (i32.const $mem.jsonStack))))
+    (if (i32.eq (local.get $reg) (i32.or (enum.get $Language.toml) (i32.const 0x100)))
+      (then (return (i32.const $mem.tomlStack))))
+    (i32.const 0))
+
   (func $lvStackBase (result i32)
     (local $p i32)
+    (local $stack i32)
     (if (i32.eq (global.get $lvLang) (enum.get $Language.json))
       (then (return (i32.const $mem.jsonStack))))
     (if (i32.eq (global.get $lvLang) (enum.get $Language.toml))
@@ -515,21 +526,17 @@
           (i32.eq (global.get $lvLang) (enum.get $Language.markdown))
           (i32.eq (global.get $lvLang) (enum.get $Language.mdx))))
       (then
-        (if
-          (i32.eq
-            (global.get $markdownStreamLang)
-            (i32.or (enum.get $MarkdownFenceLang.json) (i32.const 0x100)))
-          (then (return (i32.const $mem.jsonStack))))
+        (local.set $stack (call $lvFenceStack (global.get $markdownStreamLang)))
+        (if (local.get $stack)
+          (then (return (local.get $stack))))
         (local.set $p (i32.const $mem.markdownFenceStack))
         (block $done
           (loop $fence
             (br_if $done (i32.ge_u (local.get $p) (i32.const $mem.markdownFenceStack+96)))
             (br_if $done (i32.eqz (i32.load (local.get $p))))
-            (if
-              (i32.eq
-                (i32.load offset=8 (local.get $p))
-                (i32.or (enum.get $MarkdownFenceLang.json) (i32.const 0x100)))
-              (then (return (i32.const $mem.jsonStack))))
+            (local.set $stack (call $lvFenceStack (i32.load offset=8 (local.get $p))))
+            (if (local.get $stack)
+              (then (return (local.get $stack))))
             (local.set $p (i32.add (local.get $p) (i32.const 12)))
             (br $fence)))))
     (i32.const $mem.jsTemplateBracketStack))
@@ -935,6 +942,7 @@
     (global.set $srcBase (local.get $inBase))
     (global.set $streaming (i32.const 1))
     (global.set $streamReset (local.get $reset))
+    (global.set $docStart (select (local.get $inBase) (i32.const 0) (local.get $reset)))
     (global.set $streamDepth (i32.const 0))
     (call $hlBegin)
     (call $recStreamBegin (local.get $reset))

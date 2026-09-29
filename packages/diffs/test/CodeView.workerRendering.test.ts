@@ -168,6 +168,64 @@ describe('CodeView worker rendering', () => {
     }
   });
 
+  test('renders a new diff object with the same cache key while a highlight result is pending', async () => {
+    const { cleanup } = installDom();
+    const { manager, worker } = await createInitializedManager({
+      theme: 'pierre-dark',
+    });
+    const viewer = new CodeView<string, undefined>(
+      {
+        // Throw render errors instead of logging them.
+        disableErrorHandling: true,
+        stickyHeaders: false,
+        theme: 'pierre-dark',
+      },
+      manager
+    );
+    // Built from the same files, so both carry the same cache key.
+    const diff = createDiff('pending:same', 'const sameValue = 1;\n');
+    const rebuiltDiff = createDiff('pending:same', 'const sameValue = 1;\n');
+    expect(rebuiltDiff).not.toBe(diff);
+    expect(rebuiltDiff.cacheKey).toBe(diff.cacheKey);
+
+    try {
+      viewer.setup(createRoot());
+      viewer.setItems([
+        { id: 'diff:same', type: 'diff', fileDiff: diff, version: 0 },
+      ]);
+      viewer.render(true);
+
+      const request = await withTimeout(worker.waitForDiffRequest());
+      const renderOptions = manager.getDiffRenderOptions();
+      worker.respond({
+        type: 'success',
+        requestType: 'diff',
+        id: request.id,
+        result: renderDiffWithHighlighter(
+          diff,
+          sharedHighlighter,
+          renderOptions
+        ),
+        options: renderOptions,
+        sentAt: Date.now(),
+      });
+
+      // Before the highlight result is applied.
+      viewer.setItems([
+        { id: 'diff:same', type: 'diff', fileDiff: rebuiltDiff, version: 1 },
+      ]);
+      expect(() => viewer.render(true)).not.toThrow();
+      await wait(0);
+
+      expect(getRenderedText(viewer, 'diff:same')).toContain('sameValue');
+    } finally {
+      viewer.cleanUp();
+      manager.terminate();
+      await wait(0);
+      cleanup();
+    }
+  });
+
   test('keeps layout matched to the displayed diff while its replacement is highlighted', async () => {
     const { cleanup } = installDom();
     const { manager, worker } = await createInitializedManager({

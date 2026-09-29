@@ -284,10 +284,19 @@
             (local.set $setVar (i32.const 0))
             (br $next)))
         (if
-          (i32.and (i32.eq (local.get $c) (i32.const "$")) (call $cmakeIsRefOpen (global.get $ptr)))
+          (if (result i32) (i32.eq (local.get $c) (i32.const "$"))
+            (then (call $cmakeIsRefOpen (global.get $ptr)))
+            (else (i32.const 0)))
           (then
             (call $cmakeReference)
             (local.set $setVar (i32.const 0))
+            (br $next)))
+        ;; unquoted arguments take escapes too: `-DNAME=\"v\"` must not open
+        ;; a quoted argument at the escaped quote
+        (if (i32.eq (local.get $c) (i32.const 92))
+          (then
+            (global.set $ptr (call $lexEscapeEnd (global.get $ptr)))
+            (call $emitTok (enum.get $Token.string.escape) (local.get $lhs) (global.get $ptr))
             (br $next)))
 
         (if (i32.eq (local.get $c) (i32.const "("))
@@ -337,11 +346,14 @@
                 (local.set $cond
                   (call $cmakeIsCondition (i32.sub (local.get $rhs) (local.get $lhs))))
                 (local.set $setVar (i32.eq (local.get $g) (i32.const 3)))
-                (local.set $hl (enum.get $Token.function))
-                (if (i32.eq (local.get $g) (i32.const 1))
-                  (then (local.set $hl (enum.get $Token.keyword.control))))
-                (if (i32.eq (local.get $g) (i32.const 2))
-                  (then (local.set $hl (enum.get $Token.keyword.import)))))
+                (local.set $hl
+                  (select
+                    (enum.get $Token.keyword.control)
+                    (select
+                      (enum.get $Token.keyword.import)
+                      (enum.get $Token.function)
+                      (i32.eq (local.get $g) (i32.const 2)))
+                    (i32.eq (local.get $g) (i32.const 1)))))
               (else
                 (local.set $g (keyword-table.get $cmakeWords (local.get $lhs) (local.get $rhs)))
                 (local.set $hl

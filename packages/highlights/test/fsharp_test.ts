@@ -267,6 +267,102 @@ void t.test('fsharp: deterministic fuzz preserves lexer invariants', () => {
   }
 });
 
+void t.test(
+  'fsharp: arguments after defined and member names are values',
+  () => {
+    assert.deepEqual(tokenKinds('fsharp', 'let add x y = obj.Add x y'), [
+      ['let', 'keyword.declaration'],
+      ['add', 'function.definition'],
+      ['x y', 'variable'],
+      ['=', 'operator'],
+      ['obj', 'type.builtin'],
+      ['.', 'punctuation.delimiter'],
+      ['Add', 'function.method'],
+      ['x y', 'variable'],
+    ]);
+  }
+);
+
+void t.test('fsharp: trailing-dot floats and ranges', () => {
+  assert.deepEqual(
+    tokenKinds('fsharp', 'let sign x = if x > 0. then 1. else 0.'),
+    [
+      ['let', 'keyword.declaration'],
+      ['sign', 'function.definition'],
+      ['x', 'variable'],
+      ['=', 'operator'],
+      ['if', 'keyword.control'],
+      ['x', 'variable'],
+      ['>', 'operator'],
+      ['0.', 'number'],
+      ['then', 'keyword.control'],
+      ['1.', 'number'],
+      ['else', 'keyword.control'],
+      ['0.', 'number'],
+    ]
+  );
+  assert.deepEqual(
+    tokenKinds('fsharp', 'let a = [1..10] @ [ 0 .. 2 .. n ] @ s.[lo..hi]'),
+    [
+      ['let', 'keyword.declaration'],
+      ['a', 'variable'],
+      ['=', 'operator'],
+      ['[', 'punctuation.bracket'],
+      ['1', 'number'],
+      ['..', 'operator'],
+      ['10', 'number'],
+      [']', 'punctuation.bracket'],
+      ['@', 'operator'],
+      ['[', 'punctuation.bracket'],
+      ['0', 'number'],
+      ['..', 'operator'],
+      ['2', 'number'],
+      ['..', 'operator'],
+      ['n', 'variable'],
+      [']', 'punctuation.bracket'],
+      ['@', 'operator'],
+      ['s', 'variable'],
+      ['.', 'punctuation.delimiter'],
+      ['[', 'punctuation.bracket'],
+      ['lo', 'variable'],
+      ['..', 'operator'],
+      ['hi', 'variable'],
+      [']', 'punctuation.bracket'],
+    ]
+  );
+});
+
+void t.test('fsharp: a double-backtick name is one identifier', () => {
+  assert.deepEqual(
+    tokenKinds('fsharp', 'let ``should return true when x is valid`` () = ()'),
+    [
+      ['let', 'keyword.declaration'],
+      ['``should return true when x is valid``', 'function.definition'],
+      ['()', 'punctuation.bracket'],
+      ['=', 'operator'],
+      ['()', 'punctuation.bracket'],
+    ]
+  );
+  // an unclosed pair on the line falls back to ordinary lexing
+  assertLineFedParity('fsharp', 'let ``open name\nlet x = 1\n');
+});
+
+void t.test('fsharp: `}` and `}}` in an interpolated string', () => {
+  assert.deepEqual(tokenKinds('fsharp', 'let s = $"a}}b{x}c}d"'), [
+    ['let', 'keyword.declaration'],
+    ['s', 'variable'],
+    ['=', 'operator'],
+    ['$"a', 'string'],
+    ['}}', 'string.escape'],
+    ['b', 'string'],
+    ['{', 'punctuation.special'],
+    ['x', 'variable'],
+    ['}', 'punctuation.special'],
+    ['c}d"', 'string'],
+  ]);
+  assertLineFedParity('fsharp', 'let s = $"""a}}\n}b{x}\n}}c"""\nlet y = 1\n');
+});
+
 void t.test('fsharp: multi-line constructs stream line-fed', () => {
   for (const code of [
     'let s = """one\ntwo"""\nlet y = 1\n',

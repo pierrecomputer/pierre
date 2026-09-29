@@ -402,3 +402,26 @@ void t.test(
     );
   }
 );
+
+void t.test('go: each line of a grouped type declaration names a type', () => {
+  const code =
+    'type (\n\t// node links\n\tnode struct {\n\t\tnext *node\n\t\tval  int\n\t}\n\tedge = int\n)\nvar x = 1\n';
+  const kinds = tokenKinds('go', code);
+  for (const name of ['node', 'edge']) {
+    assert.deepEqual(
+      kinds.find(([text]) => text === name),
+      [name, 'type'],
+      name
+    );
+  }
+  // struct fields keep their own color, and the group's `)` ends the capture
+  assert.deepEqual(
+    kinds.find(([text]) => text === 'next'),
+    ['next', 'variable']
+  );
+  assert.deepEqual(
+    kinds.find(([text]) => text === 'x'),
+    ['x', 'variable']
+  );
+  assertLineFedParity('go', code);
+});

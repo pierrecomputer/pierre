@@ -529,3 +529,76 @@ void t.test(
     );
   }
 );
+
+void t.test('kotlin: modifiers are names unless another word follows', () => {
+  const code =
+    'val data = load()\nshow(data, open)\nout.append(x)\ndata class User(val name: String)\nval x by lazy { 1 }';
+  assertLineFedParity('kotlin', code);
+  assert.deepEqual(tokenKinds('kotlin', code), [
+    ['val', 'keyword.declaration'],
+    ['data', 'variable'],
+    ['=', 'operator'],
+    ['load', 'function'],
+    ['()', 'punctuation.bracket'],
+    ['show', 'function'],
+    ['(', 'punctuation.bracket'],
+    ['data', 'variable'],
+    [',', 'punctuation.delimiter'],
+    ['open', 'variable'],
+    [')', 'punctuation.bracket'],
+    ['out', 'variable'],
+    ['.', 'punctuation.delimiter'],
+    ['append', 'function.method'],
+    ['(', 'punctuation.bracket'],
+    ['x', 'variable'],
+    [')', 'punctuation.bracket'],
+    ['data', 'keyword'],
+    ['class', 'keyword.declaration'],
+    ['User', 'type'],
+    ['(', 'punctuation.bracket'],
+    ['val', 'keyword.declaration'],
+    ['name', 'variable'],
+    [':', 'punctuation.delimiter'],
+    ['String', 'type.builtin'],
+    [')', 'punctuation.bracket'],
+    ['val', 'keyword.declaration'],
+    ['x', 'variable'],
+    ['by', 'keyword'],
+    ['lazy', 'function'],
+    ['{', 'punctuation.bracket'],
+    ['1', 'number'],
+    ['}', 'punctuation.bracket'],
+  ]);
+});
+
+void t.test('kotlin: a trailing lambda makes a call', () => {
+  const code =
+    'items.forEach { println(it) }\nval text = buildString { append(1) }\nval r = object : Runnable { }';
+  assertLineFedParity('kotlin', code);
+  assert.deepEqual(tokenKinds('kotlin', code), [
+    ['items', 'variable'],
+    ['.', 'punctuation.delimiter'],
+    ['forEach', 'function.method'],
+    ['{', 'punctuation.bracket'],
+    ['println', 'function'],
+    ['(', 'punctuation.bracket'],
+    ['it', 'variable'],
+    [') }', 'punctuation.bracket'],
+    ['val', 'keyword.declaration'],
+    ['text', 'variable'],
+    ['=', 'operator'],
+    ['buildString', 'function'],
+    ['{', 'punctuation.bracket'],
+    ['append', 'function'],
+    ['(', 'punctuation.bracket'],
+    ['1', 'number'],
+    [') }', 'punctuation.bracket'],
+    ['val', 'keyword.declaration'],
+    ['r', 'variable'],
+    ['=', 'operator'],
+    ['object', 'keyword.declaration'],
+    [':', 'punctuation.delimiter'],
+    ['Runnable', 'type'],
+    ['{ }', 'punctuation.bracket'],
+  ]);
+});

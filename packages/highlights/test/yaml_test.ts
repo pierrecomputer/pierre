@@ -363,3 +363,82 @@ void t.test(
     );
   }
 );
+
+void t.test(
+  'yaml: block plain scalars keep blanks, commas, and brackets in one scalar',
+  () => {
+    // Only a `: `, a ` #`, or the line end ends a plain scalar in block
+    // context: GitHub Actions expressions, prose with commas, regexes, and
+    // multi-word keys all stay whole, and a stray `[` opens no flow collection.
+    const src =
+      'runs-on: ${{ matrix.os }}\nname: Run tests, lint\nregex: ^[a-z]+$\nfull name: John\n- first item: 1\ntitle: Array[int\nport: 8080 # http\nnext: [a b, c]\n';
+    assert.deepEqual(tokenKinds('yaml', src), [
+      ['runs-on', 'property'],
+      [':', 'punctuation.delimiter'],
+      ['${{ matrix.os }}', 'string'],
+      ['name', 'property'],
+      [':', 'punctuation.delimiter'],
+      ['Run tests, lint', 'string'],
+      ['regex', 'property'],
+      [':', 'punctuation.delimiter'],
+      ['^[a-z]+$', 'string'],
+      ['full name', 'property'],
+      [':', 'punctuation.delimiter'],
+      ['John', 'string'],
+      ['-', 'punctuation.delimiter'],
+      ['first item', 'property'],
+      [':', 'punctuation.delimiter'],
+      ['1', 'number'],
+      ['title', 'property'],
+      [':', 'punctuation.delimiter'],
+      ['Array[int', 'string'],
+      ['port', 'property'],
+      [':', 'punctuation.delimiter'],
+      ['8080', 'number'],
+      ['# http', 'comment'],
+      ['next', 'property'],
+      [':', 'punctuation.delimiter'],
+      ['[', 'punctuation.bracket'],
+      ['a b', 'string'],
+      [',', 'punctuation.delimiter'],
+      ['c', 'string'],
+      [']', 'punctuation.bracket'],
+    ]);
+    assertLineFedParity('yaml', src);
+  }
+);
+
+void t.test('yaml: a block scalar header may end with a comment', () => {
+  const src =
+    'script: | # build\n  echo "a: b"\n  # keep: this\n  - x\nnext: 1\n';
+  assert.deepEqual(tokenKinds('yaml', src), [
+    ['script', 'property'],
+    [': |', 'punctuation.delimiter'],
+    ['# build', 'comment'],
+    ['echo "a: b"', 'string'],
+    ['# keep: this', 'string'],
+    ['- x', 'string'],
+    ['next', 'property'],
+    [':', 'punctuation.delimiter'],
+    ['1', 'number'],
+  ]);
+  assertLineFedParity('yaml', src);
+});
+
+void t.test('yaml: numeric and doubled-quote keys are properties', () => {
+  // OpenAPI status codes, and a single-quoted key with a `''` escape
+  const src = "responses:\n  200:\n    description: OK\n'it''s': 1\n";
+  assert.deepEqual(tokenKinds('yaml', src), [
+    ['responses', 'property'],
+    [':', 'punctuation.delimiter'],
+    ['200', 'property'],
+    [':', 'punctuation.delimiter'],
+    ['description', 'property'],
+    [':', 'punctuation.delimiter'],
+    ['OK', 'string'],
+    ["'it''s'", 'property'],
+    [':', 'punctuation.delimiter'],
+    ['1', 'number'],
+  ]);
+  assertLineFedParity('yaml', src);
+});

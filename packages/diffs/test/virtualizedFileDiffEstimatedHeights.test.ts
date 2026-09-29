@@ -792,7 +792,7 @@ describe('VirtualizedFileDiff estimated height cache', () => {
     }
   });
 
-  test('clears measured file-level annotation height when annotations change', () => {
+  test('retains removed file-level annotation height until the top renders', () => {
     const { cleanup } = installFakeHTMLElement();
     try {
       const instance = new VirtualizedFileDiff({}, virtualizer, metrics);
@@ -821,6 +821,25 @@ describe('VirtualizedFileDiff estimated height cache', () => {
         { side: 'additions', lineNumber: 1 },
       ]);
 
+      expect(inspect(instance).cache.fileAnnotationHeight).toBe(25);
+      expect(inspect(instance).cache.measuredHeightDeltaTotal).toBe(25);
+      expect(instance.getVirtualizedHeight()).toBe(351);
+      inspect(instance).renderRange = createRenderRange(metrics.hunkLineCount);
+      inspect(instance).codeAdditions = createMeasuredCodeGroup(
+        '1,1',
+        () => metrics.lineHeight
+      );
+      expect(instance.reconcileHeights()).toBe(false);
+      expect(inspect(instance).cache.fileAnnotationHeight).toBe(25);
+      expect(inspect(instance).cache.measuredHeightDeltaTotal).toBe(25);
+      expect(instance.getVirtualizedHeight()).toBe(351);
+
+      inspect(instance).renderRange = createRenderRange();
+      inspect(instance).codeAdditions = createMeasuredCodeGroup(
+        '0,0',
+        () => metrics.lineHeight
+      );
+      expect(instance.reconcileHeights()).toBe(true);
       expect(inspect(instance).cache.fileAnnotationHeight).toBe(0);
       expect(inspect(instance).cache.measuredHeightDeltaTotal).toBe(0);
       expect(instance.getVirtualizedHeight()).toBe(326);
@@ -829,7 +848,7 @@ describe('VirtualizedFileDiff estimated height cache', () => {
     }
   });
 
-  test('clears measured file-level annotation height when recycled without annotations', () => {
+  test('retains file-level annotation height through recycling until the top remounts', () => {
     const { cleanup } = installFakeHTMLElement();
     try {
       const instance = new VirtualizedFileDiff({}, virtualizer, metrics);
@@ -858,6 +877,20 @@ describe('VirtualizedFileDiff estimated height cache', () => {
 
       instance.updateCodeViewLayout(fileDiff, 0, undefined, []);
 
+      expect(inspect(instance).cache.fileAnnotationHeight).toBe(25);
+      expect(inspect(instance).cache.measuredHeightDeltaTotal).toBe(25);
+      expect(inspect(instance).lineAnnotations).toHaveLength(0);
+      expect(instance.getVirtualizedHeight()).toBe(351);
+
+      setRenderedDiff(instance, fileDiff);
+      inspect(instance).fileContainer =
+        new FakeHTMLElement() as unknown as HTMLElement;
+      inspect(instance).renderRange = createRenderRange();
+      inspect(instance).codeAdditions = createMeasuredCodeGroup(
+        '0,0',
+        () => metrics.lineHeight
+      );
+      expect(instance.reconcileHeights()).toBe(true);
       expect(inspect(instance).cache.fileAnnotationHeight).toBe(0);
       expect(inspect(instance).cache.measuredHeightDeltaTotal).toBe(0);
       expect(inspect(instance).lineAnnotations).toHaveLength(0);

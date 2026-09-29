@@ -3,12 +3,16 @@ import t from 'node:test';
 
 import type { Lang, ThemedToken } from '../lib/index';
 import { codeToTokens, init, StreamTokenizer } from '../lib/index';
+import languages from '../lib/languages';
 import { transformWat, wat2wasm } from '../scripts/build';
 import pierreDark from '../themes/pierre-dark.json' with { type: 'json' };
+import { samples } from './_samples';
 import {
   assertLineFedParity,
   checkInvariants,
   colorOf,
+  distinctTheme,
+  flatTokens,
   kindOfColor,
   loadLang,
   spansOf,
@@ -210,6 +214,61 @@ void t.test(
     );
   }
 );
+
+void t.test(
+  'markdown: fence info words resolve every language-table name',
+  () => {
+    // fences share the host's name lookup: each name or alias highlights its
+    // body exactly as that language highlights the same code on its own
+    const sampleOf = new Map<number, string>();
+    for (const [name, sample] of Object.entries(samples)) {
+      const id = languages[name as Lang];
+      if (!sampleOf.has(id))
+        sampleOf.set(id, sample.code.replace(/\n*$/, '\n'));
+    }
+    for (const [name, id] of Object.entries(languages)) {
+      if (id === 0) continue;
+      const body = sampleOf.get(id)!.split('\n').slice(0, 6).join('\n') + '\n';
+      if (body.includes('```')) continue;
+      const own = codeToTokens(body, {
+        lang: name as Lang,
+        theme: distinctTheme,
+      }).tokens.slice(0, -1);
+      const fenced = codeToTokens(`\`\`\`${name}\n${body}\`\`\``, {
+        lang: 'markdown',
+        theme: distinctTheme,
+      }).tokens.slice(1, 1 + own.length);
+      assert.equal(flatTokens(fenced), flatTokens(own), name);
+    }
+    // plain text's names keep the literal body of an unknown language
+    for (const name of ['plain', 'plaintext', 'text', 'txt']) {
+      const out = markdown.hl(`\`\`\`${name}\nconst x = 1;\n\`\`\``);
+      assert.equal(colorOf(out, 'const x = 1;'), LITERAL, name);
+    }
+  }
+);
+
+void t.test('markdown: a fenced body starts a document of its own', () => {
+  for (const [code, text, kind] of [
+    [
+      '```groovy\n#!/usr/bin/env groovy\nprintln 1\n```',
+      '#!/usr/bin/env groovy',
+      'comment',
+    ],
+    [
+      '```astro\n---\nconst a = 1;\n---\n<p>{a}</p>\n```',
+      '---',
+      'punctuation.special',
+    ],
+  ] as const) {
+    for (const host of ['markdown', 'mdx'] as const) {
+      const tokens = assertLineFedParity(host, `intro\n\n${code}\n\nafter`);
+      const line = tokens[3];
+      assert.equal(line[0].content, text, `${host} ${code}`);
+      assert.equal(kindOfColor(line[0].color), kind, `${host} ${code}`);
+    }
+  }
+});
 
 void t.test('markdown: unknown fence languages remain literal', () => {
   const out = checkInvariants(markdown.hl, '```unknown\nconst x = 1;\n```');
@@ -702,3 +761,146 @@ void t.test(
     }
   }
 );
+
+/**
+ * Whole-buffer tokens of `code` as `"text":kind` lines under the distinct
+ * theme, after checking that line-fed streaming produces the same.
+ */
+function flat(lang: Lang, code: string): string {
+  return flatTokens(assertLineFedParity(lang, code));
+}
+
+void t.test('markdown: autolinks are links, not inline HTML', () => {
+  assert.equal(
+    flat('markdown', 'See <https://example.com/a?b=1> and <foo@bar.com>.'),
+    '"See ":none "<":punctuation.bracket "https://example.com/a?b=1":link_uri ">":punctuation.bracket " and ":none "<":punctuation.bracket "foo@bar.com":link_uri ">":punctuation.bracket ".":none'
+  );
+  // tags, tags with attributes, and a blank inside `<...>` stay HTML
+  assert.equal(
+    flat('markdown', '<a href="x">l</a> <br/> <b:c d>'),
+    '"<":punctuation.bracket.html "a ":tag "href":attribute "=":punctuation.delimiter.html "\\"x\\"":string ">":punctuation.bracket.html "l":none "</":punctuation.bracket.html "a":tag ">":punctuation.bracket.html " ":none "<":punctuation.bracket.html "br":tag "/>":punctuation.bracket.html " ":none "<":punctuation.bracket.html "b:c ":tag "d":attribute ">":punctuation.bracket.html'
+  );
+});
+
+void t.test('markdown: a badge link keeps its outer link', () => {
+  assert.equal(
+    flat(
+      'markdown',
+      '[![npm](https://img.shields.io/npm/v/x.svg)](https://npmjs.com/x)'
+    ),
+    '"[":punctuation.bracket "!":none "[":punctuation.bracket "npm":link_text "](":punctuation.bracket "https://img.shields.io/npm/v/x.svg":link_uri ")](":punctuation.bracket "https://npmjs.com/x":link_uri ")":punctuation.bracket'
+  );
+  // an image link that is not wrapped in a link is unchanged
+  assert.equal(
+    flat('markdown', '[![x](y) plain'),
+    '"[":punctuation.bracket "![x":link_text "](":punctuation.bracket "y":link_uri ")":punctuation.bracket " plain":none'
+  );
+});
+
+void t.test('markdown: fence info strings with glued attributes', () => {
+  for (const info of [
+    'rust,ignore',
+    'rust{4}',
+    'rust:main.rs',
+    '{rust}',
+    '{.rust}',
+  ]) {
+    assert.equal(
+      flat('markdown', '```' + info + '\nfn main() {}\n```'),
+      `"\`\`\`${info}":punctuation.delimiter\n"fn ":keyword.declaration "main":function.definition "() {}":punctuation.bracket\n"\`\`\`":punctuation.delimiter`,
+      info
+    );
+  }
+});
+
+void t.test('markdown: `_` emphasis does not close inside a word', () => {
+  assert.equal(
+    flat('markdown', 'the _private_method call and _a_b'),
+    '"the _private_method call and _a_b":none'
+  );
+  assert.equal(
+    flat('markdown', 'a _:user_id_ b and _one_—two'),
+    '"a ":none "_:user_id_":emphasis " b and ":none "_one_":emphasis "—two":none'
+  );
+});
+
+void t.test('markdown: emphasis does not close inside a code span', () => {
+  assert.equal(
+    flat('markdown', '*see `a*b` here* and _(`DEFAULT_SCHEMA`)_'),
+    '"*see `a*b` here*":emphasis " and ":none "_(`DEFAULT_SCHEMA`)_":emphasis'
+  );
+  // an unmatched backtick run is literal text for the closer scan
+  assert.equal(flat('markdown', '*a ``b* c'), '"*a ``b*":emphasis " c":none');
+  // after one opener's scan skipped a span, a later opener still sees it
+  assert.equal(
+    flat('markdown', '*a _b `*_` c'),
+    '"*a _b ":none "`*_`":text.literal " c":none'
+  );
+});
+
+void t.test('markdown: fences inside block quotes', () => {
+  // each body line's `>` prefix is markup, and its content is lexed alone
+  assert.equal(
+    flat('markdown', '> ```diff\n> +added\n> -removed\n> ```\nafter'),
+    [
+      '"> ":punctuation.markup "```diff":punctuation.delimiter',
+      '"> ":punctuation.markup "+":punctuation.special "added":diff.plus',
+      '"> ":punctuation.markup "-":punctuation.special "removed":diff.minus',
+      '"> ":punctuation.markup "```":punctuation.delimiter',
+      '"after":none',
+    ].join('\n')
+  );
+  // a line with fewer markers than the opener is body content, not a closer
+  assert.equal(
+    flat('markdown', '> > ```py\n> > x = 1 # c\n>   ```\n> > ```'),
+    [
+      '"> > ":punctuation.markup "```py":punctuation.delimiter',
+      '"> > ":punctuation.markup "x ":variable "= ":operator "1 ":number "# c":comment',
+      '">   ":punctuation.markup "```":none',
+      '"> > ":punctuation.markup "```":punctuation.delimiter',
+    ].join('\n')
+  );
+  // a fence after a quoted one closes without a `>` prefix
+  assert.equal(
+    flat('markdown', '> ```js\n> a\n> ```\n~~~\nplain\n~~~\ntext'),
+    [
+      '"> ":punctuation.markup "```js":punctuation.delimiter',
+      '"> ":punctuation.markup "a":variable',
+      '"> ":punctuation.markup "```":punctuation.delimiter',
+      '"~~~":punctuation.delimiter',
+      '"plain":text.literal',
+      '"~~~":punctuation.delimiter',
+      '"text":none',
+    ].join('\n')
+  );
+});
+
+void t.test('markdown: quoted fences preserve multiline lexer state', () => {
+  for (const [lang, body, kind] of [
+    ['js', '/* start\nmiddle\n*/', 'comment'],
+    ['python', 'text = """start\nmiddle\nend"""', 'string'],
+    ['ts', 'const text = `start\nmiddle\nend`;', 'string'],
+  ]) {
+    for (const newline of ['\n', '\r\n']) {
+      const code = [
+        `> \`\`\`${lang}`,
+        ...body.split('\n').map((line) => `> ${line}`),
+        '> ```',
+        'after',
+      ].join(newline);
+      assertLineFedParity('markdown', code);
+      const kinds = tokenKinds('markdown', code);
+      assert.ok(
+        kinds.some(([text, token]) => text === 'middle' && token === kind)
+      );
+      assert.ok(
+        kinds.some(([text, token]) => text === 'after' && token === null)
+      );
+      checkInvariants(markdown.hl, code);
+    }
+  }
+  assertLineFedParity(
+    'markdown',
+    '> ```js\n> /* open\n> ```\n> ```js\n> const x = 1;\n> ```\n'
+  );
+});

@@ -19,6 +19,28 @@ import {
   wordColor,
 } from './_util';
 
+void t.test('csharp: nested query expressions preserve clause keywords', () => {
+  for (const projection of [
+    'new {x}',
+    'new {nested = new {x}}',
+    'xs.Select(v => { return v; })',
+  ]) {
+    const code = `var q = from x in xs\nselect ${projection}\ninto y\nselect y;\nvar select = 1;\n`;
+    assertLineFedParity('csharp', code);
+    assert.deepEqual(
+      tokenKinds('csharp', code).filter(
+        ([text]) => text === 'select' || text === 'into'
+      ),
+      [
+        ['select', 'keyword.declaration'],
+        ['into', 'keyword.declaration'],
+        ['select', 'keyword.declaration'],
+        ['select', 'variable'],
+      ]
+    );
+  }
+});
+
 // one unique color per token type so equal styles cannot merge neighboring
 // spans and hide a classification behind a same-colored token
 const distinct = {
@@ -395,7 +417,7 @@ void t.test(
   'csharp: statements, patterns, expressions, and contextual keywords',
   () => {
     const html = distinctHl(
-      'for (int i = 0; i < n; i++) { if (a && b || !c) break; else continue; } foreach (var x in xs) {} while (x) {} do {} while (false); switch (k) { case 1: goto case 2; case 2: break; default: return; } var r = k switch { 1 => "a", _ => "b" }; try { throw new E(); } catch (E e) when (e.Ok) {} finally {} using (var d = new D()) {} lock (o) {} checked { } unchecked { } fixed (int* p = arr) {} yield return 1; yield break; var o2 = x is int i2 && i2 > 0; var o4 = x as string; typeof(int); sizeof(int); nameof(x); stackalloc int[3]; this.x; base.F(); x ??= y; x ?? y; x?.Y; a => a; ref int r2 = ref x; in x; out x; init; required; file'
+      'for (int i = 0; i < n; i++) { if (a && b || !c) break; else continue; } foreach (var x in xs) {} while (x) {} do {} while (false); switch (k) { case 1: goto case 2; case 2: break; default: return; } var r = k switch { 1 => "a", _ => "b" }; try { throw new E(); } catch (E e) when (e.Ok) {} finally {} using (var d = new D()) {} lock (o) {} checked { } unchecked { } fixed (int* p = arr) {} yield return 1; yield break; var o2 = x is int i2 && i2 > 0; var o4 = x as string; typeof(int); sizeof(int); nameof(x); stackalloc int[3]; this.x; base.F(); x ??= y; x ?? y; x?.Y; a => a; ref int r2 = ref x; in x; out x; init; required; file class F {}'
     );
     for (const word of [
       'for',
@@ -518,5 +540,266 @@ void t.test(
       'csharp',
       'var s = """\n  a\n  """;\nvar v = @"x\ny";\n/* c\n */\n/// <summary>\n/// d\n/// </summary>\nvoid F() {}\n'
     );
+  }
+);
+
+void t.test('csharp: an LF or CRLF gap starts a line head', () => {
+  // the head of a line is where `#` directives and `[attribute]` lists start
+  const code = '#if DEBUG\r\n[Obsolete] int X;\nint y;';
+  assertLineFedParity('csharp', code);
+  assert.deepEqual(tokenKinds('csharp', code), [
+    ['#if DEBUG', 'preproc'],
+    ['[', 'punctuation.bracket'],
+    ['Obsolete', 'attribute'],
+    [']', 'punctuation.bracket'],
+    ['int', 'type.builtin'],
+    ['X', 'type'],
+    [';', 'punctuation.delimiter'],
+    ['int', 'type.builtin'],
+    ['y', 'variable'],
+    [';', 'punctuation.delimiter'],
+  ]);
+});
+
+void t.test(
+  'csharp: interpolated literals end their brace search at the quote',
+  () => {
+    // the brace search once ran to the next brace in the file for every
+    // literal; the bounded scan must keep holes, doubled braces, escapes,
+    // and raw literals exactly as before
+    const code =
+      'var a = $"x {y} {{z}} \\"q\\" {w}";\nvar b = $"""say "hi" {name}\n{{raw}} {n}""";\nvar c = 1;';
+    assertLineFedParity('csharp', code);
+    assert.deepEqual(tokenKinds('csharp', code), [
+      ['var', 'keyword.declaration'],
+      ['a', 'variable'],
+      ['=', 'operator'],
+      ['$"x', 'string'],
+      ['{', 'punctuation.special'],
+      ['y', 'variable'],
+      ['}', 'punctuation.special'],
+      ['{{z}}', 'string'],
+      ['\\"', 'string.escape'],
+      ['q', 'string'],
+      ['\\"', 'string.escape'],
+      ['{', 'punctuation.special'],
+      ['w', 'variable'],
+      ['}', 'punctuation.special'],
+      ['"', 'string'],
+      [';', 'punctuation.delimiter'],
+      ['var', 'keyword.declaration'],
+      ['b', 'variable'],
+      ['=', 'operator'],
+      ['$"""say "hi"', 'string'],
+      ['{', 'punctuation.special'],
+      ['name', 'variable'],
+      ['}', 'punctuation.special'],
+      ['{{raw}}', 'string'],
+      ['{', 'punctuation.special'],
+      ['n', 'variable'],
+      ['}', 'punctuation.special'],
+      ['"""', 'string'],
+      [';', 'punctuation.delimiter'],
+      ['var', 'keyword.declaration'],
+      ['c', 'variable'],
+      ['=', 'operator'],
+      ['1', 'number'],
+      [';', 'punctuation.delimiter'],
+    ]);
+  }
+);
+
+void t.test(
+  'csharp: contextual keywords are names outside their syntax',
+  () => {
+    const kinds = (code: string) => {
+      assertLineFedParity('csharp', code);
+      return tokenKinds('csharp', code);
+    };
+    // `record` and `file` head declarations only before a name or keyword
+    assert.deepEqual(
+      kinds('foreach (var record in records) { Save(record.Id); }'),
+      [
+        ['foreach', 'keyword.control'],
+        ['(', 'punctuation.bracket'],
+        ['var', 'keyword.declaration'],
+        ['record', 'variable'],
+        ['in', 'keyword.declaration'],
+        ['records', 'variable'],
+        [') {', 'punctuation.bracket'],
+        ['Save', 'function'],
+        ['(', 'punctuation.bracket'],
+        ['record', 'variable'],
+        ['.', 'punctuation.delimiter'],
+        ['Id', 'type'],
+        [')', 'punctuation.bracket'],
+        [';', 'punctuation.delimiter'],
+        ['}', 'punctuation.bracket'],
+      ]
+    );
+    assert.deepEqual(
+      kinds('foreach (var file in files) { var group = file.Group; }'),
+      [
+        ['foreach', 'keyword.control'],
+        ['(', 'punctuation.bracket'],
+        ['var', 'keyword.declaration'],
+        ['file', 'variable'],
+        ['in', 'keyword.declaration'],
+        ['files', 'variable'],
+        [') {', 'punctuation.bracket'],
+        ['var', 'keyword.declaration'],
+        ['group', 'variable'],
+        ['=', 'operator'],
+        ['file', 'variable'],
+        ['.', 'punctuation.delimiter'],
+        ['Group', 'type'],
+        [';', 'punctuation.delimiter'],
+        ['}', 'punctuation.bracket'],
+      ]
+    );
+    assert.deepEqual(
+      kinds(
+        'public record Point(int X);\nrecord struct P(int X);\nfile sealed class Hidden { }'
+      ),
+      [
+        ['public record', 'keyword.declaration'],
+        ['Point', 'type'],
+        ['(', 'punctuation.bracket'],
+        ['int', 'type.builtin'],
+        ['X', 'type'],
+        [')', 'punctuation.bracket'],
+        [';', 'punctuation.delimiter'],
+        ['record struct', 'keyword.declaration'],
+        ['P', 'type'],
+        ['(', 'punctuation.bracket'],
+        ['int', 'type.builtin'],
+        ['X', 'type'],
+        [')', 'punctuation.bracket'],
+        [';', 'punctuation.delimiter'],
+        ['file sealed class', 'keyword.declaration'],
+        ['Hidden', 'type'],
+        ['{ }', 'punctuation.bracket'],
+      ]
+    );
+    // query clauses are keywords only inside a query opened by `from`
+    assert.deepEqual(
+      kinds(
+        'var q = from x in xs\n    orderby x descending\n    select x;\nvar select = 1;'
+      ),
+      [
+        ['var', 'keyword.declaration'],
+        ['q', 'variable'],
+        ['=', 'operator'],
+        ['from', 'keyword.declaration'],
+        ['x', 'variable'],
+        ['in', 'keyword.declaration'],
+        ['xs', 'variable'],
+        ['orderby', 'keyword.declaration'],
+        ['x', 'variable'],
+        ['descending', 'keyword.declaration'],
+        ['select', 'keyword.declaration'],
+        ['x', 'variable'],
+        [';', 'punctuation.delimiter'],
+        ['var', 'keyword.declaration'],
+        ['select', 'variable'],
+        ['=', 'operator'],
+        ['1', 'number'],
+        [';', 'punctuation.delimiter'],
+      ]
+    );
+    // accessors are keywords in a member position before a body, `;`, `=>`,
+    // or the line end (Allman braces)
+    assert.deepEqual(
+      kinds(
+        'int X { get; private set; }\nint Y\n{\n    get\n    {\n        return y;\n    }\n}\nvar set = new HashSet<int>(); return set;'
+      ),
+      [
+        ['int', 'type.builtin'],
+        ['X', 'type'],
+        ['{', 'punctuation.bracket'],
+        ['get', 'keyword.declaration'],
+        [';', 'punctuation.delimiter'],
+        ['private set', 'keyword.declaration'],
+        [';', 'punctuation.delimiter'],
+        ['}', 'punctuation.bracket'],
+        ['int', 'type.builtin'],
+        ['Y', 'type'],
+        ['{', 'punctuation.bracket'],
+        ['get', 'keyword.declaration'],
+        ['{', 'punctuation.bracket'],
+        ['return', 'keyword.control'],
+        ['y', 'variable'],
+        [';', 'punctuation.delimiter'],
+        ['}', 'punctuation.bracket'],
+        ['}', 'punctuation.bracket'],
+        ['var', 'keyword.declaration'],
+        ['set', 'variable'],
+        ['=', 'operator'],
+        ['new', 'keyword.operator'],
+        ['HashSet', 'type'],
+        ['<', 'operator'],
+        ['int', 'type.builtin'],
+        ['>', 'operator'],
+        ['()', 'punctuation.bracket'],
+        [';', 'punctuation.delimiter'],
+        ['return', 'keyword.control'],
+        ['set', 'variable'],
+        [';', 'punctuation.delimiter'],
+      ]
+    );
+  }
+);
+
+void t.test(
+  'csharp: spaced ?, ??, <, and > end a pending type; using static',
+  () => {
+    const code =
+      'return IsValid ? Save() : Fail();\nif (Count > GetLimit()) Reset();\nstring Name => First ?? Compute();\nint? Find() { }\nusing static System.Math;\nusing var x = Open();';
+    assertLineFedParity('csharp', code);
+    assert.deepEqual(tokenKinds('csharp', code), [
+      ['return', 'keyword.control'],
+      ['IsValid', 'type'],
+      ['?', 'operator'],
+      ['Save', 'function'],
+      ['()', 'punctuation.bracket'],
+      [':', 'punctuation.delimiter'],
+      ['Fail', 'function'],
+      ['()', 'punctuation.bracket'],
+      [';', 'punctuation.delimiter'],
+      ['if', 'keyword.control'],
+      ['(', 'punctuation.bracket'],
+      ['Count', 'type'],
+      ['>', 'operator'],
+      ['GetLimit', 'function'],
+      ['())', 'punctuation.bracket'],
+      ['Reset', 'function'],
+      ['()', 'punctuation.bracket'],
+      [';', 'punctuation.delimiter'],
+      ['string', 'type.builtin'],
+      ['Name', 'type'],
+      ['=>', 'operator'],
+      ['First', 'type'],
+      ['??', 'operator'],
+      ['Compute', 'function'],
+      ['()', 'punctuation.bracket'],
+      [';', 'punctuation.delimiter'],
+      ['int', 'type.builtin'],
+      ['?', 'operator'],
+      ['Find', 'function.definition'],
+      ['() { }', 'punctuation.bracket'],
+      ['using', 'keyword.import'],
+      ['static', 'keyword.declaration'],
+      ['System', 'namespace'],
+      ['.', 'punctuation.delimiter'],
+      ['Math', 'type'],
+      [';', 'punctuation.delimiter'],
+      ['using', 'keyword.import'],
+      ['var', 'keyword.declaration'],
+      ['x', 'variable'],
+      ['=', 'operator'],
+      ['Open', 'function'],
+      ['()', 'punctuation.bracket'],
+      [';', 'punctuation.delimiter'],
+    ]);
   }
 );

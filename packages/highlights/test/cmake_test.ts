@@ -209,3 +209,37 @@ void t.test('cmake: multi-line constructs stream line-fed', () => {
     assertLineFedParity('cmake', code);
   }
 });
+
+void t.test('cmake: escapes in unquoted arguments do not open strings', () => {
+  const code =
+    'add_definitions(-DVERSION=\\"1.0\\")\nset(X 1)\nmessage(STATUS "hi ${X}")\nset(L a\\;b)\n';
+  assertLineFedParity('cmake', code);
+  assert.deepEqual(tokenKinds('cmake', code), [
+    ['add_definitions', 'function'],
+    ['(', 'punctuation.bracket'],
+    ['-DVERSION=', null],
+    ['\\"', 'string.escape'],
+    ['1.0', 'number'],
+    ['\\"', 'string.escape'],
+    [')', 'punctuation.bracket'],
+    ['set', 'function'],
+    ['(', 'punctuation.bracket'],
+    ['X', 'variable'],
+    ['1', 'number'],
+    [')', 'punctuation.bracket'],
+    ['message', 'function'],
+    ['(', 'punctuation.bracket'],
+    ['STATUS', 'constant'],
+    ['"hi', 'string'],
+    ['${X}', 'variable'],
+    ['"', 'string'],
+    [')', 'punctuation.bracket'],
+    ['set', 'function'],
+    ['(', 'punctuation.bracket'],
+    ['L', 'variable'],
+    ['a', null],
+    ['\\;', 'string.escape'],
+    ['b', null],
+    [')', 'punctuation.bracket'],
+  ]);
+});

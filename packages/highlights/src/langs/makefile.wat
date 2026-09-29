@@ -1,5 +1,7 @@
 (module
   (import "../common.wat")
+  ;; `\` line joins share $dockerLineJoin
+  (import "./dockerfile.wat")
 
   (func $makeByte (param $p i32) (result i32)
     (select (i32.load8_u (local.get $p)) (i32.const 0) (i32.lt_u (local.get $p) (global.get $end))))
@@ -29,13 +31,15 @@
         (i32.eq (i32.load (local.get $lhs)) (i32.const "ende"))
         (i32.eq (i32.load8_u offset=4 (local.get $lhs)) (i32.const "f")))))
 
-  ;; Whether $c ends a word: blanks, line breaks, and the punctuation that
-  ;; separates targets, variables, and values
+  ;; Whether $c ends a word: blanks, line breaks (TAB through CR, as in
+  ;; $lexIsSpace), and the punctuation that separates targets, variables, and
+  ;; values
   (func $makeIsWordEnd (param $c i32) (result i32)
-    (i32.or (call $lexIsSpace (local.get $c)) (byteset.get "\00\22#$'(),:;=\5c|" (local.get $c))))
+    (byteset.get "\00\09\0a\0b\0c\0d \22#$'(),:;=\5c|" (local.get $c)))
 
   ;; Advance $ptr over a word: any bytes until a word end, except that a
-  ;; `+`, `?`, or `!` right before `=` is the assignment operator's.
+  ;; `+`, `?`, or `!` right before `=` is the assignment operator's. Word
+  ;; ends are ASCII, so UTF-8 bytes step one at a time and stay in the word.
   (func $makeScanWord
     (local $c i32)
     (block $done
@@ -47,15 +51,49 @@
           (i32.and
             (byteset.get "!+?" (local.get $c))
             (i32.eq (call $makeByte (i32.add (global.get $ptr) (i32.const 1))) (i32.const "="))))
-        (global.set $ptr
-          (call $utf8SpanEnd (i32.add (global.get $ptr) (i32.const 1)) (global.get $end)))
+        (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
         (br $l))))
+
+  ;; Whether a target-specific assignment follows a rule's `:` at $p:
+  ;; blanks, a variable name, blanks, and `=`, `:=`, `::=`, `+=`, `?=`, or
+  ;; `!=` (`debug: CFLAGS += -g`). Only the first word is examined, so
+  ;; ordinary prerequisite lists cost a few bytes and a substitution
+  ;; reference such as `$(SRCS:.c=.o)` never looks like one.
+  (func $makeTargetVar (param $p i32) (result i32)
+    (local $q i32)
+    (local $c i32)
+    (local.set $p (call $lexSkipSpaceAt (local.get $p)))
+    (local.set $q (local.get $p))
+    (block $done
+      (loop $l
+        (br_if $done (i32.ge_u (local.get $q) (global.get $end)))
+        (local.set $c (i32.load8_u (local.get $q)))
+        (br_if $done
+          (i32.eqz
+            (i32.or
+              (call $lexIsIdentContinue (local.get $c))
+              (i32.or (i32.eq (local.get $c) (i32.const "-")) (i32.eq (local.get $c) (i32.const "."))))))
+        (local.set $q (i32.add (local.get $q) (i32.const 1)))
+        (br $l)))
+    (if (i32.eq (local.get $q) (local.get $p))
+      (then (return (i32.const 0))))
+    (local.set $q (call $lexSkipSpaceAt (local.get $q)))
+    (local.set $c (call $makeByte (local.get $q)))
+    (if (byteset.get "!+?" (local.get $c))
+      (then (local.set $q (i32.add (local.get $q) (i32.const 1)))))
+    (if (i32.eq (local.get $c) (i32.const ":"))
+      (then
+        (local.set $q (i32.add (local.get $q) (i32.const 1)))
+        (if (i32.eq (call $makeByte (local.get $q)) (i32.const ":"))
+          (then (local.set $q (i32.add (local.get $q) (i32.const 1)))))))
+    (i32.eq (call $makeByte (local.get $q)) (i32.const "=")))
 
   ;; Classify the logical line starting at $p by its first unbracketed
   ;; separator: 1 for a rule - a `:` that is not `:=` or `::=` - 2 for an
-  ;; assignment, 0 for neither. `$(...)` and `${...}` groups are skipped so a
-  ;; `:` inside a reference does not make a rule. The scan never crosses a
-  ;; line break or a comment.
+  ;; assignment, 3 for a rule whose prerequisite list is a target-specific
+  ;; assignment (see $makeTargetVar), 0 for none. `$(...)` and `${...}`
+  ;; groups are skipped so a `:` inside a reference does not make a rule.
+  ;; The scan never crosses a line break or a comment.
   (func $makeLineKind (param $p i32) (result i32)
     (local $c i32)
     (local $depth i32)
@@ -77,27 +115,30 @@
               (then (local.set $depth (i32.sub (local.get $depth) (i32.const 1)))))
             (local.set $p (i32.add (local.get $p) (i32.const 1)))
             (br $l)))
-        (if
-          (i32.and
-            (i32.eq (local.get $c) (i32.const "$"))
-            (i32.or
-              (i32.eq (call $makeByte (i32.add (local.get $p) (i32.const 1))) (i32.const "("))
-              (i32.eq (call $makeByte (i32.add (local.get $p) (i32.const 1))) (i32.const "{"))))
+        (if (i32.eq (local.get $c) (i32.const "$"))
           (then
             (local.set $open (call $makeByte (i32.add (local.get $p) (i32.const 1))))
-            (local.set $close
-              (select (i32.const ")") (i32.const "}") (i32.eq (local.get $open) (i32.const "("))))
-            (local.set $depth (i32.const 1))
-            (local.set $p (i32.add (local.get $p) (i32.const 2)))
-            (br $l)))
+            (if
+              (i32.or (i32.eq (local.get $open) (i32.const "(")) (i32.eq (local.get $open) (i32.const "{")))
+              (then
+                (local.set $close
+                  (select (i32.const ")") (i32.const "}") (i32.eq (local.get $open) (i32.const "("))))
+                (local.set $depth (i32.const 1))
+                (local.set $p (i32.add (local.get $p) (i32.const 2)))
+                (br $l)))))
         (if (i32.eq (local.get $c) (i32.const "="))
           (then (return (i32.const 2))))
         (if (i32.eq (local.get $c) (i32.const ":"))
           (then
-            (local.set $c (call $makeByte (i32.add (local.get $p) (i32.const 1))))
+            (local.set $p (i32.add (local.get $p) (i32.const 1)))
+            (local.set $c (call $makeByte (local.get $p)))
             (if (i32.eq (local.get $c) (i32.const ":"))
-              (then (local.set $c (call $makeByte (i32.add (local.get $p) (i32.const 2))))))
-            (return (select (i32.const 2) (i32.const 1) (i32.eq (local.get $c) (i32.const "="))))))
+              (then
+                (local.set $p (i32.add (local.get $p) (i32.const 1)))
+                (local.set $c (call $makeByte (local.get $p)))))
+            (if (i32.eq (local.get $c) (i32.const "="))
+              (then (return (i32.const 2))))
+            (return (select (i32.const 3) (i32.const 1) (call $makeTargetVar (local.get $p))))))
         (local.set $p (i32.add (local.get $p) (i32.const 1)))
         (br $l)))
     (i32.const 0))
@@ -165,10 +206,8 @@
     (if (byteset.get "%*+<?@^|" (local.get $c))
       (then
         (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
-        (if
-          (i32.or
-            (i32.eq (call $makeByte (global.get $ptr)) (i32.const "D"))
-            (i32.eq (call $makeByte (global.get $ptr)) (i32.const "F")))
+        ;; `D` and `F` differ only in bit 1
+        (if (i32.eq (i32.or (call $makeByte (global.get $ptr)) (i32.const 2)) (i32.const "F"))
           (then (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))))
         (call $emitTok (enum.get $Token.variable.special) (local.get $lhs) (global.get $ptr)))
       (else
@@ -287,12 +326,13 @@
   ;; line, where the line is classified into $mode: 1 a recipe (a TAB-led
   ;; line under a rule, or the text after a rule's `;`), 2 an assignment, 3
   ;; a rule, 4 a directive or other plain line, 5 a line of a `define`
-  ;; body. $targets is 1 over the target words of a rule until its `:`,
-  ;; $expectVar over the name of an assignment or variable directive, and
-  ;; $cmdHead over the command word of a recipe. $inRule is 1 after a rule
-  ;; line and its recipe, so a TAB still opens a recipe; $define is 1 inside
-  ;; `define` ... `endef`. A `\` before the line break joins the next line,
-  ;; keeping the mode. All are checkpointed.
+  ;; body, 6 a rule whose `:` leads into a target-specific assignment
+  ;; (mode 2 after the `:`). $targets is 1 over the target words of a rule
+  ;; until its `:`, $expectVar over the name of an assignment or variable
+  ;; directive, and $cmdHead over the command word of a recipe. $inRule is 1
+  ;; after a rule line and its recipe, so a TAB still opens a recipe;
+  ;; $define is 1 inside `define` ... `endef`. A `\` before the line break
+  ;; joins the next line, keeping the mode. All are checkpointed.
   (func $hlMakefile
     (local $c i32)
     (local $c2 i32)
@@ -316,15 +356,20 @@
       (loop $next
         (local.set $gap (global.get $ptr))
         (call $scanWhitespace)
-        ;; the gap crossed a line break when a LF sits before the new $ptr
-        (local.set $p
-          (call $scanFindSpecial
-            (local.get $gap)
-            (global.get $ptr)
-            (i32.const 10)
-            (i32.const 0)
-            (i32.const 1)))
-        (if (i32.lt_u (local.get $p) (global.get $ptr))
+        ;; the gap crossed a line break when a CR or LF sits in it: $p stops
+        ;; after the last one - the line's first byte - or at $gap. Gaps are
+        ;; usually 0-1 bytes, so a scalar scan back from $ptr beats a SIMD
+        ;; search forward.
+        (local.set $p (global.get $ptr))
+        (block $brDone
+          (loop $br
+            (br_if $brDone (i32.le_u (local.get $p) (local.get $gap)))
+            (local.set $c (i32.load8_u (i32.sub (local.get $p) (i32.const 1))))
+            (br_if $brDone
+              (i32.or (i32.eq (local.get $c) (i32.const 10)) (i32.eq (local.get $c) (i32.const 13))))
+            (local.set $p (i32.sub (local.get $p) (i32.const 1)))
+            (br $br)))
+        (if (i32.gt_u (local.get $p) (local.get $gap))
           (then (local.set $lineHead (i32.const 1))))
         (call $emitGap (local.get $gap) (global.get $ptr))
         (br_if $done (i32.ge_u (global.get $ptr) (global.get $end)))
@@ -344,27 +389,8 @@
                 (call $lexLineComment (i32.const 1) (enum.get $Token.comment))
                 (br $next)))
             ;; the line's first byte: after the last break in the gap, or the
-            ;; gap start when the chunk began this line
-            (local.set $p
-              (call $scanFindSpecial
-                (local.get $gap)
-                (global.get $ptr)
-                (i32.const 10)
-                (i32.const 0)
-                (i32.const 1)))
-            (local.set $rhs (local.get $gap))
-            (block $lastDone
-              (loop $last
-                (br_if $lastDone (i32.ge_u (local.get $p) (global.get $ptr)))
-                (local.set $rhs (i32.add (local.get $p) (i32.const 1)))
-                (local.set $p
-                  (call $scanFindSpecial
-                    (local.get $rhs)
-                    (global.get $ptr)
-                    (i32.const 10)
-                    (i32.const 0)
-                    (i32.const 1)))
-                (br $last)))
+            ;; gap start when the chunk began this line (see the gap scan)
+            (local.set $rhs (local.get $p))
             (if
               (i32.and
                 (i32.lt_u (local.get $rhs) (global.get $ptr))
@@ -398,6 +424,10 @@
                       (then
                         (local.set $mode (i32.const 3))
                         (local.set $targets (i32.const 1))))
+                    (if (i32.eq (local.get $kind) (i32.const 3))
+                      (then
+                        (local.set $mode (i32.const 6))
+                        (local.set $targets (i32.const 1))))
                     (if (i32.eq (local.get $kind) (i32.const 2))
                       (then
                         (local.set $mode (i32.const 2))
@@ -416,12 +446,16 @@
                             (i32.ge_u (local.get $g) (i32.const 1))
                             (i32.le_u (local.get $g) (i32.const 4)))
                           (then
-                            (local.set $hl (enum.get $Token.keyword))
-                            (if (i32.eq (local.get $g) (i32.const 1))
-                              (then (local.set $hl (enum.get $Token.keyword.control))))
-                            (if (i32.eq (local.get $g) (i32.const 2))
-                              (then (local.set $hl (enum.get $Token.keyword.import))))
-                            (call $emitTok (local.get $hl) (local.get $lhs) (global.get $ptr))
+                            (call $emitTok
+                              (select
+                                (enum.get $Token.keyword.control)
+                                (select
+                                  (enum.get $Token.keyword.import)
+                                  (enum.get $Token.keyword)
+                                  (i32.eq (local.get $g) (i32.const 2)))
+                                (i32.eq (local.get $g) (i32.const 1)))
+                              (local.get $lhs)
+                              (global.get $ptr))
                             (local.set $inRule (i32.const 0))
                             (local.set $targets (i32.const 0))
                             (if (i32.ge_u (local.get $g) (i32.const 3))
@@ -431,6 +465,12 @@
                                   (then (local.set $mode (i32.const 4))))))
                             (if (i32.eq (local.get $g) (i32.const 3))
                               (then (local.set $define (i32.const 1))))
+                            ;; `else ifeq (...)`: the next word heads the line
+                            (if
+                              (i32.and
+                                (i32.eq (i32.sub (global.get $ptr) (local.get $lhs)) (i32.const 4))
+                                (i32.eq (i32.load (local.get $lhs)) (i32.const "else")))
+                              (then (local.set $lineHead (i32.const 1))))
                             (br $next)))
                         (if (call $makeIsEndef (local.get $lhs) (global.get $ptr))
                           (then
@@ -445,30 +485,12 @@
         ;; is consumed here so the gap scan above does not start a new line
         (if (i32.eq (local.get $c) (i32.const 92))
           (then
-            (local.set $p (call $lexSkipSpaceAt (i32.add (global.get $ptr) (i32.const 1))))
-            (if
-              (i32.or
-                (i32.ge_u (local.get $p) (global.get $end))
-                (i32.or
-                  (i32.eq (i32.load8_u (local.get $p)) (i32.const 10))
-                  (i32.eq (i32.load8_u (local.get $p)) (i32.const 13))))
+            (br_if $next (call $dockerLineJoin))
+            ;; `\#` is a literal `#`, not a comment
+            (if (i32.eq (local.get $c2) (i32.const "#"))
               (then
-                (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
-                (call $emitTok
-                  (enum.get $Token.punctuation.special)
-                  (local.get $lhs)
-                  (global.get $ptr))
-                (if (i32.lt_u (local.get $p) (global.get $end))
-                  (then
-                    (local.set $c (i32.load8_u (local.get $p)))
-                    (local.set $p (i32.add (local.get $p) (i32.const 1)))
-                    (if
-                      (i32.and
-                        (i32.eq (local.get $c) (i32.const 13))
-                        (i32.eq (call $makeByte (local.get $p)) (i32.const 10)))
-                      (then (local.set $p (i32.add (local.get $p) (i32.const 1)))))))
-                (call $emitGap (global.get $ptr) (local.get $p))
-                (global.set $ptr (local.get $p))
+                (global.set $ptr (i32.add (global.get $ptr) (i32.const 2)))
+                (call $emitTok (enum.get $Token.string.escape) (local.get $lhs) (global.get $ptr))
                 (br $next)))
             (global.set $ptr
               (call $utf8SpanEnd (i32.add (global.get $ptr) (i32.const 1)) (global.get $end)))
@@ -514,7 +536,7 @@
             (local.set $expectVar (i32.const 0))
             (br $next)))
         ;; a rule's separator, order-only bar, and inline recipe
-        (if (i32.eq (local.get $mode) (i32.const 3))
+        (if (i32.or (i32.eq (local.get $mode) (i32.const 3)) (i32.eq (local.get $mode) (i32.const 6)))
           (then
             (if
               (i32.or
@@ -529,6 +551,11 @@
                   (local.get $lhs)
                   (global.get $ptr))
                 (local.set $targets (i32.const 0))
+                ;; a target-specific assignment follows its rule's `:`
+                (if (i32.eq (local.get $mode) (i32.const 6))
+                  (then
+                    (local.set $mode (i32.const 2))
+                    (local.set $expectVar (i32.const 1))))
                 (br $next)))
             (if (i32.eq (local.get $c) (i32.const "|"))
               (then

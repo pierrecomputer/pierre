@@ -467,6 +467,57 @@ void t.test(
 );
 
 void t.test(
+  "haskell: a record's `,` ends a field type, a tuple's keeps it",
+  () => {
+    assert.deepEqual(
+      tokenKinds(
+        'haskell',
+        'data P = P { name :: String, pos :: (Int, Int), age :: Int }'
+      ),
+      [
+        ['data', 'keyword.declaration'],
+        ['P', 'type'],
+        ['=', 'operator'],
+        ['P', 'constructor'],
+        ['{', 'punctuation.bracket'],
+        ['name', 'variable'],
+        ['::', 'operator'],
+        ['String', 'type'],
+        [',', 'punctuation.delimiter'],
+        ['pos', 'variable'],
+        ['::', 'operator'],
+        ['(', 'punctuation.bracket'],
+        ['Int', 'type'],
+        [',', 'punctuation.delimiter'],
+        ['Int', 'type'],
+        [')', 'punctuation.bracket'],
+        [',', 'punctuation.delimiter'],
+        ['age', 'variable'],
+        ['::', 'operator'],
+        ['Int', 'type'],
+        ['}', 'punctuation.bracket'],
+      ]
+    );
+  }
+);
+
+void t.test('haskell: proc and rec are names, mdo a keyword', () => {
+  assert.deepEqual(tokenKinds('haskell', 'run proc rec = mdo pure proc'), [
+    ['run', 'function.definition'],
+    ['proc rec', 'variable'],
+    ['=', 'operator'],
+    ['mdo', 'keyword.control'],
+    ['pure', 'function'],
+    ['proc', 'variable'],
+  ]);
+});
+
+void t.test('haskell: a char literal never spans a line break', () => {
+  const lines = assertLineFedParity('haskell', "x = '\n'y\n");
+  assert.equal(lines[0].at(-1)?.content, "'");
+});
+
+void t.test(
   'haskell: nested comments, string gaps, and where blocks stream line-fed',
   () => {
     assertLineFedParity(

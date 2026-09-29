@@ -40,7 +40,13 @@
           (then (return (enum.get $Token.keyword))))))
     (local.get $hl))
 
-  (func $rustRawStart (param $prefix i32) (result i32)
+  ;; The opener of a raw string at $ptr - the `r`/`br`/`cr` prefix of
+  ;; $prefix bytes, the hashes, and the quote - emitted as string. Returns 0
+  ;; with $ptr unmoved when no quote follows the hashes, else the hash count
+  ;; plus one: $hlRust keeps that in a checkpointed local while the body is
+  ;; open, so a body crossing a chunk boundary resumes from the local rather
+  ;; than from the 32-byte stream delimiter, which cannot hold long hash runs.
+  (func $rustRawOpen (param $prefix i32) (result i32)
     (local $p i32)
     (local.set $p (i32.add (global.get $ptr) (local.get $prefix)))
     (block $done
@@ -48,29 +54,14 @@
         (br_if $done (i32.ne (call $rustByte (local.get $p)) (i32.const "#")))
         (local.set $p (i32.add (local.get $p) (i32.const 1)))
         (br $hash)))
-    (i32.eq (call $rustByte (local.get $p)) (i32.const 34)))
-
-  ;; The opener of a raw string at $ptr - the `r`/`br`/`cr` prefix, the
-  ;; hashes, and the quote - emitted as string. Returns the hash count plus
-  ;; one: $hlRust keeps that in a checkpointed local while the body is open,
-  ;; so a body crossing a chunk boundary resumes from the local rather than
-  ;; from the 32-byte stream delimiter, which cannot hold long hash runs.
-  (func $rustRawOpen (param $prefix i32) (result i32)
-    (local $lhs i32)
-    (local $hashes i32)
-    (local.set $lhs (global.get $ptr))
-    (global.set $ptr (i32.add (global.get $ptr) (local.get $prefix)))
-    (block $done
-      (loop $hash
-        (br_if $done (i32.ne (call $rustByte (global.get $ptr)) (i32.const "#")))
-        (local.set $hashes (i32.add (local.get $hashes) (i32.const 1)))
-        (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
-        (br $hash)))
-    ;; $rustRawStart already proved the byte here is the opening quote, so it
-    ;; is below $end and this cursor lands at most on $end
-    (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
-    (call $emitTok (enum.get $Token.string) (local.get $lhs) (global.get $ptr))
-    (i32.add (local.get $hashes) (i32.const 1)))
+    (if (i32.ne (call $rustByte (local.get $p)) (i32.const 34))
+      (then (return (i32.const 0))))
+    ;; the quote is below $end, so the cursor lands at most on $end
+    (local.set $p (i32.add (local.get $p) (i32.const 1)))
+    (call $emitTok (enum.get $Token.string) (global.get $ptr) (local.get $p))
+    (local.set $prefix (i32.sub (i32.sub (local.get $p) (global.get $ptr)) (local.get $prefix)))
+    (global.set $ptr (local.get $p))
+    (local.get $prefix))
 
   ;; Advance $ptr through a raw string body to just past its closing quote
   ;; and $hashes hashes, or to $end: hop between quotes with SIMD and count
@@ -141,45 +132,43 @@
         (local.set $c2 (call $rustByte (i32.add (global.get $ptr) (i32.const 1))))
         (local.set $c3 (call $rustByte (i32.add (global.get $ptr) (i32.const 2))))
 
-        (if
-          (i32.and (i32.eq (local.get $c) (i32.const "/")) (i32.eq (local.get $c2) (i32.const "/")))
-          (then
-            (call $lexLineComment
-              (i32.const 2)
-              (select
-                (enum.get $Token.comment.doc)
-                (enum.get $Token.comment)
-                (i32.or
-                  (i32.eq (local.get $c3) (i32.const "/"))
-                  (i32.eq (local.get $c3) (i32.const "!")))))
-            (br $next)))
-        (if
-          (i32.and (i32.eq (local.get $c) (i32.const "/")) (i32.eq (local.get $c2) (i32.const "*")))
-          (then
-            (call $lexNestedBlockComment
-              (i32.const "/*")
-              (i32.const "*/")
-              (select
-                (enum.get $Token.comment.doc)
-                (enum.get $Token.comment)
-                (i32.or
-                  (i32.eq (local.get $c3) (i32.const "*"))
-                  (i32.eq (local.get $c3) (i32.const "!")))))
-            (br $next)))
-
+        ;; `//` and nesting `/*` comments; `///`, `//!`, `/**`, and `/*!` are
+        ;; doc comments - the third byte repeats the second or is `!`
         (if
           (i32.and
-            (i32.or (i32.eq (local.get $c) (i32.const "b")) (i32.eq (local.get $c) (i32.const "c")))
-            (i32.and (i32.eq (local.get $c2) (i32.const "r")) (call $rustRawStart (i32.const 2))))
+            (i32.eq (local.get $c) (i32.const "/"))
+            (i32.or (i32.eq (local.get $c2) (i32.const "/")) (i32.eq (local.get $c2) (i32.const "*"))))
           (then
-            (local.set $rawOpen (call $rustRawOpen (i32.const 2)))
-            (local.set $member (i32.const 0))
+            (local.set $hl
+              (select
+                (enum.get $Token.comment.doc)
+                (enum.get $Token.comment)
+                (i32.or
+                  (i32.eq (local.get $c3) (local.get $c2))
+                  (i32.eq (local.get $c3) (i32.const "!")))))
+            (if (i32.eq (local.get $c2) (i32.const "/"))
+              (then (call $lexLineComment (i32.const 2) (local.get $hl)))
+              (else
+                (call $lexNestedBlockComment (i32.const "/*") (i32.const "*/") (local.get $hl))))
             (br $next)))
-        (if (i32.and (i32.eq (local.get $c) (i32.const "r")) (call $rustRawStart (i32.const 1)))
+
+        ;; a raw string prefix: `r` is one byte, `br` and `cr` two
+        (local.set $p
+          (select
+            (i32.const 1)
+            (i32.shl
+              (i32.and
+                (i32.or (i32.eq (local.get $c) (i32.const "b")) (i32.eq (local.get $c) (i32.const "c")))
+                (i32.eq (local.get $c2) (i32.const "r")))
+              (i32.const 1))
+            (i32.eq (local.get $c) (i32.const "r"))))
+        (if (local.get $p)
           (then
-            (local.set $rawOpen (call $rustRawOpen (i32.const 1)))
-            (local.set $member (i32.const 0))
-            (br $next)))
+            (local.set $rawOpen (call $rustRawOpen (local.get $p)))
+            (if (local.get $rawOpen)
+              (then
+                (local.set $member (i32.const 0))
+                (br $next)))))
         (if
           (i32.and
             (i32.or (i32.eq (local.get $c) (i32.const "b")) (i32.eq (local.get $c) (i32.const "c")))
@@ -278,13 +267,15 @@
                               (i32.const "=")))
                           (then (local.set $hl (enum.get $Token.function)))
                           (else
+                            ;; a call after `.` is a method; after `::` it is
+                            ;; a path to a plain function
                             (if (i32.eq (call $rustByte (local.get $p)) (i32.const "("))
                               (then
                                 (local.set $hl
                                   (select
                                     (enum.get $Token.function.method)
                                     (enum.get $Token.function)
-                                    (local.get $member))))
+                                    (i32.eq (local.get $member) (i32.const 1)))))
                               (else
                                 (if (local.get $member)
                                   (then
@@ -295,7 +286,7 @@
                                       (i32.and
                                         (i32.eq (local.get $member) (i32.const 2))
                                         (i32.le_u
-                                          (i32.sub (i32.load8_u (local.get $lhs)) (i32.const "A"))
+                                          (i32.sub (local.get $c) (i32.const "A"))
                                           (i32.const 25)))
                                       (then
                                         (local.set $hl
@@ -329,14 +320,31 @@
                                           (else
                                             (if
                                               (i32.le_u
-                                                (i32.sub
-                                                  (i32.load8_u (local.get $lhs))
-                                                  (i32.const "A"))
+                                                (i32.sub (local.get $c) (i32.const "A"))
                                                 (i32.const 25))
                                               (then (local.set $hl (enum.get $Token.type)))
                                               (else
                                                 (local.set $hl
-                                                  (enum.get $Token.variable))))))))))))))))))))
+                                                  (enum.get $Token.variable))))))))))))))))
+                    ;; a lowercase segment glued to `::` names a module:
+                    ;; `std::fs::read`, `use std::collections::HashMap`,
+                    ;; `impl fmt::Display`. A capitalised one stays a type,
+                    ;; and `collect::<T>` is a turbofish, not a path
+                    (if (i32.eq (call $rustByte (local.get $rhs)) (i32.const ":"))
+                      (then
+                        (if
+                          (i32.and
+                            (i32.and
+                              (i32.eq
+                                (call $rustByte (i32.add (local.get $rhs) (i32.const 1)))
+                                (i32.const ":"))
+                              (i32.ne
+                                (call $rustByte (i32.add (local.get $rhs) (i32.const 2)))
+                                (i32.const "<")))
+                            (i32.gt_u
+                              (i32.sub (local.get $c) (i32.const "A"))
+                              (i32.const 25)))
+                          (then (local.set $hl (enum.get $Token.namespace))))))))))
             (call $emitTok (local.get $hl) (local.get $lhs) (local.get $rhs))
             ;; only a `mut` binding modifier keeps the next name in position
             (global.set $sigPattern
@@ -353,12 +361,18 @@
         ;; a declaration keyword names only the identifier right after it;
         ;; any other token below - `fn(i32)` types, punctuation, operators -
         ;; drops the pending capture so it cannot leak onto a later name
-        (if
-          (i32.or
-            (call $lexIsDigit (local.get $c))
-            (i32.and (i32.eq (local.get $c) (i32.const ".")) (call $lexIsDigit (local.get $c2))))
+        ;; Rust has no `.5` floats, so a `.` always reaches the delimiter
+        ;; below, and after it a tuple index `pair.0`, `x.0.1` is just its
+        ;; digits: the next `.` is another field access, not a fraction
+        (if (call $lexIsDigit (local.get $c))
           (then
-            (call $lexScanNumber)
+            (if (i32.eq (local.get $member) (i32.const 1))
+              (then
+                (block $indexDone
+                  (loop $index
+                    (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
+                    (br_if $index (call $lexIsDigit (call $rustByte (global.get $ptr)))))))
+              (else (call $lexScanNumber)))
             (call $emitTok (enum.get $Token.number) (local.get $lhs) (global.get $ptr))
             (local.set $member (i32.const 0))
             (local.set $expect (i32.const 0))

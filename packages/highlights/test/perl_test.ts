@@ -19,6 +19,21 @@ import {
   wordColor,
 } from './_util';
 
+void t.test('perl: shifts with constant operands do not start heredocs', () => {
+  for (const operator of ['|', '+', '&']) {
+    const code = `my $n = $flags <<BITS ${operator} 1;\nprint $n;\n`;
+    assertLineFedParity('perl', code);
+    const kinds = tokenKinds('perl', code);
+    assert.ok(
+      kinds.some(([text, kind]) => text === '<<' && kind === 'operator')
+    );
+    assert.ok(
+      kinds.some(([text, kind]) => text === 'print' && kind === 'function')
+    );
+    assert.ok(kinds.every(([, kind]) => kind !== 'string'));
+  }
+});
+
 // one unique color per token type so equal styles cannot merge neighboring
 // spans and hide a classification behind a same-colored token
 const distinct = {
@@ -430,3 +445,55 @@ void t.test(
     );
   }
 );
+
+void t.test('perl: =cut closes before any non-letter', () => {
+  const code =
+    '=pod\n\ntext\n\n=cut \nprint 1;\n=head1 X\n=cut # end\nmy $y;\n=pod\n=cutx\n=cut\nz();\n';
+  assert.deepEqual(tokenKinds('perl', code), [
+    ['=pod', 'comment.doc'],
+    ['text', 'comment.doc'],
+    ['=cut', 'comment.doc'],
+    ['print', 'function'],
+    ['1', 'number'],
+    [';', 'punctuation.delimiter'],
+    ['=head1 X', 'comment.doc'],
+    ['=cut # end', 'comment.doc'],
+    ['my', 'keyword.declaration'],
+    ['$y', 'variable'],
+    [';', 'punctuation.delimiter'],
+    ['=pod', 'comment.doc'],
+    ['=cutx', 'comment.doc'],
+    ['=cut', 'comment.doc'],
+    ['z', 'function'],
+    ['()', 'punctuation.bracket'],
+    [';', 'punctuation.delimiter'],
+  ]);
+  assertLineFedParity('perl', code);
+});
+
+void t.test('perl: heredocs after a print filehandle', () => {
+  const code =
+    "print STDERR <<EOF;\nDon't panic\nEOF\nprint $fh <<'SQL';\nSELECT 1\nSQL\nmy $m = 1 <<BITS;\n";
+  assert.deepEqual(tokenKinds('perl', code), [
+    ['print', 'function'],
+    ['STDERR', 'constant'],
+    ['<<EOF', 'string'],
+    [';', 'punctuation.delimiter'],
+    ["Don't panic", 'string'],
+    ['EOF', 'string'],
+    ['print', 'function'],
+    ['$fh', 'variable'],
+    ["<<'SQL'", 'string'],
+    [';', 'punctuation.delimiter'],
+    ['SELECT 1', 'string'],
+    ['SQL', 'string'],
+    ['my', 'keyword.declaration'],
+    ['$m', 'variable'],
+    ['=', 'operator'],
+    ['1', 'number'],
+    ['<<', 'operator'],
+    ['BITS', 'constant'],
+    [';', 'punctuation.delimiter'],
+  ]);
+  assertLineFedParity('perl', code);
+});

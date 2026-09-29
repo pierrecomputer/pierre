@@ -388,7 +388,8 @@ void t.test('rust: macros, paths, and expression operators', () => {
   }
   assert.equal(exactColor(html, '!'), distinctColor('operator'));
   assert.equal(exactColor(html, 'Self'), distinctColor('variable.special'));
-  assert.equal(exactColor(html, 'new'), distinctColor('function.method'));
+  // a path call is a function, as in Zed; only `x.f()` is a method
+  assert.equal(exactColor(html, 'new'), distinctColor('function'));
   assert.equal(exactColor(html, 'self'), distinctColor('variable.special'));
   // the first bare `x` is the field of `self.x`
   assert.equal(exactColor(html, 'x'), distinctColor('property'));
@@ -402,7 +403,7 @@ void t.test('rust: macros, paths, and expression operators', () => {
   assert.equal(exactColor(html, 'dyn'), distinctColor('keyword'));
   assert.equal(exactColor(html, 'Fn'), distinctColor('function'));
   assert.equal(exactColor(html, '..='), distinctColor('operator'));
-  assert.equal(exactColor(html, 'default'), distinctColor('function.method'));
+  assert.equal(exactColor(html, 'default'), distinctColor('function'));
 });
 
 void t.test(
@@ -414,3 +415,52 @@ void t.test(
     );
   }
 );
+
+void t.test('rust: lowercase path segments are namespaces', () => {
+  assert.deepEqual(tokenKinds('rust', 'use std::collections::HashMap;'), [
+    ['use', 'keyword.import'],
+    ['std', 'namespace'],
+    ['::', 'punctuation.delimiter'],
+    ['collections', 'namespace'],
+    ['::', 'punctuation.delimiter'],
+    ['HashMap', 'type'],
+    [';', 'punctuation.delimiter'],
+  ]);
+  // a call through a path is a plain function, not a method
+  assert.deepEqual(tokenKinds('rust', 'std::fs::read_to_string(p)'), [
+    ['std', 'namespace'],
+    ['::', 'punctuation.delimiter'],
+    ['fs', 'namespace'],
+    ['::', 'punctuation.delimiter'],
+    ['read_to_string', 'function'],
+    ['(', 'punctuation.bracket'],
+    ['p', 'variable'],
+    [')', 'punctuation.bracket'],
+  ]);
+  // a turbofish is not a path
+  const kinds = tokenKinds('rust', 'it.collect::<Vec<i32>>()');
+  assert.notEqual(kinds.find(([text]) => text === 'collect')?.[1], 'namespace');
+  assertLineFedParity('rust', 'use std::{\n    fs,\n    io::Read,\n};\n');
+});
+
+void t.test('rust: tuple fields keep the dot out of the number', () => {
+  assert.deepEqual(tokenKinds('rust', 'x.0.1 + self.1'), [
+    ['x', 'variable'],
+    ['.', 'punctuation.delimiter'],
+    ['0', 'number'],
+    ['.', 'punctuation.delimiter'],
+    ['1', 'number'],
+    ['+', 'operator'],
+    ['self', 'variable.special'],
+    ['.', 'punctuation.delimiter'],
+    ['1', 'number'],
+  ]);
+  assert.deepEqual(tokenKinds('rust', 'let f = 1.5;'), [
+    ['let', 'keyword.declaration'],
+    ['f', 'variable'],
+    ['=', 'operator'],
+    ['1.5', 'number'],
+    [';', 'punctuation.delimiter'],
+  ]);
+  assertLineFedParity('rust', 'let v = pair\n    .0\n    .1;\n');
+});

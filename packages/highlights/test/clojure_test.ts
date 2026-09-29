@@ -239,3 +239,31 @@ void t.test('clojure: multi-line constructs stream line-fed', () => {
     assertLineFedParity('clojure', code);
   }
 });
+
+void t.test(
+  'clojure: a `^{...}` metadata map keeps the definition name',
+  () => {
+    const code =
+      "(defn ^{:private true\n       :arglists '([x])} helper [x] x)";
+    assertLineFedParity('clojure', code);
+    assert.deepEqual(tokenKinds('clojure', code), [
+      ['(', 'punctuation.bracket'],
+      ['defn', 'keyword.declaration'],
+      ['^', 'punctuation.special'],
+      ['{', 'punctuation.bracket'],
+      [':private', 'string.special.symbol'],
+      ['true', 'boolean'],
+      [':arglists', 'string.special.symbol'],
+      ["'", 'punctuation.special'],
+      ['([', 'punctuation.bracket'],
+      ['x', 'variable'],
+      ['])}', 'punctuation.bracket'],
+      ['helper', 'function.definition'],
+      ['[', 'punctuation.bracket'],
+      ['x', 'variable'],
+      [']', 'punctuation.bracket'],
+      ['x', 'variable'],
+      [')', 'punctuation.bracket'],
+    ]);
+  }
+);

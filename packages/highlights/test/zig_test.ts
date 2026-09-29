@@ -848,3 +848,27 @@ void t.test('zig: multi-line strings and comments stream line-fed', () => {
     'const s =\n    \\\\a\n    \\\\b\n;\n/// doc\n// c\nconst t = struct {\n    x: u8,\n};\n'
   );
 });
+
+void t.test('zig: a while continue expression holds values, not types', () => {
+  const code =
+    'while (i < n) : (i += 1) {}\nwhile (it.next()) |x| : (count += 1) {}\n';
+  const kinds = tokenKinds('zig', code);
+  for (const name of ['i', 'count']) {
+    assert.deepEqual(
+      kinds.filter(([text]) => text === name).map(([, kind]) => kind),
+      name === 'i' ? ['variable', 'variable'] : ['variable'],
+      name
+    );
+  }
+  assertLineFedParity('zig', code);
+});
+
+void t.test('zig: a slice sentinel is not a field or label', () => {
+  const code =
+    'const s = buf[0..len :0];\nconst t: [N:0]u8 = undefined;\nconst P = struct { x: u8 };\n';
+  const kinds = new Map(tokenKinds('zig', code));
+  assert.equal(kinds.get('len'), 'variable');
+  assert.equal(kinds.get('N'), 'type');
+  assert.equal(kinds.get('x'), 'property');
+  assertLineFedParity('zig', code);
+});

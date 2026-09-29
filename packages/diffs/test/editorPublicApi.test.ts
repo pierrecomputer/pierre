@@ -460,7 +460,7 @@ describe('Editor document registry surfaces', () => {
     }
   });
 
-  test('FileDiff restores exact keyed session hunks when attached before hydrate', async () => {
+  test('FileDiff restores exact keyed session hunks after hydration', async () => {
     EditStateManager.clearAll();
     const editStateKey = 'file-diff-hydration';
     const oldFile = { name: 'edits.ts', contents: 'alpha\nold\ncharlie' };
@@ -496,12 +496,15 @@ describe('Editor document registry surfaces', () => {
     const editor = new Editor('file-diff', {}, editStateKey);
     const externalDiff = parseDiffFromFile(oldFile, newFile);
     try {
-      editor.edit(fileDiff);
+      expect(() => editor.edit(fileDiff)).toThrow(
+        'a complete diff is required before editing'
+      );
       fileDiff.hydrate({
         fileDiff: externalDiff,
         fileContainer: container,
         prerenderedHTML,
       });
+      editor.edit(fileDiff);
 
       expect(editor.getFile()).toEqual(retainedFile);
       expect(fileDiff.getCurrentDiff()?.hunks).toEqual(retainedHunks);

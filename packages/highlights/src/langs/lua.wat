@@ -79,33 +79,18 @@
           (local.get $hl))))
     (i32.const 1))
 
-  ;; group order is the dispatch order in $luaWordHl below
+  ;; Each value is the word's token; `function` adds 256 to mark that the
+  ;; next name is a function definition. A miss is an ordinary name, which
+  ;; $hlLua may still promote to a call or a property.
   (keyword-table $luaWords $mem.luaWords $mem.makefileWords
-    (group "true" "false")           ;; 1: booleans
-    (group "nil")                    ;; 2: built-in constant
-    (group "and" "not" "in" "or")    ;; 3: operator
-    (group ;; 4: control
+    (group $Token.boolean "true" "false")
+    (group $Token.constant.builtin "nil")
+    (group $Token.keyword.operator "and" "not" "in" "or")
+    (group $Token.keyword.control
       "do" "if" "end" "for" "else" "then" "break" "until" "while" "repeat" "elseif")
-    (group "local")                  ;; 5: declaration
-    (group "function")               ;; 6: declaration, next name is a function
-    (group "goto" "return"))         ;; 7: plain keyword
-
-  ;; Map a $luaWords group index to its token. Group 0 - a table miss - is an
-  ;; ordinary name, which $hlLua may still promote to a call or a property.
-  (func $luaWordHl (param $group i32) (result i32)
-    (if (i32.eqz (local.get $group))
-      (then (return (enum.get $Token.variable))))
-    (if (i32.eq (local.get $group) (i32.const 1))
-      (then (return (enum.get $Token.boolean))))
-    (if (i32.eq (local.get $group) (i32.const 2))
-      (then (return (enum.get $Token.constant.builtin))))
-    (if (i32.eq (local.get $group) (i32.const 3))
-      (then (return (enum.get $Token.keyword.operator))))
-    (if (i32.eq (local.get $group) (i32.const 4))
-      (then (return (enum.get $Token.keyword.control))))
-    (if (i32.le_u (local.get $group) (i32.const 6))
-      (then (return (enum.get $Token.keyword.declaration))))
-    (enum.get $Token.keyword))
+    (group $Token.keyword.declaration "local")
+    (group $Token.keyword.declaration+256 "function")
+    (group $Token.keyword "goto" "return"))
 
   (func $hlLua
     (local $c i32)
@@ -146,6 +131,16 @@
                   (i32.lt_u (i32.add (global.get $ptr) (i32.const 2)) (global.get $end))
                   (i32.eq (i32.load8_u offset=2 (global.get $ptr)) (i32.const "-")))))
             (br $token)))
+        ;; a `#!` shebang line: Lua skips a first line starting with `#`, and
+        ;; `#!` is never code anywhere else (`#` is length, and there is no
+        ;; `!` operator), so no first-line tracking is needed
+        (if
+          (i32.and
+            (i32.eq (local.get $c) (i32.const "#"))
+            (i32.eq (local.get $next) (i32.const "!")))
+          (then
+            (call $lexLineComment (i32.const 2) (enum.get $Token.comment))
+            (br $token)))
         (if (i32.or (i32.eq (local.get $c) (i32.const 34)) (i32.eq (local.get $c) (i32.const 39)))
           (then
             (call $lexString (local.get $c) (i32.const 0) (enum.get $Token.string))
@@ -172,8 +167,12 @@
         (if (call $lexIsIdentStart (local.get $c))
           (then
             (call $lexScanIdent)
-            (local.set $group (keyword-table.get $luaWords (local.get $lhs) (global.get $ptr)))
-            (local.set $hl (call $luaWordHl (local.get $group)))
+            (local.set $group (keyword-table.value $luaWords (local.get $lhs) (global.get $ptr)))
+            (local.set $hl
+              (select
+                (enum.get $Token.variable)
+                (i32.and (local.get $group) (i32.const 255))
+                (i32.lt_s (local.get $group) (i32.const 0))))
             (if (local.get $decl)
               (then
                 (local.set $hl (enum.get $Token.function.definition))
@@ -199,12 +198,12 @@
                             (i32.lt_u (local.get $p) (global.get $end))
                             (i32.eq (i32.load8_u (local.get $p)) (i32.const "(")))
                           (then (local.set $hl (enum.get $Token.function))))))))))
-            ;; group 6 is `function`; the token test keeps a `function` that was
-            ;; itself captured as a definition from opening another one
+            ;; `function` opens a definition; the token test keeps a `function`
+            ;; that was itself captured as a definition from opening another one
             (if
               (i32.and
                 (i32.eq (local.get $hl) (enum.get $Token.keyword.declaration))
-                (i32.eq (local.get $group) (i32.const 6)))
+                (i32.gt_s (local.get $group) (i32.const 255)))
               (then (local.set $decl (i32.const 1))))
             (if (call $lexIsConstCase (local.get $lhs) (global.get $ptr))
               (then

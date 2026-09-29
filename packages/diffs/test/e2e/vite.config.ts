@@ -31,6 +31,9 @@ function logFixturesIndex(): Plugin {
 const config: UserConfig = defineConfig({
   root: resolve(import.meta.dirname, '..', '..'),
   plugins: [logFixturesIndex()],
+  // Preload dynamic React imports so dependency optimization does not reload
+  // other fixtures in the middle of their tests.
+  optimizeDeps: { include: ['react', 'react-dom', 'react-dom/client'] },
   server: {
     host: '127.0.0.1',
     port,

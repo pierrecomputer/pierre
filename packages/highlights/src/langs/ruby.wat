@@ -120,23 +120,7 @@
         ;; hop and rescanned only once $ptr passes them
         (if (i32.ge_u (global.get $ptr) (local.get $stop))
           (then
-            (local.set $stop
-              (call $scanFindSpecial
-                (global.get $ptr)
-                (global.get $end)
-                (local.get $close)
-                (i32.and (local.get $flags) (i32.const 1))
-                (i32.shr_u (local.get $flags) (i32.const 3))))
-            (local.set $hash
-              (call $lexFindEither
-                (global.get $ptr)
-                (select
-                  (i32.const "#")
-                  (local.get $close)
-                  (i32.and (local.get $flags) (i32.const 1)))
-                (select (local.get $open) (local.get $close) (local.get $open)))))
-          (else
-            (if (i32.gt_u (global.get $ptr) (local.get $hash))
+            (if (i32.ge_u (global.get $ptr) (local.get $hash))
               (then
                 (local.set $hash
                   (call $lexFindEither
@@ -145,12 +129,17 @@
                       (i32.const "#")
                       (local.get $close)
                       (i32.and (local.get $flags) (i32.const 1)))
-                    (select (local.get $open) (local.get $close) (local.get $open))))))))
-        (global.set $ptr
-          (select
-            (local.get $hash)
-            (local.get $stop)
-            (i32.lt_u (local.get $hash) (local.get $stop))))
+                    (select (local.get $open) (local.get $close) (local.get $open))))))
+            ;; the special-byte hop stops at the next `#` or opener, so a
+            ;; body re-entered after each `#{...}` never rescans to its closer
+            (local.set $stop
+              (call $scanFindSpecial
+                (global.get $ptr)
+                (local.get $hash)
+                (local.get $close)
+                (i32.and (local.get $flags) (i32.const 1))
+                (i32.shr_u (local.get $flags) (i32.const 3))))))
+        (global.set $ptr (local.get $stop))
         (br_if $done (i32.ge_u (global.get $ptr) (global.get $end)))
         (local.set $c (i32.load8_u (global.get $ptr)))
         (if (i32.eq (local.get $c) (local.get $close))
@@ -218,10 +207,13 @@
     (i32.const 1))
 
   ;; Consume lines from $ptr through the one holding the $n-byte delimiter
-  ;; at $delim - indented when $strip - as one $hl token. An unterminated
-  ;; body runs to $end and, in streaming, checkpoints the delimiter so the
-  ;; next chunk keeps looking for it. Shared by heredocs and `=begin`.
-  (func $rubyLineDelimited (param $delim i32) (param $n i32) (param $strip i32) (param $hl i32)
+  ;; at $delim as one $hl token. $mode bit 1 allows indentation before the
+  ;; delimiter (`<<~`, `<<-`); bit 4 makes it a word closer that may be
+  ;; followed by a blank and more text (`=end # done`; see
+  ;; $lineDelimiterEnds). An unterminated body runs to $end and, in
+  ;; streaming, checkpoints the delimiter so the next chunk keeps looking
+  ;; for it. Shared by heredocs and `=begin`.
+  (func $rubyLineDelimited (param $delim i32) (param $n i32) (param $mode i32) (param $hl i32)
     (local $body i32)
     (local $lhs i32)
     (local $line i32)
@@ -230,20 +222,16 @@
       (loop $lines
         (br_if $done (i32.ge_u (global.get $ptr) (global.get $end)))
         (local.set $line (global.get $ptr))
-        (if (local.get $strip)
+        (if (i32.and (local.get $mode) (i32.const 1))
           (then (local.set $line (call $lexSkipSpaceAt (local.get $line)))))
         (if
-          (i32.and
-            (i32.le_u (i32.add (local.get $line) (local.get $n)) (global.get $end))
+          (if (result i32)
             (i32.and
-              (call $rubyRangeEq (local.get $line) (local.get $delim) (local.get $n))
-              (i32.or
-                (i32.eq (i32.add (local.get $line) (local.get $n)) (global.get $end))
-                (i32.or
-                  (i32.eq (i32.load8_u (i32.add (local.get $line) (local.get $n))) (i32.const 10))
-                  (i32.eq
-                    (i32.load8_u (i32.add (local.get $line) (local.get $n)))
-                    (i32.const 13))))))
+              (i32.le_u (i32.add (local.get $line) (local.get $n)) (global.get $end))
+              (call $rubyRangeEq (local.get $line) (local.get $delim) (local.get $n)))
+            (then
+              (call $lineDelimiterEnds (i32.add (local.get $line) (local.get $n)) (local.get $mode)))
+            (else (i32.const 0)))
           (then
             (call $emitTok (local.get $hl) (local.get $body) (global.get $ptr))
             (local.set $lhs (global.get $ptr))
@@ -260,7 +248,9 @@
     (call $streamSetLine
       (local.get $delim)
       (local.get $n)
-      (i32.shl (local.get $strip) (i32.const 1))
+      (i32.or
+        (i32.shl (i32.and (local.get $mode) (i32.const 1)) (i32.const 1))
+        (i32.and (local.get $mode) (i32.const 12)))
       (local.get $hl)))
 
   ;; the `%` literal kind letter at $p: 1 for the interpolating kinds - `Q`,
@@ -325,6 +315,13 @@
     (call $lexEmitLeadingContinuation)
     (block $done
       (loop $next
+        ;; token tails, innermost first: $literal opens a literal body,
+        ;; $valueTok and $opTok set what may follow, and $tok emits
+        ;; [$lhs,$ptr) as $hl and clears $member
+        (block $tok
+        (block $opTok
+        (block $valueTok
+        (block $literal
         (local.set $gap (global.get $ptr))
         ;; everything after `__END__` is data
         (if (local.get $data)
@@ -338,14 +335,9 @@
             ;; the pending heredoc body starts after this line's break, so
             ;; skip blanks only and consume just the LF or CRLF
             (global.set $ptr (call $lexSkipSpaceAt (global.get $ptr)))
-            (if
-              (i32.and
-                (i32.lt_u (global.get $ptr) (global.get $end))
-                (i32.or
-                  (i32.eq (i32.load8_u (global.get $ptr)) (i32.const 10))
-                  (i32.eq (i32.load8_u (global.get $ptr)) (i32.const 13))))
+            (local.set $c (call $rubyByte (global.get $ptr)))
+            (if (i32.or (i32.eq (local.get $c) (i32.const 10)) (i32.eq (local.get $c) (i32.const 13)))
               (then
-                (local.set $c (i32.load8_u (global.get $ptr)))
                 (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
                 (if
                   (i32.and
@@ -410,14 +402,7 @@
 
         (call $scanWhitespace)
         (if
-          (i32.lt_u
-            (call $scanFindSpecial
-              (local.get $gap)
-              (global.get $ptr)
-              (i32.const 10)
-              (i32.const 0)
-              (i32.const 1))
-            (global.get $ptr))
+          (call $lexGapHasBreak (local.get $gap) (global.get $ptr))
           (then
             (local.set $lineHead (i32.const 1))
             (local.set $operand (i32.const 1))
@@ -460,7 +445,7 @@
                 (call $rubyLineDelimited
                   (i32.const $mem.streamDelimiter)
                   (i32.const 4)
-                  (i32.const 0)
+                  (i32.const 4)
                   (enum.get $Token.comment))
                 (local.set $lineHead (i32.const 1))
                 (br $next)))))
@@ -479,7 +464,9 @@
             (br $next)))
 
         ;; heredoc openers: `<<~ID`, `<<-ID`, `<<ID` with an uppercase name or
-        ;; a quoted one, taken as an argument or in operand position
+        ;; a quoted one, taken in operand position or as a command argument
+        ;; glued to `<<` after a blank (`$stderr.puts <<EOS`); a digit before
+        ;; the blank keeps `1 <<BITS` a shift
         (if
           (i32.and (i32.eq (local.get $c) (i32.const "<")) (i32.eq (local.get $c2) (i32.const "<")))
           (then
@@ -500,7 +487,18 @@
                   (i32.or
                     (i32.le_u (i32.sub (local.get $kind) (i32.const "A")) (i32.const 25))
                     (i32.and (local.get $hdStrip) (call $lexIsIdentStart (local.get $kind)))))
-                (i32.or (local.get $operand) (local.get $hdStrip)))
+                (i32.or
+                  (i32.or (local.get $operand) (local.get $hdStrip))
+                  (if (result i32)
+                    (i32.and
+                      (i32.and (i32.eqz (local.get $atHead)) (i32.gt_u (local.get $lhs) (local.get $gap)))
+                      (i32.gt_u
+                        (i32.sub
+                          (i32.load8_u (i32.sub (local.get $gap) (i32.const 1)))
+                          (i32.const "0"))
+                        (i32.const 9)))
+                    (then (call $lexHeredocArgument (local.get $p)))
+                    (else (i32.const 0)))))
               (then
                 (if
                   (i32.or
@@ -517,10 +515,8 @@
                     (global.set $ptr (local.get $p))
                     (call $lexScanIdent)
                     (local.set $hdLen (i32.sub (global.get $ptr) (local.get $hdDelim)))))
-                (call $emitTok (enum.get $Token.string) (local.get $lhs) (global.get $ptr))
-                (local.set $operand (i32.const 0))
-                (local.set $member (i32.const 0))
-                (br $next)))))
+                (local.set $hl (enum.get $Token.string))
+                (br $valueTok)))))
 
         ;; quoted literals; the body is scanned at the top of the loop
         (if
@@ -529,28 +525,18 @@
             (i32.eq (local.get $c) (i32.const "`")))
           (then
             (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
-            (call $emitTok (enum.get $Token.string) (local.get $lhs) (global.get $ptr))
-            (local.set $sActive (i32.const 1))
             (local.set $sClose (local.get $c))
             (local.set $sOpen (i32.const 0))
-            (local.set $sDepth (i32.const 0))
             (local.set $sFlags (i32.ne (local.get $c) (i32.const 39)))
-            (local.set $seg (global.get $ptr))
-            (local.set $member (i32.const 0))
-            (br $next)))
+            (br $literal)))
         ;; `/regex/` and `%w[...]` literals in operand position
         (if (i32.and (i32.eq (local.get $c) (i32.const "/")) (local.get $operand))
           (then
             (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
-            (call $emitTok (enum.get $Token.string.regex) (local.get $lhs) (global.get $ptr))
-            (local.set $sActive (i32.const 1))
             (local.set $sClose (i32.const "/"))
             (local.set $sOpen (i32.const 0))
-            (local.set $sDepth (i32.const 0))
             (local.set $sFlags (i32.const 11))
-            (local.set $seg (global.get $ptr))
-            (local.set $member (i32.const 0))
-            (br $next)))
+            (br $literal)))
         (if (i32.and (i32.eq (local.get $c) (i32.const "%")) (local.get $operand))
           (then
             (local.set $kind (call $rubyPercentKind (local.get $c2)))
@@ -569,7 +555,6 @@
                 ;; only the bracket kinds nest
                 (if (i32.eq (local.get $sClose) (local.get $sOpen))
                   (then (local.set $sOpen (i32.const 0))))
-                (local.set $sDepth (i32.const 0))
                 (local.set $sFlags (i32.ne (local.get $kind) (i32.const 2)))
                 (if (i32.eq (local.get $c2) (i32.const "r"))
                   (then (local.set $sFlags (i32.const 3))))
@@ -580,20 +565,7 @@
                   (then (local.set $sFlags (i32.or (local.get $sFlags) (i32.const 4)))))
                 (if (i32.eq (local.get $c2) (i32.const "I"))
                   (then (local.set $sFlags (i32.const 5))))
-                (call $emitTok
-                  (select
-                    (enum.get $Token.string.regex)
-                    (select
-                      (enum.get $Token.string.special.symbol)
-                      (enum.get $Token.string)
-                      (i32.and (local.get $sFlags) (i32.const 4)))
-                    (i32.and (local.get $sFlags) (i32.const 2)))
-                  (local.get $lhs)
-                  (global.get $ptr))
-                (local.set $sActive (i32.const 1))
-                (local.set $seg (global.get $ptr))
-                (local.set $member (i32.const 0))
-                (br $next)))))
+                (br $literal)))))
 
         ;; `:symbol`, `:"symbol"`, and `:+`; `::` is a scope delimiter
         (if
@@ -605,18 +577,10 @@
                 (i32.eq (local.get $c2) (i32.const 39)))
               (then
                 (global.set $ptr (i32.add (global.get $ptr) (i32.const 2)))
-                (call $emitTok
-                  (enum.get $Token.string.special.symbol)
-                  (local.get $lhs)
-                  (global.get $ptr))
-                (local.set $sActive (i32.const 1))
                 (local.set $sClose (local.get $c2))
                 (local.set $sOpen (i32.const 0))
-                (local.set $sDepth (i32.const 0))
                 (local.set $sFlags (i32.or (i32.const 12) (i32.ne (local.get $c2) (i32.const 39))))
-                (local.set $seg (global.get $ptr))
-                (local.set $member (i32.const 0))
-                (br $next)))
+                (br $literal)))
             (if (call $lexIsIdentStart (local.get $c2))
               (then
                 (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
@@ -628,13 +592,8 @@
                       (i32.eq (call $rubyByte (global.get $ptr)) (i32.const "!"))
                       (i32.eq (call $rubyByte (global.get $ptr)) (i32.const "="))))
                   (then (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))))
-                (call $emitTok
-                  (enum.get $Token.string.special.symbol)
-                  (local.get $lhs)
-                  (global.get $ptr))
-                (local.set $operand (i32.const 0))
-                (local.set $member (i32.const 0))
-                (br $next)))
+                (local.set $hl (enum.get $Token.string.special.symbol))
+                (br $valueTok)))
             (if (i32.and (call $rubyIsOp (local.get $c2)) (local.get $operand))
               (then
                 (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
@@ -643,13 +602,8 @@
                     (br_if $opDone (i32.eqz (call $rubyIsOp (call $rubyByte (global.get $ptr)))))
                     (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
                     (br $op)))
-                (call $emitTok
-                  (enum.get $Token.string.special.symbol)
-                  (local.get $lhs)
-                  (global.get $ptr))
-                (local.set $operand (i32.const 0))
-                (local.set $member (i32.const 0))
-                (br $next)))))
+                (local.set $hl (enum.get $Token.string.special.symbol))
+                (br $valueTok)))))
 
         ;; `@ivar`, `@@cvar`, `$global`
         (if
@@ -671,10 +625,8 @@
             (if (call $lexIsIdentContinue (call $rubyByte (global.get $ptr)))
               (then (call $lexScanIdent))
               (else (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))))
-            (call $emitTok (enum.get $Token.variable.special) (local.get $lhs) (global.get $ptr))
-            (local.set $operand (i32.const 0))
-            (local.set $member (i32.const 0))
-            (br $next)))
+            (local.set $hl (enum.get $Token.variable.special))
+            (br $valueTok)))
 
         (if (i32.and (call $lexIsIdentStart (local.get $c)) (i32.ne (local.get $c) (i32.const "$")))
           (then
@@ -706,10 +658,9 @@
                 (local.set $decl (i32.const 0))
                 (br $next)))
             (local.set $kind
-              (select
-                (i32.const -1)
-                (call $rubyWordHl (local.get $lhs) (local.get $rhs))
-                (i32.and (local.get $member) (i32.eqz (local.get $decl)))))
+              (if (result i32) (i32.and (local.get $member) (i32.eqz (local.get $decl)))
+                (then (i32.const -1))
+                (else (call $rubyWordHl (local.get $lhs) (local.get $rhs)))))
             (if (i32.ge_s (local.get $kind) (i32.const 0))
               (then
                 (local.set $hl (i32.and (local.get $kind) (i32.const 255)))
@@ -789,34 +740,38 @@
                                 (local.set $hl (enum.get $Token.variable))
                                 (local.set $operand (i32.const 2))
                                 (local.set $c2 (call $rubyByte (local.get $p)))
+                                ;; lazy: the argument-word scan and its keyword
+                                ;; lookup run only for a name followed by blanks
+                                ;; and an identifier
                                 (if
-                                  (i32.or
+                                  (if (result i32)
                                     (i32.eq (call $rubyByte (local.get $rhs)) (i32.const "("))
-                                    (i32.and
-                                      (i32.gt_u (local.get $p) (local.get $rhs))
-                                      (i32.or
-                                        (i32.or
-                                          (i32.eq (local.get $c2) (i32.const 34))
-                                          (i32.eq (local.get $c2) (i32.const 39)))
-                                        (i32.or
-                                          (i32.or
-                                            (i32.eq (local.get $c2) (i32.const "@"))
-                                            (i32.and
-                                              (i32.eq (local.get $c2) (i32.const ":"))
-                                              (call $lexIsIdentStart
-                                                (call $rubyByte
-                                                  (i32.add (local.get $p) (i32.const 1))))))
-                                          (i32.and
-                                            (call $lexIsIdentStart (local.get $c2))
-                                            (i32.eq
-                                              (call $rubyArgWord (local.get $p))
-                                              (i32.const 1)))))))
+                                    (then (i32.const 1))
+                                    (else
+                                      (if (result i32) (i32.gt_u (local.get $p) (local.get $rhs))
+                                        (then
+                                          (if (result i32)
+                                            (i32.or
+                                              (i32.or
+                                                (i32.eq (local.get $c2) (i32.const 34))
+                                                (i32.eq (local.get $c2) (i32.const 39)))
+                                              (i32.or
+                                                (i32.eq (local.get $c2) (i32.const "@"))
+                                                (i32.and
+                                                  (i32.eq (local.get $c2) (i32.const ":"))
+                                                  (call $lexIsIdentStart
+                                                    (call $rubyByte
+                                                      (i32.add (local.get $p) (i32.const 1)))))))
+                                            (then (i32.const 1))
+                                            (else
+                                              (if (result i32) (call $lexIsIdentStart (local.get $c2))
+                                                (then (i32.eq (call $rubyArgWord (local.get $p)) (i32.const 1)))
+                                                (else (i32.const 0))))))
+                                        (else (i32.const 0)))))
                                   (then
                                     (local.set $hl (enum.get $Token.function))
                                     (local.set $operand (i32.const 1))))))))))))))
-            (call $emitTok (local.get $hl) (local.get $lhs) (local.get $rhs))
-            (local.set $member (i32.const 0))
-            (br $next)))
+            (br $tok)))
 
         (if
           (i32.or
@@ -824,10 +779,8 @@
             (i32.and (i32.eq (local.get $c) (i32.const ".")) (call $lexIsDigit (local.get $c2))))
           (then
             (call $lexScanNumber)
-            (call $emitTok (enum.get $Token.number) (local.get $lhs) (global.get $ptr))
-            (local.set $operand (i32.const 0))
-            (local.set $member (i32.const 0))
-            (br $next)))
+            (local.set $hl (enum.get $Token.number))
+            (br $valueTok)))
 
         (if (byteset.get "()[]{}" (local.get $c))
           (then
@@ -855,7 +808,6 @@
                         (local.set $member (i32.const 0))
                         (local.set $decl (i32.const 0))
                         (br $next)))))))
-            (call $emitTok (enum.get $Token.punctuation.bracket) (local.get $lhs) (global.get $ptr))
             ;; a closer ends a value; an opener starts one
             (local.set $operand
               (i32.or
@@ -863,20 +815,15 @@
                   (i32.eq (local.get $c) (i32.const "("))
                   (i32.eq (local.get $c) (i32.const "[")))
                 (i32.eq (local.get $c) (i32.const "{"))))
-            (local.set $member (i32.const 0))
             (local.set $decl (i32.const 0))
-            (br $next)))
+            (local.set $hl (enum.get $Token.punctuation.bracket))
+            (br $tok)))
         (if (i32.or (i32.eq (local.get $c) (i32.const ",")) (i32.eq (local.get $c) (i32.const ";")))
           (then
             (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
-            (call $emitTok
-              (enum.get $Token.punctuation.delimiter)
-              (local.get $lhs)
-              (global.get $ptr))
-            (local.set $operand (i32.const 1))
-            (local.set $member (i32.const 0))
             (local.set $decl (i32.const 0))
-            (br $next)))
+            (local.set $hl (enum.get $Token.punctuation.delimiter))
+            (br $opTok)))
         ;; `.`, `&.`, and `::` name a member; `..` and `...` are ranges
         (if
           (i32.or
@@ -907,13 +854,29 @@
         (if (i32.eq (local.get $c) (i32.const ":"))
           (then
             (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
-            (call $emitTok
-              (enum.get $Token.punctuation.delimiter)
-              (local.get $lhs)
-              (global.get $ptr))
-            (local.set $operand (i32.const 1))
-            (local.set $member (i32.const 0))
-            (br $next)))
+            (local.set $hl (enum.get $Token.punctuation.delimiter))
+            (br $opTok)))
+        ;; `?a`, `?"`, `?\n` character literals where a value must start (a
+        ;; name before `?` makes it a ternary); like Ruby, `?ab` is not one
+        (if (i32.and (i32.eq (local.get $c) (i32.const "?")) (i32.eq (local.get $operand) (i32.const 1)))
+          (then
+            (local.set $p
+              (i32.add
+                (global.get $ptr)
+                (select (i32.const 2) (i32.const 1) (i32.eq (local.get $c2) (i32.const 92)))))
+            (if (i32.gt_u (call $rubyByte (local.get $p)) (i32.const 32))
+              (then
+                (local.set $kind (call $utf8SpanEnd (i32.add (local.get $p) (i32.const 1)) (global.get $end)))
+                (if
+                  (i32.or
+                    (i32.eq (local.get $c2) (i32.const 92))
+                    (i32.or
+                      (i32.eqz (call $lexIsIdentContinue (call $rubyByte (local.get $p))))
+                      (i32.eqz (call $lexIsIdentContinue (call $rubyByte (local.get $kind))))))
+                  (then
+                    (global.set $ptr (local.get $kind))
+                    (local.set $hl (enum.get $Token.string))
+                    (br $valueTok)))))))
         (if (i32.or (call $rubyIsOp (local.get $c)) (i32.eq (local.get $c) (i32.const ".")))
           (then
             (block $opDone
@@ -925,17 +888,36 @@
                       (i32.eq (call $rubyByte (global.get $ptr)) (i32.const ".")))))
                 (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
                 (br $op)))
-            (call $emitTok (enum.get $Token.operator) (local.get $lhs) (global.get $ptr))
-            (local.set $operand (i32.const 1))
-            (local.set $member (i32.const 0))
             ;; `def ==(other)` names an operator method
             (if (i32.eq (local.get $decl) (i32.const 1))
               (then (local.set $decl (i32.const 0))))
-            (br $next)))
+            (local.set $hl (enum.get $Token.operator))
+            (br $opTok)))
 
         (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
-        (call $emitTok (enum.get $Token.none) (local.get $lhs) (global.get $ptr))
-        (local.set $operand (i32.const 1))
+        (local.set $hl (enum.get $Token.none))
+        (br $opTok))
+        ;; a literal opener, colored by the body kind in $sFlags; the body
+        ;; is scanned at the top of the loop
+        (local.set $hl
+          (select
+            (enum.get $Token.string.regex)
+            (select
+              (enum.get $Token.string.special.symbol)
+              (enum.get $Token.string)
+              (i32.and (local.get $sFlags) (i32.const 4)))
+            (i32.and (local.get $sFlags) (i32.const 2))))
+        (local.set $sActive (i32.const 1))
+        (local.set $sDepth (i32.const 0))
+        (local.set $seg (global.get $ptr))
+        (br $tok))
+        ;; a value token: a `/`, `%`, or `<<` next is an operator
+        (local.set $operand (i32.const 0))
+        (br $tok))
+        ;; a punctuation or operator token: a value may start next
+        (local.set $operand (i32.const 1)))
+        ;; emit [$lhs,$ptr) as $hl; a member access ends with any token
+        (call $emitTok (local.get $hl) (local.get $lhs) (global.get $ptr))
         (local.set $member (i32.const 0))
         (br $next))))
 

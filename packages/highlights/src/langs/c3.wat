@@ -4,33 +4,34 @@
   (func $c3Byte (param $p i32) (result i32)
     (select (i32.load8_u (local.get $p)) (i32.const 0) (i32.lt_u (local.get $p) (global.get $end))))
 
-  ;; Group order is the dispatch order in $c3WordHl below. Group 8 holds the
-  ;; compile-time words that only exist behind a `$` - `$sizeof`, `$vaarg` -
-  ;; and is accepted only there; `$vaconst` and `$vasplat` share their hash
-  ;; features with `$vacount` and get direct compares instead.
+  ;; Each group's value is its token, with the next-name capture in the high
+  ;; byte (see $c3WordHl). Group 8 holds the compile-time words that only
+  ;; exist behind a `$` - `$sizeof`, `$vaarg` - and is accepted only there,
+  ;; marked by bit 10 of its value; `$vaconst` and `$vasplat` share their
+  ;; hash features with `$vacount` and get direct compares instead.
   (keyword-table $c3Words $mem.c3Words $mem.clojureWords
-    (group ;; 1: control
+    (group $Token.keyword.control ;; 1: control
       "if" "do" "asm" "for" "try" "case" "else" "break" "catch" "defer" "while" "assert" "return"
       "switch" "default" "foreach" "continue" "nextcase" "foreach_r")
-    (group "fn" "macro") ;; 2: declaration, a function head follows
-    (group ;; 3: declaration, next name is a type
+    (group $Token.keyword.declaration+256 "fn" "macro") ;; 2: declaration, a function head follows
+    (group $Token.keyword.declaration+512 ;; 3: declaration, next name is a type
       "def" "enum" "alias" "union" "struct" "attrdef" "typedef" "distinct" "faultdef" "bitstruct"
       "interface")
-    (group "module")            ;; 4: declaration, next name is a namespace
-    (group "import")            ;; 5: import
-    (group ;; 6: declaration
+    (group $Token.keyword.declaration+768 "module") ;; 4: declaration, next name is a namespace
+    (group $Token.keyword.import+768 "import")      ;; 5: import
+    (group $Token.keyword.declaration ;; 6: declaration
       "var" "const" "extern" "inline" "static" "tlocal")
-    (group ;; 7: built-in types
+    (group $Token.type.builtin ;; 7: built-in types
       "any" "int" "isz" "usz" "bool" "char" "iptr" "long" "uint" "uptr" "void" "fault" "float"
       "ichar" "short" "ulong" "double" "int128" "typeid" "ushort" "float16" "uint128" "anyfault"
       "bfloat16" "float128")
-    (group ;; 8: compile-time only words, valid behind `$`
+    (group $Token.keyword+1024 ;; 8: compile-time only words, valid behind `$`
       "or" "and" "eval" "exec" "echo" "embed" "endif" "error" "varef" "vaarg" "checks" "concat"
       "vatype" "vaexpr" "append" "endfor" "kindof" "nameof" "sizeof" "typeof" "alignof" "defined"
       "feature" "include" "qnameof" "vacount" "offsetof" "evaltype" "is_const" "typefrom"
       "extnameof" "stringify" "endswitch" "endforeach")
-    (group "true" "false") ;; 9: booleans
-    (group "null"))        ;; 10: built-in constant
+    (group $Token.boolean "true" "false") ;; 9: booleans
+    (group $Token.constant.builtin "null")) ;; 10: built-in constant
 
   ;; Token in the low byte; the high byte selects the next-name capture:
   ;; 1=function head, 2=type, 3=namespace. $ct is 1 when the word followed
@@ -39,12 +40,12 @@
   (func $c3WordHl (param $lhs i32) (param $rhs i32) (param $ct i32) (result i32)
     (local $g i32)
     (local $w i64)
-    (local.set $g (keyword-table.get $c3Words (local.get $lhs) (local.get $rhs)))
+    (local.set $g (keyword-table.value $c3Words (local.get $lhs) (local.get $rhs)))
     (if (local.get $ct)
       (then
-        (if (i32.eq (local.get $g) (i32.const 1))
-          (then (return (enum.get $Token.keyword.control))))
-        (if (local.get $g)
+        (if (i32.eq (local.get $g) (enum.get $Token.keyword.control))
+          (then (return (local.get $g))))
+        (if (i32.ge_s (local.get $g) (i32.const 0))
           (then (return (enum.get $Token.keyword))))
         ;; the two words the table cannot hold; the wide load stays inside
         ;; the input slack, as in the table's own compare
@@ -57,25 +58,8 @@
                 (i64.eq (local.get $w) (i64.const "vasplat")))
               (then (return (enum.get $Token.keyword))))))
         (return (enum.get $Token.variable.special))))
-    (if (i32.or (i32.eqz (local.get $g)) (i32.eq (local.get $g) (i32.const 8)))
-      (then (return (i32.const -1))))
-    (if (i32.eq (local.get $g) (i32.const 1))
-      (then (return (enum.get $Token.keyword.control))))
-    (if (i32.le_u (local.get $g) (i32.const 4))
-      (then
-        (return
-          (i32.or
-            (enum.get $Token.keyword.declaration)
-            (i32.shl (i32.sub (local.get $g) (i32.const 1)) (i32.const 8))))))
-    (if (i32.eq (local.get $g) (i32.const 5))
-      (then (return (i32.or (enum.get $Token.keyword.import) (i32.const 768)))))
-    (if (i32.eq (local.get $g) (i32.const 6))
-      (then (return (enum.get $Token.keyword.declaration))))
-    (if (i32.eq (local.get $g) (i32.const 7))
-      (then (return (enum.get $Token.type.builtin))))
-    (if (i32.eq (local.get $g) (i32.const 9))
-      (then (return (enum.get $Token.boolean))))
-    (enum.get $Token.constant.builtin))
+    ;; a miss is -1 already; compile-time words need their `$`
+    (select (i32.const -1) (local.get $g) (i32.and (local.get $g) (i32.const 1024))))
 
   (func $c3IsOp (param $c i32) (result i32)
     (byteset.get "!%&*+-/<=>?^|~" (local.get $c)))
@@ -187,6 +171,8 @@
                 (local.set $member (i32.const 0))
                 (br $next)))
             (local.set $p (call $lexSkipSpaceAt (local.get $rhs)))
+            ;; the byte after the name's blanks
+            (local.set $c2 (call $c3Byte (local.get $p)))
             ;; `$if`, `$sizeof`, and `$Type` are compile-time words
             (if (i32.eq (local.get $c) (i32.const "$"))
               (then
@@ -219,7 +205,7 @@
                   (then
                     ;; the name before `(` is the definition; anything
                     ;; earlier is its return type, receiver, or module
-                    (if (i32.eq (call $c3Byte (local.get $p)) (i32.const "("))
+                    (if (i32.eq (local.get $c2) (i32.const "("))
                       (then
                         (local.set $hl (enum.get $Token.function.definition))
                         (local.set $expect (i32.const 0)))
@@ -228,7 +214,7 @@
                           (select
                             (enum.get $Token.namespace)
                             (enum.get $Token.type)
-                            (i32.eq (call $c3Byte (local.get $p)) (i32.const ":")))))))
+                            (i32.eq (local.get $c2) (i32.const ":")))))))
                   (else
                     (if (local.get $expect)
                       (then
@@ -241,10 +227,10 @@
                         (if
                           (i32.or
                             (i32.eq (local.get $expect) (i32.const 2))
-                            (i32.ne (call $c3Byte (local.get $p)) (i32.const ":")))
+                            (i32.ne (local.get $c2) (i32.const ":")))
                           (then (local.set $expect (i32.const 0)))))
                       (else
-                        (if (i32.eq (call $c3Byte (local.get $p)) (i32.const "("))
+                        (if (i32.eq (local.get $c2) (i32.const "("))
                           (then
                             (local.set $hl
                               (select
@@ -276,7 +262,7 @@
                                             (enum.get $Token.namespace)
                                             (enum.get $Token.variable)
                                             (i32.and
-                                              (i32.eq (call $c3Byte (local.get $p)) (i32.const ":"))
+                                              (i32.eq (local.get $c2) (i32.const ":"))
                                               (i32.eq
                                                 (call $c3Byte
                                                   (i32.add (local.get $p) (i32.const 1)))

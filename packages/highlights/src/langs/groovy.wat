@@ -48,14 +48,10 @@
     (param $seg i32)
     (result i32)
     (local $c i32)
-    (local $c2 i32)
-    (local $e i32)
-    (local $p i32)
     (local $stop i32)
     (local $dollar i32)
     (local $status i32)
     (local.set $stop (global.get $ptr))
-    (local.set $dollar (global.get $ptr))
     (block $done
       (loop $scan
         (if (i32.ge_u (global.get $ptr) (local.get $stop))
@@ -67,26 +63,18 @@
                 (local.get $q)
                 (i32.const 1)
                 (i32.eqz (local.get $triple))))
-            (local.set $dollar (local.get $stop))
-            (if (local.get $expand)
-              (then
-                (local.set $dollar
-                  (call $scanFindSpecial
-                    (global.get $ptr)
-                    (local.get $stop)
-                    (i32.const "$")
-                    (i32.const 0)
-                    (i32.const 0))))))
-          (else
-            (if (i32.and (local.get $expand) (i32.gt_u (global.get $ptr) (local.get $dollar)))
-              (then
-                (local.set $dollar
-                  (call $scanFindSpecial
-                    (global.get $ptr)
-                    (local.get $stop)
-                    (i32.const "$")
-                    (i32.const 0)
-                    (i32.const 0)))))))
+            ;; a plain body has no `$` stop; zero, below $ptr, makes a
+            ;; GString search for the next
+            (local.set $dollar (select (i32.const 0) (local.get $stop) (local.get $expand)))))
+        (if (i32.gt_u (global.get $ptr) (local.get $dollar))
+          (then
+            (local.set $dollar
+              (call $scanFindSpecial
+                (global.get $ptr)
+                (local.get $stop)
+                (i32.const "$")
+                (i32.const 0)
+                (i32.const 0)))))
         (global.set $ptr
           (select
             (local.get $dollar)
@@ -120,56 +108,14 @@
           (i32.or (i32.eq (local.get $c) (i32.const 10)) (i32.eq (local.get $c) (i32.const 13))))
         (if (i32.eq (local.get $c) (i32.const 92))
           (then
-            (call $emitTok (enum.get $Token.string) (local.get $seg) (global.get $ptr))
-            (local.set $e (call $lexEscapeEnd (global.get $ptr)))
-            (call $emitTok (enum.get $Token.string.escape) (global.get $ptr) (local.get $e))
-            (global.set $ptr (local.get $e))
-            (local.set $seg (global.get $ptr))
-            (if
-              (i32.and
-                (i32.eq (global.get $ptr) (global.get $end))
-                (i32.or
-                  (i32.eq (i32.load8_u (i32.sub (global.get $ptr) (i32.const 1))) (i32.const 10))
-                  (i32.eq (i32.load8_u (i32.sub (global.get $ptr) (i32.const 1))) (i32.const 13))))
+            (if (call $stringEscapeAt (local.get $seg))
               (then (local.set $status (i32.const 3))))
+            (local.set $seg (global.get $ptr))
             (br $scan)))
         ;; `$`: a splice or a dotted value path
-        (local.set $c2 (call $groovyByte (i32.add (global.get $ptr) (i32.const 1))))
-        (if (i32.and (i32.eq (local.get $c2) (i32.const "{")) (i32.eqz (local.get $nested)))
-          (then
-            (call $emitTok (enum.get $Token.string) (local.get $seg) (global.get $ptr))
-            (global.set $ptr (i32.add (global.get $ptr) (i32.const 2)))
-            (call $emitTok
-              (enum.get $Token.punctuation.special)
-              (i32.sub (global.get $ptr) (i32.const 2))
-              (global.get $ptr))
-            (return (i32.const 2))))
-        (if
-          (i32.and (call $lexIsIdentStart (local.get $c2)) (i32.ne (local.get $c2) (i32.const "$")))
-          (then
-            (call $emitTok (enum.get $Token.string) (local.get $seg) (global.get $ptr))
-            (local.set $p (global.get $ptr))
-            (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
-            (block $pathDone
-              (loop $path
-                (call $scanIdentRun (i32.const "_"))
-                (br_if $pathDone
-                  (i32.eqz
-                    (i32.and
-                      (i32.eq (call $groovyByte (global.get $ptr)) (i32.const "."))
-                      (i32.and
-                        (call $lexIsIdentStart
-                          (call $groovyByte (i32.add (global.get $ptr) (i32.const 1))))
-                        (i32.ne
-                          (call $groovyByte (i32.add (global.get $ptr) (i32.const 1)))
-                          (i32.const "$"))))))
-                (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
-                (br $path)))
-            (call $emitTok (enum.get $Token.variable) (local.get $p) (global.get $ptr))
-            (local.set $seg (global.get $ptr))
-            (br $scan)))
-        (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
-        (br $scan)))
+        (local.set $seg (call $stringDollarAt (local.get $seg) (i32.const 16) (local.get $nested)))
+        (br_if $scan (i32.ge_s (local.get $seg) (i32.const 0)))
+        (return (i32.const 2))))
     (call $emitTok (enum.get $Token.string) (local.get $seg) (global.get $ptr))
     (local.get $status))
 
@@ -253,15 +199,7 @@
         (local.set $gap (global.get $ptr))
         (call $scanWhitespace)
         ;; a line break ends an import line and starts a statement
-        (if
-          (i32.lt_u
-            (call $scanFindSpecial
-              (local.get $gap)
-              (global.get $ptr)
-              (i32.const 10)
-              (i32.const 0)
-              (i32.const 1))
-            (global.get $ptr))
+        (if (call $lexGapHasBreak (local.get $gap) (global.get $ptr))
           (then
             (local.set $importCtx (i32.const 0))
             (local.set $stmtHead (i32.const 1))))
@@ -294,7 +232,7 @@
         ;; a `#!` line opens a script
         (if
           (i32.and
-            (i32.eq (local.get $lhs) (global.get $srcBase))
+            (i32.eq (local.get $lhs) (global.get $docStart))
             (i32.and
               (i32.eq (local.get $c) (i32.const "#"))
               (i32.eq (local.get $c2) (i32.const "!"))))

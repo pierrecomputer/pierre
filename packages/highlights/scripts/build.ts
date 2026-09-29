@@ -103,7 +103,13 @@ export function transformWat(
         languages[alias] = id;
       }
     }
-    return `(enum $Language ${names.join(' ')})\n  (table $hlDispatch funcref\n    (elem ${functions.join(' ')}))`;
+    return (
+      `(enum $Language ${names.join(' ')})\n  (table $hlDispatch funcref\n    (elem ${functions.join(' ')}))\n` +
+      // partial fixtures without the memory layout carry no name table
+      (/\(const\s+\$mem\.languageNames\b/.test(code)
+        ? languageNamesData(languages, names)
+        : '')
+    );
   });
 
   code = code.replace(
@@ -316,7 +322,7 @@ export function transformWat(
     );
     body = body.replace(
       leading,
-      `${leading}\n    (if (i32.and\n          (global.get $streaming)\n          (i32.eqz (global.get $streamDepth)))\n      (then\n        (local.set $streamRoot (i32.const 1))\n        (global.set $streamWindow (i32.const $mem.streamState+${base}))\n        (global.set $streamDepth (i32.const 1))\n        (if (i32.eqz (global.get $streamReset))\n          (then\n            ${load}))))`
+      `${leading}\n    (if (i32.and\n          (global.get $streaming)\n          (i32.eqz (global.get $streamDepth)))\n      (then\n        (global.set $streamWindow (i32.const $mem.streamState+${base}))\n        (global.set $streamDepth (local.tee $streamRoot (i32.const 1)))\n        (if (i32.eqz (global.get $streamReset))\n          (then\n            ${load}))))`
     );
     return `(func${body}\n    (if (local.get $streamRoot)\n      (then\n        ${save}\n        (global.set $streamDepth (i32.const 0)))))`;
   });
@@ -744,13 +750,23 @@ export function transformWat(
   });
 
   // `(byteset.get "bytes" (local.get $x))` tests whether the byte in $x is
-  // one of the literal's bytes: a 256-bit membership bitmap replaces the
-  // equality ladder a lexer would otherwise spell out, with one load and two
-  // shifts however many bytes the set holds. Identical sets share one bitmap
-  // in the region at $mem.byteSets, 32 bytes each.
+  // one of the literal's bytes, replacing the equality ladder a lexer would
+  // otherwise spell out. Identical sets share one bit. Eight sets share a
+  // 256-byte table in the region at $mem.byteSets (one byte per input byte,
+  // one bit per set), so a test is one load plus a mask: `load & bit` where
+  // the result only decides a branch (see branchOperands), and an exact 0/1
+  // everywhere else, since callers combine it with other 0/1 values.
   const byteSets = new Map<string, number>();
   const byteSetBase = constMap.get('$mem.byteSets');
-  code = replaceForm(code, 'byteset.get', (inner) => {
+  // the region ends at the next named address, 32 bytes (256 bits) per set
+  const byteSetCap =
+    byteSetBase === undefined
+      ? 0
+      : (Math.min(...[...constMap.values()].filter((v) => v > byteSetBase)) -
+          byteSetBase) >>
+        5;
+  const byteSetBranches = branchOperands(code, 'byteset.get');
+  code = replaceForm(code, 'byteset.get', (inner, at) => {
     const m = inner.match(
       /^\s*("(?:[^"\\]|\\.)*")\s+(\(local\.get\s+\$\w+\))\s*$/
     );
@@ -763,26 +779,33 @@ export function transformWat(
     let index = byteSets.get(key);
     if (index === undefined) {
       index = byteSets.size;
-      if (index >= 80)
-        throw new Error(`More than 80 distinct byte sets in ${url.pathname}`);
+      if (index >= byteSetCap)
+        throw new Error(
+          `More than ${byteSetCap} distinct byte sets in ${url.pathname}`
+        );
       byteSets.set(key, index);
     }
-    const table = byteSetBase + index * 32;
-    return `(i32.and (i32.shr_u (i32.load8_u offset=${table} (i32.shr_u ${m[2]} (i32.const 3))) (i32.and ${m[2]} (i32.const 7))) (i32.const 1))`;
+    const bit = index & 7;
+    const load = `(i32.load8_u offset=${byteSetBase + (index >> 3) * 256} ${m[2]})`;
+    if (byteSetBranches.has(at))
+      return `(i32.and ${load} (i32.const ${1 << bit}))`;
+    if (bit === 0) return `(i32.and ${load} (i32.const 1))`;
+    if (bit === 7) return `(i32.shr_u ${load} (i32.const 7))`;
+    return `(i32.and (i32.shr_u ${load} (i32.const ${bit})) (i32.const 1))`;
   });
   if (byteSets.size > 0) {
-    const bitmap = new Uint8Array(byteSets.size * 32);
+    const tables = new Uint8Array(((byteSets.size + 7) >> 3) * 256);
     for (const [key, index] of byteSets) {
       for (const b of key.split(',').map(Number)) {
-        bitmap[index * 32 + (b >> 3)] |= 1 << (b & 7);
+        tables[(index >> 3) * 256 + b] |= 1 << (index & 7);
       }
     }
-    const data = [...bitmap]
+    const data = [...tables]
       .map((b) => '\\' + b.toString(16).padStart(2, '0'))
       .join('');
     code = code.replace(
       /^\s*\(\s*module(\s+)/,
-      `(module\n  ;; byte-set bitmaps: ${byteSets.size} sets\n  (data (i32.const ${byteSetBase}) "${data}")$1`
+      `(module\n  ;; byte-set tables: ${byteSets.size} sets\n  (data (i32.const ${byteSetBase}) "${data}")$1`
     );
   }
 
@@ -1072,6 +1095,44 @@ function packKeywordPool(all: string[]): string {
 }
 
 /**
+ * The data segment `$languageByName` (src/languages.wat) searches: every
+ * language name and alias, grouped by length. A u16 offset from the table
+ * start per length 0..19 (group L spans [L, L+1)) comes first, then each
+ * group's records - the language id byte and the lowercase name. The search
+ * is linear within a group, so canonical names (`ts`, `js`, `go`), which
+ * fences use most, come before aliases.
+ */
+function languageNamesData(
+  languages: Record<string, number>,
+  canonical: string[]
+): string {
+  const isCanonical = new Set(canonical.map((quoted) => quoted.slice(1, -1)));
+  const maxLength = 18; // $languageByName rejects longer words
+  // plain text's names resolve to id 0, the same as no match
+  const names = Object.keys(languages)
+    .filter((name) => languages[name] !== 0)
+    .sort((a, b) => {
+      if (a.length !== b.length) return a.length - b.length;
+      const rank = Number(isCanonical.has(b)) - Number(isCanonical.has(a));
+      if (rank !== 0) return rank;
+      return a < b ? -1 : 1;
+    });
+  const long = names.find((name) => name.length > maxLength);
+  if (long !== undefined)
+    throw new Error(`Language name "${long}" exceeds ${maxLength} bytes`);
+  const offsets: number[] = [];
+  const records: number[] = [];
+  for (let length = 0; length <= maxLength + 1; length++) {
+    offsets.push(2 * (maxLength + 2) + records.length);
+    for (const name of names.filter((n) => n.length === length))
+      records.push(languages[name], ...Buffer.from(name, 'latin1'));
+  }
+  const bytes = [...offsets.flatMap((o) => [o & 255, o >> 8]), ...records];
+  const text = bytes.map((b) => '\\' + b.toString(16).padStart(2, '0'));
+  return `  (data (i32.const $mem.languageNames) "${text.join('')}")`;
+}
+
+/**
  * Split text into its top-level items: parenthesized forms (with their head
  * word) and bare atoms, each with the offsets it spans. Comments and string
  * literals are respected.
@@ -1343,13 +1404,55 @@ function liveLocalsAtCheckpoint(inner: string): Set<string> {
 }
 
 /**
- * Replace each `(head ...)` form with `fn(innerText)`.
+ * Offsets of the `(head ...)` forms in `code` whose value only decides a
+ * branch: the condition of an `if`, the last operand of a `br_if`, or the
+ * operand of an `i32.eqz`. A macro can emit a cheaper nonzero-means-true
+ * value there instead of an exact 0/1. Offsets match what replaceForm passes
+ * for the same `code`.
+ */
+function branchOperands(code: string, head: string): Set<number> {
+  const found = new Set<number>();
+  // each open form: its head, and the offset and head of its last child
+  const stack: { head: string; lastAt: number; lastHead: string }[] = [];
+  for (let i = 0; i < code.length; i++) {
+    const c = code[i];
+    if (c === '"') {
+      for (i++; i < code.length && code[i] !== '"'; i++) {
+        if (code[i] === '\\') i++;
+      }
+    } else if (c === ';' && code[i + 1] === ';') {
+      while (i < code.length && code[i] !== '\n') i++;
+    } else if (c === '(') {
+      const name = /^\(\s*([^\s()]+)/.exec(code.slice(i, i + 64))?.[1] ?? '';
+      const parent = stack[stack.length - 1];
+      if (parent !== undefined) {
+        parent.lastAt = i;
+        parent.lastHead = name;
+        if (
+          name === head &&
+          (parent.head === 'if' || parent.head === 'i32.eqz')
+        )
+          found.add(i);
+      }
+      stack.push({ head: name, lastAt: -1, lastHead: '' });
+    } else if (c === ')') {
+      const frame = stack.pop();
+      if (frame?.head === 'br_if' && frame.lastHead === head)
+        found.add(frame.lastAt);
+    }
+  }
+  return found;
+}
+
+/**
+ * Replace each `(head ...)` form with `fn(innerText, offset)`, where offset
+ * is the form's start in `code`.
  * Skip quoted strings when matching, and preserve nested forms and operands.
  */
 function replaceForm(
   code: string,
   head: string,
-  fn: (inner: string) => string
+  fn: (inner: string, at: number) => string
 ): string {
   const open = new RegExp(
     `"(?:[^"\\\\]|\\\\.)*"|\\(\\s*${head.replace(/[.$]/g, '\\$&')}(?=[\\s(])`,
@@ -1383,7 +1486,9 @@ function replaceForm(
     if (depth !== 0) {
       throw new Error(`Unterminated (${head} ...) form at offset ${m.index}`);
     }
-    out += code.slice(last, m.index) + fn(code.slice(m.index + m[0].length, i));
+    out +=
+      code.slice(last, m.index) +
+      fn(code.slice(m.index + m[0].length, i), m.index);
     last = i + 1;
     open.lastIndex = last;
   }
@@ -1622,20 +1727,75 @@ export function optimizeWasm(wasmBytes: Uint8Array): Uint8Array {
       'highlights.wat',
       markSimdReachers(
         wrapCompoundNegations(
-          replaceForm(code, 'v128.const', (inner) => {
-            const byte = inner.match(
-              /^\s*i32x4 (0x([0-9a-f]{2})\2\2\2) \1 \1 \1\s*$/
-            )?.[2];
-            return byte === undefined
-              ? `(v128.const${inner})`
-              : `(i8x16.splat (i32.const ${(parseInt(byte, 16) << 24) >> 24}))`;
-          })
+          compactMaskedCompares(
+            replaceForm(code, 'v128.const', (inner) => {
+              const byte = inner.match(
+                /^\s*i32x4 (0x([0-9a-f]{2})\2\2\2) \1 \1 \1\s*$/
+              )?.[2];
+              return byte === undefined
+                ? `(v128.const${inner})`
+                : `(i8x16.splat (i32.const ${(parseInt(byte, 16) << 24) >> 24}))`;
+            })
+          )
         )
       )
     );
   } finally {
     compact.destroy();
   }
+}
+
+/**
+ * Rewrite a compare of a masked word against a constant, as lexers spell
+ * short keyword tests - `(i64.eq (i64.and X (i64.const 2^n-1)) (i64.const C))`
+ * with C below the mask - into
+ * `(i64.eqz (i64.shl (i64.xor X (i64.const C)) (i64.const 64-n)))`. The
+ * result is the same: the shift drops exactly the high bytes the mask
+ * cleared. It is smaller because the long mask constant goes away. Handles
+ * i64 masks of 5-7 bytes and the 3-byte i32 mask, and `ne` as `eqz` + `eqz`.
+ */
+function compactMaskedCompares(code: string): string {
+  const widths: Record<string, number> = {
+    i64: 64,
+    i32: 32,
+  };
+  const maskBytes = (width: number, value: bigint): number => {
+    for (const bytes of width === 64 ? [5, 6, 7] : [3]) {
+      if (value === (1n << BigInt(bytes * 8)) - 1n) return bytes;
+    }
+    return 0;
+  };
+  const rewrite = (type: string, op: string) => (inner: string) => {
+    const nested = compactMaskedCompares(inner);
+    const forms = splitTopLevelForms(nested);
+    const fallback = `(${type}.${op}${nested})`;
+    if (forms.length !== 2) return fallback;
+    const width = widths[type];
+    const constant = new RegExp(`^\\(${type}\\.const (-?\\d+)\\)$`);
+    for (const [masked, other] of [forms, [forms[1], forms[0]]]) {
+      const c = constant.exec(other.text.trim());
+      if (c === null || masked.head !== `${type}.and`) continue;
+      const parts = splitTopLevelForms(
+        masked.text.slice(masked.text.indexOf('and') + 3, -1)
+      );
+      if (parts.length !== 2) continue;
+      const m = constant.exec(parts[1].text.trim());
+      if (m === null) continue;
+      const bytes = maskBytes(width, BigInt(m[1]));
+      const value = BigInt(c[1]);
+      if (bytes === 0 || value < 0n || value >> BigInt(bytes * 8) !== 0n)
+        continue;
+      const zero = `(${type}.eqz (${type}.shl (${type}.xor ${parts[0].text} (${type}.const ${c[1]})) (${type}.const ${width - bytes * 8})))`;
+      return op === 'eq' ? zero : `(i32.eqz ${zero})`;
+    }
+    return fallback;
+  };
+  for (const type of Object.keys(widths)) {
+    for (const op of ['eq', 'ne']) {
+      code = replaceForm(code, `${type}.${op}`, rewrite(type, op));
+    }
+  }
+  return code;
 }
 
 /**

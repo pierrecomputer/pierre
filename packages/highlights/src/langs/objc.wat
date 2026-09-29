@@ -4,26 +4,26 @@
   (func $objcByte (param $p i32) (result i32)
     (select (i32.load8_u (local.get $p)) (i32.const 0) (i32.lt_u (local.get $p) (global.get $end))))
 
-  ;; Group order is the dispatch order in $objcWordHl below. Group 1 holds
-  ;; the words that follow `@`; group 6 the property attributes, which are
-  ;; keywords only inside the parens after `@property`. Everything C keeps
-  ;; its classification from c.wat.
+  ;; Each group's value is its token with the group number in the high byte.
+  ;; Group 1 holds the words that follow `@`; group 6 the property
+  ;; attributes, which are keywords only inside the parens after `@property`.
+  ;; Everything C keeps its classification from c.wat.
   (keyword-table $objcWords $mem.objcWords $mem.ocamlWords
-    (group ;; 1: compiler directives after `@`
+    (group $Token.keyword+256 ;; 1: compiler directives after `@`
       "end" "try" "defs" "catch" "class" "throw" "encode" "import" "public" "dynamic" "finally"
       "package" "private" "optional" "property" "protocol" "required" "selector" "available"
       "interface" "protected" "synthesize" "synchronized" "autoreleasepool" "implementation"
       "compatibility_alias")
-    (group ;; 2: built-in types
+    (group $Token.type.builtin+512 ;; 2: built-in types
       "id" "SEL" "IMP" "BOOL" "Class" "instancetype")
-    (group "NO" "YES" "nil" "Nil")        ;; 3: built-in constants
-    (group "self" "_cmd" "super")         ;; 4: special variables
-    (group ;; 5: qualifiers and ownership keywords
+    (group $Token.constant.builtin+768 "NO" "YES" "nil" "Nil") ;; 3: built-in constants
+    (group $Token.variable.special+1024 "self" "_cmd" "super") ;; 4: special variables
+    (group $Token.keyword+1280 ;; 5: qualifiers and ownership keywords
       "in" "out" "inout" "byref" "bycopy" "oneway" "__weak" "__block" "__bridge" "__kindof"
       "__strong" "IBAction" "IBOutlet" "nonnull" "nullable" "_Nonnull" "_Nullable" "__nonnull"
       "__nullable" "__autoreleasing" "__bridge_retained" "__bridge_transfer" "__unsafe_unretained"
       "null_resettable" "null_unspecified")
-    (group ;; 6: property attributes
+    (group $Token.keyword+1536 ;; 6: property attributes
       "copy" "weak" "atomic" "assign" "getter" "retain" "setter" "strong" "readonly" "readwrite"
       "nonatomic" "unsafe_unretained"))
 
@@ -40,7 +40,9 @@
     (result i32)
     (local $g i32)
     (local $n i32)
-    (local.set $g (keyword-table.get $objcWords (local.get $lhs) (local.get $rhs)))
+    (local.set $n (keyword-table.value $objcWords (local.get $lhs) (local.get $rhs)))
+    ;; the group, or a large number for a miss
+    (local.set $g (i32.shr_u (local.get $n) (i32.const 8)))
     (if (local.get $at)
       (then
         (local.set $n (i32.sub (local.get $rhs) (local.get $lhs)))
@@ -71,17 +73,13 @@
               (then (return (i32.or (enum.get $Token.keyword) (i32.const 512)))))))
         ;; any other `@word` is a directive too
         (return (enum.get $Token.keyword))))
-    (if (i32.eq (local.get $g) (i32.const 2))
-      (then (return (enum.get $Token.type.builtin))))
-    (if (i32.eq (local.get $g) (i32.const 3))
-      (then (return (enum.get $Token.constant.builtin))))
-    (if (i32.eq (local.get $g) (i32.const 4))
-      (then (return (enum.get $Token.variable.special))))
-    (if (i32.eq (local.get $g) (i32.const 5))
-      (then (return (enum.get $Token.keyword))))
-    (if (i32.and (i32.eq (local.get $g) (i32.const 6)) (local.get $propAttrs))
-      (then (return (enum.get $Token.keyword))))
-    (i32.const -1))
+    ;; directive words need their `@`; property attributes their list
+    (if
+      (i32.or
+        (i32.or (i32.eq (local.get $g) (i32.const 1)) (i32.gt_u (local.get $g) (i32.const 6)))
+        (i32.and (i32.eq (local.get $g) (i32.const 6)) (i32.eqz (local.get $propAttrs))))
+      (then (return (i32.const -1))))
+    (i32.and (local.get $n) (i32.const 255)))
 
   ;; $midLine is 1 once a token sits on the current line, so `#` opens a
   ;; directive only at a line start. $expectType is 1 after a directive that
@@ -113,7 +111,11 @@
     (local $prev i32)
     (local $nl i32)
     (local $declColon i32)
+    ;; the quote of a string the previous chunk left open at an escaped line
+    ;; break, or 0: it resumes with C escape rules ($lexCStringResume)
+    (local $strCont i32)
     (call $lexEmitLeadingContinuation)
+    (local.set $strCont (call $lexCStringResume (local.get $strCont)))
     (block $done
       (loop $next
         (local.set $gap (global.get $ptr))
@@ -192,7 +194,7 @@
               (then
                 (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
                 (call $emitTok (enum.get $Token.string) (local.get $lhs) (global.get $ptr))
-                (call $lexString (i32.const 34) (i32.const 0) (enum.get $Token.string))
+                (local.set $strCont (call $lexCString (enum.get $Token.string)))
                 (local.set $member (i32.const 0))
                 (br $next)))
             (if (call $lexIsIdentStart (local.get $c2))
@@ -224,7 +226,7 @@
         ;; strings and character literals, with C prefixes
         (if (i32.or (i32.eq (local.get $c) (i32.const 34)) (i32.eq (local.get $c) (i32.const 39)))
           (then
-            (call $lexString (local.get $c) (i32.const 0) (enum.get $Token.string))
+            (local.set $strCont (call $lexCString (enum.get $Token.string)))
             (local.set $member (i32.const 0))
             (br $next)))
 
@@ -232,6 +234,10 @@
           (then
             (call $lexScanIdent)
             (local.set $rhs (global.get $ptr))
+            ;; the byte after the name, 0 at the range end, and after its blanks
+            (local.set $c2 (call $objcByte (local.get $rhs)))
+            (local.set $p (call $lexSkipSpaceAt (local.get $rhs)))
+            (local.set $c3 (call $objcByte (local.get $p)))
             (if
               (i32.and
                 (i32.lt_u (global.get $ptr) (global.get $end))
@@ -244,17 +250,13 @@
                         (i32.eq (local.get $c) (i32.const "u"))
                         (i32.eq (local.get $c) (i32.const "U"))))
                     (i32.or
-                      (i32.eq (i32.load8_u (global.get $ptr)) (i32.const 34))
-                      (i32.eq (i32.load8_u (global.get $ptr)) (i32.const 39))))))
+                      (i32.eq (local.get $c2) (i32.const 34))
+                      (i32.eq (local.get $c2) (i32.const 39))))))
               (then
                 (call $emitTok (enum.get $Token.string) (local.get $lhs) (local.get $rhs))
-                (call $lexString
-                  (i32.load8_u (global.get $ptr))
-                  (i32.const 0)
-                  (enum.get $Token.string))
+                (local.set $strCont (call $lexCString (enum.get $Token.string)))
                 (local.set $member (i32.const 0))
                 (br $next)))
-            (local.set $p (call $lexSkipSpaceAt (local.get $rhs)))
             (local.set $kind
               (select
                 (i32.const -1)
@@ -276,7 +278,7 @@
                     ;; a unary send follows the receiver or a nested send
                     (if
                       (i32.and
-                        (i32.eq (call $objcByte (local.get $rhs)) (i32.const ":"))
+                        (i32.eq (local.get $c2) (i32.const ":"))
                         (i32.ne
                           (call $objcByte (i32.add (local.get $rhs) (i32.const 1)))
                           (i32.const ":")))
@@ -296,15 +298,15 @@
                             (i32.and
                               (i32.eqz (local.get $declColon))
                               (i32.or
-                                (i32.eq (call $objcByte (local.get $p)) (i32.const ";"))
-                                (i32.eq (call $objcByte (local.get $p)) (i32.const "{")))))
+                                (i32.eq (local.get $c3) (i32.const ";"))
+                                (i32.eq (local.get $c3) (i32.const "{")))))
                           (then (local.set $hl (enum.get $Token.function.definition)))
                           (else
                             (if
                               (i32.and
                                 (i32.and
                                   (i32.ne (local.get $brackets) (i32.const 0))
-                                  (i32.eq (call $objcByte (local.get $p)) (i32.const "]")))
+                                  (i32.eq (local.get $c3) (i32.const "]")))
                                 (i32.and
                                   (i32.lt_u (local.get $gap) (local.get $lhs))
                                   (i32.or
@@ -320,7 +322,7 @@
                                       (select
                                         (enum.get $Token.function.method)
                                         (enum.get $Token.property)
-                                        (i32.eq (call $objcByte (local.get $p)) (i32.const "(")))))
+                                        (i32.eq (local.get $c3) (i32.const "(")))))
                                   (else
                                     (local.set $hl
                                       (call $cWordHl (local.get $lhs) (local.get $rhs)))))))))))))))

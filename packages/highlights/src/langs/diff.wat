@@ -2,8 +2,8 @@
   (import "../common.wat")
 
   ;; Git metadata lines are blank-separated fields, so each helper advances $p
-  ;; over one run - blanks, decimal digits, or hex digits - bounded by the end
-  ;; of the current line.
+  ;; over one run - blanks or decimal digits - bounded by the end of the
+  ;; current line ($scanHexRun covers hex digits).
   (func $diffSkipSpace (param $p i32) (param $lineEnd i32) (result i32)
     (block $done
       (loop $l
@@ -22,21 +22,13 @@
         (br $l)))
     (local.get $p))
 
-  (func $diffSkipHex (param $p i32) (param $lineEnd i32) (result i32)
-    (block $done
-      (loop $l
-        (br_if $done (i32.ge_u (local.get $p) (local.get $lineEnd)))
-        (br_if $done (i32.eqz (call $lexIsHex (i32.load8_u (local.get $p)))))
-        (local.set $p (i32.add (local.get $p) (i32.const 1)))
-        (br $l)))
-    (local.get $p))
-
   (func $hlDiff
     (local $c i32)
     (local $lhs i32)
     (local $lineEnd i32)
     (local $p i32)
     (local $tok i32)
+    (local $len i32)
     (call $lexEmitLeadingContinuation)
     (block $done
       (loop $line
@@ -45,49 +37,35 @@
         (local.set $c (i32.load8_u (global.get $ptr)))
         (call $scanToLineEnd)
         (local.set $lineEnd (global.get $ptr))
+        (local.set $len (i32.sub (local.get $lineEnd) (local.get $lhs)))
 
         ;; Payload and hunk lines are the bulk of a patch, so they are decided
         ;; by their first byte before any of the packed metadata compares.
         (block $emitDone
-          ;; File headers keep their marker pink and color only the path as a diff.
-          (if
-            (i32.and
-              (i32.or
-                (i32.eq (local.get $c) (i32.const "+"))
-                (i32.eq (local.get $c) (i32.const "-")))
-              (i32.and
-                (i32.ge_u (i32.sub (local.get $lineEnd) (local.get $lhs)) (i32.const 4))
-                (i32.and
-                  (i32.eq
-                    (i32.and (i32.load (local.get $lhs)) (i32.const 0xffffff))
-                    (select
-                      (i32.const "+++")
-                      (i32.const "---")
-                      (i32.eq (local.get $c) (i32.const "+"))))
-                  (call $lexIsSpace (i32.load8_u offset=3 (local.get $lhs))))))
-            (then
-              (local.set $p (i32.add (local.get $lhs) (i32.const 3)))
-              (call $emitTok (enum.get $Token.punctuation.special) (local.get $lhs) (local.get $p))
-              (call $emitTok
-                (select
-                  (enum.get $Token.diff.plus)
-                  (enum.get $Token.diff.minus)
-                  (i32.eq (local.get $c) (i32.const "+")))
-                (local.get $p)
-                (local.get $lineEnd))
-              (br $emitDone)))
-
-          ;; Addition/deletion markers are punctuation; only their payload is diff-colored.
+          ;; Addition/deletion markers are punctuation; only their payload is
+          ;; diff-colored. A `+++ `/`--- ` file header marks just its three
+          ;; bytes, so the path keeps the diff color.
           (if
             (i32.or (i32.eq (local.get $c) (i32.const "+")) (i32.eq (local.get $c) (i32.const "-")))
             (then
-              (local.set $p (i32.add (local.get $lhs) (i32.const 1)))
-              (block $markerDone
-                (loop $marker
-                  (br_if $markerDone (i32.ge_u (local.get $p) (local.get $lineEnd)))
-                  (br_if $markerDone (i32.ne (i32.load8_u (local.get $p)) (local.get $c)))
-                  (local.set $p (i32.add (local.get $p) (i32.const 1)))
-                  (br $marker)))
+              (local.set $p (i32.add (local.get $lhs) (i32.const 3)))
+              (if
+                (i32.eqz
+                  (i32.and
+                    (i32.ge_u (local.get $len) (i32.const 4))
+                    (i32.and
+                      (i32.eq
+                        (i32.and (i32.load (local.get $lhs)) (i32.const 0xffffff))
+                        (i32.mul (local.get $c) (i32.const 0x010101)))
+                      (call $lexIsSpace (i32.load8_u offset=3 (local.get $lhs))))))
+                (then
+                  (local.set $p (i32.add (local.get $lhs) (i32.const 1)))
+                  (block $markerDone
+                    (loop $marker
+                      (br_if $markerDone (i32.ge_u (local.get $p) (local.get $lineEnd)))
+                      (br_if $markerDone (i32.ne (i32.load8_u (local.get $p)) (local.get $c)))
+                      (local.set $p (i32.add (local.get $p) (i32.const 1)))
+                      (br $marker)))))
               (call $emitTok (enum.get $Token.punctuation.special) (local.get $lhs) (local.get $p))
               (call $emitTok
                 (select
@@ -100,7 +78,7 @@
 
           (if
             (i32.and
-              (i32.ge_u (i32.sub (local.get $lineEnd) (local.get $lhs)) (i32.const 2))
+              (i32.ge_u (local.get $len) (i32.const 2))
               (i32.eq (i32.load16_u (local.get $lhs)) (i32.const "@@")))
             (then
               (call $emitTok (enum.get $Token.attribute) (local.get $lhs) (local.get $lineEnd))
@@ -130,7 +108,7 @@
             ;; `diff` is a function, its first argument a parameter, and paths plain.
             (if
               (i32.and
-                (i32.ge_u (i32.sub (local.get $lineEnd) (local.get $lhs)) (i32.const 4))
+                (i32.ge_u (local.get $len) (i32.const 4))
                 (i32.and
                   (i32.eq (i32.load (local.get $lhs)) (i32.const "diff"))
                   (i32.or
@@ -159,7 +137,7 @@
             ;; Split an index line into its keyword, commits, separator, and mode.
             (if
               (i32.and
-                (i32.ge_u (i32.sub (local.get $lineEnd) (local.get $lhs)) (i32.const 5))
+                (i32.ge_u (local.get $len) (i32.const 5))
                 (i32.and
                   (i64.eq
                     (i64.and (i64.load (local.get $lhs)) (i64.const 0xffffffffff))
@@ -178,7 +156,8 @@
                 (call $emitGap (local.get $tok) (local.get $p))
 
                 (local.set $tok (local.get $p))
-                (local.set $p (call $diffSkipHex (local.get $p) (local.get $lineEnd)))
+                (local.set $p
+                  (call $scanHexRun (local.get $p) (i32.sub (local.get $lineEnd) (local.get $p))))
                 (if (i32.eq (local.get $p) (local.get $tok))
                   (then
                     (call $emitTok (enum.get $Token.none) (local.get $p) (local.get $lineEnd))
@@ -198,7 +177,8 @@
                 (local.set $p (i32.add (local.get $p) (i32.const 2)))
 
                 (local.set $tok (local.get $p))
-                (local.set $p (call $diffSkipHex (local.get $p) (local.get $lineEnd)))
+                (local.set $p
+                  (call $scanHexRun (local.get $p) (i32.sub (local.get $lineEnd) (local.get $p))))
                 (if (i32.eq (local.get $p) (local.get $tok))
                   (then
                     (call $emitTok (enum.get $Token.none) (local.get $p) (local.get $lineEnd))
@@ -217,7 +197,7 @@
             ;; Similarity metadata is a label, with its score and percent numeric.
             (if
               (i32.and
-                (i32.ge_u (i32.sub (local.get $lineEnd) (local.get $lhs)) (i32.const 16))
+                (i32.ge_u (local.get $len) (i32.const 16))
                 (i32.and
                   (i64.eq (i64.load (local.get $lhs)) (i64.const "similari"))
                   (i64.eq (i64.load offset=8 (local.get $lhs)) (i64.const "ty index"))))
@@ -246,7 +226,7 @@
             (local.set $p (i32.const 0))
             (if
               (i32.and
-                (i32.ge_u (i32.sub (local.get $lineEnd) (local.get $lhs)) (i32.const 13))
+                (i32.ge_u (local.get $len) (i32.const 13))
                 (i32.and
                   (i64.eq (i64.load (local.get $lhs)) (i64.const "new file"))
                   (i64.eq
@@ -255,7 +235,7 @@
               (then (local.set $p (i32.add (local.get $lhs) (i32.const 13)))))
             (if
               (i32.and
-                (i32.ge_u (i32.sub (local.get $lineEnd) (local.get $lhs)) (i32.const 17))
+                (i32.ge_u (local.get $len) (i32.const 17))
                 (i32.and
                   (i64.eq (i64.load (local.get $lhs)) (i64.const "deleted "))
                   (i32.and
@@ -264,7 +244,7 @@
               (then (local.set $p (i32.add (local.get $lhs) (i32.const 17)))))
             (if
               (i32.and
-                (i32.ge_u (i32.sub (local.get $lineEnd) (local.get $lhs)) (i32.const 8))
+                (i32.ge_u (local.get $len) (i32.const 8))
                 (i32.or
                   (i64.eq (i64.load (local.get $lhs)) (i64.const "new mode"))
                   (i64.eq (i64.load (local.get $lhs)) (i64.const "old mode"))))
@@ -283,7 +263,7 @@
             (if
               (i32.or
                 (i32.and
-                  (i32.ge_u (i32.sub (local.get $lineEnd) (local.get $lhs)) (i32.const 11))
+                  (i32.ge_u (local.get $len) (i32.const 11))
                   (i32.and
                     (i64.eq (i64.load (local.get $lhs)) (i64.const "rename f"))
                     (i32.eq
@@ -291,18 +271,18 @@
                       (i32.const "rom"))))
                 (i32.or
                   (i32.and
-                    (i32.ge_u (i32.sub (local.get $lineEnd) (local.get $lhs)) (i32.const 9))
+                    (i32.ge_u (local.get $len) (i32.const 9))
                     (i32.and
                       (i64.eq (i64.load (local.get $lhs)) (i64.const "rename t"))
                       (i32.eq (i32.load8_u offset=8 (local.get $lhs)) (i32.const "o"))))
                   (i32.or
                     (i32.and
-                      (i32.ge_u (i32.sub (local.get $lineEnd) (local.get $lhs)) (i32.const 9))
+                      (i32.ge_u (local.get $len) (i32.const 9))
                       (i32.and
                         (i64.eq (i64.load (local.get $lhs)) (i64.const "copy fro"))
                         (i32.eq (i32.load8_u offset=8 (local.get $lhs)) (i32.const "m"))))
                     (i32.and
-                      (i32.ge_u (i32.sub (local.get $lineEnd) (local.get $lhs)) (i32.const 7))
+                      (i32.ge_u (local.get $len) (i32.const 7))
                       (i64.eq
                         (i64.and (i64.load (local.get $lhs)) (i64.const 0x00ffffffffffffff))
                         (i64.const "copy to"))))))
@@ -312,7 +292,7 @@
 
             (if
               (i32.and
-                (i32.ge_u (i32.sub (local.get $lineEnd) (local.get $lhs)) (i32.const 12))
+                (i32.ge_u (local.get $len) (i32.const 12))
                 (i32.and
                   (i64.eq (i64.load (local.get $lhs)) (i64.const "Binary f"))
                   (i32.eq (i32.load offset=8 (local.get $lhs)) (i32.const "iles"))))

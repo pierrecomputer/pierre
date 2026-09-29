@@ -4,28 +4,29 @@
   (func $hlslByte (param $p i32) (result i32)
     (select (i32.load8_u (local.get $p)) (i32.const 0) (i32.lt_u (local.get $p) (global.get $end))))
 
-  ;; Group order is the dispatch order in $hlslWordHl below. The scalar
+  ;; Each group's value is its token, with the next-name capture of the
+  ;; declaration groups in the high byte (see $hlslWordHl). The scalar
   ;; families with open-ended suffixes - `float4x4`, `min16float2`,
   ;; `sampler2D`, `int16_t` - are prefix checks in $hlslTypeHl: their members
   ;; share hash features the table cannot separate. The capitalized resource
   ;; types such as `Texture2D` fall to the capitalization rule.
   (keyword-table $hlslWords $mem.hlslWords $mem.javaWords
-    (group "true" "false") ;; 1: booleans
-    (group ;; 2: control
+    (group $Token.boolean "true" "false") ;; 1: booleans
+    (group $Token.keyword.control ;; 2: control
       "if" "do" "for" "case" "else" "break" "while" "return" "switch" "default" "discard"
       "continue")
-    (group ;; 3: declaration, next name is a type
+    (group $Token.keyword.declaration+256 ;; 3: declaration, next name is a type
       "class" "struct" "cbuffer" "tbuffer" "typedef" "interface")
-    (group "namespace") ;; 4: declaration, next name is a namespace
-    (group ;; 5: scalar and opaque built-in types
+    (group $Token.keyword.declaration+512 "namespace") ;; 4: declaration, next name is a namespace
+    (group $Token.type.builtin ;; 5: scalar and opaque built-in types
       "int" "bool" "half" "uint" "void" "dword" "float" "double" "string" "vector" "matrix"
       "sampler" "sampler_state" "float16_t")
-    (group ;; 6: storage, interpolation, and layout qualifiers
+    (group $Token.keyword ;; 6: storage, interpolation, and layout qualifiers
       "in" "out" "pass" "const" "inout" "snorm" "unorm" "export" "inline" "linear" "sample"
       "shared" "static" "extern" "precise" "uniform" "centroid" "register" "volatile" "technique"
       "row_major" "packoffset" "groupshared" "column_major" "noperspective" "nointerpolation"
       "globallycoherent")
-    (group "this")) ;; 7: special variable
+    (group $Token.variable.special "this")) ;; 7: special variable
 
   ;; The built-in type families the table cannot hold, for a name that
   ;; missed it: `int16_t`-style widths, `sampler2D`, `min16float`, and the
@@ -82,7 +83,10 @@
           (then (local.set $stem (i32.sub (local.get $rhs) (i32.const 3)))))))
     (if (i32.eq (local.get $stem) (local.get $rhs))
       (then (return (enum.get $Token.none))))
-    (if (i32.eq (keyword-table.get $hlslWords (local.get $lhs) (local.get $stem)) (i32.const 5))
+    (if
+      (i32.eq
+        (keyword-table.value $hlslWords (local.get $lhs) (local.get $stem))
+        (enum.get $Token.type.builtin))
       (then (return (enum.get $Token.type.builtin))))
     (enum.get $Token.none))
 
@@ -90,29 +94,12 @@
   ;; 1=type, 2=namespace. -1 means an ordinary identifier.
   (func $hlslWordHl (param $lhs i32) (param $rhs i32) (result i32)
     (local $g i32)
-    (local $hl i32)
-    (local.set $g (keyword-table.get $hlslWords (local.get $lhs) (local.get $rhs)))
-    (if (i32.eqz (local.get $g))
+    (local.set $g (keyword-table.value $hlslWords (local.get $lhs) (local.get $rhs)))
+    (if (i32.lt_s (local.get $g) (i32.const 0))
       (then
-        (local.set $hl (call $hlslTypeHl (local.get $lhs) (local.get $rhs)))
-        (if (local.get $hl)
-          (then (return (local.get $hl))))
-        (return (i32.const -1))))
-    (if (i32.eq (local.get $g) (i32.const 1))
-      (then (return (enum.get $Token.boolean))))
-    (if (i32.eq (local.get $g) (i32.const 2))
-      (then (return (enum.get $Token.keyword.control))))
-    (if (i32.le_u (local.get $g) (i32.const 4))
-      (then
-        (return
-          (i32.or
-            (enum.get $Token.keyword.declaration)
-            (i32.shl (i32.sub (local.get $g) (i32.const 2)) (i32.const 8))))))
-    (if (i32.eq (local.get $g) (i32.const 5))
-      (then (return (enum.get $Token.type.builtin))))
-    (if (i32.eq (local.get $g) (i32.const 6))
-      (then (return (enum.get $Token.keyword))))
-    (enum.get $Token.variable.special))
+        (local.set $g (call $hlslTypeHl (local.get $lhs) (local.get $rhs)))
+        (return (select (local.get $g) (i32.const -1) (local.get $g)))))
+    (local.get $g))
 
   (func $hlslIsOp (param $c i32) (result i32)
     (byteset.get "!%&*+-/<=>?^|~" (local.get $c)))
@@ -142,8 +129,12 @@
     (local $lineHead i32)
     (local $atHead i32)
     (local $include i32)
+    ;; the quote of a string the previous chunk left open at an escaped line
+    ;; break, or 0: it resumes with C escape rules ($lexCStringResume)
+    (local $strCont i32)
     (local.set $lineHead (i32.const 1))
     (call $lexEmitLeadingContinuation)
+    (local.set $strCont (call $lexCStringResume (local.get $strCont)))
     (block $done
       (loop $next
         (local.set $gap (global.get $ptr))
@@ -236,7 +227,7 @@
 
         (if (i32.or (i32.eq (local.get $c) (i32.const 34)) (i32.eq (local.get $c) (i32.const 39)))
           (then
-            (call $lexString (local.get $c) (i32.const 0) (enum.get $Token.string))
+            (local.set $strCont (call $lexCString (enum.get $Token.string)))
             (local.set $member (i32.const 0))
             (local.set $afterType (i32.const 0))
             (br $next)))
@@ -313,15 +304,32 @@
                                         (local.set $hl (enum.get $Token.constant))
                                         (local.set $afterType (i32.const 0)))
                                       (else
-                                        (local.set $afterType
-                                          (i32.le_u
-                                            (i32.sub (i32.load8_u (local.get $lhs)) (i32.const "A"))
-                                            (i32.const 25)))
+                                        ;; A capitalized name is a type, except the
+                                        ;; declarator right after one (`float4x4
+                                        ;; ViewProj;`, D3D's PascalCase fields); a
+                                        ;; name opening or continuing a template
+                                        ;; argument list (`StructuredBuffer<Light>`)
+                                        ;; stays a type.
                                         (local.set $hl
                                           (select
                                             (enum.get $Token.type)
                                             (enum.get $Token.variable)
-                                            (local.get $afterType)))))))))))))))))
+                                            (i32.le_u
+                                              (i32.sub (i32.load8_u (local.get $lhs)) (i32.const "A"))
+                                              (i32.const 25))))
+                                        (if
+                                          (i32.and
+                                            (local.get $afterType)
+                                            (i32.eq (local.get $hl) (enum.get $Token.type)))
+                                          (then
+                                            (local.set $c (call $lexLineByteBefore (local.get $lhs)))
+                                            (if
+                                              (i32.and
+                                                (i32.ne (local.get $c) (i32.const "<"))
+                                                (i32.ne (local.get $c) (i32.const ",")))
+                                              (then (local.set $hl (enum.get $Token.variable))))))
+                                        (local.set $afterType
+                                          (i32.eq (local.get $hl) (enum.get $Token.type)))))))))))))))))
             (call $emitTok (local.get $hl) (local.get $lhs) (local.get $rhs))
             (local.set $member (i32.const 0))
             (br $next)))

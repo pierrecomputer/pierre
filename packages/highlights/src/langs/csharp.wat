@@ -9,21 +9,21 @@
   ;; and the length, which `while` shares, so $csWordHl matches it directly;
   ;; `unmanaged` collides with `unchecked` the same way and stays out, and
   ;; the rare `on` and `scoped` share their slot bits with `out` in every
-  ;; geometry that fits the range.
+  ;; geometry that fits the range. Groups 11-15 are contextual words that
+  ;; are ordinary names outside their syntax; see $csContextual.
   (keyword-table $csWords $mem.csharpWords $mem.cudaWords
     (group $Token.keyword.control ;; 1: control
       "if" "do" "for" "try" "case" "else" "goto" "lock" "when" "break" "catch" "throw" "while"
       "yield" "return" "switch" "checked" "default" "finally" "foreach" "continue" "unchecked")
     (group $Token.keyword.declaration+256 ;; 2: declaration, next name is a type
-      "enum" "class" "record" "struct" "delegate" "interface")
+      "enum" "class" "struct" "delegate" "interface")
     (group $Token.keyword.declaration+512 "namespace") ;; 3: declaration, next name is a namespace
     (group $Token.keyword.import+512 "using")     ;; 4: import
-    (group $Token.keyword.declaration ;; 5: declaration, modifiers, accessors, and query clauses
-      "by" "in" "add" "get" "let" "out" "ref" "set" "var" "file" "from" "init" "join" "into"
-      "async" "await" "const" "event" "fixed" "group" "sealed" "select" "static" "unsafe" "equals"
-      "extern" "global" "params" "public" "remove" "managed" "notnull" "orderby" "partial"
-      "private" "virtual" "abstract" "explicit" "implicit" "internal" "operator" "override"
-      "readonly" "required" "volatile" "ascending" "protected" "descending")
+    (group $Token.keyword.declaration ;; 5: declaration and modifiers
+      "in" "out" "ref" "var" "async" "await" "const" "event" "fixed" "sealed" "static" "unsafe"
+      "extern" "global" "params" "public" "managed" "notnull" "partial" "private" "virtual"
+      "abstract" "explicit" "implicit" "internal" "operator" "override" "readonly" "required"
+      "volatile" "protected")
     (group $Token.type.builtin ;; 6: built-in types
       "int" "bool" "byte" "char" "long" "nint" "uint" "void" "float" "nuint" "sbyte" "short"
       "ulong" "object" "string" "ushort" "decimal" "double" "dynamic")
@@ -31,11 +31,18 @@
     (group $Token.constant.builtin "null")            ;; 8: built-in constant
     (group $Token.variable.special "this" "base")     ;; 9: special variables
     (group $Token.keyword.operator ;; 10: word operators
-      "is" "as" "new" "typeof" "sizeof" "nameof" "stackalloc"))
+      "is" "as" "new" "typeof" "sizeof" "nameof" "stackalloc")
+    (group $Token.keyword.declaration+8448 "record") ;; 11: heads a declaration, next name is a type
+    (group $Token.keyword.declaration+8192 "file")   ;; 12: heads a declaration
+    (group $Token.keyword.declaration+2048 "from")   ;; 13: opens a query expression
+    (group $Token.keyword.declaration+1024 ;; 14: query clauses
+      "by" "let" "join" "into" "group" "select" "equals" "orderby" "ascending" "descending")
+    (group $Token.keyword.declaration+4096 "add" "get" "set" "init" "remove")) ;; 15: accessors
 
-  ;; Token in the low byte; the high byte selects the next-name capture:
-  ;; 1=type, 2=namespace - also after `using`. -1 means an ordinary
-  ;; identifier.
+  ;; Token in the low byte; bits 8-9 select the next-name capture: 1=type,
+  ;; 2=namespace - also after `using`. Bits 10-13 flag a contextual word:
+  ;; 1024 a query clause, 2048 `from`, 4096 an accessor, 8192 a declaration
+  ;; head. -1 means an ordinary identifier.
   (func $csWordHl (param $lhs i32) (param $rhs i32) (result i32)
     (local $hl i32)
     (local.set $hl (keyword-table.value $csWords (local.get $lhs) (local.get $rhs)))
@@ -51,6 +58,65 @@
               (i64.const "where")))
           (then (return (enum.get $Token.keyword.declaration))))))
     (local.get $hl))
+
+  ;; A contextual word's $kind when it is a keyword where it stands, else -1
+  ;; so it lexes as the name it is: `var file = …`, `foreach (var record in
+  ;; records)`, `set.Add(x)`. $p is the next non-blank byte on the line.
+  ;; - Query clauses need an open query ($query, set by `from`).
+  ;; - `from` needs a following name: `from x in xs`.
+  ;; - Accessors need a member position ($head: after `{`, `;`, `}`, `]`, or
+  ;;   a modifier) and a body, `;`, `=>`, or the line end after them.
+  ;; - `record`/`file` need a following word - `record Point(`, `record
+  ;;   struct`, `file sealed class` - other than `in`, `is`, `as`, or `with`:
+  ;;   `var record in records`, `record with { }`. Byte tests rather than a
+  ;;   word scan: a second identifier-scan call site in $hlCsharp would stop
+  ;;   the engine inlining the hot one.
+  (func $csContextual
+    (param $kind i32)
+    (param $p i32)
+    (param $query i32)
+    (param $head i32)
+    (result i32)
+    (local $c i32)
+    (local $w i32)
+    (local.set $c (call $csByte (local.get $p)))
+    (if (i32.and (local.get $kind) (i32.const 1024))
+      (then (return (select (local.get $kind) (i32.const -1) (local.get $query)))))
+    (if (i32.and (local.get $kind) (i32.const 2048))
+      (then
+        (return (select (local.get $kind) (i32.const -1) (call $lexIsIdentStart (local.get $c))))))
+    (if (i32.and (local.get $kind) (i32.const 4096))
+      (then
+        (if
+          (i32.and
+            (local.get $head)
+            (i32.or
+              (i32.or
+                (i32.or (i32.eqz (local.get $c)) (i32.eq (local.get $c) (i32.const ";")))
+                (i32.or
+                  (i32.eq (local.get $c) (i32.const "{"))
+                  (i32.or (i32.eq (local.get $c) (i32.const 10)) (i32.eq (local.get $c) (i32.const 13)))))
+              (i32.and
+                (i32.eq (local.get $c) (i32.const "="))
+                (i32.eq (call $csByte (i32.add (local.get $p) (i32.const 1))) (i32.const ">")))))
+          (then (return (local.get $kind))))
+        (return (i32.const -1))))
+    (if (i32.eqz (call $lexIsIdentStart (local.get $c)))
+      (then (return (i32.const -1))))
+    (if (i32.eqz (call $lexIsIdentContinue (call $csByte (i32.add (local.get $p) (i32.const 2)))))
+      (then
+        (local.set $w (i32.load16_u (local.get $p)))
+        (if
+          (i32.or
+            (i32.eq (local.get $w) (i32.const "in"))
+            (i32.or (i32.eq (local.get $w) (i32.const "is")) (i32.eq (local.get $w) (i32.const "as"))))
+          (then (return (i32.const -1))))))
+    (select
+      (i32.const -1)
+      (local.get $kind)
+      (i32.and
+        (i32.eq (i32.load (local.get $p)) (i32.const "with"))
+        (i32.eqz (call $lexIsIdentContinue (call $csByte (i32.add (local.get $p) (i32.const 4))))))))
 
   ;; Scan a string body from $ptr with the string's bytes since $seg still
   ;; unemitted. $kind is 1 for a regular literal - escapes, one line - 2 for
@@ -78,13 +144,19 @@
       (loop $scan
         ;; every byte before the next quote, backslash, line break, or - in
         ;; an interpolated literal - brace is plain body; each stop class
-        ;; is found with one SIMD hop
+        ;; is found with one SIMD hop. The brace search also stops at the
+        ;; next quote: past the literal's end it would walk to the next
+        ;; brace anywhere in the file, once per literal.
         (if (local.get $interp)
           (then
             (if (i32.ge_u (global.get $ptr) (local.get $stop))
               (then
                 (local.set $stop
-                  (call $lexFindEither (global.get $ptr) (i32.const "{") (i32.const "}"))))))
+                  (call $scanFind3
+                    (global.get $ptr)
+                    (i32.const 34)
+                    (i32.const "{")
+                    (i32.const "}"))))))
           (else (local.set $stop (global.get $end))))
         (global.set $ptr
           (call $scanFindSpecial
@@ -198,7 +270,11 @@
   ;; array, or qualified type - so the name before a `(` after it is a
   ;; definition, and $member is 1 after `.`, `?.`, `->`, or `::`. $attr is
   ;; 1 inside a `[...]` that opened a line, whose names are attributes, and
-  ;; $lineHead is 1 until the first token of a line. All are checkpointed.
+  ;; $lineHead is 1 until the first token of a line. $ctx feeds the
+  ;; contextual words in $csContextual: bit 0 is set where a member or
+  ;; accessor can start - after `{`, `;`, `}`, `]`, or a modifier. The upper
+  ;; bits count braces within a query, starting at 1, so an anonymous object
+  ;; does not end it. One local keeps the stream checkpoint small.
   (func $hlCsharp
     (local $c i32)
     (local $c2 i32)
@@ -220,6 +296,8 @@
     (local $attr i32)
     (local $lineHead i32)
     (local $atHead i32)
+    (local $ctx i32)
+    (local $wasHead i32)
     (local.set $lineHead (i32.const 1))
     (call $lexEmitLeadingContinuation)
     (block $done
@@ -265,15 +343,7 @@
 
         (local.set $gap (global.get $ptr))
         (call $scanWhitespace)
-        (if
-          (i32.lt_u
-            (call $scanFindSpecial
-              (local.get $gap)
-              (global.get $ptr)
-              (i32.const 10)
-              (i32.const 0)
-              (i32.const 1))
-            (global.get $ptr))
+        (if (call $lexGapHasBreak (local.get $gap) (global.get $ptr))
           (then
             (local.set $lineHead (i32.const 1))
             (local.set $attr (i32.const 0))))
@@ -319,6 +389,9 @@
             (br $next)))
         (local.set $atHead (local.get $lineHead))
         (local.set $lineHead (i32.const 0))
+        ;; a member position lasts one token; the branches below renew it
+        (local.set $wasHead (i32.and (local.get $ctx) (i32.const 1)))
+        (local.set $ctx (i32.and (local.get $ctx) (i32.const -2)))
 
         ;; a string opener with its `$`/`@` prefixes and `"""` is emitted at
         ;; once; its body is scanned at the top of the loop, where it can
@@ -374,16 +447,42 @@
             (local.set $rhs (global.get $ptr))
             (local.set $p (call $lexSkipSpaceAt (local.get $rhs)))
             ;; a member name is never a keyword: `x.select`, `this.value`
-            (local.set $kind
-              (select
-                (i32.const -1)
-                (call $csWordHl (local.get $lhs) (local.get $rhs))
-                (local.get $member)))
+            (local.set $kind (i32.const -1))
+            (if (i32.eqz (local.get $member))
+              (then (local.set $kind (call $csWordHl (local.get $lhs) (local.get $rhs)))))
+            (if (i32.gt_s (local.get $kind) (i32.const 1023))
+              (then
+                (local.set $kind
+                  (call $csContextual
+                    (local.get $kind)
+                    (local.get $p)
+                    (i32.and (local.get $ctx) (i32.const -2))
+                    (local.get $wasHead)))))
             (if (i32.ge_s (local.get $kind) (i32.const 0))
               (then
                 (local.set $hl (i32.and (local.get $kind) (i32.const 255)))
-                ;; a keyword either arms the next-name capture or ends it
-                (local.set $expect (i32.shr_u (local.get $kind) (i32.const 8)))
+                (if (i32.and (local.get $kind) (i32.const 2048))
+                  (then
+                    (if (i32.lt_u (local.get $ctx) (i32.const 2))
+                      (then (local.set $ctx (i32.or (local.get $ctx) (i32.const 2)))))))
+                ;; a keyword either arms the next-name capture or ends it;
+                ;; `using static` turns `using`'s namespace into capture 3,
+                ;; namespaces up to a type: `using static System.Math`
+                (if
+                  (i32.and
+                    (i32.eq (local.get $expect) (i32.const 2))
+                    (i32.and
+                      (i32.eq (i32.sub (local.get $rhs) (local.get $lhs)) (i32.const 6))
+                      (i64.eq
+                        (i64.and (i64.load (local.get $lhs)) (i64.const 0xffffffffffff))
+                        (i64.const "static"))))
+                  (then (local.set $expect (i32.const 3)))
+                  (else
+                    (local.set $expect
+                      (i32.and (i32.shr_u (local.get $kind) (i32.const 8)) (i32.const 3)))))
+                ;; a modifier keeps a member position: `private set;`
+                (if (i32.eq (local.get $kind) (enum.get $Token.keyword.declaration))
+                  (then (local.set $ctx (i32.or (local.get $ctx) (local.get $wasHead)))))
                 (local.set $afterType (i32.eq (local.get $hl) (enum.get $Token.type.builtin))))
               (else
                 (if (local.get $attr)
@@ -405,7 +504,11 @@
                           (select
                             (enum.get $Token.type)
                             (enum.get $Token.namespace)
-                            (i32.eq (local.get $expect) (i32.const 1))))
+                            (i32.or
+                              (i32.eq (local.get $expect) (i32.const 1))
+                              (i32.and
+                                (i32.eq (local.get $expect) (i32.const 3))
+                                (i32.ne (call $csByte (local.get $p)) (i32.const "."))))))
                         (local.set $afterType (i32.eq (local.get $expect) (i32.const 1)))
                         ;; a dotted namespace keeps its capture: `Demo.App`
                         (if
@@ -481,6 +584,22 @@
               (then (local.set $attr (local.get $atHead))))
             (if (i32.eq (local.get $c) (i32.const "]"))
               (then (local.set $attr (i32.const 0))))
+            ;; `{`, `}`, and an attribute's `]` start a member position; a
+            ;; block's end also ends any query in it
+            (local.set $ctx
+              (i32.or
+                (local.get $ctx)
+                (i32.or
+                  (i32.eq (local.get $c) (i32.const "{"))
+                  (i32.or
+                    (i32.eq (local.get $c) (i32.const "}"))
+                    (i32.eq (local.get $c) (i32.const "]"))))))
+            (if (i32.ge_u (local.get $ctx) (i32.const 2))
+              (then
+                (if (i32.eq (local.get $c) (i32.const "{"))
+                  (then (local.set $ctx (i32.add (local.get $ctx) (i32.const 2)))))
+                (if (i32.eq (local.get $c) (i32.const "}"))
+                  (then (local.set $ctx (i32.sub (local.get $ctx) (i32.const 2)))))))
             (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
             (if (local.get $interp)
               (then
@@ -525,7 +644,10 @@
             (local.set $member (i32.const 0))
             (local.set $expect (i32.const 0))
             (if (i32.eq (local.get $c) (i32.const ";"))
-              (then (local.set $afterType (i32.const 0))))
+              (then
+                (local.set $afterType (i32.const 0))
+                (if (i32.lt_u (local.get $ctx) (i32.const 4))
+                  (then (local.set $ctx (i32.const 1))))))
             (br $next)))
         (if (i32.eq (local.get $c) (i32.const ":"))
           (then
@@ -539,6 +661,8 @@
               (global.get $ptr))
             (local.set $member (i32.eq (local.get $c2) (i32.const ":")))
             (local.set $afterType (i32.const 0))
+            ;; a stale capture never crosses `:` onto the name after it
+            (local.set $expect (i32.const 0))
             (br $next)))
         ;; member access: `.`, `?.`, and `->`; `..` is a range
         (if
@@ -614,9 +738,14 @@
             (call $emitTok (enum.get $Token.operator) (local.get $lhs) (global.get $ptr))
             (local.set $member (i32.const 0))
             ;; the angles of a generic - `>>` closes two - and a nullable
-            ;; `?` keep the type pending; any other operator ends it
-            (if (i32.eqz (call $lexIsTypeGlue (local.get $lhs) (global.get $ptr)))
-              (then (local.set $afterType (i32.const 0))))
+            ;; `?` keep the type pending; any other operator ends it, and so
+            ;; does a spaced one, which type syntax never is: `IsValid ?
+            ;; Save()`, `Count > Limit()`
+            (if (call $lexIsTypeGlue (local.get $lhs) (global.get $ptr))
+              (then
+                (if (i32.ne (local.get $gap) (local.get $lhs))
+                  (then (local.set $afterType (i32.const 0)))))
+              (else (local.set $afterType (i32.const 0))))
             (br $next)))
 
         (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))

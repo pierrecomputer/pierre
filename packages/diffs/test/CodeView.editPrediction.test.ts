@@ -296,11 +296,19 @@ async function createFixture({
 
   viewer.setup(root);
   await renderItems(viewer, items);
+  // A cold highlighter can defer the first render beyond renderItems' single
+  // event-loop tick. Wait for the item and its editor before reading either.
+  await waitFor(
+    () => {
+      const rendered = viewer
+        .getRenderedItems()
+        .find((item) => item.id === 'a');
+      return rendered != null && findEditableContent(rendered.element) != null;
+    },
+    { timeout: EDITABLE_TIMEOUT }
+  );
   const renderedA = findRendered(viewer, 'a');
   expect(renderedA.type).toBe(itemType);
-  await waitFor(() => findEditableContent(renderedA.element) != null, {
-    timeout: EDITABLE_TIMEOUT,
-  });
   expect(findEditableContent(renderedA.element)).toBeInstanceOf(HTMLElement);
   const editorA = viewer.getEditor('a');
   assertDefined(editorA, 'expected an editor for item A');
@@ -333,6 +341,37 @@ async function showGhost(fixture: Fixture): Promise<void> {
 }
 
 describe('CodeView edit prediction ghost rows', () => {
+  for (const itemType of ['file', 'diff'] as const) {
+    test(`does not measure code rows just because ghost heights are cached (${itemType})`, async () => {
+      const fixture = await createFixture({ itemType });
+      try {
+        await showGhost(fixture);
+        const before = snapshotLayout(fixture.viewer, fixture.instanceA);
+        let measurements = 0;
+        const rows = fixture.elementA.shadowRoot?.querySelectorAll<HTMLElement>(
+          '[data-content] > [data-line]'
+        );
+        expect(rows?.length).toBeGreaterThan(0);
+        for (const row of rows ?? []) {
+          const measure = row.getBoundingClientRect.bind(row);
+          row.getBoundingClientRect = () => {
+            measurements++;
+            return measure();
+          };
+        }
+
+        fixture.instanceA.reconcileHeights();
+
+        expect(measurements).toBe(0);
+        expect(snapshotLayout(fixture.viewer, fixture.instanceA)).toEqual(
+          before
+        );
+      } finally {
+        await fixture.cleanup();
+      }
+    });
+  }
+
   test('folds ghost rows under a file item into the layout', async () => {
     const fixture = await createFixture();
     const { viewer, instanceA } = fixture;

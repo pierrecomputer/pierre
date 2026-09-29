@@ -457,9 +457,12 @@ void t.test('php: members, static access, builtins, and constants', () => {
   const html = distinctHl(
     "<?php\n$obj->prop->sub; $obj->method(); $obj?->m(); Cls::CONST; Cls::method(); static::y; strlen($s); array_map(fn($x) => $x, $a); count($a); true; false; null; TRUE; FALSE; NULL; $_GET['x'];"
   );
-  for (const p of ['prop', 'sub', 'CONST', 'y']) {
+  for (const p of ['prop', 'sub', 'y']) {
     assert.equal(exactColor(html, p), distinctColor('property'), p);
   }
+  // a class constant, and the class named before `::`
+  assert.equal(exactColor(html, 'CONST'), distinctColor('constant'));
+  assert.equal(exactColor(html, 'Cls'), distinctColor('type'));
   for (const m of ['method', 'm']) {
     assert.equal(exactColor(html, m), distinctColor('function.method'), m);
   }
@@ -517,3 +520,81 @@ void t.test(
     );
   }
 );
+
+void t.test(
+  'php: single-quoted strings escape only quote and backslash',
+  () => {
+    const code =
+      "<?php\n$re = '/^\\d+$/';\n$q = 'it\\'s \\\\ ok';\n$m = 'one \\n\ntwo \\'\nend';\n";
+    assert.deepEqual(tokenKinds('php', code), [
+      ['<?php', 'preproc'],
+      ['$re', 'variable'],
+      ['=', 'operator'],
+      ["'/^\\d+$/'", 'string'],
+      [';', 'punctuation.delimiter'],
+      ['$q', 'variable'],
+      ['=', 'operator'],
+      ["'it", 'string'],
+      ["\\'", 'string.escape'],
+      ['s', 'string'],
+      ['\\\\', 'string.escape'],
+      ["ok'", 'string'],
+      [';', 'punctuation.delimiter'],
+      ['$m', 'variable'],
+      ['=', 'operator'],
+      ["'one \\n", 'string'],
+      ['two', 'string'],
+      ["\\'", 'string.escape'],
+      ["end'", 'string'],
+      [';', 'punctuation.delimiter'],
+    ]);
+    assertLineFedParityOf('php', code);
+  }
+);
+
+void t.test('php: class names after new and before ::, and constants', () => {
+  const code =
+    '<?php\n$u = new User($id);\n$v = new \\App\\Post();\n$w = new class {};\necho User::class, self::X, PHP_EOL, Attribute::TARGET_CLASS;\n';
+  assert.deepEqual(tokenKinds('php', code), [
+    ['<?php', 'preproc'],
+    ['$u', 'variable'],
+    ['=', 'operator'],
+    ['new', 'keyword'],
+    ['User', 'type.class'],
+    ['(', 'punctuation.bracket'],
+    ['$id', 'variable'],
+    [')', 'punctuation.bracket'],
+    [';', 'punctuation.delimiter'],
+    ['$v', 'variable'],
+    ['=', 'operator'],
+    ['new', 'keyword'],
+    ['\\', 'operator'],
+    ['App', 'namespace'],
+    ['\\', 'operator'],
+    ['Post', 'type.class'],
+    ['()', 'punctuation.bracket'],
+    [';', 'punctuation.delimiter'],
+    ['$w', 'variable'],
+    ['=', 'operator'],
+    ['new', 'keyword'],
+    ['class', 'keyword.declaration'],
+    ['{}', 'punctuation.bracket'],
+    [';', 'punctuation.delimiter'],
+    ['echo', 'keyword.control'],
+    ['User', 'type'],
+    ['::', 'operator'],
+    ['class', 'property'],
+    [',', 'punctuation.delimiter'],
+    ['self', 'variable'],
+    ['::', 'operator'],
+    ['X', 'property'],
+    [',', 'punctuation.delimiter'],
+    ['PHP_EOL', 'constant'],
+    [',', 'punctuation.delimiter'],
+    ['Attribute', 'type'],
+    ['::', 'operator'],
+    ['TARGET_CLASS', 'constant'],
+    [';', 'punctuation.delimiter'],
+  ]);
+  assertLineFedParityOf('php', code);
+});

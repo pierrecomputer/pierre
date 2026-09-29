@@ -207,16 +207,26 @@
         ;; source has no * comments - a column-one * there is an operator on a
         ;; continuation line - and only takes a C separated from its text, so
         ;; assignments such as c = 1 and words such as contains remain
-        ;; ordinary code.
-        (if (i32.and (i32.eqz (local.get $column))
-              (i32.or
-                (i32.and (global.get $fortranFixed)
+        ;; ordinary code. Nested ifs keep the `=` lookahead off every other
+        ;; token: WAT evaluates all operands of i32.and.
+        (if (i32.eqz (local.get $column))
+          (then
+            (if
+              (if (result i32) (global.get $fortranFixed)
+                (then
                   (i32.or (i32.eq (local.get $c) (i32.const "*"))
                     (i32.eq (i32.or (local.get $c) (i32.const 32)) (i32.const "c"))))
-                (i32.and (i32.eq (i32.or (local.get $c) (i32.const 32)) (i32.const "c"))
-                  (i32.and (i32.eq (local.get $c2) (i32.const 32))
-                    (i32.ne (call $fortranByte (call $lexSkipSpaceAt (i32.add (local.get $lhs) (i32.const 1)))) (i32.const "="))))))
-          (then (call $lexLineComment (i32.const 1) (enum.get $Token.comment)) (br $next)))
+                (else
+                  (if (result i32)
+                    (i32.and (i32.eq (i32.or (local.get $c) (i32.const 32)) (i32.const "c"))
+                      (i32.eq (local.get $c2) (i32.const 32)))
+                    (then
+                      (i32.ne
+                        (call $fortranByte
+                          (call $lexSkipSpaceAt (i32.add (local.get $lhs) (i32.const 1))))
+                        (i32.const "=")))
+                    (else (i32.const 0)))))
+              (then (call $lexLineComment (i32.const 1) (enum.get $Token.comment)) (br $next)))))
         (if (i32.eq (local.get $c) (i32.const "#"))
           (then (call $lexLineComment (i32.const 1) (enum.get $Token.preproc)) (br $next)))
         (if (i32.or (i32.eq (local.get $c) (i32.const 34)) (i32.eq (local.get $c) (i32.const 39)))

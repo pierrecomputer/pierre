@@ -16,6 +16,7 @@ import {
   spansOf,
   type TestLang,
   textOf,
+  tokenKinds,
   wordColor,
 } from './_util';
 
@@ -439,4 +440,81 @@ void t.test('elixir: heredocs, sigils, and blocks stream line-fed', () => {
     'elixir',
     'x = """\na #{b}\n"""\n@doc """\nc\n"""\ny = ~S"""\nd\n"""\ndef f do\n  :ok\nend\n'
   );
+});
+
+void t.test('elixir: uppercase sigils let a backslash hide a delimiter', () => {
+  const code = 'x = ~S"a\\"b" <> y\nz = ~R/a\\/b/i';
+  assertLineFedParity('elixir', code);
+  assert.deepEqual(tokenKinds('elixir', code), [
+    ['x', 'variable'],
+    ['=', 'operator'],
+    ['~S"a\\"b"', 'string'],
+    ['<>', 'operator'],
+    ['y', 'variable'],
+    ['z', 'variable'],
+    ['=', 'operator'],
+    ['~R/a\\/b/i', 'string.regex'],
+  ]);
+});
+
+void t.test('elixir: a regex sigil across a line break resumes', () => {
+  // the one-line flag was read from the regex bit, so the scan stopped at
+  // the line break without advancing and never returned
+  const code = 'r = ~r/a\nb/ + 1\n';
+  assertLineFedParity('elixir', code);
+  assert.deepEqual(tokenKinds('elixir', code), [
+    ['r', 'variable'],
+    ['=', 'operator'],
+    ['~r/a', 'string.regex'],
+    ['b/', 'string.regex'],
+    ['+', 'operator'],
+    ['1', 'number'],
+  ]);
+});
+
+void t.test('elixir: escapes before an interpolation in a long body', () => {
+  // the next `#` found before the escapes is reused rather than searched
+  // for again after each one
+  const code = 'x = """\na \\n b #{c} \\t d\n"""\ny';
+  assertLineFedParity('elixir', code);
+  assert.deepEqual(tokenKinds('elixir', code), [
+    ['x', 'variable'],
+    ['=', 'operator'],
+    ['"""', 'string'],
+    ['a', 'string'],
+    ['\\n', 'string.escape'],
+    ['b', 'string'],
+    ['#{', 'punctuation.special'],
+    ['c', 'variable'],
+    ['}', 'punctuation.special'],
+    ['\\t', 'string.escape'],
+    ['d', 'string'],
+    ['"""', 'string'],
+    ['y', 'variable'],
+  ]);
+});
+
+void t.test('elixir: character codes and quoted atoms', () => {
+  const code = 'c = ?é + ?\\n + ?\\\\ + ?ab\ne = :\'quoted atom\' + :"a#{b}c"';
+  assertLineFedParity('elixir', code);
+  assert.deepEqual(tokenKinds('elixir', code), [
+    ['c', 'variable'],
+    ['=', 'operator'],
+    ['?é', 'string.special'],
+    ['+', 'operator'],
+    ['?\\n', 'string.special'],
+    ['+', 'operator'],
+    ['?\\\\', 'string.special'],
+    ['+ ?', 'operator'],
+    ['ab', 'variable'],
+    ['e', 'variable'],
+    ['=', 'operator'],
+    [":'quoted atom'", 'string.special.symbol'],
+    ['+', 'operator'],
+    [':"a', 'string.special.symbol'],
+    ['#{', 'punctuation.special'],
+    ['b', 'variable'],
+    ['}', 'punctuation.special'],
+    ['c"', 'string.special.symbol'],
+  ]);
 });

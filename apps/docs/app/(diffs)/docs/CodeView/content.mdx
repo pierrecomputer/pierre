@@ -56,12 +56,12 @@ immutability or deep equality checks, which can quickly become expensive.
 - CodeView-level options such as `layout`, `itemMetrics`, `stickyHeaders`,
   `pointerEventsOnScroll`, and `smoothScrollSettings` allow you to configure the
   scroll view. All other options are shared between all files and diffs.
-- `loadDiffFiles` is one of those shared diff options. It applies to diff items
-  rendered inside `CodeView`, which is useful for large patch-driven review UIs
-  where full file contents should be fetched only when users expand unchanged
-  context. Hydration updates the existing `fileDiff` object in place, so keep
-  its identity stable when the hydrated metadata should persist across later
-  renders.
+- `loadDiffFiles` is one of those shared diff options. It is required whenever a
+  partial diff item needs its full contents: editing, `expandUnchanged`,
+  `expandHunk`, or replacing an editing item with another partial diff. Without
+  it those paths throw. Hydration updates the existing `fileDiff` object in
+  place, so keep its identity stable when the hydrated metadata should persist
+  across later renders.
 
 ### Editing
 
@@ -75,6 +75,14 @@ the owning item and its attached editor.
 session ends. Return `'accept'` to install `nextItem`; a controlled component
 must also mirror it into its own state. Return `'reject'` to restore the latest
 external item. A missing handler will automatically reject.
+
+A partial diff item in edit mode starts loading its full files when it renders
+(in view, not collapsed). If it scrolls out during the load, CodeView keeps the
+result and primes its highlighting without rendering the item. The editor
+attaches once a load completes while the item is rendered. Until then
+`getEditor(itemId)` returns `undefined`, and `onAttach` runs after the editor's
+first render sync. A partial edit item without `loadDiffFiles` throws from
+`render()` once it renders.
 
 Collapsing or scrolling an item out of view suspends its session rather than
 completing it. Disabling editing, removing an item, `reset()`, `cleanUp()`, and

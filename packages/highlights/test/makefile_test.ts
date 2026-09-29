@@ -221,3 +221,86 @@ void t.test(
     checkInvariants(lexer.hl, `${'$('.repeat(70)}x${')'.repeat(70)}\n`);
   }
 );
+
+void t.test(
+  'makefile: target-specific variables, `else ifeq`, and `\\#`',
+  () => {
+    const code =
+      'debug: CFLAGS += -g -O0\nifeq ($(OS),Windows)\n  X = 1\nelse ifeq ($(OS),Linux)\n  X = 2\nendif\ny = b\\#c # real comment\n';
+    assertLineFedParity('makefile', code);
+    assert.deepEqual(tokenKinds('makefile', code), [
+      ['debug', 'function'],
+      [':', 'punctuation.delimiter'],
+      ['CFLAGS', 'variable'],
+      ['+=', 'operator'],
+      ['-g -O0', null],
+      ['ifeq', 'keyword.control'],
+      ['(', 'punctuation.bracket'],
+      ['$(', 'punctuation.special'],
+      ['OS', 'variable'],
+      [')', 'punctuation.special'],
+      [',', 'punctuation.delimiter'],
+      ['Windows', null],
+      [')', 'punctuation.bracket'],
+      ['X', 'variable'],
+      ['=', 'operator'],
+      ['1', null],
+      ['else ifeq', 'keyword.control'],
+      ['(', 'punctuation.bracket'],
+      ['$(', 'punctuation.special'],
+      ['OS', 'variable'],
+      [')', 'punctuation.special'],
+      [',', 'punctuation.delimiter'],
+      ['Linux', null],
+      [')', 'punctuation.bracket'],
+      ['X', 'variable'],
+      ['=', 'operator'],
+      ['2', null],
+      ['endif', 'keyword.control'],
+      ['y', 'variable'],
+      ['=', 'operator'],
+      ['b', null],
+      ['\\#', 'string.escape'],
+      ['c', null],
+      ['# real comment', 'comment'],
+    ]);
+    // a substitution reference's `=` keeps an ordinary rule
+    assert.deepEqual(
+      tokenKinds('makefile', 'app: $(SRCS:.c=.o) lib.a\n\tcc -o $@\n'),
+      [
+        ['app', 'function'],
+        [':', 'punctuation.delimiter'],
+        ['$(', 'punctuation.special'],
+        ['SRCS', 'variable'],
+        [':.c=.o', null],
+        [')', 'punctuation.special'],
+        ['lib.a', null],
+        ['cc', 'function'],
+        ['-o', null],
+        ['$@', 'variable.special'],
+      ]
+    );
+  }
+);
+
+void t.test('makefile: line breaks in gaps, CR included, start lines', () => {
+  // the gap scan finds the last CR or LF; a lone CR also ends a line
+  for (const code of [
+    'a: b\r\n\tcc -o $@\r\nc = 1\r\n',
+    'a: b\r\tcc -o $@\rc = 1\r',
+    'x = é ü\n\n\n  \ny: z\n',
+  ]) {
+    assertLineFedParity('makefile', code);
+    checkInvariants(lexer.hl, code);
+  }
+  assert.deepEqual(tokenKinds('makefile', 'a: b\r\tcc x\rc = 1\r'), [
+    ['a', 'function'],
+    [':', 'punctuation.delimiter'],
+    ['b', null],
+    ['cc', 'function'],
+    ['x', null],
+    ['c', 'variable'],
+    ['=', 'operator'],
+    ['1', null],
+  ]);
+});

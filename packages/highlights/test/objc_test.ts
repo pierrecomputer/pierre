@@ -432,3 +432,18 @@ void t.test(
     );
   }
 );
+
+void t.test('objc: C hex and octal escapes are one escape each', () => {
+  assert.deepEqual(tokenKinds('objc', 'NSLog(@"\\x1b[31m\\033[0m");'), [
+    ['NSLog', 'function'],
+    ['(', 'punctuation.bracket'],
+    ['@"', 'string'],
+    ['\\x1b', 'string.escape'],
+    ['[31m', 'string'],
+    ['\\033', 'string.escape'],
+    ['[0m"', 'string'],
+    [')', 'punctuation.bracket'],
+    [';', 'punctuation.delimiter'],
+  ]);
+  assertLineFedParity('objc', 'NSString *s = @"ab\\\n\\x41cd";\nint y;\n');
+});

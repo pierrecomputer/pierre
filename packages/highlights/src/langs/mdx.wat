@@ -200,31 +200,7 @@
             (if (i32.eq (local.get $fence) (i32.const 32))
               (then (local.set $q (i32.add (local.get $q) (i32.const 1))))
               (else
-                (if
-                  (i32.or
-                    (i32.eq (local.get $fence) (i32.const "-"))
-                    (i32.or
-                      (i32.eq (local.get $fence) (i32.const "+"))
-                      (i32.eq (local.get $fence) (i32.const "*"))))
-                  (then (local.set $q (i32.add (local.get $q) (i32.const 1))))
-                  (else
-                    (block $digitsDone
-                      (loop $digits
-                        (br_if $digitsDone (i32.ge_u (local.get $q) (global.get $end)))
-                        (br_if $digitsDone
-                          (i32.eqz (call $lexIsDigit (i32.load8_u (local.get $q)))))
-                        (local.set $q (i32.add (local.get $q) (i32.const 1)))
-                        (br $digits)))
-                    (if
-                      (i32.and
-                        (i32.gt_u (local.get $q) (local.get $p))
-                        (i32.and
-                          (i32.lt_u (local.get $q) (global.get $end))
-                          (i32.or
-                            (i32.eq (i32.load8_u (local.get $q)) (i32.const "."))
-                            (i32.eq (i32.load8_u (local.get $q)) (i32.const ")")))))
-                      (then (local.set $q (i32.add (local.get $q) (i32.const 1))))
-                      (else (local.set $q (local.get $p))))))
+                (local.set $q (call $markdownListMarkerEnd (local.get $p)))
                 ;; a list marker counts only with a blank after it
                 (br_if $prefixDone (i32.eq (local.get $q) (local.get $p)))
                 (br_if $prefixDone
@@ -260,6 +236,92 @@
     (if (i32.ge_u (local.get $close) (global.get $end))
       (then (return (global.get $end))))
     (call $markdownAfterLine (call $markdownLineEnd (local.get $close))))
+
+  ;; When the line at $p opens an MDX ESM block - `import` or `export` at the
+  ;; very line start, then a blank, `{`, or `*` - return 1. Otherwise return 0.
+  (func $mdxEsmStart (param $p i32) (result i32)
+    (local $c i32)
+    (local $word i32)
+    (if (i32.gt_u (i32.add (local.get $p) (i32.const 7)) (global.get $end))
+      (then (return (i32.const 0))))
+    (local.set $word (i32.load (local.get $p)))
+    (if
+      (i32.eqz
+        (i32.or
+          (i32.and
+            (i32.eq (local.get $word) (i32.const "impo"))
+            (i32.eq (i32.load16_u offset=4 (local.get $p)) (i32.const "rt")))
+          (i32.and
+            (i32.eq (local.get $word) (i32.const "expo"))
+            (i32.eq (i32.load16_u offset=4 (local.get $p)) (i32.const "rt")))))
+      (then (return (i32.const 0))))
+    (local.set $c (i32.load8_u offset=6 (local.get $p)))
+    (if
+      (i32.eqz
+        (i32.or
+          (i32.or (i32.eq (local.get $c) (i32.const 32)) (i32.eq (local.get $c) (i32.const 9)))
+          (i32.or (i32.eq (local.get $c) (i32.const "{")) (i32.eq (local.get $c) (i32.const "*")))))
+      (then (return (i32.const 0))))
+    (i32.const 1))
+
+  ;; Lex ESM line by line until a blank line outside an open JS construct.
+  ;; The TSX stream state owns strings, comments, regexes, and bracket depth;
+  ;; a second byte scanner would disagree about brackets inside literals.
+  (func $mdxEsmRange (param $from i32) (param $resume i32) (result i32)
+    (local $lineEnd i32)
+    (local $p i32)
+    (local $saveEof i32)
+    (local $saveStreaming i32)
+    (local.set $saveEof (global.get $eof))
+    (local.set $saveStreaming (global.get $streaming))
+    (global.set $streaming (i32.const 1))
+    (block $done
+      (loop $lines
+        (br_if $done (i32.ge_u (local.get $from) (global.get $end)))
+        (local.set $lineEnd (call $markdownLineEnd (local.get $from)))
+        (local.set $p (call $lexSkipSpaceAt (local.get $from)))
+        (if (local.get $resume)
+          (then
+            (br_if $done
+              (i32.and
+                (i32.eq (local.get $p) (local.get $lineEnd))
+                (i32.eqz
+                  (i32.or
+                    (i32.or (global.get $brkSp) (global.get $jsxSp))
+                    (i32.or (global.get $tsxStreamMode) (global.get $jsTemplateLexSp))))))))
+        (local.set $p (call $markdownAfterLine (local.get $lineEnd)))
+        (global.set $eof (local.get $p))
+        (call $markdownCodeRange
+          (enum.get $Language.tsx)
+          (local.get $from)
+          (local.get $p)
+          (local.get $resume))
+        (local.set $resume (global.get $markdownBodyRan))
+        (local.set $from (local.get $p))
+        (br $lines)))
+    (global.set $eof (local.get $saveEof))
+    (global.set $streaming (local.get $saveStreaming))
+    (if (i32.and (local.get $saveStreaming) (i32.eq (local.get $from) (global.get $end)))
+      (then
+        (call $markdownFenceSet
+          (i32.const 1)
+          (i32.const 0)
+          (i32.or (enum.get $Language.tsx) (i32.shl (local.get $resume) (i32.const 8)))))
+      (else (call $markdownClearEmbeddedStream)))
+    (global.set $ptr (local.get $from))
+    (local.get $from))
+
+  ;; Resume the ESM block stored under pseudo fence byte 1.
+  (func $mdxEsmResume (param $reg i32) (result i32)
+    (if
+      (i32.eq
+        (call $mdxEsmRange
+          (global.get $ptr)
+          (i32.ne (i32.and (local.get $reg) (i32.const 0x100)) (i32.const 0)))
+        (global.get $end))
+      (then (return (i32.const 1))))
+    (call $markdownFenceSet (i32.const 0) (i32.const 0) (i32.const 0))
+    (i32.const 0))
 
   ;; Does the `<` at $p plausibly open a JSX tag whose `>` arrives in a later
   ;; stream chunk? Everything after the tag name up to $end must read as
@@ -334,46 +396,31 @@
     (local.set $noClose (i32.const 0))
     ;; Keep inherited Markdown YAML front matter opaque to MDX braces/angles.
     ;; Streaming also demands the first chunk, as the markdown lexer does.
-    (if
-      (i32.and
-        (i32.and
-          (i32.eq (global.get $ptr) (global.get $srcBase))
-          (i32.or (i32.eqz (global.get $streaming)) (global.get $streamReset)))
-        (i32.and
-          (i32.le_u (i32.add (global.get $ptr) (i32.const 3)) (global.get $end))
-          (i32.eq (i32.and (i32.load (global.get $ptr)) (i32.const 0xffffff)) (i32.const "---"))))
+    (local.set $p (call $frontMatterOpen))
+    (if (local.get $p)
       (then
-        (local.set $lineEnd (call $markdownLineEnd (global.get $ptr)))
-        (if (i32.eq (local.get $lineEnd) (i32.add (global.get $ptr) (i32.const 3)))
-          (then
-            (local.set $p (call $markdownAfterLine (local.get $lineEnd)))
-            (local.set $to (global.get $end))
-            (block $frontDone
-              (loop $front
-                (br_if $frontDone (i32.ge_u (local.get $p) (global.get $end)))
-                (local.set $lineEnd (call $markdownLineEnd (local.get $p)))
-                (if
-                  (i32.and
-                    (i32.eq (i32.sub (local.get $lineEnd) (local.get $p)) (i32.const 3))
-                    (i32.eq
-                      (i32.and (i32.load (local.get $p)) (i32.const 0xffffff))
-                      (i32.const "---")))
-                  (then
-                    (local.set $to (call $markdownAfterLine (local.get $lineEnd)))
-                    (br $frontDone)))
-                (local.set $p (call $markdownAfterLine (local.get $lineEnd)))
-                (br $front)))
-            (call $mdxMarkdownRange (global.get $ptr) (local.get $to))))))
+        (local.set $to (call $frontMatterClose (local.get $p)))
+        (if (i32.lt_u (local.get $to) (global.get $end))
+          (then (local.set $to (call $markdownAfterLine (call $markdownLineEnd (local.get $to))))))
+        (call $mdxMarkdownRange (global.get $ptr) (local.get $to))))
     (local.set $from (global.get $ptr))
     (local.set $p (global.get $ptr))
     (local.set $fenceAt (global.get $ptr))
     (block $done
       (loop $scan
         (local.set $p (call $lexFindEither (local.get $p) (i32.const "{") (i32.const "<")))
-        (br_if $done (i32.ge_u (local.get $p) (global.get $end)))
-        ;; Walk whole lines up to the hit, skipping fenced blocks. `$fenceAt`
-        ;; only moves forward, so each line is examined once across the scan.
+        ;; Walk whole lines up to the hit, or to the end when there is none,
+        ;; skipping fenced blocks and lexing ESM blocks. `$fenceAt` only
+        ;; moves forward, so each line is examined once across the scan, and
+        ;; lines before $from, which a JSX tag or expression range already
+        ;; covered, are not examined at all: the walk resumes at the first
+        ;; line that starts at or after $from.
         (local.set $inFence (i32.const 0))
+        (if (i32.lt_u (local.get $fenceAt) (local.get $from))
+          (then
+            (local.set $fenceAt
+              (call $markdownAfterLine
+                (call $markdownLineEnd (i32.sub (local.get $from) (i32.const 1)))))))
         (block $fenceChecked
           (loop $fenceLines
             (br_if $fenceChecked (i32.gt_u (local.get $fenceAt) (local.get $p)))
@@ -387,41 +434,43 @@
                     (local.set $inFence (i32.const 1))
                     (br $fenceChecked))))
               (else
+                ;; An `import`/`export` line is JavaScript up to a blank
+                ;; line. A hit past the block stays valid, so the next search
+                ;; starts there: restarting at the block end would rescan to
+                ;; $end after every block of a hit-free tail.
+                (if (call $mdxEsmStart (local.get $fenceAt))
+                  (then
+                    (call $mdxMarkdownRange (local.get $from) (local.get $fenceAt))
+                    (local.set $to (call $mdxEsmRange (local.get $fenceAt) (i32.const 0)))
+                    (local.set $from (local.get $to))
+                    (if (i32.lt_u (local.get $p) (local.get $to))
+                      (then (local.set $p (local.get $to))))
+                    (local.set $fenceAt (local.get $to))
+                    (br $scan)))
                 (local.set $fenceAt
                   (call $markdownAfterLine (call $markdownLineEnd (local.get $fenceAt))))))
             (br $fenceLines)))
+        (br_if $done (i32.ge_u (local.get $p) (global.get $end)))
         (if (local.get $inFence)
           (then
             (local.set $p (local.get $fenceAt))
             (br $scan)))
         (if (i32.eq (i32.load8_u (local.get $p)) (i32.const "{"))
           (then
-            (local.set $to (call $tsxExpressionEnd (local.get $p) (local.get $p)))
+            ;; one pass, braces included: the TSX lexer stops at the outer
+            ;; `}` itself, and an expression still open at a chunk end
+            ;; streams as region 8
             (call $mdxMarkdownRange (local.get $from) (local.get $p))
-            (if
-              (i32.and
-                (global.get $streaming)
-                (i32.and
-                  (i32.eq (local.get $to) (global.get $end))
-                  (i32.or
-                    (i32.eq (local.get $to) (local.get $p))
-                    (i32.ne
-                      (i32.load8_u (i32.sub (local.get $to) (i32.const 1)))
-                      (i32.const "}")))))
+            (global.set $ptr (local.get $p))
+            (if (call $hlTsxExpression (i32.const 1) (i32.const 1) (i32.const 8) (i32.const 0))
               (then
                 (call $emitTok
                   (enum.get $Token.punctuation.bracket)
-                  (local.get $p)
-                  (i32.add (local.get $p) (i32.const 1)))
-                (global.set $ptr (global.get $end))
-                (call $streamSetRegion (i32.const 8))
-                (global.set $ptr (i32.add (local.get $p) (i32.const 1)))
-                (drop (call $hlTsxExpressionStream (i32.const 1) (i32.const 1)))
-                (global.set $ptr (global.get $end))
-                (global.set $streamRegionStarted (i32.const 1)))
-              (else (call $mdxTsxRange (local.get $p) (local.get $to))))
-            (local.set $from (local.get $to))
-            (local.set $p (local.get $to))
+                  (global.get $ptr)
+                  (i32.add (global.get $ptr) (i32.const 1)))
+                (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))))
+            (local.set $from (global.get $ptr))
+            (local.set $p (global.get $ptr))
             (br $scan)))
         (if (i32.eq (i32.load8_u (local.get $p)) (i32.const "<"))
           (then
@@ -456,14 +505,16 @@
                 (local.set $from (local.get $to))
                 (local.set $p (local.get $to))
                 (br $scan)))
+            ;; the back and forward scans run only for a streamed `<name`
             (if
-              (i32.and
-                (global.get $streaming)
+              (if (result i32)
                 (i32.and
-                  (i32.lt_u (i32.add (local.get $p) (i32.const 1)) (global.get $end))
+                  (global.get $streaming)
                   (i32.and
-                    (call $lexIsIdentStart (i32.load8_u offset=1 (local.get $p)))
-                    (call $mdxTagStartContinues (local.get $p)))))
+                    (i32.lt_u (i32.add (local.get $p) (i32.const 1)) (global.get $end))
+                    (call $lexIsIdentStart (i32.load8_u offset=1 (local.get $p)))))
+                (then (call $mdxTagStartContinues (local.get $p)))
+                (else (i32.const 0)))
               (then
                 (call $mdxMarkdownRange (local.get $from) (local.get $p))
                 (global.set $ptr (global.get $end))

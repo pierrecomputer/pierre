@@ -97,6 +97,25 @@
         (br $back)))
     (i32.sub (call $yamlSkipHorizontal (local.get $p)) (local.get $p)))
 
+  ;; The end of a block scalar body starting at $p: every following line that
+  ;; is blank, or indented deeper than $indent (the introducing line's
+  ;; indentation), belongs to it.
+  (func $yamlBlockBodyEnd (param $p i32) (param $indent i32) (result i32)
+    (local $col i32)
+    (local $lineEnd i32)
+    (block $done
+      (loop $scan
+        (br_if $done (i32.ge_u (local.get $p) (global.get $end)))
+        (local.set $col (call $yamlSkipHorizontal (local.get $p)))
+        (local.set $lineEnd (call $lexFindEither (local.get $col) (i32.const 10) (i32.const 13)))
+        (br_if $done
+          (i32.and
+            (i32.ne (local.get $col) (local.get $lineEnd))
+            (i32.le_u (i32.sub (local.get $col) (local.get $p)) (local.get $indent))))
+        (local.set $p (call $yamlAfterLine (local.get $lineEnd)))
+        (br $scan)))
+    (local.get $p))
+
   ;; `|` and `>` open a block scalar: every following line that is blank or
   ;; indented deeper than the introducing line is literal text, so YAML rules
   ;; must not apply to it. Returns 1 when a block scalar was consumed, and 0
@@ -104,7 +123,7 @@
   (func $yamlBlockScalar (result i32)
     (local $bodyEnd i32)
     (local $c i32)
-    (local $col i32)
+    (local $comment i32)
     (local $indent i32)
     (local $lhs i32)
     (local $lineEnd i32)
@@ -125,8 +144,19 @@
               (i32.le_u (i32.sub (local.get $c) (i32.const "1")) (i32.const 8)))))
         (local.set $p (i32.add (local.get $p) (i32.const 1)))
         (br $mod)))
-    ;; the header has to end the line; anything else is an ordinary delimiter
+    ;; the header has to end the line, optionally with a comment after a
+    ;; blank (`run: | # install`); anything else is an ordinary delimiter
     (local.set $lineEnd (call $yamlSkipHorizontal (local.get $p)))
+    (local.set $comment (local.get $lineEnd))
+    (if
+      (i32.and
+        (i32.gt_u (local.get $lineEnd) (local.get $p))
+        (i32.lt_u (local.get $lineEnd) (global.get $end)))
+      (then
+        (if (i32.eq (i32.load8_u (local.get $lineEnd)) (i32.const "#"))
+          (then
+            (local.set $lineEnd
+              (call $lexFindEither (local.get $lineEnd) (i32.const 10) (i32.const 13)))))))
     (if
       (i32.and
         (i32.lt_u (local.get $lineEnd) (global.get $end))
@@ -136,23 +166,11 @@
       (then (return (i32.const 0))))
     (local.set $indent (call $yamlLineIndent (local.get $lhs)))
     (call $emitTok (enum.get $Token.punctuation.delimiter) (local.get $lhs) (local.get $p))
-    (call $emitGap (local.get $p) (local.get $lineEnd))
+    (call $emitGap (local.get $p) (local.get $comment))
+    (call $emitTok (enum.get $Token.comment) (local.get $comment) (local.get $lineEnd))
     (global.set $ptr (call $yamlAfterLine (local.get $lineEnd)))
     (call $emitGap (local.get $lineEnd) (global.get $ptr))
-    (local.set $bodyEnd (global.get $ptr))
-    (block $scanDone
-      (loop $scan
-        (br_if $scanDone (i32.ge_u (local.get $bodyEnd) (global.get $end)))
-        (local.set $col (call $yamlSkipHorizontal (local.get $bodyEnd)))
-        (local.set $lineEnd (call $lexFindEither (local.get $col) (i32.const 10) (i32.const 13)))
-        ;; a blank line always belongs to the body; a filled one only when it is
-        ;; indented deeper than the line that opened the block
-        (br_if $scanDone
-          (i32.and
-            (i32.ne (local.get $col) (local.get $lineEnd))
-            (i32.le_u (i32.sub (local.get $col) (local.get $bodyEnd)) (local.get $indent))))
-        (local.set $bodyEnd (call $yamlAfterLine (local.get $lineEnd)))
-        (br $scan)))
+    (local.set $bodyEnd (call $yamlBlockBodyEnd (global.get $ptr) (local.get $indent)))
     (call $emitTok (enum.get $Token.string) (global.get $ptr) (local.get $bodyEnd))
     (global.set $ptr (local.get $bodyEnd))
     (if (i32.and (global.get $streaming) (i32.eq (global.get $ptr) (global.get $end)))
@@ -165,23 +183,8 @@
   ;; indented than its header. Returns one when the whole chunk remains scalar.
   (func $yamlStreamResume (result i32)
     (local $bodyEnd i32)
-    (local $col i32)
-    (local $lhs i32)
-    (local $lineEnd i32)
-    (local.set $lhs (global.get $ptr))
-    (local.set $bodyEnd (global.get $ptr))
-    (block $done
-      (loop $scan
-        (br_if $done (i32.ge_u (local.get $bodyEnd) (global.get $end)))
-        (local.set $col (call $yamlSkipHorizontal (local.get $bodyEnd)))
-        (local.set $lineEnd (call $lexFindEither (local.get $col) (i32.const 10) (i32.const 13)))
-        (br_if $done
-          (i32.and
-            (i32.ne (local.get $col) (local.get $lineEnd))
-            (i32.le_u (i32.sub (local.get $col) (local.get $bodyEnd)) (global.get $streamA))))
-        (local.set $bodyEnd (call $yamlAfterLine (local.get $lineEnd)))
-        (br $scan)))
-    (call $emitTok (enum.get $Token.string) (local.get $lhs) (local.get $bodyEnd))
+    (local.set $bodyEnd (call $yamlBlockBodyEnd (global.get $ptr) (global.get $streamA)))
+    (call $emitTok (enum.get $Token.string) (global.get $ptr) (local.get $bodyEnd))
     (global.set $ptr (local.get $bodyEnd))
     (if (i32.eq (global.get $ptr) (global.get $end))
       (then (return (i32.const 1))))
@@ -210,37 +213,49 @@
         (i32.eq (local.get $c) (i32.const ","))
         (i32.or (i32.eq (local.get $c) (i32.const "]")) (i32.eq (local.get $c) (i32.const "}"))))))
 
-  ;; Advance $ptr over plain-scalar bytes: stop at a blank, a flow indicator
-  ;; (`,` `[` `]` `{` `}`), or a `:` that $yamlColonEnds accepts - 16 bytes
-  ;; per step. A `:` inside the scalar, as in `http://x`, resumes the hop.
-  ;; Wide loads may pass $end into the buffer slack; those bits are masked.
+  ;; Advance $ptr over plain-scalar bytes, 16 per step. A plain scalar runs
+  ;; to its line end, a `:` that $yamlColonEnds accepts, or a `#` after a
+  ;; blank; inside a flow collection the flow indicators (`,` `[` `]` `{` `}`)
+  ;; end it as well. Inner blanks belong to the scalar (`Run tests, lint`,
+  ;; `full name: x`, `${{ matrix.os }}`), trailing ones do not. The scan never
+  ;; retreats before where it started, so a caller can resume it after a
+  ;; number. Wide loads may pass $end into the buffer slack; those bits are
+  ;; masked.
   (func $yamlScanPlain (param $flow i32)
+    (local $c i32)
     (local $mask i32)
     (local $rem i32)
+    (local $start i32)
+    (local $v v128)
     (local $w v128)
+    (local.set $start (global.get $ptr))
     (block $done
       (loop $wide
         (br_if $done (i32.ge_u (global.get $ptr) (global.get $end)))
         (local.set $w (v128.load (global.get $ptr)))
-        (local.set $mask
-          (i8x16.bitmask
+        (local.set $v
+          (v128.or
             (v128.or
+              (i8x16.eq (local.get $w) (i8x16.splat (i32.const 10)))
+              (i8x16.eq (local.get $w) (i8x16.splat (i32.const 13))))
+            (v128.or
+              (i8x16.eq (local.get $w) (i8x16.splat (i32.const ":")))
+              (i8x16.eq (local.get $w) (i8x16.splat (i32.const "#"))))))
+        (if (local.get $flow)
+          (then
+            (local.set $v
               (v128.or
+                (local.get $v)
                 (v128.or
-                  (i8x16.le_u
-                    (i8x16.sub (local.get $w) (i8x16.splat (i32.const 9)))
-                    (i8x16.splat (i32.const 4)))
-                  (i8x16.eq (local.get $w) (i8x16.splat (i32.const 32))))
-                (v128.or
-                  (i8x16.eq (local.get $w) (i8x16.splat (i32.const ":")))
-                  (i8x16.eq (local.get $w) (i8x16.splat (i32.const ",")))))
-              (v128.or
-                (v128.or
-                  (i8x16.eq (local.get $w) (i8x16.splat (i32.const "[")))
-                  (i8x16.eq (local.get $w) (i8x16.splat (i32.const "]"))))
-                (v128.or
-                  (i8x16.eq (local.get $w) (i8x16.splat (i32.const "{")))
-                  (i8x16.eq (local.get $w) (i8x16.splat (i32.const "}"))))))))
+                  (v128.or
+                    (i8x16.eq (local.get $w) (i8x16.splat (i32.const ",")))
+                    (i8x16.eq (local.get $w) (i8x16.splat (i32.const "["))))
+                  (v128.or
+                    (v128.or
+                      (i8x16.eq (local.get $w) (i8x16.splat (i32.const "]")))
+                      (i8x16.eq (local.get $w) (i8x16.splat (i32.const "{"))))
+                    (i8x16.eq (local.get $w) (i8x16.splat (i32.const "}")))))))))
+        (local.set $mask (i8x16.bitmask (local.get $v)))
         (local.set $rem (i32.sub (global.get $end) (global.get $ptr)))
         (if (i32.lt_u (local.get $rem) (i32.const 16))
           (then
@@ -251,11 +266,22 @@
         (if (local.get $mask)
           (then
             (global.set $ptr (i32.add (global.get $ptr) (i32.ctz (local.get $mask))))
-            ;; a `:` that does not end the scalar is one more scalar byte
+            (local.set $c (i32.load8_u (global.get $ptr)))
+            ;; a `:` that does not end the scalar, as in `http://x`, and a `#`
+            ;; glued to the text before it are scalar bytes
             (if
-              (i32.and
-                (i32.eq (i32.load8_u (global.get $ptr)) (i32.const ":"))
-                (i32.eqz (call $yamlColonEnds (global.get $ptr) (local.get $flow))))
+              (if (result i32)
+                (i32.eq (local.get $c) (i32.const ":"))
+                (then (i32.eqz (call $yamlColonEnds (global.get $ptr) (local.get $flow))))
+                (else
+                  (i32.and
+                    (i32.eq (local.get $c) (i32.const "#"))
+                    (i32.eqz
+                      (i32.and
+                        (i32.gt_u (global.get $ptr) (local.get $start))
+                        (i32.or
+                          (i32.eq (i32.load8_u (i32.sub (global.get $ptr) (i32.const 1))) (i32.const 32))
+                          (i32.eq (i32.load8_u (i32.sub (global.get $ptr) (i32.const 1))) (i32.const 9))))))))
               (then
                 (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
                 (br $wide)))
@@ -265,7 +291,16 @@
             (global.set $ptr (global.get $end))
             (br $done)))
         (global.set $ptr (i32.add (global.get $ptr) (i32.const 16)))
-        (br $wide))))
+        (br $wide)))
+    ;; trailing blanks are a gap, not scalar text
+    (block $trimmed
+      (loop $trim
+        (br_if $trimmed (i32.le_u (global.get $ptr) (local.get $start)))
+        (local.set $c (i32.load8_u (i32.sub (global.get $ptr) (i32.const 1))))
+        (br_if $trimmed
+          (i32.and (i32.ne (local.get $c) (i32.const 32)) (i32.ne (local.get $c) (i32.const 9))))
+        (global.set $ptr (i32.sub (global.get $ptr) (i32.const 1)))
+        (br $trim))))
 
   ;; Whether $p sits at the start of a line: the input start, or right after
   ;; a line break. The walk reads one host byte before a sub-range or a chunk
@@ -332,6 +367,16 @@
                 (br_if $quoteDone (i32.ge_u (global.get $ptr) (global.get $end)))
                 (local.set $c (i32.load8_u (global.get $ptr)))
                 (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
+                ;; `''` escapes a quote inside a single-quoted scalar
+                (if
+                  (i32.and
+                    (i32.eq (local.get $c) (i32.const 39))
+                    (i32.and
+                      (i32.lt_u (global.get $ptr) (global.get $end))
+                      (i32.eq (i32.load8_u (global.get $ptr)) (i32.const 39))))
+                  (then
+                    (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
+                    (br $q)))
                 (br_if $quoteDone (i32.eq (local.get $c) (local.get $quote)))
                 ;; a backslash: step over the byte it escapes
                 (if (i32.lt_u (global.get $ptr) (global.get $end))
@@ -348,7 +393,16 @@
             (global.set $ptr (local.get $lhs))
             (if (i32.eq (local.get $quote) (i32.const 34))
               (then (call $lexString (local.get $quote) (i32.const 1) (local.get $hl)))
-              (else (call $lexRawString (local.get $quote) (i32.const 1) (local.get $hl))))
+              (else
+                ;; each `''` escape closes one raw span and opens the next
+                (block $escDone
+                  (loop $esc
+                    (call $lexRawString (local.get $quote) (i32.const 1) (local.get $hl))
+                    (br_if $escDone (i32.ge_u (global.get $ptr) (global.get $end)))
+                    (br_if $escDone (i32.ne (i32.load8_u (global.get $ptr)) (i32.const 39)))
+                    (br_if $escDone
+                      (i32.ne (i32.load8_u (i32.sub (global.get $ptr) (i32.const 1))) (i32.const 39)))
+                    (br $esc)))))
             ;; the key's `:` is the value indicator even when glued to the
             ;; value, as in `{"b":2}`, so take it here rather than letting the
             ;; plain-scalar rule fold `:2` into one scalar
@@ -409,9 +463,14 @@
               ;; `12:30:00` or `2024-01-01`, is one plain scalar
               (local.set $p (global.get $ptr))
               (call $yamlScanPlain (local.get $flow))
+              ;; a bare number is a mapping key when a `: ` follows it, as
+              ;; with OpenAPI status codes (`200:`)
               (if (i32.eq (global.get $ptr) (local.get $p))
                 (then
-                  (call $emitTok (enum.get $Token.number) (local.get $lhs) (global.get $ptr))
+                  (local.set $hl (enum.get $Token.number))
+                  (if (call $yamlColonEnds (call $yamlSkipHorizontal (global.get $ptr)) (local.get $flow))
+                    (then (local.set $hl (enum.get $Token.property))))
+                  (call $emitTok (local.get $hl) (local.get $lhs) (global.get $ptr))
                   (br $next)))
               (br $scalar)))
 

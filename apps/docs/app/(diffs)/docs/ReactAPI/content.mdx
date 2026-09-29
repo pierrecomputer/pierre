@@ -68,7 +68,10 @@ stable across parent rerenders when you want the hydrated full metadata to
 persist.
 
 Return both sides for changed diffs and `{ oldFile: null, newFile }` for pure
-renames. Added and deleted diffs do not need to be hydrated.
+renames. Added and deleted diffs do not need to be hydrated and cannot be edited
+from a patch. Editing a partial diff requires `loadDiffFiles`; the editor
+attaches after the load finishes, and rendering throws without a loader. See
+[Edit mode](#edit-mode) for attachment timing.
 
 Passing a freshly parsed partial object resets hydration for that render. Avoid
 calling `parsePatchFiles` during every render before passing the result to
