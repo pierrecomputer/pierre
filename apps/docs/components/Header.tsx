@@ -1,7 +1,6 @@
 'use client';
 
 import {
-  IconArrowUpRight,
   IconBrandDiscord,
   IconBrandGithub,
   IconChevronFlat,
@@ -13,12 +12,7 @@ import { useEffect, useState } from 'react';
 
 import { HeaderMobileMenu } from './HeaderMobileMenu';
 import { Button } from './ui/button';
-import {
-  getExternalUrl,
-  getProductFromPathname,
-  type ProductId,
-  PRODUCTS,
-} from '@/lib/product-config';
+import { getProductFromPathname } from '@/lib/product-config';
 import { cn } from '@/lib/utils';
 
 export interface HeaderProps {
@@ -58,9 +52,6 @@ function NavLink({ href, basePath, children }: NavLinkProps) {
     </Button>
   );
 }
-
-// Order in which we render cross-site links in the desktop nav.
-const OTHER_PRODUCT_IDS: ProductId[] = ['diffs', 'trees'];
 
 interface IconLinkProps {
   href: string;
@@ -128,21 +119,19 @@ export function Header({ onMobileMenuToggle, className }: HeaderProps) {
       <div className="flex items-baseline gap-1.5">
         <Link
           href={homeHref}
-          className="text-foreground hover:text-foreground/80 text-lg leading-[20px] font-semibold transition-colors"
+          className="text-foreground hover:text-foreground/80 flex items-center gap-2 text-lg leading-[20px] font-semibold transition-colors"
         >
+          {/* Product favicon, mirroring the per-site icon set in the layout. */}
+          <img
+            src={`/${product.id}-brand/icon.svg`}
+            alt=""
+            aria-hidden="true"
+            width={24}
+            height={24}
+            className="hidden size-6 shrink-0"
+          />
           {product.name}
         </Link>
-        <span className="text-muted-foreground hidden text-sm leading-[20px] md:inline">
-          by{' '}
-          <Link
-            href="https://pierre.computer"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-muted-foreground hover:text-foreground/80 hidden text-sm leading-[20px] transition-colors md:inline"
-          >
-            The Pierre Computer Co.
-          </Link>
-        </span>
       </div>
 
       <div className="mr-auto flex items-center gap-1 md:hidden">
@@ -185,41 +174,6 @@ export function Header({ onMobileMenuToggle, className }: HeaderProps) {
           <NavLink href="/docs" basePath={product.basePath}>
             Docs
           </NavLink>
-          {OTHER_PRODUCT_IDS.filter((id) => id !== product.id).map((id) => (
-            <Button
-              key={id}
-              variant="ghost"
-              size="sm"
-              asChild
-              className="text-muted-foreground gap-0.5 px-2 font-normal"
-            >
-              <Link
-                href={getExternalUrl(id)}
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                {PRODUCTS[id].name}
-                <IconArrowUpRight />
-              </Link>
-            </Button>
-          ))}
-          {/* diffshub is a separate app on its own domain, so it's a
-              hardcoded external link rather than a product in this app. */}
-          <Button
-            variant="ghost"
-            size="sm"
-            asChild
-            className="text-muted-foreground gap-0.5 px-2 font-normal"
-          >
-            <Link
-              href="https://diffshub.com"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              DiffsHub
-              <IconArrowUpRight />
-            </Link>
-          </Button>
 
           <div className="border-border mx-2 h-5 w-px border-l" />
         </div>

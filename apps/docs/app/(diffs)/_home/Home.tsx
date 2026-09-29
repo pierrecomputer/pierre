@@ -35,6 +35,7 @@ import { HeadingAnchors } from '@/components/docs/HeadingAnchors';
 import Footer from '@/components/Footer';
 import { Header } from '@/components/Header';
 import { Hero } from '@/components/Hero';
+import { Letterhead } from '@/components/Letterhead';
 import { PierreCompanySection } from '@/components/PierreCompanySection';
 import type { ProductId } from '@/lib/product-config';
 
@@ -42,32 +43,35 @@ const PRODUCT_ID: ProductId = 'diffs';
 export default function Home() {
   return (
     <WorkerPoolContext>
-      <div className="mx-auto min-h-screen max-w-5xl px-5 xl:max-w-[80rem]">
-        <Header className="-mb-[1px]" />
-        <main>
-          <Hero productId={PRODUCT_ID} />
-          <HeadingAnchors />
-          <section className="space-y-12 pb-8">
-            <EditSection />
-            <SplitUnifiedSection />
-            <DiffStylesSection />
-            <MergeConflictSection />
-            <AnnotationsSection />
-            <AcceptRejectSection />
-            <LineSelectionSection />
-            <TokenHoverSection />
+      <Letterhead />
+      <div className="bg-background relative z-10 border-t-[0.5px]">
+        <div className="mx-auto min-h-screen max-w-5xl px-5 xl:max-w-[80rem]">
+          <Header className="-mb-[1px]" />
+          <main>
+            <Hero productId={PRODUCT_ID} />
+            <HeadingAnchors />
+            <section className="space-y-12 pb-8">
+              <EditSection />
+              <SplitUnifiedSection />
+              <DiffStylesSection />
+              <MergeConflictSection />
+              <AnnotationsSection />
+              <AcceptRejectSection />
+              <LineSelectionSection />
+              <TokenHoverSection />
 
-            <hr />
+              <hr />
 
-            <ShikiThemesSection />
-            <FontStylesSection />
-            <CustomHunkSeparatorsSection />
-            <CustomHeaderSection />
-            <ArbitraryFilesSection />
-          </section>
-          <PierreCompanySection />
-        </main>
-        <Footer />
+              <ShikiThemesSection />
+              <FontStylesSection />
+              <CustomHunkSeparatorsSection />
+              <CustomHeaderSection />
+              <ArbitraryFilesSection />
+            </section>
+            <PierreCompanySection />
+          </main>
+          <Footer />
+        </div>
       </div>
     </WorkerPoolContext>
   );
