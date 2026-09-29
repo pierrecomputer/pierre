@@ -292,7 +292,7 @@ async function CoreTypesSection() {
 }
 
 async function HighlightersSection() {
-  const highlighterExample = await preloadFile(HIGHLIGHTER_EXAMPLE);
+  const highlighterExample = await preloadCodeExample(HIGHLIGHTER_EXAMPLE);
   const content = await renderMDX({
     filePath: '(diffs)/docs/Highlighters/content.mdx',
     scope: { highlighterExample },
