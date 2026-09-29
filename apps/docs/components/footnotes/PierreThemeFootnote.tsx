@@ -9,7 +9,11 @@ export function PierreThemeFootnote() {
     <IconFootnote icon={<IconArrowDownRight />}>
       Love the Pierre themes?{' '}
       <Link
-        href={`${getExternalUrl('diffs')}${DIFFS_THEME_PATH}`}
+        href={
+          process.env.NEXT_PUBLIC_SITE === 'trees'
+            ? `${getExternalUrl('diffs')}${DIFFS_THEME_PATH}`
+            : DIFFS_THEME_PATH
+        }
         className="inline-link"
       >
         Install our Pierre Theme pack
