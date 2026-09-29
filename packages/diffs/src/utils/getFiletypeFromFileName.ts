@@ -211,6 +211,7 @@ export const EXTENSION_TO_FILE_FORMAT: ExtensionFormatMap = {
   mli: 'ocaml',
   mll: 'ocaml',
   mly: 'ocaml',
+  odin: 'odin',
   pas: 'pascal',
   p: 'pascal',
   pl: 'prolog',

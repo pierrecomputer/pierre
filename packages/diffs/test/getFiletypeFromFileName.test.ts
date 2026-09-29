@@ -12,6 +12,7 @@ describe('getFiletypeFromFileName', () => {
     expect(getFiletypeFromFileName('foo.ts')).toBe('typescript');
     expect(getFiletypeFromFileName('src/nested/foo.py')).toBe('python');
     expect(getFiletypeFromFileName('src/app.component.ts')).toBe('angular-ts');
+    expect(getFiletypeFromFileName('src/main.odin')).toBe('odin');
   });
 
   test('matches exact filenames at the top level', () => {
