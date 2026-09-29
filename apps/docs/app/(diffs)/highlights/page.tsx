@@ -8,6 +8,7 @@ import {
 import type { Metadata } from 'next';
 import Link from 'next/link';
 
+import { BenchmarkBar } from './BenchmarkBar';
 import { HighlightsBenchmarks } from './HighlightsBenchmarks';
 import { HighlightsCode } from './HighlightsCode';
 import { HighlightsHero } from './HighlightsHero';
@@ -39,6 +40,9 @@ const benchmarks = [
   { language: 'JSONC', size: '292 KiB', highlights: 894, shiki: 6.04 },
   { language: 'TypeScript', size: '517 KiB', highlights: 321, shiki: 1.09 },
 ];
+const maximumHtmlThroughput = Math.max(
+  ...benchmarks.flatMap(({ highlights, shiki }) => [highlights, shiki])
+);
 
 const renderExample = `import { codeToHtml } from '@pierre/highlights';
 import pierreDark from '@pierre/highlights/themes/pierre-dark';
@@ -130,59 +134,63 @@ export default function HighlightsPage() {
                 </>
               }
             />
-            <div className="bg-card overflow-x-auto rounded-lg border">
-              <table className="w-full text-left text-sm tabular-nums">
-                <caption className="text-muted-foreground border-b px-4 py-3 text-left">
-                  HTML throughput in MiB/s · higher is better
-                </caption>
-                <thead className="bg-muted/50 border-b">
-                  <tr>
-                    <th scope="col" className="px-4 py-3 font-medium">
-                      Language
-                    </th>
-                    <th scope="col" className="px-4 py-3 font-medium">
-                      Input
-                    </th>
-                    <th
-                      scope="col"
-                      className="px-4 py-3 text-right font-medium"
-                    >
-                      Highlights
-                    </th>
-                    <th
-                      scope="col"
-                      className="px-4 py-3 text-right font-medium"
-                    >
-                      Shiki
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y">
-                  {benchmarks.map(({ language, size, highlights, shiki }) => (
-                    <tr key={language}>
-                      <th scope="row" className="px-4 py-3 font-medium">
-                        {language}
-                      </th>
-                      <td className="text-muted-foreground px-4 py-3 whitespace-nowrap">
+            <figure className="bg-card overflow-hidden rounded-lg border text-sm tabular-nums">
+              <figcaption className="text-muted-foreground border-b px-4 py-3">
+                HTML throughput in MiB/s · longer is faster
+              </figcaption>
+              <div className="divide-y">
+                {benchmarks.map(({ language, size, highlights, shiki }) => (
+                  <div
+                    key={language}
+                    className="grid gap-4 px-4 py-5 sm:grid-cols-[10rem_minmax(0,1fr)] sm:gap-6"
+                  >
+                    <div className="font-medium">
+                      {language}
+                      <span className="text-muted-foreground block text-xs font-normal">
                         {size}
-                      </td>
-                      <td className="px-4 py-3 text-right font-medium">
-                        {highlights}
-                      </td>
-                      <td className="text-muted-foreground px-4 py-3 text-right">
-                        {shiki.toFixed(2)}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                      </span>
+                    </div>
+                    <dl
+                      aria-label={`${language} throughput in MiB/s`}
+                      className="space-y-3"
+                    >
+                      <div className="grid grid-cols-[5rem_minmax(0,1fr)] items-center gap-3">
+                        <dt className="font-medium">Highlights</dt>
+                        <dd className="grid grid-cols-[minmax(0,1fr)_3.5rem] items-center gap-3">
+                          <BenchmarkBar
+                            value={highlights}
+                            maximum={maximumHtmlThroughput}
+                            highlighted
+                          />
+                          <span className="text-right font-medium">
+                            {highlights}
+                          </span>
+                        </dd>
+                      </div>
+                      <div className="grid grid-cols-[5rem_minmax(0,1fr)] items-center gap-3">
+                        <dt className="text-muted-foreground">Shiki</dt>
+                        <dd className="grid grid-cols-[minmax(0,1fr)_3.5rem] items-center gap-3">
+                          <BenchmarkBar
+                            value={shiki}
+                            maximum={maximumHtmlThroughput}
+                          />
+                          <span className="text-muted-foreground text-right">
+                            {shiki.toFixed(2)}
+                          </span>
+                        </dd>
+                      </div>
+                    </dl>
+                  </div>
+                ))}
+              </div>
+            </figure>
             <p className="text-muted-foreground max-w-3xl text-sm">
               Recorded September 25, 2026 · Bun 1.4.0 · Apple M4 Pro · Shiki
               4.4.1. Median throughput after a 200 ms warm-up, with at least 20
               samples per case. These measurements exclude DOM rendering and do
               not measure highlighting quality. Token boundaries and styles can
-              differ.
+              differ. All bars share a linear scale; rainbow bars represent
+              Highlights.
             </p>
             <Button variant="outline" asChild>
               <a

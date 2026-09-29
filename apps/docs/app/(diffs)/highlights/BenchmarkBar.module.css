@@ -1,0 +1,37 @@
+.gradient {
+  position: relative;
+  overflow: hidden;
+  background-color: #a855f7;
+}
+
+/* Two identical color cycles make the translation loop seamlessly. */
+.gradient::before {
+  position: absolute;
+  inset: 0;
+  width: 200%;
+  content: '';
+  background-image: repeating-linear-gradient(
+    90deg,
+    #a855f7 0%,
+    #ec4899 7%,
+    #f97316 14%,
+    #eab308 21%,
+    #22c55e 28%,
+    #06b6d4 35%,
+    #3b82f6 42%,
+    #a855f7 50%
+  );
+  animation: gradient-flow 15s linear infinite;
+}
+
+@keyframes gradient-flow {
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gradient::before {
+    animation: none;
+  }
+}

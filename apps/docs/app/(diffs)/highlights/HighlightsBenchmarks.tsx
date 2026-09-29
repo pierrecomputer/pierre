@@ -1,3 +1,4 @@
+import { BenchmarkBar } from './BenchmarkBar';
 import { FeatureHeader } from '@/components/FeatureHeader';
 import benchmark from '@/public/highlights/benchmark-browser.json';
 
@@ -5,6 +6,9 @@ import benchmark from '@/public/highlights/benchmark-browser.json';
 // "On highlighting code" article, available below with versions and conditions.
 const rows = [...benchmark.rows].sort(
   (left, right) => left.milliseconds - right.milliseconds
+);
+const maximumThroughput = Math.max(
+  ...rows.map(({ milliseconds }) => 1 / milliseconds)
 );
 
 export function HighlightsBenchmarks() {
@@ -34,22 +38,30 @@ export function HighlightsBenchmarks() {
         }
       />
       <div className="bg-card overflow-x-auto rounded-lg border">
-        <table className="w-full text-left text-sm tabular-nums">
+        <table className="w-full table-fixed text-left text-sm tabular-nums">
           <caption className="text-muted-foreground border-b px-4 py-3 text-left">
-            10 copies of three.min.js · median time · lower is better
+            10 copies of three.min.js · relative throughput · longer is faster
           </caption>
           <thead className="bg-muted/50 border-b">
             <tr>
               <th scope="col" className="px-3 py-3 font-medium sm:px-4">
-                Library
+                <div className="sm:grid sm:grid-cols-[12rem_minmax(0,1fr)] sm:gap-3">
+                  <span>Library</span>
+                  <span className="text-muted-foreground hidden font-normal sm:block">
+                    Relative speed
+                  </span>
+                </div>
               </th>
               <th
                 scope="col"
-                className="px-3 py-3 text-right font-medium sm:px-4"
+                className="w-24 px-3 py-3 text-right font-medium sm:w-28 sm:px-4"
               >
                 Time
               </th>
-              <th scope="col" className="px-3 py-3 font-medium sm:px-4">
+              <th
+                scope="col"
+                className="w-18 px-3 py-3 font-medium sm:w-28 sm:px-4"
+              >
                 Output
               </th>
             </tr>
@@ -61,10 +73,19 @@ export function HighlightsBenchmarks() {
                 className={name === 'Highlights' ? 'bg-muted/30' : undefined}
               >
                 <th scope="row" className="px-3 py-3 font-medium sm:px-4">
-                  {name}{' '}
-                  <span className="text-muted-foreground ml-2 hidden text-xs font-normal sm:inline">
-                    {version}
-                  </span>
+                  <div className="grid items-center gap-2 sm:grid-cols-[12rem_minmax(0,1fr)] sm:gap-3">
+                    <span>
+                      {name}{' '}
+                      <span className="text-muted-foreground ml-2 hidden text-xs font-normal sm:inline">
+                        {version}
+                      </span>
+                    </span>
+                    <BenchmarkBar
+                      value={1 / milliseconds}
+                      maximum={maximumThroughput}
+                      highlighted={name === 'Highlights'}
+                    />
+                  </div>
                 </th>
                 <td className="px-3 py-3 text-right font-medium whitespace-nowrap sm:px-4">
                   {milliseconds < 1000
@@ -87,7 +108,8 @@ export function HighlightsBenchmarks() {
         <p>
           Recorded September 15, 2026 · Chromium 152 · Apple M4 Pro. Median of
           three samples, each with one warm-up in a fresh worker. Initialization
-          and DOM rendering are excluded.
+          and DOM rendering are excluded. Bars show relative throughput on a
+          linear scale; rainbow bars represent Highlights.
         </p>
         <p>
           Highlights and Shiki return themed tokens via{' '}
