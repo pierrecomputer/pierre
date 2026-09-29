@@ -2,9 +2,9 @@
 
 Register themes before a surface loads them with
 `registerCustomTheme(name, loader, type = 'textmate')`. Use `'textmate'` for
-Shiki and `'zed'` for Highlights. Loaders accept a TextMate theme, a
-Zed-compatible `Theme` or `ThemeFamily`, or a portable `DiffsTheme`, directly or
-as a module's `default` export.
+Shiki, `'zed'` for Highlights, and `'diffs'` for a portable `DiffsTheme`.
+Loaders return the corresponding TextMate theme, Zed-compatible `Theme` or
+`ThemeFamily`, or `DiffsTheme`, directly or as a module's `default` export.
 
 For a Zed-compatible theme:
 
@@ -58,5 +58,5 @@ registerCustomCSSVariableTheme('app-palette', {
 This retains the `--diffs-*` variables on every backend, including defaults and
 optional font styles. `createCSSVariablesTheme(options)` returns a portable
 `DiffsTheme` for use with `registerCustomTheme` or application theme catalogs.
-Register a portable theme's loader for both `'textmate'` and `'zed'` to use both
-palettes; `registerCustomCSSVariableTheme` does this automatically.
+Register a portable theme's loader once with `'diffs'` to use both palettes;
+`registerCustomCSSVariableTheme` does this automatically.

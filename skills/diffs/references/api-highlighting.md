@@ -46,7 +46,7 @@ Pierre and Shiki theme names also resolve to bundled Highlights palettes.
 
 | Export                                                                | Purpose                                                                                                         |
 | --------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
-| `registerCustomTheme(name, loader, type = 'textmate')`                | Registers a loader with type `'textmate'` for Shiki or `'zed'` for Highlights.                                  |
+| `registerCustomTheme(name, loader, type = 'textmate')`                | Registers a loader with type `'textmate'` for Shiki, `'zed'` for Highlights, or `'diffs'` for portable themes.  |
 | `createCSSVariablesTheme`                                             | Creates a portable palette; accepts name, variablePrefix (default `--diffs-`), variableDefaults, and fontStyle. |
 | `registerCustomCSSVariableTheme`                                      | Preserves `(name, variableDefaults, fontStyle = false)` and the `--diffs-` prefix.                              |
 | `resolveTheme`, `resolveThemes`                                       | Resolve themes; optional second argument selects the backend.                                                   |
@@ -68,8 +68,8 @@ return `family.themes[index]` from the loader to select another. Raw Zed themes
 cannot resolve on Shiki.
 
 Theme resolution returns portable `DiffsTheme` objects. Resolve on the main
-thread before passing them to workers. Register one loader per name. Raw
-TextMate themes require Shiki. For one theme across backends, use
+thread before passing them to workers. Register one loader per name and type.
+Raw TextMate themes require Shiki. For one theme across backends, use
 `createCSSVariablesTheme` or a `DiffsTheme` containing both `textmate` (Shiki's
 normalized `ThemeRegistrationResolved`) and `zed` palettes.
 

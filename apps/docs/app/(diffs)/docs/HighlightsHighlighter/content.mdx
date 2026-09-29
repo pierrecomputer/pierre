@@ -19,9 +19,10 @@ three backends in the [diffs playground](/playground?highlighter=highlights).
 
 Built-in theme names work across backends.
 `registerCustomTheme(name, loader, 'zed')` accepts Zed-compatible Highlights
-themes, theme families, and portable `DiffsTheme` objects. Use `'textmate'` to
-register a loader for Shiki under the same name. A Zed family uses its first
-theme. See [registerCustomTheme](#utilities-registercustomtheme) for examples.
+themes and theme families. Use `'textmate'` to register a loader for Shiki under
+the same name, or `'diffs'` to register a portable `DiffsTheme` once for both
+backends. A Zed family uses its first theme. See
+[registerCustomTheme](#utilities-registercustomtheme) for examples.
 
 `createCSSVariablesTheme` returns a portable theme with `--diffs-` as its
 default `variablePrefix`; it no longer re-exports Shiki's helper, whose default
