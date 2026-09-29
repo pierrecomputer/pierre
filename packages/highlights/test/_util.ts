@@ -66,44 +66,102 @@ export function loadLang(
   funcName: string,
   splitBytes?: number
 ): TestLang {
-  const watUrl = new URL(`./test_${name}.wat`, import.meta.url);
-  const clamp =
-    splitBytes === undefined
-      ? ''
-      : `(global.set $end (i32.add (global.get $ptr) (i32.const ${splitBytes})))`;
-  const resume =
-    splitBytes === undefined
-      ? ''
-      : `(global.set $end (global.get $eof))\n    (call ${funcName})`;
   // the css preprocessors share css.wat
   const file = ['less', 'sass', 'scss'].includes(name) ? 'css' : name;
-  const src = `(module
+  let highlighter: TestHighlighter;
+  let enumMap: Map<string, Record<string, number>>;
+  let setSplit: ((splitBytes: number) => void) | undefined;
+  if (splitBytes === undefined) {
+    const watUrl = new URL(`./test_${name}.wat`, import.meta.url);
+    const src = `(module
   (import "../src/langs/${file}.wat")
   (func (export "highlight")
     (call $hlBegin)
-    ${clamp}
     (call ${funcName})
-    ${resume}
     (call $hlEnd))
 )`;
-  const { code, enumMap } = transformWat(watUrl, src);
-  const wasmBytes = wat2wasm(watUrl.href, code);
-  const tokenTypes = listTokenTypes(enumMap);
-  // Use an isolated highlighter so this harness does not replace the shared one
-  // used by token tests.
-  const highlighter = createHighlighter(new WebAssembly.Module(wasmBytes));
+    const transformed = transformWat(watUrl, src);
+    enumMap = transformed.enumMap;
+    // Use an isolated highlighter so this harness does not replace the shared
+    // one used by token tests.
+    highlighter = createHighlighter(
+      new WebAssembly.Module(wat2wasm(watUrl.href, transformed.code))
+    );
+  } else {
+    ({ highlighter, enumMap, setSplit } = compileSplitLexer(
+      name,
+      file,
+      funcName
+    ));
+  }
   return {
-    tokenTypes,
+    tokenTypes: listTokenTypes(enumMap),
     enumMap,
-    hl: (input, options) =>
-      dec.decode(
+    hl: (input, options) => {
+      // a split lexer is shared, so set this harness's offset on every call
+      if (splitBytes !== undefined) setSplit?.(splitBytes);
+      return dec.decode(
         highlighter.codeToHtml(input as string, {
           lang: name,
           theme: pierreDark,
           ...options,
         })
-      ),
+      );
+    },
   };
+}
+
+type TestHighlighter = ReturnType<typeof createHighlighter>;
+
+/** A compiled two-range lexer whose split offset is chosen per call. */
+interface SplitLexer {
+  highlighter: TestHighlighter;
+  enumMap: Map<string, Record<string, number>>;
+  setSplit(splitBytes: number): void;
+}
+
+const splitLexers = new Map<string, SplitLexer>();
+
+/**
+ * Compile, once per lexer entry, an isolated highlighter that scans
+ * `[0, split)` and then the rest. The offset is read from a control word at
+ * byte 32 of wasm memory, below the theme table, so one module serves every
+ * offset. WAT compilation dominates harness time and split tests sweep every
+ * byte of their source; recompiling per offset pushed those tests past bun's
+ * 5s timeout on a loaded machine.
+ */
+function compileSplitLexer(
+  name: Lang,
+  file: string,
+  entry: string
+): SplitLexer {
+  const key = `${name}:${entry}`;
+  const cached = splitLexers.get(key);
+  if (cached !== undefined) return cached;
+  const watUrl = new URL(`./split_${name}.wat`, import.meta.url);
+  const src = `(module
+  (import "../src/langs/${file}.wat")
+  (func (export "highlight")
+    (call $hlBegin)
+    (global.set $end (i32.add (global.get $ptr) (i32.load (i32.const 32))))
+    (call ${entry})
+    (global.set $end (global.get $eof))
+    (call ${entry})
+    (call $hlEnd)))`;
+  const { code, enumMap } = transformWat(watUrl, src);
+  const highlighter = createHighlighter(
+    new WebAssembly.Module(wat2wasm(watUrl.href, code))
+  );
+  // the control word lives in the highlighter's memory; reach in for its view
+  // on each call because memory growth replaces it
+  const internals = highlighter as unknown as { dv: DataView };
+  const lexer: SplitLexer = {
+    highlighter,
+    enumMap,
+    setSplit: (splitBytes) => internals.dv.setUint32(32, splitBytes, true),
+  };
+  splitLexers.set(key, lexer);
+  return lexer;
 }
 
 /** A lexer harness whose scan is cut at a byte offset chosen per call. */
@@ -117,9 +175,8 @@ export type TestSplitHl = (
  * over `[0, splitBytes)`, then over the rest. That is the two-range shape an
  * embedding host (html around a script body) or a chunk boundary produces, so
  * a lexer that reads past `$end` or leaves a construct half-open shows up as
- * lost bytes or unbalanced spans. One module serves every split offset: the
- * offset is passed through a control word at byte 32 of wasm memory, below
- * the theme table.
+ * lost bytes or unbalanced spans. One module serves every split offset (see
+ * `compileSplitLexer`).
  *
  * `name` is the language name; the lexer file and export follow the usual
  * naming (`js`/`jsx`/`ts` live in `tsx.wat`, the css dialects in `css.wat`,
@@ -139,24 +196,9 @@ export function loadSplitLang(name: Lang): TestSplitHl {
       : name === 'fortran-fixed-form'
         ? 'fortran'
         : name;
-  const watUrl = new URL(`./split_${name}.wat`, import.meta.url);
-  const src = `(module
-  (import "../src/langs/${file}.wat")
-  (func (export "highlight")
-    (call $hlBegin)
-    (global.set $end (i32.add (global.get $ptr) (i32.load (i32.const 32))))
-    (call ${entry})
-    (global.set $end (global.get $eof))
-    (call ${entry})
-    (call $hlEnd)))`;
-  const { code } = transformWat(watUrl, src);
-  const highlighter = createHighlighter(
-    new WebAssembly.Module(wat2wasm(watUrl.href, code))
-  );
-  // the control word lives in the highlighter's memory; reach in for its view
-  const internals = highlighter as unknown as { dv: DataView };
+  const { highlighter, setSplit } = compileSplitLexer(name, file, entry);
   return (input, splitBytes) => {
-    internals.dv.setUint32(32, splitBytes, true);
+    setSplit(splitBytes);
     return dec.decode(
       highlighter.codeToHtml(input, { lang: name, theme: pierreDark })
     );
