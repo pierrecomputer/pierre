@@ -194,7 +194,10 @@ export interface EditorViewportState {
 
 export interface EditorViewState {
   selections?: EditorSelection[];
-  /** Active indentation folds, using zero-based document lines. */
+  /**
+   * Active indentation folds, using zero-based document lines. Omit to keep
+   * the current folds when setting view state; pass `[]` to unfold all.
+   */
   foldRanges?: LineRange[];
   view?: EditorViewportState;
 }

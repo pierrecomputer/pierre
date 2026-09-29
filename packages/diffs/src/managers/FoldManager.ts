@@ -1,6 +1,7 @@
-import type { LineRange } from '../types';
+import type { FileContents, LineRange } from '../types';
 
 const CLOSING_DELIMITER_ONLY = /^[}\])]+[;,]?$/;
+const DEFAULT_TAB_SIZE = 2;
 
 /**
  * The minimal line access folding needs; structurally satisfied by the
@@ -188,11 +189,20 @@ export function isFoldingClosingDelimiter(text: string): boolean {
  */
 export function computeIndentFoldingRanges(
   textDocument: FoldableLineSource,
-  tabSize = 2
+  tabSize: number = DEFAULT_TAB_SIZE
 ): LineRange[] {
-  const integerTabSize = Math.trunc(tabSize);
-  const normalizedTabSize =
-    Number.isFinite(integerTabSize) && integerTabSize > 0 ? integerTabSize : 2;
+  return scanIndentFoldingRanges(textDocument, tabSize).ranges;
+}
+
+// Indentation fold scan shared by the editor and read-only folding. Also
+// reports whether any indentation contained a tab, the only case where the
+// ranges depend on the tab width.
+function scanIndentFoldingRanges(
+  textDocument: FoldableLineSource,
+  tabSize: number
+): { ranges: LineRange[]; usesTabIndentation: boolean } {
+  const normalizedTabSize = normalizeTabSize(tabSize);
+  let usesTabIndentation = false;
   const ranges: Array<{ startLine: number; endLine: number }> = [];
   const openRanges: Array<{
     indent: number;
@@ -213,6 +223,7 @@ export function computeIndentFoldingRanges(
       if (character === ' ') {
         indent++;
       } else if (character === '\t') {
+        usesTabIndentation = true;
         indent += normalizedTabSize - (indent % normalizedTabSize);
       } else {
         break;
@@ -254,7 +265,30 @@ export function computeIndentFoldingRanges(
     }
   }
 
-  return ranges;
+  return { ranges, usesTabIndentation };
+}
+
+function normalizeTabSize(tabSize: number): number {
+  const integerTabSize = Math.trunc(tabSize);
+  return Number.isFinite(integerTabSize) && integerTabSize > 0
+    ? integerTabSize
+    : DEFAULT_TAB_SIZE;
+}
+
+/** Whether two ordered range lists hold the same ranges. */
+export function areLineRangesEqual(
+  left: readonly LineRange[],
+  right: readonly LineRange[]
+): boolean {
+  return (
+    left.length === right.length &&
+    left.every((range, index) => {
+      const other = right[index];
+      return (
+        other?.startLine === range.startLine && other.endLine === range.endLine
+      );
+    })
+  );
 }
 
 /**
@@ -301,12 +335,27 @@ function upperBound(values: readonly number[], target: number): number {
   return low;
 }
 
-// Indentation fold candidates derived from a split-line cache, keyed by the
-// lines array identity so edits and file swaps invalidate the cache naturally.
+// Indentation fold candidates for one file version. Keyed by the file (its
+// cacheKey, or its identity plus contents) rather than by a split-line array,
+// so a remount that re-splits the same file reuses the scan and the cache
+// never keeps a line array alive after the renderer drops its own.
 interface FoldableRangeCache {
-  lines: readonly string[];
+  cacheKey: string | undefined;
+  file: FileContents;
+  contents: string;
+  tabSize: number;
   ranges: LineRange[];
   rangesByStart: Map<number, LineRange>;
+  usesTabIndentation: boolean;
+}
+
+function isRangeCacheForFile(
+  cache: FoldableRangeCache,
+  file: FileContents
+): boolean {
+  return file.cacheKey != null
+    ? cache.cacheKey === file.cacheKey
+    : cache.file === file && cache.contents === file.contents;
 }
 
 export interface FoldManagerCallbacks {
@@ -335,6 +384,7 @@ export interface FoldManagerCallbacks {
 export class FoldManager {
   private foldedStarts = new Set<number>();
   private cache: FoldableRangeCache | undefined;
+  private tabSize = DEFAULT_TAB_SIZE;
   private pre: HTMLElement | undefined;
 
   constructor(private callbacks?: FoldManagerCallbacks) {}
@@ -351,34 +401,82 @@ export class FoldManager {
     return this.foldedStarts.size > 0;
   }
 
-  /** Indentation fold candidates for `lines`, cached per lines identity. */
-  getFoldableRanges(lines: readonly string[]): LineRange[] {
-    return this.getRangeCache(lines).ranges;
+  /**
+   * Fold candidates for `file` keyed by their zero-based header line. `lines`
+   * is the file split into lines; it is only scanned when the cache misses.
+   */
+  getFoldableRangesByStart(
+    file: FileContents,
+    lines: readonly string[]
+  ): Map<number, LineRange> {
+    return this.getRangeCache(file, lines).rangesByStart;
   }
 
-  /** Fold candidates for `lines` keyed by their zero-based header line. */
-  getFoldableRangesByStart(lines: readonly string[]): Map<number, LineRange> {
-    return this.getRangeCache(lines).rangesByStart;
+  /** Whether any indentation in `file` uses tabs, making folds tab-width dependent. */
+  usesTabIndentation(file: FileContents, lines: readonly string[]): boolean {
+    return this.getRangeCache(file, lines).usesTabIndentation;
   }
 
-  private getRangeCache(lines: readonly string[]): FoldableRangeCache {
-    if (this.cache?.lines !== lines) {
-      const ranges = computeIndentFoldingRanges({
+  /**
+   * Measure tabs with the rendered tab width, matching the editor. Returns
+   * whether the fold candidates for `file` changed as a result.
+   */
+  setTabSize(
+    tabSize: number,
+    file: FileContents,
+    lines: readonly string[]
+  ): boolean {
+    const normalizedTabSize = normalizeTabSize(tabSize);
+    if (normalizedTabSize === this.tabSize) {
+      return false;
+    }
+    this.tabSize = normalizedTabSize;
+    const previous = this.cache;
+    if (previous == null || !isRangeCacheForFile(previous, file)) {
+      return false;
+    }
+    const { ranges } = this.getRangeCache(file, lines);
+    return !areLineRangesEqual(previous.ranges, ranges);
+  }
+
+  private getRangeCache(
+    file: FileContents,
+    lines: readonly string[]
+  ): FoldableRangeCache {
+    const { cache, tabSize } = this;
+    if (
+      cache != null &&
+      cache.tabSize === tabSize &&
+      isRangeCacheForFile(cache, file)
+    ) {
+      return cache;
+    }
+    const { ranges, usesTabIndentation } = scanIndentFoldingRanges(
+      {
         lineCount: lines.length,
         getLineText: (line) => lines[line] ?? '',
-      });
-      this.cache = {
-        lines,
-        ranges,
-        rangesByStart: new Map(ranges.map((range) => [range.startLine, range])),
-      };
-    }
+      },
+      tabSize
+    );
+    this.cache = {
+      cacheKey: file.cacheKey,
+      file,
+      contents: file.contents,
+      tabSize,
+      ranges,
+      rangesByStart: new Map(ranges.map((range) => [range.startLine, range])),
+      usesTabIndentation,
+    };
     return this.cache;
   }
 
   /** Toggle a fold header; returns false when the line is not foldable. */
-  toggleFold(startLine: number, lines: readonly string[]): boolean {
-    if (!this.getFoldableRangesByStart(lines).has(startLine)) {
+  toggleFold(
+    startLine: number,
+    file: FileContents,
+    lines: readonly string[]
+  ): boolean {
+    if (!this.getFoldableRangesByStart(file, lines).has(startLine)) {
       return false;
     }
     if (!this.foldedStarts.delete(startLine)) {
@@ -388,14 +486,41 @@ export class FoldManager {
   }
 
   /**
+   * Unfold every collapsed block whose hidden body contains the zero-based
+   * line, including enclosing folds. Returns whether anything unfolded.
+   */
+  unfoldLine(
+    line: number,
+    file: FileContents,
+    lines: readonly string[]
+  ): boolean {
+    if (this.foldedStarts.size === 0) {
+      return false;
+    }
+    const { rangesByStart } = this.getRangeCache(file, lines);
+    let changed = false;
+    for (const startLine of this.foldedStarts) {
+      const range = rangesByStart.get(startLine);
+      if (range != null && line > range.startLine && line <= range.endLine) {
+        this.foldedStarts.delete(startLine);
+        changed = true;
+      }
+    }
+    return changed;
+  }
+
+  /**
    * Hidden line ranges derived from the collapsed folds, after dropping folds
    * whose header is no longer foldable in the current contents.
    */
-  getHiddenLineRanges(lines: readonly string[]): LineRange[] {
+  getHiddenLineRanges(
+    file: FileContents,
+    lines: readonly string[]
+  ): LineRange[] {
     if (this.foldedStarts.size === 0) {
       return [];
     }
-    const { ranges, rangesByStart } = this.getRangeCache(lines);
+    const { ranges, rangesByStart } = this.getRangeCache(file, lines);
     for (const startLine of this.foldedStarts) {
       if (!rangesByStart.has(startLine)) {
         this.foldedStarts.delete(startLine);

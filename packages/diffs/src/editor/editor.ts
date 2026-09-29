@@ -3,6 +3,7 @@ import type { FileDiff } from '../components/FileDiff';
 import type { VirtualizedFile } from '../components/VirtualizedFile';
 import type { VirtualizedFileDiff } from '../components/VirtualizedFileDiff';
 import {
+  areLineRangesEqual,
   computeIndentFoldingRanges,
   isFoldingClosingDelimiter,
   LineRangeIndex,
@@ -1088,7 +1089,10 @@ export class Editor<
       throw new Error('Editor.setViewState: Editor is not attached');
     }
     this.#canMountSelectionAction = false;
-    this.#restoreFoldRanges(foldRanges ?? []);
+    // Like `view`, an omitted fold list leaves the current folds in place.
+    if (foldRanges !== undefined) {
+      this.#restoreFoldRanges(foldRanges);
+    }
     const primarySelection = selections?.at(-1);
     if (primarySelection !== undefined) {
       this.#revealLineIfCollapsed(getCaretPosition(primarySelection).line);
@@ -1267,7 +1271,8 @@ export class Editor<
     this.#editorEventDisposes = undefined;
     this.#removeFoldingControls();
     if (!recycle) {
-      if (fileInstance?.type === 'file') fileInstance.__setFoldRanges([]);
+      // Detaching clears the host's hidden ranges; the host renders the
+      // unfolded rows when the session settles, after this teardown.
       this.#resetFoldingState();
       this.#detach?.();
       this.#detach = undefined;
@@ -1933,16 +1938,7 @@ export class Editor<
   }
 
   #setHiddenLineRanges(ranges: LineRange[]): boolean {
-    if (
-      ranges.length === this.#hiddenLineRanges.length &&
-      ranges.every((range, index) => {
-        const previous = this.#hiddenLineRanges[index];
-        return (
-          previous?.startLine === range.startLine &&
-          previous.endLine === range.endLine
-        );
-      })
-    ) {
+    if (areLineRangesEqual(ranges, this.#hiddenLineRanges)) {
       return false;
     }
     this.#hiddenLineRanges = ranges;
@@ -2501,7 +2497,9 @@ export class Editor<
       startCharacter = 0,
       endCharacter = startCharacter,
     ] of lineChanges) {
-      if (lineDelta !== 0) {
+      // A multi-line replacement rewrites whole lines between its ends, so
+      // their indentation can change regardless of where the edit started.
+      if (lineDelta !== 0 || endLine !== startLine) {
         return true;
       }
       for (let line = startLine; line <= endLine; line++) {

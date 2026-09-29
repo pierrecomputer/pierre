@@ -1530,6 +1530,7 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
     if (pendingTarget == null) {
       return;
     }
+    this.revealScrollTargetLine(pendingTarget);
 
     const destination = this.resolveScrollTargetTop(pendingTarget);
     if (destination == null) {
@@ -3255,6 +3256,18 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
     }
     // 'start', the default
     return targetTop - stickyOffset - offset;
+  }
+
+  // A file line inside a collapsed read-only fold has no row to scroll to.
+  // Unfold it first; the item's next layout pass then positions the row.
+  private revealScrollTargetLine(target: PendingScrollTarget): void {
+    if (target.type !== 'line') {
+      return;
+    }
+    const item = this.idToItem.get(target.id);
+    if (item?.type === 'file' && item.instance.revealLine(target.lineNumber)) {
+      this.markItemLayoutDirty(item);
+    }
   }
 
   private getLineScrollPosition(

@@ -43,6 +43,7 @@ import {
   createFoldIndicatorElement,
   createFoldToggleElement,
 } from '../utils/foldControls';
+import { forEachVisibleLine } from '../utils/forEachVisibleLine';
 import { getFiletypeFromFileName } from '../utils/getFiletypeFromFileName';
 import { getHighlighterOptions } from '../utils/getHighlighterOptions';
 import { getLineAnnotationName } from '../utils/getLineAnnotationName';
@@ -196,9 +197,15 @@ export class FileRenderer<LAnnotation = undefined> {
 
   public setFoldRanges(ranges: LineRange[]): void {
     this.foldRanges = ranges;
+    // Plain-text results are windowed around the hidden rows they were built
+    // with, so they can't serve different ones. That includes a finished
+    // plain-text highlight still waiting for its render.
     if (this.renderCache?.highlighted === false) {
       this.renderCache.result = undefined;
       this.renderCache.renderRange = undefined;
+    }
+    if (this.pendingHighlightResult?.highlighted === false) {
+      this.pendingHighlightResult = undefined;
     }
   }
 
@@ -873,13 +880,23 @@ export class FileRenderer<LAnnotation = undefined> {
       }
     }
 
-    return this.renderCache.result != null
-      ? this.processFileResult(
-          this.renderCache.file,
-          renderRange,
-          this.renderCache.result
-        )
-      : undefined;
+    // A windowed plain-text result only holds the rows of the range it was
+    // built for. When it couldn't be rebuilt above (themes or the replacement
+    // file still loading), render nothing; the pending highlight re-renders.
+    const { result: cachedResult, renderRange: cachedRange } = this.renderCache;
+    if (
+      cachedResult == null ||
+      (!this.renderCache.highlighted &&
+        cachedRange != null &&
+        !areRenderRangesEqual(cachedRange, renderRange))
+    ) {
+      return undefined;
+    }
+    return this.processFileResult(
+      this.renderCache.file,
+      renderRange,
+      cachedResult
+    );
   }
 
   async asyncRender(
@@ -948,6 +965,7 @@ export class FileRenderer<LAnnotation = undefined> {
     const { disableFileHeader = false } = this.options;
     const foldManager = this.showsFoldControls() ? this.foldManager : undefined;
     const foldableRangesByStart = foldManager?.getFoldableRangesByStart(
+      file,
       this.getOrCreateLineCache(file)
     );
     const contentArray: ElementContent[] = [];
@@ -976,96 +994,73 @@ export class FileRenderer<LAnnotation = undefined> {
       rowCount++;
     }
 
-    let low = 0;
-    let high = this.foldRanges.length;
-    while (low < high) {
-      const middle = low + ((high - low) >> 1);
-      if (this.foldRanges[middle].endLine < renderRange.startingLine) {
-        low = middle + 1;
-      } else {
-        high = middle;
-      }
-    }
-    let foldedRangeIndex = low;
-    for (
-      let lineIndex = renderRange.startingLine;
-      lineIndex < endLine;
-      lineIndex++
-    ) {
-      while (this.foldRanges[foldedRangeIndex]?.endLine < lineIndex) {
-        foldedRangeIndex++;
-      }
-      const foldedRange = this.foldRanges[foldedRangeIndex];
-      if (
-        foldedRange !== undefined &&
-        lineIndex >= foldedRange.startLine &&
-        lineIndex <= foldedRange.endLine
-      ) {
-        lineIndex = foldedRange.endLine;
-        continue;
-      }
+    forEachVisibleLine(
+      this.foldRanges,
+      renderRange.startingLine,
+      endLine,
+      (lineIndex) => {
+        const lineNumber = lineIndex + 1;
 
-      const lineNumber = lineIndex + 1;
+        // Sparse array - directly indexed by lineIndex
+        const line = code[lineIndex];
+        if (line == null) {
+          const message = 'FileRenderer.processFileResult: Line doesnt exist';
+          console.error(message, {
+            name: file.name,
+            lineIndex,
+            lineNumber,
+          });
+          throw new Error(message);
+        }
 
-      // Sparse array - directly indexed by lineIndex
-      const line = code[lineIndex];
-      if (line == null) {
-        const message = 'FileRenderer.processFileResult: Line doesnt exist';
-        console.error(message, {
-          name: file.name,
-          lineIndex,
+        // Add gutter line number, with a fold toggle on foldable headers
+        const gutterItem = createGutterItem(
+          'context',
           lineNumber,
-        });
-        throw new Error(message);
-      }
-
-      // Add gutter line number, with a fold toggle on foldable headers
-      const gutterItem = createGutterItem(
-        'context',
-        lineNumber,
-        `${lineIndex}`
-      );
-      const foldable = foldableRangesByStart?.get(lineIndex) != null;
-      const isFoldedHeader =
-        foldable && foldManager?.isFolded(lineIndex) === true;
-      if (foldable) {
-        gutterItem.children.push(
-          createFoldToggleElement(lineIndex, isFoldedHeader)
+          `${lineIndex}`
         );
-      }
-      gutter.children.push(gutterItem);
-      // The cached HAST row is shared across renders; clone before appending
-      // the folded-block indicator so unfolding never leaves one behind.
-      contentArray.push(
-        isFoldedHeader && line.type === 'element'
-          ? {
-              ...line,
-              children: [
-                ...line.children,
-                createFoldIndicatorElement(lineIndex),
-              ],
-            }
-          : line
-      );
-      rowCount++;
-
-      // Check annotations using ACTUAL line number from file
-      const annotations = this.lineAnnotations[lineNumber];
-      if (annotations != null) {
-        gutter.children.push(createGutterGap('context', 'annotation', 1));
+        const foldable = foldableRangesByStart?.get(lineIndex) != null;
+        const isFoldedHeader =
+          foldable && foldManager?.isFolded(lineIndex) === true;
+        if (foldable) {
+          gutterItem.children.push(
+            createFoldToggleElement(lineIndex, isFoldedHeader)
+          );
+        }
+        gutter.children.push(gutterItem);
+        // The cached HAST row is shared across renders; clone before appending
+        // the folded-block indicator so unfolding never leaves one behind.
         contentArray.push(
-          createAnnotationElement({
-            type: 'annotation',
-            hunkIndex: 0,
-            lineIndex: lineNumber,
-            annotations: annotations.map((annotation) =>
-              this.annotationSlotName(annotation)
-            ),
-          })
+          isFoldedHeader && line.type === 'element'
+            ? {
+                ...line,
+                children: [
+                  ...line.children,
+                  createFoldIndicatorElement(lineIndex),
+                ],
+              }
+            : line
         );
         rowCount++;
+
+        // Check annotations using ACTUAL line number from file
+        const annotations = this.lineAnnotations[lineNumber];
+        if (annotations != null) {
+          gutter.children.push(createGutterGap('context', 'annotation', 1));
+          contentArray.push(
+            createAnnotationElement({
+              type: 'annotation',
+              hunkIndex: 0,
+              lineIndex: lineNumber,
+              annotations: annotations.map((annotation) =>
+                this.annotationSlotName(annotation)
+              ),
+            })
+          );
+          rowCount++;
+        }
       }
-    }
+    );
 
     // Finalize: wrap gutter and content
     gutter.properties.style = `grid-row: span ${rowCount}`;

@@ -10,6 +10,7 @@ import type {
 import { appendItems } from './appendItems';
 import { linesFromFileContents } from './computeFileOffsets';
 import { createTransformerWithState } from './createTransformerWithState';
+import { forEachVisibleLine } from './forEachVisibleLine';
 import { formatCSSVariablePrefix } from './formatCSSVariablePrefix';
 import { getFiletypeFromFileName } from './getFiletypeFromFileName';
 import { getHighlighterThemeStyles } from './getHighlighterThemeStyles';
@@ -50,33 +51,18 @@ export function renderFileWithHighlighter(
     const sourceLines = lines ?? linesFromFileContents(file.contents);
     windowEndLine = Math.min(startingLine + totalLines, sourceLines.length);
     if (hiddenLineRanges != null && hiddenLineRanges.length > 0) {
-      renderedLineIndexes = [];
+      const lineIndexes: number[] = [];
       const renderedLines: string[] = [];
-      let low = 0;
-      let high = hiddenLineRanges.length;
-      while (low < high) {
-        const middle = low + ((high - low) >> 1);
-        if (hiddenLineRanges[middle].endLine < startingLine) {
-          low = middle + 1;
-        } else {
-          high = middle;
+      forEachVisibleLine(
+        hiddenLineRanges,
+        startingLine,
+        windowEndLine,
+        (lineIndex) => {
+          lineIndexes.push(lineIndex);
+          renderedLines.push(sourceLines[lineIndex] ?? '');
         }
-      }
-      let foldedRangeIndex = low;
-      for (let lineIndex = startingLine; lineIndex < windowEndLine; ) {
-        while (hiddenLineRanges[foldedRangeIndex]?.endLine < lineIndex) {
-          foldedRangeIndex++;
-        }
-        const foldedRange = hiddenLineRanges[foldedRangeIndex];
-        if (foldedRange != null && lineIndex >= foldedRange.startLine) {
-          lineIndex = foldedRange.endLine + 1;
-          foldedRangeIndex++;
-          continue;
-        }
-        renderedLineIndexes.push(lineIndex);
-        renderedLines.push(sourceLines[lineIndex] ?? '');
-        lineIndex++;
-      }
+      );
+      renderedLineIndexes = lineIndexes;
       contents = renderedLines.join('');
     } else {
       contents = sourceLines.slice(startingLine, windowEndLine).join('');

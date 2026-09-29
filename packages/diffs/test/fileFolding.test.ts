@@ -4,6 +4,7 @@ import { File, type FileOptions } from '../src/components/File';
 import { DEFAULT_THEMES } from '../src/constants';
 import { Editor } from '../src/editor/editor';
 import { disposeHighlighter } from '../src/highlighter/shared_highlighter';
+import { preloadFile } from '../src/ssr';
 import type { FileContents } from '../src/types';
 import { installDom, waitFor } from './domHarness';
 
@@ -135,6 +136,17 @@ async function waitForLines(
     { timeout: 3000 }
   );
   expect(renderedLineNumbers(container)).toEqual(expected);
+}
+
+// Count File.render calls, including the ones rerender() makes internally.
+function countRenders(file: File<undefined>): { count: number } {
+  const counter = { count: 0 };
+  const render = file.render.bind(file);
+  file.render = (props) => {
+    counter.count++;
+    return render(props);
+  };
+  return counter;
 }
 
 describe('read-only File folding', () => {
@@ -303,5 +315,68 @@ describe('read-only File folding', () => {
       editor.cleanUp();
       cleanup();
     }
+  });
+
+  test('renders once when an editor attaches to or detaches from folds', async () => {
+    const { cleanup, container, file } = await createReadOnlyFileFixture();
+    const editor = new Editor('file');
+    try {
+      await waitFor(() => foldToggle(container, 1) != null);
+      foldToggle(container, 1).click();
+      await waitForLines(container, [1, 7, 8]);
+
+      const renders = countRenders(file);
+      editor.edit(file);
+      expect(renders.count).toBe(1);
+      await waitForLines(container, [1, 2, 3, 4, 5, 6, 7, 8]);
+
+      await waitFor(() => foldToggle(container, 1) != null);
+      foldToggle(container, 1).click();
+      await waitForLines(container, [1, 7, 8]);
+
+      renders.count = 0;
+      editor.cleanUp('complete');
+      expect(renders.count).toBe(1);
+      await waitForLines(container, [1, 2, 3, 4, 5, 6, 7, 8]);
+    } finally {
+      editor.cleanUp();
+      cleanup();
+    }
+  });
+
+  test('does not render while tearing down a file with editor folds', async () => {
+    const { cleanup, container, file } = await createReadOnlyFileFixture();
+    const editor = new Editor('file');
+    try {
+      editor.edit(file);
+      await waitFor(() => foldToggle(container, 1) != null);
+      foldToggle(container, 1).click();
+      await waitForLines(container, [1, 7, 8]);
+
+      const renders = countRenders(file);
+      file.cleanUp();
+      expect(renders.count).toBe(0);
+    } finally {
+      editor.cleanUp();
+      cleanup();
+    }
+  });
+});
+
+describe('server-rendered File folding', () => {
+  test('prerenders the fold controls a client File renders', async () => {
+    const { prerenderedHTML } = await preloadFile({
+      file: { name: 'foldable.ts', contents: FOLDABLE_CONTENTS },
+      options: { theme: DEFAULT_THEMES },
+    });
+
+    expect(prerenderedHTML).toContain('data-folding');
+    expect(prerenderedHTML.match(/data-fold-toggle/g)).toHaveLength(2);
+
+    const { prerenderedHTML: disabledHTML } = await preloadFile({
+      file: { name: 'foldable.ts', contents: FOLDABLE_CONTENTS },
+      options: { theme: DEFAULT_THEMES, folding: false },
+    });
+    expect(disabledHTML).not.toContain('data-fold-toggle');
   });
 });

@@ -652,6 +652,65 @@ describe('editor folding on File', () => {
     }
   });
 
+  test('rescans folds after a multi-line edit that keeps the line count', async () => {
+    const { cleanup, container, editor } = await createFileEditorFixture();
+    try {
+      // Replace from mid-line 1 to mid-line 3 with the same number of lines,
+      // dedenting the middle one: line 2 no longer nests, and line 3 now opens
+      // a block that ends before the closing brace.
+      editor.applyEdits([
+        {
+          range: {
+            start: { line: 1, character: 10 },
+            end: { line: 3, character: 12 },
+          },
+          newText: 'x\nif (before) {\ny',
+        },
+      ]);
+
+      await waitFor(
+        () =>
+          gutterRow(container, 4).querySelector('[data-fold-toggle]') != null,
+        { timeout: 3000 }
+      );
+      expect(gutterRow(container, 3).querySelector('[data-fold-toggle]')).toBe(
+        null
+      );
+      foldToggle(container, 4).click();
+      await waitForLines(container, [1, 2, 3, 4, 7, 8]);
+    } finally {
+      cleanup();
+    }
+  });
+
+  test('keeps folds when setViewState omits them', async () => {
+    const { cleanup, container, editor } = await createFileEditorFixture();
+    try {
+      foldToggle(container, 1).click();
+      await waitForLines(container, [1, 7, 8]);
+
+      editor.setViewState({
+        selections: [
+          {
+            start: { line: 7, character: 0 },
+            end: { line: 7, character: 0 },
+            direction: 0,
+          },
+        ],
+      });
+
+      await waitForLines(container, [1, 7, 8]);
+      expect(editor.getViewState().foldRanges).toEqual([
+        { startLine: 0, endLine: 5 },
+      ]);
+
+      editor.setViewState({ foldRanges: [] });
+      await waitForLines(container, [1, 2, 3, 4, 5, 6, 7, 8]);
+    } finally {
+      cleanup();
+    }
+  });
+
   test('syncs each fold toggle to the host once', async () => {
     const { cleanup, container, file } = await createFileEditorFixture();
     try {

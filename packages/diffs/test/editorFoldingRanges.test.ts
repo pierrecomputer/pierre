@@ -3,9 +3,13 @@ import { describe, expect, test } from 'bun:test';
 import { TextDocument } from '../src/editor/textDocument';
 import {
   computeIndentFoldingRanges,
+  FoldManager,
   LineRangeIndex,
   mergeHiddenLineRanges,
 } from '../src/managers/FoldManager';
+import type { FileContents } from '../src/types';
+import { linesFromFileContents } from '../src/utils/computeFileOffsets';
+import { forEachVisibleLine } from '../src/utils/forEachVisibleLine';
 
 function document(text: string) {
   return new TextDocument('inmemory://folding', text);
@@ -167,5 +171,108 @@ describe('LineRangeIndex', () => {
     expect(hiddenStart.nearestVisibleLine(1, 'down', 12)).toBe(3);
     expect(hiddenEnd.nearestVisibleLine(10, 'up', 12)).toBe(8);
     expect(hiddenEnd.nearestVisibleLine(10, 'down', 12)).toBeUndefined();
+  });
+});
+
+describe('forEachVisibleLine', () => {
+  function visibleLines(
+    ranges: { startLine: number; endLine: number }[],
+    startLine: number,
+    endLine: number
+  ): number[] {
+    const lines: number[] = [];
+    forEachVisibleLine(ranges, startLine, endLine, (line) => {
+      lines.push(line);
+    });
+    return lines;
+  }
+
+  test('skips hidden bodies, including one containing the start line', () => {
+    const ranges = [
+      { startLine: 1, endLine: 2 },
+      { startLine: 5, endLine: 7 },
+    ];
+
+    expect(visibleLines(ranges, 0, 10)).toEqual([0, 3, 4, 8, 9]);
+    expect(visibleLines(ranges, 6, 10)).toEqual([8, 9]);
+    expect(visibleLines(ranges, 3, 6)).toEqual([3, 4]);
+  });
+
+  test('stops when the visitor returns false', () => {
+    const visited: number[] = [];
+    forEachVisibleLine([{ startLine: 1, endLine: 1 }], 0, 10, (line) => {
+      visited.push(line);
+      return line < 3;
+    });
+
+    expect(visited).toEqual([0, 2, 3]);
+  });
+});
+
+describe('FoldManager', () => {
+  function fileWithLines(contents: string[]): {
+    file: FileContents;
+    lines: string[];
+  } {
+    const file = { name: 'mixed.ts', contents: contents.join('\n') };
+    return { file, lines: linesFromFileContents(file.contents) };
+  }
+
+  test('reuses fold candidates for the same file across re-split lines', () => {
+    const manager = new FoldManager();
+    const { file, lines } = fileWithLines(['root', '  child', 'next']);
+    const ranges = manager.getFoldableRangesByStart(file, lines);
+
+    expect(manager.getFoldableRangesByStart(file, [...lines])).toBe(ranges);
+    expect(
+      manager.getFoldableRangesByStart(
+        { ...file, contents: `${file.contents}\n  more` },
+        lines
+      )
+    ).not.toBe(ranges);
+  });
+
+  test('measures tab indentation with the configured tab size', () => {
+    const manager = new FoldManager();
+    const { file, lines } = fileWithLines([
+      'root',
+      '\tchild',
+      '    grandchild',
+    ]);
+
+    expect(manager.usesTabIndentation(file, lines)).toBe(true);
+    expect([...manager.getFoldableRangesByStart(file, lines).values()]).toEqual(
+      [
+        { startLine: 0, endLine: 2 },
+        { startLine: 1, endLine: 2 },
+      ]
+    );
+
+    expect(manager.setTabSize(4, file, lines)).toBe(true);
+    expect([...manager.getFoldableRangesByStart(file, lines).values()]).toEqual(
+      [{ startLine: 0, endLine: 2 }]
+    );
+    expect(manager.setTabSize(4, file, lines)).toBe(false);
+
+    const spaces = fileWithLines(['root', '  child']);
+    expect(manager.usesTabIndentation(spaces.file, spaces.lines)).toBe(false);
+  });
+
+  test('unfolds every fold hiding a line', () => {
+    const manager = new FoldManager();
+    const { file, lines } = fileWithLines([
+      'outer',
+      '  inner',
+      '    body',
+      '  after',
+      'next',
+    ]);
+    manager.toggleFold(0, file, lines);
+    manager.toggleFold(1, file, lines);
+
+    expect(manager.unfoldLine(0, file, lines)).toBe(false);
+    expect(manager.unfoldLine(2, file, lines)).toBe(true);
+    expect(manager.hasFolds()).toBe(false);
+    expect(manager.getHiddenLineRanges(file, lines)).toEqual([]);
   });
 });

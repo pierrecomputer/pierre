@@ -6,13 +6,17 @@ import {
   disposeHighlighter,
   getSharedHighlighter,
 } from '../src/highlighter/shared_highlighter';
+import type { FoldManager } from '../src/managers/FoldManager';
+import { FileRenderer } from '../src/renderers/FileRenderer';
 import type {
   FileContents,
   RenderRange,
   RenderWindow,
   VirtualFileMetrics,
 } from '../src/types';
+import { linesFromFileContents } from '../src/utils/computeFileOffsets';
 import { WorkerPoolManager } from '../src/worker/WorkerPoolManager';
+import { installDom, waitFor } from './domHarness';
 
 const metrics: VirtualFileMetrics = {
   ...DEFAULT_VIRTUAL_FILE_METRICS,
@@ -83,6 +87,8 @@ function createVirtualizer(layoutChanges: boolean[]) {
     isInstanceVisible() {
       return true;
     },
+    markDOMDirty() {},
+    requestHeightReconcile() {},
   } as never;
 }
 
@@ -263,5 +269,186 @@ describe('VirtualizedFile editor folding', () => {
     expect(unfoldedResult?.rowCount).toBe(19_994);
     expect(unfoldedCode?.[1]).toBeDefined();
     expect(unfoldedCode?.[19_993]).toBeDefined();
+  });
+});
+
+// Protected read-only fold state, reached the way the FoldManager's click
+// handler reaches it.
+interface ReadOnlyFoldingInternals {
+  foldManager: FoldManager;
+  foldRanges: { startLine: number; endLine: number }[];
+  toggleFold(startLine: number, restoreFocus?: boolean): void;
+}
+
+function readOnlyFolding(instance: VirtualizedFile): ReadOnlyFoldingInternals {
+  return instance as unknown as ReadOnlyFoldingInternals;
+}
+
+// Line 0 folds lines 1-5; the closing brace on line 6 stays visible.
+const FOLDABLE_CONTENTS = [
+  'function outer() {',
+  '  const before = 1;',
+  '  if (before) {',
+  '    console.log(before);',
+  '  }',
+  '  return before;',
+  '}',
+  'const after = true;',
+].join('\n');
+
+describe('VirtualizedFile read-only folding', () => {
+  // Header, 8 rows of 10px, and bottom spacing.
+  const unfoldedHeight = 30 + 80 + 4;
+  const foldedHeight = unfoldedHeight - 50;
+
+  test('drops folds when a different file is laid out', () => {
+    const instance = new VirtualizedFile({}, createVirtualizer([]), metrics);
+    instance.updateCodeViewLayout(
+      { name: 'a.ts', contents: FOLDABLE_CONTENTS },
+      0
+    );
+    readOnlyFolding(instance).toggleFold(0);
+    expect(instance.getVirtualizedHeight()).toBe(foldedHeight);
+
+    instance.updateCodeViewLayout(
+      { name: 'b.ts', contents: FOLDABLE_CONTENTS },
+      0
+    );
+
+    expect(readOnlyFolding(instance).foldManager.hasFolds()).toBe(false);
+    expect(readOnlyFolding(instance).foldRanges).toEqual([]);
+    expect(instance.getVirtualizedHeight()).toBe(unfoldedHeight);
+  });
+
+  test('applies fold state to the layout it computes', () => {
+    const file = { name: 'a.ts', contents: FOLDABLE_CONTENTS };
+    const instance = new VirtualizedFile({}, createVirtualizer([]), metrics);
+    instance.updateCodeViewLayout(file, 0);
+    expect(instance.getVirtualizedHeight()).toBe(unfoldedHeight);
+
+    // Fold state that changed outside a toggle must reach layout before the
+    // rows are measured, not only the render that follows it.
+    readOnlyFolding(instance).foldManager.toggleFold(
+      0,
+      file,
+      linesFromFileContents(file.contents)
+    );
+    instance.updateCodeViewLayout(file, 0);
+
+    expect(readOnlyFolding(instance).foldRanges).toEqual([
+      { startLine: 1, endLine: 5 },
+    ]);
+    expect(instance.getVirtualizedHeight()).toBe(foldedHeight);
+  });
+
+  test('unfolds a line revealed as a scroll target', () => {
+    const layoutChanges: boolean[] = [];
+    const instance = new VirtualizedFile(
+      {},
+      createVirtualizer(layoutChanges),
+      metrics
+    );
+    instance.updateCodeViewLayout(
+      { name: 'a.ts', contents: FOLDABLE_CONTENTS },
+      0
+    );
+    readOnlyFolding(instance).toggleFold(0);
+    expect(instance.getLinePosition(4)?.height).toBe(0);
+
+    expect(instance.revealLine(4)).toBe(true);
+
+    expect(instance.getLinePosition(4)).toEqual({ top: 60, height: 10 });
+    expect(instance.getVirtualizedHeight()).toBe(unfoldedHeight);
+    expect(layoutChanges.at(-1)).toBe(true);
+    expect(instance.revealLine(4)).toBe(false);
+  });
+
+  test('treats the folding option as a layout option', () => {
+    const layoutChanges: boolean[] = [];
+    const instance = new VirtualizedFile(
+      {},
+      createVirtualizer(layoutChanges),
+      metrics
+    );
+    instance.updateCodeViewLayout(
+      { name: 'a.ts', contents: FOLDABLE_CONTENTS },
+      0
+    );
+
+    instance.setOptions({ folding: false });
+
+    expect(layoutChanges).toEqual([true]);
+  });
+
+  test('restores keyboard focus after the deferred fold render', async () => {
+    const dom = installDom();
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const instance = new VirtualizedFile(
+      { disableFileHeader: true, theme: DEFAULT_THEMES },
+      createVirtualizer([]),
+      metrics
+    );
+    try {
+      const file = { name: 'a.ts', contents: FOLDABLE_CONTENTS };
+      instance.render({ file, fileContainer: container });
+      const toggle = (): HTMLButtonElement | null | undefined =>
+        container.shadowRoot?.querySelector<HTMLButtonElement>(
+          '[data-column-number="1"] [data-fold-toggle]'
+        );
+      await waitFor(() => toggle() != null, { timeout: 3000 });
+
+      readOnlyFolding(instance).toggleFold(0, true);
+      // The virtualizer renders the folded rows on its next frame.
+      instance.onRender(true);
+
+      const rerenderedToggle = toggle();
+      expect(rerenderedToggle?.hasAttribute('data-folded')).toBe(true);
+      expect(container.shadowRoot?.activeElement).toBe(rerenderedToggle);
+    } finally {
+      instance.cleanUp();
+      dom.cleanup();
+    }
+  });
+});
+
+describe('FileRenderer windowed plain text', () => {
+  test('does not reuse a plain-text window for another range while themes load', async () => {
+    await getSharedHighlighter({
+      themes: Object.values(DEFAULT_THEMES),
+      langs: ['text'],
+    });
+    let onHighlight: () => void = () => {};
+    const highlighted = new Promise<void>((resolve) => {
+      onHighlight = resolve;
+    });
+    // A one-character tokenize limit renders every file as plain text.
+    const renderer = new FileRenderer(
+      { theme: DEFAULT_THEMES, tokenizeMaxLength: 1 },
+      undefined,
+      () => onHighlight()
+    );
+    const file = createFile(100);
+    const firstRange = {
+      startingLine: 0,
+      totalLines: 10,
+      bufferBefore: 0,
+      bufferAfter: 900,
+    };
+    const scrolledRange = {
+      startingLine: 50,
+      totalLines: 10,
+      bufferBefore: 500,
+      bufferAfter: 400,
+    };
+    expect(renderer.renderFile(file, firstRange)?.rowCount).toBe(10);
+
+    renderer.setOptions({ ...renderer.options, theme: 'vitesse-dark' });
+
+    // The cached window only has rows 0-9 and the new theme isn't loaded, so
+    // there is nothing to render until the highlight lands.
+    expect(renderer.renderFile(file, scrolledRange)).toBeUndefined();
+    await highlighted;
+    expect(renderer.renderFile(file, scrolledRange)?.rowCount).toBe(10);
   });
 });
