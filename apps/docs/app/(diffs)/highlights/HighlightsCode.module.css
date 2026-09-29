@@ -1,0 +1,18 @@
+.code {
+  color-scheme: light dark;
+}
+
+.code pre {
+  overflow-x: auto;
+  margin: 0;
+  padding: 0 1rem 1rem;
+  font-size: 0.875rem;
+  line-height: var(--diffs-line-height, 20px);
+  tab-size: 2;
+}
+
+.code pre code {
+  font-family: var(--font-berkeley-mono), monospace;
+  font-size: inherit;
+  font-weight: 400;
+}
