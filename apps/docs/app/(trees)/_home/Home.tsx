@@ -22,7 +22,6 @@ import { HeadingAnchors } from '@/components/docs/HeadingAnchors';
 import Footer from '@/components/Footer';
 import { Header } from '@/components/Header';
 import { Hero } from '@/components/Hero';
-import { Letterhead } from '@/components/Letterhead';
 import { PierreCompanySection } from '@/components/PierreCompanySection';
 import type { ProductId } from '@/lib/product-config';
 
@@ -72,48 +71,43 @@ export default function TreesPage() {
   });
 
   return (
-    <>
-      <Letterhead />
-      <div className="bg-background relative z-10 border-t-[0.5px]">
-        <div className="mx-auto min-h-screen max-w-5xl px-5 xl:max-w-[80rem]">
-          <Header className="-mb-[1px]" />
-          <main>
-            <Hero productId={PRODUCT_ID} />
+    <div className="mx-auto min-h-screen max-w-5xl px-5 xl:max-w-[80rem]">
+      <Header className="-mb-[1px]" />
+      <main>
+        <Hero productId={PRODUCT_ID} />
 
-            <section className="relative mb-16 max-md:-mr-5 max-md:-ml-5 max-md:overflow-x-clip max-md:pl-5 md:-mt-6">
-              <DemoTreeApp />
-            </section>
+        <section className="relative mb-16 max-md:-mr-5 max-md:-ml-5 max-md:overflow-x-clip max-md:pl-5 md:-mt-6">
+          <DemoTreeApp />
+        </section>
 
-            <HeadingAnchors />
-            <section className="space-y-12 pb-8">
-              <DemoFlatten
-                preloadedData={{
-                  flattened: flattenFlattenedPreloadedData,
-                  hierarchical: flattenHierarchicalPreloadedData,
-                }}
-              />
-              <DemoGitStatus
-                preloadedData={{
-                  filteredViewport: gitStatusFilteredViewportPreloadedData,
-                  fullViewport: gitStatusFullViewportPreloadedData,
-                }}
-              />
-              <DemoContextMenu />
-              <DemoDragDrop />
-              <DemoSearch />
-              <DemoVirtualization />
-              <DemoA11y />
-              <DemoCustomIcons />
-              <DemoTheming />
-              <DemoStyling />
-              <DemoDensity />
-            </section>
+        <HeadingAnchors />
+        <section className="space-y-12 pb-8">
+          <DemoFlatten
+            preloadedData={{
+              flattened: flattenFlattenedPreloadedData,
+              hierarchical: flattenHierarchicalPreloadedData,
+            }}
+          />
+          <DemoGitStatus
+            preloadedData={{
+              filteredViewport: gitStatusFilteredViewportPreloadedData,
+              fullViewport: gitStatusFullViewportPreloadedData,
+            }}
+          />
+          <DemoContextMenu />
+          <DemoDragDrop />
+          <DemoSearch />
+          <DemoVirtualization />
+          <DemoA11y />
+          <DemoCustomIcons />
+          <DemoTheming />
+          <DemoStyling />
+          <DemoDensity />
+        </section>
 
-            <PierreCompanySection />
-          </main>
-          <Footer />
-        </div>
-      </div>
-    </>
+        <PierreCompanySection />
+      </main>
+      <Footer />
+    </div>
   );
 }
