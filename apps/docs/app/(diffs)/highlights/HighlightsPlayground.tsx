@@ -185,9 +185,23 @@ export function HighlightsPlayground({
       aria-label={variant === 'hero' ? 'TSX playground' : 'Language playground'}
       className="space-y-5 pb-16 md:pb-24"
     >
+      {variant === 'hero' && (
+        <div className="mb-6 max-w-3xl space-y-2">
+          <h2 className="text-2xl font-semibold tracking-tight">
+            Drop-in replacement for Shiki
+          </h2>
+          <p className="text-muted-foreground text-pretty">
+            Highlights support is planned for a forthcoming Diffs beta. When
+            that beta ships, set{' '}
+            <code>preferredHighlighter: &apos;highlights&apos;</code> on your
+            component or worker pool to try it, and share feedback while the
+            integration is experimental.
+          </p>
+        </div>
+      )}
       {variant === 'languages' && (
         <>
-          <div className="mb-8 max-w-3xl space-y-2">
+          <div className="mb-6 max-w-3xl space-y-2">
             <h2 className="text-2xl font-semibold tracking-tight">
               Supports over 70 languages
             </h2>
