@@ -1,235 +1,138 @@
-import Link from 'next/link';
-import type { ReactNode } from 'react';
+import { BenchmarkBar } from './BenchmarkBar';
+import benchmark from '@/public/highlights/benchmark-browser.json';
 
-import { cn } from '@/lib/utils';
+// Keep the chart tied to the complete recorded browser run. Throughput is the
+// reciprocal of elapsed time because every engine processes the same source.
+const rows = [...benchmark.rows].sort(
+  (left, right) => left.milliseconds - right.milliseconds
+);
+const maximumThroughput = Math.max(
+  ...rows.map(({ milliseconds }) => 1 / milliseconds)
+);
 
-// Published string-I/O results from packages/highlights/benchmark/README.md,
-// recorded September 25, 2026. Keep the reported ratios rather than deriving
-// them from the table's independently rounded throughput values.
-const largeFileResults = [
-  {
-    language: 'TypeScript',
-    size: '517 KiB',
-    speedup: 294,
-  },
-  {
-    language: 'HTML',
-    size: '474 KiB',
-    speedup: 237,
-  },
-  {
-    language: 'CSS',
-    size: '379 KiB',
-    speedup: 248,
-  },
-  {
-    language: 'JSONC',
-    size: '292 KiB',
-    speedup: 148,
-  },
-];
+function formatDuration(milliseconds: number) {
+  return milliseconds < 1000
+    ? `${milliseconds.toFixed(1)} ms`
+    : `${(milliseconds / 1000).toFixed(2)} s`;
+}
 
-const memoryResults = [
-  { name: 'Highlights', peakRss: 49 },
-  { name: 'Shiki JS', peakRss: 155 },
-  { name: 'Shiki Wasm', peakRss: 346 },
-];
-
-const throughputMaximum = 300;
-const memoryMaximum = 400;
-
-// Renders different benchmark units against an explicit zero-based maximum.
-function PerformanceBar({
-  name,
-  value,
-  maximum,
-  formatValue,
-  highlights = false,
-}: {
-  name: ReactNode;
-  value: number;
-  maximum: number;
-  formatValue: (value: number) => string;
-  highlights?: boolean;
-}) {
-  const formattedValue = formatValue(value);
-
-  return (
-    <div className="text-md grid grid-cols-[minmax(0,1fr)_5.75rem] items-center gap-x-1.5 gap-y-1.5 sm:grid-cols-[minmax(0,1fr)_7.5rem] sm:gap-x-3">
-      <dt className="text-muted-foreground col-start-1 row-start-2">{name}</dt>
-      <dd className="contents">
-        <div
-          aria-hidden="true"
-          className={cn(
-            'col-start-1 row-start-1 h-3 rounded-md transition-[width] duration-500 ease-out motion-reduce:transition-none',
-            highlights
-              ? 'bg-gradient-to-r from-cyan-500/80 to-blue-500/90 dark:from-cyan-400/80 dark:to-blue-400/90'
-              : 'bg-foreground/50'
-          )}
-          style={{
-            width: `${(value / maximum) * 100}%`,
-          }}
-        />
-        <span
-          className={cn(
-            'col-start-2 row-span-2 row-start-1 mt-[-16px] w-full min-w-0 self-center whitespace-nowrap text-left text-2xl font-normal tabular-nums sm:text-right sm:text-3xl',
-            highlights
-              ? 'font-semibold text-blue-500 dark:text-blue-400'
-              : 'text-foreground/50'
-          )}
-        >
-          {formattedValue}
-        </span>
-      </dd>
-    </div>
-  );
+function formatOutput(output: string) {
+  return output === 'tokens' ? 'Tokens' : output === 'spans' ? 'Spans' : output;
 }
 
 export function HighlightsBenchmarks() {
   return (
     <section
+      id="performance"
       aria-labelledby="highlights-performance"
-      className="space-y-6 pb-16 md:pb-24"
+      className="scroll-mt-20 space-y-5 pb-16 md:pb-24"
     >
       <div className="max-w-3xl">
         <h2
           id="highlights-performance"
           className="text-2xl font-semibold tracking-tight"
         >
-          Fast output & lighter footprint
+          Compared with other highlighters
         </h2>
         <p className="text-muted-foreground text-pretty">
-          Highlights generates HTML at hundreds of times Shiki’s throughput on
-          large files, with substantially lower peak process memory.
+          Highlights processes 5.56 million characters of JavaScript in{' '}
+          <strong className="text-foreground font-semibold">92.1 ms</strong>.
+          Here’s how it compares with Shu Ding’s{' '}
+          <a
+            href="https://github.com/vercel-labs/gpu-lexer"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="hover:text-foreground underline underline-offset-4"
+          >
+            gpu-lexer
+          </a>{' '}
+          and other syntax highlighters in the same browser run.
         </p>
       </div>
 
-      <div className="grid min-w-0 gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-        <figure
-          aria-labelledby="highlights-language-performance"
-          className="bg-muted/50 min-w-0 rounded-2xl p-4 sm:p-8 lg:p-10"
-        >
-          <figcaption className="mb-6 max-w-2xl">
-            <h3
-              id="highlights-language-performance"
-              className="text-xl font-semibold tracking-tight"
-            >
-              Large-file HTML generation
-            </h3>
-            <p className="text-muted-foreground max-w-xl text-pretty">
-              148–294× Shiki’s throughput across these fixtures. On the 517 KiB
-              TypeScript input, Tree-sitter reaches ≈8× Shiki.
-            </p>
-          </figcaption>
-          <div className="space-y-5">
-            {largeFileResults.map(({ language, size, speedup }) => (
-              <dl key={language}>
-                <PerformanceBar
-                  name={
-                    <span className="flex items-baseline gap-2 text-sm">
-                      <span className="text-foreground font-medium">
-                        {language}
+      <div className="bg-card overflow-x-auto rounded-lg border">
+        <table className="w-full min-w-[42rem] table-fixed text-left text-sm tabular-nums">
+          <caption className="text-muted-foreground border-b px-4 py-3 text-left text-xs sm:text-sm">
+            10 copies of three.min.js · relative throughput · longer is faster
+          </caption>
+          <thead className="bg-muted/50 border-b">
+            <tr>
+              <th scope="col" className="px-3 py-3 font-medium sm:px-4">
+                <div className="grid grid-cols-[10rem_minmax(0,1fr)] gap-3">
+                  <span>Library</span>
+                  <span className="text-muted-foreground font-normal">
+                    Relative speed
+                  </span>
+                </div>
+              </th>
+              <th
+                scope="col"
+                className="w-28 px-3 py-3 text-right font-medium sm:px-4"
+              >
+                Time
+              </th>
+              <th scope="col" className="w-24 px-3 py-3 font-medium sm:px-4">
+                Output
+              </th>
+            </tr>
+          </thead>
+          <tbody className="divide-y">
+            {rows.map(({ name, version, milliseconds, output }) => {
+              const isHighlights = name === 'Highlights';
+
+              return (
+                <tr
+                  key={name}
+                  className={isHighlights ? 'bg-muted/30' : undefined}
+                >
+                  <th scope="row" className="px-3 py-3 font-medium sm:px-4">
+                    <div className="grid grid-cols-[10rem_minmax(0,1fr)] items-center gap-3">
+                      <span className="whitespace-nowrap">
+                        {name}
+                        <span className="text-muted-foreground ml-2 text-xs font-normal">
+                          {version}
+                        </span>
                       </span>
-                      <span>{size}</span>
-                    </span>
-                  }
-                  value={speedup}
-                  maximum={throughputMaximum}
-                  formatValue={(value) => `${value}×`}
-                  highlights
-                />
-              </dl>
-            ))}
-          </div>
-        </figure>
-
-        <figure
-          aria-labelledby="highlights-memory-performance"
-          className="bg-muted/50 min-w-0 rounded-2xl p-4 sm:p-8 lg:p-10"
-        >
-          <figcaption className="mb-8 max-w-3xl">
-            <h3
-              id="highlights-memory-performance"
-              className="text-xl font-semibold tracking-tight"
-            >
-              Peak process memory
-            </h3>
-            <p className="text-muted-foreground max-w-xl text-pretty">
-              Median peak process RSS while generating HTML from the 517 KiB
-              TypeScript fixture, shown on a shared 0–400 MiB scale. Lower is
-              better.
-            </p>
-          </figcaption>
-          <dl className="space-y-6">
-            {memoryResults.map(({ name, peakRss }) => (
-              <PerformanceBar
-                key={name}
-                name={name}
-                value={peakRss}
-                maximum={memoryMaximum}
-                formatValue={(value) => `${value} MiB`}
-                highlights={name === 'Highlights'}
-              />
-            ))}
-          </dl>
-        </figure>
+                      <BenchmarkBar
+                        value={1 / milliseconds}
+                        maximum={maximumThroughput}
+                        highlighted={isHighlights}
+                      />
+                    </div>
+                  </th>
+                  <td className="px-3 py-3 text-right font-medium whitespace-nowrap sm:px-4">
+                    {formatDuration(milliseconds)}
+                  </td>
+                  <td className="text-muted-foreground px-3 py-3 sm:px-4">
+                    {formatOutput(output)}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
       </div>
 
-      <div className="grid min-w-0 gap-8 lg:grid-cols-3">
-        <article className="bg-muted/50 min-w-0 rounded-2xl p-5 sm:p-8 lg:p-10">
-          <h3 className="font-semibold">Complete themed tokens</h3>
-          <p className="text-muted-foreground mt-2 text-sm text-pretty">
-            Complete themed token generation reaches{' '}
-            <strong className="text-foreground font-semibold tabular-nums">
-              208 MiB/s · 173× Shiki’s throughput
-            </strong>{' '}
-            on the 517 KiB TypeScript fixture.
-          </p>
-        </article>
-        <article className="bg-muted/50 min-w-0 rounded-2xl p-5 sm:p-8 lg:p-10">
-          <h3 className="font-semibold">Streaming themed tokens</h3>
-          <p className="text-muted-foreground mt-2 text-sm text-pretty">
-            Streaming themed token generation reaches{' '}
-            <strong className="text-foreground font-semibold tabular-nums">
-              197 MiB/s · 170× Shiki’s throughput
-            </strong>{' '}
-            on a large TypeScript fixture.
-          </p>
-        </article>
-        <article className="bg-muted/50 min-w-0 rounded-2xl p-5 sm:p-8 lg:p-10">
-          <h3 className="font-semibold">Live edits</h3>
-          <p className="text-muted-foreground mt-2 text-sm text-pretty">
-            For single-character edits and line insertion or deletion on the
-            TypeScript fixture (517 KiB), the median synchronous response is{' '}
-            <strong className="text-foreground font-semibold tabular-nums">
-              under 1.4 µs
-            </strong>
-            , excluding deferred tokenization.
-          </p>
-        </article>
-      </div>
-
-      <div className="text-muted-foreground max-w-4xl space-y-2 text-xs leading-relaxed">
+      <div className="text-muted-foreground max-w-3xl space-y-2 text-xs leading-relaxed">
         <p>
-          Measured September 25, 2026 on an Apple M4 Pro (14 cores, 48 GiB RAM)
-          using Bun 1.4.0, Shiki 4.4.1, and tree-sitter-highlight 1.1.2. Median
-          throughput after warmup. Memory measured September 16, 2026 as median
-          peak process RSS from five fresh processes per engine. RSS includes
-          the runtime, compiled code, Wasm, and allocator capacity; it is not
-          live heap or bundle size. Results vary by input and environment.{' '}
-          <Link
-            href="https://github.com/pierrecomputer/pierre/tree/main/packages/highlights/benchmark#html-generation"
+          Recorded September 15, 2026 · Chromium 152 · Apple M4 Pro. Median of
+          three samples, each with one warm-up in a fresh worker. Bars show
+          relative throughput on a shared linear scale.
+        </p>
+        <p>
+          Highlights and Shiki return themed tokens; gpu-lexer returns
+          classified spans. The other libraries return HTML or a HAST tree.
+          These results measure speed on this JavaScript workload, not
+          highlighting quality.{' '}
+          <a
+            href="/highlights/benchmark-browser.json"
             className="hover:text-foreground underline underline-offset-4"
             target="_blank"
             rel="noopener noreferrer"
           >
-            Explore the benchmarks and methodology
-          </Link>
+            View versions, samples, and run conditions
+          </a>
           .
-        </p>
-        <p>
-          Throughput is relative to Shiki’s 1× baseline; higher is better. Each
-          chart uses its own shared zero-based linear scale.
         </p>
       </div>
     </section>
