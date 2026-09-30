@@ -69,28 +69,6 @@ function NavLink({ href, basePath, children }: NavLinkProps) {
   );
 }
 
-function ExternalNavLink({
-  href,
-  children,
-}: {
-  href: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <Button
-      variant="ghost"
-      size="sm"
-      asChild
-      className="text-muted-foreground gap-0.5 px-2 font-normal"
-    >
-      <a href={href} target="_blank" rel="noopener noreferrer">
-        {children}
-        <IconArrowUpRight />
-      </a>
-    </Button>
-  );
-}
-
 function MoreMenu({
   pathname,
   product,
@@ -103,18 +81,14 @@ function MoreMenu({
     product.id === 'diffs'
       ? `${product.basePath}${DIFFS_THEME_PATH}`
       : `${diffsUrl}${DIFFS_THEME_PATH}`;
-  const highlightsHref =
-    product.id === 'diffs'
-      ? `${product.basePath}/highlights`
-      : `${diffsUrl}/highlights`;
   const iconsHref =
     product.id === 'diffs' ? `${product.basePath}/icons` : `${diffsUrl}/icons`;
   const isThemeActive =
     product.id === 'diffs' && pathname.startsWith(DIFFS_THEME_PATH);
   const isIconsActive = product.id === 'diffs' && pathname.startsWith('/icons');
-  const isHighlightsActive =
-    product.id === 'diffs' && pathname.startsWith('/highlights');
-  const isMoreActive = isThemeActive || isIconsActive || isHighlightsActive;
+  const isMoreActive = isThemeActive || isIconsActive;
+  const otherProductId = product.id === 'diffs' ? 'trees' : 'diffs';
+  const otherProductName = product.id === 'diffs' ? 'Trees' : 'Diffs';
 
   return (
     <DropdownMenu>
@@ -123,12 +97,12 @@ function MoreMenu({
           variant="ghost"
           size="sm"
           className={cn(
-            'text-muted-foreground group gap-0.5 px-2 font-normal',
+            'text-muted-foreground group gap-1 px-2 font-normal data-[state=open]:text-foreground',
             isMoreActive && 'text-foreground font-medium'
           )}
         >
           More
-          <IconChevronSm className="transition-transform group-data-[state=open]:rotate-180" />
+          <IconChevronSm className="opacity-75 transition-transform group-data-[state=open]:rotate-180" />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="min-w-40">
@@ -160,21 +134,17 @@ function MoreMenu({
             </a>
           )}
         </DropdownMenuItem>
-        <DropdownMenuItem
-          asChild
-          className="cursor-pointer"
-          selected={isHighlightsActive}
-        >
-          {product.id === 'diffs' ? (
-            <Link href={highlightsHref}>Highlights</Link>
-          ) : (
-            <a href={highlightsHref} target="_blank" rel="noopener noreferrer">
-              Highlights
-              <IconArrowUpRight className="ml-auto opacity-60" />
-            </a>
-          )}
-        </DropdownMenuItem>
         <DropdownMenuSeparator className="mx-1.5" />
+        <DropdownMenuItem asChild className="cursor-pointer">
+          <a
+            href={getExternalUrl(otherProductId)}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            {otherProductName}
+            <IconArrowUpRight className="ml-auto opacity-60" />
+          </a>
+        </DropdownMenuItem>
         <DropdownMenuItem asChild className="cursor-pointer">
           <a href={DIFFSHUB_URL} target="_blank" rel="noopener noreferrer">
             DiffsHub
@@ -265,6 +235,17 @@ export function Header({ onMobileMenuToggle, className }: HeaderProps) {
           />
           {product.name}
         </Link>
+        <span className="text-muted-foreground hidden text-sm leading-[20px] md:inline">
+          by{' '}
+          <Link
+            href="https://pierre.computer"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-muted-foreground hover:text-foreground/80 hidden text-sm leading-[20px] transition-colors md:inline"
+          >
+            The Pierre Computer Co.
+          </Link>
+        </span>
       </div>
 
       <div className="mr-auto flex items-center gap-1 md:hidden">
@@ -294,23 +275,15 @@ export function Header({ onMobileMenuToggle, className }: HeaderProps) {
           <NavLink href="/" basePath={product.basePath}>
             Home
           </NavLink>
-          {product.id === 'diffs' ? (
+          {product.id === 'diffs' && (
             <NavLink href="/edit" basePath={product.basePath}>
               Edit
             </NavLink>
-          ) : (
-            <ExternalNavLink href={getExternalUrl('diffs')}>
-              Diffs
-            </ExternalNavLink>
           )}
-          {product.id === 'trees' ? (
-            <NavLink href="/" basePath={product.basePath}>
-              Trees
+          {product.id === 'diffs' && (
+            <NavLink href="/highlights" basePath={product.basePath}>
+              Highlights
             </NavLink>
-          ) : (
-            <ExternalNavLink href={getExternalUrl('trees')}>
-              Trees
-            </ExternalNavLink>
           )}
           <NavLink href="/docs" basePath={product.basePath}>
             Docs

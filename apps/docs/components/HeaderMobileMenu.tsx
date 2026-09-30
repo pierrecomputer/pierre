@@ -31,12 +31,14 @@ export function HeaderMobileMenu({
   const pathname = usePathname();
 
   // Mirror the desktop nav's active treatment: home matches exactly, while
-  // section links (Edit, Docs, Themes, Highlights) match their path prefix.
+  // section links (Edit, Highlights, Docs, Themes) match their path prefix.
   const homePath = product.basePath !== '' ? product.basePath : '/';
   const isActivePath = (target: string) =>
     target === homePath ? pathname === target : pathname.startsWith(target);
   const diffsUrl = getExternalUrl('diffs');
   const isDiffs = product.id === 'diffs';
+  const otherProductId = isDiffs ? 'trees' : 'diffs';
+  const otherProductName = isDiffs ? 'Trees' : 'Diffs';
 
   useEffect(() => {
     if (isOpen) {
@@ -66,25 +68,20 @@ export function HeaderMobileMenu({
         <MobileNavLink href={homePath} active={isActivePath(homePath)}>
           Home
         </MobileNavLink>
-        {isDiffs ? (
+        {isDiffs && (
           <MobileNavLink
             href={`${product.basePath}/edit`}
             active={isActivePath(`${product.basePath}/edit`)}
           >
             Edit
           </MobileNavLink>
-        ) : (
-          <MobileNavLink href={diffsUrl} external>
-            Diffs
-          </MobileNavLink>
         )}
-        {product.id === 'trees' ? (
-          <MobileNavLink href={homePath} active={isActivePath(homePath)}>
-            Trees
-          </MobileNavLink>
-        ) : (
-          <MobileNavLink href={getExternalUrl('trees')} external>
-            Trees
+        {isDiffs && (
+          <MobileNavLink
+            href={`${product.basePath}/highlights`}
+            active={isActivePath(`${product.basePath}/highlights`)}
+          >
+            Highlights
           </MobileNavLink>
         )}
         <MobileNavLink
@@ -117,19 +114,10 @@ export function HeaderMobileMenu({
             Icons
           </MobileNavLink>
         )}
-        {isDiffs ? (
-          <MobileNavLink
-            href={`${product.basePath}/highlights`}
-            active={isActivePath(`${product.basePath}/highlights`)}
-          >
-            Highlights
-          </MobileNavLink>
-        ) : (
-          <MobileNavLink href={`${diffsUrl}/highlights`} external>
-            Highlights
-          </MobileNavLink>
-        )}
         <div className="border-border my-1 border-t" />
+        <MobileNavLink href={getExternalUrl(otherProductId)} external>
+          {otherProductName}
+        </MobileNavLink>
         <MobileNavLink href={DIFFSHUB_URL} external>
           DiffsHub
         </MobileNavLink>
