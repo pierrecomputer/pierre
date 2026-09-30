@@ -1,28 +1,20 @@
 'use client';
 
+import { IconBook } from '@pierre/icons';
+import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
 
+import { AgentSkillMenu } from '@/components/AgentSkillMenu';
 import { COPY_FEEDBACK_MS, CopyStateIcon } from '@/components/CopyStateIcon';
 import { Button } from '@/components/ui/button';
-import { ButtonGroup, ButtonGroupItem } from '@/components/ui/button-group';
 
-const packageManagers = ['pnpm', 'npm', 'bun', 'yarn'] as const;
-type PackageManager = (typeof packageManagers)[number];
-
-const installCommands: Record<PackageManager, string> = {
-  pnpm: 'pnpm add @pierre/highlights',
-  npm: 'npm install @pierre/highlights',
-  bun: 'bun add @pierre/highlights',
-  yarn: 'yarn add @pierre/highlights',
-};
+const installCommand = 'pnpm add @pierre/highlights';
 
 export function HighlightsInstall() {
-  const [packageManager, setPackageManager] = useState<PackageManager>('pnpm');
   const [copied, setCopied] = useState(false);
   const resetTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(
     undefined
   );
-  const installCommand = installCommands[packageManager];
 
   useEffect(
     () => () => {
@@ -30,12 +22,6 @@ export function HighlightsInstall() {
     },
     []
   );
-
-  const selectPackageManager = (value: string) => {
-    clearTimeout(resetTimeoutRef.current);
-    setCopied(false);
-    setPackageManager(value as PackageManager);
-  };
 
   const copyInstallCommand = async () => {
     try {
@@ -54,7 +40,7 @@ export function HighlightsInstall() {
   return (
     <section
       aria-labelledby="highlights-install"
-      className="flex flex-col items-center gap-6 py-24 text-center md:py-32"
+      className="bg-muted/50 flex flex-col items-center gap-6 rounded-2xl py-24 text-center md:py-32"
     >
       <div className="max-w-xl space-y-2">
         <h2
@@ -69,23 +55,7 @@ export function HighlightsInstall() {
         </p>
       </div>
 
-      <div className="flex w-full flex-col items-center gap-3">
-        <ButtonGroup
-          aria-label="Package manager"
-          className="self-center"
-          value={packageManager}
-          onValueChange={selectPackageManager}
-        >
-          {packageManagers.map((manager) => (
-            <ButtonGroupItem
-              key={manager}
-              value={manager}
-              aria-pressed={packageManager === manager}
-            >
-              {manager}
-            </ButtonGroupItem>
-          ))}
-        </ButtonGroup>
+      <div className="flex w-full flex-col justify-center gap-3 min-[460px]:w-auto min-[460px]:flex-row min-[460px]:flex-wrap min-[460px]:items-center">
         <Button
           className="group max-w-full px-5 font-mono tracking-tight"
           size="xl"
@@ -96,8 +66,16 @@ export function HighlightsInstall() {
               : `Copy install command: ${installCommand}`
           }
         >
-          <span>{installCommand}</span>
+          <div className="size-4 min-[460px]:hidden" />
+          <span className="mx-auto min-[460px]:mx-0">{installCommand}</span>
           <CopyStateIcon copied={copied} />
+        </Button>
+        <AgentSkillMenu productId="highlights" />
+        <Button variant="secondary" asChild size="xl">
+          <Link href="/docs#highlights">
+            <IconBook />
+            Documentation
+          </Link>
         </Button>
         <span className="sr-only" aria-live="polite">
           {copied ? 'Install command copied to clipboard' : ''}

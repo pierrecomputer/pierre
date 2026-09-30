@@ -160,8 +160,8 @@ export default function HighlightsPage() {
             </div>
           </div>
         </section>
-        <PierreCompanySection />
         <HighlightsInstall />
+        <PierreCompanySection />
       </main>
       <Footer />
     </div>
