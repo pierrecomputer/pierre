@@ -4,6 +4,7 @@ import type { Metadata } from 'next';
 import { HighlightsBenchmarks } from './HighlightsBenchmarks';
 import { HighlightsHero } from './HighlightsHero';
 import { HighlightsHtmlBenchmarks } from './HighlightsHtmlBenchmarks';
+import { HighlightsInstall } from './HighlightsInstall';
 import { HighlightsPerformanceBenchmarks } from './HighlightsPerformanceBenchmarks';
 import { HighlightsPlayground } from './HighlightsPlayground';
 import Footer from '@/components/Footer';
@@ -160,6 +161,7 @@ export default function HighlightsPage() {
           </div>
         </section>
         <PierreCompanySection />
+        <HighlightsInstall />
       </main>
       <Footer />
     </div>
