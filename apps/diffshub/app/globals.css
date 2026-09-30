@@ -308,6 +308,20 @@
   }
 }
 
+/* Box-drawing glyphs (U+2500-257F) cut from JetBrains Mono, which shares
+   Berkeley Mono's 600/1000 advance. Berkeley Mono's --font-berkeley-mono
+   fallback list names this family first, so the glyphs Berkeley lacks
+   (like ━ ╰ ╴) stay on the character grid on every OS. unicode-range keeps
+   the file from loading on pages that never render these characters.
+   License: see NOTICE.md. */
+@font-face {
+  font-family: 'JetBrains Mono Box Drawing';
+  src: url('../public/fonts/JetBrainsMonoBoxDrawing.woff2') format('woff2');
+  font-weight: 100 800;
+  font-display: swap;
+  unicode-range: U+2500-257F;
+}
+
 :root {
   --diffs-font-family: var(--font-berkeley-mono);
   --cv-gutter-vertical: 0px;
