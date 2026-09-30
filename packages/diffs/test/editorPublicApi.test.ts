@@ -1477,6 +1477,58 @@ describe('Editor state round trip', () => {
   });
 });
 
+describe('Editor.setSelections', () => {
+  test('can normalize selections without scrolling or taking focus', async () => {
+    const { cleanup, content, editor, file } =
+      await createEditorFixture('alpha\nbravo');
+    try {
+      const outside = document.createElement('input');
+      document.body.append(outside);
+      outside.focus();
+      const scroll = spyOn(window.HTMLElement.prototype, 'scrollIntoView');
+      const focus = spyOn(content, 'focus');
+
+      editor.setSelections(
+        [
+          {
+            start: { line: 1, character: 99 },
+            end: { line: 0, character: 2 },
+            direction: 'forward',
+          },
+        ],
+        { skipScrollAndFocus: true }
+      );
+      expect(editor.getViewState().selections).toEqual([
+        {
+          start: { line: 0, character: 2 },
+          end: { line: 1, character: 5 },
+          direction: -1,
+        },
+      ]);
+      file.rerender();
+      await wait(0);
+      expect(scroll).not.toHaveBeenCalled();
+      expect(focus).not.toHaveBeenCalled();
+      expect(document.activeElement).toBe(outside);
+
+      editor.setSelections([
+        {
+          start: { line: 0, character: 1 },
+          end: { line: 0, character: 3 },
+          direction: 'forward',
+        },
+      ]);
+      await wait(0);
+      expect(scroll).toHaveBeenCalled();
+      expect(focus).toHaveBeenCalled();
+      scroll.mockRestore();
+      focus.mockRestore();
+    } finally {
+      cleanup();
+    }
+  });
+});
+
 describe('Editor.setOptions', () => {
   test('applies an option change after construction', async () => {
     const onChange = mock(() => {});

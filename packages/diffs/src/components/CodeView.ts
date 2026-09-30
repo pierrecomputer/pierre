@@ -1584,6 +1584,18 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
 
   private scrollToSearchMatch(match: CodeViewSearchMatch): void {
     this.setCurrentSearchMatch(match);
+    if (this.searchState.scope?.itemId === match.itemId) {
+      this.itemEditors.get(match.itemId)?.editor.setSelections(
+        [
+          {
+            start: { line: match.lineIndex, character: match.startCharacter },
+            end: { line: match.lineIndex, character: match.endCharacter },
+            direction: 'forward',
+          },
+        ],
+        { skipScrollAndFocus: true }
+      );
+    }
     this.scrollTo({
       type: 'line',
       id: match.itemId,
