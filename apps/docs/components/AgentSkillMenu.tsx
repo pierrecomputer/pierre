@@ -13,14 +13,14 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import {
+  type AgentSkillProductId,
   getAgentPrompt,
-  getProductConfig,
-  type ProductId,
+  getAgentSkillProductConfig,
 } from '@/lib/product-config';
 import { useMediaQuery } from '@/lib/useMediaQuery';
 
 export interface AgentSkillMenuProps {
-  productId: ProductId;
+  productId: AgentSkillProductId;
 }
 
 type CopyTarget = 'skillInstall' | 'agentPrompt';
@@ -35,7 +35,7 @@ export function AgentSkillMenu({ productId }: AgentSkillMenuProps) {
   const resetTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(
     undefined
   );
-  const product = getProductConfig(productId);
+  const product = getAgentSkillProductConfig(productId);
   const inlineButtons = useMediaQuery(INLINE_BUTTONS_QUERY, true);
 
   const copy = (target: CopyTarget, content: string) => {
