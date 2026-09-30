@@ -8,7 +8,13 @@ import {
   getSharedHighlighter,
 } from '../src/highlighter/shared_highlighter';
 import { parseDiffFromFile } from '../src/utils/parseDiffFromFile';
-import { createRoot, installDom, renderItems, wait } from './domHarness';
+import {
+  createRoot,
+  installDom,
+  renderItems,
+  wait,
+  waitFor,
+} from './domHarness';
 
 interface SearchMatchProbe {
   itemId: string;
@@ -212,6 +218,138 @@ afterAll(async () => {
 });
 
 describe('CodeView search panel', () => {
+  test('selects scoped file matches without editor scrolling and leaves global selections alone', async () => {
+    const dom = installDom();
+    const viewer = new CodeView({
+      createEditor: (type, options, key) => new Editor(type, options, key),
+    });
+    try {
+      const root = createRoot();
+      root.tabIndex = 0;
+      viewer.setup(root);
+      await renderItems(viewer, [
+        {
+          id: 'file',
+          type: 'file',
+          edit: true,
+          file: { name: 'search.txt', contents: 'target first\nnext target' },
+        },
+      ]);
+      const content = getEditorContent(viewer, 'file');
+      content.focus();
+      dispatchPrimaryFind(content);
+      await wait(0);
+      const input = getSearchInput(root);
+      const editor = viewer.getEditor('file')!;
+      const scroll = spyOn(window.HTMLElement.prototype, 'scrollIntoView');
+      fillSearch(root, 'target');
+      expect(editor.getViewState().selections).toEqual([
+        {
+          start: { line: 0, character: 0 },
+          end: { line: 0, character: 6 },
+          direction: 1,
+        },
+      ]);
+      pressSearchEnter(root);
+      viewer.render(true);
+      await wait(0);
+      expect(editor.getViewState().selections).toEqual([
+        {
+          start: { line: 1, character: 5 },
+          end: { line: 1, character: 11 },
+          direction: 1,
+        },
+      ]);
+      expect(input.getRootNode()).toBe(getSearchPanelRoot(root));
+      expect(getSearchPanelRoot(root).activeElement).toBe(input);
+      expect(scroll).not.toHaveBeenCalled();
+      dispatchFindAgain(input, { previous: true, composed: true });
+      expect(editor.getViewState().selections?.[0].start.line).toBe(0);
+
+      root.focus();
+      await wait(0);
+      viewer.render(true);
+      const selection = editor.getViewState().selections;
+      input.focus();
+      pressSearchEnter(root);
+      expect(getSearchState(viewer).current?.lineNumber).toBe(2);
+      expect(editor.getViewState().selections).toEqual(selection);
+      scroll.mockRestore();
+    } finally {
+      viewer.cleanUp();
+      dom.cleanup();
+    }
+  });
+
+  test.each(['split', 'unified'] as const)(
+    'reveals and selects collapsed scoped diff matches in %s mode',
+    async (diffStyle) => {
+      const dom = installDom();
+      const viewer = new CodeView({
+        diffStyle,
+        createEditor: (type, options, key) => new Editor(type, options, key),
+      });
+      try {
+        const root = createRoot();
+        viewer.setup(root);
+        const lines = Array.from({ length: 220 }, (_, index) =>
+          index === 100 ? 'hidden target' : `line ${index + 1}`
+        );
+        const next = [...lines];
+        next[9] = 'changed';
+        next[179] = 'changed again';
+        await renderItems(viewer, [
+          {
+            id: 'diff',
+            type: 'diff',
+            edit: true,
+            fileDiff: parseDiffFromFile(
+              { name: 'context.txt', contents: lines.join('\n') },
+              { name: 'context.txt', contents: next.join('\n') }
+            ),
+          },
+        ]);
+        const content = getEditorContent(viewer, 'diff');
+        const instance = viewer.getRenderedItems()[0].instance;
+        if (instance.type !== 'file-diff') {
+          throw new Error('Expected diff instance');
+        }
+        expect(instance.isLineRenderable(101)).toBe(false);
+        content.focus();
+        dispatchPrimaryFind(content);
+        await wait(0);
+        const scroll = spyOn(window.HTMLElement.prototype, 'scrollIntoView');
+        fillSearch(root, 'target');
+        await waitFor(() => {
+          viewer.render(true);
+          return (
+            getEditorContent(viewer, 'diff').querySelector(
+              '[data-line="101"]'
+            ) != null
+          );
+        });
+        expect(instance.isLineRenderable(101)).toBe(true);
+        expect(instance.isLineRenderable(210)).toBe(false);
+        expect(viewer.getEditor('diff')!.getViewState().selections).toEqual([
+          {
+            start: { line: 100, character: 7 },
+            end: { line: 100, character: 13 },
+            direction: 1,
+          },
+        ]);
+        expect(getSearchPanelRoot(root).activeElement).toBe(
+          getSearchInput(root)
+        );
+        expect(getSearchState(viewer).scope).toEqual({ itemId: 'diff' });
+        expect(scroll).not.toHaveBeenCalled();
+        scroll.mockRestore();
+      } finally {
+        viewer.cleanUp();
+        dom.cleanup();
+      }
+    }
+  );
+
   test('follows editor focus, preserves panel scope, and clears scope outside CodeView', async () => {
     const dom = installDom();
     const viewer = new CodeView({
@@ -669,7 +807,7 @@ describe('CodeView search panel', () => {
             start: { line: 0, character: 0 },
             end: { line: 0, character: 8 },
           },
-          newText: 'retained target',
+          newText: 'retained target target',
         },
       ]);
       const itemElement = getEditorContent(viewer, 'file');
@@ -690,14 +828,31 @@ describe('CodeView search panel', () => {
       );
       expect(viewer.getEditor('file')).toBe(editor);
       expect(getSearchState(viewer).scope).toEqual({ itemId: 'file' });
-      expect(getSearchState(viewer).matches).toHaveLength(1);
+      expect(getSearchState(viewer).matches).toHaveLength(2);
+
+      const input = getSearchInput(root);
+      input.focus();
+      pressSearchEnter(root);
+      expect(editor.getViewState().selections).toEqual([
+        {
+          start: { line: 0, character: 16 },
+          end: { line: 0, character: 22 },
+          direction: 1,
+        },
+      ]);
+      await waitFor(() => {
+        viewer.render(true);
+        return viewer.getRenderedItems().some((item) => item.id === 'file');
+      });
+      expect(editor.getViewState().selections?.[0].start.character).toBe(16);
+      expect(getSearchPanelRoot(root).activeElement).toBe(input);
 
       dispatchPrimaryFind(root);
       await wait(0);
       fillSearch(root, 'target');
       expect(
         getSearchState(viewer).matches.map((match) => match.itemId)
-      ).toEqual(['file']);
+      ).toEqual(['file', 'file']);
     } finally {
       viewer.cleanUp();
       dom.cleanup();

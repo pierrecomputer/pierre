@@ -18,52 +18,80 @@
       import { CodeView, parseDiffFromFile } from '/dist/index.js';
       import { Editor } from '/dist/edit/index.js';
 
+      const params = new URLSearchParams(location.search);
+      const diffStyle =
+        params.get('diffStyle') === 'unified' ? 'unified' : 'split';
       const view = new CodeView({
+        diffStyle,
         createEditor: (type, options, key) => new Editor(type, options, key),
       });
+      window.__codeView = view;
       view.setup(document.querySelector('[data-code-view-root]'));
-      const scopedFixture = new URLSearchParams(location.search).has('scope');
-      view.setItems(
-        scopedFixture
-          ? [
-              {
-                id: 'diff',
-                type: 'diff',
-                edit: true,
-                fileDiff: parseDiffFromFile(
-                  { name: 'diff.txt', contents: 'target deleted\nunchanged\n' },
-                  { name: 'diff.txt', contents: 'target added\nunchanged\n' }
-                ),
-              },
-              {
-                id: 'second',
-                type: 'file',
-                edit: true,
-                file: { name: 'second.txt', contents: 'target target\n' },
-              },
-              {
-                id: 'readonly',
-                type: 'file',
-                file: { name: 'readonly.txt', contents: 'target readonly\n' },
-              },
-            ]
-          : [
-              {
-                id: 'file',
-                type: 'file',
-                edit: true,
-                version: 1,
-                file: {
-                  name: 'example.txt',
-                  contents: Array.from({ length: 800 }, (_, index) =>
-                    [125, 126, 128, 201].includes(index + 1)
-                      ? `github match at ${index + 1}`
-                      : `line ${index + 1}`
-                  ).join('\n'),
+      const scopedFixture = params.has('scope');
+      if (params.has('collapsed')) {
+        const lines = Array.from({ length: 220 }, (_, index) =>
+          index === 100 ? 'hidden target' : `line ${index + 1}`
+        );
+        const next = [...lines];
+        next[9] = 'changed';
+        next[179] = 'changed again';
+        view.setItems([
+          {
+            id: 'diff',
+            type: 'diff',
+            edit: true,
+            fileDiff: parseDiffFromFile(
+              { name: 'context.txt', contents: lines.join('\n') },
+              { name: 'context.txt', contents: next.join('\n') }
+            ),
+          },
+        ]);
+      } else {
+        view.setItems(
+          scopedFixture
+            ? [
+                {
+                  id: 'diff',
+                  type: 'diff',
+                  edit: true,
+                  fileDiff: parseDiffFromFile(
+                    {
+                      name: 'diff.txt',
+                      contents: 'target deleted\nunchanged\n',
+                    },
+                    { name: 'diff.txt', contents: 'target added\nunchanged\n' }
+                  ),
                 },
-              },
-            ]
-      );
+                {
+                  id: 'second',
+                  type: 'file',
+                  edit: true,
+                  file: { name: 'second.txt', contents: 'target target\n' },
+                },
+                {
+                  id: 'readonly',
+                  type: 'file',
+                  file: { name: 'readonly.txt', contents: 'target readonly\n' },
+                },
+              ]
+            : [
+                {
+                  id: 'file',
+                  type: 'file',
+                  edit: true,
+                  version: 1,
+                  file: {
+                    name: 'example.txt',
+                    contents: Array.from({ length: 800 }, (_, index) =>
+                      [125, 126, 128, 201].includes(index + 1)
+                        ? `github match at ${index + 1}`
+                        : `line ${index + 1}`
+                    ).join('\n'),
+                  },
+                },
+              ]
+        );
+      }
     </script>
   </body>
 </html>
