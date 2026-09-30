@@ -31,9 +31,24 @@ const geistSans = Geist({
   subsets: ['latin'],
 });
 
+// The bundled Berkeley Mono subset only covers part of the box-drawing block
+// (it has ─ │ ┌ but not ━ ╰ ╴). Missing glyphs fall through this list, so it
+// names monospace fonts that cover the full block at ~0.6em advance (matching
+// Berkeley's 600/1000) before the generic. adjustFontFallback is off because
+// its size-adjusted Arial face would otherwise catch those glyphs first at
+// proportional widths, misaligning diagnostics and tree art.
 const berkeleyMono = localFont({
   src: './BerkeleyMonoVariable.woff2',
   variable: '--font-berkeley-mono',
+  fallback: [
+    'Menlo',
+    'DejaVu Sans Mono',
+    'Cascadia Mono',
+    'Consolas',
+    'Liberation Mono',
+    'monospace',
+  ],
+  adjustFontFallback: false,
 });
 
 const firaMono = Fira_Code({
