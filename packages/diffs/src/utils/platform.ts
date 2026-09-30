@@ -1,6 +1,7 @@
 let _isMacLike: boolean | undefined = undefined;
 let _isLinux: boolean | undefined = undefined;
 let _isSafari: boolean | undefined = undefined;
+let _isFirefox: boolean | undefined = undefined;
 
 /**
  * Clears the cached platform/browser detection. Detection is memoized on first
@@ -12,6 +13,7 @@ export function resetPlatformDetection(): void {
   _isMacLike = undefined;
   _isLinux = undefined;
   _isSafari = undefined;
+  _isFirefox = undefined;
 }
 
 export function isMacLike(): boolean {
@@ -29,6 +31,12 @@ export function isSafari(): boolean {
     // oxlint-disable-next-line typescript/no-explicit-any
     ('safari' in window && 'pushNotification' in (window as any).safari) ||
     /^((?!chrome|android).)*safari/i.test(navigator.userAgent));
+}
+
+// Gecko-based Firefox builds (desktop and Android). Firefox on iOS (FxiOS)
+// renders with WebKit and is intentionally excluded.
+export function isFirefox(): boolean {
+  return (_isFirefox ??= /\bFirefox\//.test(navigator.userAgent));
 }
 
 function getPlatform(): string {

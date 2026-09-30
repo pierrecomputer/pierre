@@ -16,9 +16,8 @@ import {
 
 const ROOT_HEIGHT = 800;
 
-// Test-local mirrors of the private scroll rebase tuning constants of the same
-// names in src/components/CodeView.ts. If the source constants are retuned,
-// update these mirrors to match.
+// Test-local mirrors of DEFAULT_SCROLL_REBASE in src/components/CodeView.ts.
+// If the source tuning changes, update these mirrors to match.
 const SCROLL_REBASE_CONTAINER_HEIGHT = 12_000_000;
 const SCROLL_REBASE_TRIGGER_TOP = 1_000_000;
 const SCROLL_REBASE_TARGET_TOP = 2_000_000;
@@ -29,6 +28,14 @@ const SCROLL_REBASE_THRESHOLD =
 // Logical scroll position slightly past the rebase threshold, so scrolling or
 // jumping to it forces a rebase.
 const PAST_REBASE_SCROLL_TOP = SCROLL_REBASE_THRESHOLD + 100_000;
+
+// Test-local mirrors of FIREFOX_SCROLL_REBASE in src/components/CodeView.ts.
+const FIREFOX_SCROLL_REBASE_CONTAINER_HEIGHT = 2 ** 22;
+const FIREFOX_SCROLL_REBASE_TARGET_TOP = 1_000_000;
+const FIREFOX_SCROLL_REBASE_THRESHOLD =
+  FIREFOX_SCROLL_REBASE_CONTAINER_HEIGHT - 500_000;
+const FIREFOX_USER_AGENT =
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:153.0) Gecko/20100101 Firefox/153.0';
 
 // Unlike the shared createRoot, this root clamps scrollTop writes to the
 // container's current max scroll range, mimicking real browser behavior so
@@ -200,6 +207,46 @@ describe('CodeView scroll anchoring', () => {
       expect(
         viewer.getRenderedItems().some((item) => item.id === 'file:39')
       ).toBe(true);
+    } finally {
+      viewer.cleanUp();
+      await wait(0);
+      cleanup();
+    }
+  });
+
+  test('caps the paged scroll container in Firefox', async () => {
+    const { cleanup } = installDom({
+      navigator: { userAgent: FIREFOX_USER_AGENT },
+    });
+    const viewer = new CodeView({
+      layout: {
+        ...DEFAULT_CODE_VIEW_LAYOUT,
+        gap: 1_000_000,
+      },
+    });
+    const root = createClampingRoot();
+    const items = Array.from({ length: 40 }, (_, index) =>
+      makeFileItem(`file:${index}`, 1)
+    );
+
+    try {
+      viewer.setup(root);
+      await renderItems(viewer, items);
+
+      const container = root.firstElementChild;
+      expect(container).toBeInstanceOf(HTMLElement);
+      expect((container as HTMLElement).style.height).toBe(
+        `${FIREFOX_SCROLL_REBASE_CONTAINER_HEIGHT}px`
+      );
+
+      const pastFirefoxRebaseScrollTop =
+        FIREFOX_SCROLL_REBASE_THRESHOLD + 100_000;
+      root.scrollTop = pastFirefoxRebaseScrollTop;
+      dispatchScroll(root);
+      viewer.render(true);
+
+      expect(viewer.getScrollTop()).toBe(pastFirefoxRebaseScrollTop);
+      expect(root.scrollTop).toBe(FIREFOX_SCROLL_REBASE_TARGET_TOP);
     } finally {
       viewer.cleanUp();
       await wait(0);
