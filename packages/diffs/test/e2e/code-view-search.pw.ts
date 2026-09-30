@@ -1,5 +1,63 @@
 import { expect, test } from '@playwright/test';
 
+test('search scope follows focus across editors, the panel, and outside CodeView', async ({
+  page,
+}) => {
+  await page.goto('/test/e2e/fixtures/code-view-search.html?scope');
+  const root = page.locator('[data-code-view-root]');
+  const editors = root.locator('[contenteditable="true"]');
+  const first = editors.nth(0);
+  const second = editors.nth(1);
+  await first.click();
+  await expect(root.locator('[data-search-panel]')).toHaveCount(0);
+  await page.keyboard.press('ControlOrMeta+f');
+  const panel = root.locator('[data-search-panel-overlay]');
+  const input = panel.getByRole('textbox', { name: 'Search' });
+  const count = panel.locator('[data-matches]');
+  await input.fill('target');
+  await expect(count).toHaveText('1 of 1');
+  await expect(
+    root.locator('[data-deletions] [data-search-match]')
+  ).toHaveCount(0);
+
+  await second.click();
+  await expect(count).toHaveText('2 results');
+  await expect(second).toBeFocused();
+  const matchCase = panel.getByRole('button', { name: 'Match Case' });
+  await matchCase.click();
+  await expect(matchCase).toHaveAttribute('aria-pressed', 'true');
+  await expect(count).toContainText('of 2');
+  await input.click();
+  await page.keyboard.press('ControlOrMeta+f');
+  await input.press('Enter');
+  await expect(count).toContainText('of 2');
+  await expect(input).toBeFocused();
+  await expect(input).toHaveValue('target');
+
+  await page.locator('[data-outside]').click();
+  await expect(count).toContainText('of 5');
+  await expect(
+    root.locator('[data-deletions] [data-search-match]')
+  ).toHaveCount(1);
+  await expect(page.locator('[data-outside]')).toBeFocused();
+  await expect(matchCase).toHaveAttribute('aria-pressed', 'true');
+  await first.click();
+  await expect(count).toHaveText('1 results');
+  await expect(
+    root.locator('[data-deletions] [data-search-match]')
+  ).toHaveCount(0);
+  await expect(first).toBeFocused();
+
+  await root.focus();
+  await page.keyboard.press('ControlOrMeta+f');
+  await expect(count).toHaveText('5 results');
+  await expect(input).toHaveValue('target');
+  await expect(root.getByRole('textbox', { name: 'Search' })).toHaveCount(1);
+  await input.press('Escape');
+  await first.click();
+  await expect(root.locator('[data-search-panel]')).toHaveCount(0);
+});
+
 test('refreshes search after typing and undo without a host update', async ({
   page,
 }) => {

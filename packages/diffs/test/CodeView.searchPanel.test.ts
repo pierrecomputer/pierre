@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
+import { afterAll, beforeAll, describe, expect, spyOn, test } from 'bun:test';
 
 import { CodeView } from '../src/components/CodeView';
 import { Editor } from '../src/editor/editor';
@@ -23,6 +23,7 @@ interface SearchMatchProbe {
 
 interface SearchStateProbe {
   searchState: {
+    scope: { itemId: string } | undefined;
     matches: SearchMatchProbe[];
     current: SearchMatchProbe | undefined;
   };
@@ -39,6 +40,7 @@ function dispatchPrimaryFind(root: HTMLElement, altKey = false): KeyboardEvent {
       key: 'f',
       code: 'KeyF',
       altKey,
+      composed: true,
       bubbles: true,
       cancelable: true,
       ...modifiers,
@@ -147,6 +149,22 @@ function makeSearchScrollContents(): string {
   }).join('\n');
 }
 
+// jsdom needs a tab stop to focus contentEditable; focus still reaches the
+// real editor's listeners, just as it does in the browser.
+function getEditorContent(viewer: CodeView, id: string): HTMLElement {
+  const content = viewer
+    .getRenderedItems()
+    .find((item) => item.id === id)
+    ?.element.shadowRoot?.querySelector<HTMLElement>(
+      '[data-code]:not([data-deletions]) > [data-content]'
+    );
+  if (content == null) {
+    throw new Error(`Expected editor content for ${id}`);
+  }
+  content.tabIndex = 0;
+  return content;
+}
+
 function getSearchState(viewer: CodeView): SearchStateProbe['searchState'] {
   return (viewer as unknown as SearchStateProbe).searchState;
 }
@@ -194,6 +212,276 @@ afterAll(async () => {
 });
 
 describe('CodeView search panel', () => {
+  test('follows editor focus, preserves panel scope, and clears scope outside CodeView', async () => {
+    const dom = installDom();
+    const viewer = new CodeView({
+      createEditor: (type, options, key) => new Editor(type, options, key),
+    });
+    try {
+      const root = createRoot();
+      viewer.setup(root);
+      await renderItems(viewer, [
+        {
+          id: 'a',
+          type: 'file',
+          edit: true,
+          file: { name: 'a.txt', contents: 'target' },
+        },
+        {
+          id: 'b',
+          type: 'file',
+          edit: true,
+          file: { name: 'b.txt', contents: 'target target' },
+        },
+        {
+          id: 'read',
+          type: 'file',
+          file: { name: 'read.txt', contents: 'target' },
+        },
+      ]);
+      const a = getEditorContent(viewer, 'a');
+      const b = getEditorContent(viewer, 'b');
+      const read = viewer.getRenderedItems()[2].element;
+      read.tabIndex = 0;
+      a.focus();
+      expect(root.querySelector('[data-search-panel]')).toBeNull();
+      dispatchPrimaryFind(a);
+      await wait(0);
+      fillSearch(root, 'target');
+      const panel = getSearchPanelHost(root);
+      const input = getSearchInput(root);
+      expect(getSearchState(viewer).scope).toEqual({ itemId: 'a' });
+      expect(getSearchState(viewer).matches).toHaveLength(1);
+
+      b.focus();
+      await wait(0);
+      viewer.render(true);
+      expect(getSearchState(viewer).scope).toEqual({ itemId: 'b' });
+      expect(getSearchState(viewer).matches).toHaveLength(2);
+      expect((b.getRootNode() as ShadowRoot).activeElement).toBe(b);
+      input.focus();
+      dispatchPrimaryFind(input);
+      dispatchFindAgain(input, { composed: true });
+      expect(getSearchState(viewer).scope).toEqual({ itemId: 'b' });
+      expect(getSearchPanelHost(root)).toBe(panel);
+      expect(input.value).toBe('target');
+
+      const outside = document.createElement('button');
+      document.body.append(outside);
+      outside.focus();
+      await wait(0);
+      viewer.render(true);
+      expect(getSearchState(viewer).scope).toBeUndefined();
+      expect(getSearchState(viewer).matches).toHaveLength(4);
+      expect(document.activeElement).toBe(outside);
+      a.focus();
+      await wait(0);
+      read.focus();
+      await wait(0);
+      expect(getSearchState(viewer).scope).toBeUndefined();
+      dispatchPrimaryFind(read);
+      expect(getSearchState(viewer).matches).toHaveLength(4);
+      a.focus();
+      await wait(0);
+      a.blur();
+      await wait(0);
+      expect(getSearchState(viewer).scope).toBeUndefined();
+      a.focus();
+      input.focus();
+      input.blur();
+      await wait(0);
+      expect(getSearchState(viewer).scope).toBeUndefined();
+      a.focus();
+      const itemHost = viewer.getRenderedItems()[0].element;
+      itemHost.tabIndex = 0;
+      itemHost.focus();
+      await wait(0);
+      expect(getSearchState(viewer).scope).toBeUndefined();
+      dispatchEscape(root);
+      b.focus();
+      expect(root.querySelector('[data-search-panel]')).toBeNull();
+    } finally {
+      viewer.cleanUp();
+      dom.cleanup();
+    }
+  });
+
+  test.each(['panel', 'editor', 'outside'] as const)(
+    'host edit-mode changes preserve scope with focus on %s',
+    async (focus) => {
+      const dom = installDom();
+      const viewer = new CodeView({
+        createEditor: (type, options, key) => new Editor(type, options, key),
+      });
+      try {
+        const root = createRoot();
+        viewer.setup(root);
+        await renderItems(viewer, [
+          {
+            id: 'a',
+            type: 'file',
+            edit: true,
+            version: 1,
+            file: { name: 'a.txt', contents: 'target' },
+          },
+          {
+            id: 'b',
+            type: 'file',
+            version: 1,
+            file: { name: 'b.txt', contents: 'target target' },
+          },
+          {
+            id: 'c',
+            type: 'file',
+            version: 1,
+            file: { name: 'c.txt', contents: 'target target target' },
+          },
+        ]);
+        const content = getEditorContent(viewer, 'a');
+        content.focus();
+        dispatchPrimaryFind(content);
+        viewer.render(true);
+        await wait(0);
+        fillSearch(root, 'target');
+        if (focus === 'editor') {
+          content.focus();
+        } else if (focus === 'outside') {
+          const outside = document.createElement('button');
+          document.body.append(outside);
+          outside.focus();
+        }
+        viewer.render(true);
+        await wait(0);
+        const expectedScope = focus === 'outside' ? undefined : { itemId: 'a' };
+        const expectedCount = focus === 'outside' ? 6 : 1;
+        viewer.updateItem({ ...viewer.getItem('b')!, edit: true, version: 2 });
+        viewer.render(true);
+        await wait(0);
+        expect(getSearchState(viewer).scope).toEqual(expectedScope);
+        expect(getSearchState(viewer).matches).toHaveLength(expectedCount);
+        viewer.setItems([
+          viewer.getItem('a')!,
+          { ...viewer.getItem('b')!, edit: false, version: 3 },
+          viewer.getItem('c')!,
+        ]);
+        viewer.setItems([
+          viewer.getItem('a')!,
+          { ...viewer.getItem('b')!, edit: true, version: 4 },
+          { ...viewer.getItem('c')!, edit: true, version: 2 },
+        ]);
+        viewer.render(true);
+        await wait(0);
+        expect(getSearchState(viewer).scope).toEqual(expectedScope);
+        expect(getSearchState(viewer).matches).toHaveLength(expectedCount);
+        expect(getSearchInput(root).value).toBe('target');
+        getEditorContent(viewer, 'b').focus();
+        viewer.render(true);
+        await wait(0);
+        expect(getSearchState(viewer).scope).toEqual({ itemId: 'b' });
+        expect(getSearchState(viewer).matches).toHaveLength(2);
+      } finally {
+        viewer.cleanUp();
+        dom.cleanup();
+      }
+    }
+  );
+
+  test('updates scope for edit mode, item renaming, collapse, and removal', async () => {
+    const dom = installDom();
+    const viewer = new CodeView({
+      createEditor: (type, options, key) => new Editor(type, options, key),
+    });
+    try {
+      const root = createRoot();
+      viewer.setup(root);
+      await renderItems(viewer, [
+        {
+          id: 'a',
+          type: 'file',
+          version: 1,
+          file: { name: 'a.txt', contents: 'target' },
+        },
+        {
+          id: 'b',
+          type: 'file',
+          version: 1,
+          file: { name: 'b.txt', contents: 'target target' },
+        },
+      ]);
+      dispatchPrimaryFind(root);
+      viewer.render(true);
+      await wait(0);
+      fillSearch(root, 'target');
+      viewer.updateItem({ ...viewer.getItem('a')!, edit: true, version: 2 });
+      viewer.render(true);
+      await wait(0);
+      expect(getSearchState(viewer).scope).toBeUndefined();
+      expect(getSearchState(viewer).matches).toHaveLength(3);
+      getEditorContent(viewer, 'a').focus();
+      viewer.render(true);
+      await wait(0);
+      getSearchInput(root).focus();
+      expect(getSearchState(viewer).scope).toEqual({ itemId: 'a' });
+      expect(getSearchState(viewer).matches).toHaveLength(1);
+      viewer.updateItemId('a', 'renamed');
+      viewer.render(true);
+      await wait(0);
+      expect(getSearchState(viewer).scope).toEqual({ itemId: 'renamed' });
+      expect(getSearchState(viewer).matches[0].itemId).toBe('renamed');
+      const renamedContent = getEditorContent(viewer, 'renamed');
+      renamedContent.focus();
+      expect(getSearchState(viewer).scope).toEqual({ itemId: 'renamed' });
+      getSearchInput(root).focus();
+      viewer.updateItem({
+        ...viewer.getItem('renamed')!,
+        edit: false,
+        version: 3,
+      });
+      viewer.render(true);
+      await wait(0);
+      expect(getSearchState(viewer).scope).toBeUndefined();
+      expect(getSearchState(viewer).matches).toHaveLength(3);
+      viewer.setItems([
+        { ...viewer.getItem('renamed')!, edit: true, version: 4 },
+        viewer.getItem('b')!,
+      ]);
+      viewer.render(true);
+      await wait(0);
+      expect(getSearchState(viewer).scope).toBeUndefined();
+      getEditorContent(viewer, 'renamed').focus();
+      viewer.render(true);
+      await wait(0);
+      getSearchInput(root).focus();
+      expect(getSearchState(viewer).scope).toEqual({ itemId: 'renamed' });
+      viewer.updateItem({
+        ...viewer.getItem('renamed')!,
+        collapsed: true,
+        version: 5,
+      });
+      viewer.render(true);
+      await wait(0);
+      expect(getSearchState(viewer).scope).toBeUndefined();
+      expect(getSearchState(viewer).matches).toHaveLength(2);
+      viewer.updateItem({ ...viewer.getItem('b')!, edit: true, version: 2 });
+      viewer.render(true);
+      await wait(0);
+      expect(getSearchState(viewer).scope).toBeUndefined();
+      getEditorContent(viewer, 'b').focus();
+      viewer.render(true);
+      await wait(0);
+      getSearchInput(root).focus();
+      expect(getSearchState(viewer).scope).toEqual({ itemId: 'b' });
+      viewer.removeItem('b');
+      viewer.render(true);
+      await wait(0);
+      expect(getSearchState(viewer).scope).toBeUndefined();
+      expect(getSearchInput(root).value).toBe('target');
+    } finally {
+      viewer.cleanUp();
+      dom.cleanup();
+    }
+  });
+
   test('refreshes live file matches and highlights without a host update', async () => {
     const dom = installDom();
     const viewer = new CodeView({
@@ -252,7 +540,7 @@ describe('CodeView search panel', () => {
   });
 
   test.each(['split', 'unified'] as const)(
-    'searches and highlights only live additions in %s edit mode',
+    'searches and highlights only live additions when scoped in %s mode',
     async (diffStyle) => {
       const dom = installDom();
       const viewer = new CodeView({
@@ -269,7 +557,9 @@ describe('CodeView search panel', () => {
         await renderItems(viewer, [
           { id: 'diff', type: 'diff', edit: true, fileDiff },
         ]);
-        dispatchPrimaryFind(root);
+        const content = getEditorContent(viewer, 'diff');
+        content.focus();
+        dispatchPrimaryFind(content);
         await wait(0);
         fillSearch(root, 'target');
         expect(
@@ -318,6 +608,29 @@ describe('CodeView search panel', () => {
             (element) => element.closest('[data-deletions]') === null
           )
         ).toBe(true);
+        root.tabIndex = 0;
+        root.focus();
+        await wait(0);
+        viewer.render(true);
+        expect(getSearchState(viewer).scope).toBeUndefined();
+        expect(
+          getSearchState(viewer).matches.map(({ side, lineNumber }) => ({
+            side,
+            lineNumber,
+          }))
+        ).toEqual([
+          { side: 'deletions', lineNumber: 1 },
+          { side: 'additions', lineNumber: 2 },
+          { side: 'additions', lineNumber: 3 },
+        ]);
+        expect(getRenderedSearchMatches(root)).toHaveLength(3);
+        expect(
+          getRenderedSearchMatches(root).some(
+            (element) =>
+              element.closest('[data-deletions]') !== null ||
+              element.closest('[data-line-type="change-deletion"]') !== null
+          )
+        ).toBe(true);
       } finally {
         viewer.cleanUp();
         dom.cleanup();
@@ -359,6 +672,12 @@ describe('CodeView search panel', () => {
           newText: 'retained target',
         },
       ]);
+      const itemElement = getEditorContent(viewer, 'file');
+      itemElement.focus();
+      dispatchPrimaryFind(itemElement);
+      await wait(0);
+      fillSearch(root, 'target');
+      itemElement.focus();
       viewer.scrollTo({
         type: 'position',
         position: 5000,
@@ -370,12 +689,75 @@ describe('CodeView search panel', () => {
         false
       );
       expect(viewer.getEditor('file')).toBe(editor);
+      expect(getSearchState(viewer).scope).toEqual({ itemId: 'file' });
+      expect(getSearchState(viewer).matches).toHaveLength(1);
+
       dispatchPrimaryFind(root);
       await wait(0);
       fillSearch(root, 'target');
       expect(
         getSearchState(viewer).matches.map((match) => match.itemId)
       ).toEqual(['file']);
+    } finally {
+      viewer.cleanUp();
+      dom.cleanup();
+    }
+  });
+
+  test('searches collapsed context only while scoped or explicitly expanded', async () => {
+    const dom = installDom();
+    const viewer = new CodeView({
+      createEditor: (type, options, key) => new Editor(type, options, key),
+    });
+    try {
+      const root = createRoot();
+      root.tabIndex = 0;
+      viewer.setup(root);
+      const lines = Array.from({ length: 80 }, (_, index) =>
+        index === 60 ? 'hidden target' : `line ${index}`
+      );
+      const next = [...lines];
+      next[1] = 'changed';
+      await renderItems(viewer, [
+        {
+          id: 'diff',
+          type: 'diff',
+          edit: true,
+          fileDiff: parseDiffFromFile(
+            { name: 'context.txt', contents: lines.join('\n') },
+            { name: 'context.txt', contents: next.join('\n') }
+          ),
+        },
+      ]);
+      dispatchPrimaryFind(root);
+      await wait(0);
+      fillSearch(root, 'target');
+      expect(getSearchState(viewer).matches).toHaveLength(0);
+      const content = getEditorContent(viewer, 'diff');
+      content.focus();
+      dispatchPrimaryFind(content);
+      await wait(0);
+      viewer.render(true);
+      expect(
+        getSearchState(viewer).matches.map(({ side, lineNumber }) => ({
+          side,
+          lineNumber,
+        }))
+      ).toEqual([{ side: 'additions', lineNumber: 61 }]);
+      root.focus();
+      await wait(0);
+      viewer.render(true);
+      expect(getSearchState(viewer).matches).toHaveLength(0);
+      viewer.setOptions({
+        createEditor: (type, options, key) => new Editor(type, options, key),
+        expandUnchanged: true,
+      });
+      await wait(0);
+      viewer.render(true);
+      expect(getSearchState(viewer).matches.map(({ side }) => side)).toEqual([
+        'deletions',
+        'additions',
+      ]);
     } finally {
       viewer.cleanUp();
       dom.cleanup();
@@ -449,6 +831,19 @@ describe('CodeView search panel', () => {
       dispatchPrimaryFind(root);
       await wait(0);
       expect(root.querySelector('[data-search-panel]')).not.toBeNull();
+      const reopenedPanel = getSearchPanelHost(root);
+      const removeListener = spyOn(reopenedPanel, 'removeEventListener');
+      getSearchPanelRoot(root)
+        .querySelector<HTMLButtonElement>('[aria-label="Close"]')!
+        .click();
+      expect(reopenedPanel.isConnected).toBe(false);
+      expect(removeListener).toHaveBeenCalledWith(
+        'focusout',
+        expect.any(Function)
+      );
+      removeListener.mockRestore();
+      dispatchPrimaryFind(root);
+      await wait(0);
 
       viewer.cleanUp();
       expect(root.querySelector('[data-search-panel]')).toBeNull();
