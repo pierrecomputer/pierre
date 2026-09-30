@@ -14,7 +14,7 @@ export function HighlightsHero() {
           <span className="relative inline-block">
             <span
               aria-hidden="true"
-              className={`${styles.rainbow} pointer-events-none absolute inset-0 bg-clip-text text-transparent opacity-20 blur-[16px] select-none dark:opacity-80`}
+              className={`${styles.rainbow} pointer-events-none absolute inset-0 bg-clip-text text-transparent opacity-20 blur-[16px] select-none dark:opacity-60`}
             >
               Highlight
             </span>

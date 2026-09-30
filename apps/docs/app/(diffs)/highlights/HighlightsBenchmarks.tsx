@@ -25,7 +25,7 @@ export function HighlightsBenchmarks() {
     <section
       id="performance"
       aria-labelledby="highlights-performance"
-      className="scroll-mt-20 space-y-5 pb-16 md:pb-24"
+      className="scroll-mt-20 space-y-6 pb-16 md:pb-24"
     >
       <div className="max-w-3xl">
         <h2
@@ -50,42 +50,35 @@ export function HighlightsBenchmarks() {
         </p>
       </div>
 
-      <div className="bg-card overflow-x-auto rounded-lg border">
-        <table className="w-full min-w-[42rem] table-fixed text-left text-sm tabular-nums">
-          <caption className="text-muted-foreground border-b px-4 py-3 text-left text-xs sm:text-sm">
-            10 copies of three.min.js · relative throughput · longer is faster
+      <div className="bg-muted/50 min-w-0 overflow-x-auto rounded-2xl p-4 pb-3 sm:p-8 sm:pb-5 lg:p-10 lg:pb-6">
+        <table className="w-full min-w-[42rem] table-fixed text-left tabular-nums">
+          <caption className="text-muted-foreground mb-5 text-left text-sm">
+            <strong>Processing three.min.js 10&times;</strong> · Relative
+            throughput, longer is faster
           </caption>
-          <thead className="bg-muted/50 border-b">
+          <thead className="text-muted-foreground border-foreground/10 border-b text-xs">
             <tr>
-              <th scope="col" className="px-3 py-3 font-medium sm:px-4">
+              <th scope="col" className="pb-3 font-medium">
                 <div className="grid grid-cols-[10rem_minmax(0,1fr)] gap-3">
                   <span>Library</span>
-                  <span className="text-muted-foreground font-normal">
-                    Relative speed
-                  </span>
+                  <span className="font-normal">Relative speed</span>
                 </div>
               </th>
-              <th
-                scope="col"
-                className="w-28 px-3 py-3 text-right font-medium sm:px-4"
-              >
+              <th scope="col" className="w-28 pb-3 text-right font-medium">
                 Time
               </th>
-              <th scope="col" className="w-24 px-3 py-3 font-medium sm:px-4">
+              <th scope="col" className="w-24 pb-3 pl-5 font-medium">
                 Output
               </th>
             </tr>
           </thead>
-          <tbody className="divide-y">
+          <tbody className="divide-foreground/10 divide-y">
             {rows.map(({ name, version, milliseconds, output }) => {
               const isHighlights = name === 'Highlights';
 
               return (
-                <tr
-                  key={name}
-                  className={isHighlights ? 'bg-muted/30' : undefined}
-                >
-                  <th scope="row" className="px-3 py-3 font-medium sm:px-4">
+                <tr key={name}>
+                  <th scope="row" className="py-5 font-medium">
                     <div className="grid grid-cols-[10rem_minmax(0,1fr)] items-center gap-3">
                       <span className="whitespace-nowrap">
                         {name}
@@ -100,10 +93,10 @@ export function HighlightsBenchmarks() {
                       />
                     </div>
                   </th>
-                  <td className="px-3 py-3 text-right font-medium whitespace-nowrap sm:px-4">
+                  <td className="py-5 text-right text-xl font-normal whitespace-nowrap">
                     {formatDuration(milliseconds)}
                   </td>
-                  <td className="text-muted-foreground px-3 py-3 sm:px-4">
+                  <td className="text-muted-foreground py-5 pl-5 text-sm">
                     {formatOutput(output)}
                   </td>
                 </tr>
@@ -117,16 +110,13 @@ export function HighlightsBenchmarks() {
         <p>
           Recorded September 15, 2026 · Chromium 152 · Apple M4 Pro. Median of
           three samples, each with one warm-up in a fresh worker. Bars show
-          relative throughput on a shared linear scale.
-        </p>
-        <p>
-          Highlights and Shiki return themed tokens; gpu-lexer returns
-          classified spans. The other libraries return HTML or a HAST tree.
-          These results measure speed on this JavaScript workload, not
-          highlighting quality.{' '}
+          relative throughput on a shared linear scale. Highlights and Shiki
+          return themed tokens; gpu-lexer returns classified spans. The other
+          libraries return HTML or a HAST tree. These results measure speed on
+          this JavaScript workload, not highlighting quality.{' '}
           <a
             href="/highlights/benchmark-browser.json"
-            className="hover:text-foreground underline underline-offset-4"
+            className="styled-link styled-link-muted"
             target="_blank"
             rel="noopener noreferrer"
           >

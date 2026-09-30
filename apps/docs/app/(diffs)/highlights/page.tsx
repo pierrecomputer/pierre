@@ -5,7 +5,7 @@ import { HighlightsBenchmarks } from './HighlightsBenchmarks';
 import { HighlightsHero } from './HighlightsHero';
 import { HighlightsHtmlBenchmarks } from './HighlightsHtmlBenchmarks';
 import { HighlightsInstall } from './HighlightsInstall';
-import { HighlightsPerformanceBenchmarks } from './HighlightsPerformanceBenchmarks';
+// import { HighlightsPerformanceBenchmarks } from './HighlightsPerformanceBenchmarks';
 import { HighlightsPlayground } from './HighlightsPlayground';
 import Footer from '@/components/Footer';
 import { Header } from '@/components/Header';
@@ -28,7 +28,7 @@ export default function HighlightsPage() {
       <main>
         <HighlightsHero />
         <HighlightsPlayground />
-        <HighlightsPerformanceBenchmarks />
+        {/* <HighlightsPerformanceBenchmarks /> */}
         <HighlightsPlayground variant="languages" />
         <HighlightsBenchmarks />
         <HighlightsHtmlBenchmarks />
