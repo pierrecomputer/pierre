@@ -12,31 +12,58 @@
     </style>
   </head>
   <body>
-    <div data-code-view-root></div>
+    <button data-outside>Outside CodeView</button>
+    <div data-code-view-root tabindex="0"></div>
     <script type="module">
-      import { CodeView } from '/dist/index.js';
+      import { CodeView, parseDiffFromFile } from '/dist/index.js';
       import { Editor } from '/dist/edit/index.js';
 
       const view = new CodeView({
         createEditor: (type, options, key) => new Editor(type, options, key),
       });
       view.setup(document.querySelector('[data-code-view-root]'));
-      view.setItems([
-        {
-          id: 'file',
-          type: 'file',
-          edit: true,
-          version: 1,
-          file: {
-            name: 'example.txt',
-            contents: Array.from({ length: 800 }, (_, index) =>
-              [125, 126, 128, 201].includes(index + 1)
-                ? `github match at ${index + 1}`
-                : `line ${index + 1}`
-            ).join('\n'),
-          },
-        },
-      ]);
+      const scopedFixture = new URLSearchParams(location.search).has('scope');
+      view.setItems(
+        scopedFixture
+          ? [
+              {
+                id: 'diff',
+                type: 'diff',
+                edit: true,
+                fileDiff: parseDiffFromFile(
+                  { name: 'diff.txt', contents: 'target deleted\nunchanged\n' },
+                  { name: 'diff.txt', contents: 'target added\nunchanged\n' }
+                ),
+              },
+              {
+                id: 'second',
+                type: 'file',
+                edit: true,
+                file: { name: 'second.txt', contents: 'target target\n' },
+              },
+              {
+                id: 'readonly',
+                type: 'file',
+                file: { name: 'readonly.txt', contents: 'target readonly\n' },
+              },
+            ]
+          : [
+              {
+                id: 'file',
+                type: 'file',
+                edit: true,
+                version: 1,
+                file: {
+                  name: 'example.txt',
+                  contents: Array.from({ length: 800 }, (_, index) =>
+                    [125, 126, 128, 201].includes(index + 1)
+                      ? `github match at ${index + 1}`
+                      : `line ${index + 1}`
+                  ).join('\n'),
+                },
+              },
+            ]
+      );
     </script>
   </body>
 </html>
