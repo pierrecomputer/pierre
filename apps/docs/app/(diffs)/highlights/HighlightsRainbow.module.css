@@ -1,0 +1,58 @@
+.rainbow {
+  background-image: linear-gradient(
+    90deg,
+    #d52c36,
+    #d47628,
+    #d5a910,
+    #199f43,
+    #1ca1c7,
+    #1a85d4,
+    #a631be,
+    #1a85d4,
+    #1ca1c7,
+    #199f43,
+    #d5a910,
+    #d47628,
+    #d52c36
+  );
+  background-position: 0% 50%;
+  background-repeat: repeat-x;
+  background-size: 200% 100%;
+  animation: rainbow-shift 8s linear infinite;
+}
+
+/* stylelint-disable-next-line selector-pseudo-class-no-unknown */
+:global(.dark) .rainbow {
+  background-image: linear-gradient(
+    90deg,
+    #ff6762,
+    #ffa359,
+    #ffd452,
+    #5ecc71,
+    #68cdf2,
+    #69b1ff,
+    #d568ea,
+    #69b1ff,
+    #68cdf2,
+    #5ecc71,
+    #ffd452,
+    #ffa359,
+    #ff6762
+  );
+}
+
+@keyframes rainbow-shift {
+  from {
+    background-position: 0% 50%;
+  }
+
+  to {
+    background-position: 200% 50%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rainbow {
+    animation: none;
+  }
+}

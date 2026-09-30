@@ -3,7 +3,6 @@ import type { Metadata } from 'next';
 
 import { HighlightsBenchmarks } from './HighlightsBenchmarks';
 import { HighlightsHero } from './HighlightsHero';
-import { HighlightsInstall } from './HighlightsInstall';
 import { HighlightsPlayground } from './HighlightsPlayground';
 import Footer from '@/components/Footer';
 import { Header } from '@/components/Header';
@@ -25,8 +24,8 @@ export default function HighlightsPage() {
       <Header className="-mb-[1px]" />
       <main>
         <HighlightsHero />
-        <HighlightsPlayground />
         <HighlightsBenchmarks />
+        <HighlightsPlayground />
         <HighlightsPlayground variant="languages" />
         <section
           aria-labelledby="highlights-features"
@@ -156,7 +155,6 @@ export default function HighlightsPage() {
             </div>
           </div>
         </section>
-        <HighlightsInstall />
         <PierreCompanySection />
       </main>
       <Footer />
