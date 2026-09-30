@@ -4,28 +4,28 @@ import type { ReactNode } from 'react';
 import { cn } from '@/lib/utils';
 
 // Published string-I/O results from packages/highlights/benchmark/README.md,
-// recorded September 18, 2026. Keep the reported ratios rather than deriving
+// recorded September 25, 2026. Keep the reported ratios rather than deriving
 // them from the table's independently rounded throughput values.
 const largeFileResults = [
   {
     language: 'TypeScript',
-    size: '517 KB',
-    speedup: 279,
+    size: '517 KiB',
+    speedup: 294,
   },
   {
     language: 'HTML',
-    size: '474 KB',
-    speedup: 205,
+    size: '474 KiB',
+    speedup: 237,
   },
   {
     language: 'CSS',
-    size: '379 KB',
-    speedup: 230,
+    size: '379 KiB',
+    speedup: 248,
   },
   {
     language: 'JSONC',
-    size: '292 KB',
-    speedup: 153,
+    size: '292 KiB',
+    speedup: 148,
   },
 ];
 
@@ -117,7 +117,7 @@ export function HighlightsBenchmarks() {
               Large-file HTML generation
             </h3>
             <p className="text-muted-foreground max-w-xl text-pretty">
-              153–279× Shiki’s throughput across these fixtures. On the 517 KB
+              148–294× Shiki’s throughput across these fixtures. On the 517 KiB
               TypeScript input, Tree-sitter reaches ≈8× Shiki.
             </p>
           </figcaption>
@@ -155,8 +155,8 @@ export function HighlightsBenchmarks() {
               Peak process memory
             </h3>
             <p className="text-muted-foreground max-w-xl text-pretty">
-              Median peak process RSS while generating HTML from the 517 KB
-              TypeScript fixture, shown on a shared 0–400 MB scale. Lower is
+              Median peak process RSS while generating HTML from the 517 KiB
+              TypeScript fixture, shown on a shared 0–400 MiB scale. Lower is
               better.
             </p>
           </figcaption>
@@ -167,7 +167,7 @@ export function HighlightsBenchmarks() {
                 name={name}
                 value={peakRss}
                 maximum={memoryMaximum}
-                formatValue={(value) => `${value} MB`}
+                formatValue={(value) => `${value} MiB`}
                 highlights={name === 'Highlights'}
               />
             ))}
@@ -181,9 +181,9 @@ export function HighlightsBenchmarks() {
           <p className="text-muted-foreground mt-2 text-sm text-pretty">
             Complete themed token generation reaches{' '}
             <strong className="text-foreground font-semibold tabular-nums">
-              199 MB/s · 168× Shiki’s throughput
+              208 MiB/s · 173× Shiki’s throughput
             </strong>{' '}
-            on the 517 KB TypeScript fixture.
+            on the 517 KiB TypeScript fixture.
           </p>
         </article>
         <article className="bg-muted/50 min-w-0 rounded-2xl p-5 sm:p-8 lg:p-10">
@@ -191,7 +191,7 @@ export function HighlightsBenchmarks() {
           <p className="text-muted-foreground mt-2 text-sm text-pretty">
             Streaming themed token generation reaches{' '}
             <strong className="text-foreground font-semibold tabular-nums">
-              171 MB/s · 147× Shiki’s throughput
+              197 MiB/s · 170× Shiki’s throughput
             </strong>{' '}
             on a large TypeScript fixture.
           </p>
@@ -199,8 +199,8 @@ export function HighlightsBenchmarks() {
         <article className="bg-muted/50 min-w-0 rounded-2xl p-5 sm:p-8 lg:p-10">
           <h3 className="font-semibold">Live edits</h3>
           <p className="text-muted-foreground mt-2 text-sm text-pretty">
-            For single-character edits and line insertion or deletion on the 517
-            KB TypeScript fixture, the median synchronous response is{' '}
+            For single-character edits and line insertion or deletion on the
+            TypeScript fixture (517 KiB), the median synchronous response is{' '}
             <strong className="text-foreground font-semibold tabular-nums">
               under 1.4 µs
             </strong>
@@ -211,7 +211,7 @@ export function HighlightsBenchmarks() {
 
       <div className="text-muted-foreground max-w-4xl space-y-2 text-xs leading-relaxed">
         <p>
-          Measured September 18, 2026 on an Apple M4 Pro (14 cores, 48 GiB RAM)
+          Measured September 25, 2026 on an Apple M4 Pro (14 cores, 48 GiB RAM)
           using Bun 1.4.0, Shiki 4.4.1, and tree-sitter-highlight 1.1.2. Median
           throughput after warmup. Memory measured September 16, 2026 as median
           peak process RSS from five fresh processes per engine. RSS includes
