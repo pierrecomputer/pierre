@@ -481,6 +481,10 @@ export class SearchPanelWidget<TMatch = MatchRange> {
     });
   }
 
+  getHostElement(): HTMLDivElement {
+    return this.#host;
+  }
+
   focus(): void {
     this.#inputElement.focus();
   }

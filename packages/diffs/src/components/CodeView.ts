@@ -89,7 +89,12 @@ export type CodeViewCreateEditorOptions<
   EType extends EditorType,
   LAnnotation,
   Caret,
-> = Required<Pick<EditorOptions<EType, LAnnotation, Caret>, 'onChange'>>;
+> = Required<
+  Pick<
+    EditorOptions<EType, LAnnotation, Caret>,
+    'onChange' | 'onFocus' | 'onBlur'
+  >
+>;
 
 type CodeViewEditor<LAnnotation, Caret> =
   | Editor<'file', LAnnotation, Caret>
@@ -167,6 +172,7 @@ interface CodeViewSearchMatch extends CodeViewSearchLineMetadata {
 }
 
 interface CodeViewSearchState {
+  scope: { itemId: string } | undefined;
   params: SearchParams | undefined;
   matches: CodeViewSearchMatch[];
   matchesByItem: Map<string, CodeViewSearchMatch[]>;
@@ -628,8 +634,10 @@ export interface CodeViewOptions<LAnnotation, Caret>
    * Create an editor for an item entering edit mode (`edit: true`). Providing
    * this option is what enables item editing. Pass the given options into the
    * editor constructor — `new Editor(editorType, options, editStateKey)` —
-   * so CodeView can route document changes to `onItemEditChange` and retain
-   * history when requested. CodeView owns the returned editor's lifecycle: it
+   * so CodeView can track editor focus, route changes to `onItemEditChange`,
+   * and retain history when requested. Forward all supplied callbacks, including
+   * `onFocus` and `onBlur`; forwarding only `onChange` disables search scoping.
+   * CodeView owns the returned editor's lifecycle: it
    * associates with the edited item, suspends and resumes rendering across
    * virtualization unmounts and collapse, and tears the editor down when the
    * session ends (edit off or removal).
@@ -814,6 +822,7 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
   };
   private items: CodeViewContextItem<LAnnotation, Caret>[] = [];
   private idToItem: CodeViewItemMap<LAnnotation, Caret> = new Map();
+  private focusedEditor: CodeViewItemOptionsState<LAnnotation> | undefined;
   private selectedLines: CodeViewLineSelection | null = null;
   // One editor per edit-mode item, created lazily via options.createEditor.
   // Entries survive virtualization unmounts with their editor association;
@@ -895,6 +904,7 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
   private resizeObserver: ResizeObserver | undefined;
   private searchPanel: SearchPanelWidget<CodeViewSearchMatch> | undefined;
   private searchState: CodeViewSearchState = {
+    scope: undefined,
     params: undefined,
     matches: [],
     matchesByItem: new Map(),
@@ -1348,6 +1358,7 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
       return record;
     });
     this.itemEditors.clear();
+    this.focusedEditor = undefined;
     this.attachedEditors.clear();
     this.selectedLines = null;
     this.items = [];
@@ -1451,12 +1462,60 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
     }
   }
 
-  private openSearchPanel(): void {
+  private isSearchPanelFocused(): boolean {
+    return this.searchPanel?.getHostElement().shadowRoot?.activeElement != null;
+  }
+
+  private setSearchScope(scope: CodeViewSearchState['scope']): void {
+    if (this.searchState.scope?.itemId === scope?.itemId) {
+      return;
+    }
+    this.searchState.scope = scope;
+    this.markSearchMatchesDirty();
+  }
+
+  // Editor callbacks identify the owner. Document focus is only needed to
+  // clear scope when focus leaves the panel or moves to non-editor content.
+  private handleSearchFocusIn = (event: FocusEvent): void => {
+    if (this.shouldFixContainerFocus && event.composedPath()[0] === this.root) {
+      return;
+    }
+    this.syncSearchFocus();
+  };
+
+  // Native blur can finish before the next target receives focus. Resolve it
+  // on the next frame so moving into the panel does not briefly widen search.
+  private handleSearchPanelBlur = (): void => {
+    queueRender(this.syncSearchFocus);
+  };
+
+  private syncSearchFocus = (): void => {
+    if (this.searchPanel == null || this.isSearchPanelFocused()) {
+      return;
+    }
+    this.setSearchScope(
+      this.focusedEditor != null ? { itemId: this.focusedEditor.id } : undefined
+    );
+  };
+
+  private removeSearchFocusListeners(): void {
+    dequeueRender(this.syncSearchFocus);
+    this.root?.ownerDocument.removeEventListener(
+      'focusin',
+      this.handleSearchFocusIn
+    );
+    this.searchPanel
+      ?.getHostElement()
+      .removeEventListener('focusout', this.handleSearchPanelBlur);
+  }
+
+  private openSearchPanel(scope: CodeViewSearchState['scope']): void {
     const container = this.container;
     if (container === undefined) {
       return;
     }
 
+    this.setSearchScope(scope);
     if (this.searchPanel !== undefined) {
       this.searchPanel.setMode('find');
       this.searchPanel.focus();
@@ -1498,15 +1557,24 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
         return nextCurrent;
       },
       onClose: () => {
+        this.removeSearchFocusListeners();
         this.searchPanel = undefined;
         this.resetSearchState();
       },
     });
+    this.root?.ownerDocument.addEventListener(
+      'focusin',
+      this.handleSearchFocusIn
+    );
+    this.searchPanel
+      .getHostElement()
+      .addEventListener('focusout', this.handleSearchPanelBlur);
     this.applySearchPanelOverlayStyles();
     this.searchPanel.focus();
   }
 
   private closeSearchPanel(): void {
+    this.removeSearchFocusListeners();
     this.searchPanel?.cleanup();
     this.searchPanel = undefined;
     this.resetSearchState();
@@ -1516,6 +1584,7 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
     const hadSearchDecorations =
       this.searchState.matches.length > 0 ||
       this.searchState.current !== undefined;
+    this.searchState.scope = undefined;
     this.searchState.params = undefined;
     this.searchState.matches = [];
     this.searchState.matchesByItem = new Map();
@@ -1539,6 +1608,19 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
   }
 
   private markSearchMatchesDirty(): void {
+    const scopedItem =
+      this.searchState.scope != null
+        ? this.idToItem.get(this.searchState.scope.itemId)
+        : undefined;
+    if (this.focusedEditor != null) {
+      const focusedItem = this.idToItem.get(this.focusedEditor.id);
+      if (focusedItem == null || !this.isItemInEditMode(focusedItem)) {
+        this.focusedEditor = undefined;
+      }
+    }
+    if (scopedItem?.item.edit !== true || scopedItem.item.collapsed === true) {
+      this.searchState.scope = undefined;
+    }
     if (
       this.searchPanel === undefined ||
       this.searchState.params === undefined
@@ -1652,7 +1734,12 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
 
   private searchCodeView(searchParams: SearchParams): CodeViewSearchMatch[] {
     const matches: CodeViewSearchMatch[] = [];
-    for (const item of this.items) {
+    const { scope } = this.searchState;
+    const scopedItem =
+      scope != null ? this.idToItem.get(scope.itemId) : undefined;
+    const items =
+      scope == null ? this.items : scopedItem == null ? [] : [scopedItem];
+    for (const item of items) {
       const remaining = MAX_FIND_MATCHES - matches.length;
       if (remaining <= 0) {
         break;
@@ -1662,7 +1749,9 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
         continue;
       }
       const nextMatches =
-        this.searchEditedItem(item, searchParams, remaining) ??
+        (scope != null || item.type === 'file'
+          ? this.searchEditedItem(item, searchParams, remaining)
+          : undefined) ??
         (item.type === 'file'
           ? this.searchFileItem(item, searchParams, remaining)
           : this.searchDiffItem(item, searchParams, remaining));
@@ -1755,10 +1844,17 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
     searchParams: SearchParams,
     limit: number
   ): CodeViewSearchMatch[] {
-    const fileDiff = item.item.fileDiff;
+    const doc = this.itemEditors
+      .get(item.item.id)
+      ?.editor.getEditState()?.document;
+    const fileDiff =
+      doc == null
+        ? item.item.fileDiff
+        : (item.instance.getDiffForSearch() ?? item.item.fileDiff);
+    const scoped = this.searchState.scope?.itemId === item.item.id;
     const diffStyle = this.options.diffStyle ?? 'split';
     const expandedHunks =
-      item.item.edit === true || this.options.expandUnchanged === true
+      scoped || this.options.expandUnchanged === true
         ? true
         : item.instance.getExpandedHunksForSearch();
     const lines: CodeViewSearchLine[] = [];
@@ -1773,7 +1869,10 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
 
       const sourceLines =
         side === 'additions' ? fileDiff.additionLines : fileDiff.deletionLines;
-      const text = sourceLines[line.lineIndex];
+      const text =
+        side === 'additions' && doc != null
+          ? doc.getLineText(line.lineIndex, true)
+          : sourceLines[line.lineIndex];
       if (text === undefined) {
         return;
       }
@@ -1803,7 +1902,7 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
         this.options.collapsedContextThreshold ??
         DEFAULT_COLLAPSED_CONTEXT_THRESHOLD,
       callback: ({ additionLine, deletionLine }) => {
-        if (item.item.edit === true) {
+        if (scoped) {
           addLine('additions', additionLine);
           return;
         }
@@ -1828,11 +1927,8 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
   }
 
   private applySearchPanelOverlayStyles(): void {
-    const panelElement = this.container?.previousElementSibling;
-    if (
-      !(panelElement instanceof HTMLElement) ||
-      panelElement.dataset.searchPanel === undefined
-    ) {
+    const panelElement = this.searchPanel?.getHostElement();
+    if (panelElement == null) {
       return;
     }
 
@@ -1899,8 +1995,12 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
     const { element } = item;
     if (element != null && this.renderedItemOwnsFocus(element)) {
       this.shouldFixContainerFocus = true;
+      dequeueRender(this.syncSearchFocus);
     }
 
+    if (this.focusedEditor?.id === item.item.id) {
+      this.focusedEditor = undefined;
+    }
     item.instance.cleanUp(true);
     // Instance cleanup suspends the editor surface. The association stays in
     // itemEditors so the same component and editor resume on remount.
@@ -1926,8 +2026,8 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
 
   private fixContainerFocus(): void {
     if (this.shouldFixContainerFocus) {
-      this.shouldFixContainerFocus = false;
       this.root?.focus({ preventScroll: true });
+      this.shouldFixContainerFocus = false;
     }
   }
 
@@ -2272,6 +2372,9 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
       }
     }
     this.renamePendingScrollTarget(oldId, newId);
+    if (this.searchState.scope?.itemId === oldId) {
+      this.searchState.scope = { itemId: newId };
+    }
     this.renamePendingLayoutAnchor(oldId, newId);
     this.markSearchMatchesDirty();
     this.render();
@@ -2889,9 +2992,23 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
           this.markSearchMatchesDirty();
           this.options.onItemEditChange?.(event, latest.item);
         };
+        const onFocus = () => {
+          this.focusedEditor = state;
+          this.syncSearchFocus();
+        };
+        const onBlur = () => {
+          if (this.focusedEditor === state) {
+            this.focusedEditor = undefined;
+            queueRender(this.syncSearchFocus);
+          }
+        };
         const editStateKey = this.options.getEditStateKey?.(item.item);
         if (item.type === 'diff') {
-          const editor = createEditor('file-diff', { onChange }, editStateKey);
+          const editor = createEditor(
+            'file-diff',
+            { onChange, onFocus, onBlur },
+            editStateKey
+          );
           createdEditor = editor;
           this.itemEditors.set(id, {
             editor,
@@ -2899,7 +3016,11 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
             dispose: editor.edit(item.instance),
           });
         } else {
-          const editor = createEditor('file', { onChange }, editStateKey);
+          const editor = createEditor(
+            'file',
+            { onChange, onFocus, onBlur },
+            editStateKey
+          );
           createdEditor = editor;
           this.itemEditors.set(id, {
             editor,
@@ -4608,7 +4729,13 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
       // Prevent the browser find UI and open CodeView's find-only panel.
       event.preventDefault();
       event.stopPropagation();
-      this.openSearchPanel();
+      this.openSearchPanel(
+        this.isSearchPanelFocused()
+          ? this.searchState.scope
+          : this.focusedEditor != null
+            ? { itemId: this.focusedEditor.id }
+            : undefined
+      );
       this.searchPanel?.setMode(event.altKey ? 'replace' : 'find');
     }
   };
