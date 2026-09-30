@@ -380,35 +380,6 @@
   @apply border-foreground/10;
 }
 
-/* Letterhead: monospace masthead mirroring pierre.computer. Colors match the
-   corporate site's `--color-bg`/`--color-fg` (derived from the dashboard gray
-   ramp) and resolve per color-scheme via `light-dark()`. */
-.letterhead {
-  --letterhead-gray: oklch(65% 0.01 286);
-  background-color: light-dark(#f7f7f8, #151516);
-  color: light-dark(
-    color-mix(in srgb, black 95%, var(--letterhead-gray)),
-    color-mix(in srgb, white 80%, var(--letterhead-gray))
-  );
-  font-family: var(--font-berkeley-mono);
-}
-
-/* Matches the corporate site's blinking header cursor exactly. */
-.letterhead-cursor {
-  animation: letterhead-flash 1s infinite;
-}
-
-@keyframes letterhead-flash {
-  0%,
-  50% {
-    opacity: 1;
-  }
-  51%,
-  100% {
-    opacity: 0;
-  }
-}
-
 /* Shared mobile popover surface (docs sidebar, header menu, playground drawer) */
 .mobile-popover {
   @apply bg-background fixed top-16 right-4 left-4 z-[60];
