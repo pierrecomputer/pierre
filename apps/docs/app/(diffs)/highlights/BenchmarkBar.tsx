@@ -15,13 +15,10 @@ export function BenchmarkBar({
   highlighted = false,
 }: BenchmarkBarProps) {
   return (
-    <div
-      aria-hidden="true"
-      className="bg-muted h-2.5 w-full overflow-hidden rounded-sm"
-    >
+    <div aria-hidden="true" className="h-3 w-full">
       <div
         className={cn(
-          'h-full rounded-sm',
+          'h-full rounded-md transition-[width] duration-500 ease-out motion-reduce:transition-none',
           highlighted ? styles.rainbow : 'bg-foreground/30'
         )}
         style={{ width: `${(value / maximum) * 100}%` }}

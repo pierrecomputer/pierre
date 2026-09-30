@@ -219,7 +219,7 @@ export function HighlightsPerformanceBenchmarks() {
           live heap or bundle size. Results vary by input and environment.{' '}
           <Link
             href="https://github.com/pierrecomputer/pierre/tree/main/packages/highlights/benchmark#html-generation"
-            className="hover:text-foreground underline underline-offset-4"
+            className="styled-link styled-link-muted"
             target="_blank"
             rel="noopener noreferrer"
           >

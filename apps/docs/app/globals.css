@@ -254,6 +254,14 @@
     @apply text-foreground hover:text-foreground decoration-muted-foreground hover:decoration-foreground underline decoration-[1px] underline-offset-3 transition-[text-decoration-color,text-underline-offset];
   }
 
+  .styled-link {
+    @apply text-foreground decoration-muted-foreground hover:decoration-foreground focus-visible:decoration-foreground underline decoration-[1px] underline-offset-3 transition-[color,text-decoration-color,text-underline-offset] focus-visible:rounded-xs focus-visible:outline-2 focus-visible:outline-offset-2;
+  }
+
+  .styled-link-muted {
+    @apply text-muted-foreground hover:text-foreground focus-visible:text-foreground;
+  }
+
   .no-scrollbar::-webkit-scrollbar {
     display: none;
   }
