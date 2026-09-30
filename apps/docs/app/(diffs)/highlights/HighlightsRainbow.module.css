@@ -21,6 +21,63 @@
   animation: rainbow-shift 8s linear infinite;
 }
 
+.heroRainbow {
+  background-color: #08c0ef;
+  background-image:
+    radial-gradient(
+      ellipse at center,
+      #fc2b73 0%,
+      rgb(252 43 115 / 88%) 28%,
+      rgb(252 43 115 / 0%) 70%
+    ),
+    radial-gradient(
+      ellipse at center,
+      #fe8c2c 0%,
+      rgb(254 140 44 / 84%) 30%,
+      rgb(254 140 44 / 0%) 72%
+    ),
+    radial-gradient(
+      ellipse at center,
+      #ffca00 0%,
+      rgb(255 202 0 / 78%) 32%,
+      rgb(255 202 0 / 0%) 74%
+    ),
+    radial-gradient(
+      ellipse at center,
+      #0dbe4e 0%,
+      rgb(13 190 78 / 80%) 30%,
+      rgb(13 190 78 / 0%) 72%
+    ),
+    radial-gradient(
+      ellipse at center,
+      #009fff 0%,
+      rgb(0 159 255 / 86%) 30%,
+      rgb(0 159 255 / 0%) 72%
+    ),
+    radial-gradient(
+      ellipse at center,
+      #c635e4 0%,
+      rgb(198 53 228 / 84%) 28%,
+      rgb(198 53 228 / 0%) 70%
+    );
+  background-position:
+    -38% 42%,
+    4% -22%,
+    40% 88%,
+    72% -12%,
+    104% 78%,
+    138% 28%;
+  background-repeat: no-repeat;
+  background-size:
+    72% 168%,
+    78% 156%,
+    76% 174%,
+    82% 164%,
+    80% 176%,
+    76% 162%;
+  animation: hero-mesh-shift 14s ease-in-out infinite;
+}
+
 /* stylelint-disable-next-line selector-pseudo-class-no-unknown */
 :global(.dark) .rainbow {
   background-image: linear-gradient(
@@ -41,6 +98,48 @@
   );
 }
 
+/* stylelint-disable-next-line selector-pseudo-class-no-unknown */
+:global(.dark) .heroRainbow {
+  background-color: #68cdf2;
+  background-image:
+    radial-gradient(
+      ellipse at center,
+      #ff678d 0%,
+      rgb(255 103 141 / 88%) 28%,
+      rgb(255 103 141 / 0%) 70%
+    ),
+    radial-gradient(
+      ellipse at center,
+      #ffa359 0%,
+      rgb(255 163 89 / 84%) 30%,
+      rgb(255 163 89 / 0%) 72%
+    ),
+    radial-gradient(
+      ellipse at center,
+      #ffd452 0%,
+      rgb(255 212 82 / 78%) 32%,
+      rgb(255 212 82 / 0%) 74%
+    ),
+    radial-gradient(
+      ellipse at center,
+      #5ecc71 0%,
+      rgb(94 204 113 / 80%) 30%,
+      rgb(94 204 113 / 0%) 72%
+    ),
+    radial-gradient(
+      ellipse at center,
+      #69b1ff 0%,
+      rgb(105 177 255 / 86%) 30%,
+      rgb(105 177 255 / 0%) 72%
+    ),
+    radial-gradient(
+      ellipse at center,
+      #d568ea 0%,
+      rgb(213 104 234 / 84%) 28%,
+      rgb(213 104 234 / 0%) 70%
+    );
+}
+
 @keyframes rainbow-shift {
   from {
     background-position: 0% 50%;
@@ -51,8 +150,66 @@
   }
 }
 
+@keyframes hero-mesh-shift {
+  0%,
+  100% {
+    background-position:
+      -38% 42%,
+      4% -22%,
+      40% 88%,
+      72% -12%,
+      104% 78%,
+      138% 28%;
+    background-size:
+      72% 168%,
+      78% 156%,
+      76% 174%,
+      82% 164%,
+      80% 176%,
+      76% 162%;
+  }
+
+  33% {
+    background-position:
+      55% 75%,
+      85% 20%,
+      -30% 45%,
+      150% 35%,
+      20% 25%,
+      55% 85%;
+    background-size:
+      88% 180%,
+      70% 170%,
+      88% 158%,
+      74% 184%,
+      90% 160%,
+      84% 178%;
+  }
+
+  67% {
+    background-position:
+      -90% -10%,
+      -65% 60%,
+      125% 70%,
+      15% 5%,
+      180% 105%,
+      220% 50%;
+    background-size:
+      70% 158%,
+      88% 180%,
+      68% 186%,
+      90% 154%,
+      72% 186%,
+      86% 158%;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .rainbow {
+    animation: none;
+  }
+
+  .heroRainbow {
     animation: none;
   }
 }
