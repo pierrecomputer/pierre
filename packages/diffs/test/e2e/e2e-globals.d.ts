@@ -52,6 +52,8 @@ interface E2EEditor {
 }
 
 interface Window {
+  __codeView?: import('../../src/components/CodeView').CodeView;
+
   // Fixture ready flags.
   __diffReady?: boolean;
   __editReady?: boolean;

@@ -1,5 +1,45 @@
 import { expect, test } from '@playwright/test';
 
+for (const diffStyle of ['split', 'unified'] as const) {
+  test(`scoped search reveals and selects collapsed context in ${diffStyle} mode`, async ({
+    page,
+  }) => {
+    await page.goto(
+      `/test/e2e/fixtures/code-view-search.html?collapsed&diffStyle=${diffStyle}`
+    );
+    const root = page.locator('[data-code-view-root]');
+    const content = root.locator('[contenteditable="true"]');
+    const hiddenLine = content.locator('[data-line="101"]');
+    await expect(hiddenLine).toHaveCount(0);
+    await content
+      .locator('[data-line="10"]:not([data-line-type="change-deletion"])')
+      .click();
+    await page.keyboard.press('ControlOrMeta+f');
+    const input = root.getByRole('textbox', { name: 'Search' });
+    await input.fill('target');
+    await expect(root.locator('[data-matches]')).toHaveText('1 of 1');
+    await expect(hiddenLine).toBeInViewport();
+    await expect(input).toBeFocused();
+    await expect
+      .poll(() =>
+        page.evaluate(
+          () => window.__codeView?.getEditor('diff')?.getViewState().selections
+        )
+      )
+      .toEqual([
+        {
+          start: { line: 100, character: 7 },
+          end: { line: 100, character: 13 },
+          direction: 1,
+        },
+      ]);
+    await expect(content.locator('[data-line="210"]')).toHaveCount(0);
+    await input.press('Enter');
+    await expect(hiddenLine).toBeInViewport();
+    await expect(input).toBeFocused();
+  });
+}
+
 test('search scope follows focus across editors, the panel, and outside CodeView', async ({
   page,
 }) => {
@@ -106,6 +146,19 @@ test('find from an editable CodeView uses its panel and reaches offscreen matche
   const line201 = content.locator('[data-line="201"]');
   await expect(line201).toBeInViewport();
   await expect(input).toBeFocused();
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () => window.__codeView?.getEditor('file')?.getViewState().selections
+      )
+    )
+    .toEqual([
+      {
+        start: { line: 200, character: 0 },
+        end: { line: 200, character: 6 },
+        direction: 1,
+      },
+    ]);
 
   // Returning focus to an editor must keep find-again on the CodeView panel.
   await line201.click();

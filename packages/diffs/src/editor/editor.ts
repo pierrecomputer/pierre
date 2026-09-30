@@ -402,6 +402,14 @@ export interface EditorFocusOptions extends FocusOptions {
   offset?: number;
 }
 
+export interface EditorSelectionOptions {
+  /**
+   * Skip scrolling to and focusing the selection. Defaults to false.
+   * Collapsed lines are still revealed when this is true.
+   */
+  skipScrollAndFocus?: boolean;
+}
+
 // Wrap offsets persist across render-range syncs (see #resetCache), so
 // scrolling through a very large file could otherwise accumulate an entry per
 // line. Past this many lines the cache resets and refills lazily for whatever
@@ -1067,12 +1075,14 @@ export class Editor<
   }
 
   setSelections(
-    selections: (Range & { direction: 'none' | 'backward' | 'forward' })[]
+    selections: (Range & { direction: 'none' | 'backward' | 'forward' })[],
+    options?: EditorSelectionOptions
   ): void {
-    const textDocument = this.#editSession?.document;
-    if (textDocument === undefined) {
+    const editSession = this.#editSession;
+    if (editSession?.document == null) {
       throw new Error('Editor.setSelections: Text document is not initialized');
     }
+    const { document: textDocument } = editSession;
     const resolvedSelections = selections.map<EditorSelection>((selection) => {
       let start = textDocument.normalizePosition(selection.start);
       let end = textDocument.normalizePosition(selection.end);
@@ -1096,11 +1106,21 @@ export class Editor<
     });
     this.#canMountSelectionAction = false;
     this.#updateSelections(resolvedSelections);
+    // A recycled editor restores selections from the retained session on
+    // remount, so navigation while offscreen must update that state too.
+    if (!this.#isRendering) {
+      editSession.editor = cloneEditorViewState({
+        ...editSession.editor,
+        selections: this.#selections,
+      });
+    }
     const primarySelection = resolvedSelections.at(-1);
     if (primarySelection !== undefined) {
       this.#revealLineIfCollapsed(getCaretPosition(primarySelection).line);
     }
-    this.#scrollToPrimaryCaret();
+    if (options?.skipScrollAndFocus !== true) {
+      this.#scrollToPrimaryCaret();
+    }
   }
 
   setMarkers(markers: Marker[]): void {
