@@ -307,7 +307,11 @@ export default function IconsPage() {
         <section className="flex max-w-3xl flex-col gap-3 py-20 lg:max-w-4xl">
           <div aria-hidden="true" className="mb-2 flex gap-1.5">
             <IconGlyph className="size-8" color="#1a85d4" source={vscodeIcon} />
-            <IconGlyph className="size-8" color="#693acf" source={wasmIcon} />
+            <IconGlyph
+              className="size-8"
+              color="#693acf"
+              source={wasmDuoIcon}
+            />
             <IconGlyph className="size-8" color="#d52c36" source={npmDuoIcon} />
           </div>
           <h1 className="text-4xl font-semibold tracking-tight md:text-5xl lg:text-6xl">
