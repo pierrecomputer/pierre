@@ -1,6 +1,11 @@
 import { afterAll, describe, expect, test } from 'bun:test';
 
-import { disposeHighlighter, File, isFileAnnotationCollection } from '../src';
+import {
+  disposeHighlighter,
+  File,
+  getSharedHighlighter,
+  isFileAnnotationCollection,
+} from '../src';
 import type {
   FileEditCompleteEvent,
   FileEditCompleteHandler,
@@ -341,7 +346,13 @@ describe('editing a File without changing its input', () => {
     }
   });
 
-  test('a file-name change that is replaced immediately does not clear undo history', async () => {
+  test('a file-name change replaced while its Shiki grammar loads does not clear undo history', async () => {
+    await disposeHighlighter();
+    await getSharedHighlighter({
+      preferredHighlighter: 'shiki-js',
+      themes: [],
+      langs: [],
+    });
     const changes: string[] = [];
     const fixture = await createFixture({
       onChange: (contents) => changes.push(contents),

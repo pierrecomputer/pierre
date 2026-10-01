@@ -1,4 +1,8 @@
-import type { DiffIndicators, SelectedLineRange } from '@pierre/diffs';
+import {
+  DEFAULT_HIGHLIGHTER,
+  type DiffIndicators,
+  type SelectedLineRange,
+} from '@pierre/diffs';
 
 // The playground's URL state, parsed identically on the server (to build the
 // prerendered payload) and on the client (to seed component state). The
@@ -69,7 +73,7 @@ export type PlaygroundLineDiffType = (typeof LINE_DIFF_TYPES)[number];
 
 // Default values for URL param comparison
 export const DEFAULTS = {
-  highlighter: 'shiki-js',
+  highlighter: DEFAULT_HIGHLIGHTER,
   viewMode: 'diff' as ViewMode,
   diffStyle: 'split',
   colorMode: 'system',

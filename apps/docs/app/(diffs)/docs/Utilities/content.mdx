@@ -71,7 +71,7 @@ resources in single-page applications. Once it and any instances from
 
 Get direct access to the shared highlighter instance used internally by all
 components. Set `preferredHighlighter` to `shiki-js`, `shiki-wasm`, or
-`highlights`; without it, the backend already loaded is used, else `shiki-js`.
+`highlights`; without it, the backend already loaded is used, else `highlights`.
 Only one backend can be loaded at a time, so requesting another one rejects.
 
 <DocsCodeExample {...getSharedHighlighter} />
@@ -133,9 +133,11 @@ highlighting with no async loading delay.
 Use `registerCustomTheme(name, loader, type = 'textmate')` to register a lazy
 loader. The optional third argument defaults to `'textmate'` for Shiki; pass
 `'zed'` for Highlights or `'diffs'` for a portable `DiffsTheme`. Existing
-two-argument calls keep working. TextMate loaders accept `ThemeRegistration`,
-Zed loaders accept `Theme` or `ThemeFamily`, and Diffs loaders accept
-`DiffsTheme`, directly or as a module's `default` export.
+two-argument calls keep their TextMate format; select
+`preferredHighlighter: 'shiki-js'` or `'shiki-wasm'` to use them. TextMate
+loaders accept `ThemeRegistration`, Zed loaders accept `Theme` or `ThemeFamily`,
+and Diffs loaders accept `DiffsTheme`, directly or as a module's `default`
+export.
 
 TextMate themes use either Shiki backend, and their `name` must match the
 registered name. Zed themes use `preferredHighlighter: 'highlights'`; the
@@ -154,7 +156,7 @@ loader automatically.
 
 Register a custom Shiki language loader and optionally map it to file names or
 extensions. Highlights bundles its lexers and ignores custom TextMate grammars.
-Use this when you're working with languages not bundled by Shiki or want custom
+Select `preferredHighlighter: 'shiki-js'` or `'shiki-wasm'` when using custom
 highlighting grammars.
 
 The grammar file or object returned by your loader has a `name` field and can

@@ -2,6 +2,7 @@ import { afterAll, describe, expect, spyOn, test } from 'bun:test';
 import { createTwoFilesPatch } from 'diff';
 
 import {
+  DEFAULT_HIGHLIGHTER,
   disposeHighlighter,
   FileDiff,
   parseDiffFromFile,
@@ -74,7 +75,7 @@ function createPrimeWorkerManager(): {
   const workerManager = {
     cleanUpTasks() {},
     getPreferredHighlighter() {
-      return 'shiki-js';
+      return DEFAULT_HIGHLIGHTER;
     },
     getDiffRenderOptions() {
       return {
@@ -677,7 +678,7 @@ describe('FileDiff partial hydration', () => {
         subscribeToThemeChanges() {},
         unsubscribeToThemeChanges() {},
         getPreferredHighlighter() {
-          return 'shiki-js';
+          return DEFAULT_HIGHLIGHTER;
         },
         getDiffRenderOptions() {
           return {

@@ -48,7 +48,7 @@ export const DEFAULT_THEMES: ThemesType = {
 };
 
 // The highlighter type used when no request names one and none is active yet.
-export const DEFAULT_HIGHLIGHTER: HighlighterTypes = 'shiki-js';
+export const DEFAULT_HIGHLIGHTER: HighlighterTypes = 'highlights';
 
 export const THEME_CSS_ATTRIBUTE = 'data-theme-css';
 export const UNSAFE_CSS_ATTRIBUTE = 'data-unsafe-css';

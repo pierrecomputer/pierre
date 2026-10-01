@@ -26,7 +26,11 @@ const renames = [
   [python, javascript],
   [javascript, python],
 ] as const;
-const options = { theme: 'pierre-dark', diffStyle: 'split' } as const;
+const options = {
+  theme: 'pierre-dark',
+  diffStyle: 'split',
+  preferredHighlighter: 'shiki-js',
+} as const;
 
 describe('DiffHunksRenderer language loading without workers', () => {
   test('the bundled Terraform loader renders an ordinary .tf edit and provides its aliases', async () => {
@@ -66,6 +70,7 @@ describe('DiffHunksRenderer language loading without workers', () => {
           const highlighter = await getSharedHighlighter({
             themes: [options.theme],
             langs: [newFile.language],
+            preferredHighlighter: options.preferredHighlighter,
           });
           if (oldFile.language !== newFile.language) {
             expect(highlighter.hasLoadedLanguages([oldFile.language])).toBe(
@@ -99,6 +104,7 @@ describe('DiffHunksRenderer language loading without workers', () => {
       const highlighter = await getSharedHighlighter({
         themes: [options.theme],
         langs: [newFile.language],
+        preferredHighlighter: options.preferredHighlighter,
       });
       expect(highlighter.hasLoadedLanguages([oldFile.language])).toBe(false);
       const updated = createDeferred<void>();

@@ -2412,6 +2412,7 @@ describe('EditorTokenizer', () => {
     const highlighter = await getSharedHighlighter({
       themes: [DEFAULT_THEMES.dark, DEFAULT_THEMES.light],
       langs: ['tsx'],
+      preferredHighlighter: 'shiki-js',
     });
     const textDocument = new TextDocument('Button.tsx', code, 'tsx');
     const tokenizer = new EditorTokenizer({

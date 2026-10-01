@@ -203,7 +203,7 @@ registerCustomTheme('inline-theme', async () => ({
 registerCustomTheme('my-zed-theme', () => import('./my-zed-theme.json'), 'zed');
 
 // Use the registered name and the matching backend:
-// <FileDiff options={{ theme: 'my-custom-theme' }} ... />
+// <FileDiff options={{ theme: 'my-custom-theme', preferredHighlighter: 'shiki-js' }} ... />
 // <FileDiff options={{ theme: 'my-zed-theme', preferredHighlighter: 'highlights' }} ... />`,
   },
   options,
@@ -266,7 +266,7 @@ export const HELPER_GET_SHARED_HIGHLIGHTER: PreloadFileOptions<
 
 // Only one backend can be loaded at a time; requesting another rejects.
 const highlighter = await getSharedHighlighter({
-  preferredHighlighter: 'highlights', // defaults to the loaded backend, else 'shiki-js'
+  preferredHighlighter: 'highlights', // defaults to the loaded backend, else 'highlights'
   themes: ['pierre-dark'],
   langs: ['typescript'],
 });

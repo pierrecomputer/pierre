@@ -49,6 +49,19 @@ afterEach(() => {
 });
 
 describe('WorkerPoolManager lifecycle', () => {
+  test('initializes the pool and its workers with Highlights by default', async () => {
+    await disposeHighlighter();
+    const { manager, worker } = await createInitializedManager();
+    try {
+      const request = await worker.waitForInitializeRequest();
+      expect(manager.getPreferredHighlighter()).toBe('highlights');
+      expect(request.preferredHighlighter).toBe('highlights');
+      expect(request.resolvedThemes[0].zed).toBeDefined();
+    } finally {
+      manager.terminate();
+    }
+  });
+
   test('fails initialization when a worker emits an error', async () => {
     spyOn(console, 'error').mockImplementation(() => {});
     const { initialization, manager, worker } = createInitializingManager();
@@ -148,7 +161,9 @@ describe('WorkerPoolManager cache priming', () => {
   for (const rejectLanguage of [true, false]) {
     test(`a worker ${rejectLanguage ? 'rejection resends' : 'success reuses'} the requested language on the next task`, async () => {
       await disposeHighlighter();
-      const { manager, worker } = await createInitializedManager();
+      const { manager, worker } = await createInitializedManager({
+        preferredHighlighter: 'shiki-js',
+      });
       const mismatch =
         'attachResolvedLanguages: No returned grammar declares "tf" as its name or an alias.';
       if (rejectLanguage) {
@@ -205,7 +220,9 @@ describe('WorkerPoolManager cache priming', () => {
 
   test('reports a background preload failure without blocking worker rendering', async () => {
     await disposeHighlighter();
-    const { manager, worker } = await createInitializedManager();
+    const { manager, worker } = await createInitializedManager({
+      preferredHighlighter: 'shiki-js',
+    });
     const highlighter = await sharedHighlighter.getSharedHighlighter({
       themes: [],
       langs: [],

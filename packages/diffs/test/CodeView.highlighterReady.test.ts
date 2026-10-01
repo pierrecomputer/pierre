@@ -1,5 +1,5 @@
+import type { Theme } from '@pierre/highlights';
 import { afterAll, expect, mock, spyOn, test } from 'bun:test';
-import type { ThemeRegistration } from 'shiki';
 
 import { CodeView } from '../src/components/CodeView';
 import {
@@ -15,13 +15,12 @@ afterAll(disposeHighlighter);
 test('retries a failed theme load on a later render without automatically retrying', async () => {
   const theme = {
     name: 'codeview-retry-theme',
-    type: 'dark',
-    colors: {},
-    tokenColors: [],
-  } satisfies ThemeRegistration;
-  const firstLoad = createDeferred<ThemeRegistration>();
+    appearance: 'dark',
+    style: {},
+  } satisfies Theme;
+  const firstLoad = createDeferred<Theme>();
   const loader = mock(() => firstLoad.promise);
-  registerCustomTheme(theme.name, loader);
+  registerCustomTheme(theme.name, loader, 'zed');
   const error = new Error('Theme chunk failed to load');
   const logError = spyOn(console, 'error').mockImplementation(() => {});
   const dom = installDom();
@@ -69,27 +68,34 @@ for (const obsoleteFinishesFirst of [false, true]) {
   test(`switches pending themes when the ${obsoleteFinishesFirst ? 'obsolete' : 'current'} loader finishes first`, async () => {
     const obsoleteName = `codeview-obsolete-${obsoleteFinishesFirst}`;
     const currentName = `codeview-current-${obsoleteFinishesFirst}`;
-    const obsoleteTheme: ThemeRegistration = {
+    const obsoleteTheme: Theme = {
       name: obsoleteName,
-      type: 'dark',
-      colors: {},
-      tokenColors: [],
+      appearance: 'dark',
+      style: {},
     };
-    const currentTheme: ThemeRegistration = {
+    const currentTheme: Theme = {
       ...obsoleteTheme,
       name: currentName,
     };
-    const obsolete = createDeferred<ThemeRegistration>();
-    const current = createDeferred<ThemeRegistration>();
+    const obsolete = createDeferred<Theme>();
+    const current = createDeferred<Theme>();
     const started: string[] = [];
-    registerCustomTheme(obsoleteName, () => {
-      started.push(obsoleteName);
-      return obsolete.promise;
-    });
-    registerCustomTheme(currentName, () => {
-      started.push(currentName);
-      return current.promise;
-    });
+    registerCustomTheme(
+      obsoleteName,
+      () => {
+        started.push(obsoleteName);
+        return obsolete.promise;
+      },
+      'zed'
+    );
+    registerCustomTheme(
+      currentName,
+      () => {
+        started.push(currentName);
+        return current.promise;
+      },
+      'zed'
+    );
 
     const dom = installDom();
     const viewer = new CodeView({ theme: obsoleteName });

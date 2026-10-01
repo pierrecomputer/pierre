@@ -16,9 +16,10 @@ makes our themes compatible with Shiki, Visual Studio Code, Cursor, and Zed.
 Pass a bundled theme name to the `theme` option, or use
 [`registerCustomTheme`](#utilities-registercustomtheme) to load a custom
 TextMate theme for Shiki, a Zed-compatible Highlights theme or family, or a
-portable `DiffsTheme`. For Zed themes, also set
-`preferredHighlighter: 'highlights'`. Our [themes documentation](/theme)
-explains how to build custom themes from a shared palette.
+portable `DiffsTheme`. Custom TextMate themes require
+`preferredHighlighter: 'shiki-js'` or `'shiki-wasm'`; Zed themes use the default
+Highlights backend. Our [themes documentation](/theme) explains how to build
+custom themes from a shared palette.
 
 <Button asChild>
   <Link

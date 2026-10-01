@@ -203,7 +203,6 @@ const poolManager: WorkerPoolManager | undefined = WORKER_POOL
       const manager = createWorkerAPI({
         theme: DEMO_THEME,
         langs: ['typescript', 'tsx'],
-        preferredHighlighter: 'shiki-wasm',
         useTokenTransformer: true,
       });
       void manager.initialize().then(() => {

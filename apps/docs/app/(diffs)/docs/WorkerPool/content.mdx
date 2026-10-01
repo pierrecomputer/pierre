@@ -9,12 +9,10 @@
   Import worker utilities from `@pierre/diffs/worker`.
 </Notice>
 
-By default, syntax highlighting runs on the main thread using Shiki. If you're
-rendering large files or many diffs, this can cause a bottleneck on your
-JavaScript thread resulting in jank or unresponsiveness. To work around this,
-we've provided some APIs to run all syntax highlighting in worker threads. The
-main thread will still attempt to render plain text synchronously and then apply
-the syntax highlighting when we get a response from the worker threads.
+By default, syntax highlighting runs on the main thread using Highlights. Worker
+pools move highlighting off the main thread, which can help when using Shiki for
+large files or many diffs. The main thread renders plain text first, then
+applies highlighted output when a worker responds.
 
 A worker pool is optional. When you supply one, all highlighting goes through
 its workers, whichever backend it uses. Pools pay off with Shiki, whose
@@ -166,9 +164,9 @@ pool is an optional optimization for edit-heavy apps — pool markup is then
 already editor-compatible, so entering edit mode skips a one-time re-render of
 that file.
 
-Set `preferredHighlighter` when initializing the pool to choose `'shiki-js'`
-(the default), `'shiki-wasm'`, or `'highlights'`. The portable worker includes
-all backends in its download and initializes the chosen backend. Use the regular
+Set `preferredHighlighter` when initializing the pool to choose `'highlights'`
+(the default), `'shiki-js'`, or `'shiki-wasm'`. The portable worker includes all
+backends in its download and initializes the chosen backend. Use the regular
 worker entry with your bundler for lazy backend loading.
 
 #### React

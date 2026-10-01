@@ -1,14 +1,14 @@
 # Highlighting API
 
-`preferredHighlighter` selects `'shiki-js'` (default), `'shiki-wasm'`, or
-`'highlights'`. Backends load lazily. File, FileDiff, Editor, FileStream, SSR
+`preferredHighlighter` selects `'highlights'` (default), `'shiki-js'`, or
+`'shiki-wasm'`. Backends load lazily. File, FileDiff, Editor, FileStream, SSR
 preload options, and worker highlighter options accept this selection.
 
 Only one backend type can be loaded per JavaScript realm (page, worker, or SSR
 process). Requests without `preferredHighlighter` use the loaded type, else
-`'shiki-js'`. Requesting another type throws until every instance of the loaded
-type, shared or from `createHighlighter`, is disposed. `getHighlighterType()`
-returns the loaded type.
+`'highlights'`. Requesting another type throws until every instance of the
+loaded type, shared or from `createHighlighter`, is disposed.
+`getHighlighterType()` returns the loaded type.
 
 ## Shared highlighter
 
@@ -77,9 +77,10 @@ cannot resolve on Shiki.
 
 Theme resolution returns portable `DiffsTheme` objects. Resolve on the main
 thread before passing them to workers. Register one loader per name and type.
-Raw TextMate themes require Shiki. For one theme across backends, use
-`createCSSVariablesTheme` or a `DiffsTheme` containing both `textmate` (Shiki's
-normalized `ThemeRegistrationResolved`) and `zed` palettes.
+Raw TextMate themes and custom grammars require an explicit Shiki selection
+(`preferredHighlighter: 'shiki-js'` or `'shiki-wasm'`). For one theme across
+backends, use `createCSSVariablesTheme` or a `DiffsTheme` containing both
+`textmate` (Shiki's normalized `ThemeRegistrationResolved`) and `zed` palettes.
 
 ## Languages
 

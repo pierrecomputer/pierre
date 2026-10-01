@@ -529,6 +529,7 @@ export function DiffWithCustomTheme({ fileDiff }) {
       options={{
         // Single theme
         theme: 'my-theme-dark',
+        preferredHighlighter: 'shiki-js',
 
         // Or both variants for automatic light/dark mode
         theme: {

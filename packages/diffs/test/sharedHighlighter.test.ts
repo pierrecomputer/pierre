@@ -25,6 +25,36 @@ afterEach(async () => {
 });
 
 describe('highlighter type lock', () => {
+  test('creates Highlights by default', async () => {
+    const highlighter = await createHighlighter();
+    try {
+      expect(highlighter.name).toBe('highlights');
+    } finally {
+      highlighter.dispose();
+    }
+  });
+
+  test('loads Highlights themes and tokens without selecting a backend', async () => {
+    const highlighter = await getSharedHighlighter({
+      themes: ['pierre-dark'],
+      langs: ['typescript'],
+    });
+    expect(highlighter.name).toBe('highlights');
+    expect(highlighter.getTheme('pierre-dark').zed).toBeDefined();
+    const code = 'const answer = 42;';
+    const { tokens } = highlighter.codeToTokens(code, {
+      lang: 'typescript',
+      theme: 'pierre-dark',
+    });
+    expect(
+      tokens
+        .flat()
+        .map((token) => token.content)
+        .join('')
+    ).toBe(code);
+    expect(tokens[0].length).toBeGreaterThan(1);
+  });
+
   test('concurrent requests for one type share a single instance', async () => {
     const instances = await Promise.all(
       [0, 1, 2].map(() =>
@@ -199,7 +229,7 @@ describe('shared highlighter backend lifecycle', () => {
   test('a loaded instance of another type is not returned', async () => {
     await getSharedHighlighter({ themes: [], langs: [] });
     expect(
-      getHighlighterIfLoaded({ preferredHighlighter: 'highlights' })
+      getHighlighterIfLoaded({ preferredHighlighter: 'shiki-js' })
     ).toBeUndefined();
   });
 

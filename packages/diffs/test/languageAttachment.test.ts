@@ -10,7 +10,14 @@ import {
 } from '../src';
 import { RegisteredCustomLanguages } from '../src/highlighter/languages/constants';
 
-beforeEach(disposeHighlighter);
+beforeEach(async () => {
+  await disposeHighlighter();
+  await getSharedHighlighter({
+    preferredHighlighter: 'shiki-js',
+    themes: [],
+    langs: [],
+  });
+});
 afterEach(async () => {
   await disposeHighlighter();
   for (const name of ['tf', 'hcl', 'custom-hcl']) {

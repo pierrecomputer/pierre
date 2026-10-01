@@ -1329,7 +1329,9 @@ export class Editor<
     if (tokenizer !== undefined) {
       tokenizer.pauseBackgroundTokenize();
       requestAnimationFrame(() => {
-        tokenizer.resumeBackgroundTokenize();
+        if (this.#tokenizer === tokenizer) {
+          tokenizer.resumeBackgroundTokenize();
+        }
       });
     }
   }

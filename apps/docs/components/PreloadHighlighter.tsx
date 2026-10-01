@@ -9,6 +9,7 @@ export function PreloadHighlighter() {
   useEffect(() => {
     if (isPlayground) return;
     void preloadHighlighter({
+      preferredHighlighter: 'highlights',
       themes: [
         'pierre-dark',
         'pierre-dark-soft',
@@ -16,7 +17,6 @@ export function PreloadHighlighter() {
         'pierre-light-soft',
       ],
       langs: ['zig', 'rust', 'typescript', 'tsx', 'bash'],
-      preferredHighlighter: 'shiki-wasm',
     }).catch((error: unknown) => console.error(error));
   }, [isPlayground]);
   return null;

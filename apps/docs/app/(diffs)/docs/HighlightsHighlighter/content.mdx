@@ -1,9 +1,9 @@
 ## Highlights
 
-Select Highlights in `@pierre/diffs` with `preferredHighlighter: 'highlights'`.
-The same option works for File, FileDiff, Editor, FileStream, SSR preload
-helpers, and worker pools. The default is `shiki-js`; `shiki-wasm` is also
-available. Each backend loads on demand.
+Highlights is the default backend in `@pierre/diffs` for File, FileDiff, Editor,
+FileStream, SSR preload helpers, and worker pools. Select `shiki-js` or
+`shiki-wasm` with `preferredHighlighter` when you need Shiki. Each backend loads
+on demand.
 
 ```tsx
 <FileDiff
@@ -43,7 +43,7 @@ directly from `shiki` when you need them.
 
 <Notice variant="warning" icon={<IconCiWarningFill />}>
   Highlights is experimental and subject to change. Try the [interactive
-  playground](/highlights) before replacing Shiki in production.
+  playground](/highlights) to compare its output with Shiki.
 </Notice>
 
 Highlights is a syntax highlighter with 73 built-in language lexers written in
