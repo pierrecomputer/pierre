@@ -334,6 +334,35 @@ function PlaygroundControlsContent({
       <div className="flex flex-wrap items-center gap-3">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
+            <Button variant="outline" className="justify-start px-3">
+              <IconLayers />
+              {VIEW_MODE_OPTIONS.find((opt) => opt.value === viewMode)?.label ??
+                viewMode}
+              <IconChevronSm className="text-muted-foreground ml-auto" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent
+            align="start"
+            scrollSelectedIntoView
+            className={dropdownContentClassName}
+          >
+            {VIEW_MODE_OPTIONS.map((option) => (
+              <DropdownMenuItem
+                key={option.value}
+                onClick={() => setViewMode(option.value)}
+                selected={viewMode === option.value}
+              >
+                {option.label}
+                {viewMode === option.value && <IconCheck className="ml-auto" />}
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
+
+        <div className="bg-border h-6 w-px" />
+
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
             <Button
               variant="outline"
               aria-label="Highlighter"
@@ -356,32 +385,6 @@ function PlaygroundControlsContent({
               >
                 {HIGHLIGHTER_LABELS[value]}
                 {highlighter === value && <IconCheck className="ml-auto" />}
-              </DropdownMenuItem>
-            ))}
-          </DropdownMenuContent>
-        </DropdownMenu>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="outline" className="justify-start px-3">
-              <IconLayers />
-              {VIEW_MODE_OPTIONS.find((opt) => opt.value === viewMode)?.label ??
-                viewMode}
-              <IconChevronSm className="text-muted-foreground ml-auto" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent
-            align="start"
-            scrollSelectedIntoView
-            className={dropdownContentClassName}
-          >
-            {VIEW_MODE_OPTIONS.map((option) => (
-              <DropdownMenuItem
-                key={option.value}
-                onClick={() => setViewMode(option.value)}
-                selected={viewMode === option.value}
-              >
-                {option.label}
-                {viewMode === option.value && <IconCheck className="ml-auto" />}
               </DropdownMenuItem>
             ))}
           </DropdownMenuContent>
@@ -502,37 +505,6 @@ function PlaygroundControlsContent({
           </ButtonGroupItem>
         </ButtonGroup>
 
-        <div className="bg-border h-6 w-px" />
-
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="outline" className="justify-start px-3">
-              <IconCodeStyleInline />
-              {LINE_DIFF_OPTIONS.find((opt) => opt.value === lineDiffType)
-                ?.label ?? lineDiffType}
-              <IconChevronSm className="text-muted-foreground ml-auto" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent
-            align="start"
-            scrollSelectedIntoView
-            className={dropdownContentClassName}
-          >
-            {LINE_DIFF_OPTIONS.map((option) => (
-              <DropdownMenuItem
-                key={option.value}
-                onClick={() => setLineDiffType(option.value)}
-                selected={lineDiffType === option.value}
-              >
-                {option.label}
-                {lineDiffType === option.value && (
-                  <IconCheck className="ml-auto" />
-                )}
-              </DropdownMenuItem>
-            ))}
-          </DropdownMenuContent>
-        </DropdownMenu>
-
         {!hideShare && (
           <>
             <div className="bg-border h-6 w-px xl:hidden" />
@@ -597,6 +569,37 @@ function PlaygroundControlsContent({
             title={!editing ? 'Start editing to show lint markers' : undefined}
           />
         )}
+      </div>
+
+      <div className="flex flex-wrap items-center gap-3">
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline" className="justify-start px-3">
+              <IconCodeStyleInline />
+              {LINE_DIFF_OPTIONS.find((opt) => opt.value === lineDiffType)
+                ?.label ?? lineDiffType}
+              <IconChevronSm className="text-muted-foreground ml-auto" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent
+            align="start"
+            scrollSelectedIntoView
+            className={dropdownContentClassName}
+          >
+            {LINE_DIFF_OPTIONS.map((option) => (
+              <DropdownMenuItem
+                key={option.value}
+                onClick={() => setLineDiffType(option.value)}
+                selected={lineDiffType === option.value}
+              >
+                {option.label}
+                {lineDiffType === option.value && (
+                  <IconCheck className="ml-auto" />
+                )}
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
 
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
@@ -627,9 +630,6 @@ function PlaygroundControlsContent({
             ))}
           </DropdownMenuContent>
         </DropdownMenu>
-      </div>
-
-      <div className="flex flex-wrap items-center gap-3">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="outline" className="justify-start px-3">
