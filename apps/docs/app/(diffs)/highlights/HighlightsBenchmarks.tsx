@@ -28,7 +28,7 @@ function formatDuration(milliseconds: number) {
     .format(seconds)
     .replace(/^0/, '');
 
-  return `${displayedSeconds} s`;
+  return `${displayedSeconds}s`;
 }
 
 function formatOutput(output: string) {
