@@ -29,6 +29,7 @@ export function getDiffHunksRendererOptions<LAnnotation, Caret>(
         : options?.hunkSeparators,
     expandUnchanged: options?.expandUnchanged,
     loadDiffFiles: options?.loadDiffFiles,
+    parseDiffOptions: options?.parseDiffOptions,
     collapsedContextThreshold: options?.collapsedContextThreshold,
     lineDiffType: options?.lineDiffType,
     maxLineDiffLength: options?.maxLineDiffLength,

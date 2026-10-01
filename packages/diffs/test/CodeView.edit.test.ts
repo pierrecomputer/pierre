@@ -5,6 +5,7 @@ import {
   CodeView,
   type CodeViewCoordinator,
   type CodeViewCreateEditorOptions,
+  type CodeViewOptions,
   type CodeViewSlotSnapshot,
 } from '../src/components/CodeView';
 import type { File, FileEditCompleteEvent } from '../src/components/File';
@@ -1039,6 +1040,105 @@ describe('CodeView item edit mode', () => {
       cleanup();
     }
   });
+
+  for (const [updateOptions, ignoreWhitespace] of [
+    [false, false],
+    [false, true],
+    [true, false],
+    [true, true],
+  ] as const) {
+    test(`diff edits and completion use parsing options ${updateOptions ? 'updated during editing' : 'provided initially'} (ignoreWhitespace: ${ignoreWhitespace})`, async () => {
+      const { cleanup } = installDom();
+      const { editors, createEditor } = createEditorHarness();
+      const parseDiffOptions = { ignoreWhitespace, context: 0 };
+      let completedDiff: FileDiffMetadata | undefined;
+      const options: CodeViewOptions<undefined, undefined> = {
+        createEditor,
+        parseDiffOptions: updateOptions
+          ? { ignoreWhitespace: !ignoreWhitespace, context: 4 }
+          : parseDiffOptions,
+        onItemEditComplete(_event, _item, nextItem) {
+          if (nextItem.type === 'diff') {
+            completedDiff = nextItem.fileDiff;
+          }
+          return 'accept';
+        },
+      };
+      const viewer = new CodeView(options);
+      const oldLines = Array.from(
+        { length: 12 },
+        (_, index) => `line ${index}`
+      );
+      const initialLines = [...oldLines];
+      initialLines[3] = 'initial change';
+      const editedLines = [...initialLines];
+      editedLines[3] = 'updated change';
+      editedLines[5] = `  ${oldLines[5]}`;
+      const oldFile = {
+        name: 'options.txt',
+        contents: oldLines.join('\n') + '\n',
+      };
+      const newFile = {
+        name: oldFile.name,
+        contents: editedLines.join('\n') + '\n',
+      };
+      const item: CodeViewItem<undefined> = {
+        id: 'parsing-options',
+        type: 'diff',
+        fileDiff: parseDiffFromFile(oldFile, {
+          name: oldFile.name,
+          contents: initialLines.join('\n') + '\n',
+        }),
+        edit: true,
+        version: 0,
+      };
+      try {
+        viewer.setup(createRoot());
+        await renderItems(viewer, [item]);
+        const editor = editors[0];
+        await waitFor(() => editor?.getFile() != null);
+        if (editor == null) {
+          throw new Error('Expected an editor for the diff');
+        }
+        if (updateOptions) {
+          viewer.setOptions({ ...options, parseDiffOptions });
+          viewer.render(true);
+          await wait(0);
+        }
+        setSessionText(editor, newFile.contents);
+        expect(editor.getText()).toBe(newFile.contents);
+        const expected = parseDiffFromFile(oldFile, newFile, parseDiffOptions);
+        const rendered = viewer.getRenderedItems()[0];
+        const sessionDiff = getEditSessionDiff(rendered?.instance);
+        // Session hunk boundaries stay stable while typing, but their change
+        // blocks must already follow the requested whitespace policy.
+        expect(
+          sessionDiff?.hunks.flatMap(({ hunkContent }) =>
+            hunkContent.filter((content) => content.type === 'change')
+          )
+        ).toEqual(
+          expected.hunks.flatMap(({ hunkContent }) =>
+            hunkContent.filter((content) => content.type === 'change')
+          )
+        );
+        await applyItemUpdate(viewer, { ...item, edit: false, version: 1 });
+
+        // Completion must match the owner's whitespace policy and requested
+        // zero-context hunk boundaries without dropping edited file contents.
+        expect(expected.hunks).toHaveLength(ignoreWhitespace ? 1 : 2);
+        expect(completedDiff?.hunks).toEqual(expected.hunks);
+        expect(completedDiff?.additionLines.join('')).toBe(newFile.contents);
+        const accepted = viewer.getItem(item.id);
+        expect(accepted?.type === 'diff' && accepted.fileDiff.hunks).toEqual(
+          expected.hunks
+        );
+      } finally {
+        viewer.cleanUp();
+        await wait(0);
+        cleanup();
+      }
+    });
+  }
 
   test('edited items keep pass-through options untouched', async () => {
     const { cleanup } = installDom();
