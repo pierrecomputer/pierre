@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import type { ReactNode } from 'react';
 
+import { BenchmarkBar } from './BenchmarkBar';
 import { cn } from '@/lib/utils';
 
 // Published string-I/O results from packages/highlights/benchmark/README.md,
@@ -58,24 +59,17 @@ function PerformanceBar({
     <div className="text-md grid grid-cols-[minmax(0,1fr)_5.75rem] items-center gap-x-1.5 gap-y-1.5 sm:grid-cols-[minmax(0,1fr)_7.5rem] sm:gap-x-3">
       <dt className="text-muted-foreground col-start-1 row-start-2">{name}</dt>
       <dd className="contents">
-        <div
-          aria-hidden="true"
-          className={cn(
-            'col-start-1 row-start-1 h-3 rounded-md transition-[width] duration-500 ease-out motion-reduce:transition-none',
-            highlights
-              ? 'bg-gradient-to-r from-cyan-500/80 to-blue-500/90 dark:from-cyan-400/80 dark:to-blue-400/90'
-              : 'bg-foreground/50'
-          )}
-          style={{
-            width: `${(value / maximum) * 100}%`,
-          }}
-        />
+        <div className="col-start-1 row-start-1">
+          <BenchmarkBar
+            value={value}
+            maximum={maximum}
+            highlighted={highlights}
+          />
+        </div>
         <span
           className={cn(
             'col-start-2 row-span-2 row-start-1 mt-[-16px] w-full min-w-0 self-center whitespace-nowrap text-left text-2xl font-normal tabular-nums sm:text-right sm:text-3xl',
-            highlights
-              ? 'font-semibold text-blue-500 dark:text-blue-400'
-              : 'text-foreground/50'
+            highlights ? 'font-semibold' : 'text-foreground/50'
           )}
         >
           {formattedValue}
@@ -91,12 +85,12 @@ export function HighlightsPerformanceBenchmarks() {
       aria-labelledby="highlights-output-performance"
       className="space-y-6 pb-16 md:pb-24"
     >
-      <div className="max-w-3xl">
+      <div className="max-w-2xl">
         <h2
           id="highlights-output-performance"
           className="text-2xl font-semibold tracking-tight"
         >
-          Fast output & lighter footprint
+          Faster output & lighter footprint
         </h2>
         <p className="text-muted-foreground text-pretty">
           Highlights generates HTML at hundreds of times Shiki’s throughput on
@@ -114,11 +108,11 @@ export function HighlightsPerformanceBenchmarks() {
               id="highlights-language-performance"
               className="text-xl font-semibold tracking-tight"
             >
-              Large-file HTML generation
+              Super-fast HTML generation
             </h3>
             <p className="text-muted-foreground max-w-xl text-pretty">
-              148–294× Shiki’s throughput across these fixtures. On the 517 KiB
-              TypeScript input, Tree-sitter reaches ≈8× Shiki.
+              Highlights generates HTML at up to 294× Shiki’s throughput across
+              these fixtures, including input encoding and output decoding.
             </p>
           </figcaption>
           <div className="space-y-5">
@@ -152,12 +146,11 @@ export function HighlightsPerformanceBenchmarks() {
               id="highlights-memory-performance"
               className="text-xl font-semibold tracking-tight"
             >
-              Peak process memory
+              Memory usage
             </h3>
             <p className="text-muted-foreground max-w-xl text-pretty">
-              Median peak process RSS while generating HTML from the 517 KiB
-              TypeScript fixture, shown on a shared 0–400 MiB scale. Lower is
-              better.
+              Median peak memory across five runs while highlighting a 517 KiB
+              TypeScript file and generating HTML.
             </p>
           </figcaption>
           <dl className="space-y-6">
@@ -173,40 +166,6 @@ export function HighlightsPerformanceBenchmarks() {
             ))}
           </dl>
         </figure>
-      </div>
-
-      <div className="grid min-w-0 gap-8 lg:grid-cols-3">
-        <article className="bg-muted/50 min-w-0 rounded-2xl p-5 sm:p-8 lg:p-10">
-          <h3 className="font-semibold">Complete themed tokens</h3>
-          <p className="text-muted-foreground mt-2 text-sm text-pretty">
-            Complete themed token generation reaches{' '}
-            <strong className="text-foreground font-semibold tabular-nums">
-              208 MiB/s · 173× Shiki’s throughput
-            </strong>{' '}
-            on the 517 KiB TypeScript fixture.
-          </p>
-        </article>
-        <article className="bg-muted/50 min-w-0 rounded-2xl p-5 sm:p-8 lg:p-10">
-          <h3 className="font-semibold">Streaming themed tokens</h3>
-          <p className="text-muted-foreground mt-2 text-sm text-pretty">
-            Streaming themed token generation reaches{' '}
-            <strong className="text-foreground font-semibold tabular-nums">
-              197 MiB/s · 170× Shiki’s throughput
-            </strong>{' '}
-            on a large TypeScript fixture.
-          </p>
-        </article>
-        <article className="bg-muted/50 min-w-0 rounded-2xl p-5 sm:p-8 lg:p-10">
-          <h3 className="font-semibold">Live edits</h3>
-          <p className="text-muted-foreground mt-2 text-sm text-pretty">
-            For single-character edits and line insertion or deletion on the
-            TypeScript fixture (517 KiB), the median synchronous response is{' '}
-            <strong className="text-foreground font-semibold tabular-nums">
-              under 1.4 µs
-            </strong>
-            , excluding deferred tokenization.
-          </p>
-        </article>
       </div>
 
       <div className="text-muted-foreground max-w-4xl space-y-2 text-xs leading-relaxed">

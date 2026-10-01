@@ -40,7 +40,7 @@ export function HighlightsHtmlBenchmarks() {
       aria-labelledby="highlights-html-generation"
       className="scroll-mt-20 space-y-6 pb-16 md:pb-24"
     >
-      <div className="max-w-3xl">
+      <div className="max-w-2xl">
         <h2
           id="highlights-html-generation"
           className="text-2xl font-semibold tracking-tight"
@@ -58,10 +58,12 @@ export function HighlightsHtmlBenchmarks() {
       </div>
 
       <figure className="bg-muted/50 min-w-0 rounded-2xl p-4 sm:p-8 lg:p-10">
-        <figcaption className="text-muted-foreground mb-4 text-sm">
-          <strong>HTML generation speedup</strong> · Highlights compares
-          reported speedups across languages (294× = full width); Shiki shows 1×
-          as a share of each row’s Highlights rate
+        <figcaption className="text-muted-foreground mb-4 flex flex-col text-sm md:flex-row md:items-baseline md:gap-1">
+          <strong>HTML generation speedup</strong>
+          <span aria-hidden="true" className="hidden md:inline">
+            ·
+          </span>
+          <span>Longer bars indicate faster throughput</span>
         </figcaption>
         <ul className="divide-foreground/10 divide-y">
           {rows.map(({ language, size, highlights, shiki, speedup }) => (
