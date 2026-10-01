@@ -10,10 +10,19 @@ const maximumThroughput = Math.max(
   ...rows.map(({ milliseconds }) => 1 / milliseconds)
 );
 
+const preciseMilliseconds = new Intl.NumberFormat('en-US', {
+  minimumFractionDigits: 1,
+  maximumFractionDigits: 1,
+});
+const roundedMilliseconds = new Intl.NumberFormat('en-US');
+
 function formatDuration(milliseconds: number) {
-  return milliseconds < 1000
-    ? `${milliseconds.toFixed(1)} ms`
-    : `${(milliseconds / 1000).toFixed(2)} s`;
+  const displayedMilliseconds =
+    milliseconds < 1000
+      ? preciseMilliseconds.format(milliseconds)
+      : roundedMilliseconds.format(Math.round(milliseconds / 10) * 10);
+
+  return `${displayedMilliseconds} ms`;
 }
 
 function formatOutput(output: string) {
@@ -42,7 +51,7 @@ export function HighlightsBenchmarks() {
             href="https://github.com/vercel-labs/gpu-lexer"
             target="_blank"
             rel="noopener noreferrer"
-            className="hover:text-foreground underline underline-offset-4"
+            className="styled-link styled-link-muted"
           >
             gpu-lexer
           </a>{' '}
@@ -53,19 +62,21 @@ export function HighlightsBenchmarks() {
       <div className="bg-muted/50 min-w-0 overflow-x-auto rounded-2xl p-4 pb-3 sm:p-8 sm:pb-5 lg:p-10 lg:pb-6">
         <table className="w-full min-w-[42rem] table-fixed text-left tabular-nums">
           <caption className="text-muted-foreground mb-5 text-left text-sm">
-            <strong>Processing three.min.js 10&times;</strong> · Relative
-            throughput, longer is faster
+            <strong>Processing three.min.js 10&times;</strong> · Elapsed time in
+            ms, lower is better
           </caption>
           <thead className="text-muted-foreground border-foreground/10 border-b text-xs">
             <tr>
               <th scope="col" className="pb-3 font-medium">
                 <div className="grid grid-cols-[10rem_minmax(0,1fr)] gap-3">
                   <span>Library</span>
-                  <span className="font-normal">Relative speed</span>
+                  <span className="font-normal">
+                    Relative speed · longer is faster
+                  </span>
                 </div>
               </th>
               <th scope="col" className="w-28 pb-3 text-right font-medium">
-                Time
+                Time (ms)
               </th>
               <th scope="col" className="w-24 pb-3 pl-5 font-medium">
                 Output
@@ -110,10 +121,11 @@ export function HighlightsBenchmarks() {
         <p>
           Recorded September 15, 2026 · Chromium 152 · Apple M4 Pro. Median of
           three samples, each with one warm-up in a fresh worker. Bars show
-          relative throughput on a shared linear scale. Highlights and Shiki
-          return themed tokens; gpu-lexer returns classified spans. The other
-          libraries return HTML or a HAST tree. These results measure speed on
-          this JavaScript workload, not highlighting quality.{' '}
+          relative speed (1 / elapsed time) on a shared linear scale; longer is
+          faster. Highlights and Shiki return themed tokens; gpu-lexer returns
+          classified spans. The other libraries return HTML or a HAST tree.
+          These results measure speed on this JavaScript workload, not
+          highlighting quality.{' '}
           <a
             href="/highlights/benchmark-browser.json"
             className="styled-link styled-link-muted"
