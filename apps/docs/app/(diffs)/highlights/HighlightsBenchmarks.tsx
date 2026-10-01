@@ -1,4 +1,5 @@
 import { BenchmarkBar } from './BenchmarkBar';
+import styles from './HighlightsBenchmarkCard.module.css';
 import benchmark from '@/public/highlights/benchmark-browser.json';
 
 // Keep the chart tied to the complete recorded browser run. Every engine
@@ -64,7 +65,9 @@ export function HighlightsBenchmarks() {
         </p>
       </div>
 
-      <figure className="bg-muted/50 min-w-0 rounded-2xl p-4 pb-3 sm:p-8 sm:pb-5 lg:p-10 lg:pb-6">
+      <figure
+        className={`${styles.card} dark text-foreground min-w-0 rounded-lg p-4 pb-3 sm:p-8 sm:pb-5 lg:p-10 lg:pb-6`}
+      >
         <figcaption
           id="highlights-benchmark-caption"
           className="text-muted-foreground mb-5 flex flex-col text-left text-sm md:flex-row md:items-baseline md:gap-1"

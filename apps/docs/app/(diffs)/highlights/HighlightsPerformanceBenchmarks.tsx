@@ -2,6 +2,7 @@ import Link from 'next/link';
 import type { ReactNode } from 'react';
 
 import { BenchmarkBar } from './BenchmarkBar';
+import styles from './HighlightsBenchmarkCard.module.css';
 import { cn } from '@/lib/utils';
 
 // Published string-I/O results from packages/highlights/benchmark/README.md,
@@ -101,7 +102,7 @@ export function HighlightsPerformanceBenchmarks() {
       <div className="grid min-w-0 gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
         <figure
           aria-labelledby="highlights-language-performance"
-          className="bg-muted/50 min-w-0 rounded-2xl p-4 sm:p-8 lg:p-10"
+          className={`${styles.card} dark text-foreground min-w-0 rounded-lg p-4 sm:p-8 lg:p-10`}
         >
           <figcaption className="mb-6 max-w-2xl">
             <h3
@@ -139,7 +140,7 @@ export function HighlightsPerformanceBenchmarks() {
 
         <figure
           aria-labelledby="highlights-memory-performance"
-          className="bg-muted/50 min-w-0 rounded-2xl p-4 sm:p-8 lg:p-10"
+          className={`${styles.card} dark text-foreground min-w-0 rounded-lg p-4 sm:p-8 lg:p-10`}
         >
           <figcaption className="mb-8 max-w-3xl">
             <h3
