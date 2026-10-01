@@ -90,6 +90,7 @@ export function HeaderMobileMenu({
         >
           Docs
         </MobileNavLink>
+        <div className="border-border my-1 border-t" />
         {isDiffs ? (
           <MobileNavLink
             href={`${product.basePath}${DIFFS_THEME_PATH}`}
@@ -114,7 +115,6 @@ export function HeaderMobileMenu({
             Icons
           </MobileNavLink>
         )}
-        <div className="border-border my-1 border-t" />
         <MobileNavLink href={getExternalUrl(otherProductId)} external>
           {otherProductName}
         </MobileNavLink>

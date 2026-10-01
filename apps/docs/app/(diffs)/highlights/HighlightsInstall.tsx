@@ -40,9 +40,9 @@ export function HighlightsInstall() {
   return (
     <section
       aria-labelledby="highlights-install"
-      className="bg-muted/50 flex flex-col items-center gap-6 rounded-2xl py-24 text-center md:py-32"
+      className="bg-muted/50 flex flex-col gap-6 rounded-2xl p-8 lg:p-12"
     >
-      <div className="max-w-xl space-y-2">
+      <div className="max-w-lg space-y-1">
         <h2
           id="highlights-install"
           className="text-2xl font-semibold tracking-tight"
@@ -50,12 +50,12 @@ export function HighlightsInstall() {
           Install Highlights
         </h2>
         <p className="text-muted-foreground text-pretty">
-          Add <code>@pierre/highlights</code>, then start with static HTML,
-          streaming tokens, or live editor updates.
+          Get started by installing the package manually, or using our agent
+          skills and prompts.
         </p>
       </div>
 
-      <div className="flex w-full flex-col justify-center gap-3 min-[460px]:w-auto min-[460px]:flex-row min-[460px]:flex-wrap min-[460px]:items-center">
+      <div className="flex w-full flex-col gap-3 min-[460px]:w-auto min-[460px]:flex-row min-[460px]:flex-wrap min-[460px]:items-center">
         <Button
           className="group max-w-full px-5 font-mono tracking-tight"
           size="xl"
