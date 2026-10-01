@@ -24,9 +24,6 @@ import {
   withTimeout,
 } from './workerPoolHarness';
 
-// A working pool highlights in its workers whatever the backend. Applications
-// that want Highlights on the main thread omit the pool instead.
-
 let restoreAnimationFrame: (() => void) | undefined;
 
 beforeAll(() => {
@@ -51,7 +48,7 @@ const newFile: FileContents = {
   contents: 'const answer = 43;\nexport default function read() {}\n',
   cacheKey: 'pool:new',
 };
-// One marked row per rendered line, standing in for a worker's highlighted AST.
+// Mark worker results so tests can distinguish them from main-thread renders.
 const poolMarker: ElementContent[] = oldFile.contents
   .split('\n')
   .map((_, index) => ({

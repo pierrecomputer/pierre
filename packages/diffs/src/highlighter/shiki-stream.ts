@@ -8,7 +8,6 @@ import { appendItems } from '../utils/appendItems';
 import { BaseStreamTokenizer } from './stream-tokenizer';
 import type { ThemedToken } from './types';
 
-/** Streams chunks through Shiki with options the backend already narrowed to one theme key. */
 export class ShikiStreamTokenizer extends BaseStreamTokenizer {
   // Text of the provisional line; it is tokenized again with each chunk.
   #tail = '';
@@ -64,7 +63,6 @@ export class ShikiStreamTokenizer extends BaseStreamTokenizer {
   }
 
   protected releaseSource(): void {
-    // Grammar state is plain data owned by this instance; nothing to release.
     this.resetSource();
   }
 }

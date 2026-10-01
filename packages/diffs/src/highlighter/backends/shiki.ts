@@ -22,18 +22,13 @@ import type { CodeToTokensOptions, TokensResult } from '../types';
 
 type ShikiHighlighterTypes = 'shiki-js' | 'shiki-wasm';
 
-/** Adapt Shiki while keeping its engines, grammars and tokenizers lazy. */
 export class ShikiHighlighter extends DiffsHighlighter {
-  // Track theme objects so clearing or replacing a resolved theme reloads its
-  // token colors without querying Shiki's allocated list of loaded names. The
-  // same map keeps a theme usable after disposeHighlighter() clears the
-  // shared resolver cache underneath a retained instance.
+  // Compare theme objects to detect replacements, and retain them when the
+  // shared cache is cleared.
   private readonly loadedThemes = new Map<string, DiffsTheme>();
-  // Names and aliases attached through this instance. Shiki's own registry
-  // allocates a fresh list per query, so membership is answered from here.
+  // Shiki allocates a new language list on each lookup.
   private readonly attachedLanguages = new Set(['text', 'ansi']);
 
-  /** Load the selected regex engine, then create the Shiki instance. */
   static async create(name: ShikiHighlighterTypes): Promise<ShikiHighlighter> {
     const engine =
       name === 'shiki-wasm'
@@ -70,8 +65,7 @@ export class ShikiHighlighter extends DiffsHighlighter {
       if (textmate == null) {
         throw new Error(`Theme "${themeName}" does not support Shiki`);
       }
-      // Passing the object also refreshes Shiki's active theme when its name
-      // is unchanged; loading the name alone leaves its token color map stale.
+      // Loading by name leaves stale colors when the theme object changes.
       this.raw.setTheme(textmate);
       this.loadedThemes.set(themeName, theme);
     }
@@ -136,8 +130,7 @@ export class ShikiHighlighter extends DiffsHighlighter {
         );
       }
       this.raw.loadLanguageSync(lang.data);
-      // Shiki skips a grammar whose name is already loaded, which silently
-      // drops a new alias; make sure the requested name resolves.
+      // Shiki skips loaded grammars, which can leave new aliases unregistered.
       try {
         this.raw.getLanguage(lang.name);
       } catch {
@@ -155,10 +148,8 @@ export class ShikiHighlighter extends DiffsHighlighter {
     this.raw.dispose();
   }
 
-  // Synchronize pre-resolved worker themes before synchronous tokenization and
-  // keep only the selected theme key. Callers may pass both keys with one set
-  // to undefined; Shiki checks for a `themes` key before `theme` and would
-  // then read entries from undefined.
+  // Attach resolved themes before tokenizing. Omit the unused key because
+  // Shiki treats `themes: undefined` as a request for multiple themes.
   private resolveOptions({
     theme,
     themes,

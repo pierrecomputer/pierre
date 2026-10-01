@@ -77,8 +77,7 @@
           theme: { dark: 'pierre-dark', light: 'pierre-light' },
           langs: ['typescript'],
           preferredHighlighter,
-          // Token spans only carry data-char through the token transformer,
-          // which is what the readiness wait below looks for.
+          // The readiness check needs the transformer's data-char attributes.
           useTokenTransformer: true,
         },
       });
@@ -106,8 +105,7 @@
       );
       instance.render({ file, containerWrapper: mount });
 
-      // Wait for highlighted token spans so the spec never races the worker's
-      // first paint.
+      // Initialization can finish before the worker's first render.
       const started = performance.now();
       while (true) {
         const host = mount.querySelector('diffs-container');

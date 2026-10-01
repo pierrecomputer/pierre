@@ -20,9 +20,8 @@ import type {
 } from './types';
 
 /**
- * Tokenization and theme resolution owned by one highlighter backend. Each
- * instance holds its realm's highlighter type from construction until
- * dispose(), so a different type cannot load while it is alive.
+ * A different highlighter type cannot load in this thread until every
+ * instance of the current type is disposed.
  */
 export abstract class DiffsHighlighter {
   protected disposed = false;
@@ -35,8 +34,7 @@ export abstract class DiffsHighlighter {
   }
 
   /**
-   * A resolved theme by name. Themes an instance has already used stay
-   * available after the shared resolver cache is cleared.
+   * Previously used themes remain available after the shared cache is cleared.
    */
   abstract getTheme(name: string): DiffsTheme;
 
@@ -57,18 +55,16 @@ export abstract class DiffsHighlighter {
     options: DiffsEditorTokenizerOptions
   ): DiffsEditorTokenizer;
 
-  /** Load grammars for languages. Backends with bundled lexers resolve at once. */
+  /** Backends with bundled lexers resolve immediately. */
   abstract loadLanguages(languages: readonly string[]): Promise<void>;
 
-  /** Whether every language can be highlighted without loading anything. */
   abstract hasLoadedLanguages(languages: readonly string[]): boolean;
 
   /** Attach grammars resolved elsewhere, such as on the main thread for a worker. */
   abstract attachLanguages(languages: readonly ResolvedLanguage[]): void;
 
   /**
-   * Release backend resources and this instance's hold on the highlighter
-   * type. The instance is unusable afterward.
+   * Disposed instances cannot be reused.
    */
   dispose(): void {
     if (this.disposed) {

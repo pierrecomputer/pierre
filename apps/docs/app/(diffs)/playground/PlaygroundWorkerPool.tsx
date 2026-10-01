@@ -19,8 +19,7 @@ export function PlaygroundWorkerPool({
   highlighter: HighlighterTypes;
   children: ReactNode;
 }) {
-  // Server and hydration renders start ready; a client navigation from a page
-  // that loaded another type waits until that type is released.
+  // Wait if navigation left a different highlighter type loaded.
   const [readyFor, setReadyFor] = useState<HighlighterTypes | undefined>(() => {
     const active =
       typeof window === 'undefined' ? undefined : getHighlighterType();
@@ -62,7 +61,7 @@ export function PlaygroundWorkerPool({
       manager?.terminate();
     };
   }, [highlighter]);
-  // Leaving the playground releases its backend for the rest of the site.
+  // Other pages may need a different highlighter type.
   useEffect(
     () => () => {
       void disposeHighlighter();

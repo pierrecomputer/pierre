@@ -31,16 +31,14 @@ export interface HighlighterOptions {
 }
 
 /**
- * Create an independently disposable highlighter, loading only its backend.
- * The type defaults to the one already in use, else `DEFAULT_HIGHLIGHTER`;
- * requesting a different type than the one in use rejects.
+ * Creates an instance the caller must dispose. Defaults to the active type
+ * or DEFAULT_HIGHLIGHTER; rejects if a different type is already active.
  */
 export async function createHighlighter(
   type?: HighlighterTypes
 ): Promise<DiffsHighlighter> {
   const resolvedType = resolveHighlighterType(type);
-  // Hold the type before importing so a concurrent request for another type
-  // rejects before its backend loads. The new instance holds it from then on.
+  // Reserve the type before importing to prevent concurrent backend loads.
   acquireHighlighterType(resolvedType);
   try {
     if (resolvedType === 'highlights') {
@@ -67,7 +65,7 @@ export async function getSharedHighlighter({
   try {
     instance = await cached;
   } catch (error) {
-    // Let a later request retry, unless the cache has moved on already.
+    // Allow retries without clearing a newer request.
     if (highlighter === cached) {
       highlighter = undefined;
     }
@@ -94,9 +92,7 @@ interface GetHighlighterIfLoadedProps {
 }
 
 /**
- * The shared instance when it is loaded and ready for the given theme and
- * language. An instance of a type other than `preferredHighlighter` is not
- * returned, so loading the requested type reports the conflict.
+ * Returns undefined if the type differs or the theme or language is not loaded.
  */
 export function getHighlighterIfLoaded({
   theme,
@@ -131,10 +127,9 @@ export async function preloadHighlighter(
 }
 
 /**
- * Dispose the shared instance and clear the shared theme and language caches.
- * A loaded instance is disposed synchronously, so its highlighter type is
- * released before this returns. Instances from createHighlighter() are not
- * disposed; their type stays in use until they are.
+ * Disposes an already loaded shared instance synchronously and clears caches.
+ * Instances from createHighlighter() must be disposed separately before
+ * switching types.
  */
 export async function disposeHighlighter(): Promise<void> {
   const cached = highlighter;

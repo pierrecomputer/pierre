@@ -4,8 +4,7 @@ import { usePathname } from 'next/navigation';
 import { useEffect } from 'react';
 
 export function PreloadHighlighter() {
-  // The playground loads the backend its visitor selects, and a page can load
-  // only one highlighter type, so preload again once it is left.
+  // Preloading here could conflict with the playground's selected backend.
   const isPlayground = usePathname().startsWith('/playground');
   useEffect(() => {
     if (isPlayground) return;

@@ -18,13 +18,11 @@ import type {
 import type { CodeToTokensOptions, TokensResult } from '../types';
 
 /**
- * Highlights bundles its lexers, so there are no grammars to load or attach;
- * unsupported languages, including custom ones, render as text.
+ * Highlights uses bundled lexers. Unsupported and custom languages render as text.
  */
 export class HighlightsHighlighter extends DiffsHighlighter {
   private readonly raw: Highlighter = createHighlighter();
-  // Themes this instance has used stay usable after disposeHighlighter()
-  // clears the shared resolver cache underneath a retained instance.
+  // Independent instances need their themes after the shared cache is cleared.
   private readonly usedThemes = new Map<string, DiffsTheme>();
 
   constructor() {
@@ -77,8 +75,7 @@ export class HighlightsHighlighter extends DiffsHighlighter {
     this.usedThemes.clear();
   }
 
-  // Resolve backend-neutral names to the native Zed theme objects, keeping
-  // only the selected theme key so callers may pass both with one undefined.
+  // Omit the unused theme key; callers may pass both keys with one undefined.
   private resolveOptions({
     theme,
     themes,

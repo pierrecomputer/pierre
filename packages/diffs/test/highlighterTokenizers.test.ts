@@ -663,15 +663,13 @@ describe('Highlights bracket reads', () => {
       reading = false;
       expect(ranges?.[0]?.[0]).toBe(0);
       expect(ranges?.at(-1)?.[1]).toBe(document.getLineText(150).length);
-      // Nothing reaches the host from inside the read.
       expect(deliveredWhileReading).toBe(false);
       expect(delivered).toHaveLength(0);
       await Promise.resolve();
-      // The lines the read completed arrive once the read has returned.
       expect(delivered.length).toBeGreaterThan(0);
       expect(Math.max(...delivered)).toBeLessThan(151);
       const completedByRead = delivered.length;
-      // The host's pause still holds: no background slice runs.
+      // The read must leave background work paused.
       await new Promise((resolve) => setTimeout(resolve, 25));
       expect(delivered).toHaveLength(completedByRead);
       tokenizer.resumeBackgroundTokenize();

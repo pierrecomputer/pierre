@@ -223,7 +223,6 @@ export class FileStream {
     const { gutter, content } = this.getOrCreateStreamColumns();
     const gutterFragment = document.createDocumentFragment();
     const contentFragment = document.createDocumentFragment();
-    // Stage rows from ordinary newlines, lone carriage returns, and stream close.
     const appendLine = () => {
       const { gutterLine, contentLine } = this.createLine();
       gutterFragment.appendChild(gutterLine);
@@ -247,8 +246,7 @@ export class FileStream {
         if (token.recall > 0) this.pendingCarriageReturn = false;
       } else {
         const span = createSpanFromToken(token);
-        // Keep a provisional CR on its current row until the next token so
-        // recalls can remove it and a following LF advances the row only once.
+        // Delay the CR's row break so recalls can remove it and CRLF counts once.
         if (this.pendingCarriageReturn && token.content !== '\n') {
           this.currentLineIndex++;
           appendLine();

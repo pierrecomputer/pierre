@@ -16,8 +16,7 @@ test.describe('portable worker', () => {
         );
         // Catch accidental bundling of the main-thread grammar and theme catalogs.
         expect(body.byteLength).toBeLessThan(1_500_000);
-        // Serve emitted bytes unchanged: Vite would otherwise resolve bare
-        // imports and hide a broken standalone worker bundle.
+        // Vite can resolve bare imports and hide a broken standalone bundle.
         await context.route(
           (url) => url.pathname.startsWith('/standalone/'),
           async (route) => {

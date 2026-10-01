@@ -180,15 +180,9 @@ const PLAYGROUND_ANNOTATIONS = [
   undefined
 >['annotations'];
 
-// Maps the shared URL state onto the preload options, so the prerendered
-// markup matches what the client derives from the same querystring — the
-// markup paints before hydration, and a drifted option would show the
-// server's presentation until the first client repaint. `colorMode` maps to
-// themeType directly: 'system' ships both themes and resolves via the native
-// CSS `light-dark()` against the pre-paint color-scheme, so no flash when
-// the client theme controller settles. The highlighter is the exception: a
-// server process loads one highlighter type for every page, so the prerender
-// uses the server's, and another selection applies once the client re-renders.
+// Keep server and client options aligned to avoid a flash during hydration.
+// The server shares one highlighter type across pages; the selected type
+// takes effect on the client.
 export function getPlaygroundPreloadOptions(
   state: PlaygroundUrlState
 ): PreloadFileDiffOptions<PlaygroundAnnotationMetadata, undefined> {

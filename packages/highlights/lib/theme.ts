@@ -182,14 +182,10 @@ export function variableSpanTag(hl: number): string {
 }
 
 /**
- * One theme prepared for every output path. `styles` is indexed by token id,
- * with `null` for unstyled slots; the foreground and background live in `fg`
- * and `bg` instead. Which extra representation is present depends on the
- * theme: hex themes carry the packed Wasm `table`, Display P3 and named CSS
- * palettes carry HTML tag replacements, and token-slot CSS themes carry neither.
- * Representations that only some callers need are built on first read:
- * the tag replacements, and the
- * variable references of a CSS-variable theme, which HTML output never reads.
+ * styles is indexed by token id; null means unstyled. Hex themes use a Wasm
+ * table, while Display P3 and named CSS palettes use HTML tag replacements.
+ * Token-slot CSS themes need neither. Tag replacements and CSS-variable
+ * styles are computed on first access.
  */
 export interface PreparedTheme {
   name: string;
@@ -205,10 +201,8 @@ export interface PreparedTheme {
    */
   table: Uint8Array | undefined;
   /**
-   * For Display P3 and named CSS palettes, the emitter's unprefixed `<pre>` and
-   * `<span>` openers mapped to openers with the theme's colors and font
-   * settings inlined; built on first read, so token-only callers never pay
-   * for it. `undefined` for other themes.
+   * Maps unprefixed emitter tags to styled tags for Display P3 and named CSS
+   * palettes. Computed on first access; undefined for other themes.
    */
   readonly htmlTags: Map<string, string> | undefined;
 }
@@ -247,7 +241,7 @@ export function prepareTheme(
   return prepared;
 }
 
-/** Resolve portable palette names without treating arbitrary CSS as theme colors. */
+/** Palette colors are variable suffixes, not literal CSS values. */
 function prepareCssPalette(theme: Theme): PreparedTheme {
   const config = theme.cssVariables;
   if (typeof config !== 'object') throw new Error('Expected CSS palette');
@@ -385,11 +379,8 @@ function prepareStyles(theme: Theme): PreparedTheme {
 }
 
 /**
- * Tag replacements for Display P3 and named CSS palettes. The emitter runs with an
- * empty prefix, so its openers read `var(<token>)`; each maps to an opener
- * with the theme's color and font settings inlined, the shape the packed-table
- * emitter produces. Escape attributes because CSS prefixes and defaults may
- * contain arbitrary strings.
+ * Replace unprefixed emitter tags with theme colors and font styles.
+ * Escape attributes because CSS prefixes and defaults may contain quotes.
  */
 function themeHtmlTags(
   styles: (TokenStyle | null)[],

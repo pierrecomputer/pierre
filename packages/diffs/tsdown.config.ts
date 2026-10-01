@@ -81,9 +81,8 @@ const config: UserConfig[] = defineConfig([
     platform: 'neutral',
   },
   {
-    // Keep portable workers self-contained for classic workers and blob URLs.
-    // Build from worker.ts itself: a shim's bare `import './worker'` would be
-    // tree-shaken, since package.json `sideEffects` only lists dist files.
+    // A shim importing worker.ts would be removed by tree shaking because
+    // package.json sideEffects only lists dist files.
     entry: { 'worker-portable': 'src/worker/worker.ts' },
     outDir: 'dist/worker',
     tsconfig: './tsconfig.json',

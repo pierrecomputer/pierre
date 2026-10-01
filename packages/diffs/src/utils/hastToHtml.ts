@@ -1,7 +1,7 @@
 import type { Element, Nodes, Properties, RootContent } from 'hast';
 import { toHtml } from 'hast-util-to-html';
 
-// `html-void-elements`, the list `toHtml()` closes without an end tag.
+// Must match the html-void-elements list used by toHtml().
 const VOID_ELEMENTS = new Set([
   'area',
   'base',
@@ -25,12 +25,10 @@ const VOID_ELEMENTS = new Set([
   'wbr',
 ]);
 
-// Elements `toHtml()` serializes with special rules: SVG switches schema,
-// template renders its content fragment, and script/style text is unescaped.
+// These elements require schema, fragment or raw-text handling in toHtml().
 const DELEGATED_TAGS = new Set(['svg', 'template', 'script', 'style']);
 
-// Properties whose HTML schema entry is neither boolean nor comma-separated,
-// mapped to their attribute names. `data-*` names map to themselves.
+// Boolean and comma-separated attributes require the full HTML schema.
 const ATTRIBUTE_NAMES: Record<string, string | undefined> = {
   class: 'class',
   className: 'class',
@@ -45,8 +43,7 @@ const DATA_ATTRIBUTE = /^data-[\w.:-]+$/;
 
 const TEXT_ESCAPE = /[<&]/g;
 const ATTRIBUTE_ESCAPE = /[\0"&'`]/g;
-// The hexadecimal references `stringify-entities` writes by default for every
-// character the two patterns above match, precomputed instead of formatted.
+// Must match stringify-entities' default hexadecimal encoding.
 const CHARACTER_REFERENCES: Record<string, string> = {
   '<': '&#x3C;',
   '&': '&#x26;',
@@ -58,13 +55,8 @@ const CHARACTER_REFERENCES: Record<string, string> = {
 const MAX_CACHED_STYLES = 256;
 
 /**
- * Serialize HAST to exactly what `toHtml()` from `hast-util-to-html` returns
- * with default options, several times faster. Rendered files carry tens of
- * thousands of token spans, and the generic serializer resolves each
- * attribute through the HTML schema and escapes with per-call regexes. The
- * elements, attributes and text the renderers create are written directly;
- * anything else (SVG, script, style, template, comments, raw nodes, other
- * attributes) is handed to `toHtml()` so the output never differs.
+ * Avoid schema lookups for common token spans; delegate other nodes and
+ * attributes to toHtml(). Output must match its default serialization exactly.
  */
 export function hastToHtml(tree: Nodes | RootContent[]): string {
   const styles = new Map<string, string>();
@@ -132,8 +124,7 @@ function serializeElement(node: Element, styles: Map<string, string>): string {
   return `${open}${content}</${tagName}>`;
 }
 
-// Token colors repeat within a render. Cache complete style attributes only
-// for this call, with a cap so custom styles cannot grow the cache indefinitely.
+// Cap the per-render cache because custom styles may be unique per token.
 function serializeStyle(value: string, styles: Map<string, string>): string {
   let attribute = styles.get(value);
   if (attribute == null) {
@@ -183,7 +174,6 @@ function escapeAttribute(value: string): string {
   return value.replace(ATTRIBUTE_ESCAPE, toCharacterReference);
 }
 
-// Replacement callback for TEXT_ESCAPE and ATTRIBUTE_ESCAPE matches.
 function toCharacterReference(character: string): string {
   return CHARACTER_REFERENCES[character];
 }

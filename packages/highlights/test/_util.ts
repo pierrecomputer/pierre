@@ -82,8 +82,7 @@ export function loadLang(
 )`;
     const transformed = transformWat(watUrl, src);
     enumMap = transformed.enumMap;
-    // Use an isolated highlighter so this harness does not replace the shared
-    // one used by token tests.
+    // Do not replace the shared highlighter used by token tests.
     highlighter = createHighlighter(
       new WebAssembly.Module(wat2wasm(watUrl.href, transformed.code))
     );
@@ -98,7 +97,7 @@ export function loadLang(
     tokenTypes: listTokenTypes(enumMap),
     enumMap,
     hl: (input, options) => {
-      // a split lexer is shared, so set this harness's offset on every call
+      // Shared lexers need this harness's split offset restored on each call.
       if (splitBytes !== undefined) setSplit?.(splitBytes);
       return dec.decode(
         highlighter.codeToHtml(input as string, {
@@ -113,7 +112,6 @@ export function loadLang(
 
 type TestHighlighter = ReturnType<typeof createHighlighter>;
 
-/** A compiled two-range lexer whose split offset is chosen per call. */
 interface SplitLexer {
   highlighter: TestHighlighter;
   enumMap: Map<string, Record<string, number>>;
@@ -123,12 +121,8 @@ interface SplitLexer {
 const splitLexers = new Map<string, SplitLexer>();
 
 /**
- * Compile, once per lexer entry, an isolated highlighter that scans
- * `[0, split)` and then the rest. The offset is read from a control word at
- * byte 32 of wasm memory, below the theme table, so one module serves every
- * offset. WAT compilation dominates harness time and split tests sweep every
- * byte of their source; recompiling per offset pushed those tests past bun's
- * 5s timeout on a loaded machine.
+ * Reuse one module per lexer; compiling each split offset can time out tests.
+ * Byte 32 of Wasm memory stores the split offset, below the theme table.
  */
 function compileSplitLexer(
   name: Lang,
@@ -152,8 +146,7 @@ function compileSplitLexer(
   const highlighter = createHighlighter(
     new WebAssembly.Module(wat2wasm(watUrl.href, code))
   );
-  // the control word lives in the highlighter's memory; reach in for its view
-  // on each call because memory growth replaces it
+  // Read dv on every call because memory growth replaces the DataView.
   const internals = highlighter as unknown as { dv: DataView };
   const lexer: SplitLexer = {
     highlighter,
@@ -171,16 +164,8 @@ export type TestSplitHl = (
 ) => string;
 
 /**
- * Compile one lexer into a harness that runs it twice per highlight: first
- * over `[0, splitBytes)`, then over the rest. That is the two-range shape an
- * embedding host (html around a script body) or a chunk boundary produces, so
- * a lexer that reads past `$end` or leaves a construct half-open shows up as
- * lost bytes or unbalanced spans. One module serves every split offset (see
- * `compileSplitLexer`).
- *
- * `name` is the language name; the lexer file and export follow the usual
- * naming (`js`/`jsx`/`ts` live in `tsx.wat`, the css dialects in `css.wat`,
- * fixed-form Fortran in `fortran.wat`).
+ * Scan [0, splitBytes) and then the remainder to detect lost bytes or
+ * unbalanced spans at chunk and embedded-language boundaries.
  */
 export function loadSplitLang(name: Lang): TestSplitHl {
   const entry =

@@ -5,11 +5,9 @@ import type {
 import type { ThemedToken } from './types';
 
 /**
- * Chunk bookkeeping shared by the backend stream tokenizers. A carriage
- * return ending a chunk waits for the next chunk, since it may start a CRLF
- * pair; token offsets count from the start of the whole stream; and the last,
- * unterminated line stays provisional so a later chunk can recall its tokens.
- * Subclasses tokenize one chunk's text and report each completed line.
+ * The final line stays provisional until a line break or stream close.
+ * A trailing CR waits for the next chunk, which may complete a CRLF pair.
+ * Token offsets are absolute UTF-16 positions in the stream.
  */
 export abstract class BaseStreamTokenizer implements DiffsStreamTokenizer {
   protected disposed = false;
@@ -26,8 +24,7 @@ export abstract class BaseStreamTokenizer implements DiffsStreamTokenizer {
     const recall = this.unstable.length;
     const stable: ThemedToken[] = [];
     const { unstable, tailLength } = this.tokenizeChunk(chunk, stable);
-    // The held-back carriage return is still part of the provisional line's
-    // source, so token text keeps round-tripping the streamed input.
+    // Include the pending CR so token contents still reproduce the input.
     if (this.pendingCarriageReturn !== '')
       unstable.push({ content: '\r', offset: this.stableOffset + tailLength });
     this.unstable = unstable;
@@ -35,9 +32,8 @@ export abstract class BaseStreamTokenizer implements DiffsStreamTokenizer {
   }
 
   /**
-   * Tokenize `chunk` appended to the provisional line. Completed lines and
-   * their line breaks go to `stable` through `pushLineBreak`; the new
-   * provisional line's tokens and UTF-16 length are returned.
+   * Append completed lines to stable, using pushLineBreak for their endings.
+   * Return the unfinished line's tokens and UTF-16 length.
    */
   protected abstract tokenizeChunk(
     chunk: string,
@@ -82,7 +78,6 @@ export abstract class BaseStreamTokenizer implements DiffsStreamTokenizer {
     this.releaseSource();
   }
 
-  /** Copy the shared bookkeeping into a clone a subclass created. */
   protected copyStateTo(clone: BaseStreamTokenizer): void {
     clone.stableOffset = this.stableOffset;
     clone.unstable = this.unstable.slice();
@@ -96,6 +91,5 @@ export abstract class BaseStreamTokenizer implements DiffsStreamTokenizer {
   /** Forget the provisional line and any lexer state. */
   protected abstract resetSource(): void;
 
-  /** Release backend resources; the tokenizer is not used afterwards. */
   protected abstract releaseSource(): void;
 }

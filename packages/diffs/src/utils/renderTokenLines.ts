@@ -18,9 +18,7 @@ interface LineDecoration extends Omit<DecorationItem, 'start' | 'end'> {
   end: { line: number; character: number };
 }
 
-// A decoration's extent within one rendered line. `from`/`to` are line-local
-// columns (0 and the line length when the decoration continues from or onto
-// another line); `order` is its index in the outer-to-inner sorted list.
+// from/to are columns within this line; order preserves outer-to-inner nesting.
 interface LineDecorationRange {
   decoration: LineDecoration;
   order: number;
@@ -28,14 +26,12 @@ interface LineDecorationRange {
   to: number;
 }
 
-// One edge of a range, clamped to the line so the walk can visit it in order.
 interface DecorationBoundary {
   position: number;
   range: LineDecorationRange;
   start: boolean;
 }
 
-/** Render backend tokens with the same line metadata and edit offsets. */
 export function renderTokenLines(
   lines: ThemedToken[][],
   {
@@ -153,8 +149,7 @@ export function renderTokenLines(
   });
 }
 
-// Append one span per token to an undecorated line, which most lines are.
-// Returns the line's length in UTF-16 code units.
+// Returns the line length in UTF-16 code units.
 function appendTokens(
   line: Element,
   tokens: ThemedToken[],
@@ -177,9 +172,8 @@ function appendTokens(
   return column;
 }
 
-// Walk token and decoration boundaries together. Update the enclosing wrappers
-// only when a range starts or ends, rather than checking every range for every
-// token fragment. Empty ranges are emitted before text at the same position.
+// Visit sorted boundaries once to avoid scanning every decoration per token.
+// Emit empty ranges before text at the same position.
 function appendDecoratedTokens(
   line: Element,
   tokens: ThemedToken[],
@@ -244,8 +238,7 @@ function appendDecoratedTokens(
     else if (active[low] === range) active.splice(low, 1);
   };
 
-  // Reuse the existing wrapper prefix so a range spanning several tokens stays
-  // one element. Markers and text use this same stack to preserve their nesting.
+  // Reuse wrappers across tokens so a continuous range stays in one element.
   const getParent = (): Element => {
     let parent = line;
     let depth = 0;
@@ -269,11 +262,8 @@ function appendDecoratedTokens(
 
   let parent = line;
 
-  // Apply every range edge at `position`: close ranges ending here, open
-  // ranges covering the following text, then emit wrappers for empty ranges
-  // (markers) here and update `parent` for the next text fragment. At shared
-  // boundaries, markers belong to the following ranges. At the line end they
-  // instead remain inside the ranges that end there.
+  // Markers belong inside ranges starting here, except at the line end,
+  // where they belong inside ranges ending here.
   const advanceBoundary = (position: number): void => {
     const first = boundaryIndex;
     while (boundaries[boundaryIndex]?.position === position) boundaryIndex++;
@@ -335,8 +325,7 @@ function appendDecoratedTokens(
   return column;
 }
 
-// One token span. `start` is the token's column, which the editor reads back
-// from `data-char` even when a decoration split the token into fragments.
+// data-char must retain the original token column when decorations split it.
 function createTokenSpan(
   token: ThemedToken,
   style: string,

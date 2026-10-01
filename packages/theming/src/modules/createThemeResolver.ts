@@ -1,11 +1,6 @@
 /**
- * Generic theme resolver: a cache and registry with optional fallback loading
- * and normalization. Callers register named loaders; this module dedupes
- * concurrent loads (same loader runs at most once per name per cache cycle) and
- * caches resolved ThemeLike objects for synchronous access after the first
- * successful load.
- * The `{ default: theme }` unwrap handles the common pattern of dynamic ESM
- * imports (`import('some-theme.json')`) that wrap the value under `default`.
+ * Concurrent requests for one name share a load. Resolved themes are cached
+ * for synchronous reads; module default exports are unwrapped before caching.
  */
 
 import type { ThemeLike } from './types';

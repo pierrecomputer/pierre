@@ -13,8 +13,7 @@ import { DiffsEditorTokenizer } from './DiffsEditorTokenizer';
 import type { DiffsEditorTokenizerOptions } from './tokenizer-types';
 import type { DiffsHighlighter } from './types';
 
-// A cold regex engine can exceed a deadline and return an incomplete state.
-// Bound work by line length and background slices instead of accepting it.
+// Timed aborts can leave incomplete grammar state; limit line length instead.
 const TOKENIZE_TIME_LIMIT = 0;
 let nextTokenizerId = 0;
 
@@ -30,7 +29,6 @@ export class ShikiEditorTokenizer extends DiffsEditorTokenizer {
   #matchBrackets: boolean;
   #debug: boolean;
   #isCleanedUp = false;
-  // state
   #stateStack: StateStack[] = [INITIAL]; // cached state stack by line index
   #comparisonStateStack: StateStack[] = [];
   #comparisonStateStackStart = 0;
@@ -50,8 +48,7 @@ export class ShikiEditorTokenizer extends DiffsEditorTokenizer {
   #isMessageListenerAttached: boolean = false;
 
   #prebuildStateStack = debounce(async (renderRange?: RenderRange) => {
-    // Drop work scheduled before disposal; a late timer must not call setTheme
-    // on a highlighter that tests (or hosts) have already disposed.
+    // A queued timer may run after the highlighter is disposed.
     if (this.#isCleanedUp) {
       return;
     }
@@ -135,8 +132,7 @@ export class ShikiEditorTokenizer extends DiffsEditorTokenizer {
     this.#textDocument = options.textDocument;
     this.#themeName = options.theme;
     this.#colorMap = [];
-    // Lines at or above the limit stay unthemed, matching Shiki's codeToTokens
-    // and the Highlights backend so every render path agrees on the cutoff.
+    // The cutoff must match codeToTokens and Highlights: length >= limit.
     this.#tokenizeMaxLineLength = options.tokenizeMaxLineLength ?? 1000;
     this.#onDeferTokenize = options.onDeferTokenize;
     this.#matchBrackets = options.matchBrackets !== false;
@@ -159,13 +155,8 @@ export class ShikiEditorTokenizer extends DiffsEditorTokenizer {
     }
   }
 
-  // The shared highlighter is also used for dual-theme SSR (`themes: {dark,light}`),
-  // which leaves its active theme on whichever pass finished last (usually light).
-  // The tokenizer caches a single-theme colorMap from construction; if we tokenize
-  // without re-activating that theme, grammar color indices are looked up in the
-  // wrong map — property names resolve to a near-foreground gray while types and
-  // comments (stable across maps) still look correct. Re-apply before every
-  // tokenize path so a first edit after load matches a later file-switch re-attach.
+  // Dual-theme SSR can change the shared highlighter's active theme. Restore
+  // the editor theme before tokenizing so color indices match its color map.
   #ensureActiveTheme(): void {
     if (this.#themeName === '') {
       return;
@@ -219,9 +210,7 @@ export class ShikiEditorTokenizer extends DiffsEditorTokenizer {
       (change.changedLineChanges?.every(([, , lineDelta]) => lineDelta === 0) ??
         true);
     if (this.#matchBrackets && !canReuseCachedStates) {
-      // Structural edits shift cache indexes, so only the untouched prefix is
-      // safe. Same-line edits overwrite every range they re-tokenize and can
-      // retain the untouched suffix once grammar state reconverges.
+      // Structural edits shift line indexes; only the unchanged prefix is valid.
       this.#bracketIgnoredRanges.length = Math.min(
         this.#bracketIgnoredRanges.length,
         change.startLine
@@ -289,11 +278,8 @@ export class ShikiEditorTokenizer extends DiffsEditorTokenizer {
         this.#stateStack[offscreenEnd] = offscreenState;
       }
     }
-    // Seed the loop's grammar state after the offscreen flush, not before it.
-    // When a delete's removed lines reach the viewport's first line, the flush
-    // rebuilds the cached state up to `line`; reading it earlier would capture
-    // the truncated INITIAL state and color the viewport as if outside an open
-    // construct (block comment, template literal) it is actually inside.
+    // Read state after the offscreen flush; a deletion may have invalidated
+    // the viewport's starting state inside a block comment or template literal.
     let state = this.#stateStack[line] ?? INITIAL;
     for (; line < renderRangeEndLine; ) {
       const previousNextState = canReuseCachedStates

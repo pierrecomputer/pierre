@@ -33,7 +33,6 @@ const loadPierreThemeCatalog = createCachedLoader(
 );
 const loadShikiCore = createCachedLoader(() => import('shiki/core'));
 
-// Keep the first loader registered for each name and format.
 export function registerCustomThemeLoader(
   themeName: string,
   loader: CustomThemeLoader,
@@ -78,8 +77,7 @@ const ZED_COLOR_ALIASES: readonly (readonly [
   ],
 ];
 
-// Build the shared theme shape from a Zed theme: copy its flat colors, then
-// fill the VS Code keys the surfaces read from their Zed equivalents.
+// The editor and diff overlays read VS Code color keys, so alias Zed colors.
 function createHighlightsTheme(
   name: string,
   raw: ZedTheme | ZedThemeFamily
@@ -153,7 +151,6 @@ export function createDiffsThemeResolver(
       }
       const custom = customThemes.get(name);
       if (backend === 'highlights') {
-        // Custom Zed palettes take precedence over the bundled catalog.
         const loader = custom?.zed ?? custom?.diffs;
         if (loader != null) {
           const loaded = await loader();

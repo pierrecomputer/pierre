@@ -729,8 +729,7 @@ function handlePreload() {
       themes.push(item.options.theme.light);
     }
   }
-  // Match the pool, which may still be initializing: only one highlighter
-  // type can be loaded per page.
+  // Match the pool even during initialization; two types cannot coexist.
   void preloadHighlighter({
     langs,
     themes,

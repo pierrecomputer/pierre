@@ -14,8 +14,7 @@ import { fileNew, fileOld, mockFiles } from './mocks';
 beforeEach(disposeHighlighter);
 afterAll(disposeHighlighter);
 
-// hastToHtml replaces toHtml on the rendering hot paths, so its output must
-// match byte for byte, including every fallback to toHtml.
+// Output must match toHtml byte for byte, including fallback cases.
 function expectSameHtml(tree: Nodes | RootContent[]): void {
   expect(hastToHtml(tree)).toBe(toHtml(tree));
 }

@@ -11,22 +11,16 @@ import { DiffsEditorTokenizer } from './DiffsEditorTokenizer';
 import type { DiffsEditorTokenizerOptions } from './tokenizer-types';
 import type { CodeToTokensOptions } from './types';
 
-/** Adapts the native incremental lexer to the editor's document and viewport. */
 export class HighlightsEditorTokenizer extends DiffsEditorTokenizer {
   #tokenizer: LiveTokenizer;
   #version: number;
   #disposed = false;
-  // Lines the in-progress tokenize call returns itself. A synchronous flush
-  // must not also deliver them through onDeferTokenize, or the host patches
-  // the same rows twice.
+  // Delivering these lines through onDeferTokenize would patch them twice.
   #returnedRange: readonly [start: number, end: number] | undefined;
-  // Whether the native tokenizer's background work is paused. Every flush,
-  // edit and reset resumes it, so reads that flush restore the pause after.
+  // Flush, edit and reset resume the lexer; reads must restore this pause.
   #paused = false;
-  // While a bracket-matching read runs, lines the native tokenizer completes
-  // collect here instead of reaching the host from inside the read.
+  // Defer callbacks during bracket matching to avoid re-entering the renderer.
   #capturedLines: Map<number, HighlightedToken[]> | undefined;
-  // Captured lines waiting for the microtask that hands them to the host.
   #pendingDelivery: Map<number, HighlightedToken[]> | undefined;
 
   constructor(
@@ -54,9 +48,6 @@ export class HighlightsEditorTokenizer extends DiffsEditorTokenizer {
     });
   }
 
-  // Forward background and off-range lines to the host, minus the rows the
-  // current tokenize call already returns. Lines completed by a
-  // bracket-matching read are held back until that read has returned.
   #deliver(lines: Map<number, HighlightedToken[]>): void {
     const captured = this.#capturedLines;
     if (captured != null) {
@@ -73,11 +64,8 @@ export class HighlightsEditorTokenizer extends DiffsEditorTokenizer {
     this.options.onDeferTokenize(lines);
   }
 
-  // Hand lines completed during a read to the host once the current task
-  // ends, so the host's row patching cannot re-enter the selection render
-  // that asked for bracket ranges. Edits, resets and theme changes before
-  // then renumber or recolor lines and drop the batch; their own deliveries
-  // and the next viewport read cover those rows.
+  // Wait until bracket matching returns before patching rows. Edits, resets
+  // and theme changes discard the batch because its tokens may be stale.
   #queueDelivery(lines: Map<number, HighlightedToken[]>): void {
     const pending = this.#pendingDelivery;
     if (pending != null) {
@@ -137,19 +125,15 @@ export class HighlightsEditorTokenizer extends DiffsEditorTokenizer {
     return lines;
   }
 
-  // Rows a tokenize call returns are patched by the host from its result, so
-  // a queued delivery must not patch them a second time.
+  // Returned rows must not be patched again by a queued callback.
   #dropPendingLines(lines: Map<number, HighlightedToken[]>): void {
     const pending = this.#pendingDelivery;
     if (pending == null) return;
     for (const line of lines.keys()) pending.delete(line);
   }
 
-  // Apply the editor's edits to the Wasm mirror, or reload the whole document
-  // when the mirror cannot have tracked them. TextDocumentChange carries no
-  // version, so a skipped or coalesced delivery would otherwise leave the
-  // mirror describing another document and later reads would throw range
-  // errors from the render path.
+  // Reload the lexer document if edits were skipped or combined; applying
+  // them to stale text can produce incorrect tokens or out-of-range reads.
   #syncDocument(
     change: TextDocumentChange,
     renderRange: readonly [start: number, end: number]
@@ -168,16 +152,14 @@ export class HighlightsEditorTokenizer extends DiffsEditorTokenizer {
         );
         if (this.#tokenizer.lineCount === document.lineCount) return update;
       } catch (error) {
-        // An edit past the mirror's lines is the desync signal; malformed
-        // edits still surface as TypeErrors.
+        // Out-of-range edits require a reload; other errors must propagate.
         if (!(error instanceof RangeError)) throw error;
       }
     }
     return this.#tokenizer.reset(document.getText(), options);
   }
 
-  // Finish tokenizing [from, to) and add every line the map is missing. Lines
-  // the flush completes outside that range still reach onDeferTokenize.
+  // Flushing may complete lines outside [from, to); deliver those by callback.
   #readLines(
     lines: Map<number, HighlightedToken[]>,
     from: number,
@@ -225,17 +207,13 @@ export class HighlightsEditorTokenizer extends DiffsEditorTokenizer {
       lineIndex >= document.lineCount
     )
       return null;
-    // This read must leave the tokenizer as it found it: the reset and flush
-    // below resume background work and deliver completed lines synchronously,
-    // so completed lines are captured for a later delivery and the host's
-    // pause is restored before returning.
+    // Reset and flush resume background work and invoke callbacks immediately.
+    // Defer those callbacks and restore any pause before returning.
     const captured = new Map<number, HighlightedToken[]>();
     this.#capturedLines = captured;
     try {
-      // Bracket matching runs between renders, so a desynced mirror is
-      // reloaded here rather than read past its end. The mirror then matches
-      // the current version, so the next render must not re-apply that
-      // version's edits.
+      // Bracket matching can precede rendering. Record the reloaded version
+      // so the next render does not apply the same edits again.
       if (
         this.#version !== document.version ||
         this.#tokenizer.lineCount !== document.lineCount
