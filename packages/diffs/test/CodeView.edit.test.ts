@@ -1140,6 +1140,137 @@ describe('CodeView item edit mode', () => {
     });
   }
 
+  for (const diffStyle of ['split', 'unified'] as const) {
+    for (const editMode of [
+      'document replacement',
+      'separate edits',
+      'net-zero structural edits',
+    ] as const) {
+      test(`applyEdits preserves text below the rendered range on completion (${diffStyle}, ${editMode})`, async () => {
+        const { cleanup } = installDom();
+        const { editors, createEditor } = createEditorHarness();
+        let completed:
+          | FileDiffEditCompleteEvent<undefined, undefined>
+          | undefined;
+        const viewer = new CodeView({
+          createEditor,
+          diffStyle,
+          onItemEditComplete(event, editedItem) {
+            if (editedItem.type === 'diff') {
+              completed = event as FileDiffEditCompleteEvent<
+                undefined,
+                undefined
+              >;
+            }
+            return 'accept';
+          },
+        });
+        const oldLines = Array.from(
+          { length: 12 },
+          (_, index) => `line ${index}`
+        );
+        const initialLines = [...oldLines];
+        initialLines[3] = 'initial change';
+        const editedLines = [...initialLines];
+        if (editMode === 'net-zero structural edits') {
+          editedLines.splice(8, 1);
+          editedLines.splice(3, 0, 'inserted line');
+        } else {
+          editedLines[3] = 'updated change';
+          editedLines[8] = `  ${oldLines[8]}`;
+        }
+        const oldFile = {
+          name: 'offscreen.txt',
+          contents: oldLines.join('\n') + '\n',
+        };
+        const newFile = {
+          name: oldFile.name,
+          contents: editedLines.join('\n') + '\n',
+        };
+        const item: CodeViewItem<undefined> = {
+          id: 'offscreen-edit',
+          type: 'diff',
+          fileDiff: parseDiffFromFile(oldFile, {
+            name: oldFile.name,
+            contents: initialLines.join('\n') + '\n',
+          }),
+          edit: true,
+          version: 0,
+        };
+        try {
+          viewer.setup(createRoot());
+          await renderItems(viewer, [item]);
+          const editor = editors[0];
+          await waitFor(() => editor?.getFile() != null);
+          if (editor == null)
+            throw new Error('Expected an attached diff editor');
+          const rendered = viewer.getRenderedItems()[0];
+          expect(
+            rendered?.element.shadowRoot?.querySelector('[data-line="9"]')
+          ).toBeNull();
+          if (editMode === 'document replacement') {
+            setSessionText(editor, newFile.contents);
+          } else if (editMode === 'net-zero structural edits') {
+            editor.applyEdits([
+              {
+                range: {
+                  start: { line: 3, character: 0 },
+                  end: { line: 3, character: 0 },
+                },
+                newText: 'inserted line\n',
+              },
+              {
+                range: {
+                  start: { line: 8, character: 0 },
+                  end: { line: 9, character: 0 },
+                },
+                newText: '',
+              },
+            ]);
+          } else {
+            editor.applyEdits([
+              {
+                range: {
+                  start: { line: 3, character: 0 },
+                  end: { line: 3, character: initialLines[3].length },
+                },
+                newText: editedLines[3],
+              },
+              {
+                range: {
+                  start: { line: 8, character: 0 },
+                  end: { line: 8, character: 0 },
+                },
+                newText: '  ',
+              },
+            ]);
+          }
+          expect(editor.getText()).toBe(newFile.contents);
+          expect(
+            getEditSessionDiff(rendered?.instance)?.additionLines.join('')
+          ).toBe(newFile.contents);
+          // Complete immediately: preserving text must not depend on a later
+          // highlighting pass reaching the edited line.
+          await applyItemUpdate(viewer, { ...item, edit: false, version: 1 });
+          expect(completed?.newFile?.contents).toBe(newFile.contents);
+          const expected = parseDiffFromFile(oldFile, newFile);
+          expect(completed?.fileDiff.additionLines).toEqual(
+            expected.additionLines
+          );
+          expect(completed?.fileDiff.hunks).toEqual(expected.hunks);
+          const accepted = viewer.getItem(item.id);
+          expect(
+            accepted?.type === 'diff' && accepted.fileDiff.additionLines
+          ).toEqual(expected.additionLines);
+        } finally {
+          viewer.cleanUp();
+          await wait(0);
+          cleanup();
+        }
+      });
+    }
+  }
+
   test('edited items keep pass-through options untouched', async () => {
     const { cleanup } = installDom();
     const { createEditor } = createEditorHarness();
