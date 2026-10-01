@@ -98,7 +98,8 @@
   );
 }
 
-/* stylelint-disable-next-line selector-pseudo-class-no-unknown */
+/* Temporarily disabled for visual comparison so dark mode uses the default hero mesh palette. */
+/*
 :global(.dark) .heroRainbow {
   background-color: #68cdf2;
   background-image:
@@ -139,6 +140,7 @@
       rgb(213 104 234 / 0%) 70%
     );
 }
+*/
 
 @keyframes rainbow-shift {
   from {
