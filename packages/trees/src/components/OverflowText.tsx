@@ -10,16 +10,13 @@ export type CSSPropertiesWithVars = CSSProperties & {
   [key: `--${string}`]: string | number | undefined;
 };
 
-export interface MarkerProps extends PropsWithChildren {}
-
 export type TruncateMode = 'truncate' | 'fruncate';
 
 export interface OverflowTextProps extends PropsWithChildren {
   mode?: TruncateMode;
   style?: Omit<CSSPropertiesWithVars, 'height' | 'overflow'>;
   className?: string;
-  marker?: ComponentChildren | ((props: MarkerProps) => ComponentChildren);
-  variant?: 'default' | 'fade';
+  'data-truncate-segment-priority'?: '1' | '2';
 }
 
 export type MiddleTruncateProps = Omit<OverflowTextProps, 'mode' | 'children'> &
@@ -37,7 +34,7 @@ export type MiddleTruncateProps = Omit<OverflowTextProps, 'mode' | 'children'> &
 
 export type MiddleTruncateFilteredProps = Pick<
   MiddleTruncateProps,
-  'priority' | 'variant'
+  'priority'
 > & { splitIndex?: number; splitOffset?: number };
 
 export type CustomSplitFn = (
@@ -186,81 +183,20 @@ export const splitFirst: CustomSplitFn = (
   return [contents.slice(0, splitIndex), contents.slice(splitIndex)];
 };
 
-function OverflowMarker({
-  children,
-  marker,
-  variant = 'default',
-}: OverflowTextProps) {
-  'use no memo';
-  const isFadeVariant = variant === 'fade';
-  return (
-    <div aria-hidden data-truncate-marker-cell>
-      <div data-truncate-marker>
-        {typeof marker === 'function' ? (
-          marker({ children })
-        ) : isFadeVariant ? (
-          <span data-truncate-fade />
-        ) : (
-          marker
-        )}
-      </div>
-    </div>
-  );
-}
-
-function OverflowContent(options: OverflowTextProps) {
-  'use no memo';
-  const { mode, children } = options;
-
-  // The inner span wrapper here is only needed to implement
-  // the right aligned internals for fruncate
-  return (
-    <div>
-      <div data-truncate-content="visible">
-        {mode === 'fruncate' ? <span>{children}</span> : children}
-      </div>
-      <div data-truncate-content="overflow" aria-hidden>
-        {mode === 'fruncate' ? <span>{children}</span> : children}
-      </div>
-    </div>
-  );
-}
-
 export function OverflowText({
   children,
   mode = 'truncate',
-  marker = '…',
-  variant = 'default',
   ...props
 }: OverflowTextProps): JSX.Element {
   'use no memo';
-  const contentNode = (
-    <OverflowContent key="content" mode={mode}>
-      {children}
-    </OverflowContent>
-  );
-  const markerNode = (
-    <OverflowMarker
-      key="marker"
-      marker={marker}
-      mode={mode}
-      variant={variant}
-    />
-  );
-  const fillNode = <div key="fill" data-truncate-fill></div>;
-
   return (
-    <div
-      data-truncate-container={mode}
-      data-truncate-variant={variant}
-      {...props}
-    >
-      <div data-truncate-grid>
-        {mode === 'truncate'
-          ? [contentNode, markerNode]
-          : [markerNode, contentNode, fillNode]}
-      </div>
-    </div>
+    <span data-truncate-container={mode} {...props}>
+      {mode === 'fruncate' ? (
+        <span data-truncate-content>{children}</span>
+      ) : (
+        children
+      )}
+    </span>
   );
 }
 
@@ -306,8 +242,8 @@ export function MiddleTruncate({
       console.error('MiddleTruncate: contents must be an array of two items');
       return null;
     }
-    firstSegment = <Truncate {...props}>{contents[0]}</Truncate>;
-    secondSegment = <Fruncate {...props}>{contents[1]}</Fruncate>;
+    firstSegment = contents[0];
+    secondSegment = contents[1];
   } else {
     // TODO: figure out how to support ReactNode children in the future
     if (typeof children !== 'string') {
@@ -315,9 +251,9 @@ export function MiddleTruncate({
       return null;
     }
 
-    // In case styling relies on the presence of the component, we will return a div
+    // In case styling relies on the presence of the component, keep a host node.
     if (children.length === 0) {
-      return <div className={className} style={style}></div>;
+      return <span className={className} style={style}></span>;
     }
 
     // If the minimumLength is not met, we will still truncate the text,
@@ -372,59 +308,30 @@ export function MiddleTruncate({
 
     const [firstHalfMessage, secondHalfMessage] = splitFn(children, {
       priority,
-      variant: props.variant,
       splitIndex: typeof splitIndex === 'number' ? splitIndex : undefined,
       splitOffset: typeof splitOffset === 'number' ? splitOffset : undefined,
     });
 
-    const firstIsLarger = firstHalfMessage.length >= secondHalfMessage.length;
-    const secondIsLarger = !firstIsLarger;
-
-    const firstCanBeSimple = priority === 'equal' && secondIsLarger;
-    const secondCanBeSimple = priority === 'equal' && firstIsLarger;
-
-    const firstPropOverrides: Partial<OverflowTextProps> = {};
-    const secondPropOverrides: Partial<OverflowTextProps> = {};
-
-    if (firstCanBeSimple) {
-      firstPropOverrides.marker = '';
-    }
-    if (secondCanBeSimple) {
-      secondPropOverrides.marker = '';
-    }
-
-    firstSegment = (
-      <Truncate {...props} {...firstPropOverrides}>
-        {firstHalfMessage}
-      </Truncate>
-    );
-    secondSegment = (
-      <Fruncate {...props} {...secondPropOverrides}>
-        {secondHalfMessage}
-      </Fruncate>
-    );
+    firstSegment = firstHalfMessage;
+    secondSegment = secondHalfMessage;
   }
 
+  const firstPriority =
+    priority === 'start' || priority === 'equal' ? '1' : '2';
+  const secondPriority = priority === 'end' || priority === 'equal' ? '1' : '2';
+
   return (
-    <div
+    <span
       data-truncate-group-container="middle"
       className={className}
       style={style}
     >
-      <div
-        data-truncate-segment-priority={
-          priority === 'start' || priority === 'equal' ? '1' : '2'
-        }
-      >
+      <Truncate {...props} data-truncate-segment-priority={firstPriority}>
         {firstSegment}
-      </div>
-      <div
-        data-truncate-segment-priority={
-          priority === 'end' || priority === 'equal' ? '1' : '2'
-        }
-      >
+      </Truncate>
+      <Fruncate {...props} data-truncate-segment-priority={secondPriority}>
         {secondSegment}
-      </div>
-    </div>
+      </Fruncate>
+    </span>
   );
 }
