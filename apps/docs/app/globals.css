@@ -259,7 +259,18 @@
   }
 
   .styled-link-muted {
-    @apply text-muted-foreground hover:text-foreground focus-visible:text-foreground;
+    color: var(--color-muted-foreground);
+    text-decoration-color: color-mix(
+      in oklab,
+      var(--color-muted-foreground) 50%,
+      transparent
+    );
+  }
+
+  .styled-link-muted:hover,
+  .styled-link-muted:focus-visible {
+    color: var(--color-foreground);
+    text-decoration-color: var(--color-foreground);
   }
 
   .no-scrollbar::-webkit-scrollbar {

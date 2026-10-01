@@ -58,8 +58,8 @@ export function HighlightsHtmlBenchmarks() {
 
       <figure className="bg-muted/50 min-w-0 rounded-2xl p-4 sm:p-8 lg:p-10">
         <figcaption className="text-muted-foreground mb-4 text-sm">
-          <strong>HTML throughput in MiB/s</strong> · Highlights labels show
-          speedup over Shiki
+          <strong>HTML throughput (MiB/s)</strong> · Linear scale, longer is
+          faster
         </figcaption>
         <ul className="divide-foreground/10 divide-y">
           {rows.map(({ language, size, highlights, shiki, speedup }) => (
@@ -85,11 +85,11 @@ export function HighlightsHtmlBenchmarks() {
                       highlighted
                     />
                   </dd>
-                  <dd
-                    aria-label={`${speedup} times Shiki; ${highlights} MiB per second`}
-                    className="text-right text-lg font-semibold"
-                  >
-                    {speedup}×
+                  <dd className="text-right text-lg font-semibold">
+                    <span aria-hidden="true">{speedup}×</span>
+                    <span className="sr-only">
+                      {highlights} MiB per second; {speedup} times Shiki
+                    </span>
                   </dd>
                 </div>
                 <div className="grid grid-cols-[4.75rem_minmax(0,1fr)_3rem] items-center gap-2 sm:col-start-2 sm:row-start-2 sm:grid-cols-[5.5rem_minmax(0,1fr)_3.5rem] sm:gap-3">
@@ -97,11 +97,9 @@ export function HighlightsHtmlBenchmarks() {
                   <dd>
                     <BenchmarkBar value={shiki} maximum={maximumThroughput} />
                   </dd>
-                  <dd
-                    aria-label={`${shiki} MiB per second`}
-                    className="text-foreground/50 text-md text-right"
-                  >
-                    {shiki}
+                  <dd className="text-foreground/50 text-md text-right">
+                    <span aria-hidden="true">{shiki}</span>
+                    <span className="sr-only">{shiki} MiB per second</span>
                   </dd>
                 </div>
               </dl>
@@ -115,8 +113,9 @@ export function HighlightsHtmlBenchmarks() {
           Recorded September 25, 2026 · Bun 1.4.0 · Apple M4 Pro · Shiki 4.4.1.
           Median throughput after a 200 ms warm-up, with at least 20 samples per
           case and a 1.5 s sampling budget, rotating contenders. DOM rendering
-          is excluded and highlighting quality is not measured. Token boundaries
-          and styles can differ between libraries.{' '}
+          is excluded and highlighting quality is not measured. Highlights
+          labels show speedup over Shiki. Token boundaries and styles can differ
+          between libraries.{' '}
           <a
             href="https://github.com/pierrecomputer/pierre/tree/main/packages/highlights/benchmark#html-generation"
             className="styled-link styled-link-muted"

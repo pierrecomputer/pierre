@@ -7,19 +7,25 @@ interface BenchmarkBarProps {
   highlighted?: boolean;
 }
 
-// Draws every result on the same zero-based scale so bar lengths remain
-// directly comparable, including the much smaller competitor results.
+// Gives nonzero neutral results a small visibility floor while preserving the
+// true percentage width used to compare every result.
 export function BenchmarkBar({
   value,
   maximum,
   highlighted = false,
 }: BenchmarkBarProps) {
+  const barClassName = cn(
+    'h-full rounded-md',
+    highlighted ? styles.rainbow : 'bg-foreground/30'
+  );
+
   return (
     <div aria-hidden="true" className="h-3 w-full">
       <div
         className={cn(
-          'h-full rounded-md transition-[width] duration-500 ease-out motion-reduce:transition-none',
-          highlighted ? styles.rainbow : 'bg-foreground/30'
+          'transition-[width] duration-500 ease-out motion-reduce:transition-none',
+          !highlighted && value > 0 && 'min-w-[3px]',
+          barClassName
         )}
         style={{ width: `${(value / maximum) * 100}%` }}
       />
