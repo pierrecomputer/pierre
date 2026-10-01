@@ -73,6 +73,9 @@ function createPrimeWorkerManager(): {
   const primedDiffs: FileDiffMetadata[] = [];
   const workerManager = {
     cleanUpTasks() {},
+    getPreferredHighlighter() {
+      return 'shiki-js';
+    },
     getDiffRenderOptions() {
       return {
         theme: 'github-dark',
@@ -673,6 +676,9 @@ describe('FileDiff partial hydration', () => {
       const workerManager = {
         subscribeToThemeChanges() {},
         unsubscribeToThemeChanges() {},
+        getPreferredHighlighter() {
+          return 'shiki-js';
+        },
         getDiffRenderOptions() {
           return {
             theme: 'github-dark',

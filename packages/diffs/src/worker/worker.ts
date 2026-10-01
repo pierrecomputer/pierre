@@ -181,9 +181,9 @@ async function handleRenderDiff({
 }
 
 function getHighlighter(
-  preferredHighlighter: HighlighterTypes = 'shiki-js'
+  preferredHighlighter?: HighlighterTypes
 ): Promise<DiffsHighlighter> | DiffsHighlighter {
-  highlighter ??= createHighlighter({ preferredHighlighter });
+  highlighter ??= createHighlighter(preferredHighlighter);
   return highlighter;
 }
 

@@ -37,7 +37,6 @@ import type {
   CodeViewScrollBehavior,
   CodeViewScrollTarget,
   DiffsThemeNames,
-  HighlighterTypes,
   HunkSeparators,
   PendingCodeViewLayoutReset,
   SelectedLineRange,
@@ -825,7 +824,6 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
   private options: CodeViewOptions<LAnnotation, Caret>;
   private workerManager: WorkerPoolManager | undefined;
   private isReadySubscription: (() => void) | undefined;
-  private pendingHighlighterType: HighlighterTypes | undefined;
   private pendingHighlighterTheme: DiffsThemeNames | ThemesType | undefined;
   private isContainerManaged: boolean;
 
@@ -1891,7 +1889,6 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
     this.isReadySubscription();
     this.isReadySubscription = undefined;
     this.pendingHighlighterTheme = undefined;
-    this.pendingHighlighterType = undefined;
   }
 
   private isSharedHighlighterReady(): boolean {
@@ -1903,25 +1900,16 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
       this.workerManager?.getFileRenderOptions().theme ??
       this.options.theme ??
       DEFAULT_THEMES;
-    if (
-      getHighlighterIfLoaded({
-        theme,
-        preferredHighlighter,
-      }) != null
-    ) {
+    if (getHighlighterIfLoaded({ theme, preferredHighlighter }) != null) {
       this.clearReadySubscription();
       return true;
     }
-    // An obsolete theme or backend request must not block the current one.
-    if (
-      !areThemesEqual(this.pendingHighlighterTheme, theme) ||
-      this.pendingHighlighterType !== preferredHighlighter
-    ) {
+    // A pending request for an obsolete theme must not block the current one.
+    if (!areThemesEqual(this.pendingHighlighterTheme, theme)) {
       this.clearReadySubscription();
     }
     this.isReadySubscription ??= (() => {
       this.pendingHighlighterTheme = theme;
-      this.pendingHighlighterType = preferredHighlighter;
       let cancelled = false;
       void preloadHighlighter({
         themes: getThemes(theme),

@@ -1,4 +1,4 @@
-import { afterAll, describe, expect, test } from 'bun:test';
+import { afterAll, beforeEach, describe, expect, test } from 'bun:test';
 
 import { TextDocument } from '../src/editor/textDocument';
 import {
@@ -12,6 +12,8 @@ import type { DiffsTheme } from '../src/highlighter/themes/types';
 import { getHighlighterThemeStyles } from '../src/utils/getHighlighterThemeStyles';
 import { renderFileWithHighlighter } from '../src/utils/renderFileWithHighlighter';
 
+// Each test loads its backend fresh: only one highlighter type can be loaded.
+beforeEach(disposeHighlighter);
 afterAll(disposeHighlighter);
 
 for (const preferredHighlighter of ['shiki-js', 'shiki-wasm'] as const) {
@@ -126,7 +128,7 @@ describe('highlights themes', () => {
             '--diffs-light:var(--diffs-token-foreground);--diffs-light-bg:var(--diffs-token-background);'
         );
         const textDocument = new TextDocument('test.json', '42', 'json');
-        const tokenizer = highlighter.createLiveTokenizer({
+        const tokenizer = highlighter.createEditorTokenizer({
           textDocument,
           theme: name,
           onDeferTokenize: () => {},

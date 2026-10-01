@@ -9,12 +9,7 @@ const LAYER_ORDER = '@layer base,theme,rendered,unsafe;';
 
 const config: UserConfig[] = defineConfig([
   {
-    entry: [
-      'src/**/*.ts',
-      'src/**/*.tsx',
-      '!src/worker/worker.ts',
-      '!src/worker/worker-portable.ts',
-    ],
+    entry: ['src/**/*.ts', 'src/**/*.tsx', '!src/worker/worker.ts'],
     loader: {
       '.css': 'text',
     },
@@ -87,7 +82,9 @@ const config: UserConfig[] = defineConfig([
   },
   {
     // Keep portable workers self-contained for classic workers and blob URLs.
-    entry: ['src/worker/worker-portable.ts'],
+    // Build from worker.ts itself: a shim's bare `import './worker'` would be
+    // tree-shaken, since package.json `sideEffects` only lists dist files.
+    entry: { 'worker-portable': 'src/worker/worker.ts' },
     outDir: 'dist/worker',
     tsconfig: './tsconfig.json',
     clean: false,

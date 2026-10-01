@@ -14,7 +14,7 @@ import type {
   EditorViewState,
   FileEditState,
 } from '../src/editor/types';
-import { ShikiLiveTokenizer } from '../src/highlighter/shiki-live';
+import { ShikiEditorTokenizer } from '../src/highlighter/shiki-editor';
 import type { DiffsHighlighter, FileContents } from '../src/types';
 import { getFiletypeFromFileName } from '../src/utils/getFiletypeFromFileName';
 import { installDom } from './domHarness';
@@ -37,10 +37,10 @@ function createTestHighlighter(): DiffsHighlighter {
         bg: theme.bg ?? '',
       };
     },
-    createLiveTokenizer: (
+    createEditorTokenizer: (
       options
-    ): ReturnType<DiffsHighlighter['createLiveTokenizer']> =>
-      new ShikiLiveTokenizer(raw, options),
+    ): ReturnType<DiffsHighlighter['createEditorTokenizer']> =>
+      new ShikiEditorTokenizer(raw, options),
   } as DiffsHighlighter;
 }
 

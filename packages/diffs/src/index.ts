@@ -106,4 +106,4 @@ export * from './utils/trimPatchContext';
 export type * from './types';
 
 export * from './highlighter/themes/createCSSVariablesTheme';
-export type { CSSVariablesThemeOptions } from './highlighter/themes/types';
+export type * from './highlighter/themes/types';

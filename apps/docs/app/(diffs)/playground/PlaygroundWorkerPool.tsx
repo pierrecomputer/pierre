@@ -1,11 +1,17 @@
 'use client';
 
-import type { HighlighterTypes } from '@pierre/diffs';
+import {
+  disposeHighlighter,
+  getHighlighterType,
+  type HighlighterTypes,
+} from '@pierre/diffs';
 import { WorkerPoolContext } from '@pierre/diffs/react';
 import { WorkerPoolManager } from '@pierre/diffs/worker';
-import { type ReactNode, useEffect, useState } from 'react';
+import { createContext, type ReactNode, useEffect, useState } from 'react';
 
-// Each selection owns its workers so changing backends cannot reuse old results.
+export const PlaygroundHighlighterReadyContext = createContext(true);
+
+// Rendering surfaces must unmount before their highlighter is disposed.
 export function PlaygroundWorkerPool({
   highlighter,
   children,
@@ -13,38 +19,70 @@ export function PlaygroundWorkerPool({
   highlighter: HighlighterTypes;
   children: ReactNode;
 }) {
+  // Server and hydration renders start ready; a client navigation from a page
+  // that loaded another type waits until that type is released.
+  const [readyFor, setReadyFor] = useState<HighlighterTypes | undefined>(() => {
+    const active =
+      typeof window === 'undefined' ? undefined : getHighlighterType();
+    return active == null || active === highlighter ? highlighter : undefined;
+  });
   const [pool, setPool] = useState<WorkerPoolManager>();
   useEffect(() => {
-    const manager = new WorkerPoolManager(
-      {
-        poolSize: Math.min(
-          3,
-          Math.max(1, (navigator.hardwareConcurrency ?? 2) - 1)
-        ),
-        workerFactory: () =>
-          new Worker(
-            new URL('@pierre/diffs/worker/worker.js', import.meta.url)
-          ),
-      },
-      { preferredHighlighter: highlighter, useTokenTransformer: true }
-    );
     let cancelled = false;
-    void manager
-      .initialize()
-      .then(() => {
-        if (!cancelled) setPool(manager);
-      })
-      .catch((error: unknown) => console.error(error));
+    let manager: WorkerPoolManager | undefined;
+    void (async () => {
+      setPool(undefined);
+      setReadyFor(undefined);
+      const active = getHighlighterType();
+      if (active != null && active !== highlighter) {
+        await disposeHighlighter();
+      }
+      if (cancelled) return;
+      manager = new WorkerPoolManager(
+        {
+          poolSize: Math.min(
+            3,
+            Math.max(1, (navigator.hardwareConcurrency ?? 2) - 1)
+          ),
+          workerFactory: () =>
+            new Worker(
+              new URL('@pierre/diffs/worker/worker.js', import.meta.url)
+            ),
+        },
+        { preferredHighlighter: highlighter, useTokenTransformer: true }
+      );
+      await manager.initialize();
+      if (!cancelled) {
+        setPool(manager);
+        setReadyFor(highlighter);
+      }
+    })().catch((error: unknown) => console.error(error));
     return () => {
       cancelled = true;
-      manager.terminate();
+      manager?.terminate();
     };
   }, [highlighter]);
+  // Leaving the playground releases its backend for the rest of the site.
+  useEffect(
+    () => () => {
+      void disposeHighlighter();
+    },
+    []
+  );
   return (
     <WorkerPoolContext.Provider
-      value={pool?.getPreferredHighlighter() === highlighter ? pool : undefined}
+      value={
+        readyFor === highlighter &&
+        pool?.getPreferredHighlighter() === highlighter
+          ? pool
+          : undefined
+      }
     >
-      {children}
+      <PlaygroundHighlighterReadyContext.Provider
+        value={readyFor === highlighter}
+      >
+        {children}
+      </PlaygroundHighlighterReadyContext.Provider>
     </WorkerPoolContext.Provider>
   );
 }

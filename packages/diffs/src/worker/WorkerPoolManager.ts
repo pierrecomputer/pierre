@@ -2,6 +2,7 @@ import LRUMapPkg from 'lru_map';
 import type { LRUMap } from 'lru_map';
 
 import { DEFAULT_THEMES } from '../constants';
+import { resolveHighlighterType } from '../highlighter/highlighterType';
 import { areLanguagesAttached } from '../highlighter/languages/areLanguagesAttached';
 import { getResolvedLanguages } from '../highlighter/languages/getResolvedLanguages';
 import { hasResolvedLanguages } from '../highlighter/languages/hasResolvedLanguages';
@@ -100,15 +101,6 @@ type RenderTask = RenderFileTask | RenderDiffTask;
 type RenderTaskInstance = FileRendererInstance | DiffRendererInstance;
 
 export class WorkerPoolManager {
-  /**
-   * Whether renderers using this pool highlight on the main thread instead of
-   * requesting worker results. Highlights builds a file's highlighted AST in
-   * about the time the worker result takes to clone back, while a worker
-   * render paints plain text first and then repaints the highlighted result,
-   * so with Highlights the round trip only adds main-thread work. Workers
-   * still start and serve explicit cache priming.
-   */
-  public readonly highlightsOnMainThread: boolean;
   private highlighter: DiffsHighlighter | undefined;
   private readonly preferredHighlighter: HighlighterTypes;
   private renderOptions: WorkerRenderingOptions;
@@ -150,11 +142,10 @@ export class WorkerPoolManager {
       lineDiffType = 'word-alt',
       maxLineDiffLength = 1000,
       tokenizeMaxLineLength = 1000,
-      preferredHighlighter = 'shiki-js',
+      preferredHighlighter,
     }: WorkerInitializationRenderOptions
   ) {
-    this.preferredHighlighter = preferredHighlighter;
-    this.highlightsOnMainThread = preferredHighlighter === 'highlights';
+    this.preferredHighlighter = resolveHighlighterType(preferredHighlighter);
     this.renderOptions = {
       theme,
       useTokenTransformer,

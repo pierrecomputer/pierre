@@ -729,7 +729,13 @@ function handlePreload() {
       themes.push(item.options.theme.light);
     }
   }
-  void preloadHighlighter({ langs, themes });
+  // Match the pool, which may still be initializing: only one highlighter
+  // type can be loaded per page.
+  void preloadHighlighter({
+    langs,
+    themes,
+    preferredHighlighter: poolManager?.getPreferredHighlighter(),
+  });
 }
 
 document.getElementById('toggle-theme')?.addEventListener('click', toggleTheme);

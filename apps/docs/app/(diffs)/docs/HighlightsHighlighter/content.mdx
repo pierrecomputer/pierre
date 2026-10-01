@@ -13,9 +13,14 @@ available. Each backend loads on demand.
 />
 ```
 
-When using a worker pool, set `preferredHighlighter` in the provider's
-`highlighterOptions`. The pool owns the backend used by its components. Try all
-three backends in the [diffs playground](/playground?highlighter=highlights).
+Highlights usually performs best without a [worker pool](#worker-pool). It
+highlights on the main thread faster than a worker round trip completes, so a
+pool delays highlighted output and adds main-thread work. If you do use a pool,
+set `preferredHighlighter` in the provider's `highlighterOptions`; the pool owns
+the backend used by its components and always highlights in its workers.
+
+Only one backend can be loaded on a page at a time. Try all three backends in
+the [diffs playground](/playground?highlighter=highlights).
 
 Built-in theme names work across backends.
 `registerCustomTheme(name, loader, 'zed')` accepts Zed-compatible Highlights

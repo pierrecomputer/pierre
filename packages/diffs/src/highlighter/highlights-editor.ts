@@ -7,14 +7,12 @@ import {
 import type { TextDocumentChange } from '../editor/textDocument';
 import type { HighlightedToken, RenderRange } from '../types';
 import { formatCSSVariablePrefix } from '../utils/formatCSSVariablePrefix';
-import type {
-  DiffsLiveTokenizer,
-  DiffsLiveTokenizerOptions,
-} from './tokenizer-types';
+import { DiffsEditorTokenizer } from './DiffsEditorTokenizer';
+import type { DiffsEditorTokenizerOptions } from './tokenizer-types';
 import type { CodeToTokensOptions } from './types';
 
 /** Adapts the native incremental lexer to the editor's document and viewport. */
-export class HighlightsLiveTokenizer implements DiffsLiveTokenizer {
+export class HighlightsEditorTokenizer extends DiffsEditorTokenizer {
   #tokenizer: LiveTokenizer;
   #version: number;
   #disposed = false;
@@ -32,11 +30,12 @@ export class HighlightsLiveTokenizer implements DiffsLiveTokenizer {
   #pendingDelivery: Map<number, HighlightedToken[]> | undefined;
 
   constructor(
-    private readonly options: DiffsLiveTokenizerOptions,
+    private readonly options: DiffsEditorTokenizerOptions,
     private readonly resolveOptions: (
       options: CodeToTokensOptions
     ) => HighlightsOptions
   ) {
+    super();
     this.#version = options.textDocument.version;
     this.#tokenizer = this.#createTokenizer();
   }
@@ -60,12 +59,12 @@ export class HighlightsLiveTokenizer implements DiffsLiveTokenizer {
   // bracket-matching read are held back until that read has returned.
   #deliver(lines: Map<number, HighlightedToken[]>): void {
     const captured = this.#capturedLines;
-    if (captured !== undefined) {
+    if (captured != null) {
       for (const [line, tokens] of lines) captured.set(line, tokens);
       return;
     }
     const range = this.#returnedRange;
-    if (range !== undefined) {
+    if (range != null) {
       for (const line of lines.keys()) {
         if (line >= range[0] && line < range[1]) lines.delete(line);
       }
@@ -81,7 +80,7 @@ export class HighlightsLiveTokenizer implements DiffsLiveTokenizer {
   // and the next viewport read cover those rows.
   #queueDelivery(lines: Map<number, HighlightedToken[]>): void {
     const pending = this.#pendingDelivery;
-    if (pending !== undefined) {
+    if (pending != null) {
       for (const [line, tokens] of lines) pending.set(line, tokens);
       return;
     }
@@ -89,7 +88,7 @@ export class HighlightsLiveTokenizer implements DiffsLiveTokenizer {
     queueMicrotask(() => {
       const batch = this.#pendingDelivery;
       this.#pendingDelivery = undefined;
-      if (batch !== undefined && batch.size > 0 && !this.#disposed)
+      if (batch != null && batch.size > 0 && !this.#disposed)
         this.options.onDeferTokenize(batch);
     });
   }
@@ -142,7 +141,7 @@ export class HighlightsLiveTokenizer implements DiffsLiveTokenizer {
   // a queued delivery must not patch them a second time.
   #dropPendingLines(lines: Map<number, HighlightedToken[]>): void {
     const pending = this.#pendingDelivery;
-    if (pending === undefined) return;
+    if (pending == null) return;
     for (const line of lines.keys()) pending.delete(line);
   }
 

@@ -5,7 +5,7 @@ import { VirtualizedFile } from '../src/components/VirtualizedFile';
 import { Virtualizer } from '../src/components/Virtualizer';
 import { DEFAULT_THEMES } from '../src/constants';
 import { Editor } from '../src/editor/editor';
-import { ShikiLiveTokenizer } from '../src/highlighter/shiki-live';
+import { ShikiEditorTokenizer } from '../src/highlighter/shiki-editor';
 import type { DiffsHighlighter } from '../src/types';
 import { installDom, waitFor } from './domHarness';
 
@@ -29,10 +29,10 @@ function createTestHighlighter(): DiffsHighlighter {
         bg: theme.bg ?? '',
       };
     },
-    createLiveTokenizer: (
+    createEditorTokenizer: (
       options
-    ): ReturnType<DiffsHighlighter['createLiveTokenizer']> =>
-      new ShikiLiveTokenizer(raw, options),
+    ): ReturnType<DiffsHighlighter['createEditorTokenizer']> =>
+      new ShikiEditorTokenizer(raw, options),
   } as DiffsHighlighter;
 }
 

@@ -55,6 +55,11 @@ export function getHighlighterThemeStyles({
   return styles;
 }
 
+// A Highlights theme with `cssVariables: true` colors tokens with
+// `var(<cssVariablePrefix><color>)`, and diffs renders with the token prefix.
+// Point the surface's foreground and background at those same variables so
+// they match the tokens. Object-form settings already resolve to colors using
+// their own prefix and defaults, and every other theme uses its literal colors.
 function getThemeColors(theme: DiffsTheme, highlighter: DiffsHighlighter) {
   if (highlighter.name === 'highlights' && theme.zed?.cssVariables === true) {
     const prefix = formatCSSVariablePrefix('token');

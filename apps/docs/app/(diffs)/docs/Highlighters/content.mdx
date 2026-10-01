@@ -16,7 +16,14 @@ Set `preferredHighlighter` in the component's `options`:
 The same option works with React and vanilla components, edit mode, streaming,
 and [SSR preload helpers](#ssr). When using a [worker pool](#worker-pool), set
 `preferredHighlighter` in the pool's `highlighterOptions`; the pool controls the
-backend used by its components.
+backend used by its components. Highlights usually performs best without a pool.
+
+Only one backend can be loaded at a time on a page, in each worker, and in an
+SSR server process. Components without `preferredHighlighter` use the backend
+that is already loaded, or `shiki-js` when none is. Requesting a different
+backend throws until every instance of the loaded one is disposed, which usually
+points to a component or preload that names a different backend than the rest of
+the app. `getHighlighterType()` returns the loaded backend.
 
 Built-in theme names work across all three backends.
 `registerCustomTheme(name, loader, type = 'textmate')` uses `'textmate'` for

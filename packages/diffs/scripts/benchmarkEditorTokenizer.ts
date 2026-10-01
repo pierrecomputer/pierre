@@ -3,7 +3,7 @@ import { type IGrammar, type StateStack } from 'shiki/textmate';
 
 import { TextDocument } from '../src/editor/textDocument';
 import { EditorTokenizer } from '../src/editor/tokenizer';
-import { ShikiLiveTokenizer } from '../src/highlighter/shiki-live';
+import { ShikiEditorTokenizer } from '../src/highlighter/shiki-editor';
 import type { DiffsHighlighter, RenderRange } from '../src/types';
 
 interface BenchmarkConfig {
@@ -228,9 +228,9 @@ function createTokenizer(
       fg: '',
       bg: '',
     }),
-    createLiveTokenizer: (
-      options: Parameters<DiffsHighlighter['createLiveTokenizer']>[0]
-    ) => new ShikiLiveTokenizer(raw, options),
+    createEditorTokenizer: (
+      options: Parameters<DiffsHighlighter['createEditorTokenizer']>[0]
+    ) => new ShikiEditorTokenizer(raw, options),
   } as unknown as DiffsHighlighter;
   return new EditorTokenizer({
     highlighter,

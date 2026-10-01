@@ -11,8 +11,7 @@
   "sideEffects": [
     "dist/components/web-components.js",
     "dist/worker/worker.js",
-    "dist/worker/worker-portable.js",
-    "src/worker/worker.ts"
+    "dist/worker/worker-portable.js"
   ],
   "typesVersions": {
     "*": {

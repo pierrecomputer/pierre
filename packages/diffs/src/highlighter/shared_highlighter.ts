@@ -5,14 +5,24 @@ import type {
   SupportedLanguages,
   ThemesType,
 } from '../types';
+import {
+  acquireHighlighterType,
+  assertHighlighterType,
+  releaseHighlighterType,
+  resolveHighlighterType,
+} from './highlighterType';
 import { cleanUpResolvedLanguages } from './languages/cleanUpResolvedLanguages';
+import { areThemesAttached } from './themes/areThemesAttached';
 import { cleanUpResolvedThemes } from './themes/cleanUpResolvedThemes';
 
-type CachedHighlighter = DiffsHighlighter | Promise<DiffsHighlighter>;
-const highlighters = new Map<HighlighterTypes, CachedHighlighter>();
+export { getHighlighterType } from './highlighterType';
 
-/** A backend's cache slot by name, or a cached instance or promise directly. */
-type HighlighterState = HighlighterTypes | CachedHighlighter | undefined;
+type CachedOrLoadingHighlighterType =
+  | Promise<DiffsHighlighter>
+  | DiffsHighlighter
+  | undefined;
+
+let highlighter: CachedOrLoadingHighlighterType;
 
 export interface HighlighterOptions {
   themes: DiffsThemeNames[];
@@ -20,82 +30,61 @@ export interface HighlighterOptions {
   preferredHighlighter?: HighlighterTypes;
 }
 
-/** Load only the selected backend and create an independently disposable instance. */
-export async function createHighlighter({
-  preferredHighlighter = 'shiki-js',
-}: {
-  preferredHighlighter?: HighlighterTypes;
-} = {}): Promise<DiffsHighlighter> {
-  if (preferredHighlighter === 'highlights') {
-    const { createHighlightsHighlighter } =
-      await import('./backends/highlights');
-    return createHighlightsHighlighter();
+/**
+ * Create an independently disposable highlighter, loading only its backend.
+ * The type defaults to the one already in use, else `DEFAULT_HIGHLIGHTER`;
+ * requesting a different type than the one in use rejects.
+ */
+export async function createHighlighter(
+  type?: HighlighterTypes
+): Promise<DiffsHighlighter> {
+  const resolvedType = resolveHighlighterType(type);
+  // Hold the type before importing so a concurrent request for another type
+  // rejects before its backend loads. The new instance holds it from then on.
+  acquireHighlighterType(resolvedType);
+  try {
+    if (resolvedType === 'highlights') {
+      const { HighlightsHighlighter } = await import('./backends/highlights');
+      return new HighlightsHighlighter();
+    }
+    const { ShikiHighlighter } = await import('./backends/shiki');
+    return await ShikiHighlighter.create(resolvedType);
+  } finally {
+    releaseHighlighterType();
   }
-  const { createShikiHighlighter } = await import('./backends/shiki');
-  return createShikiHighlighter(preferredHighlighter);
 }
 
 export async function getSharedHighlighter({
   themes,
   langs,
-  preferredHighlighter = 'shiki-js',
+  preferredHighlighter,
 }: HighlighterOptions): Promise<DiffsHighlighter> {
-  let cached = highlighters.get(preferredHighlighter);
-  if (cached == null) {
-    cached = createHighlighter({ preferredHighlighter });
-    highlighters.set(preferredHighlighter, cached);
+  if (preferredHighlighter != null) {
+    assertHighlighterType(preferredHighlighter);
   }
+  const cached = (highlighter ??= createHighlighter(preferredHighlighter));
   let instance: DiffsHighlighter;
   try {
     instance = await cached;
   } catch (error) {
-    if (highlighters.get(preferredHighlighter) === cached)
-      highlighters.delete(preferredHighlighter);
+    // Let a later request retry, unless the cache has moved on already.
+    if (highlighter === cached) {
+      highlighter = undefined;
+    }
     throw error;
   }
-  if (highlighters.get(preferredHighlighter) === cached)
-    highlighters.set(preferredHighlighter, instance);
+  if (highlighter === cached) {
+    highlighter = instance;
+  }
   await Promise.all([
     instance.themeResolver.resolveThemes(themes),
-    instance.loadLanguages?.(langs),
+    instance.loadLanguages(langs),
   ]);
   return instance;
 }
 
-function getCachedHighlighter(
-  state: HighlighterState
-): CachedHighlighter | undefined {
-  return typeof state === 'string' ? highlighters.get(state) : state;
-}
-
-// Resolves the cache entry a load-state predicate should inspect. A bare call
-// checks the default `shiki-js` backend, but an explicit `undefined` argument
-// comes from the instance type-guard overload and means "no instance", so it
-// must not fall back to the default backend the way a parameter default would.
-function resolvePredicateTarget(
-  args: [state?: HighlighterState]
-): CachedHighlighter | undefined {
-  return getCachedHighlighter(args.length === 0 ? 'shiki-js' : args[0]);
-}
-
-function isLoadedInstance(
-  cached: CachedHighlighter | undefined
-): cached is DiffsHighlighter {
-  return cached != null && !('then' in cached);
-}
-
-/**
- * Whether a backend's shared instance is ready. Pass the backend name to
- * check a backend other than the default `shiki-js`.
- */
-export function isHighlighterLoaded(
-  h: CachedHighlighter | undefined
-): h is DiffsHighlighter;
-export function isHighlighterLoaded(backend?: HighlighterTypes): boolean;
-export function isHighlighterLoaded(
-  ...args: [state?: HighlighterState]
-): boolean {
-  return isLoadedInstance(resolvePredicateTarget(args));
+export function isHighlighterLoaded(): boolean {
+  return highlighter != null && !('then' in highlighter);
 }
 
 interface GetHighlighterIfLoadedProps {
@@ -104,46 +93,35 @@ interface GetHighlighterIfLoadedProps {
   preferredHighlighter?: HighlighterTypes;
 }
 
+/**
+ * The shared instance when it is loaded and ready for the given theme and
+ * language. An instance of a type other than `preferredHighlighter` is not
+ * returned, so loading the requested type reports the conflict.
+ */
 export function getHighlighterIfLoaded({
   theme,
   lang,
-  preferredHighlighter = 'shiki-js',
+  preferredHighlighter,
 }: GetHighlighterIfLoadedProps = {}): DiffsHighlighter | undefined {
-  const highlighter = highlighters.get(preferredHighlighter);
-  if (!isLoadedInstance(highlighter)) return undefined;
+  const instance = highlighter;
   if (
-    theme != null &&
-    !highlighter.themeResolver.hasResolvedThemes(
-      typeof theme === 'string' ? [theme] : Object.values(theme)
-    )
-  )
+    instance == null ||
+    'then' in instance ||
+    (preferredHighlighter != null && instance.name !== preferredHighlighter) ||
+    (theme != null && !areThemesAttached(theme, instance)) ||
+    (lang != null && !instance.hasLoadedLanguages([lang]))
+  ) {
     return undefined;
-  if (lang != null && highlighter.hasLoadedLanguages?.([lang]) === false)
-    return undefined;
-  return highlighter;
+  }
+  return instance;
 }
 
-/** Whether a backend's shared instance is still initializing. */
-export function isHighlighterLoading(
-  h: CachedHighlighter | undefined
-): h is Promise<DiffsHighlighter>;
-export function isHighlighterLoading(backend?: HighlighterTypes): boolean;
-export function isHighlighterLoading(
-  ...args: [state?: HighlighterState]
-): boolean {
-  const cached = resolvePredicateTarget(args);
-  return cached != null && 'then' in cached;
+export function isHighlighterLoading(): boolean {
+  return highlighter != null && 'then' in highlighter;
 }
 
-/** Whether a backend has neither a shared instance nor one loading. */
-export function isHighlighterNull(
-  h: CachedHighlighter | undefined
-): h is undefined;
-export function isHighlighterNull(backend?: HighlighterTypes): boolean;
-export function isHighlighterNull(
-  ...args: [state?: HighlighterState]
-): boolean {
-  return resolvePredicateTarget(args) == null;
+export function isHighlighterNull(): boolean {
+  return highlighter == null;
 }
 
 export async function preloadHighlighter(
@@ -153,28 +131,20 @@ export async function preloadHighlighter(
 }
 
 /**
- * Dispose every shared instance and clear the shared theme and language
- * caches. Instances created with createHighlighter() are not disposed and
- * keep the themes and grammars they have already used.
+ * Dispose the shared instance and clear the shared theme and language caches.
+ * A loaded instance is disposed synchronously, so its highlighter type is
+ * released before this returns. Instances from createHighlighter() are not
+ * disposed; their type stays in use until they are.
  */
 export async function disposeHighlighter(): Promise<void> {
-  const cached = [...highlighters.values()];
-  highlighters.clear();
-  // Failed initialization must not prevent other backends and caches from being cleared.
-  const results = await Promise.allSettled(
-    cached.map(async (highlighter) => {
-      let instance: DiffsHighlighter;
-      try {
-        instance = await highlighter;
-      } catch {
-        return;
-      }
-      instance.dispose();
-    })
-  );
+  const cached = highlighter;
+  highlighter = undefined;
   cleanUpResolvedLanguages();
   cleanUpResolvedThemes();
-  for (const result of results) {
-    if (result.status === 'rejected') throw result.reason;
+  if (cached != null && 'then' in cached) {
+    // A failed initialization has nothing to dispose.
+    (await cached.catch(() => undefined))?.dispose();
+  } else {
+    cached?.dispose();
   }
 }

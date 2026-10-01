@@ -1,4 +1,4 @@
-import { afterAll, expect, test } from 'bun:test';
+import { afterAll, beforeEach, expect, test } from 'bun:test';
 
 import { File, type FileOptions } from '../src/components/File';
 import { VirtualizedFile } from '../src/components/VirtualizedFile';
@@ -10,6 +10,8 @@ import {
 } from '../src/highlighter/shared_highlighter';
 import { installDom, waitFor } from './domHarness';
 
+// Each test loads its backend fresh: only one highlighter type can be loaded.
+beforeEach(disposeHighlighter);
 afterAll(disposeHighlighter);
 
 test.each(['file', 'virtualized'])(

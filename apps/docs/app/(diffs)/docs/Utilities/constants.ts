@@ -244,7 +244,7 @@ export const HELPER_DISPOSE_HIGHLIGHTER: PreloadFileOptions<
     name: 'disposeHighlighter.ts',
     contents: `import { disposeHighlighter } from '@pierre/diffs';
 
-// Dispose all shared highlighter instances to free memory.
+// Dispose the shared highlighter instance to free memory.
 // This is useful when you're done rendering diffs and want
 // to clean up resources (e.g., in a single-page app when
 // navigating away from a diff view).
@@ -264,9 +264,9 @@ export const HELPER_GET_SHARED_HIGHLIGHTER: PreloadFileOptions<
     name: 'getSharedHighlighter.ts',
     contents: `import { getSharedHighlighter } from '@pierre/diffs';
 
-// Each backend has its own lazily created shared instance.
+// Only one backend can be loaded at a time; requesting another rejects.
 const highlighter = await getSharedHighlighter({
-  preferredHighlighter: 'highlights', // defaults to 'shiki-js'
+  preferredHighlighter: 'highlights', // defaults to the loaded backend, else 'shiki-js'
   themes: ['pierre-dark'],
   langs: ['typescript'],
 });

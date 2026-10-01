@@ -58,6 +58,7 @@ import { useSearchParams } from 'next/navigation';
 import {
   Fragment,
   useCallback,
+  useContext,
   useEffect,
   useMemo,
   useRef,
@@ -83,7 +84,10 @@ import {
 import { EditSessionButtons } from './PlaygroundEditButtons';
 import { PlaygroundVirtualizerElementView } from './PlaygroundVirtualizerElementView';
 import { PlaygroundVirtualizerView } from './PlaygroundVirtualizerView';
-import { PlaygroundWorkerPool } from './PlaygroundWorkerPool';
+import {
+  PlaygroundHighlighterReadyContext,
+  PlaygroundWorkerPool,
+} from './PlaygroundWorkerPool';
 import type {
   HunkSeparatorValue,
   LineHoverHighlight,
@@ -751,6 +755,7 @@ function PlaygroundContent({
   setHighlighter: (value: HighlighterTypes) => void;
 }) {
   const searchParams = useSearchParams();
+  const highlighterReady = useContext(PlaygroundHighlighterReadyContext);
 
   // The app-wide color scheme resolved by @pierre/theming (the shared theme
   // controller). The diff's "system" mode must follow this so the editor stays
@@ -1649,42 +1654,44 @@ function PlaygroundContent({
           </div>
         </div>
       )}
-      <Fragment
-        key={`${highlighter}:${workerPool == null ? 'main' : 'workers'}`}
-      >
-        {viewMode === 'diff' ? (
-          fileDiff
-        ) : viewMode === 'file' ? (
-          file
-        ) : viewMode === 'virtualizer' ? (
-          <PlaygroundVirtualizerView
-            diffs={VIRTUALIZER_FILE_DIFFS}
-            options={renderOptions}
-            enableLineSelection={enableLineSelection}
-            enableGutterComments={enableGutterUtility}
-            showAnnotations={showAnnotations}
-            editPrediction={editPrediction}
-          />
-        ) : viewMode === 'virtualizer-element' ? (
-          <PlaygroundVirtualizerElementView
-            diffs={VIRTUALIZER_FILE_DIFFS}
-            options={renderOptions}
-            enableLineSelection={enableLineSelection}
-            enableGutterComments={enableGutterUtility}
-            showAnnotations={showAnnotations}
-            editPrediction={editPrediction}
-          />
-        ) : (
-          <PlaygroundCodeView
-            items={CODE_VIEW_ITEMS}
-            options={codeViewOptions}
-            enableLineSelection={enableLineSelection}
-            enableGutterComments={enableGutterUtility}
-            showAnnotations={showAnnotations}
-            editPrediction={editPrediction}
-          />
-        )}
-      </Fragment>
+      {highlighterReady && (
+        <Fragment
+          key={`${highlighter}:${workerPool == null ? 'main' : 'workers'}`}
+        >
+          {viewMode === 'diff' ? (
+            fileDiff
+          ) : viewMode === 'file' ? (
+            file
+          ) : viewMode === 'virtualizer' ? (
+            <PlaygroundVirtualizerView
+              diffs={VIRTUALIZER_FILE_DIFFS}
+              options={renderOptions}
+              enableLineSelection={enableLineSelection}
+              enableGutterComments={enableGutterUtility}
+              showAnnotations={showAnnotations}
+              editPrediction={editPrediction}
+            />
+          ) : viewMode === 'virtualizer-element' ? (
+            <PlaygroundVirtualizerElementView
+              diffs={VIRTUALIZER_FILE_DIFFS}
+              options={renderOptions}
+              enableLineSelection={enableLineSelection}
+              enableGutterComments={enableGutterUtility}
+              showAnnotations={showAnnotations}
+              editPrediction={editPrediction}
+            />
+          ) : (
+            <PlaygroundCodeView
+              items={CODE_VIEW_ITEMS}
+              options={codeViewOptions}
+              enableLineSelection={enableLineSelection}
+              enableGutterComments={enableGutterUtility}
+              showAnnotations={showAnnotations}
+              editPrediction={editPrediction}
+            />
+          )}
+        </Fragment>
+      )}
     </div>
   );
 }

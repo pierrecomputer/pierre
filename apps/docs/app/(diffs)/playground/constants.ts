@@ -186,7 +186,9 @@ const PLAYGROUND_ANNOTATIONS = [
 // server's presentation until the first client repaint. `colorMode` maps to
 // themeType directly: 'system' ships both themes and resolves via the native
 // CSS `light-dark()` against the pre-paint color-scheme, so no flash when
-// the client theme controller settles.
+// the client theme controller settles. The highlighter is the exception: a
+// server process loads one highlighter type for every page, so the prerender
+// uses the server's, and another selection applies once the client re-renders.
 export function getPlaygroundPreloadOptions(
   state: PlaygroundUrlState
 ): PreloadFileDiffOptions<PlaygroundAnnotationMetadata, undefined> {
@@ -194,7 +196,6 @@ export function getPlaygroundPreloadOptions(
     fileDiff: PLAYGROUND_FILE_DIFF,
     options: {
       theme: { dark: state.darkTheme, light: state.lightTheme },
-      preferredHighlighter: state.highlighter,
       themeType: state.colorMode,
       diffStyle: state.diffStyle,
       overflow: state.overflow,

@@ -5,7 +5,18 @@ import type {
   CodeToTokensOptions,
   DiffsHighlighter,
 } from '../src';
+import {
+  isHighlighterLoaded,
+  isHighlighterLoading,
+  isHighlighterNull,
+} from '../src/highlighter/shared_highlighter';
 import type { CodeToTokenTransformStreamOptions } from '../src/shiki-stream';
+
+test('shared-state checks do not narrow a supplied instance', () => {
+  expectTypeOf(isHighlighterLoaded).parameters.toEqualTypeOf<[]>();
+  expectTypeOf(isHighlighterLoading).parameters.toEqualTypeOf<[]>();
+  expectTypeOf(isHighlighterNull).parameters.toEqualTypeOf<[]>();
+});
 
 test('tokenization requires exactly one theme selection', () => {
   expectTypeOf<{

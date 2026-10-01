@@ -1788,8 +1788,6 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
     }
     const sync = (highlighter: DiffsHighlighter): void => {
       if (
-        highlighter.name !==
-          resolvePreferredHighlighter(this.workerManager, this.options) ||
         !this.enabled ||
         this.editor !== editor ||
         this.fileContainer !== fileContainer ||

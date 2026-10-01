@@ -1,5 +1,13 @@
-import { afterEach, describe, expect, test } from 'bun:test';
+import {
+  afterAll,
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  test,
+} from 'bun:test';
 
+import { disposeHighlighter } from '../src/highlighter/shared_highlighter';
 import { cleanUpResolvedThemes } from '../src/highlighter/themes/cleanUpResolvedThemes';
 import { getResolvedThemes } from '../src/highlighter/themes/getResolvedThemes';
 import { hasResolvedThemes } from '../src/highlighter/themes/hasResolvedThemes';
@@ -67,6 +75,10 @@ describe('resolveTheme contract', () => {
 });
 
 describe('backend theme resolution', () => {
+  // Each test loads its backends fresh: only one highlighter type can be loaded.
+  beforeEach(disposeHighlighter);
+  afterAll(disposeHighlighter);
+
   test('portable factory themes can attach directly without registration', async () => {
     const { createHighlighter } =
       await import('../src/highlighter/shared_highlighter');
@@ -79,10 +91,10 @@ describe('backend theme resolution', () => {
       variableDefaults: { 'token-keyword': '#c084fc' },
     });
     for (const preferredHighlighter of ['shiki-js', 'highlights'] as const) {
-      const highlighter = await createHighlighter({ preferredHighlighter });
+      const highlighter = await createHighlighter(preferredHighlighter);
       try {
         attachResolvedThemes(theme, highlighter);
-        await highlighter.loadLanguages?.(['javascript']);
+        await highlighter.loadLanguages(['javascript']);
         const { tokens } = highlighter.codeToTokens('const value = 1;', {
           lang: 'javascript',
           theme: theme.name,
@@ -166,6 +178,7 @@ describe('backend theme resolution', () => {
       foreground: '#111111',
     });
     for (const preferredHighlighter of ['shiki-js', 'highlights'] as const) {
+      await disposeHighlighter();
       const highlighter = await getSharedHighlighter({
         themes: [name],
         langs: ['javascript'],

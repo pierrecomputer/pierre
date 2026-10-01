@@ -9,10 +9,8 @@ import {
 import type { TextDocumentChange } from '../editor/textDocument';
 import { debounce } from '../editor/utils';
 import type { HighlightedToken, RenderRange } from '../types';
-import type {
-  DiffsLiveTokenizer,
-  DiffsLiveTokenizerOptions,
-} from './tokenizer-types';
+import { DiffsEditorTokenizer } from './DiffsEditorTokenizer';
+import type { DiffsEditorTokenizerOptions } from './tokenizer-types';
 import type { DiffsHighlighter } from './types';
 
 // A cold regex engine can exceed a deadline and return an incomplete state.
@@ -21,14 +19,14 @@ const TOKENIZE_TIME_LIMIT = 0;
 let nextTokenizerId = 0;
 
 /** TextMate state caching and background work for a single editable document. */
-export class ShikiLiveTokenizer implements DiffsLiveTokenizer {
+export class ShikiEditorTokenizer extends DiffsEditorTokenizer {
   #highlighter: HighlighterCore;
   #grammar: IGrammar | undefined;
   #themeName: string;
   #colorMap: string[];
-  #textDocument: DiffsLiveTokenizerOptions['textDocument'];
+  #textDocument: DiffsEditorTokenizerOptions['textDocument'];
   #tokenizeMaxLineLength: number;
-  #onDeferTokenize: DiffsLiveTokenizerOptions['onDeferTokenize'];
+  #onDeferTokenize: DiffsEditorTokenizerOptions['onDeferTokenize'];
   #matchBrackets: boolean;
   #debug: boolean;
   #isCleanedUp = false;
@@ -63,10 +61,10 @@ export class ShikiLiveTokenizer implements DiffsLiveTokenizer {
       this.#textDocument.lineCount
     );
     if (
-      this.#grammar === undefined &&
+      this.#grammar == null &&
       !isGrammarlessLanguage(this.#textDocument.languageId)
     ) {
-      await this.backend?.loadLanguages?.([this.#textDocument.languageId]);
+      await this.backend?.loadLanguages([this.#textDocument.languageId]);
       if (this.#isCleanedUp) {
         return;
       }
@@ -112,7 +110,7 @@ export class ShikiLiveTokenizer implements DiffsLiveTokenizer {
       return null;
     }
     this.#ensureGrammar();
-    if (this.#grammar === undefined) {
+    if (this.#grammar == null) {
       return null;
     }
     if (this.#bracketIgnoredRanges[lineIndex] === undefined) {
@@ -126,12 +124,13 @@ export class ShikiLiveTokenizer implements DiffsLiveTokenizer {
 
   constructor(
     highlighter: HighlighterCore,
-    options: DiffsLiveTokenizerOptions,
+    options: DiffsEditorTokenizerOptions,
     private readonly backend?: Pick<
       DiffsHighlighter,
       'getTheme' | 'loadLanguages'
     >
   ) {
+    super();
     this.#highlighter = highlighter;
     this.#textDocument = options.textDocument;
     this.#themeName = options.theme;
@@ -155,7 +154,7 @@ export class ShikiLiveTokenizer implements DiffsLiveTokenizer {
     this.#comparisonStateStack = [];
     this.#comparisonStateStackStart = 0;
     this.#comparisonLineChanges = [];
-    if (this.#grammar !== undefined && this.#textDocument.lineCount > 0) {
+    if (this.#grammar != null && this.#textDocument.lineCount > 0) {
       this.#scheduleBackgroundTokenize(0);
     }
   }
@@ -192,7 +191,7 @@ export class ShikiLiveTokenizer implements DiffsLiveTokenizer {
     this.#ensureGrammar();
     this.#ensureActiveTheme();
     if (
-      this.#grammar === undefined &&
+      this.#grammar == null &&
       !isGrammarlessLanguage(this.#textDocument.languageId)
     ) {
       throw new Error(
@@ -210,7 +209,7 @@ export class ShikiLiveTokenizer implements DiffsLiveTokenizer {
     const dirtyStart = change.startLine;
     const viewStart = Math.max(startingLine, dirtyStart);
     const crossesRenderRangeEnd =
-      renderRange !== undefined &&
+      renderRange != null &&
       totalLines !== Infinity &&
       change.lineDelta > 0 &&
       dirtyStart < renderRangeEndLine &&
@@ -231,9 +230,7 @@ export class ShikiLiveTokenizer implements DiffsLiveTokenizer {
     const canReuseShiftedStates =
       hostRealignsRows && change.lineDelta !== 0 && dirtyStart >= startingLine;
     const canCacheTokenizedStates =
-      canReuseCachedStates ||
-      renderRange === undefined ||
-      dirtyStart >= viewStart;
+      canReuseCachedStates || renderRange == null || dirtyStart >= viewStart;
     const changedLineRanges: readonly [number, number][] =
       change.changedLineRanges ?? [[dirtyStart, change.endLine]];
     this.#comparisonStateStack = [];
@@ -257,7 +254,7 @@ export class ShikiLiveTokenizer implements DiffsLiveTokenizer {
       this.#buildStateStack(dirtyStart);
     } else {
       this.#shiftComparisonStateStack(change);
-      if (renderRange === undefined || dirtyStart >= viewStart) {
+      if (renderRange == null || dirtyStart >= viewStart) {
         this.#buildStateStack(viewStart);
       }
     }
@@ -274,7 +271,7 @@ export class ShikiLiveTokenizer implements DiffsLiveTokenizer {
     const offscreenDirtyLines:
       | Map<number, Array<HighlightedToken>>
       | undefined = shouldFlushOffscreenLines ? new Map() : undefined;
-    if (offscreenDirtyLines !== undefined && !canReuseCachedStates) {
+    if (offscreenDirtyLines != null && !canReuseCachedStates) {
       const offscreenEnd = Math.min(
         offscreenSyncEnd + 1,
         viewStart,
@@ -326,12 +323,12 @@ export class ShikiLiveTokenizer implements DiffsLiveTokenizer {
       settled =
         line >= currentChangedRangeEnd &&
         (canReuseCachedStates || canReuseShiftedStates) &&
-        previousNextState !== undefined &&
+        previousNextState != null &&
         state.equals(previousNextState);
       if (settled) {
         changedRangeIndex++;
         const nextRange = changedLineRanges[changedRangeIndex];
-        if (nextRange === undefined) {
+        if (nextRange == null) {
           break;
         }
         if (nextRange[0] >= renderRangeEndLine) {
@@ -347,13 +344,13 @@ export class ShikiLiveTokenizer implements DiffsLiveTokenizer {
             stateLine++
           ) {
             nextState = this.#getPreviousEndState(stateLine);
-            if (nextState === undefined) {
+            if (nextState == null) {
               break;
             }
             this.#stateStack[stateLine] = nextState;
           }
         }
-        if (nextState === undefined) {
+        if (nextState == null) {
           currentChangedRangeEnd = nextRange[1];
           line++;
         } else {
@@ -375,10 +372,10 @@ export class ShikiLiveTokenizer implements DiffsLiveTokenizer {
       }
     }
 
-    if (settled && canReuseShiftedStates && backgroundStartLine === undefined) {
+    if (settled && canReuseShiftedStates && backgroundStartLine == null) {
       for (let stateLine = line + 2; stateLine <= lineCount; stateLine++) {
         const previousState = this.#getPreviousEndState(stateLine);
-        if (previousState === undefined) {
+        if (previousState == null) {
           break;
         }
         this.#stateStack[stateLine] = previousState;
@@ -388,11 +385,11 @@ export class ShikiLiveTokenizer implements DiffsLiveTokenizer {
       this.#comparisonLineChanges = [];
     }
 
-    if (offscreenDirtyLines !== undefined && offscreenDirtyLines.size > 0) {
+    if (offscreenDirtyLines != null && offscreenDirtyLines.size > 0) {
       this.#onDeferTokenize(offscreenDirtyLines);
     }
 
-    if (backgroundStartLine !== undefined) {
+    if (backgroundStartLine != null) {
       if (this.#matchBrackets && canReuseCachedStates) {
         this.#bracketIgnoredRanges.length = Math.min(
           this.#bracketIgnoredRanges.length,
@@ -465,7 +462,7 @@ export class ShikiLiveTokenizer implements DiffsLiveTokenizer {
     if (
       this.#isStopped ||
       !this.#isPaused ||
-      this.#grammar === undefined ||
+      this.#grammar == null ||
       this.#lastLine < 0
     ) {
       return;
@@ -481,7 +478,7 @@ export class ShikiLiveTokenizer implements DiffsLiveTokenizer {
 
   #ensureGrammar(): void {
     if (
-      this.#grammar === undefined &&
+      this.#grammar == null &&
       !isGrammarlessLanguage(this.#textDocument.languageId) &&
       this.#highlighter
         .getLoadedLanguages()
@@ -555,7 +552,7 @@ export class ShikiLiveTokenizer implements DiffsLiveTokenizer {
   }
 
   #scheduleStatePrebuild(endLine: number): void {
-    if (this.#grammar === undefined || this.#stateStack.length > endLine) {
+    if (this.#grammar == null || this.#stateStack.length > endLine) {
       return;
     }
     // Extend an active prebuild, or retain the target until the foreground
@@ -599,11 +596,7 @@ export class ShikiLiveTokenizer implements DiffsLiveTokenizer {
       this.#cacheBracketIgnoredRanges(line, null);
       return { resolvedTokens: [[0, '', lineText]], state };
     }
-    if (
-      this.#grammar === undefined ||
-      lineText === '' ||
-      lineText.trim() === ''
-    ) {
+    if (this.#grammar == null || lineText === '' || lineText.trim() === '') {
       this.#cacheBracketIgnoredRanges(line, null);
       return { resolvedTokens: [[0, '', lineText]], state };
     }
@@ -684,10 +677,10 @@ export class ShikiLiveTokenizer implements DiffsLiveTokenizer {
       Math.max(0, endAt),
       this.#textDocument.lineCount
     );
-    if (this.#stateStack.length > boundedEndAt || this.#grammar === undefined) {
+    if (this.#stateStack.length > boundedEndAt || this.#grammar == null) {
       return true;
     }
-    const startedAt = timeBudget === undefined ? 0 : performance.now();
+    const startedAt = timeBudget == null ? 0 : performance.now();
     let line = this.#stateStack.length - 1;
     let state = this.#stateStack[line] ?? INITIAL;
     while (line < boundedEndAt) {
@@ -714,10 +707,7 @@ export class ShikiLiveTokenizer implements DiffsLiveTokenizer {
       }
       line++;
       this.#stateStack[line] = state;
-      if (
-        timeBudget !== undefined &&
-        performance.now() - startedAt > timeBudget
-      ) {
+      if (timeBudget != null && performance.now() - startedAt > timeBudget) {
         break;
       }
     }
@@ -728,7 +718,7 @@ export class ShikiLiveTokenizer implements DiffsLiveTokenizer {
     if (
       this.#isStopped ||
       this.#isPaused ||
-      this.#grammar === undefined ||
+      this.#grammar == null ||
       jobId !== this.#backgroundJobId
     ) {
       return;
@@ -753,7 +743,7 @@ export class ShikiLiveTokenizer implements DiffsLiveTokenizer {
     if (
       this.#isStopped ||
       this.#isPaused ||
-      this.#grammar === undefined ||
+      this.#grammar == null ||
       jobId !== this.#backgroundJobId
     ) {
       return;
@@ -775,7 +765,7 @@ export class ShikiLiveTokenizer implements DiffsLiveTokenizer {
       this.#stateStack[line] = state;
 
       const previousNextState =
-        currentChangedRangeEnd !== undefined
+        currentChangedRangeEnd != null
           ? this.#getPreviousEndState(line + 1)
           : undefined;
       const result = this.#tokenizeLineAt(line, state);
@@ -784,19 +774,19 @@ export class ShikiLiveTokenizer implements DiffsLiveTokenizer {
 
       this.#stateStack[line + 1] = state;
       settled =
-        currentChangedRangeEnd !== undefined &&
+        currentChangedRangeEnd != null &&
         line >= currentChangedRangeEnd &&
-        previousNextState !== undefined &&
+        previousNextState != null &&
         state.equals(previousNextState);
       line++;
       if (settled) {
         changedRangeIndex++;
         const nextRange = changedLineRanges?.[changedRangeIndex];
-        if (nextRange === undefined) {
+        if (nextRange == null) {
           break;
         }
         currentChangedRangeEnd = nextRange[1];
-        if (this.#stateStack[nextRange[0]] === undefined) {
+        if (this.#stateStack[nextRange[0]] == null) {
           settled = false;
         } else {
           line = nextRange[0];

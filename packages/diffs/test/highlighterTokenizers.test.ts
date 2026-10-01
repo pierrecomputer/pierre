@@ -1,4 +1,4 @@
-import { afterAll, describe, expect, spyOn, test } from 'bun:test';
+import { afterAll, beforeEach, describe, expect, spyOn, test } from 'bun:test';
 
 import { TextDocument } from '../src/editor/textDocument';
 import {
@@ -9,6 +9,8 @@ import {
 import { CodeToTokenTransformStream } from '../src/shiki-stream';
 import type { HighlightedToken, ThemedToken } from '../src/types';
 
+// Each test loads its backend fresh: only one highlighter type can be loaded.
+beforeEach(disposeHighlighter);
 afterAll(disposeHighlighter);
 
 describe('backend tokenizers', () => {
@@ -17,19 +19,19 @@ describe('backend tokenizers', () => {
     'shiki-wasm',
     'highlights',
   ] as const) {
-    test(`${preferredHighlighter} switches live tokenizers to a resolved theme`, async () => {
-      const highlighter = await createHighlighter({ preferredHighlighter });
+    test(`${preferredHighlighter} switches editor tokenizers to a resolved theme`, async () => {
+      const highlighter = await createHighlighter(preferredHighlighter);
       await highlighter.themeResolver.resolveThemes([
         'pierre-dark',
         'pierre-light',
       ]);
-      await highlighter.loadLanguages?.(['typescript']);
+      await highlighter.loadLanguages(['typescript']);
       const document = new TextDocument(
         'test.ts',
         'const value = 1;',
         'typescript'
       );
-      const tokenizer = highlighter.createLiveTokenizer({
+      const tokenizer = highlighter.createEditorTokenizer({
         textDocument: document,
         theme: 'pierre-dark',
         onDeferTokenize: () => {},
@@ -97,7 +99,7 @@ describe('backend tokenizers', () => {
         'const emoji = "🚀";\r\nconst value = 1;\r\nvalue;',
         'typescript'
       );
-      const tokenizer = highlighter.createLiveTokenizer({
+      const tokenizer = highlighter.createEditorTokenizer({
         textDocument: document,
         theme: 'pierre-dark',
         onDeferTokenize: () => {},
@@ -299,7 +301,7 @@ describe('backend tokenizers', () => {
         'const a = 1;\nconst b = 2;\nconst c = 3;',
         'typescript'
       );
-      const tokenizer = highlighter.createLiveTokenizer({
+      const tokenizer = highlighter.createEditorTokenizer({
         textDocument: document,
         theme: 'pierre-dark',
         onDeferTokenize: () => {},
@@ -440,7 +442,7 @@ describe('backend tokenizers', () => {
         `${atLimit}\n${underLimit}`,
         'typescript'
       );
-      const tokenizer = highlighter.createLiveTokenizer({
+      const tokenizer = highlighter.createEditorTokenizer({
         textDocument: document,
         theme: 'pierre-dark',
         tokenizeMaxLineLength: atLimit.length,
@@ -475,7 +477,7 @@ describe('backend tokenizers', () => {
       langs: ['typescript'],
     });
     const document = new TextDocument('test.ts', 'value;', 'typescript');
-    const tokenizer = highlighter.createLiveTokenizer({
+    const tokenizer = highlighter.createEditorTokenizer({
       textDocument: document,
       theme: 'pierre-dark',
       onDeferTokenize: () => {},
@@ -516,7 +518,7 @@ describe('backend tokenizers', () => {
       'typescript'
     );
     const delivered = new Set<number>();
-    const tokenizer = highlighter.createLiveTokenizer({
+    const tokenizer = highlighter.createEditorTokenizer({
       textDocument: document,
       theme: 'pierre-dark',
       onDeferTokenize: (lines) => {
@@ -575,7 +577,7 @@ describe('backend tokenizers', () => {
       'typescript'
     );
     const deferred = new Map<number, HighlightedToken[]>();
-    const tokenizer = highlighter.createLiveTokenizer({
+    const tokenizer = highlighter.createEditorTokenizer({
       textDocument: document,
       theme: 'pierre-dark',
       onDeferTokenize: (lines) => {
@@ -629,7 +631,7 @@ describe('Highlights bracket reads', () => {
     const delivered: number[] = [];
     let reading = false;
     let deliveredWhileReading = false;
-    const tokenizer = highlighter.createLiveTokenizer({
+    const tokenizer = highlighter.createEditorTokenizer({
       textDocument: document,
       theme: 'pierre-dark',
       onDeferTokenize: (lines) => {

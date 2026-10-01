@@ -18,6 +18,23 @@ interface LineDecoration extends Omit<DecorationItem, 'start' | 'end'> {
   end: { line: number; character: number };
 }
 
+// A decoration's extent within one rendered line. `from`/`to` are line-local
+// columns (0 and the line length when the decoration continues from or onto
+// another line); `order` is its index in the outer-to-inner sorted list.
+interface LineDecorationRange {
+  decoration: LineDecoration;
+  order: number;
+  from: number;
+  to: number;
+}
+
+// One edge of a range, clamped to the line so the walk can visit it in order.
+interface DecorationBoundary {
+  position: number;
+  range: LineDecorationRange;
+  start: boolean;
+}
+
 /** Render backend tokens with the same line metadata and edit offsets. */
 export function renderTokenLines(
   lines: ThemedToken[][],
@@ -29,84 +46,89 @@ export function renderTokenLines(
     lineOffsets = [],
   }: RenderTokenLinesOptions
 ): ElementContent[] {
-  const decorationsByLine = new Map<number, LineDecoration[]>();
+  let decorationsByLine: Map<number, LineDecoration[]> | undefined;
   for (const decoration of decorations) {
+    const byLine = (decorationsByLine ??= new Map());
     const normalized: LineDecoration = {
       ...decoration,
       start: getDecorationPosition(decoration.start, lineOffsets),
       end: getDecorationPosition(decoration.end, lineOffsets),
     };
-    for (
-      let line = normalized.start.line;
-      line <= Math.min(normalized.end.line, lines.length - 1);
-      line++
-    ) {
-      let spans = decorationsByLine.get(line);
-      if (spans == null) decorationsByLine.set(line, (spans = []));
+    const lastLine = Math.min(normalized.end.line, lines.length - 1);
+    for (let line = normalized.start.line; line <= lastLine; line++) {
+      let spans = byLine.get(line);
+      if (spans == null) byLine.set(line, (spans = []));
       spans.push(normalized);
     }
   }
   return lines.map((tokens, lineIndex) => {
-    // Keep whitespace separate for editor caret mapping; regular rendering
-    // folds it into the following span to avoid unnecessary DOM nodes.
-    const normalized: ThemedToken[] = [];
-    let pendingWhitespace = '';
-    let whitespaceOffset = 0;
-    for (let i = 0; i < tokens.length; i++) {
-      let token = tokens[i];
-      if (useTokenTransformer) {
-        const content = token.content.trim();
-        if (content !== '' && content !== token.content) {
-          const start = token.content.indexOf(content);
-          if (start > 0)
+    let normalized: ThemedToken[] | undefined;
+    if (useTokenTransformer || mergeWhitespaces !== 'never') {
+      let pendingWhitespace = '';
+      let whitespaceOffset = 0;
+      for (let i = 0; i < tokens.length; i++) {
+        let token = tokens[i];
+        if (useTokenTransformer) {
+          const content = token.content.trim();
+          if (content !== '' && content !== token.content) {
+            normalized ??= tokens.slice(0, i);
+            const start = token.content.indexOf(content);
+            if (start > 0)
+              normalized.push({
+                content: token.content.slice(0, start),
+                offset: token.offset,
+              });
             normalized.push({
-              content: token.content.slice(0, start),
-              offset: token.offset,
-            });
-          normalized.push({ ...token, content, offset: token.offset + start });
-          const end = start + content.length;
-          if (end < token.content.length)
-            normalized.push({
-              content: token.content.slice(end),
-              offset: token.offset + end,
-            });
-          continue;
-        }
-      } else if (mergeWhitespaces !== 'never') {
-        const decoratedWhitespace = ((token.fontStyle ?? 0) & 12) !== 0;
-        if (
-          !decoratedWhitespace &&
-          /^\s+$/.test(token.content) &&
-          i < tokens.length - 1
-        ) {
-          if (pendingWhitespace === '') whitespaceOffset = token.offset;
-          pendingWhitespace += token.content;
-          continue;
-        }
-        if (pendingWhitespace !== '') {
-          if (decoratedWhitespace)
-            normalized.push({
-              content: pendingWhitespace,
-              offset: whitespaceOffset,
-            });
-          else
-            token = {
               ...token,
-              content: pendingWhitespace + token.content,
-              offset: whitespaceOffset,
-            };
-          pendingWhitespace = '';
+              content,
+              offset: token.offset + start,
+            });
+            const end = start + content.length;
+            if (end < token.content.length)
+              normalized.push({
+                content: token.content.slice(end),
+                offset: token.offset + end,
+              });
+            continue;
+          }
+        } else {
+          const decoratedWhitespace = ((token.fontStyle ?? 0) & 12) !== 0;
+          if (
+            !decoratedWhitespace &&
+            /^\s+$/.test(token.content) &&
+            i < tokens.length - 1
+          ) {
+            normalized ??= tokens.slice(0, i);
+            if (pendingWhitespace === '') whitespaceOffset = token.offset;
+            pendingWhitespace += token.content;
+            continue;
+          }
+          if (pendingWhitespace !== '' && normalized != null) {
+            if (decoratedWhitespace)
+              normalized.push({
+                content: pendingWhitespace,
+                offset: whitespaceOffset,
+              });
+            else
+              token = {
+                ...token,
+                content: pendingWhitespace + token.content,
+                offset: whitespaceOffset,
+              };
+            pendingWhitespace = '';
+          }
         }
+        normalized?.push(token);
       }
-      normalized.push(token);
     }
+    normalized ??= tokens;
     const line: Element = {
       type: 'element',
       tagName: state == null ? 'span' : 'div',
       properties: state == null ? { class: 'line' } : {},
       children: [],
     };
-    const spans = decorationsByLine.get(lineIndex);
+    const spans = decorationsByLine?.get(lineIndex);
     const column =
       spans == null
         ? appendTokens(line, normalized, useTokenTransformer)
@@ -125,7 +147,8 @@ export function renderTokenLines(
         children: [],
       });
     }
-    if (useTokenTransformer) wrapTokenFragments(line);
+    // Undecorated tokens already have one span per editor position.
+    if (useTokenTransformer && spans != null) wrapTokenFragments(line);
     return state == null ? line : processLine(line, lineIndex + 1, state);
   });
 }
@@ -154,10 +177,9 @@ function appendTokens(
   return column;
 }
 
-// Append a line's tokens inside its decoration ranges. Tokens are split at
-// range boundaries and each fragment is nested in the ranges that cover it;
-// empty ranges become empty wrapper spans at their position. Returns the
-// line's length in UTF-16 code units.
+// Walk token and decoration boundaries together. Update the enclosing wrappers
+// only when a range starts or ends, rather than checking every range for every
+// token fragment. Empty ranges are emitted before text at the same position.
 function appendDecoratedTokens(
   line: Element,
   tokens: ThemedToken[],
@@ -174,105 +196,142 @@ function appendDecoratedTokens(
       if (a.end.line !== b.end.line) return b.end.line - a.end.line;
       return b.end.character - a.end.character;
     });
-  let column = 0;
-  const decorationStack: { decoration: LineDecoration; node: Element }[] = [];
-  const emptyPositions = new Set<number>();
   const lineLength = tokens.reduce(
     (length, token) => length + token.content.length,
     0
   );
-  for (const span of spans) {
-    const from = span.start.line === lineIndex ? span.start.character : 0;
-    const to = span.end.line === lineIndex ? span.end.character : lineLength;
-    if (from === to && from >= 0 && from <= lineLength)
-      emptyPositions.add(from);
-  }
-
-  // Share the range stack for text and empty markers so both keep their
-  // enclosing decorations without splitting an existing wrapper.
-  const appendDecoratedNode = (
-    node: Element | undefined,
-    from: number,
-    to: number
-  ): void => {
-    let parent = line;
-    let depth = 0;
-    for (const decoration of spans) {
-      const rangeStart =
-        decoration.start.line === lineIndex ? decoration.start.character : 0;
-      const rangeEnd =
+  const boundaries: DecorationBoundary[] = [];
+  for (let order = 0; order < spans.length; order++) {
+    const decoration = spans[order];
+    const range: LineDecorationRange = {
+      decoration,
+      order,
+      from:
+        decoration.start.line === lineIndex ? decoration.start.character : 0,
+      to:
         decoration.end.line === lineIndex
           ? decoration.end.character
-          : lineLength;
-      if (
-        rangeStart > from ||
-        rangeEnd < to ||
-        // Boundary markers join the following range, except at the line end.
-        (from === to &&
-          from < lineLength &&
-          rangeStart < from &&
-          rangeEnd === from)
-      )
-        continue;
-      if (decorationStack[depth]?.decoration !== decoration) {
+          : lineLength,
+    };
+    boundaries.push(
+      {
+        position: Math.max(0, Math.min(range.from, lineLength)),
+        range,
+        start: true,
+      },
+      {
+        position: Math.max(0, Math.min(range.to, lineLength)),
+        range,
+        start: false,
+      }
+    );
+  }
+  boundaries.sort((a, b) => a.position - b.position);
+  const active: LineDecorationRange[] = [];
+  const decorationStack: { range: LineDecorationRange; node: Element }[] = [];
+  let boundaryIndex = 0;
+
+  // Keep the same outer-to-inner order even when decorations cross each other.
+  const updateActive = (range: LineDecorationRange, add: boolean): void => {
+    let low = 0;
+    let high = active.length;
+    while (low < high) {
+      const middle = (low + high) >>> 1;
+      if (active[middle].order < range.order) low = middle + 1;
+      else high = middle;
+    }
+    if (add) active.splice(low, 0, range);
+    else if (active[low] === range) active.splice(low, 1);
+  };
+
+  // Reuse the existing wrapper prefix so a range spanning several tokens stays
+  // one element. Markers and text use this same stack to preserve their nesting.
+  const getParent = (): Element => {
+    let parent = line;
+    let depth = 0;
+    for (const range of active) {
+      if (decorationStack[depth]?.range !== range) {
         decorationStack.length = depth;
         const wrapper: Element = {
           type: 'element',
           tagName: 'span',
-          properties: { ...decoration.properties },
+          properties: { ...range.decoration.properties },
           children: [],
         };
         parent.children.push(wrapper);
-        decorationStack.push({ decoration, node: wrapper });
+        decorationStack.push({ range, node: wrapper });
       }
       parent = decorationStack[depth++].node;
     }
     decorationStack.length = depth;
-    if (node != null) parent.children.push(node);
+    return parent;
   };
+
+  let parent = line;
+
+  // Apply every range edge at `position`: close ranges ending here, open
+  // ranges covering the following text, then emit wrappers for empty ranges
+  // (markers) here and update `parent` for the next text fragment. At shared
+  // boundaries, markers belong to the following ranges. At the line end they
+  // instead remain inside the ranges that end there.
+  const advanceBoundary = (position: number): void => {
+    const first = boundaryIndex;
+    while (boundaries[boundaryIndex]?.position === position) boundaryIndex++;
+    let hasMarker = false;
+    for (let i = first; i < boundaryIndex; i++) {
+      const { range, start } = boundaries[i];
+      if (!start && range.from !== range.to && position < lineLength)
+        updateActive(range, false);
+    }
+    for (let i = first; i < boundaryIndex; i++) {
+      const { range, start } = boundaries[i];
+      if (
+        start &&
+        range.from <= position &&
+        range.to >= position &&
+        (range.to > position ||
+          range.from === position ||
+          position === lineLength)
+      ) {
+        updateActive(range, true);
+        if (range.from === range.to) hasMarker = true;
+      }
+    }
+    if (hasMarker) {
+      getParent();
+      for (let i = first; i < boundaryIndex; i++) {
+        const { range, start } = boundaries[i];
+        if (start && range.from === range.to) updateActive(range, false);
+      }
+    }
+    if (position < lineLength) parent = getParent();
+  };
+
+  let column = 0;
   for (const token of tokens) {
     if (token.content === '') continue;
     const start = column;
     const end = start + token.content.length;
-    const boundaries = [start, end];
-    for (const span of spans) {
-      if (
-        span.start.line === lineIndex &&
-        span.start.character > start &&
-        span.start.character < end
-      )
-        boundaries.push(span.start.character);
-      if (
-        span.end.line === lineIndex &&
-        span.end.character > start &&
-        span.end.character < end
-      )
-        boundaries.push(span.end.character);
-    }
-    boundaries.sort((a, b) => a - b);
     const style = tokenStyle(token);
-    for (let i = 1; i < boundaries.length; i++) {
-      const from = boundaries[i - 1];
-      const to = boundaries[i];
-      if (from === to) continue;
-      if (emptyPositions.delete(from))
-        appendDecoratedNode(undefined, from, from);
-      appendDecoratedNode(
+    while (column < end) {
+      if (boundaries[boundaryIndex]?.position === column)
+        advanceBoundary(column);
+      const to = Math.min(end, boundaries[boundaryIndex]?.position ?? end);
+      parent.children.push(
         createTokenSpan(
           token,
           style,
-          token.content.slice(from - start, to - start),
+          column === start && to === end
+            ? token.content
+            : token.content.slice(column - start, to - start),
           start,
           useTokenTransformer
-        ),
-        from,
-        to
+        )
       );
+      column = to;
     }
-    column = end;
   }
-  if (emptyPositions.delete(column))
-    appendDecoratedNode(undefined, column, column);
+  if (boundaries[boundaryIndex]?.position === column) advanceBoundary(column);
   return column;
 }
 

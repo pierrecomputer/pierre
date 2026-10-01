@@ -61,17 +61,18 @@ uncontrolled.
 
 ### disposeHighlighter [toc-ignore]
 
-Dispose all shared highlighter instances to free memory. Useful when cleaning up
-resources in single-page applications.
+Dispose the shared highlighter instance to free memory. Useful when cleaning up
+resources in single-page applications. Once it and any instances from
+`createHighlighter()` are disposed, another backend can be loaded.
 
 <DocsCodeExample {...disposeHighlighter} />
 
 ### getSharedHighlighter [toc-ignore]
 
 Get direct access to the shared highlighter instance used internally by all
-components. Set `preferredHighlighter` to `shiki-js` (the default),
-`shiki-wasm`, or `highlights`. Each backend has its own instance and theme
-resolver.
+components. Set `preferredHighlighter` to `shiki-js`, `shiki-wasm`, or
+`highlights`; without it, the backend already loaded is used, else `shiki-js`.
+Only one backend can be loaded at a time, so requesting another one rejects.
 
 <DocsCodeExample {...getSharedHighlighter} />
 

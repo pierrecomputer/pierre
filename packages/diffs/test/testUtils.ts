@@ -22,6 +22,17 @@ export function createDeferred<T>(): Deferred<T> {
   return { promise, resolve, reject };
 }
 
+// Awaits a promise that must reject and returns its error, so tests can assert
+// on the message without awaiting Bun's untyped `expect().rejects` chain.
+export async function getRejection(promise: Promise<unknown>): Promise<Error> {
+  try {
+    await promise;
+  } catch (error) {
+    return error instanceof Error ? error : new Error(String(error));
+  }
+  throw new Error('Expected promise to reject');
+}
+
 // Assertion helpers
 
 export function assertDefined<T>(

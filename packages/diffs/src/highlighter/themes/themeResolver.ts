@@ -11,6 +11,7 @@ import type { ThemeRegistration } from 'shiki';
 
 import type { HighlighterTypes } from '../../types';
 import { isWorkerContext } from '../../utils/isWorkerContext';
+import { createCachedLoader } from './createCachedLoader';
 import type { DiffsTheme } from './types';
 
 declare const __DIFFS_WORKER__: boolean | undefined;
@@ -24,6 +25,14 @@ export const customThemes: Map<
 > = new Map();
 const resolvers = new Map<HighlighterTypes, ThemeResolver<DiffsTheme>>();
 
+const loadHighlightsThemeCatalog = createCachedLoader(
+  () => import('@pierre/highlights/themes/loader')
+);
+const loadPierreThemeCatalog = createCachedLoader(
+  () => import('@pierre/theming/themes')
+);
+const loadShikiCore = createCachedLoader(() => import('shiki/core'));
+
 // Keep the first loader registered for each name and format.
 export function registerCustomThemeLoader(
   themeName: string,
@@ -31,7 +40,7 @@ export function registerCustomThemeLoader(
   type: 'textmate' | 'zed' | 'diffs'
 ): void {
   const themes = customThemes.get(themeName) ?? {};
-  if (themes[type] !== undefined) {
+  if (themes[type] != null) {
     console.error(
       'SharedHighlight.registerCustomTheme: theme name and type already registered',
       themeName,
@@ -76,7 +85,7 @@ function createHighlightsTheme(
   raw: ZedTheme | ZedThemeFamily
 ): DiffsTheme {
   const theme = 'themes' in raw ? raw.themes[0] : raw;
-  if (theme === undefined)
+  if (theme == null)
     throw new Error(`Theme "${name}" is an empty Zed theme family.`);
   const zed = { ...theme, name };
   const colors: Record<string, string> = {};
@@ -85,14 +94,14 @@ function createHighlightsTheme(
   }
   // Zed keeps the local user's caret and selection in the first player slot.
   const player = zed.style.players?.[0];
-  if (player?.cursor !== undefined)
+  if (player?.cursor != null)
     colors['editorCursor.foreground'] ??= player.cursor;
-  if (player?.selection !== undefined)
+  if (player?.selection != null)
     colors['editor.selectionBackground'] ??= player.selection;
   for (const [target, ...sources] of ZED_COLOR_ALIASES) {
-    if (colors[target] !== undefined) continue;
-    const source = sources.find((key) => colors[key] !== undefined);
-    if (source !== undefined) colors[target] = colors[source];
+    if (colors[target] != null) continue;
+    const source = sources.find((key) => colors[key] != null);
+    if (source != null) colors[target] = colors[source];
   }
   if (zed.cssVariables === true) {
     colors['editor.foreground'] = 'var(--hls-foreground)';
@@ -130,7 +139,7 @@ export function createDiffsThemeResolver(
   backend: HighlighterTypes
 ): ThemeResolver<DiffsTheme> {
   let resolver = resolvers.get(backend);
-  if (resolver !== undefined) return resolver;
+  if (resolver != null) return resolver;
   resolver = createThemeResolver<DiffsTheme>({
     fallbackLoader: async (name) => {
       if (
@@ -146,24 +155,24 @@ export function createDiffsThemeResolver(
       if (backend === 'highlights') {
         // Custom Zed palettes take precedence over the bundled catalog.
         const loader = custom?.zed ?? custom?.diffs;
-        if (loader !== undefined) {
+        if (loader != null) {
           const loaded = await loader();
           const theme = 'default' in loaded ? loaded.default : loaded;
-          if ('zed' in theme && theme.zed !== undefined) return theme;
+          if ('zed' in theme && theme.zed != null) return theme;
           if ('style' in theme || 'themes' in theme)
             return createHighlightsTheme(name, theme);
           throw new Error(
             `Theme "${name}" is a TextMate theme; register a Zed theme with registerCustomTheme(name, loader, 'zed') for Highlights.`
           );
         }
-        const { themes: bundledHighlightsThemes } =
-          await import('@pierre/highlights/themes/loader');
-        const bundledLoader = bundledHighlightsThemes[name];
-        if (bundledLoader !== undefined) {
+        const catalog = loadHighlightsThemeCatalog();
+        const { themes } = catalog instanceof Promise ? await catalog : catalog;
+        const bundledLoader = themes[name];
+        if (bundledLoader != null) {
           const loaded = await bundledLoader();
           return createHighlightsTheme(name, loaded.default);
         }
-        if (custom?.textmate !== undefined) {
+        if (custom?.textmate != null) {
           throw new Error(
             `Theme "${name}" is only registered for TextMate; use registerCustomTheme(name, loader, 'zed') for Highlights.`
           );
@@ -171,18 +180,20 @@ export function createDiffsThemeResolver(
       } else {
         const loader = custom?.textmate ?? custom?.diffs;
         let loaded: ThemeRegistration | DiffsTheme | ZedTheme | ZedThemeFamily;
-        if (loader !== undefined) {
+        if (loader != null) {
           const result = await loader();
           loaded = 'default' in result ? result.default : result;
         } else {
-          const { themes } = await import('@pierre/theming/themes');
+          const catalog = loadPierreThemeCatalog();
+          const { themes } =
+            catalog instanceof Promise ? await catalog : catalog;
           const descriptor = themes.getTheme(name);
-          if (descriptor === undefined && custom?.zed !== undefined) {
+          if (descriptor == null && custom?.zed != null) {
             throw new Error(
               `Theme "${name}" is only registered for Zed; use registerCustomTheme(name, loader, 'textmate') for Shiki.`
             );
           }
-          if (descriptor === undefined)
+          if (descriptor == null)
             throw new Error(`No valid theme loader registered for "${name}"`);
           const result = await descriptor.load();
           loaded = 'default' in result ? result.default : result;
@@ -192,9 +203,10 @@ export function createDiffsThemeResolver(
             `Theme "${name}" is a Zed theme; use preferredHighlighter: 'highlights' or register a TextMate theme for Shiki.`
           );
         }
+        const core = loadShikiCore();
         const { normalizeTheme, createCssVariablesTheme } =
-          await import('shiki/core');
-        if ('cssVariables' in loaded && loaded.cssVariables !== undefined) {
+          core instanceof Promise ? await core : core;
+        if ('cssVariables' in loaded && loaded.cssVariables != null) {
           return {
             ...loaded,
             textmate: normalizeTheme(
@@ -202,7 +214,7 @@ export function createDiffsThemeResolver(
             ),
           };
         }
-        if ('textmate' in loaded && loaded.textmate !== undefined) {
+        if ('textmate' in loaded && loaded.textmate != null) {
           return { ...loaded, textmate: normalizeTheme(loaded.textmate) };
         }
         const textmate = normalizeTheme(loaded);

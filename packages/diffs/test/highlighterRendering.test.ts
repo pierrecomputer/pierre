@@ -1,4 +1,4 @@
-import { afterAll, describe, expect, test } from 'bun:test';
+import { afterAll, beforeEach, describe, expect, test } from 'bun:test';
 import { toHtml } from 'hast-util-to-html';
 import { JSDOM } from 'jsdom';
 
@@ -15,6 +15,8 @@ import {
   installAnimationFramePolyfill,
 } from './workerPoolHarness';
 
+// Each test loads its backend fresh: only one highlighter type can be loaded.
+beforeEach(disposeHighlighter);
 afterAll(disposeHighlighter);
 
 const file = {

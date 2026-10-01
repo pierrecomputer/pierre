@@ -5,11 +5,12 @@ import type {
   ThemesType,
 } from '../../types';
 import { getThemes } from '../../utils/getThemes';
+import { resolveHighlighterType } from '../highlighterType';
 import { createDiffsThemeResolver } from './themeResolver';
 
 export function areThemesAttached(
   themes: DiffsThemeNames | ThemesType,
-  highlighter: DiffsHighlighter | HighlighterTypes = 'shiki-js'
+  highlighter: DiffsHighlighter | HighlighterTypes = resolveHighlighterType()
 ): boolean {
   const resolver =
     typeof highlighter === 'string'

@@ -7,7 +7,7 @@ import {
   type TextDocumentChange,
 } from '../src/editor/textDocument';
 import { EditorTokenizer } from '../src/editor/tokenizer';
-import { ShikiLiveTokenizer } from '../src/highlighter/shiki-live';
+import { ShikiEditorTokenizer } from '../src/highlighter/shiki-editor';
 import type { DiffsHighlighter, HighlightedToken } from '../src/types';
 
 const noopSetStyle = () => {};
@@ -32,10 +32,10 @@ function createTestHighlighter(
         bg: theme.bg ?? '',
       };
     },
-    createLiveTokenizer: (
+    createEditorTokenizer: (
       options
-    ): ReturnType<DiffsHighlighter['createLiveTokenizer']> =>
-      new ShikiLiveTokenizer(raw, options),
+    ): ReturnType<DiffsHighlighter['createEditorTokenizer']> =>
+      new ShikiEditorTokenizer(raw, options),
   } as DiffsHighlighter;
 }
 

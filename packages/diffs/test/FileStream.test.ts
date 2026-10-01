@@ -1,10 +1,12 @@
-import { afterAll, expect, test } from 'bun:test';
+import { afterAll, beforeEach, expect, test } from 'bun:test';
 
 import { FileStream } from '../src/components/FileStream';
 import { DIFFS_TAG_NAME } from '../src/constants';
 import { disposeHighlighter } from '../src/highlighter/shared_highlighter';
 import { createRoot, installDom, wait, waitFor } from './domHarness';
 
+// Each test loads its backend fresh: only one highlighter type can be loaded.
+beforeEach(disposeHighlighter);
 afterAll(disposeHighlighter);
 
 for (const preferredHighlighter of [

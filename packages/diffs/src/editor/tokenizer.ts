@@ -1,7 +1,7 @@
 import { colorUtils } from '@pierre/theming/color';
 
 import { DEFAULT_THEMES } from '../constants';
-import type { DiffsLiveTokenizer } from '../highlighter/tokenizer-types';
+import type { DiffsEditorTokenizer } from '../highlighter/DiffsEditorTokenizer';
 import type {
   BaseCodeOptions,
   DiffsHighlighter,
@@ -31,7 +31,7 @@ export interface EditorTokenizerProps {
 /** Applies editor theme CSS and delegates tokenization to the selected backend. */
 export class EditorTokenizer {
   #highlighter: DiffsHighlighter;
-  #tokenizer: DiffsLiveTokenizer;
+  #tokenizer: DiffsEditorTokenizer;
   #mediaQueryList: MediaQueryList;
   #themeType: 'light' | 'dark' = 'dark';
   #themeName = '';
@@ -109,7 +109,7 @@ export class EditorTokenizer {
       typeof theme === 'string' ? theme : theme[themeType],
       typeof theme === 'string' ? undefined : themeType
     );
-    this.#tokenizer = highlighter.createLiveTokenizer({
+    this.#tokenizer = highlighter.createEditorTokenizer({
       textDocument,
       theme: this.#themeName,
       tokenizeMaxLineLength,

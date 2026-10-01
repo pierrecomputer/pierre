@@ -1,18 +1,15 @@
 import type { HighlighterTypes } from '../types';
 
 /**
- * The backend a surface renders with: the worker pool's backend when the
- * surface belongs to a pool, else the surface's own option, else Shiki's
- * JavaScript engine. Every surface resolves through here so a renderer and
- * its host component cannot pick different backends.
+ * The highlighter type a surface requests: its worker pool's type when it
+ * belongs to a pool, else its own option. Undefined means "whichever type is
+ * already in use, else the default", so only explicit requests can conflict.
  */
 export function resolvePreferredHighlighter(
   workerManager: { getPreferredHighlighter(): HighlighterTypes } | undefined,
   options: { preferredHighlighter?: HighlighterTypes | undefined }
-): HighlighterTypes {
+): HighlighterTypes | undefined {
   return (
-    workerManager?.getPreferredHighlighter() ??
-    options.preferredHighlighter ??
-    'shiki-js'
+    workerManager?.getPreferredHighlighter() ?? options.preferredHighlighter
   );
 }

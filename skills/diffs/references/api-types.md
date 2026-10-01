@@ -161,15 +161,15 @@ file or diff invalidates that cache.
 
 ## Tokenization and diff types
 
-| Export                                            | Purpose                                                              |
-| ------------------------------------------------- | -------------------------------------------------------------------- |
-| `DiffsTheme`                                      | Shared editor colors with optional TextMate and Zed syntax palettes. |
-| `ThemedToken`                                     | One styled token with content, offset, color, and optional styles.   |
-| `TokensResult`                                    | Token rows and root colors/styles.                                   |
-| `CodeToTokensOptions`, `CodeToHtmlOptions`        | Select a language, themes, and tokenization limits.                  |
-| `DiffsStreamTokenizer`                            | Incremental tokenization of appended chunks.                         |
-| `DiffsLiveTokenizer`, `DiffsLiveTokenizerOptions` | Incremental tokenization of document edits.                          |
-| `CreatePatchOptionsNonabortable`                  | Configures the underlying patch algorithm.                           |
+| Export                                                | Purpose                                                              |
+| ----------------------------------------------------- | -------------------------------------------------------------------- |
+| `DiffsTheme`                                          | Shared editor colors with optional TextMate and Zed syntax palettes. |
+| `ThemedToken`                                         | One styled token with content, offset, color, and optional styles.   |
+| `TokensResult`                                        | Token rows and root colors/styles.                                   |
+| `CodeToTokensOptions`, `CodeToHtmlOptions`            | Select a language, themes, and tokenization limits.                  |
+| `DiffsStreamTokenizer`                                | Incremental tokenization of appended chunks.                         |
+| `DiffsEditorTokenizer`, `DiffsEditorTokenizerOptions` | Incremental tokenization of document edits.                          |
+| `CreatePatchOptionsNonabortable`                      | Configures the underlying patch algorithm.                           |
 
 Import TextMate registration and Shiki transformer types from `shiki`. Diffs no
 longer re-exports Shiki's public API.

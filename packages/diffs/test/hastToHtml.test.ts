@@ -1,4 +1,4 @@
-import { afterAll, describe, expect, test } from 'bun:test';
+import { afterAll, beforeEach, describe, expect, test } from 'bun:test';
 import type { Element, ElementContent, Nodes, RootContent } from 'hast';
 import { toHtml } from 'hast-util-to-html';
 
@@ -10,9 +10,9 @@ import { hastToHtml } from '../src/utils/hastToHtml';
 import { parseDiffFromFile } from '../src/utils/parseDiffFromFile';
 import { fileNew, fileOld, mockFiles } from './mocks';
 
-afterAll(async () => {
-  await disposeHighlighter();
-});
+// Each test loads its backend fresh: only one highlighter type can be loaded.
+beforeEach(disposeHighlighter);
+afterAll(disposeHighlighter);
 
 // hastToHtml replaces toHtml on the rendering hot paths, so its output must
 // match byte for byte, including every fallback to toHtml.
@@ -61,6 +61,47 @@ describe('hastToHtml', () => {
     expectSameHtml(span({ class: 'line' }));
     expectSameHtml(span({ class: [] }));
     expectSameHtml(span({ className: true }));
+  });
+
+  test('serializes single-text token spans without dropping extra attributes', () => {
+    const children: ElementContent[] = [{ type: 'text', value: 'a < b && c' }];
+    for (const properties of [
+      { style: 'color:red' },
+      { style: '' },
+      { style: 'content:"\0\u0060\'<&>"' },
+      { style: 'color:red', title: null, 'data-unused': undefined },
+      { style: 'color:red', 'data-char': 0 },
+      { 'data-char': 42, style: 'color:red' },
+      { style: 'color:red', className: ['token', 'keyword'] },
+      { style: 'color:red', hidden: true },
+      { style: false },
+      { style: true },
+      { style: ['color:red', 'font-weight:bold'] },
+    ]) {
+      expectSameHtml(span(properties, children));
+    }
+    expectSameHtml(
+      span({ style: 'color:red' }, [
+        ...children,
+        { type: 'text', value: ' > d' },
+      ])
+    );
+  });
+
+  test('matches toHtml with repeated and more than 256 distinct styles', () => {
+    const children: ElementContent[] = [{ type: 'text', value: '<&' }];
+    const spans: RootContent[] = [];
+    for (let i = 0; i < 300; i++) {
+      spans.push(span({ style: `--token:${i};content:"&"` }, children));
+    }
+    spans.push(span({ style: '--token:0;content:"&"' }, children));
+    spans.push(span({ style: '--token:299;content:"&"' }, children));
+    expectSameHtml(spans);
+
+    const token = span({ style: 'color:red' }, children);
+    expectSameHtml(token);
+    token.properties.style = 'color:blue';
+    expectSameHtml(token);
   });
 
   test('closes void elements only when they have no content', () => {

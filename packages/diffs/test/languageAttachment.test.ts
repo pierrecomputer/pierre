@@ -36,8 +36,8 @@ describe('language attachment', () => {
         }).catch((error: unknown) => error);
         expect(result).toEqual(new Error(mismatch));
         expect(areLanguagesAttached('tf')).toBe(false);
-        expect(highlighter.hasLoadedLanguages?.(['tf'])).toBe(false);
-        expect(highlighter.hasLoadedLanguages?.(['hcl'])).toBe(false);
+        expect(highlighter.hasLoadedLanguages(['tf'])).toBe(false);
+        expect(highlighter.hasLoadedLanguages(['hcl'])).toBe(false);
       }
     });
   }
@@ -64,7 +64,7 @@ describe('language attachment', () => {
       });
 
       expect(areLanguagesAttached(name)).toBe(true);
-      expect(highlighter.hasLoadedLanguages?.([name])).toBe(true);
+      expect(highlighter.hasLoadedLanguages([name])).toBe(true);
       expect(
         highlighter.codeToTokens('locals { label = "example" }', {
           lang: name,
@@ -96,7 +96,7 @@ describe('language attachment', () => {
 
     await getSharedHighlighter({ themes: [], langs: ['tf'] });
     expect(areLanguagesAttached('tf')).toBe(true);
-    expect(highlighter.hasLoadedLanguages?.(['tf'])).toBe(true);
+    expect(highlighter.hasLoadedLanguages(['tf'])).toBe(true);
   });
 
   test('does not report a new alias attached when Shiki skips an already-loaded grammar', async () => {

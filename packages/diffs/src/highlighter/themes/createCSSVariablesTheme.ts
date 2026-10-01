@@ -11,7 +11,7 @@ export function createCSSVariablesTheme({
 }: CSSVariablesThemeOptions = {}): DiffsTheme {
   const variable = (key: string): string => {
     const fallback = variableDefaults[key];
-    return `var(${variablePrefix}${key}${fallback !== undefined && fallback !== '' ? `, ${fallback}` : ''})`;
+    return `var(${variablePrefix}${key}${fallback != null && fallback !== '' ? `, ${fallback}` : ''})`;
   };
   const fg = variable('foreground');
   const bg = variable('background');

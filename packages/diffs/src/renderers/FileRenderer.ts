@@ -6,6 +6,7 @@ import {
   DEFAULT_TOKENIZE_MAX_LENGTH,
 } from '../constants';
 import type { TextDocument } from '../editor/textDocument';
+import { assertHighlighterType } from '../highlighter/highlighterType';
 import { areLanguagesAttached } from '../highlighter/languages/areLanguagesAttached';
 import {
   getHighlighterIfLoaded,
@@ -45,7 +46,6 @@ import {
   createHastElement,
 } from '../utils/hast_utils';
 import { hastToHtml } from '../utils/hastToHtml';
-import { highlightsInWorkers } from '../utils/highlightsInWorkers';
 import {
   FILE_ANNOTATION_HUNK_INDEX,
   FILE_ANNOTATION_LINE_INDEX,
@@ -157,7 +157,7 @@ export class FileRenderer<LAnnotation = undefined> {
     private onRenderUpdate?: () => unknown,
     private workerManager?: WorkerPoolManager | undefined
   ) {
-    if (!highlightsInWorkers(workerManager)) {
+    if (workerManager?.isWorkingPool() !== true) {
       this.highlighter = getHighlighterIfLoaded({
         theme: options.theme ?? DEFAULT_THEMES,
         preferredHighlighter: resolvePreferredHighlighter(
@@ -169,10 +169,8 @@ export class FileRenderer<LAnnotation = undefined> {
   }
 
   public setOptions(options: FileRendererOptions): void {
-    if (this.options.preferredHighlighter !== options.preferredHighlighter) {
-      this.highlighter = undefined;
-      this.clearRenderCache();
-    }
+    const type = resolvePreferredHighlighter(this.workerManager, options);
+    if (type != null) assertHighlighterType(type);
     this.options = options;
   }
 
@@ -361,8 +359,7 @@ export class FileRenderer<LAnnotation = undefined> {
     };
     if (
       !this.editSessionActive &&
-      this.workerManager != null &&
-      highlightsInWorkers(this.workerManager)
+      this.workerManager?.isWorkingPool() === true
     ) {
       if (this.renderCache.result == null && !massiveFile) {
         // We should only kick off a preload of the AST if we have a WorkerPool
@@ -488,7 +485,10 @@ export class FileRenderer<LAnnotation = undefined> {
       return true;
     }
 
-    if (!this.editSessionActive && highlightsInWorkers(this.workerManager)) {
+    if (
+      !this.editSessionActive &&
+      this.workerManager?.isWorkingPool() === true
+    ) {
       return !renderCache.highlighted;
     }
 
@@ -745,8 +745,7 @@ export class FileRenderer<LAnnotation = undefined> {
     );
     if (
       !this.editSessionActive &&
-      this.workerManager?.isWorkingPool() === true &&
-      (forcePlainText || highlightsInWorkers(this.workerManager))
+      this.workerManager?.isWorkingPool() === true
     ) {
       // Hydration has highlighted DOM but no local AST. Keep that DOM until
       // its corresponding worker result is ready.
@@ -836,10 +835,7 @@ export class FileRenderer<LAnnotation = undefined> {
       // process which will involve initializing the highlighter with new themes
       // and languages
       if (!hasThemes || (!forcePlainText && !hasLangs)) {
-        const preferredHighlighter = this.options.preferredHighlighter;
         void this.asyncHighlight(file).then(({ result, options }) => {
-          if (preferredHighlighter !== this.options.preferredHighlighter)
-            return;
           this.applyHighlightResult(file, result, options, !forcePlainText);
         });
       }
@@ -1053,24 +1049,16 @@ export class FileRenderer<LAnnotation = undefined> {
   }
 
   public async initializeHighlighter(): Promise<DiffsHighlighter> {
-    const preferredHighlighter = resolvePreferredHighlighter(
-      this.workerManager,
-      this.options
-    );
-    const highlighter = await getSharedHighlighter(
+    this.highlighter = await getSharedHighlighter(
       getHighlighterOptions(this.computedLang, {
         theme: this.getLocalHighlightTheme(),
-        preferredHighlighter,
+        preferredHighlighter: resolvePreferredHighlighter(
+          this.workerManager,
+          this.options
+        ),
       })
     );
-    if (
-      preferredHighlighter !==
-      resolvePreferredHighlighter(this.workerManager, this.options)
-    ) {
-      return this.initializeHighlighter();
-    }
-    this.highlighter = highlighter;
-    return highlighter;
+    return this.highlighter;
   }
 
   public onHighlightSuccess(

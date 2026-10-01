@@ -98,3 +98,7 @@ use the regular worker entry with your bundler.
 
 The pool resolves themes and Shiki grammars on the main thread and sends them to
 the worker. Their catalogs are excluded from the portable script.
+
+A pool is optional. When one is supplied, highlighting goes through its workers
+for every backend. Highlights is often fast enough on the main thread to skip
+the pool.

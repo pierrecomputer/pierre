@@ -1,9 +1,14 @@
 # Highlighting API
 
 `preferredHighlighter` selects `'shiki-js'` (default), `'shiki-wasm'`, or
-`'highlights'`. Backends load lazily and have separate shared instances and
-theme caches. File, FileDiff, Editor, FileStream, SSR preload options, and
-worker highlighter options accept this selection.
+`'highlights'`. Backends load lazily. File, FileDiff, Editor, FileStream, SSR
+preload options, and worker highlighter options accept this selection.
+
+Only one backend type can be loaded per JavaScript realm (page, worker, or SSR
+process). Requests without `preferredHighlighter` use the loaded type, else
+`'shiki-js'`. Requesting another type throws until every instance of the loaded
+type, shared or from `createHighlighter`, is disposed. `getHighlighterType()`
+returns the loaded type.
 
 ## Shared highlighter
 
@@ -21,22 +26,25 @@ const html = highlighter.codeToHtml('const value = 1;', {
 });
 ```
 
-`DiffsHighlighter` owns `name`, `themeResolver`, `getTheme`, `codeToHtml`,
-`codeToTokens`, `createLiveTokenizer`, `createStreamTokenizer`, and `dispose`.
-Shiki implementations also expose optional `loadLanguages`,
-`hasLoadedLanguages`, and `attachLanguages` methods. Import backend-specific
-Shiki APIs and types from `shiki` directly.
+`DiffsHighlighter` is an abstract class with `name`, `themeResolver`,
+`getTheme`, `codeToHtml`, `codeToTokens`, `createEditorTokenizer`,
+`createStreamTokenizer`, `loadLanguages`, `hasLoadedLanguages`,
+`attachLanguages`, and `dispose`. Highlights bundles its lexers, so its language
+methods do nothing and `hasLoadedLanguages` is true until disposal. Import
+backend-specific Shiki APIs and types from `shiki` directly.
 
-| Export                                                             | Purpose                                                                                                                 |
-| ------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------- |
-| `getSharedHighlighter`                                             | Gets or creates the selected backend and loads themes/languages.                                                        |
-| `preloadHighlighter`                                               | Loads the same settings before a render.                                                                                |
-| `getHighlighterIfLoaded`                                           | Gets a loaded instance when its requested settings are available.                                                       |
-| `isHighlighterLoaded`, `isHighlighterLoading`, `isHighlighterNull` | Inspect a backend's cached state; pass a backend name (default `'shiki-js'`).                                           |
-| `disposeHighlighter`                                               | Disposes shared instances and clears resolved caches; retained `createHighlighter` instances keep the themes they used. |
-| `getHighlighterOptions`                                            | Converts component options to highlighter input.                                                                        |
-| `getHighlighterThemeStyles`                                        | Creates component CSS from a loaded theme.                                                                              |
-| `getThemes`                                                        | Converts a theme name or light/dark pair to a name list.                                                                |
+| Export                                                             | Purpose                                                                                                            |
+| ------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------ |
+| `getSharedHighlighter`                                             | Gets or creates the shared instance and loads themes/languages.                                                    |
+| `createHighlighter`                                                | Creates an independently disposable instance: `createHighlighter('highlights')`.                                   |
+| `getHighlighterType`                                               | Returns the backend type loaded in this realm, if any.                                                             |
+| `preloadHighlighter`                                               | Loads the same settings before a render.                                                                           |
+| `getHighlighterIfLoaded`                                           | Gets the loaded shared instance when its requested settings are available.                                         |
+| `isHighlighterLoaded`, `isHighlighterLoading`, `isHighlighterNull` | Inspect shared state without arguments. Use `getHighlighterIfLoaded()` to obtain a ready instance.                 |
+| `disposeHighlighter`                                               | Disposes the shared instance and clears resolved caches; retained `createHighlighter` instances keep their themes. |
+| `getHighlighterOptions`                                            | Converts component options to highlighter input.                                                                   |
+| `getHighlighterThemeStyles`                                        | Creates component CSS from a loaded theme.                                                                         |
+| `getThemes`                                                        | Converts a theme name or light/dark pair to a name list.                                                           |
 
 ## Themes
 
@@ -90,7 +98,7 @@ loading. Language loader/cache maps remain available for compatibility.
 syntax trees from backend-independent tokens.
 
 Use `highlighter.createStreamTokenizer(options)` for incremental append-only
-input and `highlighter.createLiveTokenizer(options)` for document editing.
+input and `highlighter.createEditorTokenizer(options)` for document editing.
 `FileStream` connects a readable code stream through `setup(source, wrapper)`,
 accepts `preferredHighlighter`, supports `setThemeType`, and releases its stream
 through `cleanUp()`.

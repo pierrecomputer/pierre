@@ -45,9 +45,7 @@ describe('registerCustomTheme with Highlights themes', () => {
       registerCustomTheme(name, loader, 'zed');
       expect(loader).not.toHaveBeenCalled();
 
-      const highlighter = await createHighlighter({
-        preferredHighlighter: 'highlights',
-      });
+      const highlighter = await createHighlighter('highlights');
       try {
         const theme = await resolveTheme(name, 'highlights');
         expect(theme.name).toBe(name);
