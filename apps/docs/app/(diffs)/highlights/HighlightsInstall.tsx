@@ -40,7 +40,7 @@ export function HighlightsInstall() {
   return (
     <section
       aria-labelledby="highlights-install"
-      className="bg-muted/50 flex flex-col gap-6 rounded-2xl p-8 lg:p-12"
+      className="bg-muted/50 flex flex-col gap-6 rounded-lg p-8 lg:p-12"
     >
       <div className="max-w-lg space-y-1">
         <h2

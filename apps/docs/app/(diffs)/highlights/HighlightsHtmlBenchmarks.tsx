@@ -1,4 +1,5 @@
 import { BenchmarkBar } from './BenchmarkBar';
+import styles from './HighlightsBenchmarkCard.module.css';
 
 const maximumSpeedup = 294;
 const shikiBaselineSpeedup = 1;
@@ -57,7 +58,9 @@ export function HighlightsHtmlBenchmarks() {
         </p>
       </div>
 
-      <figure className="bg-muted/50 min-w-0 rounded-2xl p-4 sm:p-8 lg:p-10">
+      <figure
+        className={`${styles.card} dark text-foreground min-w-0 rounded-lg p-4 sm:p-8 lg:p-10`}
+      >
         <figcaption className="text-muted-foreground mb-4 flex flex-col text-sm md:flex-row md:items-baseline md:gap-1">
           <strong>HTML generation speedup</strong>
           <span aria-hidden="true" className="hidden md:inline">

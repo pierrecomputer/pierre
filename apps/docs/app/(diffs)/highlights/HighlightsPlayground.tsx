@@ -80,7 +80,7 @@ export function HighlightsPlayground({
   });
   const [selectedColorMode, setSelectedColorMode] = useState<
     'system' | 'light' | 'dark'
-  >(variant === 'hero' ? 'dark' : 'system');
+  >('dark');
   const [previewTheme, setPreviewTheme] = useState<{
     name: string;
     colorScheme: 'light' | 'dark';

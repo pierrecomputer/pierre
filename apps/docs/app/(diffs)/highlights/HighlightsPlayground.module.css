@@ -3,7 +3,7 @@
   isolation: isolate;
   overflow: hidden;
   border: 1px solid var(--border);
-  border-radius: 0.5rem;
+  border-radius: var(--radius);
   background: light-dark(var(--light-background), var(--dark-background));
   color-scheme: light dark;
 }
