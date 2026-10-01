@@ -59,13 +59,13 @@ export function HighlightsBenchmarks() {
         </p>
       </div>
 
-      <div className="bg-muted/50 min-w-0 overflow-x-auto rounded-2xl p-4 pb-3 sm:p-8 sm:pb-5 lg:p-10 lg:pb-6">
-        <table className="w-full min-w-[42rem] table-fixed text-left tabular-nums">
-          <caption className="text-muted-foreground mb-5 text-left text-sm">
-            <strong>Processing three.min.js 10&times;</strong> · Elapsed time in
-            ms, lower is better
+      <div className="bg-muted/50 min-w-0 rounded-2xl p-4 pb-3 sm:p-8 sm:pb-5 lg:p-10 lg:pb-6">
+        <table className="block w-full text-left tabular-nums md:table md:table-fixed">
+          <caption className="text-muted-foreground mb-5 block text-left text-sm md:table-caption">
+            <strong>Processing three.min.js 10&times;</strong> · Elapsed time
+            (ms), lower time is better · Relative-speed bars, longer is faster
           </caption>
-          <thead className="text-muted-foreground border-foreground/10 border-b text-xs">
+          <thead className="text-muted-foreground border-foreground/10 hidden border-b text-xs md:table-header-group">
             <tr>
               <th scope="col" className="pb-3 font-medium">
                 <div className="grid grid-cols-[10rem_minmax(0,1fr)] gap-3">
@@ -83,15 +83,21 @@ export function HighlightsBenchmarks() {
               </th>
             </tr>
           </thead>
-          <tbody className="divide-foreground/10 divide-y">
+          <tbody className="divide-foreground/10 block divide-y md:table-row-group">
             {rows.map(({ name, version, milliseconds, output }) => {
               const isHighlights = name === 'Highlights';
 
               return (
-                <tr key={name}>
-                  <th scope="row" className="py-5 font-medium">
-                    <div className="grid grid-cols-[10rem_minmax(0,1fr)] items-center gap-3">
-                      <span className="whitespace-nowrap">
+                <tr
+                  key={name}
+                  className="grid grid-cols-2 gap-x-4 py-5 md:table-row md:py-0"
+                >
+                  <th
+                    scope="row"
+                    className="col-span-2 block pb-3 font-medium md:table-cell md:py-5"
+                  >
+                    <div className="grid min-w-0 gap-2 md:grid-cols-[10rem_minmax(0,1fr)] md:items-center md:gap-3">
+                      <span>
                         {name}
                         <span className="text-muted-foreground ml-2 text-xs font-normal">
                           {version}
@@ -104,11 +110,15 @@ export function HighlightsBenchmarks() {
                       />
                     </div>
                   </th>
-                  <td className="py-5 text-right text-xl font-normal whitespace-nowrap">
-                    {formatDuration(milliseconds)}
+                  <td className="flex min-w-0 items-baseline gap-2 text-sm md:table-cell md:py-5 md:text-right md:text-xl md:font-normal md:whitespace-nowrap">
+                    <span className="text-muted-foreground text-xs md:sr-only">
+                      Time
+                    </span>
+                    <span>{formatDuration(milliseconds)}</span>
                   </td>
-                  <td className="text-muted-foreground py-5 pl-5 text-sm">
-                    {formatOutput(output)}
+                  <td className="text-muted-foreground flex min-w-0 items-baseline justify-end gap-2 text-sm md:table-cell md:py-5 md:pl-5 md:text-left">
+                    <span className="text-xs md:sr-only">Output</span>
+                    <span>{formatOutput(output)}</span>
                   </td>
                 </tr>
               );

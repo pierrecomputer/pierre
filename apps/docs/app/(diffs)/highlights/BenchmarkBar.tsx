@@ -5,14 +5,14 @@ interface BenchmarkBarProps {
   value: number;
   maximum: number;
   highlighted?: boolean;
+  minimumWidth?: number;
 }
 
-// Gives nonzero neutral results a small visibility floor while preserving the
-// true percentage width used to compare every result.
 export function BenchmarkBar({
   value,
   maximum,
   highlighted = false,
+  minimumWidth,
 }: BenchmarkBarProps) {
   const barClassName = cn(
     'h-full rounded-md',
@@ -24,10 +24,15 @@ export function BenchmarkBar({
       <div
         className={cn(
           'transition-[width] duration-500 ease-out motion-reduce:transition-none',
-          !highlighted && value > 0 && 'min-w-[3px]',
           barClassName
         )}
-        style={{ width: `${(value / maximum) * 100}%` }}
+        style={{
+          width: `${(value / maximum) * 100}%`,
+          minWidth:
+            value > 0 && minimumWidth !== undefined
+              ? `${minimumWidth}px`
+              : undefined,
+        }}
       />
     </div>
   );
