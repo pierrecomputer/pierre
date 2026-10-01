@@ -1,6 +1,7 @@
 import { BenchmarkBar } from './BenchmarkBar';
 
-const maximumThroughput = 894;
+const maximumSpeedup = 294;
+const shikiBaselineSpeedup = 1;
 
 const rows = [
   {
@@ -58,8 +59,9 @@ export function HighlightsHtmlBenchmarks() {
 
       <figure className="bg-muted/50 min-w-0 rounded-2xl p-4 sm:p-8 lg:p-10">
         <figcaption className="text-muted-foreground mb-4 text-sm">
-          <strong>HTML throughput (MiB/s)</strong> · Linear scale, longer is
-          faster
+          <strong>HTML generation speedup</strong> · Highlights compares
+          reported speedups across languages (294× = full width); Shiki shows 1×
+          as a share of each row’s Highlights rate
         </figcaption>
         <ul className="divide-foreground/10 divide-y">
           {rows.map(({ language, size, highlights, shiki, speedup }) => (
@@ -76,30 +78,41 @@ export function HighlightsHtmlBenchmarks() {
                 </span>
               </h3>
               <dl className="text-sm tabular-nums sm:contents">
-                <div className="grid grid-cols-[4.75rem_minmax(0,1fr)_3rem] items-center gap-1 sm:col-start-2 sm:row-start-1 sm:grid-cols-[5.5rem_minmax(0,1fr)_3.5rem] sm:gap-3">
+                <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-2 sm:col-start-2 sm:row-start-1 sm:grid-cols-[5.5rem_minmax(0,1fr)_3.5rem] sm:gap-3">
                   <dt className="font-medium">Highlights</dt>
-                  <dd>
+                  <dd className="col-span-2 row-start-2 sm:col-span-1 sm:col-start-2 sm:row-start-1">
                     <BenchmarkBar
-                      value={highlights}
-                      maximum={maximumThroughput}
+                      value={speedup}
+                      maximum={maximumSpeedup}
                       highlighted
                     />
                   </dd>
-                  <dd className="text-right text-lg font-semibold">
+                  <dd className="col-start-2 row-start-1 text-right text-lg font-semibold sm:col-start-3">
                     <span aria-hidden="true">{speedup}×</span>
                     <span className="sr-only">
                       {highlights} MiB per second; {speedup} times Shiki
                     </span>
                   </dd>
                 </div>
-                <div className="grid grid-cols-[4.75rem_minmax(0,1fr)_3rem] items-center gap-2 sm:col-start-2 sm:row-start-2 sm:grid-cols-[5.5rem_minmax(0,1fr)_3.5rem] sm:gap-3">
+                <div className="mt-2 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-2 sm:col-start-2 sm:row-start-2 sm:mt-0 sm:grid-cols-[5.5rem_minmax(0,1fr)_3.5rem] sm:gap-3">
                   <dt className="text-muted-foreground">Shiki</dt>
-                  <dd>
-                    <BenchmarkBar value={shiki} maximum={maximumThroughput} />
+                  <dd className="col-span-2 row-start-2 sm:col-span-1 sm:col-start-2 sm:row-start-1">
+                    <BenchmarkBar
+                      value={shikiBaselineSpeedup}
+                      maximum={speedup}
+                      minimumWidth={1}
+                    />
                   </dd>
-                  <dd className="text-foreground/50 text-md text-right">
-                    <span aria-hidden="true">{shiki}</span>
-                    <span className="sr-only">{shiki} MiB per second</span>
+                  <dd className="text-foreground/50 text-right sm:col-start-3">
+                    <span className="sm:hidden" aria-hidden="true">
+                      {shiki} MiB/s
+                    </span>
+                    <span className="hidden sm:inline" aria-hidden="true">
+                      {shiki}
+                    </span>
+                    <span className="sr-only">
+                      {shiki} MiB per second; 1 times baseline
+                    </span>
                   </dd>
                 </div>
               </dl>
