@@ -3,9 +3,9 @@ import type { Metadata } from 'next';
 
 import { HighlightsBenchmarks } from './HighlightsBenchmarks';
 import { HighlightsHero } from './HighlightsHero';
-import { HighlightsHtmlBenchmarks } from './HighlightsHtmlBenchmarks';
+// import { HighlightsHtmlBenchmarks } from './HighlightsHtmlBenchmarks';
 import { HighlightsInstall } from './HighlightsInstall';
-// import { HighlightsPerformanceBenchmarks } from './HighlightsPerformanceBenchmarks';
+import { HighlightsPerformanceBenchmarks } from './HighlightsPerformanceBenchmarks';
 import { HighlightsPlayground } from './HighlightsPlayground';
 import Footer from '@/components/Footer';
 import { Header } from '@/components/Header';
@@ -27,11 +27,11 @@ export default function HighlightsPage() {
       <Header className="-mb-[1px]" />
       <main>
         <HighlightsHero />
-        <HighlightsPlayground />
-        {/* <HighlightsPerformanceBenchmarks /> */}
-        <HighlightsPlayground variant="languages" />
+        <HighlightsPerformanceBenchmarks />
         <HighlightsBenchmarks />
-        <HighlightsHtmlBenchmarks />
+        {/* <HighlightsHtmlBenchmarks /> */}
+        <HighlightsPlayground />
+        <HighlightsPlayground variant="languages" />
         <section
           aria-labelledby="highlights-features"
           className="space-y-8 pb-16 md:pb-24"
