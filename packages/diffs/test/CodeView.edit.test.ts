@@ -1095,6 +1095,49 @@ describe('CodeView item edit mode', () => {
     }
   });
 
+  test('edited diffs finish with the parseDiffOptions context', async () => {
+    const { cleanup } = installDom();
+    const { editors, createEditor } = createEditorHarness();
+    const completions: FileDiffEditCompleteEvent<undefined, undefined>[] = [];
+    const parseDiffOptions = { context: 3 };
+    const viewer = new CodeView({
+      createEditor,
+      parseDiffOptions,
+      onItemEditComplete(event) {
+        completions.push(
+          event as FileDiffEditCompleteEvent<undefined, undefined>
+        );
+        return 'reject';
+      },
+    });
+    const oldFile = makeFile('a.txt');
+    const item: CodeViewItem<undefined> = {
+      id: 'a',
+      type: 'diff',
+      fileDiff: parseDiffFromFile(
+        oldFile,
+        { ...oldFile, contents: `line 0\n${oldFile.contents}` },
+        parseDiffOptions
+      ),
+      version: 0,
+      edit: true,
+    };
+    try {
+      viewer.setup(createRoot());
+      await renderItems(viewer, [item]);
+
+      insertAtStart(editors[0], 'new ');
+      await applyItemUpdate(viewer, { ...item, edit: false, version: 1 });
+
+      // One added line plus 3 context lines, not the jsdiff default of 4.
+      expect(completions[0].fileDiff.hunks[0].additionCount).toBe(4);
+    } finally {
+      viewer.cleanUp();
+      await wait(0);
+      cleanup();
+    }
+  });
+
   test('toggling edit off discards the editor; re-toggling creates a fresh one', async () => {
     const { cleanup } = installDom();
     const { editors, createEditor } = createEditorHarness();
