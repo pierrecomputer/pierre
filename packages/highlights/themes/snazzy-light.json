@@ -107,6 +107,59 @@
       },
       "keyword": {
         "color": "#f767bb"
+      },
+      "emphasis": {
+        "color": "#13BBB7",
+        "font_style": "italic"
+      },
+      "label": {
+        "color": "#565869"
+      },
+      "namespace": {
+        "color": "#2dae58"
+      },
+      "predictive": {
+        "color": "#adb1c2"
+      },
+      "preproc": {
+        "color": "#f767bb"
+      },
+      "primary": {
+        "color": "#565869"
+      },
+      "selector": {
+        "color": "#F767BB"
+      },
+      "title": {
+        "color": "#2DAE58"
+      },
+      "enum": {
+        "color": "#2dae58"
+      },
+      "hint": {
+        "color": "#adb1c2"
+      },
+      "link_text": {
+        "color": "#09A1ED"
+      },
+      "link_uri": {
+        "color": "#565869"
+      },
+      "variant": {
+        "color": "#565869"
+      },
+      "diff.minus": {
+        "color": "#888888"
+      },
+      "diff.plus": {
+        "color": "#888888"
+      },
+      "emphasis.strong": {
+        "color": "#13BBB7",
+        "font_weight": 700
+      },
+      "text.literal": {
+        "color": "#F767BB"
       }
     }
   }

@@ -96,6 +96,66 @@
       "variable.special": {
         "color": "#FAC29AE6",
         "font_style": "italic"
+      },
+      "boolean": {
+        "color": "#F09483E6"
+      },
+      "embedded": {
+        "color": "#D5D8DA"
+      },
+      "namespace": {
+        "color": "#FAC29AE6"
+      },
+      "predictive": {
+        "color": "#BBBBBB4D"
+      },
+      "preproc": {
+        "color": "#B877DBE6"
+      },
+      "primary": {
+        "color": "#D5D8DA"
+      },
+      "selector": {
+        "color": "#E95678E6"
+      },
+      "string": {
+        "color": "#FAB795E6"
+      },
+      "enum": {
+        "color": "#FAC29AE6"
+      },
+      "hint": {
+        "color": "#969696ff"
+      },
+      "variant": {
+        "color": "#E95678E6"
+      },
+      "diff.minus": {
+        "color": "#F43E5C"
+      },
+      "diff.plus": {
+        "color": "#27D797B3"
+      },
+      "selector.class": {
+        "color": "#F09483E6"
+      },
+      "selector.id": {
+        "color": "#25B0BCE6"
+      },
+      "string.escape": {
+        "color": "#25B0BCE6"
+      },
+      "string.regex": {
+        "color": "#F09483E6"
+      },
+      "text.literal": {
+        "color": "#F09483E6"
+      },
+      "selector.pseudo": {
+        "color": "#FAB795E6"
+      },
+      "string.special.symbol": {
+        "color": "#F09483E6"
       }
     }
   }

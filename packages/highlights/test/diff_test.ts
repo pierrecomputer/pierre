@@ -1,6 +1,8 @@
 import assert from 'node:assert';
 import t from 'node:test';
 
+import { resolveThemeStyle } from '../lib/theme';
+import * as themes from '../themes/index';
 import {
   assertLineFedParity,
   checkInvariants,
@@ -47,6 +49,30 @@ const theme = {
     },
   },
 };
+
+void t.test('diff: bundled themes keep added and removed text visible', () => {
+  for (const theme of Object.values(themes)) {
+    if (
+      typeof theme !== 'object' ||
+      theme.cssVariables === true ||
+      typeof theme.cssVariables === 'object'
+    )
+      continue;
+    const background = resolveThemeStyle(theme.style, 'background').color;
+    const spans = spansOf(
+      checkInvariants(diff.hl, '-removed\n+added\n', { theme })
+    );
+    for (const text of ['removed', 'added']) {
+      const span = spans.find((span) => span.text.includes(text));
+      assert.ok(span?.color, `${theme.name}: missing ${text} text`);
+      assert.notEqual(
+        span.color,
+        background,
+        `${theme.name}: invisible ${text} text`
+      );
+    }
+  }
+});
 
 void t.test('diff: Zed capture boundaries for git headers and hunks', () => {
   const src = `diff --git a/src/config.js b/src/config.js

@@ -5,7 +5,12 @@ import { bundledThemesInfo } from 'shiki';
 
 import { HighlightsHighlighter } from '../lib/highlighter';
 import type { Theme } from '../lib/index';
-import { isThemeColor, themeBackground, themeForeground } from '../lib/theme';
+import {
+  isThemeColor,
+  resolveThemeStyle,
+  themeBackground,
+  themeForeground,
+} from '../lib/theme';
 import tokenTypes from '../lib/token-types';
 import { transformWat, wat2wasm } from '../scripts/build';
 import * as themes from '../themes/index';
@@ -258,6 +263,58 @@ void test('bundled themes: matches Shiki and Pierre catalogs and metadata', () =
     assert.ok(Object.keys(theme.style.syntax ?? {}).length > 0, id);
     assert.ok(isThemeColor(themeBackground(theme.style)), id);
     assert.ok(isThemeColor(themeForeground(theme.style)), id);
+    for (const [key, value] of Object.entries(theme.style)) {
+      if (typeof value === 'string')
+        assert.ok(isThemeColor(value), `${id}: ${key}`);
+    }
+    for (const player of theme.style.players ?? []) {
+      for (const [key, value] of Object.entries(player)) {
+        assert.ok(isThemeColor(value), `${id}: player ${key}`);
+      }
+    }
+    for (const [scope, settings] of Object.entries(theme.style.syntax ?? {})) {
+      const color = typeof settings === 'string' ? settings : settings.color;
+      if (color !== undefined)
+        assert.ok(isThemeColor(color), `${id}: ${scope}`);
+      if (typeof settings === 'string') continue;
+      if (settings.font_style !== undefined) {
+        assert.ok(
+          ['normal', 'italic'].includes(settings.font_style),
+          `${id}: ${scope}`
+        );
+      }
+      if (settings.font_weight !== undefined) {
+        assert.ok(
+          settings.font_weight >= 100 &&
+            settings.font_weight <= 900 &&
+            settings.font_weight % 100 === 0,
+          `${id}: ${scope}`
+        );
+      }
+    }
+    for (const scope of tokenTypes.slice(1, -2)) {
+      assert.ok(
+        isThemeColor(
+          resolveThemeStyle(theme.style, scope).color ??
+            (scope === 'text.jsx' ? themeForeground(theme.style) : undefined)
+        ),
+        `${id}: missing ${scope}`
+      );
+    }
+    for (const [status, terminal] of [
+      ['created', 'green'],
+      ['deleted', 'red'],
+      ['modified', 'blue'],
+    ]) {
+      const color =
+        theme.style[status] ?? theme.style[`terminal.ansi.${terminal}`];
+      assert.ok(isThemeColor(color), `${id}: ${status}`);
+      assert.notEqual(
+        resolveThemeStyle({ foreground: color }, 'foreground').color,
+        resolveThemeStyle(theme.style, 'background').color,
+        `${id}: invisible ${status}`
+      );
+    }
   }
   for (const { name, colors } of pierreThemes) {
     const theme = bundledThemes.get(camel(name)) as Theme;
@@ -270,6 +327,30 @@ void test('bundled themes: matches Shiki and Pierre catalogs and metadata', () =
       themeForeground(theme.style),
       colors['editor.foreground'],
       name
+    );
+  }
+});
+
+void test('bundled themes: corrected source colors survive scope inheritance', () => {
+  for (const [theme, scope, color] of [
+    [themes.darkPlus, 'keyword.control', '#c586c0'],
+    [themes.darkPlus, 'punctuation.bracket', '#d4d4d4'],
+    [themes.darkPlus, 'punctuation.bracket.html', '#808080'],
+    [themes.darkPlus, 'tag.component.jsx', '#4ec9b0'],
+    [themes.lightPlus, 'keyword.import', '#af00db'],
+    [themes.lightPlus, 'punctuation.delimiter', '#000000'],
+    [themes.monokai, 'keyword.declaration', '#66d9ef'],
+    [themes.red, 'property.json_key', '#9df39f'],
+    [themes.solarizedDark, 'variable', '#268bd2'],
+    [themes.solarizedLight, 'property.json_key', '#859900'],
+    [themes.horizon, 'string', '#fab795e6'],
+    [themes.horizon, 'string.escape', '#25b0bce6'],
+    [themes.materialTheme, 'boolean', '#ff9cac'],
+  ] as const) {
+    assert.equal(
+      resolveThemeStyle(theme.style, scope).color,
+      color,
+      `${theme.name}: ${scope}`
     );
   }
 });

@@ -31,9 +31,26 @@ const geistSans = Geist({
   subsets: ['latin'],
 });
 
+// The bundled Berkeley Mono subset only covers part of the box-drawing block
+// (it has ─ │ ┌ but not ━ ╰ ╴). Missing glyphs fall through this list, so it
+// starts with the box-drawing face declared in globals.css, which covers the
+// whole block at Berkeley's 600/1000 advance. No stock Windows font does
+// (Consolas is ~0.55em), so that face can't be replaced by a system font. The
+// ~0.6em monospace fonts after it catch other glyphs Berkeley lacks.
+// adjustFontFallback is off because its size-adjusted Arial face would
+// otherwise catch missing glyphs first at proportional widths, misaligning
+// diagnostics and tree art.
 const berkeleyMono = localFont({
   src: './BerkeleyMonoVariable.woff2',
   variable: '--font-berkeley-mono',
+  fallback: [
+    'JetBrains Mono Box Drawing',
+    'Menlo',
+    'DejaVu Sans Mono',
+    'Liberation Mono',
+    'monospace',
+  ],
+  adjustFontFallback: false,
 });
 
 const firaMono = Fira_Code({

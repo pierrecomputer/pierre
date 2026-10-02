@@ -154,6 +154,39 @@
       },
       "variant": {
         "color": "#61afef"
+      },
+      "label": {
+        "color": "#E06C75"
+      },
+      "namespace": {
+        "color": "#E5C07B"
+      },
+      "preproc": {
+        "color": "#c678dd"
+      },
+      "primary": {
+        "color": "#abb2bf"
+      },
+      "selector": {
+        "color": "#E06C75"
+      },
+      "hint": {
+        "color": "#7a849c"
+      },
+      "diff.minus": {
+        "color": "#E06C75"
+      },
+      "diff.plus": {
+        "color": "#98C379"
+      },
+      "selector.class": {
+        "color": "#D19A66"
+      },
+      "selector.id": {
+        "color": "#61AFEF"
+      },
+      "selector.pseudo": {
+        "color": "#56B6C2"
       }
     }
   }

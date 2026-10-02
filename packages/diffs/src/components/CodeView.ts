@@ -55,6 +55,7 @@ import { createCodeViewHeaderFooterHostElement } from '../utils/createCodeViewHe
 import { createWindowFromScrollPosition } from '../utils/createWindowFromScrollPosition';
 import { getThemes } from '../utils/getThemes';
 import { isStyleNode } from '../utils/isStyleNode';
+import { isFirefox } from '../utils/platform';
 import { prefersReducedMotion } from '../utils/prefersReducedMotion';
 import { resolvePreferredHighlighter } from '../utils/resolvePreferredHighlighter';
 import { roundToDevicePixel } from '../utils/roundToDevicePixel';
@@ -638,13 +639,55 @@ export interface CodeViewOptions<LAnnotation, Caret>
 const DEFAULT_SCROLL_INTERACTION_RESTORE_DELAY_MS = 120;
 const SUB_PIXEL_TOLERANCE = 1;
 const SCROLLING_CODE_OVERFLOW_FIX_VARIABLE = '--diffs-overflow-override';
-const SCROLL_REBASE_CONTAINER_HEIGHT = 12_000_000;
-const SCROLL_REBASE_TRIGGER_TOP = 1_000_000;
-const SCROLL_REBASE_TARGET_TOP = 2_000_000;
-const SCROLL_REBASE_TARGET_BOTTOM =
-  SCROLL_REBASE_CONTAINER_HEIGHT - SCROLL_REBASE_TARGET_TOP;
-const SCROLL_REBASE_THRESHOLD =
-  SCROLL_REBASE_CONTAINER_HEIGHT - SCROLL_REBASE_TRIGGER_TOP;
+
+// Browsers cap how tall an element can be, so very large content scrolls
+// inside a fixed-height container instead. When the scroll position gets
+// close to either end of that container, we shift the content and jump the
+// scroll position back toward the middle, so there is always room to keep
+// scrolling.
+interface ScrollRebaseConfig {
+  // Height of the scroll container, in CSS pixels.
+  containerHeight: number;
+  // Scrolling up past this point jumps back down to `targetBottom`.
+  triggerTop: number;
+  // Where a jump lands after scrolling down past `threshold`.
+  targetTop: number;
+  // Where a jump lands after scrolling up past `triggerTop`.
+  targetBottom: number;
+  // Scrolling down past this point jumps back up to `targetTop`.
+  threshold: number;
+}
+
+function createScrollRebaseConfig(
+  containerHeight: number,
+  triggerTop: number,
+  targetTop: number
+): ScrollRebaseConfig {
+  return {
+    containerHeight,
+    triggerTop,
+    targetTop,
+    targetBottom: containerHeight - targetTop,
+    threshold: containerHeight - triggerTop,
+  };
+}
+
+const DEFAULT_SCROLL_REBASE = createScrollRebaseConfig(
+  12_000_000,
+  1_000_000,
+  2_000_000
+);
+
+// Firefox loses precision on very large positions: past about 16.7 million
+// device pixels, some letters render a pixel lower than their neighbors. A
+// smaller container keeps positions under that limit, even on high-density
+// or zoomed-in screens.
+const FIREFOX_SCROLL_REBASE = createScrollRebaseConfig(
+  2 ** 22,
+  500_000,
+  1_000_000
+);
+
 interface ScrollToAnimation {
   position: number;
   velocity: number;
@@ -750,6 +793,9 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
   private containerHeight = -1;
   private scrollTop: number = 0;
   private scrollPageOffset: number = 0;
+  private readonly scrollRebaseConfig: ScrollRebaseConfig = isFirefox()
+    ? FIREFOX_SCROLL_REBASE
+    : DEFAULT_SCROLL_REBASE;
   private scrollDirty = true;
   private scrollInteractionFixTimer: ReturnType<typeof setTimeout> | undefined;
   private pointerEventsDisabled = false;
@@ -1190,7 +1236,7 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
     // Test code to bring back in if needed
     // window.__CODE_VIEW_SCROLL_BEFORE_REBASE = (pixelsBefore = 1_000) => {
     //   const target = this.clampScrollTop(
-    //     this.scrollPageOffset + SCROLL_REBASE_THRESHOLD - pixelsBefore
+    //     this.scrollPageOffset + this.scrollRebaseConfig.threshold - pixelsBefore
     //   );
     //   this.scrollTo({
     //     type: 'position',
@@ -2938,12 +2984,15 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
   }
 
   private shouldRebaseScroll(): boolean {
-    return this.getMaxScrollTop() > SCROLL_REBASE_THRESHOLD;
+    return this.getMaxScrollTop() > this.scrollRebaseConfig.threshold;
   }
 
   private getPagedScrollHeight(): number {
     return this.shouldRebaseScroll()
-      ? Math.min(this.getScrollHeight(), SCROLL_REBASE_CONTAINER_HEIGHT)
+      ? Math.min(
+          this.getScrollHeight(),
+          this.scrollRebaseConfig.containerHeight
+        )
       : this.getScrollHeight();
   }
 
@@ -3006,16 +3055,17 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
       };
     }
 
-    const currentPageOffset = this.clampScrollPageOffset(this.scrollPageOffset);
+    const { scrollPageOffset, scrollRebaseConfig } = this;
+    const currentPageOffset = this.clampScrollPageOffset(scrollPageOffset);
 
     const pagedScrollTop = logicalScrollTop - currentPageOffset;
     const pagedMaxScrollTop = this.getMaxPagedScrollTop();
     const maxRebaseOffset = this.getMaxScrollPageOffset();
     const shouldMoveDown =
-      pagedScrollTop > SCROLL_REBASE_THRESHOLD &&
+      pagedScrollTop > scrollRebaseConfig.threshold &&
       currentPageOffset < maxRebaseOffset;
     const shouldMoveUp =
-      pagedScrollTop < SCROLL_REBASE_TRIGGER_TOP && currentPageOffset > 0;
+      pagedScrollTop < scrollRebaseConfig.triggerTop && currentPageOffset > 0;
 
     if (
       pagedScrollTop < 0 ||
@@ -3026,8 +3076,8 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
       const nextWindow = this.resolveScrollPageWindow(
         logicalScrollTop,
         shouldMoveUp
-          ? Math.min(SCROLL_REBASE_TARGET_BOTTOM, pagedMaxScrollTop)
-          : SCROLL_REBASE_TARGET_TOP
+          ? Math.min(scrollRebaseConfig.targetBottom, pagedMaxScrollTop)
+          : scrollRebaseConfig.targetTop
       );
       return nextWindow;
     }

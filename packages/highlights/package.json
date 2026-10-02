@@ -1,6 +1,6 @@
 {
   "name": "@pierre/highlights",
-  "version": "0.0.5",
+  "version": "0.1.0",
   "description": "A fast code highlighter written in WebAssembly Text(Wat), from Pierre",
   "license": "apache-2.0",
   "files": [
@@ -41,7 +41,7 @@
     "wabt": "catalog:"
   },
   "meta": {
-    "highlights.wasm": 161909,
-    "highlights.wasm.gz": 75322
+    "highlights.wasm": 161186,
+    "highlights.wasm.gz": 75067
   }
 }

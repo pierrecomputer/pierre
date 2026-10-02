@@ -181,24 +181,14 @@ export function variableSpanTag(hl: number): string {
   return `<span style="color:var(${tokenTypes[hl].replace(/[._]/g, '-')})">`;
 }
 
-/**
- * styles is indexed by token id; null means unstyled. Hex themes use a Wasm
- * table, while Display P3 and named CSS palettes use HTML tag replacements.
- * Token-slot CSS themes need neither. Tag replacements and CSS-variable
- * styles are computed on first access.
- */
+/** Resolved token styles, root colors, and the theme's HTML representation. */
 export interface PreparedTheme {
   name: string;
+  /** Indexed by token id; null slots inherit the foreground. */
   styles: (TokenStyle | null)[];
   fg?: string;
   bg?: string;
-  /** True when any color is `color(display-p3 …)`. */
-  usesDisplayP3: boolean;
-  /**
-   * Five bytes per token id (`r g b a style`) for the Wasm theme table, or
-   * `undefined` when HTML must render through the CSS-variable emitter
-   * because the colors are custom properties or Display P3.
-   */
+  /** Five-byte RGBA/style records; undefined for Display P3 and CSS variables. */
   table: Uint8Array | undefined;
   /**
    * Maps unprefixed emitter tags to styled tags for Display P3 and named CSS
@@ -207,9 +197,7 @@ export interface PreparedTheme {
   readonly htmlTags: Map<string, string> | undefined;
 }
 
-// Cache by object identity, not name: same-named themes may have different
-// palettes, and a registered theme may be replaced by a new object with the
-// same name. CSS-variable themes get one entry per prefix; the others use ''.
+// Theme names are not unique. Replace the object to change its cached styles.
 const preparedCache = new WeakMap<Theme, Map<string, PreparedTheme>>();
 
 /**
@@ -271,7 +259,6 @@ function prepareCssPalette(theme: Theme): PreparedTheme {
     styles,
     fg,
     bg,
-    usesDisplayP3: false,
     table: undefined,
     get htmlTags() {
       return (htmlTags ??= themeHtmlTags(styles, fg, bg));
@@ -301,7 +288,6 @@ function prepareCssVariables(
     get bg() {
       return resolve().bg;
     },
-    usesDisplayP3: false,
     table: undefined,
     htmlTags: undefined,
   };
@@ -369,7 +355,6 @@ function prepareStyles(theme: Theme): PreparedTheme {
     styles,
     fg,
     bg,
-    usesDisplayP3,
     table: usesDisplayP3 ? undefined : table,
     get htmlTags() {
       if (!usesDisplayP3) return undefined;

@@ -343,6 +343,18 @@
       "predictive": {
         "color": "color(display-p3 0.388235 0.388235 0.388235)",
         "font_style": "italic"
+      },
+      "selector": {
+        "color": "color(display-p3 1.000000 0.566977 0.409224)"
+      },
+      "enum": {
+        "color": "color(display-p3 0.829375 0.434619 0.954315)"
+      },
+      "hint": {
+        "color": "color(display-p3 0.450980 0.450980 0.450980)"
+      },
+      "variant": {
+        "color": "color(display-p3 1.000000 0.868456 0.454295)"
       }
     }
   }

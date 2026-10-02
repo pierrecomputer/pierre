@@ -90,7 +90,7 @@
         "color": "#ae81ffff"
       },
       "constant": {
-        "color": "#ae81ffff"
+        "color": "#F8F8F2"
       },
       "variable": {
         "color": "#f8f8f2ff"
@@ -131,26 +131,27 @@
         "color": "#f92672ff"
       },
       "punctuation.delimiter": {
-        "color": "#a6e22eff",
-        "font_style": "italic"
+        "color": "#f8f8f2ff"
       },
       "punctuation.list_marker": {
         "color": "#a6e22eff"
       },
       "punctuation": {
-        "color": "#f92672ff"
+        "color": "#f8f8f2ff"
       },
       "preproc": {
-        "color": "#a6e22eff"
+        "color": "#f8f8f2ff"
       },
       "title": {
         "color": "#a6e22eff"
       },
       "emphasis.strong": {
-        "color": "#66d9efff"
+        "color": "#66D9EF",
+        "font_weight": 700
       },
       "emphasis": {
-        "color": "#66d9efff"
+        "color": "#66D9EF",
+        "font_style": "italic"
       },
       "text.literal": {
         "color": "#fd971fff"
@@ -162,7 +163,7 @@
         "color": "#f8f8f2ff"
       },
       "label": {
-        "color": "#f92672ff"
+        "color": "#f8f8f2ff"
       },
       "constructor": {
         "color": "#a6e22eff"
@@ -204,11 +205,39 @@
         "color": "#f8f8f266"
       },
       "punctuation.bracket": {
-        "color": "#f92672ff"
+        "color": "#f8f8f2ff"
       },
       "punctuation.markup": {
-        "color": "#f92672ff"
+        "color": "#f8f8f2ff"
+      },
+      "keyword.declaration": {
+        "color": "#66D9EF",
+        "font_style": "italic"
+      },
+      "property.json_key": {
+        "color": "#66D9EF",
+        "font_style": "italic"
+      },
+      "selector.class": {
+        "color": "#A6E22E"
+      },
+      "selector.id": {
+        "color": "#A6E22E"
+      },
+      "tag.doctype": {
+        "color": "#f8f8f2ff"
+      },
+      "keyword.jsdoc": {
+        "color": "#66D9EF",
+        "font_style": "italic"
+      },
+      "tag.component.jsx": {
+        "color": "#66D9EF",
+        "font_style": "italic"
       }
-    }
+    },
+    "created": "#81b88b",
+    "deleted": "#c74e39",
+    "modified": "#E2C08D"
   }
 }

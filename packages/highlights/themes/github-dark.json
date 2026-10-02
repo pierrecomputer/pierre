@@ -177,6 +177,54 @@
       },
       "variable.member": {
         "color": "#ffab70"
+      },
+      "attribute": {
+        "color": "#B392F0"
+      },
+      "embedded": {
+        "color": "#e1e4e8"
+      },
+      "namespace": {
+        "color": "#B392F0"
+      },
+      "predictive": {
+        "color": "#6a737d"
+      },
+      "preproc": {
+        "color": "#f97583"
+      },
+      "primary": {
+        "color": "#e1e4e8"
+      },
+      "punctuation": {
+        "color": "#e1e4e8"
+      },
+      "selector": {
+        "color": "#85E89D"
+      },
+      "hint": {
+        "color": "#848d97"
+      },
+      "variant": {
+        "color": "#79B8FF"
+      },
+      "diff.minus": {
+        "color": "#FDAEB7"
+      },
+      "diff.plus": {
+        "color": "#85E89D"
+      },
+      "punctuation.list_marker": {
+        "color": "#FFAB70"
+      },
+      "selector.class": {
+        "color": "#B392F0"
+      },
+      "selector.id": {
+        "color": "#B392F0"
+      },
+      "selector.pseudo": {
+        "color": "#B392F0"
       }
     }
   }

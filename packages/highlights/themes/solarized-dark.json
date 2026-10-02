@@ -89,10 +89,10 @@
         "color": "#b58900ff"
       },
       "constant": {
-        "color": "#d33682ff"
+        "color": "#268BD2"
       },
       "variable": {
-        "color": "#839496ff"
+        "color": "#268BD2"
       },
       "variable.special": {
         "color": "#268bd2ff"
@@ -122,16 +122,16 @@
         "color": "#93a1a1ff"
       },
       "punctuation.special": {
-        "color": "#dc322fff"
+        "color": "#839496ff"
       },
       "punctuation.bracket": {
-        "color": "#586e75ff"
+        "color": "#839496ff"
       },
       "punctuation.delimiter": {
-        "color": "#6c71c4ff"
+        "color": "#839496ff"
       },
       "punctuation": {
-        "color": "#859900ff"
+        "color": "#839496ff"
       },
       "preproc": {
         "color": "#b58900ff"
@@ -144,6 +144,7 @@
         "font_weight": 700
       },
       "emphasis": {
+        "color": "#D33682",
         "font_style": "italic"
       },
       "text.literal": {
@@ -153,10 +154,10 @@
         "color": "#cb4b16ff"
       },
       "property": {
-        "color": "#268bd2ff"
+        "color": "#839496ff"
       },
       "label": {
-        "color": "#268bd2ff"
+        "color": "#839496ff"
       },
       "constructor": {
         "color": "#268bd2ff"
@@ -192,7 +193,7 @@
         "color": "#839496ff"
       },
       "link_uri": {
-        "color": "#2aa19899"
+        "color": "#839496ff"
       },
       "hint": {
         "color": "#83949666"
@@ -201,11 +202,52 @@
         "color": "#83949666"
       },
       "punctuation.list_marker": {
-        "color": "#859900ff"
+        "color": "#839496ff"
       },
       "punctuation.markup": {
-        "color": "#859900ff"
+        "color": "#839496ff"
+      },
+      "keyword.declaration": {
+        "color": "#93A1A1",
+        "font_weight": 700
+      },
+      "property.json_key": {
+        "color": "#859900"
+      },
+      "selector.class": {
+        "color": "#93A1A1"
+      },
+      "selector.id": {
+        "color": "#93A1A1"
+      },
+      "tag.doctype": {
+        "color": "#839496ff"
+      },
+      "variable.parameter": {
+        "color": "#839496ff"
+      },
+      "keyword.jsdoc": {
+        "color": "#93A1A1",
+        "font_weight": 700
+      },
+      "punctuation.bracket.html": {
+        "color": "#586E75"
+      },
+      "punctuation.bracket.jsx": {
+        "color": "#586E75"
+      },
+      "punctuation.delimiter.html": {
+        "color": "#586E75"
+      },
+      "punctuation.delimiter.jsx": {
+        "color": "#586E75"
+      },
+      "tag.component.jsx": {
+        "color": "#859900"
       }
-    }
+    },
+    "created": "#81b88b",
+    "deleted": "#c74e39",
+    "modified": "#E2C08D"
   }
 }

@@ -196,6 +196,30 @@
       },
       "variant": {
         "color": "#e82424"
+      },
+      "label": {
+        "color": "#8EA4A2"
+      },
+      "namespace": {
+        "color": "#C4B28A"
+      },
+      "preproc": {
+        "color": "#E46876"
+      },
+      "selector": {
+        "color": "#C4B28A"
+      },
+      "diff.minus": {
+        "color": "#C34043"
+      },
+      "diff.plus": {
+        "color": "#76946A"
+      },
+      "selector.id": {
+        "color": "#8992A7"
+      },
+      "selector.pseudo": {
+        "color": "#8992A7"
       }
     }
   }

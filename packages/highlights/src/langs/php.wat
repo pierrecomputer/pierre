@@ -88,24 +88,29 @@
       (then (return (enum.get $Token.constant))))
     (enum.get $Token.variable))
 
-  ;; PHP keywords are case-insensitive: fold the first eight bytes once with
-  ;; OR 0x20, then dispatch on length so only one length group's compares run.
-  ;; Words longer than eight bytes compare their folded tail separately. The
-  ;; buckets follow the lexer's split: control flow and language constructs
-  ;; such as `echo`/`isset` are keyword.control, words that name what follows
-  ;; (`class`, `extends`, `namespace`) are keyword.declaration so $phpCode
-  ;; can prime the next identifier, and modifiers are plain keyword.
+  (keyword-table $phpWords $mem.phpWords $mem.keywordTablesEnd
+    (group $Token.keyword.control
+      "break" "catch" "while" "throw" "match" "print" "isset" "empty" "unset" "return" "switch" "elseif" "foreach" "default" "finally" "continue")
+    (group $Token.keyword
+      "yield" "final" "clone" "public" "static" "global" "private" "declare" "require" "include" "abstract" "readonly" "protected" "insteadof" "instanceof" "require_once" "include_once")
+    (group $Token.type.builtin
+      "array" "float" "mixed" "never" "string" "object" "callable" "iterable")
+    (group $Token.boolean
+      "false")
+    (group $Token.keyword.declaration
+      "class" "const" "trait" "extends" "function" "interface" "namespace" "implements"))
+
   (func $phpWordHl (param $lhs i32) (param $rhs i32) (result i32)
     (local $n i32)
-    (local $tail i32)
+    (local $hl i32)
     (local $w i64)
+    (local $v v128)
     (local.set $n (i32.sub (local.get $rhs) (local.get $lhs)))
-    ;; every keyword is 2..12 bytes long
     (if (i32.gt_u (i32.sub (local.get $n) (i32.const 2)) (i32.const 10))
       (then (return (enum.get $Token.variable))))
-    (local.set $w (i64.or (i64.load (local.get $lhs)) (i64.const 0x2020202020202020)))
-    (if (i32.eq (local.get $n) (i32.const 2))
-      (then
+    (byte-switch (local.get $n)
+      (case 2
+        (local.set $w (i64.or (i64.load (local.get $lhs)) (i64.const 0x2020202020202020)))
         (local.set $w (i64.and (local.get $w) (i64.const 0xffff)))
         (if
           (i32.or (i64.eq (local.get $w) (i64.const "if")) (i64.eq (local.get $w) (i64.const "do")))
@@ -113,9 +118,9 @@
         (if
           (i32.or (i64.eq (local.get $w) (i64.const "as")) (i64.eq (local.get $w) (i64.const "fn")))
           (then (return (enum.get $Token.keyword))))
-        (return (enum.get $Token.variable))))
-    (if (i32.eq (local.get $n) (i32.const 3))
-      (then
+        (return (enum.get $Token.variable)))
+      (case 3
+        (local.set $w (i64.or (i64.load (local.get $lhs)) (i64.const 0x2020202020202020)))
         (local.set $w (i64.and (local.get $w) (i64.const 0xffffff)))
         (if
           (i32.or
@@ -131,9 +136,9 @@
           (then (return (enum.get $Token.keyword.control))))
         (if (i64.eq (local.get $w) (i64.const "int"))
           (then (return (enum.get $Token.type.builtin))))
-        (return (enum.get $Token.variable))))
-    (if (i32.eq (local.get $n) (i32.const 4))
-      (then
+        (return (enum.get $Token.variable)))
+      (case 4
+        (local.set $w (i64.or (i64.load (local.get $lhs)) (i64.const 0x2020202020202020)))
         (local.set $w (i64.and (local.get $w) (i64.const 0xffffffff)))
         (if (i64.eq (local.get $w) (i64.const "true"))
           (then (return (enum.get $Token.boolean))))
@@ -156,171 +161,21 @@
             (i64.eq (local.get $w) (i64.const "void")))
           (then (return (enum.get $Token.type.builtin))))
         (return (enum.get $Token.variable))))
-    (if (i32.eq (local.get $n) (i32.const 5))
-      (then
-        (local.set $w (i64.and (local.get $w) (i64.const 0xffffffffff)))
-        (if (i64.eq (local.get $w) (i64.const "false"))
-          (then (return (enum.get $Token.boolean))))
-        (if
-          (i32.or
-            (i64.eq (local.get $w) (i64.const "yield"))
-            (i32.or
-              (i64.eq (local.get $w) (i64.const "final"))
-              (i64.eq (local.get $w) (i64.const "clone"))))
-          (then (return (enum.get $Token.keyword))))
-        (if
-          (i32.or
-            (i32.or
-              (i32.or
-                (i64.eq (local.get $w) (i64.const "break"))
-                (i64.eq (local.get $w) (i64.const "catch")))
-              (i32.or
-                (i64.eq (local.get $w) (i64.const "while"))
-                (i64.eq (local.get $w) (i64.const "throw"))))
-            (i32.or
-              (i32.or
-                (i64.eq (local.get $w) (i64.const "match"))
-                (i64.eq (local.get $w) (i64.const "print")))
-              (i32.or
-                (i64.eq (local.get $w) (i64.const "isset"))
-                (i32.or
-                  (i64.eq (local.get $w) (i64.const "empty"))
-                  (i64.eq (local.get $w) (i64.const "unset"))))))
-          (then (return (enum.get $Token.keyword.control))))
-        (if
-          (i32.or
-            (i64.eq (local.get $w) (i64.const "class"))
-            (i32.or
-              (i64.eq (local.get $w) (i64.const "const"))
-              (i64.eq (local.get $w) (i64.const "trait"))))
-          (then (return (enum.get $Token.keyword.declaration))))
-        (if
-          (i32.or
-            (i32.or
-              (i64.eq (local.get $w) (i64.const "array"))
-              (i64.eq (local.get $w) (i64.const "float")))
-            (i32.or
-              (i64.eq (local.get $w) (i64.const "mixed"))
-              (i64.eq (local.get $w) (i64.const "never"))))
-          (then (return (enum.get $Token.type.builtin))))
-        (return (enum.get $Token.variable))))
-    (if (i32.eq (local.get $n) (i32.const 6))
-      (then
-        (local.set $w (i64.and (local.get $w) (i64.const 0xffffffffffff)))
-        (if
-          (i32.or
-            (i64.eq (local.get $w) (i64.const "return"))
-            (i32.or
-              (i64.eq (local.get $w) (i64.const "switch"))
-              (i64.eq (local.get $w) (i64.const "elseif"))))
-          (then (return (enum.get $Token.keyword.control))))
-        (if
-          (i32.or
-            (i64.eq (local.get $w) (i64.const "public"))
-            (i32.or
-              (i64.eq (local.get $w) (i64.const "static"))
-              (i64.eq (local.get $w) (i64.const "global"))))
-          (then (return (enum.get $Token.keyword))))
-        (if
-          (i32.or
-            (i64.eq (local.get $w) (i64.const "string"))
-            (i64.eq (local.get $w) (i64.const "object")))
-          (then (return (enum.get $Token.type.builtin))))
-        (return (enum.get $Token.variable))))
-    (if (i32.eq (local.get $n) (i32.const 7))
-      (then
-        (local.set $w (i64.and (local.get $w) (i64.const 0xffffffffffffff)))
-        (if
-          (i32.or
-            (i64.eq (local.get $w) (i64.const "foreach"))
-            (i32.or
-              (i64.eq (local.get $w) (i64.const "default"))
-              (i64.eq (local.get $w) (i64.const "finally"))))
-          (then (return (enum.get $Token.keyword.control))))
-        (if (i64.eq (local.get $w) (i64.const "extends"))
-          (then (return (enum.get $Token.keyword.declaration))))
-        (if
-          (i32.or
-            (i32.or
-              (i64.eq (local.get $w) (i64.const "private"))
-              (i64.eq (local.get $w) (i64.const "declare")))
-            (i32.or
-              (i64.eq (local.get $w) (i64.const "require"))
-              (i64.eq (local.get $w) (i64.const "include"))))
-          (then (return (enum.get $Token.keyword))))
-        (return (enum.get $Token.variable))))
-    (if (i32.eq (local.get $n) (i32.const 8))
-      (then
-        (if (i64.eq (local.get $w) (i64.const "function"))
-          (then (return (enum.get $Token.keyword.declaration))))
-        (if (i64.eq (local.get $w) (i64.const "continue"))
-          (then (return (enum.get $Token.keyword.control))))
-        (if
-          (i32.or
-            (i64.eq (local.get $w) (i64.const "abstract"))
-            (i64.eq (local.get $w) (i64.const "readonly")))
-          (then (return (enum.get $Token.keyword))))
-        (if
-          (i32.or
-            (i64.eq (local.get $w) (i64.const "callable"))
-            (i64.eq (local.get $w) (i64.const "iterable")))
-          (then (return (enum.get $Token.type.builtin))))
-        (return (enum.get $Token.variable))))
-    ;; longer words: up to four folded tail bytes after the first eight. The
-    ;; load may pass $end into the input slack; the mask discards those bytes.
-    (local.set $tail (i32.or (i32.load offset=8 (local.get $lhs)) (i32.const 0x20202020)))
-    (if (i32.eq (local.get $n) (i32.const 9))
-      (then
-        (local.set $tail (i32.and (local.get $tail) (i32.const 0xff)))
-        (if
-          (i32.or
-            (i32.and
-              (i64.eq (local.get $w) (i64.const "interfac"))
-              (i32.eq (local.get $tail) (i32.const "e")))
-            (i32.and
-              (i64.eq (local.get $w) (i64.const "namespac"))
-              (i32.eq (local.get $tail) (i32.const "e"))))
-          (then (return (enum.get $Token.keyword.declaration))))
-        (if
-          (i32.or
-            (i32.and
-              (i64.eq (local.get $w) (i64.const "protecte"))
-              (i32.eq (local.get $tail) (i32.const "d")))
-            (i32.and
-              (i64.eq (local.get $w) (i64.const "insteado"))
-              (i32.eq (local.get $tail) (i32.const "f"))))
-          (then (return (enum.get $Token.keyword))))
-        (return (enum.get $Token.variable))))
-    (if (i32.eq (local.get $n) (i32.const 10))
-      (then
-        (local.set $tail (i32.and (local.get $tail) (i32.const 0xffff)))
-        (if
-          (i32.and
-            (i64.eq (local.get $w) (i64.const "implemen"))
-            (i32.eq (local.get $tail) (i32.const "ts")))
-          (then (return (enum.get $Token.keyword.declaration))))
-        (if
-          (i32.and
-            (i64.eq (local.get $w) (i64.const "instance"))
-            (i32.eq (local.get $tail) (i32.const "of")))
-          (then (return (enum.get $Token.keyword))))
-        (return (enum.get $Token.variable))))
-    ;; `require_once` / `include_once`: the fold would turn `_` into 0x7f, so
-    ;; the eighth byte is compared unfolded
-    (if (i32.eq (local.get $n) (i32.const 12))
-      (then
-        (if
-          (i32.and
-            (i32.and
-              (i32.or
-                (i64.eq (i64.and (local.get $w) (i64.const 0xffffffffffffff)) (i64.const "require"))
-                (i64.eq
-                  (i64.and (local.get $w) (i64.const 0xffffffffffffff))
-                  (i64.const "include")))
-              (i32.eq (i32.load8_u offset=7 (local.get $lhs)) (i32.const "_")))
-            (i32.eq (local.get $tail) (i32.const "once")))
-          (then (return (enum.get $Token.keyword))))))
-    (enum.get $Token.variable))
+    (local.set $v (v128.load (local.get $lhs)))
+    (v128.store
+      (i32.const $mem.lexLowerScratch)
+      (v128.or
+        (local.get $v)
+        (v128.and
+          (i8x16.le_u
+            (i8x16.sub (local.get $v) (i8x16.splat (i32.const "A")))
+            (i8x16.splat (i32.const 25)))
+          (i8x16.splat (i32.const 32)))))
+    (local.set $hl
+      (keyword-table.value $phpWords
+        (i32.const $mem.lexLowerScratch)
+        (i32.add (i32.const $mem.lexLowerScratch) (local.get $n))))
+    (select (local.get $hl) (enum.get $Token.variable) (i32.ge_s (local.get $hl) (i32.const 0))))
 
   ;; $p always sits on a CR, an LF, or $end here (callers land on the result
   ;; of $phpLineEndAt), so consuming one byte plus a CRLF pair is exact.

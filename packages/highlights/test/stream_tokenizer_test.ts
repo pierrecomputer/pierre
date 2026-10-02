@@ -162,6 +162,14 @@ void t.test(
         chunks: ['"\ud83d', new Uint8Array([0xf0, 0x9f])],
         code: '"\ud83d\ufffd',
       },
+      {
+        chunks: ['/*\ud800', encoder.encode('日本語🙂'.repeat(20000) + '*/\n')],
+        code: '/*\ud800' + '日本語🙂'.repeat(20000) + '*/\n',
+      },
+      {
+        chunks: ['/*\ud800', new Uint8Array([0xff, 0x0a])],
+        code: '/*\ud800\ufffd\n',
+      },
     ];
     for (const { chunks, code } of cases) {
       const stream = new StreamTokenizer(options);

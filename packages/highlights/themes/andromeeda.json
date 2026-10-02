@@ -248,6 +248,42 @@
       },
       "variable.special": {
         "color": "#00e8c6"
+      },
+      "embedded": {
+        "color": "#D5CED9"
+      },
+      "label": {
+        "color": "#00e8c6"
+      },
+      "predictive": {
+        "color": "#81898f"
+      },
+      "preproc": {
+        "color": "#c74ded"
+      },
+      "primary": {
+        "color": "#D5CED9"
+      },
+      "selector": {
+        "color": "#F92672"
+      },
+      "enum": {
+        "color": "#FFE66D"
+      },
+      "hint": {
+        "color": "#969696ff"
+      },
+      "variant": {
+        "color": "#00E8C6"
+      },
+      "selector.class": {
+        "color": "#FFE66D"
+      },
+      "selector.id": {
+        "color": "#EE5D43"
+      },
+      "selector.pseudo": {
+        "color": "#FFE66D"
       }
     }
   }

@@ -195,6 +195,27 @@
       },
       "variant": {
         "color": "#702c00ff"
+      },
+      "namespace": {
+        "color": "#702C00"
+      },
+      "selector": {
+        "color": "#024C1A"
+      },
+      "diff.minus": {
+        "color": "#6E011A"
+      },
+      "diff.plus": {
+        "color": "#024C1A"
+      },
+      "selector.class": {
+        "color": "#023B95"
+      },
+      "selector.id": {
+        "color": "#023B95"
+      },
+      "selector.pseudo": {
+        "color": "#023B95"
       }
     }
   }

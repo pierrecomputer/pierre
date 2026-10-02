@@ -821,6 +821,40 @@ void t.test('LiveTokenizer: revisions bump once per successful batch', () => {
   live.dispose();
 });
 
+void t.test(
+  'LiveTokenizer: no-op comparison includes every line and terminator',
+  () => {
+    const code = 'x🙂\r\n\rfirst\nlast\ud800y';
+    const range = {
+      start: { line: 0, character: 1 },
+      end: { line: 3, character: 5 },
+    };
+    const original = code.slice(1, -1);
+    for (const newText of [
+      original,
+      original.replace('\r\n', '\n\r'),
+      original.replace('\rfirst', '\nfirst'),
+      original.replace('first', 'First'),
+      original.replace('last', 'Last'),
+      original.replace('\ud800', '\ud801'),
+    ]) {
+      const live = new LiveTokenizer({
+        lang: 'plain',
+        theme: pierreDark,
+        code,
+      });
+      try {
+        const before = live.revision;
+        const update = live.applyEdits([{ range, newText }]);
+        assert.equal(update.revision, before + (newText === original ? 0 : 1));
+        assert.equal(live.getText(), 'x' + newText + 'y');
+      } finally {
+        live.dispose();
+      }
+    }
+  }
+);
+
 void t.test('LiveTokenizer: packed records tile each line', () => {
   const code = 'const s = "str"; // note\n';
   const live = new LiveTokenizer({ lang: 'ts', theme: pierreDark, code });
@@ -959,6 +993,47 @@ void t.test('LiveTokenizer: lone surrogates survive edits as WTF-8', () => {
   live.dispose();
   astral.dispose();
 });
+
+void t.test(
+  'LiveTokenizer: WTF-8 preserves long lines and consecutive surrogates',
+  () => {
+    for (const code of [
+      '\ud800\ud801\udc00\udc01\udc02\udbff',
+      '\udc00\udc01한\ufeffé日本語🙂\ufffd\ud800',
+      '한글🙂'.repeat(16000) + '\ud800' + 'é\ufeff'.repeat(16000),
+      '\ud800x\udc00'.repeat(4096),
+    ]) {
+      const live = new LiveTokenizer({
+        lang: 'plain',
+        theme: pierreDark,
+        code,
+      });
+      try {
+        assert.equal(live.getLineText(0), code);
+        assert.equal(live.getLineLength(0), code.length);
+        assert.equal(
+          live
+            .getLineTokens(0)
+            .tokens.map((token) => token.content)
+            .join(''),
+          code
+        );
+        live.applyEdits([
+          {
+            range: {
+              start: { line: 0, character: 0 },
+              end: { line: 0, character: code.length },
+            },
+            newText: code + '\udc00',
+          },
+        ]);
+        assert.equal(live.getText(), code + '\udc00');
+      } finally {
+        live.dispose();
+      }
+    }
+  }
+);
 
 void t.test(
   'LiveTokenizer: rejoined surrogate pairs match fresh tokens',

@@ -1,14 +1,6 @@
 (module
   (import "../common.wat")
 
-  ;; SQL keywords are case-insensitive, so the word is ASCII-folded with
-  ;; `| 0x20` instead of being matched byte for byte - which is why this stays a
-  ;; compare ladder rather than a keyword table. Every keyword is 2..8 bytes, so
-  ;; one i64 load holds the whole candidate: fold it and narrow it to the word's
-  ;; own width once, so a packed compare also implies the length. The ladder
-  ;; dispatches on the first folded byte - three ranges, then one letter - so
-  ;; an ordinary identifier pays a handful of byte compares and at most seven
-  ;; wide ones instead of walking every keyword of its length.
   (func $sqlWordHl (param $lhs i32) (param $rhs i32) (result i32)
     (local $c i32)
     (local $n i32)
@@ -23,181 +15,159 @@
           (i64.const -1)
           (i64.extend_i32_u (i32.shl (i32.sub (i32.const 8) (local.get $n)) (i32.const 3))))))
     (local.set $c (i32.and (i32.wrap_i64 (local.get $w)) (i32.const 255)))
-    (if (i32.lt_u (local.get $c) (i32.const "i"))
-      (then
-        (if (i32.eq (local.get $c) (i32.const "a"))
-          (then
-            (if
+    (byte-switch (local.get $c)
+      (case "a"
+        (if
+          (i32.or
+            (i64.eq (local.get $w) (i64.const "all"))
+            (i32.or
+              (i64.eq (local.get $w) (i64.const "as"))
+              (i64.eq (local.get $w) (i64.const "asc"))))
+          (then (return (enum.get $Token.keyword))))
+        (if (i64.eq (local.get $w) (i64.const "and"))
+          (then (return (enum.get $Token.keyword.operator))))
+        (return (enum.get $Token.variable)))
+      (case "b"
+        (if (i64.eq (local.get $w) (i64.const "by"))
+          (then (return (enum.get $Token.keyword))))
+        (if (i64.eq (local.get $w) (i64.const "between"))
+          (then (return (enum.get $Token.keyword.operator))))
+        (if
+          (i32.or
+            (i64.eq (local.get $w) (i64.const "bigint"))
+            (i32.or
+              (i64.eq (local.get $w) (i64.const "blob"))
+              (i64.eq (local.get $w) (i64.const "boolean"))))
+          (then (return (enum.get $Token.type.builtin))))
+        (return (enum.get $Token.variable)))
+      (case "c"
+        (if (i64.eq (local.get $w) (i64.const "create"))
+          (then (return (enum.get $Token.keyword))))
+        (if (i64.eq (local.get $w) (i64.const "case"))
+          (then (return (enum.get $Token.keyword.control))))
+        (if (i64.eq (local.get $w) (i64.const "char"))
+          (then (return (enum.get $Token.type.builtin))))
+        (return (enum.get $Token.variable)))
+      (case "d"
+        (if
+          (i32.or
+            (i64.eq (local.get $w) (i64.const "default"))
+            (i32.or
+              (i64.eq (local.get $w) (i64.const "delete"))
               (i32.or
-                (i64.eq (local.get $w) (i64.const "all"))
-                (i32.or
-                  (i64.eq (local.get $w) (i64.const "as"))
-                  (i64.eq (local.get $w) (i64.const "asc"))))
-              (then (return (enum.get $Token.keyword))))
-            (if (i64.eq (local.get $w) (i64.const "and"))
-              (then (return (enum.get $Token.keyword.operator))))
-            (return (enum.get $Token.variable))))
-        (if (i32.eq (local.get $c) (i32.const "b"))
-          (then
-            (if (i64.eq (local.get $w) (i64.const "by"))
-              (then (return (enum.get $Token.keyword))))
-            (if (i64.eq (local.get $w) (i64.const "between"))
-              (then (return (enum.get $Token.keyword.operator))))
-            (if
-              (i32.or
-                (i64.eq (local.get $w) (i64.const "bigint"))
-                (i32.or
-                  (i64.eq (local.get $w) (i64.const "blob"))
-                  (i64.eq (local.get $w) (i64.const "boolean"))))
-              (then (return (enum.get $Token.type.builtin))))
-            (return (enum.get $Token.variable))))
-        (if (i32.eq (local.get $c) (i32.const "c"))
-          (then
-            (if (i64.eq (local.get $w) (i64.const "create"))
-              (then (return (enum.get $Token.keyword))))
-            (if (i64.eq (local.get $w) (i64.const "case"))
-              (then (return (enum.get $Token.keyword.control))))
-            (if (i64.eq (local.get $w) (i64.const "char"))
-              (then (return (enum.get $Token.type.builtin))))
-            (return (enum.get $Token.variable))))
-        (if (i32.eq (local.get $c) (i32.const "d"))
-          (then
-            (if
-              (i32.or
-                (i64.eq (local.get $w) (i64.const "default"))
-                (i32.or
-                  (i64.eq (local.get $w) (i64.const "delete"))
-                  (i32.or
-                    (i64.eq (local.get $w) (i64.const "desc"))
-                    (i64.eq (local.get $w) (i64.const "distinct")))))
-              (then (return (enum.get $Token.keyword))))
-            (if
-              (i32.or
-                (i64.eq (local.get $w) (i64.const "date"))
-                (i32.or
-                  (i64.eq (local.get $w) (i64.const "decimal"))
-                  (i64.eq (local.get $w) (i64.const "double"))))
-              (then (return (enum.get $Token.type.builtin))))
-            (return (enum.get $Token.variable))))
-        (if (i32.eq (local.get $c) (i32.const "e"))
-          (then
-            (if (i64.eq (local.get $w) (i64.const "end"))
-              (then (return (enum.get $Token.keyword))))
-            (if (i64.eq (local.get $w) (i64.const "exists"))
-              (then (return (enum.get $Token.keyword.operator))))
-            (if (i64.eq (local.get $w) (i64.const "else"))
-              (then (return (enum.get $Token.keyword.control))))
-            (return (enum.get $Token.variable))))
-        (if (i32.eq (local.get $c) (i32.const "f"))
-          (then
-            (if
-              (i32.or
-                (i64.eq (local.get $w) (i64.const "foreign"))
-                (i32.or
-                  (i64.eq (local.get $w) (i64.const "from"))
-                  (i64.eq (local.get $w) (i64.const "full"))))
-              (then (return (enum.get $Token.keyword))))
-            (if (i64.eq (local.get $w) (i64.const "false"))
-              (then (return (enum.get $Token.boolean))))
-            (return (enum.get $Token.variable))))
-        (if (i32.eq (local.get $c) (i32.const "g"))
-          (then
-            (if (i64.eq (local.get $w) (i64.const "group"))
-              (then (return (enum.get $Token.keyword))))
-            (return (enum.get $Token.variable))))
-        (if (i32.eq (local.get $c) (i32.const "h"))
-          (then
-            (if (i64.eq (local.get $w) (i64.const "having"))
-              (then (return (enum.get $Token.keyword))))
-            (return (enum.get $Token.variable))))
-        (return (enum.get $Token.variable))))
-    (if (i32.lt_u (local.get $c) (i32.const "p"))
-      (then
-        (if (i32.eq (local.get $c) (i32.const "i"))
-          (then
-            (if
-              (i32.or
-                (i64.eq (local.get $w) (i64.const "inner"))
-                (i32.or
-                  (i64.eq (local.get $w) (i64.const "insert"))
-                  (i64.eq (local.get $w) (i64.const "into"))))
-              (then (return (enum.get $Token.keyword))))
-            (if
-              (i32.or
-                (i64.eq (local.get $w) (i64.const "in"))
-                (i64.eq (local.get $w) (i64.const "is")))
-              (then (return (enum.get $Token.keyword.operator))))
-            (if (i64.eq (local.get $w) (i64.const "integer"))
-              (then (return (enum.get $Token.type.builtin))))
-            (return (enum.get $Token.variable))))
-        (if (i32.eq (local.get $c) (i32.const "j"))
-          (then
-            (if (i64.eq (local.get $w) (i64.const "join"))
-              (then (return (enum.get $Token.keyword))))
-            (if
-              (i32.or
-                (i64.eq (local.get $w) (i64.const "json"))
-                (i64.eq (local.get $w) (i64.const "jsonb")))
-              (then (return (enum.get $Token.type.builtin))))
-            (return (enum.get $Token.variable))))
-        (if (i32.eq (local.get $c) (i32.const "l"))
-          (then
-            (if
-              (i32.or
-                (i64.eq (local.get $w) (i64.const "left"))
-                (i64.eq (local.get $w) (i64.const "limit")))
-              (then (return (enum.get $Token.keyword))))
-            (if (i64.eq (local.get $w) (i64.const "like"))
-              (then (return (enum.get $Token.keyword.operator))))
-            (return (enum.get $Token.variable))))
-        (if (i32.eq (local.get $c) (i32.const "n"))
-          (then
-            (if (i64.eq (local.get $w) (i64.const "not"))
-              (then (return (enum.get $Token.keyword.operator))))
-            (if (i64.eq (local.get $w) (i64.const "nchar"))
-              (then (return (enum.get $Token.type.builtin))))
-            (if (i64.eq (local.get $w) (i64.const "null"))
-              (then (return (enum.get $Token.constant.builtin))))
-            (return (enum.get $Token.variable))))
-        (if (i32.eq (local.get $c) (i32.const "o"))
-          (then
-            (if
-              (i32.or
-                (i64.eq (local.get $w) (i64.const "on"))
-                (i32.or
-                  (i64.eq (local.get $w) (i64.const "order"))
-                  (i64.eq (local.get $w) (i64.const "outer"))))
-              (then (return (enum.get $Token.keyword))))
-            (if (i64.eq (local.get $w) (i64.const "or"))
-              (then (return (enum.get $Token.keyword.operator))))
-            (return (enum.get $Token.variable))))
-        (return (enum.get $Token.variable))))
-    (if (i32.eq (local.get $c) (i32.const "p"))
-      (then
+                (i64.eq (local.get $w) (i64.const "desc"))
+                (i64.eq (local.get $w) (i64.const "distinct")))))
+          (then (return (enum.get $Token.keyword))))
+        (if
+          (i32.or
+            (i64.eq (local.get $w) (i64.const "date"))
+            (i32.or
+              (i64.eq (local.get $w) (i64.const "decimal"))
+              (i64.eq (local.get $w) (i64.const "double"))))
+          (then (return (enum.get $Token.type.builtin))))
+        (return (enum.get $Token.variable)))
+      (case "e"
+        (if (i64.eq (local.get $w) (i64.const "end"))
+          (then (return (enum.get $Token.keyword))))
+        (if (i64.eq (local.get $w) (i64.const "exists"))
+          (then (return (enum.get $Token.keyword.operator))))
+        (if (i64.eq (local.get $w) (i64.const "else"))
+          (then (return (enum.get $Token.keyword.control))))
+        (return (enum.get $Token.variable)))
+      (case "f"
+        (if
+          (i32.or
+            (i64.eq (local.get $w) (i64.const "foreign"))
+            (i32.or
+              (i64.eq (local.get $w) (i64.const "from"))
+              (i64.eq (local.get $w) (i64.const "full"))))
+          (then (return (enum.get $Token.keyword))))
+        (if (i64.eq (local.get $w) (i64.const "false"))
+          (then (return (enum.get $Token.boolean))))
+        (return (enum.get $Token.variable)))
+      (case "g"
+        (if (i64.eq (local.get $w) (i64.const "group"))
+          (then (return (enum.get $Token.keyword))))
+        (return (enum.get $Token.variable)))
+      (case "h"
+        (if (i64.eq (local.get $w) (i64.const "having"))
+          (then (return (enum.get $Token.keyword))))
+        (return (enum.get $Token.variable)))
+      (case "i"
+        (if
+          (i32.or
+            (i64.eq (local.get $w) (i64.const "inner"))
+            (i32.or
+              (i64.eq (local.get $w) (i64.const "insert"))
+              (i64.eq (local.get $w) (i64.const "into"))))
+          (then (return (enum.get $Token.keyword))))
+        (if
+          (i32.or
+            (i64.eq (local.get $w) (i64.const "in"))
+            (i64.eq (local.get $w) (i64.const "is")))
+          (then (return (enum.get $Token.keyword.operator))))
+        (if (i64.eq (local.get $w) (i64.const "integer"))
+          (then (return (enum.get $Token.type.builtin))))
+        (return (enum.get $Token.variable)))
+      (case "j"
+        (if (i64.eq (local.get $w) (i64.const "join"))
+          (then (return (enum.get $Token.keyword))))
+        (if
+          (i32.or
+            (i64.eq (local.get $w) (i64.const "json"))
+            (i64.eq (local.get $w) (i64.const "jsonb")))
+          (then (return (enum.get $Token.type.builtin))))
+        (return (enum.get $Token.variable)))
+      (case "l"
+        (if
+          (i32.or
+            (i64.eq (local.get $w) (i64.const "left"))
+            (i64.eq (local.get $w) (i64.const "limit")))
+          (then (return (enum.get $Token.keyword))))
+        (if (i64.eq (local.get $w) (i64.const "like"))
+          (then (return (enum.get $Token.keyword.operator))))
+        (return (enum.get $Token.variable)))
+      (case "n"
+        (if (i64.eq (local.get $w) (i64.const "not"))
+          (then (return (enum.get $Token.keyword.operator))))
+        (if (i64.eq (local.get $w) (i64.const "nchar"))
+          (then (return (enum.get $Token.type.builtin))))
+        (if (i64.eq (local.get $w) (i64.const "null"))
+          (then (return (enum.get $Token.constant.builtin))))
+        (return (enum.get $Token.variable)))
+      (case "o"
+        (if
+          (i32.or
+            (i64.eq (local.get $w) (i64.const "on"))
+            (i32.or
+              (i64.eq (local.get $w) (i64.const "order"))
+              (i64.eq (local.get $w) (i64.const "outer"))))
+          (then (return (enum.get $Token.keyword))))
+        (if (i64.eq (local.get $w) (i64.const "or"))
+          (then (return (enum.get $Token.keyword.operator))))
+        (return (enum.get $Token.variable)))
+      (case "p"
         (if (i64.eq (local.get $w) (i64.const "primary"))
           (then (return (enum.get $Token.keyword))))
-        (return (enum.get $Token.variable))))
-    (if (i32.eq (local.get $c) (i32.const "r"))
-      (then
+        (return (enum.get $Token.variable)))
+      (case "r"
         (if (i64.eq (local.get $w) (i64.const "right"))
           (then (return (enum.get $Token.keyword))))
         (if (i64.eq (local.get $w) (i64.const "real"))
           (then (return (enum.get $Token.type.builtin))))
-        (return (enum.get $Token.variable))))
-    (if (i32.eq (local.get $c) (i32.const "s"))
-      (then
+        (return (enum.get $Token.variable)))
+      (case "s"
         (if
           (i32.or
-            (i64.eq (local.get $w) (i64.const "select"))
-            (i64.eq (local.get $w) (i64.const "set")))
+        (i64.eq (local.get $w) (i64.const "select"))
+        (i64.eq (local.get $w) (i64.const "set")))
           (then (return (enum.get $Token.keyword))))
-        (return (enum.get $Token.variable))))
-    (if (i32.eq (local.get $c) (i32.const "t"))
-      (then
+        (return (enum.get $Token.variable)))
+      (case "t"
         (if
           (i32.or
-            (i64.eq (local.get $w) (i64.const "table"))
-            (i64.eq (local.get $w) (i64.const "to")))
+        (i64.eq (local.get $w) (i64.const "table"))
+        (i64.eq (local.get $w) (i64.const "to")))
           (then (return (enum.get $Token.keyword))))
         (if (i64.eq (local.get $w) (i64.const "then"))
           (then (return (enum.get $Token.keyword.control))))
@@ -205,32 +175,29 @@
           (then (return (enum.get $Token.type.builtin))))
         (if (i64.eq (local.get $w) (i64.const "true"))
           (then (return (enum.get $Token.boolean))))
-        (return (enum.get $Token.variable))))
-    (if (i32.eq (local.get $c) (i32.const "u"))
-      (then
+        (return (enum.get $Token.variable)))
+      (case "u"
         (if
           (i32.or
-            (i64.eq (local.get $w) (i64.const "union"))
-            (i32.or
-              (i64.eq (local.get $w) (i64.const "update"))
-              (i64.eq (local.get $w) (i64.const "using"))))
+        (i64.eq (local.get $w) (i64.const "union"))
+        (i32.or
+          (i64.eq (local.get $w) (i64.const "update"))
+          (i64.eq (local.get $w) (i64.const "using"))))
           (then (return (enum.get $Token.keyword))))
         (if (i64.eq (local.get $w) (i64.const "uuid"))
           (then (return (enum.get $Token.type.builtin))))
-        (return (enum.get $Token.variable))))
-    (if (i32.eq (local.get $c) (i32.const "v"))
-      (then
+        (return (enum.get $Token.variable)))
+      (case "v"
         (if (i64.eq (local.get $w) (i64.const "values"))
           (then (return (enum.get $Token.keyword))))
         (if (i64.eq (local.get $w) (i64.const "varchar"))
           (then (return (enum.get $Token.type.builtin))))
-        (return (enum.get $Token.variable))))
-    (if (i32.eq (local.get $c) (i32.const "w"))
-      (then
+        (return (enum.get $Token.variable)))
+      (case "w"
         (if
           (i32.or
-            (i64.eq (local.get $w) (i64.const "where"))
-            (i64.eq (local.get $w) (i64.const "with")))
+        (i64.eq (local.get $w) (i64.const "where"))
+        (i64.eq (local.get $w) (i64.const "with")))
           (then (return (enum.get $Token.keyword))))
         (if (i64.eq (local.get $w) (i64.const "when"))
           (then (return (enum.get $Token.keyword.control))))

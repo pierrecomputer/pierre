@@ -24,7 +24,8 @@
       [32192:43184)   per-language stacks and lookup tables
       [43184:59200)   live tokenizer change list
       [59200:59328)   live tokenizer free-list heads
-      [59328:65536)   free
+      [59328:59584)   PHP keyword table
+      [59584:65536)   free
     [] pages 2..N     (text buffer; a live instance lays them out itself, see src/live.wat)
       [65536:EOF)     input, NUL sentinel, then at least 16 bytes of slack
       [(EOF+47)&~15:) CSS-variable prefix bytes in mode 1, then output HTML;
@@ -116,9 +117,11 @@
   (const $mem.markdownFenceStack 42064)      ;; 96
   (const $mem.tomlStack 42160)               ;; 1024
 
-  ;; Live tokenizer controls; the remaining first-page space is free.
+  ;; Live tokenizer controls and remaining keyword table.
   ;; The heap starts in page 2.
   (const $mem.liveChanges 43184)             ;; 16016: count + 1000 records, padded
   (const $mem.liveFree 59200)                ;; 128: 32 size-class free-list heads
+  (const $mem.phpWords 59328)               ;; 256
+  (const $mem.keywordTablesEnd 59584)
   (const $mem.liveHeapStart 65536)
 )
