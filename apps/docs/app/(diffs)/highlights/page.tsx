@@ -16,7 +16,7 @@ const description =
   'A tiny, fast code highlighter written by hand in WebAssembly Text, with built-in lexers and Shiki-compatible themed tokens, streaming, and live editing.';
 
 export const metadata: Metadata = pageMetadata({
-  title: 'Highlights — a fast WebAssembly code highlighter',
+  title: 'Highlights, from Pierre',
   description,
   path: '/highlights',
   image: '/highlights-brand/opengraph-image.png',
