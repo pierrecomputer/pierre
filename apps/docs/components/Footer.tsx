@@ -45,6 +45,9 @@ export default function Footer() {
                 <Link href="/theme" className={linkClass}>
                   Theme
                 </Link>
+                <Link href="/icons" className={linkClass}>
+                  Icons
+                </Link>
               </>
             ) : (
               <>
@@ -65,6 +68,9 @@ export default function Footer() {
                 </a>
                 <a href={`${diffsExternal}/theme`} className={linkClass}>
                   Theme
+                </a>
+                <a href={`${diffsExternal}/icons`} className={linkClass}>
+                  Icons
                 </a>
               </>
             )}

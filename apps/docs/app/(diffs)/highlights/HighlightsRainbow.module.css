@@ -1,0 +1,95 @@
+.benchmarkRainbow {
+  background-image: linear-gradient(
+    90deg,
+    #fc2b73 0%,
+    #fe8c2c 8.5%,
+    #ffca00 17%,
+    #0dbe4e 25.5%,
+    #08c0ef 34%,
+    #009fff 42%,
+    #c635e4 50%,
+    #009fff 58%,
+    #08c0ef 66%,
+    #0dbe4e 74.5%,
+    #ffca00 83%,
+    #fe8c2c 91.5%,
+    #fc2b73 100%
+  );
+  background-position: 0% 50%;
+  background-repeat: repeat-x;
+  animation: benchmark-rainbow-shift 32s linear infinite;
+}
+
+.heroRainbow {
+  background-color: #08c0ef;
+  background-image: linear-gradient(
+    90deg,
+    #fc2b73 0%,
+    #fe8c2c 8.5%,
+    #ffca00 17%,
+    #0dbe4e 25.5%,
+    #08c0ef 34%,
+    #009fff 42%,
+    #c635e4 50%,
+    #009fff 58%,
+    #08c0ef 66%,
+    #0dbe4e 74.5%,
+    #ffca00 83%,
+    #fe8c2c 91.5%,
+    #fc2b73 100%
+  );
+  background-position: 0% 50%;
+  background-repeat: repeat-x;
+  background-size: 600% 100%;
+  animation: hero-rainbow-shift 20s linear infinite;
+}
+
+/* stylelint-disable-next-line selector-pseudo-class-no-unknown */
+:global(.dark) .benchmarkRainbow {
+  background-image: linear-gradient(
+    90deg,
+    #ff678d 0%,
+    #ffa359 8.5%,
+    #ffd452 17%,
+    #5ecc71 25.5%,
+    #68cdf2 34%,
+    #69b1ff 42%,
+    #d568ea 50%,
+    #69b1ff 58%,
+    #68cdf2 66%,
+    #5ecc71 74.5%,
+    #ffd452 83%,
+    #ffa359 91.5%,
+    #ff678d 100%
+  );
+}
+
+@keyframes benchmark-rainbow-shift {
+  from {
+    background-position: 0% 50%;
+  }
+
+  to {
+    background-position: var(--benchmark-gradient-end) 50%;
+  }
+}
+
+@keyframes hero-rainbow-shift {
+  from {
+    background-position: 0% 50%;
+  }
+
+  to {
+    background-position: 120% 50%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .benchmarkRainbow {
+    animation: none;
+  }
+
+  .heroRainbow {
+    animation: none;
+  }
+}
