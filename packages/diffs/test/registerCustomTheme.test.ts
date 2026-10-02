@@ -1,7 +1,18 @@
 import type { Theme, ThemeFamily } from '@pierre/highlights';
-import { afterEach, describe, expect, mock, spyOn, test } from 'bun:test';
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  mock,
+  spyOn,
+  test,
+} from 'bun:test';
 
-import { createHighlighter } from '../src/highlighter/shared_highlighter';
+import {
+  createHighlighter,
+  disposeHighlighter,
+} from '../src/highlighter/shared_highlighter';
 import { cleanUpResolvedThemes } from '../src/highlighter/themes/cleanUpResolvedThemes';
 import { registerCustomTheme } from '../src/highlighter/themes/registerCustomTheme';
 import { resolveTheme } from '../src/highlighter/themes/resolveTheme';
@@ -29,6 +40,7 @@ const family: ThemeFamily = {
   ],
 };
 
+beforeEach(disposeHighlighter);
 afterEach(() => {
   for (const name of names.splice(0)) customThemes.delete(name);
   cleanUpResolvedThemes();
