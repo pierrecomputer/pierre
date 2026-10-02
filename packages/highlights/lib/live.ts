@@ -130,12 +130,12 @@ interface NormalizedEdit {
 
 const fatalDecoder = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true });
 
-/** A high or low surrogate without its partner (WTF-8 slow path trigger). */
 const loneSurrogateRe =
   /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?:^|[^\uD800-\uDBFF])[\uDC00-\uDFFF]/;
 
 /** Encode preserving lone surrogates as 3-byte WTF-8 sequences. */
-function encodeWtf8(s: string): Uint8Array {
+function encodeLiveText(s: string): Uint8Array {
+  if (!loneSurrogateRe.test(s)) return enc.encode(s);
   const out = new Uint8Array(s.length * 3);
   let w = 0;
   for (let i = 0; i < s.length; i++) {
@@ -167,21 +167,21 @@ function encodeWtf8(s: string): Uint8Array {
 }
 
 /** Decode WTF-8 bytes, restoring lone surrogates the fatal decoder rejects. */
-function decodeWtf8(bytes: Uint8Array): string {
-  const units: number[] = [];
+function decodeWtf8(bytes: Uint8Array, length: number): string {
+  const units = new Array<number>(length);
+  let written = 0;
   let i = 0;
   while (i < bytes.length) {
     const b = bytes[i];
     if (b < 0x80) {
-      units.push(b);
+      units[written++] = b;
       i += 1;
     } else if (b < 0xe0) {
-      units.push(((b & 31) << 6) | (bytes[i + 1] & 63));
+      units[written++] = ((b & 31) << 6) | (bytes[i + 1] & 63);
       i += 2;
     } else if (b < 0xf0) {
-      units.push(
-        ((b & 15) << 12) | ((bytes[i + 1] & 63) << 6) | (bytes[i + 2] & 63)
-      );
+      units[written++] =
+        ((b & 15) << 12) | ((bytes[i + 1] & 63) << 6) | (bytes[i + 2] & 63);
       i += 3;
     } else {
       const cp =
@@ -189,23 +189,16 @@ function decodeWtf8(bytes: Uint8Array): string {
         ((bytes[i + 1] & 63) << 12) |
         ((bytes[i + 2] & 63) << 6) |
         (bytes[i + 3] & 63);
-      units.push(
-        0xd800 + ((cp - 0x10000) >> 10),
-        0xdc00 + ((cp - 0x10000) & 0x3ff)
-      );
+      units[written++] = 0xd800 + ((cp - 0x10000) >> 10);
+      units[written++] = 0xdc00 + ((cp - 0x10000) & 0x3ff);
       i += 4;
     }
   }
-  let s = '';
-  for (let at = 0; at < units.length; at += 4096) {
-    s += String.fromCharCode(...units.slice(at, at + 4096));
+  let text = '';
+  for (let at = 0; at < length; at += 4096) {
+    text += String.fromCharCode(...units.slice(at, at + 4096));
   }
-  return s;
-}
-
-/** Encode text for the live document, falling back to WTF-8 when needed. */
-function encodeLiveText(s: string): Uint8Array {
-  return loneSurrogateRe.test(s) ? encodeWtf8(s) : enc.encode(s);
+  return text;
 }
 
 /** Validate a half-open `[startLine, endLine)` render range option. */
@@ -440,7 +433,7 @@ export class LiveTokenizer {
     try {
       return fatalDecoder.decode(bytes);
     } catch {
-      return decodeWtf8(bytes);
+      return decodeWtf8(bytes, ex.liveLineLen(line));
     }
   }
 
@@ -757,9 +750,9 @@ export class LiveTokenizer {
     hl: HighlightsHighlighter,
     ex: LiveWasmExports,
     from: number,
-    to: number,
-    lines = new Map<number, HighlightedToken[]>()
+    to: number
   ): Map<number, HighlightedToken[]> {
+    const lines = new Map<number, HighlightedToken[]>();
     if (from >= to) return lines;
     const base = ex.liveChangesPtr();
     const count = hl.dv.getUint32(base, true);
@@ -977,18 +970,22 @@ export class LiveTokenizer {
     }
     if (rangeLen !== e.newText.length) return false;
     if (rangeLen === 0) return true;
-    let text = '';
+    let offset = 0;
     for (let line = e.sl; line <= e.el; line++) {
       const lineText = readLine(line);
-      text += lineText.slice(
+      const text = lineText.slice(
         line === e.sl ? e.sc : 0,
         line === e.el ? e.ec : lineText.length
       );
+      if (!e.newText.startsWith(text, offset)) return false;
+      offset += text.length;
       if (line < e.el) {
-        text += eol(ex.liveLineFlags(line));
+        const terminator = eol(ex.liveLineFlags(line));
+        if (!e.newText.startsWith(terminator, offset)) return false;
+        offset += terminator.length;
       }
     }
-    return text === e.newText;
+    return true;
   }
 
   /** Encode and copy the batch into a staged block, then splice natively. */

@@ -131,10 +131,12 @@ arrays, excluding terminators. Whole-input and stream offsets are absolute
 UTF-16 indices; live offsets are line-relative. Comment, string, and regex IDs
 also provide standard token types for uses such as bracket matching.
 
-`codeToTokens` normalizes malformed UTF-8 byte input before lexing and retains
-original strings for token content. Styling happens after lexing, so records are
-independent of themes. `tokenizeMaxLineLength` collapses long lines during
-object conversion; it does not skip lexing or change live raw records.
+`codeToTokens` decodes byte input for token content and copies valid UTF-8
+directly to Wasm. Malformed bytes are replaced before lexing so record offsets
+match the decoded string. String input retains its original UTF-16 content.
+Styling happens after lexing, so records are independent of themes.
+`tokenizeMaxLineLength` collapses long lines during object conversion; it does
+not skip lexing or change live raw records.
 
 ## Themes
 
@@ -213,11 +215,14 @@ of all carried state, including stacks, embedded regions, and checkpoints.
 
 Line records normally pack into `(tokenId << 24) | endUtf16`; larger offsets use
 `[endUtf16, tokenId]` pairs. Text uses WTF-8 to preserve lone surrogates. Reads
-retain LF, CRLF, and lone CR; lexers see normalized LF terminators.
+retain LF, CRLF, and lone CR; lexers see normalized LF terminators. Normal UTF-8
+uses native encoding and decoding. WTF-8 decoding preallocates its UTF-16 array
+from the stored line length.
 
 Edit batches refer to the pre-edit document. The host validates and sorts them,
-rejects overlaps, removes no-ops, and combines edits sharing a line. Wasm
-splices line descriptors and remaps any pending dirty ranges through the edits.
+rejects overlaps, removes no-ops by comparing each line and terminator, and
+combines edits sharing a line. Wasm splices line descriptors and remaps pending
+dirty ranges through the edits.
 
 Without `renderRange`, tokenization completes synchronously. With it, work
 reaches the range's end, including preceding dirty lines needed for state.

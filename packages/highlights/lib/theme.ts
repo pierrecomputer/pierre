@@ -181,41 +181,20 @@ export function variableSpanTag(hl: number): string {
   return `<span style="color:var(${tokenTypes[hl].replace(/[._]/g, '-')})">`;
 }
 
-/**
- * One theme prepared for every output path. `styles` is indexed by token id,
- * with `null` for unstyled slots; the foreground and background live in `fg`
- * and `bg` instead. Which extra representation is present depends on the
- * theme: hex themes carry the packed Wasm `table`, Display P3 themes carry
- * the HTML tag replacements, and CSS-variable themes carry neither because
- * every color is a prefixed custom property. Representations that only some
- * callers need are built on first read: the tag replacements, and the
- * variable references of a CSS-variable theme, which HTML output never reads.
- */
+/** Resolved token styles, root colors, and the theme's HTML representation. */
 export interface PreparedTheme {
   name: string;
+  /** Indexed by token id; null slots inherit the foreground. */
   styles: (TokenStyle | null)[];
   fg?: string;
   bg?: string;
-  /** True when any color is `color(display-p3 …)`. */
-  usesDisplayP3: boolean;
-  /**
-   * Five bytes per token id (`r g b a style`) for the Wasm theme table, or
-   * `undefined` when HTML must render through the CSS-variable emitter
-   * because the colors are custom properties or Display P3.
-   */
+  /** Five-byte RGBA/style records; undefined for Display P3 and CSS variables. */
   table: Uint8Array | undefined;
-  /**
-   * For Display P3 themes, the CSS-variable emitter's unprefixed `<pre>` and
-   * `<span>` openers mapped to openers with the theme's colors and font
-   * settings inlined; built on first read, so token-only callers never pay
-   * for it. `undefined` for other themes.
-   */
+  /** Lazy replacements for unprefixed CSS-variable tags; Display P3 only. */
   readonly htmlTags: Map<string, string> | undefined;
 }
 
-// Cache by object identity, not name: same-named themes may have different
-// palettes, and a registered theme may be replaced by a new object with the
-// same name. CSS-variable themes get one entry per prefix; the others use ''.
+// Theme names are not unique. Replace the object to change its cached styles.
 const preparedCache = new WeakMap<Theme, Map<string, PreparedTheme>>();
 
 /**
@@ -267,7 +246,6 @@ function prepareCssVariables(
     get bg() {
       return resolve().bg;
     },
-    usesDisplayP3: false,
     table: undefined,
     htmlTags: undefined,
   };
@@ -335,7 +313,6 @@ function prepareStyles(theme: Theme): PreparedTheme {
     styles,
     fg,
     bg,
-    usesDisplayP3,
     table: usesDisplayP3 ? undefined : table,
     get htmlTags() {
       if (!usesDisplayP3) return undefined;

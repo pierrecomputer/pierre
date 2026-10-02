@@ -24,10 +24,8 @@ import {
 
 const enc = new TextEncoder();
 const dec = new TextDecoder('utf-8', { ignoreBOM: true });
-const strictDec = new TextDecoder('utf-8', { ignoreBOM: true, fatal: true });
 const pageSize = 65536;
 const themePtr = 64; // $mem.themeTable in src/memory.wat
-const themeBytes = themeTableBytes;
 // Unicode identifier classes for the ECMAScript lexers; see #idClass.
 const idClassRegex = [/^\p{ID_Start}$/u, /^[\u200C\u200D\p{ID_Continue}]$/u];
 let idClassCache: Uint8Array | undefined;
@@ -84,21 +82,24 @@ export class HighlightsHighlighter implements Highlighter {
     this.dv = new DataView(this.memory.buffer);
   }
 
-  /** Write input to the text buffer and return its byte length. */
-  writeInput(input: string | Uint8Array | ArrayBuffer): number {
+  /** Write input at a byte offset in the text buffer and return its byte length. */
+  writeInput(input: string | Uint8Array | ArrayBuffer, offset = 0): number {
     if (typeof input === 'string') {
       // Use spare capacity for UTF-8, keeping 96 bytes for lexer lookahead.
-      this.#growMemoryIfNeeded(input.length + 96);
+      this.#growMemoryIfNeeded(offset + input.length + 96);
       let { read, written } = enc.encodeInto(
         input,
-        this.buffer.subarray(pageSize, this.buffer.length - 96)
+        this.buffer.subarray(pageSize + offset, this.buffer.length - 96)
       );
       if (read < input.length) {
         const rest = input.slice(read);
-        this.#growMemoryIfNeeded(written + rest.length * 3 + 96);
+        this.#growMemoryIfNeeded(offset + written + rest.length * 3 + 96);
         written += enc.encodeInto(
           rest,
-          this.buffer.subarray(pageSize + written, this.buffer.length - 96)
+          this.buffer.subarray(
+            pageSize + offset + written,
+            this.buffer.length - 96
+          )
         ).written;
       }
       return written;
@@ -109,8 +110,8 @@ export class HighlightsHighlighter implements Highlighter {
     if (!(input instanceof Uint8Array)) {
       throw new TypeError('input must be a string, Uint8Array, or ArrayBuffer');
     }
-    this.#growMemoryIfNeeded(input.length + 96);
-    this.buffer.set(input, pageSize);
+    this.#growMemoryIfNeeded(offset + input.length + 96);
+    this.buffer.set(input, pageSize + offset);
     return input.length;
   }
 
@@ -148,11 +149,6 @@ export class HighlightsHighlighter implements Highlighter {
     const langId = langIdOf(options.lang);
     const cssVariablePrefix =
       options.cssVariablePrefix ?? defaultCssVariablePrefix;
-    // A hex theme renders inline from its packed table and a theme set from
-    // its packed blob. The rest run the CSS-variable emitter: a CSS-variable
-    // theme with the prefix, while a Display P3 theme or a set containing one
-    // runs it with an empty prefix and has its `var(<token>)` openers
-    // rewritten by the tag replacements below.
     let table: Uint8Array | undefined;
     let blob: Uint8Array | undefined;
     let tags: Map<string, string> | undefined;
@@ -169,8 +165,6 @@ export class HighlightsHighlighter implements Highlighter {
     const inputLength = this.writeInput(input);
     let mode: number;
     if (blob !== undefined) {
-      // the set travels with the input: the blob sits at the output base and
-      // the emitter starts output after it
       this.#growMemoryIfNeeded(inputLength + blob.length + 96);
       const blobPtr = (pageSize + inputLength + 47) & ~15;
       this.buffer.set(blob, blobPtr);
@@ -193,7 +187,11 @@ export class HighlightsHighlighter implements Highlighter {
     } else {
       if (this.#themeWritten !== table) {
         this.buffer.set(table, themePtr);
-        this.buffer.fill(0, themePtr + table.length, themePtr + themeBytes);
+        this.buffer.fill(
+          0,
+          themePtr + table.length,
+          themePtr + themeTableBytes
+        );
         this.#themeWritten = table;
       }
       mode = 0;
@@ -232,12 +230,21 @@ export class HighlightsHighlighter implements Highlighter {
     options: CodeToTokensOptions
   ): TokensResult {
     const code = toCode(input);
+    // Normalize malformed UTF-8 and avoid detaching borrowed input on memory growth.
+    if (
+      typeof input !== 'string' &&
+      (code.includes('\ufffd') ||
+        input === this.memory.buffer ||
+        (input instanceof Uint8Array && input.buffer === this.memory.buffer))
+    ) {
+      input = code;
+    }
     const themes = resolveOptionThemes(options);
     const cssVariablePrefix =
       options.cssVariablePrefix ?? defaultCssVariablePrefix;
     const recs = this.tokenizeLineRecords(
       langIdOf(options.lang),
-      this.writeInput(code)
+      this.writeInput(input)
     );
     const tokens = lineRecordsToTokens(
       code,
@@ -305,11 +312,12 @@ export class HighlightsHighlighter implements Highlighter {
   }
 }
 
-/** Decode non-string input so tokens can carry string content and offsets. */
+/** Decode bytes for token content; keep string input's original UTF-16. */
 function toCode(input: string | Uint8Array | ArrayBuffer): string {
   if (typeof input === 'string') return input;
-  if (input instanceof ArrayBuffer) return dec.decode(new Uint8Array(input));
-  if (input instanceof Uint8Array) return dec.decode(input);
+  if (input instanceof Uint8Array || input instanceof ArrayBuffer) {
+    return dec.decode(input);
+  }
   throw new TypeError('input must be a string, Uint8Array, or ArrayBuffer');
 }
 
@@ -550,27 +558,12 @@ export class StreamTokenizer extends TransformStream<
   #tokenizeChunk(input: string | Uint8Array, prefix = ''): ThemedToken[][] {
     const hl = this.#hl;
     if (hl == null) throw new Error('stream has ended');
-    let code: string;
-    if (typeof input === 'string') {
-      code = input;
-    } else {
-      try {
-        code = strictDec.decode(input);
-      } catch {
-        // Normalize malformed UTF-8 before lexing, matching codeToTokens.
-        code = dec.decode(input);
-        input = enc.encode(code);
-      }
-      if (prefix !== '') {
-        const bytes = enc.encode(prefix);
-        const combined = new Uint8Array(bytes.length + input.length);
-        combined.set(bytes);
-        combined.set(input, bytes.length);
-        input = combined;
-        code = prefix + code;
-      }
-    }
-    const byteLen = hl.writeInput(input);
+    let code = toCode(input);
+    // Replacement characters must reach Wasm as valid UTF-8 for matching offsets.
+    if (typeof input !== 'string' && code.includes('\ufffd')) input = code;
+    code = prefix + code;
+    let byteLen = prefix === '' ? 0 : hl.writeInput(prefix);
+    byteLen += hl.writeInput(input, byteLen);
     const recs = hl.tokenizeLineRecords(
       this.#langId,
       byteLen,

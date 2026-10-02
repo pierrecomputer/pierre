@@ -72,6 +72,44 @@ void t.test(
   }
 );
 
+void t.test('codeToTokens: byte inputs match decoded strings', () => {
+  const encoder = new TextEncoder();
+  const decoder = new TextDecoder('utf-8', { ignoreBOM: true });
+  const options = { lang: 'ts', theme: pierreDark } as const;
+  for (const bytes of [
+    new Uint8Array(0),
+    encoder.encode('\ufeffconst café = "日本語🙂\ufffd";\r\n// 한글\n'),
+    encoder.encode('const 日本語 = "🙂";\n'.repeat(5000)),
+    new Uint8Array([0x61, 0xff, 0x0a, 0xe2, 0x82]),
+    new Uint8Array([
+      0xed, 0xa0, 0x80, 0x20, 0xc0, 0xaf, 0x0a, 0xf4, 0x90, 0x80, 0x80,
+    ]),
+  ]) {
+    const expected = codeToTokens(decoder.decode(bytes), options);
+    const padded = new Uint8Array(bytes.length + 4).fill(0xff);
+    padded.set(bytes, 2);
+    for (const input of [
+      bytes,
+      bytes.buffer,
+      padded.subarray(2, bytes.length + 2),
+    ]) {
+      assert.deepEqual(codeToTokens(input, options), expected);
+    }
+  }
+});
+
+void t.test('codeToTokens: input can borrow the instance memory', () => {
+  for (const view of [false, true]) {
+    const hl = new HighlightsHighlighter(highlighter.wasmModule);
+    hl.buffer.fill(0x20);
+    const input = view ? hl.buffer : hl.memory.buffer;
+    const code = new TextDecoder().decode(input);
+    const options = { lang: 'plain', theme: pierreDark } as const;
+    const expected = codeToTokens(code, options);
+    assert.deepEqual(hl.codeToTokens(input, options), expected);
+  }
+});
+
 void t.test('font-only bundled emphasis keeps italic and bold styling', () => {
   const code = '*hello* **world**';
   for (const theme of [pierreDark, pierreLight]) {
