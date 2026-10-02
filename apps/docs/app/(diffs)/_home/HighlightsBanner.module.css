@@ -1,0 +1,73 @@
+.benchmarkStage {
+  position: relative;
+  isolation: isolate;
+  min-width: 0;
+  padding: 0.5rem;
+  overflow: hidden;
+  border-radius: var(--radius);
+}
+
+.benchmarkStage::before {
+  position: absolute;
+  z-index: 0;
+  inset: -22% -18%;
+  pointer-events: none;
+  content: '';
+  background:
+    radial-gradient(circle at 24% 68%, rgb(8 192 239 / 42%), transparent 45%),
+    radial-gradient(circle at 60% 35%, rgb(198 53 228 / 48%), transparent 48%),
+    radial-gradient(circle at 82% 68%, rgb(252 43 115 / 38%), transparent 44%),
+    radial-gradient(circle at 92% 38%, rgb(254 140 44 / 34%), transparent 40%);
+  filter: blur(1.75rem);
+  opacity: 0.95;
+  mix-blend-mode: screen;
+  mask-image: radial-gradient(
+    ellipse 54% 52% at center,
+    black 25%,
+    rgb(0 0 0 / 90%) 45%,
+    rgb(0 0 0 / 45%) 58%,
+    transparent 66%
+  );
+}
+
+.benchmarkCard {
+  position: relative;
+  z-index: 1;
+  inline-size: 100%;
+  max-inline-size: 33.75rem;
+  margin-inline: auto;
+  background-color: color-mix(in oklch, var(--background) 82%, transparent);
+  box-shadow:
+    0 24px 48px -24px rgb(0 0 0 / 95%),
+    inset 0 1px 0 rgb(255 255 255 / 5%);
+}
+
+.benchmarkStage::after {
+  position: absolute;
+  z-index: 2;
+  inset-inline: 0.5rem;
+  bottom: 0;
+  block-size: 10rem;
+  pointer-events: none;
+  content: '';
+  background: linear-gradient(
+    to bottom,
+    transparent,
+    color-mix(in oklch, var(--background) 55%, transparent) 58%,
+    color-mix(in oklch, var(--background) 85%, transparent) 90%
+  );
+  -webkit-backdrop-filter: blur(0.5rem);
+  backdrop-filter: blur(0.5rem);
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    transparent,
+    rgb(0 0 0 / 35%) 38%,
+    black 78%
+  );
+  mask-image: linear-gradient(
+    to bottom,
+    transparent,
+    rgb(0 0 0 / 35%) 38%,
+    black 78%
+  );
+}
