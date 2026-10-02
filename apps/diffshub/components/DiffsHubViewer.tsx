@@ -15,25 +15,23 @@ import { type CodeViewHandle, useStableCallback } from '@pierre/diffs/react';
 import { IconChevronSm } from '@pierre/icons';
 import { memo, type RefObject, useMemo, useRef, useState } from 'react';
 
-import { DraftAnnotation } from './DraftAnnotation';
-import { ExampleAnnotation } from './ExampleAnnotation';
+import { CommentForm } from './CommentForm';
+import { FileComments } from './FileComments';
+import { GitHubAccount } from './GitHubAccount';
+import { GitHubComment } from './GitHubComment';
 import { ThemedCodeView } from './ThemedCodeView';
 import { useChromeThemeProps } from './useChromeThemeProps';
-import type { AvatarName } from '@/lib/annotation';
+import type { GitHubCommentControls } from './useGitHubComments';
 import { buildAnnotationThemeStyle } from '@/lib/annotationThemeStyle';
-import { classifyCommentLineType } from '@/lib/classifyCommentLineType';
 import { cn } from '@/lib/cn';
 import { CODE_VIEW_CUSTOM_CSS, CODE_VIEW_LAYOUT } from '@/lib/constants';
+import type { GitHubUser } from '@/lib/githubTypes';
 import { isDiffItem } from '@/lib/isDiffItem';
 import { isDraftAnnotation } from '@/lib/isDraftAnnotation';
 import { isDraftMetadata } from '@/lib/isDraftMetadata';
 import { isSavedAnnotation } from '@/lib/isSavedAnnotation';
 import { diffshubChromeMapping } from '@/lib/theme/diffshubChromeMapping';
-import type {
-  CommentMetadata,
-  DiffsHubDeletedCommentEvent,
-  DiffsHubSavedCommentEvent,
-} from '@/lib/types';
+import type { CommentMetadata } from '@/lib/types';
 
 function getNextItemVersion(item: CodeViewItem<CommentMetadata>): number {
   return typeof item.version === 'number' ? item.version + 1 : 1;
@@ -65,8 +63,9 @@ interface ActiveDraftComment {
 interface DiffsHubViewerProps {
   className?: string;
   diffStyle: 'split' | 'unified';
-  onCommentDeleted(comment: DiffsHubDeletedCommentEvent): void;
-  onCommentSaved(comment: DiffsHubSavedCommentEvent): void;
+  comments: GitHubCommentControls;
+  commentKind: 'pull' | 'commit' | null;
+  user: GitHubUser | null;
   overflow: 'wrap' | 'scroll';
   showBackgrounds: boolean;
   diffIndicators: DiffIndicators;
@@ -83,8 +82,9 @@ interface DiffsHubViewerProps {
 export const DiffsHubViewer = memo(function DiffsHubViewer({
   className,
   diffStyle,
-  onCommentDeleted,
-  onCommentSaved,
+  comments,
+  commentKind,
+  user,
   overflow,
   showBackgrounds,
   diffIndicators,
@@ -97,6 +97,7 @@ export const DiffsHubViewer = memo(function DiffsHubViewer({
   onLineLinkChange,
   onViewerReady,
 }: DiffsHubViewerProps) {
+  const canComment = user != null && comments.ready && commentKind != null;
   const nextCommentKeyRef = useRef(0);
   const activeDraftRef = useRef<ActiveDraftComment | null>(null);
   const [selectedLines, setSelectedLines] =
@@ -149,6 +150,12 @@ export const DiffsHubViewer = memo(function DiffsHubViewer({
 
   const handleCreateDraftComment = useStableCallback(
     (range: SelectedLineRange, itemId: string) => {
+      if (!canComment) return;
+      if (
+        activeDraftRef.current != null &&
+        !window.confirm('Discard the open line comment?')
+      )
+        return;
       const side = range.endSide ?? range.side;
       if (side == null) {
         return;
@@ -167,7 +174,6 @@ export const DiffsHubViewer = memo(function DiffsHubViewer({
         metadata: {
           kind: 'draft',
           key: commentKey,
-          message: '',
           range,
         },
       };
@@ -211,13 +217,6 @@ export const DiffsHubViewer = memo(function DiffsHubViewer({
       if (viewer == null) {
         return;
       }
-      const item = viewer.getItem(itemId);
-      const removedAnnotation =
-        item != null && isDiffItem(item)
-          ? item.annotations?.find(
-              (annotation) => annotation.metadata.key === key
-            )
-          : undefined;
 
       updateViewerDiffItem(viewer, itemId, (item) => {
         if (item.annotations == null) {
@@ -243,99 +242,28 @@ export const DiffsHubViewer = memo(function DiffsHubViewer({
 
       setSelectedLines(null);
       onLineLinkChange(null);
-      if (removedAnnotation != null && isSavedAnnotation(removedAnnotation)) {
-        onCommentDeleted({ itemId, key });
-      }
     }
   );
 
   const handleSaveDraftComment = useStableCallback(
-    (itemId: string, key: string, message: string, author: AvatarName) => {
-      const trimmedMessage = message.trim();
-      const { current: viewer } = viewerRef;
-      if (trimmedMessage.length === 0 || viewer == null) {
-        return;
-      }
-
-      const item = viewer.getItem(itemId);
-      if (item == null || !isDiffItem(item)) {
-        return;
-      }
-
-      const draftAnnotation = item?.annotations?.find(
+    async (
+      itemId: string,
+      key: string,
+      message: string
+    ): Promise<string | undefined> => {
+      const item = viewerRef.current?.getItem(itemId);
+      if (item == null || !isDiffItem(item))
+        return 'The file is no longer available. Reload the diff.';
+      const draft = item.annotations?.find(
         (annotation) => annotation.metadata.key === key
       );
-      if (draftAnnotation == null || !isDraftAnnotation(draftAnnotation)) {
-        return;
-      }
-
-      const updatedItem = updateViewerDiffItem(viewer, itemId, (item) => {
-        if (item.annotations == null) {
-          return false;
-        }
-
-        const nextAnnotations: DiffLineAnnotation<CommentMetadata>[] =
-          item.annotations.map((annotation) => {
-            if (
-              annotation.metadata.key !== key ||
-              !isDraftAnnotation(annotation)
-            ) {
-              return annotation;
-            }
-
-            return {
-              ...annotation,
-              metadata: {
-                kind: 'saved',
-                key,
-                author,
-                message: trimmedMessage,
-                range: annotation.metadata.range,
-              },
-            };
-          });
-
-        let didChange = false;
-        for (let index = 0; index < nextAnnotations.length; index++) {
-          if (nextAnnotations[index] !== item.annotations[index]) {
-            didChange = true;
-            break;
-          }
-        }
-
-        if (!didChange) {
-          return false;
-        }
-
-        item.annotations = nextAnnotations;
-        return true;
-      });
-
-      if (updatedItem == null) {
-        return;
-      }
-
-      const { current: activeDraft } = activeDraftRef;
-      if (activeDraft?.itemId === itemId && activeDraft.key === key) {
-        activeDraftRef.current = null;
-      }
-
-      setSelectedLines(null);
-      onLineLinkChange(null);
-      onCommentSaved({
-        author,
-        itemId,
-        key,
-        lineNumber: draftAnnotation.lineNumber,
-        lineType: classifyCommentLineType(
-          item.fileDiff,
-          draftAnnotation.side,
-          draftAnnotation.lineNumber
-        ),
-        message: trimmedMessage,
-        range: draftAnnotation.metadata.range,
-        side: draftAnnotation.side,
-      });
+      if (draft == null || !isDraftAnnotation(draft))
+        return 'The draft is no longer available.';
+      return comments.create(
+        item.fileDiff.name,
+        { kind: 'line', range: draft.metadata.range },
+        message
+      );
     }
   );
 
@@ -378,12 +306,19 @@ export const DiffsHubViewer = memo(function DiffsHubViewer({
       }
 
       if (isDraftAnnotation(annotation)) {
-        return (
-          <DraftAnnotation
-            annotation={annotation}
-            itemId={item.id}
-            onCancel={handleRemoveComment}
-            onSave={handleSaveDraftComment}
+        return user == null ? (
+          <GitHubAccount />
+        ) : (
+          <CommentForm
+            key={annotation.metadata.key}
+            user={user}
+            disabled={!canComment}
+            onCancel={() =>
+              handleRemoveComment(item.id, annotation.metadata.key)
+            }
+            onSave={(message) =>
+              handleSaveDraftComment(item.id, annotation.metadata.key, message)
+            }
           />
         );
       }
@@ -393,11 +328,16 @@ export const DiffsHubViewer = memo(function DiffsHubViewer({
       }
 
       return (
-        <ExampleAnnotation
-          annotation={annotation}
-          itemId={item.id}
-          onDelete={handleRemoveComment}
-          onToggleSelection={handleToggleCommentSelection}
+        <GitHubComment
+          comment={annotation.metadata.comment}
+          userId={user?.id}
+          onDelete={comments.remove}
+          onSelect={() =>
+            handleToggleCommentSelection({
+              id: item.id,
+              range: annotation.metadata.range,
+            })
+          }
         />
       );
     }
@@ -422,6 +362,11 @@ export const DiffsHubViewer = memo(function DiffsHubViewer({
     }
   );
 
+  const renderHeaderFilenameSuffix = (item: CodeViewItem<CommentMetadata>) =>
+    commentKind === 'pull' && item.type === 'diff' ? (
+      <FileComments path={item.fileDiff.name} comments={comments} user={user} />
+    ) : null;
+
   // NOTE(amadeus): For some insane reason, the react compiler did not know how
   // to properly memoize this, so we pulled it into a `useMemo` for safety...
   const options: CodeViewOptions<CommentMetadata, undefined> = useMemo(
@@ -440,7 +385,7 @@ export const DiffsHubViewer = memo(function DiffsHubViewer({
         lineHoverHighlight: 'number',
         // hunkSeparators: 'line-info-basic',
         enableLineSelection: true,
-        enableGutterUtility: true,
+        enableGutterUtility: canComment,
         stickyHeaders: true,
         unsafeCSS: CODE_VIEW_CUSTOM_CSS,
         // FIXME(amadeus): Move all `onX` methods onto the react component maybe?
@@ -455,6 +400,7 @@ export const DiffsHubViewer = memo(function DiffsHubViewer({
         },
       }) satisfies CodeViewOptions<CommentMetadata, undefined>,
     [
+      canComment,
       diffIndicators,
       diffStyle,
       handleCreateDraftComment,
@@ -467,21 +413,34 @@ export const DiffsHubViewer = memo(function DiffsHubViewer({
     ]
   );
   return (
-    <ThemedCodeView<CommentMetadata>
-      ref={handleViewerRef}
-      containerRef={scrollRef}
-      initialItems={initialItems}
-      className={cn(
-        className,
-        'cv-scrollbar relative h-full min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-clip overscroll-contain border-b border-border w-full [contain:strict] [overflow-anchor:none] [will-change:scroll-position] md:border-b-0 [&_diffs-container]:overflow-clip [&_diffs-container]:[contain:layout_paint_style] [&_diffs-container]:shadow-[0_-1px_0_var(--diffshub-diff-separator,var(--color-border-opaque)),0_1px_0_var(--diffshub-diff-separator,var(--color-border-opaque))]'
+    <div className={cn(className, 'flex min-h-0 min-w-0 flex-col')}>
+      {commentKind != null && (!canComment || comments.error != null) && (
+        <p
+          role="status"
+          className="border-border text-muted-foreground border-b px-4 py-2 text-sm"
+        >
+          {comments.error ??
+            (user == null
+              ? 'Sign in with GitHub to comment on code.'
+              : 'Loading GitHub comments…')}
+        </p>
       )}
-      options={options}
-      style={annotationThemeStyle}
-      selectedLines={selectedLines}
-      onSelectedLinesChange={handleSetSelection}
-      renderAnnotation={renderCommentAnnotation}
-      renderHeaderPrefix={renderHeaderPrefix}
-    />
+      <ThemedCodeView<CommentMetadata>
+        ref={handleViewerRef}
+        containerRef={scrollRef}
+        initialItems={initialItems}
+        className={cn(
+          'cv-scrollbar relative h-full min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-clip overscroll-contain border-b border-border w-full [contain:strict] [overflow-anchor:none] [will-change:scroll-position] md:border-b-0 [&_diffs-container]:overflow-clip [&_diffs-container]:[contain:layout_paint_style] [&_diffs-container]:shadow-[0_-1px_0_var(--diffshub-diff-separator,var(--color-border-opaque)),0_1px_0_var(--diffshub-diff-separator,var(--color-border-opaque))]'
+        )}
+        options={options}
+        style={annotationThemeStyle}
+        selectedLines={selectedLines}
+        onSelectedLinesChange={handleSetSelection}
+        renderAnnotation={renderCommentAnnotation}
+        renderHeaderPrefix={renderHeaderPrefix}
+        renderHeaderFilenameSuffix={renderHeaderFilenameSuffix}
+      />
+    </div>
   );
 });
 

@@ -120,7 +120,7 @@ export function appendFileDiffToDiffsHubData(
   accumulator.pendingItems.push(item);
   accumulator.pendingItemById.set(id, item);
 
-  accumulator.itemIdToFile.set(id, { fileOrder, path });
+  accumulator.itemIdToFile.set(id, { fileOrder, path, fileDiff });
   if (path.length === 0) {
     return itemIdRename;
   }

@@ -17,7 +17,9 @@ import { DiffsHubSidebar } from './DiffsHubSidebar';
 import { DiffsHubStatusPanel } from './DiffsHubStatusPanel';
 import { DiffsHubViewer } from './DiffsHubViewer';
 import { ThemeSourceProvider } from './ThemeSourceProvider';
+import { useGitHubComments } from './useGitHubComments';
 import { useGitHubDiffFileLoader } from './useGitHubDiffFileLoader';
+import { useGitHubSession } from './useGitHubSession';
 import { useGitHubToken } from './useGitHubToken';
 import { useIsHydrated } from './useIsHydrated';
 import { useMediaQuery } from './useMediaQuery';
@@ -28,16 +30,9 @@ import {
   docsThemeCatalog,
   themeController,
 } from '@/components/themeController';
-import { preloadAvatars } from '@/lib/annotation';
-import { removeSavedCommentSidebarEntry } from '@/lib/removeSavedCommentSidebarEntry';
+import { parseGitHubDiffSource } from '@/lib/githubDiffSource';
 import type { DarkThemeName, LightThemeName } from '@/lib/themeNames';
-import type {
-  CommentMetadata,
-  DiffsHubDeletedCommentEvent,
-  DiffsHubSavedCommentEntry,
-  DiffsHubSavedCommentEvent,
-} from '@/lib/types';
-import { upsertSavedCommentSidebarEntry } from '@/lib/upsertSavedCommentSidebarEntry';
+import type { CommentMetadata, DiffsHubSavedCommentEntry } from '@/lib/types';
 
 const MOBILE_MEDIA_QUERY = '(max-width: 767px)';
 
@@ -58,8 +53,6 @@ export function ReviewUI({ domain, initialUrl, path }: ReviewUIProps) {
 }
 
 function ReviewUIInner({ domain, initialUrl, path }: ReviewUIProps) {
-  useEffect(preloadAvatars, []);
-
   const isWorkerPoolReadyOrDisable = useIsWorkerPoolReadyOrDisabled();
   const [diffStyle, setDiffStyle] = useState<'split' | 'unified'>('split');
   const [collapseMode, setCollapseMode] = useState<'expanded' | 'collapsed'>(
@@ -77,12 +70,18 @@ function ReviewUIInner({ domain, initialUrl, path }: ReviewUIProps) {
     token: githubToken,
     tokenVersion: githubTokenVersion,
   } = useGitHubToken();
+  const session = useGitHubSession();
+  const user = session.status === 'ready' ? session.user : null;
+  const source = domain == null ? parseGitHubDiffSource(path) : undefined;
+  const commentKind =
+    source?.kind === 'pull' || source?.kind === 'commit' ? source.kind : null;
+  const authVersion = `${githubTokenVersion}:${user?.id ?? ''}`;
   const { getGitHubToken, loadDiffFiles } = useGitHubDiffFileLoader({
     domain,
-    hasGitHubToken,
+    hasGitHubToken: hasGitHubToken || user != null,
     path,
     token: githubToken,
-    tokenVersion: githubTokenVersion,
+    tokenVersion: authVersion,
   });
   // All theming state — color mode and the light/dark theme-name picks — lives
   // in the single @pierre/theming controller (the same instance the app-wide
@@ -143,7 +142,7 @@ function ReviewUIInner({ domain, initialUrl, path }: ReviewUIProps) {
   const {
     applyCollapseModeToLoaded,
     commentFileByItemId,
-    commentSections,
+    commitId,
     diffStats,
     errorMessage,
     initialItems,
@@ -151,18 +150,30 @@ function ReviewUIInner({ domain, initialUrl, path }: ReviewUIProps) {
     onLineLinkChange,
     onViewerReady,
     retryLoad,
-    setCommentSections,
     treeSource,
     viewerKey,
   } = usePatchLoader({
     collapseMode,
     domain,
     getGitHubToken,
-    githubTokenVersion,
+    githubTokenVersion: authVersion,
     onLoadStart: handlePatchLoadStart,
     path,
     viewerRef,
   });
+  const comments = useGitHubComments({
+    path,
+    commitId: commentKind != null && loadState === 'ready' ? commitId : null,
+    userId: user?.id,
+    viewerKey,
+    files: commentFileByItemId,
+    viewerRef,
+  });
+  const { sync: syncComments } = comments;
+  const handleViewerReady = useCallback(() => {
+    onViewerReady();
+    syncComments();
+  }, [onViewerReady, syncComments]);
 
   // Crossing the mobile breakpoint picks the diff style for that width and
   // closes the file-tree overlay when leaving mobile; the user can still change
@@ -208,22 +219,6 @@ function ReviewUIInner({ domain, initialUrl, path }: ReviewUIProps) {
     setCollapseMode(next);
     applyCollapseModeToLoaded(next);
   }, [applyCollapseModeToLoaded, collapseMode]);
-  const handleCommentSaved = useCallback(
-    (comment: DiffsHubSavedCommentEvent) => {
-      setCommentSections((prev) =>
-        upsertSavedCommentSidebarEntry(prev, commentFileByItemId, comment)
-      );
-    },
-    [commentFileByItemId, setCommentSections]
-  );
-  const handleCommentDeleted = useCallback(
-    (comment: DiffsHubDeletedCommentEvent) => {
-      setCommentSections((prev) =>
-        removeSavedCommentSidebarEntry(prev, comment)
-      );
-    },
-    [setCommentSections]
-  );
   const handleToggleFileTreeOverlay = useCallback(() => {
     setFileTreeOverlayOpen((open) => !open);
   }, []);
@@ -231,22 +226,22 @@ function ReviewUIInner({ domain, initialUrl, path }: ReviewUIProps) {
     setFileTreeOverlayOpen(false);
   }, []);
   const handleSelectComment = useCallback(
-    (comment: DiffsHubSavedCommentEntry) => {
+    (entry: DiffsHubSavedCommentEntry) => {
       setFileTreeOverlayOpen(false);
-      viewerRef.current?.setSelectedLines({
-        id: comment.itemId,
-        range: comment.range,
-      });
+      handleSelectTreeItem(entry.itemId);
+      if (entry.comment.anchor.kind === 'file') return;
+      const { range } = entry.comment.anchor;
+      viewerRef.current?.setSelectedLines({ id: entry.itemId, range });
       viewerRef.current?.scrollTo({
         type: 'line',
-        id: comment.itemId,
-        lineNumber: comment.range.end,
-        side: comment.range.endSide ?? comment.range.side,
+        id: entry.itemId,
+        lineNumber: range.end,
+        side: range.endSide ?? range.side,
         align: 'center',
         behavior: 'smooth-auto',
       });
     },
-    []
+    [handleSelectTreeItem]
   );
   // Withhold the viewer until the persisted themes have been read from
   // localStorage. Otherwise on client-side navigation back into a diff the
@@ -293,7 +288,7 @@ function ReviewUIInner({ domain, initialUrl, path }: ReviewUIProps) {
         <>
           <DiffsHubSidebar
             className="[grid-area:viewer] md:[grid-area:tree]"
-            commentSections={commentSections}
+            commentSections={comments.sections}
             diffStats={diffStats}
             mobileOverlayOpen={fileTreeOverlayOpen}
             onMobileClose={handleCloseFileTreeOverlay}
@@ -318,10 +313,11 @@ function ReviewUIInner({ domain, initialUrl, path }: ReviewUIProps) {
             viewerRef={viewerRef}
             initialItems={initialItems}
             loadDiffFiles={loadDiffFiles}
-            onCommentDeleted={handleCommentDeleted}
-            onCommentSaved={handleCommentSaved}
+            comments={comments}
+            commentKind={commentKind}
+            user={user}
             onLineLinkChange={onLineLinkChange}
-            onViewerReady={onViewerReady}
+            onViewerReady={handleViewerReady}
           />
         </>
       ) : (
