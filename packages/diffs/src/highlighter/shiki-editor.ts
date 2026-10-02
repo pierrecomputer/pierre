@@ -9,7 +9,7 @@ import {
 import type { TextDocumentChange } from '../editor/textDocument';
 import { debounce } from '../editor/utils';
 import type { HighlightedToken, RenderRange } from '../types';
-import { DiffsEditorTokenizer } from './DiffsEditorTokenizer';
+import type { DiffsEditorTokenizer } from './DiffsEditorTokenizer';
 import type { DiffsEditorTokenizerOptions } from './tokenizer-types';
 import type { DiffsHighlighter } from './types';
 
@@ -18,7 +18,7 @@ const TOKENIZE_TIME_LIMIT = 0;
 let nextTokenizerId = 0;
 
 /** TextMate state caching and background work for a single editable document. */
-export class ShikiEditorTokenizer extends DiffsEditorTokenizer {
+export class ShikiEditorTokenizer implements DiffsEditorTokenizer {
   #highlighter: HighlighterCore;
   #grammar: IGrammar | undefined;
   #themeName: string;
@@ -127,7 +127,6 @@ export class ShikiEditorTokenizer extends DiffsEditorTokenizer {
       'getTheme' | 'loadLanguages'
     >
   ) {
-    super();
     this.#highlighter = highlighter;
     this.#textDocument = options.textDocument;
     this.#themeName = options.theme;

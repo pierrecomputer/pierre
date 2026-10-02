@@ -1,19 +1,16 @@
 export function createCachedLoader<T extends object>(
   loader: () => Promise<T>
 ): () => T | Promise<T> {
-  let value: T | undefined;
-  let pending: Promise<T> | undefined;
-  return () => {
-    if (value != null) return value;
-    return (pending ??= loader().then(
+  let cached: T | Promise<T> | undefined;
+  return () =>
+    (cached ??= loader().then(
       (loaded) => {
-        value = loaded;
+        cached = loaded;
         return loaded;
       },
       (error: unknown) => {
-        pending = undefined;
+        cached = undefined;
         throw error;
       }
     ));
-  };
 }

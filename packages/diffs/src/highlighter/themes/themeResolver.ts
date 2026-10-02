@@ -33,24 +33,6 @@ const loadPierreThemeCatalog = createCachedLoader(
 );
 const loadShikiCore = createCachedLoader(() => import('shiki/core'));
 
-export function registerCustomThemeLoader(
-  themeName: string,
-  loader: CustomThemeLoader,
-  type: 'textmate' | 'zed' | 'diffs'
-): void {
-  const themes = customThemes.get(themeName) ?? {};
-  if (themes[type] != null) {
-    console.error(
-      'SharedHighlight.registerCustomTheme: theme name and type already registered',
-      themeName,
-      type
-    );
-    return;
-  }
-  themes[type] = loader;
-  customThemes.set(themeName, themes);
-}
-
 // Map Zed colors to the VS Code keys used by editor and diff overlays.
 const ZED_COLOR_ALIASES: readonly (readonly [
   target: string,
@@ -77,7 +59,6 @@ const ZED_COLOR_ALIASES: readonly (readonly [
   ],
 ];
 
-// The editor and diff overlays read VS Code color keys, so alias Zed colors.
 function createHighlightsTheme(
   name: string,
   raw: ZedTheme | ZedThemeFamily

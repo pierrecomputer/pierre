@@ -14,18 +14,11 @@ pools move highlighting off the main thread, which can help when using Shiki for
 large files or many diffs. The main thread renders plain text first, then
 applies highlighted output when a worker responds.
 
-A worker pool is optional. When you supply one, all highlighting goes through
-its workers, whichever backend it uses. Pools pay off with Shiki, whose
-highlighting is expensive.
-
 <Notice icon={<IconBulbFill />}>
-  With [Highlights](#highlights), skip the worker pool. Highlights builds a
-  file's highlighted output faster than the main thread can receive the same
-  result back from a worker, and a pool renders each file twice: plain text
-  first, then the highlighted result. In our benchmarks, adding a pool made
-  Highlights output appear 1.5–4× later and increased main-thread work. A pool
-  does paint plain text sooner, so measure your own content if that first paint
-  matters more.
+  [Highlights](#highlights) usually performs best on the main thread. In our
+  benchmarks, a pool made highlighted output appear 1.5–4× later and increased
+  main-thread work, though it painted plain text sooner. Measure your own
+  content before adding a pool.
 </Notice>
 
 Basic usage differs a bit depending on if you're using React or Vanilla JS APIs,

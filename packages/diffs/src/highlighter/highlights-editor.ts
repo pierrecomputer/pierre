@@ -7,11 +7,11 @@ import {
 import type { TextDocumentChange } from '../editor/textDocument';
 import type { HighlightedToken, RenderRange } from '../types';
 import { formatCSSVariablePrefix } from '../utils/formatCSSVariablePrefix';
-import { DiffsEditorTokenizer } from './DiffsEditorTokenizer';
+import type { DiffsEditorTokenizer } from './DiffsEditorTokenizer';
 import type { DiffsEditorTokenizerOptions } from './tokenizer-types';
 import type { CodeToTokensOptions } from './types';
 
-export class HighlightsEditorTokenizer extends DiffsEditorTokenizer {
+export class HighlightsEditorTokenizer implements DiffsEditorTokenizer {
   #tokenizer: LiveTokenizer;
   #version: number;
   #disposed = false;
@@ -29,7 +29,6 @@ export class HighlightsEditorTokenizer extends DiffsEditorTokenizer {
       options: CodeToTokensOptions
     ) => HighlightsOptions
   ) {
-    super();
     this.#version = options.textDocument.version;
     this.#tokenizer = this.#createTokenizer();
   }
@@ -108,7 +107,9 @@ export class HighlightsEditorTokenizer extends DiffsEditorTokenizer {
     } else {
       lines = new Map();
       this.#readLines(lines, returnedStart, end);
-      this.#dropPendingLines(lines);
+      if (this.#pendingDelivery != null) {
+        for (const line of lines.keys()) this.#pendingDelivery.delete(line);
+      }
       return lines;
     }
     // Balanced insert/delete batches shift rows without triggering host realignment.
@@ -123,13 +124,6 @@ export class HighlightsEditorTokenizer extends DiffsEditorTokenizer {
       this.#readLines(lines, returnedStart, end);
     }
     return lines;
-  }
-
-  // Returned rows must not be patched again by a queued callback.
-  #dropPendingLines(lines: Map<number, HighlightedToken[]>): void {
-    const pending = this.#pendingDelivery;
-    if (pending == null) return;
-    for (const line of lines.keys()) pending.delete(line);
   }
 
   // Reload the lexer document if edits were skipped or combined; applying
@@ -233,13 +227,11 @@ export class HighlightsEditorTokenizer extends DiffsEditorTokenizer {
     return this.#tokenizer.getLineTokens(lineIndex).bracketIgnoredRanges;
   }
 
-  prebuildStateStack(_renderRange?: RenderRange): void {
-    this.#paused = false;
-    this.#tokenizer.resume();
+  prebuildStateStack(): void {
+    this.resumeBackgroundTokenize();
   }
   stopBackgroundTokenize(): void {
-    this.#paused = true;
-    this.#tokenizer.pause();
+    this.pauseBackgroundTokenize();
   }
   pauseBackgroundTokenize(): void {
     this.#paused = true;

@@ -69,18 +69,15 @@ is a raw Shiki registration. Pass `variablePrefix: '--shiki-'` to keep
 stylesheets written for that default, or import Shiki's helper directly when a
 raw registration is needed.
 
-Loaders return a theme directly or as a module's `default` export. Zed themes
-use the registered name instead of their display name and require
-`preferredHighlighter: 'highlights'`. A `ThemeFamily` uses its first member;
-return `family.themes[index]` from the loader to select another. Raw Zed themes
-cannot resolve on Shiki.
+Loaders return a theme directly or as a module's `default` export. Register one
+loader per name and type; explicit TextMate or Zed loaders take priority over a
+shared Diffs loader. TextMate and Diffs names must match the registration. Zed
+themes use the registered name instead of their display name; a `ThemeFamily`
+uses its first member unless the loader selects another.
 
-Theme resolution returns portable `DiffsTheme` objects. Resolve on the main
-thread before passing them to workers. Register one loader per name and type.
-Raw TextMate themes and custom grammars require a Shiki backend (`shiki-js` by
-default). For one theme across backends, use `createCSSVariablesTheme` or a
-`DiffsTheme` containing both `textmate` (Shiki's normalized
-`ThemeRegistrationResolved`) and `zed` palettes.
+Resolve themes on the main thread before passing them to workers. For one theme
+across backends, use `createCSSVariablesTheme` or a `DiffsTheme` containing both
+`textmate` (Shiki's normalized `ThemeRegistrationResolved`) and `zed` palettes.
 
 ## Languages
 

@@ -15,16 +15,6 @@ interface GetHighlighterThemeStylesProps {
   prefix?: string;
 }
 
-// FIXME(amadeus): We'll probably need to
-// re-think this when it comes to removing inline
-// styles
-//
-// The base foreground/background now flow through @pierre/theming's
-// normalizeThemeColors, which preserves the theme's top-level fg/bg. The git
-// colors deliberately stay on the diffs-local 2-link lookup below (see
-// getGitVariables) to keep this output byte-identical; adopting
-// normalizeThemeColors' longer git chain is a separate, independently verified
-// follow-up rather than a side effect of this migration.
 export function getHighlighterThemeStyles({
   theme = DEFAULT_THEMES,
   highlighter,
@@ -65,13 +55,8 @@ function getThemeColors(theme: DiffsTheme, highlighter: DiffsHighlighter) {
   return normalizeThemeColors(theme);
 }
 
-// Emits the diffs git-status CSS variables (addition/deletion/modified colors)
-// for a resolved theme. This intentionally uses the diffs-local 2-link lookup
-// (gitDecoration.* → terminal.ansi*) and STOPS before the editorGutter.* tail
-// that @pierre/theming's normalizeThemeColors adds, so the emitted string stays
-// byte-identical to the pre-theming output. Adopting the gutter fallback for
-// diffs is a deliberate follow-up. A variable is omitted entirely when neither
-// source key is present, matching the previous behavior.
+// Keep the gitDecoration → terminal.ansi fallback; adding editorGutter colors
+// here would change diff backgrounds for existing themes.
 function getGitVariables(themeData: DiffsTheme, modePrefix?: string) {
   modePrefix = modePrefix != null ? `${modePrefix}-` : '';
   let styles = '';

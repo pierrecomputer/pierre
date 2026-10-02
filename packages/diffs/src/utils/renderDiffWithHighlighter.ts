@@ -2,7 +2,6 @@ import { type ChangeObject, diffChars, diffWordsWithSpace } from 'diff';
 
 import { DEFAULT_COLLAPSED_CONTEXT_THRESHOLD } from '../constants';
 import type {
-  CodeToTokensOptions,
   DecorationItem,
   DiffsHighlighter,
   FileContents,
@@ -12,7 +11,6 @@ import type {
   LineInfo,
   RenderDiffFilesResult,
   RenderDiffOptions,
-  SharedRenderState,
   SupportedLanguages,
   ThemedDiffResult,
 } from '../types';
@@ -476,63 +474,30 @@ function renderTwoFiles({
   deletionDecorations,
   additionDecorations,
   languageOverride,
-  options: { theme: themeOrThemes, ...options },
+  options: { theme, useTokenTransformer, tokenizeMaxLineLength },
 }: RenderTwoFilesProps): RenderDiffFilesResult {
-  const deletionLang =
-    languageOverride ?? getFiletypeFromFileName(deletionFile.name);
-  const additionLang =
-    languageOverride ?? getFiletypeFromFileName(additionFile.name);
-  const state: SharedRenderState = { lineInfo: [] };
-  // tokenizeTimeLimit: 0 — never trade silently-wrong token colors for
-  // latency; see renderFileWithHighlighter for the full rationale.
-  const tokenOptions: CodeToTokensOptions = {
-    ...(typeof themeOrThemes === 'string'
-      ? { theme: themeOrThemes }
-      : { themes: themeOrThemes }),
-    // Each side may have a different language after a rename.
-    lang: 'text',
-    defaultColor: false,
-    cssVariablePrefix: formatCSSVariablePrefix('token'),
-    tokenizeMaxLineLength: options.tokenizeMaxLineLength,
-    tokenizeTimeLimit: 0,
+  const renderFile = (
+    file: FileContents,
+    lineInfo: (LineInfo | undefined)[],
+    decorations: DecorationItem[]
+  ): RenderDiffFilesResult['additionLines'] => {
+    if (file.contents === '') return [];
+    return renderTokenLines(
+      highlighter.codeToTokens(cleanLastNewline(file.contents), {
+        lang: languageOverride ?? getFiletypeFromFileName(file.name),
+        ...(typeof theme === 'string' ? { theme } : { themes: theme }),
+        defaultColor: false,
+        cssVariablePrefix: formatCSSVariablePrefix('token'),
+        tokenizeMaxLineLength,
+        // Timed aborts can leave incomplete tokens; limit line length instead.
+        tokenizeTimeLimit: 0,
+      }).tokens,
+      { state: { lineInfo }, useTokenTransformer, decorations }
+    );
   };
 
-  const deletionLines = (() => {
-    if (deletionFile.contents === '') {
-      return [];
-    }
-    tokenOptions.lang = deletionLang;
-    state.lineInfo = deletionInfo;
-    return renderTokenLines(
-      highlighter.codeToTokens(
-        cleanLastNewline(deletionFile.contents),
-        tokenOptions
-      ).tokens,
-      {
-        state,
-        useTokenTransformer: options.useTokenTransformer,
-        decorations: deletionDecorations,
-      }
-    );
-  })();
-  const additionLines = (() => {
-    if (additionFile.contents === '') {
-      return [];
-    }
-    tokenOptions.lang = additionLang;
-    state.lineInfo = additionInfo;
-    return renderTokenLines(
-      highlighter.codeToTokens(
-        cleanLastNewline(additionFile.contents),
-        tokenOptions
-      ).tokens,
-      {
-        state,
-        useTokenTransformer: options.useTokenTransformer,
-        decorations: additionDecorations,
-      }
-    );
-  })();
-
-  return { deletionLines, additionLines };
+  return {
+    deletionLines: renderFile(deletionFile, deletionInfo, deletionDecorations),
+    additionLines: renderFile(additionFile, additionInfo, additionDecorations),
+  };
 }

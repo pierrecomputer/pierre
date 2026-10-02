@@ -1,40 +1,13 @@
 import { describe, expect, spyOn, test } from 'bun:test';
-import type { HighlighterCore } from 'shiki/core';
 
 import { VirtualizedFile } from '../src/components/VirtualizedFile';
 import { Virtualizer } from '../src/components/Virtualizer';
 import { DEFAULT_THEMES } from '../src/constants';
 import { Editor } from '../src/editor/editor';
-import { ShikiEditorTokenizer } from '../src/highlighter/shiki-editor';
-import type { DiffsHighlighter } from '../src/types';
 import { installDom, waitFor } from './domHarness';
+import { createTestHighlighter } from './editorHighlighter';
 
 const MODEL_LINE_TOP = 20;
-
-function createTestHighlighter(): DiffsHighlighter {
-  const raw = {
-    getLanguage: () => undefined,
-    getLoadedLanguages: () => [],
-    getTheme: () => ({ type: 'light', colors: {} }),
-    setTheme: () => ({ theme: { type: 'light' }, colorMap: [''] }),
-  } as unknown as HighlighterCore;
-  return {
-    getTheme: (name): ReturnType<DiffsHighlighter['getTheme']> => {
-      const theme = raw.getTheme(name);
-      return {
-        ...theme,
-        name,
-        type: theme.type ?? 'dark',
-        fg: theme.fg ?? '',
-        bg: theme.bg ?? '',
-      };
-    },
-    createEditorTokenizer: (
-      options
-    ): ReturnType<DiffsHighlighter['createEditorTokenizer']> =>
-      new ShikiEditorTokenizer(raw, options),
-  } as DiffsHighlighter;
-}
 
 function createVirtualizedFile(modelLineHeight: number): {
   component: VirtualizedFile<undefined>;
@@ -95,7 +68,10 @@ function createVirtualizedFile(modelLineHeight: number): {
   }
   const syncRenderView = (editor: Editor<'file', undefined>) => {
     editor.__syncRenderView({
-      highlighter: createTestHighlighter(),
+      highlighter: createTestHighlighter(
+        { getLoadedLanguages: () => [] },
+        'light'
+      ),
       fileContainer,
       file,
       lineAnnotations: undefined,

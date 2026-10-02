@@ -92,6 +92,7 @@ import type {
   HunkSeparatorValue,
   LineHoverHighlight,
   PlaygroundLineDiffType,
+  PlaygroundUrlState,
   ViewMode,
 } from './searchParams';
 import {
@@ -731,14 +732,17 @@ function PlaygroundControlsContent({
 
 export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
   const searchParams = useSearchParams();
+  const [urlState] = useState(() =>
+    parsePlaygroundSearchParams((key) => searchParams.get(key))
+  );
   const [highlighter, setHighlighter] = useState<HighlighterTypes>(
-    () =>
-      parsePlaygroundSearchParams((key) => searchParams.get(key)).highlighter
+    urlState.highlighter
   );
   return (
     <PlaygroundWorkerPool highlighter={highlighter}>
       <PlaygroundContent
         prerenderedDiff={prerenderedDiff}
+        urlState={urlState}
         highlighter={highlighter}
         setHighlighter={setHighlighter}
       />
@@ -748,26 +752,20 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
 
 function PlaygroundContent({
   prerenderedDiff,
+  urlState,
   highlighter,
   setHighlighter,
 }: PlaygroundClientProps & {
+  urlState: PlaygroundUrlState;
   highlighter: HighlighterTypes;
   setHighlighter: (value: HighlighterTypes) => void;
 }) {
-  const searchParams = useSearchParams();
   const highlighterReady = useContext(PlaygroundHighlighterReadyContext);
 
   // The app-wide color scheme resolved by @pierre/theming (the shared theme
   // controller). The diff's "system" mode must follow this so the editor stays
   // in sync with the rest of the app. See `effectiveColorMode`.
   const { resolvedColorScheme } = useTheme();
-
-  // One-time parse of the querystring with the same parser the server used to
-  // build the prerendered payload, so the first client render agrees with the
-  // prerendered markup.
-  const [urlState] = useState(() =>
-    parsePlaygroundSearchParams((key) => searchParams.get(key))
-  );
 
   const [viewMode, setViewMode] = useState<ViewMode>(urlState.viewMode);
   const [diffStyle, setDiffStyle] = useState(urlState.diffStyle);

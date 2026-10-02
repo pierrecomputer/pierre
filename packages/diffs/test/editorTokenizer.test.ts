@@ -1,5 +1,4 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
-import type { HighlighterCore } from 'shiki/core';
 import { type IGrammar, INITIAL, type StateStack } from 'shiki/textmate';
 
 import {
@@ -7,37 +6,10 @@ import {
   type TextDocumentChange,
 } from '../src/editor/textDocument';
 import { EditorTokenizer } from '../src/editor/tokenizer';
-import { ShikiEditorTokenizer } from '../src/highlighter/shiki-editor';
-import type { DiffsHighlighter, HighlightedToken } from '../src/types';
+import type { HighlightedToken } from '../src/types';
+import { createTestHighlighter } from './editorHighlighter';
 
 const noopSetStyle = () => {};
-
-function createTestHighlighter(
-  overrides: Record<string, unknown> = {}
-): DiffsHighlighter {
-  const raw = {
-    getLoadedLanguages: () => ['typescript'],
-    getTheme: () => ({ type: 'dark', colors: {} }),
-    setTheme: () => ({ theme: { type: 'dark' }, colorMap: [''] }),
-    ...overrides,
-  } as unknown as HighlighterCore;
-  return {
-    getTheme: (name): ReturnType<DiffsHighlighter['getTheme']> => {
-      const theme = raw.getTheme(name);
-      return {
-        ...theme,
-        name,
-        type: theme.type ?? 'dark',
-        fg: theme.fg ?? '',
-        bg: theme.bg ?? '',
-      };
-    },
-    createEditorTokenizer: (
-      options
-    ): ReturnType<DiffsHighlighter['createEditorTokenizer']> =>
-      new ShikiEditorTokenizer(raw, options),
-  } as DiffsHighlighter;
-}
 
 function getThemeStyle(colors: Record<string, string>): string {
   let style = '';

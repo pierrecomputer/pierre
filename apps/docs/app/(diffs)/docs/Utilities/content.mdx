@@ -130,25 +130,26 @@ highlighting with no async loading delay.
 
 ### registerCustomTheme [toc-ignore]
 
-Use `registerCustomTheme(name, loader, type = 'textmate')` to register a lazy
-loader. The optional third argument defaults to `'textmate'` for Shiki; pass
-`'zed'` for Highlights or `'diffs'` for a portable `DiffsTheme`. Existing
-two-argument calls keep their TextMate format; select
-`preferredHighlighter: 'shiki-js'` or `'shiki-wasm'` to use them. TextMate
-loaders accept `ThemeRegistration`, Zed loaders accept `Theme` or `ThemeFamily`,
-and Diffs loaders accept `DiffsTheme`, directly or as a module's `default`
-export.
+`registerCustomTheme(name, loader, type = 'textmate')` registers a lazy loader
+that returns a theme directly or as a module's `default` export.
 
-TextMate themes use either Shiki backend, and their `name` must match the
-registered name. Zed themes use `preferredHighlighter: 'highlights'`; the
-registered name replaces their display name. A Zed family uses its first theme;
-return a specific member from the loader to select another.
+| Type                   | Loader result                          | Backend                    |
+| ---------------------- | -------------------------------------- | -------------------------- |
+| `'textmate'` (default) | Shiki `ThemeRegistration`              | `shiki-js` or `shiki-wasm` |
+| `'zed'`                | Highlights `Theme` or `ThemeFamily`    | `highlights`               |
+| `'diffs'`              | `DiffsTheme` with both syntax palettes | Any                        |
 
-Register one loader per name and type; the same name can have separate TextMate
-and Zed loaders. Register a portable `DiffsTheme` with `'diffs'` to use its
-palettes across backends. Explicit TextMate or Zed registrations take priority
-over the shared Diffs loader. `registerCustomCSSVariableTheme` registers a Diffs
-loader automatically.
+TextMate and Diffs theme names must match the registered name. Zed themes use
+the registered name in place of their display name. A Zed family uses its first
+theme; return a specific member from the loader to select another.
+
+Register one loader per name and type. Separate TextMate and Zed loaders can
+share a name and take priority over a Diffs loader.
+
+`createCSSVariablesTheme(options)` creates a shared palette with a default
+`variablePrefix` of `--diffs-`. Pass `variablePrefix: '--shiki-'` to retain
+stylesheets written for Shiki's helper. `registerCustomCSSVariableTheme`
+registers a shared palette using `--diffs-*` variables automatically.
 
 <DocsCodeExample {...registerCustomTheme} />
 

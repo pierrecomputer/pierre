@@ -1,8 +1,7 @@
 ## Highlights
 
-Highlights is an optional backend in `@pierre/diffs` for File, FileDiff, Editor,
-FileStream, SSR preload helpers, and worker pools. Select `highlights` with
-`preferredHighlighter` to use it. Each backend loads on demand.
+Use Highlights with any `@pierre/diffs` component by setting
+`preferredHighlighter: 'highlights'`:
 
 ```tsx
 <FileDiff
@@ -12,33 +11,10 @@ FileStream, SSR preload helpers, and worker pools. Select `highlights` with
 />
 ```
 
-Highlights usually performs best without a [worker pool](#worker-pool). It
-highlights on the main thread faster than a worker round trip completes, so a
-pool delays highlighted output and adds main-thread work. If you do use a pool,
-set `preferredHighlighter` in the provider's `highlighterOptions`; the pool owns
-the backend used by its components and always highlights in its workers.
-
-Only one backend can be loaded on a page at a time. Try all three backends in
-the [diffs playground](/playground?highlighter=highlights).
-
-Built-in theme names work across backends.
-`registerCustomTheme(name, loader, 'zed')` accepts Zed-compatible Highlights
-themes and theme families. Use `'textmate'` to register a loader for Shiki under
-the same name, or `'diffs'` to register a portable `DiffsTheme` once for both
-backends. A Zed family uses its first theme. See
-[registerCustomTheme](#utilities-registercustomtheme) for examples.
-
-`createCSSVariablesTheme` returns a portable theme with `--diffs-` as its
-default `variablePrefix`; it no longer re-exports Shiki's helper, whose default
-is `--shiki-`. Pass `variablePrefix: '--shiki-'` to keep stylesheets written for
-that default, or import `createCssVariablesTheme` from `shiki` for a raw
-registration. `registerCustomCSSVariableTheme` keeps its existing arguments and
-`--diffs-*` variables. Highlights includes its lexers; custom TextMate language
-registrations apply only to Shiki.
-
-The shared `DiffsHighlighter` exposes tokens, themes, live editing and streaming
-without exposing Shiki internals. Import Shiki-specific helpers and types
-directly from `shiki` when you need them.
+Highlights usually performs best without a [worker pool](#worker-pool). See
+[Highlighters](#highlighters) for backend selection and
+[registerCustomTheme](#utilities-registercustomtheme) for Zed themes and shared
+palettes. Custom TextMate grammars require Shiki.
 
 <Notice variant="warning" icon={<IconCiWarningFill />}>
   Highlights is experimental and subject to change. Try the [interactive

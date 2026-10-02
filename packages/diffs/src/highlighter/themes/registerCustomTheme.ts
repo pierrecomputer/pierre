@@ -5,10 +5,7 @@ import type {
 import type { ThemeLoader } from '@pierre/theming';
 import type { ThemeRegistration } from 'shiki';
 
-import {
-  type CustomThemeLoader,
-  registerCustomThemeLoader,
-} from './themeResolver';
+import { type CustomThemeLoader, customThemes } from './themeResolver';
 import type { DiffsTheme } from './types';
 
 export type { CustomThemeLoader } from './themeResolver';
@@ -34,5 +31,15 @@ export function registerCustomTheme(
   loader: CustomThemeLoader,
   type: 'textmate' | 'zed' | 'diffs' = 'textmate'
 ): void {
-  registerCustomThemeLoader(themeName, loader, type);
+  const themes = customThemes.get(themeName) ?? {};
+  if (themes[type] != null) {
+    console.error(
+      'SharedHighlight.registerCustomTheme: theme name and type already registered',
+      themeName,
+      type
+    );
+    return;
+  }
+  themes[type] = loader;
+  customThemes.set(themeName, themes);
 }

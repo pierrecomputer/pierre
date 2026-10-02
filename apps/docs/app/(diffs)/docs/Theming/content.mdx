@@ -144,16 +144,10 @@ by registering them before rendering:
 
 <DocsCodeExample {...registerTheme} />
 
-`registerCustomTheme(name, loader, type = 'textmate')` accepts `'textmate'` for
-Shiki, `'zed'` for Highlights, and `'diffs'` for portable `DiffsTheme` objects.
-A Zed family uses its first theme; return another member from the loader to
-select it. The registered name replaces the Zed theme's display name.
-
 Use the default Shiki JS backend with a TextMate theme, or select
-`preferredHighlighter: 'highlights'` for a Zed theme. Register one loader per
-name and type. For a portable `DiffsTheme` with both syntax palettes, register
-its loader with `'diffs'`. `registerCustomCSSVariableTheme` does this
-automatically.
+`preferredHighlighter: 'highlights'` for a Zed theme. See
+[registerCustomTheme](/docs#utilities-registercustomtheme) for loader formats
+and palettes that work across backends.
 
 Then reference your theme in any component:
 

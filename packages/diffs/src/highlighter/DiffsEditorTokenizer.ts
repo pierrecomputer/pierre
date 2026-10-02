@@ -1,26 +1,26 @@
 import type { TextDocumentChange } from '../editor/textDocument';
 import type { HighlightedToken, RenderRange } from '../types';
 
-export abstract class DiffsEditorTokenizer {
-  abstract tokenize(
+export interface DiffsEditorTokenizer {
+  tokenize(
     change: TextDocumentChange,
     renderRange?: RenderRange,
     hostRealignsRows?: boolean
   ): Map<number, HighlightedToken[]>;
 
-  abstract prebuildStateStack(renderRange?: RenderRange): void;
+  prebuildStateStack(renderRange?: RenderRange): void;
 
-  abstract getStringCommentRegexpRangesInLine(
+  getStringCommentRegexpRangesInLine(
     lineIndex: number
   ): [number, number][] | null;
 
-  abstract setTheme(themeName: string): void;
+  setTheme(themeName: string): void;
 
-  abstract stopBackgroundTokenize(): void;
+  stopBackgroundTokenize(): void;
 
-  abstract pauseBackgroundTokenize(): void;
+  pauseBackgroundTokenize(): void;
 
-  abstract resumeBackgroundTokenize(): void;
+  resumeBackgroundTokenize(): void;
 
-  abstract dispose(): void;
+  dispose(): void;
 }

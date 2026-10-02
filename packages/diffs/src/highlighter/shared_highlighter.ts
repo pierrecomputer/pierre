@@ -17,12 +17,7 @@ import { cleanUpResolvedThemes } from './themes/cleanUpResolvedThemes';
 
 export { getHighlighterType } from './highlighterType';
 
-type CachedOrLoadingHighlighterType =
-  | Promise<DiffsHighlighter>
-  | DiffsHighlighter
-  | undefined;
-
-let highlighter: CachedOrLoadingHighlighterType;
+let highlighter: DiffsHighlighter | Promise<DiffsHighlighter> | undefined;
 
 export interface HighlighterOptions {
   themes: DiffsThemeNames[];
