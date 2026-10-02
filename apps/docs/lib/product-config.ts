@@ -26,9 +26,9 @@ export const PRODUCTS: Record<ProductId, ProductConfig> = {
     name: 'Diffs',
     tagline: 'Render diffs and\u00A0code, now with edit',
     description:
-      '@pierre/diffs is an open source diff and code rendering library. Built on Shiki for syntax highlighting and theming, super customizable, and packed with features.',
+      '@pierre/diffs is an open source diff and code rendering library. Rich syntax highlighting, edit mode, support for custom and Shiki themes, virtualization, and more.',
     llmsDescription:
-      'An open source diff and code rendering library for the web. Built on Shiki for syntax highlighting, with React and vanilla JS APIs, virtualization, SSR support, and extensive theming.',
+      'An open source diff and code rendering library with rich syntax highlighting, edit mode, support for custom and Shiki themes, virtualization, and more. Available with React and vanilla JS APIs',
     basePath: '',
     docsPath: '/docs',
     themePath: '/theme',
