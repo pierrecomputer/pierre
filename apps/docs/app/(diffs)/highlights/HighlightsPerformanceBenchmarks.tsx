@@ -112,8 +112,8 @@ export function HighlightsPerformanceBenchmarks() {
               Super-fast HTML generation
             </h3>
             <p className="text-muted-foreground max-w-xl text-pretty">
-              Highlights generates HTML at up to 294× Shiki’s throughput across
-              these fixtures, including input encoding and output decoding.
+              Highlights generates HTML at up to 294 times faster than Shiki’s
+              throughput across these fixtures.
             </p>
           </figcaption>
           <div className="space-y-5">

@@ -19,6 +19,7 @@ export const metadata: Metadata = pageMetadata({
   title: 'Highlights — a fast WebAssembly code highlighter',
   description,
   path: '/highlights',
+  image: '/highlights-brand/opengraph-image.png',
 });
 
 export default function HighlightsPage() {
