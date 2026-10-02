@@ -306,11 +306,13 @@ void test('bundled themes: matches Shiki and Pierre catalogs and metadata', () =
       ['deleted', 'red'],
       ['modified', 'blue'],
     ]) {
-      assert.ok(
-        isThemeColor(
-          theme.style[status] ?? theme.style[`terminal.ansi.${terminal}`]
-        ),
-        `${id}: ${status}`
+      const color =
+        theme.style[status] ?? theme.style[`terminal.ansi.${terminal}`];
+      assert.ok(isThemeColor(color), `${id}: ${status}`);
+      assert.notEqual(
+        resolveThemeStyle({ foreground: color }, 'foreground').color,
+        resolveThemeStyle(theme.style, 'background').color,
+        `${id}: invisible ${status}`
       );
     }
   }

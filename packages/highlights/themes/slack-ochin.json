@@ -16,7 +16,7 @@
       }
     ],
     "created": "#ECB22E",
-    "deleted": "#FFF",
+    "deleted": "#e53935",
     "modified": "#ECB22E",
     "terminal.ansi.green": "#91b859",
     "terminal.ansi.red": "#e53935",
@@ -139,7 +139,7 @@
         "color": "#2F86D2"
       },
       "diff.minus": {
-        "color": "#FFF"
+        "color": "#e53935"
       },
       "diff.plus": {
         "color": "#ECB22E"
