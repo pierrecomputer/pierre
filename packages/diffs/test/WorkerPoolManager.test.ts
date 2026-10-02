@@ -49,14 +49,14 @@ afterEach(() => {
 });
 
 describe('WorkerPoolManager lifecycle', () => {
-  test('initializes the pool and its workers with Highlights by default', async () => {
+  test('initializes the pool and its workers with Shiki JS by default', async () => {
     await disposeHighlighter();
     const { manager, worker } = await createInitializedManager();
     try {
       const request = await worker.waitForInitializeRequest();
-      expect(manager.getPreferredHighlighter()).toBe('highlights');
-      expect(request.preferredHighlighter).toBe('highlights');
-      expect(request.resolvedThemes[0].zed).toBeDefined();
+      expect(manager.getPreferredHighlighter()).toBe('shiki-js');
+      expect(request.preferredHighlighter).toBe('shiki-js');
+      expect(request.resolvedThemes[0].textmate).toBeDefined();
     } finally {
       manager.terminate();
     }

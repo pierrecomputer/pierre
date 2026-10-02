@@ -266,7 +266,7 @@ export const HELPER_GET_SHARED_HIGHLIGHTER: PreloadFileOptions<
 
 // Only one backend can be loaded at a time; requesting another rejects.
 const highlighter = await getSharedHighlighter({
-  preferredHighlighter: 'highlights', // defaults to the loaded backend, else 'highlights'
+  preferredHighlighter: 'shiki-js', // defaults to the loaded backend, else 'shiki-js'
   themes: ['pierre-dark'],
   langs: ['typescript'],
 });

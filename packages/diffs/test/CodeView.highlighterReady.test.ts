@@ -1,5 +1,5 @@
 import type { Theme } from '@pierre/highlights';
-import { afterAll, expect, mock, spyOn, test } from 'bun:test';
+import { afterAll, beforeEach, expect, mock, spyOn, test } from 'bun:test';
 
 import { CodeView } from '../src/components/CodeView';
 import {
@@ -10,6 +10,7 @@ import { registerCustomTheme } from '../src/highlighter/themes/registerCustomThe
 import { createRoot, installDom, wait, waitFor } from './domHarness';
 import { createDeferred } from './testUtils';
 
+beforeEach(disposeHighlighter);
 afterAll(disposeHighlighter);
 
 test('retries a failed theme load on a later render without automatically retrying', async () => {
@@ -24,7 +25,10 @@ test('retries a failed theme load on a later render without automatically retryi
   const error = new Error('Theme chunk failed to load');
   const logError = spyOn(console, 'error').mockImplementation(() => {});
   const dom = installDom();
-  const viewer = new CodeView({ theme: theme.name });
+  const viewer = new CodeView({
+    theme: theme.name,
+    preferredHighlighter: 'highlights',
+  });
   const render = spyOn(viewer, 'render');
   try {
     viewer.setup(createRoot());
@@ -98,7 +102,10 @@ for (const obsoleteFinishesFirst of [false, true]) {
     );
 
     const dom = installDom();
-    const viewer = new CodeView({ theme: obsoleteName });
+    const viewer = new CodeView({
+      theme: obsoleteName,
+      preferredHighlighter: 'highlights',
+    });
     const render = spyOn(viewer, 'render');
     try {
       viewer.setup(createRoot());
@@ -114,7 +121,10 @@ for (const obsoleteFinishesFirst of [false, true]) {
       expect(started).toEqual([obsoleteName]);
       expect(viewer.getRenderedItems()).toHaveLength(0);
 
-      viewer.setOptions({ theme: currentName });
+      viewer.setOptions({
+        theme: currentName,
+        preferredHighlighter: 'highlights',
+      });
       viewer.render(true);
       await waitFor(() => started.includes(currentName));
       expect(started).toEqual([obsoleteName, currentName]);

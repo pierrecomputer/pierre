@@ -3,11 +3,11 @@
 `@pierre/diffs` supports three syntax highlighting backends. Select one with
 `preferredHighlighter`; each backend loads on demand.
 
-| Backend      | Description                                                     |
-| ------------ | --------------------------------------------------------------- |
-| `shiki-js`   | Shiki with its JavaScript regex engine.                         |
-| `shiki-wasm` | Shiki with its WebAssembly regex engine.                        |
-| `highlights` | The default. WebAssembly lexers from [Highlights](#highlights). |
+| Backend      | Description                                          |
+| ------------ | ---------------------------------------------------- |
+| `shiki-js`   | The default. Shiki with its JavaScript regex engine. |
+| `shiki-wasm` | Shiki with its WebAssembly regex engine.             |
+| `highlights` | WebAssembly lexers from [Highlights](#highlights).   |
 
 Set `preferredHighlighter` in the component's `options`:
 
@@ -20,7 +20,7 @@ backend used by its components. Highlights usually performs best without a pool.
 
 Only one backend can be loaded at a time on a page, in each worker, and in an
 SSR server process. Components without `preferredHighlighter` use the backend
-that is already loaded, or `highlights` when none is. Requesting a different
+that is already loaded, or `shiki-js` when none is. Requesting a different
 backend throws until every instance of the loaded one is disposed, which usually
 points to a component or preload that names a different backend than the rest of
 the app. `getHighlighterType()` returns the loaded backend.
@@ -29,8 +29,8 @@ Built-in theme names work across all three backends.
 `registerCustomTheme(name, loader, type = 'textmate')` uses `'textmate'` for
 Shiki and `'zed'` for Highlights. Register a portable `DiffsTheme` with
 `'diffs'` to use it across backends. Custom TextMate themes and languages
-require `preferredHighlighter: 'shiki-js'` or `'shiki-wasm'`. Highlights
-includes its own lexers. See [Theming](#theming) for theme configuration and
+require a Shiki backend (`shiki-js` by default). Highlights includes its own
+lexers. See [Theming](#theming) for theme configuration and
 [Highlights](#highlights) for its APIs and supported languages.
 
 Try the backends in the [diffs playground](/playground?highlighter=highlights).

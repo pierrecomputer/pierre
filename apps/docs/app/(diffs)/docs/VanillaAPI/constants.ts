@@ -376,10 +376,10 @@ const instance = new FileDiff<ThreadMetadata>({
   themeType: 'system',
 
   // Choose the highlighter backend:
-  // 'shiki-js' - JavaScript regex engine
+  // 'shiki-js' (default) - JavaScript regex engine
   // 'shiki-wasm' - WASM Oniguruma engine
-  // 'highlights' (default) - bundled WASM lexers
-  preferredHighlighter: 'highlights',
+  // 'highlights' - bundled WASM lexers
+  preferredHighlighter: 'shiki-js',
 
   // ─────────────────────────────────────────────────────────────
   // DIFF DISPLAY
@@ -734,10 +734,10 @@ const instance = new File<CommentMetadata>({
   themeType: 'system',
 
   // Choose the highlighter backend:
-  // 'shiki-js' - JavaScript regex engine
+  // 'shiki-js' (default) - JavaScript regex engine
   // 'shiki-wasm' - WASM Oniguruma engine
-  // 'highlights' (default) - bundled WASM lexers
-  preferredHighlighter: 'highlights',
+  // 'highlights' - bundled WASM lexers
+  preferredHighlighter: 'shiki-js',
 
   // ─────────────────────────────────────────────────────────────
   // LAYOUT & DISPLAY

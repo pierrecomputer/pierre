@@ -25,22 +25,22 @@ afterEach(async () => {
 });
 
 describe('highlighter type lock', () => {
-  test('creates Highlights by default', async () => {
+  test('creates Shiki JS by default', async () => {
     const highlighter = await createHighlighter();
     try {
-      expect(highlighter.name).toBe('highlights');
+      expect(highlighter.name).toBe('shiki-js');
     } finally {
       highlighter.dispose();
     }
   });
 
-  test('loads Highlights themes and tokens without selecting a backend', async () => {
+  test('loads Shiki themes and tokens without selecting a backend', async () => {
     const highlighter = await getSharedHighlighter({
       themes: ['pierre-dark'],
       langs: ['typescript'],
     });
-    expect(highlighter.name).toBe('highlights');
-    expect(highlighter.getTheme('pierre-dark').zed).toBeDefined();
+    expect(highlighter.name).toBe('shiki-js');
+    expect(highlighter.getTheme('pierre-dark').textmate).toBeDefined();
     const code = 'const answer = 42;';
     const { tokens } = highlighter.codeToTokens(code, {
       lang: 'typescript',
@@ -229,7 +229,7 @@ describe('shared highlighter backend lifecycle', () => {
   test('a loaded instance of another type is not returned', async () => {
     await getSharedHighlighter({ themes: [], langs: [] });
     expect(
-      getHighlighterIfLoaded({ preferredHighlighter: 'shiki-js' })
+      getHighlighterIfLoaded({ preferredHighlighter: 'highlights' })
     ).toBeUndefined();
   });
 

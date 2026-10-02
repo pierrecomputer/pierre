@@ -149,11 +149,11 @@ Shiki, `'zed'` for Highlights, and `'diffs'` for portable `DiffsTheme` objects.
 A Zed family uses its first theme; return another member from the loader to
 select it. The registered name replaces the Zed theme's display name.
 
-Use the default Highlights backend with a Zed theme, or select
-`preferredHighlighter: 'shiki-js'` or `'shiki-wasm'` for a TextMate theme.
-Register one loader per name and type. For a portable `DiffsTheme` with both
-syntax palettes, register its loader with `'diffs'`.
-`registerCustomCSSVariableTheme` does this automatically.
+Use the default Shiki JS backend with a TextMate theme, or select
+`preferredHighlighter: 'highlights'` for a Zed theme. Register one loader per
+name and type. For a portable `DiffsTheme` with both syntax palettes, register
+its loader with `'diffs'`. `registerCustomCSSVariableTheme` does this
+automatically.
 
 Then reference your theme in any component:
 
