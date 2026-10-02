@@ -80,6 +80,8 @@ export { greeting, count };
 
       const instance = new File({
         disableFileHeader: true,
+        preferredHighlighter:
+          requestedTheme === 'no-active-background' ? 'highlights' : undefined,
         theme,
         themeType,
         useTokenTransformer: true,
