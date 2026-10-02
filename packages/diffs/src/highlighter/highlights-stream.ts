@@ -29,12 +29,8 @@ export class HighlightsStreamTokenizer extends BaseStreamTokenizer {
     const lastLine = this.#tokenizer.lineCount - 1;
     let unstable: ThemedToken[] = [];
     for (let line = startLine; line <= lastLine; line++) {
-      const tokens = this.#tokenizer
-        .getLineTokens(line)
-        .tokens.map((token) => ({
-          ...token,
-          offset: token.offset + this.stableOffset,
-        }));
+      const { tokens } = this.#tokenizer.getLineTokens(line);
+      for (const token of tokens) token.offset += this.stableOffset;
       if (line < lastLine) {
         appendItems(stable, tokens);
         this.pushLineBreak(

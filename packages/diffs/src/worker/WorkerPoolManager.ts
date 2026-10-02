@@ -42,6 +42,7 @@ import { isDiffPlainText } from '../utils/isDiffPlainText';
 import { isFilePlainText } from '../utils/isFilePlainText';
 import { renderDiffWithHighlighter } from '../utils/renderDiffWithHighlighter';
 import { renderFileWithHighlighter } from '../utils/renderFileWithHighlighter';
+import { decodeHastLines } from './hastLinesTransport';
 import type {
   AllWorkerTasks,
   DiffRendererInstance,
@@ -59,9 +60,12 @@ import type {
   WorkerPoolOptions,
   WorkerRenderingOptions,
   WorkerRequestId,
-  WorkerResponse,
   WorkerStats,
 } from './types';
+import type {
+  InitializeWorkerWireRequest,
+  WorkerWireResponse,
+} from './workerMessage';
 
 const IGNORE_RESPONSE = Symbol('IGNORE_RESPONSE');
 const DEFAULT_WORKER_INITIALIZATION_TIMEOUT = 10_000;
@@ -506,7 +510,7 @@ export class WorkerPoolManager {
       };
       worker.addEventListener(
         'message',
-        (event: MessageEvent<WorkerResponse>) => {
+        (event: MessageEvent<WorkerWireResponse>) => {
           this.handleWorkerMessage(managedWorker, event.data);
         }
       );
@@ -517,20 +521,22 @@ export class WorkerPoolManager {
       initPromises.push(
         new Promise<void>((resolve, reject) => {
           const id = this.generateRequestId();
+          const request: InitializeWorkerWireRequest = {
+            type: 'initialize',
+            resultFormat: 'hast-ops-v1',
+            id,
+            renderOptions: this.renderOptions,
+            preferredHighlighter: this.preferredHighlighter,
+            resolvedThemes,
+            resolvedLanguages,
+            customExtensionsVersion:
+              customExtensionMap != null ? customExtensionVersion : undefined,
+            customExtensionMap,
+          };
           const task: InitializeWorkerTask = {
             type: 'initialize',
             id,
-            request: {
-              type: 'initialize',
-              id,
-              renderOptions: this.renderOptions,
-              preferredHighlighter: this.preferredHighlighter,
-              resolvedThemes,
-              resolvedLanguages,
-              customExtensionsVersion:
-                customExtensionMap != null ? customExtensionVersion : undefined,
-              customExtensionMap,
-            },
+            request,
             resolve() {
               managedWorker.initialized = true;
               resolve();
@@ -1039,7 +1045,7 @@ export class WorkerPoolManager {
 
   private handleWorkerMessage(
     managedWorker: ManagedWorker,
-    response: WorkerResponse
+    response: WorkerWireResponse
   ): void {
     const task = this.activeTaskById.get(response.id);
     try {
@@ -1087,7 +1093,7 @@ export class WorkerPoolManager {
             if (task.type !== 'file') {
               throw new Error('handleWorkerMessage: task/response dont match');
             }
-            const { result, options } = response;
+            const { options } = response;
             if (
               !this.isCurrentRenderTask(task) ||
               !areFileRenderOptionsEqual(options, this.getFileRenderOptions())
@@ -1095,6 +1101,10 @@ export class WorkerPoolManager {
               throw IGNORE_RESPONSE;
             }
             const { request } = task;
+            const result: ThemedFileResult = {
+              ...response.result,
+              code: decodeHastLines(response.result.code),
+            };
             this.syncCustomExtensionVersion(managedWorker, request);
             if (task.cacheKeyAtDispatch != null) {
               this.fileCache.set(task.cacheKeyAtDispatch, { result, options });
@@ -1107,7 +1117,7 @@ export class WorkerPoolManager {
             if (task.type !== 'diff') {
               throw new Error('handleWorkerMessage: task/response dont match');
             }
-            const { result, options } = response;
+            const { options } = response;
             if (
               !this.isCurrentRenderTask(task) ||
               !areDiffRenderOptionsEqual(options, this.getDiffRenderOptions())
@@ -1115,6 +1125,17 @@ export class WorkerPoolManager {
               throw IGNORE_RESPONSE;
             }
             const { request } = task;
+            const result: ThemedDiffResult = {
+              ...response.result,
+              code: {
+                deletionLines: decodeHastLines(
+                  response.result.code.deletionLines
+                ),
+                additionLines: decodeHastLines(
+                  response.result.code.additionLines
+                ),
+              },
+            };
             this.syncCustomExtensionVersion(managedWorker, request);
             if (task.cacheKeyAtDispatch != null) {
               this.diffCache.set(task.cacheKeyAtDispatch, { result, options });

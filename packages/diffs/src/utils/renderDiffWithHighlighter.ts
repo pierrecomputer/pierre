@@ -25,6 +25,7 @@ import {
   pushOrJoinSpan,
 } from './parseDiffDecorations';
 import { renderTokenLines } from './renderTokenLines';
+import { setDeferredArrayItem } from './setDeferredArrayItem';
 
 const DEFAULT_PLAIN_TEXT_OPTIONS: ForceDiffPlainTextOptions = {
   forcePlainText: false,
@@ -36,6 +37,7 @@ export function renderDiffWithHighlighter(
   options: RenderDiffOptions,
   {
     forcePlainText,
+    deferLineRendering = false,
     startingLine,
     totalLines,
     expandedHunks,
@@ -46,14 +48,12 @@ export function renderDiffWithHighlighter(
     startingLine ??= 0;
     totalLines ??= Infinity;
   } else {
-    // If we aren't forcing plain text, then we intentionally do not support
-    // ranges for highlighting as that could break the syntax highlighting, we
-    // we override any values that may have been passed in.  Maybe one day we
-    // warn about this?
+    // Tokenization must include preceding lines to preserve lexical state.
     startingLine = 0;
     totalLines = Infinity;
   }
   const isWindowedHighlight = startingLine > 0 || totalLines < Infinity;
+  deferLineRendering &&= !forcePlainText && !options.useTokenTransformer;
   const baseThemeType =
     typeof options.theme === 'string'
       ? highlighter.getTheme(options.theme).type
@@ -207,6 +207,7 @@ export function renderDiffWithHighlighter(
       highlighter,
       options,
       languageOverride: forcePlainText ? 'text' : diff.lang,
+      deferLineRendering,
     });
 
     if (shouldGroupAll) {
@@ -215,25 +216,25 @@ export function renderDiffWithHighlighter(
       continue;
     }
 
-    if (bucket.deletionSegments.length > 0) {
-      for (const seg of bucket.deletionSegments) {
-        for (let i = 0; i < seg.count; i++) {
-          code.deletionLines[seg.targetIndex + i] =
-            deletionLines[seg.originalOffset + i];
+    for (const [target, lines, segments] of [
+      [code.deletionLines, deletionLines, bucket.deletionSegments],
+      [code.additionLines, additionLines, bucket.additionSegments],
+    ] as const) {
+      if (segments.length > 0) {
+        for (const segment of segments) {
+          for (let index = 0; index < segment.count; index++) {
+            target[segment.targetIndex + index] =
+              lines[segment.originalOffset + index];
+          }
         }
-      }
-    } else {
-      appendItems(code.deletionLines, deletionLines);
-    }
-    if (bucket.additionSegments.length > 0) {
-      for (const seg of bucket.additionSegments) {
-        for (let i = 0; i < seg.count; i++) {
-          code.additionLines[seg.targetIndex + i] =
-            additionLines[seg.originalOffset + i];
+      } else if (deferLineRendering) {
+        const offset = target.length;
+        for (let index = 0; index < lines.length; index++) {
+          setDeferredArrayItem(target, offset + index, () => lines[index]);
         }
+      } else {
+        appendItems(target, lines);
       }
-    } else {
-      appendItems(code.additionLines, additionLines);
     }
   }
 
@@ -454,6 +455,7 @@ function createBucket(): RenderBucket {
 }
 
 interface RenderTwoFilesProps {
+  deferLineRendering: boolean;
   deletionFile: FileContents;
   additionFile: FileContents;
   deletionInfo: (LineInfo | undefined)[];
@@ -466,6 +468,7 @@ interface RenderTwoFilesProps {
 }
 
 function renderTwoFiles({
+  deferLineRendering,
   deletionFile,
   additionFile,
   deletionInfo,
@@ -492,7 +495,12 @@ function renderTwoFiles({
         // Timed aborts can leave incomplete tokens; limit line length instead.
         tokenizeTimeLimit: 0,
       }).tokens,
-      { state: { lineInfo }, useTokenTransformer, decorations }
+      {
+        state: { lineInfo },
+        useTokenTransformer,
+        decorations,
+        deferLineRendering,
+      }
     );
   };
 

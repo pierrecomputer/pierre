@@ -1211,11 +1211,8 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
         this.highlighter != null &&
         areLanguagesAttached(this.computedLangs, this.highlighter);
       const canHighlight = !forcePlainText && hasLangs;
+      const deferLineRendering = Number.isFinite(renderRange.totalLines);
 
-      // If we have any semblance of a highlighter with the correct theme(s)
-      // attached, we can kick off some form of rendering.  If we don't have
-      // the correct language, then we can render plain text and after kick off
-      // an async job to get the highlighted AST
       if (
         canRenderDiff &&
         this.highlighter != null &&
@@ -1228,7 +1225,8 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
         const { result, options } = this.renderDiffWithHighlighter(
           diff,
           this.highlighter,
-          forcePlainText || !hasLangs
+          forcePlainText || !hasLangs,
+          deferLineRendering
         );
         this.renderCache = {
           diff,
@@ -1239,13 +1237,12 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
         };
       }
 
-      // If we get in here it means we'll have to kick off an async highlight
-      // process which will involve initializing the highlighter with new themes
-      // and languages
       if (!hasThemes || (!forcePlainText && !hasLangs)) {
-        void this.asyncHighlight(diff).then(({ result, options }) => {
-          this.applyHighlightResult(diff, result, options, !forcePlainText);
-        });
+        void this.asyncHighlight(diff, deferLineRendering).then(
+          ({ result, options }) => {
+            this.applyHighlightResult(diff, result, options, !forcePlainText);
+          }
+        );
       }
     }
     return this.renderCache.result != null
@@ -1262,7 +1259,10 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     renderRange: RenderRange = DEFAULT_RENDER_RANGE
   ): Promise<HunksRenderResult> {
     this.diff = diff;
-    const { result } = await this.asyncHighlight(diff);
+    const { result } = await this.asyncHighlight(
+      diff,
+      Number.isFinite(renderRange.totalLines)
+    );
     return this.processDiffResult(diff, renderRange, result);
   }
 
@@ -1286,7 +1286,8 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
   }
 
   private async asyncHighlight(
-    diff: FileDiffMetadata
+    diff: FileDiffMetadata,
+    deferLineRendering = false
   ): Promise<RenderDiffResult> {
     const forcePlainText = isDiffMassive(diff, this.getTokenizeMaxLength());
     this.computedLangs = forcePlainText ? ['text'] : getDiffLanguages(diff);
@@ -1305,19 +1306,22 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     return this.renderDiffWithHighlighter(
       diff,
       this.highlighter,
-      forcePlainText
+      forcePlainText,
+      deferLineRendering
     );
   }
 
   private renderDiffWithHighlighter(
     diff: FileDiffMetadata,
     highlighter: DiffsHighlighter,
-    forcePlainText = false
+    forcePlainText = false,
+    deferLineRendering = false
   ): RenderDiffResult {
     const { options } = this.getRenderOptions(diff);
     const { collapsedContextThreshold } = this.getOptionsWithDefaults();
     const result = renderDiffWithHighlighter(diff, highlighter, options, {
       forcePlainText,
+      deferLineRendering,
       expandedHunks: forcePlainText ? true : undefined,
       collapsedContextThreshold,
     });
@@ -1911,7 +1915,10 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
               }
             }
           }
-          if (noEOFCRAddition) {
+          if (
+            noEOFCRAddition &&
+            !(unified && noEOFCRDeletion && type !== 'change')
+          ) {
             const noEOFType =
               type === 'context' || type === 'context-expanded'
                 ? type

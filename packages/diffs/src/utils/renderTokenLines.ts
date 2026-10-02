@@ -2,10 +2,12 @@ import type { Element, ElementContent, Properties } from 'hast';
 
 import type { DecorationItem, SharedRenderState, ThemedToken } from '../types';
 import { processLine } from './processLine';
+import { setDeferredArrayItem } from './setDeferredArrayItem';
 import { tokenStyle } from './tokenStyle';
 import { wrapTokenFragments } from './wrapTokenFragments';
 
 interface RenderTokenLinesOptions {
+  deferLineRendering?: boolean;
   state?: SharedRenderState;
   useTokenTransformer?: boolean;
   mergeWhitespaces?: 'never' | 'always';
@@ -36,6 +38,7 @@ export function renderTokenLines(
   lines: ThemedToken[][],
   {
     state,
+    deferLineRendering = false,
     useTokenTransformer = false,
     mergeWhitespaces = 'always',
     decorations = [],
@@ -57,7 +60,7 @@ export function renderTokenLines(
       spans.push(normalized);
     }
   }
-  return lines.map((tokens, lineIndex) => {
+  const renderLine = (tokens: ThemedToken[], lineIndex: number) => {
     let normalized: ThemedToken[] | undefined;
     if (useTokenTransformer || mergeWhitespaces !== 'never') {
       let pendingWhitespace = '';
@@ -146,7 +149,13 @@ export function renderTokenLines(
     // Undecorated tokens already have one span per editor position.
     if (useTokenTransformer && spans != null) wrapTokenFragments(line);
     return state == null ? line : processLine(line, lineIndex + 1, state);
-  });
+  };
+  if (!deferLineRendering) return lines.map(renderLine);
+  const rows: ElementContent[] = new Array(lines.length);
+  for (let index = 0; index < lines.length; index++) {
+    setDeferredArrayItem(rows, index, () => renderLine(lines[index], index));
+  }
+  return rows;
 }
 
 // Returns the line length in UTF-16 code units.

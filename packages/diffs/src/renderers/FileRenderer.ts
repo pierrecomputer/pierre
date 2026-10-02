@@ -803,11 +803,8 @@ export class FileRenderer<LAnnotation = undefined> {
         this.highlighter != null &&
         areLanguagesAttached(this.computedLang, this.highlighter);
       const canHighlight = !forcePlainText && hasLangs;
+      const deferLineRendering = Number.isFinite(renderRange.totalLines);
 
-      // If we have any semblance of a highlighter with the correct theme(s)
-      // attached, we can kick off some form of rendering.  If we don't have
-      // the correct language, then we can render plain text and after kick off
-      // an async job to get the highlighted AST
       if (
         canRenderFile &&
         this.highlighter != null &&
@@ -820,7 +817,8 @@ export class FileRenderer<LAnnotation = undefined> {
         const { result, options } = this.renderFileWithHighlighter(
           file,
           this.highlighter,
-          forcePlainText || !hasLangs
+          forcePlainText || !hasLangs,
+          deferLineRendering
         );
         this.renderCache = {
           file,
@@ -831,13 +829,12 @@ export class FileRenderer<LAnnotation = undefined> {
         };
       }
 
-      // If we get in here it means we'll have to kick off an async highlight
-      // process which will involve initializing the highlighter with new themes
-      // and languages
       if (!hasThemes || (!forcePlainText && !hasLangs)) {
-        void this.asyncHighlight(file).then(({ result, options }) => {
-          this.applyHighlightResult(file, result, options, !forcePlainText);
-        });
+        void this.asyncHighlight(file, deferLineRendering).then(
+          ({ result, options }) => {
+            this.applyHighlightResult(file, result, options, !forcePlainText);
+          }
+        );
       }
     }
 
@@ -855,11 +852,17 @@ export class FileRenderer<LAnnotation = undefined> {
     renderRange: RenderRange = DEFAULT_RENDER_RANGE
   ): Promise<FileRenderResult> {
     this.file = file;
-    const { result } = await this.asyncHighlight(file);
+    const { result } = await this.asyncHighlight(
+      file,
+      Number.isFinite(renderRange.totalLines)
+    );
     return this.processFileResult(file, renderRange, result);
   }
 
-  private async asyncHighlight(file: FileContents): Promise<RenderFileResult> {
+  private async asyncHighlight(
+    file: FileContents,
+    deferLineRendering = false
+  ): Promise<RenderFileResult> {
     const lines = this.getOrCreateLineCache(file);
     const forcePlainText = isFileMassive(
       lines.length,
@@ -883,18 +886,21 @@ export class FileRenderer<LAnnotation = undefined> {
     return this.renderFileWithHighlighter(
       file,
       this.highlighter,
-      forcePlainText
+      forcePlainText,
+      deferLineRendering
     );
   }
 
   private renderFileWithHighlighter(
     file: FileContents,
     highlighter: DiffsHighlighter,
-    forcePlainText = false
+    forcePlainText = false,
+    deferLineRendering = false
   ): RenderFileResult {
     const { options } = this.getRenderOptions(file);
     const result = renderFileWithHighlighter(file, highlighter, options, {
       forcePlainText,
+      deferLineRendering,
     });
     return { result, options };
   }

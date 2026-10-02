@@ -167,7 +167,9 @@ function serializeAttributes(
 }
 
 function escapeText(value: string): string {
-  return value.replace(TEXT_ESCAPE, toCharacterReference);
+  return value.indexOf('<') < 0 && value.indexOf('&') < 0
+    ? value
+    : value.replace(TEXT_ESCAPE, toCharacterReference);
 }
 
 function escapeAttribute(value: string): string {

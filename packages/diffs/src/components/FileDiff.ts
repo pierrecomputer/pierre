@@ -2980,6 +2980,7 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
 
   protected injectUnsafeCSS(): void {
     const { unsafeCSS } = this.options;
+    this.pre?.toggleAttribute('data-custom-styles', Boolean(unsafeCSS));
     const shadowRoot = this.fileContainer?.shadowRoot;
     if (shadowRoot == null) {
       return;

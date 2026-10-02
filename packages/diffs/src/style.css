@@ -844,6 +844,37 @@
     background-color: var(--diffs-bg);
   }
 
+  /* Keep per-row selectors outside this guard: :has would rescan the columns
+   * for every row. */
+  [data-overflow='scroll']:not(
+      [data-dehydrated],
+      [data-custom-styles],
+      :has(
+        > [data-code] > [contenteditable],
+        > [data-code]
+          > *
+          > :is(
+            [data-line-annotation],
+            [data-separator],
+            [data-merge-conflict],
+            [data-merge-conflict-actions]
+          )
+      )
+    )
+    > [data-code] {
+    display: flex;
+
+    > [data-gutter] {
+      display: block;
+      flex-shrink: 0;
+    }
+
+    > [data-content] {
+      display: block;
+      flex: 1 0 max-content;
+    }
+  }
+
   /* Both split layouts that share one grid across the two columns: wrap
    * always, and scroll while dehydrated. Scroll mode normally renders each
    * column as its own scroll container, where paired annotation rows only get
@@ -1414,6 +1445,10 @@
 
   [data-overflow='scroll'] [data-line] {
     white-space: pre;
+    min-height: 1lh;
+  }
+
+  [data-overflow='scroll'] [data-column-number] {
     min-height: 1lh;
   }
 

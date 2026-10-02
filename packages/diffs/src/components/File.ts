@@ -1521,6 +1521,7 @@ export class File<LAnnotation = undefined, Caret = undefined> {
 
   private injectUnsafeCSS(): void {
     const { unsafeCSS } = this.options;
+    this.pre?.toggleAttribute('data-custom-styles', Boolean(unsafeCSS));
     const shadowRoot = this.fileContainer?.shadowRoot;
     if (shadowRoot == null) {
       return;

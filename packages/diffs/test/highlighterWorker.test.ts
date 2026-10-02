@@ -88,6 +88,7 @@ describe('real highlighter workers', () => {
         });
         if (file.type !== 'success' || file.requestType !== 'file')
           throw new Error('Expected file result');
+        expect(Array.isArray(file.result.code)).toBe(true);
         expect(toHtml(file.result.code)).toContain('🚀');
         expect(toHtml(file.result.code)).toContain('data-char="0"');
         expect(file.result.baseThemeType).toBe('dark');
@@ -98,6 +99,8 @@ describe('real highlighter workers', () => {
         });
         if (diff.type !== 'success' || diff.requestType !== 'diff')
           throw new Error('Expected diff result');
+        expect(Array.isArray(diff.result.code.additionLines)).toBe(true);
+        expect(Array.isArray(diff.result.code.deletionLines)).toBe(true);
         expect(toHtml(diff.result.code.additionLines)).toContain('🌕');
         expect(toHtml(diff.result.code.additionLines)).toContain(
           'data-diff-span'

@@ -24,6 +24,7 @@ export function renderFileWithHighlighter(
   { theme, tokenizeMaxLineLength, useTokenTransformer }: RenderFileOptions,
   {
     forcePlainText,
+    deferLineRendering = false,
     startingLine,
     totalLines,
     lines,
@@ -33,10 +34,7 @@ export function renderFileWithHighlighter(
     startingLine ??= 0;
     totalLines ??= Infinity;
   } else {
-    // If we aren't forcing plain text, then we intentionally do not support
-    // ranges for highlighting as that could break the syntax highlighting, we
-    // we override any values that may have been passed in.  Maybe one day we
-    // warn about this?
+    // Tokenization must include preceding lines to preserve lexical state.
     startingLine = 0;
     totalLines = Infinity;
   }
@@ -83,7 +81,12 @@ export function renderFileWithHighlighter(
       ),
       tokenOptions
     ).tokens,
-    { state, useTokenTransformer }
+    {
+      state,
+      useTokenTransformer,
+      deferLineRendering:
+        deferLineRendering && !forcePlainText && !useTokenTransformer,
+    }
   );
 
   // Create sparse array for windowed rendering
