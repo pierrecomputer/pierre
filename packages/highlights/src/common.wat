@@ -999,7 +999,6 @@
     (local $h i32)
     (local $entry i32)
     (local $rec i32)
-    (local $mask i32)
     (local.set $len (i32.sub (local.get $end) (local.get $start)))
     (if (i32.gt_u (i32.sub (local.get $len) (i32.const 2)) (i32.const 29))
       (then (return (i32.const 0))))
@@ -1051,27 +1050,22 @@
     ;; the exact word bytes sit in the shared pool
     (local.set $rec
       (i32.add (i32.const $mem.keywordPool) (i32.and (local.get $entry) (i32.const 8191))))
-    ;; Compare up to 16 bytes at once. Longer words use an overlapping tail
-    ;; inside the word. Short words mask lookahead into input slack or the
-    ;; pool bytes after the word; neither needs zero padding.
-    (local.set $mask
-      (i8x16.bitmask
-        (i8x16.ne (v128.load (local.get $start)) (v128.load (local.get $rec)))))
+    ;; Ignore differing bytes after the word: ctz(0) is 32, beyond every
+    ;; supported length. Longer words also compare an overlapping tail.
+    (if
+      (i32.lt_u
+        (i32.ctz
+          (i8x16.bitmask
+            (i8x16.ne (v128.load (local.get $start)) (v128.load (local.get $rec)))))
+        (local.get $len))
+      (then (return (i32.const 0))))
     (if (i32.gt_u (local.get $len) (i32.const 16))
       (then
         (if
-          (i32.or
-            (local.get $mask)
-            (i8x16.bitmask
-              (i8x16.ne
-                (v128.load (i32.sub (local.get $end) (i32.const 16)))
-                (v128.load (i32.add (local.get $rec) (i32.sub (local.get $len) (i32.const 16)))))))
-          (then (return (i32.const 0)))))
-      (else
-        (if
-          (i32.and
-            (local.get $mask)
-            (i32.sub (i32.shl (i32.const 1) (local.get $len)) (i32.const 1)))
+          (v128.any_true
+            (v128.xor
+              (v128.load (i32.sub (local.get $end) (i32.const 16)))
+              (v128.load (i32.add (local.get $rec) (i32.sub (local.get $len) (i32.const 16))))))
           (then (return (i32.const 0))))))
     (i32.and (i32.shr_u (local.get $entry) (i32.const 13)) (i32.const 63)))
 

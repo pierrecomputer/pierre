@@ -229,29 +229,20 @@
   ;; wide loads may read up to 15 bytes past $rhs: always inside the input
   ;; buffer or the 16-byte slack, never past $cap. wide stores may write up to
   ;; 15 bytes of garbage past the advanced cursor; later writes overwrite it.
-  ;; $gap selects direct copying for whitespace or UTF-8 continuation bytes.
-  ;; caller has ensured capacity for length + 16, or 5*length + 16 when escaping.
-  (func $escCopy (param $lhs i32) (param $rhs i32) (param $gap i32)
+  ;; caller has ensured capacity for 5*length + 16.
+  (func $escCopy (param $lhs i32) (param $rhs i32)
     (local $c i32)
     (local $mask i32)
     (local $k i32)
     (local $rem i32)
     (local $w v128)
-    (if (local.get $gap)
-      (then
-        (local.set $rem (i32.sub (local.get $rhs) (local.get $lhs)))
-        ;; Later output overwrites lookahead copied by a short gap's store.
-        (if (i32.le_u (local.get $rem) (i32.const 16))
-          (then (v128.store (global.get $out) (v128.load (local.get $lhs))))
-          (else (memory.copy (global.get $out) (local.get $lhs) (local.get $rem))))
-        (global.set $out (i32.add (global.get $out) (local.get $rem)))
-        (return)))
     (block $done
       (loop $outer
         (br_if $done (i32.ge_u (local.get $lhs) (local.get $rhs)))
         (block $special
           (loop $wide
             (local.set $w (v128.load (local.get $lhs)))
+            (v128.store (global.get $out) (local.get $w))
             ;; `<` and `>` differ only in bit 1, so one masked compare finds both
             (local.set $mask
               (i8x16.bitmask
@@ -261,22 +252,15 @@
                     (i8x16.splat (i32.const "<")))
                   (i8x16.eq (local.get $w) (i8x16.splat (i32.const "&"))))))
             (local.set $rem (i32.sub (local.get $rhs) (local.get $lhs)))
-            ;; ignore specials past $rhs
-            (if (i32.lt_u (local.get $rem) (i32.const 16))
-              (then
-                (local.set $mask
-                  (i32.and
-                    (local.get $mask)
-                    (i32.sub (i32.shl (i32.const 1) (local.get $rem)) (i32.const 1))))))
             (if (local.get $mask)
               (then
-                ;; copy the clean prefix, then leave to escape the special byte
                 (local.set $k (i32.ctz (local.get $mask)))
-                (v128.store (global.get $out) (local.get $w))
-                (global.set $out (i32.add (global.get $out) (local.get $k)))
-                (local.set $lhs (i32.add (local.get $lhs) (local.get $k)))
-                (br $special)))
-            (v128.store (global.get $out) (local.get $w))
+                ;; Ignore specials in the lookahead past $rhs.
+                (if (i32.lt_u (local.get $k) (local.get $rem))
+                  (then
+                    (global.set $out (i32.add (global.get $out) (local.get $k)))
+                    (local.set $lhs (i32.add (local.get $lhs) (local.get $k)))
+                    (br $special)))))
             (if (i32.le_u (local.get $rem) (i32.const 16))
               (then
                 (global.set $out (i32.add (global.get $out) (local.get $rem)))
@@ -516,11 +500,12 @@
         (i32.mul (i32.sub (local.get $rhs) (local.get $lhs)) (i32.const 5))
         (global.get $spanReserve)))
     (call $setSpan (local.get $hl))
-    (call $escCopy (local.get $lhs) (local.get $rhs) (i32.const 0)))
+    (call $escCopy (local.get $lhs) (local.get $rhs)))
 
   ;; Copy whitespace or leading UTF-8 continuation bytes without changing
   ;; the open span. These bytes cannot contain HTML specials (& < >).
   (func $emitGap (param $lhs i32) (param $rhs i32)
+    (local $len i32)
     (if (i32.ge_u (local.get $lhs) (local.get $rhs))
       (then (return)))
     (if (global.get $tokens)
@@ -533,8 +518,13 @@
               (i32.sub (local.get $rhs) (global.get $srcBase))))
           (else (call $recTok (enum.get $Token.none) (local.get $rhs))))
         (return)))
-    (call $ensureCap (i32.add (i32.sub (local.get $rhs) (local.get $lhs)) (i32.const 16)))
-    (call $escCopy (local.get $lhs) (local.get $rhs) (i32.const 1)))
+    (local.set $len (i32.sub (local.get $rhs) (local.get $lhs)))
+    (call $ensureCap (i32.add (local.get $len) (i32.const 16)))
+    ;; Later output overwrites lookahead copied by a short gap's store.
+    (if (i32.le_u (local.get $len) (i32.const 16))
+      (then (v128.store (global.get $out) (v128.load (local.get $lhs))))
+      (else (memory.copy (global.get $out) (local.get $lhs) (local.get $len))))
+    (global.set $out (i32.add (global.get $out) (local.get $len))))
 
   ;; Keep a span open when a bounded range resumes inside a UTF-8 code point.
   ;; Lives here rather than in common.wat so the lexers that import only

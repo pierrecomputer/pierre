@@ -115,6 +115,59 @@ void t.test(
 );
 
 void t.test(
+  'emitter: HTML escaping stops at the requested byte boundary',
+  () => {
+    const url = new URL('./escape.wat', import.meta.url);
+    const { code } = transformWat(
+      url,
+      `(module
+      (import "../src/emit.wat")
+      (func (export "escape") (param $len i32) (result i32)
+        (global.set $out (i32.const 131072))
+        (call $escCopy
+          (i32.const 65536)
+          (i32.add (i32.const 65536) (local.get $len)))
+        (i32.sub (global.get $out) (i32.const 131072))))`
+    );
+    const instance = new WebAssembly.Instance(
+      new WebAssembly.Module(wat2wasm(url.pathname, code))
+    );
+    const memory = instance.exports.memory as WebAssembly.Memory;
+    const escape = instance.exports.escape as (length: number) => number;
+    const bytes = new Uint8Array(memory.buffer);
+    for (let length = 0; length <= 33; length++) {
+      for (const [special, escaped] of [
+        ['&', '&amp;'],
+        ['<', '&lt;'],
+        ['>', '&gt;'],
+      ]) {
+        for (const at of [
+          0,
+          15,
+          16,
+          length - 1,
+          length,
+          length + 1,
+          length + 14,
+        ]) {
+          if (at < 0) continue;
+          bytes.fill(0x78, 65536, 65600);
+          bytes[65536 + at] = special.charCodeAt(0);
+          const end = escape(length);
+          assert.equal(
+            decoder.decode(bytes.subarray(131072, 131072 + end)),
+            at < length
+              ? 'x'.repeat(at) + escaped + 'x'.repeat(length - at - 1)
+              : 'x'.repeat(length),
+            `${special} at ${at}, length ${length}`
+          );
+        }
+      }
+    }
+  }
+);
+
+void t.test(
   'languages: aliases and uppercase names match their canonical lexer',
   () => {
     for (const [name, id] of Object.entries(languageEnum)) {
