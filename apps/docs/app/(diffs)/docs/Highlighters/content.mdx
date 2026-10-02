@@ -1,0 +1,31 @@
+## Highlighters
+
+`@pierre/diffs` supports three syntax highlighting backends. Select one with
+`preferredHighlighter`; each backend loads on demand.
+
+| Backend      | Description                                          |
+| ------------ | ---------------------------------------------------- |
+| `shiki-js`   | The default. Shiki with its JavaScript regex engine. |
+| `shiki-wasm` | Shiki with its WebAssembly regex engine.             |
+| `highlights` | WebAssembly lexers from [Highlights](#highlights).   |
+
+Set `preferredHighlighter` in the component's `options`:
+
+<DocsCodeExample {...highlighterExample} />
+
+The same option works with React and vanilla components, edit mode, streaming,
+and [SSR preload helpers](#ssr). When using a [worker pool](#worker-pool), set
+`preferredHighlighter` in the pool's `highlighterOptions`; the pool controls the
+backend used by its components. Highlights usually performs best without a pool.
+
+Only one backend can be loaded at a time on a page, in each worker, and in an
+SSR server process. Components without `preferredHighlighter` use the backend
+already loaded, or `shiki-js` when none is. Dispose every instance before
+switching backends. `getHighlighterType()` returns the active backend.
+
+Built-in theme names work across all three backends. Custom TextMate themes and
+grammars require Shiki; Highlights uses Zed themes and bundled lexers. See
+[Themes](#themes) for configuration and [Highlights](#highlights) for its APIs
+and supported languages.
+
+Try the backends in the [diffs playground](/playground?highlighter=highlights).

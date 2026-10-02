@@ -1,6 +1,5 @@
-import type { ThemedToken } from 'shiki/core';
-
-import { ShikiStreamTokenizer } from './tokenizer';
+import type { DiffsStreamTokenizer } from '../highlighter/tokenizer-types';
+import type { ThemedToken } from '../highlighter/types';
 import type { CodeToTokenTransformStreamOptions, RecallToken } from './types';
 
 /**
@@ -10,43 +9,57 @@ export class CodeToTokenTransformStream extends TransformStream<
   string,
   ThemedToken | RecallToken
 > {
-  readonly tokenizer: ShikiStreamTokenizer;
+  readonly tokenizer: DiffsStreamTokenizer;
   readonly options: CodeToTokenTransformStreamOptions;
 
   constructor(options: CodeToTokenTransformStreamOptions) {
-    const tokenizer = new ShikiStreamTokenizer(options);
+    const tokenizer = options.highlighter.createStreamTokenizer(options);
     const { allowRecalls = false } = options;
 
-    super({
+    const transformer: Transformer<string, ThemedToken | RecallToken> & {
+      cancel(): void;
+    } = {
       async transform(chunk, controller) {
-        const {
-          stable,
-          unstable: buffer,
-          recall,
-        } = await tokenizer.enqueue(chunk);
-        if (allowRecalls && recall > 0) {
-          controller.enqueue({ recall });
-        }
-        for (const token of stable) {
-          controller.enqueue(token);
-        }
-        if (allowRecalls) {
-          for (const token of buffer) {
-            controller.enqueue(token);
+        try {
+          const {
+            stable,
+            unstable: buffer,
+            recall,
+          } = await tokenizer.enqueue(chunk);
+          if (allowRecalls && recall > 0) {
+            controller.enqueue({ recall });
           }
-        }
-      },
-      // oxlint-disable-next-line typescript/require-await
-      async flush(controller) {
-        const { stable } = tokenizer.close();
-        // if allow recalls, the tokens should already be sent
-        if (!allowRecalls) {
           for (const token of stable) {
             controller.enqueue(token);
           }
+          if (allowRecalls) {
+            for (const token of buffer) {
+              controller.enqueue(token);
+            }
+          }
+        } catch (error) {
+          tokenizer.dispose();
+          throw error;
         }
       },
-    });
+      flush(controller) {
+        try {
+          const { stable } = tokenizer.close();
+          // With recalls, the final provisional tokens have already been sent.
+          if (!allowRecalls) {
+            for (const token of stable) {
+              controller.enqueue(token);
+            }
+          }
+        } finally {
+          tokenizer.dispose();
+        }
+      },
+      cancel() {
+        tokenizer.dispose();
+      },
+    };
+    super(transformer);
 
     this.tokenizer = tokenizer;
     this.options = options;

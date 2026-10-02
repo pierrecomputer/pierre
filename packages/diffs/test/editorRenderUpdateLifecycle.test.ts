@@ -1,5 +1,6 @@
-import { afterAll, describe, expect, test } from 'bun:test';
+import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import { createTwoFilesPatch } from 'diff';
+import type { ThemeRegistration } from 'shiki';
 
 import {
   disposeHighlighter,
@@ -20,10 +21,18 @@ import type {
   FileDiffLoadedFiles,
   FileDiffMetadata,
   SupportedLanguages,
-  ThemeRegistration,
 } from '../src/types';
 import { createRoot, installDom, waitFor } from './domHarness';
 import { assertDefined, createDeferred } from './testUtils';
+
+beforeAll(async () => {
+  await disposeHighlighter();
+  await getSharedHighlighter({
+    preferredHighlighter: 'shiki-js',
+    themes: [],
+    langs: [],
+  });
+});
 
 afterAll(async () => {
   await disposeHighlighter();

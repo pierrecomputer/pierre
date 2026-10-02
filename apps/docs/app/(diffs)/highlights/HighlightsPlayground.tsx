@@ -1,6 +1,5 @@
 'use client';
 
-import { codeToHtml } from '@pierre/highlights';
 import { themes as themeLoaders } from '@pierre/highlights/themes/loader';
 import pierreDark from '@pierre/highlights/themes/pierre-dark';
 import pierreLight from '@pierre/highlights/themes/pierre-light';
@@ -72,6 +71,8 @@ export function HighlightsPlayground() {
     light: pierreLight,
     dark: pierreDark,
   });
+  const [highlighter, setHighlighter] =
+    useState<typeof import('@pierre/highlights')>();
   const [loadFailed, setLoadFailed] = useState(false);
   const lightTheme =
     previewTheme?.colorScheme === 'light'
@@ -86,11 +87,13 @@ export function HighlightsPlayground() {
     let active = true;
 
     void Promise.all([
+      import('@pierre/highlights'),
       themeLoaders[lightTheme](),
       themeLoaders[darkTheme](),
     ]).then(
-      ([light, dark]) => {
+      ([highlighter, light, dark]) => {
         if (!active) return;
+        setHighlighter(highlighter);
         setThemes({ light: light.default, dark: dark.default });
         setLoadFailed(false);
       },
@@ -105,15 +108,24 @@ export function HighlightsPlayground() {
   }, [lightTheme, darkTheme]);
 
   const html = useMemo(
-    () => ({
-      light: decoder.decode(
-        codeToHtml(code, { lang: language, theme: themes.light })
-      ),
-      dark: decoder.decode(
-        codeToHtml(code, { lang: language, theme: themes.dark })
-      ),
-    }),
-    [code, language, themes]
+    () =>
+      highlighter === undefined
+        ? undefined
+        : {
+            light: decoder.decode(
+              highlighter.codeToHtml(code, {
+                lang: language,
+                theme: themes.light,
+              })
+            ),
+            dark: decoder.decode(
+              highlighter.codeToHtml(code, {
+                lang: language,
+                theme: themes.dark,
+              })
+            ),
+          },
+    [code, highlighter, language, themes]
   );
   const themeStyles = Object.fromEntries(
     Object.entries(themes).flatMap(([colorScheme, { style }]) => [
@@ -253,7 +265,8 @@ export function HighlightsPlayground() {
 
       {loadFailed && (
         <p role="alert" className="text-destructive text-sm">
-          The theme could not load. Choose another theme or reload this page.
+          The highlighter or theme could not load. Choose another theme or
+          reload this page.
         </p>
       )}
       <div
@@ -288,13 +301,24 @@ export function HighlightsPlayground() {
             ))}
           </div>
           <div aria-hidden="true" className={styles.preview}>
-            {(['light', 'dark'] as const).map((colorScheme) => (
-              <div
-                key={colorScheme}
-                data-color-scheme={colorScheme}
-                dangerouslySetInnerHTML={{ __html: html[colorScheme] }}
-              />
-            ))}
+            {html === undefined ? (
+              <pre
+                style={{
+                  color:
+                    'light-dark(var(--light-foreground), var(--dark-foreground))',
+                }}
+              >
+                <code>{code}</code>
+              </pre>
+            ) : (
+              (['light', 'dark'] as const).map((colorScheme) => (
+                <div
+                  key={colorScheme}
+                  data-color-scheme={colorScheme}
+                  dangerouslySetInnerHTML={{ __html: html[colorScheme] }}
+                />
+              ))
+            )}
           </div>
         </div>
       </div>

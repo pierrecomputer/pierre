@@ -55,7 +55,7 @@ function withRecycledRenderer(
 ): void {
   const renderer = new DiffHunksRenderer({ theme: 'pierre-dark' });
   const diff = createDiff();
-  const highlight = spyOn(highlighter, 'codeToHast');
+  const highlight = spyOn(highlighter, 'codeToTokens');
   try {
     renderer.beginEditSession(diff);
     expect(renderHtml(renderer, diff)).toContain('data-char');
@@ -109,7 +109,7 @@ describe('recycled diff edit highlights', () => {
       theme: 'pierre-dark',
       useTokenTransformer: true,
     });
-    const highlight = spyOn(highlighter, 'codeToHast');
+    const highlight = spyOn(highlighter, 'codeToTokens');
     try {
       const external = createDiff();
       const options = {
@@ -152,7 +152,7 @@ describe('recycled diff edit highlights', () => {
   test('keeps results for every active session, including more than 100', () => {
     const renderers: DiffHunksRenderer[] = [];
     const diffs: FileDiffMetadata[] = [];
-    const highlight = spyOn(highlighter, 'codeToHast');
+    const highlight = spyOn(highlighter, 'codeToTokens');
     try {
       for (let index = 0; index < 101; index++) {
         const renderer = new DiffHunksRenderer({ theme: 'pierre-dark' });

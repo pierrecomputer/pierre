@@ -1329,7 +1329,9 @@ export class Editor<
     if (tokenizer !== undefined) {
       tokenizer.pauseBackgroundTokenize();
       requestAnimationFrame(() => {
-        tokenizer.resumeBackgroundTokenize();
+        if (this.#tokenizer === tokenizer) {
+          tokenizer.resumeBackgroundTokenize();
+        }
       });
     }
   }
@@ -1569,6 +1571,13 @@ export class Editor<
     // (rather than the rebuild) keeps an unchanged resumed document, which
     // skips the rebuild, able to paint edits.
     const textDocument = editSession.document;
+    if (
+      this.#tokenizer != null &&
+      this.#tokenizer.highlighter !== highlighter
+    ) {
+      this.#tokenizer.cleanUp();
+      this.#tokenizer = undefined;
+    }
     if (this.#tokenizer == null && textDocument != null) {
       this.#tokenizer = new EditorTokenizer({
         highlighter,

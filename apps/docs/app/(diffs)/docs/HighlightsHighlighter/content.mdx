@@ -1,8 +1,24 @@
 ## Highlights
 
+Use Highlights with any `@pierre/diffs` component by setting
+`preferredHighlighter: 'highlights'`:
+
+```tsx
+<FileDiff
+  oldFile={oldFile}
+  newFile={newFile}
+  options={{ preferredHighlighter: 'highlights' }}
+/>
+```
+
+Highlights usually performs best without a [worker pool](#worker-pool). See
+[Highlighters](#highlighters) for backend selection and
+[registerCustomTheme](#utilities-registercustomtheme) for Zed themes and shared
+palettes. Custom TextMate grammars require Shiki.
+
 <Notice variant="warning" icon={<IconCiWarningFill />}>
   Highlights is experimental and subject to change. Try the [interactive
-  playground](/highlights) before replacing Shiki in production.
+  playground](/highlights) to compare its output with Shiki.
 </Notice>
 
 Highlights is a syntax highlighter with 73 built-in language lexers written in
@@ -339,9 +355,9 @@ The main entry exports the complete runtime and its public types:
 <DocsCodeExample {...highlightsApiRuntime} />
 
 The environment-specific entry point initializes the shared instance.
-`init(module)` replaces it; `createHighlighter(module)` creates an isolated
-`Highlighter` without changing the shared instance. Both accept a compiled
-`WebAssembly.Module` and are intended for embedders managing their own module.
+`createHighlighter()` creates an isolated `Highlighter` using the initialized
+module. Embedders can pass their own compiled `WebAssembly.Module` to
+`createHighlighter(module)` or replace the shared instance with `init(module)`.
 
 The public type surface is available from the same entry:
 

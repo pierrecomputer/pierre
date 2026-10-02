@@ -74,7 +74,7 @@ test('an editable file keeps its highlighted document through a scroll remount',
     theme: 'pierre-dark',
     createEditor: (type, options, key) => new Editor(type, options, key),
   });
-  const highlight = spyOn(highlighter, 'codeToHast');
+  const highlight = spyOn(highlighter, 'codeToTokens');
   const root = createRoot({ height: 200 });
   const items: CodeViewItem<undefined>[] = Array.from(
     { length: 8 },
@@ -209,7 +209,7 @@ async function withViewer(
       });
     };
 
-    const highlight = spyOn(highlighter, 'codeToHast');
+    const highlight = spyOn(highlighter, 'codeToTokens');
     restoreHighlight = () => highlight.mockRestore();
     const viewer = new CodeView(
       {
@@ -252,7 +252,7 @@ async function withViewer(
       viewer,
       items,
       flush,
-      // Plain placeholder ASTs also call codeToHast with lang: 'text'; they
+      // Plain placeholder ASTs also call codeToTokens with lang: 'text'; they
       // do not run the TypeScript grammar and are not the expensive work.
       highlightedSources: () =>
         highlight.mock.calls
@@ -369,7 +369,7 @@ for (const partial of [false, true]) {
       createEditor: (type, options, key) => new Editor(type, options, key),
       loadDiffFiles: () => Promise.resolve({ oldFile, newFile }),
     });
-    const highlight = spyOn(highlighter, 'codeToHast');
+    const highlight = spyOn(highlighter, 'codeToTokens');
     try {
       if (replacement == null) throw new Error('Expected replacement diff');
       expect(replacement.isPartial === true).toBe(partial);

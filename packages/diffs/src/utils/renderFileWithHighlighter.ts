@@ -1,19 +1,18 @@
 import type {
-  CodeToHastOptions,
+  CodeToTokensOptions,
   DiffsHighlighter,
-  DiffsThemeNames,
   FileContents,
   ForceFilePlainTextOptions,
   RenderFileOptions,
+  SharedRenderState,
   ThemedFileResult,
 } from '../types';
 import { appendItems } from './appendItems';
 import { linesFromFileContents } from './computeFileOffsets';
-import { createTransformerWithState } from './createTransformerWithState';
 import { formatCSSVariablePrefix } from './formatCSSVariablePrefix';
 import { getFiletypeFromFileName } from './getFiletypeFromFileName';
 import { getHighlighterThemeStyles } from './getHighlighterThemeStyles';
-import { getLineNodes } from './getLineNodes';
+import { renderTokenLines } from './renderTokenLines';
 
 const DEFAULT_PLAIN_TEXT_OPTIONS: ForceFilePlainTextOptions = {
   forcePlainText: false,
@@ -25,6 +24,7 @@ export function renderFileWithHighlighter(
   { theme, tokenizeMaxLineLength, useTokenTransformer }: RenderFileOptions,
   {
     forcePlainText,
+    deferLineRendering = false,
     startingLine,
     totalLines,
     lines,
@@ -34,16 +34,12 @@ export function renderFileWithHighlighter(
     startingLine ??= 0;
     totalLines ??= Infinity;
   } else {
-    // If we aren't forcing plain text, then we intentionally do not support
-    // ranges for highlighting as that could break the syntax highlighting, we
-    // we override any values that may have been passed in.  Maybe one day we
-    // warn about this?
+    // Tokenization must include preceding lines to preserve lexical state.
     startingLine = 0;
     totalLines = Infinity;
   }
   const isWindowedHighlight = startingLine > 0 || totalLines < Infinity;
-  const { state, transformers } =
-    createTransformerWithState(useTokenTransformer);
+  const state: SharedRenderState = { lineInfo: [] };
   const lang = forcePlainText
     ? 'text'
     : (file.lang ?? getFiletypeFromFileName(file.name));
@@ -64,30 +60,16 @@ export function renderFileWithHighlighter(
   // dual-theme rendering tokenizes per theme, the first (dark) pass can smear
   // while the warm second (light) pass stays correct. Pathological content is
   // already guarded by tokenizeMaxLineLength, which renders long lines plain.
-  const hastConfig: CodeToHastOptions<DiffsThemeNames> = (() => {
-    if (typeof theme === 'string') {
-      return {
-        lang,
-        theme,
-        transformers,
-        defaultColor: false,
-        cssVariablePrefix: formatCSSVariablePrefix('token'),
-        tokenizeMaxLineLength,
-        tokenizeTimeLimit: 0,
-      };
-    }
-    return {
-      lang,
-      themes: theme,
-      transformers,
-      defaultColor: false,
-      cssVariablePrefix: formatCSSVariablePrefix('token'),
-      tokenizeMaxLineLength,
-      tokenizeTimeLimit: 0,
-    };
-  })();
-  const highlightedLines = getLineNodes(
-    highlighter.codeToHast(
+  const tokenOptions: CodeToTokensOptions = {
+    lang,
+    ...(typeof theme === 'string' ? { theme } : { themes: theme }),
+    defaultColor: false,
+    cssVariablePrefix: formatCSSVariablePrefix('token'),
+    tokenizeMaxLineLength,
+    tokenizeTimeLimit: 0,
+  };
+  const highlightedLines = renderTokenLines(
+    highlighter.codeToTokens(
       normalizeHighlightLineEndings(
         isWindowedHighlight
           ? extractWindowedFileContent(
@@ -97,8 +79,14 @@ export function renderFileWithHighlighter(
             )
           : file.contents
       ),
-      hastConfig
-    )
+      tokenOptions
+    ).tokens,
+    {
+      state,
+      useTokenTransformer,
+      deferLineRendering:
+        deferLineRendering && !forcePlainText && !useTokenTransformer,
+    }
   );
 
   // Create sparse array for windowed rendering

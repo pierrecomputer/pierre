@@ -190,7 +190,10 @@ export interface PreparedTheme {
   bg?: string;
   /** Five-byte RGBA/style records; undefined for Display P3 and CSS variables. */
   table: Uint8Array | undefined;
-  /** Lazy replacements for unprefixed CSS-variable tags; Display P3 only. */
+  /**
+   * Maps unprefixed emitter tags to styled tags for Display P3 and named CSS
+   * palettes. Computed on first access; undefined for other themes.
+   */
   readonly htmlTags: Map<string, string> | undefined;
 }
 
@@ -215,13 +218,52 @@ export function prepareTheme(
   const prepared =
     resolved.cssVariables === true
       ? prepareCssVariables(resolved.name, cssVariablePrefix)
-      : prepareStyles(resolved);
+      : typeof resolved.cssVariables === 'object'
+        ? prepareCssPalette(resolved)
+        : prepareStyles(resolved);
   if (prefixes === undefined) {
     prefixes = new Map();
     preparedCache.set(resolved, prefixes);
   }
   prefixes.set(prefix, prepared);
   return prepared;
+}
+
+/** Palette colors are variable suffixes, not literal CSS values. */
+function prepareCssPalette(theme: Theme): PreparedTheme {
+  const config = theme.cssVariables;
+  if (typeof config !== 'object') throw new Error('Expected CSS palette');
+  const prefix = config.prefix ?? defaultCssVariablePrefix;
+  const variable = (name: string): string => {
+    const fallback = config.defaults?.[name];
+    return `var(${prefix}${name}${fallback ? `, ${fallback}` : ''})`;
+  };
+  const styles: (TokenStyle | null)[] = new Array(tokenTypes.length).fill(null);
+  const syntax = theme.style.syntax ?? {};
+  for (let i = 1; i < tokenTypes.length; i++) {
+    const setting = resolveThemeSyntax(syntax, tokenTypes[i]);
+    styles[i] = {
+      color: variable(setting?.color ?? 'foreground'),
+      italic: setting?.font_style === 'italic',
+      weight:
+        setting?.font_weight === undefined
+          ? 0
+          : Math.round(setting.font_weight / 100) * 100,
+    };
+  }
+  const fg = variable(themeForeground(theme.style) ?? 'foreground');
+  const bg = variable(themeBackground(theme.style) ?? 'background');
+  let htmlTags: Map<string, string> | undefined;
+  return {
+    name: theme.name,
+    styles,
+    fg,
+    bg,
+    table: undefined,
+    get htmlTags() {
+      return (htmlTags ??= themeHtmlTags(styles, fg, bg));
+    },
+  };
 }
 
 /**
@@ -316,19 +358,16 @@ function prepareStyles(theme: Theme): PreparedTheme {
     table: usesDisplayP3 ? undefined : table,
     get htmlTags() {
       if (!usesDisplayP3) return undefined;
-      return (htmlTags ??= displayP3HtmlTags(styles, fg, bg));
+      return (htmlTags ??= themeHtmlTags(styles, fg, bg));
     },
   };
 }
 
 /**
- * Tag replacements for Display P3 HTML. The CSS-variable emitter runs with an
- * empty prefix, so its openers read `var(<token>)`; each maps to an opener
- * with the theme's color and font settings inlined, the shape the packed-table
- * emitter produces. Every color passed `isThemeColor`, so none can escape the
- * style attribute.
+ * Replace unprefixed emitter tags with theme colors and font styles.
+ * Escape attributes because CSS prefixes and defaults may contain quotes.
  */
-function displayP3HtmlTags(
+function themeHtmlTags(
   styles: (TokenStyle | null)[],
   fg: string | undefined,
   bg: string | undefined
@@ -337,7 +376,10 @@ function displayP3HtmlTags(
   const rootStyle =
     (bg === undefined ? '' : `background-color:${bg};`) +
     (fg === undefined ? '' : `color:${fg}`);
-  tags.set(variableRootTag, `<pre class="highlights" style="${rootStyle}">`);
+  tags.set(
+    variableRootTag,
+    `<pre class="highlights" style="${escapeAttribute(rootStyle)}">`
+  );
   for (let i = 1; i < tokenTypes.length; i++) {
     const style = styles[i];
     const css =
@@ -346,7 +388,7 @@ function displayP3HtmlTags(
       (style != null && style.weight !== 0
         ? `;font-weight:${style.weight}`
         : '');
-    tags.set(variableSpanTag(i), `<span style="${css}">`);
+    tags.set(variableSpanTag(i), `<span style="${escapeAttribute(css)}">`);
   }
   return tags;
 }

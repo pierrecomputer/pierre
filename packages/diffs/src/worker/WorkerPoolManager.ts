@@ -2,6 +2,7 @@ import LRUMapPkg from 'lru_map';
 import type { LRUMap } from 'lru_map';
 
 import { DEFAULT_THEMES } from '../constants';
+import { resolveHighlighterType } from '../highlighter/highlighterType';
 import { areLanguagesAttached } from '../highlighter/languages/areLanguagesAttached';
 import { getResolvedLanguages } from '../highlighter/languages/getResolvedLanguages';
 import { hasResolvedLanguages } from '../highlighter/languages/hasResolvedLanguages';
@@ -13,6 +14,7 @@ import { hasResolvedThemes } from '../highlighter/themes/hasResolvedThemes';
 import { resolveThemes } from '../highlighter/themes/resolveThemes';
 import type {
   DiffsHighlighter,
+  DiffsTheme,
   FileContents,
   FileDiffMetadata,
   HighlighterTypes,
@@ -24,7 +26,6 @@ import type {
   SupportedLanguages,
   ThemedDiffResult,
   ThemedFileResult,
-  ThemeRegistrationResolved,
 } from '../types';
 import { areDiffRenderOptionsEqual } from '../utils/areDiffRenderOptionsEqual';
 import { areDiffTargetsEqual } from '../utils/areDiffTargetsEqual';
@@ -41,6 +42,7 @@ import { isDiffPlainText } from '../utils/isDiffPlainText';
 import { isFilePlainText } from '../utils/isFilePlainText';
 import { renderDiffWithHighlighter } from '../utils/renderDiffWithHighlighter';
 import { renderFileWithHighlighter } from '../utils/renderFileWithHighlighter';
+import { decodeHastLines } from './hastLinesTransport';
 import type {
   AllWorkerTasks,
   DiffRendererInstance,
@@ -58,9 +60,12 @@ import type {
   WorkerPoolOptions,
   WorkerRenderingOptions,
   WorkerRequestId,
-  WorkerResponse,
   WorkerStats,
 } from './types';
+import type {
+  InitializeWorkerWireRequest,
+  WorkerWireResponse,
+} from './workerMessage';
 
 const IGNORE_RESPONSE = Symbol('IGNORE_RESPONSE');
 const DEFAULT_WORKER_INITIALIZATION_TIMEOUT = 10_000;
@@ -141,10 +146,10 @@ export class WorkerPoolManager {
       lineDiffType = 'word-alt',
       maxLineDiffLength = 1000,
       tokenizeMaxLineLength = 1000,
-      preferredHighlighter = 'shiki-js',
+      preferredHighlighter,
     }: WorkerInitializationRenderOptions
   ) {
-    this.preferredHighlighter = preferredHighlighter;
+    this.preferredHighlighter = resolveHighlighterType(preferredHighlighter);
     this.renderOptions = {
       theme,
       useTokenTransformer,
@@ -227,13 +232,14 @@ export class WorkerPoolManager {
       }
 
       const themeNames = getThemes(theme);
-      let resolvedThemes: ThemeRegistrationResolved[] = [];
+      let resolvedThemes: DiffsTheme[] = [];
       if (!areThemesEqual(newRenderOptions.theme, this.renderOptions.theme)) {
-        if (hasResolvedThemes(themeNames)) {
-          resolvedThemes = getResolvedThemes(themeNames);
-        } else {
-          resolvedThemes = await resolveThemes(themeNames);
-        }
+        resolvedThemes = hasResolvedThemes(
+          themeNames,
+          this.preferredHighlighter
+        )
+          ? getResolvedThemes(themeNames, this.preferredHighlighter)
+          : await resolveThemes(themeNames, this.preferredHighlighter);
       }
 
       if (!isCurrentRequest()) {
@@ -294,7 +300,7 @@ export class WorkerPoolManager {
 
   private async setRenderOptionsOnWorkers(
     renderOptions: WorkerRenderingOptions,
-    resolvedThemes: ThemeRegistrationResolved[]
+    resolvedThemes: DiffsTheme[]
   ): Promise<void> {
     if (this.workersFailed) {
       return;
@@ -408,22 +414,22 @@ export class WorkerPoolManager {
         void (async () => {
           try {
             const themes = getThemes(this.renderOptions.theme);
-            let resolvedThemes: ThemeRegistrationResolved[] = [];
-            if (hasResolvedThemes(themes)) {
-              resolvedThemes = getResolvedThemes(themes);
-            } else {
-              resolvedThemes = await resolveThemes(themes);
-            }
+            const resolvedThemes = hasResolvedThemes(
+              themes,
+              this.preferredHighlighter
+            )
+              ? getResolvedThemes(themes, this.preferredHighlighter)
+              : await resolveThemes(themes, this.preferredHighlighter);
             if (!this.isCurrentLifecycle(lifecycleGeneration)) {
               resolve();
               return;
             }
 
             let resolvedLanguages: ResolvedLanguage[] = [];
-            if (hasResolvedLanguages(languages)) {
-              resolvedLanguages = getResolvedLanguages(languages);
-            } else {
-              resolvedLanguages = await resolveLanguages(languages);
+            if (this.preferredHighlighter !== 'highlights') {
+              resolvedLanguages = hasResolvedLanguages(languages)
+                ? getResolvedLanguages(languages)
+                : await resolveLanguages(languages);
             }
             if (!this.isCurrentLifecycle(lifecycleGeneration)) {
               resolve();
@@ -481,7 +487,7 @@ export class WorkerPoolManager {
   }
 
   private async initializeWorkers(
-    resolvedThemes: ThemeRegistrationResolved[],
+    resolvedThemes: DiffsTheme[],
     resolvedLanguages: ResolvedLanguage[]
   ): Promise<void> {
     this.workersFailed = false;
@@ -504,7 +510,7 @@ export class WorkerPoolManager {
       };
       worker.addEventListener(
         'message',
-        (event: MessageEvent<WorkerResponse>) => {
+        (event: MessageEvent<WorkerWireResponse>) => {
           this.handleWorkerMessage(managedWorker, event.data);
         }
       );
@@ -515,20 +521,22 @@ export class WorkerPoolManager {
       initPromises.push(
         new Promise<void>((resolve, reject) => {
           const id = this.generateRequestId();
+          const request: InitializeWorkerWireRequest = {
+            type: 'initialize',
+            resultFormat: 'hast-ops-v1',
+            id,
+            renderOptions: this.renderOptions,
+            preferredHighlighter: this.preferredHighlighter,
+            resolvedThemes,
+            resolvedLanguages,
+            customExtensionsVersion:
+              customExtensionMap != null ? customExtensionVersion : undefined,
+            customExtensionMap,
+          };
           const task: InitializeWorkerTask = {
             type: 'initialize',
             id,
-            request: {
-              type: 'initialize',
-              id,
-              renderOptions: this.renderOptions,
-              preferredHighlighter: this.preferredHighlighter,
-              resolvedThemes,
-              resolvedLanguages,
-              customExtensionsVersion:
-                customExtensionMap != null ? customExtensionVersion : undefined,
-              customExtensionMap,
-            },
+            request,
             resolve() {
               managedWorker.initialized = true;
               resolve();
@@ -984,10 +992,9 @@ export class WorkerPoolManager {
     langs: SupportedLanguages[]
   ): Promise<void> {
     try {
-      // Lets keep the main thread highlighter in sync with loaded themes so
-      // edits can be more seamless
+      // Preload the same languages on the main thread for editing.
       const mainThreadLangs = langs.filter(
-        (lang) => !areLanguagesAttached(lang)
+        (lang) => !areLanguagesAttached(lang, this.highlighter)
       );
       if (mainThreadLangs.length > 0) {
         void getSharedHighlighter({
@@ -999,9 +1006,10 @@ export class WorkerPoolManager {
         });
       }
       // Add resolved languages if required
-      const workerMissingLangs = langs.filter(
-        (lang) => !availableWorker.langs.has(lang)
-      );
+      const workerMissingLangs =
+        this.preferredHighlighter === 'highlights'
+          ? []
+          : langs.filter((lang) => !availableWorker.langs.has(lang));
 
       if (workerMissingLangs.length > 0) {
         if (hasResolvedLanguages(workerMissingLangs)) {
@@ -1037,7 +1045,7 @@ export class WorkerPoolManager {
 
   private handleWorkerMessage(
     managedWorker: ManagedWorker,
-    response: WorkerResponse
+    response: WorkerWireResponse
   ): void {
     const task = this.activeTaskById.get(response.id);
     try {
@@ -1085,7 +1093,7 @@ export class WorkerPoolManager {
             if (task.type !== 'file') {
               throw new Error('handleWorkerMessage: task/response dont match');
             }
-            const { result, options } = response;
+            const { options } = response;
             if (
               !this.isCurrentRenderTask(task) ||
               !areFileRenderOptionsEqual(options, this.getFileRenderOptions())
@@ -1093,6 +1101,10 @@ export class WorkerPoolManager {
               throw IGNORE_RESPONSE;
             }
             const { request } = task;
+            const result: ThemedFileResult = {
+              ...response.result,
+              code: decodeHastLines(response.result.code),
+            };
             this.syncCustomExtensionVersion(managedWorker, request);
             if (task.cacheKeyAtDispatch != null) {
               this.fileCache.set(task.cacheKeyAtDispatch, { result, options });
@@ -1105,7 +1117,7 @@ export class WorkerPoolManager {
             if (task.type !== 'diff') {
               throw new Error('handleWorkerMessage: task/response dont match');
             }
-            const { result, options } = response;
+            const { options } = response;
             if (
               !this.isCurrentRenderTask(task) ||
               !areDiffRenderOptionsEqual(options, this.getDiffRenderOptions())
@@ -1113,6 +1125,17 @@ export class WorkerPoolManager {
               throw IGNORE_RESPONSE;
             }
             const { request } = task;
+            const result: ThemedDiffResult = {
+              ...response.result,
+              code: {
+                deletionLines: decodeHastLines(
+                  response.result.code.deletionLines
+                ),
+                additionLines: decodeHastLines(
+                  response.result.code.additionLines
+                ),
+              },
+            };
             this.syncCustomExtensionVersion(managedWorker, request);
             if (task.cacheKeyAtDispatch != null) {
               this.diffCache.set(task.cacheKeyAtDispatch, { result, options });

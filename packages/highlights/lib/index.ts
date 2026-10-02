@@ -53,7 +53,13 @@ export interface Theme {
   name: string;
   appearance: 'dark' | 'light' | (string & {});
   style: ThemeStyle;
-  cssVariables?: true;
+  /** A palette maps syntax colors to variable suffixes and retains font styles. */
+  cssVariables?:
+    | true
+    | {
+        prefix?: string;
+        defaults?: Record<string, string>;
+      };
 }
 
 /** A Zed-compatible collection of themes. */

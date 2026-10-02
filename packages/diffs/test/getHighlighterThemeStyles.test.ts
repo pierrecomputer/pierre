@@ -1,9 +1,12 @@
+import type { Theme } from '@pierre/highlights';
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 
 import {
   disposeHighlighter,
   getSharedHighlighter,
 } from '../src/highlighter/shared_highlighter';
+import { registerCustomTheme } from '../src/highlighter/themes/registerCustomTheme';
+import { customThemes } from '../src/highlighter/themes/themeResolver';
 import type { DiffsHighlighter } from '../src/types';
 import { getHighlighterThemeStyles } from '../src/utils/getHighlighterThemeStyles';
 
@@ -23,21 +26,22 @@ const PAIRED_DARK_LIGHT =
 const SINGLE_LIGHT_PREFIXED =
   'color:#0a0a0a;background-color:#ffffff;--diffs-fg:#0a0a0a;--diffs-bg:#ffffff;--diffs-custom-addition-color:#18a46c;--diffs-custom-deletion-color:#d52c36;--diffs-custom-modified-color:#009fff;';
 
-let highlighter: DiffsHighlighter;
-
-beforeAll(async () => {
-  highlighter = await getSharedHighlighter({
-    themes: ['pierre-dark', 'pierre-light'],
-    langs: ['text'],
-    preferredHighlighter: 'shiki-js',
-  });
-});
-
-afterAll(async () => {
-  await disposeHighlighter();
-});
-
 describe('getHighlighterThemeStyles --diffs-* parity', () => {
+  let highlighter: DiffsHighlighter;
+
+  beforeAll(async () => {
+    await disposeHighlighter();
+    highlighter = await getSharedHighlighter({
+      themes: ['pierre-dark', 'pierre-light'],
+      langs: ['text'],
+      preferredHighlighter: 'shiki-js',
+    });
+  });
+
+  afterAll(async () => {
+    await disposeHighlighter();
+  });
+
   test('single theme emits color/bg/global fg/bg and 2-link git colors', () => {
     expect(
       getHighlighterThemeStyles({ theme: 'pierre-dark', highlighter })
@@ -61,5 +65,63 @@ describe('getHighlighterThemeStyles --diffs-* parity', () => {
         prefix: 'custom',
       })
     ).toBe(SINGLE_LIGHT_PREFIXED);
+  });
+});
+
+describe('getHighlighterThemeStyles with Highlights themes', () => {
+  const themes: Record<string, Theme> = {
+    // Tokens use `var(<cssVariablePrefix><color>)`, so the surface must too.
+    'styles-css-boolean': {
+      name: 'styles-css-boolean',
+      appearance: 'dark',
+      style: { foreground: '#ffffff', background: '#000000' },
+      cssVariables: true,
+    },
+    // Object palettes resolve to their own prefix and defaults.
+    'styles-css-object': {
+      name: 'styles-css-object',
+      appearance: 'dark',
+      style: { foreground: 'fg', background: 'bg' },
+      cssVariables: { prefix: '--palette-', defaults: { fg: '#eeeeee' } },
+    },
+    'styles-literal': {
+      name: 'styles-literal',
+      appearance: 'dark',
+      style: { foreground: '#efefef', background: '#101010' },
+    },
+  };
+  let highlighter: DiffsHighlighter;
+
+  beforeAll(async () => {
+    await disposeHighlighter();
+    for (const [name, theme] of Object.entries(themes)) {
+      registerCustomTheme(name, () => Promise.resolve(theme), 'zed');
+    }
+    highlighter = await getSharedHighlighter({
+      themes: Object.keys(themes),
+      langs: ['text'],
+      preferredHighlighter: 'highlights',
+    });
+  });
+
+  afterAll(async () => {
+    for (const name of Object.keys(themes)) customThemes.delete(name);
+    await disposeHighlighter();
+  });
+
+  test.each([
+    [
+      'styles-css-boolean',
+      'color:var(--diffs-token-foreground);background-color:var(--diffs-token-background);',
+    ],
+    [
+      'styles-css-object',
+      'color:var(--palette-fg, #eeeeee);background-color:var(--palette-bg);',
+    ],
+    ['styles-literal', 'color:#efefef;background-color:#101010;'],
+  ])('%s surface colors', (theme, expected) => {
+    expect(getHighlighterThemeStyles({ theme, highlighter })).toStartWith(
+      expected
+    );
   });
 });

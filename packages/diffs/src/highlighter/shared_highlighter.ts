@@ -1,154 +1,140 @@
-import type { ThemeLoader } from '@pierre/theming';
-import { pierreThemes } from '@pierre/theming/themes';
-import {
-  createHighlighter,
-  createJavaScriptRegexEngine,
-  createOnigurumaEngine,
-} from 'shiki';
-
 import type {
   DiffsHighlighter,
   DiffsThemeNames,
   HighlighterTypes,
   SupportedLanguages,
-  ThemeRegistrationResolved,
   ThemesType,
 } from '../types';
-import type { ResolvedLanguage } from '../worker/types';
-import { areLanguagesAttached } from './languages/areLanguagesAttached';
-import { attachResolvedLanguages } from './languages/attachResolvedLanguages';
+import {
+  acquireHighlighterType,
+  assertHighlighterType,
+  releaseHighlighterType,
+  resolveHighlighterType,
+} from './highlighterType';
 import { cleanUpResolvedLanguages } from './languages/cleanUpResolvedLanguages';
-import { getResolvedOrResolveLanguage } from './languages/getResolvedOrResolveLanguage';
 import { areThemesAttached } from './themes/areThemesAttached';
-import { attachResolvedThemes } from './themes/attachResolvedThemes';
 import { cleanUpResolvedThemes } from './themes/cleanUpResolvedThemes';
-import { getResolvedOrResolveTheme } from './themes/getResolvedOrResolveTheme';
-import { themeResolver } from './themes/themeResolver';
 
-type CachedOrLoadingHighlighterType =
-  | Promise<DiffsHighlighter>
-  | DiffsHighlighter
-  | undefined;
+export { getHighlighterType } from './highlighterType';
 
-let highlighter: CachedOrLoadingHighlighterType;
+let highlighter: DiffsHighlighter | Promise<DiffsHighlighter> | undefined;
 
-interface HighlighterOptions {
+export interface HighlighterOptions {
   themes: DiffsThemeNames[];
   langs: SupportedLanguages[];
   preferredHighlighter?: HighlighterTypes;
 }
 
+/**
+ * Creates an instance the caller must dispose. Defaults to the active type
+ * or DEFAULT_HIGHLIGHTER; rejects if a different type is already active.
+ */
+export async function createHighlighter(
+  type?: HighlighterTypes
+): Promise<DiffsHighlighter> {
+  const resolvedType = resolveHighlighterType(type);
+  // Reserve the type before importing to prevent concurrent backend loads.
+  acquireHighlighterType(resolvedType);
+  try {
+    if (resolvedType === 'highlights') {
+      const { HighlightsHighlighter } = await import('./backends/highlights');
+      return new HighlightsHighlighter();
+    }
+    const { ShikiHighlighter } = await import('./backends/shiki');
+    return await ShikiHighlighter.create(resolvedType);
+  } finally {
+    releaseHighlighterType();
+  }
+}
+
 export async function getSharedHighlighter({
   themes,
   langs,
-  preferredHighlighter = 'shiki-js',
+  preferredHighlighter,
 }: HighlighterOptions): Promise<DiffsHighlighter> {
-  highlighter ??= createHighlighter({
-    themes: [],
-    langs: ['text'],
-    engine:
-      preferredHighlighter === 'shiki-wasm'
-        ? createOnigurumaEngine(import('shiki/wasm'))
-        : createJavaScriptRegexEngine(),
-  }) as Promise<DiffsHighlighter>;
-
-  const instance = isHighlighterLoading(highlighter)
-    ? await highlighter
-    : highlighter;
-  highlighter = instance;
-
-  const languageLoaders: Promise<ResolvedLanguage>[] = [];
-  for (const language of Array.from(new Set(langs))) {
-    if (language === 'text' || language === 'ansi') continue;
-    const maybeResolvedLanguage = getResolvedOrResolveLanguage(language);
-    if ('then' in maybeResolvedLanguage) {
-      languageLoaders.push(maybeResolvedLanguage);
-    } else {
-      attachResolvedLanguages(maybeResolvedLanguage, instance);
+  if (preferredHighlighter != null) {
+    assertHighlighterType(preferredHighlighter);
+  }
+  const cached = (highlighter ??= createHighlighter(preferredHighlighter));
+  let instance: DiffsHighlighter;
+  try {
+    instance = await cached;
+  } catch (error) {
+    // Allow retries without clearing a newer request.
+    if (highlighter === cached) {
+      highlighter = undefined;
     }
+    throw error;
   }
-
-  const themeLoaders: Promise<ThemeRegistrationResolved>[] = [];
-  for (const themeName of themes) {
-    const maybeResolvedTheme = getResolvedOrResolveTheme(themeName);
-    if ('then' in maybeResolvedTheme) {
-      themeLoaders.push(maybeResolvedTheme);
-    } else {
-      attachResolvedThemes(maybeResolvedTheme, highlighter);
-    }
+  if (highlighter === cached) {
+    highlighter = instance;
   }
-
-  // If we need to load any languages or themes, lets do that now
-  if (languageLoaders.length > 0 || themeLoaders.length > 0) {
-    await Promise.all([
-      Promise.all(languageLoaders).then((languages) => {
-        attachResolvedLanguages(languages, instance);
-      }),
-      Promise.all(themeLoaders).then((themes) => {
-        attachResolvedThemes(themes, instance);
-      }),
-    ]);
-  }
-
+  await Promise.all([
+    instance.themeResolver.resolveThemes(themes),
+    instance.loadLanguages(langs),
+  ]);
   return instance;
 }
 
-export function isHighlighterLoaded(
-  h: CachedOrLoadingHighlighterType = highlighter
-): h is DiffsHighlighter {
-  return h != null && !('then' in h);
+export function isHighlighterLoaded(): boolean {
+  return highlighter != null && !('then' in highlighter);
 }
 
 interface GetHighlighterIfLoadedProps {
-  theme: DiffsThemeNames | ThemesType;
-  lang: SupportedLanguages;
+  theme?: DiffsThemeNames | ThemesType;
+  lang?: SupportedLanguages;
+  preferredHighlighter?: HighlighterTypes;
 }
 
-export function getHighlighterIfLoaded(
-  withSettings?: GetHighlighterIfLoadedProps
-): DiffsHighlighter | undefined {
-  if (highlighter == null || 'then' in highlighter) {
-    return undefined;
-  }
+/**
+ * Returns undefined if the type differs or the theme or language is not loaded.
+ */
+export function getHighlighterIfLoaded({
+  theme,
+  lang,
+  preferredHighlighter,
+}: GetHighlighterIfLoadedProps = {}): DiffsHighlighter | undefined {
+  const instance = highlighter;
   if (
-    withSettings != null &&
-    (!areThemesAttached(withSettings.theme) ||
-      !areLanguagesAttached(withSettings.lang))
+    instance == null ||
+    'then' in instance ||
+    (preferredHighlighter != null && instance.name !== preferredHighlighter) ||
+    (theme != null && !areThemesAttached(theme, instance)) ||
+    (lang != null && !instance.hasLoadedLanguages([lang]))
   ) {
     return undefined;
   }
-  return highlighter;
+  return instance;
 }
 
-export function isHighlighterLoading(
-  h: CachedOrLoadingHighlighterType = highlighter
-): h is Promise<DiffsHighlighter> {
-  return h != null && 'then' in h;
+export function isHighlighterLoading(): boolean {
+  return highlighter != null && 'then' in highlighter;
 }
 
-export function isHighlighterNull(
-  h: CachedOrLoadingHighlighterType = highlighter
-): h is undefined {
-  return h == null;
+export function isHighlighterNull(): boolean {
+  return highlighter == null;
 }
 
 export async function preloadHighlighter(
   options: HighlighterOptions
 ): Promise<void> {
-  return void (await getSharedHighlighter(options));
+  await getSharedHighlighter(options);
 }
 
+/**
+ * Disposes an already loaded shared instance synchronously and clears caches.
+ * Instances from createHighlighter() must be disposed separately before
+ * switching types.
+ */
 export async function disposeHighlighter(): Promise<void> {
-  if (highlighter == null) return;
-  (await highlighter).dispose();
+  const cached = highlighter;
+  highlighter = undefined;
   cleanUpResolvedLanguages();
   cleanUpResolvedThemes();
-  highlighter = undefined;
-}
-
-for (const descriptor of pierreThemes.getThemes()) {
-  themeResolver.registerThemeIfAbsent(
-    descriptor.name,
-    descriptor.load as ThemeLoader<ThemeRegistrationResolved>
-  );
+  if (cached != null && 'then' in cached) {
+    // A failed initialization has nothing to dispose.
+    (await cached.catch(() => undefined))?.dispose();
+  } else {
+    cached?.dispose();
+  }
 }

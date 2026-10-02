@@ -84,7 +84,10 @@ const LANGUAGE = getFiletypeFromFileName(HISTORY_DEMO_FILE.name);
 // is what the editor tokenizes edits with.
 function isLanguageReady(): boolean {
   return (
-    getHighlighterIfLoaded()?.getLoadedLanguages().includes(LANGUAGE) ?? false
+    getHighlighterIfLoaded({
+      preferredHighlighter: 'highlights',
+      lang: LANGUAGE,
+    }) != null
   );
 }
 
@@ -316,9 +319,9 @@ export function HistoryDemo({ prerenderedFile }: HistoryDemoProps) {
       // Warm the shared highlighter before polling so the editor tokenizer can
       // pick up the grammar synchronously once the component attaches.
       void preloadHighlighter({
+        preferredHighlighter: 'highlights',
         themes: [DEFAULT_THEMES.dark, DEFAULT_THEMES.light],
         langs: [LANGUAGE],
-        preferredHighlighter: 'shiki-wasm',
       })
         .catch(() => {})
         .finally(() => {

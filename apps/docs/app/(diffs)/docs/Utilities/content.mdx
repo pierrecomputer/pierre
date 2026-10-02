@@ -61,15 +61,18 @@ uncontrolled.
 
 ### disposeHighlighter [toc-ignore]
 
-Dispose the shared Shiki highlighter instance to free memory. Useful when
-cleaning up resources in single-page applications.
+Dispose the shared highlighter instance to free memory. Useful when cleaning up
+resources in single-page applications. Once it and any instances from
+`createHighlighter()` are disposed, another backend can be loaded.
 
 <DocsCodeExample {...disposeHighlighter} />
 
 ### getSharedHighlighter [toc-ignore]
 
-Get direct access to the shared Shiki highlighter instance used internally by
-all components. Useful for custom highlighting operations.
+Get direct access to the shared highlighter instance used internally by all
+components. Set `preferredHighlighter` to `shiki-js`, `shiki-wasm`, or
+`highlights`; without it, the backend already loaded is used, else `shiki-js`.
+Only one backend can be loaded at a time, so requesting another one rejects.
 
 <DocsCodeExample {...getSharedHighlighter} />
 
@@ -127,16 +130,35 @@ highlighting with no async loading delay.
 
 ### registerCustomTheme [toc-ignore]
 
-Register a custom Shiki theme for use with any component. The theme name you
-register must match the `name` field inside your theme JSON file.
+`registerCustomTheme(name, loader, type = 'textmate')` registers a lazy loader
+that returns a theme directly or as a module's `default` export.
+
+| Type                   | Loader result                          | Backend                    |
+| ---------------------- | -------------------------------------- | -------------------------- |
+| `'textmate'` (default) | Shiki `ThemeRegistration`              | `shiki-js` or `shiki-wasm` |
+| `'zed'`                | Highlights `Theme` or `ThemeFamily`    | `highlights`               |
+| `'diffs'`              | `DiffsTheme` with both syntax palettes | Any                        |
+
+TextMate and Diffs theme names must match the registered name. Zed themes use
+the registered name in place of their display name. A Zed family uses its first
+theme; return a specific member from the loader to select another.
+
+Register one loader per name and type. Separate TextMate and Zed loaders can
+share a name and take priority over a Diffs loader.
+
+`createCSSVariablesTheme(options)` creates a shared palette with a default
+`variablePrefix` of `--diffs-`. Pass `variablePrefix: '--shiki-'` to retain
+stylesheets written for Shiki's helper. `registerCustomCSSVariableTheme`
+registers a shared palette using `--diffs-*` variables automatically.
 
 <DocsCodeExample {...registerCustomTheme} />
 
 ### registerCustomLanguage [toc-ignore]
 
 Register a custom Shiki language loader and optionally map it to file names or
-extensions. Use this when you're working with languages not bundled by Shiki or
-want custom highlighting grammars.
+extensions. Highlights bundles its lexers and ignores custom TextMate grammars.
+Select `preferredHighlighter: 'shiki-js'` or `'shiki-wasm'` when using custom
+highlighting grammars.
 
 The grammar file or object returned by your loader has a `name` field and can
 have an `aliases` array. An alias is an additional language ID that uses the
