@@ -34,6 +34,7 @@ import {
   IconCodeStyleBars,
   IconCodeStyleBg,
   IconCodeStyleInline,
+  IconCollapsedRow,
   IconColorAuto,
   IconColorDark,
   IconColorLight,
@@ -174,6 +175,7 @@ export type SharedRenderOptions = Pick<
   | 'disableBackground'
   | 'disableLineNumbers'
   | 'overflow'
+  | 'folding'
   | 'themeType'
   | 'theme'
 > & {
@@ -215,6 +217,8 @@ interface PlaygroundControlsContentProps {
   setDisableLineNumbers: (v: boolean) => void;
   overflow: 'wrap' | 'scroll';
   setOverflow: (v: 'wrap' | 'scroll') => void;
+  folding: boolean;
+  setFolding: (v: boolean) => void;
   enableLineSelection: boolean;
   setEnableLineSelection: (v: boolean) => void;
   enableGutterUtility: boolean;
@@ -260,6 +264,8 @@ function PlaygroundControlsContent({
   setDisableLineNumbers,
   overflow,
   setOverflow,
+  folding,
+  setFolding,
   enableLineSelection,
   setEnableLineSelection,
   enableGutterUtility,
@@ -516,6 +522,16 @@ function PlaygroundControlsContent({
           }
         />
 
+        {viewMode !== 'diff' && (
+          <ToggleButton
+            icon={<IconCollapsedRow />}
+            label="Folding"
+            checked={folding}
+            onCheckedChange={setFolding}
+            title="Code folding on file surfaces (diffs don't fold)"
+          />
+        )}
+
         <ToggleButton
           icon={<IconInReview />}
           label="Annotations"
@@ -712,6 +728,7 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
     urlState.disableLineNumbers
   );
   const [overflow, setOverflow] = useState(urlState.overflow);
+  const [folding, setFolding] = useState(urlState.folding);
   const [enableLineSelection, setEnableLineSelection] = useState(
     urlState.enableLineSelection
   );
@@ -1016,6 +1033,7 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
       params.set('ln', disableLineNumbers ? '0' : '1');
     if ((overflow === 'wrap') !== DEFAULTS.wrap)
       params.set('wrap', overflow === 'wrap' ? '1' : '0');
+    if (folding !== DEFAULTS.folding) params.set('fold', folding ? '1' : '0');
     if (interactionMode !== DEFAULTS.interactionMode)
       params.set('lineMode', interactionMode);
     if (enableLineSelection !== DEFAULTS.lineSelection)
@@ -1056,6 +1074,7 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
     disableBackground,
     disableLineNumbers,
     overflow,
+    folding,
     interactionMode,
     enableLineSelection,
     enableGutterUtility,
@@ -1259,6 +1278,8 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
     setDisableLineNumbers,
     overflow,
     setOverflow,
+    folding,
+    setFolding,
     enableLineSelection,
     setEnableLineSelection,
     enableGutterUtility,
@@ -1298,6 +1319,7 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
       disableBackground,
       disableLineNumbers,
       overflow,
+      folding,
       themeType: effectiveColorMode,
       theme: { dark: selectedDarkTheme, light: selectedLightTheme },
     }),
@@ -1310,6 +1332,7 @@ export function PlaygroundClient({ prerenderedDiff }: PlaygroundClientProps) {
       disableBackground,
       disableLineNumbers,
       overflow,
+      folding,
       effectiveColorMode,
       selectedDarkTheme,
       selectedLightTheme,

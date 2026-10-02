@@ -1542,14 +1542,15 @@ const file: FileContents | undefined = editor.getFile();
 // Full document text, or '' when no current session or initialState exists.
 const text: string = editor.getText();
 
-// Snapshot selections and scroll positions for explicit restoration:
+// Snapshot selections, active folds, and scroll positions for explicit restoration:
 const state: EditorViewState = editor.getViewState();
 // EditorViewState = {
 //   selections?: EditorSelection[];
+//   foldRanges?: LineRange[]; // zero-based; standalone closers stay visible
 //   view?: { scrollLeft: number; scrollTop?: number };
 // }
 
-// Restore selections and scroll positions after re-rendering.
+// Restore selections, folds, and scroll positions after re-rendering.
 editor.setViewState(state);
 
 // Borrow the complete live document, history, and editor-state checkpoint. This is
