@@ -84,7 +84,7 @@
         "color": "#0000ffff"
       },
       "constant": {
-        "color": "#0000ffff"
+        "color": "#0070C1"
       },
       "variable": {
         "color": "#001080ff"
@@ -123,16 +123,16 @@
         "color": "#0000ffff"
       },
       "punctuation.bracket": {
-        "color": "#800000ff"
+        "color": "#000000ff"
       },
       "punctuation.delimiter": {
-        "color": "#267f99ff"
+        "color": "#000000ff"
       },
       "punctuation.list_marker": {
         "color": "#0451a5ff"
       },
       "punctuation": {
-        "color": "#0451a5ff"
+        "color": "#000000ff"
       },
       "preproc": {
         "color": "#0000ffff"
@@ -159,7 +159,7 @@
         "color": "#001080ff"
       },
       "label": {
-        "color": "#800000ff"
+        "color": "#000000"
       },
       "constructor": {
         "color": "#795e26ff"
@@ -180,7 +180,7 @@
         "color": "#800000ff"
       },
       "selector.pseudo": {
-        "color": "#e50000ff"
+        "color": "#800000"
       },
       "variant": {
         "color": "#0070c1ff"
@@ -189,7 +189,7 @@
         "color": "#a31515ff"
       },
       "punctuation.markup": {
-        "color": "#0451a5ff"
+        "color": "#000000ff"
       },
       "property.json_key": {
         "color": "#0451a5ff"
@@ -198,7 +198,7 @@
         "color": "#000000ff"
       },
       "link_uri": {
-        "color": "#007accff"
+        "color": "#000000ff"
       },
       "hint": {
         "color": "#00000066"
@@ -207,8 +207,35 @@
         "color": "#00000066"
       },
       "string.special.symbol": {
-        "color": "#0000ffff"
+        "color": "#000000ff"
+      },
+      "keyword.control": {
+        "color": "#AF00DB"
+      },
+      "keyword.import": {
+        "color": "#AF00DB"
+      },
+      "tag.doctype": {
+        "color": "#000000ff"
+      },
+      "punctuation.bracket.html": {
+        "color": "#800000"
+      },
+      "punctuation.bracket.jsx": {
+        "color": "#800000"
+      },
+      "punctuation.delimiter.html": {
+        "color": "#800000"
+      },
+      "punctuation.delimiter.jsx": {
+        "color": "#800000"
+      },
+      "tag.component.jsx": {
+        "color": "#267F99"
       }
-    }
+    },
+    "created": "#587c0c",
+    "deleted": "#ad0707",
+    "modified": "#895503"
   }
 }

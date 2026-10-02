@@ -222,6 +222,18 @@
       },
       "variant": {
         "color": "#8be9fd"
+      },
+      "embedded": {
+        "color": "#ebece6"
+      },
+      "selector": {
+        "color": "#fc4346"
+      },
+      "diff.minus": {
+        "color": "#dd5074"
+      },
+      "diff.plus": {
+        "color": "#64d389fd"
       }
     }
   }

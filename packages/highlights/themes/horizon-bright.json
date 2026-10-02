@@ -96,6 +96,66 @@
       "variable.special": {
         "color": "#F77D26",
         "font_style": "italic"
+      },
+      "boolean": {
+        "color": "#DC3318"
+      },
+      "embedded": {
+        "color": "#06060C"
+      },
+      "namespace": {
+        "color": "#F77D26"
+      },
+      "predictive": {
+        "color": "#33333380"
+      },
+      "preproc": {
+        "color": "#8A31B9"
+      },
+      "primary": {
+        "color": "#06060C"
+      },
+      "selector": {
+        "color": "#DA103F"
+      },
+      "string": {
+        "color": "#F6661E"
+      },
+      "enum": {
+        "color": "#F77D26"
+      },
+      "hint": {
+        "color": "#969696ff"
+      },
+      "variant": {
+        "color": "#DA103F"
+      },
+      "diff.minus": {
+        "color": "#F43E5C"
+      },
+      "diff.plus": {
+        "color": "#1EB980B3"
+      },
+      "selector.class": {
+        "color": "#DC3318"
+      },
+      "selector.id": {
+        "color": "#1D8991"
+      },
+      "string.escape": {
+        "color": "#1D8991"
+      },
+      "string.regex": {
+        "color": "#DC3318"
+      },
+      "text.literal": {
+        "color": "#DC3318"
+      },
+      "selector.pseudo": {
+        "color": "#F6661E"
+      },
+      "string.special.symbol": {
+        "color": "#DC3318"
       }
     }
   }

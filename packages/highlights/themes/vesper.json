@@ -116,7 +116,55 @@
       },
       "variable.special": {
         "color": "#A0A0A0"
+      },
+      "boolean": {
+        "color": "#FFC799"
+      },
+      "embedded": {
+        "color": "#FFFFFF"
+      },
+      "namespace": {
+        "color": "#FFC799"
+      },
+      "predictive": {
+        "color": "#8b8b8b94"
+      },
+      "preproc": {
+        "color": "#A0A0A0"
+      },
+      "primary": {
+        "color": "#FFFFFF"
+      },
+      "property": {
+        "color": "#FFF"
+      },
+      "selector": {
+        "color": "#FFC799"
+      },
+      "enum": {
+        "color": "#FFC799"
+      },
+      "hint": {
+        "color": "#A0A0A0"
+      },
+      "variant": {
+        "color": "#FFF"
+      },
+      "diff.minus": {
+        "color": "#FF8080"
+      },
+      "diff.plus": {
+        "color": "#99FFE4"
+      },
+      "property.json_key": {
+        "color": "#FFC799"
+      },
+      "selector.pseudo": {
+        "color": "#A0A0A0"
       }
-    }
+    },
+    "created": "#81b88b",
+    "deleted": "#c74e39",
+    "modified": "#E2C08D"
   }
 }

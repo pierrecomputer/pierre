@@ -110,7 +110,7 @@
         "color": "#fec758ff"
       },
       "type.builtin": {
-        "color": "#96dd3bff"
+        "color": "#9DF39FFF"
       },
       "function": {
         "color": "#fec758ff"
@@ -128,13 +128,13 @@
         "color": "#ec0d1eff"
       },
       "punctuation.delimiter": {
-        "color": "#aa5507ff"
+        "color": "#f8f8f8ff"
       },
       "punctuation": {
-        "color": "#aa5507ff"
+        "color": "#f8f8f8ff"
       },
       "preproc": {
-        "color": "#fd6209ff"
+        "color": "#f8f8f8ff"
       },
       "title": {
         "color": "#fec758ff",
@@ -144,6 +144,7 @@
         "font_weight": 700
       },
       "emphasis": {
+        "color": "#FB9A4BFF",
         "font_style": "italic"
       },
       "text.literal": {
@@ -191,14 +192,13 @@
         "color": "#994646ff"
       },
       "punctuation.markup": {
-        "color": "#fec758ff",
-        "font_weight": 700
+        "color": "#f8f8f8ff"
       },
       "primary": {
         "color": "#f8f8f8ff"
       },
       "link_uri": {
-        "color": "#883333ff"
+        "color": "#f8f8f8ff"
       },
       "hint": {
         "color": "#f8f8f866"
@@ -207,11 +207,31 @@
         "color": "#f8f8f866"
       },
       "punctuation.bracket": {
-        "color": "#aa5507ff"
+        "color": "#f8f8f8ff"
       },
       "punctuation.list_marker": {
-        "color": "#aa5507ff"
+        "color": "#f8f8f8ff"
+      },
+      "keyword.declaration": {
+        "color": "#FF6262FF",
+        "font_weight": 700
+      },
+      "property.json_key": {
+        "color": "#9DF39FFF"
+      },
+      "tag.doctype": {
+        "color": "#EC0D1EFF"
+      },
+      "keyword.jsdoc": {
+        "color": "#FF6262FF",
+        "font_weight": 700
+      },
+      "tag.component.jsx": {
+        "color": "#9DF39FFF"
       }
-    }
+    },
+    "created": "#81b88b",
+    "deleted": "#c74e39",
+    "modified": "#E2C08D"
   }
 }

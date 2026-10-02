@@ -167,6 +167,30 @@
       },
       "variant": {
         "color": "#d7827e"
+      },
+      "namespace": {
+        "color": "#56949F"
+      },
+      "selector": {
+        "color": "#56949F"
+      },
+      "diff.minus": {
+        "color": "#797593"
+      },
+      "diff.plus": {
+        "color": "#56949f"
+      },
+      "selector.class": {
+        "color": "#907AA9",
+        "font_style": "italic"
+      },
+      "selector.id": {
+        "color": "#907AA9",
+        "font_style": "italic"
+      },
+      "selector.pseudo": {
+        "color": "#907AA9",
+        "font_style": "italic"
       }
     }
   }

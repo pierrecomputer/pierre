@@ -103,6 +103,50 @@
       },
       "variable.special": {
         "color": "#569cd6"
+      },
+      "emphasis": {
+        "color": "#E6E6E6",
+        "font_style": "italic"
+      },
+      "label": {
+        "color": "#9CDCFE"
+      },
+      "namespace": {
+        "color": "#4EC9B0"
+      },
+      "predictive": {
+        "color": "#6A9955"
+      },
+      "primary": {
+        "color": "#E6E6E6"
+      },
+      "selector": {
+        "color": "#D7BA7D"
+      },
+      "title": {
+        "color": "#569CD6",
+        "font_weight": 700
+      },
+      "enum": {
+        "color": "#4EC9B0"
+      },
+      "hint": {
+        "color": "#6A9955"
+      },
+      "link_text": {
+        "color": "#CE9178"
+      },
+      "link_uri": {
+        "color": "#E6E6E6"
+      },
+      "variant": {
+        "color": "#9CDCFE"
+      },
+      "diff.minus": {
+        "color": "#CE9178"
+      },
+      "diff.plus": {
+        "color": "#B5CEA8"
       }
     }
   }

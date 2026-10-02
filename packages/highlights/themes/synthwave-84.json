@@ -87,7 +87,6 @@
       },
       "boolean": {
         "color": "#f97e72",
-        "font_style": "bold",
         "font_weight": 700
       },
       "brackethighlighter.tag": {
@@ -112,7 +111,6 @@
       },
       "constant.language": {
         "color": "#f97e72",
-        "font_style": "bold",
         "font_weight": 700
       },
       "constant.numeric": {
@@ -142,7 +140,6 @@
       },
       "emphasis.strong": {
         "color": "#ff7edb",
-        "font_style": "bold",
         "font_weight": 700
       },
       "entity.name.function": {
@@ -189,27 +186,22 @@
       },
       "entity.name.type.class": {
         "color": "#72f1b8",
-        "font_style": "bold",
         "font_weight": 700
       },
       "entity.name.type.class.cpp": {
         "color": "#72f1b8",
-        "font_style": "bold",
         "font_weight": 700
       },
       "entity.name.type.class.java": {
         "color": "#72f1b8",
-        "font_style": "bold",
         "font_weight": 700
       },
       "entity.name.type.class.python": {
         "color": "#72f1b8",
-        "font_style": "bold",
         "font_weight": 700
       },
       "entity.name.type.class.ruby": {
         "color": "#72f1b8",
-        "font_style": "bold",
         "font_weight": 700
       },
       "entity.name.type.conditional": {
@@ -454,12 +446,10 @@
       },
       "markup.bold": {
         "color": "#ff7edb",
-        "font_style": "bold",
         "font_weight": 700
       },
       "markup.bold.markdown": {
         "color": "#ff7edb",
-        "font_style": "bold",
         "font_weight": 700
       },
       "markup.heading": {
@@ -496,12 +486,10 @@
         "font_style": "italic"
       },
       "markup.underline": {
-        "color": "#72f1b8",
-        "font_style": "underline"
+        "color": "#72f1b8"
       },
       "markup.underline.link.markdown": {
-        "color": "#72f1b8",
-        "font_style": "underline"
+        "color": "#72f1b8"
       },
       "meta.attribute.rust": {
         "color": "#fede5d"
@@ -656,7 +644,6 @@
       },
       "support.class": {
         "color": "#72f1b8",
-        "font_style": "bold",
         "font_weight": 700
       },
       "support.constant": {
@@ -749,6 +736,27 @@
       },
       "inlay_hint.background": {
         "color": "#262335"
+      },
+      "namespace": {
+        "color": "#FE4450"
+      },
+      "selector": {
+        "color": "#72F1B8"
+      },
+      "diff.minus": {
+        "color": "#fe4450"
+      },
+      "diff.plus": {
+        "color": "#72f1b8cc"
+      },
+      "selector.class": {
+        "color": "#FEDE5D"
+      },
+      "selector.id": {
+        "color": "#36F9F6"
+      },
+      "selector.pseudo": {
+        "color": "#D50"
       }
     }
   }

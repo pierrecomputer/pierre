@@ -343,6 +343,18 @@
       "predictive": {
         "color": "#a3a3a3",
         "font_style": "italic"
+      },
+      "selector": {
+        "color": "#ff5d36"
+      },
+      "enum": {
+        "color": "#d568ea"
+      },
+      "hint": {
+        "color": "#8a8a8a"
+      },
+      "variant": {
+        "color": "#ffca00"
       }
     }
   }

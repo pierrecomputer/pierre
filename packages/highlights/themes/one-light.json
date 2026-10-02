@@ -199,7 +199,31 @@
       },
       "variant": {
         "color": "#C18401"
+      },
+      "namespace": {
+        "color": "#C18401"
+      },
+      "selector": {
+        "color": "#E45649"
+      },
+      "diff.minus": {
+        "color": "#E45649"
+      },
+      "diff.plus": {
+        "color": "#50A14F"
+      },
+      "selector.class": {
+        "color": "#986801"
+      },
+      "selector.id": {
+        "color": "#4078F2"
+      },
+      "selector.pseudo": {
+        "color": "#986801"
       }
-    }
+    },
+    "created": "#587c0c",
+    "deleted": "#ad0707",
+    "modified": "#895503"
   }
 }

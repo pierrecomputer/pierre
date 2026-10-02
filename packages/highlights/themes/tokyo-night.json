@@ -316,6 +316,24 @@
       },
       "variant": {
         "color": "#c0caf5"
+      },
+      "predictive": {
+        "color": "#51597d"
+      },
+      "selector": {
+        "color": "#0DB9D7"
+      },
+      "hint": {
+        "color": "#51597d"
+      },
+      "selector.class": {
+        "color": "#9ECE6A"
+      },
+      "selector.id": {
+        "color": "#FC7B7B"
+      },
+      "selector.pseudo": {
+        "color": "#BB9AF7"
       }
     }
   }

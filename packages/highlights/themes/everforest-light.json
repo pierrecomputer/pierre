@@ -166,6 +166,12 @@
       },
       "variant": {
         "color": "#5c6a72"
+      },
+      "diff.minus": {
+        "color": "#f85552a0"
+      },
+      "diff.plus": {
+        "color": "#8da101a0"
       }
     }
   }

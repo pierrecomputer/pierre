@@ -390,6 +390,21 @@
       },
       "variant": {
         "color": "#d20f39"
+      },
+      "preproc": {
+        "color": "#ea76cb"
+      },
+      "selector": {
+        "color": "#1E66F5"
+      },
+      "selector.class": {
+        "color": "#DF8E1D"
+      },
+      "selector.id": {
+        "color": "#DF8E1D"
+      },
+      "selector.pseudo": {
+        "color": "#179299"
       }
     }
   }

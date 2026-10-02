@@ -48,6 +48,11 @@ sources from
 converted with
 [Zed's scope mapping](https://github.com/zed-industries/zed/blob/ce48461eaadd16c65c31f835511ab96bd3b6e746/crates/theme_importer/src/vscode/syntax.rs).
 
+Missing syntax captures in the other community ports are supplemented from their
+corresponding TextMate themes at the same `tm-themes@1.12.10` pin. Existing Zed
+palette choices are retained. Pierre and the Aurora substitute use colors from
+their own palettes for missing captures.
+
 The Zed registry's `aurora-theme` is an MIT-licensed substitute, not an Aurora X
 port. The original Aurora X source is GPL-3.0-only; bundling it would require
 GPL-3.0 distribution terms, contrary to this package's Apache-2.0-only policy.

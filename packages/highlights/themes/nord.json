@@ -132,6 +132,65 @@
       },
       "property": {
         "color": "#88C0D0"
+      },
+      "embedded": {
+        "color": "#d8dee9"
+      },
+      "emphasis": {
+        "color": "#d8dee9",
+        "font_style": "italic"
+      },
+      "label": {
+        "color": "#D8DEE9"
+      },
+      "namespace": {
+        "color": "#8FBCBB"
+      },
+      "predictive": {
+        "color": "#4C566A"
+      },
+      "primary": {
+        "color": "#d8dee9"
+      },
+      "selector": {
+        "color": "#81A1C1"
+      },
+      "title": {
+        "color": "#88C0D0"
+      },
+      "enum": {
+        "color": "#8FBCBB"
+      },
+      "hint": {
+        "color": "#5e81ac"
+      },
+      "link_text": {
+        "color": "#A3BE8C"
+      },
+      "link_uri": {
+        "color": "#A3BE8C"
+      },
+      "variant": {
+        "color": "#D8DEE9"
+      },
+      "diff.minus": {
+        "color": "#BF616A"
+      },
+      "diff.plus": {
+        "color": "#A3BE8C"
+      },
+      "emphasis.strong": {
+        "color": "#d8dee9",
+        "font_weight": 700
+      },
+      "selector.class": {
+        "color": "#8FBCBB"
+      },
+      "selector.id": {
+        "color": "#8FBCBB"
+      },
+      "selector.pseudo": {
+        "color": "#8FBCBB"
       }
     }
   }
