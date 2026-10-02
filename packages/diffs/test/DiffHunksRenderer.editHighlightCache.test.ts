@@ -69,6 +69,25 @@ function withRecycledRenderer(
 }
 
 describe('recycled diff edit highlights', () => {
+  test('cached rows preserve document edits that were not tokenized', () => {
+    const renderer = new DiffHunksRenderer({ theme: 'pierre-dark' });
+    const diff = createDiff();
+    try {
+      renderer.beginEditSession(diff);
+      renderHtml(renderer, diff);
+      renderer.updateRenderCache(
+        new Map(),
+        'dark',
+        false,
+        new Map([[0, 'const changed = 3;\n']])
+      );
+      expect(diff.additionLines.join('')).toBe('const changed = 3;\n');
+      expect(renderHtml(renderer, diff)).toContain('const changed = 3;');
+    } finally {
+      renderer.cleanUp();
+    }
+  });
+
   test('keeps session markup across repeated suspension and remount', () => {
     withRecycledRenderer((renderer, diff, calls) => {
       renderer.recycle();

@@ -7,6 +7,7 @@ import { Editor } from '../src/editor/editor';
 import { EditStateManager } from '../src/editor/EditStateManager';
 import { PieceTable } from '../src/editor/pieceTable';
 import { disposeHighlighter } from '../src/highlighter/shared_highlighter';
+import type { FileDiffMetadata } from '../src/types';
 import { installDom, wait, waitFor } from './domHarness';
 
 afterAll(async () => {
@@ -136,6 +137,46 @@ function typeAt(
     true
   );
 }
+
+describe('diff editor: parsing options', () => {
+  test('live whitespace edits follow standalone option updates', async () => {
+    const fixture = await createCollapsedEditFixture(undefined, {
+      ignoreWhitespace: true,
+      context: 1,
+    });
+    try {
+      typeAt(fixture.editor, 10, 0, '  ');
+      await wait(10);
+      // Inspect the session's change blocks: editor markup can retain the
+      // previous row styling while a same-line-count edit updates metadata.
+      const lineIsChanged = () => {
+        const { editSession } = fixture.fileDiff as unknown as {
+          editSession?: { diff: FileDiffMetadata };
+        };
+        return editSession?.diff.hunks.some(({ hunkContent }) =>
+          hunkContent.some(
+            (content) =>
+              content.type === 'change' &&
+              content.additionLineIndex <= 10 &&
+              content.additionLineIndex + content.additions > 10
+          )
+        );
+      };
+      expect(lineIsChanged()).toBe(false);
+
+      fixture.fileDiff.setOptions({
+        ...fixture.fileDiff.options,
+        parseDiffOptions: { ignoreWhitespace: false, context: 1 },
+      });
+      typeAt(fixture.editor, 10, 0, '  ');
+      await wait(10);
+      expect(lineIsChanged()).toBe(true);
+      expect(fixture.editor.getText()).toContain('    line 11\n');
+    } finally {
+      await fixture.cleanup();
+    }
+  });
+});
 
 describe('diff editor: attach-time markup normalization', () => {
   test('renders editor token markup without mutating component options', async () => {

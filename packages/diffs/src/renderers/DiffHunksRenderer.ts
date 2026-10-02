@@ -577,7 +577,8 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
   public updateRenderCache(
     dirtyLines: Map<number, Array<HighlightedToken>>,
     themeType: 'dark' | 'light',
-    lineCountChangeInFlight = false
+    lineCountChangeInFlight = false,
+    changedDocumentLines?: ReadonlyMap<number, string>
   ): boolean {
     this.pendingStructuralRows = undefined;
     const { renderCache } = this;
@@ -600,6 +601,27 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     // has shifted the old data into its authoritative positions.
     const changedAdditionLines: number[] = [];
     const previousAdditionLines = new Map<number, string>();
+    // Source edits must reach the session diff independently of highlighting.
+    // Keep exact line endings and ignore the document's phantom trailing row.
+    if (pendingStructuralRows == null && changedDocumentLines != null) {
+      for (const [line, text] of changedDocumentLines) {
+        if (line < 0 || line >= diff.additionLines.length) continue;
+        const previous = diff.additionLines[line];
+        if (previous !== text) {
+          diff.additionLines[line] = text;
+          changedAdditionLines.push(line);
+          previousAdditionLines.set(line, previous);
+          // A newly revealed row must show current text even before the
+          // tokenizer supplies its colors.
+          if (!dirtyLines.has(line)) {
+            hastLines[line] = createPlainAdditionLineElement(
+              line,
+              cleanLastNewline(text)
+            );
+          }
+        }
+      }
+    }
     for (const [line, tokens] of dirtyLines) {
       const prev = hastLines[line] as HASTElement | undefined;
       const prevProps = prev?.properties ?? {};
@@ -610,7 +632,11 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       // The host text document can expose one extra trailing empty line when
       // the file ends with a newline. Deferred tokenization must not grow
       // additionLines from that mismatch or hunk trailing context desyncs.
-      if (pendingStructuralRows == null && canSyncDiffLine) {
+      if (
+        pendingStructuralRows == null &&
+        canSyncDiffLine &&
+        changedDocumentLines?.has(line) !== true
+      ) {
         diff.additionLines[line] = applyLineTextWithNewline(prevLine, lineText);
         if (prevText !== lineText) {
           changedAdditionLines.push(line);

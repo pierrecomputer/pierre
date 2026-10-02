@@ -318,6 +318,7 @@ export const CODE_VIEW_DIFF_OPTION_KEYS = [
   'disableBackground',
   'expandUnchanged',
   'loadDiffFiles',
+  'parseDiffOptions',
   'collapsedContextThreshold',
   'lineDiffType',
   'maxLineDiffLength',

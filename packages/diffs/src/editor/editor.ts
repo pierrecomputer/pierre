@@ -42,6 +42,7 @@ import {
   type ManagedEditSession,
   toManagedEditState,
 } from './EditStateManager';
+import { getChangedDocumentLines } from './getChangedDocumentLines';
 import {
   type LanguageConfigMap,
   resolveBlockCommentEdits,
@@ -3895,6 +3896,10 @@ export class Editor<
     fileInstance.updateRenderCache(dirtyLines, tokenizer.themeType, {
       shouldRefreshDiffsView: this.#isDiff && !didLineCountChange,
       lineCountChangeInFlight: didLineCountChange,
+      changedDocumentLines:
+        this.#isDiff && !didLineCountChange
+          ? getChangedDocumentLines(textDocument, change)
+          : undefined,
     });
     if (didLineCountChange) {
       // Line-count change: recompute hunks from the full document and re-render.
