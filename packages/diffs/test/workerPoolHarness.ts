@@ -4,6 +4,7 @@ import type {
   InitializeWorkerRequest,
   RenderDiffRequest,
   RenderFileRequest,
+  SetRenderOptionsWorkerRequest,
   WorkerInitializationRenderOptions,
   WorkerPoolOptions,
   WorkerRequest,
@@ -83,6 +84,10 @@ export class TestWorker {
     new Promise<InitializeWorkerRequest>((resolve) => {
       this.initializeRequestResolve = resolve;
     });
+  private setRenderOptionsRequests: SetRenderOptionsWorkerRequest[] = [];
+  private setRenderOptionsRequestResolve:
+    | ((request: SetRenderOptionsWorkerRequest) => void)
+    | undefined;
   private readonly messageListeners = new Set<EventListener>();
   private readonly errorListeners = new Set<EventListener>();
 
@@ -108,6 +113,10 @@ export class TestWorker {
       this.fileRequests.push(clonedRequest);
       this.fileRequestResolve?.(clonedRequest);
       this.fileRequestResolve = undefined;
+    } else if (clonedRequest.type === 'set-render-options') {
+      this.setRenderOptionsRequests.push(clonedRequest);
+      this.setRenderOptionsRequestResolve?.(clonedRequest);
+      this.setRenderOptionsRequestResolve = undefined;
     }
   }
 
@@ -144,6 +153,16 @@ export class TestWorker {
     }
     return new Promise<RenderFileRequest>((resolve) => {
       this.fileRequestResolve = resolve;
+    });
+  }
+
+  async waitForSetRenderOptionsRequest(): Promise<SetRenderOptionsWorkerRequest> {
+    const request = this.setRenderOptionsRequests.at(-1);
+    if (request != null) {
+      return request;
+    }
+    return new Promise<SetRenderOptionsWorkerRequest>((resolve) => {
+      this.setRenderOptionsRequestResolve = resolve;
     });
   }
 
