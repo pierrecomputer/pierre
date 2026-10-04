@@ -41,6 +41,13 @@ import { isDiffPlainText } from '../utils/isDiffPlainText';
 import { isFilePlainText } from '../utils/isFilePlainText';
 import { renderDiffWithHighlighter } from '../utils/renderDiffWithHighlighter';
 import { renderFileWithHighlighter } from '../utils/renderFileWithHighlighter';
+import {
+  isHandledWorkerPoolError,
+  markWorkerErrorReported,
+  WorkerPoolTaskCanceledError,
+  WorkerPoolTerminatedError,
+  WorkerPoolWorkerError,
+} from './errors';
 import type {
   AllWorkerTasks,
   DiffRendererInstance,
@@ -64,65 +71,6 @@ import type {
 
 const IGNORE_RESPONSE = Symbol('IGNORE_RESPONSE');
 const DEFAULT_WORKER_INITIALIZATION_TIMEOUT = 10_000;
-
-/** The pool was terminated while the operation was pending. */
-export class WorkerPoolTerminatedError extends Error {
-  constructor() {
-    super('WorkerPoolManager: operation canceled because the pool terminated');
-    this.name = 'WorkerPoolTerminatedError';
-  }
-}
-
-/** The task was superseded or dropped before a worker answered it. */
-export class WorkerPoolTaskCanceledError extends Error {
-  constructor() {
-    super('WorkerPoolManager: operation canceled before the task completed');
-    this.name = 'WorkerPoolTaskCanceledError';
-  }
-}
-
-/**
- * A pooled worker fired an `error` event while running a request: an uncaught
- * exception inside the worker, or a worker script that failed to load.
- * `reported` is set once the host received the event through
- * `WorkerPoolOptions.onWorkerError`, so the pool does not log the same failure
- * a second time when it settles initialization.
- */
-export class WorkerPoolWorkerError extends Error {
-  reported = false;
-
-  constructor(message: string, options?: ErrorOptions) {
-    super(message, options);
-    this.name = 'WorkerPoolWorkerError';
-  }
-}
-
-/**
- * True for the two errors the pool uses to settle a promise it will never
- * fulfill: the pool was terminated, or the task was superseded or dropped
- * before a worker answered. Neither is a failure of the highlight itself.
- */
-export function isWorkerPoolCancellation(
-  error: unknown
-): error is WorkerPoolTerminatedError | WorkerPoolTaskCanceledError {
-  return (
-    error instanceof WorkerPoolTerminatedError ||
-    error instanceof WorkerPoolTaskCanceledError
-  );
-}
-
-/**
- * True when the pool has already accounted for a rejection: a cancellation, or
- * a worker failure the host received through `onWorkerError`. A caller that
- * logs highlight failures skips these, otherwise one handled event is reported
- * as several errors.
- */
-export function isHandledWorkerPoolError(error: unknown): boolean {
-  return (
-    isWorkerPoolCancellation(error) ||
-    (error instanceof WorkerPoolWorkerError && error.reported)
-  );
-}
 
 interface GetCachesResult {
   fileCache: LRUMap<string, RenderFileResult>;
@@ -451,7 +399,7 @@ export class WorkerPoolManager {
       return;
     } else if (this.initialized === false) {
       const { lifecycleGeneration } = this;
-      this.initialized = new Promise((resolve, reject) => {
+      const initialization = new Promise<void>((resolve, reject) => {
         void (async () => {
           try {
             const themes = getThemes(this.renderOptions.theme);
@@ -521,7 +469,13 @@ export class WorkerPoolManager {
           }
         })();
       });
+      this.initialized = initialization;
       this.queueBroadcastStateChanges();
+      // The caller that starts the initialization (the constructor, through
+      // queueInitialization) gets the pending promise too. Returning early
+      // would hand it an already-resolved promise, and a startup failure that
+      // nothing else awaits would surface as an unhandled rejection.
+      return initialization;
     } else {
       return this.initialized;
     }
@@ -615,24 +569,25 @@ export class WorkerPoolManager {
 
   /**
    * A worker's `error` event: an uncaught exception inside the worker, or a
-   * worker script that failed to load (a classic worker whose `importScripts`
-   * could not fetch a chunk). The worker never answers the request it was
-   * given, so that request is settled here: a failed `initialize` fails the
-   * pool over to main-thread rendering through `initialize()`'s catch, a
-   * failed `set-render-options` rejects that call, and a failed render task
-   * reports to its instances. The host sees the event through
-   * `onWorkerError`, where it can `preventDefault()` to keep an error the pool
-   * has handled from also being reported as uncaught on the page; without the
-   * hook the event is logged.
+   * worker script that failed to load (a plain `Event` with no message in that
+   * case). The host receives the event through `onWorkerError`, where it can
+   * `preventDefault()` to keep an error the pool has handled from also being
+   * reported as uncaught on the page; without the hook the event is logged.
+   *
+   * Only a pending `initialize` request is settled here: a worker that failed
+   * to start never answers it, and the rejection fails the pool over to
+   * main-thread rendering through `initialize()`'s catch. Any other request
+   * stays pending. worker.ts answers every request it runs, with an `error`
+   * response when the request itself failed, so an `error` event from a
+   * running worker does not mean its current request failed; a worker that
+   * crashed instead never answers, stays busy, and gets no new work.
    */
   private handleWorkerError(
     managedWorker: ManagedWorker,
-    event: ErrorEvent
+    event: ErrorEvent | Event
   ): void {
     const { onWorkerError } = this.options;
-    const error = errorFromWorkerErrorEvent(event);
     if (onWorkerError != null) {
-      error.reported = true;
       try {
         onWorkerError(event, managedWorker.worker);
       } catch (hookError) {
@@ -641,26 +596,20 @@ export class WorkerPoolManager {
     } else {
       console.error('Worker error:', event, managedWorker);
     }
-    const { pendingSetupRequestId, requestId } = managedWorker;
-    if (pendingSetupRequestId != null) {
-      const task = this.activeTaskById.get(pendingSetupRequestId);
-      if (task != null && 'reject' in task) {
-        task.reject(error);
-        this.cleanWorkerAndTask(managedWorker, task);
-      }
+    const { pendingSetupRequestId } = managedWorker;
+    if (pendingSetupRequestId == null) {
+      return;
     }
-    if (requestId != null) {
-      const task = this.activeTaskById.get(requestId);
-      if (isRenderTask(task)) {
-        this.notifyHighlightError(task, error);
-        this.rejectRenderTaskCallbacks(task, error);
-        this.cleanWorkerAndTask(managedWorker, task);
-        this.queueBroadcastStateChanges();
-        if (this.queuedTasks.length > 0) {
-          this.queueDrain();
-        }
-      }
+    const task = this.activeTaskById.get(pendingSetupRequestId);
+    if (task?.type !== 'initialize') {
+      return;
     }
+    const error = errorFromWorkerErrorEvent(event);
+    if (onWorkerError != null) {
+      markWorkerErrorReported(error);
+    }
+    task.reject(error);
+    this.cleanWorkerAndTask(managedWorker, task);
   }
 
   private drainQueue = () => {
@@ -895,7 +844,7 @@ export class WorkerPoolManager {
     void this.initialize(languages).catch((error) => {
       // A worker failure the host already received through `onWorkerError` is
       // not logged a second time when it settles the initialization.
-      if (error instanceof WorkerPoolWorkerError && error.reported) {
+      if (isHandledWorkerPoolError(error)) {
         return;
       }
       console.error(error);
@@ -1673,13 +1622,13 @@ function normalizeWorkerError(error: unknown): Error {
 // The Error a worker's `error` event stands for. A worker that threw while it
 // ran reports an ErrorEvent with a message and usually the thrown `error`,
 // which rides along as the cause; a worker script that never loaded fires a
-// bare `error` Event with neither, so that case is named here.
-function errorFromWorkerErrorEvent(event: ErrorEvent): WorkerPoolWorkerError {
-  const cause: unknown =
-    event != null && typeof event === 'object' ? event.error : undefined;
+// plain Event with neither, so that case is named here.
+function errorFromWorkerErrorEvent(
+  event: ErrorEvent | Event
+): WorkerPoolWorkerError {
+  const cause: unknown = 'error' in event ? event.error : undefined;
   const message =
-    event != null &&
-    typeof event === 'object' &&
+    'message' in event &&
     typeof event.message === 'string' &&
     event.message !== ''
       ? event.message

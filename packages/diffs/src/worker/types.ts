@@ -166,14 +166,19 @@ export interface WorkerPoolOptions {
 
   /**
    * Called when a pooled worker fires an `error` event: an uncaught exception
-   * inside the worker, or a worker script that failed to load. The pool
-   * settles the request that worker was running (a failed initialization
-   * fails the pool over to main-thread rendering), so a host that handles the
-   * event here can call `event.preventDefault()` to keep it from also being
-   * reported as an uncaught error on the page. Without this option the event
-   * is logged with `console.error`.
+   * inside the worker (an `ErrorEvent`), or a worker script that failed to
+   * load (a plain `Event`, with no `message` or `error`). The host owns the
+   * reporting from here: the pool logs nothing, and a worker that failed to
+   * start fails the pool over to main-thread rendering. Calling
+   * `event.preventDefault()` keeps an error the pool has handled from also
+   * being reported as uncaught on the page.
+   *
+   * The hook runs once per event, not once per failure: a pool of N workers
+   * whose script fails to load calls it up to N times, so a host that wants one
+   * report per page or per cause deduplicates on its side. Without this option
+   * the event is logged with `console.error`.
    */
-  onWorkerError?: (event: ErrorEvent, worker: Worker) => void;
+  onWorkerError?: (event: ErrorEvent | Event, worker: Worker) => void;
 
   totalASTLRUCacheSize?: number;
 }

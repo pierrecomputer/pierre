@@ -89,7 +89,6 @@ import {
 } from '../utils/updateDiffHunks';
 import { getTrailingContextRangeSize } from '../utils/virtualDiffLayout';
 import type { WorkerPoolManager } from '../worker';
-import { isHandledWorkerPoolError } from '../worker/WorkerPoolManager';
 
 interface PushLineWithAnnotation {
   diffStyle: 'unified' | 'split';
@@ -1434,9 +1433,6 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
   }
 
   public onHighlightError(error: unknown): void {
-    if (isHandledWorkerPoolError(error)) {
-      return;
-    }
     console.error(error);
   }
 
