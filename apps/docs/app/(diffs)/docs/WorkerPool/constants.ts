@@ -453,6 +453,54 @@ await workerPool.setRenderOptions({
   options,
 };
 
+export const WORKER_POOL_WORKER_ERRORS: PreloadFileOptions<
+  undefined,
+  undefined
+> = {
+  file: {
+    name: 'worker-errors.ts',
+    contents: `import {
+  getOrCreateWorkerPoolSingleton,
+  isHandledWorkerPoolError,
+} from '@pierre/diffs/worker';
+import { workerFactory } from './utils/workerFactory';
+
+let reported = false;
+
+const workerPool = getOrCreateWorkerPoolSingleton({
+  poolOptions: {
+    workerFactory,
+    // Fires once per worker \`error\` event. A worker that threw sends an
+    // ErrorEvent; a worker script that failed to load sends a plain Event
+    // with no message. Every worker in the pool fails on a bad script, so
+    // report the first event and silence the rest here.
+    onWorkerError(event, worker) {
+      // The pool has handled the failure (it falls back to main-thread
+      // highlighting): keep the browser from reporting it as uncaught too.
+      event.preventDefault();
+      if (reported) return;
+      reported = true;
+      const message =
+        'message' in event ? event.message : 'worker script failed to load';
+      myErrorReporter.capture('diffs highlight worker failed', { message });
+    },
+  },
+  highlighterOptions: {
+    theme: { dark: 'pierre-dark', light: 'pierre-light' },
+  },
+});
+
+// A cache prime the pool settles without a result (the pool was terminated,
+// the task was superseded, or a worker failure you already received above)
+// rejects with an error the pool has accounted for. Log only the others.
+workerPool.primeDiffHighlightCache(diff).catch((error: unknown) => {
+  if (isHandledWorkerPoolError(error)) return;
+  console.error(error);
+});`,
+  },
+  options,
+};
+
 export const WORKER_POOL_API_REFERENCE: PreloadFileOptions<
   undefined,
   undefined
@@ -469,6 +517,9 @@ new WorkerPoolManager(poolOptions, highlighterOptions)
 //   - totalASTLRUCacheSize?: number (default: 100) - Max items per cache
 //     (Two separate LRU caches are maintained: one for files, one for diffs.
 //      Each cache has this limit, so total cached items can be 2x this value.)
+//   - onWorkerError?: (event: ErrorEvent | Event, worker: Worker) => void
+//     Receives each worker \`error\` event instead of a console.error; the pool
+//     still fails over to main-thread rendering (see Worker Errors above)
 // - highlighterOptions: WorkerInitializationRenderOptions
 //   - theme?: DiffsThemeNames | ThemesType - Theme name or { dark, light } object
 //   - lineDiffType?: 'word' | 'word-alt' | 'word-line' | 'char' | 'none'
