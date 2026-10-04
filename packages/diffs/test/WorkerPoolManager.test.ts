@@ -23,6 +23,11 @@ import type {
   DiffRendererInstance,
   RenderFileRequest,
 } from '../src/worker/types';
+import {
+  isHandledWorkerPoolError,
+  WorkerPoolTerminatedError,
+  WorkerPoolWorkerError,
+} from '../src/worker/WorkerPoolManager';
 import { createDeferred } from './testUtils';
 import {
   createInitializedManager,
@@ -67,6 +72,70 @@ describe('WorkerPoolManager lifecycle', () => {
     });
     expect(worker.terminated).toBe(true);
     manager.terminate();
+  });
+
+  test('hands a worker error to onWorkerError and logs nothing itself', async () => {
+    const consoleError = spyOn(console, 'error').mockImplementation(() => {});
+    const received: Array<{ event: ErrorEvent; worker: Worker }> = [];
+    const { initialization, manager, worker } = createInitializingManager(
+      {},
+      {
+        onWorkerError: (event, failedWorker) => {
+          received.push({ event, worker: failedWorker });
+        },
+      }
+    );
+    await worker.waitForInitializeRequest();
+
+    worker.emitError(new Error('worker failed to load'));
+
+    const initializationError = await getRejection(initialization);
+    expect(initializationError).toBeInstanceOf(WorkerPoolWorkerError);
+    expect(initializationError.message).toContain('worker failed to load');
+    expect(isHandledWorkerPoolError(initializationError)).toBe(true);
+    expect(received).toHaveLength(1);
+    expect(received[0]?.event.message).toBe('worker failed to load');
+    expect(received[0]?.worker).toBe(worker as unknown as Worker);
+    expect(manager.isWorkingPool()).toBe(false);
+    // The constructor's own initialization settles through the same
+    // rejection; a failure the host already received is not logged again.
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(consoleError).not.toHaveBeenCalled();
+    manager.terminate();
+  });
+
+  test('fails the render task on a worker that errors mid-render', async () => {
+    spyOn(console, 'error').mockImplementation(() => {});
+    const { manager, worker } = await createInitializedManager();
+    try {
+      const errors: unknown[] = [];
+      const instance: DiffRendererInstance = {
+        __id: 'erroring-diff-renderer',
+        onHighlightSuccess() {
+          throw new Error('Expected no highlight result');
+        },
+        onHighlightError(error) {
+          errors.push(error);
+        },
+      };
+      const diff = createCacheableDiff();
+      const prime = manager.primeDiffHighlightCache(diff);
+      manager.highlightDiffAST(instance, diff);
+      await worker.waitForDiffRequest();
+
+      worker.emitError(new Error('worker crashed while highlighting'));
+
+      const primeError = await getRejection(prime);
+      expect(primeError).toBeInstanceOf(WorkerPoolWorkerError);
+      expect(errors).toHaveLength(1);
+      expect(errors[0]).toBeInstanceOf(WorkerPoolWorkerError);
+      expect(manager.getStats()).toMatchObject({
+        activeTasks: 0,
+        busyWorkers: 0,
+      });
+    } finally {
+      manager.terminate();
+    }
   });
 
   test('fails a partial pool when any worker never responds', async () => {
@@ -417,8 +486,11 @@ describe('WorkerPoolManager cache priming', () => {
         rejectedError = error;
       }
 
-      expect(rejectedError).toBeInstanceOf(Error);
+      expect(rejectedError).toBeInstanceOf(WorkerPoolTerminatedError);
       expect((rejectedError as Error).message).toContain('pool terminated');
+      // A cancellation is settled, not logged, by the renderers and
+      // components that await a prime.
+      expect(isHandledWorkerPoolError(rejectedError)).toBe(true);
     } finally {
       manager.terminate();
     }

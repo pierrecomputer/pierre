@@ -134,6 +134,7 @@ import {
   isAdditionLineRenderable,
 } from '../utils/virtualDiffLayout';
 import type { WorkerPoolManager } from '../worker';
+import { isHandledWorkerPoolError } from '../worker/WorkerPoolManager';
 import { DiffsContainerLoaded } from './web-components';
 
 type LoadedPartialDiffContents = Awaited<
@@ -2545,6 +2546,9 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
     await workerManager
       .primeDiffHighlightCache(fileDiff)
       .catch((error: unknown) => {
+        if (isHandledWorkerPoolError(error)) {
+          return;
+        }
         console.error(error);
       });
   }

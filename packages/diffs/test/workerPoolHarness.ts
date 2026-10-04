@@ -165,7 +165,7 @@ export function createInitializingManager(
   initOptions: Partial<WorkerInitializationRenderOptions> = {},
   poolOptions: Pick<
     WorkerPoolOptions,
-    'poolSize' | 'workerInitializationTimeout'
+    'onWorkerError' | 'poolSize' | 'workerInitializationTimeout'
   > = {}
 ): {
   initialization: Promise<void>;

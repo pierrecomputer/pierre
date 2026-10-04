@@ -84,6 +84,7 @@ import { prerenderHTMLIfNecessary } from '../utils/prerenderHTMLIfNecessary';
 import { getMeasuredScrollbarGutter } from '../utils/scrollbarGutter';
 import { setPreNodeProperties } from '../utils/setWrapperNodeProps';
 import type { WorkerPoolManager } from '../worker';
+import { isHandledWorkerPoolError } from '../worker/WorkerPoolManager';
 import { DiffsContainerLoaded } from './web-components';
 
 const EMPTY_STRINGS: string[] = [''];
@@ -1399,6 +1400,9 @@ export class File<LAnnotation = undefined, Caret = undefined> {
     await workerManager
       .primeFileHighlightCache(file)
       .catch((error: unknown) => {
+        if (isHandledWorkerPoolError(error)) {
+          return;
+        }
         console.error(error);
       });
   }
