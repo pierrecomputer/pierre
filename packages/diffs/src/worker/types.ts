@@ -164,6 +164,17 @@ export interface WorkerPoolOptions {
    */
   workerInitializationTimeout?: number;
 
+  /**
+   * Called when a pooled worker fires an `error` event: an uncaught exception
+   * inside the worker, or a worker script that failed to load. The pool
+   * settles the request that worker was running (a failed initialization
+   * fails the pool over to main-thread rendering), so a host that handles the
+   * event here can call `event.preventDefault()` to keep it from also being
+   * reported as an uncaught error on the page. Without this option the event
+   * is logged with `console.error`.
+   */
+  onWorkerError?: (event: ErrorEvent, worker: Worker) => void;
+
   totalASTLRUCacheSize?: number;
 }
 

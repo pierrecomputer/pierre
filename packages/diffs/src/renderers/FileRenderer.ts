@@ -57,6 +57,7 @@ import { isDefaultRenderRange } from '../utils/isDefaultRenderRange';
 import { isFilePlainText } from '../utils/isFilePlainText';
 import { renderFileWithHighlighter } from '../utils/renderFileWithHighlighter';
 import type { WorkerPoolManager } from '../worker';
+import { isHandledWorkerPoolError } from '../worker/WorkerPoolManager';
 
 type AnnotationLineMap<LAnnotation> = Record<
   number,
@@ -1141,6 +1142,9 @@ export class FileRenderer<LAnnotation = undefined> {
   }
 
   public onHighlightError(error: unknown): void {
+    if (isHandledWorkerPoolError(error)) {
+      return;
+    }
     console.error(error);
   }
 
