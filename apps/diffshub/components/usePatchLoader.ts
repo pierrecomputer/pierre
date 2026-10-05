@@ -261,6 +261,17 @@ export function usePatchLoader({
             return;
           }
 
+          // The forgiving parser can return no files for a plain-text error
+          // payload. Only an empty or whitespace-only response means no changes.
+          if (
+            loadedData.diffStats.fileCount === 0 &&
+            patchContent.trim() !== ''
+          ) {
+            throw new Error(
+              'The response did not contain a valid diff. Please try again.'
+            );
+          }
+
           setTreeSource(loadedData.treeSource);
           setCommentFileByItemId(loadedData.itemIdToFile);
           setCommentSections([]);

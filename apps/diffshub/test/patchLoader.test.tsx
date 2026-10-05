@@ -135,12 +135,37 @@ describe('patch loader and status panel', () => {
     ).toBeNull();
   });
 
-  test('still loads a normal streamed diff', async () => {
-    const result = await loadResponse(new Response(patchText));
+  test.each([
+    { name: 'streamed Git diff', body: patchText },
+    {
+      name: 'fallback unified diff',
+      body: patchText.slice(patchText.indexOf('\n') + 1),
+    },
+  ])('still loads a normal $name', async ({ body }) => {
+    const result = await loadResponse(new Response(body));
 
     expect(result.getAttribute('data-load-state')).toBe('ready');
     expect(result.getAttribute('data-file-count')).toBe('1');
     expect(result.getAttribute('data-item-count')).toBe('1');
+  });
+
+  test('rejects a nonempty error payload returned with HTTP 200', async () => {
+    const result = await loadResponse(
+      new Response('Upstream service unavailable. Please try again later.', {
+        status: 200,
+        headers: { 'Content-Type': 'text/plain' },
+      })
+    );
+
+    expect(result.getAttribute('data-load-state')).toBe('error');
+    expect(result.getAttribute('data-file-count')).toBeNull();
+    expect(container.querySelector('h2')?.textContent).toBe(
+      'Couldn’t load diff'
+    );
+    expect(container.querySelector('p')?.textContent).toBe(
+      'The response did not contain a valid diff. Please try again.'
+    );
+    expect(container.querySelector('button')?.textContent).toBe('Try again');
   });
 
   test('replaces HTML errors with a status-based message and can retry', async () => {
