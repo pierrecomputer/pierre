@@ -1110,6 +1110,37 @@ void t.test(
   }
 );
 
+void t.test('LiveTokenizer: line breaks across SIMD boundaries', () => {
+  for (const length of [0, 1, 14, 15, 16, 17, 30, 31, 32, 33, 65519, 65520]) {
+    for (const terminator of ['\n', '\r', '\r\n']) {
+      const code = `${'x'.repeat(length)}${terminator}日本語😀${terminator}`;
+      const live = new LiveTokenizer({
+        lang: 'plain',
+        theme: pierreDark,
+        code,
+      });
+      try {
+        assert.equal(live.getText(), code);
+        assertMatchesFresh(live, code, 'plain', 'initial line breaks');
+        const newText = `${'y'.repeat(length)}${terminator}😀`;
+        live.applyEdits([
+          {
+            range: {
+              start: { line: 0, character: 0 },
+              end: { line: 2, character: 0 },
+            },
+            newText,
+          },
+        ]);
+        assert.equal(live.getText(), newText);
+        assertMatchesFresh(live, newText, 'plain', 'replacement line breaks');
+      } finally {
+        live.dispose();
+      }
+    }
+  }
+});
+
 void t.test('LiveTokenizer: final-line terminator edits', () => {
   const live = new LiveTokenizer({ lang: 'ts', theme: pierreDark, code: 'a' });
   // adding a trailing terminator creates the trailing empty line

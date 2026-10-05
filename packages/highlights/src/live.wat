@@ -1201,6 +1201,8 @@
     ;; lone CR (flag bit 16) and a lone LF as 1-byte terminators
     (block $done
       (loop $scan
+        (local.set $p
+          (call $scanFindSpecial (local.get $p) (local.get $stop) (i32.const 10) (i32.const 0) (i32.const 1)))
         (br_if $done (i32.ge_u (local.get $p) (local.get $stop)))
         (local.set $b (i32.load8_u (local.get $p)))
         (if (i32.eq (local.get $b) (i32.const 13))
@@ -1225,15 +1227,12 @@
                     (i32.eq (i32.load8_u (i32.add (local.get $p) (i32.const 1))) (i32.const 10))))))
             (local.set $lineStart (local.get $p)))
           (else
-            (if (i32.eq (local.get $b) (i32.const 10))
-              (then
-                (call $lvAppendLine
-                  (local.get $lineStart)
-                  (i32.sub (local.get $p) (local.get $lineStart))
-                  (i32.const 9))
-                (local.set $p (i32.add (local.get $p) (i32.const 1)))
-                (local.set $lineStart (local.get $p)))
-              (else (local.set $p (i32.add (local.get $p) (i32.const 1)))))))
+            (call $lvAppendLine
+              (local.get $lineStart)
+              (i32.sub (local.get $p) (local.get $lineStart))
+              (i32.const 9))
+            (local.set $p (i32.add (local.get $p) (i32.const 1)))
+            (local.set $lineStart (local.get $p))))
         (br $scan)))
     (call $lvAppendLine
       (local.get $lineStart)
@@ -1582,11 +1581,18 @@
     (local.set $p (i32.const 0))
     (block $counted
       (loop $count
+        (local.set $p
+          (i32.sub
+            (call $scanFindSpecial
+              (i32.add (local.get $scratch) (local.get $p))
+              (i32.add (local.get $scratch) (local.get $L))
+              (i32.const 10) (i32.const 0) (i32.const 1))
+            (local.get $scratch)))
         (br_if $counted (i32.ge_u (local.get $p) (local.get $L)))
         (local.set $b (i32.load8_u (i32.add (local.get $scratch) (local.get $p))))
+        (local.set $n (i32.add (local.get $n) (i32.const 1)))
         (if (i32.eq (local.get $b) (i32.const 13))
           (then
-            (local.set $n (i32.add (local.get $n) (i32.const 1)))
             (local.set $p
               (i32.add
                 (local.get $p)
@@ -1600,8 +1606,6 @@
                         (i32.add (i32.add (local.get $scratch) (local.get $p)) (i32.const 1)))
                       (i32.const 10)))))))
           (else
-            (if (i32.eq (local.get $b) (i32.const 10))
-              (then (local.set $n (i32.add (local.get $n) (i32.const 1)))))
             (local.set $p (i32.add (local.get $p) (i32.const 1)))))
         (br $count)))
     (local.set $n0 (i32.add (i32.sub (local.get $eLine) (local.get $sLine)) (i32.const 1)))
@@ -1641,6 +1645,13 @@
     (local.set $p (i32.const 0))
     (block $built
       (loop $build
+        (local.set $p
+          (i32.sub
+            (call $scanFindSpecial
+              (i32.add (local.get $scratch) (local.get $p))
+              (i32.add (local.get $scratch) (local.get $L))
+              (i32.const 10) (i32.const 0) (i32.const 1))
+            (local.get $scratch)))
         (br_if $built (i32.ge_u (local.get $p) (local.get $L)))
         (local.set $b (i32.load8_u (i32.add (local.get $scratch) (local.get $p))))
         (if (i32.eq (local.get $b) (i32.const 13))
@@ -1664,18 +1675,15 @@
             (local.set $segStart (local.get $p))
             (local.set $j (i32.add (local.get $j) (i32.const 1))))
           (else
-            (if (i32.eq (local.get $b) (i32.const 10))
-              (then
-                (call $lvEmitSpliceLine
-                  (i32.add (local.get $sLine) (local.get $j))
-                  (i32.add (local.get $scratch) (local.get $segStart))
-                  (i32.sub (local.get $p) (local.get $segStart))
-                  (i32.const 1)
-                  (i32.const -1))
-                (local.set $p (i32.add (local.get $p) (i32.const 1)))
-                (local.set $segStart (local.get $p))
-                (local.set $j (i32.add (local.get $j) (i32.const 1))))
-              (else (local.set $p (i32.add (local.get $p) (i32.const 1)))))))
+            (call $lvEmitSpliceLine
+              (i32.add (local.get $sLine) (local.get $j))
+              (i32.add (local.get $scratch) (local.get $segStart))
+              (i32.sub (local.get $p) (local.get $segStart))
+              (i32.const 1)
+              (i32.const -1))
+            (local.set $p (i32.add (local.get $p) (i32.const 1)))
+            (local.set $segStart (local.get $p))
+            (local.set $j (i32.add (local.get $j) (i32.const 1)))))
         (br $build)))
     (call $lvEmitSpliceLine
       (i32.add (local.get $sLine) (local.get $j))
