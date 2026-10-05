@@ -15,7 +15,7 @@ const us = (ms: number) => (ms >= 10 ? fmt(ms) + 'ms' : fmt(ms * 1000) + 'µs');
 const mb = (bytes: number) => fmt(bytes / 1048576) + 'MiB';
 
 const url = new URL('../src/highlights.wat', import.meta.url);
-const { code } = transformWat(url);
+const { code, languages } = transformWat(url);
 const wasmModule = new WebAssembly.Module(
   optimizeWasm(wat2wasm(url.pathname, code))
 );
@@ -378,7 +378,7 @@ const raw = new WebAssembly.Instance(wasmModule, { env })
 const bytes = new TextEncoder().encode(hundredK);
 const ptr = raw.liveStage(bytes.length);
 new Uint8Array(raw.memory.buffer).set(bytes, ptr);
-raw.liveInitDoc(ptr, bytes.length, 31);
+raw.liveInitDoc(ptr, bytes.length, languages.ts);
 raw.liveRun(0x7fffffff);
 console.log('\n100k-line footprint:');
 console.log(`  wasm memory      ${mb(raw.memory.buffer.byteLength)}`);
