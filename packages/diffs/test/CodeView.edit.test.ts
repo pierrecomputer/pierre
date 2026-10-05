@@ -1271,6 +1271,216 @@ describe('CodeView item edit mode', () => {
     }
   }
 
+  for (const diffStyle of ['split', 'unified'] as const) {
+    for (const kind of ['new file', 'change'] as const) {
+      for (const editMode of [
+        'immediate completion',
+        'delete to empty',
+        'undo and redo',
+      ] as const) {
+        test(`preserves text entered on the final empty row (${diffStyle}, ${kind}, ${editMode})`, async () => {
+          const { cleanup } = installDom();
+          const { editors, createEditor } = createEditorHarness();
+          let completed:
+            | FileDiffEditCompleteEvent<undefined, undefined>
+            | undefined;
+          const viewer = new CodeView({
+            createEditor,
+            diffStyle,
+            onItemEditComplete(event, editedItem) {
+              if (editedItem.type === 'diff') {
+                completed = event as FileDiffEditCompleteEvent<
+                  undefined,
+                  undefined
+                >;
+              }
+              return 'accept';
+            },
+          });
+          const oldFile =
+            kind === 'change' ? { name: 'tail.txt', contents: 'a\nb\n' } : null;
+          const initialContents = 'a\nB\n';
+          const fileDiff = parseDiffFromFile(oldFile, {
+            name: 'tail.txt',
+            contents: initialContents,
+          });
+          const original = structuredClone(fileDiff);
+          const item: CodeViewItem<undefined> = {
+            id: 'trailing-row',
+            type: 'diff',
+            fileDiff,
+            edit: true,
+            version: 0,
+          };
+          try {
+            viewer.setup(createRoot());
+            await renderItems(viewer, [item]);
+            const editor = editors[0];
+            await waitFor(() => editor?.getFile() != null);
+            if (editor == null)
+              throw new Error('Expected an attached diff editor');
+            const rendered = viewer.getRenderedItems()[0];
+            const instance = rendered?.instance;
+            const assertContents = (contents: string) => {
+              expect(editor.getText()).toBe(contents);
+              expect(getEditSessionDiff(instance)?.additionLines.join('')).toBe(
+                contents
+              );
+              expect(fileDiff).toEqual(original);
+            };
+            const replaceTail = (previous: string, next: string) => {
+              editor.applyEdits(
+                [
+                  {
+                    range: {
+                      start: { line: 2, character: 0 },
+                      end: { line: 2, character: previous.length },
+                    },
+                    newText: next,
+                  },
+                ],
+                true
+              );
+            };
+            if (editMode === 'immediate completion') {
+              const content =
+                rendered?.element.shadowRoot?.querySelector<HTMLElement>(
+                  '[data-code]:not([data-deletions]) [data-content]'
+                );
+              const view = content?.ownerDocument.defaultView;
+              if (content == null || view == null)
+                throw new Error('Expected editable additions');
+              editor.setSelections([
+                {
+                  start: { line: 2, character: 0 },
+                  end: { line: 2, character: 0 },
+                  direction: 'none',
+                },
+              ]);
+              content.dispatchEvent(
+                new view.InputEvent('beforeinput', {
+                  inputType: 'insertText',
+                  data: 'tail',
+                  bubbles: true,
+                  cancelable: true,
+                  composed: true,
+                })
+              );
+            } else {
+              replaceTail('', 'tail');
+            }
+            assertContents('a\nB\ntail');
+            const lastHunk = getEditSessionDiff(instance)?.hunks.at(-1);
+            if (lastHunk == null)
+              throw new Error('Expected a live trailing hunk');
+            expect(lastHunk.additionStart + lastHunk.additionCount - 1).toBe(3);
+            if (editMode === 'delete to empty') {
+              replaceTail('tail', '');
+              assertContents(initialContents);
+            } else if (editMode === 'undo and redo') {
+              replaceTail('tail', 'tails');
+              assertContents('a\nB\ntails');
+              replaceTail('tails', '');
+              assertContents(initialContents);
+              editor.undo();
+              await waitFor(() => editor.getText() === 'a\nB\ntails');
+              assertContents('a\nB\ntails');
+              editor.undo();
+              await waitFor(() => editor.getText() === 'a\nB\ntail');
+              assertContents('a\nB\ntail');
+              editor.undo();
+              await waitFor(() => editor.getText() === initialContents);
+              assertContents(initialContents);
+              editor.redo();
+              await waitFor(() => editor.getText() === 'a\nB\ntail');
+              assertContents('a\nB\ntail');
+              replaceTail('tail', 'tail\n');
+              assertContents('a\nB\ntail\n');
+              editor.applyEdits(
+                [
+                  {
+                    range: {
+                      start: { line: 2, character: 4 },
+                      end: { line: 3, character: 0 },
+                    },
+                    newText: '',
+                  },
+                ],
+                true
+              );
+              assertContents('a\nB\ntail');
+            }
+            await applyItemUpdate(viewer, { ...item, edit: false, version: 1 });
+            const expectedContents =
+              editMode === 'delete to empty' ? initialContents : 'a\nB\ntail';
+            expect(completed?.newFile?.contents).toBe(expectedContents);
+            const expected = parseDiffFromFile(oldFile, {
+              name: 'tail.txt',
+              contents: expectedContents,
+            });
+            expect(completed?.fileDiff.hunks).toEqual(expected.hunks);
+            expect(completed?.fileDiff.additionLines).toEqual(
+              expected.additionLines
+            );
+          } finally {
+            viewer.cleanUp();
+            await wait(0);
+            cleanup();
+          }
+        });
+      }
+    }
+  }
+
+  // The parser splits lines only on `\n`, while the editor also splits on a
+  // lone `\r`, so a CR-only file has more editor rows than diff lines. An edit
+  // past the diff's last line must not be mistaken for text on the empty row
+  // after a final newline.
+  test('does not append CR-only editor rows as a final row', async () => {
+    const { cleanup } = installDom();
+    const { editors, createEditor } = createEditorHarness();
+    const viewer = new CodeView({ createEditor });
+    const fileDiff = parseDiffFromFile(null, {
+      name: 'cr.txt',
+      contents: 'l0\rl1\rl2\r',
+    });
+    const item: CodeViewItem<undefined> = {
+      id: 'cr-only',
+      type: 'diff',
+      fileDiff,
+      edit: true,
+      version: 0,
+    };
+    try {
+      viewer.setup(createRoot());
+      await renderItems(viewer, [item]);
+      const editor = editors[0];
+      await waitFor(() => editor?.getFile() != null);
+      if (editor == null) throw new Error('Expected an attached diff editor');
+      const instance = viewer.getRenderedItems()[0]?.instance;
+      expect(getEditSessionDiff(instance)?.additionLines).toHaveLength(1);
+      expect(() =>
+        editor.applyEdits(
+          [
+            {
+              range: {
+                start: { line: 1, character: 0 },
+                end: { line: 1, character: 2 },
+              },
+              newText: 'L1',
+            },
+          ],
+          true
+        )
+      ).not.toThrow();
+      expect(getEditSessionDiff(instance)?.additionLines).toHaveLength(1);
+    } finally {
+      viewer.cleanUp();
+      await wait(0);
+      cleanup();
+    }
+  });
+
   test('edited items keep pass-through options untouched', async () => {
     const { cleanup } = installDom();
     const { createEditor } = createEditorHarness();

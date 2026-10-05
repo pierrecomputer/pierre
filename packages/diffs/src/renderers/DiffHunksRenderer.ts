@@ -578,7 +578,8 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     dirtyLines: Map<number, Array<HighlightedToken>>,
     themeType: 'dark' | 'light',
     lineCountChangeInFlight = false,
-    changedDocumentLines?: ReadonlyMap<number, string>
+    changedDocumentLines?: ReadonlyMap<number, string>,
+    documentLineCount?: number
   ): boolean {
     this.pendingStructuralRows = undefined;
     const { renderCache } = this;
@@ -602,11 +603,23 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     const changedAdditionLines: number[] = [];
     const previousAdditionLines = new Map<number, string>();
     // Source edits must reach the session diff independently of highlighting.
-    // Keep exact line endings and ignore the document's phantom trailing row.
+    // The parsed diff omits the final empty editor row. Once that row has
+    // text, include it in the file; leave it out while it is still empty.
     if (pendingStructuralRows == null && changedDocumentLines != null) {
+      const additionLineCount = diff.additionLines.length;
+      const canAppendFinalRow = canAppendFinalDocumentRow(
+        diff.additionLines,
+        documentLineCount
+      );
       for (const [line, text] of changedDocumentLines) {
-        if (line < 0 || line >= diff.additionLines.length) continue;
-        const previous = diff.additionLines[line];
+        if (
+          line < 0 ||
+          line > additionLineCount ||
+          (line === additionLineCount && (text === '' || !canAppendFinalRow))
+        ) {
+          continue;
+        }
+        const previous = diff.additionLines[line] ?? '';
         if (previous !== text) {
           diff.additionLines[line] = text;
           changedAdditionLines.push(line);
@@ -2616,6 +2629,21 @@ function realignAdditionHastLines<LAnnotation>(
     );
   }
   return realigned;
+}
+
+// The editor shows one empty row after a final `\n` that the parsed diff has
+// no entry for. Text typed there is real file content only when that row is
+// the document's single extra line. A lone `\r` also starts an editor line but
+// not a diff line, so any other count means the coordinates disagree and the
+// row cannot be appended safely.
+function canAppendFinalDocumentRow(
+  additionLines: readonly string[],
+  documentLineCount: number | undefined
+): boolean {
+  return (
+    documentLineCount === additionLines.length + 1 &&
+    additionLines.at(-1)?.endsWith('\n') === true
+  );
 }
 
 function createPlainAdditionLineElement(

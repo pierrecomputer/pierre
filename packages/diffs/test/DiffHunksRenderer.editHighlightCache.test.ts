@@ -69,6 +69,94 @@ function withRecycledRenderer(
 }
 
 describe('recycled diff edit highlights', () => {
+  test.each(['\n', '\r\n'])(
+    'preserves untokenized text entered on the final empty document row (%j)',
+    (lineEnding) => {
+      const renderer = new DiffHunksRenderer({ theme: 'pierre-dark' });
+      const diff = parseDiffFromFile(
+        { name: 'example.ts', contents: `const before = 1;${lineEnding}` },
+        { name: 'example.ts', contents: `const after = 2;${lineEnding}` }
+      );
+      try {
+        renderer.beginEditSession(diff);
+        renderHtml(renderer, diff);
+        renderer.updateRenderCache(
+          new Map(),
+          'dark',
+          false,
+          new Map([
+            [1, 'tail'],
+            [2, 'out of bounds'],
+          ]),
+          2
+        );
+        expect(diff.additionLines.join('')).toBe(
+          `const after = 2;${lineEnding}tail`
+        );
+        expect(diff.hunks.at(-1)?.additionCount).toBe(2);
+        expect(renderHtml(renderer, diff)).toContain('tail');
+      } finally {
+        renderer.cleanUp();
+      }
+    }
+  );
+
+  test('ignores an empty final document row and indexes beyond it', () => {
+    const renderer = new DiffHunksRenderer({ theme: 'pierre-dark' });
+    const diff = createDiff();
+    try {
+      renderer.beginEditSession(diff);
+      renderHtml(renderer, diff);
+      const original = structuredClone(diff);
+      renderer.updateRenderCache(
+        new Map([[1, [[0, '', '']]]]),
+        'dark',
+        false,
+        new Map([
+          [1, ''],
+          [2, 'out of bounds'],
+        ]),
+        2
+      );
+      expect(diff).toEqual(original);
+    } finally {
+      renderer.cleanUp();
+    }
+  });
+
+  // A lone `\r` starts an editor row but not a diff line, so the document has
+  // more than one extra row and its final-row index does not match the diff.
+  test.each([
+    ['CR-only lines', 'l0\rl1\r', 3],
+    ['a lone CR before the final newline', 'a\rb\n', 3],
+    ['no final newline', 'a\rb', 2],
+    ['an unknown document line count', 'a\n', undefined],
+  ] as const)(
+    'does not append the final row with %s',
+    (_, contents, documentLineCount) => {
+      const renderer = new DiffHunksRenderer({ theme: 'pierre-dark' });
+      const diff = parseDiffFromFile(
+        { name: 'example.ts', contents: 'old\n' },
+        { name: 'example.ts', contents }
+      );
+      try {
+        renderer.beginEditSession(diff);
+        renderHtml(renderer, diff);
+        const original = structuredClone(diff);
+        renderer.updateRenderCache(
+          new Map(),
+          'dark',
+          false,
+          new Map([[diff.additionLines.length, 'tail']]),
+          documentLineCount
+        );
+        expect(diff).toEqual(original);
+      } finally {
+        renderer.cleanUp();
+      }
+    }
+  );
+
   test('cached rows preserve document edits that were not tokenized', () => {
     const renderer = new DiffHunksRenderer({ theme: 'pierre-dark' });
     const diff = createDiff();

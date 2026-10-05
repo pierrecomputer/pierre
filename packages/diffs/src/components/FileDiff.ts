@@ -154,6 +154,7 @@ interface UpdateRenderCacheOptions {
   shouldRefreshDiffsView?: boolean;
   lineCountChangeInFlight?: boolean;
   changedDocumentLines?: ReadonlyMap<number, string>;
+  documentLineCount?: number;
 }
 
 function canHydrateDiff(fileDiff: FileDiffMetadata): boolean {
@@ -2257,7 +2258,8 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
       dirtyLines,
       themeType,
       lineCountChangeInFlight,
-      options.changedDocumentLines
+      options.changedDocumentLines,
+      options.documentLineCount
     );
     // A same-line-count edit that reshaped the session regions (an edit into
     // a collapsed gap) changes the rendered row set, which the debounced

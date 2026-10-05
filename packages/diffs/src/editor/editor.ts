@@ -3900,6 +3900,7 @@ export class Editor<
         this.#isDiff && !didLineCountChange
           ? getChangedDocumentLines(textDocument, change)
           : undefined,
+      documentLineCount: textDocument.lineCount,
     });
     if (didLineCountChange) {
       // Line-count change: recompute hunks from the full document and re-render.
