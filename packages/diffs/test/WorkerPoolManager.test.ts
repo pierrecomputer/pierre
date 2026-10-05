@@ -63,8 +63,8 @@ describe('WorkerPoolManager lifecycle', () => {
 
     const initializationError = await getRejection(initialization);
     expect(initializationError.message).toContain('worker failed to load');
-    // Without onWorkerError nobody received the event, so the components that
-    // await a prime still log the failure as they did before.
+    // Without an error callback, consumers still need to log startup
+    // failures.
     expect(initializationError).toBeInstanceOf(WorkerPoolWorkerError);
     expect(isHandledWorkerPoolError(initializationError)).toBe(false);
     expect(manager.isWorkingPool()).toBe(false);
@@ -103,8 +103,8 @@ describe('WorkerPoolManager lifecycle', () => {
     });
     expect(received[0]?.worker).toBe(worker as unknown as Worker);
     expect(manager.isWorkingPool()).toBe(false);
-    // The constructor's own initialization settles through the same
-    // rejection; a failure the host already received is not logged again.
+    // Allow the constructor's error handler to run and check that it does not
+    // log the failure already passed to onWorkerError.
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(consoleError).not.toHaveBeenCalled();
     manager.terminate();
@@ -124,8 +124,7 @@ describe('WorkerPoolManager lifecycle', () => {
     );
     await worker.waitForInitializeRequest();
 
-    // A module worker whose script could not be fetched fires a plain `error`
-    // Event: no `message`, no `error`.
+    // Failed script requests can produce an Event without message or error.
     const event = new Event('error', { cancelable: true });
     worker.emitErrorEvent(event);
 
@@ -491,8 +490,7 @@ describe('WorkerPoolManager cache priming', () => {
 
       expect(rejectedError).toBeInstanceOf(WorkerPoolTerminatedError);
       expect((rejectedError as Error).message).toContain('pool terminated');
-      // A cancellation is settled, not logged, by the renderers and
-      // components that await a prime.
+      // Components should ignore expected cancellations when logging errors.
       expect(isHandledWorkerPoolError(rejectedError)).toBe(true);
     } finally {
       manager.terminate();

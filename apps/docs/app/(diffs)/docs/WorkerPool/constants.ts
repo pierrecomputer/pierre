@@ -470,13 +470,10 @@ let reported = false;
 const workerPool = getOrCreateWorkerPoolSingleton({
   poolOptions: {
     workerFactory,
-    // Fires once per worker \`error\` event. A worker that threw sends an
-    // ErrorEvent; a worker script that failed to load sends a plain Event
-    // with no message. Every worker in the pool fails on a bad script, so
-    // report the first event and silence the rest here.
+    // Multiple workers can report the same script load failure.
+    // Report only the first error to avoid duplicate reports.
     onWorkerError(event, worker) {
-      // The pool has handled the failure (it falls back to main-thread
-      // highlighting): keep the browser from reporting it as uncaught too.
+      // Prevent the browser from reporting this error as uncaught.
       event.preventDefault();
       if (reported) return;
       reported = true;
@@ -490,9 +487,7 @@ const workerPool = getOrCreateWorkerPoolSingleton({
   },
 });
 
-// A cache prime the pool settles without a result (the pool was terminated,
-// the task was superseded, or a worker failure you already received above)
-// rejects with an error the pool has accounted for. Log only the others.
+// Skip expected cancellations and worker errors already reported above.
 workerPool.primeDiffHighlightCache(diff).catch((error: unknown) => {
   if (isHandledWorkerPoolError(error)) return;
   console.error(error);
@@ -518,8 +513,8 @@ new WorkerPoolManager(poolOptions, highlighterOptions)
 //     (Two separate LRU caches are maintained: one for files, one for diffs.
 //      Each cache has this limit, so total cached items can be 2x this value.)
 //   - onWorkerError?: (event: ErrorEvent | Event, worker: Worker) => void
-//     Receives each worker \`error\` event instead of a console.error; the pool
-//     still fails over to main-thread rendering (see Worker Errors above)
+//     Called for each worker error instead of logging it with console.error.
+//     Failed initialization switches components to main-thread highlighting.
 // - highlighterOptions: WorkerInitializationRenderOptions
 //   - theme?: DiffsThemeNames | ThemesType - Theme name or { dark, light } object
 //   - lineDiffType?: 'word' | 'word-alt' | 'word-line' | 'char' | 'none'

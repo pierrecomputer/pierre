@@ -165,18 +165,16 @@ export interface WorkerPoolOptions {
   workerInitializationTimeout?: number;
 
   /**
-   * Called when a pooled worker fires an `error` event: an uncaught exception
-   * inside the worker (an `ErrorEvent`), or a worker script that failed to
-   * load (a plain `Event`, with no `message` or `error`). The host owns the
-   * reporting from here: the pool logs nothing, and a worker that failed to
-   * start fails the pool over to main-thread rendering. Calling
-   * `event.preventDefault()` keeps an error the pool has handled from also
-   * being reported as uncaught on the page.
+   * Called for each worker error instead of logging it with console.error.
+   * Call event.preventDefault() to prevent the browser from also reporting it
+   * as an uncaught error.
    *
-   * The hook runs once per event, not once per failure: a pool of N workers
-   * whose script fails to load calls it up to N times, so a host that wants one
-   * report per page or per cause deduplicates on its side. Without this option
-   * the event is logged with `console.error`.
+   * Script load failures may provide a plain Event without message or error;
+   * uncaught exceptions provide an ErrorEvent. If initialization fails, the
+   * pool stops its workers and components highlight on the main thread.
+   *
+   * Several workers can report the same script load failure. Track errors in
+   * this callback if your application should report that failure only once.
    */
   onWorkerError?: (event: ErrorEvent | Event, worker: Worker) => void;
 

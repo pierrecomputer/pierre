@@ -176,9 +176,7 @@ export class TestWorker {
     this.emitErrorEvent({ error, message: error.message } as ErrorEvent);
   }
 
-  // Delivers any `error` event to the manager's listeners: the ErrorEvent-like
-  // object emitError builds, or a plain Event such as the one a browser fires
-  // when a module worker's script fails to load.
+  // Send a worker error event to the manager's listeners.
   emitErrorEvent(event: ErrorEvent | Event): void {
     for (const listener of this.errorListeners) {
       listener(event);

@@ -23,12 +23,10 @@ import {
   withTimeout,
 } from './workerPoolHarness';
 
-// A worker's `error` event after initialization does not come from the request
-// it is running: worker.ts catches every request failure and posts an `error`
-// response. The event comes from code outside the request handler, such as a
-// timer. That code does not stop the worker, so the worker still answers. If
-// the worker has crashed instead, it answers nothing again. These tests cover
-// both cases.
+// worker.ts sends request errors as responses. An `error` event can come
+// from unrelated code, such as a timer. These tests check that a request
+// can still complete after such an event, and that a worker that stops
+// responding receives no further work.
 
 let restoreAnimationFrame: (() => void) | undefined;
 
@@ -137,10 +135,9 @@ describe('WorkerPoolManager worker error events', () => {
     }
   });
 
-  // The constructor's initialize() call returns before initialization
-  // settles, so queueInitialization's catch never sees the failure. If no other
-  // caller awaits initialize(), the failure is an unhandled rejection, and Bun
-  // fails the test on it. The hook does not change that.
+  // No caller awaits initialize() in this test. The constructor's error
+  // handler must catch the startup failure to prevent an unhandled
+  // rejection.
   test('a failed initialization that only the constructor started is not an unhandled rejection', async () => {
     spyOn(console, 'error').mockImplementation(() => {});
     const worker = new TestWorker();
@@ -164,8 +161,8 @@ describe('WorkerPoolManager worker error events', () => {
   });
 });
 
-// Creates a TypeScript diff whose cache key is unique to `name`, so each call
-// makes a separate pool task.
+// Use the name in each cache key so tests can create separate highlight
+// tasks.
 function createDiff(name: string): FileDiffMetadata {
   return parseDiffFromFile(
     {

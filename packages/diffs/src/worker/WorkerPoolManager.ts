@@ -471,10 +471,8 @@ export class WorkerPoolManager {
       });
       this.initialized = initialization;
       this.queueBroadcastStateChanges();
-      // The caller that starts the initialization (the constructor, through
-      // queueInitialization) gets the pending promise too. Returning early
-      // would hand it an already-resolved promise, and a startup failure that
-      // nothing else awaits would surface as an unhandled rejection.
+      // Return the startup promise so callers can await initialization and the
+      // constructor's error handler can catch startup failures.
       return initialization;
     } else {
       return this.initialized;
@@ -568,19 +566,12 @@ export class WorkerPoolManager {
   }
 
   /**
-   * A worker's `error` event: an uncaught exception inside the worker, or a
-   * worker script that failed to load (a plain `Event` with no message in that
-   * case). The host receives the event through `onWorkerError`, where it can
-   * `preventDefault()` to keep an error the pool has handled from also being
-   * reported as uncaught on the page; without the hook the event is logged.
+   * Pass worker errors to onWorkerError, or log them if no callback is set.
    *
-   * Only a pending `initialize` request is settled here: a worker that failed
-   * to start never answers it, and the rejection fails the pool over to
-   * main-thread rendering through `initialize()`'s catch. Any other request
-   * stays pending. worker.ts answers every request it runs, with an `error`
-   * response when the request itself failed, so an `error` event from a
-   * running worker does not mean its current request failed; a worker that
-   * crashed instead never answers, stays busy, and gets no new work.
+   * A startup error rejects initialization so components can highlight on the
+   * main thread. Other requests wait for their own responses: worker.ts catches
+   * request errors, so this event may be unrelated to the current request.
+   * A worker that stops responding remains busy and receives no further work.
    */
   private handleWorkerError(
     managedWorker: ManagedWorker,
@@ -842,8 +833,7 @@ export class WorkerPoolManager {
 
   private queueInitialization(languages?: SupportedLanguages[]): void {
     void this.initialize(languages).catch((error) => {
-      // A worker failure the host already received through `onWorkerError` is
-      // not logged a second time when it settles the initialization.
+      // Skip cancellations and worker errors already passed to onWorkerError.
       if (isHandledWorkerPoolError(error)) {
         return;
       }
@@ -1619,10 +1609,9 @@ function normalizeWorkerError(error: unknown): Error {
   return new Error(String(error));
 }
 
-// The Error a worker's `error` event stands for. A worker that threw while it
-// ran reports an ErrorEvent with a message and usually the thrown `error`,
-// which rides along as the cause; a worker script that never loaded fires a
-// plain Event with neither, so that case is named here.
+// Convert a worker error event into a startup error, preserving its cause.
+// Script load failures can provide a plain Event without an error or message,
+// so use a default message when no details are available.
 function errorFromWorkerErrorEvent(
   event: ErrorEvent | Event
 ): WorkerPoolWorkerError {

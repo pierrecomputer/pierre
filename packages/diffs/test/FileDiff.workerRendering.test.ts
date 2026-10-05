@@ -144,8 +144,8 @@ test('a pool terminated while a diff primes its highlight logs nothing', async (
     const primed = diffInstance.primeHighlightCache(diff);
     await worker.waitForDiffRequest();
 
-    // The last consumer leaving terminates the pool with the prime in flight:
-    // a cancellation the renderer settles, not an error it reports.
+    // Terminating the pool cancels the pending highlight without logging
+    // an error.
     manager.terminate();
     await primed;
 

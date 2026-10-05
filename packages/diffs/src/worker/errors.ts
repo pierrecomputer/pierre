@@ -1,9 +1,6 @@
-// The errors the worker pool settles a promise with when no worker result is
-// coming, and the predicates a caller uses to tell them from highlight
-// failures. This module imports nothing: the components and renderers of the
-// main `@pierre/diffs` entry use the predicates, and importing them from
-// `WorkerPoolManager` would pull the pool and its dependencies into that
-// bundle.
+// Error types shared by the worker pool and its consumers. Keep this module
+// free of imports so components can handle pool errors without loading the
+// pool implementation and its dependencies.
 
 /** The pool was terminated while the operation was pending. */
 export class WorkerPoolTerminatedError extends Error {
@@ -13,7 +10,7 @@ export class WorkerPoolTerminatedError extends Error {
   }
 }
 
-/** The task was superseded or dropped before a worker answered it. */
+/** The task was replaced or removed before it completed. */
 export class WorkerPoolTaskCanceledError extends Error {
   constructor() {
     super('WorkerPoolManager: operation canceled before the task completed');
@@ -22,10 +19,9 @@ export class WorkerPoolTaskCanceledError extends Error {
 }
 
 /**
- * A pooled worker fired an `error` event while it initialized: an uncaught
- * exception inside the worker, or a worker script that failed to load. The
- * pool rejects `initialize()` and the cache primes it had queued with this
- * error, then falls back to main-thread rendering.
+ * A worker failed during initialization. The pool rejects initialization and
+ * pending highlight requests with this error. Components then highlight on
+ * the main thread.
  */
 export class WorkerPoolWorkerError extends Error {
   constructor(message: string, options?: ErrorOptions) {
@@ -34,24 +30,20 @@ export class WorkerPoolWorkerError extends Error {
   }
 }
 
-// The worker errors whose `error` event the host received through
-// `WorkerPoolOptions.onWorkerError`. Tracked here rather than as a field so the
-// error's public shape carries no pool state.
+// Track errors passed to onWorkerError without adding fields to the errors.
 const reportedWorkerErrors = new WeakSet<WorkerPoolWorkerError>();
 
 /**
- * Records that the host received the `error` event behind this error, so the
- * pool and the components do not log the failure a second time. Called by the
- * pool only; not exported from the package entry.
+ * Mark a worker error as reported so the pool and its consumers do not log it
+ * again. Used internally by the pool; not exported from the package entry.
  */
 export function markWorkerErrorReported(error: WorkerPoolWorkerError): void {
   reportedWorkerErrors.add(error);
 }
 
 /**
- * True for the two errors the pool uses to settle a promise it will never
- * fulfill: the pool was terminated, or the task was superseded or dropped
- * before a worker answered. Neither is a failure of the highlight itself.
+ * Returns true when an operation was canceled because the pool was terminated
+ * or the task was replaced or removed before completion.
  */
 export function isWorkerPoolCancellation(
   error: unknown
@@ -63,10 +55,8 @@ export function isWorkerPoolCancellation(
 }
 
 /**
- * True when the pool has already accounted for a rejection: a cancellation, or
- * a worker failure the host received through `onWorkerError`. A caller that
- * logs highlight failures skips these, otherwise one handled event is reported
- * as several errors.
+ * Returns true for cancellations and worker errors passed to onWorkerError.
+ * Callers use this to skip cancellation logs and duplicate error reports.
  */
 export function isHandledWorkerPoolError(error: unknown): boolean {
   return (
