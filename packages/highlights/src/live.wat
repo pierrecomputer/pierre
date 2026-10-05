@@ -1285,7 +1285,7 @@
       (local.get $dst)
       (i32.or (i32.const 0x80) (i32.and (local.get $s) (i32.const 63)))))
 
-  ;; Write replacement line $line (an absolute pre-gap slot index) with its
+  ;; Write replacement line $line (a logical line index) with its
   ;; content copied out of the splice scratch region.
   (func $lvEmitSpliceLine
     (param $line i32)
@@ -1299,7 +1299,7 @@
       (then
         (local.set $tp (call $lvAlloc (local.get $len)))
         (memory.copy (local.get $tp) (local.get $src) (local.get $len))))
-    (local.set $slot (i32.add (global.get $lvLineTab) (i32.shl (local.get $line) (i32.const 5))))
+    (local.set $slot (call $lvSlot (local.get $line)))
     (i32.store (local.get $slot) (local.get $tp))
     (i32.store offset=4 (local.get $slot) (local.get $len))
     (i32.store offset=8 (local.get $slot) (call $lvUtf16Len (local.get $src) (local.get $len)))
@@ -1569,7 +1569,8 @@
             (local.set $p (i32.add (local.get $p) (i32.const 1)))))
         (br $count)))
     (local.set $n0 (i32.add (i32.sub (local.get $eLine) (local.get $sLine)) (i32.const 1)))
-    (call $lvEnsureLines (local.get $n))
+    (if (i32.ne (local.get $n) (local.get $n0))
+      (then (call $lvEnsureLines (local.get $n))))
     ;; The last replacement line corresponds to the old end line, so it
     ;; inherits that line's outgoing state id: a state-neutral edit then
     ;; converges on the edited line itself with no extra re-tokenization.
@@ -1592,8 +1593,12 @@
               (then (call $lvRelease (i32.load offset=20 (local.get $b)))))))
         (local.set $j (i32.add (local.get $j) (i32.const 1)))
         (br $free)))
-    (call $lvMoveGap (local.get $sLine))
-    (global.set $lvLineCount (i32.sub (global.get $lvLineCount) (local.get $n0)))
+    (if (i32.ne (local.get $n) (local.get $n0))
+      (then
+        (call $lvMoveGap (local.get $sLine))
+        (global.set $lvGapAt (i32.add (local.get $sLine) (local.get $n)))
+        (global.set $lvLineCount
+          (i32.add (i32.sub (global.get $lvLineCount) (local.get $n0)) (local.get $n)))))
     ;; emit the replacement lines straight from the scratch region
     (local.set $j (i32.const 0))
     (local.set $segStart (i32.const 0))
@@ -1644,8 +1649,6 @@
       (local.get $eState))
     (if (local.get $scratch)
       (then (call $lvFree (local.get $scratch))))
-    (global.set $lvGapAt (i32.add (local.get $sLine) (local.get $n)))
-    (global.set $lvLineCount (i32.add (global.get $lvLineCount) (local.get $n)))
     (call $lvFreeLineText (local.get $sText) (local.get $sByteLen) (local.get $sFlags))
     (if (i32.eqz (local.get $same))
       (then (call $lvFreeLineText (local.get $eText) (local.get $eByteLen) (local.get $eFlags))))

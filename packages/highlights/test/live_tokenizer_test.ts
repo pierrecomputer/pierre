@@ -28,6 +28,9 @@ t.before(() => {
     url,
     `(module
       (import "../src/highlights.wat")
+      (export "lineGap" (global $lvGapAt))
+      (export "lineCap" (global $lvLineCap))
+      (export "lineTable" (global $lvLineTab))
       (global (export "freeHeads") i32 (i32.const $mem.liveFree)))`
   );
   wasmModule = new WebAssembly.Module(wat2wasm(url.pathname, code));
@@ -1729,6 +1732,126 @@ void t.test('LiveTokenizer: line accessors check bounds', () => {
   }
   live.dispose();
 });
+
+void t.test(
+  'live wasm: equal-line replacements preserve the gap and capacity',
+  () => {
+    interface RawLive {
+      memory: WebAssembly.Memory;
+      lineGap: WebAssembly.Global;
+      lineCap: WebAssembly.Global;
+      lineTable: WebAssembly.Global;
+      liveStage(len: number): number;
+      liveInitDoc(ptr: number, len: number, lang: number): void;
+      liveApplyEdits(ptr: number): void;
+      liveRun(budget: number): number;
+      liveLineCount(): number;
+      liveLineByteLen(i: number): number;
+      liveLineTextPtr(i: number): number;
+      liveLineTokPtr(i: number): number;
+      liveLineTokCount(i: number): number;
+    }
+    const env = { is_id_start: () => 1, is_id_continue: () => 1 };
+    const raw = new WebAssembly.Instance(wasmModule, { env })
+      .exports as unknown as RawLive;
+    const enc = new TextEncoder();
+    const dec = new TextDecoder();
+    let code = Array(256).fill('const value = 1;').join('\n');
+    const bytes = enc.encode(code);
+    const ptr = raw.liveStage(bytes.length);
+    new Uint8Array(raw.memory.buffer).set(bytes, ptr);
+    raw.liveInitDoc(ptr, bytes.length, LANGS.ts);
+    raw.liveRun(0x7fffffff);
+    assert.equal(raw.lineCap.value, raw.liveLineCount());
+
+    for (const [sl, sc, el, ec, newText] of [
+      [0, 14, 0, 15, '2'],
+      [255, 14, 255, 15, '3'],
+      [0, 14, 0, 15, '4'],
+      [255, 14, 255, 15, '5'],
+      [32, 0, 32, 0, 'let a = 0;\n'],
+      [0, 14, 0, 15, '6'],
+      [256, 14, 256, 15, '7'],
+      [33, 0, 35, 16, '/* first\rmiddle\r\nend */'],
+      [34, 0, 34, 0, '\n'],
+      [33, 0, 35, 6, 'const a = 1;\nconst b = 2;\nconst c = 3;'],
+      [256, 16, 256, 16, '\n'],
+      [0, 0, 1, 0, ''],
+      [255, 14, 255, 15, '8'],
+    ] as const) {
+      const count = raw.liveLineCount();
+      const gap = raw.lineGap.value;
+      const capacity = raw.lineCap.value;
+      const table = raw.lineTable.value;
+      const text = enc.encode(newText);
+      const staged = raw.liveStage(28 + text.length);
+      new Uint32Array(raw.memory.buffer, staged, 7).set([
+        1,
+        sl,
+        sc,
+        el,
+        ec,
+        28,
+        text.length,
+      ]);
+      new Uint8Array(raw.memory.buffer).set(text, staged + 28);
+      raw.liveApplyEdits(staged);
+      raw.liveRun(0x7fffffff);
+      code = applyToMirror(code, [
+        {
+          range: {
+            start: { line: sl, character: sc },
+            end: { line: el, character: ec },
+          },
+          newText,
+        },
+      ]);
+      if (docLines(code).length === count) {
+        assert.equal(
+          raw.lineGap.value,
+          gap,
+          'gap stays at the last structural edit'
+        );
+        assert.equal(
+          raw.lineCap.value,
+          capacity,
+          'no extra descriptors are needed'
+        );
+        assert.equal(
+          raw.lineTable.value,
+          table,
+          'the descriptor table stays in place'
+        );
+      }
+      const fresh = new LiveTokenizer({ lang: 'ts', theme: pierreDark, code });
+      try {
+        assert.equal(raw.liveLineCount(), fresh.lineCount);
+        for (let line = 0; line < fresh.lineCount; line++) {
+          assert.equal(
+            dec.decode(
+              new Uint8Array(
+                raw.memory.buffer,
+                raw.liveLineTextPtr(line),
+                raw.liveLineByteLen(line)
+              )
+            ),
+            fresh.getLineText(line)
+          );
+          assert.deepEqual(
+            new Uint32Array(
+              raw.memory.buffer,
+              raw.liveLineTokPtr(line),
+              raw.liveLineTokCount(line)
+            ),
+            fresh.getLineRecords(line).data
+          );
+        }
+      } finally {
+        fresh.dispose();
+      }
+    }
+  }
+);
 
 void t.test('live wasm: compaction keeps the document intact', () => {
   // Drive the native exports directly so the compaction trigger (freed

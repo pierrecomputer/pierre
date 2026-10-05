@@ -228,6 +228,52 @@ for (const [name, source, lang] of [
   }
 }
 
+for (const count of [100_000, 1_000_000]) {
+  const source = 'const value = 1;\n'.repeat(count - 1) + 'const value = 1;';
+  for (const distant of [false, true]) {
+    const live = new LiveTokenizer({
+      lang: 'ts',
+      theme: pierreDark,
+      code: source,
+    });
+    try {
+      const edits: LiveTextEdit[][] = (
+        distant ? [0, count - 1, 0, count - 1] : [0, 0, 0, 0]
+      ).map((line, i) => [
+        {
+          range: {
+            start: { line, character: 14 },
+            end: { line, character: 15 },
+          },
+          newText: (distant ? i < 2 : i % 2 === 0) ? '2' : '1',
+        },
+      ]);
+      let i = 0;
+      const [sample] = measure([
+        () => {
+          const edit = edits[i++ % edits.length];
+          live.applyEdits(edit);
+          return live.getLineRecords(edit[0].range.start.line);
+        },
+      ]);
+      assert.equal(live.lineCount, count);
+      const [lastEdit] = edits[(i - 1) % edits.length];
+      assert.equal(
+        live.getLineText(lastEdit.range.start.line),
+        `const value = ${lastEdit.newText};`
+      );
+      bench(
+        `synthetic ${count / 1000}k lines`,
+        distant ? 'alternating top/end + read' : 'local edit + read',
+        sample,
+        '1'
+      );
+    } finally {
+      live.dispose();
+    }
+  }
+}
+
 const pad = (s: string, w: number, right = false) =>
   right ? s.padStart(w) : s.padEnd(w);
 const cols = [
