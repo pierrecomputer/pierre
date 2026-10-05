@@ -9,6 +9,7 @@ import {
   distinctTheme,
   exactColor,
   loadLang,
+  makeRand,
   spansOf,
   type TestLang,
   textOf,
@@ -315,13 +316,12 @@ void t.test(
     assert.equal(textOf(html), new TextDecoder().decode(bytes));
     spansOf(html);
 
-    let state = 0x74_6f_6d_6c;
+    const rand = makeRand(0x74_6f_6d_6c);
     const alphabet = 'abcXYZ09_- #=.,\'\\"\n\r\t[]{}:+é';
     for (let sample = 0; sample < 160; sample++) {
       let src = '';
-      for (let n = state & 63; n-- !== 0; ) {
-        state = (Math.imul(state, 1664525) + 1013904223) >>> 0;
-        src += alphabet[state % alphabet.length];
+      for (let n = rand() & 63; n-- !== 0; ) {
+        src += alphabet[rand() % alphabet.length];
       }
       checkInvariants(toml.hl, src);
     }

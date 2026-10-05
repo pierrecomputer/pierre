@@ -720,11 +720,30 @@
             (return (enum.get $Token.variable.parameter))))))
     (if (call $isBuiltinConst (local.get $lhs) (local.get $rhs))
       (then (return (enum.get $Token.constant.builtin))))
-    ;; nested so the word compare only runs for identifiers after a colon
-    (if (i32.and (i32.eq (local.get $prev) (enum.get $Lex.colon)) (call $ecmaHasTypeScript))
+    (if (call $ecmaHasTypeScript)
       (then
         (if (call $isPredefinedType (local.get $lhs) (local.get $rhs))
-          (then (return (enum.get $Token.type.builtin))))))
+          (then
+            (if (i32.eq (local.get $prev) (enum.get $Lex.colon))
+              (then (return (enum.get $Token.type.builtin))))
+            (if (i32.eq (local.get $prev) (enum.get $Lex.keyword_extends))
+              (then
+                (if (i32.or
+                      (i32.or (i32.eq (local.get $next) (enum.get $Lex.r_angle))
+                        (i32.eq (local.get $next) (enum.get $Lex.r_shift)))
+                      (i32.or (i32.eq (local.get $next) (enum.get $Lex.question_mark))
+                        (i32.or (i32.eq (local.get $next) (enum.get $Lex.pipe))
+                          (i32.eq (local.get $next) (enum.get $Lex.ampersand)))))
+                  (then (return (enum.get $Token.type.builtin))))))
+            (if (i32.eq (local.get $prev) (enum.get $Lex.identifier))
+              (then
+                (local.set $c (call $tsBlanksBefore (local.get $lhs)))
+                (if (i32.ge_u (i32.sub (local.get $c) (global.get $srcBase)) (i32.const 6))
+                  (then
+                    (if (i32.and
+                          (i64.eq (i64.and (i64.load (i32.sub (local.get $c) (i32.const 6))) (i64.const 0xffffffffffff)) (i64.const "unique"))
+                          (i32.eqz (call $jsxNameStart (call $tsByteBefore (i32.sub (local.get $c) (i32.const 6))))))
+                      (then (return (enum.get $Token.type.builtin))))))))))))
     ;; `new C` - but in `new ns.C` the namespace is an ordinary name (a `.`
     ;; on the next line has not arrived yet in a line-fed chunk)
     (if (i32.eq (local.get $prev) (enum.get $Lex.keyword_new))

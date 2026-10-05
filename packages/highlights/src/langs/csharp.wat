@@ -121,7 +121,8 @@
   ;; Scan a string body from $ptr with the string's bytes since $seg still
   ;; unemitted. $kind is 1 for a regular literal - escapes, one line - 2 for
   ;; a `@` verbatim literal - `""` escapes, many lines - and 3 for a `"""`
-  ;; raw literal. $interp is 1 for a `$` literal, whose `{` opens an
+  ;; raw literal. Kinds 4..6 scan their format text until `}`. $interp is 1
+  ;; for a `$` literal, whose `{` opens an
   ;; interpolation while `{{` and `}}` stay literal braces; $nested is
   ;; nonzero inside an interpolation, where a nested string keeps its braces
   ;; plain so one brace depth suffices. Returns 1 past the closing quote, 2
@@ -147,7 +148,7 @@
         ;; is found with one SIMD hop. The brace search also stops at the
         ;; next quote: past the literal's end it would walk to the next
         ;; brace anywhere in the file, once per literal.
-        (if (local.get $interp)
+        (if (i32.and (local.get $interp) (i32.lt_u (local.get $kind) (i32.const 4)))
           (then
             (if (i32.ge_u (global.get $ptr) (local.get $stop))
               (then
@@ -162,11 +163,18 @@
           (call $scanFindSpecial
             (global.get $ptr)
             (local.get $stop)
-            (i32.const 34)
-            (i32.eq (local.get $kind) (i32.const 1))
-            (i32.eq (local.get $kind) (i32.const 1))))
+            (select (i32.const "}") (i32.const 34) (i32.ge_u (local.get $kind) (i32.const 4)))
+            (i32.or (i32.eq (local.get $kind) (i32.const 1)) (i32.eq (local.get $kind) (i32.const 4)))
+            (i32.or (i32.eq (local.get $kind) (i32.const 1)) (i32.eq (local.get $kind) (i32.const 4)))))
         (br_if $done (i32.ge_u (global.get $ptr) (global.get $end)))
         (local.set $c (i32.load8_u (global.get $ptr)))
+        (if (i32.and (i32.ge_u (local.get $kind) (i32.const 4)) (i32.eq (local.get $c) (i32.const "}")))
+          (then
+            (call $emitTok (enum.get $Token.string) (local.get $seg) (global.get $ptr))
+            (local.set $seg (global.get $ptr))
+            (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
+            (call $emitTok (enum.get $Token.punctuation.special) (local.get $seg) (global.get $ptr))
+            (return (i32.const 1))))
         (if (i32.eq (local.get $c) (i32.const 34))
           (then
             (if (i32.eq (local.get $kind) (i32.const 2))
@@ -254,6 +262,7 @@
               (else (br $done)))))
         (local.set $n (i32.add (local.get $n) (i32.const 1)))
         (br_if $l (i32.lt_u (local.get $n) (i32.const 2)))))
+    (local.set $c (call $csByte (i32.add (local.get $p) (local.get $n))))
     (if (i32.ne (local.get $c) (i32.const 34))
       (then (return (i32.const 0))))
     (i32.or (i32.const 256) (i32.or (local.get $flags) (i32.shl (local.get $n) (i32.const 4)))))
@@ -263,7 +272,8 @@
 
   ;; $strKind packs an open string body: 1 regular, 2 verbatim, 3 raw, with
   ;; bit 8 for an interpolated literal; $seg is the start of its bytes not
-  ;; yet emitted. $interp counts braces inside an interpolation and
+  ;; yet emitted; 4..6 represent format text in those three string forms.
+  ;; $interpDepth counts parentheses and brackets, $interp counts braces, and
   ;; $interpKind remembers which body to return to. $expect is the pending
   ;; next-name capture, $afterType is 1 right after a type - riding through
   ;; the `<`, `>`, `?`, `,`, `[`, `]`, and `.` of a generic, nullable,
@@ -292,6 +302,7 @@
     (local $seg i32)
     (local $interp i32)
     (local $interpKind i32)
+    (local $interpDepth i32)
     (local $status i32)
     (local $attr i32)
     (local $lineHead i32)
@@ -319,11 +330,24 @@
                 (local.get $interp)
                 (local.get $seg)))
             (local.set $seg (global.get $ptr))
+            (if (i32.and (i32.ge_u (local.get $strKind) (i32.const 4)) (i32.lt_u (local.get $strKind) (i32.const 256)))
+              (then
+                (if (i32.eq (local.get $status) (i32.const 1))
+                  (then
+                    (local.set $strKind (local.get $interpKind))
+                    (local.set $interp (i32.const 0))
+                    (local.set $interpKind (i32.const 0))))
+                (if (i32.and (i32.eq (local.get $strKind) (i32.const 4)) (i32.eqz (local.get $status)))
+                  (then
+                    (local.set $strKind (i32.const 0))
+                    (local.set $interp (i32.const 0))))
+                (br $next)))
             (if (i32.eq (local.get $status) (i32.const 2))
               (then
                 ;; `{` opened an interpolation: code until the matching `}`
                 (local.set $interpKind (local.get $strKind))
                 (local.set $interp (i32.const 1))
+                (local.set $interpDepth (i32.const 0))
                 (local.set $strKind (i32.const 0))
                 (local.set $seg (i32.const 0)))
               (else
@@ -603,6 +627,10 @@
             (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
             (if (local.get $interp)
               (then
+                (if (byteset.get "([" (local.get $c))
+                  (then (local.set $interpDepth (i32.add (local.get $interpDepth) (i32.const 1)))))
+                (if (i32.and (i32.ne (local.get $interpDepth) (i32.const 0)) (byteset.get ")]" (local.get $c)))
+                  (then (local.set $interpDepth (i32.sub (local.get $interpDepth) (i32.const 1)))))
                 (if (i32.eq (local.get $c) (i32.const "{"))
                   (then (local.set $interp (i32.add (local.get $interp) (i32.const 1)))))
                 (if (i32.eq (local.get $c) (i32.const "}"))
@@ -651,6 +679,12 @@
             (br $next)))
         (if (i32.eq (local.get $c) (i32.const ":"))
           (then
+            (if (i32.and
+                  (i32.and (i32.eq (local.get $interp) (i32.const 1)) (i32.eqz (local.get $interpDepth)))
+                  (i32.ne (local.get $c2) (i32.const ":")))
+              (then
+                (local.set $strKind (i32.add (i32.and (local.get $interpKind) (i32.const 255)) (i32.const 3)))
+                (local.set $seg (i32.add (global.get $ptr) (i32.const 1)))))
             (global.set $ptr
               (i32.add
                 (global.get $ptr)

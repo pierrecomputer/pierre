@@ -185,6 +185,8 @@
     (local $len i32)
     (local $q i32)
     (local $quotes i32)
+    (local $listStart i32)
+    (local $indent i32)
     ;; line prefix, as the markdown lexer keeps line-start meaning behind it:
     ;; spaces, `>` markers (counted), and list markers followed by a blank
     (block $prefixDone
@@ -206,7 +208,9 @@
                 (br_if $prefixDone
                   (i32.or
                     (i32.ge_u (local.get $q) (global.get $end))
-                    (i32.eqz (call $lexIsSpace (i32.load8_u (local.get $q))))))))))
+                    (i32.eqz (call $lexIsSpace (i32.load8_u (local.get $q))))))
+                (if (i32.eqz (local.get $listStart))
+                  (then (local.set $listStart (local.get $p))))))))
         (local.set $p (local.get $q))
         (br $prefix)))
     (if (i32.ge_u (local.get $p) (global.get $end))
@@ -224,6 +228,8 @@
         (local.set $q (i32.add (local.get $q) (i32.const 1)))
         (br $openRun)))
     (local.set $len (i32.sub (local.get $q) (local.get $p)))
+    (local.set $indent
+      (select (i32.sub (local.get $p) (local.get $listStart)) (i32.const 0) (local.get $listStart)))
     (if (i32.lt_u (local.get $len) (i32.const 3))
       (then (return (i32.const 0))))
     (local.set $close
@@ -231,7 +237,10 @@
         (call $markdownAfterLine (call $markdownLineEnd (local.get $q)))
         (local.get $fence)
         (local.get $len)
-        (local.get $quotes)))
+        (local.get $quotes)
+        (local.get $indent)))
+    (if (global.get $markdownFenceEnded)
+      (then (return (local.get $close))))
     ;; unterminated: the block runs to the end, exactly as markdown treats it
     (if (i32.ge_u (local.get $close) (global.get $end))
       (then (return (global.get $end))))

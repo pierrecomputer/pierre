@@ -181,6 +181,7 @@
   ;; recorded in $streamA (paren depth) and $streamB (inside `${`).
   (func $bashDoubleBody (param $seg i32) (result i32)
     (local $c i32)
+    (local $c2 i32)
     (local $e i32)
     (local $open i32)
     (local $stop i32)
@@ -212,6 +213,11 @@
             (return (i32.const 1))))
         (if (i32.eq (local.get $c) (i32.const 92))
           (then
+            (local.set $c2 (call $bashByte (i32.add (global.get $ptr) (i32.const 1))))
+            (if (i32.eqz (byteset.get "$`\22\5c\0a" (local.get $c2)))
+              (then
+                (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
+                (br $l)))
             (call $emitTok (enum.get $Token.string) (local.get $seg) (global.get $ptr))
             (local.set $e
               (call $utf8SpanEnd (i32.add (global.get $ptr) (i32.const 2)) (global.get $end)))

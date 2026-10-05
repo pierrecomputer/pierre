@@ -2476,37 +2476,41 @@ void t.test(
 void t.test(
   'LiveTokenizer: over-long lines use the theme foreground on every path',
   () => {
-    // update.lines and onDeferTokenize tuples must carry the same color
-    // getLineTokens reports for a line past tokenizeMaxLineLength
-    const long = `const x = "${'a'.repeat(1188)}";`;
-    assert.equal(long.length, 1201);
-    const code = `${long}\nlet y = 1;\nlet z = 2;\n`;
-    const deferred: Map<number, HighlightedToken[]>[] = [];
-    const live = new LiveTokenizer({
-      lang: 'ts',
-      theme: pierreDark,
-      code,
-      tokenizeMaxLineLength: 1000,
-      renderRange: [0, 0],
-      onDeferTokenize: (lines) => deferred.push(lines),
+    withSliceClock(() => {
+      // update.lines and onDeferTokenize tuples must carry the same color
+      // getLineTokens reports for a line past tokenizeMaxLineLength
+      const long = `const x = "${'a'.repeat(1188)}";`;
+      assert.equal(long.length, 1201);
+      const code = `${long}\nlet y = 1;\nlet z = 2;\n`;
+      const deferred: Map<number, HighlightedToken[]>[] = [];
+      const live = new LiveTokenizer({
+        lang: 'ts',
+        theme: pierreDark,
+        code,
+        tokenizeMaxLineLength: 1000,
+        renderRange: [0, 0],
+        onDeferTokenize: (lines) => deferred.push(lines),
+      });
+      try {
+        live.flush();
+        const fg = themeColor('foreground');
+        assert.ok(fg !== null);
+        const viaDefer = deferred.find((lines) => lines.has(0))?.get(0);
+        assert.deepEqual(viaDefer, [[0, fg, long]], 'onDeferTokenize tuple');
+        const viaUpdate = live
+          .reset(code, { renderRange: [0, 1] })
+          .lines.get(0);
+        assert.deepEqual(viaUpdate, [[0, fg, long]], 'update.lines tuple');
+        const { tokens } = live.getLineTokens(0);
+        assert.equal(tokens.length, 1);
+        assert.equal(tokens[0].color, fg, 'getLineTokens color');
+        // a line under the limit keeps its syntax colors in the tuples
+        const short = live.reset(code, { renderRange: [1, 2] }).lines.get(1);
+        assert.ok(short !== undefined && short.length > 1);
+      } finally {
+        live.dispose();
+      }
     });
-    try {
-      live.flush();
-      const fg = themeColor('foreground');
-      assert.ok(fg !== null);
-      const viaDefer = deferred.find((lines) => lines.has(0))?.get(0);
-      assert.deepEqual(viaDefer, [[0, fg, long]], 'onDeferTokenize tuple');
-      const viaUpdate = live.reset(code, { renderRange: [0, 1] }).lines.get(0);
-      assert.deepEqual(viaUpdate, [[0, fg, long]], 'update.lines tuple');
-      const { tokens } = live.getLineTokens(0);
-      assert.equal(tokens.length, 1);
-      assert.equal(tokens[0].color, fg, 'getLineTokens color');
-      // a line under the limit keeps its syntax colors in the tuples
-      const short = live.reset(code, { renderRange: [1, 2] }).lines.get(1);
-      assert.ok(short !== undefined && short.length > 1);
-    } finally {
-      live.dispose();
-    }
   }
 );
 

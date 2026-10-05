@@ -36,13 +36,13 @@ test('fortran: doubled quotes, BOZ literals, and kind suffixes', () => {
   }
 });
 
-test('fortran: separated column-one C comments and C variables', () => {
+test('fortran: free-form comments and C variables', () => {
   const kinds = tokenKinds(
     'fortran',
-    'C fixed comment\n      INTEGER n\nc = 3\ncall work(c) ! trailing'
+    '! comment\n      INTEGER n\nc = 3\ncall work(c) ! trailing'
   );
   for (const expected of [
-    ['C fixed comment', 'comment'],
+    ['! comment', 'comment'],
     ['INTEGER', 'type.builtin'],
     ['c', 'variable'],
     ['! trailing', 'comment'],
@@ -129,7 +129,8 @@ test('fortran-fixed-form: strings continue across column-six markers', () => {
 });
 
 test('fortran: free-form names keep column-one C words as code', () => {
-  const code = 'c = 1\ncontains\ncall work(c)\nC separated comment\n';
+  const code =
+    'c = 1\nc (1) = 2\nc % field = 1\ncontains\ncall work(c)\n! comment\n';
   for (const lang of [
     'fortran',
     'fortran-free-form',
@@ -142,8 +143,12 @@ test('fortran: free-form names keep column-one C words as code', () => {
     expect(kinds).toContainEqual(['c', 'variable']);
     expect(kinds).toContainEqual(['contains', 'keyword']);
     expect(kinds).toContainEqual(['call', 'keyword.control']);
-    expect(kinds).toContainEqual(['C separated comment', 'comment']);
-    expect(kinds).not.toContainEqual(['c = 1', 'comment']);
+    expect(kinds.filter(([, kind]) => kind === 'comment')).toEqual([
+      ['! comment', 'comment'],
+    ]);
+    expect(kinds).toContainEqual(['field', 'property']);
+    expect(kinds).toContainEqual(['2', 'number']);
+    assertLineFedParity(lang, code);
   }
 });
 
