@@ -239,20 +239,36 @@
   ;; wide loads may read up to 15 bytes past $rhs: always inside the input
   ;; buffer or the 16-byte slack, never past $cap. wide stores may write up to
   ;; 15 bytes of garbage past the advanced cursor; later writes overwrite it.
-  ;; caller has ensured capacity for 5*length + 16.
+  ;; caller has ensured capacity for 5*min(length,4096) + 16.
   (func $escCopy (param $lhs i32) (param $rhs i32)
     (local $c i32)
     (local $mask i32)
     (local $k i32)
     (local $rem i32)
+    (local $dst i32)
+    (local $limit i32)
     (local $w v128)
+    (local.set $dst (global.get $out))
+    (local.set $limit
+      (select (local.get $rhs) (i32.add (local.get $lhs) (i32.const 4096))
+        (i32.le_u (i32.sub (local.get $rhs) (local.get $lhs)) (i32.const 4096))))
     (block $done
       (loop $outer
         (br_if $done (i32.ge_u (local.get $lhs) (local.get $rhs)))
+        (if (i32.ge_u (local.get $lhs) (local.get $limit))
+          (then
+            (local.set $limit
+              (select (local.get $rhs) (i32.add (local.get $lhs) (i32.const 4096))
+                (i32.le_u (i32.sub (local.get $rhs) (local.get $lhs)) (i32.const 4096))))
+            (global.set $out (local.get $dst))
+            (call $ensureCap
+              (i32.add
+                (i32.mul (i32.sub (local.get $limit) (local.get $lhs)) (i32.const 5))
+                (i32.const 16)))))
         (block $special
           (loop $wide
             (local.set $w (v128.load (local.get $lhs)))
-            (v128.store (global.get $out) (local.get $w))
+            (v128.store (local.get $dst) (local.get $w))
             ;; `<` and `>` differ only in bit 1, so one masked compare finds both
             (local.set $mask
               (i8x16.bitmask
@@ -261,38 +277,40 @@
                     (v128.and (local.get $w) (i8x16.splat (i32.const 0xfd)))
                     (i8x16.splat (i32.const "<")))
                   (i8x16.eq (local.get $w) (i8x16.splat (i32.const "&"))))))
-            (local.set $rem (i32.sub (local.get $rhs) (local.get $lhs)))
+            (local.set $rem (i32.sub (local.get $limit) (local.get $lhs)))
             (if (local.get $mask)
               (then
                 (local.set $k (i32.ctz (local.get $mask)))
-                ;; Ignore specials in the lookahead past $rhs.
+                ;; Ignore specials in the lookahead past the reserved chunk.
                 (if (i32.lt_u (local.get $k) (local.get $rem))
                   (then
-                    (global.set $out (i32.add (global.get $out) (local.get $k)))
+                    (local.set $dst (i32.add (local.get $dst) (local.get $k)))
                     (local.set $lhs (i32.add (local.get $lhs) (local.get $k)))
                     (br $special)))))
             (if (i32.le_u (local.get $rem) (i32.const 16))
               (then
-                (global.set $out (i32.add (global.get $out) (local.get $rem)))
-                (br $done)))
-            (global.set $out (i32.add (global.get $out) (i32.const 16)))
+                (local.set $dst (i32.add (local.get $dst) (local.get $rem)))
+                (local.set $lhs (local.get $limit))
+                (br $outer)))
+            (local.set $dst (i32.add (local.get $dst) (i32.const 16)))
             (local.set $lhs (i32.add (local.get $lhs) (i32.const 16)))
             (br $wide)))
         (local.set $c (i32.load8_u (local.get $lhs)))
         (if (i32.eq (local.get $c) (i32.const "&"))
           (then
-            (i64.store (global.get $out) (i64.const "&amp;"))
-            (global.set $out (i32.add (global.get $out) (i32.const 5))))
+            (i64.store (local.get $dst) (i64.const "&amp;"))
+            (local.set $dst (i32.add (local.get $dst) (i32.const 5))))
           (else
             (if (i32.eq (local.get $c) (i32.const "<"))
               (then
-                (i32.store (global.get $out) (i32.const "&lt;"))
-                (global.set $out (i32.add (global.get $out) (i32.const 4))))
+                (i32.store (local.get $dst) (i32.const "&lt;"))
+                (local.set $dst (i32.add (local.get $dst) (i32.const 4))))
               (else
-                (i32.store (global.get $out) (i32.const "&gt;"))
-                (global.set $out (i32.add (global.get $out) (i32.const 4)))))))
+                (i32.store (local.get $dst) (i32.const "&gt;"))
+                (local.set $dst (i32.add (local.get $dst) (i32.const 4)))))))
         (local.set $lhs (i32.add (local.get $lhs) (i32.const 1)))
-        (br $outer))))
+        (br $outer)))
+    (global.set $out (local.get $dst)))
 
   ;; token-record mode: append an (end:u32, hl:u32) record covering up to
   ;; input offset $rhs, or extend the previous record when its $hl matches -
@@ -499,15 +517,20 @@
 
   ;; emit the token bytes [$lhs,$rhs) styled as $hl
   (func $emitTok (param $hl i32) (param $lhs i32) (param $rhs i32)
+    (local $len i32)
     (if (i32.ge_u (local.get $lhs) (local.get $rhs))
       (then (return)))
     (if (global.get $tokens)
       (then
         (call $recTok (local.get $hl) (local.get $rhs))
         (return)))
+    ;; Reserving five times a large token retains unused linear memory.
+    ;; Escape 4 KiB at a time, keeping the same span through every chunk.
+    (local.set $len (i32.sub (local.get $rhs) (local.get $lhs)))
+    (local.set $len (select (local.get $len) (i32.const 4096) (i32.lt_u (local.get $len) (i32.const 4096))))
     (call $ensureCap
       (i32.add
-        (i32.mul (i32.sub (local.get $rhs) (local.get $lhs)) (i32.const 5))
+        (i32.mul (local.get $len) (i32.const 5))
         (global.get $spanReserve)))
     (call $setSpan (local.get $hl))
     (call $escCopy (local.get $lhs) (local.get $rhs)))

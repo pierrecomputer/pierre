@@ -325,8 +325,18 @@ let wasmModule: WebAssembly.Module | undefined;
 let pooledStreamHighlighter: HighlightsHighlighter | undefined;
 
 /** The shared highlighter, or throw before `init`. */
-function assertShared(): HighlightsHighlighter {
+function assertShared(
+  input: string | Uint8Array | ArrayBuffer
+): HighlightsHighlighter {
   if (shared == null) throw new Error('highlights is not initialized');
+  // Wasm memory cannot shrink. Replace instances above 8 MiB when small
+  // inputs resume, but keep reusing capacity for consecutive large calls.
+  if (
+    shared.pageN > 128 &&
+    (typeof input === 'string' ? input.length : input.byteLength) <= pageSize
+  ) {
+    shared = new HighlightsHighlighter(shared.wasmModule);
+  }
   return shared;
 }
 
@@ -362,7 +372,7 @@ export function codeToHtml(
   input: string | Uint8Array | ArrayBuffer,
   options: CodeToHtmlOptions
 ): Uint8Array {
-  return assertShared().codeToHtml(input, options);
+  return assertShared(input).codeToHtml(input, options);
 }
 
 /**
@@ -373,7 +383,7 @@ export function codeToTokens(
   input: string | Uint8Array | ArrayBuffer,
   options: CodeToTokensOptions
 ): TokensResult {
-  return assertShared().codeToTokens(input, options);
+  return assertShared(input).codeToTokens(input, options);
 }
 
 /**
