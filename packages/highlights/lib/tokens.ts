@@ -202,6 +202,23 @@ export function rangeToToken(
   return token;
 }
 
+function themeHtmlStyles(
+  themes: ResolvedTheme[],
+  cssVariablePrefix: string
+): Record<string, string>[] {
+  let prefixes = htmlStyleCache.get(themes);
+  if (prefixes === undefined) {
+    prefixes = new Map();
+    htmlStyleCache.set(themes, prefixes);
+  }
+  let slots = prefixes.get(cssVariablePrefix);
+  if (slots === undefined) {
+    slots = [];
+    prefixes.set(cssVariablePrefix, slots);
+  }
+  return slots;
+}
+
 /**
  * The `htmlStyle` map of token id `hl` under a multi-theme set: the default
  * theme's plain `color`, `font-style`, and `font-weight`, the other themes as
@@ -213,16 +230,7 @@ export function themeHtmlStyle(
   hl: number,
   cssVariablePrefix: string
 ): Record<string, string> {
-  let prefixes = htmlStyleCache.get(themes);
-  if (prefixes === undefined) {
-    prefixes = new Map();
-    htmlStyleCache.set(themes, prefixes);
-  }
-  let slots = prefixes.get(cssVariablePrefix);
-  if (slots === undefined) {
-    slots = [];
-    prefixes.set(cssVariablePrefix, slots);
-  }
+  const slots = themeHtmlStyles(themes, cssVariablePrefix);
   let htmlStyle = slots[hl];
   if (htmlStyle === undefined) {
     if (themes[0].role === 'light-dark') {
@@ -411,63 +419,66 @@ export function lineRecordsToTokens(
   offsetBase = 0
 ): ThemedToken[][] {
   const lines: ThemedToken[][] = [];
-  let line: ThemedToken[] = [];
-  let start = 0;
-  let lineStart = 0;
   const max = maxLineLength ?? 0;
-  for (let rec = 0; rec < recs.length; rec += 2) {
-    const end = recs[rec];
-    const hl = recs[rec + 1];
-    if (hl === 0xffffffff) {
-      if (max > 0 && start - lineStart >= max) {
-        line = [
-          rangeToToken(
-            code,
-            lineStart,
-            start,
-            0,
-            themes,
-            cssVariablePrefix,
-            offsetBase
-          ),
-        ];
+  const { styles, fg, role } = themes[0];
+  const htmlStyles =
+    role === 'single' ? undefined : themeHtmlStyles(themes, cssVariablePrefix);
+  let start = 0;
+  for (let rec = 0; ; rec += 2) {
+    const first = rec;
+    while (rec < recs.length && recs[rec + 1] !== 0xffffffff) rec += 2;
+    const end = rec === first ? start : recs[rec - 2];
+    let line: ThemedToken[];
+    if (max > 0 && end - start >= max) {
+      line = [
+        rangeToToken(
+          code,
+          start,
+          end,
+          0,
+          themes,
+          cssVariablePrefix,
+          offsetBase
+        ),
+      ];
+    } else {
+      line = new Array((rec - first) / 2);
+      let count = 0;
+      for (let at = first; at < rec; at += 2) {
+        const end = recs[at];
+        if (end > start) {
+          const hl = recs[at + 1];
+          let token: ThemedToken;
+          if (htmlStyles === undefined) {
+            const style = styles[hl];
+            token = {
+              content: code.slice(start, end),
+              offset: start + offsetBase,
+              color: style?.color ?? fg,
+              fontStyle:
+                (style?.italic === true ? 1 : 0) |
+                ((style?.weight ?? 0) >= 600 ? 2 : 0),
+            };
+          } else {
+            token = {
+              content: code.slice(start, end),
+              offset: start + offsetBase,
+              htmlStyle:
+                htmlStyles[hl] ?? themeHtmlStyle(themes, hl, cssVariablePrefix),
+            };
+          }
+          const type = standardTypes[hl];
+          if (type !== 0) token.type = type;
+          line[count++] = token;
+          start = end;
+        }
       }
-      lines.push(line);
-      line = [];
-      start = end;
-      lineStart = end;
-    } else if (end > start) {
-      // Overlong lines collapse below; skip tokens that would be discarded.
-      if (!(max > 0 && end - lineStart >= max)) {
-        line.push(
-          rangeToToken(
-            code,
-            start,
-            end,
-            hl,
-            themes,
-            cssVariablePrefix,
-            offsetBase
-          )
-        );
-      }
-      start = end;
+      line.length = count;
     }
+    lines.push(line);
+    if (rec === recs.length) break;
+    start = recs[rec];
   }
-  if (max > 0 && start - lineStart >= max) {
-    line = [
-      rangeToToken(
-        code,
-        lineStart,
-        start,
-        0,
-        themes,
-        cssVariablePrefix,
-        offsetBase
-      ),
-    ];
-  }
-  lines.push(line);
   return lines;
 }
 

@@ -15,7 +15,12 @@ import {
   LiveTokenizer,
   StreamTokenizer,
 } from '../lib/index';
-import { rangeToToken, resolveOptionThemes } from '../lib/tokens';
+import tokenTypes from '../lib/token-types';
+import {
+  lineRecordsToTokens,
+  rangeToToken,
+  resolveOptionThemes,
+} from '../lib/tokens';
 import { transformWat, wat2wasm } from '../scripts/build';
 import { cssVariables } from '../themes/index';
 import pierreDarkVibrant from '../themes/pierre-dark-vibrant.json' with { type: 'json' };
@@ -49,6 +54,96 @@ t.before(() => {
 /** join a line's token contents back together */
 const lineText = (tokens: ThemedToken[]) =>
   tokens.map((tk) => tk.content).join('');
+
+void t.test('line records preserve every token style and line boundary', () => {
+  const code = 'x'.repeat(tokenTypes.length) + '\r\n\n🙂\n';
+  const comment = tokenTypes.indexOf('comment');
+  const records = new Uint32Array([
+    0,
+    0,
+    ...tokenTypes.flatMap((_, hl) => [hl + 1, hl]),
+    tokenTypes.length + 2,
+    0xffffffff,
+    tokenTypes.length + 3,
+    0xffffffff,
+    code.length - 1,
+    comment,
+    code.length,
+    0xffffffff,
+  ]);
+  const fontTheme: Theme = {
+    name: 'font styles',
+    appearance: 'dark',
+    style: {
+      foreground: '#abcdef',
+      syntax: {
+        keyword: { font_style: 'italic', font_weight: 600 },
+        comment: { font_style: 'italic', font_weight: 500 },
+        string: { font_weight: 700 },
+      },
+    },
+  };
+  const options: CodeToTokensOptions[] = [
+    ...[
+      pierreDark,
+      pierreDarkVibrant,
+      cssVariables,
+      fontTheme,
+      { name: 'empty', appearance: 'dark', style: {} },
+    ].map((theme) => ({ lang: 'ts' as const, theme })),
+    ...([false, 'light', 'light-dark()'] as const).map((defaultColor) => ({
+      lang: 'ts' as const,
+      themes: { light: pierreLight, dark: fontTheme },
+      defaultColor,
+    })),
+  ];
+  for (const option of options) {
+    for (const prefix of ['--one-', '--two-']) {
+      const themes = resolveOptionThemes({
+        ...option,
+        cssVariablePrefix: prefix,
+      });
+      for (const offsetBase of [0, 37]) {
+        for (const max of [undefined, 0, 2, tokenTypes.length, code.length]) {
+          const expected = [
+            max !== undefined && max > 0 && tokenTypes.length >= max
+              ? [
+                  rangeToToken(
+                    code,
+                    0,
+                    tokenTypes.length,
+                    0,
+                    themes,
+                    prefix,
+                    offsetBase
+                  ),
+                ]
+              : tokenTypes.map((_, hl) =>
+                  rangeToToken(code, hl, hl + 1, hl, themes, prefix, offsetBase)
+                ),
+            [],
+            [
+              rangeToToken(
+                code,
+                code.length - 3,
+                code.length - 1,
+                max === 2 ? 0 : comment,
+                themes,
+                prefix,
+                offsetBase
+              ),
+            ],
+            [],
+          ];
+          assert.deepStrictEqual(
+            lineRecordsToTokens(code, records, themes, prefix, max, offsetBase),
+            expected
+          );
+        }
+      }
+    }
+  }
+});
 
 void t.test(
   'string input preserves UTF-8 across memory growth and reuse',
