@@ -2,10 +2,9 @@ import type { CodeToHtmlOptions, ThemedToken, TokensResult } from './index';
 import type { PreparedTheme } from './theme';
 import {
   escapeAttribute,
+  packHtmlOpeners,
   prepareTheme,
   themeTableBytes,
-  variableRootTag,
-  variableSpanTag,
 } from './theme';
 import tokenTypes from './token-types';
 
@@ -63,14 +62,13 @@ const blobCache = new WeakMap<
 >();
 let nextBlobId = 1;
 
-// Tag replacements for multi-theme HTML the emitter cannot render (a member
-// with Display P3 or CSS-variable colors), one map per theme set and prefix.
-const htmlTagsCache = new WeakMap<
+// Prepared HTML openers for sets with Display P3 or CSS-variable colors.
+const htmlOpenersCache = new WeakMap<
   ResolvedTheme[],
-  Map<string, Map<string, string>>
+  Map<string, Uint8Array>
 >();
 
-// Resolved theme sets, so the styles and HTML tags derived from a set (keyed
+// Resolved theme sets, so the styles and HTML openers derived from a set (keyed
 // by the set's identity above) survive across calls that name the same
 // themes again. `prepareTheme` returns one object per theme (and per prefix
 // for CSS-variable themes), so a set is identified by those objects plus the
@@ -272,7 +270,7 @@ export function themeHtmlStyle(
  * set id is unique per blob, so an instance's opener cache is keyed by it.
  * Built once per set and prefix. Returns `undefined` for a set the emitter
  * cannot pack because a member has no theme table (Display P3 or CSS-variable
- * colors); HTML output then falls back to `multiThemeHtmlTags`.
+ * colors); HTML output then uses `multiThemeHtmlOpeners`.
  */
 export function multiThemeBlob(
   themes: ResolvedTheme[],
@@ -332,43 +330,38 @@ export function multiThemeBlob(
 }
 
 /**
- * Tag replacements for multi-theme HTML the Wasm emitter cannot pack. Wasm
- * renders the set through the CSS-variable emitter with an empty prefix, so
- * its openers read `var(<token>)`; each maps to an opener whose style
- * attribute serializes the token's `htmlStyle` (the map `codeToTokens`
- * returns for that id), and the `<pre>` opener carries the root colors
- * `themeMeta` reports. Built once per set and prefix. Prefixes and theme keys
- * are user strings, so attribute values are escaped.
+ * HTML openers for theme sets without packed RGBA tables. Each span uses
+ * the token's `htmlStyle`, and the root uses `themeMeta`. Cached per set and
+ * prefix; arbitrary prefixes and theme keys are escaped for HTML attributes.
  */
-export function multiThemeHtmlTags(
+export function multiThemeHtmlOpeners(
   themes: ResolvedTheme[],
   cssVariablePrefix: string
-): Map<string, string> {
-  let prefixes = htmlTagsCache.get(themes);
+): Uint8Array {
+  let prefixes = htmlOpenersCache.get(themes);
   if (prefixes === undefined) {
     prefixes = new Map();
-    htmlTagsCache.set(themes, prefixes);
+    htmlOpenersCache.set(themes, prefixes);
   }
-  let tags = prefixes.get(cssVariablePrefix);
-  if (tags !== undefined) return tags;
-  tags = new Map();
+  const cached = prefixes.get(cssVariablePrefix);
+  if (cached !== undefined) return cached;
   const { fg, bg, rootStyle } = themeMeta(themes, cssVariablePrefix);
-  tags.set(
-    variableRootTag,
+  const openers = [
     `<pre class="highlights" style="${escapeAttribute(
       rootStyle ?? `background-color:${bg};color:${fg}`
-    )}">`
-  );
+    )}"><code>`,
+  ];
   for (let hl = 1; hl < tokenTypes.length; hl++) {
     const htmlStyle = themeHtmlStyle(themes, hl, cssVariablePrefix);
     let css = '';
     for (const property in htmlStyle) {
       css += `${css === '' ? '' : ';'}${property}:${htmlStyle[property]}`;
     }
-    tags.set(variableSpanTag(hl), `<span style="${escapeAttribute(css)}">`);
+    openers.push(`<span style="${escapeAttribute(css)}">`);
   }
-  prefixes.set(cssVariablePrefix, tags);
-  return tags;
+  const blob = packHtmlOpeners(openers);
+  prefixes.set(cssVariablePrefix, blob);
+  return blob;
 }
 
 /**

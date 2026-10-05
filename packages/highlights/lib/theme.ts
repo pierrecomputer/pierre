@@ -14,6 +14,7 @@ export const defaultCssVariablePrefix = '--hls-';
  */
 export const themeTableBytes = 384;
 
+const enc = new TextEncoder();
 const colorReg = /^#([a-f0-9]{3,4}|[a-f0-9]{6}|[a-f0-9]{8})$/i;
 const displayP3Reg =
   /^color\(display-p3\s+[+-]?(?:\d+(?:\.\d*)?|\.\d+)\s+[+-]?(?:\d+(?:\.\d*)?|\.\d+)\s+[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:\s*\/\s*[+-]?(?:\d+(?:\.\d*)?|\.\d+))?\s*\)$/i;
@@ -169,16 +170,27 @@ export function escapeAttribute(value: string): string {
 }
 
 /**
- * The `<pre>` opener the CSS-variable emitter writes with an empty prefix.
- * Tag-replacement maps key on it and on `variableSpanTag` openers to rewrite
- * the emitter's output with colors it cannot carry itself.
+ * Pack HTML openers for Wasm mode 4: u32 span reserve, then one pair of u32
+ * byte offset/length per token id, then UTF-8 bytes. Slot 0 holds the root
+ * opener including `<code>`; the other slots hold token span openers.
  */
-export const variableRootTag =
-  '<pre class="highlights" style="background-color:var(background);color:var(foreground);">';
-
-/** The `<span>` opener the CSS-variable emitter writes for a token id with an empty prefix. */
-export function variableSpanTag(hl: number): string {
-  return `<span style="color:var(${tokenTypes[hl].replace(/[._]/g, '-')})">`;
+export function packHtmlOpeners(openers: string[]): Uint8Array {
+  const bytes = openers.map((opener) => enc.encode(opener));
+  let offset = 4 + 8 * bytes.length;
+  const blob = new Uint8Array(
+    offset + bytes.reduce((sum, entry) => sum + entry.length, 0)
+  );
+  const dv = new DataView(blob.buffer);
+  let spanReserve = 32;
+  for (let i = 0; i < bytes.length; i++) {
+    dv.setUint32(4 + 8 * i, offset, true);
+    dv.setUint32(8 + 8 * i, bytes[i].length, true);
+    blob.set(bytes[i], offset);
+    offset += bytes[i].length;
+    if (i !== 0) spanReserve = Math.max(spanReserve, bytes[i].length + 32);
+  }
+  dv.setUint32(0, spanReserve, true);
+  return blob;
 }
 
 /** Resolved token styles, root colors, and the theme's HTML representation. */
@@ -190,8 +202,8 @@ export interface PreparedTheme {
   bg?: string;
   /** Five-byte RGBA/style records; undefined for Display P3 and CSS variables. */
   table: Uint8Array | undefined;
-  /** Lazy replacements for unprefixed CSS-variable tags; Display P3 only. */
-  readonly htmlTags: Map<string, string> | undefined;
+  /** Lazy UTF-8 HTML openers for Display P3 themes. */
+  readonly htmlOpeners: Uint8Array | undefined;
 }
 
 // Theme names are not unique. Replace the object to change its cached styles.
@@ -247,7 +259,7 @@ function prepareCssVariables(
       return resolve().bg;
     },
     table: undefined,
-    htmlTags: undefined,
+    htmlOpeners: undefined,
   };
 }
 
@@ -275,7 +287,7 @@ function cssVariableStyles(
  * each hex color and its font settings into the Wasm theme table as it goes.
  * Font settings stay in the table even without a color. Display P3 colors
  * cannot fit the packed RGBA records, so such a theme drops the table and
- * gets HTML tag replacements instead.
+ * gets prepared HTML openers instead.
  */
 function prepareStyles(theme: Theme): PreparedTheme {
   const themeStyle = theme.style ?? {};
@@ -307,46 +319,31 @@ function prepareStyles(theme: Theme): PreparedTheme {
     else if (name === 'background') bg = color;
     else styles[i] = style;
   }
-  let htmlTags: Map<string, string> | undefined;
+  let htmlOpeners: Uint8Array | undefined;
   return {
     name: theme.name,
     styles,
     fg,
     bg,
     table: usesDisplayP3 ? undefined : table,
-    get htmlTags() {
+    get htmlOpeners() {
       if (!usesDisplayP3) return undefined;
-      return (htmlTags ??= displayP3HtmlTags(styles, fg, bg));
+      if (htmlOpeners !== undefined) return htmlOpeners;
+      const rootStyle =
+        (bg === undefined ? '' : `background-color:${bg};`) +
+        (fg === undefined ? '' : `color:${fg}`);
+      const openers = [`<pre class="highlights" style="${rootStyle}"><code>`];
+      for (let i = 1; i < tokenTypes.length; i++) {
+        const style = styles[i];
+        const css =
+          `color:${style?.color ?? 'inherit'}` +
+          (style?.italic === true ? ';font-style:italic' : '') +
+          (style != null && style.weight !== 0
+            ? `;font-weight:${style.weight}`
+            : '');
+        openers.push(`<span style="${css}">`);
+      }
+      return (htmlOpeners = packHtmlOpeners(openers));
     },
   };
-}
-
-/**
- * Tag replacements for Display P3 HTML. The CSS-variable emitter runs with an
- * empty prefix, so its openers read `var(<token>)`; each maps to an opener
- * with the theme's color and font settings inlined, the shape the packed-table
- * emitter produces. Every color passed `isThemeColor`, so none can escape the
- * style attribute.
- */
-function displayP3HtmlTags(
-  styles: (TokenStyle | null)[],
-  fg: string | undefined,
-  bg: string | undefined
-): Map<string, string> {
-  const tags = new Map<string, string>();
-  const rootStyle =
-    (bg === undefined ? '' : `background-color:${bg};`) +
-    (fg === undefined ? '' : `color:${fg}`);
-  tags.set(variableRootTag, `<pre class="highlights" style="${rootStyle}">`);
-  for (let i = 1; i < tokenTypes.length; i++) {
-    const style = styles[i];
-    const css =
-      `color:${style?.color ?? 'inherit'}` +
-      (style?.italic === true ? ';font-style:italic' : '') +
-      (style != null && style.weight !== 0
-        ? `;font-weight:${style.weight}`
-        : '');
-    tags.set(variableSpanTag(i), `<span style="${css}">`);
-  }
-  return tags;
 }

@@ -22,7 +22,8 @@
   (global $spanHl (mut i32) (i32.const -1)) ;; $Token of the currently open span, -1 when none
   (global $spanVal (mut i64) (i64.const 0)) ;; style value of the open span, 0 when none
   (global $cssVariables (mut i32) (i32.const 0))
-  (global $multi (mut i32) (i32.const 0))
+  (global $htmlOpeners (mut i32) (i32.const 0))
+  (global $themeBlob (mut i32) (i32.const 0))
   (global $multiBlob (mut i32) (i32.const 0))
   (global $multiSlots (mut i32) (i32.const 0))
   (global $multiTables (mut i32) (i32.const 0))
@@ -135,9 +136,9 @@
     (global.set $spanVal (i64.const 0))
     (global.set $spanHl (i32.const -1)))
 
-  ;; write `<span style="...">` for $hl at $out. The bytes come from a
-  ;; cache at $mem.emitterSpanCache (73 slots of [len:u8, fragment:u8*65]) rendered on
-  ;; first use and reused across runs. $hlBegin clears the cache when theme
+  ;; Write `<span style="...">` from the cache at $mem.emitterSpanCache
+  ;; (73 slots of [len:u8, fragment:u8*65]), rendered on first use.
+  ;; $hlBegin clears the cache when theme
   ;; bytes or the output mode change, including after a theme set borrowed
   ;; the region as its opener arena.
   (func $emitSpanOpen (param $hl i32)
@@ -197,16 +198,25 @@
   ;; switch the open span to $hl's color/font. adjacent tokens whose records
   ;; hold identical bytes share one span (a 40-bit compare), so runs of
   ;; same-styled tokens and the whitespace between them do not churn spans.
-  ;; caller has ensured capacity for close (7) + open (19 + 9 + 34 + 2) plus
-  ;; the 64-byte wide copy $emitSpanOpen performs, or the CSS-variable prefix.
+  ;; The caller reserves space for closing and opening tags, including any
+  ;; CSS-variable prefix or host-prepared opener and wide-copy slack.
   (func $setSpan (param $hl i32)
     (local $val i64)
     (if (i32.eq (local.get $hl) (global.get $spanHl))
       (then (return)))
     (global.set $spanHl (local.get $hl))
-    (if (global.get $multi)
+    (if (global.get $themeBlob)
       (then
-        (call $multiSetSpan (local.get $hl))
+        (if (global.get $htmlOpeners)
+          (then
+            (if (i64.ne (global.get $spanVal) (i64.const 0))
+              (then
+                (i64.store (global.get $out) (i64.const "</span>"))
+                (global.set $out (i32.add (global.get $out) (i32.const 7)))))
+            (global.set $spanVal (i64.extend_i32_u (local.get $hl)))
+            (if (local.get $hl)
+              (then (call $copyHtmlOpener (local.get $hl)))))
+          (else (call $multiSetSpan (local.get $hl))))
         (return)))
     ;; Token identity is the style in CSS-variable mode; otherwise compare the
     ;; whole packed five-byte theme record.
@@ -928,19 +938,25 @@
 
   ;; driver prologue shared by highlights.wat and the per-language test harnesses:
   ;; read the control block ([1]: 0 inline colors, 1 CSS variables, 2 a
-  ;; multi-theme set, 3 UTF-16 line records), place the output, emit the wrapper
+  ;; multi-theme set, 3 UTF-16 line records, 4 prepared HTML openers), place
+  ;; the output, emit the wrapper
   (func $hlBegin
     (local $offset i32)
     (local $changed v128)
     (global.set $cssVariables (i32.eq (i32.load8_u (i32.const 1)) (i32.const 1)))
-    (global.set $multi (i32.eq (i32.load8_u (i32.const 1)) (i32.const 2)))
     (global.set $tokens (i32.eq (i32.load8_u (i32.const 1)) (i32.const 3)))
+    (global.set $htmlOpeners
+      (select (i32.load (i32.const 14)) (i32.const 0)
+        (i32.eq (i32.load8_u (i32.const 1)) (i32.const 4))))
+    (global.set $themeBlob
+      (i32.or (global.get $htmlOpeners)
+        (i32.eq (i32.load8_u (i32.const 1)) (i32.const 2))))
     (global.set $eof (i32.add (global.get $srcBase) (i32.load (i32.const 2))))
     (global.set $end (global.get $eof))
     (global.set $ptr (global.get $srcBase))
     (global.set $out (i32.and (i32.add (global.get $eof) (i32.const 47)) (i32.const -16)))
-    ;; the CSS-variable prefix or the theme-set blob sits at the output base
-    (if (i32.or (global.get $cssVariables) (global.get $multi))
+    ;; The prefix or theme blob sits before the output.
+    (if (i32.or (global.get $cssVariables) (global.get $themeBlob))
       (then
         (global.set $out (i32.add (global.get $out) (i32.load (i32.const 18))))))
     (i32.store (i32.const 6) (global.get $out))
@@ -954,7 +970,13 @@
       (i32.add
         (i32.const 96)
         (select (i32.load (i32.const 18)) (i32.const 0) (global.get $cssVariables))))
-    (if (global.get $multi)
+    (if (global.get $htmlOpeners)
+      (then
+        (global.set $spanReserve (i32.load (global.get $htmlOpeners)))
+        (call $ensureCap (i32.load offset=8 (global.get $htmlOpeners)))
+        (call $copyHtmlOpener (i32.const 0))
+        (return)))
+    (if (global.get $themeBlob)
       (then
         ;; the set's openers are rendered per span, leaving the single-theme
         ;; span cache and its theme copy untouched
@@ -1008,6 +1030,19 @@
               (i32.const 384))
             (global.set $spanCacheMode (global.get $cssVariables))))
         (call $prologue))))
+
+  ;; Mode 4: u32 span reserve, then offset/length pairs indexed by token id.
+  ;; Offsets are relative to the blob; slot 0 contains `<pre ...><code>`.
+  (func $copyHtmlOpener (param $hl i32)
+    (local $slot i32)
+    (local $len i32)
+    (local.set $slot
+      (i32.add (global.get $htmlOpeners) (i32.add (i32.const 4) (i32.shl (local.get $hl) (i32.const 3)))))
+    (local.set $len (i32.load offset=4 (local.get $slot)))
+    (memory.copy (global.get $out)
+      (i32.add (global.get $htmlOpeners) (i32.load (local.get $slot)))
+      (local.get $len))
+    (global.set $out (i32.add (global.get $out) (local.get $len))))
 
   ;; driver epilogue: emit the wrapper closing and publish the result
   (func $hlEnd

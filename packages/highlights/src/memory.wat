@@ -3,12 +3,13 @@
     memory structure
     [] page 1         (control, static data, and scratch)
       [0]             language id (u8)
-      [1]             output mode (u8): 0 inline colors, 1 CSS variables, 3 UTF-16 line records
+      [1]             output mode (u8): 0 inline colors, 1 CSS variables,
+                      2 packed theme set, 3 UTF-16 line records, 4 HTML openers
       [2:6)           input length (u32 LE)
       [6:10)          output start (u32 LE)
       [10:14)         output length (u32 LE)
-      [14:18)         CSS-variable prefix address (u32 LE)
-      [18:22)         CSS-variable prefix byte length (u32 LE)
+      [14:18)         CSS-variable prefix or theme blob address (u32 LE)
+      [18:22)         CSS-variable prefix or theme blob byte length (u32 LE)
       [22:64)         reserved space
       [64:448)        theme table written by JavaScript, five bytes per token
       [448:1360)      CSS-variable name table
@@ -28,7 +29,7 @@
       [59584:65536)   free
     [] pages 2..N     (text buffer; a live instance lays them out itself, see src/live.wat)
       [65536:EOF)     input, NUL sentinel, then at least 16 bytes of slack
-      [(EOF+47)&~15:) CSS-variable prefix bytes in mode 1, then output HTML;
+      [(EOF+47)&~15:) prefix bytes (mode 1) or theme blob (modes 2/4), then HTML;
                       other modes start output here directly;
                       $ensureCap grows memory
   ;;)

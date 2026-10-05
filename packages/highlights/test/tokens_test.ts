@@ -976,7 +976,7 @@ void t.test(
 );
 
 void t.test(
-  'codeToHtml: sets with Display P3 or CSS-variable members render through tag replacement',
+  'codeToHtml: sets with Display P3 or CSS-variable members copy prepared openers',
   () => {
     const dec = new TextDecoder();
     const html = dec.decode(
@@ -994,6 +994,116 @@ void t.test(
       `color:${pierreLightVibrant.style.syntax.keyword.color};--x-dark:var(--x-keyword-declaration)`,
     ]);
     assert.equal(textOf(html), 'const');
+  }
+);
+
+void t.test(
+  'P3 HTML stays in Wasm memory across theme and input changes',
+  () => {
+    const hl = new HighlightsHighlighter(highlighter.wasmModule);
+    const dec = new TextDecoder();
+    const background = 'color(display-p3 .1 .2 .3)';
+    const backgroundOnly: Theme = {
+      ...pierreDark,
+      style: { ...pierreDark.style, 'editor.background': background },
+    };
+    const options: CodeToHtmlOptions[] = [
+      { lang: 'ts', theme: pierreDark },
+      { lang: 'ts', theme: backgroundOnly },
+      { lang: 'ts', themes: { light: pierreLight, dark: pierreDark } },
+      { lang: 'ts', theme: pierreDarkVibrant },
+      { lang: 'ts', theme: cssVariables },
+      {
+        lang: 'ts',
+        themes: { light: pierreLightVibrant, dark: cssVariables },
+      },
+      { lang: 'ts', theme: pierreDark },
+      {
+        lang: 'ts',
+        themes: { light: pierreLightVibrant, dark: pierreDarkVibrant },
+        defaultColor: 'light-dark()',
+      },
+      { lang: 'ts', theme: backgroundOnly },
+    ];
+    for (const code of [
+      '',
+      'const café = "日本語🙂<&>";\r\n1',
+      'const café = "日本語🙂<&>";\r\n1\n'.repeat(5000),
+      'const x = 1;',
+    ]) {
+      for (const option of options) {
+        const output = hl.codeToHtml(code, option);
+        assert.equal(output.buffer, hl.memory.buffer);
+        const html = dec.decode(output);
+        assert.equal(textOf(html), code);
+        assert.equal(
+          html,
+          dec.decode(
+            new HighlightsHighlighter(highlighter.wasmModule).codeToHtml(
+              code,
+              option
+            )
+          )
+        );
+        if (option.theme === backgroundOnly) {
+          assert.equal(
+            rootStyle(html),
+            `background-color:${background};color:${pierreDark.style['editor.foreground']}`
+          );
+        }
+        hl.codeToTokens('const n = 2', option);
+      }
+    }
+  }
+);
+
+void t.test(
+  'P3 HTML grows for long openers and escapes UTF-8 theme names',
+  () => {
+    const hl = new HighlightsHighlighter(highlighter.wasmModule);
+    const dec = new TextDecoder();
+    const color = `color(display-p3 0.${'1'.repeat(100000)} .2 .3)`;
+    const theme: Theme = {
+      name: 'long P3',
+      appearance: 'dark',
+      style: {
+        foreground: color,
+        background: color,
+        syntax: { string: color, number: { font_weight: 700 } },
+      },
+    };
+    const code = `1 "${'&日本語'.repeat(10000)}" 2`;
+    const output = hl.codeToHtml(code, { lang: 'json', theme });
+    assert.equal(output.buffer, hl.memory.buffer);
+    const html = dec.decode(output);
+    assert.equal(textOf(html), code);
+    assert.equal(rootStyle(html), `background-color:${color};color:${color}`);
+    assert.deepEqual(spanStyles(html), [
+      `color:${color};font-weight:700`,
+      `color:${color}`,
+      `color:${color};font-weight:700`,
+    ]);
+    for (const cssVariablePrefix of [
+      '--"<>&日本語-',
+      `--${'é'.repeat(3000)}-`,
+    ]) {
+      const options = {
+        lang: 'json',
+        themes: { light: pierreLightVibrant, 'd<a>"rk&🙂': cssVariables },
+        cssVariablePrefix,
+        defaultColor: false,
+      } as const;
+      const bytes = hl.codeToHtml(code, options);
+      assert.equal(bytes.buffer, hl.memory.buffer);
+      const result = dec.decode(bytes);
+      assert.equal(textOf(result), code);
+      assert.ok(result.includes('d&lt;a&gt;&quot;rk&amp;🙂:var('));
+      const prefix = cssVariablePrefix.startsWith('--"')
+        ? '--&quot;&lt;&gt;&amp;日本語-'
+        : cssVariablePrefix;
+      assert.ok(result.includes(`var(${prefix}string)`));
+      assert.doesNotMatch(result, /--"/);
+    }
   }
 );
 

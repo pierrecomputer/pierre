@@ -17,7 +17,7 @@ import type { ResolvedTheme } from './tokens';
 import {
   lineRecordsToTokens,
   multiThemeBlob,
-  multiThemeHtmlTags,
+  multiThemeHtmlOpeners,
   resolveOptionThemes,
   themeMeta,
 } from './tokens';
@@ -117,8 +117,8 @@ export class HighlightsHighlighter implements Highlighter {
 
   /**
    * Run the lexer over the first `inputLength` bytes: 0 inline colors, 1 CSS
-   * variables, 2 a packed theme set, or 3 UTF-16 line records. `reset`
-   * selects streaming mode.
+   * variables, 2 a packed theme set, 3 UTF-16 line records, or 4 prepared
+   * HTML openers. `reset` selects streaming mode.
    */
   #run(
     langId: number,
@@ -151,31 +151,32 @@ export class HighlightsHighlighter implements Highlighter {
       options.cssVariablePrefix ?? defaultCssVariablePrefix;
     let table: Uint8Array | undefined;
     let blob: Uint8Array | undefined;
-    let tags: Map<string, string> | undefined;
+    let mode = 0;
     if (options.themes != null) {
       const themes = resolveOptionThemes(options);
       blob = multiThemeBlob(themes, cssVariablePrefix);
-      if (blob === undefined)
-        tags = multiThemeHtmlTags(themes, cssVariablePrefix);
+      mode = 2;
+      if (blob === undefined) {
+        blob = multiThemeHtmlOpeners(themes, cssVariablePrefix);
+        mode = 4;
+      }
     } else {
       const prepared = prepareTheme(options.theme, cssVariablePrefix);
       table = prepared.table;
-      tags = prepared.htmlTags;
+      blob = prepared.htmlOpeners;
+      if (blob !== undefined) mode = 4;
     }
     const inputLength = this.writeInput(input);
-    let mode: number;
     if (blob !== undefined) {
       this.#growMemoryIfNeeded(inputLength + blob.length + 96);
       const blobPtr = (pageSize + inputLength + 47) & ~15;
       this.buffer.set(blob, blobPtr);
       this.dv.setUint32(14, blobPtr, true);
       this.dv.setUint32(18, blob.length, true);
-      mode = 2;
     } else if (table === undefined) {
-      const prefix = tags === undefined ? cssVariablePrefix : '';
-      if (this.#htmlPrefix !== prefix) {
-        this.#htmlPrefixBytes = enc.encode(escapeAttribute(prefix));
-        this.#htmlPrefix = prefix;
+      if (this.#htmlPrefix !== cssVariablePrefix) {
+        this.#htmlPrefixBytes = enc.encode(escapeAttribute(cssVariablePrefix));
+        this.#htmlPrefix = cssVariablePrefix;
       }
       const bytes = this.#htmlPrefixBytes;
       this.#growMemoryIfNeeded(inputLength + bytes.length + 96);
@@ -199,15 +200,7 @@ export class HighlightsHighlighter implements Highlighter {
     this.#run(langId, mode, inputLength);
     const outStart = this.dv.getUint32(6, true);
     const outLength = this.dv.getUint32(10, true);
-    const output = this.buffer.subarray(outStart, outStart + outLength);
-    if (tags === undefined) return output;
-    // Keep Wasm's escaping and line handling, replacing only generated tags
-    // with styles that cannot fit in its packed RGBA theme table.
-    return enc.encode(
-      dec
-        .decode(output)
-        .replace(/<(?:pre|span)[^>]*>/g, (tag) => tags.get(tag) ?? tag)
-    );
+    return this.buffer.subarray(outStart, outStart + outLength);
   }
 
   /** Return UTF-16 token records; `reset` starts or continues a stream. */
