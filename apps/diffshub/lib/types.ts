@@ -6,6 +6,7 @@ export type ViewerLoadState =
   | 'streaming'
   | 'parsing'
   | 'ready'
+  | 'empty'
   | 'error';
 
 export interface SavedCommentMetadata {
