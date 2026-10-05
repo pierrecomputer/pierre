@@ -16,6 +16,7 @@ import { areObjectsEqual } from '../utils/areObjectsEqual';
 import { areOptionsEqual } from '../utils/areOptionsEqual';
 import {
   computeVirtualFileMetrics,
+  getVirtualFileHeaderHeight,
   getVirtualFileHeaderRegion,
   getVirtualFilePaddingBottom,
 } from '../utils/computeVirtualFileMetrics';
@@ -481,9 +482,15 @@ export class VirtualizedFile<
 
     const { disableFileHeader = false, collapsed = false } = this.options;
     const lastLineIndex = this.fileRenderer.getLineCount(file) - 1;
-    let top = getVirtualFileHeaderRegion(this.metrics, disableFileHeader);
+    if (collapsed) {
+      return {
+        top: getVirtualFileHeaderHeight(this.metrics, disableFileHeader),
+        height: 0,
+      };
+    }
 
-    if (collapsed || lastLineIndex < 0) {
+    let top = getVirtualFileHeaderRegion(this.metrics, disableFileHeader);
+    if (lastLineIndex < 0) {
       return { top, height: 0 };
     }
 
@@ -709,17 +716,21 @@ export class VirtualizedFile<
     const { disableFileHeader = false, collapsed = false } = this.options;
     const { lineHeight } = this.metrics;
     const lineCount = this.fileRenderer.getLineCount(file);
+    if (collapsed) {
+      this.height += getVirtualFileHeaderHeight(
+        this.metrics,
+        disableFileHeader
+      );
+      this.layoutDirty = false;
+      return;
+    }
+
     const headerRegion = getVirtualFileHeaderRegion(
       this.metrics,
       disableFileHeader
     );
     const paddingBottom = getVirtualFilePaddingBottom(this.metrics);
-
     this.height += headerRegion;
-    if (collapsed) {
-      this.layoutDirty = false;
-      return;
-    }
 
     this.height += this.cache.fileAnnotationHeight;
 
