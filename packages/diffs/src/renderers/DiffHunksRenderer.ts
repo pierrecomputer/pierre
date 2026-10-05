@@ -968,7 +968,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       }
     }
     // Lets attempt to get the highlighter/languages ready immediately
-    else if (this.highlighter == null) {
+    else if (this.highlighter == null || this.highlighter.isDisposed) {
       this.computedLangs = getDiffLanguages(diff);
       void this.initializeHighlighter();
     }
@@ -1137,6 +1137,15 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       !hasContent ||
       isDiffPlainText(diff) ||
       isDiffMassive(diff, this.getTokenizeMaxLength());
+    // Refresh disposed instances before canRenderDiff checks their themes.
+    if (this.highlighter == null || this.highlighter.isDisposed) {
+      this.highlighter = getHighlighterIfLoaded({
+        preferredHighlighter: resolvePreferredHighlighter(
+          this.workerManager,
+          this.options
+        ),
+      });
+    }
     const canRenderDiff = this.canRenderDiff(diff, options, forcePlainText);
     const newContent = !areDiffTargetsEqual(diff, this.renderCache.diff);
     const newRenderRange = !areRenderRangesEqual(
@@ -1198,12 +1207,6 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       }
     } else {
       this.computedLangs = getDiffLanguages(diff);
-      this.highlighter ??= getHighlighterIfLoaded({
-        preferredHighlighter: resolvePreferredHighlighter(
-          this.workerManager,
-          this.options
-        ),
-      });
       const hasThemes =
         this.highlighter != null &&
         areThemesAttached(options.theme, this.highlighter);

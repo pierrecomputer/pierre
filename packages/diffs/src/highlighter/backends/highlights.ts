@@ -21,12 +21,16 @@ import type { CodeToTokensOptions, TokensResult } from '../types';
  * Highlights uses bundled lexers. Unsupported and custom languages render as text.
  */
 export class HighlightsHighlighter extends DiffsHighlighter {
-  private readonly raw: Highlighter = createHighlighter();
+  private readonly raw: Highlighter;
   // Independent instances need their themes after the shared cache is cleared.
   private readonly usedThemes = new Map<string, DiffsTheme>();
 
   constructor() {
+    // Instantiate Wasm before super() takes the type lock; a throw after it
+    // would leave the lock held.
+    const raw = createHighlighter();
     super('highlights', createDiffsThemeResolver('highlights'));
+    this.raw = raw;
   }
 
   getTheme(name: string): DiffsTheme {

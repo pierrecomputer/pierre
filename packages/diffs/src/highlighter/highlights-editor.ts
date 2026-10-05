@@ -227,9 +227,8 @@ export class HighlightsEditorTokenizer implements DiffsEditorTokenizer {
     return this.#tokenizer.getLineTokens(lineIndex).bracketIgnoredRanges;
   }
 
-  prebuildStateStack(): void {
-    this.resumeBackgroundTokenize();
-  }
+  // Rendering calls this while background tokenization may be paused; do not resume it.
+  prebuildStateStack(): void {}
   stopBackgroundTokenize(): void {
     this.pauseBackgroundTokenize();
   }

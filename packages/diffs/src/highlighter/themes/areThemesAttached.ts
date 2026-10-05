@@ -12,6 +12,10 @@ export function areThemesAttached(
   themes: DiffsThemeNames | ThemesType,
   highlighter: DiffsHighlighter | HighlighterTypes = resolveHighlighterType()
 ): boolean {
+  // Shared resolvers can retain themes after an instance is disposed.
+  if (typeof highlighter !== 'string' && highlighter.isDisposed) {
+    return false;
+  }
   const resolver =
     typeof highlighter === 'string'
       ? createDiffsThemeResolver(highlighter)

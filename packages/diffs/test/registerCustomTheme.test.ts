@@ -252,6 +252,45 @@ describe('registerCustomTheme format selection', () => {
     });
   }
 
+  test('Shiki tokenizes a diffs theme whose TextMate name differs', async () => {
+    const name = 'custom-diffs-renamed-textmate';
+    names.push(name);
+    registerCustomTheme(
+      name,
+      () =>
+        Promise.resolve({
+          name,
+          type: 'dark' as const,
+          fg: '#abcdef',
+          bg: '#012345',
+          textmate: {
+            name: `${name}-textmate`,
+            type: 'dark' as const,
+            fg: '#abcdef',
+            bg: '#012345',
+            settings: [
+              { scope: ['storage'], settings: { foreground: '#ff0000' } },
+            ],
+          },
+        }),
+      'diffs'
+    );
+    for (const backend of ['shiki-js', 'shiki-wasm'] as const) {
+      const highlighter = await createHighlighter(backend);
+      try {
+        await highlighter.themeResolver.resolveThemes([name]);
+        await highlighter.loadLanguages(['javascript']);
+        const { tokens } = highlighter.codeToTokens('const answer = 42;', {
+          lang: 'javascript',
+          theme: name,
+        });
+        expect(tokens[0][0].color?.toLowerCase()).toBe('#ff0000');
+      } finally {
+        highlighter.dispose();
+      }
+    }
+  });
+
   test('rejects a TextMate theme registered as Zed', () => {
     const name = 'custom-invalid-zed';
     names.push(name);

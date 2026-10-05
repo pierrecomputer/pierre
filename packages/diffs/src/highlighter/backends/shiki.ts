@@ -65,8 +65,8 @@ export class ShikiHighlighter extends DiffsHighlighter {
       if (textmate == null) {
         throw new Error(`Theme "${themeName}" does not support Shiki`);
       }
-      // Loading by name leaves stale colors when the theme object changes.
-      this.raw.setTheme(textmate);
+      // Pass the object to refresh colors, using the name tokenization looks up.
+      this.raw.setTheme({ ...textmate, name: themeName });
       this.loadedThemes.set(themeName, theme);
     }
     return theme;

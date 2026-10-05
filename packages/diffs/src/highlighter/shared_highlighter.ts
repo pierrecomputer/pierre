@@ -55,6 +55,7 @@ export async function getSharedHighlighter({
   if (preferredHighlighter != null) {
     assertHighlighterType(preferredHighlighter);
   }
+  dropDisposedHighlighter();
   const cached = (highlighter ??= createHighlighter(preferredHighlighter));
   let instance: DiffsHighlighter;
   try {
@@ -73,10 +74,26 @@ export async function getSharedHighlighter({
     instance.themeResolver.resolveThemes(themes),
     instance.loadLanguages(langs),
   ]);
+  // disposeHighlighter() may run while themes and languages load.
+  if (instance.isDisposed) {
+    throw new Error('Highlighter is disposed');
+  }
   return instance;
 }
 
+// Direct dispose() calls leave the shared reference pointing to a dead instance.
+function dropDisposedHighlighter(): void {
+  if (
+    highlighter != null &&
+    !('then' in highlighter) &&
+    highlighter.isDisposed
+  ) {
+    highlighter = undefined;
+  }
+}
+
 export function isHighlighterLoaded(): boolean {
+  dropDisposedHighlighter();
   return highlighter != null && !('then' in highlighter);
 }
 
@@ -94,6 +111,7 @@ export function getHighlighterIfLoaded({
   lang,
   preferredHighlighter,
 }: GetHighlighterIfLoadedProps = {}): DiffsHighlighter | undefined {
+  dropDisposedHighlighter();
   const instance = highlighter;
   if (
     instance == null ||
@@ -112,6 +130,7 @@ export function isHighlighterLoading(): boolean {
 }
 
 export function isHighlighterNull(): boolean {
+  dropDisposedHighlighter();
   return highlighter == null;
 }
 

@@ -616,6 +616,64 @@ describe('backend tokenizers', () => {
   });
 });
 
+describe('Highlights state prebuild', () => {
+  test('keeps a pause set before rendering', async () => {
+    const highlighter = await getSharedHighlighter({
+      preferredHighlighter: 'highlights',
+      themes: ['pierre-dark'],
+      langs: ['typescript'],
+    });
+    const document = new TextDocument(
+      'test.ts',
+      'const text = "🚀";\n'.repeat(300),
+      'typescript'
+    );
+    const delivered: number[] = [];
+    const tokenizer = highlighter.createEditorTokenizer({
+      textDocument: document,
+      theme: 'pierre-dark',
+      onDeferTokenize: (lines) => {
+        delivered.push(...lines.keys());
+      },
+    });
+    try {
+      // Opening a comment on line 0 leaves every later line pending.
+      const change = document.applyEdits([
+        {
+          range: {
+            start: { line: 0, character: 0 },
+            end: { line: 0, character: 0 },
+          },
+          newText: '/*',
+        },
+      ]);
+      tokenizer.tokenize(change!, {
+        startingLine: 0,
+        totalLines: 2,
+        bufferBefore: 0,
+        bufferAfter: 0,
+      });
+      // Same order as File.render: pause, then sync the editor view.
+      tokenizer.pauseBackgroundTokenize();
+      delivered.length = 0;
+      tokenizer.prebuildStateStack({
+        startingLine: 0,
+        totalLines: 10,
+        bufferBefore: 0,
+        bufferAfter: 0,
+      });
+      await new Promise((resolve) => setTimeout(resolve, 25));
+      expect(delivered).toHaveLength(0);
+      tokenizer.resumeBackgroundTokenize();
+      for (let retries = 0; retries < 100 && delivered.length === 0; retries++)
+        await new Promise((resolve) => setTimeout(resolve, 5));
+      expect(delivered.length).toBeGreaterThan(0);
+    } finally {
+      tokenizer.dispose();
+    }
+  });
+});
+
 describe('Highlights bracket reads', () => {
   test('keep background work paused and deliver completed lines afterwards', async () => {
     const highlighter = await getSharedHighlighter({

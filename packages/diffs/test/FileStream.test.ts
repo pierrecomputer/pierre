@@ -2,12 +2,31 @@ import { afterAll, beforeEach, expect, test } from 'bun:test';
 
 import { FileStream } from '../src/components/FileStream';
 import { DIFFS_TAG_NAME } from '../src/constants';
-import { disposeHighlighter } from '../src/highlighter/shared_highlighter';
+import {
+  disposeHighlighter,
+  getSharedHighlighter,
+} from '../src/highlighter/shared_highlighter';
 import { createRoot, installDom, wait, waitFor } from './domHarness';
+import { getRejection } from './testUtils';
 
 // Each test loads its backend fresh: only one highlighter type can be loaded.
 beforeEach(disposeHighlighter);
 afterAll(disposeHighlighter);
+
+function installStreamDom() {
+  const dom = installDom();
+  // FileStream expects the browser's diffs-container to create its shadow root.
+  dom.window.customElements.define(
+    DIFFS_TAG_NAME,
+    class extends dom.window.HTMLElement {
+      constructor() {
+        super();
+        this.attachShadow({ mode: 'open' });
+      }
+    }
+  );
+  return dom;
+}
 
 for (const preferredHighlighter of [
   'shiki-js',
@@ -16,17 +35,7 @@ for (const preferredHighlighter of [
 ] as const) {
   for (const renderEachChunk of [false, true]) {
     test(`${preferredHighlighter} renders CR and CRLF rows with ${renderEachChunk ? 'separate' : 'batched'} frames`, async () => {
-      const dom = installDom();
-      // The browser's diffs-container creates its shadow root before setup.
-      dom.window.customElements.define(
-        DIFFS_TAG_NAME,
-        class extends dom.window.HTMLElement {
-          constructor() {
-            super();
-            this.attachShadow({ mode: 'open' });
-          }
-        }
-      );
+      const dom = installStreamDom();
       try {
         for (const chunks of [
           ['a\rb'],
@@ -101,3 +110,50 @@ for (const preferredHighlighter of [
     });
   }
 }
+
+test('setup can retry after the highlighter request rejects', async () => {
+  const dom = installStreamDom();
+  const root = createRoot();
+  let closed = false;
+  const stream = new FileStream({
+    preferredHighlighter: 'shiki-js',
+    theme: 'pierre-dark',
+    lang: 'text',
+    onStreamClose: () => {
+      closed = true;
+    },
+  });
+  const source = () =>
+    new ReadableStream<string>({
+      start(controller) {
+        controller.enqueue('retried');
+        controller.close();
+      },
+    });
+  try {
+    await getSharedHighlighter({
+      themes: ['pierre-dark'],
+      langs: [],
+      preferredHighlighter: 'highlights',
+    });
+    expect(
+      (await getRejection(stream.setup(source(), root))).message
+    ).toContain(
+      'Cannot load the "shiki-js" highlighter while "highlights" is in use'
+    );
+    await disposeHighlighter();
+    await stream.setup(source(), root);
+    await waitFor(() => closed);
+    await wait();
+    expect(
+      root.firstElementChild?.shadowRoot?.querySelector(
+        '[data-content] > [data-line]'
+      )?.textContent
+    ).toBe('retried');
+  } finally {
+    stream.cleanUp();
+    await wait();
+    root.remove();
+    dom.cleanup();
+  }
+});

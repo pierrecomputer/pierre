@@ -6,6 +6,8 @@ import {
 } from '../src/highlighter/shared_highlighter';
 import { DiffHunksRenderer } from '../src/renderers/DiffHunksRenderer';
 import { FileRenderer } from '../src/renderers/FileRenderer';
+import type { HighlighterTypes } from '../src/types';
+import { parseDiffFromFile } from '../src/utils/parseDiffFromFile';
 import { getRejection } from './testUtils';
 
 beforeEach(disposeHighlighter);
@@ -15,7 +17,7 @@ for (const kind of ['file', 'diff'] as const) {
   describe(`${kind} renderer highlighter type`, () => {
     function createRenderer(options: {
       theme: string;
-      preferredHighlighter?: 'shiki-js' | 'highlights';
+      preferredHighlighter?: HighlighterTypes;
     }) {
       return kind === 'file'
         ? new FileRenderer(options)
@@ -78,6 +80,41 @@ for (const kind of ['file', 'diff'] as const) {
           expect(() =>
             renderer[update]({ theme: 'pierre-light' })
           ).not.toThrow();
+        } finally {
+          renderer.cleanUp();
+        }
+      });
+    }
+
+    for (const preferredHighlighter of [
+      'shiki-js',
+      'shiki-wasm',
+      'highlights',
+    ] as const) {
+      test(`${preferredHighlighter} renders new content after the shared instance is disposed and recreated`, async () => {
+        const renderer = createRenderer({
+          theme: 'pierre-dark',
+          preferredHighlighter,
+        });
+        try {
+          for (const contents of ['const a = 1;\n', 'const b = 2;\n']) {
+            await getSharedHighlighter({
+              themes: ['pierre-dark'],
+              langs: ['typescript'],
+              preferredHighlighter,
+            });
+            const file = { name: 'test.ts', contents, cacheKey: contents };
+            if (renderer instanceof FileRenderer) {
+              expect(renderer.renderFile(file)?.file).toBe(file);
+            } else {
+              const diff = parseDiffFromFile(
+                { name: 'test.ts', contents: '', cacheKey: `old-${contents}` },
+                file
+              );
+              expect(renderer.renderDiff(diff)?.fileDiff).toBe(diff);
+            }
+            await disposeHighlighter();
+          }
         } finally {
           renderer.cleanUp();
         }

@@ -63,6 +63,10 @@ export abstract class DiffsHighlighter {
   /** Attach grammars resolved elsewhere, such as on the main thread for a worker. */
   abstract attachLanguages(languages: readonly ResolvedLanguage[]): void;
 
+  get isDisposed(): boolean {
+    return this.disposed;
+  }
+
   /**
    * Disposed instances cannot be reused.
    */

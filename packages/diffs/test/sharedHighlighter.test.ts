@@ -184,18 +184,39 @@ describe('highlighter type lock', () => {
     await disposed;
   });
 
-  test('disposing during a load disposes the loaded instance and releases its type', async () => {
-    const loading = getSharedHighlighter({
+  test('a shared instance disposed directly is replaced on the next request', async () => {
+    const shared = await getSharedHighlighter({
       themes: [],
       langs: [],
       preferredHighlighter: 'shiki-js',
     });
-    await disposeHighlighter();
-    const highlighter = await loading;
-    expect(() =>
-      highlighter.codeToTokens('x', { lang: 'text', theme: 'pierre-dark' })
-    ).toThrow('disposed');
-    expect(getHighlighterType()).toBeUndefined();
+    shared.dispose();
+    expect(getHighlighterIfLoaded()).toBeUndefined();
+    expect(isHighlighterLoaded()).toBe(false);
+    expect(isHighlighterNull()).toBe(true);
+    const next = await getSharedHighlighter({
+      themes: [],
+      langs: [],
+      preferredHighlighter: 'highlights',
+    });
+    expect(next.name).toBe('highlights');
+    expect(next.isDisposed).toBe(false);
+  });
+
+  test('disposing during a load rejects the load and releases its type', async () => {
+    for (const preferredHighlighter of backends) {
+      const loading = getSharedHighlighter({
+        themes: ['pierre-dark'],
+        langs: ['typescript'],
+        preferredHighlighter,
+      });
+      await disposeHighlighter();
+      expect((await getRejection(loading)).message).toContain(
+        'Highlighter is disposed'
+      );
+      expect(isHighlighterNull()).toBe(true);
+      expect(getHighlighterType()).toBeUndefined();
+    }
     expect(
       (
         await getSharedHighlighter({

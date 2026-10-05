@@ -97,9 +97,15 @@ export class FileStream {
       // awaitable, maybe?
       return;
     }
-    const highlighter = await getSharedHighlighter(
-      getHighlighterOptions(this.options.lang, this.options)
-    );
+    let highlighter: DiffsHighlighter;
+    try {
+      highlighter = await getSharedHighlighter(
+        getHighlighterOptions(this.options.lang, this.options)
+      );
+    } catch (error) {
+      this.queuedSetupArgs = undefined;
+      throw error;
+    }
 
     const [source, wrapper] = this.queuedSetupArgs;
     this.queuedSetupArgs = undefined;

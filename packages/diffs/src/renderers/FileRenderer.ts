@@ -367,7 +367,7 @@ export class FileRenderer<LAnnotation = undefined> {
       }
     }
     // Lets attempt to get the highlighter/languages ready immediately
-    else if (this.highlighter == null) {
+    else if (this.highlighter == null || this.highlighter.isDisposed) {
       this.computedLang = file.lang ?? getFiletypeFromFileName(file.name);
       void this.initializeHighlighter();
     }
@@ -737,6 +737,15 @@ export class FileRenderer<LAnnotation = undefined> {
       !hasContent ||
       isFilePlainText(file) ||
       isFileMassive(lines.length, this.getTokenizeMaxLength());
+    // Refresh disposed instances before canRenderFile checks their themes.
+    if (this.highlighter == null || this.highlighter.isDisposed) {
+      this.highlighter = getHighlighterIfLoaded({
+        preferredHighlighter: resolvePreferredHighlighter(
+          this.workerManager,
+          this.options
+        ),
+      });
+    }
     const canRenderFile = this.canRenderFile(file, options, forcePlainText);
     const newContent = !areFileTargetsEqual(file, this.renderCache.file);
     const newRenderRange = !areRenderRangesEqual(
@@ -790,12 +799,6 @@ export class FileRenderer<LAnnotation = undefined> {
       }
     } else {
       this.computedLang = file.lang ?? getFiletypeFromFileName(file.name);
-      this.highlighter ??= getHighlighterIfLoaded({
-        preferredHighlighter: resolvePreferredHighlighter(
-          this.workerManager,
-          this.options
-        ),
-      });
       const hasThemes =
         this.highlighter != null &&
         areThemesAttached(options.theme, this.highlighter);
