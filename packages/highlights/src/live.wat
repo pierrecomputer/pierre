@@ -877,10 +877,27 @@
 
   (global $lvIncoming (mut i32) (i32.const 0)) ;; state id before the cursor line
 
-  ;; Tokenize line $i against the incoming state and return the interned
-  ;; outgoing state id. Rewrites the descriptor's token block, utf16 length,
-  ;; and wide flag; the caller owns the stateId field.
-  (func $lvRunLine (param $i i32) (param $reset i32) (result i32)
+  (global $lvLinePhase (mut i32) (i32.const 0))
+  (global $lvRecord (mut i32) (i32.const 0))
+  (global $lvRecordEnd (mut i32) (i32.const 0))
+  (global $lvByte (mut i32) (i32.const 0))
+  (global $lvChar (mut i32) (i32.const 0))
+  (global $lvTokenCount (mut i32) (i32.const 0))
+  (global $lvTokenPtr (mut i32) (i32.const 0))
+  (global $lvOutgoing (mut i32) (i32.const 0))
+
+  (func $lvCancelLine
+    (call $lvFree (global.get $lvTokenPtr))
+    (call $lvRelease (global.get $lvOutgoing))
+    (global.set $lvTokenPtr (i32.const 0))
+    (global.set $lvOutgoing (i32.const 0))
+    (global.set $lvLinePhase (i32.const 0))
+    (global.set $liveSuspended (i32.const 0))
+    (global.set $liveLimit (i32.const 0x7fffffff))
+    (global.set $lvTransLo (i32.const 0))
+    (global.set $lvTransHi (i32.const 0)))
+
+  (func $lvRunLine (param $i i32) (param $reset i32) (param $work i32) (result i32)
     (local $slot i32)
     (local $flags i32)
     (local $termBytes i32)
@@ -892,179 +909,198 @@
     (local $blobBase i32)
     (local $blobLen i32)
     (local $newId i32)
-    (local $recs i32)
-    (local $nRecs i32)
-    (local $r i32)
     (local $end i32)
+    (local $stop i32)
     (local $hl i32)
-    (local $n i32)
-    (local $lastEnd i32)
-    (local $utf16 i32)
     (local $wide i32)
-    (local $tokPtr i32)
     (local $before i32)
     (local $w i32)
     (local $node i32)
+    (local $remaining i32)
     (local.set $slot (call $lvSlot (local.get $i)))
     (local.set $flags (i32.load offset=24 (local.get $slot)))
     (local.set $byteLen (i32.load offset=4 (local.get $slot)))
     (local.set $termBytes (i32.and (local.get $flags) (i32.const 3)))
     (local.set $total (i32.add (local.get $byteLen) (local.get $termBytes)))
-    (local.set $inBase (i32.add (global.get $lvHeapCeil) (i32.const 16)))
-    (call $lvGrowTo (i32.add (i32.add (local.get $inBase) (local.get $total)) (i32.const 64)))
-    (if (local.get $reset)
-      (then (call $lvResetCaptured))
-      (else
-        (if (i32.ne (global.get $lvMachineId) (global.get $lvIncoming))
+    (local.set $wide (i32.ge_u (i32.load offset=8 (local.get $slot)) (i32.const 0x1000000)))
+    (if (i32.eqz (global.get $lvLinePhase))
+      (then
+        (local.set $inBase (i32.add (global.get $lvHeapCeil) (i32.const 16)))
+        (call $lvGrowTo (i32.add (i32.add (local.get $inBase) (local.get $total)) (i32.const 64)))
+        (if (local.get $reset)
+          (then (call $lvResetCaptured))
+          (else
+            (if (i32.ne (global.get $lvMachineId) (global.get $lvIncoming))
+              (then
+                ;; blobs are stored zero-trimmed: rebuild the full image in the
+                ;; scratch area, which the line copy below then overwrites
+                (local.set $node
+                  (i32.load
+                    (i32.add (global.get $lvIdTab) (i32.shl (global.get $lvIncoming) (i32.const 2)))))
+                (call $lvGrowTo (i32.add (local.get $inBase) (i32.const $mem.streamStateUsed+8496)))
+                (memory.fill (local.get $inBase) (i32.const 0) (i32.const $mem.streamStateUsed+8496))
+                (memory.copy
+                  (local.get $inBase)
+                  (i32.add (local.get $node) (i32.const 24))
+                  (i32.load offset=8 (local.get $node)))
+                (call $lvRestoreBlob (local.get $inBase))))))
+        (global.set $lvMachineId (i32.const -1))
+        (memory.copy (local.get $inBase) (i32.load (local.get $slot)) (local.get $byteLen))
+        (if (i32.eq (local.get $termBytes) (i32.const 2))
+          (then (i32.store16 (i32.add (local.get $inBase) (local.get $byteLen)) (i32.const 0x0a0d)))
+          (else
+            (if (local.get $termBytes)
+              (then (i32.store8 (i32.add (local.get $inBase) (local.get $byteLen)) (i32.const 10))))))
+        (i32.store8 (i32.add (local.get $inBase) (local.get $total)) (i32.const 0))
+        (i32.store8 (i32.const 1) (i32.const 3))
+        (i32.store (i32.const 2) (local.get $total))
+        (global.set $srcBase (local.get $inBase))
+        (global.set $streaming (i32.const 1))
+        (global.set $streamReset (local.get $reset))
+        (global.set $docStart (select (local.get $inBase) (i32.const 0) (local.get $reset)))
+        (global.set $streamDepth (i32.const 0))
+        (call $hlBegin)
+        (call $recStreamBegin (local.get $reset))
+        (global.set $lvLinePhase (i32.const 1)))
+      (else (local.set $reset (i32.const 0))))
+    (if (i32.eq (global.get $lvLinePhase) (i32.const 1))
+      (then
+        (global.set $liveLimit
+          (select (i32.add (global.get $ptr) (local.get $work)) (i32.const 0x7fffffff) (local.get $work)))
+        (call $streamChunk (global.get $lvLang) (local.get $reset))
+        (global.set $liveLimit (i32.const 0x7fffffff))
+        (if (global.get $liveSuspended) (then (return (i32.const -1))))
+        (call $recStreamEnd)
+        (global.set $streaming (i32.const 0))
+        (global.set $streamDepth (i32.const 0))
+        (local.set $recStart (i32.load (i32.const 6)))
+        (local.set $recLen (i32.sub (global.get $out) (local.get $recStart)))
+        ;; capture the outgoing state right after the records
+        (local.set $blobBase
+          (i32.and
+            (i32.add (i32.add (local.get $recStart) (local.get $recLen)) (i32.const 7))
+            (i32.const -8)))
+        ;; head, globals, delimiter, and fence registers (304) plus the five
+        ;; stack prefixes at their caps (1024 * 4 + 4096), then the checkpoints
+        (call $lvGrowTo (i32.add (local.get $blobBase) (i32.const $mem.streamStateUsed+8576)))
+        (local.set $blobLen
+          (call $lvTrimBlob (local.get $blobBase) (call $lvCaptureBlob (local.get $blobBase))))
+        (global.set $lvTransLo (local.get $recStart))
+        (global.set $lvTransHi (i32.add (local.get $blobBase) (local.get $blobLen)))
+        ;; the common line leaves the state unchanged: compare against the
+        ;; incoming blob first and skip the hash and bucket walk on a match
+        (if
+          (i32.and
+            (i32.eqz (local.get $reset))
+            (i32.lt_u (global.get $lvIncoming) (global.get $lvIdNext)))
           (then
-            ;; blobs are stored zero-trimmed: rebuild the full image in the
-            ;; scratch area, which the line copy below then overwrites
             (local.set $node
               (i32.load
                 (i32.add (global.get $lvIdTab) (i32.shl (global.get $lvIncoming) (i32.const 2)))))
-            (call $lvGrowTo (i32.add (local.get $inBase) (i32.const $mem.streamStateUsed+8496)))
-            (memory.fill (local.get $inBase) (i32.const 0) (i32.const $mem.streamStateUsed+8496))
-            (memory.copy
-              (local.get $inBase)
-              (i32.add (local.get $node) (i32.const 24))
-              (i32.load offset=8 (local.get $node)))
-            (call $lvRestoreBlob (local.get $inBase))))))
-    (global.set $lvMachineId (i32.const -1))
-    (memory.copy (local.get $inBase) (i32.load (local.get $slot)) (local.get $byteLen))
-    (if (i32.eq (local.get $termBytes) (i32.const 2))
-      (then (i32.store16 (i32.add (local.get $inBase) (local.get $byteLen)) (i32.const 0x0a0d)))
-      (else
-        (if (local.get $termBytes)
-          (then (i32.store8 (i32.add (local.get $inBase) (local.get $byteLen)) (i32.const 10))))))
-    (i32.store8 (i32.add (local.get $inBase) (local.get $total)) (i32.const 0))
-    (i32.store8 (i32.const 1) (i32.const 3))
-    (i32.store (i32.const 2) (local.get $total))
-    (global.set $srcBase (local.get $inBase))
-    (global.set $streaming (i32.const 1))
-    (global.set $streamReset (local.get $reset))
-    (global.set $docStart (select (local.get $inBase) (i32.const 0) (local.get $reset)))
-    (global.set $streamDepth (i32.const 0))
-    (call $hlBegin)
-    (call $recStreamBegin (local.get $reset))
-    (call $streamChunk (global.get $lvLang) (local.get $reset))
-    (call $recStreamEnd)
-    (call $hlEnd)
-    (global.set $streaming (i32.const 0))
-    (global.set $streamDepth (i32.const 0))
-    (local.set $recStart (i32.load (i32.const 6)))
-    (local.set $recLen (i32.load (i32.const 10)))
-    ;; capture the outgoing state right after the records
-    (local.set $blobBase
-      (i32.and
-        (i32.add (i32.add (local.get $recStart) (local.get $recLen)) (i32.const 7))
-        (i32.const -8)))
-    ;; head, globals, delimiter, and fence registers (304) plus the five
-    ;; stack prefixes at their caps (1024 * 4 + 4096), then the checkpoints
-    (call $lvGrowTo (i32.add (local.get $blobBase) (i32.const $mem.streamStateUsed+8576)))
-    (local.set $blobLen
-      (call $lvTrimBlob (local.get $blobBase) (call $lvCaptureBlob (local.get $blobBase))))
-    (global.set $lvTransLo (local.get $recStart))
-    (global.set $lvTransHi (i32.add (local.get $blobBase) (local.get $blobLen)))
-    ;; the common line leaves the state unchanged: compare against the
-    ;; incoming blob first and skip the hash and bucket walk on a match
-    (if
-      (i32.and
-        (i32.eqz (local.get $reset))
-        (i32.lt_u (global.get $lvIncoming) (global.get $lvIdNext)))
-      (then
-        (local.set $node
-          (i32.load
-            (i32.add (global.get $lvIdTab) (i32.shl (global.get $lvIncoming) (i32.const 2)))))
-        (if
-          (i32.and
-            (i32.eqz (i32.and (local.get $node) (i32.const 1)))
-            (i32.and
-              (i32.ne (local.get $node) (i32.const 0))
-              (i32.eq (i32.load offset=8 (local.get $node)) (local.get $blobLen))))
+            (if
+              (i32.and
+                (i32.eqz (i32.and (local.get $node) (i32.const 1)))
+                (i32.and
+                  (i32.ne (local.get $node) (i32.const 0))
+                  (i32.eq (i32.load offset=8 (local.get $node)) (local.get $blobLen))))
+              (then
+                (if
+                  (call $lvBytesEq
+                    (i32.add (local.get $node) (i32.const 24))
+                    (local.get $blobBase)
+                    (local.get $blobLen))
+                  (then
+                    (i32.store offset=4
+                      (local.get $node)
+                      (i32.add (i32.load offset=4 (local.get $node)) (i32.const 1)))
+                    (local.set $newId (global.get $lvIncoming))))))))
+        (if (i32.eqz (local.get $newId))
+          (then
+            (local.set $newId (call $lvIntern (local.get $blobBase) (local.get $blobLen)))))
+        (global.set $lvMachineId (local.get $newId))
+        (global.set $lvOutgoing (local.get $newId))
+        (global.set $lvRecord (i32.const 0))
+        (global.set $lvRecordEnd (select (local.get $recLen) (i32.const 0) (local.get $byteLen)))
+        (global.set $lvByte (i32.const 0))
+        (global.set $lvChar (i32.const 0))
+        (global.set $lvTokenCount (i32.const 0))
+        (if (global.get $lvRecordEnd)
+          (then
+            (global.set $lvTokenPtr
+              (call $lvAlloc (i32.shr_u (local.get $recLen) (i32.eqz (local.get $wide)))))))
+        (global.set $lvLinePhase (i32.const 2))
+        (if (local.get $work) (then (return (i32.const -1))))))
+    (local.set $remaining (select (local.get $work) (i32.const 0x7fffffff) (local.get $work)))
+    (block $converted
+      (loop $records
+        (br_if $converted (i32.ge_u (global.get $lvRecord) (global.get $lvRecordEnd)))
+        (if (i32.le_s (local.get $remaining) (i32.const 0)) (then (return (i32.const -1))))
+        (local.set $w (i32.add (global.get $lvTransLo) (global.get $lvRecord)))
+        (local.set $end (i32.load (local.get $w)))
+        (local.set $hl (i32.load offset=4 (local.get $w)))
+        (if (i32.gt_u (local.get $end) (local.get $byteLen))
+          (then (local.set $end (local.get $byteLen))))
+        (if (i32.gt_u (local.get $end) (global.get $lvByte))
+          (then
+            (local.set $stop (i32.add (global.get $lvByte) (local.get $remaining)))
+            (if (i32.gt_u (local.get $stop) (local.get $end))
+              (then (local.set $stop (local.get $end))))
+            (local.set $inBase (i32.load (local.get $slot)))
+            (block $aligned
+              (loop $utf8
+                (br_if $aligned (i32.ge_u (local.get $stop) (local.get $byteLen)))
+                (br_if $aligned
+                  (i32.ne (i32.and (i32.load8_u (i32.add (local.get $inBase) (local.get $stop))) (i32.const 0xc0)) (i32.const 0x80)))
+                (local.set $stop (i32.add (local.get $stop) (i32.const 1)))
+                (br $utf8)))
+            (global.set $lvChar
+              (i32.add (global.get $lvChar)
+                (call $lvUtf16Len
+                  (i32.add (local.get $inBase) (global.get $lvByte))
+                  (i32.sub (local.get $stop) (global.get $lvByte)))))
+            (local.set $remaining (i32.sub (local.get $remaining) (i32.sub (local.get $stop) (global.get $lvByte))))
+            (global.set $lvByte (local.get $stop))
+            (if (i32.lt_u (local.get $stop) (local.get $end)) (then (return (i32.const -1))))))
+        (local.set $w
+          (i32.add (global.get $lvTokenPtr)
+            (i32.shl (global.get $lvTokenCount) (select (i32.const 3) (i32.const 2) (local.get $wide)))))
+        (local.set $before (i32.const 0))
+        (if (global.get $lvTokenCount)
+          (then
+            (local.set $node (i32.sub (local.get $w) (select (i32.const 8) (i32.const 4) (local.get $wide))))
+            (local.set $before
+              (select (i32.load (local.get $node)) (i32.and (i32.load (local.get $node)) (i32.const 0xffffff)) (local.get $wide)))))
+        (if (i32.gt_u (global.get $lvChar) (local.get $before))
           (then
             (if
-              (call $lvBytesEq
-                (i32.add (local.get $node) (i32.const 24))
-                (local.get $blobBase)
-                (local.get $blobLen))
+              (i32.and (i32.ne (global.get $lvTokenCount) (i32.const 0))
+                (i32.eq (local.get $hl)
+                  (select (i32.load offset=4 (local.get $node)) (i32.shr_u (i32.load (local.get $node)) (i32.const 24)) (local.get $wide))))
               (then
-                (i32.store offset=4
-                  (local.get $node)
-                  (i32.add (i32.load offset=4 (local.get $node)) (i32.const 1)))
-                (local.set $newId (global.get $lvIncoming))))))))
-    (if (i32.eqz (local.get $newId))
-      (then
-        (local.set $before (global.get $lvTransLo))
-        (local.set $newId (call $lvIntern (local.get $blobBase) (local.get $blobLen)))
-        (local.set $recStart
-          (i32.add (local.get $recStart) (i32.sub (global.get $lvTransLo) (local.get $before))))))
-    (global.set $lvMachineId (local.get $newId))
-    ;; parse the line records: count content records, find the utf16 length
-    (local.set $recs (local.get $recStart))
-    (local.set $nRecs (i32.shr_u (local.get $recLen) (i32.const 3)))
-    (block $parsed
-      (loop $parse
-        (br_if $parsed (i32.ge_u (local.get $r) (local.get $nRecs)))
-        (local.set $end
-          (i32.load (i32.add (local.get $recs) (i32.shl (local.get $r) (i32.const 3)))))
-        (local.set $hl
-          (i32.load offset=4 (i32.add (local.get $recs) (i32.shl (local.get $r) (i32.const 3)))))
-        (if (i32.eq (local.get $hl) (i32.const -1))
-          (then
-            (local.set $lastEnd
-              (i32.sub
-                (local.get $end)
-                (select (i32.const 2) (i32.const 1) (i32.eq (local.get $termBytes) (i32.const 2)))))
-            (br $parsed)))
-        (local.set $n (i32.add (local.get $n) (i32.const 1)))
-        (local.set $lastEnd (local.get $end))
-        (local.set $r (i32.add (local.get $r) (i32.const 1)))
-        (br $parse)))
-    (local.set $utf16 (local.get $lastEnd))
-    (local.set $wide (i32.ge_u (local.get $utf16) (i32.const 0x1000000)))
-    ;; pack into a fresh token block: 4-byte packed records, or the raw
-    ;; 8-byte pairs for lines past the 24-bit end range
-    (local.set $tokPtr (i32.const 0))
-    (if (local.get $n)
-      (then
-        (local.set $before (global.get $lvTransLo))
-        (local.set $tokPtr
-          (call $lvAlloc
-            (i32.shl (local.get $n) (select (i32.const 3) (i32.const 2) (local.get $wide)))))
-        (local.set $recs
-          (i32.add (local.get $recs) (i32.sub (global.get $lvTransLo) (local.get $before))))
-        (if (local.get $wide)
-          (then
-            (memory.copy
-              (local.get $tokPtr)
-              (local.get $recs)
-              (i32.shl (local.get $n) (i32.const 3))))
-          (else
-            (local.set $r (i32.const 0))
-            (block $packed
-              (loop $pack
-                (br_if $packed (i32.ge_u (local.get $r) (local.get $n)))
-                (local.set $w (i32.add (local.get $recs) (i32.shl (local.get $r) (i32.const 3))))
-                (i32.store
-                  (i32.add (local.get $tokPtr) (i32.shl (local.get $r) (i32.const 2)))
-                  (i32.or
-                    (i32.load (local.get $w))
-                    (i32.shl (i32.load offset=4 (local.get $w)) (i32.const 24))))
-                (local.set $r (i32.add (local.get $r) (i32.const 1)))
-                (br $pack)))))))
+                (local.set $w (local.get $node))
+                (global.set $lvTokenCount (i32.sub (global.get $lvTokenCount) (i32.const 1)))))
+            (if (local.get $wide)
+              (then
+                (i32.store (local.get $w) (global.get $lvChar))
+                (i32.store offset=4 (local.get $w) (local.get $hl)))
+              (else
+                (i32.store (local.get $w) (i32.or (global.get $lvChar) (i32.shl (local.get $hl) (i32.const 24))))))
+            (global.set $lvTokenCount (i32.add (global.get $lvTokenCount) (i32.const 1)))))
+        (global.set $lvRecord (i32.add (global.get $lvRecord) (i32.const 8)))
+        (local.set $remaining (i32.sub (local.get $remaining) (i32.const 1)))
+        (br $records)))
     (global.set $lvTransLo (i32.const 0))
     (global.set $lvTransHi (i32.const 0))
     (call $lvFree (i32.load offset=12 (local.get $slot)))
-    (i32.store offset=8 (local.get $slot) (local.get $utf16))
-    (i32.store offset=12 (local.get $slot) (local.get $tokPtr))
-    (i32.store offset=16 (local.get $slot) (local.get $n))
-    (i32.store offset=24
-      (local.get $slot)
-      (i32.or
-        (i32.and (local.get $flags) (i32.const -5))
-        (i32.shl (local.get $wide) (i32.const 2))))
-    (global.set $lvIncoming (local.get $newId))
-    (local.get $newId))
+    (i32.store offset=12 (local.get $slot) (global.get $lvTokenPtr))
+    (i32.store offset=16 (local.get $slot) (global.get $lvTokenCount))
+    (i32.store offset=24 (local.get $slot)
+      (i32.or (i32.and (local.get $flags) (i32.const -5)) (i32.shl (local.get $wide) (i32.const 2))))
+    (global.set $lvIncoming (global.get $lvOutgoing))
+    (global.set $lvOutgoing (i32.const 0))
+    (global.set $lvTokenPtr (i32.const 0))
+    (global.set $lvLinePhase (i32.const 0))
+    (global.get $lvIncoming))
 
   (global $lvRangePtr (mut i32) (i32.const 0))
   (global $lvRangeCount (mut i32) (i32.const 0))
@@ -1901,7 +1937,7 @@
   ;; ranges force re-tokenization of every line the old run had not reached,
   ;; and beyond them a state-id match against a pre-old-batch id certifies the
   ;; untouched chain exactly like ordinary convergence.
-  (func (export "liveApplyEdits") (param $staged i32)
+  (func (export "liveApplyEdits") (param $staged i32) (param $undelivered i32)
     (local $count i32)
     (local $k i32)
     (local $e i32)
@@ -1922,22 +1958,27 @@
     (local $b i32)
     (local $os i32)
     (local $oe i32)
+    (call $lvCancelLine)
     (local.set $count (i32.load (local.get $staged)))
     ;; capture the pending dirty ranges before the splices invalidate their
     ;; coordinates: the interrupted range restarts at the cursor (at least one
     ;; line, so a mid-convergence-tail run re-checks convergence there), then
     ;; the untouched later ranges follow verbatim
-    (if (global.get $lvPhase)
+    (if (i32.or (global.get $lvPhase) (local.get $undelivered))
       (then
-        (local.set $pendCount (i32.sub (global.get $lvRangeCount) (global.get $lvRangeIdx)))
+        (local.set $a (global.get $lvCursor))
+        (local.set $b
+          (select (global.get $lvDirtyTo) (i32.add (local.get $a) (i32.const 1))
+            (i32.gt_u (global.get $lvDirtyTo) (local.get $a))))
+        (if (local.get $undelivered)
+          (then
+            (local.set $a (i32.sub (local.get $undelivered) (i32.const 1)))
+            (if (i32.eqz (global.get $lvPhase)) (then (local.set $b (local.get $undelivered))))))
+        (local.set $pendCount
+          (select (i32.sub (global.get $lvRangeCount) (global.get $lvRangeIdx)) (i32.const 1) (global.get $lvPhase)))
         (local.set $pend (call $lvAlloc (i32.shl (local.get $pendCount) (i32.const 3))))
-        (i32.store (local.get $pend) (global.get $lvCursor))
-        (i32.store offset=4
-          (local.get $pend)
-          (select
-            (global.get $lvDirtyTo)
-            (i32.add (global.get $lvCursor) (i32.const 1))
-            (i32.gt_u (global.get $lvDirtyTo) (global.get $lvCursor))))
+        (i32.store (local.get $pend) (local.get $a))
+        (i32.store offset=4 (local.get $pend) (local.get $b))
         (local.set $k (i32.const 1))
         (block $copied
           (loop $copy
@@ -2091,7 +2132,7 @@
   ;; Returns 1 while more lines are pending, including after a range jump.
   ;; All driver state lives in globals, so time-sliced callers just call
   ;; again; a huge budget runs synchronously to completion.
-  (func (export "liveRun") (param $budget i32) (param $end i32) (result i32)
+  (func (export "liveRun") (param $budget i32) (param $end i32) (param $work i32) (result i32)
     (local $i i32)
     (local $slot i32)
     (local $oldId i32)
@@ -2109,7 +2150,8 @@
         (local.set $i (global.get $lvCursor))
         (local.set $slot (call $lvSlot (local.get $i)))
         (local.set $oldId (i32.load offset=20 (local.get $slot)))
-        (local.set $newId (call $lvRunLine (local.get $i) (i32.eqz (local.get $i))))
+        (local.set $newId (call $lvRunLine (local.get $i) (i32.eqz (local.get $i)) (local.get $work)))
+        (if (i32.eq (local.get $newId) (i32.const -1)) (then (return (i32.const 1))))
         (i32.store offset=20 (local.get $slot) (local.get $newId))
         (call $lvRelease (local.get $oldId))
         (global.set $lvRetok (i32.add (global.get $lvRetok) (i32.const 1)))

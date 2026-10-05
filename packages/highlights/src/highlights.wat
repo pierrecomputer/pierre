@@ -45,8 +45,14 @@
   ;; construct or embedded region, then continue with the language lexer.
   ;; Shared by highlightStream and the live tokenizer's per-line runs.
   (func $streamChunk (param $lang i32) (param $reset i32)
+    (global.set $liveEntering (i32.const 1))
     (if (call $ecmaStreamLang (local.get $lang) (local.get $reset))
       (then (return)))
+    (if (global.get $liveSuspended)
+      (then
+        (call $highlightLang (local.get $lang))
+        (return)))
+    (global.set $liveEntering (i32.const 0))
     ;; non-ecma lexers share the parameter-machine globals; the ecma stream
     ;; entries reset them in $hlEcmaImpl
     (if (local.get $reset)
@@ -76,6 +82,7 @@
       (then (return)))
     (if (call $streamResumeLang (local.get $lang))
       (then (return)))
+    (global.set $liveEntering (i32.const 1))
     (call $highlightLang (local.get $lang)))
 
   ;; Stream one input chunk through any language while preserving lexer and

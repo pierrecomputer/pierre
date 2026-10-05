@@ -143,9 +143,18 @@ for (const [name, source, lang] of [
       },
     }
   );
-  for (const viewport of [false, true]) {
+  for (const renderRange of [
+    undefined,
+    [0, 120],
+    [Math.max(0, lines.length - 120), lines.length],
+  ] as const) {
     scenarios.push({
-      label: viewport ? 'template + viewport' : 'template propagation',
+      label:
+        renderRange === undefined
+          ? 'template propagation'
+          : renderRange[0] === 0
+            ? 'template + viewport'
+            : 'template + distant viewport',
       edit: {
         range: {
           start: { line: 2, character: 0 },
@@ -153,7 +162,7 @@ for (const [name, source, lang] of [
         },
         newText: '`',
       },
-      options: viewport ? { renderRange: [0, 120] } : undefined,
+      options: renderRange === undefined ? undefined : { renderRange },
     });
   }
 
@@ -271,6 +280,52 @@ for (const count of [100_000, 1_000_000]) {
     } finally {
       live.dispose();
     }
+  }
+}
+
+for (const size of [1, 5]) {
+  const live = new LiveTokenizer({
+    lang: 'ts',
+    theme: pierreDark,
+    code: 'x+1;'.repeat(size * 262144),
+    onDeferTokenize() {},
+  });
+  try {
+    const [sample] = measure(
+      [
+        {
+          run: () =>
+            live.applyEdits(
+              [
+                {
+                  range: {
+                    start: { line: 0, character: 0 },
+                    end: { line: 0, character: 0 },
+                  },
+                  newText: ' ',
+                },
+              ],
+              { renderRange: [0, 1] }
+            ),
+          afterEach: () => {
+            live.flush();
+            live.applyEdits([
+              {
+                range: {
+                  start: { line: 0, character: 0 },
+                  end: { line: 0, character: 1 },
+                },
+                newText: '',
+              },
+            ]);
+          },
+        },
+      ],
+      { batch: false }
+    );
+    bench(`${size} MiB dense line`, 'edit + viewport', sample);
+  } finally {
+    live.dispose();
   }
 }
 

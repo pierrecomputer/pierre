@@ -224,11 +224,19 @@ rejects overlaps, removes no-ops by comparing each line and terminator, and
 combines edits sharing a line. Wasm splices line descriptors and remaps pending
 dirty ranges through the edits.
 
-Without `renderRange`, tokenization completes synchronously. With it, work
-reaches the range's end, including preceding dirty lines needed for state.
-Finished in-range tokens are returned; off-range tokens reach `onDeferTokenize`.
-Remaining work runs in adaptive slices on the host event loop through
-`MessageChannel`, with a timer fallback.
+Without `renderRange`, tokenization completes synchronously. With it, each slice
+uses a one-millisecond elapsed-time budget for lexer work, text decode, token
+conversion, and callback delivery. Finished viewport lines return in `lines`.
+All unfinished lines, including viewport lines, reach `onDeferTokenize` through
+`MessageChannel` tasks, with a timer fallback.
+
+The live driver can suspend root lexer loops at token boundaries and resume
+their locals against the same input. Raw record conversion and tuple conversion
+also yield within a line. Partial results stay private until a complete line is
+ready. `tokenizeMaxLineLength` limits output objects, not lexer work. The budget
+is cooperative: individual lexer operations, embedded regions, memory
+allocation, and caller callbacks can exceed it. Document staging and explicit
+synchronous reads also remain synchronous.
 
 `pause` retains pending work, `resume` schedules it, and `flush` completes it
 through an optional end line. Unreached lines keep previous tokens; new lines

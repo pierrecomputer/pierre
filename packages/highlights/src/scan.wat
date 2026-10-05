@@ -12,6 +12,9 @@
   (global $eof (mut i32) (i32.const 0)) ;; input end (the NUL sentinel sits there)
   (global $end (mut i32) (i32.const 0)) ;; scan end: $eof, or a sub-range end for embedded scans
   (global $ptr (mut i32) (i32.const 0)) ;; read cursor
+  (global $liveLimit (mut i32) (i32.const 0x7fffffff))
+  (global $liveSuspended (mut i32) (i32.const 0))
+  (global $liveEntering (mut i32) (i32.const 0))
 
   ;; advance $ptr to the next CR/LF, or to $end - 16 bytes per step
   (func $scanToLineEnd

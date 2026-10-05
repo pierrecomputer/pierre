@@ -330,6 +330,87 @@ export function transformWat(
   // publish its length as a named address for src/live.wat.
   code += `\n(const $mem.streamStateUsed ${streamStateOffset})\n`;
 
+  // Nested lexers cannot yield: their callers' locals are not saved here.
+  const liveModule = code.includes('(export "liveRun")');
+  code = replaceForm(code, 'func', (inner) => {
+    const name = inner.match(/^\s*(\$\w+)/)?.[1];
+    if (
+      !liveModule ||
+      name === undefined ||
+      (!lexers.has(name) && name !== '$hlEcmaImpl' && name !== '$hlAngularHtml')
+    )
+      return `(func${inner})`;
+    const forms = splitTopLevelForms(inner);
+    const loopBlock = forms.find(
+      (form) =>
+        form.head === 'block' &&
+        splitTopLevelForms(form.text.slice(1, -1)).some(
+          (child) => child.head === 'loop'
+        )
+    );
+    if (loopBlock === undefined)
+      return `(func${inner.replace(
+        '(call $lexEmitLeadingContinuation)',
+        '(global.set $liveEntering (i32.const 0))\n(call $lexEmitLeadingContinuation)'
+      )})`;
+    const first = forms.find(
+      (form) =>
+        form.head !== '' && !['param', 'result', 'local'].includes(form.head)
+    )!;
+    const carried = new LocalLiveness().seq(
+      parseSexpr(inner.slice(loopBlock.start)),
+      new Set()
+    );
+    let offset = 0;
+    const locals = [
+      ...inner.matchAll(/\((?:local|param)\s+(\$\w+)\s+(\w+)\s*\)/g),
+    ]
+      .filter(([, local]) => carried.has(local))
+      .map(([, local, type]) => {
+        if (type !== 'i32' && type !== 'i64')
+          throw new Error(`${name} cannot suspend a ${type} local`);
+        const size = type === 'i64' ? 8 : 4;
+        offset = (offset + size - 1) & -size;
+        const at = offset;
+        offset += size;
+        return { local, type, at };
+      });
+    if (offset > 512) throw new Error(`${name} exceeds live lexer locals`);
+    const load = locals
+      .map(
+        ({ local, type, at }) =>
+          `(local.set ${local} (${type}.load offset=${at} (i32.const $mem.liveLocals)))`
+      )
+      .join('\n');
+    const save = locals
+      .map(
+        ({ local, type, at }) =>
+          `(${type}.store offset=${at} (i32.const $mem.liveLocals) (local.get ${local}))`
+      )
+      .join('\n');
+    const block = loopBlock.text.replace(
+      /\(loop\s+\$\w+/,
+      (loop) => `${loop}
+      (if (i32.ge_u (global.get $ptr) (global.get $liveLimit))
+        (then
+          (if (local.get $liveRoot)
+            (then
+              ${save}
+              (global.set $liveSuspended (i32.const 1))
+              (return ${inner.includes('(result i32)') ? '(i32.const 0)' : ''})))))`
+    );
+    return `(func${inner.slice(0, first.start)}
+      (local $liveRoot i32)
+      (local.set $liveRoot (global.get $liveEntering))
+      (global.set $liveEntering (i32.const 0))
+      (if (global.get $liveSuspended)
+        (then
+          (global.set $liveSuspended (i32.const 0))
+          ${load})
+        (else ${inner.slice(first.start, loopBlock.start)}))
+      ${block}${inner.slice(loopBlock.end)})`;
+  });
+
   // `(const $mem.name <int|$other>[+-<int>])` defines a named address.
   // Addresses live in src/memory.wat so each region moves in one place.
   // References may add a +/- bias; names cannot contain `-`.

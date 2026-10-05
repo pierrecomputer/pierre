@@ -26,7 +26,8 @@
       [43184:59200)   live tokenizer change list
       [59200:59328)   live tokenizer free-list heads
       [59328:59584)   PHP keyword table
-      [59584:65536)   free
+      [59584:60096)   suspended live lexer locals
+      [60096:65536)   free
     [] pages 2..N     (text buffer; a live instance lays them out itself, see src/live.wat)
       [65536:EOF)     input, NUL sentinel, then at least 16 bytes of slack
       [(EOF+47)&~15:) prefix bytes (mode 1) or theme blob (modes 2/4), then HTML;
@@ -124,5 +125,6 @@
   (const $mem.liveFree 59200)                ;; 128: 32 size-class free-list heads
   (const $mem.phpWords 59328)               ;; 256
   (const $mem.keywordTablesEnd 59584)
+  (const $mem.liveLocals 59584)              ;; 512
   (const $mem.liveHeapStart 65536)
 )

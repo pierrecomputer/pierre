@@ -1302,6 +1302,69 @@ void t.test('LiveTokenizer: renderRange updates match sync updates', () => {
 });
 
 void t.test(
+  'live wasm: yielding within lines preserves tokens and state',
+  () => {
+    interface RawLive {
+      memory: WebAssembly.Memory;
+      liveStage(len: number): number;
+      liveInitDoc(ptr: number, len: number, lang: number): void;
+      liveRun(lines: number, end?: number, work?: number): number;
+      liveLineCount(): number;
+      liveLineTokPtr(line: number): number;
+      liveLineTokCount(line: number): number;
+      liveLineFlags(line: number): number;
+      liveStats(key: number): number;
+    }
+    const env = { is_id_start: () => 1, is_id_continue: () => 1 };
+    for (const [lang, source] of tokenizerSamples) {
+      const bytes = new TextEncoder().encode(source);
+      const runs: RawLive[] = [];
+      for (const work of [0, 7]) {
+        const raw = new WebAssembly.Instance(wasmModule, { env })
+          .exports as unknown as RawLive;
+        const ptr = raw.liveStage(bytes.length);
+        new Uint8Array(raw.memory.buffer).set(bytes, ptr);
+        raw.liveInitDoc(ptr, bytes.length, LANGS[lang]);
+        let steps = 0;
+        while (raw.liveRun(1, 0, work) !== 0) {
+          assert.ok(
+            ++steps < bytes.length * 3 + 100,
+            `${lang}: makes progress`
+          );
+        }
+        runs.push(raw);
+      }
+      const [eager, sliced] = runs;
+      assert.equal(
+        sliced.liveStats(1),
+        eager.liveStats(1),
+        `${lang}: outgoing states`
+      );
+      for (let line = 0; line < eager.liveLineCount(); line++) {
+        assert.equal(
+          sliced.liveLineFlags(line),
+          eager.liveLineFlags(line),
+          `${lang}:${line}: flags`
+        );
+        assert.deepEqual(
+          new Uint32Array(
+            sliced.memory.buffer,
+            sliced.liveLineTokPtr(line),
+            sliced.liveLineTokCount(line)
+          ),
+          new Uint32Array(
+            eager.memory.buffer,
+            eager.liveLineTokPtr(line),
+            eager.liveLineTokCount(line)
+          ),
+          `${lang}:${line}: records`
+        );
+      }
+    }
+  }
+);
+
+void t.test(
   'LiveTokenizer: an edit while deferred work is pending merges the tail',
   async () => {
     const code = Array.from(
@@ -2413,5 +2476,189 @@ void t.test(
     } finally {
       live.dispose();
     }
+  }
+);
+
+function withSliceClock(
+  run: (messages: (() => void)[], advance: () => void) => void
+): void {
+  const originalChannel = globalThis.MessageChannel;
+  const originalNow = Object.getOwnPropertyDescriptor(performance, 'now');
+  const messages: (() => void)[] = [];
+  let time = 0;
+  Object.defineProperty(performance, 'now', {
+    configurable: true,
+    value: () => (time += 0.05),
+  });
+  globalThis.MessageChannel = class {
+    listener: ((event: { data: number }) => void) | undefined;
+    port1 = {
+      addEventListener: (
+        _type: string,
+        listener: (event: { data: number }) => void
+      ) => {
+        this.listener = listener;
+      },
+      start() {},
+      close() {},
+    };
+    port2 = {
+      postMessage: (data: number) =>
+        messages.push(() => this.listener?.({ data })),
+      close() {},
+    };
+  } as unknown as typeof MessageChannel;
+  try {
+    run(messages, () => {
+      time += 2;
+    });
+  } finally {
+    globalThis.MessageChannel = originalChannel;
+    if (originalNow !== undefined)
+      Object.defineProperty(performance, 'now', originalNow);
+    else Reflect.deleteProperty(performance, 'now');
+  }
+}
+
+void t.test(
+  'LiveTokenizer: distant viewports and callback work share elapsed budgets',
+  () => {
+    withSliceClock((messages, advance) => {
+      const source = 'const x = 1;\n'.repeat(100_120);
+      const seen = new Set<number>();
+      let deliveries = 0;
+      const live = new LiveTokenizer({
+        lang: 'ts',
+        code: source,
+        theme: pierreDark,
+        onDeferTokenize(lines) {
+          deliveries++;
+          for (const [line, tokens] of lines) {
+            assert.ok(!seen.has(line), `line ${line} is delivered once`);
+            seen.add(line);
+            assert.equal(
+              tokens.map((token) => token[2]).join(''),
+              live.getLineText(line)
+            );
+          }
+          advance();
+        },
+      });
+      try {
+        const update = live.applyEdits(
+          [
+            {
+              range: {
+                start: { line: 0, character: 0 },
+                end: { line: 0, character: 0 },
+              },
+              newText: '/*',
+            },
+          ],
+          { renderRange: [100_000, 100_120] }
+        );
+        assert.equal(update.lines.size, 0, 'viewport can arrive later');
+        assert.ok(live.pendingTokenization);
+        assert.ok(
+          seen.size < 120,
+          'the synchronous slice stops in the dirty prefix'
+        );
+        while (messages.length > 0) {
+          const before = deliveries;
+          messages.shift()!();
+          assert.ok(
+            deliveries - before <= 1,
+            'expensive delivery exhausts the slice'
+          );
+        }
+        assert.equal(live.pendingTokenization, false);
+        assert.equal(seen.size, live.lineCount);
+        assert.ok(seen.has(100_119), 'deferred delivery includes the viewport');
+        assertMatchesFresh(live, '/*' + source, 'ts', 'distant viewport');
+      } finally {
+        live.dispose();
+      }
+    });
+  }
+);
+
+void t.test(
+  'LiveTokenizer: edits remap a partially materialized long line',
+  () => {
+    withSliceClock((messages) => {
+      let long = 'const é = "🙂"; '.repeat(8192) + '\ud800';
+      const delivered = new Map<number, HighlightedToken[]>();
+      const live = new LiveTokenizer({
+        lang: 'ts',
+        code: `first\n${long}\nlast`,
+        theme: pierreDark,
+        renderRange: [0, 0],
+        onDeferTokenize(lines) {
+          for (const [line, tokens] of lines) delivered.set(line, tokens);
+        },
+      });
+      try {
+        messages.shift()!();
+        assert.equal(live.getLineRecords(1).data.length, 0);
+        live.applyEdits(
+          [
+            {
+              range: {
+                start: { line: 1, character: 0 },
+                end: { line: 1, character: 0 },
+              },
+              newText: ' ',
+            },
+          ],
+          { renderRange: [0, 0] }
+        );
+        long = ' ' + long;
+        let slices = 0;
+        while (live.getLineRecords(1).data.length === 0) {
+          assert.ok(messages.length > 0);
+          messages.shift()!();
+          assert.ok(++slices < 1000);
+        }
+        assert.ok(slices > 1, 'scanning yields within the long line');
+        assert.ok(
+          !delivered.has(1),
+          'raw records finish before tuple conversion'
+        );
+        assert.ok(live.pendingTokenization, 'materialization remains pending');
+        live.pause();
+        while (messages.length > 0) messages.shift()!();
+        assert.ok(!delivered.has(1), 'pause retains the partial conversion');
+        delivered.clear();
+        live.applyEdits(
+          [
+            {
+              range: {
+                start: { line: 0, character: 0 },
+                end: { line: 0, character: 0 },
+              },
+              newText: 'new\n',
+            },
+          ],
+          { renderRange: [0, 0] }
+        );
+        while (messages.length > 0) messages.shift()!();
+        assert.equal(live.pendingTokenization, false);
+        assert.equal(
+          delivered
+            .get(2)
+            ?.map((token) => token[2])
+            .join(''),
+          long
+        );
+        assertMatchesFresh(
+          live,
+          `new\nfirst\n${long}\nlast`,
+          'ts',
+          'interrupted conversion'
+        );
+      } finally {
+        live.dispose();
+      }
+    });
   }
 );
