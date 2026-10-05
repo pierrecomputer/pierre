@@ -1,12 +1,25 @@
-import { afterEach, describe, expect, mock, spyOn, test } from 'bun:test';
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  mock,
+  spyOn,
+  test,
+} from 'bun:test';
 
 import { CodeView } from '../src/components/CodeView';
 import { DEFAULT_HIGHLIGHTER, DEFAULT_THEMES } from '../src/constants';
+import {
+  disposeHighlighter,
+  preloadHighlighter,
+} from '../src/highlighter/shared_highlighter';
 import type {
   HighlighterTypes,
   RenderDiffOptions,
   RenderFileOptions,
 } from '../src/types';
+import { getThemes } from '../src/utils/getThemes';
 import type { WorkerPoolManager, WorkerStats } from '../src/worker';
 import { createRoot, installDom, makeFileItem, wait } from './domHarness';
 
@@ -139,7 +152,16 @@ class FakeWorkerPoolManager {
 }
 
 describe('CodeView worker pool readiness', () => {
-  afterEach(() => {
+  beforeEach(async () => {
+    await disposeHighlighter();
+    await preloadHighlighter({
+      themes: getThemes(DEFAULT_THEMES),
+      langs: ['typescript'],
+      preferredHighlighter: DEFAULT_HIGHLIGHTER,
+    });
+  });
+  afterEach(async () => {
+    await disposeHighlighter();
     mock.restore();
   });
 
