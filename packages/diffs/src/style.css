@@ -317,18 +317,6 @@
       var(--diffs-token-light-bg, inherit),
       var(--diffs-token-dark-bg, inherit)
     );
-    font-weight: light-dark(
-      var(--diffs-token-light-font-weight, inherit),
-      var(--diffs-token-dark-font-weight, inherit)
-    );
-    font-style: light-dark(
-      var(--diffs-token-light-font-style, inherit),
-      var(--diffs-token-dark-font-style, inherit)
-    );
-    text-decoration: light-dark(
-      var(--diffs-token-light-text-decoration, inherit),
-      var(--diffs-token-dark-text-decoration, inherit)
-    );
   }
 
   /* Line Color and BG Calculations */
