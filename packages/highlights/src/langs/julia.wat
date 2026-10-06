@@ -81,6 +81,7 @@
     (param $q i32)
     (param $triple i32)
     (param $expand i32)
+    (param $raw i32)
     (param $nested i32)
     (param $hl i32)
     (param $seg i32)
@@ -145,6 +146,14 @@
         (local.set $seg (global.get $ptr))
         (if (i32.eq (local.get $c) (i32.const 92))
           (then
+            (if (local.get $raw)
+              (then
+                (local.set $c2 (call $jlByte (i32.add (global.get $ptr) (i32.const 1))))
+                (global.set $ptr
+                  (i32.add (global.get $ptr)
+                    (select (i32.const 2) (i32.const 1)
+                      (byteset.get "\22\5c" (local.get $c2)))))
+                (br $scan)))
             (local.set $e (call $lexEscapeEnd (global.get $ptr)))
             (call $emitTok (enum.get $Token.string.escape) (global.get $ptr) (local.get $e))
             (global.set $ptr (local.get $e))
@@ -189,8 +198,8 @@
         (br $l)))
     (i32.const 0))
 
-  ;; $strKind is 1 inside a `"` body, 2 inside `"""`, 3 and 4 for the raw
-  ;; forms behind a prefix such as `r"..."`, and 5 inside a backtick
+  ;; $strKind is 1 inside a `"` body, 2 inside `"""`, 3 and 4 for
+  ;; non-interpolating prefixes, 7 and 8 for `raw`, and 5 inside a backtick
   ;; command, with $strHl the body's token and $seg the start of the bytes
   ;; not yet emitted; $interp counts parentheses inside a `$(` splice and
   ;; $interpKind remembers which body to return to. $expect is the pending
@@ -247,6 +256,7 @@
                 (i32.or
                   (i32.le_u (local.get $strKind) (i32.const 2))
                   (i32.eq (local.get $strKind) (i32.const 5)))
+                (i32.ge_u (local.get $strKind) (i32.const 7))
                 (local.get $interp)
                 (local.get $strHl)
                 (local.get $seg)))
@@ -407,6 +417,10 @@
                   (then
                     (local.set $strKind (i32.const 4))
                     (global.set $ptr (i32.add (global.get $ptr) (i32.const 2)))))
+                (if (i32.eq (i32.sub (local.get $rhs) (local.get $lhs)) (i32.const 3))
+                  (then
+                    (if (i32.eq (i32.and (i32.load (local.get $lhs)) (i32.const 0xffffff)) (i32.const "raw"))
+                      (then (local.set $strKind (i32.add (local.get $strKind) (i32.const 4)))))))
                 (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
                 (call $emitTok (local.get $strHl) (local.get $rhs) (global.get $ptr))
                 (local.set $seg (global.get $ptr))

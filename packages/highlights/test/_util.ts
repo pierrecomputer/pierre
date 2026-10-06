@@ -74,7 +74,9 @@ export function loadLang(
   const resume =
     splitBytes === undefined
       ? ''
-      : `(global.set $end (global.get $eof))\n    (call ${funcName})`;
+      : `(if (i32.gt_u (global.get $ptr) (global.get $end)) (then unreachable))
+    (global.set $end (global.get $eof))
+    (call ${funcName})`;
   // the css preprocessors share css.wat
   const file = ['less', 'sass', 'scss'].includes(name) ? 'css' : name;
   const src = `(module
@@ -146,6 +148,7 @@ export function loadSplitLang(name: Lang): TestSplitHl {
     (call $hlBegin)
     (global.set $end (i32.add (global.get $ptr) (i32.load (i32.const 32))))
     (call ${entry})
+    (if (i32.gt_u (global.get $ptr) (global.get $end)) (then unreachable))
     (global.set $end (global.get $eof))
     (call ${entry})
     (call $hlEnd)))`;

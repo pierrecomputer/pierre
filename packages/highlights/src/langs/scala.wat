@@ -27,22 +27,22 @@
   (func $scalaWordHl (param $lhs i32) (param $rhs i32) (result i32)
     (keyword-table.value $scalaWords (local.get $lhs) (local.get $rhs)))
 
-  ;; Scan a `"` or `"""` body from $ptr, with the string's bytes since $seg
-  ;; still unemitted. Only a single-quote body has backslash escapes; an
-  ;; interpolated body - $expand, after an `s`, `f`, `raw`, or custom
-  ;; prefix - carries `$name` variables, `${` splices, and `$$`. Returns 1
-  ;; past the closing quote, 2 past a `${` that opens a splice - emitted as
-  ;; punctuation.special, the caller lexes the expression - 3 when an
-  ;; escaped line break ends exactly at $end, and 0 when the body stops at
-  ;; $end or at a raw line break of a single-line string. $nested is
-  ;; nonzero inside a splice, where a nested string keeps `${` plain.
+  ;; Scan a `"` or `"""` body from $ptr. Bytes from $seg are not yet emitted.
+  ;; Only non-raw, single-quoted bodies process backslash escapes.
+  ;; $expand enables `$name`, `${...}`, and `$$` for interpolated strings.
+  ;; Return 1 after the quote, 2 after `${`, 3 after an escaped line break
+  ;; at $end, or 0 at $end or a single-line string's raw line break.
+  ;; Emit `${` as punctuation.special. $nested keeps `${` literal inside
+  ;; a string nested in an interpolation.
   (func $scalaStringBody
     (param $triple i32)
     (param $expand i32)
+    (param $raw i32)
     (param $nested i32)
     (param $seg i32)
     (result i32)
     (local $c i32)
+    (local $c2 i32)
     (local $stop i32)
     (local $dollar i32)
     (local $status i32)
@@ -104,6 +104,14 @@
           (i32.or (i32.eq (local.get $c) (i32.const 10)) (i32.eq (local.get $c) (i32.const 13))))
         (if (i32.eq (local.get $c) (i32.const 92))
           (then
+            (if (local.get $raw)
+              (then
+                (local.set $c2 (call $scalaByte (i32.add (global.get $ptr) (i32.const 1))))
+                (global.set $ptr
+                  (i32.add (global.get $ptr)
+                    (select (i32.const 2) (i32.const 1)
+                      (byteset.get "\22\5c" (local.get $c2)))))
+                (br $scan)))
             (if (call $stringEscapeAt (local.get $seg))
               (then (local.set $status (i32.const 3))))
             (local.set $seg (global.get $ptr))
@@ -119,7 +127,7 @@
     (byteset.get "!#%&*+-/:<=>?@^|~" (local.get $c)))
 
   ;; $strKind is 1 inside a `"` body, 2 inside `"""`, and 3 or 4 for their
-  ;; interpolated forms, with $seg the start of the bytes not yet emitted;
+  ;; interpolated forms, 5 or 6 for `raw`, with $seg the start of unemitted bytes;
   ;; $interp counts braces inside a `${` splice and $interpKind remembers
   ;; which body to return to. $expect is 1 after `def` and 2 after a type
   ;; keyword; $member is 1 after `.`; $importCtx is 1 on an import or
@@ -161,6 +169,7 @@
               (call $scalaStringBody
                 (i32.eqz (i32.and (local.get $strKind) (i32.const 1)))
                 (i32.ge_u (local.get $strKind) (i32.const 3))
+                (i32.ge_u (local.get $strKind) (i32.const 5))
                 (local.get $interp)
                 (local.get $seg)))
             (local.set $seg (global.get $ptr))
@@ -303,6 +312,10 @@
                   (then
                     (local.set $strKind (i32.const 4))
                     (global.set $ptr (i32.add (global.get $ptr) (i32.const 2)))))
+                (if (i32.eq (i32.sub (local.get $rhs) (local.get $lhs)) (i32.const 3))
+                  (then
+                    (if (i32.eq (i32.and (i32.load (local.get $lhs)) (i32.const 0xffffff)) (i32.const "raw"))
+                      (then (local.set $strKind (i32.add (local.get $strKind) (i32.const 2)))))))
                 (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
                 (call $emitTok (enum.get $Token.string) (local.get $rhs) (global.get $ptr))
                 (local.set $seg (global.get $ptr))

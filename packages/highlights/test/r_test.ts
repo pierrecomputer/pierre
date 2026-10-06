@@ -11,6 +11,7 @@ import {
   checkInvariants,
   exactColor,
   loadLang,
+  makeRand,
   spansOf,
   type TestLang,
   textOf,
@@ -200,13 +201,12 @@ void t.test('r: malformed UTF-8 stays balanced and decodes losslessly', () => {
 });
 
 void t.test('r: deterministic fuzz preserves lexer invariants', () => {
-  let state = 0x2a7f13;
+  const rand = makeRand(0x2a7f13);
   const alphabet = 'abcXYZ09_ /\\"\'`\n\t{}[]().,:;+-*=!<>&|#@$%~?é';
   for (let n = 0; n < 160; n++) {
     let src = '';
-    for (let i = 0, len = state & 63; i < len; i++) {
-      state = (Math.imul(state, 1664525) + 1013904223) >>> 0;
-      src += alphabet[state % alphabet.length];
+    for (let i = 0, len = rand() & 63; i < len; i++) {
+      src += alphabet[rand() % alphabet.length];
     }
     checkInvariants(lexer.hl, src);
   }

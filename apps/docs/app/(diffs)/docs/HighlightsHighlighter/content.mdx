@@ -1,13 +1,13 @@
 ## Highlights
 
 <Notice variant="warning" icon={<IconCiWarningFill />}>
-  Highlights is experimental and subject to change. Try the [interactive
-  playground](/highlights) before replacing Shiki in production.
+  Highlights is experimental. Its API can change. Try the [interactive
+  playground](/highlights) before you replace Shiki in production.
 </Notice>
 
 Highlights is a syntax highlighter with 73 built-in language lexers written in
-WebAssembly Text (WAT). It produces HTML or Shiki-compatible token objects
-without downloading language grammars.
+WebAssembly Text (WAT). It produces HTML or Shiki-compatible token objects. The
+package includes the lexers, so it does not download language grammars.
 
 | Use case                     | API               | Result                               |
 | ---------------------------- | ----------------- | ------------------------------------ |
@@ -22,81 +22,89 @@ Install Highlights from npm:
 pnpm add @pierre/highlights
 ```
 
-The package runs in Node.js, browsers, and Cloudflare Workers. Its conditional
-exports select and initialize the matching WebAssembly loader automatically.
-After importing it, highlighting calls are synchronous; no `init()` call or
-language registration is needed.
+The package runs in Node.js, browsers, and Cloudflare Workers. It selects and
+initializes the WebAssembly loader for your runtime at import. `codeToHtml()`
+and `codeToTokens()` run synchronously after import. You do not need to call
+`init()` or register languages.
 
 ### HTML
 
 `codeToHtml(input, { lang, theme })` returns a
 `<pre class="highlights"><code>…</code></pre>` fragment as a `Uint8Array`.
-`input` can be a `string`, `Uint8Array`, or `ArrayBuffer`; byte input is UTF-8.
-Decode the result to use it as an HTML string. Pass `themes` instead of `theme`
-to render several color schemes into the same markup; see Multiple themes below.
+`input` can be a `string`, `Uint8Array`, or `ArrayBuffer`. Byte input uses
+UTF-8.
+
+Decode the result to use it as an HTML string. To use several color schemes in
+the same markup, pass `themes` instead of `theme`. Read the Multiple themes
+section for details.
 
 <DocsCodeExample {...highlightsHtml} />
 
-The returned bytes may reference WebAssembly memory. Decode them immediately, or
-call `.slice()` before retaining them across another highlighting or
-tokenization call on the same highlighter. The top-level `codeToHtml()` and
-`codeToTokens()` functions share one highlighter instance.
+The returned bytes can share WebAssembly memory. The top-level `codeToHtml()`
+and `codeToTokens()` functions share one highlighter instance. A later call on
+that instance can overwrite the bytes.
 
-Code is HTML-escaped and theme styles are applied inline. The `cssVariables`
-theme requires CSS declarations, shown in the Themes section below.
+Decode the bytes before the next call. Use `.slice()` to keep a copy for later
+use.
+
+The highlighter escapes HTML characters in the code and applies inline theme
+styles. The `cssVariables` theme needs CSS declarations. The Themes section
+explains these declarations.
 
 ### Tokens
 
 `codeToTokens()` accepts the same input types as `codeToHtml()` and returns a
 `TokensResult`. Its `tokens` property contains one `ThemedToken[]` per line.
 Each token has `content` and an `offset` measured in UTF-16 code units from the
-start of the complete input. Line terminators are excluded from token content; a
-trailing line break adds an empty final line.
+start of the complete input. Token content excludes line terminators. A trailing
+line break adds an empty final line.
 
 <DocsCodeExample {...highlightsTokens} />
 
 With a single `theme`, tokens have `color` and `fontStyle` fields. With
-`themes`, styles are in each token's `htmlStyle` map, including any CSS custom
-properties. A custom renderer must apply these styles as well as the result's
-root colors; rendering only `token.color` loses multi-theme styling. The token
-object format is compatible with Shiki, but lexer boundaries and syntax
+`themes`, each token has an `htmlStyle` map with its styles and CSS custom
+properties. A custom renderer must apply this map and the result's root colors.
+`token.color` alone does not contain all styles for multiple themes.
+
+The token object format is compatible with Shiki. Token boundaries and syntax
 classifications can differ.
 
 The result also includes theme metadata: `fg`, `bg`, `themeName`, and, for
 `defaultColor: false`, `rootStyle`. In multi-theme mode, `fg` and `bg` can
 contain CSS declaration lists rather than single colors.
 
-These options are shared by `codeToHtml()`, `codeToTokens()`, `StreamTokenizer`,
-and `LiveTokenizer`:
+`codeToHtml()`, `codeToTokens()`, `StreamTokenizer`, and `LiveTokenizer` accept
+these options:
 
-| Option                  | Behavior                                                                                                                                                                                                     |
-| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `lang`                  | A built-in language name or alias                                                                                                                                                                            |
-| `theme`                 | One Zed `Theme` or `ThemeFamily`                                                                                                                                                                             |
-| `themes`                | A non-empty map of named themes such as `{ dark, light }`; emits per-theme styles                                                                                                                            |
-| `cssVariablePrefix`     | Prefix for CSS-variable colors and multi-theme properties; defaults to `--hls-`                                                                                                                              |
-| `defaultColor`          | With `themes`, the key applied inline; defaults to `light` and throws if that key is missing. `false` emits only custom properties; `'light-dark()'` combines colors from required `light` and `dark` themes |
-| `tokenizeMaxLineLength` | Collapses lines at or above this UTF-16 length into one token with the theme's foreground color and no syntax styling; `0` or omission disables the limit                                                    |
+| Option                  | Behavior                                                                                                                                                                                                |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `lang`                  | A built-in language name or alias                                                                                                                                                                       |
+| `theme`                 | One Zed `Theme` or `ThemeFamily`                                                                                                                                                                        |
+| `themes`                | A non-empty map of named themes, such as `{ dark, light }`. The output includes styles for each theme.                                                                                                  |
+| `cssVariablePrefix`     | Prefix for CSS colors and properties for multiple themes. The default is `--hls-`.                                                                                                                      |
+| `defaultColor`          | With `themes`, the key for inline styles. The default is `light`. A missing key causes an error. `false` uses only custom properties. `'light-dark()'` combines the required `light` and `dark` themes. |
+| `tokenizeMaxLineLength` | At this UTF-16 line length or greater, return one token with the theme's foreground color and no syntax styles. `0` or omission disables the limit.                                                     |
 
-Choose either `theme` or `themes`; every entry point accepts both forms.
+Choose either `theme` or `themes`. Each API accepts both forms.
 
-`tokenizeMaxLineLength` applies to the tokenization APIs only. It limits the
-number of token objects a renderer receives; the lexer still processes those
-lines to preserve state for subsequent lines.
+`tokenizeMaxLineLength` applies only to the tokenization APIs. It limits the
+number of token objects that a renderer receives. The lexer still processes
+those lines to preserve state for later lines.
 
 ### Streaming
 
 `StreamTokenizer` extends
 [`TransformStream`](https://developer.mozilla.org/en-US/docs/Web/API/TransformStream).
-It accepts UTF-8 `Uint8Array` chunks and emits one `ThemedToken[]` per completed
-line, so you can pass it directly to `readable.pipeThrough(tokenizer)`. Closing
-the writable side emits the final line and releases the WebAssembly instance;
-cancellation or abort discards buffered input and releases the instance.
+It accepts UTF-8 `Uint8Array` chunks and emits one `ThemedToken[]` per complete
+line. It works directly with `readable.pipeThrough(tokenizer)`. When the
+writable side closes, the tokenizer emits the final line and releases the
+WebAssembly instance. Cancellation or abort discards buffered input and releases
+the instance.
 
-Each tokenizer owns an isolated WebAssembly instance, preserves lexer state
-between chunks, and tokenizes each completed chunk once. Token offsets stay
-relative to the complete stream. UTF-8 decoding is handled internally, including
-characters split across chunks.
+Each tokenizer owns a separate WebAssembly instance. It saves lexer state
+between chunks and tokenizes each complete chunk once. Token offsets are
+relative to the start of the stream. The tokenizer decodes UTF-8 characters,
+even when they span chunks.
 
 <DocsCodeExample {...highlightsStreamPipe} />
 
@@ -107,67 +115,79 @@ You can also use the synchronous `pushCode()` and `end()` methods:
 `pushCode(chunk: string | Uint8Array)` accepts strings or UTF-8 bytes and
 buffers the unfinished line until an `LF` (`\n`) arrives or you call `end()`.
 This also handles `CRLF` input. An input chunk can produce zero, one, or several
-lines; chunk boundaries do not need to match line or token boundaries.
+lines. Chunk boundaries do not need to match line or token boundaries.
 
-UTF-8 characters can span consecutive byte chunks. You can mix strings and
-bytes; a nonempty string flushes any incomplete UTF-8 sequence as a replacement
-character before appending the string. Empty chunks leave buffered input intact.
+You can mix strings and bytes. A nonempty string causes any incomplete UTF-8
+sequence to emit a replacement character first. The tokenizer then adds the
+string. Empty chunks do not change buffered input.
 
-Call `end()` once after the last chunk to finish decoding and retrieve the
-remaining lines, including an empty final line after a trailing line break. It
-also disposes the stream. Use `dispose()` to cancel and discard buffered input;
-repeated disposal is safe, but `pushCode()` or `end()` after disposal throws.
+Call `end()` once after the last chunk to get the remaining lines. Use
+`dispose()` to cancel the stream and discard buffered input.
+
+`end()` completes the UTF-8 decode and disposes the stream. It returns an empty
+final line if the input ends with a line break. Repeated disposal is safe.
+`pushCode()` or `end()` after disposal throws an error.
 
 ### Incremental editing
 
-`LiveTokenizer` keeps a document and its lexer state in an isolated WebAssembly
-instance. It re-tokenizes edited lines and any following lines whose syntax
-changes, stopping when the lexer state matches the retained state.
+`LiveTokenizer` keeps a document and its lexer state in a separate WebAssembly
+instance. It tokenizes edited lines and continues through later lines whose
+syntax changes. It stops when the lexer state matches the saved state.
 
 Edit positions use zero-based line numbers and UTF-16 character offsets. Every
-range in a batch refers to the document before the batch is applied and excludes
-its end position. Overlapping ranges are rejected before the document is
-changed. The example replaces `41` with `42` on the first line.
+range in a batch refers to the document before the edits. Each range excludes
+its end position. The tokenizer rejects overlaps before it changes the document.
+The example replaces `41` with `42` on the first line.
 
 <DocsCodeExample {...highlightsLive} />
 
-Without `renderRange`, tokenization finishes synchronously. `update.lines` is
-empty; use `lineChanges` to find changed or re-tokenized lines, then read them
-with `getLineTokens()`. Each change maps `[oldStartLine, oldEndLine)` in the
-previous document to `[newStartLine, newEndLine)` in the updated document, so
-renderers can also remove deleted lines.
+Without `renderRange`, tokenization completes synchronously and `update.lines`
+is empty. Each `lineChanges` entry maps `[oldStartLine, oldEndLine)` in the old
+document to `[newStartLine, newEndLine)` in the new document. This lets a
+renderer remove deleted lines.
+
+Use `lineChanges` to find changed or re-tokenized lines. Read their tokens with
+`getLineTokens()`.
 
 `getLineTokens(line)` returns `ThemedToken[]` with offsets relative to that
-line, plus `bracketIgnoredRanges`: end-exclusive UTF-16 ranges covering strings,
-comments, and regexes that bracket matching should skip.
+line. It also returns `bracketIgnoredRanges` for strings, comments, and regexes.
+These UTF-16 ranges exclude their end position. A bracket matcher must skip
+these ranges.
 
 #### Prioritize a viewport
 
 Pass `renderRange: [startLine, endLine]` to the constructor, `applyEdits()`, or
-`reset()` to limit synchronous work. The range uses zero-based line numbers in
-the updated document and excludes `endLine`. Dirty lines before the viewport are
-processed first to establish its lexer state; remaining work runs in background
-slices. Pass the range on each update that should prioritize it.
+`reset()` to limit synchronous work. Pass the range on each update that needs
+it.
+
+The range uses zero-based line numbers in the updated document and excludes
+`endLine`. The tokenizer processes dirty lines before the viewport first to
+establish its lexer state. Later work runs in background slices.
 
 <DocsCodeExample {...highlightsViewport} />
 
-`update.lines` contains only lines re-tokenized inside the requested range, not
-every visible line. Read the initial viewport with `getLineTokens()` after
-construction. Completed lines outside the range arrive through
-`onDeferTokenize`, sometimes synchronously during an update.
+`update.lines` contains lines that complete tokenization inside the requested
+range during the synchronous slice. It does not contain every visible line.
+Completed lines outside the range arrive through `onDeferTokenize`, sometimes
+during the update call. Unfinished viewport lines also arrive through that
+callback when they complete.
+
+Read the initial viewport with `getLineTokens()` after construction.
 
 Both `update.lines` and the callback use `Map<number, HighlightedToken[]>`,
 where each token is `[character, color, text]`. These tuples contain colors from
-the first resolved theme. Use `getLineTokens()` for font styles or multi-theme
-token objects.
+the first resolved theme.
 
-`onDeferTokenize` can run synchronously, including before the constructor
-returns. Its callback must not depend on the variable receiving the instance.
+Use `getLineTokens()` for font styles or token objects with multiple themes.
 
-While `pendingTokenization` is true, lines not yet re-tokenized can still have
-their previous tokens; newly inserted lines can have only foreground styling.
-Call `flush()` before reading tokens that must be current, or `flush(endLine)`
-to finish pending lines before an exclusive line bound.
+`onDeferTokenize` can run synchronously, even before the constructor returns.
+The callback must not use the variable that will hold the instance.
+
+While `pendingTokenization` is true, some lines can still have their previous
+tokens. New lines can have only the foreground color.
+
+Call `flush()` before you read tokens that must be current. To complete only the
+lines before `endLine`, call `flush(endLine)`.
 
 #### Document and lifecycle methods
 
@@ -183,12 +203,13 @@ to finish pending lines before an exclusive line bound.
 | `flush(endLine?)`, `pause()`, `resume()`       | Control deferred tokenization                                 |
 | `dispose()`                                    | Release the isolated WebAssembly instance                     |
 
-`getLineRecords()` views are invalidated by the next edit, reset, deferred
-slice, or disposal. Copy `.data` when ownership is required. `tokenNames` maps
-each packed token ID to its syntax-scope name.
+The next edit, reset, deferred slice, or disposal invalidates `getLineRecords()`
+views. `tokenNames` maps each packed token ID to its syntax scope name.
 
-`applyEdits()`, including a no-op batch, `reset()`, and `flush()` resume work
-suspended by `pause()`.
+Copy `.data` to keep records after any of those operations.
+
+`applyEdits()`, `reset()`, and `flush()` resume work after `pause()`. This also
+applies to an edit batch that leaves the document unchanged.
 
 ### Themes
 
@@ -198,9 +219,11 @@ named theme from `@pierre/highlights/themes` or use a per-theme default export:
 
 <DocsCodeExample {...highlightsThemes} />
 
-Theme options take objects, not string IDs. A `ThemeFamily` resolves to its
-first member; pass `family.themes[index]` to choose another. Theme objects are
-cached by identity, so create a new object when changing their values.
+Theme options need objects, not string IDs. A `ThemeFamily` uses its first
+member. Highlights caches themes by object identity.
+
+Pass `family.themes[index]` to choose another member. Create a new theme object
+when you change its values.
 
 For custom themes, colors accept three-, four-, six-, and eight-digit hex values
 and numeric `color(display-p3 ...)` values. Syntax scopes such as
@@ -209,47 +232,56 @@ and numeric `color(display-p3 ...)` values. Syntax scopes such as
 #### CSS variables
 
 Use `cssVariables` to emit `var(--hls-*)` colors. `toCSS(theme)` returns the
-matching declarations without a selector; apply them to the code block or an
-ancestor. This example includes them in a stylesheet alongside the markup:
+matching declarations without a selector.
+
+Apply the declarations to the code block or an ancestor. This example uses a
+stylesheet:
 
 <DocsCodeExample {...highlightsCssVariables} />
 
-Changing those declarations updates the colors without re-highlighting the code.
-CSS-variable mode controls colors only; it ignores the theme's `font_style` and
-`font_weight` values. Set `cssVariablePrefix` in the highlighting options to
-customize the default `--hls-` prefix, and pass the same option to
-`toCSS(theme, { cssVariablePrefix: '--code-' })` for matching declarations. This
-option also controls the multi-theme properties below.
+Changes to these declarations update colors without another lexer scan.
+CSS-variable mode controls colors only. It ignores the theme's `font_style` and
+`font_weight` values. The default prefix is `--hls-`.
+
+Set `cssVariablePrefix` in the highlighter options to change the prefix. Pass
+the same prefix to `toCSS(theme, { cssVariablePrefix: '--code-' })`.
+
+This option also controls the properties for multiple themes.
 
 #### Multiple themes
 
-Use `themes` to produce styles for several color schemes in one pass. The code
-is lexed once; `codeToHtml()` writes every scheme into each span's `style`
-attribute inside WebAssembly, and the tokenization APIs return the same styles
-in each token's `htmlStyle`. With `defaultColor: false`, every scheme uses CSS
-custom properties:
+Use `themes` to produce styles for several color schemes in one pass.
+
+The lexer scans the code once. `codeToHtml()` writes each scheme into the span's
+`style` attribute. The tokenization APIs return those styles in each token's
+`htmlStyle`. With `defaultColor: false`, each scheme uses CSS custom properties:
 
 <DocsCodeExample {...highlightsDualThemes} />
 
 `codeToHtml()` applies the root properties to its `<pre>`. A custom renderer
-applies `rootStyle` to its code container and each token's `htmlStyle` to its
-span. For a container with class `code` (use `.highlights` for the HTML output),
-this CSS selects the light or dark properties, including font styles:
+applies `rootStyle` to the code container and each token's `htmlStyle` to its
+span. This CSS selects light or dark colors and font styles for a container with
+class `code`.
+
+Use `.highlights` as the selector for HTML output from `codeToHtml()`.
 
 <DocsCodeExample {...highlightsDualThemesCss} />
 
 To apply one theme inline, set `defaultColor` to its key, such as `'dark'`. The
-default is `'light'`, so a map without a `light` key must set this option. With
-`defaultColor: 'light-dark()'`, the required `light` and `dark` themes merge
-into CSS `light-dark()` colors that follow the page's `color-scheme`, with no
-custom properties to switch.
+default is `'light'`. Set this option if the map has no `light` key.
+
+`defaultColor: 'light-dark()'` needs both `light` and `dark` themes. It combines
+them into CSS `light-dark()` colors. These colors use the page's `color-scheme`
+and do not need custom properties.
 
 ### Languages
 
-Language names and aliases are case-insensitive. Unsupported names throw a
-`RangeError`; use `isSupportedLanguage(value)` to validate a string and narrow
-it to `Lang`, or fall back to `plain` (also available as `text`, `plaintext`,
-and `txt`). No language detection or filename resolution is performed.
+Language names and aliases ignore case. Unsupported names cause a `RangeError`.
+Highlights does not detect the language from the code or filename.
+
+Use `isSupportedLanguage(value)` to validate a string and narrow its type to
+`Lang`. Use `plain` for text without syntax colors. Its aliases are `text`,
+`plaintext`, and `txt`.
 
 Built-in languages and their aliases are included in the `Lang` type:
 
@@ -334,23 +366,23 @@ Built-in languages and their aliases are included in the `Lang` type:
 
 #### `@pierre/highlights`
 
-The main entry exports the complete runtime and its public types:
+The main entry exports runtime functions and public types:
 
 <DocsCodeExample {...highlightsApiRuntime} />
 
-The environment-specific entry point initializes the shared instance.
-`init(module)` replaces it; `createHighlighter(module)` creates an isolated
-`Highlighter` without changing the shared instance. Both accept a compiled
-`WebAssembly.Module` and are intended for embedders managing their own module.
+The runtime entry point initializes the shared instance. `init(module)` replaces
+that instance. `createHighlighter(module)` creates a separate `Highlighter` and
+leaves the shared instance unchanged. Both accept a compiled
+`WebAssembly.Module` for applications that supply their own module.
 
-The public type surface is available from the same entry:
+The same entry exports the public types:
 
 <DocsCodeExample {...highlightsApiTypes} />
 
 #### `@pierre/highlights/themes`
 
 The themes entry exports `cssVariables`, `toCSS()`, and every bundled theme as a
-named `Theme`. Each theme is also available from a per-theme default subpath
+named `Theme`. Each theme also has a default export through its own import path,
 such as `@pierre/highlights/themes/vitesse-dark`.
 
 #### `@pierre/highlights/themes/loader`

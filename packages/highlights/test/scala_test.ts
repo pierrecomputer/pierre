@@ -12,6 +12,7 @@ import {
   colorOf,
   exactColor,
   loadLang,
+  makeRand,
   spansOf,
   type TestLang,
   textOf,
@@ -216,14 +217,29 @@ void t.test(
   }
 );
 
+void t.test('scala: raw interpolation preserves backslashes', () => {
+  const code = 'raw"a\\n $x ${n + 1}"';
+  assert.deepEqual(tokenKinds('scala', code), [
+    ['raw', 'function'],
+    ['"a\\n', 'string'],
+    ['$x', 'variable'],
+    ['${', 'punctuation.special'],
+    ['n', 'variable'],
+    ['+', 'operator'],
+    ['1', 'number'],
+    ['}', 'punctuation.special'],
+    ['"', 'string'],
+  ]);
+  assertLineFedParity('scala', code);
+});
+
 void t.test('scala: deterministic fuzz preserves lexer invariants', () => {
-  let state = 0x5ca1a7;
+  const rand = makeRand(0x5ca1a7);
   const alphabet = 'abcXYZ09_ /\\"\'`\n\t{}[]().,:;+-*=!<>&|#@$%~?é';
   for (let n = 0; n < 160; n++) {
     let src = '';
-    for (let i = 0, len = state & 63; i < len; i++) {
-      state = (Math.imul(state, 1664525) + 1013904223) >>> 0;
-      src += alphabet[state % alphabet.length];
+    for (let i = 0, len = rand() & 63; i < len; i++) {
+      src += alphabet[rand() % alphabet.length];
     }
     checkInvariants(lexer.hl, src);
   }
@@ -400,9 +416,7 @@ void t.test(
     ]);
     assert.deepEqual(tokenKinds('scala', 'raw"a\\nb" + f"$r%.1f"'), [
       ['raw', 'function'],
-      ['"a', 'string'],
-      ['\\n', 'string.escape'],
-      ['b"', 'string'],
+      ['"a\\nb"', 'string'],
       ['+', 'operator'],
       ['f', 'function'],
       ['"', 'string'],

@@ -89,10 +89,9 @@
   (func $lvExtendHeap (param $min i32)
     (local $delta i32)
     (local.set $delta (i32.and (i32.add (local.get $min) (i32.const 327679)) (i32.const -65536)))
-    ;; the window sits above the line's scratch copy, not at the ceiling, so
-    ;; the slide destination ends at $lvTransHi+$delta; growing from the
-    ;; ceiling alone under-allocates by the line length and the copy traps on
-    ;; token-dense long lines
+    ;; The window starts above the line's scratch copy. Its slide destination
+    ;; ends at $lvTransHi+$delta. Allocating from the ceiling alone misses the
+    ;; line length and causes copy traps on long lines with many tokens.
     (call $lvGrowTo
       (i32.add
         (i32.add
@@ -215,12 +214,11 @@
     (global.set $lvHeapFreed (i32.const 0))
     (memory.fill (i32.const $mem.liveFree) (i32.const 0) (i32.const 128)))
 
-  ;; A state blob is the byte image of everything the streaming pipeline
-  ;; carries across chunk boundaries, stored with trailing zeros trimmed
-  ;; (see $lvTrimBlob). Blob blocks hold
-  ;; [next, refcount, len, hashLo, hashHi, id] then the bytes. The id table
-  ;; maps stable ids to blob pointers; id 0 is the reset state and
-  ;; 0xffffffff marks a line whose old state is gone.
+  ;; A state blob stores the state carried between chunks, with trailing
+  ;; zeros removed (see $lvTrimBlob). Each block holds
+  ;; [next, refcount, len, hashLo, hashHi, id], then the bytes.
+  ;; The ID table maps stable IDs to blob pointers. ID 0 is the reset state.
+  ;; 0xffffffff marks a line whose previous state is unavailable.
 
   (global $lvIdTab (mut i32) (i32.const 0))     ;; id -> blob body pointer
   (global $lvIdCap (mut i32) (i32.const 0))
@@ -372,10 +370,10 @@
     (global.set $lvBuckets (local.get $nb))
     (global.set $lvBucketMask (local.get $newMask)))
 
-  ;; intern the blob at $ptr (inside the transient window): returns the id of
-  ;; an existing identical blob with its refcount bumped, or copies the bytes
-  ;; into a new blob block. Allocation may slide the transient window; the
-  ;; source pointer is re-derived from the window base.
+  ;; Intern the blob at $ptr in the transient window. If an identical blob
+  ;; exists, increment its reference count and return its ID. Otherwise copy
+  ;; the bytes into a new block. Allocation can move the window, so compute
+  ;; the source pointer again from its base.
   (func $lvIntern (param $ptr i32) (param $len i32) (result i32)
     (local $h i64)
     (local $lo i32)
@@ -482,29 +480,26 @@
       (i32.or (i32.shl (global.get $lvIdFree) (i32.const 1)) (i32.const 1)))
     (global.set $lvIdFree (local.get $id)))
 
-  ;; Blob image: [stackLen, brkLen, jsxLen] u32 head, 40 cross-chunk globals,
-  ;; the 32-byte stream delimiter, the 96-byte nested markdown fence
-  ;; registers, the live prefixes of the language's own stack - json or toml
-  ;; nesting, or the JavaScript template bracket stack - and of the template
-  ;; HTML/CSS state, bracket and jsx stacks, then the lexer checkpoints.
+  ;; State image layout, in order:
+  ;; - [stackLen, brkLen, jsxLen] u32 header and 40 cross-chunk globals.
+  ;; - 32-byte stream delimiter and 96-byte nested Markdown fence registers.
+  ;; - Active JSON/TOML or JavaScript template stack entries.
+  ;; - Template HTML/CSS state, bracket and JSX stacks, then lexer checkpoints.
   ;; JSON fences also preserve the surrounding JavaScript template stack.
-  ;; The image is a pure function of the
-  ;; incoming state and the line bytes, so exact byte identity is a sound
-  ;; convergence test. Capture builds the full image; interning and restore
-  ;; work on its zero-trimmed form. The
-  ;; checkpoint region comes last because it is all zero for the JavaScript
-  ;; family (which keeps its state in globals and the stacks): trailing-zero
-  ;; trimming then drops it entirely instead of storing, hashing, and
-  ;; comparing a kilobyte of zeros per line.
+  ;;
+  ;; The incoming state and line bytes determine the image. Equal images
+  ;; therefore mean tokenization has converged. Capture builds the full image.
+  ;; Interning and restore use it with trailing zeros removed.
+  ;; Checkpoints come last because JavaScript lexers leave them zero.
+  ;; Trimming avoids storing, hashing, and comparing those zeros per line.
 
   (global $lvLang (mut i32) (i32.const 0))
   (global $lvMachineId (mut i32) (i32.const -1)) ;; state the machine holds now
 
-  ;; JSON and TOML own nesting stacks. Markdown/MDX may suspend JavaScript
-  ;; while a JSON fence is active, including inside nested Markdown fences.
-  ;; The stack an open markdown fence body keeps its lexer state in, from
-  ;; its language register (bit 8 set once the body's lexer ran): json and
-  ;; toml bodies use their own stacks; 0 for every other body.
+  ;; Find the nesting stack used by the current fence body from its language
+  ;; register. Bit 8 marks a lexer that has run. JSON and TOML use their own
+  ;; stacks. Other bodies return 0. Markdown/MDX can suspend JavaScript
+  ;; inside JSON fences, including nested Markdown fences.
   (func $lvFenceStack (param $reg i32) (result i32)
     (if (i32.eq (local.get $reg) (i32.or (enum.get $Language.json) (i32.const 0x100)))
       (then (return (i32.const $mem.jsonStack))))
@@ -640,12 +635,10 @@
     (memory.copy (local.get $p) (i32.const $mem.streamState) (i32.const $mem.streamStateUsed))
     (i32.sub (i32.add (local.get $p) (i32.const $mem.streamStateUsed)) (local.get $dst)))
 
-  ;; Length of the blob at $base without its trailing zero bytes. Most of a
-  ;; captured image is zero (idle checkpoint slices, empty stacks), so blobs
-  ;; store, hash, and compare only the short nonzero prefix. Identity is
-  ;; preserved: the section lengths are derived from the head, so the full
-  ;; image is exactly the trimmed bytes zero-padded, and equal trims imply
-  ;; equal states.
+  ;; Return the blob length without trailing zeros. This avoids storing,
+  ;; hashing, and comparing inactive checkpoints and empty stacks.
+  ;; The header determines section lengths, so zero-padding restores the
+  ;; exact image. Equal trimmed bytes therefore represent equal states.
   (func $lvTrimBlob (param $base i32) (param $len i32) (result i32)
     (local $p i32)
     (local.set $p (i32.add (local.get $base) (local.get $len)))
@@ -775,12 +768,11 @@
     (memory.fill (i32.const $mem.streamDelimiter) (i32.const 0) (i32.const 32))
     (memory.fill (i32.const $mem.streamState) (i32.const 0) (i32.const $mem.streamStateUsed)))
 
-  ;; A gap buffer of 32-byte descriptors:
-  ;;   +0 textPtr  +4 byteLen (content, no terminator)  +8 utf16Len (counted
-  ;;      from the bytes when the line is appended or spliced, so reads and
-  ;;      edit validation see it before the driver has run the line)
+  ;; Gap buffer of 32-byte line descriptors:
+  ;;   +0 textPtr  +4 byteLen (without terminator)  +8 utf16Len
   ;;   +12 tokPtr  +16 tokCount  +20 outgoing stateId  +24 flags  +28 spare
-  ;; flags: bits 0-1 terminator (0 none, 1 LF, 2 CRLF), bit 2 wide records,
+  ;; Count utf16Len when appending or splicing, before tokenization.
+  ;; Flags: bits 0-1 terminator (0 none, 1 LF, 2 CRLF), bit 2 wide records,
   ;; bit 3 text points into the initial contiguous document block.
 
   (global $lvLineTab (mut i32) (i32.const 0))
@@ -1344,12 +1336,10 @@
     (i32.store offset=24 (local.get $slot) (local.get $flags))
     (i32.store offset=28 (local.get $slot) (i32.const 0)))
 
-  ;; Replace lines [sLine, eLine] with the staged text spliced between the
-  ;; retained prefix of sLine and suffix of eLine. Returns the produced line
-  ;; count shifted left once, with bit 0 set when a CRLF boundary merge
-  ;; extended the splice to also replace line sLine-1. Coordinates were
-  ;; validated by the caller against the pre-edit revision; edits are applied
-  ;; in descending order so earlier coordinates stay valid.
+  ;; Replace lines [sLine, eLine] with prefix + staged text + suffix.
+  ;; Return the new line count shifted left once. Set bit 0 if a CRLF merge
+  ;; also replaces line sLine-1. The caller validates coordinates before
+  ;; editing. Apply edits in descending order to keep earlier coordinates valid.
   (func $lvSpliceEdit
     (param $sLine i32)
     (param $sChar i32)
@@ -1409,10 +1399,9 @@
       (call $lvCharToByte (local.get $eText) (local.get $eByteLen) (local.get $eChar)))
     (local.set $eSplit (i32.shr_u (local.get $ePos) (i32.const 31)))
     (local.set $ePos (i32.and (local.get $ePos) (i32.const 0x7fffffff)))
-    ;; Assemble the whole replacement region (prefix + staged text + suffix)
-    ;; into one scratch block first, so terminator scanning sees every CR/LF
-    ;; pairing — including ones straddling the old segment boundaries — with
-    ;; one set of rules: CRLF, lone CR, and lone LF all terminate a line.
+    ;; Assemble prefix + staged text + suffix in one scratch block.
+    ;; This lets terminator scanning detect CRLF across segment boundaries.
+    ;; CRLF, lone CR, and lone LF each terminate a line.
     (local.set $pre (i32.add (local.get $sPos) (i32.mul (local.get $sSplit) (i32.const 3))))
     (local.set $suf
       (i32.add
@@ -1522,11 +1511,10 @@
         (br $join)))
     ;; the final segment inherits the end line's terminator (with its CR kind)
     (local.set $finalTerm (i32.and (local.get $eFlags) (i32.const 19)))
-    ;; When the line above the splice ends in a lone CR and the byte that now
-    ;; follows it is an LF — the region's first byte, or an inherited bare-LF
-    ;; terminator when the region is empty — the two are byte-wise one CRLF.
-    ;; Extend the splice down to that line (its content plus its CR join the
-    ;; scratch region) so the scan below reads the pairing like a byte stream.
+    ;; A lone CR on the preceding line can join a new LF to form CRLF.
+    ;; The LF can be the region's first byte or an inherited terminator of
+    ;; an empty region. Include the preceding line in the splice so scanning
+    ;; detects this pair.
     (if (i32.gt_u (local.get $sLine) (i32.const 0))
       (then
         (local.set $pSlot (call $lvSlot (i32.sub (local.get $sLine) (i32.const 1))))
@@ -1780,10 +1768,9 @@
       (then (return (i32.const 0))))
     (i32.add (i32.load offset=4 (i32.sub (local.get $body) (i32.const 8))) (i32.const 8)))
 
-  ;; Sliding compaction: assign packed addresses into each live header's aux
-  ;; word, rewrite every reference (line descriptors, state id table, bucket
-  ;; chains, singleton table pointers), then move the blocks downward in
-  ;; address order. Free space coalesces into the bump region.
+  ;; Compact live blocks. Assign packed addresses in each header's aux word,
+  ;; then update line descriptors, state IDs, bucket chains, and table pointers.
+  ;; Move blocks downward in address order. Free space joins the bump region.
   (func $lvCompact
     (local $hdr i32)
     (local $size i32)
@@ -1900,12 +1887,10 @@
     (memory.fill (i32.const $mem.liveFree) (i32.const 0) (i32.const 128))
     (global.set $lvHeapFreed (i32.const 0)))
 
-  ;; Merge one pending re-tokenization piece [a, b) — pre-batch line numbers
-  ;; landing at [a+shift, b+shift) in the new document — into the change list
-  ;; and range table; returns the updated range count. Pieces arrive in
-  ;; ascending old-start order interleaved with the batch's own entries, so
-  ;; touching spans coalesce through $lvAddChange and the range table mirrors
-  ;; the entry the piece merged into.
+  ;; Merge a pending range [a, b) into the change list and range table.
+  ;; Its new coordinates are [a+shift, b+shift). Return the updated range count.
+  ;; Ranges arrive in ascending old-start order among the batch's entries.
+  ;; $lvAddChange merges touching ranges. Keep the range table in sync.
   (func $lvAddPend
     (param $a i32)
     (param $b i32)
@@ -1936,15 +1921,14 @@
       (then (i32.store offset=4 (local.get $slot) (i32.add (local.get $b) (local.get $shift)))))
     (local.get $rangeCount))
 
-  ;; Apply a validated staged edit batch: [count][24-byte records][text bytes]
-  ;; where each record is sLine, sChar, eLine, eChar, textOff, textLen.
-  ;; Deferred re-tokenization from a previous batch may still be pending; its
-  ;; remaining dirty ranges are captured in pre-batch coordinates, remapped
-  ;; through this batch's splices, and merged into the new range list — a new
-  ;; edit never runs the old tail to convergence first. Soundness: the merged
-  ;; ranges force re-tokenization of every line the old run had not reached,
-  ;; and beyond them a state-id match against a pre-old-batch id certifies the
-  ;; untouched chain exactly like ordinary convergence.
+  ;; Apply a validated batch: [count][24-byte records][text bytes].
+  ;; Each record holds sLine, sChar, eLine, eChar, textOff, textLen.
+  ;; Remap pending ranges through the new edits and merge them into the
+  ;; range list. Do not finish the previous batch first.
+  ;;
+  ;; The merged ranges cover every line still pending from the old batch.
+  ;; Beyond them, a matching state ID confirms that the unchanged lines
+  ;; need no further tokenization.
   (func (export "liveApplyEdits") (param $staged i32) (param $undelivered i32)
     (local $count i32)
     (local $k i32)
@@ -1968,10 +1952,9 @@
     (local $oe i32)
     (call $lvCancelLine)
     (local.set $count (i32.load (local.get $staged)))
-    ;; capture the pending dirty ranges before the splices invalidate their
-    ;; coordinates: the interrupted range restarts at the cursor (at least one
-    ;; line, so a mid-convergence-tail run re-checks convergence there), then
-    ;; the untouched later ranges follow verbatim
+    ;; Save pending ranges before splices invalidate their coordinates.
+    ;; Restart the interrupted range at the cursor and include at least one
+    ;; line to check convergence again. Keep later ranges as they are.
     (if (i32.or (global.get $lvPhase) (local.get $undelivered))
       (then
         (local.set $a (global.get $lvCursor))
@@ -2136,10 +2119,10 @@
         (global.set $lvPhase (i32.const 1)))
       (else (call $lvFinish))))
 
-  ;; Retokenize up to $budget lines, stopping before $end when nonzero.
-  ;; Returns 1 while more lines are pending, including after a range jump.
-  ;; All driver state lives in globals, so time-sliced callers just call
-  ;; again; a huge budget runs synchronously to completion.
+  ;; Tokenize up to $budget lines. Stop before $end if it is nonzero.
+  ;; Return 1 if lines remain, including after a range jump.
+  ;; Globals preserve driver state between calls. A large budget completes
+  ;; all pending work synchronously.
   (func (export "liveRun") (param $budget i32) (param $end i32) (param $work i32) (result i32)
     (local $i i32)
     (local $slot i32)

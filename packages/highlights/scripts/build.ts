@@ -134,12 +134,10 @@ export function transformWat(
     }
   );
 
-  // `(byte-switch (local.get $c) (case <byte>... body...) ...)` dispatches on
-  // a byte with one br_table instead of a chain of equality tests. Each case
-  // lists its bytes - string or numeric constants - before its body; a body
-  // that neither branches out nor returns falls through to the code after the
-  // switch, exactly like the if-chain it replaces. Cases nest as blocks in
-  // source order, with a shared default label wrapping them.
+  // `(byte-switch (local.get $c) (case <byte>... body...) ...)` uses br_table
+  // to select a case. Each case lists string or numeric byte constants,
+  // then its body. A body without a branch or return continues after the
+  // switch. Cases form nested blocks in source order inside a default block.
   let byteSwitches = 0;
   code = replaceForm(code, 'byte-switch', (inner) => {
     const forms = splitTopLevelForms(inner);
@@ -198,13 +196,10 @@ export function transformWat(
     return `(block ${fallback}\n${out})`;
   });
 
-  // Preserve top-level lexer locals between streaming calls. Nested lexers
-  // used for embedded ranges see a non-zero depth and stay ordinary bounded
-  // calls. TypeScript has its own resumable state machine. Only the locals
-  // that are live at the checkpoint - read on some path before they are
-  // written, so their value carries over from the previous chunk - are saved
-  // and restored; scratch locals that every iteration recomputes cost
-  // nothing. See liveLocalsAtCheckpoint.
+  // Save top-level lexer locals between streaming calls.
+  // Nested lexers have nonzero depth and remain bounded calls. TypeScript
+  // uses its own state machine. Save only locals read before their next
+  // write at the checkpoint. See liveLocalsAtCheckpoint.
   const lexers = new Set([
     '$hlAsm',
     '$hlAstro',
@@ -282,12 +277,10 @@ export function transformWat(
     }
     const live = liveLocalsAtCheckpoint(inner);
     const locals = [...inner.matchAll(/\(local\s+(\$\w+)\s+(\w+)\s*\)/g)];
-    // each lexer owns an 8-byte-aligned window of the checkpoint region. The
-    // window base goes through the mutable global $streamWindow rather than
-    // a local: Binaryen would fold a constant local into every access as a
-    // three-byte absolute address, while a global base keeps each access at
-    // a two-byte global.get plus a one-byte offset. $streamRoot marks the
-    // lexer that owns the checkpoint for this chunk.
+    // Each lexer has an 8-byte-aligned checkpoint window.
+    // Keep its base in mutable global $streamWindow. Binaryen folds a constant
+    // local into three-byte absolute addresses. A global base uses a two-byte
+    // global.get and one-byte offsets. $streamRoot identifies the owning lexer.
     streamStateOffset = (streamStateOffset + 7) & -8;
     const base = streamStateOffset;
     const state = locals
@@ -460,10 +453,9 @@ export function transformWat(
   if (stray !== null)
     throw new Error(`Const '${stray[0]}' is undefined in ${url.pathname}`);
 
-  // (css-variable-table $Enum <base> <end>) emits [ptr:u16, length:u8]
-  // lookup records, one per enum member, at <base>, followed by the blob of
-  // kebab-case token suffixes the records point into; the whole must fit
-  // below <end>.
+  // (css-variable-table $Enum <base> <end>) writes [ptr:u16, length:u8]
+  // records at <base>, one per enum member. Kebab-case token suffixes
+  // follow the records. All data must fit below <end>.
   code = replaceForm(code, 'css-variable-table', (inner) => {
     const m = inner.match(/^\s*(\$\w+)\s+(\d+)\s+(\d+)\s*$/);
     if (m === null)
@@ -569,11 +561,9 @@ export function transformWat(
   });
 
   // `(enum-map $Name $Enum <base> <default> (value <v> "member" ...) ...)`
-  // emits one byte per enum member at <base>: the member's mapped value, or
-  // <default> for members no value lists. A value is a number or an enum
-  // member reference such as $Token.operator. `(enum-map.get $Name <expr>)`
-  // loads the byte for an enum index - a fixed-cost replacement for a chain
-  // of equality tests that maps one enum onto another.
+  // writes one byte per enum member at <base>. Unlisted members use <default>.
+  // Values are numbers or enum references, such as $Token.operator.
+  // `(enum-map.get $Name <expr>)` loads the byte for an enum index.
   const enumMaps = new Map<string, number>();
   code = replaceForm(code, 'enum-map', (raw) => {
     const inner = raw.replace(/;;[^\n]*/g, '');
@@ -628,21 +618,20 @@ export function transformWat(
   });
 
   // `(keyword-table $Name <base> <end> (group <value>? "word" ...) ...)`
-  // emits a displacement-based perfect hash table for keyword lookup:
-  // [buckets] displacement bytes, [slots] 3-byte descriptors
-  // (len<<19 | group<<13 | word offset) and, when every group carries a
-  // value, a u16 value per group. The word bytes themselves live in one
-  // shared pool - see `keyword-pool` - so a word that many languages share
-  // is stored once and a word contained in another costs nothing.
-  // `(keyword-table.get $Name <start> <end>)` looks a word up and returns its
-  // 1-based group index, or 0 for a miss; `(keyword-table.value $Name <start>
-  // <end>)` returns the group's value, or -1 for a miss (a group whose value
-  // is -1 also reads as a miss). The hash mixes the first two bytes, last
-  // byte, and length, so words must be 2..31 bytes long; a table holds at
-  // most 63 groups. Slot counts need not be powers of two - the lookup
-  // reduces the hash with a multiply and shift - so each table is packed
-  // almost full: the cheapest bucket and slot pair that places every word
-  // wins. Tables are laid out once every table and the pool are known.
+  // builds a perfect hash table. Layout: displacement bytes per bucket,
+  // then 3-byte descriptors (len<<19 | group<<13 | word offset).
+  // If every group has a value, u16 group values follow the descriptors.
+  // Words share the `keyword-pool`, including repeated words and substrings.
+  //
+  // `(keyword-table.get $Name <start> <end>)` returns the 1-based group
+  // index, or 0 if absent. `keyword-table.value` returns the group's value,
+  // or -1 if absent. A declared value of -1 also means absent.
+  // The hash uses the first two bytes, last byte, and length. Words must
+  // be 2..31 bytes long. Tables support at most 63 groups.
+  //
+  // A multiply and shift reduce the hash to any slot count.
+  // Choose the smallest bucket/slot layout that places all words.
+  // Assign addresses after all tables and the shared pool are known.
   interface PendingKeywordTable {
     name: string;
     base: number;
@@ -708,10 +697,9 @@ export function transformWat(
     return `@@keyword-table ${name}@@`;
   });
 
-  // `(keyword-pool <base> <end>)` reserves the region that holds the word
-  // bytes of every keyword table: the distinct words packed into one string
-  // (see packKeywordPool), at most 8191 bytes since descriptors carry 13-bit
-  // offsets. Declared once, next to $lexKeywordLookup in src/common.wat.
+  // `(keyword-pool <base> <end>)` reserves shared keyword bytes.
+  // packKeywordPool combines the words into one string. The 13-bit descriptor
+  // offset limits it to 8191 bytes. Declare it once beside $lexKeywordLookup.
   let keywordPool: { base: number; rangeEnd: number } | undefined;
   code = replaceForm(code, 'keyword-pool', (inner) => {
     const m = inner.match(/^\s*(\d+)\s+(\d+)\s*$/);
@@ -830,13 +818,11 @@ export function transformWat(
     return `(call $lexKeywordValue ${m[2].trim()} (i32.const ${table.base}) (i32.const ${table.buckets - 1}) (i32.const ${table.slots}))`;
   });
 
-  // `(byteset.get "bytes" (local.get $x))` tests whether the byte in $x is
-  // one of the literal's bytes, replacing the equality ladder a lexer would
-  // otherwise spell out. Identical sets share one bit. Eight sets share a
-  // 256-byte table in the region at $mem.byteSets (one byte per input byte,
-  // one bit per set), so a test is one load plus a mask: `load & bit` where
-  // the result only decides a branch (see branchOperands), and an exact 0/1
-  // everywhere else, since callers combine it with other 0/1 values.
+  // `(byteset.get "bytes" (local.get $x))` tests whether a set contains $x.
+  // Identical sets share one bit. Eight sets share a 256-byte table at
+  // $mem.byteSets: one byte per input byte, one bit per set.
+  // For branch conditions, use `load & bit` (see branchOperands).
+  // Other expressions need an exact 0/1 result for boolean arithmetic.
   const byteSets = new Map<string, number>();
   const byteSetBase = constMap.get('$mem.byteSets');
   // the region ends at the next named address, 32 bytes (256 bits) per set
@@ -953,9 +939,8 @@ export function transformWat(
 }
 
 /**
- * Remove `;;` line comments and nested `(; ... ;)` block comments from WAT
- * source, leaving string literals (and any `;;` inside them) intact. Line
- * breaks are kept so the remaining text keeps its shape.
+ * Remove WAT line comments and nested block comments.
+ * Preserve string literals and line breaks.
  */
 function stripComments(src: string): string {
   let out = '';
@@ -994,9 +979,8 @@ function stripComments(src: string): string {
 }
 
 /**
- * Decode a quoted WAT string literal into bytes: `\XX` hex escapes, the
- * named escapes, and plain ASCII. Non-ASCII characters are rejected because
- * the byte sets index by single bytes.
+ * Decode a WAT string into bytes: hex escapes, named escapes, and ASCII.
+ * Reject non-ASCII characters because byte sets index individual bytes.
  */
 function unescapeWatString(literal: string): number[] {
   const out: number[] = [];
@@ -1032,8 +1016,8 @@ function unescapeWatString(literal: string): number[] {
 }
 
 /**
- * Resolve a build-time value: a decimal number, or an enum member reference
- * such as `$Token.operator`, optionally biased with `+N`.
+ * Resolve a decimal number or enum reference such as `$Token.operator`,
+ * with an optional `+N` offset.
  */
 function resolveEnumValue(
   text: string,
@@ -1047,8 +1031,8 @@ function resolveEnumValue(
 }
 
 /**
- * The keyword-table hash, the same mix `$lexKeywordLookup` computes at
- * runtime over the first two bytes, the last byte, and the length.
+ * Hash the first two bytes, last byte, and word length.
+ * Must match $lexKeywordLookup in src/common.wat.
  */
 function keywordHash(w: string): number {
   let h =
@@ -1062,12 +1046,10 @@ function keywordHash(w: string): number {
 }
 
 /**
- * The slot a word probes for a bucket displacement `d`: the hash plus the
- * displacement times an odd second hash, rotated so the displacement reaches
- * the high bits, then reduced to `slots` by a multiply and shift - so any
- * slot count works, not only powers of two. Two words of one bucket that
- * share the base slot still separate for some displacement. Mirrors the
- * runtime lookup exactly.
+ * Compute a word's slot from its hash and bucket displacement `d`.
+ * Add `d` times an odd second hash, rotate, then multiply and shift
+ * to reduce to `slots`. This supports any slot count and separates
+ * words with the same base slot. Must match the runtime lookup.
  */
 function keywordSlot(h: number, d: number, slots: number): number {
   const x = (h + Math.imul(d, (h >>> 12) | 1)) >>> 0;
@@ -1077,11 +1059,11 @@ function keywordSlot(h: number, d: number, slots: number): number {
 }
 
 /**
- * Place the words of a keyword table (CHD): words fall into `buckets` by
- * their low hash bits, and each bucket searches for a displacement that
- * puts all of its words into free slots, largest buckets first. Returns the
- * displacement bytes and the word index placed in each slot (-1 when
- * empty), or undefined when a bucket finds no displacement in 0..255.
+ * Place words with a compress, hash, and displace (CHD) table.
+ * Low hash bits select each bucket. Starting with the largest bucket,
+ * find a displacement that puts all its words in free slots.
+ * Return displacement bytes and word indices (-1 for empty slots).
+ * Return undefined if any bucket has no valid displacement in 0..255.
  */
 function placeKeywords(
   words: { h: number }[],
@@ -1116,11 +1098,10 @@ function placeKeywords(
 }
 
 /**
- * Choose the cheapest geometry that places every word of a keyword table.
- * Slot counts run from the word count up in small steps, bucket counts are
- * powers of two, and a table costs one byte per bucket and three per slot;
- * the first geometry in cost order that places wins, which packs tables to
- * within a few percent of full.
+ * Choose the smallest table that places every word.
+ * Try slot counts from the word count upward and power-of-two bucket
+ * counts. Cost is one byte per bucket plus three per slot.
+ * Use the first valid layout in cost order.
  */
 function placeKeywordTable(
   words: { h: number }[]
@@ -1144,11 +1125,10 @@ function placeKeywordTable(
 }
 
 /**
- * Pack the distinct words of every keyword table into one string. A word
- * contained in another needs no bytes of its own; the rest are appended
- * greedily, longest words first, each time choosing the word whose head
- * overlaps the pool's tail the most. Descriptors locate a word by its first
- * occurrence.
+ * Pack distinct keywords into one string. Reuse words contained in others.
+ * Process longer words first and choose the largest overlap between
+ * the next word's start and the pool's end. Descriptors use each word's
+ * first occurrence.
  */
 function packKeywordPool(all: string[]): string {
   const distinct = [...new Set(all)].sort((a, b) =>
@@ -1176,12 +1156,11 @@ function packKeywordPool(all: string[]): string {
 }
 
 /**
- * The data segment `$languageByName` (src/languages.wat) searches: every
- * language name and alias, grouped by length. A u16 offset from the table
- * start per length 0..19 (group L spans [L, L+1)) comes first, then each
- * group's records - the language id byte and the lowercase name. The search
- * is linear within a group, so canonical names (`ts`, `js`, `go`), which
- * fences use most, come before aliases.
+ * Build the name table searched by $languageByName in src/languages.wat.
+ * Store u16 offsets for lengths 0..19, then group names by length.
+ * Group L spans offsets [L, L+1). Each record holds a language ID byte
+ * and lowercase name. Put canonical names before aliases because fences
+ * use them most often and searches are linear within each group.
  */
 function languageNamesData(
   languages: Record<string, number>,
@@ -1214,9 +1193,8 @@ function languageNamesData(
 }
 
 /**
- * Split text into its top-level items: parenthesized forms (with their head
- * word) and bare atoms, each with the offsets it spans. Comments and string
- * literals are respected.
+ * Split text into top-level forms and bare atoms with their source offsets.
+ * Include each form's head word. Respect comments and string literals.
  */
 function splitTopLevelForms(
   text: string
@@ -1274,8 +1252,8 @@ function splitTopLevelForms(
 type Sexpr = string | Sexpr[];
 
 /**
- * Parse folded WAT into nested lists. Line comments, block comments, and
- * string literals are handled; string atoms keep their quotes.
+ * Parse folded WAT into nested lists. Handle line and block comments.
+ * Keep quotes on string atoms.
  */
 function parseSexpr(src: string): Sexpr[] {
   const root: Sexpr[] = [];
@@ -1325,11 +1303,10 @@ function parseSexpr(src: string): Sexpr[] {
 }
 
 /**
- * Backward liveness over structured wasm control flow. `seq` returns the
- * locals live before a sequence of expressions given the set live after it:
- * local.get adds a name, local.set/tee removes it, branches join the set that
- * is live at their target label, and loops iterate to a fixed point because
- * a back edge carries the loop head's own live-in set.
+ * Find locals that are read before their next write.
+ * `seq` walks expressions backward from the set needed after them.
+ * local.get adds a name. local.set/tee removes it. Branches include
+ * locals needed at their target. Repeat loops until the set stops changing.
  */
 class LocalLiveness {
   private labels = new Map<string, Set<string>>();
@@ -1467,11 +1444,9 @@ function union(a: Set<string>, b: Set<string>): Set<string> {
 }
 
 /**
- * The locals of a stream lexer whose values carry across chunk boundaries:
- * those live right after `$lexEmitLeadingContinuation` in the function body
- * `inner`, i.e. read on some path before they are written. Locals dead at
- * that point are recomputed by the lexer before use, so restoring them is
- * pointless and saving them only bloats the state the live tokenizer interns.
+ * Find locals read before their next write after $lexEmitLeadingContinuation
+ * in `inner`. Save these across chunks. Other locals are recomputed before
+ * use, so saving them would only increase the live tokenizer's state size.
  */
 function liveLocalsAtCheckpoint(inner: string): Set<string> {
   const body = parseSexpr(inner).filter(Array.isArray);
@@ -1485,11 +1460,10 @@ function liveLocalsAtCheckpoint(inner: string): Set<string> {
 }
 
 /**
- * Offsets of the `(head ...)` forms in `code` whose value only decides a
- * branch: the condition of an `if`, the last operand of a `br_if`, or the
- * operand of an `i32.eqz`. A macro can emit a cheaper nonzero-means-true
- * value there instead of an exact 0/1. Offsets match what replaceForm passes
- * for the same `code`.
+ * Find forms whose values only decide a branch: `if` conditions, the last
+ * operand of `br_if`, and operands of `i32.eqz`.
+ * These can use any nonzero true value instead of exactly 1.
+ * Return source offsets matching replaceForm for the same `code`.
  */
 function branchOperands(code: string, head: string): Set<number> {
   const found = new Set<number>();
@@ -1577,22 +1551,15 @@ function replaceForm(
 }
 
 /**
- * Rewrite `(i32.eqz X)` where X is an `i32.and`/`i32.or` form into
- * `(i32.shr_u (i32.clz X) (i32.const 5))`: the same 0/1 result, since only
- * zero has 32 leading zeros. JavaScriptCore's optimizing tier (Bun 1.4,
- * Safari) fuses an and/or tree of comparisons that feeds a branch into ARM64
- * conditional compares, and reads `x == 0` inside that tree as a negated
- * sub-chain. When the sub-chain then turns out not to be fusable - it meets a
- * call result or a load, or two nested and/or nodes side by side - the nodes
- * it had already recorded stay in the chain, and the branch is compiled
- * against corrupted flags. Perl's `qq{...}` delimiter test failed this way in
- * about one process in thirty, depending on how B3 had associated the `or`
- * chain that run. A shift of a count-leading-zeros is not a comparison, so
- * the fuser stops there and the tree compiles as plain boolean arithmetic.
- * Runs on the preprocessed source and again on the optimized module, since
- * Binaryen rebuilds `eqz(or(a, b))` from `and(eqz(a), eqz(b))`. Upstream
- * WebKit now discards the recorded nodes; drop this once the pinned Bun ships
- * that fix.
+ * Work around a JavaScriptCore ARM64 bug in compound boolean expressions.
+ * Replace `(i32.eqz X)` for and/or expressions with
+ * `(i32.shr_u (i32.clz X) (i32.const 5))`. Both return 1 only for zero.
+ * JavaScriptCore can leave stale comparisons when conditional-compare
+ * fusion fails. This produces incorrect branch flags. The clz form stops
+ * fusion and preserves boolean arithmetic.
+ *
+ * Apply before and after Binaryen, which can reconstruct the affected form.
+ * Remove this workaround when the pinned Bun includes WebKit's fix.
  */
 function wrapCompoundNegations(code: string): string {
   return replaceForm(code, 'i32.eqz', (inner) => {
@@ -1604,23 +1571,16 @@ function wrapCompoundNegations(code: string): string {
 }
 
 /**
- * Give every function that can reach a SIMD instruction through calls, and
- * holds none itself, one unused `v128` local. JavaScriptCore (Bun, Safari)
- * decides whether a function uses SIMD from that function's own bytecode -
- * a SIMD instruction or a `v128` local both count - yet its optimizing tier
- * inlines small callees. A caller that only inlines a SIMD scanner is
- * therefore compiled with the scalar register convention, and its register
- * allocator may park the scanner's vector constants in callee-saved vector
- * registers across calls. The ARM64 ABI preserves only the low 64 bits of
- * those registers, so after the first call that touches them the constants
- * lose lanes 8-15 and every later scan stops after 8 bytes (Bun 1.4:
- * identifiers cut after eight characters once a lexer tiered up). The local
- * switches the caller to the SIMD convention, which keeps vectors out of
- * those registers across calls. A local costs two bytes and no instructions;
- * a dropped vector load also works but its seven bytes pushed hot helpers
- * over the inliner's size thresholds and slowed the HTML lexer by up to 70%.
- * Binaryen removes unused locals, so `optimizeWasm()` runs this again on the
- * optimized module, where calls name functions by index.
+ * Add an unused `v128` local to scalar functions that can call SIMD code.
+ * JavaScriptCore selects a register convention from each function's own
+ * bytecode, but can then inline SIMD callees. With the scalar convention,
+ * ARM64 calls preserve only 64 bits of some vector registers.
+ * This corrupts inlined scanner constants and can truncate 16-byte scans.
+ *
+ * The local selects the SIMD convention without adding instructions.
+ * A dropped vector load also works, but its size can prevent inlining.
+ * Binaryen removes unused locals, so optimizeWasm applies this again
+ * after optimization, when calls refer to function indices.
  */
 function markSimdReachers(code: string): string {
   const simdOp =
@@ -1768,9 +1728,8 @@ export function wasmToText(wasmBytes: Uint8Array): string {
 }
 
 /**
- * Optimize with Binaryen at `-O3 --shrink-level=1` and emit optimized Stack IR.
- * Each pass exposes more patterns for the next. Pass three still shrinks the
- * module; pass four does not.
+ * Optimize with Binaryen at `-O3 --shrink-level=1` and emit Stack IR.
+ * Three passes reduce the module size. A fourth gives no further reduction.
  */
 export function optimizeWasm(wasmBytes: Uint8Array): Uint8Array {
   binaryen.setOptimizeLevel(3);
@@ -1796,11 +1755,10 @@ export function optimizeWasm(wasmBytes: Uint8Array): Uint8Array {
       wasmModule.dispose();
     }
   }
-  // Binaryen folds byte splats into 18-byte vector constants. Encode them
-  // as a scalar and splat (4–5 bytes) after the final optimization pass, and
-  // re-apply the negation rewrite and the SIMD markers Binaryen may have
-  // undone (see wrapCompoundNegations and markSimdReachers); all three work
-  // on the folded text.
+  // Binaryen turns byte splats into 18-byte vector constants.
+  // After optimization, restore the 4-5-byte scalar-and-splat form.
+  // Also restore compound-negation rewrites and SIMD markers.
+  // All three transformations operate on folded WAT.
   const compact = readWasm(wasmBytes, { readDebugNames: false });
   try {
     const code = compact.toText({ foldExprs: true, inlineExport: false });
@@ -1827,13 +1785,12 @@ export function optimizeWasm(wasmBytes: Uint8Array): Uint8Array {
 }
 
 /**
- * Rewrite a compare of a masked word against a constant, as lexers spell
- * short keyword tests - `(i64.eq (i64.and X (i64.const 2^n-1)) (i64.const C))`
- * with C below the mask - into
- * `(i64.eqz (i64.shl (i64.xor X (i64.const C)) (i64.const 64-n)))`. The
- * result is the same: the shift drops exactly the high bytes the mask
- * cleared. It is smaller because the long mask constant goes away. Handles
- * i64 masks of 5-7 bytes and the 3-byte i32 mask, and `ne` as `eqz` + `eqz`.
+ * Replace masked-word comparisons with xor, shift, and eqz:
+ * `(i64.eq (i64.and X (i64.const 2^n-1)) (i64.const C))` becomes
+ * `(i64.eqz (i64.shl (i64.xor X (i64.const C)) (i64.const 64-n)))`.
+ * C must fit the mask. Shifting removes the same high bits as masking
+ * and avoids the large mask constant. Handle 5-7-byte i64 masks,
+ * 3-byte i32 masks, and `ne` with a second `eqz`.
  */
 function compactMaskedCompares(code: string): string {
   const widths: Record<string, number> = {
@@ -1900,10 +1857,10 @@ export function listTokenTypes(
   return names;
 }
 
-// The largest $Token count the fixed regions accept: the emitter span cache
-// has 73 slots of 66 bytes, the theme table and its SIMD compare cover 384
-// bytes (76 five-byte records), and packed live records keep the id in one
-// byte. Growing the enum past this means resizing those regions.
+// Maximum token count supported by the fixed memory regions.
+// The span cache holds 73 slots of 66 bytes. Theme tables and SIMD
+// comparisons cover 384 bytes (76 five-byte records). Packed live records
+// use one byte for the ID. Resize these regions before increasing the limit.
 const tokenSlotLimit = 73;
 
 /** Generate the checked-in language lookup and derive Lang from its keys. */

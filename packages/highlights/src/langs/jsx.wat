@@ -1,24 +1,18 @@
 (module
-  ;; JSX mode stack and markup scanner shared by JSX and TSX.
-  ;; jsx mode stack entries
-  ;; mode 1 = TAG (inside an open tag, scanning attributes; a TSRX raw-text
-  ;;          element keeps its kind in the target field until the `>`)
-  ;; mode 2 = CONTENT (between > and </, scanning children)
-  ;; mode 3 = CONTAINER ({expr}: the token pipeline runs until braceDepth
-  ;;          returns to the recorded target)
-  ;; TSRX only (langs/tsrx.wat):
-  ;; mode 4 = DIRECTIVE (`@if (x) { ... }` from CONTENT: the token pipeline
-  ;;          runs until the `}` that returns braceDepth to the target, or
-  ;;          until a bare element body ends)
-  ;; mode 5 = SCRIPT (a `<script>` body: the token pipeline runs until the
-  ;;          scanner reports `</script`)
-  ;; mode 6 = STYLE (a `<style>` body: CSS bytes; the target field holds the
-  ;;          CSS lexer's resumable state)
-  ;; mode 7 = CLOSE TAIL (`</{expr}>` after its container closed)
-  ;; like $brkPush, pushes past the 512-entry capacity are dropped but still
-  ;; COUNTED, so every pop matches its push and the stored entries are correct
-  ;; again once the depth returns below capacity; top accesses clamp to the
-  ;; deepest stored entry meanwhile
+  ;; Markup scanner and mode stack shared by JSX and TSX.
+  ;; Modes:
+  ;; 1 TAG: scan attributes. TSRX stores the raw-text kind in target until `>`.
+  ;; 2 CONTENT: scan children between `>` and the closing tag.
+  ;; 3 CONTAINER: tokenize an expression until braceDepth returns to target.
+  ;; TSRX also uses:
+  ;; 4 DIRECTIVE: tokenize through the matching `}` or a bare element body.
+  ;; 5 SCRIPT: tokenize until the scanner reports `</script`.
+  ;; 6 STYLE: scan CSS. The target field stores its resumable state.
+  ;; 7 CLOSE TAIL: finish `</{expr}>` after its expression.
+  ;;
+  ;; Count pushes beyond the 512-entry capacity without storing them.
+  ;; This keeps pushes and pops balanced. Clamp reads to the deepest stored
+  ;; entry until the depth returns below capacity, as in $brkPush.
   (func $jsxPush (param $mode i32) (param $target i32)
     (if (i32.lt_u (global.get $jsxSp) (i32.const 512))
       (then
@@ -135,13 +129,11 @@
         (br $ws)))
     (local.get $p))
 
-  ;; does the byte shape after the `<` at $p look like a JSX tag? pure
-  ;; lookahead, consumes nothing. `<>`, or a name followed by `>`/`/`/`{`/
-  ;; quote/another name - anything else bails to a comparison operator. TS
-  ;; also accepts type arguments, `<Select<Option>`, and rejects what the
-  ;; TypeScript parser reads as an arrow's type parameters in .tsx: after an
-  ;; optional `const` modifier, a name followed by `,` or `=`, or by
-  ;; `extends` and anything but `=`, `>`, or `/`
+  ;; Check whether `<` at $p can open JSX without consuming input.
+  ;; Accept `<>` or a name followed by `>`, `/`, `{`, a quote, or another name.
+  ;; TypeScript also accepts type arguments, such as `<Select<Option>`.
+  ;; Reject arrow type parameters after an optional `const`: a name followed
+  ;; by `,` or `=`, or by `extends` then anything except `=`, `>`, or `/`.
   (func $jsxValidate (param $p i32) (result i32)
     (local $c i32)
     (local $name i32)
@@ -254,12 +246,11 @@
     (call $jsxPush (i32.const 3) (i32.sub (global.get $braceDepth) (i32.const 1)))
     (global.set $prevTok (enum.get $Lex.l_brace)))
 
-  ;; one step inside an open tag: whitespace, then one attribute piece or the
-  ;; tag end. always advances $ptr or changes mode.
-  ;; TS type arguments after the tag name (`<Select<Option> ...>`) count their
-  ;; depth in the entry's target field above the TSRX raw-text kind, in steps
-  ;; of 256, so the list's own `>` does not open the tag, also across chunks;
-  ;; names inside the list are types.
+  ;; Scan whitespace and one attribute or tag end. Always advance $ptr
+  ;; or change mode. For `<Select<Option> ...>`, store type-argument depth
+  ;; in target above the TSRX raw-text kind, in steps of 256.
+  ;; This prevents a type argument's `>` from opening the tag across chunks.
+  ;; Names in the type-argument list are types.
   (func $jsxTagStep
     (local $from i32)
     (local $c i32)
@@ -448,11 +439,9 @@
     (if (call $jsxCloseTagTail)
       (then (call $jsxPop))))
 
-  ;; Run the byte-scanning markup steps, starting in the top entry's mode $m,
-  ;; until the stack leaves the byte modes or the input ends. The lexer and
-  ;; $tsxExpressionEnd both drive markup through this one loop, so each step
-  ;; has a single caller and there is one call per stretch of markup rather
-  ;; than one per attribute or text run
+  ;; Run markup steps from mode $m until the stack leaves markup mode
+  ;; or input ends. The lexer and $tsxExpressionEnd share this loop.
+  ;; Use one call per markup region instead of per attribute or text run.
   (func $jsxRunBytes (param $m i32)
     (loop $step
       (if (i32.eq (local.get $m) (i32.const 1))
