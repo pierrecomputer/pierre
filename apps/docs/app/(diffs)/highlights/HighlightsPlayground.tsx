@@ -19,6 +19,7 @@ import {
   PLAYGROUND_LANGUAGES,
   type PlaygroundLanguage,
 } from './languageExamples';
+import { FeatureHeader } from '@/components/FeatureHeader';
 import { docsThemeCatalog } from '@/components/themeCatalog';
 import { Button } from '@/components/ui/button';
 import { ButtonGroup, ButtonGroupItem } from '@/components/ui/button-group';
@@ -150,9 +151,18 @@ export function HighlightsPlayground() {
   ) as CSSProperties;
 
   return (
-    <section id="playground" className="space-y-5 pb-16 md:pb-24">
+    <section
+      id="playground"
+      className="scroll-mt-20 space-y-5"
+      aria-labelledby="highlights-playground"
+    >
+      <FeatureHeader
+        id="highlights-playground"
+        title="Try Highlights"
+        description="Pick a language and a theme, then start typing. The code below is highlighted as you edit, right in your browser."
+      />
       <div className="flex flex-wrap gap-3 md:items-center">
-        <div className="flex w-full gap-3 md:w-auto">
+        <div className="flex w-full min-w-0 flex-col gap-3 sm:flex-row md:w-auto">
           {(['light', 'dark'] as const).map((colorScheme) => (
             <DropdownMenu
               key={colorScheme}
@@ -161,13 +171,18 @@ export function HighlightsPlayground() {
               }}
             >
               <DropdownMenuTrigger asChild>
-                <Button variant="outline" className="flex-1 justify-start">
+                <Button
+                  variant="outline"
+                  className="min-w-0 flex-1 justify-start md:max-w-64 md:flex-none"
+                >
                   {colorScheme === 'light' ? (
                     <IconColorLight />
                   ) : (
                     <IconColorDark />
                   )}
-                  {selectedThemes[colorScheme]}
+                  <span className="truncate">
+                    {selectedThemes[colorScheme]}
+                  </span>
                   <IconChevronSm className="text-muted-foreground ml-auto" />
                 </Button>
               </DropdownMenuTrigger>
@@ -269,35 +284,42 @@ export function HighlightsPlayground() {
         <div className={styles.header}>
           <IconFileCode aria-hidden="true" className="size-4" />
           <span>source.{language}</span>
+          <span className="ml-auto text-xs opacity-60">Editable source</span>
         </div>
-        <div className={styles.content}>
-          <textarea
-            aria-label="Source code"
-            value={code}
-            onChange={(event) => setCode(event.target.value)}
-            spellCheck={false}
-            autoCapitalize="off"
-            autoCorrect="off"
-            className={styles.input}
-          />
-          <div aria-hidden="true" className={styles.lineNumbers}>
-            {lines.map((line, index) => (
-              <div key={index} data-line-number={index + 1}>
-                {line === '' ? '\u200b' : line}
-              </div>
-            ))}
-          </div>
-          <div aria-hidden="true" className={styles.preview}>
-            {(['light', 'dark'] as const).map((colorScheme) => (
-              <div
-                key={colorScheme}
-                data-color-scheme={colorScheme}
-                dangerouslySetInnerHTML={{ __html: html[colorScheme] }}
-              />
-            ))}
+        <div className={styles.scrollContainer}>
+          <div className={styles.content}>
+            <textarea
+              aria-label="Source code"
+              value={code}
+              onChange={(event) => setCode(event.target.value)}
+              spellCheck={false}
+              autoCapitalize="off"
+              autoCorrect="off"
+              className={styles.input}
+            />
+            <div aria-hidden="true" className={styles.lineNumbers}>
+              {lines.map((line, index) => (
+                <div key={index} data-line-number={index + 1}>
+                  {line === '' ? '\u200b' : line}
+                </div>
+              ))}
+            </div>
+            <div aria-hidden="true" className={styles.preview}>
+              {(['light', 'dark'] as const).map((colorScheme) => (
+                <div
+                  key={colorScheme}
+                  data-color-scheme={colorScheme}
+                  dangerouslySetInnerHTML={{ __html: html[colorScheme] }}
+                />
+              ))}
+            </div>
           </div>
         </div>
       </div>
+      <p className="text-muted-foreground text-sm">
+        The demo re-highlights the source as you type. Use LiveTokenizer to
+        reuse work between edits in your own editor.
+      </p>
     </section>
   );
 }
