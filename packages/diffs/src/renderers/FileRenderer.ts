@@ -369,7 +369,7 @@ export class FileRenderer<LAnnotation = undefined> {
     // Lets attempt to get the highlighter/languages ready immediately
     else if (this.highlighter == null || this.highlighter.isDisposed) {
       this.computedLang = file.lang ?? getFiletypeFromFileName(file.name);
-      void this.initializeHighlighter();
+      void this.initializeHighlighter().catch(() => {});
     }
   }
 

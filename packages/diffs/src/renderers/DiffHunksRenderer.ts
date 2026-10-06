@@ -970,7 +970,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     // Lets attempt to get the highlighter/languages ready immediately
     else if (this.highlighter == null || this.highlighter.isDisposed) {
       this.computedLangs = getDiffLanguages(diff);
-      void this.initializeHighlighter();
+      void this.initializeHighlighter().catch(() => {});
     }
   }
 
