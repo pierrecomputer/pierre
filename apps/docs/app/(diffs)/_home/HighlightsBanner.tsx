@@ -13,10 +13,8 @@ import { Button } from '@/components/ui/button';
 
 export function HighlightsBanner() {
   return (
-    <div
-      className={`${cardStyles.card} dark text-foreground mb-16 grid min-w-0 gap-8 overflow-hidden rounded-xl p-6 pb-0 shadow-sm sm:p-8 sm:pb-0 md:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] md:items-center md:gap-6 lg:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)] lg:gap-10 lg:px-12 lg:pt-12`}
-    >
-      <div className="min-w-0">
+    <div className={`${cardStyles.card} ${styles.banner} dark`}>
+      <div className="min-w-0 md:pb-12">
         <p className="mb-1 text-xl leading-tight font-medium tracking-tight sm:text-2xl md:text-xl lg:text-2xl">
           Introducing
         </p>
@@ -42,8 +40,8 @@ export function HighlightsBanner() {
         <Button
           asChild
           size="lg"
-          className="group text-md mt-5 h-12 lg:text-lg"
-          variant="default"
+          className="group text-md mt-5 h-10 px-4 md:h-12 md:px-6 lg:text-lg"
+          variant="inverse"
         >
           <Link href="/highlights">
             Get started
@@ -63,7 +61,7 @@ function CompactPerformancePreview() {
   return (
     <div aria-hidden="true" className={styles.benchmarkStage}>
       <figure
-        className={`${cardStyles.card} ${styles.benchmarkCard} dark text-foreground -mb-8 min-w-0 rounded-lg border border-white/10 p-4 sm:p-5`}
+        className={`${cardStyles.card} ${styles.benchmarkCard} dark text-foreground -mb-4 min-w-0 rounded-lg border border-white/10 p-4 sm:p-5 md:-mb-6`}
       >
         <figcaption className="mb-4">
           <h3 className="text-sm font-semibold tracking-tight sm:text-base">

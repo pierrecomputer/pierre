@@ -1,33 +1,60 @@
+.banner {
+  --highlights-banner-surface: var(--background);
+
+  display: grid;
+  min-width: 0;
+  padding: calc(var(--spacing) * 6);
+  padding-bottom: 0;
+  margin-bottom: calc(var(--spacing) * 16);
+  overflow: hidden;
+  color: var(--color-foreground);
+  border-radius: var(--radius-xl);
+  box-shadow:
+    var(--tw-inset-shadow), var(--tw-inset-ring-shadow),
+    var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--shadow-sm);
+  gap: calc(var(--spacing) * 8);
+}
+
+/* Match the shared card's translucent dark-page surface after compositing it. */
+/* stylelint-disable-next-line selector-pseudo-class-no-unknown */
+:global(:root.dark) .banner {
+  --highlights-banner-surface: color-mix(
+    in oklch,
+    var(--muted) 50%,
+    var(--background)
+  );
+}
+
+@media (width >= 640px) {
+  .banner {
+    padding: calc(var(--spacing) * 8);
+    padding-bottom: 0;
+  }
+}
+
+@media (width >= 768px) {
+  .banner {
+    grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+    align-items: center;
+    gap: calc(var(--spacing) * 6);
+  }
+}
+
+@media (width >= 1024px) {
+  .banner {
+    grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr);
+    padding-top: calc(var(--spacing) * 12);
+    padding-inline: calc(var(--spacing) * 12);
+    gap: calc(var(--spacing) * 10);
+  }
+}
+
 .benchmarkStage {
   position: relative;
-  isolation: isolate;
   min-width: 0;
   padding: 0.5rem;
   overflow: hidden;
   border-radius: var(--radius);
-}
-
-.benchmarkStage::before {
-  position: absolute;
-  z-index: 0;
-  inset: -22% -18%;
-  pointer-events: none;
-  content: '';
-  background:
-    radial-gradient(circle at 24% 68%, rgb(8 192 239 / 42%), transparent 45%),
-    radial-gradient(circle at 60% 35%, rgb(198 53 228 / 48%), transparent 48%),
-    radial-gradient(circle at 82% 68%, rgb(252 43 115 / 38%), transparent 44%),
-    radial-gradient(circle at 92% 38%, rgb(254 140 44 / 34%), transparent 40%);
-  filter: blur(1.75rem);
-  opacity: 0.95;
-  mix-blend-mode: screen;
-  mask-image: radial-gradient(
-    ellipse 54% 52% at center,
-    black 25%,
-    rgb(0 0 0 / 90%) 45%,
-    rgb(0 0 0 / 45%) 58%,
-    transparent 66%
-  );
 }
 
 .benchmarkCard {
@@ -53,11 +80,11 @@
   background: linear-gradient(
     to bottom,
     transparent,
-    color-mix(in oklch, var(--background) 55%, transparent) 58%,
-    color-mix(in oklch, var(--background) 85%, transparent) 90%
+    color-mix(in oklch, var(--highlights-banner-surface) 55%, transparent) 58%,
+    var(--highlights-banner-surface) 90%
   );
-  -webkit-backdrop-filter: blur(0.5rem);
-  backdrop-filter: blur(0.5rem);
+  -webkit-backdrop-filter: blur(0.375rem);
+  backdrop-filter: blur(0.375rem);
   -webkit-mask-image: linear-gradient(
     to bottom,
     transparent,
