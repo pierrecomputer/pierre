@@ -16,12 +16,10 @@
     (call $highlightLang (i32.load8_u (i32.const 0)))
     (call $hlEnd))
 
-  ;; Zero every cross-chunk stream global, the stream delimiter, and the
-  ;; lexer checkpoint windows, matching a fresh Wasm instance. Called for a
-  ;; stream reset and before the live tokenizer's first line. The windows
-  ;; matter for a pooled instance: a lexer first entered on a later chunk (a
-  ;; markdown fence body) restores its window, which must not hold the
-  ;; previous stream's locals.
+  ;; Clear stream globals, the delimiter, and lexer checkpoints to match
+  ;; a fresh Wasm instance. Run on stream reset and before the first live line.
+  ;; Pooled instances can retain old locals for lexers first used in later
+  ;; chunks, such as a Markdown fence body. Clear those checkpoints too.
   (func $streamResetGlobals
     (global.set $ecmaImport (i32.const 0))
     (memory.fill (i32.const $mem.streamDelimiter) (i32.const 0) (i32.const 32))
@@ -57,10 +55,9 @@
     ;; entries reset them in $hlEcmaImpl
     (if (local.get $reset)
       (then (call $sigReset)))
-    ;; An open markdown fence owns the chunk start: its body resumes inside
-    ;; the fence bounds ($markdownCodeRange runs the shared and per-language
-    ;; resumes there), so the top-level resumes must not consume a mode the
-    ;; body left open.
+    ;; An open Markdown fence resumes its body within the fence bounds.
+    ;; $markdownCodeRange runs shared and language-specific resume hooks there.
+    ;; Top-level hooks must not consume the body's saved mode.
     (if
       (i32.and
         (i32.or

@@ -31,9 +31,7 @@ const idClassRegex = [/^\p{ID_Start}$/u, /^[\u200C\u200D\p{ID_Continue}]$/u];
 let idClassCache: Uint8Array | undefined;
 
 /**
- * Map of language names to their Wasm language ID.
- *
- * Ordered by the ID first, then the language name.
+ * Language names and Wasm IDs, sorted by ID and then name.
  */
 export const LANGS: Record<string, number> = languages;
 
@@ -116,9 +114,9 @@ export class HighlightsHighlighter implements Highlighter {
   }
 
   /**
-   * Run the lexer over the first `inputLength` bytes: 0 inline colors, 1 CSS
-   * variables, 2 a packed theme set, 3 UTF-16 line records, or 4 prepared
-   * HTML openers. `reset` selects streaming mode.
+   * Lex the first `inputLength` bytes. Output modes:
+   * 0 inline colors, 1 CSS variables, 2 packed themes, 3 UTF-16 line records,
+   * 4 prepared HTML openers. `reset` selects streaming mode.
    */
   #run(
     langId: number,
@@ -139,8 +137,8 @@ export class HighlightsHighlighter implements Highlighter {
   }
 
   /**
-   * Highlight the input code as HTML.
-   * Returns HTML bytes, which may reference wasm memory until the next call.
+   * Return highlighted HTML bytes.
+   * The bytes can reference Wasm memory that the next call overwrites.
    */
   codeToHtml(
     input: string | Uint8Array | ArrayBuffer,
@@ -259,12 +257,11 @@ export class HighlightsHighlighter implements Highlighter {
   }
 
   /**
-   * Answer the ECMAScript lexers' `is_id_start` / `is_id_continue` imports
-   * for the non-ASCII code point encoded at `ptr` (`len` bytes long).
-   * `shift` selects the class: 0 for ID_Start, 2 for ID_Continue. The lexer
-   * asks once per code point, so the Unicode regex only runs on a cache miss;
-   * the cache stores 2 bits per class per BMP code point (0 unknown, 1 no,
-   * 2 yes) and astral code points fall back to the regex.
+   * Check `is_id_start` or `is_id_continue` for the code point at `ptr`.
+   * `len` is its UTF-8 byte length. `shift` is 0 for ID_Start or 2 for
+   * ID_Continue. Each BMP code point uses two cache bits per class:
+   * 0 unknown, 1 no, 2 yes. Use the Unicode regex for cache misses and
+   * astral code points.
    */
   #idClass(ptr: number, len: number, shift: number): number {
     this.bindMemory();
@@ -364,9 +361,9 @@ export function createHighlighter(wasmModule: WebAssembly.Module): Highlighter {
 }
 
 /**
- * Highlight code as a self-contained `<pre class="highlights">` fragment with
- * inline colors. With `themes`, each span carries the default theme inline and
- * the other themes as custom properties, like `codeToTokens`'s `htmlStyle`.
+ * Return a `<pre class="highlights">` fragment with inline colors.
+ * With `themes`, each span uses the default theme inline and CSS custom
+ * properties for the other themes, as in `codeToTokens`'s `htmlStyle`.
  */
 export function codeToHtml(
   input: string | Uint8Array | ArrayBuffer,
@@ -376,8 +373,9 @@ export function codeToHtml(
 }
 
 /**
- * Tokenize code into Shiki-compatible tokens, one array per line.
- * WebAssembly lexes and splits lines; JavaScript maps style records to tokens.
+ * Return Shiki-compatible tokens, grouped by line.
+ * WebAssembly lexes the input and splits lines. JavaScript converts the
+ * style records to tokens.
  */
 export function codeToTokens(
   input: string | Uint8Array | ArrayBuffer,
@@ -387,9 +385,9 @@ export function codeToTokens(
 }
 
 /**
- * Transform UTF-8 byte chunks into themed token arrays, one per completed line.
- * Also supports synchronous pushCode/end calls with strings or UTF-8 bytes.
- * An isolated Wasm instance scans each completed chunk once and preserves
+ * Convert UTF-8 chunks to themed token arrays, one per completed line.
+ * Use synchronous `pushCode` and `end` calls for strings or UTF-8 bytes.
+ * An isolated Wasm instance scans each completed chunk once and keeps
  * lexer state between chunks.
  */
 export class StreamTokenizer extends TransformStream<
@@ -444,10 +442,11 @@ export class StreamTokenizer extends TransformStream<
   }
 
   /**
-   * Append text or UTF-8 bytes and return one token array per completed line,
-   * with offsets relative to the full streamed input. Incomplete UTF-8 stays
-   * buffered across byte chunks; a nonempty string flushes it first. The
-   * incomplete final line stays buffered until a newline or `end()`.
+   * Append text or UTF-8 bytes. Return tokens for each completed line,
+   * with offsets relative to the full input.
+   * Incomplete UTF-8 stays buffered between byte chunks. A nonempty
+   * string flushes those bytes first. The final line stays buffered
+   * until a newline or `end()`.
    */
   pushCode(chunk: string | Uint8Array): ThemedToken[][] {
     if (this.#hl == null) throw new Error('stream has ended');
@@ -500,8 +499,9 @@ export class StreamTokenizer extends TransformStream<
   }
 
   /**
-   * Finish decoding UTF-8 and return the remaining lines, including the final
-   * line after a trailing terminator, matching codeToTokens line splitting.
+   * Finish UTF-8 decoding and return the remaining lines.
+   * A trailing line terminator produces a final empty line, as in
+   * `codeToTokens`.
    */
   end(): ThemedToken[][] {
     if (this.#hl == null) throw new Error('stream has ended');

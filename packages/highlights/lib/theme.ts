@@ -76,10 +76,9 @@ function isThemeObject(value: unknown): value is Theme {
 }
 
 /**
- * The single `Theme` behind a `theme` option: a `ThemeFamily` resolves to its
- * first member. Throws a `TypeError` naming what was received when the value
- * is not a theme object, so a theme id passed as a string (Shiki style) fails
- * with a clear message instead of a raw engine error.
+ * Resolve a `theme` option. For a `ThemeFamily`, use its first member.
+ * Throw a `TypeError` that describes the received value if it is invalid.
+ * Theme ID strings are not supported.
  */
 export function resolveTheme(theme: Theme | ThemeFamily): Theme {
   const resolved: unknown =
@@ -156,10 +155,8 @@ function cssVariable(name: string, cssVariablePrefix: string): string {
 }
 
 /**
- * Escape a user string for a double-quoted HTML attribute, the same escaping
- * the CSS-variable emitter applies to its prefix. Theme colors never need it
- * (`isThemeColor` rejects anything but hex and numeric Display P3), but
- * prefixes and theme keys are arbitrary strings.
+ * Escape a string for a double-quoted HTML attribute.
+ * Prefixes and theme keys need escaping. Validated theme colors do not.
  */
 export function escapeAttribute(value: string): string {
   return value
@@ -170,9 +167,9 @@ export function escapeAttribute(value: string): string {
 }
 
 /**
- * Pack HTML openers for Wasm mode 4: u32 span reserve, then one pair of u32
- * byte offset/length per token id, then UTF-8 bytes. Slot 0 holds the root
- * opener including `<code>`; the other slots hold token span openers.
+ * Pack HTML openers for Wasm mode 4. Store the u32 span reserve, then
+ * u32 byte offset/length pairs per token ID, then the UTF-8 bytes.
+ * Slot 0 holds the root opener with `<code>`. Other slots hold span openers.
  */
 export function packHtmlOpeners(openers: string[]): Uint8Array {
   const bytes = openers.map((opener) => enc.encode(opener));
@@ -210,10 +207,9 @@ export interface PreparedTheme {
 const preparedCache = new WeakMap<Theme, Map<string, PreparedTheme>>();
 
 /**
- * Prepare a theme or family for rendering, resolving every token slot once.
- * Results are cached by theme object identity (and by prefix for
- * CSS-variable themes), so HTML, token, stream, and live output share one
- * prepared object per theme.
+ * Resolve all token styles for a theme or family.
+ * Cache by theme object identity and, for CSS-variable themes, by prefix.
+ * HTML, token, stream, and live output share the prepared object.
  */
 export function prepareTheme(
   theme: Theme | ThemeFamily,
@@ -237,9 +233,9 @@ export function prepareTheme(
 }
 
 /**
- * A CSS-variable theme: every slot references its prefixed custom property
- * and the theme's own `style` is never read. The references are built on
- * first read, since HTML output only needs to know there is no table.
+ * Each slot uses its prefixed CSS custom property. The theme's `style`
+ * is not read. Build these references on first use. HTML output only
+ * needs to know that there is no packed theme table.
  */
 function prepareCssVariables(
   name: string,
@@ -283,11 +279,10 @@ function cssVariableStyles(
 }
 
 /**
- * Resolve every token slot of a hex or Display P3 theme in one pass, packing
- * each hex color and its font settings into the Wasm theme table as it goes.
- * Font settings stay in the table even without a color. Display P3 colors
- * cannot fit the packed RGBA records, so such a theme drops the table and
- * gets prepared HTML openers instead.
+ * Resolve token styles and pack hex colors and font settings into a Wasm
+ * theme table. Keep font settings even when the color is absent.
+ * Display P3 colors do not fit RGBA records. Themes with these colors
+ * use prepared HTML openers instead of a packed table.
  */
 function prepareStyles(theme: Theme): PreparedTheme {
   const themeStyle = theme.style ?? {};

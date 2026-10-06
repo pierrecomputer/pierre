@@ -118,18 +118,13 @@
         (i32.eq (i32.load (local.get $p)) (i32.const "with"))
         (i32.eqz (call $lexIsIdentContinue (call $csByte (i32.add (local.get $p) (i32.const 4))))))))
 
-  ;; Scan a string body from $ptr with the string's bytes since $seg still
-  ;; unemitted. $kind is 1 for a regular literal - escapes, one line - 2 for
-  ;; a `@` verbatim literal - `""` escapes, many lines - and 3 for a `"""`
-  ;; raw literal. Kinds 4..6 scan their format text until `}`. $interp is 1
-  ;; for a `$` literal, whose `{` opens an
-  ;; interpolation while `{{` and `}}` stay literal braces; $nested is
-  ;; nonzero inside an interpolation, where a nested string keeps its braces
-  ;; plain so one brace depth suffices. Returns 1 past the closing quote, 2
-  ;; past an opening `{` - emitted as punctuation.special, the caller lexes
-  ;; the expression - 3 when an escaped line break ends exactly at $end, and
-  ;; 0 when the body stops at $end or at a raw line break of a regular
-  ;; literal.
+  ;; Scan a string from $ptr. Bytes from $seg are not yet emitted.
+  ;; $kind: 1 regular, 2 verbatim, 3 raw, 4-6 their format text ending at `}`.
+  ;; $interp enables `{` interpolation and literal `{{`/`}}` pairs.
+  ;; Inside an interpolation, $nested keeps nested strings' braces literal.
+  ;; Return 1 after the closing quote, 2 after an interpolation opener,
+  ;; 3 after an escaped line break at $end, or 0 at $end or a regular
+  ;; string's raw line break. Emit openers as punctuation.special.
   (func $csStringBody
     (param $kind i32)
     (param $interp i32)
@@ -270,21 +265,18 @@
   (func $csIsOp (param $c i32) (result i32)
     (byteset.get "!%&*+-/<=>?^|~" (local.get $c)))
 
-  ;; $strKind packs an open string body: 1 regular, 2 verbatim, 3 raw, with
-  ;; bit 8 for an interpolated literal; $seg is the start of its bytes not
-  ;; yet emitted; 4..6 represent format text in those three string forms.
-  ;; $interpDepth counts parentheses and brackets, $interp counts braces, and
-  ;; $interpKind remembers which body to return to. $expect is the pending
-  ;; next-name capture, $afterType is 1 right after a type - riding through
-  ;; the `<`, `>`, `?`, `,`, `[`, `]`, and `.` of a generic, nullable,
-  ;; array, or qualified type - so the name before a `(` after it is a
-  ;; definition, and $member is 1 after `.`, `?.`, `->`, or `::`. $attr is
-  ;; 1 inside a `[...]` that opened a line, whose names are attributes, and
-  ;; $lineHead is 1 until the first token of a line. $ctx feeds the
-  ;; contextual words in $csContextual: bit 0 is set where a member or
-  ;; accessor can start - after `{`, `;`, `}`, `]`, or a modifier. The upper
-  ;; bits count braces within a query, starting at 1, so an anonymous object
-  ;; does not end it. One local keeps the stream checkpoint small.
+  ;; Checkpointed lexer state:
+  ;; $strKind: 1 regular, 2 verbatim, 3 raw, 4-6 their format text.
+  ;; Bit 8 marks interpolation. $seg starts bytes not yet emitted.
+  ;; $interpDepth counts parentheses and brackets. $interp counts braces.
+  ;; $interpKind stores the string body to resume.
+  ;; $expect marks the next name's capture. $afterType persists through
+  ;; generic, nullable, array, and qualified type punctuation. A following
+  ;; name before `(` is a definition. $member follows `.`, `?.`, `->`, or `::`.
+  ;; $attr marks a `[...]` opened at line start. $lineHead lasts until
+  ;; the first token. $ctx bit 0 permits a member or accessor after
+  ;; `{`, `;`, `}`, `]`, or a modifier. Upper bits count query braces from 1
+  ;; so anonymous objects do not end the query.
   (func $hlCsharp
     (local $c i32)
     (local $c2 i32)

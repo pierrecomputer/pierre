@@ -54,11 +54,9 @@
   (func $bashIsSpecialParam (param $c i32) (result i32)
     (i32.or (call $lexIsDigit (local.get $c)) (byteset.get "!#*-?@" (local.get $c))))
 
-  ;; A word is an identifier run extended over `-`, `/` and `.` - `apt-get`,
-  ;; `./run.sh`, `a.b` - so paths and dashed commands stay one token. `$` ends
-  ;; a word so a glued expansion still lexes as one: `abc$def` is the word
-  ;; `abc` followed by `$def`. The SIMD run covers `-` directly; `/` and `.`
-  ;; restart it, which keeps the loop off the per-byte path for plain names.
+  ;; Keep `-`, `/`, and `.` inside words, such as `apt-get` and `./run.sh`.
+  ;; `$` ends a word: `abc$def` becomes `abc` followed by the expansion.
+  ;; SIMD scans include `-` directly. `/` and `.` restart the scan.
   (func $bashScanWord
     (local $c i32)
     (block $done
@@ -120,12 +118,11 @@
     (call $emitTok (enum.get $Token.punctuation.special) (local.get $seg) (global.get $ptr))
     (i32.const 1))
 
-  ;; Emit a parameter expansion beginning at `$`. In a double-quoted string,
-  ;; command substitutions are kept together so the quote remains owned by the
-  ;; outer lexer; unquoted substitutions return after their opener. Returns 0
-  ;; when the expansion is complete, the open paren depth when a quoted `$(`
-  ;; ran into $end, or -1 when a `${` did - the double-quoted string
-  ;; checkpoints that so the next chunk finishes the expansion first.
+  ;; Emit the expansion at `$`. Keep quoted command substitutions together
+  ;; so the outer lexer retains its quote. Unquoted substitutions stop
+  ;; after the opener. Return 0 when complete, the open parenthesis depth
+  ;; for unfinished quoted `$(`, or -1 for unfinished `${`.
+  ;; The string lexer saves this result to resume in the next chunk.
   (func $bashDollar (param $quoted i32) (result i32)
     (local $c i32)
     (local $close i32)
@@ -169,16 +166,13 @@
     (call $emitTok (enum.get $Token.variable) (local.get $lhs) (global.get $ptr))
     (i32.const 0))
 
-  ;; Scan a double-quoted string body from $ptr; $seg includes the opening
-  ;; quote for a new literal and starts at $ptr when resuming a stream chunk.
-  ;; The string ends at `"`, and only a backslash escape or a `$` expansion
-  ;; interrupts it, so each step hops to the first of the three: one SIMD pass
-  ;; locates the quote or the backslash, then a second - bounded by that hit,
-  ;; so it never runs past the string - locates an earlier `$`. The quote or
-  ;; backslash hit stays valid until $ptr passes it, so it is searched again
-  ;; only then: a fresh search per `$` made long strings quadratic. Returns 1
-  ;; after the closing quote, else 0 with the expansion left open at $end
-  ;; recorded in $streamA (paren depth) and $streamB (inside `${`).
+  ;; Scan a double-quoted body from $ptr. $seg includes a new opening quote,
+  ;; or starts at $ptr when resuming. Find the next quote or backslash with
+  ;; SIMD, then search for `$` before that position.
+  ;; Keep the quote/backslash result until $ptr passes it. Searching again
+  ;; after every `$` would make long strings quadratic.
+  ;; Return 1 after the closing quote. Otherwise return 0 and save any open
+  ;; expansion in $streamA (parenthesis depth) or $streamB (inside `${`).
   (func $bashDoubleBody (param $seg i32) (result i32)
     (local $c i32)
     (local $c2 i32)
@@ -345,17 +339,15 @@
       (call $lexIsIdentContinue (local.get $c))
       (i32.or (i32.eq (local.get $c) (i32.const "+")) (i32.eq (local.get $c) (i32.const "]")))))
 
-  ;; $cmd is 1 where a word is a command: at a line start, after `;`, `&`,
-  ;; `|`, a command-list keyword, an unquoted `$(`, a subshell or process
-  ;; substitution `(`, a group `{`, a case arm's `)`, and after a `VAR=x`
-  ;; prefix. Keywords apply only there, except an awaited `in`. $flow packs
-  ;; the rest of the statement state, carried across chunks in one local:
-  ;; bits 0-1 are the case state - 1 after `case` until its `in`, 2 at a
-  ;; pattern (no commands, only `esac`), 3 in an arm body - bit 2 (4) marks
-  ;; the `in` awaited after `for NAME`/`case WORD`, and bit 3 (8) an
-  ;; assignment at command position waiting for the blank that starts its
-  ;; command. $arrayOpen counts the parens of an open `NAME=(` array, whose
-  ;; lines hold elements rather than commands.
+  ;; $cmd marks command positions: line starts, command separators, command-list
+  ;; keywords, substitutions, subshells, groups, case arms, and assignment prefixes.
+  ;; Keywords apply only there, except a pending `in`.
+  ;; $flow stores statement state across chunks:
+  ;; - Bits 0-1: 1 after `case`, 2 in a pattern (only `esac` is a keyword),
+  ;;   3 in an arm body.
+  ;; - Bit 2: waiting for `in` after `for NAME` or `case WORD`.
+  ;; - Bit 3: assignment prefix waiting for the blank before its command.
+  ;; $arrayOpen counts parentheses in a `NAME=(` array. Its lines hold elements.
   (func $hlBash
     (local $c i32)
     (local $c2 i32)

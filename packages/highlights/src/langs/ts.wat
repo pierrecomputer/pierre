@@ -91,12 +91,11 @@
             (i64.eq (local.get $w) (i64.const "unknown"))))))
     (i32.const 0))
 
-  ;; The ecma driver for the shared parameter-list machine in sig.wat: a
-  ;; paren following a `function`/`catch`/`constructor`/accessor head, or one
-  ;; whose first identifier carries a TS `name:` annotation - a call cannot -
-  ;; is a parameter list, and identifiers at its top level (or one level into
-  ;; a destructuring pattern, matching Zed's one-level captures) classify as
-  ;; variable.parameter.
+  ;; Update the shared parameter-list state from sig.wat.
+  ;; Mark parentheses after function, catch, constructor, or accessor heads.
+  ;; Also mark a first identifier with a TS `name:` annotation, which calls
+  ;; cannot contain. Classify names at the top level or one destructuring
+  ;; level below it as variable.parameter, matching Zed's captures.
 
   ;; the exact word `constructor` - a class constructor head
   (func $isConstructorWord (param $lhs i32) (param $rhs i32) (result i32)
@@ -187,14 +186,11 @@
         (i32.const "new"))
       (i32.eqz (call $jsxNameStart (call $tsByteBefore (i32.sub (local.get $p) (i32.const 3)))))))
 
-  ;; is a SCREAMING_CASE-shaped TS name in a type position, where it reads
-  ;; as a type (`T`, `K`, `FC`) rather than a constant? After a type
-  ;; operator (`keyof`, `infer`, `is`, `as`, `satisfies`); inside `<...>`
-  ;; (`<T>`, `<K, V>`, `<T extends U>`, `<T = X>`, `<const T,>`); a mapped-type key
-  ;; `[K in`; the last union member of an arrow return type `| T =>`; and an
-  ;; annotation - inside a marked parameter list, a return type `): T`, or a
-  ;; generic reference `: FC<`. A `:` in an object literal and bitwise `|`
-  ;; keep their constant values
+  ;; Check whether a SCREAMING_CASE name is a type (`T`, `K`, `FC`).
+  ;; Type positions include type operators, generic lists, mapped-type keys,
+  ;; arrow return types, and annotations in marked parameter lists.
+  ;; Also accept `): T` and generic references such as `: FC<`.
+  ;; Object values after `:` and bitwise operands after `|` remain constants.
   (func $tsTypeSlot (param $prev i32) (param $next i32) (param $lhs i32) (result i32)
     (if
       (i32.or
@@ -529,13 +525,11 @@
                 (i32.eq (local.get $t) (enum.get $Lex.ctxword_type))))))))
     (i32.const -1))
 
-  ;; contextual words the keyword table does not carry, recognized from
-  ;; their neighbours: `using x` (explicit resource management), `accessor x`
-  ;; and `accessor #x` (auto-accessors), and TS `declare global {`,
-  ;; `module 'm'` / `module Foo`, `unique symbol`, and `asserts v` after an
-  ;; annotation colon. Returns the token, or -1 for an ordinary name. A
-  ;; plain identifier before a name, a string, `{`, or `#x` is rare, so the
-  ;; word compares seldom run
+  ;; Match contextual keywords absent from the keyword table:
+  ;; `using x`, `accessor x`, `accessor #x`, `declare global {`,
+  ;; `module 'm'`, `module Foo`, `unique symbol`, and `asserts v`
+  ;; after an annotation colon. Return the token, or -1 for an ordinary name.
+  ;; Check neighboring syntax first to avoid most word comparisons.
   (func $ctxIdentHl (param $prev i32) (param $next i32) (param $lhs i32) (param $rhs i32) (result i32)
     (local $len i32)
     (local $w i64)
@@ -702,11 +696,9 @@
                   (i32.eq (local.get $prev) (enum.get $Lex.l_bracket)))
                 (i32.eq (local.get $prev) (enum.get $Lex.comma)))))
           (then (return (enum.get $Token.variable.parameter))))))
-    ;; a TS `name:` (or `name?:`) annotation right after `(` proves a
-    ;; parameter list - a call cannot contain one - so mark the list for the
-    ;; names after later commas too. The pipeline already scanned $next, so
-    ;; the tokenizer global $rhs is its end: the byte there is the one after
-    ;; the `?`
+    ;; A TS `name:` or `name?:` immediately after `(` marks a parameter list.
+    ;; This also marks names after later commas. The pipeline has scanned
+    ;; $next, so global $rhs points just after it, including after `?`.
     (if (i32.and (i32.eq (local.get $prev) (enum.get $Lex.l_paren)) (call $ecmaHasTypeScript))
       (then
         (if
@@ -766,12 +758,10 @@
       (then (return (enum.get $Token.type))))
     (if (i32.eq (local.get $prev) (enum.get $Lex.keyword_function))
       (then (return (enum.get $Token.function))))
-    ;; object / type-member key: `{`/`,`/`;` before - `;` separates interface
-    ;; and type-literal members - and `:` after, or `?` when the `:` follows it
-    ;; directly (a TS optional member; a ternary `?` never touches its `:`).
-    ;; the pipeline already scanned $next, so the tokenizer global $rhs - not
-    ;; the $rhs param, the current token's end - is its end: the byte there is
-    ;; the one after the `?`
+    ;; Object and type-member keys follow `{`, `,`, or `;` and precede `:`.
+    ;; Also accept `?:` for optional TS members. Ternary `?` does not touch `:`.
+    ;; Use global $rhs for the end of the already-scanned $next token.
+    ;; The $rhs parameter marks the current token's end instead.
     (if
       (i32.and
         (i32.or

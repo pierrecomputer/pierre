@@ -172,13 +172,11 @@
         (br $l)))
     (i32.add (local.get $lhs) (i32.const 1)))
 
-  ;; When the line at $p opens a fenced code block, the offset just past its
-  ;; closing fence; 0 otherwise. A fenced body belongs to markdown, which knows
-  ;; how to delegate it by info string, so `{` and `<` inside one are literal
-  ;; text rather than MDX expressions or JSX. The opener may sit behind block
-  ;; quote markers and spaces exactly as the markdown lexer accepts them, and
-  ;; the closer is found by the markdown lexer's own scan, so the two never
-  ;; disagree on where a body ends.
+  ;; Find the end of the fence opened by the line at $p, or return 0.
+  ;; Markdown handles the body according to its info string. Braces and
+  ;; angle brackets there do not start MDX expressions or JSX.
+  ;; Use Markdown's container rules and closer scan to keep both lexers'
+  ;; fence bounds consistent.
   (func $mdxFenceEnd (param $p i32) (result i32)
     (local $close i32)
     (local $fence i32)
@@ -332,13 +330,11 @@
     (call $markdownFenceSet (i32.const 0) (i32.const 0) (i32.const 0))
     (i32.const 0))
 
-  ;; Does the `<` at $p plausibly open a JSX tag whose `>` arrives in a later
-  ;; stream chunk? Everything after the tag name up to $end must read as
-  ;; attributes: names, `=`, quoted values, braced expressions, `/`, blanks.
-  ;; A bare `<word` mid-line with nothing else, as in prose `a <b c`, is not
-  ;; enough on its own: the tag must also be a component, sit at a line
-  ;; start, or carry an attribute assignment. Without this the region would
-  ;; swallow every following line as attributes.
+  ;; Check whether `<` at $p starts JSX that continues in the next chunk.
+  ;; Bytes after the name must be attributes: names, `=`, quoted values,
+  ;; expressions, `/`, or blanks. Also require a component name, line-start
+  ;; position, or attribute assignment. This prevents incomplete prose such
+  ;; as `a <b c` from consuming later lines as attributes.
   (func $mdxTagStartContinues (param $p i32) (result i32)
     (local $c i32)
     (local $evidence i32)

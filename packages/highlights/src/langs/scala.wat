@@ -27,15 +27,13 @@
   (func $scalaWordHl (param $lhs i32) (param $rhs i32) (result i32)
     (keyword-table.value $scalaWords (local.get $lhs) (local.get $rhs)))
 
-  ;; Scan a `"` or `"""` body from $ptr, with the string's bytes since $seg
-  ;; still unemitted. Only a non-raw single-quote body has backslash escapes; an
-  ;; interpolated body - $expand, after an `s`, `f`, `raw`, or custom
-  ;; prefix - carries `$name` variables, `${` splices, and `$$`. Returns 1
-  ;; past the closing quote, 2 past a `${` that opens a splice - emitted as
-  ;; punctuation.special, the caller lexes the expression - 3 when an
-  ;; escaped line break ends exactly at $end, and 0 when the body stops at
-  ;; $end or at a raw line break of a single-line string. $nested is
-  ;; nonzero inside a splice, where a nested string keeps `${` plain.
+  ;; Scan a `"` or `"""` body from $ptr. Bytes from $seg are not yet emitted.
+  ;; Only non-raw, single-quoted bodies process backslash escapes.
+  ;; $expand enables `$name`, `${...}`, and `$$` for interpolated strings.
+  ;; Return 1 after the quote, 2 after `${`, 3 after an escaped line break
+  ;; at $end, or 0 at $end or a single-line string's raw line break.
+  ;; Emit `${` as punctuation.special. $nested keeps `${` literal inside
+  ;; a string nested in an interpolation.
   (func $scalaStringBody
     (param $triple i32)
     (param $expand i32)

@@ -198,12 +198,11 @@
     (call $emitTok (enum.get $Token.string) (local.get $lhs) (global.get $ptr))
     (local.get $quote))
 
-  ;; Svelte and Astro cut their html ranges at every `{`, including one inside
-  ;; a start tag (`class={x}`, `{...props}`). When a range ends inside a start
-  ;; tag, the attribute loop leaves its state here for the owner, packed as
-  ;; 1 | after-`=` << 1 | open quote << 8 | raw-text kind << 16 (0: no open
-  ;; tag). The owner clears it before each range, reads it right after, and
-  ;; continues the tag's attributes once the expression is highlighted.
+  ;; Svelte and Astro split HTML ranges at `{`, including inside start tags.
+  ;; Save unfinished attribute state in $htmlOpenTag:
+  ;; 1 | after-`=` << 1 | open quote << 8 | raw-text kind << 16.
+  ;; Zero means no open tag. The owner clears this before each range,
+  ;; then reads it to resume attributes after the expression.
   (global $htmlOpenTag (mut i32) (i32.const 0))
 
   ;; Raw-text kinds: 1 script, 2 style, and a style whose `lang` attribute
@@ -243,18 +242,15 @@
       (then (return (i32.const 16))))
     (local.get $kind))
 
-  ;; Attributes after a tag name until `>` / `/>`. Returns the status in the
-  ;; low byte - 1 when the tag was closed by a plain `>`, 2 for `/>`, 0 for a
-  ;; stray `<` (the caller reparses it in text mode) or input end - and the
-  ;; raw-text kind above it (a style's `lang` may refine it). The loop is
-  ;; re-enterable so a tag cut by a chunk end resumes where it stopped:
-  ;; $afterEq is set when the value after `=` is still expected, $quote is
-  ;; the open quote of an unterminated value. At a real chunk end (never a
-  ;; bounded sub-range end) the open tag becomes stream region $region with
-  ;; $streamA = $kind (a raw-text body must follow the tag), $streamB =
-  ;; after-`=` flag, $streamC = open quote; the owning lexer's resume hook
-  ;; calls back into this loop with them. A bounded end in a svelte or astro
-  ;; range (regions 12 and 13) sets $htmlOpenTag instead.
+  ;; Scan attributes through `>` or `/>`. Return status in the low byte:
+  ;; 1 for `>`, 2 for `/>`, 0 for input end or a stray `<` to reparse.
+  ;; Upper bits hold the raw-text kind, refined by a style tag's `lang`.
+  ;; $afterEq marks a pending value. $quote holds an unfinished value's quote.
+  ;;
+  ;; At a real chunk end, save stream region $region with $streamA = $kind,
+  ;; $streamB = $afterEq, and $streamC = $quote. The owner's resume hook
+  ;; restores these. Bounded Svelte/Astro ranges (12/13) use $htmlOpenTag
+  ;; instead of stream state.
   (func $htmlAttrs
     (param $afterEq i32)
     (param $quote i32)
@@ -559,13 +555,11 @@
     (call $lexEmitLeadingContinuation)
     (call $htmlLex (i32.const 9)))
 
-  ;; Finish a resumed start tag from its attribute-loop status. Status 0 with
-  ;; the cursor at the chunk end means the tag is still open (the loop
-  ;; checkpointed it again): report the chunk as consumed. Status 0 elsewhere
-  ;; abandons the tag at a stray `<` or at the owner's range bound. A closed
-  ;; script/style tag starts its raw-text body, which may itself continue as
-  ;; region 1/2. The resume hooks run at stream depth 1 so embedded lexers
-  ;; behave as they do under the html root; this resets the depth.
+  ;; Finish a resumed start tag from its attribute status.
+  ;; Status 0 at chunk end keeps the tag checkpointed and consumes the chunk.
+  ;; Status 0 elsewhere abandons the tag at a stray `<` or range bound.
+  ;; A closed script/style tag starts its raw-text body, possibly in region 1/2.
+  ;; Resume hooks use stream depth 1 for embedded lexers. Reset it here.
   (func $htmlTagResumeEnd (param $status i32) (param $kind i32) (result i32)
     (if (i32.and (i32.eqz (local.get $status)) (i32.eq (global.get $ptr) (global.get $eof)))
       (then
@@ -669,13 +663,12 @@
         (br $scan)))
     (select (local.get $p) (global.get $end) (i32.lt_u (local.get $p) (global.get $end))))
 
-  ;; Highlight the `{...}` at $from in one pass (see $hlTsxExpression).
-  ;; Svelte emits the `{` itself and a block or directive marker word after
-  ;; it (`#if`, `:else`, `/each`, `@html`) as a keyword, then lexes the body
-  ;; as TSX in regexp-allowed position; its braces are punctuation.special.
-  ;; Astro lexes the braces as TSX too, so they stay brackets. Returns 1 with
-  ;; $ptr after the closing `}`, 0 when the body ran to $end; a body open at
-  ;; a chunk end streams on as region 7 + $astro, keeping $tag.
+  ;; Highlight `{...}` at $from with $hlTsxExpression.
+  ;; Svelte emits `{` and directive markers (`#if`, `:else`, `/each`, `@html`)
+  ;; as keywords. It lexes the body as TSX with regexes allowed and marks
+  ;; braces as punctuation.special. Astro uses TSX for the braces too.
+  ;; Return 1 after the closing `}`, or 0 at $end. An unfinished body at
+  ;; chunk end uses region 7 + $astro and preserves $tag.
   (func $braceExpression (param $from i32) (param $tag i32) (param $astro i32) (result i32)
     (local $c i32)
     (local $markerEnd i32)
@@ -733,14 +726,12 @@
         (return (i32.const 1))))
     (i32.const 0))
 
-  ;; Continue a start tag that a `{` cut interrupted, from $ptr: after an
-  ;; expression (`class={x}`, `{...props}`, Svelte's `title="a {b} c"`), or,
-  ;; in Astro, at a `{` inside a quoted value, which Astro keeps literal
-  ;; (`href="/x/{id}"`). The attributes run to the next cut, and each `{`
-  ;; there is another expression (Astro: unless quoted), until the tag
-  ;; closes, a stray `<` or another cut abandons it, or the input ends. $tag
-  ;; is the packed attribute state at the `{` (see $htmlOpenTag): the value
-  ;; an expression gave is complete, and an open quote continues after it.
+  ;; Resume a start tag at $ptr after a `{` split.
+  ;; $tag holds the packed attribute state from $htmlOpenTag.
+  ;; An expression completes its value. An open quote continues after it.
+  ;; Scan attributes to the next split, tag end, stray `<`, or input end.
+  ;; Each `{` starts another expression, except inside Astro quoted values
+  ;; such as `href="/x/{id}"`, where it stays literal.
   (func $braceTagRest (param $tag i32) (param $astro i32)
     (local $quote i32)
     (local $r i32)
