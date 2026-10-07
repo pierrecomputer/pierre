@@ -1,0 +1,100 @@
+.banner {
+  --highlights-banner-surface: var(--background);
+
+  display: grid;
+  min-width: 0;
+  padding: calc(var(--spacing) * 6);
+  padding-bottom: 0;
+  margin-bottom: calc(var(--spacing) * 16);
+  overflow: hidden;
+  color: var(--color-foreground);
+  border-radius: var(--radius-xl);
+  box-shadow:
+    var(--tw-inset-shadow), var(--tw-inset-ring-shadow),
+    var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--shadow-sm);
+  gap: calc(var(--spacing) * 8);
+}
+
+/* Match the shared card's translucent dark-page surface after compositing it. */
+/* stylelint-disable-next-line selector-pseudo-class-no-unknown */
+:global(:root.dark) .banner {
+  --highlights-banner-surface: color-mix(
+    in oklch,
+    var(--muted) 50%,
+    var(--background)
+  );
+}
+
+@media (width >= 640px) {
+  .banner {
+    padding: calc(var(--spacing) * 8);
+    padding-bottom: 0;
+  }
+}
+
+@media (width >= 768px) {
+  .banner {
+    grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+    align-items: center;
+    gap: calc(var(--spacing) * 6);
+  }
+}
+
+@media (width >= 1024px) {
+  .banner {
+    grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr);
+    padding-top: calc(var(--spacing) * 12);
+    padding-inline: calc(var(--spacing) * 12);
+    gap: calc(var(--spacing) * 10);
+  }
+}
+
+.benchmarkStage {
+  position: relative;
+  min-width: 0;
+  padding: 0.5rem;
+  overflow: hidden;
+  border-radius: var(--radius);
+}
+
+.benchmarkCard {
+  position: relative;
+  z-index: 1;
+  inline-size: 100%;
+  max-inline-size: 33.75rem;
+  margin-inline: auto;
+  background-color: color-mix(in oklch, var(--background) 82%, transparent);
+  box-shadow:
+    0 24px 48px -24px rgb(0 0 0 / 95%),
+    inset 0 1px 0 rgb(255 255 255 / 5%);
+}
+
+.benchmarkStage::after {
+  position: absolute;
+  z-index: 2;
+  inset-inline: 0.5rem;
+  bottom: 0;
+  block-size: 10rem;
+  pointer-events: none;
+  content: '';
+  background: linear-gradient(
+    to bottom,
+    transparent,
+    color-mix(in oklch, var(--highlights-banner-surface) 55%, transparent) 58%,
+    var(--highlights-banner-surface) 90%
+  );
+  -webkit-backdrop-filter: blur(0.375rem);
+  backdrop-filter: blur(0.375rem);
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    transparent,
+    rgb(0 0 0 / 35%) 38%,
+    black 78%
+  );
+  mask-image: linear-gradient(
+    to bottom,
+    transparent,
+    rgb(0 0 0 / 35%) 38%,
+    black 78%
+  );
+}
