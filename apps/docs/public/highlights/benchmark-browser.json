@@ -1,0 +1,79 @@
+{
+  "date": "2026-09-15T18:15:50.648Z",
+  "source": "https://unpkg.com/three@0.97.0/build/three.min.js",
+  "copies": 10,
+  "characters": 5556500,
+  "warmups": 1,
+  "measuredRuns": 3,
+  "aggregation": "median",
+  "sampling": "One warm-up followed by one timed call in a fresh dedicated worker for each sample; three complete passes through all engines.",
+  "sampleDates": [
+    "2026-09-15T18:12:48.049Z",
+    "2026-09-15T18:14:18.898Z",
+    "2026-09-15T18:15:50.648Z"
+  ],
+  "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36",
+  "rows": [
+    {
+      "name": "Highlights",
+      "version": "0.0.3",
+      "output": "tokens",
+      "samplesMilliseconds": [90.69999992847443, 92.10000002384186, 104.5],
+      "milliseconds": 92.10000002384186
+    },
+    {
+      "name": "gpu-lexer",
+      "version": "0.0.2",
+      "output": "spans",
+      "samplesMilliseconds": [407.2000000476837, 400.2000000476837, 403],
+      "milliseconds": 403
+    },
+    {
+      "name": "Prism.js",
+      "version": "1.30.0",
+      "output": "HTML",
+      "samplesMilliseconds": [1220.2999999523163, 1245, 1267.8999999761581],
+      "milliseconds": 1245
+    },
+    {
+      "name": "Highlight.js",
+      "version": "11.12.0",
+      "output": "HTML",
+      "samplesMilliseconds": [1409.2999999523163, 1418.3999999761581, 1462.5],
+      "milliseconds": 1418.3999999761581
+    },
+    {
+      "name": "Sugar High",
+      "version": "2.3.1",
+      "output": "HTML",
+      "samplesMilliseconds": [859.3999999761581, 870.1999999284744, 898.5],
+      "milliseconds": 870.1999999284744
+    },
+    {
+      "name": "Starry Night",
+      "version": "3.11.0",
+      "output": "HAST",
+      "samplesMilliseconds": [
+        11047.300000071526, 11111.100000023842, 11294.200000047684
+      ],
+      "milliseconds": 11111.100000023842
+    },
+    {
+      "name": "Shiki",
+      "version": "4.4.3",
+      "output": "tokens",
+      "samplesMilliseconds": [
+        30143.700000047684, 30183.600000023842, 30294.899999976158
+      ],
+      "milliseconds": 30183.600000023842
+    }
+  ],
+  "environment": "Apple M4 Pro, 48 GiB RAM, macOS 15.7.7, Chromium 152 (Codex in-app browser)",
+  "reference": "https://gpu-lexer.vercel.app/",
+  "sourceSha256": "3ed7c9316c0724813330f2720111f295827ac22a04da471f167c0fa06b9f28e5",
+  "conditions": [
+    "Arc was closed.",
+    "The animated article preview was unloaded.",
+    "Display and idle system sleep were prevented with caffeinate throughout all three passes."
+  ]
+}
