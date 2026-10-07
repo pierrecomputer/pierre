@@ -3,33 +3,11 @@ import type { ReactNode } from 'react';
 
 import { BenchmarkBar } from './BenchmarkBar';
 import styles from './HighlightsBenchmarkCard.module.css';
+import {
+  HIGHLIGHTS_LARGE_FILE_RESULTS,
+  HIGHLIGHTS_THROUGHPUT_MAXIMUM,
+} from './performanceBenchmarkData';
 import { cn } from '@/lib/utils';
-
-// Published string-I/O results from packages/highlights/benchmark/README.md,
-// recorded September 25, 2026. Keep the reported ratios rather than deriving
-// them from the table's independently rounded throughput values.
-const largeFileResults = [
-  {
-    language: 'TypeScript',
-    size: '517 KiB',
-    speedup: 294,
-  },
-  {
-    language: 'HTML',
-    size: '474 KiB',
-    speedup: 237,
-  },
-  {
-    language: 'CSS',
-    size: '379 KiB',
-    speedup: 248,
-  },
-  {
-    language: 'JSONC',
-    size: '292 KiB',
-    speedup: 148,
-  },
-];
 
 const memoryResults = [
   { name: 'Highlights', peakRss: 49 },
@@ -37,7 +15,6 @@ const memoryResults = [
   { name: 'Shiki Wasm', peakRss: 346 },
 ];
 
-const throughputMaximum = 300;
 const memoryMaximum = 400;
 
 // Renders different benchmark units against an explicit zero-based maximum.
@@ -117,24 +94,26 @@ export function HighlightsPerformanceBenchmarks() {
             </p>
           </figcaption>
           <div className="space-y-5">
-            {largeFileResults.map(({ language, size, speedup }) => (
-              <dl key={language}>
-                <PerformanceBar
-                  name={
-                    <span className="flex items-baseline gap-2 text-sm">
-                      <span className="text-foreground font-medium">
-                        {language}
+            {HIGHLIGHTS_LARGE_FILE_RESULTS.map(
+              ({ language, size, speedup }) => (
+                <dl key={language}>
+                  <PerformanceBar
+                    name={
+                      <span className="flex items-baseline gap-2 text-sm">
+                        <span className="text-foreground font-medium">
+                          {language}
+                        </span>
+                        <span>{size}</span>
                       </span>
-                      <span>{size}</span>
-                    </span>
-                  }
-                  value={speedup}
-                  maximum={throughputMaximum}
-                  formatValue={(value) => `${value}×`}
-                  highlights
-                />
-              </dl>
-            ))}
+                    }
+                    value={speedup}
+                    maximum={HIGHLIGHTS_THROUGHPUT_MAXIMUM}
+                    formatValue={(value) => `${value}×`}
+                    highlights
+                  />
+                </dl>
+              )
+            )}
           </div>
         </figure>
 
