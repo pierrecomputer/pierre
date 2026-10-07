@@ -5,6 +5,7 @@ import {
   IconBrandDiscord,
   IconBrandGithub,
   IconChevronFlat,
+  IconChevronSm,
   IconParagraph,
 } from '@pierre/icons';
 import Link from 'next/link';
@@ -14,12 +15,21 @@ import { useEffect, useState } from 'react';
 import { HeaderMobileMenu } from './HeaderMobileMenu';
 import { Button } from './ui/button';
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from './ui/dropdown-menu';
+import {
+  DIFFS_THEME_PATH,
   getExternalUrl,
   getProductFromPathname,
-  type ProductId,
-  PRODUCTS,
+  type ProductConfig,
 } from '@/lib/product-config';
 import { cn } from '@/lib/utils';
+
+const DIFFSHUB_URL = 'https://diffshub.com';
 
 export interface HeaderProps {
   onMobileMenuToggle?: () => void;
@@ -59,8 +69,92 @@ function NavLink({ href, basePath, children }: NavLinkProps) {
   );
 }
 
-// Order in which we render cross-site links in the desktop nav.
-const OTHER_PRODUCT_IDS: ProductId[] = ['diffs', 'trees'];
+function MoreMenu({
+  pathname,
+  product,
+}: {
+  pathname: string;
+  product: ProductConfig;
+}) {
+  const diffsUrl = getExternalUrl('diffs');
+  const themeHref =
+    product.id === 'diffs'
+      ? `${product.basePath}${DIFFS_THEME_PATH}`
+      : `${diffsUrl}${DIFFS_THEME_PATH}`;
+  const iconsHref =
+    product.id === 'diffs' ? `${product.basePath}/icons` : `${diffsUrl}/icons`;
+  const isThemeActive =
+    product.id === 'diffs' && pathname.startsWith(DIFFS_THEME_PATH);
+  const isIconsActive = product.id === 'diffs' && pathname.startsWith('/icons');
+  const isMoreActive = isThemeActive || isIconsActive;
+  const otherProductId = product.id === 'diffs' ? 'trees' : 'diffs';
+  const otherProductName = product.id === 'diffs' ? 'Trees' : 'Diffs';
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button
+          variant="ghost"
+          size="sm"
+          className={cn(
+            'text-muted-foreground group gap-1 px-2 font-normal data-[state=open]:text-foreground',
+            isMoreActive && 'text-foreground font-medium'
+          )}
+        >
+          More
+          <IconChevronSm className="opacity-75 transition-transform group-data-[state=open]:rotate-180" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="min-w-40">
+        <DropdownMenuItem
+          asChild
+          className="cursor-pointer"
+          selected={isThemeActive}
+        >
+          {product.id === 'diffs' ? (
+            <Link href={themeHref}>Themes</Link>
+          ) : (
+            <a href={themeHref} target="_blank" rel="noopener noreferrer">
+              Themes
+              <IconArrowUpRight className="ml-auto opacity-60" />
+            </a>
+          )}
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          asChild
+          className="cursor-pointer"
+          selected={isIconsActive}
+        >
+          {product.id === 'diffs' ? (
+            <Link href={iconsHref}>Icons</Link>
+          ) : (
+            <a href={iconsHref} target="_blank" rel="noopener noreferrer">
+              Icons
+              <IconArrowUpRight className="ml-auto opacity-60" />
+            </a>
+          )}
+        </DropdownMenuItem>
+        <DropdownMenuSeparator className="mx-1.5" />
+        <DropdownMenuItem asChild className="cursor-pointer">
+          <a
+            href={getExternalUrl(otherProductId)}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            {otherProductName}
+            <IconArrowUpRight className="ml-auto opacity-60" />
+          </a>
+        </DropdownMenuItem>
+        <DropdownMenuItem asChild className="cursor-pointer">
+          <a href={DIFFSHUB_URL} target="_blank" rel="noopener noreferrer">
+            DiffsHub
+            <IconArrowUpRight className="ml-auto opacity-60" />
+          </a>
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
 
 interface IconLinkProps {
   href: string;
@@ -120,7 +214,7 @@ export function Header({ onMobileMenuToggle, className }: HeaderProps) {
     <header
       data-slot="header"
       className={cn(
-        'bg-background bg-clip-padding sticky top-0 z-140 flex items-center justify-between gap-4 py-3 transition-[border-color,box-shadow] duration-200 px-5 -mx-5 md:mx-0 md:px-0',
+        'bg-background bg-clip-padding sticky top-0 z-40 flex items-center justify-between gap-4 py-3 transition-[border-color,box-shadow] duration-200 px-5 -mx-5 md:mx-0 md:px-0',
         isStuck ? 'is-stuck' : 'border-b border-transparent',
         className
       )}
@@ -128,8 +222,17 @@ export function Header({ onMobileMenuToggle, className }: HeaderProps) {
       <div className="flex items-baseline gap-1.5">
         <Link
           href={homeHref}
-          className="text-foreground hover:text-foreground/80 text-lg leading-[20px] font-semibold transition-colors"
+          className="text-foreground hover:text-foreground/80 flex items-center gap-2 text-lg leading-[20px] font-semibold transition-colors"
         >
+          {/* Product favicon, mirroring the per-site icon set in the layout. */}
+          <img
+            src={`/${product.id}-brand/icon.svg`}
+            alt=""
+            aria-hidden="true"
+            width={24}
+            height={24}
+            className="hidden size-6 shrink-0"
+          />
           {product.name}
         </Link>
         <span className="text-muted-foreground hidden text-sm leading-[20px] md:inline">
@@ -172,54 +275,20 @@ export function Header({ onMobileMenuToggle, className }: HeaderProps) {
           <NavLink href="/" basePath={product.basePath}>
             Home
           </NavLink>
-          {/* {product.id === 'diffs' && (
-            <NavLink href="/highlights" basePath={product.basePath}>
-              Highlights
-            </NavLink>
-          )} */}
           {product.id === 'diffs' && (
             <NavLink href="/edit" basePath={product.basePath}>
               Edit
             </NavLink>
           )}
+          {product.id === 'diffs' && (
+            <NavLink href="/highlights" basePath={product.basePath}>
+              Highlights
+            </NavLink>
+          )}
           <NavLink href="/docs" basePath={product.basePath}>
             Docs
           </NavLink>
-          {OTHER_PRODUCT_IDS.filter((id) => id !== product.id).map((id) => (
-            <Button
-              key={id}
-              variant="ghost"
-              size="sm"
-              asChild
-              className="text-muted-foreground gap-0.5 px-2 font-normal"
-            >
-              <Link
-                href={getExternalUrl(id)}
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                {PRODUCTS[id].name}
-                <IconArrowUpRight />
-              </Link>
-            </Button>
-          ))}
-          {/* diffshub is a separate app on its own domain, so it's a
-              hardcoded external link rather than a product in this app. */}
-          <Button
-            variant="ghost"
-            size="sm"
-            asChild
-            className="text-muted-foreground gap-0.5 px-2 font-normal"
-          >
-            <Link
-              href="https://diffshub.com"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              DiffsHub
-              <IconArrowUpRight />
-            </Link>
-          </Button>
+          <MoreMenu pathname={pathname} product={product} />
 
           <div className="border-border mx-2 h-5 w-px border-l" />
         </div>

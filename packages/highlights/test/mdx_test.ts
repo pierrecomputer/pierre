@@ -122,10 +122,24 @@ void t.test('mdx: fences behind list markers and block quotes close', () => {
   );
   assert.equal(colorOf(quoted, 'after'), VARIABLE);
   assertLineFedMatchesWhole('> ```js\n> let a = {b: 1}\n> ```\n{after}\n');
-  const item = checkInvariants(mdx.hl, '- ```js\nlet a = <b/>\n```\n{after}\n');
+  const item = checkInvariants(
+    mdx.hl,
+    '- ```js\n  let a = <b/>\n  ```\n{after}\n'
+  );
   assert.equal(colorOf(item, 'let'), KEYWORD);
   assert.equal(colorOf(item, 'after'), VARIABLE);
-  assertLineFedMatchesWhole('- ```js\nlet a = <b/>\n```\n{after}\n');
+  assertLineFedMatchesWhole('- ```js\n  let a = <b/>\n  ```\n{after}\n');
+  for (const code of [
+    '- ```js\n# heading\n```\n{after}\n',
+    '> ```js\n# heading\n```\n{after}\n',
+  ]) {
+    assert.ok(
+      tokenKinds('mdx', code).some(
+        ([text, kind]) => text === '{after}' && kind === 'text.literal'
+      )
+    );
+    assertLineFedMatchesWhole(code);
+  }
 });
 
 void t.test('mdx: a stray `<word` does not open a JSX region', () => {

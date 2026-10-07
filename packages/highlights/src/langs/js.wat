@@ -1001,19 +1001,15 @@
         (global.set $lto (local.get $t))))
     (local.get $t))
 
-  ;; Return the byte after the `}` balancing the `{` at $from. This reuses the
-  ;; real token scanner, then restores $ptr; unterminated expressions reach
-  ;; $end, and a $from that is not on a `{` returns the byte after it. Every
-  ;; caller scans from the `{` itself, so $body always equals $from.
-  ;; INVARIANT: when $from < $end the result is strictly greater than $from -
-  ;; MDX's tag scans rely on this to always advance. Expressions that are
-  ;; highlighted use $hlTsxExpression instead, which finds the closer while
-  ;; lexing. Every caller highlights the body with the TSX feature set, so the scan
-  ;; enables JSX too and walks elements with the lexer's own jsx steps,
-  ;; silenced by $jsxMute: otherwise `</li>` inside
-  ;; `{items.map((i) => <li>{i}</li>)}` reads as `<` and a regexp that
-  ;; swallows the closing brace, and the scanner and the lexer disagree about
-  ;; where the expression ends.
+  ;; Find the byte after the `}` matching `{` at $from, then restore $ptr.
+  ;; Return $end for unfinished expressions. If $from is not `{`, return
+  ;; the next byte. When $from < $end, the result must advance past $from
+  ;; so MDX tag scans always progress.
+  ;;
+  ;; Use the token scanner with JSX enabled and $jsxMute set.
+  ;; Otherwise `</li>` inside `{items.map((i) => <li>{i}</li>)}` can appear
+  ;; to start a regex and hide the closing brace.
+  ;; Use $hlTsxExpression to highlight an expression while finding its end.
   (func $tsxExpressionEnd (param $from i32) (param $body i32) (result i32)
     (local $save i32)
     (local $to i32)
@@ -1094,12 +1090,10 @@
     (global.set $ptr (local.get $save))
     (local.get $to))
 
-  ;; emit [$from,$to) as $hl with string.escape sub-spans for `\x` escapes.
-  ;; escape spans cover only what is actually present - `\u` / `\x` plus the
-  ;; hex digits found (and the braces of a `\u{...}` code-point escape) - so a
-  ;; short escape never swallows the following byte. An escaped multibyte
-  ;; UTF-8 character stays whole inside the escape span - a span boundary must
-  ;; never split a code point.
+  ;; Emit [$from,$to) as $hl with separate string.escape spans.
+  ;; Include only the available hex digits after `\u` or `\x`, and braces
+  ;; for `\u{...}`. Short escapes must not consume the following byte.
+  ;; Keep escaped UTF-8 characters whole.
   (func $emitEscaped (param $hl i32) (param $from i32) (param $to i32)
     (local $seg i32)
     (local $e i32)
@@ -1159,13 +1153,11 @@
         (br $blank)))
     (local.get $p))
 
-  ;; the embedded language the opening backtick of the template token
-  ;; [$lhs,$rhs) takes from the pending marker - none while a metadata key
-  ;; still awaits its colon. A component `template:` key (the Angular bit)
-  ;; marks markup only when the text on the backtick's own line starts with
-  ;; `<`, `@`, or `{`, or the line holds nothing more: a Next.js title
-  ;; pattern such as `%s | Site` stays a string. The look stays on the line,
-  ;; so line-fed chunks decide the same way
+  ;; Choose a template's embedded language from the pending marker.
+  ;; Do not embed while a metadata key still needs its colon.
+  ;; For Angular `template:`, require `<`, `@`, or `{` at the start of the
+  ;; backtick's line content, or an empty remainder. Text such as `%s | Site`
+  ;; stays a string. Restrict lookahead to this line for streaming consistency.
   (func $jsTemplateOpenState (param $lhs i32) (param $rhs i32) (result i32)
     (local $m i32)
     (local $p i32)
@@ -1190,13 +1182,12 @@
       (then (return (local.get $m))))
     (i32.const 0))
 
-  ;; emit a template token: a trailing `${` is punctuation.special, and so is
-  ;; a leading `}` when $leadBrace is set - the token picked the template up
-  ;; after a substitution. Marked templates emit HTML or CSS; other templates emit
-  ;; strings with escape sub-spans. Save the embedded state across substitutions so
-  ;; nested templates cannot change the surrounding HTML or CSS. A chunk
-  ;; continuation passes $leadBrace zero: its first byte is template text
-  ;; even when it happens to be a `}`
+  ;; Emit a template token. Mark trailing `${` as punctuation.special.
+  ;; If $leadBrace is set, mark leading `}` the same way.
+  ;; Marked templates use HTML or CSS. Others use strings with escape spans.
+  ;; Save embedded state across substitutions so nested templates cannot
+  ;; change the surrounding HTML/CSS state. Chunk continuations pass
+  ;; $leadBrace = 0 because their first byte is template text.
   (func $emitTemplate
     (param $lhs i32)
     (param $rhs i32)
@@ -1313,13 +1304,12 @@
         (i32.or (i32.eq (local.get $c) (i32.const "_")) (i32.eq (local.get $c) (i32.const "$")))
         (i32.eq (local.get $c) (i32.const ".")))))
 
-  ;; emit a `/** ... */` doc comment with JSDoc tags highlighted (Zed's JSDoc
-  ;; captures): `@tag` is keyword.jsdoc; a `{...}` brace group right after it
-  ;; - same line, balanced - is a type.jsdoc in punctuation.bracket braces;
-  ;; after the param-like tags the next identifier path is variable.jsdoc.
-  ;; Everything else, including every malformed shape, stays comment.doc. The
-  ;; token [$lhs,$rhs) is already clamped, so scans - the `@` search
-  ;; included - bound on $rhs, not $end
+  ;; Highlight JSDoc tags inside a documentation comment.
+  ;; `@tag` is keyword.jsdoc. A balanced `{...}` group immediately after it
+  ;; on the same line is type.jsdoc with punctuation.bracket braces.
+  ;; After parameter-like tags, mark the next name path as variable.jsdoc.
+  ;; Other text, including malformed syntax, remains comment.doc.
+  ;; Bound every scan by $rhs, the end of this token, rather than $end.
   (func $emitDocCommentRange (param $lhs i32) (param $rhs i32) (param $skip i32)
     (local $seg i32)   ;; start of the pending comment.doc run
     (local $p i32)     ;; scan cursor

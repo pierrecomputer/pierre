@@ -1,23 +1,16 @@
 (module
-  ;; Shared parameter-list machine. Zed captures names inside parameter lists
-  ;; as variable.parameter via tree-sitter; the stream lexers approximate that
-  ;; by tracking parens: a paren that provably opens a parameter list - it
-  ;; follows a definition head such as `function`, `def`, `fn`, `func`,
-  ;; `catch`, or `constructor`, or its first name carries an annotation a call
-  ;; cannot - sets the bit for its depth in $sigMask, and names at the top
-  ;; level of a marked list classify as parameters. Each language drives the
-  ;; registers from its own token loop; see ts.wat $sigStep for the ecma
-  ;; driver. State lives in globals so the streaming and live engines carry
-  ;; it across chunk and line boundaries; every register is captured in the
-  ;; live tokenizer's state blob (live.wat).
+  ;; Track parameter lists to approximate Zed's variable.parameter captures.
+  ;; Mark a parenthesis depth in $sigMask after a definition head such as
+  ;; `function`, `def`, `fn`, `func`, `catch`, or `constructor`.
+  ;; Also mark lists whose first name has an annotation that a call cannot
+  ;; contain. Names at the top level of a marked list are parameters.
+  ;; Each lexer updates the registers. See $sigStep in ts.wat for ECMAScript.
   ;;
-  ;; Registers: open-paren depth, the parameter-list bitmask over depths, the
-  ;; brace/bracket nesting inside the innermost marked list, a per-language
-  ;; position flag (ecma: the current brace level is a destructuring pattern;
-  ;; others: the previous token put the next name in parameter position), the
-  ;; `<`/`>` type-argument nesting inside a marked list, and the pending head
-  ;; between a definition keyword and its paren with its own angle depth for
-  ;; type parameters between the name and the paren.
+  ;; Globals preserve state between chunks. live.wat captures every register.
+  ;; Registers track parenthesis depth, marked depths, brace/bracket nesting,
+  ;; type-argument depth, and a pending definition head with type parameters.
+  ;; The position flag marks destructuring in ECMAScript. In other languages,
+  ;; it marks a parameter position after the previous token.
   (global $sigParens (mut i32) (i32.const 0))
   (global $sigMask (mut i32) (i32.const 0))
   (global $sigObscure (mut i32) (i32.const 0))

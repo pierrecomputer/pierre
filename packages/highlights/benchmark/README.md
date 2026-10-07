@@ -1,9 +1,9 @@
 # Highlights benchmarks
 
-These benchmarks measure HTML generation, themed tokens, streaming, live
-editing, and memory. Shiki is the HTML/token baseline; `tree-sitter-highlight`
-also runs in HTML mode. Live edits compare against a full Highlights token
-rebuild.
+These benchmarks measure HTML output, themed tokens, input streams, document
+edits, and memory use. HTML and token results compare Highlights with Shiki.
+HTML results also include `tree-sitter-highlight`. Edit results compare an
+incremental update with tokenization of the complete document.
 
 ## Run
 
@@ -16,25 +16,26 @@ moon run highlights:bench-memory
 ```
 
 - `bench`: HTML generation for CSS, HTML, JSONC, and TypeScript.
-- `bench-tokens`: complete `codeToTokens` output on TypeScript.
-- `bench-stream`: streaming tokenization in 4,096-character chunks.
-- `bench-live`: initialization, edits, cached reads, and retained Wasm memory.
+- `bench-tokens`: complete `codeToTokens` output for TypeScript.
+- `bench-stream`: tokenization in chunks of 4,096 UTF-16 code units.
+- `bench-live`: initialization, edits, cached reads, and Wasm memory use.
 - `bench-memory`: Bun memory usage for TypeScript against Shiki JS and Shiki
   Wasm.
 
-Pass `-- --wide` to the first three tasks to retain all table columns.
+Pass `-- --wide` to the first three tasks to show all table columns.
 
-Source fixtures live in [`fixtures`](./fixtures); the scripts generate the
-Unicode and 100k-line cases.
+The [`fixtures`](./fixtures) directory contains the source files. The scripts
+generate the Unicode and 100k-line inputs.
 
-All results are from **2026-10-05**, with Bun 1.4.0 on an Apple M4 Pro (14
-cores, 48 GiB RAM, macOS 27.0.1 arm64). The optimized Wasm build measured
-170,853 bytes, or 77,955 bytes gzipped. The tables preserve one complete run of
-each mode. All five modes ran sequentially.
+These results are from **2026-10-05**. The tests used Bun 1.4.0 on an Apple M4
+Pro (14 cores, 48 GiB RAM, macOS 27.0.1 arm64). That Wasm build measured 170,853
+bytes, or 77,955 bytes with gzip. Each table shows one complete run of its mode.
+The five modes ran in sequence.
 
 ## HTML generation
 
-Throughput is input MiB/s. Parentheses show speedups over Shiki for string I/O.
+Throughput is input MiB per second. Values in parentheses compare the speed with
+Shiki when both APIs use strings.
 
 | Input                       | highlights (bytes) | highlights | tree-sitter (NAPI) | shiki |
 | --------------------------- | -----------------: | ---------: | -----------------: | ----: |
@@ -51,16 +52,17 @@ Throughput is input MiB/s. Parentheses show speedups over Shiki for string I/O.
 | `large.jsonc.txt` (292 KiB) |               1031 | 928 (157×) |       25.6 (4.34×) |  5.89 |
 | `large.ts.txt` (517 KiB)    |                354 | 320 (298×) |       9.00 (8.40×) |  1.07 |
 
-Shiki 4.4.1 is the string-API baseline; Tree-sitter uses `tree-sitter-highlight`
-1.1.2. Highlights includes UTF-8 encoding and HTML decoding;
-`highlights (bytes)` accepts and returns bytes. Tree-sitter's HTML support is
-incomplete, so those entries are omitted.
+The comparison uses Shiki 4.4.1 and `tree-sitter-highlight` 1.1.2. The
+`highlights` column includes conversion from strings to UTF-8 and from HTML
+bytes to strings. The `highlights (bytes)` column uses bytes for input and
+output. Tree-sitter has incomplete HTML support, so it has no HTML results.
 
 ## Tokens
 
-Complete `codeToTokens` output on TypeScript, using Pierre Dark for Highlights
-and GitHub Dark for Shiki. The Unicode fixture has 10,000 content lines plus a
-trailing empty line and exercises UTF-16 offsets.
+This table measures complete `codeToTokens` output for TypeScript. Highlights
+uses Pierre Dark. Shiki uses GitHub Dark. The Unicode input has 10,000 content
+lines and a final empty line. It includes non-ASCII text to exercise UTF-16
+offsets.
 
 | Input                        |  Lines | Highlights | Throughput |   Shiki | Speedup |
 | ---------------------------- | -----: | ---------: | ---------: | ------: | ------: |
@@ -87,22 +89,24 @@ trailing empty line and exercises UTF-16 offsets.
 | `large.ts.txt` (517 KiB)     | 10,826 |    130 |    2728 µs |  185 MiB/s |  449 ms |    165× |
 | `unicode-lines.ts` (527 KiB) | 10,001 |    105 |    2759 µs |  187 MiB/s |  397 ms |    144× |
 
-Each run starts with fresh stream state and processes 4,096-UTF-16-code-unit
-chunks. Highlights preserves lexer state; Shiki carries grammar state between
-calls. Both collect token arrays with document-relative offsets.
+Each run starts with new stream state and processes chunks of 4,096 UTF-16 code
+units. Highlights saves lexer state between calls. Shiki saves grammar state.
+Both collect token arrays with offsets from the start of the document.
 
 ## Live editing
 
-Measures initialization, one-character edits, line insertion/deletion, and
-cached reads. Edit timings update retained records; the rebuild baseline
-materializes themed tokens for the entire edited document. The 100k-line fixture
-repeats `large.ts.txt` ten times (108,251 lines). The template viewport covers
-the first 120 lines. The distant viewport covers the last 120 lines.
+These cases measure initialization, one-character edits, line insertion and
+deletion, and cached reads. Each edit updates stored token records. The rebuild
+comparison creates themed tokens for the complete edited document.
 
-Deferred work and undo run outside measured edit latency. Viewport results
-describe synchronous response time. For viewport cases, Changed lines counts
-viewport lines returned synchronously. Distant-viewport calls returned zero
-viewport lines in this run and deferred their completion.
+The 100k-line input repeats `large.ts.txt` ten times (108,251 lines). The
+template viewport covers the first 120 lines. The distant viewport covers the
+last 120 lines.
+
+Edit measurements exclude deferred work and undo. Viewport results measure only
+the synchronous response. In those cases, **Changed lines** counts viewport
+lines that the call returns synchronously. The distant viewport calls returned
+zero viewport lines in this run. Those lines completed through deferred work.
 
 | Fixture              | Scenario                    |  Median |     p95 | Rebuild median | Changed lines |
 | -------------------- | --------------------------- | ------: | ------: | -------------: | ------------: |
@@ -140,9 +144,9 @@ viewport lines in this run and deferred their completion.
 |                      | raw reads ×100              | 3.12 µs | 3.83 µs |              — |             — |
 |                      | themed reads ×100           | 20.0 µs | 30.6 µs |              — |             — |
 
-Additional cases use 100,000 or 1,000,000 repeated `const value = 1;` lines, or
-one dense line of repeated `x+1;`. Each local or top/end edit includes one raw
-record read. Dense-line edits use a viewport of one line.
+The next cases use repeated `const value = 1;` lines or one long line of
+repeated `x+1;` expressions. Each local or top/end edit includes one raw record
+read. Edits to a long line use a viewport of one line.
 
 | Fixture               | Scenario                   |  Median |     p95 |
 | --------------------- | -------------------------- | ------: | ------: |
@@ -153,8 +157,8 @@ record read. Dense-line edits use a viewport of one line.
 | 1 MiB dense line      | edit + viewport            | 1308 µs | 1606 µs |
 | 5 MiB dense line      | edit + viewport            | 2355 µs | 2422 µs |
 
-The 100k-line document retains 17.4 MiB of Wasm memory, with 13.0 MiB of live
-heap and 633 interned lexer states.
+The 100k-line document uses 17.4 MiB of Wasm memory. This includes 13.0 MiB of
+live heap data and 633 distinct saved lexer states.
 
 ## Memory Usage
 
@@ -163,13 +167,16 @@ moon run highlights:bench-memory
 moonx highlights:bench-memory -- --samples 5 --json /tmp/highlights-memory.json
 ```
 
-Runs on Bun with five fresh processes per workload and engine. Inputs are
-`tiny.ts.txt`, `small.ts.txt`, `large.ts.txt`, and `large.ts.txt` repeated ten
-times (5,289,410 bytes, 108,251 lines). Each input is measured as both HTML and
-themed tokens. Use `--samples 1` for a quick check.
+The memory benchmark uses Bun with five new processes per workload and engine.
+The inputs are `tiny.ts.txt`, `small.ts.txt`, `large.ts.txt`, and `large.ts.txt`
+repeated ten times (5,289,410 bytes, 108,251 lines). Each input produces HTML
+and themed tokens in separate processes.
 
-The baseline uses **Shiki 4.4.1**. Values are median **peak process RSS in MiB**
-from five fresh processes per workload and engine (**120 processes** total).
+Use `--samples 1` for a quick check.
+
+The comparison uses **Shiki 4.4.1**. Values show the median **peak process RSS
+in MiB** from five new processes per workload and engine. The benchmark uses
+**120 processes** in total. RSS is the physical memory that a process uses.
 
 | Workload         | Highlights | Shiki JS | Shiki Wasm |
 | ---------------- | ---------: | -------: | ---------: |
@@ -182,31 +189,38 @@ from five fresh processes per workload and engine (**120 processes** total).
 | 5 MiB → HTML     |    **104** |      739 |        963 |
 | 5 MiB → tokens   |    **133** |      326 |        488 |
 
-The table reports median peak process RSS through the first complete call, in
-MiB, rounded to whole numbers. RSS includes the runtime, compiled code, Wasm,
-and allocator capacity. Both HTML APIs return complete strings, including UTF-8
-decoding for Highlights. Both libraries use GitHub Dark, and Shiki's line-length
-and time limits are disabled. Token boundaries and styles can differ between
-libraries.
+The table shows peak RSS through the first complete call, rounded to whole MiB.
+RSS includes the runtime, compiled code, Wasm, and allocator capacity. Both HTML
+APIs return complete strings. The Highlights measurement includes UTF-8 decode
+time.
 
-Samples run sequentially, rotating engine order. Compilation and bundling run
-outside the measured processes, and the temporary build is removed afterward. No
-package build is needed. Highlights includes all its built-in lexers; Shiki
-loads TypeScript only.
+Both libraries use GitHub Dark. Shiki's line-length and time limits are
+disabled. Token boundaries and styles can differ between the libraries.
 
-`--json` preserves every sample, including startup, peak, and retained-result
-RSS, heap/external counters, Highlights Wasm capacity, and input/output sizes.
-Retained-result measurements and output checks happen after the first-call peak
-is sampled. RSS is not a count of live objects, and Highlights' Wasm buffer
-stays grown for the lifetime of the highlighter.
+Samples run in sequence, with a different engine first in each round. The script
+compiles and bundles code outside the measured processes. It deletes the
+temporary build afterward. The benchmark does not need a package build.
+Highlights includes all its built-in lexers. Shiki loads only TypeScript.
+
+`--json` saves each sample. It records RSS at startup, at the first-call peak,
+and while the result remains in memory. It also records heap and external
+counters, Wasm capacity, and input and output sizes.
+
+The script measures retained results and checks output after the first-call
+peak. RSS does not count live objects. The Wasm buffer does not shrink during
+the lifetime of a highlighter.
 
 ## Sampling
 
-The throughput and live-edit scripts use [`measure.ts`](./measure.ts): a 200 ms
-warmup and 1.5-second sampling budget per case, at least 20 samples, and
-rotating contender order. Shiki's line-length and time limits are disabled.
+The throughput and edit scripts use [`measure.ts`](./measure.ts). Each case has
+a 200 ms warmup, a 1.5-second measurement budget, and at least 20 samples. The
+order of the engines changes each round. Shiki's line-length and time limits are
+disabled.
 
-Throughput uses the median of per-call batch averages (~5 ms batches), in MiB/s.
-The repeated local/top-end edit cases also use batch averages. Other live-edit
-cases measure individual calls. Live-edit tables report median and p95. Cleanup
-counts toward the budget but not the measured latency.
+Throughput uses the median of per-call averages from batches of approximately 5
+ms. The units are MiB per second. Repeated local and top/end edits also use
+batch averages. Other edit cases measure individual calls.
+
+Edit tables show the median and p95. The p95 value is the time at or below which
+95% of measurements fall. Cleanup counts toward the budget but not the measured
+call time.

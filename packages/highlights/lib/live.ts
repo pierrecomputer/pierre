@@ -38,17 +38,17 @@ export interface LiveLineChange {
 }
 
 /**
- * One styled run within a line: the run's UTF-16 start column, its CSS color
- * (the theme foreground for unstyled runs, `''` when the theme defines none),
- * and its text. Colors come from the first resolved theme; use
- * `getLineTokens` when per-theme custom properties or font styles are needed.
+ * One styled run: its UTF-16 start column, CSS color, and text.
+ * Unstyled runs use the theme foreground, or `''` if none is defined.
+ * Colors come from the first resolved theme. Use `getLineTokens` for
+ * font styles or custom properties for multiple themes.
  */
 export type HighlightedToken = [char: number, fg: string, text: string];
 
 /**
- * A half-open `[startLine, endLine)` window in post-edit line numbers.
- * The synchronous slice targets this window with a one-millisecond budget.
- * Unfinished lines, including viewport lines, reach `onDeferTokenize` later.
+ * A half-open `[startLine, endLine)` range in post-edit line numbers.
+ * Synchronous tokenization targets this range with a one-millisecond
+ * budget. `onDeferTokenize` receives unfinished lines later.
  */
 export interface LiveUpdateOptions {
   readonly renderRange?: readonly [startLine: number, endLine: number];
@@ -59,15 +59,19 @@ export type LiveTokenizerOptions = CodeToTokensOptions & {
   /** The initial document; defaults to the empty document. */
   code?: string;
   /**
-   * Receives finished tokens outside `renderRange` during the update, then
-   * all deferred lines (including viewport lines) in background batches. Line
-   * numbers refer to the document at delivery time. With a constructor
-   * `renderRange`, this can run before the instance is assigned to a variable.
+   * Receive completed lines outside `renderRange` during the update,
+   * then all deferred lines in background batches. Deferred lines can
+   * include lines in `renderRange`. Line numbers refer to the document
+   * at delivery time.
+   *
+   * With a constructor `renderRange`, this callback can run before the
+   * instance is assigned to a variable.
    */
   onDeferTokenize?: (lines: Map<number, HighlightedToken[]>) => void;
   /**
-   * Requests a budgeted initial viewport. Unfinished lines converge through
-   * `onDeferTokenize`, whose first delivery can happen inside the constructor.
+   * Request initial tokenization of this range within the time budget.
+   * `onDeferTokenize` receives unfinished lines later. The callback can
+   * first run inside the constructor.
    */
   renderRange?: readonly [startLine: number, endLine: number];
 };
@@ -79,21 +83,22 @@ export interface LiveTokenizerUpdate {
   readonly lineCount: number;
   readonly lineChanges: readonly LiveLineChange[];
   /**
-   * Tokens for the lines re-tokenized inside `renderRange` during the
-   * synchronous slice, keyed by post-edit line number. Empty when the update
-   * was made without a `renderRange`. Unfinished viewport lines arrive through
-   * `onDeferTokenize`; use `flush` to force synchronous completion.
+   * Lines completed within `renderRange` during synchronous tokenization,
+   * keyed by post-edit line number. Empty if the update has no `renderRange`.
+   * `onDeferTokenize` receives unfinished lines later. Use `flush` to
+   * complete them synchronously.
    */
   readonly lines: Map<number, HighlightedToken[]>;
 }
 
 /**
- * A zero-copy view of one line's token records. `packed24` data holds one
- * `(tokenId << 24) | endUtf16` word per token; `wide32` holds
- * `[endUtf16, tokenId]` pairs for lines past the 24-bit end range. Starts are
- * implicit: each record starts at the previous record's end (0 for the
- * first). The view is valid until the next successful edit, reset, dispose,
- * or deferred re-tokenization slice; callers `.slice()` for ownership.
+ * A borrowed view of one line's token records.
+ * `packed24` stores one `(tokenId << 24) | endUtf16` word per token.
+ * `wide32` stores `[endUtf16, tokenId]` pairs when line ends exceed 24 bits.
+ * Each record starts at the previous end, or 0 for the first record.
+ *
+ * The next successful edit, reset, disposal, or deferred tokenization
+ * slice invalidates this view. Use `.slice()` to keep a copy.
  */
 export interface LiveTokenRecords {
   readonly revision: number;
@@ -223,9 +228,8 @@ function checkRenderRange(
 }
 
 /**
- * Ref or unref a MessagePort. Node and Bun keep the event loop alive while a
- * started port is ref'd; browser ports have neither method, so both calls
- * are optional.
+ * Ref or unref a MessagePort. Node and Bun keep the event loop active
+ * while a started port is referenced. Browser ports have neither method.
  */
 function refPort(port: MessagePort, alive: boolean): void {
   const p = port as MessagePort & { ref?: () => void; unref?: () => void };
@@ -243,13 +247,15 @@ function eol(flags: number): string {
 }
 
 /**
- * An editable document and incremental tokenizer in an isolated Wasm
- * instance. Edits use UTF-16 positions and may split or join `\r\n`, `\n`,
- * or lone `\r` terminators; lexers see each line break as `\n`.
- * Re-tokenization starts at each changed region and stops when its outgoing
- * lexer state matches the previous state. A `renderRange` limits synchronous
- * work; background slices finish the document through `onDeferTokenize`.
- * Unreached lines retain their previous tokens; `flush` completes them.
+ * An editable document with an incremental tokenizer and its own Wasm
+ * instance. Edits use UTF-16 positions and can split or join `\r\n`,
+ * `\n`, or lone `\r` terminators. Lexers receive each line break as `\n`.
+ *
+ * Tokenization starts at each changed region. It stops when the outgoing
+ * lexer state matches the previous state. `renderRange` limits synchronous
+ * work. Background batches deliver the rest through `onDeferTokenize`.
+ * Pending lines keep their previous tokens until processed. Use `flush`
+ * to complete them synchronously.
  */
 export class LiveTokenizer {
   #hl: HighlightsHighlighter | undefined;
@@ -340,9 +346,9 @@ export class LiveTokenizer {
   }
 
   /**
-   * Finish pending lines before the exclusive `endLine`, or all lines when
-   * omitted. Delivers finished lines through `onDeferTokenize`, clears a
-   * `pause`, and schedules any remaining work in the background.
+   * Complete pending lines before `endLine`, or all lines if it is omitted.
+   * Deliver completed lines through `onDeferTokenize`. Clear any pause and
+   * schedule remaining work in the background.
    */
   flush(endLine?: number): void {
     const hl = this.#live();
@@ -365,11 +371,10 @@ export class LiveTokenizer {
   }
 
   /**
-   * Suspend background re-tokenization without discarding the pending work:
-   * no slices run and nothing is delivered while paused, and reads of
-   * unreached lines keep returning pre-edit tokens. `resume` reschedules the
-   * remainder; `flush`, `applyEdits`, and `reset` implicitly resume (a
-   * mutating call starts background work for its own deferred tail).
+   * Pause background tokenization and keep the pending work.
+   * No background batches run or deliver tokens while paused. Pending lines
+   * keep their previous tokens. `resume`, `flush`, `applyEdits`, and `reset`
+   * clear the pause. Edits and resets schedule their own remaining work.
    */
   pause(): void {
     this.#live();
@@ -468,12 +473,13 @@ export class LiveTokenizer {
   }
 
   /**
-   * Themed tokens for one line plus line-relative string/comment/regex
-   * ranges for bracket matching. Offsets are line-relative. Lines at or
-   * above `tokenizeMaxLineLength` collapse to one unthemed token while the
-   * raw records stay precise. While deferred re-tokenization is pending, a
-   * line it has not reached yet returns pre-edit tokens; a line with no
-   * records yet (freshly spliced in) returns its text as one unthemed token.
+   * Return themed tokens and string, comment, and regex ranges for bracket
+   * matching. All offsets are relative to the line.
+   * At `tokenizeMaxLineLength`, return one token without syntax styles.
+   * Raw records remain available.
+   *
+   * Pending lines return their previous tokens. A new line with no records
+   * returns its text as one token without syntax styles.
    */
   getLineTokens(line: number): {
     tokens: ThemedToken[];
@@ -550,13 +556,14 @@ export class LiveTokenizer {
   }
 
   /**
-   * Validate and apply a batch against the current document. Without
-   * `renderRange`, tokenization completes synchronously and `lines` is empty.
-   * With it, a budgeted slice returns finished in-range lines. All remaining
-   * lines, including unfinished viewport lines, reach `onDeferTokenize` later.
-   * Pending work is remapped through the edits without waiting for completion.
+   * Validate and apply edits to the current document. Without `renderRange`,
+   * tokenization completes synchronously and `lines` is empty.
+   * With `renderRange`, return lines completed within its time budget.
+   * `onDeferTokenize` receives all remaining lines later.
+   *
+   * Remap pending work through the edits without waiting for completion.
    * Calling `applyEdits` or `reset` from this update's synchronous callback
-   * throws; reads, `pause`, and `flush` are allowed.
+   * throws. Reads, `pause`, and `flush` are allowed.
    */
   applyEdits(
     edits: readonly TextEdit[],
@@ -670,9 +677,8 @@ export class LiveTokenizer {
   }
 
   /**
-   * Queue a background slice through MessageChannel to avoid nested timer
-   * clamping while yielding between slices. Fall back to a timer in runtimes
-   * without MessageChannel.
+   * Schedule a background batch through MessageChannel to avoid delays
+   * from nested timers. Use a timer if MessageChannel is unavailable.
    */
   #scheduleSlice(generation: number): void {
     if (typeof MessageChannel === 'undefined') {
@@ -856,10 +862,9 @@ export class LiveTokenizer {
   }
 
   /**
-   * Validate the whole batch against the pre-call revision before any
-   * mutation: shapes, bounds, ordering, and overlap. Returns the surviving
-   * edits sorted ascending with no-ops (byte-identical replacements)
-   * removed.
+   * Validate all edit shapes, bounds, ordering, and overlaps before changing
+   * the document. Return edits in ascending order. Remove replacements
+   * whose bytes match the existing text.
    */
   #validate(
     edits: readonly TextEdit[],

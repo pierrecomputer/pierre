@@ -9,6 +9,7 @@ import {
   distinctTheme,
   exactColor,
   loadLang,
+  makeRand,
   type TestLang,
   themeColor,
   tokenKinds,
@@ -59,7 +60,7 @@ void t.test('bash: strings, ANSI-C strings, and escapes', () => {
   const src = "printf '%s' \"line\\n$name\" $'tab\\t' `cmd`";
   const html = checkInvariants(bash.hl, src);
   assert.equal(colorOf(html, "'%s'"), STRING);
-  assert.equal(colorOf(html, String.raw`\n`), ESCAPE);
+  assert.equal(colorOf(html, String.raw`"line\n`), STRING);
   assert.equal(colorOf(html, String.raw`\t`), ESCAPE);
   assert.equal(colorOf(html, '$name'), VARIABLE);
   assert.equal(colorOf(html, '`cmd`'), themeColor('string.special'));
@@ -139,13 +140,12 @@ void t.test('bash: lookahead never crosses split ranges', () => {
 
 void t.test('bash: deterministic fuzz preserves lexer invariants', () => {
   const alphabet = 'abcXYZ09_ $\'\\"`{}()[]<>|&;#-=\nλ';
-  let state = 0x51a7f00d;
+  const rand = makeRand(0x51a7f00d);
   for (let sample = 0; sample < 160; sample++) {
     let src = '';
-    const n = state >>> 27;
+    const n = rand() & 31;
     for (let i = 0; i < n; i++) {
-      state = (Math.imul(state, 1664525) + 1013904223) >>> 0;
-      src += alphabet[state % alphabet.length];
+      src += alphabet[rand() % alphabet.length];
     }
     checkInvariants(bash.hl, src);
   }
@@ -173,8 +173,7 @@ void t.test('bash: quoting rules token by token', () => {
       [')', 'punctuation.special'],
       ['\\"', 'string.escape'],
       ['\\$', 'string.escape'],
-      ['\\n', 'string.escape'],
-      ['" $\'ansi', 'string'],
+      ['\\n" $\'ansi', 'string'],
       ['\\t', 'string.escape'],
       ["'", 'string'],
       ['x', 'variable'],

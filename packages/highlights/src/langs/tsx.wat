@@ -545,16 +545,13 @@
     (call $hlEcmaImpl (local.get $reset))
     (global.get $tsxStreamExpressionClosed))
 
-  ;; Highlight a framework expression body from $ptr in one pass: the lexer
-  ;; stops before the outer `}` or `}}` by itself, so no scan for the closer
-  ;; runs first. With $open set, $ptr is on the opening `{`, which the lexer
-  ;; consumes as its first token (Astro and MDX color it as TSX does, and an
-  ;; object key right after it stays a key): the brace depth starts at -1 so
-  ;; that brace brings it to zero. Returns one with $ptr on the closing
-  ;; delimiter, zero when the body runs to $end. In a stream the body keeps
-  ;; the ECMAScript state, and one still open at the chunk end becomes stream
-  ;; region $region with $tag (the start tag the expression sits in, or 0) in
-  ;; $streamA, which $hlTsxExpressionStream continues.
+  ;; Highlight an expression from $ptr, stopping before its outer `}` or `}}`.
+  ;; With $open set, consume the opening `{` as TSX. Start brace depth at -1
+  ;; so that opener brings it to zero and object keys stay keys.
+  ;; Return 1 on the closing delimiter, or 0 at $end.
+  ;; Streams retain ECMAScript state. An unfinished body saves region $region
+  ;; and $tag in $streamA for $hlTsxExpressionStream. $tag holds the enclosing
+  ;; start tag's state, or 0.
   (func $hlTsxExpression
     (param $closeLen i32)
     (param $open i32)

@@ -365,7 +365,7 @@ export const samples: Record<string, LangSample> = {
       'EOF',
       'case "$target" in',
       '  all|clean) make "$target" ;;',
-      '  *) printf "%s\\n" "unknown" >&2 ;;',
+      '  *) printf "%s\\n" "unknown \\"target\\"" >&2 ;;',
       'esac'
     ),
     kinds: [
@@ -646,7 +646,7 @@ export const samples: Record<string, LangSample> = {
       '            var text = $"added {item} at {DateTime.Now:HH:mm}";',
       '            string path = @"C:\\temp',
       '                across lines";',
-      '            const double ratio = 1.5e3;',
+      '            const double MAX_RATIO = 1.5e3;',
       '            /* block */',
       '            if (item is null || Count > 0xFF) return false;',
       '            await Task.Delay(10, ct);',

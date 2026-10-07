@@ -1,9 +1,9 @@
 # Highlights themes
 
-Highlights includes the same 65 Shiki catalog themes and ten Pierre themes
-available to the Shiki backends. All are Zed-compatible objects with matching
-IDs and display names. Source versions and attribution are recorded in
-[third-party licenses](../NOTICE.md).
+Highlights includes 65 themes from the Shiki catalog and ten Pierre themes.
+These are the same themes that the Shiki backends provide. Each theme is a
+Zed-compatible object with the same ID and display name. The
+[third-party notices](../NOTICE.md) list source versions and attribution.
 
 ```js
 import { codeToHtml } from '@pierre/highlights';
@@ -15,7 +15,7 @@ codeToHtml('const a = 1', { lang: 'js', theme: vitesseDark });
 The Shiki catalog and Pierre themes have camel-case named exports:
 `vitesse-dark.json` becomes `vitesseDark`.
 
-Every theme also has a default export at its filename subpath:
+Each theme also has a default export through its own import path:
 
 ```js
 import vitesseDark from '@pierre/highlights/themes/vitesse-dark';
@@ -30,16 +30,18 @@ toCSS(pierreDark);
 // --hls-background: #0a0a0a;--hls-foreground: #fafafa;--hls-comment: #737373;...
 ```
 
-Pass `{ cssVariablePrefix: '--code-' }` to `toCSS` as its second argument and to
-the highlighting options to use matching custom variable names. The default
-prefix is `--hls-`.
+The default prefix for CSS variables is `--hls-`.
 
-Community themes use licensed Zed ports where available; the remainder are
-converted from pinned TextMate sources using Zed's scope mapping. Files retain
-the name, appearance, and style keys used by Highlights and `@pierre/diffs`.
+To change it, pass `{ cssVariablePrefix: '--code-' }` as the second argument to
+`toCSS`. Set the same `cssVariablePrefix` in the highlighter options.
 
-Shiki catalog and Pierre themes also retain git-decoration and terminal colors
-as `created`, `deleted`, `modified`, and `terminal.ansi.*` for diff rendering.
+Community themes use licensed Zed versions when available. The other themes use
+conversions from fixed TextMate source versions and Zed's scope map. The files
+keep the name, appearance, and style keys that Highlights and `@pierre/diffs`
+use.
+
+Shiki catalog and Pierre themes also include colors for Git changes and terminal
+output. The keys are `created`, `deleted`, `modified`, and `terminal.ansi.*`.
 
 For CSS-controlled colors, use `cssVariables`. See the
 [theme docs](https://diffs.com/docs#highlights-themes) for accepted properties
@@ -130,5 +132,5 @@ and scope inheritance.
 | `pierre-light-tritanopia`              | Pierre Light Tritanopia                | light      |
 | `pierre-light-vibrant`                 | Pierre Light Vibrant                   | light      |
 
-The Pierre theme IDs match `@pierre/theme`, including the full
-`protanopia-deuteranopia` names. The vibrant variants retain Display P3 colors.
+The Pierre theme IDs match `@pierre/theme`, with the full
+`protanopia-deuteranopia` names. The vibrant variants keep Display P3 colors.
