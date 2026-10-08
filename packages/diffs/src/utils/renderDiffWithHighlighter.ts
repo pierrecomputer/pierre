@@ -37,7 +37,7 @@ export function renderDiffWithHighlighter(
   options: RenderDiffOptions,
   {
     forcePlainText,
-    deferLineRendering = false,
+    lazyLineAST = false,
     startingLine,
     totalLines,
     expandedHunks,
@@ -53,7 +53,7 @@ export function renderDiffWithHighlighter(
     totalLines = Infinity;
   }
   const isWindowedHighlight = startingLine > 0 || totalLines < Infinity;
-  deferLineRendering &&= !forcePlainText && !options.useTokenTransformer;
+  lazyLineAST &&= !forcePlainText && !options.useTokenTransformer;
   const baseThemeType =
     typeof options.theme === 'string'
       ? highlighter.getTheme(options.theme).type
@@ -207,7 +207,7 @@ export function renderDiffWithHighlighter(
       highlighter,
       options,
       languageOverride: forcePlainText ? 'text' : diff.lang,
-      deferLineRendering,
+      lazyLineAST,
     });
 
     if (shouldGroupAll) {
@@ -227,7 +227,7 @@ export function renderDiffWithHighlighter(
               lines[segment.originalOffset + index];
           }
         }
-      } else if (deferLineRendering) {
+      } else if (lazyLineAST) {
         const offset = target.length;
         for (let index = 0; index < lines.length; index++) {
           setDeferredArrayItem(target, offset + index, () => lines[index]);
@@ -455,7 +455,7 @@ function createBucket(): RenderBucket {
 }
 
 interface RenderTwoFilesProps {
-  deferLineRendering: boolean;
+  lazyLineAST: boolean;
   deletionFile: FileContents;
   additionFile: FileContents;
   deletionInfo: (LineInfo | undefined)[];
@@ -468,7 +468,7 @@ interface RenderTwoFilesProps {
 }
 
 function renderTwoFiles({
-  deferLineRendering,
+  lazyLineAST,
   deletionFile,
   additionFile,
   deletionInfo,
@@ -499,7 +499,7 @@ function renderTwoFiles({
         state: { lineInfo },
         useTokenTransformer,
         decorations,
-        deferLineRendering,
+        lazyLineAST,
       }
     );
   };

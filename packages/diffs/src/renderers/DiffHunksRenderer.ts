@@ -8,7 +8,6 @@ import {
   DEFAULT_TOKENIZE_MAX_LENGTH,
 } from '../constants';
 import type { TextDocument } from '../editor/textDocument';
-import { assertHighlighterType } from '../highlighter/highlighterType';
 import { areLanguagesAttached } from '../highlighter/languages/areLanguagesAttached';
 import {
   getHighlighterIfLoaded,
@@ -503,13 +502,11 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
   }
 
   public setOptions(options: DiffHunksRendererOptions): void {
-    const type = resolvePreferredHighlighter(this.workerManager, options);
-    if (type != null) assertHighlighterType(type);
     this.options = options;
   }
 
   public mergeOptions(options: Partial<DiffHunksRendererOptions>): void {
-    this.setOptions({ ...this.options, ...options });
+    this.options = { ...this.options, ...options };
   }
 
   public expandHunk(
@@ -1214,7 +1211,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
         this.highlighter != null &&
         areLanguagesAttached(this.computedLangs, this.highlighter);
       const canHighlight = !forcePlainText && hasLangs;
-      const deferLineRendering = Number.isFinite(renderRange.totalLines);
+      const lazyLineAST = Number.isFinite(renderRange.totalLines);
 
       if (
         canRenderDiff &&
@@ -1229,7 +1226,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
           diff,
           this.highlighter,
           forcePlainText || !hasLangs,
-          deferLineRendering
+          lazyLineAST
         );
         this.renderCache = {
           diff,
@@ -1241,7 +1238,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       }
 
       if (!hasThemes || (!forcePlainText && !hasLangs)) {
-        void this.asyncHighlight(diff, deferLineRendering).then(
+        void this.asyncHighlight(diff, lazyLineAST).then(
           ({ result, options }) => {
             this.applyHighlightResult(diff, result, options, !forcePlainText);
           }
@@ -1290,7 +1287,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
 
   private async asyncHighlight(
     diff: FileDiffMetadata,
-    deferLineRendering = false
+    lazyLineAST = false
   ): Promise<RenderDiffResult> {
     const forcePlainText = isDiffMassive(diff, this.getTokenizeMaxLength());
     this.computedLangs = forcePlainText ? ['text'] : getDiffLanguages(diff);
@@ -1310,7 +1307,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       diff,
       this.highlighter,
       forcePlainText,
-      deferLineRendering
+      lazyLineAST
     );
   }
 
@@ -1318,13 +1315,13 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     diff: FileDiffMetadata,
     highlighter: DiffsHighlighter,
     forcePlainText = false,
-    deferLineRendering = false
+    lazyLineAST = false
   ): RenderDiffResult {
     const { options } = this.getRenderOptions(diff);
     const { collapsedContextThreshold } = this.getOptionsWithDefaults();
     const result = renderDiffWithHighlighter(diff, highlighter, options, {
       forcePlainText,
-      deferLineRendering,
+      lazyLineAST,
       expandedHunks: forcePlainText ? true : undefined,
       collapsedContextThreshold,
     });

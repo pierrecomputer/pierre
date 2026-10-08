@@ -8,7 +8,6 @@ import { DiffHunksRenderer } from '../src/renderers/DiffHunksRenderer';
 import { FileRenderer } from '../src/renderers/FileRenderer';
 import type { HighlighterTypes } from '../src/types';
 import { parseDiffFromFile } from '../src/utils/parseDiffFromFile';
-import { getRejection } from './testUtils';
 
 beforeEach(disposeHighlighter);
 afterEach(disposeHighlighter);
@@ -24,8 +23,8 @@ for (const kind of ['file', 'diff'] as const) {
         : new DiffHunksRenderer(options);
     }
 
-    test('rejects an explicit type other than the loaded one', async () => {
-      await getSharedHighlighter({
+    test('reuses the loaded type despite another preference', async () => {
+      const loaded = await getSharedHighlighter({
         themes: ['pierre-dark'],
         langs: ['typescript'],
         preferredHighlighter: 'shiki-js',
@@ -35,11 +34,7 @@ for (const kind of ['file', 'diff'] as const) {
         preferredHighlighter: 'highlights',
       });
       try {
-        expect(
-          (await getRejection(renderer.initializeHighlighter())).message
-        ).toContain(
-          'Cannot load the "highlights" highlighter while "shiki-js" is in use'
-        );
+        expect(await renderer.initializeHighlighter()).toBe(loaded);
       } finally {
         renderer.cleanUp();
       }
@@ -60,7 +55,7 @@ for (const kind of ['file', 'diff'] as const) {
     });
 
     for (const update of ['setOptions', 'mergeOptions'] as const) {
-      test(`${update} rejects another type without changing the renderer`, async () => {
+      test(`${update} accepts another preference and keeps the loaded type`, async () => {
         const options = {
           theme: 'pierre-dark',
           preferredHighlighter: 'shiki-js' as const,
@@ -73,9 +68,7 @@ for (const kind of ['file', 'diff'] as const) {
               ...options,
               preferredHighlighter: 'highlights',
             })
-          ).toThrow(
-            'Cannot load the "highlights" highlighter while "shiki-js" is in use'
-          );
+          ).not.toThrow();
           expect(await renderer.initializeHighlighter()).toBe(highlighter);
           expect(() =>
             renderer[update]({ theme: 'pierre-light' })

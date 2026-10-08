@@ -70,7 +70,7 @@ describe('highlighter type lock', () => {
     expect(getHighlighterType()).toBe('highlights');
   });
 
-  test('rejects another type while the first is loading, before its backend loads', async () => {
+  test('shares the first load despite later preferences without loading another backend', async () => {
     const create = spyOn(ShikiHighlighter, 'create');
     try {
       const loading = getSharedHighlighter({
@@ -80,19 +80,12 @@ describe('highlighter type lock', () => {
       });
       expect(isHighlighterLoading()).toBe(true);
       for (const preferredHighlighter of ['shiki-js', 'shiki-wasm'] as const) {
-        expect(
-          (
-            await getRejection(
-              getSharedHighlighter({
-                themes: [],
-                langs: [],
-                preferredHighlighter,
-              })
-            )
-          ).message
-        ).toContain(
-          `Cannot load the "${preferredHighlighter}" highlighter while "highlights" is in use`
-        );
+        const next = getSharedHighlighter({
+          themes: [],
+          langs: [],
+          preferredHighlighter,
+        });
+        expect(await next).toBe(await loading);
         expect(
           (await getRejection(createHighlighter(preferredHighlighter))).message
         ).toContain(`while "highlights" is in use`);
@@ -128,6 +121,21 @@ describe('highlighter type lock', () => {
     const independent = await createHighlighter('highlights');
     try {
       const shared = await getSharedHighlighter({ themes: [], langs: [] });
+      expect(shared.name).toBe('highlights');
+      expect(shared).not.toBe(independent);
+    } finally {
+      independent.dispose();
+    }
+  });
+
+  test('a shared preference follows an independent active instance', async () => {
+    const independent = await createHighlighter('highlights');
+    try {
+      const shared = await getSharedHighlighter({
+        themes: ['pierre-dark'],
+        langs: ['typescript'],
+        preferredHighlighter: 'shiki-js',
+      });
       expect(shared.name).toBe('highlights');
       expect(shared).not.toBe(independent);
     } finally {
@@ -247,11 +255,11 @@ describe('shared highlighter backend lifecycle', () => {
     });
   }
 
-  test('a loaded instance of another type is not returned', async () => {
-    await getSharedHighlighter({ themes: [], langs: [] });
-    expect(
-      getHighlighterIfLoaded({ preferredHighlighter: 'highlights' })
-    ).toBeUndefined();
+  test('a loaded instance ignores later preferences', async () => {
+    const shared = await getSharedHighlighter({ themes: [], langs: [] });
+    expect(getHighlighterIfLoaded({ preferredHighlighter: 'highlights' })).toBe(
+      shared
+    );
   });
 
   test('Highlights ignores custom TextMate loaders and renders unknown languages as text', async () => {
@@ -294,9 +302,9 @@ describe('shared highlighter cache state', () => {
     expect(isHighlighterLoading()).toBe(false);
     expect(isHighlighterNull()).toBe(false);
     expect(getHighlighterIfLoaded()).toBe(shared);
-    expect(
-      getHighlighterIfLoaded({ preferredHighlighter: 'shiki-js' })
-    ).toBeUndefined();
+    expect(getHighlighterIfLoaded({ preferredHighlighter: 'shiki-js' })).toBe(
+      shared
+    );
     await disposeHighlighter();
     expect(isHighlighterLoaded()).toBe(false);
     expect(isHighlighterLoading()).toBe(false);

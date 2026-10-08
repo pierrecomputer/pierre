@@ -6,7 +6,6 @@ import {
   DEFAULT_TOKENIZE_MAX_LENGTH,
 } from '../constants';
 import type { TextDocument } from '../editor/textDocument';
-import { assertHighlighterType } from '../highlighter/highlighterType';
 import { areLanguagesAttached } from '../highlighter/languages/areLanguagesAttached';
 import {
   getHighlighterIfLoaded,
@@ -169,13 +168,11 @@ export class FileRenderer<LAnnotation = undefined> {
   }
 
   public setOptions(options: FileRendererOptions): void {
-    const type = resolvePreferredHighlighter(this.workerManager, options);
-    if (type != null) assertHighlighterType(type);
     this.options = options;
   }
 
   public mergeOptions(options: Partial<FileRendererOptions>): void {
-    this.setOptions({ ...this.options, ...options });
+    this.options = { ...this.options, ...options };
   }
 
   public setLineAnnotations(
@@ -806,7 +803,7 @@ export class FileRenderer<LAnnotation = undefined> {
         this.highlighter != null &&
         areLanguagesAttached(this.computedLang, this.highlighter);
       const canHighlight = !forcePlainText && hasLangs;
-      const deferLineRendering = Number.isFinite(renderRange.totalLines);
+      const lazyLineAST = Number.isFinite(renderRange.totalLines);
 
       if (
         canRenderFile &&
@@ -821,7 +818,7 @@ export class FileRenderer<LAnnotation = undefined> {
           file,
           this.highlighter,
           forcePlainText || !hasLangs,
-          deferLineRendering
+          lazyLineAST
         );
         this.renderCache = {
           file,
@@ -833,7 +830,7 @@ export class FileRenderer<LAnnotation = undefined> {
       }
 
       if (!hasThemes || (!forcePlainText && !hasLangs)) {
-        void this.asyncHighlight(file, deferLineRendering).then(
+        void this.asyncHighlight(file, lazyLineAST).then(
           ({ result, options }) => {
             this.applyHighlightResult(file, result, options, !forcePlainText);
           }
@@ -864,7 +861,7 @@ export class FileRenderer<LAnnotation = undefined> {
 
   private async asyncHighlight(
     file: FileContents,
-    deferLineRendering = false
+    lazyLineAST = false
   ): Promise<RenderFileResult> {
     const lines = this.getOrCreateLineCache(file);
     const forcePlainText = isFileMassive(
@@ -890,7 +887,7 @@ export class FileRenderer<LAnnotation = undefined> {
       file,
       this.highlighter,
       forcePlainText,
-      deferLineRendering
+      lazyLineAST
     );
   }
 
@@ -898,12 +895,12 @@ export class FileRenderer<LAnnotation = undefined> {
     file: FileContents,
     highlighter: DiffsHighlighter,
     forcePlainText = false,
-    deferLineRendering = false
+    lazyLineAST = false
   ): RenderFileResult {
     const { options } = this.getRenderOptions(file);
     const result = renderFileWithHighlighter(file, highlighter, options, {
       forcePlainText,
-      deferLineRendering,
+      lazyLineAST,
     });
     return { result, options };
   }

@@ -46,7 +46,7 @@ test('windowed highlighting constructs only accessed rows and caches them', () =
       { content: `line ${index}`, offset: index * 10 },
     ]),
     {
-      deferLineRendering: true,
+      lazyLineAST: true,
       state: {
         lineInfo(line) {
           rendered.push(line);
@@ -65,7 +65,7 @@ test('windowed highlighting constructs only accessed rows and caches them', () =
   expect(rendered).toEqual([1, 901]);
 });
 
-test('deferred rows preserve decorations, serialization, and array edits', () => {
+test('lazy rows preserve decorations, serialization, and array edits', () => {
   const tokens = [
     [{ content: 'alpha', offset: 0 }],
     [{ content: 'beta', offset: 6 }],
@@ -76,15 +76,15 @@ test('deferred rows preserve decorations, serialization, and array edits', () =>
     lineOffsets: [0, 6, 11],
   };
   const expected = renderTokenLines(tokens, options);
-  const deferredOptions = { ...options, deferLineRendering: true };
-  expect(JSON.stringify(renderTokenLines(tokens, deferredOptions))).toBe(
+  const lazyOptions = { ...options, lazyLineAST: true };
+  expect(JSON.stringify(renderTokenLines(tokens, lazyOptions))).toBe(
     JSON.stringify(expected)
   );
-  expect(structuredClone(renderTokenLines(tokens, deferredOptions))).toEqual(
+  expect(structuredClone(renderTokenLines(tokens, lazyOptions))).toEqual(
     expected
   );
 
-  const rows = renderTokenLines(tokens, deferredOptions);
+  const rows = renderTokenLines(tokens, lazyOptions);
   rows[0] = { type: 'text', value: 'replaced' };
   rows.splice(1, 0, { type: 'text', value: 'inserted' });
   expect(rows).toEqual([
@@ -95,7 +95,7 @@ test('deferred rows preserve decorations, serialization, and array edits', () =>
   ]);
 });
 
-test('deferred file rows retain preceding lexical state and eager SSR output', () => {
+test('lazy file rows retain preceding lexical state and eager SSR output', () => {
   const expected = renderFileWithHighlighter(file, highlighter, options);
   const highlight = spyOn(highlighter, 'codeToTokens');
   try {
@@ -103,7 +103,7 @@ test('deferred file rows retain preceding lexical state and eager SSR output', (
       forcePlainText: false,
       startingLine: 1,
       totalLines: 1,
-      deferLineRendering: true,
+      lazyLineAST: true,
     });
     expect(highlight.mock.calls[0][0]).toBe(file.contents);
     expect(
@@ -136,7 +136,7 @@ test('full and partial diffs defer both sides without losing line decorations', 
     const expected = renderDiffWithHighlighter(diff, highlighter, options);
     const result = renderDiffWithHighlighter(diff, highlighter, options, {
       forcePlainText: false,
-      deferLineRendering: true,
+      lazyLineAST: true,
     });
     for (const side of ['deletionLines', 'additionLines'] as const) {
       const rows = result.code[side];
@@ -154,7 +154,7 @@ test('plain-text windows retain sparse absolute indexes', () => {
     forcePlainText: true,
     startingLine: 2,
     totalLines: 1,
-    deferLineRendering: true,
+    lazyLineAST: true,
   });
   expect(0 in result.code).toBe(false);
   expect(1 in result.code).toBe(false);
@@ -162,7 +162,7 @@ test('plain-text windows retain sparse absolute indexes', () => {
   expect(toHtml(result.code[2])).toContain('end */');
 });
 
-test('cached file and diff renderers scroll across deferred rows without retokenizing', () => {
+test('cached file and diff renderers scroll across lazy rows without retokenizing', () => {
   const fileRenderer = new FileRenderer(options);
   const diffRenderer = new DiffHunksRenderer({
     ...options,
@@ -199,7 +199,7 @@ test('cached file and diff renderers scroll across deferred rows without retoken
   }
 });
 
-test('editing after a deferred render regenerates writable editor rows', () => {
+test('editing after a lazy render regenerates writable editor rows', () => {
   const renderer = new FileRenderer(options);
   const session = { ...file };
   const range = { ...DEFAULT_RENDER_RANGE, totalLines: 1 };

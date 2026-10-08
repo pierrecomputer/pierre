@@ -24,7 +24,7 @@ export function renderFileWithHighlighter(
   { theme, tokenizeMaxLineLength, useTokenTransformer }: RenderFileOptions,
   {
     forcePlainText,
-    deferLineRendering = false,
+    lazyLineAST = false,
     startingLine,
     totalLines,
     lines,
@@ -84,8 +84,7 @@ export function renderFileWithHighlighter(
     {
       state,
       useTokenTransformer,
-      deferLineRendering:
-        deferLineRendering && !forcePlainText && !useTokenTransformer,
+      lazyLineAST: lazyLineAST && !forcePlainText && !useTokenTransformer,
     }
   );
 

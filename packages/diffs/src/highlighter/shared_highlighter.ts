@@ -7,7 +7,7 @@ import type {
 } from '../types';
 import {
   acquireHighlighterType,
-  assertHighlighterType,
+  getHighlighterType,
   releaseHighlighterType,
   resolveHighlighterType,
 } from './highlighterType';
@@ -52,11 +52,10 @@ export async function getSharedHighlighter({
   langs,
   preferredHighlighter,
 }: HighlighterOptions): Promise<DiffsHighlighter> {
-  if (preferredHighlighter != null) {
-    assertHighlighterType(preferredHighlighter);
-  }
   dropDisposedHighlighter();
-  const cached = (highlighter ??= createHighlighter(preferredHighlighter));
+  const cached = (highlighter ??= createHighlighter(
+    getHighlighterType() ?? preferredHighlighter
+  ));
   let instance: DiffsHighlighter;
   try {
     instance = await cached;
@@ -104,19 +103,17 @@ interface GetHighlighterIfLoadedProps {
 }
 
 /**
- * Returns undefined if the type differs or the theme or language is not loaded.
+ * Returns undefined if the theme or language is not loaded.
  */
 export function getHighlighterIfLoaded({
   theme,
   lang,
-  preferredHighlighter,
 }: GetHighlighterIfLoadedProps = {}): DiffsHighlighter | undefined {
   dropDisposedHighlighter();
   const instance = highlighter;
   if (
     instance == null ||
     'then' in instance ||
-    (preferredHighlighter != null && instance.name !== preferredHighlighter) ||
     (theme != null && !areThemesAttached(theme, instance)) ||
     (lang != null && !instance.hasLoadedLanguages([lang]))
   ) {

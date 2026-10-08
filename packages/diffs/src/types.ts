@@ -757,7 +757,7 @@ export interface HunkExpansionRegion {
 
 export interface ForceDiffPlainTextOptions {
   forcePlainText: boolean;
-  deferLineRendering?: boolean;
+  lazyLineAST?: boolean;
   startingLine?: number;
   totalLines?: number;
   expandedHunks?: Map<number, HunkExpansionRegion> | true;
@@ -766,7 +766,7 @@ export interface ForceDiffPlainTextOptions {
 
 export interface ForceFilePlainTextOptions {
   forcePlainText: boolean;
-  deferLineRendering?: boolean;
+  lazyLineAST?: boolean;
   startingLine?: number;
   totalLines?: number;
   // Pre-split lines for caching in windowing scenarios

@@ -7,7 +7,7 @@ import { tokenStyle } from './tokenStyle';
 import { wrapTokenFragments } from './wrapTokenFragments';
 
 interface RenderTokenLinesOptions {
-  deferLineRendering?: boolean;
+  lazyLineAST?: boolean;
   state?: SharedRenderState;
   useTokenTransformer?: boolean;
   mergeWhitespaces?: 'never' | 'always';
@@ -38,7 +38,7 @@ export function renderTokenLines(
   lines: ThemedToken[][],
   {
     state,
-    deferLineRendering = false,
+    lazyLineAST = false,
     useTokenTransformer = false,
     mergeWhitespaces = 'always',
     decorations = [],
@@ -150,7 +150,7 @@ export function renderTokenLines(
     if (useTokenTransformer && spans != null) wrapTokenFragments(line);
     return state == null ? line : processLine(line, lineIndex + 1, state);
   };
-  if (!deferLineRendering) return lines.map(renderLine);
+  if (!lazyLineAST) return lines.map(renderLine);
   const rows: ElementContent[] = new Array(lines.length);
   for (let index = 0; index < lines.length; index++) {
     setDeferredArrayItem(rows, index, () => renderLine(lines[index], index));
