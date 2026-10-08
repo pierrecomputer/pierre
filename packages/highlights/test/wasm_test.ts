@@ -110,6 +110,61 @@ void test(
   }
 );
 
+void test('live state hashing and comparison ignore bytes beyond the state', () => {
+  const url = new URL('../src/highlights.wat', import.meta.url);
+  // Public highlighter exports would keep every lexer alive during optimization.
+  const code = transformWat(url)
+    .code.replace(/\(export "(?!memory")[^"]+"\)/g, '')
+    .replace(
+      /\)\s*$/,
+      '(export "hash" (func $lvHash)) (export "equal" (func $lvBytesEq)))'
+    );
+  const wasm = wat2wasm(url.pathname, code);
+  for (const binary of [wasm, optimizeWasm(wasm)]) {
+    const instance = new WebAssembly.Instance(new WebAssembly.Module(binary), {
+      env: { is_id_start: assert.fail, is_id_continue: assert.fail },
+    });
+    const { memory, hash, equal } = instance.exports as {
+      memory: WebAssembly.Memory;
+      hash: (ptr: number, length: number) => bigint;
+      equal: (a: number, b: number, length: number) => number;
+    };
+    const bytes = new Uint8Array(memory.buffer);
+    const a = bytes.length - 160;
+    const b = bytes.length - 80;
+    for (let length = 0; length <= 64; length++) {
+      for (const alignment of [0, 1, 7]) {
+        const input = Uint8Array.from(
+          { length },
+          (_, i) => (i * 37 + 129) & 255
+        );
+        bytes.fill(0xa5, a, b);
+        bytes.fill(0x5a, b);
+        bytes.set(input, a + alignment);
+        bytes.set(input, b + alignment);
+        let expected = 0xcbf29ce484222325n;
+        for (let at = 0; at < length; at += 8) {
+          let lane = 0n;
+          for (let i = 0; i < Math.min(8, length - at); i++)
+            lane |= BigInt(input[at + i]) << BigInt(i * 8);
+          expected = BigInt.asUintN(64, (expected ^ lane) * 0x100000001b3n);
+        }
+        assert.equal(hash(a + alignment, length), BigInt.asIntN(64, expected));
+        assert.equal(hash(b + alignment, length), BigInt.asIntN(64, expected));
+        assert.equal(equal(a + alignment, b + alignment, length), 1);
+        for (let i = 0; i < length; i++) {
+          bytes[b + alignment + i] ^= 0xff;
+          assert.equal(equal(a + alignment, b + alignment, length), 0);
+          bytes[b + alignment + i] ^= 0xff;
+        }
+      }
+    }
+    assert.equal(hash(bytes.length, 0), BigInt.asIntN(64, 0xcbf29ce484222325n));
+    assert.equal(equal(bytes.length, bytes.length, 0), 1);
+    assert.equal(equal(bytes.length - 16, bytes.length - 16, 16), 1);
+  }
+});
+
 // JavaScriptCore compiles a function with the SIMD register convention only
 // when the function's own bytecode uses SIMD, but its optimizing tier inlines
 // small callees. Without the marker the build adds (markSimdReachers in

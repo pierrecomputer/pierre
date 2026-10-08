@@ -337,13 +337,13 @@
             (local.set $b (v128.or (local.get $w) (i8x16.splat (i32.const 32))))
             (local.set $pass
               (v128.or
-                (v128.and
-                  (i8x16.ge_u (local.get $b) (i8x16.splat (i32.const "a")))
-                  (i8x16.le_u (local.get $b) (i8x16.splat (i32.const "z"))))
+                (i8x16.le_u
+                  (i8x16.sub (local.get $b) (i8x16.splat (i32.const "a")))
+                  (i8x16.splat (i32.const 25)))
                 (v128.or
-                  (v128.and
-                    (i8x16.ge_u (local.get $w) (i8x16.splat (i32.const "0")))
-                    (i8x16.le_u (local.get $w) (i8x16.splat (i32.const "9"))))
+                  (i8x16.le_u
+                    (i8x16.sub (local.get $w) (i8x16.splat (i32.const "0")))
+                    (i8x16.splat (i32.const 9)))
                   (v128.or
                     (i8x16.eq (local.get $w) (i8x16.splat (i32.const "_")))
                     (i8x16.eq (local.get $w) (i8x16.splat (i32.const "$")))))))

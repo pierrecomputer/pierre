@@ -229,12 +229,12 @@
   (global $lvStateCount (mut i32) (i32.const 0))
   (global $lvStateBytes (mut i32) (i32.const 0))
 
-  ;; FNV-1a 64 over 8-byte lanes with a byte-assembled tail
+  ;; FNV-1a 64 over 8-byte lanes with a masked tail.
+  ;; Tail loads require the heap and transient window's reserved slack.
   (func $lvHash (param $ptr i32) (param $len i32) (result i64)
     (local $h i64)
     (local $p i32)
     (local $stop i32)
-    (local $tail i64)
     (local $k i32)
     (local.set $h (i64.const 0xcbf29ce484222325))
     (local.set $p (local.get $ptr))
@@ -249,40 +249,35 @@
     (local.set $k (i32.and (local.get $len) (i32.const 7)))
     (if (local.get $k)
       (then
-        (block $tdone
-          (loop $tl
-            (br_if $tdone (i32.eqz (local.get $k)))
-            (local.set $k (i32.sub (local.get $k) (i32.const 1)))
-            (local.set $tail
-              (i64.or
-                (i64.shl (local.get $tail) (i64.const 8))
-                (i64.load8_u (i32.add (local.get $p) (local.get $k)))))
-            (br $tl)))
         (local.set $h
-          (i64.mul (i64.xor (local.get $h) (local.get $tail)) (i64.const 0x100000001b3)))))
+          (i64.mul
+            (i64.xor
+              (local.get $h)
+              (i64.and
+                (i64.load (local.get $p))
+                (i64.shr_u (i64.const -1)
+                  (i64.extend_i32_u (i32.shl (i32.sub (i32.const 8) (local.get $k)) (i32.const 3))))))
+            (i64.const 0x100000001b3)))))
     (local.get $h))
 
   (func $lvBytesEq (param $a i32) (param $b i32) (param $len i32) (result i32)
-    (local $stop i32)
-    (local.set $stop (i32.add (local.get $a) (i32.and (local.get $len) (i32.const -8))))
-    (block $tail
-      (loop $wide
-        (br_if $tail (i32.ge_u (local.get $a) (local.get $stop)))
-        (if (i64.ne (i64.load (local.get $a)) (i64.load (local.get $b)))
-          (then (return (i32.const 0))))
-        (local.set $a (i32.add (local.get $a) (i32.const 8)))
-        (local.set $b (i32.add (local.get $b) (i32.const 8)))
-        (br $wide)))
-    (local.set $stop (i32.add (local.get $a) (i32.and (local.get $len) (i32.const 7))))
-    (block $done
-      (loop $one
-        (br_if $done (i32.ge_u (local.get $a) (local.get $stop)))
-        (if (i32.ne (i32.load8_u (local.get $a)) (i32.load8_u (local.get $b)))
-          (then (return (i32.const 0))))
-        (local.set $a (i32.add (local.get $a) (i32.const 1)))
-        (local.set $b (i32.add (local.get $b) (i32.const 1)))
-        (br $one)))
-    (i32.const 1))
+    (local $different v128)
+    (if (i32.eqz (local.get $len))
+      (then (return (i32.const 1))))
+    ;; Tail loads require the heap and transient window's reserved slack.
+    (loop $wide
+      (local.set $different (i8x16.ne (v128.load (local.get $a)) (v128.load (local.get $b))))
+      (if (v128.any_true (local.get $different))
+        (then
+          (return
+            (i32.ge_u (i32.ctz (i8x16.bitmask (local.get $different))) (local.get $len)))))
+      (if (i32.le_u (local.get $len) (i32.const 16))
+        (then (return (i32.const 1))))
+      (local.set $a (i32.add (local.get $a) (i32.const 16)))
+      (local.set $b (i32.add (local.get $b) (i32.const 16)))
+      (local.set $len (i32.sub (local.get $len) (i32.const 16)))
+      (br $wide))
+    (unreachable))
 
   ;; set up the id table and buckets; called from the document initializer
   (func $lvStateInit

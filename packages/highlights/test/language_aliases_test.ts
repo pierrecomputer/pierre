@@ -12,6 +12,9 @@ import {
 } from './_util';
 
 const additions = [
+  ['gdresource', ['gdresource', 'godot-resource', 'tres', 'tscn']],
+  ['gdscript', ['gdscript', 'gd']],
+  ['gdshader', ['gdshader', 'godot-shader', 'gdshaderinc']],
   ['batch', ['batch', 'bat', 'batchfile', 'cmd', 'dos']],
   ['elm', ['elm']],
   ['cuda', ['cuda', 'cu', 'cuh']],
