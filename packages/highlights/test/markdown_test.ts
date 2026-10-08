@@ -15,8 +15,10 @@ import {
   flatTokens,
   kindOfColor,
   loadLang,
+  loadSplitLang,
   spansOf,
   type TestLang,
+  textOf,
   themeColor,
   tokenKinds,
 } from './_util';
@@ -295,12 +297,17 @@ void t.test(
     ]) {
       checkInvariants(markdown.hl, src);
     }
-    const split = loadLang('markdown', '$hlMarkdown', 12);
-    checkInvariants(split.hl, '# title\nText **strong** and <b>x</b>\n');
+    const split = loadSplitLang('markdown');
+    const code = '# title\nText **strong** and <b>x</b>\n';
+    const html = split(code, 12);
+    assert.equal(textOf(html), code);
+    spansOf(html);
     const fenced = '```rust\nfn main() { println!("é"); }\n```';
     const size = new TextEncoder().encode(fenced).length;
     for (const end of [1, 3, 7, 8, 17, size - 3, size]) {
-      checkInvariants(loadLang('markdown', '$hlMarkdown', end).hl, fenced);
+      const html = split(fenced, end);
+      assert.equal(textOf(html), fenced, `split ${end}`);
+      spansOf(html);
     }
   }
 );
