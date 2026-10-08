@@ -134,16 +134,13 @@ test('gdshader: directives, hints, modes, and engine builtins', () => {
     'group_uniforms',
     'global',
     'instance',
-    'canvas_item',
-    'spatial',
-    'particles',
-    'sky',
-    'fog',
-    'unshaded',
-    'blend_mix',
-    'cull_disabled',
   ])
     expect(tokenKinds('gdshader', word)).toEqual([[word, 'keyword']]);
+  for (const word of ['canvas_item', 'spatial', 'particles', 'sky', 'fog'])
+    expect(tokenKinds('gdshader', `shader_type ${word};`)).toEqual([
+      [`shader_type ${word}`, 'keyword'],
+      [';', 'punctuation.delimiter'],
+    ]);
   expect(tokenKinds('gdshader', 'shader_type texture_blit;')).toEqual([
     ['shader_type texture_blit', 'keyword'],
     [';', 'punctuation.delimiter'],
@@ -186,6 +183,31 @@ test('gdshader: directives, hints, modes, and engine builtins', () => {
   expect(tokenKinds('glsl', 'ALBEDO')).toEqual([['ALBEDO', 'constant']]);
 });
 
+test('gdshader: mode names are keywords only inside shader_type and render_mode lists', () => {
+  const code = `shader_type sky;
+render_mode use_half_res_pass, // half resolution
+  depth_prepass_alpha;
+void sky() {
+  float fog = unshaded;
+}
+void fog() {}
+`;
+  const tokens = tokenKinds('gdshader', code);
+  for (const [text, kind] of [
+    ['shader_type sky', 'keyword'],
+    ['render_mode use_half_res_pass', 'keyword'],
+    ['depth_prepass_alpha', 'keyword'],
+    ['sky', 'function'],
+    ['fog', 'variable'],
+    ['unshaded', 'variable'],
+    ['fog', 'function'],
+  ])
+    expect(tokens).toContainEqual([text, kind]);
+  expect(tokens).not.toContainEqual(['sky', 'keyword']);
+  expect(tokens).not.toContainEqual(['fog', 'keyword']);
+  assertLineFedParity('gdshader', code);
+});
+
 test('gdresource: headers, slash-delimited properties, references, and typed arrays', () => {
   const code = `[gd_resource type="Resource" format=3]
 [resource]
@@ -220,5 +242,43 @@ test('gdresource: multiline shader strings preserve comments and escapes', () =>
   expect(tokens).toContainEqual(['// λ😀 <>&', 'string']);
   expect(tokens).toContainEqual(['; comment', 'comment']);
   expect(tokens).toContainEqual(['value', 'property']);
+  assertLineFedParity('gdresource', code);
+});
+
+test('gdresource: only line-leading brackets open section headers', () => {
+  const code = `[node name="A" type="Node2D"]
+colors = [Color(1, 0, 0, 1)]
+nested = [1, [2, [3]]]
+[node name="B" parent="."]
+typed = Array[node]([])
+points = [1, 2
+[sub_resource type="Curve" id="1"]
+`;
+  const tokens = tokenKinds('gdresource', code);
+  expect(tokens.filter(([text]) => text === 'node')).toEqual([
+    ['node', 'tag'],
+    ['node', 'tag'],
+    ['node', 'variable'],
+  ]);
+  expect(tokens).toContainEqual(['sub_resource', 'tag']);
+  assertLineFedParity('gdresource', code);
+});
+
+test('gdresource: digit-led TileSet keys are properties', () => {
+  const code = `[resource]
+0:0/0 = 0
+0:0/0/physics_layer_0/polygon_0/points = PackedVector2Array(-8, -8, 8, -8)
+values = {
+1: 2
+}
+`;
+  const tokens = tokenKinds('gdresource', code);
+  for (const [text, kind] of [
+    ['0:0/0', 'property'],
+    ['0:0/0/physics_layer_0/polygon_0/points', 'property'],
+    ['1', 'number'],
+    ['2', 'number'],
+  ])
+    expect(tokens).toContainEqual([text, kind]);
   assertLineFedParity('gdresource', code);
 });

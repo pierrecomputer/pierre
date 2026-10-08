@@ -1,5 +1,5 @@
 (module
-  (import "../common.wat")
+  (import "./python.wat")
 
   (keyword-table $gdTypes $mem.gdTypes $mem.gdPackedWords
     (group $Token.type.builtin
@@ -52,66 +52,6 @@
     (group $Token.keyword "extends" "static")
     (group $Token.function "preload" "assert"))
 
-  ;; Script and resource strings share escapes, including Godot's six-digit \U.
-  (func $gdStringBody
-    (param $quote i32) (param $raw i32) (param $width i32) (param $multiline i32)
-    (param $seg i32) (result i32)
-    (local $c i32)
-    (local $e i32)
-    (local $status i32)
-    (block $done
-      (loop $scan
-        (global.set $ptr
-          (call $scanFindSpecial (global.get $ptr) (global.get $end)
-            (local.get $quote) (i32.const 1) (i32.eqz (local.get $multiline))))
-        (br_if $done (i32.ge_u (global.get $ptr) (global.get $end)))
-        (local.set $c (i32.load8_u (global.get $ptr)))
-        (if
-          (i32.and
-            (i32.eq (local.get $c) (local.get $quote))
-            (i32.or
-              (i32.eq (local.get $width) (i32.const 1))
-              (i32.and
-                (i32.lt_u (i32.add (global.get $ptr) (i32.const 2)) (global.get $end))
-                (i32.and
-                  (i32.eq (i32.load8_u offset=1 (global.get $ptr)) (local.get $quote))
-                  (i32.eq (i32.load8_u offset=2 (global.get $ptr)) (local.get $quote))))))
-          (then
-            (global.set $ptr (i32.add (global.get $ptr) (local.get $width)))
-            (local.set $status (i32.const 1))
-            (br $done)))
-        (br_if $done
-          (i32.and (i32.eqz (local.get $multiline))
-            (i32.or (i32.eq (local.get $c) (i32.const 10)) (i32.eq (local.get $c) (i32.const 13)))))
-        (if (i32.eq (local.get $c) (i32.const 92))
-          (then
-            (local.set $e (call $lexEscapeEnd (global.get $ptr)))
-            (if (i32.eqz (local.get $raw))
-              (then
-                (if (i32.lt_u (i32.add (global.get $ptr) (i32.const 1)) (global.get $end))
-                  (then
-                    (local.set $c (i32.load8_u offset=1 (global.get $ptr)))
-                    (if (i32.or (i32.eq (local.get $c) (i32.const "u")) (i32.eq (local.get $c) (i32.const "U")))
-                      (then
-                        (local.set $e
-                          (call $scanHexRun (local.get $e)
-                            (select (i32.const 4) (i32.const 6) (i32.eq (local.get $c) (i32.const "u")))))))))
-                (call $emitTok (enum.get $Token.string) (local.get $seg) (global.get $ptr))
-                (call $emitTok (enum.get $Token.string.escape) (global.get $ptr) (local.get $e))
-                (local.set $seg (local.get $e))))
-            (global.set $ptr (local.get $e))
-            (if
-              (i32.and
-                (i32.eq (global.get $ptr) (global.get $end))
-                (i32.or
-                  (i32.eq (i32.load8_u (i32.sub (local.get $e) (i32.const 1))) (i32.const 10))
-                  (i32.eq (i32.load8_u (i32.sub (local.get $e) (i32.const 1))) (i32.const 13))))
-              (then (local.set $status (i32.const 2)))))
-          (else (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))))
-        (br $scan)))
-    (call $emitTok (enum.get $Token.string) (local.get $seg) (global.get $ptr))
-    (local.get $status))
-
   (func $hlGdscript
     (local $c i32)
     (local $n i32)
@@ -124,7 +64,7 @@
     (local $operand i32)
     (local $quote i32)
     (local $raw i32)
-    (local $width i32)
+    (local $triple i32)
     (local $status i32)
     (call $lexEmitLeadingContinuation)
     (block $done
@@ -133,17 +73,11 @@
         (local.set $lhs (global.get $ptr))
         (block $string
           (br_if $string (local.get $quote))
-          (block $spaceDone
-            (loop $space
-              (br_if $spaceDone (i32.ge_u (global.get $ptr) (global.get $end)))
-              (local.set $c (i32.load8_u (global.get $ptr)))
-              (br_if $spaceDone (i32.eqz (byteset.get " \09\0a\0d" (local.get $c))))
-              (if (i32.or (i32.eq (local.get $c) (i32.const 10)) (i32.eq (local.get $c) (i32.const 13)))
-                (then
-                  (local.set $operand (i32.const 0))
-                  (local.set $decl (i32.const 0))))
-              (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
-              (br $space)))
+          (call $scanWhitespace)
+          (if (call $lexGapHasBreak (local.get $lhs) (global.get $ptr))
+            (then
+              (local.set $operand (i32.const 0))
+              (local.set $decl (i32.const 0))))
           (call $emitGap (local.get $lhs) (global.get $ptr))
           (br_if $done (i32.ge_u (global.get $ptr) (global.get $end)))
           (local.set $lhs (global.get $ptr))
@@ -169,15 +103,14 @@
           (if (i32.or (i32.eq (local.get $c) (i32.const 34)) (i32.eq (local.get $c) (i32.const 39)))
             (then
               (local.set $quote (local.get $c))
-              (local.set $width (i32.const 1))
-              (if
+              (local.set $triple
                 (i32.and
                   (i32.lt_u (i32.add (global.get $ptr) (i32.const 2)) (global.get $end))
                   (i32.and
                     (i32.eq (i32.load8_u offset=1 (global.get $ptr)) (local.get $quote))
-                    (i32.eq (i32.load8_u offset=2 (global.get $ptr)) (local.get $quote))))
-                (then (local.set $width (i32.const 3))))
-              (global.set $ptr (i32.add (global.get $ptr) (local.get $width)))
+                    (i32.eq (i32.load8_u offset=2 (global.get $ptr)) (local.get $quote)))))
+              (global.set $ptr
+                (i32.add (global.get $ptr) (select (i32.const 3) (i32.const 1) (local.get $triple))))
               (br $string)))
           (if (i32.eq (local.get $c) (i32.const "@"))
             (then
@@ -273,11 +206,11 @@
           (local.set $decl (i32.const 0))
           (br $token))
         (local.set $status
-          (call $gdStringBody (local.get $quote) (local.get $raw) (local.get $width)
-            (i32.eq (local.get $width) (i32.const 3)) (local.get $lhs)))
+          (call $pyStringBody (local.get $quote) (local.get $raw) (i32.const 0)
+            (local.get $triple) (local.get $triple) (i32.const 6) (local.get $lhs) (i32.const 0)))
         (if
           (i32.or (i32.eq (local.get $status) (i32.const 1))
-            (i32.and (i32.eq (local.get $width) (i32.const 1)) (i32.ne (local.get $status) (i32.const 2))))
+            (i32.and (i32.eqz (local.get $triple)) (i32.ne (local.get $status) (i32.const 2))))
           (then (local.set $quote (i32.const 0))))
         (local.set $operand (i32.const 1))
         (local.set $member (i32.const 0))

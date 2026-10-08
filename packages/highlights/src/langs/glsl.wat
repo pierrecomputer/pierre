@@ -165,19 +165,13 @@
 
     (enum.get $Token.none))
 
+  ;; Keep mode names out of this table: `sky` and `fog` also name functions.
+  ;; The +256 flag starts a mode list in $hlGlslImpl.
   (keyword-table $gdShaderWords $mem.gdshaderWords $mem.gdresourceWords
+    (group $Token.keyword+256 "shader_type" "render_mode")
     (group $Token.keyword
-      "shader_type" "render_mode" "group_uniforms" "global" "instance"
-      "spatial" "canvas_item" "particles" "sky" "fog" "texture_blit"
-      "const" "in" "out" "inout" "uniform" "varying" "flat" "smooth" "lowp" "mediump" "highp"
-      "blend_mix" "blend_add" "blend_sub" "blend_mul" "blend_premul_alpha" "blend_disabled"
-      "unshaded" "wireframe" "skip_vertex_transform" "world_vertex_coords" "ensure_correct_normals"
-      "cull_back" "cull_front" "cull_disabled" "depth_draw_opaque" "depth_draw_always" "depth_draw_never"
-      "depth_test_disabled" "shadows_disabled" "ambient_light_disabled" "vertex_lighting"
-      "diffuse_burley" "diffuse_lambert" "diffuse_lambert_wrap" "diffuse_toon"
-      "specular_schlick_ggx" "specular_toon" "specular_disabled" "light_only"
-      "keep_data" "disable_force" "disable_velocity" "collision_use_scale"
-      "use_half_res_pass" "use_quarter_res_pass" "disable_fog" "fog_disabled")
+      "group_uniforms" "global" "instance"
+      "const" "in" "out" "inout" "uniform" "varying" "flat" "smooth" "lowp" "mediump" "highp")
     (group $Token.attribute
       "source_color" "hint_range" "hint_enum" "hint_normal" "hint_default_white" "hint_default_black"
       "hint_default_transparent" "hint_anisotropy" "hint_roughness_r" "hint_roughness_g"
@@ -210,6 +204,7 @@
     (local $afterDot i32)
     (local $wantType i32)
     (local $include i32)
+    (local $modes i32)
     ;; the quote of a string the previous chunk left open at an escaped line
     ;; break, or 0: it resumes with C escape rules ($lexCStringResume)
     (local $strCont i32)
@@ -249,6 +244,7 @@
             (call $emitTok (enum.get $Token.preproc) (local.get $lhs) (global.get $ptr))
             (local.set $afterDot (i32.const 0))
             (local.set $wantType (i32.const 0))
+            (local.set $modes (i32.const 0))
             (br $next)))
 
         ;; Angle-bracket include paths are strings, not comparison operators.
@@ -310,6 +306,11 @@
                 (call $lexBlockComment (i32.const 2) (local.get $hl))
                 (br $next)))))
 
+        (if (local.get $modes)
+          (then
+            (local.set $modes
+              (i32.or (call $lexIsIdentStart (local.get $c)) (i32.eq (local.get $c) (i32.const ","))))))
+
         (if (i32.or (i32.eq (local.get $c) (i32.const 34)) (i32.eq (local.get $c) (i32.const 39)))
           (then
             (local.set $strCont (call $lexCString (enum.get $Token.string)))
@@ -341,31 +342,42 @@
             (local.set $hl (enum.get $Token.none))
             (if (local.get $godot)
               (then
-                (local.set $p (keyword-table.value $gdShaderWords (local.get $lhs) (global.get $ptr)))
-                (if (i32.ge_s (local.get $p) (i32.const 0))
-                  (then (local.set $hl (local.get $p))))
-                (local.set $len (i32.sub (global.get $ptr) (local.get $lhs)))
-                (if (i32.and (i32.eq (local.get $len) (i32.const 1)) (i32.eq (local.get $c) (i32.const "E")))
-                  (then (local.set $hl (enum.get $Token.constant.builtin))))
-                (if
-                  (i32.and (i32.eq (local.get $len) (i32.const 18))
-                    (i32.and
-                      (i64.eq (i64.load (local.get $lhs)) (i64.const "hint_dep"))
-                      (i32.and
-                        (i64.eq (i64.load offset=8 (local.get $lhs)) (i64.const "th_textu"))
-                        (i32.eq (i32.load16_u offset=16 (local.get $lhs)) (i32.const "re")))))
-                  (then (local.set $hl (enum.get $Token.attribute))))
-                (if
-                  (i32.and (i32.le_u (i32.sub (local.get $len) (i32.const 32)) (i32.const 1))
-                    (i32.and
-                      (i64.eq (i64.load (i32.sub (global.get $ptr) (i32.const 12))) (i64.const "_anisotr"))
-                      (i32.eq (i32.load (i32.sub (global.get $ptr) (i32.const 4))) (i32.const "opic"))))
-                  (then
-                    (if
-                      (i32.eq
-                        (keyword-table.value $gdShaderWords (local.get $lhs) (i32.sub (global.get $ptr) (i32.const 12)))
-                        (enum.get $Token.attribute))
-                      (then (local.set $hl (enum.get $Token.attribute))))))))
+                (if (local.get $modes)
+                  (then (local.set $hl (enum.get $Token.keyword)))
+                  (else
+                    (local.set $p (keyword-table.value $gdShaderWords (local.get $lhs) (global.get $ptr)))
+                    (if (i32.ge_s (local.get $p) (i32.const 0))
+                      (then
+                        (local.set $hl (i32.and (local.get $p) (i32.const 255)))
+                        (local.set $modes (i32.shr_u (local.get $p) (i32.const 8))))
+                      (else
+                        ;; The keyword table only supports lengths 2 through 31.
+                        (local.set $len (i32.sub (global.get $ptr) (local.get $lhs)))
+                        (if (i32.eq (local.get $len) (i32.const 1))
+                          (then
+                            (if (i32.eq (local.get $c) (i32.const "E"))
+                              (then (local.set $hl (enum.get $Token.constant.builtin))))))
+                        (if (i32.eq (local.get $len) (i32.const 18))
+                          (then
+                            (if
+                              (i32.and
+                                (i64.eq (i64.load (local.get $lhs)) (i64.const "hint_dep"))
+                                (i32.and
+                                  (i64.eq (i64.load offset=8 (local.get $lhs)) (i64.const "th_textu"))
+                                  (i32.eq (i32.load16_u offset=16 (local.get $lhs)) (i32.const "re"))))
+                              (then (local.set $hl (enum.get $Token.attribute))))))
+                        (if (i32.le_u (i32.sub (local.get $len) (i32.const 32)) (i32.const 1))
+                          (then
+                            (if
+                              (i32.and
+                                (i64.eq (i64.load (i32.sub (global.get $ptr) (i32.const 12))) (i64.const "_anisotr"))
+                                (i32.eq (i32.load (i32.sub (global.get $ptr) (i32.const 4))) (i32.const "opic")))
+                              (then
+                                (if
+                                  (i32.eq
+                                    (keyword-table.value $gdShaderWords (local.get $lhs) (i32.sub (global.get $ptr) (i32.const 12)))
+                                    (enum.get $Token.attribute))
+                                  (then (local.set $hl (enum.get $Token.attribute))))))))))))))
             (if (i32.eq (local.get $hl) (enum.get $Token.none))
               (then (local.set $hl (call $glslWordHl (local.get $lhs) (global.get $ptr)))))
             (if (i32.eq (local.get $hl) (enum.get $Token.none))
