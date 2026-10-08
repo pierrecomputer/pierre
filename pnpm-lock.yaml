@@ -710,6 +710,33 @@ importers:
         specifier: 'catalog:'
         version: 1.0.39
 
+  packages/layouts:
+    devDependencies:
+      '@playwright/test':
+        specifier: 'catalog:'
+        version: 1.51.1
+      '@types/react':
+        specifier: 19.2.7
+        version: 19.2.7
+      '@types/react-dom':
+        specifier: 19.2.3
+        version: 19.2.3(@types/react@19.2.7)
+      react:
+        specifier: 19.2.7
+        version: 19.2.7
+      react-dom:
+        specifier: 19.2.7
+        version: 19.2.7(react@19.2.7)
+      tsdown:
+        specifier: 'catalog:'
+        version: 0.22.14(@tsdown/css@0.22.14)(typescript@7.0.2)
+      typescript:
+        specifier: 'catalog:'
+        version: 7.0.2
+      vite:
+        specifier: 'catalog:'
+        version: 8.1.0(@types/node@25.9.3)(jiti@2.7.0)(yaml@2.9.0)
+
   packages/path-store:
     devDependencies:
       '@pierre/tree-test-data':

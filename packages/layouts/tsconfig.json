@@ -1,0 +1,24 @@
+{
+  "extends": "../../tsconfig.options.json",
+  "include": [
+    "src/**/*.ts",
+    "src/**/*.tsx",
+    "demo/**/*.ts",
+    "demo/**/*.tsx",
+    "test/**/*.ts",
+    "tsdown.config.ts"
+  ],
+  "exclude": ["node_modules", "dist", "demo/dist"],
+  "compilerOptions": {
+    "isolatedDeclarations": true,
+    "allowJs": false,
+    "checkJs": false,
+    "emitDeclarationOnly": true,
+    "outDir": "dist",
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "types": ["bun"],
+    "jsx": "react-jsx",
+    "rootDir": ".",
+    "tsBuildInfoFile": "tsconfig.tsbuildinfo"
+  }
+}
