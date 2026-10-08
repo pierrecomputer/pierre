@@ -307,6 +307,7 @@ export const CODE_VIEW_DIFF_OPTION_KEYS = [
   'themeType',
   'disableFileHeader',
   'disableVirtualizationBuffers',
+  'folding',
   'preferredHighlighter',
   'useCSSClasses',
   'useTokenTransformer',
@@ -341,6 +342,7 @@ export const CODE_VIEW_FILE_OPTION_KEYS = [
   'themeType',
   'disableFileHeader',
   'disableVirtualizationBuffers',
+  'folding',
   'preferredHighlighter',
   'useCSSClasses',
   'useTokenTransformer',
@@ -1575,6 +1577,7 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
     if (pendingTarget == null) {
       return;
     }
+    this.revealScrollTargetLine(pendingTarget);
 
     const destination = this.resolveScrollTargetTop(pendingTarget);
     if (destination == null) {
@@ -3306,6 +3309,18 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
     return targetTop - stickyOffset - offset;
   }
 
+  // A file line inside a collapsed read-only fold has no row to scroll to.
+  // Unfold it first; the item's next layout pass then positions the row.
+  private revealScrollTargetLine(target: PendingScrollTarget): void {
+    if (target.type !== 'line') {
+      return;
+    }
+    const item = this.idToItem.get(target.id);
+    if (item?.type === 'file' && item.instance.revealLine(target.lineNumber)) {
+      this.markItemLayoutDirty(item);
+    }
+  }
+
   private getLineScrollPosition(
     item: CodeViewContextItem<LAnnotation, Caret>,
     target: CodeViewLineScrollTarget
@@ -4473,6 +4488,8 @@ function hasItemLayoutOptionChanged<LAnnotation, Caret>(
     (previousOptions.disableFileHeader ?? false) !==
       (nextOptions.disableFileHeader ?? false) ||
     previousOptions.unsafeCSS !== nextOptions.unsafeCSS ||
+    // Disabling folding unfolds items, changing their heights.
+    (previousOptions.folding ?? true) !== (nextOptions.folding ?? true) ||
     (previousOptions.diffStyle ?? 'split') !==
       (nextOptions.diffStyle ?? 'split') ||
     (previousOptions.diffIndicators ?? 'bars') !==

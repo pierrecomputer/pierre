@@ -428,6 +428,13 @@ export interface BaseCodeOptions {
   disableFileHeader?: boolean;
   disableVirtualizationBuffers?: boolean;
   stickyHeader?: boolean;
+  /**
+   * Show code-fold controls on file components, default is true. Read-only
+   * File components manage their own fold state; an attached editor takes
+   * over folding for the edit session. FileDiff components do not support
+   * folding and ignore this option.
+   */
+  folding?: boolean;
 
   // Shiki config options, ignored if you're using a WorkerPoolManager
   preferredHighlighter?: HighlighterTypes;
@@ -475,7 +482,12 @@ export interface BaseDiffOptions extends BaseCodeOptions {
 export type BaseDiffOptionsWithDefaults = Required<
   Omit<
     BaseDiffOptions,
-    'unsafeCSS' | 'preferredHighlighter' | 'parseDiffOptions' | 'loadDiffFiles'
+    | 'unsafeCSS'
+    | 'preferredHighlighter'
+    | 'parseDiffOptions'
+    | 'loadDiffFiles'
+    // Diff components do not support folding.
+    | 'folding'
   >
 >;
 
@@ -791,6 +803,7 @@ export interface ForceFilePlainTextOptions {
   totalLines?: number;
   // Pre-split lines for caching in windowing scenarios
   lines?: string[];
+  hiddenLineRanges?: readonly LineRange[];
 }
 
 export interface RenderFileOptions {
@@ -979,4 +992,9 @@ export interface AppliedThemeStyleCache {
 export interface StickySpecs {
   topOffset: number;
   height: number;
+}
+
+export interface LineRange {
+  readonly startLine: number;
+  readonly endLine: number;
 }

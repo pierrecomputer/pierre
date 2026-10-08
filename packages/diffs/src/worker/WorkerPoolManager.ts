@@ -17,6 +17,7 @@ import type {
   FileDiffMetadata,
   HighlighterTypes,
   HunkExpansionRegion,
+  LineRange,
   RenderDiffOptions,
   RenderDiffResult,
   RenderFileOptions,
@@ -704,7 +705,8 @@ export class WorkerPoolManager {
     file: FileContents,
     startingLine: number,
     totalLines: number,
-    lines?: string[]
+    lines?: string[],
+    hiddenLineRanges?: readonly LineRange[]
   ): ThemedFileResult | undefined {
     if (this.highlighter == null) {
       this.queueInitialization();
@@ -714,7 +716,13 @@ export class WorkerPoolManager {
       file,
       this.highlighter,
       this.renderOptions,
-      { forcePlainText: true, startingLine, totalLines, lines }
+      {
+        forcePlainText: true,
+        startingLine,
+        totalLines,
+        lines,
+        hiddenLineRanges,
+      }
     );
   }
 

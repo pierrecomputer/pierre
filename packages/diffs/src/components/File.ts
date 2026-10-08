@@ -21,6 +21,7 @@ import type {
   EditorChangeEvent,
   FileEditCompleteEvent,
 } from '../editor/types';
+import { areLineRangesEqual, FoldManager } from '../managers/FoldManager';
 import {
   type GetHoveredLineResult,
   InteractionManager,
@@ -44,6 +45,7 @@ import type {
   FileContents,
   HighlightedToken,
   LineAnnotation,
+  LineRange,
   PostRenderPhase,
   PrePropertiesConfig,
   RenderFileMetadata,
@@ -247,6 +249,19 @@ export class File<LAnnotation = undefined, Caret = undefined> {
   protected renderedFile: FileContents | undefined;
   protected renderRange: RenderRange | undefined;
   protected enabled = true;
+  protected foldRanges: LineRange[] = [];
+  // Interactive read-only fold state; shared with the renderer, which
+  // decorates fold headers from it. An attached editor bypasses it and pushes
+  // its own hidden ranges through __setFoldRanges.
+  protected foldManager: FoldManager;
+  // Header line whose fold toggle should regain focus once the render that
+  // replaces it lands (keyboard toggles; virtualized renders are deferred).
+  private pendingFoldFocusLine: number | undefined;
+  // The code element whose computed `tab-size` the fold manager last read.
+  private foldTabSizeElement: HTMLElement | undefined;
+  // An editor detached with folds applied; settling its session re-renders
+  // the unfolded rows.
+  private editorFoldsNeedRender = false;
 
   protected editor: Editor<'file', LAnnotation, Caret> | undefined;
 
@@ -263,6 +278,12 @@ export class File<LAnnotation = undefined, Caret = undefined> {
       this.handleHighlightRender,
       this.workerManager
     );
+    this.foldManager = new FoldManager({
+      isEnabled: () => this.isReadOnlyFoldingEnabled(),
+      onToggleFold: (startLine, restoreFocus) =>
+        this.toggleFold(startLine, restoreFocus),
+    });
+    this.fileRenderer.setFoldManager(this.foldManager);
     this.resizeManager = new ResizeManager();
     this.interactionManager = new InteractionManager(
       'file',
@@ -353,6 +374,12 @@ export class File<LAnnotation = undefined, Caret = undefined> {
 
     const hadSession = this.editSession != null;
     this.file = incomingFile;
+    // Folded blocks don't carry over to different contents. State only: every
+    // caller renders the new file next, and virtualized callers do so before
+    // computing layout.
+    if (this.foldManager.reset()) {
+      this.updateFoldRanges([]);
+    }
 
     if (hadSession || this.editor != null) {
       this.installEditSession(
@@ -422,6 +449,158 @@ export class File<LAnnotation = undefined, Caret = undefined> {
     );
   }
 
+  public __setFoldRanges(ranges: LineRange[]): void {
+    this.applyFoldRanges(ranges);
+  }
+
+  // Hide the given line ranges and re-render when they changed. The
+  // virtualized subclass overrides this to also invalidate row layout.
+  protected applyFoldRanges(ranges: LineRange[]): boolean {
+    if (!this.updateFoldRanges(ranges)) {
+      return false;
+    }
+    if (this.enabled && this.file != null) {
+      this.rerender();
+    }
+    return true;
+  }
+
+  // Whether this component drives its own folding: the folding option is on
+  // and no editor session owns the fold state.
+  protected isReadOnlyFoldingEnabled(): boolean {
+    return this.options.folding !== false && this.editor == null;
+  }
+
+  // Fold or unfold the block starting at the zero-based header line, hiding
+  // or revealing its body. Invoked by the FoldManager for fold-control clicks.
+  protected toggleFold(startLine: number, restoreFocus = false): void {
+    const { file } = this;
+    if (!this.isReadOnlyFoldingEnabled() || file == null) {
+      return;
+    }
+    const lines = this.fileRenderer.getOrCreateLineCache(file);
+    if (!this.foldManager.toggleFold(startLine, file, lines)) {
+      return;
+    }
+    if (restoreFocus) {
+      this.pendingFoldFocusLine = startLine;
+    }
+    if (
+      !this.applyFoldRanges(this.foldManager.getHiddenLineRanges(file, lines))
+    ) {
+      // The hidden ranges can survive a toggle (e.g. a fold nested inside a
+      // still-folded block); re-render for the control state alone.
+      this.rerender();
+    }
+  }
+
+  /**
+   * Unfold the read-only folds that hide a one-based line so scroll targets
+   * have a row to land on. Returns whether anything unfolded.
+   */
+  public revealLine(lineNumber: number): boolean {
+    const { file } = this;
+    if (
+      !this.isReadOnlyFoldingEnabled() ||
+      file == null ||
+      !this.foldManager.hasFolds()
+    ) {
+      return false;
+    }
+    const lines = this.fileRenderer.getOrCreateLineCache(file);
+    if (!this.foldManager.unfoldLine(lineNumber - 1, file, lines)) {
+      return false;
+    }
+    this.applyFoldRanges(this.foldManager.getHiddenLineRanges(file, lines));
+    return true;
+  }
+
+  // Move focus to the re-rendered toggle of a keyboard-activated fold.
+  private restorePendingFoldFocus(): void {
+    const line = this.pendingFoldFocusLine;
+    if (line == null) {
+      return;
+    }
+    this.pendingFoldFocusLine = undefined;
+    this.pre
+      ?.querySelector<HTMLButtonElement>(
+        `[data-column-number][data-line-index="${line}"] [data-fold-toggle]`
+      )
+      ?.focus({ preventScroll: true });
+  }
+
+  /**
+   * Unfold everything and drop the interactive fold state, re-rendering when
+   * anything was folded. Used when an editor attaches (the session owns
+   * folding) and when the folding option turns off.
+   */
+  protected resetReadOnlyFolding(): void {
+    const hadFolds = this.foldManager.reset();
+    if (!this.applyFoldRanges([]) && hadFolds) {
+      this.rerender();
+    }
+  }
+
+  // Store the hidden line ranges without rendering; returns whether they
+  // changed. The virtualized subclass also marks its row layout dirty.
+  protected updateFoldRanges(ranges: LineRange[]): boolean {
+    if (areLineRangesEqual(ranges, this.foldRanges)) {
+      return false;
+    }
+    this.foldRanges = ranges.map((range) => ({ ...range }));
+    this.fileRenderer.setFoldRanges(this.foldRanges);
+    return true;
+  }
+
+  // Re-derive the hidden ranges from the interactive fold state for `file`,
+  // so every render hides exactly the folded bodies (a recycle or a tab-width
+  // change can leave them stale). Returns whether they changed.
+  protected syncReadOnlyFoldRanges(file: FileContents): boolean {
+    if (!this.isReadOnlyFoldingEnabled() || !this.foldManager.hasFolds()) {
+      return false;
+    }
+    return this.updateFoldRanges(
+      this.foldManager.getHiddenLineRanges(
+        file,
+        this.fileRenderer.getOrCreateLineCache(file)
+      )
+    );
+  }
+
+  // Read-only folds measure tab indentation with the rendered `tab-size`, as
+  // the editor does. Read once per code element, and only for files indented
+  // with tabs, since space indentation doesn't depend on it.
+  private syncFoldTabSize(): void {
+    const { code, file } = this;
+    if (
+      code == null ||
+      file == null ||
+      code === this.foldTabSizeElement ||
+      !this.isReadOnlyFoldingEnabled()
+    ) {
+      return;
+    }
+    const lines = this.fileRenderer.getOrCreateLineCache(file);
+    if (!this.foldManager.usesTabIndentation(file, lines)) {
+      return;
+    }
+    this.foldTabSizeElement = code;
+    const tabSize = Number.parseInt(getComputedStyle(code).tabSize, 10);
+    if (
+      Number.isNaN(tabSize) ||
+      !this.foldManager.setTabSize(tabSize, file, lines)
+    ) {
+      return;
+    }
+    // The fold controls just rendered used the previous width. This runs at
+    // the end of a render, so re-render once it has finished.
+    queueMicrotask(() => {
+      if (this.enabled) {
+        this.rerender();
+      }
+    });
+  }
+
   public onThemeChange(): void {
     this.fileRenderer.clearRenderCache();
     this.rerender();
@@ -431,9 +610,17 @@ export class File<LAnnotation = undefined, Caret = undefined> {
     options: FileOptions<LAnnotation, Caret> | undefined
   ): void {
     if (options == null) return;
+    const foldingDisabled =
+      options.folding === false && this.options.folding !== false;
     this.options = options;
     this.cachedHeaderHTML = undefined;
+    this.foldTabSizeElement = undefined;
     this.syncInteractionOptions();
+    if (foldingDisabled && this.editor == null) {
+      this.resetReadOnlyFolding();
+    }
+    // The editor reads shared code options (e.g. folding) from this host.
+    this.editor?.__hostOptionsChanged?.();
   }
 
   protected syncInteractionOptions(): void {
@@ -574,6 +761,8 @@ export class File<LAnnotation = undefined, Caret = undefined> {
 
     const { overflow = 'scroll' } = this.options;
     this.interactionManager.setup(this.pre);
+    this.foldManager.setup(this.pre);
+    this.syncFoldTabSize();
     this.resizeManager.setup(this.pre, {
       disableAnnotations: overflow === 'wrap',
       columnVariables: this.shouldApplyColumnVariables(overflow)
@@ -590,6 +779,11 @@ export class File<LAnnotation = undefined, Caret = undefined> {
   public cleanUp(recycle = false): void {
     const editor = this.editor;
     this.emitPostRender(true);
+    if (!recycle) {
+      // Drop hidden rows as state only, so the editor teardown below doesn't
+      // render a component that is going away to unfold them.
+      this.updateFoldRanges([]);
+    }
     // Tear the editor down while the code scroller still exists. A recycle
     // keeps its document and undo history; a full teardown drops them as the
     // session ends.
@@ -599,6 +793,14 @@ export class File<LAnnotation = undefined, Caret = undefined> {
     }
     this.resizeManager.cleanUp();
     this.interactionManager.cleanUp();
+    this.foldManager.cleanUp();
+    // A recycle keeps the fold state so a virtualized remount restores it.
+    if (!recycle) {
+      this.foldManager.reset();
+    }
+    this.pendingFoldFocusLine = undefined;
+    this.foldTabSizeElement = undefined;
+    this.editorFoldsNeedRender = false;
     this.managersDirty = false;
     this.workerManager?.unsubscribeToThemeChanges(this);
     this.renderRange = undefined;
@@ -650,6 +852,8 @@ export class File<LAnnotation = undefined, Caret = undefined> {
       this.editSession = undefined;
       this.renderedFile = undefined;
     }
+    this.foldRanges = [];
+
     this.enabled = false;
   }
 
@@ -871,13 +1075,22 @@ export class File<LAnnotation = undefined, Caret = undefined> {
     if (this.editor != null) {
       throw new Error('File.__attachEditor: an editor is already attached');
     }
+    // The editor owns folding for its session. Unfold the read-only state
+    // without rendering; attaching renders the unfolded rows below.
+    this.foldManager.reset();
+    const unfolded = this.updateFoldRanges([]);
     this.editor = editor;
     const detach = () => {
       this.editor = undefined;
       this.fileRenderer.endEditSession();
+      // The editor's folds end with its session. Settling the session renders
+      // the unfolded rows, once the editor has finished tearing down.
+      if (this.updateFoldRanges([])) {
+        this.editorFoldsNeedRender = true;
+      }
     };
     try {
-      this.resumeEditorRendering(editor);
+      this.resumeEditorRendering(editor, unfolded);
       return detach;
     } catch (error) {
       detach();
@@ -893,8 +1106,11 @@ export class File<LAnnotation = undefined, Caret = undefined> {
     this.resumeEditorRendering(editor);
   }
 
+  // `forceRender` skips reusing the current markup, e.g. when attaching
+  // unfolded rows the current markup still hides.
   private resumeEditorRendering(
-    editor: Editor<'file', LAnnotation, Caret>
+    editor: Editor<'file', LAnnotation, Caret>,
+    forceRender = false
   ): void {
     // A retained session just re-starts its render; a fresh attach with a file
     // installs a session seeded from the editor's document. The editor can also
@@ -909,7 +1125,7 @@ export class File<LAnnotation = undefined, Caret = undefined> {
       );
     }
     const editSessionFile = this.editSession?.file;
-    if (this.fileRenderer.editorRenderReady()) {
+    if (!forceRender && this.fileRenderer.editorRenderReady()) {
       if (this.fileRenderer.fileCache === editSessionFile) {
         this.renderedFile = editSessionFile;
       }
@@ -1023,7 +1239,9 @@ export class File<LAnnotation = undefined, Caret = undefined> {
     ) {
       this.renderedFile = settledFile;
     }
-    if (installResult && this.fileContainer != null) {
+    const unfolded = this.editorFoldsNeedRender;
+    this.editorFoldsNeedRender = false;
+    if ((installResult || unfolded) && this.fileContainer != null) {
       this.rerender();
     }
     if (failed) {
@@ -1141,6 +1359,7 @@ export class File<LAnnotation = undefined, Caret = undefined> {
       this.setLineAnnotations(lineAnnotations);
     }
     this.fileRenderer.setLineAnnotations(this.getLatestAnnotations());
+    this.syncReadOnlyFoldRanges(file);
 
     const { disableErrorHandling = false, disableFileHeader = false } =
       this.options;
@@ -1260,6 +1479,7 @@ export class File<LAnnotation = undefined, Caret = undefined> {
       if (!deferManagers) {
         this.flushManagers();
       }
+      this.restorePendingFoldFocus();
 
       this.finalizeRender();
       if (this.editor != null) {
@@ -1623,6 +1843,9 @@ export class File<LAnnotation = undefined, Caret = undefined> {
     this.cleanupErrorWrapper();
     this.applyPreNodeAttributes(pre, result);
     const code = (this.code = getOrCreateCodeNode({ code: this.code }));
+    // Reserves gutter space for fold toggles (see style.css). An attached
+    // editor re-applies the attribute when it renders its own controls.
+    code.toggleAttribute('data-folding', this.fileRenderer.showsFoldControls());
     const codeAst = this.fileRenderer.renderCodeAST(result);
     this.editor?.__captureFocusForDOMReplacement();
     const applyColumns = () => {
