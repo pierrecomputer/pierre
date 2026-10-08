@@ -144,6 +144,10 @@ test('gdshader: directives, hints, modes, and engine builtins', () => {
     'cull_disabled',
   ])
     expect(tokenKinds('gdshader', word)).toEqual([[word, 'keyword']]);
+  expect(tokenKinds('gdshader', 'shader_type texture_blit;')).toEqual([
+    ['shader_type texture_blit', 'keyword'],
+    [';', 'punctuation.delimiter'],
+  ]);
   for (const word of [
     'source_color',
     'hint_range',
@@ -174,6 +178,10 @@ test('gdshader: directives, hints, modes, and engine builtins', () => {
   );
   expect(tokenKinds('glsl', 'shader_type')).toEqual([
     ['shader_type', 'variable'],
+  ]);
+  expect(tokenKinds('glsl', 'texture_blit')).not.toContainEqual([
+    'texture_blit',
+    'keyword',
   ]);
   expect(tokenKinds('glsl', 'ALBEDO')).toEqual([['ALBEDO', 'constant']]);
 });

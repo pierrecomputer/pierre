@@ -168,7 +168,7 @@
   (keyword-table $gdShaderWords $mem.gdshaderWords $mem.gdresourceWords
     (group $Token.keyword
       "shader_type" "render_mode" "group_uniforms" "global" "instance"
-      "spatial" "canvas_item" "particles" "sky" "fog"
+      "spatial" "canvas_item" "particles" "sky" "fog" "texture_blit"
       "const" "in" "out" "inout" "uniform" "varying" "flat" "smooth" "lowp" "mediump" "highp"
       "blend_mix" "blend_add" "blend_sub" "blend_mul" "blend_premul_alpha" "blend_disabled"
       "unshaded" "wireframe" "skip_vertex_transform" "world_vertex_coords" "ensure_correct_normals"
