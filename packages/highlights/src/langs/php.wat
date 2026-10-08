@@ -88,7 +88,7 @@
       (then (return (enum.get $Token.constant))))
     (enum.get $Token.variable))
 
-  (keyword-table $phpWords $mem.phpWords $mem.keywordTablesEnd
+  (keyword-table $phpWords $mem.phpWords $mem.powershellWords
     (group $Token.keyword.control
       "break" "catch" "while" "throw" "match" "print" "isset" "empty" "unset" "return" "switch" "elseif" "foreach" "default" "finally" "continue")
     (group $Token.keyword

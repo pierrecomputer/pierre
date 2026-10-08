@@ -8,7 +8,7 @@ import {
   LiveTokenizer,
   StreamTokenizer,
 } from '../lib/index';
-import { zonSample } from './_samples';
+import { samples, zonSample } from './_samples';
 import {
   assertLineFedParity,
   distinctTheme,
@@ -20,6 +20,46 @@ import {
 } from './_util';
 
 const fixtures = [
+  {
+    lang: 'gdscript',
+    code: samples.gdscript.code,
+    delimiter: '"""',
+    fragments: [
+      '"""',
+      "'''",
+      'r"',
+      '\\U01F600',
+      '@export',
+      '$Node/Child',
+      '%Node',
+      '#',
+    ],
+    open: 'var text = """λ😀',
+  },
+  {
+    lang: 'gdshader',
+    code: samples.gdshader.code,
+    delimiter: '*/',
+    fragments: ['/*', '*/', '//', '#include', '"', '\\', 'COLOR', 'hint_range'],
+    open: '/* λ😀',
+  },
+  {
+    lang: 'gdresource',
+    code: samples.gdresource.code,
+    delimiter: '"',
+    fragments: [
+      '[node',
+      ']',
+      '[',
+      ';',
+      '"',
+      '&"',
+      '\\',
+      'ExtResource(',
+      'metadata/key',
+    ],
+    open: '[gd_resource type="Shader"]\ncode = "λ😀',
+  },
   {
     lang: 'zig',
     code: zonSample,
