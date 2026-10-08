@@ -18,10 +18,9 @@ export default function Footer() {
   return (
     <footer className="pt-12 pb-12">
       <div className="grid-cols- grid gap-3 md:grid-cols-6 md:justify-between">
-        <div className="text-muted-foreground text-sm">
+        <div className="text-muted-foreground text-sm md:col-span-2">
           &copy; {new Date().getFullYear()} The Pierre Computer Co.
         </div>
-        <div className="hidden md:block" />
         <div>
           <p className="mb-2 text-sm font-medium">Diffs</p>
           <nav className="flex flex-col gap-1">
