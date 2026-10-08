@@ -92,11 +92,10 @@ export const cssVariables: Theme = {
 };
 
 /**
- * Convert a Zed theme to CSS custom properties. Theme values are interpolated
- * into a stylesheet, so only hex and numeric Display P3 colors are
- * emitted: a background or foreground that fails validation is omitted, a
- * syntax color that fails becomes `inherit`, and a syntax scope whose name is
- * not a plain dotted identifier is skipped.
+ * Convert a Zed theme to CSS custom properties.
+ * Emit only hex and numeric Display P3 colors. Omit invalid background
+ * and foreground colors. Use `inherit` for invalid syntax colors.
+ * Skip syntax scopes whose names are not plain dotted identifiers.
  */
 export function toCSS(
   { style }: Theme,

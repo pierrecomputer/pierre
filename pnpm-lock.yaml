@@ -458,6 +458,9 @@ importers:
       '@pierre/trees':
         specifier: workspace:*
         version: link:../../packages/trees
+      '@pierre/vscode-icons':
+        specifier: 'catalog:'
+        version: 0.0.9
       '@radix-ui/react-avatar':
         specifier: 'catalog:'
         version: 1.1.10(@types/react-dom@19.2.3(@types/react@19.2.7))(@types/react@19.2.7)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)

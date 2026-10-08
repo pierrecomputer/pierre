@@ -22,7 +22,8 @@
   (global $spanHl (mut i32) (i32.const -1)) ;; $Token of the currently open span, -1 when none
   (global $spanVal (mut i64) (i64.const 0)) ;; style value of the open span, 0 when none
   (global $cssVariables (mut i32) (i32.const 0))
-  (global $multi (mut i32) (i32.const 0))
+  (global $htmlOpeners (mut i32) (i32.const 0))
+  (global $themeBlob (mut i32) (i32.const 0))
   (global $multiBlob (mut i32) (i32.const 0))
   (global $multiSlots (mut i32) (i32.const 0))
   (global $multiTables (mut i32) (i32.const 0))
@@ -135,11 +136,10 @@
     (global.set $spanVal (i64.const 0))
     (global.set $spanHl (i32.const -1)))
 
-  ;; write `<span style="...">` for $hl at $out. The bytes come from a
-  ;; cache at $mem.emitterSpanCache (73 slots of [len:u8, fragment:u8*65]) rendered on
-  ;; first use and reused across runs. $hlBegin clears the cache when theme
-  ;; bytes or the output mode change, including after a theme set borrowed
-  ;; the region as its opener arena.
+  ;; Write a cached `<span style="...">` opener from $mem.emitterSpanCache.
+  ;; The cache has 73 [len:u8, fragment:u8*65] slots, filled on first use.
+  ;; $hlBegin clears it when theme bytes or the output mode change,
+  ;; including after use as a theme set's opener arena.
   (func $emitSpanOpen (param $hl i32)
     (local $slot i32)
     (local $len i32)
@@ -184,29 +184,36 @@
         (memory.copy (global.get $out) (i32.add (local.get $slot) (i32.const 24)) (i32.sub (local.get $len) (i32.const 23)))
         (global.set $out (i32.add (global.get $out) (i32.sub (local.get $len) (i32.const 23))))
         (return)))
-    ;; copy the fragment as four 16-byte stores: an opener is at most 64
-    ;; bytes, the slot holds 65, and the caller's capacity covers the
-    ;; overshoot, which later output overwrites - cheaper than a bulk copy
-    ;; of a few dozen bytes
+    ;; Copy with four 16-byte stores. Openers use at most 64 bytes and slots
+    ;; hold 65. Reserved output space covers extra writes, which later output
+    ;; overwrites. This costs less than a bulk copy for these short strings.
     (v128.store (global.get $out) (v128.load offset=1 (local.get $slot)))
     (v128.store offset=16 (global.get $out) (v128.load offset=17 (local.get $slot)))
     (v128.store offset=32 (global.get $out) (v128.load offset=33 (local.get $slot)))
     (v128.store offset=48 (global.get $out) (v128.load offset=49 (local.get $slot)))
     (global.set $out (i32.add (global.get $out) (local.get $len))))
 
-  ;; switch the open span to $hl's color/font. adjacent tokens whose records
-  ;; hold identical bytes share one span (a 40-bit compare), so runs of
-  ;; same-styled tokens and the whitespace between them do not churn spans.
-  ;; caller has ensured capacity for close (7) + open (19 + 9 + 34 + 2) plus
-  ;; the 64-byte wide copy $emitSpanOpen performs, or the CSS-variable prefix.
+  ;; Switch the open span to $hl's color and font. Adjacent tokens with
+  ;; identical 40-bit style records share a span, including whitespace.
+  ;; The caller reserves space for closing and opening tags, variable-length
+  ;; prefixes or prepared openers, and wide-copy slack.
   (func $setSpan (param $hl i32)
     (local $val i64)
     (if (i32.eq (local.get $hl) (global.get $spanHl))
       (then (return)))
     (global.set $spanHl (local.get $hl))
-    (if (global.get $multi)
+    (if (global.get $themeBlob)
       (then
-        (call $multiSetSpan (local.get $hl))
+        (if (global.get $htmlOpeners)
+          (then
+            (if (i64.ne (global.get $spanVal) (i64.const 0))
+              (then
+                (i64.store (global.get $out) (i64.const "</span>"))
+                (global.set $out (i32.add (global.get $out) (i32.const 7)))))
+            (global.set $spanVal (i64.extend_i32_u (local.get $hl)))
+            (if (local.get $hl)
+              (then (call $copyHtmlOpener (local.get $hl)))))
+          (else (call $multiSetSpan (local.get $hl))))
         (return)))
     ;; Token identity is the style in CSS-variable mode; otherwise compare the
     ;; whole packed five-byte theme record.
@@ -225,24 +232,39 @@
     (if (i64.ne (local.get $val) (i64.const 0))
       (then (call $emitSpanOpen (local.get $hl)))))
 
-  ;; copy [$lhs,$rhs) to $out, escaping & < > - 16 bytes per step.
-  ;; wide loads may read up to 15 bytes past $rhs: always inside the input
-  ;; buffer or the 16-byte slack, never past $cap. wide stores may write up to
-  ;; 15 bytes of garbage past the advanced cursor; later writes overwrite it.
-  ;; caller has ensured capacity for 5*length + 16.
+  ;; Copy [$lhs,$rhs) to $out, escaping & < >, 16 bytes per step.
+  ;; Wide loads can read 15 bytes past $rhs into input slack, never past $cap.
+  ;; Wide stores can write 15 extra bytes, which later output overwrites.
+  ;; The caller must reserve 5*min(length,4096) + 16 bytes.
   (func $escCopy (param $lhs i32) (param $rhs i32)
     (local $c i32)
     (local $mask i32)
     (local $k i32)
     (local $rem i32)
+    (local $dst i32)
+    (local $limit i32)
     (local $w v128)
+    (local.set $dst (global.get $out))
+    (local.set $limit
+      (select (local.get $rhs) (i32.add (local.get $lhs) (i32.const 4096))
+        (i32.le_u (i32.sub (local.get $rhs) (local.get $lhs)) (i32.const 4096))))
     (block $done
       (loop $outer
         (br_if $done (i32.ge_u (local.get $lhs) (local.get $rhs)))
+        (if (i32.ge_u (local.get $lhs) (local.get $limit))
+          (then
+            (local.set $limit
+              (select (local.get $rhs) (i32.add (local.get $lhs) (i32.const 4096))
+                (i32.le_u (i32.sub (local.get $rhs) (local.get $lhs)) (i32.const 4096))))
+            (global.set $out (local.get $dst))
+            (call $ensureCap
+              (i32.add
+                (i32.mul (i32.sub (local.get $limit) (local.get $lhs)) (i32.const 5))
+                (i32.const 16)))))
         (block $special
           (loop $wide
             (local.set $w (v128.load (local.get $lhs)))
-            (v128.store (global.get $out) (local.get $w))
+            (v128.store (local.get $dst) (local.get $w))
             ;; `<` and `>` differ only in bit 1, so one masked compare finds both
             (local.set $mask
               (i8x16.bitmask
@@ -251,43 +273,45 @@
                     (v128.and (local.get $w) (i8x16.splat (i32.const 0xfd)))
                     (i8x16.splat (i32.const "<")))
                   (i8x16.eq (local.get $w) (i8x16.splat (i32.const "&"))))))
-            (local.set $rem (i32.sub (local.get $rhs) (local.get $lhs)))
+            (local.set $rem (i32.sub (local.get $limit) (local.get $lhs)))
             (if (local.get $mask)
               (then
                 (local.set $k (i32.ctz (local.get $mask)))
-                ;; Ignore specials in the lookahead past $rhs.
+                ;; Ignore specials in the lookahead past the reserved chunk.
                 (if (i32.lt_u (local.get $k) (local.get $rem))
                   (then
-                    (global.set $out (i32.add (global.get $out) (local.get $k)))
+                    (local.set $dst (i32.add (local.get $dst) (local.get $k)))
                     (local.set $lhs (i32.add (local.get $lhs) (local.get $k)))
                     (br $special)))))
             (if (i32.le_u (local.get $rem) (i32.const 16))
               (then
-                (global.set $out (i32.add (global.get $out) (local.get $rem)))
-                (br $done)))
-            (global.set $out (i32.add (global.get $out) (i32.const 16)))
+                (local.set $dst (i32.add (local.get $dst) (local.get $rem)))
+                (local.set $lhs (local.get $limit))
+                (br $outer)))
+            (local.set $dst (i32.add (local.get $dst) (i32.const 16)))
             (local.set $lhs (i32.add (local.get $lhs) (i32.const 16)))
             (br $wide)))
         (local.set $c (i32.load8_u (local.get $lhs)))
         (if (i32.eq (local.get $c) (i32.const "&"))
           (then
-            (i64.store (global.get $out) (i64.const "&amp;"))
-            (global.set $out (i32.add (global.get $out) (i32.const 5))))
+            (i64.store (local.get $dst) (i64.const "&amp;"))
+            (local.set $dst (i32.add (local.get $dst) (i32.const 5))))
           (else
             (if (i32.eq (local.get $c) (i32.const "<"))
               (then
-                (i32.store (global.get $out) (i32.const "&lt;"))
-                (global.set $out (i32.add (global.get $out) (i32.const 4))))
+                (i32.store (local.get $dst) (i32.const "&lt;"))
+                (local.set $dst (i32.add (local.get $dst) (i32.const 4))))
               (else
-                (i32.store (global.get $out) (i32.const "&gt;"))
-                (global.set $out (i32.add (global.get $out) (i32.const 4)))))))
+                (i32.store (local.get $dst) (i32.const "&gt;"))
+                (local.set $dst (i32.add (local.get $dst) (i32.const 4)))))))
         (local.set $lhs (i32.add (local.get $lhs) (i32.const 1)))
-        (br $outer))))
+        (br $outer)))
+    (global.set $out (local.get $dst)))
 
-  ;; token-record mode: append an (end:u32, hl:u32) record covering up to
-  ;; input offset $rhs, or extend the previous record when its $hl matches -
-  ;; the analog of span merging. Records tile the input; a record's start is
-  ;; the previous record's end (0 for the first).
+  ;; Append an (end:u32, hl:u32) record through input offset $rhs.
+  ;; If $hl matches the previous record, extend that record instead.
+  ;; Records cover the input without gaps. Each starts at the previous
+  ;; record's end, or 0 for the first record.
   (func $recTok (param $hl i32) (param $rhs i32)
     (if
       (i32.and
@@ -392,12 +416,10 @@
         (br $wide)))
     (select (local.get $p) (global.get $eof) (i32.lt_u (local.get $p) (global.get $eof))))
 
-  ;; Convert byte-end token records to line-aware UTF-16 records after lexing.
-  ;; Keeping the original emission order first preserves malformed-input cases
-  ;; where a lexer temporarily emits a non-forward range. Plain ASCII counts
-  ;; one UTF-16 unit per byte, so a record holding no LF and no non-ASCII byte
-  ;; converts with one subtraction; the scan for the next such byte runs once
-  ;; per line or code point rather than once per record.
+  ;; Convert byte-end records to line-based UTF-16 records after lexing.
+  ;; Preserve emission order because malformed input can emit backward ranges.
+  ;; ASCII records without LF need only one subtraction. Scan for the next
+  ;; LF or non-ASCII byte once per line or code point, not per record.
   (func $recLinesPost
     (local $rec i32)
     (local $oldEnd i32)
@@ -489,15 +511,20 @@
 
   ;; emit the token bytes [$lhs,$rhs) styled as $hl
   (func $emitTok (param $hl i32) (param $lhs i32) (param $rhs i32)
+    (local $len i32)
     (if (i32.ge_u (local.get $lhs) (local.get $rhs))
       (then (return)))
     (if (global.get $tokens)
       (then
         (call $recTok (local.get $hl) (local.get $rhs))
         (return)))
+    ;; Reserving five times a large token retains unused linear memory.
+    ;; Escape 4 KiB at a time, keeping the same span through every chunk.
+    (local.set $len (i32.sub (local.get $rhs) (local.get $lhs)))
+    (local.set $len (select (local.get $len) (i32.const 4096) (i32.lt_u (local.get $len) (i32.const 4096))))
     (call $ensureCap
       (i32.add
-        (i32.mul (i32.sub (local.get $rhs) (local.get $lhs)) (i32.const 5))
+        (i32.mul (local.get $len) (i32.const 5))
         (global.get $spanReserve)))
     (call $setSpan (local.get $hl))
     (call $escCopy (local.get $lhs) (local.get $rhs)))
@@ -690,15 +717,13 @@
     (call $multiFontDecls (i32.const 0) (i32.and (local.get $sa) (i32.xor (local.get $common) (i32.const -1))) (i32.const 1))
     (call $multiFontDecls (i32.const 1) (i32.and (local.get $sb) (i32.xor (local.get $common) (i32.const -1))) (i32.const 1)))
 
-  ;; write `<span style="...">` for $hl. Openers hold host-sized property
-  ;; names, so the fixed slots do not fit them; a set instead uses the span
-  ;; cache region as an arena: [id:u32, used:u32, length:u16*73,
-  ;; offset:u16*73, fragments:4520 bytes]. $hlBegin clears the arena when the
-  ;; set id changes, and a single-theme call clears the region (the id with
-  ;; it) since the mode changed. An opener is rendered into the arena on
-  ;; first use and copied out in 16-byte steps (the reserve covers the
-  ;; overshoot); one the arena cannot hold renders straight to $out on
-  ;; every use.
+  ;; Write `<span style="...">` for $hl. Theme set property names have
+  ;; variable lengths, so use the span cache as an arena:
+  ;; [id:u32, used:u32, length:u16*73, offset:u16*73, fragments:4520 bytes].
+  ;; $hlBegin clears it when the set ID or output mode changes.
+  ;; Render each opener on first use, then copy it in 16-byte steps.
+  ;; Reserved space covers extra writes. If an opener does not fit the
+  ;; arena, render it directly to $out on each use.
   (func $multiSpanOpen (param $hl i32)
     (local $len i32)
     (local $at i32)
@@ -843,10 +868,10 @@
       (local.set $i (i32.add (local.get $i) (i32.const 1)))
       (br_if $slots (i32.lt_u (local.get $i) (global.get $multiSlots)))))
 
-  ;; `<pre class="highlights" style="...">` for a theme set. With an inline
-  ;; slot the order is Shiki's `background-color:BG;color:FG` with each
-  ;; list holding the other slots' properties; with custom properties only
-  ;; it is Shiki's `rootStyle`, foregrounds then backgrounds.
+  ;; Write `<pre class="highlights" style="...">` for a theme set.
+  ;; With an inline theme, use Shiki's `background-color:BG;color:FG` order.
+  ;; Each list also holds the other themes' properties. With custom properties
+  ;; only, use `rootStyle` order: foregrounds, then backgrounds.
   (func $multiPrologue
     (local $a i32)
     (local $b i32)
@@ -926,21 +951,27 @@
     (memory.copy (global.get $out) (i32.const $mem.emitterHtml+126) (i32.const 13))
     (global.set $out (i32.add (global.get $out) (i32.const 13))))
 
-  ;; driver prologue shared by highlights.wat and the per-language test harnesses:
-  ;; read the control block ([1]: 0 inline colors, 1 CSS variables, 2 a
-  ;; multi-theme set, 3 UTF-16 line records), place the output, emit the wrapper
+  ;; Initialize output for highlights.wat and per-language test harnesses.
+  ;; Read the control block and write the wrapper. Output mode in [1]:
+  ;; 0 inline colors, 1 CSS variables, 2 multiple themes, 3 UTF-16 line
+  ;; records, 4 prepared HTML openers.
   (func $hlBegin
     (local $offset i32)
     (local $changed v128)
     (global.set $cssVariables (i32.eq (i32.load8_u (i32.const 1)) (i32.const 1)))
-    (global.set $multi (i32.eq (i32.load8_u (i32.const 1)) (i32.const 2)))
     (global.set $tokens (i32.eq (i32.load8_u (i32.const 1)) (i32.const 3)))
+    (global.set $htmlOpeners
+      (select (i32.load (i32.const 14)) (i32.const 0)
+        (i32.eq (i32.load8_u (i32.const 1)) (i32.const 4))))
+    (global.set $themeBlob
+      (i32.or (global.get $htmlOpeners)
+        (i32.eq (i32.load8_u (i32.const 1)) (i32.const 2))))
     (global.set $eof (i32.add (global.get $srcBase) (i32.load (i32.const 2))))
     (global.set $end (global.get $eof))
     (global.set $ptr (global.get $srcBase))
     (global.set $out (i32.and (i32.add (global.get $eof) (i32.const 47)) (i32.const -16)))
-    ;; the CSS-variable prefix or the theme-set blob sits at the output base
-    (if (i32.or (global.get $cssVariables) (global.get $multi))
+    ;; The prefix or theme blob sits before the output.
+    (if (i32.or (global.get $cssVariables) (global.get $themeBlob))
       (then
         (global.set $out (i32.add (global.get $out) (i32.load (i32.const 18))))))
     (i32.store (i32.const 6) (global.get $out))
@@ -954,7 +985,13 @@
       (i32.add
         (i32.const 96)
         (select (i32.load (i32.const 18)) (i32.const 0) (global.get $cssVariables))))
-    (if (global.get $multi)
+    (if (global.get $htmlOpeners)
+      (then
+        (global.set $spanReserve (i32.load (global.get $htmlOpeners)))
+        (call $ensureCap (i32.load offset=8 (global.get $htmlOpeners)))
+        (call $copyHtmlOpener (i32.const 0))
+        (return)))
+    (if (global.get $themeBlob)
       (then
         ;; the set's openers are rendered per span, leaving the single-theme
         ;; span cache and its theme copy untouched
@@ -1008,6 +1045,19 @@
               (i32.const 384))
             (global.set $spanCacheMode (global.get $cssVariables))))
         (call $prologue))))
+
+  ;; Mode 4: u32 span reserve, then offset/length pairs indexed by token id.
+  ;; Offsets are relative to the blob; slot 0 contains `<pre ...><code>`.
+  (func $copyHtmlOpener (param $hl i32)
+    (local $slot i32)
+    (local $len i32)
+    (local.set $slot
+      (i32.add (global.get $htmlOpeners) (i32.add (i32.const 4) (i32.shl (local.get $hl) (i32.const 3)))))
+    (local.set $len (i32.load offset=4 (local.get $slot)))
+    (memory.copy (global.get $out)
+      (i32.add (global.get $htmlOpeners) (i32.load (local.get $slot)))
+      (local.get $len))
+    (global.set $out (i32.add (global.get $out) (local.get $len))))
 
   ;; driver epilogue: emit the wrapper closing and publish the result
   (func $hlEnd

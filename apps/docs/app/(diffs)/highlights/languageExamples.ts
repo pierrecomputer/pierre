@@ -1729,23 +1729,52 @@ export function TodoList({ items }: { items: Todo[] }) @{
   [
     'tsx',
     'TSX',
-    `// Badge.tsx
+    `import { useId, useState, type ReactNode } from "react";
 
-import { useState } from "react";
-
-type BadgeProps = {
-  /** The label of the badge. */
-  label: string;
-  /** The count of the badge. */
-  count?: number;
+type Status = "open" | "merged" | "closed";
+type PullRequest = {
+  id: number;
+  title: string;
+  author: { name: string; avatar?: string };
+  status: Status;
+  additions: number;
+  deletions: number;
 };
 
-export default function Badge({ label, count = 0 }: BadgeProps) {
-  const [hot, setHot] = useState(count > 99);
+const statusLabels = {
+  open: "Ready for review",
+  merged: "Merged",
+  closed: "Closed",
+} satisfies Record<Status, string>;
+
+/** A searchable review queue with a custom action for each pull request. */
+export function ReviewQueue({ items, renderAction }: {
+  items: readonly PullRequest[];
+  renderAction: (item: PullRequest) => ReactNode;
+}) {
+  const searchId = useId();
+  const [query, setQuery] = useState("");
+  const matches = items.filter(({ title, author }) =>
+    \`\${title} \${author.name}\`.toLowerCase().includes(query.toLowerCase())
+  );
+
   return (
-    <button className={\`badge \${hot ? "hot" : "calm"}\`} onClick={() => setHot(!hot)}>
-      {label}: <strong>{count.toLocaleString()}</strong>
-    </button>
+    <section aria-label="Pull requests">
+      <label htmlFor={searchId}>Find a review</label>
+      <input id={searchId} value={query}
+        onChange={(event) => setQuery(event.currentTarget.value)} />
+      <ul>
+        {matches.map((pr) => (
+          <li key={pr.id} className={\`review review--\${pr.status}\`}>
+            <a href={\`/pull/\${pr.id}\`}>{pr.title}</a>
+            <span>{statusLabels[pr.status]} · {pr.author.name}</span>
+            <code>+{pr.additions} / −{pr.deletions}</code>
+            {renderAction(pr)}
+          </li>
+        ))}
+      </ul>
+      {matches.length === 0 && <p>No reviews match “{query}”.</p>}
+    </section>
   );
 }`,
   ],

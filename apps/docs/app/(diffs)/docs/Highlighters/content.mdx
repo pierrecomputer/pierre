@@ -18,10 +18,12 @@ and [SSR preload helpers](#ssr). When using a [worker pool](#worker-pool), set
 `preferredHighlighter` in the pool's `highlighterOptions`; the pool controls the
 backend used by its components. Highlights usually performs best without a pool.
 
-Only one backend can be loaded at a time on a page, in each worker, and in an
-SSR server process. Components without `preferredHighlighter` use the backend
-already loaded, or `shiki-js` when none is. Dispose every instance before
-switching backends. `getHighlighterType()` returns the active backend.
+Only one backend can be active on a page, in each worker, and in each SSR server
+thread. `preferredHighlighter` selects the backend for the first initialization.
+Later requests use the active backend, even with a different preference. If no
+backend or preference exists, the default is `shiki-js`. Dispose every instance
+before you select another backend. `getHighlighterType()` returns the active
+backend.
 
 Built-in theme names work across all three backends. Custom TextMate themes and
 grammars require Shiki; Highlights uses Zed themes and bundled lexers. See

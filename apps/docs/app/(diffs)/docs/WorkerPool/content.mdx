@@ -195,6 +195,39 @@ To change themes or other render options dynamically, call
 
 <DocsCodeExample {...vanillaUsage} />
 
+### Worker Errors
+
+A worker that cannot start — its script failed to load, or it threw while it
+initialized — never answers the pool. The pool rejects that initialization,
+terminates the other workers and highlights on the main thread instead, so
+components still render. By default the worker's `error` event is logged with
+`console.error`, and the browser also reports the worker's uncaught error on the
+page.
+
+To report worker failures through your own channel instead, pass `onWorkerError`
+in the pool options. The pool then hands you each `error` event and logs nothing
+itself; call `event.preventDefault()` to keep an error the pool has handled from
+also surfacing as an uncaught error on the page.
+
+<DocsCodeExample {...workerErrors} />
+
+<Notice icon={<IconInfoFill />}>
+  The hook runs once per `error` event, not once per failure: a pool of 8
+  workers whose script fails to load calls it up to 8 times, so deduplicate on
+  your side if you report once per page. A worker script that failed to load
+  fires a plain `Event` with no `message` or `error`; a worker that threw fires
+  an `ErrorEvent`. The parameter is typed `ErrorEvent | Event` for that reason.
+</Notice>
+
+A promise the pool settles without a result rejects with an error exported from
+`@pierre/diffs/worker`: `WorkerPoolTerminatedError` (the pool was terminated
+while the operation was pending), `WorkerPoolTaskCanceledError` (the task was
+superseded or dropped before a worker answered) and `WorkerPoolWorkerError` (a
+worker failed to start). `isWorkerPoolCancellation(error)` is true for the first
+two; `isHandledWorkerPoolError(error)` also accepts a `WorkerPoolWorkerError`
+whose event your `onWorkerError` already received, so a `catch` that logs
+highlight failures can skip the errors you have already accounted for.
+
 ### Render Cache
 
 <Notice variant="warning" icon={<IconCiWarningFill />}>

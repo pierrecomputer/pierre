@@ -1,4 +1,5 @@
 export type ProductId = 'diffs' | 'trees';
+export type AgentSkillProductId = ProductId | 'highlights';
 
 export interface ProductConfig {
   id: ProductId;
@@ -25,9 +26,9 @@ export const PRODUCTS: Record<ProductId, ProductConfig> = {
     name: 'Diffs',
     tagline: 'Render diffs and\u00A0code, now with edit',
     description:
-      '@pierre/diffs is an open source diff and code rendering library. Built on Shiki for syntax highlighting and theming, super customizable, and packed with features.',
+      '@pierre/diffs is an open source diff and code rendering library. Rich syntax highlighting, edit mode, support for custom and Shiki themes, virtualization, and more.',
     llmsDescription:
-      'An open source diff and code rendering library for the web. Built on Shiki for syntax highlighting, with React and vanilla JS APIs, virtualization, SSR support, and extensive theming.',
+      'An open source diff and code rendering library with rich syntax highlighting, edit mode, support for custom and Shiki themes, virtualization, and more. Available with React and vanilla JS APIs',
     basePath: '',
     docsPath: '/docs',
     themePath: '/theme',
@@ -55,6 +56,29 @@ export const PRODUCTS: Record<ProductId, ProductConfig> = {
   },
 };
 
+interface AgentSkillProductConfig {
+  name: string;
+  packageName: string;
+  docsPath: string;
+  skillUrl: string;
+  skillInstallCommand: string;
+}
+
+const AGENT_SKILL_PRODUCTS: Record<
+  AgentSkillProductId,
+  AgentSkillProductConfig
+> = {
+  ...PRODUCTS,
+  highlights: {
+    name: 'Highlights',
+    packageName: '@pierre/highlights',
+    docsPath: '/docs#highlights',
+    skillUrl: 'https://www.skills.sh/pierrecomputer/pierre/highlights',
+    skillInstallCommand:
+      'npx skills add pierrecomputer/pierre --skill highlights',
+  },
+};
+
 /** External base URL for the other product's site. */
 const EXTERNAL_URLS: Record<ProductId, string> = {
   diffs: 'https://diffs.com',
@@ -79,9 +103,37 @@ export function getProductConfig(productId: ProductId): ProductConfig {
   return PRODUCTS[productId];
 }
 
+export function getAgentSkillProductConfig(
+  productId: AgentSkillProductId
+): AgentSkillProductConfig {
+  return AGENT_SKILL_PRODUCTS[productId];
+}
+
 /** Prompt behind the hero's agent button, for pasting into a coding agent. */
-export function getAgentPrompt(productId: ProductId): string {
-  const product = PRODUCTS[productId];
+export function getAgentPrompt(productId: AgentSkillProductId): string {
+  const product = AGENT_SKILL_PRODUCTS[productId];
+
+  if (productId === 'highlights') {
+    const siteUrl = EXTERNAL_URLS.diffs;
+
+    return [
+      `Set up ${product.packageName} in this project.`,
+      '',
+      'Install its agent skill first so you have the full API reference:',
+      product.skillInstallCommand,
+      '',
+      'Then:',
+      '- Inspect the repository package manager, framework, and runtime before changing dependencies.',
+      `- Install ${product.packageName} with the repository package manager.`,
+      `- Follow the installed Highlights skill and the official docs: ${siteUrl}${product.docsPath}`,
+      '- Integrate the standalone API that fits the app: HTML, tokens, streaming, or incremental editing.',
+      '- Preserve the existing languages, themes, and rendering behavior unless a change is required.',
+      '- Verify the highlighted output in the target runtime and run the relevant project checks.',
+      "- Do not configure @pierre/diffs with preferredHighlighter: 'highlights'; that opt-in is planned but unreleased.",
+      `Full reference for LLMs: ${siteUrl}/llms-full.txt`,
+    ].join('\n');
+  }
+
   const siteUrl = EXTERNAL_URLS[productId];
 
   return [

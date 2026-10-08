@@ -8,16 +8,9 @@ import {
   DIFFS_THEME_PATH,
   getExternalUrl,
   type ProductConfig,
-  type ProductId,
-  PRODUCTS,
 } from '@/lib/product-config';
 
-const siteProduct = process.env.NEXT_PUBLIC_SITE ?? 'diffs';
-const isDiffs = siteProduct === 'diffs';
-
-// Order matches Header.tsx so the desktop and mobile navs render the same
-// list of cross-site links.
-const OTHER_PRODUCT_IDS: ProductId[] = ['diffs', 'trees'];
+const DIFFSHUB_URL = 'https://diffshub.com';
 
 export interface HeaderMobileMenuProps {
   isOpen: boolean;
@@ -38,10 +31,14 @@ export function HeaderMobileMenu({
   const pathname = usePathname();
 
   // Mirror the desktop nav's active treatment: home matches exactly, while
-  // section links (Edit, Docs, Theme) match their path prefix.
+  // section links (Edit, Highlights, Docs, Themes) match their path prefix.
   const homePath = product.basePath !== '' ? product.basePath : '/';
   const isActivePath = (target: string) =>
     target === homePath ? pathname === target : pathname.startsWith(target);
+  const diffsUrl = getExternalUrl('diffs');
+  const isDiffs = product.id === 'diffs';
+  const otherProductId = isDiffs ? 'trees' : 'diffs';
+  const otherProductName = isDiffs ? 'Trees' : 'Diffs';
 
   useEffect(() => {
     if (isOpen) {
@@ -71,20 +68,20 @@ export function HeaderMobileMenu({
         <MobileNavLink href={homePath} active={isActivePath(homePath)}>
           Home
         </MobileNavLink>
-        {/* {product.id === 'diffs' && (
-          <MobileNavLink
-            href={`${product.basePath}/highlights`}
-            active={isActivePath(`${product.basePath}/highlights`)}
-          >
-            Highlights
-          </MobileNavLink>
-        )} */}
-        {product.id === 'diffs' && (
+        {isDiffs && (
           <MobileNavLink
             href={`${product.basePath}/edit`}
             active={isActivePath(`${product.basePath}/edit`)}
           >
             Edit
+          </MobileNavLink>
+        )}
+        {isDiffs && (
+          <MobileNavLink
+            href={`${product.basePath}/highlights`}
+            active={isActivePath(`${product.basePath}/highlights`)}
+          >
+            Highlights
           </MobileNavLink>
         )}
         <MobileNavLink
@@ -93,35 +90,37 @@ export function HeaderMobileMenu({
         >
           Docs
         </MobileNavLink>
-        {product.themePath != null && (
+        <div className="border-border my-1 border-t" />
+        {isDiffs ? (
           <MobileNavLink
-            href={product.themePath}
-            active={isActivePath(product.themePath)}
+            href={`${product.basePath}${DIFFS_THEME_PATH}`}
+            active={isActivePath(`${product.basePath}${DIFFS_THEME_PATH}`)}
           >
-            Theme
+            Themes
+          </MobileNavLink>
+        ) : (
+          <MobileNavLink href={`${diffsUrl}${DIFFS_THEME_PATH}`} external>
+            Themes
           </MobileNavLink>
         )}
-        {OTHER_PRODUCT_IDS.filter((id) => id !== product.id).map((id) => (
-          <MobileNavLink key={id} href={getExternalUrl(id)} external>
-            {PRODUCTS[id].name}
+        {isDiffs ? (
+          <MobileNavLink
+            href={`${product.basePath}/icons`}
+            active={isActivePath(`${product.basePath}/icons`)}
+          >
+            Icons
           </MobileNavLink>
-        ))}
-        {/* diffshub is a separate app on its own domain; hardcoded external
-            link, matching the desktop nav. */}
-        <MobileNavLink href="https://diffshub.com" external>
+        ) : (
+          <MobileNavLink href={`${diffsUrl}/icons`} external>
+            Icons
+          </MobileNavLink>
+        )}
+        <MobileNavLink href={getExternalUrl(otherProductId)} external>
+          {otherProductName}
+        </MobileNavLink>
+        <MobileNavLink href={DIFFSHUB_URL} external>
           DiffsHub
         </MobileNavLink>
-        {/* Theme lives only on the diffs site. From any other site, link out
-            to it; on the diffs site itself we already rendered it above via
-            `product.themePath`. */}
-        {!isDiffs && (
-          <MobileNavLink
-            href={`${getExternalUrl('diffs')}${DIFFS_THEME_PATH}`}
-            external
-          >
-            Theme
-          </MobileNavLink>
-        )}
       </nav>
     </>
   );

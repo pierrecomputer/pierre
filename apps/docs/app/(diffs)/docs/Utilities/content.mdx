@@ -69,10 +69,11 @@ resources in single-page applications. Once it and any instances from
 
 ### getSharedHighlighter [toc-ignore]
 
-Get direct access to the shared highlighter instance used internally by all
-components. Set `preferredHighlighter` to `shiki-js`, `shiki-wasm`, or
-`highlights`; without it, the backend already loaded is used, else `shiki-js`.
-Only one backend can be loaded at a time, so requesting another one rejects.
+Get the shared highlighter instance that components use. Set
+`preferredHighlighter` to `shiki-js`, `shiki-wasm`, or `highlights` for the
+first initialization. Later requests use the active backend, even with a
+different preference. If no backend or preference exists, the default is
+`shiki-js`.
 
 <DocsCodeExample {...getSharedHighlighter} />
 

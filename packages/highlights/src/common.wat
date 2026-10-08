@@ -34,10 +34,9 @@
   (func $lexScanIdent
     (call $scanIdentRun (i32.const "$")))
 
-  ;; A language-neutral numeric run. It keeps radix digits, separators,
-  ;; exponents, and type suffixes together, but leaves `.` for member access
-  ;; unless a digit follows it. Start at the first digit or dot, after any
-  ;; sign, so `0x` is visible and its `e` digits cannot consume a `+` or `-`.
+  ;; Scan a number with radix digits, separators, exponents, and type suffixes.
+  ;; Include `.` only when a digit follows it. Start after any sign, at the
+  ;; first digit or dot, so hex `e` digits cannot consume a following sign.
   (func $lexScanNumber
     (call $lexScanNumberBody
       (i32.and
@@ -155,10 +154,9 @@
                 (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
                 (call $lexScanNumberBody (i32.const 1)))))))))
 
-  ;; End of the escape span that starts at the backslash $p: the backslash,
-  ;; the escaped byte with any UTF-8 continuation bytes, and - when the
-  ;; escaped byte is CR followed by LF - the LF as well, so a backslash before
-  ;; CRLF continues the line exactly like one before LF. Clamped to $end.
+  ;; Find the end of the escape at backslash $p, bounded by $end.
+  ;; Keep an escaped UTF-8 character whole. Include LF after an escaped CR
+  ;; so a backslash before CRLF continues the line.
   (func $lexEscapeEnd (param $p i32) (result i32)
     (local $e i32)
     (local.set $e (call $utf8SpanEnd (i32.add (local.get $p) (i32.const 2)) (global.get $end)))
@@ -221,10 +219,10 @@
     (call $emitTok (local.get $hl) (local.get $seg) (global.get $ptr))
     (local.get $status))
 
-  ;; Checkpoint only at $eof: an embedded lexer can have an earlier $end
-  ;; imposed by its enclosing region, which must not continue into a new chunk.
-  ;; Quoted literal beginning at $ptr. Escapes are emitted separately, and a
-  ;; malformed escape cannot split a multibyte UTF-8 character.
+  ;; Scan the quoted literal at $ptr and emit escapes separately.
+  ;; Keep UTF-8 characters whole, including malformed escapes.
+  ;; Checkpoint only at $eof. An embedded region's earlier $end must not
+  ;; continue into the next chunk.
   (func $lexString (param $quote i32) (param $multiline i32) (param $hl i32)
     (local $lhs i32)
     (local $status i32)
@@ -298,12 +296,11 @@
         (global.set $streamB (local.get $multiline))
         (global.set $streamHl (local.get $hl)))))
 
-  ;; End of the C escape that starts at the backslash $p, so the whole escape
-  ;; is one string.escape span: `\uXXXX`, `\UXXXXXXXX`, a hex run `\x…`
-  ;; (bounded to 64 digits), up to three octal digits, a named `\N{…}` that
-  ;; stops at its `}` or before a quote, backslash, or line break, or else one
-  ;; escaped character or line continuation ($lexEscapeEnd). An escaped
-  ;; multibyte UTF-8 character stays whole. Clamped to $end.
+  ;; Find the end of the C escape at backslash $p, bounded by $end.
+  ;; Accept `\uXXXX`, `\UXXXXXXXX`, `\x` with at most 64 hex digits,
+  ;; up to three octal digits, or `\N{...}`. Stop a named escape at `}`,
+  ;; a quote, backslash, or line break. Otherwise use $lexEscapeEnd for
+  ;; one escaped character or line continuation. Keep UTF-8 characters whole.
   (func $lexCEscapeEnd (param $p i32) (result i32)
     (local $c i32)
     (local $e i32)
@@ -361,15 +358,14 @@
       (local.set $e (call $lexEscapeEnd (local.get $p))))
     (call $utf8SpanEnd (local.get $e) (global.get $end)))
 
-  ;; Scan a C-family literal body from $ptr, whose bytes from $seg on are
-  ;; still unemitted: the body as $hl and each C escape ($lexCEscapeEnd) as
-  ;; string.escape. A backslash before a line break continues the literal.
-  ;; With $suffix set, an identifier glued to the closing quote (a C++
-  ;; user-defined-literal suffix) joins the literal. Returns 1 after the
-  ;; closing quote, 2 when the scan reached $end right after an escaped line
-  ;; break - the caller resumes the literal in the next chunk through its own
-  ;; checkpointed local, because the shared string mode would resume with
-  ;; generic escapes - or 0 when a raw line break or $end left it unterminated.
+  ;; Scan a C-family literal body from $ptr. Bytes from $seg are not yet
+  ;; emitted. Emit the body as $hl and C escapes as string.escape.
+  ;; A backslash before a line break continues the literal.
+  ;; If $suffix is set, include a C++ identifier suffix after the quote.
+  ;;
+  ;; Return 1 after the closing quote, or 0 at a raw line break or $end.
+  ;; Return 2 if $end follows an escaped line break. The caller must save
+  ;; this state and resume with $lexCStringBody to preserve C escape rules.
   (func $lexCStringBody (param $q i32) (param $hl i32) (param $seg i32) (param $suffix i32) (result i32)
     (local $c i32)
     (local $e i32)
@@ -419,10 +415,10 @@
     (call $emitTok (local.get $hl) (local.get $seg) (global.get $ptr))
     (local.get $status))
 
-  ;; A C-family literal whose opening quote sits at $ptr (any prefix already
-  ;; emitted), without a suffix. Returns the quote byte when the chunk ended
-  ;; right after an escaped line break inside it - the caller keeps that in a
-  ;; checkpointed local and resumes with $lexCStringBody - and 0 otherwise.
+  ;; Scan a C-family literal from the opening quote at $ptr, without a suffix.
+  ;; Any prefix is already emitted. Return the quote byte if the chunk ends
+  ;; after an escaped line break, or 0 otherwise. The caller saves the quote
+  ;; in a checkpointed local and resumes with $lexCStringBody.
   (func $lexCString (param $hl i32) (result i32)
     (local $lhs i32)
     (local $q i32)
@@ -436,10 +432,9 @@
         (call $lexCStringBody (local.get $q) (local.get $hl) (local.get $lhs) (i32.const 0))
         (i32.const 2))))
 
-  ;; The nearest byte before $p on its line that is not a blank (space or
-  ;; TAB), or 0 when only blanks separate $p from the line start. The walk
-  ;; stops at a line break or $srcBase: a line-fed chunk starts at a line
-  ;; start, so whole-buffer and streamed runs agree.
+  ;; Find the nearest byte before $p that is not a space or tab.
+  ;; Stop at a line break or $srcBase. Return 0 if none is found.
+  ;; This keeps lookbehind consistent between whole-buffer and line chunks.
   (func $lexLineByteBefore (param $p i32) (result i32)
     (local $c i32)
     (block $done
@@ -499,10 +494,9 @@
         (global.set $streamMode (i32.const 1))
         (global.set $streamHl (local.get $hl)))))
 
-  ;; Save an arbitrary delimiter (up to 32 bytes) for a multiline token whose
-  ;; body has one highlight and no nesting. Longer delimiters cannot be
-  ;; checkpointed: the region is 32 bytes and anything past it is the lexer
-  ;; checkpoint area, so the token simply ends at the chunk.
+  ;; Save a delimiter for a multiline token with one highlight and no nesting.
+  ;; The delimiter region holds 32 bytes. Longer delimiters would overwrite
+  ;; lexer checkpoints, so those tokens end at the chunk boundary.
   (func $streamSetFixed (param $delimiter i32) (param $len i32) (param $hl i32)
     (if
       (i32.and
@@ -561,11 +555,10 @@
           (i32.eq (local.get $c) (i32.const ")"))
           (i32.or (i32.eq (local.get $c) (i32.const ".")) (i32.eq (local.get $c) (i32.const "#")))))))
 
-  ;; Whether a line delimiter whose bytes end at $p closes its body. A
-  ;; heredoc terminator must end the line (LF, CR, or $end). A word closer
-  ;; may be followed by more text, which then belongs to the closer's line:
-  ;; $trim bit 4 accepts a following blank (Ruby `=end # done`), bit 8 any
-  ;; non-letter (Perl `=cut`).
+  ;; Check whether the delimiter ending at $p closes the body.
+  ;; Heredoc terminators require LF, CR, or $end after them.
+  ;; For word closers, $trim bit 4 accepts a following blank (`=end # done`)
+  ;; and bit 8 accepts any non-letter (`=cut`).
   (func $lineDelimiterEnds (param $p i32) (param $trim i32) (result i32)
     (local $c i32)
     (if (i32.ge_u (local.get $p) (global.get $end))
@@ -588,11 +581,10 @@
             (i32.const 25)))))
     (i32.const 0))
 
-  ;; Save a delimiter that must occupy a whole line (bash and terraform
-  ;; heredocs). $trim is one when leading tabs are allowed before it (`<<-`)
-  ;; and two when spaces are too; bits 4 and 8 mark word closers (see
-  ;; $lineDelimiterEnds). Delimiters longer than the 32-byte region are not
-  ;; checkpointed (see $streamSetFixed).
+  ;; Save a whole-line delimiter for Bash or Terraform heredocs.
+  ;; $trim 1 permits leading tabs, 2 also permits spaces. Bits 4 and 8
+  ;; mark word closers (see $lineDelimiterEnds). Delimiters longer than
+  ;; 32 bytes cannot be checkpointed (see $streamSetFixed).
   (func $streamSetLine (param $delimiter i32) (param $len i32) (param $trim i32) (param $hl i32)
     (if
       (i32.and
@@ -607,11 +599,10 @@
         (global.set $streamB (local.get $trim))
         (global.set $streamHl (local.get $hl)))))
 
-  ;; Mark an embedded region whose body continues in another chunk: one is a
-  ;; script tag, two a style tag, three TSX front matter, four YAML front matter,
-  ;; five an MDX JSX tag, six through eight framework expressions, and nine
-  ;; through thirteen start tags whose attributes continue (html, xml, vue,
-  ;; svelte, astro - resumed by the owning lexer through highlights.wat).
+  ;; Save the kind of embedded region that continues in the next chunk:
+  ;; 1 script, 2 style, 3 TSX front matter, 4 YAML front matter, 5 MDX JSX,
+  ;; 6-8 framework expressions, 9-13 unfinished HTML/XML/Vue/Svelte/Astro
+  ;; start tags. The owning lexer resumes start tags through highlights.wat.
   (func $streamSetRegion (param $kind i32)
     (if (i32.and (global.get $streaming) (i32.eq (global.get $ptr) (global.get $eof)))
       (then
@@ -659,12 +650,10 @@
     (call $emitTok (global.get $streamHl) (local.get $lhs) (global.get $ptr))
     (i32.const 1))
 
-  ;; Advance $ptr through a nested two-byte-delimited region, returning the
-  ;; depth still open at $end (0 when the region closed). $open/$close are
-  ;; packed in source byte order, for example `/*` and `*/`. Long bodies hop
-  ;; with SIMD to the next whole opener or closer pair, comparing each byte
-  ;; and its successor, so banners such as `(* **** *)` or `{- ---- -}` don't
-  ;; stop on every delimiter first byte.
+  ;; Scan a nested region with two-byte delimiters. Return the remaining
+  ;; depth at $end, or 0 if closed. $open and $close use source byte order.
+  ;; SIMD compares whole pairs, such as `/*` and `*/`, so repeated first
+  ;; bytes in `(* **** *)` or `{- ---- -}` do not stop each scan.
   (func $lexNestedScan (param $depth i32) (param $open i32) (param $close i32) (result i32)
     (local $mask i32)
     (local $w v128)
@@ -813,10 +802,9 @@
                 (call $emitTok (global.get $streamHl) (local.get $lhs) (global.get $ptr))
                 (global.set $streamMode (i32.const 0))
                 (return (i32.const 0))))))
-        ;; skip to the next candidate line. A lone CR ends a line here exactly
-        ;; as it does for the whole-file heredoc scanners and the live line
-        ;; table, and CRLF counts as one terminator; stopping only at LF would
-        ;; jump past a closer that follows a lone CR.
+        ;; Skip to the next line. Treat lone CR as a terminator and CRLF as one
+        ;; terminator, as in whole-file scans and the live line table.
+        ;; Stopping only at LF would skip a closer after a lone CR.
         (block $lineDone
           (loop $line
             (br_if $lineDone (i32.ge_u (local.get $p) (global.get $end)))
@@ -888,10 +876,8 @@
       (then (return (call $streamResumeLine))))
     (i32.const 0))
 
-  ;; Skip blanks (space, TAB) from $p on the same line. Line breaks stop the
-  ;; scan on purpose: the streaming and live engines lex one line per chunk,
-  ;; so a lookahead that crossed them would classify `foo` in `foo\n(` one way
-  ;; whole-buffer and another way line-fed.
+  ;; Skip spaces and tabs on the current line. Stop at line breaks so
+  ;; whole-buffer and line-fed scans classify `foo\n(` the same way.
   (func $lexSkipSpaceAt (param $p i32) (result i32)
     (local $c i32)
     (block $done
@@ -982,12 +968,11 @@
   ;; address them with 13-bit offsets, so the pool holds at most 8191 bytes.
   (keyword-pool $mem.keywordPool $mem.jsonStack)
 
-  ;; Look a word up in a keyword table - see scripts/build.ts - using a
-  ;; displacement-based perfect hash over the first two bytes, last byte, and
-  ;; length. Returns the word's 1-based group index, or 0 for a miss - one
-  ;; probe and one bounded compare, however many words the table holds.
-  ;; Callers go through the keyword-table.get form, which fills in the table
-  ;; constants.
+  ;; Look up a word with a perfect hash of its first two bytes, last byte,
+  ;; and length. Return the 1-based group index, or 0 if absent.
+  ;; The lookup uses one probe and one bounded comparison.
+  ;; Call through keyword-table.get, which supplies the table constants.
+  ;; See scripts/build.ts for the table format.
   (func $lexKeywordLookup
     (param $start i32)
     (param $end i32)
@@ -1013,13 +998,12 @@
         (i32.xor (local.get $h) (i32.shr_u (local.get $h) (i32.const 16)))
         (i32.const 0xe51fac89)))
     (local.set $h (i32.xor (local.get $h) (i32.shr_u (local.get $h) (i32.const 24))))
-    ;; base: displacement bytes; base+buckets: 3-byte descriptors
-    ;; (len<<19 | group<<13 | pool offset). The slot is the hash plus the
-    ;; bucket's displacement times an odd second hash, rotated so the
-    ;; displacement reaches the high bits, then reduced to the slot count by
-    ;; a multiply and shift - any count works, so the build packs tables
-    ;; almost full. The 4-byte load takes one byte past the last descriptor,
-    ;; which the mask drops.
+    ;; Layout: displacement bytes at base, then 3-byte descriptors at
+    ;; base+buckets: (len<<19 | group<<13 | pool offset).
+    ;; Add the bucket displacement times an odd second hash, then rotate
+    ;; and reduce to the slot count with a multiply and shift.
+    ;; Any slot count is valid. The 4-byte load reads one extra descriptor
+    ;; byte, which the mask discards.
     (local.set $entry
       (i32.and
         (i32.load
@@ -1069,10 +1053,9 @@
           (then (return (i32.const 0))))))
     (i32.and (i32.shr_u (local.get $entry) (i32.const 13)) (i32.const 63)))
 
-  ;; The value a keyword table assigns to a word's group - see the
-  ;; keyword-table.value form - or -1 when the word is not in the table or
-  ;; its group declares no value. The signed 16-bit values follow the
-  ;; table's displacement bytes and 3-byte descriptors, indexed by group.
+  ;; Return the word's group value, or -1 if the word or value is absent.
+  ;; See keyword-table.value. Signed 16-bit group values follow the
+  ;; displacement bytes and 3-byte descriptors.
   (func $lexKeywordValue
     (param $start i32)
     (param $end i32)
@@ -1095,10 +1078,10 @@
         (i32.add (local.get $base) (i32.add (local.get $bucketMask) (i32.const 1)))
         (i32.add (i32.mul (local.get $slots) (i32.const 3)) (i32.shl (local.get $g) (i32.const 1))))))
 
-  ;; Copy a word as lowercase ASCII for case-insensitive keyword lookup.
-  ;; Wide loads use input slack; stores fit the 64-byte scratch buffer.
-  ;; Returns the copied length, or 0 for a word longer than a table can hold;
-  ;; the empty range then misses like any other non-keyword.
+  ;; Copy a word as lowercase ASCII for case-insensitive lookup.
+  ;; Wide loads read input slack. Stores fit the 64-byte scratch buffer.
+  ;; Return the copied length, or 0 if the word exceeds the table's limit.
+  ;; A zero-length range cannot match a keyword.
   (func $lexLowerCopy (param $lhs i32) (param $rhs i32) (param $dst i32) (result i32)
     (local $n i32)
     (local $i i32)
@@ -1146,10 +1129,9 @@
         (br_if $simd (i32.lt_u (local.get $p) (global.get $end)))))
     (select (local.get $p) (global.get $end) (i32.lt_u (local.get $p) (global.get $end))))
 
-  ;; Return the next occurrence of byte $a, or $end - one SIMD comparison per
-  ;; 16 bytes. Prefer this over $lexFindEither with a repeated byte: the loop
-  ;; body drops a splat, a compare, and an or per step. Matches in the input
-  ;; slack clamp to $end.
+  ;; Find byte $a, or return $end. Use one SIMD comparison per 16 bytes.
+  ;; This needs fewer instructions than $lexFindEither with a repeated byte.
+  ;; Clamp matches in input slack to $end.
   (func $lexFindByte (param $p i32) (param $a i32) (result i32)
     (local $mask i32)
     (if (i32.ge_u (local.get $p) (global.get $end))
@@ -1224,19 +1206,16 @@
         (br $l)))
     (local.get $upper))
 
-  ;; String-body helpers shared by the Java, Kotlin, Scala, Groovy, Dart, and
-  ;; Swift lexers. Each lexer keeps its own inline scan loop, which runs per
-  ;; string - a call there measurably slows string-heavy code - while these
-  ;; cover the rarer escape and `$` steps, where a call costs nothing
-  ;; measurable and every inline copy cost 50 to 150 bytes.
+  ;; Shared string helpers for Java, Kotlin, Scala, Groovy, Dart, and Swift.
+  ;; Keep each lexer's main string loop inline for speed. Share the less
+  ;; frequent escape and `$` handling to reduce code size.
 
   (func $templateByte (param $p i32) (result i32)
     (select (i32.load8_u (local.get $p)) (i32.const 0) (i32.lt_u (local.get $p) (global.get $end))))
 
-  ;; Emit the backslash escape at $ptr, after the string run [$seg,$ptr)
-  ;; before it, and step past it. Returns 1 when the escape ends exactly at
-  ;; $end on a line break - an escaped line break continuing the string into
-  ;; the next chunk - else 0.
+  ;; Emit [$seg,$ptr), then the backslash escape at $ptr. Advance past it.
+  ;; Return 1 if the escape ends at $end with a line break, so the string
+  ;; continues in the next chunk. Return 0 otherwise.
   (func $stringEscapeAt (param $seg i32) (result i32)
     (local $e i32)
     (call $emitTok (enum.get $Token.string) (local.get $seg) (global.get $ptr))
@@ -1249,14 +1228,13 @@
         (i32.eq (i32.load8_u (i32.sub (global.get $ptr) (i32.const 1))) (i32.const 10))
         (i32.eq (i32.load8_u (i32.sub (global.get $ptr) (i32.const 1))) (i32.const 13)))))
 
-  ;; Lex the `$` at $ptr in a template string body whose run [$seg,$ptr) is
-  ;; still unemitted: a `${` interpolation opener - unless $nested, inside an
-  ;; interpolation, where a nested string keeps it plain - a `$name`
-  ;; template, or a plain `$`. $dialect 8 makes `$$` an escaped dollar
-  ;; (Scala) and 16 lets a name run on through `.name` segments (Groovy);
-  ;; with either, a name holds no `$`, while Kotlin and Dart (0) read `$$x`
-  ;; as a name. Returns -1 after emitting a `${` opener as
-  ;; punctuation.special, else the start of the body's unemitted bytes.
+  ;; Handle `$` in a template whose bytes from $seg are not yet emitted.
+  ;; Recognize `${`, `$name`, or a plain `$`. Inside a nested string
+  ;; ($nested), keep `${` as text.
+  ;; $dialect 8 escapes `$$` (Scala). Bit 16 allows `.name` segments
+  ;; (Groovy). Neither permits `$` in names. Dialect 0 (Kotlin/Dart) does.
+  ;; Return -1 after emitting `${` as punctuation.special. Otherwise return
+  ;; the start of the body's bytes that are not yet emitted.
   (func $stringDollarAt (param $seg i32) (param $dialect i32) (param $nested i32) (result i32)
     (local $at i32)
     (local $c2 i32)

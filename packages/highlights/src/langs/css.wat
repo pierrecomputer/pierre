@@ -81,12 +81,11 @@
             (if (call $cssIdentStart (local.get $c))
               (then (call $cssScanIdent))))))))
 
-  ;; quoted string starting at the opening quote: emitted as $Token.string with
-  ;; 2-byte string.escape sub-spans for `\x` escapes. A raw CR/LF terminates the
-  ;; (invalid) string leniently without being consumed; `\` + newline is an
-  ;; escape, so continuation lines keep the string open. 16 bytes per step.
-  ;; Skip the opening quote, or pass zero to resume a template part. Returns
-  ;; one when the body is still open at the end of the range.
+  ;; Scan a quoted string as $Token.string with separate escape spans.
+  ;; A raw CR/LF ends an invalid string without consuming the line break.
+  ;; An escaped line break continues the string. Scan 16 bytes per step.
+  ;; Skip the opening quote, or pass zero to resume a template part.
+  ;; Return 1 if the body remains open at the range end.
   (func $cssString (param $q i32) (param $skip i32) (result i32)
     (local $open i32)
     (local $seg i32)
@@ -115,11 +114,9 @@
           (then
             (local.set $open (i32.const 0))
             (br $done)))
-        ;; backslash escape: `\` + up to 6 hex digits (css hex escape) or the
-        ;; escaped byte, clamped to $end. An escaped multibyte UTF-8 character
-        ;; stays whole inside the escape span - a span boundary must never
-        ;; split a code point, or the output decodes to garbage - and a `\`
-        ;; before LF or CRLF continues the string on the next line
+        ;; Scan up to six hex digits or one escaped character, bounded by $end.
+        ;; Keep escaped UTF-8 characters whole. Splitting a code point would
+        ;; corrupt the decoded output. Escaped LF and CRLF continue the string.
         (call $emitTok (enum.get $Token.string) (local.get $seg) (global.get $ptr))
         (local.set $e (call $scanHexRun (i32.add (global.get $ptr) (i32.const 1)) (i32.const 6)))
         (if (i32.eq (local.get $e) (i32.add (global.get $ptr) (i32.const 1)))
@@ -241,12 +238,10 @@
         (global.set $ptr (i32.add (global.get $ptr) (i32.const 16)))
         (br $wide))))
 
-  ;; the statement-start decider: scan ahead from $ptr without emitting until
-  ;; a `{` (returns 1: selector) or a `;` / `}` (returns 0: declaration),
-  ;; skipping strings and comments. The string skip mirrors $cssString - a
-  ;; raw newline ends a string - so both passes agree. Reaching $end first
-  ;; hands the guess to $cssDecideAtEnd. $depth is the number of `{` blocks
-  ;; still open.
+  ;; Classify a statement without emitting tokens. Return 1 at `{` for a
+  ;; selector, or 0 at `;` or `}` for a declaration. Skip comments and
+  ;; strings, ending strings at raw newlines as $cssString does.
+  ;; At $end, use $cssDecideAtEnd. $depth counts open `{` blocks.
   (func $cssDecide (param $depth i32) (result i32)
     (local $p i32)
     (local $c i32)

@@ -3,8 +3,8 @@ import type { Lang } from './languages';
 export type { Lang } from './languages';
 
 /**
- * Styling for a Zed syntax scope. The `& {}` unions keep literal suggestions
- * while accepting the `string` and `number` types inferred from bundled themes.
+ * Styles for a Zed syntax scope. The `& {}` unions preserve literal
+ * suggestions and accept `string` and `number` types from bundled themes.
  */
 export interface ThemeSyntaxSettings {
   color?: string;
@@ -70,8 +70,9 @@ export interface ThemeFamily {
 }
 
 /**
- * A Shiki-compatible styled run within one line. `offset` is the absolute
- * UTF-16 index in the input.
+ * A Shiki-compatible styled run within one line. Offsets use UTF-16 code
+ * units. `codeToTokens` and streams use input offsets. `getLineTokens`
+ * uses line offsets.
  */
 export interface ThemedToken {
   content: string;
@@ -82,14 +83,14 @@ export interface ThemedToken {
   bgColor?: string;
   /**
    * Shiki flags: italic 1, bold 2, underline 4, strikethrough 8.
-   * Highlights emits italic and bold; transformers can set the rest.
+   * Highlights emits italic and bold. Transformers can set the other flags.
    */
   fontStyle?: number;
   /**
-   * Inline styles for multi-theme output: plain `color`, `font-style`, and
-   * `font-weight` for the `defaultColor` theme, custom properties keyed by
-   * `${cssVariablePrefix}${themeColor}` for the others.
-   * Equal runs share this map; replace it when customizing one token's styles.
+   * Styles for multiple themes. The `defaultColor` theme uses `color`,
+   * `font-style`, and `font-weight`. Other themes use custom properties
+   * with the prefix `${cssVariablePrefix}${themeColor}`.
+   * Equal runs share this map. Replace it to change one token's styles.
    */
   htmlStyle?: Record<string, string>;
   /** Extra attributes for the token's `<span>` (`htmlAttrs` in Shiki). */
@@ -104,12 +105,13 @@ export interface CodeToHtmlBaseOptions {
   /** Prefix for CSS-variable colors and per-theme properties. Defaults to `--hls-`. */
   cssVariablePrefix?: string;
   /**
-   * With `themes`, the key of the theme applied inline through plain `color`,
-   * `font-style`, and `font-weight`; every other theme becomes custom
-   * properties named `${cssVariablePrefix}${key}`. Defaults to `light`, like
-   * Shiki, and throws when `themes` lacks that key. `false` makes every theme
-   * a custom property, and `'light-dark()'` merges the `light` and `dark`
-   * themes into CSS `light-dark()` colors.
+   * The key in `themes` to apply with inline `color`, `font-style`, and
+   * `font-weight`. Other themes use custom properties with the prefix
+   * `${cssVariablePrefix}${key}`.
+   *
+   * Defaults to `light`, as in Shiki. Throws if `themes` lacks that key.
+   * Use `false` for custom properties only. Use `'light-dark()'` to combine
+   * the `light` and `dark` theme colors with CSS `light-dark()`.
    */
   defaultColor?: string | false;
 }
@@ -117,8 +119,9 @@ export interface CodeToHtmlBaseOptions {
 /** Options shared by every tokenization entry point. */
 export interface CodeToTokensBaseOptions extends CodeToHtmlBaseOptions {
   /**
-   * Lines at or above this length become one unthemed token, matching Shiki's
-   * `tokenizeMaxLineLength` DOM-safety limit. `0` or undefined disables it.
+   * Lines at or above this length become one token without syntax styles,
+   * as in Shiki. This limits the number of DOM elements for long lines.
+   * `0` or `undefined` disables the limit.
    */
   tokenizeMaxLineLength?: number;
 }

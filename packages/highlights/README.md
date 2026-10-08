@@ -1,8 +1,8 @@
 # Highlights, from Pierre
 
-`@pierre/highlights` is a syntax highlighter written in WebAssembly Text (WAT),
-with 73 built-in languages and Zed-compatible themes. It generates HTML or
-themed tokens and supports streaming input and incremental edits.
+`@pierre/highlights` is a syntax highlighter written in WebAssembly Text (WAT).
+It supports 73 built-in languages and Zed-compatible themes. It produces HTML or
+themed tokens from complete input, input chunks, or document edits.
 
 Read the [Documentation](https://diffs.com/docs#highlights).
 
@@ -12,8 +12,9 @@ Read the [Documentation](https://diffs.com/docs#highlights).
 pnpm add @pierre/highlights
 ```
 
-Runs in Node.js, browsers, and Cloudflare Workers. The package initializes
-WebAssembly automatically; highlighting calls are synchronous after import.
+The package runs in Node.js, browsers, and Cloudflare Workers. It initializes
+WebAssembly at import. `codeToHtml()` and `codeToTokens()` run synchronously
+after import.
 
 ## Quick start
 
@@ -28,11 +29,13 @@ const htmlBytes = codeToHtml("console.log('Hello world!')", {
 const html = new TextDecoder().decode(htmlBytes);
 ```
 
-`codeToHtml()` returns UTF-8 HTML bytes. Decode them immediately, or copy them
-with `.slice()` before the next highlighting or tokenization call.
+`codeToHtml()` returns UTF-8 HTML bytes that can share WebAssembly memory.
 
-See the [docs](https://diffs.com/docs#highlights) for token rendering,
-streaming, incremental editing, themes, and the API reference.
+Decode the bytes before the next call to the highlighter. Use `.slice()` to keep
+a copy for later use.
+
+Read the [API reference](https://diffs.com/docs#highlights) for tokens, input
+streams, document edits, and themes.
 
 ## Development
 

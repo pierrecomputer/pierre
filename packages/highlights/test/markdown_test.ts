@@ -398,7 +398,7 @@ void t.test(
 );
 
 void t.test('markdown: list items keep line-start meaning', () => {
-  const code = '- ```js\nlet a = 1\n```\nafter *em*\n';
+  const code = '- ```js\n  let a = 1\n  ```\nafter *em*\n';
   const out = checkInvariants(markdown.hl, code);
   assert.equal(colorOf(out, '```js'), DELIMITER);
   assert.equal(colorOf(out, 'let'), KEYWORD);
@@ -414,6 +414,27 @@ void t.test('markdown: list items keep line-start meaning', () => {
   assert.equal(colorOf(nested, 'title'), TITLE);
   assert.equal(colorOf(nested, '>'), themeColor('punctuation.markup'));
   assert.equal(colorOf(nested, '1. 2.'), LIST);
+});
+
+void t.test('markdown: a fence ends with its list or quote container', () => {
+  for (const [code, body] of [
+    ['- ```js\nlet a = 1\n```\nafter *em*\n', 'after *em*'],
+    ['> ```js\n# heading\n```\nafter *em*\n', 'after *em*'],
+    ['> > ```py\n> > x = 1\n>   ```\n> > ```', '> ```'],
+  ]) {
+    assert.ok(
+      tokenKinds('markdown', code).some(
+        ([text, kind]) => text === body && kind === 'text.literal'
+      )
+    );
+    assertLineFedParity('markdown', code);
+    assertLineFedParity('markdown', code.replaceAll('\n', '\r\n'));
+  }
+  assert.ok(
+    tokenKinds('markdown', '- ```js\nlet a = 1\n').some(
+      ([text, kind]) => text === 'let a = 1' && kind === null
+    )
+  );
 });
 
 void t.test('markdown: backslash escapes only ASCII punctuation', () => {
@@ -793,7 +814,7 @@ void t.test('markdown: a badge link keeps its outer link', () => {
   // an image link that is not wrapped in a link is unchanged
   assert.equal(
     flat('markdown', '[![x](y) plain'),
-    '"[":punctuation.bracket "![x":link_text "](":punctuation.bracket "y":link_uri ")":punctuation.bracket " plain":none'
+    '"[!":none "[":punctuation.bracket "x":link_text "](":punctuation.bracket "y":link_uri ")":punctuation.bracket " plain":none'
   );
 });
 
@@ -850,14 +871,14 @@ void t.test('markdown: fences inside block quotes', () => {
       '"after":none',
     ].join('\n')
   );
-  // a line with fewer markers than the opener is body content, not a closer
+  // Fewer quote markers end the inner container and its fence.
   assert.equal(
     flat('markdown', '> > ```py\n> > x = 1 # c\n>   ```\n> > ```'),
     [
       '"> > ":punctuation.markup "```py":punctuation.delimiter',
       '"> > ":punctuation.markup "x ":variable "= ":operator "1 ":number "# c":comment',
-      '">   ":punctuation.markup "```":none',
-      '"> > ":punctuation.markup "```":punctuation.delimiter',
+      '">   ":punctuation.markup "```":punctuation.delimiter',
+      '"> ":punctuation.markup "> ```":text.literal',
     ].join('\n')
   );
   // a fence after a quoted one closes without a `>` prefix

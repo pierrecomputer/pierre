@@ -582,7 +582,9 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
   public updateRenderCache(
     dirtyLines: Map<number, Array<HighlightedToken>>,
     themeType: 'dark' | 'light',
-    lineCountChangeInFlight = false
+    lineCountChangeInFlight = false,
+    changedDocumentLines?: ReadonlyMap<number, string>,
+    documentLineCount?: number
   ): boolean {
     this.pendingStructuralRows = undefined;
     const { renderCache } = this;
@@ -605,6 +607,39 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     // has shifted the old data into its authoritative positions.
     const changedAdditionLines: number[] = [];
     const previousAdditionLines = new Map<number, string>();
+    // Source edits must reach the session diff independently of highlighting.
+    // The parsed diff omits the final empty editor row. Once that row has
+    // text, include it in the file; leave it out while it is still empty.
+    if (pendingStructuralRows == null && changedDocumentLines != null) {
+      const additionLineCount = diff.additionLines.length;
+      const canAppendFinalRow = canAppendFinalDocumentRow(
+        diff.additionLines,
+        documentLineCount
+      );
+      for (const [line, text] of changedDocumentLines) {
+        if (
+          line < 0 ||
+          line > additionLineCount ||
+          (line === additionLineCount && (text === '' || !canAppendFinalRow))
+        ) {
+          continue;
+        }
+        const previous = diff.additionLines[line] ?? '';
+        if (previous !== text) {
+          diff.additionLines[line] = text;
+          changedAdditionLines.push(line);
+          previousAdditionLines.set(line, previous);
+          // A newly revealed row must show current text even before the
+          // tokenizer supplies its colors.
+          if (!dirtyLines.has(line)) {
+            hastLines[line] = createPlainAdditionLineElement(
+              line,
+              cleanLastNewline(text)
+            );
+          }
+        }
+      }
+    }
     for (const [line, tokens] of dirtyLines) {
       const prev = hastLines[line] as HASTElement | undefined;
       const prevProps = prev?.properties ?? {};
@@ -615,7 +650,11 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       // The host text document can expose one extra trailing empty line when
       // the file ends with a newline. Deferred tokenization must not grow
       // additionLines from that mismatch or hunk trailing context desyncs.
-      if (pendingStructuralRows == null && canSyncDiffLine) {
+      if (
+        pendingStructuralRows == null &&
+        canSyncDiffLine &&
+        changedDocumentLines?.has(line) !== true
+      ) {
         diff.additionLines[line] = applyLineTextWithNewline(prevLine, lineText);
         if (prevText !== lineText) {
           changedAdditionLines.push(line);
@@ -2618,6 +2657,21 @@ function realignAdditionHastLines<LAnnotation>(
     );
   }
   return realigned;
+}
+
+// The editor shows one empty row after a final `\n` that the parsed diff has
+// no entry for. Text typed there is real file content only when that row is
+// the document's single extra line. A lone `\r` also starts an editor line but
+// not a diff line, so any other count means the coordinates disagree and the
+// row cannot be appended safely.
+function canAppendFinalDocumentRow(
+  additionLines: readonly string[],
+  documentLineCount: number | undefined
+): boolean {
+  return (
+    documentLineCount === additionLines.length + 1 &&
+    additionLines.at(-1)?.endsWith('\n') === true
+  );
 }
 
 function createPlainAdditionLineElement(

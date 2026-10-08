@@ -53,6 +53,7 @@ const STREAM_TREE_PUBLISH_FILE_BATCH_SIZE = 1_000;
 const STREAM_TREE_PUBLISH_INTERVAL_MS = 1_000;
 const GENERIC_PATCH_LOAD_ERROR_MESSAGE =
   'We couldn’t load that diff. Check the URL and try again.';
+const MAX_PATCH_LOAD_ERROR_MESSAGE_LENGTH = 500;
 
 interface UsePatchLoaderOptions {
   collapseMode: 'expanded' | 'collapsed';
@@ -260,13 +261,26 @@ export function usePatchLoader({
             return;
           }
 
+          // The forgiving parser can return no files for a plain-text error
+          // payload. Only an empty or whitespace-only response means no changes.
+          if (
+            loadedData.diffStats.fileCount === 0 &&
+            patchContent.trim() !== ''
+          ) {
+            throw new Error(
+              'The response did not contain a valid diff. Please try again.'
+            );
+          }
+
           setTreeSource(loadedData.treeSource);
           setCommentFileByItemId(loadedData.itemIdToFile);
           setCommentSections([]);
           setDiffStats(loadedData.diffStats);
           prepareItemsForViewer(loadedData.items);
           setInitialItems(loadedData.items);
-          setLoadState('ready');
+          setLoadState(
+            loadedData.diffStats.fileCount === 0 ? 'empty' : 'ready'
+          );
           await yieldToBrowser();
           if (isCurrentRequest()) {
             tryApplyLineHashTarget();
@@ -281,11 +295,16 @@ export function usePatchLoader({
           )
         );
 
-        // This only catches route setup errors. GitHub fetch failures are
-        // delivered while consuming the stream so the UI can enter the
-        // streaming state as soon as the local transport opens.
+        // Our route returns plain-text errors. Hosting/framework failures can
+        // return HTML instead, which must not become the displayed message.
         if (!response.ok) {
-          const detail = (await response.text()).trim();
+          const contentType = response.headers
+            .get('Content-Type')
+            ?.split(';', 1)[0]
+            .trim()
+            .toLowerCase();
+          const detail =
+            contentType === 'text/plain' ? (await response.text()).trim() : '';
           throw new Error(
             detail.length > 0 ? detail : `Request failed (${response.status}).`
           );
@@ -470,7 +489,7 @@ export function usePatchLoader({
 
         setCommentFileByItemId(new Map(accumulator.itemIdToFile));
         setDiffStats({ ...accumulator.diffStats });
-        setLoadState('ready');
+        setLoadState(accumulator.diffStats.fileCount === 0 ? 'empty' : 'ready');
       } catch (error) {
         if (!isCurrentRequest()) {
           return;
@@ -595,9 +614,14 @@ function createPatchRequestInit(
   };
 }
 
+// Bounds messages from both HTTP failures and stream/parser errors so technical
+// details cannot overwhelm the status panel or push its retry button away.
 function getPatchLoadErrorMessage(error: unknown): string {
   if (error instanceof Error && error.message.trim() !== '') {
-    return error.message;
+    const message = error.message.trim();
+    return message.length > MAX_PATCH_LOAD_ERROR_MESSAGE_LENGTH
+      ? `${message.slice(0, MAX_PATCH_LOAD_ERROR_MESSAGE_LENGTH - 1)}…`
+      : message;
   }
   return GENERIC_PATCH_LOAD_ERROR_MESSAGE;
 }

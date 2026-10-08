@@ -15,7 +15,12 @@ import {
   LiveTokenizer,
   StreamTokenizer,
 } from '../lib/index';
-import { rangeToToken, resolveOptionThemes } from '../lib/tokens';
+import tokenTypes from '../lib/token-types';
+import {
+  lineRecordsToTokens,
+  rangeToToken,
+  resolveOptionThemes,
+} from '../lib/tokens';
 import { transformWat, wat2wasm } from '../scripts/build';
 import { cssVariables } from '../themes/index';
 import pierreDarkVibrant from '../themes/pierre-dark-vibrant.json' with { type: 'json' };
@@ -49,6 +54,96 @@ t.before(() => {
 /** join a line's token contents back together */
 const lineText = (tokens: ThemedToken[]) =>
   tokens.map((tk) => tk.content).join('');
+
+void t.test('line records preserve every token style and line boundary', () => {
+  const code = 'x'.repeat(tokenTypes.length) + '\r\n\n🙂\n';
+  const comment = tokenTypes.indexOf('comment');
+  const records = new Uint32Array([
+    0,
+    0,
+    ...tokenTypes.flatMap((_, hl) => [hl + 1, hl]),
+    tokenTypes.length + 2,
+    0xffffffff,
+    tokenTypes.length + 3,
+    0xffffffff,
+    code.length - 1,
+    comment,
+    code.length,
+    0xffffffff,
+  ]);
+  const fontTheme: Theme = {
+    name: 'font styles',
+    appearance: 'dark',
+    style: {
+      foreground: '#abcdef',
+      syntax: {
+        keyword: { font_style: 'italic', font_weight: 600 },
+        comment: { font_style: 'italic', font_weight: 500 },
+        string: { font_weight: 700 },
+      },
+    },
+  };
+  const options: CodeToTokensOptions[] = [
+    ...[
+      pierreDark,
+      pierreDarkVibrant,
+      cssVariables,
+      fontTheme,
+      { name: 'empty', appearance: 'dark', style: {} },
+    ].map((theme) => ({ lang: 'ts' as const, theme })),
+    ...([false, 'light', 'light-dark()'] as const).map((defaultColor) => ({
+      lang: 'ts' as const,
+      themes: { light: pierreLight, dark: fontTheme },
+      defaultColor,
+    })),
+  ];
+  for (const option of options) {
+    for (const prefix of ['--one-', '--two-']) {
+      const themes = resolveOptionThemes({
+        ...option,
+        cssVariablePrefix: prefix,
+      });
+      for (const offsetBase of [0, 37]) {
+        for (const max of [undefined, 0, 2, tokenTypes.length, code.length]) {
+          const expected = [
+            max !== undefined && max > 0 && tokenTypes.length >= max
+              ? [
+                  rangeToToken(
+                    code,
+                    0,
+                    tokenTypes.length,
+                    0,
+                    themes,
+                    prefix,
+                    offsetBase
+                  ),
+                ]
+              : tokenTypes.map((_, hl) =>
+                  rangeToToken(code, hl, hl + 1, hl, themes, prefix, offsetBase)
+                ),
+            [],
+            [
+              rangeToToken(
+                code,
+                code.length - 3,
+                code.length - 1,
+                max === 2 ? 0 : comment,
+                themes,
+                prefix,
+                offsetBase
+              ),
+            ],
+            [],
+          ];
+          assert.deepStrictEqual(
+            lineRecordsToTokens(code, records, themes, prefix, max, offsetBase),
+            expected
+          );
+        }
+      }
+    }
+  }
+});
 
 void t.test(
   'string input preserves UTF-8 across memory growth and reuse',
@@ -976,7 +1071,7 @@ void t.test(
 );
 
 void t.test(
-  'codeToHtml: sets with Display P3 or CSS-variable members render through tag replacement',
+  'codeToHtml: sets with Display P3 or CSS-variable members copy prepared openers',
   () => {
     const dec = new TextDecoder();
     const html = dec.decode(
@@ -994,6 +1089,116 @@ void t.test(
       `color:${pierreLightVibrant.style.syntax.keyword.color};--x-dark:var(--x-keyword-declaration)`,
     ]);
     assert.equal(textOf(html), 'const');
+  }
+);
+
+void t.test(
+  'P3 HTML stays in Wasm memory across theme and input changes',
+  () => {
+    const hl = new HighlightsHighlighter(highlighter.wasmModule);
+    const dec = new TextDecoder();
+    const background = 'color(display-p3 .1 .2 .3)';
+    const backgroundOnly: Theme = {
+      ...pierreDark,
+      style: { ...pierreDark.style, 'editor.background': background },
+    };
+    const options: CodeToHtmlOptions[] = [
+      { lang: 'ts', theme: pierreDark },
+      { lang: 'ts', theme: backgroundOnly },
+      { lang: 'ts', themes: { light: pierreLight, dark: pierreDark } },
+      { lang: 'ts', theme: pierreDarkVibrant },
+      { lang: 'ts', theme: cssVariables },
+      {
+        lang: 'ts',
+        themes: { light: pierreLightVibrant, dark: cssVariables },
+      },
+      { lang: 'ts', theme: pierreDark },
+      {
+        lang: 'ts',
+        themes: { light: pierreLightVibrant, dark: pierreDarkVibrant },
+        defaultColor: 'light-dark()',
+      },
+      { lang: 'ts', theme: backgroundOnly },
+    ];
+    for (const code of [
+      '',
+      'const café = "日本語🙂<&>";\r\n1',
+      'const café = "日本語🙂<&>";\r\n1\n'.repeat(5000),
+      'const x = 1;',
+    ]) {
+      for (const option of options) {
+        const output = hl.codeToHtml(code, option);
+        assert.equal(output.buffer, hl.memory.buffer);
+        const html = dec.decode(output);
+        assert.equal(textOf(html), code);
+        assert.equal(
+          html,
+          dec.decode(
+            new HighlightsHighlighter(highlighter.wasmModule).codeToHtml(
+              code,
+              option
+            )
+          )
+        );
+        if (option.theme === backgroundOnly) {
+          assert.equal(
+            rootStyle(html),
+            `background-color:${background};color:${pierreDark.style['editor.foreground']}`
+          );
+        }
+        hl.codeToTokens('const n = 2', option);
+      }
+    }
+  }
+);
+
+void t.test(
+  'P3 HTML grows for long openers and escapes UTF-8 theme names',
+  () => {
+    const hl = new HighlightsHighlighter(highlighter.wasmModule);
+    const dec = new TextDecoder();
+    const color = `color(display-p3 0.${'1'.repeat(100000)} .2 .3)`;
+    const theme: Theme = {
+      name: 'long P3',
+      appearance: 'dark',
+      style: {
+        foreground: color,
+        background: color,
+        syntax: { string: color, number: { font_weight: 700 } },
+      },
+    };
+    const code = `1 "${'&日本語'.repeat(10000)}" 2`;
+    const output = hl.codeToHtml(code, { lang: 'json', theme });
+    assert.equal(output.buffer, hl.memory.buffer);
+    const html = dec.decode(output);
+    assert.equal(textOf(html), code);
+    assert.equal(rootStyle(html), `background-color:${color};color:${color}`);
+    assert.deepEqual(spanStyles(html), [
+      `color:${color};font-weight:700`,
+      `color:${color}`,
+      `color:${color};font-weight:700`,
+    ]);
+    for (const cssVariablePrefix of [
+      '--"<>&日本語-',
+      `--${'é'.repeat(3000)}-`,
+    ]) {
+      const options = {
+        lang: 'json',
+        themes: { light: pierreLightVibrant, 'd<a>"rk&🙂': cssVariables },
+        cssVariablePrefix,
+        defaultColor: false,
+      } as const;
+      const bytes = hl.codeToHtml(code, options);
+      assert.equal(bytes.buffer, hl.memory.buffer);
+      const result = dec.decode(bytes);
+      assert.equal(textOf(result), code);
+      assert.ok(result.includes('d&lt;a&gt;&quot;rk&amp;🙂:var('));
+      const prefix = cssVariablePrefix.startsWith('--"')
+        ? '--&quot;&lt;&gt;&amp;日本語-'
+        : cssVariablePrefix;
+      assert.ok(result.includes(`var(${prefix}string)`));
+      assert.doesNotMatch(result, /--"/);
+    }
   }
 );
 

@@ -128,6 +128,36 @@ test('standalone renderers fall back when worker initialization fails', async ()
   }
 });
 
+test('a pool terminated while a diff primes its highlight logs nothing', async () => {
+  const dom = installDom();
+  const consoleError = spyOn(console, 'error').mockImplementation(() => {});
+  const { manager, worker } = await createInitializedManager({
+    theme: 'pierre-dark',
+  });
+  const diffInstance = new TestFileDiff(
+    { disableErrorHandling: true, disableFileHeader: true },
+    manager
+  );
+  const diff = createDiff('terminated:diff', 'const terminated = true;\n');
+
+  try {
+    const primed = diffInstance.primeHighlightCache(diff);
+    await worker.waitForDiffRequest();
+
+    // Terminating the pool cancels the pending highlight without logging
+    // an error.
+    manager.terminate();
+    await primed;
+
+    expect(consoleError).not.toHaveBeenCalled();
+  } finally {
+    diffInstance.cleanUp();
+    manager.terminate();
+    consoleError.mockRestore();
+    dom.cleanup();
+  }
+});
+
 test('applies replacement annotations while its diff is highlighted', async () => {
   const dom = installDom();
   const { manager, worker } = await createInitializedManager({

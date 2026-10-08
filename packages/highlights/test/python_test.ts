@@ -13,6 +13,7 @@ import {
   distinctTheme,
   exactColor,
   loadLang,
+  makeRand,
   spansOf,
   type TestLang,
   themeColor,
@@ -194,13 +195,12 @@ void t.test('python: lookahead is bounded by split ranges', () => {
 
 void t.test('python: deterministic fuzz preserves lexer invariants', () => {
   const alphabet = 'abcXYZ09_ rfb\'\\"{}()[]@#.:,+-*/|&=<>\nλ雪';
-  let state = 0xc0ffee42;
+  const rand = makeRand(0xc0ffee42);
   for (let sample = 0; sample < 180; sample++) {
     let src = '';
-    const n = state >>> 27;
+    const n = rand() & 31;
     for (let i = 0; i < n; i++) {
-      state = (Math.imul(state, 1103515245) + 12345) >>> 0;
-      src += alphabet[state % alphabet.length];
+      src += alphabet[rand() % alphabet.length];
     }
     checkInvariants(python.hl, src);
   }

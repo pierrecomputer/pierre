@@ -1,8 +1,11 @@
-import highlightsPackageJson from '@pierre/highlights/package.json';
 import { IconBolt, IconCodeBlock, IconPencil } from '@pierre/icons';
 import type { Metadata } from 'next';
 
+import { HighlightsBenchmarks } from './HighlightsBenchmarks';
 import { HighlightsHero } from './HighlightsHero';
+// import { HighlightsHtmlBenchmarks } from './HighlightsHtmlBenchmarks';
+import { HighlightsInstall } from './HighlightsInstall';
+import { HighlightsPerformanceBenchmarks } from './HighlightsPerformanceBenchmarks';
 import { HighlightsPlayground } from './HighlightsPlayground';
 import Footer from '@/components/Footer';
 import { Header } from '@/components/Header';
@@ -13,9 +16,10 @@ const description =
   'A tiny, fast code highlighter written by hand in WebAssembly Text, with built-in lexers and Shiki-compatible themed tokens, streaming, and live editing.';
 
 export const metadata: Metadata = pageMetadata({
-  title: 'Highlights — a fast WebAssembly code highlighter',
+  title: 'Highlights, from Pierre',
   description,
   path: '/highlights',
+  image: '/highlights-brand/opengraph-image.png',
 });
 
 export default function HighlightsPage() {
@@ -23,10 +27,12 @@ export default function HighlightsPage() {
     <div className="mx-auto min-h-screen max-w-5xl px-5 xl:max-w-[80rem]">
       <Header className="-mb-[1px]" />
       <main>
-        <HighlightsHero
-          gzipBytes={highlightsPackageJson.meta['highlights.wasm.gz']}
-        />
+        <HighlightsHero />
+        <HighlightsPerformanceBenchmarks />
+        <HighlightsBenchmarks />
+        {/* <HighlightsHtmlBenchmarks /> */}
         <HighlightsPlayground />
+        <HighlightsPlayground variant="languages" />
         <section
           aria-labelledby="highlights-features"
           className="space-y-8 pb-16 md:pb-24"
@@ -155,6 +161,7 @@ export default function HighlightsPage() {
             </div>
           </div>
         </section>
+        <HighlightsInstall />
         <PierreCompanySection />
       </main>
       <Footer />

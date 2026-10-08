@@ -1,11 +1,9 @@
-import { afterAll, beforeEach, expect, test } from 'bun:test';
+import { afterAll, beforeEach, expect, spyOn, test } from 'bun:test';
 
 import { FileStream } from '../src/components/FileStream';
 import { DIFFS_TAG_NAME } from '../src/constants';
-import {
-  disposeHighlighter,
-  getSharedHighlighter,
-} from '../src/highlighter/shared_highlighter';
+import { ShikiHighlighter } from '../src/highlighter/backends/shiki';
+import { disposeHighlighter } from '../src/highlighter/shared_highlighter';
 import { createRoot, installDom, wait, waitFor } from './domHarness';
 import { getRejection } from './testUtils';
 
@@ -130,18 +128,13 @@ test('setup can retry after the highlighter request rejects', async () => {
         controller.close();
       },
     });
+  const create = spyOn(ShikiHighlighter, 'create').mockRejectedValueOnce(
+    new Error('engine failed')
+  );
   try {
-    await getSharedHighlighter({
-      themes: ['pierre-dark'],
-      langs: [],
-      preferredHighlighter: 'highlights',
-    });
     expect(
       (await getRejection(stream.setup(source(), root))).message
-    ).toContain(
-      'Cannot load the "shiki-js" highlighter while "highlights" is in use'
-    );
-    await disposeHighlighter();
+    ).toContain('engine failed');
     await stream.setup(source(), root);
     await waitFor(() => closed);
     await wait();
@@ -151,6 +144,7 @@ test('setup can retry after the highlighter request rejects', async () => {
       )?.textContent
     ).toBe('retried');
   } finally {
+    create.mockRestore();
     stream.cleanUp();
     await wait();
     root.remove();

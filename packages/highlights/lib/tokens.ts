@@ -2,21 +2,20 @@ import type { CodeToHtmlOptions, ThemedToken, TokensResult } from './index';
 import type { PreparedTheme } from './theme';
 import {
   escapeAttribute,
+  packHtmlOpeners,
   prepareTheme,
   themeTableBytes,
-  variableRootTag,
-  variableSpanTag,
 } from './theme';
 import tokenTypes from './token-types';
 
 const enc = new TextEncoder();
 
 /**
- * How one resolved theme reaches the output: `single` for the `theme` option
- * (plain `color`/`fontStyle`), `default` for the `defaultColor` theme of a
- * `themes` set (plain `color`, `font-style`, `font-weight` in `htmlStyle`),
- * `variable` for the other themes of a set (custom properties), and
- * `light-dark` for the `light`/`dark` pair merged into CSS `light-dark()`.
+ * How a resolved theme appears in the output:
+ * - `single`: plain `color` and `fontStyle` for the `theme` option.
+ * - `default`: plain `color`, `font-style`, and `font-weight` in `htmlStyle`.
+ * - `variable`: custom properties for other members of a `themes` set.
+ * - `light-dark`: combine `light` and `dark` colors with CSS `light-dark()`.
  */
 export type ThemeRole = 'single' | 'default' | 'variable' | 'light-dark';
 
@@ -63,20 +62,16 @@ const blobCache = new WeakMap<
 >();
 let nextBlobId = 1;
 
-// Tag replacements for multi-theme HTML the emitter cannot render (a member
-// with Display P3 or CSS-variable colors), one map per theme set and prefix.
-const htmlTagsCache = new WeakMap<
+// Prepared HTML openers for sets with Display P3 or CSS-variable colors.
+const htmlOpenersCache = new WeakMap<
   ResolvedTheme[],
-  Map<string, Map<string, string>>
+  Map<string, Uint8Array>
 >();
 
-// Resolved theme sets, so the styles and HTML tags derived from a set (keyed
-// by the set's identity above) survive across calls that name the same
-// themes again. `prepareTheme` returns one object per theme (and per prefix
-// for CSS-variable themes), so a set is identified by those objects plus the
-// color key and role the options give each one. Entries hang off the first
-// prepared theme and are only reachable while it is. Keep at most 128 sets
-// per first theme so a fixed theme cannot retain unlimited discarded partners.
+// Reuse resolved theme sets and their cached styles and HTML openers.
+// Identify a set by its prepared theme objects, color keys, and roles.
+// Each entry lives as long as its first prepared theme remains reachable.
+// Limit each first theme to 128 sets to bound retained partner themes.
 const resolvedSetCache = new WeakMap<
   PreparedTheme,
   Map<string, ResolvedTheme[]>
@@ -104,12 +99,12 @@ function tagTheme(
 }
 
 /**
- * Normalize Shiki-style options to a list of themes. With `themes`, the
- * `defaultColor` theme (Shiki's default is `light`) comes first and is applied
- * inline; the others follow in name order as custom properties.
- * `defaultColor: false` makes every theme a custom property, and
- * `'light-dark()'` pairs the `light` and `dark` themes. Recently cached `themes`
- * options return the same list object, so caches keyed by it are shared.
+ * Convert Shiki-style options to a theme list.
+ * With `themes`, put the inline `defaultColor` theme first (`light` by
+ * default). Sort the remaining themes by name and use custom properties.
+ * `defaultColor: false` uses custom properties for all themes.
+ * `'light-dark()'` pairs the `light` and `dark` themes.
+ * Reuse cached list objects so their style caches remain available.
  */
 export function resolveOptionThemes(
   options: CodeToHtmlOptions
@@ -204,17 +199,10 @@ export function rangeToToken(
   return token;
 }
 
-/**
- * The `htmlStyle` map of token id `hl` under a multi-theme set: the default
- * theme's plain `color`, `font-style`, and `font-weight`, the other themes as
- * custom properties, or one `light-dark()` merge. Built once per set, prefix,
- * and token id and shared by every token and HTML tag with that id.
- */
-export function themeHtmlStyle(
+function themeHtmlStyles(
   themes: ResolvedTheme[],
-  hl: number,
   cssVariablePrefix: string
-): Record<string, string> {
+): Record<string, string>[] {
   let prefixes = htmlStyleCache.get(themes);
   if (prefixes === undefined) {
     prefixes = new Map();
@@ -225,6 +213,22 @@ export function themeHtmlStyle(
     slots = [];
     prefixes.set(cssVariablePrefix, slots);
   }
+  return slots;
+}
+
+/**
+ * Build `htmlStyle` for token ID `hl` and a theme set.
+ * Use plain styles for the default theme and custom properties for the
+ * others, or combine colors with `light-dark()`.
+ * Cache by set, prefix, and token ID. All matching tokens and HTML tags
+ * share the map.
+ */
+export function themeHtmlStyle(
+  themes: ResolvedTheme[],
+  hl: number,
+  cssVariablePrefix: string
+): Record<string, string> {
+  const slots = themeHtmlStyles(themes, cssVariablePrefix);
   let htmlStyle = slots[hl];
   if (htmlStyle === undefined) {
     if (themes[0].role === 'light-dark') {
@@ -256,9 +260,8 @@ export function themeHtmlStyle(
 }
 
 /**
- * Pack a theme set for the Wasm multi-theme HTML emitter (mode 2), which
- * writes every theme's colors and font settings into each span itself. The
- * layout, mirrored by `$multiRec` in src/emit.wat:
+ * Pack a theme set for Wasm HTML mode 2. The emitter writes each theme's
+ * colors and font settings into spans. Layout (see `$multiRec` in emit.wat):
  *
  *     0   u8  slot count       1  u8  kind: 0 custom properties, 1 light-dark()
  *     4   u32 tables offset    8  u32 span reserve    12  u32 prologue reserve
@@ -266,13 +269,14 @@ export function themeHtmlStyle(
  *     32  per slot, 16 bytes: u32 name offset, u32 name length, u32 inline
  *     then one padded theme table per slot, then the name bytes
  *
- * A slot's name is its escaped custom property (`--hls-dark`); the inline
- * slot (the `defaultColor` theme) has none. The reserves bound the output one
- * span opener or the `<pre>` opener can add, since names are host-sized. The
- * set id is unique per blob, so an instance's opener cache is keyed by it.
- * Built once per set and prefix. Returns `undefined` for a set the emitter
- * cannot pack because a member has no theme table (Display P3 or CSS-variable
- * colors); HTML output then falls back to `multiThemeHtmlTags`.
+ * Each slot name is an escaped custom property, such as `--hls-dark`.
+ * The inline `defaultColor` slot has no name. Reserves bound the size of
+ * span and `<pre>` openers, including property names supplied by the host.
+ * The unique set ID identifies this data in the opener cache.
+ *
+ * Cache by set and prefix. Return `undefined` if any theme lacks a packed
+ * table (Display P3 or CSS-variable colors). HTML output then uses
+ * `multiThemeHtmlOpeners`.
  */
 export function multiThemeBlob(
   themes: ResolvedTheme[],
@@ -332,49 +336,44 @@ export function multiThemeBlob(
 }
 
 /**
- * Tag replacements for multi-theme HTML the Wasm emitter cannot pack. Wasm
- * renders the set through the CSS-variable emitter with an empty prefix, so
- * its openers read `var(<token>)`; each maps to an opener whose style
- * attribute serializes the token's `htmlStyle` (the map `codeToTokens`
- * returns for that id), and the `<pre>` opener carries the root colors
- * `themeMeta` reports. Built once per set and prefix. Prefixes and theme keys
- * are user strings, so attribute values are escaped.
+ * Build HTML openers for theme sets without packed RGBA tables.
+ * Spans use `htmlStyle`. The root uses `themeMeta`.
+ * Cache by set and prefix. Escape prefixes and theme keys for HTML attributes.
  */
-export function multiThemeHtmlTags(
+export function multiThemeHtmlOpeners(
   themes: ResolvedTheme[],
   cssVariablePrefix: string
-): Map<string, string> {
-  let prefixes = htmlTagsCache.get(themes);
+): Uint8Array {
+  let prefixes = htmlOpenersCache.get(themes);
   if (prefixes === undefined) {
     prefixes = new Map();
-    htmlTagsCache.set(themes, prefixes);
+    htmlOpenersCache.set(themes, prefixes);
   }
-  let tags = prefixes.get(cssVariablePrefix);
-  if (tags !== undefined) return tags;
-  tags = new Map();
+  const cached = prefixes.get(cssVariablePrefix);
+  if (cached !== undefined) return cached;
   const { fg, bg, rootStyle } = themeMeta(themes, cssVariablePrefix);
-  tags.set(
-    variableRootTag,
+  const openers = [
     `<pre class="highlights" style="${escapeAttribute(
       rootStyle ?? `background-color:${bg};color:${fg}`
-    )}">`
-  );
+    )}"><code>`,
+  ];
   for (let hl = 1; hl < tokenTypes.length; hl++) {
     const htmlStyle = themeHtmlStyle(themes, hl, cssVariablePrefix);
     let css = '';
     for (const property in htmlStyle) {
       css += `${css === '' ? '' : ';'}${property}:${htmlStyle[property]}`;
     }
-    tags.set(variableSpanTag(hl), `<span style="${escapeAttribute(css)}">`);
+    openers.push(`<span style="${escapeAttribute(css)}">`);
   }
-  prefixes.set(cssVariablePrefix, tags);
-  return tags;
+  const blob = packHtmlOpeners(openers);
+  prefixes.set(cssVariablePrefix, blob);
+  return blob;
 }
 
 /**
- * The `htmlStyle` of a token under `defaultColor: 'light-dark()'`: the two
- * colors merge into one CSS `light-dark()` value, and font settings stay plain
- * when both themes agree or become per-theme custom properties otherwise.
+ * Build `htmlStyle` for `defaultColor: 'light-dark()'`.
+ * Combine both colors with CSS `light-dark()`. Use plain font settings
+ * when the themes agree, or per-theme custom properties when they differ.
  */
 function lightDarkStyle(
   themes: ResolvedTheme[],
@@ -418,72 +417,75 @@ export function lineRecordsToTokens(
   offsetBase = 0
 ): ThemedToken[][] {
   const lines: ThemedToken[][] = [];
-  let line: ThemedToken[] = [];
-  let start = 0;
-  let lineStart = 0;
   const max = maxLineLength ?? 0;
-  for (let rec = 0; rec < recs.length; rec += 2) {
-    const end = recs[rec];
-    const hl = recs[rec + 1];
-    if (hl === 0xffffffff) {
-      if (max > 0 && start - lineStart >= max) {
-        line = [
-          rangeToToken(
-            code,
-            lineStart,
-            start,
-            0,
-            themes,
-            cssVariablePrefix,
-            offsetBase
-          ),
-        ];
+  const { styles, fg, role } = themes[0];
+  const htmlStyles =
+    role === 'single' ? undefined : themeHtmlStyles(themes, cssVariablePrefix);
+  let start = 0;
+  for (let rec = 0; ; rec += 2) {
+    const first = rec;
+    while (rec < recs.length && recs[rec + 1] !== 0xffffffff) rec += 2;
+    const end = rec === first ? start : recs[rec - 2];
+    let line: ThemedToken[];
+    if (max > 0 && end - start >= max) {
+      line = [
+        rangeToToken(
+          code,
+          start,
+          end,
+          0,
+          themes,
+          cssVariablePrefix,
+          offsetBase
+        ),
+      ];
+    } else {
+      line = new Array((rec - first) / 2);
+      let count = 0;
+      for (let at = first; at < rec; at += 2) {
+        const end = recs[at];
+        if (end > start) {
+          const hl = recs[at + 1];
+          let token: ThemedToken;
+          if (htmlStyles === undefined) {
+            const style = styles[hl];
+            token = {
+              content: code.slice(start, end),
+              offset: start + offsetBase,
+              color: style?.color ?? fg,
+              fontStyle:
+                (style?.italic === true ? 1 : 0) |
+                ((style?.weight ?? 0) >= 600 ? 2 : 0),
+            };
+          } else {
+            token = {
+              content: code.slice(start, end),
+              offset: start + offsetBase,
+              htmlStyle:
+                htmlStyles[hl] ?? themeHtmlStyle(themes, hl, cssVariablePrefix),
+            };
+          }
+          const type = standardTypes[hl];
+          if (type !== 0) token.type = type;
+          line[count++] = token;
+          start = end;
+        }
       }
-      lines.push(line);
-      line = [];
-      start = end;
-      lineStart = end;
-    } else if (end > start) {
-      // Overlong lines collapse below; skip tokens that would be discarded.
-      if (!(max > 0 && end - lineStart >= max)) {
-        line.push(
-          rangeToToken(
-            code,
-            start,
-            end,
-            hl,
-            themes,
-            cssVariablePrefix,
-            offsetBase
-          )
-        );
-      }
-      start = end;
+      line.length = count;
     }
+    lines.push(line);
+    if (rec === recs.length) break;
+    start = recs[rec];
   }
-  if (max > 0 && start - lineStart >= max) {
-    line = [
-      rangeToToken(
-        code,
-        lineStart,
-        start,
-        0,
-        themes,
-        cssVariablePrefix,
-        offsetBase
-      ),
-    ];
-  }
-  lines.push(line);
   return lines;
 }
 
 /**
- * Build the `fg`, `bg`, `themeName`, and `rootStyle` block of a Shiki
- * `TokensResult`. With `themes`, `fg` and `bg` are CSS declaration lists: the
- * `defaultColor` theme's plain color first, then one custom property per other
- * theme. `rootStyle` is set only when no theme is applied inline, so the
- * `<pre>` style is either `rootStyle` or `background-color:bg;color:fg`.
+ * Build `fg`, `bg`, `themeName`, and `rootStyle` for a Shiki `TokensResult`.
+ * With `themes`, `fg` and `bg` are CSS declaration lists. Each list starts
+ * with the default theme's plain color, then the other themes' properties.
+ * Set `rootStyle` only when no theme is inline. The `<pre>` style uses
+ * `rootStyle` if set, or `background-color:bg;color:fg` otherwise.
  */
 export function themeMeta(
   themes: ResolvedTheme[],

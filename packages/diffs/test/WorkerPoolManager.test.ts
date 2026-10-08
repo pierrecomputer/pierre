@@ -19,6 +19,11 @@ import type {
   FileContents,
   FileDiffMetadata,
 } from '../src/types';
+import {
+  isHandledWorkerPoolError,
+  WorkerPoolTerminatedError,
+  WorkerPoolWorkerError,
+} from '../src/worker/errors';
 import type {
   DiffRendererInstance,
   RenderFileRequest,
@@ -71,6 +76,10 @@ describe('WorkerPoolManager lifecycle', () => {
 
     const initializationError = await getRejection(initialization);
     expect(initializationError.message).toContain('worker failed to load');
+    // Without an error callback, consumers still need to log startup
+    // failures.
+    expect(initializationError).toBeInstanceOf(WorkerPoolWorkerError);
+    expect(isHandledWorkerPoolError(initializationError)).toBe(false);
     expect(manager.isWorkingPool()).toBe(false);
     expect(manager.getStats()).toMatchObject({
       managerState: 'waiting',
@@ -79,6 +88,68 @@ describe('WorkerPoolManager lifecycle', () => {
       workersFailed: true,
     });
     expect(worker.terminated).toBe(true);
+    manager.terminate();
+  });
+
+  test('hands a worker error to onWorkerError and logs nothing itself', async () => {
+    const consoleError = spyOn(console, 'error').mockImplementation(() => {});
+    const received: Array<{ event: ErrorEvent | Event; worker: Worker }> = [];
+    const { initialization, manager, worker } = createInitializingManager(
+      {},
+      {
+        onWorkerError: (event, failedWorker) => {
+          received.push({ event, worker: failedWorker });
+        },
+      }
+    );
+    await worker.waitForInitializeRequest();
+
+    worker.emitError(new Error('worker failed to load'));
+
+    const initializationError = await getRejection(initialization);
+    expect(initializationError).toBeInstanceOf(WorkerPoolWorkerError);
+    expect(initializationError.message).toContain('worker failed to load');
+    expect(isHandledWorkerPoolError(initializationError)).toBe(true);
+    expect(received).toHaveLength(1);
+    expect(received[0]?.event).toMatchObject({
+      message: 'worker failed to load',
+    });
+    expect(received[0]?.worker).toBe(worker as unknown as Worker);
+    expect(manager.isWorkingPool()).toBe(false);
+    // Allow the constructor's error handler to run and check that it does not
+    // log the failure already passed to onWorkerError.
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(consoleError).not.toHaveBeenCalled();
+    manager.terminate();
+  });
+
+  test('hands the plain Event of a worker script that failed to load to onWorkerError', async () => {
+    const consoleError = spyOn(console, 'error').mockImplementation(() => {});
+    const received: Event[] = [];
+    const { initialization, manager, worker } = createInitializingManager(
+      {},
+      {
+        onWorkerError: (event) => {
+          received.push(event);
+          event.preventDefault();
+        },
+      }
+    );
+    await worker.waitForInitializeRequest();
+
+    // Failed script requests can produce an Event without message or error.
+    const event = new Event('error', { cancelable: true });
+    worker.emitErrorEvent(event);
+
+    const initializationError = await getRejection(initialization);
+    expect(initializationError).toBeInstanceOf(WorkerPoolWorkerError);
+    expect(initializationError.message).toContain('failed to load');
+    expect(isHandledWorkerPoolError(initializationError)).toBe(true);
+    expect(received).toEqual([event]);
+    expect(event.defaultPrevented).toBe(true);
+    expect(manager.isWorkingPool()).toBe(false);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(consoleError).not.toHaveBeenCalled();
     manager.terminate();
   });
 
@@ -434,8 +505,10 @@ describe('WorkerPoolManager cache priming', () => {
         rejectedError = error;
       }
 
-      expect(rejectedError).toBeInstanceOf(Error);
+      expect(rejectedError).toBeInstanceOf(WorkerPoolTerminatedError);
       expect((rejectedError as Error).message).toContain('pool terminated');
+      // Components should ignore expected cancellations when logging errors.
+      expect(isHandledWorkerPoolError(rejectedError)).toBe(true);
     } finally {
       manager.terminate();
     }

@@ -28,6 +28,9 @@ t.before(() => {
     url,
     `(module
       (import "../src/highlights.wat")
+      (export "lineGap" (global $lvGapAt))
+      (export "lineCap" (global $lvLineCap))
+      (export "lineTable" (global $lvLineTab))
       (global (export "freeHeads") i32 (i32.const $mem.liveFree)))`
   );
   wasmModule = new WebAssembly.Module(wat2wasm(url.pathname, code));
@@ -1107,6 +1110,37 @@ void t.test(
   }
 );
 
+void t.test('LiveTokenizer: line breaks across SIMD boundaries', () => {
+  for (const length of [0, 1, 14, 15, 16, 17, 30, 31, 32, 33, 65519, 65520]) {
+    for (const terminator of ['\n', '\r', '\r\n']) {
+      const code = `${'x'.repeat(length)}${terminator}日本語😀${terminator}`;
+      const live = new LiveTokenizer({
+        lang: 'plain',
+        theme: pierreDark,
+        code,
+      });
+      try {
+        assert.equal(live.getText(), code);
+        assertMatchesFresh(live, code, 'plain', 'initial line breaks');
+        const newText = `${'y'.repeat(length)}${terminator}😀`;
+        live.applyEdits([
+          {
+            range: {
+              start: { line: 0, character: 0 },
+              end: { line: 2, character: 0 },
+            },
+            newText,
+          },
+        ]);
+        assert.equal(live.getText(), newText);
+        assertMatchesFresh(live, newText, 'plain', 'replacement line breaks');
+      } finally {
+        live.dispose();
+      }
+    }
+  }
+});
+
 void t.test('LiveTokenizer: final-line terminator edits', () => {
   const live = new LiveTokenizer({ lang: 'ts', theme: pierreDark, code: 'a' });
   // adding a trailing terminator creates the trailing empty line
@@ -1297,6 +1331,69 @@ void t.test('LiveTokenizer: renderRange updates match sync updates', () => {
   syncLive.dispose();
   rangedLive.dispose();
 });
+
+void t.test(
+  'live wasm: yielding within lines preserves tokens and state',
+  () => {
+    interface RawLive {
+      memory: WebAssembly.Memory;
+      liveStage(len: number): number;
+      liveInitDoc(ptr: number, len: number, lang: number): void;
+      liveRun(lines: number, end?: number, work?: number): number;
+      liveLineCount(): number;
+      liveLineTokPtr(line: number): number;
+      liveLineTokCount(line: number): number;
+      liveLineFlags(line: number): number;
+      liveStats(key: number): number;
+    }
+    const env = { is_id_start: () => 1, is_id_continue: () => 1 };
+    for (const [lang, source] of tokenizerSamples) {
+      const bytes = new TextEncoder().encode(source);
+      const runs: RawLive[] = [];
+      for (const work of [0, 7]) {
+        const raw = new WebAssembly.Instance(wasmModule, { env })
+          .exports as unknown as RawLive;
+        const ptr = raw.liveStage(bytes.length);
+        new Uint8Array(raw.memory.buffer).set(bytes, ptr);
+        raw.liveInitDoc(ptr, bytes.length, LANGS[lang]);
+        let steps = 0;
+        while (raw.liveRun(1, 0, work) !== 0) {
+          assert.ok(
+            ++steps < bytes.length * 3 + 100,
+            `${lang}: makes progress`
+          );
+        }
+        runs.push(raw);
+      }
+      const [eager, sliced] = runs;
+      assert.equal(
+        sliced.liveStats(1),
+        eager.liveStats(1),
+        `${lang}: outgoing states`
+      );
+      for (let line = 0; line < eager.liveLineCount(); line++) {
+        assert.equal(
+          sliced.liveLineFlags(line),
+          eager.liveLineFlags(line),
+          `${lang}:${line}: flags`
+        );
+        assert.deepEqual(
+          new Uint32Array(
+            sliced.memory.buffer,
+            sliced.liveLineTokPtr(line),
+            sliced.liveLineTokCount(line)
+          ),
+          new Uint32Array(
+            eager.memory.buffer,
+            eager.liveLineTokPtr(line),
+            eager.liveLineTokCount(line)
+          ),
+          `${lang}:${line}: records`
+        );
+      }
+    }
+  }
+);
 
 void t.test(
   'LiveTokenizer: an edit while deferred work is pending merges the tail',
@@ -1729,6 +1826,126 @@ void t.test('LiveTokenizer: line accessors check bounds', () => {
   }
   live.dispose();
 });
+
+void t.test(
+  'live wasm: equal-line replacements preserve the gap and capacity',
+  () => {
+    interface RawLive {
+      memory: WebAssembly.Memory;
+      lineGap: WebAssembly.Global;
+      lineCap: WebAssembly.Global;
+      lineTable: WebAssembly.Global;
+      liveStage(len: number): number;
+      liveInitDoc(ptr: number, len: number, lang: number): void;
+      liveApplyEdits(ptr: number): void;
+      liveRun(budget: number): number;
+      liveLineCount(): number;
+      liveLineByteLen(i: number): number;
+      liveLineTextPtr(i: number): number;
+      liveLineTokPtr(i: number): number;
+      liveLineTokCount(i: number): number;
+    }
+    const env = { is_id_start: () => 1, is_id_continue: () => 1 };
+    const raw = new WebAssembly.Instance(wasmModule, { env })
+      .exports as unknown as RawLive;
+    const enc = new TextEncoder();
+    const dec = new TextDecoder();
+    let code = Array(256).fill('const value = 1;').join('\n');
+    const bytes = enc.encode(code);
+    const ptr = raw.liveStage(bytes.length);
+    new Uint8Array(raw.memory.buffer).set(bytes, ptr);
+    raw.liveInitDoc(ptr, bytes.length, LANGS.ts);
+    raw.liveRun(0x7fffffff);
+    assert.equal(raw.lineCap.value, raw.liveLineCount());
+
+    for (const [sl, sc, el, ec, newText] of [
+      [0, 14, 0, 15, '2'],
+      [255, 14, 255, 15, '3'],
+      [0, 14, 0, 15, '4'],
+      [255, 14, 255, 15, '5'],
+      [32, 0, 32, 0, 'let a = 0;\n'],
+      [0, 14, 0, 15, '6'],
+      [256, 14, 256, 15, '7'],
+      [33, 0, 35, 16, '/* first\rmiddle\r\nend */'],
+      [34, 0, 34, 0, '\n'],
+      [33, 0, 35, 6, 'const a = 1;\nconst b = 2;\nconst c = 3;'],
+      [256, 16, 256, 16, '\n'],
+      [0, 0, 1, 0, ''],
+      [255, 14, 255, 15, '8'],
+    ] as const) {
+      const count = raw.liveLineCount();
+      const gap = raw.lineGap.value;
+      const capacity = raw.lineCap.value;
+      const table = raw.lineTable.value;
+      const text = enc.encode(newText);
+      const staged = raw.liveStage(28 + text.length);
+      new Uint32Array(raw.memory.buffer, staged, 7).set([
+        1,
+        sl,
+        sc,
+        el,
+        ec,
+        28,
+        text.length,
+      ]);
+      new Uint8Array(raw.memory.buffer).set(text, staged + 28);
+      raw.liveApplyEdits(staged);
+      raw.liveRun(0x7fffffff);
+      code = applyToMirror(code, [
+        {
+          range: {
+            start: { line: sl, character: sc },
+            end: { line: el, character: ec },
+          },
+          newText,
+        },
+      ]);
+      if (docLines(code).length === count) {
+        assert.equal(
+          raw.lineGap.value,
+          gap,
+          'gap stays at the last structural edit'
+        );
+        assert.equal(
+          raw.lineCap.value,
+          capacity,
+          'no extra descriptors are needed'
+        );
+        assert.equal(
+          raw.lineTable.value,
+          table,
+          'the descriptor table stays in place'
+        );
+      }
+      const fresh = new LiveTokenizer({ lang: 'ts', theme: pierreDark, code });
+      try {
+        assert.equal(raw.liveLineCount(), fresh.lineCount);
+        for (let line = 0; line < fresh.lineCount; line++) {
+          assert.equal(
+            dec.decode(
+              new Uint8Array(
+                raw.memory.buffer,
+                raw.liveLineTextPtr(line),
+                raw.liveLineByteLen(line)
+              )
+            ),
+            fresh.getLineText(line)
+          );
+          assert.deepEqual(
+            new Uint32Array(
+              raw.memory.buffer,
+              raw.liveLineTokPtr(line),
+              raw.liveLineTokCount(line)
+            ),
+            fresh.getLineRecords(line).data
+          );
+        }
+      } finally {
+        fresh.dispose();
+      }
+    }
+  }
+);
 
 void t.test('live wasm: compaction keeps the document intact', () => {
   // Drive the native exports directly so the compaction trigger (freed
@@ -2259,36 +2476,224 @@ void t.test(
 void t.test(
   'LiveTokenizer: over-long lines use the theme foreground on every path',
   () => {
-    // update.lines and onDeferTokenize tuples must carry the same color
-    // getLineTokens reports for a line past tokenizeMaxLineLength
-    const long = `const x = "${'a'.repeat(1188)}";`;
-    assert.equal(long.length, 1201);
-    const code = `${long}\nlet y = 1;\nlet z = 2;\n`;
-    const deferred: Map<number, HighlightedToken[]>[] = [];
-    const live = new LiveTokenizer({
-      lang: 'ts',
-      theme: pierreDark,
-      code,
-      tokenizeMaxLineLength: 1000,
-      renderRange: [0, 0],
-      onDeferTokenize: (lines) => deferred.push(lines),
+    withSliceClock(() => {
+      // update.lines and onDeferTokenize tuples must carry the same color
+      // getLineTokens reports for a line past tokenizeMaxLineLength
+      const long = `const x = "${'a'.repeat(1188)}";`;
+      assert.equal(long.length, 1201);
+      const code = `${long}\nlet y = 1;\nlet z = 2;\n`;
+      const deferred: Map<number, HighlightedToken[]>[] = [];
+      const live = new LiveTokenizer({
+        lang: 'ts',
+        theme: pierreDark,
+        code,
+        tokenizeMaxLineLength: 1000,
+        renderRange: [0, 0],
+        onDeferTokenize: (lines) => deferred.push(lines),
+      });
+      try {
+        live.flush();
+        const fg = themeColor('foreground');
+        assert.ok(fg !== null);
+        const viaDefer = deferred.find((lines) => lines.has(0))?.get(0);
+        assert.deepEqual(viaDefer, [[0, fg, long]], 'onDeferTokenize tuple');
+        const viaUpdate = live
+          .reset(code, { renderRange: [0, 1] })
+          .lines.get(0);
+        assert.deepEqual(viaUpdate, [[0, fg, long]], 'update.lines tuple');
+        const { tokens } = live.getLineTokens(0);
+        assert.equal(tokens.length, 1);
+        assert.equal(tokens[0].color, fg, 'getLineTokens color');
+        // a line under the limit keeps its syntax colors in the tuples
+        const short = live.reset(code, { renderRange: [1, 2] }).lines.get(1);
+        assert.ok(short !== undefined && short.length > 1);
+      } finally {
+        live.dispose();
+      }
     });
-    try {
-      live.flush();
-      const fg = themeColor('foreground');
-      assert.ok(fg !== null);
-      const viaDefer = deferred.find((lines) => lines.has(0))?.get(0);
-      assert.deepEqual(viaDefer, [[0, fg, long]], 'onDeferTokenize tuple');
-      const viaUpdate = live.reset(code, { renderRange: [0, 1] }).lines.get(0);
-      assert.deepEqual(viaUpdate, [[0, fg, long]], 'update.lines tuple');
-      const { tokens } = live.getLineTokens(0);
-      assert.equal(tokens.length, 1);
-      assert.equal(tokens[0].color, fg, 'getLineTokens color');
-      // a line under the limit keeps its syntax colors in the tuples
-      const short = live.reset(code, { renderRange: [1, 2] }).lines.get(1);
-      assert.ok(short !== undefined && short.length > 1);
-    } finally {
-      live.dispose();
-    }
+  }
+);
+
+function withSliceClock(
+  run: (messages: (() => void)[], advance: () => void) => void
+): void {
+  const originalChannel = globalThis.MessageChannel;
+  const originalNow = Object.getOwnPropertyDescriptor(performance, 'now');
+  const messages: (() => void)[] = [];
+  let time = 0;
+  Object.defineProperty(performance, 'now', {
+    configurable: true,
+    value: () => (time += 0.05),
+  });
+  globalThis.MessageChannel = class {
+    listener: ((event: { data: number }) => void) | undefined;
+    port1 = {
+      addEventListener: (
+        _type: string,
+        listener: (event: { data: number }) => void
+      ) => {
+        this.listener = listener;
+      },
+      start() {},
+      close() {},
+    };
+    port2 = {
+      postMessage: (data: number) =>
+        messages.push(() => this.listener?.({ data })),
+      close() {},
+    };
+  } as unknown as typeof MessageChannel;
+  try {
+    run(messages, () => {
+      time += 2;
+    });
+  } finally {
+    globalThis.MessageChannel = originalChannel;
+    if (originalNow !== undefined)
+      Object.defineProperty(performance, 'now', originalNow);
+    else Reflect.deleteProperty(performance, 'now');
+  }
+}
+
+void t.test(
+  'LiveTokenizer: distant viewports and callback work share elapsed budgets',
+  () => {
+    withSliceClock((messages, advance) => {
+      const source = 'const x = 1;\n'.repeat(100_120);
+      const seen = new Set<number>();
+      let deliveries = 0;
+      const live = new LiveTokenizer({
+        lang: 'ts',
+        code: source,
+        theme: pierreDark,
+        onDeferTokenize(lines) {
+          deliveries++;
+          for (const [line, tokens] of lines) {
+            assert.ok(!seen.has(line), `line ${line} is delivered once`);
+            seen.add(line);
+            assert.equal(
+              tokens.map((token) => token[2]).join(''),
+              live.getLineText(line)
+            );
+          }
+          advance();
+        },
+      });
+      try {
+        const update = live.applyEdits(
+          [
+            {
+              range: {
+                start: { line: 0, character: 0 },
+                end: { line: 0, character: 0 },
+              },
+              newText: '/*',
+            },
+          ],
+          { renderRange: [100_000, 100_120] }
+        );
+        assert.equal(update.lines.size, 0, 'viewport can arrive later');
+        assert.ok(live.pendingTokenization);
+        assert.ok(
+          seen.size < 120,
+          'the synchronous slice stops in the dirty prefix'
+        );
+        while (messages.length > 0) {
+          const before = deliveries;
+          messages.shift()!();
+          assert.ok(
+            deliveries - before <= 1,
+            'expensive delivery exhausts the slice'
+          );
+        }
+        assert.equal(live.pendingTokenization, false);
+        assert.equal(seen.size, live.lineCount);
+        assert.ok(seen.has(100_119), 'deferred delivery includes the viewport');
+        assertMatchesFresh(live, '/*' + source, 'ts', 'distant viewport');
+      } finally {
+        live.dispose();
+      }
+    });
+  }
+);
+
+void t.test(
+  'LiveTokenizer: edits remap a partially materialized long line',
+  () => {
+    withSliceClock((messages) => {
+      let long = 'const é = "🙂"; '.repeat(8192) + '\ud800';
+      const delivered = new Map<number, HighlightedToken[]>();
+      const live = new LiveTokenizer({
+        lang: 'ts',
+        code: `first\n${long}\nlast`,
+        theme: pierreDark,
+        renderRange: [0, 0],
+        onDeferTokenize(lines) {
+          for (const [line, tokens] of lines) delivered.set(line, tokens);
+        },
+      });
+      try {
+        messages.shift()!();
+        assert.equal(live.getLineRecords(1).data.length, 0);
+        live.applyEdits(
+          [
+            {
+              range: {
+                start: { line: 1, character: 0 },
+                end: { line: 1, character: 0 },
+              },
+              newText: ' ',
+            },
+          ],
+          { renderRange: [0, 0] }
+        );
+        long = ' ' + long;
+        let slices = 0;
+        while (live.getLineRecords(1).data.length === 0) {
+          assert.ok(messages.length > 0);
+          messages.shift()!();
+          assert.ok(++slices < 1000);
+        }
+        assert.ok(slices > 1, 'scanning yields within the long line');
+        assert.ok(
+          !delivered.has(1),
+          'raw records finish before tuple conversion'
+        );
+        assert.ok(live.pendingTokenization, 'materialization remains pending');
+        live.pause();
+        while (messages.length > 0) messages.shift()!();
+        assert.ok(!delivered.has(1), 'pause retains the partial conversion');
+        delivered.clear();
+        live.applyEdits(
+          [
+            {
+              range: {
+                start: { line: 0, character: 0 },
+                end: { line: 0, character: 0 },
+              },
+              newText: 'new\n',
+            },
+          ],
+          { renderRange: [0, 0] }
+        );
+        while (messages.length > 0) messages.shift()!();
+        assert.equal(live.pendingTokenization, false);
+        assert.equal(
+          delivered
+            .get(2)
+            ?.map((token) => token[2])
+            .join(''),
+          long
+        );
+        assertMatchesFresh(
+          live,
+          `new\nfirst\n${long}\nlast`,
+          'ts',
+          'interrupted conversion'
+        );
+      } finally {
+        live.dispose();
+      }
+    });
   }
 );

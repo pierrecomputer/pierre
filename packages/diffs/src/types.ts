@@ -444,8 +444,9 @@ export interface BaseDiffOptions extends BaseCodeOptions {
   expansionLineCount?: number; // 100 is default
 
   /**
-   * Options forwarded to the underlying diff algorithm when computing diffs
-   * from file contents (oldFile/newFile). Has no effect on pre-parsed patches.
+   * Options forwarded to the underlying diff algorithm when computing
+   * diffs from file contents (oldFile/newFile) or recomputing edited
+   * diffs. Does not change the hunks in supplied pre-parsed patches.
    */
   parseDiffOptions?: CreatePatchOptionsNonabortable;
 }

@@ -165,6 +165,20 @@ export interface WorkerPoolOptions {
    */
   workerInitializationTimeout?: number;
 
+  /**
+   * Called for each worker error instead of logging it with console.error.
+   * Call event.preventDefault() to prevent the browser from also reporting it
+   * as an uncaught error.
+   *
+   * Script load failures may provide a plain Event without message or error;
+   * uncaught exceptions provide an ErrorEvent. If initialization fails, the
+   * pool stops its workers and components highlight on the main thread.
+   *
+   * Several workers can report the same script load failure. Track errors in
+   * this callback if your application should report that failure only once.
+   */
+  onWorkerError?: (event: ErrorEvent | Event, worker: Worker) => void;
+
   totalASTLRUCacheSize?: number;
 }
 

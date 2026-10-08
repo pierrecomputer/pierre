@@ -15,7 +15,7 @@ const us = (ms: number) => (ms >= 10 ? fmt(ms) + 'ms' : fmt(ms * 1000) + 'µs');
 const mb = (bytes: number) => fmt(bytes / 1048576) + 'MiB';
 
 const url = new URL('../src/highlights.wat', import.meta.url);
-const { code } = transformWat(url);
+const { code, languages } = transformWat(url);
 const wasmModule = new WebAssembly.Module(
   optimizeWasm(wat2wasm(url.pathname, code))
 );
@@ -143,9 +143,18 @@ for (const [name, source, lang] of [
       },
     }
   );
-  for (const viewport of [false, true]) {
+  for (const renderRange of [
+    undefined,
+    [0, 120],
+    [Math.max(0, lines.length - 120), lines.length],
+  ] as const) {
     scenarios.push({
-      label: viewport ? 'template + viewport' : 'template propagation',
+      label:
+        renderRange === undefined
+          ? 'template propagation'
+          : renderRange[0] === 0
+            ? 'template + viewport'
+            : 'template + distant viewport',
       edit: {
         range: {
           start: { line: 2, character: 0 },
@@ -153,7 +162,7 @@ for (const [name, source, lang] of [
         },
         newText: '`',
       },
-      options: viewport ? { renderRange: [0, 120] } : undefined,
+      options: renderRange === undefined ? undefined : { renderRange },
     });
   }
 
@@ -228,6 +237,98 @@ for (const [name, source, lang] of [
   }
 }
 
+for (const count of [100_000, 1_000_000]) {
+  const source = 'const value = 1;\n'.repeat(count - 1) + 'const value = 1;';
+  for (const distant of [false, true]) {
+    const live = new LiveTokenizer({
+      lang: 'ts',
+      theme: pierreDark,
+      code: source,
+    });
+    try {
+      const edits: LiveTextEdit[][] = (
+        distant ? [0, count - 1, 0, count - 1] : [0, 0, 0, 0]
+      ).map((line, i) => [
+        {
+          range: {
+            start: { line, character: 14 },
+            end: { line, character: 15 },
+          },
+          newText: (distant ? i < 2 : i % 2 === 0) ? '2' : '1',
+        },
+      ]);
+      let i = 0;
+      const [sample] = measure([
+        () => {
+          const edit = edits[i++ % edits.length];
+          live.applyEdits(edit);
+          return live.getLineRecords(edit[0].range.start.line);
+        },
+      ]);
+      assert.equal(live.lineCount, count);
+      const [lastEdit] = edits[(i - 1) % edits.length];
+      assert.equal(
+        live.getLineText(lastEdit.range.start.line),
+        `const value = ${lastEdit.newText};`
+      );
+      bench(
+        `synthetic ${count / 1000}k lines`,
+        distant ? 'alternating top/end + read' : 'local edit + read',
+        sample,
+        '1'
+      );
+    } finally {
+      live.dispose();
+    }
+  }
+}
+
+for (const size of [1, 5]) {
+  const live = new LiveTokenizer({
+    lang: 'ts',
+    theme: pierreDark,
+    code: 'x+1;'.repeat(size * 262144),
+    onDeferTokenize() {},
+  });
+  try {
+    const [sample] = measure(
+      [
+        {
+          run: () =>
+            live.applyEdits(
+              [
+                {
+                  range: {
+                    start: { line: 0, character: 0 },
+                    end: { line: 0, character: 0 },
+                  },
+                  newText: ' ',
+                },
+              ],
+              { renderRange: [0, 1] }
+            ),
+          afterEach: () => {
+            live.flush();
+            live.applyEdits([
+              {
+                range: {
+                  start: { line: 0, character: 0 },
+                  end: { line: 0, character: 1 },
+                },
+                newText: '',
+              },
+            ]);
+          },
+        },
+      ],
+      { batch: false }
+    );
+    bench(`${size} MiB dense line`, 'edit + viewport', sample);
+  } finally {
+    live.dispose();
+  }
+}
+
 const pad = (s: string, w: number, right = false) =>
   right ? s.padStart(w) : s.padEnd(w);
 const cols = [
@@ -277,7 +378,7 @@ const raw = new WebAssembly.Instance(wasmModule, { env })
 const bytes = new TextEncoder().encode(hundredK);
 const ptr = raw.liveStage(bytes.length);
 new Uint8Array(raw.memory.buffer).set(bytes, ptr);
-raw.liveInitDoc(ptr, bytes.length, 31);
+raw.liveInitDoc(ptr, bytes.length, languages.ts);
 raw.liveRun(0x7fffffff);
 console.log('\n100k-line footprint:');
 console.log(`  wasm memory      ${mb(raw.memory.buffer.byteLength)}`);

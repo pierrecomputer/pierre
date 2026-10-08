@@ -25,6 +25,7 @@ import { awaitWithTimeout } from '../utils/awaitWithTimeout';
 import { computeEstimatedDiffHeights } from '../utils/computeEstimatedDiffHeights';
 import {
   computeVirtualFileMetrics,
+  getVirtualFileHeaderHeight,
   getVirtualFileHeaderRegion,
   getVirtualFilePaddingBottom,
 } from '../utils/computeVirtualFileMetrics';
@@ -684,7 +685,10 @@ export class VirtualizedFileDiff<
     let top = checkpoint?.top ?? headerRegion + this.cache.fileAnnotationHeight;
 
     if (collapsed) {
-      return { top: headerRegion, height: 0 };
+      return {
+        top: getVirtualFileHeaderHeight(this.metrics, disableFileHeader),
+        height: 0,
+      };
     }
 
     let position: { top: number; height: number } | undefined;
@@ -1259,13 +1263,11 @@ export class VirtualizedFileDiff<
     );
 
     const { disableFileHeader = false, collapsed = false } = this.options;
-    const headerRegion = getVirtualFileHeaderRegion(
-      this.metrics,
-      disableFileHeader
-    );
-
-    this.height += headerRegion;
     if (collapsed) {
+      this.height += getVirtualFileHeaderHeight(
+        this.metrics,
+        disableFileHeader
+      );
       this.layoutDirty = false;
       return;
     }

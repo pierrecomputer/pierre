@@ -12,6 +12,7 @@ import {
   colorOf,
   exactColor,
   loadLang,
+  makeRand,
   spansOf,
   type TestLang,
   textOf,
@@ -199,14 +200,37 @@ void t.test(
   }
 );
 
+void t.test('csharp: interpolation formats are string text', () => {
+  const code =
+    '$"{date:yyyy-MM-dd} {n,10:N2} {((ok ? xs[0] : ys[0])):N2} {global::System.Math.PI:F2}"';
+  const kinds = tokenKinds('csharp', code);
+  assert.deepEqual(
+    kinds.filter(([text]) => ['yyyy-MM-dd', 'N2', 'F2'].includes(text)),
+    [
+      ['yyyy-MM-dd', 'string'],
+      ['N2', 'string'],
+      ['N2', 'string'],
+      ['F2', 'string'],
+    ]
+  );
+  assert.ok(kinds.some(([text, kind]) => text === 'ys' && kind === 'variable'));
+  assertLineFedParity('csharp', code);
+  const multiline = '$@"{date:yyyy\nMM-dd} tail"';
+  assert.ok(
+    tokenKinds('csharp', multiline).some(
+      ([text, kind]) => text === 'MM-dd' && kind === 'string'
+    )
+  );
+  assertLineFedParity('csharp', multiline);
+});
+
 void t.test('csharp: deterministic fuzz preserves lexer invariants', () => {
-  let state = 0x51f15e;
+  const rand = makeRand(0x51f15e);
   const alphabet = 'abcXYZ09_ /\\"\'`\n\t{}[]().,:;+-*=!<>&|#@$%~?\u00e9';
   for (let n = 0; n < 160; n++) {
     let src = '';
-    for (let i = 0, len = state & 63; i < len; i++) {
-      state = (Math.imul(state, 1664525) + 1013904223) >>> 0;
-      src += alphabet[state % alphabet.length];
+    for (let i = 0, len = rand() & 63; i < len; i++) {
+      src += alphabet[rand() % alphabet.length];
     }
     checkInvariants(lexer.hl, src);
   }
@@ -395,7 +419,7 @@ void t.test(
     }
     assert.equal(exactColor(html, '$"i'), distinctColor('string'));
     assert.equal(exactColor(html, '{'), distinctColor('punctuation.special'));
-    assert.equal(exactColor(html, 'N2'), distinctColor('constant'));
+    assert.equal(exactColor(html, 'N2'), distinctColor('string'));
     assert.equal(
       exactColor(html, '@"verbatim ""q"" \\n"'),
       distinctColor('string')

@@ -7,15 +7,12 @@
   ;; around each delegation and so returns to zero on its own; never reset it
   ;; in `$hlMarkdown`, which is itself one of the recursive entry points.
   (global $markdownDepth (mut i32) (i32.const 0))
-  ;; The fence left open at the end of a stream chunk, so the next chunk
-  ;; resumes its body: the fence byte, its run length with the block-quote
-  ;; depth packed above, and the body language. The globals hold the
-  ;; document's own fence. A fence opened inside a `markdown` or `mdx` fence
-  ;; body keeps its registers in $mem.markdownFenceStack at its nesting
-  ;; depth, so an inner fence survives the chunk boundary alongside the outer
-  ;; one instead of being overwritten by it. The live tokenizer captures both
-  ;; and $streamResetGlobals clears both. MDX records an open ESM block here
-  ;; too, under the pseudo fence byte 1 (see $mdxEsmRange).
+  ;; Save an open fence's byte, length, block-quote depth, and body language
+  ;; for the next chunk. Globals hold the document's outer fence.
+  ;; Nested Markdown/MDX fences use per-depth $mem.markdownFenceStack records
+  ;; so inner and outer fences survive together. The live tokenizer captures
+  ;; both. $streamResetGlobals clears both. MDX also uses fence byte 1 for
+  ;; an open ESM block (see $mdxEsmRange).
   (global $markdownStreamFence (mut i32) (i32.const 0))
   (global $markdownStreamFenceLen (mut i32) (i32.const 0))
   (global $markdownStreamLang (mut i32) (i32.const 0))
@@ -75,15 +72,14 @@
   ;; a later chunk knows whether the body's lexer already checkpointed state
   ;; for this fence.
   (global $markdownBodyRan (mut i32) (i32.const 0))
+  (global $markdownFenceEnded (mut i32) (i32.const 0))
 
-  ;; Highlight the fence body [$from,$to) as $lang. A whole-buffer run and
-  ;; the first chunk of a streamed body start the body's lexer fresh; a later
-  ;; chunk of a streamed body ($resume) continues it the way the top-level
-  ;; driver continues a document: the shared comment/string modes and the
-  ;; language's own resume hooks run first, bounded by the fence closer, and
-  ;; checkpoint lexers run at stream depth 0 so their locals carry over. A
-  ;; nested markdown or mdx body stays a bounded call one nesting depth down;
-  ;; its state lives in the per-depth fence registers.
+  ;; Highlight fence body [$from,$to) as $lang. Start a fresh lexer for
+  ;; whole-buffer input or the first streamed chunk.
+  ;; For $resume, run shared modes and language resume hooks first, bounded
+  ;; by the fence closer. Checkpoint lexers use stream depth 0 to save locals.
+  ;; Nested Markdown/MDX bodies stay bounded one level deeper and store
+  ;; their state in per-depth fence registers.
   (func $markdownCodeRange (param $lang i32) (param $from i32) (param $to i32) (param $resume i32)
     (local $save i32)
     (local $saveDoc i32)
@@ -404,22 +400,23 @@
         (br $l)))
     (local.get $p))
 
-  ;; Start of the first line at or after $p that closes a fence: $quotes
-  ;; block-quote markers, at most three spaces, a run of at least $len $fence
-  ;; bytes, then only blanks. The indent and quote prefixes mirror what the
-  ;; opener accepts, so fences inside list items and block quotes close.
-  ;; Returns $end when the fence never closes. Shared with the MDX pre-scan
-  ;; so the two lexers agree on where a fenced body ends.
+  ;; Find the first fence closer line at or after $p. Require $quotes quote
+  ;; markers, at most three spaces, at least $len $fence bytes, then blanks.
+  ;; Match the opener's container prefixes. Return $end if no closer exists.
+  ;; A missing container prefix ends the body before that line and sets
+  ;; $markdownFenceEnded. MDX shares this scan to use the same body bounds.
   (func $markdownFenceClose
     (param $p i32)
     (param $fence i32)
     (param $len i32)
     (param $quotes i32)
+    (param $indent i32)
     (result i32)
     (local $c i32)
     (local $lineEnd i32)
     (local $n i32)
     (local $q i32)
+    (global.set $markdownFenceEnded (i32.const 0))
     (block $done
       (loop $lines
         (br_if $done (i32.ge_u (local.get $p) (global.get $end)))
@@ -432,8 +429,12 @@
             (loop $quoteLevel
               (br_if $quotesDone (i32.eqz (local.get $n)))
               (local.set $q (call $markdownSkipIndent (local.get $q) (local.get $lineEnd)))
-              (br_if $skip (i32.ge_u (local.get $q) (local.get $lineEnd)))
-              (br_if $skip (i32.ne (i32.load8_u (local.get $q)) (i32.const ">")))
+              (if (i32.or
+                    (i32.ge_u (local.get $q) (local.get $lineEnd))
+                    (i32.ne (i32.load8_u (local.get $q)) (i32.const ">")))
+                (then
+                  (global.set $markdownFenceEnded (i32.const 1))
+                  (return (local.get $p))))
               (local.set $q (i32.add (local.get $q) (i32.const 1)))
               (if
                 (i32.and
@@ -442,6 +443,22 @@
                 (then (local.set $q (i32.add (local.get $q) (i32.const 1)))))
               (local.set $n (i32.sub (local.get $n) (i32.const 1)))
               (br $quoteLevel)))
+          (local.set $n (i32.const 0))
+          (block $indentDone
+            (loop $indent
+              (br_if $indentDone (i32.ge_u (local.get $n) (local.get $indent)))
+              (br_if $skip (i32.ge_u (local.get $q) (local.get $lineEnd)))
+              (local.set $c (i32.load8_u (local.get $q)))
+              (if (i32.eqz (byteset.get " \09" (local.get $c)))
+                (then
+                  (global.set $markdownFenceEnded (i32.const 1))
+                  (return (local.get $p))))
+              (local.set $n
+                (i32.add (local.get $n)
+                  (select (i32.sub (i32.const 4) (i32.and (local.get $n) (i32.const 3)))
+                    (i32.const 1) (i32.eq (local.get $c) (i32.const 9)))))
+              (local.set $q (i32.add (local.get $q) (i32.const 1)))
+              (br $indent)))
           (local.set $q (call $markdownSkipIndent (local.get $q) (local.get $lineEnd)))
           (local.set $n (local.get $q))
           (block $runDone
@@ -467,27 +484,22 @@
         (br $lines)))
     (global.get $end))
 
-  ;; Drop stream state left behind by an embedded range that finished inside
-  ;; this chunk. A fence body or an inline HTML range hands its bytes to
-  ;; another lexer over an $end swap; at that inner end the lexer may
-  ;; checkpoint an open comment, string, or script/style region as if the
-  ;; chunk ended there. When the range really continues in the next chunk
-  ;; (a fence body cut by the chunk end) that state is kept and resumed by
-  ;; $markdownCodeRange; otherwise markdown continues and it must not leak.
+  ;; Clear embedded lexer state when its range ends within this chunk.
+  ;; Fence bodies and inline HTML temporarily replace $end. An embedded
+  ;; lexer can save an unfinished mode there as if the chunk had ended.
+  ;; Keep that state only if the range continues in the next chunk.
+  ;; Otherwise it must not affect the Markdown that follows.
   (func $markdownClearEmbeddedStream
     (global.set $streamMode (i32.const 0))
     (global.set $streamRegionKind (i32.const 0))
     (global.set $streamRegionStarted (i32.const 0)))
 
-  ;; Continue a fenced block whose closing delimiter is in a later stream
-  ;; chunk. Returns one while the whole chunk belongs to the fence body.
-  ;; The fence length register packs the block-quote depth of the opener
-  ;; into its upper half so the closer scan can demand the same `>` prefix;
-  ;; the language register carries bit 8 once the body's lexer has run, so
-  ;; the next chunk resumes that lexer instead of starting it fresh.
-  ;; Runs at the current nesting depth: for the document itself from
-  ;; $streamChunk, and for a nested markdown body from $markdownCodeRange,
-  ;; which resumes a fence recorded one depth down.
+  ;; Resume an open fence. Return 1 if its body consumes the whole chunk.
+  ;; The length register stores block-quote depth in its upper half.
+  ;; The language register stores list indentation in its upper half and
+  ;; uses bit 8 to mark a lexer that has run and needs resuming.
+  ;; $streamChunk resumes the outer fence. $markdownCodeRange resumes nested
+  ;; fences from the next depth's registers.
   (func $markdownStreamResume (result i32)
     (local $after i32)
     (local $close i32)
@@ -497,6 +509,7 @@
     (local $lineEnd i32)
     (local $quotes i32)
     (local $reg i32)
+    (local $ended i32)
     (local.set $fence (call $markdownFenceReg))
     (if (i32.eqz (local.get $fence))
       (then (return (i32.const 0))))
@@ -512,7 +525,9 @@
         (global.get $ptr)
         (local.get $fence)
         (i32.and (local.get $len) (i32.const 0xffff))
-        (local.get $quotes)))
+        (local.get $quotes)
+        (i32.shr_u (local.get $reg) (i32.const 16))))
+    (local.set $ended (global.get $markdownFenceEnded))
     (call $markdownFenceBody
       (local.get $lang)
       (global.get $ptr)
@@ -527,12 +542,13 @@
             (call $markdownFenceSet
               (local.get $fence)
               (local.get $len)
-              (i32.or (local.get $lang) (i32.const 0x100)))))
+              (i32.or (local.get $reg) (i32.const 0x100)))))
         (return (i32.const 1))))
     ;; closed in this chunk: whatever the body left open is finished text
     (call $markdownClearEmbeddedStream)
     (global.set $ptr (local.get $close))
-    (call $markdownFenceCloser (local.get $quotes))
+    (if (i32.eqz (local.get $ended))
+      (then (call $markdownFenceCloser (local.get $quotes))))
     ;; a nested body records its own fences one depth down, so the registers
     ;; at this depth still describe the fence being closed
     (call $markdownFenceSet (i32.const 0) (i32.const 0) (i32.const 0))
@@ -585,15 +601,12 @@
         (br $scalar)))
     (local.get $p))
 
-  ;; End of one inline HTML construct starting at the `<` at $lhs, whose line
-  ;; ends at $lineEnd. Returns lhs+1 when the byte after `<` rules a tag out,
-  ;; and 0 when a tag could start but nothing closes it before the line end:
-  ;; the caller then treats every later `<` on the line as plain text without
-  ;; rescanning, which keeps a line of many `<` linear. Quoted attribute
-  ;; values are bounded to the line too, so a tag never spans the chunk
-  ;; boundary the line-fed engines cut at. A `<script` or `<style` open tag
-  ;; extends through its matching close tag, or to $end, so the raw-text body
-  ;; reaches the HTML lexer the same way whole-buffer and streamed.
+  ;; Find the end of inline HTML starting at $lhs on a line ending at $lineEnd.
+  ;; Return lhs+1 if the next byte rules out a tag. Return 0 if a tag could
+  ;; start but has no closer on this line. The caller then skips later `<`
+  ;; bytes without rescanning, keeping repeated failures linear.
+  ;; Bound quoted attributes to the line. Extend script/style tags through
+  ;; their closing tag or $end so the HTML lexer receives the raw-text body.
   (func $markdownHtmlEnd (param $lhs i32) (param $lineEnd i32) (result i32)
     (local $p i32)
     (local $q i32)
@@ -782,13 +795,11 @@
       (then (return (i32.add (local.get $p) (i32.const 1)))))
     (i32.const 0))
 
-  ;; A link whose text is an image, `[![alt](src)](href)` - the badge rows
-  ;; that open most READMEs. The generic link scan pairs the outer `[` with
-  ;; the image's `]`, so this shape is matched first: when the whole of it
-  ;; lies on the line, emit the image inside the outer link and return the
-  ;; end past the final `)`; otherwise emit nothing and return 0.
-  (func $markdownImageLink (param $lhs i32) (param $lineEnd i32) (result i32)
-    (local $alt i32)
+  ;; Match an image inside a link: `[![alt](src)](href)`.
+  ;; Check this before generic links. If the whole construct fits on the
+  ;; line, emit the image inside the link and return the end after `)`.
+  ;; Otherwise emit nothing and return 0.
+  (func $markdownImageLink (param $lhs i32) (param $lineEnd i32) (param $alt i32) (result i32)
     (local $src i32)
     (local $href i32)
     (if
@@ -797,13 +808,10 @@
         (i32.ne (i32.load16_u offset=1 (local.get $lhs)) (i32.const "![")))
       (then (return (i32.const 0))))
     ;; each of `](`, `)](`, and `)` must follow on the line
-    (local.set $alt
-      (call $scanFindSpecial
-        (i32.add (local.get $lhs) (i32.const 3))
-        (local.get $lineEnd)
-        (i32.const "]")
-        (i32.const 0)
-        (i32.const 0)))
+    (if (i32.lt_u
+          (call $scanFindSpecial (i32.add (local.get $lhs) (i32.const 3)) (local.get $alt) (i32.const "[") (i32.const 0) (i32.const 0))
+          (local.get $alt))
+      (then (return (i32.const 0))))
     (if
       (i32.or
         (i32.ge_u (i32.add (local.get $alt) (i32.const 1)) (local.get $lineEnd))
@@ -870,13 +878,11 @@
       (local.get $rhs)
       (i32.add (local.get $rhs) (i32.const 1))))
 
-  ;; Failed-scan memo of the emphasis closer scan, reset by each $hlMarkdown
-  ;; call: no closer for a `_` opener of width $markdownUnderNoCloseCount
-  ;; exists before $markdownUnderNoClose. Closers glued to an alphanumeric
-  ;; byte are skipped, so a line of such openers would otherwise rescan to
-  ;; the line end from each one. Positions only grow within a call, so the
-  ;; memo expires by itself; a nested markdown body resets it, which only
-  ;; costs the outer lexer a rescan.
+  ;; Cache a failed emphasis scan: no closer for an underscore opener of
+  ;; width $markdownUnderNoCloseCount exists before $markdownUnderNoClose.
+  ;; Skip closers next to alphanumeric bytes. Caching prevents repeated scans
+  ;; to the line end. The cache expires as positions advance.
+  ;; Each $hlMarkdown call resets it. A nested call can cause a rescan.
   (global $markdownUnderNoClose (mut i32) (i32.const 0))
   (global $markdownUnderNoCloseCount (mut i32) (i32.const 0))
 
@@ -1008,6 +1014,9 @@
     (local $count i32)
     (local $fence i32)
     (local $fenceLen i32)
+    (local $ended i32)
+    (local $listStart i32)
+    (local $indent i32)
     (local $htmlEnd i32)
     (local $info i32)
     (local $lang i32)
@@ -1019,13 +1028,13 @@
     (local $lineCache i32)
     (local $lineEnd i32)
     (local $lineStart i32)
-    ;; Failed-scan memos, each a position on the current line: no inline tag
-    ;; closes before $htmlNoClose, and no `[..](..)` link can complete from a
-    ;; `[` before $linkNoClose. Positions only grow, so a memo expires by
-    ;; itself once the cursor passes it. They keep a line of many `<` or `[`
-    ;; linear instead of rescanning to the line end per byte.
+    ;; Cache failed scans on this line. No tag closes before $htmlNoClose.
+    ;; No link starting before $linkNoClose can complete.
+    ;; These bounds expire as the cursor advances and prevent repeated scans
+    ;; to the line end for sequences of `<` or `[`.
     (local $htmlNoClose i32)
     (local $linkNoClose i32)
+    (local $linkClose i32)
     (local $p i32)
     (local $q i32)
     ;; block-quote markers seen on the current line; a fence opened behind
@@ -1038,6 +1047,7 @@
     (local.set $lineCache (i32.const 0))
     (local.set $htmlNoClose (i32.const 0))
     (local.set $linkNoClose (i32.const 0))
+    (local.set $linkClose (i32.const 0))
     (global.set $markdownUnderNoClose (i32.const 0))
     (global.set $markdownUnderNoCloseCount (i32.const 0))
     (local.set $quotes (i32.const 0))
@@ -1086,6 +1096,7 @@
             (call $emitGap (local.get $lhs) (global.get $ptr))
             (local.set $lineStart (i32.const 1))
             (local.set $quotes (i32.const 0))
+            (local.set $listStart (i32.const 0))
             (br $next)))
 
         ;; Up to three leading spaces retain line-start meaning.
@@ -1212,6 +1223,8 @@
                     (local.set $q (i32.add (local.get $q) (i32.const 1)))
                     (br $infoWord)))
                 (local.set $lang (call $languageByName (local.get $info) (local.get $q)))
+                (local.set $indent
+                  (select (i32.sub (global.get $ptr) (local.get $listStart)) (i32.const 0) (local.get $listStart)))
                 (local.set $body (call $markdownAfterLine (local.get $lineEnd)))
                 (call $emitTok
                   (enum.get $Token.punctuation.delimiter)
@@ -1222,7 +1235,9 @@
                     (local.get $body)
                     (local.get $fence)
                     (local.get $fenceLen)
-                    (local.get $quotes)))
+                    (local.get $quotes)
+                    (local.get $indent)))
+                (local.set $ended (global.get $markdownFenceEnded))
                 (call $markdownFenceBody
                   (local.get $lang)
                   (local.get $body)
@@ -1252,7 +1267,7 @@
                                 (i32.gt_u (local.get $quotes) (i32.const 0x7fff)))
                               (i32.const 16)))
                           (i32.or
-                            (local.get $lang)
+                            (i32.or (local.get $lang) (i32.shl (local.get $indent) (i32.const 16)))
                             (select
                               (i32.const 0x100)
                               (i32.const 0)
@@ -1266,12 +1281,13 @@
                         (call $markdownClearEmbeddedStream)
                         (call $markdownFenceClearDeeper)))))
                 (global.set $ptr (local.get $close))
-                (if (i32.lt_u (local.get $close) (global.get $end))
+                (if (i32.and (i32.eqz (local.get $ended)) (i32.lt_u (local.get $close) (global.get $end)))
                   (then (call $markdownFenceCloser (local.get $quotes))))
                 ;; the closer consumed its line break: the next line starts
                 ;; outside the block quote until it shows its own `>`
                 (local.set $lineStart (i32.const 1))
                 (local.set $quotes (i32.const 0))
+                (local.set $listStart (i32.const 0))
                 (br $next)))))
 
         ;; Unordered and ordered list markers.
@@ -1285,6 +1301,8 @@
                   (i32.lt_u (local.get $p) (global.get $end))
                   (call $lexIsSpace (i32.load8_u (local.get $p)))))
               (then
+                (if (i32.eqz (local.get $listStart))
+                  (then (local.set $listStart (global.get $ptr))))
                 (global.set $ptr (local.get $p))
                 (call $emitTok
                   (enum.get $Token.punctuation.list_marker)
@@ -1363,18 +1381,35 @@
               (then (local.set $lineCache (call $markdownLineEnd (global.get $ptr)))))
             (if (i32.gt_u (i32.add (global.get $ptr) (i32.const 1)) (local.get $linkNoClose))
               (then
-                (local.set $q (call $markdownImageLink (global.get $ptr) (local.get $lineCache)))
+                (if (i32.ge_u (global.get $ptr) (local.get $linkClose))
+                  (then
+                    (local.set $linkClose
+                      (call $scanFindSpecial
+                        (i32.add (global.get $ptr) (i32.const 1))
+                        (local.get $lineCache)
+                        (i32.const "]")
+                        (i32.const 0)
+                        (i32.const 0)))))
+                (local.set $p (local.get $linkClose))
+                (local.set $q (call $markdownImageLink (global.get $ptr) (local.get $lineCache) (local.get $p)))
                 (if (local.get $q)
                   (then
                     (global.set $ptr (local.get $q))
                     (br $next)))
-                (local.set $p
-                  (call $scanFindSpecial
-                    (i32.add (global.get $ptr) (i32.const 1))
-                    (local.get $lineCache)
-                    (i32.const "]")
-                    (i32.const 0)
-                    (i32.const 0)))
+                (local.set $q (i32.add (global.get $ptr) (i32.const 1)))
+                (block $labelDone
+                  (loop $label
+                    (local.set $q
+                      (call $scanFindSpecial (local.get $q) (local.get $p) (i32.const "[") (i32.const 1) (i32.const 0)))
+                    (br_if $labelDone (i32.ge_u (local.get $q) (local.get $p)))
+                    (br_if $labelDone (i32.eq (i32.load8_u (local.get $q)) (i32.const "[")))
+                    (local.set $q (i32.add (local.get $q) (i32.const 2)))
+                    (br $label)))
+                (if (i32.lt_u (local.get $q) (local.get $p))
+                  (then
+                    (global.set $ptr (local.get $q))
+                    (call $emitTok (enum.get $Token.none) (local.get $lhs) (global.get $ptr))
+                    (br $next)))
                 (if
                   (i32.and
                     (i32.lt_u (i32.add (local.get $p) (i32.const 1)) (local.get $lineCache))

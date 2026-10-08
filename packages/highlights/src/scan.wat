@@ -2,16 +2,17 @@
   ;; input base: 65536 for whole-buffer runs, the live scratch base otherwise.
   ;; token-record offsets and start-of-input checks are relative to it.
   (global $srcBase (mut i32) (i32.const 65536))
-  ;; Where the current lexer run starts a document, or 0 when it does not:
-  ;; the input start of a whole-buffer run and of a stream's (or live
-  ;; document's) first chunk, and the start of a fenced body's first piece
-  ;; ($markdownCodeRange). Document-start syntax - a `#!` line, front
-  ;; matter - counts only here, so whole-buffer and streamed runs agree.
-  ;; Starts at the default $srcBase, which single-lexer harnesses keep.
+  ;; Start of the document for this lexer run, or 0 for a continuation.
+  ;; This is the first chunk of an input, stream, live document, or fence
+  ;; body. Only this position accepts document-start syntax such as `#!`
+  ;; or front matter. Defaults to $srcBase for single-lexer test harnesses.
   (global $docStart (mut i32) (i32.const 65536))
   (global $eof (mut i32) (i32.const 0)) ;; input end (the NUL sentinel sits there)
   (global $end (mut i32) (i32.const 0)) ;; scan end: $eof, or a sub-range end for embedded scans
   (global $ptr (mut i32) (i32.const 0)) ;; read cursor
+  (global $liveLimit (mut i32) (i32.const 0x7fffffff))
+  (global $liveSuspended (mut i32) (i32.const 0))
+  (global $liveEntering (mut i32) (i32.const 0))
 
   ;; advance $ptr to the next CR/LF, or to $end - 16 bytes per step
   (func $scanToLineEnd
@@ -62,11 +63,10 @@
     (if (i32.gt_u (global.get $ptr) (global.get $end))
       (then (global.set $ptr (global.get $end)))))
 
-  ;; the next occurrence in [$p,$stop) of $q, backslash (when $esc), or CR/LF
-  ;; (when $nl), or $stop when there is none - 16 bytes per step. Wide loads
-  ;; may pass $stop into the buffer slack; matches at or past $stop are
-  ;; discarded. Disabled classes compare against $q again, so the loop body
-  ;; stays branch-free.
+  ;; Find $q, backslash (if $esc), or CR/LF (if $nl) in [$p,$stop).
+  ;; Return $stop if none is found. Scan 16 bytes per step.
+  ;; Wide loads can read buffer slack. Discard matches at or past $stop.
+  ;; Disabled classes compare against $q to keep the loop branch-free.
   (func $scanFindSpecial
     (param $p i32)
     (param $stop i32)
@@ -238,10 +238,9 @@
         (br $l)))
     (local.get $e))
 
-  ;; end of the run of ASCII hex digits starting at $p: at most $max long,
-  ;; clamped to $end. Escape spans (`\uXXXX`, `\xNN`, css `\HHHHHH`) cover
-  ;; only digits actually present, so a short escape never swallows the byte
-  ;; that ends its string.
+  ;; Find the end of at most $max ASCII hex digits from $p, bounded by $end.
+  ;; Escape spans include only digits present. Short `\uXXXX`, `\xNN`, or
+  ;; CSS `\HHHHHH` escapes must not consume the string's closing quote.
   (func $scanHexRun (param $p i32) (param $max i32) (result i32)
     (local $c i32)
     (local $stop i32)

@@ -264,7 +264,7 @@ export const HELPER_GET_SHARED_HIGHLIGHTER: PreloadFileOptions<
     name: 'getSharedHighlighter.ts',
     contents: `import { getSharedHighlighter } from '@pierre/diffs';
 
-// Only one backend can be loaded at a time; requesting another rejects.
+// Later preferences do not replace an active backend.
 const highlighter = await getSharedHighlighter({
   preferredHighlighter: 'shiki-js', // defaults to the loaded backend, else 'shiki-js'
   themes: ['pierre-dark'],

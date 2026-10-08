@@ -210,7 +210,7 @@ describe('virtual file padding metrics', () => {
       );
     });
 
-    test('uses only the top region when collapsed', () => {
+    test('uses only the header when collapsed', () => {
       const fileDiff = createTwoHunkDiff();
       const [firstHunk] = fileDiff.hunks;
       if (firstHunk == null) {
@@ -229,12 +229,12 @@ describe('virtual file padding metrics', () => {
       instance.updateCodeViewLayout(fileDiff, 0);
 
       expect(instance.getVirtualizedHeight()).toBe(
-        baseMetrics.diffHeaderHeight + 6
+        baseMetrics.diffHeaderHeight
       );
       expect(
         instance.getLinePosition(firstHunk.additionStart, 'additions')
       ).toEqual({
-        top: baseMetrics.diffHeaderHeight + 6,
+        top: baseMetrics.diffHeaderHeight,
         height: 0,
       });
     });

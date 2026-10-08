@@ -361,6 +361,49 @@ await workerPool.setRenderOptions({
   options,
 };
 
+export const WORKER_POOL_WORKER_ERRORS: PreloadFileOptions<
+  undefined,
+  undefined
+> = {
+  file: {
+    name: 'worker-errors.ts',
+    contents: `import {
+  getOrCreateWorkerPoolSingleton,
+  isHandledWorkerPoolError,
+} from '@pierre/diffs/worker';
+import { workerFactory } from './utils/workerFactory';
+
+let reported = false;
+
+const workerPool = getOrCreateWorkerPoolSingleton({
+  poolOptions: {
+    workerFactory,
+    // Multiple workers can report the same script load failure.
+    // Report only the first error to avoid duplicate reports.
+    onWorkerError(event, worker) {
+      // Prevent the browser from reporting this error as uncaught.
+      event.preventDefault();
+      if (reported) return;
+      reported = true;
+      const message =
+        'message' in event ? event.message : 'worker script failed to load';
+      myErrorReporter.capture('diffs highlight worker failed', { message });
+    },
+  },
+  highlighterOptions: {
+    theme: { dark: 'pierre-dark', light: 'pierre-light' },
+  },
+});
+
+// Skip expected cancellations and worker errors already reported above.
+workerPool.primeDiffHighlightCache(diff).catch((error: unknown) => {
+  if (isHandledWorkerPoolError(error)) return;
+  console.error(error);
+});`,
+  },
+  options,
+};
+
 export const WORKER_POOL_API_REFERENCE: PreloadFileOptions<
   undefined,
   undefined
@@ -377,6 +420,9 @@ new WorkerPoolManager(poolOptions, highlighterOptions)
 //   - totalASTLRUCacheSize?: number (default: 100) - Max items per cache
 //     (Two separate LRU caches are maintained: one for files, one for diffs.
 //      Each cache has this limit, so total cached items can be 2x this value.)
+//   - onWorkerError?: (event: ErrorEvent | Event, worker: Worker) => void
+//     Called for each worker error instead of logging it with console.error.
+//     Failed initialization switches components to main-thread highlighting.
 // - highlighterOptions: WorkerInitializationRenderOptions
 //   - theme?: DiffsThemeNames | ThemesType - Theme name or { dark, light } object
 //   - lineDiffType?: 'word' | 'word-alt' | 'word-line' | 'char' | 'none'

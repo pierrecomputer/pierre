@@ -14,11 +14,10 @@ export interface MeasurementCase {
 // Keep results observable without walking outputs of different sizes.
 export let lastResult: unknown;
 
-// Warm every contender, then rotate batches with the same budget per case.
-// Throughput samples average ~5 ms batches; batch:false measures call latency.
-// Cleanup is excluded from samples but counts toward the runtime budget;
-// otherwise fast edits with expensive deferred work can run for minutes.
-// Cases with cleanup always run one call per sample.
+// Warm each case, then rotate batches with equal time budgets.
+// Throughput samples average about 5 ms. Use batch:false for call latency.
+// Cleanup counts toward the time budget but not the measured sample.
+// Cases with cleanup run once per sample to bound deferred work.
 export function measure(
   cases: readonly ((() => unknown) | MeasurementCase)[],
   { batch = true }: { batch?: boolean } = {}

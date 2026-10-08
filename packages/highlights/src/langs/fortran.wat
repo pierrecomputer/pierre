@@ -201,31 +201,11 @@
                 (br $string)))
             (call $emitTok (enum.get $Token.string) (local.get $lhs) (global.get $ptr))
             (br $next)))
-        ;; A C or * in column one opens a comment line. Fixed-form source
-        ;; takes any column-one * or C, with or without a blank after it
-        ;; (Ccomment), because its statements start in column seven. Free-form
-        ;; source has no * comments - a column-one * there is an operator on a
-        ;; continuation line - and only takes a C separated from its text, so
-        ;; assignments such as c = 1 and words such as contains remain
-        ;; ordinary code. Nested ifs keep the `=` lookahead off every other
-        ;; token: WAT evaluates all operands of i32.and.
-        (if (i32.eqz (local.get $column))
+        (if (i32.and (global.get $fortranFixed) (i32.eqz (local.get $column)))
           (then
             (if
-              (if (result i32) (global.get $fortranFixed)
-                (then
-                  (i32.or (i32.eq (local.get $c) (i32.const "*"))
-                    (i32.eq (i32.or (local.get $c) (i32.const 32)) (i32.const "c"))))
-                (else
-                  (if (result i32)
-                    (i32.and (i32.eq (i32.or (local.get $c) (i32.const 32)) (i32.const "c"))
-                      (i32.eq (local.get $c2) (i32.const 32)))
-                    (then
-                      (i32.ne
-                        (call $fortranByte
-                          (call $lexSkipSpaceAt (i32.add (local.get $lhs) (i32.const 1))))
-                        (i32.const "=")))
-                    (else (i32.const 0)))))
+              (i32.or (i32.eq (local.get $c) (i32.const "*"))
+                (i32.eq (i32.or (local.get $c) (i32.const 32)) (i32.const "c")))
               (then (call $lexLineComment (i32.const 1) (enum.get $Token.comment)) (br $next)))))
         (if (i32.eq (local.get $c) (i32.const "#"))
           (then (call $lexLineComment (i32.const 1) (enum.get $Token.preproc)) (br $next)))

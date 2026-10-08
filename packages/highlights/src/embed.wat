@@ -1,12 +1,10 @@
 (module
-  ;; Stream resumption of embedded regions: raw-text script/style bodies,
-  ;; front matter, and framework expressions that a chunk boundary cut open
-  ;; ($streamRegionKind 1-8, and 14-16 for style bodies in a css
-  ;; preprocessor - see html.wat's raw-text kinds). The top-level driver in
-  ;; highlights.wat resumes them for html-like documents, and markdown.wat
-  ;; resumes them inside a fenced body that is streamed line by line - hence
-  ;; the import cycle with markdown.wat, which the build's
-  ;; one-inline-per-module import expansion tolerates.
+  ;; Resume script/style bodies, front matter, and framework expressions
+  ;; at chunk boundaries. These use $streamRegionKind 1-8 and 14-16
+  ;; (CSS preprocessor bodies, see html.wat).
+  ;; highlights.wat resumes them in HTML-like documents. markdown.wat
+  ;; resumes them inside streamed fences. Their import cycle is safe
+  ;; because the build inlines each module once.
   (import "./common.wat")
   (import "./langs/tsx.wat")
   (import "./langs/html.wat")

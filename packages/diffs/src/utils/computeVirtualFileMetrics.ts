@@ -14,8 +14,19 @@ export function getVirtualFileHeaderRegion(
   metrics: VirtualFileMetrics,
   disableFileHeader: boolean
 ): number {
-  const paddingTop = getVirtualFilePaddingTop(metrics, disableFileHeader);
-  return disableFileHeader ? paddingTop : metrics.diffHeaderHeight + paddingTop;
+  return (
+    getVirtualFileHeaderHeight(metrics, disableFileHeader) +
+    getVirtualFilePaddingTop(metrics, disableFileHeader)
+  );
+}
+
+// Collapsed items render only the header. The top padding belongs to the
+// code content, which is removed on collapse.
+export function getVirtualFileHeaderHeight(
+  metrics: VirtualFileMetrics,
+  disableFileHeader: boolean
+): number {
+  return disableFileHeader ? 0 : metrics.diffHeaderHeight;
 }
 
 export function getVirtualFilePaddingTop(

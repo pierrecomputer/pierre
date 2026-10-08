@@ -4,9 +4,12 @@ import { arch, cpus, totalmem, type } from 'node:os';
 import { WriteStream } from 'node:tty';
 import type { Language } from 'tree-sitter-highlight';
 
+import { HighlightsHighlighter, LANGS } from '../lib/highlighter';
 import { init, StreamTokenizer, type ThemedToken } from '../lib/index';
+import { lineRecordsToTokens, resolveOptionThemes } from '../lib/tokens';
 import { optimizeWasm, transformWat, wat2wasm } from '../scripts/build';
 import pierreDark from '../themes/pierre-dark.json' with { type: 'json' };
+import pierreLight from '../themes/pierre-light.json' with { type: 'json' };
 import { measure, type Measurement } from './measure';
 
 const enc = new TextEncoder();
@@ -19,6 +22,7 @@ const baselineLabel = (rel: number) =>
   rel >= 1 ? `${fmt(rel)}× slower` : `${fmt(1 / rel)}× faster`;
 const dim = (s: string) => `\x1b[90m${s}\x1b[0m`;
 const tokensOnly = process.argv.includes('--tokens');
+const tokenStages = tokensOnly && process.argv.includes('--stages');
 const streamOnly = process.argv.includes('--stream');
 
 /** The languages the benchmark fixtures cover in every contender. */
@@ -392,7 +396,7 @@ console.log(
 );
 
 const BASELINE = 'shiki';
-const contenders = await loadContenders();
+const contenders = tokenStages ? [] : await loadContenders();
 
 interface BenchResult extends Partial<Measurement> {
   name: string;
@@ -400,7 +404,54 @@ interface BenchResult extends Partial<Measurement> {
   error?: string;
 }
 
-if (streamOnly) {
+if (tokenStages) {
+  const highlighter = new HighlightsHighlighter(
+    new WebAssembly.Module(wasmBytes)
+  );
+  const rows = [];
+  for (const { name, lang, input } of TOKEN_FIXTURES) {
+    for (const multiple of [false, true]) {
+      const options = multiple
+        ? { lang, themes: { light: pierreLight, dark: pierreDark } }
+        : { lang, theme: pierreDark };
+      const themes = resolveOptionThemes(options);
+      const langId = LANGS[lang];
+      const inputLength = highlighter.writeInput(input);
+      const records = highlighter
+        .tokenizeLineRecords(langId, inputLength)
+        .slice();
+      assert.deepEqual(
+        lineRecordsToTokens(input, records, themes, '--hls-'),
+        highlighter.codeToTokens(input, options).tokens
+      );
+      const results = measure([
+        () => highlighter.writeInput(input),
+        () => highlighter.tokenizeLineRecords(langId, inputLength),
+        () => lineRecordsToTokens(input, records, themes, '--hls-'),
+        () => highlighter.codeToTokens(input, options),
+      ]);
+      rows.push([
+        name,
+        multiple ? 'light + dark' : 'dark',
+        ...results.map((result) => us(result.median)),
+      ]);
+    }
+  }
+  console.log(
+    'codeToTokens stages (measured separately; timings are not additive):'
+  );
+  printTable(
+    [
+      { title: 'input' },
+      { title: 'themes' },
+      { title: 'encode/copy', align: 'right' },
+      { title: 'Wasm records', align: 'right' },
+      { title: 'themed objects', align: 'right' },
+      { title: 'complete', align: 'right' },
+    ],
+    rows
+  );
+} else if (streamOnly) {
   benchmarkStream(contenders);
 } else if (tokensOnly) {
   benchmarkTokens(contenders);

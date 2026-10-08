@@ -68,6 +68,7 @@ import {
   HIGHLIGHTS_DUAL_THEMES,
   HIGHLIGHTS_DUAL_THEMES_CSS,
   HIGHLIGHTS_HTML,
+  HIGHLIGHTS_INSTALL,
   HIGHLIGHTS_LIVE,
   HIGHLIGHTS_STREAM,
   HIGHLIGHTS_STREAM_PIPE,
@@ -172,6 +173,7 @@ import {
   WORKER_POOL_VSCODE_INLINE_SCRIPT,
   WORKER_POOL_VSCODE_LOCAL_ROOTS,
   WORKER_POOL_VSCODE_WORKER_URI,
+  WORKER_POOL_WORKER_ERRORS,
 } from '../docs/WorkerPool/constants';
 import { DocsLayout } from '@/components/docs/DocsLayout';
 import { HeadingAnchors } from '@/components/docs/HeadingAnchors';
@@ -669,6 +671,7 @@ async function ThemingSection() {
 
 async function HighlightsHighlighterSection() {
   const [
+    highlightsInstall,
     highlightsHtml,
     highlightsTokens,
     highlightsStreamPipe,
@@ -683,6 +686,7 @@ async function HighlightsHighlighterSection() {
     highlightsApiRuntime,
     highlightsApiTypes,
   ] = await Promise.all([
+    preloadCodeExample(HIGHLIGHTS_INSTALL),
     preloadCodeExample(HIGHLIGHTS_HTML),
     preloadCodeExample(HIGHLIGHTS_TOKENS),
     preloadCodeExample(HIGHLIGHTS_STREAM_PIPE),
@@ -700,6 +704,7 @@ async function HighlightsHighlighterSection() {
   const content = await renderMDX({
     filePath: '(diffs)/docs/HighlightsHighlighter/content.mdx',
     scope: {
+      highlightsInstall,
       highlightsHtml,
       highlightsTokens,
       highlightsStreamPipe,
@@ -786,6 +791,7 @@ async function WorkerPoolSection() {
     helperVanilla,
     vanillaUsage,
     reactUsage,
+    workerErrors,
     apiReference,
     cachingExample,
     architectureASCII,
@@ -805,6 +811,7 @@ async function WorkerPoolSection() {
     preloadCodeExample(WORKER_POOL_HELPER_VANILLA),
     preloadCodeExample(WORKER_POOL_VANILLA_USAGE),
     preloadCodeExample(WORKER_POOL_REACT_USAGE),
+    preloadCodeExample(WORKER_POOL_WORKER_ERRORS),
     preloadCodeExample(WORKER_POOL_API_REFERENCE),
     preloadCodeExample(WORKER_POOL_CACHING),
     preloadCodeExample(WORKER_POOL_ARCHITECTURE_ASCII),
@@ -827,6 +834,7 @@ async function WorkerPoolSection() {
       helperVanilla,
       vanillaUsage,
       reactUsage,
+      workerErrors,
       apiReference,
       cachingExample,
       architectureASCII,

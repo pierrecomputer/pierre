@@ -42,6 +42,13 @@ import { isDiffPlainText } from '../utils/isDiffPlainText';
 import { isFilePlainText } from '../utils/isFilePlainText';
 import { renderDiffWithHighlighter } from '../utils/renderDiffWithHighlighter';
 import { renderFileWithHighlighter } from '../utils/renderFileWithHighlighter';
+import {
+  isHandledWorkerPoolError,
+  markWorkerErrorReported,
+  WorkerPoolTaskCanceledError,
+  WorkerPoolTerminatedError,
+  WorkerPoolWorkerError,
+} from './errors';
 import { decodeHastLines } from './hastLinesTransport';
 import type {
   AllWorkerTasks,
@@ -69,18 +76,6 @@ import type {
 
 const IGNORE_RESPONSE = Symbol('IGNORE_RESPONSE');
 const DEFAULT_WORKER_INITIALIZATION_TIMEOUT = 10_000;
-
-class WorkerPoolTerminatedError extends Error {
-  constructor() {
-    super('WorkerPoolManager: operation canceled because the pool terminated');
-  }
-}
-
-class WorkerPoolTaskCanceledError extends Error {
-  constructor() {
-    super('WorkerPoolManager: operation canceled before the task completed');
-  }
-}
 
 interface GetCachesResult {
   fileCache: LRUMap<string, RenderFileResult>;
@@ -410,7 +405,7 @@ export class WorkerPoolManager {
       return;
     } else if (this.initialized === false) {
       const { lifecycleGeneration } = this;
-      this.initialized = new Promise((resolve, reject) => {
+      const initialization = new Promise<void>((resolve, reject) => {
         void (async () => {
           try {
             const themes = getThemes(this.renderOptions.theme);
@@ -480,7 +475,11 @@ export class WorkerPoolManager {
           }
         })();
       });
+      this.initialized = initialization;
       this.queueBroadcastStateChanges();
+      // Return the startup promise so callers can await initialization and the
+      // constructor's error handler can catch startup failures.
+      return initialization;
     } else {
       return this.initialized;
     }
@@ -574,11 +573,28 @@ export class WorkerPoolManager {
     }
   }
 
+  /**
+   * Pass worker errors to onWorkerError, or log them if no callback is set.
+   *
+   * A startup error rejects initialization so components can highlight on the
+   * main thread. Other requests wait for their own responses: worker.ts catches
+   * request errors, so this event may be unrelated to the current request.
+   * A worker that stops responding remains busy and receives no further work.
+   */
   private handleWorkerError(
     managedWorker: ManagedWorker,
-    error: unknown
+    event: ErrorEvent | Event
   ): void {
-    console.error('Worker error:', error, managedWorker);
+    const { onWorkerError } = this.options;
+    if (onWorkerError != null) {
+      try {
+        onWorkerError(event, managedWorker.worker);
+      } catch (hookError) {
+        console.error('WorkerPoolManager: onWorkerError threw:', hookError);
+      }
+    } else {
+      console.error('Worker error:', event, managedWorker);
+    }
     const { pendingSetupRequestId } = managedWorker;
     if (pendingSetupRequestId == null) {
       return;
@@ -587,7 +603,11 @@ export class WorkerPoolManager {
     if (task?.type !== 'initialize') {
       return;
     }
-    task.reject(normalizeWorkerError(error));
+    const error = errorFromWorkerErrorEvent(event);
+    if (onWorkerError != null) {
+      markWorkerErrorReported(error);
+    }
+    task.reject(error);
     this.cleanWorkerAndTask(managedWorker, task);
   }
 
@@ -821,6 +841,10 @@ export class WorkerPoolManager {
 
   private queueInitialization(languages?: SupportedLanguages[]): void {
     void this.initialize(languages).catch((error) => {
+      // Skip cancellations and worker errors already passed to onWorkerError.
+      if (isHandledWorkerPoolError(error)) {
+        return;
+      }
       console.error(error);
     });
   }
@@ -1606,4 +1630,25 @@ function normalizeWorkerError(error: unknown): Error {
     }
   }
   return new Error(String(error));
+}
+
+// Convert a worker error event into a startup error, preserving its cause.
+// Script load failures can provide a plain Event without an error or message,
+// so use a default message when no details are available.
+function errorFromWorkerErrorEvent(
+  event: ErrorEvent | Event
+): WorkerPoolWorkerError {
+  const cause: unknown = 'error' in event ? event.error : undefined;
+  const message =
+    'message' in event &&
+    typeof event.message === 'string' &&
+    event.message !== ''
+      ? event.message
+      : cause instanceof Error
+        ? cause.message
+        : 'the worker script failed to load (the error event carries no message)';
+  return new WorkerPoolWorkerError(
+    `WorkerPoolManager: worker failed: ${message}`,
+    cause instanceof Error ? { cause } : undefined
+  );
 }

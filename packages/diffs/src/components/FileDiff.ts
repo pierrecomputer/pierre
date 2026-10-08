@@ -135,6 +135,7 @@ import {
   isAdditionLineRenderable,
 } from '../utils/virtualDiffLayout';
 import type { WorkerPoolManager } from '../worker';
+import { isHandledWorkerPoolError } from '../worker/errors';
 import { DiffsContainerLoaded } from './web-components';
 
 type LoadedPartialDiffContents = Awaited<
@@ -150,6 +151,13 @@ type DeferredEditorActiveLineWrite = [
   lineNumber: number | null,
   options: EditorActiveLineOptions | undefined,
 ];
+
+interface UpdateRenderCacheOptions {
+  shouldRefreshDiffsView?: boolean;
+  lineCountChangeInFlight?: boolean;
+  changedDocumentLines?: ReadonlyMap<number, string>;
+  documentLineCount?: number;
+}
 
 function canHydrateDiff(fileDiff: FileDiffMetadata): boolean {
   return (
@@ -2245,10 +2253,7 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
   public updateRenderCache(
     dirtyLines: Map<number, Array<HighlightedToken>>,
     themeType: 'dark' | 'light',
-    options: {
-      shouldRefreshDiffsView?: boolean;
-      lineCountChangeInFlight?: boolean;
-    } = {}
+    options: UpdateRenderCacheOptions = {}
   ): void {
     const editSessionDiff = this.editSession?.diff;
     if (editSessionDiff == null) {
@@ -2262,7 +2267,9 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
     const regionsChanged = this.hunksRenderer.updateRenderCache(
       dirtyLines,
       themeType,
-      lineCountChangeInFlight
+      lineCountChangeInFlight,
+      options.changedDocumentLines,
+      options.documentLineCount
     );
     // A same-line-count edit that reshaped the session regions (an edit into
     // a collapsed gap) changes the rendered row set, which the debounced
@@ -2554,6 +2561,9 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
     await workerManager
       .primeDiffHighlightCache(fileDiff)
       .catch((error: unknown) => {
+        if (isHandledWorkerPoolError(error)) {
+          return;
+        }
         console.error(error);
       });
   }
