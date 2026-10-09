@@ -2,6 +2,7 @@ import { afterAll, describe, expect, spyOn, test } from 'bun:test';
 import { createTwoFilesPatch } from 'diff';
 
 import {
+  DEFAULT_HIGHLIGHTER,
   disposeHighlighter,
   FileDiff,
   parseDiffFromFile,
@@ -73,6 +74,9 @@ function createPrimeWorkerManager(): {
   const primedDiffs: FileDiffMetadata[] = [];
   const workerManager = {
     cleanUpTasks() {},
+    getPreferredHighlighter() {
+      return DEFAULT_HIGHLIGHTER;
+    },
     getDiffRenderOptions() {
       return {
         theme: 'github-dark',
@@ -673,6 +677,9 @@ describe('FileDiff partial hydration', () => {
       const workerManager = {
         subscribeToThemeChanges() {},
         unsubscribeToThemeChanges() {},
+        getPreferredHighlighter() {
+          return DEFAULT_HIGHLIGHTER;
+        },
         getDiffRenderOptions() {
           return {
             theme: 'github-dark',

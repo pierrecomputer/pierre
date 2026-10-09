@@ -17,10 +17,10 @@ import type {
   EditorType,
 } from '../editor/types';
 import {
-  isHighlighterLoaded,
+  getHighlighterIfLoaded,
+  HighlighterDisposedError,
   preloadHighlighter,
 } from '../highlighter/shared_highlighter';
-import { areThemesAttached } from '../highlighter/themes/areThemesAttached';
 import type { SelectionWriteOptions } from '../managers/InteractionManager';
 import {
   dequeueRender,
@@ -58,6 +58,7 @@ import { getThemes } from '../utils/getThemes';
 import { isStyleNode } from '../utils/isStyleNode';
 import { isFirefox } from '../utils/platform';
 import { prefersReducedMotion } from '../utils/prefersReducedMotion';
+import { resolvePreferredHighlighter } from '../utils/resolvePreferredHighlighter';
 import { roundToDevicePixel } from '../utils/roundToDevicePixel';
 import type { WorkerPoolManager } from '../worker';
 import type { FileEditCompleteEvent, FileOptions } from './File';
@@ -1943,7 +1944,7 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
       this.workerManager?.getFileRenderOptions().theme ??
       this.options.theme ??
       DEFAULT_THEMES;
-    if (isHighlighterLoaded() && areThemesAttached(theme)) {
+    if (getHighlighterIfLoaded({ theme }) != null) {
       this.clearReadySubscription();
       return true;
     }
@@ -1957,7 +1958,10 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
       void preloadHighlighter({
         themes: getThemes(theme),
         langs: [],
-        preferredHighlighter: this.options.preferredHighlighter,
+        preferredHighlighter: resolvePreferredHighlighter(
+          this.workerManager,
+          this.options
+        ),
       }).then(
         () => {
           if (cancelled) {
@@ -1972,7 +1976,9 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
           }
           // Let a later render retry without looping on a failing loader.
           this.clearReadySubscription();
-          console.error(error);
+          if (!(error instanceof HighlighterDisposedError)) {
+            console.error(error);
+          }
         }
       );
       return () => {

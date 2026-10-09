@@ -1,4 +1,5 @@
-import { afterAll, expect, mock, spyOn, test } from 'bun:test';
+import type { Theme } from '@pierre/highlights';
+import { afterAll, beforeEach, expect, mock, spyOn, test } from 'bun:test';
 
 import { CodeView } from '../src/components/CodeView';
 import {
@@ -6,26 +7,28 @@ import {
   getSharedHighlighter,
 } from '../src/highlighter/shared_highlighter';
 import { registerCustomTheme } from '../src/highlighter/themes/registerCustomTheme';
-import type { ThemeRegistration } from '../src/types';
 import { createRoot, installDom, wait, waitFor } from './domHarness';
 import { createDeferred } from './testUtils';
 
+beforeEach(disposeHighlighter);
 afterAll(disposeHighlighter);
 
 test('retries a failed theme load on a later render without automatically retrying', async () => {
   const theme = {
     name: 'codeview-retry-theme',
-    type: 'dark',
-    colors: {},
-    tokenColors: [],
-  } satisfies ThemeRegistration;
-  const firstLoad = createDeferred<ThemeRegistration>();
+    appearance: 'dark',
+    style: {},
+  } satisfies Theme;
+  const firstLoad = createDeferred<Theme>();
   const loader = mock(() => firstLoad.promise);
-  registerCustomTheme(theme.name, loader);
+  registerCustomTheme(theme.name, loader, 'zed');
   const error = new Error('Theme chunk failed to load');
   const logError = spyOn(console, 'error').mockImplementation(() => {});
   const dom = installDom();
-  const viewer = new CodeView({ theme: theme.name });
+  const viewer = new CodeView({
+    theme: theme.name,
+    preferredHighlighter: 'highlights',
+  });
   const render = spyOn(viewer, 'render');
   try {
     viewer.setup(createRoot());
@@ -69,30 +72,40 @@ for (const obsoleteFinishesFirst of [false, true]) {
   test(`switches pending themes when the ${obsoleteFinishesFirst ? 'obsolete' : 'current'} loader finishes first`, async () => {
     const obsoleteName = `codeview-obsolete-${obsoleteFinishesFirst}`;
     const currentName = `codeview-current-${obsoleteFinishesFirst}`;
-    const obsoleteTheme: ThemeRegistration = {
+    const obsoleteTheme: Theme = {
       name: obsoleteName,
-      type: 'dark',
-      colors: {},
-      tokenColors: [],
+      appearance: 'dark',
+      style: {},
     };
-    const currentTheme: ThemeRegistration = {
+    const currentTheme: Theme = {
       ...obsoleteTheme,
       name: currentName,
     };
-    const obsolete = createDeferred<ThemeRegistration>();
-    const current = createDeferred<ThemeRegistration>();
+    const obsolete = createDeferred<Theme>();
+    const current = createDeferred<Theme>();
     const started: string[] = [];
-    registerCustomTheme(obsoleteName, () => {
-      started.push(obsoleteName);
-      return obsolete.promise;
-    });
-    registerCustomTheme(currentName, () => {
-      started.push(currentName);
-      return current.promise;
-    });
+    registerCustomTheme(
+      obsoleteName,
+      () => {
+        started.push(obsoleteName);
+        return obsolete.promise;
+      },
+      'zed'
+    );
+    registerCustomTheme(
+      currentName,
+      () => {
+        started.push(currentName);
+        return current.promise;
+      },
+      'zed'
+    );
 
     const dom = installDom();
-    const viewer = new CodeView({ theme: obsoleteName });
+    const viewer = new CodeView({
+      theme: obsoleteName,
+      preferredHighlighter: 'highlights',
+    });
     const render = spyOn(viewer, 'render');
     try {
       viewer.setup(createRoot());
@@ -108,7 +121,10 @@ for (const obsoleteFinishesFirst of [false, true]) {
       expect(started).toEqual([obsoleteName]);
       expect(viewer.getRenderedItems()).toHaveLength(0);
 
-      viewer.setOptions({ theme: currentName });
+      viewer.setOptions({
+        theme: currentName,
+        preferredHighlighter: 'highlights',
+      });
       viewer.render(true);
       await waitFor(() => started.includes(currentName));
       expect(started).toEqual([obsoleteName, currentName]);

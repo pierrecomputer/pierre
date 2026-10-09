@@ -9,12 +9,7 @@ const LAYER_ORDER = '@layer base,theme,rendered,unsafe;';
 
 const config: UserConfig[] = defineConfig([
   {
-    entry: [
-      'src/**/*.ts',
-      'src/**/*.tsx',
-      '!src/worker/worker.ts',
-      '!src/worker/worker-portable.ts',
-    ],
+    entry: ['src/**/*.ts', 'src/**/*.tsx', '!src/worker/worker.ts'],
     loader: {
       '.css': 'text',
     },
@@ -86,16 +81,21 @@ const config: UserConfig[] = defineConfig([
     platform: 'neutral',
   },
   {
-    entry: ['src/worker/worker-portable.ts'],
+    // A shim importing worker.ts would be removed by tree shaking because
+    // package.json sideEffects only lists dist files.
+    entry: { 'worker-portable': 'src/worker/worker.ts' },
     outDir: 'dist/worker',
     tsconfig: './tsconfig.json',
     clean: false,
     unbundle: false,
     deps: { alwaysBundle: [/.*/] },
+    // The pool sends resolved themes and grammars; omit their main-thread catalogs.
+    define: { __DIFFS_WORKER__: 'true' },
+    minify: true,
     dts: { sourcemap: true, tsgo: true },
     platform: 'neutral',
     format: 'esm',
-    treeshake: false,
+    outputOptions: { codeSplitting: false },
   },
 ]);
 

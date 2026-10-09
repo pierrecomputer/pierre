@@ -33,6 +33,7 @@ export {
   UnresolvedThemeError,
   type ThemeLoader,
   type ThemeResolver,
+  type ThemeResolverOptions,
 } from './modules/createThemeResolver';
 
 export {
