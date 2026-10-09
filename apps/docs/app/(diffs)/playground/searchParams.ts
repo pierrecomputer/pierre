@@ -1,4 +1,8 @@
-import type { DiffIndicators, SelectedLineRange } from '@pierre/diffs';
+import {
+  DEFAULT_HIGHLIGHTER,
+  type DiffIndicators,
+  type SelectedLineRange,
+} from '@pierre/diffs';
 
 // The playground's URL state, parsed identically on the server (to build the
 // prerendered payload) and on the client (to seed component state). The
@@ -28,6 +32,8 @@ export const DARK_THEMES = [
 
 export type PlaygroundLightTheme = (typeof LIGHT_THEMES)[number];
 export type PlaygroundDarkTheme = (typeof DARK_THEMES)[number];
+
+export const HIGHLIGHTERS = ['shiki-js', 'shiki-wasm', 'highlights'] as const;
 
 const VIEW_MODES = [
   'diff',
@@ -67,6 +73,7 @@ export type PlaygroundLineDiffType = (typeof LINE_DIFF_TYPES)[number];
 
 // Default values for URL param comparison
 export const DEFAULTS = {
+  highlighter: DEFAULT_HIGHLIGHTER,
   viewMode: 'diff' as ViewMode,
   diffStyle: 'split',
   colorMode: 'system',
@@ -89,6 +96,7 @@ export const DEFAULTS = {
 } as const;
 
 export interface PlaygroundUrlState {
+  highlighter: (typeof HIGHLIGHTERS)[number];
   viewMode: ViewMode;
   diffStyle: (typeof DIFF_STYLES)[number];
   colorMode: (typeof COLOR_MODES)[number];
@@ -159,6 +167,7 @@ export function parsePlaygroundSearchParams(
       : pickBool(get('gutter'), DEFAULTS.gutterButton);
 
   return {
+    highlighter: pick(get('highlighter'), HIGHLIGHTERS, DEFAULTS.highlighter),
     viewMode,
     diffStyle: pick(get('layout'), DIFF_STYLES, 'split'),
     colorMode: pick(get('mode'), COLOR_MODES, 'system'),

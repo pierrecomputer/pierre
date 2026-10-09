@@ -8,7 +8,7 @@ const MULTIPLE_TOKENS: unique symbol = Symbol('multiple-tokens');
 type TokenFragmentState = number | typeof NO_TOKEN | typeof MULTIPLE_TOKENS;
 
 // Walk a rendered line and add a single outer token wrapper around all
-// fragments that still belong to the same original Shiki token.
+// fragments that still belong to the same original syntax token.
 export function wrapTokenFragments(container: HASTElement): TokenFragmentState {
   const ownTokenChar = getTokenChar(container);
   if (ownTokenChar != null) {

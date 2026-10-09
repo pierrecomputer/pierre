@@ -1,5 +1,4 @@
 import type { ElementContent, Element as HASTElement, Properties } from 'hast';
-import { toHtml } from 'hast-util-to-html';
 
 import {
   DEFAULT_COLLAPSED_CONTEXT_THRESHOLD,
@@ -13,6 +12,7 @@ import { areLanguagesAttached } from '../highlighter/languages/areLanguagesAttac
 import {
   getHighlighterIfLoaded,
   getSharedHighlighter,
+  HighlighterDisposedError,
 } from '../highlighter/shared_highlighter';
 import { areThemesAttached } from '../highlighter/themes/areThemesAttached';
 import type {
@@ -69,6 +69,7 @@ import {
   createGutterWrapper,
   createHastElement,
 } from '../utils/hast_utils';
+import { hastToHtml } from '../utils/hastToHtml';
 import {
   FILE_ANNOTATION_HUNK_INDEX,
   FILE_ANNOTATION_LINE_INDEX,
@@ -80,6 +81,7 @@ import { isDiffPlainText } from '../utils/isDiffPlainText';
 import type { DiffLineMetadata } from '../utils/iterateOverDiff';
 import { iterateOverDiff } from '../utils/iterateOverDiff';
 import { renderDiffWithHighlighter } from '../utils/renderDiffWithHighlighter';
+import { resolvePreferredHighlighter } from '../utils/resolvePreferredHighlighter';
 import {
   recomputeDiffHunksForEdit,
   recomputeEmptyDocumentDiff,
@@ -275,9 +277,9 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     private workerManager?: WorkerPoolManager | undefined
   ) {
     if (workerManager?.isWorkingPool() !== true) {
-      this.highlighter = areThemesAttached(options.theme ?? DEFAULT_THEMES)
-        ? getHighlighterIfLoaded()
-        : undefined;
+      this.highlighter = getHighlighterIfLoaded({
+        theme: options.theme ?? DEFAULT_THEMES,
+      });
     }
   }
 
@@ -961,9 +963,10 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     this.highlighter = await getSharedHighlighter(
       getHighlighterOptions(this.computedLangs, {
         theme: this.getLocalHighlightTheme(),
-        preferredHighlighter:
-          this.workerManager?.getPreferredHighlighter() ??
-          this.options.preferredHighlighter,
+        preferredHighlighter: resolvePreferredHighlighter(
+          this.workerManager,
+          this.options
+        ),
       })
     );
     return this.highlighter;
@@ -975,6 +978,9 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     }
     this.diff = diff;
     const { options } = this.getRenderOptions(diff);
+    this.highlighter = getHighlighterIfLoaded({
+      theme: this.getLocalHighlightTheme(),
+    });
     const massiveDiff = isDiffMassive(diff, this.getTokenizeMaxLength());
     let cache = this.workerManager?.getDiffResultCache(diff);
     if (cache != null && !areDiffRenderOptionsEqual(options, cache.options)) {
@@ -1000,7 +1006,11 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     // Lets attempt to get the highlighter/languages ready immediately
     else if (this.highlighter == null) {
       this.computedLangs = getDiffLanguages(diff);
-      void this.initializeHighlighter();
+      void this.initializeHighlighter().catch((error: unknown) => {
+        if (!(error instanceof HighlighterDisposedError)) {
+          this.onHighlightError(error);
+        }
+      });
     }
   }
 
@@ -1108,7 +1118,8 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       return (
         (renderCache.result == null && renderCache.hydrated !== true) ||
         this.workerManager?.isWorkingPool() === true ||
-        (this.highlighter != null && areThemesAttached(options.theme))
+        (this.highlighter != null &&
+          areThemesAttached(options.theme, this.highlighter))
       );
     }
     // Hydration has highlighted DOM without a local AST. It is still active
@@ -1125,7 +1136,10 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       return !renderCache.highlighted;
     }
 
-    return this.highlighter != null && areThemesAttached(options.theme);
+    return (
+      this.highlighter != null &&
+      areThemesAttached(options.theme, this.highlighter)
+    );
   }
 
   public renderDiff(
@@ -1163,6 +1177,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       !hasContent ||
       isDiffPlainText(diff) ||
       isDiffMassive(diff, this.getTokenizeMaxLength());
+    this.highlighter = getHighlighterIfLoaded();
     const canRenderDiff = this.canRenderDiff(diff, options, forcePlainText);
     const newContent = !areDiffTargetsEqual(diff, this.renderCache.diff);
     const newRenderRange = !areRenderRangesEqual(
@@ -1224,17 +1239,15 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       }
     } else {
       this.computedLangs = getDiffLanguages(diff);
-      this.highlighter ??= getHighlighterIfLoaded();
       const hasThemes =
-        this.highlighter != null && areThemesAttached(options.theme);
+        this.highlighter != null &&
+        areThemesAttached(options.theme, this.highlighter);
       const hasLangs =
-        this.highlighter != null && areLanguagesAttached(this.computedLangs);
+        this.highlighter != null &&
+        areLanguagesAttached(this.computedLangs, this.highlighter);
       const canHighlight = !forcePlainText && hasLangs;
+      const lazyLineAST = Number.isFinite(renderRange.totalLines);
 
-      // If we have any semblance of a highlighter with the correct theme(s)
-      // attached, we can kick off some form of rendering.  If we don't have
-      // the correct language, then we can render plain text and after kick off
-      // an async job to get the highlighted AST
       if (
         canRenderDiff &&
         this.highlighter != null &&
@@ -1247,7 +1260,8 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
         const { result, options } = this.renderDiffWithHighlighter(
           diff,
           this.highlighter,
-          forcePlainText || !hasLangs
+          forcePlainText || !hasLangs,
+          lazyLineAST
         );
         this.renderCache = {
           diff,
@@ -1258,13 +1272,16 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
         };
       }
 
-      // If we get in here it means we'll have to kick off an async highlight
-      // process which will involve initializing the highlighter with new themes
-      // and languages
       if (!hasThemes || (!forcePlainText && !hasLangs)) {
-        void this.asyncHighlight(diff).then(({ result, options }) => {
-          this.applyHighlightResult(diff, result, options, !forcePlainText);
-        });
+        void this.asyncHighlight(diff, lazyLineAST)
+          .then(({ result, options }) => {
+            this.applyHighlightResult(diff, result, options, !forcePlainText);
+          })
+          .catch((error: unknown) => {
+            if (!(error instanceof HighlighterDisposedError)) {
+              this.onHighlightError(error);
+            }
+          });
       }
     }
     return this.renderCache.result != null
@@ -1281,7 +1298,10 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     renderRange: RenderRange = DEFAULT_RENDER_RANGE
   ): Promise<HunksRenderResult> {
     this.diff = diff;
-    const { result } = await this.asyncHighlight(diff);
+    const { result } = await this.asyncHighlight(
+      diff,
+      Number.isFinite(renderRange.totalLines)
+    );
     return this.processDiffResult(diff, renderRange, result);
   }
 
@@ -1305,16 +1325,18 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
   }
 
   private async asyncHighlight(
-    diff: FileDiffMetadata
+    diff: FileDiffMetadata,
+    lazyLineAST = false
   ): Promise<RenderDiffResult> {
     const forcePlainText = isDiffMassive(diff, this.getTokenizeMaxLength());
     this.computedLangs = forcePlainText ? ['text'] : getDiffLanguages(diff);
     const hasThemes =
       this.highlighter != null &&
-      areThemesAttached(this.getLocalHighlightTheme());
+      areThemesAttached(this.getLocalHighlightTheme(), this.highlighter);
     const hasLangs =
       forcePlainText ||
-      (this.highlighter != null && areLanguagesAttached(this.computedLangs));
+      (this.highlighter != null &&
+        areLanguagesAttached(this.computedLangs, this.highlighter));
     // If we don't have the required langs or themes, then we need to
     // initialize the highlighter to load the appropriate languages and themes
     if (this.highlighter == null || !hasThemes || !hasLangs) {
@@ -1323,19 +1345,22 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     return this.renderDiffWithHighlighter(
       diff,
       this.highlighter,
-      forcePlainText
+      forcePlainText,
+      lazyLineAST
     );
   }
 
   private renderDiffWithHighlighter(
     diff: FileDiffMetadata,
     highlighter: DiffsHighlighter,
-    forcePlainText = false
+    forcePlainText = false,
+    lazyLineAST = false
   ): RenderDiffResult {
     const { options } = this.getRenderOptions(diff);
     const { collapsedContextThreshold } = this.getOptionsWithDefaults();
     const result = renderDiffWithHighlighter(diff, highlighter, options, {
       forcePlainText,
+      lazyLineAST,
       expandedHunks: forcePlainText ? true : undefined,
       collapsedContextThreshold,
     });
@@ -1929,7 +1954,10 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
               }
             }
           }
-          if (noEOFCRAddition) {
+          if (
+            noEOFCRAddition &&
+            !(unified && noEOFCRDeletion && type !== 'change')
+          ) {
             const noEOFType =
               type === 'context' || type === 'context-expanded'
                 ? type
@@ -2124,7 +2152,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     result: HunksRenderResult,
     tempChildren: ElementContent[] = []
   ): string {
-    return toHtml(this.renderFullAST(result, tempChildren));
+    return hastToHtml(this.renderFullAST(result, tempChildren));
   }
 
   public renderPartialHTML(
@@ -2132,9 +2160,9 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     columnType?: 'unified' | 'deletions' | 'additions'
   ): string {
     if (columnType == null) {
-      return toHtml(children);
+      return hastToHtml(children);
     }
-    return toHtml(
+    return hastToHtml(
       createHastElement({
         tagName: 'code',
         children,

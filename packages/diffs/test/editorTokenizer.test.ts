@@ -6,20 +6,10 @@ import {
   type TextDocumentChange,
 } from '../src/editor/textDocument';
 import { EditorTokenizer } from '../src/editor/tokenizer';
-import type { DiffsHighlighter, HighlightedToken } from '../src/types';
+import type { HighlightedToken } from '../src/types';
+import { createTestHighlighter } from './editorHighlighter';
 
 const noopSetStyle = () => {};
-
-function createTestHighlighter(
-  overrides: Record<string, unknown> = {}
-): DiffsHighlighter {
-  return {
-    getLoadedLanguages: () => ['typescript'],
-    getTheme: () => ({ type: 'dark', colors: {} }),
-    setTheme: () => ({ theme: { type: 'dark' }, colorMap: [''] }),
-    ...overrides,
-  } as unknown as DiffsHighlighter;
-}
 
 function getThemeStyle(colors: Record<string, string>): string {
   let style = '';
@@ -166,9 +156,6 @@ describe('EditorTokenizer', () => {
       const getLanguage = () => {
         throw new Error('getLanguage should not be called for plain text');
       };
-      const loadLanguage = () => {
-        throw new Error('loadLanguage should not be called for plain text');
-      };
       const textDocument = new TextDocument(
         'Untitled-1',
         Array.from({ length: 20 }, (_, i) => `line ${i}`).join('\n'),
@@ -177,7 +164,6 @@ describe('EditorTokenizer', () => {
       const tokenizer = new EditorTokenizer({
         highlighter: createTestHighlighter({
           getLanguage,
-          loadLanguage,
           getLoadedLanguages: () => [],
         }),
         textDocument,
@@ -2398,6 +2384,7 @@ describe('EditorTokenizer', () => {
     const highlighter = await getSharedHighlighter({
       themes: [DEFAULT_THEMES.dark, DEFAULT_THEMES.light],
       langs: ['tsx'],
+      preferredHighlighter: 'shiki-js',
     });
     const textDocument = new TextDocument('Button.tsx', code, 'tsx');
     const tokenizer = new EditorTokenizer({

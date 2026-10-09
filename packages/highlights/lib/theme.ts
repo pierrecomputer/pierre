@@ -199,7 +199,7 @@ export interface PreparedTheme {
   bg?: string;
   /** Five-byte RGBA/style records; undefined for Display P3 and CSS variables. */
   table: Uint8Array | undefined;
-  /** Lazy UTF-8 HTML openers for Display P3 themes. */
+  /** Lazy UTF-8 HTML openers for Display P3 themes and named CSS palettes. */
   readonly htmlOpeners: Uint8Array | undefined;
 }
 
@@ -223,13 +223,52 @@ export function prepareTheme(
   const prepared =
     resolved.cssVariables === true
       ? prepareCssVariables(resolved.name, cssVariablePrefix)
-      : prepareStyles(resolved);
+      : typeof resolved.cssVariables === 'object'
+        ? prepareCssPalette(resolved)
+        : prepareStyles(resolved);
   if (prefixes === undefined) {
     prefixes = new Map();
     preparedCache.set(resolved, prefixes);
   }
   prefixes.set(prefix, prepared);
   return prepared;
+}
+
+/** Palette colors are variable suffixes, not literal CSS values. */
+function prepareCssPalette(theme: Theme): PreparedTheme {
+  const config = theme.cssVariables;
+  if (typeof config !== 'object') throw new Error('Expected CSS palette');
+  const prefix = config.prefix ?? defaultCssVariablePrefix;
+  const variable = (name: string): string => {
+    const fallback = config.defaults?.[name];
+    return `var(${prefix}${name}${fallback ? `, ${fallback}` : ''})`;
+  };
+  const styles: (TokenStyle | null)[] = new Array(tokenTypes.length).fill(null);
+  const syntax = theme.style.syntax ?? {};
+  for (let i = 1; i < tokenTypes.length; i++) {
+    const setting = resolveThemeSyntax(syntax, tokenTypes[i]);
+    styles[i] = {
+      color: variable(setting?.color ?? 'foreground'),
+      italic: setting?.font_style === 'italic',
+      weight:
+        setting?.font_weight === undefined
+          ? 0
+          : Math.round(setting.font_weight / 100) * 100,
+    };
+  }
+  const fg = variable(themeForeground(theme.style) ?? 'foreground');
+  const bg = variable(themeBackground(theme.style) ?? 'background');
+  let htmlOpeners: Uint8Array | undefined;
+  return {
+    name: theme.name,
+    styles,
+    fg,
+    bg,
+    table: undefined,
+    get htmlOpeners() {
+      return (htmlOpeners ??= themeHtmlOpeners(styles, fg, bg));
+    },
+  };
 }
 
 /**
@@ -323,22 +362,35 @@ function prepareStyles(theme: Theme): PreparedTheme {
     table: usesDisplayP3 ? undefined : table,
     get htmlOpeners() {
       if (!usesDisplayP3) return undefined;
-      if (htmlOpeners !== undefined) return htmlOpeners;
-      const rootStyle =
-        (bg === undefined ? '' : `background-color:${bg};`) +
-        (fg === undefined ? '' : `color:${fg}`);
-      const openers = [`<pre class="highlights" style="${rootStyle}"><code>`];
-      for (let i = 1; i < tokenTypes.length; i++) {
-        const style = styles[i];
-        const css =
-          `color:${style?.color ?? 'inherit'}` +
-          (style?.italic === true ? ';font-style:italic' : '') +
-          (style != null && style.weight !== 0
-            ? `;font-weight:${style.weight}`
-            : '');
-        openers.push(`<span style="${css}">`);
-      }
-      return (htmlOpeners = packHtmlOpeners(openers));
+      return (htmlOpeners ??= themeHtmlOpeners(styles, fg, bg));
     },
   };
+}
+
+/**
+ * Pack theme colors and font styles for the Wasm HTML emitter.
+ * Escape attributes because CSS prefixes and defaults may contain quotes.
+ */
+function themeHtmlOpeners(
+  styles: (TokenStyle | null)[],
+  fg: string | undefined,
+  bg: string | undefined
+): Uint8Array {
+  const rootStyle =
+    (bg === undefined ? '' : `background-color:${bg};`) +
+    (fg === undefined ? '' : `color:${fg}`);
+  const openers = [
+    `<pre class="highlights" style="${escapeAttribute(rootStyle)}"><code>`,
+  ];
+  for (let i = 1; i < tokenTypes.length; i++) {
+    const style = styles[i];
+    const css =
+      `color:${style?.color ?? 'inherit'}` +
+      (style?.italic === true ? ';font-style:italic' : '') +
+      (style != null && style.weight !== 0
+        ? `;font-weight:${style.weight}`
+        : '');
+    openers.push(`<span style="${escapeAttribute(css)}">`);
+  }
+  return packHtmlOpeners(openers);
 }
