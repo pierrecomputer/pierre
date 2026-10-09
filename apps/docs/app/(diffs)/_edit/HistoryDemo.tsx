@@ -83,12 +83,7 @@ const LANGUAGE = getFiletypeFromFileName(HISTORY_DEMO_FILE.name);
 // True once the shared main-thread highlighter has this file's grammar, which
 // is what the editor tokenizes edits with.
 function isLanguageReady(): boolean {
-  return (
-    getHighlighterIfLoaded({
-      preferredHighlighter: 'highlights',
-      lang: LANGUAGE,
-    }) != null
-  );
+  return getHighlighterIfLoaded({ lang: LANGUAGE }) != null;
 }
 
 function detectMac(): boolean {
