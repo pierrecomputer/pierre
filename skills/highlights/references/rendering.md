@@ -93,11 +93,12 @@ grammar registration belongs to the Shiki APIs in `@pierre/diffs`.
 
 ## Runtime and types
 
-For embedders managing a compiled `WebAssembly.Module`, `init(module)` replaces
-the shared highlighter; `createHighlighter(module)` returns an isolated
-`Highlighter` without replacing it. Both are synchronous and require a module.
-`Highlighter` exposes `codeToHtml()` and `codeToTokens()` with the signatures
-above. Import the normal package entry for automatic initialization.
+`createHighlighter()` returns an isolated `Highlighter` using the initialized
+module. Embedders can pass their own compiled `WebAssembly.Module` to
+`createHighlighter(module)` or replace the shared highlighter with
+`init(module)`. Both functions are synchronous. `Highlighter` exposes
+`codeToHtml()` and `codeToTokens()` with the signatures above. Import the normal
+package entry for automatic initialization.
 
 Core public types are `Highlighter`, `Lang`, `CodeToHtmlBaseOptions`,
 `CodeToHtmlOptions`, `CodeToTokensBaseOptions`, `CodeToTokensOptions`,

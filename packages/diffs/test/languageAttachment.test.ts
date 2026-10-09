@@ -3,13 +3,21 @@ import { bundledLanguages } from 'shiki';
 
 import {
   areLanguagesAttached,
+  type DiffsHighlighter,
   disposeHighlighter,
   getSharedHighlighter,
   registerCustomLanguage,
 } from '../src';
 import { RegisteredCustomLanguages } from '../src/highlighter/languages/constants';
 
-beforeEach(disposeHighlighter);
+beforeEach(async () => {
+  await disposeHighlighter();
+  await getSharedHighlighter({
+    preferredHighlighter: 'shiki-js',
+    themes: [],
+    langs: [],
+  });
+});
 afterEach(async () => {
   await disposeHighlighter();
   for (const name of ['tf', 'hcl', 'custom-hcl']) {
@@ -35,7 +43,8 @@ describe('language attachment', () => {
         }).catch((error: unknown) => error);
         expect(result).toEqual(new Error(mismatch));
         expect(areLanguagesAttached('tf')).toBe(false);
-        expect(highlighter.getLoadedLanguages()).not.toContain('hcl');
+        expect(highlighter.hasLoadedLanguages(['tf'])).toBe(false);
+        expect(highlighter.hasLoadedLanguages(['hcl'])).toBe(false);
       }
     });
   }
@@ -62,7 +71,7 @@ describe('language attachment', () => {
       });
 
       expect(areLanguagesAttached(name)).toBe(true);
-      expect(highlighter.getLoadedLanguages()).toContain(name);
+      expect(highlighter.hasLoadedLanguages([name])).toBe(true);
       expect(
         highlighter.codeToTokens('locals { label = "example" }', {
           lang: name,
@@ -75,11 +84,12 @@ describe('language attachment', () => {
   test('preserves a Shiki loading error and allows attachment to be retried', async () => {
     const highlighter = await getSharedHighlighter({ themes: [], langs: [] });
     const failure = new Error('grammar load failed');
-    const load = spyOn(highlighter, 'loadLanguageSync').mockImplementation(
-      () => {
-        throw failure;
-      }
-    );
+    const load = spyOn(
+      highlighter as Required<DiffsHighlighter>,
+      'attachLanguages'
+    ).mockImplementation(() => {
+      throw failure;
+    });
     try {
       const result = await getSharedHighlighter({
         themes: [],
@@ -93,7 +103,7 @@ describe('language attachment', () => {
 
     await getSharedHighlighter({ themes: [], langs: ['tf'] });
     expect(areLanguagesAttached('tf')).toBe(true);
-    expect(highlighter.getLoadedLanguages()).toContain('tf');
+    expect(highlighter.hasLoadedLanguages(['tf'])).toBe(true);
   });
 
   test('does not report a new alias attached when Shiki skips an already-loaded grammar', async () => {

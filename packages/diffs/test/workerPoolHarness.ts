@@ -216,7 +216,6 @@ export function createInitializingManager(
     },
     {
       langs: [],
-      preferredHighlighter: 'shiki-js',
       theme: 'github-dark',
       ...initOptions,
     }

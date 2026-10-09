@@ -47,6 +47,7 @@ const DIFFS_SECTIONS = [
   'Installation',
   'BuildWithAgents',
   'CoreTypes',
+  'Highlighters',
   'ReactAPI',
   'VanillaAPI',
   'CodeView',
@@ -92,6 +93,8 @@ const SECTION_DESCRIPTIONS: Record<string, Record<string, string>> = {
       'The diffs agent skill, a paste-ready prompt for agents without skill support, and the plain-text docs',
     CoreTypes:
       'FileContents, FileDiffMetadata, and creating diffs from files or patches',
+    Highlighters:
+      'Choosing Shiki or Highlights for components, SSR, and worker pools',
     ReactAPI:
       'React components for CodeView, diffs, files, UnresolvedFile, EditProvider, and shared props',
     VanillaAPI:
@@ -374,7 +377,6 @@ const LABEL_OVERRIDES: Record<string, string> = {
   SSR_USAGE_CLIENT: 'Client Component',
   THEMING_REGISTER_THEME: 'Registering Custom Themes',
   THEMING_USE_IN_COMPONENT: 'Using Custom Themes in Components',
-  WORKER_POOL_USAGE: 'Basic Usage',
 };
 
 const LABEL_PREFIXES_TO_STRIP = [

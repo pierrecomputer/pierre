@@ -49,6 +49,7 @@ const PoolOptions: WorkerPoolOptions = {
 const SITE = process.env.NEXT_PUBLIC_SITE;
 
 const HighlighterOptions: WorkerInitializationRenderOptions = {
+  preferredHighlighter: 'highlights',
   // diffshub intentionally previews on the soft Pierre pair (a deliberate
   // product choice) even though the canonical default is the non-soft pair.
   // Every other site preloads the shared default.
@@ -69,7 +70,6 @@ const HighlighterOptions: WorkerInitializationRenderOptions = {
     'typescript',
     'zig',
   ],
-  preferredHighlighter: 'shiki-wasm',
   useTokenTransformer: true,
 };
 

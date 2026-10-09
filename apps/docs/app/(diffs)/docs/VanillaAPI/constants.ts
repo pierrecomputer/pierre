@@ -375,9 +375,10 @@ const instance = new FileDiff<ThreadMetadata>({
   // 'dark' or 'light' - forces specific theme
   themeType: 'system',
 
-  // Choose the Shiki engine:
+  // Choose the highlighter backend:
   // 'shiki-js' (default) - JavaScript regex engine
   // 'shiki-wasm' - WASM Oniguruma engine
+  // 'highlights' - bundled WASM lexers
   preferredHighlighter: 'shiki-js',
 
   // ─────────────────────────────────────────────────────────────
@@ -732,9 +733,10 @@ const instance = new File<CommentMetadata>({
   // 'dark' or 'light' - forces specific theme
   themeType: 'system',
 
-  // Choose the Shiki engine:
+  // Choose the highlighter backend:
   // 'shiki-js' (default) - JavaScript regex engine
   // 'shiki-wasm' - WASM Oniguruma engine
+  // 'highlights' - bundled WASM lexers
   preferredHighlighter: 'shiki-js',
 
   // ─────────────────────────────────────────────────────────────
