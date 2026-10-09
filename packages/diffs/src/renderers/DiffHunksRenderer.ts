@@ -12,6 +12,7 @@ import { areLanguagesAttached } from '../highlighter/languages/areLanguagesAttac
 import {
   getHighlighterIfLoaded,
   getSharedHighlighter,
+  HighlighterDisposedError,
 } from '../highlighter/shared_highlighter';
 import { areThemesAttached } from '../highlighter/themes/areThemesAttached';
 import type {
@@ -278,10 +279,6 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     if (workerManager?.isWorkingPool() !== true) {
       this.highlighter = getHighlighterIfLoaded({
         theme: options.theme ?? DEFAULT_THEMES,
-        preferredHighlighter: resolvePreferredHighlighter(
-          workerManager,
-          options
-        ),
       });
     }
   }
@@ -981,6 +978,9 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     }
     this.diff = diff;
     const { options } = this.getRenderOptions(diff);
+    this.highlighter = getHighlighterIfLoaded({
+      theme: this.getLocalHighlightTheme(),
+    });
     const massiveDiff = isDiffMassive(diff, this.getTokenizeMaxLength());
     let cache = this.workerManager?.getDiffResultCache(diff);
     if (cache != null && !areDiffRenderOptionsEqual(options, cache.options)) {
@@ -1004,9 +1004,13 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       }
     }
     // Lets attempt to get the highlighter/languages ready immediately
-    else if (this.highlighter == null || this.highlighter.isDisposed) {
+    else if (this.highlighter == null) {
       this.computedLangs = getDiffLanguages(diff);
-      void this.initializeHighlighter().catch(() => {});
+      void this.initializeHighlighter().catch((error: unknown) => {
+        if (!(error instanceof HighlighterDisposedError)) {
+          this.onHighlightError(error);
+        }
+      });
     }
   }
 
@@ -1173,15 +1177,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       !hasContent ||
       isDiffPlainText(diff) ||
       isDiffMassive(diff, this.getTokenizeMaxLength());
-    // Refresh disposed instances before canRenderDiff checks their themes.
-    if (this.highlighter == null || this.highlighter.isDisposed) {
-      this.highlighter = getHighlighterIfLoaded({
-        preferredHighlighter: resolvePreferredHighlighter(
-          this.workerManager,
-          this.options
-        ),
-      });
-    }
+    this.highlighter = getHighlighterIfLoaded();
     const canRenderDiff = this.canRenderDiff(diff, options, forcePlainText);
     const newContent = !areDiffTargetsEqual(diff, this.renderCache.diff);
     const newRenderRange = !areRenderRangesEqual(
@@ -1277,11 +1273,15 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       }
 
       if (!hasThemes || (!forcePlainText && !hasLangs)) {
-        void this.asyncHighlight(diff, lazyLineAST).then(
-          ({ result, options }) => {
+        void this.asyncHighlight(diff, lazyLineAST)
+          .then(({ result, options }) => {
             this.applyHighlightResult(diff, result, options, !forcePlainText);
-          }
-        );
+          })
+          .catch((error: unknown) => {
+            if (!(error instanceof HighlighterDisposedError)) {
+              this.onHighlightError(error);
+            }
+          });
       }
     }
     return this.renderCache.result != null

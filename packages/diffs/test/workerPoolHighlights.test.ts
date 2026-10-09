@@ -10,7 +10,10 @@ import {
 import type { ElementContent } from 'hast';
 import { toHtml } from 'hast-util-to-html';
 
-import { disposeHighlighter } from '../src/highlighter/shared_highlighter';
+import {
+  disposeHighlighter,
+  getSharedHighlighter,
+} from '../src/highlighter/shared_highlighter';
 import { DiffHunksRenderer } from '../src/renderers/DiffHunksRenderer';
 import { FileRenderer } from '../src/renderers/FileRenderer';
 import type { FileContents } from '../src/types';
@@ -148,6 +151,80 @@ describe('a Highlights worker pool', () => {
       respondToFileRequest(manager, worker, request, poolMarker);
       await withTimeout(prime);
       expect(manager.getFileResultCache(oldFile)).toBeDefined();
+    } finally {
+      manager.terminate();
+    }
+  });
+
+  test('loads theme changes into a Shiki main-thread highlighter in its own format', async () => {
+    const shared = await getSharedHighlighter({
+      themes: ['pierre-dark'],
+      langs: ['text'],
+      preferredHighlighter: 'shiki-js',
+    });
+    const { manager, worker } = await createInitializedManager({
+      preferredHighlighter: 'highlights',
+      theme: 'pierre-dark',
+    });
+    try {
+      const update = manager.setRenderOptions({ theme: 'pierre-light' });
+      const request = await withTimeout(
+        worker.waitForSetRenderOptionsRequest()
+      );
+      expect(request.resolvedThemes.map((theme) => theme.zed != null)).toEqual([
+        true,
+      ]);
+      worker.respond({
+        type: 'success',
+        requestType: 'set-render-options',
+        id: request.id,
+        sentAt: Date.now(),
+      });
+      await withTimeout(update);
+      expect(shared.getTheme('pierre-light').textmate).toBeDefined();
+      expect(shared.getTheme('pierre-light').zed).toBeUndefined();
+      expect(manager.getPlainFileAST(oldFile, 0, Infinity)).toBeDefined();
+    } finally {
+      manager.terminate();
+    }
+  });
+
+  test('reloads the main-thread highlighter after disposeHighlighter', async () => {
+    const { manager } = await createInitializedManager({
+      preferredHighlighter: 'highlights',
+      theme: 'pierre-dark',
+    });
+    const diff = parseDiffFromFile(oldFile, newFile);
+    try {
+      expect(manager.getPlainFileAST(oldFile, 0, Infinity)).toBeDefined();
+      await disposeHighlighter();
+      expect(manager.getPlainFileAST(oldFile, 0, Infinity)).toBeUndefined();
+      expect(manager.getPlainDiffAST(diff, 0, Infinity)).toBeUndefined();
+      await withTimeout(manager.initialize());
+      expect(manager.getPlainFileAST(oldFile, 0, Infinity)).toBeDefined();
+      expect(manager.getPlainDiffAST(diff, 0, Infinity)).toBeDefined();
+    } finally {
+      manager.terminate();
+    }
+  });
+
+  test('stays usable when disposeHighlighter runs during startup', async () => {
+    const { initialization, manager, worker } = createInitializingManager({
+      preferredHighlighter: 'highlights',
+      theme: 'pierre-dark',
+    });
+    try {
+      const request = await withTimeout(worker.waitForInitializeRequest());
+      await disposeHighlighter();
+      worker.respond({
+        type: 'success',
+        requestType: 'initialize',
+        id: request.id,
+        sentAt: Date.now(),
+      });
+      await withTimeout(initialization);
+      expect(manager.isWorkingPool()).toBe(true);
+      expect(manager.isInitialized()).toBe(true);
     } finally {
       manager.terminate();
     }

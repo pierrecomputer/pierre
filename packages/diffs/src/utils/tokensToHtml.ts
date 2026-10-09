@@ -8,7 +8,8 @@ import { renderTokenLines } from './renderTokenLines';
 export function tokensToHtml(
   source: string,
   result: TokensResult,
-  options: CodeToHtmlOptions
+  options: CodeToHtmlOptions,
+  cacheHtmlStyles: boolean
 ): string {
   const lineOffsets = [0];
   if (
@@ -33,6 +34,7 @@ export function tokensToHtml(
     decorations: options.decorations,
     mergeWhitespaces: options.mergeWhitespaces,
     lineOffsets,
+    cacheHtmlStyles,
   });
   for (let i = 0; i < lines.length; i++) {
     if (i > 0) code.children.push({ type: 'text', value: '\n' });

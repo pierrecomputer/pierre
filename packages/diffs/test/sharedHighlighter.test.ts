@@ -247,7 +247,7 @@ describe('shared highlighter backend lifecycle', () => {
       };
       const highlighter = await getSharedHighlighter(options);
       await disposeHighlighter();
-      expect(getHighlighterIfLoaded({ preferredHighlighter })).toBeUndefined();
+      expect(getHighlighterIfLoaded()).toBeUndefined();
       expect(() =>
         highlighter.codeToTokens('x', { lang: 'text', theme: 'pierre-dark' })
       ).toThrow('disposed');
@@ -257,9 +257,13 @@ describe('shared highlighter backend lifecycle', () => {
 
   test('a loaded instance ignores later preferences', async () => {
     const shared = await getSharedHighlighter({ themes: [], langs: [] });
-    expect(getHighlighterIfLoaded({ preferredHighlighter: 'highlights' })).toBe(
-      shared
-    );
+    expect(
+      await getSharedHighlighter({
+        themes: [],
+        langs: [],
+        preferredHighlighter: 'highlights',
+      })
+    ).toBe(shared);
   });
 
   test('Highlights ignores custom TextMate loaders and renders unknown languages as text', async () => {
@@ -302,9 +306,6 @@ describe('shared highlighter cache state', () => {
     expect(isHighlighterLoading()).toBe(false);
     expect(isHighlighterNull()).toBe(false);
     expect(getHighlighterIfLoaded()).toBe(shared);
-    expect(getHighlighterIfLoaded({ preferredHighlighter: 'shiki-js' })).toBe(
-      shared
-    );
     await disposeHighlighter();
     expect(isHighlighterLoaded()).toBe(false);
     expect(isHighlighterLoading()).toBe(false);

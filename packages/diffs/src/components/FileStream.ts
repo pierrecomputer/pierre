@@ -15,10 +15,10 @@ import type {
 } from '../types';
 import { createSpanFromToken } from '../utils/createSpanNodeFromToken';
 import { wrapThemeCSS } from '../utils/cssWrappers';
-import { formatCSSVariablePrefix } from '../utils/formatCSSVariablePrefix';
 import { getHighlighterOptions } from '../utils/getHighlighterOptions';
 import { getHighlighterThemeStyles } from '../utils/getHighlighterThemeStyles';
 import { getOrCreateCodeNode } from '../utils/getOrCreateCodeNode';
+import { getTokenOptions } from '../utils/getTokenOptions';
 import { upsertHostThemeStyle } from '../utils/hostTheme';
 import { getMeasuredScrollbarGutter } from '../utils/scrollbarGutter';
 import { setPreNodeProperties } from '../utils/setWrapperNodeProps';
@@ -165,16 +165,14 @@ export class FileStream {
     // Swallow AbortError / locked-stream rejections since we're tearing down.
     this.stream?.cancel().catch(() => {});
     this.stream = stream;
-    // Disable timed tokenization aborts; long lines have a separate limit.
     const tokenStream = new CodeToTokenTransformStream({
-      lang: this.options.lang ?? 'text',
-      ...(typeof theme === 'string' ? { theme } : { themes: theme }),
+      ...getTokenOptions(
+        this.options.lang ?? 'text',
+        theme,
+        this.options.tokenizeMaxLineLength
+      ),
       highlighter,
       allowRecalls: true,
-      defaultColor: false,
-      cssVariablePrefix: formatCSSVariablePrefix('token'),
-      tokenizeMaxLineLength: this.options.tokenizeMaxLineLength,
-      tokenizeTimeLimit: 0,
     });
     this.tokenStream = tokenStream;
     this.stream
@@ -229,6 +227,8 @@ export class FileStream {
     const { gutter, content } = this.getOrCreateStreamColumns();
     const gutterFragment = document.createDocumentFragment();
     const contentFragment = document.createDocumentFragment();
+    const cacheHtmlStyle =
+      this.tokenStream?.options.highlighter.name === 'highlights';
     const appendLine = () => {
       const { gutterLine, contentLine } = this.createLine();
       gutterFragment.appendChild(gutterLine);
@@ -251,7 +251,7 @@ export class FileStream {
         }
         if (token.recall > 0) this.pendingCarriageReturn = false;
       } else {
-        const span = createSpanFromToken(token);
+        const span = createSpanFromToken(token, cacheHtmlStyle);
         // Delay the CR's row break so recalls can remove it and CRLF counts once.
         if (this.pendingCarriageReturn && token.content !== '\n') {
           this.currentLineIndex++;

@@ -34,6 +34,7 @@ export type { FileEditCompleteEvent } from '../editor/types';
 import {
   getHighlighterIfLoaded,
   getSharedHighlighter,
+  HighlighterDisposedError,
 } from '../highlighter/shared_highlighter';
 import type {
   AppliedThemeStyleCache,
@@ -825,10 +826,6 @@ export class File<LAnnotation = undefined, Caret = undefined> {
     const highlighter = getHighlighterIfLoaded({
       theme,
       lang,
-      preferredHighlighter: resolvePreferredHighlighter(
-        this.workerManager,
-        this.options
-      ),
     });
     if (highlighter != null) {
       syncEditor(highlighter);
@@ -840,7 +837,13 @@ export class File<LAnnotation = undefined, Caret = undefined> {
           this.workerManager,
           this.options
         ),
-      }).then(syncEditor);
+      })
+        .then(syncEditor)
+        .catch((error: unknown) => {
+          if (!(error instanceof HighlighterDisposedError)) {
+            console.error(error);
+          }
+        });
     }
   }
 

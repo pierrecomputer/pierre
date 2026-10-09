@@ -8,6 +8,7 @@ import type {
 import {
   acquireHighlighterType,
   getHighlighterType,
+  HighlighterDisposedError,
   releaseHighlighterType,
   resolveHighlighterType,
 } from './highlighterType';
@@ -15,7 +16,10 @@ import { cleanUpResolvedLanguages } from './languages/cleanUpResolvedLanguages';
 import { areThemesAttached } from './themes/areThemesAttached';
 import { cleanUpResolvedThemes } from './themes/cleanUpResolvedThemes';
 
-export { getHighlighterType } from './highlighterType';
+export {
+  getHighlighterType,
+  HighlighterDisposedError,
+} from './highlighterType';
 
 let highlighter: DiffsHighlighter | Promise<DiffsHighlighter> | undefined;
 
@@ -75,7 +79,7 @@ export async function getSharedHighlighter({
   ]);
   // disposeHighlighter() may run while themes and languages load.
   if (instance.isDisposed) {
-    throw new Error('Highlighter is disposed');
+    throw new HighlighterDisposedError();
   }
   return instance;
 }
@@ -99,7 +103,6 @@ export function isHighlighterLoaded(): boolean {
 interface GetHighlighterIfLoadedProps {
   theme?: DiffsThemeNames | ThemesType;
   lang?: SupportedLanguages;
-  preferredHighlighter?: HighlighterTypes;
 }
 
 /**

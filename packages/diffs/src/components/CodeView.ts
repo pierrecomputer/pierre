@@ -18,6 +18,7 @@ import type {
 } from '../editor/types';
 import {
   getHighlighterIfLoaded,
+  HighlighterDisposedError,
   preloadHighlighter,
 } from '../highlighter/shared_highlighter';
 import type { SelectionWriteOptions } from '../managers/InteractionManager';
@@ -1939,15 +1940,11 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
   }
 
   private isSharedHighlighterReady(): boolean {
-    const preferredHighlighter = resolvePreferredHighlighter(
-      this.workerManager,
-      this.options
-    );
     const theme =
       this.workerManager?.getFileRenderOptions().theme ??
       this.options.theme ??
       DEFAULT_THEMES;
-    if (getHighlighterIfLoaded({ theme, preferredHighlighter }) != null) {
+    if (getHighlighterIfLoaded({ theme }) != null) {
       this.clearReadySubscription();
       return true;
     }
@@ -1961,7 +1958,10 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
       void preloadHighlighter({
         themes: getThemes(theme),
         langs: [],
-        preferredHighlighter,
+        preferredHighlighter: resolvePreferredHighlighter(
+          this.workerManager,
+          this.options
+        ),
       }).then(
         () => {
           if (cancelled) {
@@ -1976,7 +1976,9 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
           }
           // Let a later render retry without looping on a failing loader.
           this.clearReadySubscription();
-          console.error(error);
+          if (!(error instanceof HighlighterDisposedError)) {
+            console.error(error);
+          }
         }
       );
       return () => {

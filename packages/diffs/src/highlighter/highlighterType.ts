@@ -6,6 +6,13 @@ import type { HighlighterTypes } from '../types';
 let activeType: HighlighterTypes | undefined;
 let holds = 0;
 
+export class HighlighterDisposedError extends Error {
+  constructor() {
+    super('Highlighter is disposed');
+    this.name = 'HighlighterDisposedError';
+  }
+}
+
 export function getHighlighterType(): HighlighterTypes | undefined {
   return activeType;
 }

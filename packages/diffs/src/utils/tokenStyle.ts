@@ -1,17 +1,22 @@
 import type { ThemedToken } from '../types';
 
-// Highlights reuses htmlStyle objects, so cache their serialized CSS by identity.
+// Warning: cache only tokens from Highlights, which reuses htmlStyle objects.
+// Shiki creates one per token, so caching them adds a WeakMap entry per token.
 const htmlStyleCache = new WeakMap<Record<string, string>, string>();
 
-export function tokenStyle(token: ThemedToken): string {
+export function tokenStyle(
+  token: ThemedToken,
+  cacheHtmlStyle: boolean
+): string {
   const { htmlStyle } = token;
   if (htmlStyle != null) {
-    let style = htmlStyleCache.get(htmlStyle);
+    let style = cacheHtmlStyle ? htmlStyleCache.get(htmlStyle) : undefined;
     if (style == null) {
-      style = Object.entries(htmlStyle)
-        .map(([name, value]) => `${name}:${value}`)
-        .join(';');
-      htmlStyleCache.set(htmlStyle, style);
+      style = '';
+      for (const name in htmlStyle) {
+        style += `${style === '' ? '' : ';'}${name}:${htmlStyle[name]}`;
+      }
+      if (cacheHtmlStyle) htmlStyleCache.set(htmlStyle, style);
     }
     return style;
   }

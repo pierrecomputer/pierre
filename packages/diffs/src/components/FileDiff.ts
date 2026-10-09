@@ -26,6 +26,7 @@ import type {
 import {
   getHighlighterIfLoaded,
   getSharedHighlighter,
+  HighlighterDisposedError,
 } from '../highlighter/shared_highlighter';
 import {
   type GetHoveredLineResult,
@@ -1828,10 +1829,6 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
     const highlighter = getHighlighterIfLoaded({
       theme,
       lang,
-      preferredHighlighter: resolvePreferredHighlighter(
-        this.workerManager,
-        this.options
-      ),
     });
     if (highlighter != null) {
       sync(highlighter);
@@ -1843,7 +1840,13 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
           this.workerManager,
           this.options
         ),
-      }).then(sync);
+      })
+        .then(sync)
+        .catch((error: unknown) => {
+          if (!(error instanceof HighlighterDisposedError)) {
+            console.error(error);
+          }
+        });
     }
   }
 

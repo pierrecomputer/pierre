@@ -6,6 +6,7 @@ import type { ResolvedLanguage } from '../worker/types';
 import type { DiffsEditorTokenizer } from './DiffsEditorTokenizer';
 import {
   acquireHighlighterType,
+  HighlighterDisposedError,
   releaseHighlighterType,
 } from './highlighterType';
 import type { DiffsTheme } from './themes/types';
@@ -44,7 +45,12 @@ export abstract class DiffsHighlighter {
   ): TokensResult;
 
   codeToHtml(code: string, options: CodeToHtmlOptions): string {
-    return tokensToHtml(code, this.codeToTokens(code, options), options);
+    return tokensToHtml(
+      code,
+      this.codeToTokens(code, options),
+      options,
+      this.name === 'highlights'
+    );
   }
 
   abstract createStreamTokenizer(
@@ -83,7 +89,7 @@ export abstract class DiffsHighlighter {
 
   protected assertNotDisposed(): void {
     if (this.disposed) {
-      throw new Error('Highlighter is disposed');
+      throw new HighlighterDisposedError();
     }
   }
 }

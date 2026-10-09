@@ -16,9 +16,9 @@ import type {
 } from '../types';
 import { appendItems } from './appendItems';
 import { cleanLastNewline } from './cleanLastNewline';
-import { formatCSSVariablePrefix } from './formatCSSVariablePrefix';
 import { getFiletypeFromFileName } from './getFiletypeFromFileName';
 import { getHighlighterThemeStyles } from './getHighlighterThemeStyles';
+import { getTokenOptions } from './getTokenOptions';
 import { iterateOverDiff } from './iterateOverDiff';
 import {
   createDiffSpanDecoration,
@@ -486,20 +486,20 @@ function renderTwoFiles({
   ): RenderDiffFilesResult['additionLines'] => {
     if (file.contents === '') return [];
     return renderTokenLines(
-      highlighter.codeToTokens(cleanLastNewline(file.contents), {
-        lang: languageOverride ?? getFiletypeFromFileName(file.name),
-        ...(typeof theme === 'string' ? { theme } : { themes: theme }),
-        defaultColor: false,
-        cssVariablePrefix: formatCSSVariablePrefix('token'),
-        tokenizeMaxLineLength,
-        // Timed aborts can leave incomplete tokens; limit line length instead.
-        tokenizeTimeLimit: 0,
-      }).tokens,
+      highlighter.codeToTokens(
+        cleanLastNewline(file.contents),
+        getTokenOptions(
+          languageOverride ?? getFiletypeFromFileName(file.name),
+          theme,
+          tokenizeMaxLineLength
+        )
+      ).tokens,
       {
         state: { lineInfo },
         useTokenTransformer,
         decorations,
         lazyLineAST,
+        cacheHtmlStyles: highlighter.name === 'highlights',
       }
     );
   };

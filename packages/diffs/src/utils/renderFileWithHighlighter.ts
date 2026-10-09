@@ -1,5 +1,4 @@
 import type {
-  CodeToTokensOptions,
   DiffsHighlighter,
   FileContents,
   ForceFilePlainTextOptions,
@@ -9,9 +8,9 @@ import type {
 } from '../types';
 import { appendItems } from './appendItems';
 import { linesFromFileContents } from './computeFileOffsets';
-import { formatCSSVariablePrefix } from './formatCSSVariablePrefix';
 import { getFiletypeFromFileName } from './getFiletypeFromFileName';
 import { getHighlighterThemeStyles } from './getHighlighterThemeStyles';
+import { getTokenOptions } from './getTokenOptions';
 import { renderTokenLines } from './renderTokenLines';
 
 const DEFAULT_PLAIN_TEXT_OPTIONS: ForceFilePlainTextOptions = {
@@ -54,20 +53,6 @@ export function renderFileWithHighlighter(
     lineIndex: shikiLineNumber - 1 + startingLine,
     lineNumber: shikiLineNumber + startingLine,
   });
-  // tokenizeTimeLimit: 0 disables shiki's silent 500ms-per-line tokenization
-  // abort. When it trips (slow devices, cold JS-regex-engine compile), the
-  // rest of the line collapses to the enclosing scope's color — and since
-  // dual-theme rendering tokenizes per theme, the first (dark) pass can smear
-  // while the warm second (light) pass stays correct. Pathological content is
-  // already guarded by tokenizeMaxLineLength, which renders long lines plain.
-  const tokenOptions: CodeToTokensOptions = {
-    lang,
-    ...(typeof theme === 'string' ? { theme } : { themes: theme }),
-    defaultColor: false,
-    cssVariablePrefix: formatCSSVariablePrefix('token'),
-    tokenizeMaxLineLength,
-    tokenizeTimeLimit: 0,
-  };
   const highlightedLines = renderTokenLines(
     highlighter.codeToTokens(
       normalizeHighlightLineEndings(
@@ -79,12 +64,13 @@ export function renderFileWithHighlighter(
             )
           : file.contents
       ),
-      tokenOptions
+      getTokenOptions(lang, theme, tokenizeMaxLineLength)
     ).tokens,
     {
       state,
       useTokenTransformer,
       lazyLineAST: lazyLineAST && !forcePlainText && !useTokenTransformer,
+      cacheHtmlStyles: highlighter.name === 'highlights',
     }
   );
 

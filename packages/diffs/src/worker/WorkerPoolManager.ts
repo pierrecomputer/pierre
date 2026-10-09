@@ -7,14 +7,17 @@ import { areLanguagesAttached } from '../highlighter/languages/areLanguagesAttac
 import { getResolvedLanguages } from '../highlighter/languages/getResolvedLanguages';
 import { hasResolvedLanguages } from '../highlighter/languages/hasResolvedLanguages';
 import { resolveLanguages } from '../highlighter/languages/resolveLanguages';
-import { getSharedHighlighter } from '../highlighter/shared_highlighter';
-import { attachResolvedThemes } from '../highlighter/themes/attachResolvedThemes';
+import {
+  getHighlighterIfLoaded,
+  getSharedHighlighter,
+  HighlighterDisposedError,
+} from '../highlighter/shared_highlighter';
 import { getResolvedThemes } from '../highlighter/themes/getResolvedThemes';
 import { hasResolvedThemes } from '../highlighter/themes/hasResolvedThemes';
 import { resolveThemes } from '../highlighter/themes/resolveThemes';
 import type {
-  DiffsHighlighter,
   DiffsTheme,
+  DiffsThemeNames,
   FileContents,
   FileDiffMetadata,
   HighlighterTypes,
@@ -100,7 +103,6 @@ type RenderTask = RenderFileTask | RenderDiffTask;
 type RenderTaskInstance = FileRendererInstance | DiffRendererInstance;
 
 export class WorkerPoolManager {
-  private highlighter: DiffsHighlighter | undefined;
   private readonly preferredHighlighter: HighlighterTypes;
   private renderOptions: WorkerRenderingOptions;
   private renderOptionsRequestVersion = 0;
@@ -241,18 +243,13 @@ export class WorkerPoolManager {
         return;
       }
 
-      if (this.highlighter != null) {
-        attachResolvedThemes(resolvedThemes, this.highlighter);
-      } else {
-        const highlighter = await getSharedHighlighter({
-          themes: themeNames,
-          langs: ['text'],
-          preferredHighlighter: this.preferredHighlighter,
-        });
+      // Warning: resolvedThemes use the workers' backend. The main-thread
+      // highlighter can be another backend, so it loads its own copies.
+      if (getHighlighterIfLoaded({ theme }) == null) {
+        await this.loadSharedHighlighter(themeNames, ['text']);
         if (!isCurrentRequest()) {
           return;
         }
-        this.highlighter = highlighter;
       }
 
       const workerSetup = this.setRenderOptionsOnWorkers(
@@ -402,6 +399,12 @@ export class WorkerPoolManager {
 
   public async initialize(languages: SupportedLanguages[] = []): Promise<void> {
     if (this.initialized === true) {
+      if (getHighlighterIfLoaded({ theme: this.renderOptions.theme }) == null) {
+        await this.loadSharedHighlighter(getThemes(this.renderOptions.theme), [
+          'text',
+          ...languages,
+        ]);
+      }
       return;
     } else if (this.initialized === false) {
       const { lifecycleGeneration } = this;
@@ -431,12 +434,8 @@ export class WorkerPoolManager {
               return;
             }
 
-            const [highlighter] = await Promise.all([
-              getSharedHighlighter({
-                themes,
-                langs: ['text', ...languages],
-                preferredHighlighter: this.preferredHighlighter,
-              }),
+            await Promise.all([
+              this.loadSharedHighlighter(themes, ['text', ...languages]),
               this.initializeWorkers(resolvedThemes, resolvedLanguages),
             ]);
 
@@ -445,7 +444,6 @@ export class WorkerPoolManager {
               resolve();
               return;
             }
-            this.highlighter = highlighter;
             this.initialized = true;
             this.diffCache.clear();
             this.fileCache.clear();
@@ -482,6 +480,26 @@ export class WorkerPoolManager {
       return initialization;
     } else {
       return this.initialized;
+    }
+  }
+
+  // Warning: workers never use the main-thread highlighter. If
+  // disposeHighlighter() runs during this load, pool work must not fail; the
+  // next plain render loads the highlighter again.
+  private async loadSharedHighlighter(
+    themes: DiffsThemeNames[],
+    langs: SupportedLanguages[]
+  ): Promise<void> {
+    try {
+      await getSharedHighlighter({
+        themes,
+        langs,
+        preferredHighlighter: this.preferredHighlighter,
+      });
+    } catch (error) {
+      if (!(error instanceof HighlighterDisposedError)) {
+        throw error;
+      }
     }
   }
 
@@ -714,16 +732,19 @@ export class WorkerPoolManager {
     totalLines: number,
     lines?: string[]
   ): ThemedFileResult | undefined {
-    if (this.highlighter == null) {
+    const highlighter = getHighlighterIfLoaded({
+      theme: this.renderOptions.theme,
+    });
+    if (highlighter == null) {
       this.queueInitialization();
       return undefined;
     }
-    return renderFileWithHighlighter(
-      file,
-      this.highlighter,
-      this.renderOptions,
-      { forcePlainText: true, startingLine, totalLines, lines }
-    );
+    return renderFileWithHighlighter(file, highlighter, this.renderOptions, {
+      forcePlainText: true,
+      startingLine,
+      totalLines,
+      lines,
+    });
   }
 
   public highlightDiffAST(
@@ -803,15 +824,20 @@ export class WorkerPoolManager {
     expandedHunks?: Map<number, HunkExpansionRegion> | true,
     collapsedContextThreshold?: number
   ): ThemedDiffResult | undefined {
-    return this.highlighter != null
-      ? renderDiffWithHighlighter(diff, this.highlighter, this.renderOptions, {
-          forcePlainText: true,
-          startingLine,
-          totalLines,
-          expandedHunks,
-          collapsedContextThreshold,
-        })
-      : undefined;
+    const highlighter = getHighlighterIfLoaded({
+      theme: this.renderOptions.theme,
+    });
+    if (highlighter == null) {
+      this.queueInitialization();
+      return undefined;
+    }
+    return renderDiffWithHighlighter(diff, highlighter, this.renderOptions, {
+      forcePlainText: true,
+      startingLine,
+      totalLines,
+      expandedHunks,
+      collapsedContextThreshold,
+    });
   }
 
   public terminate(): void {
@@ -829,7 +855,6 @@ export class WorkerPoolManager {
     this.queuedTaskByInstance.clear();
     this.taskByHighlightKey.clear();
     this.activeTaskById.clear();
-    this.highlighter = undefined;
     this.initialized = false;
     this.workersFailed = false;
     this.queueBroadcastStateChanges();
@@ -1017,15 +1042,16 @@ export class WorkerPoolManager {
   ): Promise<void> {
     try {
       // Preload the same languages on the main thread for editing.
+      const highlighter = getHighlighterIfLoaded();
       const mainThreadLangs = langs.filter(
-        (lang) => !areLanguagesAttached(lang, this.highlighter)
+        (lang) =>
+          highlighter == null || !areLanguagesAttached(lang, highlighter)
       );
       if (mainThreadLangs.length > 0) {
-        void getSharedHighlighter({
-          themes: getThemes(this.renderOptions.theme),
-          langs: ['text', ...mainThreadLangs],
-          preferredHighlighter: this.preferredHighlighter,
-        }).catch((error: unknown) => {
+        void this.loadSharedHighlighter(getThemes(this.renderOptions.theme), [
+          'text',
+          ...mainThreadLangs,
+        ]).catch((error: unknown) => {
           console.error(error);
         });
       }

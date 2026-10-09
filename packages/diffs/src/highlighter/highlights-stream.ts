@@ -4,9 +4,14 @@ import { appendItems } from '../utils/appendItems';
 import { BaseStreamTokenizer } from './stream-tokenizer';
 import type { ThemedToken } from './types';
 
+// Completed lines the tokenizer keeps before it tries to drop older ones.
+const TRIM_LINE_COUNT = 1024;
+const DOCUMENT_START = { line: 0, character: 0 };
+
 /** Keeps the unfinished line editable so new chunks can recall provisional tokens. */
 export class HighlightsStreamTokenizer extends BaseStreamTokenizer {
   #tokenizer: LiveTokenizer;
+  #trimLineCount = TRIM_LINE_COUNT;
 
   constructor(private readonly options: CodeToTokensOptions) {
     super();
@@ -42,7 +47,36 @@ export class HighlightsStreamTokenizer extends BaseStreamTokenizer {
         unstable = tokens;
       }
     }
-    return { unstable, tailLength: this.#tokenizer.getLineLength(lastLine) };
+    const tailLength = this.#tokenizer.getLineLength(lastLine);
+    if (lastLine > this.#trimLineCount) {
+      // Warning: keep the last completed line. Lexed from the initial state,
+      // it must end in its old state, or the unfinished line would be lexed
+      // from the wrong state; then restore the dropped lines.
+      const text = this.#tokenizer.getText();
+      const { lineChanges } = this.#tokenizer.applyEdits([
+        {
+          range: {
+            start: DOCUMENT_START,
+            end: { line: lastLine - 1, character: 0 },
+          },
+          newText: '',
+        },
+      ]);
+      if (lineChanges.every((change) => change.newEndLine <= 1)) {
+        this.#trimLineCount = TRIM_LINE_COUNT;
+      } else {
+        const keptLength = this.#tokenizer.getText().length;
+        this.#tokenizer.applyEdits([
+          {
+            range: { start: DOCUMENT_START, end: DOCUMENT_START },
+            newText: text.slice(0, text.length - keptLength),
+          },
+        ]);
+        // Retry after the window doubles, such as inside a long comment.
+        this.#trimLineCount = lastLine * 2;
+      }
+    }
+    return { unstable, tailLength };
   }
 
   clone(): HighlightsStreamTokenizer {
@@ -55,6 +89,7 @@ export class HighlightsStreamTokenizer extends BaseStreamTokenizer {
 
   protected resetSource(): void {
     this.#tokenizer.reset('');
+    this.#trimLineCount = TRIM_LINE_COUNT;
   }
 
   protected releaseSource(): void {

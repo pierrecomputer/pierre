@@ -8,6 +8,7 @@ import { wrapTokenFragments } from './wrapTokenFragments';
 
 interface RenderTokenLinesOptions {
   lazyLineAST?: boolean;
+  cacheHtmlStyles?: boolean;
   state?: SharedRenderState;
   useTokenTransformer?: boolean;
   mergeWhitespaces?: 'never' | 'always';
@@ -39,6 +40,7 @@ export function renderTokenLines(
   {
     state,
     lazyLineAST = false,
+    cacheHtmlStyles = false,
     useTokenTransformer = false,
     mergeWhitespaces = 'always',
     decorations = [],
@@ -130,13 +132,14 @@ export function renderTokenLines(
     const spans = decorationsByLine?.get(lineIndex);
     const column =
       spans == null
-        ? appendTokens(line, normalized, useTokenTransformer)
+        ? appendTokens(line, normalized, useTokenTransformer, cacheHtmlStyles)
         : appendDecoratedTokens(
             line,
             normalized,
             spans,
             lineIndex,
-            useTokenTransformer
+            useTokenTransformer,
+            cacheHtmlStyles
           );
     if (useTokenTransformer && column === 0) {
       line.children.push({
@@ -153,7 +156,10 @@ export function renderTokenLines(
   if (!lazyLineAST) return lines.map(renderLine);
   const rows: ElementContent[] = new Array(lines.length);
   for (let index = 0; index < lines.length; index++) {
-    setDeferredArrayItem(rows, index, () => renderLine(lines[index], index));
+    // Warning: capture one line, not `lines`; unbuilt rows would keep every
+    // line's tokens alive.
+    const tokens = lines[index];
+    setDeferredArrayItem(rows, index, () => renderLine(tokens, index));
   }
   return rows;
 }
@@ -162,7 +168,8 @@ export function renderTokenLines(
 function appendTokens(
   line: Element,
   tokens: ThemedToken[],
-  useTokenTransformer: boolean
+  useTokenTransformer: boolean,
+  cacheHtmlStyles: boolean
 ): number {
   let column = 0;
   for (const token of tokens) {
@@ -170,7 +177,7 @@ function appendTokens(
     line.children.push(
       createTokenSpan(
         token,
-        tokenStyle(token),
+        tokenStyle(token, cacheHtmlStyles),
         token.content,
         column,
         useTokenTransformer
@@ -188,7 +195,8 @@ function appendDecoratedTokens(
   tokens: ThemedToken[],
   spans: LineDecoration[],
   lineIndex: number,
-  useTokenTransformer: boolean
+  useTokenTransformer: boolean,
+  cacheHtmlStyles: boolean
 ): number {
   // Open outer ranges first, regardless of their order in the input.
   if (spans.length > 1)
@@ -311,7 +319,7 @@ function appendDecoratedTokens(
     if (token.content === '') continue;
     const start = column;
     const end = start + token.content.length;
-    const style = tokenStyle(token);
+    const style = tokenStyle(token, cacheHtmlStyles);
     while (column < end) {
       if (boundaries[boundaryIndex]?.position === column)
         advanceBoundary(column);

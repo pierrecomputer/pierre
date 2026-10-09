@@ -10,6 +10,7 @@ import { areLanguagesAttached } from '../highlighter/languages/areLanguagesAttac
 import {
   getHighlighterIfLoaded,
   getSharedHighlighter,
+  HighlighterDisposedError,
 } from '../highlighter/shared_highlighter';
 import { areThemesAttached } from '../highlighter/themes/areThemesAttached';
 import type {
@@ -159,10 +160,6 @@ export class FileRenderer<LAnnotation = undefined> {
     if (workerManager?.isWorkingPool() !== true) {
       this.highlighter = getHighlighterIfLoaded({
         theme: options.theme ?? DEFAULT_THEMES,
-        preferredHighlighter: resolvePreferredHighlighter(
-          workerManager,
-          options
-        ),
       });
     }
   }
@@ -335,6 +332,9 @@ export class FileRenderer<LAnnotation = undefined> {
 
   public hydrate(file: FileContents): void {
     this.file = file;
+    this.highlighter = getHighlighterIfLoaded({
+      theme: this.getLocalHighlightTheme(),
+    });
     const { options } = this.getRenderOptions(file);
     const lines = this.getOrCreateLineCache(file);
     const massiveFile = isFileMassive(
@@ -364,9 +364,13 @@ export class FileRenderer<LAnnotation = undefined> {
       }
     }
     // Lets attempt to get the highlighter/languages ready immediately
-    else if (this.highlighter == null || this.highlighter.isDisposed) {
+    else if (this.highlighter == null) {
       this.computedLang = file.lang ?? getFiletypeFromFileName(file.name);
-      void this.initializeHighlighter().catch(() => {});
+      void this.initializeHighlighter().catch((error: unknown) => {
+        if (!(error instanceof HighlighterDisposedError)) {
+          this.onHighlightError(error);
+        }
+      });
     }
   }
 
@@ -734,15 +738,7 @@ export class FileRenderer<LAnnotation = undefined> {
       !hasContent ||
       isFilePlainText(file) ||
       isFileMassive(lines.length, this.getTokenizeMaxLength());
-    // Refresh disposed instances before canRenderFile checks their themes.
-    if (this.highlighter == null || this.highlighter.isDisposed) {
-      this.highlighter = getHighlighterIfLoaded({
-        preferredHighlighter: resolvePreferredHighlighter(
-          this.workerManager,
-          this.options
-        ),
-      });
-    }
+    this.highlighter = getHighlighterIfLoaded();
     const canRenderFile = this.canRenderFile(file, options, forcePlainText);
     const newContent = !areFileTargetsEqual(file, this.renderCache.file);
     const newRenderRange = !areRenderRangesEqual(
@@ -830,11 +826,15 @@ export class FileRenderer<LAnnotation = undefined> {
       }
 
       if (!hasThemes || (!forcePlainText && !hasLangs)) {
-        void this.asyncHighlight(file, lazyLineAST).then(
-          ({ result, options }) => {
+        void this.asyncHighlight(file, lazyLineAST)
+          .then(({ result, options }) => {
             this.applyHighlightResult(file, result, options, !forcePlainText);
-          }
-        );
+          })
+          .catch((error: unknown) => {
+            if (!(error instanceof HighlighterDisposedError)) {
+              this.onHighlightError(error);
+            }
+          });
       }
     }
 

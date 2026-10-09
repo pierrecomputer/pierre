@@ -1,3 +1,4 @@
+import { LiveTokenizer } from '@pierre/highlights';
 import { afterAll, beforeEach, describe, expect, spyOn, test } from 'bun:test';
 
 import { TextDocument } from '../src/editor/textDocument';
@@ -469,6 +470,62 @@ describe('backend tokenizers', () => {
       }
     });
   }
+
+  test('Highlights streams long input with a bounded document and exact tokens', async () => {
+    const highlighter = await getSharedHighlighter({
+      preferredHighlighter: 'highlights',
+      themes: ['pierre-dark'],
+      langs: ['typescript'],
+    });
+    const options = { lang: 'typescript', theme: 'pierre-dark' } as const;
+    const tokenizer = highlighter.createStreamTokenizer(options);
+    const reset = spyOn(LiveTokenizer.prototype, 'reset');
+    const tokens: ThemedToken[] = [];
+    let unstableCount = 0;
+    const enqueue = async (text: string) => {
+      for (let index = 0; index < text.length; index += 997) {
+        const result = await tokenizer.enqueue(text.slice(index, index + 997));
+        tokens.splice(
+          tokens.length - result.recall,
+          result.recall,
+          ...result.stable,
+          ...result.unstable
+        );
+        unstableCount = result.unstable.length;
+      }
+    };
+    const code = 'const a = `x`;\n'.repeat(3000);
+    // The comment spans failed trims, which must restore the dropped lines.
+    const comment = `/*\n${' * const b = 1;\n'.repeat(2500)} */\nconst c = 2;`;
+    try {
+      await enqueue(code);
+      tokenizer.clone().dispose();
+      const cloned = reset.mock.calls[0]?.[0] ?? '';
+      expect(cloned.split('\n').length).toBeLessThanOrEqual(1026);
+      expect(code.endsWith(cloned)).toBe(true);
+      await enqueue(comment);
+      tokens.splice(
+        tokens.length - unstableCount,
+        unstableCount,
+        ...tokenizer.close().stable
+      );
+    } finally {
+      reset.mockRestore();
+      tokenizer.dispose();
+    }
+    const source = code + comment;
+    expect(tokens.map((token) => token.content).join('')).toBe(source);
+    expect(
+      tokens
+        .filter((token) => token.content !== '\n')
+        .map((token) => [token.content, token.color])
+    ).toEqual(
+      highlighter
+        .codeToTokens(source, options)
+        .tokens.flat()
+        .map((token) => [token.content, token.color])
+    );
+  });
 
   test('Highlights refreshes same-line edits before bracket matching', async () => {
     const highlighter = await getSharedHighlighter({
