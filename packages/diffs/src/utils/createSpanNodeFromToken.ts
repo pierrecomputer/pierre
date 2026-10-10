@@ -1,13 +1,15 @@
-import {
-  getTokenStyleObject,
-  stringifyTokenStyle,
-  type ThemedToken,
-} from 'shiki';
+import type { ThemedToken } from '../types';
+import { tokenStyle } from './tokenStyle';
 
-export function createSpanFromToken(token: ThemedToken): HTMLSpanElement {
+export function createSpanFromToken(
+  token: ThemedToken,
+  cacheHtmlStyle: boolean
+): HTMLSpanElement {
   const element = document.createElement('span');
-  const style = token.htmlStyle ?? getTokenStyleObject(token);
-  element.style = stringifyTokenStyle(style);
-  element.textContent = token.content;
+  // setAttribute lets Blink share parsed styles; style.cssText prevents reuse.
+  element.setAttribute('style', tokenStyle(token, cacheHtmlStyle));
+  // CR renders as a space under white-space: pre. Keep its span empty but
+  // retain the node so token recalls remove the correct number of children.
+  element.textContent = token.content === '\r' ? '' : token.content;
   return element;
 }

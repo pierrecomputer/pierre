@@ -12,6 +12,7 @@
     "@pierre/theming": "workspace:*",
     "@pierre/tree-test-data": "workspace:*",
     "@pierre/trees": "workspace:*",
+    "@pierre/vscode-icons": "catalog:",
     "@radix-ui/react-avatar": "catalog:",
     "@radix-ui/react-dialog": "catalog:",
     "@radix-ui/react-dropdown-menu": "catalog:",

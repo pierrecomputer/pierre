@@ -34,7 +34,7 @@
     <div data-diff-mount></div>
 
     <script type="module">
-      import { File } from '/dist/index.js';
+      import { File, registerCustomTheme } from '/dist/index.js';
       import { Editor } from '/dist/edit/index.js';
 
       const mount = document.querySelector('[data-diff-mount]');
@@ -55,6 +55,21 @@ export { greeting, count };
 
       const searchParams = new URLSearchParams(window.location.search);
       const requestedTheme = searchParams.get('theme');
+      if (requestedTheme === 'no-active-background') {
+        registerCustomTheme(
+          requestedTheme,
+          async () => ({
+            name: requestedTheme,
+            appearance: 'dark',
+            style: {
+              'editor.background': '#1e1e1e',
+              'editor.foreground': '#d4d4d4',
+              'element.selected': '#264f78',
+            },
+          }),
+          'zed'
+        );
+      }
       const theme = requestedTheme ?? {
         dark: 'pierre-dark',
         light: 'pierre-light',
@@ -65,6 +80,8 @@ export { greeting, count };
 
       const instance = new File({
         disableFileHeader: true,
+        preferredHighlighter:
+          requestedTheme === 'no-active-background' ? 'highlights' : undefined,
         theme,
         themeType,
         useTokenTransformer: true,

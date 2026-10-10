@@ -125,17 +125,19 @@ describe('FileRenderer AST Structure', () => {
     const tokensWithCSSVars = styledTokens.filter(
       (node) =>
         node.style?.match(
-          /--diffs-token-dark:#[A-F0-9]{6};--diffs-token-light:#[A-F0-9]{6}/
+          /--diffs-token-dark:#[A-F0-9]{6};--diffs-token-light:#[A-F0-9]{6}/i
         ) !== null
     );
     expect(tokensWithCSSVars.length).toBeGreaterThan(0);
 
     // Verify specific keyword exists and is highlighted
-    const functionToken = textNodes.find((node) => node.text === 'function');
+    const functionToken = textNodes.find(
+      (node) => node.text.trim() === 'function'
+    );
     assertDefined(functionToken, 'functionToken should be defined');
     assertDefined(functionToken.style, 'functionToken.style should be defined');
     expect(functionToken.style).toMatch(
-      /--diffs-token-dark:#[A-F0-9]{6};--diffs-token-light:#[A-F0-9]{6}/
+      /--diffs-token-dark:#[A-F0-9]{6};--diffs-token-light:#[A-F0-9]{6}/i
     );
   });
 

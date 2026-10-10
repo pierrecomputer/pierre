@@ -1,0 +1,13 @@
+.card {
+  --color-foreground: var(--foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+
+  background-color: var(--background);
+}
+
+/* The card's local `.dark` class must not trigger this outer-page override. */
+/* stylelint-disable-next-line selector-pseudo-class-no-unknown */
+:global(:root.dark) .card {
+  background-color: color-mix(in oklch, var(--muted) 50%, transparent);
+}
