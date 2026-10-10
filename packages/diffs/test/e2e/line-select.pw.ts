@@ -73,4 +73,49 @@ test.describe('line selection and gutter utility', () => {
         end: 3,
       });
   });
+
+  // Regression guard for pierre#1184: during a native text-selection drag the
+  // gutter utility must not be re-parented into the hovered line's number cell
+  // on every pointermove. That mid-drag DOM mutation crashes WebKit's
+  // web-content process (EventHandler::handleMouseDraggedEvent). Asserting the
+  // utility stays frozen guards the fix on every browser, including those whose
+  // WebKit build does not happen to crash.
+  test('a native text-selection drag does not move the gutter utility', async ({
+    page,
+  }) => {
+    await openFixture(page);
+
+    // Reveal the utility on line 2 via hover (no button held).
+    await page.locator(gutterRow(2)).hover();
+    await expect(page.locator('[data-utility-button]')).toBeVisible();
+
+    const utilityLine = (): Promise<string | null> =>
+      page.evaluate(() => {
+        const host = document.querySelector('diffs-container');
+        const button = host?.shadowRoot?.querySelector('[data-utility-button]');
+        const cell = button?.closest('[data-column-number]');
+        return cell?.getAttribute('data-column-number') ?? null;
+      });
+
+    expect(await utilityLine()).toBe('2');
+
+    const row2 = await page.locator(gutterRow(2)).boundingBox();
+    const row5 = await page.locator(gutterRow(5)).boundingBox();
+    const content = await page.locator('[data-content]').first().boundingBox();
+    if (row2 == null || row5 == null || content == null) {
+      throw new Error('missing fixture geometry');
+    }
+
+    // Press on the CONTENT (not the gutter) so a native text selection starts
+    // instead of a line-selection session, then drag down across lines with
+    // the button held.
+    const x = content.x + content.width / 2;
+    await page.mouse.move(x, row2.y + row2.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(x, row5.y + row5.height / 2, { steps: 8 });
+    // Utility stays on line 2 while the drag is in progress.
+    expect(await utilityLine()).toBe('2');
+    await page.mouse.up();
+    expect(await utilityLine()).toBe('2');
+  });
 });
