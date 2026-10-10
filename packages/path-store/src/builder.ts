@@ -39,7 +39,7 @@ export interface BuilderFinishOptions {
 
 type PreparedInputKind = 'prepared' | 'presorted';
 
-const PREPARED_INPUT_KIND = Symbol('pathStorePreparedInputKind');
+const PREPARED_INPUT_KIND = 'pathStorePreparedInputKind' as const;
 
 type ValidatedPreparedInput = InternalPreparedInput & {
   [PREPARED_INPUT_KIND]?: PreparedInputKind;
