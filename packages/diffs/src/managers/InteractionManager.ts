@@ -284,6 +284,12 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
   private renderedEditorActiveLineState: LineRenderState | undefined;
   private selectionAnchor: SelectionPoint | undefined;
   private pointerSession: PointerSession = { mode: 'idle' };
+  // True while a native text-selection drag is in progress (a mouse button is
+  // held and no pierre gutter/line-selection session owns the pointer). Used to
+  // freeze gutter-utility placement so its node is not re-parented between line
+  // cells on every pointermove under the drag, which crashes WebKit (pierre
+  // #1184, EventHandler::handleMouseDraggedEvent).
+  private nativeTextDragActive = false;
 
   constructor(
     private mode: TMode,
@@ -466,6 +472,13 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
     if (event.pointerType !== 'mouse') {
       return;
     }
+
+    // A held button with no pierre selection session means the browser is
+    // extending a native text selection. While that drag runs, hover-driven
+    // gutter-utility placement must not move the utility node (see
+    // `nativeTextDragActive` / `placeUtility`).
+    this.nativeTextDragActive =
+      event.buttons !== 0 && this.pointerSession.mode === 'idle';
 
     const {
       lineHoverHighlight = 'disabled',
@@ -789,6 +802,11 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
     ) {
       return;
     }
+
+    // A fresh press has not moved yet; clear any stale native-drag flag so
+    // utility placement for this press is not suppressed. A subsequent move
+    // with the button held re-arms it in `handlePointerMove`.
+    this.nativeTextDragActive = false;
 
     const path = event.composedPath();
     if (
@@ -1166,6 +1184,13 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
   // selection, desktop hover and mobile tap reveal can still place it on a
   // single row.
   private placeUtility(): void {
+    // Do not touch the utility node's position during a native text-selection
+    // drag: re-parenting it into a line cell (or removing it) while WebKit
+    // extends the selection crashes the web-content process (pierre#1184).
+    // Placement resumes on the next hover move once the drag ends.
+    if (this.nativeTextDragActive) {
+      return;
+    }
     if (this.placeUtilityFromSelection()) {
       return;
     }
