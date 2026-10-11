@@ -8,7 +8,7 @@ import {
 import { type Ref, useMemo } from 'react';
 
 import { useDiffThemeProps } from './useDiffThemeProps';
-import { useWorkerDiffTheme } from './useWorkerDiffTheme';
+import { PREFERRED_HIGHLIGHTER } from '@/lib/preferredHighlighter';
 import type { DiffThemeInput } from '@/lib/theme/diffThemeProps';
 
 type ThemedCodeViewComponent = <LAnnotation = undefined, Caret = undefined>(
@@ -22,7 +22,6 @@ export const ThemedCodeView: ThemedCodeViewComponent = <
   LAnnotation = undefined,
   Caret = undefined,
 >({
-  disableWorkerPool = false,
   options,
   ref,
   theme,
@@ -32,10 +31,10 @@ export const ThemedCodeView: ThemedCodeViewComponent = <
   theme?: DiffThemeInput;
 }): React.JSX.Element => {
   const diffTheme = useDiffThemeProps(theme);
-  useWorkerDiffTheme(diffTheme.theme, disableWorkerPool);
   const themedOptions = useMemo(
     () => ({
       ...options,
+      preferredHighlighter: PREFERRED_HIGHLIGHTER,
       theme: diffTheme.theme,
       themeType: options?.themeType ?? diffTheme.themeType,
     }),
@@ -45,7 +44,6 @@ export const ThemedCodeView: ThemedCodeViewComponent = <
     <CodeView<LAnnotation, Caret>
       {...props}
       ref={ref}
-      disableWorkerPool={disableWorkerPool}
       options={themedOptions}
     />
   );

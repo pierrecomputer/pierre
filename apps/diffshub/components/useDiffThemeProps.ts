@@ -15,7 +15,7 @@ import { hasThemeNameSelection } from '@/lib/theme/ThemeSource';
 // Names-now diffs hook. Reads the selection (names + scheme) — for the provider
 // path it comes from the controller; for an override `theme` prop the names are
 // taken from the override. Returns the spreadable { theme, themeType } pair that
-// drives both the worker pool render options and (future) a CodeView object prop.
+// drives the diffs component options.
 //
 // In this prototype the override `theme` is only used for the documented preview
 // case (a single fixed theme or a { light, dark } pair); when given, its names

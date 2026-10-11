@@ -4,7 +4,7 @@ import { FileDiff, type FileDiffProps } from '@pierre/diffs/react';
 import { useMemo } from 'react';
 
 import { useDiffThemeProps } from './useDiffThemeProps';
-import { useWorkerDiffTheme } from './useWorkerDiffTheme';
+import { PREFERRED_HIGHLIGHTER } from '@/lib/preferredHighlighter';
 import type { DiffThemeInput } from '@/lib/theme/diffThemeProps';
 
 interface ThemedFileDiffProps<LAnnotation, Caret> extends FileDiffProps<
@@ -16,28 +16,21 @@ interface ThemedFileDiffProps<LAnnotation, Caret> extends FileDiffProps<
 }
 
 // Sugar over useDiffThemeProps: applies the active theme names + themeType to
-// the React <FileDiff> options and keeps the worker pool in step when present.
+// the React <FileDiff> options.
 export function ThemedFileDiff<LAnnotation = undefined, Caret = undefined>({
-  disableWorkerPool = false,
   options,
   theme,
   ...props
 }: ThemedFileDiffProps<LAnnotation, Caret>) {
   const diffTheme = useDiffThemeProps(theme);
-  useWorkerDiffTheme(diffTheme.theme, disableWorkerPool);
   const themedOptions = useMemo(
     () => ({
       ...options,
+      preferredHighlighter: PREFERRED_HIGHLIGHTER,
       theme: diffTheme.theme,
       themeType: options?.themeType ?? diffTheme.themeType,
     }),
     [diffTheme, options]
   );
-  return (
-    <FileDiff<LAnnotation, Caret>
-      {...props}
-      disableWorkerPool={disableWorkerPool}
-      options={themedOptions}
-    />
-  );
+  return <FileDiff<LAnnotation, Caret> {...props} options={themedOptions} />;
 }

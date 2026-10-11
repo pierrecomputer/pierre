@@ -108,7 +108,6 @@ describe('React themed component overrides', () => {
       root.render(
         <ThemedCodeView
           ref={codeViewRef}
-          disableWorkerPool
           options={{
             theme: { light: 'github-light', dark: 'github-dark' },
             themeType: 'system',
