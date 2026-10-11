@@ -1,6 +1,5 @@
 'use client';
 
-import type { CodeViewHandle } from '@pierre/diffs/react';
 import {
   IconComment,
   IconFileTree,
@@ -31,7 +30,7 @@ import { PoweredBy } from './PoweredBy';
 import { StressTestControls } from './StressTestControls';
 import { useChromeThemeProps } from './useChromeThemeProps';
 import { useMediaQuery } from './useMediaQuery';
-import type { ThemeCycleControls } from './useThemeCycle';
+import type { StressTestState } from './useStressTest';
 import { Button } from '@/components/Button';
 import { ButtonGroup, ButtonGroupItem } from '@/components/ButtonGroup';
 import {
@@ -49,7 +48,6 @@ import { getDiffsHubFileTreeAvailableStatuses } from '@/lib/getDiffsHubFileTreeA
 import { diffshubChromeMapping } from '@/lib/theme/diffshubChromeMapping';
 import { getDropdownThemeStyle } from '@/lib/theme/dropdownChromeStyle';
 import type {
-  CommentMetadata,
   DiffsHubDiffStats as DiffsHubDiffStatsData,
   DiffsHubFileTreeSource,
   DiffsHubSavedCommentEntry,
@@ -71,8 +69,7 @@ interface DiffsHubSidebarProps {
   scrollRef: RefObject<HTMLDivElement | null>;
   source: DiffsHubFileTreeSource;
   streaming: boolean;
-  themeCycle: ThemeCycleControls;
-  viewerRef: RefObject<CodeViewHandle<CommentMetadata, undefined> | null>;
+  stressTest: StressTestState;
 }
 
 export const DiffsHubSidebar = memo(function DiffsHubSidebar({
@@ -86,8 +83,7 @@ export const DiffsHubSidebar = memo(function DiffsHubSidebar({
   scrollRef,
   source,
   streaming,
-  themeCycle,
-  viewerRef,
+  stressTest,
 }: DiffsHubSidebarProps) {
   const [activeTab, setActiveTab] = useState<SidebarTab>('files');
   let totalCommentCount = 0;
@@ -324,7 +320,7 @@ export const DiffsHubSidebar = memo(function DiffsHubSidebar({
           stats={diffStats}
           streaming={streaming}
         />
-        <StressTestControls themeCycle={themeCycle} viewerRef={viewerRef} />
+        <StressTestControls stressTest={stressTest} />
         <PoweredBy />
       </SidebarWrapper>
     </>
