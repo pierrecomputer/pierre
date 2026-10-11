@@ -8,6 +8,7 @@ import {
 import { type Ref, useMemo } from 'react';
 
 import { useDiffThemeProps } from './useDiffThemeProps';
+import { useWorkerDiffTheme } from './useWorkerDiffTheme';
 import { PREFERRED_HIGHLIGHTER } from '@/lib/preferredHighlighter';
 import type { DiffThemeInput } from '@/lib/theme/diffThemeProps';
 
@@ -31,6 +32,7 @@ export const ThemedCodeView: ThemedCodeViewComponent = <
   theme?: DiffThemeInput;
 }): React.JSX.Element => {
   const diffTheme = useDiffThemeProps(theme);
+  useWorkerDiffTheme(diffTheme.theme);
   const themedOptions = useMemo(
     () => ({
       ...options,
