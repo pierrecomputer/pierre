@@ -119,10 +119,9 @@ function ReviewUIInner({ domain, initialUrl, path }: ReviewUIProps) {
   const setDarkThemeName = useCallback((name: DarkThemeName) => {
     themeController.setThemeNameForScheme('dark', name);
   }, []);
-  // The cycle button in the System Monitor sweeps through every Shiki
-  // theme so reviewers can preview the full set without manually picking
-  // each one. The hook captures the user's current pick when cycling
-  // starts so the visible theme anchors the rotation.
+  // The Stress Test row's cycle button sweeps through every catalog theme.
+  // The hook captures the user's current pick when cycling starts so the
+  // visible theme anchors the rotation.
   const themeCycle = useThemeCycle({
     lightThemeName,
     darkThemeName,
