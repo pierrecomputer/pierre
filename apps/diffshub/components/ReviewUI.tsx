@@ -1,7 +1,7 @@
 'use client';
 
 import { type DiffIndicators } from '@pierre/diffs';
-import { type CodeViewHandle, useWorkerPool } from '@pierre/diffs/react';
+import type { CodeViewHandle } from '@pierre/diffs/react';
 import { type ColorMode } from '@pierre/theming';
 import { useThemeController } from '@pierre/theming/react';
 import {
@@ -60,7 +60,6 @@ export function ReviewUI({ domain, initialUrl, path }: ReviewUIProps) {
 function ReviewUIInner({ domain, initialUrl, path }: ReviewUIProps) {
   useEffect(preloadAvatars, []);
 
-  const isWorkerPoolReadyOrDisable = useIsWorkerPoolReadyOrDisabled();
   const [diffStyle, setDiffStyle] = useState<'split' | 'unified'>('split');
   const [collapseMode, setCollapseMode] = useState<'expanded' | 'collapsed'>(
     'expanded'
@@ -97,8 +96,8 @@ function ReviewUIInner({ domain, initialUrl, path }: ReviewUIProps) {
   // theme-derived value (rendered into inline chrome styles + the CodeView
   // themeType) behind a hydration snapshot so the first client render matches
   // the SSR markup, then flips to the user's selection. This also keeps the
-  // long-lived WorkerPool and the CodeView from mounting against the default
-  // palette before the persisted values apply.
+  // CodeView from mounting against the default palette before the persisted
+  // values apply.
   const themesHydrated = useIsHydrated();
 
   const colorMode: ColorMode = themesHydrated ? themeState.mode : 'system';
@@ -254,7 +253,6 @@ function ReviewUIInner({ domain, initialUrl, path }: ReviewUIProps) {
   // are still at their `DEFAULT_*_THEME` initial values and tokenize the
   // first batch of files against the wrong palette.
   const viewerAvailable =
-    isWorkerPoolReadyOrDisable &&
     themesHydrated &&
     (loadState === 'ready' ||
       (loadState === 'streaming' && initialItems.length > 0));
@@ -333,26 +331,6 @@ function ReviewUIInner({ domain, initialUrl, path }: ReviewUIProps) {
       )}
     </ReviewGrid>
   );
-}
-
-function useIsWorkerPoolReadyOrDisabled() {
-  const workerPool = useWorkerPool();
-  const [isReady, setIsReady] = useState(
-    () => workerPool?.isInitialized() ?? true
-  );
-  const isReadyRef = useRef(isReady);
-  useEffect(() => {
-    // The callback will always be fired immediately with the new state, so we
-    // don't need to check for it in the effect
-    return workerPool?.subscribeToStatChanges((stats) => {
-      const isReady = stats.managerState === 'initialized';
-      if (isReady !== isReadyRef.current) {
-        setIsReady(isReady);
-        isReadyRef.current = isReady;
-      }
-    });
-  }, [workerPool]);
-  return isReady;
 }
 
 interface ReviewGridProps {
