@@ -23,7 +23,7 @@ import { useIsHydrated } from './useIsHydrated';
 import { useMediaQuery } from './useMediaQuery';
 import { useOnValueChange } from './useOnValueChange';
 import { usePatchLoader } from './usePatchLoader';
-import { useThemeCycle } from './useThemeCycle';
+import { useStressTest } from './useStressTest';
 import {
   docsThemeCatalog,
   themeController,
@@ -119,10 +119,12 @@ function ReviewUIInner({ domain, initialUrl, path }: ReviewUIProps) {
   const setDarkThemeName = useCallback((name: DarkThemeName) => {
     themeController.setThemeNameForScheme('dark', name);
   }, []);
-  // The Stress Test row's cycle button sweeps through every catalog theme.
-  // The hook captures the user's current pick when cycling starts so the
-  // visible theme anchors the rotation.
-  const themeCycle = useThemeCycle({
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const viewerRef = useRef<CodeViewHandle<CommentMetadata, undefined> | null>(
+    null
+  );
+  const stressTest = useStressTest({
+    viewerRef,
     lightThemeName,
     darkThemeName,
     resolvedThemeMode: appResolvedTheme,
@@ -130,11 +132,6 @@ function ReviewUIInner({ domain, initialUrl, path }: ReviewUIProps) {
     setDarkThemeName,
     setColorMode,
   });
-
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const viewerRef = useRef<CodeViewHandle<CommentMetadata, undefined> | null>(
-    null
-  );
   const handlePatchLoadStart = useCallback(() => {
     setFileTreeOverlayOpen(false);
   }, []);
@@ -298,8 +295,7 @@ function ReviewUIInner({ domain, initialUrl, path }: ReviewUIProps) {
             scrollRef={scrollRef}
             source={treeSource}
             streaming={loadState === 'streaming'}
-            themeCycle={themeCycle}
-            viewerRef={viewerRef}
+            stressTest={stressTest}
             onSelectItem={handleSelectTreeItem}
           />
           <DiffsHubViewer

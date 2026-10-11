@@ -3,28 +3,20 @@
 import { resolveThemes } from '@pierre/diffs';
 import { useWorkerPool } from '@pierre/diffs/react';
 import { type ColorMode } from '@pierre/theming';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { useLatestValueRef } from './useLatestValueRef';
 import { docsThemeCatalog } from '@/components/themeCatalog';
 import { PREFERRED_HIGHLIGHTER } from '@/lib/preferredHighlighter';
 import type { DarkThemeName, LightThemeName } from '@/lib/themeNames';
 
-// Step durations for the theme-cycle button. Shift-click advances through
-// these in order; a plain click starts/stops the rotation.
+// Theme switching intervals the stress test can step through, after "off".
 export const THEME_CYCLE_DURATIONS_SECONDS = [3, 0.8, 0.4, 0.1] as const;
 
 export type ThemeCycleDurationSeconds =
   (typeof THEME_CYCLE_DURATIONS_SECONDS)[number];
 
-export interface ThemeCycleControls {
-  cycling: boolean;
-  stepSeconds: ThemeCycleDurationSeconds;
-  bumpDuration(): void;
-  toggleCycle(): void;
-}
-
-interface UseThemeCycleArgs {
+export interface ThemeCycleThemeState {
   lightThemeName: LightThemeName;
   darkThemeName: DarkThemeName;
   // Resolved light/dark for the surrounding ThemeProvider — undefined while
@@ -37,22 +29,27 @@ interface UseThemeCycleArgs {
   setColorMode: (mode: ColorMode) => void;
 }
 
+interface UseThemeCycleArgs extends ThemeCycleThemeState {
+  running: boolean;
+  stepSeconds: ThemeCycleDurationSeconds | null;
+}
+
 // Drives a sweep through every catalog theme, alternating light and dark on
 // each step so every tick flips the color scheme. The rotation is anchored on
 // the currently active theme so the visible state doesn't jump. The first
-// time cycling is turned on, every theme is resolved up front so steps never
-// wait on a theme load.
+// time cycling runs, every theme is resolved up front so steps never wait on a
+// theme load.
 export function useThemeCycle({
+  running,
+  stepSeconds,
   lightThemeName,
   darkThemeName,
   resolvedThemeMode,
   setLightThemeName,
   setDarkThemeName,
   setColorMode,
-}: UseThemeCycleArgs): ThemeCycleControls {
-  const [stepSeconds, setStepSeconds] =
-    useState<ThemeCycleDurationSeconds>(0.4);
-  const [cycling, setCycling] = useState(false);
+}: UseThemeCycleArgs): void {
+  const cycling = running && stepSeconds != null;
   const [themesPreloaded, setThemesPreloaded] = useState(false);
   const preloadStartedRef = useRef(false);
   const workerPool = useWorkerPool();
@@ -65,18 +62,8 @@ export function useThemeCycle({
   const darkThemeNameRef = useLatestValueRef(darkThemeName);
   const resolvedThemeModeRef = useLatestValueRef(resolvedThemeMode);
 
-  const bumpDuration = useCallback(() => {
-    setStepSeconds((prev) => {
-      const idx = THEME_CYCLE_DURATIONS_SECONDS.indexOf(prev);
-      return THEME_CYCLE_DURATIONS_SECONDS[
-        (idx + 1) % THEME_CYCLE_DURATIONS_SECONDS.length
-      ];
-    });
-  }, []);
-
-  const toggleCycle = useCallback(() => {
-    setCycling((c) => !c);
-    if (preloadStartedRef.current) return;
+  useEffect(() => {
+    if (!cycling || preloadStartedRef.current) return;
     preloadStartedRef.current = true;
     // Themes resolve into the same cache the active highlighter reads from,
     // whether that's highlights on the main thread or the worker pool.
@@ -88,10 +75,10 @@ export function useThemeCycle({
         console.error('Failed to preload themes for cycling', error);
       })
       .finally(() => setThemesPreloaded(true));
-  }, [workerPool]);
+  }, [cycling, workerPool]);
 
   useEffect(() => {
-    if (!cycling || !themesPreloaded) return undefined;
+    if (!cycling || stepSeconds == null || !themesPreloaded) return undefined;
     const startMode = resolvedThemeModeRef.current ?? 'light';
     // Snapshot the catalog once per cycle start; each tick reads the same
     // captured sequence.
@@ -156,9 +143,4 @@ export function useThemeCycle({
     setDarkThemeName,
     setColorMode,
   ]);
-
-  return useMemo(
-    () => ({ cycling, stepSeconds, bumpDuration, toggleCycle }),
-    [cycling, stepSeconds, bumpDuration, toggleCycle]
-  );
 }
