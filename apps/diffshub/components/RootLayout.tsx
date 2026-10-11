@@ -8,6 +8,7 @@ import { PreloadHighlighter } from '@/components/PreloadHighlighter';
 import { ScrollbarGutterVariables } from '@/components/ScrollbarGutterVariables';
 import { ThemeProvider } from '@/components/ThemeProvider';
 import { Toaster } from '@/components/Toaster';
+import { WorkerPoolProvider } from '@/components/WorkerPoolProvider';
 import {
   THEME_BOOTSTRAP_RULE_ID,
   THEME_BOOTSTRAP_SELECTOR,
@@ -152,20 +153,22 @@ export function RootLayout({
       </head>
       <body className="diffshub">
         <ScrollbarGutterVariables />
-        <ThemeProvider attribute="class">
-          {children}
-          <Toaster />
-          <div
-            id="dark-mode-portal-container"
-            className="dark"
-            data-theme="dark"
-          ></div>
-          <div
-            id="light-mode-portal-container"
-            className="light"
-            data-theme="light"
-          ></div>
-        </ThemeProvider>
+        <WorkerPoolProvider>
+          <ThemeProvider attribute="class">
+            {children}
+            <Toaster />
+            <div
+              id="dark-mode-portal-container"
+              className="dark"
+              data-theme="dark"
+            ></div>
+            <div
+              id="light-mode-portal-container"
+              className="light"
+              data-theme="light"
+            ></div>
+          </ThemeProvider>
+        </WorkerPoolProvider>
         <PreloadHighlighter />
         <Analytics />
         <SpeedInsights />
