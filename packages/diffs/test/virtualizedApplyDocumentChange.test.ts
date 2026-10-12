@@ -63,9 +63,15 @@ class BufferRecordingFile extends VirtualizedFile<undefined> {
 function setRenderedEditSession(instance: BufferRecordingFile): void {
   const state = instance as unknown as {
     editSession: { file: FileContents } | undefined;
-    renderedFile: FileContents | undefined;
+    renderedData:
+      | { file: FileContents; lineAnnotations: unknown[] }
+      | undefined;
   };
-  state.renderedFile = state.editSession?.file;
+  const file = state.editSession?.file;
+  if (file == null) {
+    throw new Error('Expected an attached edit session');
+  }
+  state.renderedData = { file, lineAnnotations: [] };
 }
 
 describe('applyDocumentChange buffer updates', () => {

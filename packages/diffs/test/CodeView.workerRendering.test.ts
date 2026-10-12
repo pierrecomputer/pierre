@@ -100,11 +100,17 @@ function getItemTop<LAnnotation>(
 function getRenderedDiffForTest(
   instance: object
 ): FileDiffMetadata | undefined {
-  return Reflect.get(instance, 'renderedDiff') as FileDiffMetadata | undefined;
+  const getRenderedDiff = Reflect.get(instance, 'getRenderedDiff') as () =>
+    | FileDiffMetadata
+    | undefined;
+  return getRenderedDiff.call(instance);
 }
 
 function getRenderedFileForTest(instance: object): FileContents | undefined {
-  return Reflect.get(instance, 'renderedFile') as FileContents | undefined;
+  const getRenderedFile = Reflect.get(instance, 'getRenderedFile') as () =>
+    | FileContents
+    | undefined;
+  return getRenderedFile.call(instance);
 }
 
 describe('CodeView worker rendering', () => {
@@ -367,10 +373,10 @@ describe('CodeView worker rendering', () => {
         `header:${shortDiff.cacheKey}`
       );
       expect(getRenderedSlotText(viewer, shortItem.id)).toContain(
-        'annotation:tall'
+        'annotation:short'
       );
       expect(getRenderedSlotText(viewer, shortItem.id)).not.toContain(
-        'annotation:short'
+        'annotation:tall'
       );
       expect(viewer.getScrollHeight()).toBe(shortScrollHeight);
       expect(getItemTop(viewer, follower.id)).toBe(followerTopWithShortDiff);

@@ -60,7 +60,9 @@ interface InspectableVirtualizedFileDiff {
     fileAnnotationHeight: number;
   };
   lineAnnotations: unknown[];
-  renderedDiff: FileDiffMetadata | undefined;
+  renderedData:
+    | { fileDiff: FileDiffMetadata; lineAnnotations: unknown[] }
+    | undefined;
   renderRange: RenderRange | undefined;
   getExpandedLineCount(
     fileDiff: FileDiffMetadata,
@@ -87,7 +89,8 @@ function setRenderedDiff(
   instance: VirtualizedFileDiff,
   fileDiff: FileDiffMetadata
 ): void {
-  inspect(instance).renderedDiff = fileDiff;
+  const state = inspect(instance);
+  state.renderedData = { fileDiff, lineAnnotations: state.lineAnnotations };
 }
 
 function createRenderRange(startingLine = 0): RenderRange {

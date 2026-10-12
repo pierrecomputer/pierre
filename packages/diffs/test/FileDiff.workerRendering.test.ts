@@ -11,12 +11,11 @@ import type {
   DiffsHighlighter,
   FileContents,
   FileDiffMetadata,
-  RenderDiffOptions,
-  ThemedDiffResult,
 } from '../src/types';
 import { parseDiffFromFile } from '../src/utils/parseDiffFromFile';
 import { renderDiffWithHighlighter } from '../src/utils/renderDiffWithHighlighter';
-import { installDom, waitFor } from './domHarness';
+import type { RenderDiffRequest } from '../src/worker/types';
+import { installDom, wait, waitFor } from './domHarness';
 import {
   createInitializedManager,
   createInitializingManager,
@@ -40,14 +39,6 @@ afterAll(async () => {
 class TestFileDiff extends FileDiff<string> {
   getRenderedDiffForTest(): FileDiffMetadata | undefined {
     return this.getRenderedDiff();
-  }
-
-  completeHighlightForTest(
-    fileDiff: FileDiffMetadata,
-    result: ThemedDiffResult,
-    options: RenderDiffOptions
-  ): void {
-    this.hunksRenderer.onHighlightSuccess(fileDiff, result, options);
   }
 }
 
@@ -158,7 +149,8 @@ test('a pool terminated while a diff primes its highlight logs nothing', async (
   }
 });
 
-test('applies replacement annotations while its diff is highlighted', async () => {
+// Use real worker requests to keep the pending interval under test control.
+async function createHighlightedDiffFixture() {
   const dom = installDom();
   const { manager, worker } = await createInitializedManager({
     theme: 'pierre-dark',
@@ -167,12 +159,12 @@ test('applies replacement annotations while its diff is highlighted', async () =
     {
       disableErrorHandling: true,
       disableFileHeader: true,
-      renderAnnotation: (annotation) => {
+      theme: 'pierre-dark',
+      renderAnnotation(annotation) {
         const element = document.createElement('span');
         element.textContent = annotation.metadata;
         return element;
       },
-      theme: 'pierre-dark',
     },
     manager
   );
@@ -192,75 +184,122 @@ test('applies replacement annotations while its diff is highlighted', async () =
   const annotationsB: DiffLineAnnotation<string>[] = [
     { side: 'additions', lineNumber: 2, metadata: 'annotation:B' },
   ];
-
-  try {
-    instance.render({
-      fileContainer,
-      fileDiff: diffA,
-      lineAnnotations: annotationsA,
-    });
-    const requestA = await withTimeout(worker.waitForDiffRequest());
+  const render = (
+    fileDiff: FileDiffMetadata,
+    lineAnnotations?: DiffLineAnnotation<string>[]
+  ) => instance.render({ fileContainer, fileDiff, lineAnnotations });
+  const getRequest = async (count: number) => {
+    await waitFor(() => worker.diffRequestCount >= count);
+    return withTimeout(worker.waitForDiffRequest());
+  };
+  const respond = (request: RenderDiffRequest, diff: FileDiffMetadata) => {
+    const options = manager.getDiffRenderOptions();
     worker.respond({
       type: 'success',
       requestType: 'diff',
-      id: requestA.id,
-      result: renderDiffWithHighlighter(
-        diffA,
-        sharedHighlighter,
-        manager.getDiffRenderOptions()
-      ),
-      options: manager.getDiffRenderOptions(),
+      id: request.id,
+      result: renderDiffWithHighlighter(diff, sharedHighlighter, options),
+      options,
       sentAt: Date.now(),
     });
-    await waitFor(
-      () =>
-        instance.getRenderedDiffForTest() === diffA &&
-        getAnnotationText(fileContainer, 'annotation-additions-1') ===
-          'annotation:A'
-    );
-    expect(instance.getRenderedDiffForTest()).toBe(diffA);
-    expect(getAnnotationText(fileContainer, 'annotation-additions-1')).toBe(
-      'annotation:A'
-    );
+  };
+  const annotationText = (line: number) =>
+    getAnnotationText(fileContainer, `annotation-additions-${line}`);
+  const hasAnnotationRow = (line: number) =>
+    fileContainer.shadowRoot?.querySelector(
+      `slot[name="annotation-additions-${line}"]`
+    ) != null;
+  render(diffA, annotationsA);
+  respond(await getRequest(1), diffA);
+  await waitFor(
+    () =>
+      instance.getRenderedDiffForTest() === diffA &&
+      annotationText(1) === 'annotation:A'
+  );
+  return {
+    instance,
+    diffA,
+    diffB,
+    annotationsA,
+    annotationsB,
+    render,
+    getRequest,
+    respond,
+    annotationText,
+    hasAnnotationRow,
+    cleanup() {
+      instance.cleanUp();
+      manager.terminate();
+      dom.cleanup();
+    },
+  };
+}
 
-    instance.render({
-      fileContainer,
-      fileDiff: diffB,
-      lineAnnotations: annotationsB,
-    });
-    expect(instance.getRenderedDiffForTest()).toBe(diffA);
-    expect(
-      getAnnotationText(fileContainer, 'annotation-additions-1')
-    ).toBeUndefined();
-    expect(getAnnotationText(fileContainer, 'annotation-additions-2')).toBe(
-      'annotation:B'
-    );
-
-    instance.completeHighlightForTest(
+for (const reuseDisplayed of [false, true]) {
+  test(`FileDiff adopts replacement content and ${reuseDisplayed ? 'reused' : 'removed'} annotations together`, async () => {
+    const fixture = await createHighlightedDiffFixture();
+    const {
+      instance,
+      render,
+      diffA,
       diffB,
-      renderDiffWithHighlighter(
-        diffB,
-        sharedHighlighter,
-        manager.getDiffRenderOptions()
-      ),
-      manager.getDiffRenderOptions()
-    );
-    await waitFor(
-      () =>
-        instance.getRenderedDiffForTest() === diffB &&
-        getAnnotationText(fileContainer, 'annotation-additions-2') ===
-          'annotation:B'
-    );
-    expect(instance.getRenderedDiffForTest()).toBe(diffB);
-    expect(getAnnotationText(fileContainer, 'annotation-additions-2')).toBe(
-      'annotation:B'
-    );
-    expect(
-      getAnnotationText(fileContainer, 'annotation-additions-1')
-    ).toBeUndefined();
+      annotationsB,
+      annotationText,
+      hasAnnotationRow,
+    } = fixture;
+    try {
+      const updatedA: DiffLineAnnotation<string>[] = [
+        { side: 'additions', lineNumber: 1, metadata: 'annotation:A updated' },
+      ];
+      render(diffA, updatedA);
+      expect(instance.getRenderedDiffForTest()).toBe(diffA);
+      expect(annotationText(1)).toBe('annotation:A updated');
+      render(diffB, annotationsB);
+      expect(instance.fileDiff).toBe(diffB);
+      expect(instance.getRenderedDiffForTest()).toBe(diffA);
+      expect(annotationText(1)).toBe('annotation:A updated');
+      expect(hasAnnotationRow(1)).toBe(true);
+      expect(hasAnnotationRow(2)).toBe(false);
+      render(diffB, reuseDisplayed ? updatedA : []);
+      expect(instance.getRenderedDiffForTest()).toBe(diffA);
+      expect(annotationText(1)).toBe('annotation:A updated');
+      fixture.respond(await fixture.getRequest(2), diffB);
+      await waitFor(() => instance.getRenderedDiffForTest() === diffB);
+      expect(annotationText(1)).toBe(
+        reuseDisplayed ? 'annotation:A updated' : undefined
+      );
+      expect(hasAnnotationRow(1)).toBe(reuseDisplayed);
+      expect(hasAnnotationRow(2)).toBe(false);
+    } finally {
+      fixture.cleanup();
+    }
+  });
+}
+
+test('FileDiff returns to the adopted diff and ignores a late replacement highlight', async () => {
+  const fixture = await createHighlightedDiffFixture();
+  const {
+    instance,
+    render,
+    diffA,
+    diffB,
+    annotationsA,
+    annotationsB,
+    annotationText,
+  } = fixture;
+  try {
+    render(diffB, annotationsB);
+    expect(instance.fileDiff).toBe(diffB);
+    const requestB = await fixture.getRequest(2);
+    render(diffA, annotationsA);
+    expect(instance.getRenderedDiffForTest()).toBe(diffA);
+    expect(annotationText(1)).toBe('annotation:A');
+    fixture.respond(requestB, diffB);
+    await wait();
+    expect(instance.getRenderedDiffForTest()).toBe(diffA);
+    expect(annotationText(1)).toBe('annotation:A');
+    expect(annotationText(2)).toBeUndefined();
   } finally {
-    instance.cleanUp();
-    manager.terminate();
-    dom.cleanup();
+    fixture.cleanup();
   }
 });
