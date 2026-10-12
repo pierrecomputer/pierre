@@ -229,7 +229,7 @@ export class VirtualizedFileDiff<
   }
 
   private hasFileAnnotations(fileDiff: FileDiffMetadata): boolean {
-    const lineAnnotations = this.getLatestAnnotations();
+    const lineAnnotations = this.getLayoutAnnotations();
     if (!includesFileAnnotations(lineAnnotations)) {
       return false;
     }
@@ -438,7 +438,7 @@ export class VirtualizedFileDiff<
     const { ghostTextRowsByIndex } = this.cache;
     const measureAllRows =
       overflow !== 'scroll' ||
-      this.getLatestAnnotations().length > 0 ||
+      this.lineAnnotations.length > 0 ||
       this.isResizeDebuggingEnabled();
     // Ghost-row changes affect placeholders too, but placeholders have no DOM
     // rows to measure. After the last annotation is removed, keep measuring
@@ -1288,6 +1288,14 @@ export class VirtualizedFileDiff<
   // layout calculation within that frame tied to the same diff.
   private getLayoutDiff(): FileDiffMetadata | undefined {
     return this.pendingRender?.diff ?? this.getRenderedDiff();
+  }
+
+  // Annotations paired with the content layout is prepared for.
+  private getLayoutAnnotations(): DiffLineAnnotation<LAnnotation>[] {
+    const { pendingRender } = this;
+    return pendingRender != null
+      ? this.getAnnotationsForDiff(pendingRender.diff)
+      : this.lineAnnotations;
   }
 
   private getActiveEstimatedHeight(

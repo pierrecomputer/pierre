@@ -166,7 +166,7 @@ export class VirtualizedFile<
   }
 
   private hasLineAnnotations(): boolean {
-    return this.getLatestAnnotations().some(
+    return this.getLayoutAnnotations().some(
       (annotation) => annotation.lineNumber > FILE_ANNOTATION_LINE_NUMBER
     );
   }
@@ -309,7 +309,7 @@ export class VirtualizedFile<
     hasHeightChange = this.applyGhostTextRows(ghostTextRows);
     const measureAllRows =
       overflow !== 'scroll' ||
-      this.getLatestAnnotations().length > 0 ||
+      this.lineAnnotations.length > 0 ||
       this.isResizeDebuggingEnabled();
 
     // Ghost-row changes affect placeholders too, but placeholders have no DOM
@@ -473,6 +473,14 @@ export class VirtualizedFile<
   // geometry read in that frame tied to the file selected for that render.
   private getLayoutFile(): FileContents | undefined {
     return this.pendingRender?.file ?? this.getRenderedFile();
+  }
+
+  // Annotations paired with the content layout is prepared for.
+  private getLayoutAnnotations(): LineAnnotation<LAnnotation>[] {
+    const { pendingRender } = this;
+    return pendingRender != null
+      ? this.getAnnotationsForFile(pendingRender.file)
+      : this.lineAnnotations;
   }
 
   public getLinePosition(
@@ -1148,7 +1156,7 @@ export class VirtualizedFile<
       fileHeight - headerRegion - fileAnnotationHeight - paddingBottom
     );
     const hasFileAnnotations = includesFileAnnotations(
-      this.getLatestAnnotations()
+      this.getLayoutAnnotations()
     );
     const fileAnnotationTop = fileTop + headerRegion;
     const measuredFileAnnotationVisible =

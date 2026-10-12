@@ -722,6 +722,17 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
     );
   }
 
+  // Use pending annotations only when their diff is selected for rendering.
+  protected getAnnotationsForDiff(
+    fileDiff: FileDiffMetadata
+  ): DiffLineAnnotation<LAnnotation>[] {
+    const { pendingData } = this;
+    return pendingData != null &&
+      areDiffTargetsEqual(fileDiff, pendingData.fileDiff)
+      ? pendingData.lineAnnotations
+      : this.lineAnnotations;
+  }
+
   // Check whether the annotation array is new. Reusing a tracked array must
   // not reset positions moved by editing.
   protected isNewAnnotations(
@@ -1837,12 +1848,7 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
   // Build rows using annotations for the diff the renderer selected.
   // Subclasses also prepare their additional rows here.
   protected prepareRenderData(fileDiff: FileDiffMetadata): void {
-    const { pendingData } = this;
-    this.hunksRenderer.setLineAnnotations(
-      pendingData != null && areDiffTargetsEqual(fileDiff, pendingData.fileDiff)
-        ? pendingData.lineAnnotations
-        : this.lineAnnotations
-    );
+    this.hunksRenderer.setLineAnnotations(this.getAnnotationsForDiff(fileDiff));
   }
 
   // Record the diff now on screen. If it matches pendingData, apply those

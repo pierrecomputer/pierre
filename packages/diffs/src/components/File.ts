@@ -353,6 +353,16 @@ export class File<LAnnotation = undefined, Caret = undefined> {
     );
   }
 
+  // Use pending annotations only when their file is selected for rendering.
+  protected getAnnotationsForFile(
+    file: FileContents
+  ): LineAnnotation<LAnnotation>[] {
+    const { pendingData } = this;
+    return pendingData != null && areFileTargetsEqual(file, pendingData.file)
+      ? pendingData.lineAnnotations
+      : this.lineAnnotations;
+  }
+
   // Update the displayed file and its annotations together after rendering. If
   // highlighting keeps the previous file displayed, leave the next pair queued
   // in pendingData.
@@ -1216,12 +1226,9 @@ export class File<LAnnotation = undefined, Caret = undefined> {
       this.setLineAnnotations(lineAnnotations);
     }
     const nextRenderFile = this.fileRenderer.getFileForNextRender(workingFile);
-    const renderAnnotations =
-      this.pendingData != null &&
-      areFileTargetsEqual(nextRenderFile, this.pendingData.file)
-        ? this.pendingData.lineAnnotations
-        : this.lineAnnotations;
-    this.fileRenderer.setLineAnnotations(renderAnnotations);
+    this.fileRenderer.setLineAnnotations(
+      this.getAnnotationsForFile(nextRenderFile)
+    );
 
     const { disableErrorHandling = false, disableFileHeader = false } =
       this.options;
