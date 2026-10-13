@@ -8,11 +8,13 @@ import type {
 interface MountedLine {
   element: HTMLElement;
   run: number;
+  /** The "No newline at end of file" row drawn under this line, if any. */
+  noNewline?: HTMLElement;
 }
 
-// Measure complete, mounted endpoint runs. Missing rows and layout gaps keep a
-// connector out of the result; annotations between its source rows stay inside
-// it.
+// Measure endpoint runs whose rows are mounted in one uninterrupted stretch.
+// Annotations and gap rows between source rows stay inside a band; a
+// separator, a jump in line numbers, or an unmounted endpoint keeps it out.
 export function measureSemanticDiffConnectors(
   regions: readonly SemanticDiffConnector[],
   deletions: HTMLElement,
@@ -63,23 +65,36 @@ export function measureSemanticDiffConnectors(
 // every source row between them is mounted, without scanning each region again.
 function indexMountedLines(content: HTMLElement): Map<number, MountedLine> {
   const lines = new Map<number, MountedLine>();
+  let previous: MountedLine | undefined;
   let previousLine = 0;
   let run = 0;
   for (const element of content.children) {
     if (!(element instanceof HTMLElement)) continue;
     const sourceLine = element.getAttribute('data-line');
-    if (sourceLine == null) {
-      if (!element.hasAttribute('data-line-annotation')) run++;
+    if (sourceLine != null) {
+      const line = Number(sourceLine);
+      if (line !== previousLine + 1) run++;
+      previous = { element, run };
+      lines.set(line, previous);
+      previousLine = line;
       continue;
     }
-    const line = Number(sourceLine);
-    if (line !== previousLine + 1) run++;
-    lines.set(line, { element, run });
-    previousLine = line;
+    if (element.hasAttribute('data-no-newline')) {
+      if (previous != null) previous.noNewline = element;
+      continue;
+    }
+    if (
+      element.hasAttribute('data-line-annotation') ||
+      element.hasAttribute('data-content-buffer')
+    ) {
+      continue;
+    }
+    run++;
   }
   return lines;
 }
 
+// A line's region runs through its "No newline at end of file" row.
 function measureRun(
   range: SemanticDiffConnectorRange,
   lines: Map<number, MountedLine>,
@@ -90,7 +105,7 @@ function measureRun(
   const last = lines.get(range.end);
   if (first == null || last == null || first.run !== last.run) return;
   const firstRect = getRowRect(first.element, rects);
-  const lastRect = getRowRect(last.element, rects);
+  const lastRect = getRowRect(last.noNewline ?? last.element, rects);
   return {
     top: firstRect.top - originTop,
     bottom: lastRect.bottom - originTop,
@@ -116,6 +131,27 @@ function measureAttachment(
     y = (attachment.edge === 'before' ? rect.top : rect.bottom) - originTop;
   }
   return { top: y, bottom: y };
+}
+
+// Measure the hunk separators in a split column. Their bars stop at each
+// column's inner edge, so the connector column repeats them to join the two
+// halves. Custom separators have no bar of their own.
+export function measureSemanticDiffSeparators(
+  content: HTMLElement,
+  originTop: number
+): SideBounds[] {
+  const separators: SideBounds[] = [];
+  for (const element of content.children) {
+    if (!(element instanceof HTMLElement)) continue;
+    const type = element.getAttribute('data-separator');
+    if (type == null || type === 'custom') continue;
+    const rect = element.getBoundingClientRect();
+    separators.push({
+      top: rect.top - originTop,
+      bottom: rect.bottom - originTop,
+    });
+  }
+  return separators;
 }
 
 function getRowRect(
