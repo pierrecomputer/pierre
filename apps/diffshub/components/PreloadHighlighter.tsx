@@ -4,6 +4,7 @@ import { useEffect } from 'react';
 
 import { canUseWasm } from '@/lib/canUseWasm';
 import { PREFERRED_HIGHLIGHTER } from '@/lib/preferredHighlighter';
+import { HIGHLIGHT_THEME_NAME } from '@/lib/theme/highlightTheme';
 
 export function PreloadHighlighter() {
   useEffect(() => {
@@ -12,6 +13,7 @@ export function PreloadHighlighter() {
     }
     void preloadHighlighter({
       themes: [
+        HIGHLIGHT_THEME_NAME,
         'pierre-dark',
         'pierre-dark-soft',
         'pierre-light',
