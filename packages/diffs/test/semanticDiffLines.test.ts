@@ -249,3 +249,143 @@ describe('semantic line types', () => {
     ]);
   });
 });
+
+// The source lines on one side whose range shows a gutter icon.
+function iconLines(
+  operations: SemanticDiffOperation[],
+  side: 'additions' | 'deletions'
+): number[] {
+  return createSemanticDiffLineLookup(operations)
+    [side].filter((entry) => entry.showsIcon)
+    .map((entry) => entry.start);
+}
+
+// A one-line edit on the same line of both sides.
+function editedLine(line: number): SemanticDiffOperation {
+  return {
+    type: 'edited',
+    spans: [
+      {
+        role: 'root',
+        relation: 'mapped',
+        old: [range(line, 0, line, 10)],
+        new: [range(line, 0, line, 10)],
+        linePairs: [
+          { old: { start: line, end: line }, new: { start: line, end: line } },
+        ],
+      },
+    ],
+    lines: {
+      old: [{ start: line, end: line, spanIndex: 0 }],
+      new: [{ start: line, end: line, spanIndex: 0 }],
+    },
+  };
+}
+
+describe('semantic region icons', () => {
+  test('only the first range of a span shows an icon, and not directly below the same line type', () => {
+    // Converter output for a helper inlined at its call site. The removed
+    // helper wrapper (span 4) has two ranges around the moved body, and the
+    // new call line (15) directly follows the moved body with the same type.
+    const operation: SemanticDiffOperation = {
+      type: 'inlinedFunction',
+      spans: [
+        {
+          role: 'body',
+          relation: 'moved',
+          old: [range(20, 1, 22, 24)],
+          new: [range(13, 3, 14, 27)],
+          linePairs: [
+            { old: { start: 20, end: 22 }, new: { start: 13, end: 14 } },
+          ],
+        },
+        {
+          role: 'call',
+          relation: 'replaced',
+          old: [range(13, 12, 13, 31)],
+          new: [range(15, 12, 15, 28)],
+          linePairs: [
+            { old: { start: 13, end: 13 }, new: { start: 15, end: 15 } },
+          ],
+        },
+        {
+          role: 'focus',
+          relation: 'replaced',
+          old: [range(13, 12, 13, 31)],
+          new: [range(15, 12, 15, 28)],
+          linePairs: [],
+        },
+        {
+          role: 'focus',
+          relation: 'removed',
+          old: [range(22, 1, 22, 7)],
+        },
+        {
+          role: 'container',
+          relation: 'removed',
+          old: [range(19, 0, 19, 40), range(23, 0, 23, 1)],
+        },
+      ],
+      lines: {
+        old: [
+          { start: 13, end: 13, spanIndex: 1 },
+          {
+            start: 18,
+            end: 19,
+            spanIndex: 4,
+            anchorIndex: 0,
+            attachment: { line: 13, edge: 'before' },
+          },
+          { start: 20, end: 22, spanIndex: 0 },
+          {
+            start: 23,
+            end: 23,
+            spanIndex: 4,
+            anchorIndex: 1,
+            attachment: { line: 15, edge: 'after' },
+          },
+        ],
+        new: [
+          { start: 13, end: 14, spanIndex: 0 },
+          { start: 15, end: 15, spanIndex: 1 },
+        ],
+      },
+    };
+
+    expect(iconLines([operation], 'deletions')).toEqual([13, 18, 20]);
+    expect(iconLines([operation], 'additions')).toEqual([13]);
+  });
+
+  test('adjacent operations share an icon only when their line types match', () => {
+    // Separate edits on lines 15-17 read as one edited region. The deletion
+    // directly above the edit on line 11 has a different type, so both show
+    // an icon.
+    const deleted: SemanticDiffOperation = {
+      type: 'deleted',
+      spans: [
+        { role: 'root', relation: 'removed', old: [range(10, 0, 10, 8)] },
+      ],
+      lines: {
+        old: [
+          {
+            start: 10,
+            end: 10,
+            spanIndex: 0,
+            attachment: { line: 9, edge: 'after' },
+          },
+        ],
+        new: [],
+      },
+    };
+    const operations = [
+      deleted,
+      editedLine(11),
+      editedLine(15),
+      editedLine(16),
+      editedLine(17),
+    ];
+
+    expect(iconLines(operations, 'deletions')).toEqual([10, 11, 15]);
+    expect(iconLines(operations, 'additions')).toEqual([11, 15]);
+  });
+});
