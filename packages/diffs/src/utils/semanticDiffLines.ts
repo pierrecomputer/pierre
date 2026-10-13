@@ -11,6 +11,12 @@ interface SemanticDiffLine {
   lineType: LineTypes;
   operation: SemanticDiffOperation;
   span: SemanticDiffSpan;
+  /**
+   * Whether this range's first line starts a region and shows its gutter icon.
+   * Only a span's first range on a side does, and not when the line above
+   * already has the same line type.
+   */
+  showsIcon: boolean;
 }
 
 export interface SemanticDiffLineLookup {
@@ -41,6 +47,9 @@ export function createSemanticDiffLineLookup(
   for (const operation of operations) {
     for (const side of ['old', 'new'] as const) {
       const entries = side === 'old' ? deletions : additions;
+      // An operation's ranges are sorted by line, so the first range seen for
+      // a span is that span's first range on this side.
+      const startedSpans = new Set<number>();
       for (const range of operation.lines[side]) {
         const span = operation.spans[range.spanIndex];
         entries.push({
@@ -49,13 +58,35 @@ export function createSemanticDiffLineLookup(
           lineType: semanticLineType(operation, span),
           operation,
           span,
+          showsIcon: !startedSpans.has(range.spanIndex),
         });
+        startedSpans.add(range.spanIndex);
       }
     }
   }
   additions.sort((a, b) => a.start - b.start);
   deletions.sort((a, b) => a.start - b.start);
+  hideContinuedRegionIcons(additions);
+  hideContinuedRegionIcons(deletions);
   return { additions, deletions };
+}
+
+// A range that starts directly below a line of the same line type reads as part
+// of that line's region, so it shows no icon of its own. This holds even when
+// the two ranges belong to different spans or operations, such as adjacent
+// edits. Ranges on one side never overlap, so after sorting, only the previous
+// entry can end on the line above.
+function hideContinuedRegionIcons(entries: SemanticDiffLine[]): void {
+  for (let index = 1; index < entries.length; index++) {
+    const previous = entries[index - 1];
+    const entry = entries[index];
+    if (
+      previous.end === entry.start - 1 &&
+      previous.lineType === entry.lineType
+    ) {
+      entry.showsIcon = false;
+    }
+  }
 }
 
 // Decides a LineType based on the semantic operation and span data we have
