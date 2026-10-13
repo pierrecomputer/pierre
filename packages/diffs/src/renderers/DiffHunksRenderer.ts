@@ -51,6 +51,7 @@ import type {
   FileDiffMetadata,
   FileHeaderRenderMode,
   HighlightedToken,
+  Hunk,
   HunkData,
   HunkExpansionRegion,
   LineTypes,
@@ -729,6 +730,34 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       additionLineNumber != null ? 'additions' : 'deletions',
       additionLineNumber ?? deletionLineNumber
     );
+  }
+
+  // A "No newline at end of file" row trails its side's last line in the hunk,
+  // so it takes that line's type: the hunk's change type, or the semantic type
+  // of the region the line ends. This keeps a semantic region's background and
+  // gutter bar running through the no-newline row.
+  public getNoNewlineLineType(
+    type: SplitLineDecorationProps['type'],
+    side: 'additions' | 'deletions',
+    hunk: Hunk | undefined
+  ): LineTypes {
+    if (hunk == null) {
+      throw new Error(
+        'DiffHunksRenderer.getNoNewlineLineType: a no-newline row must belong to a hunk'
+      );
+    }
+    const hunkLineType: LineTypes =
+      type !== 'change'
+        ? type
+        : side === 'deletions'
+          ? 'change-deletion'
+          : 'change-addition';
+    const lastLine =
+      side === 'deletions'
+        ? hunk.deletionStart + hunk.deletionCount - 1
+        : hunk.additionStart + hunk.additionCount - 1;
+    return this.getSourceLineDecoration(hunkLineType, side, lastLine)
+      .gutterLineType;
   }
 
   public getSplitLineDecoration({

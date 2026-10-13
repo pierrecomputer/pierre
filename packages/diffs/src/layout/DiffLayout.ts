@@ -686,10 +686,11 @@ export class DiffLayout<LAnnotation = undefined> {
         if (showNoNewlineMarkers && (noEOFCRAddition || noEOFCRDeletion)) {
           flushBuffer();
           if (noEOFCRDeletion) {
-            const noEOFType: LineTypes =
-              type === 'context' || type === 'context-expanded'
-                ? type
-                : 'change-deletion';
+            const noEOFType = host.getNoNewlineLineType(
+              type,
+              'deletions',
+              hunk
+            );
             this.#cells.fixedRow(
               unified ? columns.unified : columns.deletions,
               'eof:d',
@@ -720,10 +721,11 @@ export class DiffLayout<LAnnotation = undefined> {
             noEOFCRAddition &&
             !(unified && noEOFCRDeletion && type !== 'change')
           ) {
-            const noEOFType: LineTypes =
-              type === 'context' || type === 'context-expanded'
-                ? type
-                : 'change-addition';
+            const noEOFType = host.getNoNewlineLineType(
+              type,
+              'additions',
+              hunk
+            );
             this.#cells.fixedRow(
               unified ? columns.unified : columns.additions,
               'eof:a',
