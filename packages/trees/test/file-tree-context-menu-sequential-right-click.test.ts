@@ -43,7 +43,7 @@ describe('file-tree sequential right-click context menu', () => {
               const menu = dom.window.document.createElement('div');
               menu.dataset.testMenu = 'true';
               menu.dataset.itemPath = item.path;
-              return menu as unknown as HTMLElement;
+              return menu;
             },
           },
         },
@@ -103,6 +103,85 @@ describe('file-tree sequential right-click context menu', () => {
       slotted = host?.querySelector('[slot="context-menu"][data-test-menu]');
       expect(slotted).not.toBeNull();
       expect((slotted as HTMLElement | null)?.dataset.itemPath).toBe('b.ts');
+
+      fileTree.cleanUp();
+    } finally {
+      cleanup();
+    }
+  });
+
+  // Right-clicking the row whose menu is already open keeps the same menu
+  // instance (the slot is not re-rendered), so that instance's close() must
+  // still be accepted. Before the fix the reopen issued a new token and this
+  // close() was ignored as stale, leaving the menu stuck open.
+  test('right-clicking the same row again keeps the open menu closable', async () => {
+    const { cleanup, dom } = installDom();
+    try {
+      const { FileTree } = await import('../src/render/FileTree');
+      const mount = dom.window.document.createElement('div');
+      dom.window.document.body.appendChild(mount);
+
+      const contexts: FileTreeContextMenuOpenContext[] = [];
+      let renderCount = 0;
+
+      const fileTree = new FileTree({
+        composition: {
+          contextMenu: {
+            enabled: true,
+            render: (item, context): HTMLElement => {
+              renderCount += 1;
+              contexts.push(context);
+              const menu = dom.window.document.createElement('div');
+              menu.dataset.testMenu = 'true';
+              menu.dataset.itemPath = item.path;
+              return menu;
+            },
+          },
+        },
+        flattenEmptyDirectories: true,
+        initialExpansion: 'open',
+        paths: ['a.ts', 'b.ts'],
+        initialVisibleRowCount: 120 / 30,
+      });
+
+      fileTree.render({ containerWrapper: mount });
+      await flushDom();
+
+      const host = fileTree.getFileTreeContainer();
+      const shadowRoot = host?.shadowRoot;
+      const rightClickA = (clientY: number): void => {
+        getItemButton(shadowRoot, dom, 'a.ts').dispatchEvent(
+          new dom.window.MouseEvent('contextmenu', {
+            bubbles: true,
+            clientX: 10,
+            clientY,
+          })
+        );
+      };
+
+      rightClickA(10);
+      await flushDom();
+      rightClickA(14);
+      await flushDom();
+
+      // The second right-click reuses the menu that is already open.
+      expect(renderCount).toBe(1);
+      const slotted = host?.querySelector(
+        '[slot="context-menu"][data-test-menu]'
+      );
+      expect((slotted as HTMLElement | null)?.dataset.itemPath).toBe('a.ts');
+
+      // The consumer closes the visible menu with the close() it received.
+      const visibleContext = contexts.at(-1);
+      if (visibleContext == null) {
+        throw new Error('expected captured context for a.ts');
+      }
+      visibleContext.close();
+      await flushDom(2);
+
+      expect(
+        host?.querySelector('[slot="context-menu"][data-test-menu]')
+      ).toBeNull();
 
       fileTree.cleanUp();
     } finally {

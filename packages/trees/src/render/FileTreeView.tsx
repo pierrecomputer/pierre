@@ -1320,6 +1320,25 @@ export function FileTreeView({
   contextMenuStateRef.current = contextMenuState;
   // Bumped on every open so each opened menu gets a unique identity token.
   const contextMenuOpenTokenRef = useRef(0);
+  // Returns the token for a menu open. Reopening the row that already has the
+  // menu open with the same source keeps the same path::source key, so the
+  // slot effect keeps the existing menu and its close() closure. Reuse the
+  // current token in that case; a new token would make that close() stale.
+  const nextContextMenuToken = useCallback(
+    (path: string, source: 'button' | 'keyboard' | 'right-click'): number => {
+      const currentState = contextMenuStateRef.current;
+      if (
+        currentState != null &&
+        currentState.path === path &&
+        currentState.source === source
+      ) {
+        return currentState.token;
+      }
+      contextMenuOpenTokenRef.current += 1;
+      return contextMenuOpenTokenRef.current;
+    },
+    []
+  );
 
   const pendingStickyFocusPathRef = useRef<string | null>(null);
   const pendingStickyKeyboardFocusPathRef = useRef<string | null>(null);
@@ -1669,16 +1688,21 @@ export function FileTreeView({
       item.focus();
       updateTriggerPosition(anchorButton);
       shouldRestoreContextMenuFocusRef.current = true;
-      contextMenuOpenTokenRef.current += 1;
+      const source = options?.source ?? 'keyboard';
       setContextMenuState({
         anchorRect: options?.anchorRect ?? null,
         item: createContextMenuItem(row, targetPath),
         path: targetPath,
-        source: options?.source ?? 'keyboard',
-        token: contextMenuOpenTokenRef.current,
+        source,
+        token: nextContextMenuToken(targetPath, source),
       });
     },
-    [controller, getTriggerAnchorButton, updateTriggerPosition]
+    [
+      controller,
+      getTriggerAnchorButton,
+      nextContextMenuToken,
+      updateTriggerPosition,
+    ]
   );
   const startRenameFromPath = useCallback(
     (path?: string): void => {
@@ -3636,17 +3660,17 @@ export function FileTreeView({
 
     updateTriggerPosition(triggerButton);
     shouldRestoreContextMenuFocusRef.current = true;
-    contextMenuOpenTokenRef.current += 1;
+    const triggerItemPath = triggerItem.getPath();
     setContextMenuState({
       anchorRect: null,
       item: {
         kind: triggerItem.isDirectory() ? 'directory' : 'file',
         name: triggerButton.getAttribute('aria-label') ?? triggerPath,
-        path: triggerItem.getPath(),
+        path: triggerItemPath,
       },
-      path: triggerItem.getPath(),
+      path: triggerItemPath,
       source: 'button',
-      token: contextMenuOpenTokenRef.current,
+      token: nextContextMenuToken(triggerItemPath, 'button'),
     });
   };
 
