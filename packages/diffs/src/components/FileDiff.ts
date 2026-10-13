@@ -121,7 +121,10 @@ import { isDefaultRenderRange } from '../utils/isDefaultRenderRange';
 import { isDiffPlainText } from '../utils/isDiffPlainText';
 import { isStyleNode } from '../utils/isStyleNode';
 import { iterateOverDiff } from '../utils/iterateOverDiff';
-import { measureSemanticDiffConnectors } from '../utils/measureSemanticDiffConnectors';
+import {
+  measureSemanticDiffConnectors,
+  measureSemanticDiffSeparators,
+} from '../utils/measureSemanticDiffConnectors';
 import { parseDiffFromFile } from '../utils/parseDiffFromFile';
 import { isSafari } from '../utils/platform';
 import { prerenderHTMLIfNecessary } from '../utils/prerenderHTMLIfNecessary';
@@ -972,18 +975,18 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
     if (bounds.width === 0 || bounds.height === 0) {
       return;
     }
-    // FOLLOWUP: Think about how this work could maybe be better memoized?
-    const connectors = measureSemanticDiffConnectors(
-      this.semanticConnector.regions,
-      deletions.content,
-      additions.content,
-      bounds.top
-    );
     this.semanticConnector.instance ??= new SemanticConnector();
     this.semanticConnector.instance.render({
       container: column,
       bounds: { left: 0, top: 0, width: bounds.width, height: bounds.height },
-      connectors,
+      // FOLLOWUP: Think about how this work could maybe be better memoized?
+      connectors: measureSemanticDiffConnectors(
+        this.semanticConnector.regions,
+        deletions.content,
+        additions.content,
+        bounds.top
+      ),
+      separators: measureSemanticDiffSeparators(deletions.content, bounds.top),
     });
   };
 

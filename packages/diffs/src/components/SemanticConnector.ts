@@ -55,6 +55,11 @@ interface SemanticConnectorRenderProps {
   bounds: SemanticConnectorBounds;
   /** The complete connector set in paint order, with stable, unique IDs. */
   connectors: readonly Connector[];
+  /**
+   * Hunk separator rows, drawn as full-width bars above the connectors so a
+   * separator reads as one bar across the split columns.
+   */
+  separators: readonly SideBounds[];
 }
 
 interface ConnectorEntry {
@@ -76,6 +81,10 @@ const SVG_NS = 'http://www.w3.org/2000/svg';
 export class SemanticConnector {
   private readonly options: Required<SemanticConnectorOptions>;
   private svg: SVGSVGElement | undefined;
+  // Holds one rect per separator row; stays the SVG's last child so it paints
+  // above every connector path.
+  private separatorLayer: SVGGElement | undefined;
+  private separatorSnapshot: readonly SideBounds[] = [];
   private bounds: SemanticConnectorBounds | undefined;
   private connectorSnapshot: readonly Connector[] = [];
   // Latest render data waiting to be applied: on the next frame during
@@ -109,6 +118,7 @@ export class SemanticConnector {
     container,
     bounds,
     connectors,
+    separators,
   }: SemanticConnectorRenderProps): void {
     if (this.disposed) {
       throw new Error('SemanticConnector.render: instance has been cleaned up');
@@ -117,10 +127,11 @@ export class SemanticConnector {
     const previous = this.pendingRender?.connectors ?? this.connectorSnapshot;
     this.pendingRender = {
       container,
-      bounds: { ...bounds },
+      bounds,
       connectors: this.connectorsChanged(connectors, previous)
-        ? connectors.map(copyConnector)
+        ? connectors
         : previous,
+      separators,
     };
 
     if (this.frameQueued) return;
@@ -140,8 +151,9 @@ export class SemanticConnector {
     let redrawAll = false;
 
     if (pending != null) {
-      const { container, bounds, connectors } = pending;
+      const { container, bounds, connectors, separators } = pending;
       const svg = this.getOrCreateSVG(container);
+      this.drawSeparators(separators);
       const boundsChanged = !areBoundsEqual(this.bounds, bounds);
       const connectorsChanged = this.connectorsChanged(connectors);
 
@@ -173,6 +185,8 @@ export class SemanticConnector {
     this.animations.clear();
     this.svg?.remove();
     this.svg = undefined;
+    this.separatorLayer = undefined;
+    this.separatorSnapshot = [];
     this.entries.clear();
     this.connectorSnapshot = [];
     this.pendingRender = undefined;
@@ -186,6 +200,9 @@ export class SemanticConnector {
       this.svg.setAttribute('aria-hidden', 'true');
       this.svg.setAttribute('data-connector-column', '');
       this.svg.style.position = 'absolute';
+      this.separatorLayer = document.createElementNS(SVG_NS, 'g');
+      this.separatorLayer.setAttribute('data-connector-separators', '');
+      this.svg.appendChild(this.separatorLayer);
     }
     if (this.svg.parentNode !== container) {
       container.appendChild(this.svg);
@@ -216,7 +233,35 @@ export class SemanticConnector {
     ) {
       svg.setAttribute('viewBox', `0 0 ${bounds.width} ${bounds.height}`);
     }
-    this.bounds = { ...bounds };
+    this.bounds = bounds;
+  }
+
+  // Match one full-width rect to each separator row, reusing rects by index.
+  private drawSeparators(separators: readonly SideBounds[]): void {
+    const { separatorLayer: layer, separatorSnapshot: previous } = this;
+    if (layer == null) {
+      throw new Error(
+        'SemanticConnector.drawSeparators: the separator layer must exist'
+      );
+    }
+    for (const [index, { top, bottom }] of separators.entries()) {
+      const drawn = previous[index];
+      if (drawn?.top === top && drawn.bottom === bottom) continue;
+      let rect = layer.children[index];
+      if (rect == null) {
+        rect = document.createElementNS(SVG_NS, 'rect');
+        rect.setAttribute('data-connector-separator', '');
+        rect.setAttribute('x', '0');
+        rect.setAttribute('width', '100%');
+        layer.appendChild(rect);
+      }
+      rect.setAttribute('y', String(top));
+      rect.setAttribute('height', String(bottom - top));
+    }
+    while (layer.children.length > separators.length) {
+      layer.lastElementChild?.remove();
+    }
+    this.separatorSnapshot = separators;
   }
 
   private connectorsChanged(
@@ -370,14 +415,6 @@ function areConnectorsEqual(a: Connector, b: Connector): boolean {
     a.target.top === b.target.top &&
     a.target.bottom === b.target.bottom
   );
-}
-
-function copyConnector(connector: Connector): Connector {
-  return {
-    ...connector,
-    base: { ...connector.base },
-    target: { ...connector.target },
-  };
 }
 
 /**

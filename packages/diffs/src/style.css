@@ -932,6 +932,10 @@
       opacity: 0.15;
     }
 
+    [data-connector-separator] {
+      fill: var(--diffs-bg-separator);
+    }
+
     [data-connector-kind='added'] {
       fill: var(--diffs-addition-base);
     }
@@ -1609,23 +1613,28 @@
     }
   }
 
+  /* A "No newline at end of file" row continues the bar of the line it trails.
+   * Its gutter cell uses ::after because a gutter buffer's ::before sets the
+   * column's minimum width. */
   [data-indicators='bars'] {
     [data-line-type^='change-'] {
-      &[data-column-number] {
-        &::before {
-          content: '';
-          display: block;
-          background-color: currentColor;
-          width: 4px;
-          height: 100%;
-          position: absolute;
-          top: 0;
-          left: 0;
-          user-select: none;
-          contain: strict;
-        }
+      &[data-column-number]::before,
+      &[data-gutter-buffer='metadata']::after {
+        content: '';
+        display: block;
+        background-color: currentColor;
+        width: 4px;
+        height: 100%;
+        position: absolute;
+        top: 0;
+        left: 0;
+        user-select: none;
+        contain: strict;
+      }
 
-        &[data-line-type='change-deletion']::before {
+      &[data-line-type='change-deletion'] {
+        &[data-column-number]::before,
+        &[data-gutter-buffer='metadata']::after {
           background-color: transparent;
           background-image: linear-gradient(
             0deg,
@@ -1637,8 +1646,11 @@
           background-size: calc(1lh / round(1lh / 2px))
             calc(1lh / round(1lh / 2px));
         }
+      }
 
-        &[data-line-type='change-addition']::before {
+      &[data-line-type='change-addition'] {
+        &[data-column-number]::before,
+        &[data-gutter-buffer='metadata']::after {
           background-color: var(--diffs-addition-base);
         }
       }

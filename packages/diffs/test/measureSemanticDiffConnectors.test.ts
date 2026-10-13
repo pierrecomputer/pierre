@@ -1,6 +1,9 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 
-import { measureSemanticDiffConnectors } from '../src/utils/measureSemanticDiffConnectors';
+import {
+  measureSemanticDiffConnectors,
+  measureSemanticDiffSeparators,
+} from '../src/utils/measureSemanticDiffConnectors';
 import type { SemanticDiffConnector } from '../src/utils/semanticDiffConnectors';
 import { type DomHandle, installDom } from './domHarness';
 
@@ -23,16 +26,47 @@ function rect(top: number, bottom: number): DOMRect {
   };
 }
 
-// A rendered column: one row per source line, stacked from the column's top.
-// jsdom performs no layout, so each element reports its own rectangle.
-function column(lines: readonly number[], top: number): HTMLElement {
+// A row that isn't a source line, named by the attributes the renderer puts on
+// it.
+type Row =
+  | number
+  | 'gap'
+  | 'no-newline'
+  | 'separator'
+  | 'first-separator'
+  | 'last-separator';
+
+const ROW_ATTRIBUTES: Record<Exclude<Row, number>, Record<string, string>> = {
+  gap: { 'data-content-buffer': '' },
+  'no-newline': { 'data-no-newline': '' },
+  separator: { 'data-separator': 'line-info' },
+  'first-separator': {
+    'data-separator': 'line-info',
+    'data-separator-first': '',
+  },
+  'last-separator': {
+    'data-separator': 'line-info',
+    'data-separator-last': '',
+  },
+};
+
+// A rendered column of one-height rows stacked from the column's top: source
+// lines by number, plus gap, no-newline, and separator rows. jsdom performs no
+// layout, so each element reports its own rectangle.
+function column(rows: readonly Row[], top: number): HTMLElement {
   const content = document.createElement('div');
   Object.defineProperty(content, 'getBoundingClientRect', {
-    value: () => rect(top, top + lines.length * ROW_HEIGHT),
+    value: () => rect(top, top + rows.length * ROW_HEIGHT),
   });
-  for (const [index, line] of lines.entries()) {
+  for (const [index, line] of rows.entries()) {
     const row = document.createElement('div');
-    row.setAttribute('data-line', String(line));
+    if (typeof line === 'number') {
+      row.setAttribute('data-line', String(line));
+    } else {
+      for (const [name, value] of Object.entries(ROW_ATTRIBUTES[line])) {
+        row.setAttribute(name, value);
+      }
+    }
     const rowTop = top + index * ROW_HEIGHT;
     Object.defineProperty(row, 'getBoundingClientRect', {
       value: () => rect(rowTop, rowTop + ROW_HEIGHT),
@@ -182,6 +216,86 @@ describe('measureSemanticDiffConnectors', () => {
         base: { top: 160, bottom: 160 },
         target: { top: 0, bottom: 20 },
       },
+    ]);
+  });
+  test('extends a band through the no-newline row under its last line', () => {
+    const regions: SemanticDiffConnector[] = [
+      {
+        id: 'moved',
+        kind: 'moved',
+        rank: 0,
+        base: { start: 2, end: 2 },
+        target: { start: 2, end: 3 },
+      },
+    ];
+
+    expect(
+      measureSemanticDiffConnectors(
+        regions,
+        column([1, 2, 'gap', 'no-newline'], ORIGIN_TOP),
+        column([1, 2, 3, 'no-newline'], ORIGIN_TOP),
+        ORIGIN_TOP
+      )
+    ).toEqual([
+      {
+        id: 'moved',
+        kind: 'moved',
+        rank: 0,
+        base: { top: 20, bottom: 80 },
+        target: { top: 20, bottom: 80 },
+      },
+    ]);
+  });
+
+  test('spans gap rows but not a separator', () => {
+    const region: SemanticDiffConnector = {
+      id: 'moved',
+      kind: 'moved',
+      rank: 0,
+      base: { start: 1, end: 3 },
+      target: { start: 1, end: 3 },
+    };
+    const additions = column(lines(3), ORIGIN_TOP);
+
+    expect(
+      measureSemanticDiffConnectors(
+        [region],
+        column([1, 'gap', 'gap', 2, 3], ORIGIN_TOP),
+        additions,
+        ORIGIN_TOP
+      )
+    ).toEqual([
+      {
+        id: 'moved',
+        kind: 'moved',
+        rank: 0,
+        base: { top: 0, bottom: 100 },
+        target: { top: 0, bottom: 60 },
+      },
+    ]);
+    expect(
+      measureSemanticDiffConnectors(
+        [{ ...region, base: { start: 1, end: 9 } }],
+        column([1, 'separator', 9], ORIGIN_TOP),
+        additions,
+        ORIGIN_TOP
+      )
+    ).toEqual([]);
+  });
+
+  test('measures each separator row for the connector column', () => {
+    const deletions = column(
+      ['first-separator', 1, 'gap', 'separator', 9, 'last-separator'],
+      ORIGIN_TOP
+    );
+    const custom = document.createElement('div');
+    custom.setAttribute('data-separator', 'custom');
+    deletions.appendChild(custom);
+
+    expect(measureSemanticDiffSeparators(deletions, ORIGIN_TOP)).toEqual([
+      { top: 0, bottom: 20 },
+      { top: 60, bottom: 80 },
+      { top: 100, bottom: 120 },
     ]);
   });
 });
