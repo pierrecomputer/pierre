@@ -8,6 +8,7 @@ import {
 import { type Ref, useMemo } from 'react';
 
 import { useDiffThemeProps } from './useDiffThemeProps';
+import { useHighlightTheme } from './useHighlightTheme';
 import { useWorkerDiffTheme } from './useWorkerDiffTheme';
 import { PREFERRED_HIGHLIGHTER } from '@/lib/preferredHighlighter';
 import type { DiffThemeInput } from '@/lib/theme/diffThemeProps';
@@ -26,27 +27,30 @@ export const ThemedCodeView: ThemedCodeViewComponent = <
   options,
   ref,
   theme,
+  style,
   ...props
 }: CodeViewProps<LAnnotation, Caret> & {
   ref?: Ref<CodeViewHandle<LAnnotation, Caret>>;
   theme?: DiffThemeInput;
 }): React.JSX.Element => {
   const diffTheme = useDiffThemeProps(theme);
-  useWorkerDiffTheme(diffTheme.theme);
+  const highlightTheme = useHighlightTheme(diffTheme.theme);
+  useWorkerDiffTheme(highlightTheme.theme);
   const themedOptions = useMemo(
     () => ({
       ...options,
       preferredHighlighter: PREFERRED_HIGHLIGHTER,
-      theme: diffTheme.theme,
+      theme: highlightTheme.theme,
       themeType: options?.themeType ?? diffTheme.themeType,
     }),
-    [diffTheme, options]
+    [highlightTheme.theme, diffTheme.themeType, options]
   );
   return (
     <CodeView<LAnnotation, Caret>
       {...props}
       ref={ref}
       options={themedOptions}
+      style={{ ...highlightTheme.style, ...style }}
     />
   );
 };

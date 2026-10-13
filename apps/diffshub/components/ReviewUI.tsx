@@ -130,7 +130,6 @@ function ReviewUIInner({ domain, initialUrl, path }: ReviewUIProps) {
     resolvedThemeMode: appResolvedTheme,
     setLightThemeName,
     setDarkThemeName,
-    setColorMode,
   });
   const handlePatchLoadStart = useCallback(() => {
     setFileTreeOverlayOpen(false);
