@@ -175,6 +175,85 @@ describe('InteractionManager editor active-line state', () => {
     }
   });
 
+  test('reports each applied selection change, after the rows are marked', () => {
+    const { cleanup } = installDom();
+    const { contentRows, pre } = createFilePre(3);
+    // Whether the first row was marked when each report arrived.
+    const reports: boolean[] = [];
+    const manager = new InteractionManager('file', {
+      onSelectedLinesRender: () => reports.push(isSelected(contentRows[0])),
+    });
+    try {
+      // Setup applies the initial, empty selection.
+      manager.setup(pre);
+      expect(reports).toEqual([false]);
+
+      manager.setSelection({ start: 1, end: 2 }, { notify: false });
+      expect(reports).toEqual([false, true]);
+
+      manager.setEditorActiveLine(3, { side: 'additions' });
+      expect(reports).toEqual([false, true]);
+
+      manager.setSelection(null, { notify: false });
+      expect(reports).toEqual([false, true, false]);
+    } finally {
+      manager.cleanUp();
+      cleanup();
+    }
+  });
+
+  test('records the top and bottom selected content rows', () => {
+    const { cleanup } = installDom();
+    const fixture = createFilePre(4);
+    const { contentRows, pre } = fixture;
+    const manager = new InteractionManager('file', {});
+    try {
+      manager.setup(pre);
+      expect(manager.getSelectedRowEdges()).toEqual([]);
+
+      manager.setSelection({ start: 2, end: 3 }, { notify: false });
+      expect(manager.getSelectedRowEdges()).toEqual([
+        { first: contentRows[1], last: contentRows[2] },
+      ]);
+
+      // An annotation under the last selected line ends the selection.
+      createAnnotationRowAfter(fixture, 2);
+      const annotationRow = contentRows[2].nextElementSibling;
+      if (!(annotationRow instanceof HTMLElement)) {
+        throw new Error('missing annotation row');
+      }
+      manager.setup(pre);
+      expect(manager.getSelectedRowEdges()).toEqual([
+        { first: contentRows[1], last: annotationRow },
+      ]);
+
+      // A range that runs past the mounted rows ends at the last mounted one.
+      manager.setSelection({ start: 3, end: 10 }, { notify: false });
+      expect(manager.getSelectedRowEdges()).toEqual([
+        { first: contentRows[2], last: contentRows[3] },
+      ]);
+
+      // Moving only the editor's active line keeps the recorded rows.
+      manager.setEditorActiveLine(1, { side: 'additions' });
+      expect(manager.getSelectedRowEdges()).toEqual([
+        { first: contentRows[2], last: contentRows[3] },
+      ]);
+
+      manager.setSelection(
+        { start: 1, end: 2 },
+        { notify: false, lineNumberOnly: true }
+      );
+      expect(manager.getSelectedRowEdges()).toEqual([]);
+
+      manager.setSelection({ start: 1, end: 1 }, { notify: false });
+      manager.setSelection(null, { notify: false });
+      expect(manager.getSelectedRowEdges()).toEqual([]);
+    } finally {
+      manager.cleanUp();
+      cleanup();
+    }
+  });
+
   test('invalidates independent selected-line and editor active-line styles', () => {
     const { cleanup } = installDom();
     const manager = new InteractionManager('file', {});

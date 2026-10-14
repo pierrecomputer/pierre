@@ -1,4 +1,5 @@
 import type { Connector, SideBounds } from '../components/SemanticConnector';
+import type { SelectedRowEdges } from '../managers/InteractionManager';
 import type { SemanticDiffConnectorAttachment } from '../types';
 import type {
   SemanticDiffConnector,
@@ -152,6 +153,26 @@ export function measureSemanticDiffSeparators(
     });
   }
   return separators;
+}
+
+// Measure the selected rows of both split columns as one vertical span. A line
+// selection is one contiguous range, so the connector column draws it as a
+// single band that reads as one row across the split. InteractionManager
+// records each column's top and bottom selected rows, so only those are read.
+export function measureSemanticDiffSelection(
+  edges: readonly SelectedRowEdges[],
+  originTop: number
+): SideBounds | undefined {
+  let selection: SideBounds | undefined;
+  for (const { first, last } of edges) {
+    const top = first.getBoundingClientRect().top - originTop;
+    const bottom = last.getBoundingClientRect().bottom - originTop;
+    selection = {
+      top: Math.min(top, selection?.top ?? top),
+      bottom: Math.max(bottom, selection?.bottom ?? bottom),
+    };
+  }
+  return selection;
 }
 
 function getRowRect(

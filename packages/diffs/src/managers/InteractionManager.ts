@@ -137,6 +137,13 @@ interface LineRenderColumn {
   renderSelectedLines: boolean;
 }
 
+/** The top and bottom selected content rows of one code column. */
+export interface SelectedRowEdges {
+  first: HTMLElement;
+  /** The last selected line, or the annotation row drawn under it. */
+  last: HTMLElement;
+}
+
 interface ResolvedLineTarget<TMode extends InteractionManagerMode> {
   kind: 'line';
   lineType: LineTypes;
@@ -248,6 +255,7 @@ export interface InteractionManagerOptions<
     expansionLineCountOverride?: number
   ): unknown;
   onMergeConflictActionClick?(target: MergeConflictActionTarget): void;
+  onSelectedLinesRender?(): void;
 }
 
 interface HandlePointerEventProps {
@@ -281,6 +289,7 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
   private editorLineNumberOnly = false;
   private proposedSelectedRange: SelectedLineRange | null | undefined;
   private renderedSelectedLinesState: LineRenderState | undefined;
+  private selectedRowEdges: SelectedRowEdges[] = [];
   private renderedEditorActiveLineState: LineRenderState | undefined;
   // The elements carrying each mark, so clearing them never scans the tree.
   // Undefined until the first render, when markup may already carry marks.
@@ -423,6 +432,15 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
 
   getSelection(): SelectedLineRange | null {
     return this.selectedRange;
+  }
+
+  /**
+   * The mounted top and bottom selected content rows of each code column that
+   * shows the selection. Empty when nothing is selected, when only line
+   * numbers are highlighted, or when no selected row is mounted.
+   */
+  getSelectedRowEdges(): readonly SelectedRowEdges[] {
+    return this.selectedRowEdges;
   }
 
   getHoveredLine = (): GetHoveredLineResult<TMode> | undefined => {
@@ -1645,7 +1663,7 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
       return [];
     }
 
-    const { children: codeElements } = this.pre;
+    const codeElements = this.pre.querySelectorAll(':scope > [data-code]');
     if (codeElements.length > 2) {
       console.error(codeElements);
       throw new Error(
@@ -1757,6 +1775,7 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
     if (selectedLinesChanged) {
       this.clearMarks('data-selected-line', this.markedSelectedElements);
       this.markedSelectedElements = [];
+      this.selectedRowEdges = [];
     }
     if (editorActiveLineChanged) {
       this.clearMarks(
@@ -1783,6 +1802,7 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
         renderSelectedLines ? (selectedLast ?? -Infinity) : -Infinity,
         renderEditorActiveLine ? (editorLineIndex ?? -Infinity) : -Infinity
       );
+      let edges: SelectedRowEdges | undefined;
       const len = content.children.length;
       for (let i = 0; i < len; i++) {
         const contentElement = content.children[i];
@@ -1820,6 +1840,8 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
           // line background and any annotation rows untouched.
           if (!selectedLines.lineNumberOnly) {
             this.markSelected(contentElement, attributeValue);
+            edges ??= { first: contentElement, last: contentElement };
+            edges.last = contentElement;
             if (
               gutterElement.nextSibling instanceof HTMLElement &&
               contentElement.nextSibling instanceof HTMLElement &&
@@ -1839,6 +1861,7 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
                 this.markSelected(contentElement, '');
               }
               this.markSelected(contentElement.nextSibling, attributeValue);
+              edges.last = contentElement.nextSibling;
               this.markSelected(gutterElement.nextSibling, attributeValue);
             }
           }
@@ -1850,10 +1873,15 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
           }
         }
       }
+      if (edges != null) {
+        this.selectedRowEdges.push(edges);
+      }
     }
 
     if (selectedLinesChanged && selectedLinesComplete) {
       this.renderedSelectedLinesState = selectedLines;
+      const { onSelectedLinesRender } = this.options;
+      onSelectedLinesRender?.();
     }
     if (editorActiveLineChanged && editorActiveLineComplete) {
       this.renderedEditorActiveLineState = editorActiveLine;
@@ -2313,6 +2341,7 @@ export function pluckInteractionOptions<TMode extends InteractionManagerMode>(
     expansionLineCountOverride?: number
   ) => unknown,
   getLineIndex?: GetLineIndexUtility,
+  onSelectedLinesRender?: () => void,
   onMergeConflictActionClick?: (target: MergeConflictActionTarget) => void
 ): InteractionManagerOptions<TMode> {
   return {
@@ -2328,6 +2357,7 @@ export function pluckInteractionOptions<TMode extends InteractionManagerMode>(
     onGutterUtilityClick,
     onHunkExpand,
     onMergeConflictActionClick,
+    onSelectedLinesRender,
     onLineClick,
     onLineEnter,
     onLineLeave,
