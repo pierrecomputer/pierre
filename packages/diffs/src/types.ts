@@ -1,4 +1,4 @@
-import type { CreatePatchOptionsNonabortable } from 'diff';
+import type { CreatePatchOptions } from '@pierre/patch';
 import type { ElementContent } from 'hast';
 import type { BundledLanguage, BundledTheme } from 'shiki';
 
@@ -15,7 +15,9 @@ export type {
   TokensResult,
 } from './highlighter/types';
 
-export type { CreatePatchOptionsNonabortable };
+export type { CreatePatchOptions };
+/** @deprecated Use `CreatePatchOptions`. */
+export type CreatePatchOptionsNonabortable = CreatePatchOptions;
 
 export type CodeViewScrollBehavior = 'instant' | 'smooth' | 'smooth-auto';
 
@@ -32,7 +34,7 @@ export interface FileContents {
   /** Explicitly set the syntax highlighting language instead of inferring from
    * filename. Generally you should not be setting this. */
   lang?: SupportedLanguages;
-  /** Optional header passed to the jsdiff library's `createTwoFilesPatch`. */
+  /** Optional header passed to `createTwoFilesPatch` from `@pierre/patch`. */
   header?: string;
   /** Identifies a file for worker pool highlight caching. */
   cacheKey?: string;
@@ -448,7 +450,7 @@ export interface BaseDiffOptions extends BaseCodeOptions {
    * diffs from file contents (oldFile/newFile) or recomputing edited
    * diffs. Does not change the hunks in supplied pre-parsed patches.
    */
-  parseDiffOptions?: CreatePatchOptionsNonabortable;
+  parseDiffOptions?: CreatePatchOptions;
 }
 
 export type BaseDiffOptionsWithDefaults = Required<

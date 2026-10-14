@@ -70,9 +70,9 @@
   },
   "dependencies": {
     "@pierre/highlights": "workspace:*",
+    "@pierre/patch": "workspace:*",
     "@pierre/theme": "workspace:*",
     "@pierre/theming": "workspace:*",
-    "diff": "catalog:",
     "hast-util-to-html": "catalog:",
     "lru_map": "catalog:",
     "shiki": "^3.0.0 || ^4.0.0"

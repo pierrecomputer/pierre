@@ -1,4 +1,4 @@
-import type { CreatePatchOptionsNonabortable } from 'diff';
+import type { CreatePatchOptions } from '@pierre/patch';
 
 import type { CodeViewOptions } from '../components/CodeView';
 import type { FileDiffOptions } from '../components/FileDiff';
@@ -33,7 +33,7 @@ export function areOptionsEqual<LAnnotation, Caret>(
 
 function getParseDiffOptions<L, C>(
   options: AnyOptions<L, C>
-): CreatePatchOptionsNonabortable | undefined {
+): CreatePatchOptions | undefined {
   if (options != null && 'parseDiffOptions' in options) {
     return options.parseDiffOptions;
   }

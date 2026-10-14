@@ -1,4 +1,4 @@
-import { type CreatePatchOptionsNonabortable, createTwoFilesPatch } from 'diff';
+import { type CreatePatchOptions, createTwoFilesPatch } from '@pierre/patch';
 
 import type { FileContents, FileDiffMetadata } from '../types';
 import { composeCacheKey } from './composeCacheKey';
@@ -15,7 +15,7 @@ const MISSING_FILE_NAME = '/dev/null';
 export function parseDiffFromFile(
   oldFile: FileContents | null,
   newFile: FileContents | null,
-  options?: CreatePatchOptionsNonabortable,
+  options?: CreatePatchOptions,
   throwOnError = false
 ): FileDiffMetadata {
   if (oldFile === null && newFile === null) {

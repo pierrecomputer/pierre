@@ -1,5 +1,5 @@
+import { createTwoFilesPatch } from '@pierre/patch';
 import { afterAll, describe, expect, spyOn, test } from 'bun:test';
-import { createTwoFilesPatch } from 'diff';
 
 import {
   DEFAULT_HIGHLIGHTER,

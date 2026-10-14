@@ -1,4 +1,8 @@
-import { type ChangeObject, diffChars, diffWordsWithSpace } from 'diff';
+import {
+  type ChangeObject,
+  diffChars,
+  diffWordsWithSpace,
+} from '@pierre/patch';
 
 import { DEFAULT_COLLAPSED_CONTEXT_THRESHOLD } from '../constants';
 import type {
@@ -260,7 +264,7 @@ interface ProcessLineDiffProps extends LineDiffDecorationTargets {
 // token, so each line only has one highlight. Offsets come straight from the
 // diff items, skipping the span arrays the other word modes build.
 function pushWordLineDecorations(
-  lineDiff: ChangeObject<string>[],
+  lineDiff: ChangeObject[],
   {
     deletionLineIndex,
     additionLineIndex,

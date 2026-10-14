@@ -1,4 +1,4 @@
-import type { CreatePatchOptionsNonabortable } from 'diff';
+import type { CreatePatchOptions } from '@pierre/patch';
 
 import type {
   ChangeContent,
@@ -113,7 +113,7 @@ export function findDivergenceCore(
  */
 export function rebuildSessionHunks(
   diff: FileDiffMetadata,
-  parseDiffOptions?: CreatePatchOptionsNonabortable,
+  parseDiffOptions?: CreatePatchOptions,
   getPreviousAdditionLine?: (index: number) => string | undefined
 ): SessionRegionChange | undefined {
   const previousHunks = diff.hunks;
@@ -157,7 +157,7 @@ export function rebuildSessionHunks(
 export function applySessionChangedLines(
   diff: FileDiffMetadata,
   changedAdditionLineIndexes: Iterable<number>,
-  parseDiffOptions?: CreatePatchOptionsNonabortable,
+  parseDiffOptions?: CreatePatchOptions,
   previousAdditionLines?: ReadonlyMap<number, string>
 ): SessionRegionChange | undefined {
   const changedLines = new Set(changedAdditionLineIndexes);
@@ -224,7 +224,7 @@ function canRetainCanonicalBlocks(
   changedLines: number[],
   regionIndex: number,
   previousAdditionLines: ReadonlyMap<number, string> | undefined,
-  parseDiffOptions: CreatePatchOptionsNonabortable | undefined
+  parseDiffOptions: CreatePatchOptions | undefined
 ): boolean {
   if (
     previousAdditionLines == null ||
@@ -432,7 +432,7 @@ export function rebuildExpansionFromAnchors(
  */
 export function finishEditSessionForDiff(
   diff: FileDiffMetadata,
-  parseDiffOptions?: CreatePatchOptionsNonabortable
+  parseDiffOptions?: CreatePatchOptions
 ): boolean {
   if (diff.editSessionDirty !== true) {
     return false;
@@ -454,7 +454,7 @@ export function finishEditSessionForDiff(
 // extend the slide. Running cursors normalize unified N,0 indexes.
 function parseSessionChangeBlocks(
   diff: FileDiffMetadata,
-  parseDiffOptions: CreatePatchOptionsNonabortable | undefined,
+  parseDiffOptions: CreatePatchOptions | undefined,
   getPreviousAdditionLine: ((index: number) => string | undefined) | undefined
 ): ChangeContent[] {
   if (findDivergenceCore(diff.deletionLines, diff.additionLines) == null) {
