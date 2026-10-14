@@ -784,8 +784,12 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     return this.getSourceLineDecoration(lineType, side, lineNumber);
   }
 
-  public createAnnotationElement(span: AnnotationSpan): HASTElement {
-    return createDefaultAnnotationElement(span);
+  // An annotation row; a line type styles it like the line it sits under.
+  public createAnnotationElement(
+    span: AnnotationSpan,
+    lineType?: LineTypes
+  ): HASTElement {
+    return createDefaultAnnotationElement(span, lineType);
   }
 
   // Unified hook returns extra rows that render before/after the current line.
