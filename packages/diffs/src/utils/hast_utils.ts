@@ -143,7 +143,7 @@ export function createGutterGap(
     properties: {
       'data-gutter-buffer': bufferType,
       'data-buffer-size': size,
-      'data-line-type': bufferType === 'annotation' ? undefined : type,
+      'data-line-type': type,
       style:
         bufferType === 'annotation'
           ? `grid-row: span ${size};`

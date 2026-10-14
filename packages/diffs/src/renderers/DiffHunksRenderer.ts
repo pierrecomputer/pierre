@@ -104,16 +104,26 @@ import { isHandledWorkerPoolError } from '../worker/errors';
 
 interface PushLineWithAnnotation {
   diffStyle: 'unified' | 'split';
-  type: 'context' | 'context-expanded' | 'change';
 
   deletionLine?: ElementContent;
   additionLine?: ElementContent;
+
+  /**
+   * Line type of the line above each column's annotation row, which the row
+   * and its gutter cell take on. Unset when the column has no line there.
+   */
+  unifiedLineType?: LineTypes;
+  deletionLineType?: LineTypes;
+  additionLineType?: LineTypes;
 
   unifiedSpan?: AnnotationSpan;
   deletionSpan?: AnnotationSpan;
   additionSpan?: AnnotationSpan;
 
-  createAnnotationElement(span: AnnotationSpan): HASTElement;
+  createAnnotationElement(
+    span: AnnotationSpan,
+    lineType?: LineTypes
+  ): HASTElement;
   context: ProcessContext;
 }
 
@@ -1010,8 +1020,11 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     return this.getSourceLineDecoration(lineType, side, lineNumber);
   }
 
-  private createAnnotationElement = (span: AnnotationSpan): HASTElement => {
-    return createDefaultAnnotationElement(span);
+  private createAnnotationElement = (
+    span: AnnotationSpan,
+    lineType?: LineTypes
+  ): HASTElement => {
+    return createDefaultAnnotationElement(span, lineType);
   };
 
   // Unified hook returns extra rows that render before/after the current line.
@@ -1889,9 +1902,9 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
           }
           pushLineWithAnnotation({
             diffStyle: 'unified',
-            type: type,
             deletionLine: deletionLineContent,
             additionLine: additionLineContent,
+            unifiedLineType: lineDecoration.gutterLineType,
             unifiedSpan: this.getAnnotations(
               'unified',
               deletionLine?.lineNumber,
@@ -1899,8 +1912,8 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
               hunkIndex,
               lineIndex
             ),
-            createAnnotationElement: (span) =>
-              this.createAnnotationElement(span),
+            createAnnotationElement: (span, lineType) =>
+              this.createAnnotationElement(span, lineType),
             context,
           });
           if (injectedRows?.after != null) {
@@ -2025,12 +2038,19 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
           }
           pushLineWithAnnotation({
             diffStyle: 'split',
-            type: type,
             additionLine: additionLineContent,
             deletionLine: deletionLineContent,
+            deletionLineType:
+              deletionLine != null
+                ? deletionLineDecoration.gutterLineType
+                : undefined,
+            additionLineType:
+              additionLine != null
+                ? additionLineDecoration.gutterLineType
+                : undefined,
             ...annotationSpans,
-            createAnnotationElement: (span) =>
-              this.createAnnotationElement(span),
+            createAnnotationElement: (span, lineType) =>
+              this.createAnnotationElement(span, lineType),
             context,
           });
           if (injectedRows?.after != null) {
@@ -2369,7 +2389,6 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     if (diffStyle === 'unified') {
       pushLineWithAnnotation({
         diffStyle,
-        type: 'context',
         unifiedSpan: {
           type: 'annotation',
           hunkIndex,
@@ -2384,7 +2403,6 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
 
     pushLineWithAnnotation({
       diffStyle,
-      type: 'context',
       deletionSpan: {
         type: 'annotation',
         hunkIndex,
@@ -2545,9 +2563,11 @@ function pushSplitInjectedRows(
 
 function pushLineWithAnnotation({
   diffStyle,
-  type,
   deletionLine,
   additionLine,
+  unifiedLineType,
+  deletionLineType,
+  additionLineType,
   unifiedSpan,
   deletionSpan,
   additionSpan,
@@ -2562,16 +2582,12 @@ function pushLineWithAnnotation({
       context.unifiedContentAST.push(deletionLine);
     }
     if (unifiedSpan != null) {
-      const lineType =
-        type === 'change'
-          ? deletionLine != null
-            ? 'change-deletion'
-            : 'change-addition'
-          : type;
-      context.unifiedContentAST.push(createAnnotationElement(unifiedSpan));
+      context.unifiedContentAST.push(
+        createAnnotationElement(unifiedSpan, unifiedLineType)
+      );
       context.pushToGutter(
         'unified',
-        createGutterGap(lineType, 'annotation', 1)
+        createGutterGap(unifiedLineType, 'annotation', 1)
       );
       hasAnnotationRow = true;
     }
@@ -2583,30 +2599,22 @@ function pushLineWithAnnotation({
       context.additionsContentAST.push(additionLine);
     }
     if (deletionSpan != null) {
-      const lineType =
-        type === 'change'
-          ? deletionLine != null
-            ? 'change-deletion'
-            : 'context'
-          : type;
-      context.deletionsContentAST.push(createAnnotationElement(deletionSpan));
+      context.deletionsContentAST.push(
+        createAnnotationElement(deletionSpan, deletionLineType)
+      );
       context.pushToGutter(
         'deletions',
-        createGutterGap(lineType, 'annotation', 1)
+        createGutterGap(deletionLineType, 'annotation', 1)
       );
       hasAnnotationRow = true;
     }
     if (additionSpan != null) {
-      const lineType =
-        type === 'change'
-          ? additionLine != null
-            ? 'change-addition'
-            : 'context'
-          : type;
-      context.additionsContentAST.push(createAnnotationElement(additionSpan));
+      context.additionsContentAST.push(
+        createAnnotationElement(additionSpan, additionLineType)
+      );
       context.pushToGutter(
         'additions',
-        createGutterGap(lineType, 'annotation', 1)
+        createGutterGap(additionLineType, 'annotation', 1)
       );
       hasAnnotationRow = true;
     }

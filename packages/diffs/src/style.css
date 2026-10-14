@@ -585,7 +585,16 @@
       --mix-dark: 85%;
     }
 
+    /* An annotation row or gutter cell under a changed line mixes its tint from
+     * --diffs-bg, like the line above it. Without backgrounds it keeps the
+     * annotation gray. */
+    [data-line-annotation][data-line-type^='change-'],
+    [data-gutter-buffer='annotation'][data-line-type^='change-'] {
+      --diffs-computed-decoration-bg: var(--diffs-bg);
+    }
+
     [data-line],
+    [data-line-annotation],
     [data-no-newline] {
       --mix-light: 88%;
       --mix-dark: 80%;
@@ -594,6 +603,7 @@
     [data-gutter-buffer],
     [data-column-number],
     [data-line],
+    [data-line-annotation],
     [data-no-newline] {
       --diffs-diff-line-mix-target: var(--diffs-bg);
 
@@ -1632,16 +1642,46 @@
     }
   }
 
-  /* A "No newline at end of file" row continues the bar of the line it trails.
-   * Its gutter cell uses ::after because a gutter buffer's ::before sets the
-   * column's minimum width. */
+  /* The color that marks each change line type, for its gutter bar and icon.
+   * It is set outside [data-background], so bars and icons keep their color
+   * when backgrounds are off and line numbers fall back to the default
+   * number color. */
+  [data-line-type='change-addition'] {
+    --diffs-line-type-color: var(--diffs-addition-base);
+  }
+
+  [data-line-type='change-deletion'] {
+    --diffs-line-type-color: var(--diffs-deletion-base);
+  }
+
+  [data-line-type='change-moved'],
+  [data-line-type='change-reordered'],
+  [data-line-type='change-extracted-function'],
+  [data-line-type='change-inlined-function'] {
+    --diffs-line-type-color: var(--diffs-moved-base);
+  }
+
+  [data-line-type='change-edited'],
+  [data-line-type='change-moved-with-edit'],
+  [data-line-type='change-renamed'] {
+    --diffs-line-type-color: var(--diffs-edited-base);
+  }
+
+  [data-line-type='change-reformatted'] {
+    --diffs-line-type-color: var(--diffs-reformatted-base);
+  }
+
+  /* Annotation and "No newline at end of file" rows continue the bar of the
+   * line they sit under; only those gutter buffers carry a change line type.
+   * They use ::after because a gutter buffer's ::before sets the column's
+   * minimum width. */
   [data-indicators='bars'] {
     [data-line-type^='change-'] {
       &[data-column-number]::before,
-      &[data-gutter-buffer='metadata']::after {
+      &[data-gutter-buffer]::after {
         content: '';
         display: block;
-        background-color: currentColor;
+        background-color: var(--diffs-line-type-color);
         width: 4px;
         height: 100%;
         position: absolute;
@@ -1653,24 +1693,17 @@
 
       &[data-line-type='change-deletion'] {
         &[data-column-number]::before,
-        &[data-gutter-buffer='metadata']::after {
+        &[data-gutter-buffer]::after {
           background-color: transparent;
           background-image: linear-gradient(
             0deg,
             var(--diffs-bg-deletion) 50%,
-            var(--diffs-deletion-base) 50%
+            var(--diffs-line-type-color) 50%
           );
           background-repeat: repeat;
           background-size: 2px 2px;
           background-size: calc(1lh / round(1lh / 2px))
             calc(1lh / round(1lh / 2px));
-        }
-      }
-
-      &[data-line-type='change-addition'] {
-        &[data-column-number]::before,
-        &[data-gutter-buffer='metadata']::after {
-          background-color: var(--diffs-addition-base);
         }
       }
 
@@ -1705,13 +1738,13 @@
         [data-line-type='change-renamed']
       ) {
         &[data-column-number]::before,
-        &[data-gutter-buffer='metadata']::after {
+        &[data-gutter-buffer]::after {
           background-color: transparent;
           background-image: linear-gradient(
             var(--diffs-bar-stripe-angle),
-            currentColor 25%,
+            var(--diffs-line-type-color) 25%,
             transparent 25% 50%,
-            currentColor 50% 75%,
+            var(--diffs-line-type-color) 50% 75%,
             transparent 75%
           );
           background-repeat: repeat;
@@ -1784,7 +1817,7 @@
     z-index: 1;
     width: var(--diffs-semantic-icon-size);
     height: var(--diffs-semantic-icon-size);
-    fill: currentColor;
+    fill: var(--diffs-line-type-color);
     pointer-events: none;
   }
 
