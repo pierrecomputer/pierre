@@ -12,6 +12,9 @@
     --diffs-mixer: light-dark(black, white);
     --diffs-gap-fallback: 8px;
     --diffs-connector-column-width: 40px;
+    --diffs-semantic-icon-size: 12px;
+    /* The 4px gutter bar plus an 8px gap before the icon. */
+    --diffs-semantic-icon-inset: 12px;
     --diffs-scrollbar-gutter-fallback: 6px;
     --diffs-scrollbar-gutter: var(
       --diffs-scrollbar-gutter-override,
@@ -1654,6 +1657,53 @@
           background-color: var(--diffs-addition-base);
         }
       }
+
+      /* Moved and edited bars are diagonal stripes in the line type's color,
+       * leaning opposite ways so the two colors stay distinct side by side.
+       * The tile height divides the line height, so the stripes continue
+       * across rows without a seam. */
+      &:is(
+        [data-line-type='change-moved'],
+        [data-line-type='change-reordered'],
+        [data-line-type='change-extracted-function'],
+        [data-line-type='change-inlined-function']
+      ) {
+        --diffs-bar-stripe-angle: 135deg;
+      }
+
+      &:is(
+        [data-line-type='change-edited'],
+        [data-line-type='change-moved-with-edit'],
+        [data-line-type='change-renamed']
+      ) {
+        --diffs-bar-stripe-angle: 45deg;
+      }
+
+      &:is(
+        [data-line-type='change-moved'],
+        [data-line-type='change-reordered'],
+        [data-line-type='change-extracted-function'],
+        [data-line-type='change-inlined-function'],
+        [data-line-type='change-edited'],
+        [data-line-type='change-moved-with-edit'],
+        [data-line-type='change-renamed']
+      ) {
+        &[data-column-number]::before,
+        &[data-gutter-buffer='metadata']::after {
+          background-color: transparent;
+          background-image: linear-gradient(
+            var(--diffs-bar-stripe-angle),
+            currentColor 25%,
+            transparent 25% 50%,
+            currentColor 50% 75%,
+            transparent 75%
+          );
+          background-repeat: repeat;
+          background-size: 4px 4px;
+          background-size: calc(1lh / round(1lh / 4px))
+            calc(1lh / round(1lh / 4px));
+        }
+      }
     }
   }
 
@@ -1698,6 +1748,30 @@
     z-index: 1;
   }
 
+  /* Semantic diffs reserve room in every gutter cell for the icon that marks
+   * the first row of a change region, so the gutter keeps the same width
+   * whichever rows are mounted. The icon sits between the bar and the line
+   * number and takes its color from the cell's line type. */
+  [data-semantic]:not([data-disable-line-numbers]) {
+    [data-gutter-buffer],
+    [data-column-number] {
+      padding-left: calc(
+        var(--diffs-semantic-icon-inset) + var(--diffs-semantic-icon-size) + 1ch
+      );
+    }
+  }
+
+  [data-semantic-icon] {
+    position: absolute;
+    top: calc((1lh - var(--diffs-semantic-icon-size)) / 2);
+    left: var(--diffs-semantic-icon-inset);
+    z-index: 1;
+    width: var(--diffs-semantic-icon-size);
+    height: var(--diffs-semantic-icon-size);
+    fill: currentColor;
+    pointer-events: none;
+  }
+
   [data-disable-line-numbers] {
     [data-gutter-buffer],
     [data-column-number] {
@@ -1709,7 +1783,8 @@
       }
     }
 
-    [data-line-number-content] {
+    [data-line-number-content],
+    [data-semantic-icon] {
       display: none;
     }
 

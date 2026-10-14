@@ -94,12 +94,33 @@ export function createGutterWrapper(children?: ElementContent[]): HASTElement {
   });
 }
 
+// A gutter cell holding a line number. An optional icon is placed before the
+// number; semantic diffs use it to mark the first row of a change region.
 export function createGutterItem(
   lineType: LineTypes | 'buffer' | 'separator' | 'annotation',
   lineNumber: number,
   lineIndex: string,
-  properties: Properties = {}
+  properties: Properties = {},
+  icon?: SVGSpriteNames
 ): HASTElement {
+  const children: ElementContent[] = [];
+  if (icon != null) {
+    children.push(
+      createIconElement({
+        name: icon,
+        properties: { 'data-semantic-icon': '', 'aria-hidden': 'true' },
+      })
+    );
+  }
+  if (lineNumber != null) {
+    children.push(
+      createHastElement({
+        tagName: 'span',
+        properties: { 'data-line-number-content': '' },
+        children: [createTextNodeElement(`${lineNumber}`)],
+      })
+    );
+  }
   return createHastElement({
     tagName: 'div',
     properties: {
@@ -108,16 +129,7 @@ export function createGutterItem(
       'data-line-index': lineIndex,
       ...properties,
     },
-    children:
-      lineNumber != null
-        ? [
-            createHastElement({
-              tagName: 'span',
-              properties: { 'data-line-number-content': '' },
-              children: [createTextNodeElement(`${lineNumber}`)],
-            }),
-          ]
-        : undefined,
+    children: children.length > 0 ? children : undefined,
   });
 }
 

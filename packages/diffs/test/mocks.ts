@@ -1,7 +1,11 @@
 import { readFileSync } from 'fs';
 import { resolve } from 'path';
 
-import type { FileContents } from '../src/types';
+import type {
+  FileContents,
+  SemanticDiffOperation,
+  SemanticDiffTextRange,
+} from '../src/types';
 
 export const fileOld: string = readFileSync(
   resolve(__dirname, '../../../apps/demo/src/mocks/fileOld.txt'),
@@ -222,3 +226,92 @@ export const finalBlankLinePatch = `--- packages/svelte/src/compiler/phases/3-tr
  
  \tconst template_name = context.state.scope.root.unique('root'); // TODO infer name from parent
  `;
+
+function semanticRange(
+  startLine: number,
+  startCharacter: number,
+  endLine: number,
+  endCharacter: number
+): SemanticDiffTextRange {
+  return {
+    start: { line: startLine, character: startCharacter },
+    end: { line: endLine, character: endCharacter },
+  };
+}
+
+// Converter output for the Sema fixture `op-inlined-function-nested`: the
+// helper `cartItemTotal` is inlined at its only call site.
+export const inlinedFunctionDiff: {
+  oldContents: string;
+  newContents: string;
+  operation: SemanticDiffOperation;
+} = {
+  oldContents:
+    'package ops\n\ntype CartItem struct {\n\tActive   bool\n\tPrice    int\n\tShipping int\n}\n\nfunc ActiveCartTotal(items []CartItem) int {\n\ttotal := 0\n\tfor _, item := range items {\n\t\tif item.Active {\n\t\t\ttotal += cartItemTotal(item)\n\t\t}\n\t}\n\treturn total\n}\n\nfunc cartItemTotal(item CartItem) int {\n\tprice := item.Price\n\tshipping := item.Shipping\n\treturn price + shipping\n}\n',
+  newContents:
+    'package ops\n\ntype CartItem struct {\n\tActive   bool\n\tPrice    int\n\tShipping int\n}\n\nfunc ActiveCartTotal(items []CartItem) int {\n\ttotal := 0\n\tfor _, item := range items {\n\t\tif item.Active {\n\t\t\tprice := item.Price\n\t\t\tshipping := item.Shipping\n\t\t\ttotal += price + shipping\n\t\t}\n\t}\n\treturn total\n}\n',
+  operation: {
+    type: 'inlinedFunction',
+    spans: [
+      {
+        role: 'body',
+        relation: 'moved',
+        old: [semanticRange(20, 1, 22, 24)],
+        new: [semanticRange(13, 3, 14, 27)],
+        linePairs: [
+          { old: { start: 20, end: 22 }, new: { start: 13, end: 14 } },
+        ],
+      },
+      {
+        role: 'call',
+        relation: 'replaced',
+        old: [semanticRange(13, 12, 13, 31)],
+        new: [semanticRange(15, 12, 15, 28)],
+        linePairs: [
+          { old: { start: 13, end: 13 }, new: { start: 15, end: 15 } },
+        ],
+      },
+      {
+        role: 'focus',
+        relation: 'replaced',
+        old: [semanticRange(13, 12, 13, 31)],
+        new: [semanticRange(15, 12, 15, 28)],
+        linePairs: [],
+      },
+      {
+        role: 'focus',
+        relation: 'removed',
+        old: [semanticRange(22, 1, 22, 7)],
+      },
+      {
+        role: 'container',
+        relation: 'removed',
+        old: [semanticRange(19, 0, 19, 40), semanticRange(23, 0, 23, 1)],
+      },
+    ],
+    lines: {
+      old: [
+        { start: 13, end: 13, spanIndex: 1 },
+        {
+          start: 18,
+          end: 19,
+          spanIndex: 4,
+          anchorIndex: 0,
+          attachment: { line: 13, edge: 'before' },
+        },
+        { start: 20, end: 22, spanIndex: 0 },
+        {
+          start: 23,
+          end: 23,
+          spanIndex: 4,
+          anchorIndex: 1,
+          attachment: { line: 15, edge: 'after' },
+        },
+      ],
+      new: [
+        { start: 13, end: 14, spanIndex: 0 },
+        { start: 15, end: 15, spanIndex: 1 },
+      ],
+    },
+  },
+};

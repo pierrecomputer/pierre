@@ -15,6 +15,7 @@ import {
   HighlighterDisposedError,
 } from '../highlighter/shared_highlighter';
 import { areThemesAttached } from '../highlighter/themes/areThemesAttached';
+import type { SVGSpriteNames } from '../sprite';
 import type {
   AnnotationLineMap,
   AnnotationSpan,
@@ -87,6 +88,7 @@ import { getSemanticDiffFocus } from '../utils/semanticDiffFocus';
 import {
   createSemanticDiffLineLookup,
   getSemanticDiffLine,
+  getSemanticLineIcon,
   type SemanticDiffLineLookup,
 } from '../utils/semanticDiffLines';
 import {
@@ -188,6 +190,7 @@ export interface SplitLineDecorationProps {
 export interface LineDecoration {
   gutterLineType: LineTypes;
   gutterProperties?: Properties;
+  gutterIcon?: SVGSpriteNames;
   contentProperties?: Properties;
 }
 
@@ -935,12 +938,21 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     );
     // Only owned lines take a semantic color; the converter owns every changed
     // line, blank lines included, so an unowned line is context.
-    const lineType =
-      line?.lineType ??
-      (hunkLineType === 'context-expanded' ? 'context-expanded' : 'context');
+    if (line == null) {
+      const lineType =
+        hunkLineType === 'context-expanded' ? 'context-expanded' : 'context';
+      return {
+        gutterLineType: lineType,
+        contentProperties: { 'data-line-type': lineType },
+      };
+    }
     return {
-      gutterLineType: lineType,
-      contentProperties: { 'data-line-type': lineType },
+      gutterLineType: line.lineType,
+      gutterIcon:
+        line.showsIcon && line.start === lineNumber
+          ? getSemanticLineIcon(line.lineType, side)
+          : undefined,
+      contentProperties: { 'data-line-type': line.lineType },
     };
   }
 
@@ -1729,14 +1741,19 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
 
     const pushGutterLineNumber = (
       type: CodeColumnType,
-      lineType: LineTypes | 'buffer' | 'separator' | 'annotation',
+      { gutterLineType, gutterProperties, gutterIcon }: LineDecoration,
       lineNumber: number,
-      lineIndex: string,
-      gutterProperties: Properties | undefined
+      lineIndex: string
     ) => {
       context.pushToGutter(
         type,
-        createGutterItem(lineType, lineNumber, lineIndex, gutterProperties)
+        createGutterItem(
+          gutterLineType,
+          lineNumber,
+          lineIndex,
+          gutterProperties,
+          gutterIcon
+        )
       );
     };
 
@@ -1841,12 +1858,11 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
           });
           pushGutterLineNumber(
             'unified',
-            lineDecoration.gutterLineType,
+            lineDecoration,
             additionLine != null
               ? additionLine.lineNumber
               : deletionLine.lineNumber,
-            `${unifiedLineIndex},${splitLineIndex}`,
-            lineDecoration.gutterProperties
+            `${unifiedLineIndex},${splitLineIndex}`
           );
           if (additionLineContent != null) {
             additionLineContent = withContentProperties(
@@ -1978,10 +1994,9 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
             );
             pushGutterLineNumber(
               'deletions',
-              deletionLineDecoration.gutterLineType,
+              deletionLineDecoration,
               deletionLine.lineNumber,
-              `${deletionLine.unifiedLineIndex},${splitLineIndex}`,
-              deletionLineDecoration.gutterProperties
+              `${deletionLine.unifiedLineIndex},${splitLineIndex}`
             );
             if (deletionLineDecorated != null) {
               deletionLineContent = deletionLineDecorated;
@@ -2000,10 +2015,9 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
             );
             pushGutterLineNumber(
               'additions',
-              additionLineDecoration.gutterLineType,
+              additionLineDecoration,
               additionLine.lineNumber,
-              `${additionLine.unifiedLineIndex},${splitLineIndex}`,
-              additionLineDecoration.gutterProperties
+              `${additionLine.unifiedLineIndex},${splitLineIndex}`
             );
             if (additionLineDecorated != null) {
               additionLineContent = additionLineDecorated;
