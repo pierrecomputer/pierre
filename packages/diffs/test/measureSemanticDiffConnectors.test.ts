@@ -32,6 +32,7 @@ function rect(top: number, bottom: number): DOMRect {
 type Row =
   | number
   | 'gap'
+  | 'annotation'
   | 'no-newline'
   | 'separator'
   | 'first-separator'
@@ -39,6 +40,7 @@ type Row =
 
 const ROW_ATTRIBUTES: Record<Exclude<Row, number>, Record<string, string>> = {
   gap: { 'data-content-buffer': '' },
+  annotation: { 'data-line-annotation': '0,0' },
   'no-newline': { 'data-no-newline': '' },
   separator: { 'data-separator': 'line-info' },
   'first-separator': {
@@ -244,6 +246,77 @@ describe('measureSemanticDiffConnectors', () => {
         rank: 0,
         base: { top: 20, bottom: 80 },
         target: { top: 20, bottom: 80 },
+      },
+    ]);
+  });
+
+  test('extends a band through the annotation row under its last line', () => {
+    const region: SemanticDiffConnector = {
+      id: 'moved',
+      kind: 'moved',
+      rank: 0,
+      base: { start: 1, end: 2 },
+      target: { start: 1, end: 2 },
+    };
+    const measure = (deletions: Row[], additions: Row[]) =>
+      measureSemanticDiffConnectors(
+        [region],
+        column(deletions, ORIGIN_TOP),
+        column(additions, ORIGIN_TOP),
+        ORIGIN_TOP
+      ).map(({ base, target }) => [base, target]);
+
+    // The old side's last line has an annotation; the new side gets an empty
+    // annotation row at the same height, which belongs to its line too.
+    expect(measure([1, 2, 'annotation', 3], [1, 2, 'annotation', 3])).toEqual([
+      [
+        { top: 0, bottom: 60 },
+        { top: 0, bottom: 60 },
+      ],
+    ]);
+    // An annotation row continues through to the no-newline row under it.
+    expect(
+      measure([1, 2, 'annotation', 'no-newline'], [1, 2, 3, 'no-newline'])
+    ).toEqual([
+      [
+        { top: 0, bottom: 80 },
+        { top: 0, bottom: 40 },
+      ],
+    ]);
+    // An annotation row under a gap row belongs to the other side's line.
+    expect(measure([1, 2, 'gap', 'annotation'], [1, 2, 3, 4])).toEqual([
+      [
+        { top: 0, bottom: 40 },
+        { top: 0, bottom: 40 },
+      ],
+    ]);
+  });
+
+  test('attaches after the annotation row under a line', () => {
+    // An addition (new 3-4) attached after old line 2, which has an
+    // annotation; the new side has its spacer at the same height.
+    expect(
+      measureSemanticDiffConnectors(
+        [
+          {
+            id: 'added',
+            kind: 'added',
+            rank: 2,
+            target: { start: 3, end: 4 },
+            attachment: { line: 2, edge: 'after' },
+          },
+        ],
+        column([1, 2, 'annotation', 'gap', 'gap'], ORIGIN_TOP),
+        column([1, 2, 'annotation', 3, 4], ORIGIN_TOP),
+        ORIGIN_TOP
+      )
+    ).toEqual([
+      {
+        id: 'added',
+        kind: 'added',
+        rank: 2,
+        base: { top: 60, bottom: 60 },
+        target: { top: 60, bottom: 100 },
       },
     ]);
   });
