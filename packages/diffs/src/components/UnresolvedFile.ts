@@ -209,6 +209,7 @@ export class UnresolvedFile<LAnnotation = undefined> extends FileDiff<
           ? this.handleExpandHunk
           : undefined,
         this.getLineIndex,
+        undefined,
         this.handleMergeConflictActionClick
       )
     );

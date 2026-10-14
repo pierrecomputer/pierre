@@ -939,6 +939,22 @@
       fill: var(--diffs-bg-separator);
     }
 
+    /* The same selection mix a selected context row uses over --diffs-bg. */
+    [data-connector-selection] {
+      fill: light-dark(
+        color-mix(
+          in lab,
+          var(--diffs-bg) 82%,
+          var(--diffs-bg-selection-override, var(--diffs-selection-base))
+        ),
+        color-mix(
+          in lab,
+          var(--diffs-bg) 75%,
+          var(--diffs-bg-selection-override, var(--diffs-selection-base))
+        )
+      );
+    }
+
     [data-connector-kind='added'] {
       fill: var(--diffs-addition-base);
     }

@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 
 import {
   measureSemanticDiffConnectors,
+  measureSemanticDiffSelection,
   measureSemanticDiffSeparators,
 } from '../src/utils/measureSemanticDiffConnectors';
 import type { SemanticDiffConnector } from '../src/utils/semanticDiffConnectors';
@@ -297,5 +298,30 @@ describe('measureSemanticDiffConnectors', () => {
       { top: 60, bottom: 80 },
       { top: 100, bottom: 120 },
     ]);
+  });
+
+  test('measures the selected row edges of both columns as one span', () => {
+    // Rows 1-2 are selected on the old side and rows 3-4 on the new side.
+    const deletions = column([1, 2, 3, 4, 5], ORIGIN_TOP);
+    const additions = column([1, 2, 'gap', 3, 4], ORIGIN_TOP);
+    const edges = (content: HTMLElement, first: number, last: number) => {
+      const firstRow = content.children[first];
+      const lastRow = content.children[last];
+      if (
+        !(firstRow instanceof HTMLElement) ||
+        !(lastRow instanceof HTMLElement)
+      ) {
+        throw new Error('edges: rows must exist');
+      }
+      return { first: firstRow, last: lastRow };
+    };
+
+    expect(
+      measureSemanticDiffSelection(
+        [edges(deletions, 1, 2), edges(additions, 3, 4)],
+        ORIGIN_TOP
+      )
+    ).toEqual({ top: 20, bottom: 100 });
+    expect(measureSemanticDiffSelection([], ORIGIN_TOP)).toBeUndefined();
   });
 });
