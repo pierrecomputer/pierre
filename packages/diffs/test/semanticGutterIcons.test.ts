@@ -51,12 +51,13 @@ describe('semantic gutter icons', () => {
       inlinedFunctionDiff.operation,
     ]);
     expect(gutterIcons(result.deletionsGutterAST)).toEqual([
-      [13, '#diffs-icon-symbol-inlined-duo'],
+      [13, '#diffs-icon-symbol-modified-duo'],
       [18, '#diffs-icon-symbol-deleted-duo'],
       [20, '#diffs-icon-symbol-inlined-duo'],
     ]);
     expect(gutterIcons(result.additionsGutterAST)).toEqual([
       [13, '#diffs-icon-symbol-inlined-fill'],
+      [15, '#diffs-icon-symbol-modified-fill'],
     ]);
   });
 
@@ -67,8 +68,9 @@ describe('semantic gutter icons', () => {
     // Old line 13 and new lines 13-15 form one change block, which lists its
     // deletions before its additions.
     expect(gutterIcons(result.unifiedGutterAST)).toEqual([
-      [13, '#diffs-icon-symbol-inlined-duo'],
+      [13, '#diffs-icon-symbol-modified-duo'],
       [13, '#diffs-icon-symbol-inlined-fill'],
+      [15, '#diffs-icon-symbol-modified-fill'],
       [18, '#diffs-icon-symbol-deleted-duo'],
       [20, '#diffs-icon-symbol-inlined-duo'],
     ]);
