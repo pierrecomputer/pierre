@@ -15,7 +15,7 @@ import { useEffect, useRef } from 'react';
 import { flushSync } from 'react-dom';
 import { createRoot, type Root } from 'react-dom/client';
 
-import { ITEM_UNSAFE_CSS, LONG_README_FILE } from './constants';
+import { ITEM_UNSAFE_CSS, LONG_CODE_FILE } from './constants';
 import type { SharedRenderOptions } from './PlaygroundClient';
 import { CommentForm, CommentThread } from './PlaygroundComments';
 import { createEditSessionButtons } from './PlaygroundEditButtons';
@@ -99,7 +99,7 @@ export function PlaygroundVirtualizerView({
   const annotationsRef = useRef<VirtualizerAnnotation[][]>([]);
   // The file/diffs currently shown: the fixtures until a session is saved,
   // then the accepted values, so later rerenders do not paint the originals.
-  const currentFileRef = useRef(LONG_README_FILE);
+  const currentFileRef = useRef(LONG_CODE_FILE);
   const currentDiffsRef = useRef<FileDiffMetadata[]>([]);
   const savedVersionRef = useRef(0);
   const annotationRootsRef = useRef(new Map<string, Root>());
@@ -131,7 +131,7 @@ export function PlaygroundVirtualizerView({
     // Passing `document` makes the page/window the scroll container.
     virtualizer.setup(document);
 
-    // The long README plain file leads the window-scroll list (as in
+    // The long foldable plain file leads the window-scroll list (as in
     // CodeView), driven by the vanilla VirtualizedFile. It carries the same
     // header edit buttons and line interactions as the diffs below. Its
     // container is appended first so it sits above the diffs in the page flow.

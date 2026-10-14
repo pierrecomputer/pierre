@@ -8,13 +8,11 @@ export type SVGSpriteNames =
   | 'replace'
   | 'replace-all';
 
-// Icon artwork is sourced from `@pierre/icons` (IconSearch, IconX,
-// IconArrowRight, IconType, IconTypeWord, IconRegex, IconReplace,
-// IconReplaceAll) so the editor matches the rest of the product. The arrow glyph
-// is the full-size right arrow rotated to point up/down for the search
-// "previous"/"next" controls. `getEditorIconSvg` omits an outer viewBox so each
-// symbol scales to fill the requested size regardless of its intrinsic
-// coordinate system.
+// Icon artwork is sourced from `@pierre/icons` so the editor matches the rest
+// of the product. The arrow glyph is the full-size right arrow rotated to point
+// up/down for the search "previous"/"next" controls. `getEditorIconSvg` omits
+// an outer viewBox so each symbol scales to fill the requested size regardless
+// of its intrinsic coordinate system.
 export const SVGSpriteSheet = `<svg data-icon-sprite aria-hidden="true" width="0" height="0">
   <symbol id="diffs-editor-icon-close" viewBox="0 0 16 16">
     <path fill="currentColor" d="M3.21967 3.21967C3.51256 2.92678 3.98744 2.92678 4.28033 3.21967L8 6.93934L11.7197 3.21967C12.0126 2.92678 12.4874 2.92678 12.7803 3.21967C13.0732 3.51256 13.0732 3.98744 12.7803 4.28033L9.06066 8L12.7803 11.7197C13.0732 12.0126 13.0732 12.4874 12.7803 12.7803C12.4874 13.0732 12.0126 13.0732 11.7197 12.7803L8 9.06066L4.28033 12.7803C3.98744 13.0732 3.51256 13.0732 3.21967 12.7803C2.92678 12.4874 2.92678 12.0126 3.21967 11.7197L6.93934 8L3.21967 4.28033C2.92678 3.98744 2.92678 3.51256 3.21967 3.21967Z"></path>
@@ -57,6 +55,4 @@ export const createSpriteElement = (): SVGSVGElement => {
 };
 
 export const getEditorIconSvg = (name: SVGSpriteNames, size = 16): string =>
-  `<svg width="${size}" height="${size}" aria-hidden="true" focusable="false">
-<use href="#diffs-editor-icon-${name}"></use>
-</svg>`;
+  `<svg width="${size}" height="${size}" aria-hidden="true" focusable="false"><use href="#diffs-editor-icon-${name}"></use></svg>`;

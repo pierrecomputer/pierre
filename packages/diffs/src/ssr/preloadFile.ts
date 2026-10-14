@@ -1,4 +1,5 @@
 import type { FileOptions } from '../components/File';
+import { FoldManager } from '../managers/FoldManager';
 import { FileRenderer } from '../renderers/FileRenderer';
 import type { FileContents, LineAnnotation } from '../types';
 import {
@@ -37,6 +38,11 @@ export async function preloadFile<LAnnotation = undefined, Caret = undefined>({
     headerRenderMode:
       options?.renderCustomHeader != null ? 'custom' : 'default',
   });
+
+  // Emit the same fold controls a client File renders, so hydrated markup
+  // is interactive and the gutter doesn't shift on the first client render.
+  // Server markup has nothing folded; the client File owns fold state.
+  fileRenderer.setFoldManager(new FoldManager());
 
   // Set line annotations if provided
   if (annotations !== undefined && annotations.length > 0) {

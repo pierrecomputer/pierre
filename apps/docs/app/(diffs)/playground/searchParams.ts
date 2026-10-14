@@ -86,6 +86,7 @@ export const DEFAULTS = {
   background: true,
   lineNumbers: true,
   wrap: true,
+  folding: true,
   lineSelection: true,
   gutterButton: true,
   interactionMode: 'comment' as const,
@@ -109,6 +110,8 @@ export interface PlaygroundUrlState {
   disableBackground: boolean;
   disableLineNumbers: boolean;
   overflow: 'wrap' | 'scroll';
+  // Code folding on file surfaces (diffs don't fold).
+  folding: boolean;
   enableLineSelection: boolean;
   enableGutterUtility: boolean;
   showAnnotations: boolean;
@@ -188,6 +191,7 @@ export function parsePlaygroundSearchParams(
     disableBackground: !pickBool(get('bg'), DEFAULTS.background),
     disableLineNumbers: !pickBool(get('ln'), DEFAULTS.lineNumbers),
     overflow: pickBool(get('wrap'), DEFAULTS.wrap) ? 'wrap' : 'scroll',
+    folding: pickBool(get('fold'), DEFAULTS.folding),
     enableLineSelection,
     enableGutterUtility,
     showAnnotations: pickBool(get('annot'), DEFAULTS.annotations),

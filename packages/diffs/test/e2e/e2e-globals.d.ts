@@ -62,6 +62,7 @@ interface Window {
   __lineSelectReady?: boolean;
   __annotationsReady?: boolean;
   __themeReady?: boolean;
+  __foldingReady?: boolean;
   __selectionActionReady?: boolean;
   __selectionActionEdgesReady?: boolean;
   __workerPortableReady?: boolean;
@@ -98,12 +99,14 @@ interface Window {
   __selectionChanges?: (E2ELineRange | null)[];
   __gutterClicks?: E2ELineRange[];
   __actionClicks?: string[];
+  __lineNumberClicks?: number[];
 
   // theme.html helper for rendering one row in each line-highlight state.
   __setLineHighlightState?: (state: E2ELineHighlightState) => void;
 
   // Editor handle exposed by the editable fixtures.
   __editor?: E2EEditor;
+  __setFoldingTheme?: () => void;
   __completeEdit?: () => void;
   __forceEditorFullRender?: () => void;
   __moveEditorContainer?: () => void;
