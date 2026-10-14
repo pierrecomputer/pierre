@@ -249,6 +249,31 @@ describe('semantic line types', () => {
       },
     ]);
   });
+
+  test('a replaced call site is an edited line', () => {
+    // The inlined helper's call (old 13) becomes the inlined expression
+    // (new 15); its body keeps the inlined-function line type.
+    expectLines(inlinedFunctionDiff.operation, [
+      {
+        side: 'deletions',
+        lines: [13],
+        spanIndex: 1,
+        lineType: 'change-edited',
+      },
+      {
+        side: 'additions',
+        lines: [15],
+        spanIndex: 1,
+        lineType: 'change-edited',
+      },
+      {
+        side: 'additions',
+        lines: [13, 14],
+        spanIndex: 0,
+        lineType: 'change-inlined-function',
+      },
+    ]);
+  });
 });
 
 // The source lines on one side whose range shows a gutter icon.
@@ -284,13 +309,14 @@ function editedLine(line: number): SemanticDiffOperation {
 }
 
 describe('semantic region icons', () => {
-  test('only the first range of a span shows an icon, and not directly below a matching row', () => {
+  test('only the first range of a span shows an icon', () => {
     // A helper inlined at its call site (see `inlinedFunctionDiff`). The
-    // removed wrapper (span 4) has two ranges around the moved body, and the
-    // new call line (15) directly follows the moved body with the same type.
+    // removed wrapper (span 4) has two ranges around the moved body. The
+    // replaced call lines (old 13, new 15) are edits, so the new call line
+    // starts its own region below the moved body.
     const { operation } = inlinedFunctionDiff;
     expect(iconLines([operation], 'deletions')).toEqual([13, 18, 20]);
-    expect(iconLines([operation], 'additions')).toEqual([13]);
+    expect(iconLines([operation], 'additions')).toEqual([13, 15]);
   });
 
   test('adjacent operations share an icon only when their line types match', () => {
