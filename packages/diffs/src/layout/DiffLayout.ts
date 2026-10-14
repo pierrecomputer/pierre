@@ -5,6 +5,7 @@ import type { DiffHunksRenderer } from '../renderers/DiffHunksRenderer';
 import { LineDiffRangeCache, lineDiffRangesFor } from '../rows/lineDiffRanges';
 import { markRow, type RowMark } from '../rows/markRow';
 import type { RowSource } from '../rows/RowSource';
+import type { SVGSpriteNames } from '../sprite';
 import type {
   AnnotationLineMap,
   AnnotationSpan,
@@ -148,6 +149,7 @@ interface LineRowInputs {
   lineIndexText: string;
   gutterLineType: LineTypes;
   gutterProperties: Properties | undefined;
+  gutterIcon: SVGSpriteNames | undefined;
 }
 
 // Filler rows a split view owes one column so both columns stay aligned.
@@ -508,6 +510,7 @@ export class DiffLayout<LAnnotation = undefined> {
                   lineIndexText,
                   gutterLineType: decoration.gutterLineType,
                   gutterProperties: decoration.gutterProperties,
+                  gutterIcon: decoration.gutterIcon,
                 }
               : {
                   column: 'unified',
@@ -524,6 +527,7 @@ export class DiffLayout<LAnnotation = undefined> {
                   lineIndexText,
                   gutterLineType: decoration.gutterLineType,
                   gutterProperties: decoration.gutterProperties,
+                  gutterIcon: decoration.gutterIcon,
                 }
           );
           const span = getUnifiedAnnotationSpan(
@@ -614,6 +618,7 @@ export class DiffLayout<LAnnotation = undefined> {
               lineIndexText: `${deletionLine.unifiedLineIndex},${splitLineIndex}`,
               gutterLineType: deletionDecoration.gutterLineType,
               gutterProperties: deletionDecoration.gutterProperties,
+              gutterIcon: deletionDecoration.gutterIcon,
             });
           }
           if (additionLine != null) {
@@ -630,6 +635,7 @@ export class DiffLayout<LAnnotation = undefined> {
               lineIndexText: `${additionLine.unifiedLineIndex},${splitLineIndex}`,
               gutterLineType: additionDecoration.gutterLineType,
               gutterProperties: additionDecoration.gutterProperties,
+              gutterIcon: additionDecoration.gutterIcon,
             });
           }
           if (spans != null) {
@@ -1004,7 +1010,8 @@ export class DiffLayout<LAnnotation = undefined> {
         row.gutterLineType,
         row.lineNumber,
         row.lineIndexText,
-        row.gutterProperties
+        row.gutterProperties,
+        row.gutterIcon
       ),
       content,
     };

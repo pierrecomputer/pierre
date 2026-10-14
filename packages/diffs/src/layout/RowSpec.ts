@@ -1,5 +1,6 @@
 import type { ElementContent, Element as HASTElement, Properties } from 'hast';
 
+import type { SVGSpriteNames } from '../sprite';
 import type { LineTypes } from '../types';
 import type { DiffLineMetadata } from '../utils/iterateOverDiff';
 
@@ -61,6 +62,7 @@ export interface LayoutColumns {
 export interface LineDecoration {
   gutterLineType: LineTypes;
   gutterProperties?: Properties;
+  gutterIcon?: SVGSpriteNames;
   contentProperties?: Properties;
 }
 
