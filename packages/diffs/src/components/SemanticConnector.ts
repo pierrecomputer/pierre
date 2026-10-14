@@ -60,6 +60,11 @@ interface SemanticConnectorRenderProps {
    * separator reads as one bar across the split columns.
    */
   separators: readonly SideBounds[];
+  /**
+   * The selected rows, drawn as one full-width band below the connectors so a
+   * selection reads as one row across the split columns.
+   */
+  selection: SideBounds | undefined;
 }
 
 interface ConnectorEntry {
@@ -81,6 +86,7 @@ const SVG_NS = 'http://www.w3.org/2000/svg';
 export class SemanticConnector {
   private readonly options: Required<SemanticConnectorOptions>;
   private svg: SVGSVGElement | undefined;
+  private selectionRect: SVGRectElement | undefined;
   // Holds one rect per separator row; stays the SVG's last child so it paints
   // above every connector path.
   private separatorLayer: SVGGElement | undefined;
@@ -119,6 +125,7 @@ export class SemanticConnector {
     bounds,
     connectors,
     separators,
+    selection,
   }: SemanticConnectorRenderProps): void {
     if (this.disposed) {
       throw new Error('SemanticConnector.render: instance has been cleaned up');
@@ -132,6 +139,7 @@ export class SemanticConnector {
         ? connectors
         : previous,
       separators,
+      selection,
     };
 
     if (this.frameQueued) return;
@@ -144,6 +152,22 @@ export class SemanticConnector {
     }
   }
 
+  /**
+   * Redraw only the selection band, for selection changes that move no rows.
+   * Before the first commit, the next render draws it.
+   */
+  public renderSelection(selection: SideBounds | undefined): void {
+    if (this.disposed) {
+      throw new Error(
+        'SemanticConnector.renderSelection: instance has been cleaned up'
+      );
+    }
+    if (this.pendingRender != null) {
+      this.pendingRender.selection = selection;
+    }
+    this.drawSelection(selection);
+  }
+
   /** A frame timestamp enables entrance; idle commits show complete geometry. */
   private commit(now?: number): void {
     const { pendingRender: pending } = this;
@@ -151,8 +175,9 @@ export class SemanticConnector {
     let redrawAll = false;
 
     if (pending != null) {
-      const { container, bounds, connectors, separators } = pending;
+      const { container, bounds, connectors, separators, selection } = pending;
       const svg = this.getOrCreateSVG(container);
+      this.drawSelection(selection);
       this.drawSeparators(separators);
       const boundsChanged = !areBoundsEqual(this.bounds, bounds);
       const connectorsChanged = this.connectorsChanged(connectors);
@@ -185,6 +210,7 @@ export class SemanticConnector {
     this.animations.clear();
     this.svg?.remove();
     this.svg = undefined;
+    this.selectionRect = undefined;
     this.separatorLayer = undefined;
     this.separatorSnapshot = [];
     this.entries.clear();
@@ -200,6 +226,11 @@ export class SemanticConnector {
       this.svg.setAttribute('aria-hidden', 'true');
       this.svg.setAttribute('data-connector-column', '');
       this.svg.style.position = 'absolute';
+      this.selectionRect = document.createElementNS(SVG_NS, 'rect');
+      this.selectionRect.setAttribute('data-connector-selection', '');
+      this.selectionRect.setAttribute('x', '0');
+      this.selectionRect.setAttribute('width', '100%');
+      this.svg.appendChild(this.selectionRect);
       this.separatorLayer = document.createElementNS(SVG_NS, 'g');
       this.separatorLayer.setAttribute('data-connector-separators', '');
       this.svg.appendChild(this.separatorLayer);
@@ -234,6 +265,25 @@ export class SemanticConnector {
       svg.setAttribute('viewBox', `0 0 ${bounds.width} ${bounds.height}`);
     }
     this.bounds = bounds;
+  }
+
+  // Place the selection band over the selected rows, or hide it when nothing
+  // is selected. Before the SVG exists, the first commit draws it.
+  private drawSelection(selection: SideBounds | undefined): void {
+    const { selectionRect } = this;
+    if (selectionRect == null) {
+      return;
+    }
+    if (selection == null) {
+      selectionRect.setAttribute('display', 'none');
+      return;
+    }
+    selectionRect.removeAttribute('display');
+    selectionRect.setAttribute('y', String(selection.top));
+    selectionRect.setAttribute(
+      'height',
+      String(selection.bottom - selection.top)
+    );
   }
 
   // Match one full-width rect to each separator row, reusing rects by index.
@@ -287,7 +337,8 @@ export class SemanticConnector {
   ): ConnectorEntry[] {
     const added: ConnectorEntry[] = [];
     const nextEntries = new Map<string, ConnectorEntry>();
-    let nextNode = svg.firstChild;
+    // Paths sit between the selection band and the separator layer.
+    let nextNode = this.selectionRect?.nextSibling ?? null;
     for (const connector of connectors) {
       let entry = this.entries.get(connector.id);
       if (entry == null) {

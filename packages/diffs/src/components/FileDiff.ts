@@ -134,6 +134,7 @@ import { isDiffPlainText } from '../utils/isDiffPlainText';
 import { isStyleNode } from '../utils/isStyleNode';
 import {
   measureSemanticDiffConnectors,
+  measureSemanticDiffSelection,
   measureSemanticDiffSeparators,
 } from '../utils/measureSemanticDiffConnectors';
 import { parseDiffFromFile } from '../utils/parseDiffFromFile';
@@ -338,6 +339,13 @@ interface SemanticConnectorCache {
   regions: SemanticDiffConnector[];
 }
 
+interface SemanticConnectorLayout {
+  column: HTMLElement;
+  bounds: DOMRect;
+  deletions: HTMLElement;
+  additions: HTMLElement;
+}
+
 interface HeaderCache {
   lastRenderedHTML: string | undefined;
   html: string | undefined;
@@ -488,7 +496,8 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
           options.hunkSeparators === 'line-info-basic'
           ? this.handleExpandHunk
           : undefined,
-        this.getLineIndex
+        this.getLineIndex,
+        this.renderSemanticSelection
       )
     );
     this.workerManager?.subscribeToThemeChanges(this);
@@ -654,7 +663,8 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
           this.options.hunkSeparators === 'line-info-basic'
           ? this.handleExpandHunk
           : undefined,
-        this.getLineIndex
+        this.getLineIndex,
+        this.renderSemanticSelection
       )
     );
   }
@@ -904,23 +914,43 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
     }
   }
 
-  // Measure the source rows and let SemanticConnector handle when to draw.
-  private renderSemanticConnectors = (): void => {
-    const column = this.semanticConnectorColumn;
-    const deletions = this.getColumnPair(this.codeDeletions);
-    const additions = this.getColumnPair(this.codeAdditions);
+  // The mounted connector column and the split content columns it sits
+  // between, or undefined when there is nothing laid out to measure.
+  private getSemanticConnectorLayout(): SemanticConnectorLayout | undefined {
+    const {
+      semanticConnectorColumn: column,
+      codeDeletions,
+      codeAdditions,
+    } = this;
+    const deletions = this.getColumnPair(codeDeletions);
+    const additions = this.getColumnPair(codeAdditions);
     if (
       column == null ||
       !column.isConnected ||
       deletions == null ||
       additions == null
     ) {
-      return;
+      return undefined;
     }
     const bounds = column.getBoundingClientRect();
     if (bounds.width === 0 || bounds.height === 0) {
+      return undefined;
+    }
+    return {
+      column,
+      bounds,
+      deletions: deletions.content,
+      additions: additions.content,
+    };
+  }
+
+  // Measure the source rows and let SemanticConnector handle when to draw.
+  private renderSemanticConnectors = (): void => {
+    const layout = this.getSemanticConnectorLayout();
+    if (layout == null) {
       return;
     }
+    const { column, bounds, deletions, additions } = layout;
     this.semanticConnector.instance ??= new SemanticConnector();
     this.semanticConnector.instance.render({
       container: column,
@@ -928,12 +958,33 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
       // FOLLOWUP: Think about how this work could maybe be better memoized?
       connectors: measureSemanticDiffConnectors(
         this.semanticConnector.regions,
-        deletions.content,
-        additions.content,
+        deletions,
+        additions,
         bounds.top
       ),
-      separators: measureSemanticDiffSeparators(deletions.content, bounds.top),
+      separators: measureSemanticDiffSeparators(deletions, bounds.top),
+      selection: measureSemanticDiffSelection(
+        this.interactionManager.getSelectedRowEdges(),
+        bounds.top
+      ),
     });
+  };
+
+  // A selection change moves no rows, so only the selection band needs a new
+  // measurement. Before the connector layer exists, its first render measures
+  // the selection.
+  private renderSemanticSelection = (): void => {
+    const { instance } = this.semanticConnector;
+    const layout = this.getSemanticConnectorLayout();
+    if (instance == null || layout == null) {
+      return;
+    }
+    instance.renderSelection(
+      measureSemanticDiffSelection(
+        this.interactionManager.getSelectedRowEdges(),
+        layout.bounds.top
+      )
+    );
   };
 
   private clearSemanticConnectors(): void {
