@@ -369,12 +369,13 @@ export class DiffLayout<LAnnotation = undefined> {
     };
 
     // An annotation row is keyed by the line it hangs under, so it follows
-    // that line through edits.
+    // that line through edits. It takes that line's gutter line type, and
+    // none when its column has no line there.
     const pushAnnotationRow = (
       column: Column,
       lineKey: LineKey | 'file',
       span: AnnotationSpan,
-      lineType: LineTypes
+      lineType: LineTypes | undefined
     ) => {
       this.#cells.fixedRow(
         column,
@@ -382,7 +383,7 @@ export class DiffLayout<LAnnotation = undefined> {
         `${lineType}|${span.hunkIndex},${span.lineIndex}|${span.annotations.join(',')}`,
         () => ({
           gutter: createGutterGap(lineType, 'annotation', 1),
-          content: readOnly(host.createAnnotationElement(span)),
+          content: readOnly(host.createAnnotationElement(span, lineType)),
         })
       );
     };
@@ -539,7 +540,12 @@ export class DiffLayout<LAnnotation = undefined> {
             lineIndex
           );
           if (span != null) {
-            pushAnnotationRow(columns.unified, lineKey, span, lineType);
+            pushAnnotationRow(
+              columns.unified,
+              lineKey,
+              span,
+              decoration.gutterLineType
+            );
             rowCount++;
           }
           if (injected?.after != null) {
@@ -644,21 +650,17 @@ export class DiffLayout<LAnnotation = undefined> {
               columns.deletions,
               deletionsKey,
               spans.deletionSpan,
-              type === 'change'
-                ? deletionLine != null
-                  ? 'change-deletion'
-                  : 'context'
-                : type
+              deletionLine != null
+                ? deletionDecoration.gutterLineType
+                : undefined
             );
             pushAnnotationRow(
               columns.additions,
               additionsKey,
               spans.additionSpan,
-              type === 'change'
-                ? additionLine != null
-                  ? 'change-addition'
-                  : 'context'
-                : type
+              additionLine != null
+                ? additionDecoration.gutterLineType
+                : undefined
             );
             rowCount++;
           }
@@ -1052,7 +1054,7 @@ export class DiffLayout<LAnnotation = undefined> {
       column: Column,
       lineKey: LineKey | 'file',
       span: AnnotationSpan,
-      lineType: LineTypes
+      lineType: LineTypes | undefined
     ) => void,
     countRow: () => void
   ): void {
@@ -1088,7 +1090,7 @@ export class DiffLayout<LAnnotation = undefined> {
           lineIndex,
           annotations: deletionNames.concat(additionNames),
         },
-        'context'
+        undefined
       );
     } else {
       pushAnnotationRow(
@@ -1100,7 +1102,7 @@ export class DiffLayout<LAnnotation = undefined> {
           lineIndex,
           annotations: deletionNames,
         },
-        'context'
+        undefined
       );
       pushAnnotationRow(
         columns.additions,
@@ -1111,7 +1113,7 @@ export class DiffLayout<LAnnotation = undefined> {
           lineIndex,
           annotations: additionNames,
         },
-        'context'
+        undefined
       );
     }
     countRow();

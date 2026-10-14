@@ -1,9 +1,14 @@
 import type { Element as HASTElement } from 'hast';
 
-import type { AnnotationSpan } from '../types';
+import type { AnnotationSpan, LineTypes } from '../types';
 import { createHastElement } from './hast_utils';
 
-export function createAnnotationElement(span: AnnotationSpan): HASTElement {
+// An annotation row holding the span's slots. A line type styles the row like
+// the line it sits under.
+export function createAnnotationElement(
+  span: AnnotationSpan,
+  lineType?: LineTypes
+): HASTElement {
   return createHastElement({
     tagName: 'div',
     children: [
@@ -17,6 +22,7 @@ export function createAnnotationElement(span: AnnotationSpan): HASTElement {
     ],
     properties: {
       'data-line-annotation': `${span.hunkIndex},${span.lineIndex}`,
+      'data-line-type': lineType,
     },
   });
 }
