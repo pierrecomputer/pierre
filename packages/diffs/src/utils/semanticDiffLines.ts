@@ -158,6 +158,9 @@ export function semanticLineType(
   if (span.relation === 'removed') {
     return 'change-deletion';
   }
+  if (span.role === 'call' && span.relation === 'replaced') {
+    return 'change-edited';
+  }
   if (span.role === 'focus') {
     switch (span.relation) {
       case 'moved':
