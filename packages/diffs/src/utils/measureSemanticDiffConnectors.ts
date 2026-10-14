@@ -9,8 +9,11 @@ import type {
 interface MountedLine {
   element: HTMLElement;
   run: number;
-  /** The "No newline at end of file" row drawn under this line, if any. */
-  noNewline?: HTMLElement;
+  /**
+   * May be an annotation line that's attached to the row above or a no-newline
+   * row
+   */
+  end: HTMLElement;
 }
 
 // Measure endpoint runs whose rows are mounted in one uninterrupted stretch.
@@ -67,6 +70,8 @@ export function measureSemanticDiffConnectors(
 function indexMountedLines(content: HTMLElement): Map<number, MountedLine> {
   const lines = new Map<number, MountedLine>();
   let previous: MountedLine | undefined;
+  // The line whose rows end directly above the current element, if any.
+  let adjacent: MountedLine | undefined;
   let previousLine = 0;
   let run = 0;
   for (const element of content.children) {
@@ -75,27 +80,32 @@ function indexMountedLines(content: HTMLElement): Map<number, MountedLine> {
     if (sourceLine != null) {
       const line = Number(sourceLine);
       if (line !== previousLine + 1) run++;
-      previous = { element, run };
+      previous = { element, run, end: element };
+      adjacent = previous;
       lines.set(line, previous);
       previousLine = line;
       continue;
     }
     if (element.hasAttribute('data-no-newline')) {
-      if (previous != null) previous.noNewline = element;
+      if (previous != null) previous.end = element;
+      adjacent = undefined;
       continue;
     }
-    if (
-      element.hasAttribute('data-line-annotation') ||
-      element.hasAttribute('data-content-buffer')
-    ) {
+    // An annotation row directly under a line belongs to it, as it does for a
+    // selection that ends on that line.
+    if (element.hasAttribute('data-line-annotation')) {
+      if (adjacent != null) adjacent.end = element;
+      adjacent = undefined;
       continue;
     }
+    adjacent = undefined;
+    if (element.hasAttribute('data-content-buffer')) continue;
     run++;
   }
   return lines;
 }
 
-// A line's region runs through its "No newline at end of file" row.
+// A run ends at the last row drawn for its final line (see MountedLine.end).
 function measureRun(
   range: SemanticDiffConnectorRange,
   lines: Map<number, MountedLine>,
@@ -106,14 +116,15 @@ function measureRun(
   const last = lines.get(range.end);
   if (first == null || last == null || first.run !== last.run) return;
   const firstRect = getRowRect(first.element, rects);
-  const lastRect = getRowRect(last.noNewline ?? last.element, rects);
+  const lastRect = getRowRect(last.end, rects);
   return {
     top: firstRect.top - originTop,
     bottom: lastRect.bottom - originTop,
   };
 }
 
-// Find the row edge where an addition or deletion connector ends.
+// Find the row edge where an addition or deletion connector ends: the top of
+// the line, or the bottom of the last row drawn for it (see MountedLine.end).
 // Use the content's top for an empty file; skip rows that aren't rendered.
 function measureAttachment(
   attachment: SemanticDiffConnectorAttachment,
@@ -128,8 +139,10 @@ function measureAttachment(
   } else {
     const line = lines.get(attachment.line);
     if (line == null) return;
-    const rect = getRowRect(line.element, rects);
-    y = (attachment.edge === 'before' ? rect.top : rect.bottom) - originTop;
+    y =
+      (attachment.edge === 'before'
+        ? getRowRect(line.element, rects).top
+        : getRowRect(line.end, rects).bottom) - originTop;
   }
   return { top: y, bottom: y };
 }
