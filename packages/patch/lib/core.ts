@@ -28,9 +28,9 @@ export interface DiffLinesOptions {
 
 /** Which header lines a patch has. A field left out is false. */
 export interface HeaderOptions {
-  includeIndex: boolean;
-  includeUnderline: boolean;
-  includeFileHeaders: boolean;
+  includeIndex?: boolean;
+  includeUnderline?: boolean;
+  includeFileHeaders?: boolean;
 }
 
 export interface CreatePatchOptions extends DiffLinesOptions {
@@ -175,9 +175,9 @@ export function createTwoFilesPatch(
   // headerOptions writes every header line, and a field left out is false.
   const headerFlags =
     (headerOptions != null
-      ? (headerOptions.includeIndex ? 1 : 0) |
-        (headerOptions.includeUnderline ? 2 : 0) |
-        (headerOptions.includeFileHeaders ? 4 : 0)
+      ? ((headerOptions.includeIndex ?? false) ? 1 : 0) |
+        ((headerOptions.includeUnderline ?? false) ? 2 : 0) |
+        ((headerOptions.includeFileHeaders ?? false) ? 4 : 0)
       : 7) |
     (oldFileName !== undefined ? 8 : 0) |
     (newFileName !== undefined ? 16 : 0);

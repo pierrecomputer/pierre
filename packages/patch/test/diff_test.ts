@@ -161,7 +161,7 @@ test('createTwoFilesPatch headerOptions', () => {
   // like jsdiff: a field left out of headerOptions is false
   expect(
     createTwoFilesPatch('f', 'f', 'x', 'x', undefined, undefined, {
-      headerOptions: { includeFileHeaders: true } as never,
+      headerOptions: { includeFileHeaders: true },
     })
   ).toBe('--- f\n+++ f\n');
 });
