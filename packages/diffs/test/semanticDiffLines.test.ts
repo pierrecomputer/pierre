@@ -9,6 +9,7 @@ import {
   createSemanticDiffLineLookup,
   getSemanticDiffLine,
 } from '../src/utils/semanticDiffLines';
+import { inlinedFunctionDiff } from './mocks';
 
 function range(
   startLine: number,
@@ -37,7 +38,7 @@ function expectLines(
   for (const { side, lines, spanIndex, lineType } of expected) {
     for (const line of lines) {
       const entry = getSemanticDiffLine(lookup, side, line);
-      expect(entry?.lineType).toBe(lineType);
+      expect<LineTypes | undefined>(entry?.lineType).toBe(lineType);
       expect(entry?.operation).toBe(operation);
       expect(entry?.span).toBe(operation.spans[spanIndex]);
     }
@@ -283,75 +284,11 @@ function editedLine(line: number): SemanticDiffOperation {
 }
 
 describe('semantic region icons', () => {
-  test('only the first range of a span shows an icon, and not directly below the same line type', () => {
-    // Converter output for a helper inlined at its call site. The removed
-    // helper wrapper (span 4) has two ranges around the moved body, and the
+  test('only the first range of a span shows an icon, and not directly below a matching row', () => {
+    // A helper inlined at its call site (see `inlinedFunctionDiff`). The
+    // removed wrapper (span 4) has two ranges around the moved body, and the
     // new call line (15) directly follows the moved body with the same type.
-    const operation: SemanticDiffOperation = {
-      type: 'inlinedFunction',
-      spans: [
-        {
-          role: 'body',
-          relation: 'moved',
-          old: [range(20, 1, 22, 24)],
-          new: [range(13, 3, 14, 27)],
-          linePairs: [
-            { old: { start: 20, end: 22 }, new: { start: 13, end: 14 } },
-          ],
-        },
-        {
-          role: 'call',
-          relation: 'replaced',
-          old: [range(13, 12, 13, 31)],
-          new: [range(15, 12, 15, 28)],
-          linePairs: [
-            { old: { start: 13, end: 13 }, new: { start: 15, end: 15 } },
-          ],
-        },
-        {
-          role: 'focus',
-          relation: 'replaced',
-          old: [range(13, 12, 13, 31)],
-          new: [range(15, 12, 15, 28)],
-          linePairs: [],
-        },
-        {
-          role: 'focus',
-          relation: 'removed',
-          old: [range(22, 1, 22, 7)],
-        },
-        {
-          role: 'container',
-          relation: 'removed',
-          old: [range(19, 0, 19, 40), range(23, 0, 23, 1)],
-        },
-      ],
-      lines: {
-        old: [
-          { start: 13, end: 13, spanIndex: 1 },
-          {
-            start: 18,
-            end: 19,
-            spanIndex: 4,
-            anchorIndex: 0,
-            attachment: { line: 13, edge: 'before' },
-          },
-          { start: 20, end: 22, spanIndex: 0 },
-          {
-            start: 23,
-            end: 23,
-            spanIndex: 4,
-            anchorIndex: 1,
-            attachment: { line: 15, edge: 'after' },
-          },
-        ],
-        new: [
-          { start: 13, end: 14, spanIndex: 0 },
-          { start: 15, end: 15, spanIndex: 1 },
-        ],
-      },
-    };
-
+    const { operation } = inlinedFunctionDiff;
     expect(iconLines([operation], 'deletions')).toEqual([13, 18, 20]);
     expect(iconLines([operation], 'additions')).toEqual([13]);
   });
@@ -387,5 +324,79 @@ describe('semantic region icons', () => {
 
     expect(iconLines(operations, 'deletions')).toEqual([10, 11, 15]);
     expect(iconLines(operations, 'additions')).toEqual([11, 15]);
+  });
+
+  test('line types drawn with the same icon and color share one icon', () => {
+    // The `lang-example-css` shape: a renamed selector directly above an
+    // edited declaration. Renamed and edited lines both draw the purple
+    // modified icon, so they read as one region.
+    const renamed: SemanticDiffOperation = {
+      type: 'renamed',
+      spans: [
+        {
+          role: 'focus',
+          relation: 'replaced',
+          old: [range(58, 4, 58, 9)],
+          new: [range(61, 4, 61, 17)],
+          linePairs: [
+            { old: { start: 58, end: 58 }, new: { start: 61, end: 61 } },
+          ],
+        },
+      ],
+      lines: {
+        old: [{ start: 58, end: 58, spanIndex: 0 }],
+        new: [{ start: 61, end: 61, spanIndex: 0 }],
+      },
+    };
+    const edited: SemanticDiffOperation = {
+      type: 'edited',
+      spans: [
+        {
+          role: 'root',
+          relation: 'mapped',
+          old: [range(59, 4, 59, 40)],
+          new: [range(62, 4, 62, 40)],
+          linePairs: [
+            { old: { start: 59, end: 59 }, new: { start: 62, end: 62 } },
+          ],
+        },
+      ],
+      lines: {
+        old: [{ start: 59, end: 59, spanIndex: 0 }],
+        new: [{ start: 62, end: 62, spanIndex: 0 }],
+      },
+    };
+
+    expect(iconLines([renamed, edited], 'deletions')).toEqual([58]);
+    expect(iconLines([renamed, edited], 'additions')).toEqual([61]);
+  });
+
+  test('a matching glyph in a different color starts a new region', () => {
+    // Moved and moved-with-edit lines both draw the moved icon, but in blue
+    // and purple, so the edited move still shows its own icon.
+    const movedRange = (start: number, end: number) => ({
+      old: [range(start, 0, end, 10)],
+      new: [range(start, 0, end, 10)],
+      linePairs: [{ old: { start, end }, new: { start, end } }],
+    });
+    const moved: SemanticDiffOperation = {
+      type: 'moved',
+      spans: [{ role: 'root', relation: 'moved', ...movedRange(3, 4) }],
+      lines: {
+        old: [{ start: 3, end: 4, spanIndex: 0 }],
+        new: [{ start: 3, end: 4, spanIndex: 0 }],
+      },
+    };
+    const movedWithEdit: SemanticDiffOperation = {
+      type: 'movedWithEdit',
+      spans: [{ role: 'root', relation: 'moved', ...movedRange(5, 6) }],
+      lines: {
+        old: [{ start: 5, end: 6, spanIndex: 0 }],
+        new: [{ start: 5, end: 6, spanIndex: 0 }],
+      },
+    };
+
+    expect(iconLines([moved, movedWithEdit], 'deletions')).toEqual([3, 5]);
+    expect(iconLines([moved, movedWithEdit], 'additions')).toEqual([3, 5]);
   });
 });

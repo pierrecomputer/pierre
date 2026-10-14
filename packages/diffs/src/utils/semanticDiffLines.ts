@@ -1,3 +1,4 @@
+import type { SVGSpriteNames } from '../sprite';
 import type {
   LineTypes,
   SemanticDiffOperation,
@@ -5,16 +6,34 @@ import type {
   SemanticDiffSpan,
 } from '../types';
 
+/** The line types a semantic range can give its lines. */
+type SemanticLineType = Exclude<LineTypes, 'context' | 'context-expanded'>;
+
+/** Glyphs that have both a tinted (`-duo`) and a solid (`-fill`) icon. */
+type SemanticIconGlyph =
+  | 'added'
+  | 'deleted'
+  | 'moved'
+  | 'extracted'
+  | 'inlined'
+  | 'modified';
+
+type SemanticLineIcon = Extract<
+  SVGSpriteNames,
+  | `diffs-icon-symbol-${SemanticIconGlyph}-${'duo' | 'fill'}`
+  | 'diffs-icon-eye-slash'
+>;
+
 interface SemanticDiffLine {
   start: number;
   end: number;
-  lineType: LineTypes;
+  lineType: SemanticLineType;
   operation: SemanticDiffOperation;
   span: SemanticDiffSpan;
   /**
    * Whether this range's first line starts a region and shows its gutter icon.
-   * Only a span's first range on a side does, and not when the line above
-   * already has the same line type.
+   * Only a span's first range on a side does, and not when the line above is
+   * drawn with the same icon and color.
    */
   showsIcon: boolean;
 }
@@ -24,7 +43,10 @@ export interface SemanticDiffLineLookup {
   deletions: readonly SemanticDiffLine[];
 }
 
-const LINE_TYPE_BY_OPERATION: Record<SemanticDiffOperationType, LineTypes> = {
+const LINE_TYPE_BY_OPERATION: Record<
+  SemanticDiffOperationType,
+  SemanticLineType
+> = {
   moved: 'change-moved',
   movedWithEdit: 'change-moved-with-edit',
   edited: 'change-edited',
@@ -35,6 +57,38 @@ const LINE_TYPE_BY_OPERATION: Record<SemanticDiffOperationType, LineTypes> = {
   reformatted: 'change-reformatted',
   extractedFunction: 'change-extracted-function',
   inlinedFunction: 'change-inlined-function',
+};
+
+/** The color groups in `style.css`: one background, bar, and number color. */
+type SemanticLineColor =
+  | 'addition'
+  | 'deletion'
+  | 'moved'
+  | 'edited'
+  | 'reformatted';
+
+interface SemanticLineGutterStyle {
+  /** `eye-slash` (reformatted) exists only as an outline icon. */
+  glyph: SemanticIconGlyph | 'eye-slash';
+  color: SemanticLineColor;
+}
+
+// How each line type looks in the gutter. `color` must match the line type
+// groups in style.css.
+const GUTTER_STYLE_BY_LINE_TYPE: Record<
+  SemanticLineType,
+  SemanticLineGutterStyle
+> = {
+  'change-addition': { glyph: 'added', color: 'addition' },
+  'change-deletion': { glyph: 'deleted', color: 'deletion' },
+  'change-moved': { glyph: 'moved', color: 'moved' },
+  'change-reordered': { glyph: 'moved', color: 'moved' },
+  'change-extracted-function': { glyph: 'extracted', color: 'moved' },
+  'change-inlined-function': { glyph: 'inlined', color: 'moved' },
+  'change-moved-with-edit': { glyph: 'moved', color: 'edited' },
+  'change-edited': { glyph: 'modified', color: 'edited' },
+  'change-renamed': { glyph: 'modified', color: 'edited' },
+  'change-reformatted': { glyph: 'eye-slash', color: 'reformatted' },
 };
 
 // Resolve supplied ownership runs once, preserving the original operation and
@@ -71,18 +125,19 @@ export function createSemanticDiffLineLookup(
   return { additions, deletions };
 }
 
-// A range that starts directly below a line of the same line type reads as part
-// of that line's region, so it shows no icon of its own. This holds even when
-// the two ranges belong to different spans or operations, such as adjacent
-// edits. Ranges on one side never overlap, so after sorting, only the previous
-// entry can end on the line above.
+// Hide the icon of a range that starts directly below a range with the same
+// glyph and color, such as an edit below a rename. Ranges on one side never
+// overlap, so only the previous sorted entry can end on the line above.
 function hideContinuedRegionIcons(entries: SemanticDiffLine[]): void {
   for (let index = 1; index < entries.length; index++) {
     const previous = entries[index - 1];
     const entry = entries[index];
+    const previousStyle = GUTTER_STYLE_BY_LINE_TYPE[previous.lineType];
+    const entryStyle = GUTTER_STYLE_BY_LINE_TYPE[entry.lineType];
     if (
       previous.end === entry.start - 1 &&
-      previous.lineType === entry.lineType
+      previousStyle.glyph === entryStyle.glyph &&
+      previousStyle.color === entryStyle.color
     ) {
       entry.showsIcon = false;
     }
@@ -93,7 +148,7 @@ function hideContinuedRegionIcons(entries: SemanticDiffLine[]): void {
 export function semanticLineType(
   operation: SemanticDiffOperation,
   span: SemanticDiffSpan
-): LineTypes {
+): SemanticLineType {
   if (span.role === 'focus' && span.kind === 'reformatted') {
     return 'change-reformatted';
   }
@@ -114,6 +169,20 @@ export function semanticLineType(
     }
   }
   return LINE_TYPE_BY_OPERATION[operation.type];
+}
+
+// The gutter icon for the first row of a semantic region. The glyph follows the
+// line type (see GUTTER_STYLE_BY_LINE_TYPE). Old-side rows use the
+// tinted icon and new-side rows the solid one.
+export function getSemanticLineIcon(
+  lineType: SemanticLineType,
+  side: 'additions' | 'deletions'
+): SemanticLineIcon {
+  const { glyph } = GUTTER_STYLE_BY_LINE_TYPE[lineType];
+  if (glyph === 'eye-slash') {
+    return 'diffs-icon-eye-slash';
+  }
+  return `diffs-icon-symbol-${glyph}-${side === 'deletions' ? 'duo' : 'fill'}`;
 }
 
 // FOLLOWUP: This is dumb, and goes back to my thinking that we should probably
