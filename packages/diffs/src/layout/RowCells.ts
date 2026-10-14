@@ -1,6 +1,7 @@
 import type { Element as HASTElement, Properties } from 'hast';
 
 import { i18n } from '../i18n/I18n';
+import type { SVGSpriteNames } from '../sprite';
 import type { LineTypes } from '../types';
 import { createGutterItem } from '../utils/hast_utils';
 import type { LineKey, RowKey, RowSpec } from './RowSpec';
@@ -15,6 +16,7 @@ interface GutterCell {
   lineNumber: number;
   lineIndexText: string;
   properties: Properties;
+  icon: SVGSpriteNames | undefined;
   cell: HASTElement;
 }
 
@@ -81,15 +83,16 @@ export class RowCells {
   }
 
   /**
-   * The gutter cell of the line with `key`, reused while its number, type
-   * and properties match, whatever happened to the line's text.
+   * The gutter cell of the line with `key`, reused while its number, type,
+   * properties and icon match, whatever happened to the line's text.
    */
   gutter(
     key: LineKey,
     lineType: LineTypes,
     lineNumber: number,
     lineIndexText: string,
-    properties: Properties = {}
+    properties: Properties = {},
+    icon?: SVGSpriteNames
   ): HASTElement {
     const cached = this.#gutters.get(key);
     if (
@@ -97,6 +100,7 @@ export class RowCells {
       cached.lineType === lineType &&
       cached.lineNumber === lineNumber &&
       cached.lineIndexText === lineIndexText &&
+      cached.icon === icon &&
       arePropertiesEqual(cached.properties, properties)
     ) {
       return cached.cell;
@@ -105,11 +109,16 @@ export class RowCells {
       lineType,
       lineNumber,
       lineIndexText,
-      properties
+      properties,
+      icon
     );
-    // Same line number means only attributes changed, so keep the children
-    // and let the reconciler patch attributes alone.
-    if (cached != null && cached.lineNumber === lineNumber) {
+    // Same line number and icon means only attributes changed, so keep the
+    // children and let the reconciler patch attributes alone.
+    if (
+      cached != null &&
+      cached.lineNumber === lineNumber &&
+      cached.icon === icon
+    ) {
       cell.children = cached.cell.children;
     }
     this.#gutters.set(key, {
@@ -117,6 +126,7 @@ export class RowCells {
       lineNumber,
       lineIndexText,
       properties,
+      icon,
       cell,
     });
     return cell;

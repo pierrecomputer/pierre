@@ -85,6 +85,7 @@ import { getSemanticDiffFocus } from '../utils/semanticDiffFocus';
 import {
   createSemanticDiffLineLookup,
   getSemanticDiffLine,
+  getSemanticLineIcon,
   type SemanticDiffLineLookup,
 } from '../utils/semanticDiffLines';
 import type { WorkerPoolManager } from '../worker';
@@ -732,12 +733,21 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     );
     // Only owned lines take a semantic color; the converter owns every changed
     // line, blank lines included, so an unowned line is context.
-    const lineType =
-      line?.lineType ??
-      (hunkLineType === 'context-expanded' ? 'context-expanded' : 'context');
+    if (line == null) {
+      const lineType =
+        hunkLineType === 'context-expanded' ? 'context-expanded' : 'context';
+      return {
+        gutterLineType: lineType,
+        contentProperties: { 'data-line-type': lineType },
+      };
+    }
     return {
-      gutterLineType: lineType,
-      contentProperties: { 'data-line-type': lineType },
+      gutterLineType: line.lineType,
+      gutterIcon:
+        line.showsIcon && line.start === lineNumber
+          ? getSemanticLineIcon(line.lineType, side)
+          : undefined,
+      contentProperties: { 'data-line-type': line.lineType },
     };
   }
 
