@@ -163,9 +163,18 @@ export function HighlightsPerformanceBenchmarks() {
             target="_blank"
             rel="noopener noreferrer"
           >
-            Explore the benchmarks and methodology
+            Explore the HTML generation
           </Link>
-          .
+          {' and '}
+          <Link
+            href="https://github.com/pierrecomputer/pierre/tree/main/packages/highlights/benchmark#memory-usage"
+            className="styled-link styled-link-muted"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            memory usage
+          </Link>{' '}
+          benchmarks and methodology.
         </p>
         <p>
           Throughput is relative to Shiki’s 1× baseline; higher is better. Each
