@@ -19,10 +19,17 @@ import type {
   LineDiffTypes,
   LineTypes,
   RenderRange,
+  SemanticDiffCollapsibleRegion,
+  SemanticDiffLineRegion,
 } from '../types';
 import { areRenderRangesEqual } from '../utils/areRenderRangesEqual';
 import { createEmptyRowBuffer } from '../utils/createEmptyRowBuffer';
 import { createNoNewlineElement } from '../utils/createNoNewlineElement';
+import {
+  createSemanticRegionContent,
+  createSemanticRegionGutter,
+  getSemanticRegionIconToggleProperties,
+} from '../utils/createSemanticRegionRow';
 import { createSeparator } from '../utils/createSeparator';
 import { getHunkSeparatorSlotName } from '../utils/getHunkSeparatorSlotName';
 import { getTotalLineCountFromHunks } from '../utils/getTotalLineCountFromHunks';
@@ -33,6 +40,7 @@ import {
   getFileAnnotations,
   shouldRenderFileAnnotations,
 } from '../utils/includesFileAnnotations';
+import { isDefaultRenderRange } from '../utils/isDefaultRenderRange';
 import { iterateOverDiff } from '../utils/iterateOverDiff';
 import type { SemanticDiffFocus } from '../utils/semanticDiffFocus';
 import { getTrailingContextRangeSize } from '../utils/virtualDiffLayout';
@@ -77,6 +85,11 @@ export interface DiffLayoutInput<LAnnotation> {
   annotationSlotName(annotation: DiffLineAnnotation<LAnnotation>): string;
   /** Focus marks of a semantic diff, which replace its word diff marks. */
   semanticFocus?: SemanticDiffFocus;
+  /**
+   * The first old lines of the collapsible semantic regions that are
+   * expanded. Every other region collapses into one row.
+   */
+  expandedSemanticRegions?: ReadonlySet<number>;
   /**
    * Give the empty line after the new file's final line break a row of its
    * own; see IterateOverDiffProps.includeTrailingNewline.
@@ -124,6 +137,7 @@ function sameInputs<LAnnotation>(
     last.additionAnnotations === next.additionAnnotations &&
     last.annotationSlotName === next.annotationSlotName &&
     last.semanticFocus === next.semanticFocus &&
+    last.expandedSemanticRegions === next.expandedSemanticRegions &&
     last.includeTrailingNewline === next.includeTrailingNewline &&
     last.showNoNewlineMarkers === next.showNoNewlineMarkers &&
     areRenderRangesEqual(last.renderRange, next.renderRange)
@@ -151,6 +165,13 @@ interface LineRowInputs {
   gutterLineType: LineTypes;
   gutterProperties: Properties | undefined;
   gutterIcon: SVGSpriteNames | undefined;
+  gutterIconProperties: Properties | undefined;
+}
+
+// A collapsible region the walk is in, and whether it is collapsed.
+interface SemanticRegionState {
+  region: SemanticDiffCollapsibleRegion;
+  collapsed: boolean;
 }
 
 // Filler rows a split view owes one column so both columns stay aligned.
@@ -397,6 +418,89 @@ export class DiffLayout<LAnnotation = undefined> {
       errorPrefix: 'DiffLayout.layout',
     });
 
+    // Collapsible regions only collapse in a split, full render. A windowed
+    // render counts rows from the hunks, which still include every hidden line.
+    const { semanticCollapsibleRegions } = diff;
+    const canCollapseSemanticRegions =
+      // TODO: Figure out unified diffs
+      !unified &&
+      diff.semanticOperations != null &&
+      semanticCollapsibleRegions != null &&
+      // TODO: Figure out when we implement virtualization
+      isDefaultRenderRange(renderRange);
+    // The collapsible region covering an old line, and whether it is
+    // collapsed. A region with an annotation on any of its lines never
+    // collapses. The walk visits old lines in ascending order, so a cursor
+    // into the sorted regions only moves forward, and each region's state is
+    // worked out once, when the walk reaches it.
+    let regionIndex = 0;
+    let currentRegion: SemanticDiffCollapsibleRegion | undefined;
+    let currentRegionState: SemanticRegionState | undefined;
+    let previousOldLine = 0;
+    const getSemanticRegionState = (
+      lineNumber: number
+    ): SemanticRegionState | undefined => {
+      if (!canCollapseSemanticRegions) {
+        return undefined;
+      }
+      if (lineNumber < previousOldLine) {
+        throw new Error(
+          `DiffLayout.layout: old line ${lineNumber} follows old line ${previousOldLine}; collapsible regions need old lines in ascending order`
+        );
+      }
+      previousOldLine = lineNumber;
+      while (
+        regionIndex < semanticCollapsibleRegions.length &&
+        semanticCollapsibleRegions[regionIndex].old.end < lineNumber
+      ) {
+        regionIndex++;
+      }
+      const region = semanticCollapsibleRegions[regionIndex];
+      if (region == null || lineNumber < region.old.start) {
+        return undefined;
+      }
+      if (region !== currentRegion) {
+        currentRegion = region;
+        currentRegionState = !hasAnnotationsIn(
+          input.deletionAnnotations,
+          region.old
+        )
+          ? {
+              region,
+              collapsed:
+                input.expandedSemanticRegions?.has(region.old.start) !== true,
+            }
+          : undefined;
+      }
+      return currentRegionState;
+    };
+    // A collapsed region's row: one deletions-side row, so the additions
+    // column takes a one-row gap beside it.
+    const pushSemanticRegionRow = (region: SemanticDiffCollapsibleRegion) => {
+      if (pendingBuffer.side === 'deletions') {
+        flushBuffer();
+      }
+      pendingBuffer.side = 'additions';
+      pendingBuffer.size += 1;
+      const { gutterLineType, gutterIcon } =
+        host.getSemanticRegionDecoration(region);
+      const { moved, edited, removed } = region.counts;
+      this.#cells.fixedRow(
+        columns.deletions,
+        `sem:${region.old.start}`,
+        `${gutterLineType}|${gutterIcon}|${region.old.end}|${moved},${edited},${removed}`,
+        () => ({
+          gutter: createSemanticRegionGutter(
+            region,
+            gutterLineType,
+            gutterIcon
+          ),
+          content: createSemanticRegionContent(region, gutterLineType),
+        })
+      );
+      rowCount++;
+    };
+
     iterateOverDiff({
       diff,
       diffStyle,
@@ -442,6 +546,33 @@ export class DiffLayout<LAnnotation = undefined> {
             isExpandable: isExpandableDiff,
           });
         }
+
+        const regionState =
+          deletionLine != null
+            ? getSemanticRegionState(deletionLine.lineNumber)
+            : undefined;
+        if (regionState != null) {
+          // The converter only marks old lines on one-sided rows.
+          if (additionLine != null) {
+            throw new Error(
+              `DiffLayout.layout: collapsible region ${regionState.region.old.start}-${regionState.region.old.end} has a new-side line beside old line ${deletionLine?.lineNumber}`
+            );
+          }
+          if (
+            regionState.collapsed &&
+            deletionLine?.lineNumber === regionState.region.old.start
+          ) {
+            pushSemanticRegionRow(regionState.region);
+          }
+        }
+        const isHiddenBySemanticRegion = regionState?.collapsed === true;
+        // An expanded region's first line carries the icon that collapses it.
+        const expandedRegionStart =
+          regionState != null &&
+          !regionState.collapsed &&
+          deletionLine?.lineNumber === regionState.region.old.start
+            ? regionState.region
+            : undefined;
 
         const lineIndex = unified ? unifiedLineIndex : splitLineIndex;
         const lineContext: RenderedLineContext = {
@@ -513,6 +644,7 @@ export class DiffLayout<LAnnotation = undefined> {
                   gutterLineType: decoration.gutterLineType,
                   gutterProperties: decoration.gutterProperties,
                   gutterIcon: decoration.gutterIcon,
+                  gutterIconProperties: decoration.gutterIconProperties,
                 }
               : {
                   column: 'unified',
@@ -530,6 +662,7 @@ export class DiffLayout<LAnnotation = undefined> {
                   gutterLineType: decoration.gutterLineType,
                   gutterProperties: decoration.gutterProperties,
                   gutterIcon: decoration.gutterIcon,
+                  gutterIconProperties: decoration.gutterIconProperties,
                 }
           );
           const span = getUnifiedAnnotationSpan(
@@ -555,7 +688,7 @@ export class DiffLayout<LAnnotation = undefined> {
               `${lineKey}:after`
             );
           }
-        } else {
+        } else if (!isHiddenBySemanticRegion) {
           const injected = host.getSplitInjectedRowsForLine?.(lineContext);
           if (injected?.before != null) {
             rowCount += pushSplitInjectedRows(
@@ -566,11 +699,18 @@ export class DiffLayout<LAnnotation = undefined> {
               flushBuffer
             );
           }
-          const deletionDecoration = host.getSplitLineDecoration({
-            side: 'deletions',
-            type,
-            lineNumber: deletionLine?.lineNumber,
-          });
+          const deletionDecoration =
+            expandedRegionStart != null
+              ? {
+                  ...host.getSemanticRegionDecoration(expandedRegionStart),
+                  gutterIconProperties:
+                    getSemanticRegionIconToggleProperties(expandedRegionStart),
+                }
+              : host.getSplitLineDecoration({
+                  side: 'deletions',
+                  type,
+                  lineNumber: deletionLine?.lineNumber,
+                });
           const additionDecoration = host.getSplitLineDecoration({
             side: 'additions',
             type,
@@ -626,6 +766,7 @@ export class DiffLayout<LAnnotation = undefined> {
               gutterLineType: deletionDecoration.gutterLineType,
               gutterProperties: deletionDecoration.gutterProperties,
               gutterIcon: deletionDecoration.gutterIcon,
+              gutterIconProperties: deletionDecoration.gutterIconProperties,
             });
           }
           if (additionLine != null) {
@@ -643,6 +784,7 @@ export class DiffLayout<LAnnotation = undefined> {
               gutterLineType: additionDecoration.gutterLineType,
               gutterProperties: additionDecoration.gutterProperties,
               gutterIcon: additionDecoration.gutterIcon,
+              gutterIconProperties: additionDecoration.gutterIconProperties,
             });
           }
           if (spans != null) {
@@ -687,8 +829,9 @@ export class DiffLayout<LAnnotation = undefined> {
               hunk.unifiedLineStart + hunk.unifiedLineCount - 1
             : splitLineIndex === hunk.splitLineStart + hunk.splitLineCount - 1);
         const noEOFCRDeletion =
-          (deletionLine?.noEOFCR ?? false) ||
-          (isFinalSplitHunkRow && hunk.noEOFCRDeletions);
+          !isHiddenBySemanticRegion &&
+          ((deletionLine?.noEOFCR ?? false) ||
+            (isFinalSplitHunkRow && hunk.noEOFCRDeletions));
         const noEOFCRAddition =
           (additionLine?.noEOFCR ?? false) ||
           (isFinalSplitHunkRow && hunk.noEOFCRAdditions);
@@ -775,7 +918,9 @@ export class DiffLayout<LAnnotation = undefined> {
             isExpandable: isExpandableDiff,
           });
         }
-        rowCount++;
+        if (!isHiddenBySemanticRegion) {
+          rowCount++;
+        }
       },
     });
 
@@ -1014,7 +1159,8 @@ export class DiffLayout<LAnnotation = undefined> {
         row.lineNumber,
         row.lineIndexText,
         row.gutterProperties,
-        row.gutterIcon
+        row.gutterIcon,
+        row.gutterIconProperties
       ),
       content,
     };
@@ -1262,6 +1408,20 @@ function getSplitAnnotationSpans<LAnnotation>(
     return undefined;
   }
   return { deletionSpan, additionSpan };
+}
+
+// Whether any old line of a collapsible region has an annotation. Such a
+// region stays expanded, so collapsing never hides an annotation.
+function hasAnnotationsIn<LAnnotation>(
+  annotations: AnnotationLineMap<LAnnotation>,
+  { start, end }: SemanticDiffLineRegion
+): boolean {
+  for (let line = start; line <= end; line++) {
+    if ((annotations[line]?.length ?? 0) > 0) {
+      return true;
+    }
+  }
+  return false;
 }
 
 function areRangesEqual(a: readonly RowMark[], b: readonly RowMark[]): boolean {
