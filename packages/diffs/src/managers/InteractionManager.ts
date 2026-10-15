@@ -176,11 +176,18 @@ export interface MergeConflictActionTarget {
   conflictIndex: number;
 }
 
+/** The expand/collapse toggle of a collapsible region, by its first line. */
+interface SemanticRegionToggleTarget {
+  kind: 'semantic-region-toggle';
+  start: number;
+}
+
 type ResolvedPointerTarget<TMode extends InteractionManagerMode> =
   | ResolvedLineTarget<TMode>
   | ResolvedTokenTarget<TMode>
   | ExpandoEventProps
-  | MergeConflictActionTarget;
+  | MergeConflictActionTarget
+  | SemanticRegionToggleTarget;
 
 type LinePointerTarget<TMode extends InteractionManagerMode> =
   ResolvedLineTarget<TMode>;
@@ -256,6 +263,7 @@ export interface InteractionManagerOptions<
   ): unknown;
   onMergeConflictActionClick?(target: MergeConflictActionTarget): void;
   onSelectedLinesRender?(): void;
+  onSemanticRegionToggle?(start: number): void;
 }
 
 interface HandlePointerEventProps {
@@ -468,12 +476,14 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
       onLineNumberClick,
       onTokenClick,
       onMergeConflictActionClick,
+      onSemanticRegionToggle,
     } = this.options;
     if (
       onHunkExpand == null &&
       onLineClick == null &&
       onLineNumberClick == null &&
       onMergeConflictActionClick == null &&
+      onSemanticRegionToggle == null &&
       onTokenClick == null
     ) {
       return;
@@ -586,6 +596,7 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
       onTokenLeave,
       onHunkExpand,
       onMergeConflictActionClick,
+      onSemanticRegionToggle,
     } = this.options;
 
     switch (eventType) {
@@ -645,6 +656,13 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
           onMergeConflictActionClick(target);
           break;
         }
+        if (
+          isSemanticRegionTogglePointerTarget(target) &&
+          onSemanticRegionToggle != null
+        ) {
+          onSemanticRegionToggle(target.start);
+          break;
+        }
         if (isExpandoPointerTarget(target) && onHunkExpand != null) {
           onHunkExpand(
             target.hunkIndex,
@@ -692,6 +710,7 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
       onTokenLeave,
       onHunkExpand,
       onMergeConflictActionClick,
+      onSemanticRegionToggle,
       enableGutterUtility = false,
       enableLineSelection = false,
       onGutterUtilityClick,
@@ -708,6 +727,7 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
       onTokenLeave != null ||
       onHunkExpand != null ||
       onMergeConflictActionClick != null ||
+      onSemanticRegionToggle != null ||
       enableGutterUtility ||
       enableLineSelection ||
       enableGutterSelection;
@@ -1458,6 +1478,10 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
     if (excludeUtility && isGutterUtilityPath(path)) {
       return undefined;
     }
+    // A collapsible region's toggle expands or collapses the region instead.
+    if (isSemanticRegionTogglePath(path)) {
+      return undefined;
+    }
     // Selection is row-based, not child-element-based. Lateral movement over
     // tokens, annotations, or line-number text should still update to the
     // nearest content or gutter row; anything else is ignored by returning
@@ -2020,8 +2044,27 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
     let expandInfo: ExpandCache | undefined;
     let lineNumber: number | undefined;
     let mergeConflictActionTarget: MergeConflictActionTarget | undefined;
+    let semanticRegionToggleTarget: SemanticRegionToggleTarget | undefined;
 
     for (const element of path) {
+      // A collapsible region's toggle can be an SVG icon, so it is matched on
+      // any element, ahead of the HTML-only checks below.
+      if (
+        semanticRegionToggleTarget == null &&
+        element instanceof Element &&
+        element.hasAttribute('data-semantic-region-toggle')
+      ) {
+        const start = Number.parseInt(
+          element.getAttribute('data-semantic-region-toggle') ?? '',
+          10
+        );
+        if (Number.isFinite(start)) {
+          semanticRegionToggleTarget = {
+            kind: 'semantic-region-toggle',
+            start,
+          };
+        }
+      }
       if (!(element instanceof HTMLElement)) {
         continue;
       }
@@ -2142,6 +2185,9 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
 
     if (mergeConflictActionTarget != null) {
       return mergeConflictActionTarget;
+    }
+    if (semanticRegionToggleTarget != null) {
+      return semanticRegionToggleTarget;
     }
 
     if (expandInfo?.hunkIndex != null) {
@@ -2342,6 +2388,7 @@ export function pluckInteractionOptions<TMode extends InteractionManagerMode>(
   ) => unknown,
   getLineIndex?: GetLineIndexUtility,
   onSelectedLinesRender?: () => void,
+  onSemanticRegionToggle?: (start: number) => void,
   onMergeConflictActionClick?: (target: MergeConflictActionTarget) => void
 ): InteractionManagerOptions<TMode> {
   return {
@@ -2358,6 +2405,7 @@ export function pluckInteractionOptions<TMode extends InteractionManagerMode>(
     onHunkExpand,
     onMergeConflictActionClick,
     onSelectedLinesRender,
+    onSemanticRegionToggle,
     onLineClick,
     onLineEnter,
     onLineLeave,
@@ -2424,6 +2472,22 @@ function isMergeConflictActionPointerTarget<
   TMode extends InteractionManagerMode,
 >(target: ResolvedPointerTarget<TMode>): target is MergeConflictActionTarget {
   return 'kind' in target && target.kind === 'merge-conflict-action';
+}
+
+function isSemanticRegionTogglePath(
+  path: readonly (EventTarget | undefined)[]
+): boolean {
+  return path.some(
+    (element) =>
+      element instanceof Element &&
+      element.hasAttribute('data-semantic-region-toggle')
+  );
+}
+
+function isSemanticRegionTogglePointerTarget<
+  TMode extends InteractionManagerMode,
+>(target: ResolvedPointerTarget<TMode>): target is SemanticRegionToggleTarget {
+  return 'kind' in target && target.kind === 'semantic-region-toggle';
 }
 
 function isMergeConflictResolution(

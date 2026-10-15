@@ -16,6 +16,7 @@ interface GutterCell {
   lineIndexText: string;
   properties: Properties;
   icon: SVGSpriteNames | undefined;
+  iconProperties: Properties;
   cell: HASTElement;
 }
 
@@ -88,7 +89,8 @@ export class RowCells {
     lineNumber: number,
     lineIndexText: string,
     properties: Properties = {},
-    icon?: SVGSpriteNames
+    icon?: SVGSpriteNames,
+    iconProperties: Properties = {}
   ): HASTElement {
     const cached = this.#gutters.get(key);
     if (
@@ -97,7 +99,8 @@ export class RowCells {
       cached.lineNumber === lineNumber &&
       cached.lineIndexText === lineIndexText &&
       cached.icon === icon &&
-      arePropertiesEqual(cached.properties, properties)
+      arePropertiesEqual(cached.properties, properties) &&
+      arePropertiesEqual(cached.iconProperties, iconProperties)
     ) {
       return cached.cell;
     }
@@ -106,14 +109,16 @@ export class RowCells {
       lineNumber,
       lineIndexText,
       properties,
-      icon
+      icon,
+      iconProperties
     );
     // Same line number and icon means only attributes changed, so keep the
     // children and let the reconciler patch attributes alone.
     if (
       cached != null &&
       cached.lineNumber === lineNumber &&
-      cached.icon === icon
+      cached.icon === icon &&
+      arePropertiesEqual(cached.iconProperties, iconProperties)
     ) {
       cell.children = cached.cell.children;
     }
@@ -123,6 +128,7 @@ export class RowCells {
       lineIndexText,
       properties,
       icon,
+      iconProperties,
       cell,
     });
     return cell;

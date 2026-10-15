@@ -29,7 +29,8 @@ export type LineKey = `a${number}` | `d${number}`;
  * kind can never equal a key of another: `ann:` for an annotation row under a
  * line (or `ann:file` for the file-level one), `sep:` for a hunk separator,
  * `buf:` for a filler row after the row it follows, `eof:` for a "no newline"
- * marker, and `inj:` for a row a host injects.
+ * marker, `inj:` for a row a host injects, and `sem:` for the row a collapsed
+ * semantic region shows in place of its old lines.
  */
 export type RowKey =
   | LineKey
@@ -39,7 +40,8 @@ export type RowKey =
   | `buf:${string}`
   | 'eof:a'
   | 'eof:d'
-  | `inj:${string}`;
+  | `inj:${string}`
+  | `sem:${number}`;
 
 /** Whether a key is a line's: every other kind of row carries a `:` prefix. */
 export function isLineKey(key: RowKey): key is LineKey {
@@ -63,6 +65,7 @@ export interface LineDecoration {
   gutterLineType: LineTypes;
   gutterProperties?: Properties;
   gutterIcon?: SVGSpriteNames;
+  gutterIconProperties?: Properties;
   contentProperties?: Properties;
 }
 
