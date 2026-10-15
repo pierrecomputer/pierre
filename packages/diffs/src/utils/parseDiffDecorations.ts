@@ -1,4 +1,4 @@
-import type { ChangeObject } from '@pierre/patch';
+import type { ChangeObject } from '@pierre/patches';
 
 import type { DecorationItem } from '../types';
 

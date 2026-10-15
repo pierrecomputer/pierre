@@ -1,4 +1,4 @@
-import { createTwoFilesPatch } from '@pierre/patch';
+import { createTwoFilesPatch } from '@pierre/patches';
 import { afterAll, beforeAll, describe, expect, spyOn, test } from 'bun:test';
 
 import { CodeView } from '../src/components/CodeView';

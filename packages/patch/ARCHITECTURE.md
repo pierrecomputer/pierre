@@ -1,8 +1,8 @@
 # Architecture
 
-`@pierre/patch` produces the same output as `diff@9.0.0`. WAT (WebAssembly Text)
-contains all diff logic. The TypeScript host checks options, writes input, and
-reads results.
+`@pierre/patches` produces the same output as `diff@9.0.0`. WAT (WebAssembly
+Text) contains all diff logic. The TypeScript host checks options, writes input,
+and reads results.
 
 ```text
 JS strings -> WTF-8 bytes -> tokens -> integer ids -> Myers diff

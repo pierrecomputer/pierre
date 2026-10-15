@@ -16,7 +16,7 @@ moonx patch:bench -- --memory   # also measure the memory that one call allocate
 Higher is better. Size is the UTF-8 size of the old and new strings together.
 The number in parentheses is the speedup over `diff@9.0.0`.
 
-| API / input                       |   Size | diff@9.0.0 |         @pierre/patch |
+| API / input                       |   Size | diff@9.0.0 |       @pierre/patches |
 | --------------------------------- | -----: | ---------: | --------------------: |
 | `createTwoFilesPatch`             | 779 KB |   208 MB/s | **2871 MB/s (13.8×)** |
 | `createTwoFilesPatch` (divergent) | 244 KB |  3.32 MB/s |  **185 MB/s (55.5×)** |
@@ -34,25 +34,25 @@ The number in parentheses is the speedup over `diff@9.0.0`.
 ## Memory Usage
 
 Lower is better. Memory is all the memory that one call allocates, with the
-garbage collector off. For @pierre/patch, this includes the wasm memory.
+garbage collector off. For @pierre/patches, this includes the wasm memory.
 
-| API / input                       |   Size | diff@9.0.0 | @pierre/patch |
-| --------------------------------- | -----: | ---------: | ------------: |
-| `createTwoFilesPatch`             | 779 KB |    6.61 MB |   **1.48 MB** |
-| `createTwoFilesPatch` (divergent) | 244 KB |    77.8 MB |   **3.39 MB** |
-| `diffLines`                       | 779 KB |    5.53 MB |   **1.38 MB** |
-| `diffWordsWithSpace`              | 154 KB |    5.33 MB |   **1.78 MB** |
-| `diffWordsWithSpace` (Unicode)    |  94 KB |    2.67 MB |   **1.55 MB** |
-| `diffChars`                       |  51 KB |    2.84 MB |   **0.56 MB** |
-| `diffChars` (Unicode)             |  24 KB |    1.80 MB |   **0.25 MB** |
-| `diffWordsWithSpace` (per line)   | 213 KB |    8.73 MB |   **0.75 MB** |
-| `diffChars` (per line)            | 213 KB |    31.4 MB |   **1.06 MB** |
+| API / input                       |   Size | diff@9.0.0 | @pierre/patches |
+| --------------------------------- | -----: | ---------: | --------------: |
+| `createTwoFilesPatch`             | 779 KB |    6.61 MB |     **1.48 MB** |
+| `createTwoFilesPatch` (divergent) | 244 KB |    77.8 MB |     **3.39 MB** |
+| `diffLines`                       | 779 KB |    5.53 MB |     **1.38 MB** |
+| `diffWordsWithSpace`              | 154 KB |    5.33 MB |     **1.78 MB** |
+| `diffWordsWithSpace` (Unicode)    |  94 KB |    2.67 MB |     **1.55 MB** |
+| `diffChars`                       |  51 KB |    2.84 MB |     **0.56 MB** |
+| `diffChars` (Unicode)             |  24 KB |    1.80 MB |     **0.25 MB** |
+| `diffWordsWithSpace` (per line)   | 213 KB |    8.73 MB |     **0.75 MB** |
+| `diffChars` (per line)            | 213 KB |    31.4 MB |     **1.06 MB** |
 
 > Measured on 2026-10-15 with Bun 1.4.0 on a 14-core Apple M4 Pro with 48 GB RAM
 > (macOS arm64).
 
 jsdiff makes garbage that the garbage collector must clean up after each call.
-@pierre/patch keeps its wasm memory for the next call, up to 32 MB
+@pierre/patches keeps its wasm memory for the next call, up to 32 MB
 (`setMemoryLimit`), so it grows only when an input needs more memory than all
 inputs before it.
 
@@ -69,7 +69,7 @@ time per call (1 MB = 1,024² bytes).
 
 For memory, [`memory.ts`](./memory.ts) runs in a new Bun process with
 `BUN_JSC_useGC=0`. After 5 warmup calls, it measures how much the RSS grows in
-one call. @pierre/patch gets a new wasm instance first, so its wasm memory is
+one call. @pierre/patches gets a new wasm instance first, so its wasm memory is
 counted. The result is the median of 3 processes.
 
 The chart uses the 779 KB `createTwoFilesPatch` case.

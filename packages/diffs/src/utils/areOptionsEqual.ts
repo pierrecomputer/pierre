@@ -1,4 +1,4 @@
-import type { CreatePatchOptions } from '@pierre/patch';
+import type { CreatePatchOptions } from '@pierre/patches';
 
 import type { CodeViewOptions } from '../components/CodeView';
 import type { FileDiffOptions } from '../components/FileDiff';

@@ -1,4 +1,4 @@
-import { createTwoFilesPatch } from '@pierre/patch';
+import { createTwoFilesPatch } from '@pierre/patches';
 import { afterAll, describe, expect, spyOn, test } from 'bun:test';
 
 import {

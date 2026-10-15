@@ -200,7 +200,7 @@ function check(
   allowed?: string[]
 ): void {
   if (typeof options === 'function') {
-    throw new Error('callbacks are not supported by @pierre/patch');
+    throw new Error('callbacks are not supported by @pierre/patches');
   }
   if (options == null) return;
   for (const [key, value] of Object.entries(options)) {
@@ -210,7 +210,7 @@ function check(
       !(allowed?.includes(key) ?? false)
     ) {
       throw new Error(
-        `options.${key} is not supported by @pierre/patch ${api}`
+        `options.${key} is not supported by @pierre/patches ${api}`
       );
     }
   }

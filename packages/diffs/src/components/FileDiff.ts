@@ -54,6 +54,7 @@ import type {
   BaseCodeOptions,
   BaseDiffOptions,
   CustomPreProperties,
+  DiffLib,
   DiffLineAnnotation,
   ExpansionDirections,
   DiffsHighlighter,
@@ -111,6 +112,7 @@ import { getFiletypeFromFileName } from '../utils/getFiletypeFromFileName';
 import { getHunkSideStartBoundary } from '../utils/getHunkSideBoundaries';
 import { getLineAnnotationName } from '../utils/getLineAnnotationName';
 import { getOrCreateCodeNode } from '../utils/getOrCreateCodeNode';
+import { getParseDiffOptions } from '../utils/getParseDiffOptions';
 import { getThemes } from '../utils/getThemes';
 import { guardWebKitScrollDuringRebuild } from '../utils/guardWebKitScrollDuringRebuild';
 import { hastToHtml } from '../utils/hastToHtml';
@@ -449,6 +451,7 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
   private mounted = false;
 
   protected enabled = true;
+  protected parsedDiffLib: DiffLib = 'jsdiff';
 
   protected editor: Editor<'file-diff', LAnnotation, Caret> | undefined;
   protected refreshViewTimeout: ReturnType<typeof setTimeout> | undefined;
@@ -1122,10 +1125,11 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
     this.lineAnnotations = lineAnnotations ?? this.lineAnnotations;
     this.additionFile = newFile;
     this.deletionFile = oldFile;
+    this.parsedDiffLib = this.options.preferredDiffLib ?? 'jsdiff';
     this.fileDiff =
       fileDiff ??
       (oldFile !== undefined && newFile !== undefined
-        ? parseDiffFromFile(oldFile, newFile, this.options.parseDiffOptions)
+        ? parseDiffFromFile(oldFile, newFile, getParseDiffOptions(this.options))
         : undefined);
 
     if (this.pre == null) {
@@ -1491,7 +1495,8 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
     const hasFileInput = fileInput != null;
     const filesDidChange =
       hasFileInput &&
-      (!areOptionalFilesEqual(oldFile, this.deletionFile) ||
+      (this.parsedDiffLib !== (this.options.preferredDiffLib ?? 'jsdiff') ||
+        !areOptionalFilesEqual(oldFile, this.deletionFile) ||
         !areOptionalFilesEqual(newFile, this.additionFile));
     let diffDidChange =
       fileDiff != null && !areDiffTargetsEqual(fileDiff, this.fileDiff);
@@ -1530,8 +1535,9 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
       nextParsedFileDiff = parseDiffFromFile(
         fileInput.oldFile,
         fileInput.newFile,
-        this.options.parseDiffOptions
+        getParseDiffOptions(this.options)
       );
+      this.parsedDiffLib = this.options.preferredDiffLib ?? 'jsdiff';
     }
 
     const { renderRange: previousRenderRange } = this;
@@ -1573,7 +1579,7 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
       latestDiff.editSessionDirty === true &&
       this.shouldSelfHealEditSession()
     ) {
-      finishEditSessionForDiff(latestDiff, this.options.parseDiffOptions);
+      finishEditSessionForDiff(latestDiff, getParseDiffOptions(this.options));
       void this.hunksRenderer.refreshHighlightedResult();
     }
     if (expandUnchanged) {
@@ -2214,7 +2220,7 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
       this.hunksRenderer.getExpandedHunksMap(),
       collapsedContextThreshold
     );
-    finishEditSessionForDiff(fileDiff, this.options.parseDiffOptions);
+    finishEditSessionForDiff(fileDiff, getParseDiffOptions(this.options));
     this.hunksRenderer.setExpandedHunksMap(
       rebuildExpansionFromAnchors(fileDiff, anchors)
     );

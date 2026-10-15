@@ -1,4 +1,4 @@
-import type { CreatePatchOptions } from '@pierre/patch';
+import type { CreatePatchOptions } from '@pierre/patches';
 import { describe, expect, test } from 'bun:test';
 
 import type { FileDiffMetadata, HunkExpansionRegion } from '../src/types';

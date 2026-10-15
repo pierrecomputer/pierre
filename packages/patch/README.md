@@ -1,4 +1,4 @@
-# @pierre/patch
+# @pierre/patches
 
 A fast text diff library, written by hand in WAT (WebAssembly Text). It is a
 drop-in replacement for the core APIs of
@@ -15,7 +15,7 @@ method.
 ## Usage
 
 ```bash
-npm i @pierre/patch
+npm i @pierre/patches
 ```
 
 It works in Node.js, browsers, and Cloudflare Workers.
@@ -27,7 +27,7 @@ import {
   diffChars,
   diffLines,
   diffWordsWithSpace,
-} from '@pierre/patch';
+} from '@pierre/patches';
 
 diffChars('abcabba', 'cbabac');
 // [{ count: 2, added: false, removed: true, value: "ab" }, ...]

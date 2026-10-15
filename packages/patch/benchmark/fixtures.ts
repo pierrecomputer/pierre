@@ -119,7 +119,7 @@ function mutateChunks(rnd: Rnd, chunks: string[], edits: number): string[] {
   return out;
 }
 
-/** The APIs that @pierre/patch and jsdiff share, as the benchmark calls them. */
+/** The APIs that @pierre/patches and jsdiff share, as the benchmark calls them. */
 export interface DiffApi {
   createTwoFilesPatch(
     oldFileName: string,
@@ -135,7 +135,7 @@ export interface DiffApi {
 export type ApiName = keyof DiffApi;
 
 /**
- * `api` of `lib` (@pierre/patch or jsdiff) as a function of (oldStr, newStr).
+ * `api` of `lib` (@pierre/patches or jsdiff) as a function of (oldStr, newStr).
  * `perLine` diffs line i of the old text with line i of the new text, one call each.
  */
 export function bindApi(

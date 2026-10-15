@@ -30,6 +30,7 @@ import {
   getVirtualFilePaddingBottom,
 } from '../utils/computeVirtualFileMetrics';
 import { getDiffFileInput } from '../utils/getDiffFileInput';
+import { getParseDiffOptions } from '../utils/getParseDiffOptions';
 import { hydratePartialDiff } from '../utils/hydratePartialDiff';
 import {
   FILE_ANNOTATION_DOM_KEY,
@@ -1381,7 +1382,8 @@ export class VirtualizedFileDiff<
     const newFile = fileInput?.newFile;
     const filesDidChange =
       hasFileInput &&
-      (!areOptionalFilesEqual(oldFile, this.deletionFile) ||
+      (this.parsedDiffLib !== (this.options.preferredDiffLib ?? 'jsdiff') ||
+        !areOptionalFilesEqual(oldFile, this.deletionFile) ||
         !areOptionalFilesEqual(newFile, this.additionFile));
     let nextFileDiff = fileDiff ?? this.fileDiff;
     if (
@@ -1392,8 +1394,9 @@ export class VirtualizedFileDiff<
       nextFileDiff = parseDiffFromFile(
         fileInput.oldFile,
         fileInput.newFile,
-        this.options.parseDiffOptions
+        getParseDiffOptions(this.options)
       );
+      this.parsedDiffLib = this.options.preferredDiffLib ?? 'jsdiff';
     }
     const { forceRenderOverride, isSetup } = this;
     this.forceRenderOverride = undefined;

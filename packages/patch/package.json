@@ -1,5 +1,5 @@
 {
-  "name": "@pierre/patch",
+  "name": "@pierre/patches",
   "version": "0.0.0",
   "description": "A fast text diff library written in WebAssembly Text (WAT), compatible with jsdiff",
   "license": "apache-2.0",

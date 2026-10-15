@@ -16,6 +16,7 @@ import { getResolvedThemes } from '../highlighter/themes/getResolvedThemes';
 import { hasResolvedThemes } from '../highlighter/themes/hasResolvedThemes';
 import { resolveThemes } from '../highlighter/themes/resolveThemes';
 import type {
+  DiffLib,
   DiffsTheme,
   DiffsThemeNames,
   FileContents,
@@ -286,8 +287,8 @@ export class WorkerPoolManager {
     return { theme, useTokenTransformer, tokenizeMaxLineLength };
   }
 
-  public getDiffRenderOptions(): RenderDiffOptions {
-    return { ...this.renderOptions };
+  public getDiffRenderOptions(preferredDiffLib?: DiffLib): RenderDiffOptions {
+    return { ...this.renderOptions, preferredDiffLib };
   }
 
   private async setRenderOptionsOnWorkers(
@@ -749,7 +750,8 @@ export class WorkerPoolManager {
 
   public highlightDiffAST(
     instance: DiffRendererInstance,
-    diff: FileDiffMetadata
+    diff: FileDiffMetadata,
+    preferredDiffLib?: DiffLib
   ): void {
     const cachedResult = this.getDiffResultCache(diff);
     // If we've already highlighted the diff or it's plain text, we should not
@@ -760,17 +762,20 @@ export class WorkerPoolManager {
       (cachedResult != null &&
         areDiffRenderOptionsEqual(
           cachedResult.options,
-          this.getDiffRenderOptions()
+          this.getDiffRenderOptions(preferredDiffLib)
         ))
     ) {
       return;
     }
-    if (!this.hasMatchingDiffInstanceTask(instance, diff)) {
-      this.submitTask(instance, { type: 'diff', diff });
+    if (!this.hasMatchingDiffInstanceTask(instance, diff, preferredDiffLib)) {
+      this.submitTask(instance, { type: 'diff', diff, preferredDiffLib });
     }
   }
 
-  public primeDiffHighlightCache(diff: FileDiffMetadata): Promise<void> {
+  public primeDiffHighlightCache(
+    diff: FileDiffMetadata,
+    preferredDiffLib?: DiffLib
+  ): Promise<void> {
     if (!this.isWorkingPool()) {
       return Promise.reject(
         new Error(
@@ -779,14 +784,15 @@ export class WorkerPoolManager {
       );
     }
 
-    const task = this.getOrCreateDiffHighlightCacheTask(diff);
+    const task = this.getOrCreateDiffHighlightCacheTask(diff, preferredDiffLib);
     return task != null
       ? this.createRenderTaskCallbacks(task)
       : Promise.resolve();
   }
 
   private getOrCreateDiffHighlightCacheTask(
-    diff: FileDiffMetadata
+    diff: FileDiffMetadata,
+    preferredDiffLib?: DiffLib
   ): RenderDiffTask | undefined {
     if (diff.cacheKey == null) {
       console.warn(
@@ -795,14 +801,14 @@ export class WorkerPoolManager {
       return undefined;
     }
     const cachedResult = this.getDiffResultCache(diff);
-    const highlightKey = this.getDiffHighlightKey(diff);
+    const highlightKey = this.getDiffHighlightKey(diff, preferredDiffLib);
     if (
       highlightKey == null ||
       isDiffPlainText(diff) ||
       (cachedResult != null &&
         areDiffRenderOptionsEqual(
           cachedResult.options,
-          this.getDiffRenderOptions()
+          this.getDiffRenderOptions(preferredDiffLib)
         ))
     ) {
       return undefined;
@@ -812,7 +818,10 @@ export class WorkerPoolManager {
       existingTask.primeCache = true;
       return existingTask.type === 'diff' ? existingTask : undefined;
     } else {
-      const task = this.submitCacheTask({ type: 'diff', diff }, highlightKey);
+      const task = this.submitCacheTask(
+        { type: 'diff', diff, preferredDiffLib },
+        highlightKey
+      );
       return task.type === 'diff' ? task : undefined;
     }
   }
@@ -822,7 +831,8 @@ export class WorkerPoolManager {
     startingLine: number,
     totalLines: number,
     expandedHunks?: Map<number, HunkExpansionRegion> | true,
-    collapsedContextThreshold?: number
+    collapsedContextThreshold?: number,
+    preferredDiffLib?: DiffLib
   ): ThemedDiffResult | undefined {
     const highlighter = getHighlighterIfLoaded({
       theme: this.renderOptions.theme,
@@ -831,13 +841,18 @@ export class WorkerPoolManager {
       this.queueInitialization();
       return undefined;
     }
-    return renderDiffWithHighlighter(diff, highlighter, this.renderOptions, {
-      forcePlainText: true,
-      startingLine,
-      totalLines,
-      expandedHunks,
-      collapsedContextThreshold,
-    });
+    return renderDiffWithHighlighter(
+      diff,
+      highlighter,
+      this.getDiffRenderOptions(preferredDiffLib),
+      {
+        forcePlainText: true,
+        startingLine,
+        totalLines,
+        expandedHunks,
+        collapsedContextThreshold,
+      }
+    );
   }
 
   public terminate(): void {
@@ -1170,7 +1185,10 @@ export class WorkerPoolManager {
             const { options } = response;
             if (
               !this.isCurrentRenderTask(task) ||
-              !areDiffRenderOptionsEqual(options, this.getDiffRenderOptions())
+              !areDiffRenderOptionsEqual(
+                options,
+                this.getDiffRenderOptions(task.request.preferredDiffLib)
+              )
             ) {
               throw IGNORE_RESPONSE;
             }
@@ -1348,11 +1366,14 @@ export class WorkerPoolManager {
     return `file:${file.cacheKey}:${this.renderOptionsVersion}`;
   }
 
-  private getDiffHighlightKey(diff: FileDiffMetadata): string | undefined {
+  private getDiffHighlightKey(
+    diff: FileDiffMetadata,
+    preferredDiffLib?: DiffLib
+  ): string | undefined {
     if (diff.cacheKey == null) {
       return undefined;
     }
-    return `diff:${diff.cacheKey}:${this.renderOptionsVersion}`;
+    return `diff:${diff.cacheKey}:${this.renderOptionsVersion}:${preferredDiffLib ?? 'jsdiff'}`;
   }
 
   private getHighlightKeyForRequest(
@@ -1362,7 +1383,7 @@ export class WorkerPoolManager {
       case 'file':
         return this.getFileHighlightKey(request.file);
       case 'diff':
-        return this.getDiffHighlightKey(request.diff);
+        return this.getDiffHighlightKey(request.diff, request.preferredDiffLib);
     }
   }
 
@@ -1554,14 +1575,17 @@ export class WorkerPoolManager {
 
   private hasMatchingDiffInstanceTask(
     instance: DiffRendererInstance,
-    diff: FileDiffMetadata
+    diff: FileDiffMetadata,
+    preferredDiffLib?: DiffLib
   ): boolean {
     for (const task of this.iterateRenderTasks()) {
       if (
         task.type === 'diff' &&
         this.isCurrentRenderTask(task) &&
         task.instances.has(instance) &&
-        areDiffTargetsEqual(task.request.diff, diff)
+        areDiffTargetsEqual(task.request.diff, diff) &&
+        (task.request.preferredDiffLib ?? 'jsdiff') ===
+          (preferredDiffLib ?? 'jsdiff')
       ) {
         return true;
       }

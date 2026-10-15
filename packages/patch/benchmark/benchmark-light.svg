@@ -4,7 +4,7 @@
   <rect x="454.981" y="20" width="1" height="40" fill="#7F7F7F" fill-opacity="0.25"/>
   <rect x="602.472" y="20" width="1" height="40" fill="#7F7F7F" fill-opacity="0.25"/>
   <rect x="160" y="23" width="39.079" height="14" fill="#1f883d"/>
-  <text x="152" y="30" text-anchor="end" dominant-baseline="middle" font-weight="bold" fill="#24292F">@pierre/patch</text>
+  <text x="152" y="30" text-anchor="end" dominant-baseline="middle" font-weight="bold" fill="#24292F">@pierre/patches</text>
   <text x="207.079" y="30" dominant-baseline="middle" font-weight="bold" fill="#24292F">0.26ms</text>
   <rect x="160" y="43" width="540" height="14" fill="#1f883d"/>
   <text x="152" y="50" text-anchor="end" dominant-baseline="middle" fill="#24292F">diff@9.0.0</text>

@@ -1,12 +1,9 @@
-import {
-  type ChangeObject,
-  diffChars,
-  diffWordsWithSpace,
-} from '@pierre/patch';
+import type { ChangeObject } from '@pierre/patches';
 
 import { DEFAULT_COLLAPSED_CONTEXT_THRESHOLD } from '../constants';
 import type {
   DecorationItem,
+  DiffLib,
   DiffsHighlighter,
   FileContents,
   FileDiffMetadata,
@@ -20,6 +17,7 @@ import type {
 } from '../types';
 import { appendItems } from './appendItems';
 import { cleanLastNewline } from './cleanLastNewline';
+import { diffLibs } from './diffLibs';
 import { getFiletypeFromFileName } from './getFiletypeFromFileName';
 import { getHighlighterThemeStyles } from './getHighlighterThemeStyles';
 import { getTokenOptions } from './getTokenOptions';
@@ -83,7 +81,7 @@ export function renderDiffWithHighlighter(
     additionLines: [],
   };
 
-  const { maxLineDiffLength } = options;
+  const { maxLineDiffLength, preferredDiffLib = 'jsdiff' } = options;
   const shouldGroupAll = !forcePlainText && !diff.isPartial;
   const expandedHunksForIteration = forcePlainText ? expandedHunks : undefined;
   const buckets = new Map<number, RenderBucket>();
@@ -142,6 +140,7 @@ export function renderDiffWithHighlighter(
           additionDecorations: bucket.additionDecorations,
           lineDiffType,
           maxLineDiffLength,
+          preferredDiffLib,
         });
       }
 
@@ -254,6 +253,7 @@ interface LineDiffDecorationTargets {
 }
 
 interface ProcessLineDiffProps extends LineDiffDecorationTargets {
+  preferredDiffLib: DiffLib;
   deletionLine: string | undefined;
   additionLine: string | undefined;
   lineDiffType: LineDiffTypes;
@@ -321,6 +321,7 @@ function computeLineDiffDecorations({
   additionDecorations,
   lineDiffType,
   maxLineDiffLength,
+  preferredDiffLib,
 }: ProcessLineDiffProps) {
   if (deletionLine == null || additionLine == null || lineDiffType === 'none') {
     return;
@@ -337,6 +338,7 @@ function computeLineDiffDecorations({
   // NOTE(amadeus): Because we visually trim trailing newlines when rendering,
   // we also gotta make sure the diff parsing doesn't include the newline
   // character that could be there...
+  const { diffChars, diffWordsWithSpace } = diffLibs[preferredDiffLib];
   const lineDiff =
     lineDiffType === 'char'
       ? diffChars(deletionLine, additionLine)

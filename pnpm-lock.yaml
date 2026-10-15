@@ -309,7 +309,7 @@ importers:
       '@pierre/icons':
         specifier: 'catalog:'
         version: 0.9.0(react@19.2.7)
-      '@pierre/patch':
+      '@pierre/patches':
         specifier: workspace:*
         version: link:../../packages/patch
       react:
@@ -621,7 +621,7 @@ importers:
       '@pierre/highlights':
         specifier: workspace:*
         version: link:../highlights
-      '@pierre/patch':
+      '@pierre/patches':
         specifier: workspace:*
         version: link:../patch
       '@pierre/theme':
@@ -630,6 +630,9 @@ importers:
       '@pierre/theming':
         specifier: workspace:*
         version: link:../theming
+      diff:
+        specifier: 'catalog:'
+        version: 9.0.0
       hast-util-to-html:
         specifier: 'catalog:'
         version: 9.0.5

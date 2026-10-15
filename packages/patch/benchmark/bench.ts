@@ -118,7 +118,7 @@ function renderChart(
   }
   rows.forEach((r, i) => {
     const y = top + 3 + i * rowH;
-    const bold = r.name === '@pierre/patch' ? ' font-weight="bold"' : '';
+    const bold = r.name === '@pierre/patches' ? ' font-weight="bold"' : '';
     const w = px((r.median / maxMs) * barMax);
     lines.push(
       `  <rect x="${left}" y="${y}" width="${w}" height="${barH}" fill="${bar}"/>`
@@ -279,7 +279,7 @@ for (const s of SCENARIOS) {
     (enc.encode(s.old).length + enc.encode(s.new).length) / 1024 / 1024;
   const results: Result[] = [
     {
-      name: '@pierre/patch',
+      name: '@pierre/patches',
       lib: 'mine',
       ...runBench(() => s.mine(s.old, s.new)),
     },

@@ -62,6 +62,7 @@ import { getFiletypeFromFileName } from '../utils/getFiletypeFromFileName';
 import { getHighlighterOptions } from '../utils/getHighlighterOptions';
 import { getHunkSeparatorSlotName } from '../utils/getHunkSeparatorSlotName';
 import { getLineAnnotationName } from '../utils/getLineAnnotationName';
+import { getParseDiffOptions } from '../utils/getParseDiffOptions';
 import { getTotalLineCountFromHunks } from '../utils/getTotalLineCountFromHunks';
 import {
   createGutterGap,
@@ -343,7 +344,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     if (!diff.isPartial && diff.additionLines.length === 0) {
       Object.assign(
         diff,
-        recomputeEmptyDocumentDiff(diff, this.options.parseDiffOptions)
+        recomputeEmptyDocumentDiff(diff, getParseDiffOptions(this.options))
       );
       this.markEditSessionPass(diff);
       this.clearRenderCache();
@@ -705,7 +706,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
         ) {
           this.applyRecomputePreservingSessionType(
             diff,
-            recomputeEmptyDocumentDiff(diff, this.options.parseDiffOptions)
+            recomputeEmptyDocumentDiff(diff, getParseDiffOptions(this.options))
           );
           regionsChanged = true;
         } else if (shouldTopAlignAdditionRecompute(diff, diff.additionLines)) {
@@ -714,7 +715,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
             recomputeTopAlignedAdditionDiff(
               diff,
               diff.additionLines,
-              this.options.parseDiffOptions
+              getParseDiffOptions(this.options)
             )
           );
           regionsChanged = true;
@@ -722,7 +723,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
           const change = applySessionChangedLines(
             diff,
             changedAdditionLines,
-            this.options.parseDiffOptions,
+            getParseDiffOptions(this.options),
             previousAdditionLines
           );
           this.applyExpansionRemap(change);
@@ -734,7 +735,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
           updateDiffHunks(
             diff,
             changedAdditionLines,
-            this.options.parseDiffOptions
+            getParseDiffOptions(this.options)
           )
         );
       }
@@ -791,7 +792,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     if (diff.additionLines.length <= 1 && diff.additionLines.join('') === '') {
       this.applyRecomputePreservingSessionType(
         diff,
-        recomputeEmptyDocumentDiff(diff, this.options.parseDiffOptions)
+        recomputeEmptyDocumentDiff(diff, getParseDiffOptions(this.options))
       );
       if (result != null) {
         result.code.additionLines[0] = createPlainAdditionLineElement(
@@ -804,7 +805,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     } else {
       Object.assign(
         diff,
-        recomputeDiffHunksForEdit(diff, this.options.parseDiffOptions)
+        recomputeDiffHunksForEdit(diff, getParseDiffOptions(this.options))
       );
     }
 
@@ -827,7 +828,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     diff: FileDiffMetadata,
     previousAdditionLines: readonly string[]
   ): void {
-    const { parseDiffOptions } = this.options;
+    const parseDiffOptions = getParseDiffOptions(this.options);
     const rawLines = diff.additionLines;
     if (shouldTopAlignAdditionRecompute(diff, rawLines)) {
       this.applyRecomputePreservingSessionType(
@@ -924,6 +925,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       expansionLineCount = 100,
       hunkSeparators = 'line-info',
       lineDiffType = 'word-alt',
+      preferredDiffLib = 'jsdiff',
       maxLineDiffLength = 1000,
       overflow = 'scroll',
       stickyHeader = false,
@@ -947,6 +949,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       expansionLineCount,
       hunkSeparators,
       lineDiffType,
+      preferredDiffLib,
       maxLineDiffLength,
       overflow,
       stickyHeader,
@@ -1000,7 +1003,11 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     ) {
       if (this.renderCache.result == null && !massiveDiff) {
         // We should only kick off a preload of the AST if we have a WorkerPool
-        this.workerManager.highlightDiffAST(this, this.diff);
+        this.workerManager.highlightDiffAST(
+          this,
+          this.diff,
+          this.options.preferredDiffLib
+        );
       }
     }
     // Lets attempt to get the highlighter/languages ready immediately
@@ -1041,7 +1048,9 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
   private getRenderOptions(diff: FileDiffMetadata): GetRenderOptionsReturn {
     const options: RenderDiffOptions = (() => {
       if (this.workerManager?.isWorkingPool() === true) {
-        const poolOptions = this.workerManager.getDiffRenderOptions();
+        const poolOptions = this.workerManager.getDiffRenderOptions(
+          this.options.preferredDiffLib
+        );
         // Active edit sessions require `useTokenTransformer: true`
         if (
           this.editSessionActive &&
@@ -1051,14 +1060,20 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
         }
         return poolOptions;
       }
-      const { theme, tokenizeMaxLineLength, lineDiffType, maxLineDiffLength } =
-        this.getOptionsWithDefaults();
+      const {
+        theme,
+        tokenizeMaxLineLength,
+        lineDiffType,
+        maxLineDiffLength,
+        preferredDiffLib,
+      } = this.getOptionsWithDefaults();
       return {
         theme,
         useTokenTransformer:
           this.editSessionActive || this.options.useTokenTransformer === true,
         tokenizeMaxLineLength,
         lineDiffType,
+        preferredDiffLib,
         maxLineDiffLength,
       };
     })();
@@ -1223,7 +1238,8 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
               : expandUnchanged
                 ? true
                 : this.expandedHunks,
-            collapsedContextThreshold
+            collapsedContextThreshold,
+            this.options.preferredDiffLib
           );
         }
         this.renderCache.renderRange = renderRange;
@@ -1235,7 +1251,11 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
         hasContent &&
         (!this.renderCache.highlighted || forceHighlight)
       ) {
-        this.workerManager.highlightDiffAST(this, diff);
+        this.workerManager.highlightDiffAST(
+          this,
+          diff,
+          this.options.preferredDiffLib
+        );
       }
     } else {
       this.computedLangs = getDiffLanguages(diff);

@@ -1,4 +1,4 @@
-import type { CreatePatchOptions } from '@pierre/patch';
+import type { CreatePatchOptions } from '@pierre/patches';
 import { afterAll, describe, expect, spyOn, test } from 'bun:test';
 
 import { FileDiff } from '../src/components/FileDiff';

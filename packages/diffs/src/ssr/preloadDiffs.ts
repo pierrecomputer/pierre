@@ -22,6 +22,7 @@ import {
 } from '../utils/createStyleElement';
 import { wrapThemeCSS } from '../utils/cssWrappers';
 import { getDiffFileInput } from '../utils/getDiffFileInput';
+import { getParseDiffOptions } from '../utils/getParseDiffOptions';
 import { getSingularPatch } from '../utils/getSingularPatch';
 import { parseDiffFromFile } from '../utils/parseDiffFromFile';
 import { parseMergeConflictDiffFromFile } from '../utils/parseMergeConflictDiffFromFile';
@@ -57,7 +58,7 @@ export async function preloadDiffHTML<
     fileDiff = parseDiffFromFile(
       fileInput.oldFile,
       fileInput.newFile,
-      options?.parseDiffOptions
+      getParseDiffOptions(options)
     );
   }
   if (fileDiff == null) {
