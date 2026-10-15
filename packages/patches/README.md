@@ -95,11 +95,11 @@ reads the result.
 ## Development
 
 ```bash
-moonx patch:build                # preprocess the WAT, compile it with wabt and binaryen, then bundle the glue
-moonx patch:test                 # run the tests (they compile the WAT in memory, no build needed)
-moonx patch:bench                # compare throughput with diff@9.0.0
-moonx patch:bench -- --chart     # also update benchmark-{light,dark}.svg
-moonx patch:bench -- --memory    # also measure the memory that one call allocates
+moonx patches:build                # preprocess the WAT, compile it with wabt and binaryen, then bundle the glue
+moonx patches:test                 # run the tests (they compile the WAT in memory, no build needed)
+moonx patches:bench                # compare throughput with diff@9.0.0
+moonx patches:bench -- --chart     # also update benchmark-{light,dark}.svg
+moonx patches:bench -- --memory    # also measure the memory that one call allocates
 ```
 
 [ARCHITECTURE.md](./ARCHITECTURE.md) explains how the library works inside.

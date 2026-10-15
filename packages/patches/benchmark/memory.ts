@@ -1,5 +1,5 @@
 import * as jsdiff from 'diff';
-// Print the bytes one call allocates, in a fresh process. `moonx patch:bench -- --memory` runs this
+// Print the bytes one call allocates, in a fresh process. `moonx patches:bench -- --memory` runs this
 // with BUN_JSC_useGC=0, so nothing is freed or reused during the call.
 // argv: "mine" | "theirs", api, fixture name, "perLine"?; stdin: patch.wasm (mine only)
 import { readFileSync } from 'node:fs';

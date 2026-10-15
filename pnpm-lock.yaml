@@ -311,7 +311,7 @@ importers:
         version: 0.9.0(react@19.2.7)
       '@pierre/patches':
         specifier: workspace:*
-        version: link:../../packages/patch
+        version: link:../../packages/patches
       react:
         specifier: 19.2.7
         version: 19.2.7
@@ -623,7 +623,7 @@ importers:
         version: link:../highlights
       '@pierre/patches':
         specifier: workspace:*
-        version: link:../patch
+        version: link:../patches
       '@pierre/theme':
         specifier: workspace:*
         version: link:../theme
@@ -716,7 +716,7 @@ importers:
         specifier: 'catalog:'
         version: 1.0.39
 
-  packages/patch:
+  packages/patches:
     devDependencies:
       binaryen:
         specifier: 'catalog:'

@@ -22,7 +22,7 @@
     "access": "public"
   },
   "scripts": {
-    "prepublishOnly": "moon run patch:prepublish"
+    "prepublishOnly": "moon run patches:prepublish"
   },
   "devDependencies": {
     "binaryen": "catalog:",

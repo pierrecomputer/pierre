@@ -158,7 +158,8 @@ between calls, not peak memory during a call. `Infinity` keeps all memory.
 
 ## Build
 
-`moonx patch:build` runs [`scripts/build.ts`](./scripts/build.ts), then tsdown:
+`moonx patches:build` runs [`scripts/build.ts`](./scripts/build.ts), then
+tsdown:
 
 1. `transformWat()` inlines local WAT imports and converts string constants to
    little-endian integers.

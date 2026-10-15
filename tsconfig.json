@@ -18,7 +18,7 @@
       "path": "packages/diffs/tsconfig.json"
     },
     {
-      "path": "packages/patch/tsconfig.json"
+      "path": "packages/patches/tsconfig.json"
     },
     {
       "path": "packages/path-store/tsconfig.json"

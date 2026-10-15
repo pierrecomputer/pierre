@@ -6,9 +6,9 @@ checks that the two libraries give the same output. If the output is different,
 it stops.
 
 ```sh
-moonx patch:bench
-moonx patch:bench -- --chart    # also update benchmark-{light,dark}.svg
-moonx patch:bench -- --memory   # also measure the memory that one call allocates
+moonx patches:bench
+moonx patches:bench -- --chart    # also update benchmark-{light,dark}.svg
+moonx patches:bench -- --memory   # also measure the memory that one call allocates
 ```
 
 ## Throughput
@@ -60,8 +60,9 @@ inputs before it.
 
 [`fixtures.ts`](./fixtures.ts) makes the input from a fixed seed, so each run
 uses the same input. The WAT in `src/` is built the same way as
-`moonx patch:build`. The "per line" inputs are 2,000 pairs of edited code lines,
-diffed one pair at a time, as a diff viewer does for inline change highlights.
+`moonx patches:build`. The "per line" inputs are 2,000 pairs of edited code
+lines, diffed one pair at a time, as a diff viewer does for inline change
+highlights.
 
 For throughput, each function gets 5 warmup calls, then runs until 1.2 seconds
 pass or 2,000 calls are done. Throughput is the input size divided by the median
