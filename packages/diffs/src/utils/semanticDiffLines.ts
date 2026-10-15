@@ -31,9 +31,8 @@ interface SemanticDiffLine {
   operation: SemanticDiffOperation;
   span: SemanticDiffSpan;
   /**
-   * Whether this range's first line starts a region and shows its gutter icon.
-   * Only a span's first range on a side does, and not when the line above is
-   * drawn with the same icon and color.
+   * Whether this range's first line starts a region and shows its gutter icon:
+   * it does unless the line above is drawn with the same icon and color.
    */
   showsIcon: boolean;
 }
@@ -101,9 +100,6 @@ export function createSemanticDiffLineLookup(
   for (const operation of operations) {
     for (const side of ['old', 'new'] as const) {
       const entries = side === 'old' ? deletions : additions;
-      // An operation's ranges are sorted by line, so the first range seen for
-      // a span is that span's first range on this side.
-      const startedSpans = new Set<number>();
       for (const range of operation.lines[side]) {
         const span = operation.spans[range.spanIndex];
         entries.push({
@@ -112,9 +108,8 @@ export function createSemanticDiffLineLookup(
           lineType: semanticLineType(operation, span),
           operation,
           span,
-          showsIcon: !startedSpans.has(range.spanIndex),
+          showsIcon: true,
         });
-        startedSpans.add(range.spanIndex);
       }
     }
   }
