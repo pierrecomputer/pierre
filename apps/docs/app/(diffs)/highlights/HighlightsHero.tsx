@@ -31,7 +31,7 @@ export function HighlightsHero() {
           highlighter hand-written in WebAssembly Text. Built especially for{' '}
           <code>@pierre/diffs</code>. Includes built-in language lexers, runs
           across JavaScript runtimes, and supports Shiki-compatible formats.
-          Generates large-file HTML up to 294× faster than Shiki.
+          Generates large-file HTML up to 298× faster than Shiki.
         </p>
       </div>
 
