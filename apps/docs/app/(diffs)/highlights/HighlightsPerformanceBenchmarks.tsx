@@ -10,9 +10,9 @@ import {
 import { cn } from '@/lib/utils';
 
 const memoryResults = [
-  { name: 'Highlights', peakRss: 49 },
+  { name: 'Highlights', peakRss: 50 },
   { name: 'Shiki JS', peakRss: 155 },
-  { name: 'Shiki Wasm', peakRss: 346 },
+  { name: 'Shiki Wasm', peakRss: 349 },
 ];
 
 const memoryMaximum = 400;
@@ -89,7 +89,7 @@ export function HighlightsPerformanceBenchmarks() {
               Super-fast HTML generation
             </h3>
             <p className="text-muted-foreground max-w-xl text-pretty">
-              Highlights generates HTML at up to 294 times faster than Shiki’s
+              Highlights generates HTML at up to 298 times faster than Shiki’s
               throughput across these fixtures.
             </p>
           </figcaption>
@@ -150,12 +150,13 @@ export function HighlightsPerformanceBenchmarks() {
 
       <div className="text-muted-foreground max-w-4xl space-y-2 text-xs leading-relaxed">
         <p>
-          Measured September 25, 2026 on an Apple M4 Pro (14 cores, 48 GiB RAM)
-          using Bun 1.4.0, Shiki 4.4.1, and tree-sitter-highlight 1.1.2. Median
-          throughput after warmup. Memory measured September 16, 2026 as median
-          peak process RSS from five fresh processes per engine. RSS includes
-          the runtime, compiled code, Wasm, and allocator capacity; it is not
-          live heap or bundle size. Results vary by input and environment.{' '}
+          Measured October 5, 2026 on an Apple M4 Pro (14 cores, 48 GiB RAM)
+          running macOS 27.0.1, using Bun 1.4.0, Shiki 4.4.1, and
+          tree-sitter-highlight 1.1.2. Median throughput after warmup. Memory is
+          median peak process RSS from five fresh processes per engine. RSS
+          includes the runtime, compiled code, Wasm, and allocator capacity; it
+          is not live heap or bundle size. Results vary by input and
+          environment.{' '}
           <Link
             href="https://github.com/pierrecomputer/pierre/tree/main/packages/highlights/benchmark#html-generation"
             className="styled-link styled-link-muted"
