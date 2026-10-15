@@ -32,7 +32,7 @@
     "wabt": "catalog:"
   },
   "meta": {
-    "patch.wasm": 5502,
-    "patch.wasm.gz": 3044
+    "patch.wasm": 5216,
+    "patch.wasm.gz": 2955
   }
 }

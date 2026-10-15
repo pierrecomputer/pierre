@@ -124,7 +124,7 @@ export function diffLines(
   const { ignoreWhitespace, stripTrailingCr, ...rest } =
     checkCallback(options) ?? {};
   rejectOptions(rest, 'diffLines');
-  if (stripTrailingCr === true) {
+  if (stripTrailingCr ?? false) {
     oldStr = oldStr.replaceAll('\r\n', '\n');
     newStr = newStr.replaceAll('\r\n', '\n');
   }
@@ -132,7 +132,7 @@ export function diffLines(
     OP_LINES,
     oldStr,
     newStr,
-    ignoreWhitespace === true ? IGNORE_WHITESPACE : 0
+    (ignoreWhitespace ?? false) ? IGNORE_WHITESPACE : 0
   );
 }
 
@@ -173,7 +173,7 @@ export function createTwoFilesPatch(
     stripTrailingCr,
     ...rest
   } = checkCallback(options) ?? {};
-  if ((rest as { newlineIsToken?: unknown }).newlineIsToken === true) {
+  if ((rest as { newlineIsToken?: boolean }).newlineIsToken ?? false) {
     throw new Error(
       'newlineIsToken may not be used with patch-generation functions, only with diffing functions'
     );
@@ -183,13 +183,13 @@ export function createTwoFilesPatch(
   if (!(Number.isInteger(context) && context >= 0) && context !== Infinity) {
     throw new Error('options.context must be a non-negative integer');
   }
-  if (stripTrailingCr === true) {
+  if (stripTrailingCr ?? false) {
     oldStr = oldStr.replaceAll('\r\n', '\n');
     newStr = newStr.replaceAll('\r\n', '\n');
   }
   // Wasm writes the whole patch, header lines included; JS only passes the
   // strings and the header flags ([2] in src/mem.wat). Like jsdiff, no
-  // headerOptions writes every header line, and a field left out is false.
+  // headerOptions writes every header line, and a falsy field is off.
   const headerFlags =
     (headerOptions != null
       ? ((headerOptions.includeIndex ?? false) ? 1 : 0) |
@@ -203,14 +203,14 @@ export function createTwoFilesPatch(
     oldStr,
     newStr,
     Math.min(context, 0x0fffffff),
-    ignoreWhitespace === true ? IGNORE_WHITESPACE : 0,
+    (ignoreWhitespace ?? false) ? IGNORE_WHITESPACE : 0,
     headerFlags,
     [
       oldFileName === undefined ? '' : String(oldFileName),
       newFileName === undefined ? '' : String(newFileName),
       // jsdiff drops falsy headers
-      oldHeader != null && oldHeader !== '' ? String(oldHeader) : '',
-      newHeader != null && newHeader !== '' ? String(newHeader) : '',
+      oldHeader ? String(oldHeader) : '',
+      newHeader ? String(newHeader) : '',
     ]
   );
   const ptr = dv.getUint32(16, true);

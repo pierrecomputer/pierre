@@ -63,14 +63,18 @@ export function wat2wasm(filename: string, text: string): Uint8Array {
 }
 
 /**
- * Optimize a wasm binary with binaryen (`wasm-opt -O3 --shrink-level=1`) and
- * the optimized Stack IR writer. The pipeline runs three times: reading an
- * optimized binary again lets the next pass fold patterns that the previous
- * one exposed.
+ * Optimize a wasm binary with binaryen (`wasm-opt -O3 --shrink-level=1
+ * --one-caller-inline-max-size=250`) and the optimized Stack IR writer. The
+ * pipeline runs three times: reading an optimized binary again lets the next
+ * pass fold patterns that the previous one exposed.
  */
 export function optimizeWasm(wasmBytes: Uint8Array): Uint8Array {
   binaryen.setOptimizeLevel(3);
   binaryen.setShrinkLevel(1);
+  // keeps the two largest single-caller functions ($myers, $emitPatch) out of
+  // the entry function: there, V8's register allocator slows the Myers loop
+  // by up to 7% whenever unrelated code changes
+  binaryen.setOneCallerInlineMaxSize(250);
   binaryen.setGenerateStackIR(true);
   binaryen.setOptimizeStackIR(true);
   for (let pass = 0; pass < 3; pass++) {

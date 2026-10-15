@@ -4,14 +4,11 @@
   ;; last decoded code point + its byte length (set by $decodeCp)
   (global $cp      (mut i32) (i32.const 0))
   (global $cpLen   (mut i32) (i32.const 0))
-  ;; byte length of the last $trimKey key
-  (global $keyLen  (mut i32) (i32.const 0))
 
-  ;; intern table: 12-byte slots (ptr, len, id), open addressing;
-  ;; hash is a bucket index; matches compare len+bytes
+  ;; intern table: 8-byte slots (ptr, len), open addressing; a token's id is its
+  ;; slot index. Hash is a bucket index; matches compare len+bytes
   (global $tabBase (mut i32) (i32.const 0))
   (global $tabMask (mut i32) (i32.const 0))
-  (global $nextId  (mut i32) (i32.const 0))
 
   ;; UTF-8 at $p (< $end) -> $cp/$cpLen. Callers pass leads >= 0x80 only (ASCII is
   ;; inline at every site). Malformed/truncated: 1-byte token, id = 0x110000+byte
@@ -25,7 +22,7 @@
       ;; length = count of leading 1-bits: C2..DF 2, E0..EF 3, F0..F4 4
       (local.set $n (i32.clz (i32.xor (i32.shl (local.get $b0) (i32.const 24)) (i32.const -1))))
       (br_if $invalid (i32.gt_u (i32.add (local.get $p) (local.get $n)) (local.get $end)))
-      ;; i32 load may overread $end into the 16-byte pad
+      ;; i32 load may overread $end into the pad
       (local.set $w (i32.load (local.get $p)))
       (global.set $cpLen (local.get $n))
       (local.set $b0 (i32.and (local.get $b0) (i32.shr_u (i32.const 0x7F) (local.get $n))))
@@ -45,12 +42,24 @@
     (global.set $cpLen (i32.const 1))
   )
 
-  ;; UTF-16 units of UTF-8 [$p,$end): +1 per non-continuation, +1 more per 4-byte
-  ;; lead (>=0xF0, astral -> surrogate pair). SIMD 16 bytes/step; load may overread
-  ;; $end (old text runs into new, new into the pad); tail mask drops overread bytes
-  ;; from both bitmask counts.
-  (func $utf16Units (param $p i32) (param $end i32) (result i32)
-    (local $n i32) (local $mask i32) (local $v v128)
+  ;; UTF-16 units of tokens [$tok, $tok+$cnt) of the text at $src with byte
+  ;; offsets $offs: the byte count when $ascii, else +1 per non-continuation byte,
+  ;; +1 more per 4-byte lead (>=0xF0, astral -> surrogate pair). SIMD 16 bytes/step;
+  ;; load may overread the range (old text runs into new, new into the pad); tail
+  ;; mask drops overread bytes from both bitmask counts.
+  (func $utf16Units
+    (param $src i32) (param $offs i32) (param $tok i32) (param $cnt i32) (param $ascii i32)
+    (result i32)
+    (local $p i32) (local $end i32) (local $n i32) (local $mask i32) (local $v v128)
+    (local.set $p (i32.add
+      (local.get $src)
+      (i32.load (i32.add (local.get $offs) (i32.shl (local.get $tok) (i32.const 2))))))
+    (local.set $end (i32.add
+      (local.get $src)
+      (i32.load (i32.add
+        (local.get $offs)
+        (i32.shl (i32.add (local.get $tok) (local.get $cnt)) (i32.const 2))))))
+    (if (local.get $ascii) (then (return (i32.sub (local.get $end) (local.get $p)))))
     (block $done (loop $l
       (br_if $done (i32.ge_u (local.get $p) (local.get $end)))
       ;; ((1 << rem) - 1) keeps the low rem bits; a full chunk keeps all 16
@@ -208,80 +217,89 @@
     "\00\00\00\00\01\00"                                                              ;; _
     "\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01") ;; a-z
 
-  ;; jsdiff wordsWithSpaceDiff.tokenize: (\r?\n) | [word]+ | [^\S\n\r]+ | [^word]
-  ;; first match wins; testing word before (\r?\n) is safe — alternatives are
-  ;; disjoint on the first cp. ASCII class from table at 64; leads >= 0x80 pay
-  ;; $decodeCp+$clsCp.
+  ;; jsdiff wordsWithSpaceDiff.tokenize: (\r?\n) | [word]+ | [^\S\n\r]+ | [^word].
+  ;; A token starts where the cp class changes and at every class-0 cp, except
+  ;; the \n of \r\n. ASCII class from table at 64; leads >= 0x80 pay
+  ;; $decodeCp+$clsCp. No branch on token ends: each cp stores its offset, and
+  ;; only a token start keeps it.
   (func $tokenizeWords (param $src i32) (param $end i32) (param $offs i32) (result i32)
-    (local $p i32) (local $c i32) (local $b i32) (local $k i32) (local $o0 i32)
+    (local $p i32) (local $c i32) (local $k i32) (local $prev i32) (local $cr i32) (local $o i32)
     (local.set $p (local.get $src))
-    (local.set $o0 (local.get $offs))
+    (local.set $o (local.get $offs))
+    ;; no class, so the first cp starts a token
+    (local.set $prev (i32.const 3))
     (block $done (loop $l
       (br_if $done (i32.ge_u (local.get $p) (local.get $end)))
-      (i32.store (local.get $offs) (i32.sub (local.get $p) (local.get $src)))
-      (local.set $offs (i32.add (local.get $offs) (i32.const 4)))
+      (i32.store (local.get $o) (i32.sub (local.get $p) (local.get $src)))
       (local.set $c (i32.load8_u (local.get $p)))
       (if (i32.lt_u (local.get $c) (i32.const 0x80))
         (then
           (local.set $p (i32.add (local.get $p) (i32.const 1)))
           (local.set $k (i32.load8_u offset=64 (local.get $c))))
-        (else ;; $c keeps the lead byte: >= 0x80, so it never matches 0x0D below
+        (else ;; $c keeps the lead byte: >= 0x80, so it is never \n or \r below
           (call $decodeCp (local.get $p) (local.get $end))
           (local.set $p (i32.add (local.get $p) (global.get $cpLen)))
           (local.set $k (call $clsCp (global.get $cp)))))
-      (if (local.get $k)
-        (then ;; word or space run: extend while the class stays the same
-          (block $rEnd (loop $r
-            (br_if $rEnd (i32.ge_u (local.get $p) (local.get $end)))
-            (local.set $b (i32.load8_u (local.get $p)))
-            (if (i32.lt_u (local.get $b) (i32.const 0x80))
-              (then
-                (br_if $rEnd (i32.ne (i32.load8_u offset=64 (local.get $b)) (local.get $k)))
-                (local.set $p (i32.add (local.get $p) (i32.const 1))))
-              (else
-                (call $decodeCp (local.get $p) (local.get $end))
-                (br_if $rEnd (i32.ne (call $clsCp (global.get $cp)) (local.get $k)))
-                (local.set $p (i32.add (local.get $p) (global.get $cpLen)))))
-            (br $r))))
-        ;; class 0: one cp; "\r\n" pairs. Peek may overread $end into the pad (or
-        ;; next text); a match overshoots $p by 1 into the loop exit. Token bounds
-        ;; come from the offset array either way.
-        (else
-          (local.set $p (i32.add
-            (local.get $p)
-            (i32.and
-              (i32.eq (local.get $c) (i32.const 0x0D))
-              (i32.eq (i32.load8_u (local.get $p)) (i32.const 0x0A)))))))
+      (local.set $o (i32.add (local.get $o) (i32.shl
+        (i32.or
+          (i32.ne (local.get $k) (local.get $prev))
+          (i32.eqz (i32.or
+            (local.get $k)
+            (i32.and (local.get $cr) (i32.eq (local.get $c) (i32.const 0x0A))))))
+        (i32.const 2))))
+      (local.set $prev (local.get $k))
+      (local.set $cr (i32.eq (local.get $c) (i32.const 0x0D)))
       (br $l)))
-    (i32.store (local.get $offs) (i32.sub (local.get $end) (local.get $src)))
-    (i32.shr_u (i32.sub (local.get $offs) (local.get $o0)) (i32.const 2))
+    (i32.store (local.get $o) (i32.sub (local.get $end) (local.get $src)))
+    (i32.shr_u (i32.sub (local.get $o) (local.get $offs)) (i32.const 2))
   )
 
   ;; jsdiff lines: content + its \n/\r\n; split after every \n (a trailing piece
-  ;; without \n is a token too)
+  ;; without \n is a token too). One SIMD pass: each \n of a 32-byte chunk ends a
+  ;; token. The last loads may overread $end (pad or new text); a mask drops those bytes.
   (func $tokenizeLines (param $src i32) (param $end i32) (param $offs i32) (result i32)
-    (local $p i32) (local $q i32) (local $o0 i32)
+    (local $p i32) (local $m i32) (local $o i32)
     (local.set $p (local.get $src))
-    (local.set $o0 (local.get $offs))
-    (block $done (loop $l
+    (local.set $o (local.get $offs))
+    (i32.store (local.get $o) (i32.const 0))
+    (block $done (loop $chunks
       (br_if $done (i32.ge_u (local.get $p) (local.get $end)))
-      (i32.store (local.get $offs) (i32.sub (local.get $p) (local.get $src)))
-      (local.set $offs (i32.add (local.get $offs) (i32.const 4)))
-      (local.set $q (call $memchr (local.get $p) (local.get $end) (i32.const 0x0A)))
-      (local.set $p (select
-        (i32.add (local.get $q) (i32.const 1))
-        (local.get $end)
-        (local.get $q)))
-      (br $l)))
-    (i32.store (local.get $offs) (i32.sub (local.get $end) (local.get $src)))
-    (i32.shr_u (i32.sub (local.get $offs) (local.get $o0)) (i32.const 2))
+      (local.set $m (i32.or
+        (i8x16.bitmask (i8x16.eq (v128.load (local.get $p)) (i8x16.splat (i32.const 0x0A))))
+        (i32.shl
+          (i8x16.bitmask (i8x16.eq (v128.load offset=16 (local.get $p)) (i8x16.splat (i32.const 0x0A))))
+          (i32.const 16))))
+      (if (i32.lt_u (i32.sub (local.get $end) (local.get $p)) (i32.const 32))
+        (then
+          (local.set $m (i32.and
+            (local.get $m)
+            (i32.sub
+              (i32.shl (i32.const 1) (i32.sub (local.get $end) (local.get $p)))
+              (i32.const 1))))))
+      (block $bits (loop $each
+        (br_if $bits (i32.eqz (local.get $m)))
+        ;; next token starts after the lowest \n: index via clz (V8 arm64 calls out for ctz)
+        (local.set $o (i32.add (local.get $o) (i32.const 4)))
+        (i32.store (local.get $o) (i32.sub
+          (i32.add (i32.sub (local.get $p) (local.get $src)) (i32.const 32))
+          (i32.clz (i32.and (local.get $m) (i32.sub (i32.const 0) (local.get $m))))))
+        (local.set $m (i32.and (local.get $m) (i32.sub (local.get $m) (i32.const 1))))
+        (br $each)))
+      (local.set $p (i32.add (local.get $p) (i32.const 32)))
+      (br $chunks)))
+    ;; the end sentinel, unless the text ends with \n (then it is stored already)
+    (if (i32.ne (i32.load (local.get $o)) (i32.sub (local.get $end) (local.get $src)))
+      (then
+        (local.set $o (i32.add (local.get $o) (i32.const 4)))
+        (i32.store (local.get $o) (i32.sub (local.get $end) (local.get $src)))))
+    (i32.shr_u (i32.sub (local.get $o) (local.get $offs)) (i32.const 2))
   )
 
   ;; allocate + clear the intern table for $total tokens (load factor <= 1/2)
   (func $internInit (param $total i32) (result i32)
     (local $cap i32) (local $bytes i32)
-    ;; Warning: above 2^27 tokens cap*12 (and the probe's idx*12) wraps i32; that
-    ;; table needs >= 6 GiB, so it is OOM anyway
+    ;; Warning: above 2^28 tokens cap*8 (and the probe's idx*8) wraps i32; the
+    ;; 2^27 cap keeps the table <= 2 GiB
     (if (i32.gt_u (local.get $total) (i32.const 0x08000000))
       (then
         (call $oom)
@@ -291,87 +309,94 @@
       (i32.sub (i32.const 32) (i32.clz (i32.or
         (i32.sub (i32.shl (local.get $total) (i32.const 1)) (i32.const 1))
         (i32.const 15))))))
-    (local.set $bytes (i32.mul (local.get $cap) (i32.const 12)))
+    (local.set $bytes (i32.shl (local.get $cap) (i32.const 3)))
     (global.set $tabBase (call $alloc (local.get $bytes)))
     (if (i32.eqz (global.get $tabBase)) (then (return (i32.const 0))))
     (memory.fill (global.get $tabBase) (i32.const 0) (local.get $bytes))
     (global.set $tabMask (i32.sub (local.get $cap) (i32.const 1)))
-    (global.set $nextId (i32.const 0))
     (i32.const 1)
   )
 
-  ;; jsdiff ignoreWhitespace key: [$p,$end) without its leading and trailing JS
-  ;; `trim()` whitespace. Returns the key start and sets $keyLen. A separate
-  ;; function: inlined into $internAll's loop it slows the default path ~3%.
-  (func $trimKey (param $p i32) (param $end i32) (result i32)
-    (local $q i32)
-    (loop $lead
-      (if (i32.lt_u (local.get $p) (local.get $end))
-        (then
-          (if (call $isTrimSpace (local.get $p) (local.get $end))
-            (then
-              (local.set $p (i32.add (local.get $p) (global.get $cpLen)))
-              (br $lead))))))
-    (block $trail (loop $back
-      (br_if $trail (i32.le_u (local.get $end) (local.get $p)))
-      ;; step back over 10xxxxxx bytes to the last code point's lead (input is WTF-8)
-      (local.set $q (local.get $end))
-      (loop $cont
-        (local.set $q (i32.sub (local.get $q) (i32.const 1)))
-        (br_if $cont (i32.eq
-          (i32.and (i32.load8_u (local.get $q)) (i32.const 0xC0))
-          (i32.const 0x80))))
-      (br_if $trail (i32.eqz (call $isTrimSpace (local.get $q) (local.get $end))))
-      (local.set $end (local.get $q))
-      (br $back)))
-    (global.set $keyLen (i32.sub (local.get $end) (local.get $p)))
-    ;; Warning: $hashToken and $memcmp need $len > 0 or one shared pointer, so
-    ;; every all-space token keys at the old text base
-    (select (local.get $p) (i32.const 65536) (global.get $keyLen))
-  )
-
-  ;; map every token in $offs to a dense integer id (equal bytes = equal id).
-  ;; $trim (jsdiff ignoreWhitespace): the key is the token without its leading
-  ;; and trailing JS `trim()` whitespace.
+  ;; map every token in $offs to an id (equal bytes = equal id). A key of up to 3
+  ;; bytes is its own id: bytes | len << 24. Longer keys get their table slot
+  ;; | 1 << 31. With $trim (jsdiff ignoreWhitespace), a pre-pass trims each
+  ;; token's leading and trailing JS `trim()` whitespace: key starts go to $ids
+  ;; (each read before its id overwrites it), key ends to a new array. The id loop
+  ;; reads key bounds from two arrays either way, so the default path pays no trim
+  ;; branch or call per token. OOM returns early with $err set.
   (func $internAll (param $src i32) (param $offs i32) (param $count i32) (param $ids i32) (param $trim i32)
-    (local $ptr i32) (local $len i32)
-    (local $idx i32) (local $slot i32) (local $next i32)
-    (local $base i32) (local $mask i32)
+    (local $ptr i32) (local $len i32) (local $idx i32) (local $slot i32) (local $next i32)
+    (local $base i32) (local $mask i32) (local $ks i32) (local $ke i32) (local $i i32) (local $q i32)
+    (local.set $ks (local.get $offs))
+    (local.set $ke (i32.add (local.get $offs) (i32.const 4)))
+    (if (local.get $trim)
+      (then
+        (local.set $ks (local.get $ids))
+        (local.set $ke (call $alloc (i32.shl (local.get $count) (i32.const 2))))
+        (if (i32.eqz (local.get $ke)) (then (return)))
+        (block $trimmed (loop $keys
+          (br_if $trimmed (i32.ge_u (local.get $i) (local.get $count)))
+          (local.set $q (i32.add (local.get $offs) (i32.shl (local.get $i) (i32.const 2))))
+          (local.set $ptr (i32.add (local.get $src) (i32.load (local.get $q))))
+          (local.set $next (i32.add (local.get $src) (i32.load offset=4 (local.get $q))))
+          (loop $lead
+            (if (i32.lt_u (local.get $ptr) (local.get $next))
+              (then
+                (if (call $isTrimSpace (local.get $ptr) (local.get $next))
+                  (then
+                    (local.set $ptr (i32.add (local.get $ptr) (global.get $cpLen)))
+                    (br $lead))))))
+          (block $trail (loop $back
+            (br_if $trail (i32.le_u (local.get $next) (local.get $ptr)))
+            ;; step back over 10xxxxxx bytes to the last code point's lead (input is WTF-8)
+            (local.set $q (local.get $next))
+            (loop $cont
+              (local.set $q (i32.sub (local.get $q) (i32.const 1)))
+              (br_if $cont (i32.eq
+                (i32.and (i32.load8_u (local.get $q)) (i32.const 0xC0))
+                (i32.const 0x80))))
+            (br_if $trail (i32.eqz (call $isTrimSpace (local.get $q) (local.get $next))))
+            (local.set $next (local.get $q))
+            (br $back)))
+          (local.set $q (i32.shl (local.get $i) (i32.const 2)))
+          (i32.store (i32.add (local.get $ids) (local.get $q)) (i32.sub (local.get $ptr) (local.get $src)))
+          (i32.store (i32.add (local.get $ke) (local.get $q)) (i32.sub (local.get $next) (local.get $src)))
+          (local.set $i (i32.add (local.get $i) (i32.const 1)))
+          (br $keys)))))
     (local.set $base (global.get $tabBase))
     (local.set $mask (global.get $tabMask))
-    ;; offs[0] exists even when $count is 0 (the tokenizers store a sentinel)
-    (local.set $ptr (i32.add (local.get $src) (i32.load (local.get $offs))))
     (block $done (loop $each
       (br_if $done (i32.eqz (local.get $count)))
       (local.set $count (i32.sub (local.get $count) (i32.const 1)))
-      (local.set $next (i32.add (local.get $src) (i32.load offset=4 (local.get $offs))))
-      (local.set $len (i32.sub (local.get $next) (local.get $ptr)))
-      (if (local.get $trim)
-        (then
-          (local.set $ptr (call $trimKey (local.get $ptr) (local.get $next)))
-          (local.set $len (global.get $keyLen))))
-      (local.set $idx
-        (i32.and (call $hashToken (local.get $ptr) (local.get $len)) (local.get $mask)))
-      (block $stored (loop $probe
-        (local.set $slot (i32.add (local.get $base) (i32.mul (local.get $idx) (i32.const 12))))
-        (if (i32.eqz (i32.load (local.get $slot)))
-          (then ;; empty slot: insert ($ptr is never 0, the text starts on page 2)
-            (i32.store (local.get $slot) (local.get $ptr))
-            (i32.store offset=4 (local.get $slot) (local.get $len))
-            (i32.store offset=8 (local.get $slot) (global.get $nextId))
-            (i32.store (local.get $ids) (global.get $nextId))
-            (global.set $nextId (i32.add (global.get $nextId) (i32.const 1)))
-            (br $stored)))
-        (if (i32.eq (i32.load offset=4 (local.get $slot)) (local.get $len))
-          (then
-            (if (call $memcmp (i32.load (local.get $slot)) (local.get $ptr) (local.get $len))
-              (then
-                (i32.store (local.get $ids) (i32.load offset=8 (local.get $slot)))
-                (br $stored)))))
-        (local.set $idx (i32.and (i32.add (local.get $idx) (i32.const 1)) (local.get $mask)))
-        (br $probe)))
-      (local.set $ptr (local.get $next))
-      (local.set $offs (i32.add (local.get $offs) (i32.const 4)))
+      (local.set $ptr (i32.add (local.get $src) (i32.load (local.get $ks))))
+      (local.set $len (i32.sub (i32.add (local.get $src) (i32.load (local.get $ke))) (local.get $ptr)))
+      (block $stored
+        ;; the i32 load may overread the key into later text or the pad
+        (local.set $idx (i32.or
+          (i32.and
+            (i32.load (local.get $ptr))
+            (i32.sub (i32.shl (i32.const 1) (i32.shl (local.get $len) (i32.const 3))) (i32.const 1)))
+          (i32.shl (local.get $len) (i32.const 24))))
+        (br_if $stored (i32.lt_u (local.get $len) (i32.const 4)))
+        (local.set $idx
+          (i32.and (call $hashToken (local.get $ptr) (local.get $len)) (local.get $mask)))
+        (block $found (loop $probe
+          (local.set $slot (i32.add (local.get $base) (i32.shl (local.get $idx) (i32.const 3))))
+          (if (i32.eqz (i32.load (local.get $slot)))
+            (then ;; empty slot: insert ($ptr is never 0, the text starts on page 2)
+              (i32.store (local.get $slot) (local.get $ptr))
+              (i32.store offset=4 (local.get $slot) (local.get $len))
+              (br $found)))
+          (if (i32.eq (i32.load offset=4 (local.get $slot)) (local.get $len))
+            (then
+              (br_if $found
+                (call $memcmp (i32.load (local.get $slot)) (local.get $ptr) (local.get $len)))))
+          (local.set $idx (i32.and (i32.add (local.get $idx) (i32.const 1)) (local.get $mask)))
+          (br $probe)))
+        (local.set $idx (i32.or (local.get $idx) (i32.const 0x80000000))))
+      (i32.store (local.get $ids) (local.get $idx))
+      (local.set $ks (i32.add (local.get $ks) (i32.const 4)))
+      (local.set $ke (i32.add (local.get $ke) (i32.const 4)))
       (local.set $ids (i32.add (local.get $ids) (i32.const 4)))
       (br $each)))
   )

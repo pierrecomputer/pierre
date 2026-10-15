@@ -53,9 +53,10 @@ The host rejects unsupported active options and callbacks. The
 
 ## Tokens and the diff loop
 
-Each token refers to one byte range in the input. Words and lines get dense
-integer ids through a hash table. A byte comparison confirms each hash match.
-With `ignoreWhitespace`, line ids use the range after `trim()`, so equal ids can
+Each token refers to one byte range in the input. A word or line of up to 3
+bytes is its own id: its bytes and its length. A longer token gets its slot in a
+hash table as its id. A byte comparison confirms each hash match. With
+`ignoreWhitespace`, line ids use the range after `trim()`, so equal ids can
 refer to different original bytes.
 
 Characters use their code points as ids and need no hash table. Lone surrogates
@@ -66,17 +67,26 @@ The tokenizers and diff loop avoid repeated work:
 
 - The character tokenizer reads 16 ASCII characters per step.
 - The word tokenizer uses an ASCII class table and decodes non-ASCII characters.
-- The line tokenizer finds `\n` with SIMD `memchr`.
-- `$scanCommon` compares four token ids per step. Its final read can extend 12
-  bytes into later allocations, but the match count stops at the array end.
+  It has no branch at token ends: each character writes its offset, and only a
+  token start keeps it.
+- The line tokenizer finds each `\n` in one SIMD pass, 32 bytes per step.
+- The Myers loop follows a common run four token ids per step. Its final read
+  can extend 12 bytes into later allocations, but the match count stops at the
+  array end.
 
 The Myers algorithm stores each diagonal as an 8-byte `(oldPos, lastComponent)`
 entry in `bestPath`. It initializes entries as needed, so setup costs O(D).
 Here, D is the edit distance.
 
-Paths share immutable 8-byte component nodes:
-`(prev, count | added << 31 | removed << 30)`. This preserves jsdiff's path
-behavior without JavaScript objects for each node.
+Paths share immutable nodes. Each step adds a 4-byte node for one added or
+removed token, and an 8-byte node for a common run. A link to a node keeps the
+node kind in its low 2 bits. `$buildComps` then joins adjacent added or removed
+nodes of the final path, as jsdiff's `addToPath` does. This preserves jsdiff's
+path behavior without JavaScript objects for each node.
+
+The diagonal loop calls no functions, because V8 spills all live values around a
+wasm call. Nodes come from a bump pointer, and each edit length reserves the
+memory for its nodes first.
 
 ## Results
 
@@ -96,10 +106,9 @@ uses `String.slice` to read values, with no text copy in wasm and no decode.
 
 ### Unified patches
 
-`$patchHunks` applies jsdiff's `structuredPatch` rules to the components. It
-writes a 32-byte descriptor for each hunk: four header numbers and the component
-span. A second pass writes each hunk header, then a prefix and token bytes for
-each line.
+`$emitPatch` applies jsdiff's `structuredPatch` rules to the components. When a
+hunk closes, it writes the hunk header, then a prefix and token bytes for each
+line.
 
 Wasm also writes the optional file headers and quotes filenames with Git-style C
 escapes. It preserves line endings and adds `\ No newline at end of file` where
@@ -121,7 +130,7 @@ their offsets refer to JavaScript strings.
 ## Memory and limits
 
 The first 64 KiB page holds control fields and static data. Input starts at byte
-65536: old text, new text, then filenames and headers for patches. A 16-byte pad
+65536: old text, new text, then filenames and headers for patches. A 32-byte pad
 allows SIMD reads past the input end. The workspace follows the pad.
 [`src/mem.wat`](./src/mem.wat) contains the full layout and field offsets.
 
@@ -137,8 +146,9 @@ between calls, not peak memory during a call. `Infinity` keeps all memory.
 
 - Each input has a 256 MB limit. Token tables check their sizes before integer
   overflow.
-- Worst-case time is O((N+M)·D), and component memory is O(D²), as in jsdiff. N
-  and M are the token counts. Large, unrelated inputs are the expensive case.
+- Worst-case time is `O((N+M)·D)`, and component memory is `O(D²)`, as in
+  jsdiff. N and M are the token counts. Large, unrelated inputs are the
+  expensive case.
 - Wasm memory has a 4 GiB limit. If wasm cannot allocate memory, it returns
   `out of memory` without a trap. The host reads the message and throws an
   `Error`.
@@ -151,7 +161,9 @@ between calls, not peak memory during a call. `Infinity` keeps all memory.
    little-endian integers.
 2. `wat2wasm()` compiles with wabt, with bulk memory and SIMD enabled.
 3. `optimizeWasm()` runs three binaryen passes with `-O3 --shrink-level=1` and
-   the optimized Stack IR writer.
+   the optimized Stack IR writer. `--one-caller-inline-max-size=250` keeps
+   `$myers` and `$emitPatch` out of the entry function, so V8 compiles the Myers
+   loop alone.
 
 The build writes `dist/patch.wat`, `dist/patch.wasm`, `dist/patch.wasm.mjs`, and
 the compiled host code. It also records wasm sizes in `package.json` under

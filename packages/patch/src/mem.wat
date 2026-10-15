@@ -17,15 +17,16 @@
       [24:28)         context line count (op 3 input)
       [28:44)         filename/header byte lengths (4 × u32, op 3 input)
       [64:192)        ASCII word/space class table for the word tokenizer
-      [1024:1083)     static strings, packed gap-free (error messages, the
+      [1016:1024)     $hashToken multiplier (u64 LE)
+      [1024:1073)     static strings, packed gap-free (error message, the
                       no-newline marker, C escape letters)
-      [1083:1093)     $itoa digit scratch
+      [1073:1083)     $itoa digit scratch
     [] page 2..N      (text buffer)
       [65536:oldEnd)  old text (WTF-8)
       [oldEnd:newEnd) new text
       [newEnd:EOF)    op 3: oldFileName, newFileName, oldHeader, newHeader
-      [EOF:EOF+16)    pad so 16-byte SIMD scans may overread safely
-      [EOF+16:...)    bump-allocated workspace
+      [EOF:EOF+32)    pad so SIMD scans (<= 32 bytes) may overread safely
+      [EOF+32:...)    bump-allocated workspace
   ;;)
   (memory (export "memory") 2)
 
@@ -36,21 +37,18 @@
   (global $memEnd (mut i32) (i32.const 0))
 
   ;; page-1 statics, one gap-free segment so one copy of the framing ships (layout above)
-  (data (i32.const 1024)
+  (data (i32.const 1016)
+    "\15\7c\4a\7f\b9\79\37\9e"         ;; 1016: 0x9E3779B97F4A7C15
     "out of memory"                    ;; 1024, len 13
-    "invalid op"                       ;; 1037, len 10
-    "\n\\ No newline at end of file\n" ;; 1047, len 29
-    "abtnvfr")                         ;; 1076: C escape letters for bytes 07..0D
+    "\n\\ No newline at end of file\n" ;; 1037, len 29
+    "abtnvfr")                         ;; 1066: C escape letters for bytes 07..0D
 
-  ;; error: [12:16)=message length, [16:20)=message pointer; the driver writes ok=0 at exit
-  (func $error (param $ptr i32) (param $len i32)
-    (global.set $err (i32.const 1))
-    (i32.store (i32.const 12) (local.get $len))
-    (i32.store (i32.const 16) (local.get $ptr))
-  )
-
+  ;; the only error: [12:16)=message length, [16:20)=message pointer; the driver
+  ;; writes ok=0 at exit
   (func $oom
-    (call $error (i32.const 1024) (i32.const 13))
+    (global.set $err (i32.const 1))
+    (i32.store (i32.const 12) (i32.const 13))
+    (i32.store (i32.const 16) (i32.const 1024))
   )
 
   ;; grow until [0, $end) is addressable; 1=ok, 0=cannot grow
@@ -96,17 +94,17 @@
   )
 
   ;; write unsigned $n as decimal at $ptr; returns end. Digits build backwards in
-  ;; [1083:1093) (10 bytes fit any u32) then one memory.copy — smaller than a count loop.
+  ;; [1073:1083) (10 bytes fit any u32) then one memory.copy — smaller than a count loop.
   (func $itoa (param $ptr i32) (param $n i32) (result i32)
     (local $p i32)
-    (local.set $p (i32.const 1093))
+    (local.set $p (i32.const 1083))
     (loop $write
       (local.set $p (i32.sub (local.get $p) (i32.const 1)))
       (i32.store8 (local.get $p) (i32.add (i32.const 48) (i32.rem_u (local.get $n) (i32.const 10))))
       (local.set $n (i32.div_u (local.get $n) (i32.const 10)))
       (br_if $write (local.get $n)))
-    (memory.copy (local.get $ptr) (local.get $p) (i32.sub (i32.const 1093) (local.get $p)))
-    (i32.add (local.get $ptr) (i32.sub (i32.const 1093) (local.get $p)))
+    (memory.copy (local.get $ptr) (local.get $p) (i32.sub (i32.const 1083) (local.get $p)))
+    (i32.add (local.get $ptr) (i32.sub (i32.const 1083) (local.get $p)))
   )
 
   ;; 1 if [$a,$a+$len)==[$b,$b+$len). 8 bytes/step; last chunk re-reads the last 8 so
@@ -141,52 +139,42 @@
   ;; Tail may overread <=7 bytes (string-area pad); the mask drops them. Equal bytes
   ;; hash equal; the value never affects output (intern confirms with len+$memcmp).
   (func $hashToken (param $ptr i32) (param $len i32) (result i32)
-    (local $h i64) (local $k i64) (local $tail i32) (local $x i32)
+    (local $h i64) (local $g i64) (local $t i64) (local $k i64) (local $tail i32) (local $x i32)
     (local.set $h (i64.extend_i32_u (local.get $len)))
-    (local.set $k (i64.const 0x9E3779B97F4A7C15))
+    ;; a load, not a const: JITs then keep it in a register across the loop
+    ;; instead of rebuilding it per chunk
+    (local.set $k (i64.load (i32.const 1016)))
     ;; $tail = start of the final 1..8-byte piece ($len is never 0 here)
     (local.set $tail (i32.add
       (local.get $ptr)
       (i32.and (i32.sub (local.get $len) (i32.const 1)) (i32.const -8))))
     (block $chunked (loop $chunks
       (br_if $chunked (i32.ge_u (local.get $ptr) (local.get $tail)))
-      ;; rotate so the multiply's high (well-mixed) bits feed the next chunk
-      (local.set $h (i64.rotl
+      ;; rotate so the multiply's high (well-mixed) bits feed the next chunk. Two
+      ;; accumulators take turns, so consecutive multiplies overlap.
+      (local.set $t (i64.rotr
         (i64.mul (i64.xor (local.get $h) (i64.load (local.get $ptr))) (local.get $k))
         (i64.const 32)))
+      (local.set $h (local.get $g))
+      (local.set $g (local.get $t))
       (local.set $ptr (i32.add (local.get $ptr) (i32.const 8)))
       (br $chunks)))
     ;; final piece: (-1 >> 8*(-len & 7)) keeps exactly the remaining bytes
-    (local.set $h (i64.mul
-      (i64.xor
-        (local.get $h)
-        (i64.and
-          (i64.load (local.get $tail))
-          (i64.shr_u
-            (i64.const -1)
-            (i64.extend_i32_u (i32.shl
-              (i32.and (i32.sub (i32.const 0) (local.get $len)) (i32.const 7))
-              (i32.const 3))))))
-      (local.get $k)))
+    (local.set $h (i64.xor
+      (i64.mul
+        (i64.xor
+          (local.get $h)
+          (i64.and
+            (i64.load (local.get $tail))
+            (i64.shr_u
+              (i64.const -1)
+              (i64.extend_i32_u (i32.shl
+                (i32.and (i32.sub (i32.const 0) (local.get $len)) (i32.const 7))
+                (i32.const 3))))))
+        (local.get $k))
+      (local.get $g)))
     ;; fold high half, then once more in 32 bits so any difference reaches hash&mask bits
     (local.set $x (i32.wrap_i64 (i64.xor (local.get $h) (i64.shr_u (local.get $h) (i64.const 32)))))
     (i32.xor (local.get $x) (i32.shr_u (local.get $x) (i32.const 16)))
-  )
-
-  ;; first $c in [$p,$end), or 0. SIMD 16 bytes/step; may overread <=15 past $end (driver pad).
-  (func $memchr (param $p i32) (param $end i32) (param $c i32) (result i32)
-    (local $needle v128) (local $m i32) (local $cand i32)
-    (local.set $needle (i8x16.splat (local.get $c)))
-    (block $none (loop $l
-      (br_if $none (i32.ge_u (local.get $p) (local.get $end)))
-      (local.set $m (i8x16.bitmask (i8x16.eq (v128.load (local.get $p)) (local.get $needle))))
-      (if (local.get $m)
-        (then
-          (local.set $cand (i32.add (local.get $p) (i32.ctz (local.get $m))))
-          (br_if $none (i32.ge_u (local.get $cand) (local.get $end)))
-          (return (local.get $cand))))
-      (local.set $p (i32.add (local.get $p) (i32.const 16)))
-      (br $l)))
-    (i32.const 0)
   )
 )
