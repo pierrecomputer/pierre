@@ -211,6 +211,7 @@ export class UnresolvedFile<LAnnotation = undefined> extends FileDiff<
           : undefined,
         this.getLineIndex,
         undefined,
+        undefined,
         this.handleMergeConflictActionClick
       )
     );

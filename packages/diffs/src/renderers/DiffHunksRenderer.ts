@@ -39,6 +39,7 @@ import type {
 } from '../model/types';
 import { LineCuts, type LineExpansion } from '../rows/LineCuts';
 import { RowSource } from '../rows/RowSource';
+import type { SVGSpriteNames } from '../sprite';
 import type {
   AnnotationLineMap,
   AnnotationSpan,
@@ -61,6 +62,7 @@ import type {
   RenderDiffResult,
   RenderedDiffASTCache,
   RenderRange,
+  SemanticDiffCollapsibleRegion,
   SupportedLanguages,
   ThemedDiffResult,
 } from '../types';
@@ -199,6 +201,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
   // is highlighted in the background.
   private diff: FileDiffMetadata | undefined;
   private semanticLineCache: SemanticLineCache | undefined;
+  private expandedSemanticRegions = new Set<number>();
 
   public readonly lineCuts: LineCuts = new LineCuts();
   private expandedHunks = new Map<number, HunkExpansionRegion>();
@@ -662,6 +665,16 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     this.layout?.invalidateLines();
   }
 
+  public toggleSemanticRegion(start: number): void {
+    const { expandedSemanticRegions } = this;
+    if (!expandedSemanticRegions.delete(start)) {
+      expandedSemanticRegions.add(start);
+    }
+    // Toggling moves rows; the set is changed in place, so the layout cannot
+    // see that on its own.
+    this.layout?.invalidateLines();
+  }
+
   public getExpandedHunk(hunkIndex: number): HunkExpansionRegion {
     return this.expandedHunks.get(hunkIndex) ?? DEFAULT_EXPANDED_REGION;
   }
@@ -709,6 +722,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     const { semanticOperations } = diff;
     if (semanticOperations == null) {
       this.semanticLineCache = undefined;
+      this.expandedSemanticRegions.clear();
       return;
     }
     const { semanticLineCache: cached } = this;
@@ -725,6 +739,24 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     this.semanticLineCache = {
       diff,
       lookup: createSemanticDiffLineLookup(semanticOperations),
+    };
+    this.expandedSemanticRegions.clear();
+  }
+
+  // The decoration of a collapsible region's first old line, which the region's
+  // collapsed row shares so collapsing keeps the same icon. The line shows the
+  // moved icon when the icon rules gave it none, since it carries the toggle.
+  public getSemanticRegionDecoration(
+    region: SemanticDiffCollapsibleRegion
+  ): LineDecoration & { gutterIcon: SVGSpriteNames } {
+    const decoration = this.getSplitLineDecoration({
+      side: 'deletions',
+      type: 'change',
+      lineNumber: region.old.start,
+    });
+    return {
+      ...decoration,
+      gutterIcon: decoration.gutterIcon ?? 'diffs-icon-symbol-moved-duo',
     };
   }
 
@@ -910,6 +942,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       return;
     }
     this.diff = diff;
+    this.prepareSemanticLines(diff);
     const { options } = this.getRenderOptions(diff);
     const massiveDiff = isDiffMassive(diff, this.getTokenizeMaxLength());
     let cache = this.workerManager?.getDiffResultCache(diff);
@@ -1636,6 +1669,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       additionAnnotations: this.additionAnnotations,
       annotationSlotName: this.annotationSlotName,
       semanticFocus: getSemanticDiffFocus(model.diff),
+      expandedSemanticRegions: this.expandedSemanticRegions,
       includeTrailingNewline: this.includesTrailingNewline(),
       showNoNewlineMarkers: this.showsNoNewlineMarkers(),
     };
