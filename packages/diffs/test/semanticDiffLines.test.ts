@@ -309,13 +309,14 @@ function editedLine(line: number): SemanticDiffOperation {
 }
 
 describe('semantic region icons', () => {
-  test('only the first range of a span shows an icon', () => {
+  test('every range of a span starts a region below a different row', () => {
     // A helper inlined at its call site (see `inlinedFunctionDiff`). The
-    // removed wrapper (span 4) has two ranges around the moved body. The
-    // replaced call lines (old 13, new 15) are edits, so the new call line
-    // starts its own region below the moved body.
+    // removed wrapper (span 4) has two ranges around the moved body, and each
+    // shows an icon (old 18 and 23). The replaced call lines (old 13, new 15)
+    // are edits, so the new call line starts its own region below the moved
+    // body.
     const { operation } = inlinedFunctionDiff;
-    expect(iconLines([operation], 'deletions')).toEqual([13, 18, 20]);
+    expect(iconLines([operation], 'deletions')).toEqual([13, 18, 20, 23]);
     expect(iconLines([operation], 'additions')).toEqual([13, 15]);
   });
 
