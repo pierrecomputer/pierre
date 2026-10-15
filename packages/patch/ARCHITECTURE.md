@@ -119,9 +119,12 @@ to preserve U+FEFF at the start.
 
 ## Unicode at the host boundary
 
-The host uses `TextEncoder.encodeInto` for well-formed text. For lone
-surrogates, it writes WTF-8 bytes directly. This keeps different surrogates
-distinct from each other and from U+FFFD, as in jsdiff.
+The host writes WTF-8 with a JS loop for texts shorter than 256 UTF-16 units: a
+call to `TextEncoder.encodeInto` costs more than the loop for short texts. A
+longer text uses `encodeInto`. If the result is not pure ASCII and
+`isWellFormed()` is false, the JS loop writes the text again. The loop encodes
+each lone surrogate as WTF-8, so different surrogates stay distinct from each
+other and from U+FFFD, as in jsdiff.
 
 For patch output with lone surrogates, the host decodes the bytes between them
 and restores each original code unit. Change records need no decoder because

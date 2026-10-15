@@ -46,33 +46,27 @@ export interface CreatePatchOptions extends DiffLinesOptions {
 
 const enc = new TextEncoder();
 const dec = new TextDecoder('utf-8', { ignoreBOM: true });
-const pageSize = 65536;
-const textPtr = pageSize; // page2#0
+// options each API accepts besides inactive ones
+const lineKeys = ['ignoreWhitespace', 'stripTrailingCr'];
+const patchKeys = [...lineKeys, 'context', 'headerOptions'];
 
-// ops (must match src/patch.wat)
-const OP_CHARS = 1;
-const OP_WORDS_WITH_SPACE = 2;
-const OP_PATCH = 3;
-const OP_LINES = 4;
-// [3] bit 2 (src/mem.wat)
-const IGNORE_WHITESPACE = 4;
-
-let buffer: Uint8Array;
-let dv: DataView;
-let diffCall: () => void;
-let memory: WebAssembly.Memory;
-let pageN: number;
-let maxPages = 512; // 32 MB
 let wasm: WebAssembly.Module;
+let memory: WebAssembly.Memory;
+let diffCall: () => void;
+// views of the wasm memory; a memory.grow detaches them, so their length is 0
+let u8: Uint8Array;
+let dv: DataView;
+let maxBytes = 32 << 20;
+// set by `encode` when a text has lone surrogates (written as WTF-8)
 let wtf8: boolean;
 
 /** Initialize with the compiled wasm module (the index and workerd entries call it). */
 export function init(wasmModule: WebAssembly.Module): void {
   wasm = wasmModule;
-  const exports = new WebAssembly.Instance(wasmModule, {}).exports;
+  const { exports } = new WebAssembly.Instance(wasmModule, {});
   memory = exports.memory as WebAssembly.Memory;
   diffCall = exports.diff as () => void;
-  bindMemory();
+  bind();
 }
 
 /**
@@ -85,8 +79,8 @@ export function setMemoryLimit(bytes: number): void {
   if (!(bytes >= 0)) {
     throw new RangeError('the memory limit must be a non-negative number');
   }
-  maxPages = bytes / pageSize;
-  if (pageN > maxPages) init(wasm);
+  maxBytes = bytes;
+  release();
 }
 
 /** Diff two texts, treating each Unicode code point as a token. */
@@ -95,8 +89,8 @@ export function diffChars(
   newStr: string,
   options?: Record<string, never>
 ): ChangeObject[] {
-  rejectOptions(options, 'diffChars');
-  return runChanges(OP_CHARS, oldStr, newStr, 0);
+  check(options, 'diffChars');
+  return run(1, oldStr, newStr) as ChangeObject[];
 }
 
 /**
@@ -108,8 +102,8 @@ export function diffWordsWithSpace(
   newStr: string,
   options?: Record<string, never>
 ): ChangeObject[] {
-  rejectOptions(options, 'diffWordsWithSpace');
-  return runChanges(OP_WORDS_WITH_SPACE, oldStr, newStr, 0);
+  check(options, 'diffWordsWithSpace');
+  return run(2, oldStr, newStr) as ChangeObject[];
 }
 
 /**
@@ -121,19 +115,8 @@ export function diffLines(
   newStr: string,
   options?: DiffLinesOptions
 ): ChangeObject[] {
-  const { ignoreWhitespace, stripTrailingCr, ...rest } =
-    checkCallback(options) ?? {};
-  rejectOptions(rest, 'diffLines');
-  if (stripTrailingCr ?? false) {
-    oldStr = oldStr.replaceAll('\r\n', '\n');
-    newStr = newStr.replaceAll('\r\n', '\n');
-  }
-  return runChanges(
-    OP_LINES,
-    oldStr,
-    newStr,
-    (ignoreWhitespace ?? false) ? IGNORE_WHITESPACE : 0
-  );
+  check(options, 'diffLines', lineKeys);
+  return run(4, oldStr, newStr, options) as ChangeObject[];
 }
 
 /** Create a unified diff of one file: `createTwoFilesPatch` with one name on both sides. */
@@ -166,45 +149,36 @@ export function createTwoFilesPatch(
   newHeader?: string,
   options?: CreatePatchOptions
 ): string {
-  const {
-    context = 4,
-    headerOptions,
-    ignoreWhitespace,
-    stripTrailingCr,
-    ...rest
-  } = checkCallback(options) ?? {};
-  if ((rest as { newlineIsToken?: boolean }).newlineIsToken ?? false) {
+  if (
+    (options as { newlineIsToken?: boolean } | undefined)?.newlineIsToken ??
+    false
+  ) {
     throw new Error(
       'newlineIsToken may not be used with patch-generation functions, only with diffing functions'
     );
   }
-  rejectOptions(rest, 'createTwoFilesPatch');
+  check(options, 'createTwoFilesPatch', patchKeys);
+  const { context = 4, headerOptions: h } = options ?? {};
   // jsdiff prints odd hunk headers (e.g. "@@ -2,3.5") for these; Infinity means whole-file context
   if (!(Number.isInteger(context) && context >= 0) && context !== Infinity) {
     throw new Error('options.context must be a non-negative integer');
   }
-  if (stripTrailingCr ?? false) {
-    oldStr = oldStr.replaceAll('\r\n', '\n');
-    newStr = newStr.replaceAll('\r\n', '\n');
-  }
   // Wasm writes the whole patch, header lines included; JS only passes the
   // strings and the header flags ([2] in src/mem.wat). Like jsdiff, no
   // headerOptions writes every header line, and a falsy field is off.
-  const headerFlags =
-    (headerOptions != null
-      ? ((headerOptions.includeIndex ?? false) ? 1 : 0) |
-        ((headerOptions.includeUnderline ?? false) ? 2 : 0) |
-        ((headerOptions.includeFileHeaders ?? false) ? 4 : 0)
-      : 7) |
-    (oldFileName !== undefined ? 8 : 0) |
-    (newFileName !== undefined ? 16 : 0);
-  run(
-    OP_PATCH,
+  return run(
+    3,
     oldStr,
     newStr,
+    options,
     Math.min(context, 0x0fffffff),
-    (ignoreWhitespace ?? false) ? IGNORE_WHITESPACE : 0,
-    headerFlags,
+    (h != null
+      ? ((h.includeIndex ?? false) ? 1 : 0) |
+        ((h.includeUnderline ?? false) ? 2 : 0) |
+        ((h.includeFileHeaders ?? false) ? 4 : 0)
+      : 7) |
+      (oldFileName !== undefined ? 8 : 0) |
+      (newFileName !== undefined ? 16 : 0),
     [
       oldFileName === undefined ? '' : String(oldFileName),
       newFileName === undefined ? '' : String(newFileName),
@@ -212,46 +186,29 @@ export function createTwoFilesPatch(
       oldHeader ? String(oldHeader) : '',
       newHeader ? String(newHeader) : '',
     ]
-  );
-  const ptr = dv.getUint32(16, true);
-  const bytes = buffer.subarray(ptr, ptr + dv.getUint32(20, true));
-  try {
-    if (!wtf8) return dec.decode(bytes);
-    let s = '';
-    let from = 0;
-    for (
-      let i = bytes.indexOf(0xed);
-      i !== -1;
-      i = bytes.indexOf(0xed, i + 1)
-    ) {
-      if (bytes[i + 1] < 0xa0) continue;
-      s +=
-        dec.decode(bytes.subarray(from, i)) +
-        String.fromCharCode(
-          0xd000 | ((bytes[i + 1] & 0x3f) << 6) | (bytes[i + 2] & 0x3f)
-        );
-      from = i + 3;
-    }
-    return s + dec.decode(bytes.subarray(from));
-  } finally {
-    if (pageN > maxPages) init(wasm);
-  }
-}
-
-function checkCallback<T>(options: T): T {
-  if (typeof options === 'function') {
-    throw new Error('callbacks are not supported by @pierre/patch');
-  }
-  return options;
+  ) as string;
 }
 
 /**
- * Throw for options that would change the result. Like jsdiff, an option set
- * to `undefined`, `null`, or `false` is off, so it is accepted.
+ * Throw for callbacks and for options outside `allowed` that would change the
+ * result. Like jsdiff, an option set to `undefined`, `null`, or `false` is off,
+ * so it is accepted.
  */
-function rejectOptions(options: object | undefined, api: string): void {
-  for (const [key, value] of Object.entries(checkCallback(options) ?? {})) {
-    if (value != null && value !== false) {
+function check(
+  options: object | undefined,
+  api: string,
+  allowed?: string[]
+): void {
+  if (typeof options === 'function') {
+    throw new Error('callbacks are not supported by @pierre/patch');
+  }
+  if (options == null) return;
+  for (const [key, value] of Object.entries(options)) {
+    if (
+      value != null &&
+      value !== false &&
+      !(allowed?.includes(key) ?? false)
+    ) {
       throw new Error(
         `options.${key} is not supported by @pierre/patch ${api}`
       );
@@ -259,112 +216,157 @@ function rejectOptions(options: object | undefined, api: string): void {
   }
 }
 
-function runChanges(
-  op: number,
-  oldStr: string,
-  newStr: string,
-  flags: number
-): ChangeObject[] {
-  run(op, oldStr, newStr, 0, flags);
-  const count = dv.getUint32(12, true);
-  let p = dv.getUint32(16, true);
-  const changes = new Array<ChangeObject>(count);
-  for (let i = 0; i < count; i++, p += 16) {
-    const recordFlags = dv.getUint32(p, true);
-    const removed = (recordFlags & 1) !== 0;
-    changes[i] = {
-      count: dv.getUint32(p + 4, true),
-      added: (recordFlags & 2) !== 0,
-      removed,
-      value: (removed ? oldStr : newStr).slice(
-        dv.getUint32(p + 8, true),
-        dv.getUint32(p + 12, true)
-      ),
-    };
-  }
-  if (pageN > maxPages) init(wasm);
-  return changes;
-}
-
+/**
+ * Run op [0] (src/mem.wat) and read its result: the change objects, or the
+ * patch text for op 3. `headers` are the filenames and headers of op 3.
+ */
 function run(
   op: number,
   oldStr: string,
   newStr: string,
-  context: number,
-  flags: number,
+  options?: CreatePatchOptions,
+  context = 0,
   headerFlags = 0,
-  headerStrings: string[] = []
-): void {
+  headers?: string[]
+): ChangeObject[] | string {
   if (typeof oldStr !== 'string' || typeof newStr !== 'string') {
     throw new TypeError('expected the texts to diff to be strings');
   }
-  // WTF-8 is at most 3 bytes per UTF-16 code unit; 64 covers the SIMD overread pad
-  let headerUnits = 0;
-  for (const s of headerStrings) headerUnits += s.length;
-  const worst = (oldStr.length + newStr.length + headerUnits) * 3 + 64;
-  const neededPages = 1 + Math.ceil(worst / pageSize);
-  if (neededPages > pageN) {
-    memory.grow(neededPages - pageN);
-    bindMemory();
+  if (options?.stripTrailingCr ?? false) {
+    oldStr = oldStr.replaceAll('\r\n', '\n');
+    newStr = newStr.replaceAll('\r\n', '\n');
+  }
+  // input starts on page 2; WTF-8 is at most 3 bytes per UTF-16 code unit, and
+  // 64 covers the SIMD overread pad
+  let need = 65600 + (oldStr.length + newStr.length) * 3;
+  if (headers !== undefined) for (const s of headers) need += s.length * 3;
+  if (need > u8.length) {
+    memory.grow(Math.ceil((need - u8.length) / 65536));
+    bind();
   }
   wtf8 = false;
-  const oldLen = encode(oldStr, textPtr);
-  const newLen = encode(newStr, textPtr + oldLen);
-  // filenames and headers follow the texts; only op 3 reads them
-  let p = textPtr + oldLen + newLen;
-  for (let i = 0; i < headerStrings.length; i++) {
-    const written = encode(headerStrings[i], p);
-    dv.setUint32(28 + i * 4, written, true);
-    p += written;
+  const oldLen = encode(oldStr, 65536);
+  const newLen = encode(newStr, 65536 + oldLen);
+  if (headers !== undefined) {
+    let p = 65536 + oldLen + newLen;
+    for (let i = 0; i < 4; i++) {
+      const n = encode(headers[i], p);
+      dv.setUint32(28 + i * 4, n, true);
+      p += n;
+    }
   }
-  flags |=
-    (oldLen === oldStr.length ? 1 : 0) | (newLen === newStr.length ? 2 : 0);
-  // Write the four leading control bytes together; wasm sets byte 1 (success) on exit.
-  dv.setUint32(0, op | (headerFlags << 16) | (flags << 24), true);
+  // the four control bytes: op, wasm's success flag, header flags, input
+  // flags (pure-ASCII texts, ignoreWhitespace)
+  dv.setUint32(
+    0,
+    op |
+      (headerFlags << 16) |
+      (oldLen === oldStr.length ? 1 << 24 : 0) |
+      (newLen === newStr.length ? 2 << 24 : 0) |
+      ((options?.ignoreWhitespace ?? false) ? 4 << 24 : 0),
+    true
+  );
   dv.setUint32(4, oldLen, true);
   dv.setUint32(8, newLen, true);
   dv.setUint32(24, context, true);
-  try {
-    diffCall();
-  } finally {
-    bindMemory();
-  }
-  if (dv.getUint8(1) === 0) {
-    const len = dv.getUint32(12, true);
-    const ptr = dv.getUint32(16, true);
-    const message = dec.decode(buffer.subarray(ptr, ptr + len));
-    if (pageN > maxPages) init(wasm);
+  diffCall();
+  if (u8.length === 0) bind();
+  let ptr = dv.getUint32(16, true);
+  if (u8[1] === 0) {
+    const message = dec.decode(u8.subarray(ptr, ptr + dv.getUint32(12, true)));
+    release();
     throw new Error(message);
   }
+  let result: ChangeObject[] | string;
+  if (op === 3) {
+    const bytes = u8.subarray(ptr, ptr + dv.getUint32(20, true));
+    // restore each lone surrogate (WTF-8 ED A0..BF xx) that TextDecoder would replace
+    result = '';
+    let from = 0;
+    if (wtf8) {
+      for (
+        let i = bytes.indexOf(0xed);
+        i !== -1;
+        i = bytes.indexOf(0xed, i + 1)
+      ) {
+        if (bytes[i + 1] < 0xa0) continue;
+        result +=
+          dec.decode(bytes.subarray(from, i)) +
+          String.fromCharCode(
+            0xd000 | ((bytes[i + 1] & 0x3f) << 6) | (bytes[i + 2] & 0x3f)
+          );
+        from = i + 3;
+      }
+    }
+    result += dec.decode(bytes.subarray(from));
+  } else {
+    // 16-byte records: flags (1 removed, 2 added), count, UTF-16 start and end
+    const count = dv.getUint32(12, true);
+    result = new Array<ChangeObject>(count);
+    for (let i = 0; i < count; i++, ptr += 16) {
+      const removed = u8[ptr] === 1;
+      result[i] = {
+        count: dv.getUint32(ptr + 4, true),
+        added: u8[ptr] === 2,
+        removed,
+        value: (removed ? oldStr : newStr).slice(
+          dv.getUint32(ptr + 8, true),
+          dv.getUint32(ptr + 12, true)
+        ),
+      };
+    }
+  }
+  release();
+  return result;
 }
 
-/** Write `s` at `p` as WTF-8 and return the byte count. */
+/**
+ * Write `s` at `p` as WTF-8 and return the byte count. Short texts and texts
+ * with lone surrogates go through the JS encoder: encodeInto costs more per
+ * call, and it writes lone surrogates as U+FFFD.
+ */
 function encode(s: string, p: number): number {
-  if (s.isWellFormed()) return enc.encodeInto(s, buffer.subarray(p)).written;
-  wtf8 = true;
-  const start = p;
-  let from = 0;
+  if (s.length < 256) return encodeJS(s, p);
+  const written = enc.encodeInto(s, u8.subarray(p)).written;
+  // only non-ASCII text can hold lone surrogates
+  return written === s.length || s.isWellFormed() ? written : encodeJS(s, p);
+}
+
+/** Write `s` at `p` as WTF-8 and return the byte count; lone surrogates set `wtf8`. */
+function encodeJS(s: string, p: number): number {
+  let q = p;
   for (let i = 0; i < s.length; i++) {
-    const c = s.charCodeAt(i);
-    if ((c & 0xf800) !== 0xd800) continue;
-    if (c < 0xdc00 && (s.charCodeAt(i + 1) & 0xfc00) === 0xdc00) {
-      i++;
+    // a surrogate pair's code point, else the code unit (a lone surrogate too)
+    const c = s.codePointAt(i)!;
+    if (c < 0x80) {
+      u8[q++] = c;
       continue;
     }
-    p += enc.encodeInto(s.slice(from, i), buffer.subarray(p)).written;
-    buffer[p] = 0xed;
-    buffer[p + 1] = 0x80 | ((c >> 6) & 0x3f);
-    buffer[p + 2] = 0x80 | (c & 0x3f);
-    p += 3;
-    from = i + 1;
+    if (c < 0x800) {
+      u8[q++] = 0xc0 | (c >> 6);
+    } else {
+      if (c < 0x10000) {
+        u8[q++] = 0xe0 | (c >> 12);
+        if ((c & 0xf800) === 0xd800) wtf8 = true;
+      } else {
+        u8[q++] = 0xf0 | (c >> 18);
+        u8[q++] = 0x80 | ((c >> 12) & 63);
+        i++;
+      }
+      u8[q++] = 0x80 | ((c >> 6) & 63);
+    }
+    u8[q++] = 0x80 | (c & 63);
   }
-  return p - start + enc.encodeInto(s.slice(from), buffer.subarray(p)).written;
+  return q - p;
 }
 
-/** Re-bind the views after the wasm memory grows. */
-function bindMemory(): void {
-  if (buffer?.buffer === memory.buffer) return;
-  pageN = memory.buffer.byteLength / pageSize;
-  buffer = new Uint8Array(memory.buffer);
+/** Bind the views to the current wasm memory. */
+function bind(): void {
+  u8 = new Uint8Array(memory.buffer);
   dv = new DataView(memory.buffer);
+}
+
+/** Replace the instance when its memory passed the limit; the GC frees the old one. */
+function release(): void {
+  if (u8.length > maxBytes) init(wasm);
 }
