@@ -54,6 +54,7 @@ describe('semantic gutter icons', () => {
       [13, '#diffs-icon-symbol-modified-duo'],
       [18, '#diffs-icon-symbol-deleted-duo'],
       [20, '#diffs-icon-symbol-inlined-duo'],
+      [23, '#diffs-icon-symbol-deleted-duo'],
     ]);
     expect(gutterIcons(result.additionsGutterAST)).toEqual([
       [13, '#diffs-icon-symbol-inlined-fill'],
@@ -73,6 +74,7 @@ describe('semantic gutter icons', () => {
       [15, '#diffs-icon-symbol-modified-fill'],
       [18, '#diffs-icon-symbol-deleted-duo'],
       [20, '#diffs-icon-symbol-inlined-duo'],
+      [23, '#diffs-icon-symbol-deleted-duo'],
     ]);
   });
 
