@@ -13,8 +13,9 @@
     --diffs-gap-fallback: 8px;
     --diffs-connector-column-width: 40px;
     --diffs-semantic-icon-size: 12px;
-    /* The 4px gutter bar plus an 8px gap before the icon. */
-    --diffs-semantic-icon-inset: 12px;
+    --diffs-semantic-icon-gap: 8px;
+    /* The 4px gutter bar plus the gap before the icon. */
+    --diffs-semantic-icon-inset: calc(4px + var(--diffs-semantic-icon-gap));
     --diffs-scrollbar-gutter-fallback: 6px;
     --diffs-scrollbar-gutter: var(
       --diffs-scrollbar-gutter-override,
@@ -1614,31 +1615,50 @@
     padding-inline-start: 2ch;
   }
 
+  /* Classic indicators mark each changed line with a character in its line
+   * type's color. The character follows the line type's gutter icon glyph;
+   * reformatted lines, whose code is unchanged, use an equals sign. */
   [data-indicators='classic'] {
-    [data-line-type='change-addition'],
-    [data-line-type='change-deletion'] {
+    [data-line-type^='change-'] {
       &[data-no-newline],
       &[data-line] {
         &::before {
+          content: var(--diffs-classic-indicator);
           display: inline-block;
           width: 1ch;
           height: 1lh;
           position: absolute;
           top: 0;
           left: 0;
+          color: var(--diffs-line-type-color);
           user-select: none;
         }
-
-        &[data-line-type='change-addition']::before {
-          content: '+';
-          color: var(--diffs-addition-base);
-        }
-
-        &[data-line-type='change-deletion']::before {
-          content: '-';
-          color: var(--diffs-deletion-base);
-        }
       }
+    }
+
+    [data-line-type='change-addition'] {
+      --diffs-classic-indicator: '+';
+    }
+
+    [data-line-type='change-deletion'] {
+      --diffs-classic-indicator: '-';
+    }
+
+    [data-line-type='change-moved'],
+    [data-line-type='change-reordered'],
+    [data-line-type='change-extracted-function'],
+    [data-line-type='change-inlined-function'],
+    [data-line-type='change-moved-with-edit'] {
+      --diffs-classic-indicator: '»';
+    }
+
+    [data-line-type='change-edited'],
+    [data-line-type='change-renamed'] {
+      --diffs-classic-indicator: '~';
+    }
+
+    [data-line-type='change-reformatted'] {
+      --diffs-classic-indicator: '=';
     }
   }
 
@@ -1821,6 +1841,80 @@
     pointer-events: none;
   }
 
+  /* A collapsed region's row. Its gutter cell holds the moved icon, the summary
+   * and the toggle, extending past the gutter into the content column. The
+   * content cell draws the connector line across the rest of the row. The row
+   * keeps the plain background, so the label covers the line where they
+   * overlap. */
+  [data-gutter-buffer='semantic-region'] {
+    --diffs-line-bg: var(--diffs-bg);
+    cursor: pointer;
+  }
+
+  [data-semantic-region] {
+    position: relative;
+    min-height: 1lh;
+    background-color: var(--diffs-bg);
+    cursor: pointer;
+
+    &::after {
+      content: '';
+      position: absolute;
+      inset-inline: 0;
+      top: calc(50% - 0.5px);
+      height: 1px;
+      background-color: color-mix(
+        in lab,
+        var(--diffs-line-type-color) 30%,
+        var(--diffs-bg)
+      );
+    }
+  }
+
+  [data-semantic-region-label] {
+    position: absolute;
+    top: 0;
+    left: var(--diffs-semantic-icon-inset);
+    z-index: 1;
+    display: flex;
+    align-items: center;
+    gap: 1ch;
+    height: 1lh;
+    padding-inline-end: 1ch;
+    white-space: nowrap;
+    font-family: var(
+      --diffs-header-font-family,
+      var(--diffs-header-font-fallback)
+    );
+    color: var(--diffs-line-type-color);
+    fill: currentColor;
+    background-color: var(--diffs-bg);
+    user-select: none;
+  }
+
+  /* An expanded region's first-line icon collapses it again. */
+  [data-semantic-icon][data-semantic-region-toggle] {
+    pointer-events: auto;
+    cursor: pointer;
+  }
+
+  [data-semantic-region-icon] {
+    width: var(--diffs-semantic-icon-size);
+    height: var(--diffs-semantic-icon-size);
+  }
+
+  [data-semantic-region-button] {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    border: none;
+    background: none;
+    color: inherit;
+    fill: currentColor;
+    cursor: pointer;
+  }
+
   [data-disable-line-numbers] {
     [data-gutter-buffer],
     [data-column-number] {
@@ -1832,8 +1926,7 @@
       }
     }
 
-    [data-line-number-content],
-    [data-semantic-icon] {
+    [data-line-number-content] {
       display: none;
     }
 
@@ -1846,6 +1939,26 @@
     &[data-indicators='bars'] [data-gutter-utility-slot] {
       /* Using 5px here because theres a 2px separator after the bar */
       left: 6px;
+    }
+  }
+
+  /* Without line numbers, a semantic diff's gutter still holds the icon, with
+   * the same gap on both sides of it. The gutter utility keeps its usual place
+   * on the gutter's edge, rather than the left alignment a bare bar needs. */
+  [data-semantic][data-disable-line-numbers] {
+    [data-gutter-buffer],
+    [data-column-number] {
+      min-width: 0;
+      padding-left: calc(
+        var(--diffs-semantic-icon-inset) + var(--diffs-semantic-icon-size)
+      );
+      padding-right: var(--diffs-semantic-icon-gap);
+    }
+
+    [data-gutter-utility-slot] {
+      right: 0;
+      left: auto;
+      justify-content: flex-end;
     }
   }
 

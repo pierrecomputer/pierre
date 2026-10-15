@@ -321,6 +321,92 @@ describe('measureSemanticDiffConnectors', () => {
     ]);
   });
 
+  test('ends bands on a collapsed move at its 1px center line', () => {
+    // Old lines 3-5 are collapsed into the row between lines 2 and 6.
+    const deletions = column([1, 2, 'gap', 6], ORIGIN_TOP);
+    const placeholder = deletions.children[2];
+    placeholder.removeAttribute('data-content-buffer');
+    placeholder.setAttribute('data-semantic-region', '');
+    placeholder.setAttribute('data-semantic-region-start', '3');
+    placeholder.setAttribute('data-semantic-region-end', '5');
+    const additions = column(lines(9), ORIGIN_TOP);
+    const measure = (base: { start: number; end: number }) =>
+      measureSemanticDiffConnectors(
+        [
+          {
+            id: 'moved',
+            kind: 'moved',
+            rank: 0,
+            base,
+            target: { start: 7, end: 9 },
+          },
+        ],
+        deletions,
+        additions,
+        ORIGIN_TOP
+      ).map((connector) => connector.base);
+
+    // The moved lines narrow to the row's 1px center line.
+    expect(measure({ start: 3, end: 5 })).toEqual([
+      { top: 49.5, bottom: 50.5 },
+    ]);
+    // A run reaching into the move ends on that line, and a run through it
+    // continues across the row.
+    expect(measure({ start: 1, end: 4 })).toEqual([{ top: 0, bottom: 50.5 }]);
+    expect(measure({ start: 2, end: 6 })).toEqual([{ top: 20, bottom: 80 }]);
+  });
+
+  test('merges same-colored bands that end on one collapsed row', () => {
+    // Old lines 3-5 are collapsed into the row between lines 2 and 6.
+    const deletions = column([1, 2, 'gap', 6], ORIGIN_TOP);
+    const placeholder = deletions.children[2];
+    placeholder.removeAttribute('data-content-buffer');
+    placeholder.setAttribute('data-semantic-region', '');
+    placeholder.setAttribute('data-semantic-region-start', '3');
+    placeholder.setAttribute('data-semantic-region-end', '5');
+    const additions = column(lines(12), ORIGIN_TOP);
+    const band = (
+      id: string,
+      kind: SemanticDiffConnector['kind'],
+      base: number,
+      target: { start: number; end: number }
+    ): SemanticDiffConnector => ({
+      id,
+      kind,
+      rank: 0,
+      base: { start: base, end: base },
+      target,
+    });
+    const measure = (regions: SemanticDiffConnector[]) =>
+      measureSemanticDiffConnectors(regions, deletions, additions, ORIGIN_TOP);
+
+    // Each old line paired with an adjacent new run: one band spanning them.
+    expect(
+      measure([
+        band('a', 'modified', 3, { start: 7, end: 7 }),
+        band('b', 'modified', 4, { start: 8, end: 8 }),
+        band('c', 'modified', 5, { start: 9, end: 9 }),
+      ])
+    ).toEqual([
+      {
+        id: 'a',
+        kind: 'modified',
+        rank: 0,
+        base: { top: 49.5, bottom: 50.5 },
+        target: { top: 120, bottom: 180 },
+      },
+    ]);
+
+    // A different color, or new runs that don't touch, stay separate.
+    expect(
+      measure([
+        band('a', 'moved', 3, { start: 7, end: 7 }),
+        band('b', 'modified', 4, { start: 8, end: 8 }),
+        band('c', 'moved', 5, { start: 11, end: 11 }),
+      ]).map((connector) => connector.id)
+    ).toEqual(['a', 'b', 'c']);
+  });
+
   test('spans gap rows but not a separator', () => {
     const region: SemanticDiffConnector = {
       id: 'moved',

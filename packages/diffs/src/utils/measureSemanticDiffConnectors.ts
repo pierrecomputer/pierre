@@ -6,6 +6,13 @@ import type {
   SemanticDiffConnectorRange,
 } from './semanticDiffConnectors';
 
+// Half the height of the line a collapsed region's row draws (see style.css).
+const COLLAPSED_LINE_HALF_HEIGHT = 0.5;
+
+// How far apart, in pixels, two band ends can be and still count as touching.
+// Adjacent rows share an edge, up to sub-pixel rounding.
+const MERGE_TOLERANCE = 0.5;
+
 interface MountedLine {
   element: HTMLElement;
   run: number;
@@ -14,6 +21,12 @@ interface MountedLine {
    * row
    */
   end: HTMLElement;
+  /**
+   * Set when a collapsed region hides the line: `element` and `end` are then
+   * the region's row, and connectors meet the line at the row's 1px center
+   * line.
+   */
+  collapsed?: true;
 }
 
 // Measure endpoint runs whose rows are mounted in one uninterrupted stretch.
@@ -29,7 +42,7 @@ export function measureSemanticDiffConnectors(
   const oldLines = indexMountedLines(deletions);
   const newLines = indexMountedLines(additions);
   const rects = new Map<HTMLElement, DOMRect>();
-  const connectors: Connector[] = [];
+  const measured: MeasuredConnector[] = [];
   for (const region of regions) {
     const base =
       region.base != null
@@ -54,15 +67,116 @@ export function measureSemanticDiffConnectors(
     if (base == null || target == null) {
       continue;
     }
-    connectors.push({
-      id: region.id,
-      kind: region.kind,
-      rank: region.rank,
-      base,
-      target,
+    measured.push({
+      connector: {
+        id: region.id,
+        kind: region.kind,
+        rank: region.rank,
+        base,
+        target,
+      },
+      collapsedRows: {
+        base:
+          region.base != null
+            ? getCollapsedRow(oldLines, region.base.start, region.base.end)
+            : getAttachmentCollapsedRow(oldLines, region.attachment),
+        target:
+          region.target != null
+            ? getCollapsedRow(newLines, region.target.start, region.target.end)
+            : getAttachmentCollapsedRow(newLines, region.attachment),
+      },
+      merged: false,
     });
   }
-  return connectors;
+  mergeOnCollapsedRows(measured, 'base');
+  mergeOnCollapsedRows(measured, 'target');
+  return measured
+    .filter((entry) => !entry.merged)
+    .map((entry) => entry.connector);
+}
+
+interface MeasuredConnector {
+  connector: Connector;
+  /** The collapsed region row each end lies on, when it lies on one. */
+  collapsedRows: { base?: HTMLElement; target?: HTMLElement };
+  /** Folded into another connector by `mergeOnCollapsedRows`. */
+  merged: boolean;
+}
+
+// The collapsed region row that hides every line from `start` to `end`, if one
+// does.
+function getCollapsedRow(
+  lines: Map<number, MountedLine>,
+  start: number,
+  end: number
+): HTMLElement | undefined {
+  const first = lines.get(start);
+  return first?.collapsed === true && lines.get(end)?.element === first.element
+    ? first.element
+    : undefined;
+}
+
+function getAttachmentCollapsedRow(
+  lines: Map<number, MountedLine>,
+  attachment: SemanticDiffConnectorAttachment
+): HTMLElement | undefined {
+  return 'empty' in attachment
+    ? undefined
+    : getCollapsedRow(lines, attachment.line, attachment.line);
+}
+
+// Connectors whose `side` ends lie on one collapsed region's row all narrow to
+// its 1px line, where their translucent fills would stack. Merge the ones of
+// one kind whose other ends touch into a single band spanning those ends.
+// Ends that don't touch stay separate, so a band never covers unrelated rows.
+function mergeOnCollapsedRows(
+  entries: MeasuredConnector[],
+  side: 'base' | 'target'
+): void {
+  const other = side === 'base' ? 'target' : 'base';
+  const groups = new Map<
+    HTMLElement,
+    Map<Connector['kind'], MeasuredConnector[]>
+  >();
+  for (const entry of entries) {
+    const row = entry.collapsedRows[side];
+    if (row == null || entry.merged) continue;
+    let byKind = groups.get(row);
+    if (byKind == null) {
+      byKind = new Map();
+      groups.set(row, byKind);
+    }
+    const group = byKind.get(entry.connector.kind);
+    if (group == null) {
+      byKind.set(entry.connector.kind, [entry]);
+    } else {
+      group.push(entry);
+    }
+  }
+  for (const byKind of groups.values()) {
+    for (const group of byKind.values()) {
+      group.sort((a, b) => a.connector[other].top - b.connector[other].top);
+      let current = group[0];
+      for (const entry of group.slice(1)) {
+        const currentEnd = current.connector[other];
+        const entryEnd = entry.connector[other];
+        if (entryEnd.top > currentEnd.bottom + MERGE_TOLERANCE) {
+          current = entry;
+          continue;
+        }
+        const span = {
+          top: currentEnd.top,
+          bottom: Math.max(currentEnd.bottom, entryEnd.bottom),
+        };
+        current.connector = {
+          ...current.connector,
+          rank: Math.min(current.connector.rank, entry.connector.rank),
+          ...(other === 'base' ? { base: span } : { target: span }),
+        };
+        entry.merged = true;
+      }
+    }
+  }
 }
 
 // Number each uninterrupted sequence so checking two endpoints also proves that
@@ -84,6 +198,19 @@ function indexMountedLines(content: HTMLElement): Map<number, MountedLine> {
       adjacent = previous;
       lines.set(line, previous);
       previousLine = line;
+      continue;
+    }
+    // A collapsed region's row stands in for every old line it hides.
+    if (element.hasAttribute('data-semantic-region')) {
+      adjacent = undefined;
+      const start = Number(element.getAttribute('data-semantic-region-start'));
+      const end = Number(element.getAttribute('data-semantic-region-end'));
+      if (start !== previousLine + 1) run++;
+      previous = { element, run, end: element, collapsed: true };
+      for (let line = start; line <= end; line++) {
+        lines.set(line, previous);
+      }
+      previousLine = end;
       continue;
     }
     if (element.hasAttribute('data-no-newline')) {
@@ -115,11 +242,9 @@ function measureRun(
   const first = lines.get(range.start);
   const last = lines.get(range.end);
   if (first == null || last == null || first.run !== last.run) return;
-  const firstRect = getRowRect(first.element, rects);
-  const lastRect = getRowRect(last.end, rects);
   return {
-    top: firstRect.top - originTop,
-    bottom: lastRect.bottom - originTop,
+    top: getLineTop(first, rects) - originTop,
+    bottom: getLineBottom(last, rects) - originTop,
   };
 }
 
@@ -141,8 +266,8 @@ function measureAttachment(
     if (line == null) return;
     y =
       (attachment.edge === 'before'
-        ? getRowRect(line.element, rects).top
-        : getRowRect(line.end, rects).bottom) - originTop;
+        ? getLineTop(line, rects)
+        : getLineBottom(line, rects)) - originTop;
   }
   return { top: y, bottom: y };
 }
@@ -186,6 +311,29 @@ export function measureSemanticDiffSelection(
     };
   }
   return selection;
+}
+
+// Where a line's rows start and end. A line inside a collapsed region has no
+// row of its own, so it spans the 1px line drawn through the region's row
+// center.
+function getLineTop(
+  line: MountedLine,
+  rects: Map<HTMLElement, DOMRect>
+): number {
+  const rect = getRowRect(line.element, rects);
+  return line.collapsed === true
+    ? (rect.top + rect.bottom) / 2 - COLLAPSED_LINE_HALF_HEIGHT
+    : rect.top;
+}
+
+function getLineBottom(
+  line: MountedLine,
+  rects: Map<HTMLElement, DOMRect>
+): number {
+  const rect = getRowRect(line.end, rects);
+  return line.collapsed === true
+    ? (rect.top + rect.bottom) / 2 + COLLAPSED_LINE_HALF_HEIGHT
+    : rect.bottom;
 }
 
 function getRowRect(

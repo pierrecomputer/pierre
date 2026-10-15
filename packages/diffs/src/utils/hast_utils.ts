@@ -101,14 +101,19 @@ export function createGutterItem(
   lineNumber: number,
   lineIndex: string,
   properties: Properties = {},
-  icon?: SVGSpriteNames
+  icon?: SVGSpriteNames,
+  iconProperties?: Properties
 ): HASTElement {
   const children: ElementContent[] = [];
   if (icon != null) {
     children.push(
       createIconElement({
         name: icon,
-        properties: { 'data-semantic-icon': '', 'aria-hidden': 'true' },
+        properties: {
+          'data-semantic-icon': '',
+          'aria-hidden': 'true',
+          ...iconProperties,
+        },
       })
     );
   }

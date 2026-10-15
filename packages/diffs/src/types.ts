@@ -342,6 +342,8 @@ export interface FileDiffMetadata {
    * semantic changes were found.
    */
   semanticOperations?: SemanticDiffOperation[];
+  /** The file's collapsible moved regions, sorted by `old.start`. Absent when there are none. */
+  semanticCollapsibleRegions?: SemanticDiffCollapsibleRegion[];
   /**
    * Set while an attached editor's session-scoped hunk updates have reshaped
    * `hunks` away from a plain recompute (regions stay frozen during an edit
@@ -417,6 +419,28 @@ export type SemanticDiffFocusKind = 'reformatted';
 export interface SemanticDiffLineRegion {
   start: number;
   end: number;
+}
+
+/** Counts shown in a collapsed region's summary. Each old line in the region counts once. */
+export interface SemanticDiffCollapsibleRegionCounts {
+  /** Old lines that moved unchanged. */
+  moved: number;
+  /** Old lines a change touches: an edit nested in the move, or a focus of the move. */
+  edited: number;
+  /** Old lines deleted inside the moved code. */
+  removed: number;
+}
+
+/**
+ * Old lines of moved code that Diffs collapses into one row by default. Every row in the region
+ * is one-sided: no new-side line sits beside it.
+ */
+export interface SemanticDiffCollapsibleRegion {
+  /** The old lines hidden while collapsed, both ends included. */
+  old: SemanticDiffLineRegion;
+  /** The moves the region covers, as indexes into `semanticOperations`, in old-line order. */
+  operations: number[];
+  counts: SemanticDiffCollapsibleRegionCounts;
 }
 
 /** These old lines correspond to these new lines within one span. */

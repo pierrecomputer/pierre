@@ -39,6 +39,8 @@ import type {
   RenderDiffResult,
   RenderedDiffASTCache,
   RenderRange,
+  SemanticDiffCollapsibleRegion,
+  SemanticDiffLineRegion,
   SupportedLanguages,
   ThemedDiffResult,
 } from '../types';
@@ -53,6 +55,11 @@ import { createEmptyRowBuffer } from '../utils/createEmptyRowBuffer';
 import { createFileHeaderElement } from '../utils/createFileHeaderElement';
 import { createNoNewlineElement } from '../utils/createNoNewlineElement';
 import { createPreElement } from '../utils/createPreElement';
+import {
+  createSemanticRegionContent,
+  createSemanticRegionGutter,
+  getSemanticRegionIconToggleProperties,
+} from '../utils/createSemanticRegionRow';
 import { createSeparator } from '../utils/createSeparator';
 import {
   applySessionChangedLines,
@@ -143,6 +150,11 @@ interface DiffRenderCache extends RenderedDiffASTCache {
   hydrated?: boolean;
 }
 
+interface SemanticRegionState {
+  region: SemanticDiffCollapsibleRegion;
+  collapsed: boolean;
+}
+
 interface SemanticLineCache {
   diff: FileDiffMetadata;
   lookup: SemanticDiffLineLookup;
@@ -201,6 +213,7 @@ export interface LineDecoration {
   gutterLineType: LineTypes;
   gutterProperties?: Properties;
   gutterIcon?: SVGSpriteNames;
+  gutterIconProperties?: Properties;
   contentProperties?: Properties;
 }
 
@@ -271,6 +284,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
   // is highlighted in the background.
   private diff: FileDiffMetadata | undefined;
   private semanticLineCache: SemanticLineCache | undefined;
+  private expandedSemanticRegions = new Set<number>();
 
   private expandedHunks = new Map<number, HunkExpansionRegion>();
 
@@ -558,6 +572,13 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       this.clearRenderCache();
     }
     this.expandedHunks.set(index, region);
+  }
+
+  public toggleSemanticRegion(start: number): void {
+    const { expandedSemanticRegions } = this;
+    if (!expandedSemanticRegions.delete(start)) {
+      expandedSemanticRegions.add(start);
+    }
   }
 
   public getExpandedHunk(hunkIndex: number): HunkExpansionRegion {
@@ -908,6 +929,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     const { semanticOperations } = diff;
     if (semanticOperations == null) {
       this.semanticLineCache = undefined;
+      this.expandedSemanticRegions.clear();
       return;
     }
     const { semanticLineCache: cached } = this;
@@ -925,6 +947,38 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       diff,
       lookup: createSemanticDiffLineLookup(semanticOperations),
     };
+    this.expandedSemanticRegions.clear();
+  }
+
+  // The decoration of a collapsible region's first old line, which the region's
+  // collapsed row shares so collapsing keeps the same icon. The line shows the
+  // moved icon when the icon rules gave it none, since it carries the toggle.
+  private getSemanticRegionDecoration(
+    region: SemanticDiffCollapsibleRegion
+  ): LineDecoration & { gutterIcon: SVGSpriteNames } {
+    const decoration = this.getSplitLineDecoration({
+      side: 'deletions',
+      type: 'change',
+      lineNumber: region.old.start,
+    });
+    return {
+      ...decoration,
+      gutterIcon: decoration.gutterIcon ?? 'diffs-icon-symbol-moved-duo',
+    };
+  }
+
+  // Whether any old line of a collapsible region has an annotation. Such a
+  // region stays expanded, so collapsing never hides an annotation.
+  private hasDeletionAnnotationsIn({
+    start,
+    end,
+  }: SemanticDiffLineRegion): boolean {
+    for (let line = start; line <= end; line++) {
+      if ((this.deletionAnnotations[line]?.length ?? 0) > 0) {
+        return true;
+      }
+    }
+    return false;
   }
 
   // Use semantic line types when supplied; keep hunk types for unclassified
@@ -1103,6 +1157,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       return;
     }
     this.diff = diff;
+    this.prepareSemanticLines(diff);
     const { options } = this.getRenderOptions(diff);
     const massiveDiff = isDiffMassive(diff, this.getTokenizeMaxLength());
     let cache = this.workerManager?.getDiffResultCache(diff);
@@ -1754,7 +1809,12 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
 
     const pushGutterLineNumber = (
       type: CodeColumnType,
-      { gutterLineType, gutterProperties, gutterIcon }: LineDecoration,
+      {
+        gutterLineType,
+        gutterProperties,
+        gutterIcon,
+        gutterIconProperties,
+      }: LineDecoration,
       lineNumber: number,
       lineIndex: string
     ) => {
@@ -1765,9 +1825,82 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
           lineNumber,
           lineIndex,
           gutterProperties,
-          gutterIcon
+          gutterIcon,
+          gutterIconProperties
         )
       );
+    };
+
+    // Collapsible regions only collapse in a split, full render. A windowed
+    // render counts rows from the hunks, which still include every hidden line.
+    const { semanticCollapsibleRegions } = fileDiff;
+    const canCollapseSemanticRegions =
+      // TODO: Figure out unified diffs
+      diffStyle === 'split' &&
+      fileDiff.semanticOperations != null &&
+      semanticCollapsibleRegions != null &&
+      // TODO: Figure out when we implement virtualization
+      isDefaultRenderRange(renderRange);
+    // The collapsible region covering an old line, and whether it is
+    // collapsed. A region with an annotation on any of its lines never
+    // collapses. The walk visits old lines in ascending order, so a cursor
+    // into the sorted regions only moves forward, and each region's state is
+    // worked out once, when the walk reaches it.
+    let regionIndex = 0;
+    let currentRegion: SemanticDiffCollapsibleRegion | undefined;
+    let currentRegionState: SemanticRegionState | undefined;
+    let previousOldLine = 0;
+    const getSemanticRegionState = (
+      lineNumber: number
+    ): SemanticRegionState | undefined => {
+      if (!canCollapseSemanticRegions) {
+        return undefined;
+      }
+      if (lineNumber < previousOldLine) {
+        throw new Error(
+          `DiffHunksRenderer.processDiffResult: old line ${lineNumber} follows old line ${previousOldLine}; collapsible regions need old lines in ascending order`
+        );
+      }
+      previousOldLine = lineNumber;
+      while (
+        regionIndex < semanticCollapsibleRegions.length &&
+        semanticCollapsibleRegions[regionIndex].old.end < lineNumber
+      ) {
+        regionIndex++;
+      }
+      const region = semanticCollapsibleRegions[regionIndex];
+      if (region == null || lineNumber < region.old.start) {
+        return undefined;
+      }
+      if (region !== currentRegion) {
+        currentRegion = region;
+        currentRegionState = !this.hasDeletionAnnotationsIn(region.old)
+          ? {
+              region,
+              collapsed: !this.expandedSemanticRegions.has(region.old.start),
+            }
+          : undefined;
+      }
+      return currentRegionState;
+    };
+    // A collapsed region's row: one deletions-side row, so the additions
+    // column takes a one-row gap beside it.
+    const pushSemanticRegionRow = (region: SemanticDiffCollapsibleRegion) => {
+      if (pendingSplitContext.side === 'deletions') {
+        pendingSplitContext.flush();
+      }
+      pendingSplitContext.side = 'additions';
+      pendingSplitContext.increment();
+      const { gutterLineType, gutterIcon } =
+        this.getSemanticRegionDecoration(region);
+      context.pushToGutter(
+        'deletions',
+        createSemanticRegionGutter(region, gutterLineType, gutterIcon)
+      );
+      context.deletionsContentAST.push(
+        createSemanticRegionContent(region, gutterLineType)
+      );
+      context.incrementRowCount(1);
     };
 
     function pushSeparators(props: PushSeparatorProps) {
@@ -1822,6 +1955,33 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
             isExpandable: isExpandableDiff,
           });
         }
+
+        const regionState =
+          deletionLine != null
+            ? getSemanticRegionState(deletionLine.lineNumber)
+            : undefined;
+        if (regionState != null) {
+          // The converter only marks old lines on one-sided rows.
+          if (additionLine != null) {
+            throw new Error(
+              `DiffHunksRenderer.processDiffResult: collapsible region ${regionState.region.old.start}-${regionState.region.old.end} has a new-side line beside old line ${deletionLine?.lineNumber}`
+            );
+          }
+          if (
+            regionState.collapsed &&
+            deletionLine?.lineNumber === regionState.region.old.start
+          ) {
+            pushSemanticRegionRow(regionState.region);
+          }
+        }
+        const isHiddenBySemanticRegion = regionState?.collapsed === true;
+        // An expanded region's first line carries the icon that collapses it.
+        const expandedRegionStart =
+          regionState != null &&
+          !regionState.collapsed &&
+          deletionLine?.lineNumber === regionState.region.old.start
+            ? regionState.region
+            : undefined;
 
         const lineIndex =
           diffStyle === 'unified' ? unifiedLineIndex : splitLineIndex;
@@ -1919,7 +2079,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
           if (injectedRows?.after != null) {
             pushUnifiedInjectedRows(injectedRows.after, context);
           }
-        } else {
+        } else if (!isHiddenBySemanticRegion) {
           const injectedRows =
             this.getSplitInjectedRowsForLine?.(renderedLineContext);
           if (injectedRows?.before != null) {
@@ -1938,11 +2098,18 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
             additionLine != null
               ? additionLines[additionLine.lineIndex]
               : undefined;
-          const deletionLineDecoration = this.getSplitLineDecoration({
+          let deletionLineDecoration = this.getSplitLineDecoration({
             side: 'deletions',
             type,
             lineNumber: deletionLine?.lineNumber,
           });
+          if (expandedRegionStart != null) {
+            deletionLineDecoration = {
+              ...this.getSemanticRegionDecoration(expandedRegionStart),
+              gutterIconProperties:
+                getSemanticRegionIconToggleProperties(expandedRegionStart),
+            };
+          }
           const additionLineDecoration = this.getSplitLineDecoration({
             side: 'additions',
             type,
@@ -2080,7 +2247,8 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
           ? hunk.noEOFCRAdditions
           : false;
         const noEOFCRDeletion =
-          (deletionLine?.noEOFCR ?? false) || splitNoEOFCRDeletion;
+          !isHiddenBySemanticRegion &&
+          ((deletionLine?.noEOFCR ?? false) || splitNoEOFCRDeletion);
         const noEOFCRAddition =
           (additionLine?.noEOFCR ?? false) || splitNoEOFCRAddition;
         if (noEOFCRAddition || noEOFCRDeletion) {
@@ -2167,7 +2335,9 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
             isExpandable: isExpandableDiff,
           });
         }
-        context.incrementRowCount(1);
+        if (!isHiddenBySemanticRegion) {
+          context.incrementRowCount(1);
+        }
       },
     });
 
