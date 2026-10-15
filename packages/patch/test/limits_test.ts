@@ -1,6 +1,7 @@
 import { beforeAll, expect, test } from 'bun:test';
 
 import { transformWat, wat2wasm } from '../scripts/build';
+import { createTwoFilesPatch, diffChars, setMemoryLimit } from './_util';
 
 // Token counts whose table sizes would wrap i32 must report out of memory
 // before allocating. Real inputs need GiBs (two 128 MiB diffChars strings), so
@@ -45,4 +46,39 @@ test('bestPath size past i32 reports out of memory', () => {
 test('intern table size past i32 reports out of memory', () => {
   expect(wasm.t_intern(0x08000001)).toBe(0);
   expect(wasm.t_takeErr()).toBe(1);
+});
+
+test('a call that grows memory past the limit gets a new instance after it', () => {
+  const Instance = WebAssembly.Instance;
+  let instances = 0;
+  WebAssembly.Instance = class extends Instance {
+    constructor(module: WebAssembly.Module) {
+      super(module, {});
+      instances++;
+    }
+  };
+  try {
+    expect(() => setMemoryLimit(-1)).toThrow(RangeError);
+    expect(() => setMemoryLimit(NaN)).toThrow(RangeError);
+    // a new instance has 2 pages, so a limit of 0 replaces it after each call
+    setMemoryLimit(0);
+    expect(instances).toBe(1);
+    expect(diffChars('ab', 'ac').map((c) => c.value)).toEqual(['a', 'b', 'c']);
+    expect(instances).toBe(2);
+
+    setMemoryLimit(1 << 20);
+    expect(instances).toBe(2);
+    expect(diffChars('ab', 'ac')).toHaveLength(3);
+    expect(instances).toBe(2);
+    const big = 'x\n'.repeat(200_000);
+    expect(createTwoFilesPatch('a', 'b', big, big + 'y\n')).toEndWith(
+      ' x\n+y\n'
+    );
+    expect(instances).toBe(3);
+    expect(diffChars('ab', 'ac')).toHaveLength(3);
+    expect(instances).toBe(3);
+  } finally {
+    WebAssembly.Instance = Instance;
+    setMemoryLimit(32 << 20);
+  }
 });

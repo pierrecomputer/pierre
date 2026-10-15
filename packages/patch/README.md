@@ -61,6 +61,9 @@ console.log(
   returns a unified diff.
 - `createPatch(fileName, oldStr, newStr, oldHeader?, newHeader?, options?)`:
   same as `createTwoFilesPatch(fileName, fileName, ...)`.
+- `setMemoryLimit(bytes)`: how much wasm memory stays allocated between calls
+  (default 32 MB). Wasm memory cannot shrink, so after a call that grows it past
+  the limit, a new wasm instance replaces it. `Infinity` keeps all memory.
 
 `diffLines` and the patch functions accept these jsdiff options:
 
@@ -88,19 +91,6 @@ reads the result.
   only offsets, so no text is decoded.
 - **Hand-written WAT**: no compiler sits between the code and the wasm. Each
   instruction in the hot path is there on purpose.
-
-## jsdiff compatibility
-
-The output is the same as `diff@9.0.0`, byte for byte, lone surrogates included.
-Fuzz tests check every API against jsdiff. The differences:
-
-- Other options that change the result (`ignoreCase`, `newlineIsToken`,
-  `ignoreNewlineAtEof`, `oneChangePerToken`, `maxEditLength`, `timeout`,
-  callbacks) throw an error. An option set to `undefined`, `null`, or `false` is
-  off, so it is accepted.
-- A negative or non-integer `context` throws an error. jsdiff prints odd hunk
-  headers, such as `@@ -2,3.5 +2,3.5 @@`.
-- Each side is limited to 256 MB. Larger input fails with `out of memory`.
 
 ## Development
 

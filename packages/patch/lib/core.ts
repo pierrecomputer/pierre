@@ -62,14 +62,31 @@ let dv: DataView;
 let diffCall: () => void;
 let memory: WebAssembly.Memory;
 let pageN: number;
+let maxPages = 512; // 32 MB
+let wasm: WebAssembly.Module;
 let wtf8: boolean;
 
 /** Initialize with the compiled wasm module (the index and workerd entries call it). */
 export function init(wasmModule: WebAssembly.Module): void {
+  wasm = wasmModule;
   const exports = new WebAssembly.Instance(wasmModule, {}).exports;
   memory = exports.memory as WebAssembly.Memory;
   diffCall = exports.diff as () => void;
   bindMemory();
+}
+
+/**
+ * Set how much wasm memory, in bytes, stays allocated between calls (default
+ * 32 MB). Wasm memory cannot shrink, so when a call grows it past the limit,
+ * a new wasm instance replaces it after the call, and the garbage collector
+ * frees the old memory. `Infinity` keeps all memory for the next calls.
+ */
+export function setMemoryLimit(bytes: number): void {
+  if (!(bytes >= 0)) {
+    throw new RangeError('the memory limit must be a non-negative number');
+  }
+  maxPages = bytes / pageSize;
+  if (pageN > maxPages) init(wasm);
 }
 
 /** Diff two texts, treating each Unicode code point as a token. */
@@ -198,20 +215,27 @@ export function createTwoFilesPatch(
   );
   const ptr = dv.getUint32(16, true);
   const bytes = buffer.subarray(ptr, ptr + dv.getUint32(20, true));
-  if (!wtf8) return dec.decode(bytes);
-  // Warning: TextDecoder turns a WTF-8 lone surrogate into U+FFFD
-  let s = '';
-  let from = 0;
-  for (let i = bytes.indexOf(0xed); i !== -1; i = bytes.indexOf(0xed, i + 1)) {
-    if (bytes[i + 1] < 0xa0) continue;
-    s +=
-      dec.decode(bytes.subarray(from, i)) +
-      String.fromCharCode(
-        0xd000 | ((bytes[i + 1] & 0x3f) << 6) | (bytes[i + 2] & 0x3f)
-      );
-    from = i + 3;
+  try {
+    if (!wtf8) return dec.decode(bytes);
+    let s = '';
+    let from = 0;
+    for (
+      let i = bytes.indexOf(0xed);
+      i !== -1;
+      i = bytes.indexOf(0xed, i + 1)
+    ) {
+      if (bytes[i + 1] < 0xa0) continue;
+      s +=
+        dec.decode(bytes.subarray(from, i)) +
+        String.fromCharCode(
+          0xd000 | ((bytes[i + 1] & 0x3f) << 6) | (bytes[i + 2] & 0x3f)
+        );
+      from = i + 3;
+    }
+    return s + dec.decode(bytes.subarray(from));
+  } finally {
+    if (pageN > maxPages) init(wasm);
   }
-  return s + dec.decode(bytes.subarray(from));
 }
 
 function checkCallback<T>(options: T): T {
@@ -258,6 +282,7 @@ function runChanges(
       ),
     };
   }
+  if (pageN > maxPages) init(wasm);
   return changes;
 }
 
@@ -307,7 +332,9 @@ function run(
   if (dv.getUint8(1) === 0) {
     const len = dv.getUint32(12, true);
     const ptr = dv.getUint32(16, true);
-    throw new Error(dec.decode(buffer.subarray(ptr, ptr + len)));
+    const message = dec.decode(buffer.subarray(ptr, ptr + len));
+    if (pageN > maxPages) init(wasm);
+    throw new Error(message);
   }
 }
 

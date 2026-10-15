@@ -52,8 +52,9 @@ garbage collector off. For @pierre/patch, this includes the wasm memory.
 > (macOS arm64).
 
 jsdiff makes garbage that the garbage collector must clean up after each call.
-@pierre/patch does not free its wasm memory. The next call uses the same memory
-again, and it grows only when an input is larger than all inputs before it.
+@pierre/patch keeps its wasm memory for the next call, up to 32 MB
+(`setMemoryLimit`), so it grows only when an input needs more memory than all
+inputs before it.
 
 ## Method
 

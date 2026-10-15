@@ -1,234 +1,159 @@
 # Architecture
 
-`@pierre/patch` makes text diffs that match jsdiff. All diff logic is in WAT.
-Each call tokenizes both texts, interns each token to a dense integer id, runs
-jsdiff's Myers O(ND) algorithm on the two id arrays, and then writes compact
-change records (`$emitRecords`) or unified diff text (`$emitPatch`).
+`@pierre/patch` produces the same output as `diff@9.0.0`. WAT (WebAssembly Text)
+contains all diff logic. The TypeScript host checks options, writes input, and
+reads results.
 
+```text
+JS strings -> WTF-8 bytes -> tokens -> integer ids -> Myers diff
+                                                    ├─ change records -> JS string slices
+                                                    └─ unified patch -> decoded string
 ```
-WTF-8 old+new -> tokenize -> intern ids -> $myers -> $emitRecords | $emitPatch
-```
 
-## jsdiff compatibility
+## Source files
 
-The output must be **byte-identical to `diff@9.0.0`**, lone surrogates included.
-Tests fuzz every API against it. A correct diff is not enough. The code must
-make the same choices as jsdiff:
+| File                                     | Purpose                                                         |
+| ---------------------------------------- | --------------------------------------------------------------- |
+| [`src/mem.wat`](./src/mem.wat)           | Memory layout, allocation, byte operations, token hash          |
+| [`src/tokenize.wat`](./src/tokenize.wat) | WTF-8 decoder, tokenizers, token ids                            |
+| [`src/myers.wat`](./src/myers.wat)       | Myers algorithm, change components, change records              |
+| [`src/patch.wat`](./src/patch.wat)       | Entry point, hunk groups, headers, patch output                 |
+| [`lib/core.ts`](./lib/core.ts)           | Shared host code and public APIs                                |
+| [`lib/index.ts`](./lib/index.ts)         | Node, Deno, Bun, and browser entry point with inline wasm bytes |
+| [`lib/workerd.ts`](./lib/workerd.ts)     | Cloudflare Workers entry point with a native wasm import        |
+| [`scripts/build.ts`](./scripts/build.ts) | WAT preprocessor, compiler, optimizer                           |
+| [`test/`](./test/)                       | API, tokenizer, size-limit, and jsdiff fuzz tests               |
+| [`benchmark/`](./benchmark/)             | Throughput and memory comparisons with jsdiff                   |
 
-- **Tokenizers.** `diffChars` splits like `Array.from` (code points).
-  `diffWordsWithSpace` uses `(\r?\n)|[word]+|[^\S\n\r]+|[^word]` with jsdiff's
-  `extendedWordChars` ranges. `diffLines` splits after each `\n`.
-- **Line options.** `ignoreWhitespace` compares lines as
-  `left.trim() === right.trim()`, and a common line keeps the new text.
-  `stripTrailingCr` replaces each `\r\n` with `\n` before the diff.
-- **Myers.** Keep jsdiff's tie-break:
-  `!canRemove || (canAdd && removePath.oldPos < addPath.oldPos)`. Keep its
-  diagonal pruning (`minDiagonalToConsider` / `maxDiagonalToConsider`): compute
-  `kEnd` in every iteration, but `kStart` only once for each edit length. Keep
-  the component merge of `addToPath` and `extractCommon`.
-- **Hunks.** Group like `structuredPatch`. Context lines come only from the
-  previous common component. Two hunks merge when
-  `lines.length <= context*2 && i < diff.length - 2`. Add the trailing sentinel
-  and `\ No newline at end of file`. A side with 0 lines shows its start one
-  lower.
+## Compatibility
 
-## Change records
+The output must match jsdiff byte for byte, even for lone surrogates. Fuzz tests
+compare every diff and patch API with `diff@9.0.0`. These rules affect the
+result:
 
-A token is one contiguous byte range, and equal tokens have equal bytes. So each
-change value is one range of the old text (removed) or the new text (common,
-added), as in jsdiff. The change-record APIs never copy token text. Wasm writes
-one 16-byte record for each change:
+- **Tokens:** characters split like `Array.from`, words use jsdiff's
+  `extendedWordChars` ranges, and lines split after each `\n`.
 
-- `flags`: `0` common, `1` removed, `2` added
-- `count`: number of tokens
-- `start`, `end`: UTF-16 offsets into the old text (removed) or the new text
-  (common, added)
+- **Line options:** `ignoreWhitespace` compares lines with `trim()` and keeps
+  the new text for common lines. `stripTrailingCr` replaces `\r\n` with `\n`
+  before the diff, so change values use the normalized text.
 
-`$emitRecords` changes byte offsets to UTF-16 offsets in one SIMD pass, and
-skips a side that is pure ASCII. The host slices the original JS strings, so it
-never decodes a value. With `ignoreWhitespace`, the two sides of a common run
-can have different bytes, so the old side counts its own UTF-16 units.
+- **Myers paths:** the algorithm keeps jsdiff's tie-break, diagonal limits, and
+  component merge rules. It computes `kEnd` each iteration and `kStart` once per
+  edit length. The tie-break is
+  `!canRemove || (canAdd && removePath.oldPos < addPath.oldPos)`.
 
-## Project structure
+- **Hunks:** context comes from the previous common component. Hunks merge when
+  `lines.length <= context * 2 && i < diff.length - 2`. The output preserves
+  jsdiff's final sentinel, no-newline markers, and start positions for empty
+  sides.
 
-```
-src/mem.wat       memory layout map, bump allocator, errors, itoa, memcmp, token hash,
-                  SIMD memchr
-src/tokenize.wat  WTF-8 decoder, character classes, the three tokenizers, interning
-src/myers.wat     jsdiff Myers loop, component list, change records
-src/patch.wat     ENTRY module: op dispatch, hunk grouping, patch headers, unified diff text
-lib/core.ts       host glue: init(module), diffChars, diffWordsWithSpace, diffLines,
-                  createPatch, createTwoFilesPatch
-lib/index.ts      Node, Deno, Bun, browsers: wasm bytes inlined in dist/patch.wasm.mjs
-lib/workerd.ts    Cloudflare Workers: native wasm import
-scripts/build.ts  WAT preprocessor + wat2wasm + binaryen (tests and bench import it too)
-test/             bun:test: tokenizer and size-limit harnesses, API tests, fuzz against diff@9.0.0
-benchmark/        throughput and memory against diff@9.0.0, fixed-seed fixtures
-```
+The host rejects unsupported active options and callbacks. The
+[README](./README.md#apis) lists the supported options and defaults.
+
+## Tokens and the diff loop
+
+Each token refers to one byte range in the input. Words and lines get dense
+integer ids through a hash table. A byte comparison confirms each hash match.
+With `ignoreWhitespace`, line ids use the range after `trim()`, so equal ids can
+refer to different original bytes.
+
+Characters use their code points as ids and need no hash table. Lone surrogates
+keep their UTF-16 code units. Invalid UTF-8 bytes get ids above the Unicode
+range.
+
+The tokenizers and diff loop avoid repeated work:
+
+- The character tokenizer reads 16 ASCII characters per step.
+- The word tokenizer uses an ASCII class table and decodes non-ASCII characters.
+- The line tokenizer finds `\n` with SIMD `memchr`.
+- `$scanCommon` compares four token ids per step. Its final read can extend 12
+  bytes into later allocations, but the match count stops at the array end.
+
+The Myers algorithm stores each diagonal as an 8-byte `(oldPos, lastComponent)`
+entry in `bestPath`. It initializes entries as needed, so setup costs O(D).
+Here, D is the edit distance.
+
+Paths share immutable 8-byte component nodes:
+`(prev, count | added << 31 | removed << 30)`. This preserves jsdiff's path
+behavior without JavaScript objects for each node.
+
+## Results
+
+### Change records
+
+`$emitRecords` writes one 16-byte record per change:
+
+| Field          | Meaning                                                                |
+| -------------- | ---------------------------------------------------------------------- |
+| `flags`        | `0` common, `1` removed, `2` added                                     |
+| `count`        | Token count                                                            |
+| `start`, `end` | UTF-16 offsets in the old text for removals, or the new text otherwise |
+
+Wasm converts byte offsets to UTF-16 offsets in one SIMD pass and skips ASCII
+inputs. With `ignoreWhitespace`, each side counts its own UTF-16 units. The host
+uses `String.slice` to read values, with no text copy in wasm and no decode.
+
+### Unified patches
+
+`$patchHunks` applies jsdiff's `structuredPatch` rules to the components. It
+writes a 32-byte descriptor for each hunk: four header numbers and the component
+span. A second pass writes each hunk header, then a prefix and token bytes for
+each line.
+
+Wasm also writes the optional file headers and quotes filenames with Git-style C
+escapes. It preserves line endings and adds `\ No newline at end of file` where
+needed. A patch with no headers or hunks is `"\n"`, as in jsdiff.
+
+The host decodes the complete patch once. `TextDecoder` uses `ignoreBOM: true`
+to preserve U+FEFF at the start.
+
+## Unicode at the host boundary
+
+The host uses `TextEncoder.encodeInto` for well-formed text. For lone
+surrogates, it writes WTF-8 bytes directly. This keeps different surrogates
+distinct from each other and from U+FFFD, as in jsdiff.
+
+For patch output with lone surrogates, the host decodes the bytes between them
+and restores each original code unit. Change records need no decoder because
+their offsets refer to JavaScript strings.
+
+## Memory and limits
+
+The first 64 KiB page holds control fields and static data. Input starts at byte
+65536: old text, new text, then filenames and headers for patches. A 16-byte pad
+allows SIMD reads past the input end. The workspace follows the pad.
+[`src/mem.wat`](./src/mem.wat) contains the full layout and field offsets.
+
+The bump allocator reserves token arrays, the hash table, Myers state, and
+output in sequence. It grows memory with 25% extra space to reduce growth calls.
+The next call resets the workspace after its input. Individual allocations need
+no cleanup.
+
+Wasm memory cannot shrink. After the host reads a result or a wasm error, it
+replaces the instance if memory exceeds `setMemoryLimit` (default 32 MB). The
+garbage collector can then free the old memory. This limit controls memory
+between calls, not peak memory during a call. `Infinity` keeps all memory.
+
+- Each input has a 256 MB limit. Token tables check their sizes before integer
+  overflow.
+- Worst-case time is O((N+M)·D), and component memory is O(D²), as in jsdiff. N
+  and M are the token counts. Large, unrelated inputs are the expensive case.
+- Wasm memory has a 4 GiB limit. If wasm cannot allocate memory, it returns
+  `out of memory` without a trap. The host reads the message and throws an
+  `Error`.
 
 ## Build
 
-`scripts/build.ts` has three steps:
+`moonx patch:build` runs [`scripts/build.ts`](./scripts/build.ts), then tsdown:
 
-1. `transformWat()` inlines `(import "./x.wat")` modules (each file once) and
-   changes string operands such as `(i32.const "@@ -")` to little-endian
-   integers.
-2. `wat2wasm()` compiles with wabt, with bulk memory and SIMD on.
-3. `optimizeWasm()` runs binaryen `-O3 --shrink-level=1` three times with the
-   optimized Stack IR writer. Each pass can fold patterns that the previous pass
-   exposed.
+1. `transformWat()` inlines local WAT imports and converts string constants to
+   little-endian integers.
+2. `wat2wasm()` compiles with wabt, with bulk memory and SIMD enabled.
+3. `optimizeWasm()` runs three binaryen passes with `-O3 --shrink-level=1` and
+   the optimized Stack IR writer.
 
-`moonx patch:build` runs it, then tsdown. It writes `dist/patch.wat` (debug),
-`dist/patch.wasm`, and `dist/patch.wasm.mjs` (base64 bytes for browsers) next to
-the compiled glue, and writes the wasm sizes to `meta` in `package.json`. Git
-ignores `dist/`.
-
-## Memory layout
-
-```
-[] page 1         (control + static data)
-  [0]             op (u8): 1 = diffChars, 2 = diffWordsWithSpace,
-                  3 = unified-patch hunks (line tokens), 4 = diffLines
-  [1]             output flag (u8): 0 = error, 1 = success
-  [2]             patch header flags (op 3 input): includeIndex, includeUnderline,
-                  includeFileHeaders, oldFileName/newFileName defined
-  [3]             input flags: bit 0/1 old/new text is pure ASCII (op 1/2/4),
-                  bit 2 ignoreWhitespace (op 3/4)
-  [4:8)           old text length (u32 LE)
-  [8:12)          new text length (u32 LE)
-  [12:16)         change-record count (op 1/2/4) / error message length
-  [16:20)         result pointer: change records, patch text, or error message
-  [20:24)         patch text length (op 3)
-  [24:28)         context line count (op 3 input)
-  [28:44)         filename/header byte lengths (4 × u32, op 3 input)
-  [64:192)        ASCII word/space class table for the word tokenizer
-  [1024:1083)     static strings, packed gap-free (error messages, the
-                  no-newline marker, C escape letters)
-  [1083:1093)     $itoa digit scratch
-[] page 2..N      (text buffer)
-  [65536:oldEnd)  old text (WTF-8)
-  [oldEnd:newEnd) new text
-  [newEnd:EOF)    op 3: oldFileName, newFileName, oldHeader, newHeader
-  [EOF:EOF+16)    pad so 16-byte SIMD scans may overread safely
-  [EOF+16:...)    bump-allocated workspace
-```
-
-`$alloc` is a bump allocator. It grows memory by itself with 25% extra, so small
-allocations do not grow one page at a time. If memory cannot grow, it reports
-`out of memory` and does not trap. Each call allocates in this order:
-
-1. Token offset arrays (at most one token for each byte).
-2. The intern table: 12-byte open-addressing slots, load factor ½ or less.
-   `diffChars` has no intern table.
-3. Token id arrays.
-4. `bestPath` diagonals.
-5. Component nodes.
-6. The flat component array, then the change records, or the hunk descriptors
-   and the patch text.
-
-Nothing is freed. The next call starts the workspace again after its own input.
-
-## Interning and the hot loop
-
-jsdiff compares token _strings_ in its inner loop. Here, words and lines intern
-once, with a chunked multiply-mix hash and a byte compare to confirm each match.
-After that, `extractCommon` (`$scanCommon`) compares dense i32 ids. With
-`ignoreWhitespace`, a line interns by its range without leading and trailing
-`trim()` whitespace, so lines that differ only there get the same id. All
-whitespace-only lines key as one empty range.
-
-Almost all diff time is in this loop. It compares 4 ids per step with `i8x16.eq`
-and `i8x16.bitmask`, also for the last partial chunk. That chunk can read up to
-12 bytes past the id array. Those bytes are in later allocations, and the loop
-clamps the count.
-
-- `diffChars` does not intern. The code point _is_ the id. An invalid UTF-8 byte
-  gets the id `0x110000 + byte`, which is above the Unicode range, so it never
-  matches a real character. A lone surrogate decodes to its code unit
-  (`0xD800..0xDFFF`). Pure-ASCII runs tokenize 16 code points per SIMD step.
-- The word tokenizer reads the class of each ASCII byte from the page-1 class
-  table. It decodes UTF-8 only for lead bytes ≥ 0x80.
-- The line tokenizer finds each `\n` with SIMD `memchr`.
-
-## Myers state
-
-- `bestPath` is jsdiff's sparse diagonal array. Each entry is 8 bytes:
-  `(oldPos, lastComponent)`. `0x80808080` means "undefined". Entries are cleared
-  lazily: edit length d reads only two new entries, `[-(d+1)]` and `[d+1]`. So
-  setup costs O(D), like jsdiff's sparse array, not O(M+N).
-- A component node is 8 bytes: `(prev, count | added<<31 | removed<<30)`. Nodes
-  are bump-allocated. Paths share nodes and never change them, like jsdiff's
-  linked objects. Worst-case memory is O(D²), as in jsdiff, but each node is 8
-  bytes, not a JS object.
-
-## Patch emission (op 3)
-
-`$patchHunks` reads the components once. It runs the `structuredPatch` state
-machine and writes one 32-byte descriptor for each hunk: the four `@@` numbers
-and the span `(startComp, startOff, endComp, endOff)`. It needs no token
-cursors: a line counter moves only when the token cursor of its side moves, so
-each 1-based `@@` start is that cursor + 1.
-
-A second pass writes each hunk:
-
-1. `$itoa` writes the numbers of the `@@` line.
-2. Each line is one prefix byte (`-`, `+`, or space), then one `memory.copy` of
-   the token.
-3. If a token does not end in `\n`, the pass adds `\ No newline at end of file`.
-
-Each line keeps its own trailing `\n`. This gives the same bytes as jsdiff,
-which strips the newlines and then does `join('\n') + '\n'`. So a patch with no
-lines (no header lines and no hunks) is `"\n"`.
-
-Wasm also writes the header lines (`$emitHeaders` and `$quoteName` in
-`src/patch.wat`):
-
-- `Index: <oldFileName>`: when `includeIndex` is on, and both filenames are
-  defined and byte-equal.
-- `===` underline (67 `=`, one `memory.fill`): when `includeUnderline` is on.
-- `--- <old>` and `+++ <new>`: when `includeFileHeaders` is on and both
-  filenames are defined. Names are quoted in the Git style (C escapes). jsdiff
-  quotes UTF-8 bytes too, so the byte-level port is exact. jsdiff gets those
-  bytes from `TextEncoder`, so a lone surrogate is quoted as U+FFFD
-  (`\357\277\275`). A truthy header adds `\t<header>` to its line.
-
-The host writes the four strings after the new text, their byte lengths at
-`[28:44)`, and the flags at `[2]`. Then it decodes one finished string.
-
-## Host glue (`lib/core.ts`)
-
-- **Write input.** Grow memory for the worst case (3 bytes for each UTF-16 unit,
-  plus 64), then `TextEncoder.encodeInto`. If `isWellFormed()` is false, the
-  host writes WTF-8: `encodeInto` for each run between lone surrogates, and
-  `ED A0..BF xx` for each lone surrogate. `TextEncoder` would write U+FFFD, and
-  then `"\uD800"`, `"\uD801"`, and `"\uFFFD"` would be equal tokens. jsdiff
-  compares UTF-16, so they are different.
-- **Read change values.** `String.slice` of the inputs with the UTF-16 offsets
-  from the records. No decode.
-- **Read patch text and errors.** `TextDecoder` with `ignoreBOM: true`. The
-  default decoder strips a leading U+FEFF. If an input had a lone surrogate, the
-  host finds each `ED A0..BF xx` in the patch text, decodes the bytes between
-  them, and puts back each code unit, as jsdiff does.
-- **Check options.** `diffChars` and `diffWordsWithSpace` accept no options.
-  `diffLines` accepts `ignoreWhitespace` and `stripTrailingCr`. The patch
-  functions also accept `context` (a non-negative integer or `Infinity`) and
-  `headerOptions`. Any other option that is on, or a callback, throws. An option
-  set to `undefined`, `null`, or `false` is off, as in jsdiff. No
-  `headerOptions` turns on every header line, and a field left out of the object
-  is false.
-- **Strip CRs.** `stripTrailingCr` is `replaceAll("\r\n", "\n")` on both texts
-  before they are written, so change values slice the stripped strings, as in
-  jsdiff.
-- **Report errors.** Wasm writes the message length and pointer to `[12:20)`.
-  The driver writes `[1]` (0 = error) last, after all other stores. The host
-  throws an `Error` with that message.
-
-## Known limitations
-
-- **Input size.** 256 MB per side, so text and offset sizes fit in i32. Tables
-  sized by token count check for themselves: `$internInit` (above 2^27 tokens)
-  and `$myers` (`bestPath`, about 2^28 tokens) report `out of memory` before
-  their size would wrap. Those tables would need 4 GiB or more anyway.
-- **Time and memory.** Same as jsdiff: worst-case time O((N+M)·D), memory O(D²).
-  Two large, unrelated inputs are the slow case. Wasm memory stops at 4 GiB.
-  Then the library reports `out of memory` and does not trap.
+The build writes `dist/patch.wat`, `dist/patch.wasm`, `dist/patch.wasm.mjs`, and
+the compiled host code. It also records wasm sizes in `package.json` under
+`meta`. Tests and benchmarks use the same build functions to compile WAT in
+memory.
