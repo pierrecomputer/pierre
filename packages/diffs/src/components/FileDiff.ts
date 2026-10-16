@@ -1493,9 +1493,11 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
     if (
       restoreRetainedSession &&
       retainedSession != null &&
+      retainedDocument != null &&
       retainedLines != null
     ) {
       sessionDiff.additionLines = retainedLines;
+      sessionDiff.additionCharacterCount = retainedDocument.contents.length;
       sessionDiff.type = retainedSession.type;
       sessionDiff.hunks = retainedSession.hunks;
       sessionDiff.editSessionDirty = true;

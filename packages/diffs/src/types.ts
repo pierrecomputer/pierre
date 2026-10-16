@@ -326,6 +326,16 @@ export interface FileDiffMetadata {
    */
   additionLines: string[];
   /**
+   * Total character count of every entry in `deletionLines`. Producers and
+   * anything that replaces or mutates `deletionLines` must keep it in sync.
+   */
+  deletionCharacterCount: number;
+  /**
+   * Total character count of every entry in `additionLines`. Producers and
+   * anything that replaces or mutates `additionLines` must keep it in sync.
+   */
+  additionCharacterCount: number;
+  /**
    * Set while an attached editor's session-scoped hunk updates have reshaped
    * `hunks` away from a plain recompute (regions stay frozen during an edit
    * session). Consumed by the session-exit recompute, which restores

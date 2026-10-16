@@ -624,6 +624,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
         const previous = diff.additionLines[line] ?? '';
         if (previous !== text) {
           diff.additionLines[line] = text;
+          diff.additionCharacterCount += text.length - previous.length;
           changedAdditionLines.push(line);
           previousAdditionLines.set(line, previous);
           // A newly revealed row must show current text even before the
@@ -652,7 +653,9 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
         canSyncDiffLine &&
         changedDocumentLines?.has(line) !== true
       ) {
-        diff.additionLines[line] = applyLineTextWithNewline(prevLine, lineText);
+        const nextLine = applyLineTextWithNewline(prevLine, lineText);
+        diff.additionLines[line] = nextLine;
+        diff.additionCharacterCount += nextLine.length - prevLine.length;
         if (prevText !== lineText) {
           changedAdditionLines.push(line);
           previousAdditionLines.set(line, prevLine);
@@ -714,6 +717,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
             recomputeTopAlignedAdditionDiff(
               diff,
               diff.additionLines,
+              diff.additionCharacterCount,
               this.options.parseDiffOptions
             )
           );
@@ -775,7 +779,9 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     // Reading line-by-line also preserves blank documents and the final
     // editable empty row after a trailing line break.
     const { additionLines: previousAdditionLines } = diff;
-    diff.additionLines = getEditorDocumentLines(textDocument);
+    const { lines, characterCount } = getEditorDocumentLines(textDocument);
+    diff.additionLines = lines;
+    diff.additionCharacterCount = characterCount;
     if (result != null) {
       result.code.additionLines = realignAdditionHastLines(
         previousAdditionLines,
@@ -832,7 +838,12 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     if (shouldTopAlignAdditionRecompute(diff, rawLines)) {
       this.applyRecomputePreservingSessionType(
         diff,
-        recomputeTopAlignedAdditionDiff(diff, rawLines, parseDiffOptions)
+        recomputeTopAlignedAdditionDiff(
+          diff,
+          rawLines,
+          diff.additionCharacterCount,
+          parseDiffOptions
+        )
       );
       return;
     }
@@ -2706,14 +2717,19 @@ function createPlainAdditionLineElement(
   };
 }
 
+// Reads every document line (with its line break) plus their total character
+// count, so callers can replace `additionLines` and its count in one pass.
 function getEditorDocumentLines<LAnnotation>(
   textDocument: TextDocument<'file-diff', LAnnotation>
-): string[] {
+): { lines: string[]; characterCount: number } {
   const lines: string[] = [];
+  let characterCount = 0;
   for (let line = 0; line < textDocument.lineCount; line++) {
-    lines.push(textDocument.getLineText(line, true));
+    const text = textDocument.getLineText(line, true);
+    lines.push(text);
+    characterCount += text.length;
   }
-  return lines;
+  return { lines, characterCount };
 }
 
 // Renames can supply 2 different languages, so lets go ahead and figure out

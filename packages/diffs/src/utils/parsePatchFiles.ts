@@ -196,6 +196,14 @@ function _processFile(
           !isPartial && oldFile != null && newFile != null
             ? splitFileContents(oldFile.contents)
             : [],
+        additionCharacterCount:
+          !isPartial && oldFile != null && newFile != null
+            ? newFile.contents.length
+            : 0,
+        deletionCharacterCount:
+          !isPartial && oldFile != null && newFile != null
+            ? oldFile.contents.length
+            : 0,
         cacheKey: maybeDetachOptionalString(cacheKey),
       };
       // If either file is technically empty, then we should empty the
@@ -424,6 +432,7 @@ function _processFile(
         parsedAdditionLines++;
         if (isPartial) {
           currentFile.additionLines.push(line);
+          currentFile.additionCharacterCount += line.length;
         }
         currentContent.additions++;
         additionLines++;
@@ -445,6 +454,7 @@ function _processFile(
         parsedDeletionLines++;
         if (isPartial) {
           currentFile.deletionLines.push(line);
+          currentFile.deletionCharacterCount += line.length;
         }
         currentContent.deletions++;
         deletionLines++;
@@ -473,6 +483,8 @@ function _processFile(
         if (isPartial) {
           currentFile.deletionLines.push(line);
           currentFile.additionLines.push(line);
+          currentFile.deletionCharacterCount += line.length;
+          currentFile.additionCharacterCount += line.length;
         }
         currentContent.lines++;
         lastLineType = 'context';
@@ -493,9 +505,11 @@ function _processFile(
         ) {
           const lastIndex = currentFile.additionLines.length - 1;
           if (lastIndex >= 0) {
-            currentFile.additionLines[lastIndex] = cleanLastNewline(
-              currentFile.additionLines[lastIndex]
-            );
+            const line = currentFile.additionLines[lastIndex];
+            const cleanedLine = cleanLastNewline(line);
+            currentFile.additionLines[lastIndex] = cleanedLine;
+            currentFile.additionCharacterCount +=
+              cleanedLine.length - line.length;
           }
         }
         if (
@@ -504,9 +518,11 @@ function _processFile(
         ) {
           const lastIndex = currentFile.deletionLines.length - 1;
           if (lastIndex >= 0) {
-            currentFile.deletionLines[lastIndex] = cleanLastNewline(
-              currentFile.deletionLines[lastIndex]
-            );
+            const line = currentFile.deletionLines[lastIndex];
+            const cleanedLine = cleanLastNewline(line);
+            currentFile.deletionLines[lastIndex] = cleanedLine;
+            currentFile.deletionCharacterCount +=
+              cleanedLine.length - line.length;
           }
         }
       }
