@@ -24,4 +24,8 @@ export const HIGHLIGHTS_LARGE_FILE_RESULTS = [
   },
 ] as const;
 
+export const HIGHLIGHTS_LARGE_FILE_MAXIMUM_SPEEDUP = Math.max(
+  ...HIGHLIGHTS_LARGE_FILE_RESULTS.map(({ speedup }) => speedup)
+);
+
 export const HIGHLIGHTS_THROUGHPUT_MAXIMUM = 300;

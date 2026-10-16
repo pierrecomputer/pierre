@@ -5,6 +5,7 @@ import { BenchmarkBar } from '../highlights/BenchmarkBar';
 import cardStyles from '../highlights/HighlightsBenchmarkCard.module.css';
 import rainbowStyles from '../highlights/HighlightsRainbow.module.css';
 import {
+  HIGHLIGHTS_LARGE_FILE_MAXIMUM_SPEEDUP,
   HIGHLIGHTS_LARGE_FILE_RESULTS,
   HIGHLIGHTS_THROUGHPUT_MAXIMUM,
 } from '../highlights/performanceBenchmarkData';
@@ -68,7 +69,8 @@ function CompactPerformancePreview() {
             Super-fast HTML generation
           </h3>
           <p className="text-muted-foreground mt-1 mb-0 max-w-md text-xs leading-5 text-pretty">
-            Highlights generates HTML at up to 294 times faster than Shiki’s
+            Highlights generates HTML at up to{' '}
+            {HIGHLIGHTS_LARGE_FILE_MAXIMUM_SPEEDUP} times faster than Shiki’s
             throughput across these fixtures.
           </p>
         </figcaption>
