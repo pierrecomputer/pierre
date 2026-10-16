@@ -304,11 +304,14 @@ function expectParity(a: string, b: string, label: string): void {
   );
 }
 
+// warning: CI runs this next to other tasks, up to 5x slower than its ~1.5 s alone
 test('fuzz structured edits against diff@9.0.0', () => {
   try {
     for (let iter = 0; iter < 1500; iter++) {
       const [name, gen] = pick(generators);
-      const tokens = Array.from({ length: int(120) }, gen);
+      // ASCII-run tokens average 13 chars, and jsdiff is near-quadratic on long texts
+      const size = name === 'ascii runs' ? 40 : 120;
+      const tokens = Array.from({ length: int(size) }, gen);
       let a = tokens.join('');
       let b: string;
       const shape = rnd();
@@ -336,7 +339,7 @@ test('fuzz structured edits against diff@9.0.0', () => {
         // a pure ASCII side skips the UTF-16 count
         b = editTokens(tokens, gen).join('');
         a = a.replace(/[^\0-\x7F]/g, ' ');
-      } else b = Array.from({ length: int(120) }, gen).join('');
+      } else b = Array.from({ length: int(size) }, gen).join('');
       if (rnd() < 0.5) [a, b] = [b, a];
       // every 8th pair gets a new instance for each call, so wasm memory grows mid-call
       setMemoryLimit(iter % 8 === 0 ? 0 : 32 << 20);
@@ -345,7 +348,7 @@ test('fuzz structured edits against diff@9.0.0', () => {
   } finally {
     setMemoryLimit(32 << 20);
   }
-});
+}, 30_000);
 
 test('large and degenerate inputs match jsdiff', () => {
   const long = 'é'.repeat(5000) + 'abc'.repeat(3000);
