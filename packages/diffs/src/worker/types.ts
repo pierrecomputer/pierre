@@ -1,17 +1,18 @@
+import type { LanguageRegistration } from 'shiki';
+
 import type {
+  DiffsTheme,
   DiffsThemeNames,
   ExtensionFormatMap,
   FileContents,
   FileDiffMetadata,
   HighlighterTypes,
-  LanguageRegistration,
   LineDiffTypes,
   RenderDiffOptions,
   RenderFileOptions,
   SupportedLanguages,
   ThemedDiffResult,
   ThemedFileResult,
-  ThemeRegistrationResolved,
   ThemesType,
 } from '../types';
 
@@ -68,7 +69,7 @@ export interface InitializeWorkerRequest {
   id: WorkerRequestId;
   renderOptions: WorkerRenderingOptions;
   preferredHighlighter: HighlighterTypes;
-  resolvedThemes: ThemeRegistrationResolved[];
+  resolvedThemes: DiffsTheme[];
   resolvedLanguages?: ResolvedLanguage[];
   customExtensionsVersion?: number;
   customExtensionMap?: ExtensionFormatMap;
@@ -83,7 +84,7 @@ export interface SetRenderOptionsWorkerRequest {
   type: 'set-render-options';
   id: WorkerRequestId;
   renderOptions: WorkerRenderingOptions;
-  resolvedThemes: ThemeRegistrationResolved[];
+  resolvedThemes: DiffsTheme[];
 }
 
 export type SubmitRequest =

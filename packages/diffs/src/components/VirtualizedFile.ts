@@ -52,7 +52,9 @@ interface FileLayoutCache {
 }
 
 interface PendingRender {
-  latestFile: FileContents;
+  // File requested for the next render, including editor changes.
+  workingFile: FileContents;
+  // File selected by the renderer. Highlighting can keep this on the old file.
   file: FileContents;
 }
 
@@ -100,7 +102,6 @@ export class VirtualizedFile<
   private isVisible: boolean = false;
   private isSetup: boolean = false;
   private layoutDirty = true;
-  private forceRenderOverride: true | undefined;
   private currentCollapsed: boolean | undefined;
 
   constructor(
@@ -108,9 +109,9 @@ export class VirtualizedFile<
     private virtualizer: Virtualizer | CodeView<LAnnotation, Caret>,
     private metrics: VirtualFileMetrics = DEFAULT_VIRTUAL_FILE_METRICS,
     workerManager?: WorkerPoolManager,
-    isContainerManaged = false
+    requestOwnerRender?: () => void
   ) {
-    super(options, workerManager, isContainerManaged);
+    super(options, workerManager, requestOwnerRender);
   }
 
   public setMetrics(
@@ -164,7 +165,7 @@ export class VirtualizedFile<
   }
 
   private hasLineAnnotations(): boolean {
-    return this.getLatestAnnotations().some(
+    return this.getLayoutAnnotations().some(
       (annotation) => annotation.lineNumber > FILE_ANNOTATION_LINE_NUMBER
     );
   }
@@ -307,7 +308,7 @@ export class VirtualizedFile<
     hasHeightChange = this.applyGhostTextRows(ghostTextRows);
     const measureAllRows =
       overflow !== 'scroll' ||
-      this.getLatestAnnotations().length > 0 ||
+      this.lineAnnotations.length > 0 ||
       this.isResizeDebuggingEnabled();
 
     // Ghost-row changes affect placeholders too, but placeholders have no DOM
@@ -408,13 +409,14 @@ export class VirtualizedFile<
   }
 
   public onRender = (dirty: boolean): boolean => {
-    if (this.fileContainer == null || this.file == null) {
+    const file = this.getInputFile();
+    if (this.fileContainer == null || file == null) {
       return false;
     }
     if (dirty) {
       this.top = this.getVirtualizedTop();
     }
-    return this.render({ file: this.file });
+    return this.render({ file });
   };
 
   // CodeView positions every item before updating the DOM. Recalculate this
@@ -425,9 +427,9 @@ export class VirtualizedFile<
     reset?: PendingCodeViewLayoutReset,
     lineAnnotations?: LineAnnotation<LAnnotation>[]
   ): number {
-    const targetChanged = !areFileTargetsEqual(this.file, file);
+    const targetChanged = !areFileTargetsEqual(this.getInputFile(), file);
     if (targetChanged) {
-      this.updateExternalFile(file, lineAnnotations);
+      this.updateInputFile(file, lineAnnotations);
     }
     const {
       pendingRenderFile,
@@ -470,6 +472,14 @@ export class VirtualizedFile<
   // geometry read in that frame tied to the file selected for that render.
   private getLayoutFile(): FileContents | undefined {
     return this.pendingRender?.file ?? this.getRenderedFile();
+  }
+
+  // Annotations paired with the content layout is prepared for.
+  private getLayoutAnnotations(): LineAnnotation<LAnnotation>[] {
+    const { pendingRender } = this;
+    return pendingRender != null
+      ? this.getAnnotationsForFile(pendingRender.file)
+      : this.lineAnnotations;
   }
 
   public getLinePosition(
@@ -673,7 +683,7 @@ export class VirtualizedFile<
       this.isAdvancedMode() &&
       this.fileContainer != null &&
       (hadGhostTextRows ||
-        !areFileTargetsEqual(this.getRenderedFile(), this.getLatestFile()));
+        !areFileTargetsEqual(this.getRenderedFile(), this.getWorkingFile()));
     if (this.fileContainer != null && this.isSimpleMode()) {
       this.getSimpleVirtualizer()?.disconnect(this.fileContainer);
     }
@@ -782,23 +792,31 @@ export class VirtualizedFile<
   }
 
   override rerender(): void {
-    if (!this.enabled || this.file == null) {
+    if (!this.enabled || this.getInputFile() == null) {
       return;
     }
-    const latestFile = this.getLatestFile();
+    const workingFile = this.getWorkingFile();
     const nextRenderFile =
-      latestFile == null
+      workingFile == null
         ? undefined
-        : this.fileRenderer.getFileForNextRender(latestFile);
+        : this.fileRenderer.getFileForNextRender(workingFile);
     // A completed async highlight can change which file the next simple
     // virtualizer render will commit. CodeView refreshes this during layout.
     if (this.isSimpleMode()) {
       this.pendingRender = undefined;
     }
     this.forceRenderOverride = true;
+    if (this.isSimpleMode() && this.requestRender()) return;
     this.virtualizer.instanceChanged(
       this,
       !areFileTargetsEqual(this.getRenderedFile(), nextRenderFile)
+    );
+  }
+  // CodeView items are component-managed whenever their CodeView is.
+  protected override get isComponentManaged(): boolean {
+    return (
+      this.getAdvancedVirtualizer()?.isComponentManaged ??
+      super.isComponentManaged
     );
   }
 
@@ -863,9 +881,9 @@ export class VirtualizedFile<
     lineAnnotations,
     ...props
   }: FileRenderProps<LAnnotation>): boolean {
-    const didFileChange = !areFileTargetsEqual(this.file, file);
+    const didFileChange = !areFileTargetsEqual(this.getInputFile(), file);
     if (didFileChange) {
-      this.updateExternalFile(file, lineAnnotations);
+      this.updateInputFile(file, lineAnnotations);
       this.cachedHeaderHTML = undefined;
     }
     const {
@@ -876,7 +894,7 @@ export class VirtualizedFile<
     } = (() => {
       if (
         this.pendingRender != null &&
-        this.pendingRender.latestFile === (this.getLatestFile(file) ?? file)
+        this.pendingRender.workingFile === (this.getWorkingFile(file) ?? file)
       ) {
         return {
           pendingRenderFile: this.pendingRender.file,
@@ -975,13 +993,13 @@ export class VirtualizedFile<
     nextFile: FileContents,
     lineAnnotations: LineAnnotation<LAnnotation>[] | undefined
   ) {
-    const latestFile = this.getLatestFile(nextFile) ?? nextFile;
+    const workingFile = this.getWorkingFile(nextFile) ?? nextFile;
     const previousRenderedFile = this.getRenderedFile();
     const previousLayoutFile = this.pendingRender?.file ?? previousRenderedFile;
     const pendingRenderFile =
-      this.fileRenderer.getFileForNextRender(latestFile);
+      this.fileRenderer.getFileForNextRender(workingFile);
 
-    this.pendingRender = { latestFile, file: pendingRenderFile };
+    this.pendingRender = { workingFile, file: pendingRenderFile };
 
     return {
       pendingRenderFile,
@@ -1145,7 +1163,7 @@ export class VirtualizedFile<
       fileHeight - headerRegion - fileAnnotationHeight - paddingBottom
     );
     const hasFileAnnotations = includesFileAnnotations(
-      this.getLatestAnnotations()
+      this.getLayoutAnnotations()
     );
     const fileAnnotationTop = fileTop + headerRegion;
     const measuredFileAnnotationVisible =

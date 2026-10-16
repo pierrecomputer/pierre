@@ -52,7 +52,12 @@ const theme = {
 
 void t.test('diff: bundled themes keep added and removed text visible', () => {
   for (const theme of Object.values(themes)) {
-    if (typeof theme !== 'object' || theme.cssVariables) continue;
+    if (
+      typeof theme !== 'object' ||
+      theme.cssVariables === true ||
+      typeof theme.cssVariables === 'object'
+    )
+      continue;
     const background = resolveThemeStyle(theme.style, 'background').color;
     const spans = spansOf(
       checkInvariants(diff.hl, '-removed\n+added\n', { theme })

@@ -40,7 +40,13 @@ export function File<LAnnotation = undefined, Caret = undefined>({
   onEditChange,
   onEditComplete,
 }: FileProps<LAnnotation, Caret>): React.JSX.Element {
-  const { ref, getHoveredLine, getAnnotationSlotName } = useFileInstance({
+  const {
+    ref,
+    getHoveredLine,
+    getAnnotationSlotName,
+    file: renderedFile,
+    lineAnnotations: renderedAnnotations,
+  } = useFileInstance({
     file,
     options,
     editorOptions,
@@ -57,14 +63,14 @@ export function File<LAnnotation = undefined, Caret = undefined>({
     onEditComplete,
   });
   const children = renderFileChildren({
-    file,
+    file: renderedFile,
     renderAnnotation,
     renderCustomHeader,
     renderHeaderPrefix,
     renderHeaderFilenameSuffix,
     renderHeaderMetadata,
     renderGutterUtility,
-    lineAnnotations,
+    lineAnnotations: renderedAnnotations,
     getHoveredLine,
     getAnnotationSlotName,
   });

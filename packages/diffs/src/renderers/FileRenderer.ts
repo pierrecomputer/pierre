@@ -1,5 +1,4 @@
 import type { ElementContent, Element as HASTElement } from 'hast';
-import { toHtml } from 'hast-util-to-html';
 
 import {
   DEFAULT_RENDER_RANGE,
@@ -11,9 +10,9 @@ import { areLanguagesAttached } from '../highlighter/languages/areLanguagesAttac
 import {
   getHighlighterIfLoaded,
   getSharedHighlighter,
+  HighlighterDisposedError,
 } from '../highlighter/shared_highlighter';
 import { areThemesAttached } from '../highlighter/themes/areThemesAttached';
-import { hasResolvedThemes } from '../highlighter/themes/hasResolvedThemes';
 import type {
   BaseCodeOptions,
   DiffsHighlighter,
@@ -25,10 +24,12 @@ import type {
   RenderFileOptions,
   RenderFileResult,
   RenderRange,
+  SearchLineDecoration,
   SupportedLanguages,
   ThemedFileResult,
 } from '../types';
 import { applyLineTextWithNewline } from '../utils/applyLineTextWithNewline';
+import { applySearchDecorationsToLine } from '../utils/applySearchDecorations';
 import { areFileRenderOptionsEqual } from '../utils/areFileRenderOptionsEqual';
 import { areFileTargetsEqual } from '../utils/areFileTargetsEqual';
 import { areRenderRangesEqual } from '../utils/areRenderRangesEqual';
@@ -40,13 +41,13 @@ import { createPreElement } from '../utils/createPreElement';
 import { getFiletypeFromFileName } from '../utils/getFiletypeFromFileName';
 import { getHighlighterOptions } from '../utils/getHighlighterOptions';
 import { getLineAnnotationName } from '../utils/getLineAnnotationName';
-import { getThemes } from '../utils/getThemes';
 import {
   createGutterGap,
   createGutterItem,
   createGutterWrapper,
   createHastElement,
 } from '../utils/hast_utils';
+import { hastToHtml } from '../utils/hastToHtml';
 import {
   FILE_ANNOTATION_HUNK_INDEX,
   FILE_ANNOTATION_LINE_INDEX,
@@ -56,6 +57,7 @@ import {
 import { isDefaultRenderRange } from '../utils/isDefaultRenderRange';
 import { isFilePlainText } from '../utils/isFilePlainText';
 import { renderFileWithHighlighter } from '../utils/renderFileWithHighlighter';
+import { resolvePreferredHighlighter } from '../utils/resolvePreferredHighlighter';
 import type { WorkerPoolManager } from '../worker';
 
 type AnnotationLineMap<LAnnotation> = Record<
@@ -131,6 +133,7 @@ export class FileRenderer<LAnnotation = undefined> {
 
   private computedLang: SupportedLanguages = 'text';
   private lineAnnotations: AnnotationLineMap<LAnnotation> = {};
+  private searchDecorations = new Map<number, SearchLineDecoration[]>();
   private lineCache: LineCache | undefined;
   private pendingStructuralRows: Map<number, HASTElement> | undefined;
   private textDocumentCache = new WeakMap<
@@ -158,9 +161,9 @@ export class FileRenderer<LAnnotation = undefined> {
     private workerManager?: WorkerPoolManager | undefined
   ) {
     if (workerManager?.isWorkingPool() !== true) {
-      this.highlighter = areThemesAttached(options.theme ?? DEFAULT_THEMES)
-        ? getHighlighterIfLoaded()
-        : undefined;
+      this.highlighter = getHighlighterIfLoaded({
+        theme: options.theme ?? DEFAULT_THEMES,
+      });
     }
   }
 
@@ -181,6 +184,12 @@ export class FileRenderer<LAnnotation = undefined> {
       this.lineAnnotations[annotation.lineNumber] = arr;
       arr.push(annotation);
     }
+  }
+
+  public setSearchDecorations(
+    decorations: readonly SearchLineDecoration[] | undefined
+  ): void {
+    this.searchDecorations = groupSearchDecorationsByLine(decorations);
   }
 
   public cleanUp(): void {
@@ -322,6 +331,7 @@ export class FileRenderer<LAnnotation = undefined> {
     this.highlighter = undefined;
     this.workerManager?.cleanUpTasks(this);
     this.file = undefined;
+    this.setSearchDecorations(undefined);
   }
 
   public clearRenderCache(): void {
@@ -332,6 +342,9 @@ export class FileRenderer<LAnnotation = undefined> {
 
   public hydrate(file: FileContents): void {
     this.file = file;
+    this.highlighter = getHighlighterIfLoaded({
+      theme: this.getLocalHighlightTheme(),
+    });
     const { options } = this.getRenderOptions(file);
     const lines = this.getOrCreateLineCache(file);
     const massiveFile = isFileMassive(
@@ -363,7 +376,11 @@ export class FileRenderer<LAnnotation = undefined> {
     // Lets attempt to get the highlighter/languages ready immediately
     else if (this.highlighter == null) {
       this.computedLang = file.lang ?? getFiletypeFromFileName(file.name);
-      void this.initializeHighlighter();
+      void this.initializeHighlighter().catch((error: unknown) => {
+        if (!(error instanceof HighlighterDisposedError)) {
+          this.onHighlightError(error);
+        }
+      });
     }
   }
 
@@ -468,7 +485,8 @@ export class FileRenderer<LAnnotation = undefined> {
       return (
         (renderCache.result == null && renderCache.hydrated !== true) ||
         this.workerManager?.isWorkingPool() === true ||
-        (this.highlighter != null && areThemesAttached(options.theme))
+        (this.highlighter != null &&
+          areThemesAttached(options.theme, this.highlighter))
       );
     }
     // Hydration has highlighted DOM without a local AST. It is still active
@@ -485,7 +503,10 @@ export class FileRenderer<LAnnotation = undefined> {
       return !renderCache.highlighted;
     }
 
-    return this.highlighter != null && areThemesAttached(options.theme);
+    return (
+      this.highlighter != null &&
+      areThemesAttached(options.theme, this.highlighter)
+    );
   }
 
   public getOrCreateLineCache(file: FileContents): string[] {
@@ -727,6 +748,7 @@ export class FileRenderer<LAnnotation = undefined> {
       !hasContent ||
       isFilePlainText(file) ||
       isFileMassive(lines.length, this.getTokenizeMaxLength());
+    this.highlighter = getHighlighterIfLoaded();
     const canRenderFile = this.canRenderFile(file, options, forcePlainText);
     const newContent = !areFileTargetsEqual(file, this.renderCache.file);
     const newRenderRange = !areRenderRangesEqual(
@@ -780,17 +802,15 @@ export class FileRenderer<LAnnotation = undefined> {
       }
     } else {
       this.computedLang = file.lang ?? getFiletypeFromFileName(file.name);
-      this.highlighter ??= getHighlighterIfLoaded();
       const hasThemes =
-        this.highlighter != null && areThemesAttached(options.theme);
+        this.highlighter != null &&
+        areThemesAttached(options.theme, this.highlighter);
       const hasLangs =
-        this.highlighter != null && areLanguagesAttached(this.computedLang);
+        this.highlighter != null &&
+        areLanguagesAttached(this.computedLang, this.highlighter);
       const canHighlight = !forcePlainText && hasLangs;
+      const lazyLineAST = Number.isFinite(renderRange.totalLines);
 
-      // If we have any semblance of a highlighter with the correct theme(s)
-      // attached, we can kick off some form of rendering.  If we don't have
-      // the correct language, then we can render plain text and after kick off
-      // an async job to get the highlighted AST
       if (
         canRenderFile &&
         this.highlighter != null &&
@@ -803,7 +823,8 @@ export class FileRenderer<LAnnotation = undefined> {
         const { result, options } = this.renderFileWithHighlighter(
           file,
           this.highlighter,
-          forcePlainText || !hasLangs
+          forcePlainText || !hasLangs,
+          lazyLineAST
         );
         this.renderCache = {
           file,
@@ -814,13 +835,16 @@ export class FileRenderer<LAnnotation = undefined> {
         };
       }
 
-      // If we get in here it means we'll have to kick off an async highlight
-      // process which will involve initializing the highlighter with new themes
-      // and languages
       if (!hasThemes || (!forcePlainText && !hasLangs)) {
-        void this.asyncHighlight(file).then(({ result, options }) => {
-          this.applyHighlightResult(file, result, options, !forcePlainText);
-        });
+        void this.asyncHighlight(file, lazyLineAST)
+          .then(({ result, options }) => {
+            this.applyHighlightResult(file, result, options, !forcePlainText);
+          })
+          .catch((error: unknown) => {
+            if (!(error instanceof HighlighterDisposedError)) {
+              this.onHighlightError(error);
+            }
+          });
       }
     }
 
@@ -838,11 +862,17 @@ export class FileRenderer<LAnnotation = undefined> {
     renderRange: RenderRange = DEFAULT_RENDER_RANGE
   ): Promise<FileRenderResult> {
     this.file = file;
-    const { result } = await this.asyncHighlight(file);
+    const { result } = await this.asyncHighlight(
+      file,
+      Number.isFinite(renderRange.totalLines)
+    );
     return this.processFileResult(file, renderRange, result);
   }
 
-  private async asyncHighlight(file: FileContents): Promise<RenderFileResult> {
+  private async asyncHighlight(
+    file: FileContents,
+    lazyLineAST = false
+  ): Promise<RenderFileResult> {
     const lines = this.getOrCreateLineCache(file);
     const forcePlainText = isFileMassive(
       lines.length,
@@ -853,10 +883,11 @@ export class FileRenderer<LAnnotation = undefined> {
       : (file.lang ?? getFiletypeFromFileName(file.name));
     const hasThemes =
       this.highlighter != null &&
-      hasResolvedThemes(getThemes(this.getLocalHighlightTheme()));
+      areThemesAttached(this.getLocalHighlightTheme(), this.highlighter);
     const hasLangs =
       forcePlainText ||
-      (this.highlighter != null && areLanguagesAttached(this.computedLang));
+      (this.highlighter != null &&
+        areLanguagesAttached(this.computedLang, this.highlighter));
     // If we don't have the required langs or themes, then we need to
     // initialize the highlighter to load the appropriate languages and themes
     if (this.highlighter == null || !hasThemes || !hasLangs) {
@@ -865,18 +896,21 @@ export class FileRenderer<LAnnotation = undefined> {
     return this.renderFileWithHighlighter(
       file,
       this.highlighter,
-      forcePlainText
+      forcePlainText,
+      lazyLineAST
     );
   }
 
   private renderFileWithHighlighter(
     file: FileContents,
     highlighter: DiffsHighlighter,
-    forcePlainText = false
+    forcePlainText = false,
+    lazyLineAST = false
   ): RenderFileResult {
     const { options } = this.getRenderOptions(file);
     const result = renderFileWithHighlighter(file, highlighter, options, {
       forcePlainText,
+      lazyLineAST,
     });
     return { result, options };
   }
@@ -937,7 +971,12 @@ export class FileRenderer<LAnnotation = undefined> {
       gutter.children.push(
         createGutterItem('context', lineNumber, `${lineIndex}`)
       );
-      contentArray.push(line);
+      contentArray.push(
+        applySearchDecorationsToLine(
+          line,
+          this.searchDecorations.get(lineIndex)
+        )
+      );
       rowCount++;
 
       // Check annotations using ACTUAL line number from file
@@ -986,7 +1025,7 @@ export class FileRenderer<LAnnotation = undefined> {
   }
 
   public renderFullHTML(result: FileRenderResult): string {
-    return toHtml(this.renderFullAST(result));
+    return hastToHtml(this.renderFullAST(result));
   }
 
   public renderFullAST(
@@ -1019,9 +1058,9 @@ export class FileRenderer<LAnnotation = undefined> {
     includeCodeNode: boolean = false
   ): string {
     if (!includeCodeNode) {
-      return toHtml(children);
+      return hastToHtml(children);
     }
-    return toHtml(
+    return hastToHtml(
       createHastElement({
         tagName: 'code',
         children,
@@ -1034,9 +1073,10 @@ export class FileRenderer<LAnnotation = undefined> {
     this.highlighter = await getSharedHighlighter(
       getHighlighterOptions(this.computedLang, {
         theme: this.getLocalHighlightTheme(),
-        preferredHighlighter:
-          this.workerManager?.getPreferredHighlighter() ??
-          this.options.preferredHighlighter,
+        preferredHighlighter: resolvePreferredHighlighter(
+          this.workerManager,
+          this.options
+        ),
       })
     );
     return this.highlighter;
@@ -1160,6 +1200,22 @@ export class FileRenderer<LAnnotation = undefined> {
       totalLines,
     });
   }
+}
+
+function groupSearchDecorationsByLine(
+  decorations: readonly SearchLineDecoration[] | undefined
+): Map<number, SearchLineDecoration[]> {
+  const grouped = new Map<number, SearchLineDecoration[]>();
+  if (decorations == null) {
+    return grouped;
+  }
+
+  for (const decoration of decorations) {
+    const lineDecorations = grouped.get(decoration.lineIndex) ?? [];
+    lineDecorations.push(decoration);
+    grouped.set(decoration.lineIndex, lineDecorations);
+  }
+  return grouped;
 }
 
 function isFileMassive(lineCount: number, tokenizeMaxLength: number): boolean {

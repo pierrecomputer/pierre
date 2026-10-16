@@ -87,6 +87,8 @@ interface ReceivedEditorOptions {
   historyMaxEntries: number | undefined;
   onAttach: unknown;
   onChange: unknown;
+  onFocus: (() => void) | undefined;
+  onBlur: (() => void) | undefined;
   roundedSelection: boolean | undefined;
 }
 
@@ -176,6 +178,8 @@ function createEditorHarness(attachmentError?: Error) {
       historyMaxEntries: options.historyMaxEntries,
       onAttach: options.onAttach,
       onChange: options.onChange,
+      onFocus: options.onFocus,
+      onBlur: options.onBlur,
       roundedSelection: options.roundedSelection,
     });
     receivedEditStateKeys.push(editStateKey);
@@ -384,6 +388,8 @@ describe('React CodeView editor factory', () => {
     } = createEditorHarness();
     const attemptedOnChange = mock(() => {});
     const onAttach = mock(() => {});
+    const onFocus = mock(() => {});
+    const onBlur = mock(() => {});
     const onItemEditChange = mock(
       (
         _event: EditorChangeEvent<'file' | 'file-diff', undefined, undefined>,
@@ -395,6 +401,8 @@ describe('React CodeView editor factory', () => {
       // item router must overwrite it before invoking the provider factory.
       historyMaxEntries: 17,
       onAttach,
+      onFocus,
+      onBlur,
       onChange: attemptedOnChange,
       roundedSelection: false,
     };
@@ -426,7 +434,11 @@ describe('React CodeView editor factory', () => {
         expect(options.roundedSelection).toBe(false);
         expect(options.onChange).toBeDefined();
         expect(options.onChange).not.toBe(attemptedOnChange);
+        options.onFocus?.();
+        options.onBlur?.();
       }
+      expect(onFocus).toHaveBeenCalledTimes(2);
+      expect(onBlur).toHaveBeenCalledTimes(2);
 
       await setSessionText(editors[0], 'edited a');
       await setSessionText(editors[1], 'edited b');

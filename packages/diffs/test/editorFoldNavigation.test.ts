@@ -8,6 +8,16 @@ import { disposeHighlighter } from '../src/highlighter/shared_highlighter';
 import type { FileDiffMetadata } from '../src/types';
 import { installDom, wait } from './domHarness';
 
+class TestFileDiff extends FileDiff<undefined> {
+  getInputDiffForTest(): FileDiffMetadata | undefined {
+    return this.getInputDiff();
+  }
+
+  getRenderedDiffForTest(): FileDiffMetadata | undefined {
+    return this.getRenderedDiff();
+  }
+}
+
 afterAll(async () => {
   await disposeHighlighter();
 });
@@ -41,7 +51,7 @@ function getEditSessionDiff(
 interface FoldFixture {
   container: HTMLElement;
   editor: Editor<'file-diff', undefined>;
-  fileDiff: FileDiff<undefined>;
+  fileDiff: TestFileDiff;
   content: HTMLElement;
   cleanup(): Promise<void>;
 }
@@ -61,7 +71,7 @@ async function createFoldFixture(): Promise<FoldFixture> {
     .replace('line 10\n', 'line 10 changed\n')
     .replace('line 50\n', 'line 50 changed\n');
 
-  const fileDiff = new FileDiff<undefined>({
+  const fileDiff = new TestFileDiff({
     disableFileHeader: true,
     theme: DEFAULT_THEMES,
     diffStyle: 'split',
@@ -318,7 +328,7 @@ describe('diff editor: reveal-on-jump', () => {
     const fixture = await createFoldFixture();
     const { container, editor, fileDiff } = fixture;
     try {
-      const externalHunks = fileDiff.fileDiff!.hunks;
+      const externalHunks = fileDiff.getInputDiffForTest()!.hunks;
       const sessionDiff = getEditSessionDiff(fileDiff);
       expect(sessionDiff).toBeDefined();
       const hunksBefore = sessionDiff!.hunks.length;
@@ -341,7 +351,9 @@ describe('diff editor: reveal-on-jump', () => {
 
       expect(getEditSessionDiff(fileDiff)).toBe(sessionDiff);
       expect(sessionDiff!.hunks.length).toBe(hunksBefore + 1);
-      expect(fileDiff.fileDiff!.hunks).toBe(externalHunks);
+      expect(fileDiff.getInputDiffForTest()!.hunks).toBe(externalHunks);
+      expect(fileDiff.fileDiff).not.toBe(sessionDiff);
+      expect(fileDiff.getRenderedDiffForTest()).toBe(sessionDiff);
       const content = findAdditionContent(container);
       const row = content?.querySelector('[data-line="30"]');
       expect(row).not.toBeNull();

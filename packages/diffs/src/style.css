@@ -317,18 +317,6 @@
       var(--diffs-token-light-bg, inherit),
       var(--diffs-token-dark-bg, inherit)
     );
-    font-weight: light-dark(
-      var(--diffs-token-light-font-weight, inherit),
-      var(--diffs-token-dark-font-weight, inherit)
-    );
-    font-style: light-dark(
-      var(--diffs-token-light-font-style, inherit),
-      var(--diffs-token-dark-font-style, inherit)
-    );
-    text-decoration: light-dark(
-      var(--diffs-token-light-text-decoration, inherit),
-      var(--diffs-token-dark-text-decoration, inherit)
-    );
   }
 
   /* Line Color and BG Calculations */
@@ -842,6 +830,37 @@
     grid-column: 2;
     min-width: 0;
     background-color: var(--diffs-bg);
+  }
+
+  /* Keep per-row selectors outside this guard: :has would rescan the columns
+   * for every row. */
+  [data-overflow='scroll']:not(
+      [data-dehydrated],
+      [data-custom-styles],
+      :has(
+        > [data-code] > [contenteditable],
+        > [data-code]
+          > *
+          > :is(
+            [data-line-annotation],
+            [data-separator],
+            [data-merge-conflict],
+            [data-merge-conflict-actions]
+          )
+      )
+    )
+    > [data-code] {
+    display: flex;
+
+    > [data-gutter] {
+      display: block;
+      flex-shrink: 0;
+    }
+
+    > [data-content] {
+      display: block;
+      flex: 1 0 max-content;
+    }
   }
 
   /* Both split layouts that share one grid across the two columns: wrap
@@ -1417,6 +1436,10 @@
     min-height: 1lh;
   }
 
+  [data-overflow='scroll'] [data-column-number] {
+    min-height: 1lh;
+  }
+
   [data-column-number] {
     box-sizing: content-box;
     text-align: right;
@@ -1473,6 +1496,28 @@
   [data-diff-span] {
     border-radius: 3px;
     box-decoration-break: clone;
+  }
+
+  :is([data-line], [data-no-newline]) [data-search-match] {
+    border-radius: 3px;
+    box-decoration-break: clone;
+    background-color: var(
+      --diffs-bg-search-match-override,
+      var(--diffs-editor-match-highlight-bg, light-dark(#ff963288, #ff963266))
+    );
+  }
+
+  :is([data-line], [data-no-newline]) [data-search-match-current] {
+    background-color: var(
+      --diffs-bg-search-match-current-override,
+      var(
+        --diffs-editor-match-bg,
+        var(
+          --diffs-editor-selection-bg,
+          color-mix(in lab, var(--diffs-modified-base) 52%, transparent)
+        )
+      )
+    );
   }
 
   [data-line-type='change-addition'] [data-diff-span] {

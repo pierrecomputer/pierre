@@ -3,8 +3,8 @@ import { normalizeThemeColors } from '@pierre/theming/color';
 import { DEFAULT_THEMES } from '../constants';
 import type {
   DiffsHighlighter,
+  DiffsTheme,
   DiffsThemeNames,
-  ThemeRegistrationResolved,
   ThemesType,
 } from '../types';
 import { formatCSSVariablePrefix } from './formatCSSVariablePrefix';
@@ -15,16 +15,6 @@ interface GetHighlighterThemeStylesProps {
   prefix?: string;
 }
 
-// FIXME(amadeus): We'll probably need to
-// re-think this when it comes to removing inline
-// styles
-//
-// The base foreground/background now flow through @pierre/theming's
-// normalizeThemeColors, which preserves the theme's top-level fg/bg. The git
-// colors deliberately stay on the diffs-local 2-link lookup below (see
-// getGitVariables) to keep this output byte-identical; adopting
-// normalizeThemeColors' longer git chain is a separate, independently verified
-// follow-up rather than a side effect of this migration.
 export function getHighlighterThemeStyles({
   theme = DEFAULT_THEMES,
   highlighter,
@@ -33,39 +23,80 @@ export function getHighlighterThemeStyles({
   let styles = '';
   if (typeof theme === 'string') {
     const themeData = highlighter.getTheme(theme);
-    const normalized = normalizeThemeColors(themeData);
+    const normalized = getThemeColors(themeData, highlighter);
     styles += `color:${normalized.fg};`;
     styles += `background-color:${normalized.bg};`;
     styles += `${formatCSSVariablePrefix('global')}fg:${normalized.fg};`;
     styles += `${formatCSSVariablePrefix('global')}bg:${normalized.bg};`;
+    styles += getEditorSearchVariables(normalized);
     styles += getGitVariables(themeData, prefix);
   } else {
     let themeData = highlighter.getTheme(theme.dark);
-    let normalized = normalizeThemeColors(themeData);
+    let normalized = getThemeColors(themeData, highlighter);
     styles += `${formatCSSVariablePrefix('global')}dark:${normalized.fg};`;
     styles += `${formatCSSVariablePrefix('global')}dark-bg:${normalized.bg};`;
+    styles += getEditorSearchVariables(normalized, 'dark');
     styles += getGitVariables(themeData, 'dark');
 
     themeData = highlighter.getTheme(theme.light);
-    normalized = normalizeThemeColors(themeData);
+    normalized = getThemeColors(themeData, highlighter);
     styles += `${formatCSSVariablePrefix('global')}light:${normalized.fg};`;
     styles += `${formatCSSVariablePrefix('global')}light-bg:${normalized.bg};`;
+    styles += getEditorSearchVariables(normalized, 'light');
+    styles += getPairedEditorSearchVariables();
     styles += getGitVariables(themeData, 'light');
   }
   return styles;
 }
 
-// Emits the diffs git-status CSS variables (addition/deletion/modified colors)
-// for a resolved theme. This intentionally uses the diffs-local 2-link lookup
-// (gitDecoration.* → terminal.ansi*) and STOPS before the editorGutter.* tail
-// that @pierre/theming's normalizeThemeColors adds, so the emitted string stays
-// byte-identical to the pre-theming output. Adopting the gutter fallback for
-// diffs is a deliberate follow-up. A variable is omitted entirely when neither
-// source key is present, matching the previous behavior.
-function getGitVariables(
-  themeData: ThemeRegistrationResolved,
+// cssVariables: true must use the same prefix for backgrounds and tokens.
+// Object palettes already include their configured prefix and defaults.
+function getThemeColors(theme: DiffsTheme, highlighter: DiffsHighlighter) {
+  if (highlighter.name === 'highlights' && theme.zed?.cssVariables === true) {
+    const prefix = formatCSSVariablePrefix('token');
+    return {
+      fg: `var(${prefix}foreground)`,
+      bg: `var(${prefix}background)`,
+      colors: theme.colors,
+    };
+  }
+  return normalizeThemeColors(theme);
+}
+
+function getPairedEditorSearchVariables() {
+  return [
+    '--diffs-editor-selection-bg:light-dark(var(--diffs-light-editor-selection-bg, var(--diffs-line-bg)), var(--diffs-dark-editor-selection-bg, var(--diffs-line-bg)));',
+    '--diffs-editor-match-bg:light-dark(var(--diffs-light-editor-match-bg, var(--diffs-light-editor-selection-bg, var(--diffs-editor-selection-bg))), var(--diffs-dark-editor-match-bg, var(--diffs-dark-editor-selection-bg, var(--diffs-editor-selection-bg))));',
+    '--diffs-editor-match-highlight-bg:light-dark(var(--diffs-light-editor-match-highlight-bg, #ff963288), var(--diffs-dark-editor-match-highlight-bg, #ff963266));',
+  ].join('');
+}
+
+function getEditorSearchVariables(
+  themeData: { colors?: Record<string, string> },
   modePrefix?: string
 ) {
+  modePrefix = modePrefix != null ? `${modePrefix}-` : '';
+  let styles = '';
+  const { colors = {} } = themeData;
+  const selectionBackground = colors['editor.selectionBackground'];
+  if (selectionBackground != null) {
+    styles += `${formatCSSVariablePrefix('global')}${modePrefix}editor-selection-bg:${selectionBackground};`;
+  }
+  const findMatchBackground = colors['editor.findMatchBackground'];
+  if (findMatchBackground != null) {
+    styles += `${formatCSSVariablePrefix('global')}${modePrefix}editor-match-bg:${findMatchBackground};`;
+  }
+  const findMatchHighlightBackground =
+    colors['editor.findMatchHighlightBackground'];
+  if (findMatchHighlightBackground != null) {
+    styles += `${formatCSSVariablePrefix('global')}${modePrefix}editor-match-highlight-bg:${findMatchHighlightBackground};`;
+  }
+  return styles;
+}
+
+// Keep the gitDecoration → terminal.ansi fallback; adding editorGutter colors
+// here would change diff backgrounds for existing themes.
+function getGitVariables(themeData: DiffsTheme, modePrefix?: string) {
   modePrefix = modePrefix != null ? `${modePrefix}-` : '';
   let styles = '';
   const additionGreen =

@@ -64,7 +64,7 @@ test('StrictMode-style remount reconnects instances to the virtualizer', async (
           virtualizer,
           undefined,
           undefined,
-          true
+          () => undefined
         );
         instance.hydrate({ fileDiff, fileContainer: containers[index] });
         instance.render({ fileDiff });

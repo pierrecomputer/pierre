@@ -52,6 +52,8 @@ interface E2EEditor {
 }
 
 interface Window {
+  __codeView?: import('../../src/components/CodeView').CodeView;
+
   // Fixture ready flags.
   __diffReady?: boolean;
   __editReady?: boolean;
@@ -64,6 +66,12 @@ interface Window {
   __themeReady?: boolean;
   __selectionActionReady?: boolean;
   __selectionActionEdgesReady?: boolean;
+  __workerPortableReady?: boolean;
+
+  // worker-portable.html: whether the portable worker pool initialized, and
+  // the first worker or pool error if one occurred.
+  __workerPortableInitialized?: boolean;
+  __workerPortableError?: string;
 
   // code-view-annotations.html helpers for annotation layout and scroll state.
   __annotationScroll?: {
