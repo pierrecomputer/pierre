@@ -2,6 +2,7 @@
 
 import { resolveThemes } from '@pierre/diffs';
 import { useWorkerPool } from '@pierre/diffs/react';
+import { type ColorMode } from '@pierre/theming';
 import { useEffect, useRef, useState } from 'react';
 
 import { useLatestValueRef } from './useLatestValueRef';
@@ -19,11 +20,13 @@ export interface ThemeCycleThemeState {
   lightThemeName: LightThemeName;
   darkThemeName: DarkThemeName;
   // Resolved light/dark for the surrounding ThemeProvider — undefined while
-  // localStorage hydration is still pending. Cycling only steps through
-  // themes of this scheme and waits for a resolved value before stepping.
+  // localStorage hydration is still pending. Cycling waits for a resolved
+  // value before starting so the first step doesn't anchor on the wrong
+  // phase.
   resolvedThemeMode: 'light' | 'dark' | undefined;
   setLightThemeName: (theme: LightThemeName) => void;
   setDarkThemeName: (theme: DarkThemeName) => void;
+  setColorMode: (mode: ColorMode) => void;
 }
 
 interface UseThemeCycleArgs extends ThemeCycleThemeState {
@@ -31,13 +34,11 @@ interface UseThemeCycleArgs extends ThemeCycleThemeState {
   stepSeconds: ThemeCycleDurationSeconds | null;
 }
 
-// Drives a sweep through the catalog themes that match the resolved color
-// scheme — the user's Light/Dark pick, or the system appearance in Auto — so
-// cycling never overrides the appearance. Each scheme keeps its own cursor,
-// anchored on its active theme, and every tick advances whichever scheme is
-// resolved at that moment, so an appearance change mid-cycle carries on
-// through the other scheme's themes. The first time cycling runs, every theme
-// is resolved up front so steps never wait on a theme load.
+// Drives a sweep through every catalog theme, alternating light and dark on
+// each step so every tick flips the color scheme. The rotation is anchored on
+// the currently active theme so the visible state doesn't jump. The first
+// time cycling runs, every theme is resolved up front so steps never wait on a
+// theme load.
 export function useThemeCycle({
   running,
   stepSeconds,
@@ -46,6 +47,7 @@ export function useThemeCycle({
   resolvedThemeMode,
   setLightThemeName,
   setDarkThemeName,
+  setColorMode,
 }: UseThemeCycleArgs): void {
   const cycling = running && stepSeconds != null;
   const [themesPreloaded, setThemesPreloaded] = useState(false);
@@ -53,9 +55,9 @@ export function useThemeCycle({
   const workerPool = useWorkerPool();
 
   // Capture the latest theme state in refs so the cycle effect doesn't
-  // restart its interval (and re-anchor the cursors) every time the cycle
-  // advances or the appearance changes. One ref per value, so each only
-  // updates when its own value changes.
+  // restart its interval (and re-anchor the rotation order) every time
+  // the cycle advances. Each tick reads the same captured sequence. One ref
+  // per value, so each only updates when its own value changes.
   const lightThemeNameRef = useLatestValueRef(lightThemeName);
   const darkThemeNameRef = useLatestValueRef(darkThemeName);
   const resolvedThemeModeRef = useLatestValueRef(resolvedThemeMode);
@@ -64,8 +66,7 @@ export function useThemeCycle({
     if (!cycling || preloadStartedRef.current) return;
     preloadStartedRef.current = true;
     // Themes resolve into the same cache the active highlighter reads from,
-    // whether that's highlights on the main thread or the worker pool. Both
-    // schemes load because the appearance can change while cycling.
+    // whether that's highlights on the main thread or the worker pool.
     resolveThemes(
       [...docsThemeCatalog.getThemeNames()],
       workerPool?.getPreferredHighlighter() ?? PREFERRED_HIGHLIGHTER
@@ -78,23 +79,55 @@ export function useThemeCycle({
 
   useEffect(() => {
     if (!cycling || stepSeconds == null || !themesPreloaded) return undefined;
+    const startMode = resolvedThemeModeRef.current ?? 'light';
+    // Snapshot the catalog once per cycle start; each tick reads the same
+    // captured sequence.
     const lightThemes = docsThemeCatalog.getThemeNames({
       colorScheme: 'light',
     });
     const darkThemes = docsThemeCatalog.getThemeNames({ colorScheme: 'dark' });
-    // A theme missing from the catalog yields -1, so the first tick lands on
-    // index 0.
-    let lightIdx = lightThemes.indexOf(lightThemeNameRef.current);
-    let darkIdx = darkThemes.indexOf(darkThemeNameRef.current);
-    const tick = () => {
-      // Skips ticks until hydration resolves the scheme.
-      if (resolvedThemeModeRef.current === 'dark') {
-        darkIdx = (darkIdx + 1) % darkThemes.length;
-        setDarkThemeName(darkThemes[darkIdx]);
-      } else if (resolvedThemeModeRef.current === 'light') {
-        lightIdx = (lightIdx + 1) % lightThemes.length;
-        setLightThemeName(lightThemes[lightIdx]);
+    const lightStartIdx = Math.max(
+      0,
+      lightThemes.indexOf(lightThemeNameRef.current)
+    );
+    const darkStartIdx = Math.max(
+      0,
+      darkThemes.indexOf(darkThemeNameRef.current)
+    );
+    type Step =
+      | { mode: 'light'; theme: LightThemeName }
+      | { mode: 'dark'; theme: DarkThemeName };
+    const lightStep = (i: number): Step => ({
+      mode: 'light',
+      theme: lightThemes[(lightStartIdx + i) % lightThemes.length],
+    });
+    const darkStep = (i: number): Step => ({
+      mode: 'dark',
+      theme: darkThemes[(darkStartIdx + i) % darkThemes.length],
+    });
+    // Interleave the two schemes, starting with the active one. The shorter
+    // list wraps so every theme in the longer list still gets a turn.
+    const order: Step[] = [];
+    for (let i = 0; i < Math.max(lightThemes.length, darkThemes.length); i++) {
+      if (startMode === 'dark') {
+        order.push(darkStep(i), lightStep(i));
+      } else {
+        order.push(lightStep(i), darkStep(i));
       }
+    }
+    // Tick 0 is the already-active theme — start advancing from the next
+    // entry so the first interval fires onto something new.
+    let idx = 1;
+    const tick = () => {
+      const step = order[idx % order.length];
+      if (step.mode === 'light') {
+        setLightThemeName(step.theme);
+        setColorMode('light');
+      } else {
+        setDarkThemeName(step.theme);
+        setColorMode('dark');
+      }
+      idx++;
     };
     tick();
     const intervalId = window.setInterval(tick, stepSeconds * 1000);
@@ -108,5 +141,6 @@ export function useThemeCycle({
     stepSeconds,
     setLightThemeName,
     setDarkThemeName,
+    setColorMode,
   ]);
 }
