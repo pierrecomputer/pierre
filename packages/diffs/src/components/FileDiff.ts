@@ -6,6 +6,7 @@ import {
   DEFAULT_THEMES,
   DEFAULT_TOKENIZE_MAX_LENGTH,
   DIFFS_TAG_NAME,
+  EMPTY_LINE_ANNOTATIONS,
   EMPTY_RENDER_RANGE,
   HEADER_FILENAME_SUFFIX_SLOT_ID,
   HEADER_METADATA_SLOT_ID,
@@ -216,16 +217,16 @@ function areLinesEqual(first: string[], second: string[]): boolean {
 // completely invalid
 function canRestoreDiffSession(
   snapshot: RetainedDiffSessionSnapshot,
-  externalDiff: FileDiffMetadata
+  inputDiff: FileDiffMetadata
 ): boolean {
   const { oldFile } = snapshot;
   if (oldFile == null) {
-    return externalDiff.type === 'new';
+    return inputDiff.type === 'new';
   }
   return (
-    externalDiff.type !== 'new' &&
-    oldFile.name === (externalDiff.prevName ?? externalDiff.name) &&
-    areLinesEqual(oldFile.lines, externalDiff.deletionLines)
+    inputDiff.type !== 'new' &&
+    oldFile.name === (inputDiff.prevName ?? inputDiff.name) &&
+    areLinesEqual(oldFile.lines, inputDiff.deletionLines)
   );
 }
 
@@ -294,8 +295,10 @@ export interface FileDiffOptions<LAnnotation, Caret>
    * errors yourself.
    */
   disableErrorHandling?: boolean;
+  /** Receives the matching diff, including any editor changes. */
   renderAnnotation?(
-    annotation: DiffLineAnnotation<LAnnotation>
+    annotation: DiffLineAnnotation<LAnnotation>,
+    fileDiff: FileDiffMetadata
   ): HTMLElement | undefined;
   renderGutterUtility?(
     getHoveredRow: () => GetHoveredLineResult<'diff'> | undefined
@@ -328,6 +331,7 @@ export interface FileDiffOptions<LAnnotation, Caret>
 interface AnnotationElementCache<LAnnotation> {
   element: HTMLElement;
   annotation: DiffLineAnnotation<LAnnotation>;
+  fileDiff: FileDiffMetadata;
 }
 
 interface CustomHunkElementCache {
@@ -374,17 +378,26 @@ interface HeaderCache {
   fileDiff: FileDiffMetadata | undefined;
 }
 
+export interface FileDiffRenderData<LAnnotation> {
+  fileDiff: FileDiffMetadata;
+  lineAnnotations: DiffLineAnnotation<LAnnotation>[];
+}
+
+export interface FileDiffRenderInput<LAnnotation> {
+  fileDiff: FileDiffMetadata;
+  lineAnnotations: DiffLineAnnotation<LAnnotation>[] | undefined;
+}
+
 interface EditSession<LAnnotation> {
+  // Editable copy of the diff. Changes in the editor are written here.
   diff: FileDiffMetadata;
+  // Latest input, kept separately so rejecting edits can restore it.
+  inputDiff: FileDiffMetadata;
   annotations:
     | EditSessionAnnotations<DiffLineAnnotation<LAnnotation>>
     | undefined;
-  /*
-   * `outgoingDiff` keeps the diff the document still holds (the render already
-   * shows the new `diff`): its presence signals the pending replacement, and it
-   * supplies the old-file side both for the undo-reset decision and for
-   * capturing session state.
-   */
+  // Diff still held by the editor's document until it syncs to a replacement.
+  // Keep it to compare the old-file contents for undo and to save the session.
   outgoingDiff: FileDiffMetadata | undefined;
 }
 
@@ -429,14 +442,24 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
 
   protected annotationCache: Map<string, AnnotationElementCache<LAnnotation>> =
     new Map();
-  protected lineAnnotations: DiffLineAnnotation<LAnnotation>[] = [];
+  // Annotations for the displayed diff, stored with that diff in renderedData.
+  protected get lineAnnotations(): DiffLineAnnotation<LAnnotation>[] {
+    return this.renderedData?.lineAnnotations ?? EMPTY_LINE_ANNOTATIONS;
+  }
   protected managersDirty = false;
 
   protected deletionFile?: FileContents | null;
   protected additionFile?: FileContents | null;
+  // Latest input. Editor changes are kept in the private edit session.
   public fileDiff: FileDiffMetadata | undefined;
   private editSession: EditSession<LAnnotation> | undefined;
-  protected renderedDiff: FileDiffMetadata | undefined;
+  // Diff and annotations currently displayed. Absent until a diff is rendered.
+  private renderedData: FileDiffRenderData<LAnnotation> | undefined;
+  // Keep the next diff and its annotations together until that diff renders.
+  private pendingData: FileDiffRenderData<LAnnotation> | undefined;
+  // Forces the next render() call, such as the one the owner makes after
+  // requestOwnerRender.
+  protected forceRenderOverride: true | undefined;
   protected renderRange: RenderRange | undefined;
   protected pendingFiles: PendingFileLoad | undefined;
   protected appliedPreAttributes: PrePropertiesConfig | undefined;
@@ -464,7 +487,9 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
       theme: DEFAULT_THEMES,
     },
     protected workerManager?: WorkerPoolManager | undefined,
-    protected isContainerManaged = false
+    // Set when an owner such as React manages the container. Internal renders
+    // call it, and the owner must call render().
+    protected requestOwnerRender?: () => void
   ) {
     this.hunksRenderer = this.createHunksRenderer(options);
     this.resizeManager = new ResizeManager();
@@ -700,23 +725,35 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
     );
   };
 
-  // Return the annotations this component currently renders. Once editing
-  // starts, the private session state owns them.
+  // Return annotations for the working diff, including updates that haven't
+  // been rendered yet.
   protected getLatestAnnotations(): DiffLineAnnotation<LAnnotation>[] {
-    return this.editSession?.annotations?.current ?? this.lineAnnotations;
+    return (
+      this.pendingData?.lineAnnotations ??
+      this.editSession?.annotations?.current ??
+      this.lineAnnotations
+    );
   }
 
-  // Returns true when the caller passed annotations this component has not
-  // handled yet. Re-renders often re-pass an annotations array the component
-  // already holds — the external one, or one the active session tracks — and
-  // treating those repeats as new writes would move annotations, so they are
-  // recognized by identity and ignored.
+  // Use pending annotations only when their diff is selected for rendering.
+  protected getAnnotationsForDiff(
+    fileDiff: FileDiffMetadata
+  ): DiffLineAnnotation<LAnnotation>[] {
+    const { pendingData } = this;
+    return pendingData != null &&
+      areDiffTargetsEqual(fileDiff, pendingData.fileDiff)
+      ? pendingData.lineAnnotations
+      : this.lineAnnotations;
+  }
+
+  // Check whether the annotation array is new. Reusing a tracked array must
+  // not reset positions moved by editing.
   protected isNewAnnotations(
     lineAnnotations: DiffLineAnnotation<LAnnotation>[]
   ): boolean {
     const session = this.editSession?.annotations;
-    const externalAnnotations = this.lineAnnotations;
-    if (lineAnnotations === externalAnnotations) {
+    const latestAnnotations = this.getLatestAnnotations();
+    if (lineAnnotations === latestAnnotations) {
       return false;
     }
     return (
@@ -730,23 +767,22 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
     lineAnnotations: DiffLineAnnotation<LAnnotation>[]
   ): void {
     const sessionAnnotations = this.editSession?.annotations;
-    if (sessionAnnotations == null) {
-      this.lineAnnotations = lineAnnotations;
-      return;
+    if (sessionAnnotations != null) {
+      if (!this.isNewAnnotations(lineAnnotations)) {
+        return;
+      }
+      // Use the new annotations for editing, and keep their original positions
+      // so rejecting the edit can restore them.
+      writeEditSessionAnnotations(
+        sessionAnnotations,
+        lineAnnotations,
+        getLineAnnotationName
+      );
     }
-    if (!this.isNewAnnotations(lineAnnotations)) {
-      return;
+    const fileDiff = this.getWorkingDiff();
+    if (fileDiff != null) {
+      this.pendingData = { fileDiff, lineAnnotations };
     }
-    // Externally provided annotations are the source of truth: they become the
-    // new external collection and the session renders them at the line numbers
-    // given. The caller owns whether those positions still make sense after an
-    // edit; a revert renders this collection unchanged rather than moving them.
-    this.lineAnnotations = lineAnnotations;
-    writeEditSessionAnnotations(
-      sessionAnnotations,
-      lineAnnotations,
-      getLineAnnotationName
-    );
   }
 
   // Takes annotations the editor remapped and makes them what the session
@@ -770,6 +806,10 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
       return false;
     }
     session.current = lineAnnotations;
+    if (this.renderedData != null) {
+      this.renderedData.lineAnnotations = lineAnnotations;
+    }
+    this.pendingData = undefined;
     this.hunksRenderer.setLineAnnotations(lineAnnotations);
     this.renderAnnotations();
     return true;
@@ -867,7 +907,7 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
     }
     return (
       overflow === 'scroll' &&
-      (this.getLatestAnnotations().length > 0 ||
+      (this.lineAnnotations.length > 0 ||
         this.pre?.hasAttribute('data-has-merge-conflict') === true)
     );
   }
@@ -918,13 +958,14 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
     }
 
     // Clean up the elements
-    if (!this.isContainerManaged) {
+    if (!this.isComponentManaged) {
       this.fileContainer?.remove();
     }
     this.fileContainer = undefined;
     this.mounted = false;
     if (!recycle) {
-      this.lineAnnotations = [];
+      this.renderedData = undefined;
+      this.pendingData = undefined;
     }
     this.clearAuxiliaryNodes();
     this.annotationCache.clear();
@@ -966,7 +1007,6 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
       // Clean up the data
       this.fileDiff = undefined;
       this.editSession = undefined;
-      this.renderedDiff = undefined;
       this.deletionFile = undefined;
       this.additionFile = undefined;
     }
@@ -1119,7 +1159,8 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
   }: HydrationSetup<LAnnotation>): void {
     // It's possible we are hydrating a pure-rename and therefore there will be
     // no pre element
-    this.lineAnnotations = lineAnnotations ?? this.lineAnnotations;
+    const hydratedAnnotations = lineAnnotations ?? this.getLatestAnnotations();
+    this.pendingData = undefined;
     this.additionFile = newFile;
     this.deletionFile = oldFile;
     this.fileDiff =
@@ -1127,6 +1168,13 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
       (oldFile !== undefined && newFile !== undefined
         ? parseDiffFromFile(oldFile, newFile, this.options.parseDiffOptions)
         : undefined);
+    this.renderedData =
+      this.fileDiff != null
+        ? { fileDiff: this.fileDiff, lineAnnotations: hydratedAnnotations }
+        : undefined;
+    if (this.fileDiff != null) {
+      this.adoptRenderData(this.fileDiff);
+    }
 
     if (this.pre == null) {
       return;
@@ -1134,7 +1182,6 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
 
     this.syncInteractionOptions();
     this.hunksRenderer.hydrate(this.fileDiff);
-    this.renderedDiff = this.fileDiff;
     // FIXME(amadeus): not sure how to handle this yet...
     // this.renderSeparators();
     this.renderAnnotations();
@@ -1147,13 +1194,30 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
   public rerender(): void {
     if (
       !this.enabled ||
-      (this.fileDiff == null &&
+      (this.getInputDiff() == null &&
         this.additionFile == null &&
         this.deletionFile == null)
     ) {
       return;
     }
+    if (this.requestRender()) return;
     this.render({ forceRender: true, renderRange: this.renderRange });
+  }
+
+  // Editors update their rows directly. Other internal renders can be driven
+  // by the owner, so React updates its children before calling render().
+  protected requestRender(): boolean {
+    const { requestOwnerRender } = this;
+    if (this.editSession != null || requestOwnerRender == null) {
+      return false;
+    }
+    this.forceRenderOverride = true;
+    requestOwnerRender();
+    return true;
+  }
+
+  protected get isComponentManaged(): boolean {
+    return this.requestOwnerRender != null;
   }
 
   public onThemeChange(): void {
@@ -1189,10 +1253,8 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
   };
 
   protected loadFilesIfNecessary(): void {
-    const {
-      fileDiff,
-      options: { loadDiffFiles },
-    } = this;
+    const fileDiff = this.getInputDiff();
+    const { loadDiffFiles } = this.options;
     if (
       fileDiff == null ||
       !canHydrateDiff(fileDiff) ||
@@ -1228,7 +1290,8 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
    * `loadDiffFiles` was passed in to `options`
    */
   public __canAttachEditor(): boolean {
-    return this.fileDiff != null && !this.fileDiff.isPartial;
+    const fileDiff = this.getInputDiff();
+    return fileDiff != null && !fileDiff.isPartial;
   }
 
   /**
@@ -1242,7 +1305,8 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
     }
     const pending = this.__prepareForEditing();
     if (pending == null) {
-      if (this.fileDiff?.isPartial === true && !canHydrateDiff(this.fileDiff)) {
+      const fileDiff = this.getInputDiff();
+      if (fileDiff?.isPartial === true && !canHydrateDiff(fileDiff)) {
         throw new Error(
           'FileDiff.prepareForEditing: this partial diff cannot be hydrated; provide a complete diff'
         );
@@ -1264,7 +1328,8 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
     if (this.__canAttachEditor()) {
       return undefined;
     }
-    if (this.fileDiff?.isPartial === true && !canHydrateDiff(this.fileDiff)) {
+    const fileDiff = this.getInputDiff();
+    if (fileDiff?.isPartial === true && !canHydrateDiff(fileDiff)) {
       throw new Error(
         'FileDiff: this partial diff cannot be hydrated; provide a complete diff to edit'
       );
@@ -1279,7 +1344,7 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
   ): Promise<void> {
     try {
       const files = await loadDiffFiles(fileDiff);
-      if (this.fileDiff !== fileDiff) {
+      if (this.getInputDiff() !== fileDiff) {
         return;
       }
 
@@ -1296,7 +1361,7 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
     expectedDiff: FileDiffMetadata,
     files: LoadedPartialDiffContents
   ): Promise<void> {
-    if (this.fileDiff !== expectedDiff || !expectedDiff.isPartial) {
+    if (this.getInputDiff() !== expectedDiff || !expectedDiff.isPartial) {
       return;
     }
     hydratePartialDiff('merge', expectedDiff, files);
@@ -1306,7 +1371,7 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
       return;
     }
     await awaitWithTimeout(() => this.primeHighlightCache(expectedDiff));
-    if (!this.enabled || this.fileDiff !== expectedDiff) {
+    if (!this.enabled || this.getInputDiff() !== expectedDiff) {
       return;
     }
     this.rerender();
@@ -1321,7 +1386,7 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
         'FileDiff.installHydratedSessionDiff: diffs cannot be partial for editing'
       );
     }
-    if (this.fileDiff !== expectedDiff) {
+    if (this.getInputDiff() !== expectedDiff) {
       return false;
     }
     if (this.editSession?.outgoingDiff != null) {
@@ -1331,42 +1396,51 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
     return false;
   }
 
-  // Install a replacement diff from the caller; returns false when it is the
-  // diff already installed. During an edit session the diff the editor's
-  // document still holds is kept as `outgoingDiff` until the editor syncs, so
-  // it can decide whether the swap keeps or resets undo history.
-  protected updateExternalDiff(
-    incomingExternalDiff: FileDiffMetadata,
+  // Store a new input. Keep the editor's previous diff until it syncs
+  // so it can decide whether to keep or reset undo history for the
+  // replacement. Return false if the input has not changed.
+  protected updateInputDiff(
+    incomingDiff: FileDiffMetadata,
     lineAnnotations?: DiffLineAnnotation<LAnnotation>[]
   ): boolean {
-    if (areDiffTargetsEqual(this.fileDiff, incomingExternalDiff)) {
+    if (areDiffTargetsEqual(this.getInputDiff(), incomingDiff)) {
       return false;
     }
 
-    const outgoingDiff =
-      this.editSession?.outgoingDiff ?? this.editSession?.diff;
-    this.fileDiff = incomingExternalDiff;
-    if (outgoingDiff != null) {
-      if (incomingExternalDiff.isPartial) {
-        this.loadFilesIfNecessary();
+    const previousAnnotations = this.getLatestAnnotations();
+    this.fileDiff = incomingDiff;
+    const { editSession: previousSession } = this;
+    const outgoingDiff = previousSession?.outgoingDiff ?? previousSession?.diff;
+    if (previousSession != null) {
+      if (incomingDiff.isPartial) {
+        // Keep the working diff until loading provides a complete replacement.
+        previousSession.inputDiff = incomingDiff;
       } else {
-        this.installEditSession(incomingExternalDiff);
+        this.installEditSession(incomingDiff);
       }
       if (this.editSession != null) {
         this.editSession.outgoingDiff = outgoingDiff;
       }
     }
     if (this.editSession?.annotations != null && lineAnnotations != null) {
-      // These annotations arrived with the new diff, so their line numbers
-      // describe it. The positions the session tracked for the old document
-      // mean nothing now: the session restarts from these annotations, and
-      // they also become what renders once the session ends.
-      this.lineAnnotations = lineAnnotations;
+      // Positions supplied with a host replacement describe its new
+      // document. Surviving annotations retain their frozen names from
+      // the old session.
       this.editSession.annotations = adoptEditSessionAnnotations(
         lineAnnotations,
         getLineAnnotationName,
         this.editSession.annotations
       );
+    }
+    this.pendingData = {
+      fileDiff: this.editSession?.diff ?? incomingDiff,
+      lineAnnotations:
+        this.editSession?.annotations?.current ??
+        lineAnnotations ??
+        previousAnnotations,
+    };
+    if (outgoingDiff != null && incomingDiff.isPartial) {
+      this.loadFilesIfNecessary();
     }
     return true;
   }
@@ -1376,18 +1450,18 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
   // replacing the diff in an open editor so the replacement is handled as a
   // new external update instead of overwriting the document being edited.
   private installEditSession(
-    externalDiff: FileDiffMetadata,
+    inputDiff: FileDiffMetadata,
     retainedDocument?: FileContents,
     retainedSession?: RetainedDiffSessionSnapshot
   ): void {
-    const externalContents = externalDiff.additionLines.join('');
+    const inputContents = inputDiff.additionLines.join('');
     const retainedLines =
       retainedDocument != null
         ? splitFileContents(retainedDocument.contents)
         : undefined;
     const restoreRetainedSession =
       retainedSession != null &&
-      canRestoreDiffSession(retainedSession, externalDiff);
+      canRestoreDiffSession(retainedSession, inputDiff);
     if (retainedSession != null && !restoreRetainedSession) {
       throw new Error(
         'FileDiff: retained session cannot resume against a different old file'
@@ -1395,23 +1469,23 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
     }
     if (
       retainedDocument != null &&
-      retainedDocument.contents !== externalContents &&
+      retainedDocument.contents !== inputContents &&
       !restoreRetainedSession
     ) {
       throw new Error(
         'FileDiff: retained edits are missing their diff session state'
       );
     }
-    const usesExternalDocument =
+    const usesInputDocument =
       retainedDocument == null ||
-      (retainedDocument.name === externalDiff.name &&
-        retainedDocument.lang === externalDiff.lang &&
-        retainedDocument.contents === externalContents);
-    const sessionDiff = createEditSessionDiff(externalDiff);
+      (retainedDocument.name === inputDiff.name &&
+        retainedDocument.lang === inputDiff.lang &&
+        retainedDocument.contents === inputContents);
+    const sessionDiff = createEditSessionDiff(inputDiff);
     if (
       retainedDocument != null &&
       retainedLines != null &&
-      !usesExternalDocument
+      !usesInputDocument
     ) {
       sessionDiff.name = retainedDocument.name;
       sessionDiff.lang = retainedDocument.lang;
@@ -1427,23 +1501,28 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
       sessionDiff.editSessionDirty = true;
       recomputeDiffRenderLineCounts(sessionDiff);
     }
+    // Initialize annotations when the session starts so updateInputDiff can
+    // reset their positions when a replacement arrives. An existing session
+    // keeps its tracked annotations.
+    const annotations =
+      this.editSession?.annotations ??
+      adoptEditSessionAnnotations(
+        this.getLatestAnnotations(),
+        getLineAnnotationName
+      );
     this.editSession = {
       diff: sessionDiff,
-      // Seed annotations when the session is created so the adopt-block in
-      // updateExternalDiff fires on the next external update — this is what an
-      // attach-before-hydrate (React) mount relies on, since the session does
-      // not exist yet at attach. A live session keeps the ones it tracks.
-      annotations:
-        this.editSession?.annotations ??
-        adoptEditSessionAnnotations(
-          this.lineAnnotations,
-          getLineAnnotationName
-        ),
+      inputDiff,
+      annotations,
       outgoingDiff: this.editSession?.outgoingDiff,
+    };
+    this.pendingData = {
+      fileDiff: sessionDiff,
+      lineAnnotations: annotations.current,
     };
     this.hunksRenderer.beginEditSession(
       sessionDiff,
-      usesExternalDocument && !restoreRetainedSession ? externalDiff : undefined
+      usesInputDocument && !restoreRetainedSession ? inputDiff : undefined
     );
   }
 
@@ -1472,6 +1551,8 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
         'FileDiff.render: attempting to call render after cleaned up'
       );
     }
+    forceRender = this.forceRenderOverride ?? forceRender;
+    this.forceRenderOverride = undefined;
 
     const fileInput = getDiffFileInput(fileInputProps, 'FileDiff.render');
     const oldFile = fileInput?.oldFile;
@@ -1494,7 +1575,7 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
       (!areOptionalFilesEqual(oldFile, this.deletionFile) ||
         !areOptionalFilesEqual(newFile, this.additionFile));
     let diffDidChange =
-      fileDiff != null && !areDiffTargetsEqual(fileDiff, this.fileDiff);
+      fileDiff != null && !areDiffTargetsEqual(fileDiff, this.getInputDiff());
     const annotationsChanged =
       lineAnnotations != null &&
       (lineAnnotations.length > 0 || this.getLatestAnnotations().length > 0)
@@ -1525,7 +1606,7 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
     if (
       fileDiff == null &&
       hasFileInput &&
-      (filesDidChange || this.fileDiff == null)
+      (filesDidChange || this.getInputDiff() == null)
     ) {
       nextParsedFileDiff = parseDiffFromFile(
         fileInput.oldFile,
@@ -1549,10 +1630,10 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
     }
 
     if (fileDiff != null && diffDidChange) {
-      this.updateExternalDiff(fileDiff, lineAnnotations);
+      this.updateInputDiff(fileDiff, lineAnnotations);
     } else if (nextParsedFileDiff != null) {
       diffDidChange = true;
-      this.updateExternalDiff(nextParsedFileDiff, lineAnnotations);
+      this.updateInputDiff(nextParsedFileDiff, lineAnnotations);
     }
     if (diffDidChange) {
       this.clearReusableHeader();
@@ -1562,18 +1643,18 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
       this.setLineAnnotations(lineAnnotations);
     }
 
-    const latestDiff = this.getLatestDiff();
-    if (latestDiff == null) {
+    const workingDiff = this.getWorkingDiff();
+    if (workingDiff == null) {
       return false;
     }
     // Backstop for sessions that ended without their exit hook running (e.g.
     // session-shaped metadata reused after a host teardown): restore
     // recompute-shaped hunks before rendering.
     if (
-      latestDiff.editSessionDirty === true &&
+      workingDiff.editSessionDirty === true &&
       this.shouldSelfHealEditSession()
     ) {
-      finishEditSessionForDiff(latestDiff, this.options.parseDiffOptions);
+      finishEditSessionForDiff(workingDiff, this.options.parseDiffOptions);
       void this.hunksRenderer.refreshHighlightedResult();
     }
     if (expandUnchanged) {
@@ -1582,7 +1663,9 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
     this.hunksRenderer.setOptions(this.getHunksRendererOptions(this.options));
     this.syncInteractionOptions();
 
-    this.hunksRenderer.setLineAnnotations(this.getLatestAnnotations());
+    this.prepareRenderData(
+      this.hunksRenderer.getDiffForNextRender(workingDiff)
+    );
 
     const { disableErrorHandling = false, disableFileHeader = false } =
       this.options;
@@ -1608,7 +1691,7 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
 
       try {
         const hunksResult = this.hunksRenderer.renderDiff(
-          latestDiff,
+          workingDiff,
           EMPTY_RENDER_RANGE
         );
         if (hunksResult != null) {
@@ -1627,7 +1710,7 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
           );
         }
         this.renderSeparators([]);
-        this.renderedDiff = hunksResult?.fileDiff ?? latestDiff;
+        this.adoptRenderData(hunksResult?.fileDiff ?? workingDiff);
         this.injectUnsafeCSS();
       } catch (error: unknown) {
         if (disableErrorHandling) {
@@ -1656,10 +1739,10 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
           filesDidChange ||
             diffDidChange ||
             themeChanged ||
-            !areDiffTargetsEqual(this.renderedDiff, latestDiff)
+            !areDiffTargetsEqual(this.getRenderedDiff(), workingDiff)
         ) &&
         this.applyPartialRender({
-          fileDiff: latestDiff,
+          fileDiff: workingDiff,
           previousRenderRange,
           renderRange: nextRenderRange,
         });
@@ -1667,7 +1750,7 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
       // If we were unable to partially render, perform a full render
       if (!didPartiallyRender) {
         const hunksResult = this.hunksRenderer.renderDiff(
-          latestDiff,
+          workingDiff,
           nextRenderRange
         );
         if (hunksResult == null) {
@@ -1708,7 +1791,12 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
           this.pre = undefined;
         }
         this.renderSeparators(hunksResult.hunkData);
-        this.renderedDiff = hunksResult.fileDiff;
+        this.adoptRenderData(hunksResult.fileDiff);
+      } else {
+        const renderedDiff = this.getRenderedDiff();
+        if (renderedDiff != null) {
+          this.adoptRenderData(renderedDiff);
+        }
       }
       this.applyBuffers(pre, nextRenderRange);
       this.injectUnsafeCSS();
@@ -1768,25 +1856,87 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
     onPostRender?.(fileContainer, this, phase);
   }
 
-  // Return the newest diff this component intends to display. An active edit
-  // session owns that state instead of the caller-provided diff.
-  protected getLatestDiff(
-    fileDiff: FileDiffMetadata | undefined = this.fileDiff
-  ): FileDiffMetadata | undefined {
-    return this.editSession?.diff ?? fileDiff;
+  // Return the latest input without editor changes. It may be newer than the
+  // displayed diff while a replacement is loading or being highlighted.
+  protected getInputDiff(): FileDiffMetadata | undefined {
+    return this.fileDiff;
   }
 
-  // Return the diff that produced the DOM currently owned by this instance.
-  // It can trail getLatestDiff while replacement highlighting is pending.
+  // Return the editor's copy, including its changes, or the input when there
+  // is no edit session. The editor keeps its copy while a partial input loads.
+  // Use fallbackDiff if the new input is not stored yet.
+  protected getWorkingDiff(
+    fallbackDiff: FileDiffMetadata | undefined = this.fileDiff
+  ): FileDiffMetadata | undefined {
+    return this.editSession?.diff ?? fallbackDiff;
+  }
+
+  // Return the displayed diff. While a replacement is being highlighted,
+  // this still returns the previous diff.
   protected getRenderedDiff(): FileDiffMetadata | undefined {
-    return this.renderedDiff;
+    return this.renderedData?.fileDiff;
+  }
+
+  /**
+   * @internal Data the next render() with this input will display. While a
+   * replacement diff is being highlighted, this is still the displayed data.
+   */
+  public __getNextRenderData({
+    fileDiff,
+    lineAnnotations,
+  }: FileDiffRenderInput<LAnnotation>): FileDiffRenderData<LAnnotation> {
+    const sessionAnnotations = this.editSession?.annotations;
+    // Keep the supplied content during editing. The editor moves annotation
+    // rows through stable slots without rerendering their React children.
+    if (sessionAnnotations != null) {
+      return {
+        fileDiff,
+        lineAnnotations:
+          lineAnnotations != null && this.isNewAnnotations(lineAnnotations)
+            ? lineAnnotations
+            : sessionAnnotations.provided,
+      };
+    }
+    const workingDiff = this.getWorkingDiff(fileDiff) ?? fileDiff;
+    const nextDiff = this.hunksRenderer.getDiffForNextRender(workingDiff);
+    return {
+      fileDiff: nextDiff,
+      lineAnnotations:
+        lineAnnotations != null && areDiffTargetsEqual(nextDiff, workingDiff)
+          ? lineAnnotations
+          : this.getAnnotationsForDiff(nextDiff),
+    };
+  }
+
+  // Build rows using annotations for the diff the renderer selected.
+  // Subclasses also prepare their additional rows here.
+  protected prepareRenderData(fileDiff: FileDiffMetadata): void {
+    this.hunksRenderer.setLineAnnotations(this.getAnnotationsForDiff(fileDiff));
+  }
+
+  // Record the diff now on screen. If it matches pendingData, apply those
+  // annotations and clear pendingData; otherwise keep the pending update.
+  protected adoptRenderData(fileDiff: FileDiffMetadata): void {
+    const { pendingData } = this;
+    const matchesPending =
+      pendingData != null &&
+      areDiffTargetsEqual(fileDiff, pendingData.fileDiff);
+    this.renderedData = {
+      fileDiff,
+      lineAnnotations: matchesPending
+        ? pendingData.lineAnnotations
+        : this.lineAnnotations,
+    };
+    if (matchesPending) {
+      this.pendingData = undefined;
+    }
   }
 
   private syncRenderViewToEditor(): void {
     const { editor, fileContainer } = this;
     const lineAnnotations = this.getLatestAnnotations();
     const renderRange = this.computeEditorRenderRange(this.renderRange);
-    const fileDiff = this.getLatestDiff();
+    const fileDiff = this.getWorkingDiff();
     if (
       editor == null ||
       fileContainer == null ||
@@ -1800,17 +1950,17 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
         !this.enabled ||
         this.editor !== editor ||
         this.fileContainer !== fileContainer ||
-        this.getLatestDiff() !== fileDiff
+        this.getWorkingDiff() !== fileDiff
       ) {
         return;
       }
       const replacement = this.editSession?.outgoingDiff;
-      const { fileDiff: externalDiff } = this;
+      const inputDiff = this.getInputDiff();
       const externalDocument =
-        replacement != null && externalDiff != null && replacement !== fileDiff;
+        replacement != null && inputDiff != null && replacement !== fileDiff;
       const resetHistory =
-        externalDocument && replacement != null && externalDiff != null
-          ? shouldResetUndoState(replacement, externalDiff)
+        externalDocument && replacement != null && inputDiff != null
+          ? shouldResetUndoState(replacement, inputDiff)
           : false;
       editor.__syncRenderView({
         highlighter,
@@ -1859,7 +2009,7 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
   private computeEditorRenderRange(
     renderRange: RenderRange | undefined
   ): RenderRange | undefined {
-    const fileDiff = this.getLatestDiff();
+    const fileDiff = this.getWorkingDiff();
     if (
       renderRange == null ||
       fileDiff == null ||
@@ -1933,8 +2083,8 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
   public __captureDocumentSessionState(
     clone = true
   ): CapturedDiffSessionState | undefined {
-    let { fileDiff, editSession: { diff: sessionDiff, outgoingDiff } = {} } =
-      this;
+    const fileDiff = this.getInputDiff();
+    let { diff: sessionDiff, outgoingDiff } = this.editSession ?? {};
     if (outgoingDiff != null && fileDiff != null) {
       if (!fileDiff.isPartial && shouldResetUndoState(outgoingDiff, fileDiff)) {
         return undefined;
@@ -2006,28 +2156,26 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
   private resumeEditorRendering(
     editor: Editor<'file-diff', LAnnotation, Caret>
   ): void {
-    const { fileDiff: externalDiff } = this;
+    const inputDiff = this.getInputDiff();
     const pendingReplacement = this.editSession?.outgoingDiff;
     // A pending replacement whose diff was partial when it arrived installs now
     // that we are (re)attaching with a hydrated diff.
     if (
       pendingReplacement != null &&
-      externalDiff != null &&
-      !externalDiff.isPartial &&
+      inputDiff != null &&
+      !inputDiff.isPartial &&
       this.editSession?.diff === pendingReplacement
     ) {
-      this.installEditSession(externalDiff);
+      this.installEditSession(inputDiff);
     }
-    const initialExternalDiff =
-      this.editSession == null &&
-      externalDiff != null &&
-      !externalDiff.isPartial
-        ? externalDiff
+    const initialInputDiff =
+      this.editSession == null && inputDiff != null && !inputDiff.isPartial
+        ? inputDiff
         : undefined;
-    if (initialExternalDiff != null) {
+    if (initialInputDiff != null) {
       this.installEditSession(
-        initialExternalDiff,
-        editor.__getDocumentContents(getAdditionFile(initialExternalDiff)),
+        initialInputDiff,
+        editor.__getDocumentContents(getAdditionFile(initialInputDiff)),
         editor.__getDocumentSessionState()
       );
     } else if (this.editSession != null) {
@@ -2036,7 +2184,7 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
     this.editor = editor;
     // The editor sync below refuses partial diffs (it needs the full file
     // contents); kick off hydration so the loaded re-render re-runs it.
-    if (this.fileDiff?.isPartial === true) {
+    if (this.getInputDiff()?.isPartial === true) {
       this.loadFilesIfNecessary();
     }
     const editSessionDiff = this.editSession?.diff;
@@ -2048,7 +2196,7 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
         editSessionDiff != null &&
         this.hunksRenderer.diffCache === editSessionDiff
       ) {
-        this.renderedDiff = editSessionDiff;
+        this.adoptRenderData(editSessionDiff);
       }
       this.syncRenderViewToEditor();
     } else {
@@ -2072,7 +2220,7 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
    * Requires the editor to be detached first. Does nothing when no session
    * exists, so callers can invoke it again safely after it has settled.
    *
-   * `onEditComplete` receives the completed diff, current external diff,
+   * `onEditComplete` receives the completed diff, current input diff,
    * complete file pair, and both annotation collections even when the final
    * text is unchanged. In `install` mode, accepting installs the completed diff
    * and its annotations; rejecting or having no handler restores the external
@@ -2090,16 +2238,17 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
     installResult: boolean,
     editor: Editor<'file-diff', LAnnotation, Caret> | undefined
   ): void {
-    const {
-      editSession,
-      fileDiff: externalDiff,
-      lineAnnotations: externalAnnotations,
-    } = this;
-    if (editSession == null || externalDiff == null) {
+    const { editSession } = this;
+    if (editSession == null) {
       return;
     }
-    const { diff: editSessionDiff, annotations: editSessionAnnotations } =
-      editSession;
+    const {
+      diff: editSessionDiff,
+      inputDiff,
+      annotations: editSessionAnnotations,
+    } = editSession;
+    const inputAnnotations =
+      editSessionAnnotations?.provided ?? this.lineAnnotations;
     if (this.editor != null) {
       throw new Error(
         'FileDiff.__completeEditSession: detach the editor before completing the session'
@@ -2130,7 +2279,7 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
     const event: FileDiffEditCompleteEvent<LAnnotation, Caret> = {
       fileDiff: completedDiff,
       editor,
-      originalFileDiff: externalDiff,
+      originalFileDiff: inputDiff,
       oldFile:
         completedDiff.type === 'new'
           ? null
@@ -2140,7 +2289,7 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
             },
       newFile,
       lineAnnotations: sessionAnnotationsCurrent,
-      originalLineAnnotations: externalAnnotations,
+      originalLineAnnotations: inputAnnotations,
     };
     // Frozen so a handler cannot swap the event's fileDiff/originalFileDiff
     // references; nested mutation (i.e. a fresh cacheKey on event.fileDiff)
@@ -2152,7 +2301,7 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
       if (decision === 'accept') {
         if (
           completedDiff.cacheKey != null &&
-          completedDiff.cacheKey === externalDiff.cacheKey
+          completedDiff.cacheKey === inputDiff.cacheKey
         ) {
           throw new Error(
             'FileDiff.__completeEditSession: an accepted diff must not reuse the replaced diff cacheKey'
@@ -2168,7 +2317,6 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
     }
 
     if (installResult && acceptedDiff != null) {
-      this.fileDiff = acceptedDiff;
       // Callers using the oldFile/newFile API get the stored pair
       // refreshed so their next render with the event's files does not
       // reparse over the accepted diff. Every editable pair has a new
@@ -2177,11 +2325,17 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
         this.deletionFile = acceptedOldFile;
         this.additionFile = acceptedNewFile;
       }
-      if (sessionAnnotationsCurrent != null) {
-        this.lineAnnotations = sessionAnnotationsCurrent;
-      }
     }
     this.editSession = undefined;
+    this.fileDiff =
+      installResult && acceptedDiff != null ? acceptedDiff : inputDiff;
+    this.pendingData = {
+      fileDiff: this.fileDiff,
+      lineAnnotations:
+        installResult && acceptedDiff != null
+          ? (sessionAnnotationsCurrent ?? inputAnnotations)
+          : inputAnnotations,
+    };
     if (installResult && this.fileContainer != null) {
       this.rerender();
     }
@@ -2203,7 +2357,7 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
    * ran.
    */
   public finalizeEditSessionHunks(): boolean {
-    const fileDiff = this.getLatestDiff();
+    const fileDiff = this.getWorkingDiff();
     if (fileDiff == null || fileDiff.editSessionDirty !== true) {
       return false;
     }
@@ -2307,11 +2461,10 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
   }
 
   private detachAdditionLines(): void {
-    const editSessionDiff = this.editSession?.diff;
-    const { fileDiff } = this;
+    const { diff: editSessionDiff, inputDiff } = this.editSession ?? {};
     if (
       editSessionDiff != null &&
-      (editSessionDiff.additionLines === fileDiff?.additionLines ||
+      (editSessionDiff.additionLines === inputDiff?.additionLines ||
         editSessionDiff.additionLines === editSessionDiff.deletionLines)
     ) {
       editSessionDiff.additionLines = [...editSessionDiff.additionLines];
@@ -2540,7 +2693,7 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
   }
 
   public async primeHighlightCache(
-    fileDiff: FileDiffMetadata | undefined = this.fileDiff
+    fileDiff: FileDiffMetadata | undefined = this.getInputDiff()
   ): Promise<void> {
     const { workerManager } = this;
     if (
@@ -2620,7 +2773,7 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
   private renderSeparators(hunkData: HunkData[]): void {
     const { hunkSeparators } = this.options;
     if (
-      this.isContainerManaged ||
+      this.isComponentManaged ||
       this.fileContainer == null ||
       typeof hunkSeparators !== 'function'
     ) {
@@ -2656,7 +2809,7 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
   }
 
   protected renderAnnotations(): void {
-    if (this.isContainerManaged || this.fileContainer == null) {
+    if (this.isComponentManaged || this.fileContainer == null) {
       for (const { element } of this.annotationCache.values()) {
         element.remove();
       }
@@ -2664,19 +2817,23 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
       return;
     }
     const staleAnnotations = new Map(this.annotationCache);
-    const { renderAnnotation } = this.options;
-    const lineAnnotations = this.getLatestAnnotations();
-    if (renderAnnotation != null && lineAnnotations.length > 0) {
+    const {
+      renderedData,
+      options: { renderAnnotation },
+    } = this;
+    if (renderAnnotation != null && renderedData != null) {
+      const { fileDiff, lineAnnotations } = renderedData;
       for (const [index, annotation] of lineAnnotations.entries()) {
         const name = this.getAnnotationSlotName(annotation);
         const id = `${index}-${name}`;
         let cache = this.annotationCache.get(id);
         if (
           cache == null ||
+          cache.fileDiff !== fileDiff ||
           !areDiffLineAnnotationsEqual(annotation, cache.annotation)
         ) {
           cache?.element.remove();
-          const content = renderAnnotation(annotation);
+          const content = renderAnnotation(annotation, fileDiff);
           // If we can't render anything, then we should not render anything
           // and clear the annotation cache if necessary.
           if (content == null) {
@@ -2685,6 +2842,7 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
           cache = {
             element: createAnnotationWrapperNode(name),
             annotation,
+            fileDiff,
           };
           cache.element.appendChild(content);
           this.fileContainer.appendChild(cache.element);
@@ -2852,7 +3010,7 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
     this.placeHolder?.remove();
     this.placeHolder = undefined;
     // Session metadata changes in place, so an HTML cache created from the
-    // external diff cannot describe the current edit-session header.
+    // input diff cannot describe the current edit-session header.
     const {
       headerCache: {
         fileDiff: cachedHeaderDiff,
@@ -2885,7 +3043,7 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
       this.headerCache.lastRenderedHTML = headerHTML;
     }
 
-    if (this.isContainerManaged) {
+    if (this.isComponentManaged) {
       return;
     }
 
@@ -3388,7 +3546,7 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
         );
       }
       rowCount += result.rowCount;
-      this.renderedDiff = result.fileDiff;
+      this.adoptRenderData(result.fileDiff);
     };
 
     this.cleanupErrorWrapper();
@@ -3447,7 +3605,7 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
   // fast refresh diff view via updating the `data-line-type` after an edit.
   // only for split view.
   private refreshSplitDiffView(): void {
-    const fileDiff = this.getLatestDiff();
+    const fileDiff = this.getWorkingDiff();
     if (this.options.diffStyle !== 'split' || fileDiff == null) {
       return;
     }
@@ -3507,13 +3665,13 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
 
     applyLineType('deletions', columns[0]);
     applyLineType('additions', columns[1]);
-    this.renderedDiff = hunksResult.fileDiff;
+    this.adoptRenderData(hunksResult.fileDiff);
   }
 
   // full diff view re-rendering
   // only for unified view.
   private refreshUnifiedDiffView(): void {
-    const fileDiff = this.getLatestDiff();
+    const fileDiff = this.getWorkingDiff();
     if (this.options.diffStyle !== 'unified' || fileDiff == null) {
       return;
     }
@@ -3553,7 +3711,7 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
         this.applyRowSpan('unified', columns, hunksResult.rowCount);
         this.lastRowCount = hunksResult.rowCount;
       }
-      this.renderedDiff = hunksResult.fileDiff;
+      this.adoptRenderData(hunksResult.fileDiff);
     };
     if (this.shouldGuardRebuildScroll()) {
       guardWebKitScrollDuringRebuild(this.pre, applyColumns);

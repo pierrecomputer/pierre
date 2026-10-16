@@ -60,7 +60,10 @@ interface InspectableVirtualizedFileDiff {
     fileAnnotationHeight: number;
   };
   lineAnnotations: unknown[];
-  renderedDiff: FileDiffMetadata | undefined;
+  getLatestAnnotations(): unknown[];
+  renderedData:
+    | { fileDiff: FileDiffMetadata; lineAnnotations: unknown[] }
+    | undefined;
   renderRange: RenderRange | undefined;
   getExpandedLineCount(
     fileDiff: FileDiffMetadata,
@@ -87,7 +90,11 @@ function setRenderedDiff(
   instance: VirtualizedFileDiff,
   fileDiff: FileDiffMetadata
 ): void {
-  inspect(instance).renderedDiff = fileDiff;
+  const state = inspect(instance);
+  state.renderedData = {
+    fileDiff,
+    lineAnnotations: state.getLatestAnnotations(),
+  };
 }
 
 function createRenderRange(startingLine = 0): RenderRange {
@@ -879,7 +886,8 @@ describe('VirtualizedFileDiff estimated height cache', () => {
 
       expect(inspect(instance).cache.fileAnnotationHeight).toBe(25);
       expect(inspect(instance).cache.measuredHeightDeltaTotal).toBe(25);
-      expect(inspect(instance).lineAnnotations).toHaveLength(0);
+      expect(inspect(instance).getLatestAnnotations()).toHaveLength(0);
+      expect(inspect(instance).lineAnnotations).toHaveLength(1);
       expect(instance.getVirtualizedHeight()).toBe(351);
 
       setRenderedDiff(instance, fileDiff);

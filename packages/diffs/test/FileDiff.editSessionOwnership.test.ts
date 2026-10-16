@@ -33,8 +33,16 @@ afterAll(async () => {
 class TestFileDiff extends FileDiff<undefined> {
   throwOnRerender = false;
 
-  getLatestDiffForTest(): FileDiffMetadata | undefined {
-    return this.getLatestDiff();
+  getWorkingDiffForTest(): FileDiffMetadata | undefined {
+    return this.getWorkingDiff();
+  }
+
+  getInputDiffForTest(): FileDiffMetadata | undefined {
+    return this.getInputDiff();
+  }
+
+  getRenderedDiffForTest(): FileDiffMetadata | undefined {
+    return this.getRenderedDiff();
   }
 
   getRendererDiffForTest(): FileDiffMetadata | undefined {
@@ -45,7 +53,7 @@ class TestFileDiff extends FileDiff<undefined> {
     return this.hunksRenderer.editorRenderReady();
   }
 
-  getExternalAnnotationsForTest(): DiffLineAnnotation<undefined>[] {
+  getDisplayedAnnotationsForTest(): DiffLineAnnotation<undefined>[] {
     return this.lineAnnotations;
   }
 
@@ -90,6 +98,7 @@ function expectExternalDiffUnchanged(
   before: ReturnType<typeof captureExternalDiffState>
 ): void {
   expect(instance.fileDiff).toBe(externalDiff);
+  expect(instance.getInputDiffForTest()).toBe(externalDiff);
   expect(externalDiff.additionLines).toBe(before.additionLines);
   expect(externalDiff.deletionLines).toBe(before.deletionLines);
   expect(externalDiff.hunks).toBe(before.hunks);
@@ -132,7 +141,7 @@ async function createAttachedFixture(): Promise<{
 
   await waitFor(
     () => {
-      const sessionDiff = instance.getLatestDiffForTest();
+      const sessionDiff = instance.getWorkingDiffForTest();
       return (
         sessionDiff != null &&
         sessionDiff !== externalDiff &&
@@ -141,7 +150,7 @@ async function createAttachedFixture(): Promise<{
     },
     { timeout: 4_000 }
   );
-  const sessionDiff = instance.getLatestDiffForTest();
+  const sessionDiff = instance.getWorkingDiffForTest();
   expect(sessionDiff).toBeDefined();
   expect(sessionDiff).not.toBe(externalDiff);
   expect(instance.isEditorRenderReadyForTest()).toBe(true);
@@ -236,7 +245,7 @@ describe('FileDiff edit-session ownership', () => {
     const fixture = await createAttachedFixture();
     const { detach, externalDiff, instance } = fixture;
     try {
-      const sessionDiff = instance.getLatestDiffForTest();
+      const sessionDiff = instance.getWorkingDiffForTest();
       expect(sessionDiff).toBeDefined();
       if (sessionDiff == null) return;
 
@@ -258,7 +267,7 @@ describe('FileDiff edit-session ownership', () => {
     const { detach, externalDiff, instance } = fixture;
     const externalBefore = captureExternalDiffState(externalDiff);
     try {
-      const sessionBefore = instance.getLatestDiffForTest();
+      const sessionBefore = instance.getWorkingDiffForTest();
       expect(sessionBefore).toBeDefined();
       if (sessionBefore == null) return;
       expect(sessionBefore.additionLines).toBe(externalDiff.additionLines);
@@ -269,7 +278,7 @@ describe('FileDiff edit-session ownership', () => {
         'light'
       );
 
-      const sessionAfter = instance.getLatestDiffForTest();
+      const sessionAfter = instance.getWorkingDiffForTest();
       expect(sessionAfter).toBe(sessionBefore);
       expect(sessionAfter?.additionLines).not.toBe(externalDiff.additionLines);
       expect(sessionAfter?.additionLines[1]).toBe('edited value\n');
@@ -285,12 +294,58 @@ describe('FileDiff edit-session ownership', () => {
     }
   });
 
+  test('same-line edits reuse owned addition lines before and after a structural edit', async () => {
+    const fixture = await createAttachedFixture();
+    const { detach, externalDiff, instance } = fixture;
+    const externalBefore = captureExternalDiffState(externalDiff);
+    try {
+      const session = instance.getWorkingDiffForTest();
+      if (session == null) {
+        throw new Error('Expected an attached edit session');
+      }
+      expect(session.additionLines).toBe(externalDiff.additionLines);
+      instance.updateRenderCache(makeDirtyLines([[1, 'edited 0']]), 'light');
+      const ownedLines = session.additionLines;
+      expect(ownedLines).not.toBe(externalDiff.additionLines);
+      for (let edit = 1; edit < 4; edit++) {
+        instance.updateRenderCache(
+          makeDirtyLines([[1, `edited ${edit}`]]),
+          'light'
+        );
+        expect(session.additionLines).toBe(ownedLines);
+        expect(ownedLines[1]).toBe(`edited ${edit}\n`);
+      }
+
+      instance.applyDocumentChange(
+        createTextDocumentFromLines(
+          'file-diff',
+          ['alpha\n', 'inserted\n', 'edited 3\n', 'omega\n'],
+          'inmemory://file-diff-session'
+        )
+      );
+      const structuralLines = session.additionLines;
+      expect(structuralLines).not.toBe(ownedLines);
+      for (let edit = 4; edit < 8; edit++) {
+        instance.updateRenderCache(
+          makeDirtyLines([[2, `edited ${edit}`]]),
+          'light'
+        );
+        expect(session.additionLines).toBe(structuralLines);
+        expect(structuralLines[2]).toBe(`edited ${edit}\n`);
+      }
+      expectExternalDiffUnchanged(instance, externalDiff, externalBefore);
+    } finally {
+      detach();
+      fixture.cleanup();
+    }
+  });
+
   test('a structural edit rebuilds an owned hunk graph', async () => {
     const fixture = await createAttachedFixture();
     const { detach, externalDiff, instance } = fixture;
     const externalBefore = captureExternalDiffState(externalDiff);
     try {
-      const sessionBefore = instance.getLatestDiffForTest();
+      const sessionBefore = instance.getWorkingDiffForTest();
       expect(sessionBefore).toBeDefined();
       if (sessionBefore == null) return;
       expect(sessionBefore.hunks).toBe(externalDiff.hunks);
@@ -303,7 +358,7 @@ describe('FileDiff edit-session ownership', () => {
         )
       );
 
-      const sessionAfter = instance.getLatestDiffForTest();
+      const sessionAfter = instance.getWorkingDiffForTest();
       expect(sessionAfter).toBe(sessionBefore);
       expect(sessionAfter?.additionLines).not.toBe(externalDiff.additionLines);
       expect(sessionAfter?.additionLines.join('')).toBe(
@@ -381,13 +436,13 @@ describe('FileDiff edit-session ownership', () => {
           makeDirtyLines([[1, 'edited value']]),
           'light'
         );
-        const sessionDiff = instance.getLatestDiffForTest();
+        const sessionDiff = instance.getWorkingDiffForTest();
         expect(sessionDiff).toBeDefined();
         expect(sessionDiff).not.toBe(externalDiff);
 
         triggerRender(fixture);
 
-        expect(instance.getLatestDiffForTest()).toBe(sessionDiff);
+        expect(instance.getWorkingDiffForTest()).toBe(sessionDiff);
         expect(instance.getRendererDiffForTest()).toBe(sessionDiff);
         expect(sessionDiff?.additionLines[1]).toBe('edited value\n');
         expectExternalDiffUnchanged(instance, externalDiff, externalBefore);
@@ -405,7 +460,7 @@ describe('FileDiff edit-session ownership', () => {
     const equivalentExternalDiff = structuredClone(externalDiff);
     const equivalentBefore = structuredClone(equivalentExternalDiff);
     try {
-      const sessionDiff = instance.getLatestDiffForTest();
+      const sessionDiff = instance.getWorkingDiffForTest();
       expect(sessionDiff).toBeDefined();
 
       instance.render({
@@ -415,7 +470,9 @@ describe('FileDiff edit-session ownership', () => {
       });
 
       expect(instance.fileDiff).toBe(externalDiff);
-      expect(instance.getLatestDiffForTest()).toBe(sessionDiff);
+      expect(instance.getRenderedDiffForTest()).toBe(sessionDiff);
+      expect(instance.getInputDiffForTest()).toBe(externalDiff);
+      expect(instance.getWorkingDiffForTest()).toBe(sessionDiff);
       expect(instance.getRendererDiffForTest()).toBe(sessionDiff);
 
       instance.updateRenderCache(
@@ -441,7 +498,7 @@ describe('FileDiff edit-session ownership', () => {
         makeDirtyLines([[1, 'edited value']]),
         'light'
       );
-      const sessionDiff = instance.getLatestDiffForTest();
+      const sessionDiff = instance.getWorkingDiffForTest();
       expect(sessionDiff).toBeDefined();
 
       instance.render({
@@ -473,13 +530,13 @@ describe('FileDiff edit-session ownership', () => {
         makeDirtyLines([[1, 'edited value']]),
         'light'
       );
-      const sessionDiff = instance.getLatestDiffForTest();
+      const sessionDiff = instance.getWorkingDiffForTest();
       expect(sessionDiff).toBeDefined();
       expect(sessionDiff?.additionLines[1]).toBe('edited value\n');
 
       instance.cleanUp(true);
 
-      expect(instance.getLatestDiffForTest()).toBe(sessionDiff);
+      expect(instance.getWorkingDiffForTest()).toBe(sessionDiff);
       expect(instance.getRendererDiffForTest()).toBe(sessionDiff);
       expect(instance.isEditorRenderReadyForTest()).toBe(true);
       expectExternalDiffUnchanged(instance, externalDiff, externalBefore);
@@ -637,9 +694,7 @@ describe('FileDiff edit-session ownership', () => {
 
       const latest = instance.getLatestAnnotationsForTest();
       expect(latest).toEqual([{ side: 'additions', lineNumber: 3 }]);
-      expect(instance.getExternalAnnotationsForTest()).toBe(
-        externalAnnotations
-      );
+      expect(instance.getDisplayedAnnotationsForTest()).toBe(latest);
       expect(externalAnnotations).toEqual([
         { side: 'additions', lineNumber: 2 },
       ]);
@@ -808,7 +863,7 @@ describe('__completeEditSession', () => {
           direction: 'none',
         },
       ]);
-      const sessionDiff = instance.getLatestDiffForTest();
+      const sessionDiff = instance.getWorkingDiffForTest();
       if (sessionDiff == null) {
         throw new Error('Expected an active session diff');
       }
@@ -889,10 +944,10 @@ describe('__completeEditSession', () => {
       expect(events).toHaveLength(1);
       const event = events[0];
       expect(instance.fileDiff).toBe(event.fileDiff);
-      expect(instance.getLatestDiffForTest()).toBe(event.fileDiff);
+      expect(instance.getWorkingDiffForTest()).toBe(event.fileDiff);
       expect(instance.fileDiff?.cacheKey).toBe('external:session-v2');
       expect(event.lineAnnotations).toBe(
-        instance.getExternalAnnotationsForTest()
+        instance.getDisplayedAnnotationsForTest()
       );
       expect(event.originalLineAnnotations).toBe(externalAnnotations);
       expect(instance.getLatestAnnotationsForTest()).toEqual([
@@ -931,7 +986,7 @@ describe('__completeEditSession', () => {
         if (content == null) {
           throw new Error('Expected editable addition content');
         }
-        const session = instance.getLatestDiffForTest();
+        const session = instance.getWorkingDiffForTest();
         if (session == null) {
           throw new Error('Expected an active diff session');
         }
@@ -1009,7 +1064,7 @@ describe('__completeEditSession', () => {
       const { editor, instance } = fixture;
       const end = { line: 15, character: 6 };
       editor.applyEdits([{ range: { start: end, end }, newText: '!' }]);
-      const session = instance.getLatestDiffForTest();
+      const session = instance.getWorkingDiffForTest();
       if (session == null) throw new Error('Expected an active diff session');
       expect(session.hunks[0].hunkContent).toEqual(
         before.value.hunks[0].hunkContent
@@ -1052,7 +1107,7 @@ describe('__completeEditSession', () => {
           editor,
           `${structural ? 'prefix\n' : ''}anchor\n\n\ntail`
         );
-        const session = instance.getLatestDiffForTest();
+        const session = instance.getWorkingDiffForTest();
         if (session == null) throw new Error('Expected an active diff session');
         const blank = session.hunks
           .flatMap((hunk) => hunk.hunkContent)
@@ -1084,7 +1139,7 @@ describe('__completeEditSession', () => {
     try {
       const { editor, fileContainer, instance } = fixture;
       insertLinesAtStart(editor);
-      const sessionDiff = instance.getLatestDiffForTest();
+      const sessionDiff = instance.getWorkingDiffForTest();
       if (sessionDiff == null) {
         throw new Error('Expected an active session diff');
       }
@@ -1101,7 +1156,7 @@ describe('__completeEditSession', () => {
         forceRender: true,
         lineAnnotations: added,
       });
-      expect(instance.getExternalAnnotationsForTest()).toBe(added);
+      expect(instance.getDisplayedAnnotationsForTest()).toBe(added);
 
       // The changed diff reverts, but the added annotation is kept.
       editor.cleanUp('complete');
@@ -1129,7 +1184,7 @@ describe('__completeEditSession', () => {
       editor.cleanUp('complete');
 
       expect(instance.fileDiff).toBe(externalDiff);
-      expect(instance.getLatestDiffForTest()).toBe(externalDiff);
+      expect(instance.getWorkingDiffForTest()).toBe(externalDiff);
       expect(instance.getLatestAnnotationsForTest()).toBe(externalAnnotations);
       expect(externalAnnotations).toEqual([
         { side: 'additions', lineNumber: 2 },
@@ -1150,7 +1205,7 @@ describe('__completeEditSession', () => {
       editor.cleanUp('complete');
 
       expect(instance.fileDiff).toBe(externalDiff);
-      expect(instance.getLatestDiffForTest()).toBe(externalDiff);
+      expect(instance.getWorkingDiffForTest()).toBe(externalDiff);
     } finally {
       fixture.cleanup();
     }
@@ -1164,7 +1219,7 @@ describe('__completeEditSession', () => {
       editor.cleanUp('complete');
 
       expect(instance.fileDiff).toBe(externalDiff);
-      expect(instance.getLatestDiffForTest()).toBe(externalDiff);
+      expect(instance.getWorkingDiffForTest()).toBe(externalDiff);
     } finally {
       fixture.cleanup();
     }
@@ -1185,7 +1240,7 @@ describe('__completeEditSession', () => {
       );
 
       expect(instance.fileDiff).toBe(externalDiff);
-      expect(instance.getLatestDiffForTest()).toBe(externalDiff);
+      expect(instance.getWorkingDiffForTest()).toBe(externalDiff);
     } finally {
       fixture.cleanup();
     }
@@ -1203,7 +1258,7 @@ describe('__completeEditSession', () => {
       expect(() => editor.cleanUp('complete')).toThrow('owner exploded');
 
       expect(instance.fileDiff).toBe(externalDiff);
-      expect(instance.getLatestDiffForTest()).toBe(externalDiff);
+      expect(instance.getWorkingDiffForTest()).toBe(externalDiff);
     } finally {
       fixture.cleanup();
     }
@@ -1240,7 +1295,7 @@ describe('__completeEditSession', () => {
       );
       expect(events[0].fileDiff.cacheKey).toBeUndefined();
       expect(instance.fileDiff).toBe(events[0].fileDiff);
-      expect(instance.getExternalAnnotationsForTest()).toBe(written);
+      expect(instance.getDisplayedAnnotationsForTest()).toBe(written);
       expect(instance.getLatestAnnotationsForTest()).toBe(written);
     } finally {
       fixture.cleanup();
@@ -1354,7 +1409,7 @@ describe('__completeEditSession', () => {
         forceRender: true,
       });
       expect(instance.fileDiff).toBe(event.fileDiff);
-      expect(instance.getLatestDiffForTest()).toBe(event.fileDiff);
+      expect(instance.getWorkingDiffForTest()).toBe(event.fileDiff);
 
       // A genuinely different pair later still replaces the accepted diff.
       instance.render({

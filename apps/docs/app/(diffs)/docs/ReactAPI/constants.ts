@@ -453,11 +453,16 @@ const lineAnnotations: DiffLineAnnotation<ThreadMetadata>[] = [
   // Multiple annotations can target the same side/line.
   // Use lineNumber: 0 for a file-level annotation rendered above the first
   // hunk separator or diff row.
+  // Annotations passed with a new diff appear when that diff renders, which
+  // can wait for syntax highlighting. Until then the previous diff keeps its
+  // annotations. Annotation-only changes apply immediately.
   lineAnnotations={lineAnnotations}
 
   // Render function for each annotation. Despite the diff being
   // rendered in shadow DOM, annotations use slots so you can use
   // normal CSS and styling.
+  // The second argument is the FileDiffMetadata displayed with this
+  // annotation.
   renderAnnotation={(annotation) => (
     <CommentThread threadId={annotation.metadata.threadId} />
   )}
@@ -1152,11 +1157,15 @@ const lineAnnotations: LineAnnotation<CommentMetadata>[] = [
   // has no 'side' property since there's only one column.
   // Use lineNumber: 0 for a file-level annotation rendered above the
   // first file line.
+  // Annotations passed with a new file appear when that file renders, which
+  // can wait for syntax highlighting. Until then the previous file keeps its
+  // annotations. Annotation-only changes apply immediately.
   lineAnnotations={lineAnnotations}
 
   // Render function for each annotation. Despite the file being
   // rendered in shadow DOM, annotations use slots so you can use
   // normal CSS and styling.
+  // The second argument is the FileContents displayed with this annotation.
   renderAnnotation={(annotation) => (
     <Comment commentId={annotation.metadata.commentId} />
   )}

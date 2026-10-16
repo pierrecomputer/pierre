@@ -166,6 +166,14 @@ class SpyUnresolvedFile extends UnresolvedFile {
 }
 
 class InspectableVirtualizedFileDiff extends VirtualizedFileDiff {
+  getInputDiffForTest(): FileDiffMetadata | undefined {
+    return this.getInputDiff();
+  }
+
+  getRenderedDiffForTest(): FileDiffMetadata | undefined {
+    return this.getRenderedDiff();
+  }
+
   public getCachedFiles(): {
     deletionFile: FileContents | null | undefined;
     additionFile: FileContents | null | undefined;
@@ -478,7 +486,7 @@ describe('collapsed hydration', () => {
     const dom = installDomConstructors();
     try {
       const virtualizerState = createVirtualizer();
-      const instance = new VirtualizedFileDiff(
+      const instance = new InspectableVirtualizedFileDiff(
         undefined,
         virtualizerState.virtualizer
       );
@@ -491,8 +499,10 @@ describe('collapsed hydration', () => {
 
       instance.hydrate(props);
 
-      expect(instance.fileDiff?.type).toBe('new');
-      expect(instance.fileDiff?.isPartial).toBe(false);
+      expect(instance.fileDiff).toBe(instance.getInputDiffForTest());
+      expect(instance.getRenderedDiffForTest()).toBeUndefined();
+      expect(instance.getInputDiffForTest()?.type).toBe('new');
+      expect(instance.getInputDiffForTest()?.isPartial).toBe(false);
       expect(virtualizerState.connectCalls).toBe(1);
       const placeholderHeight = getPlaceholderHeight(fileContainer);
       assertDefined(
@@ -513,7 +523,7 @@ describe('collapsed hydration', () => {
     const dom = installDomConstructors();
     try {
       const virtualizerState = createVirtualizer();
-      const instance = new VirtualizedFileDiff(
+      const instance = new InspectableVirtualizedFileDiff(
         undefined,
         virtualizerState.virtualizer
       );
@@ -526,8 +536,10 @@ describe('collapsed hydration', () => {
 
       instance.hydrate(props);
 
-      expect(instance.fileDiff?.type).toBe('deleted');
-      expect(instance.fileDiff?.isPartial).toBe(false);
+      expect(instance.fileDiff).toBe(instance.getInputDiffForTest());
+      expect(instance.getRenderedDiffForTest()).toBeUndefined();
+      expect(instance.getInputDiffForTest()?.type).toBe('deleted');
+      expect(instance.getInputDiffForTest()?.isPartial).toBe(false);
       expect(virtualizerState.connectCalls).toBe(1);
       const placeholderHeight = getPlaceholderHeight(fileContainer);
       assertDefined(

@@ -28,6 +28,8 @@ import {
   CodeView as CodeViewClass,
   type CodeViewCoordinator,
   type CodeViewCreateEditorOptions,
+  type CodeViewDiffItem,
+  type CodeViewFileItem,
   type CodeViewItem,
   type CodeViewItemEditCompleteEventMap,
   type CodeViewItemEditCompleteHandler,
@@ -35,14 +37,15 @@ import {
   type CodeViewMode,
   type CodeViewModeItemMap,
   type CodeViewOptions,
-  type CodeViewRenderedItem,
   type CodeViewScrollTarget,
   type CodeViewSlotSnapshot,
   type DiffLineAnnotation,
+  type FileContents,
+  type FileDiffMetadata,
   type GetHoveredLineResult,
   type LineAnnotation,
 } from '../index';
-import { areManagedSnapshotsEqual } from '../utils/areManagedSnapshotsEqual';
+import { getCodeViewItemRenderData } from '../utils/getCodeViewItemRenderData';
 import { useCreateEditor } from './EditContext';
 import { assignRef } from './utils/assignRef';
 import { renderDiffChildren } from './utils/renderDiffChildren';
@@ -58,6 +61,18 @@ const useIsomorphicLayoutEffect =
 type CodeViewGutterUtilityGetter =
   | (() => GetHoveredLineResult<'file'> | undefined)
   | (() => GetHoveredLineResult<'diff'> | undefined);
+
+export type CodeViewAnnotationArgs<LAnnotation> =
+  | [
+      annotation: LineAnnotation<LAnnotation>,
+      file: FileContents,
+      item: CodeViewFileItem<LAnnotation>,
+    ]
+  | [
+      annotation: DiffLineAnnotation<LAnnotation>,
+      fileDiff: FileDiffMetadata,
+      item: CodeViewDiffItem<LAnnotation>,
+    ];
 
 export type CodeViewReactOptions<LAnnotation, Caret> = Omit<
   CodeViewOptions<LAnnotation, Caret>,
@@ -121,10 +136,7 @@ interface CodeViewBaseProps<LAnnotation, Caret> {
   renderHeaderPrefix?(item: CodeViewItem<LAnnotation>): ReactNode;
   renderHeaderFilenameSuffix?(item: CodeViewItem<LAnnotation>): ReactNode;
   renderHeaderMetadata?(item: CodeViewItem<LAnnotation>): ReactNode;
-  renderAnnotation?(
-    annotation: LineAnnotation<LAnnotation> | DiffLineAnnotation<LAnnotation>,
-    item: CodeViewItem<LAnnotation>
-  ): ReactNode;
+  renderAnnotation?(...args: CodeViewAnnotationArgs<LAnnotation>): ReactNode;
   renderGutterUtility?(
     getHoveredLine: CodeViewGutterUtilityGetter,
     item: CodeViewItem<LAnnotation>
@@ -181,6 +193,14 @@ type CodeViewComponent = <LAnnotation = undefined, Caret = undefined>(
 type SlotPortalsComponent = <LAnnotation, Caret>(
   props: SlotPortalsProps<LAnnotation, Caret>
 ) => React.JSX.Element;
+
+type DiffItemSlotsComponent = <LAnnotation, Caret>(
+  props: DiffItemSlotsProps<LAnnotation, Caret>
+) => ReactNode;
+
+type FileItemSlotsComponent = <LAnnotation, Caret>(
+  props: FileItemSlotsProps<LAnnotation, Caret>
+) => ReactNode;
 
 interface ManagedContentStore<LAnnotation, Caret> {
   getSnapshot(): CodeViewSlotSnapshot<LAnnotation, Caret> | undefined;
@@ -724,7 +744,7 @@ function createSlotContentStore<LAnnotation, Caret>(): ManagedContentStore<
       return snapshot;
     },
     publish(nextSnapshot) {
-      if (areManagedSnapshotsEqual(snapshot, nextSnapshot)) {
+      if (snapshot === nextSnapshot) {
         return;
       }
 
@@ -820,8 +840,7 @@ function createManagedCodeViewOptions<LAnnotation, Caret>({
   return managedOptions;
 }
 
-interface RenderCodeViewItemChildrenProps<LAnnotation, Caret> {
-  renderedItem: CodeViewRenderedItem<LAnnotation, Caret>;
+interface CodeViewItemRenderers<LAnnotation, Caret> {
   renderCustomHeader: CodeViewBaseProps<
     LAnnotation,
     Caret
@@ -843,6 +862,30 @@ interface RenderCodeViewItemChildrenProps<LAnnotation, Caret> {
     LAnnotation,
     Caret
   >['renderGutterUtility'];
+}
+
+interface DiffItemSlotsProps<LAnnotation, Caret> extends CodeViewItemRenderers<
+  LAnnotation,
+  Caret
+> {
+  version: number;
+  item: CodeViewDiffItem<LAnnotation>;
+  fileDiff: FileDiffMetadata;
+  lineAnnotations: DiffLineAnnotation<LAnnotation>[];
+  getHoveredLine(): GetHoveredLineResult<'diff'> | undefined;
+  getAnnotationSlotName(annotation: DiffLineAnnotation<LAnnotation>): string;
+}
+
+interface FileItemSlotsProps<LAnnotation, Caret> extends CodeViewItemRenderers<
+  LAnnotation,
+  Caret
+> {
+  version: number;
+  item: CodeViewFileItem<LAnnotation>;
+  file: FileContents;
+  lineAnnotations: LineAnnotation<LAnnotation>[];
+  getHoveredLine(): GetHoveredLineResult<'file'> | undefined;
+  getAnnotationSlotName(annotation: LineAnnotation<LAnnotation>): string;
 }
 
 interface SlotPortalsProps<LAnnotation, Caret> {
@@ -899,26 +942,44 @@ const SlotPortals = memo(function SlotPortals<LAnnotation, Caret>({
   const snapshot = useSyncExternalStore<
     CodeViewSlotSnapshot<LAnnotation, Caret> | undefined
   >(subscribe, getSnapshot, getSnapshot);
-  let itemKeys = '';
-  for (const item of snapshot?.items ?? []) {
-    itemKeys += `${item.id}:${item.version}:${item.type}`;
-  }
   // NOTE(amadeus): And just like that, the react compiler do be failing us
   // lol... we need to pre-render everything for items, headers and footers to
   // not trigger needless renders while scrolling
   const renderedItems = useMemo(
     () => {
+      const renderers = {
+        renderCustomHeader,
+        renderHeaderPrefix,
+        renderHeaderFilenameSuffix,
+        renderHeaderMetadata,
+        renderAnnotation,
+        renderGutterUtility,
+      };
       return snapshot?.items?.map((renderedItem) =>
         createPortal(
-          renderCodeViewItemChildren({
-            renderedItem,
-            renderCustomHeader,
-            renderHeaderPrefix,
-            renderHeaderFilenameSuffix,
-            renderHeaderMetadata,
-            renderAnnotation,
-            renderGutterUtility,
-          }),
+          renderedItem.type === 'diff' ? (
+            <DiffItemSlots
+              version={renderedItem.version ?? 0}
+              item={renderedItem.item}
+              getHoveredLine={renderedItem.instance.getHoveredLine}
+              getAnnotationSlotName={
+                renderedItem.instance.getAnnotationSlotName
+              }
+              {...getCodeViewItemRenderData(renderedItem)}
+              {...renderers}
+            />
+          ) : (
+            <FileItemSlots
+              version={renderedItem.version ?? 0}
+              item={renderedItem.item}
+              getHoveredLine={renderedItem.instance.getHoveredLine}
+              getAnnotationSlotName={
+                renderedItem.instance.getAnnotationSlotName
+              }
+              {...getCodeViewItemRenderData(renderedItem)}
+              {...renderers}
+            />
+          ),
           renderedItem.element,
           renderedItem.id
         )
@@ -932,7 +993,7 @@ const SlotPortals = memo(function SlotPortals<LAnnotation, Caret>({
       renderHeaderMetadata,
       renderAnnotation,
       renderGutterUtility,
-      itemKeys,
+      snapshot?.items,
     ]
   );
   const renderedHeader = useMemo(() => {
@@ -954,73 +1015,90 @@ const SlotPortals = memo(function SlotPortals<LAnnotation, Caret>({
   );
 }) as SlotPortalsComponent;
 
-function renderCodeViewItemChildren<LAnnotation, Caret>({
-  renderedItem,
+// Each item's slot content is its own memoized component, so republishing the
+// slot snapshot only rerenders items whose displayed data changed. An item in
+// an edit session keeps the same data while the editor moves its rows.
+const DiffItemSlots = memo(function DiffItemSlots<LAnnotation, Caret>({
+  item,
+  fileDiff,
+  lineAnnotations,
+  getHoveredLine,
+  getAnnotationSlotName,
   renderCustomHeader,
   renderHeaderPrefix,
   renderHeaderFilenameSuffix,
   renderHeaderMetadata,
   renderAnnotation,
   renderGutterUtility,
-}: RenderCodeViewItemChildrenProps<LAnnotation, Caret>): ReactNode {
-  if (renderedItem.type === 'diff') {
-    const { item, instance } = renderedItem;
-    return renderDiffChildren({
-      fileDiff: item.fileDiff,
-      renderCustomHeader:
-        renderCustomHeader != null ? () => renderCustomHeader(item) : undefined,
-      renderHeaderPrefix:
-        renderHeaderPrefix != null ? () => renderHeaderPrefix(item) : undefined,
-      renderHeaderFilenameSuffix:
-        renderHeaderFilenameSuffix != null
-          ? () => renderHeaderFilenameSuffix(item)
-          : undefined,
-      renderHeaderMetadata:
-        renderHeaderMetadata != null
-          ? () => renderHeaderMetadata(item)
-          : undefined,
-      renderAnnotation:
-        renderAnnotation != null
-          ? (annotation) => renderAnnotation(annotation, item)
-          : undefined,
-      lineAnnotations: item.annotations,
-      renderGutterUtility:
-        renderGutterUtility != null
-          ? (getHoveredLine) => renderGutterUtility(getHoveredLine, item)
-          : undefined,
-      getHoveredLine: instance.getHoveredLine,
-      getAnnotationSlotName: instance.getAnnotationSlotName,
-    });
-  } else {
-    const { item, instance } = renderedItem;
-    return renderFileChildren({
-      file: item.file,
-      renderCustomHeader:
-        renderCustomHeader != null ? () => renderCustomHeader(item) : undefined,
-      renderHeaderPrefix:
-        renderHeaderPrefix != null ? () => renderHeaderPrefix(item) : undefined,
-      renderHeaderFilenameSuffix:
-        renderHeaderFilenameSuffix != null
-          ? () => renderHeaderFilenameSuffix(item)
-          : undefined,
-      renderHeaderMetadata:
-        renderHeaderMetadata != null
-          ? () => renderHeaderMetadata(item)
-          : undefined,
-      renderAnnotation:
-        renderAnnotation != null
-          ? (annotation) => renderAnnotation(annotation, item)
-          : undefined,
-      lineAnnotations: item.annotations,
-      renderGutterUtility:
-        renderGutterUtility != null
-          ? (getHoveredLine) => renderGutterUtility(getHoveredLine, item)
-          : undefined,
-      getHoveredLine: instance.getHoveredLine,
-      getAnnotationSlotName: instance.getAnnotationSlotName,
-    });
-  }
-}
+}: DiffItemSlotsProps<LAnnotation, Caret>): ReactNode {
+  return renderDiffChildren({
+    fileDiff,
+    renderCustomHeader:
+      renderCustomHeader != null ? () => renderCustomHeader(item) : undefined,
+    renderHeaderPrefix:
+      renderHeaderPrefix != null ? () => renderHeaderPrefix(item) : undefined,
+    renderHeaderFilenameSuffix:
+      renderHeaderFilenameSuffix != null
+        ? () => renderHeaderFilenameSuffix(item)
+        : undefined,
+    renderHeaderMetadata:
+      renderHeaderMetadata != null
+        ? () => renderHeaderMetadata(item)
+        : undefined,
+    renderAnnotation:
+      renderAnnotation != null
+        ? (annotation, fileDiff) => renderAnnotation(annotation, fileDiff, item)
+        : undefined,
+    lineAnnotations,
+    renderGutterUtility:
+      renderGutterUtility != null
+        ? (getHoveredLine) => renderGutterUtility(getHoveredLine, item)
+        : undefined,
+    getHoveredLine,
+    getAnnotationSlotName,
+  });
+}) as DiffItemSlotsComponent;
+
+const FileItemSlots = memo(function FileItemSlots<LAnnotation, Caret>({
+  item,
+  file,
+  lineAnnotations,
+  getHoveredLine,
+  getAnnotationSlotName,
+  renderCustomHeader,
+  renderHeaderPrefix,
+  renderHeaderFilenameSuffix,
+  renderHeaderMetadata,
+  renderAnnotation,
+  renderGutterUtility,
+}: FileItemSlotsProps<LAnnotation, Caret>): ReactNode {
+  return renderFileChildren({
+    file,
+    renderCustomHeader:
+      renderCustomHeader != null ? () => renderCustomHeader(item) : undefined,
+    renderHeaderPrefix:
+      renderHeaderPrefix != null ? () => renderHeaderPrefix(item) : undefined,
+    renderHeaderFilenameSuffix:
+      renderHeaderFilenameSuffix != null
+        ? () => renderHeaderFilenameSuffix(item)
+        : undefined,
+    renderHeaderMetadata:
+      renderHeaderMetadata != null
+        ? () => renderHeaderMetadata(item)
+        : undefined,
+    renderAnnotation:
+      renderAnnotation != null
+        ? (annotation, file) => renderAnnotation(annotation, file, item)
+        : undefined,
+    lineAnnotations,
+    renderGutterUtility:
+      renderGutterUtility != null
+        ? (getHoveredLine) => renderGutterUtility(getHoveredLine, item)
+        : undefined,
+    getHoveredLine,
+    getAnnotationSlotName,
+  });
+}) as FileItemSlotsComponent;
 
 function noopRender() {
   return undefined;

@@ -28,8 +28,12 @@ class TestFileDiff extends FileDiff<undefined> {
     return this.hunksRenderer.initializeHighlighter();
   }
 
-  getLatestDiffForTest() {
-    return this.getLatestDiff();
+  getWorkingDiffForTest() {
+    return this.getWorkingDiff();
+  }
+
+  getInputDiffForTest() {
+    return this.getInputDiff();
   }
 
   getRendererDiffForTest() {
@@ -217,9 +221,9 @@ const loadedFiles: FileDiffLoadedFiles = {
   newFile: { name: 'file.ts', contents: 'const newValue = 2;\n' },
 };
 
-async function waitForHydrated(instance: FileDiff<undefined>): Promise<void> {
+async function waitForHydrated(instance: TestFileDiff): Promise<void> {
   for (let attempt = 0; attempt < 50; attempt++) {
-    if (instance.fileDiff?.isPartial === false) {
+    if (instance.getInputDiffForTest()?.isPartial === false) {
       return;
     }
     await wait(10);
@@ -281,8 +285,8 @@ async function expectOneSidedPartialDoesNotStartHydration({
 
     instance.expandHunk(0, 'both', 1);
     expect(loadCalls).toBe(0);
-    expect(instance.fileDiff).toBe(partial);
-    expect(instance.fileDiff?.isPartial).toBe(true);
+    expect(instance.getInputDiffForTest()).toBe(partial);
+    expect(instance.getInputDiffForTest()?.isPartial).toBe(true);
     expect(instance.getPendingFileLoadPromiseForTest()).toBeUndefined();
     expect(() => instance?.__prepareForEditing()).toThrow(
       'this partial diff cannot be hydrated'
@@ -333,7 +337,7 @@ describe('FileDiff partial hydration', () => {
       ).toThrow('a complete diff is required before editing');
       const readyForEditing = instance.prepareForEditing();
 
-      const partialSession = instance.getLatestDiffForTest();
+      const partialSession = instance.getWorkingDiffForTest();
       expect(partialSession).toBeDefined();
       // Partial inputs remain external-only until the complete files arrive;
       // session ownership begins with the fully hydrated value.
@@ -345,10 +349,10 @@ describe('FileDiff partial hydration', () => {
       await readyForEditing;
       detach = instance.__attachEditor(createEditorInstance('file-diff'));
 
-      const hydratedSession = instance.getLatestDiffForTest();
+      const hydratedSession = instance.getWorkingDiffForTest();
       expect(hydratedSession).toBeDefined();
       expect(hydratedSession).not.toBe(partial);
-      expect(instance.fileDiff).toBe(partial);
+      expect(instance.getInputDiffForTest()).toBe(partial);
       expect(partial.isPartial).toBe(false);
       expect(partial.cacheKey).toBe('external:partial-session:hydrated');
       expect(hydratedSession?.isPartial).toBe(false);
@@ -403,8 +407,8 @@ describe('FileDiff partial hydration', () => {
       });
       detach = instance.__attachEditor(createEditorInstance('file-diff'));
 
-      const editSessionDiff = instance.getLatestDiffForTest();
-      expect(instance.fileDiff).toBe(replacement);
+      const editSessionDiff = instance.getWorkingDiffForTest();
+      expect(instance.getInputDiffForTest()).toBe(replacement);
       expect(editSessionDiff).not.toBe(replacement);
       expect(editSessionDiff?.cacheKey).toBeUndefined();
       expect(editSessionDiff?.additionLines).toBe(replacement.additionLines);
@@ -417,8 +421,8 @@ describe('FileDiff partial hydration', () => {
       deferred.resolve({ oldFile, newFile });
       await loadPromise;
       expect(partial.isPartial).toBe(true);
-      expect(instance.fileDiff).toBe(replacement);
-      expect(instance.getLatestDiffForTest()).toBe(editSessionDiff);
+      expect(instance.getInputDiffForTest()).toBe(replacement);
+      expect(instance.getWorkingDiffForTest()).toBe(editSessionDiff);
     } finally {
       deferred.resolve({ oldFile, newFile });
       await loadPromise;
@@ -470,10 +474,10 @@ describe('FileDiff partial hydration', () => {
       await loadPromise;
       detach = instance.__attachEditor(createEditorInstance('file-diff'));
 
-      const hydratedSession = instance.getLatestDiffForTest();
+      const hydratedSession = instance.getWorkingDiffForTest();
       expect(hydratedSession).toBeDefined();
       expect(hydratedSession).not.toBe(partial);
-      expect(instance.fileDiff).toBe(partial);
+      expect(instance.getInputDiffForTest()).toBe(partial);
       expect(partial.isPartial).toBe(false);
       expect(partial.cacheKey).toBe(
         'external:recycled-partial-session:hydrated'
@@ -523,7 +527,7 @@ describe('FileDiff partial hydration', () => {
       await loadPromise;
       detach = instance.__attachEditor(createEditorInstance('file-diff'));
 
-      const hydratedSession = instance.getLatestDiffForTest();
+      const hydratedSession = instance.getWorkingDiffForTest();
       expect(hydratedSession).toBeDefined();
       if (hydratedSession == null) return;
       expect(hydratedSession).not.toBe(partial);
@@ -547,7 +551,7 @@ describe('FileDiff partial hydration', () => {
       );
       expect(hydratedSession.deletionLines).toEqual(['alpha\n', 'beta\n']);
       expect(hydratedSession.deletionLines).toBe(partial.deletionLines);
-      expect(instance.fileDiff).toBe(partial);
+      expect(instance.getInputDiffForTest()).toBe(partial);
       expect(partial.additionLines).toBe(partial.deletionLines);
       expect(partial).toEqual(hydratedBaseBefore);
     } finally {
@@ -586,8 +590,8 @@ describe('FileDiff partial hydration', () => {
       instance.expandHunk(0, 'up', 2);
 
       expect(loadCalls).toBe(1);
-      expect(instance.fileDiff).toBe(partial);
-      expect(instance.fileDiff?.isPartial).toBe(true);
+      expect(instance.getInputDiffForTest()).toBe(partial);
+      expect(instance.getInputDiffForTest()?.isPartial).toBe(true);
       expect(instance.getExpandedHunkForTest(0)).toEqual({
         fromStart: 2,
         fromEnd: 1,
@@ -596,15 +600,15 @@ describe('FileDiff partial hydration', () => {
       deferred.resolve(loadedContents);
       await waitForHydrated(instance);
 
-      expect(instance.fileDiff).toBe(partial);
-      expect(instance.fileDiff?.isPartial).toBe(false);
-      expect(instance.fileDiff?.additionLines).toEqual([
+      expect(instance.getInputDiffForTest()).toBe(partial);
+      expect(instance.getInputDiffForTest()?.isPartial).toBe(false);
+      expect(instance.getInputDiffForTest()?.additionLines).toEqual([
         'keep 1\n',
         'new value\n',
         'keep 3\n',
         'keep 4\n',
       ]);
-      expect(instance.fileDiff?.deletionLines).toEqual([
+      expect(instance.getInputDiffForTest()?.deletionLines).toEqual([
         'keep 1\n',
         'old value\n',
         'keep 3\n',
@@ -614,7 +618,7 @@ describe('FileDiff partial hydration', () => {
         fromStart: 2,
         fromEnd: 1,
       });
-      const hydratedInstanceFileDiff = instance.fileDiff;
+      const hydratedInstanceFileDiff = instance.getInputDiffForTest();
       assertDefined(
         hydratedInstanceFileDiff,
         'expected FileDiff to keep hydrated file diff'
@@ -647,8 +651,8 @@ describe('FileDiff partial hydration', () => {
         'loadDiffFiles is required to load full files'
       );
 
-      expect(instance.fileDiff).toBe(partial);
-      expect(instance.fileDiff?.isPartial).toBe(true);
+      expect(instance.getInputDiffForTest()).toBe(partial);
+      expect(instance.getInputDiffForTest()?.isPartial).toBe(true);
       expect(instance.getPendingFileLoadPromiseForTest()).toBeUndefined();
       expect(instance.getExpandedHunkForTest(0)).toEqual(expandedBefore);
       expect(() => instance?.__prepareForEditing()).toThrow(
@@ -725,7 +729,7 @@ describe('FileDiff partial hydration', () => {
 
       await instance.handleFilesLoadedForTest(partial, loadedContents);
 
-      expect(instance.fileDiff).toBe(partial);
+      expect(instance.getInputDiffForTest()).toBe(partial);
       expect(partial.isPartial).toBe(false);
       expect(cleanedTasks).toHaveLength(0);
       expect(instance.getLoadedFilesForTest()).toEqual({
@@ -785,8 +789,8 @@ describe('FileDiff partial hydration', () => {
       deferred.resolve(loadedContents);
       await waitForHydrated(instance);
 
-      expect(instance.fileDiff).toBe(partial);
-      expect(instance.fileDiff?.isPartial).toBe(false);
+      expect(instance.getInputDiffForTest()).toBe(partial);
+      expect(instance.getInputDiffForTest()?.isPartial).toBe(false);
       expect(fileContainer.shadowRoot?.textContent).not.toContain(
         'More unchanged context may be available'
       );
@@ -826,8 +830,8 @@ describe('FileDiff partial hydration', () => {
       instance.expandHunk(0, 'both', 1);
 
       expect(loadCalls).toBe(0);
-      expect(instance.fileDiff).toBe(fullDiff);
-      expect(instance.fileDiff?.isPartial).toBe(false);
+      expect(instance.getInputDiffForTest()).toBe(fullDiff);
+      expect(instance.getInputDiffForTest()?.isPartial).toBe(false);
       expect(instance.getPendingFileLoadPromiseForTest()).toBeUndefined();
       expect(instance.getExpandedHunkForTest(0)).toEqual({
         fromStart: 1,
@@ -866,8 +870,8 @@ describe('FileDiff partial hydration', () => {
       });
 
       expect(didRender).toBe(true);
-      expect(instance.fileDiff).toBe(partial);
-      expect(instance.fileDiff?.isPartial).toBe(true);
+      expect(instance.getInputDiffForTest()).toBe(partial);
+      expect(instance.getInputDiffForTest()?.isPartial).toBe(true);
     } finally {
       instance?.cleanUp();
       cleanup();
@@ -978,10 +982,12 @@ describe('FileDiff partial hydration', () => {
       deferred.resolve({ oldFile, newFile });
       await wait(10);
 
-      expect(instance.fileDiff).toBe(nextDiff);
-      expect(instance.fileDiff?.name).toBe('second.txt');
-      expect(instance.fileDiff?.isPartial).toBe(false);
-      expect(instance.fileDiff?.additionLines).toEqual(['after\n']);
+      expect(instance.getInputDiffForTest()).toBe(nextDiff);
+      expect(instance.getInputDiffForTest()?.name).toBe('second.txt');
+      expect(instance.getInputDiffForTest()?.isPartial).toBe(false);
+      expect(instance.getInputDiffForTest()?.additionLines).toEqual([
+        'after\n',
+      ]);
     } finally {
       instance?.cleanUp();
       cleanup();
@@ -1025,14 +1031,14 @@ describe('FileDiff partial hydration', () => {
       expect(primedDiffs[0]).toBe(partial);
       expect(primedDiffs[0]?.isPartial).toBe(false);
       expect(primedDiffs[0]?.cacheKey).toBe('partial-cache:hydrated');
-      expect(instance.fileDiff).toBe(partial);
-      expect(instance.fileDiff?.isPartial).toBe(false);
+      expect(instance.getInputDiffForTest()).toBe(partial);
+      expect(instance.getInputDiffForTest()?.isPartial).toBe(false);
 
       primeDeferred.resolve(undefined);
       await hydrationPromise;
 
-      expect(instance.fileDiff).toBe(partial);
-      expect(instance.fileDiff?.isPartial).toBe(false);
+      expect(instance.getInputDiffForTest()).toBe(partial);
+      expect(instance.getInputDiffForTest()?.isPartial).toBe(false);
     } finally {
       instance?.cleanUp();
       cleanup();
@@ -1074,8 +1080,8 @@ describe('FileDiff partial hydration', () => {
       expect(primedDiffs).toHaveLength(1);
       expect(primedDiffs[0]).toBe(partial);
       expect(primedDiffs[0]?.cacheKey).toBe('partial-cache:hydrated');
-      expect(instance.fileDiff).toBe(partial);
-      expect(instance.fileDiff?.isPartial).toBe(false);
+      expect(instance.getInputDiffForTest()).toBe(partial);
+      expect(instance.getInputDiffForTest()?.isPartial).toBe(false);
       primeDeferred.resolve(undefined);
     } finally {
       instance?.cleanUp();
@@ -1120,8 +1126,8 @@ describe('FileDiff partial hydration', () => {
       expect(primedDiffs[0]).toBe(partial);
       expect(primedDiffs[0]?.cacheKey).toBe('partial-cache:hydrated');
       expect(consoleError.mock.calls[0]?.[0]).toBe(primingError);
-      expect(instance.fileDiff).toBe(partial);
-      expect(instance.fileDiff?.isPartial).toBe(false);
+      expect(instance.getInputDiffForTest()).toBe(partial);
+      expect(instance.getInputDiffForTest()?.isPartial).toBe(false);
     } finally {
       consoleError.mockRestore();
       instance?.cleanUp();
@@ -1172,10 +1178,10 @@ describe('FileDiff partial hydration', () => {
       primeDeferred.resolve(undefined);
       await wait(0);
 
-      expect(instance.fileDiff).toBe(nextDiff);
-      expect(instance.fileDiff?.name).toBe('second.ts');
-      expect(instance.fileDiff?.isPartial).toBe(false);
-      expect(instance.fileDiff?.additionLines).toEqual([
+      expect(instance.getInputDiffForTest()).toBe(nextDiff);
+      expect(instance.getInputDiffForTest()?.name).toBe('second.ts');
+      expect(instance.getInputDiffForTest()?.isPartial).toBe(false);
+      expect(instance.getInputDiffForTest()?.additionLines).toEqual([
         'const value = "after";\n',
       ]);
     } finally {
@@ -1212,10 +1218,16 @@ describe('FileDiff partial hydration', () => {
       expect(loadCalls).toBe(1);
       await waitForHydrated(instance);
 
-      expect(instance.fileDiff?.type).toBe('rename-pure');
-      expect(instance.fileDiff?.isPartial).toBe(false);
-      expect(instance.fileDiff?.additionLines).toEqual(['alpha\n', 'beta\n']);
-      expect(instance.fileDiff?.deletionLines).toEqual(['alpha\n', 'beta\n']);
+      expect(instance.getInputDiffForTest()?.type).toBe('rename-pure');
+      expect(instance.getInputDiffForTest()?.isPartial).toBe(false);
+      expect(instance.getInputDiffForTest()?.additionLines).toEqual([
+        'alpha\n',
+        'beta\n',
+      ]);
+      expect(instance.getInputDiffForTest()?.deletionLines).toEqual([
+        'alpha\n',
+        'beta\n',
+      ]);
     } finally {
       instance?.cleanUp();
       cleanup();
@@ -1254,17 +1266,17 @@ describe('FileDiff partial hydration', () => {
 
       expect(loadCalls).toBe(1);
       expect(consoleError.mock.calls[0]?.[0]).toBe(loadError);
-      expect(instance.fileDiff).toBe(partial);
-      expect(instance.fileDiff?.isPartial).toBe(true);
+      expect(instance.getInputDiffForTest()).toBe(partial);
+      expect(instance.getInputDiffForTest()?.isPartial).toBe(true);
       expect(instance.getPendingFileLoadPromiseForTest()).toBeUndefined();
 
       instance.expandHunk(0, 'up', 1);
       expect(loadCalls).toBe(2);
       await waitForHydrated(instance);
 
-      expect(instance.fileDiff).toBe(partial);
-      expect(instance.fileDiff?.isPartial).toBe(false);
-      expect(instance.fileDiff?.additionLines).toEqual([
+      expect(instance.getInputDiffForTest()).toBe(partial);
+      expect(instance.getInputDiffForTest()?.isPartial).toBe(false);
+      expect(instance.getInputDiffForTest()?.additionLines).toEqual([
         'keep 1\n',
         'new value\n',
         'keep 3\n',
@@ -1308,8 +1320,8 @@ describe('FileDiff partial hydration', () => {
       }
 
       expect(rejectedError).toBe(loadError);
-      expect(instance.fileDiff).toBe(partial);
-      expect(instance.fileDiff?.isPartial).toBe(true);
+      expect(instance.getInputDiffForTest()).toBe(partial);
+      expect(instance.getInputDiffForTest()?.isPartial).toBe(true);
       expect(instance.getPendingFileLoadPromiseForTest()).toBeUndefined();
     } finally {
       instance?.cleanUp();

@@ -97,6 +97,8 @@ export const DEFAULT_RENDER_RANGE: RenderRange = {
   bufferAfter: 0,
 };
 
+export const EMPTY_LINE_ANNOTATIONS: never[] = Object.freeze([]) as never[];
+
 export const EMPTY_RENDER_RANGE: RenderRange = {
   startingLine: 0,
   totalLines: 0,

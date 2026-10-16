@@ -23,8 +23,8 @@ afterAll(async () => {
 });
 
 class TestFile extends File<undefined> {
-  getLatestFileForTest(): FileContents | undefined {
-    return this.getLatestFile();
+  getWorkingFileForTest(): FileContents | undefined {
+    return this.getWorkingFile();
   }
 
   getRenderedFileForTest(): FileContents | undefined {
@@ -35,7 +35,7 @@ class TestFile extends File<undefined> {
     return this.fileRenderer.fileCache;
   }
 
-  getExternalAnnotationsForTest(): LineAnnotation<undefined>[] {
+  getDisplayedAnnotationsForTest(): LineAnnotation<undefined>[] {
     return this.lineAnnotations;
   }
 
@@ -183,7 +183,7 @@ describe('editing a File without changing its input', () => {
   test('attaching an editor creates a separate file without a cache key', async () => {
     const fixture = await createFixture();
     try {
-      const editSessionFile = fixture.instance.getLatestFileForTest();
+      const editSessionFile = fixture.instance.getWorkingFileForTest();
       expect(fixture.instance.file).toBe(fixture.externalFile);
       expect(editSessionFile).not.toBe(fixture.externalFile);
       expect(editSessionFile?.cacheKey).toBeUndefined();
@@ -227,12 +227,13 @@ describe('editing a File without changing its input', () => {
           '[data-line-annotation]'
         )
       ).not.toBeNull();
-      expect(fixture.instance.getLatestFileForTest()?.contents).toBe(
+      expect(fixture.instance.getWorkingFileForTest()?.contents).toBe(
         'edited\nbravo\ncharlie\n'
       );
       expect(fixture.instance.getRendererFileForTest()).toBe(
-        fixture.instance.getLatestFileForTest()
+        fixture.instance.getWorkingFileForTest()
       );
+      expect(fixture.instance.file).toBe(fixture.externalFile);
       expect(fixture.externalFile).toEqual(externalBefore);
     } finally {
       fixture.cleanup();
@@ -289,7 +290,7 @@ describe('editing a File without changing its input', () => {
     const fixture = await createFixture();
     try {
       replaceDocument(fixture.editor, 'edited\n');
-      const editSessionFile = fixture.instance.getLatestFileForTest();
+      const editSessionFile = fixture.instance.getWorkingFileForTest();
 
       fixture.instance.render({
         file: { ...fixture.externalFile },
@@ -298,7 +299,7 @@ describe('editing a File without changing its input', () => {
       });
 
       expect(fixture.instance.file).toBe(fixture.externalFile);
-      expect(fixture.instance.getLatestFileForTest()).toBe(editSessionFile);
+      expect(fixture.instance.getWorkingFileForTest()).toBe(editSessionFile);
       expect(fixture.editor.getText()).toBe('edited\n');
       expect(fixture.externalFile).toEqual(EXTERNAL_FILE);
     } finally {
@@ -331,8 +332,13 @@ describe('editing a File without changing its input', () => {
       });
 
       expect(fixture.instance.file).toBe(replacement);
-      expect(fixture.instance.getLatestFileForTest()).not.toBe(replacement);
-      expect(fixture.instance.getLatestFileForTest()?.cacheKey).toBeUndefined();
+      expect(fixture.instance.getRenderedFileForTest()).toBe(
+        fixture.instance.getWorkingFileForTest()
+      );
+      expect(fixture.instance.getWorkingFileForTest()).not.toBe(replacement);
+      expect(
+        fixture.instance.getWorkingFileForTest()?.cacheKey
+      ).toBeUndefined();
       expect(changes).toEqual(['bravo\n', 'charlie\n']);
 
       fixture.editor.undo();
@@ -641,7 +647,7 @@ describe('session-owned line annotations', () => {
     };
   }
 
-  test('a remap moves only the private session collection', async () => {
+  test('a remap updates adopted annotations without changing the caller collection', async () => {
     const fixture = await createAnnotatedFixture();
     try {
       const { editor, events, externalAnnotations, instance } = fixture;
@@ -650,9 +656,7 @@ describe('session-owned line annotations', () => {
       const latest = instance.getLatestAnnotationsForTest();
       expect(latest).not.toBe(externalAnnotations);
       expect(latest).toEqual([{ lineNumber: 3 }]);
-      expect(instance.getExternalAnnotationsForTest()).toBe(
-        externalAnnotations
-      );
+      expect(instance.getDisplayedAnnotationsForTest()).toBe(latest);
       expect(externalAnnotations).toEqual([{ lineNumber: 2 }]);
       expect(events.at(-1)?.lineAnnotations).toBe(latest);
     } finally {
@@ -723,7 +727,7 @@ describe('session-owned line annotations', () => {
       // An external write is the source of truth: it renders in the session
       // and becomes the external collection too, so a revert keeps it.
       expect(fixture.instance.getLatestAnnotationsForTest()).toBe(written);
-      expect(fixture.instance.getExternalAnnotationsForTest()).toBe(written);
+      expect(fixture.instance.getDisplayedAnnotationsForTest()).toBe(written);
       const single = written.at(0);
       if (single == null) {
         throw new Error('Expected the written annotation to exist');
@@ -762,7 +766,7 @@ describe('session-owned line annotations', () => {
         lineAnnotations: replacementAnnotations,
       });
 
-      expect(instance.getExternalAnnotationsForTest()).toBe(
+      expect(instance.getDisplayedAnnotationsForTest()).toBe(
         replacementAnnotations
       );
       expect(instance.getLatestAnnotationsForTest()).toBe(
@@ -782,7 +786,7 @@ describe('session-owned line annotations', () => {
     }
   });
 
-  test('deleting an annotated line drops it from the session collection only', async () => {
+  test('deleting an annotated line drops its adopted annotation without changing the caller collection', async () => {
     const fixture = await createAnnotatedFixture();
     try {
       const { editor, externalAnnotations, instance } = fixture;
@@ -798,9 +802,7 @@ describe('session-owned line annotations', () => {
 
       expect(instance.getLatestAnnotationsForTest()).toEqual([]);
       expect(externalAnnotations).toEqual([{ lineNumber: 2 }]);
-      expect(instance.getExternalAnnotationsForTest()).toBe(
-        externalAnnotations
-      );
+      expect(instance.getDisplayedAnnotationsForTest()).toEqual([]);
     } finally {
       fixture.cleanup();
     }
@@ -1084,10 +1086,10 @@ describe('__completeEditSession', () => {
       expect(events).toHaveLength(1);
       const event = events[0];
       expect(instance.file).toBe(event.file);
-      expect(instance.getLatestFileForTest()).toBe(event.file);
+      expect(instance.getWorkingFileForTest()).toBe(event.file);
       expect(instance.file?.cacheKey).toBe('external:file-v2');
       expect(event.lineAnnotations).toBe(
-        instance.getExternalAnnotationsForTest()
+        instance.getDisplayedAnnotationsForTest()
       );
       expect(event.originalLineAnnotations).toBe(externalAnnotations);
       expect(instance.getLatestAnnotationsForTest()).toEqual([
@@ -1113,7 +1115,7 @@ describe('__completeEditSession', () => {
     try {
       const { editor, fileContainer, instance } = fixture;
       insertLinesAtStart(editor);
-      const sessionFile = instance.getLatestFileForTest();
+      const sessionFile = instance.getWorkingFileForTest();
       if (sessionFile == null) {
         throw new Error('Expected an active session file');
       }
@@ -1130,7 +1132,7 @@ describe('__completeEditSession', () => {
         forceRender: true,
         lineAnnotations: added,
       });
-      expect(instance.getExternalAnnotationsForTest()).toBe(added);
+      expect(instance.getDisplayedAnnotationsForTest()).toBe(added);
 
       // Reverting keeps the added annotation; the baseline is not rewound.
       editor.cleanUp('complete');
@@ -1157,7 +1159,7 @@ describe('__completeEditSession', () => {
       editor.cleanUp('complete');
 
       expect(instance.file).toBe(externalFile);
-      expect(instance.getLatestFileForTest()).toBe(externalFile);
+      expect(instance.getWorkingFileForTest()).toBe(externalFile);
       expect(instance.getLatestAnnotationsForTest()).toBe(externalAnnotations);
       expect(externalAnnotations).toEqual([{ lineNumber: 2 }]);
     } finally {
@@ -1175,7 +1177,7 @@ describe('__completeEditSession', () => {
       editor.cleanUp('complete');
 
       expect(instance.file).toBe(externalFile);
-      expect(instance.getLatestFileForTest()).toBe(externalFile);
+      expect(instance.getWorkingFileForTest()).toBe(externalFile);
     } finally {
       fixture.cleanup();
     }
@@ -1189,7 +1191,7 @@ describe('__completeEditSession', () => {
       editor.cleanUp('complete');
 
       expect(instance.file).toBe(externalFile);
-      expect(instance.getLatestFileForTest()).toBe(externalFile);
+      expect(instance.getWorkingFileForTest()).toBe(externalFile);
     } finally {
       fixture.cleanup();
     }
@@ -1210,7 +1212,7 @@ describe('__completeEditSession', () => {
       );
 
       expect(instance.file).toBe(externalFile);
-      expect(instance.getLatestFileForTest()).toBe(externalFile);
+      expect(instance.getWorkingFileForTest()).toBe(externalFile);
     } finally {
       fixture.cleanup();
     }
@@ -1228,7 +1230,7 @@ describe('__completeEditSession', () => {
       expect(() => editor.cleanUp('complete')).toThrow('owner exploded');
 
       expect(instance.file).toBe(externalFile);
-      expect(instance.getLatestFileForTest()).toBe(externalFile);
+      expect(instance.getWorkingFileForTest()).toBe(externalFile);
     } finally {
       fixture.cleanup();
     }
@@ -1261,7 +1263,7 @@ describe('__completeEditSession', () => {
       expect(events[0].file.contents).toBe(externalFile.contents);
       expect(events[0].file.cacheKey).toBeUndefined();
       expect(instance.file).toBe(events[0].file);
-      expect(instance.getExternalAnnotationsForTest()).toBe(written);
+      expect(instance.getDisplayedAnnotationsForTest()).toBe(written);
       expect(instance.getLatestAnnotationsForTest()).toBe(written);
     } finally {
       fixture.cleanup();
@@ -1409,7 +1411,7 @@ describe('editor session lifecycle', () => {
 
       expect(events).toHaveLength(1);
       expect(instance.file).toBe(events[0].file);
-      expect(instance.getLatestFileForTest()).toBe(events[0].file);
+      expect(instance.getWorkingFileForTest()).toBe(events[0].file);
 
       finishSession();
       expect(events).toHaveLength(1);
@@ -1433,7 +1435,7 @@ describe('editor session lifecycle', () => {
 
       expect(events).toHaveLength(1);
       expect(events[0].file.contents).toBe('edited\nbravo\n');
-      expect(instance.getLatestFileForTest()?.contents).toBe(
+      expect(instance.getWorkingFileForTest()?.contents).toBe(
         EXTERNAL_FILE.contents
       );
     } finally {
@@ -1468,7 +1470,7 @@ describe('editor session lifecycle', () => {
       replaceDocument(editor, 'first\n');
       editor.cleanUp('recycle');
       expect(events).toHaveLength(0);
-      expect(instance.getLatestFileForTest()?.contents).toBe('first\n');
+      expect(instance.getWorkingFileForTest()?.contents).toBe('first\n');
 
       const finishResumed = editor.edit(instance);
       await waitFor(() => attachCount === 2, { timeout: 4_000 });
