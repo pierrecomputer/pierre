@@ -320,6 +320,7 @@ export const CODE_VIEW_DIFF_OPTION_KEYS = [
   'expandUnchanged',
   'loadDiffFiles',
   'parseDiffOptions',
+  'preferredDiffLib',
   'collapsedContextThreshold',
   'lineDiffType',
   'maxLineDiffLength',

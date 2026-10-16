@@ -1,5 +1,5 @@
+import { createTwoFilesPatch } from '@pierre/patches';
 import { afterAll, describe, expect, test } from 'bun:test';
-import { createTwoFilesPatch } from 'diff';
 
 import {
   disposeHighlighter,

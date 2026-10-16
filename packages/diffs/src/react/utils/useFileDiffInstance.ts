@@ -161,6 +161,7 @@ export function useFileDiffInstance<LAnnotation, Caret>({
     newFile,
     oldFile,
     parseDiffOptions: options?.parseDiffOptions,
+    preferredDiffLib: options?.preferredDiffLib,
   });
   const instanceRef = useRef<
     | FileDiff<LAnnotation, Caret>
@@ -354,6 +355,7 @@ interface UseEffectiveFileDiffProps<LAnnotation, Caret> {
   newFile: FileContents | null | undefined;
   oldFile: FileContents | null | undefined;
   parseDiffOptions: FileDiffOptions<LAnnotation, Caret>['parseDiffOptions'];
+  preferredDiffLib: FileDiffOptions<LAnnotation, Caret>['preferredDiffLib'];
 }
 
 // Resolves the diff the instance renders: the `fileDiff` prop when given;
@@ -368,6 +370,7 @@ function useEffectiveFileDiff<LAnnotation, Caret>({
   newFile,
   oldFile,
   parseDiffOptions,
+  preferredDiffLib,
 }: UseEffectiveFileDiffProps<LAnnotation, Caret>): FileDiffMetadata {
   /* oxlint-disable react/immutability react/refs -- accepted edit output must
    * replace stale file-pair props during render */
@@ -386,12 +389,18 @@ function useEffectiveFileDiff<LAnnotation, Caret>({
       }
       accepted.filePair = null;
     }
-    return parseDiffFromFile(
-      oldFile ?? null,
-      newFile ?? null,
-      parseDiffOptions
-    );
-  }, [acceptedCache, fileDiff, oldFile, newFile, parseDiffOptions]);
+    return parseDiffFromFile(oldFile ?? null, newFile ?? null, {
+      ...parseDiffOptions,
+      preferredDiffLib,
+    });
+  }, [
+    acceptedCache,
+    fileDiff,
+    oldFile,
+    newFile,
+    parseDiffOptions,
+    preferredDiffLib,
+  ]);
   /* oxlint-enable react/immutability react/refs */
 
   return effectiveFileDiff;

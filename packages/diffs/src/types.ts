@@ -1,4 +1,4 @@
-import type { CreatePatchOptionsNonabortable } from 'diff';
+import type { CreatePatchOptions } from '@pierre/patches';
 import type { ElementContent } from 'hast';
 import type { BundledLanguage, BundledTheme } from 'shiki';
 
@@ -15,7 +15,9 @@ export type {
   TokensResult,
 } from './highlighter/types';
 
-export type { CreatePatchOptionsNonabortable };
+export type { CreatePatchOptions };
+/** @deprecated Use `CreatePatchOptions`. */
+export type CreatePatchOptionsNonabortable = CreatePatchOptions;
 
 export type CodeViewScrollBehavior = 'instant' | 'smooth' | 'smooth-auto';
 
@@ -32,7 +34,7 @@ export interface FileContents {
   /** Explicitly set the syntax highlighting language instead of inferring from
    * filename. Generally you should not be setting this. */
   lang?: SupportedLanguages;
-  /** Optional header passed to the jsdiff library's `createTwoFilesPatch`. */
+  /** Optional header passed to the selected diff library. */
   header?: string;
   /** Identifies a file for worker pool highlight caching. */
   cacheKey?: string;
@@ -396,6 +398,12 @@ export type HunkSeparators =
 
 export type LineDiffTypes = 'word-alt' | 'word-line' | 'word' | 'char' | 'none';
 
+export type DiffLib = '@pierre/patches' | 'jsdiff';
+
+export interface ParseDiffOptions extends CreatePatchOptions {
+  preferredDiffLib?: DiffLib;
+}
+
 export type DiffIndicators = 'classic' | 'bars' | 'none';
 
 export interface BaseCodeOptions {
@@ -420,6 +428,7 @@ export interface BaseCodeOptions {
 }
 
 export interface BaseDiffOptions extends BaseCodeOptions {
+  preferredDiffLib?: DiffLib; // jsdiff is default
   diffStyle?: 'unified' | 'split'; // split is default
   diffIndicators?: DiffIndicators; // bars is default
   disableBackground?: boolean;
@@ -448,7 +457,7 @@ export interface BaseDiffOptions extends BaseCodeOptions {
    * diffs from file contents (oldFile/newFile) or recomputing edited
    * diffs. Does not change the hunks in supplied pre-parsed patches.
    */
-  parseDiffOptions?: CreatePatchOptionsNonabortable;
+  parseDiffOptions?: CreatePatchOptions;
 }
 
 export type BaseDiffOptionsWithDefaults = Required<
@@ -781,6 +790,7 @@ export interface RenderFileOptions {
 }
 
 export interface RenderDiffOptions {
+  preferredDiffLib?: DiffLib;
   theme: DiffsThemeNames | Record<'dark' | 'light', DiffsThemeNames>;
   useTokenTransformer: boolean;
   tokenizeMaxLineLength: number;
