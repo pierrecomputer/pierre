@@ -171,12 +171,49 @@ interface LineRowInputs {
 interface SemanticRegionState {
   region: SemanticDiffCollapsibleRegion;
   collapsed: boolean;
+  // The split row of a collapsed region's row, once the walk has pushed it.
+  firstRow?: number;
 }
 
 // Filler rows a split view owes one column so both columns stay aligned.
 interface PendingSplitBuffer {
   size: number;
   side: 'additions' | 'deletions' | undefined;
+  /**
+   * The split rows the gap covers, used to select it. Undefined if the gap
+   * includes an injected row, which has no split row.
+   */
+  rows: { first: number; last: number } | undefined;
+}
+
+// Add one row to the gap. `row` is that row's split index, which selection
+// uses; injected rows don't have one.
+function incrementBuffer(
+  buffer: PendingSplitBuffer,
+  row: number | undefined
+): void {
+  if (row == null) {
+    buffer.rows = undefined;
+  } else if (buffer.size === 0) {
+    buffer.rows = { first: row, last: row };
+  } else if (buffer.rows != null) {
+    extendBuffer(buffer, row);
+  }
+  buffer.size += 1;
+}
+
+// Add a hidden row to the gap's rows without making the gap taller. Used for
+// the rows a collapsed region hides.
+function extendBuffer(buffer: PendingSplitBuffer, row: number): void {
+  if (buffer.rows == null) {
+    return;
+  }
+  if (row !== buffer.rows.last && row !== buffer.rows.last + 1) {
+    throw new Error(
+      `DiffLayout.layout: a gap's rows must be consecutive, but row ${row} came after row ${buffer.rows.last}`
+    );
+  }
+  buffer.rows.last = row;
 }
 
 interface SeparatorProps {
@@ -355,19 +392,34 @@ export class DiffLayout<LAnnotation = undefined> {
     let rowCount = 0;
     let firstNewFileLine: number | undefined;
     let lastNewFileLine: number | undefined;
-    const pendingBuffer: PendingSplitBuffer = { size: 0, side: undefined };
+    const pendingBuffer: PendingSplitBuffer = {
+      size: 0,
+      side: undefined,
+      rows: undefined,
+    };
 
     const flushBuffer = () => {
       if (unified) return;
-      const { size, side } = pendingBuffer;
+      const { size, side, rows } = pendingBuffer;
       pendingBuffer.size = 0;
       pendingBuffer.side = undefined;
+      pendingBuffer.rows = undefined;
       if (size <= 0 || side == null) return;
       const column = columns[side];
-      this.#cells.fixedRow(column, bufferKey(column), `${size}`, () => ({
-        gutter: createGutterGap(undefined, 'buffer', size),
-        content: createEmptyRowBuffer(size),
-      }));
+      const splitRows = rows != null ? `${rows.first},${rows.last}` : undefined;
+      this.#cells.fixedRow(
+        column,
+        bufferKey(column),
+        `${size}|${splitRows}`,
+        () => {
+          const content = createEmptyRowBuffer(size);
+          content.properties['data-split-rows'] = splitRows;
+          return {
+            gutter: createGutterGap(undefined, 'buffer', size),
+            content,
+          };
+        }
+      );
     };
 
     const pushSeparators = (props: SeparatorProps) => {
@@ -474,28 +526,38 @@ export class DiffLayout<LAnnotation = undefined> {
       return currentRegionState;
     };
     // A collapsed region's row: one deletions-side row, so the additions
-    // column takes a one-row gap beside it.
-    const pushSemanticRegionRow = (region: SemanticDiffCollapsibleRegion) => {
+    // column takes a one-row gap beside it. The row records the split rows it
+    // hides, one per old line from `firstRow`, so a line selection over them
+    // can mark it.
+    const pushSemanticRegionRow = (
+      region: SemanticDiffCollapsibleRegion,
+      firstRow: number
+    ) => {
       if (pendingBuffer.side === 'deletions') {
         flushBuffer();
       }
       pendingBuffer.side = 'additions';
-      pendingBuffer.size += 1;
+      incrementBuffer(pendingBuffer, firstRow);
       const { gutterLineType, gutterIcon } =
         host.getSemanticRegionDecoration(region);
       const { moved, edited, removed } = region.counts;
+      const splitRows = `${firstRow},${firstRow + region.old.end - region.old.start}`;
       this.#cells.fixedRow(
         columns.deletions,
         `sem:${region.old.start}`,
-        `${gutterLineType}|${gutterIcon}|${region.old.end}|${moved},${edited},${removed}`,
-        () => ({
-          gutter: createSemanticRegionGutter(
-            region,
-            gutterLineType,
-            gutterIcon
-          ),
-          content: createSemanticRegionContent(region, gutterLineType),
-        })
+        `${gutterLineType}|${gutterIcon}|${splitRows}|${moved},${edited},${removed}`,
+        () => {
+          const content = createSemanticRegionContent(region, gutterLineType);
+          content.properties['data-split-rows'] = splitRows;
+          return {
+            gutter: createSemanticRegionGutter(
+              region,
+              gutterLineType,
+              gutterIcon
+            ),
+            content,
+          };
+        }
       );
       rowCount++;
     };
@@ -557,11 +619,28 @@ export class DiffLayout<LAnnotation = undefined> {
               `DiffLayout.layout: collapsible region ${regionState.region.old.start}-${regionState.region.old.end} has a new-side line beside old line ${deletionLine?.lineNumber}`
             );
           }
-          if (
-            regionState.collapsed &&
-            deletionLine?.lineNumber === regionState.region.old.start
-          ) {
-            pushSemanticRegionRow(regionState.region);
+          if (regionState.collapsed) {
+            const { region } = regionState;
+            if (deletionLine?.lineNumber === region.old.start) {
+              regionState.firstRow = splitLineIndex;
+              pushSemanticRegionRow(region, splitLineIndex);
+            }
+            const { firstRow } = regionState;
+            if (firstRow == null || deletionLine == null) {
+              throw new Error(
+                `DiffLayout.layout: collapsible region ${region.old.start}-${region.old.end} was entered after its first line`
+              );
+            }
+            // The collapsed row was given one split row per old line it hides.
+            const expectedRow =
+              firstRow + deletionLine.lineNumber - region.old.start;
+            if (splitLineIndex !== expectedRow) {
+              throw new Error(
+                `DiffLayout.layout: collapsible region ${region.old.start}-${region.old.end} hides old line ${deletionLine.lineNumber} on split row ${splitLineIndex}, not ${expectedRow}`
+              );
+            }
+            // The gap beside the collapsed row covers the same split rows.
+            extendBuffer(pendingBuffer, splitLineIndex);
           }
         }
         const isHiddenBySemanticRegion = regionState?.collapsed === true;
@@ -732,7 +811,7 @@ export class DiffLayout<LAnnotation = undefined> {
               flushBuffer();
             }
             pendingBuffer.side = missingSide;
-            pendingBuffer.size += 1;
+            incrementBuffer(pendingBuffer, splitLineIndex);
           } else if (type === 'change') {
             // A change row with both sides fills the column a one-sided
             // buffer was holding open; the buffer lands above this row.
@@ -1337,7 +1416,7 @@ function pushSplitInjectedRows(
     }
     if (missingSide != null) {
       pendingBuffer.side = missingSide;
-      pendingBuffer.size += 1;
+      incrementBuffer(pendingBuffer, undefined);
     }
     added++;
   }
