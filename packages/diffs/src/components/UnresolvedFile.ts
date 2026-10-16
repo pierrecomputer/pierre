@@ -34,6 +34,8 @@ import {
   FileDiff,
   type FileDiffOptions,
   type FileDiffRenderBaseProps,
+  type FileDiffRenderData,
+  type FileDiffRenderInput,
 } from './FileDiff';
 
 export type RenderMergeConflictActions<LAnnotation> = (
@@ -111,6 +113,20 @@ interface ResolveConflictReturn {
 
 type UnresolvedFileDataCache = GetOrComputeDiffProps;
 
+export interface UnresolvedFileRenderInput<
+  LAnnotation,
+> extends FileDiffRenderInput<LAnnotation> {
+  actions: (MergeConflictDiffAction | undefined)[];
+  markerRows: MergeConflictMarkerRow[];
+}
+
+export interface UnresolvedFileRenderData<
+  LAnnotation,
+> extends FileDiffRenderData<LAnnotation> {
+  actions: (MergeConflictDiffAction | undefined)[];
+  markerRows: MergeConflictMarkerRow[];
+}
+
 let instanceId = -1;
 
 export class UnresolvedFile<LAnnotation = undefined> extends FileDiff<
@@ -128,6 +144,21 @@ export class UnresolvedFile<LAnnotation = undefined> extends FileDiff<
   };
   private conflictActions: (MergeConflictDiffAction | undefined)[] = [];
   private markerRows: MergeConflictMarkerRow[] = [];
+
+  public override __getNextRenderData({
+    actions,
+    markerRows,
+    ...input
+  }: UnresolvedFileRenderInput<LAnnotation>): UnresolvedFileRenderData<LAnnotation> {
+    const data = super.__getNextRenderData(input);
+    const isInput = areDiffTargetsEqual(data.fileDiff, input.fileDiff);
+    return {
+      ...data,
+      actions: isInput ? actions : this.conflictActions,
+      markerRows: isInput ? markerRows : this.markerRows,
+    };
+  }
+
   private conflictActionCache: Map<string, MergeConflictActionElementCache> =
     new Map();
 
@@ -136,9 +167,9 @@ export class UnresolvedFile<LAnnotation = undefined> extends FileDiff<
       theme: DEFAULT_THEMES,
     },
     workerManager?: WorkerPoolManager | undefined,
-    isContainerManaged = false
+    requestOwnerRender?: () => void
   ) {
-    super(undefined, workerManager, isContainerManaged);
+    super(undefined, workerManager, requestOwnerRender);
     this.setOptions(options);
   }
 
@@ -399,6 +430,7 @@ export class UnresolvedFile<LAnnotation = undefined> extends FileDiff<
     if (!this.enabled || this.computedCache.fileDiff == null) {
       return;
     }
+    if (this.requestRender()) return;
     this.render({ forceRender: true, renderRange: this.renderRange });
   }
 
@@ -548,8 +580,10 @@ export class UnresolvedFile<LAnnotation = undefined> extends FileDiff<
     // With onMergeConflictAction, the new diff may reuse an index for a different
     // conflict. Ignore clicks on the old diff until the new one is displayed.
     // Built-in resolution keeps indices stable, so remaining conflicts can still
-    // be clicked while highlighting is pending.
+    // be clicked while highlighting is pending. A wrapper component manages
+    // resolution itself and handles every click.
     if (
+      !this.isComponentManaged &&
       this.options.onMergeConflictAction != null &&
       !areDiffTargetsEqual(this.getRenderedDiff(), this.computedCache.fileDiff)
     ) {
@@ -577,9 +611,9 @@ export class UnresolvedFile<LAnnotation = undefined> extends FileDiff<
   };
 
   private renderMergeConflictActionSlots(): void {
-    const { fileDiff } = this;
+    const fileDiff = this.getRenderedDiff();
     if (
-      this.isContainerManaged ||
+      this.isComponentManaged ||
       this.fileContainer == null ||
       typeof this.options.mergeConflictActionsType !== 'function' ||
       this.conflictActions.length === 0 ||

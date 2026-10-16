@@ -148,7 +148,6 @@ export class VirtualizedFileDiff<
   private isSetup: boolean = false;
   private virtualizer: Virtualizer | CodeView<LAnnotation, Caret>;
   private layoutDirty = true;
-  private forceRenderOverride: true | undefined;
   private currentCollapsed: boolean | undefined;
   private pendingHydratedDiff: PendingLoadedDiff | undefined;
   private pendingExpansions: PendingExpansion[] | undefined;
@@ -163,9 +162,9 @@ export class VirtualizedFileDiff<
     virtualizer: Virtualizer | CodeView<LAnnotation, Caret>,
     metrics?: Partial<VirtualFileMetrics>,
     workerManager?: WorkerPoolManager,
-    isContainerManaged = false
+    requestOwnerRender?: () => void
   ) {
-    super(options, workerManager, isContainerManaged);
+    super(options, workerManager, requestOwnerRender);
     this.virtualizer = virtualizer;
     this.metrics = computeVirtualFileMetrics(metrics);
   }
@@ -1173,9 +1172,18 @@ export class VirtualizedFileDiff<
       this.pendingRender = undefined;
     }
     this.forceRenderOverride = true;
+    if (this.isSimpleMode() && this.requestRender()) return;
     this.virtualizer.instanceChanged(
       this,
       !areDiffTargetsEqual(this.getRenderedDiff(), nextRenderDiff)
+    );
+  }
+
+  // CodeView items are component-managed whenever their CodeView is.
+  protected override get isComponentManaged(): boolean {
+    return (
+      this.getAdvancedVirtualizer()?.isComponentManaged ??
+      super.isComponentManaged
     );
   }
 

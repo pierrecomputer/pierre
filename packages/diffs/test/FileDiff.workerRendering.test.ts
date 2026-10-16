@@ -155,12 +155,14 @@ async function createHighlightedDiffFixture() {
   const { manager, worker } = await createInitializedManager({
     theme: 'pierre-dark',
   });
+  const annotationContents: FileDiffMetadata[] = [];
   const instance = new TestFileDiff(
     {
       disableErrorHandling: true,
       disableFileHeader: true,
       theme: 'pierre-dark',
-      renderAnnotation(annotation) {
+      renderAnnotation(annotation, fileDiff) {
+        annotationContents.push(fileDiff);
         const element = document.createElement('span');
         element.textContent = annotation.metadata;
         return element;
@@ -218,6 +220,7 @@ async function createHighlightedDiffFixture() {
   );
   return {
     instance,
+    annotationContents,
     diffA,
     diffB,
     annotationsA,
@@ -254,19 +257,25 @@ for (const reuseDisplayed of [false, true]) {
       render(diffA, updatedA);
       expect(instance.getRenderedDiffForTest()).toBe(diffA);
       expect(annotationText(1)).toBe('annotation:A updated');
+      expect(fixture.annotationContents.at(-1)).toBe(diffA);
       render(diffB, annotationsB);
       expect(instance.fileDiff).toBe(diffB);
       expect(instance.getRenderedDiffForTest()).toBe(diffA);
       expect(annotationText(1)).toBe('annotation:A updated');
+      expect(fixture.annotationContents.at(-1)).toBe(diffA);
       expect(hasAnnotationRow(1)).toBe(true);
       expect(hasAnnotationRow(2)).toBe(false);
       render(diffB, reuseDisplayed ? updatedA : []);
       expect(instance.getRenderedDiffForTest()).toBe(diffA);
       expect(annotationText(1)).toBe('annotation:A updated');
+      expect(fixture.annotationContents.at(-1)).toBe(diffA);
       fixture.respond(await fixture.getRequest(2), diffB);
       await waitFor(() => instance.getRenderedDiffForTest() === diffB);
       expect(annotationText(1)).toBe(
         reuseDisplayed ? 'annotation:A updated' : undefined
+      );
+      expect(fixture.annotationContents.at(-1)).toBe(
+        reuseDisplayed ? diffB : diffA
       );
       expect(hasAnnotationRow(1)).toBe(reuseDisplayed);
       expect(hasAnnotationRow(2)).toBe(false);

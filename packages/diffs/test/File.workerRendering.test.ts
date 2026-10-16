@@ -70,11 +70,13 @@ async function createFixture() {
   });
   const container = document.createElement('div');
   document.body.appendChild(container);
+  const annotationContents: FileContents[] = [];
   const instance = new TestFile(
     {
       disableErrorHandling: true,
       theme: 'pierre-dark',
-      renderAnnotation(annotation) {
+      renderAnnotation(annotation, file) {
+        annotationContents.push(file);
         const element = document.createElement('span');
         element.textContent = annotation.metadata;
         return element;
@@ -113,6 +115,7 @@ async function createFixture() {
 
   return {
     instance,
+    annotationContents,
     render,
     getRequest,
     respond,
@@ -138,12 +141,14 @@ for (const reuseDisplayed of [false, true]) {
       expect(instance.getRenderedFileForTest()).toBe(fileA);
       expect(instance.getAnnotationsForTest()).toBe(updatedA);
       expect(annotationText(1)).toBe('annotation:A updated');
+      expect(fixture.annotationContents.at(-1)).toBe(fileA);
 
       render(fileB, annotationsB);
       expect(instance.file).toBe(fileB);
       expect(instance.getRenderedFileForTest()).toBe(fileA);
       expect(instance.getAnnotationsForTest()).toBe(updatedA);
       expect(annotationText(1)).toBe('annotation:A updated');
+      expect(fixture.annotationContents.at(-1)).toBe(fileA);
       expect(hasAnnotationRow(1)).toBe(true);
       expect(hasAnnotationRow(2)).toBe(false);
 
@@ -152,12 +157,16 @@ for (const reuseDisplayed of [false, true]) {
       expect(instance.getRenderedFileForTest()).toBe(fileA);
       expect(instance.getAnnotationsForTest()).toBe(updatedA);
       expect(annotationText(1)).toBe('annotation:A updated');
+      expect(fixture.annotationContents.at(-1)).toBe(fileA);
 
       fixture.respond(await fixture.getRequest(2), fileB);
       await waitFor(() => instance.getRenderedFileForTest() === fileB);
       expect(instance.getAnnotationsForTest()).toBe(finalAnnotations);
       expect(annotationText(1)).toBe(
         reuseDisplayed ? 'annotation:A updated' : undefined
+      );
+      expect(fixture.annotationContents.at(-1)).toBe(
+        reuseDisplayed ? fileB : fileA
       );
       expect(hasAnnotationRow(1)).toBe(reuseDisplayed);
       expect(hasAnnotationRow(2)).toBe(false);

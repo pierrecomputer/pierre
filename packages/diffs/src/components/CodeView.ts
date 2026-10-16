@@ -54,6 +54,7 @@ import { areSelectionsEqual } from '../utils/areSelectionsEqual';
 import { areThemesEqual } from '../utils/areThemesEqual';
 import { createCodeViewHeaderFooterHostElement } from '../utils/createCodeViewHeaderFooterHostElement';
 import { createWindowFromScrollPosition } from '../utils/createWindowFromScrollPosition';
+import { getCodeViewItemRenderData } from '../utils/getCodeViewItemRenderData';
 import { getThemes } from '../utils/getThemes';
 import { isStyleNode } from '../utils/isStyleNode';
 import { isFirefox } from '../utils/platform';
@@ -873,19 +874,24 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
   private workerManager: WorkerPoolManager | undefined;
   private isReadySubscription: (() => void) | undefined;
   private pendingHighlighterTheme: DiffsThemeNames | ThemesType | undefined;
-  private isContainerManaged: boolean;
+  public readonly isComponentManaged: boolean;
+  // Annotations are tied to a matching file or diff, and if we have a content
+  // update that has a pending highlight, we'd show the old content and
+  // annotations until we get the new highlighted response. In these cases we
+  // need to re-publish the slot snapshot once the new content renders.
+  private slotSnapshotStale = false;
 
   constructor(
     options: CodeViewOptions<LAnnotation, Caret> = { theme: DEFAULT_THEMES },
     workerManager?: WorkerPoolManager | undefined,
-    isContainerManaged = false
+    isComponentManaged = false
   ) {
     this.options = options;
     this.computeMetricsCache(options.itemMetrics);
     this.fileOptionsPrototype = this.createFileOptionsPrototype();
     this.diffOptionsPrototype = this.createDiffOptionsPrototype();
     this.workerManager = workerManager;
-    this.isContainerManaged = isContainerManaged;
+    this.isComponentManaged = isComponentManaged;
 
     this.stickyOffset.style.contain = 'layout size';
     this.stickyContainer.style.position = 'sticky';
@@ -1152,7 +1158,7 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
     const content = render();
     if (content != null) {
       element.replaceChildren(content);
-    } else if (!this.isContainerManaged && element.children.length > 0) {
+    } else if (!this.isComponentManaged && element.children.length > 0) {
       element.textContent = '';
     }
     host.render = render;
@@ -1325,7 +1331,7 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
     // NOTE(amadeus): Container managed CodeView controls when flushing
     // occurs. This is mostly to make imperative vanilla js api easier to work
     // with
-    if (!this.isContainerManaged) {
+    if (!this.isComponentManaged) {
       this.flushSlotCoordinator();
     }
     if (failed) {
@@ -1406,14 +1412,14 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
     const viewportSize = this.getHeight() + this.config.overscrollSize * 2;
     const { diffHeaderHeight } = this.itemMetricsCache;
     // The goal here roughly is to hold an element pool that's maxed out at
-    // around the size of all collapsed files, doubled if `isContainerManaged`
+    // around the size of all collapsed files, doubled if `isComponentManaged`
     // because we have to wait an additional render tick to actually re-use the
     // elements
     return (
       Math.max(
         8,
         Math.ceil(viewportSize / Math.max(diffHeaderHeight, 10)) + 1
-      ) * (this.isContainerManaged ? 2 : 1)
+      ) * (this.isComponentManaged ? 2 : 1)
     );
   }
 
@@ -1479,7 +1485,7 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
       }
     }
 
-    if (!this.isContainerManaged) {
+    if (!this.isComponentManaged) {
       element.replaceChildren();
     }
   }
@@ -1862,7 +1868,7 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
       prevOptions.renderCodeViewHeader !== options.renderCodeViewHeader ||
       prevOptions.renderCodeViewFooter !== options.renderCodeViewFooter;
     if (
-      !this.isContainerManaged &&
+      !this.isComponentManaged &&
       (this.items.length > 0 || headerFooterChanged)
     ) {
       this.render();
@@ -2005,6 +2011,9 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
     if (layoutDirty) {
       this.markItemLayoutDirty(item);
     }
+    if (!this.itemEditors.has(item.item.id)) {
+      this.slotSnapshotStale = true;
+    }
     this.render();
   }
 
@@ -2138,8 +2147,7 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
         this.createDiffOptions(input.id),
         this,
         itemMetrics,
-        this.workerManager,
-        this.isContainerManaged
+        this.workerManager
       );
       return {
         type: 'diff',
@@ -2158,8 +2166,7 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
       this.createFileOptions(input.id),
       this,
       itemMetrics,
-      this.workerManager,
-      this.isContainerManaged
+      this.workerManager
     );
     return {
       type: 'file',
@@ -4279,10 +4286,14 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
     }
 
     const slotSnapshot = this.buildSlotSnapshot(this.slotCoordinator);
-    if (areManagedSnapshotsEqual(this.slotSnapshot, slotSnapshot)) {
+    if (
+      !this.slotSnapshotStale &&
+      areManagedSnapshotsEqual(this.slotSnapshot, slotSnapshot)
+    ) {
       return;
     }
 
+    this.slotSnapshotStale = false;
     this.slotSnapshot = slotSnapshot;
     this.slotCoordinator.onSnapshotChange(slotSnapshot);
   }
@@ -4588,8 +4599,15 @@ function syncRenderedItemOrder(
   }
 }
 
-function hasAnnotations<LAnnotation>(item: CodeViewItem<LAnnotation>): boolean {
-  return (item.annotations?.length ?? 0) > 0;
+// Also count annotations that stay displayed while a replacement without them
+// is being highlighted.
+function hasAnnotations<LAnnotation, Caret>(
+  renderedItem: CodeViewRenderedItem<LAnnotation, Caret>
+): boolean {
+  return (
+    (renderedItem.item.annotations?.length ?? 0) > 0 ||
+    getCodeViewItemRenderData(renderedItem).lineAnnotations.length > 0
+  );
 }
 
 function getSlotItems<LAnnotation, Caret>(
@@ -4615,7 +4633,7 @@ function getSlotItems<LAnnotation, Caret>(
   const slotSnapshot: CodeViewRenderedItem<LAnnotation, Caret>[] = [];
 
   for (const renderedItem of renderedItems) {
-    if (hasAnnotations(renderedItem.item)) {
+    if (hasAnnotations(renderedItem)) {
       slotSnapshot.push(renderedItem);
     }
   }

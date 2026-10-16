@@ -62,7 +62,7 @@ export function renderFileChildren<LAnnotation, Caret>({
       {renderAnnotation != null &&
         lineAnnotations?.map((annotation, index) => (
           <div key={index} slot={getAnnotationSlotName(annotation)}>
-            {renderAnnotation(annotation)}
+            {renderAnnotation(annotation, file)}
           </div>
         ))}
       {renderGutterUtility != null && (

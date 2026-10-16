@@ -295,8 +295,10 @@ export interface FileDiffOptions<LAnnotation, Caret>
    * errors yourself.
    */
   disableErrorHandling?: boolean;
+  /** Receives the matching diff, including any editor changes. */
   renderAnnotation?(
-    annotation: DiffLineAnnotation<LAnnotation>
+    annotation: DiffLineAnnotation<LAnnotation>,
+    fileDiff: FileDiffMetadata
   ): HTMLElement | undefined;
   renderGutterUtility?(
     getHoveredRow: () => GetHoveredLineResult<'diff'> | undefined
@@ -329,6 +331,7 @@ export interface FileDiffOptions<LAnnotation, Caret>
 interface AnnotationElementCache<LAnnotation> {
   element: HTMLElement;
   annotation: DiffLineAnnotation<LAnnotation>;
+  fileDiff: FileDiffMetadata;
 }
 
 interface CustomHunkElementCache {
@@ -375,9 +378,14 @@ interface HeaderCache {
   fileDiff: FileDiffMetadata | undefined;
 }
 
-interface DiffRenderData<LAnnotation> {
+export interface FileDiffRenderData<LAnnotation> {
   fileDiff: FileDiffMetadata;
   lineAnnotations: DiffLineAnnotation<LAnnotation>[];
+}
+
+export interface FileDiffRenderInput<LAnnotation> {
+  fileDiff: FileDiffMetadata;
+  lineAnnotations: DiffLineAnnotation<LAnnotation>[] | undefined;
 }
 
 interface EditSession<LAnnotation> {
@@ -446,9 +454,12 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
   public fileDiff: FileDiffMetadata | undefined;
   private editSession: EditSession<LAnnotation> | undefined;
   // Diff and annotations currently displayed. Absent until a diff is rendered.
-  private renderedData: DiffRenderData<LAnnotation> | undefined;
+  private renderedData: FileDiffRenderData<LAnnotation> | undefined;
   // Keep the next diff and its annotations together until that diff renders.
-  private pendingData: DiffRenderData<LAnnotation> | undefined;
+  private pendingData: FileDiffRenderData<LAnnotation> | undefined;
+  // Forces the next render() call, such as the one the owner makes after
+  // requestOwnerRender.
+  protected forceRenderOverride: true | undefined;
   protected renderRange: RenderRange | undefined;
   protected pendingFiles: PendingFileLoad | undefined;
   protected appliedPreAttributes: PrePropertiesConfig | undefined;
@@ -476,7 +487,9 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
       theme: DEFAULT_THEMES,
     },
     protected workerManager?: WorkerPoolManager | undefined,
-    protected isContainerManaged = false
+    // Set when an owner such as React manages the container. Internal renders
+    // call it, and the owner must call render().
+    protected requestOwnerRender?: () => void
   ) {
     this.hunksRenderer = this.createHunksRenderer(options);
     this.resizeManager = new ResizeManager();
@@ -945,7 +958,7 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
     }
 
     // Clean up the elements
-    if (!this.isContainerManaged) {
+    if (!this.isComponentManaged) {
       this.fileContainer?.remove();
     }
     this.fileContainer = undefined;
@@ -1187,7 +1200,24 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
     ) {
       return;
     }
+    if (this.requestRender()) return;
     this.render({ forceRender: true, renderRange: this.renderRange });
+  }
+
+  // Editors update their rows directly. Other internal renders can be driven
+  // by the owner, so React updates its children before calling render().
+  protected requestRender(): boolean {
+    const { requestOwnerRender } = this;
+    if (this.editSession != null || requestOwnerRender == null) {
+      return false;
+    }
+    this.forceRenderOverride = true;
+    requestOwnerRender();
+    return true;
+  }
+
+  protected get isComponentManaged(): boolean {
+    return this.requestOwnerRender != null;
   }
 
   public onThemeChange(): void {
@@ -1521,6 +1551,8 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
         'FileDiff.render: attempting to call render after cleaned up'
       );
     }
+    forceRender = this.forceRenderOverride ?? forceRender;
+    this.forceRenderOverride = undefined;
 
     const fileInput = getDiffFileInput(fileInputProps, 'FileDiff.render');
     const oldFile = fileInput?.oldFile;
@@ -1843,6 +1875,37 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
   // this still returns the previous diff.
   protected getRenderedDiff(): FileDiffMetadata | undefined {
     return this.renderedData?.fileDiff;
+  }
+
+  /**
+   * @internal Data the next render() with this input will display. While a
+   * replacement diff is being highlighted, this is still the displayed data.
+   */
+  public __getNextRenderData({
+    fileDiff,
+    lineAnnotations,
+  }: FileDiffRenderInput<LAnnotation>): FileDiffRenderData<LAnnotation> {
+    const sessionAnnotations = this.editSession?.annotations;
+    // Keep the supplied content during editing. The editor moves annotation
+    // rows through stable slots without rerendering their React children.
+    if (sessionAnnotations != null) {
+      return {
+        fileDiff,
+        lineAnnotations:
+          lineAnnotations != null && this.isNewAnnotations(lineAnnotations)
+            ? lineAnnotations
+            : sessionAnnotations.provided,
+      };
+    }
+    const workingDiff = this.getWorkingDiff(fileDiff) ?? fileDiff;
+    const nextDiff = this.hunksRenderer.getDiffForNextRender(workingDiff);
+    return {
+      fileDiff: nextDiff,
+      lineAnnotations:
+        lineAnnotations != null && areDiffTargetsEqual(nextDiff, workingDiff)
+          ? lineAnnotations
+          : this.getAnnotationsForDiff(nextDiff),
+    };
   }
 
   // Build rows using annotations for the diff the renderer selected.
@@ -2710,7 +2773,7 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
   private renderSeparators(hunkData: HunkData[]): void {
     const { hunkSeparators } = this.options;
     if (
-      this.isContainerManaged ||
+      this.isComponentManaged ||
       this.fileContainer == null ||
       typeof hunkSeparators !== 'function'
     ) {
@@ -2746,7 +2809,7 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
   }
 
   protected renderAnnotations(): void {
-    if (this.isContainerManaged || this.fileContainer == null) {
+    if (this.isComponentManaged || this.fileContainer == null) {
       for (const { element } of this.annotationCache.values()) {
         element.remove();
       }
@@ -2755,20 +2818,22 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
     }
     const staleAnnotations = new Map(this.annotationCache);
     const {
-      lineAnnotations,
+      renderedData,
       options: { renderAnnotation },
     } = this;
-    if (renderAnnotation != null && lineAnnotations.length > 0) {
+    if (renderAnnotation != null && renderedData != null) {
+      const { fileDiff, lineAnnotations } = renderedData;
       for (const [index, annotation] of lineAnnotations.entries()) {
         const name = this.getAnnotationSlotName(annotation);
         const id = `${index}-${name}`;
         let cache = this.annotationCache.get(id);
         if (
           cache == null ||
+          cache.fileDiff !== fileDiff ||
           !areDiffLineAnnotationsEqual(annotation, cache.annotation)
         ) {
           cache?.element.remove();
-          const content = renderAnnotation(annotation);
+          const content = renderAnnotation(annotation, fileDiff);
           // If we can't render anything, then we should not render anything
           // and clear the annotation cache if necessary.
           if (content == null) {
@@ -2777,6 +2842,7 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
           cache = {
             element: createAnnotationWrapperNode(name),
             annotation,
+            fileDiff,
           };
           cache.element.appendChild(content);
           this.fileContainer.appendChild(cache.element);
@@ -2977,7 +3043,7 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
       this.headerCache.lastRenderedHTML = headerHTML;
     }
 
-    if (this.isContainerManaged) {
+    if (this.isComponentManaged) {
       return;
     }
 

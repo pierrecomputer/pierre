@@ -275,8 +275,23 @@ remapping rules, stable metadata IDs, and annotation-content lifetime guidance.
   `clearSelectedLines`, `getItem`, `updateItem`, `addItems`, `removeItem`, and
   `getInstance`.
 - `renderCustomHeader`, `renderHeaderPrefix`, `renderHeaderFilenameSuffix`,
-  `renderHeaderMetadata`, `renderAnnotation`, and `renderGutterUtility` receive
-  the whole `CodeViewItem`, which makes it easy to branch on `item.type`.
+  `renderHeaderMetadata`, and `renderGutterUtility` receive the whole
+  `CodeViewItem`, which makes it easy to branch on `item.type`.
+- `renderAnnotation(annotation, fileOrDiff, item)` receives the displayed
+  `FileContents` or `FileDiffMetadata` second and the original input item third.
+  Item metadata such as `id` and `version` is available on the third argument.
+  While a replacement is being highlighted, `item` contains the replacement
+  while `fileOrDiff` is still the previous content. In Vanilla JS, the third
+  argument is the item context:
+  `renderAnnotation(annotation, fileOrDiff, context)`, with the input item at
+  `context.item`. Standalone `File` and `FileDiff` use the same first two
+  arguments. During editing, React keeps the supplied file/diff and annotations;
+  the editor moves the existing annotation rows without rerendering their React
+  content. Edit changes are available through `onItemEditChange`.
+- The React callback's argument types require a file item with a file, or a diff
+  item with a diff and a diff annotation. Checking `item.type` narrows `item`
+  only; check `'additionLines' in fileOrDiff` to narrow the displayed content
+  separately.
 - In Vanilla JS, `CodeView` owns a scrollable root that you set up once and
   update over time.
 - In Vanilla JS, call `setup(root)` once with the scrollable container.

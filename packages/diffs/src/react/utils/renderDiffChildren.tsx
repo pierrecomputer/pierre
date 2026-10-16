@@ -88,7 +88,7 @@ export function renderDiffChildren<LAnnotation, Caret, T>({
       {renderAnnotation != null &&
         lineAnnotations?.map((annotation, index) => (
           <div key={index} slot={getAnnotationSlotName(annotation)}>
-            {renderAnnotation(annotation)}
+            {renderAnnotation(annotation, fileDiff)}
           </div>
         ))}
       {actions != null &&

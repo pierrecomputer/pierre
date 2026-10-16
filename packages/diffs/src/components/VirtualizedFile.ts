@@ -102,7 +102,6 @@ export class VirtualizedFile<
   private isVisible: boolean = false;
   private isSetup: boolean = false;
   private layoutDirty = true;
-  private forceRenderOverride: true | undefined;
   private currentCollapsed: boolean | undefined;
 
   constructor(
@@ -110,9 +109,9 @@ export class VirtualizedFile<
     private virtualizer: Virtualizer | CodeView<LAnnotation, Caret>,
     private metrics: VirtualFileMetrics = DEFAULT_VIRTUAL_FILE_METRICS,
     workerManager?: WorkerPoolManager,
-    isContainerManaged = false
+    requestOwnerRender?: () => void
   ) {
-    super(options, workerManager, isContainerManaged);
+    super(options, workerManager, requestOwnerRender);
   }
 
   public setMetrics(
@@ -807,9 +806,17 @@ export class VirtualizedFile<
       this.pendingRender = undefined;
     }
     this.forceRenderOverride = true;
+    if (this.isSimpleMode() && this.requestRender()) return;
     this.virtualizer.instanceChanged(
       this,
       !areFileTargetsEqual(this.getRenderedFile(), nextRenderFile)
+    );
+  }
+  // CodeView items are component-managed whenever their CodeView is.
+  protected override get isComponentManaged(): boolean {
+    return (
+      this.getAdvancedVirtualizer()?.isComponentManaged ??
+      super.isComponentManaged
     );
   }
 

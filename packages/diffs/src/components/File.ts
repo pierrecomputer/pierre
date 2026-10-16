@@ -140,8 +140,10 @@ export interface FileOptions<LAnnotation, Caret>
    * errors yourself.
    */
   disableErrorHandling?: boolean;
+  /** Receives the matching file, including any editor changes. */
   renderAnnotation?(
-    annotation: LineAnnotation<LAnnotation>
+    annotation: LineAnnotation<LAnnotation>,
+    file: FileContents
   ): HTMLElement | undefined;
   renderGutterUtility?(
     getHoveredRow: () => GetHoveredLineResult<'file'> | undefined
@@ -173,6 +175,7 @@ export interface FileOptions<LAnnotation, Caret>
 interface AnnotationElementCache<LAnnotation> {
   element: HTMLElement;
   annotation: LineAnnotation<LAnnotation>;
+  file: FileContents;
 }
 
 interface ColumnElements {
@@ -185,9 +188,14 @@ interface HydrationSetup<LAnnotation> {
   lineAnnotations: LineAnnotation<LAnnotation>[] | undefined;
 }
 
-interface FileRenderData<LAnnotation> {
+export interface FileRenderData<LAnnotation> {
   file: FileContents;
   lineAnnotations: LineAnnotation<LAnnotation>[];
+}
+
+export interface FileRenderInput<LAnnotation> {
+  file: FileContents;
+  lineAnnotations: LineAnnotation<LAnnotation>[] | undefined;
 }
 
 interface EditSession<LAnnotation> {
@@ -265,6 +273,9 @@ export class File<LAnnotation = undefined, Caret = undefined> {
   private renderedData: FileRenderData<LAnnotation> | undefined;
   // Keep the next file and its annotations together until that file renders.
   private pendingData: FileRenderData<LAnnotation> | undefined;
+  // Forces the next render() call, such as the one the owner makes after
+  // requestOwnerRender.
+  protected forceRenderOverride: true | undefined;
   protected renderRange: RenderRange | undefined;
   protected enabled = true;
 
@@ -275,7 +286,9 @@ export class File<LAnnotation = undefined, Caret = undefined> {
       theme: DEFAULT_THEMES,
     },
     private workerManager?: WorkerPoolManager | undefined,
-    private isContainerManaged = false
+    // Set when an owner such as React manages the container. Internal renders
+    // call it, and the owner must call render().
+    private requestOwnerRender?: () => void
   ) {
     this.fileRenderer = new FileRenderer<LAnnotation>(
       options,
@@ -308,11 +321,28 @@ export class File<LAnnotation = undefined, Caret = undefined> {
   public rerender(): void {
     const file = this.getInputFile();
     if (!this.enabled || file == null) return;
+    if (this.requestRender()) return;
     this.render({
       file,
       forceRender: true,
       renderRange: this.renderRange,
     });
+  }
+
+  // Editors update their rows directly. Other internal renders can be driven
+  // by the owner, so React updates its children before calling render().
+  protected requestRender(): boolean {
+    const { requestOwnerRender } = this;
+    if (this.editSession != null || requestOwnerRender == null) {
+      return false;
+    }
+    this.forceRenderOverride = true;
+    requestOwnerRender();
+    return true;
+  }
+
+  protected get isComponentManaged(): boolean {
+    return this.requestOwnerRender != null;
   }
 
   private getTheme() {
@@ -341,6 +371,37 @@ export class File<LAnnotation = undefined, Caret = undefined> {
   // still returns the previous file.
   protected getRenderedFile(): FileContents | undefined {
     return this.renderedData?.file;
+  }
+
+  /**
+   * @internal Data the next render() with this input will display. While a
+   * replacement file is being highlighted, this is still the displayed data.
+   */
+  public __getNextRenderData({
+    file,
+    lineAnnotations,
+  }: FileRenderInput<LAnnotation>): FileRenderData<LAnnotation> {
+    const sessionAnnotations = this.editSession?.annotations;
+    // Keep the supplied content during editing. The editor moves annotation
+    // rows through stable slots without rerendering their React children.
+    if (sessionAnnotations != null) {
+      return {
+        file,
+        lineAnnotations:
+          lineAnnotations != null && this.isNewAnnotations(lineAnnotations)
+            ? lineAnnotations
+            : sessionAnnotations.provided,
+      };
+    }
+    const workingFile = this.getWorkingFile(file) ?? file;
+    const nextFile = this.fileRenderer.getFileForNextRender(workingFile);
+    return {
+      file: nextFile,
+      lineAnnotations:
+        lineAnnotations != null && areFileTargetsEqual(nextFile, workingFile)
+          ? lineAnnotations
+          : this.getAnnotationsForFile(nextFile),
+    };
   }
 
   // Return the working file's annotations, including updates that have not
@@ -671,7 +732,7 @@ export class File<LAnnotation = undefined, Caret = undefined> {
     this.renderRange = undefined;
 
     // Clean up the elements
-    if (!this.isContainerManaged) {
+    if (!this.isComponentManaged) {
       this.fileContainer?.remove();
     }
     this.fileContainer = undefined;
@@ -1182,6 +1243,8 @@ export class File<LAnnotation = undefined, Caret = undefined> {
         'File.render: attempting to call render after cleaned up'
       );
     }
+    forceRender = this.forceRenderOverride ?? forceRender;
+    this.forceRenderOverride = undefined;
 
     // postpone background tokenizing to next frame for avoiding UI freeze
     // during render
@@ -1542,7 +1605,7 @@ export class File<LAnnotation = undefined, Caret = undefined> {
   }
 
   private renderAnnotations(): void {
-    if (this.isContainerManaged || this.fileContainer == null) {
+    if (this.isComponentManaged || this.fileContainer == null) {
       for (const { element } of this.annotationCache.values()) {
         element.remove();
       }
@@ -1551,18 +1614,20 @@ export class File<LAnnotation = undefined, Caret = undefined> {
     }
     const staleAnnotations = new Map(this.annotationCache);
     const { renderAnnotation } = this.options;
-    const { lineAnnotations } = this;
-    if (renderAnnotation != null && lineAnnotations.length > 0) {
+    const { renderedData } = this;
+    if (renderAnnotation != null && renderedData != null) {
+      const { file, lineAnnotations } = renderedData;
       for (const [index, annotation] of lineAnnotations.entries()) {
         const name = this.getAnnotationSlotName(annotation);
         const id = `${index}-${name}`;
         let cache = this.annotationCache.get(id);
         if (
           cache == null ||
+          cache.file !== file ||
           !areLineAnnotationsEqual(annotation, cache.annotation)
         ) {
           cache?.element.remove();
-          const content = renderAnnotation(annotation);
+          const content = renderAnnotation(annotation, file);
           // If we can't render anything, then we should not render anything
           // and clear the annotation cache if necessary.
           if (content == null) {
@@ -1571,6 +1636,7 @@ export class File<LAnnotation = undefined, Caret = undefined> {
           cache = {
             element: createAnnotationWrapperNode(name),
             annotation,
+            file,
           };
           cache.element.appendChild(content);
           this.fileContainer.appendChild(cache.element);
@@ -2025,7 +2091,7 @@ export class File<LAnnotation = undefined, Caret = undefined> {
       this.lastRenderedHeaderHTML = headerHTML;
     }
 
-    if (this.isContainerManaged) return;
+    if (this.isComponentManaged) return;
 
     const {
       renderHeaderPrefix,
