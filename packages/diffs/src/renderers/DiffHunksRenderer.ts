@@ -444,7 +444,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     ) {
       workerManager.evictDiffFromCache(diff.cacheKey);
       return workerManager
-        .primeDiffHighlightCache(diff)
+        .primeDiffHighlightCache(diff, this.options.preferredDiffLib)
         .then(() => {
           this.applyRefreshedResult(
             diff,

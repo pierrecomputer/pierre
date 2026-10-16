@@ -55,9 +55,10 @@ The host rejects unsupported active options and callbacks. The
 
 Each token refers to one byte range in the input. A word or line of up to 3
 bytes is its own id: its bytes and its length. A longer token gets its slot in a
-hash table as its id. A byte comparison confirms each hash match. With
-`ignoreWhitespace`, line ids use the range after `trim()`, so equal ids can
-refer to different original bytes.
+hash table as its id. A byte comparison confirms each hash match. Each instance
+hashes with a random multiplier, so crafted inputs cannot make many tokens share
+a slot and slow the table down. With `ignoreWhitespace`, line ids use the range
+after `trim()`, so equal ids can refer to different original bytes.
 
 Characters use their code points as ids and need no hash table. Lone surrogates
 keep their UTF-16 code units. Invalid UTF-8 bytes get ids above the Unicode

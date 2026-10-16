@@ -36,9 +36,10 @@
     (local.set $M (global.get $oldN))
     (local.set $N (global.get $newN))
     (local.set $maxEdit (i32.add (local.get $M) (local.get $N)))
-    ;; Warning: ($maxEdit+2)<<4 wraps i32 past this (under the byte cap, e.g. two
-    ;; 128 MiB diffChars inputs); such a bestPath needs >= 4 GiB, so it is OOM anyway
-    (if (i32.gt_u (local.get $maxEdit) (i32.const 0x0FFFFFFD))
+    ;; Warning: ($maxEdit+3)<<4 (bestPath + seed room) wraps i32 past this (under the
+    ;; byte cap, e.g. two 128 MiB diffChars inputs); such a bestPath needs >= 4 GiB,
+    ;; so it is OOM anyway
+    (if (i32.gt_u (local.get $maxEdit) (i32.const 0x0FFFFFFC))
       (then
         (call $oom)
         (return (i32.const 0))))

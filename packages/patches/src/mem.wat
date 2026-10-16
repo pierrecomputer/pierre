@@ -17,7 +17,8 @@
       [24:28)         context line count (op 3 input)
       [28:44)         filename/header byte lengths (4 × u32, op 3 input)
       [64:192)        ASCII word/space class table for the word tokenizer
-      [1016:1024)     $hashToken multiplier (u64 LE)
+      [1016:1024)     $hashToken multiplier (u64 LE, odd); the host sets a random
+                      one per instance so crafted tokens cannot force collisions
       [1024:1073)     static strings, packed gap-free (error message, the
                       no-newline marker, C escape letters)
       [1073:1083)     $itoa digit scratch

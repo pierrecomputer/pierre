@@ -41,6 +41,9 @@ beforeAll(() => {
 test('bestPath size past i32 reports out of memory', () => {
   expect(wasm.t_myers(0x08000000, 0x08000000)).toBe(0);
   expect(wasm.t_takeErr()).toBe(1);
+  // the smallest count whose bestPath plus seed room wraps to a 0-byte alloc
+  expect(wasm.t_myers(0x07fffffe, 0x07ffffff)).toBe(0);
+  expect(wasm.t_takeErr()).toBe(1);
 });
 
 test('intern table size past i32 reports out of memory', () => {

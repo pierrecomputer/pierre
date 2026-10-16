@@ -67,6 +67,10 @@ export function init(wasmModule: WebAssembly.Module): void {
   memory = exports.memory as WebAssembly.Memory;
   diffCall = exports.diff as () => void;
   bind();
+  // a random odd hash multiplier ([1016] in src/mem.wat): with the fixed default,
+  // crafted lines that share a hash slot make the token table quadratic
+  crypto.getRandomValues(u8.subarray(1016, 1024));
+  u8[1016] |= 1;
 }
 
 /**

@@ -2568,7 +2568,7 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
     }
 
     await workerManager
-      .primeDiffHighlightCache(fileDiff)
+      .primeDiffHighlightCache(fileDiff, this.options.preferredDiffLib)
       .catch((error: unknown) => {
         if (isHandledWorkerPoolError(error)) {
           return;
