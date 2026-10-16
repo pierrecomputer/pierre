@@ -77,6 +77,7 @@ function mountControlledUnresolvedFile(file: FileContents) {
     });
   };
 
+  // Like the React hook, the owner renders the current state on request.
   const instance = new UnresolvedFile(
     {
       theme: DEFAULT_THEMES,
@@ -84,7 +85,13 @@ function mountControlledUnresolvedFile(file: FileContents) {
       onMergeConflictAction,
     },
     undefined,
-    true
+    () => {
+      instance.render({
+        fileDiff: state.fileDiff,
+        actions: state.actions,
+        markerRows: state.markerRows,
+      });
+    }
   );
 
   instance.hydrate({
@@ -193,7 +200,13 @@ describe('UnresolvedFile token callbacks', () => {
         onTokenClick: () => undefined,
       },
       undefined,
-      true
+      () => {
+        instance.render({
+          fileDiff: state.fileDiff,
+          actions: state.actions,
+          markerRows: state.markerRows,
+        });
+      }
     );
     try {
       instance.hydrate({

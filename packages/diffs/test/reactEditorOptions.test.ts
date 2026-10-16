@@ -795,81 +795,134 @@ describe('React editor factory lifecycle', () => {
     });
   }
 
-  test('File annotation slots stay projected through a remap without prop feedback', async () => {
-    const { cleanup } = installDom();
-    const cleanupActEnvironment = installReactActEnvironment();
-    const container = document.createElement('div');
-    document.body.appendChild(container);
-    const editors: AnyTrackedEditor[] = [];
-    const factory = createTrackedEditorFactory(editors);
-    const lineAnnotations = [{ lineNumber: 2 }];
-    let root: Root | undefined;
+  for (const surface of ['File', 'FileDiff'] as const) {
+    test(`${surface} annotation slots stay projected through a remap without prop feedback`, async () => {
+      const { cleanup } = installDom();
+      const cleanupActEnvironment = installReactActEnvironment();
+      const container = document.createElement('div');
+      document.body.appendChild(container);
+      const editors: AnyTrackedEditor[] = [];
+      const factory = createTrackedEditorFactory(editors);
+      const lineAnnotations: DiffLineAnnotation<undefined>[] = [
+        { side: 'additions', lineNumber: 2 },
+      ];
+      const file = { name: 'edit.ts', contents: 'alpha\nbravo\ncharlie\n' };
+      const slotName =
+        surface === 'File' ? 'annotation-2' : 'annotation-additions-2';
+      let root: Root | undefined;
+      let annotationRenderCount = 0;
 
-    try {
-      root = createReactRoot(container);
-      await act(async () => {
-        root!.render(
-          createElement(
-            EditProviderComponent,
-            { createEditor: factory },
-            createElement(ReactFileComponent, {
-              disableWorkerPool: true,
-              edit: true,
-              file: { name: 'edit.ts', contents: 'alpha\nbravo\ncharlie\n' },
-              lineAnnotations,
-              options: { disableFileHeader: true, theme: DEFAULT_THEMES },
-              renderAnnotation: () => createElement('div', null, 'note'),
-            })
-          )
-        );
-        await wait(10);
-      });
-      await waitFor(() => editors[0]?.getFile() !== undefined);
+      try {
+        root = createReactRoot(container);
+        await act(async () => {
+          root!.render(
+            createElement(
+              EditProviderComponent,
+              { createEditor: factory },
+              surface === 'File'
+                ? createElement(ReactFileComponent, {
+                    disableWorkerPool: true,
+                    edit: true,
+                    file,
+                    lineAnnotations: lineAnnotations.map(({ lineNumber }) => ({
+                      lineNumber,
+                    })),
+                    options: { disableFileHeader: true, theme: DEFAULT_THEMES },
+                    renderAnnotation: (annotation) => {
+                      annotationRenderCount++;
+                      return createElement(
+                        'div',
+                        null,
+                        `note:${annotation.lineNumber}`
+                      );
+                    },
+                  })
+                : createElement(ReactFileDiffComponent, {
+                    disableWorkerPool: true,
+                    edit: true,
+                    fileDiff: parseDiffFromFile(
+                      { name: 'edit.ts', contents: 'old\n' },
+                      file
+                    ),
+                    lineAnnotations,
+                    options: {
+                      disableFileHeader: true,
+                      theme: DEFAULT_THEMES,
+                      diffStyle: 'unified',
+                    },
+                    renderAnnotation: (annotation) => {
+                      annotationRenderCount++;
+                      return createElement(
+                        'div',
+                        null,
+                        `note:${annotation.lineNumber}`
+                      );
+                    },
+                  })
+            )
+          );
+          await wait(10);
+        });
+        await waitFor(() => editors[0]?.getText() === file.contents);
 
-      const findShadowRoot = (): ShadowRoot | undefined => {
-        for (const el of Array.from(container.querySelectorAll('*'))) {
-          if (el.shadowRoot != null) {
-            return el.shadowRoot;
+        const findShadowRoot = (): ShadowRoot | undefined => {
+          for (const el of Array.from(container.querySelectorAll('*'))) {
+            if (el.shadowRoot != null) {
+              return el.shadowRoot;
+            }
           }
-        }
-        return undefined;
-      };
-      const rowInfo = (): {
-        slotName: string | undefined;
-        dataLine: string | undefined;
-      } => {
-        const row = findShadowRoot()?.querySelector('[data-line-annotation]');
-        const line = row?.previousElementSibling;
-        return {
-          slotName:
-            row?.querySelector('slot')?.getAttribute('name') ?? undefined,
-          dataLine: line instanceof HTMLElement ? line.dataset.line : undefined,
+          return undefined;
         };
-      };
-      await waitFor(() => rowInfo().slotName === 'annotation-2');
-      expect(rowInfo().dataLine).toBe('2');
-      expect(container.querySelector('[slot="annotation-2"]')).not.toBeNull();
+        const rowInfo = (): {
+          slotName: string | undefined;
+          dataLine: string | undefined;
+        } => {
+          const row = findShadowRoot()?.querySelector('[data-line-annotation]');
+          const line = row?.previousElementSibling;
+          return {
+            slotName:
+              row?.querySelector('slot')?.getAttribute('name') ?? undefined,
+            dataLine:
+              line instanceof HTMLElement ? line.dataset.line : undefined,
+          };
+        };
+        await waitFor(() => rowInfo().slotName === slotName);
+        expect(rowInfo().dataLine).toBe('2');
+        expect(container.querySelector(`[slot="${slotName}"]`)).not.toBeNull();
 
-      editors[0].applyEdits([
-        {
-          range: {
-            start: { line: 0, character: 0 },
-            end: { line: 0, character: 0 },
-          },
-          newText: 'pad\n',
-        },
-      ]);
+        const renderCountBeforeEdit = annotationRenderCount;
+        const annotationElement = container.querySelector(
+          `[slot="${slotName}"]`
+        );
+        act(() =>
+          editors[0].applyEdits([
+            {
+              range: {
+                start: { line: 0, character: 0 },
+                end: { line: 0, character: 0 },
+              },
+              newText: 'pad\n',
+            },
+          ])
+        );
 
-      // The shadow row moved with the remap while its frozen slot name — and
-      // therefore the untouched React light-DOM child — kept projecting.
-      expect(rowInfo()).toEqual({ slotName: 'annotation-2', dataLine: '3' });
-      expect(container.querySelector('[slot="annotation-2"]')).not.toBeNull();
-    } finally {
-      await unmountRoot(root);
-      cleanupActEnvironment();
-      cleanup();
-    }
-  });
+        // The row moves while its frozen slot name keeps the React child projected.
+        expect(rowInfo()).toEqual({ slotName, dataLine: '3' });
+        expect(container.querySelector(`[slot="${slotName}"]`)).not.toBeNull();
+        expect(
+          container.querySelector(`[slot="${slotName}"]`)?.textContent
+        ).toBe('note:2');
+        expect(annotationRenderCount).toBe(renderCountBeforeEdit);
+        expect(container.querySelector(`[slot="${slotName}"]`)).toBe(
+          annotationElement
+        );
+      } finally {
+        await unmountRoot(root);
+        cleanupActEnvironment();
+        cleanup();
+      }
+    });
+  }
 
   for (const wrapper of ['MultiFileDiff', 'PatchDiff'] as const) {
     test(`${wrapper} forwards editor options to its FileDiff instance`, async () => {

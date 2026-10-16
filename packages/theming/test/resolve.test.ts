@@ -16,6 +16,53 @@ const makeTheme = (name: string): ThemeLike => ({
 });
 
 describe('createThemeResolver', () => {
+  test('fallback loads are normalized once, deduped, and cached', async () => {
+    let loads = 0;
+    let normalizations = 0;
+    const resolver = createThemeResolver<ThemeLike>({
+      fallbackLoader: (name) => {
+        loads++;
+        return Promise.resolve(
+          name === 'fallback' ? { default: { name } } : undefined
+        );
+      },
+      normalizeTheme: (theme, name) => {
+        normalizations++;
+        return { ...theme, name, fg: '#123456' };
+      },
+    });
+    const [first, second] = await Promise.all([
+      resolver.resolveTheme('fallback'),
+      resolver.resolveTheme('fallback'),
+    ]);
+    expect(first).toBe(second);
+    expect(resolver.getResolvedTheme('fallback')).toBe(first);
+    expect(first.fg).toBe('#123456');
+    expect(loads).toBe(1);
+    expect(normalizations).toBe(1);
+    expect(resolver.resolveTheme('missing')).rejects.toBeInstanceOf(
+      UnregisteredThemeError
+    );
+  });
+
+  test('registered loaders take priority over fallback and failed normalization can retry', async () => {
+    let attempts = 0;
+    const resolver = createThemeResolver<ThemeLike>({
+      fallbackLoader: () =>
+        Promise.reject(new Error('fallback should not run')),
+      normalizeTheme: (theme) => {
+        if (++attempts === 1) throw new Error('invalid palette');
+        return theme;
+      },
+    });
+    resolver.registerTheme('custom', () =>
+      Promise.resolve(makeTheme('custom'))
+    );
+    expect(resolver.resolveTheme('custom')).rejects.toThrow('invalid palette');
+    expect(resolver.hasResolvedTheme('custom')).toBe(false);
+    expect((await resolver.resolveTheme('custom')).name).toBe('custom');
+  });
+
   test('resolver.registerTheme duplicate throws DuplicateThemeError naming the theme', () => {
     const resolver = createThemeResolver();
     resolver.registerTheme('dup', () => Promise.resolve(makeTheme('dup')));

@@ -1,5 +1,6 @@
-import { afterAll, describe, expect, test } from 'bun:test';
+import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import { createTwoFilesPatch } from 'diff';
+import type { ThemeRegistration } from 'shiki';
 
 import {
   disposeHighlighter,
@@ -20,18 +21,34 @@ import type {
   FileDiffLoadedFiles,
   FileDiffMetadata,
   SupportedLanguages,
-  ThemeRegistration,
 } from '../src/types';
 import { createRoot, installDom, waitFor } from './domHarness';
 import { assertDefined, createDeferred } from './testUtils';
+
+beforeAll(async () => {
+  await disposeHighlighter();
+  await getSharedHighlighter({
+    preferredHighlighter: 'shiki-js',
+    themes: [],
+    langs: [],
+  });
+});
 
 afterAll(async () => {
   await disposeHighlighter();
 });
 
 class TestFileDiff extends FileDiff<undefined> {
+  getInputDiffForTest(): FileDiffMetadata | undefined {
+    return this.getInputDiff();
+  }
+
+  getRenderedDiffForTest(): FileDiffMetadata | undefined {
+    return this.getRenderedDiff();
+  }
+
   getSessionDiff(): FileDiffMetadata | undefined {
-    return this.getLatestDiff();
+    return this.getWorkingDiff();
   }
 }
 
@@ -407,6 +424,8 @@ describe('external FileDiff updates during editing', () => {
 
       const sessionDiff = fixture.instance.getSessionDiff();
       expect(fixture.instance.fileDiff).toBe(replacement);
+      expect(fixture.instance.getRenderedDiffForTest()).toBe(sessionDiff);
+      expect(fixture.instance.getInputDiffForTest()).toBe(replacement);
       expect(sessionDiff).not.toBe(replacement);
       expect(sessionDiff?.cacheKey).toBeUndefined();
       expect(changes).toEqual(['bravo\n', 'charlie\n']);
@@ -573,6 +592,10 @@ describe('external FileDiff updates during editing', () => {
       });
 
       expect(fixture.instance.fileDiff).toBe(partial);
+      expect(fixture.instance.getRenderedDiffForTest()).toBe(
+        fixture.instance.getSessionDiff()
+      );
+      expect(fixture.instance.getInputDiffForTest()).toBe(partial);
       expect(partial.isPartial).toBe(true);
       expect(fixture.editor.getText()).toBe('bravo\n');
 

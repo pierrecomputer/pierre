@@ -61,7 +61,11 @@ export interface DiffBasePropsReact<LAnnotation, Caret> {
   metrics?: VirtualFileMetrics;
   lineAnnotations?: DiffLineAnnotation<LAnnotation>[];
   selectedLines?: SelectedLineRange | null;
-  renderAnnotation?(annotations: DiffLineAnnotation<LAnnotation>): ReactNode;
+  /** Receives the matching diff. */
+  renderAnnotation?(
+    annotation: DiffLineAnnotation<LAnnotation>,
+    fileDiff: FileDiffMetadata
+  ): ReactNode;
   renderCustomHeader?(fileDiff: FileDiffMetadata): ReactNode;
   renderHeaderPrefix?(fileDiff: FileDiffMetadata): ReactNode;
   renderHeaderFilenameSuffix?(fileDiff: FileDiffMetadata): ReactNode;
@@ -99,7 +103,11 @@ export interface FileProps<LAnnotation, Caret> {
   metrics?: VirtualFileMetrics;
   lineAnnotations?: LineAnnotation<LAnnotation>[];
   selectedLines?: SelectedLineRange | null;
-  renderAnnotation?(annotations: LineAnnotation<LAnnotation>): ReactNode;
+  /** Receives the matching file. */
+  renderAnnotation?(
+    annotation: LineAnnotation<LAnnotation>,
+    file: FileContents
+  ): ReactNode;
   renderCustomHeader?(file: FileContents): ReactNode;
   renderHeaderPrefix?(file: FileContents): ReactNode;
   renderHeaderFilenameSuffix?(file: FileContents): ReactNode;

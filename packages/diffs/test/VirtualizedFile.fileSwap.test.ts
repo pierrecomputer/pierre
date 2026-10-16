@@ -46,7 +46,7 @@ test('updates the rendered header when a live instance swaps to a renamed file',
       virtualizer,
       undefined,
       undefined,
-      true
+      () => undefined
     );
     instance.render({
       file: makeNamedFile('before.ts'),
@@ -93,7 +93,7 @@ test('prepareCodeViewItem drops measured heights when the file is replaced', asy
       virtualizer,
       undefined,
       undefined,
-      true
+      () => undefined
     );
     const wrappedFile = makeNamedFile('wrapped.ts');
     instance.render({ file: wrappedFile, fileContainer: container });
@@ -143,7 +143,7 @@ test('updates the header when the swap lands while the file is hidden', async ()
       virtualizer,
       undefined,
       undefined,
-      true
+      () => undefined
     );
     instance.render({
       file: makeNamedFile('before.ts'),

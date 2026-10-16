@@ -1,5 +1,21 @@
 ## Highlights
 
+Use Highlights with any `@pierre/diffs` component by setting
+`preferredHighlighter: 'highlights'`:
+
+```tsx
+<FileDiff
+  oldFile={oldFile}
+  newFile={newFile}
+  options={{ preferredHighlighter: 'highlights' }}
+/>
+```
+
+Highlights usually performs best without a [worker pool](#worker-pool). See
+[Highlighters](#highlighters) for backend selection and
+[registerCustomTheme](#utilities-registercustomtheme) for Zed themes and shared
+palettes. Custom TextMate grammars require Shiki.
+
 <Notice variant="warning" icon={<IconCiWarningFill />}>
   Highlights is experimental. Its API can change. Try the [interactive
   playground](/highlights) before you replace Shiki in production.
@@ -18,9 +34,7 @@ package includes the lexers, so it does not download language grammars.
 
 Install Highlights from npm:
 
-```bash
-pnpm add @pierre/highlights
-```
+<DocsCodeExample {...highlightsInstall} />
 
 The package runs in Node.js, browsers, and Cloudflare Workers. It selects and
 initializes the WebAssembly loader for your runtime at import. `codeToHtml()`
@@ -373,10 +387,10 @@ The main entry exports runtime functions and public types:
 
 <DocsCodeExample {...highlightsApiRuntime} />
 
-The runtime entry point initializes the shared instance. `init(module)` replaces
-that instance. `createHighlighter(module)` creates a separate `Highlighter` and
-leaves the shared instance unchanged. Both accept a compiled
-`WebAssembly.Module` for applications that supply their own module.
+The environment-specific entry point initializes the shared instance.
+`createHighlighter()` creates an isolated `Highlighter` using the initialized
+module. Embedders can pass their own compiled `WebAssembly.Module` to
+`createHighlighter(module)` or replace the shared instance with `init(module)`.
 
 The same entry exports the public types:
 

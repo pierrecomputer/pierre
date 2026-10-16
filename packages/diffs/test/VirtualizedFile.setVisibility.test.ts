@@ -22,14 +22,17 @@ test('re-showing a hidden file with an unchanged window re-renders content', asy
     // pre-hide and post-show renders resolve ranges against the same window.
     await wait(10);
 
-    const instance = new VirtualizedFile(
+    const file = makeFile('visibility.ts', 40);
+    // Like the React hook, the owner renders the current file on request.
+    const instance: VirtualizedFile = new VirtualizedFile(
       {},
       virtualizer,
       undefined,
       undefined,
-      true
+      () => {
+        instance.render({ file });
+      }
     );
-    const file = makeFile('visibility.ts', 40);
     instance.render({ file, fileContainer: container });
     await wait(10);
     const placeholderCount = (): number =>

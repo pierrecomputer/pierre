@@ -155,7 +155,7 @@ function getEditSessionFile(instance: unknown): FileContents | undefined {
     ?.file;
 }
 
-function getExternalFile(instance: unknown): FileContents | undefined {
+function getInputFile(instance: unknown): FileContents | undefined {
   return (instance as { file?: FileContents }).file;
 }
 
@@ -2906,7 +2906,7 @@ describe('CodeView item edit mode', () => {
         expect(committed?.version).toBe(2);
         // The instance installed the exact accepted file at completion.
         expect(committed?.type === 'file' ? committed.file : undefined).toBe(
-          getExternalFile(instance)
+          getInputFile(instance)
         );
       } finally {
         viewer.cleanUp();
@@ -2933,7 +2933,7 @@ describe('CodeView item edit mode', () => {
         setSessionText(editors[0], 'rejected');
         await applyItemUpdate(viewer, { ...item, edit: false, version: 1 });
 
-        expect(getExternalFile(instance)).toBe(
+        expect(getInputFile(instance)).toBe(
           item.type === 'file' ? item.file : undefined
         );
         expect(getEditSessionFile(instance)).toBeUndefined();
@@ -2962,7 +2962,7 @@ describe('CodeView item edit mode', () => {
         setSessionText(editors[0], 'rejected');
         await applyItemUpdate(viewer, { ...item, edit: false, version: 1 });
 
-        expect(getExternalFile(instance)).toBe(
+        expect(getInputFile(instance)).toBe(
           item.type === 'file' ? item.file : undefined
         );
         expect(getEditSessionFile(instance)).toBeUndefined();
@@ -3117,6 +3117,7 @@ describe('CodeView item edit mode', () => {
         viewer.setup(createRoot());
         await renderItems(viewer, [makeEditFileItem('a')]);
         const initialElement = viewer.getRenderedItems()[0]?.element;
+        const snapshotsBeforeRemoval = snapshots.length;
 
         // setItems([]) is a removal like any other controlled update, so the
         // session completes with the session's contents.
@@ -3128,8 +3129,8 @@ describe('CodeView item edit mode', () => {
         expect(viewer.getItem(replacement.id)).toBe(replacement);
         const renderedReplacement = viewer.getRenderedItems()[0];
         expect(renderedReplacement?.element).toBe(initialElement);
-        expect(snapshots).toHaveLength(2);
-        expect(snapshots[1]?.items?.[0]?.instance).toBe(
+        expect(snapshots).toHaveLength(snapshotsBeforeRemoval + 1);
+        expect(snapshots.at(-1)?.items?.[0]?.instance).toBe(
           renderedReplacement?.instance
         );
       } finally {
