@@ -108,6 +108,11 @@ async function createFixture() {
   const hasAnnotationRow = (line: number) =>
     container.shadowRoot?.querySelector(`slot[name="annotation-${line}"]`) !=
     null;
+  // Annotation content lives in light DOM; its row lives in the shadow DOM.
+  const annotationAt = (line: number) => ({
+    text: annotationText(line),
+    row: hasAnnotationRow(line),
+  });
 
   render(fileA, annotationsA);
   respond(await getRequest(1), fileA);
@@ -121,6 +126,7 @@ async function createFixture() {
     respond,
     annotationText,
     hasAnnotationRow,
+    annotationAt,
     cleanup() {
       instance.cleanUp();
       manager.terminate();
@@ -208,6 +214,41 @@ test('File replaces queued data without adopting a superseded highlight', async 
     expect(instance.getRenderedFileForTest()).toBe(plainFile);
     expect(instance.getAnnotationsForTest()).toBe(annotationsA);
     expect(annotationText(1)).toBe('annotation:A');
+  } finally {
+    fixture.cleanup();
+  }
+});
+
+test('File returns to the adopted file and ignores a late replacement highlight', async () => {
+  const fixture = await createFixture();
+  const { instance, render, annotationAt } = fixture;
+  try {
+    render(fileB, annotationsB);
+    expect(instance.file).toBe(fileB);
+    const requestB = await fixture.getRequest(2);
+    render(fileA, annotationsA);
+    expect(instance.getRenderedFileForTest()).toBe(fileA);
+    expect(annotationAt(1)).toEqual({ text: 'annotation:A', row: true });
+
+    fixture.respond(requestB, fileB);
+    await wait();
+    expect(instance.getRenderedFileForTest()).toBe(fileA);
+    expect(annotationAt(1)).toEqual({ text: 'annotation:A', row: true });
+    expect(annotationAt(2)).toEqual({ text: undefined, row: false });
+  } finally {
+    fixture.cleanup();
+  }
+});
+
+test('File applies annotations immediately for an equivalent file object', async () => {
+  const fixture = await createFixture();
+  const { instance, render, annotationAt } = fixture;
+  try {
+    const equivalentA = { ...fileA };
+    render(equivalentA, annotationsB);
+    expect(instance.getRenderedFileForTest()).toBe(fileA);
+    expect(annotationAt(1)).toEqual({ text: undefined, row: false });
+    expect(annotationAt(2)).toEqual({ text: 'annotation:B', row: true });
   } finally {
     fixture.cleanup();
   }

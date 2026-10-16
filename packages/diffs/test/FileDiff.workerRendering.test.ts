@@ -1,17 +1,19 @@
 import { afterAll, beforeAll, expect, spyOn, test } from 'bun:test';
 
 import { File } from '../src/components/File';
-import { FileDiff } from '../src/components/FileDiff';
+import { FileDiff, type FileDiffOptions } from '../src/components/FileDiff';
 import {
   disposeHighlighter,
   getSharedHighlighter,
 } from '../src/highlighter/shared_highlighter';
+import { preloadFileDiff } from '../src/ssr';
 import type {
   DiffLineAnnotation,
   DiffsHighlighter,
   FileContents,
   FileDiffMetadata,
 } from '../src/types';
+import { diffAcceptRejectHunk } from '../src/utils/diffAcceptRejectHunk';
 import { parseDiffFromFile } from '../src/utils/parseDiffFromFile';
 import { renderDiffWithHighlighter } from '../src/utils/renderDiffWithHighlighter';
 import type { RenderDiffRequest } from '../src/worker/types';
@@ -211,6 +213,11 @@ async function createHighlightedDiffFixture() {
     fileContainer.shadowRoot?.querySelector(
       `slot[name="annotation-additions-${line}"]`
     ) != null;
+  // Annotation content lives in light DOM; its row lives in the shadow DOM.
+  const annotationAt = (line: number) => ({
+    text: annotationText(line),
+    row: hasAnnotationRow(line),
+  });
   render(diffA, annotationsA);
   respond(await getRequest(1), diffA);
   await waitFor(
@@ -219,7 +226,9 @@ async function createHighlightedDiffFixture() {
       annotationText(1) === 'annotation:A'
   );
   return {
+    manager,
     instance,
+    fileContainer,
     annotationContents,
     diffA,
     diffB,
@@ -230,6 +239,7 @@ async function createHighlightedDiffFixture() {
     respond,
     annotationText,
     hasAnnotationRow,
+    annotationAt,
     cleanup() {
       instance.cleanUp();
       manager.terminate();
@@ -308,6 +318,166 @@ test('FileDiff returns to the adopted diff and ignores a late replacement highli
     expect(instance.getRenderedDiffForTest()).toBe(diffA);
     expect(annotationText(1)).toBe('annotation:A');
     expect(annotationText(2)).toBeUndefined();
+  } finally {
+    fixture.cleanup();
+  }
+});
+
+test('FileDiff replaces queued data without adopting a superseded highlight', async () => {
+  const fixture = await createHighlightedDiffFixture();
+  const { instance, render, diffA, diffB, annotationsA, annotationsB } =
+    fixture;
+  const { annotationAt } = fixture;
+  try {
+    const diffC = createDiff(
+      'annotations:c',
+      'const gamma = 3;\nconst stable = 1;\n'
+    );
+    render(diffB, annotationsB);
+    const requestB = await fixture.getRequest(2);
+    render(diffC, []);
+    expect(instance.fileDiff).toBe(diffC);
+    expect(instance.getRenderedDiffForTest()).toBe(diffA);
+    expect(annotationAt(1)).toEqual({ text: 'annotation:A', row: true });
+
+    fixture.respond(requestB, diffB);
+    await wait();
+    expect(instance.getRenderedDiffForTest()).toBe(diffA);
+    expect(annotationAt(1)).toEqual({ text: 'annotation:A', row: true });
+    expect(annotationAt(2)).toEqual({ text: undefined, row: false });
+
+    fixture.respond(await fixture.getRequest(3), diffC);
+    await waitFor(() => instance.getRenderedDiffForTest() === diffC);
+    expect(annotationAt(1)).toEqual({ text: undefined, row: false });
+
+    const plainDiff: FileDiffMetadata = {
+      ...diffC,
+      lang: 'text',
+      cacheKey: 'annotations:plain',
+    };
+    render(plainDiff, annotationsA);
+    expect(instance.getRenderedDiffForTest()).toBe(plainDiff);
+    expect(annotationAt(1)).toEqual({ text: 'annotation:A', row: true });
+  } finally {
+    fixture.cleanup();
+  }
+});
+
+test('FileDiff keeps hydrated annotations while a replacement is highlighted', async () => {
+  const fixture = await createHighlightedDiffFixture();
+  const { manager, diffA, diffB, annotationsA, annotationsB } = fixture;
+  const options: FileDiffOptions<string, undefined> = {
+    disableFileHeader: true,
+    theme: 'pierre-dark',
+  };
+  const hydrated = new TestFileDiff(
+    {
+      ...options,
+      disableErrorHandling: true,
+      renderAnnotation(annotation) {
+        const element = document.createElement('span');
+        element.textContent = annotation.metadata;
+        return element;
+      },
+    },
+    manager
+  );
+  const fileContainer = document.createElement('div');
+  try {
+    const { prerenderedHTML } = await preloadFileDiff({
+      fileDiff: diffA,
+      options,
+      annotations: annotationsA,
+    });
+    hydrated.hydrate({
+      fileDiff: diffA,
+      fileContainer,
+      lineAnnotations: annotationsA,
+      prerenderedHTML,
+    });
+    const annotationAt = (line: number) => ({
+      text: getAnnotationText(fileContainer, `annotation-additions-${line}`),
+      row:
+        fileContainer.shadowRoot?.querySelector(
+          `slot[name="annotation-additions-${line}"]`
+        ) != null,
+    });
+    expect(annotationAt(1)).toEqual({ text: 'annotation:A', row: true });
+
+    hydrated.render({ fileDiff: diffB, lineAnnotations: annotationsB });
+    expect(hydrated.getRenderedDiffForTest()).toBe(diffA);
+    expect(annotationAt(1)).toEqual({ text: 'annotation:A', row: true });
+    expect(annotationAt(2)).toEqual({ text: undefined, row: false });
+
+    const request = await fixture.getRequest(2);
+    fixture.respond(request, request.diff);
+    await waitFor(() => hydrated.getRenderedDiffForTest() === diffB);
+    expect(annotationAt(1)).toEqual({ text: undefined, row: false });
+    expect(annotationAt(2)).toEqual({ text: 'annotation:B', row: true });
+  } finally {
+    hydrated.cleanUp();
+    fixture.cleanup();
+  }
+});
+
+test('FileDiff keeps a hunk action with its hunk until the resolved diff renders', async () => {
+  const fixture = await createHighlightedDiffFixture();
+  const { instance, render, diffA, annotationAt } = fixture;
+  const changedRows = () =>
+    fixture.fileContainer.shadowRoot?.querySelectorAll(
+      '[data-line-type="change-addition"]'
+    ).length ?? 0;
+  try {
+    expect(changedRows()).toBeGreaterThan(0);
+    // The annotation on the hunk's added line stands in for its action.
+    const resolved = diffAcceptRejectHunk(diffA, 0, 'accept');
+    render(resolved, []);
+    expect(instance.getRenderedDiffForTest()).toBe(diffA);
+    expect(changedRows()).toBeGreaterThan(0);
+    expect(annotationAt(1)).toEqual({ text: 'annotation:A', row: true });
+
+    fixture.respond(await fixture.getRequest(2), resolved);
+    await waitFor(() => instance.getRenderedDiffForTest() === resolved);
+    expect(changedRows()).toBe(0);
+    expect(annotationAt(1)).toEqual({ text: undefined, row: false });
+  } finally {
+    fixture.cleanup();
+  }
+});
+
+// Collapsing drops the highlighted rows, so expanding before the replacement
+// is highlighted shows no code and no annotations until it is ready.
+test('FileDiff shows no stale annotations when expanded during a replacement', async () => {
+  const fixture = await createHighlightedDiffFixture();
+  const { instance, render, diffB, annotationsB, annotationAt } = fixture;
+  const setCollapsed = (collapsed: boolean) =>
+    instance.setOptions({ ...instance.options, collapsed });
+  try {
+    setCollapsed(true);
+    render(diffB, annotationsB);
+    const requestB = await fixture.getRequest(2);
+    setCollapsed(false);
+    render(diffB, annotationsB);
+    expect(annotationAt(1)).toEqual({ text: undefined, row: false });
+    expect(annotationAt(2)).toEqual({ text: undefined, row: false });
+
+    fixture.respond(requestB, diffB);
+    await waitFor(() => instance.getRenderedDiffForTest() === diffB);
+    expect(annotationAt(1)).toEqual({ text: undefined, row: false });
+    expect(annotationAt(2)).toEqual({ text: 'annotation:B', row: true });
+  } finally {
+    fixture.cleanup();
+  }
+});
+
+test('FileDiff applies annotations immediately for an equivalent diff object', async () => {
+  const fixture = await createHighlightedDiffFixture();
+  const { instance, render, diffA, annotationsB, annotationAt } = fixture;
+  try {
+    render({ ...diffA }, annotationsB);
+    expect(instance.getRenderedDiffForTest()).toBe(diffA);
+    expect(annotationAt(1)).toEqual({ text: undefined, row: false });
+    expect(annotationAt(2)).toEqual({ text: 'annotation:B', row: true });
   } finally {
     fixture.cleanup();
   }

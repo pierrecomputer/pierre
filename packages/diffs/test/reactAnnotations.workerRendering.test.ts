@@ -18,6 +18,7 @@ import { PatchDiff } from '../src/react/PatchDiff';
 import { UnresolvedFile } from '../src/react/UnresolvedFile';
 import { Virtualizer } from '../src/react/Virtualizer';
 import { WorkerPoolContext } from '../src/react/WorkerPoolContext';
+import { preloadFileDiff } from '../src/ssr';
 import type {
   CodeViewItem,
   DiffLineAnnotation,
@@ -908,3 +909,50 @@ for (const custom of [false, true]) {
     }
   });
 }
+
+test('React FileDiff keeps hydrated annotations while a replacement is highlighted', async () => {
+  const fixture = await createFixture();
+  const { container, options, render, respond } = fixture;
+  const { prerenderedHTML } = await preloadFileDiff({
+    fileDiff: diffs.A,
+    options,
+    annotations: annotationsA,
+  });
+  const element = (version: 'A' | 'B') =>
+    createElement(FileDiff<string>, {
+      fileDiff: diffs[version],
+      options,
+      prerenderedHTML,
+      lineAnnotations: version === 'A' ? annotationsA : annotationsB,
+      renderAnnotation: (annotation) => annotation.metadata,
+    });
+  const hasAnnotationRow = (line: number) =>
+    container
+      .querySelector('diffs-container')
+      ?.shadowRoot?.querySelector(
+        `slot[name="annotation-additions-${line}"]`
+      ) != null;
+  try {
+    await render(element('A'));
+    expect(container.textContent).toContain('annotation A');
+
+    await render(element('B'));
+    expect(container.textContent).toContain('annotation A');
+    expect(container.textContent).not.toContain('annotation B');
+    expect(hasAnnotationRow(1)).toBe(true);
+    expect(hasAnnotationRow(2)).toBe(false);
+
+    // Hydration requests A's highlight first; B is requested after it.
+    await respond('diff', 'A', 1);
+    expect(container.textContent).toContain('annotation A');
+    await respond('diff', 'B', 2);
+    await waitFor(
+      () => container.textContent?.includes('annotation B') === true
+    );
+    expect(container.textContent).not.toContain('annotation A');
+    expect(hasAnnotationRow(1)).toBe(false);
+    expect(hasAnnotationRow(2)).toBe(true);
+  } finally {
+    await fixture.cleanup();
+  }
+});
