@@ -610,6 +610,8 @@ const instance = new FileDiff<ThreadMetadata>({
 
   // Render annotations on specific lines. Use lineNumber: 0 for a file-level
   // annotation above the first hunk separator or diff row.
+  // The second argument is the FileDiffMetadata displayed with this
+  // annotation.
   renderAnnotation(annotation) {
     const element = document.createElement('div');
     element.textContent = annotation.metadata.threadId;
@@ -648,6 +650,9 @@ instance.render({
   // not omit only one side.
   oldFile: { name: 'file.ts', contents: '...' },
   newFile: { name: 'file.ts', contents: '...' },
+  // Annotations passed with a new diff appear when that diff renders, which
+  // can wait for syntax highlighting. Until then the previous diff keeps its
+  // annotations.
   lineAnnotations,
   containerWrapper: document.body,
 });
@@ -897,6 +902,7 @@ const instance = new File<CommentMetadata>({
   // Render annotations on specific lines. Use lineNumber: 0 for a file-level
   // annotation above the first file line.
   // Note: File uses LineAnnotation (no 'side' property)
+  // The second argument is the FileContents displayed with this annotation.
   renderAnnotation(annotation) {
     const element = document.createElement('div');
     element.textContent = annotation.metadata.commentId;
@@ -930,6 +936,9 @@ const instance = new File<CommentMetadata>({
 // Render the file
 instance.render({
   file: { name: 'example.ts', contents: '...' },
+  // Annotations passed with a new file appear when that file renders, which
+  // can wait for syntax highlighting. Until then the previous file keeps its
+  // annotations.
   lineAnnotations,
   containerWrapper: document.body,
 });
