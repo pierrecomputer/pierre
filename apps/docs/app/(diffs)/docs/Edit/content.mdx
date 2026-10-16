@@ -420,8 +420,9 @@ collection; accept installs the final collection, which should be committed
 alongside the accepted file or diff.
 
 For interactive annotation content, keep application state under a stable,
-position-independent metadata ID. React may recreate annotation content when
-rows move, disappear, or leave a virtualized window.
+position-independent metadata ID. React keeps annotation content while editing
+moves its row, but may recreate it when rows disappear or leave a virtualized
+window.
 
 ### Performance and loading
 
