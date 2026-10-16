@@ -868,6 +868,7 @@ interface DiffItemSlotsProps<LAnnotation, Caret> extends CodeViewItemRenderers<
   LAnnotation,
   Caret
 > {
+  version: number;
   item: CodeViewDiffItem<LAnnotation>;
   fileDiff: FileDiffMetadata;
   lineAnnotations: DiffLineAnnotation<LAnnotation>[];
@@ -879,6 +880,7 @@ interface FileItemSlotsProps<LAnnotation, Caret> extends CodeViewItemRenderers<
   LAnnotation,
   Caret
 > {
+  version: number;
   item: CodeViewFileItem<LAnnotation>;
   file: FileContents;
   lineAnnotations: LineAnnotation<LAnnotation>[];
@@ -957,6 +959,7 @@ const SlotPortals = memo(function SlotPortals<LAnnotation, Caret>({
         createPortal(
           renderedItem.type === 'diff' ? (
             <DiffItemSlots
+              version={renderedItem.version ?? 0}
               item={renderedItem.item}
               getHoveredLine={renderedItem.instance.getHoveredLine}
               getAnnotationSlotName={
@@ -967,6 +970,7 @@ const SlotPortals = memo(function SlotPortals<LAnnotation, Caret>({
             />
           ) : (
             <FileItemSlots
+              version={renderedItem.version ?? 0}
               item={renderedItem.item}
               getHoveredLine={renderedItem.instance.getHoveredLine}
               getAnnotationSlotName={
