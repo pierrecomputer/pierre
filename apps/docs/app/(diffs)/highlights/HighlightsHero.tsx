@@ -2,6 +2,7 @@ import { IconArrowRight, IconBook } from '@pierre/icons';
 import Link from 'next/link';
 
 import styles from './HighlightsRainbow.module.css';
+import { HIGHLIGHTS_LARGE_FILE_MAXIMUM_SPEEDUP } from './performanceBenchmarkData';
 import { BetaBadge } from '@/components/BetaBadge';
 import { Button } from '@/components/ui/button';
 
@@ -31,7 +32,8 @@ export function HighlightsHero() {
           highlighter hand-written in WebAssembly Text. Built especially for{' '}
           <code>@pierre/diffs</code>. Includes built-in language lexers, runs
           across JavaScript runtimes, and supports Shiki-compatible formats.
-          Generates large-file HTML up to 294× faster than Shiki.
+          Generates large-file HTML up to{' '}
+          {HIGHLIGHTS_LARGE_FILE_MAXIMUM_SPEEDUP}× faster than Shiki.
         </p>
       </div>
 
