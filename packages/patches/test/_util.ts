@@ -2,14 +2,14 @@ import { init } from '../lib/core';
 import { transformWat, wat2wasm } from '../scripts/build';
 
 // compile the WAT sources in memory: tests never need a prior build
-init(
+export const loadWasm = (): WebAssembly.Module =>
   new WebAssembly.Module(
     wat2wasm(
       'patch.wat',
       transformWat(new URL('../src/patch.wat', import.meta.url))
     )
-  )
-);
+  );
+init(loadWasm);
 
 export * from '../lib/core';
 

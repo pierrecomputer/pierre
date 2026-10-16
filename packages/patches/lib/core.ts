@@ -50,7 +50,9 @@ const dec = new TextDecoder('utf-8', { ignoreBOM: true });
 const lineKeys = ['ignoreWhitespace', 'stripTrailingCr'];
 const patchKeys = [...lineKeys, 'context', 'headerOptions'];
 
-let wasm: WebAssembly.Module;
+let load: () => WebAssembly.Module;
+// undefined until the first call compiles it
+let wasm: WebAssembly.Module | undefined;
 let memory: WebAssembly.Memory;
 let diffCall: () => void;
 // views of the wasm memory; a memory.grow detaches them, so their length is 0
@@ -60,10 +62,21 @@ let maxBytes = 32 << 20;
 // set by `encode` when a text has lone surrogates (written as WTF-8)
 let wtf8: boolean;
 
-/** Initialize with the compiled wasm module (the index and workerd entries call it). */
-export function init(wasmModule: WebAssembly.Module): void {
-  wasm = wasmModule;
-  const { exports } = new WebAssembly.Instance(wasmModule, {});
+/**
+ * Set the function that returns the compiled wasm module (the index and
+ * workerd entries call it). The first diff call runs it, so importing the
+ * package works where WebAssembly is unavailable. A new call drops the current
+ * instance; the next diff call starts with empty wasm memory.
+ */
+export function init(loadModule: () => WebAssembly.Module): void {
+  load = loadModule;
+  wasm = undefined;
+}
+
+/** Create a wasm instance, compiling the module first if needed. */
+function start(): void {
+  wasm ??= load();
+  const { exports } = new WebAssembly.Instance(wasm, {});
   memory = exports.memory as WebAssembly.Memory;
   diffCall = exports.diff as () => void;
   bind();
@@ -84,7 +97,7 @@ export function setMemoryLimit(bytes: number): void {
     throw new RangeError('the memory limit must be a non-negative number');
   }
   maxBytes = bytes;
-  release();
+  if (wasm !== undefined) release();
 }
 
 /** Diff two texts, treating each Unicode code point as a token. */
@@ -240,6 +253,7 @@ function run(
     oldStr = oldStr.replaceAll('\r\n', '\n');
     newStr = newStr.replaceAll('\r\n', '\n');
   }
+  if (wasm === undefined) start();
   // input starts on page 2; WTF-8 is at most 3 bytes per UTF-16 code unit, and
   // 64 covers the SIMD overread pad
   let need = 65600 + (oldStr.length + newStr.length) * 3;
@@ -372,5 +386,5 @@ function bind(): void {
 
 /** Replace the instance when its memory passed the limit; the GC frees the old one. */
 function release(): void {
-  if (u8.length > maxBytes) init(wasm);
+  if (u8.length > maxBytes) start();
 }

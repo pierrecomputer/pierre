@@ -10,7 +10,7 @@ import { type ApiName, bindApi, genFixtures } from './fixtures';
 const [lib, api, input, perLine] = process.argv.slice(2);
 const wasm =
   lib === 'mine' ? new WebAssembly.Module(readFileSync(0)) : undefined;
-if (wasm != null) core.init(wasm);
+if (wasm != null) core.init(() => wasm);
 const fn = bindApi(
   lib === 'mine' ? core : jsdiff,
   api as ApiName,
@@ -25,7 +25,7 @@ for (let i = 0; i < 5; i++) fn(a, b);
 await Bun.sleep(100);
 // a new instance keeps the compiled code but starts with empty wasm memory,
 // so the call counts the wasm memory it grows into
-if (wasm != null) core.init(wasm);
+if (wasm != null) core.init(() => wasm);
 
 // Warning: maxRSS is a high-water mark. This is only correct because, with GC off,
 // the RSS before the call is already the peak.

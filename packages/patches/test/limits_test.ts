@@ -1,7 +1,13 @@
 import { beforeAll, expect, test } from 'bun:test';
 
 import { transformWat, wat2wasm } from '../scripts/build';
-import { createTwoFilesPatch, diffChars, setMemoryLimit } from './_util';
+import {
+  createTwoFilesPatch,
+  diffChars,
+  init,
+  loadWasm,
+  setMemoryLimit,
+} from './_util';
 
 // Token counts whose table sizes would wrap i32 must report out of memory
 // before allocating. Real inputs need GiBs (two 128 MiB diffChars strings), so
@@ -51,7 +57,22 @@ test('intern table size past i32 reports out of memory', () => {
   expect(wasm.t_takeErr()).toBe(1);
 });
 
+test('init compiles the wasm at the first call, not before', () => {
+  init(() => {
+    throw new Error('no wasm');
+  });
+  try {
+    setMemoryLimit(32 << 20);
+    expect(() => diffChars('ab', 'ac')).toThrow('no wasm');
+  } finally {
+    init(loadWasm);
+  }
+  expect(diffChars('ab', 'ac')).toHaveLength(3);
+});
+
 test('a call that grows memory past the limit gets a new instance after it', () => {
+  // the first call creates the instance that the limit replaces
+  diffChars('ab', 'ac');
   const Instance = WebAssembly.Instance;
   let instances = 0;
   WebAssembly.Instance = class extends Instance {

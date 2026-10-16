@@ -202,7 +202,8 @@ const t0 = performance.now();
 const code = transformWat(new URL('../src/patch.wat', import.meta.url));
 // optimize exactly as the build does, so these numbers describe the published wasm
 const wasmBytes = optimizeWasm(wat2wasm('patch.wat', code));
-core.init(new WebAssembly.Module(wasmBytes));
+const wasm = new WebAssembly.Module(wasmBytes);
+core.init(() => wasm);
 console.log(
   dim(
     `patch.wasm: ${wasmBytes.length} bytes (-O3), compiled in ${Math.ceil(performance.now() - t0)}ms`
