@@ -4,6 +4,7 @@ import type { ReactNode } from 'react';
 import { BenchmarkBar } from './BenchmarkBar';
 import styles from './HighlightsBenchmarkCard.module.css';
 import {
+  HIGHLIGHTS_LARGE_FILE_MAXIMUM_SPEEDUP,
   HIGHLIGHTS_LARGE_FILE_RESULTS,
   HIGHLIGHTS_THROUGHPUT_MAXIMUM,
 } from './performanceBenchmarkData';
@@ -89,7 +90,8 @@ export function HighlightsPerformanceBenchmarks() {
               Super-fast HTML generation
             </h3>
             <p className="text-muted-foreground max-w-xl text-pretty">
-              Highlights generates HTML at up to 298 times faster than Shiki’s
+              Highlights generates HTML at up to{' '}
+              {HIGHLIGHTS_LARGE_FILE_MAXIMUM_SPEEDUP} times faster than Shiki’s
               throughput across these fixtures.
             </p>
           </figcaption>
