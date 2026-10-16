@@ -18,6 +18,7 @@ import type {
 
 export interface DiffsHubDataAccumulator {
   diffStats: DiffsHubDiffStats;
+  directoryPaths: Set<string>;
   fileIndex: number;
   gitStatusByPath: Map<string, GitStatusEntry>;
   itemIdToFile: Map<string, DiffsHubCommentSidebarFile>;
@@ -32,6 +33,7 @@ export interface DiffsHubDataAccumulator {
   pendingItems: CodeViewItem<CommentMetadata>[];
   pendingItemById: Map<string, CodeViewItem<CommentMetadata>>;
   pathToItemId: Map<string, string>;
+  pathStateByPatchPath: Map<string, CodeViewPathState>;
   pathStateByTreePath: Map<string, CodeViewPathState>;
   paths: string[];
 }
@@ -45,7 +47,9 @@ interface CodeViewPathState {
   currentItem: CodeViewItem<CommentMetadata>;
   currentItemId: string;
   currentType: ChangeTypes;
+  pathIndex: number;
   sawDeleted: boolean;
+  treePath: string;
 }
 
 export interface LoadedDiffsHubData {
@@ -63,6 +67,7 @@ export function createDiffsHubDataAccumulator(): DiffsHubDataAccumulator {
       fileCount: 0,
       totalLinesOfCode: 0,
     },
+    directoryPaths: new Set(),
     fileIndex: 0,
     gitStatusByPath: new Map(),
     itemIdToFile: new Map(),
@@ -74,6 +79,7 @@ export function createDiffsHubDataAccumulator(): DiffsHubDataAccumulator {
     pendingItems: [],
     pendingItemById: new Map(),
     pathToItemId: new Map(),
+    pathStateByPatchPath: new Map(),
     pathStateByTreePath: new Map(),
     paths: [],
   };
@@ -93,18 +99,18 @@ export function appendFileDiffToDiffsHubData(
   }
 
   const path = fileDiff.name;
-  const treePath = treePathPrefix == null ? path : `${treePathPrefix}/${path}`;
+  const patchPath = treePathPrefix == null ? path : `${treePathPrefix}/${path}`;
   const previousPathState =
     path.length === 0
       ? undefined
-      : accumulator.pathStateByTreePath.get(treePath);
+      : accumulator.pathStateByPatchPath.get(patchPath);
   const itemIdRename =
     previousPathState == null
       ? undefined
-      : renameCurrentPathItem(accumulator, treePath, previousPathState);
-  const id = accumulator.itemIdToFile.has(treePath)
-    ? createFallbackItemId(accumulator, treePath)
-    : treePath;
+      : renameCurrentPathItem(accumulator, patchPath, previousPathState);
+  const id = accumulator.itemIdToFile.has(patchPath)
+    ? createFallbackItemId(accumulator, patchPath)
+    : patchPath;
   // Streaming cache keys read fileIndex before this append, so keep advancing
   // it even though item ids are now path-based.
   accumulator.fileIndex++;
@@ -125,25 +131,123 @@ export function appendFileDiffToDiffsHubData(
     return itemIdRename;
   }
 
-  if (previousPathState == null) {
+  let pathState = previousPathState;
+  if (pathState == null) {
+    const treePath = claimTreePath(accumulator, patchPath);
+    pathState = {
+      currentItem: item,
+      currentItemId: id,
+      currentType: fileDiff.type,
+      pathIndex: accumulator.paths.length,
+      sawDeleted: false,
+      treePath,
+    };
     accumulator.paths.push(treePath);
+    accumulator.pathStateByPatchPath.set(patchPath, pathState);
+    accumulator.pathStateByTreePath.set(treePath, pathState);
   }
+  const { treePath } = pathState;
   accumulator.pathToItemId.set(treePath, id);
   updateGitStatusByPath(
     accumulator,
     treePath,
     fileDiff.type,
-    previousPathState?.sawDeleted === true
+    pathState.sawDeleted
   );
-  accumulator.pathStateByTreePath.set(treePath, {
-    currentItem: item,
-    currentItemId: id,
-    currentType: fileDiff.type,
-    sawDeleted:
-      previousPathState?.sawDeleted === true || fileDiff.type === 'deleted',
-  });
+  pathState.currentItem = item;
+  pathState.currentItemId = id;
+  pathState.currentType = fileDiff.type;
+  pathState.sawDeleted ||= fileDiff.type === 'deleted';
 
   return itemIdRename;
+}
+
+// Picks the file tree path for a patch path seen for the first time. The tree
+// cannot hold a file and a directory at the same path, yet a patch can, e.g.
+// when it deletes a symlink `lib/actions` and adds `lib/actions/index.ts`. The
+// directory always keeps its real path and the file is shown under a suffixed
+// name instead, so an already-placed file whose path a later patch path turns
+// into a directory is renamed.
+function claimTreePath(
+  accumulator: DiffsHubDataAccumulator,
+  patchPath: string
+): string {
+  const { directoryPaths, pathStateByTreePath } = accumulator;
+  // Ancestors are visited deepest-first, so reaching a known directory means
+  // every shallower ancestor is already a directory too.
+  let slashIndex = patchPath.lastIndexOf('/');
+  while (slashIndex > 0) {
+    const directoryPath = patchPath.slice(0, slashIndex);
+    if (directoryPaths.has(directoryPath)) {
+      break;
+    }
+    const fileState = pathStateByTreePath.get(directoryPath);
+    if (fileState != null) {
+      renameTreeFile(accumulator, fileState);
+    }
+    directoryPaths.add(directoryPath);
+    slashIndex = patchPath.lastIndexOf('/', slashIndex - 1);
+  }
+
+  return directoryPaths.has(patchPath) || pathStateByTreePath.has(patchPath)
+    ? createFileTreePath(accumulator, patchPath)
+    : patchPath;
+}
+
+// Renames a file already in the tree to a suffixed path, carrying its item
+// link and git status along. Published snapshots alias `paths` and
+// `pathToItemId`, so renaming a file the last snapshot already shows first
+// gives the accumulator its own copies and drops the snapshot link. The next
+// snapshot is then unlinked, so the tree consumer rebuilds from it in patch
+// order instead of extending a tree that still holds the old file path.
+function renameTreeFile(
+  accumulator: DiffsHubDataAccumulator,
+  pathState: CodeViewPathState
+): void {
+  const { lastTreeSource } = accumulator;
+  if (
+    lastTreeSource != null &&
+    pathState.pathIndex < lastTreeSource.pathCount
+  ) {
+    accumulator.paths = accumulator.paths.slice();
+    accumulator.pathToItemId = new Map(accumulator.pathToItemId);
+    accumulator.lastTreeSource = undefined;
+  }
+
+  const { gitStatusByPath, pathStateByTreePath, pathToItemId } = accumulator;
+  const from = pathState.treePath;
+  const to = createFileTreePath(accumulator, from);
+  pathState.treePath = to;
+  accumulator.paths[pathState.pathIndex] = to;
+  pathStateByTreePath.delete(from);
+  pathStateByTreePath.set(to, pathState);
+  pathToItemId.delete(from);
+  pathToItemId.set(to, pathState.currentItemId);
+
+  const gitStatusEntry = gitStatusByPath.get(from);
+  if (gitStatusEntry != null) {
+    gitStatusByPath.delete(from);
+    recordGitStatusRemove(accumulator, from);
+    const renamedEntry = { path: to, status: gitStatusEntry.status };
+    gitStatusByPath.set(to, renamedEntry);
+    recordGitStatusSet(accumulator, renamedEntry);
+  }
+}
+
+// Returns an unused tree path for a file whose own path is taken by a
+// directory (or by another file that was already renamed).
+function createFileTreePath(
+  accumulator: DiffsHubDataAccumulator,
+  path: string
+): string {
+  const { directoryPaths, pathStateByTreePath } = accumulator;
+  let treePath = `${path} (file)`;
+  let suffix = 2;
+  while (directoryPaths.has(treePath) || pathStateByTreePath.has(treePath)) {
+    treePath = `${path} (file ${suffix})`;
+    suffix++;
+  }
+  return treePath;
 }
 
 export function takePendingDiffsHubItems(
@@ -206,13 +310,13 @@ function takePendingGitStatusPatch(
 // next diff entry for that same path can own tree navigation without rebuilding.
 function renameCurrentPathItem(
   accumulator: DiffsHubDataAccumulator,
-  treePath: string,
+  patchPath: string,
   pathState: CodeViewPathState
 ): DiffsHubItemIdRename | undefined {
   const oldId = pathState.currentItemId;
   const newId = createSupersededItemId(
     accumulator,
-    treePath,
+    patchPath,
     pathState.currentType
   );
   pathState.currentItem.id = newId;
@@ -236,18 +340,18 @@ function renameCurrentPathItem(
 
 function createSupersededItemId(
   accumulator: DiffsHubDataAccumulator,
-  treePath: string,
+  patchPath: string,
   changeType: ChangeTypes
 ): string {
   const semanticSuffix = changeType === 'deleted' ? '?deleted' : '?previous';
-  return createUniqueItemId(accumulator, `${treePath}${semanticSuffix}`);
+  return createUniqueItemId(accumulator, `${patchPath}${semanticSuffix}`);
 }
 
 function createFallbackItemId(
   accumulator: DiffsHubDataAccumulator,
-  treePath: string
+  patchPath: string
 ): string {
-  return createUniqueItemId(accumulator, `${treePath}?2`);
+  return createUniqueItemId(accumulator, `${patchPath}?2`);
 }
 
 // Resolves rare id collisions by advancing a per-base suffix instead of scanning
