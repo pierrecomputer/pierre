@@ -153,6 +153,7 @@ interface DiffRenderCache extends RenderedDiffASTCache {
 interface SemanticRegionState {
   region: SemanticDiffCollapsibleRegion;
   collapsed: boolean;
+  collapsedRow?: { content: HASTElement; firstRow: number };
 }
 
 interface SemanticLineCache {
@@ -220,7 +221,21 @@ export interface LineDecoration {
 interface PendingSplitContext {
   size: number;
   side: 'additions' | 'deletions' | undefined;
-  increment(): void;
+  /**
+   * The split rows the gap covers, used to select it. Undefined if the gap
+   * includes an injected row, which has no split row.
+   */
+  rows: { first: number; last: number } | undefined;
+  /**
+   * Add one row to the gap. `row` is that row's split index, which selection
+   * uses; injected rows don't have one.
+   */
+  increment(row?: number): void;
+  /**
+   * Add a hidden row to the gap's rows without making the gap taller. Used for
+   * the rows a collapsed region hides.
+   */
+  extend(row: number): void;
   flush(): void;
 }
 
@@ -1777,8 +1792,27 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     const pendingSplitContext: PendingSplitContext = {
       size: 0,
       side: undefined,
-      increment() {
+      rows: undefined,
+      increment(row) {
+        if (row == null) {
+          this.rows = undefined;
+        } else if (this.size === 0) {
+          this.rows = { first: row, last: row };
+        } else if (this.rows != null) {
+          this.extend(row);
+        }
         this.size += 1;
+      },
+      extend(row) {
+        if (this.rows == null) {
+          return;
+        }
+        if (row !== this.rows.last && row !== this.rows.last + 1) {
+          throw new Error(
+            `DiffHunksRenderer.processDiffResult: a gap's rows must be consecutive, but row ${row} came after row ${this.rows.last}`
+          );
+        }
+        this.rows.last = row;
       },
       flush() {
         if (diffStyle === 'unified') {
@@ -1787,23 +1821,31 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
         if (this.size <= 0 || this.side == null) {
           this.side = undefined;
           this.size = 0;
+          this.rows = undefined;
           return;
         }
+        const splitRows =
+          this.rows != null
+            ? `${this.rows.first},${this.rows.last}`
+            : undefined;
+        const content = createEmptyRowBuffer(this.size);
+        content.properties['data-split-rows'] = splitRows;
         if (this.side === 'additions') {
           context.pushToGutter(
             'additions',
             createGutterGap(undefined, 'buffer', this.size)
           );
-          additionsContentAST?.push(createEmptyRowBuffer(this.size));
+          additionsContentAST?.push(content);
         } else {
           context.pushToGutter(
             'deletions',
             createGutterGap(undefined, 'buffer', this.size)
           );
-          deletionsContentAST?.push(createEmptyRowBuffer(this.size));
+          deletionsContentAST?.push(content);
         }
         this.size = 0;
         this.side = undefined;
+        this.rows = undefined;
       },
     };
 
@@ -1885,22 +1927,25 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     };
     // A collapsed region's row: one deletions-side row, so the additions
     // column takes a one-row gap beside it.
-    const pushSemanticRegionRow = (region: SemanticDiffCollapsibleRegion) => {
+    const pushSemanticRegionRow = (
+      region: SemanticDiffCollapsibleRegion,
+      firstRow: number
+    ): HASTElement => {
       if (pendingSplitContext.side === 'deletions') {
         pendingSplitContext.flush();
       }
       pendingSplitContext.side = 'additions';
-      pendingSplitContext.increment();
+      pendingSplitContext.increment(firstRow);
       const { gutterLineType, gutterIcon } =
         this.getSemanticRegionDecoration(region);
       context.pushToGutter(
         'deletions',
         createSemanticRegionGutter(region, gutterLineType, gutterIcon)
       );
-      context.deletionsContentAST.push(
-        createSemanticRegionContent(region, gutterLineType)
-      );
+      const content = createSemanticRegionContent(region, gutterLineType);
+      context.deletionsContentAST.push(content);
       context.incrementRowCount(1);
+      return content;
     };
 
     function pushSeparators(props: PushSeparatorProps) {
@@ -1967,11 +2012,27 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
               `DiffHunksRenderer.processDiffResult: collapsible region ${regionState.region.old.start}-${regionState.region.old.end} has a new-side line beside old line ${deletionLine?.lineNumber}`
             );
           }
-          if (
-            regionState.collapsed &&
-            deletionLine?.lineNumber === regionState.region.old.start
-          ) {
-            pushSemanticRegionRow(regionState.region);
+          if (regionState.collapsed) {
+            if (deletionLine?.lineNumber === regionState.region.old.start) {
+              regionState.collapsedRow = {
+                content: pushSemanticRegionRow(
+                  regionState.region,
+                  splitLineIndex
+                ),
+                firstRow: splitLineIndex,
+              };
+            }
+            // The collapsed row, and the gap beside it, record the split rows
+            // it hides, so a line selection over them can mark both.
+            const { collapsedRow } = regionState;
+            if (collapsedRow == null) {
+              throw new Error(
+                `DiffHunksRenderer.processDiffResult: collapsible region ${regionState.region.old.start}-${regionState.region.old.end} was entered after its first line`
+              );
+            }
+            collapsedRow.content.properties['data-split-rows'] =
+              `${collapsedRow.firstRow},${splitLineIndex}`;
+            pendingSplitContext.extend(splitLineIndex);
           }
         }
         const isHiddenBySemanticRegion = regionState?.collapsed === true;
@@ -2141,7 +2202,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
               pendingSplitContext.flush();
             }
             pendingSplitContext.side = missingSide;
-            pendingSplitContext.increment();
+            pendingSplitContext.increment(splitLineIndex);
           } else if (type === 'change') {
             // A change row with both sides fills the column a pending
             // one-sided buffer was holding open (an insert/delete block

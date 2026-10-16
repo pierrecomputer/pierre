@@ -1823,6 +1823,44 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
           continue;
         }
 
+        // A collapsed semantic region's row and a gap each stand in for a
+        // range of split rows. The collapsed row is selected when the selection
+        // covers any row it hides; a gap only when the selection covers all of
+        // its rows, so a selection that runs through it fills it.
+        const splitRows = getSplitRows(contentElement);
+        if (splitRows != null) {
+          const [firstRow, lastRow] = splitRows;
+          if (firstRow > finalLineIndex) {
+            break;
+          }
+          if (
+            renderSelectedLines &&
+            selectedFirst != null &&
+            selectedLast != null &&
+            (contentElement.hasAttribute('data-semantic-region')
+              ? firstRow <= selectedLast && lastRow >= selectedFirst
+              : firstRow >= selectedFirst && lastRow <= selectedLast)
+          ) {
+            const startsInside = selectedFirst >= firstRow;
+            const endsInside = selectedLast <= lastRow;
+            const attributeValue =
+              startsInside && endsInside
+                ? 'single'
+                : startsInside
+                  ? 'first'
+                  : endsInside
+                    ? 'last'
+                    : '';
+            gutterElement.setAttribute('data-selected-line', attributeValue);
+            if (!selectedLines.lineNumberOnly) {
+              contentElement.setAttribute('data-selected-line', attributeValue);
+              edges ??= { first: contentElement, last: contentElement };
+              edges.last = contentElement;
+            }
+          }
+          continue;
+        }
+
         const lineIndex = this.parseLineIndex(contentElement, split);
         if ((lineIndex ?? 0) > finalLineIndex) {
           break;
@@ -2592,6 +2630,17 @@ function areLineRenderStatesEqual(
     first?.lineNumberOnly === second.lineNumberOnly &&
     areSelectionRangesEqual(first?.range ?? null, second.range)
   );
+}
+
+// The first and last split rows a collapsed semantic region's row or a gap
+// stands for, or undefined for any other row.
+function getSplitRows(element: HTMLElement): [number, number] | undefined {
+  const rows = element.getAttribute('data-split-rows');
+  if (rows == null) {
+    return undefined;
+  }
+  const [firstRow, lastRow] = rows.split(',').map(Number);
+  return [firstRow, lastRow];
 }
 
 function getLineTypeFromElement(element: HTMLElement): LineTypes | undefined {

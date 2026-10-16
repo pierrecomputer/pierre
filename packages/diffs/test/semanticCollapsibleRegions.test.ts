@@ -329,6 +329,73 @@ describe('collapsed moves', () => {
     }
   });
 
+  test('a selection over any hidden line selects the collapsed row', async () => {
+    const dom = installDom();
+    const consoleError = spyOn(console, 'error');
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const instance = new FileDiff<undefined>({
+      disableFileHeader: true,
+      theme: DEFAULT_THEMES,
+      diffStyle: 'split',
+    });
+    // The selected-line value of each deletions-side content row, keyed by
+    // its line number or 'region' for the collapsed row; unselected rows are
+    // left out.
+    const selectedRows = () =>
+      Object.fromEntries(
+        [
+          ...(container.shadowRoot?.querySelectorAll(
+            '[data-deletions] [data-content] > [data-selected-line]'
+          ) ?? []),
+        ].map((row) => [
+          row.getAttribute('data-line') ?? 'region',
+          row.getAttribute('data-selected-line'),
+        ])
+      );
+    const regionGutterSelection = () =>
+      container.shadowRoot
+        ?.querySelector("[data-gutter-buffer='semantic-region']")
+        ?.getAttribute('data-selected-line');
+    try {
+      instance.render({
+        fileDiff: movedDiff(),
+        fileContainer: container,
+        forceRender: true,
+      });
+      await waitFor(() => renderedOldLines(container).length > 0);
+
+      // A hidden line alone.
+      instance.setSelectedLines({ start: 4, end: 4, side: 'deletions' });
+      await waitFor(() => 'region' in selectedRows());
+      expect(selectedRows()).toEqual({ region: 'single' });
+      expect(regionGutterSelection()).toBe('single');
+
+      // A range that starts above the region and ends below it.
+      instance.setSelectedLines({ start: 2, end: 6, side: 'deletions' });
+      await waitFor(() => '6' in selectedRows());
+      expect(selectedRows()).toEqual({ '2': 'first', region: '', '6': 'last' });
+      expect(regionGutterSelection()).toBe('');
+
+      // A range that ends inside the region.
+      instance.setSelectedLines({ start: 1, end: 3, side: 'deletions' });
+      await waitFor(() => '1' in selectedRows());
+      expect(selectedRows()).toEqual({ '1': 'first', '2': '', region: 'last' });
+
+      // A range that misses the region.
+      instance.setSelectedLines({ start: 7, end: 8, side: 'deletions' });
+      await waitFor(() => '7' in selectedRows());
+      expect(selectedRows()).toEqual({ '7': 'first', '8': 'last' });
+      expect(regionGutterSelection()).toBeNull();
+      expect(consoleError).not.toHaveBeenCalled();
+    } finally {
+      consoleError.mockRestore();
+      await wait(10);
+      instance.cleanUp();
+      dom.cleanup();
+    }
+  });
+
   test('the first toggle after hydrating server markup expands the move', async () => {
     const options = {
       disableFileHeader: true,

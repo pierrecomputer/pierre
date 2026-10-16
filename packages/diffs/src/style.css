@@ -463,6 +463,8 @@
   [data-column-number],
   [data-line-annotation],
   [data-no-newline],
+  [data-semantic-region],
+  [data-content-buffer],
   [data-merge-conflict],
   [data-merge-conflict-actions],
   [data-editor-overlay] {
@@ -796,6 +798,8 @@
   [data-merge-conflict],
   [data-merge-conflict-actions],
   [data-no-newline],
+  [data-semantic-region],
+  [data-content-buffer],
   [data-editor-overlay] {
     --diffs-selection-mix-target: var(
       --diffs-bg-selection-override,
@@ -809,7 +813,9 @@
         [data-line-annotation],
         [data-merge-conflict],
         [data-merge-conflict-actions],
-        [data-no-newline]
+        [data-no-newline],
+        [data-semantic-region],
+        [data-content-buffer]
       )[data-selected-line] {
       --mix-selection-light: 82%;
       --mix-selection-dark: 75%;
@@ -827,6 +833,17 @@
         var(--diffs-selection-base)
       );
       --diffs-hover-mix-target: var(--diffs-selection-mix-target);
+    }
+
+    /* A collapsed region's row reads as one row across the gutter and the
+     * content column, so its gutter cell mixes a selection like content. */
+    &:where([data-gutter-buffer='semantic-region'][data-selected-line]) {
+      --mix-selection-light: 82%;
+      --mix-selection-dark: 75%;
+      --diffs-selection-mix-target: var(
+        --diffs-bg-selection-override,
+        var(--diffs-selection-base)
+      );
     }
 
     /* Keep the light-theme emphasis on a selected changed line tied to its
@@ -1231,7 +1248,7 @@
   }
 
   [data-gutter-buffer='buffer'] {
-    --diffs-line-bg: var(--diffs-bg-context-gutter);
+    --diffs-computed-decoration-bg: var(--diffs-bg-context-gutter);
   }
 
   [data-content-buffer] {
@@ -1844,17 +1861,20 @@
   /* A collapsed region's row. Its gutter cell holds the moved icon, the summary
    * and the toggle, extending past the gutter into the content column. The
    * content cell draws the connector line across the rest of the row. The row
-   * keeps the plain background, so the label covers the line where they
-   * overlap. */
+   * keeps the plain background, or the selection's, without its line type's
+   * tint, and the label takes the same background so it covers the line where
+   * they overlap. */
   [data-gutter-buffer='semantic-region'] {
-    --diffs-line-bg: var(--diffs-bg);
     cursor: pointer;
+
+    &[data-line-type] {
+      --diffs-computed-diff-line-bg: var(--diffs-computed-decoration-bg);
+    }
   }
 
   [data-semantic-region] {
     position: relative;
     min-height: 1lh;
-    background-color: var(--diffs-bg);
     cursor: pointer;
 
     &::after {
@@ -1888,7 +1908,7 @@
     );
     color: var(--diffs-line-type-color);
     fill: currentColor;
-    background-color: var(--diffs-bg);
+    background-color: var(--diffs-line-bg);
     user-select: none;
   }
 
