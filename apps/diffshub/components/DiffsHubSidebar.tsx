@@ -62,6 +62,9 @@ const MOBILE_MEDIA_QUERY = '(max-width: 767px)';
 
 interface DiffsHubSidebarProps {
   className?: string;
+  // Whether saved drafts post to the pull request on GitHub; only changes
+  // the comments empty-state copy.
+  commentsPostToGitHub?: boolean;
   commentSections: readonly DiffsHubSavedCommentItem[];
   diffStats: DiffsHubDiffStatsData | null;
   mobileOverlayOpen?: boolean;
@@ -77,6 +80,7 @@ interface DiffsHubSidebarProps {
 
 export const DiffsHubSidebar = memo(function DiffsHubSidebar({
   className,
+  commentsPostToGitHub,
   commentSections,
   diffStats,
   mobileOverlayOpen = false,
@@ -313,6 +317,7 @@ export const DiffsHubSidebar = memo(function DiffsHubSidebar({
             className="h-full min-h-0"
           >
             <DiffsHubCommentsList
+              canPostToGitHub={commentsPostToGitHub}
               commentSections={commentSections}
               onSelectComment={onSelectComment}
               onSelectItem={onSelectItem}

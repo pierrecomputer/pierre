@@ -4,6 +4,7 @@ import { cn } from '@/lib/cn';
 interface CommentAuthorAvatarProps {
   // A stable seed (e.g. comment key or a fixed name) used to pick the avatar.
   seed: string;
+  avatarUrl?: string;
   className?: string;
 }
 
@@ -11,9 +12,13 @@ interface CommentAuthorAvatarProps {
 // Defaults to 32px (size-8); pass className to override for other sizes.
 export function CommentAuthorAvatar({
   seed,
+  avatarUrl,
   className,
 }: CommentAuthorAvatarProps) {
-  const { name, avatarSrc } = getCommentPersona(seed);
+  const { name, avatarSrc } =
+    avatarUrl == null
+      ? getCommentPersona(seed)
+      : { avatarSrc: avatarUrl, name: seed };
   return (
     <div className="relative shrink-0 self-start after:absolute after:inset-0 after:z-10 after:block after:rounded-full after:border after:border-[rgb(0_0_0_/_0.1)] after:content-[''] dark:after:border-[rgb(255_255_255_/_0.1)]">
       <img
