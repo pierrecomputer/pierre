@@ -1,26 +1,36 @@
-import { getCommentPersona } from '@/lib/annotation';
 import { cn } from '@/lib/cn';
 
 interface CommentAuthorAvatarProps {
-  // A stable seed (e.g. comment key or a fixed name) used to pick the avatar.
-  seed: string;
+  name: string;
+  src?: string;
   className?: string;
 }
 
-// Renders a circular avatar image for a comment author.
-// Defaults to 32px (size-8); pass className to override for other sizes.
+/** Uses the GitHub avatar, or the author's initial when the account is gone. */
 export function CommentAuthorAvatar({
-  seed,
+  name,
+  src,
   className,
 }: CommentAuthorAvatarProps) {
-  const { name, avatarSrc } = getCommentPersona(seed);
   return (
     <div className="relative shrink-0 self-start after:absolute after:inset-0 after:z-10 after:block after:rounded-full after:border after:border-[rgb(0_0_0_/_0.1)] after:content-[''] dark:after:border-[rgb(255_255_255_/_0.1)]">
-      <img
-        src={avatarSrc}
-        alt={name}
-        className={cn('block size-8 object-cover rounded-full', className)}
-      />
+      {src != null ? (
+        <img
+          src={src}
+          alt=""
+          className={cn('block size-8 object-cover rounded-full', className)}
+        />
+      ) : (
+        <span
+          aria-label={name}
+          className={cn(
+            'inline-flex size-8 items-center justify-center rounded-full bg-muted text-sm',
+            className
+          )}
+        >
+          {name.slice(0, 1)}
+        </span>
+      )}
     </div>
   );
 }

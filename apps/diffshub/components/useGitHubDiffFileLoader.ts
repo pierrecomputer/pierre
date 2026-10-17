@@ -11,7 +11,7 @@ interface UseGitHubDiffFileLoaderOptions {
   hasGitHubToken: boolean;
   path: string;
   token: string;
-  tokenVersion: number;
+  tokenVersion: number | string;
 }
 
 interface UseGitHubDiffFileLoaderResult {

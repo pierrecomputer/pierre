@@ -26,6 +26,9 @@ const nextConfig = {
   reactStrictMode: false,
   reactCompiler: true,
   devIndicators: false,
+  allowedDevOrigins: process.env.DIFFSHUB_DEV_HOST
+    ? [process.env.DIFFSHUB_DEV_HOST]
+    : [],
   // Resolve and transpile workspace packages so subpath exports (e.g. @pierre/trees/react)
   // resolve correctly when Next follows client-component imports from the server.
   transpilePackages: ['@pierre/trees', '@pierre/diffs'],

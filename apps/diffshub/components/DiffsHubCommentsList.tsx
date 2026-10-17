@@ -93,7 +93,7 @@ export const DiffsHubCommentsList = memo(function DiffsHubCommentsList({
             <span className="light:text-white light:bg-[rgb(0,159,255)] inline-flex h-[20px] w-[20px] items-center justify-center rounded-[4px] align-top dark:bg-[rgb(0,159,255)] dark:text-black">
               <IconPlus />
             </span>{' '}
-            button to add fake code comments.
+            button to post a code comment to GitHub.
           </p>
         </div>
       </div>
@@ -125,50 +125,58 @@ export const DiffsHubCommentsList = memo(function DiffsHubCommentsList({
             </div>
           )}
           <div className="rounded-lg border border-[var(--diffshub-card-border,rgb(0_0_0_/_0.1))] dark:border-[var(--diffshub-card-border,rgb(255_255_255_/_0.15))]">
-            {section.comments.map((comment) => (
-              <button
-                key={comment.key}
-                type="button"
-                // Card surface, hover, and border come from the themed
-                // chrome (set on the sidebar wrapper) so cards stay
-                // on-palette for mixed-light/dark themes like slack-ochin
-                // (light-typed but uses a dark navy sidebar). The
-                // hardcoded fallbacks cover the brief window before the
-                // Shiki theme resolves on first render.
-                // No `transition-colors` here: the bg / border / text
-                // colors are driven by CSS variables that flip the entire
-                // chrome on every theme swap, so a smooth color transition
-                // on each card visibly trails the rest of the UI (header,
-                // file tree, diff body) which snap instantly. Hover bg is
-                // snappy enough without an interpolated transition.
-                className="focus-visible:ring-ring flex w-full cursor-pointer items-start gap-2 border-b border-[var(--diffshub-card-border,rgb(0_0_0_/_0.1))] bg-[var(--diffshub-card-bg,var(--color-card))] p-3 text-left text-sm outline-none first:rounded-t-lg last:rounded-b-lg last:border-b-0 hover:bg-[var(--diffshub-card-hover-bg,var(--color-muted))] focus-visible:ring-2 dark:border-[var(--diffshub-card-border,rgb(255_255_255_/_0.15))]"
-                onClick={(event) =>
-                  handleRowClick(event, () => onSelectComment?.(comment))
-                }
-              >
-                <CommentAuthorAvatar seed={comment.author} className="size-5" />
-                <div className="flex flex-col items-start gap-0.5 select-text">
-                  <div className="text-muted-foreground flex gap-1">
-                    {comment.author} commented on{' '}
-                    <span
-                      className={cn(
-                        getCommentLineClassName(comment.side, comment.lineType),
-                        'font-medium'
-                      )}
-                    >
-                      {getCommentLineLabel(
-                        comment.side,
-                        comment.lineNumber,
-                        comment.lineType
-                      )}
-                    </span>
+            {section.comments.map((entry) => {
+              const { comment, lineType } = entry;
+              const range =
+                comment.anchor.kind === 'line' ? comment.anchor.range : null;
+              const side = range?.endSide ?? range?.side ?? 'additions';
+              return (
+                <button
+                  key={comment.id}
+                  type="button"
+                  // Card surface, hover, and border come from the themed
+                  // chrome (set on the sidebar wrapper) so cards stay
+                  // on-palette for mixed-light/dark themes like slack-ochin
+                  // (light-typed but uses a dark navy sidebar). The
+                  // hardcoded fallbacks cover the brief window before the
+                  // Shiki theme resolves on first render.
+                  // No `transition-colors` here: the bg / border / text
+                  // colors are driven by CSS variables that flip the entire
+                  // chrome on every theme swap, so a smooth color transition
+                  // on each card visibly trails the rest of the UI (header,
+                  // file tree, diff body) which snap instantly. Hover bg is
+                  // snappy enough without an interpolated transition.
+                  className="focus-visible:ring-ring flex w-full cursor-pointer items-start gap-2 border-b border-[var(--diffshub-card-border,rgb(0_0_0_/_0.1))] bg-[var(--diffshub-card-bg,var(--color-card))] p-3 text-left text-sm outline-none first:rounded-t-lg last:rounded-b-lg last:border-b-0 hover:bg-[var(--diffshub-card-hover-bg,var(--color-muted))] focus-visible:ring-2 dark:border-[var(--diffshub-card-border,rgb(255_255_255_/_0.15))]"
+                  onClick={(event) =>
+                    handleRowClick(event, () => onSelectComment?.(entry))
+                  }
+                >
+                  <CommentAuthorAvatar
+                    name={comment.author?.login ?? 'Deleted account'}
+                    src={comment.author?.avatarUrl}
+                    className="size-5"
+                  />
+                  <div className="flex flex-col items-start gap-0.5 select-text">
+                    <div className="text-muted-foreground flex gap-1">
+                      {comment.author?.login ?? 'Deleted account'} commented on{' '}
+                      <span
+                        className={cn(
+                          getCommentLineClassName(side, lineType),
+                          'font-medium'
+                        )}
+                      >
+                        {range == null
+                          ? 'this file'
+                          : getCommentLineLabel(side, range.end, lineType)}
+                      </span>
+                    </div>
+                    <p className="text-foreground w-full break-words whitespace-pre-wrap">
+                      {comment.body}
+                    </p>
                   </div>
-                  <p className="text-foreground w-full break-words whitespace-pre-wrap">
-                    {comment.message}
-                  </p>
-                </div>
-              </button>
-            ))}
+                </button>
+              );
+            })}
           </div>
         </section>
       ))}
