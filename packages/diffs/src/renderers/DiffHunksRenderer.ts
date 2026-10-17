@@ -1005,13 +1005,11 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       result: massiveDiff ? undefined : cache?.result,
       renderRange: undefined,
     };
-    if (
-      !this.editSessionActive &&
-      this.workerManager?.isWorkingPool() === true
-    ) {
+    const workerManager = this.getHighlightWorkerManager(diff);
+    if (workerManager != null) {
       if (this.renderCache.result == null && !massiveDiff) {
         // We should only kick off a preload of the AST if we have a WorkerPool
-        this.workerManager.highlightDiffAST(this, this.diff);
+        workerManager.highlightDiffAST(this, this.diff);
       }
     }
     // Lets attempt to get the highlighter/languages ready immediately
@@ -1023,6 +1021,18 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
         }
       });
     }
+  }
+
+  // Returns the pool when there's a valid worker AND we should use it
+  private getHighlightWorkerManager(
+    diff: FileDiffMetadata
+  ): WorkerPoolManager | undefined {
+    const { editSessionActive, workerManager } = this;
+    return !editSessionActive &&
+      workerManager?.isWorkingPool() === true &&
+      !workerManager.shouldHighlightOnMainThread(diff)
+      ? workerManager
+      : undefined;
   }
 
   private getLocalHighlightTheme(): RenderDiffOptions['theme'] {
@@ -1128,7 +1138,8 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     if (forcePlainText) {
       return (
         (renderCache.result == null && renderCache.hydrated !== true) ||
-        this.workerManager?.isWorkingPool() === true ||
+        (this.workerManager?.isWorkingPool() === true &&
+          !this.workerManager.shouldHighlightOnMainThread(diff)) ||
         (this.highlighter != null &&
           areThemesAttached(options.theme, this.highlighter))
       );
@@ -1140,10 +1151,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       return true;
     }
 
-    if (
-      !this.editSessionActive &&
-      this.workerManager?.isWorkingPool() === true
-    ) {
+    if (this.getHighlightWorkerManager(diff) != null) {
       return !renderCache.highlighted;
     }
 
@@ -1195,10 +1203,8 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       this.renderCache.renderRange,
       renderRange
     );
-    if (
-      !this.editSessionActive &&
-      this.workerManager?.isWorkingPool() === true
-    ) {
+    const workerManager = this.getHighlightWorkerManager(diff);
+    if (workerManager != null) {
       // Hydration has highlighted DOM but no local AST. Keep that DOM until
       // its corresponding worker result is ready.
       const preserveHydratedContent =
@@ -1223,7 +1229,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
           newRenderRange ||
           forceHighlight
         ) {
-          this.renderCache.result = this.workerManager.getPlainDiffAST(
+          this.renderCache.result = workerManager.getPlainDiffAST(
             diff,
             renderRange.startingLine,
             renderRange.totalLines,
@@ -1246,7 +1252,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
         hasContent &&
         (!this.renderCache.highlighted || forceHighlight)
       ) {
-        this.workerManager.highlightDiffAST(this, diff);
+        workerManager.highlightDiffAST(this, diff);
       }
     } else {
       this.computedLangs = getDiffLanguages(diff);

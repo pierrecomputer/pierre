@@ -515,6 +515,69 @@ describe('WorkerPoolManager cache priming', () => {
   });
 });
 
+describe('WorkerPoolManager main-thread threshold', () => {
+  test('routes files and diffs by character count against the threshold', async () => {
+    const file = createCacheableFile();
+    const diff = createCacheableDiff();
+    const diffCharacters =
+      diff.deletionCharacterCount + diff.additionCharacterCount;
+    const unset = await createInitializedManager();
+    const atFile = await createInitializedManager(
+      {},
+      { mainThreadMaxCharacters: file.contents.length }
+    );
+    const belowDiff = await createInitializedManager(
+      {},
+      { mainThreadMaxCharacters: diffCharacters - 1 }
+    );
+    try {
+      expect(unset.manager.shouldHighlightOnMainThread(file)).toBe(false);
+      expect(unset.manager.shouldHighlightOnMainThread(diff)).toBe(false);
+
+      expect(atFile.manager.shouldHighlightOnMainThread(file)).toBe(true);
+      expect(
+        atFile.manager.shouldHighlightOnMainThread({
+          ...file,
+          contents: `${file.contents} `,
+        })
+      ).toBe(false);
+
+      // Diffs count both sides, so one character under their sum routes the
+      // diff to a worker even though each side alone fits.
+      expect(belowDiff.manager.shouldHighlightOnMainThread(diff)).toBe(false);
+      expect(
+        belowDiff.manager.shouldHighlightOnMainThread({
+          ...diff,
+          additionCharacterCount: diff.additionCharacterCount - 1,
+        })
+      ).toBe(true);
+    } finally {
+      unset.manager.terminate();
+      atFile.manager.terminate();
+      belowDiff.manager.terminate();
+    }
+  });
+
+  test('drops shared results rendered with outdated options', async () => {
+    const { manager } = await createInitializedManager();
+    try {
+      const file = createCacheableFile();
+      const result = { code: [], themeStyles: '', baseThemeType: undefined };
+      const options = manager.getFileRenderOptions();
+      manager.setFileResultCache(file.cacheKey, {
+        result,
+        options: { ...options, tokenizeMaxLineLength: 5 },
+      });
+      expect(manager.getFileResultCache(file)).toBeUndefined();
+
+      manager.setFileResultCache(file.cacheKey, { result, options });
+      expect(manager.getFileResultCache(file)).toEqual({ result, options });
+    } finally {
+      manager.terminate();
+    }
+  });
+});
+
 function createCacheableDiff(): FileDiffMetadata {
   const oldFile = createCacheableFile('file:old', 'const value = "old";\n');
   const newFile = createCacheableFile('file:new', 'const value = "new";\n');

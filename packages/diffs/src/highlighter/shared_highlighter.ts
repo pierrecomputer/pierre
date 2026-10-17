@@ -103,6 +103,7 @@ export function isHighlighterLoaded(): boolean {
 interface GetHighlighterIfLoadedProps {
   theme?: DiffsThemeNames | ThemesType;
   lang?: SupportedLanguages;
+  langs?: SupportedLanguages[];
 }
 
 /**
@@ -111,6 +112,7 @@ interface GetHighlighterIfLoadedProps {
 export function getHighlighterIfLoaded({
   theme,
   lang,
+  langs,
 }: GetHighlighterIfLoadedProps = {}): DiffsHighlighter | undefined {
   dropDisposedHighlighter();
   const instance = highlighter;
@@ -118,7 +120,11 @@ export function getHighlighterIfLoaded({
     instance == null ||
     'then' in instance ||
     (theme != null && !areThemesAttached(theme, instance)) ||
-    (lang != null && !instance.hasLoadedLanguages([lang]))
+    ((lang != null || langs != null) &&
+      !instance.hasLoadedLanguages([
+        ...(lang != null ? [lang] : []),
+        ...(langs ?? []),
+      ]))
   ) {
     return undefined;
   }

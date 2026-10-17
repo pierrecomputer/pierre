@@ -106,6 +106,9 @@ function createPrimeWorkerManager(): {
     isWorkingPool() {
       return true;
     },
+    shouldHighlightOnMainThread() {
+      return false;
+    },
     primeDiffHighlightCache(fileDiff: FileDiffMetadata) {
       primedDiffs.push(fileDiff);
       return primeDeferred.promise;
@@ -708,6 +711,9 @@ describe('FileDiff partial hydration', () => {
         },
         isWorkingPool() {
           return true;
+        },
+        shouldHighlightOnMainThread() {
+          return false;
         },
         primeDiffHighlightCache() {
           return Promise.resolve();

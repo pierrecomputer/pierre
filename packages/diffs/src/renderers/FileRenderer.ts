@@ -354,13 +354,11 @@ export class FileRenderer<LAnnotation = undefined> {
       // FIXME(amadeus): Add support for renderRanges
       renderRange: undefined,
     };
-    if (
-      !this.editSessionActive &&
-      this.workerManager?.isWorkingPool() === true
-    ) {
+    const workerManager = this.getHighlightWorkerManager(file);
+    if (workerManager != null) {
       if (this.renderCache.result == null && !massiveFile) {
         // We should only kick off a preload of the AST if we have a WorkerPool
-        this.workerManager.highlightFileAST(this, file);
+        workerManager.highlightFileAST(this, file);
       }
     }
     // Lets attempt to get the highlighter/languages ready immediately
@@ -372,6 +370,18 @@ export class FileRenderer<LAnnotation = undefined> {
         }
       });
     }
+  }
+
+  // Returns the pool when there's a valid worker AND we should use it
+  private getHighlightWorkerManager(
+    file: FileContents
+  ): WorkerPoolManager | undefined {
+    const { editSessionActive, workerManager } = this;
+    return !editSessionActive &&
+      workerManager?.isWorkingPool() === true &&
+      !workerManager.shouldHighlightOnMainThread(file)
+      ? workerManager
+      : undefined;
   }
 
   private getLocalHighlightTheme(): RenderFileOptions['theme'] {
@@ -474,7 +484,8 @@ export class FileRenderer<LAnnotation = undefined> {
     if (forcePlainText) {
       return (
         (renderCache.result == null && renderCache.hydrated !== true) ||
-        this.workerManager?.isWorkingPool() === true ||
+        (this.workerManager?.isWorkingPool() === true &&
+          !this.workerManager.shouldHighlightOnMainThread(file)) ||
         (this.highlighter != null &&
           areThemesAttached(options.theme, this.highlighter))
       );
@@ -486,10 +497,7 @@ export class FileRenderer<LAnnotation = undefined> {
       return true;
     }
 
-    if (
-      !this.editSessionActive &&
-      this.workerManager?.isWorkingPool() === true
-    ) {
+    if (this.getHighlightWorkerManager(file) != null) {
       return !renderCache.highlighted;
     }
 
@@ -745,10 +753,8 @@ export class FileRenderer<LAnnotation = undefined> {
       this.renderCache.renderRange,
       renderRange
     );
-    if (
-      !this.editSessionActive &&
-      this.workerManager?.isWorkingPool() === true
-    ) {
+    const workerManager = this.getHighlightWorkerManager(file);
+    if (workerManager != null) {
       // Hydration has highlighted DOM but no local AST. Keep that DOM until
       // its corresponding worker result is ready.
       const preserveHydratedContent =
@@ -773,7 +779,7 @@ export class FileRenderer<LAnnotation = undefined> {
           newRenderRange ||
           forceHighlight
         ) {
-          this.renderCache.result = this.workerManager.getPlainFileAST(
+          this.renderCache.result = workerManager.getPlainFileAST(
             file,
             renderRange.startingLine,
             renderRange.totalLines,
@@ -788,7 +794,7 @@ export class FileRenderer<LAnnotation = undefined> {
         hasContent &&
         (!this.renderCache.highlighted || forceHighlight)
       ) {
-        this.workerManager.highlightFileAST(this, file);
+        workerManager.highlightFileAST(this, file);
       }
     } else {
       this.computedLang = file.lang ?? getFiletypeFromFileName(file.name);
