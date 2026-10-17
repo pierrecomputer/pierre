@@ -96,11 +96,27 @@ export type WorkerRequest =
   | InitializeWorkerRequest
   | SetRenderOptionsWorkerRequest;
 
+// Workers send each highlighted line as a JSON string. Structured cloning one
+// object per hast node costs far more on both the worker and the main thread.
+export interface EncodedThemedFileResult extends Omit<
+  ThemedFileResult,
+  'code'
+> {
+  code: string[];
+}
+
+export interface EncodedThemedDiffResult extends Omit<
+  ThemedDiffResult,
+  'code'
+> {
+  code: { deletionLines: string[]; additionLines: string[] };
+}
+
 export interface RenderFileSuccessResponse {
   type: 'success';
   requestType: 'file';
   id: WorkerRequestId;
-  result: ThemedFileResult;
+  result: EncodedThemedFileResult;
   options: RenderFileOptions;
   sentAt: number;
 }
@@ -109,7 +125,7 @@ export interface RenderDiffSuccessResponse {
   type: 'success';
   requestType: 'diff';
   id: WorkerRequestId;
-  result: ThemedDiffResult;
+  result: EncodedThemedDiffResult;
   options: RenderDiffOptions;
   sentAt: number;
 }

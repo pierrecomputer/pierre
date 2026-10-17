@@ -1,9 +1,17 @@
 import type { ElementContent } from 'hast';
 
+import type { ThemedDiffResult, ThemedFileResult } from '../src/types';
+import {
+  encodeDiffResult,
+  encodeFileResult,
+} from '../src/worker/encodedResults';
 import type {
   InitializeWorkerRequest,
   RenderDiffRequest,
+  RenderDiffSuccessResponse,
   RenderFileRequest,
+  RenderFileSuccessResponse,
+  RenderSuccessResponse,
   SetRenderOptionsWorkerRequest,
   WorkerInitializationRenderOptions,
   WorkerPoolOptions,
@@ -62,6 +70,13 @@ export function installAnimationFramePolyfill(): () => void {
     }
   };
 }
+
+// Tests respond with highlighted lines as hast nodes; `respond` encodes them
+// the way the real worker does before posting.
+type TestWorkerResponse =
+  | Exclude<WorkerResponse, RenderSuccessResponse>
+  | (Omit<RenderFileSuccessResponse, 'result'> & { result: ThemedFileResult })
+  | (Omit<RenderDiffSuccessResponse, 'result'> & { result: ThemedDiffResult });
 
 // A plain object substituted for a browser Worker through `workerFactory`.
 // Records posted requests by type and delivers responses to the manager's
@@ -166,9 +181,22 @@ export class TestWorker {
     });
   }
 
-  respond(response: WorkerResponse): void {
+  respond(response: TestWorkerResponse): void {
+    const data: WorkerResponse =
+      response.type !== 'success'
+        ? response
+        : response.requestType === 'file'
+          ? { ...response, result: encodeFileResult(response.result) }
+          : response.requestType === 'diff'
+            ? { ...response, result: encodeDiffResult(response.result) }
+            : response;
+    this.deliver(data);
+  }
+
+  // Delivers a response exactly as given, without encoding highlighted lines.
+  deliver(data: WorkerResponse): void {
     for (const listener of this.messageListeners) {
-      listener({ data: response } as MessageEvent<WorkerResponse>);
+      listener({ data } as MessageEvent<WorkerResponse>);
     }
   }
 
