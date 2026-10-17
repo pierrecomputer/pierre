@@ -190,6 +190,11 @@ export class TestWorker {
           : response.requestType === 'diff'
             ? { ...response, result: encodeDiffResult(response.result) }
             : response;
+    this.deliver(data);
+  }
+
+  // Delivers a response exactly as given, without encoding highlighted lines.
+  deliver(data: WorkerResponse): void {
     for (const listener of this.messageListeners) {
       listener({ data } as MessageEvent<WorkerResponse>);
     }

@@ -8,6 +8,7 @@ import {
   spyOn,
   test,
 } from 'bun:test';
+import type { ElementContent } from 'hast';
 import { bundledLanguages } from 'shiki';
 
 import { parseDiffFromFile, registerCustomLanguage } from '../src';
@@ -27,6 +28,7 @@ import {
 import type {
   DiffRendererInstance,
   RenderFileRequest,
+  WorkerResponse,
 } from '../src/worker/types';
 import { createDeferred } from './testUtils';
 import {
@@ -435,6 +437,34 @@ describe('WorkerPoolManager cache priming', () => {
         manager.getFileResultCache({ ...file, cacheKey: dispatchedCacheKey })
       ).toBeDefined();
       expect(manager.getFileResultCache(file)).toBeUndefined();
+    } finally {
+      manager.terminate();
+    }
+  });
+
+  test('accepts hast lines from a worker that predates line encoding', async () => {
+    const { manager, worker } = await createInitializedManager();
+    try {
+      const file = createCacheableFile();
+      const prime = manager.primeFileHighlightCache(file);
+      const request = await worker.waitForFileRequest();
+      const line: ElementContent = {
+        type: 'element',
+        tagName: 'div',
+        properties: { 'data-line': 1 },
+        children: [{ type: 'text', value: 'legacy' }],
+      };
+      worker.deliver({
+        type: 'success',
+        requestType: 'file',
+        id: request.id,
+        result: { code: [line], themeStyles: '', baseThemeType: undefined },
+        options: manager.getFileRenderOptions(),
+        sentAt: Date.now(),
+      } as unknown as WorkerResponse);
+      await withTimeout(prime);
+
+      expect(manager.getFileResultCache(file)?.result.code).toEqual([line]);
     } finally {
       manager.terminate();
     }

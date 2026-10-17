@@ -47,6 +47,10 @@ function encodeLines(lines: ElementContent[]): string[] {
 // lines that actually render pay for parsing. Accessors on a plain array keep
 // cached results cloneable with structuredClone.
 function decodeLines(encodedLines: string[]): ElementContent[] {
+  // A worker copied from an older release still sends hast nodes.
+  if (typeof encodedLines[0] !== 'string') {
+    return encodedLines as unknown as ElementContent[];
+  }
   const lines = new Array<ElementContent>(encodedLines.length);
   for (let index = 0; index < encodedLines.length; index++) {
     const store = (line: ElementContent) => {
