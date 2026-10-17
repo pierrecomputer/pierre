@@ -16,6 +16,7 @@ import type {
 import { replaceCustomExtensions } from '../utils/getFiletypeFromFileName';
 import { renderDiffWithHighlighter } from '../utils/renderDiffWithHighlighter';
 import { renderFileWithHighlighter } from '../utils/renderFileWithHighlighter';
+import { encodeDiffResult, encodeFileResult } from './encodedResults';
 import type {
   InitializeSuccessResponse,
   InitializeWorkerRequest,
@@ -224,7 +225,7 @@ function sendFileSuccess(
     type: 'success',
     requestType: 'file',
     id,
-    result,
+    result: encodeFileResult(result),
     options,
     sentAt: Date.now(),
   } satisfies RenderFileSuccessResponse);
@@ -239,7 +240,7 @@ function sendDiffSuccess(
     type: 'success',
     requestType: 'diff',
     id,
-    result,
+    result: encodeDiffResult(result),
     options,
     sentAt: Date.now(),
   } satisfies RenderDiffSuccessResponse);

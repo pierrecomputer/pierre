@@ -41,6 +41,7 @@ import { isDiffPlainText } from '../utils/isDiffPlainText';
 import { isFilePlainText } from '../utils/isFilePlainText';
 import { renderDiffWithHighlighter } from '../utils/renderDiffWithHighlighter';
 import { renderFileWithHighlighter } from '../utils/renderFileWithHighlighter';
+import { decodeDiffResult, decodeFileResult } from './encodedResults';
 import {
   isHandledWorkerPoolError,
   markWorkerErrorReported,
@@ -1109,13 +1110,14 @@ export class WorkerPoolManager {
             if (task.type !== 'file') {
               throw new Error('handleWorkerMessage: task/response dont match');
             }
-            const { result, options } = response;
+            const { options } = response;
             if (
               !this.isCurrentRenderTask(task) ||
               !areFileRenderOptionsEqual(options, this.getFileRenderOptions())
             ) {
               throw IGNORE_RESPONSE;
             }
+            const result = decodeFileResult(response.result);
             const { request } = task;
             this.syncCustomExtensionVersion(managedWorker, request);
             if (task.cacheKeyAtDispatch != null) {
@@ -1129,13 +1131,14 @@ export class WorkerPoolManager {
             if (task.type !== 'diff') {
               throw new Error('handleWorkerMessage: task/response dont match');
             }
-            const { result, options } = response;
+            const { options } = response;
             if (
               !this.isCurrentRenderTask(task) ||
               !areDiffRenderOptionsEqual(options, this.getDiffRenderOptions())
             ) {
               throw IGNORE_RESPONSE;
             }
+            const result = decodeDiffResult(response.result);
             const { request } = task;
             this.syncCustomExtensionVersion(managedWorker, request);
             if (task.cacheKeyAtDispatch != null) {
