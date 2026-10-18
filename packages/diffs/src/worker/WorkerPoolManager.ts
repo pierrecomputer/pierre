@@ -490,8 +490,6 @@ export class WorkerPoolManager {
               return;
             }
             this.initialized = true;
-            this.diffCache.clear();
-            this.fileCache.clear();
             this.drainQueue();
             this.queueBroadcastStateChanges();
             resolve();

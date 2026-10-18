@@ -19,6 +19,7 @@ import type {
   FileContents,
   FileDiffMetadata,
 } from '../src/types';
+import { getThemes } from '../src/utils/getThemes';
 import {
   isHandledWorkerPoolError,
   WorkerPoolTerminatedError,
@@ -574,6 +575,37 @@ describe('WorkerPoolManager main-thread threshold', () => {
 
     expect(await getRejection(prime)).toBeInstanceOf(WorkerPoolTerminatedError);
     expect(manager.getFileResultCache(file)).toBeUndefined();
+  });
+
+  test('keeps a main-thread prime that completes while workers initialize', async () => {
+    const { initialization, manager, worker } = createInitializingManager(
+      {},
+      { mainThreadMaxCharacters: 1000 }
+    );
+    try {
+      await sharedHighlighter.getSharedHighlighter({
+        themes: getThemes(manager.getFileRenderOptions().theme),
+        langs: ['typescript'],
+        preferredHighlighter: manager.getPreferredHighlighter(),
+      });
+      const file = createCacheableFile('main-thread:during-initialize');
+      const prime = manager.primeFileHighlightCache(file);
+      expect(manager.getFileResultCache(file)).toBeDefined();
+      await withTimeout(prime);
+
+      const request = await worker.waitForInitializeRequest();
+      worker.respond({
+        type: 'success',
+        requestType: 'initialize',
+        id: request.id,
+        sentAt: Date.now(),
+      });
+      await withTimeout(initialization);
+
+      expect(manager.getFileResultCache(file)).toBeDefined();
+    } finally {
+      manager.terminate();
+    }
   });
 
   test('drops shared results rendered with outdated options', async () => {
