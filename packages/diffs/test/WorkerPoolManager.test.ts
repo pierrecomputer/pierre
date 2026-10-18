@@ -22,6 +22,7 @@ import type {
 import { getThemes } from '../src/utils/getThemes';
 import {
   isHandledWorkerPoolError,
+  WorkerPoolTaskCanceledError,
   WorkerPoolTerminatedError,
   WorkerPoolWorkerError,
 } from '../src/worker/errors';
@@ -564,7 +565,8 @@ describe('WorkerPoolManager main-thread threshold', () => {
       {},
       { mainThreadMaxCharacters: 1000 }
     );
-    // Python is not loaded, so this prime has to wait for its grammar.
+    // With no highlighter loaded, this prime has to wait for its grammar.
+    await disposeHighlighter();
     const file: FileContents = {
       name: 'prime.py',
       contents: 'value = [1, 2]\n',
@@ -575,6 +577,31 @@ describe('WorkerPoolManager main-thread threshold', () => {
 
     expect(await getRejection(prime)).toBeInstanceOf(WorkerPoolTerminatedError);
     expect(manager.getFileResultCache(file)).toBeUndefined();
+  });
+
+  test('cancels a main-thread prime whose highlighter is disposed while loading', async () => {
+    const { manager } = await createInitializedManager(
+      {},
+      { mainThreadMaxCharacters: 1000 }
+    );
+    try {
+      // With no highlighter loaded, this prime has to wait for its grammar.
+      await disposeHighlighter();
+      const file: FileContents = {
+        name: 'prime.py',
+        contents: 'value = [1, 2]\n',
+        cacheKey: 'main-thread:disposed',
+      };
+      const prime = manager.primeFileHighlightCache(file);
+      await disposeHighlighter();
+
+      expect(await getRejection(prime)).toBeInstanceOf(
+        WorkerPoolTaskCanceledError
+      );
+      expect(manager.getFileResultCache(file)).toBeUndefined();
+    } finally {
+      manager.terminate();
+    }
   });
 
   test('keeps a main-thread prime that completes while workers initialize', async () => {

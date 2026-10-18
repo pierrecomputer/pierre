@@ -898,8 +898,7 @@ export class WorkerPoolManager {
   // Runs `highlightAndCacheResult` with the main-thread highlighter for primes
   // within the main-thread threshold. It runs synchronously when the
   // highlighter already has the theme and languages, and after loading them
-  // otherwise. A load that outlives terminate() rejects like a worker prime
-  // instead of writing into the cleared cache.
+  // otherwise.
   private primeHighlightCacheOnMainThread(
     langs: SupportedLanguages[],
     theme: WorkerRenderingOptions['theme'],
@@ -924,7 +923,9 @@ export class WorkerPoolManager {
       if (!this.isCurrentLifecycle(lifecycleGeneration)) {
         throw new WorkerPoolTerminatedError();
       }
-      highlightAndCacheIfLoaded();
+      if (!highlightAndCacheIfLoaded()) {
+        throw new WorkerPoolTaskCanceledError();
+      }
     });
   }
 
