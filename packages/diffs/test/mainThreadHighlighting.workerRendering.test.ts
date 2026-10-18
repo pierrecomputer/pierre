@@ -77,6 +77,116 @@ test('File highlights a file within the threshold on its first render', async ()
   }
 });
 
+// Recreates the shared highlighter, leaving renderers holding a disposed one.
+async function recreateHighlighter(): Promise<void> {
+  await disposeHighlighter();
+  await getSharedHighlighter({
+    themes: ['pierre-dark'],
+    langs: ['typescript'],
+    preferredHighlighter: 'shiki-js',
+  });
+}
+
+// Annotation rows live in the shadow DOM and their content in the light DOM;
+// both must describe the same rendered content.
+function getAnnotationSlots(container: HTMLElement) {
+  return {
+    rows: Array.from(
+      container.shadowRoot?.querySelectorAll('slot[name^="annotation-"]') ?? [],
+      (slot) => slot.getAttribute('name')
+    ),
+    content: Array.from(
+      container.querySelectorAll('[slot^="annotation-"]'),
+      (element) => element.getAttribute('slot')
+    ),
+  };
+}
+
+function renderAnnotation(annotation: { metadata: string }): HTMLElement {
+  const element = document.createElement('span');
+  element.textContent = annotation.metadata;
+  return element;
+}
+
+test('File keeps annotations with the rendered file after the highlighter is recreated', async () => {
+  const { manager, container, cleanup } = await createFixture();
+  const instance = new File<string>(
+    { disableErrorHandling: true, theme: 'pierre-dark', renderAnnotation },
+    manager
+  );
+  try {
+    instance.render({
+      file: {
+        name: 'a.ts',
+        contents: 'const alpha = 1;\nconst two = 2;\n',
+        cacheKey: 'recreated:a',
+      },
+      fileContainer: container,
+      lineAnnotations: [{ lineNumber: 1, metadata: 'A' }],
+    });
+    await recreateHighlighter();
+    instance.render({
+      file: {
+        name: 'b.ts',
+        contents: 'const beta = 2;\nconst other = 3;\n',
+        cacheKey: 'recreated:b',
+      },
+      fileContainer: container,
+      lineAnnotations: [{ lineNumber: 2, metadata: 'B' }],
+    });
+    await wait();
+
+    expect(getAnnotationSlots(container)).toEqual({
+      rows: ['annotation-2'],
+      content: ['annotation-2'],
+    });
+  } finally {
+    instance.cleanUp();
+    cleanup();
+  }
+});
+
+test('FileDiff keeps annotations with the rendered diff after the highlighter is recreated', async () => {
+  const { manager, container, cleanup } = await createFixture();
+  const instance = new FileDiff<string>(
+    { disableErrorHandling: true, theme: 'pierre-dark', renderAnnotation },
+    manager
+  );
+  const createDiff = (cacheKey: string, contents: string) =>
+    parseDiffFromFile(
+      { name: 'a.ts', contents: 'const old = 0;\n', cacheKey: 'recreated:old' },
+      { name: 'a.ts', contents, cacheKey }
+    );
+  try {
+    instance.render({
+      fileDiff: createDiff(
+        'recreated:diff-a',
+        'const alpha = 1;\nconst two = 2;\n'
+      ),
+      fileContainer: container,
+      lineAnnotations: [{ side: 'additions', lineNumber: 1, metadata: 'A' }],
+    });
+    await recreateHighlighter();
+    instance.render({
+      fileDiff: createDiff(
+        'recreated:diff-b',
+        'const beta = 2;\nconst other = 3;\n'
+      ),
+      fileContainer: container,
+      lineAnnotations: [{ side: 'additions', lineNumber: 2, metadata: 'B' }],
+    });
+    await wait();
+
+    expect(getAnnotationSlots(container)).toEqual({
+      rows: ['annotation-additions-2'],
+      content: ['annotation-additions-2'],
+    });
+  } finally {
+    instance.cleanUp();
+    cleanup();
+  }
+});
+
 test('File primes a file within the threshold synchronously', async () => {
   const { manager, worker, cleanup } = await createFixture();
   const instance = new File({ theme: 'pierre-dark' }, manager);

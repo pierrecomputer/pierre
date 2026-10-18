@@ -118,7 +118,6 @@ let instanceId = -1;
 export class FileRenderer<LAnnotation = undefined> {
   readonly __id: string = `file-renderer:${++instanceId}`;
 
-  private highlighter: DiffsHighlighter | undefined;
   // The latest file requested by the component. The render cache may
   // intentionally keep displaying an older highlighted file while this one
   // is highlighted in the background.
@@ -156,13 +155,7 @@ export class FileRenderer<LAnnotation = undefined> {
     ) => string = getLineAnnotationName,
     private onRenderUpdate?: () => unknown,
     private workerManager?: WorkerPoolManager | undefined
-  ) {
-    if (workerManager?.isWorkingPool() !== true) {
-      this.highlighter = getHighlighterIfLoaded({
-        theme: options.theme ?? DEFAULT_THEMES,
-      });
-    }
-  }
+  ) {}
 
   public setOptions(options: FileRendererOptions): void {
     this.options = options;
@@ -319,7 +312,6 @@ export class FileRenderer<LAnnotation = undefined> {
       this.lineCache = undefined;
       this.textDocumentCache = new WeakMap();
     }
-    this.highlighter = undefined;
     this.workerManager?.cleanUpTasks(this);
     this.file = undefined;
   }
@@ -332,9 +324,6 @@ export class FileRenderer<LAnnotation = undefined> {
 
   public hydrate(file: FileContents): void {
     this.file = file;
-    this.highlighter = getHighlighterIfLoaded({
-      theme: this.getLocalHighlightTheme(),
-    });
     const { options } = this.getRenderOptions(file);
     const lines = this.getOrCreateLineCache(file);
     const massiveFile = isFileMassive(
@@ -362,7 +351,9 @@ export class FileRenderer<LAnnotation = undefined> {
       }
     }
     // Lets attempt to get the highlighter/languages ready immediately
-    else if (this.highlighter == null) {
+    else if (
+      getHighlighterIfLoaded({ theme: this.getLocalHighlightTheme() }) == null
+    ) {
       this.computedLang = file.lang ?? getFiletypeFromFileName(file.name);
       void this.initializeHighlighter().catch((error: unknown) => {
         if (!(error instanceof HighlighterDisposedError)) {
@@ -486,8 +477,7 @@ export class FileRenderer<LAnnotation = undefined> {
         (renderCache.result == null && renderCache.hydrated !== true) ||
         (this.workerManager?.isWorkingPool() === true &&
           !this.workerManager.shouldHighlightOnMainThread(file)) ||
-        (this.highlighter != null &&
-          areThemesAttached(options.theme, this.highlighter))
+        getHighlighterIfLoaded({ theme: options.theme }) != null
       );
     }
     // Hydration has highlighted DOM without a local AST. It is still active
@@ -501,10 +491,7 @@ export class FileRenderer<LAnnotation = undefined> {
       return !renderCache.highlighted;
     }
 
-    return (
-      this.highlighter != null &&
-      areThemesAttached(options.theme, this.highlighter)
-    );
+    return getHighlighterIfLoaded({ theme: options.theme }) != null;
   }
 
   public getOrCreateLineCache(file: FileContents): string[] {
@@ -746,7 +733,6 @@ export class FileRenderer<LAnnotation = undefined> {
       !hasContent ||
       isFilePlainText(file) ||
       isFileMassive(lines.length, this.getTokenizeMaxLength());
-    this.highlighter = getHighlighterIfLoaded();
     const canRenderFile = this.canRenderFile(file, options, forcePlainText);
     const newContent = !areFileTargetsEqual(file, this.renderCache.file);
     const newRenderRange = !areRenderRangesEqual(
@@ -798,18 +784,18 @@ export class FileRenderer<LAnnotation = undefined> {
       }
     } else {
       this.computedLang = file.lang ?? getFiletypeFromFileName(file.name);
+      const highlighter = getHighlighterIfLoaded();
       const hasThemes =
-        this.highlighter != null &&
-        areThemesAttached(options.theme, this.highlighter);
+        highlighter != null && areThemesAttached(options.theme, highlighter);
       const hasLangs =
-        this.highlighter != null &&
-        areLanguagesAttached(this.computedLang, this.highlighter);
+        highlighter != null &&
+        areLanguagesAttached(this.computedLang, highlighter);
       const canHighlight = !forcePlainText && hasLangs;
       const lazyLineAST = Number.isFinite(renderRange.totalLines);
 
       if (
         canRenderFile &&
-        this.highlighter != null &&
+        highlighter != null &&
         hasThemes &&
         (forceHighlight ||
           forcePlainText ||
@@ -818,7 +804,7 @@ export class FileRenderer<LAnnotation = undefined> {
       ) {
         const { result, options } = this.renderFileWithHighlighter(
           file,
-          this.highlighter,
+          highlighter,
           forcePlainText || !hasLangs,
           lazyLineAST
         );
@@ -877,21 +863,22 @@ export class FileRenderer<LAnnotation = undefined> {
     this.computedLang = forcePlainText
       ? 'text'
       : (file.lang ?? getFiletypeFromFileName(file.name));
+    let highlighter = getHighlighterIfLoaded();
     const hasThemes =
-      this.highlighter != null &&
-      areThemesAttached(this.getLocalHighlightTheme(), this.highlighter);
+      highlighter != null &&
+      areThemesAttached(this.getLocalHighlightTheme(), highlighter);
     const hasLangs =
       forcePlainText ||
-      (this.highlighter != null &&
-        areLanguagesAttached(this.computedLang, this.highlighter));
+      (highlighter != null &&
+        areLanguagesAttached(this.computedLang, highlighter));
     // If we don't have the required langs or themes, then we need to
     // initialize the highlighter to load the appropriate languages and themes
-    if (this.highlighter == null || !hasThemes || !hasLangs) {
-      this.highlighter = await this.initializeHighlighter();
+    if (highlighter == null || !hasThemes || !hasLangs) {
+      highlighter = await this.initializeHighlighter();
     }
     return this.renderFileWithHighlighter(
       file,
-      this.highlighter,
+      highlighter,
       forcePlainText,
       lazyLineAST
     );
@@ -1060,8 +1047,8 @@ export class FileRenderer<LAnnotation = undefined> {
     );
   }
 
-  public async initializeHighlighter(): Promise<DiffsHighlighter> {
-    this.highlighter = await getSharedHighlighter(
+  public initializeHighlighter(): Promise<DiffsHighlighter> {
+    return getSharedHighlighter(
       getHighlighterOptions(this.computedLang, {
         theme: this.getLocalHighlightTheme(),
         preferredHighlighter: resolvePreferredHighlighter(
@@ -1070,7 +1057,6 @@ export class FileRenderer<LAnnotation = undefined> {
         ),
       })
     );
-    return this.highlighter;
   }
 
   public onHighlightSuccess(
