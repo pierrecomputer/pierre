@@ -59,6 +59,18 @@ uncontrolled.
 
 <DocsCodeExample {...resolveMergeConflictExample} />
 
+### canUseWASM [toc-ignore]
+
+Check whether the current environment can run the WebAssembly that the
+`highlights` and `shiki-wasm` backends need. It returns `false` when WebAssembly
+is missing, blocked by a Content Security Policy, or lacks the SIMD support
+`highlights` requires (for example, Safari before 16.4). Use it to fall back to
+`shiki-js` when you select `highlights`. Call it where highlighting runs: in the
+browser for client components, since a server result does not describe the
+browser.
+
+<DocsCodeExample {...canUseWASM} />
+
 ### disposeHighlighter [toc-ignore]
 
 Dispose the shared highlighter instance to free memory. Useful when cleaning up

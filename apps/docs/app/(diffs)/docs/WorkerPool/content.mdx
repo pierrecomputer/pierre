@@ -162,7 +162,9 @@ that file.
 Set `preferredHighlighter` when initializing the pool to choose `'shiki-js'`
 (the default), `'shiki-wasm'`, or `'highlights'`. The portable worker includes
 all backends in its download and initializes the chosen backend. Use the regular
-worker entry with your bundler for lazy backend loading.
+worker entry with your bundler for lazy backend loading. When you choose
+`'highlights'`, use [`canUseWASM()`](#utilities-canusewasm) to fall back to
+`'shiki-js'` in browsers that can't run it.
 
 #### React
 
@@ -213,7 +215,9 @@ that a worker round trip usually costs more than the highlighting itself. Start
 with `mainThreadMaxCharacters: 100_000`, which should cover most files. If you
 tune the limit, aim to keep most or all main-thread highlighting under about 2ms
 on the devices you support. When the option is unset, every highlight uses a
-worker.
+worker. If you fall back to `'shiki-js'` with
+[`canUseWASM()`](#utilities-canusewasm), leave the option unset for that case so
+Shiki stays in the workers.
 
 ### Worker Errors
 

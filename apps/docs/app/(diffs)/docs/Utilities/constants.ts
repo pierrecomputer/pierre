@@ -236,6 +236,18 @@ registerCustomLanguage('my-lang', () => import('./my-lang.tmLanguage.json'));`,
   options,
 };
 
+export const HELPER_CAN_USE_WASM: PreloadFileOptions<undefined, undefined> = {
+  file: {
+    name: 'canUseWASM.ts',
+    contents: `import { canUseWASM } from '@pierre/diffs';
+
+// 'highlights' and 'shiki-wasm' need WebAssembly. Fall back to
+// 'shiki-js' when the browser lacks it or the page blocks it.
+const preferredHighlighter = canUseWASM() ? 'highlights' : 'shiki-js';`,
+  },
+  options,
+};
+
 export const HELPER_DISPOSE_HIGHLIGHTER: PreloadFileOptions<
   undefined,
   undefined
