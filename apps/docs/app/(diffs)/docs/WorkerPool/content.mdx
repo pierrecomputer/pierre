@@ -18,7 +18,9 @@ applies highlighted output when a worker responds.
   [Highlights](#highlights) usually performs best on the main thread. In our
   benchmarks, a pool made highlighted output appear 1.5–4× later and increased
   main-thread work, though it painted plain text sooner. Measure your own
-  content before adding a pool.
+  content before adding a pool. If you pair Highlights with a pool, we recommend
+  you set [`mainThreadMaxCharacters`](#worker-pool-main-thread-highlighting) so
+  smaller files skip the workers.
 </Notice>
 
 Basic usage differs a bit depending on if you're using React or Vanilla JS APIs,
@@ -195,6 +197,24 @@ To change themes or other render options dynamically, call
 
 <DocsCodeExample {...vanillaUsage} />
 
+### Main-Thread Highlighting
+
+Set `mainThreadMaxCharacters` in the pool options to keep small files and diffs
+on the main thread. Anything at or below the limit skips the workers: it renders
+highlighted immediately when the theme and language are already loaded, and its
+first render may be plain text when either still needs to load. Larger content
+still goes to the workers. Files count all characters in `contents`; diffs count
+the characters on both sides. Main-thread results go into the same
+[render cache](#worker-pool-render-cache) as worker results, and
+`primeFileHighlightCache()` / `primeDiffHighlightCache()` follow the same rule.
+
+We recommend using this with the `'highlights'` backend, which is fast enough
+that a worker round trip usually costs more than the highlighting itself. Start
+with `mainThreadMaxCharacters: 100_000`, which should cover most files. If you
+tune the limit, aim to keep most or all main-thread highlighting under about 2ms
+on the devices you support. When the option is unset, every highlight uses a
+worker.
+
 ### Worker Errors
 
 A worker that cannot start — its script failed to load, or it threw while it
@@ -246,6 +266,10 @@ worker. This works automatically for both React and Vanilla JS APIs.
   against render options — if options like theme or line diff type change, the
   cached result is skipped and re-rendered.
 </Notice>
+
+Results highlighted on the main thread through
+[`mainThreadMaxCharacters`](#worker-pool-main-thread-highlighting) are cached
+the same way.
 
 <DocsCodeExample {...cachingExample} />
 

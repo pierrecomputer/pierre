@@ -423,6 +423,10 @@ new WorkerPoolManager(poolOptions, highlighterOptions)
 //   - onWorkerError?: (event: ErrorEvent | Event, worker: Worker) => void
 //     Called for each worker error instead of logging it with console.error.
 //     Failed initialization switches components to main-thread highlighting.
+//   - mainThreadMaxCharacters?: number (default: unset) - Files and diffs with
+//     at most this many characters highlight on the main thread instead of a
+//     worker. Diffs count both sides. Unset (default behavior) sends every 
+//     highlight to a worker.
 // - highlighterOptions: WorkerInitializationRenderOptions
 //   - theme?: DiffsThemeNames | ThemesType - Theme name or { dark, light } object
 //   - lineDiffType?: 'word' | 'word-alt' | 'word-line' | 'char' | 'none'
@@ -434,7 +438,9 @@ new WorkerPoolManager(poolOptions, highlighterOptions)
 
 // Methods:
 poolManager.initialize()
-// Returns: Promise<void> - Initializes workers (auto-called on first render)
+// Returns: Promise<void> - Resolves when the workers are ready. Startup begins
+// automatically when the manager is constructed; call this to await it, or to
+// start the pool again after terminate()
 
 poolManager.isInitialized()
 // Returns: boolean
@@ -464,8 +470,12 @@ poolManager.highlightDiffAST(fileDiffInstance, diff, options)
 poolManager.getPlainDiffAST(diff, lineDiffType)
 // Returns: ThemedDiffResult | undefined - Sync render with 'text' lang
 
+poolManager.shouldHighlightOnMainThread(fileOrDiff)
+// Returns: boolean - Whether a file or diff is within mainThreadMaxCharacters
+
 poolManager.terminate()
-// Terminates all workers and resets state
+// Terminates all workers and resets state. Components highlight on the main
+// thread until initialize() starts the pool again.
 
 poolManager.getStats()
 // Returns: { totalWorkers, busyWorkers, queuedTasks, pendingTasks }

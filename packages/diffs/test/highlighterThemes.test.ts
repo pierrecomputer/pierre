@@ -9,12 +9,24 @@ import { cleanUpResolvedThemes } from '../src/highlighter/themes/cleanUpResolved
 import { registerCustomTheme } from '../src/highlighter/themes/registerCustomTheme';
 import { customThemes } from '../src/highlighter/themes/themeResolver';
 import type { DiffsTheme } from '../src/highlighter/themes/types';
+import type { HighlightedToken } from '../src/types';
 import { getHighlighterThemeStyles } from '../src/utils/getHighlighterThemeStyles';
 import { renderFileWithHighlighter } from '../src/utils/renderFileWithHighlighter';
 
 // Each test loads its backend fresh: only one highlighter type can be loaded.
 beforeEach(disposeHighlighter);
 afterAll(disposeHighlighter);
+
+// Waits for a line the editor tokenizer delivered through onDeferTokenize.
+async function waitForDeferredLine(
+  deferredLines: Map<number, HighlightedToken[]>,
+  line: number
+): Promise<HighlightedToken[] | undefined> {
+  for (let attempt = 0; attempt < 100 && !deferredLines.has(line); attempt++) {
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+  return deferredLines.get(line);
+}
 
 for (const preferredHighlighter of ['shiki-js', 'shiki-wasm'] as const) {
   test(`${preferredHighlighter} reloads token colors after clearing resolved themes`, async () => {
@@ -128,10 +140,17 @@ describe('highlights themes', () => {
             '--diffs-light:var(--diffs-token-foreground);--diffs-light-bg:var(--diffs-token-background);'
         );
         const textDocument = new TextDocument('test.json', '42', 'json');
+        // The synchronous pass has a 1ms budget, so a slow run can deliver
+        // the edited line through onDeferTokenize instead of returning it.
+        const deferredLines = new Map<number, HighlightedToken[]>();
         const tokenizer = highlighter.createEditorTokenizer({
           textDocument,
           theme: name,
-          onDeferTokenize: () => {},
+          onDeferTokenize: (lines) => {
+            for (const [line, tokens] of lines) {
+              deferredLines.set(line, tokens);
+            }
+          },
         });
         try {
           const change = textDocument.applyEdits([
@@ -143,9 +162,10 @@ describe('highlights themes', () => {
               newText: '43',
             },
           ]);
-          expect(tokenizer.tokenize(change!).get(0)).toEqual([
-            [0, 'var(--diffs-token-number)', '43'],
-          ]);
+          const tokens =
+            tokenizer.tokenize(change!).get(0) ??
+            (await waitForDeferredLine(deferredLines, 0));
+          expect(tokens).toEqual([[0, 'var(--diffs-token-number)', '43']]);
         } finally {
           tokenizer.dispose();
         }

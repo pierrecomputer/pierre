@@ -285,6 +285,8 @@ function createTrailingDiff(trailingLineCount: number): FileDiffMetadata {
     noEOFCRAdditions: false,
   };
 
+  const deletionLines = createLines(2 + trailingLineCount);
+  const additionLines = createLines(2 + trailingLineCount);
   return {
     name: 'trailing.ts',
     type: 'change',
@@ -292,8 +294,10 @@ function createTrailingDiff(trailingLineCount: number): FileDiffMetadata {
     splitLineCount: 2 + trailingLineCount,
     unifiedLineCount: 2 + trailingLineCount,
     isPartial: false,
-    deletionLines: createLines(2 + trailingLineCount),
-    additionLines: createLines(2 + trailingLineCount),
+    deletionLines,
+    additionLines,
+    deletionCharacterCount: deletionLines.join('').length,
+    additionCharacterCount: additionLines.join('').length,
   };
 }
 

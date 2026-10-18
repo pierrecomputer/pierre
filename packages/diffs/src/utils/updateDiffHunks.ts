@@ -22,7 +22,13 @@ type HunkMetadataUpdate = Pick<
 >;
 
 type FullDiffHunkUpdate = HunkMetadataUpdate &
-  Pick<FileDiffMetadata, 'additionLines' | 'deletionLines'>;
+  Pick<
+    FileDiffMetadata,
+    | 'additionLines'
+    | 'deletionLines'
+    | 'additionCharacterCount'
+    | 'deletionCharacterCount'
+  >;
 
 /** Rebuilds all hunk metadata from the current deletion/addition line arrays. */
 export function recomputeDiffHunks(
@@ -47,6 +53,8 @@ export function recomputeDiffHunks(
     unifiedLineCount: recomputed.unifiedLineCount,
     additionLines: recomputed.additionLines,
     deletionLines: recomputed.deletionLines,
+    additionCharacterCount: recomputed.additionCharacterCount,
+    deletionCharacterCount: recomputed.deletionCharacterCount,
     type: recomputed.type,
   };
 }
@@ -101,6 +109,7 @@ export function shouldTopAlignAdditionRecompute(
 export function recomputeTopAlignedAdditionDiff(
   diff: FileDiffMetadata,
   additionLines: string[],
+  additionCharacterCount: number,
   parseDiffOptions?: CreatePatchOptionsNonabortable
 ): FullDiffHunkUpdate {
   const deletionContents = diff.deletionLines.join('');
@@ -126,6 +135,8 @@ export function recomputeTopAlignedAdditionDiff(
     unifiedLineCount: recomputed.unifiedLineCount,
     additionLines,
     deletionLines: recomputed.deletionLines,
+    additionCharacterCount,
+    deletionCharacterCount: recomputed.deletionCharacterCount,
     type: recomputed.type,
   };
 }
@@ -140,7 +151,7 @@ export function recomputeEmptyDocumentDiff(
   diff: FileDiffMetadata,
   parseDiffOptions?: CreatePatchOptionsNonabortable
 ): FullDiffHunkUpdate {
-  return recomputeTopAlignedAdditionDiff(diff, [''], parseDiffOptions);
+  return recomputeTopAlignedAdditionDiff(diff, [''], 0, parseDiffOptions);
 }
 
 /** Rebuilds diff hunks after an edit, top-aligning sparse addition sides when needed. */
@@ -155,6 +166,7 @@ export function recomputeDiffHunksForEdit(
     return recomputeTopAlignedAdditionDiff(
       diff,
       diff.additionLines,
+      diff.additionCharacterCount,
       parseDiffOptions
     );
   }

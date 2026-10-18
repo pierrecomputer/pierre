@@ -16,6 +16,7 @@ import { getResolvedThemes } from '../highlighter/themes/getResolvedThemes';
 import { hasResolvedThemes } from '../highlighter/themes/hasResolvedThemes';
 import { resolveThemes } from '../highlighter/themes/resolveThemes';
 import type {
+  DiffsHighlighter,
   DiffsTheme,
   DiffsThemeNames,
   FileContents,
@@ -127,6 +128,7 @@ export class WorkerPoolManager {
   private nextRequestId = 0;
   private themeSubscribers = new Set<ThemeSubscriber>();
   private workersFailed = false;
+  private terminated = false;
   private statSubscribers = new Set<(stats: WorkerStats) => unknown>();
   private fileCache: LRUMap<string, RenderFileResult>;
   private diffCache: LRUMap<string, RenderDiffResult>;
@@ -160,7 +162,23 @@ export class WorkerPoolManager {
   }
 
   public isWorkingPool(): boolean {
-    return !this.workersFailed;
+    return !this.workersFailed && !this.terminated;
+  }
+
+  /**
+   * Whether a file or diff fits within `mainThreadMaxCharacters`, so it
+   * highlights on the main thread instead of a worker. Files count `contents`;
+   * diffs count both sides.
+   */
+  public shouldHighlightOnMainThread(
+    fileOrDiff: FileContents | FileDiffMetadata
+  ): boolean {
+    const { mainThreadMaxCharacters = -1 } = this.options;
+    const characterCount =
+      'contents' in fileOrDiff
+        ? fileOrDiff.contents.length
+        : fileOrDiff.deletionCharacterCount + fileOrDiff.additionCharacterCount;
+    return characterCount <= mainThreadMaxCharacters;
   }
 
   public getFileResultCache(file: FileContents): RenderFileResult | undefined {
@@ -175,6 +193,40 @@ export class WorkerPoolManager {
     return diff.cacheKey != null
       ? this.diffCache.get(diff.cacheKey)
       : undefined;
+  }
+
+  // Returns whether the result was stored. Results without a cache key or
+  // rendered with outdated options are dropped.
+  public setFileResultCache(
+    cacheKey: string | undefined,
+    { result, options }: RenderFileResult
+  ): boolean {
+    if (
+      cacheKey == null ||
+      !areFileRenderOptionsEqual(options, this.getFileRenderOptions())
+    ) {
+      return false;
+    }
+    this.fileCache.set(cacheKey, { result, options });
+    this.queueBroadcastStateChanges();
+    return true;
+  }
+
+  // Returns whether the result was stored. Results without a cache key or
+  // rendered with outdated options are dropped.
+  public setDiffResultCache(
+    cacheKey: string | undefined,
+    { result, options }: RenderDiffResult
+  ): boolean {
+    if (
+      cacheKey == null ||
+      !areDiffRenderOptionsEqual(options, this.getDiffRenderOptions())
+    ) {
+      return false;
+    }
+    this.diffCache.set(cacheKey, { result, options });
+    this.queueBroadcastStateChanges();
+    return true;
   }
 
   public inspectCaches(): GetCachesResult {
@@ -407,6 +459,7 @@ export class WorkerPoolManager {
       }
       return;
     } else if (this.initialized === false) {
+      this.terminated = false;
       const { lifecycleGeneration } = this;
       const initialization = new Promise<void>((resolve, reject) => {
         void (async () => {
@@ -445,8 +498,6 @@ export class WorkerPoolManager {
               return;
             }
             this.initialized = true;
-            this.diffCache.clear();
-            this.fileCache.clear();
             this.drainQueue();
             this.queueBroadcastStateChanges();
             resolve();
@@ -644,7 +695,7 @@ export class WorkerPoolManager {
         i++;
         continue;
       }
-      const langs = getLangsFromTask(task);
+      const langs = getLangsFromRequest(task.request);
       const availableWorker = this.getAvailableWorker(langs);
       if (availableWorker == null) {
         break;
@@ -688,41 +739,71 @@ export class WorkerPoolManager {
       );
     }
 
+    if (!this.shouldPrimeFileHighlightCache(file)) {
+      return Promise.resolve();
+    }
+    if (this.shouldHighlightOnMainThread(file)) {
+      const options = this.getFileRenderOptions();
+      return this.primeHighlightCacheOnMainThread(
+        getLangsFromRequest({ type: 'file', file }),
+        options.theme,
+        (highlighter) =>
+          this.setFileResultCache(file.cacheKey, {
+            result: renderFileWithHighlighter(file, highlighter, options),
+            options,
+          })
+      );
+    }
     const task = this.getOrCreateFileHighlightCacheTask(file);
     return task != null
       ? this.createRenderTaskCallbacks(task)
       : Promise.resolve();
   }
 
-  private getOrCreateFileHighlightCacheTask(
-    file: FileContents
-  ): RenderFileTask | undefined {
+  // Priming needs a cache key to store the result under, and skips files that
+  // are plain text or already cached with the current render options.
+  private shouldPrimeFileHighlightCache(file: FileContents): boolean {
     if (file.cacheKey == null) {
       console.warn(
         `WorkerPoolManager.primeFileHighlightCache: priming highlight cache requires file.cacheKey; skipping "${file.name}".`
       );
-      return undefined;
+      return false;
     }
     const cachedResult = this.getFileResultCache(file);
-    const highlightKey = this.getFileHighlightKey(file);
-    if (
-      highlightKey == null ||
-      isFilePlainText(file) ||
-      (cachedResult != null &&
-        areFileRenderOptionsEqual(
+    return (
+      !isFilePlainText(file) &&
+      (cachedResult == null ||
+        !areFileRenderOptionsEqual(
           cachedResult.options,
           this.getFileRenderOptions()
         ))
-    ) {
+    );
+  }
+
+  private getOrCreateFileHighlightCacheTask(
+    file: FileContents
+  ): RenderFileTask | undefined {
+    const highlightKey = this.getFileHighlightKey(file);
+    if (highlightKey == null) {
       return undefined;
     }
     const existingTask = this.getTaskByHighlightKey(highlightKey);
     if (existingTask != null) {
+      if (existingTask.type !== 'file') {
+        throw new Error(
+          'WorkerPoolManager.getOrCreateFileHighlightCacheTask: Invalid task type'
+        );
+      }
       existingTask.primeCache = true;
-      return existingTask.type === 'file' ? existingTask : undefined;
+      return existingTask;
     } else {
       const task = this.submitCacheTask({ type: 'file', file }, highlightKey);
-      return task.type === 'file' ? task : undefined;
+      if (task.type !== 'file') {
+        throw new Error(
+          'WorkerPoolManager.getOrCreateFileHighlightCacheTask: Invalid task created'
+        );
+      }
+      return task;
     }
   }
 
@@ -779,41 +860,102 @@ export class WorkerPoolManager {
       );
     }
 
+    if (!this.shouldPrimeDiffHighlightCache(diff)) {
+      return Promise.resolve();
+    }
+    if (this.shouldHighlightOnMainThread(diff)) {
+      const options = this.getDiffRenderOptions();
+      return this.primeHighlightCacheOnMainThread(
+        getLangsFromRequest({ type: 'diff', diff }),
+        options.theme,
+        (highlighter) =>
+          this.setDiffResultCache(diff.cacheKey, {
+            result: renderDiffWithHighlighter(diff, highlighter, options),
+            options,
+          })
+      );
+    }
     const task = this.getOrCreateDiffHighlightCacheTask(diff);
     return task != null
       ? this.createRenderTaskCallbacks(task)
       : Promise.resolve();
   }
 
-  private getOrCreateDiffHighlightCacheTask(
-    diff: FileDiffMetadata
-  ): RenderDiffTask | undefined {
+  // Priming needs a cache key to store the result under, and skips diffs that
+  // are plain text or already cached with the current render options.
+  private shouldPrimeDiffHighlightCache(diff: FileDiffMetadata): boolean {
     if (diff.cacheKey == null) {
       console.warn(
         `WorkerPoolManager.primeDiffHighlightCache: priming highlight cache requires diff.cacheKey; skipping "${diff.prevName ?? diff.name}" -> "${diff.name}".`
       );
-      return undefined;
+      return false;
     }
     const cachedResult = this.getDiffResultCache(diff);
-    const highlightKey = this.getDiffHighlightKey(diff);
-    if (
-      highlightKey == null ||
-      isDiffPlainText(diff) ||
-      (cachedResult != null &&
-        areDiffRenderOptionsEqual(
+    return (
+      !isDiffPlainText(diff) &&
+      (cachedResult == null ||
+        !areDiffRenderOptionsEqual(
           cachedResult.options,
           this.getDiffRenderOptions()
         ))
-    ) {
+    );
+  }
+
+  // Runs `highlightAndCacheResult` with the main-thread highlighter for primes
+  // within the main-thread threshold. It runs synchronously when the
+  // highlighter already has the theme and languages, and after loading them
+  // otherwise. Like a worker prime, it rejects as canceled when nothing could
+  // be cached, such as after a render options change during the load.
+  private primeHighlightCacheOnMainThread(
+    langs: SupportedLanguages[],
+    theme: WorkerRenderingOptions['theme'],
+    highlightAndCacheResult: (highlighter: DiffsHighlighter) => boolean
+  ): Promise<void> {
+    function highlightAndCacheIfLoaded(): boolean {
+      const highlighter = getHighlighterIfLoaded({ theme, langs });
+      return highlighter != null && highlightAndCacheResult(highlighter);
+    }
+    if (highlightAndCacheIfLoaded()) {
+      return Promise.resolve();
+    }
+    const { lifecycleGeneration } = this;
+    return this.loadSharedHighlighter(getThemes(theme), [
+      'text',
+      ...langs,
+    ]).then(() => {
+      if (!this.isCurrentLifecycle(lifecycleGeneration)) {
+        throw new WorkerPoolTerminatedError();
+      }
+      if (!highlightAndCacheIfLoaded()) {
+        throw new WorkerPoolTaskCanceledError();
+      }
+    });
+  }
+
+  private getOrCreateDiffHighlightCacheTask(
+    diff: FileDiffMetadata
+  ): RenderDiffTask | undefined {
+    const highlightKey = this.getDiffHighlightKey(diff);
+    if (highlightKey == null) {
       return undefined;
     }
     const existingTask = this.getTaskByHighlightKey(highlightKey);
     if (existingTask != null) {
+      if (existingTask.type !== 'diff') {
+        throw new Error(
+          'WorkerPoolManager.getOrCreateDiffHighlightCacheTask: Invalid task type'
+        );
+      }
       existingTask.primeCache = true;
-      return existingTask.type === 'diff' ? existingTask : undefined;
+      return existingTask;
     } else {
       const task = this.submitCacheTask({ type: 'diff', diff }, highlightKey);
-      return task.type === 'diff' ? task : undefined;
+      if (task.type !== 'diff') {
+        throw new Error(
+          'WorkerPoolManager.getOrCreateDiffHighlightCacheTask: Invalid task created'
+        );
+      }
+      return task;
     }
   }
 
@@ -857,6 +999,7 @@ export class WorkerPoolManager {
     this.activeTaskById.clear();
     this.initialized = false;
     this.workersFailed = false;
+    this.terminated = true;
     this.queueBroadcastStateChanges();
   }
 
@@ -1604,27 +1747,22 @@ function shouldSyncCustomExtensions(
   );
 }
 
-function getLangsFromTask(task: AllWorkerTasks): SupportedLanguages[] {
+function getLangsFromRequest(request: SubmitRequest): SupportedLanguages[] {
   const langs = new Set<SupportedLanguages>();
-  if (task.type === 'initialize' || task.type === 'set-render-options') {
-    return [];
-  }
-  switch (task.type) {
+  switch (request.type) {
     case 'file': {
       langs.add(
-        task.request.file.lang ??
-          getFiletypeFromFileName(task.request.file.name)
+        request.file.lang ?? getFiletypeFromFileName(request.file.name)
       );
       break;
     }
     case 'diff': {
       langs.add(
-        task.request.diff.lang ??
-          getFiletypeFromFileName(task.request.diff.name)
+        request.diff.lang ?? getFiletypeFromFileName(request.diff.name)
       );
       langs.add(
-        task.request.diff.lang ??
-          getFiletypeFromFileName(task.request.diff.prevName ?? '-')
+        request.diff.lang ??
+          getFiletypeFromFileName(request.diff.prevName ?? '-')
       );
       break;
     }

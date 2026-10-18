@@ -176,6 +176,8 @@ function createHugeSingleBlockDiff(lineCount: number): FileDiffMetadata {
     isPartial: true,
     deletionLines: [],
     additionLines: [],
+    deletionCharacterCount: 0,
+    additionCharacterCount: 0,
   };
 }
 
@@ -190,6 +192,8 @@ function createNoHunkDiff(): FileDiffMetadata {
     isPartial: false,
     deletionLines: [],
     additionLines: [],
+    deletionCharacterCount: 0,
+    additionCharacterCount: 0,
   };
 }
 

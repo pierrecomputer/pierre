@@ -118,7 +118,6 @@ let instanceId = -1;
 export class FileRenderer<LAnnotation = undefined> {
   readonly __id: string = `file-renderer:${++instanceId}`;
 
-  private highlighter: DiffsHighlighter | undefined;
   // The latest file requested by the component. The render cache may
   // intentionally keep displaying an older highlighted file while this one
   // is highlighted in the background.
@@ -137,6 +136,10 @@ export class FileRenderer<LAnnotation = undefined> {
     FileContents,
     TextDocument<'file', LAnnotation>
   >();
+  // Rows this renderer built itself, which edits renumber in place. Any other
+  // row can be shared with the pool cache or other renderers, so an edit
+  // copies it the first time it has to change.
+  private ownedRows = new WeakSet<HASTElement>();
 
   // Edit-session state: while active, this renderer stays on the main thread
   // with editor-compatible token markup — the editor's caret/selection
@@ -156,13 +159,7 @@ export class FileRenderer<LAnnotation = undefined> {
     ) => string = getLineAnnotationName,
     private onRenderUpdate?: () => unknown,
     private workerManager?: WorkerPoolManager | undefined
-  ) {
-    if (workerManager?.isWorkingPool() !== true) {
-      this.highlighter = getHighlighterIfLoaded({
-        theme: options.theme ?? DEFAULT_THEMES,
-      });
-    }
-  }
+  ) {}
 
   public setOptions(options: FileRendererOptions): void {
     this.options = options;
@@ -319,7 +316,6 @@ export class FileRenderer<LAnnotation = undefined> {
       this.lineCache = undefined;
       this.textDocumentCache = new WeakMap();
     }
-    this.highlighter = undefined;
     this.workerManager?.cleanUpTasks(this);
     this.file = undefined;
   }
@@ -332,9 +328,6 @@ export class FileRenderer<LAnnotation = undefined> {
 
   public hydrate(file: FileContents): void {
     this.file = file;
-    this.highlighter = getHighlighterIfLoaded({
-      theme: this.getLocalHighlightTheme(),
-    });
     const { options } = this.getRenderOptions(file);
     const lines = this.getOrCreateLineCache(file);
     const massiveFile = isFileMassive(
@@ -354,23 +347,45 @@ export class FileRenderer<LAnnotation = undefined> {
       // FIXME(amadeus): Add support for renderRanges
       renderRange: undefined,
     };
-    if (
-      !this.editSessionActive &&
-      this.workerManager?.isWorkingPool() === true
-    ) {
+    const workerManager = this.getHighlightWorkerManager(file);
+    if (workerManager != null) {
       if (this.renderCache.result == null && !massiveFile) {
         // We should only kick off a preload of the AST if we have a WorkerPool
-        this.workerManager.highlightFileAST(this, file);
+        workerManager.highlightFileAST(this, file);
       }
     }
     // Lets attempt to get the highlighter/languages ready immediately
-    else if (this.highlighter == null) {
+    else if (
+      getHighlighterIfLoaded({ theme: this.getLocalHighlightTheme() }) == null
+    ) {
       this.computedLang = file.lang ?? getFiletypeFromFileName(file.name);
       void this.initializeHighlighter().catch((error: unknown) => {
         if (!(error instanceof HighlighterDisposedError)) {
           this.onHighlightError(error);
         }
       });
+    }
+  }
+
+  // Returns the pool when there's a valid worker AND we should use it
+  private getHighlightWorkerManager(
+    file: FileContents
+  ): WorkerPoolManager | undefined {
+    const { editSessionActive, workerManager } = this;
+    return !editSessionActive &&
+      workerManager?.isWorkingPool() === true &&
+      !workerManager.shouldHighlightOnMainThread(file)
+      ? workerManager
+      : undefined;
+  }
+
+  private cacheHighlightResult(
+    file: FileContents,
+    renderResult: RenderFileResult
+  ): void {
+    const { editSessionActive, workerManager } = this;
+    if (!editSessionActive && workerManager?.isWorkingPool() === true) {
+      workerManager.setFileResultCache(file.cacheKey, renderResult);
     }
   }
 
@@ -474,9 +489,9 @@ export class FileRenderer<LAnnotation = undefined> {
     if (forcePlainText) {
       return (
         (renderCache.result == null && renderCache.hydrated !== true) ||
-        this.workerManager?.isWorkingPool() === true ||
-        (this.highlighter != null &&
-          areThemesAttached(options.theme, this.highlighter))
+        (this.workerManager?.isWorkingPool() === true &&
+          !this.workerManager.shouldHighlightOnMainThread(file)) ||
+        getHighlighterIfLoaded({ theme: options.theme }) != null
       );
     }
     // Hydration has highlighted DOM without a local AST. It is still active
@@ -486,17 +501,11 @@ export class FileRenderer<LAnnotation = undefined> {
       return true;
     }
 
-    if (
-      !this.editSessionActive &&
-      this.workerManager?.isWorkingPool() === true
-    ) {
+    if (this.getHighlightWorkerManager(file) != null) {
       return !renderCache.highlighted;
     }
 
-    return (
-      this.highlighter != null &&
-      areThemesAttached(options.theme, this.highlighter)
-    );
+    return getHighlighterIfLoaded({ theme: options.theme }) != null;
   }
 
   public getOrCreateLineCache(file: FileContents): string[] {
@@ -588,6 +597,7 @@ export class FileRenderer<LAnnotation = undefined> {
           };
         }),
       };
+      this.ownedRows.add(row);
       if (pendingStructuralRows != null) {
         pendingStructuralRows.set(line, row);
       } else {
@@ -657,7 +667,7 @@ export class FileRenderer<LAnnotation = undefined> {
         }
       }
       for (let i = prefix; i < nextLines.length - suffix; i++) {
-        result.code[i] ??= {
+        result.code[i] ??= this.ownRow({
           type: 'element',
           tagName: 'div',
           properties: {
@@ -680,13 +690,21 @@ export class FileRenderer<LAnnotation = undefined> {
               ],
             },
           ],
-        };
+        });
       }
       for (let i = 0; i < result.code.length; i++) {
         const line = result.code[i];
-        if (line?.type === 'element') {
-          line.properties['data-line'] = i + 1;
-          line.properties['data-line-index'] = i;
+        if (
+          line?.type === 'element' &&
+          (line.properties['data-line'] !== i + 1 ||
+            line.properties['data-line-index'] !== i)
+        ) {
+          const row = this.ownedRows.has(line)
+            ? line
+            : this.ownRow({ ...line, properties: { ...line.properties } });
+          row.properties['data-line'] = i + 1;
+          row.properties['data-line-index'] = i;
+          result.code[i] = row;
         }
       }
       if (renderCache != null) {
@@ -703,6 +721,11 @@ export class FileRenderer<LAnnotation = undefined> {
     };
     this.textDocumentCache.set(file, textDocument);
     file.contents = contents;
+  }
+
+  private ownRow(row: HASTElement): HASTElement {
+    this.ownedRows.add(row);
+    return row;
   }
 
   public renderFile(
@@ -738,17 +761,14 @@ export class FileRenderer<LAnnotation = undefined> {
       !hasContent ||
       isFilePlainText(file) ||
       isFileMassive(lines.length, this.getTokenizeMaxLength());
-    this.highlighter = getHighlighterIfLoaded();
     const canRenderFile = this.canRenderFile(file, options, forcePlainText);
     const newContent = !areFileTargetsEqual(file, this.renderCache.file);
     const newRenderRange = !areRenderRangesEqual(
       this.renderCache.renderRange,
       renderRange
     );
-    if (
-      !this.editSessionActive &&
-      this.workerManager?.isWorkingPool() === true
-    ) {
+    const workerManager = this.getHighlightWorkerManager(file);
+    if (workerManager != null) {
       // Hydration has highlighted DOM but no local AST. Keep that DOM until
       // its corresponding worker result is ready.
       const preserveHydratedContent =
@@ -773,7 +793,7 @@ export class FileRenderer<LAnnotation = undefined> {
           newRenderRange ||
           forceHighlight
         ) {
-          this.renderCache.result = this.workerManager.getPlainFileAST(
+          this.renderCache.result = workerManager.getPlainFileAST(
             file,
             renderRange.startingLine,
             renderRange.totalLines,
@@ -788,22 +808,22 @@ export class FileRenderer<LAnnotation = undefined> {
         hasContent &&
         (!this.renderCache.highlighted || forceHighlight)
       ) {
-        this.workerManager.highlightFileAST(this, file);
+        workerManager.highlightFileAST(this, file);
       }
     } else {
       this.computedLang = file.lang ?? getFiletypeFromFileName(file.name);
+      const highlighter = getHighlighterIfLoaded();
       const hasThemes =
-        this.highlighter != null &&
-        areThemesAttached(options.theme, this.highlighter);
+        highlighter != null && areThemesAttached(options.theme, highlighter);
       const hasLangs =
-        this.highlighter != null &&
-        areLanguagesAttached(this.computedLang, this.highlighter);
+        highlighter != null &&
+        areLanguagesAttached(this.computedLang, highlighter);
       const canHighlight = !forcePlainText && hasLangs;
       const lazyLineAST = Number.isFinite(renderRange.totalLines);
 
       if (
         canRenderFile &&
-        this.highlighter != null &&
+        highlighter != null &&
         hasThemes &&
         (forceHighlight ||
           forcePlainText ||
@@ -812,7 +832,7 @@ export class FileRenderer<LAnnotation = undefined> {
       ) {
         const { result, options } = this.renderFileWithHighlighter(
           file,
-          this.highlighter,
+          highlighter,
           forcePlainText || !hasLangs,
           lazyLineAST
         );
@@ -823,11 +843,17 @@ export class FileRenderer<LAnnotation = undefined> {
           result,
           renderRange: undefined,
         };
+        if (canHighlight) {
+          this.cacheHighlightResult(file, { result, options });
+        }
       }
 
       if (!hasThemes || (!forcePlainText && !hasLangs)) {
         void this.asyncHighlight(file, lazyLineAST)
           .then(({ result, options }) => {
+            if (!forcePlainText) {
+              this.cacheHighlightResult(file, { result, options });
+            }
             this.applyHighlightResult(file, result, options, !forcePlainText);
           })
           .catch((error: unknown) => {
@@ -871,21 +897,22 @@ export class FileRenderer<LAnnotation = undefined> {
     this.computedLang = forcePlainText
       ? 'text'
       : (file.lang ?? getFiletypeFromFileName(file.name));
+    let highlighter = getHighlighterIfLoaded();
     const hasThemes =
-      this.highlighter != null &&
-      areThemesAttached(this.getLocalHighlightTheme(), this.highlighter);
+      highlighter != null &&
+      areThemesAttached(this.getLocalHighlightTheme(), highlighter);
     const hasLangs =
       forcePlainText ||
-      (this.highlighter != null &&
-        areLanguagesAttached(this.computedLang, this.highlighter));
+      (highlighter != null &&
+        areLanguagesAttached(this.computedLang, highlighter));
     // If we don't have the required langs or themes, then we need to
     // initialize the highlighter to load the appropriate languages and themes
-    if (this.highlighter == null || !hasThemes || !hasLangs) {
-      this.highlighter = await this.initializeHighlighter();
+    if (highlighter == null || !hasThemes || !hasLangs) {
+      highlighter = await this.initializeHighlighter();
     }
     return this.renderFileWithHighlighter(
       file,
-      this.highlighter,
+      highlighter,
       forcePlainText,
       lazyLineAST
     );
@@ -1054,8 +1081,8 @@ export class FileRenderer<LAnnotation = undefined> {
     );
   }
 
-  public async initializeHighlighter(): Promise<DiffsHighlighter> {
-    this.highlighter = await getSharedHighlighter(
+  public initializeHighlighter(): Promise<DiffsHighlighter> {
+    return getSharedHighlighter(
       getHighlighterOptions(this.computedLang, {
         theme: this.getLocalHighlightTheme(),
         preferredHighlighter: resolvePreferredHighlighter(
@@ -1064,7 +1091,6 @@ export class FileRenderer<LAnnotation = undefined> {
         ),
       })
     );
-    return this.highlighter;
   }
 
   public onHighlightSuccess(
