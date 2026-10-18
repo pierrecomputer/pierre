@@ -558,6 +558,24 @@ describe('WorkerPoolManager main-thread threshold', () => {
     }
   });
 
+  test('rejects a main-thread prime whose language load outlives terminate', async () => {
+    const { manager } = await createInitializedManager(
+      {},
+      { mainThreadMaxCharacters: 1000 }
+    );
+    // Python is not loaded, so this prime has to wait for its grammar.
+    const file: FileContents = {
+      name: 'prime.py',
+      contents: 'value = [1, 2]\n',
+      cacheKey: 'main-thread:terminated',
+    };
+    const prime = manager.primeFileHighlightCache(file);
+    manager.terminate();
+
+    expect(await getRejection(prime)).toBeInstanceOf(WorkerPoolTerminatedError);
+    expect(manager.getFileResultCache(file)).toBeUndefined();
+  });
+
   test('drops shared results rendered with outdated options', async () => {
     const { manager } = await createInitializedManager();
     try {
