@@ -1,12 +1,14 @@
 'use client';
 
-import { canUseWASM, DEFAULT_THEMES } from '@pierre/diffs';
+import { DEFAULT_THEMES } from '@pierre/diffs';
 import {
   type WorkerInitializationRenderOptions,
   WorkerPoolContextProvider,
   type WorkerPoolOptions,
 } from '@pierre/diffs/react';
 import type { ReactNode } from 'react';
+
+import { getPreferredHighlighter } from '@/lib/preferredHighlighter';
 
 function isMobileBrowser(): boolean {
   const navigator = global.navigator;
@@ -45,9 +47,10 @@ const PoolOptions: WorkerPoolOptions = {
   totalASTLRUCacheSize: WorkerResourceLimits.totalASTLRUCacheSize,
   // The shiki-js fallback leaves this unset so every
   // highlight goes through a worker.
-  mainThreadMaxCharacters: canUseWASM()
-    ? MAIN_THREAD_MAX_CHARACTERS
-    : undefined,
+  mainThreadMaxCharacters:
+    getPreferredHighlighter() === 'highlights'
+      ? MAIN_THREAD_MAX_CHARACTERS
+      : undefined,
   workerFactory() {
     return new Worker(
       new URL('@pierre/diffs/worker/worker.js', import.meta.url)
@@ -58,8 +61,7 @@ const PoolOptions: WorkerPoolOptions = {
 const SITE = process.env.NEXT_PUBLIC_SITE;
 
 const HighlighterOptions: WorkerInitializationRenderOptions = {
-  // highlights needs WebAssembly. Without it the pool falls back to shiki-js.
-  preferredHighlighter: canUseWASM() ? 'highlights' : 'shiki-js',
+  preferredHighlighter: getPreferredHighlighter(),
   // diffshub intentionally previews on the soft Pierre pair (a deliberate
   // product choice) even though the canonical default is the non-soft pair.
   // Every other site preloads the shared default.
