@@ -1025,6 +1025,16 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       : undefined;
   }
 
+  private cacheHighlightResult(
+    diff: FileDiffMetadata,
+    renderResult: RenderDiffResult
+  ): void {
+    const { editSessionActive, workerManager } = this;
+    if (!editSessionActive && workerManager?.isWorkingPool() === true) {
+      workerManager.setDiffResultCache(diff.cacheKey, renderResult);
+    }
+  }
+
   private getLocalHighlightTheme(): RenderDiffOptions['theme'] {
     return (
       this.workerManager?.getDiffRenderOptions().theme ??
@@ -1272,11 +1282,17 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
           result,
           renderRange: undefined,
         };
+        if (canHighlight) {
+          this.cacheHighlightResult(diff, { result, options });
+        }
       }
 
       if (!hasThemes || (!forcePlainText && !hasLangs)) {
         void this.asyncHighlight(diff, lazyLineAST)
           .then(({ result, options }) => {
+            if (!forcePlainText) {
+              this.cacheHighlightResult(diff, { result, options });
+            }
             this.applyHighlightResult(diff, result, options, !forcePlainText);
           })
           .catch((error: unknown) => {

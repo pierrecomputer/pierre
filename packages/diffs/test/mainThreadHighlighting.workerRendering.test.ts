@@ -1,15 +1,19 @@
-import { afterAll, beforeAll, expect, test } from 'bun:test';
+import { afterAll, beforeAll, expect, spyOn, test } from 'bun:test';
 
 import { File } from '../src/components/File';
 import { FileDiff } from '../src/components/FileDiff';
 import { UnresolvedFile } from '../src/components/UnresolvedFile';
+import { Editor } from '../src/editor/editor';
+import { TextDocument } from '../src/editor/textDocument';
 import {
   disposeHighlighter,
   getSharedHighlighter,
 } from '../src/highlighter/shared_highlighter';
+import { DiffHunksRenderer } from '../src/renderers/DiffHunksRenderer';
+import { FileRenderer } from '../src/renderers/FileRenderer';
 import type { FileContents } from '../src/types';
 import { parseDiffFromFile } from '../src/utils/parseDiffFromFile';
-import { installDom, wait } from './domHarness';
+import { installDom, wait, waitFor } from './domHarness';
 import { createInitializedManager } from './workerPoolHarness';
 
 // Files and diffs below this many characters highlight on the main thread.
@@ -107,6 +111,178 @@ function renderAnnotation(annotation: { metadata: string }): HTMLElement {
   element.textContent = annotation.metadata;
   return element;
 }
+
+test('File shares a main-thread highlight with other renderers of its cache key', async () => {
+  const { manager, container, cleanup } = await createFixture();
+  const first = new File({ theme: 'pierre-dark' }, manager);
+  const second = new File({ theme: 'pierre-dark' }, manager);
+  const secondContainer = document.createElement('div');
+  document.body.appendChild(secondContainer);
+  try {
+    first.render({ file: smallFile, fileContainer: container });
+    expect(manager.getFileResultCache(smallFile)?.options).toEqual(
+      manager.getFileRenderOptions()
+    );
+
+    // The second renderer adopts the cached result instead of tokenizing.
+    const highlighter = await getSharedHighlighter({
+      themes: ['pierre-dark'],
+      langs: ['typescript'],
+      preferredHighlighter: 'shiki-js',
+    });
+    const codeToTokens = spyOn(highlighter, 'codeToTokens');
+    second.render({ file: { ...smallFile }, fileContainer: secondContainer });
+    expect(codeToTokens).not.toHaveBeenCalled();
+    codeToTokens.mockRestore();
+    expect(isLineHighlighted(secondContainer)).toBe(true);
+  } finally {
+    first.cleanUp();
+    second.cleanUp();
+    cleanup();
+  }
+});
+
+test('Editing one File leaves the cached highlight other renderers use unchanged', async () => {
+  const dom = installDom();
+  // Token-transformer output lets the edited File adopt the cached result.
+  const { manager } = await createInitializedManager(
+    { theme: 'pierre-dark', useTokenTransformer: true },
+    { mainThreadMaxCharacters: MAIN_THREAD_MAX_CHARACTERS }
+  );
+  const file: FileContents = {
+    name: 'shared.ts',
+    contents: 'const alpha = 1;\nconst tail = 2;',
+    cacheKey: 'main-thread:edited',
+  };
+  const viewerContainer = document.createElement('div');
+  const editedContainer = document.createElement('div');
+  document.body.append(viewerContainer, editedContainer);
+  const viewer = new File({ theme: 'pierre-dark' }, manager);
+  const edited = new File({ theme: 'pierre-dark' }, manager);
+  const getCachedLineNumbers = () =>
+    manager
+      .getFileResultCache(file)
+      ?.result.code.map((line) =>
+        line.type === 'element' ? line.properties['data-line'] : undefined
+      );
+  try {
+    viewer.render({ file, fileContainer: viewerContainer });
+    edited.render({ file, fileContainer: editedContainer });
+    edited.__attachEditor(new Editor('file'));
+    // A document change without tokenizer rows keeps every shifted row, as a
+    // programmatic edit to an offscreen editor does.
+    edited.applyDocumentChange(
+      new TextDocument(
+        'inmemory://edited',
+        `const inserted = 0;\n${file.contents}`
+      )
+    );
+
+    expect(getCachedLineNumbers()).toEqual([1, 2]);
+    viewer.render({ file, fileContainer: viewerContainer, forceRender: true });
+    expect(
+      viewerContainer.shadowRoot?.querySelector('[data-line="1"]')?.textContent
+    ).toBe('const alpha = 1;');
+  } finally {
+    viewer.cleanUp();
+    edited.cleanUp();
+    manager.terminate();
+    dom.cleanup();
+  }
+});
+
+test('File shares a main-thread highlight that waited for its language', async () => {
+  const { manager, container, cleanup } = await createFixture();
+  const instance = new File({ theme: 'pierre-dark' }, manager);
+  // No other test loads Rust, so this render highlights asynchronously.
+  const file: FileContents = {
+    name: 'main.rs',
+    contents: 'fn main() {}\n',
+    cacheKey: 'main-thread:rust',
+  };
+  try {
+    instance.render({ file, fileContainer: container });
+    expect(manager.getFileResultCache(file)).toBeUndefined();
+
+    await waitFor(() => manager.getFileResultCache(file) != null);
+    expect(manager.getFileResultCache(file)?.options).toEqual(
+      manager.getFileRenderOptions()
+    );
+  } finally {
+    instance.cleanUp();
+    cleanup();
+  }
+});
+
+test('Renderers drop async highlights that finish after the pool terminates', async () => {
+  const dom = installDom();
+  const { manager } = await createInitializedManager(
+    { theme: 'pierre-dark' },
+    { mainThreadMaxCharacters: MAIN_THREAD_MAX_CHARACTERS }
+  );
+  let renderUpdates = 0;
+  const onRenderUpdate = () => {
+    renderUpdates++;
+  };
+  // No other test loads Go or Ruby, so both renders wait for their grammar.
+  const file: FileContents = {
+    name: 'late.go',
+    contents: 'package main\n',
+    cacheKey: 'main-thread:late-file',
+  };
+  const fileDiff = parseDiffFromFile(
+    { name: 'late.rb', contents: 'value = []\n', cacheKey: 'late:old' },
+    { name: 'late.rb', contents: 'value = [1, 2]\n', cacheKey: 'late:new' }
+  );
+  const fileRenderer = new FileRenderer(
+    { theme: 'pierre-dark' },
+    undefined,
+    onRenderUpdate,
+    manager
+  );
+  const diffRenderer = new DiffHunksRenderer(
+    { theme: 'pierre-dark' },
+    undefined,
+    onRenderUpdate,
+    manager
+  );
+  try {
+    fileRenderer.renderFile(file);
+    diffRenderer.renderDiff(fileDiff);
+    manager.terminate();
+    await waitFor(() => renderUpdates === 2);
+
+    expect(manager.getFileResultCache(file)).toBeUndefined();
+    expect(manager.getDiffResultCache(fileDiff)).toBeUndefined();
+  } finally {
+    fileRenderer.cleanUp();
+    diffRenderer.cleanUp();
+    dom.cleanup();
+  }
+});
+
+test('FileDiff shares a main-thread highlight with the pool cache', async () => {
+  const { manager, container, cleanup } = await createFixture();
+  const instance = new FileDiff({ theme: 'pierre-dark' }, manager);
+  const fileDiff = parseDiffFromFile(
+    { ...smallFile, cacheKey: 'main-thread:shared-old' },
+    {
+      ...smallFile,
+      contents: 'const alpha = 10;\nconst beta = 2;\n',
+      cacheKey: 'main-thread:shared-new',
+    }
+  );
+  try {
+    instance.render({ fileDiff, fileContainer: container });
+
+    expect(manager.getDiffResultCache(fileDiff)?.options).toEqual(
+      manager.getDiffRenderOptions()
+    );
+  } finally {
+    instance.cleanUp();
+    cleanup();
+  }
+});
 
 test('File keeps annotations with the rendered file after the highlighter is recreated', async () => {
   const { manager, container, cleanup } = await createFixture();

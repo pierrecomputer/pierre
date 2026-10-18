@@ -128,6 +128,7 @@ export class WorkerPoolManager {
   private nextRequestId = 0;
   private themeSubscribers = new Set<ThemeSubscriber>();
   private workersFailed = false;
+  private terminated = false;
   private statSubscribers = new Set<(stats: WorkerStats) => unknown>();
   private fileCache: LRUMap<string, RenderFileResult>;
   private diffCache: LRUMap<string, RenderDiffResult>;
@@ -161,7 +162,7 @@ export class WorkerPoolManager {
   }
 
   public isWorkingPool(): boolean {
-    return !this.workersFailed;
+    return !this.workersFailed && !this.terminated;
   }
 
   /**
@@ -452,6 +453,7 @@ export class WorkerPoolManager {
       }
       return;
     } else if (this.initialized === false) {
+      this.terminated = false;
       const { lifecycleGeneration } = this;
       const initialization = new Promise<void>((resolve, reject) => {
         void (async () => {
@@ -996,6 +998,7 @@ export class WorkerPoolManager {
     this.activeTaskById.clear();
     this.initialized = false;
     this.workersFailed = false;
+    this.terminated = true;
     this.queueBroadcastStateChanges();
   }
 

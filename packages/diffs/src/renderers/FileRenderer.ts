@@ -136,6 +136,10 @@ export class FileRenderer<LAnnotation = undefined> {
     FileContents,
     TextDocument<'file', LAnnotation>
   >();
+  // Rows this renderer built itself, which edits renumber in place. Any other
+  // row can be shared with the pool cache or other renderers, so an edit
+  // copies it the first time it has to change.
+  private ownedRows = new WeakSet<HASTElement>();
 
   // Edit-session state: while active, this renderer stays on the main thread
   // with editor-compatible token markup — the editor's caret/selection
@@ -375,6 +379,16 @@ export class FileRenderer<LAnnotation = undefined> {
       : undefined;
   }
 
+  private cacheHighlightResult(
+    file: FileContents,
+    renderResult: RenderFileResult
+  ): void {
+    const { editSessionActive, workerManager } = this;
+    if (!editSessionActive && workerManager?.isWorkingPool() === true) {
+      workerManager.setFileResultCache(file.cacheKey, renderResult);
+    }
+  }
+
   private getLocalHighlightTheme(): RenderFileOptions['theme'] {
     return (
       this.workerManager?.getFileRenderOptions().theme ??
@@ -583,6 +597,7 @@ export class FileRenderer<LAnnotation = undefined> {
           };
         }),
       };
+      this.ownedRows.add(row);
       if (pendingStructuralRows != null) {
         pendingStructuralRows.set(line, row);
       } else {
@@ -652,7 +667,7 @@ export class FileRenderer<LAnnotation = undefined> {
         }
       }
       for (let i = prefix; i < nextLines.length - suffix; i++) {
-        result.code[i] ??= {
+        result.code[i] ??= this.ownRow({
           type: 'element',
           tagName: 'div',
           properties: {
@@ -675,13 +690,21 @@ export class FileRenderer<LAnnotation = undefined> {
               ],
             },
           ],
-        };
+        });
       }
       for (let i = 0; i < result.code.length; i++) {
         const line = result.code[i];
-        if (line?.type === 'element') {
-          line.properties['data-line'] = i + 1;
-          line.properties['data-line-index'] = i;
+        if (
+          line?.type === 'element' &&
+          (line.properties['data-line'] !== i + 1 ||
+            line.properties['data-line-index'] !== i)
+        ) {
+          const row = this.ownedRows.has(line)
+            ? line
+            : this.ownRow({ ...line, properties: { ...line.properties } });
+          row.properties['data-line'] = i + 1;
+          row.properties['data-line-index'] = i;
+          result.code[i] = row;
         }
       }
       if (renderCache != null) {
@@ -698,6 +721,11 @@ export class FileRenderer<LAnnotation = undefined> {
     };
     this.textDocumentCache.set(file, textDocument);
     file.contents = contents;
+  }
+
+  private ownRow(row: HASTElement): HASTElement {
+    this.ownedRows.add(row);
+    return row;
   }
 
   public renderFile(
@@ -815,11 +843,17 @@ export class FileRenderer<LAnnotation = undefined> {
           result,
           renderRange: undefined,
         };
+        if (canHighlight) {
+          this.cacheHighlightResult(file, { result, options });
+        }
       }
 
       if (!hasThemes || (!forcePlainText && !hasLangs)) {
         void this.asyncHighlight(file, lazyLineAST)
           .then(({ result, options }) => {
+            if (!forcePlainText) {
+              this.cacheHighlightResult(file, { result, options });
+            }
             this.applyHighlightResult(file, result, options, !forcePlainText);
           })
           .catch((error: unknown) => {
