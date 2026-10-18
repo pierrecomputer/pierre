@@ -195,32 +195,38 @@ export class WorkerPoolManager {
       : undefined;
   }
 
+  // Returns whether the result was stored. Results without a cache key or
+  // rendered with outdated options are dropped.
   public setFileResultCache(
     cacheKey: string | undefined,
     { result, options }: RenderFileResult
-  ): void {
+  ): boolean {
     if (
       cacheKey == null ||
       !areFileRenderOptionsEqual(options, this.getFileRenderOptions())
     ) {
-      return;
+      return false;
     }
     this.fileCache.set(cacheKey, { result, options });
     this.queueBroadcastStateChanges();
+    return true;
   }
 
+  // Returns whether the result was stored. Results without a cache key or
+  // rendered with outdated options are dropped.
   public setDiffResultCache(
     cacheKey: string | undefined,
     { result, options }: RenderDiffResult
-  ): void {
+  ): boolean {
     if (
       cacheKey == null ||
       !areDiffRenderOptionsEqual(options, this.getDiffRenderOptions())
     ) {
-      return;
+      return false;
     }
     this.diffCache.set(cacheKey, { result, options });
     this.queueBroadcastStateChanges();
+    return true;
   }
 
   public inspectCaches(): GetCachesResult {
@@ -741,12 +747,11 @@ export class WorkerPoolManager {
       return this.primeHighlightCacheOnMainThread(
         getLangsFromRequest({ type: 'file', file }),
         options.theme,
-        (highlighter) => {
+        (highlighter) =>
           this.setFileResultCache(file.cacheKey, {
             result: renderFileWithHighlighter(file, highlighter, options),
             options,
-          });
-        }
+          })
       );
     }
     const task = this.getOrCreateFileHighlightCacheTask(file);
@@ -863,12 +868,11 @@ export class WorkerPoolManager {
       return this.primeHighlightCacheOnMainThread(
         getLangsFromRequest({ type: 'diff', diff }),
         options.theme,
-        (highlighter) => {
+        (highlighter) =>
           this.setDiffResultCache(diff.cacheKey, {
             result: renderDiffWithHighlighter(diff, highlighter, options),
             options,
-          });
-        }
+          })
       );
     }
     const task = this.getOrCreateDiffHighlightCacheTask(diff);
@@ -900,19 +904,16 @@ export class WorkerPoolManager {
   // Runs `highlightAndCacheResult` with the main-thread highlighter for primes
   // within the main-thread threshold. It runs synchronously when the
   // highlighter already has the theme and languages, and after loading them
-  // otherwise.
+  // otherwise. Like a worker prime, it rejects as canceled when nothing could
+  // be cached, such as after a render options change during the load.
   private primeHighlightCacheOnMainThread(
     langs: SupportedLanguages[],
     theme: WorkerRenderingOptions['theme'],
-    highlightAndCacheResult: (highlighter: DiffsHighlighter) => void
+    highlightAndCacheResult: (highlighter: DiffsHighlighter) => boolean
   ): Promise<void> {
     function highlightAndCacheIfLoaded(): boolean {
       const highlighter = getHighlighterIfLoaded({ theme, langs });
-      if (highlighter == null) {
-        return false;
-      }
-      highlightAndCacheResult(highlighter);
-      return true;
+      return highlighter != null && highlightAndCacheResult(highlighter);
     }
     if (highlightAndCacheIfLoaded()) {
       return Promise.resolve();

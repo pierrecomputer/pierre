@@ -579,6 +579,32 @@ describe('WorkerPoolManager main-thread threshold', () => {
     expect(manager.getFileResultCache(file)).toBeUndefined();
   });
 
+  test('cancels a main-thread prime whose render options change while loading', async () => {
+    const { manager } = await createInitializedManager(
+      {},
+      { mainThreadMaxCharacters: 1000 }
+    );
+    try {
+      // Nothing else in this file loads Ruby, so this prime waits for it.
+      const file: FileContents = {
+        name: 'prime.rb',
+        contents: 'value = [1, 2]\n',
+        cacheKey: 'main-thread:options-changed',
+      };
+      const prime = manager.primeFileHighlightCache(file);
+      // The theme is unchanged, so the new options apply synchronously; the
+      // workers never acknowledge them in this harness, so don't await it.
+      void manager.setRenderOptions({ tokenizeMaxLineLength: 500 });
+
+      expect(await getRejection(prime)).toBeInstanceOf(
+        WorkerPoolTaskCanceledError
+      );
+      expect(manager.getFileResultCache(file)).toBeUndefined();
+    } finally {
+      manager.terminate();
+    }
+  });
+
   test('cancels a main-thread prime whose highlighter is disposed while loading', async () => {
     const { manager } = await createInitializedManager(
       {},

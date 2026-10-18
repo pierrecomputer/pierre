@@ -91,6 +91,7 @@ import {
 } from '../utils/updateDiffHunks';
 import { getTrailingContextRangeSize } from '../utils/virtualDiffLayout';
 import type { WorkerPoolManager } from '../worker';
+import { isHandledWorkerPoolError } from '../worker/errors';
 
 interface PushLineWithAnnotation {
   diffStyle: 'unified' | 'split';
@@ -442,7 +443,12 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
             workerManager.getDiffResultCache(diff)
           );
         })
-        .catch((error: unknown) => this.onHighlightError(error));
+        .catch((error: unknown) => {
+          // A canceled prime leaves the current result in place.
+          if (!isHandledWorkerPoolError(error)) {
+            this.onHighlightError(error);
+          }
+        });
     }
     return this.asyncHighlight(diff)
       .then((fresh) => this.applyRefreshedResult(diff, fresh))

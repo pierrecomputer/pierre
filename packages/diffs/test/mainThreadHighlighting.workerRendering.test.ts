@@ -261,6 +261,50 @@ test('Renderers drop async highlights that finish after the pool terminates', as
   }
 });
 
+test('DiffHunksRenderer ignores a refresh canceled by a render options change', async () => {
+  const dom = installDom();
+  // Start from a Shiki highlighter without Lua, so the refresh's prime has to
+  // wait for the grammar however earlier tests left the shared highlighter.
+  await recreateHighlighter();
+  const { manager } = await createInitializedManager(
+    { theme: 'pierre-dark' },
+    { mainThreadMaxCharacters: MAIN_THREAD_MAX_CHARACTERS }
+  );
+  const consoleError = spyOn(console, 'error');
+  const fileDiff = parseDiffFromFile(
+    {
+      name: 'refresh.lua',
+      contents: 'local value = 1\n',
+      cacheKey: 'refresh:old',
+    },
+    {
+      name: 'refresh.lua',
+      contents: 'local value = 2\n',
+      cacheKey: 'refresh:new',
+    }
+  );
+  const renderer = new DiffHunksRenderer(
+    { theme: 'pierre-dark' },
+    undefined,
+    undefined,
+    manager
+  );
+  try {
+    renderer.renderDiff(fileDiff);
+    const refresh = renderer.refreshHighlightedResult();
+    // The workers never acknowledge new options in this harness.
+    void manager.setRenderOptions({ tokenizeMaxLineLength: 500 });
+    await refresh;
+
+    expect(consoleError).not.toHaveBeenCalled();
+  } finally {
+    consoleError.mockRestore();
+    renderer.cleanUp();
+    manager.terminate();
+    dom.cleanup();
+  }
+});
+
 test('FileDiff shares a main-thread highlight with the pool cache', async () => {
   const { manager, container, cleanup } = await createFixture();
   const instance = new FileDiff({ theme: 'pierre-dark' }, manager);
