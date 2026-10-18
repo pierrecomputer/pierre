@@ -210,7 +210,7 @@ the characters on both sides. Main-thread results go into the same
 
 We recommend using this with the `'highlights'` backend, which is fast enough
 that a worker round trip usually costs more than the highlighting itself. Start
-with `mainThreadMaxCharacters: 30_000`, which should cover most files. If you
+with `mainThreadMaxCharacters: 100_000`, which should cover most files. If you
 tune the limit, aim to keep most or all main-thread highlighting under about 2ms
 on the devices you support. When the option is unset, every highlight uses a
 worker.
