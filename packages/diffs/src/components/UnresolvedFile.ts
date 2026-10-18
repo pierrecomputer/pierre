@@ -538,8 +538,12 @@ export class UnresolvedFile<LAnnotation = undefined> extends FileDiff<
     // world we would have a more elegant way to kick off a render to the
     // highlighter and then resolve actions in a cleaner way, but time is short
     // right now.  Can't let perfect be the enemy of good
-    if (this.workerManager != null) {
-      // Because we are using a workerManager, if we fire off the renderDiff
+    const { workerManager } = this;
+    if (
+      workerManager?.isWorkingPool() === true &&
+      !workerManager.shouldHighlightOnMainThread(fileDiff)
+    ) {
+      // Because the diff highlights on a worker, if we fire off the renderDiff
       // call, it will eventually get back to us in a callback which will
       // trigger a re-render
       this.hunksRenderer.renderDiff(fileDiff);

@@ -1518,6 +1518,7 @@ exports[`parsePatchFiles patches with a final blank line should have a \\n added
   {
     "files": [
       {
+        "additionCharacterCount": 338,
         "additionLines": [
           
 "	const is_single_element = trimmed.length === 1 && trimmed[0].type === 'RegularElement';
@@ -1549,6 +1550,7 @@ exports[`parsePatchFiles patches with a final blank line should have a \\n added
 ,
         ],
         "cacheKey": undefined,
+        "deletionCharacterCount": 400,
         "deletionLines": [
           
 "	const is_single_element = trimmed.length === 1 && trimmed[0].type === 'RegularElement';
@@ -1650,8 +1652,10 @@ exports[`parsePatchFiles should warn on malformed patch with bare newline in hun
   {
     "files": [
       {
+        "additionCharacterCount": 0,
         "additionLines": [],
         "cacheKey": undefined,
+        "deletionCharacterCount": 2993,
         "deletionLines": [
           
 "import type { PreloadedFileResult } from '@pierre/diffs/ssr';

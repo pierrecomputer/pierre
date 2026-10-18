@@ -184,12 +184,17 @@ export class TestWorker {
   }
 }
 
+type TestPoolOptions = Pick<
+  WorkerPoolOptions,
+  | 'mainThreadMaxCharacters'
+  | 'onWorkerError'
+  | 'poolSize'
+  | 'workerInitializationTimeout'
+>;
+
 export function createInitializingManager(
   initOptions: Partial<WorkerInitializationRenderOptions> = {},
-  poolOptions: Pick<
-    WorkerPoolOptions,
-    'onWorkerError' | 'poolSize' | 'workerInitializationTimeout'
-  > = {}
+  poolOptions: TestPoolOptions = {}
 ): {
   initialization: Promise<void>;
   manager: WorkerPoolManager;
@@ -229,13 +234,16 @@ export function createInitializingManager(
 }
 
 export async function createInitializedManager(
-  initOptions: Partial<WorkerInitializationRenderOptions> = {}
+  initOptions: Partial<WorkerInitializationRenderOptions> = {},
+  poolOptions: TestPoolOptions = {}
 ): Promise<{
   manager: WorkerPoolManager;
   worker: TestWorker;
 }> {
-  const { initialization, manager, worker } =
-    createInitializingManager(initOptions);
+  const { initialization, manager, worker } = createInitializingManager(
+    initOptions,
+    poolOptions
+  );
   const request = await worker.waitForInitializeRequest();
   worker.respond({
     type: 'success',

@@ -180,6 +180,18 @@ export interface WorkerPoolOptions {
   onWorkerError?: (event: ErrorEvent | Event, worker: Worker) => void;
 
   totalASTLRUCacheSize?: number;
+
+  /**
+   * Files and diffs with at most this many characters highlight on the main
+   * thread instead of a worker. Small highlights finish faster than a worker
+   * round trip, so they render highlighted without a plain-text pass. Files
+   * count `contents`; diffs count both sides of the diff. Main-thread results
+   * share the pool's highlight cache, and priming the cache follows the same
+   * rule.
+   *
+   * When unset, every highlight uses a worker.
+   */
+  mainThreadMaxCharacters?: number;
 }
 
 export interface WorkerInitializationRenderOptions extends Partial<WorkerRenderingOptions> {

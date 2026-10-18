@@ -47,6 +47,8 @@ export function hydratePartialDiff(
       targetFileDiff.isPartial = false;
       targetFileDiff.deletionLines = lines;
       targetFileDiff.additionLines = lines;
+      targetFileDiff.deletionCharacterCount = newFile.contents.length;
+      targetFileDiff.additionCharacterCount = newFile.contents.length;
       setHydratedCacheKey(targetFileDiff, null, newFile);
       return targetFileDiff;
     }
@@ -74,6 +76,8 @@ function hydrateTwoSidedFileDiff(
   fileDiff.isPartial = false;
   fileDiff.deletionLines = deletionLines;
   fileDiff.additionLines = additionLines;
+  fileDiff.deletionCharacterCount = oldFile.contents.length;
+  fileDiff.additionCharacterCount = newFile.contents.length;
   setHydratedCacheKey(fileDiff, oldFile, newFile);
   return fileDiff;
 }

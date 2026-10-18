@@ -316,6 +316,8 @@ export function parseMergeConflictDiffFromFile(
     isPartial: false,
     deletionLines: s.deletionLines,
     additionLines: s.additionLines,
+    deletionCharacterCount: currentContents.length,
+    additionCharacterCount: incomingContents.length,
     cacheKey:
       file.cacheKey != null
         ? `${file.cacheKey}:merge-conflict-diff`

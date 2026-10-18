@@ -19,8 +19,10 @@ import type {
   FileContents,
   FileDiffMetadata,
 } from '../src/types';
+import { getThemes } from '../src/utils/getThemes';
 import {
   isHandledWorkerPoolError,
+  WorkerPoolTaskCanceledError,
   WorkerPoolTerminatedError,
   WorkerPoolWorkerError,
 } from '../src/worker/errors';
@@ -509,6 +511,170 @@ describe('WorkerPoolManager cache priming', () => {
       expect((rejectedError as Error).message).toContain('pool terminated');
       // Components should ignore expected cancellations when logging errors.
       expect(isHandledWorkerPoolError(rejectedError)).toBe(true);
+    } finally {
+      manager.terminate();
+    }
+  });
+});
+
+describe('WorkerPoolManager main-thread threshold', () => {
+  test('routes files and diffs by character count against the threshold', async () => {
+    const file = createCacheableFile();
+    const diff = createCacheableDiff();
+    const diffCharacters =
+      diff.deletionCharacterCount + diff.additionCharacterCount;
+    const unset = await createInitializedManager();
+    const atFile = await createInitializedManager(
+      {},
+      { mainThreadMaxCharacters: file.contents.length }
+    );
+    const belowDiff = await createInitializedManager(
+      {},
+      { mainThreadMaxCharacters: diffCharacters - 1 }
+    );
+    try {
+      expect(unset.manager.shouldHighlightOnMainThread(file)).toBe(false);
+      expect(unset.manager.shouldHighlightOnMainThread(diff)).toBe(false);
+
+      expect(atFile.manager.shouldHighlightOnMainThread(file)).toBe(true);
+      expect(
+        atFile.manager.shouldHighlightOnMainThread({
+          ...file,
+          contents: `${file.contents} `,
+        })
+      ).toBe(false);
+
+      // Diffs count both sides, so one character under their sum routes the
+      // diff to a worker even though each side alone fits.
+      expect(belowDiff.manager.shouldHighlightOnMainThread(diff)).toBe(false);
+      expect(
+        belowDiff.manager.shouldHighlightOnMainThread({
+          ...diff,
+          additionCharacterCount: diff.additionCharacterCount - 1,
+        })
+      ).toBe(true);
+    } finally {
+      unset.manager.terminate();
+      atFile.manager.terminate();
+      belowDiff.manager.terminate();
+    }
+  });
+
+  test('rejects a main-thread prime whose language load outlives terminate', async () => {
+    const { manager } = await createInitializedManager(
+      {},
+      { mainThreadMaxCharacters: 1000 }
+    );
+    // With no highlighter loaded, this prime has to wait for its grammar.
+    await disposeHighlighter();
+    const file: FileContents = {
+      name: 'prime.py',
+      contents: 'value = [1, 2]\n',
+      cacheKey: 'main-thread:terminated',
+    };
+    const prime = manager.primeFileHighlightCache(file);
+    manager.terminate();
+
+    expect(await getRejection(prime)).toBeInstanceOf(WorkerPoolTerminatedError);
+    expect(manager.getFileResultCache(file)).toBeUndefined();
+  });
+
+  test('cancels a main-thread prime whose render options change while loading', async () => {
+    const { manager } = await createInitializedManager(
+      {},
+      { mainThreadMaxCharacters: 1000 }
+    );
+    try {
+      // Nothing else in this file loads Ruby, so this prime waits for it.
+      const file: FileContents = {
+        name: 'prime.rb',
+        contents: 'value = [1, 2]\n',
+        cacheKey: 'main-thread:options-changed',
+      };
+      const prime = manager.primeFileHighlightCache(file);
+      // The theme is unchanged, so the new options apply synchronously; the
+      // workers never acknowledge them in this harness, so don't await it.
+      void manager.setRenderOptions({ tokenizeMaxLineLength: 500 });
+
+      expect(await getRejection(prime)).toBeInstanceOf(
+        WorkerPoolTaskCanceledError
+      );
+      expect(manager.getFileResultCache(file)).toBeUndefined();
+    } finally {
+      manager.terminate();
+    }
+  });
+
+  test('cancels a main-thread prime whose highlighter is disposed while loading', async () => {
+    const { manager } = await createInitializedManager(
+      {},
+      { mainThreadMaxCharacters: 1000 }
+    );
+    try {
+      // With no highlighter loaded, this prime has to wait for its grammar.
+      await disposeHighlighter();
+      const file: FileContents = {
+        name: 'prime.py',
+        contents: 'value = [1, 2]\n',
+        cacheKey: 'main-thread:disposed',
+      };
+      const prime = manager.primeFileHighlightCache(file);
+      await disposeHighlighter();
+
+      expect(await getRejection(prime)).toBeInstanceOf(
+        WorkerPoolTaskCanceledError
+      );
+      expect(manager.getFileResultCache(file)).toBeUndefined();
+    } finally {
+      manager.terminate();
+    }
+  });
+
+  test('keeps a main-thread prime that completes while workers initialize', async () => {
+    const { initialization, manager, worker } = createInitializingManager(
+      {},
+      { mainThreadMaxCharacters: 1000 }
+    );
+    try {
+      await sharedHighlighter.getSharedHighlighter({
+        themes: getThemes(manager.getFileRenderOptions().theme),
+        langs: ['typescript'],
+        preferredHighlighter: manager.getPreferredHighlighter(),
+      });
+      const file = createCacheableFile('main-thread:during-initialize');
+      const prime = manager.primeFileHighlightCache(file);
+      expect(manager.getFileResultCache(file)).toBeDefined();
+      await withTimeout(prime);
+
+      const request = await worker.waitForInitializeRequest();
+      worker.respond({
+        type: 'success',
+        requestType: 'initialize',
+        id: request.id,
+        sentAt: Date.now(),
+      });
+      await withTimeout(initialization);
+
+      expect(manager.getFileResultCache(file)).toBeDefined();
+    } finally {
+      manager.terminate();
+    }
+  });
+
+  test('drops shared results rendered with outdated options', async () => {
+    const { manager } = await createInitializedManager();
+    try {
+      const file = createCacheableFile();
+      const result = { code: [], themeStyles: '', baseThemeType: undefined };
+      const options = manager.getFileRenderOptions();
+      manager.setFileResultCache(file.cacheKey, {
+        result,
+        options: { ...options, tokenizeMaxLineLength: 5 },
+      });
+      expect(manager.getFileResultCache(file)).toBeUndefined();
+
+      manager.setFileResultCache(file.cacheKey, { result, options });
+      expect(manager.getFileResultCache(file)).toEqual({ result, options });
     } finally {
       manager.terminate();
     }
