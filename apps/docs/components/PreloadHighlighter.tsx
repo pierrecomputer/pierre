@@ -1,13 +1,14 @@
 'use client';
-import { preloadHighlighter } from '@pierre/diffs';
+import { canUseWASM, preloadHighlighter } from '@pierre/diffs';
 import { usePathname } from 'next/navigation';
 import { useEffect } from 'react';
 
 export function PreloadHighlighter() {
-  // Preloading here could conflict with the playground's selected backend.
+  // Preloading here could conflict with the playground's selected backend, or
+  // with the shiki-js worker pool used when WebAssembly is unavailable.
   const isPlayground = usePathname().startsWith('/playground');
   useEffect(() => {
-    if (isPlayground) return;
+    if (isPlayground || !canUseWASM()) return;
     void preloadHighlighter({
       preferredHighlighter: 'highlights',
       themes: [

@@ -1,6 +1,7 @@
 'use client';
 
 import {
+  canUseWASM,
   DEFAULT_THEMES,
   getFiletypeFromFileName,
   getHighlighterIfLoaded,
@@ -312,9 +313,10 @@ export function HistoryDemo({ prerenderedFile }: HistoryDemoProps) {
 
     const startSeeding = () => {
       // Warm the shared highlighter before polling so the editor tokenizer can
-      // pick up the grammar synchronously once the component attaches.
+      // pick up the grammar synchronously once the component attaches. Matches
+      // the worker pool's backend, which is shiki-js without WebAssembly.
       void preloadHighlighter({
-        preferredHighlighter: 'highlights',
+        preferredHighlighter: canUseWASM() ? 'highlights' : 'shiki-js',
         themes: [DEFAULT_THEMES.dark, DEFAULT_THEMES.light],
         langs: [LANGUAGE],
       })

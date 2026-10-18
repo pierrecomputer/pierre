@@ -1,6 +1,6 @@
 'use client';
 
-import { DEFAULT_THEMES } from '@pierre/diffs';
+import { canUseWASM, DEFAULT_THEMES } from '@pierre/diffs';
 import {
   type WorkerInitializationRenderOptions,
   WorkerPoolContextProvider,
@@ -32,6 +32,10 @@ function getWorkerResourceLimits(): Pick<
 
 const WorkerResourceLimits = getWorkerResourceLimits();
 
+// Files and diffs up to this many characters highlight on the main thread,
+// where highlights finishes faster than a worker round trip.
+const MAIN_THREAD_MAX_CHARACTERS = 100_000;
+
 const PoolOptions: WorkerPoolOptions = {
   // We really shouldn't let the pool get too big...
   poolSize: Math.min(
@@ -39,6 +43,11 @@ const PoolOptions: WorkerPoolOptions = {
     WorkerResourceLimits.poolSize
   ),
   totalASTLRUCacheSize: WorkerResourceLimits.totalASTLRUCacheSize,
+  // The shiki-js fallback leaves this unset so every
+  // highlight goes through a worker.
+  mainThreadMaxCharacters: canUseWASM()
+    ? MAIN_THREAD_MAX_CHARACTERS
+    : undefined,
   workerFactory() {
     return new Worker(
       new URL('@pierre/diffs/worker/worker.js', import.meta.url)
@@ -49,7 +58,8 @@ const PoolOptions: WorkerPoolOptions = {
 const SITE = process.env.NEXT_PUBLIC_SITE;
 
 const HighlighterOptions: WorkerInitializationRenderOptions = {
-  preferredHighlighter: 'highlights',
+  // highlights needs WebAssembly. Without it the pool falls back to shiki-js.
+  preferredHighlighter: canUseWASM() ? 'highlights' : 'shiki-js',
   // diffshub intentionally previews on the soft Pierre pair (a deliberate
   // product choice) even though the canonical default is the non-soft pair.
   // Every other site preloads the shared default.

@@ -1,9 +1,8 @@
 'use client';
 
-import { resolveThemes, type ThemesType } from '@pierre/diffs';
+import { canUseWASM, resolveThemes, type ThemesType } from '@pierre/diffs';
 import { type CSSProperties, useEffect, useState } from 'react';
 
-import { canUseWasm } from '@/lib/canUseWasm';
 import {
   HIGHLIGHT_THEMES,
   highlightThemeStyle,
@@ -15,7 +14,7 @@ export function useHighlightTheme(theme: ThemesType): {
 } {
   // Only highlights renders the css-variables theme; the shiki-js fallback
   // pool used without WebAssembly keeps the real theme pair.
-  const enabled = canUseWasm();
+  const enabled = canUseWASM();
   const [style, setStyle] = useState<CSSProperties>();
   const { light, dark } = theme;
   useEffect(() => {

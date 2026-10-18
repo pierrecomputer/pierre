@@ -1,6 +1,6 @@
 'use client';
 
-import { DEFAULT_THEMES } from '@pierre/diffs';
+import { canUseWASM, DEFAULT_THEMES } from '@pierre/diffs';
 import { WorkerPoolContext } from '@pierre/diffs/react';
 import {
   getOrCreateWorkerPoolSingleton,
@@ -10,7 +10,6 @@ import {
 } from '@pierre/diffs/worker';
 import { type ReactNode, useState } from 'react';
 
-import { canUseWasm } from '@/lib/canUseWasm';
 import { PREFERRED_HIGHLIGHTER } from '@/lib/preferredHighlighter';
 
 // Files and diffs up to this many characters highlight on the main thread,
@@ -71,7 +70,7 @@ function getPoolOptions(): WorkerPoolOptions {
     totalASTLRUCacheSize: limits.totalASTLRUCacheSize,
     // The shiki-js fallback leaves this unset so every highlight goes through
     // a worker.
-    mainThreadMaxCharacters: canUseWasm()
+    mainThreadMaxCharacters: canUseWASM()
       ? MAIN_THREAD_MAX_CHARACTERS
       : undefined,
     workerFactory() {
@@ -98,6 +97,6 @@ function getHighlighterOptions(): WorkerInitializationRenderOptions {
       'zig',
     ],
     // highlights needs WebAssembly.
-    preferredHighlighter: canUseWasm() ? PREFERRED_HIGHLIGHTER : 'shiki-js',
+    preferredHighlighter: canUseWASM() ? PREFERRED_HIGHLIGHTER : 'shiki-js',
   };
 }

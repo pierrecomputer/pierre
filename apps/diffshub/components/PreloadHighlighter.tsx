@@ -1,14 +1,13 @@
 'use client';
-import { preloadHighlighter } from '@pierre/diffs';
+import { canUseWASM, preloadHighlighter } from '@pierre/diffs';
 import { useEffect } from 'react';
 
-import { canUseWasm } from '@/lib/canUseWasm';
 import { PREFERRED_HIGHLIGHTER } from '@/lib/preferredHighlighter';
 import { HIGHLIGHT_THEME_NAME } from '@/lib/theme/highlightTheme';
 
 export function PreloadHighlighter() {
   useEffect(() => {
-    if (!canUseWasm()) {
+    if (!canUseWASM()) {
       return;
     }
     void preloadHighlighter({
