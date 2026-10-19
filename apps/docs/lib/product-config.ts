@@ -129,7 +129,7 @@ export function getAgentPrompt(productId: AgentSkillProductId): string {
       '- Integrate the standalone API that fits the app: HTML, tokens, streaming, or incremental editing.',
       '- Preserve the existing languages, themes, and rendering behavior unless a change is required.',
       '- Verify the highlighted output in the target runtime and run the relevant project checks.',
-      "- Do not configure @pierre/diffs with preferredHighlighter: 'highlights'; that opt-in is planned but unreleased.",
+      "- To use Highlights in @pierre/diffs, set preferredHighlighter: 'highlights' (beta) and use canUseWASM() to fall back to 'shiki-js'.",
       `Full reference for LLMs: ${siteUrl}/llms-full.txt`,
     ].join('\n');
   }

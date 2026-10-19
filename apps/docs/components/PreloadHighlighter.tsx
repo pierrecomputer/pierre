@@ -3,13 +3,15 @@ import { preloadHighlighter } from '@pierre/diffs';
 import { usePathname } from 'next/navigation';
 import { useEffect } from 'react';
 
+import { getPreferredHighlighter } from '@/lib/preferredHighlighter';
+
 export function PreloadHighlighter() {
   // Preloading here could conflict with the playground's selected backend.
   const isPlayground = usePathname().startsWith('/playground');
   useEffect(() => {
     if (isPlayground) return;
     void preloadHighlighter({
-      preferredHighlighter: 'highlights',
+      preferredHighlighter: getPreferredHighlighter(),
       themes: [
         'pierre-dark',
         'pierre-dark-soft',

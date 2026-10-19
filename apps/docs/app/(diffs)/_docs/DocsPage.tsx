@@ -122,6 +122,7 @@ import {
   TOKEN_HOOKS_VANILLA,
 } from '../docs/TokenHooks/constants';
 import {
+  HELPER_CAN_USE_WASM,
   HELPER_DIFF_ACCEPT_REJECT,
   HELPER_DIFF_ACCEPT_REJECT_REACT,
   HELPER_DISPOSE_HIGHLIGHTER,
@@ -583,6 +584,7 @@ async function VirtualizationSection() {
 
 async function UtilitiesSection() {
   const [
+    canUseWASM,
     diffAcceptReject,
     diffAcceptRejectReact,
     disposeHighlighter,
@@ -596,6 +598,7 @@ async function UtilitiesSection() {
     setLanguageOverride,
     trimPatchContext,
   ] = await Promise.all([
+    preloadCodeExample(HELPER_CAN_USE_WASM),
     preloadCodeExample(HELPER_DIFF_ACCEPT_REJECT),
     preloadCodeExample(HELPER_DIFF_ACCEPT_REJECT_REACT),
     preloadCodeExample(HELPER_DISPOSE_HIGHLIGHTER),
@@ -612,6 +615,7 @@ async function UtilitiesSection() {
   const content = await renderMDX({
     filePath: '(diffs)/docs/Utilities/content.mdx',
     scope: {
+      canUseWASM,
       diffAcceptReject,
       diffAcceptRejectReact,
       disposeHighlighter,

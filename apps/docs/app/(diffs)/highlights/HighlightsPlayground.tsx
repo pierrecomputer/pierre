@@ -203,12 +203,9 @@ export function HighlightsPlayground({
             Drop-in replacement for Shiki
           </h2>
           <p className="text-muted-foreground text-pretty">
-            Highlights support is planned for a forthcoming{' '}
-            <code>@pierre/diffs</code> beta and is not available in the current
-            release. Once it ships, set{' '}
-            <code>preferredHighlighter: &apos;highlights&apos;</code> on your
-            component or worker pool to try it. Share feedback while the
-            integration is experimental.
+            Set <code>preferredHighlighter: &apos;highlights&apos;</code> on
+            your <code>@pierre/diffs</code> component or worker pool to try it.
+            Highlights support is in beta, so share feedback as you go.
           </p>
         </div>
       )}

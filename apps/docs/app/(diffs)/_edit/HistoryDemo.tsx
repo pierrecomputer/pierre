@@ -27,6 +27,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { HISTORY_DEMO_EDITS, HISTORY_DEMO_FILE } from './constants';
 import { Button } from '@/components/ui/button';
+import { getPreferredHighlighter } from '@/lib/preferredHighlighter';
 
 interface HistoryDemoProps {
   // Server-preloaded, highlighted File; hydrating from it avoids a highlight flash on load.
@@ -314,7 +315,7 @@ export function HistoryDemo({ prerenderedFile }: HistoryDemoProps) {
       // Warm the shared highlighter before polling so the editor tokenizer can
       // pick up the grammar synchronously once the component attaches.
       void preloadHighlighter({
-        preferredHighlighter: 'highlights',
+        preferredHighlighter: getPreferredHighlighter(),
         themes: [DEFAULT_THEMES.dark, DEFAULT_THEMES.light],
         langs: [LANGUAGE],
       })

@@ -271,7 +271,18 @@ export class WorkerPoolManager {
         tokenizeMaxLineLength,
       };
       if (!this.isInitialized()) {
-        await this.initialize();
+        try {
+          await this.initialize();
+        } catch (error) {
+          // When the workers fail to start, components highlight on the main
+          // thread with this pool's render options. Keep applying the new
+          // options so theme changes still take effect there;
+          // setRenderOptionsOnWorkers skips the failed workers. The pool has
+          // already reported the failure.
+          if (!this.workersFailed) {
+            throw error;
+          }
+        }
       }
       if (
         !isCurrentRequest() ||

@@ -10,6 +10,9 @@
   "exclude": ["node_modules", ".next"],
   "references": [
     {
+      "path": "../../packages/highlights/tsconfig.json"
+    },
+    {
       "path": "../../packages/diffs/tsconfig.json"
     },
     {
