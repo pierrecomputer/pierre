@@ -2,7 +2,6 @@
 import { canUseWASM, preloadHighlighter } from '@pierre/diffs';
 import { useEffect } from 'react';
 
-import { PREFERRED_HIGHLIGHTER } from '@/lib/preferredHighlighter';
 import { HIGHLIGHT_THEME_NAME } from '@/lib/theme/highlightTheme';
 
 export function PreloadHighlighter() {
@@ -19,7 +18,7 @@ export function PreloadHighlighter() {
         'pierre-light-soft',
       ],
       langs: ['zig', 'rust', 'typescript', 'tsx', 'bash'],
-      preferredHighlighter: PREFERRED_HIGHLIGHTER,
+      preferredHighlighter: 'highlights',
     });
   }, []);
   return null;

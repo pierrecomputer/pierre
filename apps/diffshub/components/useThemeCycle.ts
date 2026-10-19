@@ -7,7 +7,7 @@ import { useEffect, useRef, useState } from 'react';
 
 import { useLatestValueRef } from './useLatestValueRef';
 import { docsThemeCatalog } from '@/components/themeCatalog';
-import { PREFERRED_HIGHLIGHTER } from '@/lib/preferredHighlighter';
+import { getPreferredHighlighter } from '@/lib/preferredHighlighter';
 import type { DarkThemeName, LightThemeName } from '@/lib/themeNames';
 
 // Theme switching intervals the stress test can step through, after "off".
@@ -69,7 +69,7 @@ export function useThemeCycle({
     // whether that's highlights on the main thread or the worker pool.
     resolveThemes(
       [...docsThemeCatalog.getThemeNames()],
-      workerPool?.getPreferredHighlighter() ?? PREFERRED_HIGHLIGHTER
+      workerPool?.getPreferredHighlighter() ?? getPreferredHighlighter()
     )
       .catch((error: unknown) => {
         console.error('Failed to preload themes for cycling', error);

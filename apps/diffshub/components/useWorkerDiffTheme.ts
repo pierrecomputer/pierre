@@ -11,6 +11,8 @@ export function useWorkerDiffTheme(theme: ThemesType): void {
   const workerPool = useWorkerPool();
   useLayoutEffect(() => {
     if (workerPool == null) return;
-    void workerPool.setRenderOptions({ theme });
+    workerPool.setRenderOptions({ theme }).catch((error: unknown) => {
+      console.error('Failed to update the worker pool theme', error);
+    });
   }, [theme, workerPool]);
 }

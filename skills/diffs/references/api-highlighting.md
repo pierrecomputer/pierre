@@ -6,9 +6,11 @@ preload options, and worker highlighter options accept this selection.
 
 Only one backend type can be loaded per JavaScript realm (page, worker, or SSR
 process). Requests without `preferredHighlighter` use the loaded type, else
-`'shiki-js'`. Requesting another type throws until every instance of the loaded
-type, shared or from `createHighlighter`, is disposed. `getHighlighterType()`
-returns the loaded type.
+`'shiki-js'`. Shared-highlighter requests (components, `getSharedHighlighter`,
+`preloadHighlighter`) keep using the loaded type even when they name another
+one; they do not throw. `createHighlighter` with another type throws. To switch
+types, dispose every instance of the loaded type, shared or from
+`createHighlighter`. `getHighlighterType()` returns the loaded type.
 
 ## Shared highlighter
 

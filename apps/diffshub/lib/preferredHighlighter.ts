@@ -1,6 +1,9 @@
-import type { HighlighterTypes } from '@pierre/diffs';
+import { canUseWASM, type HighlighterTypes } from '@pierre/diffs';
 
-// Every diffs component, the preload, and the worker pool pass this so they
-// share one highlights instance. The pool swaps it for shiki-js when
-// WebAssembly is unavailable, and its choice overrides the components'.
-export const PREFERRED_HIGHLIGHTER: HighlighterTypes = 'highlights';
+// The highlighter diffshub uses: highlights when WebAssembly works, shiki-js
+// otherwise. The worker pool, the diffs components, and the theme cycle all
+// pass this so they agree on one highlighter type, including when a component
+// renders without a pool to override its preference.
+export function getPreferredHighlighter(): HighlighterTypes {
+  return canUseWASM() ? 'highlights' : 'shiki-js';
+}
