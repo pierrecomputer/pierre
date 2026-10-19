@@ -24,6 +24,7 @@ function createStubVirtualizer(type: 'simple' | 'advanced') {
     },
     markDOMDirty() {},
     requestHeightReconcile() {},
+    cancelScroll() {},
     render() {},
   } as never;
 }

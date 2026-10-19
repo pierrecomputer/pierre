@@ -2,7 +2,7 @@ import {
   dequeueRender,
   queueRender,
 } from '../managers/UniversalRenderingManager';
-import type { VirtualWindowSpecs } from '../types';
+import type { ScrollRequestResult, VirtualWindowSpecs } from '../types';
 import { areVirtualWindowSpecsEqual } from '../utils/areVirtualWindowSpecsEqual';
 import { createWindowFromScrollPosition } from '../utils/createWindowFromScrollPosition';
 
@@ -11,6 +11,22 @@ interface SubscribedInstance {
   reconcileHeights(): boolean;
   setVisibility(visible: boolean): void;
 }
+
+// A pending request to scroll a vertical span, such as a line, into view.
+interface SpanScrollRequest {
+  // Read again after every render pass, since edits and anchor fixes move it.
+  resolveSpan(): { top: number; height: number } | undefined;
+  align: 'nearest' | 'center';
+  onDone(result: ScrollRequestResult): void;
+}
+
+// User input that takes over scrolling from a pending span scroll.
+const USER_SCROLL_EVENTS = [
+  'wheel',
+  'touchstart',
+  'pointerdown',
+  'keydown',
+] as const;
 
 interface ScrollAnchor {
   fileElement: HTMLElement;
@@ -81,6 +97,7 @@ export class Virtualizer {
   private scrollHeightDirty = true;
   private renderedObservers = 0;
   private connectQueue: Map<HTMLElement, SubscribedInstance> = new Map();
+  private spanScrollRequest: SpanScrollRequest | undefined;
 
   constructor(config?: Partial<VirtualizerConfig>) {
     this.config = { ...DEFAULT_VIRTUALIZER_CONFIG, ...config };
@@ -106,6 +123,12 @@ export class Virtualizer {
       this.setupWindow();
     } else {
       this.setupElement(contentContainer);
+    }
+    const inputTarget = root instanceof Document ? window : root;
+    for (const type of USER_SCROLL_EVENTS) {
+      inputTarget.addEventListener(type, this.handleUserScrollInput, {
+        passive: true,
+      });
     }
 
     // FIXME(amadeus): Remove me before release
@@ -246,6 +269,11 @@ export class Virtualizer {
 
   cleanUp(): void {
     dequeueRender(this.computeRenderRangeAndEmit);
+    const inputTarget = this.root instanceof Document ? window : this.root;
+    for (const type of USER_SCROLL_EVENTS) {
+      inputTarget?.removeEventListener(type, this.handleUserScrollInput);
+    }
+    this.spanScrollRequest = undefined;
     this.resizeObserver?.disconnect();
     this.resizeObserver = undefined;
     this.intersectionObserver?.disconnect();
@@ -369,13 +397,19 @@ export class Virtualizer {
         !this.visibleInstancesDirty &&
         this.reconcileQueue.size === 0
       ) {
+        this.advanceSpanScroll(true);
         return;
       }
       this.windowSpecs = windowSpecs;
     }
     this.visibleInstancesDirty = false;
     this.renderedObservers = this.observers.size;
-    const anchor = this.getScrollAnchor(this.height);
+    // Skip anchoring while a span scroll is pending, otherwise the anchor fix
+    // would undo the scroll it's making.
+    const anchor =
+      this.spanScrollRequest == null
+        ? this.getScrollAnchor(this.height)
+        : undefined;
     const updatedInstances = new Set<SubscribedInstance>();
     // NOTE(amadeus): If the wrapper is dirty, we need to force every component
     // to re-render
@@ -407,6 +441,9 @@ export class Virtualizer {
     }
     this.reconcileQueue.clear();
     instancesHaveChanged ||= this.instancesChanged.size > 0;
+    // This has to run before markDOMDirty below, otherwise its scroll reads
+    // would clear the flags the next pass needs to re-render.
+    this.advanceSpanScroll(!instancesHaveChanged && !wrapperDirty);
 
     // Reconciliation reads virtualized offsets and can consume dirty geometry
     // flags, so mark after it when an instance update needs a corrected pass.
@@ -640,7 +677,18 @@ export class Virtualizer {
   }
 
   /** Scroll to a logical vertical position and queue the normal render pass. */
-  public scrollTo({ top, behavior = 'auto' }: VirtualizerScrollOptions): void {
+  public scrollTo(options: VirtualizerScrollOptions): void {
+    // The newest scroll request wins, so a pending span scroll is dropped.
+    const { spanScrollRequest: replaced } = this;
+    this.spanScrollRequest = undefined;
+    this.writeScrollTop(options);
+    replaced?.onDone('cancelled');
+  }
+
+  private writeScrollTop({
+    top,
+    behavior = 'auto',
+  }: VirtualizerScrollOptions): void {
     const { root } = this;
     if (root == null) {
       return;
@@ -654,6 +702,83 @@ export class Virtualizer {
     }
     this.scrollDirty = true;
     queueRender(this.computeRenderRangeAndEmit);
+  }
+
+  /**
+   * Scrolls toward a vertically defined region.
+   * - 'nearest' will only scroll the minimum amount to bring the region into
+   *   view, and do nothing if it's already showing.
+   * - 'center' will attempt to center the region in the viewport.
+   * - 'onDone' is called when the scrolling is done or cancelled. A newer
+   *   request or user scroll input cancels an existing scroll
+   */
+  public scrollSpanIntoView(request: SpanScrollRequest): void {
+    // Install the replacement before telling the replaced request it was
+    // cancelled, so a callback that requests again supersedes it in turn.
+    const { spanScrollRequest: replaced } = this;
+    this.spanScrollRequest = request;
+    queueRender(this.computeRenderRangeAndEmit);
+    replaced?.onDone('cancelled');
+  }
+
+  // Scroll toward the pending span's aligned position, or settle once it is
+  // there (or can get no closer) and canSettle says this render is final.
+  private advanceSpanScroll(canSettle: boolean): void {
+    const request = this.spanScrollRequest;
+    if (request == null) {
+      return;
+    }
+    const span = request.resolveSpan();
+    if (span == null) {
+      this.finishSpanScroll('cancelled');
+      return;
+    }
+    const scrollTop = this.getScrollTop();
+    const viewportBottom = scrollTop + this.getHeight();
+    const spanBottom = span.top + span.height;
+    // A span that covers the whole viewport counts as in view for 'nearest'.
+    let top = scrollTop;
+    if (request.align === 'center') {
+      top = span.top - (this.getHeight() - span.height) / 2;
+    } else if (span.top < scrollTop && spanBottom < viewportBottom) {
+      top = span.top;
+    } else if (span.top > scrollTop && spanBottom > viewportBottom) {
+      top = spanBottom - this.getHeight();
+    }
+    if (Math.abs(top - scrollTop) >= 1) {
+      this.writeScrollTop({ top, behavior: 'instant' });
+      if (Math.abs(this.getScrollTop() - scrollTop) >= 1) {
+        return;
+      }
+    }
+    if (canSettle) {
+      this.finishSpanScroll('settled');
+    }
+  }
+
+  private handleUserScrollInput = (event: Event): void => {
+    if (!event.defaultPrevented) {
+      this.cancelScroll();
+    }
+  };
+
+  // Drop the pending span scroll, reporting its request as cancelled. With
+  // onDone, only while that request is still the pending one.
+  public cancelScroll(onDone?: (result: ScrollRequestResult) => void): void {
+    if (onDone != null && this.spanScrollRequest?.onDone !== onDone) {
+      return;
+    }
+    this.finishSpanScroll('cancelled');
+  }
+
+  private finishSpanScroll(result: ScrollRequestResult): void {
+    const { spanScrollRequest } = this;
+    if (spanScrollRequest == null) {
+      return;
+    }
+    this.spanScrollRequest = undefined;
+    const { onDone } = spanScrollRequest;
+    onDone(result);
   }
 
   private clampScrollTop(scrollTop: number): number {

@@ -7,6 +7,7 @@ import type {
   PendingCodeViewLayoutReset,
   RenderRange,
   RenderWindow,
+  ScrollRequestResult,
   StickySpecs,
   ThemeTypes,
   VirtualFileMetrics,
@@ -539,6 +540,37 @@ export class VirtualizedFile<
     return this.virtualizer.type === 'simple'
       ? this.virtualizer.getRoot()
       : this.virtualizer.getContainerElement();
+  }
+
+  public scrollToLine(
+    lineNumber: number,
+    align: 'nearest' | 'center',
+    onDone: (result: ScrollRequestResult) => void
+  ): void {
+    const { virtualizer } = this;
+    if (virtualizer.type === 'advanced') {
+      virtualizer.scrollToInstanceLine(this, lineNumber, align, onDone);
+      return;
+    }
+    virtualizer.scrollSpanIntoView({
+      align,
+      onDone,
+      resolveSpan: () => {
+        const position = this.getLinePosition(lineNumber);
+        return position != null
+          ? {
+              top: this.getVirtualizedTop() + position.top,
+              height: position.height,
+            }
+          : undefined;
+      },
+    });
+  }
+
+  // Drop the host's pending scroll request. With onDone, only while that
+  // request is still the one onDone made.
+  public cancelScroll(onDone?: (result: ScrollRequestResult) => void): void {
+    this.virtualizer.cancelScroll(onDone);
   }
 
   public getNumericScrollAnchor(

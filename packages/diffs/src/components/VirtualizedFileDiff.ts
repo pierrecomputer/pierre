@@ -12,6 +12,7 @@ import type {
   PendingCodeViewLayoutReset,
   RenderRange,
   RenderWindow,
+  ScrollRequestResult,
   SelectionSide,
   StickySpecs,
   ThemeTypes,
@@ -787,6 +788,53 @@ export class VirtualizedFileDiff<
     return this.virtualizer.type === 'simple'
       ? this.virtualizer.getRoot()
       : this.virtualizer.getContainerElement();
+  }
+
+  public scrollToLine(
+    lineNumber: number,
+    align: 'nearest' | 'center',
+    onDone: (result: ScrollRequestResult) => void
+  ): void {
+    // The editor's empty row after a final newline has no diff line of its
+    // own, so target the line above it; the editor's caret reveal then covers
+    // the last row.
+    const targetLine =
+      lineNumber > 1 && this.getLinePosition(lineNumber) == null
+        ? lineNumber - 1
+        : lineNumber;
+    // A line still folded into a collapsed region (CodeView applies staged
+    // expansions on its next layout) has no row yet, so don't scroll to the
+    // separator standing in for it.
+    const { virtualizer } = this;
+    if (!super.isLineRenderable(targetLine)) {
+      // Still the newest request, so it replaces any scroll in flight.
+      virtualizer.cancelScroll();
+      onDone('cancelled');
+      return;
+    }
+    if (virtualizer.type === 'advanced') {
+      virtualizer.scrollToInstanceLine(this, targetLine, align, onDone);
+    } else {
+      virtualizer.scrollSpanIntoView({
+        align,
+        onDone,
+        resolveSpan: () => {
+          const position = this.getLinePosition(targetLine);
+          return position != null
+            ? {
+                top: this.getVirtualizedTop() + position.top,
+                height: position.height,
+              }
+            : undefined;
+        },
+      });
+    }
+  }
+
+  // Drop the host's pending scroll request. With onDone, only while that
+  // request is still the one onDone made.
+  public cancelScroll(onDone?: (result: ScrollRequestResult) => void): void {
+    this.virtualizer.cancelScroll(onDone);
   }
 
   public getNumericScrollAnchor(

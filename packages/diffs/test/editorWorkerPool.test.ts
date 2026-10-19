@@ -1925,6 +1925,7 @@ describe('rendering when an editor attaches', () => {
         isInstanceVisible: () => true,
         markDOMDirty() {},
         requestHeightReconcile() {},
+        cancelScroll() {},
       } as never;
       const instance = new VirtualizedFileDiff<undefined>(
         { theme: 'pierre-dark', disableFileHeader: true },
