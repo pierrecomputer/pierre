@@ -2,8 +2,11 @@ import { expect, test } from 'bun:test';
 import { toHtml } from 'hast-util-to-html';
 import { JSDOM } from 'jsdom';
 
-import type { DecorationItem, ThemedToken } from '../src/types';
-import { renderTokenLines } from '../src/utils/renderTokenLines';
+import {
+  type DecorationItem,
+  renderTokenLines,
+  type ThemedToken,
+} from '../src';
 
 function decoration(name: string, start: number, end: number): DecorationItem {
   return {

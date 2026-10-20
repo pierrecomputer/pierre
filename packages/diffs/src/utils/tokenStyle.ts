@@ -4,9 +4,13 @@ import type { ThemedToken } from '../types';
 // Shiki creates one per token, so caching them adds a WeakMap entry per token.
 const htmlStyleCache = new WeakMap<Record<string, string>, string>();
 
+/**
+ * Returns CSS declarations for a highlighted token. Enable caching only when
+ * htmlStyle objects are immutable and reused across tokens.
+ */
 export function tokenStyle(
   token: ThemedToken,
-  cacheHtmlStyle: boolean
+  cacheHtmlStyle: boolean = false
 ): string {
   const { htmlStyle } = token;
   if (htmlStyle != null) {

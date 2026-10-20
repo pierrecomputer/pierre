@@ -4,12 +4,15 @@ import type { CodeToHtmlOptions, TokensResult } from '../types';
 import { hastToHtml } from './hastToHtml';
 import { renderTokenLines } from './renderTokenLines';
 
-/** Serialize highlighted tokens without loading a backend's HTML renderer. */
+/**
+ * Renders existing tokens as a pre/code HTML block without highlighting again.
+ * Pass the original source to resolve numeric decoration offsets.
+ */
 export function tokensToHtml(
   source: string,
   result: TokensResult,
   options: CodeToHtmlOptions,
-  cacheHtmlStyles: boolean
+  cacheHtmlStyles: boolean = false
 ): string {
   const lineOffsets = [0];
   if (

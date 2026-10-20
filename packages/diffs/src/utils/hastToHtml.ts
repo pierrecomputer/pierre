@@ -55,8 +55,8 @@ const CHARACTER_REFERENCES: Record<string, string> = {
 const MAX_CACHED_STYLES = 256;
 
 /**
- * Avoid schema lookups for common token spans; delegate other nodes and
- * attributes to toHtml(). Output must match its default serialization exactly.
+ * Serializes a HAST node or node array to HTML. Common token spans use a fast
+ * path; other nodes and attributes use hast-util-to-html's default serialization.
  */
 export function hastToHtml(tree: Nodes | RootContent[]): string {
   const styles = new Map<string, string>();

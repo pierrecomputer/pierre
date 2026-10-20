@@ -2,11 +2,11 @@ import { afterAll, beforeEach, describe, expect, test } from 'bun:test';
 import type { Element, ElementContent, Nodes, RootContent } from 'hast';
 import { toHtml } from 'hast-util-to-html';
 
+import { hastToHtml } from '../src';
 import { disposeHighlighter } from '../src/highlighter/shared_highlighter';
 import { DiffHunksRenderer } from '../src/renderers/DiffHunksRenderer';
 import { FileRenderer } from '../src/renderers/FileRenderer';
 import { createGutterUtilityElement } from '../src/utils/createGutterUtilityElement';
-import { hastToHtml } from '../src/utils/hastToHtml';
 import { parseDiffFromFile } from '../src/utils/parseDiffFromFile';
 import { fileNew, fileOld, mockFiles } from './mocks';
 

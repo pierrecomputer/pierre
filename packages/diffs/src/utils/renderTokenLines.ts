@@ -6,13 +6,14 @@ import { setDeferredArrayItem } from './setDeferredArrayItem';
 import { tokenStyle } from './tokenStyle';
 import { wrapTokenFragments } from './wrapTokenFragments';
 
-interface RenderTokenLinesOptions {
+export interface RenderTokenLinesOptions {
   lazyLineAST?: boolean;
   cacheHtmlStyles?: boolean;
   state?: SharedRenderState;
   useTokenTransformer?: boolean;
   mergeWhitespaces?: 'never' | 'always';
   decorations?: DecorationItem[];
+  /** UTF-16 line start offsets, required for numeric decoration positions. */
   lineOffsets?: number[];
 }
 
@@ -35,6 +36,10 @@ interface DecorationBoundary {
   start: boolean;
 }
 
+/**
+ * Converts highlighted tokens to one HAST element per line for custom renderers.
+ * Callers provide any line separators and enclosing pre/code elements.
+ */
 export function renderTokenLines(
   lines: ThemedToken[][],
   {
