@@ -1,37 +1,37 @@
 import { BenchmarkBar } from './BenchmarkBar';
 import styles from './HighlightsBenchmarkCard.module.css';
 
-const maximumSpeedup = 294;
+const maximumSpeedup = 298;
 const shikiBaselineSpeedup = 1;
 
 const rows = [
   {
     language: 'CSS',
     size: '379 KiB',
-    highlights: 309,
-    shiki: 1.25,
-    speedup: 248,
+    highlights: 297,
+    shiki: 1.22,
+    speedup: 244,
   },
   {
     language: 'HTML',
     size: '474 KiB',
-    highlights: 678,
-    shiki: 2.86,
-    speedup: 237,
+    highlights: 615,
+    shiki: 2.8,
+    speedup: 220,
   },
   {
     language: 'JSONC',
     size: '292 KiB',
-    highlights: 894,
-    shiki: 6.04,
-    speedup: 148,
+    highlights: 928,
+    shiki: 5.89,
+    speedup: 157,
   },
   {
     language: 'TypeScript',
     size: '517 KiB',
-    highlights: 321,
-    shiki: 1.09,
-    speedup: 294,
+    highlights: 320,
+    shiki: 1.07,
+    speedup: 298,
   },
 ] as const;
 
@@ -52,7 +52,7 @@ export function HighlightsHtmlBenchmarks() {
           Highlight a whole file in one pass. On the 517 KiB TypeScript fixture,
           Highlights delivers{' '}
           <strong className="text-foreground font-semibold">
-            294× Shiki’s HTML throughput
+            298× Shiki’s HTML throughput
           </strong>
           , including input encoding and output decoding.
         </p>
@@ -128,12 +128,12 @@ export function HighlightsHtmlBenchmarks() {
 
       <div className="text-muted-foreground max-w-3xl space-y-2 text-xs leading-relaxed">
         <p>
-          Recorded September 25, 2026 · Bun 1.4.0 · Apple M4 Pro · Shiki 4.4.1.
-          Median throughput after a 200 ms warm-up, with at least 20 samples per
-          case and a 1.5 s sampling budget, rotating contenders. DOM rendering
-          is excluded and highlighting quality is not measured. Highlights
-          labels show speedup over Shiki. Token boundaries and styles can differ
-          between libraries.{' '}
+          Recorded October 5, 2026 · Bun 1.4.0 · Apple M4 Pro · macOS 27.0.1 ·
+          Shiki 4.4.1. Median throughput after a 200 ms warm-up, with at least
+          20 samples per case and a 1.5 s sampling budget, rotating contenders.
+          DOM rendering is excluded and highlighting quality is not measured.
+          Highlights labels show speedup over Shiki. Token boundaries and styles
+          can differ between libraries.{' '}
           <a
             href="https://github.com/pierrecomputer/pierre/tree/main/packages/highlights/benchmark#html-generation"
             className="styled-link styled-link-muted"
