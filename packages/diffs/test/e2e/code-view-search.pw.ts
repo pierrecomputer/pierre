@@ -1,5 +1,109 @@
 import { expect, test } from '@playwright/test';
 
+for (const kind of ['file', 'split', 'unified'] as const) {
+  test(`replace all while recycled renders current text and undo in ${kind}`, async ({
+    page,
+  }) => {
+    await page.goto(
+      `/test/e2e/fixtures/code-view-search.html?recycle&kind=${kind}&diffStyle=${kind}`
+    );
+    const root = page.locator('[data-code-view-root]');
+    const content = root.locator('[contenteditable="true"]');
+    await content
+      .locator('[data-line="1"]:not([data-line-type="change-deletion"])')
+      .click();
+    await page.keyboard.press('ControlOrMeta+Alt+f');
+    const panel = root.locator('[data-search-panel-overlay]');
+    const search = panel.getByRole('textbox', { name: 'Search' });
+    const replacement = panel.getByRole('textbox', {
+      name: 'Replace',
+      exact: true,
+    });
+    await expect(search).toBeVisible();
+    await search.fill('target');
+    await replacement.fill('NEW');
+    await root.hover();
+    await page.mouse.wheel(0, 6000);
+    await expect(content).toHaveCount(0);
+    await expect(replacement).toBeFocused();
+    await panel
+      .getByRole('button', { name: 'Replace All', exact: true })
+      .click();
+    await expect(panel.locator('[data-matches]')).toHaveText('No results');
+    await expect
+      .poll(() =>
+        page.evaluate(() => window.__codeView?.getEditor('item')?.getText())
+      )
+      .toBe('NEW one\nkeep\nNEW two\n');
+    await page.evaluate(() =>
+      window.__codeView?.scrollTo({
+        type: 'position',
+        position: 0,
+        behavior: 'instant',
+      })
+    );
+    const rows = content.locator(
+      '[data-line]:not([data-line-type="change-deletion"])'
+    );
+    await expect(rows.filter({ hasText: 'NEW' })).toHaveText([
+      'NEW one',
+      'NEW two',
+    ]);
+    await expect(content).not.toContainText('target');
+    await expect(root.locator('[data-search-match]')).toHaveCount(0);
+    await root.hover();
+    await page.mouse.wheel(0, 6000);
+    await expect(content).toHaveCount(0);
+    await page.evaluate(() => window.__codeView?.getEditor('item')?.undo());
+    await expect
+      .poll(() =>
+        page.evaluate(() => window.__codeView?.getEditor('item')?.canUndo)
+      )
+      .toBe(false);
+    await page.evaluate(() =>
+      window.__codeView?.scrollTo({
+        type: 'position',
+        position: 0,
+        behavior: 'instant',
+      })
+    );
+    await expect(rows.filter({ hasText: 'target' })).toHaveText([
+      'target one',
+      'target two',
+    ]);
+    await expect(panel.locator('[data-matches]')).toContainText('2');
+    await expect(content.locator('[data-search-match]')).toHaveCount(2);
+  });
+}
+
+test('ending edit mode with replacement input focused leaves find usable', async ({
+  page,
+}) => {
+  await page.goto('/test/e2e/fixtures/code-view-search.html?scope');
+  const root = page.locator('[data-code-view-root]');
+  await root.locator('[contenteditable="true"]').nth(1).click();
+  await page.keyboard.press('ControlOrMeta+Alt+f');
+  const panel = root.locator('[data-search-panel-overlay]');
+  const search = panel.getByRole('textbox', { name: 'Search' });
+  const replacement = panel.getByRole('textbox', {
+    name: 'Replace',
+    exact: true,
+  });
+  await search.fill('target');
+  await replacement.fill('NEW');
+  await expect(replacement).toBeFocused();
+  await page.evaluate(() => {
+    const view = window.__codeView!;
+    view.updateItem({ ...view.getItem('second')!, edit: false, version: 1 });
+  });
+  await expect(replacement).toBeHidden();
+  await expect(panel.locator('[data-matches]')).toContainText('5');
+  await search.click();
+  await expect(search).toBeFocused();
+  await search.fill('readonly');
+  await expect(panel.locator('[data-matches]')).toHaveText('1 of 1');
+});
+
 for (const diffStyle of ['split', 'unified'] as const) {
   test(`scoped search reveals and selects collapsed context in ${diffStyle} mode`, async ({
     page,
@@ -9,7 +113,9 @@ for (const diffStyle of ['split', 'unified'] as const) {
     );
     const root = page.locator('[data-code-view-root]');
     const content = root.locator('[contenteditable="true"]');
-    const hiddenLine = content.locator('[data-line="101"]');
+    const hiddenLine = content.locator(
+      '[data-line="101"]:not([data-line-type="change-deletion"])'
+    );
     await expect(hiddenLine).toHaveCount(0);
     await content
       .locator('[data-line="10"]:not([data-line-type="change-deletion"])')
@@ -37,6 +143,19 @@ for (const diffStyle of ['split', 'unified'] as const) {
     await input.press('Enter');
     await expect(hiddenLine).toBeInViewport();
     await expect(input).toBeFocused();
+
+    const replacement = root.getByRole('textbox', {
+      name: 'Replace',
+      exact: true,
+    });
+    await replacement.fill('changed');
+    await replacement.press('Enter');
+    await expect(hiddenLine).toContainText('hidden changed');
+    await expect(root.locator('[data-matches]')).toHaveText('No results');
+    await expect(replacement).toBeFocused();
+    await page.evaluate(() => window.__codeView?.getEditor('diff')?.undo());
+    await expect(hiddenLine).toContainText('hidden target');
+    await expect(root.locator('[data-matches]')).toContainText('1');
   });
 }
 
@@ -54,6 +173,12 @@ test('search scope follows focus across editors, the panel, and outside CodeView
   const panel = root.locator('[data-search-panel-overlay]');
   const input = panel.getByRole('textbox', { name: 'Search' });
   const count = panel.locator('[data-matches]');
+  const replacement = panel.getByRole('textbox', {
+    name: 'Replace',
+    exact: true,
+  });
+  await expect(replacement).toBeVisible();
+  await replacement.fill('changed');
   await input.fill('target');
   await expect(count).toHaveText('1 of 1');
   await expect(
@@ -63,6 +188,7 @@ test('search scope follows focus across editors, the panel, and outside CodeView
   await second.click();
   await expect(count).toHaveText('2 results');
   await expect(second).toBeFocused();
+  await expect(replacement).toHaveValue('changed');
   const matchCase = panel.getByRole('button', { name: 'Match Case' });
   await matchCase.click();
   await expect(matchCase).toHaveAttribute('aria-pressed', 'true');
@@ -80,6 +206,7 @@ test('search scope follows focus across editors, the panel, and outside CodeView
     root.locator('[data-deletions] [data-search-match]')
   ).toHaveCount(1);
   await expect(page.locator('[data-outside]')).toBeFocused();
+  await expect(replacement).toBeHidden();
   await expect(matchCase).toHaveAttribute('aria-pressed', 'true');
   await first.click();
   await expect(count).toHaveText('1 results');
@@ -87,15 +214,73 @@ test('search scope follows focus across editors, the panel, and outside CodeView
     root.locator('[data-deletions] [data-search-match]')
   ).toHaveCount(0);
   await expect(first).toBeFocused();
+  await expect(replacement).toBeVisible();
+  await expect(replacement).toHaveValue('changed');
 
   await root.focus();
   await page.keyboard.press('ControlOrMeta+f');
   await expect(count).toHaveText('5 results');
+  await expect(replacement).toBeHidden();
   await expect(input).toHaveValue('target');
   await expect(root.getByRole('textbox', { name: 'Search' })).toHaveCount(1);
   await input.press('Escape');
   await first.click();
   await expect(root.locator('[data-search-panel]')).toHaveCount(0);
+});
+
+test('scoped replacement advances past inserted matches and replace all is one undo step', async ({
+  page,
+}) => {
+  await page.goto('/test/e2e/fixtures/code-view-search.html?scope');
+  const root = page.locator('[data-code-view-root]');
+  const content = root.locator('[contenteditable="true"]').nth(1);
+  await expect(content).toBeVisible();
+  await page.evaluate(() =>
+    window.__codeView?.getEditor('second')?.applyEdits([
+      {
+        range: {
+          start: { line: 0, character: 0 },
+          end: { line: 0, character: 13 },
+        },
+        newText: 'target target target',
+      },
+    ])
+  );
+  await expect(content).toContainText('target target target');
+  await content.click();
+  await page.keyboard.press('ControlOrMeta+Alt+f');
+  const panel = root.locator('[data-search-panel-overlay]');
+  const input = panel.getByRole('textbox', { name: 'Search' });
+  const replacement = panel.getByRole('textbox', {
+    name: 'Replace',
+    exact: true,
+  });
+  const count = panel.locator('[data-matches]');
+  await input.fill('target');
+  await input.press('Enter');
+  await expect(count).toHaveText('2 of 3');
+  await replacement.fill('targettarget');
+  await replacement.press('Enter');
+  await expect(content).toContainText('target targettarget target');
+  await expect(count).toHaveText('4 of 4');
+  await expect(replacement).toBeFocused();
+  await replacement.press('Enter');
+  await expect(content).toContainText('target targettarget targettarget');
+  await expect(count).toHaveText('5 results');
+  await replacement.fill('new');
+  await panel.getByRole('button', { name: 'Replace All', exact: true }).click();
+  await expect(content).toContainText('new newnew newnew');
+  await expect(count).toHaveText('No results');
+  await expect(root.locator('[data-search-match]')).toHaveCount(0);
+  await expect
+    .poll(() =>
+      page.evaluate(() => window.__codeView?.getEditor('diff')?.getText())
+    )
+    .toBe('target added\nunchanged\n');
+  await page.evaluate(() => window.__codeView?.getEditor('second')?.undo());
+  await expect(content).toContainText('target targettarget targettarget');
+  await expect(count).toContainText('5');
+  await expect(content.locator('[data-search-match]')).toHaveCount(5);
 });
 
 test('refreshes search after typing and undo without a host update', async ({

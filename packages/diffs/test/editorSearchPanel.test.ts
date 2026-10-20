@@ -87,10 +87,16 @@ function createWidget(
   options: {
     defaultQuery?: string;
     mode?: SearchPanelOptions['mode'];
+    initialMatch?: MatchRange;
     selectCurrent?: boolean;
   } = {}
 ): WidgetHarness {
-  const { defaultQuery = '', mode, selectCurrent = true } = options;
+  const {
+    defaultQuery = '',
+    mode,
+    initialMatch,
+    selectCurrent = true,
+  } = options;
   const dom = installDom();
   const textDocument = new TextDocument('inmemory://search-panel', contents);
   const containerElement = document.createElement('div');
@@ -121,6 +127,7 @@ function createWidget(
     containerElement,
     defaultQuery,
     mode,
+    initialMatch,
     search: (searchParams) => textDocument.search(searchParams),
     isSameMatch: ([aStart, aEnd], [bStart, bEnd]) =>
       aStart === bStart && aEnd === bEnd,
@@ -173,6 +180,70 @@ function createWidget(
 }
 
 describe('SearchPanelWidget', () => {
+  for (const initialMatch of [undefined, [0, 3] as MatchRange]) {
+    test.each(['search', 'replace', 'outside'] as const)(
+      `initial frame preserves an early search and navigation with ${initialMatch == null ? 'empty' : 'prefilled'} query and focus on %s`,
+      async (focusTarget) => {
+        const harness = createWidget('foo foo', {
+          defaultQuery: initialMatch == null ? '' : 'foo',
+          initialMatch,
+          mode: 'replace',
+        });
+        try {
+          // Enter the query and navigate before the constructor's frame runs.
+          harness.widget.focus();
+          setInputValue(harness.input, 'foo');
+          pressKey(harness.input, 'Enter');
+          const outside = document.createElement('button');
+          document.body.append(outside);
+          const target =
+            focusTarget === 'search'
+              ? harness.input
+              : focusTarget === 'replace'
+                ? harness.replaceInput
+                : outside;
+          target.focus();
+          harness.input.setSelectionRange(3, 3);
+          await waitForAnimationFrame();
+          expect(harness.updates).toEqual([
+            [
+              [0, 3],
+              [4, 7],
+            ],
+          ]);
+          expect(harness.matchesText()).toBe('2 of 2');
+          expect(harness.input.value).toBe('foo');
+          expect(harness.input.selectionStart).toBe(3);
+          expect(harness.input.selectionEnd).toBe(3);
+          if (focusTarget === 'outside') {
+            expect(document.activeElement).toBe(target);
+          } else {
+            expect(
+              harness.widget.getHostElement().shadowRoot!.activeElement
+            ).toBe(target);
+          }
+        } finally {
+          harness.cleanup();
+        }
+      }
+    );
+  }
+
+  test('closing before the initial frame prevents a late result update', async () => {
+    const harness = createWidget('foo foo', {
+      defaultQuery: 'foo',
+      initialMatch: [0, 3],
+    });
+    try {
+      harness.widget.close();
+      await waitForAnimationFrame();
+      expect(harness.isClosed()).toBe(true);
+      expect(harness.updates).toEqual([]);
+    } finally {
+      harness.cleanup();
+    }
+  });
+
   test('Shift+Enter in the find input navigates to the previous match', async () => {
     const harness = createWidget('foo foo foo');
     try {
@@ -1127,6 +1198,64 @@ describe('search agrees with a string-model oracle under random splices', () => 
   });
 });
 describe('SearchPanelWidget', () => {
+  test('changes replacement capability without rebuilding controls or moving focus', async () => {
+    const dom = installDom();
+    try {
+      const calls: string[] = [];
+      const widget = new SearchPanelWidget<MatchRange>({
+        containerElement: createContainer(),
+        defaultQuery: 'foo',
+        mode: 'replace',
+        initialMatch: [0, 3],
+        search: () => [[0, 3]],
+        scrollToMatch: () => {},
+        onUpdate: (matches) => matches[0],
+        onClose: () => {},
+      });
+      await wait(0);
+      const panel = widget.getHostElement().shadowRoot!;
+      const grid = panel.querySelector<HTMLElement>('[data-search-grid]')!;
+      const query =
+        panel.querySelector<HTMLInputElement>('input[data-search]')!;
+      const outside = document.createElement('input');
+      document.body.append(outside);
+      outside.focus();
+      const handlers = (name: string) => ({
+        replaceMatch: (_match: MatchRange, params: SearchParams) => {
+          calls.push(`${name}:${params.text}:${params.replaceText}`);
+          return undefined;
+        },
+        replaceAll: () => {},
+      });
+      widget.setReplaceHandlers(handlers('first'));
+      expect(grid.dataset.mode).toBe('replace');
+      expect(document.activeElement).toBe(outside);
+      const replacement = panel.querySelector<HTMLInputElement>(
+        'input[data-replace]'
+      )!;
+      setInputValue(replacement, 'bar');
+      const button = panel.querySelector<HTMLButtonElement>(
+        'button[title="Replace"]'
+      )!;
+      button.click();
+      widget.setReplaceHandlers(undefined);
+      expect(grid.dataset.mode).toBe('find');
+      button.click();
+      expect(calls).toEqual(['first:foo:bar']);
+      widget.setReplaceHandlers(handlers('second'));
+      expect(grid.dataset.mode).toBe('replace');
+      expect(panel.querySelector('input[data-replace]')).toBe(replacement);
+      expect(replacement.value).toBe('bar');
+      expect(query.value).toBe('foo');
+      expect(document.activeElement).toBe(outside);
+      button.click();
+      expect(calls).toEqual(['first:foo:bar', 'second:foo:bar']);
+      widget.cleanup();
+    } finally {
+      dom.cleanup();
+    }
+  });
+
   test('runs in find-only mode without replace handlers', async () => {
     const dom = installDom();
     try {

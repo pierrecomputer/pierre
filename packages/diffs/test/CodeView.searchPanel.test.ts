@@ -105,6 +105,26 @@ function fillSearch(root: HTMLElement, value: string): void {
   input.dispatchEvent(new window.Event('input', { bubbles: true }));
 }
 
+function fillReplace(root: HTMLElement, value: string): HTMLInputElement {
+  const input = getSearchPanelRoot(root).querySelector<HTMLInputElement>(
+    'input[data-replace]'
+  );
+  if (input == null) {
+    throw new Error('Expected replacement input');
+  }
+  input.value = value;
+  input.dispatchEvent(new window.Event('input', { bubbles: true }));
+  return input;
+}
+
+function replaceFromPanel(root: HTMLElement, all = false): void {
+  getSearchPanelRoot(root)
+    .querySelector<HTMLButtonElement>(
+      `button[title="${all ? 'Replace All' : 'Replace'}"]`
+    )!
+    .click();
+}
+
 function getSearchPanelHost(root: HTMLElement): HTMLElement {
   const host = root.querySelector<HTMLElement>('[data-search-panel]');
   if (host === null) {
@@ -218,6 +238,220 @@ afterAll(async () => {
 });
 
 describe('CodeView search panel', () => {
+  test('replacement follows scope and retains panel state across edit-mode changes', async () => {
+    const dom = installDom();
+    const changes: string[] = [];
+    const viewer = new CodeView({
+      createEditor: (type, options, key) => new Editor(type, options, key),
+      onItemEditChange: (_event, item) => changes.push(item.id),
+    });
+    try {
+      const root = createRoot();
+      root.tabIndex = 0;
+      viewer.setup(root);
+      await renderItems(viewer, [
+        {
+          id: 'a',
+          type: 'file',
+          edit: true,
+          file: { name: 'a.txt', contents: 'target target' },
+        },
+        {
+          id: 'b',
+          type: 'file',
+          edit: true,
+          file: { name: 'b.txt', contents: 'target b' },
+        },
+        {
+          id: 'read',
+          type: 'file',
+          file: { name: 'read.txt', contents: 'target read' },
+        },
+      ]);
+      dispatchPrimaryFind(root, true);
+      await wait(0);
+      const host = getSearchPanelHost(root);
+      const panel = getSearchPanelRoot(root);
+      const grid = panel.querySelector<HTMLElement>('[data-search-grid]')!;
+      expect(grid.dataset.mode).toBe('find');
+      expect(panel.querySelector('input[data-replace]')).toBeNull();
+      fillSearch(root, 'target');
+      panel
+        .querySelector<HTMLButtonElement>('button[title="Match Case"]')!
+        .click();
+      getEditorContent(viewer, 'a').focus();
+      viewer.render(true);
+      await wait(0);
+      expect(grid.dataset.mode).toBe('replace');
+      const replacement = fillReplace(root, 'changed');
+      getEditorContent(viewer, 'b').focus();
+      viewer.render(true);
+      await wait(0);
+      replacement.focus();
+      replaceFromPanel(root, true);
+      viewer.render(true);
+      await wait(0);
+      expect(viewer.getEditor('b')!.getText()).toBe('changed b');
+      expect(viewer.getEditor('a')!.getText()).toBe('target target');
+      expect(viewer.getItem('read')).toMatchObject({
+        file: { contents: 'target read' },
+      });
+      expect(changes).toEqual(['b']);
+      expect(panel.activeElement).toBe(replacement);
+
+      const outside = document.createElement('button');
+      document.body.append(outside);
+      outside.focus();
+      viewer.render(true);
+      await wait(0);
+      expect(grid.dataset.mode).toBe('find');
+      replaceFromPanel(root, true);
+      expect(viewer.getEditor('a')!.getText()).toBe('target target');
+      getEditorContent(viewer, 'a').focus();
+      viewer.render(true);
+      await wait(0);
+      expect(grid.dataset.mode).toBe('replace');
+      expect(getSearchPanelHost(root)).toBe(host);
+      expect(panel.querySelector('input[data-replace]')).toBe(replacement);
+      expect(replacement.value).toBe('changed');
+      expect(getSearchInput(root).value).toBe('target');
+      expect(
+        panel
+          .querySelector('button[title="Match Case"]')
+          ?.getAttribute('aria-pressed')
+      ).toBe('true');
+      replacement.focus();
+      viewer.updateItem({ ...viewer.getItem('a')!, edit: false, version: 2 });
+      viewer.render(true);
+      await wait(0);
+      expect(getSearchState(viewer).scope).toBeUndefined();
+      expect(grid.dataset.mode).toBe('find');
+      expect(replacement.value).toBe('changed');
+    } finally {
+      viewer.cleanUp();
+      dom.cleanup();
+    }
+  });
+
+  test.each(['file', 'split', 'unified'] as const)(
+    'replacing a middle match advances past replacement text containing the query in %s',
+    async (kind) => {
+      const replacement = 'ashash';
+      const dom = installDom();
+      const changes: string[] = [];
+      const viewer = new CodeView({
+        diffStyle: kind === 'unified' ? 'unified' : 'split',
+        createEditor: (type, options, key) => new Editor(type, options, key),
+        onItemEditChange: (_event, item) => changes.push(item.id),
+      });
+      try {
+        const root = createRoot();
+        viewer.setup(root);
+        const contents = 'ash elm ash birch ash';
+        const file = { name: 'replace.txt', contents };
+        await renderItems(viewer, [
+          kind === 'file'
+            ? { id: 'item', type: 'file', edit: true, file }
+            : {
+                id: 'item',
+                type: 'diff',
+                edit: true,
+                fileDiff: parseDiffFromFile(
+                  { ...file, contents: 'ash deleted' },
+                  file
+                ),
+              },
+        ]);
+        const content = getEditorContent(viewer, 'item');
+        content.focus();
+        dispatchPrimaryFind(content, true);
+        await wait(0);
+        expect(
+          getSearchPanelRoot(root).querySelector<HTMLElement>(
+            '[data-search-grid]'
+          )?.dataset.mode
+        ).toBe('replace');
+        fillSearch(root, 'ash');
+        pressSearchEnter(root);
+        expect(getSearchState(viewer).current?.startCharacter).toBe(8);
+        const input = fillReplace(root, replacement);
+        input.focus();
+        replaceFromPanel(root);
+        viewer.render(true);
+        await wait(0);
+        const editor = viewer.getEditor('item')!;
+        expect(editor.getText()).toBe(`ash elm ${replacement} birch ash`);
+        expect(getSearchState(viewer).current?.lineIndex).toBe(0);
+        expect(getSearchState(viewer).current?.startCharacter).toBe(21);
+        expect(getSearchState(viewer).matches).toHaveLength(4);
+        expect(getSearchPanelRoot(root).activeElement).toBe(input);
+        replaceFromPanel(root);
+        viewer.render(true);
+        await wait(0);
+        expect(editor.getText()).toBe(
+          `ash elm ${replacement} birch ${replacement}`
+        );
+        expect(getSearchState(viewer).current).toBeUndefined();
+        expect(getSearchState(viewer).matches).toHaveLength(5);
+        expect(changes).toEqual(['item', 'item']);
+        expect(getSearchPanelRoot(root).activeElement).toBe(input);
+      } finally {
+        viewer.cleanUp();
+        dom.cleanup();
+      }
+    }
+  );
+
+  test('replace all edits live scoped additions in one history step and refreshes highlights', async () => {
+    const dom = installDom();
+    const viewer = new CodeView({
+      createEditor: (type, options, key) => new Editor(type, options, key),
+    });
+    try {
+      const root = createRoot();
+      viewer.setup(root);
+      const fileDiff = parseDiffFromFile(
+        { name: 'replace.txt', contents: 'target deleted\nold' },
+        { name: 'replace.txt', contents: 'target target\nunchanged' }
+      );
+      await renderItems(viewer, [
+        { id: 'diff', type: 'diff', edit: true, fileDiff },
+        {
+          id: 'other',
+          type: 'file',
+          edit: true,
+          file: { name: 'other.txt', contents: 'target other' },
+        },
+      ]);
+      const content = getEditorContent(viewer, 'diff');
+      content.focus();
+      dispatchPrimaryFind(content);
+      await wait(0);
+      fillSearch(root, 'target');
+      fillReplace(root, 'new');
+      replaceFromPanel(root, true);
+      viewer.render(true);
+      await wait(0);
+      const editor = viewer.getEditor('diff')!;
+      expect(editor.getText()).toBe('new new\nunchanged');
+      expect(fileDiff.additionLines.join('')).toBe('target target\nunchanged');
+      expect(fileDiff.deletionLines.join('')).toBe('target deleted\nold');
+      expect(viewer.getEditor('other')!.getText()).toBe('target other');
+      expect(getSearchState(viewer).matches).toHaveLength(0);
+      expect(getRenderedSearchMatches(root)).toHaveLength(0);
+      editor.undo();
+      viewer.render(true);
+      await wait(0);
+      expect(editor.getText()).toBe('target target\nunchanged');
+      expect(editor.canUndo).toBe(false);
+      expect(getSearchState(viewer).matches).toHaveLength(2);
+      expect(getRenderedSearchMatches(root)).toHaveLength(2);
+    } finally {
+      viewer.cleanUp();
+      dom.cleanup();
+    }
+  });
+
   test('selects scoped file matches without editor scrolling and leaves global selections alone', async () => {
     const dom = installDom();
     const viewer = new CodeView({
@@ -775,6 +1009,129 @@ describe('CodeView search panel', () => {
       }
     }
   );
+
+  for (const action of ['replace', 'replaceAll', 'applyEdits'] as const) {
+    test.each(['file', 'split', 'unified'] as const)(
+      `${action} while recycled renders the edited document after remount in %s`,
+      async (kind) => {
+        const dom = installDom();
+        const changes: string[] = [];
+        const viewer = new CodeView({
+          diffStyle: kind === 'unified' ? 'unified' : 'split',
+          createEditor: (type, options, key) => new Editor(type, options, key),
+          onItemEditChange: (_event, item) => changes.push(item.id),
+        });
+        try {
+          const root = createRoot();
+          viewer.setup(root);
+          const file = {
+            name: 'replace.txt',
+            contents: 'target one\nkeep\ntarget two\n',
+          };
+          await renderItems(viewer, [
+            kind === 'file'
+              ? { id: 'item', type: 'file', edit: true, file }
+              : {
+                  id: 'item',
+                  type: 'diff',
+                  edit: true,
+                  fileDiff: parseDiffFromFile(
+                    { ...file, contents: 'old one\nkeep\nold two\n' },
+                    file
+                  ),
+                },
+            {
+              id: 'padding',
+              type: 'file',
+              file: { name: 'padding.txt', contents: 'padding\n'.repeat(1000) },
+            },
+          ]);
+          const editor = viewer.getEditor('item')!;
+          const content = getEditorContent(viewer, 'item');
+          content.focus();
+          dispatchPrimaryFind(content, true);
+          await wait(0);
+          fillSearch(root, 'target');
+          const input = fillReplace(root, 'NEW');
+          input.focus();
+          const recycle = async () => {
+            viewer.scrollTo({
+              type: 'position',
+              position: 5000,
+              behavior: 'instant',
+            });
+            viewer.render(true);
+            await wait(0);
+            expect(
+              viewer.getRenderedItems().some((item) => item.id === 'item')
+            ).toBe(false);
+            expect(getSearchState(viewer).scope).toEqual({ itemId: 'item' });
+          };
+          const remount = async (expected: string) => {
+            viewer.scrollTo({
+              type: 'position',
+              position: 0,
+              behavior: 'instant',
+            });
+            await waitFor(() => {
+              viewer.render(true);
+              return viewer
+                .getRenderedItems()
+                .some((item) => item.id === 'item');
+            });
+            const rows = getEditorContent(
+              viewer,
+              'item'
+            ).querySelectorAll<HTMLElement>(
+              '[data-line]:not([data-line-type="change-deletion"])'
+            );
+            expect(
+              Array.from(rows, (row) => row.textContent)
+                .join('\n')
+                .replace(/\n$/, '')
+            ).toBe(expected.replace(/\n$/, ''));
+          };
+          await recycle();
+          if (action === 'applyEdits') {
+            editor.applyEdits([
+              {
+                range: {
+                  start: { line: 0, character: 0 },
+                  end: { line: 0, character: 6 },
+                },
+                newText: 'NEW\nextra',
+              },
+            ]);
+          } else {
+            replaceFromPanel(root, action === 'replaceAll');
+          }
+          const expected =
+            action === 'replaceAll'
+              ? 'NEW one\nkeep\nNEW two\n'
+              : action === 'replace'
+                ? 'NEW one\nkeep\ntarget two\n'
+                : 'NEW\nextra one\nkeep\ntarget two\n';
+          expect(editor.getText()).toBe(expected);
+          expect(changes).toEqual(['item']);
+          await remount(expected);
+          expect(getSearchPanelRoot(root).activeElement).toBe(input);
+          await recycle();
+          editor.undo();
+          expect(editor.getText()).toBe(file.contents);
+          expect(editor.canUndo).toBe(false);
+          await remount(file.contents);
+          await recycle();
+          editor.redo();
+          expect(editor.getText()).toBe(expected);
+          await remount(expected);
+          expect(changes).toEqual(['item', 'item', 'item']);
+        } finally {
+          viewer.cleanUp();
+          dom.cleanup();
+        }
+      }
+    );
+  }
 
   test('searches retained edits after the item scrolls offscreen', async () => {
     const dom = installDom();

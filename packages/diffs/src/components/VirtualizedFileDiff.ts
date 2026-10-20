@@ -1156,7 +1156,7 @@ export class VirtualizedFileDiff<
   // Search maps live editor lines against the session's hunks, including while
   // the item is offscreen and its rendered diff may be out of date.
   public getDiffForSearch(): FileDiffMetadata | undefined {
-    return this.getLatestDiff();
+    return this.getWorkingDiff();
   }
 
   public setVisibility(visible: boolean): void {

@@ -278,6 +278,10 @@ svg {
   color: var(--diffs-search-panel-modified);
 }
 
+[data-replace-toggle][hidden] {
+  display: none;
+}
+
 [data-replace-toggle] {
   --diffs-search-icon-size: 16px;
   grid-area: toggle;
