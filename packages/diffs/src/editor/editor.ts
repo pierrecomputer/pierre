@@ -6,7 +6,11 @@ import {
   dequeueRender,
   queueRender,
 } from '../managers/UniversalRenderingManager';
-import { buildSearchReplacementText, type MatchRange } from '../search';
+import {
+  buildSearchReplacementText,
+  type MatchRange,
+  type SearchParams,
+} from '../search';
 import type {
   DiffLineAnnotation,
   DiffsHighlighter,
@@ -923,6 +927,55 @@ export class Editor<
       this.#applyChangeToLineAnnotations(change),
       { skipFocus: !wasFocused }
     );
+  }
+
+  /**
+   * Replace search matches in document order as one undoable edit. Returns a
+   * collapsed range after the final replacement, without moving focus or scroll.
+   */
+  replaceSearchMatches(
+    matches: readonly MatchRange[],
+    searchParams: SearchParams
+  ): MatchRange | undefined {
+    const textDocument = this.#editSession?.document;
+    if (textDocument == null) {
+      throw new Error('Editor.replaceSearchMatches: Editor is not attached');
+    }
+    if (matches.length === 0) {
+      return undefined;
+    }
+
+    let replacementEnd = 0;
+    let offsetDelta = 0;
+    const edits = matches.map(([start, end]): TextEdit => {
+      const newText = buildSearchReplacementText(
+        (offset) => textDocument.positionAt(offset),
+        (position) => textDocument.offsetAt(position),
+        (line) => textDocument.getLineText(line),
+        searchParams,
+        start,
+        end
+      );
+      replacementEnd = start + offsetDelta + newText.length;
+      offsetDelta += newText.length - (end - start);
+      return {
+        range: {
+          start: textDocument.positionAt(start),
+          end: textDocument.positionAt(end),
+        },
+        newText,
+      };
+    });
+    const change = textDocument.applyEdits(edits, true, this.#selections);
+    if (change != null) {
+      this.#applyChange(
+        change,
+        undefined,
+        this.#applyChangeToLineAnnotations(change),
+        { skipSearchRefresh: true, skipFocus: true }
+      );
+    }
+    return [replacementEnd, replacementEnd];
   }
 
   /** Whether there is an edit to undo. */
@@ -6504,48 +6557,6 @@ export class Editor<
       this.#retainSearchPanelFocus = retainFocus;
     };
 
-    const buildReplacementEdit = (
-      searchParams: Parameters<typeof textDocument.search>[0],
-      matchStart: number,
-      matchEnd: number
-    ): ResolvedTextEdit => ({
-      start: matchStart,
-      end: matchEnd,
-      text: buildSearchReplacementText(
-        (offset) => textDocument.positionAt(offset),
-        (position) => textDocument.offsetAt(position),
-        (line) => textDocument.getLineText(line),
-        searchParams,
-        matchStart,
-        matchEnd
-      ),
-    });
-
-    const applyReplace = (edits: ResolvedTextEdit[]) => {
-      if (edits.length === 0) {
-        return;
-      }
-      const change = textDocument.applyEdits(
-        edits.map((edit) => ({
-          range: {
-            start: textDocument.positionAt(edit.start),
-            end: textDocument.positionAt(edit.end),
-          },
-          newText: edit.text,
-        })),
-        true,
-        this.#selections
-      );
-      if (change !== undefined) {
-        this.#applyChange(
-          change,
-          undefined,
-          this.#applyChangeToLineAnnotations(change),
-          { skipSearchRefresh: true }
-        );
-      }
-    };
-
     const searchPanel = new SearchPanelWidget({
       containerElement: preElement,
       defaultQuery,
@@ -6556,17 +6567,10 @@ export class Editor<
         aStart === bStart && aEnd === bEnd,
       scrollToMatch,
       replace: {
-        replaceMatch: ([start, end], searchParams): MatchRange => {
-          const edit = buildReplacementEdit(searchParams, start, end);
-          applyReplace([edit]);
-          return [start + edit.text.length, start + edit.text.length];
-        },
+        replaceMatch: (match, searchParams) =>
+          this.replaceSearchMatches([match], searchParams),
         replaceAll: (matches, searchParams) => {
-          applyReplace(
-            matches.map(([start, end]) =>
-              buildReplacementEdit(searchParams, start, end)
-            )
-          );
+          this.replaceSearchMatches(matches, searchParams);
         },
       },
       onUpdate: (

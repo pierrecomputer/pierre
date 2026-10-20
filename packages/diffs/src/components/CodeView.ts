@@ -14,7 +14,10 @@ import { resolveFindAgainShortcut } from '../editor/command';
 import type { Editor, EditorOptions } from '../editor/editor';
 import { getCaretPosition } from '../editor/selection';
 import { isPrimaryModifier } from '../editor/platform';
-import { SearchPanelWidget } from '../editor/searchPanel';
+import {
+  type SearchPanelReplaceHandlers,
+  SearchPanelWidget,
+} from '../editor/searchPanel';
 import type {
   EditCompletionDecision,
   EditorChangeEvent,
@@ -32,6 +35,7 @@ import {
 } from '../managers/UniversalRenderingManager';
 import {
   type LineByLineSearchDocument,
+  type MatchRange,
   MAX_FIND_MATCHES,
   searchLineByLine,
   type SearchParams,
@@ -1517,7 +1521,7 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
 
     this.setSearchScope(scope);
     if (this.searchPanel !== undefined) {
-      this.searchPanel.setMode('find');
+      this.searchPanel.setMode('replace');
       this.searchPanel.focus();
       return;
     }
@@ -1525,7 +1529,8 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
     this.searchPanel = new SearchPanelWidget<CodeViewSearchMatch>({
       containerElement: container,
       defaultQuery: '',
-      mode: 'find',
+      mode: 'replace',
+      replace: this.getSearchReplaceHandlers(),
       search: (searchParams) => {
         const matches = this.searchCodeView(searchParams);
         this.searchState.params = searchParams;
@@ -1551,9 +1556,27 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
           return undefined;
         }
 
-        const nextCurrent = matches[0];
+        // Replacement returns a collapsed match at the insertion end. Advance
+        // from that position rather than revisiting text just inserted.
+        const replacementEnd =
+          current != null &&
+          current.itemId === this.searchState.scope?.itemId &&
+          current.startCharacter === current.endCharacter
+            ? current
+            : undefined;
+        const nextCurrent =
+          replacementEnd != null
+            ? matches.find(
+                (match) =>
+                  match.lineIndex > replacementEnd.lineIndex ||
+                  (match.lineIndex === replacementEnd.lineIndex &&
+                    match.startCharacter >= replacementEnd.endCharacter)
+              )
+            : matches[0];
         this.setSearchResults(matches, nextCurrent);
-        this.scrollToSearchMatch(nextCurrent);
+        if (nextCurrent != null) {
+          this.scrollToSearchMatch(nextCurrent);
+        }
         return nextCurrent;
       },
       onClose: () => {
@@ -1619,6 +1642,49 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
     });
   }
 
+  // Bind replacement to the scoped editor's live document. The panel receives
+  // a collapsed match at the replacement end so its next search advances.
+  private getSearchReplaceHandlers():
+    | SearchPanelReplaceHandlers<CodeViewSearchMatch>
+    | undefined {
+    const scope = this.searchState.scope;
+    const editor =
+      scope != null ? this.itemEditors.get(scope.itemId)?.editor : undefined;
+    const document = editor?.getEditState()?.document;
+    if (editor == null || document == null) {
+      return undefined;
+    }
+    const toOffsets = (match: CodeViewSearchMatch): MatchRange => [
+      document.offsetAt({
+        line: match.lineIndex,
+        character: match.startCharacter,
+      }),
+      document.offsetAt({
+        line: match.lineIndex,
+        character: match.endCharacter,
+      }),
+    ];
+    return {
+      replaceMatch: (match, params) => {
+        const next = editor.replaceSearchMatches([toOffsets(match)], params);
+        if (next == null) {
+          return undefined;
+        }
+        const position = document.positionAt(next[1]);
+        return {
+          ...match,
+          lineIndex: position.line,
+          lineNumber: position.line + 1,
+          startCharacter: position.character,
+          endCharacter: position.character,
+        };
+      },
+      replaceAll: (matches, params) => {
+        editor.replaceSearchMatches(matches.map(toOffsets), params);
+      },
+    };
+  }
+
   private markSearchMatchesDirty(): void {
     const scopedItem =
       this.searchState.scope != null
@@ -1633,6 +1699,7 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
     if (scopedItem?.item.edit !== true || scopedItem.item.collapsed === true) {
       this.searchState.scope = undefined;
     }
+    this.searchPanel?.setReplaceHandlers(this.getSearchReplaceHandlers());
     if (
       this.searchPanel === undefined ||
       this.searchState.params === undefined
@@ -4738,7 +4805,7 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
       isPrimaryModifier(event) &&
       (event.key === 'f' || event.code === 'KeyF')
     ) {
-      // Prevent the browser find UI and open CodeView's find-only panel.
+      // Prevent browser find and open CodeView's panel with the focused scope.
       event.preventDefault();
       event.stopPropagation();
       this.openSearchPanel(
@@ -4748,7 +4815,6 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
             ? { itemId: this.focusedEditor.id }
             : undefined
       );
-      this.searchPanel?.setMode(event.altKey ? 'replace' : 'find');
     }
   };
 

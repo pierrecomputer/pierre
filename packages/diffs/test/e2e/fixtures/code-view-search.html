@@ -28,7 +28,30 @@
       window.__codeView = view;
       view.setup(document.querySelector('[data-code-view-root]'));
       const scopedFixture = params.has('scope');
-      if (params.has('collapsed')) {
+      if (params.has('recycle')) {
+        const file = {
+          name: 'replace.txt',
+          contents: 'target one\nkeep\ntarget two\n',
+        };
+        view.setItems([
+          params.get('kind') === 'file'
+            ? { id: 'item', type: 'file', edit: true, file }
+            : {
+                id: 'item',
+                type: 'diff',
+                edit: true,
+                fileDiff: parseDiffFromFile(
+                  { ...file, contents: 'old one\nkeep\nold two\n' },
+                  file
+                ),
+              },
+          {
+            id: 'padding',
+            type: 'file',
+            file: { name: 'padding.txt', contents: 'padding\n'.repeat(1000) },
+          },
+        ]);
+      } else if (params.has('collapsed')) {
         const lines = Array.from({ length: 220 }, (_, index) =>
           index === 100 ? 'hidden target' : `line ${index + 1}`
         );

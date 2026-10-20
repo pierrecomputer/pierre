@@ -13,6 +13,7 @@ import type { Marker } from '../src/editor/marker';
 import { TextDocument } from '../src/editor/textDocument';
 import type { EditorViewState } from '../src/editor/types';
 import { disposeHighlighter } from '../src/highlighter/shared_highlighter';
+import type { SearchParams } from '../src/search';
 import type {
   FileContents,
   FileDiffMetadata,
@@ -1475,6 +1476,55 @@ describe('Editor state round trip', () => {
       cleanup();
     }
   });
+});
+
+describe('Editor.replaceSearchMatches', () => {
+  test.each(['file', 'file-diff'] as const)(
+    'replaces regex matches in a %s as one undoable edit without taking focus',
+    async (type) => {
+      const contents = 'foo-1\r\nfoo-22';
+      const fixture =
+        type === 'file'
+          ? await createEditorFixture(contents)
+          : await createDiffEditorFixture(
+              'split',
+              undefined,
+              undefined,
+              contents
+            );
+      try {
+        const params: SearchParams = {
+          text: 'foo-(\\d+)',
+          replaceText: '$1:$&\n',
+          caseSensitive: true,
+          wholeWord: false,
+          regex: true,
+        };
+        const outside = document.createElement('input');
+        document.body.append(outside);
+        outside.focus();
+        const onChange = mock(() => {});
+        fixture.editor.setOptions({ onChange });
+        const textDocument = fixture.editor.getEditState()!.document;
+        const end = fixture.editor.replaceSearchMatches(
+          textDocument.search(params),
+          params
+        );
+        expect(fixture.editor.getText()).toBe('1:foo-1\n\r\n22:foo-22\n');
+        expect(end).toEqual([20, 20]);
+        expect(onChange).toHaveBeenCalledTimes(1);
+        await wait(0);
+        expect(globalThis.document.activeElement).toBe(outside);
+        fixture.editor.undo();
+        expect(fixture.editor.getText()).toBe(contents);
+        expect(fixture.editor.canUndo).toBe(false);
+        fixture.editor.redo();
+        expect(fixture.editor.getText()).toBe('1:foo-1\n\r\n22:foo-22\n');
+      } finally {
+        fixture.cleanup();
+      }
+    }
+  );
 });
 
 describe('Editor.setSelections', () => {
