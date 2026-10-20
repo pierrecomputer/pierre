@@ -161,7 +161,7 @@ export function HighlightsPerformanceBenchmarks() {
           environment.{' '}
           <Link
             href="https://github.com/pierrecomputer/pierre/tree/main/packages/highlights/benchmark#html-generation"
-            className="styled-link styled-link-muted"
+            className="styled-link"
             target="_blank"
             rel="noopener noreferrer"
           >
@@ -170,7 +170,7 @@ export function HighlightsPerformanceBenchmarks() {
           {' and '}
           <Link
             href="https://github.com/pierrecomputer/pierre/tree/main/packages/highlights/benchmark#memory-usage"
-            className="styled-link styled-link-muted"
+            className="styled-link"
             target="_blank"
             rel="noopener noreferrer"
           >

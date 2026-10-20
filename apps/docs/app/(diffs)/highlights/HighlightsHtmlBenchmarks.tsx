@@ -136,7 +136,7 @@ export function HighlightsHtmlBenchmarks() {
           can differ between libraries.{' '}
           <a
             href="https://github.com/pierrecomputer/pierre/tree/main/packages/highlights/benchmark#html-generation"
-            className="styled-link styled-link-muted"
+            className="styled-link"
             target="_blank"
             rel="noopener noreferrer"
           >

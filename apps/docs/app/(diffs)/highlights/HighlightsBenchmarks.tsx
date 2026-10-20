@@ -57,7 +57,7 @@ export function HighlightsBenchmarks() {
             href="https://github.com/vercel-labs/gpu-lexer"
             target="_blank"
             rel="noopener noreferrer"
-            className="styled-link styled-link-muted"
+            className="styled-link"
           >
             gpu-lexer
           </a>{' '}
@@ -136,7 +136,7 @@ export function HighlightsBenchmarks() {
           JavaScript workload, not highlighting quality.{' '}
           <a
             href="/highlights/benchmark-browser.json"
-            className="styled-link styled-link-muted"
+            className="styled-link"
             target="_blank"
             rel="noopener noreferrer"
           >
