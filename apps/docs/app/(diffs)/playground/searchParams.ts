@@ -1,8 +1,6 @@
-import {
-  DEFAULT_HIGHLIGHTER,
-  type DiffIndicators,
-  type SelectedLineRange,
-} from '@pierre/diffs';
+import type { DiffIndicators, SelectedLineRange } from '@pierre/diffs';
+
+import { getPreferredHighlighter } from '@/lib/preferredHighlighter';
 
 // The playground's URL state, parsed identically on the server (to build the
 // prerendered payload) and on the client (to seed component state). The
@@ -33,7 +31,7 @@ export const DARK_THEMES = [
 export type PlaygroundLightTheme = (typeof LIGHT_THEMES)[number];
 export type PlaygroundDarkTheme = (typeof DARK_THEMES)[number];
 
-export const HIGHLIGHTERS = ['shiki-js', 'shiki-wasm', 'highlights'] as const;
+export const HIGHLIGHTERS = ['highlights', 'shiki-wasm', 'shiki-js'] as const;
 
 const VIEW_MODES = [
   'diff',
@@ -73,7 +71,7 @@ export type PlaygroundLineDiffType = (typeof LINE_DIFF_TYPES)[number];
 
 // Default values for URL param comparison
 export const DEFAULTS = {
-  highlighter: DEFAULT_HIGHLIGHTER,
+  highlighter: getPreferredHighlighter(),
   viewMode: 'diff' as ViewMode,
   diffStyle: 'split',
   colorMode: 'system',
