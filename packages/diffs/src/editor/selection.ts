@@ -163,13 +163,22 @@ export type ResolveRenderableLine = (
 export function mapCursorMove(
   textDocument: TextDocument,
   selections: EditorSelection[],
-  shortcut: 'textStart' | 'start' | 'end' | 'up' | 'down' | 'left' | 'right',
+  shortcut:
+    | 'textStart'
+    | 'start'
+    | 'end'
+    | 'up'
+    | 'down'
+    | 'left'
+    | 'right'
+    | 'wordLeft'
+    | 'wordRight',
   options: CursorMoveOptions = {}
 ): EditorSelection[] {
   const lineCount = textDocument.lineCount;
   return selections.map((selection) => {
     let { line, character } =
-      shortcut === 'up' || shortcut === 'left'
+      shortcut === 'up' || shortcut === 'left' || shortcut === 'wordLeft'
         ? selection.start
         : selection.end;
     if (
@@ -223,16 +232,18 @@ export function mapCursorMove(
     } else if (isCollapsedSelection(selection)) {
       const lineLength = textDocument.getLineLength(line);
       character = Math.min(character, lineLength);
-      if (shortcut === 'left') {
+      if (shortcut === 'left' || shortcut === 'wordLeft') {
         if (character > 0) {
           // Step left by a whole grapheme so the caret never lands inside an
           // emoji or other multi-code-unit character.
-          character = stepCharacterByGrapheme(
-            textDocument,
-            line,
-            character,
-            false
-          );
+          character =
+            shortcut === 'left'
+              ? stepCharacterByGrapheme(textDocument, line, character, false)
+              : findWordBoundary(
+                  textDocument.getLineText(line),
+                  character,
+                  false
+                );
         } else if (line > 0) {
           // Fold-skip: land at the end of the nearest renderable line above;
           // stay put when everything above is collapsed.
@@ -246,12 +257,10 @@ export function mapCursorMove(
           }
         }
       } else if (character < lineLength) {
-        character = stepCharacterByGrapheme(
-          textDocument,
-          line,
-          character,
-          true
-        );
+        character =
+          shortcut === 'right'
+            ? stepCharacterByGrapheme(textDocument, line, character, true)
+            : findWordBoundary(textDocument.getLineText(line), character, true);
       } else if (line < lineCount - 1) {
         // Fold-skip: land at the start of the nearest renderable line below;
         // stay put when everything below is collapsed.
@@ -442,7 +451,16 @@ function getSoftLineInfoAtIndex(
 export function mapSelectionShift(
   textDocument: TextDocument,
   selections: EditorSelection[],
-  shortcut: 'textStart' | 'start' | 'end' | 'up' | 'down' | 'left' | 'right',
+  shortcut:
+    | 'textStart'
+    | 'start'
+    | 'end'
+    | 'up'
+    | 'down'
+    | 'left'
+    | 'right'
+    | 'wordLeft'
+    | 'wordRight',
   options: CursorMoveOptions = {}
 ): EditorSelection[] {
   return selections.map((selection) => {
@@ -2154,12 +2172,7 @@ function resolveDeleteWordBackwardRange(
   let match: number | undefined;
   while (pos > 0) {
     const prev = findClusterBreak(lineText, pos, false, graphemeStarts);
-    const nextChar = lineText.slice(prev, pos);
-    const nextMatch = !/\S/.test(nextChar)
-      ? 0
-      : /\p{Alphabetic}|\p{Number}|_/u.test(nextChar)
-        ? 1
-        : 2;
+    const nextMatch = getWordCharKind(lineText.slice(prev, pos));
     if (match !== undefined && nextMatch !== match) {
       break;
     }
@@ -2172,6 +2185,55 @@ function resolveDeleteWordBackwardRange(
     { line, character: pos },
     { line, character: head },
   ];
+}
+
+// Groups text for word motion and deletion: 0 is whitespace, 1 is word
+// characters, 2 is punctuation and symbols.
+function getWordCharKind(text: string): 0 | 1 | 2 {
+  return !/\S/.test(text)
+    ? 0
+    : /\p{Alphabetic}|\p{Number}|_/u.test(text)
+      ? 1
+      : 2;
+}
+
+// Finds where Ctrl+Arrow word motion stops on one line: past any whitespace,
+// then past one run of word characters or one run of punctuation. Steps by
+// whole graphemes so the caret never lands inside an emoji, and only visits
+// the graphemes it crosses, so long lines stay cheap.
+function findWordBoundary(
+  lineText: string,
+  character: number,
+  forward: boolean
+): number {
+  const segments = getGraphemeSegmenter()?.segment(lineText);
+  let pos = character;
+  let kind = 0;
+  while (forward ? pos < lineText.length : pos > 0) {
+    let text: string;
+    let next: number;
+    const segment = segments?.containing(forward ? pos : pos - 1);
+    if (segment !== undefined) {
+      text = segment.segment;
+      next = forward ? segment.index + text.length : segment.index;
+    } else {
+      // Degraded path for engines lacking Intl.Segmenter: step by code point.
+      const start = forward
+        ? pos
+        : (lineText.codePointAt(pos - 2) ?? 0) > 0xffff
+          ? pos - 2
+          : pos - 1;
+      text = String.fromCodePoint(lineText.codePointAt(start) ?? 0);
+      next = forward ? pos + text.length : start;
+    }
+    const nextKind = getWordCharKind(text);
+    if (kind !== 0 && nextKind !== kind) {
+      break;
+    }
+    kind = nextKind;
+    pos = next;
+  }
+  return pos;
 }
 
 function findClusterBreak(

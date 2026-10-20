@@ -24,9 +24,12 @@ export function isMoveCursorShortcut(
   | 'start'
   | 'textStart'
   | 'end'
+  | 'wordLeft'
+  | 'wordRight'
   | undefined {
+  const isMac = isMacLike();
   // emacs key bindings
-  if (isMacLike() && e.ctrlKey && !e.altKey && !e.metaKey) {
+  if (isMac && e.ctrlKey && !e.altKey && !e.metaKey) {
     switch (e.key) {
       case 'a':
         return 'start';
@@ -59,11 +62,13 @@ export function isMoveCursorShortcut(
     }
   }
 
-  if (isPrimaryModifier(e)) {
+  // Cmd+Arrow jumps to line edges on macOS; Ctrl+Arrow moves by word on
+  // Windows/Linux. macOS Option+Arrow stays with the browser.
+  if (!e.altKey && isPrimaryModifier(e, isMac)) {
     if (e.key === 'ArrowLeft') {
-      return 'textStart';
+      return isMac ? 'textStart' : 'wordLeft';
     } else if (e.key === 'ArrowRight') {
-      return 'end';
+      return isMac ? 'end' : 'wordRight';
     }
   }
 
