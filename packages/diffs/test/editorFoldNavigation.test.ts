@@ -59,8 +59,8 @@ interface FoldFixture {
 // 60-line file, changes at lines 10 and 50: hunks cover lines 6-14 and
 // 46-54, with the gap 15-45 collapsed once the fixture re-enables collapse
 // mid-session (the standalone pre-flip vector).
-async function createFoldFixture(): Promise<FoldFixture> {
-  const dom = installDom();
+async function createFoldFixture(platform?: string): Promise<FoldFixture> {
+  const dom = installDom({ navigator: { platform } });
   const container = document.createElement('div');
   document.body.appendChild(container);
 
@@ -225,6 +225,26 @@ describe('diff editor: fold-skip navigation', () => {
       expect(selection?.start.line).toBe(13);
       expect(selection?.end.line).toBe(45);
       expect(selection?.end.character).toBe(0);
+    } finally {
+      await fixture.cleanup();
+    }
+  });
+
+  test('Windows Ctrl+Arrow word motion skips the gap', async () => {
+    const fixture = await createFoldFixture('Win32');
+    const { editor, content } = fixture;
+    try {
+      setCaret(editor, 13, 'line 14'.length);
+      await wait(0);
+      pressKey(content, 'ArrowRight', { ctrlKey: true });
+      let selection = editor.getViewState().selections?.at(-1);
+      expect(selection?.start.line).toBe(45);
+      expect(selection?.start.character).toBe(0);
+
+      pressKey(content, 'ArrowLeft', { ctrlKey: true });
+      selection = editor.getViewState().selections?.at(-1);
+      expect(selection?.start.line).toBe(13);
+      expect(selection?.start.character).toBe('line 14'.length);
     } finally {
       await fixture.cleanup();
     }

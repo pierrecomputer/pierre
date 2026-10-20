@@ -6,6 +6,10 @@ import {
   resolveEditorCommandFromKeyboardEvent,
   resolveFindAgainShortcut,
 } from '../src/editor/command';
+import {
+  isMoveCursorShortcut,
+  resetPlatformDetection,
+} from '../src/editor/platform';
 
 type ShortcutKeyboardEvent = Pick<
   KeyboardEvent,
@@ -38,6 +42,8 @@ function withPlatform(platform: string, run: () => void): void {
     configurable: true,
     value: platform,
   });
+  // Platform detection is memoized, so reset it on the way in and out.
+  resetPlatformDetection();
 
   try {
     run();
@@ -46,6 +52,7 @@ function withPlatform(platform: string, run: () => void): void {
       configurable: true,
       value: originalPlatform,
     });
+    resetPlatformDetection();
   }
 }
 
@@ -546,5 +553,71 @@ describe('resolveFindAgainShortcut', () => {
       { event: { key: 'g' }, expected: undefined },
       { event: { key: 'f', metaKey: true }, expected: undefined },
     ]);
+  });
+});
+
+describe('isMoveCursorShortcut', () => {
+  test('moves by word with Ctrl+Arrow on Windows and Linux', () => {
+    for (const platform of ['Win32', 'Linux x86_64']) {
+      withPlatform(platform, () => {
+        expect(
+          isMoveCursorShortcut(event({ key: 'ArrowLeft', ctrlKey: true }))
+        ).toBe('wordLeft');
+        expect(
+          isMoveCursorShortcut(event({ key: 'ArrowRight', ctrlKey: true }))
+        ).toBe('wordRight');
+        expect(
+          isMoveCursorShortcut(
+            event({ key: 'ArrowLeft', ctrlKey: true, shiftKey: true })
+          )
+        ).toBe('wordLeft');
+        expect(
+          isMoveCursorShortcut(
+            event({ key: 'ArrowRight', ctrlKey: true, shiftKey: true })
+          )
+        ).toBe('wordRight');
+        expect(isMoveCursorShortcut(event({ key: 'ArrowRight' }))).toBe(
+          'right'
+        );
+        expect(isMoveCursorShortcut(event({ key: 'Home' }))).toBe('start');
+        expect(isMoveCursorShortcut(event({ key: 'End' }))).toBe('end');
+        for (const modifiers of [
+          { ctrlKey: true, altKey: true },
+          { ctrlKey: true, metaKey: true },
+          { metaKey: true },
+          { altKey: true },
+        ]) {
+          expect(
+            isMoveCursorShortcut(event({ key: 'ArrowLeft', ...modifiers }))
+          ).toBeUndefined();
+        }
+      });
+    }
+  });
+
+  test('keeps Cmd+Arrow line moves and leaves Option+Arrow to macOS', () => {
+    withPlatform('MacIntel', () => {
+      expect(
+        isMoveCursorShortcut(event({ key: 'ArrowLeft', metaKey: true }))
+      ).toBe('textStart');
+      expect(
+        isMoveCursorShortcut(
+          event({ key: 'ArrowRight', metaKey: true, shiftKey: true })
+        )
+      ).toBe('end');
+      expect(isMoveCursorShortcut(event({ key: 'a', ctrlKey: true }))).toBe(
+        'start'
+      );
+      for (const modifiers of [
+        { altKey: true },
+        { altKey: true, shiftKey: true },
+        { ctrlKey: true },
+        { metaKey: true, altKey: true },
+      ]) {
+        expect(
+          isMoveCursorShortcut(event({ key: 'ArrowLeft', ...modifiers }))
+        ).toBeUndefined();
+      }
+    });
   });
 });
