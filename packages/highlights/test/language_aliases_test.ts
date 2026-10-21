@@ -12,6 +12,7 @@ import {
 } from './_util';
 
 const additions = [
+  ['lean', ['lean', 'lean4']],
   ['gdresource', ['gdresource', 'godot-resource', 'tres', 'tscn']],
   ['gdscript', ['gdscript', 'gd']],
   ['gdshader', ['gdshader', 'godot-shader', 'gdshaderinc']],

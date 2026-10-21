@@ -27,7 +27,8 @@
       [46160:62176)   live tokenizer change list
       [62176:62304)   live tokenizer free-list heads
       [62304:62816)   suspended live lexer locals
-      [62816:65536)   free
+      [62816:63584)   Lean keyword table
+      [63584:65536)   free
     [] pages 2..N     (text buffer; a live instance lays them out itself, see src/live.wat)
       [65536:EOF)     input, NUL sentinel, then at least 16 bytes of slack
       [(EOF+47)&~15:) prefix bytes (mode 1) or theme blob (modes 2/4), then HTML;
@@ -132,5 +133,7 @@
   (const $mem.liveChanges 46160)             ;; 16016: count + 1000 records, padded
   (const $mem.liveFree 62176)                ;; 128: 32 size-class free-list heads
   (const $mem.liveLocals 62304)              ;; 512
+  (const $mem.leanWords 62816)              ;; 768: uses the remaining page-one scratch space
+  (const $mem.leanWordsEnd 63584)
   (const $mem.liveHeapStart 65536)
 )

@@ -1,7 +1,7 @@
 # Highlights, from Pierre
 
 `@pierre/highlights` is a syntax highlighter written in WebAssembly Text (WAT).
-It supports 80 built-in languages and Zed-compatible themes. It produces HTML or
+It supports 81 built-in languages and Zed-compatible themes. It produces HTML or
 themed tokens from complete input, input chunks, or document edits.
 
 Read the [Documentation](https://diffs.com/docs#highlights).
@@ -54,3 +54,20 @@ moonx highlights:bench-memory
 ## License
 
 [Apache-2.0](./LICENSE.md)
+
+## Lean
+
+Use `lang: 'lean'` or `lang: 'lean4'` for Lean 4 source and the same names in
+Markdown/MDX fences. The lexer recognizes declaration names, common proof
+tactics, attributes, commands, Unicode identifiers and mathematical notation,
+nested comments, documentation comments, escaped identifiers, and ordinary/raw
+strings. Lean syntax is extensible: custom elaborator-defined keywords and
+semantic name resolution require the Lean language server and are outside this
+lexical highlighter.
+
+Lexical behavior follows the
+[Lean language reference](https://lean-lang.org/doc/reference/latest/Source-Files-and-Modules/).
+Additional references:
+[Lean's highlighting guide](https://lean-lang.org/documentation/latex-syntax-highlighting/)
+and the
+[Obsidian Lean mode](https://github.com/tomaz1502/lean-syntax-highlight).
