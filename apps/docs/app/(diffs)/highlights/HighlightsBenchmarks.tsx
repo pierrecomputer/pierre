@@ -126,11 +126,10 @@ export function HighlightsBenchmarks() {
 
       <div className="text-muted-foreground max-w-3xl space-y-2 text-xs leading-relaxed">
         <p>
-          Recorded September 15, 2026 · Chromium 152 · Apple M4 Pro. Highlights
-          0.2.0 re-recorded October 21, 2026 · Chromium 153. Median of three
-          runs, each after one warm-up in a fresh worker. Highlights and Shiki
-          return themed tokens, gpu-lexer returns spans, and the others return
-          HTML or HAST. Measures speed only, not highlighting quality.{' '}
+          Recorded October 21, 2026 · Chromium 153 · Apple M4 Pro. Median of
+          three runs, each after one warm-up in a fresh worker. Highlights and
+          Shiki return themed tokens, gpu-lexer returns spans, and the others
+          return HTML or HAST. Measures speed only, not highlighting quality.{' '}
           <a
             href="/highlights/benchmark-browser.json"
             className="styled-link"
