@@ -486,6 +486,10 @@ void t.test(
       '<Chart\n  icon={<Icon size={2} />}\n>\n\nchild *text*\n\n</Chart>\n',
       '<Chart\n  /* c > d */\n  b\n/>\n\n# T\n',
       '<Chart\n  b="x"> after *em*\n\n# T\n',
+      // comments on the first line, closed or still open
+      '<Chart /* c > d */\n  b\n/>\n\n# T\n',
+      '<Chart /* c */\n  b\n/>\n\n# T\n',
+      '<Chart a="1" /* c\n d */ b\n/>\n\n# T\n',
     ]) {
       const kinds = tokenKinds('mdx', code);
       assertLineFedParity('mdx', code);
