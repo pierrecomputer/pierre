@@ -142,6 +142,11 @@
   (global $jsTemplateEmitSp (mut i32) (i32.const 0))
   (global $brkSp (mut i32) (i32.const 0))
   (global $rxCloser (mut i32) (i32.const 0))
+  ;; Open ternaries outside every bracket. Inside a bracket, bits 1-7 of its
+  ;; bracket-stack byte count them instead (see $ternaryCount).
+  (global $ternaryTop (mut i32) (i32.const 0))
+  ;; The last `:` scanned closes a ternary rather than introducing a type.
+  (global $ternaryColon (mut i32) (i32.const 0))
   (global $prevTok (mut i32) (i32.const 0)) ;; significant token before the current one
   (global $jsxSp (mut i32) (i32.const 0))   ;; jsx mode stack pointer
   (global $tsxStreaming (mut i32) (i32.const 0))
@@ -167,12 +172,15 @@
         (i32.store8 (i32.add (i32.const $mem.jsBracketStack) (global.get $brkSp)) (local.get $k))))
     (global.set $brkSp (i32.add (global.get $brkSp) (i32.const 1))))
   ;; kind of the innermost open bracket - 1 for a control paren or a block,
-  ;; 0 for an object or call - or 0 with none open
+  ;; 0 for an object or call - or 0 with none open. The kind is bit 0 of the
+  ;; stack byte; the bits above count the level's open ternaries.
   (func $brkTopKind (result i32)
     (if (i32.or (i32.eqz (global.get $brkSp)) (i32.gt_u (global.get $brkSp) (i32.const 1024)))
       (then (return (i32.const 0))))
-    (i32.load8_u
-      (i32.add (i32.const $mem.jsBracketStack) (i32.sub (global.get $brkSp) (i32.const 1)))))
+    (i32.and
+      (i32.load8_u
+        (i32.add (i32.const $mem.jsBracketStack) (i32.sub (global.get $brkSp) (i32.const 1))))
+      (i32.const 1)))
   (func $brkPop
     (global.set $rxCloser (i32.const 0))
     (if (i32.eqz (global.get $brkSp))
@@ -181,7 +189,39 @@
     (if (i32.lt_u (global.get $brkSp) (i32.const 1024))
       (then
         (global.set $rxCloser
-          (i32.load8_u (i32.add (i32.const $mem.jsBracketStack) (global.get $brkSp)))))))
+          (i32.and
+            (i32.load8_u (i32.add (i32.const $mem.jsBracketStack) (global.get $brkSp)))
+            (i32.const 1))))))
+
+  ;; Open ternaries (`?` still waiting for its `:`) at the innermost bracket
+  ;; level, so a `:` inside nested brackets or an object literal is not
+  ;; mistaken for the one that closes an outer ternary.
+  (func $ternaryCount (result i32)
+    (if (i32.eqz (global.get $brkSp))
+      (then (return (global.get $ternaryTop))))
+    (if (i32.gt_u (global.get $brkSp) (i32.const 1024))
+      (then (return (i32.const 0))))
+    (i32.shr_u
+      (i32.load8_u (i32.add (i32.const $mem.jsBracketStack-1) (global.get $brkSp)))
+      (i32.const 1)))
+
+  ;; Set the innermost level's open-ternary count, saturating at 127.
+  (func $ternarySet (param $n i32)
+    (local $at i32)
+    (if (i32.gt_u (local.get $n) (i32.const 127))
+      (then (local.set $n (i32.const 127))))
+    (if (i32.eqz (global.get $brkSp))
+      (then
+        (global.set $ternaryTop (local.get $n))
+        (return)))
+    (if (i32.gt_u (global.get $brkSp) (i32.const 1024))
+      (then (return)))
+    (local.set $at (i32.add (i32.const $mem.jsBracketStack-1) (global.get $brkSp)))
+    (i32.store8
+      (local.get $at)
+      (i32.or
+        (i32.and (i32.load8_u (local.get $at)) (i32.const 1))
+        (i32.shl (local.get $n) (i32.const 1)))))
 
   ;; byte at $p, or 0 at/past $end - safe lookahead for multibyte tokens.
   ;; the load itself is always in-bounds (input buffer + 16 bytes of slack).
@@ -601,6 +641,7 @@
     (local $bits i32)
     (local $kw i32)
     (local $take i32)
+    (local $after i32) ;; first non-blank byte after a `?` on its line
     (global.set $nlBefore (i32.const 0))
     (if (global.get $tsxStreaming)
       (then
@@ -737,10 +778,16 @@
               (return (call $scanNumber (i32.const 1)))))
           (br $takeDone (i32.or (i32.shl (enum.get $Lex.dot) (i32.const 3)) (i32.const 1))))
         (case ";"
+          ;; a statement end drops any `?` left without its `:`
+          (call $ternarySet (i32.const 0))
           (br $takeDone (i32.or (i32.shl (enum.get $Lex.semicolon) (i32.const 3)) (i32.const 1))))
         (case ","
           (br $takeDone (i32.or (i32.shl (enum.get $Lex.comma) (i32.const 3)) (i32.const 1))))
         (case ":"
+          ;; the innermost open ternary, if any, closes here
+          (global.set $ternaryColon (i32.ne (call $ternaryCount) (i32.const 0)))
+          (if (global.get $ternaryColon)
+            (then (call $ternarySet (i32.sub (call $ternaryCount) (i32.const 1)))))
           (br $takeDone (i32.or (i32.shl (enum.get $Lex.colon) (i32.const 3)) (i32.const 1))))
         (case "{"
           (call $brkPush (call $braceIsBlock))
@@ -817,6 +864,15 @@
                     (i32.or (i32.shl (enum.get $Lex.question_mark) (i32.const 3)) (i32.const 1)))))
               (br $takeDone
                 (i32.or (i32.shl (enum.get $Lex.question_mark_dot) (i32.const 3)) (i32.const 2)))))
+          ;; A lone `?` opens a ternary unless the same line continues with
+          ;; `:`, `)`, `,`, `=`, or `;`, as after an optional member or
+          ;; parameter. `??` and `??=` are not ternaries.
+          (if (i32.ne (local.get $c2) (i32.const "?"))
+            (then
+              (local.set $after
+                (call $tsxByte (call $lexSkipSpaceAt (i32.add (global.get $ptr) (i32.const 1)))))
+              (if (i32.eqz (byteset.get ":),=;" (local.get $after)))
+                (then (call $ternarySet (i32.add (call $ternaryCount) (i32.const 1)))))))
           (br $family (i32.or (i32.shl (enum.get $Lex.question_mark) (i32.const 3)) (i32.const 6))))
         (case "["
           (call $brkPush (i32.const 0))
@@ -1029,6 +1085,7 @@
     (global.set $jsTemplateLexSp (i32.const 0))
     (global.set $brkSp (i32.const 0))
     (global.set $rxCloser (i32.const 0))
+    (global.set $ternaryTop (i32.const 0))
     (global.set $jsxSp (i32.const 0))
     (global.set $jsxMute (i32.const 1))
     (call $sigReset)

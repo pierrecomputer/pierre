@@ -202,6 +202,7 @@
     (global.set $jsTemplateMarker (i32.const 0))
     (global.set $brkSp (i32.const 0))
     (global.set $rxCloser (i32.const 0))
+    (global.set $ternaryTop (i32.const 0))
     (global.set $jsxSp (i32.const 0))
     (global.set $tsxStreamMode (i32.const 0))
     (global.set $tsxStreamNl (i32.const 0))

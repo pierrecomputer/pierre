@@ -842,12 +842,16 @@
             (local.get $rhs)))))
     ;; `:` before a type name and `?` directly before `:` are TypeScript
     ;; punctuation.special; the word compare only runs for a colon before an
-    ;; identifier - wasm i32.and is eager, and this runs for every such token
+    ;; identifier - wasm i32.and is eager, and this runs for every such token.
+    ;; A `:` that closes a ternary stays a delimiter whatever follows it.
     (if (call $ecmaHasTypeScript)
       (then
         (if (i32.eq (local.get $t) (enum.get $Lex.colon))
           (then
-            (if (i32.eq (local.get $next) (enum.get $Lex.identifier))
+            (if
+              (i32.and
+                (i32.eq (local.get $next) (enum.get $Lex.identifier))
+                (i32.eqz (global.get $ternaryColon)))
               (then
                 (if
                   (i32.or

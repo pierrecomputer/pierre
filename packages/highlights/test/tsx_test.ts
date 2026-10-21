@@ -845,6 +845,36 @@ void t.test(
   }
 );
 
+void t.test(
+  'ecma: a ternary colon stays a delimiter before a type-like name',
+  () => {
+    for (const lang of ['ts', 'tsx', 'tsrx'] as const) {
+      for (const code of [
+        'const m = ok ? Diagnostics.A : Diagnostics.B;\n',
+        'const m = ok ?\n  Diagnostics.A :\n  Diagnostics.B;\n',
+        'const m = ok ? { k: 1 } : (x) => Foo;\n',
+        'f(a ? b : C, d ? [e] : F);\n',
+        'type C<T> = T extends string ? Foo : Bar;\n',
+      ]) {
+        const colons = tokenKinds(lang, code).filter(([text]) => text === ':');
+        assert.ok(colons.length > 0, `${lang}: ${JSON.stringify(code)}`);
+        for (const [, kind] of colons) {
+          assert.equal(kind, 'punctuation.delimiter', `${lang}: ${code}`);
+        }
+        assertLineFedParity(lang, code);
+      }
+      // annotations around a ternary keep their type colon
+      const kinds = tokenKinds(lang, 'let x: Foo = ok ? a : B;\n').filter(
+        ([text]) => text === ':'
+      );
+      assert.deepEqual(
+        kinds.map(([, kind]) => kind),
+        ['punctuation.special', 'punctuation.delimiter']
+      );
+    }
+  }
+);
+
 void t.test('tsx: a spaced ternary `?` never reads as an optional key', () => {
   const html = checkInvariants(
     tsx.hl,
