@@ -48,6 +48,12 @@ const deletedFileDiff: FileDiffMetadata = parseDiffFromFile(oldFile, null);
 // Omitting one side is not the same as passing null, and passing
 // null for both sides throws because at least one side must exist.
 
+// Use the WebAssembly diff library instead of jsdiff (the default).
+// The options also accept context, ignoreWhitespace, and stripTrailingCr.
+const wasmFileDiff: FileDiffMetadata = parseDiffFromFile(oldFile, newFile, {
+  preferredDiffLib: '@pierre/patches',
+});
+
 // With strict error handling (throws instead of logging)
 // const fileDiff = parseDiffFromFile(oldFile, newFile, undefined, true);
 

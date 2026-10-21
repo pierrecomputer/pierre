@@ -7,6 +7,8 @@ export function areDiffRenderOptionsEqual(
 ): boolean {
   return (
     areThemesEqual(optionsA.theme, optionsB.theme) &&
+    (optionsA.preferredDiffLib ?? 'jsdiff') ===
+      (optionsB.preferredDiffLib ?? 'jsdiff') &&
     optionsA.useTokenTransformer === optionsB.useTokenTransformer &&
     optionsA.tokenizeMaxLineLength === optionsB.tokenizeMaxLineLength &&
     optionsA.lineDiffType === optionsB.lineDiffType &&

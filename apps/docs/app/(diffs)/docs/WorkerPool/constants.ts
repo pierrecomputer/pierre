@@ -425,7 +425,7 @@ new WorkerPoolManager(poolOptions, highlighterOptions)
 //     Failed initialization switches components to main-thread highlighting.
 //   - mainThreadMaxCharacters?: number (default: unset) - Files and diffs with
 //     at most this many characters highlight on the main thread instead of a
-//     worker. Diffs count both sides. Unset (default behavior) sends every 
+//     worker. Diffs count both sides. Unset (default behavior) sends every
 //     highlight to a worker.
 // - highlighterOptions: WorkerInitializationRenderOptions
 //   - theme?: DiffsThemeNames | ThemesType - Theme name or { dark, light } object

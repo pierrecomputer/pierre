@@ -1,6 +1,7 @@
 import type { LanguageRegistration } from 'shiki';
 
 import type {
+  DiffLib,
   DiffsTheme,
   DiffsThemeNames,
   ExtensionFormatMap,
@@ -56,6 +57,7 @@ export interface RenderFileRequest {
 }
 
 export interface RenderDiffRequest {
+  preferredDiffLib?: DiffLib;
   type: 'diff';
   id: WorkerRequestId;
   diff: FileDiffMetadata;

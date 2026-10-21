@@ -1,6 +1,6 @@
 import type { DiffModel } from '../model/DiffModel';
 import type { DiffSide } from '../model/types';
-import type { LineDiffTypes } from '../types';
+import type { DiffLib, LineDiffTypes } from '../types';
 import {
   computeLineDiffRanges,
   type LineDiffRange,
@@ -24,7 +24,8 @@ export class LineDiffRangeCache {
 
   constructor(
     readonly lineDiffType: LineDiffTypes,
-    readonly maxLineDiffLength: number
+    readonly maxLineDiffLength: number,
+    private preferredDiffLib: DiffLib = 'jsdiff'
   ) {}
 
   get(
@@ -44,7 +45,8 @@ export class LineDiffRangeCache {
       deletionText,
       additionText,
       this.lineDiffType,
-      this.maxLineDiffLength
+      this.maxLineDiffLength,
+      this.preferredDiffLib
     );
     this.#pairs.set(deletionIndex, { deletionText, additionText, ranges });
     return ranges;

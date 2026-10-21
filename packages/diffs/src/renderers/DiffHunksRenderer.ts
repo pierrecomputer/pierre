@@ -498,7 +498,10 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     ) {
       workerManager.evictDiffFromCache(diff.cacheKey);
       return workerManager
-        .primeDiffHighlightCache(diff)
+        .primeDiffHighlightCache(
+          diff,
+          this.options.parseDiffOptions?.preferredDiffLib
+        )
         .then(() => {
           this.applyRefreshedResult(
             diff,
@@ -779,7 +782,11 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     if (workerManager != null) {
       if (this.renderCache.result == null && !massiveDiff) {
         // We should only kick off a preload of the AST if we have a WorkerPool
-        workerManager.highlightDiffAST(this, this.diff);
+        workerManager.highlightDiffAST(
+          this,
+          this.diff,
+          this.options.parseDiffOptions?.preferredDiffLib
+        );
       }
     }
     // Lets attempt to get the highlighter/languages ready immediately
@@ -844,7 +851,9 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
   private getRenderOptions(diff: FileDiffMetadata): GetRenderOptionsReturn {
     const options: RenderDiffOptions = (() => {
       if (this.workerManager?.isWorkingPool() === true) {
-        const poolOptions = this.workerManager.getDiffRenderOptions();
+        const poolOptions = this.workerManager.getDiffRenderOptions(
+          this.options.parseDiffOptions?.preferredDiffLib
+        );
         // Active edit sessions require `useTokenTransformer: true`
         if (
           this.editSessionActive &&
@@ -862,6 +871,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
           this.editSessionActive || this.options.useTokenTransformer === true,
         tokenizeMaxLineLength,
         lineDiffType,
+        preferredDiffLib: this.options.parseDiffOptions?.preferredDiffLib,
         maxLineDiffLength,
       };
     })();
@@ -1018,7 +1028,8 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
               : expandUnchanged
                 ? true
                 : this.expandedHunks,
-            collapsedContextThreshold
+            collapsedContextThreshold,
+            this.options.parseDiffOptions?.preferredDiffLib
           );
           // A plain result for the same diff keeps its rows as the window
           // moves, so rows that stay on screen stay the same objects.
@@ -1044,7 +1055,11 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
         hasContent &&
         (!this.renderCache.highlighted || forceHighlight)
       ) {
-        workerManager.highlightDiffAST(this, diff);
+        workerManager.highlightDiffAST(
+          this,
+          diff,
+          this.options.parseDiffOptions?.preferredDiffLib
+        );
       }
     } else {
       this.computedLangs = getDiffLanguages(diff);
@@ -1314,7 +1329,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       collapsedContextThreshold,
       hunkSeparators,
     } = this.getOptionsWithDefaults();
-    const { lineDiffType, maxLineDiffLength } =
+    const { lineDiffType, maxLineDiffLength, preferredDiffLib } =
       this.getRenderOptions(diff).options;
     const layoutOptions: DiffLayoutOptions = {
       diffStyle,
@@ -1324,6 +1339,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       hunkSeparators,
       lineDiffType,
       maxLineDiffLength,
+      preferredDiffLib,
       canHydrateContext: canHydrateCollapsedContext(
         diff,
         this.options.loadDiffFiles != null

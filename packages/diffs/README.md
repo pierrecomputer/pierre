@@ -28,6 +28,26 @@ JavaScript and React components.
 pnpm add @pierre/diffs
 ```
 
+## Diff library
+
+`FileDiff` and `CodeView` use `jsdiff` by default. Set
+`options.parseDiffOptions.preferredDiffLib` to `'@pierre/patches'` to use the
+WebAssembly backend:
+
+```tsx
+const options = { parseDiffOptions: { preferredDiffLib: '@pierre/patches' } };
+
+<FileDiff fileDiff={fileDiff} options={options} />
+<CodeView items={items} options={options} />
+```
+
+The option controls file diffs, editor updates, and word or character
+highlights. Worker requests use the component's selected library. Supplied patch
+hunks stay unchanged until an edit requires a new diff.
+
+`parseDiffFromFile(oldFile, newFile, { preferredDiffLib: '@pierre/patches' })`
+also accepts the option.
+
 ## Agent skill
 
 Install the agent skill for this package with the

@@ -105,14 +105,18 @@ If both `oldFile` and `newFile` have a `cacheKey`, the resulting
 from both values and the line-matching mode. See
 [Render Cache](#worker-pool-render-cache) for more information.
 
-The third argument accepts `ParseDiffOptions`: jsdiff settings such as `context`
-and `ignoreWhitespace`, plus `disableLineMatching` (default: `false`). When
-enabled, this escape hatch preserves the generated patch's change blocks and
-line order without similarity matching. It applies at parse time.
+The third argument accepts `ParseDiffOptions`: `context`, `ignoreWhitespace`,
+`stripTrailingCr`, `preferredDiffLib`, and `disableLineMatching`. Set
+`preferredDiffLib: '@pierre/patches'` to use the WebAssembly diff library
+instead of `jsdiff` (the default).
+
+`disableLineMatching` (default: `false`) preserves the generated patch's change
+blocks and line order without similarity matching. It applies at parse time.
 
 Views that compute diffs accept the same `ParseDiffOptions` through
 `parseDiffOptions` (under `options` in React). This configures file-pair parsing
-and edit recomputation; it does not rewrite supplied `fileDiff` metadata.
+and edit recomputation; it does not rewrite supplied `fileDiff` metadata. Here,
+`preferredDiffLib` also selects the library for inline change highlights.
 
 An optional fourth `throwOnError` parameter (default: `false`) controls error
 handling. When `true`, parsing errors throw exceptions; when `false`, errors are
