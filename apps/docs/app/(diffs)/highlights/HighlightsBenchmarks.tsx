@@ -51,7 +51,7 @@ export function HighlightsBenchmarks() {
         </h2>
         <p className="text-muted-foreground text-pretty">
           Highlights tokenizes 5.56 million characters of JavaScript in{' '}
-          <strong className="text-foreground font-semibold">.07 s</strong> in
+          <strong className="text-foreground font-semibold">.08 s</strong> in
           the browser. Compare it with Shu Ding’s{' '}
           <a
             href="https://github.com/vercel-labs/gpu-lexer"
