@@ -1,5 +1,3 @@
-import { type ChangeObject, diffChars, diffWordsWithSpace } from 'diff';
-
 import { DEFAULT_COLLAPSED_CONTEXT_THRESHOLD } from '../constants';
 import type {
   DecorationItem,
@@ -16,14 +14,15 @@ import type {
 } from '../types';
 import { appendItems } from './appendItems';
 import { cleanLastNewline } from './cleanLastNewline';
+import {
+  computeLineDiffRanges,
+  type LineDiffRange,
+} from './computeLineDiffRanges';
 import { getFiletypeFromFileName } from './getFiletypeFromFileName';
 import { getHighlighterThemeStyles } from './getHighlighterThemeStyles';
 import { getTokenOptions } from './getTokenOptions';
 import { iterateOverDiff } from './iterateOverDiff';
-import {
-  createDiffSpanDecoration,
-  pushOrJoinSpan,
-} from './parseDiffDecorations';
+import { createDiffSpanDecoration } from './parseDiffDecorations';
 import { renderTokenLines } from './renderTokenLines';
 import { setDeferredArrayItem } from './setDeferredArrayItem';
 
@@ -241,71 +240,15 @@ export function renderDiffWithHighlighter(
   return { code, themeStyles, baseThemeType };
 }
 
-// The line indexes and decoration arrays a line diff writes its highlights to
-interface LineDiffDecorationTargets {
+interface ProcessLineDiffProps {
+  deletionLine: string | undefined;
+  additionLine: string | undefined;
   deletionLineIndex: number;
   additionLineIndex: number;
   deletionDecorations: DecorationItem[];
   additionDecorations: DecorationItem[];
-}
-
-interface ProcessLineDiffProps extends LineDiffDecorationTargets {
-  deletionLine: string | undefined;
-  additionLine: string | undefined;
   lineDiffType: LineDiffTypes;
   maxLineDiffLength: number;
-}
-
-// Push one decoration per side covering the first through last changed
-// token, so each line only has one highlight. Offsets come straight from the
-// diff items, skipping the span arrays the other word modes build.
-function pushWordLineDecorations(
-  lineDiff: ChangeObject<string>[],
-  {
-    deletionLineIndex,
-    additionLineIndex,
-    deletionDecorations,
-    additionDecorations,
-  }: LineDiffDecorationTargets
-): void {
-  let deletionOffset = 0;
-  let additionOffset = 0;
-  let deletionStart = -1;
-  let deletionEnd = 0;
-  let additionStart = -1;
-  let additionEnd = 0;
-  for (const { value, added, removed } of lineDiff) {
-    if (removed) {
-      if (deletionStart === -1) deletionStart = deletionOffset;
-      deletionOffset += value.length;
-      deletionEnd = deletionOffset;
-    } else if (added) {
-      if (additionStart === -1) additionStart = additionOffset;
-      additionOffset += value.length;
-      additionEnd = additionOffset;
-    } else {
-      deletionOffset += value.length;
-      additionOffset += value.length;
-    }
-  }
-  if (deletionStart !== -1) {
-    deletionDecorations.push(
-      createDiffSpanDecoration({
-        line: deletionLineIndex,
-        spanStart: deletionStart,
-        spanLength: deletionEnd - deletionStart,
-      })
-    );
-  }
-  if (additionStart !== -1) {
-    additionDecorations.push(
-      createDiffSpanDecoration({
-        line: additionLineIndex,
-        spanStart: additionStart,
-        spanLength: additionEnd - additionStart,
-      })
-    );
-  }
 }
 
 function computeLineDiffDecorations({
@@ -318,86 +261,41 @@ function computeLineDiffDecorations({
   lineDiffType,
   maxLineDiffLength,
 }: ProcessLineDiffProps) {
-  if (deletionLine == null || additionLine == null || lineDiffType === 'none') {
+  if (deletionLine == null || additionLine == null) {
     return;
   }
-  deletionLine = cleanLastNewline(deletionLine);
-  additionLine = cleanLastNewline(additionLine);
-  // If we have really long lines, we probably shouldn't compute diffs on them.
-  if (
-    deletionLine.length > maxLineDiffLength ||
-    additionLine.length > maxLineDiffLength
-  ) {
-    return;
-  }
-  // NOTE(amadeus): Because we visually trim trailing newlines when rendering,
-  // we also gotta make sure the diff parsing doesn't include the newline
-  // character that could be there...
-  const lineDiff =
-    lineDiffType === 'char'
-      ? diffChars(deletionLine, additionLine)
-      : diffWordsWithSpace(deletionLine, additionLine);
-  if (lineDiffType === 'word-line') {
-    pushWordLineDecorations(lineDiff, {
-      deletionLineIndex,
-      additionLineIndex,
-      deletionDecorations,
-      additionDecorations,
-    });
-    return;
-  }
-  const deletionSpans: [0 | 1, string][] = [];
-  const additionSpans: [0 | 1, string][] = [];
-  const enableJoin = lineDiffType === 'word-alt';
-  const lastItem = lineDiff.at(-1);
-  for (const item of lineDiff) {
-    const isLastItem = item === lastItem;
-    if (!item.added && !item.removed) {
-      pushOrJoinSpan({
-        item,
-        arr: deletionSpans,
-        enableJoin,
-        isNeutral: true,
-        isLastItem,
-      });
-      pushOrJoinSpan({
-        item,
-        arr: additionSpans,
-        enableJoin,
-        isNeutral: true,
-        isLastItem,
-      });
-    } else if (item.removed) {
-      pushOrJoinSpan({ item, arr: deletionSpans, enableJoin, isLastItem });
-    } else {
-      pushOrJoinSpan({ item, arr: additionSpans, enableJoin, isLastItem });
-    }
-  }
-  let spanIndex = 0;
-  for (const span of deletionSpans) {
-    if (span[0] === 1) {
-      deletionDecorations.push(
-        createDiffSpanDecoration({
-          line: deletionLineIndex,
-          spanStart: spanIndex,
-          spanLength: span[1].length,
-        })
-      );
-    }
-    spanIndex += span[1].length;
-  }
-  spanIndex = 0;
-  for (const span of additionSpans) {
-    if (span[0] === 1) {
-      additionDecorations.push(
-        createDiffSpanDecoration({
-          line: additionLineIndex,
-          spanStart: spanIndex,
-          spanLength: span[1].length,
-        })
-      );
-    }
-    spanIndex += span[1].length;
+  const ranges = computeLineDiffRanges(
+    deletionLine,
+    additionLine,
+    lineDiffType,
+    maxLineDiffLength
+  );
+  pushDiffSpanDecorations(
+    ranges.deletion,
+    deletionLineIndex,
+    deletionDecorations
+  );
+  pushDiffSpanDecorations(
+    ranges.addition,
+    additionLineIndex,
+    additionDecorations
+  );
+}
+
+function pushDiffSpanDecorations(
+  ranges: readonly LineDiffRange[],
+  line: number,
+  decorations: DecorationItem[]
+): void {
+  for (let index = 0; index < ranges.length; index++) {
+    const range = ranges[index];
+    decorations.push(
+      createDiffSpanDecoration({
+        line,
+        spanStart: range[0],
+        spanLength: range[1] - range[0],
+      })
+    );
   }
 }
 

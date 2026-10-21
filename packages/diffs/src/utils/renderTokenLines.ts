@@ -1,6 +1,10 @@
 import type { Element, ElementContent, Properties } from 'hast';
 
 import type { DecorationItem, SharedRenderState, ThemedToken } from '../types';
+import {
+  DecoratedLineBuilder,
+  type LineDecoration,
+} from './DecoratedLineBuilder';
 import { processLine } from './processLine';
 import { setDeferredArrayItem } from './setDeferredArrayItem';
 import { tokenStyle } from './tokenStyle';
@@ -15,25 +19,6 @@ export interface RenderTokenLinesOptions {
   decorations?: DecorationItem[];
   /** UTF-16 line start offsets, required for numeric decoration positions. */
   lineOffsets?: number[];
-}
-
-interface LineDecoration extends Omit<DecorationItem, 'start' | 'end'> {
-  start: { line: number; character: number };
-  end: { line: number; character: number };
-}
-
-// from/to are columns within this line; order preserves outer-to-inner nesting.
-interface LineDecorationRange {
-  decoration: LineDecoration;
-  order: number;
-  from: number;
-  to: number;
-}
-
-interface DecorationBoundary {
-  position: number;
-  range: LineDecorationRange;
-  start: boolean;
 }
 
 /**
@@ -193,8 +178,9 @@ function appendTokens(
   return column;
 }
 
-// Visit sorted boundaries once to avoid scanning every decoration per token.
-// Emit empty ranges before text at the same position.
+// Adds a line's tokens to `line` with decorations applied. When a decoration
+// splits a token, each piece keeps the column where the token starts, which
+// the editor needs.
 function appendDecoratedTokens(
   line: Element,
   tokens: ThemedToken[],
@@ -203,139 +189,26 @@ function appendDecoratedTokens(
   useTokenTransformer: boolean,
   cacheHtmlStyles: boolean
 ): number {
-  // Open outer ranges first, regardless of their order in the input.
-  if (spans.length > 1)
-    spans.sort((a, b) => {
-      if (a.start.line !== b.start.line) return a.start.line - b.start.line;
-      if (a.start.character !== b.start.character)
-        return a.start.character - b.start.character;
-      if (a.end.line !== b.end.line) return b.end.line - a.end.line;
-      return b.end.character - a.end.character;
-    });
-  const lineLength = tokens.reduce(
-    (length, token) => length + token.content.length,
-    0
-  );
-  const boundaries: DecorationBoundary[] = [];
-  for (let order = 0; order < spans.length; order++) {
-    const decoration = spans[order];
-    const range: LineDecorationRange = {
-      decoration,
-      order,
-      from:
-        decoration.start.line === lineIndex ? decoration.start.character : 0,
-      to:
-        decoration.end.line === lineIndex
-          ? decoration.end.character
-          : lineLength,
-    };
-    boundaries.push(
-      {
-        position: Math.max(0, Math.min(range.from, lineLength)),
-        range,
-        start: true,
-      },
-      {
-        position: Math.max(0, Math.min(range.to, lineLength)),
-        range,
-        start: false,
-      }
-    );
-  }
-  boundaries.sort((a, b) => a.position - b.position);
-  const active: LineDecorationRange[] = [];
-  const decorationStack: { range: LineDecorationRange; node: Element }[] = [];
-  let boundaryIndex = 0;
-
-  // Keep the same outer-to-inner order even when decorations cross each other.
-  const updateActive = (range: LineDecorationRange, add: boolean): void => {
-    let low = 0;
-    let high = active.length;
-    while (low < high) {
-      const middle = (low + high) >>> 1;
-      if (active[middle].order < range.order) low = middle + 1;
-      else high = middle;
-    }
-    if (add) active.splice(low, 0, range);
-    else if (active[low] === range) active.splice(low, 1);
-  };
-
-  // Reuse wrappers across tokens so a continuous range stays in one element.
-  const getParent = (): Element => {
-    let parent = line;
-    let depth = 0;
-    for (const range of active) {
-      if (decorationStack[depth]?.range !== range) {
-        decorationStack.length = depth;
-        const wrapper: Element = {
-          type: 'element',
-          tagName: 'span',
-          properties: { ...range.decoration.properties },
-          children: [],
-        };
-        parent.children.push(wrapper);
-        decorationStack.push({ range, node: wrapper });
-      }
-      parent = decorationStack[depth++].node;
-    }
-    decorationStack.length = depth;
-    return parent;
-  };
-
-  let parent = line;
-
-  // Markers belong inside ranges starting here, except at the line end,
-  // where they belong inside ranges ending here.
-  const advanceBoundary = (position: number): void => {
-    const first = boundaryIndex;
-    while (boundaries[boundaryIndex]?.position === position) boundaryIndex++;
-    let hasMarker = false;
-    for (let i = first; i < boundaryIndex; i++) {
-      const { range, start } = boundaries[i];
-      if (!start && range.from !== range.to && position < lineLength)
-        updateActive(range, false);
-    }
-    for (let i = first; i < boundaryIndex; i++) {
-      const { range, start } = boundaries[i];
-      if (
-        start &&
-        range.from <= position &&
-        range.to >= position &&
-        (range.to > position ||
-          range.from === position ||
-          position === lineLength)
-      ) {
-        updateActive(range, true);
-        if (range.from === range.to) hasMarker = true;
-      }
-    }
-    if (hasMarker) {
-      getParent();
-      for (let i = first; i < boundaryIndex; i++) {
-        const { range, start } = boundaries[i];
-        if (start && range.from === range.to) updateActive(range, false);
-      }
-    }
-    if (position < lineLength) parent = getParent();
-  };
-
+  let lineLength = 0;
+  for (const token of tokens) lineLength += token.content.length;
+  const builder = new DecoratedLineBuilder(line, spans, lineIndex, lineLength);
   let column = 0;
   for (const token of tokens) {
-    if (token.content === '') continue;
+    const { content } = token;
+    if (content === '') continue;
     const start = column;
-    const end = start + token.content.length;
+    const end = start + content.length;
     const style = tokenStyle(token, cacheHtmlStyles);
     while (column < end) {
-      if (boundaries[boundaryIndex]?.position === column)
-        advanceBoundary(column);
-      const to = Math.min(end, boundaries[boundaryIndex]?.position ?? end);
-      parent.children.push(
+      builder.moveTo(column);
+      const to = Math.min(end, builder.nextEdge);
+      builder.parent.children.push(
         createTokenSpan(
           token,
           style,
           column === start && to === end
-            ? token.content
-            : token.content.slice(column - start, to - start),
+            ? content
+            : content.slice(column - start, to - start),
           start,
           useTokenTransformer
         )
@@ -343,7 +216,7 @@ function appendDecoratedTokens(
       column = to;
     }
   }
-  if (boundaries[boundaryIndex]?.position === column) advanceBoundary(column);
+  builder.moveTo(column);
   return column;
 }
 
