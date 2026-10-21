@@ -36,7 +36,7 @@ const WorkerResourceLimits = getWorkerResourceLimits();
 
 // Files and diffs up to this many characters highlight on the main thread,
 // where highlights finishes faster than a worker round trip.
-const MAIN_THREAD_MAX_CHARACTERS = 100_000;
+export const MAIN_THREAD_MAX_CHARACTERS = 100_000;
 
 const PoolOptions: WorkerPoolOptions = {
   // We really shouldn't let the pool get too big...
