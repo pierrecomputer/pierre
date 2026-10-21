@@ -544,7 +544,7 @@ export class VirtualizedFile<
 
   public scrollToLine(
     lineNumber: number,
-    align: 'nearest' | 'center',
+    align: ScrollLogicalPosition,
     onDone: (result: ScrollRequestResult) => void
   ): void {
     const { virtualizer } = this;

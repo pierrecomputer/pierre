@@ -17,7 +17,7 @@ interface SubscribedInstance {
 interface SpanScrollRequest {
   // Read again after every render pass, since edits and anchor fixes move it.
   resolveSpan(): { top: number; height: number } | undefined;
-  align: 'nearest' | 'center';
+  align: ScrollLogicalPosition;
   onDone(result: ScrollRequestResult): void;
 }
 
@@ -739,7 +739,11 @@ export class Virtualizer {
     const spanBottom = span.top + span.height;
     // A span that covers the whole viewport counts as in view for 'nearest'.
     let top = scrollTop;
-    if (request.align === 'center') {
+    if (request.align === 'start') {
+      top = span.top;
+    } else if (request.align === 'end') {
+      top = spanBottom - this.getHeight();
+    } else if (request.align === 'center') {
       top = span.top - (this.getHeight() - span.height) / 2;
     } else if (span.top < scrollTop && spanBottom < viewportBottom) {
       top = span.top;

@@ -4267,7 +4267,7 @@ export class Editor<
 
   #scrollToPrimaryCaret(
     noFocus = false,
-    scrollPosition: 'nearest' | 'center' = 'nearest'
+    scrollPosition: ScrollLogicalPosition = 'nearest'
   ) {
     const primarySelection = this.#selections?.at(-1);
     if (primarySelection === undefined) {
@@ -4298,7 +4298,7 @@ export class Editor<
   // Virtualized hosts own scrolling: the host brings the primary caret's line
   // into view, then whatever caret the selection holds once it settles gets its
   // exact row and column revealed. The reveal never moves focus.
-  #requestCaretReveal(align: 'nearest' | 'center'): void {
+  #requestCaretReveal(align: ScrollLogicalPosition): void {
     const host = this.#virtualizedInstance;
     const caret = this.#selections?.at(-1);
     if (host === undefined || caret === undefined) {

@@ -17,11 +17,12 @@ function setupVirtualizer() {
   const virtualizer = new Virtualizer();
   virtualizer.setup(root, content);
   const request = (
-    span: { top: number; height: number } | undefined
+    span: { top: number; height: number } | undefined,
+    align: ScrollLogicalPosition = 'nearest'
   ): ScrollRequestResult[] => {
     const results: ScrollRequestResult[] = [];
     virtualizer.scrollSpanIntoView({
-      align: 'nearest',
+      align,
       resolveSpan: () => span,
       onDone: (result) => results.push(result),
     });
@@ -38,6 +39,30 @@ test('scrolls a span below the viewport to its bottom edge, then settles', async
     await waitFor(() => results.length > 0);
     expect(results).toEqual(['settled']);
     expect(root.scrollTop).toBe(2020 - VIEWPORT_HEIGHT);
+    virtualizer.cleanUp();
+  } finally {
+    dom.cleanup();
+  }
+});
+
+test('start and end align a span to the viewport top and bottom', async () => {
+  const dom = installDom();
+  try {
+    const { root, virtualizer, request } = setupVirtualizer();
+    // 'start' moves a span that is already in view, unlike 'nearest'.
+    const visible = request({ top: 300, height: 20 }, 'start');
+    await waitFor(() => visible.length > 0);
+    expect(root.scrollTop).toBe(300);
+
+    const end = request({ top: 2000, height: 20 }, 'end');
+    await waitFor(() => end.length > 0);
+    expect(end).toEqual(['settled']);
+    expect(root.scrollTop).toBe(2020 - VIEWPORT_HEIGHT);
+
+    const start = request({ top: 2000, height: 20 }, 'start');
+    await waitFor(() => start.length > 0);
+    expect(start).toEqual(['settled']);
+    expect(root.scrollTop).toBe(2000);
     virtualizer.cleanUp();
   } finally {
     dom.cleanup();

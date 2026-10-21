@@ -2168,7 +2168,7 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
   public scrollToInstanceLine(
     instance: CodeViewVirtualizedInstanceKey,
     lineNumber: number,
-    align: 'nearest' | 'center',
+    align: ScrollLogicalPosition,
     onDone: (result: ScrollRequestResult) => void
   ): void {
     const item = this.instanceToItem.get(instance);

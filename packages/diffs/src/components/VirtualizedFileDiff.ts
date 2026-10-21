@@ -807,7 +807,7 @@ export class VirtualizedFileDiff<
 
   public scrollToLine(
     lineNumber: number,
-    align: 'nearest' | 'center',
+    align: ScrollLogicalPosition,
     onDone: (result: ScrollRequestResult) => void
   ): void {
     // A line still folded into a collapsed region (CodeView applies staged
