@@ -150,10 +150,9 @@ export function HighlightsPerformanceBenchmarks() {
 
       <div className="text-muted-foreground max-w-4xl space-y-2 text-xs leading-relaxed">
         <p>
-          Recorded October 5, 2026 · Bun 1.4.0 · Shiki 4.4.1 · Apple M4 Pro ·
-          macOS 27.0.1. Speedup is median throughput relative to Shiki. Memory
-          is median peak process RSS from five fresh processes, including the
-          runtime.{' '}
+          Recorded October 5, 2026 · Shiki 4.4.1 · Apple M4 Pro. Speedup is
+          median throughput relative to Shiki. Memory is median peak process RSS
+          from five fresh processes, including the runtime.{' '}
           <Link
             href="https://github.com/pierrecomputer/pierre/tree/main/packages/highlights/benchmark#html-generation"
             className="styled-link"
