@@ -599,6 +599,40 @@ void t.test(
   }
 );
 
+void t.test(
+  'LiveTokenizer: edits inside an embedded body stop after it',
+  () => {
+    const tail = 'para\n'.repeat(50);
+    for (const [lang, head, line] of [
+      ['markdown', '```js\nfunction f(x) {\n  return x;\n}\n```\n', 2],
+      ['html', '<script>\nconst a = f(1);\n</script>\n', 1],
+      ['html', '<style>\n.a { color: red; }\n</style>\n', 1],
+      ['vue', '<script setup>\nconst a = f(1);\n</script>\n', 1],
+    ] as const) {
+      const code = head + tail;
+      const live = new LiveTokenizer({ lang, theme: pierreDark, code });
+      for (const newText of [' x', '(', '/*']) {
+        const character = live.getLineLength(line);
+        const update = live.applyEdits([
+          {
+            range: {
+              start: { line, character },
+              end: { line, character },
+            },
+            newText,
+          },
+        ]);
+        const end = Math.max(...update.lineChanges.map((c) => c.newEndLine));
+        assert.ok(
+          end <= head.split('\n').length,
+          `${lang} ${JSON.stringify(newText)} retokenized to line ${end}`
+        );
+      }
+      live.dispose();
+    }
+  }
+);
+
 void t.test('LiveTokenizer: unterminated constructs propagate to EOF', () => {
   const code = 'let a = 1;\nlet b = 2;\nlet c = 3;\n';
   const live = new LiveTokenizer({ lang: 'ts', theme: pierreDark, code });

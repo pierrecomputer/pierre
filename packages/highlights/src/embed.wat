@@ -14,6 +14,28 @@
   (import "./langs/astro.wat")
   (import "./langs/markdown.wat")
 
+  ;; Clear what an embedded body leaves behind once it ends: the ECMAScript
+  ;; machine, the stream registers, the saved delimiter, and saved locals.
+  ;; The next body starts fresh, so this changes no output. It lets live line
+  ;; states after the body match again when an edit inside it changed them.
+  ;; A comment or string mode can carry a body to its end without running the
+  ;; body lexer, so its saved locals are cleared here, not when it returns.
+  ;; WARNING: this clears every lexer's saved locals. Hosts of embedded
+  ;; bodies keep none, except Markdown's $listStart: an address in the
+  ;; current line that every LF resets.
+  (func $streamClearEmbedded
+    (call $ecmaReset)
+    (global.set $tsxStreamExpressionClose (i32.const 0))
+    (global.set $tsxStreamExpressionClosed (i32.const 0))
+    (global.set $tsxStreamExpressionDepth (i32.const 0))
+    (global.set $streamMode (i32.const 0))
+    (global.set $streamA (i32.const 0))
+    (global.set $streamB (i32.const 0))
+    (global.set $streamC (i32.const 0))
+    (global.set $streamHl (i32.const 0))
+    (memory.fill (i32.const $mem.streamDelimiter) (i32.const 0) (i32.const 32))
+    (memory.fill (i32.const $mem.streamState) (i32.const 0) (i32.const $mem.streamStateUsed)))
+
   (func $streamEmbedRange (param $kind i32) (param $from i32) (param $to i32)
     (local $reset i32)
     (local $saveDepth i32)
@@ -114,12 +136,28 @@
           (local.get $after))
         (global.set $ptr (local.get $after))
         (global.set $streamRegionKind (i32.const 0))
-        (global.set $streamMode (i32.const 0))
-        (global.set $streamA (i32.const 0))
+        (call $streamClearEmbedded)
         (if (local.get $tag)
           (then
             (call $braceTagRest (local.get $tag) (i32.ne (local.get $kind) (i32.const 7)))
             (return (i32.ge_u (global.get $ptr) (global.get $end)))))
+        (return (i32.const 0))))
+    ;; An MDX JSX tag (kind 5) can hold `>` in quotes, braces, or `=>`. The
+    ;; TSX state tracks those across chunks, so its markup steps report
+    ;; where the root tag ends.
+    (if (i32.eq (local.get $kind) (i32.const 5))
+      (then
+        (global.set $jsxRootEnd (i32.const 1))
+        (if (call $jsxRootDone (call $jsxTopMode))
+          (then (global.set $jsxRootEnd (local.get $p)))
+          (else (call $streamEmbedRange (local.get $kind) (local.get $p) (local.get $close))))
+        (local.set $close (global.get $jsxRootEnd))
+        (global.set $jsxRootEnd (i32.const 0))
+        (if (i32.eq (local.get $close) (i32.const 1))
+          (then (return (i32.const 1))))
+        (global.set $ptr (local.get $close))
+        (global.set $streamRegionKind (i32.const 0))
+        (call $streamClearEmbedded)
         (return (i32.const 0))))
     (if (i32.or (i32.le_u (local.get $kind) (i32.const 2)) (i32.ge_u (local.get $kind) (i32.const 14)))
       (then
@@ -135,36 +173,28 @@
             (local.set $p (i32.add (local.get $p) (i32.const 1)))
             (br $raw))))
       (else
-        (if (i32.eq (local.get $kind) (i32.const 5))
-          (then
-            (local.set $p (call $lexFindByte (local.get $p) (i32.const ">")))
-            (if (i32.lt_u (local.get $p) (global.get $end))
+        (block $frontDone
+          (loop $front
+            (br_if $frontDone (i32.ge_u (local.get $p) (global.get $end)))
+            (local.set $lineEnd (call $markdownLineEnd (local.get $p)))
+            (if
+              (i32.and
+                (i32.eq (i32.sub (local.get $lineEnd) (local.get $p)) (i32.const 3))
+                (i32.eq
+                  (i32.and (i32.load (local.get $p)) (i32.const 0xffffff))
+                  (i32.const "---")))
               (then
-                (local.set $close (i32.add (local.get $p) (i32.const 1)))
-                (local.set $found (i32.const 1)))))
-          (else
-            (block $frontDone
-              (loop $front
-                (br_if $frontDone (i32.ge_u (local.get $p) (global.get $end)))
-                (local.set $lineEnd (call $markdownLineEnd (local.get $p)))
-                (if
-                  (i32.and
-                    (i32.eq (i32.sub (local.get $lineEnd) (local.get $p)) (i32.const 3))
-                    (i32.eq
-                      (i32.and (i32.load (local.get $p)) (i32.const 0xffffff))
-                      (i32.const "---")))
-                  (then
-                    (local.set $close (local.get $p))
-                    (local.set $found (i32.const 1))
-                    (br $frontDone)))
-                (local.set $p (call $markdownAfterLine (local.get $lineEnd)))
-                (br $front)))))))
+                (local.set $close (local.get $p))
+                (local.set $found (i32.const 1))
+                (br $frontDone)))
+            (local.set $p (call $markdownAfterLine (local.get $lineEnd)))
+            (br $front)))))
     (call $streamEmbedRange (local.get $kind) (global.get $ptr) (local.get $close))
     (if (i32.eqz (local.get $found))
       (then (return (i32.const 1))))
     (global.set $ptr (local.get $close))
     (global.set $streamRegionKind (i32.const 0))
-    (global.set $streamMode (i32.const 0))
+    (call $streamClearEmbedded)
     ;; front matter (kinds 3 and 4) ends with its `---` line
     (if (i32.le_u (i32.sub (local.get $kind) (i32.const 3)) (i32.const 1))
       (then

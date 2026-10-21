@@ -185,6 +185,28 @@
     (global.set $tsxStreamMode (i32.const 0))
     (i32.const 0))
 
+  ;; Clear the ECMAScript machine: token history, bracket, template, and jsx
+  ;; stacks, stream modes, and parameter registers. A new run starts here.
+  ;; Hosts also call it after an embedded body ends: the next body starts
+  ;; fresh, and leftover state would keep live line states from matching.
+  (func $ecmaReset
+    (global.set $lto (enum.get $Lex.eof))
+    (global.set $prevLto (enum.get $Lex.eof))
+    (global.set $prevTok (enum.get $Lex.eof))
+    (global.set $ecmaImport (i32.const 0))
+    (global.set $nlBefore (i32.const 0))
+    (global.set $braceDepth (i32.const 0))
+    (global.set $jsTemplateLexSp (i32.const 0))
+    (global.set $jsTemplateEmitSp (i32.const 0))
+    (global.set $jsTemplateState (i32.const 0))
+    (global.set $jsTemplateMarker (i32.const 0))
+    (global.set $brkSp (i32.const 0))
+    (global.set $rxCloser (i32.const 0))
+    (global.set $jsxSp (i32.const 0))
+    (global.set $tsxStreamMode (i32.const 0))
+    (global.set $tsxStreamNl (i32.const 0))
+    (call $sigReset))
+
   ;; the lexer: a one-token-lookahead pipeline over $nextToken, with the
   ;; jsx byte modes layered on top (see the mode stack above)
   (func $hlEcmaImpl (param $reset i32)
@@ -210,22 +232,7 @@
     (if (local.get $reset)
       (then
         (global.set $sourceStart (global.get $ptr))
-        (global.set $lto (enum.get $Lex.eof))
-        (global.set $prevLto (enum.get $Lex.eof))
-        (global.set $prevTok (enum.get $Lex.eof))
-        (global.set $ecmaImport (i32.const 0))
-        (global.set $nlBefore (i32.const 0))
-        (global.set $braceDepth (i32.const 0))
-        (global.set $jsTemplateLexSp (i32.const 0))
-        (global.set $jsTemplateEmitSp (i32.const 0))
-        (global.set $jsTemplateState (i32.const 0))
-        (global.set $jsTemplateMarker (i32.const 0))
-        (global.set $brkSp (i32.const 0))
-        (global.set $rxCloser (i32.const 0))
-        (global.set $jsxSp (i32.const 0))
-        (global.set $tsxStreamMode (i32.const 0))
-        (global.set $tsxStreamNl (i32.const 0))
-        (call $sigReset))
+        (call $ecmaReset))
       (else
         ;; A later chunk cannot contain the source-level hashbang.
         (global.set $sourceStart (i32.const 0))))

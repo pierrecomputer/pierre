@@ -497,6 +497,8 @@
   ;; Save a delimiter for a multiline token with one highlight and no nesting.
   ;; The delimiter region holds 32 bytes. Longer delimiters would overwrite
   ;; lexer checkpoints, so those tokens end at the chunk boundary.
+  ;; $streamB starts at 0; a lexer can then set it to a byte that escapes the
+  ;; delimiter right before it (see $streamResumeFixed).
   (func $streamSetFixed (param $delimiter i32) (param $len i32) (param $hl i32)
     (if
       (i32.and
@@ -508,6 +510,7 @@
         (memory.copy (i32.const $mem.streamDelimiter) (local.get $delimiter) (local.get $len))
         (global.set $streamMode (i32.const 20))
         (global.set $streamA (local.get $len))
+        (global.set $streamB (i32.const 0))
         (global.set $streamHl (local.get $hl)))))
 
   (func $streamSetFixed32 (param $delimiter i32) (param $len i32) (param $hl i32)
@@ -638,6 +641,14 @@
                 (br $compareDone)))
             (local.set $i (i32.add (local.get $i) (i32.const 1)))
             (br $compare)))
+        ;; the escape byte in $streamB cancels a delimiter, as `\"""` in GraphQL
+        (if
+          (i32.and
+            (i32.and
+              (i32.ne (global.get $streamB) (i32.const 0))
+              (i32.gt_u (local.get $p) (local.get $lhs)))
+            (i32.eq (i32.load8_u (i32.sub (local.get $p) (i32.const 1))) (global.get $streamB)))
+          (then (local.set $matched (i32.const 0))))
         (if (local.get $matched)
           (then
             (global.set $ptr (i32.add (local.get $p) (global.get $streamA)))
@@ -1232,7 +1243,8 @@
   ;; Recognize `${`, `$name`, or a plain `$`. Inside a nested string
   ;; ($nested), keep `${` as text.
   ;; $dialect 8 escapes `$$` (Scala). Bit 16 allows `.name` segments
-  ;; (Groovy). Neither permits `$` in names. Dialect 0 (Kotlin/Dart) does.
+  ;; (Groovy). No dialect permits `$` in names: Kotlin and Dart (dialect 0)
+  ;; end `$a$b` at the second `$`.
   ;; Return -1 after emitting `${` as punctuation.special. Otherwise return
   ;; the start of the body's bytes that are not yet emitted.
   (func $stringDollarAt (param $seg i32) (param $dialect i32) (param $nested i32) (result i32)
@@ -1257,13 +1269,13 @@
         (global.set $ptr (i32.add (global.get $ptr) (i32.const 2)))
         (call $emitTok (enum.get $Token.string.escape) (local.get $at) (global.get $ptr))
         (return (global.get $ptr))))
-    (if (call $lexIsIdentStart (local.get $c2))
+    (if (i32.and (call $lexIsIdentStart (local.get $c2)) (i32.ne (local.get $c2) (i32.const "$")))
       (then
         (call $emitTok (enum.get $Token.string) (local.get $seg) (global.get $ptr))
         (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
         (block $nameDone
           (loop $name
-            (call $scanIdentRun (select (i32.const "_") (i32.const "$") (local.get $dialect)))
+            (call $scanIdentRun (i32.const "_"))
             (br_if $nameDone
               (i32.eqz
                 (i32.and

@@ -737,31 +737,11 @@
   ;; values from earlier batches can never leak into a blob
   (func $lvResetCaptured
     (call $streamResetGlobals)
+    (call $streamClearEmbedded)
     (global.set $recCarryHl (i32.const -1))
     (global.set $markdownDepth (i32.const 0))
     (global.set $bashArith (i32.const 0))
-    (global.set $lto (i32.const 0))
-    (global.set $prevLto (i32.const 0))
-    (global.set $prevTok (i32.const 0))
-    (global.set $ecmaImport (i32.const 0))
-    (global.set $nlBefore (i32.const 0))
-    (global.set $braceDepth (i32.const 0))
-    (global.set $rxCloser (i32.const 0))
-    (global.set $jsTemplateLexSp (i32.const 0))
-    (global.set $jsTemplateMarker (i32.const 0))
-    (global.set $jsTemplateState (i32.const 0))
-    (global.set $jsTemplateEmitSp (i32.const 0))
-    (global.set $brkSp (i32.const 0))
-    (global.set $jsxSp (i32.const 0))
-    (global.set $tsxStreamMode (i32.const 0))
-    (global.set $tsxStreamNl (i32.const 0))
-    (global.set $tsxStreamExpressionClose (i32.const 0))
-    (global.set $tsxStreamExpressionClosed (i32.const 0))
-    (global.set $tsxStreamExpressionDepth (i32.const 0))
-    (call $sigReset)
-    (global.set $liveStackBytes (i32.const 0))
-    (memory.fill (i32.const $mem.streamDelimiter) (i32.const 0) (i32.const 32))
-    (memory.fill (i32.const $mem.streamState) (i32.const 0) (i32.const $mem.streamStateUsed)))
+    (global.set $liveStackBytes (i32.const 0)))
 
   ;; Gap buffer of 32-byte line descriptors:
   ;;   +0 textPtr  +4 byteLen (without terminator)  +8 utf16Len

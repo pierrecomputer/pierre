@@ -49,7 +49,11 @@
         (br $scan)))
     (call $emitTok (enum.get $Token.string) (local.get $lhs) (global.get $ptr))
     (if (i32.eqz (local.get $closed))
-      (then (call $streamSetFixed32 (i32.const 0x222222) (i32.const 3) (enum.get $Token.string)))))
+      (then
+        (call $streamSetFixed32 (i32.const 0x222222) (i32.const 3) (enum.get $Token.string))
+        ;; `\"""` stays escaped in the next chunk too
+        (if (i32.eq (global.get $streamMode) (i32.const 20))
+          (then (global.set $streamB (i32.const 92)))))))
 
   ;; $expect names the capture of the next name: 1 type, 2 operation or
   ;; fragment definition, 3 fragment spread. $paren counts open parens, where

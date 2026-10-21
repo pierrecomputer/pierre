@@ -489,10 +489,17 @@
   ;; lexer can save an unfinished mode there as if the chunk had ended.
   ;; Keep that state only if the range continues in the next chunk.
   ;; Otherwise it must not affect the Markdown that follows.
+  ;; A finished body's leftovers would also keep live line states after it
+  ;; from matching, so clear every body lexer's state too.
   (func $markdownClearEmbeddedStream
-    (global.set $streamMode (i32.const 0))
     (global.set $streamRegionKind (i32.const 0))
-    (global.set $streamRegionStarted (i32.const 0)))
+    (global.set $streamRegionStarted (i32.const 0))
+    (call $streamClearEmbedded)
+    (global.set $phpStreamingCode (i32.const 0))
+    (global.set $phpStreamDecl (i32.const 0))
+    (global.set $phpStreamMember (i32.const 0))
+    (global.set $bashArith (i32.const 0))
+    (global.set $liveStackBytes (i32.const 0)))
 
   ;; Resume an open fence. Return 1 if its body consumes the whole chunk.
   ;; The length register stores block-quote depth in its upper half.

@@ -319,7 +319,13 @@ export function transformWat(
       leading,
       `${leading}\n    (if (i32.and\n          (global.get $streaming)\n          (i32.eqz (global.get $streamDepth)))\n      (then\n        (global.set $streamWindow (i32.const $mem.streamState+${base}))\n        (global.set $streamDepth (local.tee $streamRoot (i32.const 1)))\n        (if (i32.eqz (global.get $streamReset))\n          (then\n            ${load}))))`
     );
-    return `(func${body}\n    (if (local.get $streamRoot)\n      (then\n        ${save}\n        (global.set $streamDepth (i32.const 0)))))`;
+    // A fence or region body runs as its own root and moves $streamWindow,
+    // so set the base again before saving.
+    const exit =
+      state.length === 0
+        ? ''
+        : `(global.set $streamWindow (i32.const $mem.streamState+${base}))\n        ${save}\n        `;
+    return `(func${body}\n    (if (local.get $streamRoot)\n      (then\n        ${exit}(global.set $streamDepth (i32.const 0)))))`;
   });
   // The live tokenizer captures the whole used checkpoint region per line;
   // publish its length as a named address for src/live.wat.

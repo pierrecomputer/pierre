@@ -164,6 +164,23 @@
             (local.set $to (call $tsxExpressionEnd (local.get $p) (local.get $p)))
             (local.set $p (local.get $to))
             (br $l)))
+        ;; `/* */` and `//` between attributes, as the TSX tag steps read them
+        (if
+          (i32.and
+            (i32.and (i32.eqz (local.get $value)) (i32.eq (local.get $c) (i32.const "/")))
+            (i32.lt_u (i32.add (local.get $p) (i32.const 1)) (global.get $end)))
+          (then
+            (local.set $c (i32.load8_u offset=1 (local.get $p)))
+            (if (i32.or (i32.eq (local.get $c) (i32.const "*")) (i32.eq (local.get $c) (i32.const "/")))
+              (then
+                (local.set $to (global.get $ptr))
+                (global.set $ptr (i32.add (local.get $p) (i32.const 2)))
+                (if (i32.eq (local.get $c) (i32.const "*"))
+                  (then (call $scanBlockCommentEnd))
+                  (else (call $scanToLineEnd)))
+                (local.set $p (global.get $ptr))
+                (global.set $ptr (local.get $to))
+                (br $l)))))
         (if (i32.and (i32.eq (local.get $value) (i32.const 2)) (call $lexIsSpace (local.get $c)))
           (then (local.set $value (i32.const 0))))
         (if (i32.and (i32.eqz (local.get $value)) (i32.eq (local.get $c) (i32.const "=")))
