@@ -51,6 +51,7 @@
   (import "./langs/nix.wat")
   (import "./langs/objc.wat")
   (import "./langs/ocaml.wat")
+  (import "./langs/odin.wat")
   (import "./langs/pascal.wat")
   (import "./langs/perl.wat")
   (import "./langs/php.wat")
@@ -131,6 +132,7 @@
     (language "nix" $hlNix)
     (language "objc" $hlObjc "m" "mm" "objcpp" "objective-c" "objective-cpp" "objectivec")
     (language "ocaml" $hlOcaml "ml" "mli")
+    (language "odin" $hlOdin)
     (language "pascal" $hlPascal "delphi" "dpk" "dpr" "lpr" "object-pascal" "objectpascal" "pas" "pp")
     (language "perl" $hlPerl "pl" "pm")
     (language "php" $hlPhp)
@@ -312,5 +314,10 @@
         (i32.eq (local.get $lang) (enum.get $Language.toml))
         (i32.eq (global.get $streamMode) (i32.const 13)))
       (then (return (call $tomlStreamResume))))
+    (if
+      (i32.and
+        (i32.eq (local.get $lang) (enum.get $Language.odin))
+        (i32.eq (global.get $streamMode) (i32.const 23)))
+      (then (return (call $odinStreamResumeTriple))))
     (i32.const 0))
 )

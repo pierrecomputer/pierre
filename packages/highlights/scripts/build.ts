@@ -245,6 +245,7 @@ export function transformWat(
     '$hlNix',
     '$hlObjc',
     '$hlOcaml',
+    '$hlOdin',
     '$hlPascal',
     '$hlPerl',
     '$hlPhp',

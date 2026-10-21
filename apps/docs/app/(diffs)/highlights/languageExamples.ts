@@ -1337,6 +1337,50 @@ let () =
   print_endline (to_string c)`,
   ],
   [
+    'odin',
+    'Odin',
+    `// A small shop example.
+package main
+
+import "core:fmt"
+import strings "core:strings"
+
+@(private="file")
+MAX_ITEMS :: 10
+
+Item :: struct {
+	name:  string,
+	price: f32,
+}
+
+Category :: enum { Food, Drink }
+
+total :: proc(items: []Item) -> (sum: f32) {
+	for item, i in items {
+		if i >= MAX_ITEMS {
+			break
+		}
+		sum += item.price
+	}
+	return
+}
+
+main :: proc() {
+	items := []Item{{"tea", 2.5}, {"cake", 0x10}}
+	label := """
+shop
+total
+"""
+	upper, err := strings.to_upper(label)
+	if err != nil {
+		fmt.eprintln("failed:", err, nil, true)
+		return
+	}
+	/* nested /* comment */ still */
+	fmt.println(upper, total(items), ---)
+}`,
+  ],
+  [
     'pascal',
     'Delphi / Object Pascal',
     `unit Shapes;
