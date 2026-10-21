@@ -491,12 +491,23 @@
   (global $lvLang (mut i32) (i32.const 0))
   (global $lvMachineId (mut i32) (i32.const -1)) ;; state the machine holds now
 
+  ;; JSON, JSON5, and JSONL share the JSON lexer and its stack.
+  (func $lvIsJson (param $lang i32) (result i32)
+    (i32.or
+      (i32.eq (local.get $lang) (enum.get $Language.json))
+      (i32.or
+        (i32.eq (local.get $lang) (enum.get $Language.json5))
+        (i32.eq (local.get $lang) (enum.get $Language.jsonl)))))
+
   ;; Find the nesting stack used by the current fence body from its language
   ;; register. Bit 8 marks a lexer that has run. JSON and TOML use their own
   ;; stacks. Other bodies return 0. Markdown/MDX can suspend JavaScript
   ;; inside JSON fences, including nested Markdown fences.
   (func $lvFenceStack (param $reg i32) (result i32)
-    (if (i32.eq (local.get $reg) (i32.or (enum.get $Language.json) (i32.const 0x100)))
+    (if
+      (i32.and
+        (i32.eq (i32.and (local.get $reg) (i32.const -256)) (i32.const 0x100))
+        (call $lvIsJson (i32.and (local.get $reg) (i32.const 0xff))))
       (then (return (i32.const $mem.jsonStack))))
     (if (i32.eq (local.get $reg) (i32.or (enum.get $Language.toml) (i32.const 0x100)))
       (then (return (i32.const $mem.tomlStack))))
@@ -505,7 +516,7 @@
   (func $lvStackBase (result i32)
     (local $p i32)
     (local $stack i32)
-    (if (i32.eq (global.get $lvLang) (enum.get $Language.json))
+    (if (call $lvIsJson (global.get $lvLang))
       (then (return (i32.const $mem.jsonStack))))
     (if (i32.eq (global.get $lvLang) (enum.get $Language.toml))
       (then (return (i32.const $mem.tomlStack))))

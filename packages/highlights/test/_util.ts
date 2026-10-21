@@ -181,7 +181,9 @@ export function loadSplitLang(name: Lang): TestSplitHl {
       ? 'css'
       : name === 'fortran-fixed-form'
         ? 'fortran'
-        : name;
+        : name === 'json5' || name === 'jsonl'
+          ? 'json'
+          : name;
   const { highlighter, setSplit } = compileSplitLexer(name, file, entry);
   return (input, splitBytes) => {
     setSplit(splitBytes);

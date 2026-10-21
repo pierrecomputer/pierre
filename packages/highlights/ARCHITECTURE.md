@@ -87,8 +87,10 @@ Wasm files together. A change to the table order changes IDs in both files.
 Several languages share implementations. CSS dialects use `css.wat`. Free-form
 and fixed-form Fortran share `fortran.wat` through a dialect flag that each
 entry point sets. GLSL and the Godot shading language share `glsl.wat` through a
-parameter of `$hlGlslImpl`. GDScript and Godot resources share the type lookup
-in `gdscript.wat` and scan strings with the Python string scanner.
+parameter of `$hlGlslImpl`. JSON, JSON5, and JSONL share `json.wat` the same way
+through `$hlJsonImpl`; JSONL starts a new value on each line. GDScript and Godot
+resources share the type lookup in `gdscript.wat` and scan strings with the
+Python string scanner.
 
 The ECMAScript family uses `js.wat` to scan code and `ts.wat` to classify
 tokens. `jsx.wat` handles markup, and `tsx.wat` is the driver. Feature flags

@@ -902,6 +902,22 @@ const slug = memoize((title) =>
 console.log(\`slug: \${slug("Hello, WAT & Wasm!")}\`);`,
   ],
   [
+    'json5',
+    'JSON5',
+    `// JSON5 allows comments, unquoted keys, and trailing commas
+{
+  name: 'highlights-playground',
+  version: "1.0.0",
+  hex: 0xC0FFEE,
+  ratio: .5,
+  limits: [+Infinity, -Infinity, NaN],
+  multiline: 'first line \\
+second line \\x41',
+  /* nested settings */
+  wasm: { simd: true, pages: 3, },
+}`,
+  ],
+  [
     'jsonc',
     'JSON/JSONC',
     `// comments and trailing commas are supported
@@ -916,6 +932,13 @@ console.log(\`slug: \${slug("Hello, WAT & Wasm!")}\`);`,
   "escape": "a\\nb \\u0041",
   "fallback": null,
 }`,
+  ],
+  [
+    'jsonl',
+    'JSON Lines',
+    `{"id": 1, "event": "open", "path": "/src/main.ts", "ok": true}
+{"id": 2, "event": "edit", "range": [10, 24], "text": "const x = 1;\\n"}
+{"id": 3, "event": "save", "size": 2048, "meta": null}`,
   ],
   [
     'julia',
@@ -983,6 +1006,34 @@ fun main() {
     val distance = distanceSquared(Point(0, 0), Point(3, 4))
     println("distance² = \${distance}")
 }`,
+  ],
+  [
+    'latex',
+    'LaTeX',
+    `\\documentclass[11pt]{article}
+\\usepackage{amsmath, graphicx}
+
+% Title block
+\\title{Notes on \\emph{Highlights}}
+\\author{Pierre}
+
+\\begin{document}
+\\maketitle
+
+\\section{Introduction}\\label{sec:intro}
+Inline math $e^{i\\pi} + 1 = 0$ and a \\textbf{bold} claim, see~\\eqref{eq:sum}.
+
+\\begin{equation}
+  \\sum_{k=1}^{n} k = \\frac{n(n+1)}{2} \\label{eq:sum}
+\\end{equation}
+
+\\begin{itemize}
+  \\item Docs at \\url{https://diffs.com}
+  \\item Inline code: \\verb|raw_text|
+\\end{itemize}
+
+\\newcommand{\\R}{\\mathbb{R}}
+\\end{document}`,
   ],
   [
     'less',
@@ -1173,6 +1224,31 @@ export const languages = ["Rust", "WAT", "MDX"];
     </Badge>
   ))}
 </Grid>`,
+  ],
+  [
+    'nim',
+    'Nim',
+    `## Statistics helpers
+import std/[strutils, strformat]
+
+type
+  Point* = object
+    x*, y*: float
+
+const MaxIter = 1_000'i32
+
+proc mean*(xs: openArray[float]): float {.inline.} =
+  ## Returns the mean of \`xs\`.
+  if xs.len == 0: return NaN
+  for x in xs:
+    result += x
+  result /= xs.len.float
+
+#[ a block
+   comment ]#
+let p = Point(x: 1.5, y: 0x10.float)
+echo "mean: ", mean([1.0, 2.0, 3.0]), '\\n'
+echo fmt"point {p.x} {p.y}"`,
   ],
   [
     'nix',

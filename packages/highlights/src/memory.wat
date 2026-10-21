@@ -21,13 +21,13 @@
       [12032:12416)   saved theme bytes for the emitter span cache
       [12416:12448)   streaming delimiter
       [12448:13984)   streaming lexer checkpoints
-      [13984:27680)   language keyword tables (displacements and descriptors)
-      [27680:35872)   keyword pool: the word bytes every table shares
-      [35872:45488)   per-language stacks and lookup tables
-      [45488:61504)   live tokenizer change list
-      [61504:61632)   live tokenizer free-list heads
-      [61632:62144)   suspended live lexer locals
-      [62144:65536)   free
+      [13984:28352)   language keyword tables (displacements and descriptors)
+      [28352:36544)   keyword pool: the word bytes every table shares
+      [36544:46160)   per-language stacks and lookup tables
+      [46160:62176)   live tokenizer change list
+      [62176:62304)   live tokenizer free-list heads
+      [62304:62816)   suspended live lexer locals
+      [62816:65536)   free
     [] pages 2..N     (text buffer; a live instance lays them out itself, see src/live.wat)
       [65536:EOF)     input, NUL sentinel, then at least 16 bytes of slack
       [(EOF+47)&~15:) prefix bytes (mode 1) or theme blob (modes 2/4), then HTML;
@@ -53,7 +53,7 @@
   (const $mem.streamDelimiter 12416)         ;; 32
   (const $mem.streamState 12448)             ;; 1536
 
-  ;; [13984:35872) keyword tables, capacities rounded up to 32 bytes, then the
+  ;; [13984:36544) keyword tables, capacities rounded up to 32 bytes, then the
   ;; shared word pool at its 8191-byte addressing limit. Each region's end is
   ;; the next named address, checked during the build.
   (const $mem.angularWords 13984)            ;; 160
@@ -88,47 +88,49 @@
   (const $mem.javaWords 21024)               ;; 224
   (const $mem.juliaWords 21248)              ;; 192
   (const $mem.kotlinWords 21440)             ;; 256
-  (const $mem.lispWords 21696)               ;; 320
-  (const $mem.luaWords 22016)                ;; 96
-  (const $mem.makefileWords 22112)           ;; 192
-  (const $mem.matlabWords 22304)             ;; 160
-  (const $mem.nixWords 22464)                ;; 128
-  (const $mem.objcWords 22592)               ;; 288
-  (const $mem.ocamlWords 22880)              ;; 256
-  (const $mem.pascalWords 23136)             ;; 576
-  (const $mem.perlWords 23712)               ;; 256
-  (const $mem.phpWords 23968)                ;; 256
-  (const $mem.powershellWords 24224)         ;; 352
-  (const $mem.protoWords 24576)              ;; 160
-  (const $mem.pythonWords 24736)             ;; 288
-  (const $mem.rWords 25024)                  ;; 96
-  (const $mem.rubyWords 25120)               ;; 192
-  (const $mem.rustWords 25312)               ;; 224
-  (const $mem.scalaWords 25536)              ;; 224
-  (const $mem.solidityWords 25760)           ;; 448
-  (const $mem.swiftWords 26208)              ;; 256
-  (const $mem.terraformWords 26464)          ;; 96
-  (const $mem.tsxWords 26560)                ;; 544: ECMAScript keyword table (js.wat)
-  (const $mem.watWords 27104)                ;; 96
-  (const $mem.wgslWords 27200)               ;; 192
-  (const $mem.zigWords 27392)                ;; 288
-  (const $mem.keywordPool 27680)             ;; 8192: word bytes shared by every table
+  (const $mem.latexWords 21696)              ;; 288
+  (const $mem.lispWords 21984)               ;; 320
+  (const $mem.luaWords 22304)                ;; 96
+  (const $mem.makefileWords 22400)           ;; 192
+  (const $mem.matlabWords 22592)             ;; 160
+  (const $mem.nimWords 22752)                ;; 384
+  (const $mem.nixWords 23136)                ;; 128
+  (const $mem.objcWords 23264)               ;; 288
+  (const $mem.ocamlWords 23552)              ;; 256
+  (const $mem.pascalWords 23808)             ;; 576
+  (const $mem.perlWords 24384)               ;; 256
+  (const $mem.phpWords 24640)                ;; 256
+  (const $mem.powershellWords 24896)         ;; 352
+  (const $mem.protoWords 25248)              ;; 160
+  (const $mem.pythonWords 25408)             ;; 288
+  (const $mem.rWords 25696)                  ;; 96
+  (const $mem.rubyWords 25792)               ;; 192
+  (const $mem.rustWords 25984)               ;; 224
+  (const $mem.scalaWords 26208)              ;; 224
+  (const $mem.solidityWords 26432)           ;; 448
+  (const $mem.swiftWords 26880)              ;; 256
+  (const $mem.terraformWords 27136)          ;; 96
+  (const $mem.tsxWords 27232)                ;; 544: ECMAScript keyword table (js.wat)
+  (const $mem.watWords 27776)                ;; 96
+  (const $mem.wgslWords 27872)               ;; 192
+  (const $mem.zigWords 28064)                ;; 288
+  (const $mem.keywordPool 28352)             ;; 8192: word bytes shared by every table
 
-  ;; [35872:45488) per-language stacks and lookup tables.
-  (const $mem.jsonStack 35872)               ;; 1024
-  (const $mem.jsBracketStack 36896)          ;; 1024
-  (const $mem.jsTokenFlags 37920)            ;; 144
-  (const $mem.jsTokenHighlightMap 38064)     ;; 144
-  (const $mem.jsTemplateBracketStack 38208)  ;; 1024
-  (const $mem.jsTemplateFn 39232)            ;; 1024
-  (const $mem.jsxStack 40256)                ;; 4096
-  (const $mem.markdownFenceStack 44368)      ;; 96
-  (const $mem.tomlStack 44464)               ;; 1024
+  ;; [36544:46160) per-language stacks and lookup tables.
+  (const $mem.jsonStack 36544)               ;; 1024
+  (const $mem.jsBracketStack 37568)          ;; 1024
+  (const $mem.jsTokenFlags 38592)            ;; 144
+  (const $mem.jsTokenHighlightMap 38736)     ;; 144
+  (const $mem.jsTemplateBracketStack 38880)  ;; 1024
+  (const $mem.jsTemplateFn 39904)            ;; 1024
+  (const $mem.jsxStack 40928)                ;; 4096
+  (const $mem.markdownFenceStack 45040)      ;; 96
+  (const $mem.tomlStack 45136)               ;; 1024
 
   ;; Live tokenizer controls.
   ;; The heap starts in page 2.
-  (const $mem.liveChanges 45488)             ;; 16016: count + 1000 records, padded
-  (const $mem.liveFree 61504)                ;; 128: 32 size-class free-list heads
-  (const $mem.liveLocals 61632)              ;; 512
+  (const $mem.liveChanges 46160)             ;; 16016: count + 1000 records, padded
+  (const $mem.liveFree 62176)                ;; 128: 32 size-class free-list heads
+  (const $mem.liveLocals 62304)              ;; 512
   (const $mem.liveHeapStart 65536)
 )
