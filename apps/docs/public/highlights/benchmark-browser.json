@@ -16,10 +16,14 @@
   "rows": [
     {
       "name": "Highlights",
-      "version": "0.0.3",
+      "version": "0.2.0",
       "output": "tokens",
-      "samplesMilliseconds": [90.69999992847443, 92.10000002384186, 104.5],
-      "milliseconds": 92.10000002384186
+      "samplesMilliseconds": [74.30000001192093, 69.5, 67],
+      "milliseconds": 69.5,
+      "date": "2026-10-21T09:57:50.405Z",
+      "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/153.0.0.0 Safari/537.36",
+      "environment": "Apple M4 Pro, 48 GiB RAM, macOS 27.0.1, headless Chromium 153 (Playwright)",
+      "note": "Re-recorded alone with the same source and sampling. In this setup, 0.0.3 took 121 ms (92.1 ms on 2026-09-15), so this setup is slower than the original run."
     },
     {
       "name": "gpu-lexer",

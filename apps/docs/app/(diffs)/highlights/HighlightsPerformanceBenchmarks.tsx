@@ -72,8 +72,9 @@ export function HighlightsPerformanceBenchmarks() {
           Faster output & lighter footprint
         </h2>
         <p className="text-muted-foreground text-pretty">
-          Highlights generates HTML at hundreds of times Shiki’s throughput on
-          large files, with substantially lower peak process memory.
+          Highlights generates HTML up to{' '}
+          {HIGHLIGHTS_LARGE_FILE_MAXIMUM_SPEEDUP}× faster than Shiki and uses
+          about a third of its memory.
         </p>
       </div>
 
@@ -90,9 +91,7 @@ export function HighlightsPerformanceBenchmarks() {
               Super-fast HTML generation
             </h3>
             <p className="text-muted-foreground max-w-xl text-pretty">
-              Highlights generates HTML at up to{' '}
-              {HIGHLIGHTS_LARGE_FILE_MAXIMUM_SPEEDUP} times faster than Shiki’s
-              throughput across these fixtures.
+              Speedup over Shiki when generating HTML from large files.
             </p>
           </figcaption>
           <div className="space-y-5">
@@ -131,8 +130,7 @@ export function HighlightsPerformanceBenchmarks() {
               Memory usage
             </h3>
             <p className="text-muted-foreground max-w-xl text-pretty">
-              Median peak memory across five runs while highlighting a 517 KiB
-              TypeScript file and generating HTML.
+              Peak memory when generating HTML from a 517 KiB TypeScript file.
             </p>
           </figcaption>
           <dl className="space-y-6">
@@ -152,20 +150,17 @@ export function HighlightsPerformanceBenchmarks() {
 
       <div className="text-muted-foreground max-w-4xl space-y-2 text-xs leading-relaxed">
         <p>
-          Measured October 5, 2026 on an Apple M4 Pro (14 cores, 48 GiB RAM)
-          running macOS 27.0.1, using Bun 1.4.0, Shiki 4.4.1, and
-          tree-sitter-highlight 1.1.2. Median throughput after warmup. Memory is
-          median peak process RSS from five fresh processes per engine. RSS
-          includes the runtime, compiled code, Wasm, and allocator capacity; it
-          is not live heap or bundle size. Results vary by input and
-          environment.{' '}
+          Recorded October 5, 2026 · Bun 1.4.0 · Shiki 4.4.1 · Apple M4 Pro ·
+          macOS 27.0.1. Speedup is median throughput relative to Shiki. Memory
+          is median peak process RSS from five fresh processes, including the
+          runtime.{' '}
           <Link
             href="https://github.com/pierrecomputer/pierre/tree/main/packages/highlights/benchmark#html-generation"
             className="styled-link"
             target="_blank"
             rel="noopener noreferrer"
           >
-            Explore the HTML generation
+            See the HTML generation
           </Link>
           {' and '}
           <Link
@@ -176,11 +171,7 @@ export function HighlightsPerformanceBenchmarks() {
           >
             memory usage
           </Link>{' '}
-          benchmarks and methodology.
-        </p>
-        <p>
-          Throughput is relative to Shiki’s 1× baseline; higher is better. Each
-          chart uses its own shared zero-based linear scale.
+          benchmarks.
         </p>
       </div>
     </section>

@@ -50,9 +50,9 @@ export function HighlightsBenchmarks() {
           Compared with other highlighters
         </h2>
         <p className="text-muted-foreground text-pretty">
-          Highlights processes 5.56 million characters of JavaScript in{' '}
-          <strong className="text-foreground font-semibold">.09 s</strong>.
-          Here’s how it compares with Shu Ding’s{' '}
+          Highlights tokenizes 5.56 million characters of JavaScript in{' '}
+          <strong className="text-foreground font-semibold">.07 s</strong> in
+          the browser. Compare it with Shu Ding’s{' '}
           <a
             href="https://github.com/vercel-labs/gpu-lexer"
             target="_blank"
@@ -61,7 +61,7 @@ export function HighlightsBenchmarks() {
           >
             gpu-lexer
           </a>{' '}
-          and other syntax highlighters in the same browser run.
+          and other highlighters on the same input.
         </p>
       </div>
 
@@ -126,21 +126,18 @@ export function HighlightsBenchmarks() {
 
       <div className="text-muted-foreground max-w-3xl space-y-2 text-xs leading-relaxed">
         <p>
-          Recorded September 15, 2026 · Chromium 152 · Apple M4 Pro. Median of
-          three samples, each with one warm-up in a fresh worker. Bar lengths
-          encode elapsed time; shorter is faster. Every nonzero bar reserves a
-          6px visibility floor, with elapsed-time percentages mapped
-          proportionally across the remaining width. Highlights and Shiki return
-          themed tokens; gpu-lexer returns classified spans. The other libraries
-          return HTML or a HAST tree. These results measure speed on this
-          JavaScript workload, not highlighting quality.{' '}
+          Recorded September 15, 2026 · Chromium 152 · Apple M4 Pro. Highlights
+          0.2.0 re-recorded October 21, 2026 · Chromium 153. Median of three
+          runs, each after one warm-up in a fresh worker. Highlights and Shiki
+          return themed tokens, gpu-lexer returns spans, and the others return
+          HTML or HAST. Measures speed only, not highlighting quality.{' '}
           <a
             href="/highlights/benchmark-browser.json"
             className="styled-link"
             target="_blank"
             rel="noopener noreferrer"
           >
-            View versions, samples, and run conditions
+            View raw results
           </a>
           .
         </p>
