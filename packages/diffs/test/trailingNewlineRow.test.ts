@@ -7,6 +7,9 @@ import {
   parseDiffFromFile,
   parsePatchFiles,
 } from '../src';
+import { FileDiff } from '../src/components/FileDiff';
+import { DEFAULT_THEMES } from '../src/constants';
+import { Editor } from '../src/editor/editor';
 import type { FileDiffMetadata } from '../src/types';
 import { finishEditSessionForDiff } from '../src/utils/editSessionHunks';
 import {
@@ -14,6 +17,7 @@ import {
   endsWithNewline,
   iterateOverDiff,
 } from '../src/utils/iterateOverDiff';
+import { installDom, wait } from './domHarness';
 
 afterAll(async () => {
   await disposeHighlighter();
@@ -335,4 +339,49 @@ describe('trailing newline row', () => {
       lastElement(result.deletionsContentAST)?.properties['data-content-buffer']
     ).toBeDefined();
   });
+
+  for (const [label, oldContents, newContents] of [
+    ['drops the trailing row', 'one\ntwo\n', 'one\nTWO\n'],
+    ['restores the "No newline" marker', 'one\ntwo', 'one\nTWO'],
+  ] as const) {
+    test(`discarding an unchanged edit session ${label}`, async () => {
+      const dom = installDom();
+      const container = document.createElement('div');
+      document.body.appendChild(container);
+      const fileDiff = new FileDiff<undefined>({
+        disableFileHeader: true,
+        theme: DEFAULT_THEMES,
+        diffStyle: 'split',
+      });
+      const editor = new Editor('file-diff');
+      try {
+        fileDiff.render({
+          oldFile: { name: 'a.txt', contents: oldContents },
+          newFile: { name: 'a.txt', contents: newContents },
+          fileContainer: container,
+          forceRender: true,
+        });
+        await wait(100);
+        const viewHTML = () => {
+          const html = container.shadowRoot?.innerHTML ?? '';
+          return {
+            trailingRow: html.includes('data-line="3"'),
+            marker: html.includes('data-no-newline'),
+          };
+        };
+        const before = viewHTML();
+        editor.edit(fileDiff);
+        await wait(100);
+        expect(viewHTML()).not.toEqual(before);
+
+        editor.cleanUp('discard');
+        await wait(100);
+        expect(viewHTML()).toEqual(before);
+      } finally {
+        editor.cleanUp();
+        fileDiff.cleanUp();
+        dom.cleanup();
+      }
+    });
+  }
 });

@@ -2267,7 +2267,16 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
       );
     }
     this.hunksRenderer.endEditSession();
-    this.finalizeEditSessionHunks();
+    const didFinalize = this.finalizeEditSessionHunks();
+    // Markup the session rendered with the end of the file on screen shows
+    // that end in edit mode, so view mode has to repaint it.
+    const showsSessionEndOfFile =
+      !didFinalize &&
+      this.getRenderedDiff() === editSessionDiff &&
+      this.hunksRenderer.editingChangesEndOfFile(
+        editSessionDiff,
+        this.renderRange
+      );
 
     const sessionAnnotationsCurrent = editSessionAnnotations?.current;
     let acceptedDiff: FileDiffMetadata | undefined;
@@ -2348,7 +2357,10 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
           ? (sessionAnnotationsCurrent ?? inputAnnotations)
           : inputAnnotations,
     };
-    if (installResult && this.fileContainer != null) {
+    if (
+      (installResult || showsSessionEndOfFile) &&
+      this.fileContainer != null
+    ) {
       this.rerender();
     }
     if (failed) {
