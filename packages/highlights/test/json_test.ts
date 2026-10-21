@@ -544,7 +544,7 @@ void t.test('json: a continued string resumes its hex escapes line-fed', () => {
 void t.test('json5: quotes, identifier keys, numbers, and constants', () => {
   const kinds = tokenKinds(
     'json5',
-    "{ name: 'a \"b\"', $id: 1, café: 2, 'q': 0xC0FFEE, d: .5, t: 8., p: +1e3, i: -Infinity, n: NaN, e: '\\x41\\u00e9', }"
+    "{ name: 'a \"b\"', $id: 1, café: 2, 'q': 0xC0FFEE, d: .5, t: 8., p: +1e3, i: -Infinity, n: NaN, e: '\\x41\\u00e9', \\u0061: 0, foo\\u0062: 0, }"
   );
   const has = (text: string, kind: string | null) =>
     kinds.some(([t, k]) => t === text && k === kind);
@@ -559,6 +559,9 @@ void t.test('json5: quotes, identifier keys, numbers, and constants', () => {
     'i',
     'n',
     'e',
+    // identifier escapes stay inside one key
+    '\\u0061',
+    'foo\\u0062',
   ]) {
     assert.ok(has(key, 'property.json_key'), key);
   }

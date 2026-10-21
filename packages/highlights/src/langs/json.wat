@@ -155,15 +155,35 @@
             (br $next)))
 
         ;; words: true/false -> boolean, null -> constant.builtin, else plain.
-        ;; JSON5 names follow JavaScript identifiers and can be object keys.
+        ;; JSON5 names follow JavaScript identifiers, `\uXXXX` escapes
+        ;; included, and can be object keys.
         (if
           (if (result i32)
             (i32.le_u (i32.sub (i32.or (local.get $c) (i32.const 32)) (i32.const "a")) (i32.const 25))
             (then (i32.const 1))
-            (else (i32.and (local.get $json5) (call $lexIsIdentStart (local.get $c)))))
+            (else
+              (if (result i32)
+                (local.get $json5)
+                (then
+                  (i32.or
+                    (call $lexIsIdentStart (local.get $c))
+                    (i32.and
+                      (i32.eq (local.get $c) (i32.const 92))
+                      (i32.eq (call $templateByte (i32.add (global.get $ptr) (i32.const 1))) (i32.const "u")))))
+                (else (i32.const 0)))))
           (then
             (if (local.get $json5)
-              (then (call $scanIdentRun (i32.const "$")))
+              (then
+                (loop $name
+                  (call $scanIdentRun (i32.const "$"))
+                  (if
+                    (i32.and
+                      (i32.eq (call $templateByte (global.get $ptr)) (i32.const 92))
+                      (i32.eq (call $templateByte (i32.add (global.get $ptr) (i32.const 1))) (i32.const "u")))
+                    (then
+                      (global.set $ptr
+                        (call $scanHexRun (i32.add (global.get $ptr) (i32.const 2)) (i32.const 4)))
+                      (br $name)))))
               (else
                 (block $wordDone
                   (loop $word
