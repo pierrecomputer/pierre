@@ -21,6 +21,25 @@ import {
 
 const fixtures = [
   {
+    lang: 'lean',
+    code: samples.lean.code,
+    delimiter: '-/',
+    fragments: [
+      '/-',
+      '-/',
+      '/--',
+      '/-!',
+      '--',
+      'r##"',
+      '"##',
+      '«',
+      '»',
+      'α→β',
+      '@[simp]',
+    ],
+    open: '/- nested /- λ😀 -/',
+  },
+  {
     lang: 'gdscript',
     code: samples.gdscript.code,
     delimiter: '"""',
