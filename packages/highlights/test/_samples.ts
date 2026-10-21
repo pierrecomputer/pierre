@@ -44,6 +44,48 @@ export interface LangSample {
 }
 
 export const samples: Record<string, LangSample> = {
+  lean: {
+    code: lines(
+      'import Mathlib',
+      '/-! Module documentation -/',
+      'namespace Demo',
+      '/-- Prove an implication. /- Nested explanation -/ -/',
+      '@[simp] theorem identity (p : Prop) : p → p := by',
+      '  intro h',
+      '  exact h',
+      'def count : Nat := 12',
+      'def ready : Bool := true',
+      'def message := "first\\n',
+      '-- still a string"',
+      'def raw := r##"raw "# content',
+      'with \\slashes"##',
+      "def «quoted name» := 'λ'",
+      '-- A normal comment',
+      '#check ∀ (α : Type), α → α',
+      'end Demo'
+    ),
+    kinds: [
+      'keyword.import',
+      'namespace',
+      'comment.doc',
+      'punctuation.bracket',
+      'attribute',
+      'keyword.declaration',
+      'function.definition',
+      'variable',
+      'punctuation.delimiter',
+      'type.builtin',
+      'operator',
+      'keyword.control',
+      'number',
+      'boolean',
+      'string',
+      'string.escape',
+      'comment',
+      'preproc',
+      'keyword.operator',
+    ],
+  },
   gdscript: {
     code: lines(
       '## Player controller',
@@ -4095,6 +4137,7 @@ export const samples: Record<string, LangSample> = {
 
 /** Short documents with multiline constructs and Unicode for tokenizer tests. */
 export const tokenizerSamples: [Lang, string][] = [
+  ['lean', samples.lean.code],
   ['gdscript', samples.gdscript.code],
   ['gdshader', samples.gdshader.code],
   ['gdresource', samples.gdresource.code],

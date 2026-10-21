@@ -28,7 +28,7 @@
       [62240:62368)   live tokenizer free-list heads
       [62368:62880)   suspended live lexer locals
       [62880:64928)   odin keyword table (outside the packed block)
-      [64928:65536)   free
+      [64928:65536)   Lean keyword table
     [] pages 2..N     (text buffer; a live instance lays them out itself, see src/live.wat)
       [65536:EOF)     input, NUL sentinel, then at least 16 bytes of slack
       [(EOF+47)&~15:) prefix bytes (mode 1) or theme blob (modes 2/4), then HTML;
@@ -138,5 +138,7 @@
   ;; alphabetical tables above keep their addresses.
   (const $mem.odinWords 62880)               ;; 2048
   (const $mem.odinWordsEnd 64928)
+  (const $mem.leanWords 64928)               ;; 608
+  (const $mem.leanWordsEnd 65536)
   (const $mem.liveHeapStart 65536)
 )
