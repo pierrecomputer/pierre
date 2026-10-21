@@ -16,6 +16,12 @@
   background-color: var(--diffs-editor-selection-bg);
 }
 
+/* Word diff marks are not kept up to date while editing, so hide them on both
+   sides until the edit session ends. */
+[data-diff-span] {
+  background-color: transparent;
+}
+
 @keyframes blinking {
   0% {
     opacity: 1;
