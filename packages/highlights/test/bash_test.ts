@@ -362,6 +362,70 @@ void t.test('bash: pipes, lists, redirections, and descriptors', () => {
   );
 });
 
+void t.test('bash: a backslash line join keeps the command open', () => {
+  // the first word of a joined line is an argument, not a command, and
+  // keywords do not apply there; `#` heading a joined line still comments
+  const cases: [string, [string, string | null][]][] = [
+    [
+      'docker run \\\n  --rm \\\n  ubuntu bash\n',
+      [
+        ['docker', 'function'],
+        ['run', 'variable'],
+        ['\\', 'punctuation.special'],
+        ['--rm', 'variable'],
+        ['\\', 'punctuation.special'],
+        ['ubuntu bash', 'variable'],
+      ],
+    ],
+    [
+      'echo a \\\r\n  done\n',
+      [
+        ['echo', 'function'],
+        ['a', 'variable'],
+        ['\\', 'punctuation.special'],
+        ['done', 'variable'],
+      ],
+    ],
+    [
+      'VAR=x \\\n  cmd arg\n',
+      [
+        ['VAR', 'variable'],
+        ['=', 'operator'],
+        ['x', 'variable'],
+        ['\\', 'punctuation.special'],
+        ['cmd', 'function'],
+        ['arg', 'variable'],
+      ],
+    ],
+    [
+      'echo a \\\n# note\necho b\n',
+      [
+        ['echo', 'function'],
+        ['a', 'variable'],
+        ['\\', 'punctuation.special'],
+        ['# note', 'comment'],
+        ['echo', 'function'],
+        ['b', 'variable'],
+      ],
+    ],
+    // a blank line after the join ends the command; `\$` escapes outside quotes
+    [
+      'echo \\$HOME \\\n\nls\n',
+      [
+        ['echo', 'function'],
+        ['\\$', 'string.escape'],
+        ['HOME', 'variable'],
+        ['\\', 'punctuation.special'],
+        ['ls', 'function'],
+      ],
+    ],
+  ];
+  for (const [code, expected] of cases) {
+    assertLineFedParity('bash', code);
+    assert.deepEqual(tokenKinds('bash', code), expected, JSON.stringify(code));
+  }
+});
+
 void t.test('bash: assignments and numeric literals', () => {
   assert.deepEqual(
     tokenKinds('bash', 'export FOO=1 BAR="$FOO"\nn=42\nm=0x1F\nf=1.5'),
