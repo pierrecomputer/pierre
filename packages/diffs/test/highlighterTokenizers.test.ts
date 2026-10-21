@@ -32,14 +32,20 @@ describe('backend tokenizers', () => {
         'const value = 1;',
         'typescript'
       );
+      // A line that misses the tokenizer's time budget arrives through
+      // onDeferTokenize instead of tokenize()'s result.
+      const deferredLines = new Map<number, HighlightedToken[]>();
       const tokenizer = highlighter.createEditorTokenizer({
         textDocument: document,
         theme: 'pierre-dark',
-        onDeferTokenize: () => {},
+        onDeferTokenize: (lines) => {
+          for (const [line, tokens] of lines) deferredLines.set(line, tokens);
+        },
       });
       try {
         for (const theme of ['pierre-light', 'pierre-dark']) {
           tokenizer.setTheme(theme);
+          deferredLines.clear();
           const change = document.applyEdits([
             {
               range: {
@@ -49,7 +55,11 @@ describe('backend tokenizers', () => {
               newText: theme === 'pierre-light' ? '2' : '3',
             },
           ]);
-          const tokens = tokenizer.tokenize(change!).get(0);
+          let tokens = tokenizer.tokenize(change!).get(0);
+          for (let attempt = 0; tokens == null && attempt < 100; attempt++) {
+            await new Promise((resolve) => setTimeout(resolve, 0));
+            tokens = deferredLines.get(0);
+          }
           const expected = highlighter.codeToTokens(document.getText(), {
             lang: 'typescript',
             theme,
