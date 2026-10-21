@@ -5,6 +5,7 @@ import {
 import type { ScrollRequestResult, VirtualWindowSpecs } from '../types';
 import { areVirtualWindowSpecsEqual } from '../utils/areVirtualWindowSpecsEqual';
 import { createWindowFromScrollPosition } from '../utils/createWindowFromScrollPosition';
+import { isUserScrollInput } from '../utils/isUserScrollInput';
 
 interface SubscribedInstance {
   onRender(dirty: boolean): boolean;
@@ -757,7 +758,7 @@ export class Virtualizer {
   }
 
   private handleUserScrollInput = (event: Event): void => {
-    if (!event.defaultPrevented) {
+    if (isUserScrollInput(event)) {
       this.cancelScroll();
     }
   };

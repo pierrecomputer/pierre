@@ -171,9 +171,10 @@ test('an unresolvable span cancels', async () => {
   }
 });
 
-// Editor key commands prevent default and request their own scroll, so only
-// unhandled input counts as the user taking over.
-test('user scroll input cancels, but a handled keydown does not', async () => {
+// Editor key commands prevent default and request their own scroll, and keys
+// that don't scroll natively never take over, so only unhandled scroll input
+// cancels.
+test('user scroll input cancels, but handled and non-scroll keys do not', async () => {
   const dom = installDom();
   try {
     const { root, virtualizer, request } = setupVirtualizer();
@@ -190,6 +191,24 @@ test('user scroll input cancels, but a handled keydown does not', async () => {
     root.dispatchEvent(keydown);
     await waitFor(() => handled.length > 0);
     expect(handled).toEqual(['settled']);
+
+    // A held Cmd+V repeats keydown between its paste and the next frame.
+    const pasting = request({ top: 2000, height: 20 });
+    root.dispatchEvent(
+      new window.KeyboardEvent('keydown', {
+        bubbles: true,
+        key: 'v',
+        metaKey: true,
+      })
+    );
+    await waitFor(() => pasting.length > 0);
+    expect(pasting).toEqual(['settled']);
+
+    const arrowed = request({ top: 2000, height: 20 });
+    root.dispatchEvent(
+      new window.KeyboardEvent('keydown', { bubbles: true, key: 'ArrowDown' })
+    );
+    expect(arrowed).toEqual(['cancelled']);
     virtualizer.cleanUp();
   } finally {
     dom.cleanup();

@@ -58,6 +58,7 @@ import { createWindowFromScrollPosition } from '../utils/createWindowFromScrollP
 import { getCodeViewItemRenderData } from '../utils/getCodeViewItemRenderData';
 import { getThemes } from '../utils/getThemes';
 import { isStyleNode } from '../utils/isStyleNode';
+import { isUserScrollInput } from '../utils/isUserScrollInput';
 import { isFirefox } from '../utils/platform';
 import { prefersReducedMotion } from '../utils/prefersReducedMotion';
 import { resolvePreferredHighlighter } from '../utils/resolvePreferredHighlighter';
@@ -3983,7 +3984,7 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
   // Attached to root as a passive listener for wheel / touchstart /
   // pointerdown / keydown; we never mutate the event, just drop our state.
   private clearPendingScroll = (event: Event): void => {
-    if (event.defaultPrevented) {
+    if (!isUserScrollInput(event)) {
       return;
     }
     this.pendingLayoutAnchor = undefined;
