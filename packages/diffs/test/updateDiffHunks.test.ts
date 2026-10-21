@@ -281,121 +281,45 @@ describe('updateDiffHunks', () => {
     );
   });
 
-  test('preserves context when a contentful edit has an editor-only trailing blank line', () => {
-    const oldContents = ['drop 1', 'kept', 'drop 2', ''].join('\n');
-    const diff = parseDiffFromFile(
-      { name: 'example.ts', contents: oldContents },
-      { name: 'example.ts', contents: 'kept\n' },
-      { context: 3 }
-    );
+  // The editor exposes an empty final line after a trailing newline. The diff
+  // never models it (edit sessions render it as an extra row), so recomputing
+  // from editor-shaped lines matches a plain parse of the same contents.
+  for (const [label, oldLines, newContents] of [
+    [
+      'after deleting all but one matching line',
+      ['drop 1', 'kept', 'drop 2', ''],
+      'kept\n',
+    ],
+    [
+      'after replacing a longer file',
+      ['old 1', 'old 2', 'old 3', 'old 4', ''],
+      'a\n',
+    ],
+  ] as const) {
+    test(`drops the editor-only trailing blank line ${label}`, () => {
+      const oldContents = oldLines.join('\n');
+      const diff = parseDiffFromFile(
+        { name: 'example.ts', contents: oldContents },
+        { name: 'example.ts', contents: newContents },
+        { context: 3 }
+      );
+      const clean = parseDiffFromFile(
+        { name: 'example.ts', contents: oldContents },
+        { name: 'example.ts', contents: newContents },
+        { context: 3 }
+      );
+      diff.additionLines = [newContents, ''];
 
-    // Mirrors edit mode after deleting all but one matching line in a longer
-    // file and pressing Enter: the editor has a final logical empty line that
-    // patch-style splitting would normally drop.
-    diff.additionLines = ['kept\n', ''];
+      const recomputed = recomputeDiffHunksForEdit(diff, { context: 3 });
 
-    const recomputed = recomputeDiffHunksForEdit(diff, { context: 3 });
-
-    expect(recomputed.additionLines).toEqual(['kept\n', '']);
-    expect(recomputed.splitLineCount).toBe(3);
-    expect(recomputed.unifiedLineCount).toBe(4);
-    expect(recomputed.hunks[0]?.hunkContent).toEqual([
-      {
-        type: 'change',
-        additions: 0,
-        deletions: 1,
-        additionLineIndex: 0,
-        deletionLineIndex: 0,
-      },
-      {
-        type: 'context',
-        lines: 1,
-        additionLineIndex: 0,
-        deletionLineIndex: 1,
-      },
-      {
-        type: 'change',
-        additions: 1,
-        deletions: 1,
-        additionLineIndex: 1,
-        deletionLineIndex: 2,
-      },
-    ]);
-
-    Object.assign(diff, recomputed);
-    const splitRows: Array<{
-      deletionLineIndex: number | undefined;
-      additionLineIndex: number | undefined;
-    }> = [];
-    iterateOverDiff({
-      diff,
-      diffStyle: 'split',
-      callback(row) {
-        splitRows.push({
-          deletionLineIndex: row.deletionLine?.lineIndex,
-          additionLineIndex: row.additionLine?.lineIndex,
-        });
-      },
+      expect(recomputed.additionLines).toEqual([newContents]);
+      expect(recomputed.splitLineCount).toBe(clean.splitLineCount);
+      expect(recomputed.unifiedLineCount).toBe(clean.unifiedLineCount);
+      expect(recomputed.hunks.map((hunk) => hunk.hunkContent)).toEqual(
+        clean.hunks.map((hunk) => hunk.hunkContent)
+      );
     });
-
-    expect(splitRows).toEqual([
-      { deletionLineIndex: 0, additionLineIndex: undefined },
-      { deletionLineIndex: 1, additionLineIndex: 0 },
-      { deletionLineIndex: 2, additionLineIndex: 1 },
-    ]);
-  });
-
-  test('top-aligns an editor-only trailing blank line after replacing a longer file', () => {
-    const oldContents = ['old 1', 'old 2', 'old 3', 'old 4', ''].join('\n');
-    const diff = parseDiffFromFile(
-      { name: 'example.ts', contents: oldContents },
-      { name: 'example.ts', contents: 'a\n' },
-      { context: 3 }
-    );
-
-    // Mirrors select-all, type "a", then press Enter: the editor has a second
-    // logical row for the trailing blank line before tokenization sees content
-    // on that row.
-    diff.additionLines = ['a\n', ''];
-
-    const recomputed = recomputeDiffHunksForEdit(diff, { context: 3 });
-
-    expect(recomputed.additionLines).toEqual(['a\n', '']);
-    expect(recomputed.splitLineCount).toBe(4);
-    expect(recomputed.unifiedLineCount).toBe(6);
-    expect(recomputed.hunks[0]?.hunkContent).toEqual([
-      {
-        type: 'change',
-        additions: 2,
-        deletions: 4,
-        additionLineIndex: 0,
-        deletionLineIndex: 0,
-      },
-    ]);
-
-    Object.assign(diff, recomputed);
-    const splitRows: Array<{
-      deletionLineIndex: number | undefined;
-      additionLineIndex: number | undefined;
-    }> = [];
-    iterateOverDiff({
-      diff,
-      diffStyle: 'split',
-      callback(row) {
-        splitRows.push({
-          deletionLineIndex: row.deletionLine?.lineIndex,
-          additionLineIndex: row.additionLine?.lineIndex,
-        });
-      },
-    });
-
-    expect(splitRows).toEqual([
-      { deletionLineIndex: 0, additionLineIndex: 0 },
-      { deletionLineIndex: 1, additionLineIndex: 1 },
-      { deletionLineIndex: 2, additionLineIndex: undefined },
-      { deletionLineIndex: 3, additionLineIndex: undefined },
-    ]);
-  });
+  }
 
   test('does not append an editor-only trailing blank line as an EOF change addition', () => {
     const oldContents = ['line 1', 'remove me', 'line 3', ''].join('\n');

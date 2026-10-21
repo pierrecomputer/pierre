@@ -7,7 +7,6 @@ import {
   captureExpansionAnchors,
   findDivergenceCore,
   finishEditSessionForDiff,
-  normalizeEditorLines,
   rebuildExpansionFromAnchors,
   rebuildSessionHunks,
   remapExpandedHunksForRegionChange,
@@ -17,6 +16,7 @@ import { iterateOverDiff } from '../src/utils/iterateOverDiff';
 import { parseDiffFromFile } from '../src/utils/parseDiffFromFile';
 import { processFile } from '../src/utils/parsePatchFiles';
 import { splitFileContents } from '../src/utils/splitFileContents';
+import { normalizeEditorLines } from '../src/utils/updateDiffHunks';
 import { getTrailingContextRangeSize } from '../src/utils/virtualDiffLayout';
 import { verifyFileDiffHunkValues } from './testUtils';
 

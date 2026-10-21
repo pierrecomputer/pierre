@@ -1896,112 +1896,166 @@ describe('rendering when an editor attaches', () => {
     }
   });
 
-  test('entering edit mode reuses an existing editor-compatible render', async () => {
-    const dom = installDom();
-    const { manager, worker } = await createInitializedManager({
-      theme: 'pierre-dark',
-      useTokenTransformer: true,
-    });
-    let attaches = 0;
-    const editor = new Editor('file-diff', {
-      onAttach: () => attaches++,
-    });
-    try {
-      const root = document.createElement('div');
-      document.body.appendChild(root);
-      let instanceChangedCalls = 0;
-      const virtualizer = {
-        type: 'simple',
-        config: {},
-        connect() {},
-        disconnect() {},
-        getRoot: () => root,
-        getWindowSpecs: () => ({ top: 0, bottom: 800 }),
-        getOffsetInScrollContainer: () => 0,
-        instanceChanged(target: { onRender(dirty: boolean): boolean }) {
-          instanceChangedCalls++;
-          target.onRender(true);
-        },
-        isInstanceVisible: () => true,
-        markDOMDirty() {},
-        requestHeightReconcile() {},
-        cancelScroll() {},
-      } as never;
-      const instance = new VirtualizedFileDiff<undefined>(
-        { theme: 'pierre-dark', disableFileHeader: true },
-        virtualizer,
-        undefined,
-        manager
-      );
-      const fileContainer = document.createElement('div');
-      root.appendChild(fileContainer);
-      const fileDiff = parseDiffFromFile(
-        {
-          name: 'demo.ts',
-          contents: 'const value = "old";\n',
-          cacheKey: 'vr:old',
-        },
-        {
-          name: 'demo.ts',
-          contents: 'const value = "new";\n',
-          cacheKey: 'vr:new',
-        }
-      );
-
-      instance.render({ fileDiff, fileContainer, forceRender: true });
-      const request = await withTimeout(worker.waitForDiffRequest());
-      // Deliver a genuine transformer-shaped highlight, as a configured
-      // pool worker would.
-      worker.respond({
-        type: 'success',
-        requestType: 'diff',
-        id: request.id,
-        result: renderDiffWithHighlighter(
-          fileDiff,
-          sharedHighlighter,
-          manager.getDiffRenderOptions()
-        ),
-        options: manager.getDiffRenderOptions(),
-        sentAt: Date.now(),
+  // Edit sessions render the end of the file differently (the editor's empty
+  // final row, no "No newline" marker), so markup that shows the end of the
+  // file repaints on entry; markup with a collapsed end is reused.
+  const unchangedTail = Array.from(
+    { length: 30 },
+    (_, index) => `const tail${index} = ${index};\n`
+  ).join('');
+  const longTail = Array.from(
+    { length: 400 },
+    (_, index) => `const long${index} = ${index};\n`
+  ).join('');
+  for (const {
+    label,
+    expectation,
+    oldContents,
+    newContents,
+    expandUnchanged = false,
+    windowBottom = 800,
+  } of [
+    {
+      label: 'reuses an existing editor-compatible render',
+      expectation: 'reuse',
+      oldContents: `const value = "old";\n${unchangedTail}`,
+      newContents: `const value = "new";\n${unchangedTail}`,
+    },
+    {
+      label: 'reuses a windowed render that stops before the end of the file',
+      expectation: 'reuse',
+      oldContents: `const value = "old";\n${longTail}`,
+      newContents: `const value = "new";\n${longTail}`,
+      expandUnchanged: true,
+      windowBottom: 200,
+    },
+    {
+      label: 'repaints to add the empty final row after a trailing newline',
+      expectation: 'final-row',
+      oldContents: 'const value = "old";\n',
+      newContents: 'const value = "new";\n',
+    },
+    {
+      label: 'repaints to drop the "No newline" marker',
+      expectation: 'no-marker',
+      oldContents: 'const value = "old";',
+      newContents: 'const value = "new";',
+    },
+  ] as const) {
+    test(`entering edit mode ${label}`, async () => {
+      const dom = installDom();
+      const { manager, worker } = await createInitializedManager({
+        theme: 'pierre-dark',
+        useTokenTransformer: true,
       });
-      await waitFor(() => {
-        expect(fileContainer.shadowRoot?.innerHTML ?? '').toContain(
-          'data-char'
+      let attaches = 0;
+      const editor = new Editor('file-diff', {
+        onAttach: () => attaches++,
+      });
+      try {
+        const root = document.createElement('div');
+        document.body.appendChild(root);
+        let instanceChangedCalls = 0;
+        const virtualizer = {
+          type: 'simple',
+          config: {},
+          connect() {},
+          disconnect() {},
+          getRoot: () => root,
+          getWindowSpecs: () => ({ top: 0, bottom: windowBottom }),
+          getOffsetInScrollContainer: () => 0,
+          instanceChanged(target: { onRender(dirty: boolean): boolean }) {
+            instanceChangedCalls++;
+            target.onRender(true);
+          },
+          isInstanceVisible: () => true,
+          markDOMDirty() {},
+          requestHeightReconcile() {},
+          cancelScroll() {},
+        } as never;
+        const instance = new VirtualizedFileDiff<undefined>(
+          { theme: 'pierre-dark', disableFileHeader: true, expandUnchanged },
+          virtualizer,
+          undefined,
+          manager
         );
-      });
+        const fileContainer = document.createElement('div');
+        root.appendChild(fileContainer);
+        const fileDiff = parseDiffFromFile(
+          {
+            name: 'demo.ts',
+            contents: oldContents,
+            cacheKey: `vr:old:${label}`,
+          },
+          {
+            name: 'demo.ts',
+            contents: newContents,
+            cacheKey: `vr:new:${label}`,
+          }
+        );
 
-      const callsBefore = instanceChangedCalls;
-      const contentBefore =
-        fileContainer.shadowRoot?.querySelector('[data-content]');
-      const lineBefore =
-        fileContainer.shadowRoot?.querySelector('[data-line="1"]');
-      expect(contentBefore).not.toBeNull();
-      expect(lineBefore).not.toBeNull();
+        instance.render({ fileDiff, fileContainer, forceRender: true });
+        const request = await withTimeout(worker.waitForDiffRequest());
+        // Deliver a genuine transformer-shaped highlight, as a configured
+        // pool worker would.
+        worker.respond({
+          type: 'success',
+          requestType: 'diff',
+          id: request.id,
+          result: renderDiffWithHighlighter(
+            fileDiff,
+            sharedHighlighter,
+            manager.getDiffRenderOptions()
+          ),
+          options: manager.getDiffRenderOptions(),
+          sentAt: Date.now(),
+        });
+        await waitFor(() => {
+          expect(fileContainer.shadowRoot?.innerHTML ?? '').toContain(
+            'data-char'
+          );
+        });
 
-      const detach = editor.edit(instance);
-      // Compatible transformer markup is retained while its renderer cache is
-      // moved onto the private, keyless session model.
-      await waitFor(() => expect(attaches).toBe(1));
-      await wait(50);
+        const callsBefore = instanceChangedCalls;
+        const contentBefore =
+          fileContainer.shadowRoot?.querySelector('[data-content]');
+        const lineBefore =
+          fileContainer.shadowRoot?.querySelector('[data-line="1"]');
+        expect(contentBefore).not.toBeNull();
+        expect(lineBefore).not.toBeNull();
 
-      expect(instanceChangedCalls).toBe(callsBefore);
-      expect(fileContainer.shadowRoot?.querySelector('[data-content]')).toBe(
-        contentBefore
-      );
-      expect(fileContainer.shadowRoot?.querySelector('[data-line="1"]')).toBe(
-        lineBefore
-      );
-      expect(editor.getFile()?.cacheKey).toBeUndefined();
-      expect(instance.options.useTokenTransformer).toBeUndefined();
-      expect(worker.diffRequestCount).toBe(1);
-      detach();
-      instance.cleanUp();
-    } finally {
-      editor.cleanUp();
-      manager.terminate();
-      dom.cleanup();
-    }
-  });
+        const detach = editor.edit(instance);
+        // Compatible transformer markup is retained while its renderer cache is
+        // moved onto the private, keyless session model.
+        await waitFor(() => expect(attaches).toBe(1));
+        await wait(50);
+
+        const shadowRoot = fileContainer.shadowRoot;
+        if (expectation === 'final-row') {
+          expect(shadowRoot?.querySelector('[data-line="2"]')).not.toBeNull();
+        } else if (expectation === 'no-marker') {
+          expect(shadowRoot?.querySelector('[data-no-newline]')).toBeNull();
+        } else {
+          expect(instanceChangedCalls).toBe(callsBefore);
+          expect(
+            fileContainer.shadowRoot?.querySelector('[data-content]')
+          ).toBe(contentBefore);
+          expect(
+            fileContainer.shadowRoot?.querySelector('[data-line="1"]')
+          ).toBe(lineBefore);
+        }
+        expect(editor.getFile()?.cacheKey).toBeUndefined();
+        expect(instance.options.useTokenTransformer).toBeUndefined();
+        expect(worker.diffRequestCount).toBe(1);
+        detach();
+        instance.cleanUp();
+      } finally {
+        editor.cleanUp();
+        manager.terminate();
+        dom.cleanup();
+      }
+    });
+  }
 
   test('reuses an existing editor-compatible local render', async () => {
     const dom = installDom();

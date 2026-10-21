@@ -38,7 +38,10 @@ import {
   includesFileAnnotations,
   shouldRenderFileAnnotations,
 } from '../utils/includesFileAnnotations';
-import { iterateOverDiff } from '../utils/iterateOverDiff';
+import {
+  type DiffLineMetadata,
+  iterateOverDiff,
+} from '../utils/iterateOverDiff';
 import { parseDiffFromFile } from '../utils/parseDiffFromFile';
 import {
   getExpandedRegion,
@@ -260,6 +263,17 @@ export class VirtualizedFileDiff<
   private getEstimatedLineHeight(hasMetadataLine = false): number {
     const multiplier = hasMetadataLine ? 2 : 1;
     return this.metrics.lineHeight * multiplier;
+  }
+
+  // Whether a line has an extra metadata line after it
+  private hasNoNewlineMarker(
+    additionLine: DiffLineMetadata | undefined,
+    deletionLine: DiffLineMetadata | undefined
+  ): boolean {
+    return (
+      this.hunksRenderer.showsNoNewlineMarkers() &&
+      ((additionLine?.noEOFCR ?? false) || (deletionLine?.noEOFCR ?? false))
+    );
   }
 
   override setOptions(
@@ -702,6 +716,7 @@ export class VirtualizedFileDiff<
         ? true
         : this.hunksRenderer.getExpandedHunksMap(),
       collapsedContextThreshold,
+      includeTrailingNewline: this.hunksRenderer.includesTrailingNewline(),
       callback: ({
         hunkIndex,
         hunk,
@@ -746,7 +761,7 @@ export class VirtualizedFileDiff<
 
         const lineHeight = this.getLineHeight(
           lineIndex,
-          (additionLine?.noEOFCR ?? false) || (deletionLine?.noEOFCR ?? false)
+          this.hasNoNewlineMarker(additionLine, deletionLine)
         );
         if (lineIndex === targetLineIndex) {
           position = {
@@ -795,31 +810,24 @@ export class VirtualizedFileDiff<
     align: 'nearest' | 'center',
     onDone: (result: ScrollRequestResult) => void
   ): void {
-    // The editor's empty row after a final newline has no diff line of its
-    // own, so target the line above it; the editor's caret reveal then covers
-    // the last row.
-    const targetLine =
-      lineNumber > 1 && this.getLinePosition(lineNumber) == null
-        ? lineNumber - 1
-        : lineNumber;
     // A line still folded into a collapsed region (CodeView applies staged
     // expansions on its next layout) has no row yet, so don't scroll to the
     // separator standing in for it.
     const { virtualizer } = this;
-    if (!super.isLineRenderable(targetLine)) {
+    if (!super.isLineRenderable(lineNumber)) {
       // Still the newest request, so it replaces any scroll in flight.
       virtualizer.cancelScroll();
       onDone('cancelled');
       return;
     }
     if (virtualizer.type === 'advanced') {
-      virtualizer.scrollToInstanceLine(this, targetLine, align, onDone);
+      virtualizer.scrollToInstanceLine(this, lineNumber, align, onDone);
     } else {
       virtualizer.scrollSpanIntoView({
         align,
         onDone,
         resolveSpan: () => {
-          const position = this.getLinePosition(targetLine);
+          const position = this.getLinePosition(lineNumber);
           return position != null
             ? {
                 top: this.getVirtualizedTop() + position.top,
@@ -877,6 +885,7 @@ export class VirtualizedFileDiff<
         ? true
         : this.hunksRenderer.getExpandedHunksMap(),
       collapsedContextThreshold,
+      includeTrailingNewline: this.hunksRenderer.includesTrailingNewline(),
       callback: ({
         hunkIndex,
         hunk,
@@ -929,7 +938,7 @@ export class VirtualizedFileDiff<
 
         const lineHeight = this.getLineHeight(
           lineIndex,
-          (additionLine?.noEOFCR ?? false) || (deletionLine?.noEOFCR ?? false)
+          this.hasNoNewlineMarker(additionLine, deletionLine)
         );
         top += lineHeight;
 
@@ -1402,6 +1411,8 @@ export class VirtualizedFileDiff<
         fileDiff,
         this.options.loadDiffFiles != null
       ),
+      includeTrailingNewline: this.hunksRenderer.includesTrailingNewline(),
+      showNoNewlineMarkers: this.hunksRenderer.showsNoNewlineMarkers(),
     });
     this.cache.estimatedSplitHeight = splitHeight;
     this.cache.estimatedUnifiedHeight = unifiedHeight;
@@ -1831,11 +1842,13 @@ export class VirtualizedFileDiff<
         preSeparatorHeight: pendingLeadingSeparatorHeight,
         postSeparatorHeight:
           trailingExpandedCount === 0 ? trailingSeparatorHeight : 0,
-        metadataOffsets: getHunkMetadataOffsets({
-          diffStyle,
-          hunk,
-          rowCount: hunkBodyRowCount,
-        }),
+        metadataOffsets: this.hunksRenderer.showsNoNewlineMarkers()
+          ? getHunkMetadataOffsets({
+              diffStyle,
+              hunk,
+              rowCount: hunkBodyRowCount,
+            })
+          : [],
       });
 
       if (trailingRegion != null && trailingExpandedCount > 0) {
@@ -1975,6 +1988,13 @@ export class VirtualizedFileDiff<
     if (trailingRegion != null) {
       count += trailingRegion.fromStart + trailingRegion.fromEnd;
     }
+    if (
+      fileDiff.hunks.length > 0 &&
+      (trailingRegion?.collapsedLines ?? 0) === 0 &&
+      this.hunksRenderer.hasTrailingNewlineRow(fileDiff)
+    ) {
+      count += 1;
+    }
 
     return count;
   }
@@ -1988,9 +2008,10 @@ export class VirtualizedFileDiff<
   ): number {
     const expandedLineCount = this.getExpandedLineCount(fileDiff, diffStyle);
     const metadataLineCount =
-      diffStyle === 'split'
+      (diffStyle === 'split'
         ? fileDiff.splitLineCount
-        : fileDiff.unifiedLineCount;
+        : fileDiff.unifiedLineCount) +
+      (this.hunksRenderer.hasTrailingNewlineRow(fileDiff) ? 1 : 0);
     return Math.max(
       expandedLineCount,
       metadataLineCount,
@@ -2096,6 +2117,7 @@ export class VirtualizedFileDiff<
         ? true
         : this.hunksRenderer.getExpandedHunksMap(),
       collapsedContextThreshold,
+      includeTrailingNewline: this.hunksRenderer.includesTrailingNewline(),
       callback: ({
         hunkIndex,
         hunk,
@@ -2112,8 +2134,7 @@ export class VirtualizedFileDiff<
           additionLine != null
             ? additionLine.unifiedLineIndex
             : deletionLine.unifiedLineIndex;
-        const hasMetadata =
-          (additionLine?.noEOFCR ?? false) || (deletionLine?.noEOFCR ?? false);
+        const hasMetadata = this.hasNoNewlineMarker(additionLine, deletionLine);
         const isFinalHunkRow =
           hunkIndex === fileDiff.hunks.length - 1 &&
           hunk != null &&

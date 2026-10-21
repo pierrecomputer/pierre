@@ -106,6 +106,10 @@ export interface IterateOverDiffProps {
   totalLines?: number;
   expandedHunks?: Map<number, HunkExpansionRegion> | true;
   collapsedContextThreshold?: number;
+  // Normally trailing newlines in files are not rendered or iterated over.
+  // However when editing we need to render them, so this boolean will be
+  // typically used in that flow
+  includeTrailingNewline?: boolean;
   callback: DiffLineCallback;
 }
 
@@ -116,6 +120,7 @@ export function iterateOverDiff({
   totalLines = Infinity,
   expandedHunks,
   collapsedContextThreshold = DEFAULT_COLLAPSED_CONTEXT_THRESHOLD,
+  includeTrailingNewline = false,
   callback,
 }: IterateOverDiffProps): void {
   const iterationStart = getIterationStartState({
@@ -124,6 +129,7 @@ export function iterateOverDiff({
     startingLine,
     expandedHunks,
     collapsedContextThreshold,
+    includeTrailingNewline,
   });
   const state: IterationState = {
     viewportStart: startingLine,
@@ -574,7 +580,78 @@ export function iterateOverDiff({
         break hunkIterator;
       }
     }
+
+    if (
+      includeTrailingNewline &&
+      hunkIndex === state.finalHunkIndex &&
+      (trailingRegion?.collapsedLines ?? 0) === 0 &&
+      endsWithNewline(diff, 'additions')
+    ) {
+      // The row sits right after the last hunk and its trailing context.
+      const offset =
+        trailingRegion != null
+          ? trailingRegion.fromStart + trailingRegion.fromEnd
+          : 0;
+      const additionLine: DiffLineMetadata = {
+        unifiedLineIndex: unifiedLineIndex + offset,
+        splitLineIndex: splitLineIndex + offset,
+        lineIndex: additionLineIndex + offset,
+        lineNumber: additionLineNumber + offset,
+        noEOFCR: false,
+      };
+      const rowBase = {
+        hunkIndex: diff.hunks.length,
+        hunk: undefined,
+        collapsedBefore: 0,
+        collapsedAfter: 0,
+      };
+      if (
+        walkContextLines(state, 1, diffStyle, () =>
+          state.emit(
+            endsWithNewline(diff, 'deletions')
+              ? {
+                  ...rowBase,
+                  type: 'context',
+                  deletionLine: {
+                    unifiedLineIndex: unifiedLineIndex + offset,
+                    splitLineIndex: splitLineIndex + offset,
+                    lineIndex: deletionLineIndex + offset,
+                    lineNumber: deletionLineNumber + offset,
+                    noEOFCR: false,
+                  },
+                  additionLine,
+                }
+              : { ...rowBase, type: 'change', additionLine }
+          )
+        )
+      ) {
+        break hunkIterator;
+      }
+    }
   }
+}
+
+// Whether one side's last line ends with a newline, so an empty line follows
+// it. A partial diff only knows that from its patch's "\ No newline at end of
+// file" marker on the last hunk; a full diff has the file's real last line.
+export function endsWithNewline(
+  diff: FileDiffMetadata,
+  side: 'additions' | 'deletions'
+): boolean {
+  const lines = side === 'additions' ? diff.additionLines : diff.deletionLines;
+  if (lines.length === 0) {
+    return false;
+  }
+  if (diff.isPartial) {
+    const lastHunk = diff.hunks.at(-1);
+    return (
+      lastHunk != null &&
+      !(side === 'additions'
+        ? lastHunk.noEOFCRAdditions
+        : lastHunk.noEOFCRDeletions)
+    );
+  }
+  return lines.at(-1)?.endsWith('\n') === true;
 }
 
 // Seek the iterator to the hunk that contains `startingLine` without changing
@@ -590,6 +667,7 @@ function getIterationStartState({
   startingLine,
   expandedHunks,
   collapsedContextThreshold,
+  includeTrailingNewline = false,
 }: IterationStartStateProps): IterationStartState {
   if (startingLine <= 0 || diffStyle === 'both') {
     return { hunkIndex: 0, splitCount: 0, unifiedCount: 0 };
@@ -623,15 +701,22 @@ function getIterationStartState({
   }
 
   if (result >= diff.hunks.length) {
-    const counts = prefixCounts[diff.hunks.length];
-    if (counts == null) {
-      throw new Error('iterateOverDiff: invalid terminal hunk prefix index');
+    // A window past every hunk's rows still starts at the final hunk when it
+    // can include the trailing newline row: that iteration skips the hunk's
+    // rows and emits the row after them.
+    if (includeTrailingNewline && diff.hunks.length > 0) {
+      result = diff.hunks.length - 1;
+    } else {
+      const counts = prefixCounts[diff.hunks.length];
+      if (counts == null) {
+        throw new Error('iterateOverDiff: invalid terminal hunk prefix index');
+      }
+      return {
+        hunkIndex: diff.hunks.length,
+        splitCount: counts.splitCount,
+        unifiedCount: counts.unifiedCount,
+      };
     }
-    return {
-      hunkIndex: diff.hunks.length,
-      splitCount: counts.splitCount,
-      unifiedCount: counts.unifiedCount,
-    };
   }
 
   const counts = prefixCounts[result];

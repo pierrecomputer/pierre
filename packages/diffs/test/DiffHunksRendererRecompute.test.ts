@@ -8,7 +8,10 @@ import {
 import { TextDocument } from '../src/editor/textDocument';
 import type { FileDiffMetadata, HighlightedToken } from '../src/types';
 import { finishEditSessionForDiff } from '../src/utils/editSessionHunks';
-import { iterateOverDiff } from '../src/utils/iterateOverDiff';
+import {
+  type DiffLineCallbackProps,
+  iterateOverDiff,
+} from '../src/utils/iterateOverDiff';
 import {
   collectAllElements,
   hastTextContent,
@@ -643,10 +646,13 @@ describe('DiffHunksRenderer edit-session hunk updates', () => {
     expect(pairingProjection(diff)).toEqual(pairingProjection(full));
   });
 
-  test('a same-line edit can rebuild after preserving the trailing editor row', async () => {
+  test('a same-line edit rebuilds when the document ends with a newline', async () => {
     const { renderer, diff } = await createSessionRenderer();
     renderer.applyDocumentChange(makeTextDocumentFromText('line 1\n'));
-    expect(diff.additionLines).toEqual(['line 1\n', '']);
+    // The editor's empty final line stays out of the diff and renders as an
+    // extra row instead.
+    expect(diff.additionLines).toEqual(['line 1\n']);
+    expect(renderer.hasTrailingNewlineRow(diff)).toBe(true);
 
     expect(() =>
       renderer.updateRenderCache(
@@ -655,7 +661,7 @@ describe('DiffHunksRenderer edit-session hunk updates', () => {
       )
     ).not.toThrow();
 
-    expect(diff.additionLines).toEqual(['line 1 edited\n', '']);
+    expect(diff.additionLines).toEqual(['line 1 edited\n']);
     expect(renderer.renderDiff()).toBeDefined();
   });
 
@@ -750,13 +756,13 @@ describe('DiffHunksRenderer edit-session hunk updates', () => {
   test('typing into a newline-only document rebuilds from canonical lines', async () => {
     const { renderer, diff } = await createSessionRenderer();
     renderer.applyDocumentChange(makeTextDocumentFromText('\n'));
-    expect(diff.additionLines).toEqual(['\n', '']);
+    expect(diff.additionLines).toEqual(['\n']);
 
     expect(() =>
       renderer.updateRenderCache(makeDirtyLines([[0, 'typed']]), 'light')
     ).not.toThrow();
 
-    expect(diff.additionLines).toEqual(['typed\n', '']);
+    expect(diff.additionLines).toEqual(['typed\n']);
     expect(renderer.renderDiff()).toBeDefined();
   });
 
@@ -925,16 +931,28 @@ describe('DiffHunksRenderer.applyDocumentChange empty document', () => {
       if (rendered == null) return;
 
       const additionSplitLines: number[] = [];
+      let lastRow: DiffLineCallbackProps | undefined;
       iterateOverDiff({
         diff: rendered,
         diffStyle: 'split',
-        callback: ({ additionLine }) => {
-          if (additionLine != null) {
+        includeTrailingNewline: true,
+        callback: (row) => {
+          lastRow = row;
+          const { additionLine } = row;
+          if (
+            additionLine != null &&
+            additionLine.lineIndex < rendered.additionLines.length
+          ) {
             additionSplitLines.push(additionLine.splitLineIndex);
           }
         },
       });
-      expect(additionSplitLines).toEqual([0, 1]);
+      // The edited lines stay top-aligned; the empty line after the final
+      // newline renders after the block, as context since both files end
+      // with a newline.
+      expect(additionSplitLines).toEqual([0]);
+      expect(lastRow?.type).toBe('context');
+      expect(lastRow?.additionLine?.lineNumber).toBe(2);
     });
 
     test(`top-aligns multiple newline-only additions after delete-all (${diffStyle})`, async () => {
@@ -972,16 +990,28 @@ describe('DiffHunksRenderer.applyDocumentChange empty document', () => {
       if (rendered == null) return;
 
       const additionSplitLines: number[] = [];
+      let lastRow: DiffLineCallbackProps | undefined;
       iterateOverDiff({
         diff: rendered,
         diffStyle: 'split',
-        callback: ({ additionLine }) => {
-          if (additionLine != null) {
+        includeTrailingNewline: true,
+        callback: (row) => {
+          lastRow = row;
+          const { additionLine } = row;
+          if (
+            additionLine != null &&
+            additionLine.lineIndex < rendered.additionLines.length
+          ) {
             additionSplitLines.push(additionLine.splitLineIndex);
           }
         },
       });
-      expect(additionSplitLines).toEqual([0, 1, 2]);
+      // The edited lines stay top-aligned; the empty line after the final
+      // newline renders after the block, as context since both files end
+      // with a newline.
+      expect(additionSplitLines).toEqual([0, 1]);
+      expect(lastRow?.type).toBe('context');
+      expect(lastRow?.additionLine?.lineNumber).toBe(3);
     });
 
     test(`renders one row per editor line after insertLineBreak (${diffStyle})`, async () => {
@@ -1017,12 +1047,13 @@ describe('DiffHunksRenderer.applyDocumentChange empty document', () => {
       const rendered = renderer.diffCache;
       expect(rendered).toBeDefined();
       if (rendered == null) return;
-      expect(rendered.additionLines).toEqual(['\n', '']);
+      expect(rendered.additionLines).toEqual(['\n']);
 
       const additionSplitLines: number[] = [];
       iterateOverDiff({
         diff: rendered,
         diffStyle: 'split',
+        includeTrailingNewline: true,
         callback: ({ additionLine }) => {
           if (additionLine != null) {
             additionSplitLines.push(additionLine.lineNumber);

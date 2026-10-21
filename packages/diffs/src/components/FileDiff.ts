@@ -2034,6 +2034,7 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
         ? true
         : this.hunksRenderer.getExpandedHunksMap(),
       collapsedContextThreshold,
+      includeTrailingNewline: this.hunksRenderer.includesTrailingNewline(),
       callback: ({ additionLine }) => {
         if (additionLine != null) {
           firstLineNumber ??= additionLine.lineNumber;
@@ -2189,7 +2190,17 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
       this.loadFilesIfNecessary();
     }
     const editSessionDiff = this.editSession?.diff;
-    if (this.hunksRenderer.editorRenderReady()) {
+    // View-mode markup that shows the end of the file can't be reused: the
+    // session renders that end differently. Markup the session rendered
+    // already has its end.
+    const changesEndOfFile =
+      editSessionDiff != null &&
+      this.getRenderedDiff() !== editSessionDiff &&
+      this.hunksRenderer.editingChangesEndOfFile(
+        editSessionDiff,
+        this.renderRange
+      );
+    if (this.hunksRenderer.editorRenderReady() && !changesEndOfFile) {
       // Compatible markup can be reused without repainting. Once the renderer
       // transfers that cache to the private session, the existing DOM belongs
       // to the session as well.
