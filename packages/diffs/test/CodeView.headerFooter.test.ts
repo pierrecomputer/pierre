@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'bun:test';
+import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 
 import { CodeView, type CodeViewOptions } from '../src/components/CodeView';
 import {
@@ -6,6 +6,10 @@ import {
   CODE_VIEW_HEADER_ATTRIBUTE,
   DEFAULT_CODE_VIEW_LAYOUT,
 } from '../src/constants';
+import {
+  disposeHighlighter,
+  preloadHighlighter,
+} from '../src/highlighter/shared_highlighter';
 import type { CodeViewItem } from '../src/types';
 import {
   createRoot,
@@ -83,6 +87,19 @@ function stubRectHeight(element: HTMLElement, height: number): void {
 }
 
 describe('CodeView header/footer', () => {
+  // CodeView renders nothing, headers included, until the shared highlighter
+  // is ready.
+  beforeAll(async () => {
+    await preloadHighlighter({
+      themes: ['pierre-dark', 'pierre-light'],
+      langs: [],
+    });
+  });
+
+  afterAll(async () => {
+    await disposeHighlighter();
+  });
+
   test('mounts header/footer hosts as flanking siblings of the container', async () => {
     const { cleanup } = installDom();
     const viewer = new CodeView({
