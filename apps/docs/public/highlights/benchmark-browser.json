@@ -18,19 +18,26 @@
       "name": "Highlights",
       "version": "0.2.0",
       "output": "tokens",
-      "samplesMilliseconds": [74.30000001192093, 69.5, 67],
-      "milliseconds": 69.5,
-      "date": "2026-10-21T09:57:50.405Z",
-      "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/153.0.0.0 Safari/537.36",
-      "environment": "Apple M4 Pro, 48 GiB RAM, macOS 27.0.1, headless Chromium 153 (Playwright)",
-      "note": "Re-recorded alone with the same source and sampling. In this setup, 0.0.3 took 121 ms (92.1 ms on 2026-09-15), so this setup is slower than the original run."
+      "samplesMilliseconds": [
+        75.30000001192093, 68.60000002384186, 68.89999997615814
+      ],
+      "milliseconds": 68.89999997615814,
+      "date": "2026-10-21T12:27:14.210Z",
+      "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36",
+      "environment": "Apple M4 Pro, 48 GiB RAM, macOS 27.0.1, Chromium 153 (Playwright, headed for WebGPU), AC power, caffeinate -di"
     },
     {
       "name": "gpu-lexer",
-      "version": "0.0.2",
+      "version": "0.0.3",
       "output": "spans",
-      "samplesMilliseconds": [407.2000000476837, 400.2000000476837, 403],
-      "milliseconds": 403
+      "samplesMilliseconds": [
+        286.80000001192093, 289.89999997615814, 288.80000001192093
+      ],
+      "milliseconds": 288.80000001192093,
+      "date": "2026-10-21T12:27:14.210Z",
+      "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36",
+      "environment": "Apple M4 Pro, 48 GiB RAM, macOS 27.0.1, Chromium 153 (Playwright, headed for WebGPU), AC power, caffeinate -di",
+      "note": "gpu-lexer 0.0.2 took 402 ms in the same run (403 ms on 2026-09-15)."
     },
     {
       "name": "Prism.js",
