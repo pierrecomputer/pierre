@@ -7,6 +7,8 @@
 #[rustfmt::skip]
 mod generated;
 mod html;
+#[cfg(feature = "native-core")]
+mod native;
 pub mod parallel;
 mod rt;
 mod terminal;
@@ -15,6 +17,11 @@ mod theme;
 #[rustfmt::skip]
 #[path = "generated/languages.rs"]
 mod languages;
+#[cfg(feature = "native-core")]
+#[allow(dead_code)]
+#[rustfmt::skip]
+#[path = "generated/lex_ids.rs"]
+mod lex_ids;
 #[rustfmt::skip]
 #[path = "generated/token_ids.rs"]
 pub mod token_ids;

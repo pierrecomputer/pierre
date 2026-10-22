@@ -27,6 +27,9 @@ use std::time::{Duration, Instant};
 use highlights::{Highlighter, Mode, Rec};
 use serde_json::{Value, json};
 
+#[cfg(feature = "native-core")]
+mod native_core;
+
 fn root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("..")
 }
@@ -195,6 +198,14 @@ fn main() {
         Some("--train") => return train(Path::new(&args[1])),
         Some("--parallel") => return parallel(),
         Some("--viewport") => return viewport(),
+        #[cfg(feature = "native-core")]
+        Some("--native-parity") => return native_core::parity(&args[1..]),
+        #[cfg(feature = "native-core")]
+        Some("--native-fuzz") => return native_core::fuzz(args[1].parse().unwrap(), &args[2..]),
+        #[cfg(feature = "native-core")]
+        Some("--profile-core") => {
+            return native_core::profile(&args[1], &args[2], args[3].parse().unwrap());
+        }
         Some("--profile") => {
             return profile(&args[1], args.get(2).map_or(10.0, |s| s.parse().unwrap()));
         }
@@ -584,9 +595,11 @@ fn viewport() {
     println!("\nmid tokens exact: share of non-space bytes whose token matches whole-file lexing.");
 }
 
-/// Loop native tokenizing of one `gen/bench` input, or of any file by path
-/// (language from its extension), so a sampling profiler can attach.
+/// Loop native tokenizing of one `gen/bench` input so a sampling profiler
+/// can attach.
 fn profile(file: &str, secs: f64) {
+    // A bench input by name, or any file by path with its language guessed
+    // from the extension.
     let (lang, bytes) = match load_inputs(None).into_iter().find(|i| i.file == file) {
         Some(input) => (input.lang, input.bytes),
         None => {

@@ -9,6 +9,9 @@ publish.workspace = true
 [features]
 # Bounds-check every memory access and trap instead of reading out of range.
 checked = []
+# Hand-written JS/TS lexer core (`src/native`), compared with the translated
+# lexer for parity and speed.
+native-core = []
 
 [dependencies]
 unicode-ident = "1"
