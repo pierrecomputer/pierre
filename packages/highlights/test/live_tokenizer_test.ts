@@ -5,6 +5,7 @@ import { LANGS } from '../lib/highlighter';
 import type {
   HighlightedToken,
   Lang,
+  LiveLineChange,
   LiveTextEdit,
   ThemedToken,
 } from '../lib/index';
@@ -18,7 +19,12 @@ import {
 import { transformWat, wat2wasm } from '../scripts/build';
 import pierreDark from '../themes/pierre-dark.json' with { type: 'json' };
 import { tokenizerSamples } from './_samples';
-import { assertLineFedParity, makeRand, themeColor } from './_util';
+import {
+  assertLineFedParity,
+  distinctTheme,
+  makeRand,
+  themeColor,
+} from './_util';
 
 let wasmModule: WebAssembly.Module;
 
@@ -95,6 +101,35 @@ function assertMatchesFresh(
   }
 }
 
+/**
+ * Like `assertMatchesFresh`, under the distinct theme, so two token kinds the
+ * default theme paints alike still count as a mismatch.
+ */
+function assertMatchesDistinct(
+  live: LiveTokenizer,
+  code: string,
+  lang: Lang,
+  label: string
+): void {
+  const fresh = codeToTokens(lexNormalized(code), {
+    lang,
+    theme: distinctTheme,
+  }).tokens;
+  const starts = lineStartsOf(code);
+  assert.equal(live.lineCount, fresh.length, `${label}: line count`);
+  for (let i = 0; i < fresh.length; i++) {
+    const relative = fresh[i].map((tk: ThemedToken) => ({
+      ...tk,
+      offset: tk.offset - starts[i],
+    }));
+    assert.deepEqual(
+      live.getLineTokens(i).tokens,
+      relative,
+      `${label}: ${lang} line ${i} ${JSON.stringify(docLines(code)[i])}`
+    );
+  }
+}
+
 void t.test(
   'LiveTokenizer: lexer regressions survive restoring state before an edited line',
   () => {
@@ -104,6 +139,19 @@ void t.test(
       ['ts', 'type\n= value;\n'],
       ['tsx', 'let type;\ntype\n= value;\n'],
       ['tsrx', 'if (ready) {}\ntype\n= value;\n'],
+      ['ts', 'interface I\n extends B\n { render?<T>(): Result }\n'],
+      ['tsx', 'interface I { first(): void\n render?<T>(): Result }\n'],
+      ['tsrx', 'class I extends B {\n static render?(): Result;\n}\n'],
+      ['tsx', 'class I extends mixin(class B {}) {\n render?(): Result;\n}\n'],
+      ['ts', 'const value = cond?.3\n : Result;\n'],
+      ['tsx', 'class I { field =\n cond ? (value) : Result;\n}\n'],
+      [
+        'tsx',
+        'const el = <div>\n {!ready ? <A /> : null}\n</div>;\nconst x = 1;\n',
+      ],
+      ['ts', 'class A { a(): Promise<void>\n {} b?(): Result; }\n'],
+      ['ts', 'class A { x = y as const\n b?(): Result; }\n'],
+      ['ts', 'interface I { "a\\\nb"?(): Result }\n'],
       ['css', 'a {\ncolor:red\n; }'],
       ['css', '@media screen {\nh1\n { color: red; } }'],
       ['elm', 'import List\nmain = 1\n'],
@@ -2729,5 +2777,199 @@ void t.test(
         live.dispose();
       }
     });
+  }
+);
+
+void t.test(
+  'LiveTokenizer: a block after a line-ending colon survives a restored state',
+  () => {
+    // Each document ends with a ternary so that stale colon state from the
+    // first pass differs from the state saved after the colon's line.
+    for (const [lang, code, marker] of [
+      [
+        'ts',
+        'switch (k) {\n  case 1: // run\n  {\n    ready ? go() : Result.stop();\n  }\n}\nconst v = ok ? a : B;\n',
+        '  {\n',
+      ],
+      [
+        'tsx',
+        'switch (k) {\n  case 1: // run\n  {\n    ready ? <A /> : null;\n  }\n}\nconst v = ok ? a : B;\n',
+        '  {\n',
+      ],
+      [
+        'ts',
+        'switch (k) {\n  case 1:\n  {\n    ready ? go() : Result.stop();\n  }\n}\nconst v = ok ? a : B;\n',
+        '  {\n',
+      ],
+      [
+        'ts',
+        'label:\n{\n  ready ? go() : Result.stop();\n}\nconst v = ok ? a : B;\n',
+        '{\n',
+      ],
+      [
+        'ts',
+        'function f(a = 1,\n  b:\n  { m?<T>(): R }) {}\nconst v = ok ? a : B;\n',
+        '  { m?',
+      ],
+      [
+        'ts',
+        'let x: /* a\n   b */ { m?(): R };\nconst v = ok ? a : B;\n',
+        '   b */',
+      ],
+    ] as const) {
+      const live = new LiveTokenizer({ lang, code, theme: distinctTheme });
+      try {
+        assertMatchesDistinct(live, code, lang, 'initial');
+        const at = code.indexOf(marker);
+        const line = code.slice(0, at).split('\n').length - 1;
+        live.applyEdits([
+          {
+            range: {
+              start: { line, character: 0 },
+              end: { line, character: 0 },
+            },
+            newText: ' ',
+          },
+        ]);
+        assertMatchesDistinct(
+          live,
+          code.slice(0, at) + ' ' + code.slice(at),
+          lang,
+          'edited'
+        );
+      } finally {
+        live.dispose();
+      }
+    }
+  }
+);
+
+void t.test(
+  'LiveTokenizer: a statement edit without semicolons re-tokenizes only nearby lines',
+  () => {
+    // a word or declaration on one line must not change the saved state of
+    // every following statement
+    for (const [lang, code, edits] of [
+      [
+        'ts',
+        'foo.bar\n' + 'run()\n'.repeat(400),
+        [
+          [0, 4, 0, 7, 'using'],
+          [0, 4, 0, 9, 'bar'],
+        ],
+      ],
+      [
+        'tsx',
+        'x = 1\n' + 'run()\n'.repeat(400),
+        [
+          [1, 0, 1, 0, 'let z\n'],
+          [1, 0, 2, 0, ''],
+        ],
+      ],
+      [
+        'ts',
+        'const x: T = y\n' + 'run()\n'.repeat(400),
+        [
+          [0, 0, 0, 14, 'const x'],
+          [0, 0, 0, 7, 'const x: T = y'],
+        ],
+      ],
+      [
+        'ts',
+        'x\n' + '++y\n'.repeat(400),
+        [
+          [0, 0, 0, 0, 'let '],
+          [0, 0, 0, 4, ''],
+        ],
+      ],
+      [
+        'tsx',
+        'x\n' + '!run()\n'.repeat(400),
+        [
+          [0, 0, 0, 0, 'using '],
+          [0, 0, 0, 6, ''],
+        ],
+      ],
+    ] as const) {
+      const live = new LiveTokenizer({ lang, code, theme: pierreDark });
+      try {
+        for (const [sl, sc, el, ec, newText] of edits) {
+          const update = live.applyEdits([
+            {
+              range: {
+                start: { line: sl, character: sc },
+                end: { line: el, character: ec },
+              },
+              newText,
+            },
+          ]);
+          const span = Math.max(
+            ...update.lineChanges.map((c) =>
+              Math.max(
+                c.oldEndLine - c.oldStartLine,
+                c.newEndLine - c.newStartLine
+              )
+            )
+          );
+          assert.ok(
+            span <= 6,
+            `${lang}: ${JSON.stringify(newText)} ${JSON.stringify(update.lineChanges)}`
+          );
+        }
+        assertMatchesFresh(live, code, lang, 'restored');
+      } finally {
+        live.dispose();
+      }
+    }
+  }
+);
+
+void t.test(
+  'LiveTokenizer: a block comment edit in JS re-tokenizes only nearby lines',
+  () => {
+    for (const lang of ['js', 'jsx', 'ts', 'tsx'] as const) {
+      const code = 'x;\n' + 'a = 1;\n'.repeat(400);
+      const live = new LiveTokenizer({ lang, code, theme: pierreDark });
+      try {
+        const span = (changes: readonly LiveLineChange[]) =>
+          Math.max(
+            ...changes.map((c) =>
+              Math.max(
+                c.oldEndLine - c.oldStartLine,
+                c.newEndLine - c.newStartLine
+              )
+            )
+          );
+        const inserted = live.applyEdits([
+          {
+            range: {
+              start: { line: 1, character: 0 },
+              end: { line: 1, character: 0 },
+            },
+            newText: '/**\n * doc\n */\n',
+          },
+        ]);
+        assert.ok(
+          span(inserted.lineChanges) <= 6,
+          `${lang}: ${JSON.stringify(inserted.lineChanges)}`
+        );
+        const deleted = live.applyEdits([
+          {
+            range: {
+              start: { line: 1, character: 0 },
+              end: { line: 4, character: 0 },
+            },
+            newText: '',
+          },
+        ]);
+        assert.ok(
+          span(deleted.lineChanges) <= 6,
+          `${lang}: ${JSON.stringify(deleted.lineChanges)}`
+        );
+        assertMatchesFresh(live, code, lang, 'restored');
+      } finally {
+        live.dispose();
+      }
+    }
   }
 );
