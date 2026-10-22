@@ -584,22 +584,28 @@ fn viewport() {
     println!("\nmid tokens exact: share of non-space bytes whose token matches whole-file lexing.");
 }
 
-/// Loop native tokenizing of one `gen/bench` input so a sampling profiler
-/// can attach.
+/// Loop native tokenizing of one `gen/bench` input, or of any file by path
+/// (language from its extension), so a sampling profiler can attach.
 fn profile(file: &str, secs: f64) {
-    let input = load_inputs(None)
-        .into_iter()
-        .find(|i| i.file == file)
-        .expect("no such bench input");
+    let (lang, bytes) = match load_inputs(None).into_iter().find(|i| i.file == file) {
+        Some(input) => (input.lang, input.bytes),
+        None => {
+            let path = Path::new(file);
+            let lang = highlights::Language::from_path(path).expect("unknown language");
+            (
+                lang.id(),
+                std::fs::read(path).expect("no such bench input or file"),
+            )
+        }
+    };
     let mut hl = Highlighter::new();
-    hl.input_mut(input.bytes.len())
-        .copy_from_slice(&input.bytes);
+    hl.input_mut(bytes.len()).copy_from_slice(&bytes);
     let t = Instant::now();
     let mut n = 0u64;
     while t.elapsed().as_secs_f64() < secs {
-        black_box(hl.tokenize(input.lang, input.bytes.len()));
+        black_box(hl.tokenize(lang, bytes.len()));
         n += 1;
     }
-    let mibs = (n as f64 * input.bytes.len() as f64) / 1048576.0 / t.elapsed().as_secs_f64();
+    let mibs = (n as f64 * bytes.len() as f64) / 1048576.0 / t.elapsed().as_secs_f64();
     println!("{file}: {mibs:.0} MiB/s");
 }
