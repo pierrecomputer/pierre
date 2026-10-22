@@ -1,0 +1,14 @@
+{
+  "name": "md-playground",
+  "compatibility_date": "2026-08-01",
+  "main": "playground/index.mjs",
+  "routes": [
+    {
+      "pattern": "md-playground.wat-labs.com",
+      "custom_domain": true
+    }
+  ],
+  "assets": {
+    "directory": "dist"
+  }
+}

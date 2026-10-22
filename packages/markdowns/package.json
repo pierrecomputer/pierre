@@ -1,0 +1,64 @@
+{
+  "name": "@pierre/markdowns",
+  "version": "0.0.0",
+  "description": "A fast markdown renderer written in WebAssembly Text.",
+  "license": "apache-2.0",
+  "files": [
+    "dist/",
+    "LICENSE-MIT",
+    "LICENSE.md",
+    "NOTICE.md"
+  ],
+  "type": "module",
+  "main": "./dist/browser.mjs",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "workerd": "./dist/workerd.mjs",
+      "import": "./dist/browser.mjs",
+      "default": "./dist/browser.mjs"
+    },
+    "./react": {
+      "types": "./dist/react.d.ts",
+      "import": "./dist/react.js"
+    },
+    "./highlights": {
+      "types": "./dist/highlights.d.ts",
+      "import": "./dist/highlights.js"
+    },
+    "./styles.css": "./dist/styles.css"
+  },
+  "scripts": {
+    "prepublishOnly": "moon run markdowns:prepublish"
+  },
+  "devDependencies": {
+    "@pierre/highlights": "workspace:*",
+    "@types/bun": "catalog:",
+    "@types/jsdom": "catalog:",
+    "@types/react": "catalog:",
+    "@types/react-dom": "catalog:",
+    "binaryen": "catalog:",
+    "jsdom": "catalog:",
+    "markdown-it": "catalog:",
+    "md4x": "catalog:",
+    "react": "catalog:",
+    "react-dom": "catalog:",
+    "tsdown": "catalog:",
+    "typescript": "catalog:",
+    "wabt": "catalog:",
+    "wrangler": "catalog:"
+  },
+  "peerDependencies": {
+    "@pierre/highlights": "*",
+    "react": "^18.3.1 || ^19.0.0"
+  },
+  "peerDependenciesMeta": {
+    "react": {
+      "optional": true
+    },
+    "@pierre/highlights": {
+      "optional": true
+    }
+  }
+}

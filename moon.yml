@@ -19,6 +19,7 @@ language: 'typescript'
 dependsOn:
   - 'diffs'
   - 'highlights'
+  - 'markdowns'
   - 'pipes'
   - 'theme'
   - 'theming'

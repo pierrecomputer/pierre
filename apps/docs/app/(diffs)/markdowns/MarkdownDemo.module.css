@@ -1,0 +1,178 @@
+.demo {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+}
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px;
+}
+.sampleLabel {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+.sampleLabel select {
+  padding: 6px 10px;
+  background: var(--background);
+  color: var(--foreground);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+.options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  padding: 12px 16px;
+  border-block: 1px solid var(--border);
+  background: var(--muted);
+}
+.options label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+}
+.options input {
+  accent-color: #218b67;
+}
+.speed {
+  margin-inline-start: auto;
+}
+.speed input {
+  width: 85px;
+}
+.panes {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+}
+.paneTitle {
+  display: flex;
+  justify-content: space-between;
+  padding: 12px 20px;
+  border-bottom: 1px solid var(--border);
+  font: 11px/1.5 monospace;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+.paneTitle > :last-child {
+  color: var(--muted-foreground);
+}
+.editorPane {
+  border-inline-end: 1px solid var(--border);
+  background: color-mix(in srgb, var(--muted) 35%, var(--background));
+}
+.editorPane textarea {
+  display: block;
+  width: 100%;
+  height: 640px;
+  resize: vertical;
+  min-height: 240px;
+  padding: 24px;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: var(--foreground);
+  font: 12px/1.85 monospace;
+  tab-size: 2;
+}
+.editorPane textarea:focus-visible {
+  box-shadow: inset 0 0 0 2px #218b67;
+}
+.previewPane {
+  min-width: 0;
+}
+.preview {
+  height: 640px;
+  overflow: auto;
+  padding: 28px;
+  font-size: 14px;
+}
+.progress {
+  height: 2px;
+  background: var(--border);
+}
+.progress > div {
+  height: 100%;
+  background: #218b67;
+  transition: width 80ms linear;
+}
+.status {
+  display: flex;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 10px 16px;
+  color: var(--muted-foreground);
+  font: 11px/1.5 monospace;
+}
+.usage {
+  padding: 16px 20px;
+  border-top: 1px solid var(--border);
+  font-size: 13px;
+}
+.usage summary {
+  cursor: pointer;
+}
+.usage pre {
+  overflow: auto;
+  margin-top: 16px;
+  font-size: 12px;
+  line-height: 1.8;
+}
+.customHeading {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  font-size: 1.5em;
+  font-weight: 500;
+  letter-spacing: -0.04em;
+  margin-block: 1em 0.6em;
+}
+.customHeading span {
+  color: #218b67;
+}
+.customLink {
+  color: light-dark(#157a55, #75d5b0);
+  text-decoration: none;
+  border-bottom: 1px solid color-mix(in srgb, currentColor 30%, transparent);
+}
+.customInline {
+  border: 1px solid color-mix(in srgb, #218b67 25%, transparent);
+  background: color-mix(in srgb, #218b67 8%, transparent);
+  border-radius: 4px;
+  padding: 2px 5px;
+  font-size: 0.88em;
+}
+
+@media (width <= 767px) {
+  .panes {
+    grid-template-columns: 1fr;
+  }
+  .editorPane {
+    border-inline-end: none;
+    border-bottom: 1px solid var(--border);
+  }
+  .editorPane textarea {
+    height: 240px;
+  }
+  .preview {
+    height: 480px;
+    padding: 20px;
+  }
+  .speed {
+    margin-inline-start: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .progress > div {
+    transition: none;
+  }
+}
