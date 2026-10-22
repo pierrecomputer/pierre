@@ -162,6 +162,12 @@ interface EditedRowHighlights {
     HASTElement,
     { ranges: readonly LineDiffRange[]; highlighted: HASTElement }
   >;
+  // The highlighted copy each row was last rendered with, by line index, for
+  // rows rendered with something other than their cached row.
+  renderedRows: {
+    deletions: Map<number, HASTElement>;
+    additions: Map<number, HASTElement>;
+  };
 }
 
 interface LineDiffPair {
@@ -1648,6 +1654,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       originalRowRanges: new WeakMap(),
       pairs: new Map(),
       rows: new WeakMap(),
+      renderedRows: { deletions: new Map(), additions: new Map() },
     });
   }
 
@@ -1717,7 +1724,12 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       return ranges;
     };
 
-    return (side, lineIndex, hunkContent, row) => {
+    const highlightRow: EditedRowHighlighter = (
+      side,
+      lineIndex,
+      hunkContent,
+      row
+    ) => {
       if (row?.type !== 'element') {
         return row;
       }
@@ -1800,6 +1812,69 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       const highlighted = applyLineDiffMarks(row, ranges);
       rows.set(row, { ranges, highlighted });
       return highlighted;
+    };
+
+    const { renderedRows } = highlights;
+    return (side, lineIndex, hunkContent, row) => {
+      const output = highlightRow(side, lineIndex, hunkContent, row);
+      if (output === row || output?.type !== 'element') {
+        renderedRows[side].delete(lineIndex);
+      } else {
+        renderedRows[side].set(lineIndex, output);
+      }
+      return output;
+    };
+  }
+
+  /**
+   * Returns a function that gives the new content of a rendered row, by side
+   * and line number, when its word diff highlights changed since it was last
+   * rendered, or undefined when the cache has not been edited. After a
+   * same-line-count edit, rows on screen keep their old layout until the next
+   * full render, so the host asks about the rows it shows, top to bottom.
+   */
+  public createRenderedRowUpdater():
+    | ((
+        side: 'deletions' | 'additions',
+        lineNumber: number
+      ) => HASTElement | undefined)
+    | undefined {
+    const { renderCache } = this;
+    const highlights = renderCache?.editedRowHighlights;
+    const result = renderCache?.result;
+    if (renderCache == null || highlights == null || result == null) {
+      return undefined;
+    }
+    const { diff } = renderCache;
+    const highlightRow = this.createEditedRowHighlighter(
+      diff,
+      renderCache.renderRange ?? DEFAULT_RENDER_RANGE
+    );
+    if (highlightRow == null) {
+      return undefined;
+    }
+    const { renderedRows } = highlights;
+    const findBlock = {
+      deletions: createBlockFinder(diff, 'deletions'),
+      additions: createBlockFinder(diff, 'additions'),
+    };
+    return (side, lineNumber) => {
+      const lineIndex = lineNumber - 1;
+      const row = (
+        side === 'deletions'
+          ? result.code.deletionLines
+          : result.code.additionLines
+      )[lineIndex];
+      const previous = renderedRows[side].get(lineIndex) ?? row;
+      const output = highlightRow(
+        side,
+        lineIndex,
+        findBlock[side](lineIndex),
+        row
+      );
+      return output !== previous && output?.type === 'element'
+        ? output
+        : undefined;
     };
   }
 
@@ -3074,6 +3149,34 @@ function getDiffLanguages(diff: FileDiffMetadata): SupportedLanguages[] {
   return deletionLang === additionLang
     ? [additionLang]
     : [deletionLang, additionLang];
+}
+
+// Returns a function that finds the hunk block a line is in, on one side of
+// the diff, or undefined for lines outside every hunk. It is fastest when
+// asked about lines in increasing order.
+function createBlockFinder(
+  diff: FileDiffMetadata,
+  side: 'deletions' | 'additions'
+): (line: number) => ChangeContent | ContextContent | undefined {
+  const blocks = diff.hunks.flatMap((hunk) => hunk.hunkContent);
+  const getStart = (block: ChangeContent | ContextContent) =>
+    side === 'deletions' ? block.deletionLineIndex : block.additionLineIndex;
+  const getEnd = (block: ChangeContent | ContextContent) =>
+    getStart(block) +
+    (block.type === 'context'
+      ? block.lines
+      : side === 'deletions'
+        ? block.deletions
+        : block.additions);
+  let index = 0;
+  let lastLine = -1;
+  return (line) => {
+    if (line < lastLine) index = 0;
+    lastLine = line;
+    while (index < blocks.length && getEnd(blocks[index]) <= line) index++;
+    const block = blocks[index];
+    return block != null && getStart(block) <= line ? block : undefined;
+  };
 }
 
 // The editor keeps an empty row after a final line break that the file does
