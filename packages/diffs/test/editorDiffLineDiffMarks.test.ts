@@ -58,6 +58,17 @@ function getTextOffset(row: Element, mark: Element): number {
   throw new Error('highlight is not inside its row');
 }
 
+// Waits until the editor attached to the diff in `container` can be edited.
+async function waitForEditable(container: HTMLElement): Promise<void> {
+  // The new file's column, which the editor makes editable.
+  const isEditable = () =>
+    container.shadowRoot?.querySelector<HTMLElement>(
+      '[data-code]:not([data-deletions]) [data-content]'
+    )?.contentEditable === 'true';
+  await waitFor(isEditable);
+  expect(isEditable()).toBe(true);
+}
+
 function hasHighlights(container: HTMLElement): boolean {
   return container.shadowRoot?.querySelector('[data-diff-span]') != null;
 }
@@ -123,11 +134,9 @@ async function withEditor(
       renderRange,
     });
     editor.edit(fileDiff);
-    await waitFor(() => {
-      const content =
-        container.shadowRoot?.querySelector<HTMLElement>('[data-content]');
-      return content?.contentEditable === 'true' && hasHighlights(container);
-    });
+    await waitForEditable(container);
+    await waitFor(() => hasHighlights(container));
+    expect(hasHighlights(container)).toBe(true);
     await run(editor, container);
   } finally {
     await wait(10);
@@ -269,6 +278,14 @@ describe('word diff highlights while typing', () => {
 });
 
 describe('word diff highlights after the editor redraws rows in the background', () => {
+  // Switches the page to dark. The editor follows the page's color scheme, so
+  // it recolors every line in the background.
+  function flipColorScheme(): void {
+    document.body.style.colorScheme = 'dark';
+    // The editor re-reads the color scheme when the page's attributes change.
+    document.body.dataset.theme = 'dark';
+  }
+
   // A long diff where every third line changed, so the editor's background
   // tokenizing redraws it in several batches.
   const LONG_OLD = Array.from(
@@ -292,11 +309,15 @@ describe('word diff highlights after the editor redraws rows in the background',
       // Runs `start`, then waits until the background redraws it caused have
       // finished. Returns how many there were.
       waitForRedraws: (start: () => void) => Promise<number>;
+      // Attaches `editor` and waits until it can be edited.
+      attach: (editor: Editor<'file-diff', undefined>) => Promise<void>;
     }) => Promise<void>
   ): Promise<void> {
     // The shared highlighter keeps whichever backend loaded first.
     await disposeHighlighter();
     const dom = installDom();
+    // The page starts light; flipColorScheme switches it to dark.
+    document.body.style.colorScheme = 'light';
     const container = document.createElement('div');
     document.body.appendChild(container);
     const fileDiff = new FileDiff<undefined>({
@@ -339,6 +360,10 @@ describe('word diff highlights after the editor redraws rows in the background',
       await run({
         container,
         fileDiff,
+        async attach(editor) {
+          editor.edit(fileDiff);
+          await waitForEditable(container);
+        },
         async waitForRedraws(start) {
           const countBefore = redrawCount;
           start();
@@ -361,16 +386,17 @@ describe('word diff highlights after the editor redraws rows in the background',
   }
 
   for (const diffStyle of ['split', 'unified'] as const) {
-    test(`${diffStyle}: stay on rows redrawn after attaching`, async () => {
+    test(`${diffStyle}: stay on rows redrawn after the color scheme changes`, async () => {
       await withHighlights(
         diffStyle,
         { oldContents: OLD, newContents: NEW },
-        async ({ container, fileDiff, waitForRedraws }) => {
+        async ({ container, attach, waitForRedraws }) => {
           const before = getHighlights(container);
           expect(before.length).toBeGreaterThan(0);
           const editor = new Editor('file-diff');
           try {
-            await waitForRedraws(() => editor.edit(fileDiff));
+            await attach(editor);
+            await waitForRedraws(flipColorScheme);
             expect(getHighlights(container)).toEqual(before);
           } finally {
             editor.cleanUp();
@@ -383,12 +409,13 @@ describe('word diff highlights after the editor redraws rows in the background',
       await withHighlights(
         diffStyle,
         { oldContents: LONG_OLD, newContents: LONG_NEW },
-        async ({ container, fileDiff, waitForRedraws }) => {
+        async ({ container, attach, waitForRedraws }) => {
           const before = getHighlights(container);
           expect(before.length).toBe(32);
           const editor = new Editor('file-diff');
           try {
-            const redraws = await waitForRedraws(() => editor.edit(fileDiff));
+            await attach(editor);
+            const redraws = await waitForRedraws(flipColorScheme);
             expect(redraws).toBeGreaterThan(1);
             expect(getHighlights(container)).toEqual(before);
           } finally {
@@ -402,10 +429,11 @@ describe('word diff highlights after the editor redraws rows in the background',
       await withHighlights(
         diffStyle,
         { oldContents: OLD, newContents: NEW },
-        async ({ container, fileDiff, waitForRedraws }) => {
+        async ({ container, attach, waitForRedraws }) => {
           const editor = new Editor('file-diff');
           try {
-            await waitForRedraws(() => editor.edit(fileDiff));
+            await attach(editor);
+            await waitForRedraws(flipColorScheme);
             replaceText(editor, 0, 20, 21, '9');
             expect(getHighlights(container)).toEqual(
               await getReadOnlyHighlights(
@@ -471,7 +499,7 @@ describe('word diff highlights after the editor redraws rows in the background',
         await withHighlights(
           diffStyle,
           diff,
-          async ({ container, fileDiff, waitForRedraws }) => {
+          async ({ container, attach, waitForRedraws }) => {
             const lineHighlight = () =>
               getHighlights(container).find((row) =>
                 row.startsWith(`additions:${line}:`)
@@ -479,7 +507,8 @@ describe('word diff highlights after the editor redraws rows in the background',
             expect(lineHighlight()).toBe(`additions:${line}:${highlight}`);
             const editor = new Editor('file-diff');
             try {
-              await waitForRedraws(() => editor.edit(fileDiff));
+              await attach(editor);
+              await waitForRedraws(flipColorScheme);
               expect(lineHighlight()).toBe(`additions:${line}:${highlight}`);
               replaceText(editor, line - 1, 11, 12, '3');
               expect(lineHighlight()).toBe(`additions:${line}:11-12 3`);
