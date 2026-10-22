@@ -132,6 +132,42 @@ function collectMarkRanges(
   return column;
 }
 
+/** Returns the column ranges the highlights in a row on screen cover. */
+export function getElementLineDiffMarks(element: Element): LineDiffRange[] {
+  const ranges: LineDiffRange[] = [];
+  collectElementMarkRanges(element, 0, ranges);
+  return ranges;
+}
+
+function collectElementMarkRanges(
+  node: Node,
+  column: number,
+  ranges: LineDiffRange[]
+): number {
+  for (const child of node.childNodes) {
+    if (child instanceof Element) {
+      const start = column;
+      column = collectElementMarkRanges(child, column, ranges);
+      if (child.hasAttribute('data-diff-span')) {
+        ranges.push([start, column]);
+      }
+    } else if (child.nodeType === child.TEXT_NODE) {
+      column += child.textContent?.length ?? 0;
+    }
+  }
+  return column;
+}
+
+/** Returns the text of a rendered row. */
+export function getRowText(node: HASTElement): string {
+  let text = '';
+  for (const child of node.children) {
+    if (child.type === 'text') text += child.value;
+    else if (child.type === 'element') text += getRowText(child);
+  }
+  return text;
+}
+
 function hasDiffSpan(node: HASTElement): boolean {
   for (const child of node.children) {
     if (child.type !== 'element') continue;

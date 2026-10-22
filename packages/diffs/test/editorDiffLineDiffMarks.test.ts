@@ -2,8 +2,10 @@ import { afterAll, describe, expect, test } from 'bun:test';
 
 import { FileDiff } from '../src/components/FileDiff';
 import { Editor } from '../src/editor/editor';
+import { getHighlighterType } from '../src/highlighter/highlighterType';
 import { disposeHighlighter } from '../src/highlighter/shared_highlighter';
-import type { RenderRange } from '../src/types';
+import type { FileDiffMetadata, RenderRange } from '../src/types';
+import { processFile } from '../src/utils/parsePatchFiles';
 import { installDom, wait, waitFor } from './domHarness';
 
 afterAll(async () => {
@@ -93,7 +95,7 @@ async function withEditor(
   run: (
     editor: Editor<'file-diff', undefined>,
     container: HTMLElement
-  ) => Promise<void>,
+  ) => void | Promise<void>,
   {
     renderRange,
     oldContents = OLD,
@@ -247,7 +249,7 @@ describe('word diff highlights while typing', () => {
     });
 
     test(`${diffStyle}: go away when a change is edited back to the original`, async () => {
-      await withEditor(diffStyle, async (editor, container) => {
+      await withEditor(diffStyle, (editor, container) => {
         replaceText(editor, 0, 23, 24, '2');
         expect(getHighlights(container)).toEqual([]);
       });
@@ -264,4 +266,229 @@ describe('word diff highlights while typing', () => {
       );
     });
   });
+});
+
+describe('word diff highlights after the editor redraws rows in the background', () => {
+  // A long diff where every third line changed, so the editor's background
+  // tokenizing redraws it in several batches.
+  const LONG_OLD = Array.from(
+    { length: 48 },
+    (_, i) => `const value${i} = compute(${i});`
+  ).join('\n');
+  const LONG_NEW = Array.from({ length: 48 }, (_, i) =>
+    i % 3 === 0
+      ? `const value${i} = compute(${i + 100});`
+      : `const value${i} = compute(${i});`
+  ).join('\n');
+
+  // Uses Highlights and a finite render range, so the editor redraws rows
+  // itself after background tokenizing. Runs `run`, then cleans up.
+  async function withHighlights(
+    diffStyle: DiffStyle,
+    diff: { oldContents: string; newContents: string } | FileDiffMetadata,
+    run: (context: {
+      container: HTMLElement;
+      fileDiff: FileDiff<undefined>;
+      // Runs `start`, then waits until the background redraws it caused have
+      // finished. Returns how many there were.
+      waitForRedraws: (start: () => void) => Promise<number>;
+    }) => Promise<void>
+  ): Promise<void> {
+    // The shared highlighter keeps whichever backend loaded first.
+    await disposeHighlighter();
+    const dom = installDom();
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const fileDiff = new FileDiff<undefined>({
+      disableFileHeader: true,
+      diffStyle,
+      preferredHighlighter: 'highlights',
+    });
+    let redrawCount = 0;
+    const updateRenderCache = fileDiff.updateRenderCache.bind(fileDiff);
+    fileDiff.updateRenderCache = (lines, themeType, options) => {
+      updateRenderCache(lines, themeType, options);
+      // Background tokenizing updates the cache without edit options.
+      if (options == null) redrawCount++;
+    };
+    try {
+      const renderRange: RenderRange = {
+        startingLine: 0,
+        totalLines: 100,
+        bufferBefore: 0,
+        bufferAfter: 0,
+      };
+      fileDiff.render(
+        'hunks' in diff
+          ? {
+              fileDiff: diff,
+              fileContainer: container,
+              forceRender: true,
+              renderRange,
+            }
+          : {
+              oldFile: { name: 'edit.ts', contents: diff.oldContents },
+              newFile: { name: 'edit.ts', contents: diff.newContents },
+              fileContainer: container,
+              forceRender: true,
+              renderRange,
+            }
+      );
+      await waitFor(() => hasHighlights(container));
+      expect(getHighlighterType()).toBe('highlights');
+      await run({
+        container,
+        fileDiff,
+        async waitForRedraws(start) {
+          const countBefore = redrawCount;
+          start();
+          await waitFor(() => redrawCount > countBefore);
+          let settledCount = -1;
+          while (settledCount !== redrawCount) {
+            settledCount = redrawCount;
+            await wait(50);
+          }
+          const redraws = redrawCount - countBefore;
+          expect(redraws).toBeGreaterThan(0);
+          return redraws;
+        },
+      });
+    } finally {
+      await wait(10);
+      fileDiff.cleanUp();
+      dom.cleanup();
+    }
+  }
+
+  for (const diffStyle of ['split', 'unified'] as const) {
+    test(`${diffStyle}: stay on rows redrawn after attaching`, async () => {
+      await withHighlights(
+        diffStyle,
+        { oldContents: OLD, newContents: NEW },
+        async ({ container, fileDiff, waitForRedraws }) => {
+          const before = getHighlights(container);
+          expect(before.length).toBeGreaterThan(0);
+          const editor = new Editor('file-diff');
+          try {
+            await waitForRedraws(() => editor.edit(fileDiff));
+            expect(getHighlights(container)).toEqual(before);
+          } finally {
+            editor.cleanUp();
+          }
+        }
+      );
+    });
+
+    test(`${diffStyle}: stay on rows redrawn in several batches`, async () => {
+      await withHighlights(
+        diffStyle,
+        { oldContents: LONG_OLD, newContents: LONG_NEW },
+        async ({ container, fileDiff, waitForRedraws }) => {
+          const before = getHighlights(container);
+          expect(before.length).toBe(32);
+          const editor = new Editor('file-diff');
+          try {
+            const redraws = await waitForRedraws(() => editor.edit(fileDiff));
+            expect(redraws).toBeGreaterThan(1);
+            expect(getHighlights(container)).toEqual(before);
+          } finally {
+            editor.cleanUp();
+          }
+        }
+      );
+    });
+
+    test(`${diffStyle}: follow an edit made after rows were redrawn`, async () => {
+      await withHighlights(
+        diffStyle,
+        { oldContents: OLD, newContents: NEW },
+        async ({ container, fileDiff, waitForRedraws }) => {
+          const editor = new Editor('file-diff');
+          try {
+            await waitForRedraws(() => editor.edit(fileDiff));
+            replaceText(editor, 0, 20, 21, '9');
+            expect(getHighlights(container)).toEqual(
+              await getReadOnlyHighlights(
+                diffStyle,
+                NEW.replace('alpha(1, 3)', 'alpha(9, 3)')
+              )
+            );
+          } finally {
+            editor.cleanUp();
+          }
+        }
+      );
+    });
+
+    // A patch can contain hunks with no lines on a side. They must not hide
+    // the lines of the hunks around them.
+    for (const { name, emptyHunk, line, highlight } of [
+      {
+        name: 'after an empty hunk',
+        emptyHunk: '@@ -4,0 +4,0 @@\n',
+        line: 8,
+        highlight: '11-12 2',
+      },
+      {
+        name: 'before an empty hunk that starts at the same line',
+        emptyHunk: '@@ -1,0 +1,0 @@\n',
+        line: 1,
+        highlight: '11-12 2',
+      },
+      {
+        name: 'before a deletion-only hunk',
+        emptyHunk: '@@ -2 +1,0 @@\n-const x1 = 1;\n',
+        line: 1,
+        highlight: '11-12 2',
+      },
+    ]) {
+      test(`${diffStyle}: work on lines ${name}`, async () => {
+        const oldContents = Array.from(
+          { length: 10 },
+          (_, i) => `const x${i} = 1;\n`
+        ).join('');
+        let newContents = oldContents
+          .replace('x0 = 1', 'x0 = 2')
+          .replace('x7 = 1', 'x7 = 2');
+        if (emptyHunk.includes('-const x1')) {
+          newContents = newContents.replace('const x1 = 1;\n', '');
+        }
+        const lastHunk = emptyHunk.includes('-const x1')
+          ? '@@ -8 +7 @@\n-const x7 = 1;\n+const x7 = 2;\n'
+          : '@@ -8 +8 @@\n-const x7 = 1;\n+const x7 = 2;\n';
+        const diff = processFile(
+          '--- a/edit.ts\n+++ b/edit.ts\n' +
+            '@@ -1 +1 @@\n-const x0 = 1;\n+const x0 = 2;\n' +
+            emptyHunk +
+            lastHunk,
+          {
+            oldFile: { name: 'edit.ts', contents: oldContents },
+            newFile: { name: 'edit.ts', contents: newContents },
+            throwOnError: true,
+          }
+        );
+        if (diff == null) throw new Error('expected the patch to parse');
+        await withHighlights(
+          diffStyle,
+          diff,
+          async ({ container, fileDiff, waitForRedraws }) => {
+            const lineHighlight = () =>
+              getHighlights(container).find((row) =>
+                row.startsWith(`additions:${line}:`)
+              );
+            expect(lineHighlight()).toBe(`additions:${line}:${highlight}`);
+            const editor = new Editor('file-diff');
+            try {
+              await waitForRedraws(() => editor.edit(fileDiff));
+              expect(lineHighlight()).toBe(`additions:${line}:${highlight}`);
+              replaceText(editor, line - 1, 11, 12, '3');
+              expect(lineHighlight()).toBe(`additions:${line}:11-12 3`);
+            } finally {
+              editor.cleanUp();
+            }
+          }
+        );
+      });
+    }
+  }
 });

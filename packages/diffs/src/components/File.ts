@@ -1207,6 +1207,14 @@ export class File<LAnnotation = undefined, Caret = undefined> {
     this.fileRenderer.clearRenderCache();
   }
 
+  /** Files have no word diff highlights, so the editor draws plain tokens. */
+  public getRedrawnRowHTML(
+    _lineIndex: number,
+    _lineElement: HTMLElement
+  ): undefined {
+    return undefined;
+  }
+
   public updateRenderCache(
     dirtyLines: Map<number, Array<HighlightedToken>>,
     themeType: 'dark' | 'light',
