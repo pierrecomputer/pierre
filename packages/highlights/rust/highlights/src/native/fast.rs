@@ -454,6 +454,188 @@ fn resolve_other(cold: &mut Cold, prev: u8, t: u8, next: Next, lhs: usize, rhs: 
     hl
 }
 
+/// The end of at most `max` ASCII hex digits from `p`, bounded by `end`
+/// (`$scanHexRun`).
+#[inline(always)]
+fn hex_run(src: &[u8], mut p: usize, max: usize, end: usize) -> usize {
+    let stop = (p + max).min(end);
+    while p < stop && src[p].is_ascii_hexdigit() {
+        p += 1;
+    }
+    p
+}
+
+/// Emit the string `[from, to)` with its escapes (`$emitEscaped`): the text
+/// between escapes as strings, and each `\x`, `\u`, `\u{...}`, or
+/// single-character escape as an escape, never splitting a code point.
+#[inline(never)]
+fn emit_escaped(recs: &mut Recs, src: &[u8], end: usize, from: usize, to: usize) {
+    let byte = |q: usize| if q < end { src[q] } else { 0 };
+    let mut seg = from;
+    let mut p = from;
+    while p < to {
+        let q = scan::find3(src, p, to, b'\\', b'\\', b'\\');
+        if q >= to {
+            break;
+        }
+        if seg < q {
+            recs.tok(tok::STRING, q);
+        }
+        let mut e = match byte(q + 1) {
+            b'u' if byte(q + 2) == b'{' => {
+                let e = hex_run(src, q + 3, 16, end);
+                if e < to && src[e] == b'}' { e + 1 } else { e }
+            }
+            b'u' => hex_run(src, q + 2, 4, end),
+            b'x' => hex_run(src, q + 2, 2, end),
+            _ => q + 2,
+        };
+        e = scan::utf8_span_end(src, e, to);
+        if q < e {
+            recs.tok(tok::STRING_ESCAPE, e);
+        }
+        p = e;
+        seg = e;
+    }
+    if seg < to {
+        recs.tok(tok::STRING, to);
+    }
+}
+
+/// Whether the block comment `[lhs, rhs)` is a `/** ... */` doc comment
+/// (`$isDocComment`): a third `*`, except in the empty `/**/`. A comment
+/// still open at its end is judged by its opener alone.
+#[inline(always)]
+fn is_doc_comment(src: &[u8], end: usize, lhs: usize, rhs: usize) -> bool {
+    let open = rhs - lhs < 4 || &src[rhs - 2..rhs] != b"*/";
+    lhs + 2 < end && src[lhs + 2] == b'*' && (rhs - lhs > 4 || open)
+}
+
+/// Whether the JSDoc tag name `[lhs, rhs)` takes a parameter path
+/// (`$isParamTag`).
+#[inline(always)]
+fn is_param_tag(src: &[u8], lhs: usize, rhs: usize) -> bool {
+    matches!(
+        &src[lhs..rhs],
+        b"param"
+            | b"arg"
+            | b"argument"
+            | b"prop"
+            | b"property"
+            | b"template"
+            | b"typedef"
+            | b"callback"
+    )
+}
+
+/// A JSDoc parameter path byte: identifier characters and `.`
+/// (`$docNameChar`).
+#[inline(always)]
+fn doc_name_char(c: u8) -> bool {
+    c.is_ascii_alphanumeric() || c == b'_' || c == b'$' || c == b'.'
+}
+
+/// The first byte at or after `p` that is not a space or tab, or `rhs`
+/// (`$blanksEnd`).
+#[inline(always)]
+fn blanks_end(src: &[u8], mut p: usize, rhs: usize) -> usize {
+    while p < rhs && matches!(src[p], b' ' | b'\t') {
+        p += 1;
+    }
+    p
+}
+
+/// Emit the doc comment `[lhs, rhs)` (`$emitDocCommentRange` with the
+/// `/**` opener skipped): `@tag` as a JSDoc keyword, a balanced `{type}`
+/// right after it on the same line as a JSDoc type in brackets, and the
+/// name path after parameter-like tags as a JSDoc variable. Everything else
+/// is doc comment text.
+#[inline(never)]
+fn emit_doc_comment(recs: &mut Recs, src: &[u8], lhs: usize, rhs: usize) {
+    // `$emitTok`: empty ranges emit nothing.
+    let emit = |recs: &mut Recs, hl: u32, a: usize, b: usize| {
+        if a < b {
+            recs.tok(hl, b);
+        }
+    };
+    let mut seg = lhs;
+    let mut p = lhs + 3;
+    loop {
+        p = scan::find3(src, p, rhs, b'@', b'@', b'@').max(p);
+        if p >= rhs {
+            break;
+        }
+        // A tag starts a word, after whitespace, `*`, `{`, or `(`.
+        let c = if p > lhs { src[p - 1] } else { b' ' };
+        if !(c == b' ' || c.wrapping_sub(9) <= 4 || matches!(c, b'*' | b'{' | b'(')) {
+            p += 1;
+            continue;
+        }
+        // ... and a letter follows the `@`.
+        let mut e = p + 1;
+        if e >= rhs || !src[e].is_ascii_alphabetic() {
+            p = e;
+            continue;
+        }
+        loop {
+            e += 1;
+            if e >= rhs || !src[e].is_ascii_alphanumeric() {
+                break;
+            }
+        }
+        emit(recs, tok::COMMENT_DOC, seg, p);
+        emit(recs, tok::KEYWORD_JSDOC, p, e);
+        let param = e - (p + 1) <= 8 && is_param_tag(src, p + 1, e);
+        seg = e;
+        p = e;
+        // An optional `{type}`, balanced and on this line.
+        let q = blanks_end(src, p, rhs);
+        if q < rhs && src[q] == b'{' {
+            let mut b = q + 1;
+            let mut depth = 1;
+            let closed = loop {
+                if b >= rhs || matches!(src[b], b'\n' | b'\r') {
+                    break false;
+                }
+                match src[b] {
+                    b'{' => depth += 1,
+                    b'}' => depth -= 1,
+                    _ => {}
+                }
+                b += 1;
+                if depth == 0 {
+                    break true;
+                }
+            };
+            if closed {
+                emit(recs, tok::COMMENT_DOC, seg, q);
+                emit(recs, tok::PUNCTUATION_BRACKET, q, q + 1);
+                emit(recs, tok::TYPE_JSDOC, q + 1, b - 1);
+                emit(recs, tok::PUNCTUATION_BRACKET, b - 1, b);
+                seg = b;
+                p = b;
+            }
+        }
+        // The tag's name argument.
+        if param {
+            let q = blanks_end(src, p, rhs);
+            if q < rhs {
+                let mut b = q;
+                while b < rhs && doc_name_char(src[b]) {
+                    b += 1;
+                }
+                if b != q {
+                    emit(recs, tok::COMMENT_DOC, seg, q);
+                    emit(recs, tok::VARIABLE_JSDOC, q, b);
+                    seg = b;
+                    p = b;
+                }
+            }
+        }
+    }
+    emit(recs, tok::COMMENT_DOC, seg, rhs);
+}
+
 /// Emit a token that neither waits nor is plain: import clause words,
 /// strings, templates, comments, and invalid bytes. Records go through
 /// `inst.ext.recs`.
@@ -481,6 +663,20 @@ fn other(
         let hl = classify(cold, prev, t, NO_NEXT, lhs, rhs);
         let mut recs = Recs::load(inst);
         recs.tok(hl, rhs);
+        recs.store(inst);
+    } else if t == lex::STRING_LITERAL
+        || (t == lex::INVALID && matches!(cold.src[lhs], b'"' | b'\''))
+    {
+        let mut recs = Recs::load(inst);
+        emit_escaped(&mut recs, cold.src, cold.end, lhs, rhs);
+        recs.store(inst);
+    } else if t == lex::MULTILINE_COMMENT {
+        let mut recs = Recs::load(inst);
+        if is_doc_comment(cold.src, cold.end, lhs, rhs) {
+            emit_doc_comment(&mut recs, cold.src, lhs, rhs);
+        } else {
+            recs.tok(tok::COMMENT, rhs);
+        }
         recs.store(inst);
     } else {
         let abs = |p: usize| (base + p) as i32;
@@ -531,24 +727,33 @@ fn lex(cold: &mut Cold, inst: &mut Instance, base: usize) {
     let mut done = p;
     // A line break precedes the current token.
     let mut nl: bool;
+    // The records: the vector's start, one past the last written one, and
+    // the end of its capacity.
     let mut rp = inst.ext.recs.as_mut_ptr();
-    let mut n = inst.ext.recs.len();
+    // SAFETY: `len` records are written.
+    let mut cur = unsafe { rp.add(inst.ext.recs.len()) };
+    // SAFETY: one past the allocation.
+    let mut limit = unsafe { rp.add(inst.ext.recs.capacity()) };
     let mut last = inst.ext.recs.last().map_or(u32::MAX, |r| r.token);
 
     // Append a record (`$emitTok`), merging with a same-colored last one.
-    // Records never outnumber input bytes, which the vector has room for.
+    // Records never outnumber input bytes, which the vector has room for;
+    // running out of room means a lexer bug, which traps.
     macro_rules! emit {
         ($hl:expr, $end:expr) => {{
             let hl: u32 = $hl;
-            n -= (last == hl) as usize;
-            // SAFETY: see above.
+            // SAFETY: see above; a merge rewrites the last record.
             unsafe {
-                rp.add(n).write(Rec {
+                cur = cur.sub((last == hl) as usize);
+                if cur == limit {
+                    crate::rt::trap();
+                }
+                cur.write(Rec {
                     end: $end as u32,
                     token: hl,
-                })
-            };
-            n += 1;
+                });
+                cur = cur.add(1);
+            }
             last = hl;
         }};
     }
@@ -557,11 +762,11 @@ fn lex(cold: &mut Cold, inst: &mut Instance, base: usize) {
         ($lhs:expr) => {{
             let lhs: usize = $lhs;
             if done < lhs {
-                if n == 0 {
+                if cur == rp {
                     emit!(tok::NONE, lhs);
                 } else {
-                    // SAFETY: record `n - 1` is written.
-                    unsafe { (*rp.add(n - 1)).end = lhs as u32 };
+                    // SAFETY: the record before `cur` is written.
+                    unsafe { (*cur.sub(1)).end = lhs as u32 };
                 }
             }
         }};
@@ -569,14 +774,17 @@ fn lex(cold: &mut Cold, inst: &mut Instance, base: usize) {
     // Hand the records to `inst.ext.recs` around helpers that write them.
     macro_rules! store_recs {
         () => {
-            // SAFETY: records `..n` are written.
-            unsafe { inst.ext.recs.set_len(n) }
+            // SAFETY: the records before `cur` are written.
+            unsafe { inst.ext.recs.set_len(cur.offset_from(rp) as usize) }
         };
     }
     macro_rules! load_recs {
         () => {{
             rp = inst.ext.recs.as_mut_ptr();
-            n = inst.ext.recs.len();
+            // SAFETY: `len` records are written.
+            cur = unsafe { rp.add(inst.ext.recs.len()) };
+            // SAFETY: one past the allocation.
+            limit = unsafe { rp.add(inst.ext.recs.capacity()) };
             last = inst.ext.recs.last().map_or(u32::MAX, |r| r.token);
         }};
     }

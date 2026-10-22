@@ -725,6 +725,8 @@ impl<'a> Ts<'a> {
 pub(super) struct Recs {
     ptr: *mut Rec,
     n: usize,
+    /// The vector's capacity.
+    cap: usize,
     /// Token of the last record, or `u32::MAX` when there is none.
     last: u32,
 }
@@ -735,6 +737,7 @@ impl Recs {
         Recs {
             ptr: v.as_mut_ptr(),
             n: v.len(),
+            cap: v.capacity(),
             last: v.last().map_or(u32::MAX, |r| r.token),
         }
     }
@@ -745,12 +748,16 @@ impl Recs {
     }
 
     /// Append a non-empty token ending at `end`, merging it into the last
-    /// record when the token matches (`$emitTok`).
+    /// record when the token matches (`$emitTok`). Every record covers at
+    /// least one input byte and the vector has room for one per byte, so
+    /// running out of room means a lexer bug, which traps.
     #[inline(always)]
     pub(super) fn tok(&mut self, hl: u32, end: usize) {
         self.n -= (self.last == hl) as usize;
-        // SAFETY: every record covers at least one input byte, and the
-        // vector has room for one record per byte.
+        if self.n == self.cap {
+            crate::rt::trap();
+        }
+        // SAFETY: `n` is below the capacity.
         unsafe {
             self.ptr.add(self.n).write(Rec {
                 end: end as u32,
