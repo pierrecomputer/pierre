@@ -95,7 +95,7 @@ describe('worker HAST transport', () => {
     expect(Object.keys(decoded[2].children)).toEqual(['1']);
   });
 
-  test('decodes only accessed rows and retains ordinary array mutations', () => {
+  test('decodes rows on read without retaining them and keeps array mutations', () => {
     const lines: ElementContent[] = Array.from({ length: 8 }, (_, index) => ({
       type: 'element',
       tagName: 'div',
@@ -107,9 +107,12 @@ describe('worker HAST transport', () => {
     expect(Object.getOwnPropertyDescriptor(decoded, '0')?.get).toBeDefined();
     expect(decoded[7]).toEqual(lines[7]);
     expect(decoded[2]).toEqual(lines[2]);
-    expect(decoded[2]).toBe(decoded[2]);
+    // Each read decodes a fresh row; the decoded HAST is not kept alive by
+    // the array, so a row stays a getter after it has been read.
+    expect(decoded[2]).not.toBe(decoded[2]);
+    expect(decoded[2]).toEqual(decoded[2]);
     expect(Object.getOwnPropertyDescriptor(decoded, '0')?.get).toBeDefined();
-    expect(Object.getOwnPropertyDescriptor(decoded, '2')?.get).toBeUndefined();
+    expect(Object.getOwnPropertyDescriptor(decoded, '2')?.get).toBeDefined();
     expect(decoded.slice(3, 5)).toEqual(lines.slice(3, 5));
     const replacement: ElementContent = { type: 'text', value: 'replacement' };
     decoded[0] = replacement;
@@ -138,9 +141,30 @@ describe('worker HAST transport', () => {
       const second = decoded[1];
       expect(second).toEqual(lines[1]);
       expect(decoded[0]).toEqual(lines[0]);
-      expect(decoded[1]).toBe(second);
+      expect(decoded[1]).toEqual(second);
       expect(structuredClone(decoded)).toEqual(lines);
     }
+  });
+
+  test('assignments follow sealed and frozen array semantics', () => {
+    const lines: ElementContent[] = [
+      { type: 'text', value: 'first' },
+      { type: 'text', value: 'second' },
+    ];
+    const replacement: ElementContent = { type: 'text', value: 'replacement' };
+
+    const sealed = decodeHastLines(structuredClone(encodeHastLines(lines)));
+    Object.seal(sealed);
+    sealed[1] = replacement;
+    expect(sealed[1]).toBe(replacement);
+    expect(sealed[0]).toEqual(lines[0]);
+
+    const frozen = decodeHastLines(structuredClone(encodeHastLines(lines)));
+    Object.freeze(frozen);
+    expect(() => {
+      frozen[1] = replacement;
+    }).toThrow(TypeError);
+    expect(frozen[1]).toEqual(lines[1]);
   });
 
   test('retains custom HAST with absent or null properties', () => {

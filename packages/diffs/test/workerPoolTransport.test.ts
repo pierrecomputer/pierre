@@ -123,10 +123,17 @@ describe('worker cache transport', () => {
           );
           expect(manager.getFileResultCache(oldFile)).toBe(fileCache);
           expect(manager.getDiffResultCache(diff)).toBe(diffCache);
+          // Cached rows decode from the transferred buffers on every read,
+          // so reading a row does not retain its HAST in the cache.
           const line = fileCache.result.code[2];
-          if (line.type !== 'element')
-            throw new Error('Expected a line element');
-          line.properties['data-marker'] = 'persist';
+          expect(manager.getFileResultCache(oldFile)?.result.code[2]).toEqual(
+            line
+          );
+          expect(
+            Object.getOwnPropertyDescriptor(fileCache.result.code, '2')?.get
+          ).toBeDefined();
+          // Assigned rows are stored like ordinary array items.
+          fileCache.result.code[2] = line;
           expect(manager.getFileResultCache(oldFile)?.result.code[2]).toBe(
             line
           );
