@@ -21,7 +21,9 @@ import type {
   BaseCodeOptions,
   BaseDiffOptions,
   BaseDiffOptionsWithDefaults,
+  ChangeContent,
   CodeColumnType,
+  ContextContent,
   CustomPreProperties,
   DiffLineAnnotation,
   DiffsHighlighter,
@@ -40,11 +42,20 @@ import type {
   SupportedLanguages,
   ThemedDiffResult,
 } from '../types';
+import {
+  applyLineDiffMarks,
+  getLineDiffMarks,
+} from '../utils/applyLineDiffMarks';
 import { applyLineTextWithNewline } from '../utils/applyLineTextWithNewline';
 import { areDiffRenderOptionsEqual } from '../utils/areDiffRenderOptionsEqual';
 import { areDiffTargetsEqual } from '../utils/areDiffTargetsEqual';
 import { areRenderRangesEqual } from '../utils/areRenderRangesEqual';
 import { cleanLastNewline } from '../utils/cleanLastNewline';
+import {
+  computeLineDiffRanges,
+  type LineDiffRange,
+  type LineDiffRanges,
+} from '../utils/computeLineDiffRanges';
 import { createAnnotationElement as createDefaultAnnotationElement } from '../utils/createAnnotationElement';
 import { createContentColumn } from '../utils/createContentColumn';
 import { createEmptyRowBuffer } from '../utils/createEmptyRowBuffer';
@@ -122,7 +133,53 @@ interface DiffRenderCache extends RenderedDiffASTCache {
   // hydrate() describes DOM that already exists, even when no reusable AST
   // was available for that server-rendered content.
   hydrated?: boolean;
+  // Word diff highlights for rows of a cache that editing has changed.
+  editedRowHighlights?: EditedRowHighlights;
 }
+
+// What is needed to keep word diff highlights right once editing starts
+// changing a render cache.
+interface EditedRowHighlights {
+  // How lines were paired when editing started: for each old line and each
+  // new line that had a partner, the partner's text. Rows that editing has
+  // not rebuilt still show the highlights of that pairing.
+  originalDeletionPartners: Map<number, string>;
+  originalAdditionPartners: Map<number, string>;
+  // Rows built by editing. They start out with no highlights.
+  editedRows: WeakSet<HASTElement>;
+  // Rows rebuilt from new tokens without a text change, such as after a
+  // theme change, and the row from before editing that they replace. While
+  // their partner is unchanged, they show that row's highlights.
+  retokenizedRows: WeakMap<HASTElement, HASTElement>;
+  // The highlights of rows from before editing, read once when needed.
+  originalRowRanges: WeakMap<HASTElement, readonly LineDiffRange[]>;
+  // The highlights of each line pair, by old line index, kept while both
+  // lines still have the same text.
+  pairs: Map<number, LineDiffPair>;
+  // A highlighted copy of each cached row, kept while the row's highlights
+  // stay the same.
+  rows: WeakMap<
+    HASTElement,
+    { ranges: readonly LineDiffRange[]; highlighted: HASTElement }
+  >;
+}
+
+interface LineDiffPair {
+  deletionText: string;
+  additionText: string;
+  ranges: LineDiffRanges;
+}
+
+// Adds the right word diff highlights to one row as it is rendered.
+// `hunkContent` is the block of lines the row is in, if any.
+type EditedRowHighlighter = (
+  side: 'deletions' | 'additions',
+  lineIndex: number,
+  hunkContent: ChangeContent | ContextContent | undefined,
+  row: ElementContent | undefined
+) => ElementContent | undefined;
+
+const NO_HIGHLIGHTS: readonly LineDiffRange[] = Object.freeze([]);
 
 interface PushSeparatorProps {
   hunkIndex: number;
@@ -593,6 +650,9 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     if (diff.isPartial) {
       throw new Error('Could not update render cache for partial diff');
     }
+    const { editedRows, retokenizedRows } =
+      renderCache.editedRowHighlights ??
+      this.startEditedRowHighlights(renderCache, diff);
 
     const hastLines = result.code.additionLines;
     const pendingStructuralRows = (this.pendingStructuralRows =
@@ -628,10 +688,12 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
           // A newly revealed row must show current text even before the
           // tokenizer supplies its colors.
           if (!dirtyLines.has(line)) {
-            hastLines[line] = createPlainAdditionLineElement(
+            const row = createPlainAdditionLineElement(
               line,
               cleanLastNewline(text)
             );
+            editedRows.add(row);
+            hastLines[line] = row;
           }
         }
       }
@@ -691,8 +753,20 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
         }),
       };
       if (pendingStructuralRows != null) {
+        editedRows.add(row);
         pendingStructuralRows.set(line, row);
+      } else if (
+        prev?.type === 'element' &&
+        !editedRows.has(prev) &&
+        prevText === lineText &&
+        changedDocumentLines?.has(line) !== true
+      ) {
+        // Re-tokenizing a line without changing its text, as a theme change
+        // does, keeps the highlights the row had.
+        retokenizedRows.set(row, retokenizedRows.get(prev) ?? prev);
+        hastLines[line] = row;
       } else {
+        editedRows.add(row);
         hastLines[line] = row;
       }
     }
@@ -771,6 +845,13 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     if (diff.isPartial) {
       throw new Error('Could not apply document change for partial diff');
     }
+    const editedRows =
+      renderCache != null && result != null
+        ? (
+            renderCache.editedRowHighlights ??
+            this.startEditedRowHighlights(renderCache, diff)
+          ).editedRows
+        : undefined;
 
     // The structural token pass leaves the diff in its pre-edit shape so this
     // document remains the single source of truth for shifting its lines.
@@ -785,7 +866,8 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
         previousAdditionLines,
         diff.additionLines,
         result.code.additionLines,
-        textDocument
+        textDocument,
+        editedRows
       );
     }
     // An empty document splits into zero addition lines, which would recompute
@@ -798,10 +880,12 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
         recomputeEmptyDocumentDiff(diff, this.options.parseDiffOptions)
       );
       if (result != null) {
-        result.code.additionLines[0] = createPlainAdditionLineElement(
+        const row = createPlainAdditionLineElement(
           0,
           textDocument.getLineText(0)
         );
+        editedRows?.add(row);
+        result.code.additionLines[0] = row;
       }
     } else if (this.editSessionActive) {
       this.applySessionDocumentChange(diff, previousAdditionLines);
@@ -1529,6 +1613,196 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     return this.options.tokenizeMaxLength ?? DEFAULT_TOKENIZE_MAX_LENGTH;
   }
 
+  /**
+   * Starts tracking a render cache that editing is about to change for the
+   * first time, by recording how its lines are paired before any edit.
+   */
+  private startEditedRowHighlights(
+    renderCache: DiffRenderCache,
+    diff: FileDiffMetadata
+  ): EditedRowHighlights {
+    const originalDeletionPartners = new Map<number, string>();
+    const originalAdditionPartners = new Map<number, string>();
+    for (const hunk of diff.hunks) {
+      for (const content of hunk.hunkContent) {
+        if (content.type !== 'change') continue;
+        const pairCount = Math.min(content.deletions, content.additions);
+        for (let offset = 0; offset < pairCount; offset++) {
+          const deletionIndex = content.deletionLineIndex + offset;
+          const additionIndex = content.additionLineIndex + offset;
+          const deletionText = diff.deletionLines[deletionIndex];
+          const additionText = diff.additionLines[additionIndex];
+          if (!isPairableLine(deletionText) || !isPairableLine(additionText)) {
+            continue;
+          }
+          originalDeletionPartners.set(deletionIndex, additionText);
+          originalAdditionPartners.set(additionIndex, deletionText);
+        }
+      }
+    }
+    return (renderCache.editedRowHighlights = {
+      originalDeletionPartners,
+      originalAdditionPartners,
+      editedRows: new WeakSet(),
+      retokenizedRows: new WeakMap(),
+      originalRowRanges: new WeakMap(),
+      pairs: new Map(),
+      rows: new WeakMap(),
+    });
+  }
+
+  /**
+   * Returns a function that gives each rendered row the word diff highlights
+   * of its current line pair, or undefined when nothing needs to change: the
+   * cache has not been edited, word diffs are off, or the diff is large plain
+   * text that read-only rendering also shows without them.
+   *
+   * A row keeps the highlights it already has when editing has not rebuilt
+   * it and its partner's text is unchanged. Other rows are highlighted again
+   * from the current text. This keeps working after editing ends, until a
+   * fresh highlight replaces the cache.
+   */
+  private createEditedRowHighlighter(
+    fileDiff: FileDiffMetadata,
+    renderRange: RenderRange
+  ): EditedRowHighlighter | undefined {
+    const highlights = this.renderCache?.editedRowHighlights;
+    if (this.renderCache == null || highlights == null) {
+      return undefined;
+    }
+    const { lineDiffType, maxLineDiffLength } = this.renderCache.options;
+    if (lineDiffType === 'none') {
+      return undefined;
+    }
+    // Match read-only rendering, which skips highlights for large plain text
+    // diffs rendered in full.
+    if (
+      isDefaultRenderRange(renderRange) &&
+      (isDiffPlainText(fileDiff) ||
+        isDiffMassive(fileDiff, this.getTokenizeMaxLength())) &&
+      (fileDiff.unifiedLineCount > 1000 || fileDiff.splitLineCount > 1000)
+    ) {
+      return undefined;
+    }
+    const {
+      originalDeletionPartners,
+      originalAdditionPartners,
+      editedRows,
+      retokenizedRows,
+      originalRowRanges,
+      pairs,
+      rows,
+    } = highlights;
+
+    const getPairRanges = (
+      deletionIndex: number,
+      deletionText: string,
+      additionText: string
+    ): LineDiffRanges => {
+      const cached = pairs.get(deletionIndex);
+      if (
+        cached != null &&
+        cached.deletionText === deletionText &&
+        cached.additionText === additionText
+      ) {
+        return cached.ranges;
+      }
+      const ranges = computeLineDiffRanges(
+        deletionText,
+        additionText,
+        lineDiffType,
+        maxLineDiffLength
+      );
+      pairs.set(deletionIndex, { deletionText, additionText, ranges });
+      return ranges;
+    };
+
+    return (side, lineIndex, hunkContent, row) => {
+      if (row?.type !== 'element') {
+        return row;
+      }
+      // Lines pair up by position within their change block.
+      let deletionIndex: number | undefined;
+      let deletionText: string | undefined;
+      let additionText: string | undefined;
+      if (hunkContent?.type === 'change') {
+        const offset =
+          lineIndex -
+          (side === 'deletions'
+            ? hunkContent.deletionLineIndex
+            : hunkContent.additionLineIndex);
+        if (offset < Math.min(hunkContent.deletions, hunkContent.additions)) {
+          deletionIndex = hunkContent.deletionLineIndex + offset;
+          deletionText = fileDiff.deletionLines[deletionIndex];
+          additionText =
+            fileDiff.additionLines[hunkContent.additionLineIndex + offset];
+          if (!isPairableLine(deletionText) || !isPairableLine(additionText)) {
+            deletionIndex = undefined;
+          }
+        }
+      }
+      const partnerText =
+        deletionIndex == null
+          ? undefined
+          : side === 'deletions'
+            ? additionText
+            : deletionText;
+
+      if (!editedRows.has(row)) {
+        // Old lines never move. New rows keep the line number they were
+        // rendered with.
+        const originalIndex =
+          side === 'deletions' ? lineIndex : getRowLineIndex(row);
+        if (
+          originalIndex != null &&
+          (side === 'deletions'
+            ? originalDeletionPartners
+            : originalAdditionPartners
+          ).get(originalIndex) === partnerText
+        ) {
+          const replaced = retokenizedRows.get(row);
+          if (replaced == null) {
+            return row;
+          }
+          let ranges = originalRowRanges.get(replaced);
+          if (ranges == null) {
+            ranges = getLineDiffMarks(replaced);
+            originalRowRanges.set(replaced, ranges);
+          }
+          const cached = rows.get(row);
+          if (cached?.ranges === ranges) {
+            return cached.highlighted;
+          }
+          const highlighted = applyLineDiffMarks(row, ranges);
+          rows.set(row, { ranges, highlighted });
+          return highlighted;
+        }
+      }
+
+      let ranges = NO_HIGHLIGHTS;
+      if (
+        deletionIndex != null &&
+        deletionText != null &&
+        additionText != null
+      ) {
+        const pairRanges = getPairRanges(
+          deletionIndex,
+          deletionText,
+          additionText
+        );
+        ranges =
+          side === 'deletions' ? pairRanges.deletion : pairRanges.addition;
+      }
+      const cached = rows.get(row);
+      if (cached?.ranges === ranges) {
+        return cached.highlighted;
+      }
+      const highlighted = applyLineDiffMarks(row, ranges);
+      rows.set(row, { ranges, highlighted });
+      return highlighted;
+    };
+  }
+
   private processDiffResult(
     fileDiff: FileDiffMetadata,
     renderRange: RenderRange,
@@ -1543,6 +1817,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       hunkSeparators,
     } = this.getOptionsWithDefaults();
     const isRenderCacheDirty = this.renderCache?.isDirty ?? false;
+    const highlightRow = this.createEditedRowHighlighter(fileDiff, renderRange);
 
     const unified = diffStyle === 'unified';
     const canHydrateContext = canHydrateCollapsedContext(
@@ -1665,6 +1940,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
         additionLine,
         deletionLine,
         type,
+        hunkContent,
       }) => {
         const splitLineIndex =
           deletionLine != null
@@ -1722,6 +1998,24 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
               'DiffHunksRenderer.processDiffResult: deletionLine and additionLine are null, something is wrong';
             console.error(errorMessage, { file: fileDiff.name });
             throw new Error(errorMessage);
+          }
+          // A unified row shows the new line when there is one.
+          if (highlightRow != null) {
+            if (additionLine != null) {
+              additionLineContent = highlightRow(
+                'additions',
+                additionLine.lineIndex,
+                hunkContent,
+                additionLineContent
+              );
+            } else {
+              deletionLineContent = highlightRow(
+                'deletions',
+                deletionLine.lineIndex,
+                hunkContent,
+                deletionLineContent
+              );
+            }
           }
           const lineType =
             type === 'change'
@@ -1807,6 +2101,24 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
             additionLine != null
               ? additionLines[additionLine.lineIndex]
               : undefined;
+          if (highlightRow != null) {
+            if (deletionLine != null) {
+              deletionLineContent = highlightRow(
+                'deletions',
+                deletionLine.lineIndex,
+                hunkContent,
+                deletionLineContent
+              );
+            }
+            if (additionLine != null) {
+              additionLineContent = highlightRow(
+                'additions',
+                additionLine.lineIndex,
+                hunkContent,
+                additionLineContent
+              );
+            }
+          }
           const deletionLineDecoration = this.getSplitLineDecoration({
             side: 'deletions',
             type,
@@ -2642,7 +2954,8 @@ function realignAdditionHastLines<LAnnotation>(
   previousLines: string[],
   nextLines: string[],
   hastLines: ElementContent[],
-  textDocument: TextDocument<'file-diff', LAnnotation>
+  textDocument: TextDocument<'file-diff', LAnnotation>,
+  editedRows: WeakSet<HASTElement> | undefined
 ): ElementContent[] {
   const previousContentLength = contentLineCount(previousLines);
   const nextContentLength = contentLineCount(nextLines);
@@ -2676,10 +2989,14 @@ function realignAdditionHastLines<LAnnotation>(
     realigned[nextLines.length - 1] = hastLines[previousLines.length - 1];
   }
   for (let index = prefix; index < nextLines.length; index++) {
-    realigned[index] ??= createPlainAdditionLineElement(
-      index,
-      textDocument.getLineText(index)
-    );
+    if (realigned[index] == null) {
+      const row = createPlainAdditionLineElement(
+        index,
+        textDocument.getLineText(index)
+      );
+      editedRows?.add(row);
+      realigned[index] = row;
+    }
   }
   return realigned;
 }
@@ -2757,6 +3074,18 @@ function getDiffLanguages(diff: FileDiffMetadata): SupportedLanguages[] {
   return deletionLang === additionLang
     ? [additionLang]
     : [deletionLang, additionLang];
+}
+
+// The editor keeps an empty row after a final line break that the file does
+// not have. That row, stored as '', is never paired with an old line.
+function isPairableLine(text: string | undefined): text is string {
+  return text != null && text !== '';
+}
+
+// The zero-based line index a cached row was rendered for.
+function getRowLineIndex(row: HASTElement): number | undefined {
+  const lineNumber = row.properties['data-line'];
+  return typeof lineNumber === 'number' ? lineNumber - 1 : undefined;
 }
 
 function isDiffMassive(
