@@ -227,6 +227,7 @@ export function transformWat(
     '$hlGlslImpl',
     '$hlGo',
     '$hlGraphql',
+    '$hlGroq',
     '$hlGroovy',
     '$hlHaskell',
     '$hlHlsl',

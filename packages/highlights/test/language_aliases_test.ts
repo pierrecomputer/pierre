@@ -22,6 +22,7 @@ const additions = [
   ['tsv', ['tsv']],
   ['fortran', ['fortran', 'fortran-free-form', 'f90', 'f95', 'f03', 'f08']],
   ['fortran-fixed-form', ['fortran-fixed-form', 'f', 'for', 'f77']],
+  ['groq', ['groq']],
   ['solidity', ['solidity', 'sol']],
   ['zig', ['zig', 'zon']],
 ] as const satisfies readonly (readonly [Lang, readonly Lang[]])[];

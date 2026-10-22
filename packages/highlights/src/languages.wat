@@ -33,6 +33,7 @@
   (import "./langs/glsl.wat")
   (import "./langs/go.wat")
   (import "./langs/graphql.wat")
+  (import "./langs/groq.wat")
   (import "./langs/groovy.wat")
   (import "./langs/haskell.wat")
   (import "./langs/hlsl.wat")
@@ -110,6 +111,7 @@
     (language "glsl" $hlGlsl "comp" "frag" "geom" "vert")
     (language "go" $hlGo "golang")
     (language "graphql" $hlGraphql "gql")
+    (language "groq" $hlGroq)
     (language "groovy" $hlGroovy "gradle" "gsh" "gvy" "gy")
     (language "haskell" $hlHaskell "hs")
     (language "hlsl" $hlHlsl)
@@ -322,5 +324,10 @@
         (i32.eq (local.get $lang) (enum.get $Language.odin))
         (i32.eq (global.get $streamMode) (i32.const 23)))
       (then (return (call $odinStreamResumeTriple))))
+    (if
+      (i32.and
+        (i32.eq (local.get $lang) (enum.get $Language.groq))
+        (i32.eq (global.get $streamMode) (i32.const 16)))
+      (then (return (call $groqStreamResume))))
     (i32.const 0))
 )

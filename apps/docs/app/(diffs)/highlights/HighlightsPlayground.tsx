@@ -213,7 +213,7 @@ export function HighlightsPlayground({
         <>
           <div className="mb-6 max-w-3xl space-y-2">
             <h2 className="text-2xl font-semibold tracking-tight">
-              Supports 80 languages
+              Supports 84 languages
             </h2>
             <p className="text-muted-foreground text-pretty">
               Highlights ships its language lexers in one small WebAssembly

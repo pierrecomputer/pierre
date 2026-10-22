@@ -746,6 +746,14 @@ mutation CreateUser($input: NewUser!) {
 }`,
   ],
   [
+    'groq',
+    'GROQ',
+    `*[_type == 'movie' && releaseYear >= 1979] | order(releaseYear){
+  _id, title, releaseYear,
+  "directorName": director->name
+}[0...100]`,
+  ],
+  [
     'groovy',
     'Groovy',
     `#!/usr/bin/env groovy
