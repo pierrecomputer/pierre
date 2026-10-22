@@ -9,6 +9,8 @@ mod generated;
 mod html;
 pub mod parallel;
 mod rt;
+mod terminal;
+mod theme;
 
 #[rustfmt::skip]
 #[path = "generated/languages.rs"]
@@ -21,10 +23,12 @@ pub mod token_ids;
 mod token_types;
 
 pub use generated::Instance;
-pub use html::HtmlTheme;
-pub use languages::LANGUAGES;
+use html::HtmlTheme;
+pub use languages::{LANGUAGE_NAMES, LANGUAGES};
 use rt::PAGE;
 pub use rt::Rec;
+pub use terminal::TerminalOptions;
+pub use theme::{Color, Style, Theme};
 pub use token_types::TOKEN_TYPES;
 
 /// Lookahead and NUL-sentinel space the lexers may read past the input.
@@ -50,9 +54,106 @@ pub fn language_id(name: &str) -> Option<u8> {
         .map(|&(_, id)| id)
 }
 
+/// A supported language.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Language(u8);
+
+impl Language {
+    /// The language for a name or alias (`typescript`, `ts`, `rs`), ignoring
+    /// ASCII case.
+    pub fn from_name(name: &str) -> Option<Language> {
+        language_id(name).map(Language)
+    }
+
+    /// The language for a file path, from its extension, or its whole name
+    /// for files such as `Dockerfile` and `Makefile`.
+    pub fn from_path(path: &std::path::Path) -> Option<Language> {
+        let name = path.file_name()?.to_str()?;
+        let by_name = match name {
+            "Dockerfile" | "Containerfile" => Some("dockerfile"),
+            "Makefile" | "makefile" | "GNUmakefile" => Some("makefile"),
+            "CMakeLists.txt" => Some("cmake"),
+            _ => None,
+        };
+        if let Some(lang) = by_name {
+            return Language::from_name(lang);
+        }
+        let ext = path.extension()?.to_str()?;
+        Language::from_name(ext)
+    }
+
+    /// The language's canonical name, such as `ts` for TypeScript.
+    pub fn name(&self) -> &'static str {
+        LANGUAGE_NAMES
+            .get(self.0 as usize)
+            .copied()
+            .unwrap_or("plain")
+    }
+
+    /// Every supported language.
+    pub fn all() -> impl Iterator<Item = Language> {
+        (0..LANGUAGE_NAMES.len() as u8).map(Language)
+    }
+
+    /// The names that select this language, canonical name included.
+    pub fn aliases(&self) -> impl Iterator<Item = &'static str> + '_ {
+        LANGUAGES
+            .iter()
+            .filter(|&&(_, id)| id == self.0)
+            .map(|&(n, _)| n)
+    }
+
+    /// The language's id in the lexer tables.
+    pub fn id(&self) -> u8 {
+        self.0
+    }
+}
+
+/// A token kind, such as `keyword.control` or `string`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct TokenKind(pub u32);
+
+impl TokenKind {
+    /// The kind's name, the theme scope it is styled by.
+    pub fn name(&self) -> &'static str {
+        TOKEN_TYPES.get(self.0 as usize).copied().unwrap_or("none")
+    }
+}
+
+/// One token: a byte range of the input and its kind. Whitespace belongs to
+/// the token before it.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Token {
+    pub range: std::ops::Range<usize>,
+    pub kind: TokenKind,
+}
+
+/// The tokens of the current input, in order and covering it completely.
+pub struct Tokens<'a> {
+    recs: std::slice::Iter<'a, Rec>,
+    start: usize,
+}
+
+impl Iterator for Tokens<'_> {
+    type Item = Token;
+
+    fn next(&mut self) -> Option<Token> {
+        let r = self.recs.next()?;
+        let end = r.end as usize;
+        let range = self.start..end;
+        self.start = end;
+        Some(Token {
+            range,
+            kind: TokenKind(r.token),
+        })
+    }
+}
+
 pub struct Highlighter {
     inst: Instance,
     theme: Option<Vec<u8>>,
+    /// Length of the input loaded by `input_mut` or `set_input`.
+    len: usize,
 }
 
 impl Default for Highlighter {
@@ -66,6 +167,7 @@ impl Highlighter {
         Highlighter {
             inst: Instance::new(),
             theme: None,
+            len: 0,
         }
     }
 
@@ -73,7 +175,46 @@ impl Highlighter {
     /// [`Highlighter::run`] with the same length; no copy happens in between.
     pub fn input_mut(&mut self, len: usize) -> &mut [u8] {
         self.inst.mem.reserve(PAGE + len + INPUT_SLACK);
+        self.len = len;
         &mut self.inst.mem.bytes_mut()[PAGE..PAGE + len]
+    }
+
+    /// Copy `text` in as the input for [`Highlighter::tokens`],
+    /// [`Highlighter::html`], and [`Highlighter::terminal`].
+    pub fn set_input(&mut self, text: &[u8]) {
+        self.input_mut(text.len()).copy_from_slice(text);
+    }
+
+    /// The tokens of the current input.
+    pub fn tokens(&mut self, lang: Language) -> Tokens<'_> {
+        let recs = self.tokenize(lang.0, self.len);
+        Tokens {
+            recs: recs.iter(),
+            start: 0,
+        }
+    }
+
+    /// The current input as an HTML `<pre>` fragment with inline colors,
+    /// written to `out`. Matches the JS package's `codeToHtml` output.
+    pub fn html(&mut self, lang: Language, theme: &Theme, out: &mut Vec<u8>) {
+        let len = self.len;
+        self.tokenize(lang.0, len);
+        let input = &self.inst.mem.bytes()[PAGE..PAGE + len + INPUT_SLACK];
+        HtmlTheme::new(theme.table()).render(input, len, &self.inst.ext.recs, out);
+    }
+
+    /// The current input as 24-bit ANSI terminal text, written to `out`.
+    pub fn terminal(
+        &mut self,
+        lang: Language,
+        theme: &Theme,
+        options: &TerminalOptions,
+        out: &mut Vec<u8>,
+    ) {
+        let len = self.len;
+        self.tokenize(lang.0, len);
+        let input = &self.inst.mem.bytes()[PAGE..PAGE + len];
+        terminal::render(theme, options, input, len, &self.inst.ext.recs, out);
     }
 
     /// Write the packed theme table (five bytes per token) used by HTML mode.
@@ -131,13 +272,6 @@ impl Highlighter {
         inst.call_table(lang as u32);
         inst.ext.native = false;
         &inst.ext.recs
-    }
-
-    /// Lex the current input and render it as HTML into `out`.
-    pub fn html(&mut self, lang: u8, len: usize, theme: &HtmlTheme, out: &mut Vec<u8>) {
-        self.tokenize(lang, len);
-        let input = &self.inst.mem.bytes()[PAGE..PAGE + len + INPUT_SLACK];
-        theme.render(input, len, &self.inst.ext.recs, out);
     }
 }
 

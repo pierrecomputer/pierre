@@ -1,0 +1,10 @@
+[package]
+name = "hl"
+version = "0.0.0"
+description = "Print files syntax-highlighted in the terminal"
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+highlights = { path = "../highlights" }

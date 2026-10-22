@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["xtask", "highlights", "bench"]
+members = ["xtask", "highlights", "bench", "hl"]
 
 [workspace.package]
 edition = "2024"

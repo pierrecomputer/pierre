@@ -377,9 +377,13 @@ fn main() {
     );
 }
 
-/// PGO training: both token paths over each `DIR/corpus.<lang>`.
+/// PGO training: both token paths and the terminal renderer over each
+/// `DIR/corpus.<lang>`.
 fn train(dir: &Path) {
     let mut hl = Highlighter::new();
+    let theme = highlights::Theme::named("pierre-dark").unwrap();
+    let options = highlights::TerminalOptions::default();
+    let mut out = Vec::new();
     for e in std::fs::read_dir(dir).unwrap() {
         let path = e.unwrap().path();
         let Some(lang) = path
@@ -393,6 +397,15 @@ fn train(dir: &Path) {
             black_box(hl.highlight(lang, Mode::LineRecords, &input));
             hl.input_mut(input.len()).copy_from_slice(&input);
             black_box(hl.tokenize(lang, input.len()));
+            out.clear();
+            hl.terminal(
+                highlights::Language::from_name(&path.extension().unwrap().to_string_lossy())
+                    .unwrap(),
+                &theme,
+                &options,
+                &mut out,
+            );
+            black_box(&out);
         }
     }
 }

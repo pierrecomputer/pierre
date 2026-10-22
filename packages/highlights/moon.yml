@@ -142,3 +142,13 @@ tasks:
     options:
       cache: false
       runInCI: 'always'
+
+  # Build the `hl` test app with PGO: rust/target/pgo-use/release/hl prints
+  # files syntax-highlighted for a 24-bit color terminal.
+  rust-hl:
+    command: './rust/scripts/pgo.sh build'
+    deps:
+      - 'rust-gen'
+    options:
+      cache: false
+      runInCI: 'always'
