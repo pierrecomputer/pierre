@@ -1,0 +1,22 @@
+{
+  "extends": "../../tsconfig.options.json",
+  "include": [
+    "lib/index.d.ts",
+    "benchmark/**/*.ts",
+    "react/**/*.ts",
+    "react/**/*.tsx",
+    "test/**/*.tsx",
+    "tsdown.config.ts"
+  ],
+  "compilerOptions": {
+    "allowJs": false,
+    "checkJs": false,
+    "skipLibCheck": true,
+    "outDir": "dist",
+    "types": ["bun"],
+    "tsBuildInfoFile": "tsconfig.tsbuildinfo",
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "jsx": "react-jsx",
+    "jsxImportSource": "react"
+  }
+}

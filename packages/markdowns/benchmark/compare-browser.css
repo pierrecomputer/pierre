@@ -1,0 +1,67 @@
+html {
+  color-scheme: light;
+  background: white;
+  color: #171717;
+}
+body {
+  margin: 0;
+  font-family: Arial, sans-serif;
+  font-size: 16px;
+  line-height: 1.75;
+}
+main {
+  width: 900px;
+  margin: 32px auto;
+}
+#preview p {
+  margin: 0 0 20px;
+}
+#preview a {
+  color: inherit;
+  text-decoration: underline;
+}
+#preview [data-markdown='code-block'],
+#preview [data-streamdown='code-block'] {
+  margin: 20px 0;
+  border: 1px solid #ddd;
+}
+#preview [data-markdown='code-header'],
+#preview [data-streamdown='code-block-header'] {
+  display: none;
+}
+#preview pre {
+  margin: 0;
+  padding: 16px;
+  overflow: auto;
+  max-height: none !important;
+  font: 13px/1.7 monospace;
+  white-space: pre;
+}
+#preview code {
+  font: inherit;
+}
+#preview [data-markdown='code-line'] {
+  display: block;
+  white-space: pre;
+}
+/* Supply the row layout and theme colors normally provided by Tailwind. */
+#preview [data-streamdown='code-block-body'] pre code > span {
+  display: block;
+  white-space: pre;
+}
+#preview [data-streamdown='code-block-body'] pre code > span > span {
+  color: var(--sdm-c, var(--shiki-light, inherit));
+  background-color: var(--sdm-tbg, transparent);
+}
+[data-markdown='token'][data-animated='true'] {
+  animation: markdown-fade-in 180ms ease-out backwards;
+}
+
+@keyframes markdown-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}

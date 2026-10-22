@@ -49,6 +49,8 @@
     "packages/theme/themes/*.json",
     "packages/theme/zed/themes/*.json",
     "packages/tree-test-data/*-files.json",
+    "packages/markdowns/test/spec/**",
+    "packages/markdowns/benchmark/fixtures/**",
     "*.patch",
     "README"
   ]

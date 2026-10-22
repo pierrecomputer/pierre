@@ -1,0 +1,112 @@
+$schema: 'https://moonrepo.dev/schemas/project.json'
+
+language: 'typescript'
+layer: 'library'
+tags: ['publishable']
+
+tasks:
+  build:
+    script:
+      'node scripts/build.mjs && tsdown && cp react/styles.css dist/styles.css'
+    deps:
+      - '^:build'
+    inputs:
+      - 'src/**/*'
+      - 'lib/**/*'
+      - 'scripts/build.mjs'
+      - 'react/**/*'
+      # The docs demo imports this source; invalidate downstream builds too.
+      - 'benchmark/fixtures.mjs'
+      - 'tsdown.config.ts'
+      - 'tsconfig.json'
+    outputs:
+      - 'dist'
+
+  # Node covers exhaustive core replay. Bun's optimizing Wasm tier produces
+  # intermittent baseline-parser mismatches too; disable that tier for React
+  # tests until the runtime issue is resolved. See benchmark/STREAMING.md.
+  test:
+    script:
+      'node test/index.mjs && node test/index.mjs --spec && node --test
+      test/stream_test.mjs test/stress_test.mjs && BUN_JSC_useOMGJIT=false bun
+      test test/react_test.tsx'
+    deps:
+      - 'build'
+    options:
+      merge: 'replace'
+
+  test-spec:
+    command: 'node test/index.mjs --spec'
+    deps:
+      - 'build'
+
+  bench:
+    command: 'node benchmark/bench.mjs'
+    deps:
+      - 'build'
+    options:
+      cache: false
+      runInCI: 'always'
+
+  bench-stream:
+    command: 'node benchmark/stream.ts'
+    deps:
+      - 'build'
+    options:
+      cache: false
+      runInCI: 'always'
+
+  # Explicit large workloads keep routine replay checks bounded.
+  bench-large:
+    command: 'node --expose-gc benchmark/large.mjs'
+    deps:
+      - 'build'
+    options:
+      cache: false
+      runInCI: 'always'
+
+  # Requires the production docs demo to be running at the supplied URL.
+  bench-render:
+    command: 'node benchmark/browser.mjs'
+    deps:
+      - 'build'
+    options:
+      cache: false
+      runInCI: 'always'
+
+  # Uses isolated competitor dependencies; see benchmark/COMPARISON.md.
+  bench-render-compare:
+    command: 'node benchmark/compare-browser.mjs'
+    deps:
+      - 'build'
+    options:
+      cache: false
+      runInCI: 'always'
+
+  gen-spec:
+    command: 'node scripts/gen-spec.mjs'
+    options:
+      cache: false
+      runInCI: 'always'
+
+  playground-dev:
+    command: 'wrangler dev'
+    deps:
+      - 'build'
+    options:
+      cache: false
+      persistent: true
+      runInCI: 'skip'
+
+  playground-deploy:
+    command: 'wrangler deploy'
+    deps:
+      - 'build'
+    options:
+      cache: false
+      runInCI: 'skip'
+
+  prepublish:
+    deps:
+      - 'test'
+      - 'typecheck'
