@@ -15,13 +15,30 @@ pub fn trap() -> ! {
 /// on; the lexers keep every read inside the input slack the host reserves.
 pub struct Memory {
     buf: Vec<u8>,
+    /// Where `buf` lives, kept in step with every resize. All access goes
+    /// through this one pointer.
+    view: MemView,
+}
+
+// SAFETY: `Memory` owns its buffer; `view` only points into it.
+unsafe impl Send for Memory {}
+
+/// The address (and, with `checked`, the length) of linear memory. Each
+/// generated function copies it into a local, so the address stays in a
+/// register instead of being reloaded from the `Instance` after every call.
+/// The generated code refreshes it after anything that resizes memory.
+#[derive(Clone, Copy)]
+pub struct MemView {
+    base: *mut u8,
+    #[cfg(feature = "checked")]
+    len: usize,
 }
 
 macro_rules! access {
     ($self:ident, $addr:ident, $off:ident, $n:expr) => {{
         let at = $addr as u32 as usize + $off as usize;
         #[cfg(feature = "checked")]
-        if at + $n > $self.buf.len() {
+        if at + $n > $self.len {
             trap();
         }
         at
@@ -32,24 +49,38 @@ impl Memory {
     pub fn new(pages: usize, init: &[u8; PAGE]) -> Self {
         let mut buf = vec![0u8; pages * PAGE];
         buf[..PAGE].copy_from_slice(init);
-        Memory { buf }
+        let view = MemView::of(&mut buf);
+        Memory { buf, view }
+    }
+
+    /// The current address of memory, for a generated function's local.
+    #[inline(always)]
+    pub fn view(&self) -> MemView {
+        self.view
     }
 
     #[inline(always)]
     pub fn bytes(&self) -> &[u8] {
-        &self.buf
+        // SAFETY: `view` points at `buf`'s `len` initialized bytes.
+        unsafe { core::slice::from_raw_parts(self.view.base, self.buf.len()) }
     }
 
     #[inline(always)]
     pub fn bytes_mut(&mut self) -> &mut [u8] {
-        &mut self.buf
+        // SAFETY: as in `bytes`, and `&mut self` makes this the only access.
+        unsafe { core::slice::from_raw_parts_mut(self.view.base, self.buf.len()) }
+    }
+
+    /// Resize to `pages` pages, zero-filling new ones.
+    fn resize(&mut self, pages: usize) {
+        self.buf.resize(pages * PAGE, 0);
+        self.view = MemView::of(&mut self.buf);
     }
 
     /// Grow so that at least `len` bytes are addressable.
     pub fn reserve(&mut self, len: usize) {
         if len > self.buf.len() {
-            let pages = len.div_ceil(PAGE);
-            self.buf.resize(pages * PAGE, 0);
+            self.resize(len.div_ceil(PAGE));
         }
     }
 
@@ -64,144 +95,150 @@ impl Memory {
         if new > 65536 {
             return -1;
         }
-        self.buf.resize(new * PAGE, 0);
+        self.resize(new);
         old
     }
 
     #[inline(always)]
-    fn ptr(&self, at: usize) -> *const u8 {
-        // SAFETY: callers stay in bounds; see the type docs.
-        unsafe { self.buf.as_ptr().add(at) }
+    pub fn copy(&mut self, dst: i32, src: i32, n: i32) {
+        let (dst, src, n) = (dst as u32 as usize, src as u32 as usize, n as u32 as usize);
+        let mem = self.bytes_mut();
+        if dst.max(src) + n > mem.len() {
+            trap();
+        }
+        mem.copy_within(src..src + n, dst);
     }
 
     #[inline(always)]
-    fn ptr_mut(&mut self, at: usize) -> *mut u8 {
-        // SAFETY: callers stay in bounds; see the type docs.
-        unsafe { self.buf.as_mut_ptr().add(at) }
+    pub fn fill(&mut self, dst: i32, v: i32, n: i32) {
+        let (dst, n) = (dst as u32 as usize, n as u32 as usize);
+        let mem = self.bytes_mut();
+        if dst + n > mem.len() {
+            trap();
+        }
+        mem[dst..dst + n].fill(v as u8);
+    }
+}
+
+impl MemView {
+    fn of(buf: &mut Vec<u8>) -> Self {
+        MemView {
+            base: buf.as_mut_ptr(),
+            #[cfg(feature = "checked")]
+            len: buf.len(),
+        }
     }
 
     #[inline(always)]
-    pub fn ld_u8(&self, addr: i32, off: u64) -> i32 {
+    fn ptr(self, at: usize) -> *mut u8 {
+        // SAFETY: callers stay in bounds; see `Memory`.
+        unsafe { self.base.add(at) }
+    }
+
+    #[inline(always)]
+    pub fn ld_u8(self, addr: i32, off: u64) -> i32 {
         let at = access!(self, addr, off, 1);
         unsafe { *self.ptr(at) as i32 }
     }
 
     #[inline(always)]
-    pub fn ld_s8(&self, addr: i32, off: u64) -> i32 {
+    pub fn ld_s8(self, addr: i32, off: u64) -> i32 {
         let at = access!(self, addr, off, 1);
         unsafe { *self.ptr(at) as i8 as i32 }
     }
 
     #[inline(always)]
-    pub fn ld_u16(&self, addr: i32, off: u64) -> i32 {
+    pub fn ld_u16(self, addr: i32, off: u64) -> i32 {
         let at = access!(self, addr, off, 2);
         unsafe { u16::from_le(self.ptr(at).cast::<u16>().read_unaligned()) as i32 }
     }
 
     #[inline(always)]
-    pub fn ld_s16(&self, addr: i32, off: u64) -> i32 {
+    pub fn ld_s16(self, addr: i32, off: u64) -> i32 {
         let at = access!(self, addr, off, 2);
         unsafe { i16::from_le(self.ptr(at).cast::<i16>().read_unaligned()) as i32 }
     }
 
     #[inline(always)]
-    pub fn ld_i32(&self, addr: i32, off: u64) -> i32 {
+    pub fn ld_i32(self, addr: i32, off: u64) -> i32 {
         let at = access!(self, addr, off, 4);
         unsafe { i32::from_le(self.ptr(at).cast::<i32>().read_unaligned()) }
     }
 
     #[inline(always)]
-    pub fn ld_i64(&self, addr: i32, off: u64) -> i64 {
+    pub fn ld_i64(self, addr: i32, off: u64) -> i64 {
         let at = access!(self, addr, off, 8);
         unsafe { i64::from_le(self.ptr(at).cast::<i64>().read_unaligned()) }
     }
 
     #[inline(always)]
-    pub fn ld_v128(&self, addr: i32, off: u64) -> V128 {
+    pub fn ld_v128(self, addr: i32, off: u64) -> V128 {
         let at = access!(self, addr, off, 16);
         unsafe { v_load(self.ptr(at)) }
     }
 
     #[inline(always)]
-    pub fn st_i8(&mut self, addr: i32, off: u64, v: i32) {
+    pub fn st_i8(self, addr: i32, off: u64, v: i32) {
         let at = access!(self, addr, off, 1);
-        unsafe { *self.ptr_mut(at) = v as u8 }
+        unsafe { *self.ptr(at) = v as u8 }
     }
 
     #[inline(always)]
-    pub fn st_i16(&mut self, addr: i32, off: u64, v: i32) {
+    pub fn st_i16(self, addr: i32, off: u64, v: i32) {
         let at = access!(self, addr, off, 2);
         unsafe {
-            self.ptr_mut(at)
+            self.ptr(at)
                 .cast::<u16>()
                 .write_unaligned((v as u16).to_le())
         }
     }
 
     #[inline(always)]
-    pub fn st_i32(&mut self, addr: i32, off: u64, v: i32) {
+    pub fn st_i32(self, addr: i32, off: u64, v: i32) {
         let at = access!(self, addr, off, 4);
-        unsafe { self.ptr_mut(at).cast::<i32>().write_unaligned(v.to_le()) }
+        unsafe { self.ptr(at).cast::<i32>().write_unaligned(v.to_le()) }
     }
 
     #[inline(always)]
-    pub fn st_i64(&mut self, addr: i32, off: u64, v: i64) {
+    pub fn st_i64(self, addr: i32, off: u64, v: i64) {
         let at = access!(self, addr, off, 8);
-        unsafe { self.ptr_mut(at).cast::<i64>().write_unaligned(v.to_le()) }
+        unsafe { self.ptr(at).cast::<i64>().write_unaligned(v.to_le()) }
     }
 
     #[inline(always)]
-    pub fn st_v128(&mut self, addr: i32, off: u64, v: V128) {
+    pub fn st_v128(self, addr: i32, off: u64, v: V128) {
         let at = access!(self, addr, off, 16);
-        unsafe { v_store(self.ptr_mut(at), v) }
+        unsafe { v_store(self.ptr(at), v) }
     }
 
     #[inline(always)]
-    pub fn ld_u8_l(&self, addr: i32, off: u64) -> i64 {
+    pub fn ld_u8_l(self, addr: i32, off: u64) -> i64 {
         self.ld_u8(addr, off) as i64
     }
 
     #[inline(always)]
-    pub fn ld_u16_l(&self, addr: i32, off: u64) -> i64 {
+    pub fn ld_u16_l(self, addr: i32, off: u64) -> i64 {
         self.ld_u16(addr, off) as i64
     }
 
     #[inline(always)]
-    pub fn ld_u32_l(&self, addr: i32, off: u64) -> i64 {
+    pub fn ld_u32_l(self, addr: i32, off: u64) -> i64 {
         self.ld_i32(addr, off) as u32 as i64
     }
 
     #[inline(always)]
-    pub fn st_i8_l(&mut self, addr: i32, off: u64, v: i64) {
+    pub fn st_i8_l(self, addr: i32, off: u64, v: i64) {
         self.st_i8(addr, off, v as i32)
     }
 
     #[inline(always)]
-    pub fn st_i16_l(&mut self, addr: i32, off: u64, v: i64) {
+    pub fn st_i16_l(self, addr: i32, off: u64, v: i64) {
         self.st_i16(addr, off, v as i32)
     }
 
     #[inline(always)]
-    pub fn st_i32_l(&mut self, addr: i32, off: u64, v: i64) {
+    pub fn st_i32_l(self, addr: i32, off: u64, v: i64) {
         self.st_i32(addr, off, v as i32)
-    }
-
-    #[inline(always)]
-    pub fn copy(&mut self, dst: i32, src: i32, n: i32) {
-        let (dst, src, n) = (dst as u32 as usize, src as u32 as usize, n as u32 as usize);
-        if dst.max(src) + n > self.buf.len() {
-            trap();
-        }
-        self.buf.copy_within(src..src + n, dst);
-    }
-
-    #[inline(always)]
-    pub fn fill(&mut self, dst: i32, v: i32, n: i32) {
-        let (dst, n) = (dst as u32 as usize, n as u32 as usize);
-        if dst + n > self.buf.len() {
-            trap();
-        }
-        self.buf[dst..dst + n].fill(v as u8);
     }
 }
 

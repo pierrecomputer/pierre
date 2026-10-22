@@ -106,11 +106,13 @@ struct Module<'a> {
     cache_skip: BTreeSet<String>,
 }
 
-/// The globals a function may read and write, as bit sets by global index.
+/// The globals a function may read and write, as bit sets by global index,
+/// and whether it may grow memory.
 #[derive(Clone, Default, PartialEq)]
 struct Effects {
     reads: Vec<u64>,
     writes: Vec<u64>,
+    grows: bool,
 }
 
 fn bit_set(bits: &mut [u64], i: u32) {
@@ -356,7 +358,8 @@ impl<'a> Module<'a> {
         let mut effects = vec![
             Effects {
                 reads: vec![0; words],
-                writes: vec![0; words]
+                writes: vec![0; words],
+                grows: false,
             };
             self.bodies.len()
         ];
@@ -371,6 +374,7 @@ impl<'a> Module<'a> {
                     Operator::GlobalSet { global_index } => {
                         bit_set(&mut effects[i].writes, global_index)
                     }
+                    Operator::MemoryGrow { .. } => effects[i].grows = true,
                     Operator::Call { function_index } if function_index >= n_imports => {
                         callees[i].insert(function_index - n_imports);
                     }
@@ -392,6 +396,7 @@ impl<'a> Module<'a> {
                 for &c in &callees[i] {
                     bit_union(&mut e.reads, &effects[c as usize].reads);
                     bit_union(&mut e.writes, &effects[c as usize].writes);
+                    e.grows |= effects[c as usize].grows;
                 }
                 if e != effects[i] {
                     effects[i] = e;
@@ -432,6 +437,14 @@ impl<'a> Module<'a> {
             Some(name) => format!("f{idx}_{}", sanitize(name)),
             None => format!("f{idx}"),
         }
+    }
+
+    /// The Rust method for defined function `idx` that takes memory's
+    /// address as its first argument, `m`. Generated code calls these, so the
+    /// address stays in a register across calls instead of being reloaded
+    /// from the `Instance`; `func_name` is a wrapper for the host.
+    fn inner_name(&self, idx: u32) -> String {
+        format!("{}_m", self.func_name(idx))
     }
 
     fn emit(&self) -> (String, Vec<u8>) {
@@ -819,17 +832,14 @@ impl<'m, 'a> FuncEmitter<'m, 'a> {
 
     fn load(&mut self, ty: ValType, func: &str, offset: u64) {
         let a = self.pop();
-        self.push(format!("self.mem.{func}({}, {offset})", a.expr), ty);
+        self.push(format!("m.{func}({}, {offset})", a.expr), ty);
     }
 
     fn store(&mut self, func: &str, offset: u64) {
         let v = self.pop();
         let a = self.pop();
         self.flush();
-        self.line(&format!(
-            "self.mem.{func}({}, {offset}, {});",
-            a.expr, v.expr
-        ));
+        self.line(&format!("m.{func}({}, {offset}, {});", a.expr, v.expr));
     }
 
     fn call(
@@ -853,6 +863,9 @@ impl<'m, 'a> FuncEmitter<'m, 'a> {
             _ => panic!("multi-value calls are unsupported"),
         }
         self.reload(effects);
+        if effects.is_some_and(|e| e.grows) {
+            self.line("m = self.mem.view();");
+        }
     }
 
     /// A call to `$emitTok` or `$emitGap`: the inline native emitter when
@@ -868,8 +881,9 @@ impl<'m, 'a> FuncEmitter<'m, 'a> {
         ));
         self.indent += 1;
         self.write_back(None);
-        self.line(&format!("{wasm}({args});"));
+        self.line(&format!("{wasm}(m, {args});"));
         self.reload(None);
+        self.line("m = self.mem.view();");
         self.indent -= 1;
         self.line("}");
     }
@@ -919,13 +933,29 @@ impl<'m, 'a> FuncEmitter<'m, 'a> {
         }
 
         let name = self.m.func_name(self.idx);
+        let inner = self.m.inner_name(self.idx);
         let params: Vec<String> = self.locals[..n_params]
             .iter()
             .map(|(n, t)| format!("mut {n}: {}", rust_ty(*t)))
             .collect();
+        let wrapper_params: Vec<String> = ty
+            .params
+            .iter()
+            .enumerate()
+            .map(|(i, t)| format!("p{i}: {}", rust_ty(*t)))
+            .collect();
+        let wrapper_args: Vec<String> = (0..n_params).map(|i| format!("p{i}")).collect();
         writeln!(
             out,
-            "    #[allow(clippy::all)]\n    pub fn {name}(&mut self, {}){} {{",
+            "    #[inline]\n    pub fn {name}(&mut self, {}){} {{ let m = self.mem.view(); self.{inner}(m, {}) }}\n",
+            wrapper_params.join(", "),
+            ret_sig(&ty.results),
+            wrapper_args.join(", ")
+        )
+        .unwrap();
+        writeln!(
+            out,
+            "    #[allow(clippy::all)]\n    pub fn {inner}(&mut self, mut m: MemView, {}){} {{",
             params.join(", "),
             ret_sig(&ty.results)
         )
@@ -1120,14 +1150,22 @@ impl<'m, 'a> FuncEmitter<'m, 'a> {
             }
             O::Call { function_index } => {
                 let ty = self.m.func_type(function_index).clone();
-                let wasm = format!("self.{}", self.m.func_name(function_index));
+                // Host imports take no memory address; see `inner_name`.
+                let (wasm, extra) = if (function_index as usize) < self.m.imports.len() {
+                    (format!("self.{}", self.m.func_name(function_index)), None)
+                } else {
+                    (
+                        format!("self.{}", self.m.inner_name(function_index)),
+                        Some("m".to_string()),
+                    )
+                };
                 // The host's emitter replaces the wasm one; see rt.rs.
                 match self.m.func_names.get(&function_index).map(String::as_str) {
                     Some("$emitTok" | "emitTok") => self.emit_call("emit_tok_native", wasm, ty),
                     Some("$emitGap" | "emitGap") => self.emit_call("emit_gap_native", wasm, ty),
                     _ => {
                         let m = self.m;
-                        self.call(wasm, ty, None, m.call_effects(function_index))
+                        self.call(wasm, ty, extra, m.call_effects(function_index))
                     }
                 }
             }
@@ -1148,8 +1186,8 @@ impl<'m, 'a> FuncEmitter<'m, 'a> {
                     }
                     write!(
                         arms,
-                        "{i} => self.{}({}), ",
-                        self.m.func_name(*f),
+                        "{i} => self.{}(m, {}), ",
+                        self.m.inner_name(*f),
                         args.join(", ")
                     )
                     .unwrap();
@@ -1163,6 +1201,7 @@ impl<'m, 'a> FuncEmitter<'m, 'a> {
                     _ => panic!("multi-value call_indirect is unsupported"),
                 }
                 self.reload(None);
+                self.line("m = self.mem.view();");
             }
             O::Drop => {
                 self.pop();
@@ -1234,6 +1273,7 @@ impl<'m, 'a> FuncEmitter<'m, 'a> {
                 let n = self.pop();
                 self.flush();
                 self.push_effect(format!("self.mem.grow({})", n.expr), I32);
+                self.line("m = self.mem.view();");
             }
             O::MemoryCopy { .. } => {
                 let n = self.pop();
