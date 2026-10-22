@@ -1,0 +1,14 @@
+[package]
+name = "highlights"
+version = "0.0.0"
+description = "Native Rust build of the Highlights syntax highlighter"
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[features]
+# Bounds-check every memory access and trap instead of reading out of range.
+checked = []
+
+[dependencies]
+unicode-ident = "1"
