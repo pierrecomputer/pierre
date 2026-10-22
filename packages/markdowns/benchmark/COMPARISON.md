@@ -56,11 +56,11 @@ Values are medians of three replays per library and configuration. Both
 libraries produced the same normalized paragraph/code text, delivered all 267
 updates, and reported no runtime errors in the 1× runs.
 
-| 1× configuration | Pierre commit p95 | Streamdown commit p95 | Pierre frame p95 | Streamdown frame p95 |
-| --- | ---: | ---: | ---: | ---: |
-| Plain | 1.3 ms | 3.8 ms | 16.8 ms | 16.7 ms |
-| Highlighted | 2.1 ms | 3.7 ms | 16.7 ms | 16.7 ms |
-| Highlighted + native fades | 2.9 ms | 4.0 ms | 16.7 ms | 16.8 ms |
+| 1× configuration           | Pierre commit p95 | Streamdown commit p95 | Pierre frame p95 | Streamdown frame p95 |
+| -------------------------- | ----------------: | --------------------: | ---------------: | -------------------: |
+| Plain                      |            1.3 ms |                3.8 ms |          16.8 ms |              16.7 ms |
+| Highlighted                |            2.1 ms |                3.7 ms |          16.7 ms |              16.7 ms |
+| Highlighted + native fades |            2.9 ms |                4.0 ms |          16.7 ms |              16.8 ms |
 
 All 18 small replays reported zero long tasks. Our lower commit latency gives
 more update headroom; both renderers already fit the frame budget on this small
@@ -68,17 +68,17 @@ message. The highlighted/fading median producer replays were 11.29 / 11.70 s
 (Pierre / Streamdown), with settled times of 11.65 / 12.07 s. Most of that time
 is the deliberately paced 40 ms producer, rather than rendering work.
 
-| 100× configuration | Pierre settled replay | Streamdown settled replay | Pierre frame p95 | Streamdown frame p95 |
-| --- | ---: | ---: | ---: | ---: |
-| Plain | 13.25 s | 16.13 s | 16.8 ms | 16.8 ms |
-| Highlighted | 13.28 s | 16.39 s | 16.7 ms | 16.8 ms |
-| Highlighted + native fades | 14.29 s | 27.86 s | 16.7 ms | 66.7 ms |
+| 100× configuration         | Pierre settled replay | Streamdown settled replay | Pierre frame p95 | Streamdown frame p95 |
+| -------------------------- | --------------------: | ------------------------: | ---------------: | -------------------: |
+| Plain                      |               13.25 s |                   16.13 s |          16.8 ms |              16.8 ms |
+| Highlighted                |               13.28 s |                   16.39 s |          16.7 ms |              16.8 ms |
+| Highlighted + native fades |               14.29 s |                   27.86 s |          16.7 ms |              66.7 ms |
 
-| 100× configuration | Pierre commit p95 | Streamdown commit p95 | Pierre long tasks | Streamdown long tasks |
-| --- | ---: | ---: | ---: | ---: |
-| Plain | 6.5 ms | 21.7 ms | 0 | 0 |
-| Highlighted | 6.8 ms | 22.1 ms | 0 | 2 |
-| Highlighted + native fades | 6.5 ms | 32.9 ms | 0 | 112 |
+| 100× configuration         | Pierre commit p95 | Streamdown commit p95 | Pierre long tasks | Streamdown long tasks |
+| -------------------------- | ----------------: | --------------------: | ----------------: | --------------------: |
+| Plain                      |            6.5 ms |               21.7 ms |                 0 |                     0 |
+| Highlighted                |            6.8 ms |               22.1 ms |                 0 |                     2 |
+| Highlighted + native fades |            6.5 ms |               32.9 ms |                 0 |                   112 |
 
 Pierre reported no long tasks in any of its 18 matched runs. Streamdown's large
 highlighted replays each reported two tasks totaling 318 / 316 / 319 ms, with
@@ -87,10 +87,10 @@ comparison.
 
 With native fades at 100×, Streamdown reported 92 / 112 / 112 long tasks. Their
 median total duration was 8.77 s and median largest task was 1.14 s; the largest
-individual task across all three runs was 1.23 s. The final DOM contained
-96,801 / 94,901 elements for Pierre / Streamdown, respectively; both retained
-zero fade wrappers after completion. Their paragraph/code text matched,
-including all 100 highlighted fences.
+individual task across all three runs was 1.23 s. The final DOM contained 96,801
+/ 94,901 elements for Pierre / Streamdown, respectively; both retained zero fade
+wrappers after completion. Their paragraph/code text matched, including all 100
+highlighted fences.
 
 The animated producer reached its final commit in 13.93 / 27.50 s; the table
 above also includes asynchronous/fade settlement. This is a substantial
