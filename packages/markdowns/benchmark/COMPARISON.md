@@ -1,10 +1,20 @@
 # Current performance and Streamdown comparison
 
 Measured October 21, 2026 on an Apple M4 Max, 16 logical CPUs, 128 GiB RAM,
-macOS arm64, Node 24.11.0. Browser comparisons use production React 19.2.7 in
-headless Chrome. Streamdown is 2.7.1, `@streamdown/code` is 2.0.0, and its
-resolved Shiki is 4.5.0. Competitor dependencies live outside the workspace;
-they are not library or docs dependencies.
+macOS 26.6.2 arm64, Node 24.11.0. Browser comparisons use production React
+19.2.7 in headless Chrome 156.0.8078.47. Streamdown is 2.7.1, `@streamdown/code`
+is 2.0.0, and its resolved Shiki is 4.5.0. Competitor dependencies live outside
+the workspace; they are not library or docs dependencies.
+
+Both renderers stayed smooth on small messages. On the isolated 100× renderer,
+native fades gave Pierre 16.7 ms p95 frames versus Streamdown's 66.7 ms, with
+zero versus a median 112 long tasks. The full docs playground still has 33.4 ms
+p95 frames at that size. Memory is a separate tradeoff: our highlighted renderer
+retains less reported heap without fades, but more with fades enabled.
+
+[Raw measurements and environment](./results/2026-10-21.json) include every
+reported browser run, large-parser output checks, memory samples, and
+bundle-size inputs.
 
 ## Direct browser method
 
@@ -152,6 +162,46 @@ are separate counters, not a combined total. These runs do not include the
 browser DOM or highlighter instances and do not establish 1,000× browser
 capacity.
 
+## Memory and active DOM diagnostic
+
+Separate fresh-browser runs at 100× captured Chromium's reported
+`performance.memory.usedJSHeapSize` after two explicit GCs at a warmed empty
+baseline, settled output, and keyed empty reset. No GC ran during playback.
+Once-per-second DOM samples were collected in these diagnostic runs only; their
+timings are excluded from the primary comparison.
+
+| Reported heap after GC                |    Pierre | Streamdown |
+| ------------------------------------- | --------: | ---------: |
+| Highlighted baseline                  |   3.15 MB |    9.18 MB |
+| Highlighted settled                   |  70.88 MB |  140.44 MB |
+| Highlighted retained increase         |  67.73 MB |  131.26 MB |
+| Highlighted empty reset               |   4.82 MB |   26.30 MB |
+| Highlighted + fades baseline          |   3.16 MB |    9.18 MB |
+| Highlighted + fades settled           | 300.24 MB |  231.78 MB |
+| Highlighted + fades retained increase | 297.08 MB |  222.60 MB |
+| Highlighted + fades empty reset       |  36.94 MB |   28.21 MB |
+
+| Animated 100× structural observation | Pierre | Streamdown |
+| ------------------------------------ | -----: | ---------: |
+| Sampled peak fade wrappers           |  1,974 |    110,099 |
+| Sampled peak elements                | 96,801 |    204,578 |
+| Final elements                       | 96,801 |     94,901 |
+| Final fade wrappers                  |      0 |          0 |
+
+The active wrapper counts support bounded animation history in Pierre. They do
+not identify the CPU cause of the timing difference. More importantly, bounding
+DOM wrappers has not bounded all animation-related heap retention: enabling
+fades was associated with another 229 MB of retained heap for Pierre, versus 91
+MB for Streamdown, after both had removed their fade spans. Persistent React
+text/animation state is a candidate to investigate; exact retainers have not
+been established.
+
+These are single diagnostic samples per provider/configuration, with repeated
+code and different native fade implementations. The heap counter is not total
+process memory or complete Wasm/native-DOM/GPU accounting. Reset deltas are not
+leak proofs. The parser arena figures above use a different runtime and must not
+be added to these browser counters.
+
 ## Bundled footprint
 
 Same esbuild 0.27.4, minified ES2022 browser ESM, with React/React DOM external.
@@ -178,7 +228,8 @@ The bundles therefore have different feature/language coverage.
 Existing parser and docs tasks:
 
 ```sh
-moon run markdowns:bench markdowns:bench-stream
+moon run markdowns:bench
+moon run markdowns:bench-stream
 moon run markdowns:bench-large -- 100 16 /tmp/markdowns-large-100.json
 moon run markdowns:bench-large -- 1000 16 /tmp/markdowns-large-1000.json
 moon run markdowns:bench-render -- http://localhost:3690/markdowns current /tmp/markdowns-current 100 3 --no-trace
