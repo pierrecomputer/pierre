@@ -104,6 +104,34 @@ function createPieceNode(piece: TextPiece, text: string): ElementContent {
   };
 }
 
+/** Returns the column ranges a rendered row's highlights cover. */
+export function getLineDiffMarks(row: HASTElement): LineDiffRange[] {
+  const ranges: LineDiffRange[] = [];
+  collectMarkRanges(row.children, 0, ranges);
+  return ranges;
+}
+
+// Adds the ranges of the highlights in `children`, whose text starts at
+// `column`. Returns the column after the children's text.
+function collectMarkRanges(
+  children: ElementContent[],
+  column: number,
+  ranges: LineDiffRange[]
+): number {
+  for (const child of children) {
+    if (child.type === 'text') {
+      column += child.value.length;
+    } else if (child.type === 'element') {
+      const start = column;
+      column = collectMarkRanges(child.children, column, ranges);
+      if (child.properties['data-diff-span'] != null) {
+        ranges.push([start, column]);
+      }
+    }
+  }
+  return column;
+}
+
 function hasDiffSpan(node: HASTElement): boolean {
   for (const child of node.children) {
     if (child.type !== 'element') continue;

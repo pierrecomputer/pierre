@@ -1,6 +1,7 @@
 import { DEFAULT_COLLAPSED_CONTEXT_THRESHOLD } from '../constants';
 import type {
   ChangeContent,
+  ContextContent,
   FileDiffMetadata,
   Hunk,
   HunkExpansionRegion,
@@ -26,26 +27,46 @@ export interface DiffLineCallbackBase {
   collapsedAfter: number; // > 0 only on final line if trailing collapsed content
 }
 
-interface DiffLineCallbackContextChange extends DiffLineCallbackBase {
-  type: 'change' | 'context' | 'context-expanded';
+interface DiffLineCallbackContext extends DiffLineCallbackBase {
+  type: 'context';
   deletionLine: DiffLineMetadata;
   additionLine: DiffLineMetadata;
+  hunkContent: ContextContent;
+}
+
+// Unchanged lines revealed between hunks are not part of any block.
+interface DiffLineCallbackExpandedContext extends DiffLineCallbackBase {
+  type: 'context-expanded';
+  deletionLine: DiffLineMetadata;
+  additionLine: DiffLineMetadata;
+  hunkContent?: undefined;
+}
+
+interface DiffLineCallbackChangePair extends DiffLineCallbackBase {
+  type: 'change';
+  deletionLine: DiffLineMetadata;
+  additionLine: DiffLineMetadata;
+  hunkContent: ChangeContent;
 }
 
 interface DiffLineCallbackChangeDeletion extends DiffLineCallbackBase {
   type: 'change';
   deletionLine: DiffLineMetadata;
   additionLine?: undefined;
+  hunkContent: ChangeContent;
 }
 
 interface DiffLineCallbackChangeAddition extends DiffLineCallbackBase {
   type: 'change';
   deletionLine?: undefined;
   additionLine: DiffLineMetadata;
+  hunkContent: ChangeContent;
 }
 
 export type DiffLineCallbackProps =
-  | DiffLineCallbackContextChange
+  | DiffLineCallbackContext
+  | DiffLineCallbackExpandedContext
+  | DiffLineCallbackChangePair
   | DiffLineCallbackChangeDeletion
   | DiffLineCallbackChangeAddition;
 
@@ -423,6 +444,7 @@ export function iterateOverDiff({
                     splitRowIndex
                   ),
                   type: 'context',
+                  hunkContent: content,
                   deletionLine: {
                     lineNumber: deletionLineNumber + index,
                     lineIndex: deletionLineIndex + index,
@@ -1015,6 +1037,7 @@ function getChangeLineData({
       collapsedBefore,
       deletionLine: undefined,
       additionLine,
+      hunkContent: content,
     };
   } else if (deletionLine != null && additionLine == null) {
     return {
@@ -1025,6 +1048,7 @@ function getChangeLineData({
       collapsedBefore,
       deletionLine,
       additionLine: undefined,
+      hunkContent: content,
     };
   }
 
@@ -1040,5 +1064,6 @@ function getChangeLineData({
     collapsedBefore,
     deletionLine,
     additionLine,
+    hunkContent: content,
   };
 }
