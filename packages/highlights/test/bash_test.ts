@@ -419,6 +419,84 @@ void t.test('bash: a backslash line join keeps the command open', () => {
         ['ls', 'function'],
       ],
     ],
+    // with no blank before the `\`, bash joins `a` and `#b` into one word
+    [
+      'echo a\\\n#b c\n',
+      [
+        ['echo', 'function'],
+        ['a', 'variable'],
+        ['\\', 'punctuation.special'],
+        ['#', null],
+        ['b c', 'variable'],
+      ],
+    ],
+    // a trailing `\` with no line break after it still reads as a join
+    [
+      'docker run \\',
+      [
+        ['docker', 'function'],
+        ['run', 'variable'],
+        ['\\', 'punctuation.special'],
+      ],
+    ],
+  ];
+  for (const [code, expected] of cases) {
+    assertLineFedParity('bash', code);
+    assert.deepEqual(tokenKinds('bash', code), expected, JSON.stringify(code));
+  }
+  // bash finds the heredoc body after the joined line, but the lexer starts
+  // it at the next physical line; the join itself still highlights and
+  // streaming agrees with a whole-buffer run
+  const heredoc = 'cat <<EOF \\\n  -n\nbody\nEOF\n';
+  assertLineFedParity('bash', heredoc);
+  assert.ok(
+    tokenKinds('bash', heredoc).some(
+      ([text, kind]) => text === '\\' && kind === 'punctuation.special'
+    )
+  );
+});
+
+void t.test('bash: a backslash before a word quotes it', () => {
+  // `\rm` bypasses an alias and still runs `rm`; a quoted keyword is a
+  // command and a quoted assignment is a command word
+  const cases: [string, [string, string | null][]][] = [
+    [
+      '\\rm -rf dir; \\ls\n',
+      [
+        ['\\rm', 'function'],
+        ['-rf dir', 'variable'],
+        [';', 'operator'],
+        ['\\ls', 'function'],
+      ],
+    ],
+    [
+      '\\if x\n',
+      [
+        ['\\if', 'function'],
+        ['x', 'variable'],
+      ],
+    ],
+    [
+      '\\VAR=x\n',
+      [
+        ['\\VAR', 'function'],
+        ['=', 'operator'],
+        ['x', 'variable'],
+      ],
+    ],
+    // `\$`, `\-`, and `\ ` stay escapes
+    [
+      'echo \\$a \\-n a\\ b\n',
+      [
+        ['echo', 'function'],
+        ['\\$', 'string.escape'],
+        ['a', 'variable'],
+        ['\\-', 'string.escape'],
+        ['n a', 'variable'],
+        ['\\', 'string.escape'],
+        ['b', 'variable'],
+      ],
+    ],
   ];
   for (const [code, expected] of cases) {
     assertLineFedParity('bash', code);

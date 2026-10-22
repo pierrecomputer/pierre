@@ -342,9 +342,9 @@
   ;; $cmd marks command positions: line starts, command separators, command-list
   ;; keywords, substitutions, subshells, groups, case arms, and assignment prefixes.
   ;; Keywords apply only there, except a pending `in`. A `\` before a line
-  ;; break joins the next line, so the command continues there; $joined is 1
-  ;; from the join until the next token so a `#` heading the joined line is
-  ;; still a comment.
+  ;; break joins the next line, so the command continues there. $joined is 1
+  ;; from a join that followed a blank or a command position until the next
+  ;; token, so a `#` heading the joined line still starts a comment.
   ;; $flow stores statement state across chunks:
   ;; - Bits 0-1: 1 after `case`, 2 in a pattern (only `esac` is a keyword),
   ;;   3 in an arm body.
@@ -503,16 +503,28 @@
                         (local.get $arrayOpen)
                         (i32.sub (i32.const 2) (local.get $cmd))))))))
             (br $next)))
-        ;; An unquoted `\` before a line break joins the next line: emit it as
-        ;; punctuation.special and consume the LF or CRLF as a gap here, so
-        ;; the gap scan above does not see a new line and $cmd carries over.
-        ;; A pending heredoc leaves the break alone: its body starts after
-        ;; this physical line and the loop head consumes the break. Before
-        ;; any other byte the `\` escapes that character.
-        (if (i32.eq (local.get $c) (i32.const 92))
+        ;; An unquoted `\` before a line break, or as the last byte of the
+        ;; range, joins the next line: emit it as punctuation.special and
+        ;; consume the LF or CRLF as a gap here, so the gap scan above does
+        ;; not see a new line and $cmd carries over.
+        ;; Bash joins lines before it finds a heredoc body, so after `<<EOF \`
+        ;; the body really starts after the joined line. The delimiter
+        ;; pointer only lives within this chunk (see $hdDelim), so the break
+        ;; is left for the loop head and the body starts one line early.
+        ;; Before a letter the `\` starts a word (see below); before any
+        ;; other byte it escapes that character.
+        (if
+          (i32.and
+            (i32.eq (local.get $c) (i32.const 92))
+            (i32.eqz
+              (i32.and
+                (call $lexIsIdentStart (local.get $c2))
+                (i32.ne (local.get $c2) (i32.const "$")))))
           (then
             (if
-              (i32.or (i32.eq (local.get $c2) (i32.const 10)) (i32.eq (local.get $c2) (i32.const 13)))
+              (i32.or
+                (i32.ge_u (i32.add (global.get $ptr) (i32.const 1)) (global.get $end))
+                (i32.or (i32.eq (local.get $c2) (i32.const 10)) (i32.eq (local.get $c2) (i32.const 13))))
               (then
                 (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
                 (call $emitTok (enum.get $Token.punctuation.special) (local.get $lhs) (global.get $ptr))
@@ -521,7 +533,11 @@
                     (local.set $p (call $lexEscapeEnd (local.get $lhs)))
                     (call $emitGap (global.get $ptr) (local.get $p))
                     (global.set $ptr (local.get $p))
-                    (local.set $joined (i32.const 1))))
+                    ;; `a\` + `#b` joins into the word `a#b`: only a `\` after
+                    ;; a blank or at a command position leaves a `#` that
+                    ;; comments
+                    (local.set $joined
+                      (i32.or (local.get $cmd) (i32.lt_u (local.get $gap) (local.get $lhs))))))
                 (br $next)))
             (global.set $ptr (call $lexEscapeEnd (global.get $ptr)))
             (call $emitTok (enum.get $Token.string.escape) (local.get $lhs) (global.get $ptr))
@@ -602,7 +618,10 @@
             (call $emitTok (enum.get $Token.number) (local.get $lhs) (global.get $ptr))
             (local.set $cmd (i32.const 0))
             (br $next)))
-        ;; a word; `$` never reaches here
+        ;; a word; `$` never reaches here. A `\` reaches here only before a
+        ;; letter: `\rm` bypasses an alias and still runs `rm`, so the word
+        ;; keeps its `\`. The quoting also stops `\if` from being a keyword,
+        ;; which the keyword table gets for free since `\if` misses it.
         (if
           (if (result i32) (call $lexIsIdentStart (local.get $c))
             (then (i32.const 1))
@@ -613,9 +632,9 @@
                   (i32.le_u (i32.sub (local.get $c) (i32.const "-")) (i32.const 2))
                   (i32.eq (local.get $c) (i32.const "~")))
                 (then (call $bashIsPunctWordStart (local.get $c) (local.get $c2)))
-                (else (i32.const 0)))))
+                (else (i32.eq (local.get $c) (i32.const 92))))))
           (then
-            (if (i32.eq (local.get $c) (i32.const "~"))
+            (if (i32.or (i32.eq (local.get $c) (i32.const "~")) (i32.eq (local.get $c) (i32.const 92)))
               (then (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))))
             (call $bashScanWord)
             (local.set $rhs (global.get $ptr))
@@ -653,8 +672,11 @@
                       (else
                         (if (local.get $cmd)
                           (then
+                            ;; `\VAR=x` is quoted, so it runs as a command
                             (if
-                              (i32.eq (call $bashByte (global.get $ptr)) (i32.const "="))
+                              (i32.and
+                                (i32.eq (call $bashByte (global.get $ptr)) (i32.const "="))
+                                (i32.ne (local.get $c) (i32.const 92)))
                               (then (local.set $flow (i32.or (local.get $flow) (i32.const 8))))
                               (else
                                 ;; a case pattern is never a command
