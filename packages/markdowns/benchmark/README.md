@@ -3,6 +3,10 @@
 Throughput against [md4x](https://github.com/unjs/md4x) (MD4C, native and Wasm)
 and [markdown-it](https://github.com/markdown-it/markdown-it).
 
+The [current performance and Streamdown comparison](./COMPARISON.md) includes
+the October 21, 2026 parser rerun, matched browser replays, memory diagnostics,
+and configured bundle sizes.
+
 ```sh
 moonx markdowns:bench
 moonx markdowns:bench -- --chart   # write benchmark-{light,dark}.svg for the README
