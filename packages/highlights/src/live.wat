@@ -746,6 +746,17 @@
     (local.set $p (i32.add (local.get $p) (local.get $jsxLen)))
     (memory.copy (i32.const $mem.streamState) (local.get $p) (i32.const $mem.streamStateUsed)))
 
+  ;; Rebuild a zero-trimmed interned state in scratch memory before restoring
+  ;; it. Clear the full header, capped stack prefixes, and lexer checkpoints.
+  (func $lvLoadBlob (param $dst i32) (param $node i32)
+    (call $lvGrowTo (i32.add (local.get $dst) (i32.const $mem.streamStateUsed+8500)))
+    (memory.fill (local.get $dst) (i32.const 0) (i32.const $mem.streamStateUsed+8500))
+    (memory.copy
+      (local.get $dst)
+      (i32.add (local.get $node) (i32.const 24))
+      (i32.load offset=8 (local.get $node)))
+    (call $lvRestoreBlob (local.get $dst)))
+
   ;; canonicalize every captured location before the first line so stale
   ;; values from earlier batches can never leak into a blob
   (func $lvResetCaptured
@@ -917,13 +928,7 @@
                 (local.set $node
                   (i32.load
                     (i32.add (global.get $lvIdTab) (i32.shl (global.get $lvIncoming) (i32.const 2)))))
-                (call $lvGrowTo (i32.add (local.get $inBase) (i32.const $mem.streamStateUsed+8496)))
-                (memory.fill (local.get $inBase) (i32.const 0) (i32.const $mem.streamStateUsed+8496))
-                (memory.copy
-                  (local.get $inBase)
-                  (i32.add (local.get $node) (i32.const 24))
-                  (i32.load offset=8 (local.get $node)))
-                (call $lvRestoreBlob (local.get $inBase))))))
+                (call $lvLoadBlob (local.get $inBase) (local.get $node))))))
         (global.set $lvMachineId (i32.const -1))
         (memory.copy (local.get $inBase) (i32.load (local.get $slot)) (local.get $byteLen))
         (if (i32.eq (local.get $termBytes) (i32.const 2))

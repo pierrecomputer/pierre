@@ -855,6 +855,11 @@ void t.test(
         'const m = ok ? { k: 1 } : (x) => Foo;\n',
         'f(a ? b : C, d ? [e] : F);\n',
         'type C<T> = T extends string ? Foo : Bar;\n',
+        'const m = ok ? (value) : Result;\n',
+        'f(a, ok ? (value) : Result);\n',
+        'function f() { ok ? (value) : Result; }\n',
+        'const m = { value: ok ? (value) : Result };\n',
+        'const m = { value: ok ? <T,>() => value : Result };\n',
       ]) {
         const colons = tokenKinds(lang, code).filter(([text]) => text === ':');
         assert.ok(colons.length > 0, `${lang}: ${JSON.stringify(code)}`);
@@ -874,6 +879,27 @@ void t.test(
     }
   }
 );
+
+void t.test('ecma: optional methods keep their return-type colon', () => {
+  for (const lang of ['ts', 'tsx', 'tsrx'] as const) {
+    for (const code of [
+      'interface I { render?(): Result }\n',
+      'interface I { render?<T>(): Result }\n',
+      'interface I { render?(value: Input): Result }\n',
+      'interface I { render?<T>(value: T): Result }\n',
+      'interface I {\n  render?(\n    value: Input\n  ): Result;\n}\n',
+      'type I = { render?(): Result; update?<T>(): Result };\n',
+      'class I { render?(): Result; update?<T>(): Result; }\n',
+    ]) {
+      const colons = tokenKinds(lang, code).filter(([text]) => text === ':');
+      assert.ok(colons.length > 0, `${lang}: ${code}`);
+      for (const [, kind] of colons) {
+        assert.equal(kind, 'punctuation.special', `${lang}: ${code}`);
+      }
+      assertLineFedParity(lang, code);
+    }
+  }
+});
 
 void t.test('tsx: a spaced ternary `?` never reads as an optional key', () => {
   const html = checkInvariants(

@@ -142,7 +142,7 @@
   (global $jsTemplateEmitSp (mut i32) (i32.const 0))
   (global $brkSp (mut i32) (i32.const 0))
   (global $rxCloser (mut i32) (i32.const 0))
-  ;; Open ternaries outside every bracket. Inside a bracket, bits 1-7 of its
+  ;; Open ternaries outside every bracket. Inside a bracket, bits 2-7 of its
   ;; bracket-stack byte count them instead (see $ternaryCount).
   (global $ternaryTop (mut i32) (i32.const 0))
   ;; The last `:` scanned closes a ternary rather than introducing a type.
@@ -173,7 +173,7 @@
     (global.set $brkSp (i32.add (global.get $brkSp) (i32.const 1))))
   ;; kind of the innermost open bracket - 1 for a control paren or a block,
   ;; 0 for an object or call - or 0 with none open. The kind is bit 0 of the
-  ;; stack byte; the bits above count the level's open ternaries.
+  ;; stack byte; bit 1 marks member bodies and bits 2-7 count open ternaries.
   (func $brkTopKind (result i32)
     (if (i32.or (i32.eqz (global.get $brkSp)) (i32.gt_u (global.get $brkSp) (i32.const 1024)))
       (then (return (i32.const 0))))
@@ -203,13 +203,13 @@
       (then (return (i32.const 0))))
     (i32.shr_u
       (i32.load8_u (i32.add (i32.const $mem.jsBracketStack-1) (global.get $brkSp)))
-      (i32.const 1)))
+      (i32.const 2)))
 
-  ;; Set the innermost level's open-ternary count, saturating at 127.
+  ;; Set the innermost level's open-ternary count, saturating at 63.
   (func $ternarySet (param $n i32)
     (local $at i32)
-    (if (i32.gt_u (local.get $n) (i32.const 127))
-      (then (local.set $n (i32.const 127))))
+    (if (i32.gt_u (local.get $n) (i32.const 63))
+      (then (local.set $n (i32.const 63))))
     (if (i32.eqz (global.get $brkSp))
       (then
         (global.set $ternaryTop (local.get $n))
@@ -220,8 +220,43 @@
     (i32.store8
       (local.get $at)
       (i32.or
-        (i32.and (i32.load8_u (local.get $at)) (i32.const 1))
-        (i32.shl (local.get $n) (i32.const 1)))))
+        (i32.and (i32.load8_u (local.get $at)) (i32.const 3))
+        (i32.shl (local.get $n) (i32.const 2)))))
+
+  ;; In a member position, `name?(` and `name?<` start optional methods.
+  ;; Keep parentheses, statement blocks, and object values out of this test:
+  ;; their `?` can introduce a parenthesized expression or generic arrow.
+  (func $optionalMethod (param $after i32) (result i32)
+    (if (i32.eqz (call $ecmaHasTypeScript))
+      (then (return (i32.const 0))))
+    (if (i32.eqz (byteset.get "(<" (local.get $after)))
+      (then (return (i32.const 0))))
+    (if (i32.or (i32.eqz (global.get $brkSp)) (i32.gt_u (global.get $brkSp) (i32.const 1024)))
+      (then (return (i32.const 0))))
+    (if
+      (i32.ne
+        (i32.and
+          (i32.load8_u (i32.add (i32.const $mem.jsBracketStack-1) (global.get $brkSp)))
+          (i32.const 2))
+        (i32.const 2))
+      (then (return (i32.const 0))))
+    (if (i32.eqz (call $isIdentish (global.get $lto)))
+      (then (return (i32.const 0))))
+    (i32.or
+      (i32.or
+        (i32.or
+          (i32.eq (global.get $prevLto) (enum.get $Lex.l_brace))
+          (i32.eq (global.get $prevLto) (enum.get $Lex.comma)))
+        (i32.or
+          (i32.eq (global.get $prevLto) (enum.get $Lex.semicolon))
+          (i32.eq (global.get $prevLto) (enum.get $Lex.keyword_public))))
+      (i32.or
+        (i32.or
+          (i32.eq (global.get $prevLto) (enum.get $Lex.keyword_private))
+          (i32.eq (global.get $prevLto) (enum.get $Lex.keyword_protected)))
+        (i32.or
+          (i32.eq (global.get $prevLto) (enum.get $Lex.ctxword_abstract))
+          (i32.eq (global.get $prevLto) (enum.get $Lex.ctxword_override))))))
 
   ;; byte at $p, or 0 at/past $end - safe lookahead for multibyte tokens.
   ;; the load itself is always in-bounds (input buffer + 16 bytes of slack).
@@ -613,6 +648,11 @@
   (func $jsxCanStart (param $t i32) (result i32)
     (if (i32.eq (local.get $t) (enum.get $Lex.string_literal))
       (then (return (i32.const 0))))
+    ;; An optional method's `?` introduces type parameters, not JSX.
+    (if (i32.eq (local.get $t) (enum.get $Lex.question_mark))
+      (then
+        (if (i32.eqz (call $ternaryCount))
+          (then (return (i32.const 0))))))
     (call $rxAllowedAfter (local.get $t)))
 
   ;; is the string literal in $lto the module specifier of an import/export?
@@ -634,6 +674,18 @@
     (if (i32.eqz (call $regexpAllowed))
       (then (return (i32.const 1))))
     (i32.ne (bitset.get $LexBits.braceBlockPrev (global.get $lto)) (i32.const 0)))
+
+  ;; Object/type literals and class/interface bodies contain member heads.
+  ;; Statement blocks must not treat `name ? (value) : Other` as a method.
+  (func $braceHasMembers (result i32)
+    (if (i32.eqz (call $braceIsBlock))
+      (then (return (i32.const 2))))
+    (if
+      (i32.or
+        (i32.eq (global.get $prevLto) (enum.get $Lex.keyword_class))
+        (i32.eq (global.get $prevLto) (enum.get $Lex.keyword_interface)))
+      (then (return (i32.const 2))))
+    (i32.const 0))
 
   (func $scanToken (result i32)
     (local $c i32)
@@ -790,7 +842,7 @@
             (then (call $ternarySet (i32.sub (call $ternaryCount) (i32.const 1)))))
           (br $takeDone (i32.or (i32.shl (enum.get $Lex.colon) (i32.const 3)) (i32.const 1))))
         (case "{"
-          (call $brkPush (call $braceIsBlock))
+          (call $brkPush (i32.or (call $braceIsBlock) (call $braceHasMembers)))
           (global.set $braceDepth (i32.add (global.get $braceDepth) (i32.const 1)))
           (br $takeDone (i32.or (i32.shl (enum.get $Lex.l_brace) (i32.const 3)) (i32.const 1))))
         (case "}"
@@ -866,13 +918,16 @@
                 (i32.or (i32.shl (enum.get $Lex.question_mark_dot) (i32.const 3)) (i32.const 2)))))
           ;; A lone `?` opens a ternary unless the same line continues with
           ;; `:`, `)`, `,`, `=`, or `;`, as after an optional member or
-          ;; parameter. `??` and `??=` are not ternaries.
+          ;; parameter, or starts an optional method. `??` and `??=` are not
+          ;; ternaries.
           (if (i32.ne (local.get $c2) (i32.const "?"))
             (then
               (local.set $after
                 (call $tsxByte (call $lexSkipSpaceAt (i32.add (global.get $ptr) (i32.const 1)))))
               (if (i32.eqz (byteset.get ":),=;" (local.get $after)))
-                (then (call $ternarySet (i32.add (call $ternaryCount) (i32.const 1)))))))
+                (then
+                  (if (i32.eqz (call $optionalMethod (local.get $after)))
+                    (then (call $ternarySet (i32.add (call $ternaryCount) (i32.const 1)))))))))
           (br $family (i32.or (i32.shl (enum.get $Lex.question_mark) (i32.const 3)) (i32.const 6))))
         (case "["
           (call $brkPush (i32.const 0))
