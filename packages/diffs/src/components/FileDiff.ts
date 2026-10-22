@@ -2446,6 +2446,7 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
       return;
     }
     if (shouldRefreshDiffsView === true) {
+      this.applyRowHighlightUpdates();
       if (this.refreshViewTimeout != null) {
         clearTimeout(this.refreshViewTimeout);
       }
@@ -4077,6 +4078,47 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
     element.dataset.bufferSize = `${size}`;
     element.style.setProperty('grid-row', `span ${size}`);
     element.style.setProperty('min-height', `calc(${size} * 1lh)`);
+  }
+
+  // Updates the word diff highlights of the rows on screen after an edit. The
+  // editor only redraws the lines it changed, so this updates the rest, such
+  // as the old line paired with an edited one, without waiting for the next
+  // full render.
+  private applyRowHighlightUpdates(): void {
+    const getUpdatedRow = this.hunksRenderer.createRenderedRowUpdater();
+    if (getUpdatedRow == null) {
+      return;
+    }
+    // In unified view, rows for old lines are the changed deletions; every
+    // other row shows a new line.
+    const updateColumn = (
+      column: ColumnElements | undefined,
+      side: 'deletions' | 'additions' | undefined
+    ) => {
+      if (column == null) return;
+      for (const child of column.content.children) {
+        if (!(child instanceof HTMLElement)) continue;
+        const lineNumber = Number.parseInt(child.dataset.line ?? '', 10);
+        if (Number.isNaN(lineNumber)) continue;
+        const row = getUpdatedRow(
+          side ??
+            (child.dataset.lineType === 'change-deletion'
+              ? 'deletions'
+              : 'additions'),
+          lineNumber
+        );
+        if (row != null) {
+          child.innerHTML = hastToHtml(row.children);
+        }
+      }
+    };
+    const unified = this.getColumnPair(this.codeUnified);
+    if (unified != null) {
+      updateColumn(unified, undefined);
+    } else {
+      updateColumn(this.getColumnPair(this.codeDeletions), 'deletions');
+      updateColumn(this.getColumnPair(this.codeAdditions), 'additions');
+    }
   }
 
   private getColumnPair(
