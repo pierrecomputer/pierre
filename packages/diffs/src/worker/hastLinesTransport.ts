@@ -174,14 +174,6 @@ export function decodeHastLines(
   return lines;
 }
 
-// Exposes a row as a getter that decodes it from the encoded buffers on every
-// read. The buffers stay alive as long as the cached result does, so keeping
-// the decoded HAST as well would hold a second, far larger copy of every row
-// that has ever been rendered. Renders read only the rows in the visible
-// window, so decoding again costs time proportional to the rows rendered.
-// Assigning to the row stores the value like an ordinary array item, including
-// on sealed arrays (where the row can no longer be redefined) and throwing on
-// frozen ones.
 function defineDecodedLine(
   lines: ElementContent[],
   index: number,
