@@ -25,7 +25,9 @@ fn main() {
             let bytes = std::fs::read(&args[2]).expect("read wasm");
             let out = Path::new(&args[3]);
             std::fs::create_dir_all(out).unwrap();
-            let module = Module::parse(&bytes);
+            let mut module = Module::parse(&bytes);
+            module.cache_skip =
+                cache_exclusions(Path::new("cache-exclude.txt"), Path::new("../src/langs"));
             let (code, memory) = module.emit();
             std::fs::write(out.join("mod.rs"), code).unwrap();
             std::fs::write(out.join("memory.bin"), memory).unwrap();
@@ -35,6 +37,35 @@ fn main() {
             std::process::exit(2);
         }
     }
+}
+
+/// The function names defined by the languages listed in `list` (one per
+/// line, `#` comments), read from `<langs>/<language>.wat`. A missing list
+/// means no exclusions.
+fn cache_exclusions(list: &Path, langs: &Path) -> BTreeSet<String> {
+    let Ok(text) = std::fs::read_to_string(list) else {
+        return BTreeSet::new();
+    };
+    let mut names = BTreeSet::new();
+    for lang in text
+        .lines()
+        .map(|l| l.split('#').next().unwrap().trim())
+        .filter(|l| !l.is_empty())
+    {
+        let path = langs.join(format!("{lang}.wat"));
+        let source =
+            std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{}: {e}", path.display()));
+        for line in source.lines() {
+            if let Some(rest) = line.trim_start().strip_prefix("(func $") {
+                let name: String = rest
+                    .chars()
+                    .take_while(|c| !c.is_whitespace() && *c != ')')
+                    .collect();
+                names.insert(sanitize(&name));
+            }
+        }
+    }
+    names
 }
 
 #[derive(Clone)]
@@ -67,6 +98,33 @@ struct Module<'a> {
     /// Function names that occur once, so their Rust methods can drop the
     /// index prefix and the host can call them by name.
     unique_names: BTreeSet<String>,
+    /// Per defined function: the globals it may read or write, directly or
+    /// through its callees (see `compute_effects`).
+    effects: Vec<Effects>,
+    /// Functions that never cache globals in locals: those defined by the
+    /// languages in `cache-exclude.txt` (sanitized names).
+    cache_skip: BTreeSet<String>,
+}
+
+/// The globals a function may read and write, as bit sets by global index.
+#[derive(Clone, Default, PartialEq)]
+struct Effects {
+    reads: Vec<u64>,
+    writes: Vec<u64>,
+}
+
+fn bit_set(bits: &mut [u64], i: u32) {
+    bits[i as usize / 64] |= 1 << (i % 64);
+}
+
+fn bit_get(bits: &[u64], i: u32) -> bool {
+    bits[i as usize / 64] >> (i % 64) & 1 != 0
+}
+
+fn bit_union(into: &mut [u64], from: &[u64]) {
+    for (a, b) in into.iter_mut().zip(from) {
+        *a |= b;
+    }
 }
 
 fn const_i64(expr: &wasmparser::ConstExpr) -> i64 {
@@ -141,6 +199,8 @@ impl<'a> Module<'a> {
             memory_pages: 0,
             bodies: vec![],
             unique_names: BTreeSet::new(),
+            effects: vec![],
+            cache_skip: BTreeSet::new(),
         };
         for payload in Parser::new(0).parse_all(bytes) {
             match payload.unwrap() {
@@ -281,7 +341,74 @@ impl<'a> Module<'a> {
             }
             g.name = name;
         }
+        m.compute_effects();
         m
+    }
+
+    /// Which globals each defined function may read or write, through any
+    /// chain of calls. A call site then syncs only the cached globals its
+    /// callee can touch, so calls to helpers that use no globals cost
+    /// nothing. Host imports touch no globals; `call_indirect` may reach any
+    /// table entry.
+    fn compute_effects(&mut self) {
+        let words = self.globals.len().div_ceil(64).max(1);
+        let n_imports = self.imports.len() as u32;
+        let mut effects = vec![
+            Effects {
+                reads: vec![0; words],
+                writes: vec![0; words]
+            };
+            self.bodies.len()
+        ];
+        let mut callees: Vec<BTreeSet<u32>> = vec![BTreeSet::new(); self.bodies.len()];
+        for (i, body) in self.bodies.iter().enumerate() {
+            let mut ops = body.get_operators_reader().unwrap();
+            while !ops.eof() {
+                match ops.read().unwrap() {
+                    Operator::GlobalGet { global_index } => {
+                        bit_set(&mut effects[i].reads, global_index)
+                    }
+                    Operator::GlobalSet { global_index } => {
+                        bit_set(&mut effects[i].writes, global_index)
+                    }
+                    Operator::Call { function_index } if function_index >= n_imports => {
+                        callees[i].insert(function_index - n_imports);
+                    }
+                    Operator::CallIndirect { .. } => {
+                        for &f in &self.table {
+                            if f != u32::MAX && f >= n_imports {
+                                callees[i].insert(f - n_imports);
+                            }
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+        loop {
+            let mut changed = false;
+            for i in 0..effects.len() {
+                let mut e = effects[i].clone();
+                for &c in &callees[i] {
+                    bit_union(&mut e.reads, &effects[c as usize].reads);
+                    bit_union(&mut e.writes, &effects[c as usize].writes);
+                }
+                if e != effects[i] {
+                    effects[i] = e;
+                    changed = true;
+                }
+            }
+            if !changed {
+                break;
+            }
+        }
+        self.effects = effects;
+    }
+
+    /// The effects of calling function `idx` (imports touch no globals).
+    fn call_effects(&self, idx: u32) -> Option<&Effects> {
+        let n = self.imports.len() as u32;
+        (idx >= n).then(|| &self.effects[(idx - n) as usize])
     }
 
     fn func_type(&self, idx: u32) -> &FuncType {
@@ -445,7 +572,23 @@ struct FuncEmitter<'m, 'a> {
     code: String,
     indent: usize,
     labels: usize,
+    /// Globals held in Rust locals for this function, as `(index, global,
+    /// local)`: written back before calls and returns, reloaded after calls.
+    cached: Vec<(u32, String, String)>,
+    cached_index: HashMap<u32, usize>,
 }
+
+/// Streaming and live-document resume state (`$streamDepth`,
+/// `$liveSuspended`, and the like). The build adds code that saves and
+/// restores it in every stream lexer, but that code only runs while
+/// streaming or editing, so caching it would only add register pressure to
+/// whole-input lexing.
+fn is_resume_state(global: &str) -> bool {
+    global.starts_with("g_stream") || global.starts_with("g_live")
+}
+
+/// The most globals one function keeps in locals.
+const MAX_CACHED_GLOBALS: usize = 6;
 
 impl<'m, 'a> FuncEmitter<'m, 'a> {
     fn new(m: &'m Module<'a>, idx: u32, body: &'m FunctionBody<'a>) -> Self {
@@ -460,6 +603,79 @@ impl<'m, 'a> FuncEmitter<'m, 'a> {
             code: String::new(),
             indent: 2,
             labels: 0,
+            cached: vec![],
+            cached_index: HashMap::new(),
+        }
+    }
+
+    /// Hold the function's most-used written integer globals in locals. Rust
+    /// cannot keep a struct field in a register across a loop that contains
+    /// any call taking `&mut self`, even a cold one, so without this every
+    /// `global.set` becomes a store. `$srcBase` stays in the struct, since
+    /// the native emitter reads it, and so does resume state (see
+    /// `is_resume_state`).
+    fn choose_cached_globals(&mut self) {
+        let name = self.m.func_names.get(&self.idx).map(|n| sanitize(n));
+        if name.is_some_and(|n| self.m.cache_skip.contains(&n)) {
+            return;
+        }
+        let mut counts: HashMap<u32, usize> = HashMap::new();
+        let mut written: BTreeSet<u32> = BTreeSet::new();
+        let mut ops = self.body.get_operators_reader().unwrap();
+        while !ops.eof() {
+            match ops.read().unwrap() {
+                Operator::GlobalGet { global_index } => {
+                    *counts.entry(global_index).or_default() += 1;
+                }
+                Operator::GlobalSet { global_index } => {
+                    *counts.entry(global_index).or_default() += 1;
+                    written.insert(global_index);
+                }
+                _ => {}
+            }
+        }
+        // Only globals the function writes: a read-only global costs a load
+        // from the struct, while a written one costs a store at every set.
+        let mut hot: Vec<(u32, usize)> = counts
+            .into_iter()
+            .filter(|&(g, n)| {
+                let global = &self.m.globals[g as usize];
+                n >= 3
+                    && written.contains(&g)
+                    && matches!(global.ty, ValType::I32 | ValType::I64)
+                    && global.name != "g_srcBase"
+                    && !is_resume_state(&global.name)
+            })
+            .collect();
+        hot.sort_by_key(|&(g, n)| (std::cmp::Reverse(n), g));
+        for (g, _) in hot.into_iter().take(MAX_CACHED_GLOBALS) {
+            let name = self.m.globals[g as usize].name.clone();
+            self.cached_index.insert(g, self.cached.len());
+            self.cached.push((g, name.clone(), format!("c{name}")));
+        }
+    }
+
+    /// Store cached globals back into the struct before anything that may
+    /// read them: every one before leaving the function or an unknown call,
+    /// or those a callee with `effects` may read or write. (A callee that
+    /// writes a global on only some paths must still see its current value.)
+    fn write_back(&mut self, effects: Option<&Effects>) {
+        for i in 0..self.cached.len() {
+            let (idx, g, l) = self.cached[i].clone();
+            if effects.is_none_or(|e| bit_get(&e.reads, idx) || bit_get(&e.writes, idx)) {
+                self.line(&format!("self.{g} = {l};"));
+            }
+        }
+    }
+
+    /// Reload cached globals a call may have changed: those its `effects`
+    /// write, or every one for an unknown call.
+    fn reload(&mut self, effects: Option<&Effects>) {
+        for i in 0..self.cached.len() {
+            let (idx, g, l) = self.cached[i].clone();
+            if effects.is_none_or(|e| bit_get(&e.writes, idx)) {
+                self.line(&format!("{l} = self.{g};"));
+            }
         }
     }
 
@@ -567,6 +783,7 @@ impl<'m, 'a> FuncEmitter<'m, 'a> {
     }
 
     fn ret(&mut self) {
+        self.write_back(None);
         let results = self.frames[0].results.clone();
         let n = results.len();
         let vals: Vec<String> = self.stack[self.stack.len() - n..]
@@ -615,7 +832,13 @@ impl<'m, 'a> FuncEmitter<'m, 'a> {
         ));
     }
 
-    fn call(&mut self, func: String, ty: FuncType, extra: Option<String>) {
+    fn call(
+        &mut self,
+        func: String,
+        ty: FuncType,
+        extra: Option<String>,
+        effects: Option<&Effects>,
+    ) {
         let mut args: Vec<String> = (0..ty.params.len()).map(|_| self.pop().expr).collect();
         args.reverse();
         if let Some(e) = extra {
@@ -623,11 +846,32 @@ impl<'m, 'a> FuncEmitter<'m, 'a> {
         }
         self.flush();
         let call = format!("{func}({})", args.join(", "));
+        self.write_back(effects);
         match ty.results.as_slice() {
             [] => self.line(&format!("{call};")),
             [t] => self.push_effect(call, *t),
             _ => panic!("multi-value calls are unsupported"),
         }
+        self.reload(effects);
+    }
+
+    /// A call to `$emitTok` or `$emitGap`: the inline native emitter when
+    /// `ext.native` is set, otherwise the translated wasm emitter, which
+    /// reads globals, so the cached ones are synced around it.
+    fn emit_call(&mut self, native: &str, wasm: String, ty: FuncType) {
+        let mut args: Vec<String> = (0..ty.params.len()).map(|_| self.pop().expr).collect();
+        args.reverse();
+        self.flush();
+        let args = args.join(", ");
+        self.line(&format!(
+            "if self.ext.native {{ self.{native}({args}); }} else {{"
+        ));
+        self.indent += 1;
+        self.write_back(None);
+        self.line(&format!("{wasm}({args});"));
+        self.reload(None);
+        self.indent -= 1;
+        self.line("}");
     }
 
     fn emit(mut self, out: &mut String) {
@@ -666,6 +910,7 @@ impl<'m, 'a> FuncEmitter<'m, 'a> {
             dead: false,
             dead_depth: 0,
         });
+        self.choose_cached_globals();
 
         let mut ops = self.body.get_operators_reader().unwrap();
         while !ops.eof() {
@@ -687,6 +932,13 @@ impl<'m, 'a> FuncEmitter<'m, 'a> {
         .unwrap();
         for (n, t) in &self.locals[n_params..] {
             writeln!(out, "        let mut {n}: {} = {};", rust_ty(*t), zero(*t)).unwrap();
+        }
+        let mut cached: Vec<(&u32, &usize)> = self.cached_index.iter().collect();
+        cached.sort_by_key(|&(_, i)| *i);
+        for (g, i) in cached {
+            let (_, global, local) = &self.cached[*i];
+            let ty = rust_ty(self.m.globals[*g as usize].ty);
+            writeln!(out, "        let mut {local}: {ty} = self.{global};").unwrap();
         }
         for (d, tag) in &self.slots {
             let (t, z) = match *tag {
@@ -868,13 +1120,16 @@ impl<'m, 'a> FuncEmitter<'m, 'a> {
             }
             O::Call { function_index } => {
                 let ty = self.m.func_type(function_index).clone();
+                let wasm = format!("self.{}", self.m.func_name(function_index));
                 // The host's emitter replaces the wasm one; see rt.rs.
-                let name = match self.m.func_names.get(&function_index).map(String::as_str) {
-                    Some("$emitTok" | "emitTok") => "self.emit_tok".to_string(),
-                    Some("$emitGap" | "emitGap") => "self.emit_gap".to_string(),
-                    _ => format!("self.{}", self.m.func_name(function_index)),
-                };
-                self.call(name, ty, None);
+                match self.m.func_names.get(&function_index).map(String::as_str) {
+                    Some("$emitTok" | "emitTok") => self.emit_call("emit_tok_native", wasm, ty),
+                    Some("$emitGap" | "emitGap") => self.emit_call("emit_gap_native", wasm, ty),
+                    _ => {
+                        let m = self.m;
+                        self.call(wasm, ty, None, m.call_effects(function_index))
+                    }
+                }
             }
             O::CallIndirect { type_index, .. } => {
                 let ty = self.m.types[type_index as usize].clone();
@@ -901,11 +1156,13 @@ impl<'m, 'a> FuncEmitter<'m, 'a> {
                 }
                 arms.push_str("_ => trap(), ");
                 let expr = format!("match {} as u32 {{ {arms}}}", idx.expr);
+                self.write_back(None);
                 match ty.results.as_slice() {
                     [] => self.line(&format!("{expr};")),
                     [t] => self.push_effect(expr, *t),
                     _ => panic!("multi-value call_indirect is unsupported"),
                 }
+                self.reload(None);
             }
             O::Drop => {
                 self.pop();
@@ -941,13 +1198,21 @@ impl<'m, 'a> FuncEmitter<'m, 'a> {
             }
             O::GlobalGet { global_index } => {
                 let g = &self.m.globals[global_index as usize];
-                self.push(format!("self.{}", g.name), g.ty);
+                let ty = g.ty;
+                let place = match self.cached_index.get(&global_index) {
+                    Some(&i) => self.cached[i].2.clone(),
+                    None => format!("self.{}", g.name),
+                };
+                self.push(place, ty);
             }
             O::GlobalSet { global_index } => {
                 let v = self.pop();
                 self.flush();
-                let g = &self.m.globals[global_index as usize];
-                self.line(&format!("self.{} = {};", g.name, v.expr));
+                let place = match self.cached_index.get(&global_index) {
+                    Some(&i) => self.cached[i].2.clone(),
+                    None => format!("self.{}", self.m.globals[global_index as usize].name),
+                };
+                self.line(&format!("{place} = {};", v.expr));
             }
 
             O::I32Load { memarg } => self.load(I32, "ld_i32", memarg.offset),

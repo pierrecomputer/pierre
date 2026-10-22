@@ -112,6 +112,7 @@ tasks:
       - 'benchmark/fixtures/*'
       - 'rust/scripts/gen.ts'
       - 'rust/xtask/**/*'
+      - 'rust/cache-exclude.txt'
     outputs:
       - 'rust/gen'
       - 'rust/highlights/src/generated'

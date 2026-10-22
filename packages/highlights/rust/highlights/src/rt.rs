@@ -423,13 +423,13 @@ const TOKEN_NONE: u32 = 0;
 use crate::generated::Instance;
 
 impl Instance {
-    /// `$emitTok` replacement: append a record for `[lhs, rhs)`, extending the
-    /// previous record when the token matches, like the wasm `$recTok`.
+    /// The native `$emitTok`: append a record for `[lhs, rhs)`, extending the
+    /// previous record when the token matches, like the wasm `$recTok`. The
+    /// generated code calls it when `ext.native` is set, and the wasm
+    /// emitter otherwise. It reads no wasm global but `$srcBase`, which the
+    /// translator never caches in a local.
     #[inline(always)]
-    pub fn emit_tok(&mut self, hl: i32, lhs: i32, rhs: i32) {
-        if !self.ext.native {
-            return self.f_emitTok(hl, lhs, rhs);
-        }
+    pub fn emit_tok_native(&mut self, hl: i32, lhs: i32, rhs: i32) {
         if lhs as u32 >= rhs as u32 {
             return;
         }
@@ -447,12 +447,9 @@ impl Instance {
         });
     }
 
-    /// `$emitGap` replacement: whitespace keeps the previous record's token.
+    /// The native `$emitGap`: whitespace keeps the previous record's token.
     #[inline(always)]
-    pub fn emit_gap(&mut self, lhs: i32, rhs: i32) {
-        if !self.ext.native {
-            return self.f_emitGap(lhs, rhs);
-        }
+    pub fn emit_gap_native(&mut self, lhs: i32, rhs: i32) {
         if lhs as u32 >= rhs as u32 {
             return;
         }
