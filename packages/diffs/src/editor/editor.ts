@@ -629,7 +629,17 @@ export class Editor<
         if (line >= startingLine && line < endLine) {
           const lineElement = this.#getLineElement(line);
           if (lineElement !== undefined) {
-            lineElement.replaceChildren(...renderLineTokens(tokens));
+            // Lines in a diff can have word diff highlights, which the diff
+            // keeps when it gives the redrawn line's HTML.
+            const html = this.#fileInstance?.getRedrawnRowHTML(
+              line,
+              lineElement
+            );
+            if (html != null) {
+              lineElement.innerHTML = html;
+            } else {
+              lineElement.replaceChildren(...renderLineTokens(tokens));
+            }
             refreshPrediction ||= predictionLines?.has(line) === true;
           }
         }

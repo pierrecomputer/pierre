@@ -45,6 +45,7 @@ import type {
 import {
   applyLineDiffMarks,
   getLineDiffMarks,
+  getRowText,
 } from '../utils/applyLineDiffMarks';
 import { applyLineTextWithNewline } from '../utils/applyLineTextWithNewline';
 import { areDiffRenderOptionsEqual } from '../utils/areDiffRenderOptionsEqual';
@@ -1876,6 +1877,32 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
         ? output
         : undefined;
     };
+  }
+
+  /**
+   * Puts back the word diff highlights a new-file line showed before the
+   * editor redrew it from new tokens, and returns the row with them. Returns
+   * undefined when there are none to put back.
+   */
+  public restoreRedrawnRowHighlights(
+    lineIndex: number,
+    ranges: readonly LineDiffRange[],
+    textOnScreen: string
+  ): HASTElement | undefined {
+    const highlights = this.renderCache?.editedRowHighlights;
+    const row = this.renderCache?.result?.code.additionLines[lineIndex];
+    if (highlights == null || row?.type !== 'element') {
+      return undefined;
+    }
+    const { additions } = highlights.renderedRows;
+    // Highlights only carry over to the same text.
+    if (ranges.length === 0 || getRowText(row) !== textOnScreen) {
+      additions.delete(lineIndex);
+      return undefined;
+    }
+    const highlighted = applyLineDiffMarks(row, ranges);
+    additions.set(lineIndex, highlighted);
+    return highlighted;
   }
 
   private processDiffResult(

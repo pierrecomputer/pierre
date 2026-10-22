@@ -75,6 +75,7 @@ import type {
   SelectionSide,
   ThemeTypes,
 } from '../types';
+import { getElementLineDiffMarks } from '../utils/applyLineDiffMarks';
 import { areDiffLineAnnotationsEqual } from '../utils/areDiffLineAnnotationsEqual';
 import { areDiffTargetsEqual } from '../utils/areDiffTargetsEqual';
 import { areFilesEqual } from '../utils/areFilesEqual';
@@ -2493,6 +2494,23 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
         : this.hunksRenderer.getExpandedHunksMap(),
       collapsedContextThreshold,
     });
+  }
+
+  /**
+   * Lets the editor redraw a line from new tokens without losing its word
+   * diff highlights. Returns the line's new HTML, or undefined when it has no
+   * highlights and can be drawn from its tokens.
+   */
+  public getRedrawnRowHTML(
+    lineIndex: number,
+    lineElement: HTMLElement
+  ): string | undefined {
+    const row = this.hunksRenderer.restoreRedrawnRowHighlights(
+      lineIndex,
+      getElementLineDiffMarks(lineElement),
+      lineElement.textContent
+    );
+    return row != null ? hastToHtml(row.children) : undefined;
   }
 
   // Fold-skip companion to isLineRenderable: the nearest renderable one-based
