@@ -8,7 +8,7 @@ test.beforeEach(async ({ page }) => {
   await expect(page.locator('[data-layout-pane]')).toHaveCount(7);
 });
 
-test('container resizing resolves synchronously in CSS while zoom still animates', async ({
+test('container resizing resolves synchronously in CSS while zoom animates with transforms', async ({
   page,
 }) => {
   await page.emulateMedia({ reducedMotion: 'no-preference' });
@@ -82,11 +82,19 @@ test('container resizing resolves synchronously in CSS while zoom still animates
   }
   const pane = page.locator('[data-layout-pane="1"]');
   await page.getByRole('button', { name: 'Zoom Pane 1', exact: true }).click();
+  // Zoom animates with a transform from the pane's old box.
   expect(
-    await pane.evaluate(
-      (element) => getComputedStyle(element).transitionDuration
+    await pane.evaluate((element) =>
+      element
+        .getAnimations()
+        .some(
+          (animation) =>
+            (animation.effect as KeyframeEffect | null)
+              ?.getKeyframes()
+              .some((keyframe) => 'transform' in keyframe) === true
+        )
     )
-  ).toContain('0.24s');
+  ).toBe(true);
 });
 
 test('zoom and rearrangement retain pane DOM, notes, counters, and scroll', async ({

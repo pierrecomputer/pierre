@@ -63,7 +63,7 @@ browser resolves panel bounds, gaps, and minimum-size constraints during
 container resizing, without JavaScript measurements or React size updates. Pane
 hosts stay flat and stable so moving a pane preserves its content. JavaScript
 computes pixel geometry only for pointer/keyboard interactions and zoom exit
-directions. A ResizeObserver cancels an in-progress discrete animation when the
+directions. A ResizeObserver finishes an in-progress discrete animation when the
 container changes size; it does not calculate panel bounds.
 `computeCSSLayout(root, gap)` exposes these expressions for other CSS adapters.
 This requires browser support for container query units and CSS size
@@ -102,10 +102,12 @@ panes remain mounted but are inert and excluded from the accessibility tree.
 Motion respects `prefers-reduced-motion`.
 
 Style with `--layout-accent`, `--layout-border`, `--layout-pane-background`, and
-`--layout-duration`. CSS transitions animate discrete layout changes; continuous
-container resizing has no easing. This is an initial web implementation, not a
-claim of matching native CoreAnimation's per-frame performance. Cross-window
-dragging, overlay sidebars, tab groups, and docking are future work.
+`--layout-duration`. Discrete layout changes animate with transforms from each
+element's old box (FLIP), so the compositor runs them and pane content lays out
+once; continuous container resizing has no easing. This is an initial web
+implementation, not a claim of matching native CoreAnimation's per-frame
+performance. Cross-window dragging, overlay sidebars, tab groups, and docking
+are future work.
 
 ## References
 

@@ -42,3 +42,9 @@ tasks:
       cache: false
       runInCI: 'always'
       envFile: '/.env.worktree'
+
+  bench-compare:
+    command: 'node bench/compare.ts'
+    options:
+      cache: false
+      runInCI: 'always'

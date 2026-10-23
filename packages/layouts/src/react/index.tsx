@@ -9,12 +9,13 @@ import {
   useCallback,
   useEffect,
   useId,
+  useLayoutEffect,
   useRef,
   useState,
   useSyncExternalStore,
 } from 'react';
 
-import { computeCSSLayout, type CSSRect } from '../css-layout';
+import { computeCSSLayout } from '../css-layout';
 import { computeLayout, getExitEdge } from '../geometry';
 import { getPanes } from '../model';
 import type { LayoutStore } from '../store';
@@ -58,6 +59,96 @@ interface DropTarget {
   paneId: string;
   edge: Edge;
   rect: Rect;
+}
+
+// Elements that animate a layout change carry this attribute with a stable key.
+const FLIP_ATTRIBUTE = 'data-layout-flip';
+const DEFAULT_DURATION_MS = 240;
+// The ID of the layout's own animations, so that it never touches animations in pane content.
+const FLIP_ANIMATION_ID = 'pierre-layout-flip';
+// An ease-out curve, written as cubic-bezier: Safari runs `linear()` easing on the main thread.
+const FLIP_EASING = 'cubic-bezier(0.2, 0, 0, 1)';
+
+/** The layout's running FLIP animations; animations in pane content are not included. */
+function flipAnimations(root: HTMLElement): Animation[] {
+  return root
+    .getAnimations({ subtree: true })
+    .filter((animation) => animation.id === FLIP_ANIMATION_ID);
+}
+
+/** Read the box of each animatable element, relative to the layout root, including running animations. */
+function readBoxes(root: HTMLElement): Map<string, Rect> {
+  const bounds = root.getBoundingClientRect();
+  const boxes = new Map<string, Rect>();
+  for (const element of root.querySelectorAll<HTMLElement>(
+    `[${FLIP_ATTRIBUTE}]`
+  )) {
+    const box = element.getBoundingClientRect();
+    boxes.set(element.getAttribute(FLIP_ATTRIBUTE) ?? '', {
+      x: box.left - bounds.left,
+      y: box.top - bounds.top,
+      width: box.width,
+      height: box.height,
+    });
+  }
+  return boxes;
+}
+
+function durationOf(root: HTMLElement): number {
+  const value = getComputedStyle(root).getPropertyValue('--layout-duration');
+  const parsed = Number.parseFloat(value);
+  if (Number.isNaN(parsed)) return DEFAULT_DURATION_MS;
+  return value.trim().endsWith('ms') ? parsed : parsed * 1000;
+}
+
+/**
+ * FLIP: each element already has its final geometry. Animate it from its old box
+ * with a transform only, so that the compositor runs the animation and content
+ * lays out once. `transform-origin` is `0 0` on these elements.
+ */
+function animateFromBoxes(root: HTMLElement, before: Map<string, Rect>): void {
+  const duration = durationOf(root);
+  const bounds = root.getBoundingClientRect();
+  for (const element of root.querySelectorAll<HTMLElement>(
+    `[${FLIP_ATTRIBUTE}]`
+  )) {
+    const from = before.get(element.getAttribute(FLIP_ATTRIBUTE) ?? '');
+    // A new element has no old box. It appears in place.
+    if (from === undefined) continue;
+    const box = element.getBoundingClientRect();
+    const to = {
+      x: box.left - bounds.left,
+      y: box.top - bounds.top,
+      width: box.width,
+      height: box.height,
+    };
+    if (
+      Math.abs(from.x - to.x) < 0.5 &&
+      Math.abs(from.y - to.y) < 0.5 &&
+      Math.abs(from.width - to.width) < 0.5 &&
+      Math.abs(from.height - to.height) < 0.5
+    )
+      continue;
+    if (to.width === 0 || to.height === 0) continue;
+    // The element's own transform, for example the translate of a covered pane,
+    // is the end of the animation. Its layout box is the box without it.
+    const end = getComputedStyle(element).transform;
+    const own = end === 'none' ? new DOMMatrix() : new DOMMatrix(end);
+    const layoutX = to.x - own.e;
+    const layoutY = to.y - own.f;
+    const start = new DOMMatrix([
+      from.width / to.width,
+      0,
+      0,
+      from.height / to.height,
+      from.x - layoutX,
+      from.y - layoutY,
+    ]);
+    element.animate(
+      [{ transform: start.toString() }, { transform: own.toString() }],
+      { duration, easing: FLIP_EASING, id: FLIP_ANIMATION_ID }
+    );
+  }
 }
 
 const rectStyle = (rect: Rect): CSSProperties => ({
@@ -113,50 +204,46 @@ export function Layout({
   const dropRef = useRef<DropTarget | null>(null);
   const prefix = useId();
 
+  // Boxes before a store change, for the FLIP animation after React commits it.
+  const boxesBefore = useRef<Map<string, Rect> | null>(null);
+
   // Animate model changes only. CSS owns continuous sizing, including while JS is busy.
   const subscribe = useCallback(
     (listener: () => void): (() => void) => {
       let previousZoom = store.getSnapshot().zoomedPane;
-      let animationTimer: ReturnType<typeof setTimeout> | undefined;
       const unsubscribe = store.subscribe(() => {
         const element = rootRef.current;
         const zoom = store.getSnapshot().zoomedPane;
-        if (element !== null) {
-          if (zoom !== previousZoom && zoom !== null) {
+        // A pointer resize follows the pointer with no animation.
+        const animate =
+          element !== null &&
+          gesture.current?.type !== 'resize' &&
+          !matchMedia('(prefers-reduced-motion: reduce)').matches;
+        const zoomStarts = zoom !== previousZoom && zoom !== null;
+        if (element !== null && (animate || zoomStarts)) {
+          // Layout is clean here, before React applies the change, so these reads are cheap.
+          const boxes = readBoxes(element);
+          if (zoomStarts) {
             const bounds = element.getBoundingClientRect();
             const edges: Record<string, Edge> = {};
-            for (const pane of element.querySelectorAll<HTMLElement>(
-              '[data-layout-pane]'
-            )) {
-              const box = pane.getBoundingClientRect();
-              const id = pane.dataset.layoutPane;
-              if (id !== undefined)
-                edges[id] = getExitEdge(
-                  {
-                    x: box.left - bounds.left,
-                    y: box.top - bounds.top,
-                    width: box.width,
-                    height: box.height,
-                  },
+            for (const [key, box] of boxes) {
+              if (key.startsWith('pane:'))
+                edges[key.slice(5)] = getExitEdge(
+                  box,
                   bounds.width,
                   bounds.height
                 );
             }
             setExitEdges(edges);
           }
-          element.dataset.animating = 'true';
-          clearTimeout(animationTimer);
-          animationTimer = setTimeout(() => {
-            delete element.dataset.animating;
-          }, 260);
+          // Stop running animations; the new animation starts from the current boxes.
+          for (const animation of flipAnimations(element)) animation.cancel();
+          boxesBefore.current = animate ? boxes : null;
         }
         previousZoom = zoom;
         listener();
       });
-      return () => {
-        unsubscribe();
-        clearTimeout(animationTimer);
-      };
+      return unsubscribe;
     },
     [store]
   );
@@ -174,12 +261,20 @@ export function Layout({
     ({ pane }) => pane.id === (state.zoomedPane ?? state.focusedPane)
   );
 
+  // After React commits a store change, animate each moved element from its old box.
+  useLayoutEffect(() => {
+    const element = rootRef.current;
+    const before = boxesBefore.current;
+    boxesBefore.current = null;
+    if (element !== null && before !== null) animateFromBoxes(element, before);
+  }, [state]);
+
   useEffect(() => {
     const element = rootRef.current;
     if (element === null) return;
-    // Observation only cancels a discrete animation; it never computes bounds or updates React.
+    // Observation only ends a discrete animation; it never computes bounds or updates React.
     const observer = new ResizeObserver(() => {
-      delete element.dataset.animating;
+      for (const animation of flipAnimations(element)) animation.finish();
     });
     observer.observe(element);
     return () => observer.disconnect();
@@ -413,21 +508,22 @@ export function Layout({
           state.zoomedPane !== null && state.zoomedPane !== pane.id;
         const zoomed = state.zoomedPane === pane.id;
         const edge = exitEdges[pane.id] ?? 'left';
-        const hiddenRect: CSSRect = {
-          ...rect,
-          ...(edge === 'left'
-            ? { left: `calc(0px - ${rect.width} - ${gap}px)` }
+        // A covered pane keeps its geometry and moves past an edge with a
+        // transform, so that it does not lay out its content again.
+        const exit =
+          edge === 'left'
+            ? `translateX(calc(-1 * (${rect.left} + ${rect.width} + ${gap}px)))`
             : edge === 'right'
-              ? { left: `calc(100cqw + ${gap}px)` }
+              ? `translateX(calc(100cqw - ${rect.left} + ${gap}px))`
               : edge === 'top'
-                ? { top: `calc(0px - ${rect.height} - ${gap}px)` }
-                : { top: `calc(100cqh + ${gap}px)` }),
-        };
+                ? `translateY(calc(-1 * (${rect.top} + ${rect.height} + ${gap}px)))`
+                : `translateY(calc(100cqh - ${rect.top} + ${gap}px))`;
         return (
           <section
             key={pane.id}
             id={`${prefix}-${encodeURIComponent(pane.id)}`}
             data-layout-pane={pane.id}
+            data-layout-flip={`pane:${pane.id}`}
             className="pierre-layout-pane"
             tabIndex={hidden ? -1 : 0}
             aria-label={getPaneTitle(pane)}
@@ -436,13 +532,13 @@ export function Layout({
             data-focused={state.focusedPane === pane.id}
             data-zoomed={zoomed}
             data-moving={dragging === pane.id}
-            style={{
-              ...(zoomed
+            style={
+              zoomed
                 ? { left: 0, top: 0, width: '100%', height: '100%' }
                 : hidden
-                  ? hiddenRect
-                  : rect),
-            }}
+                  ? { ...rect, transform: exit }
+                  : rect
+            }
             onFocusCapture={() => store.focusPane(pane.id)}
             onPointerDown={() => store.focusPane(pane.id)}
           >
@@ -482,6 +578,7 @@ export function Layout({
       {focused !== undefined && (
         <div
           className="pierre-layout-focus"
+          data-layout-flip="focus"
           aria-hidden="true"
           style={
             state.zoomedPane !== null
@@ -511,6 +608,7 @@ export function Layout({
             aria-valuenow={Math.round(separator.split.ratio * 100)}
             aria-valuetext={`${Math.round(separator.split.ratio * 100)}% preferred size`}
             data-direction={separator.split.direction}
+            data-layout-flip={`separator:${separator.split.id}`}
             style={separator.rect}
             onPointerDown={(event) => startResize(event, [separator.split.id])}
             onKeyDown={(event) => resizeKey(event, [separator.split.id])}
@@ -525,6 +623,7 @@ export function Layout({
             aria-label="Resize both axes"
             style={{ left: corner.left, top: corner.top }}
             data-layout-corner={corner.id}
+            data-layout-flip={`corner:${corner.id}`}
             onPointerDown={(event) => startResize(event, corner.splitIds)}
             onKeyDown={(event) => resizeKey(event, corner.splitIds)}
           />
