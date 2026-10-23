@@ -187,10 +187,13 @@ function animateFromBoxes(root: HTMLElement, before: Map<string, Rect>): void {
  * `zoomedPane` is null. A style rule gives a hidden host
  * `content-visibility: hidden`. The view sets the attribute itself, so that
  * the change does not render every pane host again. Each host whose state
- * changes receives `PANE_VISIBILITY_EVENT`.
+ * changes receives `PANE_VISIBILITY_EVENT`. The pane hosts are children of
+ * the root; a query of the subtree would also walk all pane content.
  */
 function setCoveredHidden(root: HTMLElement, zoomedPane: string | null): void {
-  for (const host of root.querySelectorAll<HTMLElement>('[data-layout-pane]')) {
+  for (const host of root.children) {
+    if (!(host instanceof HTMLElement) || host.dataset.layoutPane === undefined)
+      continue;
     const hidden =
       zoomedPane !== null && host.dataset.layoutPane !== zoomedPane;
     if ((host.dataset.hidden === 'true') === hidden) continue;
