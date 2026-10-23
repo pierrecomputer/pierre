@@ -742,13 +742,7 @@ export class File<LAnnotation = undefined, Caret = undefined> {
       this.pendingData = undefined;
     }
     this.clearAuxiliaryNodes();
-    // A <pre> with no children was created by a render that returned before
-    // the highlighter was ready. Left in the shadow root, it is adopted by the
-    // next hydrate() on this container (React StrictMode remounts onto the
-    // same node), which then skips rendering and the code stays blank.
-    if (this.pre?.childElementCount === 0) {
-      this.pre.remove();
-    }
+    this.pre?.remove();
     this.pre = undefined;
     this.code = undefined;
     this.bufferBefore?.remove();
@@ -757,11 +751,9 @@ export class File<LAnnotation = undefined, Caret = undefined> {
     this.bufferAfter = undefined;
     this.appliedPreAttributes = undefined;
     this.lastRowCount = undefined;
+    this.headerElement?.remove();
     this.headerElement = undefined;
-    this.headerPrefix = undefined;
-    this.headerFilenameSuffix = undefined;
-    this.headerMetadata = undefined;
-    this.headerCustom = undefined;
+    this.clearHeaderSlots();
     this.lastRenderedHeaderHTML = undefined;
     if (!recycle) {
       this.cachedHeaderHTML = undefined;
