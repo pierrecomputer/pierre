@@ -98,8 +98,8 @@ view shows the panes again before the restore animation starts.
 Scripts in a hidden pane keep running. The pane host receives a
 `PANE_VISIBILITY_EVENT` event when its content stops and starts rendering, so
 that content such as a terminal or a chat can pause its own work. The event does
-not bubble. A pane that mounts while it is hidden gets no event; read
-`data-hidden` on its host.
+not bubble. A pane that mounts during a zoom is not hidden. The view sets
+`data-hidden` itself, so a zoom does not render the pane hosts again.
 
 ```tsx
 import {

@@ -183,6 +183,26 @@ function animateFromBoxes(root: HTMLElement, before: Map<string, Rect>): void {
 }
 
 /**
+ * Hide each pane host that the zoomed pane covers, or show every host when
+ * `zoomedPane` is null. A style rule gives a hidden host
+ * `content-visibility: hidden`. The view sets the attribute itself, so that
+ * the change does not render every pane host again. Each host whose state
+ * changes receives `PANE_VISIBILITY_EVENT`.
+ */
+function setCoveredHidden(root: HTMLElement, zoomedPane: string | null): void {
+  for (const host of root.querySelectorAll<HTMLElement>('[data-layout-pane]')) {
+    const hidden =
+      zoomedPane !== null && host.dataset.layoutPane !== zoomedPane;
+    if ((host.dataset.hidden === 'true') === hidden) continue;
+    if (hidden) host.dataset.hidden = 'true';
+    else delete host.dataset.hidden;
+    host.dispatchEvent(
+      new CustomEvent(PANE_VISIBILITY_EVENT, { detail: { hidden } })
+    );
+  }
+}
+
+/**
  * The app's content of one pane. It renders only when its pane node or the
  * app's `renderPane` changes: focus, zoom, and ratio changes keep the pane
  * node, because the store keeps the identity of unchanged nodes.
@@ -319,6 +339,10 @@ export function Layout({
           for (const animation of flipAnimations(element)) animation.cancel();
           boxesBefore.current = animate ? boxes : null;
         }
+        // Show the covered panes before React commits a zoom change, so
+        // that they render during the next animation.
+        if (element !== null && zoom !== previous.zoomedPane)
+          setCoveredHidden(element, null);
         previous = next;
         listener();
       });
@@ -369,17 +393,6 @@ export function Layout({
   const focused = geometry.panes.find(
     ({ pane }) => pane.id === (state.zoomedPane ?? state.focusedPane)
   );
-  // A new object for each zoom change. The covered panes skip rendering only
-  // after the animation of the current zoom ends, so each zoom starts with
-  // them shown.
-  const currentZoom = useMemo(
-    () => ({ pane: state.zoomedPane }),
-    [state.zoomedPane]
-  );
-  const [settledZoom, setSettledZoom] = useState<typeof currentZoom | null>(
-    null
-  );
-  const skipCovered = currentZoom.pane !== null && settledZoom === currentZoom;
 
   // After React commits a store change, animate each moved element from its old box.
   useLayoutEffect(() => {
@@ -456,49 +469,31 @@ export function Layout({
   // zoom animation ends, the covered panes skip rendering.
   useEffect(() => {
     const element = rootRef.current;
-    if (element === null || currentZoom.pane === null) return;
+    const zoomedPane = state.zoomedPane;
+    if (element === null || zoomedPane === null) return;
     const panes = Array.from(
       element.querySelectorAll<HTMLElement>('[data-layout-pane]')
     );
     const activePane = panes.find((pane) =>
       pane.contains(document.activeElement)
     );
-    if (activePane?.dataset.layoutPane !== currentZoom.pane) {
-      panes
-        .find((pane) => pane.dataset.layoutPane === currentZoom.pane)
-        ?.focus();
+    if (activePane?.dataset.layoutPane !== zoomedPane) {
+      panes.find((pane) => pane.dataset.layoutPane === zoomedPane)?.focus();
     }
     let current = true;
-    // A tree change during the zoom cancels these animations. The covered
-    // panes then skip rendering at once.
+    // A tree change during the zoom cancels these animations, and the covered
+    // panes then hide at once. A zoom change also cancels them, before React
+    // ends this effect, so check the store too.
     void Promise.allSettled(
       flipAnimations(element).map((animation) => animation.finished)
     ).then(() => {
-      if (current) setSettledZoom(currentZoom);
+      if (current && store.getSnapshot().zoomedPane === zoomedPane)
+        setCoveredHidden(element, zoomedPane);
     });
     return () => {
       current = false;
     };
-  }, [currentZoom]);
-
-  // Tell the content of each covered pane when it stops and starts rendering,
-  // so that it can pause its own work, for example a terminal's output. The
-  // cleanup runs after React shows the panes and before the restore animation.
-  useLayoutEffect(() => {
-    const element = rootRef.current;
-    if (element === null || !skipCovered) return;
-    const hosts = Array.from(
-      element.querySelectorAll<HTMLElement>('[data-layout-pane]')
-    ).filter((host) => host.dataset.hidden === 'true');
-    const notify = (hidden: boolean): void => {
-      for (const host of hosts)
-        host.dispatchEvent(
-          new CustomEvent(PANE_VISIBILITY_EVENT, { detail: { hidden } })
-        );
-    };
-    notify(true);
-    return () => notify(false);
-  }, [skipCovered]);
+  }, [state.zoomedPane, store]);
 
   /**
    * Give the content of each pane under the dragged splits its current size in
@@ -844,7 +839,6 @@ export function Layout({
             inert={hidden}
             data-focused={state.focusedPane === pane.id}
             data-zoomed={zoomed}
-            data-hidden={hidden && skipCovered}
             data-moving={dragging === pane.id}
             style={
               zoomed
