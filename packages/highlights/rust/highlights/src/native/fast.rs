@@ -251,6 +251,7 @@ fn skip_space(src: &[u8], mut p: usize, end: usize) -> (usize, bool) {
 
 /// The end of an identifier's tail from `p`, through ASCII and Unicode
 /// identifier characters.
+#[cold]
 #[inline(never)]
 fn ident_tail_unicode(src: &[u8], end: usize, mut p: usize) -> usize {
     while p < end && src[p] >= 128 {
@@ -271,6 +272,7 @@ fn ident_tail_unicode(src: &[u8], end: usize, mut p: usize) -> usize {
 
 /// A token starting with the non-ASCII byte `c` at `lhs`: an identifier,
 /// or one invalid code point. Returns its kind and end.
+#[cold]
 #[inline(never)]
 fn non_ascii(src: &[u8], end: usize, c: u8, lhs: usize) -> (u8, usize) {
     let bits = utf8_bits(c);
@@ -411,6 +413,7 @@ impl<'a> Cold<'a> {
 
 /// `$sigStep` for a kind other than an identifier or accessor word while
 /// the machine is busy. Returns whether it stays busy.
+#[cold]
 #[inline(never)]
 fn sig_busy(cold: &mut Cold, prev: u8, t: u8, lhs: usize, rhs: usize) -> bool {
     let mut ts = cold.ts(prev);
@@ -421,6 +424,7 @@ fn sig_busy(cold: &mut Cold, prev: u8, t: u8, lhs: usize, rhs: usize) -> bool {
 
 /// `$classify` for kind `t` through the full rules, keeping the
 /// parameter-list machine's changes.
+#[cold]
 #[inline(never)]
 fn classify(cold: &mut Cold, prev: u8, t: u8, next: Next, lhs: usize, rhs: usize) -> u32 {
     let mut ts = cold.ts(prev);
@@ -442,6 +446,7 @@ fn ident_word(cold: &Cold, prev: u8, next: Next, lhs: usize, rhs: usize) -> u32 
 
 /// Color a waiting contextual word, `?`, or `:`, and set the template
 /// marker after it.
+#[cold]
 #[inline(never)]
 fn resolve_other(cold: &mut Cold, prev: u8, t: u8, next: Next, lhs: usize, rhs: usize) -> u32 {
     let hl = classify(cold, prev, t, next, lhs, rhs);
@@ -639,6 +644,7 @@ fn emit_doc_comment(recs: &mut Recs, src: &[u8], lhs: usize, rhs: usize) {
 /// Emit a token that neither waits nor is plain: import clause words,
 /// strings, templates, comments, and invalid bytes. Records go through
 /// `inst.ext.recs`.
+#[cold]
 #[inline(never)]
 fn other(
     cold: &mut Cold,
@@ -795,6 +801,7 @@ fn lex(cold: &mut Cold, inst: &mut Instance, base: usize) {
             let pf = FLAGS[prev as usize];
             let nf = FLAGS[next.t as usize];
             if busy || (next.t == lex::L_PAREN && rhs - lhs == 11) {
+                core::hint::cold_path();
                 let hl = classify(cold, prev, lex::IDENTIFIER, next, lhs, rhs);
                 busy = cold.busy();
                 hl
@@ -822,6 +829,7 @@ fn lex(cold: &mut Cold, inst: &mut Instance, base: usize) {
                     ident_word(cold, prev, next, lhs, rhs)
                 }
             } else {
+                core::hint::cold_path();
                 let hl = classify(cold, prev, lex::IDENTIFIER, next, lhs, rhs);
                 busy = cold.busy();
                 hl
@@ -864,6 +872,7 @@ fn lex(cold: &mut Cold, inst: &mut Instance, base: usize) {
                         0
                     };
                 } else {
+                    core::hint::cold_path();
                     let hl = resolve_other(cold, prev, t, next, lhs, rhs);
                     busy = cold.busy();
                     emit!(hl, rhs);
@@ -893,6 +902,7 @@ fn lex(cold: &mut Cold, inst: &mut Instance, base: usize) {
                 cold.pend_rhs = rhs;
             } else if f & kf::PLAIN != 0 && (f & kf::IMPORT_END == 0 || !cold.import) {
                 if busy {
+                    core::hint::cold_path();
                     busy = sig_busy(cold, prev, t, lhs, rhs);
                 } else if f & kf::SIG_IDLE != 0 {
                     if t == lex::L_PAREN {
@@ -914,6 +924,7 @@ fn lex(cold: &mut Cold, inst: &mut Instance, base: usize) {
                 emit!(tok::COMMENT, rhs);
             } else {
                 store_recs!();
+                core::hint::cold_path();
                 other(cold, inst, base, prev, t, lhs, rhs);
                 load_recs!();
                 busy = cold.busy();
@@ -970,6 +981,7 @@ fn lex(cold: &mut Cold, inst: &mut Instance, base: usize) {
                     nl |= br;
                 }
             } else {
+                core::hint::cold_path();
                 (p, nl) = skip_space(src, p, end);
             }
             c = at(p);
@@ -999,6 +1011,7 @@ fn lex(cold: &mut Cold, inst: &mut Instance, base: usize) {
             }
             0 if lhs >= end => break,
             0x80..=0xff => {
+                core::hint::cold_path();
                 let (t, q) = non_ascii(src, end, c, lhs);
                 p = q;
                 finish!(t, lhs, q);
