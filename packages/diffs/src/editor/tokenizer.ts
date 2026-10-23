@@ -265,6 +265,10 @@ export class EditorTokenizer {
     this.#tokenizer.prebuildStateStack(renderRange);
   }
 
+  flush(renderRange?: RenderRange): Map<number, HighlightedToken[]> {
+    return this.#tokenizer.flush(renderRange);
+  }
+
   stopBackgroundTokenize(): void {
     this.#tokenizer.stopBackgroundTokenize();
   }

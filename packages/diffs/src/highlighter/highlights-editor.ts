@@ -122,8 +122,55 @@ export class HighlightsEditorTokenizer implements DiffsEditorTokenizer {
         : !hostRealignsRows
     ) {
       this.#readLines(lines, returnedStart, end);
+    } else {
+      // Tokenize every line down to the bottom of the window now. Lines below
+      // it are tokenized in the background. Visible lines whose colors changed
+      // are returned; lines above the window go to the host after this call.
+      const offscreen = new Map<number, HighlightedToken[]>();
+      for (const [line, tokens] of this.#flushTo(end)) {
+        if (line >= start && line < end) lines.set(line, tokens);
+        else offscreen.set(line, tokens);
+      }
+      if (offscreen.size > 0) this.#queueDelivery(offscreen);
     }
     return lines;
+  }
+
+  flush(renderRange?: RenderRange): Map<number, HighlightedToken[]> {
+    const document = this.options.textDocument;
+    // Skip when the lexer hasn't seen the latest edit yet. The editor's next
+    // tokenize call catches it up.
+    if (
+      this.#version !== document.version ||
+      this.#tokenizer.lineCount !== document.lineCount
+    ) {
+      return new Map();
+    }
+    const start = renderRange?.startingLine ?? 0;
+    const lines = this.#flushTo(
+      Math.min(
+        start + (renderRange?.totalLines ?? Infinity),
+        document.lineCount
+      )
+    );
+    if (this.#paused) this.#tokenizer.pause();
+    if (this.#pendingDelivery != null) {
+      for (const line of lines.keys()) this.#pendingDelivery.delete(line);
+    }
+    return lines;
+  }
+
+  // Finishes tokenizing every line before `end`, and returns the lines whose
+  // tokens changed.
+  #flushTo(end: number): Map<number, HighlightedToken[]> {
+    const completed = new Map<number, HighlightedToken[]>();
+    this.#capturedLines = completed;
+    try {
+      this.#tokenizer.flush(end);
+    } finally {
+      this.#capturedLines = undefined;
+    }
+    return completed;
   }
 
   // Reload the lexer document if edits were skipped or combined; applying

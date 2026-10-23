@@ -155,11 +155,24 @@ type DeferredEditorActiveLineWrite = [
   options: EditorActiveLineOptions | undefined,
 ];
 
-interface UpdateRenderCacheOptions {
+interface UpdateRenderCacheOptions<LAnnotation> {
   shouldRefreshDiffsView?: boolean;
   lineCountChangeInFlight?: boolean;
   changedDocumentLines?: ReadonlyMap<number, string>;
   documentLineCount?: number;
+  // The annotations at the lines this edit moved them to.
+  lineAnnotations?: DiffLineAnnotation<LAnnotation>[];
+}
+
+// Sets a rendered row's line type when it differs.
+function setLineType(row: Element | undefined, lineType: string | undefined) {
+  if (
+    row instanceof HTMLElement &&
+    lineType != null &&
+    row.dataset.lineType !== lineType
+  ) {
+    row.dataset.lineType = lineType;
+  }
 }
 
 function canHydrateDiff(fileDiff: FileDiffMetadata): boolean {
@@ -475,10 +488,8 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
   protected enabled = true;
 
   protected editor: Editor<'file-diff', LAnnotation, Caret> | undefined;
-  protected refreshViewTimeout: ReturnType<typeof setTimeout> | undefined;
-  // Defer selected-line and editor active-line writes while a refresh rebuilds
-  // the diff rows. This is separate from the timeout because the refresh can
-  // escalate to a full rerender without one.
+  // Holds back selected-line and editor active-line writes until a queued
+  // render has rebuilt the diff rows.
   protected lineStateRefreshPending = false;
   protected deferredSelectedLines: DeferredSelectedLinesWrite | undefined;
   protected deferredEditorActiveLine: DeferredEditorActiveLineWrite | undefined;
@@ -791,11 +802,9 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
   // annotation rows. Returns true when new annotations were adopted —
   // virtualized subclasses override this and refresh their layout on true.
   //
-  // The editor delivers annotations through two calls. An edit that changes
-  // the line count sends them with the structural rebuild
-  // (applyDocumentChange) and again with the change event (__acceptEditorChange);
-  // the identity check makes the second call a no-op. An edit that keeps the
-  // line count skips the rebuild, so the event is its only path here.
+  // The editor sends moved annotations with the edit, through
+  // applyDocumentChange or updateRenderCache, and again with the change event
+  // (__acceptEditorChange). The identity check makes the second call a no-op.
   //
   // The annotations the caller passed in are never touched — stale
   // re-renders keep deduping against them.
@@ -1009,10 +1018,6 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
       this.editSession = undefined;
       this.deletionFile = undefined;
       this.additionFile = undefined;
-    }
-    if (this.refreshViewTimeout != null) {
-      clearTimeout(this.refreshViewTimeout);
-      this.refreshViewTimeout = undefined;
     }
     this.lineStateRefreshPending = false;
     this.deferredEditorActiveLine = undefined;
@@ -1730,6 +1735,12 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
       return true;
     }
 
+    // The new-file lines this render shows, which the editor works with.
+    const editorRenderRange =
+      this.editor != null
+        ? this.computeEditorRenderRange(nextRenderRange)
+        : undefined;
+    this.editor?.__prepareRender(editorRenderRange);
     try {
       const pre = this.getOrCreatePreNode(fileContainer);
 
@@ -1812,7 +1823,7 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
 
       this.finalizeRender();
       if (this.editor != null) {
-        this.syncRenderViewToEditor();
+        this.syncRenderViewToEditor(editorRenderRange);
       }
     } catch (error: unknown) {
       if (disableErrorHandling) {
@@ -1934,10 +1945,11 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
     }
   }
 
-  private syncRenderViewToEditor(): void {
+  private syncRenderViewToEditor(
+    renderRange = this.computeEditorRenderRange(this.renderRange)
+  ): void {
     const { editor, fileContainer } = this;
     const lineAnnotations = this.getLatestAnnotations();
-    const renderRange = this.computeEditorRenderRange(this.renderRange);
     const fileDiff = this.getWorkingDiff();
     if (
       editor == null ||
@@ -2409,11 +2421,15 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
     this.hunksRenderer.clearRenderCache();
   }
 
+  /**
+   * Updates the diff after an edit. Returns true when it had to render the
+   * whole diff again, which tells the editor its rows were replaced.
+   */
   public updateRenderCache(
     dirtyLines: Map<number, Array<HighlightedToken>>,
     themeType: 'dark' | 'light',
-    options: UpdateRenderCacheOptions = {}
-  ): void {
+    options: UpdateRenderCacheOptions<LAnnotation> = {}
+  ): boolean {
     const editSessionDiff = this.editSession?.diff;
     if (editSessionDiff == null) {
       throw new Error(
@@ -2423,44 +2439,37 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
     this.detachAdditionLines();
     this.hunksRenderer.beginEditSession(editSessionDiff);
     const { shouldRefreshDiffsView, lineCountChangeInFlight } = options;
-    const regionsChanged = this.hunksRenderer.updateRenderCache(
+    const layoutChange = this.hunksRenderer.updateRenderCache(
       dirtyLines,
       themeType,
       lineCountChangeInFlight,
       options.changedDocumentLines,
       options.documentLineCount
     );
-    // A same-line-count edit that reshaped the session regions (an edit into
-    // a collapsed gap) changes the rendered row set, which the debounced
-    // line-type refresh below cannot express. Escalate to a deferred full
-    // re-render — never a synchronous one, since this runs mid-editor-pass
-    // and rebuilding rows the editor is about to touch detaches its geometry
-    // caches.
-    if (regionsChanged) {
-      if (this.refreshViewTimeout != null) {
-        clearTimeout(this.refreshViewTimeout);
-        this.refreshViewTimeout = undefined;
+    // Annotations the edit moved are drawn at their new lines by rendering
+    // the diff again.
+    const { lineAnnotations } = options;
+    if (
+      layoutChange === 'rows' ||
+      lineAnnotations != null ||
+      (layoutChange === 'lineTypes' && !this.updateRenderedRows(true))
+    ) {
+      if (lineAnnotations != null) {
+        this.syncEditSessionAnnotationsFromEditor(lineAnnotations);
       }
-      this.lineStateRefreshPending = true;
-      this.escalateEditSessionRender();
-      return;
+      return this.renderEditSessionLayoutChange();
     }
-    if (shouldRefreshDiffsView === true) {
-      this.applyRowHighlightUpdates();
-      if (this.refreshViewTimeout != null) {
-        clearTimeout(this.refreshViewTimeout);
-      }
-      this.lineStateRefreshPending = true;
-      this.refreshViewTimeout = setTimeout(() => {
-        this.refreshViewTimeout = undefined;
-        if (this.options.diffStyle === 'split') {
-          this.refreshSplitDiffView();
-        } else {
-          this.refreshUnifiedDiffView();
-        }
-        this.flushDeferredLineState();
-      }, 150);
+    if (layoutChange === 'none' && shouldRefreshDiffsView === true) {
+      this.updateRenderedRows(false);
     }
+    return false;
+  }
+
+  // Renders the diff again right away, for an edit that changed which rows are
+  // shown. Returns true when the rows were rebuilt.
+  protected renderEditSessionLayoutChange(): boolean {
+    this.rerender();
+    return true;
   }
 
   private detachAdditionLines(): void {
@@ -3622,131 +3631,6 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
     }
   }
 
-  // fast refresh diff view via updating the `data-line-type` after an edit.
-  // only for split view.
-  private refreshSplitDiffView(): void {
-    const fileDiff = this.getWorkingDiff();
-    if (this.options.diffStyle !== 'split' || fileDiff == null) {
-      return;
-    }
-
-    const hunksResult = this.hunksRenderer.renderDiff(
-      fileDiff,
-      this.renderRange
-    );
-    if (hunksResult == null) {
-      return;
-    }
-
-    const columns = this.getCodeColumns(
-      'split',
-      this.codeUnified,
-      this.codeDeletions,
-      this.codeAdditions
-    );
-    if (!Array.isArray(columns)) {
-      return;
-    }
-
-    const applyLineType = (
-      type: 'deletions' | 'additions',
-      column: ColumnElements | undefined
-    ) => {
-      if (column == null) {
-        return;
-      }
-      const ast = this.hunksRenderer.renderCodeAST(type, hunksResult);
-      const gutterChildren = getElementChildren(ast?.[0]);
-      const contentChildren = getElementChildren(ast?.[1]);
-      for (const [el, astChildren] of [
-        [column.gutter, gutterChildren],
-        [column.content, contentChildren],
-      ] as const) {
-        if (
-          astChildren != null &&
-          el.childElementCount === astChildren.length
-        ) {
-          for (let i = 0; i < astChildren.length; i++) {
-            const gutterElement = el.children[i] as HTMLElement;
-            const gutterChild = astChildren[i] as HASTElement;
-            const lineType = gutterChild.properties['data-line-type'] as
-              | string
-              | undefined;
-            if (
-              lineType != null &&
-              gutterElement.dataset.lineType !== lineType
-            ) {
-              gutterElement.dataset.lineType = lineType;
-            }
-          }
-        }
-      }
-    };
-
-    applyLineType('deletions', columns[0]);
-    applyLineType('additions', columns[1]);
-    this.adoptRenderData(hunksResult.fileDiff);
-  }
-
-  // full diff view re-rendering
-  // only for unified view.
-  private refreshUnifiedDiffView(): void {
-    const fileDiff = this.getWorkingDiff();
-    if (this.options.diffStyle !== 'unified' || fileDiff == null) {
-      return;
-    }
-
-    const hunksResult = this.hunksRenderer.renderDiff(
-      fileDiff,
-      this.renderRange
-    );
-    if (hunksResult == null) {
-      return;
-    }
-
-    const columns = this.getCodeColumns(
-      'unified',
-      this.codeUnified,
-      this.codeDeletions,
-      this.codeAdditions
-    );
-    if (columns == null || Array.isArray(columns)) {
-      return;
-    }
-
-    const ast = this.hunksRenderer.renderCodeAST('unified', hunksResult);
-    const gutterChildren = getElementChildren(ast?.[0]);
-    const contentChildren = getElementChildren(ast?.[1]);
-    const applyColumns = () => {
-      for (const [el, astChildren] of [
-        [columns.gutter, gutterChildren],
-        [columns.content, contentChildren],
-      ] as const) {
-        if (astChildren != null) {
-          el.innerHTML = hastToHtml(astChildren);
-        }
-      }
-
-      if (hunksResult.rowCount !== this.lastRowCount) {
-        this.applyRowSpan('unified', columns, hunksResult.rowCount);
-        this.lastRowCount = hunksResult.rowCount;
-      }
-      this.adoptRenderData(hunksResult.fileDiff);
-    };
-    if (this.shouldGuardRebuildScroll()) {
-      guardWebKitScrollDuringRebuild(this.pre, applyColumns);
-    } else {
-      applyColumns();
-    }
-    this.renderSeparators(hunksResult.hunkData);
-
-    this.managersDirty = true;
-    this.flushManagers();
-
-    // sync the render view to the editor
-    this.syncRenderViewToEditor();
-  }
-
   private renderPartialColumn(
     column: ColumnElements | undefined,
     ast: ElementContent[] | undefined,
@@ -4097,45 +3981,63 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
     element.style.setProperty('min-height', `calc(${size} * 1lh)`);
   }
 
-  // Updates the word diff highlights of the rows on screen after an edit. The
-  // editor only redraws the lines it changed, so this updates the rest, such
-  // as the old line paired with an edited one, without waiting for the next
-  // full render.
-  private applyRowHighlightUpdates(): void {
-    const getUpdatedRow = this.hunksRenderer.createRenderedRowUpdater();
-    if (getUpdatedRow == null) {
-      return;
+  // Updates the rows on screen after an edit that kept the same rows: their
+  // word diff highlights, and their line types when `updateLineTypes` is set.
+  // The editor only redraws the lines it changed, so this updates the rest,
+  // such as the old line paired with an edited one. Returns false when the
+  // line types can't be matched to their gutter rows.
+  private updateRenderedRows(updateLineTypes: boolean): boolean {
+    const getRowUpdate = this.hunksRenderer.createRenderedRowUpdater();
+    if (getRowUpdate == null) {
+      return true;
     }
-    // In unified view, rows for old lines are the changed deletions; every
-    // other row shows a new line.
-    const updateColumn = (
-      column: ColumnElements | undefined,
-      side: 'deletions' | 'additions' | undefined
-    ) => {
-      if (column == null) return;
-      for (const child of column.content.children) {
-        if (!(child instanceof HTMLElement)) continue;
-        const lineNumber = Number.parseInt(child.dataset.line ?? '', 10);
+    const unified = this.getColumnPair(this.codeUnified);
+    const columns: [ColumnElements, 'deletions' | 'additions' | undefined][] =
+      [];
+    if (unified != null) {
+      columns.push([unified, undefined]);
+    } else {
+      const deletions = this.getColumnPair(this.codeDeletions);
+      const additions = this.getColumnPair(this.codeAdditions);
+      if (deletions != null) columns.push([deletions, 'deletions']);
+      if (additions != null) columns.push([additions, 'additions']);
+    }
+    if (
+      updateLineTypes &&
+      columns.some(
+        ([column]) =>
+          column.gutter.children.length !== column.content.children.length
+      )
+    ) {
+      return false;
+    }
+    for (const [column, side] of columns) {
+      const rows = column.content.children;
+      const gutterRows = column.gutter.children;
+      for (let index = 0; index < rows.length; index++) {
+        const row = rows[index];
+        if (!(row instanceof HTMLElement)) continue;
+        const lineNumber = Number.parseInt(row.dataset.line ?? '', 10);
         if (Number.isNaN(lineNumber)) continue;
-        const row = getUpdatedRow(
+        // In unified view, rows for old lines are the changed deletions; every
+        // other row shows a new line.
+        const update = getRowUpdate(
           side ??
-            (child.dataset.lineType === 'change-deletion'
+            (row.dataset.lineType === 'change-deletion'
               ? 'deletions'
               : 'additions'),
           lineNumber
         );
-        if (row != null) {
-          child.innerHTML = hastToHtml(row.children);
+        if (update.content != null) {
+          row.innerHTML = hastToHtml(update.content.children);
+        }
+        if (updateLineTypes) {
+          setLineType(row, update.lineType);
+          setLineType(gutterRows[index], update.gutterLineType);
         }
       }
-    };
-    const unified = this.getColumnPair(this.codeUnified);
-    if (unified != null) {
-      updateColumn(unified, undefined);
-    } else {
-      updateColumn(this.getColumnPair(this.codeDeletions), 'deletions');
-      updateColumn(this.getColumnPair(this.codeAdditions), 'additions');
     }
+    return true;
   }
 
   private getColumnPair(
