@@ -1,17 +1,20 @@
 // Build the parity corpus for the native lexers: real source files for each
-// language, found on this machine (node_modules included), kept as separate
-// files so every file starts from a fresh lexer state. Each language also
-// gets its test sample. Native lexers must give the same records as the
-// translated ones on every file (scripts/native-check.sh).
+// language, found on this machine (node_modules included) and in the
+// repositories scripts/corpus-repos.ts fetches, kept as separate files so
+// every file starts from a fresh lexer state. Each language also gets its
+// test sample, and JSON Lines gets lines made from real JSON files. Native
+// lexers must give the same records as the translated ones on every file
+// (scripts/native-check.sh).
 //
 // Writes <out>/<lang>/<n>.<lang> (up to about 2 MiB per language) and
 // <out>/sources.json; <out> is target/parity unless given as an argument.
 import { spawnSync } from 'node:child_process';
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { basename, join } from 'node:path';
+import { basename, join, relative } from 'node:path';
 
 import { samples } from '../../test/_samples';
+import { corpusRepos, corpusReposDir } from './corpus-repos';
 
 const genUrl = new URL('../gen/', import.meta.url);
 const parityDir =
@@ -52,9 +55,18 @@ const byName = new Map<string, string>([
   ['cmakelists.txt', 'cmake'],
 ]);
 
-/** The language id for `path`, by file name, then extension. */
+/** The language id for `path`: a fetched repository's override for its
+ * extension, then the file name, then the extension. */
 function languageOf(path: string): number | undefined {
   const name = basename(path).toLowerCase();
+  if (path.startsWith(corpusReposDir)) {
+    const repo = corpusRepos.find(
+      (r) => relative(corpusReposDir, path).split('/')[0] === r.name
+    );
+    const ext = name.slice(name.lastIndexOf('.') + 1);
+    const forced = repo?.as?.[ext];
+    if (forced !== undefined) return languages[forced];
+  }
   const named = byName.get(name);
   if (named !== undefined) return languages[named];
   const dot = name.lastIndexOf('.');
@@ -69,6 +81,7 @@ const found = spawnSync(
   'find',
   [
     ...roots,
+    corpusReposDir,
     '(',
     '-name',
     '.git',
@@ -92,8 +105,11 @@ const found = spawnSync(
 
 const buckets = new Map<number, { files: Buffer[]; bytes: number }>();
 for (const path of found) {
-  // Never the benchmark inputs or generated outputs.
-  if (path === '' || /\/(gen|fixtures|dist)\//.test(path)) continue;
+  // Never the benchmark inputs or generated outputs (fetched repositories
+  // hold neither, and their fixtures are real code).
+  if (path === '') continue;
+  if (!path.startsWith(corpusReposDir) && /\/(gen|fixtures|dist)\//.test(path))
+    continue;
   const id = languageOf(path);
   if (id === undefined) continue;
   const bucket = buckets.get(id) ?? { files: [], bytes: 0 };
@@ -109,6 +125,34 @@ for (const path of found) {
   bucket.files.push(bytes);
   bucket.bytes += bytes.length;
   buckets.set(id, bucket);
+}
+
+// JSON Lines: real JSON documents, one compact line each, or one line per
+// element of a top-level array.
+const jsonlId = languages['jsonl'];
+const jsonBucket = buckets.get(languages['json']);
+if (jsonlId !== undefined && jsonBucket !== undefined) {
+  const bucket = buckets.get(jsonlId) ?? { files: [], bytes: 0 };
+  let lines: string[] = [];
+  for (const bytes of jsonBucket.files) {
+    if (bucket.bytes >= BUDGET) break;
+    let value: unknown;
+    try {
+      value = JSON.parse(bytes.toString('utf8'));
+    } catch {
+      continue;
+    }
+    for (const item of Array.isArray(value) ? value : [value]) {
+      lines.push(JSON.stringify(item));
+    }
+    if (lines.length >= 40) {
+      const file = Buffer.from(lines.join('\n') + '\n');
+      bucket.files.push(file);
+      bucket.bytes += file.length;
+      lines = [];
+    }
+  }
+  buckets.set(jsonlId, bucket);
 }
 
 rmSync(parityDir, { recursive: true, force: true });

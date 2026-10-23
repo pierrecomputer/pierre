@@ -4,7 +4,7 @@
 # FAIL.
 #
 #   scripts/native-check.sh <module> [--fuzz N] [--target-dir DIR] [--no-perf]
-#                           [--update-lock]
+#                           [--update-lock] [--corpus DIR]
 #
 # <module> is a src/langs/<module>.wat name (scripts/native-modules.ts lists
 # them with their languages). Steps:
@@ -16,7 +16,7 @@
 #   1. build the bench with the module's `native-<module>` feature;
 #   2. parity on every file of target/parity/<lang>/ for each language
 #      (scripts/parity-corpus.ts builds it, with each language's test
-#      sample);
+#      sample; --corpus uses another directory built the same way);
 #   3. fuzz: N mutated inputs (default 20000) from those files, lexed as
 #      each of the module's languages;
 #   4. instructions and cycles per record, native against translated, on
@@ -32,8 +32,10 @@ fuzz=20000
 target="target/native-$module"
 perf=1
 update_lock=0
+corpus=target/parity
 while [ $# -gt 0 ]; do
   case "$1" in
+    --corpus) corpus="$2"; shift 2 ;;
     --update-lock) update_lock=1; shift ;;
     --fuzz) fuzz="$2"; shift 2 ;;
     --target-dir) target="$2"; shift 2 ;;
@@ -52,8 +54,8 @@ if [ "$module" = js ] || [ "$module" = ts ]; then
 else
   feature="native-$module"
 fi
-if [ ! -d target/parity ]; then
-  bun scripts/parity-corpus.ts
+if [ ! -d "$corpus" ]; then
+  bun scripts/parity-corpus.ts "$corpus"
 fi
 
 fail() {
@@ -92,12 +94,12 @@ cargo build --quiet --release -p bench --features "$feature" --target-dir "$targ
 bench="$target/release/bench"
 
 for lang in $langs; do
-  "$bench" --native-parity "target/parity/$lang"/* | tail -3 || fail "parity ($lang)"
+  "$bench" --native-parity "$corpus/$lang"/* | tail -3 || fail "parity ($lang)"
 done
 
 files=()
 for lang in $langs; do
-  files+=("target/parity/$lang"/*)
+  files+=("$corpus/$lang"/*)
 done
 "$bench" --native-fuzz "$(echo "$langs" | tr ' ' ',')" "$fuzz" "${files[@]}" | tail -6 ||
   fail "fuzz"
