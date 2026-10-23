@@ -47,13 +47,6 @@ const weight: ContentWeight =
   requestedWeight === 'heavy' || requestedWeight === 'real'
     ? requestedWeight
     : 'light';
-// Experimental variants of the view, for `explore-geometry-style-isolation`.
-const requestedGeometry = params.get('geometry');
-const geometryVariant =
-  requestedGeometry === 'host' || requestedGeometry === 'host-registered'
-    ? requestedGeometry
-    : 'root';
-const containVariant = params.get('contain') === 'strict';
 const paneIds = Array.from({ length: paneCount }, (_, index) => `p${index}`);
 const indexOf = new Map(paneIds.map((id, index) => [id, index]));
 
@@ -143,8 +136,6 @@ function Bench(): JSX.Element {
         renderPane={renderPane}
         getPaneTitle={title}
         label="Benchmark workspace"
-        experimentalGeometry={geometryVariant}
-        experimentalContain={containVariant}
       />
     </div>
   );

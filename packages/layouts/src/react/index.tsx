@@ -37,15 +37,6 @@ export interface LayoutProps {
   gap?: number;
   /** Accessible name of the workspace. */
   label?: string;
-  /**
-   * Experimental, for `explore-geometry-style-isolation`; removed when the
-   * exploration chooses a variant. Where the geometry variables live: on the
-   * layout root (`root`), on each element that uses them (`host`), or on each
-   * element as registered properties that do not inherit (`host-registered`).
-   */
-  experimentalGeometry?: 'root' | 'host' | 'host-registered';
-  /** Experimental: `contain: strict` on each pane host. */
-  experimentalContain?: boolean;
 }
 
 interface ResizeGesture {
@@ -181,23 +172,36 @@ const PaneBody = memo(function PaneBody({
   return <div className="pierre-layout-content">{renderPane(pane)}</div>;
 });
 
-const registeredVariables = new Set<string>();
+// Geometry variables are named by box index: `--layout-box-<index>-<side>`.
+const BOX_SIDES = ['left', 'top', 'width', 'height'] as const;
+// Registering a property restyles the whole document, so the view registers
+// names in blocks before it needs them, not one box at a time.
+const REGISTRATION_BLOCK = 256;
+let registeredBoxes = 0;
 
 /**
- * Register geometry variables so that they do not inherit: a change on a pane
- * host then does not recalculate the style of the content inside it.
+ * Register the geometry variables as properties that do not inherit. Each
+ * element carries the variables of its own geometry, so a ratio change does
+ * not recalculate the style of pane content through inheritance.
  */
-function registerVariables(names: Iterable<string>): void {
+function registerGeometryVariables(boxes: number): void {
+  if (boxes <= registeredBoxes) return;
   if (typeof CSS === 'undefined' || !('registerProperty' in CSS)) return;
-  for (const name of names) {
-    if (registeredVariables.has(name)) continue;
-    registeredVariables.add(name);
-    try {
-      CSS.registerProperty({ name, syntax: '*', inherits: false });
-    } catch {
-      // Another layout on the page registered it already.
+  const target = Math.ceil(boxes / REGISTRATION_BLOCK) * REGISTRATION_BLOCK;
+  for (let index = registeredBoxes; index < target; index++) {
+    for (const side of BOX_SIDES) {
+      try {
+        CSS.registerProperty({
+          name: `--layout-box-${index}-${side}`,
+          syntax: '*',
+          inherits: false,
+        });
+      } catch {
+        // Another copy of the view on the page registered it already.
+      }
     }
   }
+  registeredBoxes = target;
 }
 
 const rectStyle = (rect: Rect): CSSProperties => ({
@@ -243,8 +247,6 @@ export function Layout({
   style,
   gap = 8,
   label = 'Workspace',
-  experimentalGeometry = 'root',
-  experimentalContain = false,
 }: LayoutProps): JSX.Element {
   const rootRef = useRef<HTMLDivElement>(null);
   const gesture = useRef<ResizeGesture | MoveGesture | null>(null);
@@ -304,13 +306,13 @@ export function Layout({
     store.getSnapshot
   );
   const geometry = computeCSSLayout(state.root, gap);
-  const onRoot = experimentalGeometry === 'root';
-  if (experimentalGeometry === 'host-registered')
-    registerVariables(Object.keys(geometry.variables));
-  // With host geometry, each element carries only the variables that its own
-  // geometry uses, so a ratio change touches only the elements that it moves.
+  registerGeometryVariables(
+    Object.keys(geometry.variables).length / BOX_SIDES.length
+  );
+  // Each element carries only the variables that its own geometry uses, so a
+  // ratio change restyles only the elements that it moves, not their content.
   const own = (...values: string[]): Record<string, string> =>
-    onRoot ? {} : variablesFor(geometry, ...values);
+    variablesFor(geometry, ...values);
   // Keep DOM order independent of tree traversal: detach/reinsert can reset scroll and focus.
   const paneHosts = [...geometry.panes].sort((a, b) =>
     a.pane.id < b.pane.id ? -1 : a.pane.id > b.pane.id ? 1 : 0
@@ -557,8 +559,7 @@ export function Layout({
     <div
       ref={rootRef}
       className={`pierre-layout ${className ?? ''}`}
-      style={onRoot ? { ...geometry.variables, ...style } : style}
-      data-contain={experimentalContain ? 'strict' : undefined}
+      style={style}
       role="group"
       aria-label={label}
       data-resizing={resizing}

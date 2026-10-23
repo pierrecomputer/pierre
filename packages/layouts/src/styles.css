@@ -24,11 +24,6 @@
   box-sizing: border-box;
 }
 
-/* Experimental: each pane host is a layout and paint boundary. */
-.pierre-layout[data-contain='strict'] > .pierre-layout-pane {
-  contain: strict;
-}
-
 .pierre-layout-pane {
   position: absolute;
   display: flex;
