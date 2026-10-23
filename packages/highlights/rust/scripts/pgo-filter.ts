@@ -22,14 +22,15 @@ for (const lang of languages) {
 }
 
 // Records are blank-line separated; each starts with the mangled symbol,
-// which ends in the generated method name: `f_<name>` or `f<index>_<name>`.
+// which ends in the generated method name: `f_<name>` or `f<index>_<name>`,
+// with a `_m` suffix on the variant that takes memory's address.
 const records = readFileSync(input, 'utf8').split('\n\n');
 let dropped = 0;
 const kept = records.filter((record) => {
   const symbol = record
     .split('\n')
     .find((line) => !line.startsWith('#') && !line.startsWith(':'));
-  const method = symbol?.match(/\d+f\d*_([A-Za-z0-9_]+)$/)?.[1];
+  const method = symbol?.match(/\d+f\d*_([A-Za-z0-9_]+?)(?:_m)?$/)?.[1];
   if (method !== undefined && functions.has(method)) {
     dropped++;
     return false;
