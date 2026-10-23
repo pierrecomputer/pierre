@@ -1,6 +1,7 @@
 // Build the PGO training corpus: real source files for each language, found
-// on this machine and kept apart from the benchmark inputs, so profiles are
-// not trained on what the benchmark measures. Languages with no files on
+// on this machine and in the repositories scripts/corpus-repos.ts fetches,
+// kept apart from the benchmark inputs, so profiles are not trained on what
+// the benchmark measures. Languages with no files on
 // disk fall back to their test sample, and target/train/sources.json records
 // which ones did.
 //
@@ -16,9 +17,10 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { homedir } from 'node:os';
-import { join } from 'node:path';
+import { join, relative } from 'node:path';
 
 import { samples } from '../../test/_samples';
+import { corpusRepos, corpusReposDir } from './corpus-repos';
 
 const genUrl = new URL('../gen/', import.meta.url);
 const trainDir = new URL('../target/train/', import.meta.url).pathname;
@@ -35,6 +37,7 @@ const roots = [
   '/usr/share',
   '/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include',
   join(homedir(), 'Developer'),
+  corpusReposDir,
 ];
 // Never train on the benchmark inputs or generated outputs.
 const skipDirs = new Set([
@@ -91,7 +94,13 @@ function walk(dir: string, depth: number): void {
     }
     const dot = name.lastIndexOf('.');
     const ext = (dot === -1 ? name : name.slice(dot + 1)).toLowerCase();
-    const id = byExt.get(ext);
+    // A fetched repository may override what an extension means.
+    const forced = path.startsWith(corpusReposDir)
+      ? corpusRepos.find(
+          (r) => relative(corpusReposDir, path).split('/')[0] === r.name
+        )?.as?.[ext]
+      : undefined;
+    const id = forced !== undefined ? languages[forced] : byExt.get(ext);
     if (id === undefined || st.size < MIN_FILE || st.size > MAX_FILE) continue;
     const bucket = buckets.get(id) ?? { parts: [], bytes: 0, files: 0 };
     if (bucket.bytes >= BUDGET) continue;
