@@ -181,9 +181,9 @@ const REGISTRATION_BLOCK = 256;
 let registeredBoxes = 0;
 
 /**
- * Register the geometry variables as properties that do not inherit. Each
- * element carries the variables of its own geometry, so a ratio change does
- * not recalculate the style of pane content through inheritance.
+ * Register the geometry variables as `<length>` properties that do not
+ * inherit. Each element carries the variables of its own geometry, so a ratio
+ * change does not recalculate the style of pane content through inheritance.
  */
 function registerGeometryVariables(boxes: number): void {
   if (boxes <= registeredBoxes) return;
@@ -192,10 +192,13 @@ function registerGeometryVariables(boxes: number): void {
   for (let index = registeredBoxes; index < target; index++) {
     for (const side of BOX_SIDES) {
       try {
+        // A typed property computes to pixels, so a variable that refers to
+        // another one does not carry its whole calc() expression along.
         CSS.registerProperty({
           name: `--layout-box-${index}-${side}`,
-          syntax: '*',
+          syntax: '<length>',
           inherits: false,
+          initialValue: '0px',
         });
       } catch {
         // Another copy of the view on the page registered it already.

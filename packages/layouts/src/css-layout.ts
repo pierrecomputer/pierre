@@ -130,10 +130,10 @@ export function computeCSSLayout(root: LayoutNode, gap = 8): CSSLayout {
     visit(node.first, first.rect, first.scope);
     visit(node.second, second.rect, second.scope);
   }
-  // Each value uses one axis, so 100% of the containing block, the layout
-  // root, gives the root size without container units.
+  // Container units resolve to pixels when a registered `<length>` property
+  // computes, so each pane host gets fixed sizes and stays a layout boundary.
   const whole = rect(
-    { left: '0px', top: '0px', width: '100%', height: '100%' },
+    { left: '0px', top: '0px', width: '100cqw', height: '100cqh' },
     {}
   );
   visit(root, whole.rect, whole.scope);
