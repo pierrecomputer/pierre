@@ -30,7 +30,9 @@
   flex-direction: column;
   min-width: 0;
   min-height: 0;
-  overflow: hidden;
+  /* Clip content at the rounded border with no scroll container, so that a
+     scroll into view never moves the header. The content area scrolls. */
+  overflow: clip;
   border: 1px solid var(--layout-border);
   border-radius: 10px;
   background: var(--layout-pane-background, #fff);

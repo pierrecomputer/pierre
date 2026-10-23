@@ -155,6 +155,10 @@ both axes. Escape cancels an active gesture or restores a zoomed layout. Hidden
 panes remain mounted but are inert and excluded from the accessibility tree.
 Motion respects `prefers-reduced-motion`.
 
+Each pane host clips its content at its rounded border with `overflow: clip`.
+The host never scrolls; its content area scrolls. Put a menu or a tooltip that
+must extend past its pane in the top layer, with `popover` or `<dialog>`.
+
 Style with `--layout-accent`, `--layout-border`, `--layout-pane-background`, and
 `--layout-duration`. Discrete layout changes animate with transforms from each
 element's old box (FLIP), so the compositor runs them and pane content lays out
