@@ -4,7 +4,11 @@ import { FileDiff } from '../src/components/FileDiff';
 import { Editor } from '../src/editor/editor';
 import { getHighlighterType } from '../src/highlighter/highlighterType';
 import { disposeHighlighter } from '../src/highlighter/shared_highlighter';
-import type { FileDiffMetadata, RenderRange } from '../src/types';
+import type {
+  DiffLineAnnotation,
+  FileDiffMetadata,
+  RenderRange,
+} from '../src/types';
 import { processFile } from '../src/utils/parsePatchFiles';
 import { installDom, wait, waitFor } from './domHarness';
 
@@ -28,7 +32,8 @@ function getHighlights(container: HTMLElement): string[] {
     for (const row of code.querySelectorAll<HTMLElement>(
       '[data-content] > [data-line]'
     )) {
-      const marks = [...row.querySelectorAll('[data-diff-span]')].map(
+      const marks = Array.from(
+        row.querySelectorAll('[data-diff-span]'),
         (mark) => {
           const start = getTextOffset(row, mark);
           const text = mark.textContent ?? '';
@@ -45,6 +50,44 @@ function getHighlights(container: HTMLElement): string[] {
     }
   }
   return rows.sort();
+}
+
+// Lists every rendered code row and line number row, top to bottom in each
+// column, as "<line type>:<line number>". Rows saying the file has no final
+// newline show "no-newline" instead of a line number.
+function getRowLayout(container: HTMLElement): string[] {
+  const shadow = container.shadowRoot;
+  if (shadow == null) throw new Error('expected a shadow root');
+  const rows: string[] = [];
+  for (const code of shadow.querySelectorAll<HTMLElement>('[data-code]')) {
+    for (const row of code.querySelectorAll<HTMLElement>(
+      '[data-content] > [data-line], [data-content] > [data-no-newline]'
+    )) {
+      rows.push(`${row.dataset.lineType}:${row.dataset.line ?? 'no-newline'}`);
+    }
+    for (const row of code.querySelectorAll<HTMLElement>(
+      '[data-gutter] > [data-column-number], [data-gutter] > [data-gutter-buffer="metadata"]'
+    )) {
+      rows.push(
+        `${row.dataset.lineType}:${row.dataset.columnNumber ?? 'no-newline'}`
+      );
+    }
+  }
+  return rows;
+}
+
+// Lists every annotation row in each column as the row it is drawn under:
+// "<line type>:<line number>".
+function getAnnotationRows(container: HTMLElement): string[] {
+  const shadow = container.shadowRoot;
+  if (shadow == null) throw new Error('expected a shadow root');
+  return Array.from(
+    shadow.querySelectorAll('[data-content] > [data-line-annotation]'),
+    (row) => {
+      const above = row.previousElementSibling;
+      return `${above?.getAttribute('data-line-type')}:${above?.getAttribute('data-line')}`;
+    }
+  );
 }
 
 // The column where `mark` starts within the text of `row`.
@@ -77,8 +120,21 @@ function hasHighlights(container: HTMLElement): boolean {
 async function getReadOnlyHighlights(
   diffStyle: DiffStyle,
   newContents: string,
-  oldContents = OLD
+  oldContents = OLD,
+  renderRange?: RenderRange
 ): Promise<string[]> {
+  return (
+    await renderReadOnly(diffStyle, newContents, oldContents, renderRange)
+  ).highlights;
+}
+
+// The rows and highlights a diff shows when it is rendered without an editor.
+async function renderReadOnly(
+  diffStyle: DiffStyle,
+  newContents: string,
+  oldContents = OLD,
+  renderRange?: RenderRange
+): Promise<{ highlights: string[]; layout: string[] }> {
   const container = document.createElement('div');
   document.body.appendChild(container);
   const fileDiff = new FileDiff<undefined>({
@@ -91,9 +147,13 @@ async function getReadOnlyHighlights(
       newFile: { name: 'edit.ts', contents: newContents },
       fileContainer: container,
       forceRender: true,
+      renderRange,
     });
     await waitFor(() => hasHighlights(container));
-    return getHighlights(container);
+    return {
+      highlights: getHighlights(container),
+      layout: getRowLayout(container),
+    };
   } finally {
     fileDiff.cleanUp();
     container.remove();
@@ -105,16 +165,19 @@ async function withEditor(
   diffStyle: DiffStyle,
   run: (
     editor: Editor<'file-diff', undefined>,
-    container: HTMLElement
+    container: HTMLElement,
+    fileDiff: FileDiff<undefined>
   ) => void | Promise<void>,
   {
     renderRange,
     oldContents = OLD,
     newContents = NEW,
+    lineAnnotations,
   }: {
     renderRange?: RenderRange;
     oldContents?: string;
     newContents?: string;
+    lineAnnotations?: DiffLineAnnotation<undefined>[];
   } = {}
 ): Promise<void> {
   const dom = installDom();
@@ -132,12 +195,13 @@ async function withEditor(
       fileContainer: container,
       forceRender: true,
       renderRange,
+      lineAnnotations,
     });
     editor.edit(fileDiff);
     await waitForEditable(container);
     await waitFor(() => hasHighlights(container));
     expect(hasHighlights(container)).toBe(true);
-    await run(editor, container);
+    await run(editor, container, fileDiff);
   } finally {
     await wait(10);
     editor.cleanUp();
@@ -192,56 +256,226 @@ describe('word diff highlights while typing', () => {
     });
   }
 
-  test('unified: reach a row the edit pushes past the end of the render window', async () => {
-    // Making line 2 a change adds its old line above it, so line 2 moves
-    // from the window's last row to just past it while still on screen.
-    await withEditor(
-      'unified',
-      async (editor, container) => {
-        replaceText(editor, 1, 15, 19, 'gamma');
-        const expected = await getReadOnlyHighlights(
-          'unified',
-          NEW.replace('beta', 'gamma')
-        );
-        const editedRow = expected.find((row) =>
-          row.startsWith('additions:2:')
-        );
-        if (editedRow == null) {
-          throw new Error('expected the edited row to have highlights');
-        }
-        expect(getHighlights(container)).toContain(editedRow);
-      },
-      { renderRange: WINDOW }
-    );
-  });
+  // Edits that add or remove rows, or change their line types, render again
+  // in the same pass.
+  for (const diffStyle of ['split', 'unified'] as const) {
+    test(`${diffStyle}: show the new rows right away when a context line becomes a change`, async () => {
+      await withEditor(
+        diffStyle,
+        async (editor, container) => {
+          replaceText(editor, 1, 15, 19, 'gamma');
+          const expected = await renderReadOnly(
+            diffStyle,
+            NEW.replace('beta', 'gamma'),
+            OLD,
+            WINDOW
+          );
+          expect(getRowLayout(container)).toEqual(expected.layout);
+          expect(getHighlights(container)).toEqual(expected.highlights);
+        },
+        { renderRange: WINDOW }
+      );
+    });
 
-  test('unified: reach a row that moves further when change blocks merge', async () => {
-    // Editing the context line between two changes merges both blocks, which
-    // moves line 2 two rows down.
-    const oldContents =
-      'const first = alpha(1, 2);\nconst second = beta;\nconst third = omega(3);\n';
-    const newContents =
-      'const first = alpha(1, 3);\nconst second = beta;\nconst third = omega(4);\n';
-    await withEditor(
-      'unified',
-      async (editor, container) => {
-        replaceText(editor, 1, 15, 19, 'gamma');
-        const expected = await getReadOnlyHighlights(
-          'unified',
-          newContents.replace('beta', 'gamma'),
-          oldContents
-        );
-        const editedRow = expected.find((row) =>
-          row.startsWith('additions:2:')
-        );
-        if (editedRow == null) {
-          throw new Error('expected the edited row to have highlights');
+    test(`${diffStyle}: show the new rows right away when change blocks merge`, async () => {
+      const oldContents =
+        'const first = alpha(1, 2);\nconst second = beta;\nconst third = omega(3);\n';
+      const newContents =
+        'const first = alpha(1, 3);\nconst second = beta;\nconst third = omega(4);\n';
+      await withEditor(
+        diffStyle,
+        async (editor, container) => {
+          replaceText(editor, 1, 15, 19, 'gamma');
+          const expected = await renderReadOnly(
+            diffStyle,
+            newContents.replace('beta', 'gamma'),
+            oldContents,
+            WINDOW
+          );
+          expect(getRowLayout(container)).toEqual(expected.layout);
+          expect(getHighlights(container)).toEqual(expected.highlights);
+        },
+        { renderRange: WINDOW, oldContents, newContents }
+      );
+    });
+
+    test(`${diffStyle}: show the new rows right away when an added line gains an old partner`, async () => {
+      const oldContents = 'const first = alpha(1, 2);\nconst third = omega;\n';
+      const newContents =
+        'const first = alpha(1, 3);\nconst second = beta;\nconst third = omega;\n';
+      await withEditor(
+        diffStyle,
+        async (editor, container) => {
+          // The old line after the added one becomes a change, so in split
+          // view the empty row next to the added line moves below it.
+          replaceText(editor, 2, 14, 19, 'gamma');
+          const expected = await renderReadOnly(
+            diffStyle,
+            newContents.replace('omega', 'gamma'),
+            oldContents
+          );
+          expect(getRowLayout(container)).toEqual(expected.layout);
+          expect(getHighlights(container)).toEqual(expected.highlights);
+        },
+        { oldContents, newContents }
+      );
+    });
+
+    test(`${diffStyle}: show the new rows right away when one edit reverts a change and makes another`, async () => {
+      const oldContents =
+        'const first = alpha;\nconst second = beta;\nconst third = omega;\n';
+      const newContents = oldContents.replace('alpha', 'ALPHA');
+      await withEditor(
+        diffStyle,
+        async (editor, container) => {
+          editor.applyEdits([
+            {
+              range: {
+                start: { line: 0, character: 14 },
+                end: { line: 0, character: 19 },
+              },
+              newText: 'alpha',
+            },
+            {
+              range: {
+                start: { line: 2, character: 14 },
+                end: { line: 2, character: 19 },
+              },
+              newText: 'OMEGA',
+            },
+          ]);
+          const expected = await renderReadOnly(
+            diffStyle,
+            oldContents.replace('omega', 'OMEGA'),
+            oldContents,
+            WINDOW
+          );
+          expect(getRowLayout(container)).toEqual(expected.layout);
+          expect(getHighlights(container)).toEqual(expected.highlights);
+        },
+        { renderRange: WINDOW, oldContents, newContents }
+      );
+    });
+
+    test(`${diffStyle}: update the rows saying there is no final newline right away`, async () => {
+      const oldContents = 'const first = alpha;\nconst second = beta;';
+      const newContents = oldContents.replace('alpha', 'ALPHA');
+      await withEditor(
+        diffStyle,
+        async (editor, container) => {
+          // The last line becomes a change, so the rows below it saying the
+          // file has no final newline do too.
+          replaceText(editor, 1, 15, 19, 'BETA');
+          const expected = await renderReadOnly(
+            diffStyle,
+            newContents.replace('beta', 'BETA'),
+            oldContents
+          );
+          expect(getRowLayout(container)).toEqual(expected.layout);
+          expect(getHighlights(container)).toEqual(expected.highlights);
+        },
+        { oldContents, newContents }
+      );
+    });
+
+    test(`${diffStyle}: keep annotations on their lines when an edit rebuilds the rows`, async () => {
+      const oldContents =
+        'const first = alpha;\nconst second = beta;\nconst third = gamma;\nconst fourth = delta;\n';
+      const newContents = oldContents.replace('alpha', 'ALPHA');
+      await withEditor(
+        diffStyle,
+        (editor, container) => {
+          // Adds a line above the annotated line and removes one below it, so
+          // the line count stays the same but the annotated line moves down.
+          editor.applyEdits([
+            {
+              range: {
+                start: { line: 0, character: 0 },
+                end: { line: 0, character: 0 },
+              },
+              newText: 'const extra = added;\n',
+            },
+            {
+              range: {
+                start: { line: 2, character: 0 },
+                end: { line: 3, character: 0 },
+              },
+              newText: '',
+            },
+          ]);
+          const content = container.shadowRoot?.querySelector(
+            '[data-code]:not([data-deletions]) [data-content]'
+          );
+          const annotations = content?.querySelectorAll(
+            '[data-line-annotation]'
+          );
+          expect(annotations?.length).toBe(1);
+          // The annotation is drawn under the row of the line it belongs to.
+          expect(
+            annotations?.[0].previousElementSibling?.getAttribute('data-line')
+          ).toBe('3');
+        },
+        {
+          oldContents,
+          newContents,
+          lineAnnotations: [{ side: 'additions', lineNumber: 2 }],
         }
-        expect(getHighlights(container)).toContain(editedRow);
-      },
-      { renderRange: WINDOW, oldContents, newContents }
-    );
-  });
+      );
+    });
+
+    test(`${diffStyle}: keep annotations on their lines when an edit moves lines inside a change`, async () => {
+      const oldContents =
+        'const a = 1;\nconst b = 2;\nconst c = 3;\nconst d = 4;\n';
+      const newContents =
+        'const A = 9;\nconst B = 8;\nconst C = 7;\nconst D = 6;\n';
+      await withEditor(
+        diffStyle,
+        (editor, container, fileDiff) => {
+          // Adds a line at the top and removes the third line. Every line is
+          // still a change, so the change block keeps its size.
+          editor.applyEdits([
+            {
+              range: {
+                start: { line: 0, character: 0 },
+                end: { line: 0, character: 0 },
+              },
+              newText: 'const extra = 5;\n',
+            },
+            {
+              range: {
+                start: { line: 2, character: 0 },
+                end: { line: 3, character: 0 },
+              },
+              newText: '',
+            },
+          ]);
+          const annotations = getAnnotationRows(container);
+          expect(annotations.length).toBeGreaterThan(0);
+          fileDiff.rerender();
+          expect(annotations).toEqual(getAnnotationRows(container));
+        },
+        {
+          oldContents,
+          newContents,
+          lineAnnotations: [
+            { side: 'additions', lineNumber: 2 },
+            { side: 'deletions', lineNumber: 2 },
+          ],
+        }
+      );
+    });
+
+    test(`${diffStyle}: show context rows right away when a change is reverted`, async () => {
+      await withEditor(diffStyle, (editor, container) => {
+        replaceText(editor, 0, 23, 24, '2');
+        // The session keeps the reverted lines on screen, as context.
+        const layout = getRowLayout(container);
+        expect(layout.length).toBeGreaterThan(0);
+        expect(layout.every((row) => row.startsWith('context:'))).toBe(true);
+        expect(getHighlights(container)).toEqual([]);
+      });
+    });
+  }
 
   for (const diffStyle of ['split', 'unified'] as const) {
     test(`${diffStyle}: follow several edits made before the next full render`, async () => {
@@ -328,9 +562,9 @@ describe('word diff highlights after the editor redraws rows in the background',
     let redrawCount = 0;
     const updateRenderCache = fileDiff.updateRenderCache.bind(fileDiff);
     fileDiff.updateRenderCache = (lines, themeType, options) => {
-      updateRenderCache(lines, themeType, options);
       // Background tokenizing updates the cache without edit options.
       if (options == null) redrawCount++;
+      return updateRenderCache(lines, themeType, options);
     };
     try {
       const renderRange: RenderRange = {

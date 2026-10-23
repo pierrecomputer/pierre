@@ -1221,7 +1221,7 @@ export class File<LAnnotation = undefined, Caret = undefined> {
     options?: {
       lineCountChangeInFlight?: boolean;
     }
-  ): void {
+  ): boolean {
     const editSessionFile = this.editSession?.file;
     if (editSessionFile == null) {
       throw new Error(
@@ -1234,6 +1234,8 @@ export class File<LAnnotation = undefined, Caret = undefined> {
       themeType,
       options?.lineCountChangeInFlight
     );
+    // Updating a file's cache never renders its rows again.
+    return false;
   }
 
   public render({
@@ -1361,6 +1363,7 @@ export class File<LAnnotation = undefined, Caret = undefined> {
       return true;
     }
 
+    this.editor?.__prepareRender(nextRenderRange);
     try {
       const pre = this.getOrCreatePreNode(fileContainer);
       let renderedFile = this.getRenderedFile();
