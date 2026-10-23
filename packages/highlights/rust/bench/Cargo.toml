@@ -7,6 +7,7 @@ publish.workspace = true
 
 [features]
 native-core = ["highlights/native-core"]
+native = ["native-core", "highlights/native"]
 native-angular-html = ["native-core", "highlights/native-angular-html"]
 native-asm = ["native-core", "highlights/native-asm"]
 native-astro = ["native-core", "highlights/native-astro"]

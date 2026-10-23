@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Build the benchmark and the `hl` app with profile-guided optimization,
+# Build the benchmark and the `hl` app (with every native lexer) with
+# profile-guided optimization, training on both lexers,
 # then compare every language: the published wasm in JSC and V8, the
 # translated Rust, and the translated Rust with PGO. Arguments (a label
 # filter, --budget-ms N, --no-js) pass through to `bench`; `build` as the
@@ -17,7 +18,7 @@ fi
 profiles="$(pwd)/target/pgo-profiles"
 rm -rf "$profiles" && mkdir -p "$profiles"
 RUSTFLAGS="-Cprofile-generate=$profiles -Cllvm-args=-vp-counters-per-site=8" \
-  cargo build --quiet --release -p bench --target-dir target/pgo-gen
+  cargo build --quiet --release -p bench --features native --target-dir target/pgo-gen
 ./target/pgo-gen/release/bench --train target/train
 profdata="$(echo "$(rustc --print sysroot)"/lib/rustlib/*/bin/llvm-profdata)"
 "$profdata" merge -o "$profiles/merged.profdata" "$profiles"/*.profraw
@@ -28,7 +29,7 @@ if [ -f pgo-exclude.txt ]; then
   "$profdata" merge -o "$profiles/merged.profdata" "$profiles/filtered.txt"
 fi
 RUSTFLAGS="-Cprofile-use=$profiles/merged.profdata -Cllvm-args=-pgo-warn-missing-function=false" \
-  cargo build --quiet --release -p bench -p hl --target-dir target/pgo-use
+  cargo build --quiet --release -p bench -p hl --features bench/native --target-dir target/pgo-use
 if [ "${1:-}" = "build" ]; then
   echo "built $(pwd)/target/pgo-use/release/hl"
   exit 0

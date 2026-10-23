@@ -222,12 +222,12 @@ fn main() -> ExitCode {
                 hl.terminal(lang, &theme, &options, &mut scratch);
             });
             let tokenize = fastest(|| {
-                hl.tokenize(lang.id(), len);
+                hl.records(lang);
             });
             let timings = Timings {
                 len,
                 lines: scratch.iter().filter(|&&b| b == b'\n').count(),
-                tokens: hl.tokenize(lang.id(), len).len(),
+                tokens: hl.records(lang).len(),
                 read,
                 first,
                 tokenize,

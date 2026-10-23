@@ -197,9 +197,22 @@ impl Highlighter {
         self.input_mut(text.len()).copy_from_slice(text);
     }
 
+    /// The token records of the current input, which [`Highlighter::tokens`]
+    /// walks: from the language's native lexer when one is built (the
+    /// `native` features), otherwise from the translated lexer. Both give
+    /// the same records.
+    pub fn records(&mut self, lang: Language) -> &[Rec] {
+        let len = self.len;
+        #[cfg(feature = "native-core")]
+        if self.tokenize_native(lang.0, len).is_some() {
+            return &self.inst.ext.recs;
+        }
+        self.tokenize(lang.0, len)
+    }
+
     /// The tokens of the current input.
     pub fn tokens(&mut self, lang: Language) -> Tokens<'_> {
-        let recs = self.tokenize(lang.0, self.len);
+        let recs = self.records(lang);
         Tokens {
             recs: recs.iter(),
             start: 0,
@@ -210,7 +223,7 @@ impl Highlighter {
     /// written to `out`. Matches the JS package's `codeToHtml` output.
     pub fn html(&mut self, lang: Language, theme: &Theme, out: &mut Vec<u8>) {
         let len = self.len;
-        self.tokenize(lang.0, len);
+        self.records(lang);
         let input = &self.inst.mem.bytes()[PAGE..PAGE + len + INPUT_SLACK];
         HtmlTheme::new(theme.table()).render(input, len, &self.inst.ext.recs, out);
     }
@@ -224,7 +237,7 @@ impl Highlighter {
         out: &mut Vec<u8>,
     ) {
         let len = self.len;
-        self.tokenize(lang.0, len);
+        self.records(lang);
         let input = &self.inst.mem.bytes()[PAGE..PAGE + len];
         terminal::render(theme, options, input, len, &self.inst.ext.recs, out);
     }

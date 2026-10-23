@@ -7,4 +7,4 @@ license.workspace = true
 publish.workspace = true
 
 [dependencies]
-highlights = { path = "../highlights" }
+highlights = { path = "../highlights", features = ["native"] }
