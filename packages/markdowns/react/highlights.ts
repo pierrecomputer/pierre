@@ -1,10 +1,19 @@
-import { codeToTokens, isSupportedLanguage } from '@pierre/highlights';
-import { LiveTokenizer } from '@pierre/highlights';
-import type { CodeToTokensOptions } from '@pierre/highlights';
+import {
+  codeToHtml,
+  isSupportedLanguage,
+  LiveTokenizer,
+} from '@pierre/highlights';
+import type {
+  CodeToHtmlOptions,
+  CodeToTokensOptions,
+  LiveTokenizerOptions,
+} from '@pierre/highlights';
 
-import type { CodeHighlighterPlugin, HighlightToken } from './react';
+import type { CodeHighlighterPlugin, CodeOptions } from '../html/types';
 
-/** Adapt Pierre Highlights to the Markdown code plugin without loading it in core. */
+const decoder = new TextDecoder();
+
+/** Keep highlighted output as HTML; only the mutable code fence owns a live tokenizer. */
 export function createHighlightsPlugin(
   options: Omit<CodeToTokensOptions, 'lang'>
 ): CodeHighlighterPlugin {
@@ -12,33 +21,33 @@ export function createHighlightsPlugin(
     createSession() {
       let tokenizer: LiveTokenizer | undefined;
       let previous = '';
-      let previousLanguage = '';
-      let tokens: HighlightToken[][] = [];
+      let language = '';
+      let lines: string[] = [];
       const dispose = (): void => {
         tokenizer?.dispose();
         tokenizer = undefined;
-        tokens = [];
         previous = '';
+        lines = [];
       };
       return {
         dispose,
-        highlight({ code, language }) {
+        highlight({ code, language: nextLanguage }: CodeOptions) {
           code = code.replace(/\r\n?/g, '\n');
-          if (!isSupportedLanguage(language)) {
+          if (!isSupportedLanguage(nextLanguage)) {
             dispose();
             return null;
           }
-          let firstChanged = 0;
-          if (tokenizer === undefined || previousLanguage !== language) {
+          let first = 0;
+          if (tokenizer === undefined || language !== nextLanguage) {
             dispose();
             tokenizer = new LiveTokenizer({
               ...options,
-              lang: language,
+              lang: nextLanguage,
               code,
-            } as CodeToTokensOptions & { code: string });
-          } else if (code === previous) {
-            return { tokens };
-          } else if (code.startsWith(previous)) {
+            } as LiveTokenizerOptions);
+            language = nextLanguage;
+          } else if (code === previous) return lines.join('\n');
+          else if (code.startsWith(previous)) {
             const line = tokenizer.lineCount - 1;
             const end = { line, character: tokenizer.getLineLength(line) };
             const update = tokenizer.applyEdits([
@@ -47,28 +56,23 @@ export function createHighlightsPlugin(
                 newText: code.slice(previous.length),
               },
             ]);
-            firstChanged =
-              update.lineChanges[0]?.newStartLine ?? tokenizer.lineCount;
-          } else {
-            tokenizer.reset(code);
-          }
-          // Own the returned arrays: appends must not mutate earlier React results.
-          tokens = tokens.slice(0, firstChanged);
-          for (let line = firstChanged; line < tokenizer.lineCount; line++) {
-            tokens.push(tokenizer.getLineTokens(line).tokens);
-          }
+            first = update.lineChanges[0]?.newStartLine ?? tokenizer.lineCount;
+          } else tokenizer.reset(code);
+          lines.length = first;
+          for (let line = first; line < tokenizer.lineCount; line++)
+            lines.push(tokenizer.getLineHtml(line));
           previous = code;
-          previousLanguage = language;
-          return { tokens };
+          return lines.join('\n');
         },
       };
     },
     highlight({ code, language }) {
       if (!isSupportedLanguage(language)) return null;
-      return codeToTokens(code.replace(/\r\n?/g, '\n'), {
-        ...options,
-        lang: language,
-      } as CodeToTokensOptions);
+      const html = decoder.decode(
+        codeToHtml(code, { ...options, lang: language } as CodeToHtmlOptions)
+      );
+      const start = html.indexOf('<code>') + 6;
+      return html.slice(start, html.lastIndexOf('</code>'));
     },
   };
 }

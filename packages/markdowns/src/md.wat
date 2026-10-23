@@ -46,7 +46,6 @@
   (import "./inline.wat")
   (import "./render.wat")
   (import "./frontmatter.wat")
-  (import "./elements.wat")
   (import "./complete.wat")
 
   (entity-table $mem.entities $mem.entitiesEnd)

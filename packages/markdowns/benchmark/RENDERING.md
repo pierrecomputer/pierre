@@ -1,4 +1,8 @@
-# Browser streaming measurements
+# Historical browser streaming measurements
+
+These measurements describe the earlier React-tree renderer. The current library
+uses direct HTML and native DOM updates; see [HTML-FIRST.md](./HTML-FIRST.md)
+for that architecture's measurements and follow-up results.
 
 The React adapter caches serialized block signatures and incomplete-fence checks
 by immutable node identity. This removes repeated traversal of completed blocks

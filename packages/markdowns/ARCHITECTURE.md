@@ -231,63 +231,43 @@ and rewinding the output cursor.
   999 characters, ordered list start numbers at nine digits, code fences at 255
   characters, and the input at 1 GiB.
 
-## Structured React output
+## HTML-first streaming
 
-`renderToElements()` renders with raw HTML disabled, then `elements.wat` walks
-only the generated markup and emits a tape of fixed-size element, attribute, and
-text records. Host glue decodes these into owned objects before another render
-can invalidate Wasm memory. The HTML and ANSI paths do not scan this tape. This
-adds a linear pass for structured output; it does not require a browser DOM
-parser or a JavaScript Markdown parser.
+The default component path renders Markdown directly to HTML in Wasm. Host glue
+decodes the output into strings; it never invokes the element-tape scanner or
+constructs owned Markdown nodes. `createHtmlSession()` retains a completed HTML
+prefix and the source offset at its safe append boundary. The boundary lives in
+control bytes 26–29 and the global-definition flag in byte 30. New completed
+regions are rendered once more for their cached HTML; subsequent calls render
+only the suffix. Edits, completion-option changes, suffix BOMs, and definitions
+conservatively reset this cache.
 
-`complete.wat` repairs a display copy of common unfinished inline constructs. It
-uses a bounded delimiter stack, protects code fences, and emits a sentinel for
-incomplete links. The React layer never navigates to the sentinel. The HTML
-backend marks the specific fenced code record closed by EOF as incomplete in
-structured output, so completed code blocks become interactive while the message
-is streaming.
+`html/render.ts` applies URL policies, element filters, code HTML, and trusted
+HTML hooks using strings. The HTML/ANSI core APIs keep their original behavior;
+the streaming HTML session omits raw source HTML. `complete.wat` repairs a
+display copy of unfinished syntax and emits a sentinel for pending links. HTML
+formatting removes that destination while keeping the anchor.
 
-The React adapter validates attributes and URLs, builds React elements, and
-memoizes each top-level output block by its serialized contents and rendering
-configuration. `createMarkdownSession()` also caches owned nodes before the last
-safe append boundary: a newline-terminated blank line where no container or leaf
-remains open. The parser publishes that byte offset in control bytes 26–29; host
-glue converts it to a UTF-16 string offset before Wasm memory can be reused.
-EOF-only closures never establish a boundary. Newly completed regions are parsed
-once more to obtain their cached nodes; later appends parse only the suffix. No
-block pointers survive across calls to the shared Wasm instance.
+`html/dom.ts` owns an opaque native DOM region. A comment checkpoint separates
+completed nodes from the mutable suffix. Browser templates parse only the new
+completed region and live suffix; the patcher preserves matching native nodes
+and advances the checkpoint without moving the content nodes. Definitions and
+edits can require patching the entire output. No virtual tree, Markdown-node
+objects, block signatures, or per-token React components are retained.
 
-The link index publishes a global-definition flag in control byte 30. Any
-reference or footnote definition disables prefix reuse and reparses the entire
-document, including earlier references. Replacement edits and changes to
-completion options reset the cache. A BOM at the start of a suffix also forces a
-full parse because only the original document's BOM may be skipped. Long open
-blocks are still reparsed in full; arbitrary-edit convergence and incremental
-reference dependency tracking are future work.
+Fades wrap newly delivered native text. A root-level timer tracks only live
+spans, then unwraps them into ordinary text. Pausing, reduced motion, and zero
+duration stop fades without replaying old chunks on resume.
 
-When a delivery ends at a link label's `]`, completion records its original EOF
-and sets option bit 2. Inline analysis first resolves real references, then
-gives only that trailing unresolved label a pending-link mark. The HTML backend
-emits the same sentinel destination used for open labels. This avoids inserting
-a synthetic destination into code or reference-definition source. The React
-adapter keeps the anchor or custom link mounted and omits `href` until
-validation succeeds.
+The React adapter renders one container with stable initial HTML for SSR and
+hydration, then reuses that formatter's caches in the committed DOM renderer.
+Temporary highlighter sessions are released even when a render is abandoned.
+React does not reconcile Markdown descendants. HTML hooks replace the earlier
+arbitrary React-component override API.
 
-The Highlights adapter creates a separate `LiveTokenizer` for each code block.
-Append edits resume lexer state near the final line; unchanged earlier token
-arrays are reused. Language changes and replacement edits reset the tokenizer.
-The React adapter disposes sessions on unmount or plugin replacement, and a
-disposed session may restart lazily (including after Strict Mode effect replay).
+Completed code fences use the highlighter's direct HTML output. One live
+highlighter handles the mutable fence, reads borrowed Wasm records, and caches
+line HTML strings. It releases that session when the fence closes or disappears.
 
-## React block metadata
-
-The React adapter stores each owned block's serialized content and incomplete
-fence flag in a `WeakMap` keyed by node identity. Completed nodes reused by the
-parser avoid both repeated serialization and recursive fence scans. Replaced
-nodes remain eligible for garbage collection. A full parse still produces new
-nodes, whose signatures are compared by content to preserve unchanged custom
-component state. Changes to rendering context or incomplete status still cause
-updates. Session nodes must remain immutable for this cache to be valid.
-
-The docs production demo can be profiled with `markdowns:bench-render`; see
-[the browser measurements](./benchmark/RENDERING.md).
+There is no structured-output compatibility layer or Wasm element-event tape.
+The library exposes HTML strings, borrowed HTML bytes, and native DOM updates.

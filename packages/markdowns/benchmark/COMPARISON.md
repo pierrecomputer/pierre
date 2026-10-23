@@ -1,4 +1,8 @@
-# Current performance and Streamdown comparison
+# Historical React-renderer performance and Streamdown comparison
+
+These October 21 results describe the earlier JavaScript-tree/React renderer.
+The HTML-first renderer replaces that architecture; these measurements must not
+be presented as its performance.
 
 Measured October 21, 2026 on an Apple M4 Max, 16 logical CPUs, 128 GiB RAM,
 macOS 26.6.2 arm64, Node 24.11.0. Browser comparisons use production React

@@ -6,7 +6,7 @@ import { pageMetadata } from '@/lib/page-metadata';
 export const metadata = pageMetadata({
   title: 'Markdowns, from Pierre',
   description:
-    'Streaming Markdown, rendered in WebAssembly. Try live editing, custom React components, and syntax highlighting.',
+    'Streaming Markdown, rendered directly to HTML in WebAssembly. Try live editing, HTML render hooks, and syntax highlighting.',
   path: '/markdowns',
 });
 
@@ -37,10 +37,10 @@ export default function MarkdownsPage() {
             </p>
           </div>
           <div>
-            <h2 className="mb-2 font-medium">Your components.</h2>
+            <h2 className="mb-2 font-medium">Your HTML.</h2>
             <p className="text-muted-foreground text-sm">
-              Bring your own headings, links, and code blocks with a familiar
-              React component map.
+              Customize headings, links, and code blocks with HTML string hooks.
+              Keep the rendering path direct.
             </p>
           </div>
           <div>

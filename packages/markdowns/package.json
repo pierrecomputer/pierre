@@ -27,6 +27,10 @@
       "types": "./dist/highlights.d.ts",
       "import": "./dist/highlights.js"
     },
+    "./html": {
+      "types": "./dist/html.d.ts",
+      "import": "./dist/html.js"
+    },
     "./styles.css": "./dist/styles.css"
   },
   "scripts": {

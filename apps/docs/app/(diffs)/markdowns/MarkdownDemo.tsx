@@ -17,7 +17,7 @@ import styles from './MarkdownDemo.module.css';
 import { Button } from '@/components/ui/button';
 
 const samples = {
-  conversation: `## A little room for better ideas\n\nGood tools get out of your way. **Great tools make you want to keep going.**\n\nThis response arrives a few characters at a time. Watch *emphasis*, [links](https://diffs.com), and code find their shape.\n\n### Built for the conversation\n\n- [x] Write naturally, with **GitHub Flavored Markdown**\n- [x] Bring your own React components\n- [ ] Make something worth sharing\n\n\`\`\`tsx\nimport { Markdown } from '@pierre/markdowns/react';
+  conversation: `## A little room for better ideas\n\nGood tools get out of your way. **Great tools make you want to keep going.**\n\nThis response arrives a few characters at a time. Watch *emphasis*, [links](https://diffs.com), and code find their shape.\n\n### Built for the conversation\n\n- [x] Write naturally, with **GitHub Flavored Markdown**\n- [x] Customize the generated HTML\n- [ ] Make something worth sharing\n\n\`\`\`tsx\nimport { Markdown } from '@pierre/markdowns/react';
 \n\nexport function Message({ text, streaming }) {\n  return (\n    <Markdown isAnimating={streaming} caret="block">\n      {text}\n    </Markdown>\n  );\n}\n\`\`\`\n\n| A familiar idea | A thoughtful detail |\n| :--- | :--- |\n| Markdown | Tables, tasks, and footnotes |\n| Streaming | Formatting before the final token |\n| Code | Highlighted by Pierre Highlights |\n\n> The best part of a good tool is what you make with it.\n\nKeep exploring [Pierre][pierre]. Every detail counts.[^1]\n\n[pierre]: https://diffs.com\n[^1]: Even the little ones at the bottom of the page.`,
   code: `## From a thought to a function\n\nA tiny generator, with a little **room to breathe**.\n\n\`\`\`typescript\nasync function* words(message: string) {\n  for (const word of message.split(' ')) {\n    yield word + ' ';\n    await new Promise((resolve) => setTimeout(resolve, 60));\n  }\n}\n\nfor await (const word of words('Hello, world.')) {\n  process.stdout.write(word);\n}\n\`\`\`\n\nInline code, like \`yield word\`, gets its own treatment. Unknown languages fall back to plain text.`,
   references: `## The details come together\n\nThis [reference link][guide] resolves when its definition arrives below. A footnote can arrive later, too.[^note]\n\n- First, an idea\n- Then, a **little more detail**\n- Finally, the pieces fit together\n\n[guide]: https://diffs.com/docs\n[^note]: Earlier content updates when later definitions give it new meaning.`,
@@ -29,21 +29,18 @@ const plugins = {
   }),
 };
 const overrides: Components = {
-  h2: ({ children }) => (
-    <h2 className={styles.customHeading}>
-      <span aria-hidden="true">✳</span>
-      {children}
-    </h2>
-  ),
-  a: ({ children, href, title }) => (
-    <a className={styles.customLink} href={href} title={title}>
-      {children}
-      <span aria-hidden="true"> ↗</span>
-    </a>
-  ),
-  inlineCode: ({ children }) => (
-    <code className={styles.customInline}>{children}</code>
-  ),
+  // Keep streamed title spans inside one flex item beside the icon.
+  h2: (html) =>
+    html
+      .replace('<h2 ', `<h2 class="${styles.customHeading}" `)
+      .replace(/^(<h2[^>]*>)/, '$1<span aria-hidden="true">✳</span><span>')
+      .replace('</h2>', '</span></h2>'),
+  a: (html) =>
+    html
+      .replace('<a ', `<a class="${styles.customLink}" `)
+      .replace('</a>', '<span aria-hidden="true"> ↗</span></a>'),
+  inlineCode: (html) =>
+    html.replace('<code ', `<code class="${styles.customInline}" `),
 };
 
 /** Playback uses the accumulated string, exactly like an AI SDK text message. */
@@ -184,7 +181,7 @@ export function MarkdownDemo() {
             checked={custom}
             onChange={(e) => setCustom(e.target.checked)}
           />{' '}
-          Custom components
+          HTML render hooks
         </label>
         <label>
           <input

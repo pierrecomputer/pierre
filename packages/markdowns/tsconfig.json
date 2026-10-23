@@ -5,6 +5,7 @@
     "benchmark/**/*.ts",
     "react/**/*.ts",
     "react/**/*.tsx",
+    "html/**/*.ts",
     "test/**/*.tsx",
     "tsdown.config.ts"
   ],

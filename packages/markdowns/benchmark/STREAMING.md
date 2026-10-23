@@ -1,4 +1,9 @@
-# Incremental streaming experiment
+# Historical incremental streaming experiment
+
+These October 21 results used the earlier structured-output APIs. Those APIs and
+their Wasm event scanner have since been removed. The current `bench-stream` and
+`bench-large` tasks measure HTML strings; the measurements below remain an
+archival record and do not describe the cleaned-up HTML implementation.
 
 Run `moon run markdowns:bench-stream` from the repo. The script replays fixed
 64-character chunks, alternates measurement order, discards one warmup, and

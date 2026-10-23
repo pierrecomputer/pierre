@@ -5,10 +5,15 @@ import {
   langIdOf,
 } from './highlighter';
 import type { CodeToTokensOptions, ThemedToken } from './index';
-import { defaultCssVariablePrefix } from './theme';
+import { defaultCssVariablePrefix, escapeAttribute } from './theme';
 import tokenTypes from './token-types';
 import type { ResolvedTheme } from './tokens';
-import { rangeToToken, resolveOptionThemes, standardTypes } from './tokens';
+import {
+  rangeToToken,
+  resolveOptionThemes,
+  standardTypes,
+  themeHtmlStyle,
+} from './tokens';
 
 const enc = new TextEncoder();
 
@@ -264,6 +269,7 @@ export class LiveTokenizer {
   #themes: ResolvedTheme[];
   #cssVariablePrefix: string;
   #maxLineLength: number;
+  #htmlOpeners: string[] = [];
   #onDeferTokenize:
     | ((lines: Map<number, HighlightedToken[]>) => void)
     | undefined;
@@ -473,6 +479,52 @@ export class LiveTokenizer {
         wide ? n * 2 : n
       ),
     };
+  }
+
+  /** Serialize borrowed Wasm records directly to HTML, without themed token objects. */
+  getLineHtml(line: number): string {
+    const text = this.getLineText(line);
+    if (this.#maxLineLength > 0 && text.length >= this.#maxLineLength)
+      return escapeAttribute(text);
+    const records = this.getLineRecords(line);
+    const wide = records.format === 'wide32';
+    const stride = wide ? 2 : 1;
+    let start = 0;
+    let html = '';
+    for (let at = 0; at < records.data.length; at += stride) {
+      const word = records.data[at];
+      const end = wide ? word : word & 0xffffff;
+      const token = wide ? records.data[at + 1] : word >>> 24;
+      if (end <= start) continue;
+      const value = escapeAttribute(text.slice(start, end));
+      if (token === 0) html += value;
+      else {
+        let opener = this.#htmlOpeners[token];
+        if (opener === undefined) {
+          const single = this.#themes[0].role === 'single';
+          const themeStyle = this.#themes[0].styles[token];
+          const style = single
+            ? {
+                color: themeStyle?.color ?? this.#themes[0].fg ?? 'inherit',
+                ...(themeStyle?.italic === true
+                  ? { 'font-style': 'italic' }
+                  : {}),
+                ...((themeStyle?.weight ?? 0) !== 0
+                  ? { 'font-weight': String(themeStyle?.weight) }
+                  : {}),
+              }
+            : themeHtmlStyle(this.#themes, token, this.#cssVariablePrefix);
+          let css = '';
+          for (const property in style)
+            css += `${property}:${style[property]};`;
+          opener = `<span style="${escapeAttribute(css)}">`;
+          this.#htmlOpeners[token] = opener;
+        }
+        html += opener + value + '</span>';
+      }
+      start = end;
+    }
+    return html + escapeAttribute(text.slice(start));
   }
 
   /**

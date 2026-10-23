@@ -1,4 +1,4 @@
-import { execFileSync } from 'node:child_process';
+import { execFile } from 'node:child_process';
 import {
   existsSync,
   mkdirSync,
@@ -10,6 +10,7 @@ import { createServer } from 'node:http';
 import { createRequire } from 'node:module';
 import { dirname, join, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { promisify } from 'node:util';
 
 // Streamdown is deliberately isolated from the workspace dependency graph.
 const options = Object.fromEntries(
@@ -264,21 +265,24 @@ if (options['serve-only']) await new Promise(() => {});
 const results = [];
 let session;
 let open = false;
-const browser = (...arguments_) =>
-  execFileSync('agent-browser', ['--session', session, ...arguments_], {
-    encoding: 'utf8',
-    maxBuffer: 8 * 1024 * 1024,
-    timeout: 30000,
-  });
+const execute = promisify(execFile);
+const browser = async (...arguments_) =>
+  (
+    await execute('agent-browser', ['--session', session, ...arguments_], {
+      encoding: 'utf8',
+      maxBuffer: 8 * 1024 * 1024,
+      timeout: 30000,
+    })
+  ).stdout;
 const save = () =>
   writeFileSync(
     join(output, 'summary.json'),
     JSON.stringify({ metadata, results }, null, 2) + '\n'
   );
-const close = () => {
+const close = async () => {
   if (!open) return;
   open = false;
-  browser('close');
+  await browser('close');
 };
 save();
 try {
@@ -291,22 +295,25 @@ try {
           session = `markdown-compare-${process.pid}-${scale}-${mode}-${run}-${library}`;
           const settings = { library, mode, scale, run };
           try {
-            browser(
+            await browser(
               'open',
               `${baseUrl}/${library}/index.html?scale=${scale}&mode=${mode}`
             );
             open = true;
-            browser('set', 'viewport', '1280', '960');
-            browser(
+            await browser('set', 'viewport', '1280', '960');
+            await browser(
               'wait',
               '--fn',
               'window.markdownComparison?.ready === true'
             );
-            browser('eval', 'window.markdownComparison.start();true');
+            await browser('eval', 'window.markdownComparison.start();true');
             const deadline = Date.now() + timeout;
             while (
               !JSON.parse(
-                browser('eval', 'window.markdownComparison?.done === true')
+                await browser(
+                  'eval',
+                  'window.markdownComparison?.done === true'
+                )
               )
             ) {
               if (Date.now() > deadline)
@@ -314,7 +321,7 @@ try {
               await new Promise((resolve) => setTimeout(resolve, 1000));
             }
             const result = JSON.parse(
-              browser('eval', 'window.markdownComparison.result()')
+              await browser('eval', 'window.markdownComparison.result()')
             );
             results.push({ ...settings, ...result });
             console.log(JSON.stringify({ ...settings, ...result }));
@@ -322,7 +329,10 @@ try {
             let partial = null;
             try {
               partial = JSON.parse(
-                browser('eval', 'window.markdownComparison?.result() ?? null')
+                await browser(
+                  'eval',
+                  'window.markdownComparison?.result() ?? null'
+                )
               );
             } catch {
               // An unresponsive renderer still counts as a bounded failure.
@@ -331,12 +341,12 @@ try {
             console.log(JSON.stringify(results.at(-1)));
           } finally {
             save();
-            close();
+            await close();
           }
         }
       }
 } finally {
-  close();
+  await close();
   if (server)
     await new Promise((resolve) => {
       server.close(resolve);

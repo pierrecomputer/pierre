@@ -135,7 +135,7 @@
   letter-spacing: -0.04em;
   margin-block: 1em 0.6em;
 }
-.customHeading span {
+.customHeading > span[aria-hidden='true'] {
   color: #218b67;
 }
 .customLink {

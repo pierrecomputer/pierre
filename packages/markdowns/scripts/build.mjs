@@ -833,6 +833,8 @@ if (
   const moduleUrl = import.meta.url;
   try {
     const outputUrl = new URL('../dist/', moduleUrl);
+    // Remove obsolete chunks before writing the core files that tsdown preserves.
+    fs.rmSync(outputUrl, { recursive: true, force: true });
     fs.mkdirSync(outputUrl, { recursive: true });
     for (const file of fs.readdirSync(new URL('../lib/', moduleUrl))) {
       if (file.endsWith('.mjs') || file.endsWith('.d.ts')) {
