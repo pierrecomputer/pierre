@@ -48,8 +48,11 @@
 }
 
 /* The header and the content of a pane. During a FLIP animation it takes the
-   inverse of the host's scale, so text keeps its shape. */
+   inverse of the host's scale, so text keeps its shape. It always has an
+   identity transform: a transform that starts with the animation would change
+   the containing block of the content and force a layout. */
 .pierre-layout-pane-inner {
+  transform: scale(1);
   display: flex;
   flex-direction: column;
   width: 100%;

@@ -184,7 +184,11 @@ Motion respects `prefers-reduced-motion`.
 
 Each pane host clips its content at its rounded border with `overflow: clip`.
 The host never scrolls; its content area scrolls. Put a menu or a tooltip that
-must extend past its pane in the top layer, with `popover` or `<dialog>`.
+must extend past its pane in the top layer, with `popover` or `<dialog>`. The
+header and the content sit in a wrapper with an identity transform, so
+`position: fixed` in pane content is fixed to the pane. While a pane changes
+size, the wrapper takes the inverse of the pane's scale, so text and headers
+keep their shape and the pane's frame reveals or clips its content.
 
 Style with `--layout-accent`, `--layout-border`, `--layout-pane-background`, and
 `--layout-duration`. Discrete layout changes animate with transforms from each
