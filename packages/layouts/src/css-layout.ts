@@ -1,4 +1,15 @@
 import { getMinimumSize } from './geometry';
+import {
+  add,
+  clamp,
+  constant,
+  max,
+  min,
+  type Piecewise,
+  scale,
+  size,
+  toCSS,
+} from './piecewise';
 import type { LayoutNode, PaneNode, SplitNode } from './types';
 
 export interface CSSRect {
@@ -137,6 +148,24 @@ export function computeCSSLayout(root: LayoutNode, gap = 8): CSSLayout {
     {}
   );
   visit(root, whole.rect, whole.scope);
+  pairCorners(
+    separators,
+    (h, v) => ({
+      left: `calc(${h.rect.left} + ${h.rect.width} / 2 - 7px)`,
+      top: `calc(${v.rect.top} + ${v.rect.height} / 2 - 7px)`,
+      variables: { ...h.variables, ...v.variables },
+    }),
+    corners
+  );
+  return { variables, panes, separators, corners };
+}
+
+/** Find the corners where a horizontal and a vertical separator meet. */
+function pairCorners<T extends { split: SplitNode }>(
+  separators: readonly T[],
+  make: (horizontal: T, vertical: T) => Omit<CSSCorner, 'id' | 'splitIds'>,
+  corners: CSSCorner[]
+): void {
   const byId = new Map(
     separators.map((separator) => [separator.split.id, separator])
   );
@@ -153,14 +182,106 @@ export function computeCSSLayout(root: LayoutNode, gap = 8): CSSLayout {
       const v = horizontal ? otherSeparator : separator;
       const id = `${h.split.id}:${v.split.id}`;
       if (corners.some((corner) => corner.id === id)) continue;
-      corners.push({
-        id,
-        splitIds: [h.split.id, v.split.id],
-        left: `calc(${h.rect.left} + ${h.rect.width} / 2 - 7px)`,
-        top: `calc(${v.rect.top} + ${v.rect.height} / 2 - 7px)`,
-        variables: { ...h.variables, ...v.variables },
-      });
+      corners.push({ id, splitIds: [h.split.id, v.split.id], ...make(h, v) });
     }
   }
-  return { variables, panes, separators, corners };
+}
+
+interface PiecewiseBox {
+  left: Piecewise;
+  top: Piecewise;
+  width: Piecewise;
+  height: Piecewise;
+}
+
+/**
+ * Compile the split tree to one CSS value for each property of each element,
+ * with no custom properties. Each horizontal edge is a piecewise-linear
+ * function of the container width, and each vertical edge of its height, so
+ * `toCSS` writes it with container units and one hinge term for each point
+ * where a minimum size or a gap starts to apply. `hinges: false` keeps only
+ * the form for large containers, to measure the cost of the hinge terms.
+ */
+export function computePiecewiseCSSLayout(
+  root: LayoutNode,
+  gap = 8,
+  hinges = true
+): CSSLayout {
+  if (!Number.isFinite(gap) || gap < 0)
+    throw new Error('Layout gap must be finite and non-negative');
+  const panes: CSSPane[] = [];
+  const separators: (CSSSeparator & { box: PiecewiseBox })[] = [];
+  const corners: CSSCorner[] = [];
+  const none: CSSVariables = {};
+  const css = (box: PiecewiseBox): CSSRect => ({
+    left: toCSS(box.left, '100cqw', hinges),
+    top: toCSS(box.top, '100cqh', hinges),
+    width: toCSS(box.width, '100cqw', hinges),
+    height: toCSS(box.height, '100cqh', hinges),
+  });
+  function visit(node: LayoutNode, box: PiecewiseBox): void {
+    if (node.type === 'pane') {
+      panes.push({ pane: node, rect: css(box), variables: none });
+      return;
+    }
+    const horizontal = node.direction === 'horizontal';
+    const axis = horizontal ? 'width' : 'height';
+    const position = horizontal ? 'left' : 'top';
+    // The same steps as `computeCSSLayout`, on functions instead of strings.
+    const actualGap = min(constant(gap), box[axis]);
+    const available = max(constant(0), add(box[axis], scale(actualGap, -1)));
+    const firstMin = getMinimumSize(node.first, gap)[axis];
+    const secondMin = getMinimumSize(node.second, gap)[axis];
+    const share =
+      firstMin + secondMin === 0 ? 0.5 : firstMin / (firstMin + secondMin);
+    const lower = min(constant(firstMin), scale(available, share));
+    const upper = max(lower, add(available, constant(-secondMin)));
+    const firstSize = clamp(lower, scale(available, node.ratio), upper);
+    const handle = {
+      ...box,
+      [position]: add(box[position], firstSize),
+      [axis]: actualGap,
+    };
+    separators.push({
+      split: node,
+      rect: css(handle),
+      variables: none,
+      box: handle,
+    });
+    visit(node.first, { ...box, [axis]: firstSize });
+    visit(node.second, {
+      ...box,
+      [position]: add(handle[position], actualGap),
+      [axis]: add(available, scale(firstSize, -1)),
+    });
+  }
+  visit(root, {
+    left: constant(0),
+    top: constant(0),
+    width: size(),
+    height: size(),
+  });
+  pairCorners(
+    separators,
+    (h, v) => ({
+      left: toCSS(
+        add(add(h.box.left, scale(h.box.width, 0.5)), constant(-7)),
+        '100cqw',
+        hinges
+      ),
+      top: toCSS(
+        add(add(v.box.top, scale(v.box.height, 0.5)), constant(-7)),
+        '100cqh',
+        hinges
+      ),
+      variables: none,
+    }),
+    corners
+  );
+  return {
+    variables: {},
+    panes,
+    separators: separators.map(({ box: _box, ...separator }) => separator),
+    corners,
+  };
 }

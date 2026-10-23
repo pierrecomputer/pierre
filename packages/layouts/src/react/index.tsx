@@ -17,7 +17,7 @@ import {
   useSyncExternalStore,
 } from 'react';
 
-import { computeCSSLayout } from '../css-layout';
+import { computeCSSLayout, computePiecewiseCSSLayout } from '../css-layout';
 import { computeLayout, getExitEdge } from '../geometry';
 import { getPanes } from '../model';
 import type { LayoutStore } from '../store';
@@ -38,6 +38,13 @@ export interface LayoutProps {
   gap?: number;
   /** Accessible name of the workspace. */
   label?: string;
+  /**
+   * Experimental, for `explore-geometry-linear-form`: `registered` sets
+   * geometry as registered custom properties, `piecewise` as one value for
+   * each property, and `linear` as that value without the terms for small
+   * containers (to measure their cost; not exact below the minimum sizes).
+   */
+  experimentalGeometry?: 'registered' | 'piecewise' | 'linear';
 }
 
 interface ResizeGesture {
@@ -259,6 +266,7 @@ export function Layout({
   style,
   gap = 8,
   label = 'Workspace',
+  experimentalGeometry = 'registered',
 }: LayoutProps): JSX.Element {
   const rootRef = useRef<HTMLDivElement>(null);
   const gesture = useRef<ResizeGesture | MoveGesture | null>(null);
@@ -320,8 +328,15 @@ export function Layout({
   // The store keeps the tree on focus and zoom changes, so this runs only when
   // the tree or the gap changes.
   const geometry = useMemo(
-    () => computeCSSLayout(state.root, gap),
-    [state.root, gap]
+    () =>
+      experimentalGeometry === 'registered'
+        ? computeCSSLayout(state.root, gap)
+        : computePiecewiseCSSLayout(
+            state.root,
+            gap,
+            experimentalGeometry === 'piecewise'
+          ),
+    [state.root, gap, experimentalGeometry]
   );
   registerGeometryVariables(
     Object.keys(geometry.variables).length / BOX_SIDES.length
