@@ -3,9 +3,25 @@
 Throughput against [md4x](https://github.com/unjs/md4x) (MD4C, native and Wasm)
 and [markdown-it](https://github.com/markdown-it/markdown-it).
 
-The [current performance and Streamdown comparison](./COMPARISON.md) includes
-the October 21, 2026 parser rerun, matched browser replays, memory diagnostics,
-and configured bundle sizes.
+The [current benchmark report](./CURRENT.md) covers parser replay, browser
+responsiveness, memory, and bundle footprint after the HTML-first cleanup,
+including a fresh comparison with Streamdown and the 1,000× capacity limit.
+
+The [initial October 22 HTML-first report](./HTML-FIRST.md) records the rewrite
+and the large-document fade regression resolved by removing custom selection
+handling.
+
+The [historical React-renderer and Streamdown comparison](./COMPARISON.md)
+includes the October 21, 2026 parser rerun, matched browser replays, memory
+diagnostics, and configured bundle sizes. It predates the HTML-first rendering
+path.
+
+HTML-first measurements use `bench-html` for string-output replay and memory,
+`bench-render-compare` for production browser timings, `bench-memory` for
+separate browser heap diagnostics, and `bench-footprint` for configured consumer
+bundles. `bench-large` measures sparse HTML replays, borrowed/owned HTML output,
+and session memory at the selected stress scale. Both streaming tasks now use
+HTML strings; the earlier structured-element APIs have been removed.
 
 ```sh
 moonx markdowns:bench

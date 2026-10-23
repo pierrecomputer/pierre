@@ -1,5 +1,5 @@
 import pierreLight from '@pierre/highlights/themes/pierre-light';
-import { createMarkdownSession, renderToElements } from '@pierre/markdowns';
+import { createHtmlSession, renderToHtml } from '@pierre/markdowns';
 import { createHighlightsPlugin } from '@pierre/markdowns/highlights';
 import { performance } from 'node:perf_hooks';
 
@@ -44,26 +44,29 @@ const prose = Array.from(
   (_, i) =>
     `## Section ${i}\n\nA paragraph with **bold**, *emphasis*, and [a link](/docs/${i}).\n\n- One\n- Two\n\n`
 ).join('');
-compare(
-  'Markdown blocks',
-  prose,
-  (input) => renderToElements(input, { incomplete: true }),
-  () => {
-    const session = createMarkdownSession();
-    return { render: (input) => session.render(input, { incomplete: true }) };
-  }
-);
+const decoder = new TextDecoder();
+const htmlOptions = { frontmatter: false, incomplete: true, skipHtml: true };
+/** Decode direct Wasm output with the same repair and raw-HTML flags as sessions. */
+const fullHtml = (input: string): string =>
+  decoder.decode(renderToHtml(input, htmlOptions));
+const incrementalHtml = (): { render(input: string): string } => {
+  const session = createHtmlSession();
+  return {
+    render: (input) => session.render(input, { incomplete: true }).html,
+  };
+};
+compare('Markdown HTML blocks', prose, fullHtml, incrementalHtml);
 compare(
   'Markdown long open paragraph',
   'A paragraph with **bold** words. '.repeat(500),
-  renderToElements,
-  createMarkdownSession
+  fullHtml,
+  incrementalHtml
 );
 compare(
   'Markdown reference fallback',
   `${prose}\n[id]: /target\n\n${prose}`,
-  renderToElements,
-  createMarkdownSession
+  fullHtml,
+  incrementalHtml
 );
 const plugin = createHighlightsPlugin({ theme: pierreLight });
 const code = Array.from(

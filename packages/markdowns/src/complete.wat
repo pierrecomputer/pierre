@@ -14,7 +14,7 @@
     (local $fence i32) (local $fenceLen i32) (local $tick i32)
     (local $line i32) (local $indent i32) (local $open i32) (local $url i32)
     (local $image i32) (local $html i32) (local $canOpen i32) (local $canClose i32)
-    (local $top i32) (local $remaining i32)
+    (local $top i32) (local $remaining i32) (local $closeAt i32)
     (local.set $p (i32.const $mem.input))
     (local.set $line (local.get $p))
     (local.set $end (i32.add (local.get $p) (i32.load (i32.const 2))))
@@ -121,8 +121,11 @@
           (then (local.set $open (i32.const 0)) (local.set $url (i32.const 0))))
         (if (local.get $url)
           (then (local.set $p (i32.add (local.get $p) (i32.const 1))) (br $scan)))
-        (if (i32.or (i32.eq (local.get $c) (i32.const "*"))
-              (i32.or (i32.eq (local.get $c) (i32.const "_")) (i32.eq (local.get $c) (i32.const "~"))))
+        ;; An unfinished HTML tag is discarded below. Its attributes must not
+        ;; leave emphasis closers behind in the visible text before that tag.
+        (if (i32.and (i32.eqz (local.get $html))
+              (i32.or (i32.eq (local.get $c) (i32.const "*"))
+                (i32.or (i32.eq (local.get $c) (i32.const "_")) (i32.eq (local.get $c) (i32.const "~")))))
           (then
             (local.set $q (local.get $p))
             (block $marksDone
@@ -170,14 +173,41 @@
           (then
             (memory.fill (local.get $end) (i32.const "`") (local.get $tick))
             (local.set $end (i32.add (local.get $end) (local.get $tick)))))
-        (block $closed
-          (loop $closeMarks
-            (br_if $closed (i32.eqz (local.get $depth)))
-            (local.set $depth (i32.sub (local.get $depth) (i32.const 1)))
-            (local.set $top (i32.add (local.get $stack) (i32.mul (local.get $depth) (i32.const 8))))
-            (local.set $n (i32.load offset=4 (local.get $top)))
-            (memory.fill (local.get $end) (i32.load (local.get $top)) (local.get $n))
-            (local.set $end (i32.add (local.get $end) (local.get $n))) (br $closeMarks)))))
+        (if (local.get $depth)
+          (then
+            ;; A closer after whitespace is literal Markdown. Insert synthetic
+            ;; emphasis closers before that whitespace so spaces between
+            ;; streamed words cannot remove and recreate their formatting.
+            (local.set $closeAt (local.get $end))
+            (block $contentEnd
+              (loop $trailingWhite
+                (br_if $contentEnd (i32.le_u (local.get $closeAt) (i32.const $mem.input)))
+                (local.set $c (call $utf8Before (local.get $closeAt) (i32.const $mem.input)))
+                (br_if $contentEnd (i32.eqz (call $isWhiteCp (local.get $c))))
+                (local.set $closeAt (i32.sub (local.get $closeAt)
+                  (if (result i32) (i32.lt_u (local.get $c) (i32.const 0x80)) (then (i32.const 1))
+                    (else (if (result i32) (i32.lt_u (local.get $c) (i32.const 0x800))
+                      (then (i32.const 2)) (else (i32.const 3)))))))
+                (br $trailingWhite)))
+            ;; Reserve all closers at once; even a long whitespace suffix is
+            ;; moved only once, independently of the bounded delimiter depth.
+            (local.set $q (local.get $depth))
+            (local.set $remaining (i32.const 0))
+            (loop $closingSize
+              (local.set $q (i32.sub (local.get $q) (i32.const 1)))
+              (local.set $top (i32.add (local.get $stack) (i32.mul (local.get $q) (i32.const 8))))
+              (local.set $remaining (i32.add (local.get $remaining) (i32.load offset=4 (local.get $top))))
+              (br_if $closingSize (local.get $q)))
+            (memory.copy (i32.add (local.get $closeAt) (local.get $remaining)) (local.get $closeAt)
+              (i32.sub (local.get $end) (local.get $closeAt)))
+            (local.set $end (i32.add (local.get $end) (local.get $remaining)))
+            (loop $closeMarks
+              (local.set $depth (i32.sub (local.get $depth) (i32.const 1)))
+              (local.set $top (i32.add (local.get $stack) (i32.mul (local.get $depth) (i32.const 8))))
+              (local.set $n (i32.load offset=4 (local.get $top)))
+              (memory.fill (local.get $closeAt) (i32.load (local.get $top)) (local.get $n))
+              (local.set $closeAt (i32.add (local.get $closeAt) (local.get $n)))
+              (br_if $closeMarks (local.get $depth)))))))
     (if (local.get $open)
       (then
         (if (i32.eqz (local.get $url))

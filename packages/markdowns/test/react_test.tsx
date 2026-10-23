@@ -1,34 +1,38 @@
 import pierreDark from '@pierre/highlights/themes/pierre-dark';
 import pierreLight from '@pierre/highlights/themes/pierre-light';
-import {
-  createMarkdownSession,
-  renderToElements,
-  renderToHtml,
-} from '@pierre/markdowns';
-import type { MarkdownNode } from '@pierre/markdowns';
+import { createHtmlSession, renderToHtml } from '@pierre/markdowns';
 import { afterEach, describe, expect, test } from 'bun:test';
 import { JSDOM } from 'jsdom';
-import { act, useEffect } from 'react';
-import { StrictMode } from 'react';
-import type { ReactNode } from 'react';
+import { act, StrictMode } from 'react';
 import { createRoot, hydrateRoot } from 'react-dom/client';
 import type { Root } from 'react-dom/client';
 import { renderToStaticMarkup, renderToString } from 'react-dom/server';
 
+import { createDomRenderer } from '../html/dom';
+import { createHtmlRenderer } from '../html/render';
 import { createHighlightsPlugin } from '../react/highlights';
 import { Markdown } from '../react/react';
 import { defaultUrlTransform } from '../react/react';
-import type { Components, ExtraProps } from '../react/react';
+import type { Components } from '../react/react';
 
 const decoder = new TextDecoder();
 const html = (
   source: string,
   props: Partial<Parameters<typeof Markdown>[0]> = {}
 ): string => renderToStaticMarkup(<Markdown {...props}>{source}</Markdown>);
-const flatten = (nodes: MarkdownNode[]): string =>
-  nodes
-    .map((node) => (node.type === 'text' ? node.value : flatten(node.children)))
-    .join('');
+/** Render a fresh HTML session for comparisons that must bypass cached prefixes. */
+const parse = (source: string, incomplete = false): string =>
+  createHtmlSession().render(source, { incomplete }).html;
+
+/** Read visible output with the browser HTML parser only in semantic tests. */
+function text(source: string, incomplete = false): string {
+  const document = new JSDOM(parse(source, incomplete));
+  try {
+    return document.window.document.body.textContent ?? '';
+  } finally {
+    document.window.close();
+  }
+}
 let root: Root | undefined;
 let dom: JSDOM | undefined;
 const originalWindow = globalThis.window;
@@ -58,44 +62,42 @@ afterEach(async () => {
   globalThis.document = originalDocument;
 });
 
-describe('WAT structured output', () => {
-  test('owns its strings and decodes generated entities exactly once', () => {
-    const nodes = renderToElements(
+describe('direct WAT HTML output', () => {
+  test('owns its strings and escapes generated entities exactly once', () => {
+    const output = parse(
       'é **中 &amp; &lt; &amp;lt;** ![alt &quot;x&quot;](/img)'
     );
-    const before = JSON.stringify(nodes);
     renderToHtml('another document'.repeat(20000));
-    expect(JSON.stringify(nodes)).toBe(before);
-    expect(flatten(nodes)).toContain('中 & < &lt;');
-    expect(JSON.stringify(nodes)).toContain(
-      'alt \\"x\\"'.replaceAll('\\\\', '\\')
-    );
+    expect(output).toContain('中 &amp; &lt; &amp;lt;');
+    expect(output).toContain('alt="alt &quot;x&quot;"');
   });
-  test('structured output excludes raw HTML while preserving ordinary inline text', () => {
-    expect(
-      flatten(renderToElements('Hello <span onclick="bad()">world</span>'))
-    ).toBe('Hello world');
-    expect(renderToElements('<img src=x onerror="bad()">')).toEqual([]);
+  test('streamed HTML excludes raw tags while preserving ordinary inline text', () => {
+    expect(text('Hello <span onclick="bad()">world</span>')).toBe(
+      'Hello world\n'
+    );
+    expect(parse('<img src=x onerror="bad()">').trim()).toBe('');
     expect(
       decoder.decode(renderToHtml('<img src=x onerror="bad()">'))
     ).toContain('onerror');
   });
-  test('large event tapes survive memory growth and remain usable', () => {
-    const nodes = renderToElements(
+  test('large HTML strings survive memory growth and renderer reuse', () => {
+    const output = parse(
       Array.from({ length: 5000 }, (_, i) => `**row ${i}** & text\n\n`).join('')
     );
-    expect(nodes).toHaveLength(5000);
-    expect(flatten(nodes.slice(-1))).toBe('row 4999 & text');
-    expect(flatten(renderToElements('# again'))).toBe('again');
+    expect(output.match(/<p>/g)).toHaveLength(5000);
+    expect(
+      output.endsWith('<p><strong>row 4999</strong> &amp; text</p>\n')
+    ).toBe(true);
+    expect(parse('# again')).toBe('<h1>again</h1>\n');
+    expect(output.startsWith('<p><strong>row 0</strong>')).toBe(true);
   });
-  test('tables, tasks, links, and footnotes produce structured elements', () => {
-    const nodes = renderToElements(
+  test('tables, tasks, links, and footnotes render directly as HTML', () => {
+    const output = parse(
       '- [x] Done\n\n| A | B |\n|---|---|\n|x|y|\n\nNote[^1]\n\n[^1]: Detail'
     );
-    const serialized = JSON.stringify(nodes);
-    expect(serialized).toContain('"tagName":"table"');
-    expect(serialized).toContain('"checked":""');
-    expect(serialized).toContain('footnote-ref');
+    expect(output).toContain('<table>');
+    expect(output).toContain('checked');
+    expect(output).toContain('footnote-ref');
   });
 });
 
@@ -132,9 +134,7 @@ describe('streaming display completion', () => {
       '`**literal`',
       '```js\nconst x = "**literal"',
     ]) {
-      expect(flatten(renderToElements(source, { incomplete: true }))).toBe(
-        flatten(renderToElements(source))
-      );
+      expect(text(source, true)).toBe(text(source));
     }
   });
   test('protects nested fences and reports their completion from the block parser', () => {
@@ -142,9 +142,7 @@ describe('streaming display completion', () => {
       '> ```js\n> **literal',
       '- item\n\n  ```js\n  **literal',
     ]) {
-      expect(flatten(renderToElements(source, { incomplete: true }))).toBe(
-        flatten(renderToElements(source))
-      );
+      expect(text(source, true)).toBe(text(source));
       expect(html(source, { isAnimating: true })).toContain('disabled=""');
     }
     const source = 'Note[^1]\n\n[^1]: earlier\n\n```js\n**literal';
@@ -159,8 +157,8 @@ describe('streaming display completion', () => {
         seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
         source += alphabet[seed % alphabet.length];
       }
-      const first = renderToElements(source, { incomplete: true });
-      expect(renderToElements(source, { incomplete: true })).toEqual(first);
+      const first = parse(source, true);
+      expect(parse(source, true)).toBe(first);
     }
   });
   test('closed fences become interactive while the message is still streaming', () => {
@@ -181,8 +179,99 @@ describe('streaming display completion', () => {
   });
 });
 
-describe('React rendering and security', () => {
-  test('filters raw HTML, event handlers, dangerous schemes and transformed URLs', () => {
+describe('HTML rendering and the React wrapper', () => {
+  test('formats initial content once and reuses its caches for appends', async () => {
+    const container = mountDOM();
+    root = createRoot(container);
+    let calls = 0;
+    const components: Components = {
+      p: (value) => {
+        calls++;
+        return value;
+      },
+    };
+    const render = async (value: string): Promise<void> => {
+      await act(async () => {
+        root?.render(<Markdown components={components}>{value}</Markdown>);
+      });
+    };
+    await render('First\n\nSecond');
+    expect(calls).toBe(2);
+    const first = container.querySelector('p');
+    await render('First\n\nSecond');
+    expect(calls).toBe(2);
+    await render('First\n\nSecond grows');
+    expect(calls).toBe(3);
+    expect(container.querySelector('p')).toBe(first);
+  });
+  test('hydration effects reuse the client formatting pass', async () => {
+    let calls = 0;
+    const components: Components = {
+      a: (value) => {
+        calls++;
+        return value;
+      },
+    };
+    const element = (
+      <Markdown components={components}>{'See [guide](/docs).'}</Markdown>
+    );
+    const markup = renderToString(element);
+    expect(calls).toBe(1);
+    const container = mountDOM(markup);
+    const anchor = container.querySelector('a');
+    await act(async () => {
+      root = hydrateRoot(container, element);
+    });
+    expect(calls).toBe(2);
+    expect(container.querySelector('a')).toBe(anchor);
+  });
+  test('StrictMode releases initial highlighters and reuses formatting through effect replay', async () => {
+    const container = mountDOM();
+    root = createRoot(container);
+    let calls = 0;
+    let live = 0;
+    const highlight = (): string => {
+      calls++;
+      return 'highlighted';
+    };
+    const plugins = {
+      code: {
+        highlight,
+        createSession: () => {
+          live++;
+          return {
+            highlight,
+            dispose: () => {
+              live--;
+            },
+          };
+        },
+      },
+    };
+    const render = async (value: string): Promise<void> => {
+      await act(async () => {
+        root?.render(
+          <StrictMode>
+            <Markdown plugins={plugins} isAnimating>
+              {value}
+            </Markdown>
+          </StrictMode>
+        );
+      });
+    };
+    await render('```text\nHello');
+    expect(calls).toBe(2);
+    expect(live).toBe(0);
+    await render('```text\nHello world');
+    expect(calls).toBe(3);
+    expect(live).toBe(1);
+    await act(async () => {
+      root?.unmount();
+    });
+    root = undefined;
+    expect(live).toBe(0);
+  });
+  test('validates URLs, omits raw source HTML, and escapes entities once', () => {
     const output = html(
       '[bad](javascript:alert(1))\n\n![bad](data:image/svg+xml,bad)\n\n<img src=x onerror="bad()">'
     );
@@ -191,9 +280,12 @@ describe('React rendering and security', () => {
     expect(output).not.toContain('onerror');
     expect(
       html('[safe](https://example.com)', {
-        urlTransform: () => 'javascript:alert(1)',
+        urlTransform: () => 'javascript:bad()',
       })
     ).not.toContain('href=');
+    expect(html('é **中 &amp; &lt; &amp;lt;**')).toContain(
+      '中 &amp; &lt; &amp;lt;'
+    );
     for (const url of [
       'javascript:bad()',
       'jav\tascript:bad()',
@@ -210,36 +302,25 @@ describe('React rendering and security', () => {
     ])
       expect(defaultUrlTransform(url)).toBe(url);
   });
-  test('supports React overrides with normalized attributes and nested children', () => {
+  test('runs HTML hooks on generated markup and keeps inline code separate', () => {
     const components: Components = {
-      a: ({ href, children, node }) => (
-        <button data-href={href} data-tag={node.tagName}>
-          {children}
-        </button>
-      ),
+      a: (value) => value.replace('<a ', '<a class="custom" '),
+      inlineCode: (value) =>
+        value.replace(/^<code[^>]*>|<\/code>$/g, (tag) =>
+          tag.startsWith('</') ? '</mark>' : '<mark>'
+        ),
     };
-    expect(html('[**Hello**](/docs)', { components })).toContain(
-      '<button data-href="/docs" data-tag="a"><strong'
+    const output = html(
+      '[**Hello**](/docs) and `inline`\n\n```text\nfenced\n```',
+      { components }
     );
-    expect(
-      html('`hello`', {
-        components: { inlineCode: ({ children }) => <mark>{children}</mark> },
-      })
-    ).toContain('<mark>hello</mark>');
-  });
-  test('keeps inline and fenced code overrides separate inside custom pre elements', () => {
-    const components: Components = {
-      pre: ({ children }) => <pre>{children}</pre>,
-      inlineCode: ({ children }) => <mark>{children}</mark>,
-      code: ({ children, inline }) => (
-        <code data-inline={String(inline)}>{children}</code>
-      ),
-    };
-    const output = html('`inline`\n\n```text\nfenced\n```', { components });
+    expect(output).toContain('<a class="custom"');
+    expect(output).toContain('<strong data-markdown="strong">Hello</strong>');
     expect(output).toContain('<mark>inline</mark>');
-    expect(output).toContain('<code data-inline="false">fenced');
+    expect(output).toContain('language-text');
+    expect(output).not.toContain('<mark>fenced');
   });
-  test('supports filtering, unwrapping, and optional code controls', () => {
+  test('supports filtering, unwrapping and code controls', () => {
     expect(html('**hello**', { disallowedElements: ['strong'] })).not.toContain(
       'hello'
     );
@@ -256,965 +337,522 @@ describe('React rendering and security', () => {
       html('hello', { allowedElements: ['p'], disallowedElements: ['a'] })
     ).toThrow();
   });
-  test('adapts Highlights and falls back cleanly for unknown languages', () => {
-    const plugins = { code: createHighlightsPlugin({ theme: pierreLight }) };
-    expect(html('```js\nconst x = 1\n```', { plugins })).toContain(
+  test('highlights through HTML output and falls back for unknown languages', () => {
+    const plugins = {
+      code: createHighlightsPlugin({
+        themes: { light: pierreLight, dark: pierreDark },
+        defaultColor: 'light-dark()',
+      }),
+    };
+    expect(html('```ts\nconst x = 1;\n```', { plugins })).toContain(
       'style="color:'
     );
-    expect(html('```imaginary-language\nhello\n```', { plugins })).toContain(
-      'hello'
+    expect(html('```unknown\n<literal>\n```', { plugins })).toContain(
+      '&lt;literal&gt;'
     );
   });
-  test('hydrates server-rendered output without mismatches', async () => {
-    const source = '| A | B |\n|---|---|\n|x|y|\n\nA[^1]\n\n[^1]: Note';
-    const element = <Markdown>{source}</Markdown>;
+  test('hydrates the opaque HTML region and preserves its anchors', async () => {
+    const element = (
+      <Markdown>{'See [guide](/docs) and note[^1].\n\n[^1]: Detail'}</Markdown>
+    );
     const container = mountDOM(renderToString(element));
+    const anchor = container.querySelector('a')!;
     const errors: unknown[] = [];
     await act(async () => {
-      await Promise.resolve();
       root = hydrateRoot(container, element, {
         onRecoverableError: (error) => errors.push(error),
       });
+      await Promise.resolve();
     });
     expect(errors).toEqual([]);
-    const reference = container.querySelector('a[data-footnote-ref]')!;
+    expect(container.querySelector('a')).toBe(anchor);
+    const reference = container.querySelector('[data-footnote-ref]')!;
     expect(
       container.querySelector(
         `[id="${reference.getAttribute('href')!.slice(1)}"]`
       )
     ).not.toBeNull();
   });
-  test('keeps completed blocks mounted and resolves late reference definitions', async () => {
-    const container = mountDOM();
-    let mounts = 0;
-    function Paragraph({ children }: ComponentPropsForParagraph): ReactNode {
-      useEffect(() => {
-        mounts++;
-      }, []);
-      return <p>{children}</p>;
-    }
-    const components: Components = { p: Paragraph };
-    await act(async () => {
-      await Promise.resolve();
-      root = createRoot(container);
-      root.render(
-        <Markdown components={components}>
-          {'Stable paragraph\n\nSee [guide][ref]\n\nTail'}
-        </Markdown>
-      );
-    });
-    const first = container.querySelector('p');
-    const initialMounts = mounts;
-    await act(async () => {
-      await Promise.resolve();
-      root?.render(
-        <Markdown components={components}>
-          {'Stable paragraph\n\nSee [guide][ref]\n\nTail grows\n\n[ref]: /docs'}
-        </Markdown>
-      );
-    });
-    expect(container.querySelector('p')).toBe(first);
-    expect(mounts).toBe(initialMounts);
-    expect(container.querySelector('a')?.getAttribute('href')).toBe('/docs');
-  });
-});
-describe('cached block metadata', () => {
-  test('serializes reused blocks once while updating changed blocks and render configuration', async () => {
+  test('preserves completed DOM blocks and only formats the changing suffix', async () => {
     const container = mountDOM();
     root = createRoot(container);
-    const originalStringify = JSON.stringify;
-    let completedSerializations = 0;
-    let tailSerializations = 0;
-    JSON.stringify = ((value: unknown, ...args: unknown[]) => {
-      if (
-        value !== null &&
-        typeof value === 'object' &&
-        'type' in value &&
-        value.type === 'element' &&
-        'children' in value
-      ) {
-        const child = (value.children as { value?: string }[])[0]?.value;
-        if (child === 'Completed paragraph') completedSerializations++;
-        if (child?.startsWith('Tail') === true) tailSerializations++;
-      }
-      return Reflect.apply(originalStringify, JSON, [value, ...args]);
-    }) as typeof JSON.stringify;
-    const render = async (
-      source: string,
-      components?: Components
-    ): Promise<void> => {
-      await act(async () => {
-        root?.render(<Markdown components={components}>{source}</Markdown>);
-        await Promise.resolve();
-      });
-    };
-    try {
-      await render('Completed paragraph\n\nTail');
-      await render('Completed paragraph\n\nTail grows');
-      const paragraph = container.querySelector('p');
-      const completedBeforeAppend = completedSerializations;
-      const tailBeforeAppend = tailSerializations;
-      await render('Completed paragraph\n\nTail grows again');
-      expect(completedSerializations).toBe(completedBeforeAppend);
-      expect(tailSerializations).toBeGreaterThan(tailBeforeAppend);
-      expect(container.querySelector('p')).toBe(paragraph);
-      expect(container.textContent).toContain('Tail grows again');
-      await render('Completed paragraph\n\nTail grows again', {
-        p: ({ children }) => <p data-custom="updated">{children}</p>,
-      });
-      expect(completedSerializations).toBe(completedBeforeAppend);
-      expect(container.querySelector('p')?.getAttribute('data-custom')).toBe(
-        'updated'
-      );
-    } finally {
-      JSON.stringify = originalStringify;
-    }
-  });
-});
-describe('settled streaming blocks', () => {
-  test('keeps historical paragraph and code renders stable across playback changes', async () => {
-    const container = mountDOM();
-    root = createRoot(container);
-    let historicalParagraphRenders = 0;
-    let historicalCodeRenders = 0;
-    let tailRenders = 0;
+    let completedCalls = 0;
     const components: Components = {
-      p: ({ children, node, isIncomplete }) => {
-        const historical = flatten(node.children) === 'Completed paragraph';
-        if (historical) historicalParagraphRenders++;
-        else tailRenders++;
-        return (
-          <p
-            data-history={historical || undefined}
-            data-incomplete={isIncomplete}
-          >
-            {children}
-          </p>
-        );
-      },
-      code: ({ children, isIncomplete }) => {
-        historicalCodeRenders++;
-        return <code data-incomplete={isIncomplete}>{children}</code>;
+      p: (value) => {
+        if (value.includes('Completed')) completedCalls++;
+        return value;
       },
     };
-    const render = async (
-      source: string,
-      isAnimating: boolean,
-      extra: Partial<Parameters<typeof Markdown>[0]> = {}
-    ): Promise<void> => {
+    const render = async (value: string) => {
       await act(async () => {
-        root?.render(
-          <Markdown
-            animated={{ duration: 80 }}
-            components={components}
-            isAnimating={isAnimating}
-            {...extra}
-          >
-            {source}
-          </Markdown>
-        );
-        await Promise.resolve();
+        root?.render(<Markdown components={components}>{value}</Markdown>);
       });
     };
-    let source = 'Completed paragraph\n\n```text\nfinished code\n```\n\nTail';
-    await render(source, true);
-    await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 160));
-    });
-    expect(container.querySelector('[data-markdown="token"]')).toBeNull();
-    const historicalParagraph = container.querySelector('p[data-history]');
-    const historicalCode = container.querySelector('code');
-    const paragraphBefore = historicalParagraphRenders;
-    const codeBefore = historicalCodeRenders;
-    const tailBefore = tailRenders;
-    await render(source, false);
-    expect(historicalParagraphRenders).toBe(paragraphBefore);
-    expect(historicalCodeRenders).toBe(codeBefore);
-    expect(tailRenders).toBeGreaterThan(tailBefore);
-    expect(
-      container.querySelector('p:last-child')?.getAttribute('data-incomplete')
-    ).toBe('false');
-    await render(source, true);
-    expect(historicalParagraphRenders).toBe(paragraphBefore);
-    expect(historicalCodeRenders).toBe(codeBefore);
-    expect(
-      container.querySelector('p:last-child')?.getAttribute('data-incomplete')
-    ).toBe('true');
-    source += ' grows';
-    await render(source, true);
-    expect(historicalParagraphRenders).toBe(paragraphBefore);
-    expect(historicalCodeRenders).toBe(codeBefore);
-    expect(container.querySelector('[data-animated="true"]')?.textContent).toBe(
-      ' grows'
+    await render('Completed\n\nPending');
+    const paragraph = container.querySelector('p');
+    const text = paragraph!.firstChild;
+    const calls = completedCalls;
+    await render('Completed\n\nPending grows');
+    await render('Completed\n\nPending grows again');
+    expect(completedCalls).toBe(calls);
+    expect(container.querySelector('p')).toBe(paragraph);
+    expect(paragraph!.firstChild).toBe(text);
+    expect(container.querySelectorAll('p')).toHaveLength(2);
+    expect(container.querySelectorAll('p')[1].textContent).toBe(
+      'Pending grows again'
     );
-    await render(source, false);
-    expect(container.querySelector('[data-animated="true"]')).toBeNull();
-    expect(historicalParagraphRenders).toBe(paragraphBefore);
-    expect(historicalCodeRenders).toBe(codeBefore);
-    expect(container.querySelector('p[data-history]')).toBe(
-      historicalParagraph
+  });
+  test('definition fallback and replacement edits update earlier HTML correctly', async () => {
+    const container = mountDOM();
+    root = createRoot(container);
+    const render = async (value: string) => {
+      await act(async () => {
+        root?.render(<Markdown>{value}</Markdown>);
+      });
+    };
+    await render('See [later][id].\n\nTail');
+    await render('See [later][id].\n\nTail\n\n[id]: /resolved');
+    expect(container.querySelector('a')?.getAttribute('href')).toBe(
+      '/resolved'
     );
-    expect(container.querySelector('code')).toBe(historicalCode);
-    expect(container.querySelector('p:last-child')?.textContent).toBe(
-      'Tail grows'
+    await render('A replacement **message**');
+    expect(container.querySelector('a')).toBeNull();
+    expect(container.querySelector('strong')?.textContent).toBe('message');
+    expect(container.querySelectorAll('p')).toHaveLength(1);
+  });
+  test('changes code controls when a fence closes without replacing earlier output', async () => {
+    const container = mountDOM();
+    root = createRoot(container);
+    const render = async (value: string, active = true) => {
+      await act(async () => {
+        root?.render(<Markdown isAnimating={active}>{value}</Markdown>);
+      });
+    };
+    await render('Earlier\n\n```ts\nconst x = 1;');
+    const paragraph = container.querySelector('p');
+    const code = container.querySelector('code');
+    expect(container.querySelector<HTMLButtonElement>('button')?.disabled).toBe(
+      true
     );
-    source += ' while paused';
-    await render(source, false);
-    expect(container.querySelector('[data-animated="true"]')).toBeNull();
-    expect(container.querySelector('p:last-child')?.textContent).toBe(
-      'Tail grows while paused'
-    );
-    expect(historicalParagraphRenders).toBe(paragraphBefore);
-    expect(historicalCodeRenders).toBe(codeBefore);
-    await render(source, true);
-    expect(container.querySelector('[data-animated="true"]')).toBeNull();
-    source += ' resumes';
-    await render(source, true);
-    expect(container.querySelector('[data-animated="true"]')?.textContent).toBe(
-      ' resumes'
-    );
-    await render(source, false);
-    expect(historicalParagraphRenders).toBe(paragraphBefore);
-    expect(historicalCodeRenders).toBe(codeBefore);
-
-    await render(source, false, { controls: false });
-    expect(container.querySelector('[aria-label="Copy code"]')).toBeNull();
-    await render(source, false, {
-      components: {
-        ...components,
-        p: ({ children }) => <p data-custom="updated">{children}</p>,
-      },
-    });
-    expect(container.querySelector('p')?.getAttribute('data-custom')).toBe(
-      'updated'
-    );
-    await render(
-      'Replacement paragraph\n\n```text\nreplacement code\n```',
+    await render('Earlier\n\n```ts\nconst x = 1;\n```\n\nTail');
+    expect(container.querySelector<HTMLButtonElement>('button')?.disabled).toBe(
       false
     );
-    expect(container.querySelector('p')?.textContent).toBe(
-      'Replacement paragraph'
-    );
-    expect(container.querySelector('code')?.textContent).toBe(
-      'replacement code\n'
-    );
+    expect(container.querySelector('p')).toBe(paragraph);
+    expect(container.querySelector('code')).toBe(code);
   });
-  test('stops live historical fades without rerendering their memoized blocks', async () => {
+  test('releases the live highlighter at completion, replacement and unmount', async () => {
     const container = mountDOM();
     root = createRoot(container);
-    let historicalParagraphRenders = 0;
-    const components: Components = {
-      p: ({ children, node }) => {
-        const historical = flatten(node.children) === 'Completed paragraph';
-        if (historical) historicalParagraphRenders++;
-        return <p data-history={historical || undefined}>{children}</p>;
-      },
-    };
-    const render = async (
-      source: string,
-      isAnimating: boolean
-    ): Promise<void> => {
-      await act(async () => {
-        root?.render(
-          <Markdown
-            animated={{ duration: 10_000 }}
-            components={components}
-            isAnimating={isAnimating}
-          >
-            {source}
-          </Markdown>
-        );
-        await Promise.resolve();
-      });
-    };
-    const source = 'Completed paragraph\n\n```text\nfinished code\n```\n\nTail';
-    await render(source, true);
-    const paragraph = container.querySelector('p[data-history]')!;
-    const code = container.querySelector('[data-markdown="code-block"]')!;
-    const selectedToken = paragraph.querySelector('[data-markdown="token"]')!;
-    expect(selectedToken.getAttribute('data-animated')).toBe('true');
-    expect(code.querySelector('[data-animated="true"]')).not.toBeNull();
-    const selectedText = selectedToken.firstChild!;
-    const selection = window.getSelection()!;
-    await act(async () => {
-      const range = document.createRange();
-      range.setStart(selectedText, 0);
-      range.setEnd(selectedText, 9);
-      selection.addRange(range);
-      await Promise.resolve();
-    });
-    const historicalBefore = historicalParagraphRenders;
-    await render(source, false);
-    expect(historicalParagraphRenders).toBe(historicalBefore);
-    expect(paragraph.querySelector('[data-animated="true"]')).toBeNull();
-    expect(code.querySelector('[data-animated="true"]')).toBeNull();
-    expect(paragraph.querySelector('[data-markdown="token"]')).toBe(
-      selectedToken
-    );
-    expect(selection.anchorNode).toBe(selectedText);
-    expect(selection.toString()).toBe('Completed');
-    await render(source, true);
-    expect(historicalParagraphRenders).toBe(historicalBefore);
-    expect(paragraph.querySelector('[data-animated="true"]')).toBeNull();
-    expect(code.querySelector('[data-animated="true"]')).toBeNull();
-    await render(source + ' grows', true);
-    expect(historicalParagraphRenders).toBe(historicalBefore);
-    expect(container.querySelector('p[data-history]')).toBe(paragraph);
-    expect(container.querySelector('[data-markdown="code-block"]')).toBe(code);
-    expect(selection.anchorNode).toBe(selectedText);
-    expect(selection.toString()).toBe('Completed');
-    expect(container.querySelector('[data-animated="true"]')?.textContent).toBe(
-      ' grows'
-    );
-    await act(async () => {
-      selection.removeAllRanges();
-      document.dispatchEvent(new window.Event('selectionchange'));
-      await new Promise((resolve) => setTimeout(resolve, 40));
-    });
-    expect(selectedToken.isConnected).toBe(false);
-    expect(paragraph.querySelector('[data-markdown="token"]')).toBeNull();
-    expect(paragraph.textContent).toBe('Completed paragraph');
-    expect(historicalParagraphRenders).toBe(historicalBefore);
-  });
-  test('updates an unfinished final code block while settled history stays unchanged', async () => {
-    const container = mountDOM();
-    root = createRoot(container);
-    let historicalParagraphRenders = 0;
-    let historicalCodeRenders = 0;
-    let liveCodeRenders = 0;
-    const components: Components = {
-      p: ({ children, node }) => {
-        if (flatten(node.children) === 'Completed paragraph')
-          historicalParagraphRenders++;
-        return <p>{children}</p>;
-      },
-      code: ({ children, node, isIncomplete }) => {
-        if (flatten(node.children).startsWith('finished'))
-          historicalCodeRenders++;
-        else liveCodeRenders++;
-        return <code data-incomplete={isIncomplete}>{children}</code>;
-      },
-    };
-    const render = async (
-      source: string,
-      isAnimating: boolean
-    ): Promise<void> => {
-      await act(async () => {
-        root?.render(
-          <Markdown
-            animated={{ duration: 80 }}
-            components={components}
-            isAnimating={isAnimating}
-          >
-            {source}
-          </Markdown>
-        );
-        await Promise.resolve();
-      });
-    };
-    let source =
-      'Completed paragraph\n\n```text\nfinished code\n```\n\n```text\nlive code';
-    await render(source, true);
-    await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 160));
-    });
-    const paragraphBefore = historicalParagraphRenders;
-    const codeBefore = historicalCodeRenders;
-    const liveBefore = liveCodeRenders;
-    const copyButtons = (): HTMLButtonElement[] =>
-      Array.from(container.querySelectorAll('[aria-label="Copy code"]'));
-    expect(copyButtons().map((button) => button.disabled)).toEqual([
-      false,
-      true,
-    ]);
-    await render(source, false);
-    expect(copyButtons().map((button) => button.disabled)).toEqual([
-      false,
-      false,
-    ]);
-    expect(liveCodeRenders).toBeGreaterThan(liveBefore);
-    expect(historicalParagraphRenders).toBe(paragraphBefore);
-    expect(historicalCodeRenders).toBe(codeBefore);
-    await render(source, true);
-    expect(copyButtons().map((button) => button.disabled)).toEqual([
-      false,
-      true,
-    ]);
-    expect(historicalParagraphRenders).toBe(paragraphBefore);
-    expect(historicalCodeRenders).toBe(codeBefore);
-    source += '\n```\n\nTail';
-    await render(source, true);
-    expect(copyButtons().map((button) => button.disabled)).toEqual([
-      false,
-      false,
-    ]);
-    expect(
-      container.querySelectorAll('code')[1]?.getAttribute('data-incomplete')
-    ).toBe('false');
-    expect(historicalParagraphRenders).toBe(paragraphBefore);
-    expect(historicalCodeRenders).toBe(codeBefore);
-    const completedCodeRenders = liveCodeRenders;
-    await render(source + ' grows', true);
-    await render(source + ' grows', false);
-    expect(liveCodeRenders).toBe(completedCodeRenders);
-    expect(historicalParagraphRenders).toBe(paragraphBefore);
-    expect(historicalCodeRenders).toBe(codeBefore);
-  });
-});
-describe('optional token fade-in', () => {
-  for (const custom of [false, true]) {
-    test(`keeps ${custom ? 'custom' : 'default'} link labels mounted as their destination arrives`, async () => {
-      const container = mountDOM();
-      root = createRoot(container);
-      let mounts = 0;
-      const components: Components | undefined = custom
-        ? {
-            a: function Link({ children, href }) {
-              useEffect(() => {
-                mounts++;
-              }, []);
-              return <a href={href}>{children}</a>;
+    const plugin = createHighlightsPlugin({ theme: pierreLight });
+    let live = 0;
+    const plugins = {
+      code: {
+        ...plugin,
+        createSession() {
+          const session = plugin.createSession!();
+          live++;
+          let disposed = false;
+          return {
+            highlight: session.highlight,
+            dispose() {
+              if (!disposed) {
+                live--;
+                disposed = true;
+              }
+              session.dispose();
             },
-          }
-        : undefined;
-      const render = async (source: string): Promise<void> => {
-        await act(async () => {
-          root?.render(
-            <Markdown
-              animated={{ duration: 10_000 }}
-              isAnimating
-              components={components}
-            >
-              {source}
-            </Markdown>
-          );
-          await Promise.resolve();
-        });
-      };
-      const label = 'See [Hello **world** and `code`';
-      await render(label);
-      const link = container.querySelector('a')!;
-      const tokens = Array.from(
-        link.querySelectorAll('[data-markdown="token"]')
-      );
-      expect(tokens.length).toBeGreaterThan(0);
-      const text = tokens[0].firstChild!;
-      const selection = document.getSelection()!;
-      const range = document.createRange();
-      range.setStart(text, 0);
-      range.setEnd(text, 5);
-      selection.addRange(range);
-      for (const suffix of [']', '](', '](https:', '](https://example.com']) {
-        await render(label + suffix);
-        expect(container.querySelector('a') === link).toBe(true);
-        expect(link.hasAttribute('href')).toBe(false);
-        const current = Array.from(
-          link.querySelectorAll('[data-markdown="token"]')
-        );
-        expect(current.length).toBe(tokens.length);
-        expect(current.every((token, index) => token === tokens[index])).toBe(
-          true
-        );
-        expect(selection.anchorNode === text).toBe(true);
-        expect(selection.anchorOffset).toBe(0);
-        expect(selection.focusOffset).toBe(5);
-        expect(selection.toString()).toBe('Hello');
-      }
-      await render(label + '](https://example.com) and more');
-      expect(container.querySelector('a') === link).toBe(true);
-      expect(link.getAttribute('href')).toBe('https://example.com');
-      const completedTokens = Array.from(
-        link.querySelectorAll('[data-markdown="token"]')
-      );
-      expect(completedTokens.length).toBe(tokens.length);
-      expect(
-        completedTokens.every((token, index) => token === tokens[index])
-      ).toBe(true);
-      for (const token of tokens) {
-        expect(token.getAttribute('data-animated')).toBe('true');
-        expect(token.getAttribute('style')).toBe(
-          'animation-duration: 10000ms;'
-        );
-      }
-      expect(selection.anchorNode === text).toBe(true);
-      expect(selection.toString()).toBe('Hello');
-      if (custom) expect(mounts).toBe(1);
-    });
-  }
-  test('does not replay settled link labels when a destination completes or is rejected', async () => {
-    const container = mountDOM();
-    root = createRoot(container);
-    const render = async (source: string, active = true): Promise<void> => {
+          };
+        },
+      },
+    };
+    const render = async (value: string) => {
       await act(async () => {
         root?.render(
-          <Markdown animated={{ duration: 20 }} isAnimating={active}>
-            {source}
+          <Markdown plugins={plugins} isAnimating>
+            {value}
           </Markdown>
         );
-        await Promise.resolve();
       });
     };
-    await render('See [guide](');
-    const link = container.querySelector('a')!;
+    await render('```ts\nconst x = 1;');
+    expect(live).toBe(0);
+    await render('```ts\nconst x = 12;');
+    expect(live).toBe(1);
+    await render('```ts\nconst x = 12;\n```\n\nTail');
+    expect(live).toBe(0);
+    await render('```css\n.a { color: red;');
+    expect(live).toBe(1);
+    await render('Replacement');
+    expect(live).toBe(0);
+    await render('```ts\nlet next = 2;');
+    expect(live).toBe(1);
     await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 80));
+      root?.unmount();
     });
-    expect(link.querySelector('[data-markdown="token"]')).toBeNull();
-    for (const source of [
-      'See [guide](https://example.com',
-      'See [guide](https://example.com)',
-      'See [guide](javascript:alert)',
-    ]) {
-      await render(source);
-      expect(container.querySelector('a')).toBe(link);
-      expect(link.querySelector('[data-animated="true"]')).toBeNull();
-      expect(link.textContent).toBe('guide');
-    }
-    expect(link.hasAttribute('href')).toBe(false);
-    await render('See [guide](javascript:alert)', false);
-    await render('See [guide](javascript:alert)', true);
-    expect(container.querySelector('a')).toBe(link);
-    expect(link.querySelector('[data-animated="true"]')).toBeNull();
+    root = undefined;
+    expect(live).toBe(0);
   });
-  test('does not add animation spans by default, for static mode, or for idle content', () => {
-    expect(html('Hello', { isAnimating: true })).not.toContain(
-      'data-markdown="token"'
-    );
-    expect(html('Hello', { animated: true })).not.toContain(
-      'data-markdown="token"'
-    );
-    expect(
-      html('Hello', { animated: true, mode: 'static', isAnimating: true })
-    ).not.toContain('data-markdown="token"');
-    expect(html('Hello', { animated: true, isAnimating: true })).toContain(
-      'animation-duration:180ms'
-    );
-  });
-  test('preserves existing tokens and their timing as text and duration change', async () => {
+  test('keeps React responsible only for the container, not Markdown leaves', async () => {
     const container = mountDOM();
     await act(async () => {
       root = createRoot(container);
       root.render(
-        <Markdown animated={{ duration: 10_000 }} isAnimating>
-          Hel
+        <Markdown animated isAnimating>
+          {'A **paragraph** and [link](/docs).\n\n'.repeat(100)}
         </Markdown>
       );
       await Promise.resolve();
     });
-    const first = container.querySelector('[data-markdown="token"]');
-    expect(first?.textContent).toBe('Hel');
+    expect(container.querySelectorAll('p')).toHaveLength(100);
+    const rendererRoot = container.querySelector('[data-markdown="root"]')!;
+    const key = Object.keys(rendererRoot).find((name) =>
+      name.startsWith('__reactFiber$')
+    )!;
+    const fiber = (
+      rendererRoot as unknown as Record<string, { child: unknown }>
+    )[key];
+    expect(fiber.child).toBeNull();
+  });
+});
+
+describe('native DOM token fades', () => {
+  const pause = async (milliseconds = 60): Promise<void> => {
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, milliseconds));
+    });
+  };
+  async function render(
+    value: string,
+    active = true,
+    duration = 20,
+    enabled = true
+  ): Promise<HTMLElement> {
+    if (root === undefined) {
+      const container = mountDOM();
+      root = createRoot(container);
+    }
     await act(async () => {
       root?.render(
-        <Markdown animated={{ duration: 10_000 }} isAnimating>
-          Hello world
+        <Markdown
+          animated={enabled ? { duration } : false}
+          isAnimating={active}
+        >
+          {value}
         </Markdown>
       );
       await Promise.resolve();
     });
+    return document.getElementById('app')!;
+  }
+  test('only new chunks fade; settled text has no animation records in the DOM', async () => {
+    const container = await render('Hello');
+    expect(container.querySelector('[data-animated="true"]')?.textContent).toBe(
+      'Hello'
+    );
+    await pause();
+    expect(container.querySelector('[data-markdown="token"]')).toBeNull();
+    const prefix = container.querySelector('p')!.firstChild;
+    await render('Hello world');
+    expect(container.querySelector('[data-animated="true"]')?.textContent).toBe(
+      ' world'
+    );
+    expect(container.querySelector('p')!.firstChild).toBe(prefix);
+    await pause();
+    expect(container.querySelector('[data-markdown="token"]')).toBeNull();
+    expect(container.querySelector('p')?.textContent).toBe('Hello world');
+  });
+  test('batches fade timers and compacts each affected parent once', () => {
+    const container = mountDOM();
+    const renderer = createDomRenderer(container);
+    const timeout = globalThis.setTimeout;
+    const nodePrototype = dom!.window.Node.prototype;
+    const normalize = nodePrototype.normalize;
+    const scheduled: number[] = [];
+    const normalized: Node[] = [];
+    globalThis.setTimeout = new Proxy(timeout, {
+      apply(target, receiver, args) {
+        scheduled.push(Number(args[1]));
+        return Reflect.apply(target, receiver, args);
+      },
+    });
+    try {
+      renderer.connect();
+      renderer.update('First **bold**\n\nSecond', true, true, {
+        duration: 10_000,
+      });
+      expect(scheduled).toHaveLength(1);
+      renderer.update('First **bold**\n\nSecond grows', true, true, {
+        duration: 40_000,
+      });
+      expect(scheduled).toHaveLength(1);
+      renderer.update('First **bold**\n\nSecond grows again', true, true, {
+        duration: 1000,
+      });
+      expect(scheduled).toHaveLength(2);
+      const second = container.querySelectorAll('p')[1];
+      nodePrototype.normalize = new Proxy(normalize, {
+        apply(target, receiver, args) {
+          normalized.push(receiver as Node);
+          Reflect.apply(target, receiver, args);
+        },
+      });
+      renderer.update('First **bold**\n\nSecond grows again', true, false);
+      expect(normalized.filter((node) => node === second)).toHaveLength(1);
+      expect(container.querySelector('[data-markdown="token"]')).toBeNull();
+    } finally {
+      renderer.disconnect();
+      globalThis.setTimeout = timeout;
+      nodePrototype.normalize = normalize;
+    }
+  });
+  test('keeps previous spans and captured durations while chunks arrive', async () => {
+    const container = await render('Hel', true, 10_000);
+    const first = container.querySelector('[data-markdown="token"]');
+    await render('Hello world', true, 40_000);
     expect(container.querySelector('[data-markdown="token"]')).toBe(first);
-    expect(first?.getAttribute('style')).toBe('animation-duration: 10000ms;');
+    expect(first?.getAttribute('style')).toContain('10000ms');
     expect(
       Array.from(
         container.querySelectorAll('[data-animated="true"]'),
         (node) => node.textContent
       )
     ).toEqual(['Hel', 'lo world']);
-    await act(async () => {
-      root?.render(
-        <Markdown animated={{ duration: 40_000 }} isAnimating>
-          Hello world again
-        </Markdown>
-      );
-      await Promise.resolve();
-    });
-    expect(container.querySelector('[data-markdown="token"]')).toBe(first);
-    expect(first?.getAttribute('style')).toBe('animation-duration: 10000ms;');
-    const last = container.querySelector('[data-markdown="token"]:last-child');
-    expect(last?.textContent).toBe(' again');
-    expect(last?.getAttribute('style')).toBe('animation-duration: 40000ms;');
   });
-  test('resuming a paused stream animates only newly appended content', async () => {
-    const container = mountDOM();
-    await act(async () => {
-      root = createRoot(container);
-      root.render(
-        <Markdown animated isAnimating>
-          Hello
-        </Markdown>
+  test('keeps bold text and its existing fades mounted at streamed word boundaries', async () => {
+    const source =
+      'Good tools get out of your way. **Great tools make you want to keep going.**\n\n';
+    const start = source.indexOf('Great') + 'Great'.length;
+    const container = await render(source.slice(0, start), true, 10_000);
+    const bold = container.querySelector('strong')!;
+    const first = bold.querySelector('[data-markdown="token"]')!;
+    expect(first.textContent).toBe('Great');
+    for (let end = start + 1; end <= source.length; end++) {
+      await render(source.slice(0, end), true, 10_000);
+      expect(container.querySelector('strong'), source.slice(0, end)).toBe(
+        bold
       );
-      await Promise.resolve();
-    });
-    await act(async () => {
-      root?.render(<Markdown animated>Hello</Markdown>);
-      await Promise.resolve();
-    });
-    expect(container.querySelector('[data-animated="true"]')).toBeNull();
-    await act(async () => {
-      root?.render(
-        <Markdown animated isAnimating>
-          Hello
-        </Markdown>
-      );
-      await Promise.resolve();
-    });
-    expect(container.querySelector('[data-animated="true"]')).toBeNull();
-    await act(async () => {
-      root?.render(
-        <Markdown animated isAnimating>
-          Hello world
-        </Markdown>
-      );
-      await Promise.resolve();
-    });
-    expect(
-      Array.from(
-        container.querySelectorAll('[data-animated="true"]'),
-        (node) => node.textContent
-      )
-    ).toEqual([' world']);
-  });
-  test('settles delivered chunks into plain text without another stream update', async () => {
-    const container = mountDOM();
-    root = createRoot(container);
-    const render = async (source: string): Promise<void> => {
-      await act(async () => {
-        root?.render(
-          <Markdown animated={{ duration: 20 }} isAnimating>
-            {source}
-          </Markdown>
-        );
-        await Promise.resolve();
-      });
-    };
-    await render('Hello brave new world');
-    expect(container.querySelectorAll('[data-markdown="token"]')).toHaveLength(
-      1
-    );
-    await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 80));
-    });
-    expect(container.querySelector('[data-markdown="token"]')).toBeNull();
-    expect(container.querySelector('p')?.textContent).toBe(
-      'Hello brave new world'
-    );
-    await render('Hello brave new world again');
-    expect(container.querySelector('[data-animated="true"]')?.textContent).toBe(
-      ' again'
-    );
-    expect(container.querySelectorAll('[data-markdown="token"]')).toHaveLength(
-      1
-    );
-    expect(container.querySelector('p')?.textContent).toBe(
-      'Hello brave new world again'
-    );
-  });
-  test('repeated deliveries retain only the currently fading chunk', async () => {
-    const container = mountDOM();
-    root = createRoot(container);
-    let source = '';
-    for (let delivery = 0; delivery < 4; delivery++) {
-      source += 'A delivery containing many words. '.repeat(30);
-      await act(async () => {
-        root?.render(
-          <Markdown animated={{ duration: 20 }} isAnimating>
-            {source}
-          </Markdown>
-        );
-        await Promise.resolve();
-      });
-      expect(
-        container.querySelectorAll('[data-markdown="token"]')
-      ).toHaveLength(1);
-      await act(async () => {
-        await new Promise((resolve) => setTimeout(resolve, 80));
-      });
-      expect(container.querySelector('[data-markdown="token"]')).toBeNull();
-      expect(container.querySelector('p')?.textContent).toBe(source.trimEnd());
+      expect(bold.querySelector('[data-markdown="token"]')).toBe(first);
+      expect(first.isConnected).toBe(true);
+      expect(container.querySelector('p')?.textContent).not.toContain('**');
     }
+    expect(bold.textContent).toBe('Great tools make you want to keep going.');
   });
-  test('replacing streamed text discards prior chunks without animating old content', async () => {
-    const container = mountDOM();
-    root = createRoot(container);
-    await act(async () => {
-      root?.render(
-        <Markdown animated={{ duration: 10_000 }} isAnimating>
-          The first response
-        </Markdown>
-      );
-      await Promise.resolve();
-    });
-    expect(container.querySelector('[data-markdown="token"]')).not.toBeNull();
-    await act(async () => {
-      root?.render(
-        <Markdown animated={{ duration: 10_000 }} isAnimating>
-          A replacement
-        </Markdown>
-      );
-      await Promise.resolve();
-    });
-    expect(container.querySelector('p')?.textContent).toBe('A replacement');
-    expect(container.querySelector('[data-animated="true"]')).toBeNull();
-    await act(async () => {
-      root?.render(
-        <Markdown animated={{ duration: 10_000 }} isAnimating>
-          A replacement grows
-        </Markdown>
-      );
-      await Promise.resolve();
-    });
-    expect(container.querySelector('[data-animated="true"]')?.textContent).toBe(
-      ' grows'
+  test('keeps link labels mounted through the incomplete destination boundary', async () => {
+    const container = await render(
+      'See [Hello **world** and `code`',
+      true,
+      10_000
     );
+    const link = container.querySelector('a')!;
+    const token = link.querySelector('[data-markdown="token"]')!;
+    for (const suffix of [
+      ']',
+      '](',
+      '](https:',
+      '](https://example.com',
+      '](https://example.com)',
+    ]) {
+      await render('See [Hello **world** and `code`' + suffix, true, 10_000);
+      expect(container.querySelector('a')).toBe(link);
+      expect(link.querySelector('[data-markdown="token"]')).toBe(token);
+    }
+    expect(link.getAttribute('href')).toBe('https://example.com');
   });
-  test('zero-duration streams avoid animation spans', async () => {
-    const container = mountDOM();
-    root = createRoot(container);
-    await act(async () => {
-      root?.render(
-        <Markdown animated={{ duration: 0 }} isAnimating>
-          Hello world
-        </Markdown>
-      );
-      await Promise.resolve();
-    });
-    expect(container.querySelector('[data-markdown="token"]')).toBeNull();
-  });
-  test('reduced-motion streams avoid animation spans', async () => {
-    const container = mountDOM();
-    Object.defineProperty(window, 'matchMedia', {
-      configurable: true,
-      value: (query: string): MediaQueryList => ({
-        matches: query === '(prefers-reduced-motion: reduce)',
-        media: query,
-        onchange: null,
-        addListener() {},
-        removeListener() {},
-        addEventListener() {},
-        removeEventListener() {},
-        dispatchEvent: () => true,
-      }),
-    });
-    await act(async () => {
-      root = createRoot(container);
-      root.render(
-        <Markdown animated isAnimating>
-          Hello world again
-        </Markdown>
-      );
-      await Promise.resolve();
-    });
-    expect(container.querySelector('[data-markdown="token"]')).toBeNull();
-    expect(container.querySelector('p')?.textContent).toBe('Hello world again');
-  });
-  for (const completion of ['expiry', 'pause', 'disable'] as const) {
-    test(`preserves selected text during ${completion} until selection is released`, async () => {
-      const container = mountDOM();
-      root = createRoot(container);
-      await act(async () => {
-        root?.render(
-          <Markdown animated={{ duration: 20 }} isAnimating>
-            Hello world
-          </Markdown>
-        );
-        await Promise.resolve();
-      });
+  for (const finish of ['expiry', 'pause', 'disable'] as const) {
+    test(`removes fade wrappers after ${finish}`, async () => {
+      const container = await render('Hello world');
       const token = container.querySelector('[data-markdown="token"]')!;
-      const range = document.createRange();
-      range.setStart(token.firstChild!, 0);
-      range.setEnd(token.firstChild!, 5);
-      const selection = window.getSelection()!;
-      selection.addRange(range);
-      await act(async () => {
-        if (completion !== 'expiry') {
-          root?.render(
-            <Markdown
-              animated={completion === 'disable' ? false : { duration: 20 }}
-              isAnimating={completion !== 'pause'}
-            >
-              Hello world
-            </Markdown>
-          );
-        }
-        await new Promise((resolve) => setTimeout(resolve, 80));
-      });
-      expect(container.querySelector('[data-markdown="token"]')).toBe(token);
-      expect(selection.toString()).toBe('Hello');
-      expect(token.hasAttribute('data-animated')).toBe(false);
-      await act(async () => {
-        selection.removeAllRanges();
-        document.dispatchEvent(new window.Event('selectionchange'));
-        await new Promise((resolve) => setTimeout(resolve, 40));
-      });
+      if (finish !== 'expiry')
+        await render(
+          'Hello world',
+          finish !== 'pause',
+          20,
+          finish !== 'disable'
+        );
+      await pause();
+      expect(token.isConnected).toBe(false);
       expect(container.querySelector('[data-markdown="token"]')).toBeNull();
       expect(container.querySelector('p')?.textContent).toBe('Hello world');
+      expect(container.querySelector('p')?.childNodes).toHaveLength(1);
     });
   }
-  test('resuming a selected paused chunk does not restart its animation', async () => {
-    const container = mountDOM();
-    root = createRoot(container);
-    const render = async (
-      active: boolean,
-      source = 'Hello world'
-    ): Promise<void> => {
-      await act(async () => {
-        root?.render(
-          <Markdown animated={{ duration: 10_000 }} isAnimating={active}>
-            {source}
-          </Markdown>
-        );
-        await Promise.resolve();
-      });
-    };
-    await render(true);
-    const token = container.querySelector('[data-markdown="token"]')!;
-    const range = document.createRange();
-    range.setStart(token.firstChild!, 0);
-    range.setEnd(token.firstChild!, 5);
-    window.getSelection()!.addRange(range);
-    await render(false);
-    await render(true);
-    expect(container.querySelector('[data-markdown="token"]')).toBe(token);
-    expect(token.hasAttribute('data-animated')).toBe(false);
-    expect(window.getSelection()!.toString()).toBe('Hello');
-    await render(true, 'Hello world again');
-    expect(token.hasAttribute('data-animated')).toBe(false);
+  test('pause and resume never replay earlier chunks', async () => {
+    const container = await render('Hello', true, 10_000);
+    await render('Hello', false, 10_000);
+    await render('Hello', true, 10_000);
+    expect(container.querySelector('[data-animated="true"]')).toBeNull();
+    await render('Hello again', true, 10_000);
     expect(container.querySelector('[data-animated="true"]')?.textContent).toBe(
       ' again'
     );
   });
-  test('expires each chunk using the duration captured when it arrived', async () => {
+  test('zero duration bypasses fade wrappers', async () => {
+    const container = await render('Visible', true, 0);
+    expect(container.querySelector('[data-markdown="token"]')).toBeNull();
+    expect(container.querySelector('p')?.textContent).toBe('Visible');
+  });
+  test('reduced motion stops live fades and only new text fades after it is disabled', async () => {
     const container = mountDOM();
     root = createRoot(container);
-    await act(async () => {
-      root?.render(
-        <Markdown animated={{ duration: 10_000 }} isAnimating>
-          Hello
-        </Markdown>
-      );
-      await Promise.resolve();
-    });
-    const first = container.querySelector('[data-markdown="token"]')!;
-    await act(async () => {
-      root?.render(
-        <Markdown animated={{ duration: 20 }} isAnimating>
-          Hello world
-        </Markdown>
-      );
-      await Promise.resolve();
-    });
-    await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 80));
-    });
-    expect(first.getAttribute('data-animated')).toBe('true');
-    expect(
-      Array.from(
-        container.querySelectorAll('[data-animated="true"]'),
-        (node) => node.textContent
-      )
-    ).toEqual(['Hello']);
-    expect(first.getAttribute('style')).toBe('animation-duration: 10000ms;');
-    expect(container.querySelector('p')?.textContent).toBe('Hello world');
-  });
-  test('does not merge an expired chunk into a selected settled prefix', async () => {
-    const container = mountDOM();
-    root = createRoot(container);
-    await act(async () => {
-      root?.render(
-        <Markdown animated={{ duration: 20 }} isAnimating>
-          Hello world
-        </Markdown>
-      );
-      await Promise.resolve();
-    });
-    await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 80));
-    });
-    const prefix = document
-      .createTreeWalker(
-        container.querySelector('p')!,
-        window.NodeFilter.SHOW_TEXT
-      )
-      .nextNode()!;
-    const range = document.createRange();
-    range.setStart(prefix, 0);
-    range.setEnd(prefix, 5);
-    const selection = window.getSelection()!;
-    selection.addRange(range);
-    await act(async () => {
-      root?.render(
-        <Markdown animated={{ duration: 20 }} isAnimating>
-          Hello world again
-        </Markdown>
-      );
-      await Promise.resolve();
-    });
-    await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 80));
-    });
-    expect(selection.toString()).toBe('Hello');
-    expect(selection.anchorNode).toBe(prefix);
-    expect(selection.anchorOffset).toBe(0);
-    expect(selection.focusOffset).toBe(5);
-    expect(container.querySelector('p')?.textContent).toBe('Hello world again');
-    expect(container.querySelector('[data-animated="true"]')).toBeNull();
-    await act(async () => {
-      selection.removeAllRanges();
-      document.dispatchEvent(new window.Event('selectionchange'));
-      await new Promise((resolve) => setTimeout(resolve, 40));
-    });
+    const listeners = new Set<() => void>();
+    const query = {
+      matches: false,
+      addEventListener: (_name: string, callback: () => void) =>
+        listeners.add(callback),
+      removeEventListener: (_name: string, callback: () => void) =>
+        listeners.delete(callback),
+    };
+    window.matchMedia = () => query as unknown as MediaQueryList;
+    await render('Hello', true, 10_000);
+    expect(container.querySelector('[data-animated="true"]')).not.toBeNull();
+    query.matches = true;
+    for (const listener of listeners) listener();
     expect(container.querySelector('[data-markdown="token"]')).toBeNull();
-  });
-  test('a selection outside the streamed text does not prevent settling', async () => {
-    const container = mountDOM();
-    const outside = document.createTextNode('Elsewhere');
-    document.body.append(outside);
-    const range = document.createRange();
-    range.selectNodeContents(outside);
-    window.getSelection()!.addRange(range);
-    await act(async () => {
-      root = createRoot(container);
-      root.render(
-        <Markdown animated={{ duration: 20 }} isAnimating>
-          Hello world
-        </Markdown>
-      );
-      await Promise.resolve();
-    });
-    await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 80));
-    });
+    await render('Hello visible', true, 10_000);
     expect(container.querySelector('[data-markdown="token"]')).toBeNull();
-    expect(window.getSelection()!.toString()).toBe('Elsewhere');
+    query.matches = false;
+    for (const listener of listeners) listener();
+    await render('Hello visible again', true, 10_000);
+    expect(container.querySelector('[data-animated="true"]')?.textContent).toBe(
+      ' again'
+    );
   });
-  test('animates code tokens without replacing earlier spans', async () => {
+  test('insertion and fade cleanup never read or listen for selection', async () => {
     const container = mountDOM();
-    await act(async () => {
-      root = createRoot(container);
-      root.render(
-        <Markdown animated={{ duration: 10_000 }} isAnimating>
-          {'```text\nHel'}
-        </Markdown>
-      );
-      await Promise.resolve();
+    const getSelection = document.getSelection;
+    const addEventListener = document.addEventListener;
+    document.getSelection = () => {
+      throw new Error('Markdown must not query the selection');
+    };
+    document.addEventListener = new Proxy(addEventListener, {
+      apply(target, receiver, args) {
+        if (args[0] === 'selectionchange')
+          throw new Error('Markdown must not listen for selection changes');
+        Reflect.apply(target, receiver, args);
+      },
     });
-    const first = container.querySelector('pre [data-markdown="token"]');
-    await act(async () => {
-      root?.render(
-        <Markdown animated={{ duration: 10_000 }} isAnimating>
-          {'```text\nHello'}
-        </Markdown>
+    const renderer = createDomRenderer(container);
+    try {
+      renderer.connect();
+      renderer.update('Hello', true, true, { duration: 20 });
+      renderer.update('Hello world\n\nSecond', true, true, { duration: 20 });
+      expect(container.querySelector('[data-animated="true"]')).not.toBeNull();
+      await pause();
+      expect(container.querySelector('[data-markdown="token"]')).toBeNull();
+
+      renderer.update('Hello world\n\nSecond chunk', true, true, true);
+      expect(container.querySelector('[data-animated="true"]')).not.toBeNull();
+      renderer.update('Hello world\n\nSecond chunk', true, false, true);
+      expect(container.querySelector('[data-markdown="token"]')).toBeNull();
+
+      renderer.update('Hello world\n\nSecond chunk again', true, true, true);
+      expect(container.querySelector('[data-animated="true"]')).not.toBeNull();
+      renderer.update('Hello world\n\nSecond chunk again', true, true, false);
+      expect(container.querySelector('[data-markdown="token"]')).toBeNull();
+      expect(container.querySelectorAll('p')[1]?.textContent).toBe(
+        'Second chunk again'
       );
-      await Promise.resolve();
-    });
-    expect(container.querySelector('pre [data-markdown="token"]')).toBe(first);
-    expect(first?.textContent).toBe('Hel');
-    expect(container.querySelector('pre')?.textContent).toContain('Hello');
-    expect(
-      container.querySelectorAll('pre [data-animated="true"]')
-    ).toHaveLength(2);
+    } finally {
+      try {
+        renderer.disconnect();
+      } finally {
+        document.getSelection = getSelection;
+        document.addEventListener = addEventListener;
+      }
+    }
+  });
+  test('code text fades without remounting previous code nodes', async () => {
+    const container = await render('```text\nHel', true, 10_000);
+    const code = container.querySelector('code');
+    const first = code?.querySelector('[data-markdown="token"]');
+    await render('```text\nHello', true, 10_000);
+    expect(container.querySelector('code')).toBe(code);
+    expect(code?.querySelector('[data-markdown="token"]')).toBe(first);
   });
 });
-type ComponentPropsForParagraph = { children?: ReactNode } & ExtraProps;
+
+describe('direct HTML sessions', () => {
+  test('native streaming DOM matches fresh HTML through changing Markdown structure', () => {
+    const container = mountDOM();
+    const renderer = createDomRenderer(container, { controls: false });
+    renderer.connect();
+    const fixtures = [
+      '# *Hello*\n\nParagraph **bold** and [link](/docs).',
+      'Title\n---\n\n| A | B |\n|---|---|\n|x|y|\n\nTail',
+      '- first\n\n- second\n\n> quoted **text**',
+      '```ts\nconst x = 1;\n```\n\nTail',
+      'See [later][id].\n\n[id]: /resolved',
+    ];
+    for (const source of fixtures)
+      for (let end = 0; end <= source.length; end++) {
+        const value = source.slice(0, end);
+        renderer.update(value, true, true);
+        const expected = document.createElement('template');
+        const fresh = createHtmlRenderer({ controls: false });
+        expected.innerHTML = fresh.render(value, true, true).html;
+        fresh.dispose();
+        const actual = document.createDocumentFragment();
+        for (const child of container.childNodes)
+          if (child.nodeType !== 8) actual.append(child.cloneNode(true));
+        actual.normalize();
+        expected.content.normalize();
+        expect(
+          actual.isEqualNode(expected.content),
+          JSON.stringify(value)
+        ).toBe(true);
+      }
+    renderer.disconnect();
+  });
+  test('plain streaming does not retain one DOM text node per delivery', () => {
+    const container = mountDOM();
+    const renderer = createDomRenderer(container);
+    renderer.connect();
+    let source = 'Text';
+    for (let at = 0; at < 100; at++) {
+      source += ' more';
+      renderer.update(source, true, true);
+    }
+    expect(container.querySelector('p')!.childNodes).toHaveLength(1);
+    expect(container.querySelector('p')!.textContent).toBe(source);
+    renderer.disconnect();
+  });
+  test('incremental HTML equals a fresh render at every UTF-16 prefix and after edits', () => {
+    const fixtures = [
+      'First\n\nSecond **bold** and 🥳.\n\nTail',
+      '> quote\n>\n> - a\n> - b\n\nTail',
+      '```ts\nconst x = 1;\n```\n\nTail',
+      'See [later][id].\n\nTail\n\n[id]: /resolved',
+      'Note[^a].\n\n[^a]: Footnote',
+      'A\r\n\r\nB\n\n\uFEFFtail',
+      '<div>\nraw\n\n</div>\n\nAfter',
+    ];
+    for (const incomplete of [false, true])
+      for (const source of fixtures) {
+        const session = createHtmlSession();
+        for (let end = 0; end <= source.length; end++) {
+          const value = source.slice(0, end);
+          expect(session.render(value, { incomplete }).html).toBe(
+            createHtmlSession().render(value, { incomplete }).html
+          );
+        }
+        expect(session.render('Replacement', { incomplete }).html).toBe(
+          '<p>Replacement</p>\n'
+        );
+      }
+  });
+  test('the framework-independent DOM API works without a React tree', () => {
+    const container = mountDOM();
+    const renderer = createDomRenderer(container, { controls: false });
+    renderer.connect();
+    renderer.update('One\n\nTwo', true);
+    const first = container.querySelector('p');
+    renderer.update('One\n\nTwo grows', true);
+    expect(container.querySelector('p')).toBe(first);
+    expect(container.querySelectorAll('p')).toHaveLength(2);
+    renderer.disconnect();
+  });
+});
 
 describe('incremental streaming', () => {
   test('random chunk boundaries and replacements preserve full-parse output', () => {
@@ -1242,73 +880,18 @@ describe('incremental streaming', () => {
       '\uFEFF',
     ];
     for (let trial = 0; trial < 100; trial++) {
-      const session = createMarkdownSession();
+      const session = createHtmlSession();
       let input = 'Prefix\n\n';
       for (let chunk = 0; chunk < 30; chunk++) {
         input =
           (random(20) === 0 ? input.slice(0, random(input.length)) : input) +
           pieces[random(pieces.length)];
         expect(
-          session.render(input, { incomplete: true }),
+          session.render(input, { incomplete: true }).html,
           JSON.stringify(input)
-        ).toEqual(renderToElements(input, { incomplete: true }));
+        ).toBe(parse(input, true));
       }
     }
-  });
-  test('isolates mounted code sessions and disposes them through Strict Mode and plugin changes', async () => {
-    const plugin = createHighlightsPlugin({
-      themes: { light: pierreLight, dark: pierreDark },
-      defaultColor: 'light-dark()',
-    });
-    const disposed: number[] = [];
-    let created = 0;
-    const wrapped = {
-      ...plugin,
-      createSession() {
-        const session = plugin.createSession!();
-        const id = created++;
-        return {
-          highlight: session.highlight,
-          dispose() {
-            disposed.push(id);
-            session.dispose();
-          },
-        };
-      },
-    };
-    const container = mountDOM();
-    root = createRoot(container);
-    const render = async (
-      code: string,
-      activePlugin = wrapped
-    ): Promise<void> => {
-      await act(async () => {
-        root?.render(
-          <StrictMode>
-            <Markdown plugins={{ code: activePlugin }}>{code}</Markdown>
-          </StrictMode>
-        );
-        await Promise.resolve();
-      });
-    };
-    await render('```ts\nconst one = 1;\n```\n\n```css\n.a { color: red; }');
-    await render(
-      '```ts\nconst one = 1;\n```\n\n```css\n.a { color: red; }\n.b {}'
-    );
-    expect(container.textContent).toContain('const one = 1;');
-    expect(container.textContent).toContain('.b {}');
-    const activeBeforeReplacement = created;
-    await render('```ts\nlet two = 2;\n```', { ...wrapped });
-    expect(disposed.length).toBeGreaterThan(0);
-    expect(created).toBeGreaterThan(activeBeforeReplacement);
-    await act(async () => {
-      root?.unmount();
-      await Promise.resolve();
-    });
-    root = undefined;
-    // Strict Mode may create discarded render instances, but every committed
-    // session receives cleanup and remains safe to restart after effect replay.
-    expect(disposed.length).toBeGreaterThanOrEqual(3);
   });
   test('matches a fresh parse at every prefix, including retroactive syntax', () => {
     const fixtures = [
@@ -1325,90 +908,62 @@ describe('incremental streaming', () => {
     ];
     for (const incomplete of [false, true]) {
       for (const source of fixtures) {
-        const session = createMarkdownSession();
+        const session = createHtmlSession();
         for (let end = 0; end <= source.length; end++) {
           const input = source.slice(0, end);
-          expect(session.render(input, { incomplete })).toEqual(
-            renderToElements(input, { incomplete })
+          expect(session.render(input, { incomplete }).html).toBe(
+            parse(input, incomplete)
           );
         }
-        expect(session.render('replacement', { incomplete })).toEqual(
-          renderToElements('replacement', { incomplete })
+        expect(session.render('replacement', { incomplete }).html).toBe(
+          parse('replacement', incomplete)
         );
       }
     }
   });
   test('reuses completed blocks, isolates sessions, and resets on options or edits', () => {
-    const session = createMarkdownSession();
+    const session = createHtmlSession();
     session.render('First\n\nSecond');
     const before = session.render('First\n\nSecond!');
     const after = session.render('First\n\nSecond!!');
-    expect(after[0]).toBe(before[0]);
-    expect(after[1]).not.toBe(before[1]);
-    createMarkdownSession().render('unrelated'.repeat(10000));
+    expect(after.stable).toBe(before.stable);
+    expect(after.pending).not.toBe(before.pending);
+    createHtmlSession().render('unrelated'.repeat(10000));
     expect(session.render('First\n\nSecond!!')).toBe(after);
     const input = 'Changed\n\n*unfinished';
-    expect(session.render(input, { incomplete: true })).toEqual(
-      renderToElements(input, { incomplete: true })
+    expect(session.render(input, { incomplete: true }).html).toBe(
+      parse(input, true)
     );
-    expect(session.render(input, { incomplete: false })).toEqual(
-      renderToElements(input)
+    expect(session.render(input, { incomplete: false }).html).toBe(
+      parse(input)
     );
   });
-  test('live code highlighting matches fresh tokens and reuses earlier lines', () => {
+  test('live HTML highlighting keeps literal code and resumes after disposal', () => {
     const plugin = createHighlightsPlugin({ theme: pierreLight });
     const session = plugin.createSession!();
-    const simplify = (result: ReturnType<typeof plugin.highlight>) =>
-      result?.tokens.map((line) =>
-        line.map(({ content, color, bgColor, htmlStyle }) => ({
-          content,
-          color,
-          bgColor,
-          htmlStyle,
-        }))
-      );
-    for (const [language, source] of [
-      [
-        'ts',
-        'const x = `hello\n${name}`;\n/* comment\nend */\nconst emoji = "🥳";\r\nnext()',
-      ],
-      ['tsx', '<div title="hi">\n{items.map(x => <span>{x}</span>)}\n</div>'],
-      ['css', '.foo {\n color: red;\n /* comment */\n}'],
-    ]) {
-      for (let end = 0; end <= source.length; end++) {
-        const args = {
-          code: source.slice(0, end),
-          language,
-          isIncomplete: true,
-        };
-        expect(simplify(session.highlight(args))).toEqual(
-          simplify(plugin.highlight(args))
-        );
-      }
+    const container = mountDOM();
+    const source =
+      'const x = `hello\n${name}`;\n/* comment\nend */\nconst emoji = "🥳";';
+    for (let end = 0; end <= source.length; end++) {
+      const code = source.slice(0, end);
+      container.innerHTML =
+        session.highlight({ code, language: 'ts', isIncomplete: true }) ?? '';
+      expect(container.textContent).toBe(code);
     }
-    session.highlight({
-      code: 'const x = 1;\nconst y = 2',
-      language: 'ts',
-      isIncomplete: true,
-    });
-    const before = session.highlight({
-      code: 'const x = 1;\nconst y = 23',
-      language: 'ts',
-      isIncomplete: true,
-    });
-    const after = session.highlight({
-      code: 'const x = 1;\nconst y = 234',
-      language: 'ts',
-      isIncomplete: true,
-    });
-    expect(after?.tokens[0]).toBe(before?.tokens[0]);
     session.dispose();
-    const args = { code: 'let x = 1;', language: 'ts', isIncomplete: false };
-    expect(simplify(session.highlight(args))).toEqual(
-      simplify(plugin.highlight(args))
-    );
     expect(
-      session.highlight({ ...args, language: 'unknown-language' })
+      session.highlight({
+        code: 'let x = 1;',
+        language: 'ts',
+        isIncomplete: false,
+      })
+    ).toContain('color:');
+    expect(
+      session.highlight({
+        code: 'unknown',
+        language: 'unknown-language',
+        isIncomplete: false,
+      })
     ).toBeNull();
     session.dispose();
   });

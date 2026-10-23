@@ -91,12 +91,27 @@
   cursor: default;
 }
 [data-markdown='code-block'] pre {
+  display: flex;
+  gap: 1.25rem;
   overflow: auto;
   margin: 0;
   padding: 1rem;
   font: 13px/1.7 monospace;
   max-height: 28rem;
   tab-size: 2;
+}
+[data-markdown='code-block'] pre code {
+  padding: 0;
+  background: transparent;
+  border-radius: 0;
+  font: inherit;
+  white-space: pre;
+}
+[data-markdown='line-numbers'] {
+  white-space: pre;
+  text-align: right;
+  opacity: 0.35;
+  user-select: none;
 }
 [data-markdown='code-line'] {
   display: block;

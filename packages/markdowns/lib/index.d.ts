@@ -62,33 +62,22 @@ export function renderToAnsi(
   options?: AnsiOptions
 ): Uint8Array;
 
-/** An owned text node, independent of the renderer's WebAssembly memory. */
-export interface MarkdownText {
-  type: 'text';
-  value: string;
-}
-/** An owned generated element. Raw HTML from the input is omitted. */
-export interface MarkdownElement {
-  type: 'element';
-  tagName: string;
-  properties: Record<string, string>;
-  incomplete?: boolean;
-  children: MarkdownNode[];
-}
-export type MarkdownNode = MarkdownText | MarkdownElement;
-/** Render structured elements. Consumers must validate URLs before navigation. */
-export interface ElementsOptions {
+/** Options for incremental HTML rendering. */
+export interface HtmlSessionOptions {
   /** Complete common unfinished inline syntax in the display copy of the input. */
   incomplete?: boolean;
 }
-export function renderToElements(
-  input: string | Uint8Array | ArrayBuffer,
-  options?: ElementsOptions
-): MarkdownNode[];
 
-/** Append-only parsing with conservative full reparses for edits and definitions.
- * Returned nodes are owned by the session and must be treated as immutable.
+/** Direct HTML output; only a completed prefix and mutable suffix are retained. */
+export interface HtmlUpdate {
+  html: string;
+  stable: string;
+  pending: string;
+  reset: boolean;
+}
+/** Incremental HTML strings, without constructing owned JavaScript nodes.
+ * Raw source HTML is omitted. Consumers must apply their navigation URL policy.
  */
-export function createMarkdownSession(): {
-  render(input: string, options?: ElementsOptions): MarkdownNode[];
+export function createHtmlSession(): {
+  render(input: string, options?: HtmlSessionOptions): HtmlUpdate;
 };

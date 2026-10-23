@@ -15,6 +15,7 @@ tasks:
       - 'lib/**/*'
       - 'scripts/build.mjs'
       - 'react/**/*'
+      - 'html/**/*'
       # The docs demo imports this source; invalidate downstream builds too.
       - 'benchmark/fixtures.mjs'
       - 'tsdown.config.ts'
@@ -59,6 +60,28 @@ tasks:
   # Explicit large workloads keep routine replay checks bounded.
   bench-large:
     command: 'node --expose-gc benchmark/large.mjs'
+    deps:
+      - 'build'
+    options:
+      cache: false
+      runInCI: 'always'
+
+  bench-html:
+    command: 'node --expose-gc benchmark/html.mjs'
+    deps:
+      - 'build'
+    options:
+      cache: false
+      runInCI: 'always'
+
+  bench-memory:
+    command: 'node benchmark/memory.mjs'
+    options:
+      cache: false
+      runInCI: 'always'
+
+  bench-footprint:
+    command: 'node benchmark/footprint.mjs'
     deps:
       - 'build'
     options:

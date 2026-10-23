@@ -8,7 +8,6 @@ class Renderer {
     const instance = new WebAssembly.Instance(wasmModule, {});
     this.memory = instance.exports.memory;
     this.wasmRender = instance.exports.render;
-    this.wasmElements = instance.exports.elements;
     this.wasmComplete = instance.exports.complete;
     this.bindMemory();
   }
@@ -138,97 +137,13 @@ export function renderToAnsi(input, options) {
   return render(input, 1, { width: options?.width });
 }
 
-/** Decode only the entities emitted by our HTML backend, exactly once. */
-function decodeOutput(value) {
-  return value.replace(
-    /&(amp|lt|gt|quot|#39);/g,
-    (_, name) => ({ amp: '&', lt: '<', gt: '>', quot: '"', '#39': "'" })[name]
-  );
-}
-
 /**
- * Assemble owned element objects from the WAT event tape. Raw HTML is omitted;
- * URL policies belong to the consumer (the React adapter applies them).
+ * Stream HTML strings directly from Wasm, retaining only the completed HTML
+ * prefix and reparsing only the unfinished suffix.
  */
-function parseElements(input, options, checkpoint = false) {
-  shared.render(input, 0, { skipHtml: true, incomplete: options?.incomplete });
-  try {
-    shared.wasmElements();
-  } finally {
-    shared.bindMemory();
-  }
-  const start = shared.dv.getUint32(6, true);
-  const end = start + shared.dv.getUint32(10, true);
-  const root = { type: 'element', tagName: '', properties: {}, children: [] };
-  const stack = [root];
-  const read = (a, b) => decodeOutput(dec.decode(shared.buffer.subarray(a, b)));
-  for (let at = start; at < end; at += 20) {
-    const kind = shared.dv.getUint32(at, true);
-    const text = read(
-      shared.dv.getUint32(at + 4, true),
-      shared.dv.getUint32(at + 8, true)
-    );
-    const parent = stack[stack.length - 1];
-    if (kind === 1) {
-      const node = {
-        type: 'element',
-        tagName: text,
-        properties: {},
-        children: [],
-      };
-      parent.children.push(node);
-      stack.push(node);
-    } else if (kind === 2) {
-      if (stack.length > 1) stack.pop();
-    } else if (kind === 3) {
-      if (text === 'data-markdown-incomplete') {
-        parent.incomplete = true;
-        continue;
-      }
-      parent.properties[text] = read(
-        shared.dv.getUint32(at + 12, true),
-        shared.dv.getUint32(at + 16, true)
-      );
-    } else if (kind === 4) {
-      // Whitespace between table elements is formatting, not a React text child.
-      if (
-        text.trim() !== '' ||
-        !['', 'table', 'thead', 'tbody', 'tr', 'ul', 'ol'].includes(
-          parent.tagName
-        )
-      ) {
-        parent.children.push({ type: 'text', value: text });
-      }
-    } else if (
-      kind === 5 &&
-      ['hr', 'br', 'img', 'input'].includes(parent.tagName)
-    ) {
-      stack.pop();
-    }
-  }
-  const boundary = shared.dv.getUint32(26, true);
-  return {
-    nodes: root.children,
-    boundary: checkpoint
-      ? dec.decode(shared.buffer.subarray(pageSize, pageSize + boundary)).length
-      : 0,
-    definitions: shared.dv.getUint8(30) !== 0,
-  };
-}
-
-/** Render owned elements with no session state. */
-export function renderToElements(input, options) {
-  return parseElements(input, options).nodes;
-}
-
-/**
- * Cache completed top-level blocks while reparsing the open tail. Definitions
- * can affect any earlier block, so their presence disables prefix reuse.
- * Session results are owned objects; callers should treat them as immutable.
- */
-export function createMarkdownSession() {
+export function createHtmlSession() {
   let previous = '';
-  let prefix = [];
+  let stable = '';
   let offset = 0;
   let definitions = false;
   let incomplete;
@@ -239,44 +154,52 @@ export function createMarkdownSession() {
         throw new TypeError('session input must be a string');
       if (input === previous && incomplete === options?.incomplete && result)
         return result;
-      if (
+      let reset =
         !input.startsWith(previous) ||
         incomplete !== options?.incomplete ||
-        definitions
-      ) {
+        definitions;
+      if (offset && input.charCodeAt(offset) === 0xfeff) reset = true;
+      if (reset) {
+        stable = '';
         offset = 0;
-        prefix = [];
       }
       let tail = input.slice(offset);
-      // A BOM is special only at the start of the original document.
-      if (offset && tail.startsWith('\uFEFF')) {
+      let rendered = shared.render(tail, 0, {
+        skipHtml: true,
+        incomplete: options?.incomplete,
+      });
+      if (offset && shared.dv.getUint8(30)) {
+        stable = '';
         offset = 0;
-        prefix = [];
+        reset = true;
         tail = input;
+        rendered = shared.render(tail, 0, {
+          skipHtml: true,
+          incomplete: options?.incomplete,
+        });
       }
-      let parsed = parseElements(tail, options, true);
-      if (parsed.definitions && offset) {
-        offset = 0;
-        prefix = [];
-        tail = input;
-        parsed = parseElements(tail, options, true);
-      }
-      definitions = parsed.definitions;
-      result = prefix.concat(parsed.nodes);
-      // Reparse the newly completed region once to obtain its owned nodes.
-      // The open suffix will be the only region parsed on subsequent appends.
-      if (
-        !definitions &&
-        parsed.boundary > 0 &&
-        parsed.boundary <= tail.length
-      ) {
-        prefix = prefix.concat(
-          renderToElements(tail.slice(0, parsed.boundary), options)
+      const html = dec.decode(rendered.output);
+      const boundary = shared.dv.getUint32(26, true);
+      definitions = shared.dv.getUint8(30) !== 0;
+      const completed = definitions
+        ? 0
+        : dec.decode(shared.buffer.subarray(pageSize, pageSize + boundary))
+            .length;
+      let pending = html;
+      if (completed > 0 && completed <= tail.length) {
+        const prefix = dec.decode(
+          shared.render(tail.slice(0, completed), 0, {
+            skipHtml: true,
+            incomplete: options?.incomplete,
+          }).output
         );
-        offset += parsed.boundary;
+        stable += prefix;
+        offset += completed;
+        pending = html.slice(prefix.length);
       }
       previous = input;
       incomplete = options?.incomplete;
+      result = { html: stable + pending, stable, pending, reset };
       return result;
     },
   };

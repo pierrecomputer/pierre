@@ -6,11 +6,10 @@ import {
   STRESS_BASE_CHARACTERS,
   STRESS_SCALES,
 } from '../benchmark/fixtures.mjs';
-import {
-  createMarkdownSession,
-  renderToElements,
-  renderToHtml,
-} from '../dist/node.mjs';
+import { createHtmlSession, renderToHtml } from '../dist/node.mjs';
+
+const decoder = new TextDecoder();
+const full = (source) => decoder.decode(renderToHtml(source));
 
 void test('stress fixtures preserve sizes and independent block boundaries at every scale', () => {
   for (const scale of STRESS_SCALES) {
@@ -28,27 +27,20 @@ void test('stress fixtures preserve sizes and independent block boundaries at ev
 
 void test('100x fixture renders all blocks, owns output, and stays correct on append and reset', () => {
   const source = createStressFixture(100);
-  const session = createMarkdownSession();
+  const session = createHtmlSession();
   const initial = session.render(source);
+  assert.equal((initial.html.match(/<pre>/g) ?? []).length, 100);
+  assert.equal((initial.html.match(/<p>/g) ?? []).length, 10100);
+  assert.equal(initial.stable + initial.pending, initial.html);
+  assert.equal(initial.html, full(source));
   assert.equal(
-    initial.filter((node) => node.type === 'element' && node.tagName === 'pre')
-      .length,
-    100
-  );
-  assert.equal(
-    initial.filter((node) => node.type === 'element' && node.tagName === 'p')
-      .length,
-    10100
-  );
-  assert.deepEqual(
-    session.render(source + '\n\nAppended **tail**.'),
-    renderToElements(source + '\n\nAppended **tail**.')
+    session.render(source + '\n\nAppended **tail**.').html,
+    full(source + '\n\nAppended **tail**.')
   );
   renderToHtml('overwrite shared memory'.repeat(100000));
-  assert.equal(initial[0].children[0].value, 'Paragraph 0: ');
-  assert.equal(initial.at(-1).children[0].value, 'Done.');
-  assert.deepEqual(
-    session.render('replacement'),
-    renderToElements('replacement')
-  );
+  assert.ok(initial.html.startsWith('<p>Paragraph 0: '));
+  assert.ok(initial.html.endsWith('<p>Done.</p>\n'));
+  const replacement = session.render('replacement');
+  assert.equal(replacement.reset, true);
+  assert.equal(replacement.html, full('replacement'));
 });
