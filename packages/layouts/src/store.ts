@@ -16,9 +16,10 @@ export class LayoutStore {
 
   constructor(root: LayoutNode) {
     validateLayout(root);
-    this.state = this.freezeState({
-      root,
-      focusedPane: getPanes(root)[0].id,
+    const owned = copyAndFreeze(root);
+    this.state = Object.freeze({
+      root: owned,
+      focusedPane: getPanes(owned)[0].id,
       zoomedPane: null,
     });
   }
@@ -32,7 +33,8 @@ export class LayoutStore {
   };
 
   setRoot(root: LayoutNode): void {
-    this.commit({ ...this.state, root });
+    validateLayout(root);
+    this.commit({ ...this.state, root: copyAndFreeze(root) });
   }
 
   focusPane(id: string): void {
@@ -51,10 +53,11 @@ export class LayoutStore {
   }
 
   split(targetId: string, pane: PaneNode, edge: Edge = 'right'): void {
+    // The new pane comes from the caller, so the store keeps its own copy.
     const root = splitPane(
       this.state.root,
       targetId,
-      pane,
+      { ...pane },
       this.nextId(),
       edge
     );
@@ -111,8 +114,9 @@ export class LayoutStore {
     ) {
       throw new Error('Invalid layout state');
     }
+    validateLayout(value.root as LayoutNode);
     this.commit({
-      root: value.root as LayoutNode,
+      root: copyAndFreeze(value.root as LayoutNode),
       focusedPane: value.focusedPane,
       zoomedPane: value.zoomedPane,
     });
@@ -139,8 +143,12 @@ export class LayoutStore {
     );
   }
 
+  // The root of `next` holds only nodes that the store owns: frozen nodes of
+  // the current tree, and new nodes from the model functions or from a copy of
+  // caller input. Unchanged nodes keep their identity, so a view can skip them.
   private commit(next: LayoutState): void {
-    validateLayout(next.root);
+    const sameTree = next.root === this.state.root;
+    if (!sameTree) validateLayout(next.root);
     const panes = getPanes(next.root);
     const focusedPane = panes.some(({ id }) => id === next.focusedPane)
       ? next.focusedPane
@@ -148,19 +156,37 @@ export class LayoutStore {
     const zoomedPane = panes.some(({ id }) => id === next.zoomedPane)
       ? next.zoomedPane
       : null;
-    this.state = this.freezeState({ root: next.root, focusedPane, zoomedPane });
+    this.state = Object.freeze({
+      root: sameTree ? next.root : freezeNew(next.root),
+      focusedPane,
+      zoomedPane,
+    });
     for (const listener of [...this.listeners]) listener();
   }
+}
 
-  // Copy caller-owned trees before freezing, so neither side can mutate the other's state.
-  private freezeState(state: LayoutState): LayoutState {
-    function copy(node: LayoutNode): LayoutNode {
-      return Object.freeze(
-        node.type === 'pane'
-          ? { ...node }
-          : { ...node, first: copy(node.first), second: copy(node.second) }
-      );
-    }
-    return Object.freeze({ ...state, root: copy(state.root) });
+/** Copy a tree that a caller owns and freeze the copy, so neither side can change the other's state. */
+function copyAndFreeze(node: LayoutNode): LayoutNode {
+  return Object.freeze(
+    node.type === 'pane'
+      ? { ...node }
+      : {
+          ...node,
+          first: copyAndFreeze(node.first),
+          second: copyAndFreeze(node.second),
+        }
+  );
+}
+
+/**
+ * Freeze the nodes that a model function created. A frozen node is a node of
+ * an earlier tree, frozen with its whole subtree, so the walk stops there.
+ */
+function freezeNew(node: LayoutNode): LayoutNode {
+  if (Object.isFrozen(node)) return node;
+  if (node.type === 'split') {
+    freezeNew(node.first);
+    freezeNew(node.second);
   }
+  return Object.freeze(node);
 }

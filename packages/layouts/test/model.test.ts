@@ -188,6 +188,47 @@ describe('store', () => {
     expect(store.getSnapshot().zoomedPane).toBeNull();
   });
 
+  test('a change keeps the identity of every node that it does not touch', () => {
+    const store = new LayoutStore(root);
+    const before = store.getSnapshot().root;
+    const panes = getPanes(before);
+    store.setRatios({ inner: 0.4 });
+    const after = store.getSnapshot().root;
+    expect(after).not.toBe(before);
+    getPanes(after).forEach((pane, index) => expect(pane).toBe(panes[index]));
+    if (after.type !== 'split' || before.type !== 'split')
+      throw new Error('Expected a split root');
+    expect(after.first).toBe(before.first);
+    expect(after.second).not.toBe(before.second);
+    expect(Object.isFrozen(after)).toBe(true);
+    expect(Object.isFrozen(after.second)).toBe(true);
+
+    // Focus and zoom keep the whole tree.
+    store.focusPane('terminal');
+    store.toggleZoom('terminal');
+    expect(store.getSnapshot().root).toBe(after);
+
+    // A moved pane keeps its node, so its content need not render again.
+    const files = getPanes(after).find(({ id }) => id === 'files');
+    store.move('files', 'terminal', 'bottom');
+    expect(
+      getPanes(store.getSnapshot().root).find(({ id }) => id === 'files')
+    ).toBe(files);
+  });
+
+  test('the store copies the pane that a caller adds', () => {
+    const store = new LayoutStore(root);
+    const added = { type: 'pane' as const, id: 'added', minWidth: 100 };
+    store.split('editor', added, 'right');
+    const node = getPanes(store.getSnapshot().root).find(
+      ({ id }) => id === 'added'
+    );
+    expect(node).toEqual(added);
+    expect(node).not.toBe(added);
+    expect(Object.isFrozen(node)).toBe(true);
+    expect(Object.isFrozen(added)).toBe(false);
+  });
+
   test('generated split IDs avoid restored trees', () => {
     const store = new LayoutStore({ ...root, id: 'layout-split-1' });
     store.split('editor', { type: 'pane', id: 'new' });

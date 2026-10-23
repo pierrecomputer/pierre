@@ -4,6 +4,7 @@ import {
   type CSSProperties,
   type JSX,
   type KeyboardEvent,
+  memo,
   type PointerEvent,
   type ReactNode,
   useCallback,
@@ -155,6 +156,21 @@ function animateFromBoxes(root: HTMLElement, before: Map<string, Rect>): void {
     );
   }
 }
+
+/**
+ * The app's content of one pane. It renders only when its pane node or the
+ * app's `renderPane` changes: focus, zoom, and ratio changes keep the pane
+ * node, because the store keeps the identity of unchanged nodes.
+ */
+const PaneBody = memo(function PaneBody({
+  pane,
+  renderPane,
+}: {
+  pane: PaneNode;
+  renderPane: (pane: PaneNode) => ReactNode;
+}): JSX.Element {
+  return <div className="pierre-layout-content">{renderPane(pane)}</div>;
+});
 
 const rectStyle = (rect: Rect): CSSProperties => ({
   left: rect.x,
@@ -576,7 +592,7 @@ export function Layout({
                 ×
               </button>
             </header>
-            <div className="pierre-layout-content">{renderPane(pane)}</div>
+            <PaneBody pane={pane} renderPane={renderPane} />
           </section>
         );
       })}

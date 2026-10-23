@@ -29,7 +29,7 @@ keyboard-accessible controls to split, move, save, and restore panes.
 ## React
 
 ```tsx
-import { LayoutStore } from '@pierre/layouts';
+import { LayoutStore, type PaneNode } from '@pierre/layouts';
 import { Layout } from '@pierre/layouts/react';
 import '@pierre/layouts/styles.css';
 
@@ -43,18 +43,27 @@ const store = new LayoutStore({
   second: { type: 'pane', id: 'editor', minWidth: 320 },
 });
 
+// A stable function: each pane's content renders again only when this
+// function or the pane's node changes.
+const renderPane = (pane: PaneNode) => <div>{pane.id}</div>;
+
 export function Workspace() {
   return (
     <div style={{ height: 600 }}>
       <Layout
         store={store}
-        renderPane={(pane) => <div>{pane.id}</div>}
+        renderPane={renderPane}
         getPaneTitle={(pane) => pane.id}
       />
     </div>
   );
 }
 ```
+
+A focus change, a zoom, and a resize do not render pane content again: the store
+keeps the identity of each node that a change does not touch, and the view
+renders a pane's content only when its node or `renderPane` changes. Pass a
+stable `renderPane`, for example a module function or one from `useCallback`.
 
 The layout fills its parent; give that parent a definite height. Pane IDs and
 split IDs share one namespace and must be unique, non-empty strings. Horizontal
