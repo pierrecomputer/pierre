@@ -95,6 +95,11 @@ of its content. The content keeps its DOM, its React state, and its scroll
 position. The zoom moves the focus into the zoomed pane first. On restore, the
 view shows the panes again before the restore animation starts.
 
+Each pane host has `contain: style`, so a hide changes no style containment. In
+Chromium, such a change updates the style of the whole document. Style
+containment scopes CSS counters and quotes to the pane: a counter that pane
+content increments starts again in each pane.
+
 Scripts in a hidden pane keep running. The pane host receives a
 `PANE_VISIBILITY_EVENT` event when its content stops and starts rendering, so
 that content such as a terminal or a chat can pause its own work. The event does

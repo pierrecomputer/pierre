@@ -34,6 +34,10 @@
   border: 1px solid var(--layout-border);
   border-radius: 10px;
   background: var(--layout-pane-background, #fff);
+  /* `content-visibility: hidden` includes style containment. A change of style
+     containment makes Chromium update the style of the whole document, so a
+     host always has it. It scopes CSS counters and quotes to the pane. */
+  contain: style;
 }
 
 /* Layout changes animate with transforms from each element's old box (FLIP). */
