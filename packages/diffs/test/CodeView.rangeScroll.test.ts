@@ -178,6 +178,43 @@ describe('CodeView range scrolling', () => {
     }
   });
 
+  test('a nearest request for a visible range replaces an in-flight scroll', async () => {
+    const { cleanup } = installDom();
+    const viewer = new CodeView();
+    const root = createRoot({ height: ROOT_HEIGHT, width: ROOT_WIDTH });
+
+    try {
+      viewer.setup(root);
+      await renderItems(viewer, [makeFileItem('file:example', 120)]);
+
+      root.scrollTop = 500;
+      dispatchScroll(root);
+      viewer.render(true);
+
+      viewer.scrollTo({
+        type: 'range',
+        id: 'file:example',
+        range: { start: 100, end: 105 },
+        align: 'start',
+        behavior: 'instant',
+      });
+      viewer.scrollTo({
+        type: 'range',
+        id: 'file:example',
+        range: { start: 30, end: 35 },
+        align: 'nearest',
+        behavior: 'instant',
+      });
+      viewer.render(true);
+
+      expect(root.scrollTop).toBe(500);
+    } finally {
+      viewer.cleanUp();
+      await wait(0);
+      cleanup();
+    }
+  });
+
   test('moves nearest alignment when the range starts above the viewport', async () => {
     const { cleanup } = installDom();
     const viewer = new CodeView();

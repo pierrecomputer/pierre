@@ -61,21 +61,13 @@ export function recomputeDiffHunks(
 
 // Builds placeholder addition contents that diff as one top-aligned change row per
 // line. Bare `\\n` sentinels align as context against the first deletion lines,
-// which pushes the real addition rows down in split view.
-function buildTopAlignedAdditionSentinel(
-  lineCount: number,
-  deletionContents: string
-): string {
-  const count = Math.max(lineCount, 1);
-  let sentinel = Array.from(
-    { length: count },
-    (_, index) => `${' '.repeat(index + 1)}\n`
-  ).join('');
-  if (sentinel === deletionContents) {
-    sentinel = Array.from(
-      { length: count },
-      (_, index) => `\u0000${' '.repeat(index)}\n`
-    ).join('');
+// which pushes the real addition rows down in split view. Each line is a short
+// unique token no real file line matches, so the size stays linear in the line
+// count.
+function buildTopAlignedAdditionSentinel(lineCount: number): string {
+  let sentinel = '';
+  for (let index = 0; index < Math.max(lineCount, 1); index++) {
+    sentinel += `\u0000${index}\n`;
   }
   return sentinel;
 }
@@ -114,8 +106,7 @@ export function recomputeTopAlignedAdditionDiff(
 ): FullDiffHunkUpdate {
   const deletionContents = diff.deletionLines.join('');
   const additionSentinel = buildTopAlignedAdditionSentinel(
-    additionLines.length,
-    deletionContents
+    additionLines.length
   );
   const recomputed = parseDiffFromFile(
     {
@@ -154,6 +145,19 @@ export function recomputeEmptyDocumentDiff(
   return recomputeTopAlignedAdditionDiff(diff, [''], 0, parseDiffOptions);
 }
 
+/**
+ * Drops the editor document's trailing empty line (a document ending in a
+ * newline exposes one extra empty line the parsed diff never contains) so the
+ * diff's lines stay parse-shaped. Edit sessions render that line as an extra
+ * row instead; see IterateOverDiffProps.includeTrailingNewline.
+ */
+export function normalizeEditorLines(lines: string[]): string[] {
+  if (lines.length > 1 && lines[lines.length - 1] === '') {
+    return lines.slice(0, -1);
+  }
+  return lines;
+}
+
 /** Rebuilds diff hunks after an edit, top-aligning sparse addition sides when needed. */
 export function recomputeDiffHunksForEdit(
   diff: FileDiffMetadata,
@@ -162,70 +166,16 @@ export function recomputeDiffHunksForEdit(
   if (diff.additionLines.length === 0) {
     return recomputeEmptyDocumentDiff(diff, parseDiffOptions);
   }
-  if (shouldTopAlignAdditionRecompute(diff, diff.additionLines)) {
+  const additionLines = normalizeEditorLines(diff.additionLines);
+  if (shouldTopAlignAdditionRecompute(diff, additionLines)) {
     return recomputeTopAlignedAdditionDiff(
       diff,
-      diff.additionLines,
+      additionLines,
       diff.additionCharacterCount,
       parseDiffOptions
     );
   }
-  const additionLines = diff.additionLines;
-  const recomputed = recomputeDiffHunks(diff, parseDiffOptions);
-  preserveTrailingEditorBlankLine(recomputed, additionLines);
-  return recomputed;
-}
-
-function hasTrailingEditorBlankLine(additionLines: string[]): boolean {
-  return additionLines.length > 1 && additionLines.at(-1) === '';
-}
-
-// Re-adds the editor's phantom trailing empty line (a document ending in a
-// newline exposes one extra empty line) as an addition row when the last
-// hunk's final change block can absorb it, so the caret keeps a rendered row.
-export function preserveTrailingEditorBlankLine(
-  recomputed: Pick<
-    FullDiffHunkUpdate,
-    'hunks' | 'additionLines' | 'splitLineCount' | 'unifiedLineCount'
-  >,
-  additionLines: string[]
-): void {
-  if (!hasTrailingEditorBlankLine(additionLines)) {
-    return;
-  }
-  const extraLineCount = additionLines.length - recomputed.additionLines.length;
-  if (extraLineCount <= 0) {
-    return;
-  }
-  const extraAdditionLineIndex = recomputed.additionLines.length;
-
-  const lastHunk = recomputed.hunks.at(-1);
-  if (lastHunk == null) {
-    return;
-  }
-
-  const lastHunkAdditionEnd = getHunkSideEndBoundary(
-    lastHunk.additionStart,
-    lastHunk.additionCount
-  );
-  if (lastHunkAdditionEnd !== extraAdditionLineIndex) {
-    return;
-  }
-
-  for (const content of lastHunk.hunkContent) {
-    if (
-      content.type === 'change' &&
-      content.additions < content.deletions &&
-      content.additionLineIndex + content.additions === extraAdditionLineIndex
-    ) {
-      recomputed.additionLines = additionLines;
-      content.additions += extraLineCount;
-      lastHunk.additionCount += extraLineCount;
-      lastHunk.additionLines += extraLineCount;
-      recomputeDiffRenderLineCounts(recomputed);
-      return;
-    }
-  }
+  return recomputeDiffHunks({ ...diff, additionLines }, parseDiffOptions);
 }
 
 /** Updates hunk metadata after addition lines change; re-parses affected hunks only. */

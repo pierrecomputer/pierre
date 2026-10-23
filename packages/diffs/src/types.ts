@@ -20,6 +20,13 @@ export type { CreatePatchOptionsNonabortable };
 export type CodeViewScrollBehavior = 'instant' | 'smooth' | 'smooth-auto';
 
 /**
+ * How a virtualizer requested line scroll ended: 'settled' after the render
+ * that finishes the scroll, so the line's rows exist, or 'cancelled' when the
+ * user took over or a newer request replaced it.
+ */
+export type ScrollRequestResult = 'settled' | 'cancelled';
+
+/**
  * Represents a file's contents for generating diffs via `parseDiffFromFile` or
  * for when rendering a file directly using the File components
  */

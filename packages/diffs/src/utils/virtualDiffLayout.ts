@@ -248,6 +248,26 @@ export function getTrailingExpandedRegion({
   };
 }
 
+// Whether the end of the file renders, i.e. it isn't hidden inside a collapsed
+// trailing region. A diff without hunks renders no rows at all.
+export function isEndOfFileVisible(
+  diff: FileDiffMetadata,
+  expandedHunks: Map<number, HunkExpansionRegion> | true | undefined,
+  collapsedContextThreshold: number
+): boolean {
+  if (diff.hunks.length === 0) {
+    return false;
+  }
+  const trailingRegion = getTrailingExpandedRegion({
+    fileDiff: diff,
+    hunkIndex: diff.hunks.length - 1,
+    expandedHunks,
+    collapsedContextThreshold,
+    errorPrefix: 'isEndOfFileVisible',
+  });
+  return trailingRegion == null || trailingRegion.collapsedLines === 0;
+}
+
 export interface IsAdditionLineRenderableProps {
   fileDiff: FileDiffMetadata;
   /** One-based line number in the new file. */

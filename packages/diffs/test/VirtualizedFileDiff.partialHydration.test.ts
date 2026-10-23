@@ -69,6 +69,7 @@ function createVirtualizer(visible = true): {
     },
     markDOMDirty() {},
     requestHeightReconcile() {},
+    cancelScroll() {},
     isInstanceVisible() {
       return visible;
     },

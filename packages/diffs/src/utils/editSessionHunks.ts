@@ -11,8 +11,8 @@ import { getHunkSideStartBoundary } from './getHunkSideBoundaries';
 import { parseDiffFromFile } from './parseDiffFromFile';
 import { slideBlankBoundaryBlocksUp } from './realignChangeContent';
 import {
+  normalizeEditorLines,
   offsetHunkContent,
-  preserveTrailingEditorBlankLine,
   recomputeDiffHunks,
   recomputeDiffHunksForEdit,
   recomputeDiffRenderLineCounts,
@@ -63,18 +63,6 @@ const deletionLineSetCache = new WeakMap<
   FileDiffMetadata,
   { lines: string[]; set: Set<string> }
 >();
-
-/**
- * Drops the editor document's phantom trailing empty line (a document ending
- * in a newline exposes one extra empty line the parsed diff never contains)
- * so session line arrays compare like parse-derived ones.
- */
-export function normalizeEditorLines(lines: string[]): string[] {
-  if (lines.length > 1 && lines[lines.length - 1] === '') {
-    return lines.slice(0, -1);
-  }
-  return lines;
-}
 
 /**
  * Find the complete old/current divergence core. The old side is immutable
@@ -139,7 +127,6 @@ export function rebuildSessionHunks(
   diff.hunks = nextHunks;
   diff.editSessionDirty = true;
   finalizeSessionHunks(diff);
-  preserveTrailingEditorBlankLine(diff, editorAdditionLines);
   const layoutChanged = hasRegionOrSplitLayoutChanged(
     previousHunks,
     diff.hunks

@@ -79,17 +79,21 @@ import {
 import { isDefaultRenderRange } from '../utils/isDefaultRenderRange';
 import { isDiffPlainText } from '../utils/isDiffPlainText';
 import type { DiffLineMetadata } from '../utils/iterateOverDiff';
-import { iterateOverDiff } from '../utils/iterateOverDiff';
+import { endsWithNewline, iterateOverDiff } from '../utils/iterateOverDiff';
 import { renderDiffWithHighlighter } from '../utils/renderDiffWithHighlighter';
 import { resolvePreferredHighlighter } from '../utils/resolvePreferredHighlighter';
 import {
+  normalizeEditorLines,
   recomputeDiffHunksForEdit,
   recomputeEmptyDocumentDiff,
   recomputeTopAlignedAdditionDiff,
   shouldTopAlignAdditionRecompute,
   updateDiffHunks,
 } from '../utils/updateDiffHunks';
-import { getTrailingContextRangeSize } from '../utils/virtualDiffLayout';
+import {
+  getTrailingContextRangeSize,
+  isEndOfFileVisible,
+} from '../utils/virtualDiffLayout';
 import type { WorkerPoolManager } from '../worker';
 import { isHandledWorkerPoolError } from '../worker/errors';
 
@@ -385,6 +389,59 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       },
       renderRange: renderCache.renderRange,
     };
+  }
+
+  // Edit sessions render the editor's empty line after the file's final
+  // newline as its own rowq
+  public includesTrailingNewline(): boolean {
+    return this.editSessionActive;
+  }
+
+  // Whether this diff renders that empty line as one extra row (unless the
+  // end of the file is collapsed).
+  public hasTrailingNewlineRow(diff: FileDiffMetadata): boolean {
+    return this.includesTrailingNewline() && endsWithNewline(diff, 'additions');
+  }
+
+  // Edit sessions never show "No newline at end of file" markers.
+  public showsNoNewlineMarkers(): boolean {
+    return !this.editSessionActive;
+  }
+
+  // Whether markup rendered for `renderRange` would look different in edit
+  // mode: when it includes the end of the file, that end gains the editor's
+  // empty final row or loses its "No newline" marker.
+  public editingChangesEndOfFile(
+    diff: FileDiffMetadata,
+    renderRange: RenderRange | undefined
+  ): boolean {
+    const { diffStyle, expandUnchanged, collapsedContextThreshold } =
+      this.getOptionsWithDefaults();
+    const expandedHunks = expandUnchanged ? true : this.expandedHunks;
+    if (
+      diff.isPartial ||
+      !isEndOfFileVisible(diff, expandedHunks, collapsedContextThreshold)
+    ) {
+      return false;
+    }
+    if (renderRange == null || renderRange.totalLines === Infinity) {
+      return true;
+    }
+    // The range reaches the end of the file when no row comes after it.
+    let hasRowAfter = false;
+    iterateOverDiff({
+      diff,
+      diffStyle,
+      startingLine: renderRange.startingLine + renderRange.totalLines,
+      totalLines: 1,
+      expandedHunks,
+      collapsedContextThreshold,
+      callback: () => {
+        hasRowAfter = true;
+        return true;
+      },
+    });
+    return !hasRowAfter;
   }
 
   /** Leave edit-session mode. The exit recompute is the host's concern. */
@@ -832,13 +889,13 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     previousAdditionLines: readonly string[]
   ): void {
     const { parseDiffOptions } = this.options;
-    const rawLines = diff.additionLines;
-    if (shouldTopAlignAdditionRecompute(diff, rawLines)) {
+    diff.additionLines = normalizeEditorLines(diff.additionLines);
+    if (shouldTopAlignAdditionRecompute(diff, diff.additionLines)) {
       this.applyRecomputePreservingSessionType(
         diff,
         recomputeTopAlignedAdditionDiff(
           diff,
-          rawLines,
+          diff.additionLines,
           diff.additionCharacterCount,
           parseDiffOptions
         )
@@ -1638,6 +1695,27 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       );
     };
 
+    // The trailing newline row (IterateOverDiffProps.includeTrailingNewline)
+    // sits one past each side's last line and has no highlighted line of its
+    // own, so it renders as an empty line.
+    const getLineContent = (
+      lines: ElementContent[],
+      line: DiffLineMetadata | undefined,
+      lineCount: number
+    ): ElementContent | undefined => {
+      if (line == null) {
+        return undefined;
+      }
+      return line.lineIndex === lineCount
+        ? createPlainAdditionLineElement(
+            line.lineIndex,
+            '',
+            line.unifiedLineIndex,
+            line.splitLineIndex
+          )
+        : lines[line.lineIndex];
+    };
+
     function pushSeparators(props: PushSeparatorProps) {
       pendingSplitContext.flush();
       if (diffStyle === 'unified') {
@@ -1650,6 +1728,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
 
     this.pushFileLevelAnnotations(fileDiff, diffStyle, renderRange, context);
 
+    const showsNoNewlineMarkers = this.showsNoNewlineMarkers();
     iterateOverDiff({
       diff: fileDiff,
       diffStyle,
@@ -1657,6 +1736,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       totalLines: renderRange.totalLines,
       expandedHunks: expandUnchanged ? true : this.expandedHunks,
       collapsedContextThreshold,
+      includeTrailingNewline: this.includesTrailingNewline(),
       callback: ({
         hunkIndex,
         hunk,
@@ -1709,14 +1789,16 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
           if (injectedRows?.before != null) {
             pushUnifiedInjectedRows(injectedRows.before, context);
           }
-          let deletionLineContent =
-            deletionLine != null
-              ? deletionLines[deletionLine.lineIndex]
-              : undefined;
-          let additionLineContent =
-            additionLine != null
-              ? additionLines[additionLine.lineIndex]
-              : undefined;
+          let deletionLineContent = getLineContent(
+            deletionLines,
+            deletionLine,
+            fileDiff.deletionLines.length
+          );
+          let additionLineContent = getLineContent(
+            additionLines,
+            additionLine,
+            fileDiff.additionLines.length
+          );
           if (deletionLineContent == null && additionLineContent == null) {
             const errorMessage =
               'DiffHunksRenderer.processDiffResult: deletionLine and additionLine are null, something is wrong';
@@ -1799,14 +1881,16 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
             );
           }
 
-          let deletionLineContent =
-            deletionLine != null
-              ? deletionLines[deletionLine.lineIndex]
-              : undefined;
-          let additionLineContent =
-            additionLine != null
-              ? additionLines[additionLine.lineIndex]
-              : undefined;
+          let deletionLineContent = getLineContent(
+            deletionLines,
+            deletionLine,
+            fileDiff.deletionLines.length
+          );
+          let additionLineContent = getLineContent(
+            additionLines,
+            additionLine,
+            fileDiff.additionLines.length
+          );
           const deletionLineDecoration = this.getSplitLineDecoration({
             side: 'deletions',
             type,
@@ -1944,9 +2028,11 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
           ? hunk.noEOFCRAdditions
           : false;
         const noEOFCRDeletion =
-          (deletionLine?.noEOFCR ?? false) || splitNoEOFCRDeletion;
+          showsNoNewlineMarkers &&
+          ((deletionLine?.noEOFCR ?? false) || splitNoEOFCRDeletion);
         const noEOFCRAddition =
-          (additionLine?.noEOFCR ?? false) || splitNoEOFCRAddition;
+          showsNoNewlineMarkers &&
+          ((additionLine?.noEOFCR ?? false) || splitNoEOFCRAddition);
         if (noEOFCRAddition || noEOFCRDeletion) {
           if (diffStyle === 'split') {
             pendingSplitContext.flush();
@@ -2039,7 +2125,8 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
 
     const totalLines = Math.max(
       getTotalLineCountFromHunks(fileDiff.hunks),
-      fileDiff.additionLines.length ?? 0,
+      fileDiff.additionLines.length +
+        (this.hasTrailingNewlineRow(fileDiff) ? 1 : 0),
       fileDiff.deletionLines.length ?? 0
     );
 

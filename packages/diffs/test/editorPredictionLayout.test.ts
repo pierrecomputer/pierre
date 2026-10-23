@@ -120,6 +120,8 @@ function createRecordingVirtualizer(root: HTMLElement) {
     requestHeightReconcile(instance: object) {
       reconcileRequests.push(instance);
     },
+    scrollSpanIntoView() {},
+    cancelScroll() {},
   } as never;
   return { virtualizer, reconcileRequests };
 }

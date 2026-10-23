@@ -2034,6 +2034,7 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
         ? true
         : this.hunksRenderer.getExpandedHunksMap(),
       collapsedContextThreshold,
+      includeTrailingNewline: this.hunksRenderer.includesTrailingNewline(),
       callback: ({ additionLine }) => {
         if (additionLine != null) {
           firstLineNumber ??= additionLine.lineNumber;
@@ -2189,7 +2190,17 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
       this.loadFilesIfNecessary();
     }
     const editSessionDiff = this.editSession?.diff;
-    if (this.hunksRenderer.editorRenderReady()) {
+    // View-mode markup that shows the end of the file can't be reused: the
+    // session renders that end differently. Markup the session rendered
+    // already has its end.
+    const changesEndOfFile =
+      editSessionDiff != null &&
+      this.getRenderedDiff() !== editSessionDiff &&
+      this.hunksRenderer.editingChangesEndOfFile(
+        editSessionDiff,
+        this.renderRange
+      );
+    if (this.hunksRenderer.editorRenderReady() && !changesEndOfFile) {
       // Compatible markup can be reused without repainting. Once the renderer
       // transfers that cache to the private session, the existing DOM belongs
       // to the session as well.
@@ -2256,7 +2267,16 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
       );
     }
     this.hunksRenderer.endEditSession();
-    this.finalizeEditSessionHunks();
+    const didFinalize = this.finalizeEditSessionHunks();
+    // Markup the session rendered with the end of the file on screen shows
+    // that end in edit mode, so view mode has to repaint it.
+    const showsSessionEndOfFile =
+      !didFinalize &&
+      this.getRenderedDiff() === editSessionDiff &&
+      this.hunksRenderer.editingChangesEndOfFile(
+        editSessionDiff,
+        this.renderRange
+      );
 
     const sessionAnnotationsCurrent = editSessionAnnotations?.current;
     let acceptedDiff: FileDiffMetadata | undefined;
@@ -2337,7 +2357,10 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
           ? (sessionAnnotationsCurrent ?? inputAnnotations)
           : inputAnnotations,
     };
-    if (installResult && this.fileContainer != null) {
+    if (
+      (installResult || showsSessionEndOfFile) &&
+      this.fileContainer != null
+    ) {
       this.rerender();
     }
     if (failed) {
