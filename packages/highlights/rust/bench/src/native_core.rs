@@ -7,26 +7,6 @@ use std::time::Instant;
 
 use highlights::{Highlighter, Language, Rec};
 
-/// Whether the native runs use the assembly token loop (`--asm-*`).
-#[cfg(feature = "native-asm")]
-static ASM: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
-
-/// Select the assembly token loop for the parity and fuzz checks.
-#[cfg(feature = "native-asm")]
-pub fn use_asm() {
-    ASM.store(true, std::sync::atomic::Ordering::Relaxed);
-}
-
-/// The native core's records for the current input, from the Rust loop or,
-/// after [`use_asm`], the assembly loop.
-fn native(hl: &mut Highlighter, lang: u8, len: usize) -> Vec<Rec> {
-    #[cfg(feature = "native-asm")]
-    if ASM.load(std::sync::atomic::Ordering::Relaxed) {
-        return hl.tokenize_native_asm(lang, len).unwrap().to_vec();
-    }
-    hl.tokenize_native(lang, len).unwrap().to_vec()
-}
-
 /// The language id for `path` when the native core handles it.
 fn core_lang(path: &Path) -> Option<u8> {
     let lang = Language::from_path(path)?;
@@ -48,7 +28,7 @@ pub fn parity(paths: &[String]) {
         };
         hl.input_mut(input.len()).copy_from_slice(&input);
         let wasm: Vec<Rec> = hl.tokenize(lang, input.len()).to_vec();
-        let native: Vec<Rec> = native(&mut hl, lang, input.len());
+        let native: Vec<Rec> = hl.tokenize_native(lang, input.len()).unwrap().to_vec();
         files += 1;
         bytes += input.len();
         if wasm != native {
@@ -88,7 +68,7 @@ pub fn profile(engine: &str, file: &str, secs: f64) {
     let bytes = std::fs::read(path).unwrap();
     let mut hl = Highlighter::new();
     hl.input_mut(bytes.len()).copy_from_slice(&bytes);
-    let native = engine == "native" || engine == "asm";
+    let native = engine == "native";
     let recs = if native {
         hl.tokenize_native(lang, bytes.len()).unwrap().len()
     } else {
@@ -97,10 +77,7 @@ pub fn profile(engine: &str, file: &str, secs: f64) {
     let t = Instant::now();
     let mut n = 0u64;
     while t.elapsed().as_secs_f64() < secs {
-        if engine == "asm" {
-            #[cfg(feature = "native-asm")]
-            black_box(hl.tokenize_native_asm(lang, bytes.len()));
-        } else if native {
+        if native {
             black_box(hl.tokenize_native(lang, bytes.len()));
         } else {
             black_box(hl.tokenize(lang, bytes.len()));
@@ -166,7 +143,7 @@ pub fn fuzz(rounds: usize, paths: &[String]) {
         for &lang in &langs {
             hl.input_mut(buf.len()).copy_from_slice(&buf);
             let wasm: Vec<Rec> = hl.tokenize(lang, buf.len()).to_vec();
-            let native: Vec<Rec> = native(&mut hl, lang, buf.len());
+            let native: Vec<Rec> = hl.tokenize_native(lang, buf.len()).unwrap().to_vec();
             if wasm != native {
                 bad += 1;
                 if bad <= 5 {

@@ -47,37 +47,3 @@ impl Highlighter {
         Some(&inst.ext.recs)
     }
 }
-
-#[cfg(all(feature = "native-asm", target_arch = "aarch64"))]
-impl Highlighter {
-    /// [`Highlighter::tokenize_native`] with the token loop in assembly.
-    /// The records are the same.
-    #[doc(hidden)]
-    pub fn tokenize_native_asm(&mut self, lang: u8, len: usize) -> Option<&[Rec]> {
-        let ts = if Some(lang) == language_id("ts") {
-            true
-        } else if Some(lang) == language_id("js") {
-            false
-        } else {
-            return None;
-        };
-        let inst = &mut self.inst;
-        let mem = inst.mem.bytes_mut();
-        mem[0] = lang;
-        mem[1] = Mode::LineRecords as u8;
-        mem[2..6].copy_from_slice(&(len as u32).to_le_bytes());
-        mem[PAGE + len] = 0;
-        inst.ext.native = true;
-        inst.ext.recs.clear();
-        inst.ext.recs.reserve(len / 4 + 16);
-        inst.g_srcBase = PAGE as i32;
-        inst.g_docStart = PAGE as i32;
-        inst.g_streaming = 0;
-        inst.g_streamDepth = 0;
-        inst.f_sigReset();
-        inst.f_hlBegin();
-        fast::lexasm::highlight(inst, PAGE, len, ts);
-        inst.ext.native = false;
-        Some(&inst.ext.recs)
-    }
-}

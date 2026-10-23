@@ -7,7 +7,6 @@ publish.workspace = true
 
 [features]
 native-core = ["highlights/native-core"]
-native-asm = ["native-core", "highlights/native-asm"]
 
 [dependencies]
 highlights = { path = "../highlights" }
