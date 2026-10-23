@@ -256,3 +256,55 @@ test('saving and reloading restores the split tree after edits', async ({
   await page.getByRole('button', { name: 'Load', exact: true }).click();
   await expect(page.locator('[data-layout-pane]')).toHaveCount(7);
 });
+
+test('the focus indicator shows on another pane at once and moves with its pane', async ({
+  page,
+}) => {
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
+  const indicator = page.locator('.pierre-layout-focus');
+  // In the next frame, count the indicator's animations and measure how far
+  // its box is from the box of the pane, both with running transforms.
+  const nextFrame = (id: string) =>
+    indicator.evaluate(
+      (element, id) =>
+        new Promise<{ animations: number; offset: number }>((resolve) => {
+          requestAnimationFrame(() => {
+            const pane = document.querySelector(`[data-layout-pane="${id}"]`);
+            if (pane === null) throw new Error('Missing pane');
+            const a = element.getBoundingClientRect();
+            const b = pane.getBoundingClientRect();
+            resolve({
+              animations: element.getAnimations().length,
+              offset: Math.max(
+                Math.abs(a.x - b.x),
+                Math.abs(a.y - b.y),
+                Math.abs(a.width - b.width),
+                Math.abs(a.height - b.height)
+              ),
+            });
+          });
+        }),
+      id
+    );
+  // A click into another pane moves the indicator with no animation.
+  await page.locator('[data-layout-pane="7"] .demo-pane-number').click();
+  const focus = await nextFrame('7');
+  expect(focus.animations).toBe(0);
+  expect(focus.offset).toBeLessThan(0.5);
+
+  // A close moves the focus to pane 1 while pane 1 grows: the indicator
+  // shows on pane 1 at once and animates with it.
+  await page.getByRole('button', { name: 'Close Pane 7', exact: true }).click();
+  const close = await nextFrame('1');
+  expect(close.animations).toBe(1);
+  expect(close.offset).toBeLessThan(0.5);
+  await expect
+    .poll(() => indicator.evaluate((element) => element.getAnimations().length))
+    .toBe(0);
+
+  // A zoom keeps the focus on pane 1: the indicator animates with it.
+  await page.getByRole('button', { name: 'Zoom Pane 1', exact: true }).click();
+  const zoom = await nextFrame('1');
+  expect(zoom.animations).toBe(1);
+  expect(zoom.offset).toBeLessThan(0.5);
+});

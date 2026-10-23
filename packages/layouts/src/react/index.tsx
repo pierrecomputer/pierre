@@ -85,8 +85,12 @@ function readBoxes(root: HTMLElement): Map<string, Rect> {
   for (const element of root.querySelectorAll<HTMLElement>(
     `[${FLIP_ATTRIBUTE}]`
   )) {
+    const key = element.getAttribute(FLIP_ATTRIBUTE) ?? '';
+    // The focus indicator shares the key of its pane and comes after it. Keep
+    // the box of the pane, so that both elements animate from it.
+    if (boxes.has(key)) continue;
     const box = element.getBoundingClientRect();
-    boxes.set(element.getAttribute(FLIP_ATTRIBUTE) ?? '', {
+    boxes.set(key, {
       x: box.left - bounds.left,
       y: box.top - bounds.top,
       width: box.width,
@@ -240,16 +244,22 @@ export function Layout({
   // Animate model changes only. CSS owns continuous sizing, including while JS is busy.
   const subscribe = useCallback(
     (listener: () => void): (() => void) => {
-      let previousZoom = store.getSnapshot().zoomedPane;
+      let previous = store.getSnapshot();
       const unsubscribe = store.subscribe(() => {
         const element = rootRef.current;
-        const zoom = store.getSnapshot().zoomedPane;
+        const next = store.getSnapshot();
+        const zoom = next.zoomedPane;
+        // Only a tree or zoom change moves elements. A focus change reads no
+        // boxes: the focus indicator shows on the new pane at once.
+        const moves =
+          next.root !== previous.root || zoom !== previous.zoomedPane;
         // A pointer resize follows the pointer with no animation.
         const animate =
           element !== null &&
+          moves &&
           gesture.current?.type !== 'resize' &&
           !matchMedia('(prefers-reduced-motion: reduce)').matches;
-        const zoomStarts = zoom !== previousZoom && zoom !== null;
+        const zoomStarts = zoom !== previous.zoomedPane && zoom !== null;
         if (element !== null && (animate || zoomStarts)) {
           // Layout is clean here, before React applies the change, so these reads are cheap.
           const boxes = readBoxes(element);
@@ -270,7 +280,7 @@ export function Layout({
           for (const animation of flipAnimations(element)) animation.cancel();
           boxesBefore.current = animate ? boxes : null;
         }
-        previousZoom = zoom;
+        previous = next;
         listener();
       });
       return unsubscribe;
@@ -650,10 +660,13 @@ export function Layout({
           </section>
         );
       })}
+      {/* The indicator has the FLIP key of its pane, so it moves with that
+          pane. A focus change replaces it, so it never moves to another pane. */}
       {focused !== undefined && (
         <div
+          key={focused.pane.id}
           className="pierre-layout-focus"
-          data-layout-flip="focus"
+          data-layout-flip={`pane:${focused.pane.id}`}
           aria-hidden="true"
           style={
             state.zoomedPane !== null
