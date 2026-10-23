@@ -208,6 +208,14 @@ function registerGeometryVariables(boxes: number): void {
   registeredBoxes = target;
 }
 
+// The box of a zoomed pane and of the focus indicator while a pane is zoomed.
+const FULL_SIZE: CSSProperties = {
+  left: 0,
+  top: 0,
+  width: '100%',
+  height: '100%',
+};
+
 const rectStyle = (rect: Rect): CSSProperties => ({
   left: rect.x,
   top: rect.y,
@@ -317,6 +325,37 @@ export function Layout({
   );
   registerGeometryVariables(
     Object.keys(geometry.variables).length / BOX_SIDES.length
+  );
+  // Style objects keep their identity while the tree does, so React does not
+  // compare their many custom properties again on a focus or zoom change.
+  const styles = useMemo(
+    () => ({
+      panes: new Map(
+        geometry.panes.map(
+          ({ pane, rect, variables }): [string, CSSProperties] => [
+            pane.id,
+            { ...variables, ...rect },
+          ]
+        )
+      ),
+      separators: new Map(
+        geometry.separators.map(
+          ({ split, rect, variables }): [string, CSSProperties] => [
+            split.id,
+            { ...variables, ...rect },
+          ]
+        )
+      ),
+      corners: new Map(
+        geometry.corners.map(
+          ({ id, left, top, variables }): [string, CSSProperties] => [
+            id,
+            { ...variables, left, top },
+          ]
+        )
+      ),
+    }),
+    [geometry]
   );
   // Keep DOM order independent of tree traversal: detach/reinsert can reset scroll and focus.
   const paneHosts = [...geometry.panes].sort((a, b) =>
@@ -580,7 +619,7 @@ export function Layout({
         }
       }}
     >
-      {paneHosts.map(({ pane, rect, variables }) => {
+      {paneHosts.map(({ pane }) => {
         const hidden =
           state.zoomedPane !== null && state.zoomedPane !== pane.id;
         const zoomed = state.zoomedPane === pane.id;
@@ -614,17 +653,10 @@ export function Layout({
             data-moving={dragging === pane.id}
             style={
               zoomed
-                ? { left: 0, top: 0, width: '100%', height: '100%' }
+                ? FULL_SIZE
                 : hidden
-                  ? {
-                      ...variables,
-                      ...rect,
-                      transform: exit,
-                    }
-                  : {
-                      ...variables,
-                      ...rect,
-                    }
+                  ? { ...styles.panes.get(pane.id), transform: exit }
+                  : styles.panes.get(pane.id)
             }
             onFocusCapture={() => store.focusPane(pane.id)}
             onPointerDown={() => store.focusPane(pane.id)}
@@ -669,11 +701,8 @@ export function Layout({
           aria-hidden="true"
           style={
             state.zoomedPane !== null
-              ? { left: 0, top: 0, width: '100%', height: '100%' }
-              : {
-                  ...focused.variables,
-                  ...focused.rect,
-                }
+              ? FULL_SIZE
+              : styles.panes.get(focused.pane.id)
           }
         />
       )}
@@ -699,10 +728,7 @@ export function Layout({
             aria-valuetext={`${Math.round(separator.split.ratio * 100)}% preferred size`}
             data-direction={separator.split.direction}
             data-layout-flip={`separator:${separator.split.id}`}
-            style={{
-              ...separator.variables,
-              ...separator.rect,
-            }}
+            style={styles.separators.get(separator.split.id)}
             onPointerDown={(event) => startResize(event, [separator.split.id])}
             onKeyDown={(event) => resizeKey(event, [separator.split.id])}
           />
@@ -714,11 +740,7 @@ export function Layout({
             type="button"
             className="pierre-layout-corner"
             aria-label="Resize both axes"
-            style={{
-              ...corner.variables,
-              left: corner.left,
-              top: corner.top,
-            }}
+            style={styles.corners.get(corner.id)}
             data-layout-corner={corner.id}
             data-layout-flip={`corner:${corner.id}`}
             onPointerDown={(event) => startResize(event, corner.splitIds)}
