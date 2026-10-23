@@ -23,6 +23,9 @@ export function validateLayout(root: LayoutNode): void {
           throw new Error('Pane minimum sizes must be finite and non-negative');
         }
       }
+      if (node.hidden !== undefined && typeof node.hidden !== 'boolean') {
+        throw new Error('Pane hidden must be a boolean');
+      }
     } else if (node.type === 'split') {
       if (node.direction !== 'horizontal' && node.direction !== 'vertical') {
         throw new Error('Split direction must be horizontal or vertical');
@@ -37,12 +40,54 @@ export function validateLayout(root: LayoutNode): void {
     }
   }
   visit(root);
+  if (!hasVisiblePane(root)) {
+    throw new Error('A layout needs at least one visible pane');
+  }
 }
 
 export function getPanes(root: LayoutNode): PaneNode[] {
   return root.type === 'pane'
     ? [root]
     : [...getPanes(root.first), ...getPanes(root.second)];
+}
+
+export function hasVisiblePane(node: LayoutNode): boolean {
+  return node.type === 'pane'
+    ? node.hidden !== true
+    : hasVisiblePane(node.first) || hasVisiblePane(node.second);
+}
+
+/**
+ * The tree that takes space: hidden panes are left out, and a split with one
+ * visible side gives way to that side. A subtree with no hidden pane keeps its
+ * identity. Null when no pane is visible.
+ */
+export function visibleTree(node: LayoutNode): LayoutNode | null {
+  if (node.type === 'pane') return node.hidden === true ? null : node;
+  const first = visibleTree(node.first);
+  const second = visibleTree(node.second);
+  if (first === null) return second;
+  if (second === null) return first;
+  return first === node.first && second === node.second
+    ? node
+    : { ...node, first, second };
+}
+
+/** Hide a pane or show it again, in its place. */
+export function setPaneHidden(
+  root: LayoutNode,
+  id: string,
+  hidden: boolean
+): LayoutNode {
+  const next = replaceNode(root, id, (node) => {
+    if (node.type !== 'pane') throw new Error(`Pane not found: ${id}`);
+    if ((node.hidden === true) === hidden) return node;
+    if (hidden) return { ...node, hidden: true };
+    const { hidden: _hidden, ...shown } = node;
+    return shown;
+  });
+  validateLayout(next);
+  return next;
 }
 
 /** Replace a node immutably, preserving the identity of unaffected branches. */

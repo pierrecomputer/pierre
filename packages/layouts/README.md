@@ -69,8 +69,28 @@ reuses, so an app can show or hide panes by building a new tree from the nodes
 of `store.getSnapshot().root`, and the panes that stay keep their content.
 
 Each pane header has a drag grip, a zoom button, and a close button.
-`paneActions` selects them, for example `paneActions={['zoom', 'close']}` for an
-app whose panes do not move.
+`paneActions` selects them for all panes, for example `['zoom', 'close']`, or
+for each pane with a function of the pane node. By default the close button
+calls `store.close`; `onPaneClose` replaces it, for example to hide the pane.
+
+`store.setHidden(id, true)` hides a pane: it keeps its place in the tree, its
+content, its state, and its scroll position, but takes no space, and its sibling
+takes its box. `store.setHidden(id, false)` shows it again in its place, also
+after other panes moved, and focuses it. The last visible pane stays visible.
+The hidden flag is part of the pane node, so `serialize()` keeps it. A hidden
+pane host has `data-collapsed="true"` and receives `PANE_VISIBILITY_EVENT` when
+it hides or shows.
+
+```tsx
+<Layout
+  store={store}
+  renderPane={renderPane}
+  paneActions={(pane) =>
+    pane.id === 'sidebar' ? [] : ['move', 'zoom', 'close']
+  }
+  onPaneClose={(pane) => store.setHidden(pane.id, true)}
+/>
+```
 
 The layout fills its parent; give that parent a definite height. Pane IDs and
 split IDs share one namespace and must be unique, non-empty strings. Horizontal

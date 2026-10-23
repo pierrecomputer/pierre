@@ -10,9 +10,11 @@ import {
   movePane,
   type PaneNode,
   removePane,
+  setPaneHidden,
   splitPane,
   swapPanes,
   validateLayout,
+  visibleTree,
 } from '../src';
 
 const root: LayoutNode = {
@@ -164,6 +166,56 @@ describe('css layout', () => {
       expect(value).not.toContain('var(');
       expect(value).toMatch(/^(calc\(.*\)|-?[\d.]+px|100cq[wh])$/);
     }
+  });
+});
+
+describe('hidden panes', () => {
+  test('a hidden pane keeps its place and gives its space to its sibling', () => {
+    const hidden = setPaneHidden(root, 'terminal', true);
+    expect(getPanes(hidden).map(({ id }) => id)).toEqual([
+      'files',
+      'editor',
+      'terminal',
+    ]);
+    expect(visibleTree(hidden)?.type).toBe('split');
+    const geometry = computeLayout(hidden, 1000, 600);
+    expect(geometry.panes.map(({ pane }) => pane.id)).toEqual([
+      'files',
+      'editor',
+    ]);
+    expect(geometry.separators.map(({ split }) => split.id)).toEqual(['outer']);
+    const editor = geometry.panes[1].rect;
+    expect(editor.height).toBe(600);
+    // Showing it again gives back the tree without the flag.
+    const shown = setPaneHidden(hidden, 'terminal', false);
+    expect(getPanes(shown)[2]).toEqual(getPanes(root)[2]);
+    expect(() =>
+      setPaneHidden(setPaneHidden(hidden, 'files', true), 'editor', true)
+    ).toThrow();
+  });
+
+  test('the store hides and shows panes, and keeps focus and zoom on visible panes', () => {
+    const store = new LayoutStore(root);
+    store.focusPane('terminal');
+    store.toggleZoom('terminal');
+    store.setHidden('terminal', true);
+    expect(store.getSnapshot().focusedPane).not.toBe('terminal');
+    expect(store.getSnapshot().zoomedPane).toBeNull();
+    store.setHidden('files', true);
+    // The last visible pane stays, and cannot be closed either.
+    store.setHidden('editor', true);
+    store.close('editor');
+    expect(
+      getPanes(store.getSnapshot().root).filter(({ hidden }) => hidden !== true)
+    ).toHaveLength(1);
+    store.setHidden('terminal', false);
+    expect(store.getSnapshot().focusedPane).toBe('terminal');
+    expect(() =>
+      validateLayout({
+        ...root,
+        first: { type: 'pane', id: 'x', hidden: 1 },
+      } as unknown as LayoutNode)
+    ).toThrow();
   });
 });
 

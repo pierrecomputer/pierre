@@ -1,3 +1,4 @@
+import { visibleTree } from './model';
 import type {
   LayoutGeometry,
   LayoutNode,
@@ -8,18 +9,32 @@ import type {
 const DEFAULT_MIN_WIDTH = 120;
 const DEFAULT_MIN_HEIGHT = 80;
 
-/** Compute subtree minimums so resizing an ancestor respects every nested pane. */
+/**
+ * Compute subtree minimums so resizing an ancestor respects every nested pane.
+ * Hidden panes take no space, so a subtree of hidden panes has no minimum.
+ */
 export function getMinimumSize(
   node: LayoutNode,
   gap: number
 ): { width: number; height: number } {
+  return minimumSize(node, gap) ?? { width: 0, height: 0 };
+}
+
+function minimumSize(
+  node: LayoutNode,
+  gap: number
+): { width: number; height: number } | null {
   if (node.type === 'pane')
-    return {
-      width: node.minWidth ?? DEFAULT_MIN_WIDTH,
-      height: node.minHeight ?? DEFAULT_MIN_HEIGHT,
-    };
-  const first = getMinimumSize(node.first, gap);
-  const second = getMinimumSize(node.second, gap);
+    return node.hidden === true
+      ? null
+      : {
+          width: node.minWidth ?? DEFAULT_MIN_WIDTH,
+          height: node.minHeight ?? DEFAULT_MIN_HEIGHT,
+        };
+  const first = minimumSize(node.first, gap);
+  const second = minimumSize(node.second, gap);
+  if (first === null) return second;
+  if (second === null) return first;
   return node.direction === 'horizontal'
     ? {
         width: first.width + second.width + gap,
@@ -31,9 +46,12 @@ export function getMinimumSize(
       };
 }
 
-/** Resolve preferred ratios without overwriting them when a viewport temporarily constrains space. */
+/**
+ * Resolve preferred ratios without overwriting them when a viewport temporarily
+ * constrains space. Hidden panes take no space and have no geometry.
+ */
 export function computeLayout(
-  root: LayoutNode,
+  layout: LayoutNode,
   width: number,
   height: number,
   gap = 8
@@ -45,6 +63,8 @@ export function computeLayout(
       'Layout dimensions and gap must be finite and non-negative'
     );
   }
+  const root = visibleTree(layout);
+  if (root === null) return { panes: [], separators: [], corners: [] };
   const panes: LayoutGeometry['panes'][number][] = [];
   const separators: SeparatorGeometry[] = [];
   function visit(node: LayoutNode, rect: Rect): void {

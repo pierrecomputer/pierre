@@ -1,12 +1,15 @@
 export { computeLayout, getExitEdge } from './geometry';
 export {
   getPanes,
+  hasVisiblePane,
   movePane,
   removePane,
   replaceNode,
+  setPaneHidden,
   splitPane,
   swapPanes,
   validateLayout,
+  visibleTree,
 } from './model';
 export { LayoutStore } from './store';
 export type {

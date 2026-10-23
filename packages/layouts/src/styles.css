@@ -63,6 +63,15 @@
   z-index: 2;
 }
 
+/* A hidden pane (store.setHidden) keeps its content mounted, with its state
+   and scroll position, but takes no space: the view gives it the box that it
+   would have, and it does not render or take input. */
+.pierre-layout-pane[data-collapsed='true'] {
+  content-visibility: hidden;
+  visibility: hidden;
+  pointer-events: none;
+}
+
 /* A pane under a zoomed pane skips the style, layout, and paint of its
    content. The content keeps its DOM, its state, and its scroll position. The
    property is on the host: a scroller with it reads scrollTop 0 while hidden. */

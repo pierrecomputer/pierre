@@ -1,8 +1,10 @@
 import {
   getPanes,
+  hasVisiblePane,
   movePane,
   removePane,
   replaceNode,
+  setPaneHidden,
   splitPane,
   validateLayout,
 } from './model';
@@ -19,7 +21,8 @@ export class LayoutStore {
     const owned = copyAndFreeze(root);
     this.state = Object.freeze({
       root: owned,
-      focusedPane: getPanes(owned)[0].id,
+      focusedPane: getPanes(owned).filter(({ hidden }) => hidden !== true)[0]
+        .id,
       zoomedPane: null,
     });
   }
@@ -67,7 +70,29 @@ export class LayoutStore {
   close(id: string): void {
     this.requirePane(id);
     const root = removePane(this.state.root, id);
-    if (root !== null) this.commit({ ...this.state, root });
+    // The last visible pane stays: a layout needs one.
+    if (root !== null && hasVisiblePane(root))
+      this.commit({ ...this.state, root });
+  }
+
+  /**
+   * Hide a pane or show it again. A hidden pane keeps its place in the tree,
+   * its content, and its state, but takes no space. The last visible pane
+   * stays visible. A pane that shows again gets the focus.
+   */
+  setHidden(id: string, hidden: boolean): void {
+    this.requirePane(id);
+    const visible = getPanes(this.state.root).filter(
+      (pane) => pane.hidden !== true
+    );
+    if (hidden && visible.length === 1 && visible[0].id === id) return;
+    const root = setPaneHidden(this.state.root, id, hidden);
+    if (root === this.state.root) return;
+    this.commit({
+      ...this.state,
+      root,
+      focusedPane: hidden ? this.state.focusedPane : id,
+    });
   }
 
   move(sourceId: string, targetId: string, edge: Edge): void {
@@ -149,7 +174,8 @@ export class LayoutStore {
   private commit(next: LayoutState): void {
     const sameTree = next.root === this.state.root;
     if (!sameTree) validateLayout(next.root);
-    const panes = getPanes(next.root);
+    // Focus and zoom belong to visible panes only.
+    const panes = getPanes(next.root).filter(({ hidden }) => hidden !== true);
     const focusedPane = panes.some(({ id }) => id === next.focusedPane)
       ? next.focusedPane
       : panes[0].id;

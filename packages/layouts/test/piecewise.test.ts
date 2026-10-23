@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 
 import { computeCSSLayout } from '../src/css-layout';
 import { computeLayout } from '../src/geometry';
+import { getPanes, setPaneHidden } from '../src/model';
 import {
   add,
   clamp,
@@ -142,6 +143,61 @@ describe('piecewise', () => {
             Math.abs(evaluateCSS(value.height, height) - rect.height)
           ).toBeLessThan(0.01);
         }
+      }
+    }
+  });
+
+  test('hidden panes take no space and keep the box that they would have', () => {
+    const next = random(11);
+    for (let tree = 0; tree < 200; tree++) {
+      let root = randomTree(next, 2 + Math.floor(next() * 16));
+      for (const { id } of getPanes(root))
+        if (next() < 0.4) {
+          try {
+            root = setPaneHidden(root, id, true);
+          } catch {
+            // The last visible pane stays visible.
+          }
+        }
+      const gap = Math.round(next() * 12);
+      const css = computeCSSLayout(root, gap);
+      const hidden = new Set(
+        getPanes(root)
+          .filter((pane) => pane.hidden === true)
+          .map(({ id }) => id)
+      );
+      expect(
+        css.panes.filter((pane) => pane.hidden).map(({ pane }) => pane.id)
+      ).toEqual(
+        getPanes(root)
+          .filter(({ id }) => hidden.has(id))
+          .map(({ id }) => id)
+      );
+      const width = 200 + next() * 3000;
+      const height = 200 + next() * 2000;
+      const pixels = computeLayout(root, width, height, gap);
+      expect(pixels.panes.map(({ pane }) => pane.id).sort()).toEqual(
+        css.panes
+          .filter((pane) => !pane.hidden)
+          .map(({ pane }) => pane.id)
+          .sort()
+      );
+      expect(css.separators.length).toBe(pixels.separators.length);
+      for (const { pane, rect } of pixels.panes) {
+        const value = css.panes.find((item) => item.pane.id === pane.id)?.rect;
+        if (value === undefined) throw new Error('missing box');
+        expect(Math.abs(evaluateCSS(value.left, width) - rect.x)).toBeLessThan(
+          0.01
+        );
+        expect(
+          Math.abs(evaluateCSS(value.width, width) - rect.width)
+        ).toBeLessThan(0.01);
+        expect(Math.abs(evaluateCSS(value.top, height) - rect.y)).toBeLessThan(
+          0.01
+        );
+        expect(
+          Math.abs(evaluateCSS(value.height, height) - rect.height)
+        ).toBeLessThan(0.01);
       }
     }
   });

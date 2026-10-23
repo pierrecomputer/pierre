@@ -24,6 +24,7 @@ import type { LayoutStore } from '../store';
 import type {
   Edge,
   LayoutGeometry,
+  LayoutNode,
   PaneNode,
   Rect,
   SeparatorGeometry,
@@ -38,8 +39,18 @@ export interface LayoutProps {
   store: LayoutStore;
   renderPane: (pane: PaneNode) => ReactNode;
   getPaneTitle?: (pane: PaneNode) => string;
-  /** The buttons of each pane header. All three by default. */
-  paneActions?: readonly PaneAction[];
+  /**
+   * The buttons of each pane header, for all panes or for each pane. All three
+   * by default.
+   */
+  paneActions?:
+    | readonly PaneAction[]
+    | ((pane: PaneNode) => readonly PaneAction[]);
+  /**
+   * Called by the close button of a pane instead of `store.close`, for example
+   * to hide the pane with `store.setHidden` so that it keeps its content.
+   */
+  onPaneClose?: (pane: PaneNode) => void;
   className?: string;
   style?: CSSProperties;
   gap?: number;
@@ -92,6 +103,8 @@ interface DropTarget {
 
 // Elements that animate a layout change carry this attribute with a stable key.
 const FLIP_ATTRIBUTE = 'data-layout-flip';
+// A hidden pane does not render, so it neither gives nor takes a FLIP box.
+const FLIP_SELECTOR = `[${FLIP_ATTRIBUTE}]:not([data-collapsed='true'])`;
 const DEFAULT_DURATION_MS = 240;
 // The ID of the layout's own animations, so that it never touches animations in pane content.
 const FLIP_ANIMATION_ID = 'pierre-layout-flip';
@@ -109,9 +122,7 @@ function flipAnimations(root: HTMLElement): Animation[] {
 function readBoxes(root: HTMLElement): Map<string, Rect> {
   const bounds = root.getBoundingClientRect();
   const boxes = new Map<string, Rect>();
-  for (const element of root.querySelectorAll<HTMLElement>(
-    `[${FLIP_ATTRIBUTE}]`
-  )) {
+  for (const element of root.querySelectorAll<HTMLElement>(FLIP_SELECTOR)) {
     const key = element.getAttribute(FLIP_ATTRIBUTE) ?? '';
     // The focus indicator shares the key of its pane and comes after it. Keep
     // the box of the pane, so that both elements animate from it.
@@ -146,9 +157,7 @@ function animateFromBoxes(root: HTMLElement, before: Map<string, Rect>): void {
   // style, and a read after it would force another layout.
   const plans: { element: HTMLElement; start: DOMMatrix; end: DOMMatrix }[] =
     [];
-  for (const element of root.querySelectorAll<HTMLElement>(
-    `[${FLIP_ATTRIBUTE}]`
-  )) {
+  for (const element of root.querySelectorAll<HTMLElement>(FLIP_SELECTOR)) {
     const from = before.get(element.getAttribute(FLIP_ATTRIBUTE) ?? '');
     // A new element has no old box. It appears in place.
     if (from === undefined) continue;
@@ -189,6 +198,10 @@ function animateFromBoxes(root: HTMLElement, before: Map<string, Rect>): void {
   }
 }
 
+/** The panes of a subtree that take space. */
+const shownPanes = (node: LayoutNode): PaneNode[] =>
+  getPanes(node).filter(({ hidden }) => hidden !== true);
+
 /**
  * Hide each pane host that the zoomed pane covers, or show every host when
  * `zoomedPane` is null. A style rule gives a hidden host
@@ -199,7 +212,12 @@ function animateFromBoxes(root: HTMLElement, before: Map<string, Rect>): void {
  */
 function setCoveredHidden(root: HTMLElement, zoomedPane: string | null): void {
   for (const host of root.children) {
-    if (!(host instanceof HTMLElement) || host.dataset.layoutPane === undefined)
+    // A hidden pane does not render whatever the zoom.
+    if (
+      !(host instanceof HTMLElement) ||
+      host.dataset.layoutPane === undefined ||
+      host.dataset.collapsed === 'true'
+    )
       continue;
     const hidden =
       zoomedPane !== null && host.dataset.layoutPane !== zoomedPane;
@@ -279,6 +297,7 @@ export function Layout({
   gap = 8,
   label = 'Workspace',
   paneActions = ALL_PANE_ACTIONS,
+  onPaneClose,
   experimentalResize = 'live',
 }: LayoutProps): JSX.Element {
   const rootRef = useRef<HTMLDivElement>(null);
@@ -404,6 +423,32 @@ export function Layout({
   const focused = geometry.panes.find(
     ({ pane }) => pane.id === (state.zoomedPane ?? state.focusedPane)
   );
+  const visibleCount = geometry.panes.filter(({ hidden }) => !hidden).length;
+  const actionsOf = (pane: PaneNode): readonly PaneAction[] =>
+    typeof paneActions === 'function' ? paneActions(pane) : paneActions;
+
+  // Tell the content of a pane that store.setHidden hides or shows. A hidden
+  // pane keeps its content mounted, so the content can pause its own work.
+  const collapsedBefore = useRef<ReadonlySet<string> | null>(null);
+  useEffect(() => {
+    const collapsed = new Set(
+      geometry.panes.filter(({ hidden }) => hidden).map(({ pane }) => pane.id)
+    );
+    const before = collapsedBefore.current;
+    collapsedBefore.current = collapsed;
+    const element = rootRef.current;
+    if (before === null || element === null) return;
+    for (const host of element.children) {
+      if (!(host instanceof HTMLElement)) continue;
+      const id = host.dataset.layoutPane;
+      if (id === undefined || collapsed.has(id) === before.has(id)) continue;
+      host.dispatchEvent(
+        new CustomEvent(PANE_VISIBILITY_EVENT, {
+          detail: { hidden: collapsed.has(id) },
+        })
+      );
+    }
+  }, [geometry]);
 
   // After React commits a store change, animate each moved element from its old box.
   useLayoutEffect(() => {
@@ -687,8 +732,9 @@ export function Layout({
     };
   }
 
-  function closePane(id: string): void {
-    store.close(id);
+  function closePane(pane: PaneNode): void {
+    if (onPaneClose !== undefined) onPaneClose(pane);
+    else store.close(pane.id);
     requestAnimationFrame(() => {
       const focused = store.getSnapshot().focusedPane;
       Array.from(
@@ -819,13 +865,15 @@ export function Layout({
         }
       }}
     >
-      {paneHosts.map(({ pane }) => {
-        const hidden =
-          state.zoomedPane !== null && state.zoomedPane !== pane.id;
+      {paneHosts.map(({ pane, hidden: collapsed }) => {
+        const covered =
+          !collapsed &&
+          state.zoomedPane !== null &&
+          state.zoomedPane !== pane.id;
+        const hidden = collapsed || covered;
         const zoomed = state.zoomedPane === pane.id;
+        const actions = actionsOf(pane);
         const edge = exitEdges[pane.id] ?? 'left';
-        // A covered pane keeps its geometry and moves past an edge with a
-        // transform, so that it does not lay out its content again.
         // A covered pane keeps its geometry and moves past an edge with a
         // transform, so that it does not lay out its content again. One
         // container size is always enough to leave the container.
@@ -848,13 +896,14 @@ export function Layout({
             aria-label={getPaneTitle(pane)}
             aria-hidden={hidden}
             inert={hidden}
+            data-collapsed={collapsed}
             data-focused={state.focusedPane === pane.id}
             data-zoomed={zoomed}
             data-moving={dragging === pane.id}
             style={
               zoomed
                 ? FULL_SIZE
-                : hidden
+                : covered
                   ? { ...styles.panes.get(pane.id), transform: exit }
                   : styles.panes.get(pane.id)
             }
@@ -862,7 +911,7 @@ export function Layout({
             onPointerDown={() => store.focusPane(pane.id)}
           >
             <header className="pierre-layout-header">
-              {paneActions.includes('move') && (
+              {actions.includes('move') && (
                 <button
                   type="button"
                   className="pierre-layout-grip"
@@ -875,7 +924,7 @@ export function Layout({
                 </button>
               )}
               <span className="pierre-layout-title">{getPaneTitle(pane)}</span>
-              {paneActions.includes('zoom') && (
+              {actions.includes('zoom') && (
                 <button
                   type="button"
                   aria-label={`${zoomed ? 'Restore' : 'Zoom'} ${getPaneTitle(pane)}`}
@@ -885,12 +934,12 @@ export function Layout({
                   {zoomed ? '↙' : '↗'}
                 </button>
               )}
-              {paneActions.includes('close') && (
+              {actions.includes('close') && (
                 <button
                   type="button"
                   aria-label={`Close ${getPaneTitle(pane)}`}
-                  disabled={geometry.panes.length === 1}
-                  onClick={() => closePane(pane.id)}
+                  disabled={visibleCount === 1}
+                  onClick={() => closePane(pane)}
                 >
                   ×
                 </button>
@@ -922,13 +971,13 @@ export function Layout({
             className="pierre-layout-separator"
             role="separator"
             tabIndex={0}
-            aria-label={`Resize ${getPanes(separator.split.first).map(getPaneTitle).join(', ')} and ${getPanes(separator.split.second).map(getPaneTitle).join(', ')}`}
+            aria-label={`Resize ${shownPanes(separator.split.first).map(getPaneTitle).join(', ')} and ${shownPanes(separator.split.second).map(getPaneTitle).join(', ')}`}
             aria-orientation={
               separator.split.direction === 'horizontal'
                 ? 'vertical'
                 : 'horizontal'
             }
-            aria-controls={getPanes(separator.split)
+            aria-controls={shownPanes(separator.split)
               .map(({ id }) => `${prefix}-${encodeURIComponent(id)}`)
               .join(' ')}
             aria-valuemin={0}
@@ -968,7 +1017,7 @@ export function Layout({
           ? `Move ${dragging} to the ${drop.edge} of ${drop.paneId}`
           : state.zoomedPane !== null
             ? `${state.zoomedPane} zoomed`
-            : `${geometry.panes.length} panes`}
+            : `${visibleCount} panes`}
       </span>
     </div>
   );

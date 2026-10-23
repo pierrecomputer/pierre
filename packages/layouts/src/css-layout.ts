@@ -1,4 +1,5 @@
 import { getMinimumSize } from './geometry';
+import { hasVisiblePane, visibleTree } from './model';
 import {
   add,
   clamp,
@@ -22,6 +23,11 @@ export interface CSSRect {
 export interface CSSPane {
   pane: PaneNode;
   rect: CSSRect;
+  /**
+   * The pane, or a split above it, holds only hidden panes. Its rect is the
+   * box that it would have if it were visible, so it shows again in place.
+   */
+  hidden: boolean;
 }
 
 export interface CSSSeparator {
@@ -89,11 +95,31 @@ export function computeCSSLayout(root: LayoutNode, gap = 8): CSSLayout {
     throw new Error('Layout gap must be finite and non-negative');
   const panes: CSSPane[] = [];
   const separators: { split: SplitNode; box: Box }[] = [];
-  function visit(node: LayoutNode, box: Box): void {
+  function visit(node: LayoutNode, box: Box, hidden: boolean): void {
     if (node.type === 'pane') {
-      panes.push({ pane: node, rect: toRect(box) });
+      panes.push({
+        pane: node,
+        rect: toRect(box),
+        hidden: hidden || node.hidden === true,
+      });
       return;
     }
+    const [first, handle, second] = divide(node, box);
+    const firstShown = hasVisiblePane(node.first);
+    const secondShown = hasVisiblePane(node.second);
+    if (!hidden && firstShown !== secondShown) {
+      // One side holds only hidden panes. The other side takes the whole box,
+      // and the hidden side keeps the box that it would have.
+      visit(node.first, firstShown ? box : first, !firstShown);
+      visit(node.second, secondShown ? box : second, !secondShown);
+      return;
+    }
+    if (!hidden) separators.push({ split: node, box: handle });
+    visit(node.first, first, hidden);
+    visit(node.second, second, hidden);
+  }
+  /** The boxes of the two children of a split, and of the separator between them. */
+  function divide(node: SplitNode, box: Box): [Box, Box, Box] {
     const horizontal = node.direction === 'horizontal';
     const axis = horizontal ? 'width' : 'height';
     const position = horizontal ? 'left' : 'top';
@@ -113,29 +139,45 @@ export function computeCSSLayout(root: LayoutNode, gap = 8): CSSLayout {
       [position]: add(box[position], firstSize),
       [axis]: actualGap,
     };
-    separators.push({ split: node, box: handle });
-    visit(node.first, { ...box, [axis]: firstSize });
-    visit(node.second, {
-      ...box,
-      [position]: add(handle[position], actualGap),
-      [axis]: add(available, scale(firstSize, -1)),
-    });
+    return [
+      { ...box, [axis]: firstSize },
+      handle,
+      {
+        ...box,
+        [position]: add(handle[position], actualGap),
+        [axis]: add(available, scale(firstSize, -1)),
+      },
+    ];
   }
-  visit(root, {
-    left: constant(0),
-    top: constant(0),
-    width: size(),
-    height: size(),
-  });
+  visit(
+    root,
+    {
+      left: constant(0),
+      top: constant(0),
+      width: size(),
+      height: size(),
+    },
+    false
+  );
   const byId = new Map(
     separators.map((separator) => [separator.split.id, separator])
   );
+  // Corners join the separators of the tree that takes space.
+  const shown = new Map<string, SplitNode>();
+  const collect = (node: LayoutNode | null): void => {
+    if (node === null || node.type === 'pane') return;
+    shown.set(node.id, node);
+    collect(node.first);
+    collect(node.second);
+  };
+  collect(visibleTree(root));
   const corners: CSSCorner[] = [];
   for (const separator of separators) {
-    const horizontal = separator.split.direction === 'horizontal';
+    const split = shown.get(separator.split.id) ?? separator.split;
+    const horizontal = split.direction === 'horizontal';
     const adjacent = [
-      ...boundarySplits(separator.split.first, horizontal ? 'right' : 'bottom'),
-      ...boundarySplits(separator.split.second, horizontal ? 'left' : 'top'),
+      ...boundarySplits(split.first, horizontal ? 'right' : 'bottom'),
+      ...boundarySplits(split.second, horizontal ? 'left' : 'top'),
     ];
     for (const other of adjacent) {
       const otherSeparator = byId.get(other.id);

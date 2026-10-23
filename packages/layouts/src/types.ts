@@ -6,6 +6,11 @@ export interface PaneNode {
   readonly id: string;
   readonly minWidth?: number;
   readonly minHeight?: number;
+  /**
+   * A hidden pane keeps its place in the tree, its content, and its state, but
+   * takes no space and does not render.
+   */
+  readonly hidden?: boolean;
 }
 
 export interface SplitNode {
