@@ -29,10 +29,17 @@ import type {
   SeparatorGeometry,
 } from '../types';
 
+/** A button in a pane header: drag to move, zoom, or close. */
+export type PaneAction = 'move' | 'zoom' | 'close';
+
+const ALL_PANE_ACTIONS: readonly PaneAction[] = ['move', 'zoom', 'close'];
+
 export interface LayoutProps {
   store: LayoutStore;
   renderPane: (pane: PaneNode) => ReactNode;
   getPaneTitle?: (pane: PaneNode) => string;
+  /** The buttons of each pane header. All three by default. */
+  paneActions?: readonly PaneAction[];
   className?: string;
   style?: CSSProperties;
   gap?: number;
@@ -271,6 +278,7 @@ export function Layout({
   style,
   gap = 8,
   label = 'Workspace',
+  paneActions = ALL_PANE_ACTIONS,
   experimentalResize = 'live',
 }: LayoutProps): JSX.Element {
   const rootRef = useRef<HTMLDivElement>(null);
@@ -854,33 +862,39 @@ export function Layout({
             onPointerDown={() => store.focusPane(pane.id)}
           >
             <header className="pierre-layout-header">
-              <button
-                type="button"
-                className="pierre-layout-grip"
-                aria-label={`Drag ${getPaneTitle(pane)}`}
-                title="Drag to move this pane beside another"
-                disabled={state.zoomedPane !== null}
-                onPointerDown={(event) => startMove(event, pane.id)}
-              >
-                ⠿
-              </button>
+              {paneActions.includes('move') && (
+                <button
+                  type="button"
+                  className="pierre-layout-grip"
+                  aria-label={`Drag ${getPaneTitle(pane)}`}
+                  title="Drag to move this pane beside another"
+                  disabled={state.zoomedPane !== null}
+                  onPointerDown={(event) => startMove(event, pane.id)}
+                >
+                  ⠿
+                </button>
+              )}
               <span className="pierre-layout-title">{getPaneTitle(pane)}</span>
-              <button
-                type="button"
-                aria-label={`${zoomed ? 'Restore' : 'Zoom'} ${getPaneTitle(pane)}`}
-                aria-pressed={zoomed}
-                onClick={() => store.toggleZoom(pane.id)}
-              >
-                {zoomed ? '↙' : '↗'}
-              </button>
-              <button
-                type="button"
-                aria-label={`Close ${getPaneTitle(pane)}`}
-                disabled={geometry.panes.length === 1}
-                onClick={() => closePane(pane.id)}
-              >
-                ×
-              </button>
+              {paneActions.includes('zoom') && (
+                <button
+                  type="button"
+                  aria-label={`${zoomed ? 'Restore' : 'Zoom'} ${getPaneTitle(pane)}`}
+                  aria-pressed={zoomed}
+                  onClick={() => store.toggleZoom(pane.id)}
+                >
+                  {zoomed ? '↙' : '↗'}
+                </button>
+              )}
+              {paneActions.includes('close') && (
+                <button
+                  type="button"
+                  aria-label={`Close ${getPaneTitle(pane)}`}
+                  disabled={geometry.panes.length === 1}
+                  onClick={() => closePane(pane.id)}
+                >
+                  ×
+                </button>
+              )}
             </header>
             <PaneBody pane={pane} renderPane={renderPane} />
           </section>

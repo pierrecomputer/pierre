@@ -64,6 +64,13 @@ A focus change, a zoom, and a resize do not render pane content again: the store
 keeps the identity of each node that a change does not touch, and the view
 renders a pane's content only when its node or `renderPane` changes. Pass a
 stable `renderPane`, for example a module function or one from `useCallback`.
+`store.setRoot(root)` keeps each node of the store's own tree that the new tree
+reuses, so an app can show or hide panes by building a new tree from the nodes
+of `store.getSnapshot().root`, and the panes that stay keep their content.
+
+Each pane header has a drag grip, a zoom button, and a close button.
+`paneActions` selects them, for example `paneActions={['zoom', 'close']}` for an
+app whose panes do not move.
 
 The layout fills its parent; give that parent a definite height. Pane IDs and
 split IDs share one namespace and must be unique, non-empty strings. Horizontal

@@ -8,6 +8,7 @@ import {
   type LayoutNode,
   LayoutStore,
   movePane,
+  type PaneNode,
   removePane,
   splitPane,
   swapPanes,
@@ -144,8 +145,18 @@ describe('css layout', () => {
   test('each element gets container-unit values and no custom properties', () => {
     const layout = computeCSSLayout(root);
     const values = [
-      ...layout.panes.flatMap(({ rect }) => Object.values(rect)),
-      ...layout.separators.flatMap(({ rect }) => Object.values(rect)),
+      ...layout.panes.flatMap(({ rect }) => [
+        rect.left,
+        rect.top,
+        rect.width,
+        rect.height,
+      ]),
+      ...layout.separators.flatMap(({ rect }) => [
+        rect.left,
+        rect.top,
+        rect.width,
+        rect.height,
+      ]),
       ...layout.corners.flatMap(({ left, top }) => [left, top]),
     ];
     expect(values.length).toBeGreaterThan(0);
@@ -203,6 +214,39 @@ describe('store', () => {
     store.close('only');
     expect(store.getSnapshot().root).toEqual(tree);
     expect(store.getSnapshot().zoomedPane).toBeNull();
+  });
+
+  test('setRoot keeps the nodes of the store and copies the others', () => {
+    const store = new LayoutStore(root);
+    const panes = new Map(
+      getPanes(store.getSnapshot().root).map((pane) => [pane.id, pane])
+    );
+    const files = panes.get('files');
+    const editor = panes.get('editor');
+    if (files === undefined || editor === undefined)
+      throw new Error('Missing panes');
+    const added: PaneNode = { type: 'pane', id: 'notes' };
+    store.setRoot({
+      type: 'split',
+      id: 'next',
+      direction: 'horizontal',
+      ratio: 0.5,
+      first: files,
+      second: {
+        type: 'split',
+        id: 'tools',
+        direction: 'vertical',
+        ratio: 0.5,
+        first: editor,
+        second: added,
+      },
+    });
+    const next = getPanes(store.getSnapshot().root);
+    expect(next[0]).toBe(files);
+    expect(next[1]).toBe(editor);
+    expect(next[2]).not.toBe(added);
+    expect(Object.isFrozen(next[2])).toBe(true);
+    expect(Object.isFrozen(added)).toBe(false);
   });
 
   test('a change keeps the identity of every node that it does not touch', () => {

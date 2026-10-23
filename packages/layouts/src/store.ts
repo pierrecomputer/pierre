@@ -165,17 +165,20 @@ export class LayoutStore {
   }
 }
 
-/** Copy a tree that a caller owns and freeze the copy, so neither side can change the other's state. */
+/**
+ * Copy the nodes of a tree that a caller owns and freeze the copies, so
+ * neither side can change the other's state. A node that is frozen with its
+ * whole subtree, such as a node of the store's own tree, is kept: a kept pane
+ * node keeps its content from rendering again.
+ */
 function copyAndFreeze(node: LayoutNode): LayoutNode {
-  return Object.freeze(
-    node.type === 'pane'
-      ? { ...node }
-      : {
-          ...node,
-          first: copyAndFreeze(node.first),
-          second: copyAndFreeze(node.second),
-        }
-  );
+  if (node.type === 'pane')
+    return Object.isFrozen(node) ? node : Object.freeze({ ...node });
+  const first = copyAndFreeze(node.first);
+  const second = copyAndFreeze(node.second);
+  if (Object.isFrozen(node) && first === node.first && second === node.second)
+    return node;
+  return Object.freeze({ ...node, first, second });
 }
 
 /**
