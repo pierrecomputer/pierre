@@ -109,6 +109,10 @@ function durationOf(root: HTMLElement): number {
 function animateFromBoxes(root: HTMLElement, before: Map<string, Rect>): void {
   const duration = durationOf(root);
   const bounds = root.getBoundingClientRect();
+  // Read every box before the first animation starts: a new animation dirties
+  // style, and a read after it would force another layout.
+  const plans: { element: HTMLElement; start: DOMMatrix; end: DOMMatrix }[] =
+    [];
   for (const element of root.querySelectorAll<HTMLElement>(
     `[${FLIP_ATTRIBUTE}]`
   )) {
@@ -132,20 +136,21 @@ function animateFromBoxes(root: HTMLElement, before: Map<string, Rect>): void {
     if (to.width === 0 || to.height === 0) continue;
     // The element's own transform, for example the translate of a covered pane,
     // is the end of the animation. Its layout box is the box without it.
-    const end = getComputedStyle(element).transform;
-    const own = end === 'none' ? new DOMMatrix() : new DOMMatrix(end);
-    const layoutX = to.x - own.e;
-    const layoutY = to.y - own.f;
+    const own = getComputedStyle(element).transform;
+    const end = own === 'none' ? new DOMMatrix() : new DOMMatrix(own);
     const start = new DOMMatrix([
       from.width / to.width,
       0,
       0,
       from.height / to.height,
-      from.x - layoutX,
-      from.y - layoutY,
+      from.x - (to.x - end.e),
+      from.y - (to.y - end.f),
     ]);
+    plans.push({ element, start, end });
+  }
+  for (const { element, start, end } of plans) {
     element.animate(
-      [{ transform: start.toString() }, { transform: own.toString() }],
+      [{ transform: start.toString() }, { transform: end.toString() }],
       { duration, easing: FLIP_EASING, id: FLIP_ANIMATION_ID }
     );
   }
