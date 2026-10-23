@@ -203,7 +203,9 @@ fn main() {
         #[cfg(feature = "native-core")]
         Some("--native-parity") => return native_core::parity(&args[1..]),
         #[cfg(feature = "native-core")]
-        Some("--native-fuzz") => return native_core::fuzz(args[1].parse().unwrap(), &args[2..]),
+        Some("--native-fuzz") => {
+            return native_core::fuzz(&args[1], args[2].parse().unwrap(), &args[3..]);
+        }
         #[cfg(feature = "native-core")]
         Some("--profile-core") => {
             return native_core::profile(&args[1], &args[2], args[3].parse().unwrap());
@@ -410,6 +412,8 @@ fn train(dir: &Path) {
             black_box(hl.highlight(lang, Mode::LineRecords, &input));
             hl.input_mut(input.len()).copy_from_slice(&input);
             black_box(hl.tokenize(lang, input.len()));
+            #[cfg(feature = "native-core")]
+            black_box(hl.tokenize_native(lang, input.len()));
             out.clear();
             hl.terminal(
                 highlights::Language::from_name(&path.extension().unwrap().to_string_lossy())

@@ -1,5 +1,6 @@
-//! Benchmark subcommands for the hand-written JS/TS core (`native-core`):
-//! a parity check against the translated lexer and a profiling loop.
+//! Benchmark subcommands for the hand-written native lexers (`native-*`
+//! features): parity and fuzz checks against the translated lexer, and a
+//! profiling loop. A file's language comes from its name or extension.
 
 use std::hint::black_box;
 use std::path::Path;
@@ -7,10 +8,12 @@ use std::time::Instant;
 
 use highlights::{Highlighter, Language, Rec};
 
-/// The language id for `path` when the native core handles it.
+/// The language id for `path` when a native lexer for it is built.
 fn core_lang(path: &Path) -> Option<u8> {
     let lang = Language::from_path(path)?;
-    matches!(lang.name(), "js" | "ts").then(|| lang.id())
+    let mut hl = Highlighter::new();
+    hl.input_mut(0);
+    hl.tokenize_native(lang.id(), 0).map(|_| lang.id())
 }
 
 /// Compare native and translated records for every file in `paths`; print
@@ -37,6 +40,10 @@ pub fn parity(paths: &[String]) {
         }
     }
     println!("native parity: {files} files, {bytes} bytes, {bad} mismatched");
+    if files == 0 {
+        println!("no file had a native lexer for its language");
+        std::process::exit(1);
+    }
     if bad > 0 {
         std::process::exit(1);
     }
@@ -64,7 +71,7 @@ fn report(label: &str, input: &[u8], wasm: &[Rec], native: &[Rec]) {
 /// throughput, for instructions-per-token measurements.
 pub fn profile(engine: &str, file: &str, secs: f64) {
     let path = Path::new(file);
-    let lang = core_lang(path).expect("not a js/ts file");
+    let lang = core_lang(path).expect("no native lexer for this file's language");
     let bytes = std::fs::read(path).unwrap();
     let mut hl = Highlighter::new();
     hl.input_mut(bytes.len()).copy_from_slice(&bytes);
@@ -91,18 +98,24 @@ pub fn profile(engine: &str, file: &str, secs: f64) {
 
 /// Compare native and translated records on `rounds` mutated copies of the
 /// files in `paths`: random cuts, duplicated slices, and inserted syntax
-/// bytes, as both JavaScript and TypeScript. Exits nonzero on mismatch.
-pub fn fuzz(rounds: usize, paths: &[String]) {
+/// bytes, lexed as each language in `langs` (comma-separated names). Exits
+/// nonzero on mismatch; the first failing inputs are saved under
+/// `target/native-fuzz/<langs>/`.
+pub fn fuzz(langs_arg: &str, rounds: usize, paths: &[String]) {
     let inputs: Vec<Vec<u8>> = paths
         .iter()
-        .filter(|p| core_lang(Path::new(p)).is_some())
         .filter_map(|p| std::fs::read(p).ok())
         .filter(|b| !b.is_empty() && b.len() < 64 * 1024)
         .collect();
-    let langs = [
-        Language::from_name("js").unwrap().id(),
-        Language::from_name("ts").unwrap().id(),
-    ];
+    assert!(!inputs.is_empty(), "no fuzz inputs");
+    let langs: Vec<u8> = langs_arg
+        .split(',')
+        .map(|name| Language::from_name(name).expect("unknown language").id())
+        .collect();
+    let out_dir = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../target/native-fuzz")
+        .join(langs_arg);
+    std::fs::create_dir_all(&out_dir).unwrap();
     const SYNTAX: &[u8] =
         b"(){}[]<>;:,.?!=+-*/%&|^~`'\"\\$#@_ \t\n\r0123456789aAzZ\x80\xc3\xa9\xe2\x80\xa8";
     let mut seed = 0x9e37_79b9_7f4a_7c15u64;
@@ -149,17 +162,15 @@ pub fn fuzz(rounds: usize, paths: &[String]) {
                 if bad <= 5 {
                     let label = format!("round {round} lang {lang}");
                     report(&label, &buf, &wasm, &native);
-                    let _ = std::fs::write(
-                        format!(
-                            "/private/tmp/claude-501/-Users-amadeus-Developer-pierre-highlights-rust-port/0afea01e-3292-4f12-9a5f-b797f00e16f0/scratchpad/native-fuzz-{bad}.txt"
-                        ),
-                        &buf,
-                    );
+                    let _ = std::fs::write(out_dir.join(format!("fail-{bad}.txt")), &buf);
                 }
             }
         }
     }
-    println!("native fuzz: {rounds} inputs x 2 languages, {bad} mismatched");
+    println!(
+        "native fuzz: {rounds} inputs x {} languages, {bad} mismatched",
+        langs.len()
+    );
     if bad > 0 {
         std::process::exit(1);
     }

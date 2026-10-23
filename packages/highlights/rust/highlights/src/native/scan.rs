@@ -9,7 +9,7 @@ use core::arch::aarch64::*;
 /// Index of the first set lane in a NEON compare result, or 16.
 #[cfg(target_arch = "aarch64")]
 #[inline(always)]
-fn first_lane(hit: uint8x16_t) -> usize {
+pub fn first_lane(hit: uint8x16_t) -> usize {
     unsafe {
         let nib = vget_lane_u64::<0>(vreinterpret_u64_u8(vshrn_n_u16::<4>(vreinterpretq_u16_u8(
             hit,

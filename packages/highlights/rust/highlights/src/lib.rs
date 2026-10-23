@@ -22,6 +22,11 @@ mod languages;
 #[rustfmt::skip]
 #[path = "generated/lex_ids.rs"]
 mod lex_ids;
+#[cfg(feature = "native-core")]
+#[allow(dead_code)]
+#[rustfmt::skip]
+#[path = "generated/wat_tables.rs"]
+mod wat_tables;
 #[rustfmt::skip]
 #[path = "generated/token_ids.rs"]
 pub mod token_ids;

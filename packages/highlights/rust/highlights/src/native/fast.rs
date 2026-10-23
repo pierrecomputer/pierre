@@ -1,3 +1,5 @@
+//! WAT sources: src/langs/js.wat src/langs/ts.wat src/langs/tsx.wat src/sig.wat src/scan.wat src/common.wat
+//!
 //! Native JavaScript and TypeScript highlighter in one pass: each token is
 //! scanned and colored in the same step, with no token buffer. A token
 //! whose color depends on the token after it (identifiers, contextual
@@ -8,13 +10,14 @@
 use core::arch::aarch64::*;
 
 use super::ecma::{
-    COLON_OR_QUESTION, LEX_HL_TABLE, MULTI, NO_NEXT, Next, Recs, Sig, Ts, emit_multi, is,
+    COLON_OR_QUESTION, LEX_HL_TABLE, MULTI, NO_NEXT, Next, Sig, Ts, emit_multi, is,
     metadata_marker, tag_marker,
 };
 use super::ecma_scan::{
     BRACKETS, KIND_TABLE, TEMPLATES, code_point, keyword, kf, scan_regexp, scan_string,
     scan_template, utf8_bits,
 };
+use super::recs::Recs;
 use super::scan;
 use crate::Rec;
 use crate::generated::Instance;
