@@ -451,7 +451,9 @@ export function Layout({
   /**
    * Give the content of each pane under the dragged splits its current size in
    * pixels, so that a ratio change resizes the pane hosts but does not lay out
-   * their content. All sizes are read before the first write.
+   * their content. While frozen, the content also has strict containment and
+   * its own compositor layer, so that a host that moves or clips it does not
+   * paint it again. All sizes are read before the first write.
    */
   function freezeContent(separators: readonly SeparatorGeometry[]): void {
     const work = resizeWork.current;
@@ -478,6 +480,8 @@ export function Layout({
       content.style.flex = 'none';
       content.style.width = `${sizes[index].width}px`;
       content.style.height = `${sizes[index].height}px`;
+      content.style.contain = 'strict';
+      content.style.willChange = 'transform';
     });
     work.frozen = [
       ...contents,
@@ -492,6 +496,8 @@ export function Layout({
       content.style.flex = '';
       content.style.width = '';
       content.style.height = '';
+      content.style.contain = '';
+      content.style.willChange = '';
     };
     if (experimentalResize !== 'settle') {
       work.frozen.forEach(thaw);
