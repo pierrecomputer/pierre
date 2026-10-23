@@ -15,11 +15,10 @@ import {
   LayoutStore,
   type PaneNode,
 } from '../src';
-import { Layout, type LayoutProps } from '../src/react';
+import { Layout } from '../src/react';
 import '../src/styles.css';
+import { ResizeSelect, type ResizeStrategy } from './resize-select';
 import './style.css';
-
-type ResizeStrategy = NonNullable<LayoutProps['experimentalResize']>;
 
 function pane(id: string): PaneNode {
   return { type: 'pane', id, minWidth: 110, minHeight: 100 };
@@ -219,7 +218,9 @@ function Playground(): JSX.Element {
             Pierre <b>/ layouts</b>
           </span>
         </div>
-        <span className="demo-badge">Experimental · 0.0.0</span>
+        <span className="demo-badge">
+          <a href="/app">Open the app demo</a> · Experimental · 0.0.0
+        </span>
       </header>
       <div className="demo-intro">
         <div>
@@ -341,17 +342,7 @@ function Playground(): JSX.Element {
           Move
         </button>
         <span>Resize drag</span>
-        <select
-          aria-label="Resize strategy"
-          value={resize}
-          onChange={(event) => setResize(event.target.value as ResizeStrategy)}
-        >
-          <option value="live">live</option>
-          <option value="frame">once per frame</option>
-          <option value="preview">preview, resize on release</option>
-          <option value="freeze">freeze content</option>
-          <option value="settle">freeze, settle one pane per frame</option>
-        </select>
+        <ResizeSelect value={resize} onChange={setResize} />
         <span className="demo-message" role="status">
           {message}
         </span>
@@ -365,6 +356,17 @@ function Playground(): JSX.Element {
   );
 }
 
+// `/app` shows the layout as a full agent app; every other path shows the playground.
+const AppDemo = lazy(() => import('./app'));
+
 const root = document.getElementById('root');
 if (root === null) throw new Error('Missing playground root');
-createRoot(root).render(<Playground />);
+createRoot(root).render(
+  /^\/app\/?$/.test(location.pathname) ? (
+    <Suspense fallback={null}>
+      <AppDemo />
+    </Suspense>
+  ) : (
+    <Playground />
+  )
+);
