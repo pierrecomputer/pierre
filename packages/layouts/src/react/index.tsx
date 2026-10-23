@@ -43,9 +43,10 @@ export interface LayoutProps {
    * resize applies its ratios. `live` writes them on each pointer move,
    * `frame` once per animation frame, `preview` moves only the separator and
    * writes them on release, and `freeze` writes them live but keeps the size
-   * of the content of the affected panes until the pointer pauses.
+   * of the content of the affected panes until the pointer pauses. `settle`
+   * is `freeze`, but the content takes its new size one pane per frame.
    */
-  experimentalResize?: 'live' | 'frame' | 'preview' | 'freeze';
+  experimentalResize?: 'live' | 'frame' | 'preview' | 'freeze' | 'settle';
 }
 
 // Pause after which a frozen drag lets pane content take its new size.
@@ -261,7 +262,15 @@ export function Layout({
     moved: HTMLElement[];
     frozen: HTMLElement[];
     pause: ReturnType<typeof setTimeout> | null;
-  }>({ frame: null, pending: null, moved: [], frozen: [], pause: null });
+    thawing: HTMLElement[];
+  }>({
+    frame: null,
+    pending: null,
+    moved: [],
+    frozen: [],
+    pause: null,
+    thawing: [],
+  });
 
   // Animate model changes only. CSS owns continuous sizing, including while JS is busy.
   const subscribe = useCallback(
@@ -448,6 +457,11 @@ export function Layout({
     const work = resizeWork.current;
     const root = rootRef.current;
     if (root === null || work.frozen.length > 0) return;
+    // Content that still waits to thaw is frozen again with the rest.
+    if (work.frame !== null) cancelAnimationFrame(work.frame);
+    work.frame = null;
+    const waiting = work.thawing;
+    work.thawing = [];
     const ids = new Set(
       separators.flatMap(({ split }) => getPanes(split).map(({ id }) => id))
     );
@@ -465,17 +479,33 @@ export function Layout({
       content.style.width = `${sizes[index].width}px`;
       content.style.height = `${sizes[index].height}px`;
     });
-    work.frozen = contents;
+    work.frozen = [
+      ...contents,
+      ...waiting.filter((content) => !contents.includes(content)),
+    ];
   }
 
+  /** Let frozen content take its new size: at once, or one pane per frame for `settle`. */
   function thawContent(): void {
     const work = resizeWork.current;
-    for (const content of work.frozen) {
+    const thaw = (content: HTMLElement): void => {
       content.style.flex = '';
       content.style.width = '';
       content.style.height = '';
+    };
+    if (experimentalResize !== 'settle') {
+      work.frozen.forEach(thaw);
+      work.frozen = [];
+      return;
     }
+    work.thawing = [...work.thawing, ...work.frozen];
     work.frozen = [];
+    const step = (): void => {
+      const next = work.thawing.shift();
+      if (next !== undefined) thaw(next);
+      work.frame = work.thawing.length > 0 ? requestAnimationFrame(step) : null;
+    };
+    if (work.frame === null) step();
   }
 
   /** Apply the ratios of one pointer move with the `experimentalResize` variant. */
@@ -516,7 +546,7 @@ export function Layout({
       }
       return;
     }
-    if (experimentalResize === 'freeze') {
+    if (experimentalResize === 'freeze' || experimentalResize === 'settle') {
       freezeContent(active.separators);
       if (work.pause !== null) clearTimeout(work.pause);
       work.pause = setTimeout(thawContent, FREEZE_PAUSE_MS);
@@ -527,21 +557,19 @@ export function Layout({
   /** End the variant's work. Commit while the gesture is active, so that the last ratios do not animate. */
   function endResize(cancel: boolean): void {
     const work = resizeWork.current;
-    if (work.frame !== null) cancelAnimationFrame(work.frame);
+    if (work.frame !== null && experimentalResize === 'frame')
+      cancelAnimationFrame(work.frame);
     if (work.pause !== null) clearTimeout(work.pause);
     if (!cancel && work.pending !== null) store.setRatios(work.pending);
     for (const element of work.moved) {
       element.style.transform = '';
       delete element.dataset.preview;
     }
+    work.pending = null;
+    work.moved = [];
+    work.pause = null;
+    if (experimentalResize === 'frame') work.frame = null;
     thawContent();
-    resizeWork.current = {
-      frame: null,
-      pending: null,
-      moved: [],
-      frozen: [],
-      pause: null,
-    };
   }
 
   function startResize(

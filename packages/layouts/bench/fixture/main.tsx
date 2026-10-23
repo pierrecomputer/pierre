@@ -51,17 +51,21 @@ const requestedResize = params.get('resize');
 const resize =
   requestedResize === 'frame' ||
   requestedResize === 'preview' ||
-  requestedResize === 'freeze'
+  requestedResize === 'freeze' ||
+  requestedResize === 'settle'
     ? requestedResize
     : 'live';
 // Experimental paint isolation of pane content, for the resize drag exploration.
 const isolate = params.get('isolate');
-if (isolate === 'contain' || isolate === 'layer') {
+const ISOLATION: Record<string, string> = {
+  contain: '.pierre-layout-content { contain: strict; }',
+  layer: '.pierre-layout-pane { will-change: transform; }',
+  'content-layer':
+    '.pierre-layout-content { contain: strict; will-change: transform; }',
+};
+if (isolate !== null && isolate in ISOLATION) {
   const sheet = document.createElement('style');
-  sheet.textContent =
-    isolate === 'contain'
-      ? '.pierre-layout-content { contain: strict; }'
-      : '.pierre-layout-pane { will-change: transform; }';
+  sheet.textContent = ISOLATION[isolate];
   document.head.append(sheet);
 }
 const paneIds = Array.from({ length: paneCount }, (_, index) => `p${index}`);
