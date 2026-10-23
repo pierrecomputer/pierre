@@ -57,6 +57,13 @@
   z-index: 2;
 }
 
+/* A pane under a zoomed pane skips the style, layout, and paint of its
+   content. The content keeps its DOM, its state, and its scroll position. The
+   property is on the host: a scroller with it reads scrollTop 0 while hidden. */
+.pierre-layout-pane[data-hidden='true'] {
+  content-visibility: hidden;
+}
+
 .pierre-layout-pane[data-moving='true'] {
   opacity: 0.6;
 }

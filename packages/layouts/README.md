@@ -86,6 +86,38 @@ bounds. `computeCSSLayout(root, gap)` exposes these expressions for other CSS
 adapters. This requires browser support for container query units and CSS size
 containment.
 
+## Hidden panes
+
+While a pane is zoomed, the other panes stay mounted. When the zoom animation
+ends, each covered pane host gets `data-hidden="true"` and
+`content-visibility: hidden`, so the browser skips the style, layout, and paint
+of its content. The content keeps its DOM, its React state, and its scroll
+position. The zoom moves the focus into the zoomed pane first. On restore, the
+view shows the panes again before the restore animation starts.
+
+Scripts in a hidden pane keep running. The pane host receives a
+`PANE_VISIBILITY_EVENT` event when its content stops and starts rendering, so
+that content such as a terminal or a chat can pause its own work. The event does
+not bubble. A pane that mounts while it is hidden gets no event; read
+`data-hidden` on its host.
+
+```tsx
+import {
+  PANE_VISIBILITY_EVENT,
+  type PaneVisibilityEvent,
+} from '@pierre/layouts/react';
+
+useEffect(() => {
+  const host = ref.current?.closest('[data-layout-pane]');
+  if (host == null) return;
+  const onVisibility = (event: Event) => {
+    setPaused((event as PaneVisibilityEvent).detail.hidden);
+  };
+  host.addEventListener(PANE_VISIBILITY_EVENT, onVisibility);
+  return () => host.removeEventListener(PANE_VISIBILITY_EVENT, onVisibility);
+}, []);
+```
+
 ## Model and state
 
 ```ts

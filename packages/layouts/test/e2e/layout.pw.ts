@@ -1,6 +1,10 @@
 import { expect, test } from '@playwright/test';
 
 import { computeLayout, LayoutStore } from '../../src';
+import {
+  PANE_VISIBILITY_EVENT,
+  type PaneVisibilityEvent,
+} from '../../src/react';
 
 test.beforeEach(async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' });
@@ -81,6 +85,12 @@ test('container resizing resolves synchronously in CSS while zoom animates with 
     }
   }
   const pane = page.locator('[data-layout-pane="1"]');
+  const covered = page.locator('[data-layout-pane="2"]');
+  const coveredState = () =>
+    covered.evaluate((element) => ({
+      animating: element.getAnimations().length > 0,
+      contentVisibility: getComputedStyle(element).contentVisibility,
+    }));
   await page.getByRole('button', { name: 'Zoom Pane 1', exact: true }).click();
   // Zoom animates with a transform from the pane's old box.
   expect(
@@ -95,6 +105,20 @@ test('container resizing resolves synchronously in CSS while zoom animates with 
         )
     )
   ).toBe(true);
+  // A covered pane renders until the zoom animation ends, and renders again
+  // before the restore animation starts.
+  expect(await coveredState()).toEqual({
+    animating: true,
+    contentVisibility: 'visible',
+  });
+  await expect(covered).toHaveCSS('content-visibility', 'hidden');
+  await page
+    .getByRole('button', { name: 'Restore Pane 1', exact: true })
+    .click();
+  expect(await coveredState()).toEqual({
+    animating: true,
+    contentVisibility: 'visible',
+  });
 });
 
 test('zoom and rearrangement retain pane DOM, notes, counters, and scroll', async ({
@@ -103,24 +127,50 @@ test('zoom and rearrangement retain pane DOM, notes, counters, and scroll', asyn
   const pane = page.locator('[data-layout-pane="1"]');
   const original = await pane.elementHandle();
   const content = pane.locator('.pierre-layout-content');
+  const covered = page.locator('[data-layout-pane="2"]');
+  const coveredContent = covered.locator('.pierre-layout-content');
   await page
     .getByLabel('Note in Pane 1', { exact: true })
     .fill('Keep this note');
   await page
     .getByRole('button', { name: 'Count in Pane 1', exact: true })
     .click();
-  await page.getByRole('button', { name: 'Zoom Pane 1', exact: true }).click();
-  await expect(page.locator('[data-layout-pane="2"]')).toHaveAttribute(
-    'inert',
-    ''
-  );
-  await expect(page.locator('[data-layout-pane="2"]')).toHaveAttribute(
-    'aria-hidden',
-    'true'
-  );
+  // Focus a pane that the zoom covers, scroll its content, and record the
+  // visibility events of its host.
+  await page.getByLabel('Note in Pane 2', { exact: true }).focus();
+  await coveredContent.evaluate((element, type) => {
+    const child = element.firstElementChild as HTMLElement;
+    child.style.minHeight = '1500px';
+    element.scrollTop = 90;
+    const events: boolean[] = [];
+    const host = element.closest('[data-layout-pane]')!;
+    Object.assign(host, { visibilityEvents: events });
+    host.addEventListener(type, (event) =>
+      events.push((event as PaneVisibilityEvent).detail.hidden)
+    );
+  }, PANE_VISIBILITY_EVENT);
+  // A synthetic click keeps the focus in the covered pane, so the zoom must
+  // move it before the pane skips rendering.
+  await page
+    .getByRole('button', { name: 'Zoom Pane 1', exact: true })
+    .dispatchEvent('click');
+  await expect(pane).toBeFocused();
+  await expect(covered).toHaveAttribute('inert', '');
+  await expect(covered).toHaveAttribute('aria-hidden', 'true');
+  await expect(covered).toHaveCSS('content-visibility', 'hidden');
   await expect(page.getByRole('separator')).toHaveCount(0);
   await page.keyboard.press('Escape');
   await expect(page.getByRole('separator')).toHaveCount(6);
+  await expect(covered).toHaveCSS('content-visibility', 'visible');
+  expect(await coveredContent.evaluate((element) => element.scrollTop)).toBe(
+    90
+  );
+  expect(
+    await covered.evaluate(
+      (host) =>
+        (host as HTMLElement & { visibilityEvents: boolean[] }).visibilityEvents
+    )
+  ).toEqual([true, false]);
   await content.evaluate((element) => {
     const child = element.firstElementChild as HTMLElement;
     child.style.minHeight = '1500px';
