@@ -10,6 +10,10 @@ export interface DiffsEditorTokenizer {
 
   prebuildStateStack(renderRange?: RenderRange): void;
 
+  // Finishes tokenizing every line up to the end of `renderRange`, and
+  // returns the lines whose tokens changed.
+  flush(renderRange?: RenderRange): Map<number, HighlightedToken[]>;
+
   getStringCommentRegexpRangesInLine(
     lineIndex: number
   ): [number, number][] | null;

@@ -188,6 +188,18 @@ type EditedRowHighlighter = (
 
 const NO_HIGHLIGHTS: readonly LineDiffRange[] = Object.freeze([]);
 
+/** What an edit changed beyond row contents. See `updateRenderCache`. */
+export type EditLayoutChange = 'none' | 'lineTypes' | 'rows';
+
+/** What a rendered row should show after an edit. */
+export interface RenderedRowUpdate {
+  // The row's new content, when its word diff highlights changed.
+  content: HASTElement | undefined;
+  // The line types of the row and its gutter row, in split view.
+  lineType: string | undefined;
+  gutterLineType: string | undefined;
+}
+
 interface PushSeparatorProps {
   hunkIndex: number;
   collapsedLines: number | 'unknown';
@@ -633,10 +645,11 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
   }
 
   /**
-   * Returns true when a session-mode pass changed the region skeleton itself
-   * (a gap edit synthesized or merged regions), which changes the rendered
-   * row set without a line-count change — the host must escalate to a full
-   * re-render instead of its cheap refresh path.
+   * Updates the cached diff after an edit, and says what the rows on screen
+   * need to catch up:
+   * - 'none': only their text changed.
+   * - 'lineTypes': some rows changed type, like a line that is now a change.
+   * - 'rows': rows were added, removed or moved, so the diff must render again.
    */
   public updateRenderCache(
     dirtyLines: Map<number, Array<HighlightedToken>>,
@@ -644,15 +657,15 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     lineCountChangeInFlight = false,
     changedDocumentLines?: ReadonlyMap<number, string>,
     documentLineCount?: number
-  ): boolean {
+  ): EditLayoutChange {
     this.pendingStructuralRows = undefined;
     const { renderCache } = this;
     if (renderCache == null) {
-      return false;
+      return 'none';
     }
     const { result, diff } = renderCache;
     if (result == null) {
-      return false;
+      return 'none';
     }
     if (diff.isPartial) {
       throw new Error('Could not update render cache for partial diff');
@@ -778,6 +791,9 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       }
     }
 
+    // Line types and the rows shown only change when a block's size does.
+    const blockSizesBefore =
+      changedAdditionLines.length > 0 ? getBlockSizes(diff) : undefined;
     let regionsChanged = false;
     if (changedAdditionLines.length > 0) {
       if (this.editSessionActive) {
@@ -825,7 +841,33 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
 
     result.baseThemeType = themeType;
     renderCache.isDirty = true;
-    return regionsChanged;
+    if (regionsChanged) {
+      return 'rows';
+    }
+    if (blockSizesBefore == null) {
+      return 'none';
+    }
+    const blockSizesAfter = getBlockSizes(diff);
+    if (areBlockSizesEqual(blockSizesBefore, blockSizesAfter)) {
+      return 'none';
+    }
+    // Only split view can keep its rows, since each column lists its lines in
+    // order. The rows saying a file has no final newline are always rendered
+    // again, because they take the line type of the line above them.
+    const lastHunk = diff.hunks.at(-1);
+    if (
+      this.getOptionsWithDefaults().diffStyle !== 'split' ||
+      lastHunk?.noEOFCRAdditions === true ||
+      lastHunk?.noEOFCRDeletions === true
+    ) {
+      return 'rows';
+    }
+    return areBlockSizesEqual(
+      getSplitColumnRows(blockSizesBefore),
+      getSplitColumnRows(blockSizesAfter)
+    )
+      ? 'lineTypes'
+      : 'rows';
   }
 
   private applyExpansionRemap(change: SessionRegionChange | undefined): void {
@@ -1783,7 +1825,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
             originalRowRanges.set(replaced, ranges);
           }
           const cached = rows.get(row);
-          if (cached?.ranges === ranges) {
+          if (cached != null && areRangesEqual(cached.ranges, ranges)) {
             return cached.highlighted;
           }
           const highlighted = applyLineDiffMarks(row, ranges);
@@ -1807,7 +1849,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
           side === 'deletions' ? pairRanges.deletion : pairRanges.addition;
       }
       const cached = rows.get(row);
-      if (cached?.ranges === ranges) {
+      if (cached != null && areRangesEqual(cached.ranges, ranges)) {
         return cached.highlighted;
       }
       const highlighted = applyLineDiffMarks(row, ranges);
@@ -1828,17 +1870,15 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
   }
 
   /**
-   * Returns a function that gives the new content of a rendered row, by side
-   * and line number, when its word diff highlights changed since it was last
-   * rendered, or undefined when the cache has not been edited. After a
-   * same-line-count edit, rows on screen keep their old layout until the next
-   * full render, so the host asks about the rows it shows, top to bottom.
+   * Lets the host update the rows on screen after an edit without rendering
+   * the diff again. Call the returned function for each row, top to bottom.
+   * Returns undefined before the first edit.
    */
   public createRenderedRowUpdater():
     | ((
         side: 'deletions' | 'additions',
         lineNumber: number
-      ) => HASTElement | undefined)
+      ) => RenderedRowUpdate)
     | undefined {
     const { renderCache } = this;
     const highlights = renderCache?.editedRowHighlights;
@@ -1851,9 +1891,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       diff,
       renderCache.renderRange ?? DEFAULT_RENDER_RANGE
     );
-    if (highlightRow == null) {
-      return undefined;
-    }
+    const { diffStyle } = this.getOptionsWithDefaults();
     const { renderedRows } = highlights;
     const findBlock = {
       deletions: createBlockFinder(diff, 'deletions'),
@@ -1861,21 +1899,39 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     };
     return (side, lineNumber) => {
       const lineIndex = lineNumber - 1;
-      const row = (
-        side === 'deletions'
-          ? result.code.deletionLines
-          : result.code.additionLines
-      )[lineIndex];
-      const previous = renderedRows[side].get(lineIndex) ?? row;
-      const output = highlightRow(
+      const block = findBlock[side](lineIndex);
+      let content: HASTElement | undefined;
+      if (highlightRow != null) {
+        const row = (
+          side === 'deletions'
+            ? result.code.deletionLines
+            : result.code.additionLines
+        )[lineIndex];
+        const previous = renderedRows[side].get(lineIndex) ?? row;
+        const output = highlightRow(side, lineIndex, block, row);
+        if (output !== previous && output?.type === 'element') {
+          content = output;
+        }
+      }
+      // Rows outside every hunk keep their line type, since the hunks still
+      // cover the same lines.
+      if (diffStyle !== 'split' || block == null) {
+        return { content, lineType: undefined, gutterLineType: undefined };
+      }
+      const decoration = this.getSplitLineDecoration({
         side,
+        type: block.type,
         lineIndex,
-        findBlock[side](lineIndex),
-        row
-      );
-      return output !== previous && output?.type === 'element'
-        ? output
-        : undefined;
+      });
+      const contentLineType = decoration.contentProperties?.['data-line-type'];
+      return {
+        content,
+        lineType:
+          typeof contentLineType === 'string'
+            ? contentLineType
+            : decoration.gutterLineType,
+        gutterLineType: decoration.gutterLineType,
+      };
     };
   }
 
@@ -1902,6 +1958,8 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     }
     const highlighted = applyLineDiffMarks(row, ranges);
     additions.set(lineIndex, highlighted);
+    // Later renders of this row reuse this copy.
+    highlights.rows.set(row, { ranges, highlighted });
     return highlighted;
   }
 
@@ -3204,6 +3262,73 @@ function createBlockFinder(
     const block = blocks[index];
     return block != null && getStart(block) <= line ? block : undefined;
   };
+}
+
+// The kind and size of every hunk block, in order, three numbers per block: 0
+// and its line count for context, 1 and its old and new line counts for
+// changes, and 2 between hunks.
+function getBlockSizes(diff: FileDiffMetadata): number[] {
+  const sizes: number[] = [];
+  for (const hunk of diff.hunks) {
+    for (const content of hunk.hunkContent) {
+      if (content.type === 'context') sizes.push(0, content.lines, 0);
+      else sizes.push(1, content.deletions, content.additions);
+    }
+    sizes.push(2, 0, 0);
+  }
+  return sizes;
+}
+
+// The rows each split view column shows for the blocks from `getBlockSizes`:
+// a run of line rows as a positive count, a run of empty filler rows as a
+// negative count, and 0 between hunks. When this stays the same, the columns
+// show the same rows.
+function getSplitColumnRows(sizes: number[]): number[] {
+  const rows: number[] = [];
+  const pushLines = (count: number) => {
+    if (count <= 0) return;
+    const last = rows.length - 1;
+    if (last >= 0 && rows[last] > 0) rows[last] += count;
+    else rows.push(count);
+  };
+  for (const side of ['deletions', 'additions']) {
+    for (let index = 0; index < sizes.length; index += 3) {
+      const kind = sizes[index];
+      const deletions = sizes[index + 1];
+      const additions = sizes[index + 2];
+      if (kind === 2) {
+        rows.push(0);
+      } else if (kind === 0) {
+        pushLines(deletions);
+      } else {
+        // The shorter side of a change is padded with filler rows after its
+        // lines.
+        const lines = side === 'deletions' ? deletions : additions;
+        pushLines(lines);
+        if (lines < Math.max(deletions, additions)) {
+          rows.push(lines - Math.max(deletions, additions));
+        }
+      }
+    }
+  }
+  return rows;
+}
+
+function areRangesEqual(
+  a: readonly LineDiffRange[],
+  b: readonly LineDiffRange[]
+): boolean {
+  return (
+    a === b ||
+    (a.length === b.length &&
+      a.every(
+        (range, index) => range[0] === b[index][0] && range[1] === b[index][1]
+      ))
+  );
+}
+
+function areBlockSizesEqual(a: number[], b: number[]): boolean {
+  return a.length === b.length && a.every((size, index) => size === b[index]);
 }
 
 // The editor keeps an empty row after a final line break that the file does

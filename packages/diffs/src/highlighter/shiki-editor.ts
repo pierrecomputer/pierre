@@ -414,6 +414,11 @@ export class ShikiEditorTokenizer implements DiffsEditorTokenizer {
     this.#prebuildStateStack(renderRange);
   }
 
+  // Shiki keeps coloring lines it hasn't reached in the background.
+  flush(): Map<number, HighlightedToken[]> {
+    return new Map();
+  }
+
   stopBackgroundTokenize(): void {
     this.#pendingPrebuildEndLine = -1;
     if (this.#isStopped) {
