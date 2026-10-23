@@ -12,6 +12,9 @@ checked = []
 # Hand-written JS/TS lexer core (`src/native`), compared with the translated
 # lexer for parity and speed.
 native-core = []
+# The native core's token loop in AArch64 assembly (`src/native/lexasm.s`),
+# alongside the Rust loop, for comparison.
+native-asm = ["native-core"]
 
 [dependencies]
 unicode-ident = "1"

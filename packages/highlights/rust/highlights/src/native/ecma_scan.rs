@@ -383,12 +383,13 @@ const fn keyword_hash(b0: u8, b1: u8, last: u8, len: usize) -> usize {
 /// Keyword table slot: the word zero-padded to 16 bytes, and its kind
 /// (`INVALID` for an empty slot).
 #[derive(Clone, Copy)]
-struct KeywordSlot {
+#[repr(C)]
+pub(super) struct KeywordSlot {
     word: u128,
     kind: u8,
 }
 
-static KEYWORD_TABLE: [KeywordSlot; 256] = {
+pub(super) static KEYWORD_TABLE: [KeywordSlot; 256] = {
     let mut t = [KeywordSlot {
         word: 0,
         kind: lex::INVALID,

@@ -21,6 +21,10 @@ use crate::generated::Instance;
 use crate::lex_ids as lex;
 use crate::token_ids as tok;
 
+#[cfg(all(feature = "native-asm", target_arch = "aarch64"))]
+#[path = "lexasm.rs"]
+pub(crate) mod lexasm;
+
 /// The kind's color waits for the next token.
 const DEFER: u32 = 1 << 20;
 /// Before an identifier: a kind that a rule of `$identHl` ahead of its
@@ -44,7 +48,10 @@ const fn mark(mut t: [u32; 256], kinds: &[u8], bit: u32) -> [u32; 256] {
 
 /// Per-kind flags: the [`kf`] bits and [`DEFER`], with the kind's fixed
 /// color (`$LexHl`) in the top byte.
-static FLAGS: [u32; 256] = {
+static FLAGS: [u32; 256] = FLAGS_TABLE;
+
+/// [`FLAGS`] as a constant, for tables built from it.
+const FLAGS_TABLE: [u32; 256] = {
     let mut t = [0u32; 256];
     let mut k = 0;
     while k < 256 {
@@ -1175,6 +1182,13 @@ fn lex(cold: &mut Cold, inst: &mut Instance, base: usize) {
 /// Highlight `len` bytes of JavaScript, or TypeScript when `ts` is set, at
 /// lexer memory offset `base` into `inst.ext.recs`.
 pub fn highlight(inst: &mut Instance, base: usize, len: usize, ts: bool) {
+    let mut cold = setup(inst, base, len, ts);
+    lex(&mut cold, inst, base);
+}
+
+/// Prepare `inst` and the lexer state for `len` bytes at lexer memory
+/// offset `base`.
+fn setup<'a>(inst: &mut Instance, base: usize, len: usize, ts: bool) -> Cold<'a> {
     let mem_ptr = inst.mem.bytes().as_ptr();
     // SAFETY: `base..base + len + 96` lies inside lexer memory, which the
     // delegated emitters never reallocate (checked after each call).
@@ -1196,7 +1210,7 @@ pub fn highlight(inst: &mut Instance, base: usize, len: usize, ts: bool) {
     let mut recs = Recs::load(inst);
     recs.gap(0, start);
     recs.store(inst);
-    let mut cold = Cold {
+    Cold {
         src,
         end: len,
         ts,
@@ -1213,6 +1227,5 @@ pub fn highlight(inst: &mut Instance, base: usize, len: usize, ts: bool) {
         tpl_sp: 0,
         brk: [0; BRACKETS],
         tpl: [0; TEMPLATES],
-    };
-    lex(&mut cold, inst, base);
+    }
 }

@@ -198,6 +198,16 @@ fn main() {
         Some("--train") => return train(Path::new(&args[1])),
         Some("--parallel") => return parallel(),
         Some("--viewport") => return viewport(),
+        #[cfg(feature = "native-asm")]
+        Some("--asm-parity") => {
+            native_core::use_asm();
+            return native_core::parity(&args[1..]);
+        }
+        #[cfg(feature = "native-asm")]
+        Some("--asm-fuzz") => {
+            native_core::use_asm();
+            return native_core::fuzz(args[1].parse().unwrap(), &args[2..]);
+        }
         #[cfg(feature = "native-core")]
         Some("--native-parity") => return native_core::parity(&args[1..]),
         #[cfg(feature = "native-core")]
