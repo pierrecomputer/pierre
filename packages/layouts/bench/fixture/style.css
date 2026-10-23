@@ -114,3 +114,16 @@ body {
   border-radius: 4px;
   background: #eef1f5;
 }
+
+.bench-real {
+  height: 100%;
+}
+
+.bench-real-terminal,
+.bench-real-tree {
+  height: 100%;
+}
+
+.bench-real-terminal {
+  background: #000;
+}

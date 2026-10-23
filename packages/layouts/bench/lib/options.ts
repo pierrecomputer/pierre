@@ -14,6 +14,7 @@ export interface BenchOptions {
   content: ContentWeight[];
   scenarios: string[];
   save: boolean;
+  mode: 'headless' | 'headed';
 }
 
 /**
@@ -24,8 +25,10 @@ export const options: BenchOptions = {
   runs: Number(process.env.BENCH_RUNS ?? 5),
   warmupRuns: Number(process.env.BENCH_WARMUP ?? 1),
   panes: list('BENCH_PANES', '4,16').map(Number),
-  content: list('BENCH_CONTENT', 'light,heavy') as ContentWeight[],
+  content: list('BENCH_CONTENT', 'light,heavy,real') as ContentWeight[],
   scenarios: list('BENCH_SCENARIOS', ''),
   /** Write the report to `bench/results`. Set `BENCH_SAVE=0` for a trial run. */
   save: process.env.BENCH_SAVE !== '0',
+  /** `headed` measures frames at the display rate; headless Chromium runs at 60 Hz. */
+  mode: process.env.BENCH_MODE === 'headed' ? 'headed' : 'headless',
 };

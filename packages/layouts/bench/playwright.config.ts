@@ -1,6 +1,7 @@
 import { defineConfig, type PlaywrightTestConfig } from '@playwright/test';
 
 import { loadWorktreeEnv } from '../../../scripts/load-worktree-env.mjs';
+import { options } from './lib/options';
 
 loadWorktreeEnv();
 const offset = Number(process.env.PIERRE_PORT_OFFSET ?? 0);
@@ -28,7 +29,7 @@ const config: PlaywrightTestConfig = defineConfig({
     viewport: BENCH_VIEWPORT,
     // The full Chromium build in new headless mode uses the same compositor as headed Chrome.
     channel: 'chromium',
-    headless: true,
+    headless: options.mode === 'headless',
     launchOptions: {
       args: [
         '--disable-background-timer-throttling',

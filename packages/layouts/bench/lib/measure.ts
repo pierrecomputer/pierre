@@ -36,6 +36,36 @@ async function readCdpMetrics(
   return values;
 }
 
+/** The display that a run measures: its frame interval and its device pixel ratio. */
+export async function probeDisplay(
+  page: Page
+): Promise<{ refreshHz: number; frameMs: number; deviceScaleFactor: number }> {
+  return page.evaluate(
+    () =>
+      new Promise((resolve) => {
+        const times: number[] = [];
+        const step = (time: number): void => {
+          times.push(time);
+          if (times.length < 31) {
+            requestAnimationFrame(step);
+            return;
+          }
+          const intervals = times
+            .slice(1)
+            .map((value, index) => value - times[index])
+            .sort((a, b) => a - b);
+          const frameMs = intervals[Math.floor(intervals.length / 2)];
+          resolve({
+            refreshHz: Math.round(1000 / frameMs),
+            frameMs,
+            deviceScaleFactor: window.devicePixelRatio,
+          });
+        };
+        requestAnimationFrame(step);
+      })
+  );
+}
+
 /** Wait for two frames and a short idle period, so that earlier work does not leak into a measurement. */
 export async function settle(page: Page, idleMs = 150): Promise<void> {
   await page.evaluate(
@@ -58,13 +88,16 @@ export async function measure(
 ): Promise<Sample> {
   const session = await page.context().newCDPSession(page);
   await session.send('Performance.enable');
-  await page.evaluate(() => window.__layoutsBench.resetCounters());
+  await page.evaluate(() => window.__layoutsBench?.resetCounters());
   const before = await readCdpMetrics(session);
   await browser.startTracing(page, { categories: TRACE_CATEGORIES });
   await operation();
   const trace = await browser.stopTracing();
   const after = await readCdpMetrics(session);
-  const content = await page.evaluate(() => window.__layoutsBench.counters());
+  // Self-test pages have no layout and no content counters.
+  const content = (await page.evaluate(() =>
+    window.__layoutsBench?.counters()
+  )) ?? { renders: 0, resizeCallbacks: 0 };
   await session.detach();
 
   const delta = (name: CdpMetricName, scale = 1): number =>

@@ -8,6 +8,14 @@ const config: UserConfig = defineConfig({
   build: {
     outDir: fileURLToPath(new URL('dist', import.meta.url)),
     emptyOutDir: true,
+    rolldownOptions: {
+      input: {
+        main: fileURLToPath(new URL('fixture/index.html', import.meta.url)),
+        selftest: fileURLToPath(
+          new URL('fixture/selftest.html', import.meta.url)
+        ),
+      },
+    },
   },
   preview: {
     host: '127.0.0.1',

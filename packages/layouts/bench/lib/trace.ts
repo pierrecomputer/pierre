@@ -3,6 +3,8 @@ export const TRACE_CATEGORIES: string[] = [
   'devtools.timeline',
   'disabled-by-default-devtools.timeline',
   'disabled-by-default-devtools.timeline.frame',
+  // Stack traces mark a layout or a style update that script forced.
+  'disabled-by-default-devtools.timeline.stack',
   'toplevel',
   'blink',
   'blink.animations',
@@ -15,6 +17,7 @@ export const TRACE_CATEGORIES: string[] = [
 interface TraceArgs {
   name?: string;
   elementCount?: number;
+  beginData?: { stackTrace?: unknown[] };
   data?: {
     frames?: { processId: number; isOutermostMainFrame?: boolean }[];
     compositeFailed?: number;
@@ -50,6 +53,7 @@ export interface TraceSummary {
   styleMs: number;
   layouts: number;
   layoutMs: number;
+  forcedLayouts: number;
   prePaintMs: number;
   paints: number;
   paintMs: number;
@@ -57,6 +61,7 @@ export interface TraceSummary {
   framesPresented: number;
   framesPartial: number;
   framesDropped: number;
+  framesDroppedAfterFirst: number;
   framesWithMainAnimation: number;
   framesWithCompositorAnimation: number;
   animations: number;
@@ -133,14 +138,23 @@ export function summarizeTrace(traceJson: string): TraceSummary {
         event.name === 'PipelineReporter' &&
         event.ph === 'b'
     )
+    .sort((a, b) => a.ts - b.ts)
     .map(
       (event) => event.args?.chrome_frame_reporter ?? event.args?.frame_reporter
     )
     .filter((frame) => frame !== undefined);
   const frameState = (state: string): number =>
     frames.filter((frame) => frame.state === state).length;
+  // A compositor animation needs one main-thread frame to start, so its first
+  // frame can drop for a reason that is not the animation itself.
+  const expected = frames.filter(
+    (frame) => frame.state !== 'STATE_NO_UPDATE_DESIRED'
+  );
+  const droppedAfterFirst = expected
+    .slice(1)
+    .filter((frame) => frame.state === 'STATE_DROPPED').length;
 
-  // An animation is not composited when Blink reports a reason for it to run on the main thread.
+  // An animation is not composited when Blink reports a nonzero reason for it to run on the main thread.
   const animationStarts = events.filter(
     (event) =>
       event.pid === pid && event.name === 'Animation' && event.ph === 'b'
@@ -152,7 +166,8 @@ export function summarizeTrace(traceJson: string): TraceSummary {
           event.pid === pid &&
           event.name === 'Animation' &&
           event.ph === 'n' &&
-          event.args?.data?.compositeFailed !== undefined
+          // Chromium reports 0 for an animation that the compositor runs.
+          (event.args?.data?.compositeFailed ?? 0) !== 0
       )
       .map((event) => event.id2?.local ?? event.id2?.global)
   );
@@ -168,6 +183,9 @@ export function summarizeTrace(traceJson: string): TraceSummary {
     styleMs: total(styles),
     layouts: layouts.length,
     layoutMs: total(layouts),
+    forcedLayouts: layouts.filter(
+      (event) => (event.args?.beginData?.stackTrace?.length ?? 0) > 0
+    ).length,
     prePaintMs: total(named('PrePaint')),
     paints: paints.length,
     paintMs: total(paints),
@@ -175,6 +193,7 @@ export function summarizeTrace(traceJson: string): TraceSummary {
     framesPresented: frameState('STATE_PRESENTED_ALL'),
     framesPartial: frameState('STATE_PRESENTED_PARTIAL'),
     framesDropped: frameState('STATE_DROPPED'),
+    framesDroppedAfterFirst: droppedAfterFirst,
     framesWithMainAnimation: frames.filter(
       (frame) => frame.has_main_animation === true
     ).length,

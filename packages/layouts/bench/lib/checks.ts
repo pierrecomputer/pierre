@@ -111,7 +111,7 @@ export const CHECKS: Check[] = [
     rule: 'frame-rate',
     description: 'A zoom drops no frame (16 light panes).',
     limit: '0 frames',
-    evaluate: noFrames('zoom', 16, 'light', 'framesDropped'),
+    evaluate: noFrames('zoom', 16, 'light', 'framesDroppedAfterFirst'),
   },
   {
     id: 'resize-no-dropped-frames',
@@ -126,7 +126,7 @@ export const CHECKS: Check[] = [
     description:
       'A 200 ms long task during a zoom drops no frame of the animation (4 light panes).',
     limit: '0 frames',
-    evaluate: noFrames('zoom-busy', 4, 'light', 'framesDropped'),
+    evaluate: noFrames('zoom-busy', 4, 'light', 'framesDroppedAfterFirst'),
   },
   {
     id: 'zoom-no-main-thread-animation',

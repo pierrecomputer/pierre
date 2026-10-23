@@ -1,10 +1,12 @@
 import type { Page } from '@playwright/test';
 
-export type ContentWeight = 'light' | 'heavy';
+export type ContentWeight = 'light' | 'heavy' | 'real';
 
 export interface Params {
   panes: number;
   content: ContentWeight;
+  /** The frame interval of the display, from `probeDisplay`. */
+  frameMs: number;
 }
 
 interface Point {
@@ -39,23 +41,55 @@ async function center(page: Page, selector: string): Promise<Point> {
   return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
 }
 
+// Start an operation in a page task, not inside `page.evaluate`: the CDP
+// Performance domain counts script inside `page.evaluate` as DevTools time.
+async function inPageTask(
+  page: Page,
+  operation: string,
+  arg?: unknown
+): Promise<void> {
+  await page.evaluate(
+    ({ operation, arg }) => {
+      setTimeout(() => {
+        const bench = window.__layoutsBench;
+        if (operation === 'split') {
+          bench.store.split(
+            'p0',
+            { type: 'pane', id: 'added', minWidth: 48, minHeight: 48 },
+            'right'
+          );
+        } else if (operation === 'move') {
+          bench.store.move('p0', String(arg), 'left');
+        } else if (operation === 'zoom-busy') {
+          bench.store.toggleZoom('p0');
+          setTimeout(() => bench.busy(200), 16);
+        }
+      }, 0);
+    },
+    { operation, arg }
+  );
+}
+
 async function zoomFirstPane(page: Page): Promise<void> {
   await page.evaluate(() => window.__layoutsBench.store.toggleZoom('p0'));
   await page.waitForTimeout(ANIMATION_SETTLE_MS);
 }
 
-// Append to a pane once per frame, as streaming terminal output or an agent reply does.
+// Append to a pane once per frame, as streaming terminal output or an agent
+// reply does. Each append runs in a frame callback of the page.
 async function appendEachFrame(page: Page, id: string): Promise<void> {
   await page.evaluate(
-    async ({ id, steps }) => {
-      for (let step = 0; step < steps; step++) {
+    ({ id, steps }) => {
+      let step = 0;
+      const next = (): void => {
         window.__layoutsBench.append(id);
-        await new Promise((resolve) => requestAnimationFrame(resolve));
-      }
+        if (++step < steps) requestAnimationFrame(next);
+      };
+      setTimeout(() => requestAnimationFrame(next), 0);
     },
     { id, steps: APPEND_STEPS }
   );
-  await page.waitForTimeout(IDLE_SETTLE_MS);
+  await page.waitForTimeout(IDLE_SETTLE_MS + APPEND_STEPS * 20);
 }
 
 export const SCENARIOS: Scenario[] = [
@@ -94,10 +128,7 @@ export const SCENARIOS: Scenario[] = [
     description:
       'Zoom the first pane, then block the main thread for 200 ms during the animation.',
     async run(page) {
-      await page.evaluate(() => {
-        window.__layoutsBench.store.toggleZoom('p0');
-        setTimeout(() => window.__layoutsBench.busy(200), 16);
-      });
+      await inPageTask(page, 'zoom-busy');
       await page.waitForTimeout(ANIMATION_SETTLE_MS + 200);
     },
   },
@@ -113,15 +144,18 @@ export const SCENARIOS: Scenario[] = [
   },
   {
     id: 'resize',
-    description: `Drag the root separator 160 px in ${RESIZE_STEPS} pointer moves.`,
+    description: `Drag the root separator 160 px in ${RESIZE_STEPS} pointer moves, one per frame.`,
     steps: RESIZE_STEPS,
     setup: (page) => center(page, '.pierre-layout-separator'),
-    async run(page, _params, point) {
+    async run(page, params, point) {
       await page.mouse.move(point!.x, point!.y);
       await page.mouse.down();
-      await page.mouse.move(point!.x + 160, point!.y, {
-        steps: RESIZE_STEPS,
-      });
+      // One move per frame interval: Playwright's `steps` sends moves faster than
+      // frames, and Chromium then coalesces them.
+      for (let step = 1; step <= RESIZE_STEPS; step++) {
+        await page.mouse.move(point!.x + (160 * step) / RESIZE_STEPS, point!.y);
+        await page.waitForTimeout(params.frameMs);
+      }
       await page.mouse.up();
       await page.waitForTimeout(IDLE_SETTLE_MS);
     },
@@ -130,13 +164,7 @@ export const SCENARIOS: Scenario[] = [
     id: 'split',
     description: 'Add a pane to the right of the first pane.',
     async run(page) {
-      await page.evaluate(() =>
-        window.__layoutsBench.store.split(
-          'p0',
-          { type: 'pane', id: 'added', minWidth: 48, minHeight: 48 },
-          'right'
-        )
-      );
+      await inPageTask(page, 'split');
       await page.waitForTimeout(ANIMATION_SETTLE_MS);
     },
   },
@@ -154,10 +182,7 @@ export const SCENARIOS: Scenario[] = [
     id: 'move',
     description: 'Move the first pane to the left of the last pane.',
     async run(page, params) {
-      await page.evaluate(
-        (last) => window.__layoutsBench.store.move('p0', last, 'left'),
-        `p${params.panes - 1}`
-      );
+      await inPageTask(page, 'move', `p${params.panes - 1}`);
       await page.waitForTimeout(ANIMATION_SETTLE_MS);
     },
   },

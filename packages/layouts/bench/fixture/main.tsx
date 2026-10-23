@@ -42,8 +42,11 @@ const requestedPanes = Number.parseInt(params.get('panes') ?? '4', 10);
 const paneCount = Number.isNaN(requestedPanes)
   ? 4
   : Math.min(64, Math.max(1, requestedPanes));
+const requestedWeight = params.get('content');
 const weight: ContentWeight =
-  params.get('content') === 'heavy' ? 'heavy' : 'light';
+  requestedWeight === 'heavy' || requestedWeight === 'real'
+    ? requestedWeight
+    : 'light';
 const paneIds = Array.from({ length: paneCount }, (_, index) => `p${index}`);
 const indexOf = new Map(paneIds.map((id, index) => [id, index]));
 

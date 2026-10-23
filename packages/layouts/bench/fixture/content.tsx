@@ -1,6 +1,8 @@
 import { type JSX, useEffect, useRef, useState } from 'react';
 
-export type ContentWeight = 'light' | 'heavy';
+import { RealDiff, RealTerminal, RealTree } from './real-content';
+
+export type ContentWeight = 'light' | 'heavy' | 'real';
 export type ContentKind = 'terminal' | 'diff' | 'tree' | 'chat';
 
 const KINDS: readonly ContentKind[] = ['terminal', 'diff', 'tree', 'chat'];
@@ -186,14 +188,22 @@ export function PaneContent({
           <span>{words(index, 4)}</span>
           {extra > 0 && <span>{`${extra} updates`}</span>}
         </div>
+      ) : kind === 'chat' ? (
+        <Chat extra={extra} />
+      ) : weight === 'real' ? (
+        kind === 'terminal' ? (
+          <RealTerminal />
+        ) : kind === 'diff' ? (
+          <RealDiff />
+        ) : (
+          <RealTree />
+        )
       ) : kind === 'terminal' ? (
         <Terminal extra={extra} />
       ) : kind === 'diff' ? (
         <Diff />
-      ) : kind === 'tree' ? (
-        <Tree />
       ) : (
-        <Chat extra={extra} />
+        <Tree />
       )}
     </div>
   );

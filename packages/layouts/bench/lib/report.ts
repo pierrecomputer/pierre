@@ -9,6 +9,7 @@ import {
 import { arch, cpus, platform, release, totalmem } from 'node:os';
 import { join } from 'node:path';
 
+import type { BundleSize } from './bundle';
 import { type CheckResult, evaluateChecks, type RecordSummary } from './checks';
 import type { Sample } from './measure';
 import type { ContentWeight } from './scenarios';
@@ -20,6 +21,7 @@ export interface RawRecord {
   content: ContentWeight;
   steps: number;
   browser: string;
+  display: { refreshHz: number; deviceScaleFactor: number };
   samples: Sample[];
 }
 
@@ -31,6 +33,8 @@ export interface Report {
   environment: {
     browser: string;
     headless: boolean;
+    refreshHz: number;
+    deviceScaleFactor: number;
     os: string;
     cpu: string;
     cpuCount: number;
@@ -48,6 +52,8 @@ export interface Report {
     samples: Record<keyof Sample, number[]>;
   }[];
   checks: CheckResult[];
+  /** Bytes of each entry point: minified, then gzip, brotli, and Zstandard. */
+  bundle: Record<string, BundleSize>;
 }
 
 function median(values: number[]): number {
@@ -82,6 +88,7 @@ export function writeReport(options: {
   viewport: { width: number; height: number };
   runs: number;
   warmupRuns: number;
+  bundle: Record<string, BundleSize>;
 }): { path: string; report: Report } | null {
   const raw = findRecords(options.recordsDirectory).sort((a, b) => {
     if (a.scenario !== b.scenario) return a.scenario.localeCompare(b.scenario);
@@ -123,6 +130,8 @@ export function writeReport(options: {
     environment: {
       browser: raw[0].browser,
       headless: options.headless,
+      refreshHz: raw[0].display.refreshHz,
+      deviceScaleFactor: raw[0].display.deviceScaleFactor,
       os: `${platform()} ${release()} ${arch()}`,
       cpu: cpus()[0]?.model ?? 'unknown',
       cpuCount: cpus().length,
@@ -133,17 +142,19 @@ export function writeReport(options: {
     },
     records,
     checks: evaluateChecks(summaries),
+    bundle: options.bundle,
   };
 
   mkdirSync(options.resultsDirectory, { recursive: true });
   const date = report.createdAt.slice(0, 10);
-  let name = `${date}-${sha.slice(0, 8)}${report.commit.dirty ? '-dirty' : ''}`;
+  const suffix = `${options.headless ? '' : '-headed'}${report.commit.dirty ? '-dirty' : ''}`;
+  let name = `${date}-${sha.slice(0, 8)}${suffix}`;
   for (
     let index = 2;
     existsSync(join(options.resultsDirectory, `${name}.json`));
     index++
   ) {
-    name = `${date}-${sha.slice(0, 8)}${report.commit.dirty ? '-dirty' : ''}-${index}`;
+    name = `${date}-${sha.slice(0, 8)}${suffix}-${index}`;
   }
   const path = join(options.resultsDirectory, `${name}.json`);
   writeFileSync(path, `${JSON.stringify(report, null, 2)}\n`);

@@ -19,9 +19,13 @@
     "./styles.css": "./src/styles.css"
   },
   "devDependencies": {
+    "@pierre/diffs": "workspace:*",
+    "@pierre/trees": "workspace:*",
     "@playwright/test": "catalog:",
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",
+    "@xterm/addon-fit": "catalog:",
+    "@xterm/xterm": "catalog:",
     "react": "catalog:",
     "react-dom": "catalog:",
     "tsdown": "catalog:",
