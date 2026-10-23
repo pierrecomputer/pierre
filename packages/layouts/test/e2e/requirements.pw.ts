@@ -64,3 +64,23 @@ test('A10: a focused separator shows an outline in forced colors mode', async ({
   );
   expect(outline).not.toBe('none');
 });
+
+test('A15: Escape that pane content handles does not restore the zoom', async ({
+  page,
+}) => {
+  test.fail(true, 'The layout restores the zoom on any Escape.');
+  await page.getByRole('button', { name: 'Zoom Pane 1', exact: true }).click();
+  const note = page.getByLabel('Note in Pane 1', { exact: true });
+  // Content such as a terminal or an editor handles Escape itself.
+  await note.evaluate((input) =>
+    input.addEventListener('keydown', (event) => {
+      if ((event as KeyboardEvent).key === 'Escape') event.preventDefault();
+    })
+  );
+  await note.focus();
+  await page.keyboard.press('Escape');
+  await expect(page.locator('[data-layout-pane="1"]')).toHaveAttribute(
+    'data-zoomed',
+    'true'
+  );
+});

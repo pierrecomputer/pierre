@@ -65,6 +65,24 @@ function atMost(
   };
 }
 
+// A frame check has no value when the trace holds no frames, for example after
+// Chrome renames a trace field. Without this guard, such a check would pass.
+function noFrames(
+  scenario: string,
+  panes: number,
+  content: ContentWeight,
+  metric: Metric
+): Check['evaluate'] {
+  const evaluate = atMost(scenario, panes, content, metric, 0);
+  return (find) => {
+    const record = find(scenario, panes, content);
+    if (record === undefined) return null;
+    const { framesPresented, framesPartial, framesDropped } = record.median;
+    if (framesPresented + framesPartial + framesDropped === 0) return null;
+    return evaluate(find);
+  };
+}
+
 // The ratio of a metric between two parameter sets, for example heavy over light content.
 function ratio(
   scenario: string,
@@ -93,14 +111,14 @@ export const CHECKS: Check[] = [
     rule: 'frame-rate',
     description: 'A zoom drops no frame (16 light panes).',
     limit: '0 frames',
-    evaluate: atMost('zoom', 16, 'light', 'framesDropped', 0),
+    evaluate: noFrames('zoom', 16, 'light', 'framesDropped'),
   },
   {
     id: 'resize-no-dropped-frames',
     rule: 'frame-rate',
     description: 'A resize drag drops no frame (16 heavy panes).',
     limit: '0 frames',
-    evaluate: atMost('resize', 16, 'heavy', 'framesDropped', 0),
+    evaluate: noFrames('resize', 16, 'heavy', 'framesDropped'),
   },
   {
     id: 'zoom-busy-no-dropped-frames',
@@ -108,14 +126,14 @@ export const CHECKS: Check[] = [
     description:
       'A 200 ms long task during a zoom drops no frame of the animation (4 light panes).',
     limit: '0 frames',
-    evaluate: atMost('zoom-busy', 4, 'light', 'framesDropped', 0),
+    evaluate: noFrames('zoom-busy', 4, 'light', 'framesDropped'),
   },
   {
     id: 'zoom-no-main-thread-animation',
     rule: 'main-thread',
     description: 'No frame of a zoom needs a main-thread animation.',
     limit: '0 frames',
-    evaluate: atMost('zoom', 4, 'light', 'framesWithMainAnimation', 0),
+    evaluate: noFrames('zoom', 4, 'light', 'framesWithMainAnimation'),
   },
   {
     id: 'zoom-animations-composited',

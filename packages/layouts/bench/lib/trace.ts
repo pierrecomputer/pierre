@@ -19,11 +19,15 @@ interface TraceArgs {
     frames?: { processId: number; isOutermostMainFrame?: boolean }[];
     compositeFailed?: number;
   };
-  chrome_frame_reporter?: {
-    state: string;
-    has_main_animation?: boolean;
-    has_compositor_animation?: boolean;
-  };
+  chrome_frame_reporter?: FrameReporter;
+  // Chrome 155 writes the same data under this key.
+  frame_reporter?: FrameReporter;
+}
+
+interface FrameReporter {
+  state: string;
+  has_main_animation?: boolean;
+  has_compositor_animation?: boolean;
 }
 
 interface TraceEvent {
@@ -122,16 +126,19 @@ export function summarizeTrace(traceJson: string): TraceSummary {
   const paints = named('Paint');
 
   // Each frame of the page's compositor reports one state when it begins.
-  const frames = events.filter(
-    (event) =>
-      event.pid === pid &&
-      event.name === 'PipelineReporter' &&
-      event.ph === 'b' &&
-      event.args?.chrome_frame_reporter !== undefined
-  );
+  const frames = events
+    .filter(
+      (event) =>
+        event.pid === pid &&
+        event.name === 'PipelineReporter' &&
+        event.ph === 'b'
+    )
+    .map(
+      (event) => event.args?.chrome_frame_reporter ?? event.args?.frame_reporter
+    )
+    .filter((frame) => frame !== undefined);
   const frameState = (state: string): number =>
-    frames.filter((event) => event.args?.chrome_frame_reporter?.state === state)
-      .length;
+    frames.filter((frame) => frame.state === state).length;
 
   // An animation is not composited when Blink reports a reason for it to run on the main thread.
   const animationStarts = events.filter(
@@ -169,11 +176,10 @@ export function summarizeTrace(traceJson: string): TraceSummary {
     framesPartial: frameState('STATE_PRESENTED_PARTIAL'),
     framesDropped: frameState('STATE_DROPPED'),
     framesWithMainAnimation: frames.filter(
-      (event) => event.args?.chrome_frame_reporter?.has_main_animation === true
+      (frame) => frame.has_main_animation === true
     ).length,
     framesWithCompositorAnimation: frames.filter(
-      (event) =>
-        event.args?.chrome_frame_reporter?.has_compositor_animation === true
+      (frame) => frame.has_compositor_animation === true
     ).length,
     animations: animationStarts.length,
     animationsNotComposited: notComposited.size,
