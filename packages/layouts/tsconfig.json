@@ -6,9 +6,11 @@
     "demo/**/*.ts",
     "demo/**/*.tsx",
     "test/**/*.ts",
+    "bench/**/*.ts",
+    "bench/**/*.tsx",
     "tsdown.config.ts"
   ],
-  "exclude": ["node_modules", "dist", "demo/dist"],
+  "exclude": ["node_modules", "dist", "demo/dist", "bench/dist"],
   "compilerOptions": {
     "isolatedDeclarations": true,
     "allowJs": false,

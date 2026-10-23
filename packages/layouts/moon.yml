@@ -33,3 +33,12 @@ tasks:
       persistent: true
       runInCI: 'always'
       envFile: '/.env.worktree'
+
+  bench:
+    script:
+      '(bun test/e2e/check-playwright-binary.ts || pnpm exec playwright install
+      chromium) && pnpm exec playwright test -c bench/playwright.config.ts'
+    options:
+      cache: false
+      runInCI: 'always'
+      envFile: '/.env.worktree'
