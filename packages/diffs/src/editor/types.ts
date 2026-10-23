@@ -1,21 +1,15 @@
+import type { RetainedDiffSessionSnapshot } from '../model/types';
 import type {
-  ChangeTypes,
   DiffLineAnnotation,
   FileContents,
   FileDiffMetadata,
-  Hunk,
   LineAnnotation,
   SelectionSide,
 } from '../types';
 import type { Editor, EditorOptions } from './editor';
 import type { TextDocument } from './textDocument';
 
-/** FileDiff baseline and hunk state needed to resume an editing session. */
-export interface RetainedDiffSessionSnapshot {
-  oldFile: { name: string; lines: string[] } | null;
-  type: ChangeTypes;
-  hunks: Hunk[];
-}
+export type { RetainedDiffSessionSnapshot };
 
 /** @internal Current diff state and whether the document changed while editing. */
 export interface CapturedDiffSessionState {
