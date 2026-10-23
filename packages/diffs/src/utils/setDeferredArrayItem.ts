@@ -1,7 +1,13 @@
+// Defines `array[index]` as an item that `create` builds on read. By default
+// the first read keeps the built value as a plain array item. With
+// `retain: false`, every read builds a fresh value and nothing built is kept,
+// for items whose source stays available anyway. Assignments store the given
+// value like a normal array write and follow sealed/frozen array semantics.
 export function setDeferredArrayItem<T>(
   array: T[],
   index: number,
-  create: () => T
+  create: () => T,
+  { retain = true }: { retain?: boolean } = {}
 ): void {
   let initialized = false;
   let cached: T;
@@ -9,10 +15,11 @@ export function setDeferredArrayItem<T>(
     configurable: true,
     enumerable: true,
     get() {
-      if (!initialized) {
-        cached = create();
-        initialized = true;
-      }
+      if (initialized) return cached;
+      const value = create();
+      if (!retain) return value;
+      cached = value;
+      initialized = true;
       if (
         Object.getOwnPropertyDescriptor(array, index)?.configurable === true
       ) {

@@ -1,5 +1,7 @@
 import type { ElementContent, Properties } from 'hast';
 
+import { setDeferredArrayItem } from '../utils/setDeferredArrayItem';
+
 const HOLE = 0;
 const TEXT = 1;
 const ELEMENT = 2;
@@ -165,46 +167,18 @@ export function decodeHastLines(
 
   for (let index = 0; index < lines.length; index++) {
     if (ops[offsets[index * 2]] === HOLE) continue;
-    defineDecodedLine(lines, index, () => {
-      position = offsets[index * 2];
-      textPosition = offsets[index * 2 + 1];
-      return decodeNodes(1)[0];
-    });
+    // The encoded buffers outlive every row, so rows are re-decoded on read
+    // rather than kept as a second copy of the whole result.
+    setDeferredArrayItem(
+      lines,
+      index,
+      () => {
+        position = offsets[index * 2];
+        textPosition = offsets[index * 2 + 1];
+        return decodeNodes(1)[0];
+      },
+      { retain: false }
+    );
   }
   return lines;
-}
-
-function defineDecodedLine(
-  lines: ElementContent[],
-  index: number,
-  decode: () => ElementContent
-): void {
-  let assigned = false;
-  let value: ElementContent | undefined;
-  Object.defineProperty(lines, index, {
-    configurable: true,
-    enumerable: true,
-    get() {
-      return assigned ? value : decode();
-    },
-    set(next: ElementContent) {
-      if (
-        Object.getOwnPropertyDescriptor(lines, index)?.configurable === true
-      ) {
-        Object.defineProperty(lines, index, {
-          configurable: true,
-          enumerable: true,
-          writable: true,
-          value: next,
-        });
-      } else if (Object.isFrozen(lines)) {
-        throw new TypeError(
-          `Cannot assign to read only array index '${index}'`
-        );
-      } else {
-        value = next;
-        assigned = true;
-      }
-    },
-  });
 }

@@ -32,6 +32,30 @@ describe('deferred array entries', () => {
     });
   }
 
+  test('retain: false rebuilds the value on every read and keeps assignments', () => {
+    let calls = 0;
+    const array: object[] = [];
+    setDeferredArrayItem(array, 0, () => ({ calls: ++calls }), {
+      retain: false,
+    });
+    expect(array[0]).toEqual({ calls: 1 });
+    expect(array[0]).toEqual({ calls: 2 });
+    expect(Object.getOwnPropertyDescriptor(array, '0')?.get).toBeDefined();
+    const replacement = { calls: -1 };
+    array[0] = replacement;
+    expect(array[0]).toBe(replacement);
+    expect(calls).toBe(2);
+
+    const sealed: object[] = [];
+    setDeferredArrayItem(sealed, 0, () => ({ calls: ++calls }), {
+      retain: false,
+    });
+    Object.seal(sealed);
+    expect(sealed[0]).not.toBe(sealed[0]);
+    sealed[0] = replacement;
+    expect(sealed[0]).toBe(replacement);
+  });
+
   test('sealed entries can be overwritten without evaluating the old value', () => {
     let calls = 0;
     const array: string[] = [];
