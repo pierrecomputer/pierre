@@ -131,7 +131,9 @@ fn same_tokens(input: &[u8], mode3: &[u8], recs: &[Rec]) -> bool {
         start = r.end as usize;
     }
     let pairs: Vec<(u32, u32)> = mode3
-        .chunks_exact(8)
+        .as_chunks::<8>()
+        .0
+        .iter()
         .map(|c| {
             (
                 u32::from_le_bytes(c[..4].try_into().unwrap()),
