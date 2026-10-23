@@ -430,6 +430,33 @@ void t.test('bash: a backslash line join keeps the command open', () => {
         ['b c', 'variable'],
       ],
     ],
+    // a run of joins keeps a `#` heading the last joined line a comment, so
+    // the apostrophe in it does not open a string
+    [
+      "printf 'first\\n' \\\n\\\n# don't treat this as a quote\nprintf 'second\\n'\n",
+      [
+        ['printf', 'function'],
+        ["'first\\n'", 'string'],
+        ['\\', 'punctuation.special'],
+        ['\\', 'punctuation.special'],
+        ["# don't treat this as a quote", 'comment'],
+        ['printf', 'function'],
+        ["'second\\n'", 'string'],
+      ],
+    ],
+    // a join after a word, then a joined `\$`, still ends the join
+    [
+      'echo a \\\n\\$x#y\n',
+      [
+        ['echo', 'function'],
+        ['a', 'variable'],
+        ['\\', 'punctuation.special'],
+        ['\\$', 'string.escape'],
+        ['x', 'variable'],
+        ['#', null],
+        ['y', 'variable'],
+      ],
+    ],
     // a trailing `\` with no line break after it still reads as a join
     [
       'docker run \\',

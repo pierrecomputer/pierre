@@ -344,7 +344,8 @@
   ;; Keywords apply only there, except a pending `in`. A `\` before a line
   ;; break joins the next line, so the command continues there. $joined is 1
   ;; from a join that followed a blank or a command position until the next
-  ;; token, so a `#` heading the joined line still starts a comment.
+  ;; token other than another join, so a `#` heading the joined line still
+  ;; starts a comment.
   ;; $flow stores statement state across chunks:
   ;; - Bits 0-1: 1 after `case`, 2 in a pattern (only `esac` is a keyword),
   ;;   3 in an arm body.
@@ -459,7 +460,17 @@
           (then
             (call $lexLineComment (i32.const 1) (enum.get $Token.comment))
             (br $next)))
-        (local.set $joined (i32.const 0))
+        ;; any token but another join - a `\` before a line break or at the
+        ;; range end - ends the join; a run of joins such as `a \` + `\` +
+        ;; `# c` keeps the `#` a comment
+        (local.set $joined
+          (i32.and
+            (local.get $joined)
+            (i32.and
+              (i32.eq (local.get $c) (i32.const 92))
+              (i32.or
+                (i32.ge_u (i32.add (global.get $ptr) (i32.const 1)) (global.get $end))
+                (i32.or (i32.eq (local.get $c2) (i32.const 10)) (i32.eq (local.get $c2) (i32.const 13)))))))
         (if (i32.eq (local.get $c) (i32.const 39))
           (then
             (call $lexRawString (i32.const 39) (i32.const 1) (enum.get $Token.string))
@@ -537,7 +548,9 @@
                     ;; a blank or at a command position leaves a `#` that
                     ;; comments
                     (local.set $joined
-                      (i32.or (local.get $cmd) (i32.lt_u (local.get $gap) (local.get $lhs))))))
+                      (i32.or
+                        (local.get $joined)
+                        (i32.or (local.get $cmd) (i32.lt_u (local.get $gap) (local.get $lhs)))))))
                 (br $next)))
             (global.set $ptr (call $lexEscapeEnd (global.get $ptr)))
             (call $emitTok (enum.get $Token.string.escape) (local.get $lhs) (global.get $ptr))
