@@ -29,5 +29,4 @@ export type {
   CSSPane,
   CSSRect,
   CSSSeparator,
-  CSSVariables,
 } from './css-layout';

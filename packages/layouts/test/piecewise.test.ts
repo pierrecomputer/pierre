@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { computePiecewiseCSSLayout } from '../src/css-layout';
+import { computeCSSLayout } from '../src/css-layout';
 import { computeLayout } from '../src/geometry';
 import {
   add,
@@ -56,10 +56,13 @@ function evaluateCSS(value: string, containerSize: number): number {
   let total = 0;
   for (const term of terms) {
     const hinge =
-      /^(-?[\d.e-]+) \* max\(0px, 100cq[wh] - (-?[\d.e-]+)px\)$/.exec(term);
+      /^(?:(-?[\d.e-]+) \* )?max\(0px, 100cq[wh] - (-?[\d.e-]+)px\)$/.exec(
+        term
+      );
     const linear = /^(-?[\d.e-]+) \* 100cq[wh]$/.exec(term);
     if (hinge !== null)
-      total += Number(hinge[1]) * Math.max(0, containerSize - Number(hinge[2]));
+      total +=
+        Number(hinge[1] ?? 1) * Math.max(0, containerSize - Number(hinge[2]));
     else if (linear !== null) total += Number(linear[1]) * containerSize;
     else if (/^100cq[wh]$/.test(term)) total += containerSize;
     else if (term.endsWith('px')) total += Number(term.slice(0, -2));
@@ -93,11 +96,10 @@ describe('piecewise', () => {
       'calc(-6px + 0.25 * 100cqw)'
     );
     expect(toCSS(max(constant(0), add(x, constant(-8))), '100cqw')).toBe(
-      'calc(1 * max(0px, 100cqw - 8px))'
+      'calc(max(0px, 100cqw - 8px))'
     );
-    // Without hinges, only the form for large sizes remains.
-    expect(toCSS(max(constant(0), add(x, constant(-8))), '100cqw', false)).toBe(
-      'calc(-8px + 100cqw)'
+    expect(toCSS(min(scale(x, 0.5), add(x, constant(-40))), '100cqw')).toBe(
+      'calc(-40px + 100cqw + -0.5 * max(0px, 100cqw - 80px))'
     );
   });
 
@@ -106,7 +108,7 @@ describe('piecewise', () => {
     for (let tree = 0; tree < 200; tree++) {
       const root = randomTree(next, 1 + Math.floor(next() * 24));
       const gap = next() < 0.2 ? 0 : Math.round(next() * 16);
-      const css = computePiecewiseCSSLayout(root, gap);
+      const css = computeCSSLayout(root, gap);
       const panes = new Map(css.panes.map(({ pane, rect }) => [pane.id, rect]));
       const separators = new Map(
         css.separators.map(({ split, rect }) => [split.id, rect])

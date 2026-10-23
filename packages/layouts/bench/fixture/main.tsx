@@ -47,11 +47,6 @@ const weight: ContentWeight =
   requestedWeight === 'heavy' || requestedWeight === 'real'
     ? requestedWeight
     : 'light';
-const requestedGeometry = params.get('geometry');
-const geometry =
-  requestedGeometry === 'piecewise' || requestedGeometry === 'linear'
-    ? requestedGeometry
-    : 'registered';
 const paneIds = Array.from({ length: paneCount }, (_, index) => `p${index}`);
 const indexOf = new Map(paneIds.map((id, index) => [id, index]));
 
@@ -141,7 +136,6 @@ function Bench(): JSX.Element {
         renderPane={renderPane}
         getPaneTitle={title}
         label="Benchmark workspace"
-        experimentalGeometry={geometry}
       />
     </div>
   );

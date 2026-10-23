@@ -17,7 +17,7 @@ import {
   useSyncExternalStore,
 } from 'react';
 
-import { computeCSSLayout, computePiecewiseCSSLayout } from '../css-layout';
+import { computeCSSLayout } from '../css-layout';
 import { computeLayout, getExitEdge } from '../geometry';
 import { getPanes } from '../model';
 import type { LayoutStore } from '../store';
@@ -38,13 +38,6 @@ export interface LayoutProps {
   gap?: number;
   /** Accessible name of the workspace. */
   label?: string;
-  /**
-   * Experimental, for `explore-geometry-linear-form`: `registered` sets
-   * geometry as registered custom properties, `piecewise` as one value for
-   * each property, and `linear` as that value without the terms for small
-   * containers (to measure their cost; not exact below the minimum sizes).
-   */
-  experimentalGeometry?: 'registered' | 'piecewise' | 'linear';
 }
 
 interface ResizeGesture {
@@ -180,41 +173,6 @@ const PaneBody = memo(function PaneBody({
   return <div className="pierre-layout-content">{renderPane(pane)}</div>;
 });
 
-// Geometry variables are named by box index: `--layout-box-<index>-<side>`.
-const BOX_SIDES = ['left', 'top', 'width', 'height'] as const;
-// Registering a property restyles the whole document, so the view registers
-// names in blocks before it needs them, not one box at a time.
-const REGISTRATION_BLOCK = 256;
-let registeredBoxes = 0;
-
-/**
- * Register the geometry variables as `<length>` properties that do not
- * inherit. Each element carries the variables of its own geometry, so a ratio
- * change does not recalculate the style of pane content through inheritance.
- */
-function registerGeometryVariables(boxes: number): void {
-  if (boxes <= registeredBoxes) return;
-  if (typeof CSS === 'undefined' || !('registerProperty' in CSS)) return;
-  const target = Math.ceil(boxes / REGISTRATION_BLOCK) * REGISTRATION_BLOCK;
-  for (let index = registeredBoxes; index < target; index++) {
-    for (const side of BOX_SIDES) {
-      try {
-        // A typed property computes to pixels, so a variable that refers to
-        // another one does not carry its whole calc() expression along.
-        CSS.registerProperty({
-          name: `--layout-box-${index}-${side}`,
-          syntax: '<length>',
-          inherits: false,
-          initialValue: '0px',
-        });
-      } catch {
-        // Another copy of the view on the page registered it already.
-      }
-    }
-  }
-  registeredBoxes = target;
-}
-
 // The box of a zoomed pane and of the focus indicator while a pane is zoomed.
 const FULL_SIZE: CSSProperties = {
   left: 0,
@@ -266,7 +224,6 @@ export function Layout({
   style,
   gap = 8,
   label = 'Workspace',
-  experimentalGeometry = 'registered',
 }: LayoutProps): JSX.Element {
   const rootRef = useRef<HTMLDivElement>(null);
   const gesture = useRef<ResizeGesture | MoveGesture | null>(null);
@@ -328,46 +285,30 @@ export function Layout({
   // The store keeps the tree on focus and zoom changes, so this runs only when
   // the tree or the gap changes.
   const geometry = useMemo(
-    () =>
-      experimentalGeometry === 'registered'
-        ? computeCSSLayout(state.root, gap)
-        : computePiecewiseCSSLayout(
-            state.root,
-            gap,
-            experimentalGeometry === 'piecewise'
-          ),
-    [state.root, gap, experimentalGeometry]
+    () => computeCSSLayout(state.root, gap),
+    [state.root, gap]
   );
-  registerGeometryVariables(
-    Object.keys(geometry.variables).length / BOX_SIDES.length
-  );
-  // Style objects keep their identity while the tree does, so React does not
-  // compare their many custom properties again on a focus or zoom change.
+  // Style objects keep their identity while the tree does, so a focus or zoom
+  // change gives React the same objects to compare.
   const styles = useMemo(
     () => ({
       panes: new Map(
-        geometry.panes.map(
-          ({ pane, rect, variables }): [string, CSSProperties] => [
-            pane.id,
-            { ...variables, ...rect },
-          ]
-        )
+        geometry.panes.map(({ pane, rect }): [string, CSSProperties] => [
+          pane.id,
+          rect,
+        ])
       ),
       separators: new Map(
-        geometry.separators.map(
-          ({ split, rect, variables }): [string, CSSProperties] => [
-            split.id,
-            { ...variables, ...rect },
-          ]
-        )
+        geometry.separators.map(({ split, rect }): [string, CSSProperties] => [
+          split.id,
+          rect,
+        ])
       ),
       corners: new Map(
-        geometry.corners.map(
-          ({ id, left, top, variables }): [string, CSSProperties] => [
-            id,
-            { ...variables, left, top },
-          ]
-        )
+        geometry.corners.map(({ id, left, top }): [string, CSSProperties] => [
+          id,
+          { left, top },
+        ])
       ),
     }),
     [geometry]

@@ -73,12 +73,13 @@ Ratios describe the first child's preferred share of space, excluding the gap.
 The React view generates CSS container-unit expressions from the split tree. The
 browser resolves panel bounds, gaps, and minimum-size constraints during
 container resizing, without JavaScript measurements or React size updates. Each
-pane host, separator, and corner carries the custom properties of its own
-geometry, registered with `inherits: false`, so a ratio change restyles only the
-elements that move, not the pane content inside them. The view registers these
-properties in blocks of 256 boxes, because each registration restyles the
-document. Pane hosts stay flat and stable so moving a pane preserves its
-content. JavaScript computes pixel geometry only for pointer/keyboard
+edge of each box is a piecewise-linear function of the container size, so each
+pane host, separator, and corner gets one short value for each property, such as
+`calc(-6px + 0.25 * 100cqw)`, with one `max(0px, 100cqw - 216px)` term for each
+size at which a minimum size or a gap starts to apply. The values use no custom
+properties, so a ratio change restyles only the elements that move, not the pane
+content inside them. Pane hosts stay flat and stable so moving a pane preserves
+its content. JavaScript computes pixel geometry only for pointer/keyboard
 interactions and zoom exit directions. A ResizeObserver finishes an in-progress
 discrete animation when the container changes size; it does not calculate panel
 bounds. `computeCSSLayout(root, gap)` exposes these expressions for other CSS

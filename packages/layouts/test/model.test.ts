@@ -141,31 +141,18 @@ describe('geometry', () => {
 });
 
 describe('css layout', () => {
-  test('each element carries every variable that its geometry uses', () => {
+  test('each element gets container-unit values and no custom properties', () => {
     const layout = computeCSSLayout(root);
-    const elements = [
-      ...layout.panes.map(({ rect, variables }) => ({ rect, variables })),
-      ...layout.separators.map(({ rect, variables }) => ({ rect, variables })),
+    const values = [
+      ...layout.panes.flatMap(({ rect }) => Object.values(rect)),
+      ...layout.separators.flatMap(({ rect }) => Object.values(rect)),
+      ...layout.corners.flatMap(({ left, top }) => [left, top]),
     ];
-    const reference = /var\((--layout-box-[\w-]+)\)/g;
-    for (const { rect, variables } of elements) {
-      const pending = Object.values(rect).flatMap((value) =>
-        Array.from(
-          value.matchAll(reference),
-          (match: RegExpMatchArray) => match[1]
-        )
-      );
-      for (let name = pending.pop(); name !== undefined; name = pending.pop()) {
-        expect(variables[name]).toBe(layout.variables[name]);
-        for (const match of variables[name].matchAll(reference))
-          pending.push(match[1]);
-      }
+    expect(values.length).toBeGreaterThan(0);
+    for (const value of values) {
+      expect(value).not.toContain('var(');
+      expect(value).toMatch(/^(calc\(.*\)|-?[\d.]+px|100cq[wh])$/);
     }
-    // A pane near the root needs fewer variables than the whole tree.
-    const files = layout.panes.find(({ pane }) => pane.id === 'files');
-    expect(Object.keys(files?.variables ?? {}).length).toBeLessThan(
-      Object.keys(layout.variables).length
-    );
   });
 });
 

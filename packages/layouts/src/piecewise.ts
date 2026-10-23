@@ -143,33 +143,22 @@ const format = (value: number): string => String(Number(value.toPrecision(8)));
 
 /**
  * Write `f` as one CSS value of the container size `unit` (`100cqw`):
- * `f(0) + s0 × size + Σ (sᵢ − sᵢ₋₁) × max(0px, size − xᵢ)`. Each knot adds
- * one hinge term. `hinges: false` writes only the segment after the last
- * knot, which is exact only for sizes after that knot.
+ * `f(0) + s0 × size + Σ (sᵢ − sᵢ₋₁) × max(0px, size − xᵢ)`, where sᵢ is the
+ * slope after knot xᵢ. Each knot adds one hinge term, which is 0 below it.
  */
-export function toCSS(f: Piecewise, unit: string, hinges = true): string {
+export function toCSS(f: Piecewise, unit: string): string {
   const rates = slopes(f);
-  let start = f.ys[0];
-  let rate = rates[0];
-  let knots = f.xs.map((x, index) => ({
-    x,
-    change: index === 0 ? 0 : rates[index] - rates[index - 1],
-  }));
-  if (!hinges) {
-    const last = f.xs.length - 1;
-    start = f.ys[last] - f.slope * f.xs[last];
-    rate = f.slope;
-    knots = [];
-  }
   const terms: string[] = [];
-  if (Math.abs(rate) > EPSILON)
-    terms.push(rate === 1 ? unit : `${format(rate)} * ${unit}`);
-  for (const { x, change } of knots) {
-    if (x === 0 || Math.abs(change) <= EPSILON) continue;
-    terms.push(`${format(change)} * max(0px, ${unit} - ${format(x)}px)`);
+  if (Math.abs(rates[0]) > EPSILON)
+    terms.push(rates[0] === 1 ? unit : `${format(rates[0])} * ${unit}`);
+  for (let index = 1; index < f.xs.length; index++) {
+    const change = rates[index] - rates[index - 1];
+    if (Math.abs(change) <= EPSILON) continue;
+    const hinge = `max(0px, ${unit} - ${format(f.xs[index])}px)`;
+    terms.push(change === 1 ? hinge : `${format(change)} * ${hinge}`);
   }
-  if (Math.abs(start) > EPSILON || terms.length === 0)
-    terms.unshift(`${format(start)}px`);
+  if (Math.abs(f.ys[0]) > EPSILON || terms.length === 0)
+    terms.unshift(`${format(f.ys[0])}px`);
   if (terms.length === 1 && !terms[0].includes(' ')) return terms[0];
   return `calc(${terms.join(' + ')})`;
 }
