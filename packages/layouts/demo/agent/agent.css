@@ -1,0 +1,108 @@
+.agent-files,
+.agent-editor,
+.agent-terminal {
+  height: 100%;
+}
+
+.agent-editor {
+  overflow: auto;
+}
+
+.agent-terminal {
+  box-sizing: border-box;
+  padding: 6px 0 0 8px;
+  background: #11161d;
+}
+
+.agent-chat {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.agent-chat-log {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 14px;
+  min-height: 0;
+  padding: 14px 16px;
+  overflow: auto;
+}
+
+.agent-message header {
+  margin-bottom: 2px;
+  color: #6b7480;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.agent-message p {
+  margin: 0;
+}
+
+.agent-message-user p {
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: #eef2f8;
+}
+
+.agent-tool {
+  margin-top: 6px;
+  padding: 4px 8px;
+  border: 1px solid #dce1e8;
+  border-radius: 6px;
+  color: #4b5563;
+  font-family: ui-monospace, monospace;
+  font-size: 11px;
+}
+
+.agent-message pre {
+  margin: 8px 0 0;
+  padding: 8px 10px;
+  overflow: auto;
+  border-radius: 6px;
+  background: #11161d;
+  color: #d5dde8;
+  font-size: 11px;
+}
+
+.agent-composer {
+  display: flex;
+  gap: 8px;
+  align-items: flex-end;
+  padding: 10px 12px;
+  border-top: 1px solid #dce1e8;
+}
+
+.agent-composer textarea {
+  flex: 1;
+  min-width: 0;
+  padding: 6px 8px;
+  resize: none;
+  border: 1px solid #ccd3dd;
+  border-radius: 8px;
+  font: inherit;
+}
+
+.agent-composer button {
+  padding: 6px 12px;
+  border: 0;
+  border-radius: 8px;
+  background: #5489ed;
+  color: #fff;
+}
+
+.agent-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}

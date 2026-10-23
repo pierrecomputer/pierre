@@ -1,6 +1,8 @@
 import {
   type CSSProperties,
   type JSX,
+  lazy,
+  Suspense,
   useState,
   useSyncExternalStore,
 } from 'react';
@@ -95,6 +97,40 @@ const explorer: LayoutNode = {
   },
 };
 
+// An agent workspace with real content: files, the agent chat, and an editor
+// above a terminal. Its content loads on first use.
+const agent: LayoutNode = {
+  type: 'split',
+  id: 'agent-left',
+  direction: 'horizontal',
+  ratio: 0.18,
+  first: { type: 'pane', id: 'files', minWidth: 160, minHeight: 100 },
+  second: {
+    type: 'split',
+    id: 'agent-main',
+    direction: 'horizontal',
+    ratio: 0.5,
+    first: { type: 'pane', id: 'agent', minWidth: 300, minHeight: 160 },
+    second: {
+      type: 'split',
+      id: 'agent-tools',
+      direction: 'vertical',
+      ratio: 0.62,
+      first: { type: 'pane', id: 'editor', minWidth: 240, minHeight: 120 },
+      second: { type: 'pane', id: 'terminal', minWidth: 240, minHeight: 100 },
+    },
+  },
+};
+
+const AGENT_TITLES: Partial<Record<string, string>> = {
+  files: 'Files',
+  agent: 'Agent',
+  editor: 'Editor',
+  terminal: 'Terminal',
+};
+
+const AgentPane = lazy(() => import('./agent'));
+
 const store = new LayoutStore(mosaic);
 let nextPane = 8;
 const colors = [
@@ -107,7 +143,8 @@ const colors = [
   '#f0f2f6',
 ];
 const title = (node: PaneNode): string =>
-  /^\d+$/.test(node.id) ? `Pane ${node.id}` : node.id;
+  AGENT_TITLES[node.id] ??
+  (/^\d+$/.test(node.id) ? `Pane ${node.id}` : node.id);
 
 function PaneContent({ pane: node }: { pane: PaneNode }): JSX.Element {
   const [count, setCount] = useState(0);
@@ -137,7 +174,14 @@ function PaneContent({ pane: node }: { pane: PaneNode }): JSX.Element {
   );
 }
 
-const renderPane = (node: PaneNode): JSX.Element => <PaneContent pane={node} />;
+const renderPane = (node: PaneNode): JSX.Element =>
+  AGENT_TITLES[node.id] === undefined ? (
+    <PaneContent pane={node} />
+  ) : (
+    <Suspense fallback={<div className="demo-loading">Loading…</div>}>
+      <AgentPane id={node.id} />
+    </Suspense>
+  );
 
 function Playground(): JSX.Element {
   const state = useSyncExternalStore(
@@ -202,6 +246,9 @@ function Playground(): JSX.Element {
           </button>
           <button type="button" onClick={() => store.setRoot(explorer)}>
             Explorer
+          </button>
+          <button type="button" onClick={() => store.setRoot(agent)}>
+            Agent
           </button>
           <button
             type="button"

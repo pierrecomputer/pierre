@@ -20,8 +20,11 @@ moon run layouts:dev-demo
 ```
 
 The playground runs on port 4176 plus the worktree port offset. It includes a
-numbered mosaic and a repo-explorer arrangement, editable notes and counters,
-and keyboard-accessible controls to split, move, save, and restore panes.
+numbered mosaic, a repo-explorer arrangement, and an agent workspace with real
+content: a `@pierre/trees` file tree, an agent chat that streams its replies, an
+editable `@pierre/diffs` CodeView, and an xterm.js terminal. The mosaic and the
+explorer have editable notes and counters, and every view has
+keyboard-accessible controls to split, move, save, and restore panes.
 
 ## React
 

@@ -18,23 +18,24 @@ The status column records the result for the revision in the heading.
 
 ### Behavior
 
-| ID  | Behavior                                                                                                                                 | Check                                  | Status  |
-| --- | ---------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------- | ------- |
-| B1  | Split a pane to each of the four edges. The new pane takes half of the target's space.                                                   | `unit`                                 | pass    |
-| B2  | Close a pane. Its sibling takes its space, and focus moves to a remaining pane.                                                          | `unit`, `e2e` pointer rearrangement    | pass    |
-| B3  | Drag a pane by its grip to each edge of another pane. A drop indicator shows the result before the drop.                                 | `e2e` pointer rearrangement (one edge) | partial |
-| B4  | Move a pane with the keyboard only, with no pointer.                                                                                     | none; the library has no keyboard move | fail    |
-| B5  | Drag a separator. Each pane keeps its minimum size.                                                                                      | `e2e` pointer resizing                 | pass    |
-| B6  | Resize with the keyboard on a focused separator: arrows, Shift with arrows, Home, End, Enter.                                            | `e2e` keyboard limits                  | pass    |
-| B7  | Drag a corner where two separators meet. Both axes change.                                                                               | `e2e` corner dragging                  | pass    |
-| B8  | Zoom a pane to fill the layout, and restore it with its button or with Escape.                                                           | `e2e` zoom and rearrangement           | pass    |
-| B9  | Content keeps its state through move, zoom, split, and close of another pane: input values, component state, scroll position, and focus. | `e2e` zoom and rearrangement           | pass    |
-| B10 | A change of container size keeps the preferred ratios and the minimum sizes, with no script.                                             | `e2e` container resizing               | pass    |
-| B11 | Save the layout and restore it. The split tree is the same.                                                                              | `unit`, `e2e` saving and reloading     | pass    |
-| B12 | Restore rejects malformed saved state.                                                                                                   | `unit`                                 | pass    |
-| B13 | Escape or a pointer cancel during a drag restores the state before the drag.                                                             | `e2e` Escape cancellation              | pass    |
-| B14 | A pane can keep a fixed size in pixels when the container changes size, for example a 240 px file tree.                                  | none; the model has ratios only        | fail    |
-| B15 | Overlays: a modal overlay and a slide-in menu open over the workspace and close back to the element that opened them.                    | none; not built                        | n/a     |
+| ID  | Behavior                                                                                                                                 | Check                                        | Status  |
+| --- | ---------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------- | ------- |
+| B1  | Split a pane to each of the four edges. The new pane takes half of the target's space.                                                   | `unit`                                       | pass    |
+| B2  | Close a pane. Its sibling takes its space, and focus moves to a remaining pane.                                                          | `unit`, `e2e` pointer rearrangement          | pass    |
+| B3  | Drag a pane by its grip to each edge of another pane. A drop indicator shows the result before the drop.                                 | `e2e` pointer rearrangement (one edge)       | partial |
+| B4  | Move a pane with the keyboard only, with no pointer.                                                                                     | none; the library has no keyboard move       | fail    |
+| B5  | Drag a separator. Each pane keeps its minimum size.                                                                                      | `e2e` pointer resizing                       | pass    |
+| B6  | Resize with the keyboard on a focused separator: arrows, Shift with arrows, Home, End, Enter.                                            | `e2e` keyboard limits                        | pass    |
+| B7  | Drag a corner where two separators meet. Both axes change.                                                                               | `e2e` corner dragging                        | pass    |
+| B8  | Zoom a pane to fill the layout, and restore it with its button or with Escape.                                                           | `e2e` zoom and rearrangement                 | pass    |
+| B9  | Content keeps its state through move, zoom, split, and close of another pane: input values, component state, scroll position, and focus. | `e2e` zoom and rearrangement                 | pass    |
+| B10 | A change of container size keeps the preferred ratios and the minimum sizes, with no script.                                             | `e2e` container resizing                     | pass    |
+| B11 | Save the layout and restore it. The split tree is the same.                                                                              | `unit`, `e2e` saving and reloading           | pass    |
+| B12 | Restore rejects malformed saved state.                                                                                                   | `unit`                                       | pass    |
+| B13 | Escape or a pointer cancel during a drag restores the state before the drag.                                                             | `e2e` Escape cancellation                    | pass    |
+| B14 | A pane can keep a fixed size in pixels when the container changes size, for example a 240 px file tree.                                  | none; the model has ratios only              | fail    |
+| B15 | Overlays: a modal overlay and a slide-in menu open over the workspace and close back to the element that opened them.                    | none; not built                              | n/a     |
+| B16 | During a size animation, pane content keeps its shape: text and icons do not stretch.                                                    | manual: zoom a pane in the demo's agent view | fail    |
 
 ### Accessibility
 

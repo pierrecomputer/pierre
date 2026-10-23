@@ -212,3 +212,8 @@ h1 {
     margin-left: 0;
   }
 }
+.demo-loading {
+  padding: 12px;
+  color: #6b7480;
+  font-size: 12px;
+}
