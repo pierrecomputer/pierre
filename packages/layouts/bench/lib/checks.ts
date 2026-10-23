@@ -240,6 +240,14 @@ export const CHECKS: Check[] = [
     evaluate: ratio('append', 'layoutMs', [16, 'heavy'], [4, 'heavy'], 0.5),
   },
   {
+    id: 'append-time-independent-of-panes',
+    rule: 'independence-of-layers',
+    description:
+      'The main-thread time of output in one pane does not grow with the number of panes (heavy, 16 over 4).',
+    limit: `ratio ≤ ${GROWTH}`,
+    evaluate: ratio('append', 'mainThreadMs', [16, 'heavy'], [4, 'heavy'], 1),
+  },
+  {
     id: 'hidden-append-no-layout',
     rule: 'hidden-content',
     description:
