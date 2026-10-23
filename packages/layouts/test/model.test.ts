@@ -12,7 +12,6 @@ import {
   splitPane,
   swapPanes,
   validateLayout,
-  variablesFor,
 } from '../src';
 
 const root: LayoutNode = {
@@ -142,19 +141,31 @@ describe('geometry', () => {
 });
 
 describe('css layout', () => {
-  test('variablesFor returns the variables that a value uses, transitively', () => {
+  test('each element carries every variable that its geometry uses', () => {
     const layout = computeCSSLayout(root);
-    const terminal = layout.panes.find(({ pane }) => pane.id === 'terminal');
-    if (terminal === undefined) throw new Error('Missing terminal');
-    const own = variablesFor(layout, terminal.rect.left, terminal.rect.width);
-    const names = Object.keys(own);
-    expect(names.length).toBeGreaterThan(0);
-    expect(names.length).toBeLessThan(Object.keys(layout.variables).length);
-    // Each variable that a collected value refers to is also collected.
-    for (const value of Object.values(own)) {
-      for (const match of value.matchAll(/var\((--layout-box-[\w-]+)\)/g))
-        expect(own[match[1]]).toBe(layout.variables[match[1]]);
+    const elements = [
+      ...layout.panes.map(({ rect, variables }) => ({ rect, variables })),
+      ...layout.separators.map(({ rect, variables }) => ({ rect, variables })),
+    ];
+    const reference = /var\((--layout-box-[\w-]+)\)/g;
+    for (const { rect, variables } of elements) {
+      const pending = Object.values(rect).flatMap((value) =>
+        Array.from(
+          value.matchAll(reference),
+          (match: RegExpMatchArray) => match[1]
+        )
+      );
+      for (let name = pending.pop(); name !== undefined; name = pending.pop()) {
+        expect(variables[name]).toBe(layout.variables[name]);
+        for (const match of variables[name].matchAll(reference))
+          pending.push(match[1]);
+      }
     }
+    // A pane near the root needs fewer variables than the whole tree.
+    const files = layout.panes.find(({ pane }) => pane.id === 'files');
+    expect(Object.keys(files?.variables ?? {}).length).toBeLessThan(
+      Object.keys(layout.variables).length
+    );
   });
 });
 

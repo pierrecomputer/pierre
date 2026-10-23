@@ -8,14 +8,19 @@ export interface CSSRect {
   height: string;
 }
 
+/** The custom properties that one element's geometry uses, including the ones that those use. */
+export type CSSVariables = Readonly<Record<string, string>>;
+
 export interface CSSPane {
   pane: PaneNode;
   rect: CSSRect;
+  variables: CSSVariables;
 }
 
 export interface CSSSeparator {
   split: SplitNode;
   rect: CSSRect;
+  variables: CSSVariables;
 }
 
 export interface CSSCorner {
@@ -23,6 +28,7 @@ export interface CSSCorner {
   splitIds: readonly string[];
   left: string;
   top: string;
+  variables: CSSVariables;
 }
 
 export interface CSSLayout {
@@ -52,32 +58,6 @@ function boundarySplits(
   ];
 }
 
-const VARIABLE_REFERENCE = /var\((--layout-box-[\w-]+)\)/g;
-
-/**
- * The variables that some CSS values depend on, with the variables that those
- * depend on in turn. A view sets them on the element that uses the values, so
- * that a geometry change does not reach other elements through inheritance.
- */
-export function variablesFor(
-  layout: CSSLayout,
-  ...values: readonly string[]
-): Record<string, string> {
-  const result: Record<string, string> = {};
-  const pending = values.flatMap((value) =>
-    Array.from(value.matchAll(VARIABLE_REFERENCE), (match) => match[1])
-  );
-  for (let name = pending.pop(); name !== undefined; name = pending.pop()) {
-    if (name in result) continue;
-    const value = layout.variables[name];
-    if (value === undefined) continue;
-    result[name] = value;
-    for (const match of value.matchAll(VARIABLE_REFERENCE))
-      pending.push(match[1]);
-  }
-  return result;
-}
-
 /** Emit native CSS bounds once per tree change; container units resolve size without JS resize updates. */
 export function computeCSSLayout(root: LayoutNode, gap = 8): CSSLayout {
   if (!Number.isFinite(gap) || gap < 0)
@@ -87,18 +67,25 @@ export function computeCSSLayout(root: LayoutNode, gap = 8): CSSLayout {
   const separators: CSSSeparator[] = [];
   const corners: CSSCorner[] = [];
   let sequence = 0;
-  function rect(values: CSSRect): CSSRect {
+  // Each box gets four variables. Its scope holds them and the scope of the
+  // boxes that its values refer to, so each element can carry its own geometry.
+  function rect(
+    values: CSSRect,
+    scope: CSSVariables
+  ): { rect: CSSRect; scope: CSSVariables } {
     const prefix = `--layout-box-${sequence++}`;
     const result = { left: '', top: '', width: '', height: '' };
+    const own: Record<string, string> = { ...scope };
     for (const key of ['left', 'top', 'width', 'height'] as const) {
       variables[`${prefix}-${key}`] = values[key];
+      own[`${prefix}-${key}`] = values[key];
       result[key] = `var(${prefix}-${key})`;
     }
-    return result;
+    return { rect: result, scope: own };
   }
-  function visit(node: LayoutNode, bounds: CSSRect): void {
+  function visit(node: LayoutNode, bounds: CSSRect, scope: CSSVariables): void {
     if (node.type === 'pane') {
-      panes.push({ pane: node, rect: bounds });
+      panes.push({ pane: node, rect: bounds, variables: scope });
       return;
     }
     const horizontal = node.direction === 'horizontal';
@@ -112,28 +99,44 @@ export function computeCSSLayout(root: LayoutNode, gap = 8): CSSLayout {
       firstMin + secondMin === 0 ? 0.5 : firstMin / (firstMin + secondMin);
     const lower = `min(${firstMin}px, calc(${available} * ${share}))`;
     const upper = `max(${lower}, calc(${available} - ${secondMin}px))`;
-    const first = rect({
-      ...bounds,
-      [axis]: `clamp(${lower}, calc(${available} * ${node.ratio}), ${upper})`,
+    const first = rect(
+      {
+        ...bounds,
+        [axis]: `clamp(${lower}, calc(${available} * ${node.ratio}), ${upper})`,
+      },
+      scope
+    );
+    const handle = rect(
+      {
+        ...bounds,
+        [position]: `calc(${bounds[position]} + ${first.rect[axis]})`,
+        [axis]: actualGap,
+      },
+      first.scope
+    );
+    const second = rect(
+      {
+        ...bounds,
+        [position]: `calc(${handle.rect[position]} + ${actualGap})`,
+        [axis]: `calc(${available} - ${first.rect[axis]})`,
+      },
+      handle.scope
+    );
+    separators.push({
+      split: node,
+      rect: handle.rect,
+      variables: handle.scope,
     });
-    const handle = rect({
-      ...bounds,
-      [position]: `calc(${bounds[position]} + ${first[axis]})`,
-      [axis]: actualGap,
-    });
-    const second = rect({
-      ...bounds,
-      [position]: `calc(${handle[position]} + ${actualGap})`,
-      [axis]: `calc(${available} - ${first[axis]})`,
-    });
-    separators.push({ split: node, rect: handle });
-    visit(node.first, first);
-    visit(node.second, second);
+    visit(node.first, first.rect, first.scope);
+    visit(node.second, second.rect, second.scope);
   }
-  visit(
-    root,
-    rect({ left: '0px', top: '0px', width: '100cqw', height: '100cqh' })
+  // Each value uses one axis, so 100% of the containing block, the layout
+  // root, gives the root size without container units.
+  const whole = rect(
+    { left: '0px', top: '0px', width: '100%', height: '100%' },
+    {}
   );
+  visit(root, whole.rect, whole.scope);
   const byId = new Map(
     separators.map((separator) => [separator.split.id, separator])
   );
@@ -155,6 +158,7 @@ export function computeCSSLayout(root: LayoutNode, gap = 8): CSSLayout {
         splitIds: [h.split.id, v.split.id],
         left: `calc(${h.rect.left} + ${h.rect.width} / 2 - 7px)`,
         top: `calc(${v.rect.top} + ${v.rect.height} / 2 - 7px)`,
+        variables: { ...h.variables, ...v.variables },
       });
     }
   }

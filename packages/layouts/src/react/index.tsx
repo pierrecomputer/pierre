@@ -11,12 +11,13 @@ import {
   useEffect,
   useId,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
   useSyncExternalStore,
 } from 'react';
 
-import { computeCSSLayout, variablesFor } from '../css-layout';
+import { computeCSSLayout } from '../css-layout';
 import { computeLayout, getExitEdge } from '../geometry';
 import { getPanes } from '../model';
 import type { LayoutStore } from '../store';
@@ -305,14 +306,15 @@ export function Layout({
     store.getSnapshot,
     store.getSnapshot
   );
-  const geometry = computeCSSLayout(state.root, gap);
+  // The store keeps the tree on focus and zoom changes, so this runs only when
+  // the tree or the gap changes.
+  const geometry = useMemo(
+    () => computeCSSLayout(state.root, gap),
+    [state.root, gap]
+  );
   registerGeometryVariables(
     Object.keys(geometry.variables).length / BOX_SIDES.length
   );
-  // Each element carries only the variables that its own geometry uses, so a
-  // ratio change restyles only the elements that it moves, not their content.
-  const own = (...values: string[]): Record<string, string> =>
-    variablesFor(geometry, ...values);
   // Keep DOM order independent of tree traversal: detach/reinsert can reset scroll and focus.
   const paneHosts = [...geometry.panes].sort((a, b) =>
     a.pane.id < b.pane.id ? -1 : a.pane.id > b.pane.id ? 1 : 0
@@ -575,21 +577,24 @@ export function Layout({
         }
       }}
     >
-      {paneHosts.map(({ pane, rect }) => {
+      {paneHosts.map(({ pane, rect, variables }) => {
         const hidden =
           state.zoomedPane !== null && state.zoomedPane !== pane.id;
         const zoomed = state.zoomedPane === pane.id;
         const edge = exitEdges[pane.id] ?? 'left';
         // A covered pane keeps its geometry and moves past an edge with a
         // transform, so that it does not lay out its content again.
+        // A covered pane keeps its geometry and moves past an edge with a
+        // transform, so that it does not lay out its content again. One
+        // container size is always enough to leave the container.
         const exit =
           edge === 'left'
-            ? `translateX(calc(-1 * (${rect.left} + ${rect.width} + ${gap}px)))`
+            ? `translateX(calc(-100cqw - ${gap}px))`
             : edge === 'right'
-              ? `translateX(calc(100cqw - ${rect.left} + ${gap}px))`
+              ? `translateX(calc(100cqw + ${gap}px))`
               : edge === 'top'
-                ? `translateY(calc(-1 * (${rect.top} + ${rect.height} + ${gap}px)))`
-                : `translateY(calc(100cqh - ${rect.top} + ${gap}px))`;
+                ? `translateY(calc(-100cqh - ${gap}px))`
+                : `translateY(calc(100cqh + ${gap}px))`;
         return (
           <section
             key={pane.id}
@@ -609,12 +614,12 @@ export function Layout({
                 ? { left: 0, top: 0, width: '100%', height: '100%' }
                 : hidden
                   ? {
-                      ...own(rect.left, rect.top, rect.width, rect.height),
+                      ...variables,
                       ...rect,
                       transform: exit,
                     }
                   : {
-                      ...own(rect.left, rect.top, rect.width, rect.height),
+                      ...variables,
                       ...rect,
                     }
             }
@@ -663,12 +668,7 @@ export function Layout({
             state.zoomedPane !== null
               ? { left: 0, top: 0, width: '100%', height: '100%' }
               : {
-                  ...own(
-                    focused.rect.left,
-                    focused.rect.top,
-                    focused.rect.width,
-                    focused.rect.height
-                  ),
+                  ...focused.variables,
                   ...focused.rect,
                 }
           }
@@ -697,12 +697,7 @@ export function Layout({
             data-direction={separator.split.direction}
             data-layout-flip={`separator:${separator.split.id}`}
             style={{
-              ...own(
-                separator.rect.left,
-                separator.rect.top,
-                separator.rect.width,
-                separator.rect.height
-              ),
+              ...separator.variables,
               ...separator.rect,
             }}
             onPointerDown={(event) => startResize(event, [separator.split.id])}
@@ -717,7 +712,7 @@ export function Layout({
             className="pierre-layout-corner"
             aria-label="Resize both axes"
             style={{
-              ...own(corner.left, corner.top),
+              ...corner.variables,
               left: corner.left,
               top: corner.top,
             }}
