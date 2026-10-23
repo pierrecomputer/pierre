@@ -38,7 +38,18 @@ export interface LayoutProps {
   gap?: number;
   /** Accessible name of the workspace. */
   label?: string;
+  /**
+   * Experimental, for `explore-resize-drag-content-layout`: how a pointer
+   * resize applies its ratios. `live` writes them on each pointer move,
+   * `frame` once per animation frame, `preview` moves only the separator and
+   * writes them on release, and `freeze` writes them live but keeps the size
+   * of the content of the affected panes until the pointer pauses.
+   */
+  experimentalResize?: 'live' | 'frame' | 'preview' | 'freeze';
 }
+
+// Pause after which a frozen drag lets pane content take its new size.
+const FREEZE_PAUSE_MS = 150;
 
 interface ResizeGesture {
   type: 'resize';
@@ -228,6 +239,7 @@ export function Layout({
   style,
   gap = 8,
   label = 'Workspace',
+  experimentalResize = 'live',
 }: LayoutProps): JSX.Element {
   const rootRef = useRef<HTMLDivElement>(null);
   const gesture = useRef<ResizeGesture | MoveGesture | null>(null);
@@ -240,6 +252,16 @@ export function Layout({
 
   // Boxes before a store change, for the FLIP animation after React commits it.
   const boxesBefore = useRef<Map<string, Rect> | null>(null);
+  // DOM work of a pointer resize that React does not own, for the
+  // `experimentalResize` variants: a pending frame, the ratios that wait for
+  // it or for the release, moved separators, and frozen pane content.
+  const resizeWork = useRef<{
+    frame: number | null;
+    pending: Record<string, number> | null;
+    moved: HTMLElement[];
+    frozen: HTMLElement[];
+    pause: ReturnType<typeof setTimeout> | null;
+  }>({ frame: null, pending: null, moved: [], frozen: [], pause: null });
 
   // Animate model changes only. CSS owns continuous sizing, including while JS is busy.
   const subscribe = useCallback(
@@ -417,6 +439,111 @@ export function Layout({
     }
   }, [state.zoomedPane]);
 
+  /**
+   * Give the content of each pane under the dragged splits its current size in
+   * pixels, so that a ratio change resizes the pane hosts but does not lay out
+   * their content. All sizes are read before the first write.
+   */
+  function freezeContent(separators: readonly SeparatorGeometry[]): void {
+    const work = resizeWork.current;
+    const root = rootRef.current;
+    if (root === null || work.frozen.length > 0) return;
+    const ids = new Set(
+      separators.flatMap(({ split }) => getPanes(split).map(({ id }) => id))
+    );
+    const contents = Array.from(
+      root.querySelectorAll<HTMLElement>('[data-layout-pane]')
+    )
+      .filter((pane) => ids.has(pane.dataset.layoutPane ?? ''))
+      .map((pane) =>
+        pane.querySelector<HTMLElement>(':scope > .pierre-layout-content')
+      )
+      .filter((content) => content !== null);
+    const sizes = contents.map((content) => content.getBoundingClientRect());
+    contents.forEach((content, index) => {
+      content.style.flex = 'none';
+      content.style.width = `${sizes[index].width}px`;
+      content.style.height = `${sizes[index].height}px`;
+    });
+    work.frozen = contents;
+  }
+
+  function thawContent(): void {
+    const work = resizeWork.current;
+    for (const content of work.frozen) {
+      content.style.flex = '';
+      content.style.width = '';
+      content.style.height = '';
+    }
+    work.frozen = [];
+  }
+
+  /** Apply the ratios of one pointer move with the `experimentalResize` variant. */
+  function applyResize(
+    active: ResizeGesture,
+    ratios: Record<string, number>
+  ): void {
+    const work = resizeWork.current;
+    if (experimentalResize === 'frame') {
+      work.pending = ratios;
+      work.frame ??= requestAnimationFrame(() => {
+        work.frame = null;
+        if (work.pending !== null) store.setRatios(work.pending);
+        work.pending = null;
+      });
+      return;
+    }
+    if (experimentalResize === 'preview') {
+      work.pending = ratios;
+      const root = rootRef.current;
+      for (const separator of active.separators) {
+        const element = root?.querySelector<HTMLElement>(
+          `[data-layout-flip="separator:${CSS.escape(separator.split.id)}"]`
+        );
+        if (element === null || element === undefined) continue;
+        const horizontal = separator.split.direction === 'horizontal';
+        const available = horizontal
+          ? separator.container.width - separator.rect.width
+          : separator.container.height - separator.rect.height;
+        const offset =
+          ((ratios[separator.split.id] ?? separator.ratio) - separator.ratio) *
+          available;
+        element.style.transform = horizontal
+          ? `translateX(${offset}px)`
+          : `translateY(${offset}px)`;
+        element.dataset.preview = 'true';
+        if (!work.moved.includes(element)) work.moved.push(element);
+      }
+      return;
+    }
+    if (experimentalResize === 'freeze') {
+      freezeContent(active.separators);
+      if (work.pause !== null) clearTimeout(work.pause);
+      work.pause = setTimeout(thawContent, FREEZE_PAUSE_MS);
+    }
+    store.setRatios(ratios);
+  }
+
+  /** End the variant's work. Commit while the gesture is active, so that the last ratios do not animate. */
+  function endResize(cancel: boolean): void {
+    const work = resizeWork.current;
+    if (work.frame !== null) cancelAnimationFrame(work.frame);
+    if (work.pause !== null) clearTimeout(work.pause);
+    if (!cancel && work.pending !== null) store.setRatios(work.pending);
+    for (const element of work.moved) {
+      element.style.transform = '';
+      delete element.dataset.preview;
+    }
+    thawContent();
+    resizeWork.current = {
+      frame: null,
+      pending: null,
+      moved: [],
+      frozen: [],
+      pause: null,
+    };
+  }
+
   function startResize(
     event: PointerEvent<HTMLElement>,
     ids: readonly string[]
@@ -486,7 +613,7 @@ export function Layout({
           Math.min(separator.maxRatio, separator.ratio + delta / available)
         );
       }
-      store.setRatios(ratios);
+      applyResize(active, ratios);
     } else {
       if (Math.hypot(event.clientX - active.x, event.clientY - active.y) < 4)
         return;
@@ -518,6 +645,7 @@ export function Layout({
       (pointerId !== undefined && active.pointerId !== pointerId)
     )
       return;
+    if (active.type === 'resize') endResize(cancel);
     gesture.current = null;
     if (active.type === 'resize' && cancel)
       store.setRatios(active.originalRatios);

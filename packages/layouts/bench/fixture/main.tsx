@@ -47,6 +47,13 @@ const weight: ContentWeight =
   requestedWeight === 'heavy' || requestedWeight === 'real'
     ? requestedWeight
     : 'light';
+const requestedResize = params.get('resize');
+const resize =
+  requestedResize === 'frame' ||
+  requestedResize === 'preview' ||
+  requestedResize === 'freeze'
+    ? requestedResize
+    : 'live';
 const paneIds = Array.from({ length: paneCount }, (_, index) => `p${index}`);
 const indexOf = new Map(paneIds.map((id, index) => [id, index]));
 
@@ -136,6 +143,7 @@ function Bench(): JSX.Element {
         renderPane={renderPane}
         getPaneTitle={title}
         label="Benchmark workspace"
+        experimentalResize={resize}
       />
     </div>
   );

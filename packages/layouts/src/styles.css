@@ -132,7 +132,8 @@
 }
 
 .pierre-layout-separator:hover,
-.pierre-layout-separator:focus-visible {
+.pierre-layout-separator:focus-visible,
+.pierre-layout-separator[data-preview='true'] {
   outline: none;
   background: var(--layout-accent);
 }
