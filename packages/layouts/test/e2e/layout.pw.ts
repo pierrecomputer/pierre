@@ -358,3 +358,35 @@ test('the focus indicator shows on another pane at once and moves with its pane'
   expect(zoom.animations).toBe(1);
   expect(zoom.offset).toBeLessThan(0.5);
 });
+
+test('a pane that changes size keeps the shape of its text during the animation', async ({
+  page,
+}) => {
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
+  // Sample the width-to-height ratio of a text element on each frame of a zoom.
+  const ratios = await page
+    .locator('[data-layout-pane="1"] .demo-pane-number')
+    .evaluate(
+      (element) =>
+        new Promise<number[]>((resolve) => {
+          const samples: number[] = [];
+          document
+            .querySelector<HTMLButtonElement>(
+              '[data-layout-pane="1"] button[aria-label^="Zoom"]'
+            )
+            ?.click();
+          const start = performance.now();
+          const tick = (): void => {
+            const box = element.getBoundingClientRect();
+            samples.push(box.width / box.height);
+            if (performance.now() - start < 400) requestAnimationFrame(tick);
+            else resolve(samples);
+          };
+          requestAnimationFrame(tick);
+        })
+    );
+  const end = ratios[ratios.length - 1];
+  expect(ratios.length).toBeGreaterThan(5);
+  for (const ratio of ratios)
+    expect(Math.abs(ratio / end - 1)).toBeLessThan(0.02);
+});

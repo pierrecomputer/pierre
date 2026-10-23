@@ -65,6 +65,12 @@ export interface LayoutProps {
    * is `freeze`, but the content takes its new size one pane per frame.
    */
   experimentalResize?: 'live' | 'frame' | 'preview' | 'freeze' | 'settle';
+  /**
+   * Experimental, for `explore-size-animation-without-stretch`: how a pane
+   * that changes size animates. `counter-scale` keeps its header and content
+   * in shape; `scale` scales them with the pane, as before.
+   */
+  experimentalSizeAnimation?: 'counter-scale' | 'scale';
 }
 
 // Pause after which a frozen drag lets pane content take its new size.
@@ -145,12 +151,24 @@ function durationOf(root: HTMLElement): number {
   return value.trim().endsWith('ms') ? parsed : parsed * 1000;
 }
 
+// Keyframes of the inverse scale of a pane's content. The inverse of a linear
+// scale is not linear, so it is sampled: 16 steps keep the content within a
+// fraction of a pixel of its own size.
+const COUNTER_SCALE_STEPS = 16;
+
 /**
  * FLIP: each element already has its final geometry. Animate it from its old box
  * with a transform only, so that the compositor runs the animation and content
- * lays out once. `transform-origin` is `0 0` on these elements.
+ * lays out once. `transform-origin` is `0 0` on these elements. With
+ * `counterScale`, the inner wrapper of a pane host gets the inverse of the
+ * host's scale on each frame, so its header and content keep their shape and
+ * the frame reveals or clips them, instead of stretching them.
  */
-function animateFromBoxes(root: HTMLElement, before: Map<string, Rect>): void {
+function animateFromBoxes(
+  root: HTMLElement,
+  before: Map<string, Rect>,
+  counterScale: boolean
+): void {
   const duration = durationOf(root);
   const bounds = root.getBoundingClientRect();
   // Read every box before the first animation starts: a new animation dirties
@@ -190,11 +208,33 @@ function animateFromBoxes(root: HTMLElement, before: Map<string, Rect>): void {
     ]);
     plans.push({ element, start, end });
   }
+  const timing: KeyframeAnimationOptions = {
+    duration,
+    easing: FLIP_EASING,
+    id: FLIP_ANIMATION_ID,
+  };
   for (const { element, start, end } of plans) {
     element.animate(
       [{ transform: start.toString() }, { transform: end.toString() }],
-      { duration, easing: FLIP_EASING, id: FLIP_ANIMATION_ID }
+      timing
     );
+    const inner = counterScale
+      ? element.querySelector<HTMLElement>(':scope > .pierre-layout-pane-inner')
+      : null;
+    if (inner === null || (start.a === end.a && start.d === end.d)) continue;
+    // Both animations share the timing, so at each eased progress the host's
+    // scale is the linear mix of its keyframes, and the inner scale undoes it.
+    const frames: Keyframe[] = [];
+    for (let step = 0; step <= COUNTER_SCALE_STEPS; step++) {
+      const progress = step / COUNTER_SCALE_STEPS;
+      const x = start.a + (end.a - start.a) * progress;
+      const y = start.d + (end.d - start.d) * progress;
+      frames.push({
+        offset: progress,
+        transform: `scale(${end.a / x}, ${end.d / y})`,
+      });
+    }
+    inner.animate(frames, timing);
   }
 }
 
@@ -299,6 +339,7 @@ export function Layout({
   paneActions = ALL_PANE_ACTIONS,
   onPaneClose,
   experimentalResize = 'live',
+  experimentalSizeAnimation = 'counter-scale',
 }: LayoutProps): JSX.Element {
   const rootRef = useRef<HTMLDivElement>(null);
   const gesture = useRef<ResizeGesture | MoveGesture | null>(null);
@@ -455,8 +496,13 @@ export function Layout({
     const element = rootRef.current;
     const before = boxesBefore.current;
     boxesBefore.current = null;
-    if (element !== null && before !== null) animateFromBoxes(element, before);
-  }, [state]);
+    if (element !== null && before !== null)
+      animateFromBoxes(
+        element,
+        before,
+        experimentalSizeAnimation === 'counter-scale'
+      );
+  }, [state, experimentalSizeAnimation]);
 
   useEffect(() => {
     const element = rootRef.current;
@@ -575,7 +621,9 @@ export function Layout({
     )
       .filter((pane) => ids.has(pane.dataset.layoutPane ?? ''))
       .map((pane) =>
-        pane.querySelector<HTMLElement>(':scope > .pierre-layout-content')
+        pane.querySelector<HTMLElement>(
+          ':scope > .pierre-layout-pane-inner > .pierre-layout-content'
+        )
       )
       .filter((content) => content !== null);
     const sizes = contents.map((content) => content.getBoundingClientRect());
@@ -910,42 +958,48 @@ export function Layout({
             onFocusCapture={() => store.focusPane(pane.id)}
             onPointerDown={() => store.focusPane(pane.id)}
           >
-            <header className="pierre-layout-header">
-              {actions.includes('move') && (
-                <button
-                  type="button"
-                  className="pierre-layout-grip"
-                  aria-label={`Drag ${getPaneTitle(pane)}`}
-                  title="Drag to move this pane beside another"
-                  disabled={state.zoomedPane !== null}
-                  onPointerDown={(event) => startMove(event, pane.id)}
-                >
-                  ⠿
-                </button>
-              )}
-              <span className="pierre-layout-title">{getPaneTitle(pane)}</span>
-              {actions.includes('zoom') && (
-                <button
-                  type="button"
-                  aria-label={`${zoomed ? 'Restore' : 'Zoom'} ${getPaneTitle(pane)}`}
-                  aria-pressed={zoomed}
-                  onClick={() => store.toggleZoom(pane.id)}
-                >
-                  {zoomed ? '↙' : '↗'}
-                </button>
-              )}
-              {actions.includes('close') && (
-                <button
-                  type="button"
-                  aria-label={`Close ${getPaneTitle(pane)}`}
-                  disabled={visibleCount === 1}
-                  onClick={() => closePane(pane)}
-                >
-                  ×
-                </button>
-              )}
-            </header>
-            <PaneBody pane={pane} renderPane={renderPane} />
+            {/* The inner wrapper takes the inverse of the host's FLIP scale,
+                so the header and the content keep their shape. */}
+            <div className="pierre-layout-pane-inner">
+              <header className="pierre-layout-header">
+                {actions.includes('move') && (
+                  <button
+                    type="button"
+                    className="pierre-layout-grip"
+                    aria-label={`Drag ${getPaneTitle(pane)}`}
+                    title="Drag to move this pane beside another"
+                    disabled={state.zoomedPane !== null}
+                    onPointerDown={(event) => startMove(event, pane.id)}
+                  >
+                    ⠿
+                  </button>
+                )}
+                <span className="pierre-layout-title">
+                  {getPaneTitle(pane)}
+                </span>
+                {actions.includes('zoom') && (
+                  <button
+                    type="button"
+                    aria-label={`${zoomed ? 'Restore' : 'Zoom'} ${getPaneTitle(pane)}`}
+                    aria-pressed={zoomed}
+                    onClick={() => store.toggleZoom(pane.id)}
+                  >
+                    {zoomed ? '↙' : '↗'}
+                  </button>
+                )}
+                {actions.includes('close') && (
+                  <button
+                    type="button"
+                    aria-label={`Close ${getPaneTitle(pane)}`}
+                    disabled={visibleCount === 1}
+                    onClick={() => closePane(pane)}
+                  >
+                    ×
+                  </button>
+                )}
+              </header>
+              <PaneBody pane={pane} renderPane={renderPane} />
+            </div>
           </section>
         );
       })}
