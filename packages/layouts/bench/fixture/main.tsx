@@ -54,6 +54,16 @@ const resize =
   requestedResize === 'freeze'
     ? requestedResize
     : 'live';
+// Experimental paint isolation of pane content, for the resize drag exploration.
+const isolate = params.get('isolate');
+if (isolate === 'contain' || isolate === 'layer') {
+  const sheet = document.createElement('style');
+  sheet.textContent =
+    isolate === 'contain'
+      ? '.pierre-layout-content { contain: strict; }'
+      : '.pierre-layout-pane { will-change: transform; }';
+  document.head.append(sheet);
+}
 const paneIds = Array.from({ length: paneCount }, (_, index) => `p${index}`);
 const indexOf = new Map(paneIds.map((id, index) => [id, index]));
 
