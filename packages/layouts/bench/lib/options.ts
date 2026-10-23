@@ -15,6 +15,8 @@ export interface BenchOptions {
   scenarios: string[];
   save: boolean;
   mode: 'headless' | 'headed';
+  /** Extra fixture parameters that select a variant, for example `geometry=host&contain=strict`. */
+  query: string;
 }
 
 /**
@@ -31,4 +33,5 @@ export const options: BenchOptions = {
   save: process.env.BENCH_SAVE !== '0',
   /** `headed` measures frames at the display rate; headless Chromium runs at 60 Hz. */
   mode: process.env.BENCH_MODE === 'headed' ? 'headed' : 'headless',
+  query: process.env.BENCH_QUERY ?? '',
 };

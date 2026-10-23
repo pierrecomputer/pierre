@@ -18,6 +18,7 @@ export default async function globalTeardown(): Promise<void> {
     runs: options.runs,
     warmupRuns: options.warmupRuns,
     bundle,
+    variant: options.query,
   });
   if (result === null) {
     console.log('[layouts:bench] No records to report.');

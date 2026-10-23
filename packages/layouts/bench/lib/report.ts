@@ -42,6 +42,8 @@ export interface Report {
     viewport: { width: number; height: number };
     runs: number;
     warmupRuns: number;
+    /** The fixture parameters that selected a variant, or an empty string. */
+    variant: string;
   };
   records: {
     scenario: string;
@@ -89,6 +91,7 @@ export function writeReport(options: {
   runs: number;
   warmupRuns: number;
   bundle: Record<string, BundleSize>;
+  variant: string;
 }): { path: string; report: Report } | null {
   const raw = findRecords(options.recordsDirectory).sort((a, b) => {
     if (a.scenario !== b.scenario) return a.scenario.localeCompare(b.scenario);
@@ -139,6 +142,7 @@ export function writeReport(options: {
       viewport: options.viewport,
       runs: options.runs,
       warmupRuns: options.warmupRuns,
+      variant: options.variant,
     },
     records,
     checks: evaluateChecks(summaries),
@@ -147,7 +151,8 @@ export function writeReport(options: {
 
   mkdirSync(options.resultsDirectory, { recursive: true });
   const date = report.createdAt.slice(0, 10);
-  const suffix = `${options.headless ? '' : '-headed'}${report.commit.dirty ? '-dirty' : ''}`;
+  const variant = options.variant.replace(/[^a-z0-9]+/gi, '-');
+  const suffix = `${variant === '' ? '' : `-${variant}`}${options.headless ? '' : '-headed'}${report.commit.dirty ? '-dirty' : ''}`;
   let name = `${date}-${sha.slice(0, 8)}${suffix}`;
   for (
     let index = 2;

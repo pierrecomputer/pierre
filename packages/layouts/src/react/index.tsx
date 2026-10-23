@@ -16,7 +16,7 @@ import {
   useSyncExternalStore,
 } from 'react';
 
-import { computeCSSLayout } from '../css-layout';
+import { computeCSSLayout, variablesFor } from '../css-layout';
 import { computeLayout, getExitEdge } from '../geometry';
 import { getPanes } from '../model';
 import type { LayoutStore } from '../store';
@@ -37,6 +37,15 @@ export interface LayoutProps {
   gap?: number;
   /** Accessible name of the workspace. */
   label?: string;
+  /**
+   * Experimental, for `explore-geometry-style-isolation`; removed when the
+   * exploration chooses a variant. Where the geometry variables live: on the
+   * layout root (`root`), on each element that uses them (`host`), or on each
+   * element as registered properties that do not inherit (`host-registered`).
+   */
+  experimentalGeometry?: 'root' | 'host' | 'host-registered';
+  /** Experimental: `contain: strict` on each pane host. */
+  experimentalContain?: boolean;
 }
 
 interface ResizeGesture {
@@ -172,6 +181,25 @@ const PaneBody = memo(function PaneBody({
   return <div className="pierre-layout-content">{renderPane(pane)}</div>;
 });
 
+const registeredVariables = new Set<string>();
+
+/**
+ * Register geometry variables so that they do not inherit: a change on a pane
+ * host then does not recalculate the style of the content inside it.
+ */
+function registerVariables(names: Iterable<string>): void {
+  if (typeof CSS === 'undefined' || !('registerProperty' in CSS)) return;
+  for (const name of names) {
+    if (registeredVariables.has(name)) continue;
+    registeredVariables.add(name);
+    try {
+      CSS.registerProperty({ name, syntax: '*', inherits: false });
+    } catch {
+      // Another layout on the page registered it already.
+    }
+  }
+}
+
 const rectStyle = (rect: Rect): CSSProperties => ({
   left: rect.x,
   top: rect.y,
@@ -215,6 +243,8 @@ export function Layout({
   style,
   gap = 8,
   label = 'Workspace',
+  experimentalGeometry = 'root',
+  experimentalContain = false,
 }: LayoutProps): JSX.Element {
   const rootRef = useRef<HTMLDivElement>(null);
   const gesture = useRef<ResizeGesture | MoveGesture | null>(null);
@@ -274,6 +304,13 @@ export function Layout({
     store.getSnapshot
   );
   const geometry = computeCSSLayout(state.root, gap);
+  const onRoot = experimentalGeometry === 'root';
+  if (experimentalGeometry === 'host-registered')
+    registerVariables(Object.keys(geometry.variables));
+  // With host geometry, each element carries only the variables that its own
+  // geometry uses, so a ratio change touches only the elements that it moves.
+  const own = (...values: string[]): Record<string, string> =>
+    onRoot ? {} : variablesFor(geometry, ...values);
   // Keep DOM order independent of tree traversal: detach/reinsert can reset scroll and focus.
   const paneHosts = [...geometry.panes].sort((a, b) =>
     a.pane.id < b.pane.id ? -1 : a.pane.id > b.pane.id ? 1 : 0
@@ -289,6 +326,18 @@ export function Layout({
     boxesBefore.current = null;
     if (element !== null && before !== null) animateFromBoxes(element, before);
   }, [state]);
+
+  useEffect(() => {
+    const element = rootRef.current;
+    if (element === null) return;
+    // No text selection during a gesture. An inherited style on the root,
+    // such as user-select, would recalculate the style of all pane content.
+    const preventSelection = (event: Event): void => {
+      if (gesture.current !== null) event.preventDefault();
+    };
+    element.addEventListener('selectstart', preventSelection);
+    return () => element.removeEventListener('selectstart', preventSelection);
+  }, []);
 
   useEffect(() => {
     const element = rootRef.current;
@@ -508,7 +557,8 @@ export function Layout({
     <div
       ref={rootRef}
       className={`pierre-layout ${className ?? ''}`}
-      style={{ ...geometry.variables, ...style }}
+      style={onRoot ? { ...geometry.variables, ...style } : style}
+      data-contain={experimentalContain ? 'strict' : undefined}
       role="group"
       aria-label={label}
       data-resizing={resizing}
@@ -557,8 +607,15 @@ export function Layout({
               zoomed
                 ? { left: 0, top: 0, width: '100%', height: '100%' }
                 : hidden
-                  ? { ...rect, transform: exit }
-                  : rect
+                  ? {
+                      ...own(rect.left, rect.top, rect.width, rect.height),
+                      ...rect,
+                      transform: exit,
+                    }
+                  : {
+                      ...own(rect.left, rect.top, rect.width, rect.height),
+                      ...rect,
+                    }
             }
             onFocusCapture={() => store.focusPane(pane.id)}
             onPointerDown={() => store.focusPane(pane.id)}
@@ -604,7 +661,15 @@ export function Layout({
           style={
             state.zoomedPane !== null
               ? { left: 0, top: 0, width: '100%', height: '100%' }
-              : focused.rect
+              : {
+                  ...own(
+                    focused.rect.left,
+                    focused.rect.top,
+                    focused.rect.width,
+                    focused.rect.height
+                  ),
+                  ...focused.rect,
+                }
           }
         />
       )}
@@ -630,7 +695,15 @@ export function Layout({
             aria-valuetext={`${Math.round(separator.split.ratio * 100)}% preferred size`}
             data-direction={separator.split.direction}
             data-layout-flip={`separator:${separator.split.id}`}
-            style={separator.rect}
+            style={{
+              ...own(
+                separator.rect.left,
+                separator.rect.top,
+                separator.rect.width,
+                separator.rect.height
+              ),
+              ...separator.rect,
+            }}
             onPointerDown={(event) => startResize(event, [separator.split.id])}
             onKeyDown={(event) => resizeKey(event, [separator.split.id])}
           />
@@ -642,7 +715,11 @@ export function Layout({
             type="button"
             className="pierre-layout-corner"
             aria-label="Resize both axes"
-            style={{ left: corner.left, top: corner.top }}
+            style={{
+              ...own(corner.left, corner.top),
+              left: corner.left,
+              top: corner.top,
+            }}
             data-layout-corner={corner.id}
             data-layout-flip={`corner:${corner.id}`}
             onPointerDown={(event) => startResize(event, corner.splitIds)}

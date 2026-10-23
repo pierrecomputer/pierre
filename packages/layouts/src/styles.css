@@ -12,10 +12,21 @@
   font-family: inherit;
 }
 
-.pierre-layout *,
-.pierre-layout *::before,
-.pierre-layout *::after {
+/* Style the layout's own elements only; pane content belongs to the app. */
+.pierre-layout-pane,
+.pierre-layout-header,
+.pierre-layout-header *,
+.pierre-layout-content,
+.pierre-layout-focus,
+.pierre-layout-separator,
+.pierre-layout-corner,
+.pierre-layout-drop {
   box-sizing: border-box;
+}
+
+/* Experimental: each pane host is a layout and paint boundary. */
+.pierre-layout[data-contain='strict'] > .pierre-layout-pane {
+  contain: strict;
 }
 
 .pierre-layout-pane {
@@ -149,11 +160,6 @@
   background: var(--layout-accent);
   outline: 2px solid var(--layout-accent);
   outline-offset: 2px;
-}
-
-.pierre-layout[data-resizing='true'],
-.pierre-layout[data-dragging='true'] {
-  user-select: none;
 }
 
 .pierre-layout-drop {

@@ -22,7 +22,7 @@ export type {
   SeparatorGeometry,
   SplitNode,
 } from './types';
-export { computeCSSLayout } from './css-layout';
+export { computeCSSLayout, variablesFor } from './css-layout';
 export type {
   CSSCorner,
   CSSLayout,

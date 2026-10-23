@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 
 import {
+  computeCSSLayout,
   computeLayout,
   getExitEdge,
   getPanes,
@@ -11,6 +12,7 @@ import {
   splitPane,
   swapPanes,
   validateLayout,
+  variablesFor,
 } from '../src';
 
 const root: LayoutNode = {
@@ -136,6 +138,23 @@ describe('geometry', () => {
     expect(
       getExitEdge({ x: 300, y: 400, width: 100, height: 200 }, 1000, 600)
     ).toBe('bottom');
+  });
+});
+
+describe('css layout', () => {
+  test('variablesFor returns the variables that a value uses, transitively', () => {
+    const layout = computeCSSLayout(root);
+    const terminal = layout.panes.find(({ pane }) => pane.id === 'terminal');
+    if (terminal === undefined) throw new Error('Missing terminal');
+    const own = variablesFor(layout, terminal.rect.left, terminal.rect.width);
+    const names = Object.keys(own);
+    expect(names.length).toBeGreaterThan(0);
+    expect(names.length).toBeLessThan(Object.keys(layout.variables).length);
+    // Each variable that a collected value refers to is also collected.
+    for (const value of Object.values(own)) {
+      for (const match of value.matchAll(/var\((--layout-box-[\w-]+)\)/g))
+        expect(own[match[1]]).toBe(layout.variables[match[1]]);
+    }
   });
 });
 

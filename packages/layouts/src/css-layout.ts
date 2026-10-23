@@ -52,6 +52,32 @@ function boundarySplits(
   ];
 }
 
+const VARIABLE_REFERENCE = /var\((--layout-box-[\w-]+)\)/g;
+
+/**
+ * The variables that some CSS values depend on, with the variables that those
+ * depend on in turn. A view sets them on the element that uses the values, so
+ * that a geometry change does not reach other elements through inheritance.
+ */
+export function variablesFor(
+  layout: CSSLayout,
+  ...values: readonly string[]
+): Record<string, string> {
+  const result: Record<string, string> = {};
+  const pending = values.flatMap((value) =>
+    Array.from(value.matchAll(VARIABLE_REFERENCE), (match) => match[1])
+  );
+  for (let name = pending.pop(); name !== undefined; name = pending.pop()) {
+    if (name in result) continue;
+    const value = layout.variables[name];
+    if (value === undefined) continue;
+    result[name] = value;
+    for (const match of value.matchAll(VARIABLE_REFERENCE))
+      pending.push(match[1]);
+  }
+  return result;
+}
+
 /** Emit native CSS bounds once per tree change; container units resolve size without JS resize updates. */
 export function computeCSSLayout(root: LayoutNode, gap = 8): CSSLayout {
   if (!Number.isFinite(gap) || gap < 0)

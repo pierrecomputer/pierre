@@ -50,15 +50,16 @@ for (const panes of options.panes) {
         browser,
         page,
       }, testInfo) => {
+        const url = `/?panes=${panes}&content=${content}${options.query === '' ? '' : `&${options.query}`}`;
         await page.setViewportSize(BENCH_VIEWPORT);
-        await page.goto(`/?panes=${panes}&content=${content}`);
+        await page.goto(url);
         const display = await probeDisplay(page);
         const params = { panes, content, frameMs: display.frameMs };
         const samples: Sample[] = [];
         for (let run = 0; run < options.warmupRuns + options.runs; run++) {
           // A fresh document for each run, so that no state from an earlier run remains.
           await page.setViewportSize(BENCH_VIEWPORT);
-          await page.goto(`/?panes=${panes}&content=${content}`);
+          await page.goto(url);
           await page.waitForFunction(() => window.__layoutsBench?.ready);
           if (content === 'real')
             await page.waitForTimeout(REAL_CONTENT_SETTLE_MS);
