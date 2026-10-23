@@ -15,9 +15,11 @@ import {
   LayoutStore,
   type PaneNode,
 } from '../src';
-import { Layout } from '../src/react';
+import { Layout, type LayoutProps } from '../src/react';
 import '../src/styles.css';
 import './style.css';
+
+type ResizeStrategy = NonNullable<LayoutProps['experimentalResize']>;
 
 function pane(id: string): PaneNode {
   return { type: 'pane', id, minWidth: 110, minHeight: 100 };
@@ -192,6 +194,8 @@ function Playground(): JSX.Element {
   const [message, setMessage] = useState('Ready to rearrange.');
   const [target, setTarget] = useState('2');
   const [edge, setEdge] = useState<Edge>('right');
+  // Experimental: how a pointer resize applies its ratios, to compare how each feels.
+  const [resize, setResize] = useState<ResizeStrategy>('live');
   const panes = getPanes(state.root);
   const otherPanes = panes.filter(({ id }) => id !== state.focusedPane);
   const actualTarget = otherPanes.some(({ id }) => id === target)
@@ -289,6 +293,7 @@ function Playground(): JSX.Element {
           renderPane={renderPane}
           getPaneTitle={title}
           label="Layout playground"
+          experimentalResize={resize}
           style={{ '--layout-pane-background': '#fbfcfd' } as CSSProperties}
         />
       </div>
@@ -335,6 +340,18 @@ function Playground(): JSX.Element {
         >
           Move
         </button>
+        <span>Resize drag</span>
+        <select
+          aria-label="Resize strategy"
+          value={resize}
+          onChange={(event) => setResize(event.target.value as ResizeStrategy)}
+        >
+          <option value="live">live</option>
+          <option value="frame">once per frame</option>
+          <option value="preview">preview, resize on release</option>
+          <option value="freeze">freeze content</option>
+          <option value="settle">freeze, settle one pane per frame</option>
+        </select>
         <span className="demo-message" role="status">
           {message}
         </span>

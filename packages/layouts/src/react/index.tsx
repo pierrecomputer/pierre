@@ -532,6 +532,13 @@ export function Layout({
     if (experimentalResize === 'preview') {
       work.pending = ratios;
       const root = rootRef.current;
+      const move = (element: HTMLElement, x: number, y: number): void => {
+        element.style.transform = `translate(${x}px, ${y}px)`;
+        element.dataset.preview = 'true';
+        if (!work.moved.includes(element)) work.moved.push(element);
+      };
+      // The offset of each dragged split, along its own axis.
+      const offsets = new Map<string, number>();
       for (const separator of active.separators) {
         const element = root?.querySelector<HTMLElement>(
           `[data-layout-flip="separator:${CSS.escape(separator.split.id)}"]`
@@ -544,11 +551,18 @@ export function Layout({
         const offset =
           ((ratios[separator.split.id] ?? separator.ratio) - separator.ratio) *
           available;
-        element.style.transform = horizontal
-          ? `translateX(${offset}px)`
-          : `translateY(${offset}px)`;
-        element.dataset.preview = 'true';
-        if (!work.moved.includes(element)) work.moved.push(element);
+        offsets.set(separator.split.id, offset);
+        move(element, horizontal ? offset : 0, horizontal ? 0 : offset);
+      }
+      // A corner moves with the dragged splits that it joins.
+      for (const corner of geometry.corners) {
+        const [horizontal, vertical] = corner.splitIds;
+        if (!offsets.has(horizontal) && !offsets.has(vertical)) continue;
+        const element = root?.querySelector<HTMLElement>(
+          `[data-layout-corner="${CSS.escape(corner.id)}"]`
+        );
+        if (element === null || element === undefined) continue;
+        move(element, offsets.get(horizontal) ?? 0, offsets.get(vertical) ?? 0);
       }
       return;
     }
