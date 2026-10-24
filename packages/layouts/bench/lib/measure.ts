@@ -172,37 +172,41 @@ const PANE_OF_NODE = `function () {
   return '';
 }`;
 
-/** The pane of each node, by the DOM node ID that trace events give. */
+// A run looks up at most this many nodes, in batches, so that an operation
+// that removes a whole pane of content does not stall the run.
+const MAX_RESOLVED_NODES = 5000;
+const RESOLVE_BATCH = 100;
+
+/**
+ * The pane of each node, by the DOM node ID that trace events give, or null
+ * for a node that the operation removed. `DOM.resolveNode` takes the backend
+ * ID directly, so the run does not push the document to the client.
+ */
 async function panesOfNodes(
   session: CDPSession,
   ids: readonly number[]
 ): Promise<Map<number, string | null>> {
   const panes = new Map<number, string | null>();
-  if (ids.length === 0) return panes;
-  await session.send('DOM.getDocument', { depth: 0 });
-  const { nodeIds } = await session.send(
-    'DOM.pushNodesByBackendIdsToFrontend',
-    { backendNodeIds: [...ids] }
-  );
-  await Promise.all(
-    nodeIds.map(async (nodeId, index) => {
-      if (nodeId === 0) {
-        panes.set(ids[index], null);
-        return;
-      }
-      try {
-        const { object } = await session.send('DOM.resolveNode', { nodeId });
-        const { result } = await session.send('Runtime.callFunctionOn', {
-          objectId: object.objectId,
-          functionDeclaration: PANE_OF_NODE,
-          returnByValue: true,
-        });
-        panes.set(ids[index], String(result.value ?? ''));
-      } catch {
-        panes.set(ids[index], null);
-      }
-    })
-  );
+  const lookups = ids.slice(0, MAX_RESOLVED_NODES);
+  for (let start = 0; start < lookups.length; start += RESOLVE_BATCH) {
+    await Promise.all(
+      lookups.slice(start, start + RESOLVE_BATCH).map(async (backendNodeId) => {
+        try {
+          const { object } = await session.send('DOM.resolveNode', {
+            backendNodeId,
+          });
+          const { result } = await session.send('Runtime.callFunctionOn', {
+            objectId: object.objectId,
+            functionDeclaration: PANE_OF_NODE,
+            returnByValue: true,
+          });
+          panes.set(backendNodeId, String(result.value ?? ''));
+        } catch {
+          panes.set(backendNodeId, null);
+        }
+      })
+    );
+  }
   return panes;
 }
 
