@@ -96,3 +96,59 @@ tasks:
     options:
       cache: false
       runInCI: 'always'
+
+  # Native Rust build (rust/): regenerate the translated lexers from the WAT,
+  # plus the theme table and JS golden outputs the parity check reads. Cargo
+  # runs from rust/ so rust-toolchain.toml applies.
+  rust-gen:
+    script:
+      'bun ./rust/scripts/gen.ts && cd rust && cargo run --quiet --release -p
+      xtask -- gen gen/highlights.native.wasm highlights/src/generated'
+    inputs:
+      - 'src/**/*'
+      - 'lib/**/*'
+      - 'scripts/build.ts'
+      - 'themes/pierre-dark.json'
+      - 'benchmark/fixtures/*'
+      - 'rust/scripts/gen.ts'
+      - 'rust/xtask/**/*'
+      - 'rust/cache-exclude.txt'
+    outputs:
+      - 'rust/gen'
+      - 'rust/highlights/src/generated'
+    options:
+      runInCI: 'always'
+
+  # Token generation for every language: the published wasm in JSC and V8 vs
+  # the translated Rust, with token parity checked against the JS package.
+  # Pass a label filter
+  # (`-- ts`), `-- --budget-ms N`, or `-- --no-js`. Runs from rust/ so
+  # rust-toolchain.toml applies.
+  rust-bench:
+    script: 'cd rust && cargo run --quiet --release -p bench -- $@'
+    deps:
+      - 'rust-gen'
+    options:
+      cache: false
+      runInCI: 'always'
+
+  # rust-bench plus a PGO build of the Rust side, trained on real source
+  # files from this machine (rust/scripts/train-corpus.ts) rather than the
+  # benchmark inputs. Accepts the same arguments.
+  rust-bench-pgo:
+    command: './rust/scripts/pgo.sh'
+    deps:
+      - 'rust-gen'
+    options:
+      cache: false
+      runInCI: 'always'
+
+  # Build the `hl` test app with PGO: rust/target/pgo-use/release/hl prints
+  # files syntax-highlighted for a 24-bit color terminal.
+  rust-hl:
+    command: './rust/scripts/pgo.sh build'
+    deps:
+      - 'rust-gen'
+    options:
+      cache: false
+      runInCI: 'always'
