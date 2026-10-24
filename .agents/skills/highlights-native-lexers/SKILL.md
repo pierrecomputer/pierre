@@ -56,7 +56,11 @@ with `src/` (relative to `packages/highlights/`).
    input slack (96 bytes past the input) and with a `// SAFETY:` comment. Record
    writes go through `Recs` (or the same capacity-trapping pattern as
    `fast.rs`); never write records without the capacity trap.
-8. **Comments** state what the code does in plain words, timelessly. Each
+8. **Portable code.** Native lexers build and give identical output on every
+   target in `rust-toolchain.toml` (macOS, Linux, Windows; ARM and x86-64;
+   wasm). Vector code uses only `crate::simd::V` (see Portable SIMD below): no
+   `core::arch`, no `#[cfg(target_arch)]` in a module.
+9. **Comments** state what the code does in plain words, timelessly. Each
    function's doc comment names the WAT function(s) it mirrors in backticks,
    e.g. ``/// The number after `0x` (`$goNumber`).``. That naming is the map the
    sync procedure relies on.
@@ -136,6 +140,40 @@ Delegating is how embedded languages work (HTML's `<style>`/`<script>`, Markdown
 fences, template literals): call the same translated function the WAT calls at
 that point. Delegate rare, complex paths too if porting them gains nothing.
 Never delegate the hot path.
+
+## Portable SIMD
+
+`highlights/src/simd.rs` is the one vector type for every lexer: `V`, 16 bytes,
+on NEON (aarch64), SSE (x86-64-v2, set in `.cargo/config.toml`), wasm `simd128`,
+or plain arrays elsewhere. Every operation gives the same result on every
+backend; its tests compare each backend with the arrays
+(`cargo test -p highlights --lib simd`, plus `--target x86_64-apple-darwin`
+under Rosetta and `--target wasm32-wasip1` under Node). A mask is a vector whose
+lanes are all zeros or all ones, as comparisons return.
+
+| Need                      | `V`                                                                                                     | NEON it compiles to                                          |
+| ------------------------- | ------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------ |
+| load / store 16 bytes     | `V::load(p)`, `v.store(p)`, `V::from_array(&a)`                                                         | `vld1q_u8`, `vst1q_u8`                                       |
+| constant                  | `V::splat(b)`, `V::zero()`                                                                              | `vdupq_n_u8`                                                 |
+| compare                   | `eq`, `ne`, `le`, `ge`, `lt`, `gt` (unsigned), `gt_signed`, `high` (top bit set), `test` (`a & b != 0`) | `vceqq_u8`, `vcleq_u8`, `vcgtq_s8`, `vcltzq_s8`, `vtstq_u8`  |
+| bits                      | `and`, `or`, `xor`, `andnot` (`a & !b`), `not`                                                          | `vandq_u8`, `vorrq_u8`, `veorq_u8`, `vbicq_u8`, `vmvnq_u8`   |
+| arithmetic                | `add`, `sub` (wrapping), `shr::<N>()`                                                                   | `vaddq_u8`, `vsubq_u8`, `vshrq_n_u8`                         |
+| 16-entry table            | `table.lookup(idx)`: `table[i]`, 0 for `i >= 16`                                                        | `vqtbl1q_u8`                                                 |
+| any lane set              | `any()`                                                                                                 | `vmaxvq_u8`                                                  |
+| first set lane of a mask  | `first()` (16 when none)                                                                                | `vshrn_n_u16` nibble mask                                    |
+| a mask as an integer word | `lanes()` → `Lanes`: `any`, `first`, `before_first`, `and`, `or`, `not`                                 | `vshrn_n_u16` nibble mask (4 bits per lane; 1 bit elsewhere) |
+| one bit per lane          | `bits()` (top bits, 16 bits)                                                                            | shift-accumulate                                             |
+| one bit per byte of 64    | `V::bits64(a, b, c, d)` (masks)                                                                         | `vpaddq_u8` chain                                            |
+
+To leave a scan loop, branch on `m.lanes().any()` and only then take `first()`:
+comparing `first()` with 16 makes the compiler compute the index on every step.
+Position tests ("is any `/` before the first delimiter") are `Lanes` operations
+(`slash.lanes().and(delim.lanes().before_first())`).
+
+Nibble classification is
+`lo.lookup(v.and(V::splat(15))).and(hi.lookup(v.shr::<4>()))`. If a module needs
+an operation `V` lacks, stop and report it rather than reaching for
+`core::arch`.
 
 ## Porting a Module
 
@@ -291,10 +329,15 @@ little left.
    check, confirm it FAILs on parity, restore, confirm it PASSes.
 2. Final `scripts/native-check.sh <module> --update-lock`: full fuzz, perf, lock
    written.
-3. `rustfmt --edition 2024 highlights/src/native/<module>.rs` and
+3. Other targets:
+   `scripts/native-check.sh <module> --target x86_64-apple-darwin` (parity and
+   fuzz on x86-64 under Rosetta) must PASS, and
+   `cargo check --release -p highlights --features native-<module> --target wasm32-unknown-unknown --target-dir target/native-<module>`
+   must build.
+4. `rustfmt --edition 2024 highlights/src/native/<module>.rs` and
    `cargo clippy --release -p highlights --features native-<module> --target-dir target/native-<module>`
    with no warnings in your files.
-4. **Keep or drop:** the module is kept when its native instructions and cycles
+5. **Keep or drop:** the module is kept when its native instructions and cycles
    per record are both below the translated lexer's on both perf inputs.
    Otherwise report it as not beating the translated lexer, with the numbers; it
    stays, feature-gated, for a decision.
