@@ -33,7 +33,7 @@ import {
   setCoveredHidden,
   splitsAt,
 } from '../dom/panes';
-import { type ResizeStrategy, ResizeWork } from '../dom/resize-work';
+import { createResizeWork, type ResizeStrategy } from '../dom/resize-work';
 import {
   dragRatios,
   dropTarget,
@@ -182,7 +182,7 @@ export function Layout({
   const animateLayout = animateOptions?.layout !== false;
   const animateZoom = animateOptions?.zoom !== false;
   // The direct DOM work of a pointer resize with the `experimentalResize` strategy.
-  const resizeWork = useMemo(() => new ResizeWork(store), [store]);
+  const resizeWork = useMemo(() => createResizeWork(store), [store]);
 
   // Animate model changes only. CSS owns continuous sizing, including while JS is busy.
   const subscribe = useCallback(

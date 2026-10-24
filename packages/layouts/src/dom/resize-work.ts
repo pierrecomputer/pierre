@@ -15,29 +15,8 @@ export type ResizeStrategy = 'live' | 'frame' | 'preview' | 'freeze' | 'settle';
 // Pause after which a frozen drag lets pane content take its new size.
 const FREEZE_PAUSE_MS = 150;
 
-/**
- * The DOM work of one pointer resize with a resize strategy. The work moves
- * separators and freezes pane content with direct style writes, on each
- * pointer move, because a render of the view for each move would cost the
- * frame that the strategy saves. Each call names the layout root and the
- * strategy of the gesture.
- */
-export class ResizeWork {
-  private strategy: ResizeStrategy = 'live';
-  private root: HTMLElement | null = null;
-  private frame: number | null = null;
-  private pending: Record<string, number> | null = null;
-  private moved: HTMLElement[] = [];
-  private frozen: HTMLElement[] = [];
-  private pause: ReturnType<typeof setTimeout> | null = null;
-  private thawing: HTMLElement[] = [];
-
-  private readonly store: LayoutStore;
-
-  constructor(store: LayoutStore) {
-    this.store = store;
-  }
-
+/** The DOM work of pointer resizes, from `createResizeWork`. */
+export interface ResizeWork {
   /** Apply the ratios of one pointer move. */
   apply(
     root: HTMLElement,
@@ -45,65 +24,46 @@ export class ResizeWork {
     separators: readonly SeparatorGeometry[],
     ratios: Record<string, number>,
     corners: readonly { id: string; splitIds: readonly string[] }[]
-  ): void {
-    this.root = root;
-    this.strategy = strategy;
-    if (this.strategy === 'frame') {
-      this.pending = ratios;
-      this.frame ??= requestAnimationFrame(() => {
-        this.frame = null;
-        if (this.pending !== null) this.store.setRatios(this.pending);
-        this.pending = null;
-      });
-      return;
-    }
-    if (this.strategy === 'preview') {
-      this.pending = ratios;
-      this.preview(separators, ratios, corners);
-      return;
-    }
-    if (this.strategy === 'freeze' || this.strategy === 'settle') {
-      this.freeze(separators);
-      if (this.pause !== null) clearTimeout(this.pause);
-      this.pause = setTimeout(() => this.thaw(), FREEZE_PAUSE_MS);
-    }
-    this.store.setRatios(ratios);
-  }
-
+  ): void;
   /** End the work. Call it while the gesture is active, so that the last ratios do not animate. */
-  end(cancel: boolean): void {
-    if (this.frame !== null && this.strategy === 'frame')
-      cancelAnimationFrame(this.frame);
-    if (this.pause !== null) clearTimeout(this.pause);
-    if (!cancel && this.pending !== null) this.store.setRatios(this.pending);
-    for (const element of this.moved) {
-      element.style.transform = '';
-      delete element.dataset.preview;
-    }
-    this.pending = null;
-    this.moved = [];
-    this.pause = null;
-    if (this.strategy === 'frame') this.frame = null;
-    this.thaw();
-  }
+  end(cancel: boolean): void;
+}
+
+/**
+ * The DOM work of pointer resizes with a resize strategy. The work moves
+ * separators and freezes pane content with direct style writes, on each
+ * pointer move, because a render of the view for each move would cost the
+ * frame that the strategy saves. Each call names the layout root and the
+ * strategy of the gesture. The state lives in this closure, so that a
+ * minifier can shorten its names.
+ */
+export function createResizeWork(store: LayoutStore): ResizeWork {
+  let strategy: ResizeStrategy = 'live';
+  let root: HTMLElement | null = null;
+  let frame: number | null = null;
+  let pending: Record<string, number> | null = null;
+  let moved: HTMLElement[] = [];
+  let frozen: HTMLElement[] = [];
+  let pause: ReturnType<typeof setTimeout> | null = null;
+  let thawing: HTMLElement[] = [];
 
   /** Move the dragged separators, and the corners that they join, with a transform. */
-  private preview(
+  function preview(
     separators: readonly SeparatorGeometry[],
     ratios: Record<string, number>,
     corners: readonly { id: string; splitIds: readonly string[] }[]
   ): void {
-    const root = this.root;
     if (root === null) return;
+    const host = root;
     const move = (element: HTMLElement, x: number, y: number): void => {
       element.style.transform = `translate(${x}px, ${y}px)`;
       element.dataset.preview = 'true';
-      if (!this.moved.includes(element)) this.moved.push(element);
+      if (!moved.includes(element)) moved.push(element);
     };
     // The offset of each dragged split, along its own axis.
     const offsets = new Map<string, number>();
     for (const separator of separators) {
-      const element = root.querySelector<HTMLElement>(
+      const element = host.querySelector<HTMLElement>(
         `:scope > [data-layout-flip="separator:${CSS.escape(separator.split.id)}"]`
       );
       if (element === null) continue;
@@ -120,7 +80,7 @@ export class ResizeWork {
     for (const corner of corners) {
       const [horizontal, vertical] = corner.splitIds;
       if (!offsets.has(horizontal) && !offsets.has(vertical)) continue;
-      const element = root.querySelector<HTMLElement>(
+      const element = host.querySelector<HTMLElement>(
         `:scope > [data-layout-corner="${CSS.escape(corner.id)}"]`
       );
       if (element === null) continue;
@@ -135,14 +95,13 @@ export class ResizeWork {
    * its own compositor layer, so that a host that moves or clips it does not
    * paint it again. All sizes are read before the first write.
    */
-  private freeze(separators: readonly SeparatorGeometry[]): void {
-    const root = this.root;
-    if (root === null || this.frozen.length > 0) return;
+  function freeze(separators: readonly SeparatorGeometry[]): void {
+    if (root === null || frozen.length > 0) return;
     // Content that still waits to thaw is frozen again with the rest.
-    if (this.frame !== null) cancelAnimationFrame(this.frame);
-    this.frame = null;
-    const waiting = this.thawing;
-    this.thawing = [];
+    if (frame !== null) cancelAnimationFrame(frame);
+    frame = null;
+    const waiting = thawing;
+    thawing = [];
     const ids = new Set(
       separators.flatMap(({ split }) => getPanes(split).map(({ id }) => id))
     );
@@ -162,33 +121,74 @@ export class ResizeWork {
       content.style.contain = 'strict';
       content.style.willChange = 'transform';
     });
-    this.frozen = [
+    frozen = [
       ...contents,
       ...waiting.filter((content) => !contents.includes(content)),
     ];
   }
 
   /** Let frozen content take its new size: at once, or one pane per frame for `settle`. */
-  private thaw(): void {
-    const thaw = (content: HTMLElement): void => {
+  function thaw(): void {
+    const release = (content: HTMLElement): void => {
       content.style.flex = '';
       content.style.width = '';
       content.style.height = '';
       content.style.contain = '';
       content.style.willChange = '';
     };
-    if (this.strategy !== 'settle') {
-      this.frozen.forEach(thaw);
-      this.frozen = [];
+    if (strategy !== 'settle') {
+      frozen.forEach(release);
+      frozen = [];
       return;
     }
-    this.thawing = [...this.thawing, ...this.frozen];
-    this.frozen = [];
+    thawing = [...thawing, ...frozen];
+    frozen = [];
     const step = (): void => {
-      const next = this.thawing.shift();
-      if (next !== undefined) thaw(next);
-      this.frame = this.thawing.length > 0 ? requestAnimationFrame(step) : null;
+      const next = thawing.shift();
+      if (next !== undefined) release(next);
+      frame = thawing.length > 0 ? requestAnimationFrame(step) : null;
     };
-    if (this.frame === null) step();
+    if (frame === null) step();
   }
+
+  return {
+    apply(element, next, separators, ratios, corners) {
+      root = element;
+      strategy = next;
+      if (strategy === 'frame') {
+        pending = ratios;
+        frame ??= requestAnimationFrame(() => {
+          frame = null;
+          if (pending !== null) store.setRatios(pending);
+          pending = null;
+        });
+        return;
+      }
+      if (strategy === 'preview') {
+        pending = ratios;
+        preview(separators, ratios, corners);
+        return;
+      }
+      if (strategy === 'freeze' || strategy === 'settle') {
+        freeze(separators);
+        if (pause !== null) clearTimeout(pause);
+        pause = setTimeout(thaw, FREEZE_PAUSE_MS);
+      }
+      store.setRatios(ratios);
+    },
+    end(cancel) {
+      if (frame !== null && strategy === 'frame') cancelAnimationFrame(frame);
+      if (pause !== null) clearTimeout(pause);
+      if (!cancel && pending !== null) store.setRatios(pending);
+      for (const element of moved) {
+        element.style.transform = '';
+        delete element.dataset.preview;
+      }
+      pending = null;
+      moved = [];
+      pause = null;
+      if (strategy === 'frame') frame = null;
+      thaw();
+    },
+  };
 }
