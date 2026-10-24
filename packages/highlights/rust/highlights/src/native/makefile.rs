@@ -6,14 +6,12 @@
 //! `$(...)` references nest. The records equal the translated `makefile`
 //! lexer's records.
 
-#[cfg(target_arch = "aarch64")]
-use core::arch::aarch64::*;
-
 use super::Lexer;
 use super::scan;
 use super::tables::{KeywordTable, byteset};
 use crate::Rec;
 use crate::generated::Instance;
+use crate::simd::V;
 use crate::token_ids as tok;
 use crate::wat_tables::MAKEFILE_WORDS;
 
@@ -233,32 +231,21 @@ const fn word(s: &[u8]) -> u64 {
 /// [`nibbles`]), 16 bytes per step. The caller makes sure a set byte lies
 /// within 16 bytes past the input end, or stops the scan itself.
 #[inline(always)]
-fn find_set(src: &[u8], mut p: usize, nib: &([u8; 16], [u8; 16]), set: &[bool; 256]) -> usize {
-    #[cfg(target_arch = "aarch64")]
-    // SAFETY: each 16-byte load starts at or before a set byte that lies
-    // at most 16 bytes past the input end, inside the slack.
-    unsafe {
-        let _ = set;
-        let hi_t = vld1q_u8(nib.0.as_ptr());
-        let lo_t = vld1q_u8(nib.1.as_ptr());
-        loop {
-            let v = vld1q_u8(src.as_ptr().add(p));
-            let hi = vqtbl1q_u8(hi_t, vshrq_n_u8::<4>(v));
-            let lo = vqtbl1q_u8(lo_t, vandq_u8(v, vdupq_n_u8(15)));
-            let k = scan::first_lane(vtstq_u8(hi, lo));
-            if k < 16 {
-                return p + k;
-            }
-            p += 16;
+fn find_set(src: &[u8], mut p: usize, nib: &([u8; 16], [u8; 16])) -> usize {
+    let hi_t = V::from_array(&nib.0);
+    let lo_t = V::from_array(&nib.1);
+    loop {
+        // SAFETY: each 16-byte load starts at or before a set byte that
+        // lies at most 16 bytes past the input end, inside the slack.
+        let v = unsafe { V::load(src.as_ptr().add(p)) };
+        let k = hi_t
+            .lookup(v.shr::<4>())
+            .test(lo_t.lookup(v.and(V::splat(15))))
+            .first();
+        if k < 16 {
+            return p + k;
         }
-    }
-    #[cfg(not(target_arch = "aarch64"))]
-    {
-        let _ = nib;
-        while !set[at(src, p) as usize] {
-            p += 1;
-        }
-        p
+        p += 16;
     }
 }
 
@@ -270,7 +257,7 @@ fn scan_word(src: &[u8], mut p: usize, end: usize) -> usize {
     let _ = end;
     loop {
         // (the first stop lies at or before the input end)
-        p = find_set(src, p, &WORD_STOP_NIB, &WORD_STOP);
+        p = find_set(src, p, &WORD_STOP_NIB);
         if !BANG_PLUS_QUERY[at(src, p) as usize] || at(src, p + 1) == b'=' {
             return p;
         }
@@ -433,32 +420,24 @@ fn target_var(src: &[u8], p: usize) -> bool {
 fn line_kind(src: &[u8], mut p: usize, end: usize) -> u32 {
     loop {
         // the scan stops at the input end itself
-        #[cfg(target_arch = "aarch64")]
-        {
+        let hi_t = V::from_array(&LINE_KIND_NIB.0);
+        let lo_t = V::from_array(&LINE_KIND_NIB.1);
+        loop {
+            if p >= end {
+                return 0;
+            }
             // SAFETY: each load starts before the input end, inside the
             // slack.
-            unsafe {
-                let hi_t = vld1q_u8(LINE_KIND_NIB.0.as_ptr());
-                let lo_t = vld1q_u8(LINE_KIND_NIB.1.as_ptr());
-                loop {
-                    if p >= end {
-                        return 0;
-                    }
-                    let v = vld1q_u8(src.as_ptr().add(p));
-                    let hi = vqtbl1q_u8(hi_t, vshrq_n_u8::<4>(v));
-                    let lo = vqtbl1q_u8(lo_t, vandq_u8(v, vdupq_n_u8(15)));
-                    let k = scan::first_lane(vtstq_u8(hi, lo));
-                    if k < 16 {
-                        p += k;
-                        break;
-                    }
-                    p += 16;
-                }
+            let v = unsafe { V::load(src.as_ptr().add(p)) };
+            let k = hi_t
+                .lookup(v.shr::<4>())
+                .test(lo_t.lookup(v.and(V::splat(15))))
+                .first();
+            if k < 16 {
+                p += k;
+                break;
             }
-        }
-        #[cfg(not(target_arch = "aarch64"))]
-        while p < end && !LINE_KIND_STOP[at(src, p) as usize] {
-            p += 1;
+            p += 16;
         }
         if p >= end {
             return 0;
@@ -561,7 +540,7 @@ fn dollar(src: &[u8], end: usize, mut ptr: usize, out: &mut Out, nest: u32) -> u
         o.tok(tok::VARIABLE_SPECIAL, ptr);
     } else {
         // (NUL ends the head, so the scan stops at the input end)
-        ptr = find_set(src, ptr, &HEAD_STOP_NIB, &HEAD_STOP);
+        ptr = find_set(src, ptr, &HEAD_STOP_NIB);
         let rhs = ptr;
         if rhs > lhs {
             let next = at(src, skip_space_at(src, rhs));

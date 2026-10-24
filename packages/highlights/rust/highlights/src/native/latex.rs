@@ -7,14 +7,12 @@
 //! their bodies literal. A blank line ends math and arguments. The records
 //! equal the translated `latex` lexer's records.
 
-#[cfg(target_arch = "aarch64")]
-use core::arch::aarch64::*;
-
 use super::Lexer;
 use super::scan;
 use super::tables::{KeywordTable, byteset};
 use crate::Rec;
 use crate::generated::Instance;
+use crate::simd::V;
 use crate::token_ids as tok;
 use crate::wat_tables::LATEX_WORDS;
 
@@ -55,14 +53,6 @@ static SPACE: [bool; 256] = {
     }
     t
 };
-
-/// Bytes that end plain text outside math: `#$%&`, `[\]`, `{`, `}`, LF.
-#[cfg(not(target_arch = "aarch64"))]
-static TEXT_STOP: [bool; 256] = byteset(b"#$%&[\\]{}\n");
-
-/// Bytes that end plain text in math: also `^`, `_`, and `=`.
-#[cfg(not(target_arch = "aarch64"))]
-static MATH_STOP: [bool; 256] = byteset(b"#$%&[\\]^_{}\n=");
 
 /// The byte at `i`. Callers read at most 16 bytes past the input end, which
 /// the 96-byte input slack covers.
@@ -163,44 +153,32 @@ fn env_key(src: &[u8], lhs: usize, rhs: usize) -> i32 {
     WORDS.value(src, lhs, rhs - star as usize) | (star as i32) << 12
 }
 
-/// The end of the plain text from `p`: the next byte of `stop` (see
-/// [`TEXT_STOP`] and [`MATH_STOP`]), or the input end, 16 bytes per step.
+/// The end of the plain text from `p`, or the input end, 16 bytes per
+/// step. Plain text ends at `#$%&`, `[\]`, `{`, `}`, or LF, and in math
+/// also at `^`, `_`, or `=`.
 #[inline(always)]
 fn text_end(src: &[u8], mut p: usize, end: usize, math: bool) -> usize {
-    #[cfg(target_arch = "aarch64")]
-    // SAFETY: each load starts before the input end, inside the slack.
-    unsafe {
-        // `#$%&`, `[\]` (`[\]^_` in math), `{`, `}`, LF, and `=` in math
-        let range = vdupq_n_u8(if math { 4 } else { 2 });
-        let extra = vdupq_n_u8(if math { b'=' } else { b'\n' });
-        while p < end {
-            let w = vld1q_u8(src.as_ptr().add(p));
-            let hit = vorrq_u8(
-                vorrq_u8(
-                    vcleq_u8(vsubq_u8(w, vdupq_n_u8(b'#')), vdupq_n_u8(3)),
-                    vcleq_u8(vsubq_u8(w, vdupq_n_u8(b'[')), range),
-                ),
-                vorrq_u8(
-                    vorrq_u8(vceqq_u8(w, vdupq_n_u8(b'{')), vceqq_u8(w, vdupq_n_u8(b'}'))),
-                    vorrq_u8(vceqq_u8(w, vdupq_n_u8(b'\n')), vceqq_u8(w, extra)),
-                ),
-            );
-            let k = scan::first_lane(hit);
-            if k < 16 {
-                return (p + k).min(end);
-            }
-            p += 16;
+    // `#$%&`, `[\]` (`[\]^_` in math), `{`, `}`, LF, and `=` in math
+    let range = V::splat(if math { 4 } else { 2 });
+    let extra = V::splat(if math { b'=' } else { b'\n' });
+    while p < end {
+        // SAFETY: each load starts before the input end, inside the slack.
+        let w = unsafe { V::load(src.as_ptr().add(p)) };
+        let hit = w
+            .sub(V::splat(b'#'))
+            .le(V::splat(3))
+            .or(w.sub(V::splat(b'[')).le(range))
+            .or(w
+                .eq(V::splat(b'{'))
+                .or(w.eq(V::splat(b'}')))
+                .or(w.eq(V::splat(b'\n')).or(w.eq(extra))));
+        let k = hit.first();
+        if k < 16 {
+            return (p + k).min(end);
         }
-        end
+        p += 16;
     }
-    #[cfg(not(target_arch = "aarch64"))]
-    {
-        let stop = if math { &MATH_STOP } else { &TEXT_STOP };
-        while p < end && !stop[at(src, p) as usize] {
-            p += 1;
-        }
-        p.min(end)
-    }
+    end
 }
 
 /// Lex the LaTeX input of `len` bytes at `base` (`$hlLatex`).

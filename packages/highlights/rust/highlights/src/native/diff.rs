@@ -6,13 +6,11 @@
 //! and binary lines), split into their fields. The records equal the
 //! translated `diff` lexer's records.
 
-#[cfg(target_arch = "aarch64")]
-use core::arch::aarch64::*;
-
 use super::Lexer;
 use super::scan;
 use crate::Rec;
 use crate::generated::Instance;
+use crate::simd::V;
 use crate::token_ids as tok;
 
 /// The lexer for `name`, if this module handles it.
@@ -139,39 +137,11 @@ fn skip_hex(src: &[u8], mut p: usize, line_end: usize) -> usize {
 #[inline(always)]
 fn block_breaks(src: &[u8], b: usize) -> u64 {
     debug_assert!(b + 64 <= src.len());
-    #[cfg(target_arch = "aarch64")]
     // SAFETY: `b` lies at or before the input end, so its 64 bytes lie
     // inside the 96-byte slack.
-    unsafe {
-        let bits: [u8; 16] = [1, 2, 4, 8, 16, 32, 64, 128, 1, 2, 4, 8, 16, 32, 64, 128];
-        let bits = vld1q_u8(bits.as_ptr());
-        let p = src.as_ptr().add(b);
-        let hit = |v: uint8x16_t| {
-            vandq_u8(
-                vorrq_u8(
-                    vceqq_u8(v, vdupq_n_u8(b'\n')),
-                    vceqq_u8(v, vdupq_n_u8(b'\r')),
-                ),
-                bits,
-            )
-        };
-        let m0 = hit(vld1q_u8(p));
-        let m1 = hit(vld1q_u8(p.add(16)));
-        let m2 = hit(vld1q_u8(p.add(32)));
-        let m3 = hit(vld1q_u8(p.add(48)));
-        let s = vpaddq_u8(vpaddq_u8(m0, m1), vpaddq_u8(m2, m3));
-        let s = vpaddq_u8(s, s);
-        vgetq_lane_u64::<0>(vreinterpretq_u64_u8(s))
-    }
-    #[cfg(not(target_arch = "aarch64"))]
-    {
-        let mut m = 0u64;
-        for i in 0..64 {
-            let c = src[b + i];
-            m |= ((c == b'\n' || c == b'\r') as u64) << i;
-        }
-        m
-    }
+    let [v0, v1, v2, v3] = [0, 16, 32, 48].map(|i| unsafe { V::load(src.as_ptr().add(b + i)) });
+    let hit = |v: V| v.eq(V::splat(b'\n')).or(v.eq(V::splat(b'\r')));
+    V::bits64(hit(v0), hit(v1), hit(v2), hit(v3))
 }
 
 /// The line breaks of the input, one 64-byte block at a time: `mask` holds

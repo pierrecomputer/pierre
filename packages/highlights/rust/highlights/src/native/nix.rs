@@ -7,14 +7,12 @@
 //! splices, which are lexed as expressions. Paths, search paths, and URIs
 //! are literals. The records equal the translated `nix` lexer's records.
 
-#[cfg(target_arch = "aarch64")]
-use core::arch::aarch64::*;
-
 use super::Lexer;
 use super::scan;
 use super::tables::{KeywordTable, byteset};
 use crate::Rec;
 use crate::generated::Instance;
+use crate::simd::V;
 use crate::token_ids as tok;
 use crate::wat_tables::NIX_WORDS;
 
@@ -188,32 +186,21 @@ const fn nibbles(set: &[bool; 256]) -> ([u8; 16], [u8; 16]) {
 /// [`nibbles`]), 16 bytes per step. The caller makes sure a set byte lies
 /// within 16 bytes past the input end, or stops the scan itself.
 #[inline(always)]
-fn find_set(src: &[u8], mut p: usize, nib: &([u8; 16], [u8; 16]), set: &[bool; 256]) -> usize {
-    #[cfg(target_arch = "aarch64")]
-    // SAFETY: each 16-byte load starts at or before a set byte that lies
-    // at most 16 bytes past the input end, inside the slack.
-    unsafe {
-        let _ = set;
-        let hi_t = vld1q_u8(nib.0.as_ptr());
-        let lo_t = vld1q_u8(nib.1.as_ptr());
-        loop {
-            let v = vld1q_u8(src.as_ptr().add(p));
-            let hi = vqtbl1q_u8(hi_t, vshrq_n_u8::<4>(v));
-            let lo = vqtbl1q_u8(lo_t, vandq_u8(v, vdupq_n_u8(15)));
-            let k = scan::first_lane(vtstq_u8(hi, lo));
-            if k < 16 {
-                return p + k;
-            }
-            p += 16;
+fn find_set(src: &[u8], mut p: usize, nib: &([u8; 16], [u8; 16])) -> usize {
+    let hi_t = V::from_array(&nib.0);
+    let lo_t = V::from_array(&nib.1);
+    loop {
+        // SAFETY: each 16-byte load starts at or before a set byte that
+        // lies at most 16 bytes past the input end, inside the slack.
+        let v = unsafe { V::load(src.as_ptr().add(p)) };
+        let k = hi_t
+            .lookup(v.shr::<4>())
+            .test(lo_t.lookup(v.and(V::splat(15))))
+            .first();
+        if k < 16 {
+            return p + k;
         }
-    }
-    #[cfg(not(target_arch = "aarch64"))]
-    {
-        let _ = nib;
-        while !set[at(src, p) as usize] {
-            p += 1;
-        }
-        p
+        p += 16;
     }
 }
 
@@ -581,7 +568,7 @@ fn highlight(inst: &mut Instance, base: usize, len: usize) {
         if is_ident_start(c) && c != b'$' {
             // names take `-` and `'`: `hello-world`, `x'`
             // (NUL ends the name, so the scan stops at the input end)
-            ptr = find_set(src, ptr + 1, &NAME_STOP_NIB, &NAME_STOP);
+            ptr = find_set(src, ptr + 1, &NAME_STOP_NIB);
             let rhs = ptr;
             // `https://...` unquoted URIs
             if at(src, rhs) == b':' && at(src, rhs + 1) == b'/' && at(src, rhs + 2) == b'/' {
