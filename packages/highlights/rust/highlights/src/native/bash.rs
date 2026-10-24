@@ -5,14 +5,12 @@
 //! the translated `$hlBash`. The records equal the translated lexer's
 //! records.
 
-#[cfg(target_arch = "aarch64")]
-use core::arch::aarch64::*;
-
 use super::Lexer;
 use super::scan;
 use super::tables::byteset;
 use crate::Rec;
 use crate::generated::Instance;
+use crate::simd::V;
 use crate::token_ids as tok;
 use crate::wat_tables::BASH_WORDS;
 
@@ -346,34 +344,22 @@ fn word_end(src: &[u8], mut p: usize) -> usize {
         }
         p += 1;
     }
-    #[cfg(target_arch = "aarch64")]
     // SAFETY: each 16-byte load starts at or before the NUL after the
     // input, inside the slack.
     unsafe {
         loop {
-            let v = vld1q_u8(src.as_ptr().add(p));
-            let alpha = vcleq_u8(
-                vsubq_u8(vorrq_u8(v, vdupq_n_u8(0x20)), vdupq_n_u8(b'a')),
-                vdupq_n_u8(25),
-            );
+            let v = V::load(src.as_ptr().add(p));
+            let alpha = v.or(V::splat(0x20)).sub(V::splat(b'a')).le(V::splat(25));
             // `-`, `.`, `/`, and digits are 0x2d to 0x39
-            let punct = vcleq_u8(vsubq_u8(v, vdupq_n_u8(b'-')), vdupq_n_u8(12));
-            let under = vceqq_u8(v, vdupq_n_u8(b'_'));
-            let high = vcltzq_s8(vreinterpretq_s8_u8(v));
-            let ok = vorrq_u8(vorrq_u8(alpha, punct), vorrq_u8(under, high));
-            let k = scan::first_lane(vmvnq_u8(ok));
+            let punct = v.sub(V::splat(b'-')).le(V::splat(12));
+            let under = v.eq(V::splat(b'_'));
+            let ok = alpha.or(punct).or(under.or(v.high()));
+            let k = ok.not().first();
             if k < 16 {
                 return p + k;
             }
             p += 16;
         }
-    }
-    #[cfg(not(target_arch = "aarch64"))]
-    {
-        while WORD[at(src, p) as usize] {
-            p += 1;
-        }
-        p
     }
 }
 
