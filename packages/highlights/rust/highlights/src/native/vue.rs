@@ -14,6 +14,7 @@ use super::Lexer;
 use super::recs::Recs;
 use super::scan;
 use crate::generated::Instance;
+use crate::simd::V;
 use crate::token_ids as tok;
 
 /// The lexer for each language this module handles.
@@ -106,33 +107,17 @@ fn emit(recs: &mut Recs, hl: u32, lhs: usize, rhs: usize) {
 /// slack; matches there are clamped away.
 #[inline(always)]
 fn find2(src: Src, mut p: usize, end: usize, a: u8, b: u8) -> usize {
-    #[cfg(target_arch = "aarch64")]
-    {
-        use core::arch::aarch64::*;
-        while p < end {
-            // SAFETY: `p < end`, at most the input length, so the 16 bytes
-            // lie inside the input and its slack.
-            let k = unsafe {
-                let w = vld1q_u8(src.0.as_ptr().add(p));
-                scan::first_lane(vorrq_u8(
-                    vceqq_u8(w, vdupq_n_u8(a)),
-                    vceqq_u8(w, vdupq_n_u8(b)),
-                ))
-            };
-            if k < 16 {
-                return (p + k).min(end);
-            }
-            p += 16;
+    while p < end {
+        // SAFETY: `p < end`, at most the input length, so the 16 bytes lie
+        // inside the input and its slack.
+        let w = unsafe { V::load(src.0.as_ptr().add(p)) };
+        let k = w.eq(V::splat(a)).or(w.eq(V::splat(b))).first();
+        if k < 16 {
+            return (p + k).min(end);
         }
-        end
+        p += 16;
     }
-    #[cfg(not(target_arch = "aarch64"))]
-    {
-        while p < end && src[p] != a && src[p] != b {
-            p += 1;
-        }
-        p.min(end)
-    }
+    end
 }
 
 /// Does `[lhs, rhs)` name a raw-text element? 1 script, 2 style, 0 other

@@ -21,6 +21,7 @@ use super::Lexer;
 use super::recs::Recs;
 use super::scan;
 use crate::generated::Instance;
+use crate::simd::V;
 use crate::token_ids as tok;
 use crate::wat_tables::MEM_LANGUAGE_NAMES;
 
@@ -78,10 +79,6 @@ fn is_punct(c: u8) -> bool {
         || c.wrapping_sub(b'{') <= 3
 }
 
-/// The bytes that end a run of plain text (`$markdownPlainEnd`).
-#[cfg(not(target_arch = "aarch64"))]
-static PLAIN_STOP: [bool; 256] = super::tables::byteset(b"\n\r*<[\\_`|");
-
 /// Bytes that start plain text: bit 0 within a line, bit 1 at a line
 /// start, where more bytes open constructs. No rule of `$hlMarkdown`
 /// applies to them, so they fall through to its plain-text batch.
@@ -107,38 +104,23 @@ static PLAIN_START: [u8; 256] = {
 /// and matches there are clamped away.
 #[inline(always)]
 fn find_any<const N: usize>(src: &[u8], mut p: usize, stop: usize, set: [u8; N]) -> usize {
-    #[cfg(target_arch = "aarch64")]
-    {
-        use core::arch::aarch64::*;
-        while p < stop {
-            // SAFETY: `p < stop`, which is at most the input length, so the
-            // 16 bytes lie inside the input and its slack.
-            let mask = unsafe {
-                let w = vld1q_u8(src.as_ptr().add(p));
-                let mut hit = vceqq_u8(w, vdupq_n_u8(set[0]));
-                let mut i = 1;
-                while i < N {
-                    hit = vorrq_u8(hit, vceqq_u8(w, vdupq_n_u8(set[i])));
-                    i += 1;
-                }
-                vget_lane_u64::<0>(vreinterpret_u64_u8(vshrn_n_u16::<4>(vreinterpretq_u16_u8(
-                    hit,
-                ))))
-            };
-            if mask != 0 {
-                return (p + (mask.trailing_zeros() / 4) as usize).min(stop);
-            }
-            p += 16;
+    while p < stop {
+        // SAFETY: `p < stop`, which is at most the input length, so the 16
+        // bytes lie inside the input and its slack.
+        let w = unsafe { V::load(src.as_ptr().add(p)) };
+        let mut hit = w.eq(V::splat(set[0]));
+        let mut i = 1;
+        while i < N {
+            hit = hit.or(w.eq(V::splat(set[i])));
+            i += 1;
         }
-        stop
-    }
-    #[cfg(not(target_arch = "aarch64"))]
-    {
-        while p < stop && !set.contains(&src[p]) {
-            p += 1;
+        let k = hit.first();
+        if k != 16 {
+            return (p + k).min(stop);
         }
-        p.min(stop)
+        p += 16;
     }
+    stop
 }
 
 /// Emit `[lhs, rhs)` as `hl` unless the range is empty (`$emitTok`).
@@ -409,49 +391,26 @@ impl Md<'_> {
     /// or the end (`$markdownPlainEnd`). Classifies 16 bytes per step by
     /// their low and high nibbles: a byte stops the run when the bit its
     /// high nibble names is set in its low nibble's entry.
-    #[cfg(target_arch = "aarch64")]
     #[inline(always)]
     fn plain_end(&self, mut p: usize) -> usize {
-        use core::arch::aarch64::*;
         // High nibble groups of the stop bytes, one bit each: 0x0_ (LF,
         // CR), 0x2_ (`*`), 0x3_ (`<`), 0x5_ (`[`, `\`, `_`), 0x6_ (`` ` ``),
         // 0x7_ (`|`).
         const HI: [u8; 16] = [1, 0, 2, 4, 0, 8, 16, 32, 0, 0, 0, 0, 0, 0, 0, 0];
         const LO: [u8; 16] = [16, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3, 8, 44, 1, 0, 8];
-        // SAFETY: each load reads 16 bytes at `p < end`, inside the slack.
-        unsafe {
-            let hi = vld1q_u8(HI.as_ptr());
-            let lo = vld1q_u8(LO.as_ptr());
-            let nib = vdupq_n_u8(15);
-            while p < self.end {
-                let w = vld1q_u8(self.src.0.as_ptr().add(p));
-                let bits = vandq_u8(
-                    vqtbl1q_u8(lo, vandq_u8(w, nib)),
-                    vqtbl1q_u8(hi, vshrq_n_u8::<4>(w)),
-                );
-                let hit = vtstq_u8(bits, bits);
-                let mask = vget_lane_u64::<0>(vreinterpret_u64_u8(vshrn_n_u16::<4>(
-                    vreinterpretq_u16_u8(hit),
-                )));
-                if mask != 0 {
-                    p += (mask.trailing_zeros() / 4) as usize;
-                    return p.min(self.end);
-                }
-                p += 16;
+        let hi = V::from_array(&HI);
+        let lo = V::from_array(&LO);
+        while p < self.end {
+            // SAFETY: the load reads 16 bytes at `p < end`, inside the slack.
+            let w = unsafe { V::load(self.src.0.as_ptr().add(p)) };
+            let bits = lo.lookup(w.and(V::splat(15))).and(hi.lookup(w.shr::<4>()));
+            let k = bits.test(bits).first();
+            if k != 16 {
+                return (p + k).min(self.end);
             }
+            p += 16;
         }
         self.end
-    }
-
-    /// End of the plain text from `p`: the next byte that may start markup,
-    /// or the end (`$markdownPlainEnd`).
-    #[cfg(not(target_arch = "aarch64"))]
-    #[inline(always)]
-    fn plain_end(&self, mut p: usize) -> usize {
-        while p < self.end && !PLAIN_STOP[self.src[p] as usize] {
-            p += 1;
-        }
-        p
     }
 
     /// End (just past `>`) of a CommonMark autolink opening at the `<` at

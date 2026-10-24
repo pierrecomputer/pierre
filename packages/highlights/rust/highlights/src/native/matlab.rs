@@ -14,6 +14,7 @@ use super::recs::Recs;
 use super::scan;
 use super::tables::KeywordTable;
 use crate::generated::Instance;
+use crate::simd::V;
 use crate::token_ids as tok;
 use crate::wat_tables::MATLAB_WORDS;
 
@@ -96,39 +97,24 @@ fn byte(src: Src, p: usize, end: usize) -> u8 {
 
 /// The first position in `[p, end)` holding one of `set`, or `end`.
 #[inline(always)]
-fn find_any<const N: usize>(src: Src, p: usize, end: usize, set: [u8; N]) -> usize {
-    #[cfg(target_arch = "aarch64")]
-    {
-        use core::arch::aarch64::*;
-        let mut p = p;
-        while p < end {
-            // SAFETY: `p < end`, at most the input length, so the 16 bytes
-            // lie inside the input and its slack.
-            let k = unsafe {
-                let w = vld1q_u8(src.0.as_ptr().add(p));
-                let mut hit = vceqq_u8(w, vdupq_n_u8(set[0]));
-                let mut i = 1;
-                while i < N {
-                    hit = vorrq_u8(hit, vceqq_u8(w, vdupq_n_u8(set[i])));
-                    i += 1;
-                }
-                scan::first_lane(hit)
-            };
-            if k < 16 {
-                return (p + k).min(end);
-            }
-            p += 16;
+fn find_any<const N: usize>(src: Src, mut p: usize, end: usize, set: [u8; N]) -> usize {
+    while p < end {
+        // SAFETY: `p < end`, at most the input length, so the 16 bytes lie
+        // inside the input and its slack.
+        let w = unsafe { V::load(src.0.as_ptr().add(p)) };
+        let mut hit = w.eq(V::splat(set[0]));
+        let mut i = 1;
+        while i < N {
+            hit = hit.or(w.eq(V::splat(set[i])));
+            i += 1;
         }
-        end
-    }
-    #[cfg(not(target_arch = "aarch64"))]
-    {
-        let mut p = p;
-        while p < end && !set.contains(&src[p]) {
-            p += 1;
+        let k = hit.first();
+        if k < 16 {
+            return (p + k).min(end);
         }
-        p.min(end)
+        p += 16;
     }
+    end
 }
 
 /// End of the number at `p`, with radix digits, separators, exponents,

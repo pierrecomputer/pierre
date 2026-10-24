@@ -16,6 +16,7 @@ use super::recs::Recs;
 use super::scan;
 use super::tables::KeywordTable;
 use crate::generated::Instance;
+use crate::simd::V;
 use crate::token_ids as tok;
 use crate::wat_tables::PHP_WORDS;
 
@@ -109,33 +110,17 @@ fn emit(recs: &mut Recs, hl: u32, lhs: usize, rhs: usize) {
 /// slack; matches there are clamped away.
 #[inline(always)]
 fn find2(src: Src, mut p: usize, end: usize, a: u8, b: u8) -> usize {
-    #[cfg(target_arch = "aarch64")]
-    {
-        use core::arch::aarch64::*;
-        while p < end {
-            // SAFETY: `p < end`, at most the input length, so the 16 bytes
-            // lie inside the input and its slack.
-            let k = unsafe {
-                let w = vld1q_u8(src.0.as_ptr().add(p));
-                scan::first_lane(vorrq_u8(
-                    vceqq_u8(w, vdupq_n_u8(a)),
-                    vceqq_u8(w, vdupq_n_u8(b)),
-                ))
-            };
-            if k < 16 {
-                return (p + k).min(end);
-            }
-            p += 16;
+    while p < end {
+        // SAFETY: `p < end`, at most the input length, so the 16 bytes lie
+        // inside the input and its slack.
+        let w = unsafe { V::load(src.0.as_ptr().add(p)) };
+        let k = w.eq(V::splat(a)).or(w.eq(V::splat(b))).first();
+        if k < 16 {
+            return (p + k).min(end);
         }
-        end
+        p += 16;
     }
-    #[cfg(not(target_arch = "aarch64"))]
-    {
-        while p < end && src[p] != a && src[p] != b {
-            p += 1;
-        }
-        p.min(end)
-    }
+    end
 }
 
 /// Does `[lhs, rhs)` name a raw-text element? 1 script, 2 style, 0 other
@@ -733,26 +718,12 @@ static PHP_LENGTHS: [u32; 256] = {
 #[inline(always)]
 fn lower16(src: Src, p: usize) -> [u8; 32] {
     let mut out = [0u8; 32];
-    #[cfg(target_arch = "aarch64")]
     // SAFETY: `p` lies within the input, so 16 bytes from it lie inside the
     // input and its slack; `out` holds 32 bytes.
     unsafe {
-        use core::arch::aarch64::*;
-        let v = vld1q_u8(src.0.as_ptr().add(p));
-        let upper = vcleq_u8(vsubq_u8(v, vdupq_n_u8(b'A')), vdupq_n_u8(25));
-        vst1q_u8(
-            out.as_mut_ptr(),
-            vorrq_u8(v, vandq_u8(upper, vdupq_n_u8(32))),
-        );
-    }
-    #[cfg(not(target_arch = "aarch64"))]
-    for (i, b) in out.iter_mut().enumerate().take(16) {
-        let c = src[p + i];
-        *b = if c.wrapping_sub(b'A') <= 25 {
-            c | 32
-        } else {
-            c
-        };
+        let v = V::load(src.0.as_ptr().add(p));
+        let upper = v.sub(V::splat(b'A')).le(V::splat(25));
+        v.or(upper.and(V::splat(32))).store(out.as_mut_ptr());
     }
     out
 }
