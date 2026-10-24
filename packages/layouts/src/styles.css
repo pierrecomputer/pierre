@@ -45,12 +45,16 @@
   contain: style;
 }
 
-/* With `paneLayers`, each pane host is its own compositor layer. Blink then
-   groups the paint of each pane inside its layer, which roughly halves the
-   Layerize step of an update in one pane with real content at 16 panes, but
-   costs tile memory at small pane counts. */
+/* With `paneLayers`, each pane host is its own compositor layer, from a 3D
+   transform. Blink then groups the paint of each pane inside its layer, which
+   roughly halves the Layerize step of an update in one pane with real content
+   at 16 panes, but costs tile memory at small pane counts. `will-change:
+   transform` also makes a layer, but Chromium then keeps the raster scale of a
+   scale animation after it ends: after a move or a restore, a pane kept up to
+   3 times its tiles. The 2D transform of a covered pane replaces this one, so
+   a covered host is not a layer and keeps no tiles. */
 .pierre-layout[data-pane-layers='true'] > .pierre-layout-pane {
-  will-change: transform;
+  transform: translateZ(0);
 }
 
 /* Layout changes animate with transforms from each element's old box (FLIP). */

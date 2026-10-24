@@ -56,19 +56,15 @@ const resize =
     ? requestedResize
     : 'live';
 // Experimental paint isolation of pane content, for the resize drag exploration.
-// `no-layer` removes the compositor layer of each pane host and restores the
-// identity transform that pane hosts had before 40389155.
+// `layer` adds `will-change: transform` to each pane host, the layer of the
+// pane hosts from 40389155 until the layer came from `translateZ(0)`; with
+// `layers=off`, it is that layer alone.
 const isolate = params.get('isolate');
 const ISOLATION: Record<string, string> = {
   contain: '.pierre-layout-content { contain: strict; }',
   layer: '.pierre-layout-pane { will-change: transform; }',
   'content-layer':
     '.pierre-layout-content { contain: strict; will-change: transform; }',
-  'no-layer': '.pierre-layout-pane { will-change: auto !important; }',
-  // A covered or hidden pane host stops being its own layer while its content
-  // does not render.
-  'covered-no-layer':
-    ".pierre-layout-pane:is([data-hidden='true'], [data-collapsed='true']) { will-change: auto !important; }",
 };
 if (isolate !== null && isolate in ISOLATION) {
   const sheet = document.createElement('style');

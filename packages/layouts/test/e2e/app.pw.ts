@@ -112,16 +112,23 @@ test('panes and the zoom change at once when their animations are off', async ({
 test('each pane host is its own compositor layer only when paneLayers asks for it', async ({
   page,
 }) => {
-  const willChange = () =>
-    host(page, 'agent').evaluate(
-      (element) => getComputedStyle(element).willChange
+  // A pane host is a layer when its transform is 3D.
+  const layered = (id: string) =>
+    host(page, id).evaluate(
+      (element) =>
+        !(element.computedStyleMap().get('transform') as CSSTransformValue).is2D
     );
-  expect(await willChange()).toBe('transform');
+  expect(await layered('agent')).toBe(true);
   await page.getByLabel('Pane layers').selectOption('off');
-  expect(await willChange()).toBe('auto');
+  expect(await layered('agent')).toBe(false);
   // The app shows 5 panes, fewer than the 8 from which the layers start.
   await page.getByLabel('Pane layers').selectOption('auto');
-  expect(await willChange()).toBe('auto');
+  expect(await layered('agent')).toBe(false);
   await page.getByLabel('Pane layers').selectOption('on');
-  expect(await willChange()).toBe('transform');
+  expect(await layered('agent')).toBe(true);
+  // A covered pane moves out with a 2D transform, so it is not a layer.
+  await page.getByRole('button', { name: 'Zoom Editor', exact: true }).click();
+  await expect(host(page, 'agent')).toHaveAttribute('data-hidden', 'true');
+  expect(await layered('agent')).toBe(false);
+  expect(await layered('editor')).toBe(true);
 });

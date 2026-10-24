@@ -18,18 +18,18 @@ A full headless run takes about 30 minutes. The memory values and the repeat
 scenario take about 20 of them; `BENCH_MEMORY=0` skips them. Options come from
 the environment:
 
-| Variable            | Default            | Meaning                                                                   |
-| ------------------- | ------------------ | ------------------------------------------------------------------------- |
-| `BENCH_RUNS`        | `5`                | Measured runs for each scenario and parameter set.                        |
-| `BENCH_WARMUP`      | `1`                | Runs before the measured runs. The report does not keep them.             |
-| `BENCH_PANES`       | `4,16`             | Pane counts.                                                              |
-| `BENCH_CONTENT`     | `light,heavy,real` | Content weights.                                                          |
-| `BENCH_SCENARIOS`   | all                | A comma-separated list of scenario IDs.                                   |
-| `BENCH_SAVE`        | `1`                | `0` writes the report to the output directory, not `results`.             |
-| `BENCH_MODE`        | `headless`         | `headed` opens a browser window and measures frames at the display rate.  |
-| `BENCH_ATTRIBUTION` | `1`                | `0` skips the attribution run of each record.                             |
-| `BENCH_MEMORY`      | `1`                | `0` skips the memory values and the repeat scenario.                      |
-| `BENCH_QUERY`       | empty              | Fixture parameters that select a variant, for example `isolate=no-layer`. |
+| Variable            | Default            | Meaning                                                                  |
+| ------------------- | ------------------ | ------------------------------------------------------------------------ |
+| `BENCH_RUNS`        | `5`                | Measured runs for each scenario and parameter set.                       |
+| `BENCH_WARMUP`      | `1`                | Runs before the measured runs. The report does not keep them.            |
+| `BENCH_PANES`       | `4,16`             | Pane counts.                                                             |
+| `BENCH_CONTENT`     | `light,heavy,real` | Content weights.                                                         |
+| `BENCH_SCENARIOS`   | all                | A comma-separated list of scenario IDs.                                  |
+| `BENCH_SAVE`        | `1`                | `0` writes the report to the output directory, not `results`.            |
+| `BENCH_MODE`        | `headless`         | `headed` opens a browser window and measures frames at the display rate. |
+| `BENCH_ATTRIBUTION` | `1`                | `0` skips the attribution run of each record.                            |
+| `BENCH_MEMORY`      | `1`                | `0` skips the memory values and the repeat scenario.                     |
+| `BENCH_QUERY`       | empty              | Fixture parameters that select a variant, for example `layers=off`.      |
 
 For a quick trial that writes nothing to the repository:
 
@@ -71,9 +71,15 @@ work that a layout operation pushes into content.
 `window.__layoutsBench` exposes the store, the counters, `append(id)` to add
 output to a pane, and `busy(ms)` to block the main thread.
 
-`?isolate=` selects a variant of compositing: `layer` gives each pane host a
-compositor layer, `no-layer` removes it (as before commit `40389155`), `contain`
-and `content-layer` isolate the content area.
+`?layers=` sets the `paneLayers` option: `off`, or a number of visible panes
+from which each pane host is its own compositor layer. Without it, the option
+has its default, `true`.
+
+`?isolate=` selects a variant of compositing: `layer` adds
+`will-change: transform` to each pane host, which Chromium keeps at the raster
+scale of its last animation (with `layers=off`, the pane layers from commit
+`40389155` to the change to `translateZ(0)`). `contain` and `content-layer`
+isolate the content area.
 
 ## Scenarios
 

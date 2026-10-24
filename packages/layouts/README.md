@@ -188,7 +188,7 @@ panes remain mounted but are inert and excluded from the accessibility tree.
 Motion respects `prefers-reduced-motion`.
 
 Each pane host clips its content at its rounded border with `overflow: clip`. By
-default each pane host is its own compositor layer (`will-change: transform`):
+default each pane host is its own compositor layer (`transform: translateZ(0)`):
 an update in one pane then costs Blink less compositing work when there are many
 panes, at the cost of tile memory for each pane, which matters more when there
 are few. `paneLayers={false}` turns the layers off, and
