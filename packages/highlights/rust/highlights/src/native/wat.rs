@@ -5,14 +5,12 @@
 //! same order, as the translated `$hlWat`. The records equal the translated
 //! lexer's records.
 
-#[cfg(target_arch = "aarch64")]
-use core::arch::aarch64::*;
-
 use super::Lexer;
 use super::recs::Recs;
 use super::scan;
 use crate::Rec;
 use crate::generated::Instance;
+use crate::simd::V;
 use crate::token_ids as tok;
 use crate::wat_tables::WAT_WORDS;
 
@@ -175,17 +173,10 @@ fn whitespace_end(src: &[u8], mut p: usize) -> usize {
         let c = at(src, p);
         if c == b' ' {
             // Skip spaces 16 bytes at a time (indentation runs long).
-            #[cfg(target_arch = "aarch64")]
             // SAFETY: `p` lies before the NUL after the input, so the
             // 16-byte read stays inside the slack.
-            unsafe {
-                let w = vld1q_u8(src.as_ptr().add(p));
-                p += scan::first_lane(vmvnq_u8(vceqq_u8(w, vdupq_n_u8(b' '))));
-            }
-            #[cfg(not(target_arch = "aarch64"))]
-            while at(src, p) == b' ' {
-                p += 1;
-            }
+            let w = unsafe { V::load(src.as_ptr().add(p)) };
+            p += w.ne(V::splat(b' ')).first();
         } else if c.wrapping_sub(9) <= 4 {
             // TAB through CR, one at a time
             p += 1;
@@ -212,29 +203,14 @@ fn name_end(src: &[u8], mut p: usize, end: usize) -> (usize, bool) {
         p += 1;
     }
     loop {
-        #[cfg(target_arch = "aarch64")]
         // SAFETY: `p` lies at or before the NUL after the input, so the
         // 16-byte load stays inside the slack.
-        let (k, d) = unsafe {
-            let w = vld1q_u8(src.as_ptr().add(p));
-            let space = vorrq_u8(
-                vceqq_u8(w, vdupq_n_u8(b' ')),
-                vcleq_u8(vsubq_u8(w, vdupq_n_u8(9)), vdupq_n_u8(4)),
-            );
-            let paren = vcleq_u8(vsubq_u8(w, vdupq_n_u8(b'(')), vdupq_n_u8(1));
-            let other = vorrq_u8(vceqq_u8(w, vdupq_n_u8(b'"')), vceqq_u8(w, vdupq_n_u8(b';')));
-            (
-                scan::first_lane(vorrq_u8(vorrq_u8(space, paren), other)),
-                scan::first_lane(vceqq_u8(w, vdupq_n_u8(b'.'))),
-            )
-        };
-        #[cfg(not(target_arch = "aarch64"))]
-        let (k, d) = (
-            (0..16)
-                .find(|&i| NAME_STOP[at(src, p + i) as usize] && at(src, p + i) != 0)
-                .unwrap_or(16),
-            (0..16).find(|&i| at(src, p + i) == b'.').unwrap_or(16),
-        );
+        let w = unsafe { V::load(src.as_ptr().add(p)) };
+        let space = w.eq(V::splat(b' ')).or(w.sub(V::splat(9)).le(V::splat(4)));
+        let paren = w.sub(V::splat(b'(')).le(V::splat(1));
+        let other = w.eq(V::splat(b'"')).or(w.eq(V::splat(b';')));
+        let k = space.or(paren).or(other).first();
+        let d = w.eq(V::splat(b'.')).first();
         dot |= d < k && p + d < end;
         if p + k >= end {
             return (end, dot);
