@@ -243,189 +243,92 @@ impl MemView {
 }
 
 // ---------------------------------------------------------------------------
-// SIMD: the i8x16 subset the lexers use, on NEON with a portable fallback.
+// SIMD: the i8x16 subset the translated lexers use, on the shared backends
+// in `crate::simd`.
 
-#[cfg(target_arch = "aarch64")]
-#[allow(dead_code)]
-mod simd {
-    use core::arch::aarch64::*;
+pub type V128 = crate::simd::V;
 
-    pub type V128 = uint8x16_t;
-
-    #[inline(always)]
-    pub fn v_zero() -> V128 {
-        unsafe { vdupq_n_u8(0) }
-    }
-    #[inline(always)]
-    pub unsafe fn v_load(p: *const u8) -> V128 {
-        unsafe { vld1q_u8(p) }
-    }
-    #[inline(always)]
-    pub unsafe fn v_store(p: *mut u8, v: V128) {
-        unsafe { vst1q_u8(p, v) }
-    }
-    #[inline(always)]
-    pub fn v_splat(x: i32) -> V128 {
-        unsafe { vdupq_n_u8(x as u8) }
-    }
-    #[inline(always)]
-    pub fn v_eq(a: V128, b: V128) -> V128 {
-        unsafe { vceqq_u8(a, b) }
-    }
-    #[inline(always)]
-    pub fn v_ne(a: V128, b: V128) -> V128 {
-        unsafe { vmvnq_u8(vceqq_u8(a, b)) }
-    }
-    #[inline(always)]
-    pub fn v_ge_u(a: V128, b: V128) -> V128 {
-        unsafe { vcgeq_u8(a, b) }
-    }
-    #[inline(always)]
-    pub fn v_le_u(a: V128, b: V128) -> V128 {
-        unsafe { vcleq_u8(a, b) }
-    }
-    #[inline(always)]
-    pub fn v_gt_s(a: V128, b: V128) -> V128 {
-        unsafe { vcgtq_s8(vreinterpretq_s8_u8(a), vreinterpretq_s8_u8(b)) }
-    }
-    #[inline(always)]
-    pub fn v_sub(a: V128, b: V128) -> V128 {
-        unsafe { vsubq_u8(a, b) }
-    }
-    #[inline(always)]
-    pub fn v_and(a: V128, b: V128) -> V128 {
-        unsafe { vandq_u8(a, b) }
-    }
-    #[inline(always)]
-    pub fn v_or(a: V128, b: V128) -> V128 {
-        unsafe { vorrq_u8(a, b) }
-    }
-    #[inline(always)]
-    pub fn v_xor(a: V128, b: V128) -> V128 {
-        unsafe { veorq_u8(a, b) }
-    }
-    #[inline(always)]
-    pub fn v_any_true(a: V128) -> i32 {
-        unsafe { (vmaxvq_u8(a) != 0) as i32 }
-    }
-    #[inline(always)]
-    pub fn v_const(x: u128) -> V128 {
-        unsafe { v_load(x.to_le_bytes().as_ptr()) }
-    }
-    #[inline(always)]
-    pub fn v_not(a: V128) -> V128 {
-        unsafe { vmvnq_u8(a) }
-    }
-    #[inline(always)]
-    pub fn v_andnot(a: V128, b: V128) -> V128 {
-        unsafe { vbicq_u8(a, b) }
-    }
-    /// One bit per lane from each lane's top bit, like `i8x16.bitmask`.
-    #[inline(always)]
-    pub fn v_bitmask(a: V128) -> i32 {
-        unsafe {
-            let bits = vshrq_n_u8::<7>(a);
-            let p16 = vreinterpretq_u16_u8(bits);
-            let p32 = vreinterpretq_u32_u16(vsraq_n_u16::<7>(p16, p16));
-            let p64 = vreinterpretq_u64_u32(vsraq_n_u32::<14>(p32, p32));
-            let p = vreinterpretq_u8_u64(vsraq_n_u64::<28>(p64, p64));
-            (vgetq_lane_u8::<0>(p) as i32) | ((vgetq_lane_u8::<8>(p) as i32) << 8)
-        }
-    }
+#[inline(always)]
+pub fn v_zero() -> V128 {
+    V128::zero()
 }
-
-#[cfg(not(target_arch = "aarch64"))]
-#[allow(dead_code)]
-mod simd {
-    #[derive(Clone, Copy)]
-    pub struct V128([u8; 16]);
-
-    #[inline(always)]
-    fn map2(a: V128, b: V128, f: impl Fn(u8, u8) -> bool) -> V128 {
-        V128(core::array::from_fn(|i| {
-            if f(a.0[i], b.0[i]) { 0xff } else { 0 }
-        }))
-    }
-
-    #[inline(always)]
-    pub fn v_zero() -> V128 {
-        V128([0; 16])
-    }
-    #[inline(always)]
-    pub unsafe fn v_load(p: *const u8) -> V128 {
-        V128(unsafe { p.cast::<[u8; 16]>().read_unaligned() })
-    }
-    #[inline(always)]
-    pub unsafe fn v_store(p: *mut u8, v: V128) {
-        unsafe { p.cast::<[u8; 16]>().write_unaligned(v.0) }
-    }
-    #[inline(always)]
-    pub fn v_splat(x: i32) -> V128 {
-        V128([x as u8; 16])
-    }
-    #[inline(always)]
-    pub fn v_eq(a: V128, b: V128) -> V128 {
-        map2(a, b, |x, y| x == y)
-    }
-    #[inline(always)]
-    pub fn v_ne(a: V128, b: V128) -> V128 {
-        map2(a, b, |x, y| x != y)
-    }
-    #[inline(always)]
-    pub fn v_ge_u(a: V128, b: V128) -> V128 {
-        map2(a, b, |x, y| x >= y)
-    }
-    #[inline(always)]
-    pub fn v_le_u(a: V128, b: V128) -> V128 {
-        map2(a, b, |x, y| x <= y)
-    }
-    #[inline(always)]
-    pub fn v_gt_s(a: V128, b: V128) -> V128 {
-        map2(a, b, |x, y| (x as i8) > (y as i8))
-    }
-    #[inline(always)]
-    pub fn v_sub(a: V128, b: V128) -> V128 {
-        V128(core::array::from_fn(|i| a.0[i].wrapping_sub(b.0[i])))
-    }
-    #[inline(always)]
-    pub fn v_and(a: V128, b: V128) -> V128 {
-        V128(core::array::from_fn(|i| a.0[i] & b.0[i]))
-    }
-    #[inline(always)]
-    pub fn v_or(a: V128, b: V128) -> V128 {
-        V128(core::array::from_fn(|i| a.0[i] | b.0[i]))
-    }
-    #[inline(always)]
-    pub fn v_xor(a: V128, b: V128) -> V128 {
-        V128(core::array::from_fn(|i| a.0[i] ^ b.0[i]))
-    }
-    #[inline(always)]
-    pub fn v_any_true(a: V128) -> i32 {
-        a.0.iter().any(|&x| x != 0) as i32
-    }
-    #[inline(always)]
-    pub fn v_const(x: u128) -> V128 {
-        V128(x.to_le_bytes())
-    }
-    #[inline(always)]
-    pub fn v_not(a: V128) -> V128 {
-        V128(core::array::from_fn(|i| !a.0[i]))
-    }
-    #[inline(always)]
-    pub fn v_andnot(a: V128, b: V128) -> V128 {
-        V128(core::array::from_fn(|i| a.0[i] & !b.0[i]))
-    }
-    #[inline(always)]
-    pub fn v_bitmask(a: V128) -> i32 {
-        let mut m = 0;
-        for (i, x) in a.0.iter().enumerate() {
-            m |= ((x >> 7) as i32) << i;
-        }
-        m
-    }
+/// # Safety
+/// `p..p + 16` must be readable.
+#[inline(always)]
+pub unsafe fn v_load(p: *const u8) -> V128 {
+    unsafe { V128::load(p) }
 }
-
-pub use simd::*;
+/// # Safety
+/// `p..p + 16` must be writable.
+#[inline(always)]
+pub unsafe fn v_store(p: *mut u8, v: V128) {
+    unsafe { v.store(p) }
+}
+#[inline(always)]
+pub fn v_splat(x: i32) -> V128 {
+    V128::splat(x as u8)
+}
+#[inline(always)]
+pub fn v_eq(a: V128, b: V128) -> V128 {
+    a.eq(b)
+}
+#[inline(always)]
+pub fn v_ne(a: V128, b: V128) -> V128 {
+    a.ne(b)
+}
+#[inline(always)]
+pub fn v_ge_u(a: V128, b: V128) -> V128 {
+    a.ge(b)
+}
+#[inline(always)]
+pub fn v_le_u(a: V128, b: V128) -> V128 {
+    a.le(b)
+}
+#[inline(always)]
+pub fn v_gt_s(a: V128, b: V128) -> V128 {
+    a.gt_signed(b)
+}
+#[inline(always)]
+pub fn v_sub(a: V128, b: V128) -> V128 {
+    a.sub(b)
+}
+#[inline(always)]
+pub fn v_and(a: V128, b: V128) -> V128 {
+    a.and(b)
+}
+#[inline(always)]
+pub fn v_or(a: V128, b: V128) -> V128 {
+    a.or(b)
+}
+#[inline(always)]
+pub fn v_xor(a: V128, b: V128) -> V128 {
+    a.xor(b)
+}
+#[inline(always)]
+pub fn v_any_true(a: V128) -> i32 {
+    a.any() as i32
+}
+#[inline(always)]
+pub fn v_const(x: u128) -> V128 {
+    V128::from_array(&x.to_le_bytes())
+}
+// Part of the translator's operation set, though the current WAT has no use for it.
+#[allow(dead_code)]
+#[inline(always)]
+pub fn v_not(a: V128) -> V128 {
+    a.not()
+}
+// Part of the translator's operation set, though the current WAT has no use for it.
+#[allow(dead_code)]
+#[inline(always)]
+pub fn v_andnot(a: V128, b: V128) -> V128 {
+    a.andnot(b)
+}
+/// One bit per lane from each lane's top bit, like `i8x16.bitmask`.
+#[inline(always)]
+pub fn v_bitmask(a: V128) -> i32 {
+    a.bits() as i32
+}
 
 // ---------------------------------------------------------------------------
 // Native emitter.

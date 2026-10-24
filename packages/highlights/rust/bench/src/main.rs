@@ -200,6 +200,7 @@ fn main() {
         Some("--train") => return train(Path::new(&args[1])),
         Some("--parallel") => return parallel(),
         Some("--viewport") => return viewport(),
+        Some("--html-parity") => return html_parity(&args[1..]),
         #[cfg(feature = "native-core")]
         Some("--native-parity") => return native_core::parity(&args[1..]),
         #[cfg(feature = "native-core")]
@@ -599,6 +600,51 @@ fn viewport() {
         }
     }
     println!("\nmid tokens exact: share of non-space bytes whose token matches whole-file lexing.");
+}
+
+/// Compare `Highlighter::html` (records rendered natively) with the wasm
+/// emitter's HTML mode for every file in `paths`, with every bundled theme
+/// in turn; a file's language comes from its name or extension. Exits
+/// nonzero on a mismatch.
+fn html_parity(paths: &[String]) {
+    let mut hl = Highlighter::new();
+    let themes: Vec<highlights::Theme> = highlights::Theme::all().collect();
+    let (mut files, mut bad) = (0, 0);
+    let mut native = Vec::new();
+    for (i, p) in paths.iter().enumerate() {
+        let path = Path::new(p);
+        let (Some(lang), Ok(input)) = (highlights::Language::from_path(path), std::fs::read(path))
+        else {
+            continue;
+        };
+        let theme = &themes[i % themes.len()];
+        hl.set_input(&input);
+        native.clear();
+        hl.html(lang, theme, &mut native);
+        hl.set_theme_table(theme.table());
+        let wasm = hl.highlight(lang.id(), Mode::Html, &input).to_vec();
+        files += 1;
+        if native != wasm {
+            bad += 1;
+            let at = native
+                .iter()
+                .zip(&wasm)
+                .position(|(a, b)| a != b)
+                .unwrap_or(0);
+            println!(
+                "MISMATCH {p} ({}): byte {at}: native {:?} wasm {:?}",
+                theme.name(),
+                String::from_utf8_lossy(
+                    &native[at.saturating_sub(20)..(at + 40).min(native.len())]
+                ),
+                String::from_utf8_lossy(&wasm[at.saturating_sub(20)..(at + 40).min(wasm.len())]),
+            );
+        }
+    }
+    println!("html parity: {files} files, {bad} mismatched");
+    if files == 0 || bad > 0 {
+        std::process::exit(1);
+    }
 }
 
 /// Loop native tokenizing of one `gen/bench` input so a sampling profiler

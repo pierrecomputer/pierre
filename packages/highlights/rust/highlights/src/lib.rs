@@ -11,6 +11,7 @@ mod html;
 mod native;
 pub mod parallel;
 mod rt;
+mod simd;
 mod terminal;
 mod theme;
 

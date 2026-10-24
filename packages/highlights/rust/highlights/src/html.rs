@@ -5,6 +5,7 @@
 //! sharing a span. Writes go through a raw cursor into capacity reserved up
 //! front, so the per-token work is a few fixed-size stores.
 
+use crate::simd::{Lanes, V};
 use crate::{Rec, TOKEN_TYPES};
 
 /// Openers are copied as one 64-byte block; later writes overwrite the tail.
@@ -144,7 +145,6 @@ impl HtmlTheme {
 }
 
 /// Copy `n` bytes from `src` to `dst`, escaping `&`, `<`, and `>`, 16 bytes
-/// Copy `n` bytes from `src` to `dst`, escaping `&`, `<`, and `>`, 16 bytes
 /// per step: one compare finds every special in the block, and each one is
 /// replaced without rescanning. Reads and writes may run 16 bytes past the
 /// range.
@@ -154,14 +154,13 @@ unsafe fn escape(mut src: *const u8, n: usize, mut dst: *mut u8) -> *mut u8 {
         let end = src.add(n);
         while src < end {
             let take = (end.offset_from(src) as usize).min(16);
-            // Four bits per byte, set for a special.
             let mut mask = specials16(src);
             if take < 16 {
-                mask &= (1u64 << (take * 4)) - 1;
+                mask = mask.and(Lanes::first_n(take));
             }
             let mut from = 0;
-            while mask != 0 {
-                let k = mask.trailing_zeros() as usize / 4;
+            while mask.any() {
+                let k = mask.first();
                 core::ptr::copy_nonoverlapping(src.add(from), dst, 16);
                 dst = dst.add(k - from);
                 let (rep, rep_len): ([u8; 8], usize) = match *src.add(k) {
@@ -172,7 +171,7 @@ unsafe fn escape(mut src: *const u8, n: usize, mut dst: *mut u8) -> *mut u8 {
                 dst.cast::<[u8; 8]>().write_unaligned(rep);
                 dst = dst.add(rep_len);
                 from = k + 1;
-                mask &= !(0xf << (k * 4));
+                mask = mask.without(k);
             }
             core::ptr::copy_nonoverlapping(src.add(from), dst, 16);
             dst = dst.add(take - from);
@@ -182,32 +181,13 @@ unsafe fn escape(mut src: *const u8, n: usize, mut dst: *mut u8) -> *mut u8 {
     }
 }
 
-/// Four bits per byte of the 16 at `p`, set where the byte is `&`, `<`,
-/// or `>`.
+/// The bytes of the 16 at `p` that are `&`, `<`, or `>`.
 #[inline(always)]
-unsafe fn specials16(p: *const u8) -> u64 {
-    #[cfg(target_arch = "aarch64")]
-    unsafe {
-        use core::arch::aarch64::*;
-        let w = vld1q_u8(p);
-        // `<` and `>` differ only in bit 1.
-        let hit = vorrq_u8(
-            vceqq_u8(vandq_u8(w, vdupq_n_u8(0xfd)), vdupq_n_u8(b'<')),
-            vceqq_u8(w, vdupq_n_u8(b'&')),
-        );
-        vget_lane_u64::<0>(vreinterpret_u64_u8(vshrn_n_u16::<4>(vreinterpretq_u16_u8(
-            hit,
-        ))))
-    }
-    #[cfg(not(target_arch = "aarch64"))]
-    unsafe {
-        let mut m = 0u64;
-        for i in 0..16 {
-            let b = *p.add(i);
-            if b == b'&' || b == b'<' || b == b'>' {
-                m |= 0xf << (i * 4);
-            }
-        }
-        m
-    }
+unsafe fn specials16(p: *const u8) -> Lanes {
+    let w = unsafe { V::load(p) };
+    // `<` and `>` differ only in bit 1.
+    w.and(V::splat(0xfd))
+        .eq(V::splat(b'<'))
+        .or(w.eq(V::splat(b'&')))
+        .lanes()
 }

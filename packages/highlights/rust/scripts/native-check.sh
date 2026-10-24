@@ -4,7 +4,7 @@
 # FAIL.
 #
 #   scripts/native-check.sh <module> [--fuzz N] [--target-dir DIR] [--no-perf]
-#                           [--update-lock] [--corpus DIR]
+#                           [--update-lock] [--corpus DIR] [--target TRIPLE]
 #
 # <module> is a src/langs/<module>.wat name (scripts/native-modules.ts lists
 # them with their languages). Steps:
@@ -22,6 +22,10 @@
 #   4. instructions and cycles per record, native against translated, on
 #      the language's benchmark input and its training corpus.
 #
+# --target builds for another target and runs steps 1-3 there (on this Mac,
+# x86_64-apple-darwin runs under Rosetta), without perf, which another
+# architecture's emulation would not measure.
+#
 # Instruction counts are steady under machine load; cycles are not.
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -33,8 +37,10 @@ target="target/native-$module"
 perf=1
 update_lock=0
 corpus=target/parity
+triple=
 while [ $# -gt 0 ]; do
   case "$1" in
+    --target) triple="$2"; perf=0; shift 2 ;;
     --corpus) corpus="$2"; shift 2 ;;
     --update-lock) update_lock=1; shift ;;
     --fuzz) fuzz="$2"; shift 2 ;;
@@ -89,9 +95,16 @@ if [ "$update_lock" = 0 ]; then
   fi
   echo "drift lock: in sync"
 fi
-cargo build --quiet --release -p bench --features "$feature" --target-dir "$target" ||
-  fail "build"
-bench="$target/release/bench"
+if [ -n "$triple" ]; then
+  target="$target-$triple"
+  cargo build --quiet --release -p bench --features "$feature" --target "$triple" \
+    --target-dir "$target" || fail "build"
+  bench="$target/$triple/release/bench"
+else
+  cargo build --quiet --release -p bench --features "$feature" --target-dir "$target" ||
+    fail "build"
+  bench="$target/release/bench"
+fi
 
 for lang in $langs; do
   "$bench" --native-parity "$corpus/$lang"/* | tail -3 || fail "parity ($lang)"

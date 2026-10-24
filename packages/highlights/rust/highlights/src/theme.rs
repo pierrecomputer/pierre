@@ -71,7 +71,7 @@ impl Theme {
     }
 
     /// The packed table, as the wasm emitter reads it.
-    pub(crate) fn table(&self) -> &'static [u8] {
+    pub fn table(&self) -> &'static [u8] {
         self.table
     }
 
