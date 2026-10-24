@@ -8,14 +8,12 @@
 //! so this lexer dispatches on a byte class and, for each class, tests only
 //! the rules that can match it, in the WAT's order.
 
-#[cfg(target_arch = "aarch64")]
-use core::arch::aarch64::*;
-
 use super::Lexer;
 use super::scan;
 use super::tables::byteset;
 use crate::Rec;
 use crate::generated::Instance;
+use crate::simd::V;
 use crate::token_ids as tok;
 use crate::wat_tables::C3_WORDS;
 
@@ -349,33 +347,19 @@ fn ident_end(src: &[u8], mut p: usize) -> usize {
         }
         p += 1;
     }
-    #[cfg(target_arch = "aarch64")]
-    // SAFETY: each 16-byte load starts at or before the NUL after the
-    // input, inside the slack.
-    unsafe {
-        loop {
-            let v = vld1q_u8(src.as_ptr().add(p));
-            let alpha = vcleq_u8(
-                vsubq_u8(vorrq_u8(v, vdupq_n_u8(0x20)), vdupq_n_u8(b'a')),
-                vdupq_n_u8(25),
-            );
-            let digit = vcleq_u8(vsubq_u8(v, vdupq_n_u8(b'0')), vdupq_n_u8(9));
-            let extra = vorrq_u8(vceqq_u8(v, vdupq_n_u8(b'_')), vceqq_u8(v, vdupq_n_u8(b'$')));
-            let high = vcltzq_s8(vreinterpretq_s8_u8(v));
-            let ok = vorrq_u8(vorrq_u8(alpha, digit), vorrq_u8(extra, high));
-            let k = scan::first_lane(vmvnq_u8(ok));
-            if k < 16 {
-                return p + k;
-            }
-            p += 16;
+    loop {
+        // SAFETY: each 16-byte load starts at or before the NUL after the
+        // input, inside the slack.
+        let v = unsafe { V::load(src.as_ptr().add(p)) };
+        let alpha = v.or(V::splat(0x20)).sub(V::splat(b'a')).le(V::splat(25));
+        let digit = v.sub(V::splat(b'0')).le(V::splat(9));
+        let extra = v.eq(V::splat(b'_')).or(v.eq(V::splat(b'$')));
+        let ok = alpha.or(digit).or(extra.or(v.high()));
+        let k = ok.not().first();
+        if k < 16 {
+            return p + k;
         }
-    }
-    #[cfg(not(target_arch = "aarch64"))]
-    {
-        while is_ident_continue(at(src, p)) {
-            p += 1;
-        }
-        p
+        p += 16;
     }
 }
 
@@ -485,42 +469,26 @@ fn nested_comment_end(
     let mut depth = 1u32;
     loop {
         // the earliest opener or closer at or after `p`
-        #[cfg(target_arch = "aarch64")]
-        // SAFETY: each load starts before `end` and reads 17 bytes, inside
-        // the input slack.
-        unsafe {
-            loop {
-                if p >= end {
-                    return end;
-                }
-                let a = vld1q_u8(src.as_ptr().add(p));
-                let b = vld1q_u8(src.as_ptr().add(p + 1));
-                let o = vandq_u8(
-                    vceqq_u8(a, vdupq_n_u8(open[0])),
-                    vceqq_u8(b, vdupq_n_u8(open[1])),
-                );
-                let c = vandq_u8(
-                    vceqq_u8(a, vdupq_n_u8(close[0])),
-                    vceqq_u8(b, vdupq_n_u8(close[1])),
-                );
-                let k = scan::first_lane(vorrq_u8(o, c));
-                if k < 16 {
-                    p += k;
-                    break;
-                }
-                p += 16;
-            }
-        }
-        #[cfg(not(target_arch = "aarch64"))]
         loop {
             if p >= end {
                 return end;
             }
-            let pair = [at(src, p), at(src, p + 1)];
-            if pair == open || pair == close {
+            // SAFETY: each load starts before `end` and reads 17 bytes,
+            // inside the input slack.
+            let (a, b) = unsafe {
+                (
+                    V::load(src.as_ptr().add(p)),
+                    V::load(src.as_ptr().add(p + 1)),
+                )
+            };
+            let o = a.eq(V::splat(open[0])).and(b.eq(V::splat(open[1])));
+            let c = a.eq(V::splat(close[0])).and(b.eq(V::splat(close[1])));
+            let k = o.or(c).first();
+            if k < 16 {
+                p += k;
                 break;
             }
-            p += 1;
+            p += 16;
         }
         if p + 1 >= end {
             return end;
