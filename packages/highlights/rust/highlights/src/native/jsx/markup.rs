@@ -8,9 +8,6 @@
 //! adds 4 directive, 5 script body, 6 style body, 7 the tail of a dynamic
 //! close tag `</{expr}>`.
 
-#[cfg(target_arch = "aarch64")]
-use core::arch::aarch64::*;
-
 use super::{Cold, FLAGS, PLAIN_START, ident_end, ident_word, run_end};
 use crate::generated::Instance;
 use crate::lex_ids as lex;
@@ -18,6 +15,7 @@ use crate::native::ecma::{Next, metadata_marker, tag_marker};
 use crate::native::ecma_scan::{keyword, kf};
 use crate::native::recs::Recs;
 use crate::native::scan;
+use crate::simd::V;
 use crate::token_ids as tok;
 
 /// Mode stack capacity: deeper pushes are counted, not stored.
@@ -343,22 +341,16 @@ pub(super) fn raw_close(src: &[u8], end: usize, p: usize, kind: u8) -> bool {
 #[inline(always)]
 fn content_find(src: &[u8], mut p: usize, end: usize) -> usize {
     while p < end {
-        #[cfg(target_arch = "aarch64")]
         // SAFETY: `p < end`, and the slack covers 16 bytes past `end`.
-        let k = unsafe {
-            let w = vld1q_u8(src.as_ptr().add(p));
-            let eq = |b: u8| vceqq_u8(w, vdupq_n_u8(b));
-            scan::first_lane(vorrq_u8(
-                vorrq_u8(vorrq_u8(eq(b'<'), eq(b'{')), vorrq_u8(eq(b'&'), eq(b'@'))),
-                vorrq_u8(eq(b'/'), eq(b'\n')),
-            ))
-        };
-        #[cfg(not(target_arch = "aarch64"))]
-        let k = (0..16)
-            .find(|&i| matches!(src[p + i], b'<' | b'{' | b'&' | b'@' | b'/' | b'\n'))
-            .unwrap_or(16);
-        if k < 16 {
-            p += k;
+        let w = unsafe { V::load(src.as_ptr().add(p)) };
+        let eq = |b: u8| w.eq(V::splat(b));
+        let hit = eq(b'<')
+            .or(eq(b'{'))
+            .or(eq(b'&').or(eq(b'@')))
+            .or(eq(b'/').or(eq(b'\n')))
+            .lanes();
+        if hit.any() {
+            p += hit.first();
             break;
         }
         p += 16;

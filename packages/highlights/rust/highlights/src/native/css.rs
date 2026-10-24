@@ -11,13 +11,11 @@
 //! byte, so this lexer dispatches on the first byte and, for each byte,
 //! tests only the rules that can match it, in the WAT's order.
 
-#[cfg(target_arch = "aarch64")]
-use core::arch::aarch64::*;
-
 use super::Lexer;
 use super::scan;
 use crate::Rec;
 use crate::generated::Instance;
+use crate::simd::V;
 use crate::token_ids as tok;
 
 /// The lexer for each language this module handles.
@@ -162,23 +160,6 @@ impl Out {
     }
 }
 
-/// Index of the first set lane in a NEON compare result, or 16.
-#[cfg(target_arch = "aarch64")]
-#[inline(always)]
-fn first_lane(hit: uint8x16_t) -> usize {
-    // SAFETY: plain register arithmetic.
-    unsafe {
-        let nib = vget_lane_u64::<0>(vreinterpret_u64_u8(vshrn_n_u16::<4>(vreinterpretq_u16_u8(
-            hit,
-        ))));
-        if nib == 0 {
-            16
-        } else {
-            (nib.trailing_zeros() / 4) as usize
-        }
-    }
-}
-
 /// Identifier bytes (letters, digits, `_`, `-`, any byte from 128) as two
 /// nibble tables: byte `b` is one when `IDENT_HI[b >> 4] & IDENT_LO[b & 15]`
 /// is nonzero. Each bit stands for a group of high nibbles that admit the
@@ -231,31 +212,20 @@ const IDENT_LO: [u8; 16] = {
 /// input ends every run by the input end.
 #[inline(always)]
 fn ident_run(src: &[u8], mut p: usize) -> usize {
-    #[cfg(target_arch = "aarch64")]
     // SAFETY: the run stops at the NUL after the input, so each 16-byte
     // load starts at or before it, inside the slack.
     unsafe {
-        let hi_t = vld1q_u8(IDENT_HI.as_ptr());
-        let lo_t = vld1q_u8(IDENT_LO.as_ptr());
+        let hi_t = V::from_array(&IDENT_HI);
+        let lo_t = V::from_array(&IDENT_LO);
         loop {
-            let v = vld1q_u8(src.as_ptr().add(p));
-            let hi = vqtbl1q_u8(hi_t, vshrq_n_u8::<4>(v));
-            let lo = vqtbl1q_u8(lo_t, vandq_u8(v, vdupq_n_u8(15)));
-            let k = first_lane(vceqzq_u8(vandq_u8(hi, lo)));
-            if k < 16 {
-                return p + k;
+            let v = V::load(src.as_ptr().add(p));
+            let hi = hi_t.lookup(v.shr::<4>());
+            let lo = lo_t.lookup(v.and(V::splat(15)));
+            let stop = hi.and(lo).eq(V::zero()).lanes();
+            if stop.any() {
+                return p + stop.first();
             }
             p += 16;
-        }
-    }
-    #[cfg(not(target_arch = "aarch64"))]
-    {
-        loop {
-            let c = at(src, p);
-            if !(c.is_ascii_alphanumeric() || c == b'_' || c == b'-' || c >= 128) {
-                return p;
-            }
-            p += 1;
         }
     }
 }
@@ -428,26 +398,14 @@ const DECIDE_LO: [u8; 16] = [0, 0, 8, 0, 0, 0, 0, 8, 0, 0, 1 | 4, 2 | 4, 0, 1 | 
 #[inline(always)]
 fn decide_special(src: &[u8], mut p: usize, stop: usize) -> usize {
     while p < stop {
-        #[cfg(target_arch = "aarch64")]
         // SAFETY: `p` is below `stop`, at most the input end, so the
         // 16-byte load stays inside the slack.
-        let k = unsafe {
-            let w = vld1q_u8(src.as_ptr().add(p));
-            let hi = vqtbl1q_u8(vld1q_u8(DECIDE_HI.as_ptr()), vshrq_n_u8::<4>(w));
-            let lo = vqtbl1q_u8(vld1q_u8(DECIDE_LO.as_ptr()), vandq_u8(w, vdupq_n_u8(15)));
-            first_lane(vtstq_u8(hi, lo))
-        };
-        #[cfg(not(target_arch = "aarch64"))]
-        let k = (0..16)
-            .find(|&i| {
-                matches!(
-                    at(src, p + i),
-                    10 | 13 | b'{' | b'}' | b';' | b'/' | b'"' | b'\'' | b':'
-                )
-            })
-            .unwrap_or(16);
-        if k < 16 {
-            return (p + k).min(stop);
+        let w = unsafe { V::load(src.as_ptr().add(p)) };
+        let hi = V::from_array(&DECIDE_HI).lookup(w.shr::<4>());
+        let lo = V::from_array(&DECIDE_LO).lookup(w.and(V::splat(15)));
+        let hit = hi.test(lo).lanes();
+        if hit.any() {
+            return (p + hit.first()).min(stop);
         }
         p += 16;
     }

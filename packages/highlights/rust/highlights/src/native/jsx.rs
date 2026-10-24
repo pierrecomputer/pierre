@@ -18,9 +18,6 @@
 mod ecma;
 mod markup;
 
-#[cfg(target_arch = "aarch64")]
-use core::arch::aarch64::*;
-
 use self::ecma::{Sig, Ts};
 use self::markup::JsxStack;
 use super::Lexer;
@@ -37,6 +34,7 @@ use super::scan;
 use crate::Rec;
 use crate::generated::Instance;
 use crate::lex_ids as lex;
+use crate::simd::V;
 use crate::token_ids as tok;
 
 /// The kind's color waits for the next token.
@@ -138,30 +136,16 @@ fn ident_end(src: &[u8], mut p: usize) -> usize {
         if !IDENT_CONT[*src.get_unchecked(p) as usize] {
             return p;
         }
-        #[cfg(target_arch = "aarch64")]
         loop {
-            let v = vld1q_u8(src.as_ptr().add(p));
-            let alpha = vcleq_u8(
-                vsubq_u8(vorrq_u8(v, vdupq_n_u8(0x20)), vdupq_n_u8(b'a')),
-                vdupq_n_u8(25),
-            );
-            let digit = vcleq_u8(vsubq_u8(v, vdupq_n_u8(b'0')), vdupq_n_u8(9));
-            let extra = vorrq_u8(vceqq_u8(v, vdupq_n_u8(b'_')), vceqq_u8(v, vdupq_n_u8(b'$')));
-            let ok = vorrq_u8(vorrq_u8(alpha, digit), extra);
-            let nib = vget_lane_u64::<0>(vreinterpret_u64_u8(vshrn_n_u16::<4>(
-                vreinterpretq_u16_u8(vmvnq_u8(ok)),
-            )));
-            if nib != 0 {
-                return p + (nib.trailing_zeros() / 4) as usize;
+            let v = V::load(src.as_ptr().add(p));
+            let alpha = v.or(V::splat(0x20)).sub(V::splat(b'a')).le(V::splat(25));
+            let digit = v.sub(V::splat(b'0')).le(V::splat(9));
+            let extra = v.eq(V::splat(b'_')).or(v.eq(V::splat(b'$')));
+            let stop = alpha.or(digit).or(extra).not().lanes();
+            if stop.any() {
+                return p + stop.first();
             }
             p += 16;
-        }
-        #[cfg(not(target_arch = "aarch64"))]
-        {
-            while IDENT_CONT[*src.get_unchecked(p) as usize] {
-                p += 1;
-            }
-            p
         }
     }
 }
@@ -172,46 +156,19 @@ fn ident_end(src: &[u8], mut p: usize) -> usize {
 fn space_run(src: &[u8], mut p: usize) -> (usize, bool) {
     // SAFETY: as in `ident_end`; NUL is not whitespace.
     unsafe {
-        #[cfg(target_arch = "aarch64")]
-        {
-            let mut nl = false;
-            loop {
-                let v = vld1q_u8(src.as_ptr().add(p));
-                let sp = vorrq_u8(
-                    vceqq_u8(v, vdupq_n_u8(b' ')),
-                    vcleq_u8(vsubq_u8(v, vdupq_n_u8(9)), vdupq_n_u8(4)),
-                );
-                let br = vorrq_u8(
-                    vceqq_u8(v, vdupq_n_u8(b'\n')),
-                    vceqq_u8(v, vdupq_n_u8(b'\r')),
-                );
-                let nib = |m: uint8x16_t| {
-                    vget_lane_u64::<0>(vreinterpret_u64_u8(vshrn_n_u16::<4>(vreinterpretq_u16_u8(
-                        m,
-                    ))))
-                };
-                let stop = nib(vmvnq_u8(sp));
-                let breaks = nib(br);
-                if stop != 0 {
-                    let k = stop.trailing_zeros();
-                    nl |= breaks & ((1u64 << k) - 1) != 0;
-                    return (p + (k / 4) as usize, nl);
-                }
-                nl |= breaks != 0;
-                p += 16;
+        let mut nl = false;
+        loop {
+            let v = V::load(src.as_ptr().add(p));
+            let sp = v.eq(V::splat(b' ')).or(v.sub(V::splat(9)).le(V::splat(4)));
+            let br = v.eq(V::splat(b'\n')).or(v.eq(V::splat(b'\r')));
+            let stop = sp.not().lanes();
+            let br = br.lanes();
+            if stop.any() {
+                nl |= br.and(stop.before_first()).any();
+                return (p + stop.first(), nl);
             }
-        }
-        #[cfg(not(target_arch = "aarch64"))]
-        {
-            let mut nl = false;
-            loop {
-                let c = *src.get_unchecked(p);
-                if !(c == b' ' || c.wrapping_sub(9) <= 4) {
-                    return (p, nl);
-                }
-                nl |= c == b'\n' || c == b'\r';
-                p += 1;
-            }
+            nl |= br.any();
+            p += 16;
         }
     }
 }
