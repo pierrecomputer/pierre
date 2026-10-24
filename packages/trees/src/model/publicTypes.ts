@@ -142,17 +142,13 @@ export interface FileTreeDirectoryHandle extends FileTreeItemHandleBase {
 export interface FileTreeFileHandle extends FileTreeItemHandleBase {
   isDirectory(): false;
 }
-
 export type FileTreeItemHandle = FileTreeDirectoryHandle | FileTreeFileHandle;
-
 export interface FileTreeRenderOptions {
-  // Hint how many rows should fit in the first render before the browser can
-  // measure the real scroll viewport. Fractional values are allowed when the
-  // desired first-render budget is not an exact multiple of itemHeight.
   initialVisibleRowCount?: number;
   itemHeight?: number;
   overscan?: number;
   stickyFolders?: boolean;
+  flattenedSegmentsTruncation?: 'per-segment' | 'end';
 }
 
 export type FileTreeScrollOffset = 'top' | 'center' | 'nearest';
