@@ -69,6 +69,8 @@ async function inPageTask(
         } else if (operation === 'zoom-busy') {
           bench.store.toggleZoom('p0');
           setTimeout(() => bench.busy(200), 16);
+        } else if (operation === 'hide') {
+          bench.store.setHidden('p1', true);
         }
       }, 0);
     },
@@ -76,7 +78,7 @@ async function inPageTask(
   );
 }
 
-async function zoomFirstPane(page: Page): Promise<void> {
+export async function zoomFirstPane(page: Page): Promise<void> {
   await page.evaluate(() => window.__layoutsBench.store.toggleZoom('p0'));
   await page.waitForTimeout(ANIMATION_SETTLE_MS);
 }
@@ -215,6 +217,15 @@ export const SCENARIOS: Scenario[] = [
     run: (page) => appendEachFrame(page, APPEND_PANE),
   },
   {
+    id: 'hide',
+    description:
+      'Hide the second pane with store.setHidden. It keeps its content mounted.',
+    async run(page) {
+      await inPageTask(page, 'hide');
+      await page.waitForTimeout(ANIMATION_SETTLE_MS);
+    },
+  },
+  {
     id: 'container-resize',
     description: 'Narrow the viewport from 1440 px to 1200 px.',
     async run(page) {
@@ -223,3 +234,41 @@ export const SCENARIOS: Scenario[] = [
     },
   },
 ];
+
+/** Operations in each half of the repeat scenario. */
+export const REPEAT_CYCLES = 20;
+
+/**
+ * The repeat scenario: zoom and restore the first pane, then hide and show the
+ * second pane with `store.setHidden`, `cycles` times each. An app runs for
+ * hours, so these operations must not grow memory.
+ */
+export async function repeatZoomAndHide(
+  page: Page,
+  cycles: number
+): Promise<void> {
+  for (let cycle = 0; cycle < cycles; cycle++) {
+    for (let step = 0; step < 2; step++) {
+      await page.evaluate(() => window.__layoutsBench.store.toggleZoom('p0'));
+      await page.waitForTimeout(ANIMATION_SETTLE_MS);
+    }
+  }
+  for (let cycle = 0; cycle < cycles; cycle++) {
+    for (const hidden of [true, false]) {
+      await page.evaluate(
+        (value) => window.__layoutsBench.store.setHidden('p1', value),
+        hidden
+      );
+      await page.waitForTimeout(ANIMATION_SETTLE_MS);
+    }
+  }
+}
+
+/** Hide every pane but the first with `store.setHidden`. */
+export async function hideOtherPanes(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    const bench = window.__layoutsBench;
+    for (const id of bench.paneIds.slice(1)) bench.store.setHidden(id, true);
+  });
+  await page.waitForTimeout(ANIMATION_SETTLE_MS);
+}

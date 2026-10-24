@@ -9,14 +9,22 @@ import {
   type Sample,
   settle,
 } from './lib/measure';
+import { measureMemory, type MemorySnapshot } from './lib/memory';
 import { options } from './lib/options';
-import type { RawRecord } from './lib/report';
-import { SCENARIOS } from './lib/scenarios';
+import { GROWTH_VALUES, type RawRecord, type RepeatRecord } from './lib/report';
+import {
+  type ContentWeight,
+  hideOtherPanes,
+  REPEAT_CYCLES,
+  repeatZoomAndHide,
+  SCENARIOS,
+  zoomFirstPane,
+} from './lib/scenarios';
 import { BENCH_VIEWPORT } from './playwright.config';
 
-const scenarios = SCENARIOS.filter(
-  ({ id }) => options.scenarios.length === 0 || options.scenarios.includes(id)
-);
+const selected = (id: string): boolean =>
+  options.scenarios.length === 0 || options.scenarios.includes(id);
+const scenarios = SCENARIOS.filter(({ id }) => selected(id));
 
 // Real components finish async work after their first render, for example
 // syntax highlighting in a diff. Wait for it, so that it does not leak into a trace.
@@ -85,6 +93,51 @@ test('self-test: trace counts match a page with known work', async ({
   expect(shared.innerLayoutInvalidationsOutsideTarget).toBeGreaterThan(0);
 });
 
+// Four composited panes of 256 by 256 CSS pixels with a gradient each add four
+// layers and four tiles. When a browser update renames a memory-infra field or
+// changes the layer data, this test fails, and the run does not report zeros.
+test('self-test: memory values match a page with known layers', async ({
+  page,
+}) => {
+  await page.goto('/selftest.html');
+  await page.waitForFunction(() => window.__selftest !== undefined);
+  await settle(page);
+  const before = await measureMemory(page);
+  await page.evaluate(() => window.__selftest.addLayers(4));
+  await settle(page);
+  const after = await measureMemory(page);
+
+  for (const value of [
+    'tileMemoryMb',
+    'rendererMb',
+    'gpuMb',
+    'v8Mb',
+    'blinkGcMb',
+    'partitionAllocMb',
+    'mallocMb',
+    'jsHeapMb',
+    'domNodes',
+  ] as const)
+    expect(after[value], value).toBeGreaterThan(0);
+  expect(after.layers - before.layers).toBe(4);
+  expect(after.drawingLayers - before.drawingLayers).toBe(4);
+  // Each pane is one layer of the same size.
+  expect(after.panes.m0?.estimatedRasterMb).toBeGreaterThan(0);
+  for (const id of ['m0', 'm1', 'm2', 'm3']) {
+    expect(after.panes[id]?.drawingLayers).toBe(1);
+    expect(after.panes[id]?.estimatedRasterMb).toBeCloseTo(
+      after.panes.m0.estimatedRasterMb,
+      3
+    );
+  }
+  // The measured tiles of the new layers agree with the estimate.
+  const added = after.tileMemoryMb - before.tileMemoryMb;
+  const estimated = 4 * after.panes.m0.estimatedRasterMb;
+  expect(added).toBeGreaterThan(estimated * 0.75);
+  expect(added).toBeLessThan(estimated * 1.5);
+  expect(after.tileMemoryVisibleMb).toBeGreaterThan(before.tileMemoryVisibleMb);
+});
+
 for (const panes of options.panes) {
   for (const content of options.content) {
     for (const scenario of scenarios) {
@@ -122,15 +175,23 @@ for (const panes of options.panes) {
           );
           if (run >= options.warmupRuns) samples.push(sample);
         }
+        // One extra run attributes the work to panes, and then measures the
+        // memory of the page after the operation.
         let attribution: Attribution | undefined;
-        if (options.attribution) {
+        let memory: MemorySnapshot | undefined;
+        if (options.attribution || options.memory) {
           const point = await prepare();
-          attribution = await attribute(
-            browser,
-            page,
-            () => scenario.run(page, params, point),
-            scenario.target ?? null
-          );
+          const operation = (): Promise<void> =>
+            scenario.run(page, params, point);
+          if (options.attribution)
+            attribution = await attribute(
+              browser,
+              page,
+              operation,
+              scenario.target ?? null
+            );
+          else await operation();
+          if (options.memory) memory = await measureMemory(page);
         }
         const record: RawRecord = {
           scenario: scenario.id,
@@ -145,6 +206,7 @@ for (const panes of options.panes) {
           samples,
           otherTasks,
           attribution,
+          memory,
         };
         writeFileSync(
           testInfo.outputPath('record.json'),
@@ -153,4 +215,70 @@ for (const panes of options.panes) {
       });
     }
   }
+}
+
+// The repeat scenario: memory before and after repeated zooms and hides, each
+// after the page settles. One cycle of each runs first, so that memory that
+// the first operation allocates once does not count as growth. Then the
+// raster memory of covered panes: a zoom, and the same zoom with every other
+// pane hidden, which removes their layers.
+const repeatParams: [number, ContentWeight][] =
+  options.memory && selected('repeat')
+    ? options.panes.flatMap((panes) =>
+        options.content.map((content): [number, ContentWeight] => [
+          panes,
+          content,
+        ])
+      )
+    : [];
+for (const [panes, content] of repeatParams) {
+  test(`repeat · ${panes} panes · ${content}`, async ({
+    browser,
+    page,
+  }, testInfo) => {
+    await page.setViewportSize(BENCH_VIEWPORT);
+    await page.goto(
+      `/?panes=${panes}&content=${content}${options.query === '' ? '' : `&${options.query}`}`
+    );
+    const display = await probeDisplay(page);
+    await page.waitForFunction(() => window.__layoutsBench?.ready);
+    if (content === 'real') await page.waitForTimeout(REAL_CONTENT_SETTLE_MS);
+    await repeatZoomAndHide(page, 1);
+    await settle(page);
+    const before = await measureMemory(page);
+    await repeatZoomAndHide(page, REPEAT_CYCLES);
+    await settle(page);
+    const after = await measureMemory(page);
+    const growth = Object.fromEntries(
+      GROWTH_VALUES.map((value) => [
+        value,
+        Number((after[value] - before[value]).toFixed(3)),
+      ])
+    ) as RepeatRecord['growth'];
+    await zoomFirstPane(page);
+    const zoomed = await measureMemory(page);
+    await hideOtherPanes(page);
+    const alone = await measureMemory(page);
+    const record: RepeatRecord = {
+      panes,
+      content,
+      browser: `chromium ${browser.version()}`,
+      display: {
+        refreshHz: display.refreshHz,
+        deviceScaleFactor: display.deviceScaleFactor,
+      },
+      cycles: REPEAT_CYCLES,
+      before,
+      after,
+      growth,
+      covered: {
+        zoomedMb: zoomed.tileMemoryMb,
+        aloneMb: alone.tileMemoryMb,
+        tileMemoryMb: Number(
+          (zoomed.tileMemoryMb - alone.tileMemoryMb).toFixed(3)
+        ),
+      },
+    };
+    writeFileSync(testInfo.outputPath('repeat.json'), JSON.stringify(record));
+  });
 }

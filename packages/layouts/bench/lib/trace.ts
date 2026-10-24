@@ -23,7 +23,7 @@ export const ATTRIBUTION_CATEGORIES: string[] = [
   'disabled-by-default-devtools.timeline.invalidationTracking',
 ];
 
-// The fields of Chrome trace event arguments that this summary reads.
+// The fields of Chrome trace event arguments that the harness reads.
 interface TraceArgs {
   name?: string;
   elementCount?: number;
@@ -38,6 +38,16 @@ interface TraceArgs {
   chrome_frame_reporter?: FrameReporter;
   // Chrome 155 writes the same data under this key.
   frame_reporter?: FrameReporter;
+  // A memory-infra dump of one process (`ph: 'v'`). Sizes are hexadecimal strings.
+  dumps?: {
+    process_totals?: { private_footprint_bytes?: string };
+    allocators?: Record<string, AllocatorDump>;
+  };
+}
+
+/** One allocator of a memory-infra dump, for example `v8` or `cc/tile_memory/provider_0/resource_1`. */
+export interface AllocatorDump {
+  attrs?: Record<string, { type: string; units?: string; value: string }>;
 }
 
 interface FrameReporter {
@@ -46,7 +56,7 @@ interface FrameReporter {
   has_compositor_animation?: boolean;
 }
 
-interface TraceEvent {
+export interface TraceEvent {
   name: string;
   ph: string;
   pid: number;
@@ -201,7 +211,7 @@ export interface TraceAnalysis {
 const ms = (microseconds: number): number => microseconds / 1000;
 
 // The renderer of the page under test is the process of the outermost main frame.
-function rendererPid(events: readonly TraceEvent[]): number | undefined {
+export function rendererPid(events: readonly TraceEvent[]): number | undefined {
   const started = events.find(
     (event) => event.name === 'TracingStartedInBrowser'
   );

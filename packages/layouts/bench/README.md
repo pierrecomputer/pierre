@@ -16,16 +16,18 @@ moon run layouts:bench
 
 A full headless run takes about ten minutes. Options come from the environment:
 
-| Variable            | Default            | Meaning                                                                  |
-| ------------------- | ------------------ | ------------------------------------------------------------------------ |
-| `BENCH_RUNS`        | `5`                | Measured runs for each scenario and parameter set.                       |
-| `BENCH_WARMUP`      | `1`                | Runs before the measured runs. The report does not keep them.            |
-| `BENCH_PANES`       | `4,16`             | Pane counts.                                                             |
-| `BENCH_CONTENT`     | `light,heavy,real` | Content weights.                                                         |
-| `BENCH_SCENARIOS`   | all                | A comma-separated list of scenario IDs.                                  |
-| `BENCH_SAVE`        | `1`                | `0` writes the report to the output directory, not `results`.            |
-| `BENCH_MODE`        | `headless`         | `headed` opens a browser window and measures frames at the display rate. |
-| `BENCH_ATTRIBUTION` | `1`                | `0` skips the attribution run of each record.                            |
+| Variable            | Default            | Meaning                                                                   |
+| ------------------- | ------------------ | ------------------------------------------------------------------------- |
+| `BENCH_RUNS`        | `5`                | Measured runs for each scenario and parameter set.                        |
+| `BENCH_WARMUP`      | `1`                | Runs before the measured runs. The report does not keep them.             |
+| `BENCH_PANES`       | `4,16`             | Pane counts.                                                              |
+| `BENCH_CONTENT`     | `light,heavy,real` | Content weights.                                                          |
+| `BENCH_SCENARIOS`   | all                | A comma-separated list of scenario IDs.                                   |
+| `BENCH_SAVE`        | `1`                | `0` writes the report to the output directory, not `results`.             |
+| `BENCH_MODE`        | `headless`         | `headed` opens a browser window and measures frames at the display rate.  |
+| `BENCH_ATTRIBUTION` | `1`                | `0` skips the attribution run of each record.                             |
+| `BENCH_MEMORY`      | `1`                | `0` skips the memory values and the repeat scenario.                      |
+| `BENCH_QUERY`       | empty              | Fixture parameters that select a variant, for example `isolate=no-layer`. |
 
 For a quick trial that writes nothing to the repository:
 
@@ -44,7 +46,8 @@ headed pass on the reference Mac, with the window on the built-in display:
 BENCH_MODE=headed BENCH_SCENARIOS=zoom,restore,zoom-busy,split,resize moon run layouts:bench
 ```
 
-A headed report adds `-headed` to its file name.
+A headed report adds `-headed` to its file name, and a variant adds its
+parameters, for example `-isolate-no-layer`.
 
 ## Fixture
 
@@ -66,22 +69,28 @@ work that a layout operation pushes into content.
 `window.__layoutsBench` exposes the store, the counters, `append(id)` to add
 output to a pane, and `busy(ms)` to block the main thread.
 
+`?isolate=` selects a variant of compositing: `layer` gives each pane host a
+compositor layer, `no-layer` removes it (as before commit `40389155`), `contain`
+and `content-layer` isolate the content area.
+
 ## Scenarios
 
-| ID                 | Operation                                                                 |
-| ------------------ | ------------------------------------------------------------------------- |
-| `idle`             | Nothing. Shows the cost of the harness itself.                            |
-| `zoom`             | Click the zoom button of the first pane.                                  |
-| `restore`          | Click the restore button of the zoomed first pane.                        |
-| `zoom-busy`        | Zoom, then block the main thread for 200 ms during the animation.         |
-| `focus`            | Click the content of the second pane.                                     |
-| `resize`           | Drag the root separator 160 px in 16 pointer moves.                       |
-| `split`            | Add a pane to the right of the first pane.                                |
-| `close`            | Click the close button of the second pane.                                |
-| `move`             | Move the first pane to the left of the last pane.                         |
-| `append`           | Append a message to the agent chat pane once per frame, 10 times.         |
-| `hidden-append`    | Zoom the first pane, then append to the covered agent chat pane 10 times. |
-| `container-resize` | Narrow the viewport from 1440 px to 1200 px.                              |
+| ID                 | Operation                                                                                                                                             |
+| ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `idle`             | Nothing. Shows the cost of the harness itself.                                                                                                        |
+| `zoom`             | Click the zoom button of the first pane.                                                                                                              |
+| `restore`          | Click the restore button of the zoomed first pane.                                                                                                    |
+| `zoom-busy`        | Zoom, then block the main thread for 200 ms during the animation.                                                                                     |
+| `focus`            | Click the content of the second pane.                                                                                                                 |
+| `resize`           | Drag the root separator 160 px in 16 pointer moves.                                                                                                   |
+| `split`            | Add a pane to the right of the first pane.                                                                                                            |
+| `close`            | Click the close button of the second pane.                                                                                                            |
+| `move`             | Move the first pane to the left of the last pane.                                                                                                     |
+| `append`           | Append a message to the agent chat pane once per frame, 10 times.                                                                                     |
+| `hidden-append`    | Zoom the first pane, then append to the covered agent chat pane 10 times.                                                                             |
+| `hide`             | Hide the second pane with `store.setHidden`.                                                                                                          |
+| `container-resize` | Narrow the viewport from 1440 px to 1200 px.                                                                                                          |
+| `repeat`           | Not timed. Measures memory before and after 20 zooms and restores of the first pane and 20 hides and shows of the second pane. See [Memory](#memory). |
 
 Each run loads a fresh page, runs the scenario's setup, waits two frames and 150
 ms, and then traces the operation until the layout settles. With real content,
@@ -139,6 +148,43 @@ run, so it gives no times. The record's `attribution` holds:
 A count of invalidated elements is not a cost: one invalidated pane host can lay
 out all of its content. Read it with `taskLayoutMs` and `layoutMs`.
 
+## Memory
+
+After the attribution run of each record, the same page measures its memory, and
+the record's `memory` holds the values. The run first reads the layers, then
+waits until Chromium releases the raster resources that the operation stopped
+using (about 5 s after an animation), then requests a detailed memory-infra dump
+with `Tracing.requestMemoryDump`, which forces a garbage collection. The DOM
+counters and the JS heap come after two forced garbage collections. The memory
+run takes about 7 s for each record after an animation.
+
+| Field                                               | Source                                                                                                                                                            |
+| --------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `tileMemoryMb`                                      | The raster tiles that the page's compositor uses: the resources under `cc/tile_memory` of the page's renderer, less the ones with a `free_size` or a `busy_size`. |
+| `tileMemoryVisibleMb`                               | The part of `tileMemoryMb` in visible tiles: the `cc/tile_manager_*/tile_*` entries with priority `NOW`. The rest is prepaint.                                    |
+| `tileMemoryUnusedMb`                                | Resources that no tile used right after the operation. Chromium keeps them for reuse for about 5 s.                                                               |
+| `rendererMb`, `gpuMb`                               | The private footprint of the page's renderer and of the GPU process. With GPU raster, the GPU process holds the tiles.                                            |
+| `v8Mb`, `blinkGcMb`, `partitionAllocMb`, `mallocMb` | The allocators of the page's renderer.                                                                                                                            |
+| `jsHeapMb`                                          | `Runtime.getHeapUsage`, after the garbage collections.                                                                                                            |
+| `domNodes`, `jsEventListeners`                      | `Memory.getDOMCounters`, after the garbage collections.                                                                                                           |
+| `layers`, `drawingLayers`                           | `LayerTree` events after the operation.                                                                                                                           |
+| `estimatedRasterMb`                                 | The sum of the estimates of all layers that draw.                                                                                                                 |
+| `panes`                                             | For each pane: its `layers`, `drawingLayers`, `estimatedRasterMb`, and `domNodes` (also in open shadow roots).                                                    |
+
+The estimate of a layer is its area inside its pane's box and the viewport, in
+the compositor's pixels, times 4 bytes. It is not the tile memory: Chromium
+rounds each layer up to whole tiles, prepaints tiles near the viewport, and
+stores no tile for an area of one color, such as the page background.
+
+The `repeat` scenario runs once for each pane count and content weight. It does
+one zoom and one hide first, so that memory that the first operation allocates
+once does not count. Then it measures memory, does 20 zooms and restores and 20
+hides and shows, and measures again. The report's `repeats` holds both values
+and their difference (`growth`). At the end, the scenario zooms the first pane,
+measures the tile memory, hides every other pane, and measures again: the
+difference (`covered.tileMemoryMb`) is the raster memory that the covered panes
+keep.
+
 ## Self-test
 
 The first test runs on `fixture/selftest.html`: a transform animation, a `left`
@@ -149,6 +195,12 @@ attribution keeps a text change in one pane inside that pane, and finds a font
 size change above two panes in both. Chromium 134 writes frame data under
 `chrome_frame_reporter`, and Chrome 155 under `frame_reporter`; the harness
 reads both.
+
+The second test adds four composited panes of 256 by 256 CSS pixels with a
+gradient to the same page. The memory values must be above zero, the page must
+have four more layers that draw, and the tile memory must grow by 0.75 to 1.5
+times the estimate of the four layers. When Chromium renames a memory-infra
+field, this test fails.
 
 ## Bundle size
 
@@ -176,7 +228,9 @@ over light content, passes when the ratio is at most 1.25.
   device scale that the page measured, the OS, the CPU, the viewport, and the
   run counts.
 - `records`: one entry for each scenario and parameter set, with the `median` of
-  each metric and every kept sample in `samples`.
+  each metric and every kept sample in `samples`, and the `attribution` and
+  `memory` of the extra run.
+- `repeats`: the repeat scenario at each parameter set.
 - `checks`: the result of each check.
 - `bundle`: the size of each entry point.
 
@@ -195,3 +249,9 @@ to get earlier data, run it on an earlier revision.
   tracing. The `idle` scenario shows that floor.
 - The content is synthetic. It has the DOM size of real content, but not its
   scripts.
+- On the reference Mac, the headless compositor rasterizes at twice the CSS
+  pixel size, although `devicePixelRatio` is 1, and with GPU raster. Memory
+  values are for that scale. Compare them between revisions on one machine.
+- Chromium 134 writes the tiles of each layer without the layer's name, so the
+  memory of each pane is an estimate. The measured values cover the whole
+  renderer.

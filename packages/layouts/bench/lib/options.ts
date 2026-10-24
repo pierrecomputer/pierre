@@ -19,6 +19,8 @@ export interface BenchOptions {
   query: string;
   /** One extra run of each record with invalidation tracking. */
   attribution: boolean;
+  /** Memory values after the extra run of each record, and the repeat scenario. */
+  memory: boolean;
 }
 
 /**
@@ -38,4 +40,6 @@ export const options: BenchOptions = {
   query: process.env.BENCH_QUERY ?? '',
   /** Attribute work to panes in one extra run. Set `BENCH_ATTRIBUTION=0` to skip it. */
   attribution: process.env.BENCH_ATTRIBUTION !== '0',
+  /** Measure memory after the extra run of each record. Set `BENCH_MEMORY=0` to skip it. */
+  memory: process.env.BENCH_MEMORY !== '0',
 };

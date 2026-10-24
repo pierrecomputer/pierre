@@ -12,6 +12,7 @@ import { join } from 'node:path';
 import type { BundleSize } from './bundle';
 import { type CheckResult, evaluateChecks, type RecordSummary } from './checks';
 import type { Attribution, Sample } from './measure';
+import type { MemorySnapshot } from './memory';
 import type { ContentWeight } from './scenarios';
 
 /** What one benchmark test writes: every kept sample of one scenario at one parameter set. */
@@ -26,6 +27,46 @@ export interface RawRecord {
   /** The largest kinds of main-thread work that the breakdown does not name, from the last run. */
   otherTasks?: { name: string; ms: number }[];
   attribution?: Attribution;
+  /** Memory after the operation of the extra run. */
+  memory?: MemorySnapshot;
+}
+
+/** The values of a memory snapshot whose growth the repeat scenario reports. */
+export type GrowthValue =
+  | 'jsHeapMb'
+  | 'domNodes'
+  | 'jsEventListeners'
+  | 'tileMemoryMb'
+  | 'rendererMb'
+  | 'gpuMb';
+
+export const GROWTH_VALUES: readonly GrowthValue[] = [
+  'jsHeapMb',
+  'domNodes',
+  'jsEventListeners',
+  'tileMemoryMb',
+  'rendererMb',
+  'gpuMb',
+];
+
+/** What the repeat test writes: memory before and after repeated operations at one parameter set. */
+export interface RepeatRecord {
+  panes: number;
+  content: ContentWeight;
+  browser: string;
+  display: { refreshHz: number; deviceScaleFactor: number };
+  /** Zooms and restores, then hides and shows, of one pane each. */
+  cycles: number;
+  before: MemorySnapshot;
+  after: MemorySnapshot;
+  /** `after` less `before`. */
+  growth: Record<GrowthValue, number>;
+  /**
+   * After the repeat: the tile memory with the first pane zoomed, the same
+   * with every other pane hidden by `store.setHidden`, and the difference,
+   * which is the raster memory that the covered panes keep.
+   */
+  covered: { zoomedMb: number; aloneMb: number; tileMemoryMb: number };
 }
 
 /** The committed report. Version the shape, so that a later chart can read every report. */
@@ -57,7 +98,10 @@ export interface Report {
     samples: Record<keyof Sample, number[]>;
     otherTasks?: { name: string; ms: number }[];
     attribution?: Attribution;
+    memory?: MemorySnapshot;
   }[];
+  /** The repeat scenario at each parameter set. */
+  repeats?: RepeatRecord[];
   checks: CheckResult[];
   /** Bytes of each entry point: minified, then gzip, brotli, and Zstandard. */
   bundle: Record<string, BundleSize>;
@@ -77,13 +121,13 @@ function git(args: string[]): string {
   return execFileSync('git', args, { encoding: 'utf8' }).trim();
 }
 
-function findRecords(directory: string): RawRecord[] {
+// Read every file of one name that the tests wrote, for example `record.json`.
+function findFiles<T>(directory: string, name: string): T[] {
   if (!existsSync(directory)) return [];
   return readdirSync(directory, { recursive: true, encoding: 'utf8' })
-    .filter((path) => path.endsWith('record.json'))
+    .filter((path) => path.endsWith(name))
     .map(
-      (path) =>
-        JSON.parse(readFileSync(join(directory, path), 'utf8')) as RawRecord
+      (path) => JSON.parse(readFileSync(join(directory, path), 'utf8')) as T
     );
 }
 
@@ -98,12 +142,22 @@ export function writeReport(options: {
   bundle: Record<string, BundleSize>;
   variant: string;
 }): { path: string; report: Report } | null {
-  const raw = findRecords(options.recordsDirectory).sort((a, b) => {
+  const raw = findFiles<RawRecord>(
+    options.recordsDirectory,
+    'record.json'
+  ).sort((a, b) => {
     if (a.scenario !== b.scenario) return a.scenario.localeCompare(b.scenario);
     if (a.panes !== b.panes) return a.panes - b.panes;
     return a.content.localeCompare(b.content);
   });
-  if (raw.length === 0) return null;
+  const repeats = findFiles<RepeatRecord>(
+    options.recordsDirectory,
+    'repeat.json'
+  ).sort((a, b) =>
+    a.panes === b.panes ? a.content.localeCompare(b.content) : a.panes - b.panes
+  );
+  const first = raw[0] ?? repeats[0];
+  if (first === undefined) return null;
 
   const records = raw.map((record) => {
     const keys = Object.keys(record.samples[0]) as (keyof Sample)[];
@@ -124,6 +178,7 @@ export function writeReport(options: {
       samples,
       otherTasks: record.otherTasks,
       attribution: record.attribution,
+      memory: record.memory,
     };
   });
   const summaries: RecordSummary[] = records;
@@ -138,10 +193,10 @@ export function writeReport(options: {
       dirty: git(['status', '--porcelain', '--', '.']).length > 0,
     },
     environment: {
-      browser: raw[0].browser,
+      browser: first.browser,
       headless: options.headless,
-      refreshHz: raw[0].display.refreshHz,
-      deviceScaleFactor: raw[0].display.deviceScaleFactor,
+      refreshHz: first.display.refreshHz,
+      deviceScaleFactor: first.display.deviceScaleFactor,
       os: `${platform()} ${release()} ${arch()}`,
       cpu: cpus()[0]?.model ?? 'unknown',
       cpuCount: cpus().length,
@@ -152,7 +207,8 @@ export function writeReport(options: {
       variant: options.variant,
     },
     records,
-    checks: evaluateChecks(summaries),
+    repeats: repeats.length === 0 ? undefined : repeats,
+    checks: evaluateChecks(summaries, repeats),
     bundle: options.bundle,
   };
 

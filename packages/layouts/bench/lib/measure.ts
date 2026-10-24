@@ -182,7 +182,7 @@ const RESOLVE_BATCH = 100;
  * for a node that the operation removed. `DOM.resolveNode` takes the backend
  * ID directly, so the run does not push the document to the client.
  */
-async function panesOfNodes(
+export async function panesOfNodes(
   session: CDPSession,
   ids: readonly number[]
 ): Promise<Map<number, string | null>> {

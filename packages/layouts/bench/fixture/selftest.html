@@ -25,6 +25,15 @@
         height: 200px;
         background: #5489ed;
       }
+
+      .layer {
+        position: absolute;
+        top: 420px;
+        width: 256px;
+        height: 256px;
+        will-change: transform;
+        background: linear-gradient(135deg, #5489ed, #f4b860);
+      }
     </style>
   </head>
   <body>
@@ -40,6 +49,8 @@
         <p>More text</p>
       </section>
     </div>
+    <!-- Composited panes of known size for the memory self-test. -->
+    <div id="layers"></div>
     <script type="module" src="/selftest.ts"></script>
   </body>
 </html>

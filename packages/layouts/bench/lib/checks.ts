@@ -1,4 +1,6 @@
 import type { Attribution, Sample } from './measure';
+import type { MemorySnapshot } from './memory';
+import type { RepeatRecord } from './report';
 import type { ContentWeight } from './scenarios';
 
 /** The median sample of one scenario at one parameter set. */
@@ -10,9 +12,14 @@ export interface RecordSummary {
   median: Sample;
   /** One run with invalidation tracking, when the bench ran it. */
   attribution?: Attribution;
+  /** Memory after the operation of that run, when the bench measured it. */
+  memory?: MemorySnapshot;
 }
 
-/** The rules of the performance baseline in the `pierre-layouts` intent. */
+/**
+ * The rules of the performance baseline in the `pierre-layouts` intent, and
+ * `memory`: repeated operations do not grow memory, because apps run for hours.
+ */
 export type Rule =
   | 'frame-rate'
   | 'main-thread'
@@ -21,7 +28,8 @@ export type Rule =
   | 'independence-of-layers'
   | 'compositing'
   | 'hidden-content'
-  | 'scale';
+  | 'scale'
+  | 'memory';
 
 export interface CheckResult {
   id: string;
@@ -39,7 +47,10 @@ interface Check {
   rule: Rule;
   description: string;
   limit: string;
-  evaluate(find: Finder): { value: number; pass: boolean } | null;
+  evaluate(
+    find: Finder,
+    findRepeat: RepeatFinder
+  ): { value: number; pass: boolean } | null;
 }
 
 type Finder = (
@@ -47,6 +58,11 @@ type Finder = (
   panes: number,
   content: ContentWeight
 ) => RecordSummary | undefined;
+
+type RepeatFinder = (
+  panes: number,
+  content: ContentWeight
+) => RepeatRecord | undefined;
 
 // Allowed growth when a cost must not depend on content or on the number of panes.
 const GROWTH = 1.25;
@@ -76,12 +92,12 @@ function noFrames(
   metric: Metric
 ): Check['evaluate'] {
   const evaluate = atMost(scenario, panes, content, metric, 0);
-  return (find) => {
+  return (find, findRepeat) => {
     const record = find(scenario, panes, content);
     if (record === undefined) return null;
     const { framesPresented, framesPartial, framesDropped } = record.median;
     if (framesPresented + framesPartial + framesDropped === 0) return null;
-    return evaluate(find);
+    return evaluate(find, findRepeat);
   };
 }
 
@@ -104,6 +120,39 @@ function ratio(
     return { value, pass: value <= GROWTH };
   };
 }
+
+// The ratio of the tile memory between two parameter sets of one scenario.
+function tileMemoryRatio(
+  scenario: string,
+  numerator: [number, ContentWeight],
+  denominator: [number, ContentWeight]
+): Check['evaluate'] {
+  return (find) => {
+    const top = find(scenario, ...numerator)?.memory?.tileMemoryMb;
+    const bottom = find(scenario, ...denominator)?.memory?.tileMemoryMb;
+    if (top === undefined || bottom === undefined || bottom === 0) return null;
+    return { value: top / bottom, pass: top / bottom <= GROWTH };
+  };
+}
+
+// The growth of a memory value over the repeat scenario (16 heavy panes).
+function repeatGrowth(
+  value: keyof RepeatRecord['growth'],
+  limit: number
+): Check['evaluate'] {
+  return (_find, findRepeat) => {
+    const growth = findRepeat(16, 'heavy')?.growth[value];
+    return growth === undefined
+      ? null
+      : { value: growth, pass: growth <= limit };
+  };
+}
+
+// Limits of the repeat scenario's growth, from the first runs (task bench-harness-memory).
+const REPEAT_HEAP_GROWTH_MB = 1;
+const REPEAT_TILE_GROWTH_MB = 5;
+// Chromium stores tiles of 64 by 64 pixels and larger; a smaller difference is not a tile.
+const COVERED_TILE_LIMIT_MB = 0.5;
 
 const DISCRETE = ['zoom', 'restore', 'split', 'close', 'move', 'focus'];
 
@@ -283,6 +332,72 @@ export const CHECKS: Check[] = [
     limit: '0 paints',
     evaluate: atMost('hidden-append', 4, 'heavy', 'paints', 0),
   },
+  {
+    id: 'zoom-covered-panes-no-raster',
+    rule: 'hidden-content',
+    description:
+      'Covered panes keep no raster tiles after a zoom: the tile memory of a zoom less that of the same zoom with the other panes hidden (4 light panes, repeat run).',
+    limit: `${COVERED_TILE_LIMIT_MB} MB`,
+    evaluate: (_find, findRepeat) => {
+      const value = findRepeat(4, 'light')?.covered.tileMemoryMb;
+      return value === undefined
+        ? null
+        : { value, pass: value <= COVERED_TILE_LIMIT_MB };
+    },
+  },
+  {
+    id: 'hide-no-raster-in-hidden-pane',
+    rule: 'hidden-content',
+    description:
+      'A pane that store.setHidden hides has no layer that draws (16 heavy panes).',
+    limit: '0 layers',
+    evaluate: (find) => {
+      const pane = find('hide', 16, 'heavy')?.memory?.panes.p1;
+      return pane === undefined
+        ? null
+        : { value: pane.drawingLayers, pass: pane.drawingLayers === 0 };
+    },
+  },
+  {
+    id: 'idle-tile-memory-independent-of-panes',
+    rule: 'compositing',
+    description:
+      'The tile memory of a layout does not grow with the number of panes (heavy, 16 over 4).',
+    limit: `ratio ≤ ${GROWTH}`,
+    evaluate: tileMemoryRatio('idle', [16, 'heavy'], [4, 'heavy']),
+  },
+  {
+    id: 'repeat-no-dom-node-growth',
+    rule: 'memory',
+    description:
+      'Repeated zooms and hides add no DOM node (16 heavy panes, after a garbage collection).',
+    limit: '0 nodes',
+    evaluate: repeatGrowth('domNodes', 0),
+  },
+  {
+    id: 'repeat-no-listener-growth',
+    rule: 'memory',
+    description:
+      'Repeated zooms and hides add no event listener (16 heavy panes).',
+    limit: '0 listeners',
+    evaluate: repeatGrowth('jsEventListeners', 0),
+  },
+  {
+    id: 'repeat-js-heap-growth',
+    rule: 'memory',
+    description:
+      'Repeated zooms and hides grow the JS heap by little (16 heavy panes, after a garbage collection).',
+    limit: `${REPEAT_HEAP_GROWTH_MB} MB`,
+    evaluate: repeatGrowth('jsHeapMb', REPEAT_HEAP_GROWTH_MB),
+  },
+  {
+    id: 'repeat-tile-memory-growth',
+    rule: 'memory',
+    description:
+      'Repeated zooms and hides grow the tile memory by little (16 heavy panes).',
+    limit: `${REPEAT_TILE_GROWTH_MB} MB`,
+    evaluate: repeatGrowth('tileMemoryMb', REPEAT_TILE_GROWTH_MB),
+  },
   // An operation on one pane marks no element inside another pane for layout.
   // A pane host that a zoom hides or shows may count once; its content not.
   ...['zoom', 'restore', 'focus', 'append'].map(
@@ -309,8 +424,11 @@ export const CHECKS: Check[] = [
   ),
 ];
 
-/** Evaluate every check against the medians of a benchmark run. */
-export function evaluateChecks(records: RecordSummary[]): CheckResult[] {
+/** Evaluate every check against the medians and the repeat records of a benchmark run. */
+export function evaluateChecks(
+  records: RecordSummary[],
+  repeats: RepeatRecord[] = []
+): CheckResult[] {
   const find: Finder = (scenario, panes, content) =>
     records.find(
       (record) =>
@@ -318,8 +436,12 @@ export function evaluateChecks(records: RecordSummary[]): CheckResult[] {
         record.panes === panes &&
         record.content === content
     );
+  const findRepeat: RepeatFinder = (panes, content) =>
+    repeats.find(
+      (record) => record.panes === panes && record.content === content
+    );
   return CHECKS.map((check) => {
-    const result = check.evaluate(find);
+    const result = check.evaluate(find, findRepeat);
     return {
       id: check.id,
       rule: check.rule,
