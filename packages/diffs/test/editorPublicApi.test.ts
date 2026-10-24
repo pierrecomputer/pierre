@@ -13,6 +13,7 @@ import type { Marker } from '../src/editor/marker';
 import { TextDocument } from '../src/editor/textDocument';
 import type { EditorViewState } from '../src/editor/types';
 import { disposeHighlighter } from '../src/highlighter/shared_highlighter';
+import type { SearchParams } from '../src/search';
 import type {
   FileContents,
   FileDiffMetadata,
@@ -1471,6 +1472,107 @@ describe('Editor state round trip', () => {
       expect(editor.getText()).toBe(editedText);
       editor.undo();
       expect(editor.getText()).toBe('alpha\nbravo\ncharlie');
+    } finally {
+      cleanup();
+    }
+  });
+});
+
+describe('Editor.replaceSearchMatches', () => {
+  test.each(['file', 'file-diff'] as const)(
+    'replaces regex matches in a %s as one undoable edit without taking focus',
+    async (type) => {
+      const contents = 'foo-1\r\nfoo-22';
+      const fixture =
+        type === 'file'
+          ? await createEditorFixture(contents)
+          : await createDiffEditorFixture(
+              'split',
+              undefined,
+              undefined,
+              contents
+            );
+      try {
+        const params: SearchParams = {
+          text: 'foo-(\\d+)',
+          replaceText: '$1:$&\n',
+          caseSensitive: true,
+          wholeWord: false,
+          regex: true,
+        };
+        const outside = document.createElement('input');
+        document.body.append(outside);
+        outside.focus();
+        const onChange = mock(() => {});
+        fixture.editor.setOptions({ onChange });
+        const textDocument = fixture.editor.getEditState()!.document;
+        const end = fixture.editor.replaceSearchMatches(
+          textDocument.search(params),
+          params
+        );
+        expect(fixture.editor.getText()).toBe('1:foo-1\n\r\n22:foo-22\n');
+        expect(end).toEqual([20, 20]);
+        expect(onChange).toHaveBeenCalledTimes(1);
+        await wait(0);
+        expect(globalThis.document.activeElement).toBe(outside);
+        fixture.editor.undo();
+        expect(fixture.editor.getText()).toBe(contents);
+        expect(fixture.editor.canUndo).toBe(false);
+        fixture.editor.redo();
+        expect(fixture.editor.getText()).toBe('1:foo-1\n\r\n22:foo-22\n');
+      } finally {
+        fixture.cleanup();
+      }
+    }
+  );
+});
+
+describe('Editor.setSelections', () => {
+  test('can normalize selections without scrolling or taking focus', async () => {
+    const { cleanup, content, editor, file } =
+      await createEditorFixture('alpha\nbravo');
+    try {
+      const outside = document.createElement('input');
+      document.body.append(outside);
+      outside.focus();
+      const scroll = spyOn(window.HTMLElement.prototype, 'scrollIntoView');
+      const focus = spyOn(content, 'focus');
+
+      editor.setSelections(
+        [
+          {
+            start: { line: 1, character: 99 },
+            end: { line: 0, character: 2 },
+            direction: 'forward',
+          },
+        ],
+        { skipScrollAndFocus: true }
+      );
+      expect(editor.getViewState().selections).toEqual([
+        {
+          start: { line: 0, character: 2 },
+          end: { line: 1, character: 5 },
+          direction: -1,
+        },
+      ]);
+      file.rerender();
+      await wait(0);
+      expect(scroll).not.toHaveBeenCalled();
+      expect(focus).not.toHaveBeenCalled();
+      expect(document.activeElement).toBe(outside);
+
+      editor.setSelections([
+        {
+          start: { line: 0, character: 1 },
+          end: { line: 0, character: 3 },
+          direction: 'forward',
+        },
+      ]);
+      await wait(0);
+      expect(scroll).toHaveBeenCalled();
+      expect(focus).toHaveBeenCalled();
+      scroll.mockRestore();
+      focus.mockRestore();
     } finally {
       cleanup();
     }

@@ -6,6 +6,11 @@ import {
   dequeueRender,
   queueRender,
 } from '../managers/UniversalRenderingManager';
+import {
+  buildSearchReplacementText,
+  type MatchRange,
+  type SearchParams,
+} from '../search';
 import type {
   DiffLineAnnotation,
   DiffsHighlighter,
@@ -65,11 +70,7 @@ import {
   PopoverManager,
   type PopoverPlacementBounds,
 } from './popover';
-import {
-  type MatchRange,
-  type SearchPanelMode,
-  SearchPanelWidget,
-} from './searchPanel';
+import { type SearchPanelMode, SearchPanelWidget } from './searchPanel';
 import type {
   AutoSurround,
   CursorMoveOptions,
@@ -395,6 +396,14 @@ export interface EditorFocusOptions extends FocusOptions {
   character?: number;
   /** Non-negative CSS pixels below the viewport or sticky header. */
   offset?: number;
+}
+
+export interface EditorSelectionOptions {
+  /**
+   * Skip scrolling to and focusing the selection. Defaults to false.
+   * Collapsed lines are still revealed when this is true.
+   */
+  skipScrollAndFocus?: boolean;
 }
 
 // Cap on how far an edit may widen the virtualized render window, as a multiple
@@ -933,6 +942,55 @@ export class Editor<
     );
   }
 
+  /**
+   * Replace search matches in document order as one undoable edit. Returns a
+   * collapsed range after the final replacement, without moving focus or scroll.
+   */
+  replaceSearchMatches(
+    matches: readonly MatchRange[],
+    searchParams: SearchParams
+  ): MatchRange | undefined {
+    const textDocument = this.#editSession?.document;
+    if (textDocument == null) {
+      throw new Error('Editor.replaceSearchMatches: Editor is not attached');
+    }
+    if (matches.length === 0) {
+      return undefined;
+    }
+
+    let replacementEnd = 0;
+    let offsetDelta = 0;
+    const edits = matches.map(([start, end]): TextEdit => {
+      const newText = buildSearchReplacementText(
+        (offset) => textDocument.positionAt(offset),
+        (position) => textDocument.offsetAt(position),
+        (line) => textDocument.getLineText(line),
+        searchParams,
+        start,
+        end
+      );
+      replacementEnd = start + offsetDelta + newText.length;
+      offsetDelta += newText.length - (end - start);
+      return {
+        range: {
+          start: textDocument.positionAt(start),
+          end: textDocument.positionAt(end),
+        },
+        newText,
+      };
+    });
+    const change = textDocument.applyEdits(edits, true, this.#selections);
+    if (change != null) {
+      this.#applyChange(
+        change,
+        undefined,
+        this.#applyChangeToLineAnnotations(change),
+        { skipSearchRefresh: true, skipFocus: true }
+      );
+    }
+    return [replacementEnd, replacementEnd];
+  }
+
   /** Whether there is an edit to undo. */
   get canUndo(): boolean {
     return (
@@ -1048,12 +1106,14 @@ export class Editor<
   }
 
   setSelections(
-    selections: (Range & { direction: 'none' | 'backward' | 'forward' })[]
+    selections: (Range & { direction: 'none' | 'backward' | 'forward' })[],
+    options?: EditorSelectionOptions
   ): void {
-    const textDocument = this.#editSession?.document;
-    if (textDocument === undefined) {
+    const editSession = this.#editSession;
+    if (editSession?.document == null) {
       throw new Error('Editor.setSelections: Text document is not initialized');
     }
+    const { document: textDocument } = editSession;
     const resolvedSelections = selections.map<EditorSelection>((selection) => {
       let start = textDocument.normalizePosition(selection.start);
       let end = textDocument.normalizePosition(selection.end);
@@ -1077,11 +1137,21 @@ export class Editor<
     });
     this.#canMountSelectionAction = false;
     this.#updateSelections(resolvedSelections);
+    // A recycled editor restores selections from the retained session on
+    // remount, so navigation while offscreen must update that state too.
+    if (!this.#isRendering) {
+      editSession.editor = cloneEditorViewState({
+        ...editSession.editor,
+        selections: this.#selections,
+      });
+    }
     const primarySelection = resolvedSelections.at(-1);
     if (primarySelection !== undefined) {
       this.#revealLineIfCollapsed(getCaretPosition(primarySelection).line);
     }
-    this.#scrollToPrimaryCaret();
+    if (options?.skipScrollAndFocus !== true) {
+      this.#scrollToPrimaryCaret();
+    }
   }
 
   setMarkers(markers: Marker[]): void {
@@ -1329,7 +1399,7 @@ export class Editor<
     const tokenizer = this.#tokenizer;
     if (tokenizer !== undefined) {
       tokenizer.pauseBackgroundTokenize();
-      requestAnimationFrame(() => {
+      queueRender(() => {
         if (this.#tokenizer === tokenizer) {
           tokenizer.resumeBackgroundTokenize();
         }
@@ -3745,12 +3815,19 @@ export class Editor<
     const gutterEl = this.#gutterElement;
     const contentEl = this.#contentElement;
     if (
-      tokenizer == null ||
       fileInstance == null ||
       applyDocumentChange == null ||
-      textDocument == null ||
-      contentEl == null
+      textDocument == null
     ) {
+      return;
+    }
+    if (tokenizer == null || contentEl == null) {
+      // Recycling removes render resources, but edits still need to update
+      // the component's retained text and hunks before checkpointing or events.
+      applyDocumentChange(textDocument, newLineAnnotations, shouldUpdateBuffer);
+      if (newLineAnnotations != null) {
+        this.#lineAnnotations = newLineAnnotations;
+      }
       return;
     }
 
@@ -6528,35 +6605,20 @@ export class Editor<
     };
 
     const searchPanel = new SearchPanelWidget({
-      textDocument,
       containerElement: preElement,
       defaultQuery,
       mode,
       initialMatch,
+      search: (searchParams) => textDocument.search(searchParams),
+      isSameMatch: ([aStart, aEnd], [bStart, bEnd]) =>
+        aStart === bStart && aEnd === bEnd,
       scrollToMatch,
-      applyReplace: (edits: ResolvedTextEdit[]) => {
-        if (edits.length === 0) {
-          return;
-        }
-        const change = textDocument.applyEdits(
-          edits.map((edit) => ({
-            range: {
-              start: textDocument.positionAt(edit.start),
-              end: textDocument.positionAt(edit.end),
-            },
-            newText: edit.text,
-          })),
-          true,
-          this.#selections
-        );
-        if (change !== undefined) {
-          this.#applyChange(
-            change,
-            undefined,
-            this.#applyChangeToLineAnnotations(change),
-            { skipSearchRefresh: true }
-          );
-        }
+      replace: {
+        replaceMatch: (match, searchParams) =>
+          this.replaceSearchMatches([match], searchParams),
+        replaceAll: (matches, searchParams) => {
+          this.replaceSearchMatches(matches, searchParams);
+        },
       },
       onUpdate: (
         allMatches: MatchRange[],
