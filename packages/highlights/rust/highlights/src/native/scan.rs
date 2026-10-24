@@ -5,14 +5,6 @@
 
 use crate::simd::V;
 
-/// Index of the first set lane in a NEON compare result, or 16. Kept only
-/// for modules that still use NEON directly; new code uses `V::first`.
-#[cfg(target_arch = "aarch64")]
-#[inline(always)]
-pub fn first_lane(hit: core::arch::aarch64::uint8x16_t) -> usize {
-    V::from_neon(hit).first()
-}
-
 /// Find the first byte in `[p, end)` whose lane `hit` sets, 16 bytes per
 /// step.
 macro_rules! find {

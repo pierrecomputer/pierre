@@ -53,13 +53,6 @@ impl V {
         unsafe { imp::store(p, self.0) }
     }
 
-    /// A NEON vector as a `V`, for code not yet written against `V`.
-    #[cfg(target_arch = "aarch64")]
-    #[inline(always)]
-    pub fn from_neon(v: core::arch::aarch64::uint8x16_t) -> V {
-        V(v)
-    }
-
     /// The lanes, lane 0 first.
     #[inline(always)]
     pub fn to_array(self) -> [u8; 16] {
