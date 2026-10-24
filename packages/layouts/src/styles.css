@@ -27,9 +27,12 @@
 
 .pierre-layout-pane {
   position: absolute;
-  /* A covered pane moves out with a transform. With an identity transform at
-     all times, that change does not lay the host out again. */
-  transform: translate(0);
+  /* Each pane host is its own compositor layer. Blink then groups the paint
+     of each pane inside its layer, which roughly halves the Layerize step of
+     an update in one pane with real content. It also makes the host a
+     containing block at all times, so the transform that moves a covered pane
+     out does not lay the host out again. */
+  will-change: transform;
   min-width: 0;
   min-height: 0;
   /* Clip content at the rounded border with no scroll container, so that a
