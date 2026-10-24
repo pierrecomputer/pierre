@@ -12,15 +12,13 @@
 //! splice; the main loop lexes the splice and resumes the body at its
 //! closing `}`.
 
-#[cfg(target_arch = "aarch64")]
-use core::arch::aarch64::*;
-
 use super::Lexer;
 use super::recs::Recs;
 use super::scan;
 use super::tables::byteset;
 use crate::Rec;
 use crate::generated::Instance;
+use crate::simd::V;
 use crate::token_ids as tok;
 use crate::wat_tables::FSHARP_WORDS;
 
@@ -336,33 +334,22 @@ fn run_end<const X: u8>(src: &[u8], mut p: usize) -> usize {
         }
         p += 1;
     }
-    #[cfg(target_arch = "aarch64")]
     // SAFETY: each 16-byte load starts at or before the NUL after the
     // input, inside the slack.
     unsafe {
         loop {
-            let v = vld1q_u8(src.as_ptr().add(p));
-            let alpha = vcleq_u8(
-                vsubq_u8(vorrq_u8(v, vdupq_n_u8(0x20)), vdupq_n_u8(b'a')),
-                vdupq_n_u8(25),
-            );
-            let digit = vcleq_u8(vsubq_u8(v, vdupq_n_u8(b'0')), vdupq_n_u8(9));
-            let extra = vorrq_u8(vceqq_u8(v, vdupq_n_u8(b'_')), vceqq_u8(v, vdupq_n_u8(X)));
-            let high = vcltzq_s8(vreinterpretq_s8_u8(v));
-            let ok = vorrq_u8(vorrq_u8(alpha, digit), vorrq_u8(extra, high));
-            let k = scan::first_lane(vmvnq_u8(ok));
+            let v = V::load(src.as_ptr().add(p));
+            let alpha = v.or(V::splat(0x20)).sub(V::splat(b'a')).le(V::splat(25));
+            let digit = v.sub(V::splat(b'0')).le(V::splat(9));
+            let extra = v.eq(V::splat(b'_')).or(v.eq(V::splat(X)));
+            let high = v.high();
+            let ok = alpha.or(digit).or(extra.or(high));
+            let k = ok.not().first();
             if k < 16 {
                 return p + k;
             }
             p += 16;
         }
-    }
-    #[cfg(not(target_arch = "aarch64"))]
-    {
-        while table[at(src, p) as usize] {
-            p += 1;
-        }
-        p
     }
 }
 
@@ -488,28 +475,14 @@ fn is_arg_at(src: &[u8], p: usize) -> bool {
 #[inline(always)]
 fn find_nest_pair(src: &[u8], mut p: usize, end: usize) -> usize {
     while p < end {
-        #[cfg(target_arch = "aarch64")]
         // SAFETY: `p < end`, so both 16-byte loads end inside the slack.
         let k = unsafe {
-            let w = vld1q_u8(src.as_ptr().add(p));
-            let w1 = vld1q_u8(src.as_ptr().add(p + 1));
-            let open = vandq_u8(
-                vceqq_u8(w, vdupq_n_u8(b'(')),
-                vceqq_u8(w1, vdupq_n_u8(b'*')),
-            );
-            let close = vandq_u8(
-                vceqq_u8(w, vdupq_n_u8(b'*')),
-                vceqq_u8(w1, vdupq_n_u8(b')')),
-            );
-            scan::first_lane(vorrq_u8(open, close))
+            let w = V::load(src.as_ptr().add(p));
+            let w1 = V::load(src.as_ptr().add(p + 1));
+            let open = w.eq(V::splat(b'(')).and(w1.eq(V::splat(b'*')));
+            let close = w.eq(V::splat(b'*')).and(w1.eq(V::splat(b')')));
+            open.or(close).first()
         };
-        #[cfg(not(target_arch = "aarch64"))]
-        let k = (0..16)
-            .find(|&i| {
-                let (a, b) = (src[p + i], src[p + i + 1]);
-                (a == b'(' && b == b'*') || (a == b'*' && b == b')')
-            })
-            .unwrap_or(16);
         if k < 16 {
             return p + k;
         }

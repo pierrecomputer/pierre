@@ -11,14 +11,12 @@
 //! the last rule (a symbol) can take go straight to it. The binding-list
 //! state is the WAT's packed `$bl` value, kept bit for bit.
 
-#[cfg(target_arch = "aarch64")]
-use core::arch::aarch64::*;
-
 use super::Lexer;
 use super::scan;
 use super::tables::byteset;
 use crate::Rec;
 use crate::generated::Instance;
+use crate::simd::V;
 use crate::token_ids as tok;
 use crate::wat_tables::LISP_WORDS;
 
@@ -354,29 +352,21 @@ fn symbol_end(src: &[u8], mut p: usize) -> usize {
         }
         p += 1;
     }
-    #[cfg(target_arch = "aarch64")]
     // SAFETY: each 16-byte load starts at or before the NUL after the
     // input, inside the slack.
     unsafe {
-        let hi_t = vld1q_u8(DELIM_NIBBLES.0.as_ptr());
-        let lo_t = vld1q_u8(DELIM_NIBBLES.1.as_ptr());
+        let hi_t = V::from_array(&DELIM_NIBBLES.0);
+        let lo_t = V::from_array(&DELIM_NIBBLES.1);
         loop {
-            let v = vld1q_u8(src.as_ptr().add(p));
-            let h = vqtbl1q_u8(hi_t, vshrq_n_u8::<4>(v));
-            let l = vqtbl1q_u8(lo_t, vandq_u8(v, vdupq_n_u8(15)));
-            let k = scan::first_lane(vtstq_u8(h, l));
+            let v = V::load(src.as_ptr().add(p));
+            let h = hi_t.lookup(v.shr::<4>());
+            let l = lo_t.lookup(v.and(V::splat(15)));
+            let k = h.test(l).first();
             if k < 16 {
                 return p + k;
             }
             p += 16;
         }
-    }
-    #[cfg(not(target_arch = "aarch64"))]
-    {
-        while !DELIM[at(src, p) as usize] {
-            p += 1;
-        }
-        p
     }
 }
 
@@ -510,28 +500,14 @@ fn bind_step(bl: u32, c: u8, arm: u32) -> u32 {
 #[inline(always)]
 fn find_nest_pair(src: &[u8], mut p: usize, end: usize) -> usize {
     while p < end {
-        #[cfg(target_arch = "aarch64")]
         // SAFETY: `p < end`, so both 16-byte loads end inside the slack.
         let k = unsafe {
-            let w = vld1q_u8(src.as_ptr().add(p));
-            let w1 = vld1q_u8(src.as_ptr().add(p + 1));
-            let open = vandq_u8(
-                vceqq_u8(w, vdupq_n_u8(b'#')),
-                vceqq_u8(w1, vdupq_n_u8(b'|')),
-            );
-            let close = vandq_u8(
-                vceqq_u8(w, vdupq_n_u8(b'|')),
-                vceqq_u8(w1, vdupq_n_u8(b'#')),
-            );
-            scan::first_lane(vorrq_u8(open, close))
+            let w = V::load(src.as_ptr().add(p));
+            let w1 = V::load(src.as_ptr().add(p + 1));
+            let open = w.eq(V::splat(b'#')).and(w1.eq(V::splat(b'|')));
+            let close = w.eq(V::splat(b'|')).and(w1.eq(V::splat(b'#')));
+            open.or(close).first()
         };
-        #[cfg(not(target_arch = "aarch64"))]
-        let k = (0..16)
-            .find(|&i| {
-                let (a, b) = (src[p + i], src[p + i + 1]);
-                (a == b'#' && b == b'|') || (a == b'|' && b == b'#')
-            })
-            .unwrap_or(16);
         if k < 16 {
             return p + k;
         }

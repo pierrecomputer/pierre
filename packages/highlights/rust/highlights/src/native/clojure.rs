@@ -10,14 +10,12 @@
 //! only the rules that can match it, in the WAT's order. Bytes that only
 //! the last rule (a symbol) can take go straight to it.
 
-#[cfg(target_arch = "aarch64")]
-use core::arch::aarch64::*;
-
 use super::Lexer;
 use super::scan;
 use super::tables::byteset;
 use crate::Rec;
 use crate::generated::Instance;
+use crate::simd::V;
 use crate::token_ids as tok;
 use crate::wat_tables::CLOJURE_WORDS;
 
@@ -332,51 +330,29 @@ fn symbol_end_flags(src: &[u8], mut p: usize) -> (usize, u8) {
         seen |= f;
         p += 1;
     }
-    #[cfg(target_arch = "aarch64")]
-    // SAFETY: each 16-byte load starts at or before the NUL after the
-    // input, inside the slack.
-    unsafe {
-        let hi_t = vld1q_u8(DELIM_NIBBLES.0.as_ptr());
-        let lo_t = vld1q_u8(DELIM_NIBBLES.1.as_ptr());
-        // A bit mask with 4 bits per lane of a NEON compare result.
-        let bits = |m: uint8x16_t| {
-            vget_lane_u64::<0>(vreinterpret_u64_u8(vshrn_n_u16::<4>(vreinterpretq_u16_u8(
-                m,
-            ))))
-        };
-        loop {
-            let v = vld1q_u8(src.as_ptr().add(p));
-            let h = vqtbl1q_u8(hi_t, vshrq_n_u8::<4>(v));
-            let l = vqtbl1q_u8(lo_t, vandq_u8(v, vdupq_n_u8(15)));
-            let delim = bits(vtstq_u8(h, l));
-            let slash = bits(vceqq_u8(v, vdupq_n_u8(b'/')));
-            let dot = bits(vceqq_u8(v, vdupq_n_u8(b'.')));
-            // the lanes before the first delimiter
-            let before = if delim == 0 {
-                u64::MAX
-            } else {
-                (1u64 << delim.trailing_zeros()) - 1
-            };
-            if slash & before != 0 {
-                seen |= SYM_SLASH;
-            }
-            if dot & before != 0 {
-                seen |= SYM_DOT;
-            }
-            if delim != 0 {
-                return (p + (delim.trailing_zeros() / 4) as usize, seen);
-            }
-            p += 16;
-        }
-    }
-    #[cfg(not(target_arch = "aarch64"))]
+    let hi_t = V::from_array(&DELIM_NIBBLES.0);
+    let lo_t = V::from_array(&DELIM_NIBBLES.1);
     loop {
-        let f = SYM_FLAGS[at(src, p) as usize];
-        if f & SYM_DELIM != 0 {
-            return (p, seen);
+        // SAFETY: each 16-byte load starts at or before the NUL after the
+        // input, inside the slack.
+        let v = unsafe { V::load(src.as_ptr().add(p)) };
+        let h = hi_t.lookup(v.shr::<4>());
+        let l = lo_t.lookup(v.and(V::splat(15)));
+        let delim = h.test(l).lanes();
+        let slash = v.eq(V::splat(b'/')).lanes();
+        let dot = v.eq(V::splat(b'.')).lanes();
+        // the lanes before the first delimiter
+        let before = delim.before_first();
+        if slash.and(before).any() {
+            seen |= SYM_SLASH;
         }
-        seen |= f;
-        p += 1;
+        if dot.and(before).any() {
+            seen |= SYM_DOT;
+        }
+        if delim.any() {
+            return (p + delim.first(), seen);
+        }
+        p += 16;
     }
 }
 
