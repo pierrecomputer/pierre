@@ -1,0 +1,38 @@
+{
+  "name": "@pierre/patches",
+  "version": "0.0.0",
+  "description": "A fast text diff library written in WebAssembly Text (WAT), compatible with jsdiff",
+  "license": "apache-2.0",
+  "files": [
+    "dist/"
+  ],
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "workerd": "./dist/workerd.js",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "prepublishOnly": "moon run patches:prepublish"
+  },
+  "devDependencies": {
+    "binaryen": "catalog:",
+    "diff": "catalog:",
+    "tsdown": "catalog:",
+    "typescript": "catalog:",
+    "wabt": "catalog:"
+  },
+  "meta": {
+    "patch.wasm": 5216,
+    "patch.wasm.gz": 2955
+  }
+}

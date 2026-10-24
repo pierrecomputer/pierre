@@ -1,5 +1,5 @@
+import type { CreatePatchOptions } from '@pierre/patches';
 import { afterAll, describe, expect, spyOn, test } from 'bun:test';
-import type { CreatePatchOptionsNonabortable } from 'diff';
 
 import { FileDiff } from '../src/components/FileDiff';
 import { DEFAULT_THEMES } from '../src/constants';
@@ -70,7 +70,7 @@ interface CollapsedEditFixture {
 // collapse-during-edit before the option forcing is removed.
 async function createCollapsedEditFixture(
   documentKey?: string,
-  parseDiffOptions?: CreatePatchOptionsNonabortable
+  parseDiffOptions?: CreatePatchOptions
 ): Promise<CollapsedEditFixture> {
   const dom = installDom();
   const container = document.createElement('div');

@@ -12,9 +12,11 @@ import {
   disposeHighlighter,
   getSharedHighlighter,
 } from '../src/highlighter/shared_highlighter';
+import type { DiffLib, RenderDiffOptions } from '../src/types';
 import { parseDiffFromFile } from '../src/utils/parseDiffFromFile';
 import { renderDiffWithHighlighter } from '../src/utils/renderDiffWithHighlighter';
 import { renderFileWithHighlighter } from '../src/utils/renderFileWithHighlighter';
+import type { DiffRendererInstance } from '../src/worker/types';
 import type { WorkerWireResponse } from '../src/worker/workerMessage';
 import { WorkerPoolManager } from '../src/worker/WorkerPoolManager';
 import { installAnimationFramePolyfill } from './workerPoolHarness';
@@ -28,6 +30,59 @@ beforeEach(disposeHighlighter);
 afterAll(async () => {
   restoreAnimationFrame?.();
   await disposeHighlighter();
+});
+
+test('workers keep concurrent backend requests separate for the same diff', async () => {
+  const manager = new WorkerPoolManager(
+    {
+      poolSize: 1,
+      workerFactory: () =>
+        new Worker(new URL('../src/worker/worker.ts', import.meta.url), {
+          type: 'module',
+        }),
+    },
+    { theme: 'pierre-dark' }
+  );
+  const diff = parseDiffFromFile(
+    { name: 'shared.ts', contents: 'const value = 1;\n', cacheKey: 'old' },
+    { name: 'shared.ts', contents: 'const value = 2;\n', cacheKey: 'new' }
+  );
+  try {
+    await manager.initialize();
+    const requests = (['@pierre/patches', 'jsdiff'] as const).map(
+      (preferredDiffLib) =>
+        new Promise<RenderDiffOptions>((resolve, reject) => {
+          const instance: DiffRendererInstance = {
+            __id: preferredDiffLib,
+            onHighlightError: reject,
+            onHighlightSuccess(_, result, options) {
+              expect(toHtml(result.code.additionLines)).toContain(
+                'data-diff-span'
+              );
+              resolve(options);
+            },
+          };
+          manager.highlightDiffAST(instance, diff, preferredDiffLib);
+        })
+    );
+    const results = await Promise.all(requests);
+    expect(results.map(({ preferredDiffLib }) => preferredDiffLib)).toEqual([
+      '@pierre/patches',
+      'jsdiff',
+    ]);
+    const cached = manager.getDiffResultCache(diff);
+    const preferredDiffLib: DiffLib =
+      cached?.options.preferredDiffLib === 'jsdiff'
+        ? '@pierre/patches'
+        : 'jsdiff';
+    await manager.primeDiffHighlightCache(diff, preferredDiffLib);
+    expect(manager.getDiffResultCache(diff)?.options.preferredDiffLib).toBe(
+      preferredDiffLib
+    );
+    expect(manager.getDiffResultCache(diff)).not.toBe(cached);
+  } finally {
+    manager.terminate();
+  }
 });
 
 describe('worker cache transport', () => {

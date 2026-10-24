@@ -309,9 +309,9 @@ importers:
       '@pierre/icons':
         specifier: 'catalog:'
         version: 0.9.0(react@19.2.7)
-      diff:
-        specifier: 'catalog:'
-        version: 9.0.0
+      '@pierre/patches':
+        specifier: workspace:*
+        version: link:../../packages/patches
       react:
         specifier: 19.2.7
         version: 19.2.7
@@ -624,6 +624,9 @@ importers:
       '@pierre/highlights':
         specifier: workspace:*
         version: link:../highlights
+      '@pierre/patches':
+        specifier: workspace:*
+        version: link:../patches
       '@pierre/theme':
         specifier: workspace:*
         version: link:../theme
@@ -706,6 +709,24 @@ importers:
       tree-sitter-highlight:
         specifier: 'catalog:'
         version: 1.1.2
+      tsdown:
+        specifier: 'catalog:'
+        version: 0.22.14(@tsdown/css@0.22.14)(typescript@7.0.2)
+      typescript:
+        specifier: 'catalog:'
+        version: 7.0.2
+      wabt:
+        specifier: 'catalog:'
+        version: 1.0.39
+
+  packages/patches:
+    devDependencies:
+      binaryen:
+        specifier: 'catalog:'
+        version: 132.0.0
+      diff:
+        specifier: 'catalog:'
+        version: 9.0.0
       tsdown:
         specifier: 'catalog:'
         version: 0.22.14(@tsdown/css@0.22.14)(typescript@7.0.2)

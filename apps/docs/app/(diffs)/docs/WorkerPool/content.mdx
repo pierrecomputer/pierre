@@ -139,7 +139,9 @@ you can then manually pass to all your File/FileDiff instances.
   When using the worker pool, the `theme`, `lineDiffType`,
   `tokenizeMaxLineLength`, and `useTokenTransformer` render options are
   controlled by `WorkerPoolManager`, not individual components. Passing these
-  options into component instances will be ignored.
+  options into component instances will be ignored. The diff library is the
+  exception: each component's `parseDiffOptions.preferredDiffLib` also selects
+  the library its worker requests use for inline change highlights.
 </Notice>
 
 To change render options after `WorkerPoolManager` instantiates, call

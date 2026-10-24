@@ -1,7 +1,10 @@
-import { type CreatePatchOptionsNonabortable, createTwoFilesPatch } from 'diff';
-
-import type { FileContents, FileDiffMetadata } from '../types';
+import type {
+  FileContents,
+  FileDiffMetadata,
+  ParseDiffOptions,
+} from '../types';
 import { composeCacheKey } from './composeCacheKey';
+import { diffLibs } from './diffLibs';
 import { processFile } from './parsePatchFiles';
 
 const MISSING_FILE_NAME = '/dev/null';
@@ -15,7 +18,7 @@ const MISSING_FILE_NAME = '/dev/null';
 export function parseDiffFromFile(
   oldFile: FileContents | null,
   newFile: FileContents | null,
-  options?: CreatePatchOptionsNonabortable,
+  { preferredDiffLib = 'jsdiff', ...options }: ParseDiffOptions = {},
   throwOnError = false
 ): FileDiffMetadata {
   if (oldFile === null && newFile === null) {
@@ -26,7 +29,7 @@ export function parseDiffFromFile(
 
   const resolvedOldFile = oldFile ?? createMissingFile();
   const resolvedNewFile = newFile ?? createMissingFile();
-  const patch = createTwoFilesPatch(
+  const patch = diffLibs[preferredDiffLib].createTwoFilesPatch(
     resolvedOldFile.name,
     resolvedNewFile.name,
     resolvedOldFile.contents,
