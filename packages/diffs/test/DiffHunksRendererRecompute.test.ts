@@ -508,12 +508,13 @@ describe('DiffHunksRenderer edit-session hunk updates', () => {
       additionCount: hunk.additionCount,
     }));
 
-    const regionsChanged = renderer.updateRenderCache(
+    const layoutChanged = renderer.updateRenderCache(
       makeDirtyLines([[2, 'line 3']]),
       'light'
     );
 
-    expect(regionsChanged).toBe(false);
+    // The reverted lines show as context now, in the same rows.
+    expect(layoutChanged).toBe('lineTypes');
     expect(diff.hunks).toHaveLength(2);
     expect(diff.hunks[0].additionLineIndex).toBe(
       boundsBefore[0].additionLineIndex
@@ -532,7 +533,7 @@ describe('DiffHunksRenderer edit-session hunk updates', () => {
       'light'
     );
 
-    expect(regionsChanged).toBe(true);
+    expect(regionsChanged).toBe('rows');
     expect(diff.hunks).toHaveLength(3);
     expect(diff.hunks[1].additionLineIndex).toBe(11);
   });
@@ -562,7 +563,7 @@ describe('DiffHunksRenderer edit-session hunk updates', () => {
       'light'
     );
 
-    expect(regionsChanged).toBe(true);
+    expect(regionsChanged).toBe('rows');
     expect(diff.hunks[0]).toMatchObject(boundsBefore);
     expect(diff.hunks[0].splitLineCount).not.toBe(splitCountBefore);
   });
@@ -592,7 +593,7 @@ describe('DiffHunksRenderer edit-session hunk updates', () => {
       'light'
     );
 
-    expect(regionsChanged).toBe(true);
+    expect(regionsChanged).toBe('rows');
     expect(diff.hunks[0]).toMatchObject(boundsBefore);
     expect(diff.hunks[0].splitLineCount).toBe(splitCountBefore);
   });
@@ -739,7 +740,7 @@ describe('DiffHunksRenderer edit-session hunk updates', () => {
       'light'
     );
 
-    expect(regionsChanged).toBe(true);
+    expect(regionsChanged).toBe('rows');
     expect(diff.additionLines).toEqual(['']);
     const result = renderer.renderDiff();
     expect(result).toBeDefined();

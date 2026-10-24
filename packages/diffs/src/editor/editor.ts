@@ -510,6 +510,19 @@ export class Editor<
     textDocument: TextDocument<EType, LAnnotation>,
     newLineAnnotations: EditorLineAnnotation<EType, LAnnotation>[] | undefined
   ) => void;
+  // The host's updateRenderCache, typed so the editor can pass along the
+  // annotations it moved.
+  #updateRenderCache?: (
+    dirtyLines: Map<number, Array<HighlightedToken>>,
+    themeType: 'dark' | 'light',
+    options: {
+      shouldRefreshDiffsView?: boolean;
+      lineCountChangeInFlight?: boolean;
+      changedDocumentLines?: ReadonlyMap<number, string>;
+      documentLineCount?: number;
+      lineAnnotations?: EditorLineAnnotation<EType, LAnnotation>[];
+    }
+  ) => boolean;
   #publishChange?: (
     changes: EditorChange[],
     file: FileContents,
@@ -629,7 +642,17 @@ export class Editor<
         if (line >= startingLine && line < endLine) {
           const lineElement = this.#getLineElement(line);
           if (lineElement !== undefined) {
-            lineElement.replaceChildren(...renderLineTokens(tokens));
+            // Lines in a diff can have word diff highlights, which the diff
+            // keeps when it gives the redrawn line's HTML.
+            const html = this.#fileInstance?.getRedrawnRowHTML(
+              line,
+              lineElement
+            );
+            if (html != null) {
+              lineElement.innerHTML = html;
+            } else {
+              lineElement.replaceChildren(...renderLineTokens(tokens));
+            }
             refreshPrediction ||= predictionLines?.has(line) === true;
           }
         }
@@ -774,6 +797,8 @@ export class Editor<
           fileInstance.applyDocumentChange.bind(fileInstance);
         editor.#applySuspendedDocumentChange =
           fileInstance.applySuspendedDocumentChange.bind(fileInstance);
+        editor.#updateRenderCache =
+          fileInstance.updateRenderCache.bind(fileInstance);
         editor.#publishChange = (changes, file, lineAnnotations) => {
           const event: EditorChangeEvent<'file', LAnnotation, Caret> = {
             changes,
@@ -801,6 +826,8 @@ export class Editor<
           fileInstance.applyDocumentChange.bind(fileInstance);
         editor.#applySuspendedDocumentChange =
           fileInstance.applySuspendedDocumentChange.bind(fileInstance);
+        editor.#updateRenderCache =
+          fileInstance.updateRenderCache.bind(fileInstance);
         editor.#publishChange = (changes, file, lineAnnotations) => {
           const event: EditorChangeEvent<'file-diff', LAnnotation, Caret> = {
             changes,
@@ -844,6 +871,7 @@ export class Editor<
         this.#fileInstance = undefined;
         this.#applyDocumentChange = undefined;
         this.#applySuspendedDocumentChange = undefined;
+        this.#updateRenderCache = undefined;
         this.#publishChange = undefined;
       }
       if (initialState != null && initialEditorState != null) {
@@ -1266,6 +1294,7 @@ export class Editor<
         this.#fileInstance = undefined;
         this.#applyDocumentChange = undefined;
         this.#applySuspendedDocumentChange = undefined;
+        this.#updateRenderCache = undefined;
         this.#publishChange = undefined;
       }
     }
@@ -1334,6 +1363,21 @@ export class Editor<
           tokenizer.resumeBackgroundTokenize();
         }
       });
+    }
+  }
+
+  /**
+   * @internal Finishes coloring the lines the host is about to render, so
+   * none of them shows old colors until background tokenizing reaches it.
+   */
+  __prepareRender(renderRange: RenderRange | undefined): void {
+    const tokenizer = this.#tokenizer;
+    if (tokenizer === undefined) {
+      return;
+    }
+    const lines = tokenizer.flush(renderRange);
+    if (lines.size > 0) {
+      this.#onDeferTokenize(lines, tokenizer.themeType);
     }
   }
 
@@ -3741,6 +3785,7 @@ export class Editor<
     const tokenizer = this.#tokenizer;
     const fileInstance = this.#fileInstance;
     const applyDocumentChange = this.#applyDocumentChange;
+    const updateRenderCache = this.#updateRenderCache;
     const textDocument = this.#editSession?.document;
     const gutterEl = this.#gutterElement;
     const contentEl = this.#contentElement;
@@ -3748,6 +3793,7 @@ export class Editor<
       tokenizer == null ||
       fileInstance == null ||
       applyDocumentChange == null ||
+      updateRenderCache == null ||
       textDocument == null ||
       contentEl == null
     ) {
@@ -3902,7 +3948,7 @@ export class Editor<
       }
     }
 
-    fileInstance.updateRenderCache(dirtyLines, tokenizer.themeType, {
+    const rebuiltRows = updateRenderCache(dirtyLines, tokenizer.themeType, {
       shouldRefreshDiffsView: this.#isDiff && !didLineCountChange,
       lineCountChangeInFlight: didLineCountChange,
       changedDocumentLines:
@@ -3910,17 +3956,18 @@ export class Editor<
           ? getChangedDocumentLines(textDocument, change)
           : undefined,
       documentLineCount: textDocument.lineCount,
+      lineAnnotations: didLineCountChange ? undefined : newLineAnnotations,
     });
     if (didLineCountChange) {
       // Line-count change: recompute hunks from the full document and re-render.
       applyDocumentChange(textDocument, newLineAnnotations, shouldUpdateBuffer);
     }
 
-    // A line-count change can remove cached rows, while a unified diff rebuilds
-    // its content column on every edit. Either can detach the line elements
-    // memoized for caret/selection geometry, making offsetTop read as 0 and
-    // scrolling the caret to the top. Re-measure against the current rows.
-    if (didLineCountChange || (this.#isDiff && this.#diffSyle === 'unified')) {
+    // A line-count change, or a diff edit that changed which rows are shown,
+    // rebuilds rows. That can detach the line elements memoized for
+    // caret/selection geometry, making offsetTop read as 0 and scrolling the
+    // caret to the top. Re-measure against the current rows.
+    if (didLineCountChange || rebuiltRows) {
       this.#resetCache();
     }
 
@@ -3929,7 +3976,7 @@ export class Editor<
       // A structural FileDiff edit rebuilds both columns and their paired
       // annotation rows together. Re-inserting those rows independently by
       // line number would break their visual alignment in split view.
-      if (!this.#isDiff || !didLineCountChange) {
+      if (!this.#isDiff || !(didLineCountChange || rebuiltRows)) {
         renderLineAnnotations(
           newLineAnnotations,
           contentEl,

@@ -1132,6 +1132,15 @@ export class VirtualizedFileDiff<
     this.virtualizer.instanceChanged(this, true);
   }
 
+  // When an edit adds, removes or moves rows, ask the virtualizer to render
+  // the diff again on its next update instead of right away. It needs to
+  // measure the new rows' heights along with everything else it shows.
+  protected override renderEditSessionLayoutChange(): boolean {
+    this.lineStateRefreshPending = true;
+    this.escalateEditSessionRender();
+    return false;
+  }
+
   protected override shouldSelfHealEditSession(): boolean {
     // CodeView sessions retain their editor association while rendering is
     // suspended; CodeView itself runs the exit recompute when it reaps one.

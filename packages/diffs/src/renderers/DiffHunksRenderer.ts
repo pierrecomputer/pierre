@@ -21,7 +21,9 @@ import type {
   BaseCodeOptions,
   BaseDiffOptions,
   BaseDiffOptionsWithDefaults,
+  ChangeContent,
   CodeColumnType,
+  ContextContent,
   CustomPreProperties,
   DiffLineAnnotation,
   DiffsHighlighter,
@@ -40,11 +42,21 @@ import type {
   SupportedLanguages,
   ThemedDiffResult,
 } from '../types';
+import {
+  applyLineDiffMarks,
+  getLineDiffMarks,
+  getRowText,
+} from '../utils/applyLineDiffMarks';
 import { applyLineTextWithNewline } from '../utils/applyLineTextWithNewline';
 import { areDiffRenderOptionsEqual } from '../utils/areDiffRenderOptionsEqual';
 import { areDiffTargetsEqual } from '../utils/areDiffTargetsEqual';
 import { areRenderRangesEqual } from '../utils/areRenderRangesEqual';
 import { cleanLastNewline } from '../utils/cleanLastNewline';
+import {
+  computeLineDiffRanges,
+  type LineDiffRange,
+  type LineDiffRanges,
+} from '../utils/computeLineDiffRanges';
 import { createAnnotationElement as createDefaultAnnotationElement } from '../utils/createAnnotationElement';
 import { createContentColumn } from '../utils/createContentColumn';
 import { createEmptyRowBuffer } from '../utils/createEmptyRowBuffer';
@@ -122,6 +134,70 @@ interface DiffRenderCache extends RenderedDiffASTCache {
   // hydrate() describes DOM that already exists, even when no reusable AST
   // was available for that server-rendered content.
   hydrated?: boolean;
+  // Word diff highlights for rows of a cache that editing has changed.
+  editedRowHighlights?: EditedRowHighlights;
+}
+
+// What is needed to keep word diff highlights right once editing starts
+// changing a render cache.
+interface EditedRowHighlights {
+  // How lines were paired when editing started: for each old line and each
+  // new line that had a partner, the partner's text. Rows that editing has
+  // not rebuilt still show the highlights of that pairing.
+  originalDeletionPartners: Map<number, string>;
+  originalAdditionPartners: Map<number, string>;
+  // Rows built by editing. They start out with no highlights.
+  editedRows: WeakSet<HASTElement>;
+  // Rows rebuilt from new tokens without a text change, such as after a
+  // theme change, and the row from before editing that they replace. While
+  // their partner is unchanged, they show that row's highlights.
+  retokenizedRows: WeakMap<HASTElement, HASTElement>;
+  // The highlights of rows from before editing, read once when needed.
+  originalRowRanges: WeakMap<HASTElement, readonly LineDiffRange[]>;
+  // The highlights of each line pair, by old line index, kept while both
+  // lines still have the same text.
+  pairs: Map<number, LineDiffPair>;
+  // A highlighted copy of each cached row, kept while the row's highlights
+  // stay the same.
+  rows: WeakMap<
+    HASTElement,
+    { ranges: readonly LineDiffRange[]; highlighted: HASTElement }
+  >;
+  // The highlighted copy each row was last rendered with, by line index, for
+  // rows rendered with something other than their cached row.
+  renderedRows: {
+    deletions: Map<number, HASTElement>;
+    additions: Map<number, HASTElement>;
+  };
+}
+
+interface LineDiffPair {
+  deletionText: string;
+  additionText: string;
+  ranges: LineDiffRanges;
+}
+
+// Adds the right word diff highlights to one row as it is rendered.
+// `hunkContent` is the block of lines the row is in, if any.
+type EditedRowHighlighter = (
+  side: 'deletions' | 'additions',
+  lineIndex: number,
+  hunkContent: ChangeContent | ContextContent | undefined,
+  row: ElementContent | undefined
+) => ElementContent | undefined;
+
+const NO_HIGHLIGHTS: readonly LineDiffRange[] = Object.freeze([]);
+
+/** What an edit changed beyond row contents. See `updateRenderCache`. */
+export type EditLayoutChange = 'none' | 'lineTypes' | 'rows';
+
+/** What a rendered row should show after an edit. */
+export interface RenderedRowUpdate {
+  // The row's new content, when its word diff highlights changed.
+  content: HASTElement | undefined;
+  // The line types of the row and its gutter row, in split view.
+  lineType: string | undefined;
+  gutterLineType: string | undefined;
 }
 
 interface PushSeparatorProps {
@@ -569,10 +645,11 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
   }
 
   /**
-   * Returns true when a session-mode pass changed the region skeleton itself
-   * (a gap edit synthesized or merged regions), which changes the rendered
-   * row set without a line-count change — the host must escalate to a full
-   * re-render instead of its cheap refresh path.
+   * Updates the cached diff after an edit, and says what the rows on screen
+   * need to catch up:
+   * - 'none': only their text changed.
+   * - 'lineTypes': some rows changed type, like a line that is now a change.
+   * - 'rows': rows were added, removed or moved, so the diff must render again.
    */
   public updateRenderCache(
     dirtyLines: Map<number, Array<HighlightedToken>>,
@@ -580,19 +657,22 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     lineCountChangeInFlight = false,
     changedDocumentLines?: ReadonlyMap<number, string>,
     documentLineCount?: number
-  ): boolean {
+  ): EditLayoutChange {
     this.pendingStructuralRows = undefined;
     const { renderCache } = this;
     if (renderCache == null) {
-      return false;
+      return 'none';
     }
     const { result, diff } = renderCache;
     if (result == null) {
-      return false;
+      return 'none';
     }
     if (diff.isPartial) {
       throw new Error('Could not update render cache for partial diff');
     }
+    const { editedRows, retokenizedRows } =
+      renderCache.editedRowHighlights ??
+      this.startEditedRowHighlights(renderCache, diff);
 
     const hastLines = result.code.additionLines;
     const pendingStructuralRows = (this.pendingStructuralRows =
@@ -628,10 +708,12 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
           // A newly revealed row must show current text even before the
           // tokenizer supplies its colors.
           if (!dirtyLines.has(line)) {
-            hastLines[line] = createPlainAdditionLineElement(
+            const row = createPlainAdditionLineElement(
               line,
               cleanLastNewline(text)
             );
+            editedRows.add(row);
+            hastLines[line] = row;
           }
         }
       }
@@ -691,12 +773,27 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
         }),
       };
       if (pendingStructuralRows != null) {
+        editedRows.add(row);
         pendingStructuralRows.set(line, row);
+      } else if (
+        prev?.type === 'element' &&
+        !editedRows.has(prev) &&
+        prevText === lineText &&
+        changedDocumentLines?.has(line) !== true
+      ) {
+        // Re-tokenizing a line without changing its text, as a theme change
+        // does, keeps the highlights the row had.
+        retokenizedRows.set(row, retokenizedRows.get(prev) ?? prev);
+        hastLines[line] = row;
       } else {
+        editedRows.add(row);
         hastLines[line] = row;
       }
     }
 
+    // Line types and the rows shown only change when a block's size does.
+    const blockSizesBefore =
+      changedAdditionLines.length > 0 ? getBlockSizes(diff) : undefined;
     let regionsChanged = false;
     if (changedAdditionLines.length > 0) {
       if (this.editSessionActive) {
@@ -744,7 +841,33 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
 
     result.baseThemeType = themeType;
     renderCache.isDirty = true;
-    return regionsChanged;
+    if (regionsChanged) {
+      return 'rows';
+    }
+    if (blockSizesBefore == null) {
+      return 'none';
+    }
+    const blockSizesAfter = getBlockSizes(diff);
+    if (areBlockSizesEqual(blockSizesBefore, blockSizesAfter)) {
+      return 'none';
+    }
+    // Only split view can keep its rows, since each column lists its lines in
+    // order. The rows saying a file has no final newline are always rendered
+    // again, because they take the line type of the line above them.
+    const lastHunk = diff.hunks.at(-1);
+    if (
+      this.getOptionsWithDefaults().diffStyle !== 'split' ||
+      lastHunk?.noEOFCRAdditions === true ||
+      lastHunk?.noEOFCRDeletions === true
+    ) {
+      return 'rows';
+    }
+    return areBlockSizesEqual(
+      getSplitColumnRows(blockSizesBefore),
+      getSplitColumnRows(blockSizesAfter)
+    )
+      ? 'lineTypes'
+      : 'rows';
   }
 
   private applyExpansionRemap(change: SessionRegionChange | undefined): void {
@@ -771,6 +894,13 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     if (diff.isPartial) {
       throw new Error('Could not apply document change for partial diff');
     }
+    const editedRows =
+      renderCache != null && result != null
+        ? (
+            renderCache.editedRowHighlights ??
+            this.startEditedRowHighlights(renderCache, diff)
+          ).editedRows
+        : undefined;
 
     // The structural token pass leaves the diff in its pre-edit shape so this
     // document remains the single source of truth for shifting its lines.
@@ -785,7 +915,8 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
         previousAdditionLines,
         diff.additionLines,
         result.code.additionLines,
-        textDocument
+        textDocument,
+        editedRows
       );
     }
     // An empty document splits into zero addition lines, which would recompute
@@ -798,10 +929,12 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
         recomputeEmptyDocumentDiff(diff, this.options.parseDiffOptions)
       );
       if (result != null) {
-        result.code.additionLines[0] = createPlainAdditionLineElement(
+        const row = createPlainAdditionLineElement(
           0,
           textDocument.getLineText(0)
         );
+        editedRows?.add(row);
+        result.code.additionLines[0] = row;
       }
     } else if (this.editSessionActive) {
       this.applySessionDocumentChange(diff, previousAdditionLines);
@@ -1529,6 +1662,307 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     return this.options.tokenizeMaxLength ?? DEFAULT_TOKENIZE_MAX_LENGTH;
   }
 
+  /**
+   * Starts tracking a render cache that editing is about to change for the
+   * first time, by recording how its lines are paired before any edit.
+   */
+  private startEditedRowHighlights(
+    renderCache: DiffRenderCache,
+    diff: FileDiffMetadata
+  ): EditedRowHighlights {
+    const originalDeletionPartners = new Map<number, string>();
+    const originalAdditionPartners = new Map<number, string>();
+    for (const hunk of diff.hunks) {
+      for (const content of hunk.hunkContent) {
+        if (content.type !== 'change') continue;
+        const pairCount = Math.min(content.deletions, content.additions);
+        for (let offset = 0; offset < pairCount; offset++) {
+          const deletionIndex = content.deletionLineIndex + offset;
+          const additionIndex = content.additionLineIndex + offset;
+          const deletionText = diff.deletionLines[deletionIndex];
+          const additionText = diff.additionLines[additionIndex];
+          if (!isPairableLine(deletionText) || !isPairableLine(additionText)) {
+            continue;
+          }
+          originalDeletionPartners.set(deletionIndex, additionText);
+          originalAdditionPartners.set(additionIndex, deletionText);
+        }
+      }
+    }
+    return (renderCache.editedRowHighlights = {
+      originalDeletionPartners,
+      originalAdditionPartners,
+      editedRows: new WeakSet(),
+      retokenizedRows: new WeakMap(),
+      originalRowRanges: new WeakMap(),
+      pairs: new Map(),
+      rows: new WeakMap(),
+      renderedRows: { deletions: new Map(), additions: new Map() },
+    });
+  }
+
+  /**
+   * Returns a function that gives each rendered row the word diff highlights
+   * of its current line pair, or undefined when nothing needs to change: the
+   * cache has not been edited, word diffs are off, or the diff is large plain
+   * text that read-only rendering also shows without them.
+   *
+   * A row keeps the highlights it already has when editing has not rebuilt
+   * it and its partner's text is unchanged. Other rows are highlighted again
+   * from the current text. This keeps working after editing ends, until a
+   * fresh highlight replaces the cache.
+   */
+  private createEditedRowHighlighter(
+    fileDiff: FileDiffMetadata,
+    renderRange: RenderRange
+  ): EditedRowHighlighter | undefined {
+    const highlights = this.renderCache?.editedRowHighlights;
+    if (this.renderCache == null || highlights == null) {
+      return undefined;
+    }
+    const { lineDiffType, maxLineDiffLength } = this.renderCache.options;
+    if (lineDiffType === 'none') {
+      return undefined;
+    }
+    // Match read-only rendering, which skips highlights for large plain text
+    // diffs rendered in full.
+    if (
+      isDefaultRenderRange(renderRange) &&
+      (isDiffPlainText(fileDiff) ||
+        isDiffMassive(fileDiff, this.getTokenizeMaxLength())) &&
+      (fileDiff.unifiedLineCount > 1000 || fileDiff.splitLineCount > 1000)
+    ) {
+      return undefined;
+    }
+    const {
+      originalDeletionPartners,
+      originalAdditionPartners,
+      editedRows,
+      retokenizedRows,
+      originalRowRanges,
+      pairs,
+      rows,
+    } = highlights;
+
+    const getPairRanges = (
+      deletionIndex: number,
+      deletionText: string,
+      additionText: string
+    ): LineDiffRanges => {
+      const cached = pairs.get(deletionIndex);
+      if (
+        cached != null &&
+        cached.deletionText === deletionText &&
+        cached.additionText === additionText
+      ) {
+        return cached.ranges;
+      }
+      const ranges = computeLineDiffRanges(
+        deletionText,
+        additionText,
+        lineDiffType,
+        maxLineDiffLength
+      );
+      pairs.set(deletionIndex, { deletionText, additionText, ranges });
+      return ranges;
+    };
+
+    const highlightRow: EditedRowHighlighter = (
+      side,
+      lineIndex,
+      hunkContent,
+      row
+    ) => {
+      if (row?.type !== 'element') {
+        return row;
+      }
+      // Lines pair up by position within their change block.
+      let deletionIndex: number | undefined;
+      let deletionText: string | undefined;
+      let additionText: string | undefined;
+      if (hunkContent?.type === 'change') {
+        const offset =
+          lineIndex -
+          (side === 'deletions'
+            ? hunkContent.deletionLineIndex
+            : hunkContent.additionLineIndex);
+        if (offset < Math.min(hunkContent.deletions, hunkContent.additions)) {
+          deletionIndex = hunkContent.deletionLineIndex + offset;
+          deletionText = fileDiff.deletionLines[deletionIndex];
+          additionText =
+            fileDiff.additionLines[hunkContent.additionLineIndex + offset];
+          if (!isPairableLine(deletionText) || !isPairableLine(additionText)) {
+            deletionIndex = undefined;
+          }
+        }
+      }
+      const partnerText =
+        deletionIndex == null
+          ? undefined
+          : side === 'deletions'
+            ? additionText
+            : deletionText;
+
+      if (!editedRows.has(row)) {
+        // Old lines never move. New rows keep the line number they were
+        // rendered with.
+        const originalIndex =
+          side === 'deletions' ? lineIndex : getRowLineIndex(row);
+        if (
+          originalIndex != null &&
+          (side === 'deletions'
+            ? originalDeletionPartners
+            : originalAdditionPartners
+          ).get(originalIndex) === partnerText
+        ) {
+          const replaced = retokenizedRows.get(row);
+          if (replaced == null) {
+            return row;
+          }
+          let ranges = originalRowRanges.get(replaced);
+          if (ranges == null) {
+            ranges = getLineDiffMarks(replaced);
+            originalRowRanges.set(replaced, ranges);
+          }
+          const cached = rows.get(row);
+          if (cached != null && areRangesEqual(cached.ranges, ranges)) {
+            return cached.highlighted;
+          }
+          const highlighted = applyLineDiffMarks(row, ranges);
+          rows.set(row, { ranges, highlighted });
+          return highlighted;
+        }
+      }
+
+      let ranges = NO_HIGHLIGHTS;
+      if (
+        deletionIndex != null &&
+        deletionText != null &&
+        additionText != null
+      ) {
+        const pairRanges = getPairRanges(
+          deletionIndex,
+          deletionText,
+          additionText
+        );
+        ranges =
+          side === 'deletions' ? pairRanges.deletion : pairRanges.addition;
+      }
+      const cached = rows.get(row);
+      if (cached != null && areRangesEqual(cached.ranges, ranges)) {
+        return cached.highlighted;
+      }
+      const highlighted = applyLineDiffMarks(row, ranges);
+      rows.set(row, { ranges, highlighted });
+      return highlighted;
+    };
+
+    const { renderedRows } = highlights;
+    return (side, lineIndex, hunkContent, row) => {
+      const output = highlightRow(side, lineIndex, hunkContent, row);
+      if (output === row || output?.type !== 'element') {
+        renderedRows[side].delete(lineIndex);
+      } else {
+        renderedRows[side].set(lineIndex, output);
+      }
+      return output;
+    };
+  }
+
+  /**
+   * Lets the host update the rows on screen after an edit without rendering
+   * the diff again. Call the returned function for each row, top to bottom.
+   * Returns undefined before the first edit.
+   */
+  public createRenderedRowUpdater():
+    | ((
+        side: 'deletions' | 'additions',
+        lineNumber: number
+      ) => RenderedRowUpdate)
+    | undefined {
+    const { renderCache } = this;
+    const highlights = renderCache?.editedRowHighlights;
+    const result = renderCache?.result;
+    if (renderCache == null || highlights == null || result == null) {
+      return undefined;
+    }
+    const { diff } = renderCache;
+    const highlightRow = this.createEditedRowHighlighter(
+      diff,
+      renderCache.renderRange ?? DEFAULT_RENDER_RANGE
+    );
+    const { diffStyle } = this.getOptionsWithDefaults();
+    const { renderedRows } = highlights;
+    const findBlock = {
+      deletions: createBlockFinder(diff, 'deletions'),
+      additions: createBlockFinder(diff, 'additions'),
+    };
+    return (side, lineNumber) => {
+      const lineIndex = lineNumber - 1;
+      const block = findBlock[side](lineIndex);
+      let content: HASTElement | undefined;
+      if (highlightRow != null) {
+        const row = (
+          side === 'deletions'
+            ? result.code.deletionLines
+            : result.code.additionLines
+        )[lineIndex];
+        const previous = renderedRows[side].get(lineIndex) ?? row;
+        const output = highlightRow(side, lineIndex, block, row);
+        if (output !== previous && output?.type === 'element') {
+          content = output;
+        }
+      }
+      // Rows outside every hunk keep their line type, since the hunks still
+      // cover the same lines.
+      if (diffStyle !== 'split' || block == null) {
+        return { content, lineType: undefined, gutterLineType: undefined };
+      }
+      const decoration = this.getSplitLineDecoration({
+        side,
+        type: block.type,
+        lineIndex,
+      });
+      const contentLineType = decoration.contentProperties?.['data-line-type'];
+      return {
+        content,
+        lineType:
+          typeof contentLineType === 'string'
+            ? contentLineType
+            : decoration.gutterLineType,
+        gutterLineType: decoration.gutterLineType,
+      };
+    };
+  }
+
+  /**
+   * Puts back the word diff highlights a new-file line showed before the
+   * editor redrew it from new tokens, and returns the row with them. Returns
+   * undefined when there are none to put back.
+   */
+  public restoreRedrawnRowHighlights(
+    lineIndex: number,
+    ranges: readonly LineDiffRange[],
+    textOnScreen: string
+  ): HASTElement | undefined {
+    const highlights = this.renderCache?.editedRowHighlights;
+    const row = this.renderCache?.result?.code.additionLines[lineIndex];
+    if (highlights == null || row?.type !== 'element') {
+      return undefined;
+    }
+    const { additions } = highlights.renderedRows;
+    // Highlights only carry over to the same text.
+    if (ranges.length === 0 || getRowText(row) !== textOnScreen) {
+      additions.delete(lineIndex);
+      return undefined;
+    }
+    const highlighted = applyLineDiffMarks(row, ranges);
+    additions.set(lineIndex, highlighted);
+    // Later renders of this row reuse this copy.
+    highlights.rows.set(row, { ranges, highlighted });
+    return highlighted;
+  }
+
   private processDiffResult(
     fileDiff: FileDiffMetadata,
     renderRange: RenderRange,
@@ -1543,6 +1977,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       hunkSeparators,
     } = this.getOptionsWithDefaults();
     const isRenderCacheDirty = this.renderCache?.isDirty ?? false;
+    const highlightRow = this.createEditedRowHighlighter(fileDiff, renderRange);
 
     const unified = diffStyle === 'unified';
     const canHydrateContext = canHydrateCollapsedContext(
@@ -1665,6 +2100,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
         additionLine,
         deletionLine,
         type,
+        hunkContent,
       }) => {
         const splitLineIndex =
           deletionLine != null
@@ -1722,6 +2158,24 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
               'DiffHunksRenderer.processDiffResult: deletionLine and additionLine are null, something is wrong';
             console.error(errorMessage, { file: fileDiff.name });
             throw new Error(errorMessage);
+          }
+          // A unified row shows the new line when there is one.
+          if (highlightRow != null) {
+            if (additionLine != null) {
+              additionLineContent = highlightRow(
+                'additions',
+                additionLine.lineIndex,
+                hunkContent,
+                additionLineContent
+              );
+            } else {
+              deletionLineContent = highlightRow(
+                'deletions',
+                deletionLine.lineIndex,
+                hunkContent,
+                deletionLineContent
+              );
+            }
           }
           const lineType =
             type === 'change'
@@ -1807,6 +2261,24 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
             additionLine != null
               ? additionLines[additionLine.lineIndex]
               : undefined;
+          if (highlightRow != null) {
+            if (deletionLine != null) {
+              deletionLineContent = highlightRow(
+                'deletions',
+                deletionLine.lineIndex,
+                hunkContent,
+                deletionLineContent
+              );
+            }
+            if (additionLine != null) {
+              additionLineContent = highlightRow(
+                'additions',
+                additionLine.lineIndex,
+                hunkContent,
+                additionLineContent
+              );
+            }
+          }
           const deletionLineDecoration = this.getSplitLineDecoration({
             side: 'deletions',
             type,
@@ -2642,7 +3114,8 @@ function realignAdditionHastLines<LAnnotation>(
   previousLines: string[],
   nextLines: string[],
   hastLines: ElementContent[],
-  textDocument: TextDocument<'file-diff', LAnnotation>
+  textDocument: TextDocument<'file-diff', LAnnotation>,
+  editedRows: WeakSet<HASTElement> | undefined
 ): ElementContent[] {
   const previousContentLength = contentLineCount(previousLines);
   const nextContentLength = contentLineCount(nextLines);
@@ -2676,10 +3149,14 @@ function realignAdditionHastLines<LAnnotation>(
     realigned[nextLines.length - 1] = hastLines[previousLines.length - 1];
   }
   for (let index = prefix; index < nextLines.length; index++) {
-    realigned[index] ??= createPlainAdditionLineElement(
-      index,
-      textDocument.getLineText(index)
-    );
+    if (realigned[index] == null) {
+      const row = createPlainAdditionLineElement(
+        index,
+        textDocument.getLineText(index)
+      );
+      editedRows?.add(row);
+      realigned[index] = row;
+    }
   }
   return realigned;
 }
@@ -2757,6 +3234,113 @@ function getDiffLanguages(diff: FileDiffMetadata): SupportedLanguages[] {
   return deletionLang === additionLang
     ? [additionLang]
     : [deletionLang, additionLang];
+}
+
+// Returns a function that finds the hunk block a line is in, on one side of
+// the diff, or undefined for lines outside every hunk. It is fastest when
+// asked about lines in increasing order.
+function createBlockFinder(
+  diff: FileDiffMetadata,
+  side: 'deletions' | 'additions'
+): (line: number) => ChangeContent | ContextContent | undefined {
+  const blocks = diff.hunks.flatMap((hunk) => hunk.hunkContent);
+  const getStart = (block: ChangeContent | ContextContent) =>
+    side === 'deletions' ? block.deletionLineIndex : block.additionLineIndex;
+  const getEnd = (block: ChangeContent | ContextContent) =>
+    getStart(block) +
+    (block.type === 'context'
+      ? block.lines
+      : side === 'deletions'
+        ? block.deletions
+        : block.additions);
+  let index = 0;
+  let lastLine = -1;
+  return (line) => {
+    if (line < lastLine) index = 0;
+    lastLine = line;
+    while (index < blocks.length && getEnd(blocks[index]) <= line) index++;
+    const block = blocks[index];
+    return block != null && getStart(block) <= line ? block : undefined;
+  };
+}
+
+// The kind and size of every hunk block, in order, three numbers per block: 0
+// and its line count for context, 1 and its old and new line counts for
+// changes, and 2 between hunks.
+function getBlockSizes(diff: FileDiffMetadata): number[] {
+  const sizes: number[] = [];
+  for (const hunk of diff.hunks) {
+    for (const content of hunk.hunkContent) {
+      if (content.type === 'context') sizes.push(0, content.lines, 0);
+      else sizes.push(1, content.deletions, content.additions);
+    }
+    sizes.push(2, 0, 0);
+  }
+  return sizes;
+}
+
+// The rows each split view column shows for the blocks from `getBlockSizes`:
+// a run of line rows as a positive count, a run of empty filler rows as a
+// negative count, and 0 between hunks. When this stays the same, the columns
+// show the same rows.
+function getSplitColumnRows(sizes: number[]): number[] {
+  const rows: number[] = [];
+  const pushLines = (count: number) => {
+    if (count <= 0) return;
+    const last = rows.length - 1;
+    if (last >= 0 && rows[last] > 0) rows[last] += count;
+    else rows.push(count);
+  };
+  for (const side of ['deletions', 'additions']) {
+    for (let index = 0; index < sizes.length; index += 3) {
+      const kind = sizes[index];
+      const deletions = sizes[index + 1];
+      const additions = sizes[index + 2];
+      if (kind === 2) {
+        rows.push(0);
+      } else if (kind === 0) {
+        pushLines(deletions);
+      } else {
+        // The shorter side of a change is padded with filler rows after its
+        // lines.
+        const lines = side === 'deletions' ? deletions : additions;
+        pushLines(lines);
+        if (lines < Math.max(deletions, additions)) {
+          rows.push(lines - Math.max(deletions, additions));
+        }
+      }
+    }
+  }
+  return rows;
+}
+
+function areRangesEqual(
+  a: readonly LineDiffRange[],
+  b: readonly LineDiffRange[]
+): boolean {
+  return (
+    a === b ||
+    (a.length === b.length &&
+      a.every(
+        (range, index) => range[0] === b[index][0] && range[1] === b[index][1]
+      ))
+  );
+}
+
+function areBlockSizesEqual(a: number[], b: number[]): boolean {
+  return a.length === b.length && a.every((size, index) => size === b[index]);
+}
+
+// The editor keeps an empty row after a final line break that the file does
+// not have. That row, stored as '', is never paired with an old line.
+function isPairableLine(text: string | undefined): text is string {
+  return text != null && text !== '';
+}
+
+// The zero-based line index a cached row was rendered for.
+function getRowLineIndex(row: HASTElement): number | undefined {
+  const lineNumber = row.properties['data-line'];
+  return typeof lineNumber === 'number' ? lineNumber - 1 : undefined;
 }
 
 function isDiffMassive(

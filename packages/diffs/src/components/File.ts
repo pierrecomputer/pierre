@@ -1206,13 +1206,21 @@ export class File<LAnnotation = undefined, Caret = undefined> {
     this.fileRenderer.clearRenderCache();
   }
 
+  /** Files have no word diff highlights, so the editor draws plain tokens. */
+  public getRedrawnRowHTML(
+    _lineIndex: number,
+    _lineElement: HTMLElement
+  ): undefined {
+    return undefined;
+  }
+
   public updateRenderCache(
     dirtyLines: Map<number, Array<HighlightedToken>>,
     themeType: 'dark' | 'light',
     options?: {
       lineCountChangeInFlight?: boolean;
     }
-  ): void {
+  ): boolean {
     const editSessionFile = this.editSession?.file;
     if (editSessionFile == null) {
       throw new Error(
@@ -1225,6 +1233,8 @@ export class File<LAnnotation = undefined, Caret = undefined> {
       themeType,
       options?.lineCountChangeInFlight
     );
+    // Updating a file's cache never renders its rows again.
+    return false;
   }
 
   public render({
@@ -1352,6 +1362,7 @@ export class File<LAnnotation = undefined, Caret = undefined> {
       return true;
     }
 
+    this.editor?.__prepareRender(nextRenderRange);
     try {
       const pre = this.getOrCreatePreNode(fileContainer);
       let renderedFile = this.getRenderedFile();

@@ -170,7 +170,10 @@ describe('recycled diff edit highlights', () => {
         new Map([[0, 'const changed = 3;\n']])
       );
       expect(diff.additionLines.join('')).toBe('const changed = 3;\n');
-      expect(renderHtml(renderer, diff)).toContain('const changed = 3;');
+      // Word diff highlights split the row into spans, so compare its text.
+      expect(renderHtml(renderer, diff).replace(/<[^>]*>/g, '')).toContain(
+        'const changed = 3;'
+      );
     } finally {
       renderer.cleanUp();
     }

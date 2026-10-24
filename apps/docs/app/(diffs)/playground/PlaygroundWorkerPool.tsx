@@ -9,6 +9,8 @@ import { WorkerPoolContext } from '@pierre/diffs/react';
 import { WorkerPoolManager } from '@pierre/diffs/worker';
 import { createContext, type ReactNode, useEffect, useState } from 'react';
 
+import { MAIN_THREAD_MAX_CHARACTERS } from '../_components/WorkerPoolContext';
+
 export const PlaygroundHighlighterReadyContext = createContext(true);
 
 // Rendering surfaces must unmount before their highlighter is disposed.
@@ -43,6 +45,10 @@ export function PlaygroundWorkerPool({
             3,
             Math.max(1, (navigator.hardwareConcurrency ?? 2) - 1)
           ),
+          mainThreadMaxCharacters:
+            highlighter === 'highlights'
+              ? MAIN_THREAD_MAX_CHARACTERS
+              : undefined,
           workerFactory: () =>
             new Worker(
               new URL('@pierre/diffs/worker/worker.js', import.meta.url)
