@@ -18,7 +18,30 @@ import {
 } from 'react';
 
 import { computeCSSLayout } from '../css-layout';
-import { computeLayout, getExitEdge } from '../geometry';
+import {
+  animateFromBoxes,
+  cancelFlipAnimations,
+  finishFlipAnimations,
+  readBoxes,
+} from '../dom/flip';
+import {
+  focusPane,
+  focusZoomedPane,
+  hideCoveredAfterAnimation,
+  notifyCollapsed,
+  readPixelGeometry,
+  setCoveredHidden,
+  splitsAt,
+} from '../dom/panes';
+import { type ResizeStrategy, ResizeWork } from '../dom/resize-work';
+import {
+  dragRatios,
+  dropTarget,
+  type DropTarget,
+  getExitEdges,
+  keyRatios,
+  paneAt,
+} from '../gestures';
 import { getPanes } from '../model';
 import type { LayoutStore } from '../store';
 import type {
@@ -29,6 +52,9 @@ import type {
   Rect,
   SeparatorGeometry,
 } from '../types';
+
+export { PANE_VISIBILITY_EVENT, type PaneVisibilityEvent } from '../dom/panes';
+export type { ResizeStrategy } from '../dom/resize-work';
 
 /** A button in a pane header: drag to move, zoom, or close. */
 export type PaneAction = 'move' | 'zoom' | 'close';
@@ -65,13 +91,9 @@ export interface LayoutProps {
   label?: string;
   /**
    * Experimental, for `explore-resize-drag-content-layout`: how a pointer
-   * resize applies its ratios. `live` writes them on each pointer move,
-   * `frame` once per animation frame, `preview` moves only the separator and
-   * writes them on release, and `freeze` writes them live but keeps the size
-   * of the content of the affected panes until the pointer pauses. `settle`
-   * is `freeze`, but the content takes its new size one pane per frame.
+   * resize applies its ratios (see `ResizeStrategy`).
    */
-  experimentalResize?: 'live' | 'frame' | 'preview' | 'freeze' | 'settle';
+  experimentalResize?: ResizeStrategy;
   /**
    * Experimental, for `explore-size-animation-without-stretch`: how a pane
    * that changes size animates. `counter-scale` keeps its header and content
@@ -79,17 +101,6 @@ export interface LayoutProps {
    */
   experimentalSizeAnimation?: 'counter-scale' | 'scale';
 }
-
-// Pause after which a frozen drag lets pane content take its new size.
-const FREEZE_PAUSE_MS = 150;
-
-/**
- * The event that a pane host receives when its content stops or starts
- * rendering. `detail.hidden` is true when the zoom animation of another pane
- * ends, and false before the pane shows again.
- */
-export const PANE_VISIBILITY_EVENT = 'pierre-layout-visibility';
-export type PaneVisibilityEvent = CustomEvent<{ hidden: boolean }>;
 
 interface ResizeGesture {
   type: 'resize';
@@ -108,183 +119,9 @@ interface MoveGesture {
   paneId: string;
 }
 
-interface DropTarget {
-  paneId: string;
-  edge: Edge;
-  rect: Rect;
-}
-
-// Elements that animate a layout change carry this attribute with a stable key.
-const FLIP_ATTRIBUTE = 'data-layout-flip';
-// A hidden pane does not render, so it neither gives nor takes a FLIP box.
-const FLIP_SELECTOR = `[${FLIP_ATTRIBUTE}]:not([data-collapsed='true'])`;
-const DEFAULT_DURATION_MS = 240;
-// The ID of the layout's own animations, so that it never touches animations in pane content.
-const FLIP_ANIMATION_ID = 'pierre-layout-flip';
-// An ease-out curve, written as cubic-bezier: Safari runs `linear()` easing on the main thread.
-const FLIP_EASING = 'cubic-bezier(0.2, 0, 0, 1)';
-
-/** The layout's running FLIP animations; animations in pane content are not included. */
-function flipAnimations(root: HTMLElement): Animation[] {
-  return root
-    .getAnimations({ subtree: true })
-    .filter((animation) => animation.id === FLIP_ANIMATION_ID);
-}
-
-/** Read the box of each animatable element, relative to the layout root, including running animations. */
-function readBoxes(root: HTMLElement): Map<string, Rect> {
-  const bounds = root.getBoundingClientRect();
-  const boxes = new Map<string, Rect>();
-  for (const element of root.querySelectorAll<HTMLElement>(FLIP_SELECTOR)) {
-    const key = element.getAttribute(FLIP_ATTRIBUTE) ?? '';
-    // The focus indicator shares the key of its pane and comes after it. Keep
-    // the box of the pane, so that both elements animate from it.
-    if (boxes.has(key)) continue;
-    const box = element.getBoundingClientRect();
-    boxes.set(key, {
-      x: box.left - bounds.left,
-      y: box.top - bounds.top,
-      width: box.width,
-      height: box.height,
-    });
-  }
-  return boxes;
-}
-
-function durationOf(root: HTMLElement): number {
-  const value = getComputedStyle(root).getPropertyValue('--layout-duration');
-  const parsed = Number.parseFloat(value);
-  if (Number.isNaN(parsed)) return DEFAULT_DURATION_MS;
-  return value.trim().endsWith('ms') ? parsed : parsed * 1000;
-}
-
-// Keyframes of the inverse scale of a pane's content. The inverse of a linear
-// scale is not linear, so it is sampled: 16 steps keep the content within a
-// fraction of a pixel of its own size.
-const COUNTER_SCALE_STEPS = 16;
-
-/**
- * FLIP: each element already has its final geometry. Animate it from its old box
- * with a transform only, so that the compositor runs the animation and content
- * lays out once. `transform-origin` is `0 0` on these elements. With
- * `counterScale`, the inner wrapper of a pane host gets the inverse of the
- * host's scale on each frame, so its header and content keep their shape and
- * the frame reveals or clips them, instead of stretching them.
- */
-function animateFromBoxes(
-  root: HTMLElement,
-  before: Map<string, Rect>,
-  counterScale: boolean
-): void {
-  const duration = durationOf(root);
-  const bounds = root.getBoundingClientRect();
-  // Read every box before the first animation starts: a new animation dirties
-  // style, and a read after it would force another layout.
-  const plans: { element: HTMLElement; start: DOMMatrix; end: DOMMatrix }[] =
-    [];
-  for (const element of root.querySelectorAll<HTMLElement>(FLIP_SELECTOR)) {
-    const from = before.get(element.getAttribute(FLIP_ATTRIBUTE) ?? '');
-    // A new element has no old box. It appears in place.
-    if (from === undefined) continue;
-    const box = element.getBoundingClientRect();
-    const to = {
-      x: box.left - bounds.left,
-      y: box.top - bounds.top,
-      width: box.width,
-      height: box.height,
-    };
-    if (
-      Math.abs(from.x - to.x) < 0.5 &&
-      Math.abs(from.y - to.y) < 0.5 &&
-      Math.abs(from.width - to.width) < 0.5 &&
-      Math.abs(from.height - to.height) < 0.5
-    )
-      continue;
-    if (to.width === 0 || to.height === 0) continue;
-    // The element's own transform, for example the translate of a covered pane,
-    // is the end of the animation. Its layout box is the box without it.
-    const own = getComputedStyle(element).transform;
-    const end = own === 'none' ? new DOMMatrix() : new DOMMatrix(own);
-    const start = new DOMMatrix([
-      from.width / to.width,
-      0,
-      0,
-      from.height / to.height,
-      from.x - (to.x - end.e),
-      from.y - (to.y - end.f),
-    ]);
-    plans.push({ element, start, end });
-  }
-  const timing: KeyframeAnimationOptions = {
-    duration,
-    easing: FLIP_EASING,
-    id: FLIP_ANIMATION_ID,
-  };
-  for (const { element, start, end } of plans) {
-    element.animate(
-      [{ transform: start.toString() }, { transform: end.toString() }],
-      timing
-    );
-    const inner = counterScale
-      ? element.querySelector<HTMLElement>(':scope > .pierre-layout-pane-inner')
-      : null;
-    if (inner === null || (start.a === end.a && start.d === end.d)) continue;
-    // Both animations share the timing, so at each eased progress the host's
-    // scale is the linear mix of its keyframes, and the inner scale undoes it.
-    const frames: Keyframe[] = [];
-    for (let step = 0; step <= COUNTER_SCALE_STEPS; step++) {
-      const progress = step / COUNTER_SCALE_STEPS;
-      const x = start.a + (end.a - start.a) * progress;
-      const y = start.d + (end.d - start.d) * progress;
-      frames.push({
-        offset: progress,
-        transform: `scale(${end.a / x}, ${end.d / y})`,
-      });
-    }
-    inner.animate(frames, timing);
-  }
-}
-
 /** The panes of a subtree that take space. */
 const shownPanes = (node: LayoutNode): PaneNode[] =>
   getPanes(node).filter(({ hidden }) => hidden !== true);
-
-/**
- * Hide each pane host that the zoomed pane covers, or show every host when
- * `zoomedPane` is null. A style rule gives a hidden host
- * `content-visibility: hidden`. The view sets the attribute itself, so that
- * the change does not render every pane host again. Each host whose state
- * changes receives `PANE_VISIBILITY_EVENT`. The pane hosts are children of
- * the root; a query of the subtree would also walk all pane content.
- */
-function setCoveredHidden(root: HTMLElement, zoomedPane: string | null): void {
-  for (const host of root.children) {
-    // A hidden pane does not render whatever the zoom.
-    if (
-      !(host instanceof HTMLElement) ||
-      host.dataset.layoutPane === undefined ||
-      host.dataset.collapsed === 'true'
-    )
-      continue;
-    const hidden =
-      zoomedPane !== null && host.dataset.layoutPane !== zoomedPane;
-    if ((host.dataset.hidden === 'true') === hidden) continue;
-    // `inert` is inherited, so on a pane whose content renders it lays out
-    // all of that content again (about 200 ms for 15 panes of real content).
-    // It changes with `content-visibility` in one style update, so the
-    // content does not render for either change.
-    if (hidden) {
-      host.dataset.hidden = 'true';
-      host.inert = true;
-    } else {
-      host.inert = false;
-      delete host.dataset.hidden;
-    }
-    host.dispatchEvent(
-      new CustomEvent(PANE_VISIBILITY_EVENT, { detail: { hidden } })
-    );
-  }
-}
 
 /**
  * The app's content of one pane. It renders only when its pane node or the
@@ -316,33 +153,6 @@ const rectStyle = (rect: Rect): CSSProperties => ({
   height: rect.height,
 });
 
-/** Pick the closest side of a pane and show exactly where a dragged pane will be inserted. */
-function dropTarget(
-  paneId: string,
-  rect: Rect,
-  x: number,
-  y: number
-): DropTarget {
-  const sides: [Edge, number][] = [
-    ['left', (x - rect.x) / rect.width],
-    ['right', (rect.x + rect.width - x) / rect.width],
-    ['top', (y - rect.y) / rect.height],
-    ['bottom', (rect.y + rect.height - y) / rect.height],
-  ];
-  const edge = sides.sort((a, b) => a[1] - b[1])[0][0];
-  return {
-    paneId,
-    edge,
-    rect: {
-      x: rect.x + (edge === 'right' ? rect.width / 2 : 0),
-      y: rect.y + (edge === 'bottom' ? rect.height / 2 : 0),
-      width: edge === 'left' || edge === 'right' ? rect.width / 2 : rect.width,
-      height:
-        edge === 'top' || edge === 'bottom' ? rect.height / 2 : rect.height,
-    },
-  };
-}
-
 /** Flat, keyed pane hosts retain application content while the split tree changes around them. */
 export function Layout({
   store,
@@ -371,24 +181,8 @@ export function Layout({
   const boxesBefore = useRef<Map<string, Rect> | null>(null);
   const animateLayout = animateOptions?.layout !== false;
   const animateZoom = animateOptions?.zoom !== false;
-  // DOM work of a pointer resize that React does not own, for the
-  // `experimentalResize` variants: a pending frame, the ratios that wait for
-  // it or for the release, moved separators, and frozen pane content.
-  const resizeWork = useRef<{
-    frame: number | null;
-    pending: Record<string, number> | null;
-    moved: HTMLElement[];
-    frozen: HTMLElement[];
-    pause: ReturnType<typeof setTimeout> | null;
-    thawing: HTMLElement[];
-  }>({
-    frame: null,
-    pending: null,
-    moved: [],
-    frozen: [],
-    pause: null,
-    thawing: [],
-  });
+  // The direct DOM work of a pointer resize with the `experimentalResize` strategy.
+  const resizeWork = useMemo(() => new ResizeWork(store), [store]);
 
   // Animate model changes only. CSS owns continuous sizing, including while JS is busy.
   const subscribe = useCallback(
@@ -419,19 +213,10 @@ export function Layout({
           const boxes = readBoxes(element);
           if (zoomStarts) {
             const bounds = element.getBoundingClientRect();
-            const edges: Record<string, Edge> = {};
-            for (const [key, box] of boxes) {
-              if (key.startsWith('pane:'))
-                edges[key.slice(5)] = getExitEdge(
-                  box,
-                  bounds.width,
-                  bounds.height
-                );
-            }
-            setExitEdges(edges);
+            setExitEdges(getExitEdges(boxes, bounds.width, bounds.height));
           }
           // Stop running animations; the new animation starts from the current boxes.
-          for (const animation of flipAnimations(element)) animation.cancel();
+          cancelFlipAnimations(element);
           boxesBefore.current = animate ? boxes : null;
         }
         // Show the covered panes before React commits a zoom change, so
@@ -502,17 +287,8 @@ export function Layout({
     const before = collapsedBefore.current;
     collapsedBefore.current = collapsed;
     const element = rootRef.current;
-    if (before === null || element === null) return;
-    for (const host of element.children) {
-      if (!(host instanceof HTMLElement)) continue;
-      const id = host.dataset.layoutPane;
-      if (id === undefined || collapsed.has(id) === before.has(id)) continue;
-      host.dispatchEvent(
-        new CustomEvent(PANE_VISIBILITY_EVENT, {
-          detail: { hidden: collapsed.has(id) },
-        })
-      );
-    }
+    if (before !== null && element !== null)
+      notifyCollapsed(element, before, collapsed);
   }, [geometry]);
 
   // After React commits a store change, animate each moved element from its old box.
@@ -544,9 +320,7 @@ export function Layout({
     const element = rootRef.current;
     if (element === null) return;
     // Observation only ends a discrete animation; it never computes bounds or updates React.
-    const observer = new ResizeObserver(() => {
-      for (const animation of flipAnimations(element)) animation.finish();
-    });
+    const observer = new ResizeObserver(() => finishFlipAnimations(element));
     observer.observe(element);
     return () => observer.disconnect();
   }, []);
@@ -554,37 +328,17 @@ export function Layout({
   // Pixel geometry is needed only when a user starts resizing or points at a drop target.
   function readGeometry(): LayoutGeometry {
     const element = rootRef.current;
-    const bounds = element?.getBoundingClientRect();
-    return computeLayout(
-      store.getSnapshot().root,
-      bounds?.width ?? 0,
-      bounds?.height ?? 0,
-      gap
-    );
+    if (element === null) return { panes: [], separators: [], corners: [] };
+    return readPixelGeometry(element, store.getSnapshot().root, gap);
   }
 
   function separatorsAt(
-    element: HTMLElement,
+    target: HTMLElement,
     ids: readonly string[]
   ): SeparatorGeometry[] {
-    const touching = new Set(ids);
-    if (element.classList.contains('pierre-layout-corner')) {
-      const bounds = element.getBoundingClientRect();
-      for (const corner of rootRef.current?.querySelectorAll<HTMLElement>(
-        '[data-layout-corner]'
-      ) ?? []) {
-        const other = corner.getBoundingClientRect();
-        if (
-          Math.abs(bounds.x - other.x) < 1 &&
-          Math.abs(bounds.y - other.y) < 1
-        ) {
-          const spec = geometry.corners.find(
-            ({ id }) => id === corner.dataset.layoutCorner
-          );
-          for (const id of spec?.splitIds ?? []) touching.add(id);
-        }
-      }
-    }
+    const element = rootRef.current;
+    if (element === null) return [];
+    const touching = splitsAt(element, target, ids, geometry.corners);
     return readGeometry().separators.filter(({ split }) =>
       touching.has(split.id)
     );
@@ -597,175 +351,20 @@ export function Layout({
     const element = rootRef.current;
     const zoomedPane = state.zoomedPane;
     if (element === null || zoomedPane === null) return;
-    const panes = Array.from(
-      element.querySelectorAll<HTMLElement>('[data-layout-pane]')
-    );
-    const activePane = panes.find((pane) =>
-      pane.contains(document.activeElement)
-    );
-    if (activePane?.dataset.layoutPane !== zoomedPane) {
-      panes.find((pane) => pane.dataset.layoutPane === zoomedPane)?.focus();
-    }
+    focusZoomedPane(element, zoomedPane);
     let current = true;
-    // A tree change during the zoom cancels these animations, and the covered
+    // A tree change during the zoom cancels its animations, and the covered
     // panes then hide at once. A zoom change also cancels them, before React
     // ends this effect, so check the store too.
-    void Promise.allSettled(
-      flipAnimations(element).map((animation) => animation.finished)
-    ).then(() => {
-      if (current && store.getSnapshot().zoomedPane === zoomedPane)
-        setCoveredHidden(element, zoomedPane);
-    });
+    hideCoveredAfterAnimation(
+      element,
+      zoomedPane,
+      () => current && store.getSnapshot().zoomedPane === zoomedPane
+    );
     return () => {
       current = false;
     };
   }, [state.zoomedPane, store]);
-
-  /**
-   * Give the content of each pane under the dragged splits its current size in
-   * pixels, so that a ratio change resizes the pane hosts but does not lay out
-   * their content. While frozen, the content also has strict containment and
-   * its own compositor layer, so that a host that moves or clips it does not
-   * paint it again. All sizes are read before the first write.
-   */
-  function freezeContent(separators: readonly SeparatorGeometry[]): void {
-    const work = resizeWork.current;
-    const root = rootRef.current;
-    if (root === null || work.frozen.length > 0) return;
-    // Content that still waits to thaw is frozen again with the rest.
-    if (work.frame !== null) cancelAnimationFrame(work.frame);
-    work.frame = null;
-    const waiting = work.thawing;
-    work.thawing = [];
-    const ids = new Set(
-      separators.flatMap(({ split }) => getPanes(split).map(({ id }) => id))
-    );
-    const contents = Array.from(
-      root.querySelectorAll<HTMLElement>('[data-layout-pane]')
-    )
-      .filter((pane) => ids.has(pane.dataset.layoutPane ?? ''))
-      .map((pane) =>
-        pane.querySelector<HTMLElement>(
-          ':scope > .pierre-layout-pane-inner > .pierre-layout-content'
-        )
-      )
-      .filter((content) => content !== null);
-    const sizes = contents.map((content) => content.getBoundingClientRect());
-    contents.forEach((content, index) => {
-      content.style.flex = 'none';
-      content.style.width = `${sizes[index].width}px`;
-      content.style.height = `${sizes[index].height}px`;
-      content.style.contain = 'strict';
-      content.style.willChange = 'transform';
-    });
-    work.frozen = [
-      ...contents,
-      ...waiting.filter((content) => !contents.includes(content)),
-    ];
-  }
-
-  /** Let frozen content take its new size: at once, or one pane per frame for `settle`. */
-  function thawContent(): void {
-    const work = resizeWork.current;
-    const thaw = (content: HTMLElement): void => {
-      content.style.flex = '';
-      content.style.width = '';
-      content.style.height = '';
-      content.style.contain = '';
-      content.style.willChange = '';
-    };
-    if (experimentalResize !== 'settle') {
-      work.frozen.forEach(thaw);
-      work.frozen = [];
-      return;
-    }
-    work.thawing = [...work.thawing, ...work.frozen];
-    work.frozen = [];
-    const step = (): void => {
-      const next = work.thawing.shift();
-      if (next !== undefined) thaw(next);
-      work.frame = work.thawing.length > 0 ? requestAnimationFrame(step) : null;
-    };
-    if (work.frame === null) step();
-  }
-
-  /** Apply the ratios of one pointer move with the `experimentalResize` variant. */
-  function applyResize(
-    active: ResizeGesture,
-    ratios: Record<string, number>
-  ): void {
-    const work = resizeWork.current;
-    if (experimentalResize === 'frame') {
-      work.pending = ratios;
-      work.frame ??= requestAnimationFrame(() => {
-        work.frame = null;
-        if (work.pending !== null) store.setRatios(work.pending);
-        work.pending = null;
-      });
-      return;
-    }
-    if (experimentalResize === 'preview') {
-      work.pending = ratios;
-      const root = rootRef.current;
-      const move = (element: HTMLElement, x: number, y: number): void => {
-        element.style.transform = `translate(${x}px, ${y}px)`;
-        element.dataset.preview = 'true';
-        if (!work.moved.includes(element)) work.moved.push(element);
-      };
-      // The offset of each dragged split, along its own axis.
-      const offsets = new Map<string, number>();
-      for (const separator of active.separators) {
-        const element = root?.querySelector<HTMLElement>(
-          `[data-layout-flip="separator:${CSS.escape(separator.split.id)}"]`
-        );
-        if (element === null || element === undefined) continue;
-        const horizontal = separator.split.direction === 'horizontal';
-        const available = horizontal
-          ? separator.container.width - separator.rect.width
-          : separator.container.height - separator.rect.height;
-        const offset =
-          ((ratios[separator.split.id] ?? separator.ratio) - separator.ratio) *
-          available;
-        offsets.set(separator.split.id, offset);
-        move(element, horizontal ? offset : 0, horizontal ? 0 : offset);
-      }
-      // A corner moves with the dragged splits that it joins.
-      for (const corner of geometry.corners) {
-        const [horizontal, vertical] = corner.splitIds;
-        if (!offsets.has(horizontal) && !offsets.has(vertical)) continue;
-        const element = root?.querySelector<HTMLElement>(
-          `[data-layout-corner="${CSS.escape(corner.id)}"]`
-        );
-        if (element === null || element === undefined) continue;
-        move(element, offsets.get(horizontal) ?? 0, offsets.get(vertical) ?? 0);
-      }
-      return;
-    }
-    if (experimentalResize === 'freeze' || experimentalResize === 'settle') {
-      freezeContent(active.separators);
-      if (work.pause !== null) clearTimeout(work.pause);
-      work.pause = setTimeout(thawContent, FREEZE_PAUSE_MS);
-    }
-    store.setRatios(ratios);
-  }
-
-  /** End the variant's work. Commit while the gesture is active, so that the last ratios do not animate. */
-  function endResize(cancel: boolean): void {
-    const work = resizeWork.current;
-    if (work.frame !== null && experimentalResize === 'frame')
-      cancelAnimationFrame(work.frame);
-    if (work.pause !== null) clearTimeout(work.pause);
-    if (!cancel && work.pending !== null) store.setRatios(work.pending);
-    for (const element of work.moved) {
-      element.style.transform = '';
-      delete element.dataset.preview;
-    }
-    work.pending = null;
-    work.moved = [];
-    work.pause = null;
-    if (experimentalResize === 'frame') work.frame = null;
-    thawContent();
-  }
 
   function startResize(
     event: PointerEvent<HTMLElement>,
@@ -808,13 +407,8 @@ export function Layout({
     if (onPaneClose !== undefined) onPaneClose(pane);
     else store.close(pane.id);
     requestAnimationFrame(() => {
-      const focused = store.getSnapshot().focusedPane;
-      Array.from(
-        rootRef.current?.querySelectorAll<HTMLElement>('[data-layout-pane]') ??
-          []
-      )
-        .find((element) => element.dataset.layoutPane === focused)
-        ?.focus();
+      const element = rootRef.current;
+      if (element !== null) focusPane(element, store.getSnapshot().focusedPane);
     });
   }
 
@@ -822,22 +416,19 @@ export function Layout({
     const active = gesture.current;
     if (active === null || active.pointerId !== event.pointerId) return;
     if (active.type === 'resize') {
-      const ratios: Record<string, number> = {};
-      for (const separator of active.separators) {
-        const horizontal = separator.split.direction === 'horizontal';
-        const available = horizontal
-          ? separator.container.width - separator.rect.width
-          : separator.container.height - separator.rect.height;
-        if (available <= 0) continue;
-        const delta = horizontal
-          ? event.clientX - active.x
-          : event.clientY - active.y;
-        ratios[separator.split.id] = Math.max(
-          separator.minRatio,
-          Math.min(separator.maxRatio, separator.ratio + delta / available)
-        );
-      }
-      applyResize(active, ratios);
+      const element = rootRef.current;
+      if (element === null) return;
+      resizeWork.apply(
+        element,
+        experimentalResize,
+        active.separators,
+        dragRatios(
+          active.separators,
+          event.clientX - active.x,
+          event.clientY - active.y
+        ),
+        geometry.corners
+      );
     } else {
       if (Math.hypot(event.clientX - active.x, event.clientY - active.y) < 4)
         return;
@@ -845,14 +436,7 @@ export function Layout({
       const bounds = event.currentTarget.getBoundingClientRect();
       const x = event.clientX - bounds.left;
       const y = event.clientY - bounds.top;
-      const target = readGeometry().panes.find(
-        ({ pane, rect }) =>
-          pane.id !== active.paneId &&
-          x >= rect.x &&
-          x <= rect.x + rect.width &&
-          y >= rect.y &&
-          y <= rect.y + rect.height
-      );
+      const target = paneAt(readGeometry(), x, y, active.paneId);
       const next =
         target === undefined
           ? null
@@ -869,7 +453,7 @@ export function Layout({
       (pointerId !== undefined && active.pointerId !== pointerId)
     )
       return;
-    if (active.type === 'resize') endResize(cancel);
+    if (active.type === 'resize') resizeWork.end(cancel);
     gesture.current = null;
     if (active.type === 'resize' && cancel)
       store.setRatios(active.originalRatios);
@@ -886,32 +470,12 @@ export function Layout({
     event: KeyboardEvent<HTMLElement>,
     ids: readonly string[]
   ): void {
-    const separators = separatorsAt(event.currentTarget, ids);
-    const ratios: Record<string, number> = {};
-    for (const separator of separators) {
-      const horizontal = separator.split.direction === 'horizontal';
-      const smaller = horizontal ? 'ArrowLeft' : 'ArrowUp';
-      const larger = horizontal ? 'ArrowRight' : 'ArrowDown';
-      const step = event.shiftKey ? 0.1 : 0.02;
-      const value =
-        event.key === smaller
-          ? separator.ratio - step
-          : event.key === larger
-            ? separator.ratio + step
-            : event.key === 'Home'
-              ? separator.minRatio
-              : event.key === 'End'
-                ? separator.maxRatio
-                : event.key === 'Enter'
-                  ? 0.5
-                  : null;
-      if (value !== null)
-        ratios[separator.split.id] = Math.max(
-          separator.minRatio,
-          Math.min(separator.maxRatio, value)
-        );
-    }
-    if (Object.keys(ratios).length > 0) {
+    const ratios = keyRatios(
+      separatorsAt(event.currentTarget, ids),
+      event.key,
+      event.shiftKey
+    );
+    if (ratios !== null) {
       event.preventDefault();
       store.setRatios(ratios);
     }
