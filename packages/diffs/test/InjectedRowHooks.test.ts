@@ -67,20 +67,20 @@ function getTopLevelBufferIndex(rows: ElementContent[]): number {
 }
 
 class UnifiedInjectedRowTestRenderer extends DiffHunksRenderer {
-  protected override getUnifiedInjectedRowsForLine = (
+  public override getUnifiedInjectedRowsForLine(
     ctx: RenderedLineContext
-  ): UnifiedInjectedRowPlacement | undefined => {
+  ): UnifiedInjectedRowPlacement | undefined {
     if (ctx.additionLine?.lineNumber !== 1) {
       return undefined;
     }
     return { before: [createInjectedRow('unified-before-line-1')] };
-  };
+  }
 }
 
 class SplitInjectedRowTestRenderer extends DiffHunksRenderer {
-  protected override getSplitInjectedRowsForLine = (
+  public override getSplitInjectedRowsForLine(
     ctx: RenderedLineContext
-  ): SplitInjectedRowPlacement | undefined => {
+  ): SplitInjectedRowPlacement | undefined {
     if (ctx.splitLineIndex !== 0) {
       return undefined;
     }
@@ -96,7 +96,7 @@ class SplitInjectedRowTestRenderer extends DiffHunksRenderer {
         },
       ],
     };
-  };
+  }
 }
 
 describe('injected row hooks', () => {

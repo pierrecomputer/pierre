@@ -755,12 +755,13 @@ function printTable(summaries: BenchmarkSummary[]): void {
     max: summary.maxMs.toFixed(2),
   }));
   const headers = ['scenario', 'median', 'p95', 'min', 'max'] as const;
-  const widths = headers.map((header) =>
-    rows.reduce(
-      (width, row) => Math.max(width, row[header].length),
-      header.length
-    )
-  );
+  const widths = headers.map((header) => {
+    let width = header.length;
+    for (const row of rows) {
+      width = Math.max(width, row[header].length);
+    }
+    return width;
+  });
   const formatRow = (row: Record<(typeof headers)[number], string>) =>
     headers
       .map((header, index) =>

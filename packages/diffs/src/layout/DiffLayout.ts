@@ -1,6 +1,7 @@
 import type { ElementContent, Element as HASTElement, Properties } from 'hast';
 
 import type { DiffModel } from '../model/DiffModel';
+import type { DiffHunksRenderer } from '../renderers/DiffHunksRenderer';
 import { LineDiffRangeCache } from '../rows/lineDiffRanges';
 import { markRow } from '../rows/markRow';
 import type { RowSource } from '../rows/RowSource';
@@ -33,14 +34,11 @@ import { getTrailingContextRangeSize } from '../utils/virtualDiffLayout';
 import type {
   InjectedRow,
   LayoutColumns,
-  LineDecoration,
+  LineKey,
   RenderedLineContext,
+  RowKey,
   RowSpec,
   SplitInjectedRow,
-  SplitInjectedRowPlacement,
-  SplitLineDecorationProps,
-  UnifiedInjectedRowPlacement,
-  UnifiedLineDecorationProps,
 } from './RowSpec';
 
 export interface DiffLayoutOptions {
@@ -53,19 +51,6 @@ export interface DiffLayoutOptions {
   maxLineDiffLength: number;
   /** Collapsed context can still be loaded, so every gap is expandable. */
   canHydrateContext: boolean;
-}
-
-/** What a host adds to or changes about rows as they are placed. */
-export interface DiffLayoutHooks {
-  unifiedLineDecoration(props: UnifiedLineDecorationProps): LineDecoration;
-  splitLineDecoration(props: SplitLineDecorationProps): LineDecoration;
-  unifiedInjectedRows?(
-    context: RenderedLineContext
-  ): UnifiedInjectedRowPlacement | undefined;
-  splitInjectedRows?(
-    context: RenderedLineContext
-  ): SplitInjectedRowPlacement | undefined;
-  annotationElement(span: AnnotationSpan): HASTElement;
 }
 
 export interface DiffLayoutInput<LAnnotation> {
@@ -94,11 +79,25 @@ interface StampedRow {
   row: HASTElement;
 }
 
+interface GutterCell {
+  lineType: LineTypes;
+  lineNumber: number;
+  lineIndexText: string;
+  properties: Properties;
+  cell: HASTElement;
+}
+
+interface FixedRow {
+  signature: string;
+  gutter: HASTElement;
+  content: HASTElement;
+}
+
 // Rows pushed into one column, with the key of the last one for keys that
 // hang off their neighbor.
 interface Column {
   specs: RowSpec[];
-  lastKey: string;
+  lastKey: RowKey | undefined;
 }
 
 // Filler rows a split view owes one column so both columns stay aligned.
@@ -127,14 +126,20 @@ const NO_RANGES: readonly LineDiffRange[] = Object.freeze([]);
  * its line attributes. Rows are memoized on their inputs, so a row that did
  * not change is the same object as last time.
  */
-export class DiffLayout {
+export class DiffLayout<LAnnotation = undefined> {
   #ranges: LineDiffRangeCache;
   readonly #marked = new WeakMap<HASTElement, MarkedRow>();
   readonly #stamped = new WeakMap<HASTElement, StampedRow>();
+  // The gutter cell last built for each content row, reused while its
+  // inputs match so an unchanged row keeps its gutter element too.
+  readonly #gutters = new WeakMap<HASTElement, GutterCell>();
+  // Rows that are not built from a line, kept by key while their inputs
+  // match, so a render that changes nothing hands back the same objects.
+  readonly #fixedRows = new Map<RowKey, FixedRow>();
 
   constructor(
     private options: DiffLayoutOptions,
-    private readonly hooks: DiffLayoutHooks
+    private readonly host: DiffHunksRenderer<LAnnotation>
   ) {
     this.#ranges = new LineDiffRangeCache(
       options.lineDiffType,
@@ -155,7 +160,7 @@ export class DiffLayout {
     this.options = options;
   }
 
-  layout<LAnnotation>(input: DiffLayoutInput<LAnnotation>): DiffLayoutResult {
+  layout(input: DiffLayoutInput<LAnnotation>): DiffLayoutResult {
     const { model, rows, renderRange } = input;
     const { diff } = model;
     const {
@@ -166,7 +171,7 @@ export class DiffLayout {
       hunkSeparators,
       canHydrateContext,
     } = this.options;
-    const { hooks } = this;
+    const { host } = this;
     const unified = diffStyle === 'unified';
     const isExpandableDiff = !diff.isPartial || canHydrateContext;
     const marks = this.options.lineDiffType !== 'none';
@@ -187,11 +192,10 @@ export class DiffLayout {
       pendingBuffer.side = undefined;
       if (size <= 0 || side == null) return;
       const column = columns[side];
-      pushRow(column, {
-        key: `buf:${column.lastKey}`,
+      this.#pushFixedRow(column, bufferKey(column), `${size}`, () => ({
         gutter: createGutterGap(undefined, 'buffer', size),
         content: createEmptyRowBuffer(size),
-      });
+      }));
     };
 
     const pushSeparators = (props: SeparatorProps) => {
@@ -200,7 +204,7 @@ export class DiffLayout {
         ? ['unified']
         : ['deletions', 'additions'];
       for (const type of types) {
-        const rowsAdded = pushSeparator(
+        const rowsAdded = this.#pushSeparator(
           columns[type],
           type,
           props,
@@ -216,15 +220,19 @@ export class DiffLayout {
     // that line through edits.
     const pushAnnotationRow = (
       column: Column,
-      lineKey: string,
+      lineKey: LineKey | 'file',
       span: AnnotationSpan,
       lineType: LineTypes
     ) => {
-      pushRow(column, {
-        key: `ann:${lineKey}`,
-        gutter: createGutterGap(lineType, 'annotation', 1),
-        content: hooks.annotationElement(span),
-      });
+      this.#pushFixedRow(
+        column,
+        `ann:${lineKey}`,
+        `${lineType}|${span.hunkIndex},${span.lineIndex}|${span.annotations.join(',')}`,
+        () => ({
+          gutter: createGutterGap(lineType, 'annotation', 1),
+          content: host.createAnnotationElement(span),
+        })
+      );
     };
 
     this.#pushFileAnnotations(input, columns, pushAnnotationRow, () => {
@@ -299,11 +307,11 @@ export class DiffLayout {
             ? this.#rangesFor(model, 'additions', additionLine.lineIndex)
             : NO_RANGES;
 
-        const additionKey =
+        const additionKey: LineKey | undefined =
           additionLine != null
             ? `a${model.lineId(additionLine.lineIndex)}`
             : undefined;
-        const deletionKey =
+        const deletionKey: LineKey | undefined =
           deletionLine != null ? `d${deletionLine.lineIndex}` : undefined;
         // The unified row shows the new line when there is one; a split
         // column's rows hang off that column's own line when it has one.
@@ -312,11 +320,12 @@ export class DiffLayout {
         const additionsKey = additionKey ?? deletionKey!;
 
         if (unified) {
-          const injected = hooks.unifiedInjectedRows?.(lineContext);
+          const injected = host.getUnifiedInjectedRowsForLine?.(lineContext);
           if (injected?.before != null) {
             rowCount += pushUnifiedInjectedRows(
               columns.unified,
-              injected.before
+              injected.before,
+              `${lineKey}:before`
             );
           }
           const lineType: LineTypes =
@@ -325,7 +334,7 @@ export class DiffLayout {
                 ? 'change-addition'
                 : 'change-deletion'
               : type;
-          const decoration = hooks.unifiedLineDecoration({
+          const decoration = host.getUnifiedLineDecoration({
             type,
             lineType,
             additionLineIndex: additionLine?.lineIndex,
@@ -357,7 +366,8 @@ export class DiffLayout {
                 );
           pushRow(columns.unified, {
             key: lineKey,
-            gutter: createGutterItem(
+            gutter: this.#gutter(
+              content,
               decoration.gutterLineType,
               lineNumber,
               lineIndexText,
@@ -379,25 +389,27 @@ export class DiffLayout {
           if (injected?.after != null) {
             rowCount += pushUnifiedInjectedRows(
               columns.unified,
-              injected.after
+              injected.after,
+              `${lineKey}:after`
             );
           }
         } else {
-          const injected = hooks.splitInjectedRows?.(lineContext);
+          const injected = host.getSplitInjectedRowsForLine?.(lineContext);
           if (injected?.before != null) {
             rowCount += pushSplitInjectedRows(
               columns,
               injected.before,
+              `${lineKey}:before`,
               pendingBuffer,
               flushBuffer
             );
           }
-          const deletionDecoration = hooks.splitLineDecoration({
+          const deletionDecoration = host.getSplitLineDecoration({
             side: 'deletions',
             type,
             lineIndex: deletionLine?.lineIndex,
           });
-          const additionDecoration = hooks.splitLineDecoration({
+          const additionDecoration = host.getSplitLineDecoration({
             side: 'additions',
             type,
             lineIndex: additionLine?.lineIndex,
@@ -439,42 +451,46 @@ export class DiffLayout {
 
           if (deletionLine != null) {
             const lineIndexText = `${deletionLine.unifiedLineIndex},${splitLineIndex}`;
+            const content = this.#line(
+              this.#deletionRow(rows, deletionLine.lineIndex),
+              deletionRanges,
+              deletionDecoration.contentProperties,
+              deletionLine.lineNumber,
+              type === 'change' ? undefined : additionLine?.lineNumber,
+              lineIndexText
+            );
             pushRow(columns.deletions, {
               key: deletionsKey,
-              gutter: createGutterItem(
+              gutter: this.#gutter(
+                content,
                 deletionDecoration.gutterLineType,
                 deletionLine.lineNumber,
                 lineIndexText,
                 deletionDecoration.gutterProperties
               ),
-              content: this.#line(
-                this.#deletionRow(rows, deletionLine.lineIndex),
-                deletionRanges,
-                deletionDecoration.contentProperties,
-                deletionLine.lineNumber,
-                type === 'change' ? undefined : additionLine?.lineNumber,
-                lineIndexText
-              ),
+              content,
             });
           }
           if (additionLine != null) {
             const lineIndexText = `${additionLine.unifiedLineIndex},${splitLineIndex}`;
+            const content = this.#line(
+              rows.additionRow(model, additionLine.lineIndex),
+              additionRanges,
+              additionDecoration.contentProperties,
+              additionLine.lineNumber,
+              type === 'change' ? undefined : deletionLine?.lineNumber,
+              lineIndexText
+            );
             pushRow(columns.additions, {
               key: additionsKey,
-              gutter: createGutterItem(
+              gutter: this.#gutter(
+                content,
                 additionDecoration.gutterLineType,
                 additionLine.lineNumber,
                 lineIndexText,
                 additionDecoration.gutterProperties
               ),
-              content: this.#line(
-                rows.additionRow(model, additionLine.lineIndex),
-                additionRanges,
-                additionDecoration.contentProperties,
-                additionLine.lineNumber,
-                type === 'change' ? undefined : deletionLine?.lineNumber,
-                lineIndexText
-              ),
+              content,
             });
           }
           if (spans != null) {
@@ -504,6 +520,7 @@ export class DiffLayout {
             rowCount += pushSplitInjectedRows(
               columns,
               injected.after,
+              `${lineKey}:after`,
               pendingBuffer,
               flushBuffer
             );
@@ -534,17 +551,25 @@ export class DiffLayout {
               type === 'context' || type === 'context-expanded'
                 ? type
                 : 'change-deletion';
-            pushRow(unified ? columns.unified : columns.deletions, {
-              key: 'eof:d',
-              gutter: createGutterGap(noEOFType, 'metadata', 1),
-              content: createNoNewlineElement(noEOFType),
-            });
+            this.#pushFixedRow(
+              unified ? columns.unified : columns.deletions,
+              'eof:d',
+              noEOFType,
+              () => ({
+                gutter: createGutterGap(noEOFType, 'metadata', 1),
+                content: createNoNewlineElement(noEOFType),
+              })
+            );
             if (!unified && !noEOFCRAddition) {
-              pushRow(columns.additions, {
-                key: `buf:${columns.additions.lastKey}`,
-                gutter: createGutterGap(undefined, 'buffer', 1),
-                content: createEmptyRowBuffer(1),
-              });
+              this.#pushFixedRow(
+                columns.additions,
+                bufferKey(columns.additions),
+                '1',
+                () => ({
+                  gutter: createGutterGap(undefined, 'buffer', 1),
+                  content: createEmptyRowBuffer(1),
+                })
+              );
             }
           }
           if (
@@ -555,17 +580,25 @@ export class DiffLayout {
               type === 'context' || type === 'context-expanded'
                 ? type
                 : 'change-addition';
-            pushRow(unified ? columns.unified : columns.additions, {
-              key: 'eof:a',
-              gutter: createGutterGap(noEOFType, 'metadata', 1),
-              content: createNoNewlineElement(noEOFType),
-            });
+            this.#pushFixedRow(
+              unified ? columns.unified : columns.additions,
+              'eof:a',
+              noEOFType,
+              () => ({
+                gutter: createGutterGap(noEOFType, 'metadata', 1),
+                content: createNoNewlineElement(noEOFType),
+              })
+            );
             if (!unified && !noEOFCRDeletion) {
-              pushRow(columns.deletions, {
-                key: `buf:${columns.deletions.lastKey}`,
-                gutter: createGutterGap(undefined, 'buffer', 1),
-                content: createEmptyRowBuffer(1),
-              });
+              this.#pushFixedRow(
+                columns.deletions,
+                bufferKey(columns.deletions),
+                '1',
+                () => ({
+                  gutter: createGutterGap(undefined, 'buffer', 1),
+                  content: createEmptyRowBuffer(1),
+                })
+              );
             }
           }
           rowCount++;
@@ -644,6 +677,111 @@ export class DiffLayout {
     return side === 'deletions' ? ranges.deletion : ranges.addition;
   }
 
+  // A row that is not built from a line: a filler, separator, annotation or
+  // "no newline" row. Reused while its signature matches.
+  #pushFixedRow(
+    column: Column,
+    key: RowKey,
+    signature: string,
+    create: () => { gutter: HASTElement; content: HASTElement }
+  ): void {
+    let fixed = this.#fixedRows.get(key);
+    if (fixed == null || fixed.signature !== signature) {
+      fixed = { signature, ...create() };
+      this.#fixedRows.set(key, fixed);
+    }
+    pushRow(column, { key, gutter: fixed.gutter, content: fixed.content });
+  }
+
+  // Adds a separator row to one column. Returns whether a row was added.
+  #pushSeparator(
+    column: Column,
+    type: CodeColumnType,
+    {
+      hunkIndex,
+      collapsedLines,
+      rangeSize,
+      hunkSpecs,
+      isFirstHunk,
+      isLastHunk,
+      isExpandable,
+    }: SeparatorProps,
+    hunkSeparators: HunkSeparators,
+    expansionLineCount: number,
+    hunkData: HunkData[]
+  ): boolean {
+    if (typeof collapsedLines === 'number' && collapsedLines <= 0) {
+      return false;
+    }
+    if (hunkSeparators === 'metadata') {
+      if (hunkSpecs == null) {
+        return false;
+      }
+      const separator = () =>
+        createSeparator({
+          type: 'metadata',
+          content: hunkSpecs,
+          isFirstHunk,
+          isLastHunk,
+        });
+      this.#pushFixedRow(
+        column,
+        `sep:${type}:${hunkIndex}`,
+        `metadata|${hunkSpecs}|${isFirstHunk}|${isLastHunk}`,
+        () => ({ gutter: separator(), content: separator() })
+      );
+      return true;
+    }
+    if (hunkSeparators === 'simple') {
+      if (hunkIndex <= 0) {
+        return false;
+      }
+      const separator = () =>
+        createSeparator({ type: 'simple', isFirstHunk, isLastHunk: false });
+      this.#pushFixedRow(
+        column,
+        `sep:${type}:${hunkIndex}`,
+        `simple|${isFirstHunk}`,
+        () => ({ gutter: separator(), content: separator() })
+      );
+      return true;
+    }
+    const slotName = getHunkSeparatorSlotName(type, hunkIndex);
+    const chunked = rangeSize > expansionLineCount;
+    const expandIndex = isExpandable ? hunkIndex : undefined;
+    const content =
+      typeof collapsedLines === 'number'
+        ? getModifiedLinesString(collapsedLines)
+        : 'More unchanged context may be available';
+    const separator = () =>
+      createSeparator({
+        type: hunkSeparators,
+        content,
+        expandIndex,
+        chunked,
+        slotName,
+        isFirstHunk,
+        isLastHunk,
+      });
+    this.#pushFixedRow(
+      column,
+      `sep:${slotName}`,
+      `${hunkSeparators}|${content}|${expandIndex}|${chunked}|${isFirstHunk}|${isLastHunk}`,
+      () => ({ gutter: separator(), content: separator() })
+    );
+    hunkData.push({
+      slotName,
+      hunkIndex,
+      lines: typeof collapsedLines === 'number' ? collapsedLines : 0,
+      lineCountKnown: typeof collapsedLines === 'number',
+      type,
+      expandable: isExpandable
+        ? { up: !isFirstHunk, down: !isLastHunk, chunked }
+        : undefined,
+    });
+    return true;
+  }
+
   #deletionRow(rows: RowSource, lineIndex: number): HASTElement {
     const row = rows.deletionRow(lineIndex);
     if (row == null) {
@@ -692,12 +830,47 @@ export class DiffLayout {
     return row;
   }
 
-  #pushFileAnnotations<LAnnotation>(
+  // The gutter cell of a line, reused while the line number, type and
+  // host properties match.
+  #gutter(
+    content: HASTElement,
+    lineType: LineTypes,
+    lineNumber: number,
+    lineIndexText: string,
+    properties: Properties = {}
+  ): HASTElement {
+    const cached = this.#gutters.get(content);
+    if (
+      cached != null &&
+      cached.lineType === lineType &&
+      cached.lineNumber === lineNumber &&
+      cached.lineIndexText === lineIndexText &&
+      arePropertiesEqual(cached.properties, properties)
+    ) {
+      return cached.cell;
+    }
+    const cell = createGutterItem(
+      lineType,
+      lineNumber,
+      lineIndexText,
+      properties
+    );
+    this.#gutters.set(content, {
+      lineType,
+      lineNumber,
+      lineIndexText,
+      properties,
+      cell,
+    });
+    return cell;
+  }
+
+  #pushFileAnnotations(
     input: DiffLayoutInput<LAnnotation>,
     columns: Record<CodeColumnType, Column>,
     pushAnnotationRow: (
       column: Column,
-      lineKey: string,
+      lineKey: LineKey | 'file',
       span: AnnotationSpan,
       lineType: LineTypes
     ) => void,
@@ -777,7 +950,12 @@ export function columnCells(specs: readonly RowSpec[]): {
 }
 
 function createColumn(): Column {
-  return { specs: [], lastKey: '^' };
+  return { specs: [], lastKey: undefined };
+}
+
+// The key of a filler row: it follows the row before it, or opens the column.
+function bufferKey(column: Column): RowKey {
+  return `buf:${column.lastKey ?? 'top'}`;
 }
 
 function pushRow(column: Column, spec: RowSpec): void {
@@ -785,96 +963,31 @@ function pushRow(column: Column, spec: RowSpec): void {
   column.lastKey = spec.key;
 }
 
-// Adds a separator row to one column. Returns whether a row was added.
-function pushSeparator(
-  column: Column,
-  type: CodeColumnType,
-  {
-    hunkIndex,
-    collapsedLines,
-    rangeSize,
-    hunkSpecs,
-    isFirstHunk,
-    isLastHunk,
-    isExpandable,
-  }: SeparatorProps,
-  hunkSeparators: HunkSeparators,
-  expansionLineCount: number,
-  hunkData: HunkData[]
-): boolean {
-  if (typeof collapsedLines === 'number' && collapsedLines <= 0) {
-    return false;
-  }
-  if (hunkSeparators === 'metadata') {
-    if (hunkSpecs == null) {
-      return false;
-    }
-    const separator = () =>
-      createSeparator({
-        type: 'metadata',
-        content: hunkSpecs,
-        isFirstHunk,
-        isLastHunk,
-      });
-    pushRow(column, {
-      key: `sep:${type}:${hunkIndex}`,
-      gutter: separator(),
-      content: separator(),
-    });
-    return true;
-  }
-  if (hunkSeparators === 'simple') {
-    if (hunkIndex <= 0) {
-      return false;
-    }
-    const separator = () =>
-      createSeparator({ type: 'simple', isFirstHunk, isLastHunk: false });
-    pushRow(column, {
-      key: `sep:${type}:${hunkIndex}`,
-      gutter: separator(),
-      content: separator(),
-    });
-    return true;
-  }
-  const slotName = getHunkSeparatorSlotName(type, hunkIndex);
-  const chunked = rangeSize > expansionLineCount;
-  const expandIndex = isExpandable ? hunkIndex : undefined;
-  const content =
-    typeof collapsedLines === 'number'
-      ? getModifiedLinesString(collapsedLines)
-      : 'More unchanged context may be available';
-  const separator = () =>
-    createSeparator({
-      type: hunkSeparators,
-      content,
-      expandIndex,
-      chunked,
-      slotName,
-      isFirstHunk,
-      isLastHunk,
-    });
-  pushRow(column, {
-    key: `sep:${slotName}`,
-    gutter: separator(),
-    content: separator(),
-  });
-  hunkData.push({
-    slotName,
-    hunkIndex,
-    lines: typeof collapsedLines === 'number' ? collapsedLines : 0,
-    lineCountKnown: typeof collapsedLines === 'number',
-    type,
-    expandable: isExpandable
-      ? { up: !isFirstHunk, down: !isLastHunk, chunked }
-      : undefined,
-  });
-  return true;
+// Where injected rows hang: the line they belong to and which side of it.
+type InjectedRowAnchor = `${LineKey}:${'before' | 'after'}`;
+
+// The key of an injected row: the host's id when it gave one, else its place
+// at its anchor.
+function injectedRowKey(
+  row: InjectedRow,
+  anchor: InjectedRowAnchor,
+  index: number
+): RowKey {
+  return row.id != null ? `inj:${row.id}` : `inj:${anchor}:${index}`;
 }
 
 // Returns how many rows were added.
-function pushUnifiedInjectedRows(column: Column, rows: InjectedRow[]): number {
-  for (const row of rows) {
-    pushRow(column, { key: row.key, gutter: row.gutter, content: row.content });
+function pushUnifiedInjectedRows(
+  column: Column,
+  rows: InjectedRow[],
+  anchor: InjectedRowAnchor
+): number {
+  for (const [index, row] of rows.entries()) {
+    pushRow(column, {
+      key: injectedRowKey(row, anchor, index),
+      gutter: row.gutter,
+      content: row.content,
+    });
   }
   return rows.length;
 }
@@ -883,11 +996,12 @@ function pushUnifiedInjectedRows(column: Column, rows: InjectedRow[]): number {
 function pushSplitInjectedRows(
   columns: Record<CodeColumnType, Column>,
   rows: SplitInjectedRow[],
+  anchor: InjectedRowAnchor,
   pendingBuffer: PendingSplitBuffer,
   flushBuffer: () => void
 ): number {
   let added = 0;
-  for (const { deletion, addition } of rows) {
+  for (const [index, { deletion, addition }] of rows.entries()) {
     if (deletion == null && addition == null) {
       continue;
     }
@@ -902,14 +1016,14 @@ function pushSplitInjectedRows(
     }
     if (deletion != null) {
       pushRow(columns.deletions, {
-        key: deletion.key,
+        key: injectedRowKey(deletion, anchor, index),
         gutter: deletion.gutter,
         content: deletion.content,
       });
     }
     if (addition != null) {
       pushRow(columns.additions, {
-        key: addition.key,
+        key: injectedRowKey(addition, anchor, index),
         gutter: addition.gutter,
         content: addition.content,
       });

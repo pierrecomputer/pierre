@@ -6,7 +6,6 @@ import {
   expect,
   test,
 } from 'bun:test';
-import { toHtml } from 'hast-util-to-html';
 
 import {
   disposeHighlighter,
@@ -118,9 +117,6 @@ describe('worker cache transport', () => {
           );
           expect(structuredClone(fileCache.result)).toEqual(expectedFile);
           expect(structuredClone(diffCache.result)).toEqual(expectedDiff);
-          expect(toHtml(diffCache.result.code.additionLines)).toContain(
-            'data-diff-span'
-          );
           expect(manager.getFileResultCache(oldFile)).toBe(fileCache);
           expect(manager.getDiffResultCache(diff)).toBe(diffCache);
           // Cached rows decode from the transferred buffers on every read,
