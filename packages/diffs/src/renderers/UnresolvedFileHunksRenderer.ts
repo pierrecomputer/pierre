@@ -174,7 +174,7 @@ export class UnresolvedFileHunksRenderer<
     });
   }
 
-  protected override getUnifiedLineDecoration({
+  public override getUnifiedLineDecoration({
     type,
     lineType,
   }: UnifiedLineDecorationProps): LineDecoration {
@@ -194,7 +194,7 @@ export class UnresolvedFileHunksRenderer<
     };
   }
 
-  protected override getSplitLineDecoration({
+  public override getSplitLineDecoration({
     side,
     type,
   }: SplitLineDecorationProps): LineDecoration {
@@ -214,9 +214,9 @@ export class UnresolvedFileHunksRenderer<
     };
   }
 
-  protected override getUnifiedInjectedRowsForLine = (
+  public override getUnifiedInjectedRowsForLine(
     ctx: RenderedLineContext
-  ): UnifiedInjectedRowPlacement | undefined => {
+  ): UnifiedInjectedRowPlacement | undefined {
     const rows = this.injectedRows.get(`${ctx.hunkIndex}:${ctx.lineIndex}`);
     if (rows == null || rows.length === 0) {
       return undefined;
@@ -246,7 +246,7 @@ export class UnresolvedFileHunksRenderer<
       before: before.length > 0 ? before : undefined,
       after: after.length > 0 ? after : undefined,
     };
-  };
+  }
 
   protected override getOptionsWithDefaults(): BaseUnresolvedOptionsWithDefaults {
     const options = super.getOptionsWithDefaults();

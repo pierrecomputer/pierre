@@ -7,11 +7,6 @@ import {
   getSharedHighlighter,
 } from '../src/highlighter/shared_highlighter';
 import { columnCells, DiffLayout } from '../src/layout/DiffLayout';
-import type {
-  LineDecoration,
-  SplitLineDecorationProps,
-  UnifiedLineDecorationProps,
-} from '../src/layout/RowSpec';
 import { DiffModel } from '../src/model/DiffModel';
 import { DiffHunksRenderer } from '../src/renderers/DiffHunksRenderer';
 import { RowSource } from '../src/rows/RowSource';
@@ -23,7 +18,6 @@ import type {
   HunkSeparators,
   RenderRange,
 } from '../src/types';
-import { createAnnotationElement } from '../src/utils/createAnnotationElement';
 import { getLineAnnotationName } from '../src/utils/getLineAnnotationName';
 import { hastToHtml } from '../src/utils/hastToHtml';
 import { parseDiffFromFile } from '../src/utils/parseDiffFromFile';
@@ -140,37 +134,14 @@ const RANGES: Record<string, RenderRange> = {
   window: { startingLine: 2, totalLines: 9, bufferBefore: 1, bufferAfter: 3 },
 };
 
-// The default decorations, as DiffHunksRenderer declares them.
-const hooks = {
-  unifiedLineDecoration({
-    lineType,
-  }: UnifiedLineDecorationProps): LineDecoration {
-    return {
-      gutterLineType: lineType,
-      contentProperties: { 'data-line-type': lineType },
-    };
-  },
-  splitLineDecoration({
-    side,
-    type,
-  }: SplitLineDecorationProps): LineDecoration {
-    const lineType =
-      type === 'change'
-        ? side === 'deletions'
-          ? 'change-deletion'
-          : 'change-addition'
-        : type;
-    return {
-      gutterLineType: lineType,
-      contentProperties: { 'data-line-type': lineType },
-    };
-  },
-  annotationElement: createAnnotationElement,
-};
+// A renderer with the default decorations and annotation element.
+const host = new DiffHunksRenderer<undefined>();
 
-function annotationMaps(annotations: DiffLineAnnotation<undefined>[] = []) {
-  const deletionAnnotations: AnnotationLineMap<undefined> = {};
-  const additionAnnotations: AnnotationLineMap<undefined> = {};
+function annotationMaps<LAnnotation = undefined>(
+  annotations: DiffLineAnnotation<LAnnotation>[] = []
+) {
+  const deletionAnnotations: AnnotationLineMap<LAnnotation> = {};
+  const additionAnnotations: AnnotationLineMap<LAnnotation> = {};
   for (const annotation of annotations) {
     const map =
       annotation.side === 'deletions'
@@ -311,7 +282,7 @@ describe('DiffLayout matches processDiffResult', () => {
             maxLineDiffLength: 1000,
             canHydrateContext: false,
           },
-          hooks
+          host
         );
         const rows = new RowSource({
           deletionRows: result.code.deletionLines,
@@ -408,7 +379,7 @@ describe('DiffLayout matches processDiffResult', () => {
         maxLineDiffLength: 1000,
         canHydrateContext: false,
       },
-      hooks
+      host
     );
     const model = DiffModel.startSession(diff);
     const rows = new RowSource({
@@ -474,7 +445,7 @@ describe('DiffLayout matches processDiffResult', () => {
         maxLineDiffLength: 1000,
         canHydrateContext: false,
       },
-      hooks
+      host
     );
     const model = DiffModel.startSession(diff);
     const rows = new RowSource({
@@ -531,7 +502,7 @@ describe('DiffLayout matches processDiffResult', () => {
         maxLineDiffLength: 1000,
         canHydrateContext: false,
       },
-      hooks
+      host
     );
     const input = {
       model: DiffModel.fromDiff(diff),

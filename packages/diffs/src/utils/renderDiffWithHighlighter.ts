@@ -1,11 +1,9 @@
 import { DEFAULT_COLLAPSED_CONTEXT_THRESHOLD } from '../constants';
 import type {
-  DecorationItem,
   DiffsHighlighter,
   FileContents,
   FileDiffMetadata,
   ForceDiffPlainTextOptions,
-  LineDiffTypes,
   LineInfo,
   RenderDiffFilesResult,
   RenderDiffOptions,
@@ -14,15 +12,10 @@ import type {
 } from '../types';
 import { appendItems } from './appendItems';
 import { cleanLastNewline } from './cleanLastNewline';
-import {
-  computeLineDiffRanges,
-  type LineDiffRange,
-} from './computeLineDiffRanges';
 import { getFiletypeFromFileName } from './getFiletypeFromFileName';
 import { getHighlighterThemeStyles } from './getHighlighterThemeStyles';
 import { getTokenOptions } from './getTokenOptions';
 import { iterateOverDiff } from './iterateOverDiff';
-import { createDiffSpanDecoration } from './parseDiffDecorations';
 import { renderTokenLines } from './renderTokenLines';
 import { setDeferredArrayItem } from './setDeferredArrayItem';
 
@@ -62,23 +55,11 @@ export function renderDiffWithHighlighter(
     highlighter,
   });
 
-  // If we have a large file and we are rendering the WHOLE plain diff ast,
-  // then we should remove the lineDiffType to make sure things render quickly.
-  // For highlighted ASTs or windowed highlights, we should just inherit the
-  // setting
-  const lineDiffType =
-    forcePlainText &&
-    !isWindowedHighlight &&
-    (diff.unifiedLineCount > 1000 || diff.splitLineCount > 1000)
-      ? 'none'
-      : options.lineDiffType;
-
   const code: RenderDiffFilesResult = {
     deletionLines: [],
     additionLines: [],
   };
 
-  const { maxLineDiffLength } = options;
   const shouldGroupAll = !forcePlainText && !diff.isPartial;
   const expandedHunksForIteration = forcePlainText ? expandedHunks : undefined;
   const buckets = new Map<number, RenderBucket>();
@@ -126,19 +107,6 @@ export function renderDiffWithHighlighter(
         additionLine != null
           ? additionLine.splitLineIndex
           : deletionLine.splitLineIndex;
-
-      if (type === 'change' && additionLine != null && deletionLine != null) {
-        computeLineDiffDecorations({
-          additionLine: diff.additionLines[additionLine.lineIndex],
-          deletionLine: diff.deletionLines[deletionLine.lineIndex],
-          deletionLineIndex: bucket.deletionContent.length,
-          additionLineIndex: bucket.additionContent.length,
-          deletionDecorations: bucket.deletionDecorations,
-          additionDecorations: bucket.additionDecorations,
-          lineDiffType,
-          maxLineDiffLength,
-        });
-      }
 
       if (deletionLine != null) {
         appendContent(
@@ -197,11 +165,9 @@ export function renderDiffWithHighlighter(
     const { deletionLines, additionLines } = renderTwoFiles({
       deletionFile,
       deletionInfo: bucket.deletionInfo,
-      deletionDecorations: bucket.deletionDecorations,
 
       additionFile,
       additionInfo: bucket.additionInfo,
-      additionDecorations: bucket.additionDecorations,
 
       highlighter,
       options,
@@ -240,65 +206,6 @@ export function renderDiffWithHighlighter(
   return { code, themeStyles, baseThemeType };
 }
 
-interface ProcessLineDiffProps {
-  deletionLine: string | undefined;
-  additionLine: string | undefined;
-  deletionLineIndex: number;
-  additionLineIndex: number;
-  deletionDecorations: DecorationItem[];
-  additionDecorations: DecorationItem[];
-  lineDiffType: LineDiffTypes;
-  maxLineDiffLength: number;
-}
-
-function computeLineDiffDecorations({
-  deletionLine,
-  additionLine,
-  deletionLineIndex,
-  additionLineIndex,
-  deletionDecorations,
-  additionDecorations,
-  lineDiffType,
-  maxLineDiffLength,
-}: ProcessLineDiffProps) {
-  if (deletionLine == null || additionLine == null) {
-    return;
-  }
-  const ranges = computeLineDiffRanges(
-    deletionLine,
-    additionLine,
-    lineDiffType,
-    maxLineDiffLength
-  );
-  pushDiffSpanDecorations(
-    ranges.deletion,
-    deletionLineIndex,
-    deletionDecorations
-  );
-  pushDiffSpanDecorations(
-    ranges.addition,
-    additionLineIndex,
-    additionDecorations
-  );
-}
-
-function pushDiffSpanDecorations(
-  ranges: readonly LineDiffRange[],
-  line: number,
-  decorations: DecorationItem[]
-): void {
-  for (let index = 0; index < ranges.length; index++) {
-    const range = ranges[index];
-    decorations.push(
-      createDiffSpanDecoration({
-        line,
-        spanStart: range[0],
-        spanLength: range[1] - range[0],
-      })
-    );
-  }
-}
-
 interface HighlightSegment {
   // The where the highlighted region starts
   originalOffset: number;
@@ -319,8 +226,6 @@ interface RenderBucket {
   additionContent: FakeArrayType;
   deletionInfo: (LineInfo | undefined)[];
   additionInfo: (LineInfo | undefined)[];
-  deletionDecorations: DecorationItem[];
-  additionDecorations: DecorationItem[];
   deletionSegments: HighlightSegment[];
   additionSegments: HighlightSegment[];
 }
@@ -345,8 +250,6 @@ function createBucket(): RenderBucket {
     },
     deletionInfo: [],
     additionInfo: [],
-    deletionDecorations: [],
-    additionDecorations: [],
     deletionSegments: [],
     additionSegments: [],
   };
@@ -358,8 +261,6 @@ interface RenderTwoFilesProps {
   additionFile: FileContents;
   deletionInfo: (LineInfo | undefined)[];
   additionInfo: (LineInfo | undefined)[];
-  deletionDecorations: DecorationItem[];
-  additionDecorations: DecorationItem[];
   options: RenderDiffOptions;
   highlighter: DiffsHighlighter;
   languageOverride: SupportedLanguages | undefined;
@@ -372,15 +273,12 @@ function renderTwoFiles({
   deletionInfo,
   additionInfo,
   highlighter,
-  deletionDecorations,
-  additionDecorations,
   languageOverride,
   options: { theme, useTokenTransformer, tokenizeMaxLineLength },
 }: RenderTwoFilesProps): RenderDiffFilesResult {
   const renderFile = (
     file: FileContents,
-    lineInfo: (LineInfo | undefined)[],
-    decorations: DecorationItem[]
+    lineInfo: (LineInfo | undefined)[]
   ): RenderDiffFilesResult['additionLines'] => {
     if (file.contents === '') return [];
     return renderTokenLines(
@@ -395,7 +293,6 @@ function renderTwoFiles({
       {
         state: { lineInfo },
         useTokenTransformer,
-        decorations,
         lazyLineAST,
         cacheHtmlStyles: highlighter.name === 'highlights',
       }
@@ -403,7 +300,7 @@ function renderTwoFiles({
   };
 
   return {
-    deletionLines: renderFile(deletionFile, deletionInfo, deletionDecorations),
-    additionLines: renderFile(additionFile, additionInfo, additionDecorations),
+    deletionLines: renderFile(deletionFile, deletionInfo),
+    additionLines: renderFile(additionFile, additionInfo),
   };
 }
