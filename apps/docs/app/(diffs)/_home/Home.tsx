@@ -1,4 +1,5 @@
 import {
+  preloadFile,
   preloadFileDiff,
   preloadMultiFileDiff,
   preloadUnresolvedFile,
@@ -15,6 +16,8 @@ import { CUSTOM_HEADER_EXAMPLE } from '../_examples/CustomHeader/constants';
 import { CustomHeader } from '../_examples/CustomHeader/CustomHeader';
 import { CUSTOM_HUNK_SEPARATORS_EXAMPLE } from '../_examples/CustomHunkSeparators/constants';
 import { CustomHunkSeparators } from '../_examples/CustomHunkSeparators/CustomHunkSeparators';
+import { CUSTOM_SEARCH_PANEL_EXAMPLE } from '../_examples/CustomSearchPanel/constants';
+import { CustomSearchPanel } from '../_examples/CustomSearchPanel/CustomSearchPanel';
 import { DIFF_STYLES } from '../_examples/DiffStyles/constants';
 import { DiffStyles } from '../_examples/DiffStyles/DiffStyles';
 import { FONT_STYLES } from '../_examples/FontStyles/constants';
@@ -65,6 +68,7 @@ export default function Home() {
             <FontStylesSection />
             <CustomHunkSeparatorsSection />
             <CustomHeaderSection />
+            <CustomSearchPanelSection />
             <ArbitraryFilesSection />
           </section>
           <PierreCompanySection />
@@ -112,6 +116,14 @@ async function CustomHeaderSection() {
   return (
     <CustomHeader
       prerenderedDiff={await preloadMultiFileDiff(CUSTOM_HEADER_EXAMPLE)}
+    />
+  );
+}
+
+async function CustomSearchPanelSection() {
+  return (
+    <CustomSearchPanel
+      prerenderedFile={await preloadFile(CUSTOM_SEARCH_PANEL_EXAMPLE)}
     />
   );
 }

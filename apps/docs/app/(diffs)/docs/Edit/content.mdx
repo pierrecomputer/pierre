@@ -396,6 +396,36 @@ or replace selected text, `applyEdits`, and `close`:
 
 <DocsCodeExample {...editSelectionActionContextType} />
 
+#### Search panel
+
+Return a custom find/replace panel from `renderSearchPanel` to replace the
+built-in one. Pierre keeps search, match highlighting, navigation, replacement,
+and undo; your UI calls the context and renders the state passed to `update`.
+The function runs each time the panel opens (Cmd/Ctrl+F, or Cmd/Ctrl+Alt+F for
+replace mode). You can call `search.setState()` inside the renderer to restore
+the query and search options; the editor searches after mounting the panel.
+
+<DocsCodeExample {...editSearchPanelExample} />
+
+The returned `element` is slotted over the top of the code from the light DOM,
+so page styles apply to it. It still inherits text color and font from the
+editor, so set them on your panel. It sits top-right by default; set its own
+margins to move it (e.g. `margin-inline: auto` to center it). Pierre calls
+`focus()` a frame after the panel opens, when a find shortcut is pressed while
+it is open, and when a re-render moves focus out of it. Focus the find input and
+select its query so typing replaces it. UI that renders asynchronously, like a
+React portal, may not exist yet for the first call, so also focus and select the
+input when it mounts. `cleanup()` runs once after any close: `search.close()`,
+Escape in the editor, or editor detach.
+
+Keys inside the panel's own inputs are your app's job. Ignore events with
+`isComposing` or `keyCode === 229` before handling Enter or Escape.
+`resolveEditorCommandFromKeyboardEvent` identifies the find and replace
+shortcuts; `resolveFindAgainShortcut` handles Cmd/Ctrl+G and Shift+Cmd/Ctrl+G.
+Prevent the browser default when handling a shortcut.
+
+<DocsCodeExample {...editSearchPanelTypes} />
+
 #### Markers
 
 Markers add inline diagnostics with severity styling and hover messages. Call

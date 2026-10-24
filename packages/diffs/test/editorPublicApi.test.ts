@@ -1,4 +1,12 @@
-import { afterAll, describe, expect, mock, spyOn, test } from 'bun:test';
+import {
+  afterAll,
+  describe,
+  expect,
+  type Mock,
+  mock,
+  spyOn,
+  test,
+} from 'bun:test';
 
 import { File } from '../src/components/File';
 import { FileDiff } from '../src/components/FileDiff';
@@ -7,6 +15,8 @@ import {
   Editor,
   type EditorFocusOptions,
   type EditorOptions,
+  type SearchPanelContext,
+  type SearchPanelState,
 } from '../src/editor/editor';
 import { EditStateManager } from '../src/editor/EditStateManager';
 import type { Marker } from '../src/editor/marker';
@@ -1972,6 +1982,220 @@ describe('Editor history option plumbing', () => {
       expect(editor.getText()).toBe('Xbcdef');
     } finally {
       cleanup();
+    }
+  });
+});
+
+interface CustomSearchPanelFixture extends EditorFixture {
+  states: SearchPanelState[];
+  focus: Mock<() => void>;
+  cleanupPanel: Mock<() => void>;
+  element(): HTMLElement | undefined;
+  search(): SearchPanelContext | undefined;
+  pressKey(init: KeyboardEventInit): void;
+}
+
+// Mounts a File editor whose renderSearchPanel records every state pushed to
+// the custom panel, with a helper that dispatches keys on the editor content.
+async function createCustomSearchPanelFixture(
+  contents: string,
+  options: {
+    onRender?: (search: SearchPanelContext) => void;
+    onUpdate?: (search: SearchPanelContext) => void;
+  } = {}
+): Promise<CustomSearchPanelFixture> {
+  const states: SearchPanelState[] = [];
+  const focus = mock(() => {});
+  const cleanupPanel = mock(() => {});
+  let element: HTMLElement | undefined;
+  let search: SearchPanelContext | undefined;
+  const fixture = await createEditorFixture(contents, {
+    renderSearchPanel(context) {
+      search = context;
+      options.onRender?.(context);
+      element = document.createElement('div');
+      return {
+        element,
+        update: (state) => {
+          states.push(state);
+          options.onUpdate?.(context);
+        },
+        focus,
+        cleanup: cleanupPanel,
+      };
+    },
+  });
+  fixture.editor.setSelections([
+    {
+      start: { line: 0, character: 1 },
+      end: { line: 0, character: 1 },
+      direction: 'none',
+    },
+  ]);
+  return {
+    ...fixture,
+    states,
+    focus,
+    cleanupPanel,
+    element: () => element,
+    search: () => search,
+    pressKey: (init) => {
+      fixture.content.dispatchEvent(
+        new window.KeyboardEvent('keydown', {
+          bubbles: true,
+          cancelable: true,
+          composed: true,
+          ...init,
+        })
+      );
+    },
+  };
+}
+
+describe('Editor renderSearchPanel', () => {
+  test('initializes the query and search options inside the renderer', async () => {
+    const fixture = await createCustomSearchPanelFixture('Foo foo', {
+      onRender: (search) =>
+        search.setState({ text: 'Foo', caseSensitive: true }),
+    });
+    try {
+      fixture.pressKey({ key: 'f', code: 'KeyF', metaKey: true });
+      await wait(20);
+
+      expect(fixture.element()?.isConnected).toBe(true);
+      expect(fixture.states.at(-1)).toMatchObject({
+        text: 'Foo',
+        caseSensitive: true,
+        matchCount: 1,
+        currentMatchIndex: 0,
+      });
+      expect(
+        fixture.container.shadowRoot?.querySelectorAll('[data-match-range]')
+      ).toHaveLength(1);
+    } finally {
+      fixture.cleanup();
+    }
+  });
+
+  test.each(['render', 'update'] as const)(
+    'reopens after the custom panel closes during its initial %s',
+    async (stage) => {
+      let closeNext = true;
+      const closeOnce = (search: SearchPanelContext) => {
+        if (closeNext) {
+          closeNext = false;
+          search.close();
+        }
+      };
+      const fixture = await createCustomSearchPanelFixture('foo bar foo', {
+        onRender: stage === 'render' ? closeOnce : undefined,
+        onUpdate: stage === 'update' ? closeOnce : undefined,
+      });
+      try {
+        fixture.pressKey({ key: 'f', code: 'KeyF', metaKey: true });
+        await wait(20);
+        expect(fixture.element()?.isConnected).toBe(false);
+        expect(fixture.cleanupPanel).toHaveBeenCalledTimes(1);
+        expect(fixture.focus).not.toHaveBeenCalled();
+
+        fixture.pressKey({ key: 'f', code: 'KeyF', metaKey: true });
+        await wait(20);
+        expect(fixture.element()?.isConnected).toBe(true);
+        fixture.search()?.setState({ text: 'foo' });
+        expect(fixture.states.at(-1)?.matchCount).toBe(2);
+        expect(fixture.focus).toHaveBeenCalledTimes(1);
+      } finally {
+        fixture.cleanup();
+      }
+    }
+  );
+
+  test('keeps an early custom query and navigation through the first frame', async () => {
+    const fixture = await createCustomSearchPanelFixture('foo bar foo', {
+      onRender: (search) => {
+        queueMicrotask(() => {
+          search.setState({ text: 'foo' });
+          search.navigate('next');
+        });
+      },
+    });
+    try {
+      // No word under the caret seeds the initial search.
+      fixture.editor.setSelections([]);
+      fixture.pressKey({ key: 'f', code: 'KeyF', metaKey: true });
+      await wait(20);
+
+      expect(fixture.states.at(-1)).toMatchObject({
+        text: 'foo',
+        matchCount: 2,
+        currentMatchIndex: 1,
+      });
+      expect(
+        fixture.container.shadowRoot?.querySelectorAll('[data-match-range]')
+      ).toHaveLength(2);
+    } finally {
+      fixture.cleanup();
+    }
+  });
+
+  test('opens a custom panel from the find shortcut and closes it on Escape', async () => {
+    const fixture = await createCustomSearchPanelFixture('foo bar foo');
+    const { container, states, focus, cleanupPanel, pressKey } = fixture;
+    try {
+      // The DOM harness reports a Mac platform, so the primary modifier is Cmd.
+      pressKey({ key: 'f', code: 'KeyF', metaKey: true });
+      await wait(20);
+
+      // The word under the caret seeds the query, and the custom element is
+      // slotted from the host's light DOM in place of the built-in panel.
+      expect(fixture.element()?.parentElement).toBe(container);
+      expect(
+        container.shadowRoot?.querySelector('[data-search-panel] input')
+      ).toBeNull();
+      expect(states.at(-1)).toMatchObject({
+        text: 'foo',
+        mode: 'find',
+        matchCount: 2,
+        currentMatchIndex: 0,
+      });
+      expect(focus).toHaveBeenCalledTimes(1);
+
+      fixture.search()?.navigate('next');
+      expect(states.at(-1)?.currentMatchIndex).toBe(1);
+
+      // The find-and-replace shortcut switches the open panel's mode in place.
+      pressKey({ key: 'f', code: 'KeyF', metaKey: true, altKey: true });
+      expect(states.at(-1)?.mode).toBe('replace');
+      expect(focus).toHaveBeenCalledTimes(2);
+
+      pressKey({ key: 'Escape' });
+      expect(cleanupPanel).toHaveBeenCalledTimes(1);
+      expect(fixture.element()?.isConnected).toBe(false);
+    } finally {
+      fixture.cleanup();
+    }
+  });
+
+  test('re-counts matches after an edit even when the query had none', async () => {
+    const fixture = await createCustomSearchPanelFixture('foo bar foo');
+    try {
+      fixture.pressKey({ key: 'f', code: 'KeyF', metaKey: true });
+      await wait(20);
+      fixture.search()?.setState({ text: 'baz' });
+      expect(fixture.states.at(-1)?.matchCount).toBe(0);
+
+      fixture.editor.applyEdits([
+        {
+          range: {
+            start: { line: 0, character: 11 },
+            end: { line: 0, character: 11 },
+          },
+          newText: ' baz',
+        },
+      ]);
+      expect(fixture.states.at(-1)?.matchCount).toBe(1);
+    } finally {
+      fixture.cleanup();
     }
   });
 });

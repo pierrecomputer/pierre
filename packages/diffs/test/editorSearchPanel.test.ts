@@ -6,8 +6,10 @@ import {
 } from '../src/editor/pieceTable';
 import {
   type MatchRange,
+  SearchPanel,
+  type SearchPanelContext,
   type SearchPanelOptions,
-  SearchPanelWidget,
+  type SearchPanelState,
   type SearchParams,
 } from '../src/editor/searchPanel';
 import { TextDocument } from '../src/editor/textDocument';
@@ -36,8 +38,8 @@ function pressKey(
   return event;
 }
 
-interface WidgetHarness {
-  widget: SearchPanelWidget;
+interface PanelHarness {
+  panel: SearchPanel;
   input: HTMLInputElement;
   replaceInput: HTMLInputElement;
   button(container: string, index: number): HTMLButtonElement;
@@ -50,19 +52,20 @@ interface WidgetHarness {
   cleanup(): void;
 }
 
-// Mounts a SearchPanelWidget over an in-memory document and records everything
-// the widget hands back to its host (scroll targets, replace edits, match-set
-// updates, and close). The default onUpdate selects the first match as current,
-// like the editor selecting the first hit on open; pass `selectCurrent: false`
-// to model a host with no match under the caret (the "N results" state).
-function createWidget(
+// Mounts the built-in SearchPanel over an in-memory document and records
+// everything the panel hands back to its host (scroll targets, replace edits,
+// match-set updates, and close). The default onUpdate selects the first match
+// as current, like the editor selecting the first hit on open; pass
+// `selectCurrent: false` to model a host with no match under the caret (the
+// "N results" state).
+function createPanel(
   contents: string,
   options: {
     defaultQuery?: string;
     mode?: SearchPanelOptions['mode'];
     selectCurrent?: boolean;
   } = {}
-): WidgetHarness {
+): PanelHarness {
   const { defaultQuery = '', mode, selectCurrent = true } = options;
   const dom = installDom();
   const textDocument = new TextDocument('inmemory://search-panel', contents);
@@ -74,7 +77,7 @@ function createWidget(
   const updates: (MatchRange[] | undefined)[] = [];
 
   let closed = false;
-  const widget = new SearchPanelWidget({
+  const panel = new SearchPanel({
     textDocument,
     containerElement,
     defaultQuery,
@@ -89,12 +92,13 @@ function createWidget(
       closed = true;
     },
   });
+  panel.mount();
 
   const query = (selector: string) =>
     document.querySelector<HTMLElement>(`[data-search-panel] ${selector}`);
 
   return {
-    widget,
+    panel,
     input: query('input[data-search]') as HTMLInputElement,
     replaceInput: query('input[data-replace]') as HTMLInputElement,
     button: (container, index) =>
@@ -108,16 +112,16 @@ function createWidget(
     updates,
     isClosed: () => closed,
     cleanup: () => {
-      widget.cleanup();
+      panel.cleanup();
       containerElement.remove();
       dom.cleanup();
     },
   };
 }
 
-describe('SearchPanelWidget', () => {
+describe('SearchPanel', () => {
   test('Shift+Enter in the find input navigates to the previous match', async () => {
-    const harness = createWidget('foo foo foo');
+    const harness = createPanel('foo foo foo');
     try {
       await wait(0);
       setInputValue(harness.input, 'foo');
@@ -135,7 +139,7 @@ describe('SearchPanelWidget', () => {
   });
 
   test('shows the running match position and total', async () => {
-    const harness = createWidget('foo foo foo');
+    const harness = createPanel('foo foo foo');
     try {
       await wait(0);
       setInputValue(harness.input, 'foo');
@@ -149,7 +153,7 @@ describe('SearchPanelWidget', () => {
   });
 
   test('shows a bare result count when no match is current', async () => {
-    const harness = createWidget('foo foo', { selectCurrent: false });
+    const harness = createPanel('foo foo', { selectCurrent: false });
     try {
       await wait(0);
       setInputValue(harness.input, 'foo');
@@ -160,7 +164,7 @@ describe('SearchPanelWidget', () => {
   });
 
   test('clears the matches and disables navigation for an empty query', async () => {
-    const harness = createWidget('foo foo foo');
+    const harness = createPanel('foo foo foo');
     try {
       await wait(0);
       setInputValue(harness.input, 'foo');
@@ -178,7 +182,7 @@ describe('SearchPanelWidget', () => {
   });
 
   test('wraps past the last match to the first and before the first to the last', async () => {
-    const harness = createWidget('foo foo foo');
+    const harness = createPanel('foo foo foo');
     try {
       await wait(0);
       setInputValue(harness.input, 'foo'); // current = [0, 3]
@@ -195,7 +199,7 @@ describe('SearchPanelWidget', () => {
   });
 
   test('replace edits the current match and collapses past it', async () => {
-    const harness = createWidget('foo foo foo');
+    const harness = createPanel('foo foo foo');
     try {
       await wait(0);
       setInputValue(harness.input, 'foo'); // current = [0, 3]
@@ -211,7 +215,7 @@ describe('SearchPanelWidget', () => {
   });
 
   test('replace all edits every match at once', async () => {
-    const harness = createWidget('foo foo foo');
+    const harness = createPanel('foo foo foo');
     try {
       await wait(0);
       setInputValue(harness.input, 'foo');
@@ -229,7 +233,7 @@ describe('SearchPanelWidget', () => {
   });
 
   test('replace does nothing when there are no matches', async () => {
-    const harness = createWidget('foo foo foo');
+    const harness = createPanel('foo foo foo');
     try {
       await wait(0);
       setInputValue(harness.input, 'zzz'); // no matches
@@ -242,7 +246,7 @@ describe('SearchPanelWidget', () => {
   });
 
   test('cmd+f and cmd+opt+f toggle the panel between find and replace modes', async () => {
-    const harness = createWidget('foo foo foo');
+    const harness = createPanel('foo foo foo');
     try {
       await wait(0);
       expect(harness.mode()).toBe('find');
@@ -254,7 +258,7 @@ describe('SearchPanelWidget', () => {
       expect(harness.mode()).toBe('find');
 
       // setMode drives the same transition programmatically.
-      harness.widget.setMode('replace');
+      harness.panel.setMode('replace');
       expect(harness.mode()).toBe('replace');
     } finally {
       harness.cleanup();
@@ -262,7 +266,7 @@ describe('SearchPanelWidget', () => {
   });
 
   test('toggling case sensitivity re-runs the search', async () => {
-    const harness = createWidget('Foo foo');
+    const harness = createPanel('Foo foo');
     try {
       await wait(0);
       setInputValue(harness.input, 'foo'); // case-insensitive: two matches
@@ -281,7 +285,7 @@ describe('SearchPanelWidget', () => {
   });
 
   test('Escape closes the panel and notifies the host', async () => {
-    const harness = createWidget('foo foo foo');
+    const harness = createPanel('foo foo foo');
     try {
       await wait(0);
       const escape = pressKey(harness.input, 'Escape');
@@ -294,9 +298,139 @@ describe('SearchPanelWidget', () => {
   });
 });
 
+interface CustomPanelHarness {
+  host: HTMLElement;
+  element: HTMLElement;
+  search: SearchPanelContext;
+  states: SearchPanelState[];
+  cleanupCount(): number;
+  isClosed(): boolean;
+  cleanup(): void;
+}
+
+// Mounts a SearchPanel with a custom UI the way the editor does for
+// `renderSearchPanel`: the panel is inserted before a <pre> inside the host's
+// shadow root, and the custom element is slotted from the host's light DOM.
+// Records every state pushed to the custom UI.
+function mountCustomPanel(contents: string): CustomPanelHarness {
+  const dom = installDom();
+  const textDocument = new TextDocument('inmemory://custom-panel', contents);
+  const host = document.createElement('div');
+  document.body.appendChild(host);
+  const preElement = document.createElement('pre');
+  host.attachShadow({ mode: 'open' }).appendChild(preElement);
+
+  const element = document.createElement('div');
+  const states: SearchPanelState[] = [];
+  let search: SearchPanelContext | undefined;
+  let cleanupCount = 0;
+  let closed = false;
+  const panel = new SearchPanel({
+    textDocument,
+    containerElement: preElement,
+    customPanel: {
+      host,
+      render: (context) => {
+        search = context;
+        return {
+          element,
+          update: (state) => states.push(state),
+          focus: () => {},
+          cleanup: () => {
+            cleanupCount++;
+          },
+        };
+      },
+    },
+    defaultQuery: '',
+    scrollToMatch: () => {},
+    applyReplace: () => {},
+    onUpdate: (matches) => matches[0],
+    onClose: () => {
+      closed = true;
+    },
+  });
+  panel.mount();
+  if (search === undefined) {
+    throw new Error('custom panel was not rendered');
+  }
+
+  return {
+    host,
+    element,
+    search,
+    states,
+    cleanupCount: () => cleanupCount,
+    isClosed: () => closed,
+    cleanup: () => {
+      panel.cleanup();
+      host.remove();
+      dom.cleanup();
+    },
+  };
+}
+
+describe('custom search panel', () => {
+  test('slots the panel from the light DOM and pushes search state', () => {
+    const harness = mountCustomPanel('foo foo foo');
+    try {
+      // Page styles reach the panel because it stays in the light DOM and is
+      // projected into the panel position through a slot.
+      expect(harness.element.parentElement).toBe(harness.host);
+      expect(harness.element.slot).toBe('search-panel');
+      expect(
+        harness.host.shadowRoot?.querySelector(
+          '[data-search-panel] slot[name="search-panel"]'
+        )
+      ).not.toBeNull();
+
+      harness.search.setState({ text: 'foo', regex: true });
+      expect(harness.states.at(-1)).toEqual({
+        text: 'foo',
+        replaceText: '',
+        caseSensitive: false,
+        wholeWord: false,
+        regex: true,
+        mode: 'find',
+        matchCount: 3,
+        currentMatchIndex: 0,
+      });
+
+      harness.search.navigate('previous');
+      expect(harness.states.at(-1)?.currentMatchIndex).toBe(2);
+    } finally {
+      harness.cleanup();
+    }
+  });
+
+  test('close tears the panel down once and ignores later calls', () => {
+    const harness = mountCustomPanel('foo foo foo');
+    try {
+      harness.search.setState({ text: 'foo' });
+      harness.search.close();
+
+      expect(harness.isClosed()).toBe(true);
+      expect(harness.cleanupCount()).toBe(1);
+      expect(harness.element.isConnected).toBe(false);
+      expect(
+        harness.host.shadowRoot?.querySelector('[data-search-panel]')
+      ).toBeNull();
+
+      const stateCount = harness.states.length;
+      harness.search.setState({ text: 'bar' });
+      harness.search.navigate('next');
+      harness.search.close();
+      expect(harness.states).toHaveLength(stateCount);
+      expect(harness.cleanupCount()).toBe(1);
+    } finally {
+      harness.cleanup();
+    }
+  });
+});
+
 // ---------------------------------------------------------------------------
 // Search/replace semantics exercised against PieceTable.search,
-// buildSearchReplacementText, and SearchPanelWidget. pierre's search returns
+// buildSearchReplacementText, and SearchPanel. pierre's search returns
 // flat [start, end) document offsets (rather than row/column point ranges), so
 // expectations are stated in offsets and round-tripped through positionAt
 // where line geometry matters.
@@ -376,11 +510,11 @@ interface ReplaceHostHarness {
   dispose(): void;
 }
 
-// Mounts a SearchPanelWidget over a live document with a host wired the way
+// Mounts a SearchPanel over a live document with a host wired the way
 // editor.ts wires it: scrollToMatch moves a host-side selection (an offset
 // pair), applyReplace actually writes the edits into the document, and
 // onUpdate picks the first match at or after the selection start and scrolls
-// to it. This is deliberately richer than the recording-only createWidget
+// to it. This is deliberately richer than the recording-only createPanel
 // harness above — replace-progression semantics only show up when the
 // document really changes underneath the panel.
 function mountReplaceHost(contents: string): ReplaceHostHarness {
@@ -398,7 +532,7 @@ function mountReplaceHost(contents: string): ReplaceHostHarness {
     scrolled.push([nextMatch[0], nextMatch[1]]);
   };
 
-  const widget = new SearchPanelWidget({
+  const searchPanel = new SearchPanel({
     textDocument,
     containerElement,
     defaultQuery: '',
@@ -427,6 +561,7 @@ function mountReplaceHost(contents: string): ReplaceHostHarness {
     },
     onClose: () => {},
   });
+  searchPanel.mount();
 
   const panel = (selector: string) =>
     document.querySelector<HTMLElement>(`[data-search-panel] ${selector}`);
@@ -446,7 +581,7 @@ function mountReplaceHost(contents: string): ReplaceHostHarness {
     appliedBatches,
     matchesLabel: () => panel('[data-matches]')?.textContent ?? null,
     dispose: () => {
-      widget.cleanup();
+      searchPanel.cleanup();
       containerElement.remove();
       dom.cleanup();
     },

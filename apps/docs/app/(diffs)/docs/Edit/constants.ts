@@ -418,6 +418,186 @@ export const EDIT_SELECTION_ACTION_CONTEXT_TYPE: PreloadFileOptions<
   options,
 };
 
+export const EDIT_SEARCH_PANEL_EXAMPLE: PreloadFileOptions<
+  undefined,
+  undefined
+> = {
+  file: {
+    name: 'editor_search_panel.tsx',
+    contents: `import type { FileContents } from '@pierre/diffs';
+import type {
+  EditorOptions,
+  SearchPanelContext,
+  SearchPanelState,
+} from '@pierre/diffs/edit';
+import { File } from '@pierre/diffs/react';
+import {
+  type RefObject,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
+import { createPortal } from 'react-dom';
+
+interface OpenPanel {
+  element: HTMLElement;
+  search: SearchPanelContext;
+  state: SearchPanelState;
+}
+
+export function EditableFile({ file }: { file: FileContents }) {
+  const [panel, setPanel] = useState<OpenPanel>();
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const editorOptions = useMemo<EditorOptions<'file', undefined, undefined>>(
+    () => ({
+      // Runs each time find opens. The element is slotted over the code from
+      // the light DOM, so it picks up your app's styles.
+      renderSearchPanel(search) {
+        const element = document.createElement('div');
+        element.className = 'search-panel';
+        return {
+          element,
+          update: (state) => setPanel({ element, search, state }),
+          focus: () => {
+            inputRef.current?.focus();
+            inputRef.current?.select();
+          },
+          cleanup: () => setPanel(undefined),
+        };
+      },
+    }),
+    []
+  );
+
+  return (
+    <>
+      <File file={file} edit editorOptions={editorOptions} />
+      {panel != null &&
+        createPortal(
+          <SearchPopup
+            search={panel.search}
+            state={panel.state}
+            inputRef={inputRef}
+          />,
+          panel.element
+        )}
+    </>
+  );
+}
+
+function SearchPopup({
+  search,
+  state,
+  inputRef,
+}: {
+  search: SearchPanelContext;
+  state: SearchPanelState;
+  inputRef: RefObject<HTMLInputElement | null>;
+}) {
+  // React mounts the portal after the editor's open-time focus() call, so
+  // focus the input when the popup first renders.
+  useEffect(() => {
+    inputRef.current?.focus();
+    inputRef.current?.select();
+  }, [inputRef]);
+
+  return (
+    <div role="search">
+      <input
+        ref={inputRef}
+        value={state.text}
+        onChange={(e) => search.setState({ text: e.target.value })}
+        onKeyDown={(e) => {
+          if (e.nativeEvent.isComposing || e.nativeEvent.keyCode === 229) {
+            return;
+          }
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            search.navigate(e.shiftKey ? 'previous' : 'next');
+          } else if (e.key === 'Escape') {
+            e.preventDefault();
+            search.close();
+          }
+        }}
+      />
+      <button
+        aria-pressed={state.regex}
+        onClick={() => search.setState({ regex: !state.regex })}
+      >
+        .*
+      </button>
+      <span>
+        {state.currentMatchIndex === undefined
+          ? \`\${state.matchCount} results\`
+          : \`\${state.currentMatchIndex + 1} of \${state.matchCount}\`}
+      </span>
+      <button onClick={() => search.navigate('next')}>Next</button>
+      <button onClick={search.close}>Close</button>
+      {state.mode === 'replace' && (
+        <>
+          <input
+            value={state.replaceText}
+            onChange={(e) => search.setState({ replaceText: e.target.value })}
+          />
+          <button onClick={search.replace}>Replace</button>
+          <button onClick={search.replaceAll}>Replace all</button>
+        </>
+      )}
+    </div>
+  );
+}`,
+  },
+  options,
+};
+
+export const EDIT_SEARCH_PANEL_TYPES: PreloadFileOptions<undefined, undefined> =
+  {
+    file: {
+      name: 'search_panel.ts',
+      contents: `export interface SearchPanelView {
+  /** Slotted over the code from the light DOM; position it with margins. */
+  element: HTMLElement;
+  /** Receives the latest state after every change. */
+  update(state: SearchPanelState): void;
+  /** Focus and select your search input. */
+  focus(): void;
+  /** Runs once after the panel closes and the element is removed. */
+  cleanup?(): void;
+}
+
+export interface SearchPanelContext {
+  /** Query and option changes re-run the search; replaceText and mode don't. */
+  setState(patch: Partial<SearchParams & { mode: SearchPanelMode }>): void;
+  /** Moves to the next or previous match, wrapping around. */
+  navigate(direction: 'next' | 'previous'): void;
+  /** Replaces the current (or next) match, then moves past it. */
+  replace(): void;
+  /** Replaces every match as a single undo entry. */
+  replaceAll(): void;
+  /** Closes the panel and clears highlights. */
+  close(): void;
+}
+
+export interface SearchPanelState extends SearchParams {
+  mode: 'find' | 'replace';
+  matchCount: number;
+  /** Zero-based index of the current match, if any. */
+  currentMatchIndex: number | undefined;
+}
+
+export interface SearchParams {
+  text: string;
+  replaceText: string;
+  caseSensitive: boolean;
+  wholeWord: boolean;
+  regex: boolean;
+}`,
+    },
+    options,
+  };
+
 export const EDIT_CARET_TYPE: PreloadFileOptions<undefined, undefined> = {
   file: {
     name: 'editor_caret.ts',
@@ -1234,6 +1414,9 @@ interface EditorOptions<EType extends EditorType, LAnnotation, Caret> {
 
   // Custom Selection Action UI. See Selection Action docs for context shape.
   renderSelectionAction?: (context) => HTMLElement;
+
+  // Custom find/replace panel UI. See Search panel docs for the view contract.
+  renderSearchPanel?: (search: SearchPanelContext) => SearchPanelView;
 
   // Render an externally owned caret at its normalized document position.
   renderCaret?: (caret: EditorCaret<Caret>) => HTMLElement;

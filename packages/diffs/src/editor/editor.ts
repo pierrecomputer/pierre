@@ -67,8 +67,10 @@ import {
 } from './popover';
 import {
   type MatchRange,
+  SearchPanel,
+  type SearchPanelContext,
   type SearchPanelMode,
-  SearchPanelWidget,
+  type SearchPanelView,
 } from './searchPanel';
 import type {
   AutoSurround,
@@ -162,6 +164,13 @@ export type {
   EditPredictRequest,
   EditPredictResponse,
 } from './editPrediction';
+export type {
+  SearchPanelContext,
+  SearchPanelMode,
+  SearchPanelState,
+  SearchPanelView,
+  SearchParams,
+} from './searchPanel';
 
 // ShadowRoot.getSelection is a non-standard Blink/WebKit method (predates the
 // spec'd Selection.getComposedRanges) and is missing from the DOM lib types.
@@ -358,6 +367,13 @@ export interface EditorOptions<EType extends EditorType, LAnnotation, Caret> {
     context: SelectionActionContext<EType, LAnnotation>
   ) => HTMLElement;
   /**
+   * Render a custom find/replace panel in place of the built-in one. Called
+   * each time the panel opens. The returned element is slotted over the top
+   * of the code from the light DOM, so page styles apply to it. The editor
+   * keeps search, highlighting, navigation, replacement, and undo.
+   */
+  renderSearchPanel?: (search: SearchPanelContext) => SearchPanelView;
+  /**
    * Render an externally owned caret at its normalized document position.
    */
   renderCaret?: (caret: EditorCaret<Caret>) => HTMLElement;
@@ -530,7 +546,7 @@ export class Editor<
   #viewportWindowLines?: number;
   #markerRenderer?: MarkerRenderer;
   #carets?: TrackedCaret<Caret>[];
-  #searchPanel?: SearchPanelWidget;
+  #searchPanel?: SearchPanel;
   #selectionAction?: SelectionActionWidget;
   // Programmatic ranges stay passive until the user interacts with the editor.
   #canMountSelectionAction = true;
@@ -1714,7 +1730,7 @@ export class Editor<
       }
 
       if (this.#retainSearchPanelFocus) {
-        this.#searchPanel?.focus();
+        this.#searchPanel?.restoreFocus();
       }
 
       if (restoreEditorStateOnSync) {
@@ -1816,7 +1832,7 @@ export class Editor<
     this.#resetCache();
     this.#wrapLineOffsetsCache.clear();
     this.#markerRenderer?.removePopover();
-    if (this.#searchPanel !== undefined && this.#matches !== undefined) {
+    if (this.#searchPanel !== undefined) {
       this.#searchPanel.updateMatches({ syncSelection: false });
     }
   }
@@ -2588,7 +2604,7 @@ export class Editor<
           const findAgain = resolveFindAgainShortcut(e);
           if (findAgain !== undefined) {
             e.preventDefault();
-            this.#searchPanel.navigate(findAgain === 'previous');
+            this.#searchPanel.navigate(findAgain);
             return;
           }
         }
@@ -6481,10 +6497,15 @@ export class Editor<
     this.#searchPanel?.cleanup();
 
     const textDocument = this.#editSession?.document;
+    const fileContainer = this.#fileContainer;
     const preElement =
-      this.#fileContainer?.shadowRoot?.querySelector<HTMLElement>('pre');
+      fileContainer?.shadowRoot?.querySelector<HTMLElement>('pre');
     const selections = this.#selections;
-    if (textDocument === undefined || preElement == null) {
+    if (
+      textDocument === undefined ||
+      fileContainer === undefined ||
+      preElement == null
+    ) {
       return;
     }
 
@@ -6510,10 +6531,10 @@ export class Editor<
       }
     }
 
-    const scrollToMatch = (
-      [startOffset, endOffset]: MatchRange,
-      retainFocus: boolean
-    ) => {
+    const scrollToMatch = ([startOffset, endOffset]: MatchRange) => {
+      // Read focus before the selection moves: when the user is working in the
+      // panel, later re-renders keep focus there instead of in the editor.
+      const retainFocus = this.#searchPanel?.hasFocus() === true;
       const nextSelection = createSelectionFromAnchorAndFocusOffsets(
         textDocument,
         startOffset,
@@ -6527,9 +6548,14 @@ export class Editor<
       this.#retainSearchPanelFocus = retainFocus;
     };
 
-    const searchPanel = new SearchPanelWidget({
+    const renderSearchPanel = this.#options.renderSearchPanel;
+    const searchPanel = new SearchPanel({
       textDocument,
       containerElement: preElement,
+      customPanel:
+        renderSearchPanel !== undefined
+          ? { render: renderSearchPanel, host: fileContainer }
+          : undefined,
       defaultQuery,
       mode,
       initialMatch,
@@ -6597,7 +6623,7 @@ export class Editor<
           }
         }
         if (nextMatch !== undefined) {
-          scrollToMatch(nextMatch, true);
+          scrollToMatch(nextMatch);
         } else {
           this.#updateSelections(this.#selections ?? []);
         }
@@ -6613,6 +6639,7 @@ export class Editor<
 
     this.#searchPanel = searchPanel;
     this.#retainSearchPanelFocus = false;
+    searchPanel.mount();
   }
 
   #getSelectionText() {
@@ -7075,10 +7102,11 @@ export class Editor<
       newLineAnnotations ?? this.#lineAnnotations
     );
 
+    // Re-search on every edit while the panel is open, including when the
+    // previous query had no matches: typing or undo can create new ones.
     if (
       options?.skipSearchRefresh !== true &&
-      this.#searchPanel !== undefined &&
-      this.#matches !== undefined
+      this.#searchPanel !== undefined
     ) {
       this.#searchPanel.updateMatches({ syncSelection: false });
     }
