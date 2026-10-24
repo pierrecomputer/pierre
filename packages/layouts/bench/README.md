@@ -14,7 +14,9 @@ From anywhere in the repository:
 moon run layouts:bench
 ```
 
-A full headless run takes about ten minutes. Options come from the environment:
+A full headless run takes about 30 minutes. The memory values and the repeat
+scenario take about 20 of them; `BENCH_MEMORY=0` skips them. Options come from
+the environment:
 
 | Variable            | Default            | Meaning                                                                   |
 | ------------------- | ------------------ | ------------------------------------------------------------------------- |
