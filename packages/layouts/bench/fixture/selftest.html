@@ -9,6 +9,14 @@
         margin: 0;
       }
 
+      .panes {
+        position: absolute;
+        top: 260px;
+        left: 20px;
+        display: flex;
+        gap: 8px;
+      }
+
       .box {
         position: absolute;
         top: 20px;
@@ -21,6 +29,17 @@
   </head>
   <body>
     <div id="box" class="box"></div>
+    <!-- Two panes for attribution: a change in pane a, and a change above both. -->
+    <div id="panes" class="panes">
+      <section data-layout-pane="a">
+        <p id="a-text">Pane a</p>
+        <p>More text</p>
+      </section>
+      <section data-layout-pane="b">
+        <p>Pane b</p>
+        <p>More text</p>
+      </section>
+    </div>
     <script type="module" src="/selftest.ts"></script>
   </body>
 </html>

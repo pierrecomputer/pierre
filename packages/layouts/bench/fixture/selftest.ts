@@ -3,6 +3,10 @@ export interface SelfTest {
   composited(): void;
   mainThread(): void;
   forcedLayout(): void;
+  /** A text change inside pane a only. */
+  paneText(): void;
+  /** A font size change on the parent of both panes, which both inherit. */
+  sharedFont(): void;
 }
 
 declare global {
@@ -12,7 +16,10 @@ declare global {
 }
 
 const box = document.getElementById('box');
-if (box === null) throw new Error('Missing self-test box');
+const panes = document.getElementById('panes');
+const paneText = document.getElementById('a-text');
+if (box === null || panes === null || paneText === null)
+  throw new Error('Missing self-test elements');
 
 window.__selftest = {
   // A transform animation runs on the compositor in Chromium.
@@ -31,6 +38,16 @@ window.__selftest = {
     setTimeout(() => {
       box.style.width = `${200 + Math.random() * 100}px`;
       void box.offsetWidth;
+    }, 0);
+  },
+  paneText() {
+    setTimeout(() => {
+      paneText.textContent = `Pane a ${Math.random()}`;
+    }, 0);
+  },
+  sharedFont() {
+    setTimeout(() => {
+      panes.style.fontSize = panes.style.fontSize === '20px' ? '' : '20px';
     }, 0);
   },
 };

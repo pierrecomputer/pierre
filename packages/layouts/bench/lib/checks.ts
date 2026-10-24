@@ -1,4 +1,4 @@
-import type { Sample } from './measure';
+import type { Attribution, Sample } from './measure';
 import type { ContentWeight } from './scenarios';
 
 /** The median sample of one scenario at one parameter set. */
@@ -8,6 +8,8 @@ export interface RecordSummary {
   content: ContentWeight;
   steps: number;
   median: Sample;
+  /** One run with invalidation tracking, when the bench ran it. */
+  attribution?: Attribution;
 }
 
 /** The rules of the performance baseline in the `pierre-layouts` intent. */
@@ -281,6 +283,21 @@ export const CHECKS: Check[] = [
     limit: '0 paints',
     evaluate: atMost('hidden-append', 4, 'heavy', 'paints', 0),
   },
+  // An operation on one pane marks no element inside another pane for layout.
+  // A pane host that a zoom hides or shows may count once; its content not.
+  ...['zoom', 'restore', 'focus', 'append'].map(
+    (scenario): Check => ({
+      id: `${scenario}-no-layout-outside-target`,
+      rule: 'independence-of-layers',
+      description: `A ${scenario} marks no element inside another pane for layout (16 heavy panes, attribution run).`,
+      limit: '0 elements',
+      evaluate: (find) => {
+        const value = find(scenario, 16, 'heavy')?.attribution
+          ?.innerLayoutInvalidationsOutsideTarget;
+        return value === undefined ? null : { value, pass: value === 0 };
+      },
+    })
+  ),
   ...['zoom', 'focus', 'split'].map(
     (scenario): Check => ({
       id: `${scenario}-time-independent-of-panes`,

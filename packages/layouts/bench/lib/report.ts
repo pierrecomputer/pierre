@@ -11,7 +11,7 @@ import { join } from 'node:path';
 
 import type { BundleSize } from './bundle';
 import { type CheckResult, evaluateChecks, type RecordSummary } from './checks';
-import type { Sample } from './measure';
+import type { Attribution, Sample } from './measure';
 import type { ContentWeight } from './scenarios';
 
 /** What one benchmark test writes: every kept sample of one scenario at one parameter set. */
@@ -23,6 +23,9 @@ export interface RawRecord {
   browser: string;
   display: { refreshHz: number; deviceScaleFactor: number };
   samples: Sample[];
+  /** The largest kinds of main-thread work that the breakdown does not name, from the last run. */
+  otherTasks?: { name: string; ms: number }[];
+  attribution?: Attribution;
 }
 
 /** The committed report. Version the shape, so that a later chart can read every report. */
@@ -52,6 +55,8 @@ export interface Report {
     steps: number;
     median: Sample;
     samples: Record<keyof Sample, number[]>;
+    otherTasks?: { name: string; ms: number }[];
+    attribution?: Attribution;
   }[];
   checks: CheckResult[];
   /** Bytes of each entry point: minified, then gzip, brotli, and Zstandard. */
@@ -117,6 +122,8 @@ export function writeReport(options: {
       steps: record.steps,
       median: middle,
       samples,
+      otherTasks: record.otherTasks,
+      attribution: record.attribution,
     };
   });
   const summaries: RecordSummary[] = records;

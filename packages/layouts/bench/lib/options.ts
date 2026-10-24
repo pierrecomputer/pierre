@@ -17,6 +17,8 @@ export interface BenchOptions {
   mode: 'headless' | 'headed';
   /** Extra fixture parameters that select a variant, for example `geometry=host&contain=strict`. */
   query: string;
+  /** One extra run of each record with invalidation tracking. */
+  attribution: boolean;
 }
 
 /**
@@ -34,4 +36,6 @@ export const options: BenchOptions = {
   /** `headed` measures frames at the display rate; headless Chromium runs at 60 Hz. */
   mode: process.env.BENCH_MODE === 'headed' ? 'headed' : 'headless',
   query: process.env.BENCH_QUERY ?? '',
+  /** Attribute work to panes in one extra run. Set `BENCH_ATTRIBUTION=0` to skip it. */
+  attribution: process.env.BENCH_ATTRIBUTION !== '0',
 };

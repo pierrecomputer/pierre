@@ -13,6 +13,16 @@ export const TRACE_CATEGORIES: string[] = [
   'rail',
 ];
 
+/**
+ * Categories of the attribution run: invalidation tracking names each node that
+ * a change marks for style or layout. The tracking costs time, so the timed
+ * runs do not use it.
+ */
+export const ATTRIBUTION_CATEGORIES: string[] = [
+  ...TRACE_CATEGORIES,
+  'disabled-by-default-devtools.timeline.invalidationTracking',
+];
+
 // The fields of Chrome trace event arguments that this summary reads.
 interface TraceArgs {
   name?: string;
@@ -21,6 +31,9 @@ interface TraceArgs {
   data?: {
     frames?: { processId: number; isOutermostMainFrame?: boolean }[];
     compositeFailed?: number;
+    nodeId?: number;
+    nodeName?: string;
+    reason?: string;
   };
   chrome_frame_reporter?: FrameReporter;
   // Chrome 155 writes the same data under this key.
@@ -66,6 +79,123 @@ export interface TraceSummary {
   framesWithCompositorAnimation: number;
   animations: number;
   animationsNotComposited: number;
+  // The time of top-level tasks by the kind of work, from the self time of
+  // each event. These parts add up to `mainThreadMs`.
+  taskScriptMs: number;
+  taskStyleMs: number;
+  taskLayoutMs: number;
+  taskPrePaintMs: number;
+  taskPaintMs: number;
+  taskLayerizeMs: number;
+  taskCommitMs: number;
+  taskGcMs: number;
+  taskOtherMs: number;
+}
+
+type TaskKind =
+  | 'Script'
+  | 'Style'
+  | 'Layout'
+  | 'PrePaint'
+  | 'Paint'
+  | 'Layerize'
+  | 'Commit'
+  | 'Gc'
+  | 'Other';
+
+// The kind of work of a trace event, by its name. The order matters: a name
+// such as `UpdateLayoutTree` holds `Layout` but is style work.
+function kindOfTask(name: string): TaskKind {
+  if (/GC|^MinorGC|^MajorGC|BlinkGC|CppGC/.test(name)) return 'Gc';
+  if (
+    /^(FunctionCall|EvaluateScript|TimerFire|EventDispatch|FireAnimationFrame|RunMicrotasks|FireIdleCallback|AsyncTask Run|ParseHTML)$/.test(
+      name
+    ) ||
+    /^(v8|V8)\./.test(name)
+  )
+    return 'Script';
+  if (/UpdateLayoutTree|RecalculateStyles|Style/.test(name)) return 'Style';
+  if (/PrePaint/.test(name)) return 'PrePaint';
+  if (
+    /Layerize|PaintArtifactCompositor|pushPaintArtifactToCompositor|Compositing/.test(
+      name
+    )
+  )
+    return 'Layerize';
+  if (/CullRect/.test(name)) return 'PrePaint';
+  if (/Layout/.test(name)) return 'Layout';
+  if (/Paint/.test(name)) return 'Paint';
+  if (/[Cc]ommit/.test(name)) return 'Commit';
+  return 'Other';
+}
+
+/**
+ * Split the time of top-level tasks into kinds of work. Each event counts its
+ * self time: its duration less that of the events that it holds.
+ */
+function taskBreakdown(main: readonly TraceEvent[]): {
+  kinds: Record<TaskKind, number>;
+  other: Map<string, number>;
+} {
+  const events = main
+    .filter((event) => event.ph === 'X')
+    .sort((a, b) =>
+      a.ts === b.ts ? (b.dur ?? 0) - (a.dur ?? 0) : a.ts - b.ts
+    );
+  const kinds: Record<TaskKind, number> = {
+    Script: 0,
+    Style: 0,
+    Layout: 0,
+    PrePaint: 0,
+    Paint: 0,
+    Layerize: 0,
+    Commit: 0,
+    Gc: 0,
+    Other: 0,
+  };
+  const other = new Map<string, number>();
+  const stack: { event: TraceEvent; children: number; inTask: boolean }[] = [];
+  const close = (item: (typeof stack)[number]): void => {
+    if (!item.inTask) return;
+    const self = Math.max(0, (item.event.dur ?? 0) - item.children);
+    const kind = kindOfTask(item.event.name);
+    kinds[kind] += self;
+    if (kind === 'Other')
+      other.set(item.event.name, (other.get(item.event.name) ?? 0) + self);
+  };
+  for (const event of events) {
+    while (
+      stack.length > 0 &&
+      stack[stack.length - 1].event.ts +
+        (stack[stack.length - 1].event.dur ?? 0) <=
+        event.ts
+    )
+      close(stack.pop()!);
+    const parent = stack[stack.length - 1];
+    if (parent !== undefined) parent.children += event.dur ?? 0;
+    // Only the work of top-level tasks counts, as in `mainThreadMs`.
+    const inTask =
+      parent === undefined ? event.name === 'RunTask' : parent.inTask;
+    stack.push({ event, children: 0, inTask });
+  }
+  while (stack.length > 0) close(stack.pop()!);
+  return { kinds, other };
+}
+
+/** One node that a change marked for style or layout, from invalidation tracking. */
+export interface Invalidation {
+  kind: 'style' | 'layout';
+  nodeId: number;
+  nodeName: string;
+  reason: string;
+}
+
+/** What the attribution run reads from its trace, besides the summary. */
+export interface TraceAnalysis {
+  summary: TraceSummary;
+  /** The largest kinds of work that the breakdown does not name, in ms. */
+  otherTasks: { name: string; ms: number }[];
+  invalidations: Invalidation[];
 }
 
 const ms = (microseconds: number): number => microseconds / 1000;
@@ -110,6 +240,11 @@ function topLevelTaskDurations(tasks: TraceEvent[]): number[] {
 
 /** Reduce a Chrome trace to the counts and durations that the baseline rules use. */
 export function summarizeTrace(traceJson: string): TraceSummary {
+  return analyzeTrace(traceJson).summary;
+}
+
+/** Summarize a trace, and read the work that it does not name and its invalidations. */
+export function analyzeTrace(traceJson: string): TraceAnalysis {
   const parsed = JSON.parse(traceJson) as
     | { traceEvents: TraceEvent[] }
     | TraceEvent[];
@@ -172,7 +307,25 @@ export function summarizeTrace(traceJson: string): TraceSummary {
       .map((event) => event.id2?.local ?? event.id2?.global)
   );
 
-  return {
+  const { kinds, other } = taskBreakdown(
+    events.filter((event) => event.pid === pid && event.tid === tid)
+  );
+  const invalidations: Invalidation[] = events
+    .filter(
+      (event) =>
+        event.pid === pid &&
+        (event.name === 'LayoutInvalidationTracking' ||
+          event.name === 'StyleRecalcInvalidationTracking') &&
+        typeof event.args?.data?.nodeId === 'number'
+    )
+    .map((event) => ({
+      kind: event.name === 'LayoutInvalidationTracking' ? 'layout' : 'style',
+      nodeId: event.args?.data?.nodeId ?? 0,
+      nodeName: event.args?.data?.nodeName ?? '',
+      reason: event.args?.data?.reason ?? '',
+    }));
+
+  const summary: TraceSummary = {
     mainThreadMs: ms(tasks.reduce((sum, value) => sum + value, 0)),
     longestTaskMs: ms(Math.max(0, ...tasks)),
     styleRecalcs: styles.length,
@@ -202,5 +355,22 @@ export function summarizeTrace(traceJson: string): TraceSummary {
     ).length,
     animations: animationStarts.length,
     animationsNotComposited: notComposited.size,
+    taskScriptMs: ms(kinds.Script),
+    taskStyleMs: ms(kinds.Style),
+    taskLayoutMs: ms(kinds.Layout),
+    taskPrePaintMs: ms(kinds.PrePaint),
+    taskPaintMs: ms(kinds.Paint),
+    taskLayerizeMs: ms(kinds.Layerize),
+    taskCommitMs: ms(kinds.Commit),
+    taskGcMs: ms(kinds.Gc),
+    taskOtherMs: ms(kinds.Other),
+  };
+  return {
+    summary,
+    otherTasks: [...other]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5)
+      .map(([name, time]) => ({ name, ms: Number(ms(time).toFixed(3)) })),
+    invalidations,
   };
 }

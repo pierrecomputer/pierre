@@ -23,6 +23,12 @@ export interface Scenario {
   description: string;
   /** Pointer moves or repeated updates in one run; per-step metrics divide by this. */
   steps?: number;
+  /**
+   * The pane whose content the operation may change. Attribution counts work
+   * in other panes as work outside the target. Omit it when the operation
+   * resizes several panes.
+   */
+  target?: string;
   setup?(page: Page, params: Params): Promise<Point | undefined>;
   run(page: Page, params: Params, point: Point | undefined): Promise<void>;
 }
@@ -104,6 +110,7 @@ export const SCENARIOS: Scenario[] = [
   {
     id: 'zoom',
     description: 'Click the zoom button of the first pane.',
+    target: 'p0',
     setup: (page) =>
       center(page, '[data-layout-pane="p0"] button[aria-pressed]'),
     async run(page, _params, point) {
@@ -114,6 +121,7 @@ export const SCENARIOS: Scenario[] = [
   {
     id: 'restore',
     description: 'Click the restore button of the zoomed first pane.',
+    target: 'p0',
     async setup(page) {
       await zoomFirstPane(page);
       return center(page, '[data-layout-pane="p0"] button[aria-pressed]');
@@ -127,6 +135,7 @@ export const SCENARIOS: Scenario[] = [
     id: 'zoom-busy',
     description:
       'Zoom the first pane, then block the main thread for 200 ms during the animation.',
+    target: 'p0',
     async run(page) {
       await inPageTask(page, 'zoom-busy');
       await page.waitForTimeout(ANIMATION_SETTLE_MS + 200);
@@ -135,6 +144,7 @@ export const SCENARIOS: Scenario[] = [
   {
     id: 'focus',
     description: 'Click the content of the second pane to move the focus.',
+    target: 'p1',
     setup: (page) =>
       center(page, '[data-layout-pane="p1"] .pierre-layout-content'),
     async run(page, _params, point) {
@@ -190,12 +200,14 @@ export const SCENARIOS: Scenario[] = [
     id: 'append',
     description: `Append a message to the agent chat pane once per frame, ${APPEND_STEPS} times.`,
     steps: APPEND_STEPS,
+    target: APPEND_PANE,
     run: (page) => appendEachFrame(page, APPEND_PANE),
   },
   {
     id: 'hidden-append',
     description: `Zoom the first pane, then append a message to the covered agent chat pane ${APPEND_STEPS} times.`,
     steps: APPEND_STEPS,
+    target: APPEND_PANE,
     async setup(page) {
       await zoomFirstPane(page);
       return undefined;

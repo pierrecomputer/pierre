@@ -16,15 +16,16 @@ moon run layouts:bench
 
 A full headless run takes about ten minutes. Options come from the environment:
 
-| Variable          | Default            | Meaning                                                                  |
-| ----------------- | ------------------ | ------------------------------------------------------------------------ |
-| `BENCH_RUNS`      | `5`                | Measured runs for each scenario and parameter set.                       |
-| `BENCH_WARMUP`    | `1`                | Runs before the measured runs. The report does not keep them.            |
-| `BENCH_PANES`     | `4,16`             | Pane counts.                                                             |
-| `BENCH_CONTENT`   | `light,heavy,real` | Content weights.                                                         |
-| `BENCH_SCENARIOS` | all                | A comma-separated list of scenario IDs.                                  |
-| `BENCH_SAVE`      | `1`                | `0` writes the report to the output directory, not `results`.            |
-| `BENCH_MODE`      | `headless`         | `headed` opens a browser window and measures frames at the display rate. |
+| Variable            | Default            | Meaning                                                                  |
+| ------------------- | ------------------ | ------------------------------------------------------------------------ |
+| `BENCH_RUNS`        | `5`                | Measured runs for each scenario and parameter set.                       |
+| `BENCH_WARMUP`      | `1`                | Runs before the measured runs. The report does not keep them.            |
+| `BENCH_PANES`       | `4,16`             | Pane counts.                                                             |
+| `BENCH_CONTENT`     | `light,heavy,real` | Content weights.                                                         |
+| `BENCH_SCENARIOS`   | all                | A comma-separated list of scenario IDs.                                  |
+| `BENCH_SAVE`        | `1`                | `0` writes the report to the output directory, not `results`.            |
+| `BENCH_MODE`        | `headless`         | `headed` opens a browser window and measures frames at the display rate. |
+| `BENCH_ATTRIBUTION` | `1`                | `0` skips the attribution run of each record.                            |
 
 For a quick trial that writes nothing to the repository:
 
@@ -93,30 +94,61 @@ interval.
 
 Trace metrics count events on the main thread of the page's renderer.
 
-| Metric                                                     | Source                                                                                                      |
-| ---------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
-| `mainThreadMs`, `longestTaskMs`                            | Top-level `RunTask` events.                                                                                 |
-| `styleRecalcs`, `styleElements`, `styleMs`                 | `UpdateLayoutTree` events and their `elementCount`.                                                         |
-| `layouts`, `layoutMs`                                      | `Layout` events.                                                                                            |
-| `forcedLayouts`                                            | `Layout` events with a stack trace: layouts that script forced.                                             |
-| `prePaintMs`, `paints`, `paintMs`, `layerizeMs`            | `PrePaint`, `Paint`, and `Layerize` events.                                                                 |
-| `framesPresented`, `framesPartial`, `framesDropped`        | The state of each `PipelineReporter` frame of the page's compositor.                                        |
-| `framesDroppedAfterFirst`                                  | Dropped frames after the first expected frame. A compositor animation needs one main-thread frame to start. |
-| `framesWithMainAnimation`, `framesWithCompositorAnimation` | The animation flags of each `PipelineReporter` frame.                                                       |
-| `animations`, `animationsNotComposited`                    | `Animation` events, and the ones with a nonzero `compositeFailed` reason.                                   |
-| `cdp*`                                                     | Deltas of `Performance.getMetrics`, in counts and milliseconds.                                             |
-| `contentRenders`, `contentResizeCallbacks`                 | The fixture's counters.                                                                                     |
+| Metric                                                     | Source                                                                                                                                                                            |
+| ---------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `mainThreadMs`, `longestTaskMs`                            | Top-level `RunTask` events.                                                                                                                                                       |
+| `styleRecalcs`, `styleElements`, `styleMs`                 | `UpdateLayoutTree` events and their `elementCount`.                                                                                                                               |
+| `layouts`, `layoutMs`                                      | `Layout` events.                                                                                                                                                                  |
+| `forcedLayouts`                                            | `Layout` events with a stack trace: layouts that script forced.                                                                                                                   |
+| `prePaintMs`, `paints`, `paintMs`, `layerizeMs`            | `PrePaint`, `Paint`, and `Layerize` events.                                                                                                                                       |
+| `framesPresented`, `framesPartial`, `framesDropped`        | The state of each `PipelineReporter` frame of the page's compositor.                                                                                                              |
+| `framesDroppedAfterFirst`                                  | Dropped frames after the first expected frame. A compositor animation needs one main-thread frame to start.                                                                       |
+| `framesWithMainAnimation`, `framesWithCompositorAnimation` | The animation flags of each `PipelineReporter` frame.                                                                                                                             |
+| `animations`, `animationsNotComposited`                    | `Animation` events, and the ones with a nonzero `compositeFailed` reason.                                                                                                         |
+| `task*Ms`                                                  | `mainThreadMs` by kind of work: script, style, layout, pre-paint, paint, layerize, commit, GC, and other. Each event counts its self time, so the parts add up to `mainThreadMs`. |
+| `cdp*`                                                     | Deltas of `Performance.getMetrics`, in counts and milliseconds.                                                                                                                   |
+| `contentRenders`, `contentResizeCallbacks`                 | The fixture's counters.                                                                                                                                                           |
 
 Use `layoutMs`, not a count of dirty objects, for layout cost. When a pane
 changes width, Blink lays out its content without marking it dirty.
+
+Each record also has `otherTasks`: the five largest event names of `taskOtherMs`
+in the last run, for example the hit test and the text selection of a mouse
+click.
+
+## Attribution
+
+After the timed runs, one more run of each record traces with invalidation
+tracking, which names each element that the operation marks for style or layout.
+The run finds the pane of each element through CDP, across shadow roots, and
+counts the layers of the page from `LayerTree` events. The tracking slows the
+run, so it gives no times. The record's `attribution` holds:
+
+| Field                                                                 | Meaning                                                                                               |
+| --------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| `target`                                                              | The pane that the scenario changes, or null when it resizes several.                                  |
+| `layoutInvalidations`, `styleInvalidations`                           | Elements in panes marked for layout or style.                                                         |
+| `layoutInvalidationsOutsideTarget`, `styleInvalidationsOutsideTarget` | The same in other panes, pane hosts included.                                                         |
+| `innerLayoutInvalidationsOutsideTarget`                               | Elements inside other panes marked for layout. A pane host that a zoom hides or shows does not count. |
+| `layoutInvalidatedPanes`, `styleInvalidatedPanes`                     | Other panes with any invalidated element.                                                             |
+| `unresolvedInvalidations`                                             | Elements that the operation removed before the run found their pane.                                  |
+| `layers`, `drawingLayers`, `peakLayers`                               | Layers after the operation, the ones that draw content, and the most during it.                       |
+| `panes`                                                               | Each pane's invalidated elements: layout, then style.                                                 |
+| `outsideTarget`                                                       | The most common layout invalidations outside the target, as `reason: element`.                        |
+
+A count of invalidated elements is not a cost: one invalidated pane host can lay
+out all of its content. Read it with `taskLayoutMs` and `layoutMs`.
 
 ## Self-test
 
 The first test runs on `fixture/selftest.html`: a transform animation, a `left`
 animation, and a forced layout, with known trace counts. When a browser update
-renames a trace field, this test fails, and the run does not report zeros.
-Chromium 134 writes frame data under `chrome_frame_reporter`, and Chrome 155
-under `frame_reporter`; the harness reads both.
+renames a trace field, this test fails, and the run does not report zeros. It
+also checks that the `task*Ms` parts add up to `mainThreadMs`, and that
+attribution keeps a text change in one pane inside that pane, and finds a font
+size change above two panes in both. Chromium 134 writes frame data under
+`chrome_frame_reporter`, and Chrome 155 under `frame_reporter`; the harness
+reads both.
 
 ## Bundle size
 
