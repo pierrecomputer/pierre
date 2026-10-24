@@ -73,6 +73,14 @@ export interface LayoutProps {
    */
   animate?: { layout?: boolean; zoom?: boolean };
   /**
+   * Whether each pane host is its own compositor layer: `true`, `false`, or
+   * `{ minPanes }` to turn the layers on from that number of visible panes.
+   * A layer for each pane makes an update in one pane cheaper for the
+   * compositor when there are many panes, and costs tile memory when there
+   * are few. `true` by default.
+   */
+  paneLayers?: boolean | { minPanes: number };
+  /**
    * The buttons of each pane header, for all panes or for each pane. All three
    * by default.
    */
@@ -165,6 +173,7 @@ export function Layout({
   paneActions = ALL_PANE_ACTIONS,
   onPaneClose,
   animate: animateOptions,
+  paneLayers = true,
   experimentalResize = 'live',
   experimentalSizeAnimation = 'counter-scale',
 }: LayoutProps): JSX.Element {
@@ -274,6 +283,10 @@ export function Layout({
     ({ pane }) => pane.id === (state.zoomedPane ?? state.focusedPane)
   );
   const visibleCount = geometry.panes.filter(({ hidden }) => !hidden).length;
+  const layered =
+    typeof paneLayers === 'boolean'
+      ? paneLayers
+      : visibleCount >= paneLayers.minPanes;
   const actionsOf = (pane: PaneNode): readonly PaneAction[] =>
     typeof paneActions === 'function' ? paneActions(pane) : paneActions;
 
@@ -489,6 +502,7 @@ export function Layout({
       role="group"
       aria-label={label}
       data-resizing={resizing}
+      data-pane-layers={layered}
       data-dragging={dragging !== null}
       onPointerMove={pointerMove}
       onPointerUp={(event) => finishGesture(false, event.pointerId)}

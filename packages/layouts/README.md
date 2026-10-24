@@ -187,17 +187,19 @@ both axes. Escape cancels an active gesture or restores a zoomed layout. Hidden
 panes remain mounted but are inert and excluded from the accessibility tree.
 Motion respects `prefers-reduced-motion`.
 
-Each pane host clips its content at its rounded border with `overflow: clip`.
-Each pane host is its own compositor layer (`will-change: transform`): an update
-in one pane then costs Blink less compositing work, at the cost of one layer of
-memory for each pane. Keep `--layout-pane-background` opaque, so that text in
-the layer keeps subpixel antialiasing. The host never scrolls; its content area
-scrolls. Put a menu or a tooltip that must extend past its pane in the top
-layer, with `popover` or `<dialog>`. The header and the content sit in a wrapper
-with an identity transform, so `position: fixed` in pane content is fixed to the
-pane. While a pane changes size, the wrapper takes the inverse of the pane's
-scale, so text and headers keep their shape and the pane's frame reveals or
-clips its content.
+Each pane host clips its content at its rounded border with `overflow: clip`. By
+default each pane host is its own compositor layer (`will-change: transform`):
+an update in one pane then costs Blink less compositing work when there are many
+panes, at the cost of tile memory for each pane, which matters more when there
+are few. `paneLayers={false}` turns the layers off, and
+`paneLayers={{ minPanes: 8 }}` turns them on from 8 visible panes. Keep
+`--layout-pane-background` opaque, so that text in a layer keeps subpixel
+antialiasing. The host never scrolls; its content area scrolls. Put a menu or a
+tooltip that must extend past its pane in the top layer, with `popover` or
+`<dialog>`. The header and the content sit in a wrapper with an identity
+transform, so `position: fixed` in pane content is fixed to the pane. While a
+pane changes size, the wrapper takes the inverse of the pane's scale, so text
+and headers keep their shape and the pane's frame reveals or clips its content.
 
 Style with `--layout-accent`, `--layout-border`, `--layout-pane-background`, and
 `--layout-duration`. Discrete layout changes animate with transforms from each

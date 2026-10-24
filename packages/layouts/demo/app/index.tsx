@@ -92,6 +92,7 @@ export default function App(): JSX.Element {
   const [resize, setResize] = useState<ResizeStrategy>('live');
   const [animateLayout, setAnimateLayout] = useState(true);
   const [animateZoom, setAnimateZoom] = useState(true);
+  const [layers, setLayers] = useState<'on' | 'off' | 'auto'>('on');
   const visible = new Set(
     getPanes(state.root)
       .filter(({ hidden }) => hidden !== true)
@@ -153,6 +154,20 @@ export default function App(): JSX.Element {
             Animate zoom
           </label>
           <span className="app-resize">
+            Pane layers
+            <select
+              aria-label="Pane layers"
+              value={layers}
+              onChange={(event) =>
+                setLayers(event.target.value as 'on' | 'off' | 'auto')
+              }
+            >
+              <option value="on">on</option>
+              <option value="off">off</option>
+              <option value="auto">from 8 panes</option>
+            </select>
+          </span>
+          <span className="app-resize">
             Resize drag
             <ResizeSelect value={resize} onChange={setResize} />
           </span>
@@ -169,6 +184,7 @@ export default function App(): JSX.Element {
           label="Agent workspace"
           experimentalResize={resize}
           animate={{ layout: animateLayout, zoom: animateZoom }}
+          paneLayers={layers === 'auto' ? { minPanes: 8 } : layers === 'on'}
         />
       </main>
     </div>

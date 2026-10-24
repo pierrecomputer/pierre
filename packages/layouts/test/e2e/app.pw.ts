@@ -108,3 +108,20 @@ test('panes and the zoom change at once when their animations are off', async ({
   expect(await animationsInNextFrame()).toBe(0);
   await expect(host(page, 'editor')).toHaveAttribute('data-zoomed', 'true');
 });
+
+test('each pane host is its own compositor layer only when paneLayers asks for it', async ({
+  page,
+}) => {
+  const willChange = () =>
+    host(page, 'agent').evaluate(
+      (element) => getComputedStyle(element).willChange
+    );
+  expect(await willChange()).toBe('transform');
+  await page.getByLabel('Pane layers').selectOption('off');
+  expect(await willChange()).toBe('auto');
+  // The app shows 5 panes, fewer than the 8 from which the layers start.
+  await page.getByLabel('Pane layers').selectOption('auto');
+  expect(await willChange()).toBe('auto');
+  await page.getByLabel('Pane layers').selectOption('on');
+  expect(await willChange()).toBe('transform');
+});

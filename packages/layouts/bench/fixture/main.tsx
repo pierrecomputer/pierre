@@ -64,14 +64,25 @@ const ISOLATION: Record<string, string> = {
   layer: '.pierre-layout-pane { will-change: transform; }',
   'content-layer':
     '.pierre-layout-content { contain: strict; will-change: transform; }',
-  'no-layer':
-    '.pierre-layout-pane { will-change: auto; transform: translate(0); }',
+  'no-layer': '.pierre-layout-pane { will-change: auto !important; }',
+  // A covered or hidden pane host stops being its own layer while its content
+  // does not render.
+  'covered-no-layer':
+    ".pierre-layout-pane:is([data-hidden='true'], [data-collapsed='true']) { will-change: auto !important; }",
 };
 if (isolate !== null && isolate in ISOLATION) {
   const sheet = document.createElement('style');
   sheet.textContent = ISOLATION[isolate];
   document.head.append(sheet);
 }
+// The paneLayers option: `on`, `off`, or a number of panes from which the layers start.
+const requestedLayers = params.get('layers');
+const paneLayers: boolean | { minPanes: number } =
+  requestedLayers === 'off'
+    ? false
+    : requestedLayers !== null && /^\d+$/.test(requestedLayers)
+      ? { minPanes: Number(requestedLayers) }
+      : true;
 const paneIds = Array.from({ length: paneCount }, (_, index) => `p${index}`);
 const indexOf = new Map(paneIds.map((id, index) => [id, index]));
 
@@ -162,6 +173,7 @@ function Bench(): JSX.Element {
         getPaneTitle={title}
         label="Benchmark workspace"
         experimentalResize={resize}
+        paneLayers={paneLayers}
       />
     </div>
   );
