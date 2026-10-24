@@ -27,6 +27,9 @@
 
 .pierre-layout-pane {
   position: absolute;
+  /* A covered pane moves out with a transform. With an identity transform at
+     all times, that change does not lay the host out again. */
+  transform: translate(0);
   min-width: 0;
   min-height: 0;
   /* Clip content at the rounded border with no scroll container, so that a
@@ -135,7 +138,8 @@
   background: var(--layout-border);
 }
 
-.pierre-layout-header button:disabled {
+.pierre-layout-header button:disabled,
+.pierre-layout-header button[aria-disabled='true'] {
   opacity: 0.35;
   cursor: default;
 }

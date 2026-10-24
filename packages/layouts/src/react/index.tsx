@@ -262,8 +262,17 @@ function setCoveredHidden(root: HTMLElement, zoomedPane: string | null): void {
     const hidden =
       zoomedPane !== null && host.dataset.layoutPane !== zoomedPane;
     if ((host.dataset.hidden === 'true') === hidden) continue;
-    if (hidden) host.dataset.hidden = 'true';
-    else delete host.dataset.hidden;
+    // `inert` is inherited, so on a pane whose content renders it lays out
+    // all of that content again (about 200 ms for 15 panes of real content).
+    // It changes with `content-visibility` in one style update, so the
+    // content does not render for either change.
+    if (hidden) {
+      host.dataset.hidden = 'true';
+      host.inert = true;
+    } else {
+      host.inert = false;
+      delete host.dataset.hidden;
+    }
     host.dispatchEvent(
       new CustomEvent(PANE_VISIBILITY_EVENT, { detail: { hidden } })
     );
@@ -943,7 +952,9 @@ export function Layout({
             tabIndex={hidden ? -1 : 0}
             aria-label={getPaneTitle(pane)}
             aria-hidden={hidden}
-            inert={hidden}
+            // A covered pane becomes inert when its content stops rendering,
+            // at the end of the zoom animation (setCoveredHidden).
+            inert={collapsed}
             data-collapsed={collapsed}
             data-focused={state.focusedPane === pane.id}
             data-zoomed={zoomed}
@@ -968,7 +979,10 @@ export function Layout({
                     className="pierre-layout-grip"
                     aria-label={`Drag ${getPaneTitle(pane)}`}
                     title="Drag to move this pane beside another"
-                    disabled={state.zoomedPane !== null}
+                    // Not `disabled`, and only on the zoomed pane: a state
+                    // change on every pane would lay each grip out again.
+                    // startMove ignores a drag while a pane is zoomed.
+                    aria-disabled={zoomed || undefined}
                     onPointerDown={(event) => startMove(event, pane.id)}
                   >
                     ⠿
