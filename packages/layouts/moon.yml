@@ -1,0 +1,35 @@
+$schema: 'https://moonrepo.dev/schemas/project.json'
+language: 'typescript'
+layer: 'library'
+tags: ['tsdown']
+
+tasks:
+  build-demo:
+    command: 'vite build demo'
+    inputs: ['src/**/*', 'demo/**/*', '!demo/dist/**/*']
+    outputs: ['demo/dist']
+
+  dev-demo:
+    script:
+      'PORT=$(( ${PIERRE_PORT_OFFSET:-0} + 4176 )) && bash
+      ../../scripts/run-dev.sh "$PORT" -- vite demo --host 127.0.0.1 --port
+      "$PORT"'
+    options:
+      cache: false
+      persistent: true
+      runInCI: 'always'
+      envFile: '/.env.worktree'
+
+  test-e2e:
+    script:
+      '(bun test/e2e/check-playwright-binary.ts || pnpm exec playwright install
+      chromium) && pnpm exec playwright test -c test/e2e/playwright.config.ts'
+    inputs: ['src/**/*', 'demo/**/*', '!demo/dist/**/*', 'test/e2e/**/*']
+
+  test-e2e-server:
+    command: 'vite --config test/e2e/vite.config.ts'
+    options:
+      cache: false
+      persistent: true
+      runInCI: 'always'
+      envFile: '/.env.worktree'
