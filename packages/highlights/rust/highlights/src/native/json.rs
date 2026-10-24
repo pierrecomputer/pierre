@@ -11,6 +11,7 @@ use super::Lexer;
 use super::scan;
 use crate::Rec;
 use crate::generated::Instance;
+use crate::simd::V;
 use crate::token_ids as tok;
 
 /// The lexer for each language this module handles.
@@ -298,34 +299,18 @@ fn json_string(
 /// The NUL after the input ends every scan.
 #[inline(always)]
 fn string_stop(src: &[u8], mut p: usize, quote: u8) -> usize {
-    #[cfg(target_arch = "aarch64")]
-    // SAFETY: the scan stops at the NUL after the input at the latest, so
-    // each 16-byte load starts at or before it, inside the slack.
-    unsafe {
-        use core::arch::aarch64::*;
-        let q = vdupq_n_u8(quote);
-        let bs = vdupq_n_u8(b'\\');
-        let ctl = vdupq_n_u8(13);
-        loop {
-            let v = vld1q_u8(src.as_ptr().add(p));
-            let hit = vorrq_u8(vorrq_u8(vceqq_u8(v, q), vceqq_u8(v, bs)), vcleq_u8(v, ctl));
-            // Four bits per lane.
-            let nib = vget_lane_u64::<0>(vreinterpret_u64_u8(vshrn_n_u16::<4>(
-                vreinterpretq_u16_u8(hit),
-            )));
-            if nib != 0 {
-                return p + (nib.trailing_zeros() / 4) as usize;
-            }
-            p += 16;
-        }
-    }
-    #[cfg(not(target_arch = "aarch64"))]
+    let q = V::splat(quote);
+    let bs = V::splat(b'\\');
+    let ctl = V::splat(13);
     loop {
-        let c = at(src, p);
-        if c == quote || c == b'\\' || c <= 13 {
-            return p;
+        // SAFETY: the scan stops at the NUL after the input at the latest,
+        // so each 16-byte load starts at or before it, inside the slack.
+        let v = unsafe { V::load(src.as_ptr().add(p)) };
+        let k = v.eq(q).or(v.eq(bs)).or(v.le(ctl)).first();
+        if k < 16 {
+            return p + k;
         }
-        p += 1;
+        p += 16;
     }
 }
 
@@ -424,48 +409,23 @@ struct Window {
 #[inline(always)]
 fn block_masks(src: &[u8], b: usize) -> (u64, u64) {
     debug_assert!(b + 64 <= src.len());
-    #[cfg(target_arch = "aarch64")]
-    // SAFETY: the caller keeps the 64 bytes from `b` inside the slack.
-    unsafe {
-        use core::arch::aarch64::*;
-        let base = src.as_ptr().add(b);
-        let weights =
-            vld1q_u8([1u8, 2, 4, 8, 16, 32, 64, 128, 1, 2, 4, 8, 16, 32, 64, 128].as_ptr());
-        let hi_t = vld1q_u8(CLASS_HI.as_ptr());
-        let lo_t = vld1q_u8(CLASS_LO.as_ptr());
-        let mut stop = [vdupq_n_u8(0); 4];
-        let mut space = [vdupq_n_u8(0); 4];
-        for i in 0..4 {
-            let v = vld1q_u8(base.add(16 * i));
-            let class = vandq_u8(
-                vqtbl1q_u8(hi_t, vshrq_n_u8::<4>(v)),
-                vqtbl1q_u8(lo_t, vandq_u8(v, vdupq_n_u8(15))),
-            );
-            stop[i] = vandq_u8(vtstq_u8(class, vdupq_n_u8(STOP_BITS)), weights);
-            space[i] = vandq_u8(vtstq_u8(class, vdupq_n_u8(SPACE_BITS)), weights);
-        }
-        // Sum the weighted lanes pairwise: lane 0 of the result holds the
-        // stop bits and lane 1 the whitespace bits, byte 0 first.
-        let s = vpaddq_u8(vpaddq_u8(stop[0], stop[1]), vpaddq_u8(stop[2], stop[3]));
-        let w = vpaddq_u8(vpaddq_u8(space[0], space[1]), vpaddq_u8(space[2], space[3]));
-        let both = vreinterpretq_u64_u8(vpaddq_u8(s, w));
-        (vgetq_lane_u64::<0>(both), !vgetq_lane_u64::<1>(both))
+    let hi_t = V::from_array(&CLASS_HI);
+    let lo_t = V::from_array(&CLASS_LO);
+    let mut stop = [V::zero(); 4];
+    let mut space = [V::zero(); 4];
+    for i in 0..4 {
+        // SAFETY: the caller keeps the 64 bytes from `b` inside the slack.
+        let v = unsafe { V::load(src.as_ptr().add(b + 16 * i)) };
+        let class = hi_t
+            .lookup(v.shr::<4>())
+            .and(lo_t.lookup(v.and(V::splat(15))));
+        stop[i] = class.test(V::splat(STOP_BITS));
+        space[i] = class.test(V::splat(SPACE_BITS));
     }
-    #[cfg(not(target_arch = "aarch64"))]
-    {
-        let mut stop = 0u64;
-        let mut text = 0u64;
-        for i in 0..64 {
-            let c = at(src, b + i);
-            if c == b'"' || c == b'\\' || c <= 13 {
-                stop |= 1 << i;
-            }
-            if !is_space(c) {
-                text |= 1 << i;
-            }
-        }
-        (stop, text)
-    }
+    (
+        V::bits64(stop[0], stop[1], stop[2], stop[3]),
+        !V::bits64(space[0], space[1], space[2], space[3]),
+    )
 }
 
 impl Window {

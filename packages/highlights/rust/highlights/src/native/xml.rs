@@ -10,6 +10,7 @@ use super::Lexer;
 use super::scan;
 use crate::Rec;
 use crate::generated::Instance;
+use crate::simd::V;
 use crate::token_ids as tok;
 
 /// The lexer for each language this module handles.
@@ -394,51 +395,23 @@ const NAME_LO: [u8; 16] = {
 #[inline(always)]
 fn block_masks(src: &[u8], b: usize) -> (u64, u64) {
     debug_assert!(b + 64 <= src.len());
-    #[cfg(target_arch = "aarch64")]
-    // SAFETY: the caller keeps the 64 bytes from `b` inside the slack.
-    unsafe {
-        use core::arch::aarch64::*;
-        let base = src.as_ptr().add(b);
-        let weights =
-            vld1q_u8([1u8, 2, 4, 8, 16, 32, 64, 128, 1, 2, 4, 8, 16, 32, 64, 128].as_ptr());
-        let hi_t = vld1q_u8(NAME_HI.as_ptr());
-        let lo_t = vld1q_u8(NAME_LO.as_ptr());
-        let mut stop = [vdupq_n_u8(0); 4];
-        let mut name = [vdupq_n_u8(0); 4];
-        for i in 0..4 {
-            let v = vld1q_u8(base.add(16 * i));
-            stop[i] = vandq_u8(
-                vorrq_u8(vceqq_u8(v, vdupq_n_u8(b'<')), vceqq_u8(v, vdupq_n_u8(b'&'))),
-                weights,
-            );
-            let class = vandq_u8(
-                vqtbl1q_u8(hi_t, vshrq_n_u8::<4>(v)),
-                vqtbl1q_u8(lo_t, vandq_u8(v, vdupq_n_u8(15))),
-            );
-            name[i] = vandq_u8(vtstq_u8(class, class), weights);
-        }
-        // Sum the weighted lanes pairwise: lane 0 of the result holds the
-        // text stops and lane 1 the name bytes, byte 0 first.
-        let s = vpaddq_u8(vpaddq_u8(stop[0], stop[1]), vpaddq_u8(stop[2], stop[3]));
-        let n = vpaddq_u8(vpaddq_u8(name[0], name[1]), vpaddq_u8(name[2], name[3]));
-        let both = vreinterpretq_u64_u8(vpaddq_u8(s, n));
-        (vgetq_lane_u64::<0>(both), !vgetq_lane_u64::<1>(both))
+    let hi_t = V::from_array(&NAME_HI);
+    let lo_t = V::from_array(&NAME_LO);
+    let mut stop = [V::zero(); 4];
+    let mut name = [V::zero(); 4];
+    for i in 0..4 {
+        // SAFETY: the caller keeps the 64 bytes from `b` inside the slack.
+        let v = unsafe { V::load(src.as_ptr().add(b + 16 * i)) };
+        stop[i] = v.eq(V::splat(b'<')).or(v.eq(V::splat(b'&')));
+        let class = hi_t
+            .lookup(v.shr::<4>())
+            .and(lo_t.lookup(v.and(V::splat(15))));
+        name[i] = class.test(class);
     }
-    #[cfg(not(target_arch = "aarch64"))]
-    {
-        let mut stop = 0u64;
-        let mut other = 0u64;
-        for i in 0..64 {
-            let c = at(src, b + i);
-            if c == b'<' || c == b'&' {
-                stop |= 1 << i;
-            }
-            if !NAME[c as usize] {
-                other |= 1 << i;
-            }
-        }
-        (stop, other)
-    }
+    (
+        V::bits64(stop[0], stop[1], stop[2], stop[3]),
+        !V::bits64(name[0], name[1], name[2], name[3]),
+    )
 }
 
 /// Bit masks of two adjacent 64-byte blocks of the input, the second

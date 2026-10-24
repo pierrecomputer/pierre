@@ -12,6 +12,7 @@ use super::Lexer;
 use super::scan;
 use crate::Rec;
 use crate::generated::Instance;
+use crate::simd::V;
 use crate::token_ids as tok;
 use crate::wat_tables::TF_WORDS;
 
@@ -573,48 +574,23 @@ const NAME_BITS: u8 = !SPACE_BITS;
 #[inline(always)]
 fn block_masks(src: &[u8], b: usize) -> (u64, u64) {
     debug_assert!(b + 64 <= src.len());
-    #[cfg(target_arch = "aarch64")]
-    // SAFETY: the caller keeps the 64 bytes from `b` inside the slack.
-    unsafe {
-        use core::arch::aarch64::*;
-        let base = src.as_ptr().add(b);
-        let weights =
-            vld1q_u8([1u8, 2, 4, 8, 16, 32, 64, 128, 1, 2, 4, 8, 16, 32, 64, 128].as_ptr());
-        let hi_t = vld1q_u8(CLASS_HI.as_ptr());
-        let lo_t = vld1q_u8(CLASS_LO.as_ptr());
-        let mut space = [vdupq_n_u8(0); 4];
-        let mut name = [vdupq_n_u8(0); 4];
-        for i in 0..4 {
-            let v = vld1q_u8(base.add(16 * i));
-            let class = vandq_u8(
-                vqtbl1q_u8(hi_t, vshrq_n_u8::<4>(v)),
-                vqtbl1q_u8(lo_t, vandq_u8(v, vdupq_n_u8(15))),
-            );
-            space[i] = vandq_u8(vtstq_u8(class, vdupq_n_u8(SPACE_BITS)), weights);
-            name[i] = vandq_u8(vtstq_u8(class, vdupq_n_u8(NAME_BITS)), weights);
-        }
-        // Sum the weighted lanes pairwise: lane 0 of the result holds the
-        // whitespace bits and lane 1 the name bits, byte 0 first.
-        let w = vpaddq_u8(vpaddq_u8(space[0], space[1]), vpaddq_u8(space[2], space[3]));
-        let d = vpaddq_u8(vpaddq_u8(name[0], name[1]), vpaddq_u8(name[2], name[3]));
-        let both = vreinterpretq_u64_u8(vpaddq_u8(w, d));
-        (!vgetq_lane_u64::<0>(both), !vgetq_lane_u64::<1>(both))
+    let hi_t = V::from_array(&CLASS_HI);
+    let lo_t = V::from_array(&CLASS_LO);
+    let mut space = [V::zero(); 4];
+    let mut name = [V::zero(); 4];
+    for i in 0..4 {
+        // SAFETY: the caller keeps the 64 bytes from `b` inside the slack.
+        let v = unsafe { V::load(src.as_ptr().add(b + 16 * i)) };
+        let class = hi_t
+            .lookup(v.shr::<4>())
+            .and(lo_t.lookup(v.and(V::splat(15))));
+        space[i] = class.test(V::splat(SPACE_BITS));
+        name[i] = class.test(V::splat(NAME_BITS));
     }
-    #[cfg(not(target_arch = "aarch64"))]
-    {
-        let mut text = 0u64;
-        let mut other = 0u64;
-        for i in 0..64 {
-            let c = at(src, b + i);
-            if !is_space(c) {
-                text |= 1 << i;
-            }
-            if !NAME[c as usize] {
-                other |= 1 << i;
-            }
-        }
-        (text, other)
-    }
+    (
+        !V::bits64(space[0], space[1], space[2], space[3]),
+        !V::bits64(name[0], name[1], name[2], name[3]),
+    )
 }
 
 /// Bit masks of two adjacent 64-byte blocks of the input, the second

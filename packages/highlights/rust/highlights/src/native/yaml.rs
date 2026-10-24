@@ -10,6 +10,7 @@ use super::Lexer;
 use super::scan;
 use crate::Rec;
 use crate::generated::Instance;
+use crate::simd::V;
 use crate::token_ids as tok;
 
 /// The lexer for each language this module handles.
@@ -187,25 +188,14 @@ fn find_quote(src: &[u8], mut p: usize, end: usize, quote: u8, esc: bool) -> usi
         return p;
     }
     while p < end {
-        #[cfg(target_arch = "aarch64")]
         // SAFETY: `p` is below the input end, so the 16-byte load stays
         // inside the slack.
-        let k = unsafe {
-            use core::arch::aarch64::*;
-            let v = vld1q_u8(src.as_ptr().add(p));
-            let mut hit = vceqq_u8(v, vdupq_n_u8(quote));
-            if esc {
-                hit = vorrq_u8(hit, vceqq_u8(v, vdupq_n_u8(b'\\')));
-            }
-            scan::first_lane(hit)
-        };
-        #[cfg(not(target_arch = "aarch64"))]
-        let k = (0..16)
-            .find(|&i| {
-                let c = at(src, p + i);
-                c == quote || (esc && c == b'\\')
-            })
-            .unwrap_or(16);
+        let v = unsafe { V::load(src.as_ptr().add(p)) };
+        let mut hit = v.eq(V::splat(quote));
+        if esc {
+            hit = hit.or(v.eq(V::splat(b'\\')));
+        }
+        let k = hit.first();
         if k < 16 {
             return (p + k).min(end);
         }
@@ -516,48 +506,23 @@ const SPACE_BITS: u8 = 8 | 16;
 #[inline(always)]
 fn block_masks(src: &[u8], b: usize) -> (u64, u64) {
     debug_assert!(b + 64 <= src.len());
-    #[cfg(target_arch = "aarch64")]
-    // SAFETY: the caller keeps the 64 bytes from `b` inside the slack.
-    unsafe {
-        use core::arch::aarch64::*;
-        let base = src.as_ptr().add(b);
-        let weights =
-            vld1q_u8([1u8, 2, 4, 8, 16, 32, 64, 128, 1, 2, 4, 8, 16, 32, 64, 128].as_ptr());
-        let hi_t = vld1q_u8(CLASS_HI.as_ptr());
-        let lo_t = vld1q_u8(CLASS_LO.as_ptr());
-        let mut stop = [vdupq_n_u8(0); 4];
-        let mut space = [vdupq_n_u8(0); 4];
-        for i in 0..4 {
-            let v = vld1q_u8(base.add(16 * i));
-            let class = vandq_u8(
-                vqtbl1q_u8(hi_t, vshrq_n_u8::<4>(v)),
-                vqtbl1q_u8(lo_t, vandq_u8(v, vdupq_n_u8(15))),
-            );
-            stop[i] = vandq_u8(vtstq_u8(class, vdupq_n_u8(STOP_BITS)), weights);
-            space[i] = vandq_u8(vtstq_u8(class, vdupq_n_u8(SPACE_BITS)), weights);
-        }
-        // Sum the weighted lanes pairwise: lane 0 of the result holds the
-        // stop bits and lane 1 the whitespace bits, byte 0 first.
-        let s = vpaddq_u8(vpaddq_u8(stop[0], stop[1]), vpaddq_u8(stop[2], stop[3]));
-        let w = vpaddq_u8(vpaddq_u8(space[0], space[1]), vpaddq_u8(space[2], space[3]));
-        let both = vreinterpretq_u64_u8(vpaddq_u8(s, w));
-        (vgetq_lane_u64::<0>(both), !vgetq_lane_u64::<1>(both))
+    let hi_t = V::from_array(&CLASS_HI);
+    let lo_t = V::from_array(&CLASS_LO);
+    let mut stop = [V::zero(); 4];
+    let mut space = [V::zero(); 4];
+    for i in 0..4 {
+        // SAFETY: the caller keeps the 64 bytes from `b` inside the slack.
+        let v = unsafe { V::load(src.as_ptr().add(b + 16 * i)) };
+        let class = hi_t
+            .lookup(v.shr::<4>())
+            .and(lo_t.lookup(v.and(V::splat(15))));
+        stop[i] = class.test(V::splat(STOP_BITS));
+        space[i] = class.test(V::splat(SPACE_BITS));
     }
-    #[cfg(not(target_arch = "aarch64"))]
-    {
-        let mut stop = 0u64;
-        let mut text = 0u64;
-        for i in 0..64 {
-            let c = at(src, b + i);
-            if is_plain_stop(c) {
-                stop |= 1 << i;
-            }
-            if !is_space(c) {
-                text |= 1 << i;
-            }
-        }
-        (stop, text)
-    }
+    (
+        V::bits64(stop[0], stop[1], stop[2], stop[3]),
+        !V::bits64(space[0], space[1], space[2], space[3]),
+    )
 }
 
 /// Bit masks of two adjacent 64-byte blocks of the input, the second
