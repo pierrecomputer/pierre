@@ -80,6 +80,14 @@
   gap: 16px;
 }
 
+.app-check {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #6b7586;
+  white-space: nowrap;
+}
+
 .app-resize {
   display: flex;
   align-items: center;

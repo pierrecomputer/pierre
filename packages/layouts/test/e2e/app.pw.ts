@@ -62,3 +62,49 @@ test('the close button of a tool hides it, and each pane has its own buttons', a
   await page.getByRole('button', { name: 'Files', exact: true }).click();
   await expect(host(page, 'files')).toHaveAttribute('data-collapsed', 'false');
 });
+
+test('panes and the zoom change at once when their animations are off', async ({
+  page,
+}) => {
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
+  // Count the running animations of the layout in the next frame.
+  const animationsInNextFrame = () =>
+    page.evaluate(
+      () =>
+        new Promise<number>((resolve) => {
+          requestAnimationFrame(() =>
+            resolve(
+              document
+                .querySelector('.pierre-layout')
+                ?.getAnimations({ subtree: true })
+                .filter((animation) => animation.id === 'pierre-layout-flip')
+                .length ?? 0
+            )
+          );
+        })
+    );
+  const toggle = (name: string) =>
+    page.getByRole('button', { name, exact: true }).click();
+
+  await toggle('Files');
+  expect(await animationsInNextFrame()).toBeGreaterThan(0);
+
+  await page.getByLabel('Animate panes').uncheck();
+  await page.waitForTimeout(400);
+  await toggle('Files');
+  expect(await animationsInNextFrame()).toBe(0);
+  await expect(host(page, 'files')).toHaveAttribute('data-collapsed', 'false');
+
+  await page.getByRole('button', { name: 'Zoom Editor', exact: true }).click();
+  expect(await animationsInNextFrame()).toBeGreaterThan(0);
+  await page.waitForTimeout(400);
+  await page
+    .getByRole('button', { name: 'Restore Editor', exact: true })
+    .click();
+  await page.waitForTimeout(400);
+
+  await page.getByLabel('Animate zoom').uncheck();
+  await page.getByRole('button', { name: 'Zoom Editor', exact: true }).click();
+  expect(await animationsInNextFrame()).toBe(0);
+  await expect(host(page, 'editor')).toHaveAttribute('data-zoomed', 'true');
+});

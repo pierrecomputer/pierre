@@ -90,6 +90,8 @@ export default function App(): JSX.Element {
   );
   const { sessions, active } = useSessions();
   const [resize, setResize] = useState<ResizeStrategy>('live');
+  const [animateLayout, setAnimateLayout] = useState(true);
+  const [animateZoom, setAnimateZoom] = useState(true);
   const visible = new Set(
     getPanes(state.root)
       .filter(({ hidden }) => hidden !== true)
@@ -134,6 +136,22 @@ export default function App(): JSX.Element {
           })}
         </nav>
         <div className="app-header-end">
+          <label className="app-check">
+            <input
+              type="checkbox"
+              checked={animateLayout}
+              onChange={(event) => setAnimateLayout(event.target.checked)}
+            />
+            Animate panes
+          </label>
+          <label className="app-check">
+            <input
+              type="checkbox"
+              checked={animateZoom}
+              onChange={(event) => setAnimateZoom(event.target.checked)}
+            />
+            Animate zoom
+          </label>
           <span className="app-resize">
             Resize drag
             <ResizeSelect value={resize} onChange={setResize} />
@@ -150,6 +168,7 @@ export default function App(): JSX.Element {
           onPaneClose={hidePane}
           label="Agent workspace"
           experimentalResize={resize}
+          animate={{ layout: animateLayout, zoom: animateZoom }}
         />
       </main>
     </div>

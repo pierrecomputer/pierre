@@ -68,6 +68,11 @@ stable `renderPane`, for example a module function or one from `useCallback`.
 reuses, so an app can show or hide panes by building a new tree from the nodes
 of `store.getSnapshot().root`, and the panes that stay keep their content.
 
+Changes of the split tree (split, close, move, hide, and show) and zoom changes
+animate by default. `animate={{ layout: false }}` applies tree changes at once,
+and `animate={{ zoom: false }}` applies zoom and restore at once. A user's
+`prefers-reduced-motion: reduce` turns both off.
+
 Each pane header has a drag grip, a zoom button, and a close button.
 `paneActions` selects them for all panes, for example `['zoom', 'close']`, or
 for each pane with a function of the pane node. By default the close button

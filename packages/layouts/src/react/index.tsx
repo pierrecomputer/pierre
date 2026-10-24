@@ -40,6 +40,13 @@ export interface LayoutProps {
   renderPane: (pane: PaneNode) => ReactNode;
   getPaneTitle?: (pane: PaneNode) => string;
   /**
+   * Which changes animate. `layout` covers changes of the split tree: split,
+   * close, move, hide, and show. `zoom` covers zoom and restore. Both are true
+   * by default; with `false`, the change applies at once. A user's
+   * `prefers-reduced-motion: reduce` turns both off.
+   */
+  animate?: { layout?: boolean; zoom?: boolean };
+  /**
    * The buttons of each pane header, for all panes or for each pane. All three
    * by default.
    */
@@ -347,6 +354,7 @@ export function Layout({
   label = 'Workspace',
   paneActions = ALL_PANE_ACTIONS,
   onPaneClose,
+  animate: animateOptions,
   experimentalResize = 'live',
   experimentalSizeAnimation = 'counter-scale',
 }: LayoutProps): JSX.Element {
@@ -361,6 +369,8 @@ export function Layout({
 
   // Boxes before a store change, for the FLIP animation after React commits it.
   const boxesBefore = useRef<Map<string, Rect> | null>(null);
+  const animateLayout = animateOptions?.layout !== false;
+  const animateZoom = animateOptions?.zoom !== false;
   // DOM work of a pointer resize that React does not own, for the
   // `experimentalResize` variants: a pending frame, the ratios that wait for
   // it or for the release, moved separators, and frozen pane content.
@@ -390,12 +400,17 @@ export function Layout({
         const zoom = next.zoomedPane;
         // Only a tree or zoom change moves elements. A focus change reads no
         // boxes: the focus indicator shows on the new pane at once.
-        const moves =
-          next.root !== previous.root || zoom !== previous.zoomedPane;
+        const treeChanges = next.root !== previous.root;
+        const zoomChanges = zoom !== previous.zoomedPane;
+        const moves = treeChanges || zoomChanges;
+        // Each kind of change in this update must allow animation.
+        const allowed =
+          (!treeChanges || animateLayout) && (!zoomChanges || animateZoom);
         // A pointer resize follows the pointer with no animation.
         const animate =
           element !== null &&
           moves &&
+          allowed &&
           gesture.current?.type !== 'resize' &&
           !matchMedia('(prefers-reduced-motion: reduce)').matches;
         const zoomStarts = zoom !== previous.zoomedPane && zoom !== null;
@@ -428,7 +443,7 @@ export function Layout({
       });
       return unsubscribe;
     },
-    [store]
+    [store, animateLayout, animateZoom]
   );
   const state = useSyncExternalStore(
     subscribe,
