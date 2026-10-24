@@ -68,6 +68,29 @@ test.describe('find and replace', () => {
     await expect.poll(() => contents(page)).not.toContain('foo');
   });
 
+  test('the chevron shows and hides the replace row', async ({ page }) => {
+    await openFixture(page);
+    await openSearchPanel(page);
+
+    const toggle = page.locator('[data-search-panel] [data-replace-toggle]');
+    await expect(toggle).toBeVisible();
+    await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    await expect(page.locator(REPLACE_INPUT)).toBeHidden();
+    const collapsedBox = await toggle.boundingBox();
+
+    await toggle.click();
+    await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    await expect(page.locator(REPLACE_INPUT)).toBeVisible();
+    await expect(page.locator(REPLACE_INPUT)).toBeFocused();
+    // The chevron stays beside the find input while the replace row opens.
+    expect(await toggle.boundingBox()).toEqual(collapsedBox);
+
+    await toggle.click();
+    await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    await expect(page.locator(REPLACE_INPUT)).toBeHidden();
+    await expect(page.locator(SEARCH_INPUT)).toBeFocused();
+  });
+
   test('clearing the query removes the match highlights', async ({ page }) => {
     await openFixture(page);
     await openSearchPanel(page);
