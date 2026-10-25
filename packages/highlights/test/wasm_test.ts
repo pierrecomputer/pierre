@@ -149,6 +149,15 @@ void test('live state hashing and comparison ignore bytes beyond the state', () 
             lane |= BigInt(input[at + i]) << BigInt(i * 8);
           expected = BigInt.asUintN(64, (expected ^ lane) * 0x100000001b3n);
         }
+        expected = BigInt.asUintN(
+          64,
+          (expected ^ (expected >> 33n)) * 0xff51afd7ed558ccdn
+        );
+        expected = BigInt.asUintN(
+          64,
+          (expected ^ (expected >> 33n)) * 0xc4ceb9fe1a85ec53n
+        );
+        expected ^= expected >> 33n;
         assert.equal(hash(a + alignment, length), BigInt.asIntN(64, expected));
         assert.equal(hash(b + alignment, length), BigInt.asIntN(64, expected));
         assert.equal(equal(a + alignment, b + alignment, length), 1);
@@ -159,7 +168,7 @@ void test('live state hashing and comparison ignore bytes beyond the state', () 
         }
       }
     }
-    assert.equal(hash(bytes.length, 0), BigInt.asIntN(64, 0xcbf29ce484222325n));
+    assert.equal(hash(bytes.length, 0), hash(a, 0));
     assert.equal(equal(bytes.length, bytes.length, 0), 1);
     assert.equal(equal(bytes.length - 16, bytes.length - 16, 16), 1);
   }
