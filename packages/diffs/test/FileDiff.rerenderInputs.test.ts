@@ -1,9 +1,14 @@
 import { afterAll, expect, test } from 'bun:test';
 
 import { disposeHighlighter, FileDiff, parseDiffFromFile } from '../src';
-import type { FileDiffMetadata, HighlightedToken } from '../src/types';
+import type { FileDiffMetadata } from '../src/types';
 import { installDom, wait, waitFor } from './domHarness';
-import { createEditorInstance } from './editorTestUtils';
+import {
+  applySessionEdits,
+  createEditorInstance,
+  createTextDocumentFromLines,
+  lineEdit,
+} from './editorTestUtils';
 
 afterAll(async () => {
   await disposeHighlighter();
@@ -199,12 +204,14 @@ test('a dirty unkeyed session remains authoritative when the same object is re-p
     instance.render({ fileDiff: externalDiff, fileContainer });
     await waitForStableRow(fileContainer);
     const detach = instance.__attachEditor(createEditorInstance('file-diff'));
-    instance.updateRenderCache(
-      new Map<number, HighlightedToken[]>([
-        [0, [[0, '', 'const editedMarker = 3;']]],
-      ]),
-      'light'
+    const sessionDocument = createTextDocumentFromLines<'file-diff'>(
+      'file-diff',
+      externalDiff.additionLines,
+      'inmemory://file-diff-rerender'
     );
+    applySessionEdits(instance, sessionDocument, [
+      lineEdit(sessionDocument, 0, 'const editedMarker = 3;'),
+    ]);
 
     instance.render({
       fileDiff: externalDiff,

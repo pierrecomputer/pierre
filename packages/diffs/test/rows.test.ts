@@ -195,11 +195,15 @@ function baseRow(text: string): HASTElement {
   };
 }
 
-function createSource(diff: ReturnType<typeof parseDiffFromFile>): RowSource {
+function createSource(
+  diff: ReturnType<typeof parseDiffFromFile>,
+  model: DiffModel
+): RowSource {
   return new RowSource({
     deletionRows: diff.deletionLines.map(baseRow),
-    originalAdditionRows: diff.additionLines.map(baseRow),
-    originalAdditionLines: diff.additionLines,
+    additionRows: diff.additionLines.map(baseRow),
+    additionLines: diff.additionLines,
+    lineIds: model.live ? model.lineIds() : undefined,
   });
 }
 
@@ -211,15 +215,15 @@ describe('RowSource', () => {
 
   test('a static model reads the highlight result', () => {
     const model = DiffModel.fromDiff(input);
-    const source = createSource(input);
-    expect(source.deletionRow(2)).toBe(source.deletionRow(2));
+    const source = createSource(input, model);
+    expect(source.deletionRow(model, 2)).toBe(source.deletionRow(model, 2));
     expect(hastToHtml(source.additionRow(model, 2))).toContain('changed 3');
     expect(source.additionRow(model, 2)).toBe(source.additionRow(model, 2));
   });
 
   test('editor tokens replace the highlight row and are memoized by identity', () => {
-    const model = DiffModel.startSession(input);
-    const source = createSource(input);
+    const model = DiffModel.startEditSession(input);
+    const source = createSource(input, model);
     const original = source.additionRow(model, 2);
     const tokensA: HighlightedToken[] = [
       [0, '#f00', 'changed'],
@@ -250,9 +254,38 @@ describe('RowSource', () => {
     expect(source.additionRow(model, 2)).not.toBe(row);
   });
 
+  test('tokens and plain rows for deleted lines are dropped', () => {
+    const model = DiffModel.startEditSession(input);
+    const source = createSource(input, model);
+    const idOfLine3 = model.lineId(3);
+    source.setTokens(idOfLine3, [[0, '#f00', 'line 4']]);
+    expect(source.hasTokens(idOfLine3)).toBe(true);
+    const document = new TextDocument<'file-diff', undefined>(
+      'inmemory://forget',
+      input.additionLines.join(''),
+      'typescript'
+    );
+    // Deleting line 3 joins what follows onto line 2's id and drops line 3's.
+    const change = model.applyChange(
+      document.applyEdits([
+        {
+          range: {
+            start: { line: 2, character: 0 },
+            end: { line: 3, character: 0 },
+          },
+          newText: '',
+        },
+      ])!,
+      document
+    );
+    expect(change.removedLineIds).toEqual([idOfLine3]);
+    source.forgetLines(change.removedLineIds);
+    expect(source.hasTokens(idOfLine3)).toBe(false);
+  });
+
   test('an edited line without tokens falls back to plain text, untouched lines keep their rows', () => {
-    const model = DiffModel.startSession(input);
-    const source = createSource(input);
+    const model = DiffModel.startEditSession(input);
+    const source = createSource(input, model);
     const changedRow = source.additionRow(model, 2);
     const document = new TextDocument<'file-diff', undefined>(
       'inmemory://rows',
@@ -285,8 +318,8 @@ describe('RowSource', () => {
   });
 
   test('tokens from before an edit are skipped until new ones arrive', () => {
-    const model = DiffModel.startSession(input);
-    const source = createSource(input);
+    const model = DiffModel.startEditSession(input);
+    const source = createSource(input, model);
     const document = new TextDocument<'file-diff', undefined>(
       'inmemory://stale',
       input.additionLines.join(''),
@@ -314,8 +347,8 @@ describe('RowSource', () => {
   });
 
   test('empty lines render a line break', () => {
-    const model = DiffModel.startSession(input);
-    const source = createSource(input);
+    const model = DiffModel.startEditSession(input);
+    const source = createSource(input, model);
     const document = new TextDocument<'file-diff', undefined>(
       'inmemory://empty',
       input.additionLines.join(''),

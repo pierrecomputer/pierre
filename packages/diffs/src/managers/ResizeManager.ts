@@ -241,13 +241,22 @@ export class ResizeManager {
       annotationUpdates.clear();
     }
 
-    // Cleanup any old nodes that might still be observed
+    // Cleanup any old nodes that might still be observed. A row whose
+    // annotation content was rewritten keeps its container, which a new item
+    // now owns, so only containers no item uses lose their paired height.
+    const pairedContainers = new Set<HTMLElement>();
+    for (const item of this.observedNodes.values()) {
+      if (item.type === 'annotations') {
+        pairedContainers.add(item.column1.container);
+        pairedContainers.add(item.column2.container);
+      }
+    }
     for (const [element, item] of observedNodes) {
       this.unobserve(element);
       if (item.type === 'code') {
         cleanupStaleCodeItem(item);
       } else {
-        cleanupStaleAnnotationItem(item);
+        cleanupStaleAnnotationItem(item, pairedContainers);
       }
     }
     observedNodes.clear();
@@ -479,15 +488,13 @@ function cleanupStaleCodeItem(item: ObservedGridNodes): void {
   }
 }
 
-function cleanupStaleAnnotationItem(item: ObservedAnnotationNodes): void {
-  if (item.column1.container.isConnected) {
-    item.column1.container.style.removeProperty(
-      '--diffs-annotation-min-height'
-    );
-  }
-  if (item.column2.container.isConnected) {
-    item.column2.container.style.removeProperty(
-      '--diffs-annotation-min-height'
-    );
+function cleanupStaleAnnotationItem(
+  item: ObservedAnnotationNodes,
+  pairedContainers: ReadonlySet<HTMLElement>
+): void {
+  for (const { container } of [item.column1, item.column2]) {
+    if (container.isConnected && !pairedContainers.has(container)) {
+      container.style.removeProperty('--diffs-annotation-min-height');
+    }
   }
 }

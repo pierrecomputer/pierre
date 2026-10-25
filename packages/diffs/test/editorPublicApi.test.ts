@@ -937,7 +937,7 @@ describe('Editor document registry surfaces', () => {
           }
         )
       ).rejects.toThrow(
-        'FileDiff: retained session cannot resume against a different old file'
+        'DiffModel.startEditSession: the retained session was diffed against a different old file'
       );
 
       const resumed = await createDiffEditorFixture(
@@ -1972,6 +1972,201 @@ describe('Editor history option plumbing', () => {
       expect(editor.getText()).toBe('Xbcdef');
     } finally {
       cleanup();
+    }
+  });
+});
+
+describe('replacing the diff while editing', () => {
+  test("a replacement render does not flush the old document's tokens", async () => {
+    const dom = installDom();
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const fileDiff = new TestFileDiff({
+      disableErrorHandling: true,
+      disableFileHeader: true,
+      diffStyle: 'unified',
+      theme: DEFAULT_THEMES,
+      preferredHighlighter: 'highlights',
+    });
+    const oldFile = { name: 'a.ts', contents: 'a\nb\nc\nd' };
+    fileDiff.render({
+      oldFile,
+      newFile: { name: 'a.ts', contents: 'x\nb\nc\nd' },
+      fileContainer: container,
+      forceRender: true,
+    });
+    await waitFor(
+      () => container.shadowRoot?.querySelector('[data-line]') != null
+    );
+    const editor = new Editor('file-diff');
+    try {
+      // Attach and replace in the same tick: the editor has tokens for the
+      // four-line document and has not yet synced to the one-line one.
+      editor.edit(fileDiff);
+      expect(() =>
+        fileDiff.render({
+          oldFile,
+          newFile: { name: 'a.ts', contents: 'short' },
+          fileContainer: container,
+        })
+      ).not.toThrow();
+      await waitFor(() => editor.getText() === 'short');
+      expect(container.shadowRoot?.textContent).toContain('short');
+    } finally {
+      editor.cleanUp();
+      fileDiff.cleanUp();
+      dom.cleanup();
+    }
+  });
+});
+
+describe('re-rendering the same diff while editing', () => {
+  test('a fresh diff with the same text keeps the editor working', async () => {
+    const dom = installDom();
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const fileDiff = new TestFileDiff({
+      disableErrorHandling: true,
+      disableFileHeader: true,
+      diffStyle: 'unified',
+      theme: DEFAULT_THEMES,
+      preferredHighlighter: 'highlights',
+    });
+    const files = {
+      oldFile: { name: 's.ts', contents: 'old\n' },
+      newFile: { name: 's.ts', contents: 'const x = 1;\n' },
+    };
+    fileDiff.render({ ...files, fileContainer: container, forceRender: true });
+    await waitFor(
+      () => container.shadowRoot?.querySelector('[data-line]') != null
+    );
+    const editor = new Editor('file-diff');
+    try {
+      // Attach and re-render in the same tick: a fresh keyless diff of the
+      // same files counts as a replacement that changes nothing in the
+      // document, and the tokens the editor made on attach still apply.
+      editor.edit(fileDiff);
+      expect(() =>
+        fileDiff.render({
+          fileDiff: parseDiffFromFile(files.oldFile, files.newFile),
+          fileContainer: container,
+        })
+      ).not.toThrow();
+      await waitForEditableContent(container);
+      await wait(10);
+      insertText(editor, 0, 0, 'y');
+      expect(editor.getText()).toBe('yconst x = 1;\n');
+      expect(container.shadowRoot?.textContent).toContain('yconst x = 1;');
+    } finally {
+      editor.cleanUp();
+      fileDiff.cleanUp();
+      dom.cleanup();
+    }
+  });
+});
+
+describe('retained drafts', () => {
+  test('a retained draft renders its own rows over highlighted input rows', async () => {
+    EditStateManager.clearAll();
+    const documentKey = 'retained-draft-rows';
+    const files = {
+      oldFile: {
+        name: 'draft.ts',
+        contents: 'const alpha = 1;\nconst old = 2;\nconst charlie = 3;\n',
+      },
+      newFile: {
+        name: 'draft.ts',
+        contents: 'const alpha = 1;\nconst fresh = 2;\nconst charlie = 3;\n',
+      },
+    };
+    const dom = installDom();
+    // Renders the input highlighted with token spans, which is what a session
+    // may reuse, then attaches a keyed editor.
+    const mount = async () => {
+      const container = document.createElement('div');
+      document.body.appendChild(container);
+      const fileDiff = new TestFileDiff({
+        disableFileHeader: true,
+        diffStyle: 'unified',
+        theme: DEFAULT_THEMES,
+        useTokenTransformer: true,
+      });
+      fileDiff.render({
+        ...files,
+        fileContainer: container,
+        forceRender: true,
+      });
+      await waitFor(
+        () => container.shadowRoot?.querySelector('[data-char]') != null
+      );
+      const editor = new Editor('file-diff', undefined, documentKey);
+      editor.edit(fileDiff);
+      await waitForEditableContent(container);
+      return { container, editor, fileDiff };
+    };
+    const first = await mount();
+    try {
+      insertText(first.editor, 1, 0, 'const inserted = 0;\n');
+      await wait(0);
+      expect(first.container.shadowRoot?.textContent).toContain(
+        'const inserted = 0;'
+      );
+    } finally {
+      first.editor.cleanUp();
+      first.fileDiff.cleanUp();
+    }
+    const second = await mount();
+    try {
+      expect(second.editor.getText()).toContain('const inserted = 0;');
+      await wait(0);
+      const text = second.container.shadowRoot?.textContent ?? '';
+      expect(text).toContain('const inserted = 0;');
+      expect(text).toContain('const fresh = 2;');
+    } finally {
+      second.editor.cleanUp();
+      second.fileDiff.cleanUp();
+      dom.cleanup();
+    }
+  });
+
+  test('edits made while recycled render their own rows on re-attach', async () => {
+    const dom = installDom();
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const fileDiff = new TestFileDiff({
+      disableFileHeader: true,
+      diffStyle: 'unified',
+      theme: DEFAULT_THEMES,
+      useTokenTransformer: true,
+    });
+    fileDiff.render({
+      oldFile: { name: 'r.ts', contents: 'a\nold\nc\nd' },
+      newFile: { name: 'r.ts', contents: 'a\nnew\nc\nd' },
+      fileContainer: container,
+      forceRender: true,
+    });
+    await waitFor(
+      () => container.shadowRoot?.querySelector('[data-char]') != null
+    );
+    const editor = new Editor('file-diff');
+    try {
+      editor.edit(fileDiff);
+      await waitForEditableContent(container);
+      editor.cleanUp('recycle');
+      insertText(editor, 1, 0, 'x\n');
+      editor.edit(fileDiff);
+      await waitForEditableContent(container);
+      await wait(0);
+      expect(editor.getText()).toBe('a\nx\nnew\nc\nd');
+      // Unified rows, the deleted old line among them.
+      const lines = [
+        ...(container.shadowRoot?.querySelectorAll('[data-line]') ?? []),
+      ].map((line) => line.textContent);
+      expect(lines).toEqual(['a', 'old', 'x', 'new', 'c', 'd']);
+    } finally {
+      editor.cleanUp();
+      fileDiff.cleanUp();
+      dom.cleanup();
     }
   });
 });

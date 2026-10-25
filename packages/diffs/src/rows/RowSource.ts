@@ -3,17 +3,26 @@ import type { ElementContent, Element as HASTElement } from 'hast';
 import type { DiffModel } from '../model/DiffModel';
 import type { HighlightedToken } from '../types';
 import { cleanLastNewline } from '../utils/cleanLastNewline';
+import { createPlainRow, createTokenRow } from '../utils/hast_utils';
 
-export interface RowSourceOptions {
+export interface HighlightRows {
   /** Old-file rows from the highlight result, by old line index, unmarked. */
   deletionRows: readonly ElementContent[];
-  /**
-   * New-file rows from the highlight result, by the line index each had when
-   * the session started, unmarked. For a static model these are the rows.
-   */
-  originalAdditionRows: readonly ElementContent[];
+  /** New-file rows from the highlight result, by line index, unmarked. */
+  additionRows: readonly ElementContent[];
   /** The new-file lines those rows were rendered from. */
-  originalAdditionLines: readonly string[];
+  additionLines: readonly string[];
+  /**
+   * The id of the line each addition row was highlighted for. Given for a
+   * diff being edited, so rows follow their lines through later edits.
+   */
+  lineIds?: readonly number[];
+}
+
+// A highlight row kept for a line, with the text it shows.
+interface OriginalRow {
+  row: HASTElement;
+  text: string;
 }
 
 /**
@@ -25,9 +34,13 @@ export interface RowSourceOptions {
  * so an unchanged line gives the same object back.
  */
 export class RowSource {
-  readonly #deletionRows: readonly ElementContent[];
-  readonly #originalAdditionRows: readonly ElementContent[];
-  readonly #originalAdditionLines: readonly string[];
+  #deletionRows: readonly ElementContent[] = [];
+  // Highlight rows for a model that is not being edited, by line index.
+  #additionRows: readonly ElementContent[] = [];
+  #additionLines: readonly string[] = [];
+  // Highlight rows for a model being edited, by the id of the line each was
+  // rendered for, so a row follows its line through edits above it.
+  #rowsById: Map<number, OriginalRow> | undefined;
   // Editor tokens by line id with the text they spell, and the row built
   // from each tokens array.
   readonly #tokens = new Map<
@@ -36,22 +49,47 @@ export class RowSource {
   >();
   readonly #tokenRows = new WeakMap<HighlightedToken[], HASTElement>();
   readonly #plainRows = new Map<number, { text: string; row: HASTElement }>();
+  // Plain rows for old lines the highlight result has no row for.
+  readonly #plainDeletionRows = new Map<
+    number,
+    { text: string; row: HASTElement }
+  >();
 
-  constructor({
+  constructor(rows: HighlightRows) {
+    this.setHighlightRows(rows);
+  }
+
+  /** Binds the rows of a highlight result, keeping the editor's tokens. */
+  public setHighlightRows({
     deletionRows,
-    originalAdditionRows,
-    originalAdditionLines,
-  }: RowSourceOptions) {
+    additionRows,
+    additionLines,
+    lineIds,
+  }: HighlightRows): void {
     this.#deletionRows = deletionRows;
-    this.#originalAdditionRows = originalAdditionRows;
-    this.#originalAdditionLines = originalAdditionLines;
+    if (lineIds != null) {
+      const rowsById = new Map<number, OriginalRow>();
+      for (let line = 0; line < additionLines.length; line++) {
+        const row = additionRows[line];
+        if (row?.type === 'element') {
+          rowsById.set(lineIds[line], { row, text: additionLines[line] });
+        }
+      }
+      this.#rowsById = rowsById;
+      this.#additionRows = [];
+      this.#additionLines = [];
+    } else {
+      this.#rowsById = undefined;
+      this.#additionRows = additionRows;
+      this.#additionLines = additionLines;
+    }
   }
 
   /**
    * Records the editor's tokens for a line. Returns false when they render
    * the same as the tokens already held, so callers can skip the row.
    */
-  setTokens(lineId: number, tokens: HighlightedToken[]): boolean {
+  public setTokens(lineId: number, tokens: HighlightedToken[]): boolean {
     const previous = this.#tokens.get(lineId);
     if (previous != null && areTokensEqual(previous.tokens, tokens)) {
       return false;
@@ -64,16 +102,40 @@ export class RowSource {
   }
 
   /** Whether the editor has sent tokens for a line. */
-  hasTokens(lineId: number): boolean {
+  public hasTokens(lineId: number): boolean {
     return this.#tokens.has(lineId);
   }
 
-  deletionRow(lineIndex: number): HASTElement | undefined {
-    const row = this.#deletionRows[lineIndex];
-    return row?.type === 'element' ? row : undefined;
+  /** Drops what is held for lines an edit deleted. */
+  public forgetLines(lineIds: readonly number[]): void {
+    for (const lineId of lineIds) {
+      this.#tokens.delete(lineId);
+      this.#plainRows.delete(lineId);
+      this.#rowsById?.delete(lineId);
+    }
   }
 
-  additionRow(model: DiffModel, lineIndex: number): HASTElement {
+  /**
+   * The row for an old line. A highlight result has rows only for lines in
+   * hunks, so a diff with none (a pure rename) edited into one shows its old
+   * lines as plain text until it is highlighted again.
+   */
+  public deletionRow(model: DiffModel, lineIndex: number): HASTElement {
+    const row = this.#deletionRows[lineIndex];
+    if (row?.type === 'element') {
+      return row;
+    }
+    const text = cleanLastNewline(model.diff.deletionLines[lineIndex] ?? '');
+    const plain = this.#plainDeletionRows.get(lineIndex);
+    if (plain != null && plain.text === text) {
+      return plain.row;
+    }
+    const created = createPlainRow(text);
+    this.#plainDeletionRows.set(lineIndex, { text, row: created });
+    return created;
+  }
+
+  public additionRow(model: DiffModel, lineIndex: number): HASTElement {
     const lineId = model.lineId(lineIndex);
     const text = model.diff.additionLines[lineIndex] ?? '';
     const lineText = cleanLastNewline(text);
@@ -88,13 +150,15 @@ export class RowSource {
       }
       return row;
     }
-    const originalIndex = model.originalLineIndex(lineIndex);
-    if (originalIndex >= 0) {
-      const row = this.#originalAdditionRows[originalIndex];
-      if (
-        row?.type === 'element' &&
-        this.#originalAdditionLines[originalIndex] === text
-      ) {
+    const rowsById = this.#rowsById;
+    if (rowsById != null) {
+      const original = rowsById.get(lineId);
+      if (original != null && original.text === text) {
+        return original.row;
+      }
+    } else {
+      const row = this.#additionRows[lineIndex];
+      if (row?.type === 'element' && this.#additionLines[lineIndex] === text) {
         return row;
       }
     }
@@ -121,51 +185,4 @@ function areTokensEqual(
     if (aChar !== bChar || aColor !== bColor || aText !== bText) return false;
   }
   return true;
-}
-
-// A row from the editor's tokens: one span per token with the column it
-// starts at, which the editor reads to map carets. An empty line is a <br>.
-function createTokenRow(tokens: readonly HighlightedToken[]): HASTElement {
-  return {
-    type: 'element',
-    tagName: 'div',
-    properties: {},
-    children: tokens.map(([char, color, text]) => {
-      if (char === 0 && color === '') {
-        if (text === '') {
-          return {
-            type: 'element',
-            tagName: 'br',
-            properties: {},
-            children: [],
-          };
-        }
-        return { type: 'text', value: text };
-      }
-      return {
-        type: 'element',
-        tagName: 'span',
-        properties: { 'data-char': char, style: `color:${color};` },
-        children: [{ type: 'text', value: text }],
-      };
-    }),
-  };
-}
-
-// A row for a line the editor has not tokenized yet: its text in one span,
-// so the editor can still place a caret in it.
-function createPlainRow(lineText: string): HASTElement {
-  return {
-    type: 'element',
-    tagName: 'div',
-    properties: {},
-    children: [
-      {
-        type: 'element',
-        tagName: 'span',
-        properties: { 'data-char': 0 },
-        children: [{ type: 'text', value: lineText }],
-      },
-    ],
-  };
 }

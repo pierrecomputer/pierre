@@ -3,6 +3,7 @@ import type {
   ChangeTypes,
   ContextContent,
   Hunk,
+  HunkExpansionRegion,
 } from '../types';
 
 export type DiffSide = 'deletions' | 'additions';
@@ -77,11 +78,11 @@ export interface RetainedDiffSessionSnapshot {
 export interface DiffModelChange {
   /** New-file line indexes whose text changed, after the edit. */
   readonly changedLines: readonly number[];
+  /** Ids of the lines the edit deleted, so nothing is kept for them. */
+  readonly removedLineIds: readonly number[];
   readonly lineDelta: number;
   /** Hunks were rebuilt: regions appeared, disappeared or changed bounds. */
   readonly regionsChanged: boolean;
-  /** A block's shape changed, so some rows have a new line type. */
-  readonly blocksChanged: boolean;
-  /** The runs of rows each split-view column shows changed. */
-  readonly splitRowsChanged: boolean;
+  /** The expansion to use from now on: remapped when a region moved. */
+  readonly expandedHunks: Map<number, HunkExpansionRegion>;
 }

@@ -423,6 +423,76 @@ describe('word diff highlights while typing', () => {
       );
     });
 
+    test(`${diffStyle}: annotation rows rebuilt by an edit are paired for resizing again`, async () => {
+      if (diffStyle !== 'split') return;
+      const oldContents = 'alpha\nold\ncharlie\n';
+      const newContents = 'alpha\nnew\ncharlie\n';
+      await withEditor(
+        diffStyle,
+        (editor, container) => {
+          const pairedRows = () =>
+            Array.from(
+              container.shadowRoot?.querySelectorAll<HTMLElement>(
+                '[data-line-annotation*=","]'
+              ) ?? []
+            );
+          const before = pairedRows();
+          expect(before).toHaveLength(2);
+          const beforeChildren = before.map((row) => row.firstElementChild);
+          // The annotation content measures 160px from now on; the initial
+          // setup measured it before this.
+          const { prototype } =
+            container.ownerDocument.defaultView!.HTMLElement;
+          const getBoundingClientRect = prototype.getBoundingClientRect;
+          prototype.getBoundingClientRect = function (
+            this: HTMLElement
+          ): DOMRect {
+            const rect = getBoundingClientRect.call(this);
+            if (
+              this.parentElement?.hasAttribute('data-line-annotation') !== true
+            ) {
+              return rect;
+            }
+            const tall: DOMRect = {
+              x: rect.x,
+              y: rect.y,
+              width: rect.width,
+              height: 160,
+              top: rect.top,
+              right: rect.right,
+              bottom: rect.top + 160,
+              left: rect.left,
+              toJSON() {
+                return tall;
+              },
+            };
+            return tall;
+          };
+          try {
+            // Reverting the annotated line to the old text makes it context,
+            // which rewrites its annotation row in both columns.
+            replaceText(editor, 1, 0, 3, 'old');
+          } finally {
+            prototype.getBoundingClientRect = getBoundingClientRect;
+          }
+          const after = pairedRows();
+          expect(after).toHaveLength(2);
+          for (const [index, row] of after.entries()) {
+            expect(row.firstElementChild).not.toBe(beforeChildren[index]);
+            // The resize manager measured the rewritten annotation content.
+            expect(
+              row.style.getPropertyValue('--diffs-annotation-min-height')
+            ).toBe('160px');
+          }
+        },
+        {
+          oldContents,
+          newContents,
+          lineAnnotations: [{ side: 'additions', lineNumber: 2 }],
+        }
+      );
+    });
+
     test(`${diffStyle}: keep annotations on their lines when an edit moves lines inside a change`, async () => {
       const oldContents =
         'const a = 1;\nconst b = 2;\nconst c = 3;\nconst d = 4;\n';
@@ -560,11 +630,11 @@ describe('word diff highlights after the editor redraws rows in the background',
       preferredHighlighter: 'highlights',
     });
     let redrawCount = 0;
-    const updateRenderCache = fileDiff.updateRenderCache.bind(fileDiff);
-    fileDiff.updateRenderCache = (lines, themeType, options) => {
-      // Background tokenizing updates the cache without edit options.
-      if (options == null) redrawCount++;
-      return updateRenderCache(lines, themeType, options);
+    const applyTokens = fileDiff.applyTokens.bind(fileDiff);
+    fileDiff.applyTokens = (lines) => {
+      // Background tokenizing hands finished lines to the diff.
+      redrawCount++;
+      applyTokens(lines);
     };
     try {
       const renderRange: RenderRange = {

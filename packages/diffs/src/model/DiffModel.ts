@@ -1,8 +1,6 @@
 import type { CreatePatchOptionsNonabortable } from 'diff';
 
-import { DEFAULT_EXPANDED_REGION } from '../constants';
 import type {
-  ExpansionDirections,
   FileContents,
   FileDiffMetadata,
   Hunk,
@@ -36,11 +34,17 @@ import type {
   RetainedDiffSessionSnapshot,
 } from './types';
 
-export interface DiffModelOptions {
+/** What the renderer hands the model with each change and when editing ends. */
+export interface ModelSessionState {
+  /** Options for recomputing hunks. */
   parseDiffOptions?: CreatePatchOptionsNonabortable;
+  /** How far each hunk's collapsed context is expanded, by hunk index. */
+  expandedHunks?: Map<number, HunkExpansionRegion>;
 }
 
-export interface StartSessionOptions extends DiffModelOptions {
+export interface StartSessionOptions {
+  /** Options for the recompute an empty or renamed new file needs at the start. */
+  parseDiffOptions?: CreatePatchOptionsNonabortable;
   /**
    * The editor's document when it is not the input's new file: a retained
    * draft from an earlier session, split like the parsed diff (no entry for
@@ -76,11 +80,8 @@ interface BlockIndex {
  */
 export class DiffModel {
   /** A read-only model over a diff the caller owns. Nothing is copied. */
-  static fromDiff(
-    diff: FileDiffMetadata,
-    options: DiffModelOptions = {}
-  ): DiffModel {
-    return new DiffModel(diff, undefined, options.parseDiffOptions);
+  static fromDiff(diff: FileDiffMetadata): DiffModel {
+    return new DiffModel(diff, undefined);
   }
 
   /**
@@ -88,20 +89,22 @@ export class DiffModel {
    * copy without a cache key; its arrays are shared with the input until an
    * edit replaces them, and the input is never written to.
    */
-  static startSession(
+  static startEditSession(
     inputDiff: FileDiffMetadata,
     options: StartSessionOptions = {}
   ): DiffModel {
     const { document, snapshot, parseDiffOptions } = options;
     if (inputDiff.isPartial) {
-      throw new Error('DiffModel.startSession: the diff must not be partial');
+      throw new Error(
+        'DiffModel.startEditSession: the diff must not be partial'
+      );
     }
     const inputContents = inputDiff.additionLines.join('');
     const restoresSnapshot =
       snapshot != null && canRestoreSnapshot(snapshot, inputDiff);
     if (snapshot != null && !restoresSnapshot) {
       throw new Error(
-        'DiffModel.startSession: the retained session was diffed against a different old file'
+        'DiffModel.startEditSession: the retained session was diffed against a different old file'
       );
     }
     if (
@@ -110,7 +113,7 @@ export class DiffModel {
       !restoresSnapshot
     ) {
       throw new Error(
-        'DiffModel.startSession: retained edits are missing their diff session state'
+        'DiffModel.startEditSession: retained edits are missing their diff session state'
       );
     }
     const diff: FileDiffMetadata = { ...inputDiff };
@@ -134,30 +137,29 @@ export class DiffModel {
     }
     const model = new DiffModel(
       diff,
-      new LineMap(countLineBreaks(diff.additionLines.join('')) + 1),
-      parseDiffOptions
+      new LineMap(countLineBreaks(diff.additionLines.join('')) + 1)
     );
-    // An empty new file still needs one editable line for the caret.
+    // An empty new file still needs one editable line for the caret. When
+    // editing starts this recompute also sets the diff's type, so a deleted
+    // file edited from scratch shows its new side.
     if (diff.additionLines.length === 0) {
-      model.#applyRecompute(recomputeEmptyDocumentDiff(diff, parseDiffOptions));
+      Object.assign(diff, recomputeEmptyDocumentDiff(diff, parseDiffOptions));
+      diff.editSessionDirty = true;
     }
     return model;
   }
 
   readonly diff: FileDiffMetadata;
-  readonly parseDiffOptions: CreatePatchOptionsNonabortable | undefined;
-  expandedHunks: Map<number, HunkExpansionRegion> = new Map();
   readonly #lines: LineMap | undefined;
+  // The additions array the model started with, shared with the input diff.
+  // It is copied once, before the first edit that changes a line in place.
+  readonly #sharedAdditionLines: readonly string[];
   #blockIndex: BlockIndex | undefined;
 
-  private constructor(
-    diff: FileDiffMetadata,
-    lines: LineMap | undefined,
-    parseDiffOptions: CreatePatchOptionsNonabortable | undefined
-  ) {
+  private constructor(diff: FileDiffMetadata, lines: LineMap | undefined) {
     this.diff = diff;
     this.#lines = lines;
-    this.parseDiffOptions = parseDiffOptions;
+    this.#sharedAdditionLines = diff.additionLines;
   }
 
   /** Whether this model follows an editor's document. */
@@ -165,17 +167,25 @@ export class DiffModel {
     return this.#lines != null;
   }
 
+  /**
+   * The number of new-file lines: the editor document's while editing,
+   * otherwise the diff's.
+   */
+  get lineCount(): number {
+    return this.#lines?.lineCount ?? this.diff.additionLines.length;
+  }
+
   /** A stable id for a new-file line while editing; the index otherwise. */
   lineId(line: number): number {
     return this.#lines?.idAt(line) ?? line;
   }
 
-  /**
-   * The index this new-file line had when the session started, or -1 once an
-   * edit touched it. Always the index itself for a static model.
-   */
-  originalLineIndex(line: number): number {
-    return this.#lines?.originalIndexAt(line) ?? line;
+  /** The new-file line that has this id, or undefined once it was deleted. */
+  lineOf(id: number): number | undefined {
+    return (
+      this.#lines?.lineOf(id) ??
+      (id < this.diff.additionLines.length ? id : undefined)
+    );
   }
 
   /** The hunk block containing a line, or undefined between hunks. */
@@ -235,15 +245,17 @@ export class DiffModel {
    */
   applyChange(
     change: DocumentLineChange,
-    document: DocumentLines
+    document: DocumentLines,
+    session: ModelSessionState = {}
   ): DiffModelChange {
     const lines = this.#lines;
     if (lines == null) {
       throw new Error('DiffModel.applyChange: the model is not live');
     }
-    lines.applyChange(change);
-    const { diff, parseDiffOptions } = this;
-    const blockSizesBefore = getBlockSizes(diff);
+    const removedLineIds = lines.applyChange(change);
+    const { diff } = this;
+    const { parseDiffOptions } = session;
+    let expandedHunks = session.expandedHunks ?? new Map();
     // A batch whose inserts and deletes cancel out still has the same line
     // count; its changed range covers every line the edits shifted.
     const keepsLineCount = change.lineDelta === 0;
@@ -258,7 +270,6 @@ export class DiffModel {
         diff.additionLines,
         document.lineCount
       );
-      let nextLines: string[] | undefined;
       for (const [line, text] of readChangedLines(document, change)) {
         // The parsed diff has no entry for the empty line after a final line
         // break. That line joins the file once it has text.
@@ -273,14 +284,13 @@ export class DiffModel {
         if (previous === text) {
           continue;
         }
-        nextLines ??= diff.additionLines.slice();
-        nextLines[line] = text;
+        if (diff.additionLines === this.#sharedAdditionLines) {
+          diff.additionLines = diff.additionLines.slice();
+        }
+        diff.additionLines[line] = text;
         diff.additionCharacterCount += text.length - previous.length;
         changedLines.push(line);
         previousTexts.set(line, previous);
-      }
-      if (nextLines != null) {
-        diff.additionLines = nextLines;
       }
       if (changedLines.length > 0) {
         if (isEmptyDocument(diff)) {
@@ -305,7 +315,7 @@ export class DiffModel {
             parseDiffOptions,
             previousTexts
           );
-          this.#applyExpansionRemap(regionChange);
+          expandedHunks = remapExpansion(expandedHunks, regionChange);
           regionsChanged = regionChange != null;
         }
       }
@@ -328,7 +338,8 @@ export class DiffModel {
           )
         );
       } else {
-        this.#applyExpansionRemap(
+        expandedHunks = remapExpansion(
+          expandedHunks,
           rebuildSessionHunks(
             diff,
             parseDiffOptions,
@@ -347,41 +358,21 @@ export class DiffModel {
     }
 
     this.#blockIndex = undefined;
-    const blockSizesAfter = getBlockSizes(diff);
-    const blocksChanged = !areNumberArraysEqual(
-      blockSizesBefore,
-      blockSizesAfter
-    );
     return {
       changedLines,
+      removedLineIds,
       lineDelta: change.lineDelta,
       regionsChanged,
-      blocksChanged,
-      splitRowsChanged:
-        blocksChanged &&
-        !areNumberArraysEqual(
-          getSplitColumnRows(blockSizesBefore),
-          getSplitColumnRows(blockSizesAfter)
-        ),
+      expandedHunks,
     };
   }
 
-  /** Reveals more collapsed context on one side of a hunk gap. */
-  expandHunk(
-    hunkIndex: number,
-    direction: ExpansionDirections,
-    lineCount: number
-  ): void {
-    const region = {
-      ...(this.expandedHunks.get(hunkIndex) ?? DEFAULT_EXPANDED_REGION),
-    };
-    if (direction === 'up' || direction === 'both') {
-      region.fromStart += lineCount;
-    }
-    if (direction === 'down' || direction === 'both') {
-      region.fromEnd += lineCount;
-    }
-    this.expandedHunks.set(hunkIndex, region);
+  /** The id of every line, in line order. */
+  lineIds(): number[] {
+    return (
+      this.#lines?.ids() ??
+      Array.from({ length: this.lineCount }, (_, line) => line)
+    );
   }
 
   /** The state another session needs to resume this one's draft. */
@@ -408,22 +399,29 @@ export class DiffModel {
   /**
    * Ends the session: recomputes the hunks the way a plain diff of the final
    * text would, and keeps expansion at the gap edges that survive. Returns
-   * whether a recompute ran.
+   * whether a recompute ran, and the expansion to use from now on.
    */
-  finish(collapsedContextThreshold: number): boolean {
-    const { diff, parseDiffOptions } = this;
+  finish(
+    collapsedContextThreshold: number,
+    session: ModelSessionState = {}
+  ): { changed: boolean; expandedHunks: Map<number, HunkExpansionRegion> } {
+    const { diff } = this;
+    const { parseDiffOptions } = session;
+    const expandedHunks = session.expandedHunks ?? new Map();
     if (diff.editSessionDirty !== true) {
-      return false;
+      return { changed: false, expandedHunks };
     }
     const anchors = captureExpansionAnchors(
       diff,
-      this.expandedHunks,
+      expandedHunks,
       collapsedContextThreshold
     );
     finishEditSessionForDiff(diff, parseDiffOptions);
-    this.expandedHunks = rebuildExpansionFromAnchors(diff, anchors);
     this.#blockIndex = undefined;
-    return true;
+    return {
+      changed: true,
+      expandedHunks: rebuildExpansionFromAnchors(diff, anchors),
+    };
   }
 
   // A recompute that replaces the hunks wholesale keeps the session's
@@ -435,15 +433,6 @@ export class DiffModel {
     diff.type = sessionType;
     diff.editSessionDirty = true;
     this.#blockIndex = undefined;
-  }
-
-  #applyExpansionRemap(change: SessionRegionChange | undefined): void {
-    if (change != null) {
-      this.expandedHunks = remapExpandedHunksForRegionChange(
-        this.expandedHunks,
-        change
-      );
-    }
   }
 
   #getBlockIndex(): BlockIndex {
@@ -567,53 +556,13 @@ function readAllLines(document: DocumentLines): {
   return { lines, characterCount };
 }
 
-// The kind and size of every hunk block, in order, three numbers per block: 0
-// and its line count for context, 1 and its old and new line counts for
-// changes, and 2 between hunks.
-function getBlockSizes(diff: FileDiffMetadata): number[] {
-  const sizes: number[] = [];
-  for (const hunk of diff.hunks) {
-    for (const content of hunk.hunkContent) {
-      if (content.type === 'context') sizes.push(0, content.lines, 0);
-      else sizes.push(1, content.deletions, content.additions);
-    }
-    sizes.push(2, 0, 0);
-  }
-  return sizes;
-}
-
-// The rows each split view column shows for the blocks from `getBlockSizes`:
-// a run of line rows as a positive count, a run of filler rows as a negative
-// count, and 0 between hunks.
-function getSplitColumnRows(sizes: number[]): number[] {
-  const rows: number[] = [];
-  const pushLines = (count: number) => {
-    if (count <= 0) return;
-    const last = rows.length - 1;
-    if (last >= 0 && rows[last] > 0) rows[last] += count;
-    else rows.push(count);
-  };
-  for (const side of ['deletions', 'additions']) {
-    for (let index = 0; index < sizes.length; index += 3) {
-      const kind = sizes[index];
-      const deletions = sizes[index + 1];
-      const additions = sizes[index + 2];
-      if (kind === 2) {
-        rows.push(0);
-      } else if (kind === 0) {
-        pushLines(deletions);
-      } else {
-        const lines = side === 'deletions' ? deletions : additions;
-        pushLines(lines);
-        if (lines < Math.max(deletions, additions)) {
-          rows.push(lines - Math.max(deletions, additions));
-        }
-      }
-    }
-  }
-  return rows;
-}
-
-function areNumberArraysEqual(a: number[], b: number[]): boolean {
-  return a.length === b.length && a.every((value, index) => value === b[index]);
+// The expansion after a change that moved or replaced regions; unchanged when
+// the regions stayed.
+function remapExpansion(
+  expandedHunks: Map<number, HunkExpansionRegion>,
+  change: SessionRegionChange | undefined
+): Map<number, HunkExpansionRegion> {
+  return change == null
+    ? expandedHunks
+    : remapExpandedHunksForRegionChange(expandedHunks, change);
 }
