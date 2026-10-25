@@ -9,6 +9,7 @@ import { VirtualizedFile } from '../src/components/VirtualizedFile';
 import { VirtualizedFileDiff } from '../src/components/VirtualizedFileDiff';
 import { Virtualizer } from '../src/components/Virtualizer';
 import { Editor } from '../src/editor/editor';
+import { TextDocument } from '../src/editor/textDocument';
 import {
   disposeHighlighter,
   getSharedHighlighter,
@@ -18,6 +19,7 @@ import {
   type HunksRenderResult,
 } from '../src/renderers/DiffHunksRenderer';
 import { FileRenderer } from '../src/renderers/FileRenderer';
+import { preloadDiffHTML } from '../src/ssr/preloadDiffs';
 import type {
   DiffsHighlighter,
   FileContents,
@@ -30,7 +32,7 @@ import { renderFileWithHighlighter } from '../src/utils/renderFileWithHighlighte
 import type { RenderDiffRequest } from '../src/worker/types';
 import type { WorkerPoolManager } from '../src/worker/WorkerPoolManager';
 import { createRoot, installDom, wait } from './domHarness';
-import { createEditorInstance } from './editorTestUtils';
+import { createEditorInstance, lineEdit } from './editorTestUtils';
 import { createDeferred, type Deferred } from './testUtils';
 import {
   createInitializedManager,
@@ -48,14 +50,6 @@ import {
 // behavior at the renderer level plus the component wiring.
 
 let restoreAnimationFrame: (() => void) | undefined;
-
-function createKeylessSessionDiff(
-  externalDiff: FileDiffMetadata
-): FileDiffMetadata {
-  const sessionDiff = { ...externalDiff };
-  delete sessionDiff.cacheKey;
-  return sessionDiff;
-}
 
 class DeferredHighlighterDiffRenderer extends DiffHunksRenderer {
   readonly initializations: Deferred<DiffsHighlighter>[] = [];
@@ -194,6 +188,65 @@ async function waitFor(
     }
   }
 }
+
+describe('hydrated FileDiff edit session', () => {
+  test('an editor attached to hydrated markup finds its rows without a new highlight', async () => {
+    const dom = installDom();
+    const options = {
+      theme: 'pierre-dark',
+      useTokenTransformer: true,
+      disableFileHeader: true,
+      diffStyle: 'unified',
+    } as const;
+    const diff = parseDiffFromFile(
+      { name: 'a.ts', contents: 'const a = 1;\nconst b = 2;', cacheKey: 'old' },
+      { name: 'a.ts', contents: 'const a = 3;\nconst b = 2;', cacheKey: 'new' }
+    );
+    const html = await preloadDiffHTML({ fileDiff: diff, options });
+    const { manager, worker } = await createInitializedManager({
+      theme: 'pierre-dark',
+      useTokenTransformer: true,
+    });
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const fileDiff = new FileDiff(options, manager);
+    const editor = new Editor('file-diff');
+    try {
+      // A warmed pool cache makes the hydrated markup editor-ready as is.
+      const primed = manager.primeDiffHighlightCache(diff);
+      const request = await withTimeout(worker.waitForDiffRequest());
+      respondWithHighlightedDiff(manager, worker, request, diff);
+      await primed;
+
+      fileDiff.hydrate({
+        fileDiff: diff,
+        fileContainer: container,
+        prerenderedHTML: html,
+      });
+      editor.edit(fileDiff);
+      // The cached highlight serves the session; the hydrated columns are
+      // written once so the rows get keys the editor can address them by.
+      expect(worker.diffRequestCount).toBe(1);
+      const rows = [
+        ...(container.shadowRoot?.querySelectorAll<HTMLElement>(
+          '[data-line]'
+        ) ?? []),
+      ];
+      expect(rows.map((row) => row.textContent)).toEqual([
+        'const a = 1;',
+        'const a = 3;',
+        'const b = 2;',
+      ]);
+      expect(fileDiff.lineElement(0)).toBe(rows[1]);
+      expect(fileDiff.lineElement(1)).toBe(rows[2]);
+    } finally {
+      editor.cleanUp();
+      fileDiff.cleanUp();
+      manager.terminate();
+      dom.cleanup();
+    }
+  });
+});
 
 describe('FileRenderer edit session', () => {
   test('editing renders locally with editor-compatible token markup', async () => {
@@ -1188,13 +1241,12 @@ describe('DiffHunksRenderer edit session', () => {
           cacheKey: 'd:new',
         }
       );
-      const sessionDiff = createKeylessSessionDiff(externalDiff);
 
       renderer.renderDiff(externalDiff);
       const request = await withTimeout(worker.waitForDiffRequest());
       expect(worker.diffRequestCount).toBe(1);
 
-      renderer.beginEditSession(sessionDiff, externalDiff);
+      const sessionDiff = renderer.startEditSession(externalDiff);
       respondToDiffRequest(manager, worker, request);
       // Refused outright: nothing is applied and nothing is requested — the
       // session render issued at editor attach supplies the highlight.
@@ -1245,9 +1297,8 @@ describe('DiffHunksRenderer edit session', () => {
           cacheKey: 'r:new',
         }
       );
-      const sessionDiff = createKeylessSessionDiff(externalDiff);
 
-      renderer.beginEditSession(sessionDiff, externalDiff);
+      const sessionDiff = renderer.startEditSession(externalDiff);
       renderer.renderDiff(sessionDiff);
       expect(worker.diffRequestCount).toBe(0);
 
@@ -1283,7 +1334,6 @@ describe('DiffHunksRenderer edit session', () => {
           cacheKey: 'cached:new',
         }
       );
-      const sessionDiff = createKeylessSessionDiff(externalDiff);
 
       renderer.renderDiff(externalDiff);
       respondWithHighlightedDiff(
@@ -1304,19 +1354,17 @@ describe('DiffHunksRenderer edit session', () => {
       const cachedExternalSnapshot = structuredClone(cachedExternalBefore);
       const renderUpdatesBeforeSession = renderUpdates;
 
-      renderer.beginEditSession(sessionDiff, externalDiff);
+      const sessionDiff = renderer.startEditSession(externalDiff);
       expect(renderer.editorRenderReady()).toBe(true);
       expect(renderer.diffCache).toBe(sessionDiff);
       expect(renderUpdates).toBe(renderUpdatesBeforeSession);
 
-      renderer.beginEditSession(sessionDiff);
-      sessionDiff.additionLines = [...sessionDiff.additionLines];
-      renderer.updateRenderCache(
+      renderer.setTokens(
         new Map<number, HighlightedToken[]>([
           [0, [[0, '', 'const edited = true;']]],
-        ]),
-        'dark'
+        ])
       );
+      renderer.renderDiff(sessionDiff);
 
       const cachedExternalResult = manager.getDiffResultCache(externalDiff);
       expect(cachedExternalResult).toEqual(cachedExternalSnapshot);
@@ -1324,7 +1372,6 @@ describe('DiffHunksRenderer edit session', () => {
         toHtml(cachedExternalResult?.result.code.additionLines ?? [])
       ).not.toContain('const edited = true;');
       expect(renderer.diffCache).toBe(sessionDiff);
-      expect(sessionDiff.additionLines[0]).toBe('const edited = true;\n');
       expect(sessionDiff.cacheKey).toBeUndefined();
       expect(worker.diffRequestCount).toBe(1);
     } finally {
@@ -1348,7 +1395,6 @@ describe('DiffHunksRenderer edit session', () => {
         'pending-edit',
         'const pendingEdit = true;\n'
       );
-      const sessionDiff = createKeylessSessionDiff(externalDiff);
 
       renderer.renderDiff(externalDiff);
       respondWithHighlightedDiff(
@@ -1361,7 +1407,7 @@ describe('DiffHunksRenderer edit session', () => {
         expect(manager.getDiffResultCache(externalDiff)).toBeDefined();
       });
 
-      renderer.beginEditSession(sessionDiff, externalDiff);
+      const sessionDiff = renderer.startEditSession(externalDiff);
       expect(renderer.editorRenderReady()).toBe(false);
 
       const result = renderer.renderDiff(sessionDiff);
@@ -1398,7 +1444,6 @@ describe('DiffHunksRenderer edit session', () => {
           cacheKey: 'incompatible:new',
         }
       );
-      const sessionDiff = createKeylessSessionDiff(externalDiff);
 
       renderer.renderDiff(externalDiff);
       respondToDiffRequest(
@@ -1408,7 +1453,7 @@ describe('DiffHunksRenderer edit session', () => {
       );
       await waitFor(() => expect(renderUpdates).toBe(1));
 
-      renderer.beginEditSession(sessionDiff, externalDiff);
+      const sessionDiff = renderer.startEditSession(externalDiff);
       expect(renderer.editorRenderReady()).toBe(false);
 
       const result = renderer.renderDiff(sessionDiff);
@@ -1468,7 +1513,6 @@ describe('DiffHunksRenderer edit session', () => {
           cacheKey: 'session:new',
         }
       );
-      const sessionDiff = createKeylessSessionDiff(sessionExternalDiff);
 
       renderer.renderDiff(renderedExternalDiff);
       respondToDiffRequest(
@@ -1478,7 +1522,7 @@ describe('DiffHunksRenderer edit session', () => {
       );
       await waitFor(() => expect(renderUpdates).toBe(1));
 
-      renderer.beginEditSession(sessionDiff, sessionExternalDiff);
+      const sessionDiff = renderer.startEditSession(sessionExternalDiff);
       expect(renderer.editorRenderReady()).toBe(false);
 
       const result = renderer.renderDiff(sessionDiff);
@@ -1523,11 +1567,10 @@ describe('DiffHunksRenderer edit session', () => {
           contents: 'const staleResult = true;\n',
         }
       );
-      const sessionDiff = createKeylessSessionDiff(externalDiff);
 
       renderer.renderDiff(externalDiff);
       expect(renderer.initializations).toHaveLength(1);
-      renderer.beginEditSession(sessionDiff);
+      const sessionDiff = renderer.startEditSession(externalDiff);
       renderer.renderDiff(sessionDiff);
       expect(renderer.initializations).toHaveLength(2);
 
@@ -1548,12 +1591,22 @@ describe('DiffHunksRenderer edit session', () => {
       expect(renderer.diffCache).toBe(sessionDiff);
       expect(renderer.editorRenderReady()).toBe(true);
 
-      sessionDiff.additionLines = [...sessionDiff.additionLines];
-      renderer.updateRenderCache(
+      const sessionDocument = new TextDocument<'file-diff', undefined>(
+        'inmemory://stale',
+        externalDiff.additionLines.join('')
+      );
+      const change = sessionDocument.applyEdits([
+        lineEdit(sessionDocument, 0, 'const sessionResult = true;'),
+      ]);
+      if (change == null) {
+        throw new Error('expected a document change');
+      }
+      renderer.applyChange(
+        change,
+        sessionDocument,
         new Map<number, HighlightedToken[]>([
           [0, [[0, '', 'const sessionResult = true;']]],
-        ]),
-        'dark'
+        ])
       );
 
       const renderSessionHtml = (): string => {

@@ -156,10 +156,14 @@ export interface FileOptions<LAnnotation, Caret>
   ): unknown;
 
   /**
-   * Fired for every document change of an active edit session on this
-   * component, with the same `EditorChangeEvent` the editor reports through
-   * its own `onChange`. Do not feed the event's file back into the component
-   * while the session is active.
+   * Fired synchronously for every document change of an active edit session
+   * on this component, with the same `EditorChangeEvent` the editor reports
+   * through its own `onChange`. It reports the document, not the screen; the
+   * rows may not show the change yet. Do not feed the event's file back into
+   * the component while the session is active, and do not call `render` with
+   * a new file or diff, `cleanUp`, or the editor's `applyEdits`, `undo`,
+   * `redo`, `edit` or `cleanUp` from inside the callback: that throws. An
+   * error thrown by the callback is logged and the update finishes.
    */
   onEditChange?: FileEditChangeHandler<LAnnotation, Caret>;
 
@@ -690,6 +694,24 @@ export class File<LAnnotation = undefined, Caret = undefined> {
     }
   }
 
+  public applyChange(): never {
+    throw new Error(
+      'File.applyChange: file editing moves to the row pipeline in phase 7'
+    );
+  }
+
+  public applyTokens(): never {
+    throw new Error(
+      'File.applyTokens: file editing moves to the row pipeline in phase 7'
+    );
+  }
+
+  public lineElement(): never {
+    throw new Error(
+      'File.lineElement: file editing moves to the row pipeline in phase 7'
+    );
+  }
+
   public __getEffectiveCodeOptions(): BaseCodeOptions {
     return { ...this.options, ...this.fileRenderer.getEffectiveCodeOptions() };
   }
@@ -943,7 +965,6 @@ export class File<LAnnotation = undefined, Caret = undefined> {
         file,
         lineAnnotations,
         renderRange,
-        externalDocument: this.editSession?.externalReplacement === true,
       });
     };
 

@@ -1,7 +1,7 @@
 import type { Element as HASTElement } from 'hast';
 
 import type { RowKey, RowSpec } from '../layout/RowSpec';
-import { hastToHtml } from '../utils/hastToHtml';
+import { attributeFor, hastToHtml } from '../utils/hastToHtml';
 
 // One row on screen: its gutter and content elements, and the spec they were
 // last written from. `spec` is undefined for rows adopted from markup this
@@ -310,16 +310,50 @@ function patchCell(
     }
     return replacement;
   }
-  syncAttributes(element, next);
+  if (previous == null || !patchAttributes(element, previous, next)) {
+    syncAttributes(element, next);
+  }
   if (previous == null || previous.children !== next.children) {
     element.innerHTML = hastToHtml(next.children);
   }
   return element;
 }
 
-// Brings an element's attributes in line with a spec's properties. The spec
-// is serialized the same way a new row is, so a patched row and a freshly
-// written one always agree on names and values.
+// Sets only the attributes that changed for the given element. Returns false
+// for a property it cannot serialize itself, and the caller parses instead.
+function patchAttributes(
+  element: HTMLElement,
+  previous: HASTElement,
+  next: HASTElement
+): boolean {
+  const nextNames = new Set<string>();
+  for (const key in next.properties) {
+    const attribute = attributeFor(key, next.properties[key]);
+    if (attribute === undefined) {
+      return false;
+    }
+    if (attribute === null) {
+      continue;
+    }
+    nextNames.add(attribute.name);
+    if (element.getAttribute(attribute.name) !== attribute.value) {
+      element.setAttribute(attribute.name, attribute.value);
+    }
+  }
+  for (const key in previous.properties) {
+    const attribute = attributeFor(key, previous.properties[key]);
+    if (attribute === undefined) {
+      return false;
+    }
+    if (attribute != null && !nextNames.has(attribute.name)) {
+      element.removeAttribute(attribute.name);
+    }
+  }
+  return true;
+}
+
+// Serializes the cell, parses it, and copies the attributes over. Slower, but
+// always matches what a freshly written row gets.
 function syncAttributes(element: HTMLElement, next: HASTElement): void {
   const template = document.createElement('template');
   template.innerHTML = hastToHtml({ ...next, children: [] });

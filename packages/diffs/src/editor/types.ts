@@ -3,6 +3,7 @@ import type {
   DiffLineAnnotation,
   FileContents,
   FileDiffMetadata,
+  HighlightedToken,
   LineAnnotation,
   SelectionSide,
 } from '../types';
@@ -328,3 +329,21 @@ export type EditorInitialState<
   : { type: 'file-diff' } & Partial<
       Omit<FileDiffEditState<LAnnotation>, 'type'>
     >;
+
+/** What the editor hands a component along with a document change. */
+export interface ApplyChangeOptions<EType extends EditorType, LAnnotation> {
+  /** Tokens the editor produced for the lines the change touched. */
+  tokens?: ReadonlyMap<number, HighlightedToken[]>;
+  /** The line annotations, already shifted for the change. */
+  lineAnnotations?: EditorLineAnnotation<EType, LAnnotation>[];
+  /**
+   * The edit touched lines outside the rendered window, so a virtualized
+   * component must recompute its buffer sizes before its next render.
+   */
+  updateBuffer?: boolean;
+}
+
+export interface ApplyChangeResult {
+  /** Document lines whose rows were rebuilt, so the editor re-measures them. */
+  rebuiltLines: number[];
+}

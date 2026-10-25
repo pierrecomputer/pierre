@@ -9,7 +9,7 @@ import type {
   RenderRange,
 } from '../types';
 import type { TextDocument, TextDocumentChange } from './textDocument';
-import { addEventListener, h } from './utils';
+import { addEventListener } from './utils';
 
 export interface EditorTokenizerProps {
   highlighter: DiffsHighlighter;
@@ -278,24 +278,4 @@ export class EditorTokenizer {
   resumeBackgroundTokenize(): void {
     this.#tokenizer.resumeBackgroundTokenize();
   }
-}
-
-export function renderLineTokens(
-  tokens: Array<HighlightedToken>
-): (HTMLElement | string)[] {
-  return tokens.map(([char, fg, textContent]) => {
-    if (char === 0 && fg === '') {
-      if (textContent === '') {
-        return h('br');
-      }
-      return textContent;
-    }
-    return h('span', {
-      dataset: {
-        char: char.toString(),
-      },
-      style: `color:${fg};`,
-      textContent: textContent,
-    });
-  });
 }

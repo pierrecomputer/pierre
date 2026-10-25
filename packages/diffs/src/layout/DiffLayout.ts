@@ -11,6 +11,7 @@ import type {
   CodeColumnType,
   DiffLineAnnotation,
   HunkData,
+  HunkExpansionRegion,
   HunkSeparators,
   LineDiffTypes,
   LineTypes,
@@ -57,6 +58,7 @@ export interface DiffLayoutInput<LAnnotation> {
   model: DiffModel;
   rows: RowSource;
   renderRange: RenderRange;
+  expandedHunks: Map<number, HunkExpansionRegion>;
   deletionAnnotations: AnnotationLineMap<LAnnotation>;
   additionAnnotations: AnnotationLineMap<LAnnotation>;
   annotationSlotName(annotation: DiffLineAnnotation<LAnnotation>): string;
@@ -130,9 +132,12 @@ export class DiffLayout<LAnnotation = undefined> {
   #ranges: LineDiffRangeCache;
   readonly #marked = new WeakMap<HASTElement, MarkedRow>();
   readonly #stamped = new WeakMap<HASTElement, StampedRow>();
-  // The gutter cell last built for each content row, reused while its
-  // inputs match so an unchanged row keeps its gutter element too.
+  // Gutter cells by the highlight row they were built for, reused while the
+  // line number, type and decoration match so the element is kept too.
   readonly #gutters = new WeakMap<HASTElement, GutterCell>();
+  // The highlight row each content row was built from, so a row that only
+  // got new attributes (a new line index, say) still finds its gutter cell.
+  readonly #baseOf = new WeakMap<HASTElement, HASTElement>();
   // Rows that are not built from a line, kept by key while their inputs
   // match, so a render that changes nothing hands back the same objects.
   readonly #fixedRows = new Map<RowKey, FixedRow>();
@@ -160,8 +165,20 @@ export class DiffLayout<LAnnotation = undefined> {
     this.options = options;
   }
 
+  /**
+   * Drops the rows kept for lines an edit removed: their annotation rows and
+   * the buffers that followed them.
+   */
+  forgetLines(ids: readonly number[]): void {
+    for (const id of ids) {
+      this.#fixedRows.delete(`ann:a${id}`);
+      this.#fixedRows.delete(`buf:a${id}`);
+      this.#fixedRows.delete(`buf:ann:a${id}`);
+    }
+  }
+
   layout(input: DiffLayoutInput<LAnnotation>): DiffLayoutResult {
-    const { model, rows, renderRange } = input;
+    const { model, rows, renderRange, expandedHunks } = input;
     const { diff } = model;
     const {
       diffStyle,
@@ -230,7 +247,7 @@ export class DiffLayout<LAnnotation = undefined> {
         `${lineType}|${span.hunkIndex},${span.lineIndex}|${span.annotations.join(',')}`,
         () => ({
           gutter: createGutterGap(lineType, 'annotation', 1),
-          content: host.createAnnotationElement(span),
+          content: readOnly(host.createAnnotationElement(span)),
         })
       );
     };
@@ -249,7 +266,7 @@ export class DiffLayout<LAnnotation = undefined> {
       diffStyle,
       startingLine: renderRange.startingLine,
       totalLines: renderRange.totalLines,
-      expandedHunks: expandUnchanged ? true : model.expandedHunks,
+      expandedHunks: expandUnchanged ? true : expandedHunks,
       collapsedContextThreshold,
       callback: ({
         hunkIndex,
@@ -357,9 +374,9 @@ export class DiffLayout<LAnnotation = undefined> {
                   lineIndexText
                 )
               : this.#line(
-                  this.#deletionRow(rows, deletionLine.lineIndex),
+                  rows.deletionRow(model, deletionLine.lineIndex),
                   deletionRanges,
-                  decoration.contentProperties,
+                  { ...decoration.contentProperties, contenteditable: 'false' },
                   deletionLine.lineNumber,
                   undefined,
                   lineIndexText
@@ -452,7 +469,7 @@ export class DiffLayout<LAnnotation = undefined> {
           if (deletionLine != null) {
             const lineIndexText = `${deletionLine.unifiedLineIndex},${splitLineIndex}`;
             const content = this.#line(
-              this.#deletionRow(rows, deletionLine.lineIndex),
+              rows.deletionRow(model, deletionLine.lineIndex),
               deletionRanges,
               deletionDecoration.contentProperties,
               deletionLine.lineNumber,
@@ -555,10 +572,15 @@ export class DiffLayout<LAnnotation = undefined> {
               unified ? columns.unified : columns.deletions,
               'eof:d',
               noEOFType,
-              () => ({
-                gutter: createGutterGap(noEOFType, 'metadata', 1),
-                content: createNoNewlineElement(noEOFType),
-              })
+              () => {
+                // A deleted line's marker is not part of the document.
+                const marker = createNoNewlineElement(noEOFType);
+                return {
+                  gutter: createGutterGap(noEOFType, 'metadata', 1),
+                  content:
+                    noEOFType === 'change-deletion' ? readOnly(marker) : marker,
+                };
+              }
             );
             if (!unified && !noEOFCRAddition) {
               this.#pushFixedRow(
@@ -728,7 +750,10 @@ export class DiffLayout<LAnnotation = undefined> {
         column,
         `sep:${type}:${hunkIndex}`,
         `metadata|${hunkSpecs}|${isFirstHunk}|${isLastHunk}`,
-        () => ({ gutter: separator(), content: separator() })
+        () => ({
+          gutter: separator(),
+          content: readOnly(separator()),
+        })
       );
       return true;
     }
@@ -742,7 +767,10 @@ export class DiffLayout<LAnnotation = undefined> {
         column,
         `sep:${type}:${hunkIndex}`,
         `simple|${isFirstHunk}`,
-        () => ({ gutter: separator(), content: separator() })
+        () => ({
+          gutter: separator(),
+          content: readOnly(separator()),
+        })
       );
       return true;
     }
@@ -767,7 +795,10 @@ export class DiffLayout<LAnnotation = undefined> {
       column,
       `sep:${slotName}`,
       `${hunkSeparators}|${content}|${expandIndex}|${chunked}|${isFirstHunk}|${isLastHunk}`,
-      () => ({ gutter: separator(), content: separator() })
+      () => ({
+        gutter: separator(),
+        content: readOnly(separator()),
+      })
     );
     hunkData.push({
       slotName,
@@ -780,14 +811,6 @@ export class DiffLayout<LAnnotation = undefined> {
         : undefined,
     });
     return true;
-  }
-
-  #deletionRow(rows: RowSource, lineIndex: number): HASTElement {
-    const row = rows.deletionRow(lineIndex);
-    if (row == null) {
-      throw new Error(`DiffLayout: no row for old line ${lineIndex + 1}`);
-    }
-    return row;
   }
 
   // The content cell of a line: the base row with its marks, then its line
@@ -827,11 +850,12 @@ export class DiffLayout<LAnnotation = undefined> {
     }
     const row: HASTElement = { ...marked, properties };
     this.#stamped.set(marked, { properties, row });
+    this.#baseOf.set(row, base);
     return row;
   }
 
-  // The gutter cell of a line, reused while the line number, type and
-  // host properties match.
+  // The gutter cell for a line, cached by its highlight row and reused while
+  // the line number, type and host properties match.
   #gutter(
     content: HASTElement,
     lineType: LineTypes,
@@ -839,7 +863,8 @@ export class DiffLayout<LAnnotation = undefined> {
     lineIndexText: string,
     properties: Properties = {}
   ): HASTElement {
-    const cached = this.#gutters.get(content);
+    const base = this.#baseOf.get(content) ?? content;
+    const cached = this.#gutters.get(base);
     if (
       cached != null &&
       cached.lineType === lineType &&
@@ -855,7 +880,12 @@ export class DiffLayout<LAnnotation = undefined> {
       lineIndexText,
       properties
     );
-    this.#gutters.set(content, {
+    // Same line number means only attributes changed, so keep the children
+    // and let the reconciler patch attributes alone.
+    if (cached != null && cached.lineNumber === lineNumber) {
+      cell.children = cached.cell.children;
+    }
+    this.#gutters.set(base, {
       lineType,
       lineNumber,
       lineIndexText,
@@ -946,6 +976,16 @@ export function columnCells(specs: readonly RowSpec[]): {
   return {
     gutter: specs.map((spec) => spec.gutter),
     content: specs.map((spec) => spec.content),
+  };
+}
+
+// Content cells that are not document lines, such as annotation rows and
+// separators, are never editable, so the caret cannot enter them while the
+// column is. Added on every render so attaching an editor changes no rows.
+function readOnly(cell: HASTElement): HASTElement {
+  return {
+    ...cell,
+    properties: { ...cell.properties, contenteditable: 'false' },
   };
 }
 

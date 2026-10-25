@@ -422,6 +422,35 @@ describe('diff editor: collapsed regions during edit', () => {
     }
   });
 
+  test('an edit that adds a hunk above an expanded gap keeps the gap expanded', async () => {
+    const fixture = await createCollapsedEditFixture();
+    const { container, editor, fileDiff } = fixture;
+    try {
+      fileDiff.handleExpandHunk(1, 'both');
+      await wait(10);
+      expect(
+        findAdditionContent(container)!.querySelector('[data-line="30"]')
+      ).not.toBeNull();
+
+      // A new first line is a hunk of its own, so every hunk below moves to
+      // the next index and the expansion keyed by index must move with it.
+      typeAt(editor, 0, 0, 'inserted\n');
+      await wait(30);
+
+      const content = findAdditionContent(container)!;
+      expect(content.querySelector('[data-line="1"]')?.textContent).toBe(
+        'inserted'
+      );
+      expect(content.querySelector('[data-line="31"]')?.textContent).toBe(
+        'line 30'
+      );
+      const lineNumbers = renderedLineNumbers(container);
+      expect(new Set(lineNumbers).size).toBe(lineNumbers.length);
+    } finally {
+      await fixture.cleanup();
+    }
+  });
+
   test('typing into context revealed mid-edit lands correctly and undoes', async () => {
     const fixture = await createCollapsedEditFixture();
     const { container, editor, fileDiff } = fixture;

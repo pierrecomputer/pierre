@@ -3,8 +3,10 @@ import { afterAll, describe, expect, test } from 'bun:test';
 import { disposeHighlighter, FileDiff, parseDiffFromFile } from '../src';
 import { installDom } from './domHarness';
 import {
+  applySessionEdits,
   createEditorInstance,
   createTextDocumentFromLines,
+  lineEdit,
 } from './editorTestUtils';
 
 const twoHunkFileLineCount = 140;
@@ -87,15 +89,14 @@ describe('FileDiff unified edit separators', () => {
       const initialSeparatorCount = countSeparatorSlots(fileContainer);
       expect(initialSeparatorCount).toBeGreaterThan(0);
 
-      const sessionLines = [...fileDiff.additionLines];
-      sessionLines[69] = 'changed-70\n';
-      instance.applyDocumentChange(
-        createTextDocumentFromLines<'file-diff', string>(
-          'file-diff',
-          sessionLines,
-          'inmemory://file-diff-unified-separators'
-        )
+      const sessionDocument = createTextDocumentFromLines<'file-diff', string>(
+        'file-diff',
+        fileDiff.additionLines,
+        'inmemory://file-diff-unified-separators'
       );
+      applySessionEdits(instance, sessionDocument, [
+        lineEdit(sessionDocument, 69, 'changed-70'),
+      ]);
 
       expect(countSeparatorSlots(fileContainer)).toBeGreaterThan(
         initialSeparatorCount

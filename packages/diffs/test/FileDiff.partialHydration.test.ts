@@ -12,11 +12,15 @@ import type {
   FileContents,
   FileDiffLoadedFiles,
   FileDiffMetadata,
-  HighlightedToken,
 } from '../src/types';
 import type { WorkerPoolManager } from '../src/worker';
 import { installDom, wait } from './domHarness';
-import { createEditorInstance } from './editorTestUtils';
+import {
+  applySessionEdits,
+  createEditorInstance,
+  createTextDocumentFromLines,
+  lineEdit,
+} from './editorTestUtils';
 import { assertDefined, createDeferred } from './testUtils';
 
 afterAll(async () => {
@@ -61,12 +65,6 @@ class TestFileDiff extends FileDiff<undefined> {
       newFile: this.additionFile,
     };
   }
-}
-
-function makeDirtyLines(
-  edits: ReadonlyArray<[number, string]>
-): Map<number, HighlightedToken[]> {
-  return new Map(edits.map(([line, text]) => [line, [[0, '', text]]]));
 }
 
 function createPrimeWorkerManager(): {
@@ -415,8 +413,15 @@ describe('FileDiff partial hydration', () => {
       expect(editSessionDiff).not.toBe(replacement);
       expect(editSessionDiff?.cacheKey).toBeUndefined();
       expect(editSessionDiff?.additionLines).toBe(replacement.additionLines);
+      const sessionDocument = createTextDocumentFromLines<'file-diff'>(
+        'file-diff',
+        replacement.additionLines,
+        'inmemory://file-diff-partial'
+      );
       expect(() =>
-        instance.updateRenderCache(makeDirtyLines([[0, 'edited']]), 'light')
+        applySessionEdits(instance, sessionDocument, [
+          lineEdit(sessionDocument, 0, 'edited'),
+        ])
       ).not.toThrow();
       expect(editSessionDiff?.additionLines[0]).toBe('edited\n');
       expect(replacement.additionLines[0]).toBe('replacement\n');
@@ -546,7 +551,14 @@ describe('FileDiff partial hydration', () => {
       expect(partial.additionLines).toBe(partial.deletionLines);
       const hydratedBaseBefore = structuredClone(partial);
 
-      instance.updateRenderCache(makeDirtyLines([[0, 'ALPHA']]), 'light');
+      const renameDocument = createTextDocumentFromLines<'file-diff'>(
+        'file-diff',
+        hydratedSession.additionLines,
+        'inmemory://file-diff-rename'
+      );
+      applySessionEdits(instance, renameDocument, [
+        lineEdit(renameDocument, 0, 'ALPHA'),
+      ]);
 
       expect(instance.getRendererDiffForTest()).toBe(hydratedSession);
       expect(hydratedSession.additionLines).not.toBe(

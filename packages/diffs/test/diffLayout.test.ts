@@ -268,9 +268,6 @@ describe('DiffLayout matches processDiffResult', () => {
           maxLineDiffLength: 1000,
         });
         const model = DiffModel.fromDiff(diff);
-        if (variant.expand === true) {
-          model.expandHunk(1, 'down', 5);
-        }
         const layout = new DiffLayout(
           {
             diffStyle: variant.diffStyle,
@@ -286,10 +283,12 @@ describe('DiffLayout matches processDiffResult', () => {
         );
         const rows = new RowSource({
           deletionRows: result.code.deletionLines,
-          originalAdditionRows: result.code.additionLines,
-          originalAdditionLines: diff.additionLines,
+          additionRows: result.code.additionLines,
+          additionLines: diff.additionLines,
+          lineIds: model.live ? model.lineIds() : undefined,
         });
         const actual = layout.layout({
+          expandedHunks: renderer.getExpandedHunksMap(),
           model,
           rows,
           renderRange: RANGES[variant.range],
@@ -381,14 +380,16 @@ describe('DiffLayout matches processDiffResult', () => {
       },
       host
     );
-    const model = DiffModel.startSession(diff);
+    const model = DiffModel.startEditSession(diff);
     const rows = new RowSource({
       deletionRows: result.code.deletionLines,
-      originalAdditionRows: result.code.additionLines,
-      originalAdditionLines: diff.additionLines,
+      additionRows: result.code.additionLines,
+      additionLines: diff.additionLines,
+      lineIds: model.live ? model.lineIds() : undefined,
     });
     const input = {
       model,
+      expandedHunks: new Map(),
       rows,
       renderRange: RANGES.all,
       ...annotationMaps(annotations),
@@ -422,6 +423,69 @@ describe('DiffLayout matches processDiffResult', () => {
     ).toEqual(['d0', 'd1', 'ann:d1']);
   });
 
+  test('content cells that are not document lines are never editable', () => {
+    const diff = parseDiffFromFile(
+      { name: 'a.ts', contents: 'one\ntwo\nthree\nfour\nfive\nsix\nseven\n' },
+      { name: 'a.ts', contents: 'one\ntwo\nthree\nfour\nfive\nsix\nSEVEN\n' }
+    );
+    const annotations: DiffLineAnnotation<undefined>[] = [
+      { lineNumber: 7, side: 'deletions', metadata: undefined },
+    ];
+    const result = renderDiffWithHighlighter(diff, highlighter, {
+      theme: 'github-light',
+      useTokenTransformer: false,
+      tokenizeMaxLineLength: 1000,
+      lineDiffType: 'none',
+      maxLineDiffLength: 1000,
+    });
+    // A read-only model: no editor is attached, and the rows are still marked.
+    const model = DiffModel.fromDiff(diff);
+    const rows = new RowSource({
+      deletionRows: result.code.deletionLines,
+      additionRows: result.code.additionLines,
+      additionLines: diff.additionLines,
+      lineIds: model.live ? model.lineIds() : undefined,
+    });
+    for (const diffStyle of ['split', 'unified'] as const) {
+      const layout = new DiffLayout(
+        {
+          diffStyle,
+          expandUnchanged: false,
+          expansionLineCount: 100,
+          collapsedContextThreshold: 1,
+          hunkSeparators: 'line-info',
+          lineDiffType: 'word-alt',
+          maxLineDiffLength: 1000,
+          canHydrateContext: false,
+        },
+        host
+      );
+      const { columns } = layout.layout({
+        expandedHunks: new Map(),
+        model,
+        rows,
+        renderRange: RANGES.all,
+        ...annotationMaps(annotations),
+        annotationSlotName: getLineAnnotationName,
+      });
+      const specs =
+        diffStyle === 'split' ? columns.deletions! : columns.unified!;
+      const keys = specs.map((spec) => spec.key);
+      expect(keys.some((key) => key.startsWith('sep:'))).toBe(true);
+      expect(keys.some((key) => key.startsWith('ann:'))).toBe(true);
+      for (const spec of specs) {
+        const readOnly =
+          spec.key.startsWith('sep:') ||
+          spec.key.startsWith('ann:') ||
+          (diffStyle === 'unified' && spec.key.startsWith('d'));
+        expect(spec.content.properties?.contenteditable).toBe(
+          readOnly ? 'false' : undefined
+        );
+        expect(spec.gutter.properties?.contenteditable).toBeUndefined();
+      }
+    }
+  });
+
   test('token rows get their line attributes in the same order as highlighted rows', () => {
     const diff = parseDiffFromFile(
       { name: 'a.ts', contents: 'foo\n' },
@@ -447,14 +511,16 @@ describe('DiffLayout matches processDiffResult', () => {
       },
       host
     );
-    const model = DiffModel.startSession(diff);
+    const model = DiffModel.startEditSession(diff);
     const rows = new RowSource({
       deletionRows: result.code.deletionLines,
-      originalAdditionRows: result.code.additionLines,
-      originalAdditionLines: diff.additionLines,
+      additionRows: result.code.additionLines,
+      additionLines: diff.additionLines,
+      lineIds: model.live ? model.lineIds() : undefined,
     });
     rows.setTokens(model.lineId(0), [[0, '#ff0000', 'bar']]);
     const actual = layout.layout({
+      expandedHunks: new Map(),
       model,
       rows,
       renderRange: RANGES.all,
@@ -504,12 +570,15 @@ describe('DiffLayout matches processDiffResult', () => {
       },
       host
     );
+    const model = DiffModel.fromDiff(diff);
     const input = {
-      model: DiffModel.fromDiff(diff),
+      model,
+      expandedHunks: new Map(),
       rows: new RowSource({
         deletionRows: result.code.deletionLines,
-        originalAdditionRows: result.code.additionLines,
-        originalAdditionLines: diff.additionLines,
+        additionRows: result.code.additionLines,
+        additionLines: diff.additionLines,
+        lineIds: model.live ? model.lineIds() : undefined,
       }),
       renderRange: RANGES.all,
       ...annotationMaps(),

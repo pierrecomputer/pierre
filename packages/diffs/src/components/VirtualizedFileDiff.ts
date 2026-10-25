@@ -1,5 +1,4 @@
 import { DEFAULT_COLLAPSED_CONTEXT_THRESHOLD } from '../constants';
-import type { TextDocument } from '../editor/textDocument';
 import type {
   BaseDiffOptions,
   DiffLineAnnotation,
@@ -580,7 +579,7 @@ export class VirtualizedFileDiff<
         // and treat it as a mutation
         Object.assign(fileDiff, pendingHydratedDiff.nextDiff);
         this.setHydratedState(pendingHydratedDiff.files);
-        this.installHydratedSessionDiff(fileDiff);
+        this.installHydratedDiff(fileDiff);
         this.forceRenderOverride = true;
         resetLayoutCache = true;
         resetEstimatedHeights = true;
@@ -1030,7 +1029,7 @@ export class VirtualizedFileDiff<
     } else {
       hydratePartialDiff('merge', expectedDiff, files);
       this.setHydratedState(files);
-      if (!this.installHydratedSessionDiff(expectedDiff)) {
+      if (!this.installHydratedDiff(expectedDiff)) {
         await awaitWithTimeout(() => this.primeHighlightCache(expectedDiff));
         if (this.getInputDiff() !== expectedDiff) {
           return;
@@ -1132,15 +1131,6 @@ export class VirtualizedFileDiff<
     this.virtualizer.instanceChanged(this, true);
   }
 
-  // When an edit adds, removes or moves rows, ask the virtualizer to render
-  // the diff again on its next update instead of right away. It needs to
-  // measure the new rows' heights along with everything else it shows.
-  protected override renderEditSessionLayoutChange(): boolean {
-    this.lineStateRefreshPending = true;
-    this.escalateEditSessionRender();
-    return false;
-  }
-
   protected override shouldSelfHealEditSession(): boolean {
     // CodeView sessions retain their editor association while rendering is
     // suspended; CodeView itself runs the exit recompute when it reaps one.
@@ -1208,50 +1198,6 @@ export class VirtualizedFileDiff<
     } else {
       this.getSimpleVirtualizer()?.requestHeightReconcile(this);
     }
-  }
-
-  // Normally triggered by the host when the document line count changes.
-  override applyDocumentChange(
-    textDocument: TextDocument<'file-diff', LAnnotation>,
-    newLineAnnotations?: DiffLineAnnotation<LAnnotation>[],
-    shouldUpdateBuffer = false
-  ): void {
-    const { renderRange: previousRenderRange } = this;
-    // Capture the scroll anchor before the synchronous hunk rebuild and
-    // measured-height wipe below; the host's next frame resolves it against
-    // the new geometry so on-screen rows do not shift.
-    this.getAdvancedVirtualizer()?.capturePendingLayoutAnchor();
-    super.applyDocumentChange(textDocument, newLineAnnotations);
-    this.getSimpleVirtualizer()?.markDOMDirty();
-    this.resetLayoutCache({
-      forceSimpleRecompute: this.isSimpleMode(),
-      includeEstimatedHeights: true,
-      resetRenderRange: false,
-    });
-
-    const fileDiff = this.getRenderedDiff();
-    if (!this.isSimpleMode()) {
-      this.computeApproximateSize(true);
-    } else if (
-      shouldUpdateBuffer &&
-      previousRenderRange != null &&
-      fileDiff != null
-    ) {
-      // Update the buffers caused by the line-count change to ensure the host
-      // scrolls to the correct position before re-rendering.
-      const windowSpecs = this.virtualizer.getWindowSpecs();
-      const renderRange = this.computeRenderRangeFromWindow(
-        fileDiff,
-        this.top ?? 0,
-        windowSpecs
-      );
-      if (renderRange.bufferAfter !== previousRenderRange.bufferAfter) {
-        this.updateBuffers(renderRange);
-      }
-    }
-
-    this.forceRenderOverride = true;
-    this.virtualizer.instanceChanged(this, true);
   }
 
   // Compute the approximate size from the cached baseline estimate plus any
@@ -1513,7 +1459,7 @@ export class VirtualizedFileDiff<
       fileTop,
       windowSpecs
     );
-    return super.render({
+    const rendered = super.render({
       fileDiff: nextFileDiff,
       fileContainer,
       renderRange,
@@ -1526,6 +1472,7 @@ export class VirtualizedFileDiff<
       ...fileInput,
       ...fileInputProps,
     });
+    return rendered;
   }
 
   protected override finalizeRender(): void {
