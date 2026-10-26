@@ -1,0 +1,18 @@
+html {
+  color-scheme: light;
+  background: white;
+  color: #171717;
+}
+body {
+  margin: 0;
+  font:
+    16px/1.75 Arial,
+    sans-serif;
+}
+main {
+  width: 900px;
+  margin: 32px auto;
+}
+#preview pre {
+  max-height: none;
+}

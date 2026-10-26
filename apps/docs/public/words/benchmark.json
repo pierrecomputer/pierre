@@ -1,0 +1,514 @@
+{
+  "schemaVersion": 1,
+  "provenance": {
+    "measuredAt": "2026-10-23T20:42:14.618Z",
+    "sourcePath": "packages/words/benchmark/results/2026-10-23-current.json",
+    "sourceUrl": "/words/benchmark-raw.json",
+    "sourceSha256": "28c8a55ab00239478bc9be1f2ed0b58af5d235b480980a697492e650c378277f",
+    "head": "7c0618d1b7df2279b6c2a0a8ec1226e1f2762ca4",
+    "uncommittedWorkingTree": true,
+    "library": {
+      "name": "@pierre/words",
+      "capturedName": "@pierre/markdowns",
+      "distribution": "unpublished workspace build",
+      "version": null,
+      "versionNote": "The snapshot did not record a package version; the source commit, uncommitted flag, and raw build hashes identify the measured code."
+    },
+    "notes": [
+      "The measurements predate the package rename to Words. The original raw evidence is copied without modification.",
+      "This is a reviewed historical measurement, not a benchmark of the currently checked-out build."
+    ]
+  },
+  "environment": {
+    "cpu": "Apple M4 Max",
+    "logicalCpus": 16,
+    "totalMemoryBytes": 137438953472,
+    "platform": "darwin/arm64",
+    "macOS": "26.6.2",
+    "runtime": "v24.11.0",
+    "browserUserAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/156.0.0.0 Safari/537.36",
+    "dependencies": {
+      "react": "19.2.7",
+      "streamdown": "2.7.1",
+      "code": "2.0.0",
+      "esbuild": "0.27.4"
+    }
+  },
+  "browser": {
+    "aggregation": "Median of per-run metrics from three or more fresh-browser runs; update p95 is not a pooled percentile.",
+    "units": {
+      "updateP95Milliseconds": "ms",
+      "frameP95Milliseconds": "ms",
+      "longTasks": "count",
+      "settledReplayMilliseconds": "ms",
+      "characters": "ASCII characters",
+      "chunk": "characters per delivery"
+    },
+    "fields": {
+      "updateP95Milliseconds": "commitP95",
+      "frameP95Milliseconds": "frameP95",
+      "longTasks": "longTaskCount",
+      "settledReplayMilliseconds": "settledElapsed"
+    },
+    "metadata": {
+      "date": "2026-10-23T20:12:58.458Z",
+      "platform": "darwin/arm64",
+      "react": "19.2.7",
+      "streamdown": "2.7.1",
+      "code": "2.0.0",
+      "libraries": [
+        "pierre",
+        "streamdown"
+      ],
+      "modes": [
+        "plain",
+        "highlight",
+        "animated"
+      ],
+      "scales": [
+        1,
+        100
+      ],
+      "runs": 3,
+      "scroll": "top",
+      "containment": "none",
+      "sectionHeight": 2000,
+      "timeout": 180000,
+      "viewport": {
+        "width": 1280,
+        "height": 960
+      },
+      "production": true,
+      "traced": false,
+      "serializedNodeInstrumentation": false,
+      "requestedIntervalMs": 40,
+      "charactersPerStep": "32 * scale",
+      "controls": false,
+      "lineNumbers": false,
+      "codeMaxHeight": "none",
+      "codeContentVisibility": "native defaults preserved",
+      "animation": "native 180 ms fade; Pierre delivered chunks including code, Streamdown prose words with stagger 0",
+      "commitTiming": "setCursor request to parent layout effect; excludes following paint and passive effects",
+      "frameTiming": "requestAnimationFrame intervals during playback only",
+      "longTaskTiming": "playback plus highlight/fade settlement",
+      "coldStartup": "excluded; distinct paragraph and TypeScript warmup, then fresh empty renderer instance; measured code is not pre-cached",
+      "fixture": "repeated stress fixture; identical TS fence in each repeated unit"
+    },
+    "rows": [
+      {
+        "scale": 1,
+        "mode": "plain",
+        "characters": 8524,
+        "chunk": 32,
+        "updates": 267,
+        "words": {
+          "runs": 3,
+          "updateP95Milliseconds": 1.0999999046325684,
+          "frameP95Milliseconds": 16.799999999999272,
+          "longTasks": 0,
+          "settledReplayMilliseconds": 11540.800000190737,
+          "sourceRows": [
+            "browser.results[0]",
+            "browser.results[3]",
+            "browser.results[4]"
+          ]
+        },
+        "streamdown": {
+          "runs": 3,
+          "updateP95Milliseconds": 3.4000000953674316,
+          "frameP95Milliseconds": 16.700000000000728,
+          "longTasks": 0,
+          "settledReplayMilliseconds": 11926.599999904633,
+          "sourceRows": [
+            "browser.results[1]",
+            "browser.results[2]",
+            "browser.results[5]"
+          ]
+        }
+      },
+      {
+        "scale": 1,
+        "mode": "highlight",
+        "characters": 8524,
+        "chunk": 32,
+        "updates": 267,
+        "words": {
+          "runs": 3,
+          "updateP95Milliseconds": 1.4000000953674316,
+          "frameP95Milliseconds": 16.700000000000728,
+          "longTasks": 0,
+          "settledReplayMilliseconds": 11555.900000095367,
+          "sourceRows": [
+            "browser.results[6]",
+            "browser.results[9]",
+            "browser.results[10]"
+          ]
+        },
+        "streamdown": {
+          "runs": 3,
+          "updateP95Milliseconds": 3.200000047683716,
+          "frameP95Milliseconds": 16.700000000000728,
+          "longTasks": 0,
+          "settledReplayMilliseconds": 11883.5,
+          "sourceRows": [
+            "browser.results[7]",
+            "browser.results[8]",
+            "browser.results[11]"
+          ]
+        }
+      },
+      {
+        "scale": 1,
+        "mode": "animated",
+        "characters": 8524,
+        "chunk": 32,
+        "updates": 267,
+        "words": {
+          "runs": 3,
+          "updateP95Milliseconds": 1.0999999046325684,
+          "frameP95Milliseconds": 16.799999999999272,
+          "longTasks": 0,
+          "settledReplayMilliseconds": 11511.199999809263,
+          "sourceRows": [
+            "browser.results[12]",
+            "browser.results[15]",
+            "browser.results[16]"
+          ]
+        },
+        "streamdown": {
+          "runs": 3,
+          "updateP95Milliseconds": 2.9000000953674316,
+          "frameP95Milliseconds": 16.799999999999272,
+          "longTasks": 0,
+          "settledReplayMilliseconds": 11820.899999856949,
+          "sourceRows": [
+            "browser.results[13]",
+            "browser.results[14]",
+            "browser.results[17]"
+          ]
+        }
+      },
+      {
+        "scale": 100,
+        "mode": "plain",
+        "characters": 852598,
+        "chunk": 3200,
+        "updates": 267,
+        "words": {
+          "runs": 3,
+          "updateP95Milliseconds": 1.5,
+          "frameP95Milliseconds": 16.700000000000728,
+          "longTasks": 0,
+          "settledReplayMilliseconds": 11710.599999904633,
+          "sourceRows": [
+            "browser.results[18]",
+            "browser.results[21]",
+            "browser.results[22]"
+          ]
+        },
+        "streamdown": {
+          "runs": 3,
+          "updateP95Milliseconds": 22.09999990463257,
+          "frameP95Milliseconds": 16.799999999999272,
+          "longTasks": 1,
+          "settledReplayMilliseconds": 16360.699999809263,
+          "sourceRows": [
+            "browser.results[19]",
+            "browser.results[20]",
+            "browser.results[23]"
+          ]
+        }
+      },
+      {
+        "scale": 100,
+        "mode": "highlight",
+        "characters": 852598,
+        "chunk": 3200,
+        "updates": 267,
+        "words": {
+          "runs": 3,
+          "updateP95Milliseconds": 4.099999904632568,
+          "frameP95Milliseconds": 16.700000000000728,
+          "longTasks": 0,
+          "settledReplayMilliseconds": 12068.200000047684,
+          "sourceRows": [
+            "browser.results[24]",
+            "browser.results[27]",
+            "browser.results[28]"
+          ]
+        },
+        "streamdown": {
+          "runs": 3,
+          "updateP95Milliseconds": 21.600000143051147,
+          "frameP95Milliseconds": 16.799999999999272,
+          "longTasks": 2,
+          "settledReplayMilliseconds": 16339.100000143051,
+          "sourceRows": [
+            "browser.results[25]",
+            "browser.results[26]",
+            "browser.results[29]"
+          ]
+        }
+      },
+      {
+        "scale": 100,
+        "mode": "animated",
+        "characters": 852598,
+        "chunk": 3200,
+        "updates": 267,
+        "words": {
+          "runs": 3,
+          "updateP95Milliseconds": 2.9000000953674316,
+          "frameP95Milliseconds": 16.799999999999272,
+          "longTasks": 0,
+          "settledReplayMilliseconds": 13445.100000143051,
+          "sourceRows": [
+            "browser.results[30]",
+            "browser.results[33]",
+            "browser.results[34]"
+          ]
+        },
+        "streamdown": {
+          "runs": 3,
+          "updateP95Milliseconds": 33.60000014305115,
+          "frameP95Milliseconds": 66.70000000000073,
+          "longTasks": 106,
+          "settledReplayMilliseconds": 27995.200000047684,
+          "sourceRows": [
+            "browser.results[31]",
+            "browser.results[32]",
+            "browser.results[35]"
+          ]
+        }
+      }
+    ]
+  },
+  "memory": {
+    "aggregation": "Median of three or more fresh-browser samples; additional and reset heap deltas are computed within each sample before aggregation.",
+    "units": "bytes",
+    "fields": {
+      "baselineHeapBytes": "baseline.heapUsed",
+      "settledHeapBytes": "settled.heapUsed",
+      "additionalHeapBytes": "retainedHeapDelta",
+      "resetHeapBytes": "reset.heapUsed",
+      "resetAboveBaselineBytes": "resetHeapDelta"
+    },
+    "notes": [
+      "One fresh browser per provider, same warmed empty renderer and commit-paced replay as timing comparison.",
+      "Memory sampling runs separately from primary timings, with exposed GC and precise Chromium heap reporting.",
+      "Heap is performance.memory.usedJSHeapSize after two explicit GCs separated by turns and frames. It excludes native DOM, graphics resources, and complete Wasm allocation accounting.",
+      "DOM counts are structural observations, not retained byte estimates. Source, module imports and warmed global caches are included in baseline.",
+      "Reset remounts an empty renderer and releases the old rendering state; shared arenas and global code caches may intentionally remain.",
+      "Once-per-second active wrapper/element samples are allocation diagnostics that perturb replay timing; sampled peaks are not exact peaks. No forced GC runs during playback.",
+      "Each sample uses a fresh browser; heap deltas are not a leak proof or total-memory comparison."
+    ],
+    "rows": [
+      {
+        "mode": "highlight",
+        "scale": 100,
+        "words": {
+          "runs": 3,
+          "baselineHeapBytes": 3080221,
+          "settledHeapBytes": 9159218,
+          "additionalHeapBytes": 6079045,
+          "resetHeapBytes": 5350872,
+          "resetAboveBaselineBytes": 2270651,
+          "sourceRows": [
+            "memory.highlight.samples[0]",
+            "memory.highlight.samples[3]",
+            "memory.highlight.samples[4]"
+          ]
+        },
+        "streamdown": {
+          "runs": 3,
+          "baselineHeapBytes": 9183085,
+          "settledHeapBytes": 140435133,
+          "additionalHeapBytes": 131249912,
+          "resetHeapBytes": 26314033,
+          "resetAboveBaselineBytes": 17131175,
+          "sourceRows": [
+            "memory.highlight.samples[1]",
+            "memory.highlight.samples[2]",
+            "memory.highlight.samples[5]"
+          ]
+        }
+      },
+      {
+        "mode": "animated",
+        "scale": 100,
+        "words": {
+          "runs": 3,
+          "baselineHeapBytes": 3080232,
+          "settledHeapBytes": 11114842,
+          "additionalHeapBytes": 8034620,
+          "resetHeapBytes": 6734918,
+          "resetAboveBaselineBytes": 3654686,
+          "sourceRows": [
+            "memory.animated.samples[0]",
+            "memory.animated.samples[3]",
+            "memory.animated.samples[4]"
+          ]
+        },
+        "streamdown": {
+          "runs": 3,
+          "baselineHeapBytes": 9184891,
+          "settledHeapBytes": 232450532,
+          "additionalHeapBytes": 223266081,
+          "resetHeapBytes": 28223417,
+          "resetAboveBaselineBytes": 19038302,
+          "sourceRows": [
+            "memory.animated.samples[1]",
+            "memory.animated.samples[2]",
+            "memory.animated.samples[5]"
+          ]
+        }
+      }
+    ]
+  },
+  "footprint": {
+    "units": "gzip bytes",
+    "bundler": "0.27.4",
+    "rows": [
+      {
+        "id": "base",
+        "label": "Base React renderer · initial load",
+        "wordsGzipBytes": 49685,
+        "streamdownGzipBytes": 158047,
+        "sourceFields": {
+          "wordsGzipBytes": "footprint.variants.pierreBase.initial.gzip",
+          "streamdownGzipBytes": "footprint.variants.streamdownBase.initial.gzip"
+        }
+      },
+      {
+        "id": "highlight",
+        "label": "TypeScript + two themes · loaded closure",
+        "wordsGzipBytes": 170669,
+        "streamdownGzipBytes": 239413,
+        "sourceFields": {
+          "wordsGzipBytes": "footprint.variants.pierreCode.configured.gzip",
+          "streamdownGzipBytes": "footprint.variants.streamdownCode.configured.gzip"
+        }
+      }
+    ],
+    "css": {
+      "wordsGzipBytes": 1011,
+      "streamdownGzipBytes": 447,
+      "sourceFields": {
+        "wordsGzipBytes": "footprint.css.pierre.gzip",
+        "streamdownGzipBytes": "footprint.css.streamdown.gzip"
+      }
+    },
+    "notes": [
+      "Minified ES2022 browser ESM; React/React DOM external. Each JS file gzip level 9 independently.",
+      "Configured code closure includes TypeScript, default light/dark themes, and highlighted-body lazy chunks.",
+      "Pierre includes its monolithic grammar set; Streamdown lazily imports individual grammars.",
+      "CSS is separate; application-specific Streamdown Tailwind utility CSS is excluded."
+    ]
+  },
+  "stress": {
+    "metadata": {
+      "date": "2026-10-23T20:22:46.992Z",
+      "platform": "darwin/arm64",
+      "react": "19.2.7",
+      "streamdown": "2.7.1",
+      "code": "2.0.0",
+      "libraries": [
+        "pierre",
+        "streamdown"
+      ],
+      "modes": [
+        "highlight",
+        "animated"
+      ],
+      "scales": [
+        1000
+      ],
+      "runs": 1,
+      "scroll": "top",
+      "containment": "none",
+      "sectionHeight": 2000,
+      "timeout": 180000,
+      "viewport": {
+        "width": 1280,
+        "height": 960
+      },
+      "production": true,
+      "traced": false,
+      "serializedNodeInstrumentation": false,
+      "requestedIntervalMs": 40,
+      "charactersPerStep": "32 * scale",
+      "controls": false,
+      "lineNumbers": false,
+      "codeMaxHeight": "none",
+      "codeContentVisibility": "native defaults preserved",
+      "animation": "native 180 ms fade; Pierre delivered chunks including code, Streamdown prose words with stagger 0",
+      "commitTiming": "setCursor request to parent layout effect; excludes following paint and passive effects",
+      "frameTiming": "requestAnimationFrame intervals during playback only",
+      "longTaskTiming": "playback plus highlight/fade settlement",
+      "coldStartup": "excluded; distinct paragraph and TypeScript warmup, then fresh empty renderer instance; measured code is not pre-cached",
+      "fixture": "repeated stress fixture; identical TS fence in each repeated unit"
+    },
+    "rows": [
+      {
+        "mode": "highlight",
+        "words": {
+          "status": "completed",
+          "runs": 1,
+          "updateP95Milliseconds": 20.299999952316284,
+          "frameP95Milliseconds": 100,
+          "longTasks": 155,
+          "settledReplayMilliseconds": 25244.700000047684,
+          "sourceRows": [
+            "stress.results[0]"
+          ],
+          "elements": 889281
+        },
+        "streamdown": {
+          "status": "completed",
+          "runs": 1,
+          "updateP95Milliseconds": 173,
+          "frameP95Milliseconds": 216.59999999999857,
+          "longTasks": 406,
+          "settledReplayMilliseconds": 56596.199999809265,
+          "sourceRows": [
+            "stress.results[1]"
+          ],
+          "elements": 949001
+        }
+      },
+      {
+        "mode": "animated",
+        "words": {
+          "status": "completed",
+          "runs": 1,
+          "updateP95Milliseconds": 169,
+          "frameP95Milliseconds": 183.3000000000029,
+          "longTasks": 551,
+          "settledReplayMilliseconds": 81924.69999980927,
+          "sourceRows": [
+            "stress.results[2]"
+          ],
+          "elements": 889281
+        },
+        "streamdown": {
+          "status": "timed-out",
+          "reason": "Error: Playback exceeded 180000 ms",
+          "sourceRows": [
+            "stress.results[3]"
+          ]
+        }
+      }
+    ],
+    "note": "Single-run 1,000× capacity diagnostics, not repeated estimates. A timeout has no numeric timing bar. Both completed implementations still have severe frame delays."
+  },
+  "caveats": [
+    "Source-update latency ends at the parent layout effect and excludes subsequent paint and passive effects. It does not measure parser throughput or complete visual rendering.",
+    "Both renderers use native streaming and incremental paths. Larger scales increase delivery size as well as accumulated content; this is not a fixed token-rate simulation.",
+    "The repeated fixture contains identical TypeScript fences, allowing Streamdown code-cache reuse. Multiple languages and unique programs may behave differently.",
+    "Small fixtures remain near a 60 Hz frame interval for both renderers. Faster update timings do not establish a visible frame-rate advantage.",
+    "Fades use native behaviors: Words animates delivered text chunks including code; Streamdown animates prose words and skips code.",
+    "Replay elapsed includes 40 ms delivery pacing and final settlement, so its ratio is not a CPU-throughput ratio.",
+    "Additional settled JavaScript heap excludes native DOM, Wasm, graphics, and total process memory. It is not peak memory; reset deltas do not establish a leak.",
+    "Configured transfer excludes React, React DOM, separately reported library CSS, application Tailwind CSS, other Streamdown languages, and extra plugins. Grammar coverage differs."
+  ]
+}
