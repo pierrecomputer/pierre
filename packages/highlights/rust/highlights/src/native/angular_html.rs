@@ -11,6 +11,7 @@
 //! WAT's streaming branches (`$streaming` set) never apply.
 
 use super::Lexer;
+use super::input::Input;
 use super::recs::Recs;
 use super::scan;
 use super::tables::KeywordTable;
@@ -24,43 +25,6 @@ pub(crate) fn lexer(name: &str) -> Option<Lexer> {
     match name {
         "angular-html" => Some(highlight),
         _ => None,
-    }
-}
-
-/// The input and its 96-byte slack, read without borrowing `inst` so the
-/// lexer can still call translated functions.
-fn input<'a>(inst: &Instance, base: usize, len: usize) -> &'a [u8] {
-    let mem_ptr = inst.mem.bytes().as_ptr();
-    // SAFETY: `base..base + len + 96` lies inside lexer memory. The slice is
-    // derived again after every translated call, which may move memory.
-    unsafe { core::slice::from_raw_parts(mem_ptr.add(base), len + 96) }
-}
-
-/// The input bytes and their 96-byte slack. Indexing skips the bounds
-/// check: every position this module reads is below the input length plus
-/// 16, inside the slack.
-#[derive(Clone, Copy)]
-struct Src<'a>(&'a [u8]);
-
-impl Src<'_> {
-    /// The little-endian 32-bit word at `i`.
-    #[inline(always)]
-    fn u32_at(&self, i: usize) -> u32 {
-        debug_assert!(i + 4 <= self.0.len());
-        // SAFETY: `i` lies within the input, so 4 bytes from it lie inside
-        // the input and its slack.
-        u32::from_le(unsafe { self.0.as_ptr().add(i).cast::<u32>().read_unaligned() })
-    }
-}
-
-impl core::ops::Index<usize> for Src<'_> {
-    type Output = u8;
-
-    #[inline(always)]
-    fn index(&self, i: usize) -> &u8 {
-        debug_assert!(i < self.0.len());
-        // SAFETY: `i` lies within the input or its slack (see `Src`).
-        unsafe { self.0.get_unchecked(i) }
     }
 }
 
@@ -88,23 +52,15 @@ fn is_space(c: u8) -> bool {
     c == b' ' || c.wrapping_sub(9) <= 4
 }
 
-/// Emit `[lhs, rhs)` as `hl` unless the range is empty (`$emitTok`).
-#[inline(always)]
-fn emit(recs: &mut Recs, hl: u32, lhs: usize, rhs: usize) {
-    if lhs < rhs {
-        recs.tok(hl, rhs);
-    }
-}
-
 /// The first position in `[p, end)` holding `a` or `b`, or `end`
 /// (`$lexFindEither`, `$lexFindByte`). Loads may pass `end` into the input
 /// slack; matches there are clamped away.
 #[inline(always)]
-fn find2(src: Src, mut p: usize, end: usize, a: u8, b: u8) -> usize {
+fn find2(src: Input, mut p: usize, end: usize, a: u8, b: u8) -> usize {
     while p < end {
         // SAFETY: `p < end`, at most the input length, so the 16 bytes lie
         // inside the input and its slack.
-        let w = unsafe { V::load(src.0.as_ptr().add(p)) };
+        let w = unsafe { src.vec_unchecked(p) };
         let k = w.eq(V::splat(a)).or(w.eq(V::splat(b))).first();
         if k < 16 {
             return (p + k).min(end);
@@ -116,20 +72,20 @@ fn find2(src: Src, mut p: usize, end: usize, a: u8, b: u8) -> usize {
 
 /// End of the character reference at the `&` at `ptr`, past its `;`, or
 /// `None` when none starts there (`$htmlEntity`).
-fn entity_end(src: Src, ptr: usize, end: usize) -> Option<usize> {
+fn entity_end(src: Input, ptr: usize, end: usize) -> Option<usize> {
     let mut q = ptr + 1;
-    if q < end && src[q] == b'#' {
+    if q < end && src.byte(q) == b'#' {
         q += 1;
     }
     while q < end && q - ptr <= 32 {
-        let c = src[q];
+        let c = src.byte(q);
         if c.wrapping_sub(b'0') > 9 && (c | 32).wrapping_sub(b'a') > 25 {
             break;
         }
         q += 1;
     }
-    let min = if src[ptr + 1] == b'#' { 2 } else { 1 };
-    if q - ptr <= min || q >= end || src[q] != b';' {
+    let min = if src.byte(ptr + 1) == b'#' { 2 } else { 1 };
+    if q - ptr <= min || q >= end || src.byte(q) != b';' {
         return None;
     }
     Some(q + 1)
@@ -137,16 +93,18 @@ fn entity_end(src: Src, ptr: usize, end: usize) -> Option<usize> {
 
 /// End of the tag or attribute name from `q` (`$htmlNameEnd`).
 #[inline(always)]
-fn name_end(src: Src, mut q: usize, end: usize) -> usize {
-    while q < end && !NAME_STOP[src[q] as usize] {
+fn name_end(src: Input, mut q: usize, end: usize) -> usize {
+    // SAFETY: `q < end <= len`.
+    while q < end && !NAME_STOP[unsafe { src.byte_unchecked(q) } as usize] {
         q += 1;
     }
     q
 }
 /// End of the unquoted attribute value from `q` (`$htmlValueEnd`).
 #[inline(always)]
-fn value_end(src: Src, mut q: usize, end: usize) -> usize {
-    while q < end && !VALUE_STOP[src[q] as usize] {
+fn value_end(src: Input, mut q: usize, end: usize) -> usize {
+    // SAFETY: `q < end <= len`.
+    while q < end && !VALUE_STOP[unsafe { src.byte_unchecked(q) } as usize] {
         q += 1;
     }
     q
@@ -195,10 +153,11 @@ static IDENT: [bool; 256] = {
 
 /// End of the identifier run from `p` (`$lexScanIdent`).
 #[inline(always)]
-fn ident_end(src: Src, mut p: usize, end: usize) -> usize {
+fn ident_end(src: Input, mut p: usize, end: usize) -> usize {
     // the NUL at the input end, which `end` always is here, stops the run
-    debug_assert!(src[end] == 0);
-    while IDENT[src[p] as usize] {
+    debug_assert!(src.byte(end) == 0);
+    // SAFETY: `p <= end`, and the run stops at the NUL at `end` at the latest.
+    while IDENT[unsafe { src.byte_unchecked(p) } as usize] {
         p += 1;
     }
     p
@@ -206,10 +165,11 @@ fn ident_end(src: Src, mut p: usize, end: usize) -> usize {
 
 /// End of the whitespace run from `p` (`$scanWhitespace`).
 #[inline(always)]
-fn space_end(src: Src, mut p: usize, end: usize) -> usize {
+fn space_end(src: Input, mut p: usize, end: usize) -> usize {
     // the NUL at the input end, which `end` always is here, stops the run
-    debug_assert!(src[end] == 0);
-    while is_space(src[p]) {
+    debug_assert!(src.byte(end) == 0);
+    // SAFETY: `p <= end`, and the run stops at the NUL at `end` at the latest.
+    while is_space(unsafe { src.byte_unchecked(p) }) {
         p += 1;
     }
     p
@@ -217,8 +177,9 @@ fn space_end(src: Src, mut p: usize, end: usize) -> usize {
 
 /// End of the spaces and tabs from `p` (`$lexSkipSpaceAt`).
 #[inline(always)]
-fn blanks_end(src: Src, mut p: usize, end: usize) -> usize {
-    while p < end && (src[p] == b' ' || src[p] == b'\t') {
+fn blanks_end(src: Input, mut p: usize, end: usize) -> usize {
+    // SAFETY: `p < end <= len`.
+    while p < end && matches!(unsafe { src.byte_unchecked(p) }, b' ' | b'\t') {
         p += 1;
     }
     p
@@ -226,23 +187,28 @@ fn blanks_end(src: Src, mut p: usize, end: usize) -> usize {
 
 /// The byte at `p`, or 0 at or past the end (`$tsxByte`).
 #[inline(always)]
-fn byte_at(src: Src, p: usize, end: usize) -> u8 {
-    if p < end { src[p] } else { 0 }
+fn byte_at(src: Input, p: usize, end: usize) -> u8 {
+    if p < end {
+        // SAFETY: `p < end <= len`.
+        unsafe { src.byte_unchecked(p) }
+    } else {
+        0
+    }
 }
 
 /// The keyword token for `[from, to)`, or a variable (`$angularKeyword`).
 #[inline(always)]
-fn keyword(src: Src, from: usize, to: usize) -> u32 {
-    let hl = WORDS.value(src.0, from, to);
+fn keyword(src: Input, from: usize, to: usize) -> u32 {
+    let hl = WORDS.value(src.bytes(), from, to);
     if hl >= 0 { hl as u32 } else { tok::VARIABLE }
 }
 
 /// End of at most `max` hex digits from `p`, bounded by `end`
 /// (`$scanHexRun`).
-fn hex_run_end(src: Src, mut p: usize, max: usize, end: usize) -> usize {
+fn hex_run_end(src: Input, mut p: usize, max: usize, end: usize) -> usize {
     let stop = (p + max).min(end);
     while p < stop {
-        let c = src[p];
+        let c = src.byte(p);
         if c.wrapping_sub(b'0') > 9 && (c | 32).wrapping_sub(b'a') > 5 {
             break;
         }
@@ -254,7 +220,7 @@ fn hex_run_end(src: Src, mut p: usize, max: usize, end: usize) -> usize {
 /// `[from, to)` as `hl`, with backslash escapes (`\uXXXX`, `\u{...}`,
 /// `\xXX`, or one character) as their own tokens (`$emitEscaped`).
 #[inline(always)]
-fn emit_escaped(src: Src, end: usize, recs: &mut Recs, hl: u32, from: usize, to: usize) {
+fn emit_escaped(src: Input, end: usize, recs: &mut Recs, hl: u32, from: usize, to: usize) {
     let mut seg = from;
     let mut from = from;
     loop {
@@ -264,13 +230,13 @@ fn emit_escaped(src: Src, end: usize, recs: &mut Recs, hl: u32, from: usize, to:
         if from >= to {
             break;
         }
-        emit(recs, hl, seg, from);
+        recs.emit(hl, seg, from);
         let c = byte_at(src, from + 1, end);
         let e = if c == b'u' {
             if byte_at(src, from + 2, end) == b'{' {
                 // `\u{...}`: the hex run and its closing brace
                 let mut e = hex_run_end(src, from + 3, 16, end);
-                if e < to && src[e] == b'}' {
+                if e < to && src.byte(e) == b'}' {
                     e += 1;
                 }
                 e
@@ -282,19 +248,19 @@ fn emit_escaped(src: Src, end: usize, recs: &mut Recs, hl: u32, from: usize, to:
         } else {
             from + 2
         };
-        let e = scan::utf8_span_end(src.0, e, to);
-        emit(recs, tok::STRING_ESCAPE, from, e);
+        let e = scan::utf8_span_end(src.bytes(), e, to);
+        recs.emit(tok::STRING_ESCAPE, from, e);
         from = e;
         seg = e;
     }
-    emit(recs, hl, seg, to);
+    recs.emit(hl, seg, to);
 }
 
 /// End of the escape at the backslash at `p`: one character, kept whole
 /// when it is UTF-8, and the LF of an escaped CRLF (`$lexEscapeEnd`).
-fn escape_end(src: Src, p: usize, end: usize) -> usize {
-    let e = scan::utf8_span_end(src.0, p + 2, end);
-    if e == p + 2 && src[p + 1] == b'\r' && e < end && src[e] == b'\n' {
+fn escape_end(src: Input, p: usize, end: usize) -> usize {
+    let e = scan::utf8_span_end(src.bytes(), p + 2, end);
+    if e == p + 2 && src.byte(p + 1) == b'\r' && e < end && src.byte(e) == b'\n' {
         return e + 1;
     }
     e
@@ -305,7 +271,7 @@ fn escape_end(src: Src, p: usize, end: usize) -> usize {
 /// status: 1 after the closing quote, 2 after an escaped line break at the
 /// end, else 0 (`$lexStringBody` for a string).
 fn string_body(
-    src: Src,
+    src: Input,
     end: usize,
     mut ptr: usize,
     mut seg: usize,
@@ -320,37 +286,39 @@ fn string_body(
         if ptr >= end {
             break;
         }
-        if src[ptr] == quote {
+        // SAFETY: `ptr` is below the input end (tested above).
+        if unsafe { src.byte_unchecked(ptr) } == quote {
             ptr += 1;
             status = 1;
             break;
         }
-        emit(recs, tok::STRING, seg, ptr);
+        recs.emit(tok::STRING, seg, ptr);
         let e = escape_end(src, ptr, end);
-        emit(recs, tok::STRING_ESCAPE, ptr, e);
+        recs.emit(tok::STRING_ESCAPE, ptr, e);
         ptr = e;
-        if ptr == end && ptr > seg && (src[ptr - 1] == b'\n' || src[ptr - 1] == b'\r') {
+        if ptr == end && ptr > seg && (src.byte(ptr - 1) == b'\n' || src.byte(ptr - 1) == b'\r') {
             status = 2;
         }
         seg = ptr;
     }
-    emit(recs, tok::STRING, seg, ptr);
+    recs.emit(tok::STRING, seg, ptr);
     (ptr, status)
 }
 
 /// End of the number at `p` (`$lexScanNumber`, `$lexScanNumberBody`).
-fn number_end(src: Src, mut p: usize, end: usize) -> usize {
-    let hex = p + 1 < end && src[p] == b'0' && src[p + 1] | 0x20 == b'x';
+fn number_end(src: Input, mut p: usize, end: usize) -> usize {
+    let s = &src.bytes()[..end];
+    let hex = p + 1 < end && s[p] == b'0' && s[p + 1] | 0x20 == b'x';
     let mut prev = 0u8;
     while p < end {
-        let c = src[p];
+        let c = s[p];
         if is_ident_continue(c) {
             prev = c;
             p += 1;
             continue;
         }
         if c == b'.' {
-            let next = if p + 1 < end { src[p + 1] } else { 0 };
+            let next = if p + 1 < end { s[p + 1] } else { 0 };
             if !is_digit(next) {
                 break;
             }
@@ -376,7 +344,7 @@ fn number_end(src: Src, mut p: usize, end: usize) -> usize {
 /// (bits 29-30). Returns the state to continue with: the markup state once
 /// the expression ends, or the packed expression state at the end.
 #[inline(always)]
-fn expression(src: Src, end: usize, ptr: &mut usize, recs: &mut Recs, state: u32) -> u32 {
+fn expression(src: Input, end: usize, ptr: &mut usize, recs: &mut Recs, state: u32) -> u32 {
     let mode = state & 63;
     let mut expr = state >> 7 & 7;
     let mut quote = (state >> 10 & 127) as u8;
@@ -397,7 +365,8 @@ fn expression(src: Src, end: usize, ptr: &mut usize, recs: &mut Recs, state: u32
             break 'done mode | expr << 7 | (quote as u32) << 10 | depth << 17 | member << 29;
         }
         let p = ptr_;
-        let c = src[p];
+        // SAFETY: `p < end <= len`.
+        let c = unsafe { src.byte_unchecked(p) };
         // A name: no rule before the name rules applies to a name byte,
         // so names are tested first.
         if is_ident_start(c) {
@@ -432,7 +401,12 @@ fn expression(src: Src, end: usize, ptr: &mut usize, recs: &mut Recs, state: u32
             recs.tok(hl, ptr_);
             member = 0;
             // a `.` right after the name, as the operator rules take it
-            if ptr_ < end && src[ptr_] == b'.' && !is_digit(src[ptr_ + 1]) {
+            // SAFETY: `ptr_` is below the input end (tested first), so
+            // `ptr_ + 1` is at most the end.
+            if ptr_ < end
+                && unsafe { src.byte_unchecked(ptr_) } == b'.'
+                && !is_digit(unsafe { src.byte_unchecked(ptr_ + 1) })
+            {
                 ptr_ += 1;
                 recs.tok(tok::PUNCTUATION_DELIMITER, ptr_);
                 member = 1;
@@ -505,7 +479,7 @@ fn expression(src: Src, end: usize, ptr: &mut usize, recs: &mut Recs, state: u32
         member = 0;
         if is_digit(c) || (c == b'.' && is_digit(byte_at(src, p + 1, end))) {
             ptr_ = number_end(src, p, end);
-            emit(recs, tok::NUMBER, p, ptr_);
+            recs.emit(tok::NUMBER, p, ptr_);
             continue;
         }
         ptr_ = p + 1;
@@ -557,18 +531,20 @@ static TEXT: [u8; 256] = {
 /// comment, 7 declaration, 8 processing instruction, 34 or 39 a quoted
 /// value; bit 6 marks a bound attribute, and bits from 7 an expression
 /// (see [`expression`]). Returns the records.
-fn markup(src: Src, end: usize, mut ptr: usize, mut state: u32, mut recs: Recs) -> Recs {
+fn markup(src: Input, end: usize, mut ptr: usize, mut state: u32, mut recs: Recs) -> Recs {
     let from = ptr;
+    // the input up to `end`: reads below `end` need no bounds check of their own
+    let s = &src.bytes()[..end];
     while ptr < end {
         let p = ptr;
-        let c = src[p];
+        let c = s[p];
         // plain text mode, the most common state
         if state == 1 {
             if c == b'<' {
                 let c = byte_at(src, p + 1, end);
                 if c == b'!' || c == b'?' {
                     state = if c == b'?' { 8 } else { 7 };
-                    if p + 4 <= end && src.u32_at(p) == word(b"<!--") as u32 {
+                    if p + 4 <= end && (src.word(p) as u32) == word(b"<!--") as u32 {
                         state = 6;
                     }
                     continue;
@@ -579,12 +555,12 @@ fn markup(src: Src, end: usize, mut ptr: usize, mut state: u32, mut recs: Recs) 
                     state = 2;
                     // the tag name, as mode 2 takes it: a name start byte
                     // never ends a name
-                    if c != b'/' || (ptr < end && !NAME_STOP[src[ptr] as usize]) {
+                    if c != b'/' || (ptr < end && !NAME_STOP[s[ptr] as usize]) {
                         ptr = name_end(src, ptr, end);
                         recs.tok(tok::TAG, ptr);
                         state = 3;
                         // `>` right after the name, as attribute mode takes it
-                        if ptr < end && src[ptr] == b'>' {
+                        if ptr < end && s[ptr] == b'>' {
                             ptr += 1;
                             recs.tok(tok::PUNCTUATION_BRACKET_HTML, ptr);
                             state = 1;
@@ -627,14 +603,14 @@ fn markup(src: Src, end: usize, mut ptr: usize, mut state: u32, mut recs: Recs) 
             }
             // the text run, noting whether it holds a backslash
             ptr = p + 1;
-            while ptr < end && TEXT[src[ptr] as usize] == 0 {
+            while ptr < end && TEXT[s[ptr] as usize] == 0 {
                 ptr += 1;
             }
             let mut escapes = c == b'\\';
-            if ptr < end && src[ptr] == b'\\' {
+            if ptr < end && s[ptr] == b'\\' {
                 core::hint::cold_path();
                 escapes = true;
-                while ptr < end && TEXT[src[ptr] as usize] != 1 {
+                while ptr < end && TEXT[s[ptr] as usize] != 1 {
                     ptr += 1;
                 }
             }
@@ -661,8 +637,8 @@ fn markup(src: Src, end: usize, mut ptr: usize, mut state: u32, mut recs: Recs) 
                     0
                 };
                 // the common `="` follower, as the rules below take it
-                if ptr + 1 < end && src[ptr] == b'=' {
-                    let q = src[ptr + 1];
+                if ptr + 1 < end && s[ptr] == b'=' {
+                    let q = s[ptr + 1];
                     if q == b'"' || q == b'\'' {
                         recs.tok(tok::ATTRIBUTE, ptr);
                         ptr += 1;
@@ -723,7 +699,7 @@ fn markup(src: Src, end: usize, mut ptr: usize, mut state: u32, mut recs: Recs) 
                     };
                 }
             }
-            emit(&mut recs, hl, p, ptr);
+            recs.emit(hl, p, ptr);
             continue;
         }
         if mode == 34 || mode == 39 {
@@ -738,7 +714,7 @@ fn markup(src: Src, end: usize, mut ptr: usize, mut state: u32, mut recs: Recs) 
                     recs.tok(tok::PUNCTUATION_SPECIAL, ptr);
                 } else {
                     ptr += 1;
-                    emit(&mut recs, tok::STRING, p, ptr);
+                    recs.emit(tok::STRING, p, ptr);
                 }
                 continue;
             }
@@ -758,9 +734,9 @@ fn markup(src: Src, end: usize, mut ptr: usize, mut state: u32, mut recs: Recs) 
                 if mode == 7
                     || (mode == 6
                         && ptr - from >= 2
-                        && src[ptr - 2] == b'-'
-                        && src[ptr - 1] == b'-')
-                    || (mode == 8 && ptr > from && src[ptr - 1] == b'?')
+                        && src.byte(ptr - 2) == b'-'
+                        && src.byte(ptr - 1) == b'-')
+                    || (mode == 8 && ptr > from && src.byte(ptr - 1) == b'?')
                 {
                     state = 1;
                 }
@@ -769,8 +745,7 @@ fn markup(src: Src, end: usize, mut ptr: usize, mut state: u32, mut recs: Recs) 
                     break;
                 }
             }
-            emit(
-                &mut recs,
+            recs.emit(
                 if mode == 7 {
                     tok::TAG_DOCTYPE
                 } else {
@@ -788,10 +763,10 @@ fn markup(src: Src, end: usize, mut ptr: usize, mut state: u32, mut recs: Recs) 
 /// Highlight an Angular template of `len` bytes at lexer memory offset
 /// `base` (`$hlAngularHtml`).
 fn highlight(inst: &mut Instance, base: usize, len: usize) {
-    let src = Src(input(inst, base, len));
+    let src = unsafe { Input::new(inst, base, len) };
     let mut recs = Recs::load(inst);
     // $lexEmitLeadingContinuation
-    let ptr = scan::utf8_span_end(src.0, 0, len);
+    let ptr = scan::utf8_span_end(src.bytes(), 0, len);
     recs.gap(0, ptr);
     let recs = markup(src, len, ptr, 1, recs);
     recs.store(inst);

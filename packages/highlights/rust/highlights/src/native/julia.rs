@@ -10,6 +10,7 @@
 //! input, so the WAT's streaming branches (`$streaming` set) never apply.
 
 use super::Lexer;
+use super::input::Input;
 use super::recs::Recs;
 use super::scan;
 use super::tables::KeywordTable;
@@ -23,31 +24,6 @@ pub(crate) fn lexer(name: &str) -> Option<Lexer> {
     match name {
         "julia" => Some(highlight),
         _ => None,
-    }
-}
-
-/// The input and its 96-byte slack, read without borrowing `inst`.
-fn input<'a>(inst: &Instance, base: usize, len: usize) -> &'a [u8] {
-    let mem_ptr = inst.mem.bytes().as_ptr();
-    // SAFETY: `base..base + len + 96` lies inside lexer memory, and this
-    // lexer calls no translated code that could move it.
-    unsafe { core::slice::from_raw_parts(mem_ptr.add(base), len + 96) }
-}
-
-/// The input bytes and their 96-byte slack. Indexing skips the bounds
-/// check: every position this module reads is below the input length plus
-/// 16, inside the slack.
-#[derive(Clone, Copy)]
-struct Src<'a>(&'a [u8]);
-
-impl core::ops::Index<usize> for Src<'_> {
-    type Output = u8;
-
-    #[inline(always)]
-    fn index(&self, i: usize) -> &u8 {
-        debug_assert!(i < self.0.len());
-        // SAFETY: `i` lies within the input or its slack (see `Src`).
-        unsafe { self.0.get_unchecked(i) }
     }
 }
 
@@ -87,27 +63,23 @@ const fn is_ident_continue(c: u8) -> bool {
     is_ident_start(c) || is_digit(c)
 }
 
-/// Emit `[lhs, rhs)` as `hl` unless the range is empty (`$emitTok`).
-#[inline(always)]
-fn emit(recs: &mut Recs, hl: u32, lhs: usize, rhs: usize) {
-    if lhs < rhs {
-        recs.tok(hl, rhs);
-    }
-}
-
 /// The byte at `p`, or 0 at or past the end (`$jlByte`).
 #[inline(always)]
-fn byte(src: Src, p: usize, end: usize) -> u8 {
-    if p < end { src[p] } else { 0 }
+fn byte(src: Input, p: usize, end: usize) -> u8 {
+    // SAFETY: `p < end <= len`.
+    if p < end {
+        unsafe { src.byte_unchecked(p) }
+    } else {
+        0
+    }
 }
 
 /// The first position in `[p, end)` holding one of `set`, or `end`.
 #[inline(always)]
-fn find_any<const N: usize>(src: Src, mut p: usize, end: usize, set: [u8; N]) -> usize {
+fn find_any<const N: usize>(src: Input, mut p: usize, end: usize, set: [u8; N]) -> usize {
     while p < end {
-        // SAFETY: `p < end`, at most the input length, so the 16 bytes lie
-        // inside the input and its slack.
-        let w = unsafe { V::load(src.0.as_ptr().add(p)) };
+        // SAFETY: `p < end <= len`, so `p + 16` stays inside the slack.
+        let w = unsafe { src.vec_unchecked(p) };
         let mut hit = w.eq(V::splat(set[0]));
         let mut i = 1;
         while i < N {
@@ -126,10 +98,10 @@ fn find_any<const N: usize>(src: Src, mut p: usize, end: usize, set: [u8; N]) ->
 /// End of the number at `p`, with radix digits, separators, exponents,
 /// and suffixes, and a `.` only before a digit (`$lexScanNumber`,
 /// `$lexScanNumberBody`). `hex` keeps `e` from taking a sign.
-fn number_body_end(src: Src, mut p: usize, end: usize, hex: bool) -> usize {
+fn number_body_end(src: Input, mut p: usize, end: usize, hex: bool) -> usize {
     let mut prev = 0u8;
     while p < end {
-        let c = src[p];
+        let c = src.byte(p);
         if is_ident_continue(c) {
             prev = c;
             p += 1;
@@ -156,9 +128,9 @@ fn number_body_end(src: Src, mut p: usize, end: usize, hex: bool) -> usize {
 
 /// End of the escape at the backslash at `p`: one character, kept whole
 /// when it is UTF-8, and the LF of an escaped CRLF (`$lexEscapeEnd`).
-fn escape_end(src: Src, p: usize, end: usize) -> usize {
-    let e = scan::utf8_span_end(src.0, p + 2, end);
-    if e == p + 2 && src[p + 1] == b'\r' && e < end && src[e] == b'\n' {
+fn escape_end(src: Input, p: usize, end: usize) -> usize {
+    let e = scan::utf8_span_end(src.bytes(), p + 2, end);
+    if e == p + 2 && src.byte(p + 1) == b'\r' && e < end && src.byte(e) == b'\n' {
         return e + 1;
     }
     e
@@ -166,8 +138,8 @@ fn escape_end(src: Src, p: usize, end: usize) -> usize {
 
 /// End of the number at `p` (`$lexScanNumber`).
 #[inline(always)]
-fn number_end(src: Src, p: usize, end: usize) -> usize {
-    let hex = p + 1 < end && src[p] == b'0' && src[p + 1] | 0x20 == b'x';
+fn number_end(src: Input, p: usize, end: usize) -> usize {
+    let hex = p + 1 < end && src.byte(p) == b'0' && src.byte(p + 1) | 0x20 == b'x';
     number_body_end(src, p, end, hex)
 }
 
@@ -187,10 +159,14 @@ static IDENT: [bool; 256] = {
 /// End of the identifier run from `p`, also taking `extra`
 /// (`$scanIdentRun`).
 #[inline(always)]
-fn ident_end(src: Src, mut p: usize, end: usize, extra: u8) -> usize {
+fn ident_end(src: Input, mut p: usize, end: usize, extra: u8) -> usize {
     // the NUL at the input end, which `end` always is here, stops the run
-    debug_assert!(src[end] == 0);
-    while IDENT[src[p] as usize] || src[p] == extra {
+    debug_assert!(src.byte(end) == 0 && extra != 0);
+    // SAFETY: `p <= end == len`, and the run stops at the NUL at `end` at
+    // the latest (`extra` is never NUL).
+    while IDENT[unsafe { src.byte_unchecked(p) } as usize]
+        || unsafe { src.byte_unchecked(p) } == extra
+    {
         p += 1;
     }
     p
@@ -198,10 +174,12 @@ fn ident_end(src: Src, mut p: usize, end: usize, extra: u8) -> usize {
 
 /// End of the spaces and tabs from `p` (`$lexSkipSpaceAt`).
 #[inline(always)]
-fn blanks_end(src: Src, mut p: usize, end: usize) -> usize {
+fn blanks_end(src: Input, mut p: usize, end: usize) -> usize {
     // the NUL at the input end, which `end` always is here, stops the run
-    debug_assert!(src[end] == 0);
-    while src[p] == b' ' || src[p] == b'\t' {
+    debug_assert!(src.byte(end) == 0);
+    // SAFETY: `p <= end == len`, and the run stops at the NUL at `end` at
+    // the latest.
+    while unsafe { src.byte_unchecked(p) } == b' ' || unsafe { src.byte_unchecked(p) } == b'\t' {
         p += 1;
     }
     p
@@ -261,12 +239,12 @@ static CLASS: [u8; 256] = {
 /// The token of the name `[lhs, rhs)` in the low byte and the next-name
 /// capture in the high byte, or -1 for an ordinary name (`$jlWordHl`).
 #[inline(always)]
-fn word_hl(src: Src, lhs: usize, rhs: usize) -> i32 {
-    let v = WORDS.value(src.0, lhs, rhs);
+fn word_hl(src: Input, lhs: usize, rhs: usize) -> i32 {
+    let v = WORDS.value(src.bytes(), lhs, rhs);
     if v >= 0 {
         return v;
     }
-    if rhs - lhs == 5 && &src.0[lhs..lhs + 5] == b"where" {
+    if rhs - lhs == 5 && &src.bytes()[lhs..lhs + 5] == b"where" {
         return tok::KEYWORD_OPERATOR as i32;
     }
     -1
@@ -274,10 +252,10 @@ fn word_hl(src: Src, lhs: usize, rhs: usize) -> i32 {
 
 /// Whether the parenthesised list opening at `p` closes on the same line
 /// and is followed by a single `=`: `f(x) = x + 1` (`$jlDefinedAhead`).
-fn defined_ahead(src: Src, mut p: usize, end: usize) -> bool {
+fn defined_ahead(src: Input, mut p: usize, end: usize) -> bool {
     let mut depth: i32 = 0;
     while p < end {
-        let c = src[p];
+        let c = src.byte(p);
         if c == b'\n' || c == b'\r' {
             break;
         }
@@ -299,25 +277,25 @@ fn defined_ahead(src: Src, mut p: usize, end: usize) -> bool {
 /// SCREAMING_CASE with an underscore: at least two bytes, an uppercase
 /// letter, only `[A-Z0-9_]`, and a `_` (`$jlIsConstName`,
 /// `$lexIsConstCase`).
-fn is_const_name(src: Src, lhs: usize, rhs: usize) -> bool {
+fn is_const_name(src: Input, lhs: usize, rhs: usize) -> bool {
     if rhs - lhs < 2 {
         return false;
     }
     let mut upper = false;
     for i in lhs..rhs {
-        let c = src[i];
+        let c = src.byte(i);
         if c.wrapping_sub(b'A') <= 25 {
             upper = true;
         } else if !(is_digit(c) || c == b'_') {
             return false;
         }
     }
-    upper && src.0[lhs..rhs].contains(&b'_')
+    upper && src.bytes()[lhs..rhs].contains(&b'_')
 }
 
 /// A `#= ... =#` comment at `lhs`, nesting, through its balancing closer or
 /// the end. Returns its end (`$lexNestedBlockComment`, `$lexNestedScan`).
-fn nested_comment_end(src: Src, lhs: usize, end: usize) -> usize {
+fn nested_comment_end(src: Input, lhs: usize, end: usize) -> usize {
     let mut p = (lhs + 2).min(end);
     let mut depth: u32 = 1;
     loop {
@@ -326,13 +304,13 @@ fn nested_comment_end(src: Src, lhs: usize, end: usize) -> usize {
             if p + 1 >= end {
                 return end;
             }
-            let (a, b) = (src[p], src[p + 1]);
+            let (a, b) = (src.byte(p), src.byte(p + 1));
             if (a == b'#' && b == b'=') || (a == b'=' && b == b'#') {
                 break;
             }
             p += 1;
         }
-        if src[p] == b'#' {
+        if src.byte(p) == b'#' {
             depth += 1;
             p += 2;
             continue;
@@ -354,7 +332,7 @@ fn nested_comment_end(src: Src, lhs: usize, end: usize) -> usize {
 /// punctuation.special), and 0 at the end.
 #[allow(clippy::too_many_arguments)]
 fn string_body(
-    src: Src,
+    src: Input,
     end: usize,
     ptr: &mut usize,
     recs: &mut Recs,
@@ -393,11 +371,11 @@ fn string_body(
         if p >= end {
             break 0;
         }
-        let c = src[p];
+        let c = src.byte(p);
         if c == q {
             if !triple || (byte(src, p + 1, end) == q && byte(src, p + 2, end) == q) {
                 p += if triple { 3 } else { 1 };
-                emit(recs, hl, seg, p);
+                recs.emit(hl, seg, p);
                 *ptr = p;
                 return 1;
             }
@@ -405,7 +383,7 @@ fn string_body(
             continue;
         }
         // a backslash or `$`: flush the body so far
-        emit(recs, hl, seg, p);
+        recs.emit(hl, seg, p);
         seg = p;
         if c == b'\\' {
             if raw {
@@ -414,7 +392,7 @@ fn string_body(
                 continue;
             }
             let e = escape_end(src, p, end);
-            emit(recs, tok::STRING_ESCAPE, p, e);
+            recs.emit(tok::STRING_ESCAPE, p, e);
             p = e;
             seg = p;
             continue;
@@ -423,19 +401,19 @@ fn string_body(
         let c2 = byte(src, p + 1, end);
         if c2 == b'(' && !nested {
             p += 2;
-            emit(recs, tok::PUNCTUATION_SPECIAL, seg, p);
+            recs.emit(tok::PUNCTUATION_SPECIAL, seg, p);
             *ptr = p;
             return 2;
         }
         if is_ident_start(c2) && c2 != b'$' {
             p = ident_end(src, p + 1, end, b'_');
-            emit(recs, tok::VARIABLE, seg, p);
+            recs.emit(tok::VARIABLE, seg, p);
             seg = p;
             continue;
         }
         p += 1;
     };
-    emit(recs, hl, seg, p);
+    recs.emit(hl, seg, p);
     *ptr = p;
     status
 }
@@ -443,11 +421,13 @@ fn string_body(
 /// Highlight Julia source of `len` bytes at lexer memory offset `base`
 /// (`$hlJulia`).
 fn highlight(inst: &mut Instance, base: usize, len: usize) {
-    let src = Src(input(inst, base, len));
+    // SAFETY: `base..base + len + SLACK` is this input in lexer memory;
+    // it is made again after every call into translated code.
+    let src = unsafe { Input::new(inst, base, len) };
     let end = len;
     let mut recs = Recs::load(inst);
     // $lexEmitLeadingContinuation
-    let mut ptr = scan::utf8_span_end(src.0, 0, end);
+    let mut ptr = scan::utf8_span_end(src.bytes(), 0, end);
     recs.gap(0, ptr);
     // 1 `"`, 2 `"""`, 3 and 4 the non-interpolating prefixed forms, 7 and
     // 8 `raw`, 5 a backtick command; 0 outside a string body
@@ -504,9 +484,12 @@ fn highlight(inst: &mut Instance, base: usize, len: usize) {
         let gap = ptr;
         // a line break ends an import line and starts a statement
         let mut line_break = false;
-        // the NUL at the input end stops the run
-        while is_space(src[ptr]) {
-            line_break |= src[ptr] == b'\n' || src[ptr] == b'\r';
+        // SAFETY: `ptr <= end == len`, and the run stops at the NUL at `end`
+        // at the latest.
+        while let c = unsafe { src.byte_unchecked(ptr) }
+            && is_space(c)
+        {
+            line_break |= c == b'\n' || c == b'\r';
             ptr += 1;
         }
         if line_break {
@@ -519,7 +502,7 @@ fn highlight(inst: &mut Instance, base: usize, len: usize) {
             break;
         }
         let lhs = ptr;
-        let c = src[ptr];
+        let c = src.byte(ptr);
 
         match CLASS[c as usize] {
             class::NAME => {
@@ -543,7 +526,7 @@ fn highlight(inst: &mut Instance, base: usize, len: usize) {
                         str_kind = 4;
                         ptr += 2;
                     }
-                    if rhs - lhs == 3 && &src.0[lhs..lhs + 3] == b"raw" {
+                    if rhs - lhs == 3 && &src.bytes()[lhs..lhs + 3] == b"raw" {
                         str_kind += 4;
                     }
                     ptr += 1;
@@ -571,8 +554,8 @@ fn highlight(inst: &mut Instance, base: usize, len: usize) {
                     let len = rhs - lhs;
                     after_value = hl == tok::BOOLEAN
                         || hl == tok::CONSTANT_BUILTIN
-                        || (len == 3 && &src.0[lhs..lhs + 3] == b"end")
-                        || (len == 5 && &src.0[lhs..lhs + 5] == b"begin");
+                        || (len == 3 && &src.bytes()[lhs..lhs + 3] == b"end")
+                        || (len == 5 && &src.bytes()[lhs..lhs + 5] == b"begin");
                 } else {
                     after_value = true;
                     hl = if import_ctx {
@@ -679,7 +662,7 @@ fn highlight(inst: &mut Instance, base: usize, len: usize) {
             }
             class::DIGIT => {
                 ptr = number_end(src, ptr, end);
-                emit(&mut recs, tok::NUMBER, lhs, ptr);
+                recs.emit(tok::NUMBER, lhs, ptr);
                 member = false;
                 after_value = true;
                 stmt_head = false;
@@ -690,7 +673,7 @@ fn highlight(inst: &mut Instance, base: usize, len: usize) {
                 let c3 = byte(src, ptr + 2, end);
                 if is_digit(c2) {
                     ptr = number_end(src, ptr, end);
-                    emit(&mut recs, tok::NUMBER, lhs, ptr);
+                    recs.emit(tok::NUMBER, lhs, ptr);
                     member = false;
                     after_value = true;
                     stmt_head = false;
@@ -784,7 +767,7 @@ fn highlight(inst: &mut Instance, base: usize, len: usize) {
                 let mut e = if c2 == b'\\' {
                     escape_end(src, ptr + 1, end)
                 } else {
-                    scan::utf8_span_end(src.0, ptr + 2, end)
+                    scan::utf8_span_end(src.bytes(), ptr + 2, end)
                 };
                 // `'\u00e9'` carries hex digits after the escape
                 while e < ptr + 12 && is_hex(byte(src, e, end)) {
@@ -808,9 +791,9 @@ fn highlight(inst: &mut Instance, base: usize, len: usize) {
                 ptr = if c2 == b'=' {
                     nested_comment_end(src, lhs, end)
                 } else {
-                    scan::line_end(src.0, ptr + 1, end)
+                    scan::line_end(src.bytes(), ptr + 1, end)
                 };
-                emit(&mut recs, tok::COMMENT, lhs, ptr);
+                recs.emit(tok::COMMENT, lhs, ptr);
                 continue;
             }
             class::AT => {
@@ -827,7 +810,7 @@ fn highlight(inst: &mut Instance, base: usize, len: usize) {
             _ => {}
         }
 
-        ptr = scan::utf8_span_end(src.0, ptr + 1, end);
+        ptr = scan::utf8_span_end(src.bytes(), ptr + 1, end);
         recs.tok(tok::NONE, ptr);
         member = false;
         stmt_head = false;
