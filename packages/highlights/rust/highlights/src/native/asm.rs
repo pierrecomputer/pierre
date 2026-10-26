@@ -393,9 +393,7 @@ fn highlight(inst: &mut Instance, base: usize, len: usize) {
         if s == b' ' && !is_space(unsafe { src.byte_unchecked(ptr + 1) }) {
             // one space
             ptr += 1;
-            // SAFETY: every pass of this loop writes a record or ends it, and
-            // the first pass starts after the leading whitespace.
-            unsafe { recs.extend_unchecked(ptr) };
+            recs.extend(ptr);
         } else if is_space(s) {
             // a line break in the gap puts the next word in mnemonic
             // position
@@ -404,8 +402,7 @@ fn highlight(inst: &mut Instance, base: usize, len: usize) {
                 expect_mnemonic = true;
             }
             ptr = e;
-            // SAFETY: as above.
-            unsafe { recs.extend_unchecked(ptr) };
+            recs.extend(ptr);
         }
         let lhs = ptr;
         // SAFETY: `ptr` is at or before the input end.

@@ -636,9 +636,7 @@ fn highlight(inst: &mut Instance, base: usize, len: usize) {
         if s == b' ' && !is_space(unsafe { src.byte_unchecked(ptr + 1) }) {
             // one space
             ptr += 1;
-            // SAFETY: every pass of this loop writes a record or ends it, and
-            // the first pass starts after the leading whitespace.
-            unsafe { recs.extend_unchecked(ptr) };
+            recs.extend(ptr);
         } else if is_space(s) {
             ptr = whitespace_end(src, ptr + 1);
             // an import statement ends at a line break outside brackets
@@ -646,8 +644,7 @@ fn highlight(inst: &mut Instance, base: usize, len: usize) {
             if import == 1 && depth == 0 && gap_has_break(src, gap, ptr) {
                 import = 0;
             }
-            // SAFETY: as above.
-            unsafe { recs.extend_unchecked(ptr) };
+            recs.extend(ptr);
         }
         let lhs = ptr;
         // SAFETY: `ptr` is at or before the input end, so this and every

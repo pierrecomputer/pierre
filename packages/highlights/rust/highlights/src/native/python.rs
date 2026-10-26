@@ -717,9 +717,7 @@ fn highlight(inst: &mut Instance, base: usize, len: usize) {
         if c == b' ' && !is_space(unsafe { src.byte_unchecked(ptr + 1) }) {
             // one space: no line break
             ptr += 1;
-            // SAFETY: the first pass starts past the leading whitespace, and
-            // every pass writes a record.
-            unsafe { recs.extend_unchecked(ptr) };
+            recs.extend(ptr);
             // SAFETY: `ptr` is at most the input length.
             c = unsafe { src.byte_unchecked(ptr) };
         } else if is_space(c) {
@@ -736,9 +734,7 @@ fn highlight(inst: &mut Instance, base: usize, len: usize) {
                 line_head = true;
                 type_next = false;
             }
-            // SAFETY: the first pass starts past the leading whitespace, and
-            // every pass writes a record.
-            unsafe { recs.extend_unchecked(ptr) };
+            recs.extend(ptr);
             // SAFETY: `ptr` ends a whitespace run, at most the input length.
             c = unsafe { src.byte_unchecked(ptr) };
         }

@@ -186,8 +186,7 @@ fn highlight(inst: &mut Instance, base: usize, len: usize) {
         if c == b' ' && !SPACE[unsafe { inp.byte_unchecked(ptr + 1) } as usize] {
             // one space
             ptr += 1;
-            // SAFETY: whitespace after the leading run follows a record.
-            unsafe { o.extend_unchecked(ptr) };
+            o.extend(ptr);
         } else if SPACE[c as usize] {
             loop {
                 // A blank line ends math and arguments.
@@ -211,8 +210,7 @@ fn highlight(inst: &mut Instance, base: usize, len: usize) {
                     break;
                 }
             }
-            // SAFETY: whitespace after the leading run follows a record.
-            unsafe { o.extend_unchecked(ptr) };
+            o.extend(ptr);
         }
         if ptr >= end {
             break;

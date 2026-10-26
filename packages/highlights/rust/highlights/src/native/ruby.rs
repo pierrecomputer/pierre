@@ -857,13 +857,10 @@ fn lex(src: Input<'_>, end: usize, mut out: Recs) -> Recs {
         if c == b' ' && !is_space(unsafe { src.byte_unchecked(p + 1) }) {
             // one space: no line break
             p += 1;
-            // SAFETY: whitespace here follows a token, which wrote a record
-            // (the leading whitespace is taken before the loop).
-            unsafe { out.extend_unchecked(p) };
+            out.extend(p);
         } else if is_space(c) {
             p = whitespace_end(src, p + 1);
-            // SAFETY: as above.
-            unsafe { out.extend_unchecked(p) };
+            out.extend(p);
             if c == b'\n' || c == b'\r' || scan::line_end(src.bytes(), gap + 1, p) < p {
                 line_head = true;
                 operand = 1;
@@ -1027,7 +1024,7 @@ fn lex(src: Input<'_>, end: usize, mut out: Recs) -> Recs {
                         let n2 = unsafe { src.byte_unchecked(p + 1) };
                         if CLASS[n2 as usize] == class::IDENT {
                             p += 1;
-                            unsafe { out.extend_unchecked(p) };
+                            out.extend(p);
                             lhs = p;
                             c = n2;
                             continue;
@@ -1036,7 +1033,7 @@ fn lex(src: Input<'_>, end: usize, mut out: Recs) -> Recs {
                         // a line break and indentation, with no heredoc
                         // body to take first; then maybe another name
                         p = whitespace_end(src, p + 1);
-                        unsafe { out.extend_unchecked(p) };
+                        out.extend(p);
                         line_head = true;
                         operand = 1;
                         decl = 0;
@@ -1106,7 +1103,7 @@ fn lex(src: Input<'_>, end: usize, mut out: Recs) -> Recs {
                                 && (n2 == b'"' || n2 == b'\'')
                             {
                                 p += 1;
-                                unsafe { out.extend_unchecked(p) };
+                                out.extend(p);
                                 lhs = p;
                                 c = n2;
                                 continue;

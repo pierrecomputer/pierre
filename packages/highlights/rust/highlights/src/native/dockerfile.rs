@@ -468,8 +468,7 @@ fn heredoc(
         ptr += 1;
     }
     if gap < ptr {
-        // SAFETY: the heredoc's opener wrote a record.
-        unsafe { o.extend_unchecked(ptr) }
+        o.extend(ptr)
     }
     let body = ptr;
     loop {
@@ -594,8 +593,7 @@ fn highlight(inst: &mut Instance, base: usize, len: usize) {
             }
         }
         if gap < ptr {
-            // SAFETY: a token precedes every gap after the leading one.
-            unsafe { o.extend_unchecked(ptr) }
+            o.extend(ptr)
         }
         if ptr >= end {
             break;
@@ -752,8 +750,7 @@ fn highlight(inst: &mut Instance, base: usize, len: usize) {
                 if join {
                     o.tok(tok::PUNCTUATION_SPECIAL, ptr + 1);
                     if ptr + 1 < p {
-                        // SAFETY: the `\\` token was just written.
-                        unsafe { o.extend_unchecked(p) }
+                        o.extend(p)
                     }
                     ptr = p;
                     line_head = 2;

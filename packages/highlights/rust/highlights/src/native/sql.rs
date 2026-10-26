@@ -770,8 +770,7 @@ fn lex(src: Input<'_>, end: usize, mut out: Recs, mut p: usize) -> Recs {
         // there is none).
         win.sync(src, end, p);
         p = win.space_end(src, end, p);
-        // SAFETY: every rule above emits a token, so a record exists.
-        unsafe { out.extend_unchecked(p) };
+        out.extend(p);
     }
     out
 }

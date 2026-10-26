@@ -511,9 +511,7 @@ fn highlight(inst: &mut Instance, base: usize, len: usize) {
             ptr += 1;
         }
         if gap < ptr {
-            // SAFETY: the leading whitespace ends at a non-space byte, so
-            // a token's record precedes every later run.
-            unsafe { o.extend_unchecked(ptr) }
+            o.extend(ptr)
         }
         if ptr >= end {
             break;

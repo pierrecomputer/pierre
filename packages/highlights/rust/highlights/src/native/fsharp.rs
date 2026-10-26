@@ -739,9 +739,7 @@ fn highlight(inst: &mut Instance, base: usize, len: usize) {
                     }
                 }
             }
-            // SAFETY: a token's record precedes every gap after the leading
-            // whitespace.
-            unsafe { recs.extend_unchecked(ptr) };
+            recs.extend(ptr);
             // SAFETY: the NUL at the input end stops the whitespace.
             c = unsafe { src.byte_unchecked(ptr) };
         }

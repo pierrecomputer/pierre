@@ -542,13 +542,10 @@ fn lex(src: Input<'_>, end: usize, mut out: Recs) -> Recs {
         let c = unsafe { src.byte_unchecked(p) };
         if c == b' ' && !is_space(unsafe { src.byte_unchecked(p + 1) }) {
             p += 1;
-            // SAFETY: whitespace here follows a token, which wrote a record
-            // (the leading whitespace is taken before the loop).
-            unsafe { out.extend_unchecked(p) };
+            out.extend(p);
         } else if is_space(c) {
             p = whitespace_break_end(src, p + 1).0;
-            // SAFETY: as above.
-            unsafe { out.extend_unchecked(p) };
+            out.extend(p);
         }
         let lhs = p;
         // SAFETY: `p` lies at or before the input end.
@@ -623,10 +620,10 @@ fn lex(src: Input<'_>, end: usize, mut out: Recs) -> Recs {
                     {
                         // ` = `: the operator between one-space gaps, then
                         // maybe another name
-                        unsafe { out.extend_unchecked(p + 1) };
+                        out.extend(p + 1);
                         out.tok(tok::OPERATOR, p + 2);
                         p += 3;
-                        unsafe { out.extend_unchecked(p) };
+                        out.extend(p);
                         decl = false;
                         member = false;
                         let n3 = unsafe { src.byte_unchecked(p) };
@@ -638,7 +635,7 @@ fn lex(src: Input<'_>, end: usize, mut out: Recs) -> Recs {
                     } else if n == b' ' && CLASS[n2 as usize] == class::IDENT {
                         // one space, then another name
                         p += 1;
-                        unsafe { out.extend_unchecked(p) };
+                        out.extend(p);
                         lhs = p;
                         c = n2;
                         continue;
@@ -662,7 +659,7 @@ fn lex(src: Input<'_>, end: usize, mut out: Recs) -> Recs {
                         let n3 = unsafe { src.byte_unchecked(p + 1) };
                         if n2 == b' ' && CLASS[n3 as usize] == class::IDENT {
                             p += 1;
-                            unsafe { out.extend_unchecked(p) };
+                            out.extend(p);
                             lhs = p;
                             c = n3;
                             continue;

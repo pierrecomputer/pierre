@@ -173,8 +173,7 @@ fn metadata(inp: Input, lhs: usize, line_end: usize, o: &mut Recs) {
         let gap = p;
         p = skip_space(inp, p, line_end);
         if gap < p {
-            // SAFETY: a token was just emitted.
-            unsafe { o.extend_unchecked(p) };
+            o.extend(p);
         }
         let arg = p;
         // SAFETY: `p` lies below `line_end`, inside the input.
@@ -196,8 +195,7 @@ fn metadata(inp: Input, lhs: usize, line_end: usize, o: &mut Recs) {
         let gap = p;
         p = skip_space(inp, p, line_end);
         if gap < p {
-            // SAFETY: a token was just emitted.
-            unsafe { o.extend_unchecked(p) };
+            o.extend(p);
         }
 
         let hex = p;
@@ -226,8 +224,7 @@ fn metadata(inp: Input, lhs: usize, line_end: usize, o: &mut Recs) {
         let gap = p;
         p = skip_space(inp, p, line_end);
         if gap < p {
-            // SAFETY: a token was just emitted.
-            unsafe { o.extend_unchecked(p) };
+            o.extend(p);
         }
         let num = p;
         p = skip_digits(inp, p, line_end);
@@ -379,8 +376,7 @@ fn highlight(inst: &mut Instance, base: usize, len: usize) {
             ptr += 1;
         }
         if line_end < ptr {
-            // SAFETY: the line before the breaks emitted a token.
-            unsafe { o.extend_unchecked(ptr) };
+            o.extend(ptr);
         }
     }
     o.store(inst);

@@ -489,8 +489,7 @@ fn dollar(inp: Input, end: usize, mut ptr: usize, out: &mut Recs, nest: u32) -> 
     let mut lhs = ptr;
     ptr = skip_space_at(inp, ptr);
     if lhs < ptr {
-        // SAFETY: the opener's record precedes the blanks.
-        unsafe { o.extend_unchecked(ptr) }
+        o.extend(ptr)
     }
     lhs = ptr;
     let c = unsafe { inp.byte_unchecked(ptr) };
@@ -638,8 +637,7 @@ fn line_join(inp: Input, end: usize, ptr: usize, o: &mut Recs) -> Option<usize> 
     let p = p.min(end);
     o.tok(tok::PUNCTUATION_SPECIAL, ptr + 1);
     if ptr + 1 < p {
-        // SAFETY: the backslash's record was just written.
-        unsafe { o.extend_unchecked(p) }
+        o.extend(p)
     }
     Some(p)
 }
@@ -692,7 +690,7 @@ fn highlight(inst: &mut Instance, base: usize, len: usize) {
             // one space
             ptr += 1;
             if gap < ptr {
-                unsafe { o.extend_unchecked(ptr) }
+                o.extend(ptr)
             }
             c = unsafe { inp.byte_unchecked(ptr) };
         } else if c == b'\n' && SPACE[unsafe { inp.byte_unchecked(ptr + 1) } as usize] == 0 {
@@ -701,7 +699,7 @@ fn highlight(inst: &mut Instance, base: usize, len: usize) {
             p = ptr;
             line_head = true;
             if gap < ptr {
-                unsafe { o.extend_unchecked(ptr) }
+                o.extend(ptr)
             }
             c = unsafe { inp.byte_unchecked(ptr) };
         } else if SPACE[c as usize] != 0 {
@@ -720,7 +718,7 @@ fn highlight(inst: &mut Instance, base: usize, len: usize) {
                 line_head = true;
             }
             if gap < ptr {
-                unsafe { o.extend_unchecked(ptr) }
+                o.extend(ptr)
             }
         }
         if ptr >= end {

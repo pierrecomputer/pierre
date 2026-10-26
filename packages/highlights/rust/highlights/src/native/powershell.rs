@@ -653,14 +653,11 @@ fn lex(src: Input<'_>, end: usize, mut out: Recs) -> Recs {
         let c = unsafe { src.byte_unchecked(p) };
         if c == b' ' && !is_space(unsafe { src.byte_unchecked(p + 1) }) {
             p += 1;
-            // SAFETY: whitespace here follows a token, which wrote a record
-            // (the leading whitespace is taken before the loop).
-            unsafe { out.extend_unchecked(p) };
+            out.extend(p);
         } else if is_space(c) {
             let brk;
             (p, brk) = whitespace_break_end(src, p + 1);
-            // SAFETY: as above.
-            unsafe { out.extend_unchecked(p) };
+            out.extend(p);
             // a line break starts a statement
             if c == b'\n' || c == b'\r' || brk {
                 cmd_pos = true;

@@ -854,9 +854,7 @@ fn highlight(inst: &mut Instance, base: usize, len: usize) {
                 c = unsafe { src.byte_unchecked(ptr) };
                 class = CLASS[c as usize];
             }
-            // SAFETY: the leading gap and every token before this one
-            // wrote a record.
-            unsafe { out.extend_unchecked(ptr) };
+            out.extend(ptr);
         }
         let lhs = ptr;
         // a mode list runs through names and commas; comments and an

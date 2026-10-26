@@ -499,9 +499,7 @@ fn highlight(inst: &mut Instance, base: usize, len: usize) {
                     want_type = false;
                 }
             }
-            // SAFETY: a token's record precedes every gap after the leading
-            // whitespace.
-            unsafe { recs.extend_unchecked(ptr) };
+            recs.extend(ptr);
             c = src.byte(ptr);
         }
         let lhs = ptr;

@@ -974,8 +974,7 @@ fn lex(src: Input<'_>, end: usize, mut out: Recs) -> Recs {
         if c == b' ' && !is_space(unsafe { src.byte_unchecked(p + 1) }) {
             // one space: no line break
             p += 1;
-            // SAFETY: every rule above emits a token, so a record exists.
-            unsafe { out.extend_unchecked(p) };
+            out.extend(p);
             spaced = true;
             // the blank after `VAR=x` starts the command it prefixes
             if flow >= 8 {
@@ -984,8 +983,7 @@ fn lex(src: Input<'_>, end: usize, mut out: Recs) -> Recs {
             }
         } else if is_space(c) {
             p = whitespace_end(src, p + 1);
-            // SAFETY: every rule above emits a token, so a record exists.
-            unsafe { out.extend_unchecked(p) };
+            out.extend(p);
             spaced = true;
             if c == b'\n' || c == b'\r' || scan::line_end(src.bytes(), gap + 1, p) < p {
                 cmd = array_open == 0;

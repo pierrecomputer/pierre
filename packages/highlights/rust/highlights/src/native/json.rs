@@ -579,8 +579,7 @@ fn lex<const D: u32>(src: Input<'_>, end: usize, mut out: Recs, mut p: usize) ->
                             && p + 1 < win.mid
                         {
                             p += 1;
-                            // SAFETY: the colon's record was just written.
-                            unsafe { out.extend_unchecked(p) };
+                            out.extend(p);
                             lhs = p;
                             continue;
                         }
@@ -756,8 +755,7 @@ fn lex<const D: u32>(src: Input<'_>, end: usize, mut out: Recs, mut p: usize) ->
         win.sync(src, end, p);
         let gap = p;
         p = win.space_end(src, end, p);
-        // SAFETY: every rule above emits a token, so a record exists.
-        unsafe { out.extend_unchecked(p) };
+        out.extend(p);
         if D == JSONL && p > gap && src.bytes()[gap..p].contains(&b'\n') {
             depth = 0;
             object_hl = tok::STRING;

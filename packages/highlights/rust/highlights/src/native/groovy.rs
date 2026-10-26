@@ -623,9 +623,7 @@ fn highlight(inst: &mut Instance, base: usize, len: usize) {
         // SAFETY: as above.
         if c == b' ' && !is_space(unsafe { src.byte_unchecked(ptr + 1) }) {
             ptr += 1;
-            // SAFETY: the leading gap and every token before this one
-            // wrote a record.
-            unsafe { out.extend_unchecked(ptr) };
+            out.extend(ptr);
             // SAFETY: `ptr` is at most `end`.
             c = unsafe { src.byte_unchecked(ptr) };
         } else if is_space(c) {
@@ -635,8 +633,7 @@ fn highlight(inst: &mut Instance, base: usize, len: usize) {
                 import_ctx = false;
                 stmt_head = true;
             }
-            // SAFETY: as above.
-            unsafe { out.extend_unchecked(ptr) };
+            out.extend(ptr);
             // SAFETY: `ptr` is at most `end`.
             c = unsafe { src.byte_unchecked(ptr) };
         }

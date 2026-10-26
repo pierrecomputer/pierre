@@ -421,8 +421,7 @@ fn highlight(inst: &mut Instance, base: usize, len: usize) {
             }
         }
         if gap < ptr {
-            // SAFETY: a token precedes every gap after the leading one.
-            unsafe { o.extend_unchecked(ptr) }
+            o.extend(ptr)
         }
         if ptr >= end {
             break;

@@ -900,13 +900,11 @@ fn lex(src: Input<'_>, end: usize, mut out: Recs, mut p: usize) -> Recs {
                     && unsafe { src.byte_unchecked(p + 1) } == b'='
                     && unsafe { src.byte_unchecked(p + 2) } == b' '
                 {
-                    // SAFETY: the key's record is written above.
-                    unsafe { out.extend_unchecked(p + 1) };
+                    out.extend(p + 1);
                     p += 2;
                     out.tok(tok::OPERATOR, p);
                     p += 1;
-                    // SAFETY: the operator's record is written above.
-                    unsafe { out.extend_unchecked(p) };
+                    out.extend(p);
                     key = false;
                 } else if d == b'.' {
                     // A dotted key's dot: its rule below, taken here.
@@ -1049,8 +1047,7 @@ fn lex(src: Input<'_>, end: usize, mut out: Recs, mut p: usize) -> Recs {
         if matches!(unsafe { src.byte_unchecked(p) }, 9 | 10 | 13 | 32) {
             let lf;
             (p, lf) = win.space_end(src, end, p);
-            // SAFETY: every rule above emits a token, so a record exists.
-            unsafe { out.extend_unchecked(p) };
+            out.extend(p);
             if lf {
                 header = false;
                 if depth == 0 {

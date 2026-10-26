@@ -636,9 +636,7 @@ fn highlight(inst: &mut Instance, base: usize, len: usize) {
                 c = unsafe { src.byte_unchecked(ptr) };
                 class = CLASS[c as usize];
             }
-            // SAFETY: the leading run took all whitespace before the first
-            // token, so a token's record precedes this gap.
-            unsafe { out.extend_unchecked(ptr) };
+            out.extend(ptr);
         }
         let lhs = ptr;
         match class {

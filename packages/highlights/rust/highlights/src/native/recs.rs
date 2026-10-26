@@ -119,25 +119,14 @@ impl Recs {
     }
 
     /// Move the last record's end to `end`: whitespace or a continuation
-    /// joining it. There must be a record; with none, this traps.
+    /// joining it. There must be a record; with none (a lexer bug), this
+    /// traps.
     #[inline(always)]
     pub(crate) fn extend(&mut self, end: usize) {
         if self.is_empty() {
             crate::rt::trap();
         }
-        // SAFETY: the record before `cur` is written.
-        unsafe { (*self.cur.sub(1)).end = end as u32 };
-    }
-
-    /// [`Recs::extend`] without the check, for a hot path where a record
-    /// always exists.
-    ///
-    /// # Safety
-    /// A record must be written.
-    #[inline(always)]
-    pub(crate) unsafe fn extend_unchecked(&mut self, end: usize) {
-        debug_assert!(!self.is_empty());
-        // SAFETY: the caller guarantees the record before `cur`.
+        // SAFETY: the record before `cur` is written (checked above).
         unsafe { (*self.cur.sub(1)).end = end as u32 };
     }
 

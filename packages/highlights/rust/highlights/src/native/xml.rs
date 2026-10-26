@@ -275,8 +275,7 @@ fn attrs(src: Input<'_>, end: usize, win: &Window, out: &mut Recs, mut p: usize)
         }
         if k & K_SPACE != 0 {
             p = space_end(src, p);
-            // SAFETY: the tag name's record comes before every attribute.
-            unsafe { out.extend_unchecked(p) };
+            out.extend(p);
             continue;
         }
         if k & K_GT != 0 {

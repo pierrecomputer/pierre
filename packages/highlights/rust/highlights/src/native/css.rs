@@ -728,8 +728,7 @@ fn lex<const D: u32>(src: Input, end: usize, mut out: Recs, mut p: usize) -> Rec
             if D == SASS && src.bytes()[gap..p].iter().any(|&b| b == 10 || b == 13) {
                 decide = true;
             }
-            // SAFETY: a gap here follows a pass, which emitted a record.
-            unsafe { out.extend_unchecked(p) };
+            out.extend(p);
             // SAFETY: `p` ends a whitespace run, at most the input length.
             c = unsafe { src.byte_unchecked(p) };
         }
