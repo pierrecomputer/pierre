@@ -316,7 +316,7 @@ void t.test('ruby: numeric literal forms', () => {
 
 void t.test('ruby: control flow words and word operators', () => {
   const html = distinctHl(
-    'if a && b || !c then 1 elsif d then 2 end; unless u; end; while w do break end; until t; next; end; for i in 1..3 do redo end; x = 1 when 2 then 3; begin; raise E; rescue E => e; retry; ensure; end; return; yield; not a; a and b; a or b'
+    'if a && b || !c then 1 elsif d then 2 end; unless u; end; while w do break end; until t; next; end; for i in 1..3 do redo end; x = 1 when 2 then 3; begin; raise E; rescue E => e; retry; ensure; end; return; yield; not a; a and b; a or b; case k when 1 then 2 else 3 end; BEGIN { 1 }; END { 2 }'
   );
   for (const word of [
     'if',
@@ -340,6 +340,10 @@ void t.test('ruby: control flow words and word operators', () => {
     'ensure',
     'return',
     'yield',
+    'case',
+    'else',
+    'BEGIN',
+    'END',
   ]) {
     assert.equal(
       wordColor(html, word),

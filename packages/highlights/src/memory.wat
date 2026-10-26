@@ -101,10 +101,10 @@
   (const $mem.protoWords 25312)              ;; 160
   (const $mem.pythonWords 25472)             ;; 288
   (const $mem.rWords 25760)                  ;; 96
-  (const $mem.rubyWords 25856)               ;; 192
-  (const $mem.rustWords 26048)               ;; 224
-  (const $mem.scalaWords 26272)              ;; 224
-  (const $mem.solidityWords 26496)           ;; 448
+  (const $mem.rubyWords 25856)               ;; 224
+  (const $mem.rustWords 26080)               ;; 224
+  (const $mem.scalaWords 26304)              ;; 224
+  (const $mem.solidityWords 26528)           ;; 416
   (const $mem.swiftWords 26944)              ;; 256
   (const $mem.terraformWords 27200)          ;; 96
   (const $mem.tsxWords 27296)                ;; 544: ECMAScript keyword table (js.wat)
