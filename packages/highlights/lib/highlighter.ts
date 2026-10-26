@@ -26,6 +26,7 @@ const enc = new TextEncoder();
 const dec = new TextDecoder('utf-8', { ignoreBOM: true });
 const pageSize = 65536;
 const themePtr = 64; // $mem.themeTable in src/memory.wat
+const inputPtr = 81920; // $mem.input in src/memory.wat
 // Unicode identifier classes for the ECMAScript lexers; see #idClass.
 const idClassRegex = [/^\p{ID_Start}$/u, /^[\u200C\u200D\p{ID_Continue}]$/u];
 let idClassCache: Uint8Array | undefined;
@@ -87,7 +88,7 @@ export class HighlightsHighlighter implements Highlighter {
       this.#growMemoryIfNeeded(offset + input.length + 96);
       let { read, written } = enc.encodeInto(
         input,
-        this.buffer.subarray(pageSize + offset, this.buffer.length - 96)
+        this.buffer.subarray(inputPtr + offset, this.buffer.length - 96)
       );
       if (read < input.length) {
         const rest = input.slice(read);
@@ -95,7 +96,7 @@ export class HighlightsHighlighter implements Highlighter {
         written += enc.encodeInto(
           rest,
           this.buffer.subarray(
-            pageSize + offset + written,
+            inputPtr + offset + written,
             this.buffer.length - 96
           )
         ).written;
@@ -109,7 +110,7 @@ export class HighlightsHighlighter implements Highlighter {
       throw new TypeError('input must be a string, Uint8Array, or ArrayBuffer');
     }
     this.#growMemoryIfNeeded(offset + input.length + 96);
-    this.buffer.set(input, pageSize + offset);
+    this.buffer.set(input, inputPtr + offset);
     return input.length;
   }
 
@@ -127,7 +128,7 @@ export class HighlightsHighlighter implements Highlighter {
     this.dv.setUint8(0, langId);
     this.dv.setUint8(1, mode);
     this.dv.setUint32(2, inputLength, true);
-    this.buffer[pageSize + inputLength] = 0; // NUL sentinel: lexers treat byte 0 at EOF as end
+    this.buffer[inputPtr + inputLength] = 0; // NUL sentinel: lexers treat byte 0 at EOF as end
     try {
       if (reset === undefined) this.#highlight();
       else this.#highlightStream(reset);
@@ -167,7 +168,7 @@ export class HighlightsHighlighter implements Highlighter {
     const inputLength = this.writeInput(input);
     if (blob !== undefined) {
       this.#growMemoryIfNeeded(inputLength + blob.length + 96);
-      const blobPtr = (pageSize + inputLength + 47) & ~15;
+      const blobPtr = (inputPtr + inputLength + 47) & ~15;
       this.buffer.set(blob, blobPtr);
       this.dv.setUint32(14, blobPtr, true);
       this.dv.setUint32(18, blob.length, true);
@@ -178,7 +179,7 @@ export class HighlightsHighlighter implements Highlighter {
       }
       const bytes = this.#htmlPrefixBytes;
       this.#growMemoryIfNeeded(inputLength + bytes.length + 96);
-      const prefixPtr = (pageSize + inputLength + 47) & ~15;
+      const prefixPtr = (inputPtr + inputLength + 47) & ~15;
       this.buffer.set(bytes, prefixPtr);
       this.dv.setUint32(14, prefixPtr, true);
       this.dv.setUint32(18, bytes.length, true);
@@ -249,7 +250,7 @@ export class HighlightsHighlighter implements Highlighter {
 
   /** Grow the wasm linear memory if needed. */
   #growMemoryIfNeeded(len: number): void {
-    const neededPages = 1 + Math.ceil(len / pageSize);
+    const neededPages = Math.ceil((inputPtr + len) / pageSize);
     if (neededPages > this.pageN) {
       this.memory.grow(neededPages - this.pageN);
       this.bindMemory();

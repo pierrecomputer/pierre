@@ -5,6 +5,9 @@
   (global $phpStreamingCode (mut i32) (i32.const 0))
   (global $phpStreamDecl (mut i32) (i32.const 0))
   (global $phpStreamMember (mut i32) (i32.const 0))
+  ;; 1 only while $hlHack or its stream resume runs, so PHP, Blade, and the
+  ;; templates that share this code never see it
+  (global $phpHack (mut i32) (i32.const 0))
 
   (func $phpIsOpen (param $p i32) (result i32)
     (local $c i32)
@@ -39,13 +42,17 @@
         (br $scan)))
     (global.get $end))
 
-  ;; A PHP line comment ends at `?>` as well as at a newline.
+  ;; A PHP line comment ends at `?>` as well as at a newline; Hack has no `?>`.
   (func $phpLineComment (param $skip i32)
     (local $close i32)
     (local $lhs i32)
     (local $lineEnd i32)
     (local $saveEnd i32)
     (local $stop i32)
+    (if (global.get $phpHack)
+      (then
+        (call $lexLineComment (local.get $skip) (enum.get $Token.comment))
+        (return)))
     (local.set $lhs (global.get $ptr))
     (global.set $ptr (i32.add (global.get $ptr) (local.get $skip)))
     (if (i32.gt_u (global.get $ptr) (global.get $end))
@@ -73,9 +80,12 @@
 
   ;; The token for a bare uppercase-first name that is not a call: the class
   ;; before `::` (`User::class`, `Foo::bar()`), a SCREAMING_CASE constant
-  ;; (`PHP_EOL`), or a plain name. Kept out of line so lowercase names -
-  ;; functions, and the `self`/`parent`/`static` scopes - pay one compare.
+  ;; (`PHP_EOL`), or a plain name - in Hack, where variables carry `$`, a
+  ;; type. Kept out of line so lowercase names - functions, and the
+  ;; `self`/`parent`/`static` scopes - pay one compare.
   (func $phpUpperName (param $lhs i32) (param $rhs i32) (result i32)
+    (local $plain i32)
+    (local.set $plain (select (enum.get $Token.type) (enum.get $Token.variable) (global.get $phpHack)))
     (if
       (i32.and
         (i32.lt_u (i32.add (local.get $rhs) (i32.const 1)) (global.get $end))
@@ -83,10 +93,10 @@
       (then (return (enum.get $Token.type))))
     ;; a lowercase second letter rules SCREAMING_CASE out without a scan
     (if (i32.le_u (i32.sub (i32.load8_u offset=1 (local.get $lhs)) (i32.const "a")) (i32.const 25))
-      (then (return (enum.get $Token.variable))))
+      (then (return (local.get $plain))))
     (if (call $lexIsConstCase (local.get $lhs) (local.get $rhs))
       (then (return (enum.get $Token.constant))))
-    (enum.get $Token.variable))
+    (local.get $plain))
 
   (keyword-table $phpWords $mem.phpWords $mem.powershellWords
     (group $Token.keyword.control
@@ -99,6 +109,16 @@
       "false")
     (group $Token.keyword.declaration
       "class" "const" "trait" "extends" "function" "interface" "namespace" "implements"))
+
+  ;; Hack words that PHP lacks, matched case-sensitively after $phpWordHl misses.
+  (keyword-table $hackWords $mem.hackWords $mem.abapWords
+    (group $Token.keyword.control "await" "concurrent")
+    (group $Token.keyword "async" "inout" "where" "super" "using" "upcast" "reify" "internal")
+    (group $Token.keyword.declaration "type" "newtype")
+    (group $Token.keyword.operator "is")
+    (group $Token.type.builtin
+      "vec" "dict" "keyset" "tuple" "shape" "arraykey" "num" "nothing" "noreturn" "nonnull"
+      "dynamic" "this" "varray" "darray"))
 
   (func $phpWordHl (param $lhs i32) (param $rhs i32) (result i32)
     (local $n i32)
@@ -418,7 +438,12 @@
   ;; PHP code, stopping before a live `?>` delimiter. $resume is 1 when the
   ;; previous chunk ended inside code: the declaration and member lookahead
   ;; it checkpointed continues into this chunk.
+  ;; Hack's $attr: 1 where a `<<` attribute list expects a name, 2 after one.
+  ;; Attribute lists rarely span lines, so any line break since $attrAt - in
+  ;; a gap, comment, or string - ends one, as a line-fed stream sees it.
   (func $phpCode (param $resume i32)
+    (local $attr i32)
+    (local $attrAt i32)
     (local $c i32)
     (local $decl i32) ;; 1 function, 2 class-like
     (local $hl i32)
@@ -434,6 +459,11 @@
       (loop $token
         (local.set $lhs (global.get $ptr))
         (call $scanWhitespace)
+        (if (local.get $attr)
+          (then
+            (if (call $lexGapHasBreak (local.get $attrAt) (global.get $ptr))
+              (then (local.set $attr (i32.const 0))))
+            (local.set $attrAt (global.get $ptr))))
         (call $emitGap (local.get $lhs) (global.get $ptr))
         (br_if $done (i32.ge_u (global.get $ptr) (global.get $end)))
         (local.set $lhs (global.get $ptr))
@@ -445,8 +475,36 @@
             (i32.lt_u (i32.add (global.get $ptr) (i32.const 1)) (global.get $end))))
         (br_if $done
           (i32.and
-            (i32.eq (local.get $c) (i32.const "?"))
-            (i32.eq (local.get $next) (i32.const ">"))))
+            (i32.eqz (global.get $phpHack))
+            (i32.and
+              (i32.eq (local.get $c) (i32.const "?"))
+              (i32.eq (local.get $next) (i32.const ">")))))
+        ;; Hack: a legacy `<?hh` header, and `<<Name, ...>>` attributes
+        (if (i32.and (global.get $phpHack) (i32.eq (local.get $c) (i32.const "<")))
+          (then
+            (local.set $p (call $templateByte (i32.add (global.get $ptr) (i32.const 2))))
+            (if
+              (i32.and
+                (i32.eq (local.get $next) (i32.const "?"))
+                (i32.and
+                  (i32.eq (local.get $p) (i32.const "h"))
+                  (i32.eq (call $templateByte (i32.add (global.get $ptr) (i32.const 3))) (i32.const "h"))))
+              (then
+                (global.set $ptr (i32.add (global.get $ptr) (i32.const 4)))
+                (call $emitTok (enum.get $Token.preproc) (local.get $lhs) (global.get $ptr))
+                (br $token)))
+            (if
+              (i32.and
+                (i32.eq (local.get $next) (i32.const "<"))
+                (i32.and (call $lexIsIdentStart (local.get $p)) (i32.ne (local.get $p) (i32.const "$"))))
+              (then
+                (global.set $ptr (i32.add (global.get $ptr) (i32.const 2)))
+                (call $emitTok (enum.get $Token.attribute) (local.get $lhs) (global.get $ptr))
+                (local.set $attr (i32.const 1))
+                (local.set $attrAt (global.get $ptr))
+                (local.set $decl (i32.const 0))
+                (local.set $member (i32.const 0))
+                (br $token)))))
         (if
           (i32.or
             (i32.and
@@ -516,6 +574,20 @@
           (then
             (call $lexScanIdent)
             (local.set $hl (call $phpWordHl (local.get $lhs) (global.get $ptr)))
+            (if (global.get $phpHack)
+              (then
+                (if (i32.eq (local.get $hl) (enum.get $Token.variable))
+                  (then
+                    (local.set $p (keyword-table.value $hackWords (local.get $lhs) (global.get $ptr)))
+                    (if (i32.ge_s (local.get $p) (i32.const 0))
+                      (then (local.set $hl (local.get $p))))))
+                ;; `enum class Name` re-arms the name capture, and the builtin
+                ;; type of `const int MAX` cancels it
+                (if
+                  (i32.or
+                    (i32.eq (local.get $hl) (enum.get $Token.keyword.declaration))
+                    (i32.eq (local.get $hl) (enum.get $Token.type.builtin)))
+                  (then (local.set $decl (i32.const 0))))))
             (if (local.get $decl)
               (then
                 ;; `new` (decl 3) names a class unless a keyword follows
@@ -618,6 +690,10 @@
                                     (i32.const 0xffffff))
                                   (i32.const "new")))
                               (then (local.set $decl (i32.const 3))))))))))))
+            (if (i32.eq (local.get $attr) (i32.const 1))
+              (then
+                (local.set $hl (enum.get $Token.attribute))
+                (local.set $attr (i32.const 2))))
             (call $emitTok (local.get $hl) (local.get $lhs) (global.get $ptr))
             (global.set $sigPattern (i32.const 0))
             (br $token)))
@@ -661,17 +737,27 @@
             (local.set $decl (i32.const 0))
             (local.set $member (i32.const 0))
             (global.set $sigPattern (i32.eq (local.get $c) (i32.const ",")))
+            (if (local.get $attr)
+              (then (local.set $attr (i32.const 1))))
             (br $token)))
         (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
-        (call $emitTok
+        (local.set $hl
           (select
             (enum.get $Token.attribute)
             (enum.get $Token.operator)
             (i32.and
               (i32.eq (local.get $c) (i32.const "#"))
-              (i32.eq (local.get $next) (i32.const "["))))
-          (local.get $lhs)
-          (global.get $ptr))
+              (i32.eq (local.get $next) (i32.const "[")))))
+        ;; the `>>` that closes a Hack attribute list
+        (if
+          (i32.and
+            (i32.ne (local.get $attr) (i32.const 0))
+            (i32.and (i32.eq (local.get $c) (i32.const ">")) (i32.eq (local.get $next) (i32.const ">"))))
+          (then
+            (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
+            (local.set $hl (enum.get $Token.attribute))
+            (local.set $attr (i32.const 0))))
+        (call $emitTok (local.get $hl) (local.get $lhs) (global.get $ptr))
         ;; `function &name` and the `\` of `new \A\B` keep the pending name
         (if (local.get $decl)
           (then

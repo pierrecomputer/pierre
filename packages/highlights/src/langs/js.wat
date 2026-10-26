@@ -131,7 +131,7 @@
   ;; Shared JavaScript state. Feature bit 0 enables TypeScript, bit 1 JSX,
   ;; and bit 2 TSRX (see langs/tsrx.wat).
   (global $ecmaFeatures (mut i32) (i32.const 3))
-  (global $sourceStart (mut i32) (i32.const 65536))
+  (global $sourceStart (mut i32) (i32.const $mem.input))
   (global $lhs (mut i32) (i32.const 0))
   (global $rhs (mut i32) (i32.const 0))
   (global $lto (mut i32) (i32.const 0))

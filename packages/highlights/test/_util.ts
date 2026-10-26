@@ -67,11 +67,13 @@ export function loadLang(
   splitBytes?: number
 ): TestLang {
   // the css preprocessors share css.wat
-  const file = ['less', 'sass', 'scss'].includes(name)
+  const file = ['less', 'sass', 'scss', 'stylus'].includes(name)
     ? 'css'
     : name === 'tsv'
       ? 'csv'
-      : name;
+      : name === 'sparql' || name === 'turtle'
+        ? 'rdf'
+        : name;
   let highlighter: TestHighlighter;
   let enumMap: Map<string, Record<string, number>>;
   let setSplit: ((splitBytes: number) => void) | undefined;
@@ -181,7 +183,7 @@ export function loadSplitLang(name: Lang): TestSplitHl {
         : `$hl${name[0].toUpperCase()}${name.slice(1)}`;
   const file = ['js', 'jsx', 'ts'].includes(name)
     ? 'tsx'
-    : ['less', 'sass', 'scss'].includes(name)
+    : ['less', 'sass', 'scss', 'stylus'].includes(name)
       ? 'css'
       : name === 'fortran-fixed-form'
         ? 'fortran'
@@ -189,7 +191,9 @@ export function loadSplitLang(name: Lang): TestSplitHl {
           ? 'json'
           : name === 'tsv'
             ? 'csv'
-            : name;
+            : name === 'sparql' || name === 'turtle'
+              ? 'rdf'
+              : name;
   const { highlighter, setSplit } = compileSplitLexer(name, file, entry);
   return (input, splitBytes) => {
     setSplit(splitBytes);

@@ -12,7 +12,7 @@ export function tokenizeRecords(
   highlighter.dv.setUint8(0, langId);
   highlighter.dv.setUint8(1, 3);
   highlighter.dv.setUint32(2, inputLength, true);
-  highlighter.buffer[65536 + inputLength] = 0;
+  highlighter.buffer[81920 + inputLength] = 0;
   try {
     (highlighter.instance.exports.highlightByteRecords as () => void)();
   } finally {

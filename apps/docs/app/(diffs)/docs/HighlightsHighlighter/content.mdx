@@ -301,16 +301,19 @@ Built-in languages and their aliases are included in the `Lang` type:
 | Language             | Aliases                                                                     |
 | -------------------- | --------------------------------------------------------------------------- |
 | `plain`              | `plaintext`, `text`, `txt`                                                  |
+| `abap`               | —                                                                           |
 | `ada`                | `adb`, `ads`                                                                |
 | `angular-html`       | —                                                                           |
 | `apache`             | `apacheconf`, `htaccess`                                                    |
 | `apex`               | —                                                                           |
+| `applescript`        | —                                                                           |
 | `asciidoc`           | `adoc`                                                                      |
 | `asm`                | `assembly`, `mips`, `mipsasm`, `riscv`, `s`                                 |
 | `astro`              | —                                                                           |
 | `awk`                | —                                                                           |
 | `bash`               | `sh`, `shell`, `shellscript`, `shellsession`, `zsh`                         |
 | `batch`              | `bat`, `batchfile`, `cmd`, `dos`                                            |
+| `bibtex`             | `bib`                                                                       |
 | `bicep`              | —                                                                           |
 | `blade`              | —                                                                           |
 | `c`                  | `h`                                                                         |
@@ -318,13 +321,19 @@ Built-in languages and their aliases are included in the `Lang` type:
 | `clojure`            | `clj`, `cljc`, `cljs`, `edn`                                                |
 | `cmake`              | —                                                                           |
 | `cobol`              | `cbl`, `cob`                                                                |
+| `codeowners`         | —                                                                           |
+| `codeql`             | `ql`                                                                        |
 | `coffee`             | `coffeescript`                                                              |
+| `coq`                | `rocq`                                                                      |
 | `cpp`                | `c++`, `cc`, `cxx`, `hh`, `hpp`, `hxx`                                      |
 | `csharp`             | `c#`, `cs`                                                                  |
 | `css`                | `postcss`, `qss`                                                            |
 | `csv`                | —                                                                           |
 | `cuda`               | `cu`, `cuh`                                                                 |
+| `cypher`             | `cql`                                                                       |
+| `d`                  | —                                                                           |
 | `dart`               | —                                                                           |
+| `dax`                | —                                                                           |
 | `diff`               | `git-commit`, `git-rebase`, `patch`                                         |
 | `dockerfile`         | `containerfile`, `docker`                                                   |
 | `dotenv`             | `env`                                                                       |
@@ -332,6 +341,7 @@ Built-in languages and their aliases are included in the `Lang` type:
 | `elm`                | —                                                                           |
 | `erb`                | —                                                                           |
 | `erlang`             | `erl`, `hrl`                                                                |
+| `fish`               | —                                                                           |
 | `fortran`            | `f90`, `f95`, `f03`, `f08`, `fortran-free-form`                             |
 | `fortran-fixed-form` | `f`, `for`, `f77`                                                           |
 | `fsharp`             | `f#`, `fs`, `fsi`, `fsx`                                                    |
@@ -346,6 +356,7 @@ Built-in languages and their aliases are included in the `Lang` type:
 | `graphql`            | `gql`                                                                       |
 | `groq`               | —                                                                           |
 | `groovy`             | `gradle`, `gsh`, `gvy`, `gy`, `nextflow`, `nextflow-groovy`, `nf`           |
+| `hack`               | —                                                                           |
 | `haml`               | —                                                                           |
 | `handlebars`         | `hbs`, `mustache`                                                           |
 | `haskell`            | `hs`                                                                        |
@@ -360,48 +371,65 @@ Built-in languages and their aliases are included in the `Lang` type:
 | `json`               | `jsonc`                                                                     |
 | `json5`              | —                                                                           |
 | `jsonl`              | —                                                                           |
+| `jsonnet`            | `libsonnet`                                                                 |
 | `jsx`                | —                                                                           |
 | `julia`              | `jl`                                                                        |
+| `just`               | `justfile`                                                                  |
+| `kdl`                | —                                                                           |
 | `kotlin`             | `kt`, `kts`                                                                 |
 | `latex`              | `tex`                                                                       |
 | `lean`               | `lean4`                                                                     |
 | `less`               | —                                                                           |
 | `liquid`             | —                                                                           |
-| `lisp`               | `cl`, `el`, `elisp`, `emacs-lisp`, `lsp`, `scheme`, `scm`                   |
+| `lisp`               | `cl`, `el`, `elisp`, `emacs-lisp`, `lsp`, `racket`, `rkt`, `scheme`, `scm`  |
+| `llvm`               | —                                                                           |
 | `log`                | —                                                                           |
 | `lua`                | —                                                                           |
+| `luau`               | —                                                                           |
 | `makefile`           | `make`, `mk`                                                                |
 | `markdown`           | `mdc`, `md`                                                                 |
 | `matlab`             | `octave`                                                                    |
 | `mdx`                | —                                                                           |
+| `mermaid`            | `mmd`                                                                       |
+| `moonbit`            | `mbt`                                                                       |
 | `nginx`              | —                                                                           |
 | `nim`                | —                                                                           |
 | `nix`                | —                                                                           |
 | `objc`               | `m`, `mm`, `objcpp`, `objective-c`, `objective-cpp`, `objectivec`           |
 | `ocaml`              | `ml`, `mli`                                                                 |
 | `odin`               | —                                                                           |
+| `openscad`           | `scad`                                                                      |
 | `pascal`             | `delphi`, `dpk`, `dpr`, `lpr`, `object-pascal`, `objectpascal`, `pas`, `pp` |
 | `perl`               | `pl`, `pm`                                                                  |
 | `php`                | —                                                                           |
 | `plsql`              | —                                                                           |
 | `po`                 | `pot`, `potx`                                                               |
+| `powerquery`         | `pq`                                                                        |
 | `powershell`         | `ps`, `ps1`, `psd1`, `psm1`, `pwsh`                                         |
 | `prisma`             | —                                                                           |
 | `prolog`             | —                                                                           |
 | `proto`              | `protobuf`                                                                  |
 | `pug`                | `jade`                                                                      |
+| `puppet`             | —                                                                           |
 | `python`             | `py`                                                                        |
 | `qml`                | —                                                                           |
 | `r`                  | `rscript`                                                                   |
 | `razor`              | `cshtml`                                                                    |
+| `reg`                | —                                                                           |
+| `rosmsg`             | —                                                                           |
 | `rst`                | `restructuredtext`                                                          |
 | `ruby`               | `rb`                                                                        |
 | `rust`               | `rs`                                                                        |
+| `sas`                | —                                                                           |
 | `sass`               | —                                                                           |
 | `scala`              | `sbt`, `sc`                                                                 |
 | `scss`               | —                                                                           |
+| `shaderlab`          | `shader`                                                                    |
 | `solidity`           | `sol`                                                                       |
+| `sparql`             | —                                                                           |
 | `sql`                | —                                                                           |
+| `stata`              | —                                                                           |
+| `stylus`             | `styl`                                                                      |
 | `svelte`             | —                                                                           |
 | `swift`              | —                                                                           |
 | `tcl`                | —                                                                           |
@@ -411,13 +439,16 @@ Built-in languages and their aliases are included in the `Lang` type:
 | `tsrx`               | —                                                                           |
 | `tsv`                | —                                                                           |
 | `tsx`                | —                                                                           |
+| `turtle`             | `ttl`                                                                       |
 | `twig`               | —                                                                           |
+| `typst`              | `typ`                                                                       |
 | `verilog`            | `sv`, `svh`, `system-verilog`, `systemverilog`                              |
 | `vhdl`               | `vhd`                                                                       |
 | `viml`               | `vim`, `vimscript`                                                          |
 | `vue`                | `vue-html`                                                                  |
 | `wat`                | `wasm`                                                                      |
 | `wgsl`               | —                                                                           |
+| `wolfram`            | `mathematica`, `wl`                                                         |
 | `xml`                | `svg`, `xsd`, `xsl`, `xslt`                                                 |
 | `yaml`               | `yml`                                                                       |
 | `zig`                | `zon`                                                                       |

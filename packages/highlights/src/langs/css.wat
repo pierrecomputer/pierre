@@ -2,8 +2,8 @@
   (import "../common.wat")
 
   ;; The preprocessor dialect the shared lexer runs as: 0 css, 1 less, 2
-  ;; scss, 3 the indented sass syntax. Set by the entry wrappers on every
-  ;; call, so it needs no checkpoint.
+  ;; scss, 3 the indented sass syntax, 4 stylus, which is also indented. Set
+  ;; by the entry wrappers on every call, so it needs no checkpoint.
   (global $cssDialect (mut i32) (i32.const 0))
 
   ;; identifier-start: a-z A-Z `_` and any byte >= 128 - leading `-` is resolved by
@@ -485,10 +485,96 @@
       (call $scanFindSpecial (local.get $p) (local.get $stop) (i32.const ",") (i32.const 0) (i32.const 0))
       (call $scanFindSpecial (local.get $p) (local.get $stop) (i32.const "(") (i32.const 0) (i32.const 0))))
 
-  ;; The entry points: css proper, and the three preprocessor dialects that
+  ;; Stylus words. +256 marks property names without a `-`, which may drop
+  ;; their colon (`margin 0 auto`); dashed names need no entry.
+  (keyword-table $stylusWords $mem.stylusWords $mem.luauWords
+    (group $Token.keyword.control "if" "else" "unless" "for" "return")
+    (group $Token.keyword.operator "in" "and" "or" "not" "is" "isnt")
+    (group $Token.boolean "true" "false")
+    (group $Token.property+256
+      "color" "display" "margin" "padding" "width" "height" "border" "background" "position" "top"
+      "left" "right" "bottom" "float" "clear" "overflow" "opacity" "cursor" "content" "transition"
+      "transform" "animation" "outline" "visibility" "flex" "grid" "gap" "order" "filter" "font"
+      "fill" "stroke" "zoom" "resize" "inset" "clip" "columns"))
+
+  ;; Classify the Stylus statement shapes css has no syntax for: a control
+  ;; keyword, a mixin `name(`, an assignment `name = value`, or a property
+  ;; without its colon inside a block. Emits the first word of the first
+  ;; three, then returns the mode to go on in: 1 a condition, 2 a property,
+  ;; 3 a value. Returns -1 to leave the statement to $cssDecide.
+  (func $stylusStart (param $c i32) (param $nested i32) (result i32)
+    (local $lhs i32)
+    (local $p i32)
+    (local $q i32)
+    (local $v i32)
+    (if
+      (i32.eqz
+        (i32.or
+          (call $cssIdentStart (local.get $c))
+          (i32.or (i32.eq (local.get $c) (i32.const "-")) (i32.eq (local.get $c) (i32.const "$")))))
+      (then (return (i32.const -1))))
+    (local.set $lhs (global.get $ptr))
+    (global.set $ptr (i32.add (local.get $lhs) (i32.const 1)))
+    (call $cssScanIdent)
+    (local.set $p (global.get $ptr))
+    (local.set $q (call $lexSkipSpaceAt (local.get $p)))
+    (local.set $c (call $templateByte (local.get $q)))
+    (local.set $v
+      (select
+        (i32.ne (call $templateByte (i32.add (local.get $q) (i32.const 1))) (i32.const "="))
+        (i32.and
+          (i32.eq (call $templateByte (i32.add (local.get $q) (i32.const 1))) (i32.const "="))
+          (i32.or
+            (i32.or (i32.eq (local.get $c) (i32.const "?")) (i32.eq (local.get $c) (i32.const ":")))
+            (byteset.get "*+-/<=>^~" (local.get $c))))
+        (i32.eq (local.get $c) (i32.const "="))))
+    (if (local.get $v)
+      (then
+        (call $emitTok (enum.get $Token.variable) (local.get $lhs) (local.get $p))
+        (call $emitGap (local.get $p) (local.get $q))
+        (global.set $ptr (i32.add (local.get $q) (i32.sub (i32.const 2) (i32.eq (local.get $c) (i32.const "=")))))
+        (call $emitTok (enum.get $Token.operator) (local.get $q) (global.get $ptr))
+        (return (i32.const 3))))
+    (if (i32.and (i32.eq (local.get $c) (i32.const "(")) (i32.eq (local.get $q) (local.get $p)))
+      (then
+        (call $emitTok (enum.get $Token.function) (local.get $lhs) (local.get $p))
+        (return (i32.const 3))))
+    (local.set $v (keyword-table.value $stylusWords (local.get $lhs) (local.get $p)))
+    (if (i32.eq (local.get $v) (enum.get $Token.keyword.control))
+      (then
+        (call $emitTok (local.get $v) (local.get $lhs) (local.get $p))
+        (return (i32.const 1))))
+    (global.set $ptr (local.get $lhs))
+    (local.set $v
+      (i32.or
+        (i32.ge_s (local.get $v) (i32.const 256))
+        (i32.lt_u
+          (call $scanFindSpecial (local.get $lhs) (local.get $p) (i32.const "-") (i32.const 0) (i32.const 0))
+          (local.get $p))))
+    ;; `a:hover` is a selector unless a property name precedes the colon
+    (if
+      (i32.and
+        (i32.and (i32.eq (local.get $c) (i32.const ":")) (i32.eq (local.get $q) (local.get $p)))
+        (i32.and
+          (i32.eqz (local.get $v))
+          (call $cssIdentStart (call $templateByte (i32.add (local.get $q) (i32.const 1))))))
+      (then (return (i32.const 0))))
+    (select
+      (i32.const 2)
+      (i32.const -1)
+      (i32.and
+        (i32.and (local.get $nested) (i32.gt_u (local.get $q) (local.get $p)))
+        (i32.and
+          (i32.and
+            (i32.gt_u (local.get $c) (i32.const 13))
+            (i32.and (i32.ne (local.get $c) (i32.const ",")) (i32.ne (local.get $c) (i32.const "{"))))
+          (local.get $v)))))
+
+  ;; The entry points: css proper, and the four preprocessor dialects that
   ;; share its lexer with a few extra forms - `//` comments, `$var` and
-  ;; `@var` variables, `#{}` and `@{}` interpolation, placeholder selectors,
-  ;; mixin heads, and, for the indented syntax, line-terminated statements.
+  ;; `@var` variables, `#{}`, `@{}`, and `{}` interpolation, placeholder
+  ;; selectors, mixin heads, and, for the indented syntaxes,
+  ;; line-terminated statements.
   (func $hlCss
     (global.set $cssDialect (i32.const 0))
     (drop (call $hlCssImpl (i32.const 0))))
@@ -500,6 +586,9 @@
     (drop (call $hlCssImpl (i32.const 0))))
   (func $hlSass
     (global.set $cssDialect (i32.const 3))
+    (drop (call $hlCssImpl (i32.const 0))))
+  (func $hlStylus
+    (global.set $cssDialect (i32.const 4))
     (drop (call $hlCssImpl (i32.const 0))))
 
   ;; A nonzero state highlights a JS template part. Bits 0..1 hold the mode,
@@ -555,8 +644,8 @@
             (local.set $span (i32.const 0))))
         (local.set $gap (global.get $ptr))
         (call $scanWhitespace)
-        ;; the indented syntax ends a statement at its line break
-        (if (i32.eq (global.get $cssDialect) (i32.const 3))
+        ;; the indented syntaxes end a statement at its line break
+        (if (i32.ge_u (global.get $cssDialect) (i32.const 3))
           (then
             (if
               (i32.lt_u
@@ -617,7 +706,7 @@
             ;; does not start its line sits inside a block
             (local.set $sassDepth
               (i32.and
-                (i32.eq (global.get $cssDialect) (i32.const 3))
+                (i32.ge_u (global.get $cssDialect) (i32.const 3))
                 (i32.and
                   (i32.gt_u (global.get $ptr) (global.get $srcBase))
                   (i32.or
@@ -710,15 +799,28 @@
               ;; always opens a nested selector, as in less
               ;; `&:extend(.a);`, whose `;` would read as a declaration.
               (else
-                (local.set $mode
-                  (select
-                    (i32.const 0)
-                    (i32.const 2)
-                    (if (result i32)
-                      (i32.eq (local.get $c) (i32.const "&"))
-                      (then (i32.const 1))
-                      (else
-                        (call $cssDecide (i32.or (local.get $depth) (local.get $sassDepth)))))))))))
+                (block $cssStatement
+                  ;; stylus statement shapes css has no syntax for.
+                  ;; WARNING: keep this a separate guarded block; folding it
+                  ;; into the mode select below slowed css ~30% in JSC.
+                  (if (i32.eq (global.get $cssDialect) (i32.const 4))
+                    (then
+                      (local.set $p
+                        (call $stylusStart (local.get $c) (i32.or (local.get $depth) (local.get $sassDepth))))
+                      (if (i32.ge_s (local.get $p) (i32.const 0))
+                        (then
+                          (local.set $mode (local.get $p))
+                          (br_if $next (i32.gt_u (global.get $ptr) (local.get $lhs)))
+                          (br $cssStatement)))))
+                  (local.set $mode
+                    (select
+                      (i32.const 0)
+                      (i32.const 2)
+                      (if (result i32)
+                        (i32.eq (local.get $c) (i32.const "&"))
+                        (then (i32.const 1))
+                        (else
+                          (call $cssDecide (i32.or (local.get $depth) (local.get $sassDepth))))))))))))
 
         ;; `#{...}` in scss and sass, `@{...}` in less: an expression
         ;; interpolated into any context; its braces are tracked so the
@@ -808,6 +910,27 @@
         ;; structural bytes end statements in any mode
         (if (i32.eq (local.get $c) (i32.const "{"))
           (then
+            ;; stylus interpolates a bare `{...}` glued to a name: `.col-{i}`.
+            ;; WARNING: checking this with the `#{` test above, once per
+            ;; token, slowed css ~3%; here only `{` pays for it.
+            (if
+              (i32.and
+                (i32.eq (global.get $cssDialect) (i32.const 4))
+                (i32.gt_u (local.get $lhs) (global.get $srcBase)))
+              (then
+                (local.set $mid (i32.load8_u (i32.sub (local.get $lhs) (i32.const 1))))
+                (if
+                  (i32.or
+                    (call $cssIdentStart (local.get $mid))
+                    (i32.or (i32.eq (local.get $mid) (i32.const "-")) (call $lexIsDigit (local.get $mid))))
+                  (then
+                    (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
+                    (call $emitTok (enum.get $Token.punctuation.special) (local.get $lhs) (global.get $ptr))
+                    ;; an open interpolation took this `{` above
+                    (local.set $interpMode (local.get $mode))
+                    (local.set $interp (i32.const 1))
+                    (local.set $mode (i32.const 3))
+                    (br $next)))))
             (local.set $decide (i32.const 1))
             (local.set $depth (i32.add (local.get $depth) (i32.const 1)))
             (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
@@ -1041,6 +1164,9 @@
                         (i32.eq (local.get $c2) (i32.const "-"))))
                     (local.get $lhs)
                     (global.get $ptr))
+                  ;; a stylus property may skip its colon
+                  (if (i32.eq (global.get $cssDialect) (i32.const 4))
+                    (then (local.set $mode (i32.const 3))))
                   (br $next)))
               (if (i32.eq (local.get $c) (i32.const ":"))
                 (then
@@ -1076,6 +1202,14 @@
                 (then
                   (call $emitTok (enum.get $Token.variable) (local.get $lhs) (global.get $ptr))
                   (br $next)))
+              ;; stylus `if`, `unless`, `and`, `is`, `true` in expressions
+              (if (i32.eq (global.get $cssDialect) (i32.const 4))
+                (then
+                  (local.set $p (keyword-table.value $stylusWords (local.get $lhs) (global.get $ptr)))
+                  (if (i32.lt_u (local.get $p) (i32.const 256))
+                    (then
+                      (call $emitTok (local.get $p) (local.get $lhs) (global.get $ptr))
+                      (br $next)))))
               ;; in an at-rule prelude the query operators and/or/not/only can
               ;; be glued to a `(` in minified css - they are operators, so
               ;; this must run before the identifier-glued-to-`(` function rule

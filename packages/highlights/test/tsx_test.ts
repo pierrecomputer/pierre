@@ -66,23 +66,23 @@ void t.test(
       'instanceof',
     ]) {
       for (const tail of [0, 0x26, 0xff]) {
-        memory.fill(tail, 65536, 65552);
-        memory.set(enc.encode(word), 65536);
+        memory.fill(tail, 81920, 81936);
+        memory.set(enc.encode(word), 81920);
         assert.equal(
-          keyword(65536, 65536 + word.length),
+          keyword(81920, 81920 + word.length),
           lex[`keyword_${word}`],
           word
         );
         // The hash uses the first two and last bytes, so these edits still reach
         // the same candidate and must fail its exact-word comparison.
         for (let i = 2; i < word.length - 1; i++) {
-          memory[65536 + i] ^= 1;
+          memory[81920 + i] ^= 1;
           assert.equal(
-            keyword(65536, 65536 + word.length),
+            keyword(81920, 81920 + word.length),
             lex.invalid,
             `${word}: byte ${i}`
           );
-          memory[65536 + i] ^= 1;
+          memory[81920 + i] ^= 1;
         }
       }
     }

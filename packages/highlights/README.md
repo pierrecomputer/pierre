@@ -1,7 +1,7 @@
 # Highlights, from Pierre
 
 `@pierre/highlights` is a syntax highlighter written in WebAssembly Text (WAT).
-It supports 120 built-in languages and Zed-compatible themes. It produces HTML
+It supports 151 built-in languages and Zed-compatible themes. It produces HTML
 or themed tokens from complete input, input chunks, or document edits.
 
 Read the [Documentation](https://diffs.com/docs#highlights).

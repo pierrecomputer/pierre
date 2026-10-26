@@ -6,8 +6,8 @@
   (import "./token.wat")
 
   (func (export "highlight")
-    (global.set $srcBase (i32.const 65536))
-    (global.set $docStart (i32.const 65536))
+    (global.set $srcBase (i32.const $mem.input))
+    (global.set $docStart (i32.const $mem.input))
     (global.set $streaming (i32.const 0))
     (global.set $streamDepth (i32.const 0))
     ;; a pooled instance may hold parameter-machine state from a prior stream
@@ -85,10 +85,10 @@
   ;; Stream one input chunk through any language while preserving lexer and
   ;; emitter state between calls.
   (func (export "highlightStream") (param $reset i32)
-    (global.set $srcBase (i32.const 65536))
+    (global.set $srcBase (i32.const $mem.input))
     (global.set $streaming (i32.const 1))
     (global.set $streamReset (local.get $reset))
-    (global.set $docStart (select (i32.const 65536) (i32.const 0) (local.get $reset)))
+    (global.set $docStart (select (i32.const $mem.input) (i32.const 0) (local.get $reset)))
     (global.set $streamDepth (i32.const 0))
     ;; A pooled instance must reset the same state as a new Wasm instance.
     (if (local.get $reset)

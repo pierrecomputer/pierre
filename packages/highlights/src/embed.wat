@@ -1,6 +1,6 @@
 (module
   ;; Resume script/style bodies, front matter, and framework expressions
-  ;; at chunk boundaries. These use $streamRegionKind 1-8 and 14-16
+  ;; at chunk boundaries. These use $streamRegionKind 1-8, 14-16, and 42
   ;; (CSS preprocessor bodies, see html.wat).
   ;; highlights.wat resumes them in HTML-like documents. markdown.wat
   ;; resumes them inside streamed fences. Their import cycle is safe

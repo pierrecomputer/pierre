@@ -25,11 +25,11 @@ const common = transformWat(
     (keyword-table $Test $mem.cWords $mem.cppWords
       ${words.map((word) => `(group ${word.length} "${word}")`).join('\n')})
     (func (export "lookup") (param $n i32) (result i32)
-      (keyword-table.value $Test (i32.const 65536)
-        (i32.add (i32.const 65536) (local.get $n))))
+      (keyword-table.value $Test (i32.const $mem.input)
+        (i32.add (i32.const $mem.input) (local.get $n))))
     (func (export "lower") (param $n i32) (result i32)
-      (call $lexLowerCopy (i32.const 65536)
-        (i32.add (i32.const 65536) (local.get $n))
+      (call $lexLowerCopy (i32.const $mem.input)
+        (i32.add (i32.const $mem.input) (local.get $n))
         (i32.const $mem.lexLowerScratch)))
     (global (export "scratch") i32 (i32.const $mem.lexLowerScratch)))`
 );
@@ -49,13 +49,13 @@ void test('keyword SIMD compares every byte at lengths 2 through 31', () => {
   for (const word of words) {
     const input = enc.encode(word);
     for (const padding of [0, 0xff]) {
-      bytes.fill(padding, 65536, 65600);
-      bytes.set(input, 65536);
+      bytes.fill(padding, 81920, 81984);
+      bytes.set(input, 81920);
       assert.equal(lookup(input.length), input.length, word);
       for (let i = 0; i < input.length; i++) {
-        bytes[65536 + i] ^= 32;
+        bytes[81920 + i] ^= 32;
         assert.equal(lookup(input.length), -1, `${word}, byte ${i}`);
-        bytes[65536 + i] ^= 32;
+        bytes[81920 + i] ^= 32;
       }
     }
   }
@@ -70,7 +70,7 @@ void test('lowercase SIMD preserves non-letters and stays inside scratch', () =>
     for (let first = 0; first < 256; first += 16) {
       const input = Uint8Array.from({ length }, (_, i) => (first + i) & 255);
       bytes.fill(0xa5, dst, dst + 80);
-      bytes.set(input, 65536);
+      bytes.set(input, 81920);
       assert.equal(lower(length), length > 31 ? 0 : length);
       if (length <= 31) {
         assert.deepEqual(

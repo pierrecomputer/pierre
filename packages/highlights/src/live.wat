@@ -6,10 +6,10 @@
     line table, per-line token blocks, and interned per-line lexer states in
     linear memory:
 
-      page 1                    control, static data, lexer scratch
-      [65536:82192)             line-change list, size-class free-list heads,
+      [0:81920)                 control, static data, lexer scratch
+      [81920:98576)             line-change list, size-class free-list heads,
                                 and suspended lexer locals
-      [82192:$lvHeapCeil)       size-class heap: staged text, line text
+      [98576:$lvHeapCeil)       size-class heap: staged text, line text
                                 blocks, token blocks, state blobs, line table
       [$lvHeapCeil:mem end)     transient per-line scratch: the line's bytes,
                                 terminator, NUL sentinel, then the standard

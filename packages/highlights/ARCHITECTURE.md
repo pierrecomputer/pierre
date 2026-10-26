@@ -43,8 +43,8 @@ completed stream can return its instance to a pool with one slot. A new stream
 can reuse that instance. Live documents do not share a pool.
 
 The first 64 KiB memory page holds controls, static tables, caches, and
-temporary lexer data. Input starts at byte 65536. A NUL byte and space for
-lookahead follow the input.
+temporary lexer data. The shared keyword pool takes the next 16 KiB. Input
+starts at byte 81920. A NUL byte and space for lookahead follow the input.
 
 `$ptr` is the read cursor. `$eof` is the end of the input. `$end` is the current
 scan boundary, which can be earlier for an embedded lexer. NUL bytes inside the
@@ -84,19 +84,21 @@ Keep `plain` first so it and its aliases (`plaintext`, `text`, `txt`) have ID 0.
 Sort the other canonical names alphabetically. Use the generated JavaScript and
 Wasm files together. A change to the table order changes IDs in both files.
 
-Several languages share implementations. CSS dialects use `css.wat`. Free-form
-and fixed-form Fortran share `fortran.wat` through a dialect flag that each
-entry point sets. GLSL and the Godot shading language share `glsl.wat` through a
-parameter of `$hlGlslImpl`. JSON, JSON5, and JSONL share `json.wat` the same way
-through `$hlJsonImpl`; JSONL starts a new value on each line. CSV and TSV share
-`csv.wat` through the delimiter and quoting parameters of `$hlCsvImpl`; only CSV
-has quoted fields. GDScript and Godot resources share the type lookup in
-`gdscript.wat` and scan strings with the Python string scanner. SQL and PL/SQL
-share `sql.wat`, and Java and Apex share `java.wat`, through a dialect global
-that each entry point sets. Jinja, Twig, Liquid, and Handlebars share
-`jinja.wat` through a dialect parameter of `$hlJinjaImpl`. Blade and Razor share
-the markup lexer in `template.wat`, and AsciiDoc reuses the inline scans of
-`rst.wat`.
+Several languages share implementations. CSS dialects, including Stylus, use
+`css.wat`. Free-form and fixed-form Fortran share `fortran.wat` through a
+dialect flag that each entry point sets. GLSL and the Godot shading language
+share `glsl.wat` through a parameter of `$hlGlslImpl`. JSON, JSON5, and JSONL
+share `json.wat` the same way through `$hlJsonImpl`; JSONL starts a new value on
+each line. CSV and TSV share `csv.wat` through the delimiter and quoting
+parameters of `$hlCsvImpl`; only CSV has quoted fields. GDScript and Godot
+resources share the type lookup in `gdscript.wat` and scan strings with the
+Python string scanner. SQL and PL/SQL share `sql.wat`, Java and Apex share
+`java.wat`, and PHP and Hack share `php.wat`, through a dialect global that each
+entry point sets. SPARQL and Turtle share `rdf.wat` through a dialect parameter.
+Luau has its own loop in `luau.wat` and reuses the Lua helpers, so Lua does not
+pay for Luau checks. Jinja, Twig, Liquid, and Handlebars share `jinja.wat`
+through a dialect parameter of `$hlJinjaImpl`. Blade and Razor share the markup
+lexer in `template.wat`, and AsciiDoc reuses the inline scans of `rst.wat`.
 
 The ECMAScript family uses `js.wat` to scan code and `ts.wat` to classify
 tokens. `jsx.wat` handles markup, and `tsx.wat` is the driver. Feature flags
@@ -235,7 +237,7 @@ code. A reset clears saved state before the next use of an instance.
 validates UTF-16 edits, provides read methods, and schedules work. Wasm owns the
 text, line table, tokens, lexer states, and dirty ranges.
 
-A heap after the static page stores document data in blocks grouped by size. The
+A heap after the static data stores document data in blocks grouped by size. The
 line table uses a gap buffer. Each line descriptor points to text, tokens, and
 the lexer state after that line. Temporary space above the heap holds one line
 and its emitted records.

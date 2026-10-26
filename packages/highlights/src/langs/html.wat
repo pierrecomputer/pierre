@@ -207,8 +207,9 @@
 
   ;; Raw-text kinds: 1 script, 2 style, and a style whose `lang` attribute
   ;; names a css preprocessor: 14 less, 15 scss, 16 sass (13 + the css.wat
-  ;; dialect). The kind doubles as the stream region of a body cut by a chunk
-  ;; end. Bit 6 marks a style tag whose `lang` still waits for its value.
+  ;; dialect), 42 stylus. The kind doubles as the stream region of a body cut
+  ;; by a chunk end. Bit 6 marks a style tag whose `lang` still waits for its
+  ;; value.
 
   ;; A style tag's attribute name [$lhs,$rhs): `lang` sets the waiting mark,
   ;; any other name clears it. Scripts keep their kind.
@@ -224,16 +225,23 @@
     (local.get $kind))
 
   ;; The value [$lhs,$rhs) of an attribute: after a waiting `lang`, `less`,
-  ;; `scss`, or `sass` (any case) selects that dialect's style kind. The mark
-  ;; clears either way; an unterminated value passes an empty range.
+  ;; `scss`, `sass`, or `stylus` (any case) selects that dialect's style kind.
+  ;; The mark clears either way; an unterminated value passes an empty range.
   (func $htmlLangValue (param $kind i32) (param $lhs i32) (param $rhs i32) (result i32)
     (local $w i32)
     (if (i32.eqz (i32.and (local.get $kind) (i32.const 64)))
       (then (return (local.get $kind))))
     (local.set $kind (i32.and (local.get $kind) (i32.const 63)))
+    (local.set $w (i32.or (i32.load (local.get $lhs)) (i32.const 0x20202020)))
+    (if
+      (i32.and
+        (i32.eq (i32.sub (local.get $rhs) (local.get $lhs)) (i32.const 6))
+        (i32.and
+          (i32.eq (local.get $w) (i32.const "styl"))
+          (i32.eq (i32.or (i32.load16_u offset=4 (local.get $lhs)) (i32.const 0x2020)) (i32.const "us"))))
+      (then (return (i32.const 42))))
     (if (i32.ne (i32.sub (local.get $rhs) (local.get $lhs)) (i32.const 4))
       (then (return (local.get $kind))))
-    (local.set $w (i32.or (i32.load (local.get $lhs)) (i32.const 0x20202020)))
     (if (i32.eq (local.get $w) (i32.const "less"))
       (then (return (i32.const 14))))
     (if (i32.eq (local.get $w) (i32.const "scss"))
@@ -380,8 +388,12 @@
       (unreachable)))
 
   ;; a style body [$ptr, $end) as css, or as the preprocessor its `lang`
-  ;; named (raw-text kinds 14-16)
+  ;; named (raw-text kinds 14-16 and 42)
   (func $htmlStyleBody (param $kind i32)
+    (if (i32.eq (local.get $kind) (i32.const 42))
+      (then
+        (call $hlStylus)
+        (return)))
     (if (i32.eq (local.get $kind) (i32.const 14))
       (then
         (call $hlLess)

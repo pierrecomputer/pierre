@@ -204,14 +204,17 @@ export function transformWat(
   // uses its own state machine. Save only locals read before their next
   // write at the checkpoint. See liveLocalsAtCheckpoint.
   const lexers = new Set([
+    '$hlAbap',
     '$hlAda',
     '$hlApache',
+    '$hlApplescript',
     '$hlAsciidoc',
     '$hlAsm',
     '$hlAstro',
     '$hlAwk',
     '$hlBash',
     '$hlBatch',
+    '$hlBibtex',
     '$hlBicep',
     '$hlBlade',
     '$hlC',
@@ -219,12 +222,18 @@ export function transformWat(
     '$hlClojure',
     '$hlCmake',
     '$hlCobol',
+    '$hlCodeowners',
+    '$hlCodeql',
     '$hlCoffee',
+    '$hlCoq',
     '$hlCppImpl',
     '$hlCsharp',
     '$hlCssImpl',
     '$hlCsvImpl',
+    '$hlCypher',
+    '$hlD',
     '$hlDart',
+    '$hlDax',
     '$hlDiff',
     '$hlDockerfile',
     '$hlDotenv',
@@ -232,6 +241,7 @@ export function transformWat(
     '$hlElm',
     '$hlErb',
     '$hlErlang',
+    '$hlFish',
     '$hlFortranImpl',
     '$hlFsharp',
     '$hlGdresource',
@@ -244,6 +254,7 @@ export function transformWat(
     '$hlGraphql',
     '$hlGroq',
     '$hlGroovy',
+    '$hlHack',
     '$hlHaml',
     '$hlHaskell',
     '$hlHaxe',
@@ -254,53 +265,71 @@ export function transformWat(
     '$hlJavaImpl',
     '$hlJinjaImpl',
     '$hlJsonImpl',
+    '$hlJsonnet',
     '$hlJulia',
+    '$hlJust',
+    '$hlKdl',
     '$hlKotlin',
     '$hlLatex',
     '$hlLean',
     '$hlLisp',
+    '$hlLlvm',
     '$hlLog',
     '$hlLua',
+    '$hlLuau',
     '$hlMakefile',
     '$hlMarkdown',
     '$hlMatlab',
     '$hlMdx',
+    '$hlMermaid',
+    '$hlMoonbit',
     '$hlNginx',
     '$hlNim',
     '$hlNix',
     '$hlObjc',
     '$hlOcaml',
     '$hlOdin',
+    '$hlOpenscad',
     '$hlPascal',
     '$hlPerl',
     '$hlPhp',
     '$hlPo',
+    '$hlPowerquery',
     '$hlPowershell',
     '$hlPrisma',
     '$hlProlog',
     '$hlProto',
     '$hlPug',
+    '$hlPuppet',
     '$hlPython',
     '$hlQml',
     '$hlR',
     '$hlRazor',
+    '$hlRdfImpl',
+    '$hlReg',
+    '$hlRosmsg',
     '$hlRst',
     '$hlRuby',
     '$hlRust',
+    '$hlSas',
     '$hlScala',
+    '$hlShaderlab',
     '$hlSolidity',
     '$hlSqlImpl',
+    '$hlStata',
     '$hlSvelte',
     '$hlSwift',
     '$hlTcl',
     '$hlTerraform',
     '$hlToml',
+    '$hlTypst',
     '$hlVerilog',
     '$hlVhdl',
     '$hlViml',
     '$hlVue',
     '$hlWat',
     '$hlWgsl',
+    '$hlWolfram',
     '$hlXml',
     '$hlYaml',
     '$hlZig',
@@ -484,22 +513,20 @@ export function transformWat(
     return base + expr.bias;
   };
   for (const name of constExprs.keys()) resolveConst(name, new Set());
-  // the checkpoint region ends at the next named address above its base
+  // A region ends at the next named address above its base.
+  // Warning: $mem.streamStateUsed is a length, not an address.
+  const regionEnd = (base: number): number =>
+    Math.min(
+      ...[...constMap]
+        .filter(([k, v]) => v > base && k !== '$mem.streamStateUsed')
+        .map(([, v]) => v)
+    );
   const streamStateBase = constMap.get('$mem.streamState') ?? 0;
-  const streamStateEnd = Math.min(
-    ...[...constMap.values()].filter((v) => v > streamStateBase)
-  );
-  if (streamStateOffset > streamStateEnd - streamStateBase) {
+  if (streamStateOffset > regionEnd(streamStateBase) - streamStateBase) {
     throw new Error('stream lexer state exceeds reserved memory');
   }
-  // the name table ends at the next named address; streamStateUsed is a length
   const languageNamesBase = constMap.get('$mem.languageNames') ?? 0;
-  const languageNamesEnd = Math.min(
-    ...[...constMap]
-      .filter(([k, v]) => v > languageNamesBase && k !== '$mem.streamStateUsed')
-      .map(([, v]) => v)
-  );
-  if (languageNames.length > languageNamesEnd - languageNamesBase) {
+  if (languageNames.length > regionEnd(languageNamesBase) - languageNamesBase) {
     throw new Error('language names exceed reserved memory');
   }
   code = code.replace(/(\$[\w.]+)([+-]\d+)?/g, (all, name, bias) => {
@@ -882,13 +909,9 @@ export function transformWat(
   // Other expressions need an exact 0/1 result for boolean arithmetic.
   const byteSets = new Map<string, number>();
   const byteSetBase = constMap.get('$mem.byteSets');
-  // the region ends at the next named address, 32 bytes (256 bits) per set
+  // 32 bytes (256 bits) per set
   const byteSetCap =
-    byteSetBase === undefined
-      ? 0
-      : (Math.min(...[...constMap.values()].filter((v) => v > byteSetBase)) -
-          byteSetBase) >>
-        5;
+    byteSetBase === undefined ? 0 : (regionEnd(byteSetBase) - byteSetBase) >> 5;
   const byteSetBranches = branchOperands(code, 'byteset.get');
   code = replaceForm(code, 'byteset.get', (inner, at) => {
     const m = inner.match(
@@ -980,7 +1003,7 @@ export function transformWat(
       return `i${bits}.const ${hex}`;
     });
   code = wrapCompoundNegations(code);
-  checkDataSegments(code, url.pathname);
+  checkDataSegments(code, url.pathname, constMap.get('$mem.input') ?? 65536);
   if (imports.length > 0) {
     code = code.replace(
       /^\s*\(\s*module(\s+)/,
@@ -1705,10 +1728,10 @@ function markSimdReachers(code: string): string {
 }
 
 /**
- * Check that `src/memory.wat` data segments fit in page 1 without overlap.
- * A bad address can silently corrupt another table.
+ * Check that `src/memory.wat` data segments fit below the input without
+ * overlap. A bad address can silently corrupt another table.
  */
-function checkDataSegments(code: string, path: string): void {
+function checkDataSegments(code: string, path: string, limit: number): void {
   const segments: { base: number; end: number }[] = [];
   const open = /\(\s*data\s+\(\s*i32\.const\s+(\d+)\s*\)/g;
   let m;
@@ -1743,9 +1766,9 @@ function checkDataSegments(code: string, path: string): void {
   }
   segments.sort((a, b) => a.base - b.base);
   for (const [i, seg] of segments.entries()) {
-    if (seg.end > 65536) {
+    if (seg.end > limit) {
       throw new Error(
-        `data segment [${seg.base}:${seg.end}) overflows page 1 in ${path}`
+        `data segment [${seg.base}:${seg.end}) overflows the static region in ${path}`
       );
     }
     const next = segments[i + 1];
