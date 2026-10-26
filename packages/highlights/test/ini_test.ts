@@ -110,3 +110,17 @@ test('ini: properties-style comments, bare keys, and continued values', () => {
   ]);
   assertLineFedParity('ini', code);
 });
+
+test('ini: a blank line ends a continued value', () => {
+  const code = 'a=first \\\n\nPort = 8080\n';
+  expect(tokenKinds('ini', code)).toEqual([
+    ['a', 'property'],
+    ['=', 'operator'],
+    ['first \\', null],
+    ['Port', 'property'],
+    ['=', 'operator'],
+    ['8080', 'number'],
+  ]);
+  assertLineFedParity('ini', code);
+  assertLineFedParity('ini', 'a=first \\\r\n  \r\nPort = 8080\r\n');
+});

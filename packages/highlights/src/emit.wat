@@ -42,11 +42,19 @@
   (global $streamRegionKind (mut i32) (i32.const 0))
   (global $streamRegionStarted (mut i32) (i32.const 0))
   (global $streamWindow (mut i32) (i32.const 0))
-  ;; The saved prefix of $mem.streamState; every byte past it is zero.
+  ;; The saved range [Lo, Hi) of $mem.streamState; every byte outside it is
+  ;; zero. Lo is $mem.streamStateUsed and Hi 0 when nothing is saved.
+  (global $streamStateLo (mut i32) (i32.const $mem.streamStateUsed))
   (global $streamStateHi (mut i32) (i32.const 0))
 
   (func $streamClearCheckpoints
-    (memory.fill (i32.const $mem.streamState) (i32.const 0) (global.get $streamStateHi))
+    (if (i32.lt_u (global.get $streamStateLo) (global.get $streamStateHi))
+      (then
+        (memory.fill
+          (i32.add (i32.const $mem.streamState) (global.get $streamStateLo))
+          (i32.const 0)
+          (i32.sub (global.get $streamStateHi) (global.get $streamStateLo)))))
+    (global.set $streamStateLo (i32.const $mem.streamStateUsed))
     (global.set $streamStateHi (i32.const 0)))
   (global $liveStackBytes (mut i32) (i32.const 0))
 

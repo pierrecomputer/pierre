@@ -114,6 +114,19 @@ test('plsql: quoted strings and q-quoting across lines', () => {
       ['x', 'variable'],
     ]);
   }
+  // a blank or a line break is no delimiter, so `q'` stays a name and a quote
+  expect(tokenKinds('plsql', "q' a' x")).toEqual([
+    ['q', 'variable'],
+    ["' a'", 'string'],
+    ['x', 'variable'],
+  ]);
+  const open = "x := q'\nfoo';\nSELECT 1;\n";
+  expect(tokenKinds('plsql', open).slice(-3)).toEqual([
+    ['SELECT', 'keyword'],
+    ['1', 'number'],
+    [';', 'punctuation.delimiter'],
+  ]);
+  assertLineFedParity('plsql', open);
   const code = "v := q'[first\n-- not a comment\nlast]';\nx := 1;\n";
   expect(tokenKinds('plsql', code)).toEqual([
     ['v', 'variable'],

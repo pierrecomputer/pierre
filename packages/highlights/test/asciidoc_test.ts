@@ -50,6 +50,11 @@ test('asciidoc: constrained and unconstrained inline markup', () => {
     ['<<id,t>>', 'link_text'],
     ['<<x', null],
   ]);
+  // a letter of any script before a single marker keeps it text
+  expect(tokenKinds('asciidoc', 'é*x* 日本*語*です *ok*')).toEqual([
+    ['é*x* 日本*語*です', null],
+    ['*ok*', 'emphasis.strong'],
+  ]);
 });
 
 test('asciidoc: links, macros, admonitions, lists, and tables', () => {

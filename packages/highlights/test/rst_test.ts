@@ -40,6 +40,11 @@ test('rst: inline markup stays on its line', () => {
     ['\\*', 'string.escape'],
     ['2*3*4 x*y*', null],
   ]);
+  // a letter of any script before or after markup keeps it text
+  expect(tokenKinds('rst', 'é*x* 日本*語*です *ok*')).toEqual([
+    ['é*x* 日本*語*です', null],
+    ['*ok*', 'emphasis'],
+  ]);
   // unclosed markup and names that only end in underscores stay text
   expect(tokenKinds('rst', '*open and __init__ ``x\nnext*')).toEqual([
     ['*open and __init__ ``x', null],

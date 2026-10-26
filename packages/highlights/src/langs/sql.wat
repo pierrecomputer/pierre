@@ -490,10 +490,13 @@
                 (global.set $ptr (local.get $lhs))))
             (local.set $p
               (i32.add (local.get $lhs) (i32.eq (i32.or (local.get $c) (i32.const 32)) (i32.const "n"))))
+            ;; Oracle rejects a blank, tab, or line break as the delimiter
             (if
               (i32.and
-                (i32.eq (i32.or (call $templateByte (local.get $p)) (i32.const 32)) (i32.const "q"))
-                (i32.eq (call $templateByte (i32.add (local.get $p) (i32.const 1))) (i32.const 39)))
+                (i32.and
+                  (i32.eq (i32.or (call $templateByte (local.get $p)) (i32.const 32)) (i32.const "q"))
+                  (i32.eq (call $templateByte (i32.add (local.get $p) (i32.const 1))) (i32.const 39)))
+                (i32.gt_u (call $templateByte (i32.add (local.get $p) (i32.const 2))) (i32.const 32)))
               (then
                 (call $plsqlQuote (i32.add (local.get $p) (i32.const 2)))
                 (br $token)))

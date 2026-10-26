@@ -326,6 +326,7 @@ const synthetic = (body: string) =>
       (global $streamDepth (mut i32) (i32.const 0))
       (global $streamReset (mut i32) (i32.const 0))
       (global $streamWindow (mut i32) (i32.const 0))
+      (global $streamStateLo (mut i32) (i32.const 0))
       (global $streamStateHi (mut i32) (i32.const 0))
       (const $mem.streamState 8864)
       (const $mem.bashWords 10144)

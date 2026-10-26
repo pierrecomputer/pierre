@@ -570,6 +570,7 @@
 
   (func $lvCaptureBlob (param $dst i32) (result i32)
     (local $p i32)
+    (local $lo i32)
     (local $stackBase i32)
     (local $stackLen i32)
     (local $brkLen i32)
@@ -654,8 +655,35 @@
     (local.set $p (i32.add (local.get $p) (local.get $brkLen)))
     (memory.copy (local.get $p) (i32.const $mem.jsxStack) (local.get $jsxLen))
     (local.set $p (i32.add (local.get $p) (local.get $jsxLen)))
-    (memory.copy (local.get $p) (i32.const $mem.streamState) (global.get $streamStateHi))
-    (i32.sub (i32.add (local.get $p) (global.get $streamStateHi)) (local.get $dst)))
+    ;; Store the checkpoint bytes from their first nonzero byte, after its
+    ;; u16 offset. The windows below Lo are zero, so this skips them without
+    ;; a scan, and equal checkpoints still give equal bytes.
+    (local.set $lo (global.get $streamStateLo))
+    (block $chunks
+      (loop $wide
+        (br_if $chunks (i32.ge_u (local.get $lo) (global.get $streamStateHi)))
+        (br_if $chunks
+          (v128.any_true (v128.load (i32.add (i32.const $mem.streamState) (local.get $lo)))))
+        (local.set $lo (i32.add (local.get $lo) (i32.const 16)))
+        (br $wide)))
+    (block $found
+      (loop $byte
+        (br_if $found (i32.ge_u (local.get $lo) (global.get $streamStateHi)))
+        (br_if $found (i32.load8_u (i32.add (i32.const $mem.streamState) (local.get $lo))))
+        (local.set $lo (i32.add (local.get $lo) (i32.const 1)))
+        (br $byte)))
+    (if (i32.ge_u (local.get $lo) (global.get $streamStateHi))
+      (then
+        (i32.store16 (local.get $p) (i32.const 0))
+        (return (i32.sub (i32.add (local.get $p) (i32.const 2)) (local.get $dst)))))
+    (i32.store16 (local.get $p) (local.get $lo))
+    (memory.copy
+      (i32.add (local.get $p) (i32.const 2))
+      (i32.add (i32.const $mem.streamState) (local.get $lo))
+      (i32.sub (global.get $streamStateHi) (local.get $lo)))
+    (i32.sub
+      (i32.add (i32.add (local.get $p) (i32.const 2)) (i32.sub (global.get $streamStateHi) (local.get $lo)))
+      (local.get $dst)))
 
   ;; Return the blob length without trailing zeros. This avoids storing,
   ;; hashing, and comparing inactive checkpoints and empty stacks.
@@ -681,6 +709,7 @@
 
   (func $lvRestoreBlob (param $src i32) (param $len i32)
     (local $p i32)
+    (local $lo i32)
     (local $stackBase i32)
     (local $stackLen i32)
     (local $brkLen i32)
@@ -759,13 +788,19 @@
     (local.set $p (i32.add (local.get $p) (local.get $brkLen)))
     (memory.copy (i32.const $mem.jsxStack) (local.get $p) (local.get $jsxLen))
     (local.set $p (i32.add (local.get $p) (local.get $jsxLen)))
-    (memory.copy (i32.const $mem.streamState) (local.get $p) (i32.const $mem.streamStateUsed))
-    ;; the trimmed blob ends at its last nonzero byte
-    (global.set $streamStateHi
-      (select
-        (i32.sub (i32.add (local.get $src) (local.get $len)) (local.get $p))
-        (i32.const 0)
-        (i32.gt_s (i32.sub (i32.add (local.get $src) (local.get $len)) (local.get $p)) (i32.const 0)))))
+    ;; the trimmed blob ends at the last nonzero checkpoint byte
+    (call $streamClearCheckpoints)
+    (local.set $lo (i32.load16_u (local.get $p)))
+    (local.set $p (i32.add (local.get $p) (i32.const 2)))
+    (local.set $len (i32.sub (i32.add (local.get $src) (local.get $len)) (local.get $p)))
+    (if (i32.gt_s (local.get $len) (i32.const 0))
+      (then
+        (memory.copy
+          (i32.add (i32.const $mem.streamState) (local.get $lo))
+          (local.get $p)
+          (local.get $len))
+        (global.set $streamStateLo (local.get $lo))
+        (global.set $streamStateHi (i32.add (local.get $lo) (local.get $len))))))
 
   ;; canonicalize every captured location before the first line so stale
   ;; values from earlier batches can never leak into a blob
@@ -938,8 +973,11 @@
                 (local.set $node
                   (i32.load
                     (i32.add (global.get $lvIdTab) (i32.shl (global.get $lvIncoming) (i32.const 2)))))
-                (call $lvGrowTo (i32.add (local.get $inBase) (i32.const $mem.streamStateUsed+8500)))
-                (memory.fill (local.get $inBase) (i32.const 0) (i32.const $mem.streamStateUsed+8500))
+                ;; a trimmed blob reads as zeros past its end: pad the head
+                ;; (308), the stack prefixes at their caps (8192), and the
+                ;; checkpoint offset (2); checkpoint bytes are copied by length
+                (call $lvGrowTo (i32.add (local.get $inBase) (i32.const $mem.streamStateUsed+8502)))
+                (memory.fill (local.get $inBase) (i32.const 0) (i32.const 8502))
                 (memory.copy
                   (local.get $inBase)
                   (i32.add (local.get $node) (i32.const 24))
@@ -982,7 +1020,8 @@
             (i32.add (i32.add (local.get $recStart) (local.get $recLen)) (i32.const 7))
             (i32.const -8)))
         ;; head, globals, delimiter, and fence registers (308) plus the five
-        ;; stack prefixes at their caps (1024 * 4 + 4096), then the checkpoints
+        ;; stack prefixes at their caps (1024 * 4 + 4096), then the checkpoint
+        ;; offset (2) and bytes
         (call $lvGrowTo (i32.add (local.get $blobBase) (i32.const $mem.streamStateUsed+8580)))
         (local.set $blobLen
           (call $lvTrimBlob (local.get $blobBase) (call $lvCaptureBlob (local.get $blobBase))))

@@ -18,7 +18,7 @@ import {
 } from '../lib/index';
 import { transformWat, wat2wasm } from '../scripts/build';
 import pierreDark from '../themes/pierre-dark.json' with { type: 'json' };
-import { tokenizerSamples } from './_samples';
+import { samples, tokenizerSamples } from './_samples';
 import {
   assertLineFedParity,
   distinctTheme,
@@ -2225,6 +2225,35 @@ void t.test(
     assert.ok(
       stateBytes / states < 400,
       `average blob ${stateBytes / states} bytes; the checkpoint region leaked in`
+    );
+  }
+);
+
+void t.test(
+  'live wasm: a late checkpoint window adds only its own bytes to a blob',
+  () => {
+    // TOML's checkpoint window sits past every earlier lexer's window, which
+    // stay zero; a blob that kept them would carry about 1.8 KB of zeros.
+    interface RawLive {
+      memory: WebAssembly.Memory;
+      liveStage(len: number): number;
+      liveInitDoc(ptr: number, len: number, lang: number): void;
+      liveRun(budget: number): number;
+      liveStats(k: number): number;
+    }
+    const env = { is_id_start: () => 1, is_id_continue: () => 1 };
+    const raw = new WebAssembly.Instance(wasmModule, { env })
+      .exports as unknown as RawLive;
+    const bytes = new TextEncoder().encode(samples.toml.code.repeat(20));
+    const ptr = raw.liveStage(bytes.length);
+    new Uint8Array(raw.memory.buffer).set(bytes, ptr);
+    raw.liveInitDoc(ptr, bytes.length, LANGS.toml);
+    raw.liveRun(0x7fffffff);
+    const states = raw.liveStats(1);
+    assert.ok(states > 1);
+    assert.ok(
+      raw.liveStats(2) / states < 400,
+      `average blob ${raw.liveStats(2) / states} bytes; zero windows leaked in`
     );
   }
 );

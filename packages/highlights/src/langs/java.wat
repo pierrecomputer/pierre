@@ -265,6 +265,16 @@
                       (i32.gt_s (local.get $kind) (i32.const 255))
                       (i32.eq (call $javaByte (local.get $rhs)) (i32.const "."))))
                   (then (local.set $kind (i32.const -1))))
+                ;; Apex ignores case, so a lowercase `date` before `=`, `;`,
+                ;; `.`, `)`, or an operator is a variable, not a type
+                (if
+                  (i32.and
+                    (i32.eq (local.get $kind) (enum.get $Token.type.builtin))
+                    (i32.ge_u (local.get $c) (i32.const "a")))
+                  (then
+                    (local.set $c3 (call $javaByte (call $lexSkipSpaceAt (local.get $rhs))))
+                    (if (byteset.get "=;.)!+-*/%&|?:" (local.get $c3))
+                      (then (local.set $kind (i32.const -1))))))
                 (if
                   (i32.and
                     (i32.eq (i32.sub (local.get $rhs) (local.get $lhs)) (i32.const 3))

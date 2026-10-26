@@ -1,10 +1,13 @@
 (module
   (import "../common.wat")
 
+  ;; Any byte of a non-ASCII code point counts, so `日本*語*` is no markup.
   (func $rstIsAlnum (param $c i32) (result i32)
     (i32.or
-      (i32.le_u (i32.sub (i32.or (local.get $c) (i32.const 32)) (i32.const "a")) (i32.const 25))
-      (call $lexIsDigit (local.get $c))))
+      (i32.ge_u (local.get $c) (i32.const 0x80))
+      (i32.or
+        (i32.le_u (i32.sub (i32.or (local.get $c) (i32.const 32)) (i32.const "a")) (i32.const 25))
+        (call $lexIsDigit (local.get $c)))))
 
   ;; End of the run of $n `$c` bytes that closes markup in [$p,$stop), after a
   ;; non-blank byte and, with $tight, before no letter or digit; 0 when none.

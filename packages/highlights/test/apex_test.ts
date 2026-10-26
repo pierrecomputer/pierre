@@ -163,6 +163,31 @@ test('apex: inline SOQL and SOSL across lines', () => {
   ).toContainEqual(['RETURNING', 'keyword']);
 });
 
+test('apex: a lowercase type name is a variable before an operator', () => {
+  expect(
+    tokenKinds('apex', 'Date date = null; for (Id id : ids) list<string> l;')
+  ).toEqual([
+    ['Date', 'type.builtin'],
+    ['date', 'variable'],
+    ['=', 'operator'],
+    ['null', 'constant.builtin'],
+    [';', 'punctuation.delimiter'],
+    ['for', 'keyword.control'],
+    ['(', 'punctuation.bracket'],
+    ['Id', 'type.builtin'],
+    ['id', 'variable'],
+    [':', 'punctuation.delimiter'],
+    ['ids', 'variable'],
+    [')', 'punctuation.bracket'],
+    ['list', 'type.builtin'],
+    ['<', 'operator'],
+    ['string', 'type.builtin'],
+    ['>', 'operator'],
+    ['l', 'variable'],
+    [';', 'punctuation.delimiter'],
+  ]);
+});
+
 test('apex: Java keeps its own dialect after an Apex run', () => {
   expect(tokenKinds('apex', 'Public Class A {}')[0]).toEqual([
     'Public Class',

@@ -33,6 +33,7 @@ export function transformWat(
   content ??= readFileSync(url, 'utf-8');
   const enumMap = new Map<string, Record<string, number>>();
   const languages: Record<string, number> = {};
+  let languageNames: number[] = [];
   const bitsetMap = new Map<
     string,
     { base: number; bits: Record<string, number> }
@@ -103,11 +104,13 @@ export function transformWat(
         languages[alias] = id;
       }
     }
+    // partial fixtures without the memory layout carry no name table
+    if (/\(const\s+\$mem\.languageNames\b/.test(code))
+      languageNames = languageNamesData(languages, names);
     return (
       `(enum $Language ${names.join(' ')})\n  (table $hlDispatch funcref\n    (elem ${functions.join(' ')}))\n` +
-      // partial fixtures without the memory layout carry no name table
-      (/\(const\s+\$mem\.languageNames\b/.test(code)
-        ? languageNamesData(languages, names)
+      (languageNames.length > 0
+        ? `  (data (i32.const $mem.languageNames) "${languageNames.map((b) => '\\' + b.toString(16).padStart(2, '0')).join('')}")`
         : '')
     );
   });
@@ -360,11 +363,11 @@ export function transformWat(
     const exit =
       state.length === 0
         ? ''
-        : `(global.set $streamWindow (i32.const $mem.streamState+${base}))\n        ${save}\n        (if (i32.lt_u (global.get $streamStateHi) (i32.const ${streamStateOffset}))\n          (then (global.set $streamStateHi (i32.const ${streamStateOffset}))))\n        `;
+        : `(global.set $streamWindow (i32.const $mem.streamState+${base}))\n        ${save}\n        (if (i32.gt_u (global.get $streamStateLo) (i32.const ${base}))\n          (then (global.set $streamStateLo (i32.const ${base}))))\n        (if (i32.lt_u (global.get $streamStateHi) (i32.const ${streamStateOffset}))\n          (then (global.set $streamStateHi (i32.const ${streamStateOffset}))))\n        `;
     return `(func${body}\n    (if (local.get $streamRoot)\n      (then\n        ${exit}(global.set $streamDepth (i32.const 0)))))`;
   });
-  // The live tokenizer captures the whole used checkpoint region per line;
-  // publish its length as a named address for src/live.wat.
+  // The end of the last window bounds the saved checkpoint range; publish it
+  // as a named address for src/emit.wat and src/live.wat.
   code += `\n(const $mem.streamStateUsed ${streamStateOffset})\n`;
 
   // Nested lexers cannot yield: their callers' locals are not saved here.
@@ -488,6 +491,16 @@ export function transformWat(
   );
   if (streamStateOffset > streamStateEnd - streamStateBase) {
     throw new Error('stream lexer state exceeds reserved memory');
+  }
+  // the name table ends at the next named address; streamStateUsed is a length
+  const languageNamesBase = constMap.get('$mem.languageNames') ?? 0;
+  const languageNamesEnd = Math.min(
+    ...[...constMap]
+      .filter(([k, v]) => v > languageNamesBase && k !== '$mem.streamStateUsed')
+      .map(([, v]) => v)
+  );
+  if (languageNames.length > languageNamesEnd - languageNamesBase) {
+    throw new Error('language names exceed reserved memory');
   }
   code = code.replace(/(\$[\w.]+)([+-]\d+)?/g, (all, name, bias) => {
     const value = constMap.get(name);
@@ -1209,7 +1222,7 @@ function packKeywordPool(all: string[]): string {
 function languageNamesData(
   languages: Record<string, number>,
   canonical: string[]
-): string {
+): number[] {
   const isCanonical = new Set(canonical.map((quoted) => quoted.slice(1, -1)));
   const maxLength = 18; // $languageByName rejects longer words
   // plain text's names resolve to id 0, the same as no match
@@ -1231,9 +1244,7 @@ function languageNamesData(
     for (const name of names.filter((n) => n.length === length))
       records.push(languages[name], ...Buffer.from(name, 'latin1'));
   }
-  const bytes = [...offsets.flatMap((o) => [o & 255, o >> 8]), ...records];
-  const text = bytes.map((b) => '\\' + b.toString(16).padStart(2, '0'));
-  return `  (data (i32.const $mem.languageNames) "${text.join('')}")`;
+  return [...offsets.flatMap((o) => [o & 255, o >> 8]), ...records];
 }
 
 /**

@@ -142,6 +142,21 @@
         (if (call $lexGapHasBreak (local.get $gap) (global.get $ptr))
           (then
             (local.set $line (local.get $cont))
+            ;; a blank line ends a `\` continuation, as a line-fed stream sees it
+            (if (local.get $cont)
+              (then
+                (local.set $p (local.get $gap))
+                (loop $first
+                  (local.set $c (i32.load8_u (local.get $p)))
+                  (local.set $p (i32.add (local.get $p) (i32.const 1)))
+                  (br_if $first (i32.eqz (byteset.get "\n\r" (local.get $c)))))
+                (if
+                  (i32.and
+                    (i32.eq (local.get $c) (i32.const 13))
+                    (i32.eq (call $templateByte (local.get $p)) (i32.const 10)))
+                  (then (local.set $p (i32.add (local.get $p) (i32.const 1)))))
+                (if (call $lexGapHasBreak (local.get $p) (global.get $ptr))
+                  (then (local.set $line (i32.const 0))))))
             (local.set $cont (i32.const 0))))
         (call $emitGap (local.get $gap) (global.get $ptr))
         (br_if $done (i32.ge_u (global.get $ptr) (global.get $end)))
