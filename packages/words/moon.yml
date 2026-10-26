@@ -1,0 +1,203 @@
+$schema: 'https://moonrepo.dev/schemas/project.json'
+
+language: 'typescript'
+layer: 'library'
+tags: ['publishable']
+
+tasks:
+  build:
+    script:
+      'node scripts/build.mjs && tsdown && cp react/styles.css dist/styles.css'
+    deps:
+      - '^:build'
+    inputs:
+      - 'src/**/*'
+      - 'lib/**/*'
+      - 'scripts/build.mjs'
+      - 'react/**/*'
+      - 'html/**/*'
+      # The docs demo imports this source; invalidate downstream builds too.
+      - 'benchmark/fixtures.mjs'
+      - 'tsdown.config.ts'
+      - 'tsconfig.json'
+    outputs:
+      - 'dist'
+
+  # Node covers exhaustive core replay. Bun's optimizing Wasm tier produces
+  # intermittent baseline-parser mismatches too; disable that tier for React
+  # tests until the runtime issue is resolved. See benchmark/STREAMING.md.
+  test:
+    script:
+      'node test/index.mjs && node test/index.mjs --spec && node --test
+      test/stream_test.mjs test/stress_test.mjs && BUN_JSC_useOMGJIT=false bun
+      test test/react_test.tsx'
+    deps:
+      - 'build'
+      # Validate published evidence and report assembly without timing workloads.
+      - 'bench-chart-check'
+      - 'bench-chart-test'
+      - 'bench-harness-test'
+    options:
+      merge: 'replace'
+
+  test-spec:
+    command: 'node test/index.mjs --spec'
+    deps:
+      - 'build'
+
+  # Isolated competitor tools and exact Chrome build, outside shipped dependencies.
+  bench-setup:
+    command: 'node benchmark/setup.mjs'
+    options:
+      cache: false
+      runInCI: 'always'
+
+  # Optional build-connected benchmarks stay out of the affected CI graph.
+  # Request them in CI-marked shells with moonx --ignore-ci-checks.
+  # Quick verifies the full harness; full repeats the timing and heap matrix.
+  bench-quick:
+    command: 'node benchmark/run.mjs quick'
+    deps:
+      - 'build'
+    options:
+      cache: false
+      runInCI: 'skip'
+
+  bench-full:
+    command: 'node benchmark/run.mjs full'
+    deps:
+      - 'build'
+    options:
+      cache: false
+      runInCI: 'skip'
+
+  bench-report:
+    command: 'node benchmark/report.mjs'
+    options:
+      cache: false
+      runInCI: 'always'
+
+  bench-harness-test:
+    command: 'node --test benchmark/report_test.mjs'
+    options:
+      cache: false
+      runInCI: 'always'
+
+  bench-chart:
+    command: 'node benchmark/chart-data.mjs'
+    options:
+      cache: false
+      runInCI: 'always'
+
+  bench-chart-check:
+    command: 'node benchmark/chart-data.mjs --check'
+    options:
+      cache: false
+      runInCI: 'always'
+
+  bench-chart-test:
+    command: 'node --test benchmark/chart-data_test.mjs'
+    options:
+      cache: false
+      runInCI: 'always'
+
+  bench:
+    command: 'node benchmark/bench.mjs'
+    deps:
+      - 'build'
+    options:
+      cache: false
+      runInCI: 'skip'
+
+  bench-stream:
+    command: 'node benchmark/stream.ts'
+    deps:
+      - 'build'
+    options:
+      cache: false
+      runInCI: 'skip'
+
+  bench-fence:
+    command: 'node --expose-gc benchmark/fence.mjs'
+    deps:
+      - 'build'
+    options:
+      cache: false
+      runInCI: 'skip'
+
+  # Explicit large workloads keep routine replay checks bounded.
+  bench-large:
+    command: 'node --expose-gc benchmark/large.mjs'
+    deps:
+      - 'build'
+    options:
+      cache: false
+      runInCI: 'skip'
+
+  bench-html:
+    command: 'node --expose-gc benchmark/html.mjs'
+    deps:
+      - 'build'
+    options:
+      cache: false
+      runInCI: 'skip'
+
+  bench-memory:
+    command: 'node benchmark/memory.mjs'
+    options:
+      cache: false
+      runInCI: 'always'
+
+  bench-footprint:
+    command: 'node benchmark/footprint.mjs'
+    deps:
+      - 'build'
+    options:
+      cache: false
+      runInCI: 'skip'
+
+  # Requires the production docs demo to be running at the supplied URL.
+  bench-render:
+    command: 'node benchmark/browser.mjs'
+    deps:
+      - 'build'
+    options:
+      cache: false
+      runInCI: 'skip'
+
+  # Uses the pinned benchmark/harness toolchain; see benchmark/README.md.
+  bench-render-compare:
+    command: 'node benchmark/compare-browser.mjs'
+    deps:
+      - 'build'
+    options:
+      cache: false
+      runInCI: 'skip'
+
+  gen-spec:
+    command: 'node scripts/gen-spec.mjs'
+    options:
+      cache: false
+      runInCI: 'always'
+
+  playground-dev:
+    command: 'wrangler dev'
+    deps:
+      - 'build'
+    options:
+      cache: false
+      persistent: true
+      runInCI: 'skip'
+
+  playground-deploy:
+    command: 'wrangler deploy'
+    deps:
+      - 'build'
+    options:
+      cache: false
+      runInCI: 'skip'
+
+  prepublish:
+    deps:
+      - 'test'
+      - 'typecheck'

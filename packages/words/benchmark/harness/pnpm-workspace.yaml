@@ -1,0 +1,15 @@
+# Intentional standalone benchmark dependency graph; never shipped by Words.
+packages: []
+
+catalog:
+  '@puppeteer/browsers': '3.2.6'
+  '@streamdown/code': '2.0.0'
+  'agent-browser': '0.33.1'
+  'esbuild': '0.27.4'
+  'react': '19.2.7'
+  'react-dom': '19.2.7'
+  'streamdown': '2.7.1'
+
+allowBuilds:
+  agent-browser: true
+  esbuild: true

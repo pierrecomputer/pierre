@@ -24,7 +24,7 @@ function getScaledWidth(value: number, maximum: number, scaleFloor: number) {
 
 // Spans four chart tracks in each direction, then shifts by the exact mirrored
 // period so every bar reveals the same calm slice and loops without a jump.
-function getBenchmarkGradientStyle(
+export function getBenchmarkGradientStyle(
   value: number,
   maximum: number
 ): BenchmarkBarStyle {

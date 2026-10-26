@@ -458,9 +458,6 @@ importers:
       '@pierre/icons':
         specifier: 'catalog:'
         version: 0.9.0(react@19.2.7)
-      '@pierre/markdowns':
-        specifier: workspace:*
-        version: link:../../packages/markdowns
       '@pierre/theme':
         specifier: workspace:*
         version: link:../../packages/theme
@@ -476,6 +473,9 @@ importers:
       '@pierre/vscode-icons':
         specifier: 'catalog:'
         version: 0.0.9
+      '@pierre/words':
+        specifier: workspace:*
+        version: link:../../packages/words
       '@radix-ui/react-avatar':
         specifier: 'catalog:'
         version: 1.1.10(@types/react-dom@19.2.3(@types/react@19.2.7))(@types/react@19.2.7)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
@@ -728,54 +728,6 @@ importers:
         specifier: 'catalog:'
         version: 1.0.39
 
-  packages/markdowns:
-    devDependencies:
-      '@pierre/highlights':
-        specifier: workspace:*
-        version: link:../highlights
-      '@types/bun':
-        specifier: 'catalog:'
-        version: 1.4.0
-      '@types/jsdom':
-        specifier: 'catalog:'
-        version: 28.0.1
-      '@types/react':
-        specifier: 19.2.7
-        version: 19.2.7
-      '@types/react-dom':
-        specifier: 19.2.3
-        version: 19.2.3(@types/react@19.2.7)
-      binaryen:
-        specifier: 'catalog:'
-        version: 132.0.0
-      jsdom:
-        specifier: 'catalog:'
-        version: 26.1.0
-      markdown-it:
-        specifier: 'catalog:'
-        version: 15.0.0
-      md4x:
-        specifier: 'catalog:'
-        version: 0.0.29
-      react:
-        specifier: 19.2.7
-        version: 19.2.7
-      react-dom:
-        specifier: 19.2.7
-        version: 19.2.7(react@19.2.7)
-      tsdown:
-        specifier: 'catalog:'
-        version: 0.22.14(@tsdown/css@0.22.14)(typescript@7.0.2)
-      typescript:
-        specifier: 'catalog:'
-        version: 7.0.2
-      wabt:
-        specifier: 'catalog:'
-        version: 1.0.39
-      wrangler:
-        specifier: 'catalog:'
-        version: 4.120.0
-
   packages/path-store:
     devDependencies:
       '@pierre/tree-test-data':
@@ -922,6 +874,54 @@ importers:
       vite:
         specifier: 'catalog:'
         version: 8.1.0(@types/node@25.9.3)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0)
+
+  packages/words:
+    devDependencies:
+      '@pierre/highlights':
+        specifier: workspace:*
+        version: link:../highlights
+      '@types/bun':
+        specifier: 'catalog:'
+        version: 1.4.0
+      '@types/jsdom':
+        specifier: 'catalog:'
+        version: 28.0.1
+      '@types/react':
+        specifier: 19.2.7
+        version: 19.2.7
+      '@types/react-dom':
+        specifier: 19.2.3
+        version: 19.2.3(@types/react@19.2.7)
+      binaryen:
+        specifier: 'catalog:'
+        version: 132.0.0
+      jsdom:
+        specifier: 'catalog:'
+        version: 26.1.0
+      markdown-it:
+        specifier: 'catalog:'
+        version: 15.0.0
+      md4x:
+        specifier: 'catalog:'
+        version: 0.0.29
+      react:
+        specifier: 19.2.7
+        version: 19.2.7
+      react-dom:
+        specifier: 19.2.7
+        version: 19.2.7(react@19.2.7)
+      tsdown:
+        specifier: 'catalog:'
+        version: 0.22.14(@tsdown/css@0.22.14)(typescript@7.0.2)
+      typescript:
+        specifier: 'catalog:'
+        version: 7.0.2
+      wabt:
+        specifier: 'catalog:'
+        version: 1.0.39
+      wrangler:
+        specifier: 'catalog:'
+        version: 4.120.0
 
 packages:
 

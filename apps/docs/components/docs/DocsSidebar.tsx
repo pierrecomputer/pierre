@@ -193,10 +193,10 @@ export function DocsSidebar({
             )}
             {product.id === 'diffs' && (
               <MobileNavLink
-                href={`${product.basePath}/markdowns`}
-                active={isActivePath(`${product.basePath}/markdowns`)}
+                href={`${product.basePath}/words`}
+                active={isActivePath(`${product.basePath}/words`)}
               >
-                Markdowns
+                Words
               </MobileNavLink>
             )}
             <MobileNavLink

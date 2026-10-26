@@ -33,7 +33,7 @@
       "path": "packages/trees/tsconfig.json"
     },
     {
-      "path": "packages/markdowns/tsconfig.json"
+      "path": "packages/words/tsconfig.json"
     }
   ]
 }
