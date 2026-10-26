@@ -3,9 +3,10 @@
 
   ;; Lowercase words. Bits above the token: 256 a statement whose `name=`
   ;; pairs are options, 512 a word that is a function before a glued `(`,
-  ;; 1024 a macro statement that needs its `%`, 4096 the next name is a
-  ;; procedure or macro reference, 8192 the next name defines a macro, 16384
-  ;; a statement that starts data lines. `while` and `return` share their
+  ;; 1024 a macro statement that needs its `%`, 2048 a keyword only where it
+  ;; starts a statement (`weight` is also a common column), 4096 the next
+  ;; name is a procedure or macro reference, 8192 the next name defines a
+  ;; macro, 16384 a statement that starts data lines. `while` and `return` share their
   ;; hash features with `where` and `retain` and are matched directly.
   (keyword-table $sasWords $mem.sasWords $mem.stataWords
     (group $Token.keyword.control
@@ -15,11 +16,14 @@
       "set" "merge" "update" "modify" "output" "ods" "options" "libname" "filename" "infile"
       "file")
     (group $Token.keyword
-      "by" "keep" "drop" "retain" "rename" "format" "informat" "label" "attrib" "where" "class"
-      "var" "model" "tables" "table" "id" "freq" "weight" "call" "array" "title" "footnote"
-      "create" "from" "as" "group" "order" "having" "distinct" "into" "join" "on" "inner"
-      "outer" "full" "union" "insert" "values" "calculated" "desc" "descending")
-    (group $Token.keyword+512 "input" "put" "length" "left" "right" "sum")
+      "by" "where" "call" "title" "footnote" "create" "from" "as" "group" "order" "having"
+      "distinct" "into" "join" "on" "inner" "outer" "full" "union" "insert" "values" "calculated"
+      "desc" "descending")
+    (group $Token.keyword+2048
+      "keep" "drop" "retain" "rename" "format" "informat" "label" "attrib" "class" "var" "model"
+      "tables" "table" "id" "freq" "weight" "array")
+    (group $Token.keyword+512 "input" "put" "left" "right")
+    (group $Token.keyword+2560 "length" "sum")
     (group $Token.keyword.operator
       "and" "or" "not" "in" "eq" "ne" "gt" "lt" "ge" "le" "like" "between" "is")
     (group $Token.keyword.operator+512 "missing")
@@ -279,7 +283,10 @@
                     (call $emitTok (enum.get $Token.string.special) (local.get $lhs) (local.get $rhs))
                     (br $next)))))
             (local.set $v (call $sasWordHl (i32.add (local.get $lhs) (local.get $pct)) (local.get $rhs)))
-            (if (i32.and (i32.ne (i32.and (local.get $v) (i32.const 1024)) (i32.const 0)) (i32.eqz (local.get $pct)))
+            (if
+              (i32.or
+                (i32.and (i32.ne (i32.and (local.get $v) (i32.const 1024)) (i32.const 0)) (i32.eqz (local.get $pct)))
+                (i32.and (i32.ne (i32.and (local.get $v) (i32.const 2048)) (i32.const 0)) (i32.eqz (local.get $atStmt))))
               (then (local.set $v (i32.const -1))))
             (local.set $p (call $lexSkipSpaceAt (local.get $rhs)))
             (if

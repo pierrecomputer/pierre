@@ -5,6 +5,11 @@
   ;; scss, 3 the indented sass syntax, 4 stylus, which is also indented. Set
   ;; by the entry wrappers on every call, so it needs no checkpoint.
   (global $cssDialect (mut i32) (i32.const 0))
+  ;; 1 only in $hlStylusImpl, the build's copy of $hlCssImpl for stylus.
+  ;; WARNING: guard stylus-only code in $hlCssImpl with this, not
+  ;; $cssDialect. Binaryen then drops it from the css copy; left in, it
+  ;; slowed css and less 2-3%.
+  (global $cssStylus i32 (i32.const 0))
 
   ;; identifier-start: a-z A-Z `_` and any byte >= 128 - leading `-` is resolved by
   ;; the callers, which must split `-2px` from `-webkit-x` and `--custom`
@@ -125,28 +130,22 @@
         (call $emitTok (enum.get $Token.string.escape) (global.get $ptr) (local.get $e))
         (global.set $ptr (local.get $e))
         (local.set $seg (global.get $ptr))
-        (call $cssStringOpenAtChunkEnd (local.get $q))
+        ;; an escaped line break that ends a streamed chunk keeps the string
+        ;; open; $hlCssImpl resumes it with css escapes in the next chunk
+        (if
+          (i32.and
+            (global.get $streaming)
+            (i32.and
+              (i32.eq (global.get $ptr) (global.get $end))
+              (i32.or
+                (i32.eq (i32.load8_u (i32.sub (global.get $ptr) (i32.const 1))) (i32.const 10))
+                (i32.eq (i32.load8_u (i32.sub (global.get $ptr) (i32.const 1))) (i32.const 13)))))
+          (then
+            (global.set $streamMode (i32.const 17))
+            (global.set $streamA (local.get $q))))
         (br $wide)))
     (call $emitTok (enum.get $Token.string) (local.get $seg) (global.get $ptr))
     (local.get $open))
-
-  ;; A string whose escaped line break ends the chunk stays open: hand it to
-  ;; the shared string mode so the next chunk resumes the body instead of
-  ;; lexing the continuation line as css
-  (func $cssStringOpenAtChunkEnd (param $q i32)
-    (if
-      (i32.and
-        (global.get $streaming)
-        (i32.and
-          (i32.eq (global.get $ptr) (global.get $end))
-          (i32.or
-            (i32.eq (i32.load8_u (i32.sub (global.get $ptr) (i32.const 1))) (i32.const 10))
-            (i32.eq (i32.load8_u (i32.sub (global.get $ptr) (i32.const 1))) (i32.const 13)))))
-      (then
-        (global.set $streamMode (i32.const 2))
-        (global.set $streamA (local.get $q))
-        (global.set $streamB (i32.const 0))
-        (global.set $streamHl (enum.get $Token.string)))))
 
   ;; whether [$lhs,$rhs) is a media/supports query operator:
   ;; `and` / `or` / `not` / `only` - plus, in scss and sass, the control
@@ -196,47 +195,6 @@
             (i64.and (i64.load (local.get $lhs)) (i64.const 0x00ffffffffffffff))
             (i64.const "through")))))
     (i32.const 0))
-
-  ;; advance $ptr over an unquoted url body: everything up to whitespace, a
-  ;; quote, or the closing paren - data: uris make these long, 16 bytes/step
-  (func $cssScanUrlBody
-    (local $mask i32)
-    (local $rem i32)
-    (local $w v128)
-    (block $done
-      (loop $wide
-        (br_if $done (i32.ge_u (global.get $ptr) (global.get $end)))
-        (local.set $w (v128.load (global.get $ptr)))
-        (local.set $mask
-          (i8x16.bitmask
-            (v128.or
-              (v128.or
-                (i8x16.le_u
-                  (i8x16.sub (local.get $w) (i8x16.splat (i32.const 9)))
-                  (i8x16.splat (i32.const 4)))
-                (i8x16.eq (local.get $w) (i8x16.splat (i32.const 32))))
-              (v128.or
-                (v128.or
-                  (i8x16.eq (local.get $w) (i8x16.splat (i32.const 34)))
-                  (i8x16.eq (local.get $w) (i8x16.splat (i32.const 39))))
-                (i8x16.eq (local.get $w) (i8x16.splat (i32.const 41)))))))
-        (local.set $rem (i32.sub (global.get $end) (global.get $ptr)))
-        (if (i32.lt_u (local.get $rem) (i32.const 16))
-          (then
-            (local.set $mask
-              (i32.and
-                (local.get $mask)
-                (i32.sub (i32.shl (i32.const 1) (local.get $rem)) (i32.const 1))))))
-        (if (local.get $mask)
-          (then
-            (global.set $ptr (i32.add (global.get $ptr) (i32.ctz (local.get $mask))))
-            (br $done)))
-        (if (i32.le_u (local.get $rem) (i32.const 16))
-          (then
-            (global.set $ptr (global.get $end))
-            (br $done)))
-        (global.set $ptr (i32.add (global.get $ptr) (i32.const 16)))
-        (br $wide))))
 
   ;; Classify a statement without emitting tokens. Return 1 at `{` for a
   ;; selector, or 0 at `;` or `}` for a declaration. Skip comments and
@@ -438,6 +396,13 @@
               (i32.or
                 (i32.eq (local.get $c) (i32.const 10))
                 (i32.eq (local.get $c) (i32.const 13))))
+            ;; an escaped line break continues the string on the next line,
+            ;; which a line-fed run cannot see yet: stop at it
+            (local.set $c (call $templateByte (i32.add (local.get $p) (i32.const 1))))
+            (if (byteset.get "\0a\0d" (local.get $c))
+              (then
+                (local.set $stop (i32.add (local.get $p) (i32.const 1)))
+                (br $decl)))
             (local.set $p (i32.add (local.get $p) (i32.const 2)))
             (br $sl)))
         (br $scan)))
@@ -524,9 +489,7 @@
         (i32.ne (call $templateByte (i32.add (local.get $q) (i32.const 1))) (i32.const "="))
         (i32.and
           (i32.eq (call $templateByte (i32.add (local.get $q) (i32.const 1))) (i32.const "="))
-          (i32.or
-            (i32.or (i32.eq (local.get $c) (i32.const "?")) (i32.eq (local.get $c) (i32.const ":")))
-            (byteset.get "*+-/<=>^~" (local.get $c))))
+          (byteset.get "%*+-/:?" (local.get $c)))
         (i32.eq (local.get $c) (i32.const "="))))
     (if (local.get $v)
       (then
@@ -559,6 +522,7 @@
           (i32.eqz (local.get $v))
           (call $cssIdentStart (call $templateByte (i32.add (local.get $q) (i32.const 1))))))
       (then (return (i32.const 0))))
+    ;; a selector shape after the name makes it a selector: `my-card .title`
     (select
       (i32.const 2)
       (i32.const -1)
@@ -567,7 +531,12 @@
         (i32.and
           (i32.and
             (i32.gt_u (local.get $c) (i32.const 13))
-            (i32.and (i32.ne (local.get $c) (i32.const ",")) (i32.ne (local.get $c) (i32.const "{"))))
+            (i32.eqz
+              (i32.or
+                (byteset.get "&*+,>[{~" (local.get $c))
+                (i32.and
+                  (i32.eq (local.get $c) (i32.const "."))
+                  (call $cssIdentStart (call $templateByte (i32.add (local.get $q) (i32.const 1))))))))
           (local.get $v)))))
 
   ;; The entry points: css proper, and the four preprocessor dialects that
@@ -589,7 +558,8 @@
     (drop (call $hlCssImpl (i32.const 0))))
   (func $hlStylus
     (global.set $cssDialect (i32.const 4))
-    (drop (call $hlCssImpl (i32.const 0))))
+    (drop (call $hlStylusImpl (i32.const 0))))
+  (func-variant $hlStylusImpl $hlCssImpl (global $cssStylus 1) (global $cssDialect 4))
 
   ;; A nonzero state highlights a JS template part. Bits 0..1 hold the mode,
   ;; bit 2 the statement decision, bits 3..4 the attribute state, bit 5 the
@@ -612,6 +582,9 @@
     (local $interpMode i32) ;; the mode to restore when it closes
     (local $fnPrelude i32) ;; the prelude names a mixin or function next
     (local $sassDepth i32) ;; the indented syntax: 1 when the statement is indented
+    (local $urlMask i32)
+    (local $urlRem i32)
+    (local $urlW v128)
     (local.set $decide (i32.const 1))
     (call $lexEmitLeadingContinuation)
     (if (local.get $state)
@@ -622,6 +595,13 @@
         (local.set $namespace (i32.and (i32.shr_u (local.get $state) (i32.const 5)) (i32.const 1)))
         (local.set $span (i32.and (i32.shr_u (local.get $state) (i32.const 6)) (i32.const 3)))
         (local.set $depth (i32.shr_u (local.get $state) (i32.const 9)))))
+    ;; a string $cssString left open at the previous chunk end; a template
+    ;; part resumes its own through $span
+    (if (i32.eq (global.get $streamMode) (i32.const 17))
+      (then
+        (global.set $streamMode (i32.const 0))
+        (if (i32.eqz (local.get $span))
+          (then (drop (call $cssString (global.get $streamA) (i32.const 0)))))))
     (block $done
       (loop $next
         (if (local.get $span)
@@ -645,7 +625,7 @@
         (local.set $gap (global.get $ptr))
         (call $scanWhitespace)
         ;; the indented syntaxes end a statement at its line break
-        (if (i32.ge_u (global.get $cssDialect) (i32.const 3))
+        (if (i32.or (i32.eq (global.get $cssDialect) (i32.const 3)) (global.get $cssStylus))
           (then
             (if
               (i32.lt_u
@@ -706,7 +686,7 @@
             ;; does not start its line sits inside a block
             (local.set $sassDepth
               (i32.and
-                (i32.ge_u (global.get $cssDialect) (i32.const 3))
+                (i32.or (i32.eq (global.get $cssDialect) (i32.const 3)) (global.get $cssStylus))
                 (i32.and
                   (i32.gt_u (global.get $ptr) (global.get $srcBase))
                   (i32.or
@@ -800,10 +780,8 @@
               ;; `&:extend(.a);`, whose `;` would read as a declaration.
               (else
                 (block $cssStatement
-                  ;; stylus statement shapes css has no syntax for.
-                  ;; WARNING: keep this a separate guarded block; folding it
-                  ;; into the mode select below slowed css ~30% in JSC.
-                  (if (i32.eq (global.get $cssDialect) (i32.const 4))
+                  ;; stylus statement shapes css has no syntax for
+                  (if (global.get $cssStylus)
                     (then
                       (local.set $p
                         (call $stylusStart (local.get $c) (i32.or (local.get $depth) (local.get $sassDepth))))
@@ -910,19 +888,14 @@
         ;; structural bytes end statements in any mode
         (if (i32.eq (local.get $c) (i32.const "{"))
           (then
-            ;; stylus interpolates a bare `{...}` glued to a name: `.col-{i}`.
-            ;; WARNING: checking this with the `#{` test above, once per
-            ;; token, slowed css ~3%; here only `{` pays for it.
-            (if
-              (i32.and
-                (i32.eq (global.get $cssDialect) (i32.const 4))
-                (i32.gt_u (local.get $lhs) (global.get $srcBase)))
+            ;; stylus interpolates a `{...}` glued to a `-`: `.col-{i}`,
+            ;; `-webkit-{prop}`. `.a{` and `print{` open blocks.
+            (if (global.get $cssStylus)
               (then
-                (local.set $mid (i32.load8_u (i32.sub (local.get $lhs) (i32.const 1))))
                 (if
-                  (i32.or
-                    (call $cssIdentStart (local.get $mid))
-                    (i32.or (i32.eq (local.get $mid) (i32.const "-")) (call $lexIsDigit (local.get $mid))))
+                  (i32.and
+                    (i32.gt_u (local.get $lhs) (global.get $srcBase))
+                    (i32.eq (i32.load8_u (i32.sub (local.get $lhs) (i32.const 1))) (i32.const "-")))
                   (then
                     (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
                     (call $emitTok (enum.get $Token.punctuation.special) (local.get $lhs) (global.get $ptr))
@@ -1165,7 +1138,7 @@
                     (local.get $lhs)
                     (global.get $ptr))
                   ;; a stylus property may skip its colon
-                  (if (i32.eq (global.get $cssDialect) (i32.const 4))
+                  (if (global.get $cssStylus)
                     (then (local.set $mode (i32.const 3))))
                   (br $next)))
               (if (i32.eq (local.get $c) (i32.const ":"))
@@ -1203,7 +1176,7 @@
                   (call $emitTok (enum.get $Token.variable) (local.get $lhs) (global.get $ptr))
                   (br $next)))
               ;; stylus `if`, `unless`, `and`, `is`, `true` in expressions
-              (if (i32.eq (global.get $cssDialect) (i32.const 4))
+              (if (global.get $cssStylus)
                 (then
                   (local.set $p (keyword-table.value $stylusWords (local.get $lhs) (global.get $ptr)))
                   (if (i32.lt_u (local.get $p) (i32.const 256))
@@ -1253,34 +1226,64 @@
                         (enum.get $Token.punctuation.bracket)
                         (local.get $lhs)
                         (global.get $ptr))
-                      ;; peek past whitespace: quoted bodies go back to the
-                      ;; main loop; anything else up to the `)` is the raw url
+                      ;; peek past blanks on this line: quoted bodies go back
+                      ;; to the main loop; anything else up to the `)` is the
+                      ;; raw url
                       (local.set $p (global.get $ptr))
                       (block $uDone
                         (loop $uWs
                           (br_if $uDone (i32.ge_u (local.get $p) (global.get $end)))
                           (local.set $c2 (i32.load8_u (local.get $p)))
                           (br_if $uDone
-                            (i32.eqz
-                              (i32.or
-                                (i32.eq (local.get $c2) (i32.const 32))
-                                (i32.le_u (i32.sub (local.get $c2) (i32.const 9)) (i32.const 4)))))
+                            (i32.and (i32.ne (local.get $c2) (i32.const 32)) (i32.ne (local.get $c2) (i32.const 9))))
                           (local.set $p (i32.add (local.get $p) (i32.const 1)))
                           (br $uWs)))
                       (if
                         (i32.and
                           (i32.lt_u (local.get $p) (global.get $end))
-                          (i32.eqz
-                            (i32.or
-                              (i32.eq (local.get $c2) (i32.const ")"))
-                              (i32.or
-                                (i32.eq (local.get $c2) (i32.const 34))
-                                (i32.eq (local.get $c2) (i32.const 39))))))
+                          (i32.eqz (byteset.get "\0a\0d\22')" (local.get $c2))))
                         (then
                           (call $emitGap (global.get $ptr) (local.get $p))
                           (global.set $ptr (local.get $p))
                           (local.set $lhs (local.get $p))
-                          (call $cssScanUrlBody)
+                          ;; the unquoted body runs to whitespace, a quote, or `)`.
+                          ;; WARNING: keep this scan inline. As a helper, both
+                          ;; lexer copies call it, Binaryen stops inlining it,
+                          ;; and css gets ~1% slower.
+                          (block $urlDone
+                            (loop $urlWide
+                              (br_if $urlDone (i32.ge_u (global.get $ptr) (global.get $end)))
+                              (local.set $urlW (v128.load (global.get $ptr)))
+                              (local.set $urlMask
+                                (i8x16.bitmask
+                                  (v128.or
+                                    (v128.or
+                                      (i8x16.le_u
+                                        (i8x16.sub (local.get $urlW) (i8x16.splat (i32.const 9)))
+                                        (i8x16.splat (i32.const 4)))
+                                      (i8x16.eq (local.get $urlW) (i8x16.splat (i32.const 32))))
+                                    (v128.or
+                                      (v128.or
+                                        (i8x16.eq (local.get $urlW) (i8x16.splat (i32.const 34)))
+                                        (i8x16.eq (local.get $urlW) (i8x16.splat (i32.const 39))))
+                                      (i8x16.eq (local.get $urlW) (i8x16.splat (i32.const 41)))))))
+                              (local.set $urlRem (i32.sub (global.get $end) (global.get $ptr)))
+                              (if (i32.lt_u (local.get $urlRem) (i32.const 16))
+                                (then
+                                  (local.set $urlMask
+                                    (i32.and
+                                      (local.get $urlMask)
+                                      (i32.sub (i32.shl (i32.const 1) (local.get $urlRem)) (i32.const 1))))))
+                              (if (local.get $urlMask)
+                                (then
+                                  (global.set $ptr (i32.add (global.get $ptr) (i32.ctz (local.get $urlMask))))
+                                  (br $urlDone)))
+                              (if (i32.le_u (local.get $urlRem) (i32.const 16))
+                                (then
+                                  (global.set $ptr (global.get $end))
+                                  (br $urlDone)))
+                              (global.set $ptr (i32.add (global.get $ptr) (i32.const 16)))
+                              (br $urlWide)))
                           (call $emitTok
                             (enum.get $Token.constant.builtin)
                             (local.get $lhs)
@@ -1298,16 +1301,14 @@
               ;; keyword.operator, everything else is a value keyword
               (if (i32.eq (local.get $mode) (i32.const 1))
                 (then
+                  ;; blanks on this line only, as a line-fed run sees
                   (local.set $p (global.get $ptr))
                   (block $aDone
                     (loop $aWs
                       (br_if $aDone (i32.ge_u (local.get $p) (global.get $end)))
                       (local.set $c2 (i32.load8_u (local.get $p)))
                       (br_if $aDone
-                        (i32.eqz
-                          (i32.or
-                            (i32.eq (local.get $c2) (i32.const 32))
-                            (i32.le_u (i32.sub (local.get $c2) (i32.const 9)) (i32.const 4)))))
+                        (i32.and (i32.ne (local.get $c2) (i32.const 32)) (i32.ne (local.get $c2) (i32.const 9))))
                       (local.set $p (i32.add (local.get $p) (i32.const 1)))
                       (br $aWs)))
                   (if

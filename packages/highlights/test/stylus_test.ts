@@ -87,6 +87,51 @@ test('stylus: assignments, mixins, control flow, and interpolation', () => {
   assertLineFedParity('stylus', code);
 });
 
+test('stylus: css braces, custom elements, and assignment operators', () => {
+  const code =
+    '.a{color:red}\n@media print{\n  .b{top:0}\n}\n.page\n  my-card .title\n' +
+    '    color red\n  my-card > p\n  margin-top .5em\nx %= 2\ny <= 3\n';
+  expect(tokenKinds('stylus', code)).toEqual([
+    // `{` glued to a name opens a block; only `-{` interpolates
+    ['.a', 'selector.class'],
+    ['{', 'punctuation.bracket'],
+    ['color', 'property'],
+    [':', 'punctuation.delimiter'],
+    ['red', 'constant.builtin'],
+    ['}', 'punctuation.bracket'],
+    ['@media', 'keyword'],
+    ['print', 'constant.builtin'],
+    ['{', 'punctuation.bracket'],
+    ['.b', 'selector.class'],
+    ['{', 'punctuation.bracket'],
+    ['top', 'property'],
+    [':', 'punctuation.delimiter'],
+    ['0', 'number'],
+    ['}', 'punctuation.bracket'],
+    ['}', 'punctuation.bracket'],
+    ['.page', 'selector.class'],
+    // a dashed word before a selector shape is a custom element
+    ['my-card', 'tag'],
+    ['.title', 'selector.class'],
+    ['color', 'property'],
+    ['red', 'constant.builtin'],
+    ['my-card', 'tag'],
+    ['>', 'operator'],
+    ['p', 'tag'],
+    ['margin-top', 'property'],
+    ['.5em', 'number'],
+    ['x', 'variable'],
+    ['%=', 'operator'],
+    ['2', 'number'],
+    // `<=` compares; it assigns nothing
+    ['y', 'tag'],
+    ['<', null],
+    ['=', 'operator'],
+    ['3', 'number'],
+  ]);
+  assertLineFedParity('stylus', code);
+});
+
 test('stylus: comments and strings across lines', () => {
   const code =
     '// note\n.a\n  content "x \\\n  y" /* open\n  still */\n  color red\n';

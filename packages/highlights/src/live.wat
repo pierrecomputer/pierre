@@ -976,7 +976,7 @@
                 ;; a trimmed blob reads as zeros past its end: pad the head
                 ;; (308), the stack prefixes at their caps (8192), and the
                 ;; checkpoint offset (2); checkpoint bytes are copied by length
-                (call $lvGrowTo (i32.add (local.get $inBase) (i32.const $mem.streamStateUsed+8502)))
+                (call $lvGrowTo (i32.add (local.get $inBase) (i32.const $streamStateUsed+8502)))
                 (memory.fill (local.get $inBase) (i32.const 0) (i32.const 8502))
                 (memory.copy
                   (local.get $inBase)
@@ -1022,7 +1022,7 @@
         ;; head, globals, delimiter, and fence registers (308) plus the five
         ;; stack prefixes at their caps (1024 * 4 + 4096), then the checkpoint
         ;; offset (2) and bytes
-        (call $lvGrowTo (i32.add (local.get $blobBase) (i32.const $mem.streamStateUsed+8580)))
+        (call $lvGrowTo (i32.add (local.get $blobBase) (i32.const $streamStateUsed+8580)))
         (local.set $blobLen
           (call $lvTrimBlob (local.get $blobBase) (call $lvCaptureBlob (local.get $blobBase))))
         (global.set $lvTransLo (local.get $recStart))
@@ -2274,7 +2274,7 @@
     (if (i32.eq (local.get $k) (i32.const 5))
       (then (return (global.get $lvInitialDead))))
     (if (i32.eq (local.get $k) (i32.const 6))
-      (then (return (i32.const $mem.streamStateUsed))))
+      (then (return (i32.const $streamStateUsed))))
     (if (i32.eq (local.get $k) (i32.const 7))
       (then (return (global.get $lvHeapEnd))))
     (if (i32.eq (local.get $k) (i32.const 8))

@@ -116,6 +116,46 @@ test('sas: case-insensitive words, functions, and twins matched directly', () =>
   ]);
 });
 
+test('sas: statement words are keywords only where a statement starts', () => {
+  const code =
+    'bmi = weight / height**2;\ntotal = sum + freq;\nvar weight;\nsum weight;\n' +
+    'length x $10;\nn = length(name);\n';
+  expect(tokenKinds('sas', code)).toEqual([
+    ['bmi', 'variable'],
+    ['=', 'operator'],
+    ['weight', 'variable'],
+    ['/', 'operator'],
+    ['height', 'variable'],
+    ['**', 'operator'],
+    ['2', 'number'],
+    [';', 'punctuation.delimiter'],
+    ['total', 'variable'],
+    ['=', 'operator'],
+    ['sum', 'variable'],
+    ['+', 'operator'],
+    ['freq', 'variable'],
+    [';', 'punctuation.delimiter'],
+    ['var', 'keyword'],
+    ['weight', 'variable'],
+    [';', 'punctuation.delimiter'],
+    ['sum', 'keyword'],
+    ['weight', 'variable'],
+    [';', 'punctuation.delimiter'],
+    ['length', 'keyword'],
+    ['x', 'variable'],
+    ['$10', 'type'],
+    [';', 'punctuation.delimiter'],
+    ['n', 'variable'],
+    ['=', 'operator'],
+    ['length', 'function'],
+    ['(', 'punctuation.bracket'],
+    ['name', 'variable'],
+    [')', 'punctuation.bracket'],
+    [';', 'punctuation.delimiter'],
+  ]);
+  assertLineFedParity('sas', code);
+});
+
 test('sas: literals, formats, and missing values', () => {
   expect(
     tokenKinds('sas', 'd = \'01JAN2020\'d; n = \'my var\'n; s = "It""s";')

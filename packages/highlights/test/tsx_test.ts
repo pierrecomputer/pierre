@@ -1,6 +1,7 @@
 import assert from 'node:assert';
 import t from 'node:test';
 
+import { inputPtr } from '../lib/highlighter';
 import type { Lang, Theme, ThemedToken } from '../lib/index';
 import {
   codeToTokens,
@@ -66,23 +67,23 @@ void t.test(
       'instanceof',
     ]) {
       for (const tail of [0, 0x26, 0xff]) {
-        memory.fill(tail, 81920, 81936);
-        memory.set(enc.encode(word), 81920);
+        memory.fill(tail, inputPtr, inputPtr + 16);
+        memory.set(enc.encode(word), inputPtr);
         assert.equal(
-          keyword(81920, 81920 + word.length),
+          keyword(inputPtr, inputPtr + word.length),
           lex[`keyword_${word}`],
           word
         );
         // The hash uses the first two and last bytes, so these edits still reach
         // the same candidate and must fail its exact-word comparison.
         for (let i = 2; i < word.length - 1; i++) {
-          memory[81920 + i] ^= 1;
+          memory[inputPtr + i] ^= 1;
           assert.equal(
-            keyword(81920, 81920 + word.length),
+            keyword(inputPtr, inputPtr + word.length),
             lex.invalid,
             `${word}: byte ${i}`
           );
-          memory[81920 + i] ^= 1;
+          memory[inputPtr + i] ^= 1;
         }
       }
     }

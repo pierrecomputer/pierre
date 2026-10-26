@@ -954,6 +954,28 @@ void t.test(
   }
 );
 
+void t.test(
+  'css: look-ahead stops at a line break, so live and line-fed runs agree',
+  () => {
+    for (const lang of ['css', 'less', 'scss', 'sass'] as const) {
+      for (const code of [
+        // a string continued by an escaped line break
+        'l"\\\n";',
+        '/"\\\n";',
+        // and resumed with a css hex escape
+        "'\\\n\\1C'",
+        // an at-rule feature name and its `:` on separate lines
+        '@ n\n:',
+        '+r e\n:',
+        // an unquoted url body on the next line
+        'a { b: url(\nimg.png) }',
+      ]) {
+        assertLineFedParity(lang, code);
+      }
+    }
+  }
+);
+
 void t.test('css: backslash escapes continue a class name', () => {
   // compiled utility css escapes `:`, `/`, `.`, brackets, and leading digits
   const src =

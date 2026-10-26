@@ -9,7 +9,7 @@
   ;; contextual: `type`, `on`, or `input` is also an ordinary field name,
   ;; so they count as keywords only when a name, brace, directive, paren,
   ;; or `&` follows on the same line.
-  (keyword-table $graphqlWords $mem.graphqlWords $mem.groovyWords
+  (keyword-table $graphqlWords $mem.graphqlWords $mem.groqWords
     (group $Token.keyword+256 ;; definitions, next name is a type
       "type" "interface" "union" "enum" "input" "scalar" "on" "implements")
     (group $Token.keyword+512 ;; operations, next name is an operation or fragment

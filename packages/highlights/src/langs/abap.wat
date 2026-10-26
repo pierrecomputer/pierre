@@ -7,7 +7,7 @@
   ;; x`), and bit 12 makes the word a builtin type where a type is expected
   ;; (`TYPE REF TO data`). `like`, `where`, and `ascending` collide and are
   ;; matched directly.
-  (keyword-table $abapWords $mem.abapWords $mem.laterWordsFree
+  (keyword-table $abapWords $mem.abapWords $mem.moonbitWords
     (group $Token.keyword.declaration
       "constants" "field-symbols" "field-symbol" "class-data" "statics" "parameters"
       "select-options" "tables" "endclass" "endmethod" "endform" "endfunction" "endinterface"

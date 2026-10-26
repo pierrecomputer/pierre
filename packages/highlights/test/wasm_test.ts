@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { HighlightsHighlighter, langIdOf } from '../lib/highlighter';
+import { HighlightsHighlighter, inputPtr, langIdOf } from '../lib/highlighter';
 import type { Lang } from '../lib/index';
 import {
   generateLanguages,
@@ -22,7 +22,7 @@ const common = transformWat(
   commonUrl,
   `(module
     (import "../src/common.wat")
-    (keyword-table $Test $mem.cWords $mem.cppWords
+    (keyword-table $Test $mem.laterWordsFree $mem.languageNames
       ${words.map((word) => `(group ${word.length} "${word}")`).join('\n')})
     (func (export "lookup") (param $n i32) (result i32)
       (keyword-table.value $Test (i32.const $mem.input)
@@ -31,31 +31,43 @@ const common = transformWat(
       (call $lexLowerCopy (i32.const $mem.input)
         (i32.add (i32.const $mem.input) (local.get $n))
         (i32.const $mem.lexLowerScratch)))
-    (global (export "scratch") i32 (i32.const $mem.lexLowerScratch)))`
+    (global (export "scratch") i32 (i32.const $mem.lexLowerScratch))
+    (global (export "input") i32 (i32.const $mem.input)))`
 );
 const instance = new WebAssembly.Instance(
   new WebAssembly.Module(wat2wasm(commonUrl.pathname, common.code))
 );
-const { memory, lookup, lower, scratch } = instance.exports as {
+const {
+  memory,
+  lookup,
+  lower,
+  scratch,
+  input: inputAt,
+} = instance.exports as {
   memory: WebAssembly.Memory;
   lookup: (length: number) => number;
   lower: (length: number) => number;
   scratch: WebAssembly.Global;
+  input: WebAssembly.Global;
 };
 const bytes = new Uint8Array(memory.buffer);
 const enc = new TextEncoder();
+
+void test('lib/highlighter.ts writes input at $mem.input', () => {
+  assert.equal(inputPtr, Number(inputAt.value));
+});
 
 void test('keyword SIMD compares every byte at lengths 2 through 31', () => {
   for (const word of words) {
     const input = enc.encode(word);
     for (const padding of [0, 0xff]) {
-      bytes.fill(padding, 81920, 81984);
-      bytes.set(input, 81920);
+      bytes.fill(padding, inputPtr, inputPtr + 64);
+      bytes.set(input, inputPtr);
       assert.equal(lookup(input.length), input.length, word);
       for (let i = 0; i < input.length; i++) {
-        bytes[81920 + i] ^= 32;
+        bytes[inputPtr + i] ^= 32;
         assert.equal(lookup(input.length), -1, `${word}, byte ${i}`);
-        bytes[81920 + i] ^= 32;
+        bytes[inputPtr + i] ^= 32;
       }
     }
   }
@@ -70,7 +82,7 @@ void test('lowercase SIMD preserves non-letters and stays inside scratch', () =>
     for (let first = 0; first < 256; first += 16) {
       const input = Uint8Array.from({ length }, (_, i) => (first + i) & 255);
       bytes.fill(0xa5, dst, dst + 80);
-      bytes.set(input, 81920);
+      bytes.set(input, inputPtr);
       assert.equal(lower(length), length > 31 ? 0 : length);
       if (length <= 31) {
         assert.deepEqual(

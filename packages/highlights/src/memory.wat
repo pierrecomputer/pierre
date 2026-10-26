@@ -158,10 +158,7 @@
 
   ;; [49296:62464) keyword tables added later, one block per group, then free.
   ;; group A
-  (const $mem.kdlWords 49296)                ;; 64
-  (const $mem.codeownersWords 49360)         ;; 64
-  (const $mem.regWords 49424)                ;; 64
-  (const $mem.rosmsgWords 49488)             ;; 192
+  (const $mem.rosmsgWords 49296)             ;; 384
   ;; group B
   (const $mem.fishWords 49680)               ;; 160
   (const $mem.justWords 49840)               ;; 96

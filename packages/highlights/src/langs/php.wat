@@ -498,13 +498,21 @@
                 (i32.eq (local.get $next) (i32.const "<"))
                 (i32.and (call $lexIsIdentStart (local.get $p)) (i32.ne (local.get $p) (i32.const "$"))))
               (then
-                (global.set $ptr (i32.add (global.get $ptr) (i32.const 2)))
-                (call $emitTok (enum.get $Token.attribute) (local.get $lhs) (global.get $ptr))
-                (local.set $attr (i32.const 1))
-                (local.set $attrAt (global.get $ptr))
-                (local.set $decl (i32.const 0))
-                (local.set $member (i32.const 0))
-                (br $token)))))
+                ;; after a value, `<<` shifts: `1<<BIT`, `$x<<SHIFT >> 2`
+                (local.set $p (call $lexLineByteBefore (local.get $lhs)))
+                (if
+                  (i32.eqz
+                    (i32.or
+                      (call $lexIsIdentContinue (local.get $p))
+                      (i32.or (i32.eq (local.get $p) (i32.const ")")) (i32.eq (local.get $p) (i32.const "]")))))
+                  (then
+                    (global.set $ptr (i32.add (global.get $ptr) (i32.const 2)))
+                    (call $emitTok (enum.get $Token.attribute) (local.get $lhs) (global.get $ptr))
+                    (local.set $attr (i32.const 1))
+                    (local.set $attrAt (global.get $ptr))
+                    (local.set $decl (i32.const 0))
+                    (local.set $member (i32.const 0))
+                    (br $token)))))))
         (if
           (i32.or
             (i32.and

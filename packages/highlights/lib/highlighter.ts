@@ -26,7 +26,7 @@ const enc = new TextEncoder();
 const dec = new TextDecoder('utf-8', { ignoreBOM: true });
 const pageSize = 65536;
 const themePtr = 64; // $mem.themeTable in src/memory.wat
-const inputPtr = 81920; // $mem.input in src/memory.wat
+export const inputPtr = 81920; // $mem.input in src/memory.wat; wasm_test checks it
 // Unicode identifier classes for the ECMAScript lexers; see #idClass.
 const idClassRegex = [/^\p{ID_Start}$/u, /^[\u200C\u200D\p{ID_Continue}]$/u];
 let idClassCache: Uint8Array | undefined;

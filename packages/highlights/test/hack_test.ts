@@ -144,6 +144,38 @@ test('hack: attributes, lambdas, pipes, and null-safe access', () => {
   ]);
 });
 
+test('hack: `<<` after a value shifts, elsewhere it opens attributes', () => {
+  const code =
+    '$m = 1<<BITS;\n$y = $x<<SHIFT >> 2;\nfunction f(<<A>> int $x): void {}\n';
+  expect(tokenKinds('hack', code)).toEqual([
+    ['$m', 'variable'],
+    ['=', 'operator'],
+    ['1', 'number'],
+    ['<<', 'operator'],
+    ['BITS', 'constant'],
+    [';', 'punctuation.delimiter'],
+    ['$y', 'variable'],
+    ['=', 'operator'],
+    ['$x', 'variable'],
+    ['<<', 'operator'],
+    ['SHIFT', 'constant'],
+    ['>>', 'operator'],
+    ['2', 'number'],
+    [';', 'punctuation.delimiter'],
+    ['function', 'keyword.declaration'],
+    ['f', 'function.definition'],
+    ['(', 'punctuation.bracket'],
+    ['<<A>>', 'attribute'],
+    ['int', 'type.builtin'],
+    ['$x', 'variable'],
+    [')', 'punctuation.bracket'],
+    [':', 'punctuation.delimiter'],
+    ['void', 'type.builtin'],
+    ['{}', 'punctuation.bracket'],
+  ]);
+  assertLineFedParity('hack', code);
+});
+
 test('hack: PHP keeps its own reading after a Hack run', () => {
   tokenKinds('hack', '<<Foo>> function f(): Bar {}');
   expect(tokenKinds('php', '<?php <<Foo>> $a = Bar; // x ?> <b>')).toEqual([

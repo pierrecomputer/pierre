@@ -1,7 +1,7 @@
 import assert from 'node:assert';
 import t from 'node:test';
 
-import { HighlightsHighlighter, LANGS } from '../lib/highlighter';
+import { HighlightsHighlighter, inputPtr, LANGS } from '../lib/highlighter';
 import type {
   CodeToHtmlOptions,
   CodeToTokensOptions,
@@ -161,8 +161,11 @@ void t.test(
       const expected = encoder.encode(code);
       const length = hl.writeInput(code);
       assert.equal(length, expected.length);
-      assert.deepEqual(hl.buffer.subarray(81920, 81920 + length), expected);
-      assert.ok(hl.buffer.length >= 81920 + length + 96);
+      assert.deepEqual(
+        hl.buffer.subarray(inputPtr, inputPtr + length),
+        expected
+      );
+      assert.ok(hl.buffer.length >= inputPtr + length + 96);
     }
   }
 );
