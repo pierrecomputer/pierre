@@ -45,12 +45,14 @@
     "apps/**/AGENTS.md",
     "apps/**/CLAUDE.md",
     "apps/docs/public/r/*",
+    "apps/docs/public/words/benchmark.json",
+    "apps/docs/public/words/benchmark-raw.json",
     "apps/docs/next-env.d.ts",
     "packages/theme/themes/*.json",
     "packages/theme/zed/themes/*.json",
     "packages/tree-test-data/*-files.json",
-    "packages/markdowns/test/spec/**",
-    "packages/markdowns/benchmark/fixtures/**",
+    "packages/words/test/spec/**",
+    "packages/words/benchmark/fixtures/**",
     "*.patch",
     "README"
   ]
