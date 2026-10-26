@@ -47,6 +47,57 @@ export function themeBackground(style: ThemeStyle): string | undefined {
   return style['editor.background'] ?? style.background;
 }
 
+/** ANSI color names in SGR order, as in Zed's `terminal.ansi.<name>` keys. */
+export const ansiNames: readonly string[] = [
+  'black',
+  'red',
+  'green',
+  'yellow',
+  'blue',
+  'magenta',
+  'cyan',
+  'white',
+  'bright_black',
+  'bright_red',
+  'bright_green',
+  'bright_yellow',
+  'bright_blue',
+  'bright_magenta',
+  'bright_cyan',
+  'bright_white',
+];
+
+// VS Code's terminal colors, which Shiki uses when a theme has none.
+const ansiDefaults = [
+  '#000000',
+  '#cd3131',
+  '#0dbc79',
+  '#e5e510',
+  '#2472c8',
+  '#bc3fbc',
+  '#11a8cd',
+  '#e5e5e5',
+  '#666666',
+  '#f14c4c',
+  '#23d18b',
+  '#f5f543',
+  '#3b8eea',
+  '#d670d6',
+  '#29b8db',
+  '#ffffff',
+];
+
+/** The 16 ANSI colors of a theme. Missing or invalid colors use VS Code's. */
+export function themeAnsiColors(style: ThemeStyle): string[] {
+  return ansiNames.map(
+    (name, i) =>
+      resolveThemeStyle(
+        { foreground: style[`terminal.ansi.${name}`] as string },
+        'foreground'
+      ).color ?? ansiDefaults[i]
+  );
+}
+
 /** Describe a rejected theme value for the `invalid theme` error message. */
 function describeThemeValue(value: unknown): string {
   if (value === null) return 'null';
@@ -199,8 +250,10 @@ export interface PreparedTheme {
   bg?: string;
   /** Five-byte RGBA/style records; undefined for Display P3 and CSS variables. */
   table: Uint8Array | undefined;
-  /** Lazy UTF-8 HTML openers for Display P3 themes. */
+  /** Lazy UTF-8 HTML openers for Display P3 themes and named CSS palettes. */
   readonly htmlOpeners: Uint8Array | undefined;
+  /** Lazy colors for ANSI palette indexes 0–15, in `ansiNames` order. */
+  readonly ansi: readonly string[];
 }
 
 // Theme names are not unique. Replace the object to change its cached styles.
@@ -223,13 +276,63 @@ export function prepareTheme(
   const prepared =
     resolved.cssVariables === true
       ? prepareCssVariables(resolved.name, cssVariablePrefix)
-      : prepareStyles(resolved);
+      : typeof resolved.cssVariables === 'object'
+        ? prepareCssPalette(resolved)
+        : prepareStyles(resolved);
   if (prefixes === undefined) {
     prefixes = new Map();
     preparedCache.set(resolved, prefixes);
   }
   prefixes.set(prefix, prepared);
   return prepared;
+}
+
+/** Palette colors are variable suffixes, not literal CSS values. */
+function prepareCssPalette(theme: Theme): PreparedTheme {
+  const config = theme.cssVariables;
+  if (typeof config !== 'object') throw new Error('Expected CSS palette');
+  const prefix = config.prefix ?? defaultCssVariablePrefix;
+  const variable = (name: string): string => {
+    const fallback = config.defaults?.[name];
+    return `var(${prefix}${name}${fallback ? `, ${fallback}` : ''})`;
+  };
+  const styles: (TokenStyle | null)[] = new Array(tokenTypes.length).fill(null);
+  const syntax = theme.style.syntax ?? {};
+  for (let i = 1; i < tokenTypes.length; i++) {
+    const setting = resolveThemeSyntax(syntax, tokenTypes[i]);
+    styles[i] = {
+      color: variable(setting?.color ?? 'foreground'),
+      italic: setting?.font_style === 'italic',
+      weight:
+        setting?.font_weight === undefined
+          ? 0
+          : Math.round(setting.font_weight / 100) * 100,
+    };
+  }
+  const fg = variable(themeForeground(theme.style) ?? 'foreground');
+  const bg = variable(themeBackground(theme.style) ?? 'background');
+  let htmlOpeners: Uint8Array | undefined;
+  let ansi: string[] | undefined;
+  return {
+    name: theme.name,
+    styles,
+    fg,
+    bg,
+    table: undefined,
+    get htmlOpeners() {
+      return (htmlOpeners ??= themeHtmlOpeners(styles, fg, bg));
+    },
+    get ansi() {
+      return (ansi ??= ansiNames.map((name) => {
+        const value = theme.style[`terminal.ansi.${name}`];
+        return variable(
+          typeof value === 'string'
+            ? value
+            : `terminal-ansi-${name.replace('_', '-')}`
+        );
+      }));
+    },
+  };
 }
 
 /**
@@ -243,6 +346,7 @@ function prepareCssVariables(
 ): PreparedTheme {
   let variables: Pick<PreparedTheme, 'styles' | 'fg' | 'bg'> | undefined;
   const resolve = () => (variables ??= cssVariableStyles(cssVariablePrefix));
+  let ansi: string[] | undefined;
   return {
     name,
     get styles() {
@@ -256,6 +360,11 @@ function prepareCssVariables(
     },
     table: undefined,
     htmlOpeners: undefined,
+    get ansi() {
+      return (ansi ??= ansiNames.map((name) =>
+        cssVariable(`terminal.ansi.${name}`, cssVariablePrefix)
+      ));
+    },
   };
 }
 
@@ -315,6 +424,7 @@ function prepareStyles(theme: Theme): PreparedTheme {
     else styles[i] = style;
   }
   let htmlOpeners: Uint8Array | undefined;
+  let ansi: string[] | undefined;
   return {
     name: theme.name,
     styles,
@@ -323,22 +433,38 @@ function prepareStyles(theme: Theme): PreparedTheme {
     table: usesDisplayP3 ? undefined : table,
     get htmlOpeners() {
       if (!usesDisplayP3) return undefined;
-      if (htmlOpeners !== undefined) return htmlOpeners;
-      const rootStyle =
-        (bg === undefined ? '' : `background-color:${bg};`) +
-        (fg === undefined ? '' : `color:${fg}`);
-      const openers = [`<pre class="highlights" style="${rootStyle}"><code>`];
-      for (let i = 1; i < tokenTypes.length; i++) {
-        const style = styles[i];
-        const css =
-          `color:${style?.color ?? 'inherit'}` +
-          (style?.italic === true ? ';font-style:italic' : '') +
-          (style != null && style.weight !== 0
-            ? `;font-weight:${style.weight}`
-            : '');
-        openers.push(`<span style="${css}">`);
-      }
-      return (htmlOpeners = packHtmlOpeners(openers));
+      return (htmlOpeners ??= themeHtmlOpeners(styles, fg, bg));
+    },
+    get ansi() {
+      return (ansi ??= themeAnsiColors(themeStyle));
     },
   };
+}
+
+/**
+ * Pack theme colors and font styles for the Wasm HTML emitter.
+ * Escape attributes because CSS prefixes and defaults may contain quotes.
+ */
+function themeHtmlOpeners(
+  styles: (TokenStyle | null)[],
+  fg: string | undefined,
+  bg: string | undefined
+): Uint8Array {
+  const rootStyle =
+    (bg === undefined ? '' : `background-color:${bg};`) +
+    (fg === undefined ? '' : `color:${fg}`);
+  const openers = [
+    `<pre class="highlights" style="${escapeAttribute(rootStyle)}"><code>`,
+  ];
+  for (let i = 1; i < tokenTypes.length; i++) {
+    const style = styles[i];
+    const css =
+      `color:${style?.color ?? 'inherit'}` +
+      (style?.italic === true ? ';font-style:italic' : '') +
+      (style != null && style.weight !== 0
+        ? `;font-weight:${style.weight}`
+        : '');
+    openers.push(`<span style="${escapeAttribute(css)}">`);
+  }
+  return packHtmlOpeners(openers);
 }

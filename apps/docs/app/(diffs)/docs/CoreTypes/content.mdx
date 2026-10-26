@@ -36,11 +36,11 @@ If you reparse a patch or create a new partial `FileDiffMetadata`, the renderer
 treats it as a fresh partial model. Keep the same metadata object stable when
 you want hydration to persist.
 
-When loaded files provide cache keys, hydration uses those keys so full-file
-highlights can be reused across diffs. Change each `FileContents.cacheKey`
-whenever the loaded contents, filename, language, or revision changes. If loaded
-files are unkeyed but the partial metadata has a `cacheKey`, hydration appends a
-hydrated segment as a fallback.
+Hydration appends `:hydrated` to the partial metadata's `cacheKey`. Without a
+partial key, changed diffs derive a key from both loaded file keys and
+`parseDiffOptions.disableLineMatching`. Pure renames use the loaded new file's
+key. Keep `parseDiffOptions.disableLineMatching` consistent with the options
+used to parse the supplied patch.
 
 **Tip:** You can generate `FileDiffMetadata` using
 [`parseDiffFromFile`](#utilities-parsedifffromfile) (from file contents) or

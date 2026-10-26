@@ -82,8 +82,7 @@ function parsePartialDiffWithCollapsedContext(): FileDiffMetadata {
       undefined,
       { context: 0 }
     ),
-    'partial',
-    true
+    { cacheKeyPrefix: 'partial', throwOnError: true }
   )[0]?.files[0];
   assertDefined(file, 'expected patch to contain one file');
   expect(file.isPartial).toBe(true);
@@ -103,8 +102,7 @@ function parsePartialNewFile(): FileDiffMetadata {
       '+added 1\n',
       '+added 2\n',
     ].join(''),
-    'partial-created',
-    true
+    { cacheKeyPrefix: 'partial-created', throwOnError: true }
   )[0]?.files[0];
   assertDefined(file, 'expected created patch to contain one file');
   expect(file.isPartial).toBe(true);
@@ -124,8 +122,7 @@ function parsePartialDeletedFile(): FileDiffMetadata {
       '-deleted 1\n',
       '-deleted 2\n',
     ].join(''),
-    'partial-deleted',
-    true
+    { cacheKeyPrefix: 'partial-deleted', throwOnError: true }
   )[0]?.files[0];
   assertDefined(file, 'expected deleted patch to contain one file');
   expect(file.isPartial).toBe(true);

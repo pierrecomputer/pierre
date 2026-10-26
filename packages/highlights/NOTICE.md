@@ -6,6 +6,25 @@ normalized to Shiki's catalog.
 
 ## Sources
 
+Terminal palettes use the same pinned sources as the themes below. Exceptions:
+
+- Horizon's original repository is unavailable. Its palette comes from the
+  [Zed Horizon 0.0.1 archive](https://api.zed.dev/extensions/horizon/0.0.1/download).
+- Andromeeda's two null black entries and both Horizon themes' four null black
+  and white entries use their inherited
+  [Zed defaults at `ce48461`](https://github.com/zed-industries/zed/blob/ce48461eaadd16c65c31f835511ab96bd3b6e746/crates/theme/src/default_colors.rs).
+- LaserWave leaves ten terminal colors undefined; Slack Dark leaves all 16
+  undefined. These entries use the dark palette in
+  [VS Code at `3623f17`](https://github.com/microsoft/vscode/blob/3623f170559712f7ee16f59dfbd87c885b6a2b31/src/vs/workbench/contrib/terminal/common/terminalColorRegistry.ts).
+- Pierre's palettes come from
+  [its Zed theme](https://github.com/pierrecomputer/pierre/blob/861ce3c61e1cfeaf283d83e95a3767479e75bfee/packages/theme/zed/themes/pierre.json).
+  The vibrant variants preserve the Display P3 values in
+  [Pierre Dark Vibrant](https://github.com/pierrecomputer/pierre/blob/861ce3c61e1cfeaf283d83e95a3767479e75bfee/packages/theme/themes/pierre-dark-vibrant.json)
+  and
+  [Pierre Light Vibrant](https://github.com/pierrecomputer/pierre/blob/861ce3c61e1cfeaf283d83e95a3767479e75bfee/packages/theme/themes/pierre-light-vibrant.json).
+
+Dracula's `ffffffff` bright white value is normalized to `#ffffffff`.
+
 The Zed version is the extension version published in the
 [Zed registry](https://github.com/zed-industries/extensions) at
 `ab756766c27fca3de3d275149f6937105f464dec`. "Built in" means the theme ships

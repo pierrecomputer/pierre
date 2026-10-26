@@ -39,6 +39,7 @@ import type {
   FileTreeDirectoryHandle,
   FileTreeDropTarget,
   FileTreeItemHandle,
+  FileTreeLabels,
   FileTreeRowDecoration,
   FileTreeVisibleRow,
 } from '../model/publicTypes';
@@ -49,11 +50,8 @@ import {
 } from '../model/virtualization';
 import type { GitStatus } from '../publicTypes';
 import type { SVGSpriteNames } from '../sprite';
-import {
-  GIT_STATUS_DESCENDANT_TITLE,
-  GIT_STATUS_LABEL,
-  GIT_STATUS_TITLE,
-} from '../utils/gitStatusPresentation';
+import { DEFAULT_FILE_TREE_LABELS } from '../utils/fileTreeLabels';
+import { GIT_STATUS_LABEL } from '../utils/gitStatusPresentation';
 import { shouldBumpControllerRevision } from './controllerSnapshotSubscription';
 import {
   focusElement,
@@ -407,7 +405,8 @@ function getDragEdgeScrollDelta(clientY: number, scrollRect: DOMRect): number {
 // decorations can coexist without borrowing git styling or precedence.
 function getBuiltInGitStatusDecoration(
   gitStatus: GitStatus | null,
-  containsGitChange: boolean
+  containsGitChange: boolean,
+  labels: FileTreeLabels
 ): FileTreeRowDecoration | null {
   if (gitStatus != null) {
     const label = GIT_STATUS_LABEL[gitStatus];
@@ -417,14 +416,14 @@ function getBuiltInGitStatusDecoration(
 
     return {
       text: label,
-      title: GIT_STATUS_TITLE[gitStatus],
+      title: labels.gitStatusTitles[gitStatus],
     };
   }
 
   if (containsGitChange) {
     return {
       icon: { name: 'file-tree-icon-dot', width: 6, height: 6 },
-      title: GIT_STATUS_DESCENDANT_TITLE,
+      title: labels.containsGitStatusTitle,
     };
   }
 
@@ -954,6 +953,7 @@ type FileTreeRenderRowFrame = {
   ignoredInheritanceCache: Map<string, boolean>;
   directoriesWithGitChanges: ReadonlySet<string> | undefined;
   gitLaneActive: boolean;
+  labels: FileTreeLabels;
   contextMenuEnabled: boolean;
   contextMenuTriggerMode: FileTreeContextMenuTriggerMode;
   contextMenuButtonTriggerEnabled: boolean;
@@ -1016,6 +1016,7 @@ function renderStyledRow(
     ignoredInheritanceCache,
     directoriesWithGitChanges,
     gitLaneActive,
+    labels,
     contextMenuEnabled,
     contextMenuTriggerMode,
     contextMenuButtonTriggerEnabled,
@@ -1046,7 +1047,8 @@ function renderStyledRow(
   const customDecoration = renderDecorationForRow(row, targetPath);
   const gitDecoration = getBuiltInGitStatusDecoration(
     effectiveGitStatus,
-    containsGitChange
+    containsGitChange,
+    labels
   );
   const actionLaneEnabled =
     contextMenuEnabled && contextMenuButtonTriggerEnabled;
@@ -1061,7 +1063,7 @@ function renderStyledRow(
     isSticky || !isRenamingRow ? null : (
       <RenameInput
         ref={registerRenameInput}
-        ariaLabel={`Rename ${getFileTreeRowAriaLabel(row)}`}
+        ariaLabel={labels.renameItem(getFileTreeRowAriaLabel(row))}
         isFlattened={row.isFlattened}
         value={renamingValue}
         onBlur={() => {
@@ -1231,6 +1233,7 @@ export function FileTreeView({
   icons,
   instanceId,
   itemHeight = FILE_TREE_DEFAULT_ITEM_HEIGHT,
+  labels = DEFAULT_FILE_TREE_LABELS,
   overscan = FILE_TREE_DEFAULT_OVERSCAN,
   renamingEnabled = false,
   renderRowDecoration,
@@ -1311,9 +1314,34 @@ export function FileTreeView({
     item: FileTreeContextMenuItem;
     path: string;
     source: 'button' | 'keyboard' | 'right-click';
+    // Monotonic open-generation token identifying this menu instance. A
+    // superseded menu's async close() carries the token it was opened with, so
+    // a stale close cannot tear down the menu that replaced it (#664).
+    token: number;
   } | null>(null);
   const contextMenuStateRef = useRef(contextMenuState);
   contextMenuStateRef.current = contextMenuState;
+  // Bumped on every open so each opened menu gets a unique identity token.
+  const contextMenuOpenTokenRef = useRef(0);
+  // Returns the token for a menu open. Reopening the row that already has the
+  // menu open with the same source keeps the same path::source key, so the
+  // slot effect keeps the existing menu and its close() closure. Reuse the
+  // current token in that case; a new token would make that close() stale.
+  const nextContextMenuToken = useCallback(
+    (path: string, source: 'button' | 'keyboard' | 'right-click'): number => {
+      const currentState = contextMenuStateRef.current;
+      if (
+        currentState != null &&
+        currentState.path === path &&
+        currentState.source === source
+      ) {
+        return currentState.token;
+      }
+      contextMenuOpenTokenRef.current += 1;
+      return contextMenuOpenTokenRef.current;
+    },
+    []
+  );
 
   const pendingStickyFocusPathRef = useRef<string | null>(null);
   const pendingStickyKeyboardFocusPathRef = useRef<string | null>(null);
@@ -1587,13 +1615,24 @@ export function FileTreeView({
   const restoreFocusToTreeRef = useRef(restoreFocusToTree);
   restoreFocusToTreeRef.current = restoreFocusToTree;
   const shouldRestoreContextMenuFocusRef = useRef(true);
-  const closeContextMenuRef = useRef<(restoreFocus?: boolean) => void>(
-    () => {}
-  );
+  const closeContextMenuRef = useRef<
+    (restoreFocus?: boolean, expectedToken?: number) => void
+  >(() => {});
   const closeContextMenu = useCallback(
-    (restoreFocus: boolean = true): void => {
+    (restoreFocus: boolean = true, expectedToken?: number): void => {
       const currentContextMenuState = contextMenuStateRef.current;
       if (currentContextMenuState == null) {
+        return;
+      }
+
+      // Ignore a close() issued by a superseded menu instance. Sequential
+      // right-clicks open a new menu (new token) before the previous menu's
+      // consumer layer fires its async onOpenChange(false); only the menu that
+      // is currently open may close itself (#664).
+      if (
+        expectedToken != null &&
+        expectedToken !== currentContextMenuState.token
+      ) {
         return;
       }
 
@@ -1652,14 +1691,21 @@ export function FileTreeView({
       item.focus();
       updateTriggerPosition(anchorButton);
       shouldRestoreContextMenuFocusRef.current = true;
+      const source = options?.source ?? 'keyboard';
       setContextMenuState({
         anchorRect: options?.anchorRect ?? null,
         item: createContextMenuItem(row, targetPath),
         path: targetPath,
-        source: options?.source ?? 'keyboard',
+        source,
+        token: nextContextMenuToken(targetPath, source),
       });
     },
-    [controller, getTriggerAnchorButton, updateTriggerPosition]
+    [
+      controller,
+      getTriggerAnchorButton,
+      nextContextMenuToken,
+      updateTriggerPosition,
+    ]
   );
   const startRenameFromPath = useCallback(
     (path?: string): void => {
@@ -2918,7 +2964,12 @@ export function FileTreeView({
         currentState.anchorRect ??
         serializeAnchorRect(anchorElement.getBoundingClientRect()),
       close: (options) => {
-        closeContextMenuRef.current(options?.restoreFocus ?? true);
+        // Capture this menu instance's token so a close() from a menu that has
+        // since been superseded by a sequential right-click is ignored (#664).
+        closeContextMenuRef.current(
+          options?.restoreFocus ?? true,
+          currentState.token
+        );
       },
       restoreFocus: () => {
         if (!shouldRestoreContextMenuFocusRef.current) {
@@ -3612,15 +3663,17 @@ export function FileTreeView({
 
     updateTriggerPosition(triggerButton);
     shouldRestoreContextMenuFocusRef.current = true;
+    const triggerItemPath = triggerItem.getPath();
     setContextMenuState({
       anchorRect: null,
       item: {
         kind: triggerItem.isDirectory() ? 'directory' : 'file',
         name: triggerButton.getAttribute('aria-label') ?? triggerPath,
-        path: triggerItem.getPath(),
+        path: triggerItemPath,
       },
-      path: triggerItem.getPath(),
+      path: triggerItemPath,
       source: 'button',
+      token: nextContextMenuToken(triggerItemPath, 'button'),
     });
   };
 
@@ -3649,6 +3702,7 @@ export function FileTreeView({
     ignoredInheritanceCache,
     instanceId,
     itemHeight,
+    labels,
     onKeyDown: handleTreeKeyDown,
     onRowClick: handleRowClick,
     openContextMenuForRow,
@@ -3711,7 +3765,7 @@ export function FileTreeView({
             ref={searchInputRef}
             aria-activedescendant={activeDescendantId}
             aria-controls={treeDomId}
-            placeholder="Search…"
+            placeholder={labels.searchPlaceholder}
             data-file-tree-search-input
             data-file-tree-search-input-fake-focus={
               fakeSearchFocusActive ? 'true' : undefined
@@ -3840,7 +3894,7 @@ export function FileTreeView({
             ref={contextMenuTriggerRef}
             type="button"
             data-type={CONTEXT_MENU_TRIGGER_TYPE}
-            aria-label="Options"
+            aria-label={labels.contextMenuTrigger}
             aria-haspopup="menu"
             aria-expanded={contextMenuState != null ? 'true' : 'false'}
             data-visible={triggerButtonVisible ? 'true' : 'false'}

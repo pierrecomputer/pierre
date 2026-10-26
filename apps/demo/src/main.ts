@@ -203,7 +203,6 @@ const poolManager: WorkerPoolManager | undefined = WORKER_POOL
       const manager = createWorkerAPI({
         theme: DEMO_THEME,
         langs: ['typescript', 'tsx'],
-        preferredHighlighter: 'shiki-wasm',
         useTokenTransformer: true,
       });
       void manager.initialize().then(() => {
@@ -302,7 +301,7 @@ function createCodeViewPartialPatches(
       oldFile.header,
       newFile.header
     ),
-    'code-view-partial'
+    { cacheKeyPrefix: 'code-view-partial' }
   );
 }
 
@@ -320,7 +319,7 @@ function createCodeViewNoTrailingExpansionPartialPatches(
       newFile.header,
       { context: 0 }
     ),
-    'code-view-no-trailing-expansion-partial'
+    { cacheKeyPrefix: 'code-view-no-trailing-expansion-partial' }
   );
 }
 
@@ -357,7 +356,7 @@ async function loadCodeViewPatches(): Promise<CodeViewRenderData> {
       return {
         parsedPatches: (parsedPatches ??= parsePatchFiles(
           await loadPatchContent(),
-          'parsed-patch'
+          { cacheKeyPrefix: 'parsed-patch' }
         )),
       };
   }
@@ -372,7 +371,7 @@ function handlePreloadCodeViewDiff() {
 async function handlePreloadDiff() {
   if (parsedPatches != null) return;
   const content = await loadPatchContent();
-  parsedPatches = parsePatchFiles(content, 'parsed-patch');
+  parsedPatches = parsePatchFiles(content, { cacheKeyPrefix: 'parsed-patch' });
   console.log('preloaded diff', parsedPatches);
 }
 
@@ -729,7 +728,12 @@ function handlePreload() {
       themes.push(item.options.theme.light);
     }
   }
-  void preloadHighlighter({ langs, themes });
+  // Match the pool even during initialization; two types cannot coexist.
+  void preloadHighlighter({
+    langs,
+    themes,
+    preferredHighlighter: poolManager?.getPreferredHighlighter(),
+  });
 }
 
 document.getElementById('toggle-theme')?.addEventListener('click', toggleTheme);
@@ -744,10 +748,9 @@ const loadDiff = document.getElementById('load-diff');
 if (loadDiff != null) {
   function handleClick() {
     void (async () => {
-      parsedPatches ??= parsePatchFiles(
-        await loadPatchContent(),
-        'parsed-patch'
-      );
+      parsedPatches ??= parsePatchFiles(await loadPatchContent(), {
+        cacheKeyPrefix: 'parsed-patch',
+      });
       renderDiff(parsedPatches, poolManager);
       // window.scrollTo({ top: 99999999999 });
     })();
@@ -1282,7 +1285,9 @@ if (renderFileConflictButton != null) {
 const workerRenderButton = document.getElementById('worker-load-diff');
 workerRenderButton?.addEventListener('click', () => {
   void (async () => {
-    const patches = parsePatchFiles(await loadPatchContent(), 'parsed-patch');
+    const patches = parsePatchFiles(await loadPatchContent(), {
+      cacheKeyPrefix: 'parsed-patch',
+    });
     workerRenderDiff(patches);
   })();
 });

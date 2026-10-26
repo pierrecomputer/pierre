@@ -1,9 +1,6 @@
 (module
   (import "../common.wat")
 
-  (func $swiftByte (param $p i32) (result i32)
-    (select (i32.load8_u (local.get $p)) (i32.const 0) (i32.lt_u (local.get $p) (global.get $end))))
-
   ;; Group order is the dispatch order in $swiftWordHl below. `where` is
   ;; absent on purpose: the table hash sees only the first two bytes, the last
   ;; byte, and the length, which are identical for `while`, so the two words
@@ -56,10 +53,10 @@
     (local.set $p (global.get $ptr))
     (block $done
       (loop $hash
-        (br_if $done (i32.ne (call $swiftByte (local.get $p)) (i32.const "#")))
+        (br_if $done (i32.ne (call $templateByte (local.get $p)) (i32.const "#")))
         (local.set $p (i32.add (local.get $p) (i32.const 1)))
         (br $hash)))
-    (i32.eq (call $swiftByte (local.get $p)) (i32.const 34)))
+    (i32.eq (call $templateByte (local.get $p)) (i32.const 34)))
 
   ;; The opener of a hash-delimited or triple-quoted string at $ptr - the
   ;; hashes and the quote or quotes - emitted as string. Returns the hash
@@ -74,16 +71,16 @@
     (local.set $lhs (global.get $ptr))
     (block $done
       (loop $hash
-        (br_if $done (i32.ne (call $swiftByte (global.get $ptr)) (i32.const "#")))
+        (br_if $done (i32.ne (call $templateByte (global.get $ptr)) (i32.const "#")))
         (local.set $hashes (i32.add (local.get $hashes) (i32.const 1)))
         (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
         (br $hash)))
     ;; the caller proved the byte here is a quote, and the two after it are
-    ;; read through $swiftByte, so the cursor lands at most on $end
+    ;; read through $templateByte, so the cursor lands at most on $end
     (local.set $triple
       (i32.and
-        (i32.eq (call $swiftByte (i32.add (global.get $ptr) (i32.const 1))) (i32.const 34))
-        (i32.eq (call $swiftByte (i32.add (global.get $ptr) (i32.const 2))) (i32.const 34))))
+        (i32.eq (call $templateByte (i32.add (global.get $ptr) (i32.const 1))) (i32.const 34))
+        (i32.eq (call $templateByte (i32.add (global.get $ptr) (i32.const 2))) (i32.const 34))))
     (global.set $ptr
       (i32.add (global.get $ptr) (select (i32.const 3) (i32.const 1) (local.get $triple))))
     (call $emitTok (enum.get $Token.string) (local.get $lhs) (global.get $ptr))
@@ -110,7 +107,7 @@
             (block $escapeDone
               (loop $hash
                 (br_if $escapeDone (i32.ge_u (local.get $seen) (local.get $hashes)))
-                (br_if $escapeDone (i32.ne (call $swiftByte (local.get $q)) (i32.const "#")))
+                (br_if $escapeDone (i32.ne (call $templateByte (local.get $q)) (i32.const "#")))
                 (local.set $seen (i32.add (local.get $seen) (i32.const 1)))
                 (local.set $q (i32.add (local.get $q) (i32.const 1)))
                 (br $hash)))
@@ -123,8 +120,8 @@
           (i32.or
             (i32.eqz (local.get $triple))
             (i32.and
-              (i32.eq (call $swiftByte (i32.add (global.get $ptr) (i32.const 1))) (i32.const 34))
-              (i32.eq (call $swiftByte (i32.add (global.get $ptr) (i32.const 2))) (i32.const 34))))
+              (i32.eq (call $templateByte (i32.add (global.get $ptr) (i32.const 1))) (i32.const 34))
+              (i32.eq (call $templateByte (i32.add (global.get $ptr) (i32.const 2))) (i32.const 34))))
           (then
             (local.set $q
               (i32.add (global.get $ptr) (select (i32.const 3) (i32.const 1) (local.get $triple))))
@@ -132,7 +129,7 @@
             (block $matchDone
               (loop $match
                 (br_if $matchDone (i32.ge_u (local.get $seen) (local.get $hashes)))
-                (br_if $matchDone (i32.ne (call $swiftByte (local.get $q)) (i32.const "#")))
+                (br_if $matchDone (i32.ne (call $templateByte (local.get $q)) (i32.const "#")))
                 (local.set $seen (i32.add (local.get $seen) (i32.const 1)))
                 (local.set $q (i32.add (local.get $q) (i32.const 1)))
                 (br $match)))
@@ -155,7 +152,7 @@
     (local $c i32)
     (block $done
       (loop $blank
-        (local.set $c (call $swiftByte (local.get $p)))
+        (local.set $c (call $templateByte (local.get $p)))
         (br_if $done (i32.and (i32.ne (local.get $c) (i32.const 32)) (i32.ne (local.get $c) (i32.const 9))))
         (local.set $p (i32.add (local.get $p) (i32.const 1)))
         (br $blank)))
@@ -175,7 +172,7 @@
     (result i32)
     (local $c i32)
     (local $n i32)
-    (local.set $c (call $swiftByte (local.get $p)))
+    (local.set $c (call $templateByte (local.get $p)))
     (local.set $n (i32.sub (local.get $rhs) (local.get $lhs)))
     (if (i32.or (i32.eq (local.get $c) (i32.const "?")) (i32.eq (local.get $c) (i32.const "!")))
       (then
@@ -183,7 +180,7 @@
           (i32.and
             (i32.and
               (i32.eqz (local.get $member))
-              (i32.eq (call $swiftByte (i32.add (local.get $p) (i32.const 1))) (i32.const "(")))
+              (i32.eq (call $templateByte (i32.add (local.get $p) (i32.const 1))) (i32.const "(")))
             (i32.and
               (i32.eq (local.get $n) (i32.const 4))
               (i32.eq (i32.load (local.get $lhs)) (i32.const "init")))))))
@@ -298,7 +295,7 @@
                       (i32.and
                         (i32.eqz (local.get $interp))
                         (i32.eq
-                          (call $swiftByte (i32.add (global.get $ptr) (i32.const 1)))
+                          (call $templateByte (i32.add (global.get $ptr) (i32.const 1)))
                           (i32.const "(")))
                       (then
                         (call $emitTok (enum.get $Token.string) (local.get $seg) (global.get $ptr))
@@ -337,8 +334,8 @@
         (br_if $done (i32.ge_u (global.get $ptr) (global.get $end)))
         (local.set $lhs (global.get $ptr))
         (local.set $c (i32.load8_u (global.get $ptr)))
-        (local.set $c2 (call $swiftByte (i32.add (global.get $ptr) (i32.const 1))))
-        (local.set $c3 (call $swiftByte (i32.add (global.get $ptr) (i32.const 2))))
+        (local.set $c2 (call $templateByte (i32.add (global.get $ptr) (i32.const 1))))
+        (local.set $c3 (call $templateByte (i32.add (global.get $ptr) (i32.const 2))))
 
         (if
           (i32.and (i32.eq (local.get $c) (i32.const "/")) (i32.eq (local.get $c2) (i32.const "/")))
@@ -459,7 +456,7 @@
                         (global.set $sigFnAngle (i32.const 0))))
                     (local.set $expect (i32.const 0)))
                   (else
-                    (local.set $c2 (call $swiftByte (local.get $p)))
+                    (local.set $c2 (call $templateByte (local.get $p)))
                     (if
                       (if (result i32) (i32.eq (local.get $c2) (i32.const "("))
                         (then (i32.const 1))
@@ -596,9 +593,10 @@
                 (global.set $sigPattern (i32.const 1)))
               (else
                 (global.set $sigPattern (i32.const 0))
+                (local.set $p (call $sigActive))
                 (if (i32.eq (local.get $c) (i32.const ")"))
                   (then
-                    (if (call $sigActive)
+                    (if (local.get $p)
                       (then (call $sigUnmark)))
                     (if (i32.gt_u (global.get $sigParens) (i32.const 0))
                       (then
@@ -606,7 +604,7 @@
                   (else
                     (if (i32.and (global.get $sigFnPend) (i32.eqz (global.get $sigFnAngle)))
                       (then (global.set $sigFnPend (i32.const 0))))
-                    (if (call $sigActive)
+                    (if (local.get $p)
                       (then
                         (if
                           (i32.or
@@ -654,7 +652,7 @@
             (if (i32.eq (local.get $c2) (i32.const "."))
               (then
                 (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
-                (if (i32.eq (call $swiftByte (global.get $ptr)) (i32.const "."))
+                (if (i32.eq (call $templateByte (global.get $ptr)) (i32.const "."))
                   (then (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))))))
             (call $emitTok
               (select
@@ -671,18 +669,14 @@
           (then
             (block $opDone
               (loop $op
-                (br_if $opDone (i32.eqz (call $swiftIsOp (call $swiftByte (global.get $ptr)))))
+                (local.set $c3 (call $templateByte (global.get $ptr)))
+                (br_if $opDone (i32.eqz (call $swiftIsOp (local.get $c3))))
                 ;; a comment opener ends the run
+                (local.set $e (call $templateByte (i32.add (global.get $ptr) (i32.const 1))))
                 (br_if $opDone
                   (i32.and
-                    (i32.eq (call $swiftByte (global.get $ptr)) (i32.const "/"))
-                    (i32.or
-                      (i32.eq
-                        (call $swiftByte (i32.add (global.get $ptr) (i32.const 1)))
-                        (i32.const "/"))
-                      (i32.eq
-                        (call $swiftByte (i32.add (global.get $ptr) (i32.const 1)))
-                        (i32.const "*")))))
+                    (i32.eq (local.get $c3) (i32.const "/"))
+                    (i32.or (i32.eq (local.get $e) (i32.const "/")) (i32.eq (local.get $e) (i32.const "*")))))
                 (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
                 (br $op)))
             (call $emitTok (enum.get $Token.operator) (local.get $lhs) (global.get $ptr))
@@ -706,7 +700,7 @@
                             (i32.or
                               (i32.eq (local.get $c) (i32.const "?"))
                               (i32.eq (local.get $c) (i32.const "!")))
-                            (i32.eq (call $swiftByte (global.get $ptr)) (i32.const "(")))))
+                            (i32.eq (call $templateByte (global.get $ptr)) (i32.const "(")))))
                       (then (call $sigAngleOps (local.get $lhs) (global.get $ptr))))))))
             (global.set $sigPattern (i32.const 0))
             (br $next)))

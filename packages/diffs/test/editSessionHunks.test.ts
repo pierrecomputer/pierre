@@ -1,7 +1,10 @@
 import { describe, expect, test } from 'bun:test';
-import type { CreatePatchOptionsNonabortable } from 'diff';
 
-import type { FileDiffMetadata, HunkExpansionRegion } from '../src/types';
+import type {
+  FileDiffMetadata,
+  HunkExpansionRegion,
+  ParseDiffOptions,
+} from '../src/types';
 import {
   applySessionChangedLines,
   captureExpansionAnchors,
@@ -105,7 +108,7 @@ function pairingProjection(diff: FileDiffMetadata) {
 
 function expectPairingParity(
   diff: FileDiffMetadata,
-  parseDiffOptions?: CreatePatchOptionsNonabortable
+  parseDiffOptions?: ParseDiffOptions
 ): void {
   const expected = parseDiffFromFile(
     { name: diff.prevName ?? diff.name, contents: diff.deletionLines.join('') },

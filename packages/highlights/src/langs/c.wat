@@ -183,12 +183,7 @@
             (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
             (call $emitTok (enum.get $Token.punctuation.bracket) (local.get $lhs) (global.get $ptr))
             (br $next)))
-        (if
-          (i32.or
-            (i32.or (i32.eq (local.get $c) (i32.const ",")) (i32.eq (local.get $c) (i32.const ";")))
-            (i32.or
-              (i32.eq (local.get $c) (i32.const ":"))
-              (i32.eq (local.get $c) (i32.const "."))))
+        (if (byteset.get ",.:;" (local.get $c))
           (then
             (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
             (call $emitTok
@@ -202,28 +197,25 @@
         (if (call $cIsOp (local.get $c))
           (then
             (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
+            ;; $c2 and $c3 are 0 past $end, which no test below matches
             (if
-              (i32.and
-                (i32.lt_u (global.get $ptr) (global.get $end))
+              (i32.or
+                (i32.eq (local.get $c2) (i32.const "="))
                 (i32.or
-                  (i32.eq (local.get $c2) (i32.const "="))
-                  (i32.or
-                    (i32.and
-                      (i32.eq (local.get $c) (local.get $c2))
-                      (byteset.get "&+-<>|" (local.get $c)))
-                    (i32.and
-                      (i32.eq (local.get $c) (i32.const "-"))
-                      (i32.eq (local.get $c2) (i32.const ">"))))))
+                  (i32.and
+                    (i32.eq (local.get $c) (local.get $c2))
+                    (byteset.get "&+-<>|" (local.get $c)))
+                  (i32.and
+                    (i32.eq (local.get $c) (i32.const "-"))
+                    (i32.eq (local.get $c2) (i32.const ">")))))
               (then
                 (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
                 (if
                   (i32.and
-                    (i32.lt_u (global.get $ptr) (global.get $end))
-                    (i32.and
-                      (i32.or
-                        (i32.eq (local.get $c) (i32.const "<"))
-                        (i32.eq (local.get $c) (i32.const ">")))
-                      (i32.eq (i32.load8_u (global.get $ptr)) (i32.const "="))))
+                    (i32.or
+                      (i32.eq (local.get $c) (i32.const "<"))
+                      (i32.eq (local.get $c) (i32.const ">")))
+                    (i32.eq (local.get $c3) (i32.const "=")))
                   (then (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))))))
             (call $emitTok (enum.get $Token.operator) (local.get $lhs) (global.get $ptr))
             (br $next)))

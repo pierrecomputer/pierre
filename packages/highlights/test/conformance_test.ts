@@ -59,7 +59,7 @@ const lexers = Object.keys(languageEnum).filter((name) => name !== 'plain');
 // its baseline: the per-lexer functions need a few hundred calls each before
 // that tier picks them up, and a miscompile there - Bun 1.4 cut identifier
 // scans after 8 bytes in any lexer that inlined a scanner without the SIMD
-// marker `markSimdReachers` adds in scripts/build.ts - must surface as a
+// marker `markSimdReachers` adds in @pierre/wat-tools - must surface as a
 // failed check, not as a wrong result after the checks have passed.
 for (let round = 0; round < 240; round++) {
   for (const name of lexers) {
@@ -495,12 +495,17 @@ for (const name of lexers) {
       // the pristine sample highlights afterwards
       const pristine = htmlOf(lang, sample);
       const lines = byLine(sample);
+      // cut only between code points, so no mutant holds a lone surrogate
+      const boundary = (i: number) =>
+        /[\udc00-\udfff]/.test(sample[i] ?? '') ? i - 1 : i;
       for (let round = 0; round < 48; round++) {
         let mutant: string;
-        const at = rand() % sample.length;
+        const at = boundary(rand() % sample.length);
         switch (rand() % 4) {
           case 0:
-            mutant = sample.slice(0, at) + sample.slice(at + 1 + (rand() % 4));
+            mutant =
+              sample.slice(0, at) +
+              sample.slice(boundary(at + 1 + (rand() % 4)));
             break;
           case 1:
             mutant =

@@ -72,6 +72,11 @@
     (call $lexEmitLeadingContinuation)
     (block $done
       (loop $next
+        ;; token tails: $valueTok and $opTok set $afterValue, and $tok emits
+        ;; [$lhs,$ptr) as $hl and clears $member
+        (block $tok
+        (block $opTok
+        (block $valueTok
         (local.set $gap (global.get $ptr))
         (call $scanWhitespace)
         (call $emitGap (local.get $gap) (global.get $ptr))
@@ -158,45 +163,40 @@
             (local.set $member (i32.const 0))
             (local.set $afterValue (i32.const 1))
             (br $next)))
-        ;; `'a` type variables
-        (if (i32.and (i32.eq (local.get $c) (i32.const 39)) (call $lexIsIdentStart (local.get $c2)))
+        ;; a name glued to a prefix byte
+        (if (call $lexIsIdentStart (local.get $c2))
           (then
-            (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
-            (call $scanIdentRun (i32.const 39))
-            (call $emitTok (enum.get $Token.type) (local.get $lhs) (global.get $ptr))
-            (local.set $member (i32.const 0))
-            (br $next)))
-        ;; `` `Variant `` polymorphic variants
-        (if
-          (i32.and (i32.eq (local.get $c) (i32.const "`")) (call $lexIsIdentStart (local.get $c2)))
-          (then
-            (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
-            (call $lexScanIdent)
-            (call $emitTok (enum.get $Token.variant) (local.get $lhs) (global.get $ptr))
-            (local.set $member (i32.const 0))
-            (br $next)))
-        ;; `~label`, `~label:`, `?opt` argument labels. The `:` glued to a
-        ;; label introduces its argument, not a type, and that argument is
-        ;; one atom, so a name after it does not head an application.
-        (if
-          (i32.and
-            (i32.or (i32.eq (local.get $c) (i32.const "~")) (i32.eq (local.get $c) (i32.const "?")))
-            (call $lexIsIdentStart (local.get $c2)))
-          (then
-            (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
-            (call $lexScanIdent)
-            (call $emitTok (enum.get $Token.variable.parameter) (local.get $lhs) (global.get $ptr))
-            (local.set $member (i32.const 0))
-            (if
-              (i32.and
-                (i32.eq (call $mlByte (global.get $ptr)) (i32.const ":"))
-                (i32.ne (call $mlByte (i32.add (global.get $ptr) (i32.const 1))) (i32.const ":")))
+            ;; `'a` type variables
+            (if (i32.eq (local.get $c) (i32.const 39))
               (then
+                (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
+                (call $scanIdentRun (i32.const 39))
+                (local.set $hl (enum.get $Token.type))
+                (br $tok)))
+            ;; `` `Variant `` polymorphic variants
+            (if (i32.eq (local.get $c) (i32.const "`"))
+              (then
+                (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
+                (call $lexScanIdent)
+                (local.set $hl (enum.get $Token.variant))
+                (br $tok)))
+            ;; `~label`, `~label:`, `?opt` argument labels. The `:` glued to a
+            ;; label introduces its argument, not a type, and that argument is
+            ;; one atom, so a name after it does not head an application.
+            (if (i32.or (i32.eq (local.get $c) (i32.const "~")) (i32.eq (local.get $c) (i32.const "?")))
+              (then
+                (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
+                (call $lexScanIdent)
+                (local.set $hl (enum.get $Token.variable.parameter))
+                (br_if $tok
+                  (i32.or
+                    (i32.ne (call $mlByte (global.get $ptr)) (i32.const ":"))
+                    (i32.eq (call $mlByte (i32.add (global.get $ptr) (i32.const 1))) (i32.const ":"))))
+                (call $emitTok (local.get $hl) (local.get $lhs) (global.get $ptr))
                 (local.set $lhs (global.get $ptr))
                 (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
-                (call $emitTok (enum.get $Token.operator) (local.get $lhs) (global.get $ptr))
-                (local.set $afterValue (i32.const 1))))
-            (br $next)))
+                (local.set $hl (enum.get $Token.operator))
+                (br $valueTok)))))
         ;; `[@attr]`, `[@@attr]`, `[@@@attr]`, `[%ext]`, `[%%ext]`
         (if
           (i32.and
@@ -214,9 +214,8 @@
             (call $emitTok (enum.get $Token.punctuation.special) (local.get $lhs) (global.get $ptr))
             (local.set $lhs (global.get $ptr))
             (call $scanIdentRun (i32.const "."))
-            (call $emitTok (enum.get $Token.attribute) (local.get $lhs) (global.get $ptr))
-            (local.set $member (i32.const 0))
-            (br $next)))
+            (local.set $hl (enum.get $Token.attribute))
+            (br $tok)))
 
         (if (i32.and (call $lexIsIdentStart (local.get $c)) (i32.ne (local.get $c) (i32.const "$")))
           (then
@@ -302,6 +301,8 @@
                                         (if (result i32) (local.get $afterValue)
                                           (then (i32.const 0))
                                           (else (call $mlIsArgAt (local.get $p))))))))))))))))))
+            ;; WARNING: the hot name path keeps its own emit; sharing the $tok
+            ;; tail made JavaScriptCore up to 20% slower
             (call $emitTok (local.get $hl) (local.get $lhs) (local.get $rhs))
             (local.set $member (i32.const 0))
             ;; a defined name counts too, so `let add x y` keeps `x` a value
@@ -324,16 +325,13 @@
           (then
             (call $lexScanHexNumber (i32.const 1))
             (call $mlFloatDot)
-            (call $emitTok (enum.get $Token.number) (local.get $lhs) (global.get $ptr))
-            (local.set $member (i32.const 0))
-            (local.set $afterValue (i32.const 1))
-            (br $next)))
+            (local.set $hl (enum.get $Token.number))
+            (br $valueTok)))
 
         (if (byteset.get "()[]{}" (local.get $c))
           (then
             (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
-            (call $emitTok (enum.get $Token.punctuation.bracket) (local.get $lhs) (global.get $ptr))
-            (local.set $member (i32.const 0))
+            (local.set $hl (enum.get $Token.punctuation.bracket))
             (local.set $afterValue
               (i32.or
                 (i32.or
@@ -347,7 +345,7 @@
               (then (local.set $typeMode (i32.const 0))))
             (if (i32.eq (local.get $c) (i32.const "("))
               (then (local.set $expect (i32.const 0))))
-            (br $next)))
+            (br $tok)))
         (if (i32.or (i32.eq (local.get $c) (i32.const ",")) (i32.eq (local.get $c) (i32.const ";")))
           (then
             (global.set $ptr
@@ -359,15 +357,10 @@
                   (i32.and
                     (i32.eq (local.get $c) (i32.const ";"))
                     (i32.eq (local.get $c2) (i32.const ";"))))))
-            (call $emitTok
-              (enum.get $Token.punctuation.delimiter)
-              (local.get $lhs)
-              (global.get $ptr))
-            (local.set $member (i32.const 0))
-            (local.set $afterValue (i32.const 0))
             (local.set $typeMode (i32.const 0))
             (local.set $expect (i32.const 0))
-            (br $next)))
+            (local.set $hl (enum.get $Token.punctuation.delimiter))
+            (br $opTok)))
         ;; `.` names a field, `.(` an array index, `Foo.` a module member
         (if
           (i32.and (i32.eq (local.get $c) (i32.const ".")) (i32.ne (local.get $c2) (i32.const ".")))
@@ -406,7 +399,6 @@
                       (i32.const "*"))))
                 (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
                 (br $symbol)))
-            (call $emitTok (enum.get $Token.operator) (local.get $lhs) (global.get $ptr))
             (local.set $n (i32.sub (global.get $ptr) (local.get $lhs)))
             ;; `:` opens a type annotation, `->` keeps it, `=` and `|` end
             ;; it; `::` is the cons operator
@@ -426,12 +418,16 @@
                 (i32.eq (local.get $n) (i32.const 2))
                 (i32.eq (i32.load16_u (local.get $lhs)) (i32.const "::")))
               (then (local.set $typeMode (i32.const 0))))
-            (local.set $member (i32.const 0))
-            (local.set $afterValue (i32.const 0))
-            (br $next)))
+            (local.set $hl (enum.get $Token.operator))
+            (br $opTok)))
 
         (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
-        (call $emitTok (enum.get $Token.none) (local.get $lhs) (global.get $ptr))
+        (local.set $hl (enum.get $Token.none))
+        (br $tok))
+        (local.set $afterValue (i32.const 1))
+        (br $tok))
+        (local.set $afterValue (i32.const 0)))
+        (call $emitTok (local.get $hl) (local.get $lhs) (global.get $ptr))
         (local.set $member (i32.const 0))
         (br $next))))
 

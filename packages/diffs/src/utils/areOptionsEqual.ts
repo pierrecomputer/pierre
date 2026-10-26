@@ -1,9 +1,8 @@
-import type { CreatePatchOptionsNonabortable } from 'diff';
-
 import type { CodeViewOptions } from '../components/CodeView';
 import type { FileDiffOptions } from '../components/FileDiff';
 import { DEFAULT_THEMES } from '../constants';
 import type { FileOptions } from '../react';
+import type { ParseDiffOptions } from '../types';
 import { areObjectsEqual } from './areObjectsEqual';
 import { areThemesEqual } from './areThemesEqual';
 
@@ -33,7 +32,7 @@ export function areOptionsEqual<LAnnotation, Caret>(
 
 function getParseDiffOptions<L, C>(
   options: AnyOptions<L, C>
-): CreatePatchOptionsNonabortable | undefined {
+): ParseDiffOptions | undefined {
   if (options != null && 'parseDiffOptions' in options) {
     return options.parseDiffOptions;
   }

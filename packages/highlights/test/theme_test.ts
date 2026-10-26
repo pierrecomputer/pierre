@@ -589,6 +589,43 @@ void test('toCSS resolves every token scope through its parents and foreground',
   }
 });
 
+void test('toCSS: optional font style variables preserve inheritance and explicit normal styles', () => {
+  const theme: Theme = {
+    name: 'font styles',
+    appearance: 'dark',
+    style: {
+      syntax: {
+        comment: { color: '#888', font_style: 'italic' },
+        'comment.doc': { font_style: 'normal' },
+        string: { color: '#abc', font_style: 'italic' },
+        keyword: { font_style: 'italic;display:none' },
+      },
+    },
+  };
+  for (const cssVariablePrefix of [undefined, '--code-']) {
+    const prefix = cssVariablePrefix ?? '--hls-';
+    const colors = toCSS(theme, { cssVariablePrefix });
+    assert.doesNotMatch(colors, /-font-style:/);
+    assert.equal(toCSS(theme, { cssVariablePrefix, fontStyle: false }), colors);
+    const css = toCSS(theme, { cssVariablePrefix, fontStyle: true });
+    for (const [scope, style] of [
+      ['comment', 'italic'],
+      ['comment.doc', 'normal'],
+      ['string.escape', 'italic'],
+      ['variable', 'normal'],
+      ['keyword', 'normal'],
+      ['number', 'normal'],
+    ]) {
+      assert.ok(
+        css.includes(
+          `${prefix}${scope.replaceAll('.', '-')}-font-style: ${style};`
+        )
+      );
+    }
+    assert.ok(!css.includes('display:none'));
+  }
+});
+
 void test('toCSS: rejects colors that can escape the declaration', () => {
   const css = toCSS({
     name: 'hostile',
@@ -663,4 +700,48 @@ void test('theme helpers: color validation and fallback chains', () => {
   );
   assert.equal(themeBackground({ background: '#5' }), '#5');
   assert.equal(themeBackground({}), undefined);
+});
+
+void test('named CSS palettes preserve defaults and syntax font styles in tokens and HTML', () => {
+  const { highlighter } = cachedEmitter();
+  const theme: Theme = {
+    name: 'Application palette',
+    appearance: 'dark',
+    cssVariables: { prefix: '--app-', defaults: { numeric: '#123456' } },
+    style: {
+      syntax: {
+        number: { color: 'numeric', font_style: 'italic', font_weight: 700 },
+      },
+    },
+  };
+  const options = {
+    lang: 'json',
+    theme,
+    cssVariablePrefix: '--schemes-',
+  } as const;
+  const tokens = highlighter.codeToTokens('42', options);
+  assert.equal(tokens.tokens[0][0].color, 'var(--app-numeric, #123456)');
+  assert.equal(tokens.tokens[0][0].fontStyle, 3);
+  assert.equal(tokens.fg, 'var(--app-foreground)');
+  const html = new TextDecoder().decode(highlighter.codeToHtml('42', options));
+  assert.ok(
+    html.includes(
+      'var(--app-numeric, #123456);font-style:italic;font-weight:700'
+    )
+  );
+  assert.ok(!html.includes('--schemes-numeric'));
+});
+
+void test('named CSS palette HTML escapes variable prefixes and defaults', () => {
+  const theme: Theme = {
+    name: 'Escaped palette',
+    appearance: 'dark',
+    cssVariables: { prefix: '--app-"<&', defaults: { numeric: '"<&' } },
+    style: { syntax: { number: 'numeric' } },
+  };
+  const html = json.hl('42', { theme });
+  assert.ok(
+    html.includes('var(--app-&quot;&lt;&amp;numeric, &quot;&lt;&amp;)')
+  );
+  assert.ok(!html.includes('var(--app-"'));
 });

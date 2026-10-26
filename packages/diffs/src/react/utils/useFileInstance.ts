@@ -13,8 +13,10 @@ import {
   type FileEditCompleteEvent,
   type FileEditCompleteHandler,
   type FileOptions,
+  type FileRenderInput,
 } from '../../components/File';
 import { VirtualizedFile } from '../../components/VirtualizedFile';
+import { EMPTY_LINE_ANNOTATIONS } from '../../constants';
 import type { Editor, EditorChangeEvent, EditorOptions } from '../../edit';
 import type { GetHoveredLineResult } from '../../managers/InteractionManager';
 import type {
@@ -30,6 +32,8 @@ import { noopRender } from '../constants';
 import { useCreateEditor } from '../EditContext';
 import { useVirtualizer } from '../Virtualizer';
 import { WorkerPoolContext } from '../WorkerPoolContext';
+import { useForceUpdate } from './useForceUpdate';
+import { useNextRenderData } from './useNextRenderData';
 import { useStableCallback } from './useStableCallback';
 
 const useIsomorphicLayoutEffect =
@@ -64,6 +68,8 @@ interface UseFileInstanceProps<LAnnotation, Caret> {
 }
 
 interface UseFileInstanceReturn<LAnnotation> {
+  file: FileContents;
+  lineAnnotations: LineAnnotation<LAnnotation>[];
   ref(node: HTMLElement | null): void;
   getHoveredLine(): GetHoveredLineResult<'file'> | undefined;
   getAnnotationSlotName(annotation: LineAnnotation<LAnnotation>): string;
@@ -97,10 +103,10 @@ export function useFileInstance<LAnnotation, Caret>({
       _onEditChange?.(event)
   );
   const onEditChange = _onEditChange != null ? handleOnEditChange : undefined;
-  // An accepted completion installs its file on the instance immediately,
-  // but the file/lineAnnotations props stay pre-edit until the owner's state
-  // update lands. This holds the accepted values so the renders in between do
-  // not repaint pre-edit state.
+  // When an edit is accepted, the instance switches to the edited file right
+  // away, but the file and lineAnnotations props keep their pre-edit values
+  // until the parent passes new ones. This keeps the accepted values so the
+  // renders in between don't show the pre-edit file again.
   const acceptedCache = useRef<AcceptedCompletion<LAnnotation> | null>(null);
   const handleOnEditComplete = useStableCallback(
     (event: FileEditCompleteEvent<LAnnotation, Caret>) => {
@@ -122,6 +128,12 @@ export function useFileInstance<LAnnotation, Caret>({
   const instanceRef = useRef<
     File<LAnnotation, Caret> | VirtualizedFile<LAnnotation, Caret> | null
   >(null);
+  const forceUpdate = useForceUpdate();
+  const accepted = useAcceptedValues(acceptedCache, file, lineAnnotations);
+  const renderData = useNextRenderData(instanceRef, accepted) ?? {
+    file,
+    lineAnnotations: lineAnnotations ?? EMPTY_LINE_ANNOTATIONS,
+  };
   const disposeEditorRef = useRef<() => void>(null);
   const getEditor = useStableCallback(() => {
     if (createEditor == null) {
@@ -149,7 +161,7 @@ export function useFileInstance<LAnnotation, Caret>({
           simpleVirtualizer,
           metrics,
           !disableWorkerPool ? poolManager : undefined,
-          true
+          forceUpdate
         );
       } else {
         instanceRef.current = new File(
@@ -162,7 +174,7 @@ export function useFileInstance<LAnnotation, Caret>({
             options,
           }),
           !disableWorkerPool ? poolManager : undefined,
-          true
+          forceUpdate
         );
       }
       if (edit && disposeEditorRef.current == null) {
@@ -195,14 +207,9 @@ export function useFileInstance<LAnnotation, Caret>({
       onEditComplete,
       options,
     });
-    // setOptions(undefined) is a no-op, so an undefined merge result never
-    // requires a forced render — comparing it against the instance's
-    // constructor-default options would force a full render on every commit.
-    const forceRender =
-      newOptions !== undefined &&
-      !areOptionsEqual(instance.options, newOptions);
+    const forceRender = !areOptionsEqual(instance.options, newOptions);
     instance.setOptions(newOptions);
-    // Detach editor before rendering if required
+    // Detach the editor before rendering when editing turns off
     if (!edit && disposeEditorRef.current != null) {
       const { current: disposeEditor } = disposeEditorRef;
       disposeEditorRef.current = null;
@@ -221,9 +228,12 @@ export function useFileInstance<LAnnotation, Caret>({
     if (selectedLines !== undefined) {
       instance.setSelectedLines(selectedLines);
     }
-    // Attach editor after rendering if required
+    // Attach the editor after rendering when editing turns on. The editor can
+    // show content that is still highlighting, so render the children again
+    // from the edit session.
     if (edit && disposeEditorRef.current == null) {
       disposeEditorRef.current = applyEdit(instance, getEditor);
+      forceUpdate();
     }
   });
 
@@ -238,45 +248,66 @@ export function useFileInstance<LAnnotation, Caret>({
       getLineAnnotationName(annotation),
     []
   );
-  return { ref, getHoveredLine, getAnnotationSlotName };
+  return { ...renderData, ref, getHoveredLine, getAnnotationSlotName };
 }
 
-// Return the installed values in place of props that still match their stale
-// counterparts. Any other prop value clears its half, and the ref clears once
-// both halves have.
+// Read the accepted values on every render. Entries are only removed in the
+// effect, by resolveAcceptedValues. The cache changes without new props, so
+// this must not be memoized.
+function useAcceptedValues<LAnnotation>(
+  acceptedCache: RefObject<AcceptedCompletion<LAnnotation> | null>,
+  file: FileContents,
+  lineAnnotations: LineAnnotation<LAnnotation>[] | undefined
+): FileRenderInput<LAnnotation> {
+  'use no memo';
+  // oxlint-disable-next-line react/refs -- the cache changes without new props
+  return getAcceptedValues(file, lineAnnotations, acceptedCache.current);
+}
+
+// Use the accepted values for props that still hold their pre-edit values.
+function getAcceptedValues<LAnnotation>(
+  file: FileContents,
+  lineAnnotations: LineAnnotation<LAnnotation>[] | undefined,
+  accepted: AcceptedCompletion<LAnnotation> | null
+): FileRenderInput<LAnnotation> {
+  return {
+    file:
+      accepted?.file != null && areFileTargetsEqual(file, accepted.file.stale)
+        ? accepted.file.installed
+        : file,
+    lineAnnotations:
+      accepted?.annotations != null &&
+      lineAnnotations === accepted.annotations.stale
+        ? accepted.annotations.installed
+        : lineAnnotations,
+  };
+}
+
+// Return the accepted values, and drop each one once its prop no longer holds
+// the pre-edit value. The cache is cleared once both are dropped.
 function resolveAcceptedValues<LAnnotation>(
   file: FileContents,
   lineAnnotations: LineAnnotation<LAnnotation>[] | undefined,
   acceptedCache: RefObject<AcceptedCompletion<LAnnotation> | null>
-): {
-  file: FileContents;
-  lineAnnotations: LineAnnotation<LAnnotation>[] | undefined;
-} {
+): FileRenderInput<LAnnotation> {
   const { current: accepted } = acceptedCache;
+  const resolved = getAcceptedValues(file, lineAnnotations, accepted);
   if (accepted == null) {
-    return { file, lineAnnotations };
+    return resolved;
   }
-  const { file: acceptedFiles, annotations: acceptedAnnotations } = accepted;
-  let resolvedFile = file;
-  if (acceptedFiles != null) {
-    if (areFileTargetsEqual(file, acceptedFiles.stale)) {
-      resolvedFile = acceptedFiles.installed;
-    } else {
-      accepted.file = null;
-    }
+  if (
+    accepted.file != null &&
+    !areFileTargetsEqual(file, accepted.file.stale)
+  ) {
+    accepted.file = null;
   }
-  let resolvedAnnotations = lineAnnotations;
-  if (acceptedAnnotations != null) {
-    if (lineAnnotations === acceptedAnnotations.stale) {
-      resolvedAnnotations = acceptedAnnotations.installed;
-    } else {
-      accepted.annotations = null;
-    }
+  if (lineAnnotations !== accepted.annotations?.stale) {
+    accepted.annotations = null;
   }
   if (accepted.file == null && accepted.annotations == null) {
     acceptedCache.current = null;
   }
-  return { file: resolvedFile, lineAnnotations: resolvedAnnotations };
+  return resolved;
 }
 
 interface MergeFileOptionsProps<LAnnotation, Caret> {
@@ -295,20 +326,7 @@ function mergeFileOptions<LAnnotation, Caret>({
   hasGutterRenderUtility,
   onEditChange,
   onEditComplete,
-}: MergeFileOptionsProps<LAnnotation, Caret>):
-  | FileOptions<LAnnotation, Caret>
-  | undefined {
-  const needsReactOverrides =
-    controlledSelection ||
-    hasGutterRenderUtility ||
-    hasCustomHeader ||
-    onEditChange != null ||
-    onEditComplete != null;
-
-  if (!needsReactOverrides) {
-    return options;
-  }
-
+}: MergeFileOptionsProps<LAnnotation, Caret>): FileOptions<LAnnotation, Caret> {
   return {
     ...options,
     controlledSelection,
@@ -323,6 +341,7 @@ function mergeFileOptions<LAnnotation, Caret>({
   };
 }
 
+// Attach an editor to the instance, cleaning the editor up if attaching throws.
 function applyEdit<LAnnotation, Caret>(
   instance: File<LAnnotation, Caret>,
   getEditor: () => Editor<'file', LAnnotation, Caret>

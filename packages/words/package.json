@@ -1,0 +1,73 @@
+{
+  "name": "@pierre/words",
+  "version": "0.1.1",
+  "description": "A fast markdown renderer written in WebAssembly Text.",
+  "license": "apache-2.0",
+  "files": [
+    "dist/",
+    "!dist/benchmark/",
+    "LICENSE.md",
+    "NOTICE.md"
+  ],
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "workerd": "./dist/workerd.js",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./react": {
+      "types": "./dist/react.d.ts",
+      "import": "./dist/react.js",
+      "default": "./dist/react.js"
+    },
+    "./highlights": {
+      "types": "./dist/highlights.d.ts",
+      "import": "./dist/highlights.js",
+      "default": "./dist/highlights.js"
+    },
+    "./html": {
+      "types": "./dist/html.d.ts",
+      "import": "./dist/html.js",
+      "default": "./dist/html.js"
+    },
+    "./styles.css": "./dist/styles.css"
+  },
+  "scripts": {
+    "prepublishOnly": "moon run words:prepublish"
+  },
+  "devDependencies": {
+    "@pierre/highlights": "workspace:*",
+    "@pierre/wat-tools": "workspace:*",
+    "@playwright/test": "catalog:",
+    "@streamdown/code": "catalog:",
+    "@types/bun": "catalog:",
+    "@types/jsdom": "catalog:",
+    "@types/react": "catalog:",
+    "@types/react-dom": "catalog:",
+    "jsdom": "catalog:",
+    "markdown-it": "catalog:",
+    "md4x": "catalog:",
+    "react": "catalog:",
+    "react-dom": "catalog:",
+    "shiki": "catalog:",
+    "streamdown": "catalog:",
+    "tsdown": "catalog:",
+    "typescript": "catalog:"
+  },
+  "peerDependencies": {
+    "@pierre/highlights": ">=0.5.1",
+    "react": "^18.3.1 || ^19.0.0"
+  },
+  "peerDependenciesMeta": {
+    "react": {
+      "optional": true
+    },
+    "@pierre/highlights": {
+      "optional": true
+    }
+  }
+}

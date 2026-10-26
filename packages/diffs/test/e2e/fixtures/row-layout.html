@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Row layout fixture</title>
+    <style>
+      [data-mount] {
+        width: 700px;
+      }
+    </style>
+  </head>
+  <body>
+    <button data-annotation>Add annotation</button>
+    <button data-clear>Clear annotation</button>
+    <button data-wrap>Wrap</button>
+    <button data-scroll>Scroll</button>
+    <button data-collapse>Collapse unchanged</button>
+    <button data-edit>Edit</button>
+    <button data-custom-css>Custom row height</button>
+    <button data-clear-css>Clear custom styles</button>
+    <div data-mount></div>
+    <script type="module">
+      import { File, FileDiff, parseDiffFromFile } from '/dist/index.js';
+      import { Editor } from '/dist/edit/index.js';
+
+      const params = new URLSearchParams(location.search);
+      const type = params.get('type') ?? 'file';
+      const lines = Array.from(
+        { length: 30 },
+        (_, i) => `const value${i} = ${i};`
+      );
+      lines[1] = '';
+      lines[2] = `const long = '${'wide '.repeat(50)}';`;
+      const file = { name: 'layout.ts', contents: lines.join('\n') };
+      const changed = [...lines];
+      changed.splice(6, 1, 'const added = 1;', 'const extra = 2;', '');
+      changed[changed.length - 2] = 'const later = true;';
+      const options = {
+        disableFileHeader: true,
+        disableLineNumbers: params.has('hideNumbers'),
+        diffStyle: type === 'unified' ? 'unified' : 'split',
+        expandUnchanged: true,
+        enableLineSelection: true,
+        theme: 'pierre-dark',
+        renderAnnotation() {
+          const content = document.createElement('div');
+          content.textContent = 'Annotation';
+          content.style.height = '70px';
+          return content;
+        },
+      };
+      const instance =
+        type === 'file' ? new File(options) : new FileDiff(options);
+      const renderProps = {
+        ...(type === 'file'
+          ? { file }
+          : {
+              fileDiff: parseDiffFromFile(file, {
+                name: file.name,
+                contents:
+                  changed.join('\n') + (params.has('noNewline') ? '' : '\n'),
+              }),
+            }),
+        containerWrapper: document.querySelector('[data-mount]'),
+        lineAnnotations: [],
+        renderRange: params.has('partial')
+          ? {
+              startingLine: 2,
+              totalLines: 12,
+              bufferBefore: 40,
+              bufferAfter: 320,
+            }
+          : undefined,
+      };
+      instance.render(renderProps);
+      document.querySelector('[data-annotation]').onclick = () => {
+        renderProps.lineAnnotations = [{ lineNumber: 5, side: 'additions' }];
+        instance.render(renderProps);
+      };
+      document.querySelector('[data-clear]').onclick = () => {
+        renderProps.lineAnnotations = [];
+        instance.render(renderProps);
+      };
+      for (const overflow of ['wrap', 'scroll']) {
+        document.querySelector(`[data-${overflow}]`).onclick = () => {
+          instance.setOptions({ ...instance.options, overflow });
+          instance.rerender();
+        };
+      }
+      document.querySelector('[data-collapse]').onclick = () => {
+        instance.setOptions({ ...instance.options, expandUnchanged: false });
+        instance.rerender();
+      };
+      document.querySelector('[data-edit]').onclick = () => {
+        const editor = new Editor(type === 'file' ? 'file' : 'file-diff');
+        editor.edit(instance);
+      };
+      document.querySelector('[data-custom-css]').onclick = () => {
+        instance.setOptions({
+          ...instance.options,
+          unsafeCSS: '[data-line="3"] { border-bottom: 7px solid red; }',
+        });
+        instance.rerender();
+      };
+      document.querySelector('[data-clear-css]').onclick = () => {
+        instance.setOptions({ ...instance.options, unsafeCSS: undefined });
+        instance.rerender();
+      };
+    </script>
+  </body>
+</html>

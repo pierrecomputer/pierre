@@ -503,3 +503,18 @@ void t.test('dart: a spaced comparison ends a pending type', () => {
     ['() {}', 'punctuation.bracket'],
   ]);
 });
+
+void t.test('dart: a `$name` template ends before the next `$`', () => {
+  const kinds = tokenKinds('dart', 'var s = "$a${b + 1} $c$ d $$x";\n');
+  for (const name of ['$a', '$c', '$x']) {
+    assert.ok(
+      kinds.some(([text, kind]) => text === name && kind === 'variable'),
+      name
+    );
+  }
+  assert.ok(
+    kinds.some(
+      ([text, kind]) => text === '${' && kind === 'punctuation.special'
+    )
+  );
+});

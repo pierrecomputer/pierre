@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, spyOn, test } from 'bun:test';
 
-import { CodeView } from '../src/components/CodeView';
+import { CodeView, type CodeViewCoordinator } from '../src/components/CodeView';
 import {
   disposeHighlighter,
   getSharedHighlighter,
@@ -11,6 +11,7 @@ import type {
   FileContents,
   FileDiffMetadata,
 } from '../src/types';
+import { getCodeViewItemRenderData } from '../src/utils/getCodeViewItemRenderData';
 import { parseDiffFromFile } from '../src/utils/parseDiffFromFile';
 import { renderDiffWithHighlighter } from '../src/utils/renderDiffWithHighlighter';
 import { renderFileWithHighlighter } from '../src/utils/renderFileWithHighlighter';
@@ -100,11 +101,300 @@ function getItemTop<LAnnotation>(
 function getRenderedDiffForTest(
   instance: object
 ): FileDiffMetadata | undefined {
-  return Reflect.get(instance, 'renderedDiff') as FileDiffMetadata | undefined;
+  const getRenderedDiff = Reflect.get(instance, 'getRenderedDiff') as () =>
+    | FileDiffMetadata
+    | undefined;
+  return getRenderedDiff.call(instance);
 }
 
 function getRenderedFileForTest(instance: object): FileContents | undefined {
-  return Reflect.get(instance, 'renderedFile') as FileContents | undefined;
+  const getRenderedFile = Reflect.get(instance, 'getRenderedFile') as () =>
+    | FileContents
+    | undefined;
+  return getRenderedFile.call(instance);
+}
+
+for (const type of ['file', 'diff'] as const) {
+  test(`CodeView ${type} keeps input items intact while annotation callbacks and slots use displayed data`, async () => {
+    const dom = installDom();
+    const { manager, worker } = await createInitializedManager({
+      theme: 'pierre-dark',
+    });
+    const contexts: CodeViewItem<string>[] = [];
+    const displayedContents: (FileContents | FileDiffMetadata)[] = [];
+    let notifications = 0;
+    const viewer = new CodeView<string>(
+      {
+        theme: 'pierre-dark',
+        stickyHeaders: false,
+        renderAnnotation(annotation, fileOrDiff, context) {
+          contexts.push(context.item);
+          displayedContents.push(fileOrDiff);
+          const element = document.createElement('span');
+          element.textContent = annotation.metadata;
+          return element;
+        },
+      },
+      manager
+    );
+    const fileA: FileContents = {
+      name: 'pending.ts',
+      contents: 'const alpha = 1;\n',
+      cacheKey: 'context:A',
+    };
+    const fileB = {
+      ...fileA,
+      contents: 'const beta = 2;\n',
+      cacheKey: 'context:B',
+    };
+    const diffA = createDiff('context:A', fileA.contents);
+    const diffB = createDiff('context:B', fileB.contents);
+    const annotation = {
+      side: 'additions' as const,
+      lineNumber: 1,
+      metadata: 'context annotation',
+    };
+    const annotations = [annotation];
+    const itemA: CodeViewItem<string> =
+      type === 'file'
+        ? { type, id: 'pending', file: fileA, annotations, version: 0 }
+        : { type, id: 'pending', fileDiff: diffA, annotations, version: 0 };
+    const itemB: CodeViewItem<string> =
+      type === 'file'
+        ? { type, id: 'pending', file: fileB, annotations: [], version: 1 }
+        : { type, id: 'pending', fileDiff: diffB, annotations: [], version: 1 };
+    const coordinator: CodeViewCoordinator<string, undefined> = {
+      hasHeaderRenderers: false,
+      hasAnnotationRenderer: true,
+      hasGutterRenderer: false,
+      onSnapshotChange() {
+        notifications++;
+      },
+    };
+    const respond = async (count: number) => {
+      await waitFor(
+        () =>
+          (type === 'file'
+            ? worker.fileRequestCount
+            : worker.diffRequestCount) >= count
+      );
+      if (type === 'file') {
+        const request = await withTimeout(worker.waitForFileRequest());
+        const options = manager.getFileRenderOptions();
+        worker.respond({
+          type: 'success',
+          requestType: 'file',
+          id: request.id,
+          result: renderFileWithHighlighter(
+            count === 1 ? fileA : fileB,
+            sharedHighlighter,
+            options
+          ),
+          options,
+          sentAt: Date.now(),
+        });
+      } else {
+        const request = await withTimeout(worker.waitForDiffRequest());
+        const options = manager.getDiffRenderOptions();
+        worker.respond({
+          type: 'success',
+          requestType: 'diff',
+          id: request.id,
+          result: renderDiffWithHighlighter(
+            count === 1 ? diffA : diffB,
+            sharedHighlighter,
+            options
+          ),
+          options,
+          sentAt: Date.now(),
+        });
+      }
+    };
+    try {
+      viewer.setup(createRoot());
+      viewer.setSlotCoordinator(coordinator);
+      viewer.setItems([itemA]);
+      viewer.render(true);
+      await respond(1);
+      viewer.render(true);
+      await waitFor(
+        () => getRenderedText(viewer, 'pending')?.includes('alpha') === true
+      );
+      expect(contexts.at(-1)).toBe(itemA);
+      expect(displayedContents.at(-1)).toBe(type === 'file' ? fileA : diffA);
+
+      viewer.setItems([itemB]);
+      viewer.render(true);
+      expect(viewer.getItem('pending')).toBe(itemB);
+      const slotItem = viewer.getSlotSnapshot(coordinator)?.items?.[0];
+      if (slotItem == null) throw new Error('Expected a slot item');
+      expect(slotItem.item).toBe(itemB);
+      const slotData = getCodeViewItemRenderData(slotItem);
+      expect(slotData.lineAnnotations).toBe(annotations);
+      expect('file' in slotData ? slotData.file : slotData.fileDiff).toBe(
+        type === 'file' ? fileA : diffA
+      );
+      const rendered = viewer.getRenderedItems()[0];
+      if (rendered == null)
+        throw new Error('Expected the pending item to remain displayed');
+      expect(rendered.item).toBe(itemB);
+      if (rendered.type === 'file') {
+        rendered.instance.options.renderAnnotation?.(annotation, fileA);
+      } else {
+        rendered.instance.options.renderAnnotation?.(annotation, diffA);
+      }
+      expect(contexts.at(-1)).toBe(itemB);
+      expect(displayedContents.at(-1)).toBe(type === 'file' ? fileA : diffA);
+      expect(rendered.version).toBe(1);
+      const notificationsBeforeRender = notifications;
+      viewer.render(true);
+      expect(notifications).toBe(notificationsBeforeRender);
+
+      expect(viewer.updateItemId('pending', 'renamed')).toBe(true);
+      expect(viewer.getRenderedItems()[0]?.item.id).toBe('renamed');
+      expect(viewer.getRenderedItems()[0]?.version).toBe(1);
+
+      await respond(2);
+      await waitFor(
+        () => getRenderedText(viewer, 'renamed')?.includes('beta') === true
+      );
+      expect(viewer.getRenderedItems()[0]?.item).toBe(itemB);
+      expect(viewer.getSlotSnapshot(coordinator)).toBeUndefined();
+      const annotatedB = { ...itemB, annotations, version: 2 };
+      viewer.setItems([annotatedB]);
+      viewer.render(true);
+      expect(contexts.at(-1)).toBe(annotatedB);
+      expect(displayedContents.at(-1)).toBe(type === 'file' ? fileB : diffB);
+      expect(viewer.getSlotSnapshot(coordinator)?.items?.[0]?.item).toBe(
+        annotatedB
+      );
+    } finally {
+      viewer.cleanUp();
+      manager.terminate();
+      dom.cleanup();
+    }
+  });
+}
+
+for (const type of ['file', 'diff'] as const) {
+  test(`CodeView ${type} reads the displayed pair without observing intermediate renders`, async () => {
+    const dom = installDom();
+    const { manager, worker } = await createInitializedManager({
+      theme: 'pierre-dark',
+    });
+    const viewer = new CodeView<string>(
+      { theme: 'pierre-dark', stickyHeaders: false },
+      manager
+    );
+    const files = ['alpha', 'beta', 'gamma'].map((name) => ({
+      name: 'pending.ts',
+      contents: `const ${name} = 1;\n`,
+      cacheKey: `unobserved:${name}`,
+    }));
+    const items: CodeViewItem<string>[] = files.map((file, version) => {
+      const shared = {
+        id: 'pending',
+        version,
+        annotations:
+          version === 2
+            ? [
+                {
+                  side: 'additions' as const,
+                  lineNumber: 1,
+                  metadata: 'new annotation',
+                },
+              ]
+            : [],
+      };
+      return type === 'file'
+        ? { ...shared, type, file }
+        : {
+            ...shared,
+            type,
+            fileDiff: createDiff(file.cacheKey, file.contents),
+          };
+    });
+    const respond = async (count: number) => {
+      await waitFor(
+        () =>
+          (type === 'file'
+            ? worker.fileRequestCount
+            : worker.diffRequestCount) >= count
+      );
+      if (type === 'file') {
+        const request = await withTimeout(worker.waitForFileRequest());
+        const options = manager.getFileRenderOptions();
+        worker.respond({
+          type: 'success',
+          requestType: 'file',
+          id: request.id,
+          result: renderFileWithHighlighter(
+            request.file,
+            sharedHighlighter,
+            options
+          ),
+          options,
+          sentAt: Date.now(),
+        });
+      } else {
+        const request = await withTimeout(worker.waitForDiffRequest());
+        const options = manager.getDiffRenderOptions();
+        worker.respond({
+          type: 'success',
+          requestType: 'diff',
+          id: request.id,
+          result: renderDiffWithHighlighter(
+            request.diff,
+            sharedHighlighter,
+            options
+          ),
+          options,
+          sentAt: Date.now(),
+        });
+      }
+      viewer.render(true);
+    };
+    try {
+      viewer.setup(createRoot());
+      viewer.setItems([items[0]]);
+      await respond(1);
+      const element = viewer.getRenderedItems()[0]?.element;
+      expect(element?.shadowRoot?.textContent).toContain('alpha');
+
+      // Apply B without a portal coordinator or a read of getRenderedItems().
+      viewer.setItems([items[1]]);
+      await respond(2);
+      expect(element?.shadowRoot?.textContent).toContain('beta');
+      viewer.setItems([items[2]]);
+      viewer.render(true);
+      expect(element?.shadowRoot?.textContent).toContain('beta');
+
+      const displayed = viewer.getRenderedItems()[0];
+      if (displayed == null) throw new Error('Expected a rendered item');
+      expect(displayed.item).toBe(items[2]);
+      const itemB = items[1];
+      const displayedData = getCodeViewItemRenderData(displayed);
+      expect(
+        'file' in displayedData ? displayedData.file : displayedData.fileDiff
+      ).toBe(itemB.type === 'file' ? itemB.file : itemB.fileDiff);
+      expect(displayedData.lineAnnotations).toEqual([]);
+      expect(viewer.getItem('pending')).toBe(items[2]);
+      // The pending annotation keeps a portal so its content can be built
+      // before C renders.
+      expect(
+        viewer.getSlotSnapshot({
+          hasHeaderRenderers: false,
+          hasGutterRenderer: false,
+          hasAnnotationRenderer: true,
+          onSnapshotChange() {},
+        })?.items?.[0]?.item
+      ).toBe(items[2]);
+    } finally {
+      viewer.cleanUp();
+      manager.terminate();
+      dom.cleanup();
+    }
+  });
 }
 
 describe('CodeView worker rendering', () => {
@@ -367,10 +657,10 @@ describe('CodeView worker rendering', () => {
         `header:${shortDiff.cacheKey}`
       );
       expect(getRenderedSlotText(viewer, shortItem.id)).toContain(
-        'annotation:tall'
+        'annotation:short'
       );
       expect(getRenderedSlotText(viewer, shortItem.id)).not.toContain(
-        'annotation:short'
+        'annotation:tall'
       );
       expect(viewer.getScrollHeight()).toBe(shortScrollHeight);
       expect(getItemTop(viewer, follower.id)).toBe(followerTopWithShortDiff);

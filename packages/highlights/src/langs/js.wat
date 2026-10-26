@@ -124,12 +124,14 @@
     "ctxword_override"
     "ctxword_readonly"
     "ctxword_satisfies"
-    "ctxword_type")
+    "ctxword_type"
+    ;; a `:` that closes a conditional expression or conditional type
+    "ternary_colon")
 
   ;; Shared JavaScript state. Feature bit 0 enables TypeScript, bit 1 JSX,
   ;; and bit 2 TSRX (see langs/tsrx.wat).
   (global $ecmaFeatures (mut i32) (i32.const 3))
-  (global $sourceStart (mut i32) (i32.const 65536))
+  (global $sourceStart (mut i32) (i32.const $mem.input))
   (global $lhs (mut i32) (i32.const 0))
   (global $rhs (mut i32) (i32.const 0))
   (global $lto (mut i32) (i32.const 0))
@@ -142,6 +144,9 @@
   (global $jsTemplateEmitSp (mut i32) (i32.const 0))
   (global $brkSp (mut i32) (i32.const 0))
   (global $rxCloser (mut i32) (i32.const 0))
+  ;; Open ternaries outside every bracket. Inside a bracket, bits 1-7 of its
+  ;; bracket-stack byte count them instead (see $ternaryCount).
+  (global $ternaryTop (mut i32) (i32.const 0))
   (global $prevTok (mut i32) (i32.const 0)) ;; significant token before the current one
   (global $jsxSp (mut i32) (i32.const 0))   ;; jsx mode stack pointer
   (global $tsxStreaming (mut i32) (i32.const 0))
@@ -167,12 +172,15 @@
         (i32.store8 (i32.add (i32.const $mem.jsBracketStack) (global.get $brkSp)) (local.get $k))))
     (global.set $brkSp (i32.add (global.get $brkSp) (i32.const 1))))
   ;; kind of the innermost open bracket - 1 for a control paren or a block,
-  ;; 0 for an object or call - or 0 with none open
+  ;; 0 for an object or call - or 0 with none open. The kind is bit 0 of the
+  ;; stack byte; bits 1-7 count open ternaries.
   (func $brkTopKind (result i32)
     (if (i32.or (i32.eqz (global.get $brkSp)) (i32.gt_u (global.get $brkSp) (i32.const 1024)))
       (then (return (i32.const 0))))
-    (i32.load8_u
-      (i32.add (i32.const $mem.jsBracketStack) (i32.sub (global.get $brkSp) (i32.const 1)))))
+    (i32.and
+      (i32.load8_u
+        (i32.add (i32.const $mem.jsBracketStack) (i32.sub (global.get $brkSp) (i32.const 1))))
+      (i32.const 1)))
   (func $brkPop
     (global.set $rxCloser (i32.const 0))
     (if (i32.eqz (global.get $brkSp))
@@ -181,7 +189,39 @@
     (if (i32.lt_u (global.get $brkSp) (i32.const 1024))
       (then
         (global.set $rxCloser
-          (i32.load8_u (i32.add (i32.const $mem.jsBracketStack) (global.get $brkSp)))))))
+          (i32.and
+            (i32.load8_u (i32.add (i32.const $mem.jsBracketStack) (global.get $brkSp)))
+            (i32.const 1))))))
+
+  ;; Open ternaries (`?` still waiting for its `:`) at the innermost bracket
+  ;; level, so a `:` inside nested brackets or an object literal is not
+  ;; mistaken for the one that closes an outer ternary.
+  (func $ternaryCount (result i32)
+    (if (i32.eqz (global.get $brkSp))
+      (then (return (global.get $ternaryTop))))
+    (if (i32.gt_u (global.get $brkSp) (i32.const 1024))
+      (then (return (i32.const 0))))
+    (i32.shr_u
+      (i32.load8_u (i32.add (i32.const $mem.jsBracketStack-1) (global.get $brkSp)))
+      (i32.const 1)))
+
+  ;; Set the innermost level's open-ternary count, saturating at 127.
+  (func $ternarySet (param $n i32)
+    (local $at i32)
+    (if (i32.gt_u (local.get $n) (i32.const 127))
+      (then (local.set $n (i32.const 127))))
+    (if (i32.eqz (global.get $brkSp))
+      (then
+        (global.set $ternaryTop (local.get $n))
+        (return)))
+    (if (i32.gt_u (global.get $brkSp) (i32.const 1024))
+      (then (return)))
+    (local.set $at (i32.add (i32.const $mem.jsBracketStack-1) (global.get $brkSp)))
+    (i32.store8
+      (local.get $at)
+      (i32.or
+        (i32.and (i32.load8_u (local.get $at)) (i32.const 1))
+        (i32.shl (local.get $n) (i32.const 1)))))
 
   ;; byte at $p, or 0 at/past $end - safe lookahead for multibyte tokens.
   ;; the load itself is always in-bounds (input buffer + 16 bytes of slack).
@@ -337,13 +377,13 @@
             (local.set $b (v128.or (local.get $w) (i8x16.splat (i32.const 32))))
             (local.set $pass
               (v128.or
-                (v128.and
-                  (i8x16.ge_u (local.get $b) (i8x16.splat (i32.const "a")))
-                  (i8x16.le_u (local.get $b) (i8x16.splat (i32.const "z"))))
+                (i8x16.le_u
+                  (i8x16.sub (local.get $b) (i8x16.splat (i32.const "a")))
+                  (i8x16.splat (i32.const 25)))
                 (v128.or
-                  (v128.and
-                    (i8x16.ge_u (local.get $w) (i8x16.splat (i32.const "0")))
-                    (i8x16.le_u (local.get $w) (i8x16.splat (i32.const "9"))))
+                  (i8x16.le_u
+                    (i8x16.sub (local.get $w) (i8x16.splat (i32.const "0")))
+                    (i8x16.splat (i32.const 9)))
                   (v128.or
                     (i8x16.eq (local.get $w) (i8x16.splat (i32.const "_")))
                     (i8x16.eq (local.get $w) (i8x16.splat (i32.const "$")))))))
@@ -546,9 +586,9 @@
       (then (return (global.get $rxCloser))))
     ;; contextual keywords are plain identifiers, except the two operators
     (if
-      (i32.and
-        (i32.ge_u (local.get $t) (enum.get $Lex.ctxword_as))
-        (i32.le_u (local.get $t) (enum.get $Lex.ctxword_type)))
+      (i32.le_u
+        (i32.sub (local.get $t) (enum.get $Lex.ctxword_as))
+        (i32.sub (enum.get $Lex.ctxword_type) (enum.get $Lex.ctxword_as)))
       (then
         (return
           (i32.or
@@ -573,6 +613,14 @@
   (func $jsxCanStart (param $t i32) (result i32)
     (if (i32.eq (local.get $t) (enum.get $Lex.string_literal))
       (then (return (i32.const 0))))
+    ;; An optional method's `?` introduces type parameters, not JSX. Beyond
+    ;; the tracked bracket depth the count is unknown, so assume a ternary.
+    (if (i32.eq (local.get $t) (enum.get $Lex.question_mark))
+      (then
+        (if (i32.and
+              (i32.eqz (call $ternaryCount))
+              (i32.le_u (global.get $brkSp) (i32.const 1024)))
+          (then (return (i32.const 0))))))
     (call $rxAllowedAfter (local.get $t)))
 
   ;; is the string literal in $lto the module specifier of an import/export?
@@ -601,6 +649,7 @@
     (local $bits i32)
     (local $kw i32)
     (local $take i32)
+    (local $after i32) ;; first non-blank byte after a `?` on its line
     (global.set $nlBefore (i32.const 0))
     (if (global.get $tsxStreaming)
       (then
@@ -721,9 +770,13 @@
         (case "("
           (call $brkPush (call $parenIsCtrl))
           (br $takeDone (i32.or (i32.shl (enum.get $Lex.l_paren) (i32.const 3)) (i32.const 1))))
-        (case ")"
+        (case ")" "]"
           (call $brkPop)
-          (br $takeDone (i32.or (i32.shl (enum.get $Lex.r_paren) (i32.const 3)) (i32.const 1))))
+          (br $takeDone
+            (select
+              (i32.or (i32.shl (enum.get $Lex.r_paren) (i32.const 3)) (i32.const 1))
+              (i32.or (i32.shl (enum.get $Lex.r_bracket) (i32.const 3)) (i32.const 1))
+              (i32.eq (local.get $c) (i32.const ")")))))
         (case "."
           (if
             (i32.and
@@ -737,10 +790,18 @@
               (return (call $scanNumber (i32.const 1)))))
           (br $takeDone (i32.or (i32.shl (enum.get $Lex.dot) (i32.const 3)) (i32.const 1))))
         (case ";"
+          ;; a statement end drops any `?` left without its `:`
+          (call $ternarySet (i32.const 0))
           (br $takeDone (i32.or (i32.shl (enum.get $Lex.semicolon) (i32.const 3)) (i32.const 1))))
         (case ","
           (br $takeDone (i32.or (i32.shl (enum.get $Lex.comma) (i32.const 3)) (i32.const 1))))
         (case ":"
+          ;; the innermost open ternary, if any, closes here
+          (if (local.tee $kw (call $ternaryCount))
+            (then
+              (call $ternarySet (i32.sub (local.get $kw) (i32.const 1)))
+              (br $takeDone
+                (i32.or (i32.shl (enum.get $Lex.ternary_colon) (i32.const 3)) (i32.const 1)))))
           (br $takeDone (i32.or (i32.shl (enum.get $Lex.colon) (i32.const 3)) (i32.const 1))))
         (case "{"
           (call $brkPush (call $braceIsBlock))
@@ -803,27 +864,41 @@
         (case "|"
           (br $family (i32.or (i32.shl (enum.get $Lex.pipe) (i32.const 3)) (i32.const 7))))
         (case "?"
+          ;; `?.3` is ternary + number, not optional chaining: it takes the
+          ;; lone `?` path below
           (if (i32.eq (local.get $c2) (i32.const "."))
             (then
-              ;; `?.3` is ternary + number, not optional chaining
               (if
-                (i32.le_u
+                (i32.gt_u
                   (i32.sub
                     (call $tsxByte (i32.add (global.get $ptr) (i32.const 2)))
                     (i32.const "0"))
                   (i32.const 9))
                 (then
                   (br $takeDone
-                    (i32.or (i32.shl (enum.get $Lex.question_mark) (i32.const 3)) (i32.const 1)))))
-              (br $takeDone
-                (i32.or (i32.shl (enum.get $Lex.question_mark_dot) (i32.const 3)) (i32.const 2)))))
+                    (i32.or (i32.shl (enum.get $Lex.question_mark_dot) (i32.const 3)) (i32.const 2)))))))
+          ;; A lone `?` opens a ternary unless it marks an optional member or
+          ;; parameter: the same line then continues with `:`, `)`, `,`, `=`,
+          ;; `;`, `]`, or `}`, or in TypeScript a `(` or `<` follows with no
+          ;; space, as in `m?()` and `m?<T>()`. `??` and `??=` are not
+          ;; ternaries.
+          (if (i32.ne (local.get $c2) (i32.const "?"))
+            (then
+              (if (i32.eqz
+                    (i32.and
+                      (call $ecmaHasTypeScript)
+                      (i32.or
+                        (i32.eq (local.get $c2) (i32.const "("))
+                        (i32.eq (local.get $c2) (i32.const "<")))))
+                (then
+                  (local.set $after
+                    (call $tsxByte (call $lexSkipSpaceAt (i32.add (global.get $ptr) (i32.const 1)))))
+                  (if (i32.eqz (byteset.get ":),=;]}" (local.get $after)))
+                    (then (call $ternarySet (i32.add (call $ternaryCount) (i32.const 1)))))))))
           (br $family (i32.or (i32.shl (enum.get $Lex.question_mark) (i32.const 3)) (i32.const 6))))
         (case "["
           (call $brkPush (i32.const 0))
           (br $takeDone (i32.or (i32.shl (enum.get $Lex.l_bracket) (i32.const 3)) (i32.const 1))))
-        (case "]"
-          (call $brkPop)
-          (br $takeDone (i32.or (i32.shl (enum.get $Lex.r_bracket) (i32.const 3)) (i32.const 1))))
         (case 34
           (return (call $scanString (i32.const 34))))
         (case 39
@@ -874,29 +949,26 @@
           (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
           (return (call $scanTemplateBody)))
         (case "@"
+          ;; TSRX `@{` opens a statement container: one two-byte l_brace
+          ;; token, a block for the bracket stack
+          (if (i32.and (call $ecmaHasTsrx) (i32.eq (local.get $c2) (i32.const "{")))
+            (then
+              (call $brkPush (i32.const 1))
+              (global.set $braceDepth (i32.add (global.get $braceDepth) (i32.const 1)))
+              (br $takeDone
+                (i32.or (i32.shl (enum.get $Lex.l_brace) (i32.const 3)) (i32.const 2)))))
+          (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
+          (call $scanIdentTail)
+          ;; TSRX `@if` and the other directive heads act as the keyword they
+          ;; name, `@` included; other `@words` stay decorators
           (if (call $ecmaHasTsrx)
             (then
-              ;; `@{` opens a statement container: one two-byte l_brace token,
-              ;; a block for the bracket stack
-              (if (i32.eq (local.get $c2) (i32.const "{"))
-                (then
-                  (call $brkPush (i32.const 1))
-                  (global.set $braceDepth (i32.add (global.get $braceDepth) (i32.const 1)))
-                  (br $takeDone
-                    (i32.or (i32.shl (enum.get $Lex.l_brace) (i32.const 3)) (i32.const 2)))))
-              ;; `@if` and the other directive heads act as the keyword they
-              ;; name, `@` included; other `@words` stay decorators
-              (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
-              (call $scanIdentTail)
               (local.set $kw
                 (call $tsrxDirectiveKind
                   (i32.add (global.get $lhs) (i32.const 1))
                   (global.get $ptr)))
               (if (i32.ne (local.get $kw) (enum.get $Lex.invalid))
-                (then (return (local.get $kw))))
-              (return (enum.get $Lex.at_identifier))))
-          (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
-          (call $scanIdentTail)
+                (then (return (local.get $kw))))))
           (return (enum.get $Lex.at_identifier)))
         (case "#"
           ;; #! shebang, only at the very beginning of the scan
@@ -1029,6 +1101,7 @@
     (global.set $jsTemplateLexSp (i32.const 0))
     (global.set $brkSp (i32.const 0))
     (global.set $rxCloser (i32.const 0))
+    (global.set $ternaryTop (i32.const 0))
     (global.set $jsxSp (i32.const 0))
     (global.set $jsxMute (i32.const 1))
     (call $sigReset)
@@ -1056,13 +1129,12 @@
             (if (i32.eq (local.get $t) (enum.get $Lex.r_brace))
               (then
                 ;; a `}` closing a jsx expression container resumes markup
-                (if
-                  (i32.and
-                    (i32.eq (local.get $m) (i32.const 3))
-                    (i32.le_s (global.get $braceDepth) (call $jsxTopTarget)))
+                (if (i32.eq (local.get $m) (i32.const 3))
                   (then
-                    (call $jsxPop)
-                    (br $token)))
+                    (if (i32.le_s (global.get $braceDepth) (i32.load offset=4 (call $jsxTopSlot)))
+                      (then
+                        (call $jsxPop)
+                        (br $token)))))
                 (if (i32.and (i32.eqz (local.get $m)) (i32.eqz (global.get $braceDepth)))
                   (then
                     (local.set $to (global.get $rhs))

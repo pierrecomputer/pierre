@@ -34,6 +34,12 @@
     },
     {
       "path": "packages/layouts/tsconfig.json"
+    },
+    {
+      "path": "packages/wat-tools/tsconfig.json"
+    },
+    {
+      "path": "packages/words/tsconfig.json"
     }
   ]
 }

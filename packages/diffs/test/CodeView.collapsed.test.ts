@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'bun:test';
+import { beforeAll, describe, expect, test } from 'bun:test';
 
 import { CodeView } from '../src/components/CodeView';
 import type {
@@ -13,9 +13,12 @@ import {
   dispatchScroll,
   installDom,
   makeFile,
+  preloadTestHighlighter,
   renderItems,
   wait,
 } from './domHarness';
+
+beforeAll(preloadTestHighlighter);
 
 function makeDiffItem(
   id: string,
@@ -46,11 +49,11 @@ function hasRenderedCode(item: { element: HTMLElement }): boolean {
 }
 
 function getRenderedFile(instance: object): FileContents | undefined {
-  return Reflect.get(instance, 'renderedFile') as FileContents | undefined;
+  return Reflect.get(instance, 'file') as FileContents | undefined;
 }
 
 function getRenderedDiff(instance: object): FileDiffMetadata | undefined {
-  return Reflect.get(instance, 'renderedDiff') as FileDiffMetadata | undefined;
+  return Reflect.get(instance, 'fileDiff') as FileDiffMetadata | undefined;
 }
 
 describe('CodeView item collapsed state', () => {

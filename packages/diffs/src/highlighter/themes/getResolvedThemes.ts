@@ -1,11 +1,11 @@
-import type { DiffsThemeNames, ThemeRegistrationResolved } from '../../types';
-import { themeResolver } from './themeResolver';
+import type { DiffsThemeNames, HighlighterTypes } from '../../types';
+import { resolveHighlighterType } from '../highlighterType';
+import { createDiffsThemeResolver } from './themeResolver';
+import type { DiffsTheme } from './types';
 
-// This method should only be called if you know all themes are resolved,
-// otherwise it will fail. The main intention is a helper to avoid an async
-// tick if we don't actually need it
 export function getResolvedThemes(
-  themeNames: DiffsThemeNames[]
-): ThemeRegistrationResolved[] {
-  return themeResolver.getResolvedThemes(themeNames);
+  themeNames: DiffsThemeNames[],
+  backend: HighlighterTypes = resolveHighlighterType()
+): DiffsTheme[] {
+  return createDiffsThemeResolver(backend).getResolvedThemes(themeNames);
 }

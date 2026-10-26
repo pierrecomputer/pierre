@@ -12,6 +12,7 @@ import {
   UnresolvedFile as UnresolvedFileClass,
   type UnresolvedFileOptions,
 } from '../../components/UnresolvedFile';
+import { EMPTY_LINE_ANNOTATIONS } from '../../constants';
 import type { GetHoveredLineResult } from '../../managers/InteractionManager';
 import type {
   DiffLineAnnotation,
@@ -29,6 +30,8 @@ import {
 import { noopRender } from '../constants';
 import type { UnresolvedFileReactOptions } from '../UnresolvedFile';
 import { WorkerPoolContext } from '../WorkerPoolContext';
+import { useForceUpdate } from './useForceUpdate';
+import { useNextRenderData } from './useNextRenderData';
 import { useStableCallback } from './useStableCallback';
 
 const useIsomorphicLayoutEffect =
@@ -47,6 +50,7 @@ interface UseUnresolvedFileInstanceProps<LAnnotation> {
 }
 
 interface UseUnresolvedFileInstanceReturn<LAnnotation> {
+  lineAnnotations: DiffLineAnnotation<LAnnotation>[];
   fileDiff: FileDiffMetadata;
   actions: (MergeConflictDiffAction | undefined)[];
   markerRows: MergeConflictMarkerRow[];
@@ -99,6 +103,18 @@ export function useUnresolvedFileInstance<LAnnotation>({
   const controlledSelection = selectedLines !== undefined;
   const poolManager = useContext(WorkerPoolContext);
   const instanceRef = useRef<UnresolvedFileClass<LAnnotation> | null>(null);
+  const forceUpdate = useForceUpdate();
+  const renderData = useNextRenderData(instanceRef, {
+    fileDiff,
+    actions,
+    markerRows,
+    lineAnnotations,
+  }) ?? {
+    fileDiff,
+    actions,
+    markerRows,
+    lineAnnotations: lineAnnotations ?? EMPTY_LINE_ANNOTATIONS,
+  };
   const ref = useStableCallback((fileContainer: HTMLElement | null) => {
     if (fileContainer != null) {
       if (instanceRef.current != null) {
@@ -116,7 +132,7 @@ export function useUnresolvedFileInstance<LAnnotation>({
           options,
         }),
         !disableWorkerPool ? poolManager : undefined,
-        true
+        forceUpdate
       );
       void instanceRef.current.hydrate({
         fileDiff,
@@ -148,12 +164,7 @@ export function useUnresolvedFileInstance<LAnnotation>({
       onMergeConflictAction,
       options,
     });
-    // setOptions(undefined) is a no-op, so an undefined merge result never
-    // requires a forced render — comparing it against the instance's
-    // constructor-default options would force a full render on every commit.
-    const forceRender =
-      newOptions !== undefined &&
-      !areOptionsEqual(instance.options, newOptions);
+    const forceRender = !areOptionsEqual(instance.options, newOptions);
     instance.setOptions(newOptions);
     void instance.render({
       fileDiff,
@@ -177,7 +188,7 @@ export function useUnresolvedFileInstance<LAnnotation>({
     return instanceRef.current ?? undefined;
   }, []);
 
-  return { ref, getHoveredLine, fileDiff, actions, markerRows, getInstance };
+  return { ...renderData, ref, getHoveredLine, getInstance };
 }
 
 interface MergeUnresolvedOptionsProps<LAnnotation> {

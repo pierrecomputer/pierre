@@ -1,9 +1,6 @@
 (module
   (import "../common.wat")
 
-  (func $dockerByte (param $p i32) (result i32)
-    (select (i32.load8_u (local.get $p)) (i32.const 0) (i32.lt_u (local.get $p) (global.get $end))))
-
   ;; Instructions are case-insensitive, so the table holds lowercase words
   ;; and $dockerWordGroup probes it with a lowercased copy of the input word.
   ;; Group order is the dispatch order in $hlDockerfile: shell-form
@@ -49,7 +46,7 @@
     (if
       (i32.and
         (i32.eq (local.get $body) (i32.const 13))
-        (i32.eq (call $dockerByte (global.get $ptr)) (i32.const 10)))
+        (i32.eq (call $templateByte (global.get $ptr)) (i32.const 10)))
       (then (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))))
     (call $emitGap (local.get $gap) (global.get $ptr))
     (local.set $body (global.get $ptr))
@@ -109,7 +106,7 @@
         (if
           (i32.and
             (i32.eq (local.get $c) (i32.const 13))
-            (i32.eq (call $dockerByte (local.get $p)) (i32.const 10)))
+            (i32.eq (call $templateByte (local.get $p)) (i32.const 10)))
           (then (local.set $p (i32.add (local.get $p) (i32.const 1)))))))
     (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
     (call $emitTok
@@ -133,7 +130,7 @@
             (i32.const "}")
             (i32.const 0)
             (i32.const 1)))
-        (if (i32.eq (call $dockerByte (global.get $ptr)) (i32.const "}"))
+        (if (i32.eq (call $templateByte (global.get $ptr)) (i32.const "}"))
           (then (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))))
         (return (i32.const 1))))
     (if (i32.eqz (call $lexIsIdentStart (local.get $c2)))
@@ -155,9 +152,9 @@
   ;; before the line break joins the next line, so the line-head state
   ;; survives it, and $lineHead is 2 at the start of the joined line: a `#`
   ;; there is a comment line that BuildKit drops, and the instruction
-  ;; continues after it. A heredoc opener leaves $hdLen, $hdDelim, and
-  ;; $hdStrip pending until the line break, after which its body runs to the
-  ;; delimiter line. All are checkpointed.
+  ;; continues after it. A heredoc opener leaves $hdLen (the delimiter length
+  ;; times 2, plus 1 for `<<-`) and $hdDelim pending until the line break,
+  ;; after which its body runs to the delimiter line. All are checkpointed.
   (func $hlDockerfile
     (local $c i32)
     (local $c2 i32)
@@ -166,6 +163,8 @@
     (local $rhs i32)
     (local $p i32)
     (local $g i32)
+    (local $hl i32)
+    (local $name i32)
     (local $lineHead i32)
     (local $inst i32)
     (local $cmdHead i32)
@@ -176,6 +175,10 @@
     (call $lexEmitLeadingContinuation)
     (block $done
       (loop $next
+        ;; token tails: $tok ends a command word position; a branch to $emit
+        ;; emits [$lhs,$ptr) as $hl
+        (block $emit
+        (block $tok
         (local.set $gap (global.get $ptr))
         ;; the pending heredoc body starts after this line's break; an
         ;; opener on the final line of the input has no body
@@ -185,14 +188,13 @@
               (call $dockerHeredoc
                 (local.get $gap)
                 (local.get $hdDelim)
-                (local.get $hdLen)
-                (local.get $hdStrip))
+                (i32.shr_u (local.get $hdLen) (i32.const 1))
+                (i32.and (local.get $hdLen) (i32.const 1)))
               (then
                 (local.set $hdLen (i32.const 0))
                 (local.set $lineHead (i32.const 1))
                 (local.set $inst (i32.const 0))
-                (local.set $cmdHead (i32.const 0))
-                (br $next)))
+                (br $tok)))
             (if (i32.ge_u (global.get $ptr) (global.get $end))
               (then (local.set $hdLen (i32.const 0))))))
 
@@ -214,7 +216,8 @@
         (br_if $done (i32.ge_u (global.get $ptr) (global.get $end)))
         (local.set $lhs (global.get $ptr))
         (local.set $c (i32.load8_u (global.get $ptr)))
-        (local.set $c2 (call $dockerByte (i32.add (global.get $ptr) (i32.const 1))))
+        (local.set $c2 (call $templateByte (i32.add (global.get $ptr) (i32.const 1))))
+        (local.set $name (call $lexIsIdentStart (local.get $c)))
 
         ;; comments and parser directives only start a line, or a line
         ;; joined by `\`
@@ -232,7 +235,7 @@
             (i32.or
               (i32.eq (local.get $lineHead) (i32.const 1))
               (i32.eq (local.get $inst) (i32.const 4)))
-            (call $lexIsIdentStart (local.get $c)))
+            (local.get $name))
           (then
             (local.set $lineHead (i32.const 0))
             (call $lexScanIdent)
@@ -272,19 +275,17 @@
                 (local.set $lineHead (i32.const 2))
                 (br $next)))
             (global.set $ptr (call $lexEscapeEnd (global.get $ptr)))
-            (call $emitTok (enum.get $Token.string.escape) (local.get $lhs) (global.get $ptr))
-            (br $next)))
+            (local.set $hl (enum.get $Token.string.escape))
+            (br $emit)))
 
         (if (i32.eq (local.get $c) (i32.const 34))
           (then
             (call $lexString (i32.const 34) (i32.const 0) (enum.get $Token.string))
-            (local.set $cmdHead (i32.const 0))
-            (br $next)))
+            (br $tok)))
         (if (i32.eq (local.get $c) (i32.const 39))
           (then
             (call $lexRawString (i32.const 39) (i32.const 0) (enum.get $Token.string))
-            (local.set $cmdHead (i32.const 0))
-            (br $next)))
+            (br $tok)))
 
         ;; `$name` and `${name:-default}` build arguments
         (if (i32.eq (local.get $c) (i32.const "$"))
@@ -292,16 +293,14 @@
             (if (call $dockerVar (local.get $c2))
               (then
                 (call $emitTok (enum.get $Token.variable) (local.get $lhs) (global.get $ptr))
-                (local.set $cmdHead (i32.const 0))
-                (br $next)))))
+                (br $tok)))))
 
         ;; `--flag=value` instruction options
         (if
-          (i32.and
-            (i32.eq (local.get $c) (i32.const "-"))
-            (i32.and
-              (i32.eq (local.get $c2) (i32.const "-"))
-              (call $lexIsIdentStart (call $dockerByte (i32.add (global.get $ptr) (i32.const 2))))))
+          (if (result i32)
+            (i32.and (i32.eq (local.get $c) (i32.const "-")) (i32.eq (local.get $c2) (i32.const "-")))
+            (then (call $lexIsIdentStart (call $templateByte (i32.add (global.get $ptr) (i32.const 2)))))
+            (else (i32.const 0)))
           (then
             (global.set $ptr (i32.add (global.get $ptr) (i32.const 2)))
             (call $scanIdentRun (i32.const "-"))
@@ -312,7 +311,7 @@
             (if
               (i32.and
                 (i32.or (local.get $cmdHead) (i32.ne (local.get $inst) (i32.const 2)))
-                (i32.eq (call $dockerByte (global.get $ptr)) (i32.const "=")))
+                (i32.eq (call $templateByte (global.get $ptr)) (i32.const "=")))
               (then
                 (local.set $lhs (global.get $ptr))
                 (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
@@ -326,7 +325,7 @@
                         (local.set $p (global.get $ptr))
                         (if
                           (call $dockerVar
-                            (call $dockerByte (i32.add (global.get $ptr) (i32.const 1))))
+                            (call $templateByte (i32.add (global.get $ptr) (i32.const 1))))
                           (then
                             (call $emitTok (enum.get $Token.none) (local.get $lhs) (local.get $p))
                             (call $emitTok (enum.get $Token.variable) (local.get $p) (global.get $ptr))
@@ -347,32 +346,34 @@
           (then
             ;; $p: the delimiter word, $rhs: its opening quote byte or 0
             (local.set $hdStrip
-              (i32.eq (call $dockerByte (i32.add (global.get $ptr) (i32.const 2))) (i32.const "-")))
+              (i32.eq (call $templateByte (i32.add (global.get $ptr) (i32.const 2))) (i32.const "-")))
             (local.set $rhs
               (i32.add (i32.add (global.get $ptr) (i32.const 2)) (local.get $hdStrip)))
             (local.set $p (local.get $rhs))
-            (local.set $g (call $dockerByte (local.get $p)))
+            (local.set $g (call $templateByte (local.get $p)))
             (if
               (i32.or (i32.eq (local.get $g) (i32.const 34)) (i32.eq (local.get $g) (i32.const 39)))
               (then (local.set $p (i32.add (local.get $p) (i32.const 1))))
               (else (local.set $g (i32.const 0))))
-            (if (call $lexIsIdentStart (call $dockerByte (local.get $p)))
+            (if (call $lexIsIdentStart (call $templateByte (local.get $p)))
               (then
                 (call $emitTok (enum.get $Token.operator) (local.get $lhs) (local.get $rhs))
                 (global.set $ptr (local.get $p))
                 (local.set $hdDelim (local.get $p))
                 (call $lexScanIdent)
-                (local.set $hdLen (i32.sub (global.get $ptr) (local.get $hdDelim)))
+                (local.set $hdLen
+                  (i32.or
+                    (i32.shl (i32.sub (global.get $ptr) (local.get $hdDelim)) (i32.const 1))
+                    (local.get $hdStrip)))
                 (if
                   (i32.and
                     (i32.ne (local.get $g) (i32.const 0))
-                    (i32.eq (call $dockerByte (global.get $ptr)) (local.get $g)))
+                    (i32.eq (call $templateByte (global.get $ptr)) (local.get $g)))
                   (then (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))))
                 (call $emitTok (enum.get $Token.string.special) (local.get $rhs) (global.get $ptr))
-                (local.set $cmdHead (i32.const 0))
-                (br $next)))))
+                (br $tok)))))
 
-        (if (i32.and (call $lexIsIdentStart (local.get $c)) (i32.ne (local.get $c) (i32.const "$")))
+        (if (i32.and (local.get $name) (i32.ne (local.get $c) (i32.const "$")))
           (then
             (call $scanIdentRun (i32.const "-"))
             (if
@@ -385,8 +386,7 @@
                   (select (enum.get $Token.function) (enum.get $Token.none) (local.get $cmdHead))
                   (local.get $lhs)
                   (global.get $ptr))))
-            (local.set $cmdHead (i32.const 0))
-            (br $next)))
+            (br $tok)))
 
         ;; a number stands alone after blanks; digits inside `ubuntu:22.04`
         ;; stay plain
@@ -394,31 +394,27 @@
           (then
             (call $lexScanNumber)
             (call $emitTok (enum.get $Token.number) (local.get $lhs) (global.get $ptr))
-            (local.set $cmdHead (i32.const 0))
-            (br $next)))
+            (br $tok)))
 
         (if (i32.or (i32.eq (local.get $c) (i32.const "[")) (i32.eq (local.get $c) (i32.const "]")))
           (then
             (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
-            (call $emitTok (enum.get $Token.punctuation.bracket) (local.get $lhs) (global.get $ptr))
-            (br $next)))
+            (local.set $hl (enum.get $Token.punctuation.bracket))
+            (br $emit)))
         (if (i32.eq (local.get $c) (i32.const ","))
           (then
             (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
-            (call $emitTok
-              (enum.get $Token.punctuation.delimiter)
-              (local.get $lhs)
-              (global.get $ptr))
-            (br $next)))
+            (local.set $hl (enum.get $Token.punctuation.delimiter))
+            (br $emit)))
         (if (call $dockerIsShellOp (local.get $c))
           (then
             (block $opDone
               (loop $op
                 (br_if $opDone
-                  (i32.eqz (call $dockerIsShellOp (call $dockerByte (global.get $ptr)))))
+                  (i32.eqz (call $dockerIsShellOp (call $templateByte (global.get $ptr)))))
                 (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
                 (br $op)))
-            (call $emitTok (enum.get $Token.operator) (local.get $lhs) (global.get $ptr))
+            (local.set $hl (enum.get $Token.operator))
             ;; a shell command follows a pipeline or list operator
             (if
               (i32.and
@@ -429,10 +425,14 @@
                     (i32.eq (local.get $c) (i32.const "|")))
                   (i32.eq (local.get $c) (i32.const ";"))))
               (then (local.set $cmdHead (i32.const 1))))
-            (br $next)))
+            (br $emit)))
 
         (global.set $ptr
           (call $utf8SpanEnd (i32.add (global.get $ptr) (i32.const 1)) (global.get $end)))
-        (call $emitTok (enum.get $Token.none) (local.get $lhs) (global.get $ptr))
+        (local.set $hl (enum.get $Token.none))
+        (br $emit))
+        (local.set $cmdHead (i32.const 0))
+        (br $next))
+        (call $emitTok (local.get $hl) (local.get $lhs) (global.get $ptr))
         (br $next))))
 )

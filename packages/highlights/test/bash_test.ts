@@ -362,6 +362,175 @@ void t.test('bash: pipes, lists, redirections, and descriptors', () => {
   );
 });
 
+void t.test('bash: a backslash line join keeps the command open', () => {
+  // the first word of a joined line is an argument, not a command, and
+  // keywords do not apply there; `#` heading a joined line still comments
+  const cases: [string, [string, string | null][]][] = [
+    [
+      'docker run \\\n  --rm \\\n  ubuntu bash\n',
+      [
+        ['docker', 'function'],
+        ['run', 'variable'],
+        ['\\', 'punctuation.special'],
+        ['--rm', 'variable'],
+        ['\\', 'punctuation.special'],
+        ['ubuntu bash', 'variable'],
+      ],
+    ],
+    [
+      'echo a \\\r\n  done\n',
+      [
+        ['echo', 'function'],
+        ['a', 'variable'],
+        ['\\', 'punctuation.special'],
+        ['done', 'variable'],
+      ],
+    ],
+    [
+      'VAR=x \\\n  cmd arg\n',
+      [
+        ['VAR', 'variable'],
+        ['=', 'operator'],
+        ['x', 'variable'],
+        ['\\', 'punctuation.special'],
+        ['cmd', 'function'],
+        ['arg', 'variable'],
+      ],
+    ],
+    [
+      'echo a \\\n# note\necho b\n',
+      [
+        ['echo', 'function'],
+        ['a', 'variable'],
+        ['\\', 'punctuation.special'],
+        ['# note', 'comment'],
+        ['echo', 'function'],
+        ['b', 'variable'],
+      ],
+    ],
+    // a blank line after the join ends the command; `\$` escapes outside quotes
+    [
+      'echo \\$HOME \\\n\nls\n',
+      [
+        ['echo', 'function'],
+        ['\\$', 'string.escape'],
+        ['HOME', 'variable'],
+        ['\\', 'punctuation.special'],
+        ['ls', 'function'],
+      ],
+    ],
+    // with no blank before the `\`, bash joins `a` and `#b` into one word
+    [
+      'echo a\\\n#b c\n',
+      [
+        ['echo', 'function'],
+        ['a', 'variable'],
+        ['\\', 'punctuation.special'],
+        ['#', null],
+        ['b c', 'variable'],
+      ],
+    ],
+    // a run of joins keeps a `#` heading the last joined line a comment, so
+    // the apostrophe in it does not open a string
+    [
+      "printf 'first\\n' \\\n\\\n# don't treat this as a quote\nprintf 'second\\n'\n",
+      [
+        ['printf', 'function'],
+        ["'first\\n'", 'string'],
+        ['\\', 'punctuation.special'],
+        ['\\', 'punctuation.special'],
+        ["# don't treat this as a quote", 'comment'],
+        ['printf', 'function'],
+        ["'second\\n'", 'string'],
+      ],
+    ],
+    // a join after a word, then a joined `\$`, still ends the join
+    [
+      'echo a \\\n\\$x#y\n',
+      [
+        ['echo', 'function'],
+        ['a', 'variable'],
+        ['\\', 'punctuation.special'],
+        ['\\$', 'string.escape'],
+        ['x', 'variable'],
+        ['#', null],
+        ['y', 'variable'],
+      ],
+    ],
+    // a trailing `\` with no line break after it still reads as a join
+    [
+      'docker run \\',
+      [
+        ['docker', 'function'],
+        ['run', 'variable'],
+        ['\\', 'punctuation.special'],
+      ],
+    ],
+  ];
+  for (const [code, expected] of cases) {
+    assertLineFedParity('bash', code);
+    assert.deepEqual(tokenKinds('bash', code), expected, JSON.stringify(code));
+  }
+  // bash finds the heredoc body after the joined line, but the lexer starts
+  // it at the next physical line; the join itself still highlights and
+  // streaming agrees with a whole-buffer run
+  const heredoc = 'cat <<EOF \\\n  -n\nbody\nEOF\n';
+  assertLineFedParity('bash', heredoc);
+  assert.ok(
+    tokenKinds('bash', heredoc).some(
+      ([text, kind]) => text === '\\' && kind === 'punctuation.special'
+    )
+  );
+});
+
+void t.test('bash: a backslash before a word quotes it', () => {
+  // `\rm` bypasses an alias and still runs `rm`; a quoted keyword is a
+  // command and a quoted assignment is a command word
+  const cases: [string, [string, string | null][]][] = [
+    [
+      '\\rm -rf dir; \\ls\n',
+      [
+        ['\\rm', 'function'],
+        ['-rf dir', 'variable'],
+        [';', 'operator'],
+        ['\\ls', 'function'],
+      ],
+    ],
+    [
+      '\\if x\n',
+      [
+        ['\\if', 'function'],
+        ['x', 'variable'],
+      ],
+    ],
+    [
+      '\\VAR=x\n',
+      [
+        ['\\VAR', 'function'],
+        ['=', 'operator'],
+        ['x', 'variable'],
+      ],
+    ],
+    // `\$`, `\-`, and `\ ` stay escapes
+    [
+      'echo \\$a \\-n a\\ b\n',
+      [
+        ['echo', 'function'],
+        ['\\$', 'string.escape'],
+        ['a', 'variable'],
+        ['\\-', 'string.escape'],
+        ['n a', 'variable'],
+        ['\\', 'string.escape'],
+        ['b', 'variable'],
+      ],
+    ],
+  ];
+  for (const [code, expected] of cases) {
+    assertLineFedParity('bash', code);
+    assert.deepEqual(tokenKinds('bash', code), expected, JSON.stringify(code));
+  }
+});
+
 void t.test('bash: assignments and numeric literals', () => {
   assert.deepEqual(
     tokenKinds('bash', 'export FOO=1 BAR="$FOO"\nn=42\nm=0x1F\nf=1.5'),

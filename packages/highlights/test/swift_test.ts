@@ -197,11 +197,15 @@ void t.test('swift: malformed constructs stay total and lossless', () => {
 });
 
 void t.test('swift: split ranges bound nested and hash-delimited scans', () => {
+  const split = loadSplitLang('swift');
   const src = String.raw`/* a /* b */ c */ ##"raw"## """multi
 line""" "value \(outer(inner()))" @available #if obj.call()`;
   const size = new TextEncoder().encode(src).length;
-  for (let split = 0; split <= size; split++)
-    checkInvariants(loadLang('swift', '$hlSwift', split).hl, src);
+  for (let at = 0; at <= size; at++) {
+    const html = split(src, at);
+    assert.equal(textOf(html), src, `split ${at}`);
+    spansOf(html);
+  }
 });
 
 void t.test(

@@ -1,9 +1,6 @@
 (module
   (import "../common.wat")
 
-  (func $hlslByte (param $p i32) (result i32)
-    (select (i32.load8_u (local.get $p)) (i32.const 0) (i32.lt_u (local.get $p) (global.get $end))))
-
   ;; Each group's value is its token, with the next-name capture of the
   ;; declaration groups in the high byte (see $hlslWordHl). The scalar
   ;; families with open-ended suffixes - `float4x4`, `min16float2`,
@@ -156,8 +153,8 @@
         (br_if $done (i32.ge_u (global.get $ptr) (global.get $end)))
         (local.set $lhs (global.get $ptr))
         (local.set $c (i32.load8_u (global.get $ptr)))
-        (local.set $c2 (call $hlslByte (i32.add (global.get $ptr) (i32.const 1))))
-        (local.set $c3 (call $hlslByte (i32.add (global.get $ptr) (i32.const 2))))
+        (local.set $c2 (call $templateByte (i32.add (global.get $ptr) (i32.const 1))))
+        (local.set $c3 (call $templateByte (i32.add (global.get $ptr) (i32.const 2))))
         (local.set $atHead (local.get $lineHead))
         (local.set $lineHead (i32.const 0))
 
@@ -186,7 +183,7 @@
                   (i32.and
                     (i32.eq (local.get $c3) (i32.const "*"))
                     (i32.ne
-                      (call $hlslByte (i32.add (global.get $ptr) (i32.const 3)))
+                      (call $templateByte (i32.add (global.get $ptr) (i32.const 3)))
                       (i32.const "/"))))))
             (br $next)))
 
@@ -278,10 +275,10 @@
                                   (select
                                     (enum.get $Token.function.method)
                                     (enum.get $Token.property)
-                                    (i32.eq (call $hlslByte (local.get $p)) (i32.const "("))))
+                                    (i32.eq (call $templateByte (local.get $p)) (i32.const "("))))
                                 (local.set $afterType (i32.const 0)))
                               (else
-                                (if (i32.eq (call $hlslByte (local.get $p)) (i32.const "("))
+                                (if (i32.eq (call $templateByte (local.get $p)) (i32.const "("))
                                   (then
                                     ;; after a type, `name(` declares a function;
                                     ;; elsewhere it calls one or constructs a type
@@ -428,7 +425,7 @@
                     (i32.or
                       (i32.eq (local.get $c) (i32.const "<"))
                       (i32.eq (local.get $c) (i32.const ">")))
-                    (i32.eq (call $hlslByte (global.get $ptr)) (i32.const "=")))
+                    (i32.eq (call $templateByte (global.get $ptr)) (i32.const "=")))
                   (then (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))))))
             (call $emitTok (enum.get $Token.operator) (local.get $lhs) (global.get $ptr))
             (local.set $member (i32.const 0))

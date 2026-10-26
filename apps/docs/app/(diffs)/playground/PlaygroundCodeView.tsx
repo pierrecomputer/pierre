@@ -5,7 +5,9 @@ import {
   type CodeViewItem,
   type CodeViewLineSelection,
   type DiffLineAnnotation,
+  type FileContents,
   type FileDiffEditCompleteEvent,
+  type FileDiffMetadata,
   type FileEditCompleteEvent,
   type LineAnnotation,
   type SelectedLineRange,
@@ -325,6 +327,7 @@ export function PlaygroundCodeView({
       annotation:
         | LineAnnotation<PlaygroundAnnotationMetadata>
         | DiffLineAnnotation<PlaygroundAnnotationMetadata>,
+      _fileOrDiff: FileContents | FileDiffMetadata,
       item: PlaygroundItem
     ) => {
       const side = 'side' in annotation ? annotation.side : undefined;

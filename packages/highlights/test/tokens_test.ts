@@ -1,7 +1,7 @@
 import assert from 'node:assert';
 import t from 'node:test';
 
-import { HighlightsHighlighter, LANGS } from '../lib/highlighter';
+import { HighlightsHighlighter, inputPtr, LANGS } from '../lib/highlighter';
 import type {
   CodeToHtmlOptions,
   CodeToTokensOptions,
@@ -22,7 +22,7 @@ import {
   resolveOptionThemes,
 } from '../lib/tokens';
 import { transformWat, wat2wasm } from '../scripts/build';
-import { cssVariables } from '../themes/index';
+import { cssVariables, getFontStyle } from '../themes/index';
 import pierreDarkVibrant from '../themes/pierre-dark-vibrant.json' with { type: 'json' };
 import pierreDark from '../themes/pierre-dark.json' with { type: 'json' };
 import pierreLightVibrant from '../themes/pierre-light-vibrant.json' with { type: 'json' };
@@ -38,7 +38,7 @@ t.before(() => {
     `(module
     (import "../src/highlights.wat")
     (func (export "highlightByteRecords")
-      (global.set $srcBase (i32.const 65536))
+      (global.set $srcBase (i32.const $mem.input))
       (global.set $streaming (i32.const 0))
       (global.set $streamDepth (i32.const 0))
       (call $sigReset)
@@ -161,8 +161,11 @@ void t.test(
       const expected = encoder.encode(code);
       const length = hl.writeInput(code);
       assert.equal(length, expected.length);
-      assert.deepEqual(hl.buffer.subarray(65536, 65536 + length), expected);
-      assert.ok(hl.buffer.length >= 65536 + length + 96);
+      assert.deepEqual(
+        hl.buffer.subarray(inputPtr, inputPtr + length),
+        expected
+      );
+      assert.ok(hl.buffer.length >= inputPtr + length + 96);
     }
   }
 );
@@ -324,6 +327,7 @@ void t.test('codeToTokens: lines, offsets, and terminators', () => {
     }
   }
   assert.equal(tokens[0][0].color, themeColor('keyword.declaration'));
+  assert.equal(getFontStyle(tokens[0][0]), undefined);
   // comments and strings carry the shiki standard token type
   assert.equal(tokens[0].at(-1)?.type, 1);
   assert.equal(tokens[2].find((tk) => tk.content === '"x"')?.type, 2);
@@ -383,6 +387,10 @@ void t.test(
       assert.equal(
         result.tokens[0][0].color,
         `var(${prefix}keyword-declaration)`
+      );
+      assert.equal(
+        getFontStyle(result.tokens[0][0]),
+        `var(${prefix}keyword-declaration-font-style)`
       );
       assert.equal(result.fg, `var(${prefix}foreground)`);
       assert.equal(result.bg, `var(${prefix}background)`);
@@ -763,6 +771,7 @@ void t.test('codeToTokens: defaultColor applies one theme inline', () => {
   assert.equal(bare.bg, undefined);
   assert.equal(bare.rootStyle, undefined);
   assert.equal(bare.themeName, 'bare');
+  assert.equal(getFontStyle(bare.tokens[0][0]), undefined);
 });
 
 void t.test(

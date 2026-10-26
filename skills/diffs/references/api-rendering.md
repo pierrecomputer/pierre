@@ -91,7 +91,7 @@ exports from `@pierre/diffs`.
 | -------------------------------- | -------- | ---------------------------------------------------------- |
 | `createAnnotationElement`        | Function | Creates a HAST annotation row from an annotation span.     |
 | `createAnnotationWrapperNode`    | Function | Creates a DOM host for an annotation slot.                 |
-| `createDiffSpanDecoration`       | Function | Creates one Shiki inline diff decoration.                  |
+| `createDiffSpanDecoration`       | Function | Creates one inline diff decoration.                        |
 | `pushOrJoinSpan`                 | Function | Adds or joins one inline diff span.                        |
 | `createEmptyRowBuffer`           | Function | Creates an empty virtual row buffer.                       |
 | `createFileHeaderElement`        | Function | Creates a file or diff header HAST element.                |

@@ -179,4 +179,65 @@ test.describe('multi-cursor and indentation', () => {
     await page.keyboard.press('Shift+Tab');
     await expect.poll(() => contents(page)).toBe(original);
   });
+
+  test('Windows Ctrl+Arrow moves and extends every caret by word', async ({
+    page,
+  }) => {
+    await page.addInitScript(() => {
+      Object.defineProperty(Navigator.prototype, 'platform', {
+        configurable: true,
+        get: () => 'Win32',
+      });
+    });
+    await openFixture(page);
+
+    await page.locator(CONTENT).click();
+    await page.evaluate(() => {
+      const editor = window.__editor;
+      if (editor == null) {
+        throw new Error('editor missing');
+      }
+      editor.focus();
+      editor.setSelections([
+        {
+          start: { line: 0, character: 0 },
+          end: { line: 0, character: 0 },
+          direction: 'none',
+        },
+        {
+          start: { line: 2, character: 0 },
+          end: { line: 2, character: 0 },
+          direction: 'none',
+        },
+      ]);
+    });
+
+    await page.keyboard.press('Control+ArrowRight');
+    await expect
+      .poll(() => selectionTuples(page))
+      .toEqual([
+        [0, 5, 0, 5],
+        [2, 5, 2, 5],
+      ]);
+
+    await page.keyboard.press('Control+Shift+ArrowRight');
+    await expect
+      .poll(() => selectionTuples(page))
+      .toEqual([
+        [0, 5, 0, 9],
+        [2, 5, 2, 9],
+      ]);
+    // Every caret and range is painted in the shadow DOM overlay.
+    await expect
+      .poll(() =>
+        page.evaluate(() => {
+          const root = document.querySelector('diffs-container')?.shadowRoot;
+          return [
+            root?.querySelectorAll('[data-caret]').length,
+            root?.querySelectorAll('[data-selection-range]').length,
+          ];
+        })
+      )
+      .toEqual([2, 2]);
+  });
 });

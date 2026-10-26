@@ -326,8 +326,8 @@
                 (i32.shl (i32.eq (local.get $c) (i32.const "(")) (i32.const 7))))
             (br $next)))
 
-        ;; reader macros: quote, quasiquote, unquote, and `#'`, `#(`, `#:`,
-        ;; `#+feature`, `#\char`, `#x1F`
+        ;; reader macros: quote, quasiquote, unquote, and `#'`, `#(`, `#:sym`,
+        ;; `#+feature`, `#\char`, `#x1F`, `#t`, `#rx"..."`, `#lang`
         (if
           (i32.or
             (i32.or (i32.eq (local.get $c) (i32.const 39)) (i32.eq (local.get $c) (i32.const "`")))
@@ -369,6 +369,62 @@
                 (call $emitTok (enum.get $Token.string.special) (local.get $lhs) (global.get $ptr))
                 (local.set $bl (i32.and (local.get $bl) (i32.const -129)))
                 (br $next)))
+            ;; Racket and Scheme booleans: `#t`, `#f`, `#true`, `#false`
+            (if (i32.or (i32.eq (local.get $c2) (i32.const "t")) (i32.eq (local.get $c2) (i32.const "f")))
+              (then
+                (call $lispScanSymbol)
+                (local.set $rhs (i32.sub (global.get $ptr) (local.get $lhs)))
+                (if
+                  (i32.or
+                    (i32.eq (local.get $rhs) (i32.const 2))
+                    (i32.or
+                      (i32.and
+                        (i32.eq (local.get $rhs) (i32.const 5))
+                        (i32.eq (i32.load offset=1 (local.get $lhs)) (i32.const "true")))
+                      (i32.and
+                        (i32.eq (local.get $rhs) (i32.const 6))
+                        (i32.and
+                          (i32.eq (i32.load offset=1 (local.get $lhs)) (i32.const "fals"))
+                          (i32.eq (i32.load8_u offset=5 (local.get $lhs)) (i32.const "e"))))))
+                  (then
+                    (call $emitTok (enum.get $Token.boolean) (local.get $lhs) (global.get $ptr))
+                    (local.set $bl (i32.and (local.get $bl) (i32.const -129)))
+                    (br $next)))
+                (global.set $ptr (i32.add (local.get $lhs) (i32.const 1)))))
+            ;; Racket keyword arguments `#:key`, Common Lisp uninterned `#:sym`
+            (if (i32.eq (local.get $c2) (i32.const ":"))
+              (then
+                (global.set $ptr (i32.add (local.get $lhs) (i32.const 2)))
+                (call $lispScanSymbol)
+                (call $emitTok (enum.get $Token.string.special.symbol) (local.get $lhs) (global.get $ptr))
+                (local.set $bl (i32.and (local.get $bl) (i32.const -129)))
+                (br $next)))
+            ;; Racket regex literals `#rx"..."`, `#px"..."`, `#rx#"..."`
+            (if
+              (i32.and
+                (i32.or (i32.eq (local.get $c2) (i32.const "r")) (i32.eq (local.get $c2) (i32.const "p")))
+                (i32.eq (call $lispByte (i32.add (local.get $lhs) (i32.const 2))) (i32.const "x")))
+              (then
+                (local.set $rhs (i32.add (local.get $lhs) (i32.const 3)))
+                (if (i32.eq (call $lispByte (local.get $rhs)) (i32.const "#"))
+                  (then (local.set $rhs (i32.add (local.get $rhs) (i32.const 1)))))
+                (if (i32.eq (call $lispByte (local.get $rhs)) (i32.const 34))
+                  (then
+                    (call $emitTok (enum.get $Token.string.regex) (local.get $lhs) (local.get $rhs))
+                    (global.set $ptr (local.get $rhs))
+                    (call $lexString (i32.const 34) (i32.const 1) (enum.get $Token.string.regex))
+                    (local.set $bl (i32.and (local.get $bl) (i32.const -129)))
+                    (br $next)))))
+            ;; a Racket `#lang racket/base` line
+            (if
+              (i32.and
+                (i32.eq (call $lispByte (i32.add (local.get $lhs) (i32.const 5))) (i32.const " "))
+                (i32.eq (i32.load offset=1 (local.get $lhs)) (i32.const "lang")))
+              (then
+                (call $scanToLineEnd)
+                (call $emitTok (enum.get $Token.preproc) (local.get $lhs) (global.get $ptr))
+                (local.set $bl (i32.and (local.get $bl) (i32.const -129)))
+                (br $next)))
             (if
               (i32.or
                 (i32.eq (i32.or (local.get $c2) (i32.const 32)) (i32.const "x"))
@@ -391,10 +447,7 @@
                 (call $emitTok (enum.get $Token.preproc) (local.get $lhs) (global.get $ptr))
                 (local.set $bl (i32.and (local.get $bl) (i32.const -129)))
                 (br $next)))
-            (if
-              (i32.or
-                (i32.eq (local.get $c2) (i32.const 39))
-                (i32.eq (local.get $c2) (i32.const ":")))
+            (if (i32.eq (local.get $c2) (i32.const 39))
               (then (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))))
             (call $emitTok (enum.get $Token.punctuation.special) (local.get $lhs) (global.get $ptr))
             (local.set $bl (i32.and (local.get $bl) (i32.const -129)))

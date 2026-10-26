@@ -1,9 +1,6 @@
 (module
   (import "../common.wat")
 
-  (func $solByte (param $p i32) (result i32)
-    (select (i32.load8_u (local.get $p)) (i32.const 0) (i32.lt_u (local.get $p) (global.get $end))))
-
   (keyword-table $solidityWords $mem.solidityWords $mem.swiftWords
     (group $Token.keyword.declaration+256 "function" "modifier" "event" "error")
     (group $Token.keyword.declaration+512 "contract" "interface" "library" "struct" "enum" "type")
@@ -46,18 +43,18 @@
         (br_if $done (i32.ge_u (global.get $ptr) (global.get $end)))
         (local.set $lhs (global.get $ptr))
         (local.set $c (i32.load8_u (local.get $lhs)))
-        (local.set $c2 (call $solByte (i32.add (local.get $lhs) (i32.const 1))))
+        (local.set $c2 (call $templateByte (i32.add (local.get $lhs) (i32.const 1))))
         (if (i32.and (i32.eq (local.get $c) (i32.const "/")) (i32.eq (local.get $c2) (i32.const "/")))
           (then
             (call $lexLineComment (i32.const 2)
               (select (enum.get $Token.comment.doc) (enum.get $Token.comment)
-                (i32.eq (call $solByte (i32.add (local.get $lhs) (i32.const 2))) (i32.const "/"))))
+                (i32.eq (call $templateByte (i32.add (local.get $lhs) (i32.const 2))) (i32.const "/"))))
             (br $next)))
         (if (i32.and (i32.eq (local.get $c) (i32.const "/")) (i32.eq (local.get $c2) (i32.const "*")))
           (then
             (call $lexBlockComment (i32.const 2)
               (select (enum.get $Token.comment.doc) (enum.get $Token.comment)
-                (i32.eq (call $solByte (i32.add (local.get $lhs) (i32.const 2))) (i32.const "*"))))
+                (i32.eq (call $templateByte (i32.add (local.get $lhs) (i32.const 2))) (i32.const "*"))))
             (br $next)))
         (if (i32.or (i32.eq (local.get $c) (i32.const 34)) (i32.eq (local.get $c) (i32.const 39)))
           (then
@@ -68,11 +65,11 @@
             (call $lexScanIdent)
             (local.set $rhs (global.get $ptr))
             (local.set $n (i32.sub (local.get $rhs) (local.get $lhs)))
+            (local.set $c2 (call $templateByte (local.get $rhs)))
             ;; Prefixes belong to the following string, including Unicode text.
             (if
               (i32.and
-                (i32.or (i32.eq (call $solByte (local.get $rhs)) (i32.const 34))
-                  (i32.eq (call $solByte (local.get $rhs)) (i32.const 39)))
+                (i32.or (i32.eq (local.get $c2) (i32.const 34)) (i32.eq (local.get $c2) (i32.const 39)))
                 (i32.or
                   (i32.and (i32.eq (local.get $n) (i32.const 3))
                     (i32.eq (i32.and (i32.load (local.get $lhs)) (i32.const 0xffffff)) (i32.const "hex")))
@@ -80,7 +77,7 @@
                     (i64.eq (i64.and (i64.load (local.get $lhs)) (i64.const 0xffffffffffffff)) (i64.const "unicode")))))
               (then
                 (call $emitTok (enum.get $Token.string) (local.get $lhs) (local.get $rhs))
-                (call $lexString (call $solByte (local.get $rhs)) (i32.const 0) (enum.get $Token.string))
+                (call $lexString (local.get $c2) (i32.const 0) (enum.get $Token.string))
                 (br $next)))
             (local.set $kind (keyword-table.value $solidityWords (local.get $lhs) (local.get $rhs)))
             ;; These words collide under the table's prefix/suffix hash.
@@ -131,7 +128,7 @@
             (if (local.get $member)
               (then
                 (local.set $hl (select (enum.get $Token.function.method) (enum.get $Token.property)
-                  (i32.eq (call $solByte (local.get $p)) (i32.const "(")))))
+                  (i32.eq (call $templateByte (local.get $p)) (i32.const "(")))))
               (else
                 (if (i32.ge_s (local.get $kind) (i32.const 0))
                   (then
@@ -145,7 +142,7 @@
                           (i32.eq (local.get $expect) (i32.const 1))))
                         (local.set $expect (i32.const 0)))
                       (else
-                        (if (i32.eq (call $solByte (local.get $p)) (i32.const "("))
+                        (if (i32.eq (call $templateByte (local.get $p)) (i32.const "("))
                           (then (local.set $hl (enum.get $Token.function)))
                           (else
                             (if (i32.le_u (i32.sub (local.get $c) (i32.const "A")) (i32.const 25))

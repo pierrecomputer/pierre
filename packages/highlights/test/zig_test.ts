@@ -12,6 +12,7 @@ import {
   distinctTheme,
   exactColor,
   loadLang,
+  loadSplitLang,
   makeRand,
   spansOf,
   type TestLang,
@@ -630,9 +631,12 @@ void t.test(
     const src = String.raw`fn @"name"(x: u37) void { // docs
     const s = "a\n😀"; obj.call(...); \\raw
   }`;
+    const hl = loadSplitLang('zig');
     const size = new TextEncoder().encode(src).length;
     for (let split = 0; split <= size; split++) {
-      checkInvariants(loadLang('zig', '$hlZig', split).hl, src);
+      const html = hl(src, split);
+      assert.equal(textOf(html), src, `split ${split}`);
+      spansOf(html);
     }
   }
 );

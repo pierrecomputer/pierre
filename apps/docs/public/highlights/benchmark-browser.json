@@ -1,0 +1,98 @@
+{
+  "date": "2026-10-21T14:58:25.294Z",
+  "source": "https://unpkg.com/three@0.97.0/build/three.min.js",
+  "copies": 10,
+  "characters": 5556500,
+  "warmups": 1,
+  "measuredRuns": 3,
+  "aggregation": "median",
+  "sampling": "One warm-up followed by one timed call in a fresh dedicated worker for each sample; three complete passes through all engines.",
+  "sampleDates": [
+    "2026-10-21T14:55:33.750Z",
+    "2026-10-21T14:56:58.921Z",
+    "2026-10-21T14:58:25.294Z"
+  ],
+  "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36",
+  "sourceSha256": "3ed7c9316c0724813330f2720111f295827ac22a04da471f167c0fa06b9f28e5",
+  "packages": {
+    "highlights": {
+      "name": "@pierre/highlights",
+      "version": "0.2.0",
+      "distribution": "npm",
+      "source": "https://registry.npmjs.org/@pierre%2fhighlights/0.2.0",
+      "bundleSha256": "750c76dd6a5643f4c221f86fde8f4ac50e0e4bdd4af2e37aa987fa2ecb434c06"
+    }
+  },
+  "rows": [
+    {
+      "name": "Highlights",
+      "version": "0.2.0",
+      "output": "tokens",
+      "samplesMilliseconds": [
+        81.60000002384186, 90.09999999403954, 80.40000000596046
+      ],
+      "milliseconds": 81.60000002384186
+    },
+    {
+      "name": "gpu-lexer",
+      "version": "0.0.2",
+      "output": "spans",
+      "samplesMilliseconds": [
+        398.90000000596046, 401.59999999403954, 400.80000001192093
+      ],
+      "milliseconds": 400.80000001192093
+    },
+    {
+      "name": "Prism.js",
+      "version": "1.30.0",
+      "output": "HTML",
+      "samplesMilliseconds": [
+        961.1999999880791, 1003.3000000119209, 994.4000000059605
+      ],
+      "milliseconds": 994.4000000059605
+    },
+    {
+      "name": "Highlight.js",
+      "version": "11.12.0",
+      "output": "HTML",
+      "samplesMilliseconds": [1268.9000000059605, 1359.1000000238419, 1354.5],
+      "milliseconds": 1354.5
+    },
+    {
+      "name": "Sugar High",
+      "version": "2.3.1",
+      "output": "HTML",
+      "samplesMilliseconds": [
+        750.8000000119209, 761.5999999940395, 782.5999999940395
+      ],
+      "milliseconds": 761.5999999940395
+    },
+    {
+      "name": "Starry Night",
+      "version": "3.11.0",
+      "output": "HAST",
+      "samplesMilliseconds": [
+        10199.300000011921, 10498.09999999404, 10704.700000017881
+      ],
+      "milliseconds": 10498.09999999404
+    },
+    {
+      "name": "Shiki",
+      "version": "4.4.3",
+      "output": "tokens",
+      "samplesMilliseconds": [
+        27879.59999999404, 28280.19999998808, 28579.899999976158
+      ],
+      "milliseconds": 28280.19999998808
+    }
+  ],
+  "environment": "Apple M4 Pro, 48 GiB RAM, macOS 27.0.1, Chromium 153 (Chrome for Testing 153.0.8010.12, fresh profile)",
+  "reference": "https://gpu-lexer.vercel.app/",
+  "conditions": [
+    "The Mac ran on battery power.",
+    "Arc and other desktop applications remained open.",
+    "No animated article preview was opened in the benchmark browser.",
+    "Background timer throttling, renderer backgrounding, and occluded-window backgrounding were disabled in the benchmark browser.",
+    "Display and idle system sleep were prevented with caffeinate throughout all three passes."
+  ]
+}

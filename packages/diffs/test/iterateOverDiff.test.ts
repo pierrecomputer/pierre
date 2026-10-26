@@ -796,6 +796,12 @@ function createSingleHunkDiff({
     noEOFCRAdditions: false,
   };
 
+  const deletionLines = createLines(
+    collapsedBefore + counts.deletionCount + trailingLineCount
+  );
+  const additionLines = createLines(
+    collapsedBefore + counts.additionCount + trailingLineCount
+  );
   return {
     name: 'single-hunk.ts',
     type: 'change',
@@ -804,12 +810,10 @@ function createSingleHunkDiff({
     unifiedLineCount:
       collapsedBefore + counts.unifiedLineCount + trailingLineCount,
     isPartial: false,
-    deletionLines: createLines(
-      collapsedBefore + counts.deletionCount + trailingLineCount
-    ),
-    additionLines: createLines(
-      collapsedBefore + counts.additionCount + trailingLineCount
-    ),
+    deletionLines,
+    additionLines,
+    deletionCharacterCount: deletionLines.join('').length,
+    additionCharacterCount: additionLines.join('').length,
   };
 }
 
@@ -840,6 +844,8 @@ function createWindowedSeparatorDiff(
     noEOFCRAdditions: false,
   };
 
+  const deletionLines = createLines(COLLAPSED_BEFORE + counts.deletionCount);
+  const additionLines = createLines(COLLAPSED_BEFORE + counts.additionCount);
   return {
     name: 'windowed-separator.ts',
     type: 'change',
@@ -847,8 +853,10 @@ function createWindowedSeparatorDiff(
     splitLineCount: COLLAPSED_BEFORE + counts.splitLineCount,
     unifiedLineCount: COLLAPSED_BEFORE + counts.unifiedLineCount,
     isPartial: false,
-    deletionLines: createLines(COLLAPSED_BEFORE + counts.deletionCount),
-    additionLines: createLines(COLLAPSED_BEFORE + counts.additionCount),
+    deletionLines,
+    additionLines,
+    deletionCharacterCount: deletionLines.join('').length,
+    additionCharacterCount: additionLines.join('').length,
   };
 }
 

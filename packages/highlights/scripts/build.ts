@@ -1,10 +1,34 @@
-import binaryen from 'binaryen';
+import type { BitsetMap, EnumMap } from '@pierre/wat-tools';
+import {
+  checkDataSegments,
+  expandBitsetGets,
+  expandBitsets,
+  expandEnumGetsAndStrings,
+  expandEnums,
+  flattenWat,
+  markSimdReachers,
+  optimizeWasm as optimize,
+  replaceForm,
+  resolveConsts,
+  splitTopLevelForms,
+  wat2wasm,
+  wrapCompoundNegations,
+} from '@pierre/wat-tools';
 import { mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { gzipSync } from 'node:zlib';
 import { pathToFileURL } from 'url';
-import wabt from 'wabt';
 
-const { parseWat, readWasm } = await wabt();
+export { wasmToText, wat2wasm } from '@pierre/wat-tools';
+
+/** Keep wider inlining while reducing the all-language browser download. */
+export function optimizeWasm(wasmBytes: Uint8Array): Uint8Array {
+  return optimize(wasmBytes, {
+    filename: 'highlights.wat',
+    shrinkLevel: 1,
+    flexibleInlineMaxSize: 60,
+    oneCallerInlineMaxSize: 200,
+  });
+}
 
 /** The expanded module text, resolved enums, and language name lookup. */
 export interface TransformedWat {
@@ -18,7 +42,8 @@ export interface TransformedWat {
  * - inline local imports
  * - derive language IDs, dispatch, and aliases (`language-table`)
  * - expand enums
- * - resolve named addresses (`const`; see `src/memory.wat`)
+ * - copy a function with globals fixed to constants (`func-variant`)
+ * - resolve named values (`const`; see `src/memory.wat`)
  * - emit CSS-variable tables (`css-variable-table`)
  * - emit enum bitsets (`bitset`)
  * - convert string operands for `i32.const` and `i64.const` to integer literals
@@ -31,37 +56,13 @@ export function transformWat(
 ): TransformedWat {
   if (!(url instanceof URL)) url = pathToFileURL(url);
   content ??= readFileSync(url, 'utf-8');
-  const enumMap = new Map<string, Record<string, number>>();
+  const enumMap: EnumMap = new Map();
   const languages: Record<string, number> = {};
-  const bitsetMap = new Map<
-    string,
-    { base: number; bits: Record<string, number> }
-  >();
-  const imports: string[] = [];
-  const seen = new Set([url.href]);
-  // Comments go first, per file, so no pass below can match a form, import,
-  // enum, or string literal that only appears in a comment.
-  const flatten = (moduleUrl: URL, source: string): string =>
-    stripComments(source).replace(
-      /\(\s*import\s+"(\.+\/.+\.wat)"\s*\)/g,
-      (_, path) => {
-        const importUrl = new URL(path, moduleUrl);
-        if (seen.has(importUrl.href)) return '';
-        seen.add(importUrl.href);
-        return flatten(importUrl, readFileSync(importUrl, 'utf-8')).replace(
-          /^\s*\(\s*module\s+([\s\S]+)\s*\)\s*$/,
-          '$1'
-        );
-      }
-    );
-  let code = flatten(url, content).replace(
-    /\(\s*import +".+" +\( *func.+\)/g,
-    (i) => {
-      imports.push(i);
-      return '';
-    }
-  );
-
+  let languageNames: number[] = [];
+  const bitsetMap: BitsetMap = new Map();
+  const flattened = flattenWat(url, content);
+  const imports = flattened.imports;
+  let code = flattened.code;
   // Declaration order is the language ABI. Each entry owns its dispatch
   // function and all accepted names; partial lexer fixtures omit this table.
   code = replaceForm(code, 'language-table', (inner) => {
@@ -103,36 +104,18 @@ export function transformWat(
         languages[alias] = id;
       }
     }
+    // partial fixtures without the memory layout carry no name table
+    if (/\(const\s+\$mem\.languageNames\b/.test(code))
+      languageNames = languageNamesData(languages, names);
     return (
       `(enum $Language ${names.join(' ')})\n  (table $hlDispatch funcref\n    (elem ${functions.join(' ')}))\n` +
-      // partial fixtures without the memory layout carry no name table
-      (/\(const\s+\$mem\.languageNames\b/.test(code)
-        ? languageNamesData(languages, names)
+      (languageNames.length > 0
+        ? `  (data (i32.const $mem.languageNames) "${languageNames.map((b) => '\\' + b.toString(16).padStart(2, '0')).join('')}")`
         : '')
     );
   });
 
-  code = code.replace(
-    /\s*\(\s*enum\s+(\$\w+)\s+([^)]+)\s*\)/g,
-    (_, key, members) => {
-      if (enumMap.has(key)) throw new Error(`Duplicate enum ${key}`);
-      let i = 0;
-      enumMap.set(
-        key,
-        Object.fromEntries(
-          members
-            .split(/\s+/g)
-            .map((l: string) => l.trim())
-            .filter((l: string) => l !== '' && /^"[\w.-]+"$/.test(l))
-            .map((l: string): [string, number] => [
-              JSON.parse(l) as string,
-              i++,
-            ])
-        )
-      );
-      return '';
-    }
-  );
+  code = expandEnums(code, enumMap);
 
   // `(byte-switch (local.get $c) (case <byte>... body...) ...)` uses br_table
   // to select a case. Each case lists string or numeric byte constants,
@@ -201,69 +184,181 @@ export function transformWat(
   // uses its own state machine. Save only locals read before their next
   // write at the checkpoint. See liveLocalsAtCheckpoint.
   const lexers = new Set([
+    '$hlAbap',
+    '$hlAda',
+    '$hlApache',
+    '$hlApplescript',
+    '$hlAsciidoc',
     '$hlAsm',
     '$hlAstro',
+    '$hlAwk',
     '$hlBash',
     '$hlBatch',
+    '$hlBibtex',
+    '$hlBicep',
+    '$hlBlade',
     '$hlC',
     '$hlC3',
     '$hlClojure',
     '$hlCmake',
+    '$hlCobol',
+    '$hlCodeowners',
+    '$hlCodeql',
+    '$hlCoffee',
+    '$hlCoq',
     '$hlCppImpl',
     '$hlCsharp',
     '$hlCssImpl',
+    '$hlCsvImpl',
+    '$hlCypher',
+    '$hlD',
     '$hlDart',
+    '$hlDax',
     '$hlDiff',
     '$hlDockerfile',
+    '$hlDotenv',
     '$hlElixir',
     '$hlElm',
+    '$hlErb',
     '$hlErlang',
+    '$hlFish',
     '$hlFortranImpl',
     '$hlFsharp',
+    '$hlGdresource',
+    '$hlGdscript',
+    '$hlGherkin',
     '$hlGleam',
-    '$hlGlsl',
+    '$hlGlslImpl',
+    '$hlGnuplot',
     '$hlGo',
     '$hlGraphql',
+    '$hlGroq',
     '$hlGroovy',
+    '$hlHack',
+    '$hlHaml',
     '$hlHaskell',
+    '$hlHaxe',
     '$hlHlsl',
     '$hlHtml',
-    '$hlJava',
-    '$hlJson',
+    '$hlHttp',
+    '$hlIni',
+    '$hlJavaImpl',
+    '$hlJinjaImpl',
+    '$hlJsonImpl',
+    '$hlJsonnet',
     '$hlJulia',
+    '$hlJust',
+    '$hlKdl',
     '$hlKotlin',
+    '$hlLatex',
+    '$hlLean',
     '$hlLisp',
+    '$hlLlvm',
+    '$hlLog',
     '$hlLua',
+    '$hlLuau',
     '$hlMakefile',
     '$hlMarkdown',
     '$hlMatlab',
     '$hlMdx',
+    '$hlMermaid',
+    '$hlMoonbit',
+    '$hlNginx',
+    '$hlNim',
     '$hlNix',
     '$hlObjc',
     '$hlOcaml',
+    '$hlOdin',
+    '$hlOpenscad',
     '$hlPascal',
     '$hlPerl',
     '$hlPhp',
+    '$hlPo',
+    '$hlPowerquery',
     '$hlPowershell',
+    '$hlPrisma',
+    '$hlProlog',
+    '$hlPromql',
     '$hlProto',
+    '$hlPug',
+    '$hlPuppet',
     '$hlPython',
+    '$hlQml',
     '$hlR',
+    '$hlRazor',
+    '$hlRdfImpl',
+    '$hlReg',
+    '$hlRosmsg',
+    '$hlRst',
     '$hlRuby',
     '$hlRust',
+    '$hlSas',
     '$hlScala',
+    '$hlShaderlab',
     '$hlSolidity',
-    '$hlSql',
+    '$hlSqlImpl',
+    '$hlStata',
     '$hlSvelte',
     '$hlSwift',
+    '$hlTcl',
     '$hlTerraform',
     '$hlToml',
+    '$hlTypst',
+    '$hlVerilog',
+    '$hlVhdl',
+    '$hlViml',
     '$hlVue',
     '$hlWat',
     '$hlWgsl',
+    '$hlWolfram',
     '$hlXml',
     '$hlYaml',
     '$hlZig',
   ]);
+  // `(func-variant $copy $base (global $g <int>) ...)` adds a copy of $base
+  // that reads each listed global as a constant. Binaryen then drops the
+  // branches the copy never takes, so a dialect can get its own loop
+  // without slowing the lexer it shares code with.
+  const variants: { name: string; base: string; globals: string[][] }[] = [];
+  code = replaceForm(code, 'func-variant', (inner) => {
+    const m = inner.match(
+      /^\s*(\$\w+)\s+(\$\w+)((?:\s*\(global\s+\$\w+\s+-?\d+\s*\))+)\s*$/
+    );
+    if (m === null)
+      throw new Error(`Malformed func-variant in ${url.pathname}`);
+    variants.push({
+      name: m[1],
+      base: m[2],
+      globals: [...m[3].matchAll(/(\$\w+)\s+(-?\d+)/g)].map((g) => [
+        g[1],
+        g[2],
+      ]),
+    });
+    return '';
+  });
+  if (variants.length > 0) {
+    code = replaceForm(code, 'func', (inner) => {
+      const name = inner.match(/^\s*(\$\w+)/)?.[1];
+      let out = `(func${inner})`;
+      for (const variant of variants) {
+        if (variant.base !== name) continue;
+        let body = inner.replace(/^\s*\$\w+/, ` ${variant.name}`);
+        for (const [global, value] of variant.globals) {
+          if (new RegExp(`global\\.set\\s+\\${global}(?![\\w.])`).test(body))
+            throw new Error(
+              `func-variant ${variant.name} fixes ${global}, which ${name} sets`
+            );
+          body = body.replace(
+            new RegExp(`\\(\\s*global\\.get\\s+\\${global}\\s*\\)`, 'g'),
+            `(i32.const ${value})`
+          );
+        }
+        out += `\n  (func${body})`;
+        if (lexers.has(name)) lexers.add(variant.name);
+      }
+      return out;
+    });
+  }
   let streamStateOffset = 0;
   code = replaceForm(code, 'func', (inner) => {
     const name = inner.match(/^\s*(\$\w+)/)?.[1];
@@ -317,11 +412,17 @@ export function transformWat(
       leading,
       `${leading}\n    (if (i32.and\n          (global.get $streaming)\n          (i32.eqz (global.get $streamDepth)))\n      (then\n        (global.set $streamWindow (i32.const $mem.streamState+${base}))\n        (global.set $streamDepth (local.tee $streamRoot (i32.const 1)))\n        (if (i32.eqz (global.get $streamReset))\n          (then\n            ${load}))))`
     );
-    return `(func${body}\n    (if (local.get $streamRoot)\n      (then\n        ${save}\n        (global.set $streamDepth (i32.const 0)))))`;
+    // A fence or region body runs as its own root and moves $streamWindow,
+    // so set the base again before saving.
+    const exit =
+      state.length === 0
+        ? ''
+        : `(global.set $streamWindow (i32.const $mem.streamState+${base}))\n        ${save}\n        (if (i32.gt_u (global.get $streamStateLo) (i32.const ${base}))\n          (then (global.set $streamStateLo (i32.const ${base}))))\n        (if (i32.lt_u (global.get $streamStateHi) (i32.const ${streamStateOffset}))\n          (then (global.set $streamStateHi (i32.const ${streamStateOffset}))))\n        `;
+    return `(func${body}\n    (if (local.get $streamRoot)\n      (then\n        ${exit}(global.set $streamDepth (i32.const 0)))))`;
   });
-  // The live tokenizer captures the whole used checkpoint region per line;
-  // publish its length as a named address for src/live.wat.
-  code += `\n(const $mem.streamStateUsed ${streamStateOffset})\n`;
+  // The end of the last window bounds the saved checkpoint range; publish it
+  // as a named length for src/emit.wat and src/live.wat.
+  code += `\n(const $streamStateUsed ${streamStateOffset})\n`;
 
   // Nested lexers cannot yield: their callers' locals are not saved here.
   const liveModule = code.includes('(export "liveRun")');
@@ -404,54 +505,25 @@ export function transformWat(
       ${block}${inner.slice(loopBlock.end)})`;
   });
 
-  // `(const $mem.name <int|$other>[+-<int>])` defines a named address.
-  // Addresses live in src/memory.wat so each region moves in one place.
-  // References may add a +/- bias; names cannot contain `-`.
-  const constExprs = new Map<string, { value: string; bias: number }>();
-  code = code.replace(
-    /\s*\(\s*const\s+(\$[\w.]+)\s+(\$[\w.]+|\d+)([+-]\d+)?\s*\)/g,
-    (_, name, value, bias) => {
-      if (constExprs.has(name))
-        throw new Error(`Duplicate const ${name} in ${url.pathname}`);
-      constExprs.set(name, {
-        value,
-        bias: bias !== undefined ? Number(bias) : 0,
-      });
-      return '';
-    }
-  );
-  const constMap = new Map<string, number>();
-  const resolveConst = (name: string, pending: Set<string>): number => {
-    const resolved = constMap.get(name);
-    if (resolved !== undefined) return resolved;
-    const expr = constExprs.get(name);
-    if (expr === undefined)
-      throw new Error(`Const '${name}' is undefined in ${url.pathname}`);
-    if (pending.has(name) === true)
-      throw new Error(`Const '${name}' is cyclic in ${url.pathname}`);
-    pending.add(name);
-    const base = /^\d+$/.test(expr.value)
-      ? Number(expr.value)
-      : resolveConst(expr.value, pending);
-    constMap.set(name, base + expr.bias);
-    return base + expr.bias;
-  };
-  for (const name of constExprs.keys()) resolveConst(name, new Set());
-  // the checkpoint region ends at the next named address above its base
+  const resolved = resolveConsts(code, url.pathname);
+  code = resolved.code;
+  const constMap = resolved.constMap;
+  // A region ends at the next `$mem.` address above its base. Other consts,
+  // such as $streamStateUsed, are lengths.
+  const regionEnd = (base: number): number =>
+    Math.min(
+      ...[...constMap]
+        .filter(([k, v]) => v > base && k.startsWith('$mem.'))
+        .map(([, v]) => v)
+    );
   const streamStateBase = constMap.get('$mem.streamState') ?? 0;
-  const streamStateEnd = Math.min(
-    ...[...constMap.values()].filter((v) => v > streamStateBase)
-  );
-  if (streamStateOffset > streamStateEnd - streamStateBase) {
+  if (streamStateOffset > regionEnd(streamStateBase) - streamStateBase) {
     throw new Error('stream lexer state exceeds reserved memory');
   }
-  code = code.replace(/(\$[\w.]+)([+-]\d+)?/g, (all, name, bias) => {
-    const value = constMap.get(name);
-    return value !== undefined ? String(value + Number(bias ?? 0)) : all;
-  });
-  const stray = code.match(/\$mem\.[\w.]+/);
-  if (stray !== null)
-    throw new Error(`Const '${stray[0]}' is undefined in ${url.pathname}`);
+  const languageNamesBase = constMap.get('$mem.languageNames') ?? 0;
+  if (languageNames.length > regionEnd(languageNamesBase) - languageNamesBase) {
+    throw new Error('language names exceed reserved memory');
+  }
 
   // (css-variable-table $Enum <base> <end>) writes [ptr:u16, length:u8]
   // records at <base>, one per enum member. Kebab-case token suffixes
@@ -516,49 +588,7 @@ export function transformWat(
     return `(data (i32.const ${tableBase}) "${data}")\n  (data (i32.const ${stringBase}) "${blob}")`;
   });
 
-  // `(bitset $Name $Enum <base> (pred "member" ...) ...)` emits one byte per
-  // member and one bit per predicate at <base>. It replaces equality ladders
-  // with a fixed-cost load and mask.
-  code = replaceForm(code, 'bitset', (raw) => {
-    const inner = raw.replace(/;;[^\n]*/g, ''); // comments may sit between members
-    const head = inner.match(/^\s*(\$\w+)\s+(\$\w+)\s+(\d+)/);
-    if (head === null) throw new Error(`Malformed bitset in ${url.pathname}`);
-    const [, name, enumKey, baseStr] = head;
-    if (bitsetMap.has(name)) throw new Error(`Duplicate bitset ${name}`);
-    const members = enumMap.get(enumKey);
-    if (members === undefined)
-      throw new Error(
-        `Bitset '${name}' references unknown enum '${enumKey}' in ${url.pathname}`
-      );
-    const base = Number(baseStr);
-    const bytes = new Uint8Array(Object.keys(members).length);
-    const bits: Record<string, number> = {};
-    let bit = 0;
-    for (const [, pred, list] of inner.matchAll(
-      /\((\w+)((?:\s+"[\w.]+")+)\s*\)/g
-    )) {
-      if (bit > 7) {
-        throw new Error(
-          `Bitset '${name}' has more than 8 predicates in ${url.pathname}`
-        );
-      }
-      bits[pred] = 1 << bit++;
-      for (const q of list.match(/"[\w.]+"/g) ?? []) {
-        const member = JSON.parse(q);
-        if (members[member] === undefined) {
-          throw new Error(
-            `Bitset '${name}.${pred}': '${member}' is not in enum '${enumKey}' in ${url.pathname}`
-          );
-        }
-        bytes[members[member]] |= bits[pred];
-      }
-    }
-    bitsetMap.set(name, { base, bits });
-    const data = [...bytes]
-      .map((b) => '\\' + b.toString(16).padStart(2, '0'))
-      .join('');
-    return `;; ${name}: ${Object.keys(bits).join(', ')}\n  (data (i32.const ${base}) "${data}")`;
-  });
+  code = expandBitsets(code, enumMap, bitsetMap, url.pathname);
 
   // `(enum-map $Name $Enum <base> <default> (value <v> "member" ...) ...)`
   // writes one byte per enum member at <base>. Unlisted members use <default>.
@@ -627,7 +657,7 @@ export function transformWat(
   // index, or 0 if absent. `keyword-table.value` returns the group's value,
   // or -1 if absent. A declared value of -1 also means absent.
   // The hash uses the first two bytes, last byte, and length. Words must
-  // be 2..31 bytes long. Tables support at most 63 groups.
+  // be 2..31 bytes long. Tables support at most 31 groups.
   //
   // A multiply and shift reduce the hash to any slot count.
   // Choose the smallest bucket/slot layout that places all words.
@@ -662,8 +692,8 @@ export function transformWat(
       /\(group(?:\s+(\$[\w.-]+(?:\+\d+)?|-?\d+))?((?:\s+"[\w.$@#!-]+")+)\s*\)/g
     )) {
       group += 1;
-      if (group > 63)
-        throw new Error(`keyword-table ${name} has more than 63 groups`);
+      if (group > 31)
+        throw new Error(`keyword-table ${name} has more than 31 groups`);
       values.push(
         value === undefined ? null : resolveEnumValue(value, enumMap)
       );
@@ -698,8 +728,8 @@ export function transformWat(
   });
 
   // `(keyword-pool <base> <end>)` reserves shared keyword bytes.
-  // packKeywordPool combines the words into one string. The 13-bit descriptor
-  // offset limits it to 8191 bytes. Declare it once beside $lexKeywordLookup.
+  // packKeywordPool combines the words into one string. The 14-bit descriptor
+  // offset limits it to 16383 bytes. Declare it once beside $lexKeywordLookup.
   let keywordPool: { base: number; rangeEnd: number } | undefined;
   code = replaceForm(code, 'keyword-pool', (inner) => {
     const m = inner.match(/^\s*(\d+)\s+(\d+)\s*$/);
@@ -717,7 +747,7 @@ export function transformWat(
       pendingTables.flatMap((t) => t.words.map((w) => w.word))
     );
     const poolCapacity = Math.min(
-      8191,
+      16383,
       keywordPool.rangeEnd - keywordPool.base
     );
     if (pool.length > poolCapacity)
@@ -738,7 +768,7 @@ export function transformWat(
         }
         const w = table.words[index];
         const desc =
-          (w.word.length << 19) | (w.group << 13) | pool.indexOf(w.word);
+          (w.word.length << 19) | (w.group << 14) | pool.indexOf(w.word);
         bytes.push(desc & 0xff, (desc >> 8) & 0xff, desc >> 16);
       }
       // group values follow as signed 16-bit entries indexed by group (entry
@@ -756,6 +786,10 @@ export function transformWat(
           bytes.push(v & 0xff, (v >> 8) & 0xff);
         }
       }
+      if (table.rangeEnd > regionEnd(table.base))
+        throw new Error(
+          `keyword-table ${table.name} range ends past the next region at ${regionEnd(table.base)}`
+        );
       if (table.base + bytes.length > table.rangeEnd)
         throw new Error(
           `keyword-table ${table.name} needs ${bytes.length} bytes, range holds ${table.rangeEnd - table.base}`
@@ -825,13 +859,9 @@ export function transformWat(
   // Other expressions need an exact 0/1 result for boolean arithmetic.
   const byteSets = new Map<string, number>();
   const byteSetBase = constMap.get('$mem.byteSets');
-  // the region ends at the next named address, 32 bytes (256 bits) per set
+  // 32 bytes (256 bits) per set
   const byteSetCap =
-    byteSetBase === undefined
-      ? 0
-      : (Math.min(...[...constMap.values()].filter((v) => v > byteSetBase)) -
-          byteSetBase) >>
-        5;
+    byteSetBase === undefined ? 0 : (regionEnd(byteSetBase) - byteSetBase) >> 5;
   const byteSetBranches = branchOperands(code, 'byteset.get');
   code = replaceForm(code, 'byteset.get', (inner, at) => {
     const m = inner.match(
@@ -876,54 +906,10 @@ export function transformWat(
     );
   }
 
-  // (bitset.get $Name.pred <expr>) -> (i32.and (i32.load8_u offset=base <expr>) (i32.const mask))
-  code = replaceForm(code, 'bitset.get', (inner) => {
-    const m = inner.match(/^\s*(\$\w+)\.(\w+)\s+([\s\S]+)$/);
-    if (m === null) throw new Error(`Malformed bitset.get in ${url.pathname}`);
-    const [, name, pred, expr] = m;
-    const table = bitsetMap.get(name);
-    const mask = table?.bits[pred];
-    if (table === undefined || mask === undefined)
-      throw new Error(
-        `Bitset '${name}.${pred}' is undefined in ${url.pathname}`
-      );
-    return `(i32.and (i32.load8_u offset=${table.base} ${expr.trim()}) (i32.const ${mask}))`;
-  });
-
-  code = code
-    .replace(
-      /(\(\s*)enum\.get\s+(\$\w+)\.([\w.-]+)/g,
-      (_, prefix, key, memberName) => {
-        const i = enumMap.get(key)?.[memberName];
-        if (i === undefined)
-          throw new Error(
-            `Enum '${key}.${memberName}' is undefined in ${url.pathname}`
-          );
-        return prefix + 'i32.const ' + i;
-      }
-    )
-    .replace(/i(32|64).const\s+(".+?")/g, (_, bits, str) => {
-      const chars: string = JSON.parse(str);
-      if (
-        chars.length > Number(bits) / 8 ||
-        chars.split('').some((c) => c.charCodeAt(0) > 0xff)
-      ) {
-        throw new Error(
-          `Could not convert '${chars}' to i${bits} in ${url.pathname}`
-        );
-      }
-      // little-endian
-      const hex =
-        '0x' +
-        chars
-          .split('')
-          .map((c) => c.charCodeAt(0).toString(16).padStart(2, '0'))
-          .reverse()
-          .join('');
-      return `i${bits}.const ${hex}`;
-    });
+  code = expandBitsetGets(code, bitsetMap, url.pathname);
+  code = expandEnumGetsAndStrings(code, enumMap, url.pathname);
   code = wrapCompoundNegations(code);
-  checkDataSegments(code, url.pathname);
+  checkDataSegments(code, url.pathname, constMap.get('$mem.input') ?? 65536);
   if (imports.length > 0) {
     code = code.replace(
       /^\s*\(\s*module(\s+)/,
@@ -936,46 +922,6 @@ export function transformWat(
     enumMap,
     languages,
   };
-}
-
-/**
- * Remove WAT line comments and nested block comments.
- * Preserve string literals and line breaks.
- */
-function stripComments(src: string): string {
-  let out = '';
-  let last = 0;
-  let i = 0;
-  while (i < src.length) {
-    const c = src[i];
-    if (c === '"') {
-      i++;
-      while (i < src.length && src[i] !== '"') i += src[i] === '\\' ? 2 : 1;
-      i++;
-    } else if (c === ';' && src[i + 1] === ';') {
-      out += src.slice(last, i);
-      while (i < src.length && src[i] !== '\n') i++;
-      last = i;
-    } else if (c === '(' && src[i + 1] === ';') {
-      out += src.slice(last, i);
-      let depth = 1;
-      i += 2;
-      while (i < src.length && depth > 0) {
-        if (src[i] === '(' && src[i + 1] === ';') {
-          depth++;
-          i += 2;
-        } else if (src[i] === ';' && src[i + 1] === ')') {
-          depth--;
-          i += 2;
-        } else i++;
-      }
-      out += ' ';
-      last = i;
-    } else {
-      i++;
-    }
-  }
-  return out + src.slice(last);
 }
 
 /**
@@ -1165,7 +1111,7 @@ function packKeywordPool(all: string[]): string {
 function languageNamesData(
   languages: Record<string, number>,
   canonical: string[]
-): string {
+): number[] {
   const isCanonical = new Set(canonical.map((quoted) => quoted.slice(1, -1)));
   const maxLength = 18; // $languageByName rejects longer words
   // plain text's names resolve to id 0, the same as no match
@@ -1187,65 +1133,7 @@ function languageNamesData(
     for (const name of names.filter((n) => n.length === length))
       records.push(languages[name], ...Buffer.from(name, 'latin1'));
   }
-  const bytes = [...offsets.flatMap((o) => [o & 255, o >> 8]), ...records];
-  const text = bytes.map((b) => '\\' + b.toString(16).padStart(2, '0'));
-  return `  (data (i32.const $mem.languageNames) "${text.join('')}")`;
-}
-
-/**
- * Split text into top-level forms and bare atoms with their source offsets.
- * Include each form's head word. Respect comments and string literals.
- */
-function splitTopLevelForms(
-  text: string
-): { head: string; text: string; start: number; end: number }[] {
-  const out: { head: string; text: string; start: number; end: number }[] = [];
-  let i = 0;
-  while (i < text.length) {
-    const c = text[i];
-    if (c === ';' && text[i + 1] === ';') {
-      while (i < text.length && text[i] !== '\n') i++;
-    } else if (/\s/.test(c)) {
-      i++;
-    } else if (c === '(') {
-      const start = i;
-      let depth = 0,
-        inStr = false,
-        inComment = false;
-      for (; i < text.length; i++) {
-        const d = text[i];
-        if (inComment) {
-          if (d === '\n') inComment = false;
-        } else if (inStr) {
-          if (d === '\\') i++;
-          else if (d === '"') inStr = false;
-        } else if (d === '"') inStr = true;
-        else if (d === ';' && text[i + 1] === ';') inComment = true;
-        else if (d === '(') depth++;
-        else if (d === ')' && --depth === 0) break;
-      }
-      if (depth !== 0) throw new Error('unterminated form');
-      i++;
-      const form = text.slice(start, i);
-      out.push({
-        head: form.slice(1).match(/^\s*([\w.$-]+)/)?.[1] ?? '',
-        text: form,
-        start,
-        end: i,
-      });
-    } else if (c === '"') {
-      const start = i;
-      i++;
-      while (i < text.length && text[i] !== '"') i += text[i] === '\\' ? 2 : 1;
-      i++;
-      out.push({ head: '', text: text.slice(start, i), start, end: i });
-    } else {
-      const start = i;
-      while (i < text.length && !/[\s()]/.test(text[i])) i++;
-      out.push({ head: '', text: text.slice(start, i), start, end: i });
-    }
-  }
-  return out;
+  return [...offsets.flatMap((o) => [o & 255, o >> 8]), ...records];
 }
 
 /** A parsed s-expression: an atom, or a list of nested expressions. */
@@ -1497,343 +1385,6 @@ function branchOperands(code: string, head: string): Set<number> {
     }
   }
   return found;
-}
-
-/**
- * Replace each `(head ...)` form with `fn(innerText, offset)`, where offset
- * is the form's start in `code`.
- * Skip quoted strings when matching, and preserve nested forms and operands.
- */
-function replaceForm(
-  code: string,
-  head: string,
-  fn: (inner: string, at: number) => string
-): string {
-  const open = new RegExp(
-    `"(?:[^"\\\\]|\\\\.)*"|\\(\\s*${head.replace(/[.$]/g, '\\$&')}(?=[\\s(])`,
-    'g'
-  );
-  let out = '';
-  let last = 0;
-  let m;
-  while ((m = open.exec(code)) !== null) {
-    if (m[0].startsWith('"')) continue;
-    let depth = 0,
-      i = m.index,
-      inStr = false,
-      inComment = false;
-    for (; i < code.length; i++) {
-      const c = code[i];
-      if (inComment) {
-        if (c === '\n') inComment = false;
-        continue;
-      }
-      if (inStr) {
-        if (c === '\\') i++;
-        else if (c === '"') inStr = false;
-        continue;
-      }
-      if (c === '"') inStr = true;
-      else if (c === ';' && code[i + 1] === ';') inComment = true;
-      else if (c === '(') depth++;
-      else if (c === ')' && --depth === 0) break;
-    }
-    if (depth !== 0) {
-      throw new Error(`Unterminated (${head} ...) form at offset ${m.index}`);
-    }
-    out +=
-      code.slice(last, m.index) +
-      fn(code.slice(m.index + m[0].length, i), m.index);
-    last = i + 1;
-    open.lastIndex = last;
-  }
-  return out + code.slice(last);
-}
-
-/**
- * Work around a JavaScriptCore ARM64 bug in compound boolean expressions.
- * Replace `(i32.eqz X)` for and/or expressions with
- * `(i32.shr_u (i32.clz X) (i32.const 5))`. Both return 1 only for zero.
- * JavaScriptCore can leave stale comparisons when conditional-compare
- * fusion fails. This produces incorrect branch flags. The clz form stops
- * fusion and preserves boolean arithmetic.
- *
- * Apply before and after Binaryen, which can reconstruct the affected form.
- * Remove this workaround when the pinned Bun includes WebKit's fix.
- */
-function wrapCompoundNegations(code: string): string {
-  return replaceForm(code, 'i32.eqz', (inner) => {
-    // nested negations first, so an inner compound is wrapped as well
-    const arg = wrapCompoundNegations(inner).trim();
-    if (!/^\(\s*i32\.(?:and|or)\b/.test(arg)) return `(i32.eqz ${arg})`;
-    return `(i32.shr_u (i32.clz ${arg}) (i32.const 5))`;
-  });
-}
-
-/**
- * Add an unused `v128` local to scalar functions that can call SIMD code.
- * JavaScriptCore selects a register convention from each function's own
- * bytecode, but can then inline SIMD callees. With the scalar convention,
- * ARM64 calls preserve only 64 bits of some vector registers.
- * This corrupts inlined scanner constants and can truncate 16-byte scans.
- *
- * The local selects the SIMD convention without adding instructions.
- * A dropped vector load also works, but its size can prevent inlining.
- * Binaryen removes unused locals, so optimizeWasm applies this again
- * after optimization, when calls refer to function indices.
- */
-function markSimdReachers(code: string): string {
-  const simdOp =
-    /\b(?:v128|[if](?:8x16|16x8|32x4|64x2))\.|\(\s*local\b[^()]*\bv128\b/;
-  const header = new Set(['export', 'type', 'param', 'result', 'local']);
-  const moduleForm = splitTopLevelForms(code).find((f) => f.head === 'module');
-  if (moduleForm === undefined) throw new Error('markSimdReachers: no module');
-  const innerAt =
-    moduleForm.start + moduleForm.text.indexOf('module') + 'module'.length;
-  const inner = code.slice(innerAt, moduleForm.end - 1);
-  const forms = splitTopLevelForms(inner);
-  // imported functions come first in the index space that `call N` uses
-  const imported = forms.filter(
-    (f) => f.head === 'import' && /\(\s*func\b/.test(f.text)
-  ).length;
-  const funcs = forms
-    .filter((f) => f.head === 'func')
-    .map((f) => {
-      const open = /^\(\s*func(?:\s+(\$[^\s()]+))?/.exec(f.text);
-      if (open === null) throw new Error('markSimdReachers: malformed func');
-      // string literals cannot hold instructions; blank them before matching
-      const text = f.text.replace(/"(?:[^"\\]|\\.)*"/g, '""');
-      return {
-        form: f,
-        openLen: open[0].length,
-        name: open[1],
-        simd: simdOp.test(text),
-        callees: [...text.matchAll(/\bcall\s+(\$[^\s()]+|\d+)/g)].map(
-          (m) => m[1]
-        ),
-        indirect: /\bcall_indirect\b/.test(text),
-      };
-    });
-  // exported entry points may be unnamed, so track functions by index
-  const index = new Map(funcs.map((f, i) => [f.name, i]));
-  const resolve = (callee: string): number | undefined =>
-    /^\d+$/.test(callee) ? Number(callee) - imported : index.get(callee);
-  const reaches = new Set(funcs.flatMap((f, i) => (f.simd ? [i] : [])));
-  for (let changed = true; changed; ) {
-    changed = false;
-    for (const [i, f] of funcs.entries()) {
-      if (reaches.has(i)) continue;
-      const callsReacher = f.callees.some((c) => {
-        const j = resolve(c);
-        return j !== undefined && reaches.has(j);
-      });
-      if (f.indirect || callsReacher) {
-        reaches.add(i);
-        changed = true;
-      }
-    }
-  }
-  // splice the local in after the declarations, from the end so earlier
-  // offsets stay valid; an appended local leaves existing indices alone
-  let out = code;
-  for (const [i, f] of [...funcs.entries()].reverse()) {
-    if (f.simd || !reaches.has(i)) continue;
-    const body = f.form.text.slice(f.openLen, -1);
-    const first = splitTopLevelForms(body).find(
-      (x) => !header.has(x.head) && !x.text.startsWith('(;')
-    );
-    const at =
-      innerAt + f.form.start + f.openLen + (first?.start ?? body.length);
-    out = `${out.slice(0, at)} (local v128)${out.slice(at)}`;
-  }
-  return out;
-}
-
-/**
- * Check that `src/memory.wat` data segments fit in page 1 without overlap.
- * A bad address can silently corrupt another table.
- */
-function checkDataSegments(code: string, path: string): void {
-  const segments: { base: number; end: number }[] = [];
-  const open = /\(\s*data\s+\(\s*i32\.const\s+(\d+)\s*\)/g;
-  let m;
-  while ((m = open.exec(code)) !== null) {
-    let depth = 1,
-      i = m.index + m[0].length,
-      inStr = false,
-      inComment = false,
-      length = 0;
-    for (; i < code.length && depth !== 0; i++) {
-      const c = code[i];
-      if (inComment) {
-        if (c === '\n') inComment = false;
-      } else if (inStr) {
-        if (c === '\\') {
-          i += /[0-9a-fA-F]{2}/.test(code.slice(i + 1, i + 3)) ? 2 : 1;
-          length++;
-        } else if (c === '"') inStr = false;
-        else {
-          // wabt emits UTF-8, so a non-ASCII character is several bytes
-          const cp = code.codePointAt(i) ?? 0;
-          length += cp < 0x80 ? 1 : cp < 0x800 ? 2 : cp < 0x10000 ? 3 : 4;
-          if (cp > 0xffff) i++;
-        }
-      } else if (c === '"') inStr = true;
-      else if (c === ';' && code[i + 1] === ';') inComment = true;
-      else if (c === '(') depth++;
-      else if (c === ')') depth--;
-    }
-    segments.push({ base: Number(m[1]), end: Number(m[1]) + length });
-    open.lastIndex = i;
-  }
-  segments.sort((a, b) => a.base - b.base);
-  for (const [i, seg] of segments.entries()) {
-    if (seg.end > 65536) {
-      throw new Error(
-        `data segment [${seg.base}:${seg.end}) overflows page 1 in ${path}`
-      );
-    }
-    const next = segments[i + 1];
-    if (next !== undefined && next.base < seg.end) {
-      throw new Error(
-        `data segments [${seg.base}:${seg.end}) and [${next.base}:${next.end}) overlap in ${path}`
-      );
-    }
-  }
-}
-
-/**
- * Compile WAT to WebAssembly.
- */
-export function wat2wasm(filename: string, text: string): Uint8Array {
-  const wasmModule = parseWat(filename, text, {
-    bulk_memory: true,
-    simd: true,
-  });
-  try {
-    return wasmModule.toBinary({}).buffer;
-  } finally {
-    wasmModule.destroy();
-  }
-}
-
-/** Folded WAT text of a WebAssembly binary, for build-invariant tests. */
-export function wasmToText(wasmBytes: Uint8Array): string {
-  const wasmModule = readWasm(wasmBytes, { readDebugNames: false });
-  try {
-    return wasmModule.toText({ foldExprs: true, inlineExport: false });
-  } finally {
-    wasmModule.destroy();
-  }
-}
-
-/**
- * Optimize with Binaryen at `-O3 --shrink-level=1` and emit Stack IR.
- * Three passes reduce the module size. A fourth gives no further reduction.
- */
-export function optimizeWasm(wasmBytes: Uint8Array): Uint8Array {
-  binaryen.setOptimizeLevel(3);
-  binaryen.setShrinkLevel(1);
-  binaryen.setGenerateStackIR(true);
-  binaryen.setOptimizeStackIR(true);
-  for (let pass = 0; pass < 3; pass++) {
-    const wasmModule = binaryen.readBinary(wasmBytes);
-    try {
-      // Match wat2wasm features so Binaryen does not emit instructions the
-      // target runtimes cannot execute.
-      wasmModule.setFeatures(
-        binaryen.Features.BulkMemory |
-          binaryen.Features.BulkMemoryOpt |
-          binaryen.Features.SIMD128
-      );
-      if (Boolean(wasmModule.validate()) === false) {
-        throw new Error('binaryen rejected the module');
-      }
-      wasmModule.optimize();
-      wasmBytes = wasmModule.emitBinary();
-    } finally {
-      wasmModule.dispose();
-    }
-  }
-  // Binaryen turns byte splats into 18-byte vector constants.
-  // After optimization, restore the 4-5-byte scalar-and-splat form.
-  // Also restore compound-negation rewrites and SIMD markers.
-  // All three transformations operate on folded WAT.
-  const compact = readWasm(wasmBytes, { readDebugNames: false });
-  try {
-    const code = compact.toText({ foldExprs: true, inlineExport: false });
-    return wat2wasm(
-      'highlights.wat',
-      markSimdReachers(
-        wrapCompoundNegations(
-          compactMaskedCompares(
-            replaceForm(code, 'v128.const', (inner) => {
-              const byte = inner.match(
-                /^\s*i32x4 (0x([0-9a-f]{2})\2\2\2) \1 \1 \1\s*$/
-              )?.[2];
-              return byte === undefined
-                ? `(v128.const${inner})`
-                : `(i8x16.splat (i32.const ${(parseInt(byte, 16) << 24) >> 24}))`;
-            })
-          )
-        )
-      )
-    );
-  } finally {
-    compact.destroy();
-  }
-}
-
-/**
- * Replace masked-word comparisons with xor, shift, and eqz:
- * `(i64.eq (i64.and X (i64.const 2^n-1)) (i64.const C))` becomes
- * `(i64.eqz (i64.shl (i64.xor X (i64.const C)) (i64.const 64-n)))`.
- * C must fit the mask. Shifting removes the same high bits as masking
- * and avoids the large mask constant. Handle 5-7-byte i64 masks,
- * 3-byte i32 masks, and `ne` with a second `eqz`.
- */
-function compactMaskedCompares(code: string): string {
-  const widths: Record<string, number> = {
-    i64: 64,
-    i32: 32,
-  };
-  const maskBytes = (width: number, value: bigint): number => {
-    for (const bytes of width === 64 ? [5, 6, 7] : [3]) {
-      if (value === (1n << BigInt(bytes * 8)) - 1n) return bytes;
-    }
-    return 0;
-  };
-  const rewrite = (type: string, op: string) => (inner: string) => {
-    const nested = compactMaskedCompares(inner);
-    const forms = splitTopLevelForms(nested);
-    const fallback = `(${type}.${op}${nested})`;
-    if (forms.length !== 2) return fallback;
-    const width = widths[type];
-    const constant = new RegExp(`^\\(${type}\\.const (-?\\d+)\\)$`);
-    for (const [masked, other] of [forms, [forms[1], forms[0]]]) {
-      const c = constant.exec(other.text.trim());
-      if (c === null || masked.head !== `${type}.and`) continue;
-      const parts = splitTopLevelForms(
-        masked.text.slice(masked.text.indexOf('and') + 3, -1)
-      );
-      if (parts.length !== 2) continue;
-      const m = constant.exec(parts[1].text.trim());
-      if (m === null) continue;
-      const bytes = maskBytes(width, BigInt(m[1]));
-      const value = BigInt(c[1]);
-      if (bytes === 0 || value < 0n || value >> BigInt(bytes * 8) !== 0n)
-        continue;
-      const zero = `(${type}.eqz (${type}.shl (${type}.xor ${parts[0].text} (${type}.const ${c[1]})) (${type}.const ${width - bytes * 8})))`;
-      return op === 'eq' ? zero : `(i32.eqz ${zero})`;
-    }
-    return fallback;
-  };
-  for (const type of Object.keys(widths)) {
-    for (const op of ['eq', 'ne']) {
-      code = replaceForm(code, `${type}.${op}`, rewrite(type, op));
-    }
-  }
-  return code;
 }
 
 /**

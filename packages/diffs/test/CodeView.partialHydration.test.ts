@@ -1,4 +1,4 @@
-import { afterAll, describe, expect, spyOn, test } from 'bun:test';
+import { afterAll, beforeAll, describe, expect, spyOn, test } from 'bun:test';
 import { createTwoFilesPatch } from 'diff';
 
 import { CodeView } from '../src/components/CodeView';
@@ -13,11 +13,14 @@ import { parsePatchFiles } from '../src/utils/parsePatchFiles';
 import {
   createRoot,
   installDom,
+  preloadTestHighlighter,
   renderItems,
   wait,
   waitFor,
 } from './domHarness';
 import { assertDefined, createDeferred } from './testUtils';
+
+beforeAll(preloadTestHighlighter);
 
 afterAll(async () => {
   await disposeHighlighter();
@@ -48,8 +51,7 @@ function createPartialChange(): {
       undefined,
       { context: 0 }
     ),
-    'partial',
-    true
+    { cacheKeyPrefix: 'partial', throwOnError: true }
   )[0]?.files[0];
   assertDefined(partial, 'expected patch to contain one partial diff');
   expect(partial.isPartial).toBe(true);

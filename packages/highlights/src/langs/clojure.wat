@@ -1,9 +1,6 @@
 (module
   (import "../common.wat")
 
-  (func $cljByte (param $p i32) (result i32)
-    (select (i32.load8_u (local.get $p)) (i32.const 0) (i32.lt_u (local.get $p) (global.get $end))))
-
   ;; Group order is the dispatch order in $cljWordHl. The high byte of a
   ;; declaration value names what the next symbol is: 1 a function, 2 a
   ;; variable, 3 a type, 4 a namespace. `defonce`, `declare`, `defrecord`,
@@ -126,7 +123,7 @@
         (br_if $done (i32.ge_u (global.get $ptr) (global.get $end)))
         (local.set $lhs (global.get $ptr))
         (local.set $c (i32.load8_u (global.get $ptr)))
-        (local.set $c2 (call $cljByte (i32.add (global.get $ptr) (i32.const 1))))
+        (local.set $c2 (call $templateByte (i32.add (global.get $ptr) (i32.const 1))))
 
         (if (i32.eq (local.get $c) (i32.const ";"))
           (then
@@ -263,7 +260,7 @@
                 (if
                   (i32.and
                     (i32.eq (local.get $c2) (i32.const "?"))
-                    (i32.eq (call $cljByte (global.get $ptr)) (i32.const "@")))
+                    (i32.eq (call $templateByte (global.get $ptr)) (i32.const "@")))
                   (then (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))))
                 (call $emitTok
                   (enum.get $Token.punctuation.special)
@@ -272,9 +269,9 @@
                 (br $next)))
             ;; `#inst "..."`, `#uuid "..."` tagged literals
             (if
-              (i32.and
-                (call $lexIsIdentStart (local.get $c2))
-                (i32.ne (local.get $c2) (i32.const "$")))
+              (i32.or
+                (i32.le_u (i32.sub (i32.or (local.get $c2) (i32.const 32)) (i32.const "a")) (i32.const 25))
+                (i32.or (i32.eq (local.get $c2) (i32.const "_")) (i32.ge_u (local.get $c2) (i32.const 128))))
               (then
                 (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
                 (call $cljScanSymbol)
@@ -389,8 +386,9 @@
         (if (i32.le_u (i32.sub (local.get $c) (i32.const "A")) (i32.const 25))
           (then (local.set $hl (enum.get $Token.type)))
           (else
+            (local.set $kind (call $lexIsIdentStart (local.get $c)))
             (if
-              (if (result i32) (call $lexIsIdentStart (local.get $c))
+              (if (result i32) (local.get $kind)
                 (then (call $cljFindInside (local.get $lhs) (local.get $rhs) (i32.const ".")))
                 (else (i32.const 0)))
               (then (local.set $hl (enum.get $Token.namespace)))
@@ -413,7 +411,7 @@
                           (select
                             (enum.get $Token.variable)
                             (enum.get $Token.operator)
-                            (call $lexIsIdentStart (local.get $c))))))))))))
+                            (local.get $kind)))))))))))
         (call $emitTok (local.get $hl) (local.get $lhs) (local.get $rhs))
         (local.set $head (i32.const 0))
         (br $next))))

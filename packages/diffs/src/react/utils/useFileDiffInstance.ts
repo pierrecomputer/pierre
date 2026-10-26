@@ -15,8 +15,10 @@ import {
   type FileDiffEditCompleteEvent,
   type FileDiffEditCompleteHandler,
   type FileDiffOptions,
+  type FileDiffRenderInput,
 } from '../../components/FileDiff';
 import { VirtualizedFileDiff } from '../../components/VirtualizedFileDiff';
+import { EMPTY_LINE_ANNOTATIONS } from '../../constants';
 import type { Editor, EditorChangeEvent, EditorOptions } from '../../edit';
 import type { GetHoveredLineResult } from '../../managers/InteractionManager';
 import type {
@@ -35,6 +37,8 @@ import { noopRender } from '../constants';
 import { useCreateEditor } from '../EditContext';
 import { useVirtualizer } from '../Virtualizer';
 import { WorkerPoolContext } from '../WorkerPoolContext';
+import { useForceUpdate } from './useForceUpdate';
+import { useNextRenderData } from './useNextRenderData';
 import { useStableCallback } from './useStableCallback';
 
 const useIsomorphicLayoutEffect =
@@ -81,6 +85,7 @@ interface UseFileDiffInstanceProps<LAnnotation, Caret> {
 }
 
 interface UseFileDiffInstanceReturn<LAnnotation> {
+  lineAnnotations: DiffLineAnnotation<LAnnotation>[];
   fileDiff: FileDiffMetadata;
   ref(node: HTMLElement | null): void;
   getHoveredLine(): GetHoveredLineResult<'diff'> | undefined;
@@ -151,10 +156,6 @@ export function useFileDiffInstance<LAnnotation, Caret>({
   );
   const onEditComplete =
     _onEditComplete != null ? handleOnEditComplete : undefined;
-  // File-pair inputs parse here. While the file props still match the pair
-  // from acceptance time (stale) or the completion event's files (installed),
-  // the parse is the accepted diff itself; any other pair clears the record
-  // and parses fresh.
   const effectiveFileDiff = useEffectiveFileDiff({
     acceptedCache,
     fileDiff,
@@ -167,6 +168,16 @@ export function useFileDiffInstance<LAnnotation, Caret>({
     | VirtualizedFileDiff<LAnnotation, Caret>
     | null
   >(null);
+  const forceUpdate = useForceUpdate();
+  const accepted = useAcceptedValues(
+    acceptedCache,
+    effectiveFileDiff,
+    lineAnnotations
+  );
+  const renderData = useNextRenderData(instanceRef, accepted) ?? {
+    fileDiff: effectiveFileDiff,
+    lineAnnotations: lineAnnotations ?? EMPTY_LINE_ANNOTATIONS,
+  };
   const disposeEditorRef = useRef<() => void>(null);
   const pendingAttachRef = useRef<{ promise: Promise<void> } | null>(null);
   const getEditor = useStableCallback(() => {
@@ -195,7 +206,7 @@ export function useFileDiffInstance<LAnnotation, Caret>({
           simpleVirtualizer,
           metrics,
           !disableWorkerPool ? poolManager : undefined,
-          true
+          forceUpdate
         );
       } else {
         instanceRef.current = new FileDiff(
@@ -208,7 +219,7 @@ export function useFileDiffInstance<LAnnotation, Caret>({
             options,
           }),
           !disableWorkerPool ? poolManager : undefined,
-          true
+          forceUpdate
         );
       }
       void instanceRef.current.hydrate({
@@ -241,12 +252,7 @@ export function useFileDiffInstance<LAnnotation, Caret>({
       onEditComplete,
       options,
     });
-    // setOptions(undefined) is a no-op, so an undefined merge result never
-    // requires a forced render — comparing it against the instance's
-    // constructor-default options would force a full render on every commit.
-    const forceRender =
-      newOptions !== undefined &&
-      !areOptionsEqual(instance.options, newOptions);
+    const forceRender = !areOptionsEqual(instance.options, newOptions);
     instance.setOptions(newOptions);
     // Detach editor before rendering if required
     if (!edit) {
@@ -286,6 +292,9 @@ export function useFileDiffInstance<LAnnotation, Caret>({
         return;
       }
       disposeEditorRef.current = applyEdit(instance, getEditor);
+      // The editor can show content that is still highlighting, so render the
+      // children again from the edit session.
+      forceUpdate();
     };
     // If we're all ready to attach the editor, lets go ahead
     // and do that synchronously
@@ -341,7 +350,7 @@ export function useFileDiffInstance<LAnnotation, Caret>({
   }
 
   return {
-    fileDiff: effectiveFileDiff,
+    ...renderData,
     ref,
     getHoveredLine,
     getAnnotationSlotName,
@@ -356,12 +365,11 @@ interface UseEffectiveFileDiffProps<LAnnotation, Caret> {
   parseDiffOptions: FileDiffOptions<LAnnotation, Caret>['parseDiffOptions'];
 }
 
-// Resolves the diff the instance renders: the `fileDiff` prop when given;
-// otherwise the accepted edit's cached diff while the file props still name the
-// pair it was accepted against; otherwise a fresh parse of the file props. A
-// cached pair that no longer matches is dropped on the way. Kept in its own hook
-// because the render-time ref read and write are deliberate; the boundary lets
-// the calling hook stay compilable.
+// Return the diff to render: the fileDiff prop, or a parse of the file props.
+// While the file props still match the accepted edit's original or completed
+// files, return the accepted diff instead. Other files remove the filePair
+// entry. The ref is read and written during render on purpose, so that stays
+// in this hook instead of the caller.
 function useEffectiveFileDiff<LAnnotation, Caret>({
   acceptedCache,
   fileDiff,
@@ -409,37 +417,60 @@ function isSameFilePair(
   );
 }
 
-// Render the installed values in place of props that still match their stale
-// counterparts. Any other prop value clears its slot — filePair settles in
-// the parse memo instead — and the ref clears once all three have.
+// Read the accepted values on every render. Entries are only removed in the
+// effect, by resolveAcceptedValues. The cache changes without new props, so
+// this must not be memoized.
+function useAcceptedValues<LAnnotation>(
+  acceptedCache: RefObject<AcceptedCompletion<LAnnotation> | null>,
+  fileDiff: FileDiffMetadata,
+  lineAnnotations: DiffLineAnnotation<LAnnotation>[] | undefined
+): FileDiffRenderInput<LAnnotation> {
+  'use no memo';
+  // oxlint-disable-next-line react/refs -- the cache changes without new props
+  return getAcceptedValues(fileDiff, lineAnnotations, acceptedCache.current);
+}
+
+// Use the accepted values for props that still hold their pre-edit values.
+function getAcceptedValues<LAnnotation>(
+  fileDiff: FileDiffMetadata,
+  lineAnnotations: DiffLineAnnotation<LAnnotation>[] | undefined,
+  accepted: AcceptedCompletion<LAnnotation> | null
+): FileDiffRenderInput<LAnnotation> {
+  return {
+    fileDiff:
+      accepted?.fileDiff != null &&
+      areDiffTargetsEqual(fileDiff, accepted.fileDiff.stale)
+        ? accepted.fileDiff.installed
+        : fileDiff,
+    lineAnnotations:
+      accepted?.annotations != null &&
+      lineAnnotations === accepted.annotations.stale
+        ? accepted.annotations.installed
+        : lineAnnotations,
+  };
+}
+
+// Return the accepted values, and drop each one once its prop no longer holds
+// the pre-edit value. useEffectiveFileDiff drops the filePair entry. The cache
+// is cleared once every entry is dropped.
 function resolveAcceptedValues<LAnnotation>(
   fileDiff: FileDiffMetadata,
   lineAnnotations: DiffLineAnnotation<LAnnotation>[] | undefined,
   acceptedCache: RefObject<AcceptedCompletion<LAnnotation> | null>
-): {
-  fileDiff: FileDiffMetadata;
-  lineAnnotations: DiffLineAnnotation<LAnnotation>[] | undefined;
-} {
+): FileDiffRenderInput<LAnnotation> {
   const { current: accepted } = acceptedCache;
+  const resolved = getAcceptedValues(fileDiff, lineAnnotations, accepted);
   if (accepted == null) {
-    return { fileDiff, lineAnnotations };
+    return resolved;
   }
-  const { fileDiff: acceptedDiff, annotations: acceptedAnnotations } = accepted;
-  let resolvedFileDiff = fileDiff;
-  if (acceptedDiff != null) {
-    if (areDiffTargetsEqual(fileDiff, acceptedDiff.stale)) {
-      resolvedFileDiff = acceptedDiff.installed;
-    } else {
-      accepted.fileDiff = null;
-    }
+  if (
+    accepted.fileDiff != null &&
+    !areDiffTargetsEqual(fileDiff, accepted.fileDiff.stale)
+  ) {
+    accepted.fileDiff = null;
   }
-  let resolvedAnnotations = lineAnnotations;
-  if (acceptedAnnotations != null) {
-    if (lineAnnotations === acceptedAnnotations.stale) {
-      resolvedAnnotations = acceptedAnnotations.installed;
-    } else {
-      accepted.annotations = null;
-    }
+  if (lineAnnotations !== accepted.annotations?.stale) {
+    accepted.annotations = null;
   }
   if (
     accepted.fileDiff == null &&
@@ -448,7 +479,7 @@ function resolveAcceptedValues<LAnnotation>(
   ) {
     acceptedCache.current = null;
   }
-  return { fileDiff: resolvedFileDiff, lineAnnotations: resolvedAnnotations };
+  return resolved;
 }
 
 interface MergeFileDiffOptionsProps<LAnnotation, Caret> {
@@ -467,20 +498,10 @@ function mergeFileDiffOptions<LAnnotation, Caret>({
   hasGutterRenderUtility,
   onEditChange,
   onEditComplete,
-}: MergeFileDiffOptionsProps<LAnnotation, Caret>):
-  | FileDiffOptions<LAnnotation, Caret>
-  | undefined {
-  const needsReactOverrides =
-    controlledSelection ||
-    hasGutterRenderUtility ||
-    hasCustomHeader ||
-    onEditChange != null ||
-    onEditComplete != null;
-
-  if (!needsReactOverrides) {
-    return options;
-  }
-
+}: MergeFileDiffOptionsProps<LAnnotation, Caret>): FileDiffOptions<
+  LAnnotation,
+  Caret
+> {
   return {
     ...options,
     controlledSelection,

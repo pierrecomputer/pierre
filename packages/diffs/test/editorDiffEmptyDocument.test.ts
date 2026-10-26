@@ -7,6 +7,16 @@ import { disposeHighlighter } from '../src/highlighter/shared_highlighter';
 import type { FileContents, FileDiffMetadata } from '../src/types';
 import { installDom, wait } from './domHarness';
 
+class TestFileDiff extends FileDiff<undefined> {
+  getInputDiffForTest(): FileDiffMetadata | undefined {
+    return this.getInputDiff();
+  }
+
+  getRenderedDiffForTest(): FileDiffMetadata | undefined {
+    return this.getRenderedDiff();
+  }
+}
+
 afterAll(async () => {
   await disposeHighlighter();
 });
@@ -63,7 +73,7 @@ function getEditSessionDiff(
 interface DiffEditorFixture {
   container: HTMLElement;
   editor: Editor<'file-diff', undefined>;
-  fileDiff: FileDiff<undefined>;
+  fileDiff: TestFileDiff;
   cleanup(): Promise<void>;
 }
 
@@ -76,7 +86,7 @@ async function createDiffEditorFixture(
   const container = document.createElement('div');
   document.body.appendChild(container);
 
-  const fileDiff = new FileDiff<undefined>({
+  const fileDiff = new TestFileDiff({
     disableFileHeader: true,
     theme: DEFAULT_THEMES,
     diffStyle,
@@ -181,7 +191,16 @@ describe('diff editor: empty document', () => {
       );
 
       try {
+        expect(fixture.fileDiff.getInputDiffForTest()?.additionLines).toEqual(
+          []
+        );
         expect(fixture.fileDiff.fileDiff?.additionLines).toEqual([]);
+        expect(fixture.fileDiff.fileDiff).not.toBe(
+          getEditSessionDiff(fixture.fileDiff)
+        );
+        expect(fixture.fileDiff.getRenderedDiffForTest()).toBe(
+          getEditSessionDiff(fixture.fileDiff)
+        );
         expect(getEditSessionDiff(fixture.fileDiff)?.additionLines).toEqual([
           '',
         ]);

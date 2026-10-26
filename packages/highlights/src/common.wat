@@ -15,10 +15,10 @@
     (i32.le_u (i32.sub (local.get $c) (i32.const "0")) (i32.const 9)))
 
   (func $lexIsHex (param $c i32) (result i32)
-    (i32.or
-      (call $lexIsDigit (local.get $c))
-      (i32.le_u (i32.sub (i32.or (local.get $c) (i32.const 32)) (i32.const "a")) (i32.const 5))))
+    (byteset.get "0123456789ABCDEFabcdef" (local.get $c)))
 
+  ;; WARNING: keep the compare chain. A byte-set load is shorter, but in a
+  ;; lexer's main dispatch it made JavaScriptCore up to 20% slower.
   (func $lexIsIdentStart (param $c i32) (result i32)
     (i32.or
       (i32.ge_u (local.get $c) (i32.const 0x80))
@@ -26,8 +26,17 @@
         (i32.le_u (i32.sub (i32.or (local.get $c) (i32.const 32)) (i32.const "a")) (i32.const 25))
         (i32.or (i32.eq (local.get $c) (i32.const "_")) (i32.eq (local.get $c) (i32.const "$"))))))
 
+  ;; $lexIsIdentStart without `$`: a letter, `_`, or a UTF-8 byte
+  (func $lexIsNameStart (param $c i32) (result i32)
+    (i32.or
+      (i32.ge_u (local.get $c) (i32.const 0x80))
+      (i32.or
+        (i32.le_u (i32.sub (i32.or (local.get $c) (i32.const 32)) (i32.const "a")) (i32.const 25))
+        (i32.eq (local.get $c) (i32.const "_")))))
+
+  ;; A byte-set load is shorter than the compare chain at each inlined call.
   (func $lexIsIdentContinue (param $c i32) (result i32)
-    (i32.or (call $lexIsIdentStart (local.get $c)) (call $lexIsDigit (local.get $c))))
+    (byteset.get "$_0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz\80\81\82\83\84\85\86\87\88\89\8a\8b\8c\8d\8e\8f\90\91\92\93\94\95\96\97\98\99\9a\9b\9c\9d\9e\9f\a0\a1\a2\a3\a4\a5\a6\a7\a8\a9\aa\ab\ac\ad\ae\af\b0\b1\b2\b3\b4\b5\b6\b7\b8\b9\ba\bb\bc\bd\be\bf\c0\c1\c2\c3\c4\c5\c6\c7\c8\c9\ca\cb\cc\cd\ce\cf\d0\d1\d2\d3\d4\d5\d6\d7\d8\d9\da\db\dc\dd\de\df\e0\e1\e2\e3\e4\e5\e6\e7\e8\e9\ea\eb\ec\ed\ee\ef\f0\f1\f2\f3\f4\f5\f6\f7\f8\f9\fa\fb\fc\fd\fe\ff" (local.get $c)))
 
   ;; the default identifier run: `$` is an identifier byte in every language
   ;; that uses it
@@ -497,6 +506,8 @@
   ;; Save a delimiter for a multiline token with one highlight and no nesting.
   ;; The delimiter region holds 32 bytes. Longer delimiters would overwrite
   ;; lexer checkpoints, so those tokens end at the chunk boundary.
+  ;; $streamB starts at 0; a lexer can then set it to a byte that escapes the
+  ;; delimiter right before it (see $streamResumeFixed).
   (func $streamSetFixed (param $delimiter i32) (param $len i32) (param $hl i32)
     (if
       (i32.and
@@ -508,6 +519,7 @@
         (memory.copy (i32.const $mem.streamDelimiter) (local.get $delimiter) (local.get $len))
         (global.set $streamMode (i32.const 20))
         (global.set $streamA (local.get $len))
+        (global.set $streamB (i32.const 0))
         (global.set $streamHl (local.get $hl)))))
 
   (func $streamSetFixed32 (param $delimiter i32) (param $len i32) (param $hl i32)
@@ -602,7 +614,10 @@
   ;; Save the kind of embedded region that continues in the next chunk:
   ;; 1 script, 2 style, 3 TSX front matter, 4 YAML front matter, 5 MDX JSX,
   ;; 6-8 framework expressions, 9-13 unfinished HTML/XML/Vue/Svelte/Astro
-  ;; start tags. The owning lexer resumes start tags through highlights.wat.
+  ;; start tags, 23 a Jinja-family start tag cut by a template tag, 26-27 an
+  ;; ERB start tag or ERB tag, 28 a Haml or Pug body, 29 an HTTP body, 38-39
+  ;; a ShaderLab HLSL or GLSL body, 42 a Stylus style body. The owning lexer
+  ;; resumes start tags through highlights.wat.
   (func $streamSetRegion (param $kind i32)
     (if (i32.and (global.get $streaming) (i32.eq (global.get $ptr) (global.get $eof)))
       (then
@@ -638,6 +653,14 @@
                 (br $compareDone)))
             (local.set $i (i32.add (local.get $i) (i32.const 1)))
             (br $compare)))
+        ;; the escape byte in $streamB cancels a delimiter, as `\"""` in GraphQL
+        (if
+          (i32.and
+            (i32.and
+              (i32.ne (global.get $streamB) (i32.const 0))
+              (i32.gt_u (local.get $p) (local.get $lhs)))
+            (i32.eq (i32.load8_u (i32.sub (local.get $p) (i32.const 1))) (global.get $streamB)))
+          (then (local.set $matched (i32.const 0))))
         (if (local.get $matched)
           (then
             (global.set $ptr (i32.add (local.get $p) (global.get $streamA)))
@@ -965,8 +988,8 @@
     (i32.const 1))
 
   ;; The word bytes of every keyword table, packed by the build; descriptors
-  ;; address them with 13-bit offsets, so the pool holds at most 8191 bytes.
-  (keyword-pool $mem.keywordPool $mem.jsonStack)
+  ;; address them with 14-bit offsets, so the pool holds at most 16383 bytes.
+  (keyword-pool $mem.keywordPool $mem.keywordPoolEnd)
 
   ;; Look up a word with a perfect hash of its first two bytes, last byte,
   ;; and length. Return the 1-based group index, or 0 if absent.
@@ -999,7 +1022,7 @@
         (i32.const 0xe51fac89)))
     (local.set $h (i32.xor (local.get $h) (i32.shr_u (local.get $h) (i32.const 24))))
     ;; Layout: displacement bytes at base, then 3-byte descriptors at
-    ;; base+buckets: (len<<19 | group<<13 | pool offset).
+    ;; base+buckets: (len<<19 | group<<14 | pool offset).
     ;; Add the bucket displacement times an odd second hash, then rotate
     ;; and reduce to the slot count with a multiply and shift.
     ;; Any slot count is valid. The 4-byte load reads one extra descriptor
@@ -1033,7 +1056,7 @@
       (then (return (i32.const 0))))
     ;; the exact word bytes sit in the shared pool
     (local.set $rec
-      (i32.add (i32.const $mem.keywordPool) (i32.and (local.get $entry) (i32.const 8191))))
+      (i32.add (i32.const $mem.keywordPool) (i32.and (local.get $entry) (i32.const 16383))))
     ;; Ignore differing bytes after the word: ctz(0) is 32, beyond every
     ;; supported length. Longer words also compare an overlapping tail.
     (if
@@ -1051,7 +1074,7 @@
               (v128.load (i32.sub (local.get $end) (i32.const 16)))
               (v128.load (i32.add (local.get $rec) (i32.sub (local.get $len) (i32.const 16))))))
           (then (return (i32.const 0))))))
-    (i32.and (i32.shr_u (local.get $entry) (i32.const 13)) (i32.const 63)))
+    (i32.and (i32.shr_u (local.get $entry) (i32.const 14)) (i32.const 31)))
 
   ;; Return the word's group value, or -1 if the word or value is absent.
   ;; See keyword-table.value. Signed 16-bit group values follow the
@@ -1232,7 +1255,8 @@
   ;; Recognize `${`, `$name`, or a plain `$`. Inside a nested string
   ;; ($nested), keep `${` as text.
   ;; $dialect 8 escapes `$$` (Scala). Bit 16 allows `.name` segments
-  ;; (Groovy). Neither permits `$` in names. Dialect 0 (Kotlin/Dart) does.
+  ;; (Groovy). No dialect permits `$` in names: Kotlin and Dart (dialect 0)
+  ;; end `$a$b` at the second `$`.
   ;; Return -1 after emitting `${` as punctuation.special. Otherwise return
   ;; the start of the body's bytes that are not yet emitted.
   (func $stringDollarAt (param $seg i32) (param $dialect i32) (param $nested i32) (result i32)
@@ -1257,13 +1281,13 @@
         (global.set $ptr (i32.add (global.get $ptr) (i32.const 2)))
         (call $emitTok (enum.get $Token.string.escape) (local.get $at) (global.get $ptr))
         (return (global.get $ptr))))
-    (if (call $lexIsIdentStart (local.get $c2))
+    (if (i32.and (call $lexIsIdentStart (local.get $c2)) (i32.ne (local.get $c2) (i32.const "$")))
       (then
         (call $emitTok (enum.get $Token.string) (local.get $seg) (global.get $ptr))
         (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
         (block $nameDone
           (loop $name
-            (call $scanIdentRun (select (i32.const "_") (i32.const "$") (local.get $dialect)))
+            (call $scanIdentRun (i32.const "_"))
             (br_if $nameDone
               (i32.eqz
                 (i32.and

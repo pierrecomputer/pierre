@@ -1,7 +1,8 @@
+import { findSimdCallersWithoutSimd } from '@pierre/wat-tools';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { HighlightsHighlighter, langIdOf } from '../lib/highlighter';
+import { HighlightsHighlighter, inputPtr, langIdOf } from '../lib/highlighter';
 import type { Lang } from '../lib/index';
 import {
   generateLanguages,
@@ -22,40 +23,52 @@ const common = transformWat(
   commonUrl,
   `(module
     (import "../src/common.wat")
-    (keyword-table $Test $mem.cWords $mem.cppWords
+    (keyword-table $Test $mem.laterWordsFree $mem.languageNames
       ${words.map((word) => `(group ${word.length} "${word}")`).join('\n')})
     (func (export "lookup") (param $n i32) (result i32)
-      (keyword-table.value $Test (i32.const 65536)
-        (i32.add (i32.const 65536) (local.get $n))))
+      (keyword-table.value $Test (i32.const $mem.input)
+        (i32.add (i32.const $mem.input) (local.get $n))))
     (func (export "lower") (param $n i32) (result i32)
-      (call $lexLowerCopy (i32.const 65536)
-        (i32.add (i32.const 65536) (local.get $n))
+      (call $lexLowerCopy (i32.const $mem.input)
+        (i32.add (i32.const $mem.input) (local.get $n))
         (i32.const $mem.lexLowerScratch)))
-    (global (export "scratch") i32 (i32.const $mem.lexLowerScratch)))`
+    (global (export "scratch") i32 (i32.const $mem.lexLowerScratch))
+    (global (export "input") i32 (i32.const $mem.input)))`
 );
 const instance = new WebAssembly.Instance(
   new WebAssembly.Module(wat2wasm(commonUrl.pathname, common.code))
 );
-const { memory, lookup, lower, scratch } = instance.exports as {
+const {
+  memory,
+  lookup,
+  lower,
+  scratch,
+  input: inputAt,
+} = instance.exports as {
   memory: WebAssembly.Memory;
   lookup: (length: number) => number;
   lower: (length: number) => number;
   scratch: WebAssembly.Global;
+  input: WebAssembly.Global;
 };
 const bytes = new Uint8Array(memory.buffer);
 const enc = new TextEncoder();
+
+void test('lib/highlighter.ts writes input at $mem.input', () => {
+  assert.equal(inputPtr, Number(inputAt.value));
+});
 
 void test('keyword SIMD compares every byte at lengths 2 through 31', () => {
   for (const word of words) {
     const input = enc.encode(word);
     for (const padding of [0, 0xff]) {
-      bytes.fill(padding, 65536, 65600);
-      bytes.set(input, 65536);
+      bytes.fill(padding, inputPtr, inputPtr + 64);
+      bytes.set(input, inputPtr);
       assert.equal(lookup(input.length), input.length, word);
       for (let i = 0; i < input.length; i++) {
-        bytes[65536 + i] ^= 32;
+        bytes[inputPtr + i] ^= 32;
         assert.equal(lookup(input.length), -1, `${word}, byte ${i}`);
-        bytes[65536 + i] ^= 32;
+        bytes[inputPtr + i] ^= 32;
       }
     }
   }
@@ -70,7 +83,7 @@ void test('lowercase SIMD preserves non-letters and stays inside scratch', () =>
     for (let first = 0; first < 256; first += 16) {
       const input = Uint8Array.from({ length }, (_, i) => (first + i) & 255);
       bytes.fill(0xa5, dst, dst + 80);
-      bytes.set(input, 65536);
+      bytes.set(input, inputPtr);
       assert.equal(lower(length), length > 31 ? 0 : length);
       if (length <= 31) {
         assert.deepEqual(
@@ -110,10 +123,74 @@ void test(
   }
 );
 
+void test('live state hashing and comparison ignore bytes beyond the state', () => {
+  const url = new URL('../src/highlights.wat', import.meta.url);
+  // Public highlighter exports would keep every lexer alive during optimization.
+  const code = transformWat(url)
+    .code.replace(/\(export "(?!memory")[^"]+"\)/g, '')
+    .replace(
+      /\)\s*$/,
+      '(export "hash" (func $lvHash)) (export "equal" (func $lvBytesEq)))'
+    );
+  const wasm = wat2wasm(url.pathname, code);
+  for (const binary of [wasm, optimizeWasm(wasm)]) {
+    const instance = new WebAssembly.Instance(new WebAssembly.Module(binary), {
+      env: { is_id_start: assert.fail, is_id_continue: assert.fail },
+    });
+    const { memory, hash, equal } = instance.exports as {
+      memory: WebAssembly.Memory;
+      hash: (ptr: number, length: number) => bigint;
+      equal: (a: number, b: number, length: number) => number;
+    };
+    const bytes = new Uint8Array(memory.buffer);
+    const a = bytes.length - 160;
+    const b = bytes.length - 80;
+    for (let length = 0; length <= 64; length++) {
+      for (const alignment of [0, 1, 7]) {
+        const input = Uint8Array.from(
+          { length },
+          (_, i) => (i * 37 + 129) & 255
+        );
+        bytes.fill(0xa5, a, b);
+        bytes.fill(0x5a, b);
+        bytes.set(input, a + alignment);
+        bytes.set(input, b + alignment);
+        let expected = 0xcbf29ce484222325n;
+        for (let at = 0; at < length; at += 8) {
+          let lane = 0n;
+          for (let i = 0; i < Math.min(8, length - at); i++)
+            lane |= BigInt(input[at + i]) << BigInt(i * 8);
+          expected = BigInt.asUintN(64, (expected ^ lane) * 0x100000001b3n);
+        }
+        expected = BigInt.asUintN(
+          64,
+          (expected ^ (expected >> 33n)) * 0xff51afd7ed558ccdn
+        );
+        expected = BigInt.asUintN(
+          64,
+          (expected ^ (expected >> 33n)) * 0xc4ceb9fe1a85ec53n
+        );
+        expected ^= expected >> 33n;
+        assert.equal(hash(a + alignment, length), BigInt.asIntN(64, expected));
+        assert.equal(hash(b + alignment, length), BigInt.asIntN(64, expected));
+        assert.equal(equal(a + alignment, b + alignment, length), 1);
+        for (let i = 0; i < length; i++) {
+          bytes[b + alignment + i] ^= 0xff;
+          assert.equal(equal(a + alignment, b + alignment, length), 0);
+          bytes[b + alignment + i] ^= 0xff;
+        }
+      }
+    }
+    assert.equal(hash(bytes.length, 0), hash(a, 0));
+    assert.equal(equal(bytes.length, bytes.length, 0), 1);
+    assert.equal(equal(bytes.length - 16, bytes.length - 16, 16), 1);
+  }
+});
+
 // JavaScriptCore compiles a function with the SIMD register convention only
 // when the function's own bytecode uses SIMD, but its optimizing tier inlines
 // small callees. Without the marker the build adds (markSimdReachers in
-// scripts/build.ts), a lexer that inlined a scanner kept the scanner's vector
+// @pierre/wat-tools), a lexer that inlined a scanner kept the scanner's vector
 // constants in callee-saved registers across calls and lost their upper
 // halves on Bun 1.4. The invariant is local - every direct caller of a SIMD
 // function uses SIMD itself, through an instruction or a v128 local - and
@@ -131,41 +208,10 @@ void test(
       ['preprocessed source', code],
       ['optimized module', optimized],
     ] as const) {
-      const usesSimd =
-        /\b(?:v128|[if](?:8x16|16x8|32x4|64x2))\.|\(local\b[^()]*\bv128\b/;
-      const imported = (text.match(/\(import\b[^\n]*\(func\b/g) ?? []).length;
-      const funcs: { name: string; body: string }[] = [];
-      const starts = [...text.matchAll(/^\s*\(func(?:\s+(\$[^\s()]+))?/gm)];
-      for (const [i, m] of starts.entries()) {
-        const end = starts[i + 1]?.index ?? text.length;
-        funcs.push({
-          name: m[1] ?? `#${i + imported}`,
-          body: text.slice(m.index, end).replace(/"(?:[^"\\]|\\.)*"/g, '""'),
-        });
-      }
-      assert.ok(funcs.length > 300, `${label}: found the module functions`);
-      const simd = new Set(
-        funcs.flatMap((f, i) =>
-          usesSimd.test(f.body) ? [f.name, `#${i + imported}`] : []
-        )
-      );
-      assert.ok(simd.size > 40, `${label}: found the SIMD scanners`);
-      for (const f of funcs) {
-        if (simd.has(f.name)) continue;
-        const callees = [...f.body.matchAll(/\bcall\s+(\$[^\s()]+|\d+)/g)].map(
-          (m) => (/^\d+$/.test(m[1]) ? `#${m[1]}` : m[1])
-        );
-        const simdCallee = callees.find((c) => simd.has(c));
-        assert.equal(
-          simdCallee,
-          undefined,
-          `${label}: ${f.name} calls ${simdCallee} without using SIMD`
-        );
-        assert.ok(
-          !/\bcall_indirect\b/.test(f.body),
-          `${label}: ${f.name} uses call_indirect without using SIMD`
-        );
-      }
+      const { functions, simd, violations } = findSimdCallersWithoutSimd(text);
+      assert.ok(functions > 300, `${label}: found the module functions`);
+      assert.ok(simd > 40, `${label}: found the SIMD scanners`);
+      assert.deepEqual(violations, [], label);
     }
   }
 );
@@ -262,6 +308,8 @@ const synthetic = (body: string) =>
       (global $streamDepth (mut i32) (i32.const 0))
       (global $streamReset (mut i32) (i32.const 0))
       (global $streamWindow (mut i32) (i32.const 0))
+      (global $streamStateLo (mut i32) (i32.const 0))
+      (global $streamStateHi (mut i32) (i32.const 0))
       (const $mem.streamState 8864)
       (const $mem.bashWords 10144)
       (const $mem.byteSets 1424)

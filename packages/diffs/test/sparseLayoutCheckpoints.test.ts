@@ -1,16 +1,19 @@
-import { describe, expect, test } from 'bun:test';
+import { describe, expect, spyOn, test } from 'bun:test';
 
 import { VirtualizedFile } from '../src/components/VirtualizedFile';
 import { VirtualizedFileDiff } from '../src/components/VirtualizedFileDiff';
 import { DEFAULT_VIRTUAL_FILE_METRICS } from '../src/constants';
 import type {
   FileContents,
+  LineAnnotation,
   RenderRange,
   RenderWindow,
   VirtualFileMetrics,
 } from '../src/types';
+import { FILE_ANNOTATION_DOM_KEY } from '../src/utils/includesFileAnnotations';
 import { iterateOverDiff } from '../src/utils/iterateOverDiff';
 import { parseDiffFromFile } from '../src/utils/parseDiffFromFile';
+import { installDom, waitFor } from './domHarness';
 
 const metrics: VirtualFileMetrics & { hunkSeparatorHeight: number } = {
   ...DEFAULT_VIRTUAL_FILE_METRICS,
@@ -45,34 +48,11 @@ interface InspectableVirtualizedFile {
     fileAnnotationHeight: number;
   };
   renderRange: RenderRange | undefined;
-  fileContainer: HTMLElement | undefined;
-  code: HTMLElement | undefined;
   computeRenderRangeFromWindow(
     file: FileContents,
     fileTop: number,
     window: RenderWindow
   ): RenderRange;
-}
-
-class FakeHTMLElement {
-  public children: FakeHTMLElement[] = [];
-  public dataset: Record<string, string> = {};
-  public nextElementSibling: FakeHTMLElement | undefined;
-
-  constructor(private readonly getHeight = () => 0) {}
-
-  public append(...elements: FakeHTMLElement[]): void {
-    for (const [index, element] of elements.entries()) {
-      element.nextElementSibling = elements[index + 1];
-      this.children.push(element);
-    }
-  }
-
-  public getBoundingClientRect(): DOMRect {
-    return { height: this.getHeight() } as DOMRect;
-  }
-
-  public remove(): void {}
 }
 
 function inspectFile(instance: VirtualizedFile): InspectableVirtualizedFile {
@@ -97,67 +77,75 @@ function createLargeFile(name = 'large.txt'): FileContents {
   };
 }
 
-function createRenderRange(startingLine = 0): RenderRange {
-  return {
-    startingLine,
-    totalLines: metrics.hunkLineCount,
-    bufferBefore: 0,
-    bufferAfter: 0,
-  };
-}
-
-function installFakeHTMLElement() {
-  const originalValues = {
-    HTMLElement: Reflect.get(globalThis, 'HTMLElement'),
-  };
-
-  Object.assign(globalThis, {
-    HTMLElement: FakeHTMLElement,
+// Render a large plain-text file through the real pipeline. Row heights come
+// from each rendered row's type, so reconciliation measures actual DOM.
+async function createRenderedFileFixture(
+  lineAnnotations: LineAnnotation<undefined>[]
+) {
+  const dom = installDom();
+  const file = createLargeFile();
+  let window: RenderWindow = { top: 0, bottom: 100 };
+  let fileAnnotationHeight = 25;
+  const instance: VirtualizedFile = new VirtualizedFile(
+    {},
+    {
+      ...virtualizerBase,
+      getWindowSpecs: () => window,
+      markDOMDirty() {},
+      requestHeightReconcile() {},
+      instanceChanged() {
+        instance.onRender(true);
+      },
+    } as never,
+    metrics
+  );
+  const fileContainer = document.createElement('div');
+  document.body.appendChild(fileContainer);
+  const rects = spyOn(
+    HTMLElement.prototype,
+    'getBoundingClientRect'
+  ).mockImplementation(function (this: HTMLElement) {
+    const height =
+      this.dataset.lineAnnotation === FILE_ANNOTATION_DOM_KEY
+        ? fileAnnotationHeight
+        : 'lineIndex' in this.dataset
+          ? metrics.lineHeight
+          : 0;
+    return { height } as DOMRect;
   });
+  const render = (nextAnnotations?: LineAnnotation<undefined>[]) =>
+    instance.render({ file, fileContainer, lineAnnotations: nextAnnotations });
+  const hasFileAnnotationRow = () =>
+    fileContainer.shadowRoot?.querySelector(
+      `[data-line-annotation="${FILE_ANNOTATION_DOM_KEY}"]`
+    ) != null;
+
+  render(lineAnnotations);
+  await waitFor(
+    () => fileContainer.shadowRoot?.querySelector('[data-code]') != null
+  );
 
   return {
+    instance,
+    render,
+    hasFileAnnotationRow,
+    setFileAnnotationHeight(height: number) {
+      fileAnnotationHeight = height;
+    },
+    scrollTo(top: number) {
+      window = { top, bottom: top + 100 };
+      render();
+    },
     cleanup() {
-      for (const [key, value] of Object.entries(originalValues)) {
-        if (value === undefined) {
-          Reflect.deleteProperty(globalThis, key);
-        } else {
-          Object.assign(globalThis, { [key]: value });
-        }
-      }
+      rects.mockRestore();
+      instance.cleanUp();
+      dom.cleanup();
     },
   };
 }
 
-function createMeasuredFileCode(
-  lineIndex: string,
-  getMeasuredHeight: () => number
-): HTMLElement {
-  const code = new FakeHTMLElement();
-  const gutter = new FakeHTMLElement();
-  const content = new FakeHTMLElement();
-  const line = new FakeHTMLElement(getMeasuredHeight);
-  line.dataset.lineIndex = lineIndex;
-  content.append(line);
-  code.append(gutter, content);
-  return code as unknown as HTMLElement;
-}
-
-function createMeasuredFileCodeWithFileLevelAnnotation(
-  lineIndex: string,
-  getAnnotationHeight: () => number,
-  getMeasuredHeight: () => number
-): HTMLElement {
-  const code = new FakeHTMLElement();
-  const gutter = new FakeHTMLElement();
-  const content = new FakeHTMLElement();
-  const annotation = new FakeHTMLElement(getAnnotationHeight);
-  const line = new FakeHTMLElement(getMeasuredHeight);
-  annotation.dataset.lineAnnotation = '-1,-1';
-  line.dataset.lineIndex = lineIndex;
-  content.append(annotation, line);
-  code.append(gutter, content);
-  return code as unknown as HTMLElement;
-}
+const unannotatedFileHeight =
+  metrics.diffHeaderHeight + 12_000 * metrics.lineHeight + metrics.spacing;
 
 describe('sparse layout checkpoints', () => {
   test('iterateOverDiff windowing matches full iteration for a deep expanded window', () => {
@@ -324,51 +312,28 @@ describe('sparse layout checkpoints', () => {
     expect(range.bufferBefore).toBe(0);
   });
 
-  test('VirtualizedFile applies measured file-level annotation height', () => {
-    const { cleanup } = installFakeHTMLElement();
+  test('VirtualizedFile applies measured file-level annotation height', async () => {
+    const fixture = await createRenderedFileFixture([{ lineNumber: 0 }]);
     try {
-      const file = createLargeFile();
-      const instance = new VirtualizedFile({}, virtualizer, metrics);
-      let annotationHeight = 25;
-
-      instance.updateCodeViewLayout(file, 0, undefined, [{ lineNumber: 0 }]);
-      inspectFile(instance).renderRange = createRenderRange();
-      inspectFile(instance).fileContainer =
-        new FakeHTMLElement() as unknown as HTMLElement;
-      inspectFile(instance).code =
-        createMeasuredFileCodeWithFileLevelAnnotation(
-          '0',
-          () => annotationHeight,
-          () => metrics.lineHeight
-        );
-
-      expect(instance.getVirtualizedHeight()).toBe(
-        metrics.diffHeaderHeight + 12_000 * metrics.lineHeight + metrics.spacing
-      );
+      const { instance } = fixture;
+      expect(fixture.hasFileAnnotationRow()).toBe(true);
+      expect(instance.getVirtualizedHeight()).toBe(unannotatedFileHeight);
       expect(inspectFile(instance).cache.fileAnnotationHeight).toBe(0);
+
       expect(instance.reconcileHeights()).toBe(true);
-      expect(instance.getVirtualizedHeight()).toBe(
-        metrics.diffHeaderHeight +
-          25 +
-          12_000 * metrics.lineHeight +
-          metrics.spacing
-      );
+      expect(instance.getVirtualizedHeight()).toBe(unannotatedFileHeight + 25);
       expect(inspectFile(instance).cache.fileAnnotationHeight).toBe(25);
 
-      annotationHeight = metrics.lineHeight;
-
+      fixture.setFileAnnotationHeight(metrics.lineHeight);
       expect(instance.reconcileHeights()).toBe(true);
       expect(instance.getVirtualizedHeight()).toBe(
-        metrics.diffHeaderHeight +
-          metrics.lineHeight +
-          12_000 * metrics.lineHeight +
-          metrics.spacing
+        unannotatedFileHeight + metrics.lineHeight
       );
       expect(inspectFile(instance).cache.fileAnnotationHeight).toBe(
         metrics.lineHeight
       );
     } finally {
-      cleanup();
+      fixture.cleanup();
     }
   });
 
@@ -418,134 +383,59 @@ describe('sparse layout checkpoints', () => {
     });
   });
 
-  test('VirtualizedFile preserves measured file-level annotation height when the row is not rendered', () => {
-    const { cleanup } = installFakeHTMLElement();
+  test('VirtualizedFile preserves measured file-level annotation height when the row is not rendered', async () => {
+    const fixture = await createRenderedFileFixture([{ lineNumber: 0 }]);
     try {
-      const file = createLargeFile();
-      const instance = new VirtualizedFile({}, virtualizer, metrics);
-
-      instance.updateCodeViewLayout(file, 0, undefined, [{ lineNumber: 0 }]);
-      inspectFile(instance).renderRange = createRenderRange();
-      inspectFile(instance).fileContainer =
-        new FakeHTMLElement() as unknown as HTMLElement;
-      inspectFile(instance).code =
-        createMeasuredFileCodeWithFileLevelAnnotation(
-          '0',
-          () => 25,
-          () => metrics.lineHeight
-        );
-
+      const { instance } = fixture;
       expect(instance.reconcileHeights()).toBe(true);
       expect(inspectFile(instance).cache.fileAnnotationHeight).toBe(25);
 
-      inspectFile(instance).renderRange = createRenderRange(
-        metrics.hunkLineCount
-      );
-      inspectFile(instance).code = createMeasuredFileCode(
-        '1',
-        () => metrics.lineHeight
-      );
-
+      fixture.scrollTo(50_000);
+      expect(fixture.hasFileAnnotationRow()).toBe(false);
       expect(instance.reconcileHeights()).toBe(false);
       expect(inspectFile(instance).cache.fileAnnotationHeight).toBe(25);
-      expect(instance.getVirtualizedHeight()).toBe(
-        metrics.diffHeaderHeight +
-          25 +
-          12_000 * metrics.lineHeight +
-          metrics.spacing
-      );
+      expect(instance.getVirtualizedHeight()).toBe(unannotatedFileHeight + 25);
     } finally {
-      cleanup();
+      fixture.cleanup();
     }
   });
 
-  test('VirtualizedFile clears measured file-level annotation height when the expected row is missing', () => {
-    const { cleanup } = installFakeHTMLElement();
+  test('VirtualizedFile clears measured file-level annotation height when the rendered top no longer has the row', async () => {
+    const fixture = await createRenderedFileFixture([{ lineNumber: 0 }]);
     try {
-      const file = createLargeFile();
-      const instance = new VirtualizedFile({}, virtualizer, metrics);
-
-      instance.updateCodeViewLayout(file, 0, undefined, [{ lineNumber: 0 }]);
-      inspectFile(instance).renderRange = createRenderRange();
-      inspectFile(instance).fileContainer =
-        new FakeHTMLElement() as unknown as HTMLElement;
-      inspectFile(instance).code =
-        createMeasuredFileCodeWithFileLevelAnnotation(
-          '0',
-          () => 25,
-          () => metrics.lineHeight
-        );
-
+      const { instance } = fixture;
       expect(instance.reconcileHeights()).toBe(true);
       expect(inspectFile(instance).cache.fileAnnotationHeight).toBe(25);
 
-      inspectFile(instance).code = createMeasuredFileCode(
-        '0',
-        () => metrics.lineHeight
-      );
-
+      fixture.render([]);
+      expect(fixture.hasFileAnnotationRow()).toBe(false);
       expect(instance.reconcileHeights()).toBe(true);
       expect(inspectFile(instance).cache.fileAnnotationHeight).toBe(0);
-      expect(instance.getVirtualizedHeight()).toBe(
-        metrics.diffHeaderHeight + 12_000 * metrics.lineHeight + metrics.spacing
-      );
+      expect(instance.getVirtualizedHeight()).toBe(unannotatedFileHeight);
     } finally {
-      cleanup();
+      fixture.cleanup();
     }
   });
 
-  test('VirtualizedFile retains removed file-level annotation height until the top renders', () => {
-    const { cleanup } = installFakeHTMLElement();
+  test('VirtualizedFile retains removed file-level annotation height until the top renders', async () => {
+    const fixture = await createRenderedFileFixture([{ lineNumber: 0 }]);
     try {
-      const file = createLargeFile();
-      const instance = new VirtualizedFile({}, virtualizer, metrics);
-
-      instance.updateCodeViewLayout(file, 0, undefined, [{ lineNumber: 0 }]);
-      inspectFile(instance).renderRange = createRenderRange();
-      inspectFile(instance).fileContainer =
-        new FakeHTMLElement() as unknown as HTMLElement;
-      inspectFile(instance).code =
-        createMeasuredFileCodeWithFileLevelAnnotation(
-          '0',
-          () => 25,
-          () => metrics.lineHeight
-        );
-
+      const { instance } = fixture;
       expect(instance.reconcileHeights()).toBe(true);
-      expect(instance.getVirtualizedHeight()).toBe(
-        metrics.diffHeaderHeight +
-          25 +
-          12_000 * metrics.lineHeight +
-          metrics.spacing
-      );
+      expect(instance.getVirtualizedHeight()).toBe(unannotatedFileHeight + 25);
 
-      instance.updateCodeViewLayout(file, 0, undefined, [{ lineNumber: 1 }]);
-
-      expect(inspectFile(instance).cache.fileAnnotationHeight).toBe(25);
-      const retainedHeight = instance.getVirtualizedHeight();
-      inspectFile(instance).renderRange = createRenderRange(
-        metrics.hunkLineCount
-      );
-      inspectFile(instance).code = createMeasuredFileCode(
-        '1',
-        () => metrics.lineHeight
-      );
+      fixture.scrollTo(50_000);
+      fixture.render([]);
       expect(instance.reconcileHeights()).toBe(false);
       expect(inspectFile(instance).cache.fileAnnotationHeight).toBe(25);
-      expect(instance.getVirtualizedHeight()).toBe(retainedHeight);
+      expect(instance.getVirtualizedHeight()).toBe(unannotatedFileHeight + 25);
 
-      inspectFile(instance).renderRange = createRenderRange();
-      inspectFile(instance).code = createMeasuredFileCode(
-        '0',
-        () => metrics.lineHeight
-      );
+      fixture.scrollTo(0);
       expect(instance.reconcileHeights()).toBe(true);
       expect(inspectFile(instance).cache.fileAnnotationHeight).toBe(0);
-      expect(instance.getVirtualizedHeight()).toBe(
-        metrics.diffHeaderHeight + 12_000 * metrics.lineHeight + metrics.spacing
-      );
+      expect(instance.getVirtualizedHeight()).toBe(unannotatedFileHeight);
     } finally {
-      cleanup();
+      fixture.cleanup();
     }
   });
 

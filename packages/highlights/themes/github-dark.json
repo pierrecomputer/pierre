@@ -58,9 +58,22 @@
     "created": "#34d058",
     "deleted": "#ea4a5a",
     "modified": "#79b8ff",
-    "terminal.ansi.green": "#34d058",
+    "terminal.ansi.black": "#586069",
     "terminal.ansi.red": "#ea4a5a",
+    "terminal.ansi.green": "#34d058",
+    "terminal.ansi.yellow": "#ffea7f",
     "terminal.ansi.blue": "#2188ff",
+    "terminal.ansi.magenta": "#b392f0",
+    "terminal.ansi.cyan": "#39c5cf",
+    "terminal.ansi.white": "#d1d5da",
+    "terminal.ansi.bright_black": "#959da5",
+    "terminal.ansi.bright_red": "#f97583",
+    "terminal.ansi.bright_green": "#85e89d",
+    "terminal.ansi.bright_yellow": "#ffea7f",
+    "terminal.ansi.bright_blue": "#79b8ff",
+    "terminal.ansi.bright_magenta": "#b392f0",
+    "terminal.ansi.bright_cyan": "#56d4dd",
+    "terminal.ansi.bright_white": "#fafbfc",
     "syntax": {
       "boolean": {
         "color": "#79b8ff"

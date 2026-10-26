@@ -59,17 +59,33 @@ uncontrolled.
 
 <DocsCodeExample {...resolveMergeConflictExample} />
 
+### canUseWASM [toc-ignore]
+
+Check whether the current environment can run the WebAssembly that the
+`highlights` and `shiki-wasm` backends need. It returns `false` when WebAssembly
+is missing, blocked by a Content Security Policy, or lacks the SIMD support
+`highlights` requires (for example, Safari before 16.4). Use it to fall back to
+`shiki-js` when you select `highlights`. Call it where highlighting runs: in the
+browser for client components, since a server result does not describe the
+browser.
+
+<DocsCodeExample {...canUseWASM} />
+
 ### disposeHighlighter [toc-ignore]
 
-Dispose the shared Shiki highlighter instance to free memory. Useful when
-cleaning up resources in single-page applications.
+Dispose the shared highlighter instance to free memory. Useful when cleaning up
+resources in single-page applications. Once it and any instances from
+`createHighlighter()` are disposed, another backend can be loaded.
 
 <DocsCodeExample {...disposeHighlighter} />
 
 ### getSharedHighlighter [toc-ignore]
 
-Get direct access to the shared Shiki highlighter instance used internally by
-all components. Useful for custom highlighting operations.
+Get the shared highlighter instance that components use. Set
+`preferredHighlighter` to `shiki-js`, `shiki-wasm`, or `highlights` for the
+first initialization. Later requests use the active backend, even with a
+different preference. If no backend or preference exists, the default is
+`shiki-js`.
 
 <DocsCodeExample {...getSharedHighlighter} />
 
@@ -85,29 +101,51 @@ for deleted files.
 is no file to diff.
 
 If both `oldFile` and `newFile` have a `cacheKey`, the resulting
-`FileDiffMetadata` will automatically receive a combined cache key (format:
-`oldKey:newKey`). See [Render Cache](#worker-pool-render-cache) for more
-information.
+`FileDiffMetadata` will automatically receive a collision-safe cache key derived
+from both values and the line-matching mode. See
+[Render Cache](#worker-pool-render-cache) for more information.
 
-An optional `throwOnError` parameter (default: `false`) controls error handling.
-When `true`, parsing errors throw exceptions; when `false`, errors are logged to
-the console and parsing continues on a best-effort basis.
+The third argument accepts `ParseDiffOptions`: jsdiff settings such as `context`
+and `ignoreWhitespace`, plus `disableLineMatching` (default: `false`). When
+enabled, this escape hatch preserves the generated patch's change blocks and
+line order without similarity matching. It applies at parse time.
+
+Views that compute diffs accept the same `ParseDiffOptions` through
+`parseDiffOptions` (under `options` in React). This configures file-pair parsing
+and edit recomputation; it does not rewrite supplied `fileDiff` metadata.
+
+An optional fourth `throwOnError` parameter (default: `false`) controls error
+handling. When `true`, parsing errors throw exceptions; when `false`, errors are
+logged to the console and parsing continues on a best-effort basis.
 
 <DocsCodeExample {...parseDiffFromFile} />
 
 ### parsePatchFiles [toc-ignore]
 
-Parse unified diff / patch file content into structured data. Handles both
-single patches and multi-commit patch files (like those from GitHub pull request
-`.patch` URLs). An optional second parameter `cacheKeyPrefix` can be provided to
-generate cache keys for each file in the patch (format:
-`prefix-patchIndex-fileIndex`), enabling
-[caching of rendered diff results](#worker-pool-render-cache) in the worker
-pool.
+Parses a patch file string into an array of parsed patches (e.g. from GitHub
+pull request `.patch` URLs). The optional second argument is an options object:
 
-An optional `throwOnError` parameter (default: `false`) controls error handling.
-When `true`, parsing errors throw exceptions; when `false`, errors are logged to
-the console and parsing continues on a best-effort basis.
+- `disableLineMatching` (default: `false`) is an escape hatch that preserves the
+  patch's change blocks and line order without similarity matching.
+- `cacheKeyPrefix` generates cache keys for each file from the prefix, patch
+  index, file index, and matching mode, enabling
+  [caching of rendered diff results](#worker-pool-render-cache) in the worker
+  pool.
+- `throwOnError` (default: `false`) controls error handling. When `true`,
+  parsing errors throw exceptions; when `false`, errors are logged to the
+  console and parsing continues on a best-effort basis.
+
+`processPatch` accepts the same options for a single patch section.
+`processFile` also accepts `disableLineMatching` in its options. If you assign
+its `cacheKey` yourself, use different keys for different matching modes;
+explicit keys are preserved. Parser-generated keys already distinguish modes,
+and omitted/`false` retain their existing keys.
+
+`hydratePartialDiff` accepts `ParseDiffOptions` as its fourth argument. Pass the
+options used to parse the patch; components forward their `parseDiffOptions`.
+Hydration appends `:hydrated` to an existing diff key. Otherwise, changed diffs
+derive a key from both loaded file keys and `disableLineMatching`. Omitted or
+`false` preserves the existing key format.
 
 <DocsCodeExample {...parsePatchFiles} />
 
@@ -127,16 +165,35 @@ highlighting with no async loading delay.
 
 ### registerCustomTheme [toc-ignore]
 
-Register a custom Shiki theme for use with any component. The theme name you
-register must match the `name` field inside your theme JSON file.
+`registerCustomTheme(name, loader, type = 'textmate')` registers a lazy loader
+that returns a theme directly or as a module's `default` export.
+
+| Type                   | Loader result                          | Backend                    |
+| ---------------------- | -------------------------------------- | -------------------------- |
+| `'textmate'` (default) | Shiki `ThemeRegistration`              | `shiki-js` or `shiki-wasm` |
+| `'zed'`                | Highlights `Theme` or `ThemeFamily`    | `highlights`               |
+| `'diffs'`              | `DiffsTheme` with both syntax palettes | Any                        |
+
+TextMate and Diffs theme names must match the registered name. Zed themes use
+the registered name in place of their display name. A Zed family uses its first
+theme; return a specific member from the loader to select another.
+
+Register one loader per name and type. Separate TextMate and Zed loaders can
+share a name and take priority over a Diffs loader.
+
+`createCSSVariablesTheme(options)` creates a shared palette with a default
+`variablePrefix` of `--diffs-`. Pass `variablePrefix: '--shiki-'` to retain
+stylesheets written for Shiki's helper. `registerCustomCSSVariableTheme`
+registers a shared palette using `--diffs-*` variables automatically.
 
 <DocsCodeExample {...registerCustomTheme} />
 
 ### registerCustomLanguage [toc-ignore]
 
 Register a custom Shiki language loader and optionally map it to file names or
-extensions. Use this when you're working with languages not bundled by Shiki or
-want custom highlighting grammars.
+extensions. Highlights bundles its lexers and ignores custom TextMate grammars.
+Select `preferredHighlighter: 'shiki-js'` or `'shiki-wasm'` when using custom
+highlighting grammars.
 
 The grammar file or object returned by your loader has a `name` field and can
 have an `aliases` array. An alias is an additional language ID that uses the

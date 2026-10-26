@@ -284,6 +284,7 @@ void t.test(
     const html = checkInvariants(
       python.hl,
       "d = {'a': dval}\nv = a[i:jbound]\nf = lambda larg: lbody + 1\n" +
+        'w = [[1], {2: [3]}]\nn: ntype = 1\n' +
         'x: mytype = 1\nself.y: attrtype = 2\nif cond:\n    after = 1\n' +
         'm = {\n    key: mval,\n}\n' +
         'def g(pa: ptype, cb=lambda la: lb, pb: qtype = 1) -> rtype:\n' +
@@ -301,7 +302,14 @@ void t.test(
     ])
       assert.equal(wordColor(html, name), VARIABLE, name);
     // variable, attribute, parameter, and return annotations read as types
-    for (const name of ['mytype', 'attrtype', 'ptype', 'qtype', 'rtype'])
+    for (const name of [
+      'ntype',
+      'mytype',
+      'attrtype',
+      'ptype',
+      'qtype',
+      'rtype',
+    ])
       assert.equal(wordColor(html, name), TYPE, name);
     assert.equal(wordColor(html, 'contcall'), FUNCTION);
     assertLineStreamParity(

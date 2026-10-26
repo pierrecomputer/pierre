@@ -30,6 +30,7 @@ import { SplitUnified } from '../_examples/SplitUnified/SplitUnified';
 import { TOKEN_HOVER_EXAMPLE } from '../_examples/TokenHover/constants';
 import { TokenHover } from '../_examples/TokenHover/TokenHover';
 import { AgentDemoSection } from './AgentDemoSection';
+import { HighlightsBanner } from './HighlightsBanner';
 import { preloadAuiPrerenderedDiffs } from './preloadAuiDiffs';
 import { HeadingAnchors } from '@/components/docs/HeadingAnchors';
 import Footer from '@/components/Footer';
@@ -48,6 +49,7 @@ export default function Home() {
           <Hero productId={PRODUCT_ID} />
           <HeadingAnchors />
           <section className="space-y-12 pb-8">
+            <HighlightsBanner />
             <EditSection />
             <SplitUnifiedSection />
             <DiffStylesSection />

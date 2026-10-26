@@ -1,5 +1,3 @@
-import { normalizeTheme } from 'shiki/core';
-
 import type { ThemeDescriptor } from './createThemeCollection';
 import type { ThemeLoader } from './createThemeResolver';
 import type { ThemeLike } from './types';
@@ -35,7 +33,10 @@ function normalizingLoader<TTheme extends ThemeLike>(
   loader: ThemeLoader
 ): ThemeLoader<TTheme> {
   return async () => {
-    const raw = await loader();
+    const [raw, { normalizeTheme }] = await Promise.all([
+      loader(),
+      import('shiki/core'),
+    ]);
     const theme = unwrapDefault(raw);
     return normalizeTheme(theme) as unknown as TTheme;
   };

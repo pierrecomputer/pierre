@@ -520,3 +520,80 @@ void t.test('lisp: exponent markers, character escapes, and banners', () => {
     [')', 'punctuation.bracket'],
   ]);
 });
+
+void t.test(
+  'lisp: Racket booleans, keyword arguments, regexes, and #lang',
+  () => {
+    const code =
+      '#lang racket/base\n(define (greet name #:loud? [loud #f])\n  (if loud #true (regexp-match #px"\\\\d+" name)))\n(list #t #false #rx#"b" #tab)';
+    assertLineFedParity('racket', code);
+    assert.deepEqual(tokenKinds('rkt', code), tokenKinds('lisp', code));
+    assert.deepEqual(tokenKinds('racket', code), [
+      ['#lang racket/base', 'preproc'],
+      ['(', 'punctuation.bracket'],
+      ['define', 'keyword.declaration'],
+      ['(', 'punctuation.bracket'],
+      ['greet', 'function.definition'],
+      ['name', 'variable'],
+      ['#:loud?', 'string.special.symbol'],
+      ['[', 'punctuation.bracket'],
+      ['loud', 'variable'],
+      ['#f', 'boolean'],
+      ['])', 'punctuation.bracket'],
+      ['(', 'punctuation.bracket'],
+      ['if', 'keyword'],
+      ['loud', 'variable'],
+      ['#true', 'boolean'],
+      ['(', 'punctuation.bracket'],
+      ['regexp-match', 'function'],
+      ['#px"', 'string.regex'],
+      ['\\\\', 'string.escape'],
+      ['d+"', 'string.regex'],
+      ['name', 'variable'],
+      [')))', 'punctuation.bracket'],
+      ['(', 'punctuation.bracket'],
+      ['list', 'function'],
+      ['#t #false', 'boolean'],
+      ['#rx#"b"', 'string.regex'],
+      // other words after `#` keep the reader-macro split
+      ['#', 'punctuation.special'],
+      ['tab', 'variable'],
+      [')', 'punctuation.bracket'],
+    ]);
+  }
+);
+
+void t.test(
+  'lisp: uninterned symbols and multi-line regexes stream line-fed',
+  () => {
+    assert.deepEqual(tokenKinds('lisp', '(defpackage #:shop (:use #:cl))'), [
+      ['(', 'punctuation.bracket'],
+      ['defpackage', 'keyword.declaration'],
+      ['#:shop', 'string.special.symbol'],
+      ['(', 'punctuation.bracket'],
+      [':use #:cl', 'string.special.symbol'],
+      ['))', 'punctuation.bracket'],
+    ]);
+    for (const code of [
+      '(f #rx"one\ntwo")\n(g #t)\n',
+      '#lang racket\n(f #:k 1)\n',
+      '#lan\n#lang\n(f)\n',
+    ]) {
+      assertLineFedParity('lisp', code);
+    }
+    for (const src of [
+      '#t',
+      '#f',
+      '#true',
+      '#fals',
+      '#:',
+      '#rx',
+      '#rx#',
+      '#px"',
+      '#lang',
+      '#lang ',
+    ]) {
+      checkInvariants(lexer.hl, src);
+    }
+  }
+);

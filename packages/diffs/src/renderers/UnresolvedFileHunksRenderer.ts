@@ -93,11 +93,6 @@ export class UnresolvedFileHunksRenderer<
     this.options = options;
   }
 
-  // SELF_REVIEW: I don't love how this is hooked up with `renderDiff` right
-  // now, so we definitely need to figure out what the fuck we are gonna do
-  // about it...
-  // I think at the very least we should keep it like annotations, and just
-  // sorta assume there's a disconnect there
   public setConflictState(
     conflictActions: (MergeConflictDiffAction | undefined)[],
     markerRows: MergeConflictMarkerRow[],
@@ -152,7 +147,7 @@ export class UnresolvedFileHunksRenderer<
       this.syncInjectedRows(
         this.pendingConflictActions,
         this.pendingMarkerRows,
-        diff
+        this.getDiffForNextRender(diff)
       );
     }
     return super.renderDiff(diff, renderRange);

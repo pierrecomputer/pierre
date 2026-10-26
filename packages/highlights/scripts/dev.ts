@@ -47,7 +47,7 @@ async function rebuild(): Promise<void> {
 
 /** Poll source metadata so edits also rebuild on filesystems without watch events. */
 function poll(): void {
-  const paths = ['tsdown.config.ts', 'tsconfig.json'];
+  const paths = ['tsdown.config.ts', 'tsconfig.json', '../wat-tools/index.ts'];
   for (const dir of ['src', 'lib', 'themes', 'scripts']) {
     for (const name of readdirSync(`${cwd}/${dir}`, {
       recursive: true,
@@ -71,7 +71,9 @@ function poll(): void {
     for (const path of new Set([...files.keys(), ...next.keys()])) {
       if (files.get(path) === next.get(path)) continue;
       pending = true;
-      generate ||= /^(src|themes|scripts)\//.test(path);
+      generate ||=
+        path === '../wat-tools/index.ts' ||
+        /^(src|themes|scripts)\//.test(path);
     }
   }
   files = next;

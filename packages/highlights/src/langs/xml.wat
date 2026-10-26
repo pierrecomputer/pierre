@@ -327,35 +327,47 @@
                 (call $emitTok (enum.get $Token.none) (local.get $lhs) (global.get $ptr))))
             (br $next)))
 
-        ;; Exact, case-sensitive XML openers.
-        (if
-          (i32.and
-            (i32.le_u (i32.add (global.get $ptr) (i32.const 4)) (global.get $end))
-            (i32.eq (i32.load (global.get $ptr)) (i32.const "<!--")))
+        ;; Exact, case-sensitive XML openers, told apart by the byte after `<`.
+        (local.set $c
+          (select
+            (i32.load8_u offset=1 (global.get $ptr))
+            (i32.const 0)
+            (i32.lt_u (i32.add (global.get $ptr) (i32.const 1)) (global.get $end))))
+        (if (i32.eq (local.get $c) (i32.const "!"))
           (then
-            (call $xmlSection
-              (local.get $lhs)
-              (i32.const 4)
-              (i32.const 1)
-              (enum.get $Token.comment))
-            (br $next)))
-        (if
-          (i32.and
-            (i32.le_u (i32.add (global.get $ptr) (i32.const 9)) (global.get $end))
-            (i32.and
-              (i64.eq (i64.load (global.get $ptr)) (i64.const "<![CDATA"))
-              (i32.eq (i32.load8_u offset=8 (global.get $ptr)) (i32.const "["))))
-          (then
-            (call $xmlSection
-              (local.get $lhs)
-              (i32.const 9)
-              (i32.const 2)
-              (enum.get $Token.text.literal))
-            (br $next)))
-        (if
-          (i32.and
-            (i32.le_u (i32.add (global.get $ptr) (i32.const 2)) (global.get $end))
-            (i32.eq (i32.and (i32.load (global.get $ptr)) (i32.const 0xffff)) (i32.const "<?")))
+            (if
+              (i32.and
+                (i32.le_u (i32.add (global.get $ptr) (i32.const 4)) (global.get $end))
+                (i32.eq (i32.load (global.get $ptr)) (i32.const "<!--")))
+              (then
+                (call $xmlSection
+                  (local.get $lhs)
+                  (i32.const 4)
+                  (i32.const 1)
+                  (enum.get $Token.comment))
+                (br $next)))
+            (if
+              (i32.le_u (i32.add (global.get $ptr) (i32.const 9)) (global.get $end))
+              (then
+                (if
+                  (i32.and
+                    (i64.eq (i64.load (global.get $ptr)) (i64.const "<![CDATA"))
+                    (i32.eq (i32.load8_u offset=8 (global.get $ptr)) (i32.const "[")))
+                  (then
+                    (call $xmlSection
+                      (local.get $lhs)
+                      (i32.const 9)
+                      (i32.const 2)
+                      (enum.get $Token.text.literal))
+                    (br $next)))
+                (if
+                  (i32.and
+                    (i64.eq (i64.load (global.get $ptr)) (i64.const "<!DOCTYP"))
+                    (i32.eq (i32.load8_u offset=8 (global.get $ptr)) (i32.const "E")))
+                  (then
+                    (call $xmlDoctype (local.get $lhs))
+                    (br $next)))))))
+        (if (i32.eq (local.get $c) (i32.const "?"))
           (then
             (call $xmlSection
               (local.get $lhs)
@@ -363,23 +375,11 @@
               (i32.const 3)
               (enum.get $Token.preproc))
             (br $next)))
-        (if
-          (i32.and
-            (i32.le_u (i32.add (global.get $ptr) (i32.const 9)) (global.get $end))
-            (i32.and
-              (i64.eq (i64.load (global.get $ptr)) (i64.const "<!DOCTYP"))
-              (i32.eq (i32.load8_u offset=8 (global.get $ptr)) (i32.const "E"))))
-          (then
-            (call $xmlDoctype (local.get $lhs))
-            (br $next)))
 
         ;; Ordinary tags. XML names are emitted verbatim and compared nowhere,
         ;; so `<Foo>` and `<foo>` remain distinct and raw-text HTML rules never apply.
         (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
-        (if
-          (i32.and
-            (i32.lt_u (global.get $ptr) (global.get $end))
-            (i32.eq (i32.load8_u (global.get $ptr)) (i32.const "/")))
+        (if (i32.eq (local.get $c) (i32.const "/"))
           (then (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))))
         (local.set $name (global.get $ptr))
         (if

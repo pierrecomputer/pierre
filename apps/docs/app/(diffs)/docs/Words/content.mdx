@@ -1,0 +1,231 @@
+## Words
+
+`@pierre/words` renders Markdown as HTML or ANSI with a WebAssembly Text (WAT)
+parser. It supports CommonMark 0.31.2, GFM 0.29, and footnotes. The core has no
+runtime dependencies. React and syntax highlighting are optional.
+
+Try the [Words demo](/words), or select an API:
+
+| Task                                   | Entry point                | API                                |
+| -------------------------------------- | -------------------------- | ---------------------------------- |
+| Display Markdown in React              | `@pierre/words/react`      | `Markdown`                         |
+| Update a DOM container                 | `@pierre/words/html`       | `createDomRenderer()`              |
+| Produce HTML with hooks and URL checks | `@pierre/words/html`       | `createHtmlRenderer()`             |
+| Produce HTML or terminal bytes         | `@pierre/words`            | `renderToHtml()`, `renderToAnsi()` |
+| Read completed and pending HTML        | `@pierre/words`            | `createHtmlSession()`              |
+| Highlight fenced code                  | `@pierre/words/highlights` | `createHighlightsPlugin()`         |
+
+### Installation
+
+<DocsCodeExample {...wordsInstall} />
+
+The package runs in Node.js, browsers, and Cloudflare Workers. Imports select
+the runtime loader and initialize WebAssembly. All render calls are synchronous
+after import. Normal use needs no `init()` call.
+
+Install `react` for the React component. Install `@pierre/highlights` for the
+code plugin. Both are optional peer dependencies. The core entry point loads
+neither package.
+
+### Build with agents
+
+Install the
+[Words skill](https://github.com/pierrecomputer/pierre/tree/main/skills/words)
+to give your agent the API reference and integration recipes:
+
+<DocsCodeExample {...wordsSkill} />
+
+The skill covers React, HTML, DOM updates, byte output, and code plugins. Agents
+can also read the [plain-text docs](/llms-full.txt).
+
+### React
+
+Pass the full Markdown string as `children` on every update. Set `isAnimating`
+to `true` while text arrives, then set it to `false` after the final update.
+
+<DocsCodeExample {...wordsReact} />
+
+While the stream is active, Words completes unfinished emphasis, code, and links
+for display. It hides unfinished images. The final update renders the source
+without these repairs.
+
+Import `@pierre/words/styles.css` for Markdown styles, code controls, fades, and
+the caret. Fades apply to new text only during an active stream. Reduced motion
+or a zero duration disables fades.
+
+| Prop                                 | Default       | Behavior                                                                 |
+| ------------------------------------ | ------------- | ------------------------------------------------------------------------ |
+| `children`                           | `''`          | Full Markdown string.                                                    |
+| `mode`                               | `'streaming'` | Use `'static'` for content that never streams.                           |
+| `isAnimating`                        | `false`       | Marks the stream active when `mode` is `'streaming'`.                    |
+| `parseIncompleteMarkdown`            | `true`        | Repairs unfinished syntax during an active stream.                       |
+| `animated`                           | `false`       | Use `true` or `{ animation: 'fadeIn', duration: 180 }` for fades.        |
+| `caret`                              | None          | Use `'block'` or `'circle'` during an active stream.                     |
+| `onAnimationStart`, `onAnimationEnd` | None          | Callbacks for the stream's active state, separate from individual fades. |
+
+The component also accepts the shared HTML options below and standard `div`
+attributes, such as `className`. React supplies a unique `idPrefix` by default.
+The component supports server output and hydration. Keep the initial source and
+options consistent between server and client.
+
+### Syntax highlighting
+
+Install `@pierre/highlights`, then create the plugin outside the component so
+updates reuse it:
+
+<DocsCodeExample {...wordsHighlights} />
+
+Pass a theme object from `@pierre/highlights/themes`, not a theme name. The
+plugin accepts `theme` or `themes` and the Highlights HTML theme options. See
+[Highlights themes](#highlights-themes).
+
+Unsupported languages render as plain code. An open fence uses an incremental
+tokenizer. The renderer releases it when the fence closes or disappears. The
+same `plugins` object works with the HTML and DOM renderers.
+
+### HTML and DOM
+
+`createHtmlRenderer(options)` produces HTML strings with URL checks, element
+filters, code controls, and hooks. It does not need React or a browser.
+
+<DocsCodeExample {...wordsHtml} />
+
+Call `render(source, incomplete, active = false)` with the full source. The
+second argument is required. Set it to `true` for incomplete-syntax repairs. Set
+`active` to `true` while a stream is active, then render once with both flags
+`false` when it ends.
+
+The result contains `html`, `stable`, `addition`, `pending`, `reset`, and
+`revision`, as described under HTML sessions below. Call `dispose()` when the
+renderer is no longer needed. This releases any live code highlighter.
+
+`configure(next)` replaces the complete options object and resets cached output.
+Supply a distinct `idPrefix` for each document with footnotes on the same page.
+The HTML and DOM APIs use an empty prefix by default.
+
+Use `createDomRenderer(root, options)` to patch a DOM container:
+
+<DocsCodeExample {...wordsDom} />
+
+`update(source, incomplete, active = false, animated = false, caret?)` takes the
+full source. `animated` accepts the same values as the React prop. `caret`
+accepts `'block'` or `'circle'`.
+
+Call `connect()` to attach code controls and fade handlers. Call `disconnect()`
+when the container leaves the page. It removes handlers and releases live code
+resources. The DOM renderer adds `data-markdown="root"` to the container. For
+HTML strings, add that attribute to your own wrapper to use the stylesheet.
+
+### HTML options and hooks
+
+These options apply to `Markdown`, `createHtmlRenderer()`, and
+`createDomRenderer()`:
+
+| Option               | Default                     | Behavior                                                                     |
+| -------------------- | --------------------------- | ---------------------------------------------------------------------------- |
+| `components`         | None                        | Hooks for generated HTML elements.                                           |
+| `plugins.code`       | None                        | Code highlighter.                                                            |
+| `plugins.renderers`  | None                        | Custom code block renderers, selected by language.                           |
+| `controls`           | `true`                      | Code copy and download buttons. Also accepts `{ code: { copy, download } }`. |
+| `lineNumbers`        | `true`                      | Code line numbers.                                                           |
+| `allowedElements`    | None                        | Allow only these element names.                                              |
+| `disallowedElements` | None                        | Remove these element names. Use only one element list.                       |
+| `unwrapDisallowed`   | `false`                     | Keep the children of filtered elements.                                      |
+| `urlTransform`       | Default URL check           | Transform each `href` or `src` before URL validation.                        |
+| `idPrefix`           | Empty, or a unique React id | Prefix generated footnote ids and references.                                |
+
+Hooks take and return HTML strings. They do not return React elements. Use
+element names such as `a` and `h2`, or `inlineCode` for inline code alone.
+
+<DocsCodeExample {...wordsHooks} />
+
+A `plugins.code.highlight({ code, language, isIncomplete })` hook returns
+escaped HTML for the inside of `code`, or `null` for plain text. A code plugin
+can also provide `createSession()` with `highlight()` and `dispose()` methods
+for incremental updates.
+
+Each `plugins.renderers` entry has `language`, a string or string array, and
+`render({ code, language, isIncomplete })`. Its result replaces the entire code
+block. Custom renderers take priority over the code highlighter.
+
+### HTML safety
+
+The React, HTML, and DOM renderers omit raw HTML and reject unsafe URL schemes.
+A custom `urlTransform` runs before mandatory URL validation. Return `null` or
+`undefined` to remove a URL. Invalid links lose their destination. Invalid
+images disappear.
+
+External HTTP and HTTPS images remain allowed. Use `urlTransform`, as above, to
+block image requests, or filter the `img` element.
+
+Hooks and plugins are trusted code. Their output follows element filters and can
+introduce new markup. Escape untrusted text with `escapeHtml()` from
+`@pierre/words/html` before you place it in custom HTML.
+
+The core byte API and HTML sessions do not perform these URL checks. Sanitize
+their output before you insert untrusted Markdown into a page. `skipHtml` alone
+is not a sanitizer.
+
+### HTML and ANSI bytes
+
+`renderToHtml()` and `renderToAnsi()` accept a string, `Uint8Array`, or
+`ArrayBuffer`. Byte input uses UTF-8. Both functions return a `Uint8Array` view
+of shared WebAssembly memory.
+
+<DocsCodeExample {...wordsCore} />
+
+Decode or copy each result before any later render. This also applies to session
+renders. A later call can overwrite the bytes, and memory growth can detach the
+view.
+
+| HTML option   | Default | Behavior                                            |
+| ------------- | ------- | --------------------------------------------------- |
+| `skipHtml`    | `false` | Omit raw HTML.                                      |
+| `incomplete`  | `false` | Repair common unfinished inline syntax for display. |
+| `frontmatter` | `false` | Parse YAML frontmatter and return `[meta, output]`. |
+
+`renderToHtml()` preserves raw HTML by default. It does not sanitize HTML or
+validate link and image URLs.
+
+`renderToAnsi(input, { width })` wraps terminal text at the specified column.
+The default, `0`, leaves line wraps to the terminal. Control characters in
+Markdown become U+FFFD, so input cannot inject terminal escape sequences.
+
+#### Frontmatter
+
+Set `frontmatter: true` to parse an initial YAML block and remove it from the
+HTML output:
+
+<DocsCodeExample {...wordsFrontmatter} />
+
+Metadata can be any JSON value, not only an object. It is `null` when there is
+no frontmatter. `renderToHtml<T>()` describes the expected metadata type but
+does not validate it at runtime.
+
+### HTML sessions
+
+`createHtmlSession()` tracks a document across updates and returns HTML strings.
+Pass the full source, not just the newest chunk:
+
+<DocsCodeExample {...wordsSession} />
+
+| Field      | Meaning                                           |
+| ---------- | ------------------------------------------------- |
+| `html`     | Full HTML, assembled on first read.               |
+| `stable`   | Completed blocks.                                 |
+| `addition` | HTML completed since the previous revision.       |
+| `pending`  | HTML that can still change.                       |
+| `reset`    | The previous completed prefix is no longer valid. |
+| `revision` | Output version.                                   |
+
+Use `addition` only for consecutive revisions without a reset. After a reset or
+a skipped revision, replace the completed prefix with `stable`. Replace the
+pending part on each update. The DOM renderer handles these rules for you.
+
+Sessions reuse completed blocks on append. Edits, a change to `incomplete`, or
+link and footnote definitions can force a full render. A long open paragraph
+still needs a new parse on every update. Sessions omit raw HTML but do not
+validate URLs. Their string results remain valid after later renders.
+
+Math, Mermaid, CJK extensions, and remark or rehype plugins are not built in.
+Use HTML hooks or a custom code renderer for application-specific output.

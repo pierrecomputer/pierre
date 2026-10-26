@@ -2,6 +2,7 @@ import { afterAll, describe, expect, spyOn, test } from 'bun:test';
 
 import { File } from '../src/components/File';
 import { DEFAULT_THEMES } from '../src/constants';
+import type { EditorKeymap } from '../src/editor/command';
 import { Editor } from '../src/editor/editor';
 import { DirectionForward, DirectionNone } from '../src/editor/selection';
 import { disposeHighlighter } from '../src/highlighter/shared_highlighter';
@@ -55,6 +56,7 @@ type EditableSelection = Parameters<
 
 interface CreateEditorFixtureOptions {
   contents?: string;
+  keymap?: EditorKeymap;
   platform?: string;
   selections?: EditableSelection[];
 }
@@ -62,7 +64,12 @@ interface CreateEditorFixtureOptions {
 async function createEditorFixture(
   options: CreateEditorFixtureOptions = {}
 ): Promise<EditorFixture> {
-  const { contents = 'line 1', platform = 'MacIntel', selections } = options;
+  const {
+    contents = 'line 1',
+    keymap,
+    platform = 'MacIntel',
+    selections,
+  } = options;
   const dom = installDom({ navigator: { platform } });
   const fileContainer = document.createElement('div');
   document.body.appendChild(fileContainer);
@@ -75,7 +82,7 @@ async function createEditorFixture(
     name: 'editor.ts',
     contents,
   };
-  const editor = new Editor('file');
+  const editor = new Editor('file', { keymap });
 
   file.render({
     file: initialFile,
@@ -336,6 +343,131 @@ describe('Editor keyboard editing', () => {
         {
           start: { line: 0, character: 0 },
           end: { line: 1, character: 4 },
+          direction: DirectionForward,
+        },
+      ]);
+    } finally {
+      cleanup();
+    }
+  });
+
+  test('moves and extends every caret by word with Windows Ctrl+Arrow', async () => {
+    const { cleanup, content, editor, window } = await createEditorFixture({
+      contents: 'alpha beta.gamma\nfoo bar',
+      platform: 'Win32',
+      selections: [
+        {
+          start: { line: 0, character: 0 },
+          end: { line: 0, character: 0 },
+          direction: 'none',
+        },
+        {
+          start: { line: 1, character: 0 },
+          end: { line: 1, character: 0 },
+          direction: 'none',
+        },
+      ],
+    });
+
+    try {
+      const move = dispatchKeydown(window, content, {
+        key: 'ArrowRight',
+        ctrlKey: true,
+      });
+      expect(move.defaultPrevented).toBe(true);
+      expect(editor.getViewState().selections).toEqual([
+        {
+          start: { line: 0, character: 5 },
+          end: { line: 0, character: 5 },
+          direction: DirectionNone,
+        },
+        {
+          start: { line: 1, character: 3 },
+          end: { line: 1, character: 3 },
+          direction: DirectionNone,
+        },
+      ]);
+
+      const extend = dispatchKeydown(window, content, {
+        key: 'ArrowRight',
+        ctrlKey: true,
+        shiftKey: true,
+      });
+      expect(extend.defaultPrevented).toBe(true);
+      expect(editor.getViewState().selections).toEqual([
+        {
+          start: { line: 0, character: 5 },
+          end: { line: 0, character: 10 },
+          direction: DirectionForward,
+        },
+        {
+          start: { line: 1, character: 3 },
+          end: { line: 1, character: 7 },
+          direction: DirectionForward,
+        },
+      ]);
+
+      const unrelated = dispatchKeydown(window, content, {
+        key: 'ArrowRight',
+        ctrlKey: true,
+        altKey: true,
+      });
+      expect(unrelated.defaultPrevented).toBe(false);
+    } finally {
+      cleanup();
+    }
+  });
+
+  test('moves left by word with Linux Ctrl+ArrowLeft', async () => {
+    const { cleanup, content, editor, window } = await createEditorFixture({
+      contents: 'alpha beta.gamma',
+      platform: 'Linux x86_64',
+    });
+
+    try {
+      const event = dispatchKeydown(window, content, {
+        key: 'ArrowLeft',
+        ctrlKey: true,
+      });
+
+      expect(event.defaultPrevented).toBe(true);
+      expect(editor.getViewState().selections).toEqual([
+        {
+          start: { line: 0, character: 11 },
+          end: { line: 0, character: 11 },
+          direction: DirectionNone,
+        },
+      ]);
+    } finally {
+      cleanup();
+    }
+  });
+
+  test('lets a custom keymap override Ctrl+Arrow word moves', async () => {
+    const { cleanup, content, editor, window } = await createEditorFixture({
+      contents: 'alpha beta',
+      keymap: [{ bindings: { 'ctrl+ArrowRight': 'selectAll' } }],
+      platform: 'Win32',
+      selections: [
+        {
+          start: { line: 0, character: 0 },
+          end: { line: 0, character: 0 },
+          direction: 'none',
+        },
+      ],
+    });
+
+    try {
+      const event = dispatchKeydown(window, content, {
+        key: 'ArrowRight',
+        ctrlKey: true,
+      });
+
+      expect(event.defaultPrevented).toBe(true);
+      expect(editor.getViewState().selections).toEqual([
+        {
+          start: { line: 0, character: 0 },
+          end: { line: 0, character: 10 },
           direction: DirectionForward,
         },
       ]);

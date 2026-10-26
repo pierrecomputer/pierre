@@ -1,3 +1,4 @@
+import { AnsiState, ansiTokens, isAnsi } from './ansi';
 import type {
   CodeToHtmlOptions,
   CodeToTokensOptions,
@@ -26,6 +27,7 @@ const enc = new TextEncoder();
 const dec = new TextDecoder('utf-8', { ignoreBOM: true });
 const pageSize = 65536;
 const themePtr = 64; // $mem.themeTable in src/memory.wat
+export const inputPtr = 81920; // $mem.input in src/memory.wat; wasm_test checks it
 // Unicode identifier classes for the ECMAScript lexers; see #idClass.
 const idClassRegex = [/^\p{ID_Start}$/u, /^[\u200C\u200D\p{ID_Continue}]$/u];
 let idClassCache: Uint8Array | undefined;
@@ -43,10 +45,11 @@ export function langIdOf(lang: string): number {
 }
 
 /**
- * Check whether a name or alias has a built-in lexer, including `plain`/`text`.
+ * Check whether a name or alias has a built-in lexer, including `plain`/`text`,
+ * or is `ansi`.
  */
 export function isSupportedLanguage(lang: string): lang is Lang {
-  return typeof LANGS[String(lang).toLowerCase()] === 'number';
+  return typeof LANGS[String(lang).toLowerCase()] === 'number' || isAnsi(lang);
 }
 
 export class HighlightsHighlighter implements Highlighter {
@@ -87,7 +90,7 @@ export class HighlightsHighlighter implements Highlighter {
       this.#growMemoryIfNeeded(offset + input.length + 96);
       let { read, written } = enc.encodeInto(
         input,
-        this.buffer.subarray(pageSize + offset, this.buffer.length - 96)
+        this.buffer.subarray(inputPtr + offset, this.buffer.length - 96)
       );
       if (read < input.length) {
         const rest = input.slice(read);
@@ -95,7 +98,7 @@ export class HighlightsHighlighter implements Highlighter {
         written += enc.encodeInto(
           rest,
           this.buffer.subarray(
-            pageSize + offset + written,
+            inputPtr + offset + written,
             this.buffer.length - 96
           )
         ).written;
@@ -109,7 +112,7 @@ export class HighlightsHighlighter implements Highlighter {
       throw new TypeError('input must be a string, Uint8Array, or ArrayBuffer');
     }
     this.#growMemoryIfNeeded(offset + input.length + 96);
-    this.buffer.set(input, pageSize + offset);
+    this.buffer.set(input, inputPtr + offset);
     return input.length;
   }
 
@@ -127,7 +130,7 @@ export class HighlightsHighlighter implements Highlighter {
     this.dv.setUint8(0, langId);
     this.dv.setUint8(1, mode);
     this.dv.setUint32(2, inputLength, true);
-    this.buffer[pageSize + inputLength] = 0; // NUL sentinel: lexers treat byte 0 at EOF as end
+    this.buffer[inputPtr + inputLength] = 0; // NUL sentinel: lexers treat byte 0 at EOF as end
     try {
       if (reset === undefined) this.#highlight();
       else this.#highlightStream(reset);
@@ -144,9 +147,44 @@ export class HighlightsHighlighter implements Highlighter {
     input: string | Uint8Array | ArrayBuffer,
     options: CodeToHtmlOptions
   ): Uint8Array {
-    const langId = langIdOf(options.lang);
     const cssVariablePrefix =
       options.cssVariablePrefix ?? defaultCssVariablePrefix;
+    if (isAnsi(options.lang)) {
+      const themes = resolveOptionThemes(options);
+      const { fg, bg, rootStyle } = themeMeta(themes, cssVariablePrefix);
+      const code = toCode(input);
+      // Tag a single theme as inline so every token gets `htmlStyle`.
+      const lines = ansiTokens(
+        code,
+        themes[0].role === 'single'
+          ? [{ ...themes[0], role: 'default' }]
+          : themes,
+        cssVariablePrefix
+      );
+      let html = `<pre class="highlights" style="${escapeAttribute(
+        rootStyle ??
+          (bg === undefined ? '' : `background-color:${bg};`) +
+            (fg === undefined ? '' : `color:${fg}`)
+      )}"><code>`;
+      for (let i = 0, lf = -1; i < lines.length; i++) {
+        if (i > 0) {
+          lf = code.indexOf('\n', lf + 1);
+          html += code.charCodeAt(lf - 1) === 13 ? '\r\n' : '\n';
+        }
+        for (const { content, htmlStyle } of lines[i]) {
+          let css = '';
+          for (const property in htmlStyle) {
+            css += `${css === '' ? '' : ';'}${property}:${htmlStyle[property]}`;
+          }
+          html += `<span style="${escapeAttribute(css)}">${content
+            .replaceAll('&', '&amp;')
+            .replaceAll('<', '&lt;')
+            .replaceAll('>', '&gt;')}</span>`;
+        }
+      }
+      return enc.encode(`${html}</code></pre>`);
+    }
+    const langId = langIdOf(options.lang);
     let table: Uint8Array | undefined;
     let blob: Uint8Array | undefined;
     let mode = 0;
@@ -167,7 +205,7 @@ export class HighlightsHighlighter implements Highlighter {
     const inputLength = this.writeInput(input);
     if (blob !== undefined) {
       this.#growMemoryIfNeeded(inputLength + blob.length + 96);
-      const blobPtr = (pageSize + inputLength + 47) & ~15;
+      const blobPtr = (inputPtr + inputLength + 47) & ~15;
       this.buffer.set(blob, blobPtr);
       this.dv.setUint32(14, blobPtr, true);
       this.dv.setUint32(18, blob.length, true);
@@ -178,7 +216,7 @@ export class HighlightsHighlighter implements Highlighter {
       }
       const bytes = this.#htmlPrefixBytes;
       this.#growMemoryIfNeeded(inputLength + bytes.length + 96);
-      const prefixPtr = (pageSize + inputLength + 47) & ~15;
+      const prefixPtr = (inputPtr + inputLength + 47) & ~15;
       this.buffer.set(bytes, prefixPtr);
       this.dv.setUint32(14, prefixPtr, true);
       this.dv.setUint32(18, bytes.length, true);
@@ -233,23 +271,29 @@ export class HighlightsHighlighter implements Highlighter {
     const themes = resolveOptionThemes(options);
     const cssVariablePrefix =
       options.cssVariablePrefix ?? defaultCssVariablePrefix;
-    const recs = this.tokenizeLineRecords(
-      langIdOf(options.lang),
-      this.writeInput(input)
-    );
-    const tokens = lineRecordsToTokens(
-      code,
-      recs,
-      themes,
-      cssVariablePrefix,
-      options.tokenizeMaxLineLength
-    );
+    const tokens = isAnsi(options.lang)
+      ? ansiTokens(
+          code,
+          themes,
+          cssVariablePrefix,
+          options.tokenizeMaxLineLength
+        )
+      : lineRecordsToTokens(
+          code,
+          this.tokenizeLineRecords(
+            langIdOf(options.lang),
+            this.writeInput(input)
+          ),
+          themes,
+          cssVariablePrefix,
+          options.tokenizeMaxLineLength
+        );
     return { tokens, ...themeMeta(themes, cssVariablePrefix) };
   }
 
   /** Grow the wasm linear memory if needed. */
   #growMemoryIfNeeded(len: number): void {
-    const neededPages = 1 + Math.ceil(len / pageSize);
+    const neededPages = Math.ceil((inputPtr + len) / pageSize);
     if (neededPages > this.pageN) {
       this.memory.grow(neededPages - this.pageN);
       this.bindMemory();
@@ -356,7 +400,9 @@ export function init(wasm: WebAssembly.Module): Highlighter {
  * Create a highlighter with its own WebAssembly instance.
  * The shared highlighter is unchanged.
  */
-export function createHighlighter(wasmModule: WebAssembly.Module): Highlighter {
+export function createHighlighter(
+  wasmModule: WebAssembly.Module = assertWasmModule()
+): Highlighter {
   return new HighlightsHighlighter(wasmModule);
 }
 
@@ -396,6 +442,7 @@ export class StreamTokenizer extends TransformStream<
 > {
   #hl: HighlightsHighlighter | undefined;
   #langId: number;
+  #ansi: AnsiState | undefined;
   #themes: ResolvedTheme[];
   #cssVariablePrefix: string;
   #maxLineLength: number | undefined;
@@ -428,7 +475,8 @@ export class StreamTokenizer extends TransformStream<
 
     // validate the options before taking the pooled instance so a rejected
     // language or theme leaves the pool intact
-    this.#langId = langIdOf(options.lang);
+    this.#ansi = isAnsi(options.lang) ? new AnsiState() : undefined;
+    this.#langId = this.#ansi === undefined ? langIdOf(options.lang) : 0;
     this.#themes = resolveOptionThemes(options);
     const compiledWasm = assertWasmModule();
     this.#hl =
@@ -565,22 +613,34 @@ export class StreamTokenizer extends TransformStream<
     // Replacement characters must reach Wasm as valid UTF-8 for matching offsets.
     if (typeof input !== 'string' && code.includes('\ufffd')) input = code;
     code = prefix + code;
-    let byteLen = prefix === '' ? 0 : hl.writeInput(prefix);
-    byteLen += hl.writeInput(input, byteLen);
-    const recs = hl.tokenizeLineRecords(
-      this.#langId,
-      byteLen,
-      !this.#streamStarted
-    );
-    this.#streamStarted = true;
-    const lines = lineRecordsToTokens(
-      code,
-      recs,
-      this.#themes,
-      this.#cssVariablePrefix,
-      this.#maxLineLength,
-      this.#streamChar
-    );
+    let lines: ThemedToken[][];
+    if (this.#ansi === undefined) {
+      let byteLen = prefix === '' ? 0 : hl.writeInput(prefix);
+      byteLen += hl.writeInput(input, byteLen);
+      const recs = hl.tokenizeLineRecords(
+        this.#langId,
+        byteLen,
+        !this.#streamStarted
+      );
+      this.#streamStarted = true;
+      lines = lineRecordsToTokens(
+        code,
+        recs,
+        this.#themes,
+        this.#cssVariablePrefix,
+        this.#maxLineLength,
+        this.#streamChar
+      );
+    } else {
+      lines = ansiTokens(
+        code,
+        this.#themes,
+        this.#cssVariablePrefix,
+        this.#maxLineLength,
+        this.#ansi,
+        this.#streamChar
+      );
+    }
     this.#streamChar += code.length;
     return lines;
   }

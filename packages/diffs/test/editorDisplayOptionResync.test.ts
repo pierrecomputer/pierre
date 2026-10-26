@@ -567,7 +567,7 @@ describe('diff editor: detach then re-attach', () => {
         diffStyle: 'split',
       },
       undefined,
-      true
+      () => undefined
     );
 
     let remountedFileDiff: FileDiff<undefined> | undefined;
@@ -619,7 +619,7 @@ describe('diff editor: detach then re-attach', () => {
           diffStyle: 'split',
         },
         undefined,
-        true
+        () => undefined
       );
       remountedFileDiff.render({
         oldFile: { ...oldFile, cacheKey: 'old:reset' },

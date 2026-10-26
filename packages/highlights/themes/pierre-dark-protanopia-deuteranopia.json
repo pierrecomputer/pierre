@@ -16,9 +16,22 @@
     "created": "#97c4ff",
     "deleted": "#fe8c2c",
     "modified": "#009fff",
-    "terminal.ansi.green": "#69b1ff",
+    "terminal.ansi.black": "#171717",
     "terminal.ansi.red": "#ffa359",
+    "terminal.ansi.green": "#69b1ff",
+    "terminal.ansi.yellow": "#ffd452",
     "terminal.ansi.blue": "#009fff",
+    "terminal.ansi.magenta": "#b969f3",
+    "terminal.ansi.cyan": "#68cdf2",
+    "terminal.ansi.white": "#bcbcbc",
+    "terminal.ansi.bright_black": "#171717",
+    "terminal.ansi.bright_red": "#ffba82",
+    "terminal.ansi.bright_green": "#97c4ff",
+    "terminal.ansi.bright_yellow": "#ffde80",
+    "terminal.ansi.bright_blue": "#69b1ff",
+    "terminal.ansi.bright_magenta": "#ce90f7",
+    "terminal.ansi.bright_cyan": "#96d9f6",
+    "terminal.ansi.bright_white": "#bcbcbc",
     "syntax": {
       "comment": {
         "color": "#737373"

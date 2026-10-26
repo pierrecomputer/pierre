@@ -1,7 +1,9 @@
+import type { HighlighterCore } from 'shiki/core';
 import { type IGrammar, type StateStack } from 'shiki/textmate';
 
 import { TextDocument } from '../src/editor/textDocument';
 import { EditorTokenizer } from '../src/editor/tokenizer';
+import { ShikiEditorTokenizer } from '../src/highlighter/shiki-editor';
 import type { DiffsHighlighter, RenderRange } from '../src/types';
 
 interface BenchmarkConfig {
@@ -206,7 +208,7 @@ function createTokenizer(
       };
     },
   } as unknown as IGrammar;
-  const highlighter = {
+  const raw = {
     getLanguage: () => grammar,
     getLoadedLanguages: () => ['typescript'],
     getTheme: () => ({ colors: {} }),
@@ -217,6 +219,18 @@ function createTokenizer(
         theme: { name: themeName, type: 'dark' },
       };
     },
+  } as unknown as HighlighterCore;
+  const highlighter = {
+    getTheme: (name: string) => ({
+      name,
+      type: 'dark',
+      colors: {},
+      fg: '',
+      bg: '',
+    }),
+    createEditorTokenizer: (
+      options: Parameters<DiffsHighlighter['createEditorTokenizer']>[0]
+    ) => new ShikiEditorTokenizer(raw, options),
   } as unknown as DiffsHighlighter;
   return new EditorTokenizer({
     highlighter,

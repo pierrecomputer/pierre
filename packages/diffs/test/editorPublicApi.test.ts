@@ -58,17 +58,17 @@ interface EditorFixture {
 
 class TestFileDiff extends FileDiff<undefined> {
   getCurrentDiff(): FileDiffMetadata | undefined {
-    return this.getLatestDiff();
+    return this.getWorkingDiff();
   }
 
   getCurrentType(): FileDiffMetadata['type'] | undefined {
-    return this.getLatestDiff()?.type;
+    return this.getWorkingDiff()?.type;
   }
 }
 
 class TestFile extends File<undefined> {
   getCurrentFile(): FileContents | undefined {
-    return this.getLatestFile();
+    return this.getWorkingFile();
   }
 }
 

@@ -298,7 +298,7 @@ export function ReviewSurface() {
         renderHeaderMetadata={(item) =>
           item.type === 'diff' ? <span>{item.fileDiff.type}</span> : <span>file</span>
         }
-        renderAnnotation={(annotation, item) => (
+        renderAnnotation={(annotation, _fileOrDiff, item) => (
           <div>
             Note for {item.id} on line {annotation.lineNumber}
           </div>

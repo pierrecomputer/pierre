@@ -47,6 +47,7 @@ const DIFFS_SECTIONS = [
   'Installation',
   'BuildWithAgents',
   'CoreTypes',
+  'Highlighters',
   'ReactAPI',
   'VanillaAPI',
   'CodeView',
@@ -60,6 +61,7 @@ const DIFFS_SECTIONS = [
   'WorkerPool',
   'SSR',
   'HighlightsHighlighter',
+  'Words',
 ] as const;
 
 const TREES_SECTIONS = [
@@ -92,6 +94,8 @@ const SECTION_DESCRIPTIONS: Record<string, Record<string, string>> = {
       'The diffs agent skill, a paste-ready prompt for agents without skill support, and the plain-text docs',
     CoreTypes:
       'FileContents, FileDiffMetadata, and creating diffs from files or patches',
+    Highlighters:
+      'Choosing Shiki or Highlights for components, SSR, and worker pools',
     ReactAPI:
       'React components for CodeView, diffs, files, UnresolvedFile, EditProvider, and shared props',
     VanillaAPI:
@@ -113,7 +117,9 @@ const SECTION_DESCRIPTIONS: Record<string, Record<string, string>> = {
       'Off-main-thread syntax highlighting with configurable worker pools',
     SSR: 'Server-side rendering with preload functions for instant first paint',
     HighlightsHighlighter:
-      'Highlights APIs, themes, languages, streaming, and incremental editing',
+      'Highlights installation, agent skill, APIs, themes, languages, streaming, and incremental editing',
+    Words:
+      'Markdown to HTML and ANSI, React and DOM renderers, streaming, code plugins, and content controls',
   },
   trees: {
     Overview:
@@ -374,7 +380,6 @@ const LABEL_OVERRIDES: Record<string, string> = {
   SSR_USAGE_CLIENT: 'Client Component',
   THEMING_REGISTER_THEME: 'Registering Custom Themes',
   THEMING_USE_IN_COMPONENT: 'Using Custom Themes in Components',
-  WORKER_POOL_USAGE: 'Basic Usage',
 };
 
 const LABEL_PREFIXES_TO_STRIP = [
@@ -386,6 +391,7 @@ const LABEL_PREFIXES_TO_STRIP = [
   'STYLING_CODE_',
   'THEMING_',
   'HIGHLIGHTS_',
+  'WORDS_',
   'VIRTUALIZATION_',
   'OVERVIEW_',
   'TREES_',

@@ -13,11 +13,16 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { useTheme } from '@/components/theme-provider';
 import { ButtonGroup, ButtonGroupItem } from '@/components/ui/button-group';
+import { getPreferredHighlighter } from '@/lib/preferredHighlighter';
 import { useOnValueChange } from '@/lib/useOnValueChange';
 import { cn } from '@/lib/utils';
 
-// Preload themes at module level for earliest possible start
+// Preload themes at module level for earliest possible start. The server keeps
+// its default highlighter; the browser names the docs backend so this preload
+// can't claim the shared highlighter for shiki-js.
 void preloadHighlighter({
+  preferredHighlighter:
+    typeof window !== 'undefined' ? getPreferredHighlighter() : undefined,
   themes: [
     'pierre-dark',
     'pierre-dark-soft',

@@ -1,0 +1,2180 @@
+{
+  "date": "2026-11-10T23:56:20.369Z",
+  "commit": "8b0ad8f3d8b26a86059c577f64dc1d1e7c87d239",
+  "dirty": false,
+  "bun": "1.4.0",
+  "platform": "darwin/arm64",
+  "cpu": "Apple M4 Max",
+  "memoryBytes": 137438953472,
+  "chrome": "134.0.6998.35",
+  "versions": {
+    "react": "19.2.7",
+    "streamdown": "2.7.1",
+    "@streamdown/code": "2.0.0",
+    "@playwright/test": "1.51.1"
+  },
+  "settings": {
+    "intervalMs": 40,
+    "charactersPerUpdate": "32 \u00d7 scale",
+    "viewport": {
+      "width": 1280,
+      "height": 960
+    },
+    "runs": 3,
+    "stressTimeoutMs": 180000
+  },
+  "rows": [
+    {
+      "scale": 1,
+      "mode": "plain",
+      "characters": 8524,
+      "updates": 267,
+      "words": {
+        "status": "completed",
+        "runs": 3,
+        "updateP95Ms": 1,
+        "frameP95Ms": 17.6,
+        "heapBytes": 604264,
+        "elements": 409
+      },
+      "streamdown": {
+        "status": "completed",
+        "runs": 3,
+        "updateP95Ms": 3.4,
+        "frameP95Ms": 17.6,
+        "heapBytes": 3114096,
+        "elements": 590
+      }
+    },
+    {
+      "scale": 1,
+      "mode": "highlight",
+      "characters": 8524,
+      "updates": 267,
+      "words": {
+        "status": "completed",
+        "runs": 3,
+        "updateP95Ms": 1.1,
+        "frameP95Ms": 17.6,
+        "heapBytes": 724112,
+        "elements": 929
+      },
+      "streamdown": {
+        "status": "completed",
+        "runs": 3,
+        "updateP95Ms": 3.1,
+        "frameP95Ms": 17.6,
+        "heapBytes": 3920024,
+        "elements": 950
+      }
+    },
+    {
+      "scale": 1,
+      "mode": "animated",
+      "characters": 8524,
+      "updates": 267,
+      "words": {
+        "status": "completed",
+        "runs": 3,
+        "updateP95Ms": 1.2,
+        "frameP95Ms": 17.6,
+        "heapBytes": 851100,
+        "elements": 929
+      },
+      "streamdown": {
+        "status": "completed",
+        "runs": 3,
+        "updateP95Ms": 3.5,
+        "frameP95Ms": 17.6,
+        "heapBytes": 6015860,
+        "elements": 950
+      }
+    },
+    {
+      "scale": 100,
+      "mode": "plain",
+      "characters": 852598,
+      "updates": 267,
+      "words": {
+        "status": "completed",
+        "runs": 3,
+        "updateP95Ms": 1.1,
+        "frameP95Ms": 17.5,
+        "heapBytes": 4129832,
+        "elements": 40801
+      },
+      "streamdown": {
+        "status": "completed",
+        "runs": 3,
+        "updateP95Ms": 24.7,
+        "frameP95Ms": 17.4,
+        "heapBytes": 126034308,
+        "elements": 58901
+      }
+    },
+    {
+      "scale": 100,
+      "mode": "highlight",
+      "characters": 852598,
+      "updates": 267,
+      "words": {
+        "status": "completed",
+        "runs": 3,
+        "updateP95Ms": 2,
+        "frameP95Ms": 17.6,
+        "heapBytes": 5738080,
+        "elements": 90961
+      },
+      "streamdown": {
+        "status": "completed",
+        "runs": 3,
+        "updateP95Ms": 26.9,
+        "frameP95Ms": 17.6,
+        "heapBytes": 142898232,
+        "elements": 94901
+      }
+    },
+    {
+      "scale": 100,
+      "mode": "animated",
+      "characters": 852598,
+      "updates": 267,
+      "words": {
+        "status": "completed",
+        "runs": 3,
+        "updateP95Ms": 6.8,
+        "frameP95Ms": 17.6,
+        "heapBytes": 7615916,
+        "elements": 90961
+      },
+      "streamdown": {
+        "status": "completed",
+        "runs": 3,
+        "updateP95Ms": 41.9,
+        "frameP95Ms": 83.4,
+        "heapBytes": 236601596,
+        "elements": 94901
+      }
+    }
+  ],
+  "stress": [
+    {
+      "scale": 1000,
+      "mode": "highlight",
+      "characters": 8525998,
+      "updates": 267,
+      "words": {
+        "status": "completed",
+        "runs": 1,
+        "updateP95Ms": 3.4,
+        "frameP95Ms": 133.4,
+        "heapBytes": 36014192,
+        "elements": 890281
+      },
+      "streamdown": {
+        "status": "completed",
+        "runs": 1,
+        "updateP95Ms": 226.2,
+        "frameP95Ms": 283.5,
+        "heapBytes": 1397235188,
+        "elements": 949001
+      }
+    },
+    {
+      "scale": 1000,
+      "mode": "animated",
+      "characters": 8525998,
+      "updates": 267,
+      "words": {
+        "status": "completed",
+        "runs": 1,
+        "updateP95Ms": 172.7,
+        "frameP95Ms": 200.1,
+        "heapBytes": 53893784,
+        "elements": 890281
+      },
+      "streamdown": {
+        "status": "timed-out"
+      }
+    }
+  ],
+  "download": {
+    "base": {
+      "words": 50690,
+      "streamdown": 165295
+    },
+    "shared": {
+      "words": 246996,
+      "streamdown": 1057789
+    },
+    "css": {
+      "words": 1197,
+      "streamdown": 449
+    }
+  },
+  "downloadRun": {
+    "date": "2026-11-11T00:35:02.730Z",
+    "commit": "cb5b630523ccaf2a29ca5a5a7ffba8f78fc9fd33",
+    "dirty": false,
+    "bun": "1.4.0",
+    "versions": {
+      "react": "19.2.7",
+      "streamdown": "2.7.1",
+      "@streamdown/code": "2.0.0",
+      "@playwright/test": "1.51.1",
+      "shiki": "4.4.1"
+    }
+  },
+  "runs": [
+    {
+      "library": "words",
+      "scale": 1,
+      "mode": "plain",
+      "run": 0,
+      "status": "completed",
+      "updateP95Ms": 1,
+      "frameP95Ms": 17.6,
+      "heapBytes": 604184,
+      "paragraphs": 101,
+      "fences": 1,
+      "highlightedFences": 0,
+      "textHash": "ee2703a7",
+      "elements": 409,
+      "errors": []
+    },
+    {
+      "library": "streamdown",
+      "scale": 1,
+      "mode": "plain",
+      "run": 0,
+      "status": "completed",
+      "updateP95Ms": 3.5,
+      "frameP95Ms": 17.6,
+      "heapBytes": 3114096,
+      "paragraphs": 101,
+      "fences": 1,
+      "highlightedFences": 0,
+      "textHash": "ee2703a7",
+      "elements": 590,
+      "errors": []
+    },
+    {
+      "library": "streamdown",
+      "scale": 1,
+      "mode": "plain",
+      "run": 1,
+      "status": "completed",
+      "updateP95Ms": 3.3,
+      "frameP95Ms": 17.5,
+      "heapBytes": 3113456,
+      "paragraphs": 101,
+      "fences": 1,
+      "highlightedFences": 0,
+      "textHash": "ee2703a7",
+      "elements": 590,
+      "errors": []
+    },
+    {
+      "library": "words",
+      "scale": 1,
+      "mode": "plain",
+      "run": 1,
+      "status": "completed",
+      "updateP95Ms": 1,
+      "frameP95Ms": 17.5,
+      "heapBytes": 604264,
+      "paragraphs": 101,
+      "fences": 1,
+      "highlightedFences": 0,
+      "textHash": "ee2703a7",
+      "elements": 409,
+      "errors": []
+    },
+    {
+      "library": "words",
+      "scale": 1,
+      "mode": "plain",
+      "run": 2,
+      "status": "completed",
+      "updateP95Ms": 0.9,
+      "frameP95Ms": 17.7,
+      "heapBytes": 604492,
+      "paragraphs": 101,
+      "fences": 1,
+      "highlightedFences": 0,
+      "textHash": "ee2703a7",
+      "elements": 409,
+      "errors": []
+    },
+    {
+      "library": "streamdown",
+      "scale": 1,
+      "mode": "plain",
+      "run": 2,
+      "status": "completed",
+      "updateP95Ms": 3.4,
+      "frameP95Ms": 17.7,
+      "heapBytes": 3114352,
+      "paragraphs": 101,
+      "fences": 1,
+      "highlightedFences": 0,
+      "textHash": "ee2703a7",
+      "elements": 590,
+      "errors": []
+    },
+    {
+      "library": "words",
+      "scale": 1,
+      "mode": "highlight",
+      "run": 0,
+      "status": "completed",
+      "updateP95Ms": 1.4,
+      "frameP95Ms": 17.6,
+      "heapBytes": 724124,
+      "paragraphs": 101,
+      "fences": 1,
+      "highlightedFences": 1,
+      "textHash": "ee2703a7",
+      "elements": 929,
+      "errors": []
+    },
+    {
+      "library": "streamdown",
+      "scale": 1,
+      "mode": "highlight",
+      "run": 0,
+      "status": "completed",
+      "updateP95Ms": 3.4,
+      "frameP95Ms": 17.6,
+      "heapBytes": 3920268,
+      "paragraphs": 101,
+      "fences": 1,
+      "highlightedFences": 1,
+      "textHash": "ee2703a7",
+      "elements": 950,
+      "errors": []
+    },
+    {
+      "library": "streamdown",
+      "scale": 1,
+      "mode": "highlight",
+      "run": 1,
+      "status": "completed",
+      "updateP95Ms": 2.2,
+      "frameP95Ms": 17.6,
+      "heapBytes": 3920024,
+      "paragraphs": 101,
+      "fences": 1,
+      "highlightedFences": 1,
+      "textHash": "ee2703a7",
+      "elements": 950,
+      "errors": []
+    },
+    {
+      "library": "words",
+      "scale": 1,
+      "mode": "highlight",
+      "run": 1,
+      "status": "completed",
+      "updateP95Ms": 1,
+      "frameP95Ms": 17.6,
+      "heapBytes": 724112,
+      "paragraphs": 101,
+      "fences": 1,
+      "highlightedFences": 1,
+      "textHash": "ee2703a7",
+      "elements": 929,
+      "errors": []
+    },
+    {
+      "library": "words",
+      "scale": 1,
+      "mode": "highlight",
+      "run": 2,
+      "status": "completed",
+      "updateP95Ms": 1.1,
+      "frameP95Ms": 17.6,
+      "heapBytes": 724088,
+      "paragraphs": 101,
+      "fences": 1,
+      "highlightedFences": 1,
+      "textHash": "ee2703a7",
+      "elements": 929,
+      "errors": []
+    },
+    {
+      "library": "streamdown",
+      "scale": 1,
+      "mode": "highlight",
+      "run": 2,
+      "status": "completed",
+      "updateP95Ms": 3.1,
+      "frameP95Ms": 17.6,
+      "heapBytes": 3919848,
+      "paragraphs": 101,
+      "fences": 1,
+      "highlightedFences": 1,
+      "textHash": "ee2703a7",
+      "elements": 950,
+      "errors": []
+    },
+    {
+      "library": "words",
+      "scale": 1,
+      "mode": "animated",
+      "run": 0,
+      "status": "completed",
+      "updateP95Ms": 1.2,
+      "frameP95Ms": 17.6,
+      "heapBytes": 858764,
+      "paragraphs": 101,
+      "fences": 1,
+      "highlightedFences": 1,
+      "textHash": "ee2703a7",
+      "elements": 929,
+      "errors": []
+    },
+    {
+      "library": "streamdown",
+      "scale": 1,
+      "mode": "animated",
+      "run": 0,
+      "status": "completed",
+      "updateP95Ms": 3.5,
+      "frameP95Ms": 17.6,
+      "heapBytes": 6023608,
+      "paragraphs": 101,
+      "fences": 1,
+      "highlightedFences": 1,
+      "textHash": "ee2703a7",
+      "elements": 950,
+      "errors": []
+    },
+    {
+      "library": "streamdown",
+      "scale": 1,
+      "mode": "animated",
+      "run": 1,
+      "status": "completed",
+      "updateP95Ms": 3.5,
+      "frameP95Ms": 17.6,
+      "heapBytes": 6014076,
+      "paragraphs": 101,
+      "fences": 1,
+      "highlightedFences": 1,
+      "textHash": "ee2703a7",
+      "elements": 950,
+      "errors": []
+    },
+    {
+      "library": "words",
+      "scale": 1,
+      "mode": "animated",
+      "run": 1,
+      "status": "completed",
+      "updateP95Ms": 1.2,
+      "frameP95Ms": 17.6,
+      "heapBytes": 851100,
+      "paragraphs": 101,
+      "fences": 1,
+      "highlightedFences": 1,
+      "textHash": "ee2703a7",
+      "elements": 929,
+      "errors": []
+    },
+    {
+      "library": "words",
+      "scale": 1,
+      "mode": "animated",
+      "run": 2,
+      "status": "completed",
+      "updateP95Ms": 0.9,
+      "frameP95Ms": 17.5,
+      "heapBytes": 833148,
+      "paragraphs": 101,
+      "fences": 1,
+      "highlightedFences": 1,
+      "textHash": "ee2703a7",
+      "elements": 929,
+      "errors": []
+    },
+    {
+      "library": "streamdown",
+      "scale": 1,
+      "mode": "animated",
+      "run": 2,
+      "status": "completed",
+      "updateP95Ms": 2.5,
+      "frameP95Ms": 17.6,
+      "heapBytes": 6015860,
+      "paragraphs": 101,
+      "fences": 1,
+      "highlightedFences": 1,
+      "textHash": "ee2703a7",
+      "elements": 950,
+      "errors": []
+    },
+    {
+      "library": "words",
+      "scale": 100,
+      "mode": "plain",
+      "run": 0,
+      "status": "completed",
+      "updateP95Ms": 1.1,
+      "frameP95Ms": 17.3,
+      "heapBytes": 4128864,
+      "paragraphs": 10100,
+      "fences": 100,
+      "highlightedFences": 0,
+      "textHash": "80de311d",
+      "elements": 40801,
+      "errors": []
+    },
+    {
+      "library": "streamdown",
+      "scale": 100,
+      "mode": "plain",
+      "run": 0,
+      "status": "completed",
+      "updateP95Ms": 26.3,
+      "frameP95Ms": 17.4,
+      "heapBytes": 126042340,
+      "paragraphs": 10100,
+      "fences": 100,
+      "highlightedFences": 0,
+      "textHash": "80de311d",
+      "elements": 58901,
+      "errors": []
+    },
+    {
+      "library": "streamdown",
+      "scale": 100,
+      "mode": "plain",
+      "run": 1,
+      "status": "completed",
+      "updateP95Ms": 24.7,
+      "frameP95Ms": 17.4,
+      "heapBytes": 126024244,
+      "paragraphs": 10100,
+      "fences": 100,
+      "highlightedFences": 0,
+      "textHash": "80de311d",
+      "elements": 58901,
+      "errors": []
+    },
+    {
+      "library": "words",
+      "scale": 100,
+      "mode": "plain",
+      "run": 1,
+      "status": "completed",
+      "updateP95Ms": 1.1,
+      "frameP95Ms": 17.5,
+      "heapBytes": 4129832,
+      "paragraphs": 10100,
+      "fences": 100,
+      "highlightedFences": 0,
+      "textHash": "80de311d",
+      "elements": 40801,
+      "errors": []
+    },
+    {
+      "library": "words",
+      "scale": 100,
+      "mode": "plain",
+      "run": 2,
+      "status": "completed",
+      "updateP95Ms": 1.4,
+      "frameP95Ms": 17.7,
+      "heapBytes": 4136472,
+      "paragraphs": 10100,
+      "fences": 100,
+      "highlightedFences": 0,
+      "textHash": "80de311d",
+      "elements": 40801,
+      "errors": []
+    },
+    {
+      "library": "streamdown",
+      "scale": 100,
+      "mode": "plain",
+      "run": 2,
+      "status": "completed",
+      "updateP95Ms": 23.8,
+      "frameP95Ms": 17.7,
+      "heapBytes": 126034308,
+      "paragraphs": 10100,
+      "fences": 100,
+      "highlightedFences": 0,
+      "textHash": "80de311d",
+      "elements": 58901,
+      "errors": []
+    },
+    {
+      "library": "words",
+      "scale": 100,
+      "mode": "highlight",
+      "run": 0,
+      "status": "completed",
+      "updateP95Ms": 1.5,
+      "frameP95Ms": 17.6,
+      "heapBytes": 5906856,
+      "paragraphs": 10100,
+      "fences": 100,
+      "highlightedFences": 100,
+      "textHash": "80de311d",
+      "elements": 90961,
+      "errors": []
+    },
+    {
+      "library": "streamdown",
+      "scale": 100,
+      "mode": "highlight",
+      "run": 0,
+      "status": "completed",
+      "updateP95Ms": 26.9,
+      "frameP95Ms": 17.6,
+      "heapBytes": 142282208,
+      "paragraphs": 10100,
+      "fences": 100,
+      "highlightedFences": 100,
+      "textHash": "80de311d",
+      "elements": 94901,
+      "errors": []
+    },
+    {
+      "library": "streamdown",
+      "scale": 100,
+      "mode": "highlight",
+      "run": 1,
+      "status": "completed",
+      "updateP95Ms": 27.1,
+      "frameP95Ms": 17.6,
+      "heapBytes": 142927780,
+      "paragraphs": 10100,
+      "fences": 100,
+      "highlightedFences": 100,
+      "textHash": "80de311d",
+      "elements": 94901,
+      "errors": []
+    },
+    {
+      "library": "words",
+      "scale": 100,
+      "mode": "highlight",
+      "run": 1,
+      "status": "completed",
+      "updateP95Ms": 2,
+      "frameP95Ms": 17.6,
+      "heapBytes": 5730460,
+      "paragraphs": 10100,
+      "fences": 100,
+      "highlightedFences": 100,
+      "textHash": "80de311d",
+      "elements": 90961,
+      "errors": []
+    },
+    {
+      "library": "words",
+      "scale": 100,
+      "mode": "highlight",
+      "run": 2,
+      "status": "completed",
+      "updateP95Ms": 2,
+      "frameP95Ms": 17.5,
+      "heapBytes": 5738080,
+      "paragraphs": 10100,
+      "fences": 100,
+      "highlightedFences": 100,
+      "textHash": "80de311d",
+      "elements": 90961,
+      "errors": []
+    },
+    {
+      "library": "streamdown",
+      "scale": 100,
+      "mode": "highlight",
+      "run": 2,
+      "status": "completed",
+      "updateP95Ms": 25.6,
+      "frameP95Ms": 16.8,
+      "heapBytes": 142898232,
+      "paragraphs": 10100,
+      "fences": 100,
+      "highlightedFences": 100,
+      "textHash": "80de311d",
+      "elements": 94901,
+      "errors": []
+    },
+    {
+      "library": "words",
+      "scale": 100,
+      "mode": "animated",
+      "run": 0,
+      "status": "completed",
+      "updateP95Ms": 6.8,
+      "frameP95Ms": 16.8,
+      "heapBytes": 7615916,
+      "paragraphs": 10100,
+      "fences": 100,
+      "highlightedFences": 100,
+      "textHash": "80de311d",
+      "elements": 90961,
+      "errors": []
+    },
+    {
+      "library": "streamdown",
+      "scale": 100,
+      "mode": "animated",
+      "run": 0,
+      "status": "completed",
+      "updateP95Ms": 39.5,
+      "frameP95Ms": 83.3,
+      "heapBytes": 236583772,
+      "paragraphs": 10100,
+      "fences": 100,
+      "highlightedFences": 100,
+      "textHash": "80de311d",
+      "elements": 94901,
+      "errors": []
+    },
+    {
+      "library": "streamdown",
+      "scale": 100,
+      "mode": "animated",
+      "run": 1,
+      "status": "completed",
+      "updateP95Ms": 44,
+      "frameP95Ms": 83.4,
+      "heapBytes": 236601596,
+      "paragraphs": 10100,
+      "fences": 100,
+      "highlightedFences": 100,
+      "textHash": "80de311d",
+      "elements": 94901,
+      "errors": []
+    },
+    {
+      "library": "words",
+      "scale": 100,
+      "mode": "animated",
+      "run": 1,
+      "status": "completed",
+      "updateP95Ms": 13.8,
+      "frameP95Ms": 17.6,
+      "heapBytes": 7603136,
+      "paragraphs": 10100,
+      "fences": 100,
+      "highlightedFences": 100,
+      "textHash": "80de311d",
+      "elements": 90961,
+      "errors": []
+    },
+    {
+      "library": "words",
+      "scale": 100,
+      "mode": "animated",
+      "run": 2,
+      "status": "completed",
+      "updateP95Ms": 3.5,
+      "frameP95Ms": 17.6,
+      "heapBytes": 7786248,
+      "paragraphs": 10100,
+      "fences": 100,
+      "highlightedFences": 100,
+      "textHash": "80de311d",
+      "elements": 90961,
+      "errors": []
+    },
+    {
+      "library": "streamdown",
+      "scale": 100,
+      "mode": "animated",
+      "run": 2,
+      "status": "completed",
+      "updateP95Ms": 41.9,
+      "frameP95Ms": 83.4,
+      "heapBytes": 236640324,
+      "paragraphs": 10100,
+      "fences": 100,
+      "highlightedFences": 100,
+      "textHash": "80de311d",
+      "elements": 94901,
+      "errors": []
+    },
+    {
+      "library": "words",
+      "scale": 1000,
+      "mode": "highlight",
+      "run": 0,
+      "status": "completed",
+      "updateP95Ms": 3.4,
+      "frameP95Ms": 133.4,
+      "heapBytes": 36014192,
+      "paragraphs": 101000,
+      "fences": 1000,
+      "highlightedFences": 1000,
+      "textHash": "45f16bf5",
+      "elements": 890281,
+      "errors": []
+    },
+    {
+      "library": "streamdown",
+      "scale": 1000,
+      "mode": "highlight",
+      "run": 0,
+      "status": "completed",
+      "updateP95Ms": 226.2,
+      "frameP95Ms": 283.5,
+      "heapBytes": 1397235188,
+      "paragraphs": 101000,
+      "fences": 1000,
+      "highlightedFences": 1000,
+      "textHash": "45f16bf5",
+      "elements": 949001,
+      "errors": []
+    },
+    {
+      "library": "words",
+      "scale": 1000,
+      "mode": "animated",
+      "run": 0,
+      "status": "completed",
+      "updateP95Ms": 172.7,
+      "frameP95Ms": 200.1,
+      "heapBytes": 53893784,
+      "paragraphs": 101000,
+      "fences": 1000,
+      "highlightedFences": 1000,
+      "textHash": "45f16bf5",
+      "elements": 890281,
+      "errors": []
+    },
+    {
+      "library": "streamdown",
+      "scale": 1000,
+      "mode": "animated",
+      "run": 0,
+      "status": "timed-out"
+    }
+  ],
+  "downloadCoverage": {
+    "wordsLanguages": [
+      "abap",
+      "ada",
+      "angular-html",
+      "apache",
+      "apex",
+      "applescript",
+      "asciidoc",
+      "asm",
+      "astro",
+      "awk",
+      "bash",
+      "batch",
+      "bibtex",
+      "bicep",
+      "blade",
+      "c",
+      "c3",
+      "clojure",
+      "cmake",
+      "cobol",
+      "codeowners",
+      "codeql",
+      "coffee",
+      "coq",
+      "cpp",
+      "csharp",
+      "css",
+      "csv",
+      "cuda",
+      "cypher",
+      "d",
+      "dart",
+      "dax",
+      "diff",
+      "dockerfile",
+      "dotenv",
+      "elixir",
+      "elm",
+      "erb",
+      "erlang",
+      "fish",
+      "fortran",
+      "fortran-fixed-form",
+      "fsharp",
+      "gdresource",
+      "gdscript",
+      "gdshader",
+      "gherkin",
+      "gleam",
+      "glsl",
+      "gnuplot",
+      "go",
+      "graphql",
+      "groovy",
+      "groq",
+      "hack",
+      "haml",
+      "handlebars",
+      "haskell",
+      "haxe",
+      "hlsl",
+      "html",
+      "http",
+      "ini",
+      "java",
+      "jinja",
+      "js",
+      "json",
+      "json5",
+      "jsonl",
+      "jsonnet",
+      "jsx",
+      "julia",
+      "just",
+      "kdl",
+      "kotlin",
+      "latex",
+      "lean",
+      "less",
+      "liquid",
+      "lisp",
+      "llvm",
+      "log",
+      "lua",
+      "luau",
+      "makefile",
+      "markdown",
+      "matlab",
+      "mdx",
+      "mermaid",
+      "moonbit",
+      "nginx",
+      "nim",
+      "nix",
+      "objc",
+      "ocaml",
+      "odin",
+      "openscad",
+      "pascal",
+      "perl",
+      "php",
+      "plsql",
+      "po",
+      "powerquery",
+      "powershell",
+      "prisma",
+      "prolog",
+      "promql",
+      "proto",
+      "pug",
+      "puppet",
+      "python",
+      "qml",
+      "r",
+      "razor",
+      "reg",
+      "rosmsg",
+      "rst",
+      "ruby",
+      "rust",
+      "sas",
+      "sass",
+      "scala",
+      "scss",
+      "shaderlab",
+      "solidity",
+      "sparql",
+      "sql",
+      "stata",
+      "stylus",
+      "svelte",
+      "swift",
+      "tcl",
+      "terraform",
+      "toml",
+      "ts",
+      "tsrx",
+      "tsv",
+      "tsx",
+      "turtle",
+      "twig",
+      "typst",
+      "verilog",
+      "vhdl",
+      "viml",
+      "vue",
+      "wat",
+      "wgsl",
+      "wolfram",
+      "xml",
+      "yaml",
+      "zig"
+    ],
+    "sharedLanguages": [
+      {
+        "words": "abap",
+        "streamdown": "abap",
+        "fence": "abap"
+      },
+      {
+        "words": "ada",
+        "streamdown": "ada",
+        "fence": "ada"
+      },
+      {
+        "words": "angular-html",
+        "streamdown": "angular-html",
+        "fence": "angular-html"
+      },
+      {
+        "words": "apache",
+        "streamdown": "apache",
+        "fence": "apache"
+      },
+      {
+        "words": "apex",
+        "streamdown": "apex",
+        "fence": "apex"
+      },
+      {
+        "words": "applescript",
+        "streamdown": "applescript",
+        "fence": "applescript"
+      },
+      {
+        "words": "asciidoc",
+        "streamdown": "asciidoc",
+        "fence": "asciidoc"
+      },
+      {
+        "words": "asm",
+        "streamdown": "asm",
+        "fence": "asm"
+      },
+      {
+        "words": "astro",
+        "streamdown": "astro",
+        "fence": "astro"
+      },
+      {
+        "words": "awk",
+        "streamdown": "awk",
+        "fence": "awk"
+      },
+      {
+        "words": "bash",
+        "streamdown": "shellscript",
+        "fence": "bash"
+      },
+      {
+        "words": "batch",
+        "streamdown": "bat",
+        "fence": "batch"
+      },
+      {
+        "words": "bibtex",
+        "streamdown": "bibtex",
+        "fence": "bibtex"
+      },
+      {
+        "words": "bicep",
+        "streamdown": "bicep",
+        "fence": "bicep"
+      },
+      {
+        "words": "blade",
+        "streamdown": "blade",
+        "fence": "blade"
+      },
+      {
+        "words": "c",
+        "streamdown": "c",
+        "fence": "c"
+      },
+      {
+        "words": "c3",
+        "streamdown": "c3",
+        "fence": "c3"
+      },
+      {
+        "words": "clojure",
+        "streamdown": "clojure",
+        "fence": "clojure"
+      },
+      {
+        "words": "cmake",
+        "streamdown": "cmake",
+        "fence": "cmake"
+      },
+      {
+        "words": "cobol",
+        "streamdown": "cobol",
+        "fence": "cobol"
+      },
+      {
+        "words": "codeowners",
+        "streamdown": "codeowners",
+        "fence": "codeowners"
+      },
+      {
+        "words": "codeql",
+        "streamdown": "codeql",
+        "fence": "codeql"
+      },
+      {
+        "words": "coffee",
+        "streamdown": "coffee",
+        "fence": "coffee"
+      },
+      {
+        "words": "coq",
+        "streamdown": "coq",
+        "fence": "coq"
+      },
+      {
+        "words": "cpp",
+        "streamdown": "cpp",
+        "fence": "cpp"
+      },
+      {
+        "words": "csharp",
+        "streamdown": "csharp",
+        "fence": "csharp"
+      },
+      {
+        "words": "css",
+        "streamdown": "css",
+        "fence": "css"
+      },
+      {
+        "words": "csv",
+        "streamdown": "csv",
+        "fence": "csv"
+      },
+      {
+        "words": "cypher",
+        "streamdown": "cypher",
+        "fence": "cypher"
+      },
+      {
+        "words": "d",
+        "streamdown": "d",
+        "fence": "d"
+      },
+      {
+        "words": "dart",
+        "streamdown": "dart",
+        "fence": "dart"
+      },
+      {
+        "words": "dax",
+        "streamdown": "dax",
+        "fence": "dax"
+      },
+      {
+        "words": "diff",
+        "streamdown": "diff",
+        "fence": "diff"
+      },
+      {
+        "words": "dockerfile",
+        "streamdown": "docker",
+        "fence": "dockerfile"
+      },
+      {
+        "words": "dotenv",
+        "streamdown": "dotenv",
+        "fence": "dotenv"
+      },
+      {
+        "words": "elixir",
+        "streamdown": "elixir",
+        "fence": "elixir"
+      },
+      {
+        "words": "elm",
+        "streamdown": "elm",
+        "fence": "elm"
+      },
+      {
+        "words": "erb",
+        "streamdown": "erb",
+        "fence": "erb"
+      },
+      {
+        "words": "erlang",
+        "streamdown": "erlang",
+        "fence": "erlang"
+      },
+      {
+        "words": "fish",
+        "streamdown": "fish",
+        "fence": "fish"
+      },
+      {
+        "words": "fortran",
+        "streamdown": "fortran-free-form",
+        "fence": "fortran-free-form"
+      },
+      {
+        "words": "fortran-fixed-form",
+        "streamdown": "fortran-fixed-form",
+        "fence": "fortran-fixed-form"
+      },
+      {
+        "words": "fsharp",
+        "streamdown": "fsharp",
+        "fence": "fsharp"
+      },
+      {
+        "words": "gdresource",
+        "streamdown": "gdresource",
+        "fence": "gdresource"
+      },
+      {
+        "words": "gdscript",
+        "streamdown": "gdscript",
+        "fence": "gdscript"
+      },
+      {
+        "words": "gdshader",
+        "streamdown": "gdshader",
+        "fence": "gdshader"
+      },
+      {
+        "words": "gherkin",
+        "streamdown": "gherkin",
+        "fence": "gherkin"
+      },
+      {
+        "words": "gleam",
+        "streamdown": "gleam",
+        "fence": "gleam"
+      },
+      {
+        "words": "glsl",
+        "streamdown": "glsl",
+        "fence": "glsl"
+      },
+      {
+        "words": "gnuplot",
+        "streamdown": "gnuplot",
+        "fence": "gnuplot"
+      },
+      {
+        "words": "go",
+        "streamdown": "go",
+        "fence": "go"
+      },
+      {
+        "words": "graphql",
+        "streamdown": "graphql",
+        "fence": "graphql"
+      },
+      {
+        "words": "groovy",
+        "streamdown": "groovy",
+        "fence": "groovy"
+      },
+      {
+        "words": "hack",
+        "streamdown": "hack",
+        "fence": "hack"
+      },
+      {
+        "words": "haml",
+        "streamdown": "haml",
+        "fence": "haml"
+      },
+      {
+        "words": "handlebars",
+        "streamdown": "handlebars",
+        "fence": "handlebars"
+      },
+      {
+        "words": "haskell",
+        "streamdown": "haskell",
+        "fence": "haskell"
+      },
+      {
+        "words": "haxe",
+        "streamdown": "haxe",
+        "fence": "haxe"
+      },
+      {
+        "words": "hlsl",
+        "streamdown": "hlsl",
+        "fence": "hlsl"
+      },
+      {
+        "words": "html",
+        "streamdown": "html",
+        "fence": "html"
+      },
+      {
+        "words": "http",
+        "streamdown": "http",
+        "fence": "http"
+      },
+      {
+        "words": "ini",
+        "streamdown": "ini",
+        "fence": "ini"
+      },
+      {
+        "words": "java",
+        "streamdown": "java",
+        "fence": "java"
+      },
+      {
+        "words": "jinja",
+        "streamdown": "jinja",
+        "fence": "jinja"
+      },
+      {
+        "words": "js",
+        "streamdown": "javascript",
+        "fence": "js"
+      },
+      {
+        "words": "json",
+        "streamdown": "json",
+        "fence": "json"
+      },
+      {
+        "words": "json5",
+        "streamdown": "json5",
+        "fence": "json5"
+      },
+      {
+        "words": "jsonl",
+        "streamdown": "jsonl",
+        "fence": "jsonl"
+      },
+      {
+        "words": "jsonnet",
+        "streamdown": "jsonnet",
+        "fence": "jsonnet"
+      },
+      {
+        "words": "jsx",
+        "streamdown": "jsx",
+        "fence": "jsx"
+      },
+      {
+        "words": "julia",
+        "streamdown": "julia",
+        "fence": "julia"
+      },
+      {
+        "words": "just",
+        "streamdown": "just",
+        "fence": "just"
+      },
+      {
+        "words": "kdl",
+        "streamdown": "kdl",
+        "fence": "kdl"
+      },
+      {
+        "words": "kotlin",
+        "streamdown": "kotlin",
+        "fence": "kotlin"
+      },
+      {
+        "words": "latex",
+        "streamdown": "latex",
+        "fence": "latex"
+      },
+      {
+        "words": "lean",
+        "streamdown": "lean",
+        "fence": "lean"
+      },
+      {
+        "words": "less",
+        "streamdown": "less",
+        "fence": "less"
+      },
+      {
+        "words": "liquid",
+        "streamdown": "liquid",
+        "fence": "liquid"
+      },
+      {
+        "words": "lisp",
+        "streamdown": "common-lisp",
+        "fence": "lisp"
+      },
+      {
+        "words": "llvm",
+        "streamdown": "llvm",
+        "fence": "llvm"
+      },
+      {
+        "words": "log",
+        "streamdown": "log",
+        "fence": "log"
+      },
+      {
+        "words": "lua",
+        "streamdown": "lua",
+        "fence": "lua"
+      },
+      {
+        "words": "luau",
+        "streamdown": "luau",
+        "fence": "luau"
+      },
+      {
+        "words": "makefile",
+        "streamdown": "make",
+        "fence": "makefile"
+      },
+      {
+        "words": "markdown",
+        "streamdown": "markdown",
+        "fence": "markdown"
+      },
+      {
+        "words": "matlab",
+        "streamdown": "matlab",
+        "fence": "matlab"
+      },
+      {
+        "words": "mdx",
+        "streamdown": "mdx",
+        "fence": "mdx"
+      },
+      {
+        "words": "mermaid",
+        "streamdown": "mermaid",
+        "fence": "mermaid"
+      },
+      {
+        "words": "moonbit",
+        "streamdown": "moonbit",
+        "fence": "moonbit"
+      },
+      {
+        "words": "nginx",
+        "streamdown": "nginx",
+        "fence": "nginx"
+      },
+      {
+        "words": "nim",
+        "streamdown": "nim",
+        "fence": "nim"
+      },
+      {
+        "words": "nix",
+        "streamdown": "nix",
+        "fence": "nix"
+      },
+      {
+        "words": "objc",
+        "streamdown": "objective-c",
+        "fence": "objc"
+      },
+      {
+        "words": "ocaml",
+        "streamdown": "ocaml",
+        "fence": "ocaml"
+      },
+      {
+        "words": "odin",
+        "streamdown": "odin",
+        "fence": "odin"
+      },
+      {
+        "words": "openscad",
+        "streamdown": "openscad",
+        "fence": "openscad"
+      },
+      {
+        "words": "pascal",
+        "streamdown": "pascal",
+        "fence": "pascal"
+      },
+      {
+        "words": "perl",
+        "streamdown": "perl",
+        "fence": "perl"
+      },
+      {
+        "words": "php",
+        "streamdown": "php",
+        "fence": "php"
+      },
+      {
+        "words": "plsql",
+        "streamdown": "plsql",
+        "fence": "plsql"
+      },
+      {
+        "words": "po",
+        "streamdown": "po",
+        "fence": "po"
+      },
+      {
+        "words": "powerquery",
+        "streamdown": "powerquery",
+        "fence": "powerquery"
+      },
+      {
+        "words": "powershell",
+        "streamdown": "powershell",
+        "fence": "powershell"
+      },
+      {
+        "words": "prisma",
+        "streamdown": "prisma",
+        "fence": "prisma"
+      },
+      {
+        "words": "prolog",
+        "streamdown": "prolog",
+        "fence": "prolog"
+      },
+      {
+        "words": "proto",
+        "streamdown": "proto",
+        "fence": "proto"
+      },
+      {
+        "words": "pug",
+        "streamdown": "pug",
+        "fence": "pug"
+      },
+      {
+        "words": "puppet",
+        "streamdown": "puppet",
+        "fence": "puppet"
+      },
+      {
+        "words": "python",
+        "streamdown": "python",
+        "fence": "python"
+      },
+      {
+        "words": "qml",
+        "streamdown": "qml",
+        "fence": "qml"
+      },
+      {
+        "words": "r",
+        "streamdown": "r",
+        "fence": "r"
+      },
+      {
+        "words": "razor",
+        "streamdown": "razor",
+        "fence": "razor"
+      },
+      {
+        "words": "reg",
+        "streamdown": "reg",
+        "fence": "reg"
+      },
+      {
+        "words": "rosmsg",
+        "streamdown": "rosmsg",
+        "fence": "rosmsg"
+      },
+      {
+        "words": "rst",
+        "streamdown": "rst",
+        "fence": "rst"
+      },
+      {
+        "words": "ruby",
+        "streamdown": "ruby",
+        "fence": "ruby"
+      },
+      {
+        "words": "rust",
+        "streamdown": "rust",
+        "fence": "rust"
+      },
+      {
+        "words": "sas",
+        "streamdown": "sas",
+        "fence": "sas"
+      },
+      {
+        "words": "sass",
+        "streamdown": "sass",
+        "fence": "sass"
+      },
+      {
+        "words": "scala",
+        "streamdown": "scala",
+        "fence": "scala"
+      },
+      {
+        "words": "scss",
+        "streamdown": "scss",
+        "fence": "scss"
+      },
+      {
+        "words": "shaderlab",
+        "streamdown": "shaderlab",
+        "fence": "shaderlab"
+      },
+      {
+        "words": "solidity",
+        "streamdown": "solidity",
+        "fence": "solidity"
+      },
+      {
+        "words": "sparql",
+        "streamdown": "sparql",
+        "fence": "sparql"
+      },
+      {
+        "words": "sql",
+        "streamdown": "sql",
+        "fence": "sql"
+      },
+      {
+        "words": "stata",
+        "streamdown": "stata",
+        "fence": "stata"
+      },
+      {
+        "words": "stylus",
+        "streamdown": "stylus",
+        "fence": "stylus"
+      },
+      {
+        "words": "svelte",
+        "streamdown": "svelte",
+        "fence": "svelte"
+      },
+      {
+        "words": "swift",
+        "streamdown": "swift",
+        "fence": "swift"
+      },
+      {
+        "words": "tcl",
+        "streamdown": "tcl",
+        "fence": "tcl"
+      },
+      {
+        "words": "terraform",
+        "streamdown": "terraform",
+        "fence": "terraform"
+      },
+      {
+        "words": "toml",
+        "streamdown": "toml",
+        "fence": "toml"
+      },
+      {
+        "words": "ts",
+        "streamdown": "typescript",
+        "fence": "ts"
+      },
+      {
+        "words": "tsv",
+        "streamdown": "tsv",
+        "fence": "tsv"
+      },
+      {
+        "words": "tsx",
+        "streamdown": "tsx",
+        "fence": "tsx"
+      },
+      {
+        "words": "turtle",
+        "streamdown": "turtle",
+        "fence": "turtle"
+      },
+      {
+        "words": "twig",
+        "streamdown": "twig",
+        "fence": "twig"
+      },
+      {
+        "words": "typst",
+        "streamdown": "typst",
+        "fence": "typst"
+      },
+      {
+        "words": "verilog",
+        "streamdown": "verilog",
+        "fence": "verilog"
+      },
+      {
+        "words": "vhdl",
+        "streamdown": "vhdl",
+        "fence": "vhdl"
+      },
+      {
+        "words": "viml",
+        "streamdown": "viml",
+        "fence": "viml"
+      },
+      {
+        "words": "vue",
+        "streamdown": "vue",
+        "fence": "vue"
+      },
+      {
+        "words": "wat",
+        "streamdown": "wasm",
+        "fence": "wasm"
+      },
+      {
+        "words": "wgsl",
+        "streamdown": "wgsl",
+        "fence": "wgsl"
+      },
+      {
+        "words": "wolfram",
+        "streamdown": "wolfram",
+        "fence": "wolfram"
+      },
+      {
+        "words": "xml",
+        "streamdown": "xml",
+        "fence": "xml"
+      },
+      {
+        "words": "yaml",
+        "streamdown": "yaml",
+        "fence": "yaml"
+      },
+      {
+        "words": "zig",
+        "streamdown": "zig",
+        "fence": "zig"
+      }
+    ],
+    "wordsOnlyLanguages": [
+      "cuda",
+      "groq",
+      "promql",
+      "tsrx"
+    ],
+    "streamdownLanguages": [
+      "abap",
+      "actionscript-3",
+      "ada",
+      "ahk",
+      "ahk2",
+      "angular-html",
+      "angular-ts",
+      "apache",
+      "apex",
+      "apl",
+      "applescript",
+      "ara",
+      "asciidoc",
+      "asm",
+      "astro",
+      "awk",
+      "ballerina",
+      "bat",
+      "beancount",
+      "berry",
+      "bibtex",
+      "bicep",
+      "bird2",
+      "blade",
+      "bsl",
+      "c",
+      "c3",
+      "cadence",
+      "cairo",
+      "chapel",
+      "clarity",
+      "clojure",
+      "cmake",
+      "cobol",
+      "codeowners",
+      "codeql",
+      "coffee",
+      "common-lisp",
+      "coq",
+      "cpp",
+      "crystal",
+      "csharp",
+      "css",
+      "csv",
+      "cue",
+      "cypher",
+      "d",
+      "dart",
+      "dax",
+      "desktop",
+      "diff",
+      "docker",
+      "dotenv",
+      "dream-maker",
+      "edge",
+      "elixir",
+      "elm",
+      "emacs-lisp",
+      "erb",
+      "erlang",
+      "fennel",
+      "fish",
+      "fluent",
+      "fortran-fixed-form",
+      "fortran-free-form",
+      "fsharp",
+      "gdresource",
+      "gdscript",
+      "gdshader",
+      "genie",
+      "gherkin",
+      "git-commit",
+      "git-rebase",
+      "gleam",
+      "glimmer-js",
+      "glimmer-ts",
+      "glsl",
+      "gn",
+      "gnuplot",
+      "go",
+      "graphql",
+      "groovy",
+      "hack",
+      "haml",
+      "handlebars",
+      "haskell",
+      "haxe",
+      "hcl",
+      "hjson",
+      "hlsl",
+      "html",
+      "html-derivative",
+      "http",
+      "hurl",
+      "hxml",
+      "hy",
+      "imba",
+      "ini",
+      "java",
+      "javascript",
+      "jinja",
+      "jison",
+      "json",
+      "json5",
+      "jsonc",
+      "jsonl",
+      "jsonnet",
+      "jssm",
+      "jsx",
+      "julia",
+      "just",
+      "kdl",
+      "kotlin",
+      "kusto",
+      "latex",
+      "lean",
+      "less",
+      "liquid",
+      "llvm",
+      "log",
+      "logo",
+      "lua",
+      "luau",
+      "make",
+      "markdown",
+      "marko",
+      "matlab",
+      "mdc",
+      "mdx",
+      "mermaid",
+      "mipsasm",
+      "mojo",
+      "moonbit",
+      "move",
+      "narrat",
+      "nextflow",
+      "nextflow-groovy",
+      "nginx",
+      "nim",
+      "nix",
+      "nsis",
+      "nushell",
+      "objective-c",
+      "objective-cpp",
+      "ocaml",
+      "odin",
+      "openscad",
+      "org",
+      "pascal",
+      "perl",
+      "php",
+      "pkl",
+      "plsql",
+      "po",
+      "polar",
+      "postcss",
+      "powerquery",
+      "powershell",
+      "prisma",
+      "prolog",
+      "proto",
+      "pug",
+      "puppet",
+      "purescript",
+      "python",
+      "qml",
+      "qmldir",
+      "qss",
+      "r",
+      "racket",
+      "raku",
+      "razor",
+      "rbs",
+      "reg",
+      "regexp",
+      "rel",
+      "riscv",
+      "ron",
+      "rosmsg",
+      "rst",
+      "ruby",
+      "rust",
+      "sas",
+      "sass",
+      "scala",
+      "scheme",
+      "scss",
+      "sdbl",
+      "shaderlab",
+      "shellscript",
+      "shellsession",
+      "smalltalk",
+      "smithy",
+      "solidity",
+      "soy",
+      "sparql",
+      "splunk",
+      "sql",
+      "ssh-config",
+      "stata",
+      "stylus",
+      "surrealql",
+      "svelte",
+      "swift",
+      "system-verilog",
+      "systemd",
+      "talonscript",
+      "tasl",
+      "tcl",
+      "templ",
+      "terraform",
+      "tex",
+      "toml",
+      "ts-tags",
+      "tsv",
+      "tsx",
+      "turtle",
+      "twig",
+      "typescript",
+      "typespec",
+      "typst",
+      "v",
+      "vala",
+      "vb",
+      "verilog",
+      "vhdl",
+      "viml",
+      "vue",
+      "vue-html",
+      "vue-vine",
+      "vyper",
+      "wasm",
+      "wenyan",
+      "wgsl",
+      "wikitext",
+      "wit",
+      "wolfram",
+      "xml",
+      "xsl",
+      "yaml",
+      "zenscript",
+      "zig"
+    ],
+    "shared": {
+      "themes": [
+        "github-light",
+        "github-dark"
+      ],
+      "loadedStreamdownLanguages": [
+        "abap",
+        "ada",
+        "angular-expression",
+        "angular-html",
+        "angular-let-declaration",
+        "angular-template",
+        "angular-template-blocks",
+        "apache",
+        "apex",
+        "applescript",
+        "asciidoc",
+        "asm",
+        "astro",
+        "awk",
+        "bat",
+        "bibtex",
+        "bicep",
+        "blade",
+        "c",
+        "c3",
+        "clojure",
+        "cmake",
+        "cobol",
+        "codeowners",
+        "codeql",
+        "coffee",
+        "common-lisp",
+        "coq",
+        "cpp",
+        "cpp-macro",
+        "csharp",
+        "css",
+        "csv",
+        "cypher",
+        "d",
+        "dart",
+        "dax",
+        "diff",
+        "docker",
+        "dotenv",
+        "elixir",
+        "elm",
+        "erb",
+        "erlang",
+        "fish",
+        "fortran-fixed-form",
+        "fortran-free-form",
+        "fsharp",
+        "gdresource",
+        "gdscript",
+        "gdshader",
+        "gherkin",
+        "gleam",
+        "glsl",
+        "gnuplot",
+        "go",
+        "graphql",
+        "groovy",
+        "hack",
+        "haml",
+        "handlebars",
+        "haskell",
+        "haxe",
+        "hlsl",
+        "html",
+        "html-derivative",
+        "http",
+        "ini",
+        "java",
+        "javascript",
+        "jinja",
+        "jinja-html",
+        "json",
+        "json5",
+        "jsonl",
+        "jsonnet",
+        "jsx",
+        "julia",
+        "just",
+        "kdl",
+        "kotlin",
+        "latex",
+        "lean",
+        "less",
+        "liquid",
+        "llvm",
+        "log",
+        "lua",
+        "luau",
+        "make",
+        "markdown",
+        "markdown-nix",
+        "markdown-vue",
+        "matlab",
+        "mdx",
+        "mermaid",
+        "moonbit",
+        "nginx",
+        "nim",
+        "nix",
+        "objective-c",
+        "ocaml",
+        "odin",
+        "openscad",
+        "pascal",
+        "perl",
+        "php",
+        "plsql",
+        "po",
+        "postcss",
+        "powerquery",
+        "powershell",
+        "prisma",
+        "prolog",
+        "proto",
+        "pug",
+        "puppet",
+        "python",
+        "qml",
+        "r",
+        "razor",
+        "reg",
+        "regexp",
+        "rosmsg",
+        "rst",
+        "ruby",
+        "rust",
+        "sas",
+        "sass",
+        "scala",
+        "scss",
+        "shaderlab",
+        "shellscript",
+        "solidity",
+        "sparql",
+        "sql",
+        "stata",
+        "stylus",
+        "svelte",
+        "swift",
+        "tcl",
+        "terraform",
+        "tex",
+        "toml",
+        "tsv",
+        "tsx",
+        "turtle",
+        "twig",
+        "typescript",
+        "typst",
+        "verilog",
+        "vhdl",
+        "viml",
+        "vue",
+        "vue-directives",
+        "vue-interpolations",
+        "vue-sfc-style-variable-injection",
+        "wasm",
+        "wgsl",
+        "wolfram",
+        "xml",
+        "yaml",
+        "zig"
+      ]
+    }
+  }
+}

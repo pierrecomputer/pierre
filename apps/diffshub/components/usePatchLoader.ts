@@ -145,8 +145,8 @@ export function usePatchLoader({
       const targetCollapsed = mode === 'collapsed';
       const viewer = viewerRef.current;
       if (viewer == null) {
-        // The viewer hasn't mounted yet (e.g. the worker pool is still warming
-        // up while the header is already interactive). Rewrite any items
+        // The viewer hasn't mounted yet (e.g. persisted themes are still
+        // hydrating while the header is already interactive). Rewrite any items
         // already buffered in initialItems so they arrive in the right state
         // once the viewer mounts. New items still streaming in pick up the
         // live collapse mode through prepareItemsForViewer.

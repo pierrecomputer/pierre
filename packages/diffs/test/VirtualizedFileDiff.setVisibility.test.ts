@@ -60,7 +60,7 @@ test('renders a replacement after an off-screen placeholder', async () => {
     createVirtualizer(false),
     undefined,
     manager,
-    true
+    () => undefined
   );
   const firstDiff = createDiff('first', 'first value');
   const replacementDiff = createDiff('replacement', 'replacement value');

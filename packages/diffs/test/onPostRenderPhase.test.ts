@@ -100,6 +100,8 @@ const fileDiff: FileDiffMetadata = {
   isPartial: false,
   deletionLines: [],
   additionLines: [],
+  deletionCharacterCount: 0,
+  additionCharacterCount: 0,
 };
 
 describe('onPostRender phases', () => {

@@ -25,6 +25,12 @@ Pass the resolved object as `theme`; a string ID is not accepted. A
 select another. Theme preparation is cached by object identity; create new
 objects when changing values.
 
+For `@pierre/diffs` components, load these objects through
+`registerCustomTheme(name, loader, 'zed')` and select
+`preferredHighlighter: 'highlights'`. See the
+[custom highlighting recipe](../../diffs/references/recipe-custom-highlighting.md)
+for registration and backend selection.
+
 ## Custom themes
 
 ```ts
@@ -143,3 +149,31 @@ inline style, then use equivalent CSS for that container. With an inline
 default, the root style is `background-color:${result.bg};color:${result.fg}`;
 these fields can include additional declarations. Preserve those declarations
 instead of treating them as single CSS color values.
+
+## Named CSS palettes
+
+A theme can use `cssVariables: { prefix, defaults }` to map syntax categories to
+application palette variables while retaining font settings:
+
+```ts
+const theme = {
+  name: 'App palette',
+  appearance: 'dark',
+  cssVariables: {
+    prefix: '--app-',
+    defaults: { keyword: '#c084fc' },
+  },
+  style: {
+    syntax: {
+      keyword: { color: 'keyword', font_weight: 700 },
+      comment: { color: 'muted', font_style: 'italic' },
+    },
+  },
+} satisfies Theme;
+```
+
+Syntax `color` values are variable suffixes in this mode. Unconfigured syntax
+categories inherit the `foreground` variable, and defaults become CSS `var()`
+fallbacks. The palette prefix belongs to the theme and is independent of the
+prefix used for multiple theme output. Diffs uses this mode for its portable
+`createCSSVariablesTheme` palette.

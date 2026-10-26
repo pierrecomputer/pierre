@@ -86,6 +86,12 @@ common set of props for configuration, annotations, and styling. The `File`
 component has similar props, but uses `LineAnnotation` instead of
 `DiffLineAnnotation` (no `side` property).
 
+Diff components accept `ParseDiffOptions` through `options.parseDiffOptions`,
+including jsdiff settings and the `disableLineMatching` escape hatch (default:
+`false`). `MultiFileDiff` uses these options to parse `oldFile`/`newFile`;
+editable diff components also use them when recomputing edits. They do not
+rewrite supplied `fileDiff` metadata.
+
 Every editable component (`File`, `FileDiff`, `MultiFileDiff`, `PatchDiff`) also
 takes `onEditChange` — the component's live change stream — and `onEditComplete`
 — the accept/reject boundary when an edit session ends. Change events expose the

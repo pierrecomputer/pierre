@@ -35,6 +35,11 @@ The default prefix for CSS variables is `--hls-`.
 To change it, pass `{ cssVariablePrefix: '--code-' }` as the second argument to
 `toCSS`. Set the same `cssVariablePrefix` in the highlighter options.
 
+Pass `{ fontStyle: true }` to `toCSS` to emit a `-font-style` variable for each
+syntax scope, with `italic` or `normal` as its value. These variables are absent
+by default. Import `getFontStyle` from `@pierre/highlights/themes` to derive the
+CSS `font-style` value from a token, such as `var(--hls-comment-font-style)`.
+
 Community themes use licensed Zed versions when available. The other themes use
 conversions from fixed TextMate source versions and Zed's scope map. The files
 keep the name, appearance, and style keys that Highlights and `@pierre/diffs`
@@ -42,6 +47,9 @@ use.
 
 Shiki catalog and Pierre themes also include colors for Git changes and terminal
 output. The keys are `created`, `deleted`, `modified`, and `terminal.ansi.*`.
+Every theme defines all 16 terminal colors, from `terminal.ansi.black` through
+`terminal.ansi.bright_white`. ANSI output uses these colors; `toCSS()` emits
+variables such as `--hls-terminal-ansi-bright-red`.
 
 For CSS-controlled colors, use `cssVariables`. See the
 [theme docs](https://diffs.com/docs#highlights-themes) for accepted properties

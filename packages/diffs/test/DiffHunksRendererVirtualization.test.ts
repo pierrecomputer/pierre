@@ -136,6 +136,37 @@ describe('DiffHunksRenderer - Virtualization', () => {
   });
 
   describe('no-newline metadata', () => {
+    test.each([
+      ['unchanged final line', 'old\nsame', 'new\nsame', 1],
+      ['changed final line', 'old', 'new', 2],
+      ['deletion lacks newline', 'old', 'new\n', 1],
+      ['addition lacks newline', 'old\n', 'new', 1],
+    ] as const)(
+      'unified EOF metadata: %s',
+      async (_, previousContents, contents, metadataRows) => {
+        const fileDiff = parseDiffFromFile(
+          { name: 'ending.txt', contents: previousContents },
+          { name: 'ending.txt', contents }
+        );
+        const result = await new DiffHunksRenderer({
+          diffStyle: 'unified',
+          expandUnchanged: true,
+        }).asyncRender(fileDiff);
+        assertDefined(result.unifiedContentAST, 'Missing unified content');
+        assertDefined(result.unifiedGutterAST, 'Missing unified gutter');
+        expect(countNoNewlineElements(result.unifiedContentAST)).toBe(
+          metadataRows
+        );
+        expect(
+          collectAllElements(result.unifiedGutterAST).filter(
+            (node) => node.properties['data-gutter-buffer'] === 'metadata'
+          )
+        ).toHaveLength(metadataRows);
+        expect(result.unifiedContentAST).toHaveLength(result.rowCount);
+        expect(result.unifiedGutterAST).toHaveLength(result.rowCount);
+      }
+    );
+
     test('renders deletion-side metadata when deletions are shorter in split mode', async () => {
       const fileDiff = parseDiffFromFile(
         { name: 'deletion-shorter.txt', contents: 'same\nold-final' },

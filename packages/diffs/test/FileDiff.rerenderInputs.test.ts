@@ -9,6 +9,66 @@ afterAll(async () => {
   await disposeHighlighter();
 });
 
+class TestFileDiff extends FileDiff {
+  getWorkingDiffForTest(): FileDiffMetadata | undefined {
+    return this.getWorkingDiff();
+  }
+}
+
+test.each([false, true])(
+  'file-pair parsing forwards disableLineMatching=%p',
+  (disableLineMatching) => {
+    const { cleanup } = installDom();
+    const instance = new FileDiff({
+      parseDiffOptions: { disableLineMatching },
+    });
+    const oldFile = { name: 'option.ts', contents: 'const value = 1;\n' };
+    const newFile = { name: 'option.ts', contents: '\nconst value = 2;\n' };
+    try {
+      instance.render({
+        oldFile,
+        newFile,
+        fileContainer: document.createElement('div'),
+      });
+      expect(instance.fileDiff?.hunks[0].hunkContent).toEqual(
+        disableLineMatching
+          ? [
+              {
+                type: 'change',
+                deletions: 1,
+                additions: 2,
+                deletionLineIndex: 0,
+                additionLineIndex: 0,
+              },
+            ]
+          : [
+              {
+                type: 'change',
+                deletions: 0,
+                additions: 1,
+                deletionLineIndex: 0,
+                additionLineIndex: 0,
+              },
+              {
+                type: 'change',
+                deletions: 1,
+                additions: 1,
+                deletionLineIndex: 0,
+                additionLineIndex: 1,
+              },
+            ]
+      );
+      const supplied = parseDiffFromFile(oldFile, newFile);
+      instance.render({ fileDiff: supplied });
+      expect(instance.fileDiff).toBe(supplied);
+      expect(instance.fileDiff?.hunks[0].hunkContent).toHaveLength(2);
+    } finally {
+      instance.cleanUp();
+      cleanup();
+    }
+  }
+);
+
 // Waits until the first rendered row keeps the same DOM node across several
 // consecutive samples, so late async highlight rerenders (which rebuild rows)
 // cannot race the identity assertions below.
@@ -55,7 +115,7 @@ test('a host render after an internal rerender takes the early-return path', asy
     const newFile = { name: 'x.ts', contents: 'alpha\nBRAVO\ncharlie\n' };
     const fileContainer = document.createElement('div');
     document.body.appendChild(fileContainer);
-    instance = new FileDiff<undefined>({
+    instance = new TestFileDiff({
       disableFileHeader: true,
       diffStyle: 'split',
     });
@@ -96,7 +156,7 @@ test('parsed unkeyed diffs with the same filename render fresh contents', async 
     );
     const fileContainer = document.createElement('div');
     document.body.appendChild(fileContainer);
-    instance = new FileDiff<undefined>({
+    instance = new TestFileDiff({
       disableFileHeader: true,
       diffStyle: 'unified',
     });
@@ -133,7 +193,7 @@ test('a dirty unkeyed session remains authoritative when the same object is re-p
   const externalAdditionLines = externalDiff.additionLines;
   const fileContainer = document.createElement('div');
   document.body.appendChild(fileContainer);
-  const instance = new FileDiff<undefined>({ disableFileHeader: true });
+  const instance = new TestFileDiff({ disableFileHeader: true });
 
   try {
     instance.render({ fileDiff: externalDiff, fileContainer });
@@ -157,6 +217,10 @@ test('a dirty unkeyed session remains authoritative when the same object is re-p
     );
 
     expect(instance.fileDiff).toBe(externalDiff);
+    expect(instance.getWorkingDiffForTest()).not.toBe(externalDiff);
+    expect(instance.getWorkingDiffForTest()?.additionLines.join('')).toContain(
+      'editedMarker'
+    );
     expect(externalDiff.additionLines).toBe(externalAdditionLines);
     expect(externalDiff.additionLines.join('')).toContain('firstMarker');
     expect(externalDiff.additionLines.join('')).not.toContain('editedMarker');

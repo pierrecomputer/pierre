@@ -1,8 +1,3 @@
-import {
-  codeToHtml,
-  createCssVariablesTheme as createCSSVariablesTheme,
-} from 'shiki';
-
 export * from './components/CodeView';
 export * from './components/File';
 export * from './components/FileDiff';
@@ -26,7 +21,7 @@ export * from './highlighter/shared_highlighter';
 export * from './highlighter/themes/areThemesAttached';
 export * from './highlighter/themes/attachResolvedThemes';
 export * from './highlighter/themes/cleanUpResolvedThemes';
-export * from './highlighter/themes/constants';
+export * from './highlighter/themes/createCSSVariablesTheme';
 export * from './highlighter/themes/getResolvedOrResolveTheme';
 export * from './highlighter/themes/getResolvedThemes';
 export * from './highlighter/themes/hasResolvedThemes';
@@ -58,6 +53,7 @@ export * from './utils/areSelectionsEqual';
 export * from './utils/areThemesEqual';
 export * from './utils/areVirtualWindowSpecsEqual';
 export * from './utils/areWorkerStatsEqual';
+export * from './utils/canUseWASM';
 export * from './utils/cleanLastNewline';
 export * from './utils/cloneFileDiffMetadata';
 export * from './utils/createAnnotationElement';
@@ -72,7 +68,6 @@ export * from './utils/createRowNodes';
 export * from './utils/createSeparator';
 export * from './utils/createSpanNodeFromToken';
 export * from './utils/createStyleElement';
-export * from './utils/createTransformerWithState';
 export * from './utils/createUnsafeCSSStyleNode';
 export * from './utils/createWindowFromScrollPosition';
 export * from './utils/cssWrappers';
@@ -91,6 +86,7 @@ export * from './utils/getOrCreateCodeNode';
 export * from './utils/getSingularPatch';
 export * from './utils/getThemes';
 export * from './utils/getTotalLineCountFromHunks';
+export * from './utils/hastToHtml';
 export * from './utils/hast_utils';
 export * from './utils/hydratePartialDiff';
 export * from './utils/isDefaultRenderRange';
@@ -105,11 +101,14 @@ export * from './utils/prerenderHTMLIfNecessary';
 export * from './utils/processLine';
 export * from './utils/renderDiffWithHighlighter';
 export * from './utils/renderFileWithHighlighter';
+export * from './utils/renderTokenLines';
 export * from './utils/resolveConflict';
 export * from './utils/resolveRegion';
 export * from './utils/setLanguageOverride';
 export * from './utils/setWrapperNodeProps';
+export * from './utils/tokenStyle';
+export * from './utils/tokensToHtml';
 export * from './utils/trimPatchContext';
-export type * from './types';
 
-export { codeToHtml, createCSSVariablesTheme };
+export type * from './highlighter/themes/types';
+export type * from './types';

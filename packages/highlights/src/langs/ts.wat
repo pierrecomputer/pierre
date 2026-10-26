@@ -12,7 +12,8 @@
       "ctxword_type")
     (value $Token.punctuation.bracket
       "l_paren" "r_paren" "l_bracket" "r_bracket" "l_brace" "r_brace")
-    (value $Token.punctuation.delimiter "comma" "semicolon" "dot" "question_mark_dot")
+    (value $Token.punctuation.delimiter
+      "comma" "semicolon" "dot" "question_mark_dot" "ternary_colon")
     (value $Token.number "number_literal" "bigint_literal")
     (value $Token.string.regex "regexp_literal")
     (value $Token.attribute "at_identifier")
@@ -38,9 +39,9 @@
   (func $isIdentish (param $t i32) (result i32)
     (i32.or
       (i32.eq (local.get $t) (enum.get $Lex.identifier))
-      (i32.and
-        (i32.ge_u (local.get $t) (enum.get $Lex.keyword_break))
-        (i32.le_u (local.get $t) (enum.get $Lex.ctxword_type)))))
+      (i32.le_u
+        (i32.sub (local.get $t) (enum.get $Lex.keyword_break))
+        (i32.sub (enum.get $Lex.ctxword_type) (enum.get $Lex.keyword_break)))))
 
   ;; undefined / NaN / Infinity spelled out
   (func $isBuiltinConst (param $lhs i32) (param $rhs i32) (result i32)
@@ -152,7 +153,11 @@
           (i32.eq (local.get $prev) (enum.get $Lex.pipe))
           (i32.eq (local.get $prev) (enum.get $Lex.ampersand))))
       (then (return (i32.const 1))))
-    (if (i32.eq (local.get $prev) (enum.get $Lex.colon))
+    ;; a ternary colon too: in `cond ? (): T => v : w` the counter takes the
+    ;; annotation colon, but `): T =>` still names a return type
+    (if (i32.or
+          (i32.eq (local.get $prev) (enum.get $Lex.colon))
+          (i32.eq (local.get $prev) (enum.get $Lex.ternary_colon)))
       (then (return (call $tsReturnColonBefore (local.get $lhs)))))
     (i32.const 0))
 
@@ -363,9 +368,9 @@
                   (i32.eq (local.get $t) (enum.get $Lex.hash_identifier)))
                 (i32.or
                   (i32.eq (local.get $t) (enum.get $Lex.asterisk))
-                  (i32.and
-                    (i32.ge_u (local.get $t) (enum.get $Lex.ctxword_as))
-                    (i32.le_u (local.get $t) (enum.get $Lex.ctxword_type)))))))
+                  (i32.le_u
+                    (i32.sub (local.get $t) (enum.get $Lex.ctxword_as))
+                    (i32.sub (enum.get $Lex.ctxword_type) (enum.get $Lex.ctxword_as)))))))
           (then
             (global.set $sigFnPend (i32.const 0))
             (global.set $sigFnAngle (i32.const 0))))))
@@ -460,69 +465,57 @@
           (then (return (enum.get $Token.keyword.declaration))))))
     (if (i32.eq (local.get $t) (enum.get $Lex.ctxword_await))
       (then (return (enum.get $Token.keyword.control))))
-    (if (i32.eq (local.get $t) (enum.get $Lex.ctxword_async))
-      (then
-        (if
-          (i32.or
-            (call $isIdentish (local.get $next))
-            (i32.eq (local.get $next) (enum.get $Lex.l_paren)))
-          (then (return (enum.get $Token.keyword))))))
+    ;; `async (` and `keyof (`; before a name they take the shared rule below
+    (if
+      (i32.and
+        (i32.or
+          (i32.eq (local.get $t) (enum.get $Lex.ctxword_async))
+          (i32.eq (local.get $t) (enum.get $Lex.ctxword_keyof)))
+        (i32.eq (local.get $next) (enum.get $Lex.l_paren)))
+      (then (return (enum.get $Token.keyword))))
     (if (i32.eq (local.get $t) (enum.get $Lex.ctxword_of))
       (then
-        (if (bitset.get $LexBits.exprEnd (local.get $prev))
-          (then (return (enum.get $Token.keyword))))))
-    (if (i32.eq (local.get $t) (enum.get $Lex.ctxword_keyof))
-      (then
-        (if
-          (i32.or
-            (call $isIdentish (local.get $next))
-            (i32.eq (local.get $next) (enum.get $Lex.l_paren)))
-          (then (return (enum.get $Token.keyword))))))
+        (return
+          (select
+            (enum.get $Token.keyword)
+            (i32.const -1)
+            (bitset.get $LexBits.exprEnd (local.get $prev))))))
     (if (i32.eq (local.get $t) (enum.get $Lex.ctxword_from))
       (then
         (if (i32.eq (local.get $next) (enum.get $Lex.string_literal))
           (then (return (enum.get $Token.keyword.import))))
         ;; TSRX imports from a declared submodule by its name
         (if (i32.and (call $ecmaHasTsrx) (i32.eq (local.get $next) (enum.get $Lex.identifier)))
-          (then (return (enum.get $Token.keyword.import))))))
-    (if (i32.eq (local.get $t) (enum.get $Lex.ctxword_as))
-      (then
-        (if (call $isIdentish (local.get $next))
-          (then (return (enum.get $Token.keyword))))))
-    ;; the remaining ctxwords - type/satisfies/is/declare/abstract/namespace/
-    ;; readonly/override/infer/get/set - read as keywords before a name;
-    ;; `type` introduces a declaration, so it lands in Zed's declaration bucket.
-    ;; Accessors also name private members (`get #x()`), and `readonly`
-    ;; also marks index signatures and mapped types (`readonly [K in T]`)
+          (then (return (enum.get $Token.keyword.import))))
+        (return (i32.const -1))))
+    ;; the other ctxwords - as/async/keyof/type/satisfies/is/declare/abstract/
+    ;; namespace/readonly/override/infer/get/set - read as keywords before a
+    ;; name; `type` introduces a declaration, so it lands in Zed's declaration
+    ;; bucket. Accessors also name private members (`get #x()`), and
+    ;; `readonly` also marks index signatures and mapped types
+    ;; (`readonly [K in T]`)
     (if
-      (i32.and
-        (i32.ge_u (local.get $t) (enum.get $Lex.ctxword_get))
-        (i32.le_u (local.get $t) (enum.get $Lex.ctxword_type)))
-      (then
-        (if
-          (i32.and
-            (i32.ne (local.get $t) (enum.get $Lex.ctxword_of))
-            (i32.or
-              (call $isIdentish (local.get $next))
+      (i32.or
+        (call $isIdentish (local.get $next))
+        (i32.and
+          (i32.eqz (global.get $nlBefore))
+          (i32.or
+            (i32.and
+              (i32.eq (local.get $next) (enum.get $Lex.hash_identifier))
+              (i32.or
+                (i32.eq (local.get $t) (enum.get $Lex.ctxword_get))
+                (i32.eq (local.get $t) (enum.get $Lex.ctxword_set))))
+            (i32.and
+              (i32.eq (local.get $next) (enum.get $Lex.l_bracket))
               (i32.and
-                (i32.eqz (global.get $nlBefore))
-                (i32.or
-                  (i32.and
-                    (i32.eq (local.get $next) (enum.get $Lex.hash_identifier))
-                    (i32.or
-                      (i32.eq (local.get $t) (enum.get $Lex.ctxword_get))
-                      (i32.eq (local.get $t) (enum.get $Lex.ctxword_set))))
-                  (i32.and
-                    (i32.eq (local.get $next) (enum.get $Lex.l_bracket))
-                    (i32.and
-                      (i32.eq (local.get $t) (enum.get $Lex.ctxword_readonly))
-                      (i32.ne (local.get $prev) (enum.get $Lex.dot))))))))
-          (then
-            (return
-              (select
-                (enum.get $Token.keyword.declaration)
-                (enum.get $Token.keyword)
-                (i32.eq (local.get $t) (enum.get $Lex.ctxword_type))))))))
+                (i32.eq (local.get $t) (enum.get $Lex.ctxword_readonly))
+                (i32.ne (local.get $prev) (enum.get $Lex.dot)))))))
+      (then
+        (return
+          (select
+            (enum.get $Token.keyword.declaration)
+            (enum.get $Token.keyword)
+            (i32.eq (local.get $t) (enum.get $Lex.ctxword_type))))))
     (i32.const -1))
 
   ;; Match contextual keywords absent from the keyword table:
@@ -661,8 +654,11 @@
     ;; subject (`x is T`), the top level of a marked parameter list, and one
     ;; level into a destructured parameter pattern
     ;; ... except a TS return type right before the `=>`: `(a): T =>`,
-    ;; `(x): x is T =>`, `(): A | B =>` - an arrow cannot follow `|`/`&`
-    (if (i32.eq (local.get $next) (enum.get $Lex.function_arrow))
+    ;; `(x): x is T =>`, `(): A | B =>` - an arrow cannot follow `|`/`&`.
+    ;; No line break may precede `=>`, so one on the next line is not an arrow
+    (if (i32.and
+          (i32.eq (local.get $next) (enum.get $Lex.function_arrow))
+          (i32.eqz (global.get $nlBefore)))
       (then
         (if (i32.eqz (call $tsArrowReturnType (local.get $prev) (local.get $lhs)))
           (then (return (enum.get $Token.variable.parameter))))))
@@ -842,7 +838,8 @@
             (local.get $rhs)))))
     ;; `:` before a type name and `?` directly before `:` are TypeScript
     ;; punctuation.special; the word compare only runs for a colon before an
-    ;; identifier - wasm i32.and is eager, and this runs for every such token
+    ;; identifier - wasm i32.and is eager, and this runs for every such token.
+    ;; A ternary's colon is its own token kind and maps to a delimiter above.
     (if (call $ecmaHasTypeScript)
       (then
         (if (i32.eq (local.get $t) (enum.get $Lex.colon))

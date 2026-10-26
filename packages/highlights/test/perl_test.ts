@@ -408,6 +408,16 @@ void t.test('perl: regex operators and comparison words', () => {
   for (const op of ['=~', '!~', '..', '...', '**', '//', '<<=', '++', '--']) {
     assert.equal(wordColor(html, op), distinctColorOf('operator'), op);
   }
+  // `/` after a capitalized word divides; after a lowercase word it matches
+  assert.deepEqual(tokenKinds('perl', 'Total / $n; split /,/;'), [
+    ['Total', 'type'],
+    ['/', 'operator'],
+    ['$n', 'variable'],
+    [';', 'punctuation.delimiter'],
+    ['split', 'function'],
+    ['/,/', 'string.regex'],
+    [';', 'punctuation.delimiter'],
+  ]);
 });
 
 void t.test('perl: comments, POD, and the __END__ marker', () => {

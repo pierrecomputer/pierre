@@ -6,6 +6,7 @@ import type {
   FileDiffLoadedFiles,
   FileDiffMetadata,
 } from '../src/types';
+import { areDiffTargetsEqual } from '../src/utils/areDiffTargetsEqual';
 import { composeCacheKey } from '../src/utils/composeCacheKey';
 import { hydratePartialDiff } from '../src/utils/hydratePartialDiff';
 import { parsePatchFiles } from '../src/utils/parsePatchFiles';
@@ -16,7 +17,8 @@ function parseSingleFile(
   patch: string,
   cacheKeyPrefix?: string
 ): FileDiffMetadata {
-  const file = parsePatchFiles(patch, cacheKeyPrefix, true)[0]?.files[0];
+  const file = parsePatchFiles(patch, { cacheKeyPrefix, throwOnError: true })[0]
+    ?.files[0];
   assertDefined(file, 'expected patch to contain one file');
   expect(file.isPartial).toBe(true);
   return file;
@@ -155,6 +157,84 @@ describe('hydratePartialDiff', () => {
     expect(firstContent.deletionLineIndex).toBe(firstHunk.deletionStart - 1);
     expect(verifyHunkLineValues(hydrated)).toEqual([]);
   });
+
+  for (const type of ['clone', 'merge'] as const) {
+    for (const cacheKeyPrefix of [undefined, 'partial']) {
+      test(`${type} hydration keeps matching modes distinct with ${cacheKeyPrefix == null ? 'unkeyed' : 'keyed'} patches`, () => {
+        const patch = [
+          '--- file.ts',
+          '+++ file.ts',
+          '@@ -1 +1,2 @@',
+          '-const value = 1;',
+          '+',
+          '+const value = 2;',
+          '',
+        ].join('\n');
+        const oldFile: FileContents = {
+          name: 'file.ts',
+          cacheKey: 'old-full',
+          contents: 'const value = 1;\n',
+        };
+        const newFile: FileContents = {
+          name: 'file.ts',
+          cacheKey: 'new-full',
+          contents: '\nconst value = 2;\n',
+        };
+        const [matched, explicitMatched, unmatched] = [
+          undefined,
+          false,
+          true,
+        ].map((disableLineMatching) => {
+          const partial = parsePatchFiles(patch, {
+            disableLineMatching,
+            cacheKeyPrefix,
+            throwOnError: true,
+          })[0]?.files[0];
+          assertDefined(partial, 'expected a parsed file');
+          const originalKey = partial.cacheKey;
+          const hydrated = hydratePartialDiff(
+            type,
+            partial,
+            { oldFile, newFile },
+            { disableLineMatching }
+          );
+          expect(hydrated.cacheKey).toBe(
+            originalKey == null
+              ? composeCacheKey(
+                  disableLineMatching === true
+                    ? 'hydrated-files-raw'
+                    : 'hydrated-files',
+                  'old-full',
+                  'new-full'
+                )
+              : `${originalKey}:hydrated`
+          );
+          expect(verifyHunkLineValues(hydrated)).toEqual([]);
+          return hydrated;
+        });
+
+        expect(
+          matched.hunks[0].hunkContent.map((content) =>
+            content.type === 'change'
+              ? [content.deletions, content.additions]
+              : content.lines
+          )
+        ).toEqual([
+          [0, 1],
+          [1, 1],
+        ]);
+        expect(
+          unmatched.hunks[0].hunkContent.map((content) =>
+            content.type === 'change'
+              ? [content.deletions, content.additions]
+              : content.lines
+          )
+        ).toEqual([[1, 2]]);
+        expect(areDiffTargetsEqual(matched, explicitMatched)).toBe(true);
+        expect(areDiffTargetsEqual(matched, unmatched)).toBe(false);
+      });
+    }
+  }
 
   test('uses loaded file cache keys without a partial cache key', () => {
     const oldFile: FileContents = {

@@ -101,6 +101,7 @@
     (local $lhs i32)
     (local $rhs i32)
     (local $p i32)
+    (local $pc i32)
     (local $kind i32)
     (local $hl i32)
     (local $expect i32)
@@ -123,6 +124,10 @@
             (call $emitTok (enum.get $Token.string) (local.get $lhs) (global.get $ptr))
             (br $next)))
 
+        ;; token tails: $opTok leaves parameter position, and $tok emits
+        ;; [$lhs,$ptr) as $hl and clears $member and $expect
+        (block $tok
+        (block $opTok
         (local.set $gap (global.get $ptr))
         (call $scanWhitespace)
         (call $emitGap (local.get $gap) (global.get $ptr))
@@ -243,6 +248,7 @@
                       (then (local.set $expect (i32.shr_u (local.get $kind) (i32.const 8))))))
                   (else
                     (local.set $p (call $lexSkipSpaceAt (local.get $rhs)))
+                    (local.set $pc (call $rustByte (local.get $p)))
                     (if (local.get $expect)
                       (then
                         (local.set $hl
@@ -261,7 +267,7 @@
                         ;; a macro name ends in `!`, but `a != b` is an operator
                         (if
                           (i32.and
-                            (i32.eq (call $rustByte (local.get $p)) (i32.const "!"))
+                            (i32.eq (local.get $pc) (i32.const "!"))
                             (i32.ne
                               (call $rustByte (i32.add (local.get $p) (i32.const 1)))
                               (i32.const "=")))
@@ -269,7 +275,7 @@
                           (else
                             ;; a call after `.` is a method; after `::` it is
                             ;; a path to a plain function
-                            (if (i32.eq (call $rustByte (local.get $p)) (i32.const "("))
+                            (if (i32.eq (local.get $pc) (i32.const "("))
                               (then
                                 (local.set $hl
                                   (select
@@ -308,7 +314,7 @@
                                         (i32.and
                                           (i32.eqz (global.get $sigObscure))
                                           (i32.and
-                                            (i32.eq (call $rustByte (local.get $p)) (i32.const ":"))
+                                            (i32.eq (local.get $pc) (i32.const ":"))
                                             (i32.ne
                                               (call $rustByte
                                                 (i32.add (local.get $p) (i32.const 1)))
@@ -330,17 +336,16 @@
                     ;; `std::fs::read`, `use std::collections::HashMap`,
                     ;; `impl fmt::Display`. A capitalised one stays a type,
                     ;; and `collect::<T>` is a turbofish, not a path
-                    (if (i32.eq (call $rustByte (local.get $rhs)) (i32.const ":"))
+                    (if
+                      (i32.and
+                        (i32.lt_u (i32.add (local.get $rhs) (i32.const 1)) (global.get $end))
+                        (i32.eq (i32.load16_u (local.get $rhs)) (i32.const "::")))
                       (then
                         (if
                           (i32.and
-                            (i32.and
-                              (i32.eq
-                                (call $rustByte (i32.add (local.get $rhs) (i32.const 1)))
-                                (i32.const ":"))
-                              (i32.ne
-                                (call $rustByte (i32.add (local.get $rhs) (i32.const 2)))
-                                (i32.const "<")))
+                            (i32.ne
+                              (call $rustByte (i32.add (local.get $rhs) (i32.const 2)))
+                              (i32.const "<"))
                             (i32.gt_u
                               (i32.sub (local.get $c) (i32.const "A"))
                               (i32.const 25)))
@@ -373,10 +378,8 @@
                     (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
                     (br_if $index (call $lexIsDigit (call $rustByte (global.get $ptr)))))))
               (else (call $lexScanNumber)))
-            (call $emitTok (enum.get $Token.number) (local.get $lhs) (global.get $ptr))
-            (local.set $member (i32.const 0))
-            (local.set $expect (i32.const 0))
-            (br $next)))
+            (local.set $hl (enum.get $Token.number))
+            (br $tok)))
 
         (if (byteset.get "()[]{}" (local.get $c))
           (then
@@ -427,12 +430,6 @@
         (if (i32.or (i32.eq (local.get $c) (i32.const ",")) (i32.eq (local.get $c) (i32.const ";")))
           (then
             (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
-            (call $emitTok
-              (enum.get $Token.punctuation.delimiter)
-              (local.get $lhs)
-              (global.get $ptr))
-            (local.set $member (i32.const 0))
-            (local.set $expect (i32.const 0))
             ;; a comma returns to parameter position; a top-level `;` proves
             ;; the marked list was not a parameter list after all
             (global.set $sigPattern (i32.eq (local.get $c) (i32.const ",")))
@@ -441,7 +438,8 @@
                 (i32.eq (local.get $c) (i32.const ";"))
                 (i32.and (call $sigActive) (i32.eqz (global.get $sigObscure))))
               (then (call $sigUnmark)))
-            (br $next)))
+            (local.set $hl (enum.get $Token.punctuation.delimiter))
+            (br $tok)))
         (if (i32.eq (local.get $c) (i32.const ":"))
           (then
             (global.set $ptr
@@ -506,17 +504,17 @@
                       (i32.eq (local.get $c) (i32.const ">")))
                     (i32.eq (call $rustByte (global.get $ptr)) (i32.const "=")))
                   (then (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))))))
-            (call $emitTok (enum.get $Token.operator) (local.get $lhs) (global.get $ptr))
-            (local.set $member (i32.const 0))
-            (local.set $expect (i32.const 0))
             ;; a pending fn head rides `<`/`>` type-parameter operators
             (if (global.get $sigFnPend)
               (then (call $sigAngleOps (local.get $lhs) (global.get $ptr))))
-            (global.set $sigPattern (i32.const 0))
-            (br $next)))
+            (local.set $hl (enum.get $Token.operator))
+            (br $opTok)))
 
         (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
-        (call $emitTok (enum.get $Token.none) (local.get $lhs) (global.get $ptr))
+        (local.set $hl (enum.get $Token.none))
+        (br $tok))
+        (global.set $sigPattern (i32.const 0)))
+        (call $emitTok (local.get $hl) (local.get $lhs) (global.get $ptr))
         (local.set $member (i32.const 0))
         (local.set $expect (i32.const 0))
         (br $next))))

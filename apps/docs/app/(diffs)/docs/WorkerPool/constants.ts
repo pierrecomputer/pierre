@@ -52,14 +52,7 @@ export const WORKER_POOL_VSCODE_LOCAL_ROOTS: PreloadFileOptions<
     enableScripts: true,
     localResourceRoots: [
       // ... your other roots
-      vscode.Uri.joinPath(
-        extensionUri,
-        'node_modules',
-        '@pierre',
-        'diffs',
-        'dist',
-        'worker'
-      ),
+      vscode.Uri.joinPath(extensionUri, 'media'),
     ],
   };
 }`,
@@ -75,11 +68,7 @@ export const WORKER_POOL_VSCODE_WORKER_URI: PreloadFileOptions<
     name: 'extension.ts',
     contents: `const workerScriptPath = vscode.Uri.joinPath(
   this._extensionUri,
-  'node_modules',
-  '@pierre',
-  'diffs',
-  'dist',
-  'worker',
+  'media',
   'worker-portable.js'
 );
 const workerScriptUri = webview.asWebviewUri(workerScriptPath);`,
@@ -198,12 +187,11 @@ export const WORKER_POOL_HELPER_STATIC: PreloadFileOptions<
 > = {
   file: {
     name: 'utils/workerFactory.ts',
-    contents: `// For Rollup or bundlers without special worker support:
-// 1. Copy worker.js to your static/public folder
-// 2. Reference it by URL
+    contents: `// Copy dist/worker/worker-portable.js from @pierre/diffs
+// into public/static/workers/.
 
 export function workerFactory(): Worker {
-  return new Worker('/static/workers/worker.js', { type: 'module' });
+  return new Worker('/static/workers/worker-portable.js');
 }`,
   },
   options,
@@ -215,90 +203,10 @@ export const WORKER_POOL_HELPER_VANILLA: PreloadFileOptions<
 > = {
   file: {
     name: 'utils/workerFactory.js',
-    contents: `// No bundler / Vanilla JS
-// Host worker.js on your server and reference it by URL
+    contents: `// Host worker-portable.js on your server.
 
 export function workerFactory() {
-  return new Worker('/path/to/worker.js', { type: 'module' });
-}`,
-  },
-  options,
-};
-
-export const WORKER_POOL_USAGE: PreloadFileOptions<undefined, undefined> = {
-  file: {
-    name: 'example.ts',
-    contents: `import { createWorkerAPI } from './utils/createWorkerAPI';
-
-// Create worker pool with 8 workers
-const workerAPI = createWorkerAPI({
-  poolSize: 8,
-  initOptions: {
-    themes: ['pierre-dark', 'pierre-light'],
-    langs: ['typescript', 'javascript'],
-  },
-});
-
-// Initialize the pool (optional - auto-initializes on first use)
-await workerAPI.ensureInitialized();
-
-// Render a single file
-const file = {
-  name: 'example.ts',
-  contents: 'const x = 42;',
-};
-
-const result = await workerAPI.renderFileToHast(file, {
-  theme: 'pierre-dark',
-});
-
-console.log(result.lines); // Array of ElementContent
-
-// Render a diff from two files
-const oldFile = { name: 'example.ts', contents: 'const x = 1;' };
-const newFile = { name: 'example.ts', contents: 'const x = 2;' };
-
-const diffResult = await workerAPI.renderDiffToHast(oldFile, newFile, {
-  theme: { dark: 'pierre-dark', light: 'pierre-light' },
-});
-console.log(diffResult.oldLines, diffResult.newLines);
-
-// Check pool status
-console.log(workerAPI.getStats());
-// { totalWorkers: 8, busyWorkers: 0, queuedTasks: 0, pendingTasks: 0 }
-
-// Clean up when done
-workerAPI.terminate();`,
-  },
-  options,
-};
-
-export const WORKER_POOL_REACT_COMPONENT: PreloadFileOptions<
-  undefined,
-  undefined
-> = {
-  file: {
-    name: 'CodeView.tsx',
-    contents: `'use client';
-
-import { createWorkerAPI } from '@/utils/createWorkerAPI';
-import { useEffect, useState } from 'react';
-
-export function CodeView() {
-  const [workerAPI] = useState(() =>
-    createWorkerAPI({
-      poolSize: 8,
-      initOptions: {
-        themes: ['pierre-dark', 'pierre-light'],
-      },
-    })
-  );
-
-  useEffect(() => {
-    return () => workerAPI.terminate();
-  }, [workerAPI]);
-
-  // Use workerAPI.renderFileToHast() etc.
+  return new Worker('/workers/worker-portable.js');
 }`,
   },
   options,
@@ -333,7 +241,7 @@ export function HighlightProvider({ children }: { children: ReactNode }) {
         theme: { dark: 'pierre-dark', light: 'pierre-light' },
         // Optional: skip inline line diffs for very long changed lines
         // maxLineDiffLength: 1000,
-        // Optional: pick the Shiki engine ('shiki-js' is default)
+        // Optional: pick the highlighter backend ('shiki-js' is default)
         // preferredHighlighter: 'shiki-wasm',
         // Optionally preload languages to avoid lazy-loading delays
         langs: ['typescript', 'javascript', 'css', 'html'],
@@ -412,7 +320,7 @@ const workerPool = getOrCreateWorkerPoolSingleton({
     theme: { dark: 'pierre-dark', light: 'pierre-light' },
     // Optional: skip inline line diffs for very long changed lines
     // maxLineDiffLength: 1000,
-    // Optional: pick the Shiki engine ('shiki-js' is default)
+    // Optional: pick the highlighter backend ('shiki-js' is default)
     // preferredHighlighter: 'shiki-wasm',
     // Optionally preload languages to avoid lazy-loading delays
     langs: ['typescript', 'javascript', 'css', 'html'],
@@ -515,18 +423,24 @@ new WorkerPoolManager(poolOptions, highlighterOptions)
 //   - onWorkerError?: (event: ErrorEvent | Event, worker: Worker) => void
 //     Called for each worker error instead of logging it with console.error.
 //     Failed initialization switches components to main-thread highlighting.
+//   - mainThreadMaxCharacters?: number (default: unset) - Files and diffs with
+//     at most this many characters highlight on the main thread instead of a
+//     worker. Diffs count both sides. Unset (default behavior) sends every 
+//     highlight to a worker.
 // - highlighterOptions: WorkerInitializationRenderOptions
 //   - theme?: DiffsThemeNames | ThemesType - Theme name or { dark, light } object
 //   - lineDiffType?: 'word' | 'word-alt' | 'word-line' | 'char' | 'none'
 //     How to diff lines (default: 'word-alt')
 //   - maxLineDiffLength?: number - Max changed-line length for inline line diffs (default: 1000)
 //   - tokenizeMaxLineLength?: number - Max line length to tokenize (default: 1000)
-//   - preferredHighlighter?: 'shiki-js' | 'shiki-wasm' - Highlighter engine (default: 'shiki-js')
+//   - preferredHighlighter?: 'shiki-js' | 'shiki-wasm' | 'highlights' - Highlighter backend (default: 'shiki-js')
 //   - langs?: SupportedLanguages[] - Array of languages to preload
 
 // Methods:
 poolManager.initialize()
-// Returns: Promise<void> - Initializes workers (auto-called on first render)
+// Returns: Promise<void> - Resolves when the workers are ready. Startup begins
+// automatically when the manager is constructed; call this to await it, or to
+// start the pool again after terminate()
 
 poolManager.isInitialized()
 // Returns: boolean
@@ -556,8 +470,12 @@ poolManager.highlightDiffAST(fileDiffInstance, diff, options)
 poolManager.getPlainDiffAST(diff, lineDiffType)
 // Returns: ThemedDiffResult | undefined - Sync render with 'text' lang
 
+poolManager.shouldHighlightOnMainThread(fileOrDiff)
+// Returns: boolean - Whether a file or diff is within mainThreadMaxCharacters
+
 poolManager.terminate()
-// Terminates all workers and resets state
+// Terminates all workers and resets state. Components highlight on the main
+// thread until initialize() starts the pool again.
 
 poolManager.getStats()
 // Returns: { totalWorkers, busyWorkers, queuedTasks, pendingTasks }
@@ -688,7 +606,7 @@ export const WORKER_POOL_ARCHITECTURE_ASCII: PreloadFileOptions<
 ┌───┴───────── Worker Threads ────────│───┐
 │ ┌ worker.js ────────────────────────│─┐ │
 │ │ * 8 threads by default            │ │ │
-│ │ * Runs Shiki's codeToHast() ──────┘ │ │
+│ │ * Tokenizes with the backend ────┘ │ │
 │ │ * Manages themes and language       │ │
 │ │   loading automatically             │ │
 │ └─────────────────────────────────────┘ │

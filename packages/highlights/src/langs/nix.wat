@@ -84,6 +84,10 @@
     (local $p i32)
     (block $done
       (loop $scan
+        ;; a closer ends at $ptr and an escape [$p,$e) branches to the
+        ;; end of $close or $escape
+        (block $escape
+        (block $close
         (if (i32.eq (local.get $kind) (i32.const 1))
           (then
             (local.set $p
@@ -100,16 +104,11 @@
         (if (i32.eq (local.get $c) (i32.const 34))
           (then
             (global.set $ptr (i32.add (local.get $p) (i32.const 1)))
-            (call $emitTok (enum.get $Token.string) (local.get $seg) (global.get $ptr))
-            (return (i32.const 1))))
+            (br $close)))
         (if (i32.eq (local.get $c) (i32.const 92))
           (then
-            (call $emitTok (enum.get $Token.string) (local.get $seg) (local.get $p))
             (local.set $e (call $lexEscapeEnd (local.get $p)))
-            (call $emitTok (enum.get $Token.string.escape) (local.get $p) (local.get $e))
-            (global.set $ptr (local.get $e))
-            (local.set $seg (local.get $e))
-            (br $scan)))
+            (br $escape)))
         (if (i32.eq (local.get $c) (i32.const 39))
           (then
             (if (i32.ne (local.get $c2) (i32.const 39))
@@ -128,13 +127,8 @@
                   (then (local.set $e (call $lexEscapeEnd (i32.add (local.get $p) (i32.const 2)))))
                   (else
                     (global.set $ptr (i32.add (local.get $p) (i32.const 2)))
-                    (call $emitTok (enum.get $Token.string) (local.get $seg) (global.get $ptr))
-                    (return (i32.const 1))))))
-            (call $emitTok (enum.get $Token.string) (local.get $seg) (local.get $p))
-            (call $emitTok (enum.get $Token.string.escape) (local.get $p) (local.get $e))
-            (global.set $ptr (local.get $e))
-            (local.set $seg (local.get $e))
-            (br $scan)))
+                    (br $close)))))
+            (br $escape)))
         ;; `$`
         (if (i32.and (i32.eq (local.get $c2) (i32.const "{")) (i32.eqz (local.get $nested)))
           (then
@@ -143,6 +137,13 @@
             (call $emitTok (enum.get $Token.punctuation.special) (local.get $p) (global.get $ptr))
             (return (i32.const 2))))
         (global.set $ptr (i32.add (local.get $p) (i32.const 1)))
+        (br $scan))
+        (call $emitTok (enum.get $Token.string) (local.get $seg) (global.get $ptr))
+        (return (i32.const 1)))
+        (call $emitTok (enum.get $Token.string) (local.get $seg) (local.get $p))
+        (call $emitTok (enum.get $Token.string.escape) (local.get $p) (local.get $e))
+        (global.set $ptr (local.get $e))
+        (local.set $seg (local.get $e))
         (br $scan)))
     (call $emitTok (enum.get $Token.string) (local.get $seg) (global.get $ptr))
     (i32.const 0))

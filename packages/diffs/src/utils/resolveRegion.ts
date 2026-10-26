@@ -59,6 +59,8 @@ export function resolveRegion(
     hunks: [],
     deletionLines: [],
     additionLines: [],
+    deletionCharacterCount: 0,
+    additionCharacterCount: 0,
     splitLineCount: 0,
     unifiedLineCount: 0,
     cacheKey:
@@ -255,8 +257,8 @@ function pushCollapsedContextLines(
         'pushCollapsedContextLines: missing collapsed context line'
       );
     }
-    diff.deletionLines.push(deletionLine);
-    diff.additionLines.push(additionLine);
+    pushDeletionLine(diff, deletionLine);
+    pushAdditionLine(diff, additionLine);
   }
 }
 
@@ -308,8 +310,8 @@ function pushContentLinesToDiff(
         console.error({ additionLines, content, i });
         throw new Error('pushContentLinesToDiff: Context line does not exist');
       }
-      diff.deletionLines.push(line);
-      diff.additionLines.push(line);
+      pushDeletionLine(diff, line);
+      pushAdditionLine(diff, line);
     }
   } else {
     const len = Math.max(content.deletions, content.additions);
@@ -322,7 +324,7 @@ function pushContentLinesToDiff(
             'pushContentLinesToDiff: Deletion line does not exist'
           );
         }
-        diff.deletionLines.push(line);
+        pushDeletionLine(diff, line);
       }
       if (i < content.additions) {
         const line = additionLines[content.additionLineIndex + i];
@@ -332,7 +334,7 @@ function pushContentLinesToDiff(
             'pushContentLinesToDiff: Addition line does not exist'
           );
         }
-        diff.additionLines.push(line);
+        pushAdditionLine(diff, line);
       }
     }
   }
@@ -352,8 +354,8 @@ function pushResolveLinesToDiff(
         console.error({ deletionLines, content, i });
         throw new Error('pushResolveLinesToDiff: Deletion line does not exist');
       }
-      diff.deletionLines.push(line);
-      diff.additionLines.push(line);
+      pushDeletionLine(diff, line);
+      pushAdditionLine(diff, line);
     }
   }
   if (resolution === 'additions' || resolution === 'both') {
@@ -363,8 +365,8 @@ function pushResolveLinesToDiff(
         console.error({ additionLines, content, i });
         throw new Error('pushResolveLinesToDiff: Addition line does not exist');
       }
-      diff.deletionLines.push(line);
-      diff.additionLines.push(line);
+      pushDeletionLine(diff, line);
+      pushAdditionLine(diff, line);
     }
   }
 }
@@ -401,4 +403,16 @@ function advanceCursor(
     hunk.splitLineCount += Math.max(content.deletions, content.additions);
     hunk.unifiedLineCount += content.deletions + content.additions;
   }
+}
+
+// Appends a line to one side of the resolved diff and keeps that side's
+// character count in sync with its line array.
+function pushDeletionLine(diff: FileDiffMetadata, line: string) {
+  diff.deletionLines.push(line);
+  diff.deletionCharacterCount += line.length;
+}
+
+function pushAdditionLine(diff: FileDiffMetadata, line: string) {
+  diff.additionLines.push(line);
+  diff.additionCharacterCount += line.length;
 }

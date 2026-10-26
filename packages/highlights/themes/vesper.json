@@ -24,6 +24,22 @@
     "warning": "#FFC799ff",
     "info": "#7E7E7Eff",
     "hint": "#A0A0A0",
+    "terminal.ansi.black": "#101010",
+    "terminal.ansi.red": "#f5a191",
+    "terminal.ansi.green": "#90b99f",
+    "terminal.ansi.yellow": "#e6b99d",
+    "terminal.ansi.blue": "#aca1cf",
+    "terminal.ansi.magenta": "#e29eca",
+    "terminal.ansi.cyan": "#ea83a5",
+    "terminal.ansi.white": "#A0A0A0",
+    "terminal.ansi.bright_black": "#7E7E7E",
+    "terminal.ansi.bright_red": "#ff8080",
+    "terminal.ansi.bright_green": "#99FFE4",
+    "terminal.ansi.bright_yellow": "#FFC799",
+    "terminal.ansi.bright_blue": "#b9aeda",
+    "terminal.ansi.bright_magenta": "#ecaad6",
+    "terminal.ansi.bright_cyan": "#f591b2",
+    "terminal.ansi.bright_white": "#ffffff",
     "syntax": {
       "attribute": {
         "color": "#A0A0A0"

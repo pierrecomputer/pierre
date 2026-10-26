@@ -602,3 +602,18 @@ void t.test('kotlin: a trailing lambda makes a call', () => {
     ['{ }', 'punctuation.bracket'],
   ]);
 });
+
+void t.test('kotlin: a `$name` template ends before the next `$`', () => {
+  const kinds = tokenKinds('kotlin', 'val s = "$a${b + 1} $c$ d $$x"\n');
+  for (const name of ['$a', '$c', '$x']) {
+    assert.ok(
+      kinds.some(([text, kind]) => text === name && kind === 'variable'),
+      name
+    );
+  }
+  assert.ok(
+    kinds.some(
+      ([text, kind]) => text === '${' && kind === 'punctuation.special'
+    )
+  );
+});

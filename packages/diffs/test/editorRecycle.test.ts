@@ -71,7 +71,7 @@ function createTestFile(
       theme: DEFAULT_THEMES,
     },
     undefined,
-    true
+    () => undefined
   ) as TestFile;
   const fileContainer = document.createElement('div');
   document.body.appendChild(fileContainer);

@@ -1,6 +1,10 @@
-import { type CreatePatchOptionsNonabortable, createTwoFilesPatch } from 'diff';
+import { createTwoFilesPatch } from 'diff';
 
-import type { FileContents, FileDiffMetadata } from '../types';
+import type {
+  FileContents,
+  FileDiffMetadata,
+  ParseDiffOptions,
+} from '../types';
 import { composeCacheKey } from './composeCacheKey';
 import { processFile } from './parsePatchFiles';
 
@@ -10,12 +14,12 @@ const MISSING_FILE_NAME = '/dev/null';
  * Parses a diff from two file contents objects.
  *
  * If both `oldFile` and `newFile` have a `cacheKey`, the resulting diff gets a
- * collision-safe key derived from both values.
+ * collision-safe key derived from both values and the line-matching mode.
  */
 export function parseDiffFromFile(
   oldFile: FileContents | null,
   newFile: FileContents | null,
-  options?: CreatePatchOptionsNonabortable,
+  { disableLineMatching, ...diffOptions }: ParseDiffOptions = {},
   throwOnError = false
 ): FileDiffMetadata {
   if (oldFile === null && newFile === null) {
@@ -33,7 +37,7 @@ export function parseDiffFromFile(
     resolvedNewFile.contents,
     resolvedOldFile.header,
     resolvedNewFile.header,
-    options
+    diffOptions
   );
 
   const fileData = processFile(patch, {
@@ -41,11 +45,16 @@ export function parseDiffFromFile(
       const oldCacheKey = oldFile?.cacheKey;
       const newCacheKey = newFile?.cacheKey;
       return oldCacheKey != null && newCacheKey != null
-        ? composeCacheKey('diff', oldCacheKey, newCacheKey)
+        ? composeCacheKey(
+            disableLineMatching === true ? 'diff-raw' : 'diff',
+            oldCacheKey,
+            newCacheKey
+          )
         : undefined;
     })(),
     oldFile: resolvedOldFile,
     newFile: resolvedNewFile,
+    disableLineMatching,
     throwOnError,
   });
   if (fileData == null) {

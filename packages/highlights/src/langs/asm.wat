@@ -64,8 +64,28 @@
           (i32.and
             (i32.eq (local.get $n) (i32.const 4))
             (i32.eq (local.get $w) (i32.const "zero"))))))
-    (if (i32.eq (local.get $n) (i32.const 2))
+    (if (i32.eq (local.get $n) (i32.const 3))
       (then
+        ;; without the `e`/`r` prefix, only the x86-64 low bytes of the index
+        ;; and pointer registers remain
+        (if (i32.and (i32.ne (local.get $c) (i32.const "e")) (i32.ne (local.get $c) (i32.const "r")))
+          (then
+            (local.set $w (i32.and (local.get $w) (i32.const 0xffffff)))
+            (return
+              (i32.or
+                (i32.or
+                  (i32.eq (local.get $w) (i32.const "sil"))
+                  (i32.eq (local.get $w) (i32.const "dil")))
+                (i32.or
+                  (i32.eq (local.get $w) (i32.const "spl"))
+                  (i32.eq (local.get $w) (i32.const "bpl")))))))
+        ;; the two bytes after the `e`/`r` prefix
+        (local.set $w (i32.and (i32.shr_u (local.get $w) (i32.const 8)) (i32.const 0xffff)))
+        (if (i32.eq (local.get $w) (i32.const "ip"))
+          (then (return (i32.const 1)))))
+      (else
+        (if (i32.ne (local.get $n) (i32.const 2))
+          (then (return (i32.const 0))))
         (local.set $w (i32.and (local.get $w) (i32.const 0xffff)))
         ;; x86 `al`/`ah`/`ax` through `dl`/`dh`/`dx`
         (local.set $n (i32.shr_u (local.get $w) (i32.const 8)))
@@ -84,52 +104,24 @@
               (i32.le_u (i32.sub (local.get $c) (i32.const "c")) (i32.const 4))
               (i32.eq (local.get $c) (i32.const "s"))))
           (then (return (i32.const 1))))
-        (return
+        (if
           (i32.or
             (i32.or
-              (i32.or
-                (i32.eq (local.get $w) (i32.const "sp"))
-                (i32.eq (local.get $w) (i32.const "fp")))
-              (i32.or
-                (i32.eq (local.get $w) (i32.const "lr"))
-                (i32.eq (local.get $w) (i32.const "pc"))))
+              (i32.eq (local.get $w) (i32.const "fp"))
+              (i32.or (i32.eq (local.get $w) (i32.const "lr")) (i32.eq (local.get $w) (i32.const "pc"))))
             (i32.or
-              (i32.or
-                (i32.or
-                  (i32.eq (local.get $w) (i32.const "si"))
-                  (i32.eq (local.get $w) (i32.const "di")))
-                (i32.eq (local.get $w) (i32.const "bp")))
-              (i32.or
-                (i32.eq (local.get $w) (i32.const "ra"))
-                (i32.or
-                  (i32.eq (local.get $w) (i32.const "gp"))
-                  (i32.eq (local.get $w) (i32.const "tp")))))))))
-    (if (i32.ne (local.get $n) (i32.const 3))
-      (then (return (i32.const 0))))
-    ;; without the `e`/`r` prefix, only the x86-64 low bytes of the index
-    ;; and pointer registers remain
-    (if (i32.and (i32.ne (local.get $c) (i32.const "e")) (i32.ne (local.get $c) (i32.const "r")))
-      (then
-        (local.set $w (i32.and (local.get $w) (i32.const 0xffffff)))
-        (return
-          (i32.or
-            (i32.or
-              (i32.eq (local.get $w) (i32.const "sil"))
-              (i32.eq (local.get $w) (i32.const "dil")))
-            (i32.or
-              (i32.eq (local.get $w) (i32.const "spl"))
-              (i32.eq (local.get $w) (i32.const "bpl")))))))
-    ;; the two bytes after the `e`/`r` prefix
-    (local.set $w (i32.and (i32.shr_u (local.get $w) (i32.const 8)) (i32.const 0xffff)))
+              (i32.eq (local.get $w) (i32.const "ra"))
+              (i32.or (i32.eq (local.get $w) (i32.const "gp")) (i32.eq (local.get $w) (i32.const "tp")))))
+          (then (return (i32.const 1))))))
+    ;; names of both lengths: `ax`..`dx`, `si`, `di`, `bp`, `sp`, and their
+    ;; `e`/`r` forms
     (i32.or
-      (i32.or
-        (i32.or (i32.eq (local.get $w) (i32.const "ax")) (i32.eq (local.get $w) (i32.const "bx")))
-        (i32.or (i32.eq (local.get $w) (i32.const "cx")) (i32.eq (local.get $w) (i32.const "dx"))))
+      (i32.and
+        (i32.le_u (i32.sub (i32.and (local.get $w) (i32.const 0xff)) (i32.const "a")) (i32.const 3))
+        (i32.eq (i32.shr_u (local.get $w) (i32.const 8)) (i32.const "x")))
       (i32.or
         (i32.or (i32.eq (local.get $w) (i32.const "si")) (i32.eq (local.get $w) (i32.const "di")))
-        (i32.or
-          (i32.or (i32.eq (local.get $w) (i32.const "bp")) (i32.eq (local.get $w) (i32.const "sp")))
-          (i32.eq (local.get $w) (i32.const "ip"))))))
+        (i32.or (i32.eq (local.get $w) (i32.const "bp")) (i32.eq (local.get $w) (i32.const "sp"))))))
 
   (func $hlAsm
     (local $c i32)

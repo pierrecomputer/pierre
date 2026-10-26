@@ -7,7 +7,6 @@
 // only mapping that changes.
 import {
   registerCustomTheme,
-  type ThemeRegistrationResolved,
   type ThemesType,
   type ThemeTypes,
 } from '@pierre/diffs';
@@ -59,9 +58,7 @@ function nameForDiffThemeValue(value: DiffThemeValue): string {
   const name = requireThemeValueName(value);
   if (!seededDiffThemeNames.has(name)) {
     seededDiffThemeNames.add(name);
-    registerCustomTheme(name, () =>
-      Promise.resolve(value as ThemeRegistrationResolved)
-    );
+    registerCustomTheme(name, () => Promise.resolve(value));
   }
   return name;
 }

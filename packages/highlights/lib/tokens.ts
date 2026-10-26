@@ -25,7 +25,7 @@ export type ThemeRole = 'single' | 'default' | 'variable' | 'light-dark';
  */
 export interface ResolvedTheme extends Pick<
   PreparedTheme,
-  'name' | 'styles' | 'fg' | 'bg' | 'table'
+  'name' | 'styles' | 'fg' | 'bg' | 'table' | 'ansi'
 > {
   color: string | null;
   role: ThemeRole;
@@ -91,11 +91,23 @@ function preparedId(prepared: PreparedTheme): number {
 
 /** Tag one prepared theme with its color key and role. */
 function tagTheme(
-  { name, styles, fg, bg, table }: PreparedTheme,
+  prepared: PreparedTheme,
   color: string | null,
   role: ThemeRole
 ): ResolvedTheme {
-  return { color, role, name, styles, fg, bg, table };
+  const { name, styles, fg, bg, table } = prepared;
+  return {
+    color,
+    role,
+    name,
+    styles,
+    fg,
+    bg,
+    table,
+    get ansi() {
+      return prepared.ansi;
+    },
+  };
 }
 
 /**

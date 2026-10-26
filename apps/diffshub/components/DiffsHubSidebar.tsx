@@ -1,6 +1,5 @@
 'use client';
 
-import type { CodeViewHandle } from '@pierre/diffs/react';
 import {
   IconComment,
   IconFileTree,
@@ -27,10 +26,11 @@ import { CHROME_ICON_BUTTON_CLASS } from './chromeButtonStyles';
 import { DiffsHubCommentsList } from './DiffsHubCommentsList';
 import { DiffsHubDiffStats } from './DiffsHubDiffStats';
 import { DiffsHubFileTree } from './DiffsHubFileTree';
+import { PoweredBy } from './PoweredBy';
+import { StressTestControls } from './StressTestControls';
 import { useChromeThemeProps } from './useChromeThemeProps';
 import { useMediaQuery } from './useMediaQuery';
-import type { ThemeCycleControls } from './useThemeCycle';
-import { WorkerPoolStatus } from './WorkerPoolStatus';
+import type { StressTestState } from './useStressTest';
 import { Button } from '@/components/Button';
 import { ButtonGroup, ButtonGroupItem } from '@/components/ButtonGroup';
 import {
@@ -48,7 +48,6 @@ import { getDiffsHubFileTreeAvailableStatuses } from '@/lib/getDiffsHubFileTreeA
 import { diffshubChromeMapping } from '@/lib/theme/diffshubChromeMapping';
 import { getDropdownThemeStyle } from '@/lib/theme/dropdownChromeStyle';
 import type {
-  CommentMetadata,
   DiffsHubDiffStats as DiffsHubDiffStatsData,
   DiffsHubFileTreeSource,
   DiffsHubSavedCommentEntry,
@@ -56,7 +55,6 @@ import type {
 } from '@/lib/types';
 
 type SidebarTab = 'files' | 'comments';
-type SidebarStatusPanel = 'diffStats' | 'systemMonitor';
 
 const MOBILE_MEDIA_QUERY = '(max-width: 767px)';
 
@@ -71,8 +69,7 @@ interface DiffsHubSidebarProps {
   scrollRef: RefObject<HTMLDivElement | null>;
   source: DiffsHubFileTreeSource;
   streaming: boolean;
-  themeCycle: ThemeCycleControls;
-  viewerRef: RefObject<CodeViewHandle<CommentMetadata, undefined> | null>;
+  stressTest: StressTestState;
 }
 
 export const DiffsHubSidebar = memo(function DiffsHubSidebar({
@@ -86,8 +83,7 @@ export const DiffsHubSidebar = memo(function DiffsHubSidebar({
   scrollRef,
   source,
   streaming,
-  themeCycle,
-  viewerRef,
+  stressTest,
 }: DiffsHubSidebarProps) {
   const [activeTab, setActiveTab] = useState<SidebarTab>('files');
   let totalCommentCount = 0;
@@ -111,8 +107,7 @@ export const DiffsHubSidebar = memo(function DiffsHubSidebar({
     () => getDropdownThemeStyle(sidebarStyle),
     [sidebarStyle]
   );
-  const [activeStatusPanel, setActiveStatusPanel] =
-    useState<SidebarStatusPanel | null>('diffStats');
+  const [diffStatsExpanded, setDiffStatsExpanded] = useState(true);
   const isMobileViewport = useMediaQuery(MOBILE_MEDIA_QUERY, undefined);
   const [previousMobileOverlayOpen, setPreviousMobileOverlayOpen] =
     useState(false);
@@ -134,8 +129,8 @@ export const DiffsHubSidebar = memo(function DiffsHubSidebar({
   const handleModelReady = useCallback((model: FileTree | null) => {
     setFileTreeModel(model);
   }, []);
-  const toggleStatusPanel = useCallback((panel: SidebarStatusPanel) => {
-    setActiveStatusPanel((current) => (current === panel ? null : panel));
+  const toggleDiffStats = useCallback(() => {
+    setDiffStatsExpanded((expanded) => !expanded);
   }, []);
 
   const clearStatusFilter = useCallback(() => {
@@ -166,15 +161,15 @@ export const DiffsHubSidebar = memo(function DiffsHubSidebar({
     });
   }, []);
 
-  // Reset the panel once when a mobile overlay opens, while still allowing the
-  // user to reopen it during that same overlay session.
+  // Collapse the diff stats once when a mobile overlay opens, while still
+  // allowing the user to reopen them during that same overlay session.
   if (
     isMobileViewport !== undefined &&
     previousMobileOverlayOpen !== mobileOverlayOpen
   ) {
     setPreviousMobileOverlayOpen(mobileOverlayOpen);
     if (mobileOverlayOpen && isMobileViewport) {
-      setActiveStatusPanel(null);
+      setDiffStatsExpanded(false);
     }
   }
 
@@ -320,17 +315,13 @@ export const DiffsHubSidebar = memo(function DiffsHubSidebar({
           </div>
         </div>
         <DiffsHubDiffStats
-          expanded={activeStatusPanel === 'diffStats'}
-          onToggle={() => toggleStatusPanel('diffStats')}
+          expanded={diffStatsExpanded}
+          onToggle={toggleDiffStats}
           stats={diffStats}
           streaming={streaming}
         />
-        <WorkerPoolStatus
-          expanded={activeStatusPanel === 'systemMonitor'}
-          onToggle={() => toggleStatusPanel('systemMonitor')}
-          viewerRef={viewerRef}
-          themeCycle={themeCycle}
-        />
+        <StressTestControls stressTest={stressTest} />
+        <PoweredBy />
       </SidebarWrapper>
     </>
   );

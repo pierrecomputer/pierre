@@ -1,9 +1,6 @@
 (module
   (import "../common.wat")
 
-  (func $pasByte (param $p i32) (result i32)
-    (select (i32.load8_u (local.get $p)) (i32.const 0) (i32.lt_u (local.get $p) (global.get $end))))
-
   ;; Pascal is case-insensitive, so the table holds lowercase words and
   ;; $pasWordHl probes it with a lowercased copy of the input word. Group
   ;; order is the dispatch order in $hlPascal. The high byte of a
@@ -94,7 +91,7 @@
       (select
         (enum.get $Token.preproc)
         (enum.get $Token.comment)
-        (i32.eq (call $pasByte (global.get $ptr)) (i32.const "$"))))
+        (i32.eq (call $templateByte (global.get $ptr)) (i32.const "$"))))
     (if (local.get $paren)
       (then
         (block $done
@@ -105,7 +102,7 @@
                 (global.set $ptr (global.get $end))
                 (br $done)))
             (global.set $ptr (i32.add (local.get $p) (i32.const 1)))
-            (if (i32.eq (call $pasByte (global.get $ptr)) (i32.const ")"))
+            (if (i32.eq (call $templateByte (global.get $ptr)) (i32.const ")"))
               (then
                 (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
                 (local.set $closed (i32.const 1))
@@ -145,7 +142,7 @@
         (br_if $done (i32.ge_u (local.get $p) (global.get $end)))
         (br_if $done (i32.ne (i32.load8_u (local.get $p)) (i32.const 39)))
         (global.set $ptr (i32.add (local.get $p) (i32.const 1)))
-        (br_if $done (i32.ne (call $pasByte (global.get $ptr)) (i32.const 39)))
+        (br_if $done (i32.ne (call $templateByte (global.get $ptr)) (i32.const 39)))
         (call $emitTok (enum.get $Token.string) (local.get $seg) (local.get $p))
         (global.set $ptr (i32.add (local.get $p) (i32.const 2)))
         (call $emitTok (enum.get $Token.string.escape) (local.get $p) (global.get $ptr))
@@ -191,7 +188,7 @@
         (br_if $done (i32.ge_u (global.get $ptr) (global.get $end)))
         (local.set $lhs (global.get $ptr))
         (local.set $c (i32.load8_u (global.get $ptr)))
-        (local.set $c2 (call $pasByte (i32.add (global.get $ptr) (i32.const 1))))
+        (local.set $c2 (call $templateByte (i32.add (global.get $ptr) (i32.const 1))))
 
         (if
           (i32.and (i32.eq (local.get $c) (i32.const "/")) (i32.eq (local.get $c2) (i32.const "/")))
@@ -241,7 +238,7 @@
             (call $scanIdentRun (i32.const "_"))
             (local.set $rhs (global.get $ptr))
             (local.set $p (call $lexSkipSpaceAt (local.get $rhs)))
-            (local.set $pc (call $pasByte (local.get $p)))
+            (local.set $pc (call $templateByte (local.get $p)))
             (local.set $kind
               (select
                 (i32.const -1)
@@ -301,7 +298,7 @@
                         (if (i32.eq (local.get $expect) (i32.const 1))
                           (then
                             ;; `procedure TForm1.Click(` names the class first
-                            (if (i32.eq (call $pasByte (local.get $rhs)) (i32.const "."))
+                            (if (i32.eq (call $templateByte (local.get $rhs)) (i32.const "."))
                               (then (local.set $hl (enum.get $Token.type)))
                               (else
                                 (local.set $hl (enum.get $Token.function.definition))
@@ -427,13 +424,13 @@
           (then
             (block $opDone
               (loop $op
-                (br_if $opDone (i32.eqz (call $pasIsOp (call $pasByte (global.get $ptr)))))
+                (br_if $opDone (i32.eqz (call $pasIsOp (call $templateByte (global.get $ptr)))))
                 ;; a comment opener ends the run
                 (br_if $opDone
                   (i32.and
-                    (i32.eq (call $pasByte (global.get $ptr)) (i32.const "/"))
+                    (i32.eq (call $templateByte (global.get $ptr)) (i32.const "/"))
                     (i32.eq
-                      (call $pasByte (i32.add (global.get $ptr) (i32.const 1)))
+                      (call $templateByte (i32.add (global.get $ptr) (i32.const 1)))
                       (i32.const "/"))))
                 (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
                 (br $op)))

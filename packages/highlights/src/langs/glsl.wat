@@ -165,7 +165,34 @@
 
     (enum.get $Token.none))
 
+  ;; Keep mode names out of this table: `sky` and `fog` also name functions.
+  ;; The +256 flag starts a mode list in $hlGlslImpl.
+  (keyword-table $gdShaderWords $mem.gdshaderWords $mem.gdresourceWords
+    (group $Token.keyword+256 "shader_type" "render_mode")
+    (group $Token.keyword
+      "group_uniforms" "global" "instance"
+      "const" "in" "out" "inout" "uniform" "varying" "flat" "smooth" "lowp" "mediump" "highp")
+    (group $Token.attribute
+      "source_color" "hint_range" "hint_enum" "hint_normal" "hint_default_white" "hint_default_black"
+      "hint_default_transparent" "hint_anisotropy" "hint_roughness_r" "hint_roughness_g"
+      "hint_roughness_b" "hint_roughness_a" "hint_roughness_normal" "hint_screen_texture"
+      "hint_normal_roughness_texture" "filter_nearest" "filter_linear"
+      "filter_nearest_mipmap" "filter_linear_mipmap" "repeat_enable" "repeat_disable")
+    (group $Token.variable.special
+      "TIME" "VIEWPORT_SIZE" "FRAGCOORD" "VERTEX" "NORMAL" "TANGENT" "BINORMAL" "POSITION"
+      "UV" "UV2" "COLOR" "POINT_SIZE" "POINT_COORD" "INSTANCE_ID" "INSTANCE_CUSTOM"
+      "MODEL_MATRIX" "VIEW_MATRIX" "PROJECTION_MATRIX" "INV_VIEW_MATRIX" "INV_PROJECTION_MATRIX"
+      "MODELVIEW_MATRIX" "MODEL_NORMAL_MATRIX" "ALBEDO" "ALPHA" "METALLIC" "ROUGHNESS" "SPECULAR"
+      "EMISSION" "NORMAL_MAP" "NORMAL_MAP_DEPTH" "AO" "DEPTH" "SCREEN_UV" "TEXTURE" "TEXTURE_PIXEL_SIZE"
+      "SCREEN_PIXEL_SIZE" "LIGHT" "LIGHT_COLOR" "LIGHT_ENERGY" "ATTENUATION" "DIFFUSE_LIGHT" "SPECULAR_LIGHT"
+      "VELOCITY" "ACTIVE" "RESTART" "CUSTOM" "TRANSFORM" "LIFETIME" "DELTA" "NUMBER" "INDEX"
+      "EYEDIR" "SKY_COORDS" "DENSITY")
+    (group $Token.constant.builtin "PI" "TAU"))
+
   (func $hlGlsl
+    (call $hlGlslImpl (i32.const 0)))
+
+  (func $hlGlslImpl (param $godot i32)
     (local $c i32)
     (local $n i32)
     (local $lhs i32)
@@ -173,9 +200,11 @@
     (local $p i32)
     (local $word i32)
     (local $hl i32)
+    (local $len i32)
     (local $afterDot i32)
     (local $wantType i32)
     (local $include i32)
+    (local $modes i32)
     ;; the quote of a string the previous chunk left open at an escaped line
     ;; break, or 0: it resumes with C escape rules ($lexCStringResume)
     (local $strCont i32)
@@ -215,6 +244,7 @@
             (call $emitTok (enum.get $Token.preproc) (local.get $lhs) (global.get $ptr))
             (local.set $afterDot (i32.const 0))
             (local.set $wantType (i32.const 0))
+            (local.set $modes (i32.const 0))
             (br $next)))
 
         ;; Angle-bracket include paths are strings, not comparison operators.
@@ -276,6 +306,11 @@
                 (call $lexBlockComment (i32.const 2) (local.get $hl))
                 (br $next)))))
 
+        (if (local.get $modes)
+          (then
+            (local.set $modes
+              (i32.or (call $lexIsIdentStart (local.get $c)) (i32.eq (local.get $c) (i32.const ","))))))
+
         (if (i32.or (i32.eq (local.get $c) (i32.const 34)) (i32.eq (local.get $c) (i32.const 39)))
           (then
             (local.set $strCont (call $lexCString (enum.get $Token.string)))
@@ -304,7 +339,47 @@
         (if (call $lexIsIdentStart (local.get $c))
           (then
             (call $lexScanIdent)
-            (local.set $hl (call $glslWordHl (local.get $lhs) (global.get $ptr)))
+            (local.set $hl (enum.get $Token.none))
+            (if (local.get $godot)
+              (then
+                (if (local.get $modes)
+                  (then (local.set $hl (enum.get $Token.keyword)))
+                  (else
+                    (local.set $p (keyword-table.value $gdShaderWords (local.get $lhs) (global.get $ptr)))
+                    (if (i32.ge_s (local.get $p) (i32.const 0))
+                      (then
+                        (local.set $hl (i32.and (local.get $p) (i32.const 255)))
+                        (local.set $modes (i32.shr_u (local.get $p) (i32.const 8))))
+                      (else
+                        ;; The keyword table only supports lengths 2 through 31.
+                        (local.set $len (i32.sub (global.get $ptr) (local.get $lhs)))
+                        (if (i32.eq (local.get $len) (i32.const 1))
+                          (then
+                            (if (i32.eq (local.get $c) (i32.const "E"))
+                              (then (local.set $hl (enum.get $Token.constant.builtin))))))
+                        (if (i32.eq (local.get $len) (i32.const 18))
+                          (then
+                            (if
+                              (i32.and
+                                (i64.eq (i64.load (local.get $lhs)) (i64.const "hint_dep"))
+                                (i32.and
+                                  (i64.eq (i64.load offset=8 (local.get $lhs)) (i64.const "th_textu"))
+                                  (i32.eq (i32.load16_u offset=16 (local.get $lhs)) (i32.const "re"))))
+                              (then (local.set $hl (enum.get $Token.attribute))))))
+                        (if (i32.le_u (i32.sub (local.get $len) (i32.const 32)) (i32.const 1))
+                          (then
+                            (if
+                              (i32.and
+                                (i64.eq (i64.load (i32.sub (global.get $ptr) (i32.const 12))) (i64.const "_anisotr"))
+                                (i32.eq (i32.load (i32.sub (global.get $ptr) (i32.const 4))) (i32.const "opic")))
+                              (then
+                                (if
+                                  (i32.eq
+                                    (keyword-table.value $gdShaderWords (local.get $lhs) (i32.sub (global.get $ptr) (i32.const 12)))
+                                    (enum.get $Token.attribute))
+                                  (then (local.set $hl (enum.get $Token.attribute))))))))))))))
+            (if (i32.eq (local.get $hl) (enum.get $Token.none))
+              (then (local.set $hl (call $glslWordHl (local.get $lhs) (global.get $ptr)))))
             (if (i32.eq (local.get $hl) (enum.get $Token.none))
               (then
                 (if (local.get $wantType)
