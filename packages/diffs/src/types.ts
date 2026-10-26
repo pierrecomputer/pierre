@@ -1,17 +1,19 @@
 import type { CreatePatchOptionsNonabortable } from 'diff';
 import type { ElementContent } from 'hast';
-import type {
-  BundledLanguage,
-  BundledTheme,
-  CodeToHastOptions,
+import type { BundledLanguage, BundledTheme } from 'shiki';
+
+export type { DiffsTheme } from './highlighter/themes/types';
+export type {
+  CodeToHtmlOptions,
+  CodeToTokensOptions,
   DecorationItem,
-  HighlighterGeneric,
-  LanguageRegistration,
-  ShikiTransformer,
+  DiffsHighlighter,
+  DiffsEditorTokenizer,
+  DiffsEditorTokenizerOptions,
+  DiffsStreamTokenizer,
   ThemedToken,
-  ThemeRegistration,
-  ThemeRegistrationResolved,
-} from 'shiki';
+  TokensResult,
+} from './highlighter/types';
 
 export type { CreatePatchOptionsNonabortable };
 
@@ -63,38 +65,15 @@ export type FileDiffContentsLoader = (
   fileDiff: FileDiffMetadata
 ) => Promise<FileDiffLoadedFiles>;
 
-export type HighlighterTypes = 'shiki-js' | 'shiki-wasm';
+export type HighlighterTypes = 'shiki-js' | 'shiki-wasm' | 'highlights';
 
 export type HighlightedToken = [char: number, fg: string, text: string];
-
-export type {
-  BundledLanguage,
-  CodeToHastOptions,
-  DecorationItem,
-  LanguageRegistration,
-  ShikiTransformer,
-  ThemeRegistrationResolved,
-  ThemeRegistration,
-  ThemedToken,
-};
 
 // Diffs accepts Shiki's bundled theme names and any additional theme name a
 // consumer registers through the highlighter/theming catalog.
 export type DiffsThemeNames = BundledTheme | (string & {});
 
 export type ThemesType = Record<'dark' | 'light', DiffsThemeNames>;
-
-/**
- * A Shiki highlighter instance configured with the library's supported
- * languages and themes. Used internally to generate syntax-highlighted AST
- * from file contents. By default diffs will ensure that only 1 highlighter is
- * instantiated per thread and shared for all syntax highlighting.  This
- * applies to the main thread and worker threads.
- */
-export type DiffsHighlighter = HighlighterGeneric<
-  SupportedLanguages,
-  DiffsThemeNames
->;
 
 /**
  * Describes the type of change for a file in a diff.
@@ -347,6 +326,16 @@ export interface FileDiffMetadata {
    */
   additionLines: string[];
   /**
+   * Total character count of every entry in `deletionLines`. Producers and
+   * anything that replaces or mutates `deletionLines` must keep it in sync.
+   */
+  deletionCharacterCount: number;
+  /**
+   * Total character count of every entry in `additionLines`. Producers and
+   * anything that replaces or mutates `additionLines` must keep it in sync.
+   */
+  additionCharacterCount: number;
+  /**
    * Set while an attached editor's session-scoped hunk updates have reshaped
    * `hunks` away from a plain recompute (regions stay frozen during an edit
    * session). Consumed by the session-exit recompute, which restores
@@ -429,7 +418,7 @@ export interface BaseCodeOptions {
   disableVirtualizationBuffers?: boolean;
   stickyHeader?: boolean;
 
-  // Shiki config options, ignored if you're using a WorkerPoolManager
+  // Highlighter options, ignored if you're using a WorkerPoolManager
   preferredHighlighter?: HighlighterTypes;
   useCSSClasses?: boolean;
   useTokenTransformer?: boolean;
@@ -779,6 +768,7 @@ export interface HunkExpansionRegion {
 
 export interface ForceDiffPlainTextOptions {
   forcePlainText: boolean;
+  lazyLineAST?: boolean;
   startingLine?: number;
   totalLines?: number;
   expandedHunks?: Map<number, HunkExpansionRegion> | true;
@@ -787,6 +777,7 @@ export interface ForceDiffPlainTextOptions {
 
 export interface ForceFilePlainTextOptions {
   forcePlainText: boolean;
+  lazyLineAST?: boolean;
   startingLine?: number;
   totalLines?: number;
   // Pre-split lines for caching in windowing scenarios

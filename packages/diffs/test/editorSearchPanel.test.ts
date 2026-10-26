@@ -261,6 +261,54 @@ describe('SearchPanelWidget', () => {
     }
   });
 
+  test('the replace toggle expands and collapses the replace row', async () => {
+    const harness = createWidget('foo foo foo');
+    try {
+      await wait(0);
+      const toggle = document.querySelector<HTMLButtonElement>(
+        '[data-search-panel] [data-replace-toggle]'
+      )!;
+      expect(toggle.ariaLabel).toBe('Toggle Replace');
+      expect(toggle.ariaExpanded).toBe('false');
+
+      // Expanding moves focus to the replace input, ready to type into.
+      toggle.click();
+      expect(harness.mode()).toBe('replace');
+      expect(toggle.ariaExpanded).toBe('true');
+      expect(document.activeElement).toBe(harness.replaceInput);
+
+      // Collapsing returns focus to the find input.
+      toggle.click();
+      expect(harness.mode()).toBe('find');
+      expect(toggle.ariaExpanded).toBe('false');
+      expect(document.activeElement).toBe(harness.input);
+    } finally {
+      harness.cleanup();
+    }
+  });
+
+  test('the replace toggle follows the mode set by shortcuts and setMode', async () => {
+    const harness = createWidget('foo foo foo', { mode: 'replace' });
+    try {
+      await wait(0);
+      const toggle = document.querySelector<HTMLButtonElement>(
+        '[data-search-panel] [data-replace-toggle]'
+      )!;
+      expect(toggle.ariaExpanded).toBe('true');
+
+      pressKey(harness.input, 'f', { metaKey: true });
+      expect(toggle.ariaExpanded).toBe('false');
+
+      pressKey(harness.input, 'f', { metaKey: true, altKey: true });
+      expect(toggle.ariaExpanded).toBe('true');
+
+      harness.widget.setMode('find');
+      expect(toggle.ariaExpanded).toBe('false');
+    } finally {
+      harness.cleanup();
+    }
+  });
+
   test('toggling case sensitivity re-runs the search', async () => {
     const harness = createWidget('Foo foo');
     try {

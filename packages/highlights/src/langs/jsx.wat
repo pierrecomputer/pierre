@@ -439,6 +439,18 @@
     (if (call $jsxCloseTagTail)
       (then (call $jsxPop))))
 
+  ;; MDX sets this to 1 while it resumes a JSX tag that an earlier chunk left
+  ;; open. When the root tag ends, the markup steps store the end here and
+  ;; move $end to it, so the lexer stops where whole input bounds the tag.
+  (global $jsxRootEnd (mut i32) (i32.const 0))
+
+  ;; The outermost element's start tag is complete: it closed with `/>`, or
+  ;; its `>` switched it to children. $m is the top mode.
+  (func $jsxRootDone (param $m i32) (result i32)
+    (i32.or
+      (i32.eqz (global.get $jsxSp))
+      (i32.and (i32.eq (global.get $jsxSp) (i32.const 1)) (i32.eq (local.get $m) (i32.const 2)))))
+
   ;; Run markup steps from mode $m until the stack leaves markup mode
   ;; or input ends. The lexer and $tsxExpressionEnd share this loop.
   ;; Use one call per markup region instead of per attribute or text run.
@@ -454,6 +466,13 @@
                 (then (call $tsrxStyleStep))
                 (else (call $jsxCloseTailStep)))))))
       (local.set $m (call $jsxTopMode))
+      (if (i32.eq (global.get $jsxRootEnd) (i32.const 1))
+        (then
+          (if (call $jsxRootDone (local.get $m))
+            (then
+              (global.set $jsxRootEnd (global.get $ptr))
+              (global.set $end (global.get $ptr))
+              (return)))))
       (br_if $step
         (i32.and
           (call $jsxByteMode (local.get $m))

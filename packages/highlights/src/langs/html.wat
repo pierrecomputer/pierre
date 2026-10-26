@@ -424,7 +424,10 @@
       (then
         (if (local.get $continued)
           (then (call $hlJsStream (i32.const 1)))
-          (else (call $hlJs))))
+          (else
+            (call $hlJs)
+            ;; the body ended: its leftovers would keep live line states apart
+            (call $ecmaReset))))
       (else
         (if (local.get $continued)
           (then

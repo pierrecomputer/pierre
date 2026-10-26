@@ -23,6 +23,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { getPreferredHighlighter } from '@/lib/preferredHighlighter';
 
 type LightThemeName = string;
 type DarkThemeName = string;
@@ -36,6 +37,7 @@ export function ShikiThemes({
 }: ShikiThemesProps) {
   useEffect(() => {
     void preloadHighlighter({
+      preferredHighlighter: getPreferredHighlighter(),
       themes: [
         'ayu-dark',
         'catppuccin-mocha',

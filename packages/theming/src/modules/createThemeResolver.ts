@@ -1,11 +1,6 @@
 /**
- * Generic theme resolver: a pure cache + registry with no Shiki, no theme JSON,
- * and no bundled fallbacks. Callers register named loaders; this module dedupes
- * concurrent loads (same loader runs at most once per name per cache cycle) and
- * caches resolved ThemeLike objects for synchronous access after the first
- * successful load.
- * The `{ default: theme }` unwrap handles the common pattern of dynamic ESM
- * imports (`import('some-theme.json')`) that wrap the value under `default`.
+ * Concurrent requests for one name share a load. Resolved themes are cached
+ * for synchronous reads; module default exports are unwrapped before caching.
  */
 
 import type { ThemeLike } from './types';
@@ -16,6 +11,15 @@ import { type DefaultExport, unwrapDefault } from './unwrapDefault';
 // `import()` on a JSON theme file or a re-exporting ESM module).
 export interface ThemeLoader<TTheme extends ThemeLike = ThemeLike> {
   (): Promise<TTheme | DefaultExport<TTheme>>;
+}
+
+export interface ThemeResolverOptions<TTheme extends ThemeLike = ThemeLike> {
+  /** Load an unregistered name; undefined means the fallback does not know it. */
+  fallbackLoader?: (
+    name: string
+  ) => Promise<TTheme | DefaultExport<TTheme> | undefined>;
+  /** Normalize loaded themes before caching. Seeded themes are already resolved. */
+  normalizeTheme?: (theme: TTheme, name: string) => TTheme | Promise<TTheme>;
 }
 
 export interface ThemeResolver<TTheme extends ThemeLike = ThemeLike> {
@@ -101,9 +105,9 @@ export class UnresolvedThemeError extends Error {
 // Creates an isolated ThemeResolver instance with its own loader registry,
 // resolved-theme cache, and in-flight dedupe map. Multiple instances never
 // share state.
-export function createThemeResolver<
-  TTheme extends ThemeLike = ThemeLike,
->(): ThemeResolver<TTheme> {
+export function createThemeResolver<TTheme extends ThemeLike = ThemeLike>(
+  options: ThemeResolverOptions<TTheme> = {}
+): ThemeResolver<TTheme> {
   // Maps theme name → registered loader function (set at register time).
   const loaders = new Map<string, ThemeLoader<TTheme>>();
 
@@ -155,13 +159,16 @@ export function createThemeResolver<
     }
 
     const loader = loaders.get(name);
-    if (loader === undefined) {
+    if (loader === undefined && options.fallbackLoader === undefined) {
       return Promise.reject(new UnregisteredThemeError(name));
     }
 
     const generation = cacheGeneration;
-    const promise = loader()
-      .then((result) => {
+    const promise = Promise.resolve()
+      .then(() =>
+        loader !== undefined ? loader() : options.fallbackLoader?.(name)
+      )
+      .then(async (result) => {
         // A loader may return either a bare ThemeLike or an ES-module namespace
         // object ({ default: ThemeLike }) — the latter is typical when the
         // loader calls a dynamic import() on a JSON or .ts theme file and the
@@ -169,7 +176,12 @@ export function createThemeResolver<
         // carrying a top-level `default` key as the module-namespace form.
         // Real ThemeLike theme objects never carry a top-level `default` key,
         // so the heuristic is unambiguous in practice.
-        const theme = unwrapDefault(result);
+        if (result === undefined) throw new UnregisteredThemeError(name);
+        const loaded = unwrapDefault(result);
+        const theme =
+          options.normalizeTheme === undefined
+            ? loaded
+            : await options.normalizeTheme(loaded, name);
         if (generation === cacheGeneration) {
           resolved.set(name, theme);
         }

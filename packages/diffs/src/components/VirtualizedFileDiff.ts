@@ -112,7 +112,9 @@ interface PendingExpansion {
 }
 
 interface PendingRender {
-  latestDiff: FileDiffMetadata;
+  // Diff requested for the next render, including editor changes.
+  workingDiff: FileDiffMetadata;
+  // Diff selected by the renderer. Highlighting can keep this on the old diff.
   diff: FileDiffMetadata;
 }
 
@@ -146,7 +148,6 @@ export class VirtualizedFileDiff<
   private isSetup: boolean = false;
   private virtualizer: Virtualizer | CodeView<LAnnotation, Caret>;
   private layoutDirty = true;
-  private forceRenderOverride: true | undefined;
   private currentCollapsed: boolean | undefined;
   private pendingHydratedDiff: PendingLoadedDiff | undefined;
   private pendingExpansions: PendingExpansion[] | undefined;
@@ -161,9 +162,9 @@ export class VirtualizedFileDiff<
     virtualizer: Virtualizer | CodeView<LAnnotation, Caret>,
     metrics?: Partial<VirtualFileMetrics>,
     workerManager?: WorkerPoolManager,
-    isContainerManaged = false
+    requestOwnerRender?: () => void
   ) {
-    super(options, workerManager, isContainerManaged);
+    super(options, workerManager, requestOwnerRender);
     this.virtualizer = virtualizer;
     this.metrics = computeVirtualFileMetrics(metrics);
   }
@@ -227,7 +228,7 @@ export class VirtualizedFileDiff<
   }
 
   private hasFileAnnotations(fileDiff: FileDiffMetadata): boolean {
-    const lineAnnotations = this.getLatestAnnotations();
+    const lineAnnotations = this.getLayoutAnnotations();
     if (!includesFileAnnotations(lineAnnotations)) {
       return false;
     }
@@ -436,7 +437,7 @@ export class VirtualizedFileDiff<
     const { ghostTextRowsByIndex } = this.cache;
     const measureAllRows =
       overflow !== 'scroll' ||
-      this.getLatestAnnotations().length > 0 ||
+      this.lineAnnotations.length > 0 ||
       this.isResizeDebuggingEnabled();
     // Ghost-row changes affect placeholders too, but placeholders have no DOM
     // rows to measure. After the last annotation is removed, keep measuring
@@ -604,7 +605,7 @@ export class VirtualizedFileDiff<
       }
     }
 
-    const diffChanged = this.updateExternalDiff(fileDiff, lineAnnotations);
+    const diffChanged = this.updateInputDiff(fileDiff, lineAnnotations);
     const {
       pendingRenderDiff,
       layoutDiffChanged,
@@ -958,7 +959,7 @@ export class VirtualizedFileDiff<
       this.isAdvancedMode() &&
       this.fileContainer != null &&
       (hadGhostTextRows ||
-        !areDiffTargetsEqual(this.getRenderedDiff(), this.getLatestDiff()));
+        !areDiffTargetsEqual(this.getRenderedDiff(), this.getWorkingDiff()));
     if (this.fileContainer != null && this.isSimpleMode()) {
       this.getSimpleVirtualizer()?.disconnect(this.fileContainer);
     }
@@ -980,7 +981,7 @@ export class VirtualizedFileDiff<
     direction: ExpansionDirections,
     expansionLineCountOverride?: number
   ): void => {
-    if (this.fileDiff == null) {
+    if (this.getInputDiff() == null) {
       return;
     }
     this.loadFilesIfNecessary();
@@ -1008,7 +1009,7 @@ export class VirtualizedFileDiff<
     expectedDiff: FileDiffMetadata,
     files: LoadedPartialDiffContents
   ): Promise<void> {
-    if (this.fileDiff !== expectedDiff || !expectedDiff.isPartial) {
+    if (this.getInputDiff() !== expectedDiff || !expectedDiff.isPartial) {
       return;
     }
     // CodeView component requires careful control for anchor
@@ -1018,7 +1019,7 @@ export class VirtualizedFileDiff<
     if (this.isAdvancedMode()) {
       const nextDiff = hydratePartialDiff('clone', expectedDiff, files);
       await awaitWithTimeout(() => this.primeHighlightCache(nextDiff));
-      if (this.fileDiff !== expectedDiff) {
+      if (this.getInputDiff() !== expectedDiff) {
         return;
       }
       this.pendingHydratedDiff = {
@@ -1031,7 +1032,7 @@ export class VirtualizedFileDiff<
       this.setHydratedState(files);
       if (!this.installHydratedSessionDiff(expectedDiff)) {
         await awaitWithTimeout(() => this.primeHighlightCache(expectedDiff));
-        if (this.fileDiff !== expectedDiff) {
+        if (this.getInputDiff() !== expectedDiff) {
           return;
         }
       }
@@ -1044,7 +1045,7 @@ export class VirtualizedFileDiff<
 
   protected override loadFilesIfNecessary(): void {
     if (this.pendingHydratedDiff != null) {
-      if (this.pendingHydratedDiff.expectedDiff === this.fileDiff) {
+      if (this.pendingHydratedDiff.expectedDiff === this.getInputDiff()) {
         return;
       }
       this.pendingHydratedDiff = undefined;
@@ -1124,7 +1125,7 @@ export class VirtualizedFileDiff<
   // covers it.
   protected override escalateEditSessionRender(): void {
     this.invalidateEditSessionLayout();
-    if (!this.enabled || this.fileDiff == null) {
+    if (!this.enabled || this.getInputDiff() == null) {
       return;
     }
     this.forceRenderOverride = true;
@@ -1154,26 +1155,35 @@ export class VirtualizedFileDiff<
   override rerender(): void {
     if (
       !this.enabled ||
-      (this.fileDiff == null &&
+      (this.getInputDiff() == null &&
         this.additionFile == null &&
         this.deletionFile == null)
     ) {
       return;
     }
-    const latestDiff = this.getLatestDiff();
+    const workingDiff = this.getWorkingDiff();
     const nextRenderDiff =
-      latestDiff == null
+      workingDiff == null
         ? undefined
-        : this.hunksRenderer.getDiffForNextRender(latestDiff);
+        : this.hunksRenderer.getDiffForNextRender(workingDiff);
     // A completed async highlight can change which diff the next simple
     // virtualizer render will commit. CodeView refreshes this during layout.
     if (this.isSimpleMode()) {
       this.pendingRender = undefined;
     }
     this.forceRenderOverride = true;
+    if (this.isSimpleMode() && this.requestRender()) return;
     this.virtualizer.instanceChanged(
       this,
       !areDiffTargetsEqual(this.getRenderedDiff(), nextRenderDiff)
+    );
+  }
+
+  // CodeView items are component-managed whenever their CodeView is.
+  protected override get isComponentManaged(): boolean {
+    return (
+      this.getAdvancedVirtualizer()?.isComponentManaged ??
+      super.isComponentManaged
     );
   }
 
@@ -1288,6 +1298,14 @@ export class VirtualizedFileDiff<
     return this.pendingRender?.diff ?? this.getRenderedDiff();
   }
 
+  // Annotations paired with the content layout is prepared for.
+  private getLayoutAnnotations(): DiffLineAnnotation<LAnnotation>[] {
+    const { pendingRender } = this;
+    return pendingRender != null
+      ? this.getAnnotationsForDiff(pendingRender.diff)
+      : this.lineAnnotations;
+  }
+
   private getActiveEstimatedHeight(
     fileDiff: FileDiffMetadata | undefined = this.getLayoutDiff()
   ): number {
@@ -1383,11 +1401,11 @@ export class VirtualizedFileDiff<
       hasFileInput &&
       (!areOptionalFilesEqual(oldFile, this.deletionFile) ||
         !areOptionalFilesEqual(newFile, this.additionFile));
-    let nextFileDiff = fileDiff ?? this.fileDiff;
+    let nextFileDiff = fileDiff ?? this.getInputDiff();
     if (
       fileDiff == null &&
       hasFileInput &&
-      (filesDidChange || this.fileDiff == null)
+      (filesDidChange || this.getInputDiff() == null)
     ) {
       nextFileDiff = parseDiffFromFile(
         fileInput.oldFile,
@@ -1398,7 +1416,8 @@ export class VirtualizedFileDiff<
     const { forceRenderOverride, isSetup } = this;
     this.forceRenderOverride = undefined;
     const targetChanged =
-      nextFileDiff != null && !areDiffTargetsEqual(this.fileDiff, nextFileDiff);
+      nextFileDiff != null &&
+      !areDiffTargetsEqual(this.getInputDiff(), nextFileDiff);
     const dataChanged = targetChanged || filesDidChange;
 
     fileContainer = this.getOrCreateFileContainer(fileContainer);
@@ -1410,7 +1429,7 @@ export class VirtualizedFileDiff<
       return false;
     }
     if (targetChanged) {
-      this.updateExternalDiff(nextFileDiff, lineAnnotations);
+      this.updateInputDiff(nextFileDiff, lineAnnotations);
     }
 
     const {
@@ -1421,8 +1440,8 @@ export class VirtualizedFileDiff<
     } = (() => {
       if (
         this.pendingRender != null &&
-        this.pendingRender.latestDiff ===
-          (this.getLatestDiff(nextFileDiff) ?? nextFileDiff)
+        this.pendingRender.workingDiff ===
+          (this.getWorkingDiff(nextFileDiff) ?? nextFileDiff)
       ) {
         return {
           pendingRenderDiff: this.pendingRender.diff,
@@ -1523,14 +1542,14 @@ export class VirtualizedFileDiff<
     nextFileDiff: FileDiffMetadata,
     lineAnnotations: DiffLineAnnotation<LAnnotation>[] | undefined
   ) {
-    const latestDiff = this.getLatestDiff(nextFileDiff) ?? nextFileDiff;
+    const workingDiff = this.getWorkingDiff(nextFileDiff) ?? nextFileDiff;
     const previousRenderedDiff = this.getRenderedDiff();
     const { pendingRender } = this;
     const previousLayoutDiff = pendingRender?.diff ?? previousRenderedDiff;
     const pendingRenderDiff =
-      this.hunksRenderer.getDiffForNextRender(latestDiff);
+      this.hunksRenderer.getDiffForNextRender(workingDiff);
 
-    this.pendingRender = { latestDiff, diff: pendingRenderDiff };
+    this.pendingRender = { workingDiff, diff: pendingRenderDiff };
 
     return {
       pendingRenderDiff,

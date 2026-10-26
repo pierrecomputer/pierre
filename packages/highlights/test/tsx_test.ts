@@ -845,6 +845,243 @@ void t.test(
   }
 );
 
+void t.test(
+  'ecma: a ternary colon stays a delimiter before a type-like name',
+  () => {
+    for (const lang of ['ts', 'tsx', 'tsrx'] as const) {
+      for (const code of [
+        'const m = ok ? Diagnostics.A : Diagnostics.B;\n',
+        'const m = ok ?\n  Diagnostics.A :\n  Diagnostics.B;\n',
+        'const m = ok ? { k: 1 } : (x) => Foo;\n',
+        'f(a ? b : C, d ? [e] : F);\n',
+        'type C<T> = T extends string ? Foo : Bar;\n',
+        'const m = ok ? (value) : Result;\n',
+        'f(a, ok ? (value) : Result);\n',
+        'function f() { ok ? (value) : Result; }\n',
+        'const m = { value: ok ? (value) : Result };\n',
+        'const m = { value: ok ? <T,>() => value : Result };\n',
+      ]) {
+        const colons = tokenKinds(lang, code).filter(([text]) => text === ':');
+        assert.ok(colons.length > 0, `${lang}: ${JSON.stringify(code)}`);
+        for (const [, kind] of colons) {
+          assert.equal(kind, 'punctuation.delimiter', `${lang}: ${code}`);
+        }
+        assertLineFedParity(lang, code);
+      }
+      // annotations around a ternary keep their type colon
+      const kinds = tokenKinds(lang, 'let x: Foo = ok ? a : B;\n').filter(
+        ([text]) => text === ':'
+      );
+      assert.deepEqual(
+        kinds.map(([, kind]) => kind),
+        ['punctuation.special', 'punctuation.delimiter']
+      );
+    }
+  }
+);
+
+void t.test('ecma: optional methods keep their return-type colon', () => {
+  for (const lang of ['ts', 'tsx', 'tsrx'] as const) {
+    for (const code of [
+      'interface I { render?(): Result }\n',
+      'interface I { render?<T>(): Result }\n',
+      'interface I { render?(value: Input): Result }\n',
+      'interface I { render?<T>(value: T): Result }\n',
+      'interface I {\n  render?(\n    value: Input\n  ): Result;\n}\n',
+      'type I = { render?(): Result; update?<T>(): Result };\n',
+      'class I { render?(): Result; update?<T>(): Result; }\n',
+    ]) {
+      const colons = tokenKinds(lang, code).filter(([text]) => text === ':');
+      assert.ok(colons.length > 0, `${lang}: ${code}`);
+      for (const [, kind] of colons) {
+        assert.equal(kind, 'punctuation.special', `${lang}: ${code}`);
+      }
+      assertLineFedParity(lang, code);
+    }
+  }
+});
+
+for (const [label, code] of [
+  ['interface heritage', 'interface I extends B { render?(): Result }\n'],
+  [
+    'class heritage',
+    'class I extends B implements C { render?<T>(): Result; }\n',
+  ],
+  [
+    'generic heritage',
+    'interface I<T extends { id: Key }> extends B<T>, C { render?(): Result }\n',
+  ],
+  [
+    'multiline heritage',
+    'interface I\n extends B\n { render?<T>(): Result }\n',
+  ],
+  ['newline members', 'interface I { first(): void\n render?(): Result }\n'],
+  [
+    'function return type',
+    'interface I { first(): (() => void)\n render?<T>(): Result }\n',
+  ],
+  ['static member', 'class I { static render?(): Result; }\n'],
+  [
+    'commented member',
+    'interface I { first(): void\n /* member */ render?(): Result }\n',
+  ],
+  [
+    'nested class heritage',
+    'class I extends mixin(class B {}) { render?(): Result; }\n',
+  ],
+  [
+    'nested heritage expression',
+    'class I extends mixin({ value: true }) { render?<T>(): Result; }\n',
+  ],
+  ['computed method', 'interface I { [name]?(): Result }\n'],
+  ['quoted method', 'interface I { "render"?(): Result }\n'],
+  [
+    'nested member type',
+    'interface I { child: { first(): void\n render?(): Result } }\n',
+  ],
+  [
+    'generic return type',
+    'interface I { first(): Promise<Result>\n render?(): Result }\n',
+  ],
+  [
+    'nested generic return type',
+    'interface I { first(): Promise<Box<Result>>\n render?<T>(): Result }\n',
+  ],
+] as const) {
+  void t.test(`ecma: optional method after ${label}`, () => {
+    for (const lang of ['ts', 'tsx', 'tsrx'] as const) {
+      const colons = tokenKinds(lang, code).filter(([text]) => text === ':');
+      assert.ok(colons.length > 0, `${lang}: ${code}`);
+      assert.equal(
+        colons.at(-1)?.[1],
+        'punctuation.special',
+        `${lang}: ${code}`
+      );
+      assertLineFedParity(lang, code);
+    }
+  });
+}
+
+for (const code of [
+  'const value = cond?.3 : Result;\n',
+  'const value = cond?.3 : other?.4 : Result;\n',
+  'const value = cond?.3\n : Result;\n',
+  'class I extends B { field = cond ? (value) : Result; }\n',
+  'class I { field =\n cond ? (value) : Result; }\n',
+  'class I { field = cond\n ? (value) : Result; }\n',
+  'class I { field = foo\n + cond ? (value) : Result; }\n',
+  'const value = { field:\n cond ? (value) : Result };\n',
+  'const value = { ...cond ? (value) : Result };\n',
+  'function f(): Result { cond ? (value) : Result; }\n',
+  'class I extends mixin({ field: cond ? (value) : Result }) {}\n',
+  'class I { field = void\n cond ? (value) : Result; }\n',
+  'class I { field = value\n as Foo ? (value) : Result; }\n',
+  'class I { field = value\n satisfies Foo ? (value) : Result; }\n',
+  'const value = { field: void\n cond ? (value) : Result };\n',
+  'interface I { field: T extends U ? Foo : Result }\n',
+  'class I { field = fn<A, B>() ? (value) : Result; }\n',
+  'class I { field = fn<A, B> ? (value) : Result; }\n',
+  'class I { field = fn<A, B extends C ? (Value) : Result>(); }\n',
+  'const value = { field: fn<A, B extends C ? (Value) : Result>() };\n',
+  `const value = (${'cond ? '.repeat(80)}value${' : Result'.repeat(80)});\n`,
+] as const) {
+  void t.test(`ecma: keep expression ternaries in ${code.trim()}`, () => {
+    for (const lang of ['ts', 'tsx', 'tsrx'] as const) {
+      const colons = tokenKinds(lang, code).filter(([text]) => text === ':');
+      assert.ok(colons.length > 0, `${lang}: ${code}`);
+      // Function return annotations remain special; every other colon here
+      // is an object delimiter or the colon of a conditional expression.
+      assert.deepEqual(
+        colons.map(([, kind]) => kind),
+        code.startsWith('function') || code.startsWith('interface')
+          ? ['punctuation.special', 'punctuation.delimiter']
+          : colons.map(() => 'punctuation.delimiter'),
+        `${lang}: ${code}`
+      );
+      assertLineFedParity(lang, code);
+    }
+  });
+}
+
+for (const code of [
+  'function f(): void { ready ? start() : Result.stop(); }\n',
+  'async function f(): Promise<void> { ready ? go() : Result.stop(); }\n',
+  'class A { m(): void { ready ? a : Result; } }\n',
+  'switch (k) { case 1: { ready ? go() : Result.stop(); } }\n',
+  'label: { ready ? (value) : Result; }\n',
+  'function f(): void {} label: { ready ? (value) : Result; }\n',
+  'const f = (): void => { ready ? (value) : Result; };\n',
+]) {
+  void t.test(`ecma: statement body ternaries in ${code.trim()}`, () => {
+    for (const lang of ['ts', 'tsx', 'tsrx'] as const) {
+      const colons = tokenKinds(lang, code).filter(([text]) => text === ':');
+      assert.equal(colons.at(-1)?.[1], 'punctuation.delimiter');
+      assertLineFedParity(lang, code);
+    }
+  });
+}
+
+for (const code of [
+  '<div>{open ? <Panel /> : null}</div>\nconst x = 1;\n',
+  '<div>{!ready ? <A /> : null}</div>\nconst x = 1;\n',
+  '<A b={ok ? "x" : Result} />\nconst x = 1;\n',
+  '<div>{open ? <Panel title="a">Hi</Panel> : null}<Footer /></div>\nconst x = 1;\n',
+]) {
+  void t.test(`tsx: expression container ternaries in ${code.trim()}`, () => {
+    const kinds = tokenKinds('tsx', code);
+    assert.ok(
+      kinds.some(([text, kind]) => text === 'x' && kind === 'variable')
+    );
+    assert.ok(
+      kinds.some(
+        ([text, kind]) => text === ':' && kind === 'punctuation.delimiter'
+      )
+    );
+    assert.ok(!kinds.some(([, kind]) => kind === 'string.regex'));
+    if (code.includes('<Panel'))
+      assert.ok(
+        kinds.some(
+          ([text, kind]) => text === 'Panel' && kind === 'tag.component.jsx'
+        )
+      );
+    if (code.includes('<A'))
+      assert.ok(
+        kinds.some(
+          ([text, kind]) => text === 'A' && kind === 'tag.component.jsx'
+        )
+      );
+    assertLineFedParity('tsx', code);
+  });
+}
+
+for (const code of [
+  'class A { a() {} b?(): Result; }\n',
+  'class A { a(): void {} b?<T>(): Result; }\n',
+  'class A { a(): { value: Result } { return value; } b?(): Result; }\n',
+  'class A { static async *gen?(): AsyncGenerator<number> { yield 1; } }\n',
+  'class A { x = y as const\n b?(): Result; }\n',
+  'interface I { "a\\\nb"?(): Result }\n',
+  'interface I { "a\\\nb\\\nc"?<T>(): Result }\n',
+  'let x: { b?(): Result };\n',
+  'function f(x: { b?(): Result }) {}\n',
+  'function f(): { b?(): Result } { return {}; }\n',
+]) {
+  void t.test(
+    `ecma: optional member boundary in ${JSON.stringify(code)}`,
+    () => {
+      for (const lang of ['ts', 'tsx', 'tsrx'] as const) {
+        const colons = tokenKinds(lang, code).filter(([text]) => text === ':');
+        assert.equal(
+          colons.at(-1)?.[1],
+          'punctuation.special',
+          `${lang}: ${code}`
+        );
+        assertLineFedParity(lang, code);
+      }
+    }
+  );
+}
+
 void t.test('tsx: a spaced ternary `?` never reads as an optional key', () => {
   const html = checkInvariants(
     tsx.hl,
@@ -1758,3 +1995,244 @@ void t.test(
     assertLineFedParity('tsx', 'const m = { template: `%s | Site` };\n');
   }
 );
+
+// Type literals that follow a defaulted parameter, a type alias, a type
+// assertion, or a function-type arrow are member bodies: the last colon is
+// the optional method's return annotation.
+for (const code of [
+  'function f(a = 1, b: { m?(): Result }) {}\n',
+  'const a = 1,\n  b: { m?(): Result } = x;\n',
+  'class C {\n  constructor(\n    private a = 1,\n    private b: { m?(): Result }\n  ) {}\n}\n',
+  'type T = {\n  a: Promise<void>;\n  b?(): Result;\n};\n',
+  'type T = {\n  a: Promise<void>\n  b?(): Result\n}\n',
+  'type T = {\n  a: () => void\n  b?(): Result\n}\n',
+  'type T = {\n  a: Map<K, Set<V>>\n  b?(): Result\n}\n',
+  'type T<U> = U extends string ? never : { b?(): Result };\n',
+  'const x = y as { b?(): Result };\n',
+  'const x = y satisfies { b?(): Result };\n',
+  'let f: (a: T) => { b?(): Result };\n',
+  'type F = (a: T) => { b?(): Result };\n',
+  'let t: [A, { b?(): Result }];\n',
+  'let u: A | { b?(): Result };\n',
+  'class A {\n  @a.b m?(): Result\n}\n',
+  'class A {\n  @a.b(c) m?(): Result\n}\n',
+  'class A {\n  static {}\n  b?(): Result\n}\n',
+  'class A {\n  x = { a: 1 }\n  b?(): Result\n}\n',
+  'class A { x = cond ? () => {} : fn; b?(): Result }\n',
+  'class A { handler = (e: Event): void => { use(e); }; b?(): Result }\n',
+  'class A { f: (a: T) => { b?(): Result } }\n',
+  'interface I { m(): (a: T) => { b?(): Result } }\n',
+  'interface I {\n  a: string\n  delete?(): Result\n}\n',
+  'function f<T extends { m?(): Result }>(a: T) {}\n',
+  'const g = function <T extends { m?(): Result }>(a: T) {};\n',
+  'function* f<T extends { m?(): Result }>() {}\n',
+  'async function* f<T extends { m?(): Result }>() {}\n',
+  'interface I { case: { m?(): Result } }\n',
+  'interface I {\n  default: { m?(): Result }\n  delete?(): Result\n}\n',
+  'function f(): () => { m?(): Result } { return x; }\n',
+  'function f(): (a: T, b) => { m?(): Result } { return x; }\n',
+  'function f(): (...a: T[]) => { m?(): Result } { return x; }\n',
+  'class A { m(): () => { b?(): Result } { return x; } }\n',
+  'const f = (): () => { m?(): Result } => x;\n',
+  'const o = { default(): { m?(): Result } { return x; } };\n',
+  'const o = { case(): { m?(): Result } { return x; } };\n',
+  'using x: { m?(): Result } = resource;\n',
+  'async function f() {\n  await using x: { m?(): Result } = r;\n}\n',
+  `const f = <T extends ${'B<'.repeat(31)}X${' >'.repeat(31)}, U extends { m?(): Result }>(x) => x;\n`,
+  'type T = typeof using & { m?(): Result };\n',
+  'type T = typeof obj.using & { m?(): Result };\n',
+  'class C extends mixin<T>() { m?(): Result }\n',
+  'class C extends mixin<B<T>>(Base) { m?(): Result }\n',
+  'type T = typeof\nusing & { m?(): Result };\n',
+  'type T = typeof obj.\nusing & { m?(): Result };\n',
+  'switch (x) { case 0: using y: { m?(): Result } = r; }\n',
+  'switch (x) { default: await using y: { m?(): Result } = r; }\n',
+  'abstract class A {\n  readonly a: T\n  abstract b?(): Result\n}\n',
+  'let x: T\nlet y: { b?(): Result }\n',
+]) {
+  void t.test(
+    `ecma: optional method return colon in ${JSON.stringify(code)}`,
+    () => {
+      for (const lang of ['ts', 'tsx', 'tsrx'] as const) {
+        const kinds = tokenKinds(lang, code);
+        const colons = kinds.filter(([text]) => text === ':');
+        assert.equal(
+          colons.at(-1)?.[1],
+          'punctuation.special',
+          `${lang}: ${code}`
+        );
+        assert.ok(
+          !kinds.some(([, kind]) => kind === 'text.jsx'),
+          `${lang}: ${code}`
+        );
+        assertLineFedParity(lang, code);
+      }
+    }
+  );
+}
+
+// The generic optional method's `?<` is never a JSX opener, even after a
+// defaulted parameter or a type assertion.
+for (const code of [
+  'const f = (a = 1, b: { m?<T>(x: T): R }) => a;\nconst y = 1;\n',
+  'const x = y as { m?<T>(): R };\nconst z = 1;\n',
+  'type T = {\n  a: string\n  m?<T>(): R\n}\nconst z = 1;\n',
+  'const f = <T extends { m?<U>(): R },>(x: T) => x;\nconst z = 1;\n',
+  'function* f<T extends { m?<U>(): R }>() {}\nconst z = 1;\n',
+  'function f(): () => { m?<T>(): R } { return x; }\nconst z = 1;\n',
+  'interface I { default: { m?<T>(): R } }\nconst z = 1;\n',
+  'type T = typeof\nusing & { m?<U>(): R };\nconst z = 1;\n',
+  'const o = { default(): { m?<U>(): R } { return x; } };\nconst z = 1;\n',
+  'using x: { m?<U>(): R } = resource;\nconst z = 1;\n',
+]) {
+  void t.test(`tsx: optional generic method in ${JSON.stringify(code)}`, () => {
+    const kinds = tokenKinds('tsx', code);
+    assert.equal(
+      kinds.filter(([text]) => text === ':').at(-1)?.[1],
+      'punctuation.special'
+    );
+    assert.ok(
+      kinds.some(
+        ([text, kind]) => (text === 'y' || text === 'z') && kind === 'variable'
+      )
+    );
+    assert.ok(!kinds.some(([, kind]) => kind === 'text.jsx'));
+    assertLineFedParity('tsx', code);
+  });
+}
+
+// A block after a `case` or label colon is a statement body whatever the case
+// expression ends with, and an initializer continued by a binary-operator word
+// stays an expression.
+for (const code of [
+  'switch (k) {\n  case f(x): {\n    ready ? go() : Result.stop();\n  }\n}\n',
+  'switch (k) {\n  case (A): {\n    ready ? go() : Result.stop();\n  }\n}\n',
+  'switch (k) {\n  case 1:\n  {\n    ready ? go() : Result.stop();\n  }\n}\n',
+  'switch (k) {\n  default: {\n    ready ? go() : Result.stop();\n  }\n}\n',
+  'if (a) label: { ready ? go() : Result.stop(); }\n',
+  'label:\n{\n  ready ? go() : Result.stop();\n}\n',
+  'class A {\n  x = k\n    in [a] ? b : Result\n}\n',
+  'class A {\n  x = k\n    instanceof B ? (a) : Result\n}\n',
+  'class A {\n  x = f(a)\n  y = b ? (c) : Result\n}\n',
+  'class A {\n  x = { a }.b ? (c) : Result\n}\n',
+  'class A {\n  x = function () {}.bind(this) ? (c) : Result\n}\n',
+  'function f(a = 1, b = 2) { return a ? (b) : Result; }\n',
+  'export default cond ? (a) : Result;\n',
+  'const o = { as: 1, b: cond ? (a) : Result };\n',
+  'type T<U> = U extends string ? { b?(): Result } : Result;\n',
+  'const o = { class() { ready ? go() : Result; } };\n',
+  'const o = { interface() { ready ? (a) : Result; } };\n',
+  'const o = { function() { ready ? (a) : Result; } };\n',
+  'switch (k) { case a as T: { ready ? go() : Result; } }\n',
+  'switch (k) { case a satisfies T: { ready ? (a) : Result; } }\n',
+  'const f = (): (() => void) => { ready ? (a) : Result; };\n',
+  'const f = (): (A | B) => { ready ? (a) : Result; };\n',
+  'const g = <T,>(x: T) => { return x ? (a) : Result; };\n',
+  'const g = <T,>(x: T): R => { return x ? (a) : Result; };\n',
+  'const f = (): (void) => { ready ? (a) : Result; };\n',
+  'const f = (): (null) => { ready ? (a) : Result; };\n',
+  'const o = { class<T>() { ready ? (a) : Result; } };\n',
+  'const o = { interface<T>() { ready ? go() : Result; } };\n',
+  'const o = { class<T extends B<X>>() { ready ? go() : Result; } };\n',
+  'const o = { class<T extends B<B<X>>>() { ready ? (a) : Result; } };\n',
+  `const f = <T extends ${'B<'.repeat(30)}X${' >'.repeat(30)},>(x: T) => { ready ? (a) : Result; };\n`,
+]) {
+  void t.test(`ecma: expression ternary in ${JSON.stringify(code)}`, () => {
+    for (const lang of ['ts', 'tsx', 'tsrx'] as const) {
+      const colons = tokenKinds(lang, code).filter(([text]) => text === ':');
+      assert.equal(
+        colons.at(-1)?.[1],
+        'punctuation.delimiter',
+        `${lang}: ${code}`
+      );
+      assertLineFedParity(lang, code);
+    }
+  });
+}
+
+for (const code of [
+  'switch (k) {\n  case f(x): {\n    ready ? <A /> : null;\n  }\n}\nconst y = 1;\n',
+  'switch (k) {\n  case 1:\n  {\n    ready ? <A /> : null;\n  }\n}\nconst y = 1;\n',
+  'const o = { class() { ready ? <A /> : null; } };\nconst y = 1;\n',
+  'switch (k) { case a as T: { ready ? <A /> : null; } }\nconst y = 1;\n',
+  'const f = <T,>(x: T) => x ? <A /> : null;\nconst y = 1;\n',
+  'const el = ok ? <A /> : null;\nlet y: { m?(): R } = x ? (a) : b;\n',
+  `${'('.repeat(1025)}c ? <A /> : null${')'.repeat(1025)};\nconst y = 1;\n`,
+  'const f = (): (void) => { ready ? <A /> : null; };\nconst y = 1;\n',
+  'const o = { using: () => { ready ? <A /> : null; } };\nconst y = 1;\n',
+  'const o = { class<T extends B<X>>() { ready ? <A /> : null; } };\nconst y = 1;\n',
+]) {
+  void t.test(`tsx: jsx ternary in ${JSON.stringify(code)}`, () => {
+    const kinds = tokenKinds('tsx', code);
+    assert.ok(
+      kinds.some(
+        ([text, kind]) => text === 'A' && kind === 'tag.component.jsx'
+      ),
+      code
+    );
+    assert.ok(
+      kinds.some(([text, kind]) => text === 'y' && kind === 'variable'),
+      code
+    );
+    assertLineFedParity('tsx', code);
+  });
+}
+
+void t.test(
+  'ecma: a prefix word at a line end does not complete a type',
+  () => {
+    // whole-buffer only: a line-ending `readonly` or `abstract` itself has
+    // classified differently in line-fed runs since before this change
+    for (const lang of ['ts', 'tsx', 'tsrx'] as const) {
+      for (const code of [
+        'type T = readonly\nX[] & { m?(): Result };\n',
+        'type T = abstract\nnew () => { m?(): Result };\n',
+        'class A { x = await\n  f() ? (a) : Result }\n',
+      ]) {
+        const colons = tokenKinds(lang, code).filter(([text]) => text === ':');
+        assert.equal(
+          colons.at(-1)?.[1],
+          code.startsWith('class')
+            ? 'punctuation.delimiter'
+            : 'punctuation.special',
+          `${lang}: ${code}`
+        );
+      }
+    }
+  }
+);
+
+void t.test('ts: type arguments in operand position open a type', () => {
+  for (const code of [
+    'const h = <T>(x: T): R => (x ? (a) : Result);\n',
+    'const v = <T>x ? (a) : Result;\n',
+    'const w = (<T>x) ? (a) : Result;\n',
+  ]) {
+    const colons = tokenKinds('ts', code).filter(([text]) => text === ':');
+    assert.equal(colons.at(-1)?.[1], 'punctuation.delimiter', code);
+    assertLineFedParity('ts', code);
+  }
+  // an angle-bracket assertion of a type literal is a member body
+  const code = 'const v = <{ m?(): Result }>x;\n';
+  const colons = tokenKinds('ts', code).filter(([text]) => text === ':');
+  assert.equal(colons.at(-1)?.[1], 'punctuation.special', code);
+  assertLineFedParity('ts', code);
+});
+
+void t.test('ecma: a ternary colon is never a type slot', () => {
+  const kinds = tokenKinds('ts', 'const v = ok ? (a) : FOO;\n');
+  assert.ok(
+    kinds.some(([text, kind]) => text === 'FOO' && kind === 'constant')
+  );
+  // an arrow with a return type as the true branch: the counter takes the
+  // annotation colon, but the type name keeps its kind
+  const arrow = tokenKinds('ts', 'const f = ok ? (): Result => v : w;\n');
+  assert.ok(arrow.some(([text, kind]) => text === 'Result' && kind === 'type'));
+  assert.equal(
+    arrow.filter(([text]) => text === ':').at(-1)?.[1],
+    'punctuation.delimiter'
+  );
+  // no line break may precede `=>`, so the name before one on the next line
+  // is not a parameter in either run shape
+  assertLineFedParity('ts', 'const v = ok ? (a) : Result\n=> c;\n');
+});

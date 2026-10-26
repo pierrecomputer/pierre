@@ -477,6 +477,35 @@ void t.test(
 );
 
 void t.test(
+  'mdx: a line-fed tag ends at its own `>`, not one in a value',
+  () => {
+    for (const code of [
+      '<Chart\n  data={x => x > 1}\n  title="a"\n/>\n\n# Hi\n',
+      '<Chart\n  title="a>b"\n  open\n/>\n\nText\n',
+      '<Chart\n  data={{\n    a: "}>",\n  }}\n/>\n\n# Hi\n',
+      '<Chart\n  icon={<Icon size={2} />}\n>\n\nchild *text*\n\n</Chart>\n',
+      '<Chart\n  /* c > d */\n  b\n/>\n\n# T\n',
+      '<Chart\n  b="x"> after *em*\n\n# T\n',
+      // comments on the first line, closed or still open
+      '<Chart /* c > d */\n  b\n/>\n\n# T\n',
+      '<Chart /* c */\n  b\n/>\n\n# T\n',
+      '<Chart a="1" /* c\n d */ b\n/>\n\n# T\n',
+    ]) {
+      const kinds = tokenKinds('mdx', code);
+      assertLineFedParity('mdx', code);
+      assert.ok(
+        kinds.some(
+          ([text, kind]) =>
+            (text === '/>' || text === '>') &&
+            kind === 'punctuation.bracket.jsx'
+        ),
+        JSON.stringify(code)
+      );
+    }
+  }
+);
+
+void t.test(
   'mdx: markdown fences nested inside a markdown fence stream line-fed',
   () => {
     for (const code of [

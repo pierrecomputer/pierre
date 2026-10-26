@@ -60,6 +60,7 @@ import {
   EDITOR_OPTIONS_TYPE,
   EDITOR_PUBLIC_API,
 } from '../docs/Edit/constants';
+import { HIGHLIGHTER_EXAMPLE } from '../docs/Highlighters/constants';
 import {
   HIGHLIGHTS_API_RUNTIME,
   HIGHLIGHTS_API_TYPES,
@@ -67,6 +68,7 @@ import {
   HIGHLIGHTS_DUAL_THEMES,
   HIGHLIGHTS_DUAL_THEMES_CSS,
   HIGHLIGHTS_HTML,
+  HIGHLIGHTS_INSTALL,
   HIGHLIGHTS_LIVE,
   HIGHLIGHTS_STREAM,
   HIGHLIGHTS_STREAM_PIPE,
@@ -120,6 +122,7 @@ import {
   TOKEN_HOOKS_VANILLA,
 } from '../docs/TokenHooks/constants';
 import {
+  HELPER_CAN_USE_WASM,
   HELPER_DIFF_ACCEPT_REJECT,
   HELPER_DIFF_ACCEPT_REJECT_REACT,
   HELPER_DISPOSE_HIGHLIGHTER,
@@ -202,6 +205,7 @@ export default function DocsPage() {
           <InstallationSection />
           <BuildWithAgentsSection />
           <CoreTypesSection />
+          <HighlightersSection />
           <ReactAPISection />
           <VanillaAPISection />
           <CodeViewSection />
@@ -286,6 +290,15 @@ async function CoreTypesSection() {
       parseDiffFromFileExample,
       parsePatchFilesExample,
     },
+  });
+  return <ProseWrapper>{content}</ProseWrapper>;
+}
+
+async function HighlightersSection() {
+  const highlighterExample = await preloadCodeExample(HIGHLIGHTER_EXAMPLE);
+  const content = await renderMDX({
+    filePath: '(diffs)/docs/Highlighters/content.mdx',
+    scope: { highlighterExample },
   });
   return <ProseWrapper>{content}</ProseWrapper>;
 }
@@ -571,6 +584,7 @@ async function VirtualizationSection() {
 
 async function UtilitiesSection() {
   const [
+    canUseWASM,
     diffAcceptReject,
     diffAcceptRejectReact,
     disposeHighlighter,
@@ -584,6 +598,7 @@ async function UtilitiesSection() {
     setLanguageOverride,
     trimPatchContext,
   ] = await Promise.all([
+    preloadCodeExample(HELPER_CAN_USE_WASM),
     preloadCodeExample(HELPER_DIFF_ACCEPT_REJECT),
     preloadCodeExample(HELPER_DIFF_ACCEPT_REJECT_REACT),
     preloadCodeExample(HELPER_DISPOSE_HIGHLIGHTER),
@@ -600,6 +615,7 @@ async function UtilitiesSection() {
   const content = await renderMDX({
     filePath: '(diffs)/docs/Utilities/content.mdx',
     scope: {
+      canUseWASM,
       diffAcceptReject,
       diffAcceptRejectReact,
       disposeHighlighter,
@@ -659,6 +675,7 @@ async function ThemingSection() {
 
 async function HighlightsHighlighterSection() {
   const [
+    highlightsInstall,
     highlightsHtml,
     highlightsTokens,
     highlightsStreamPipe,
@@ -673,6 +690,7 @@ async function HighlightsHighlighterSection() {
     highlightsApiRuntime,
     highlightsApiTypes,
   ] = await Promise.all([
+    preloadCodeExample(HIGHLIGHTS_INSTALL),
     preloadCodeExample(HIGHLIGHTS_HTML),
     preloadCodeExample(HIGHLIGHTS_TOKENS),
     preloadCodeExample(HIGHLIGHTS_STREAM_PIPE),
@@ -690,6 +708,7 @@ async function HighlightsHighlighterSection() {
   const content = await renderMDX({
     filePath: '(diffs)/docs/HighlightsHighlighter/content.mdx',
     scope: {
+      highlightsInstall,
       highlightsHtml,
       highlightsTokens,
       highlightsStreamPipe,

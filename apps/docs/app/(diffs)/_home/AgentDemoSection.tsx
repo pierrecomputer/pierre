@@ -12,7 +12,6 @@ export function AgentDemoSection({ prerenderedDiffs }: AgentDemoSectionProps) {
     <div className="space-y-5">
       <FeatureHeader
         id="edit"
-        isBeta
         title="Edit diffs and code"
         description={
           <>

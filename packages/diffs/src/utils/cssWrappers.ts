@@ -35,8 +35,26 @@ export function wrapThemeCSS(
   color-scheme: ${themeType};`;
   const scrollbarGutterVar =
     createMeasuredScrollbarGutterDeclaration(scrollbarGutter);
+  const tokenFontStyles = (
+    themeType === 'system' ? ['light', 'dark'] : [themeType]
+  )
+    .map((type) => {
+      const styles = `
+  [data-line] span, [data-edit-prediction-suffix] span {
+    font-weight: var(--diffs-token-${type}-font-weight, inherit);
+    font-style: var(--diffs-token-${type}-font-style, inherit);
+    text-decoration: var(--diffs-token-${type}-text-decoration, inherit);
+  }`;
+      return themeType === 'system' && type === 'dark'
+        ? `@media (prefers-color-scheme: dark) {${styles}\n}`
+        : styles;
+    })
+    .join('\n');
 
   return `${LAYER_ORDER}
+@layer base {
+  ${tokenFontStyles}
+}
 @layer rendered {
   :host {${colorSchemeRule}
   ${scrollbarGutterVar}

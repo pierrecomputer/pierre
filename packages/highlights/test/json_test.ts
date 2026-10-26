@@ -2,7 +2,12 @@ import assert from 'node:assert';
 import t from 'node:test';
 
 import type { Lang, ThemedToken } from '../lib/index';
-import { codeToTokens, init, StreamTokenizer } from '../lib/index';
+import {
+  codeToTokens,
+  init,
+  LiveTokenizer,
+  StreamTokenizer,
+} from '../lib/index';
 import { transformWat, wat2wasm } from '../scripts/build';
 import pierreDark from '../themes/pierre-dark.json' with { type: 'json' };
 import {
@@ -530,4 +535,82 @@ void t.test('json: nested containers and comments stream line-fed', () => {
     'json',
     '{\n  "a": [\n    1,\n    {"b": "c"}\n  ],\n  /* d\n  */\n  "e": null\n}\n'
   );
+});
+
+void t.test('json: a continued string resumes its hex escapes line-fed', () => {
+  assertLineFedParity('json', '{"a": "x\\\n\\u0041", "b": 1}\n');
+});
+
+void t.test('json5: quotes, identifier keys, numbers, and constants', () => {
+  const kinds = tokenKinds(
+    'json5',
+    "{ name: 'a \"b\"', $id: 1, café: 2, 'q': 0xC0FFEE, d: .5, t: 8., p: +1e3, i: -Infinity, n: NaN, e: '\\x41\\u00e9', \\u0061: 0, foo\\u0062: 0, }"
+  );
+  const has = (text: string, kind: string | null) =>
+    kinds.some(([t, k]) => t === text && k === kind);
+  for (const key of [
+    'name',
+    '$id',
+    'café',
+    "'q'",
+    'd',
+    't',
+    'p',
+    'i',
+    'n',
+    'e',
+    // identifier escapes stay inside one key
+    '\\u0061',
+    'foo\\u0062',
+  ]) {
+    assert.ok(has(key, 'property.json_key'), key);
+  }
+  assert.ok(has('\'a "b"\'', 'string'));
+  for (const n of ['1', '2', '0xC0FFEE', '.5', '8.', '+1e3']) {
+    assert.ok(has(n, 'number'), n);
+  }
+  assert.ok(has('-Infinity', 'constant.builtin'));
+  assert.ok(has('NaN', 'constant.builtin'));
+  assert.ok(has('\\x41\\u00e9', 'string.escape'));
+  // plain JSON keeps its strict words and escapes
+  assert.ok(
+    tokenKinds('json', '[NaN, "\\x41"]').some(
+      ([t, k]) => t === 'NaN' && k === null
+    )
+  );
+});
+
+void t.test('json5: multi-line strings and comments stream line-fed', () => {
+  assertLineFedParity(
+    'json5',
+    '// c\n{\n  a: \'one \\\ntwo \\x41\',\n  /* b\n  */ b: [1, 2,],\n  c: "x\\\r\ny",\n}\n'
+  );
+});
+
+void t.test('jsonl: each line starts a new value', () => {
+  const code = '{"a": 1}\n{"b": [1,\n{"c": 2}\n' + '{"d": 3}\n'.repeat(20);
+  assertLineFedParity('jsonl', code);
+  // an unbalanced record leaves no state for the lines after it, so an
+  // edit there retokenizes only its own line
+  for (const [lang, end] of [
+    ['jsonl', 1],
+    ['json', 24],
+  ] as const) {
+    const live = new LiveTokenizer({ lang, theme: pierreDark, code });
+    const update = live.applyEdits([
+      {
+        range: {
+          start: { line: 0, character: 8 },
+          end: { line: 0, character: 8 },
+        },
+        newText: '[',
+      },
+    ]);
+    assert.equal(
+      Math.max(...update.lineChanges.map((c) => c.newEndLine)),
+      end,
+      lang
+    );
+    live.dispose();
+  }
 });

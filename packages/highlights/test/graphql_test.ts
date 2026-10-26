@@ -224,6 +224,9 @@ void t.test('graphql: multi-line constructs resume line-fed', () => {
     '"""\ndoc\n"""\ntype A { x: Int }\n',
     'query Q(\n  $a: Int\n) { f(a: $a) }\n',
     'type T {\n  """\n  field doc\n  """\n  x: Int\n}\n',
+    // `\"""` is an escape, also on a later line of the block string
+    '"""\na \\""" b\n"""\ntype X\n',
+    '"""\n\\"""a\n"""\ntype X\n',
   ]) {
     const [whole, streamed] = wholeAndLineFed('graphql', code);
     assert.deepEqual(streamed, whole, JSON.stringify(code));

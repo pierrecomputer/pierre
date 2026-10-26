@@ -290,7 +290,7 @@ describe('React partial diff hydration', () => {
     }
   });
 
-  test('FileDiff uses the hydrated full diff for React-owned slots on parent rerender', async () => {
+  test('FileDiff updates React-owned slots when a partial diff finishes loading', async () => {
     const { cleanup } = installDom();
     const cleanupActEnvironment = installReactActEnvironment();
     const container = document.createElement('div');
@@ -298,12 +298,16 @@ describe('React partial diff hydration', () => {
     let root: Root | undefined;
     try {
       const { oldFile, newFile, partial } = createPartialChange('react.ts');
+      const loading = Promise.withResolvers<{
+        oldFile: FileContents;
+        newFile: FileContents;
+      }>();
       const props: ReactFileDiffProps<undefined, undefined> = {
         fileDiff: partial,
         options: {
           disableErrorHandling: true,
           expandUnchanged: true,
-          loadDiffFiles: () => Promise.resolve({ oldFile, newFile }),
+          loadDiffFiles: () => loading.promise,
         },
         renderHeaderMetadata: renderHydrationState,
       };
@@ -315,6 +319,12 @@ describe('React partial diff hydration', () => {
       });
 
       expect(getHeaderMetadataText(container)).toBe('partial');
+      await act(async () => {
+        loading.resolve({ oldFile, newFile });
+        await wait(0);
+      });
+      await waitFor(() => getHeaderMetadataText(container) === 'full:4');
+      expect(getHeaderMetadataText(container)).toBe('full:4');
       await waitForHydratedMetadata(partial);
 
       await act(async () => {
@@ -330,7 +340,7 @@ describe('React partial diff hydration', () => {
     }
   });
 
-  test('PatchDiff keeps the hydrated parsed patch result across parent rerenders', async () => {
+  test('PatchDiff updates React-owned slots after loading and keeps the result on parent rerender', async () => {
     const { cleanup } = installDom();
     const cleanupActEnvironment = installReactActEnvironment();
     const container = document.createElement('div');
@@ -338,12 +348,16 @@ describe('React partial diff hydration', () => {
     let root: Root | undefined;
     try {
       const { oldFile, newFile, patch } = createPartialChange('patch.ts');
+      const loading = Promise.withResolvers<{
+        oldFile: FileContents;
+        newFile: FileContents;
+      }>();
       const props: ReactPatchDiffProps<undefined, undefined> = {
         patch,
         options: {
           disableErrorHandling: true,
           expandUnchanged: true,
-          loadDiffFiles: () => Promise.resolve({ oldFile, newFile }),
+          loadDiffFiles: () => loading.promise,
         },
         renderHeaderMetadata: renderHydrationState,
       };
@@ -355,6 +369,12 @@ describe('React partial diff hydration', () => {
       });
 
       expect(getHeaderMetadataText(container)).toBe('partial');
+      await act(async () => {
+        loading.resolve({ oldFile, newFile });
+        await wait(0);
+      });
+      await waitFor(() => getHeaderMetadataText(container) === 'full:4');
+      expect(getHeaderMetadataText(container)).toBe('full:4');
       await renderUntilHeaderMetadata(
         root,
         createElement(ReactPatchDiffComponent, props),

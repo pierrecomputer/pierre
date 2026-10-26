@@ -95,6 +95,26 @@
     (global.set $end (local.get $save))
     (global.set $ptr (local.get $to)))
 
+  ;; The end of a `/* */` or `//` comment at the `/` at $p, or $p if no
+  ;; comment starts there. Both MDX tag scans skip comments between
+  ;; attributes, as the TSX tag steps do. An unclosed comment runs to $end.
+  (func $mdxCommentEnd (param $p i32) (result i32)
+    (local $c i32)
+    (local $save i32)
+    (if (i32.ge_u (i32.add (local.get $p) (i32.const 1)) (global.get $end))
+      (then (return (local.get $p))))
+    (local.set $c (i32.load8_u offset=1 (local.get $p)))
+    (if (i32.and (i32.ne (local.get $c) (i32.const "*")) (i32.ne (local.get $c) (i32.const "/")))
+      (then (return (local.get $p))))
+    (local.set $save (global.get $ptr))
+    (global.set $ptr (i32.add (local.get $p) (i32.const 2)))
+    (if (i32.eq (local.get $c) (i32.const "*"))
+      (then (call $scanBlockCommentEnd))
+      (else (call $scanToLineEnd)))
+    (local.set $p (global.get $ptr))
+    (global.set $ptr (local.get $save))
+    (local.get $p))
+
   ;; One JSX open/close tag, including quoted and braced attribute values.
   (func $mdxJsxEnd (param $lhs i32) (result i32)
     (local $c i32)
@@ -164,6 +184,13 @@
             (local.set $to (call $tsxExpressionEnd (local.get $p) (local.get $p)))
             (local.set $p (local.get $to))
             (br $l)))
+        (if (i32.and (i32.eqz (local.get $value)) (i32.eq (local.get $c) (i32.const "/")))
+          (then
+            (local.set $to (call $mdxCommentEnd (local.get $p)))
+            (if (i32.ne (local.get $to) (local.get $p))
+              (then
+                (local.set $p (local.get $to))
+                (br $l)))))
         (if (i32.and (i32.eq (local.get $value) (i32.const 2)) (call $lexIsSpace (local.get $c)))
           (then (local.set $value (i32.const 0))))
         (if (i32.and (i32.eqz (local.get $value)) (i32.eq (local.get $c) (i32.const "=")))
@@ -332,13 +359,14 @@
 
   ;; Check whether `<` at $p starts JSX that continues in the next chunk.
   ;; Bytes after the name must be attributes: names, `=`, quoted values,
-  ;; expressions, `/`, or blanks. Also require a component name, line-start
-  ;; position, or attribute assignment. This prevents incomplete prose such
-  ;; as `a <b c` from consuming later lines as attributes.
+  ;; expressions, comments, `/`, or blanks. Also require a component name,
+  ;; line-start position, or attribute assignment. This prevents incomplete
+  ;; prose such as `a <b c` from consuming later lines as attributes.
   (func $mdxTagStartContinues (param $p i32) (result i32)
     (local $c i32)
     (local $evidence i32)
     (local $q i32)
+    (local $to i32)
     (local.set $c (i32.load8_u offset=1 (local.get $p)))
     (local.set $evidence (i32.le_u (i32.sub (local.get $c) (i32.const "A")) (i32.const 25)))
     ;; flow position: only blanks between the line start and the `<`
@@ -375,6 +403,13 @@
           (then
             (local.set $q (call $tsxExpressionEnd (local.get $q) (local.get $q)))
             (br $attrs)))
+        (if (i32.eq (local.get $c) (i32.const "/"))
+          (then
+            (local.set $to (call $mdxCommentEnd (local.get $q)))
+            (if (i32.ne (local.get $to) (local.get $q))
+              (then
+                (local.set $q (local.get $to))
+                (br $attrs)))))
         (if
           (i32.eqz
             (i32.or

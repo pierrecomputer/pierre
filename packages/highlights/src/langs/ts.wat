@@ -12,7 +12,8 @@
       "ctxword_type")
     (value $Token.punctuation.bracket
       "l_paren" "r_paren" "l_bracket" "r_bracket" "l_brace" "r_brace")
-    (value $Token.punctuation.delimiter "comma" "semicolon" "dot" "question_mark_dot")
+    (value $Token.punctuation.delimiter
+      "comma" "semicolon" "dot" "question_mark_dot" "ternary_colon")
     (value $Token.number "number_literal" "bigint_literal")
     (value $Token.string.regex "regexp_literal")
     (value $Token.attribute "at_identifier")
@@ -152,7 +153,11 @@
           (i32.eq (local.get $prev) (enum.get $Lex.pipe))
           (i32.eq (local.get $prev) (enum.get $Lex.ampersand))))
       (then (return (i32.const 1))))
-    (if (i32.eq (local.get $prev) (enum.get $Lex.colon))
+    ;; a ternary colon too: in `cond ? (): T => v : w` the counter takes the
+    ;; annotation colon, but `): T =>` still names a return type
+    (if (i32.or
+          (i32.eq (local.get $prev) (enum.get $Lex.colon))
+          (i32.eq (local.get $prev) (enum.get $Lex.ternary_colon)))
       (then (return (call $tsReturnColonBefore (local.get $lhs)))))
     (i32.const 0))
 
@@ -661,8 +666,11 @@
     ;; subject (`x is T`), the top level of a marked parameter list, and one
     ;; level into a destructured parameter pattern
     ;; ... except a TS return type right before the `=>`: `(a): T =>`,
-    ;; `(x): x is T =>`, `(): A | B =>` - an arrow cannot follow `|`/`&`
-    (if (i32.eq (local.get $next) (enum.get $Lex.function_arrow))
+    ;; `(x): x is T =>`, `(): A | B =>` - an arrow cannot follow `|`/`&`.
+    ;; No line break may precede `=>`, so one on the next line is not an arrow
+    (if (i32.and
+          (i32.eq (local.get $next) (enum.get $Lex.function_arrow))
+          (i32.eqz (global.get $nlBefore)))
       (then
         (if (i32.eqz (call $tsArrowReturnType (local.get $prev) (local.get $lhs)))
           (then (return (enum.get $Token.variable.parameter))))))
@@ -842,7 +850,8 @@
             (local.get $rhs)))))
     ;; `:` before a type name and `?` directly before `:` are TypeScript
     ;; punctuation.special; the word compare only runs for a colon before an
-    ;; identifier - wasm i32.and is eager, and this runs for every such token
+    ;; identifier - wasm i32.and is eager, and this runs for every such token.
+    ;; A ternary's colon is its own token kind and maps to a delimiter above.
     (if (call $ecmaHasTypeScript)
       (then
         (if (i32.eq (local.get $t) (enum.get $Lex.colon))

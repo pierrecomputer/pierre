@@ -1,8 +1,9 @@
 # Diffs, from Pierre
 
-`@pierre/diffs` is an open source diff and file rendering library built on
-[Shiki](https://shiki.style/). It's super customizable and packed with the
-features you need. Made with love by
+`@pierre/diffs` is an open source diff and file rendering library that uses
+[Shiki](https://shiki.style/) with its JavaScript regex engine by default, with
+optional Shiki WebAssembly and Highlights backends. It's super customizable and
+packed with the features you need. Made with love by
 [The Pierre Computer Company](https://pierre.computer). Available as vanilla
 JavaScript and React components.
 

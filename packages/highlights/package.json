@@ -1,6 +1,6 @@
 {
   "name": "@pierre/highlights",
-  "version": "0.1.2",
+  "version": "0.2.0",
   "description": "A fast code highlighter written in WebAssembly Text(Wat), from Pierre",
   "license": "apache-2.0",
   "files": [
@@ -8,14 +8,14 @@
     "NOTICE.md"
   ],
   "type": "module",
-  "main": "./dist/browser.js",
+  "main": "./dist/default.js",
   "types": "./dist/index.d.ts",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
       "workerd": "./dist/workerd.js",
-      "import": "./dist/browser.js",
-      "default": "./dist/browser.js"
+      "import": "./dist/default.js",
+      "default": "./dist/default.js"
     },
     "./themes": {
       "types": "./dist/themes.d.ts",
@@ -41,7 +41,7 @@
     "wabt": "catalog:"
   },
   "meta": {
-    "highlights.wasm": 171727,
-    "highlights.wasm.gz": 78477
+    "highlights.wasm": 282255,
+    "highlights.wasm.gz": 122205
   }
 }

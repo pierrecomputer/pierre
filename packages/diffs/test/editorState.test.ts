@@ -13,19 +13,10 @@ import type {
   EditorViewState,
   FileEditState,
 } from '../src/editor/types';
-import type { DiffsHighlighter, FileContents } from '../src/types';
+import type { FileContents } from '../src/types';
 import { getFiletypeFromFileName } from '../src/utils/getFiletypeFromFileName';
 import { installDom } from './domHarness';
-
-function createTestHighlighter(): DiffsHighlighter {
-  return {
-    getLanguage: () => undefined,
-    getLoadedLanguages: () => [],
-    getTheme: () => ({ type: 'light', colors: {} }),
-    loadLanguage: async () => {},
-    setTheme: () => ({ theme: { type: 'light' }, colorMap: [''] }),
-  } as unknown as DiffsHighlighter;
-}
+import { createTestHighlighter } from './editorHighlighter';
 
 function createInitialState(
   file: FileContents,
@@ -139,7 +130,10 @@ function createTestFile(
 
   const syncRenderView = (editor: Editor<'file', undefined>) => {
     editor.__syncRenderView({
-      highlighter: createTestHighlighter(),
+      highlighter: createTestHighlighter(
+        { getLoadedLanguages: () => [] },
+        'light'
+      ),
       fileContainer,
       file: currentFile,
       lineAnnotations: undefined,

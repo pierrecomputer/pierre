@@ -495,12 +495,17 @@ for (const name of lexers) {
       // the pristine sample highlights afterwards
       const pristine = htmlOf(lang, sample);
       const lines = byLine(sample);
+      // cut only between code points, so no mutant holds a lone surrogate
+      const boundary = (i: number) =>
+        /[\udc00-\udfff]/.test(sample[i] ?? '') ? i - 1 : i;
       for (let round = 0; round < 48; round++) {
         let mutant: string;
-        const at = rand() % sample.length;
+        const at = boundary(rand() % sample.length);
         switch (rand() % 4) {
           case 0:
-            mutant = sample.slice(0, at) + sample.slice(at + 1 + (rand() % 4));
+            mutant =
+              sample.slice(0, at) +
+              sample.slice(boundary(at + 1 + (rand() % 4)));
             break;
           case 1:
             mutant =

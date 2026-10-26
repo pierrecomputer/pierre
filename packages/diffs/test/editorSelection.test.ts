@@ -1722,6 +1722,188 @@ describe('mapSelectionRangeMove', () => {
   });
 });
 
+describe('word movement', () => {
+  // Collects the caret column after each word move on a one-line document.
+  function wordStops(
+    text: string,
+    character: number,
+    shortcut: 'wordLeft' | 'wordRight',
+    count: number
+  ): number[] {
+    const textDocument = new TextDocument('inmemory://1', text);
+    let selections = [createSelection(0, character, 0, character)];
+    const stops: number[] = [];
+    for (let index = 0; index < count; index++) {
+      selections = mapCursorMove(textDocument, selections, shortcut);
+      stops.push(selections[0].start.character);
+    }
+    return stops;
+  }
+
+  test('stops at word ends and punctuation runs', () => {
+    expect(wordStops('alpha beta.gamma', 0, 'wordRight', 5)).toEqual([
+      5, 10, 11, 16, 16,
+    ]);
+    expect(wordStops('alpha beta.gamma', 16, 'wordLeft', 5)).toEqual([
+      11, 10, 6, 0, 0,
+    ]);
+    expect(wordStops('foo->bar();', 0, 'wordRight', 4)).toEqual([3, 5, 8, 11]);
+    expect(wordStops('foo->bar();', 11, 'wordLeft', 4)).toEqual([8, 5, 3, 0]);
+  });
+
+  test('skips whitespace runs and finishes words from inside', () => {
+    expect(wordStops('foo   bar', 3, 'wordRight', 1)).toEqual([9]);
+    expect(wordStops('foo   bar', 6, 'wordLeft', 1)).toEqual([0]);
+    expect(wordStops('\tsnake_case42 x', 3, 'wordRight', 1)).toEqual([13]);
+    expect(wordStops('\tsnake_case42 x', 8, 'wordLeft', 1)).toEqual([1]);
+  });
+
+  test('keeps graphemes whole', () => {
+    // A combining accent and emoji with skin-tone modifiers.
+    expect(wordStops('cafe\u0301 ok', 0, 'wordRight', 1)).toEqual([5]);
+    expect(wordStops('cafe\u0301 ok', 5, 'wordLeft', 1)).toEqual([0]);
+    expect(wordStops('x 👍🏽👍🏽 y', 1, 'wordRight', 2)).toEqual([10, 12]);
+    expect(wordStops('x 👍🏽👍🏽 y', 10, 'wordLeft', 1)).toEqual([2]);
+  });
+
+  test('crosses line boundaries and empty lines', () => {
+    const textDocument = new TextDocument('inmemory://1', 'ab\n\ncd');
+
+    expect(
+      mapCursorMove(textDocument, [createSelection(0, 2, 0, 2)], 'wordRight')
+    ).toEqual([createSelection(1, 0, 1, 0)]);
+    expect(
+      mapCursorMove(textDocument, [createSelection(1, 0, 1, 0)], 'wordRight')
+    ).toEqual([createSelection(2, 0, 2, 0)]);
+    expect(
+      mapCursorMove(textDocument, [createSelection(2, 0, 2, 0)], 'wordLeft')
+    ).toEqual([createSelection(1, 0, 1, 0)]);
+    expect(
+      mapCursorMove(textDocument, [createSelection(1, 0, 1, 0)], 'wordLeft')
+    ).toEqual([createSelection(0, 2, 0, 2)]);
+    expect(
+      mapCursorMove(textDocument, [createSelection(0, 0, 0, 0)], 'wordLeft')
+    ).toEqual([createSelection(0, 0, 0, 0)]);
+    expect(
+      mapCursorMove(textDocument, [createSelection(2, 2, 2, 2)], 'wordRight')
+    ).toEqual([createSelection(2, 2, 2, 2)]);
+  });
+
+  test('skips collapsed lines and stays put when nothing renders', () => {
+    const textDocument = new TextDocument('inmemory://1', 'ab\ncd\nef');
+    const skipMiddle: CursorMoveOptions = {
+      resolveRenderableLine: (line, direction) =>
+        line === 1 ? (direction === 'down' ? 2 : 0) : line,
+    };
+    const nothingRenders: CursorMoveOptions = {
+      resolveRenderableLine: () => undefined,
+    };
+
+    expect(
+      mapCursorMove(
+        textDocument,
+        [createSelection(0, 2, 0, 2)],
+        'wordRight',
+        skipMiddle
+      )
+    ).toEqual([createSelection(2, 0, 2, 0)]);
+    expect(
+      mapCursorMove(
+        textDocument,
+        [createSelection(2, 0, 2, 0)],
+        'wordLeft',
+        skipMiddle
+      )
+    ).toEqual([createSelection(0, 2, 0, 2)]);
+    expect(
+      mapCursorMove(
+        textDocument,
+        [createSelection(0, 2, 0, 2)],
+        'wordRight',
+        nothingRenders
+      )
+    ).toEqual([createSelection(0, 2, 0, 2)]);
+  });
+
+  test('ignores visual wraps', () => {
+    const textDocument = new TextDocument(
+      'inmemory://1',
+      '0123456789 abcdefghij'
+    );
+    const wrapOptions: CursorMoveOptions = {
+      getSoftLineOffsets: () => new Uint32Array([0, 5, 15, 21]),
+    };
+
+    expect(
+      mapCursorMove(
+        textDocument,
+        [createSelection(0, 0, 0, 0)],
+        'wordRight',
+        wrapOptions
+      )
+    ).toEqual([createSelection(0, 10, 0, 10)]);
+    expect(
+      mapCursorMove(
+        textDocument,
+        [createSelection(0, 21, 0, 21)],
+        'wordLeft',
+        wrapOptions
+      )
+    ).toEqual([createSelection(0, 11, 0, 11)]);
+  });
+
+  test('moves every caret and collapses ranges to the edge it moves toward', () => {
+    const textDocument = new TextDocument(
+      'inmemory://1',
+      'alpha beta\ngamma delta'
+    );
+    const selections = [
+      createSelection(0, 0, 0, 0),
+      createSelection(1, 6, 1, 11, DirectionForward),
+    ];
+
+    expect(mapCursorMove(textDocument, selections, 'wordRight')).toEqual([
+      createSelection(0, 5, 0, 5),
+      createSelection(1, 11, 1, 11),
+    ]);
+    expect(mapCursorMove(textDocument, selections, 'wordLeft')).toEqual([
+      createSelection(0, 0, 0, 0),
+      createSelection(1, 6, 1, 6),
+    ]);
+  });
+
+  test('extends selections by word and crosses the anchor', () => {
+    const textDocument = new TextDocument('inmemory://1', 'alpha beta.gamma');
+    const extended = mapSelectionShift(
+      textDocument,
+      mapSelectionShift(
+        textDocument,
+        [createSelection(0, 0, 0, 0)],
+        'wordRight'
+      ),
+      'wordRight'
+    );
+    const shrunk = mapSelectionShift(
+      textDocument,
+      [createSelection(0, 0, 0, 6, DirectionBackward)],
+      'wordRight'
+    );
+
+    expect(extended).toEqual([createSelection(0, 0, 0, 10, DirectionForward)]);
+    expect(shrunk).toEqual([createSelection(0, 5, 0, 6, DirectionBackward)]);
+    expect(mapSelectionShift(textDocument, shrunk, 'wordRight')).toEqual([
+      createSelection(0, 6, 0, 10, DirectionForward),
+    ]);
+    expect(
+      mapSelectionShift(
+        textDocument,
+        [createSelection(0, 11, 0, 11)],
+        'wordLeft'
+      )
+    ).toEqual([createSelection(0, 10, 0, 11, DirectionBackward)]);
+  });
+});
+
 describe('applyDeleteCharacterToSelections', () => {
   test('resolves backward delete ranges per selection for multi-cursor edits', () => {
     const textDocument = new TextDocument('inmemory://1', 'ab😀');

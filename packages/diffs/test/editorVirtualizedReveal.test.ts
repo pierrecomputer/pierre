@@ -4,20 +4,10 @@ import { VirtualizedFile } from '../src/components/VirtualizedFile';
 import { Virtualizer } from '../src/components/Virtualizer';
 import { DEFAULT_THEMES } from '../src/constants';
 import { Editor } from '../src/editor/editor';
-import type { DiffsHighlighter } from '../src/types';
 import { installDom, waitFor } from './domHarness';
+import { createTestHighlighter } from './editorHighlighter';
 
 const MODEL_LINE_TOP = 20;
-
-function createTestHighlighter(): DiffsHighlighter {
-  return {
-    getLanguage: () => undefined,
-    getLoadedLanguages: () => [],
-    getTheme: () => ({ type: 'light', colors: {} }),
-    loadLanguage: async () => {},
-    setTheme: () => ({ theme: { type: 'light' }, colorMap: [''] }),
-  } as unknown as DiffsHighlighter;
-}
 
 function createVirtualizedFile(modelLineHeight: number): {
   component: VirtualizedFile<undefined>;
@@ -78,7 +68,10 @@ function createVirtualizedFile(modelLineHeight: number): {
   }
   const syncRenderView = (editor: Editor<'file', undefined>) => {
     editor.__syncRenderView({
-      highlighter: createTestHighlighter(),
+      highlighter: createTestHighlighter(
+        { getLoadedLanguages: () => [] },
+        'light'
+      ),
       fileContainer,
       file,
       lineAnnotations: undefined,

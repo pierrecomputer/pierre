@@ -8,6 +8,16 @@ import { disposeHighlighter } from '../src/highlighter/shared_highlighter';
 import type { FileDiffMetadata } from '../src/types';
 import { installDom, wait } from './domHarness';
 
+class TestFileDiff extends FileDiff<undefined> {
+  getInputDiffForTest(): FileDiffMetadata | undefined {
+    return this.getInputDiff();
+  }
+
+  getRenderedDiffForTest(): FileDiffMetadata | undefined {
+    return this.getRenderedDiff();
+  }
+}
+
 afterAll(async () => {
   await disposeHighlighter();
 });
@@ -41,7 +51,7 @@ function getEditSessionDiff(
 interface FoldFixture {
   container: HTMLElement;
   editor: Editor<'file-diff', undefined>;
-  fileDiff: FileDiff<undefined>;
+  fileDiff: TestFileDiff;
   content: HTMLElement;
   cleanup(): Promise<void>;
 }
@@ -49,8 +59,8 @@ interface FoldFixture {
 // 60-line file, changes at lines 10 and 50: hunks cover lines 6-14 and
 // 46-54, with the gap 15-45 collapsed once the fixture re-enables collapse
 // mid-session (the standalone pre-flip vector).
-async function createFoldFixture(): Promise<FoldFixture> {
-  const dom = installDom();
+async function createFoldFixture(platform?: string): Promise<FoldFixture> {
+  const dom = installDom({ navigator: { platform } });
   const container = document.createElement('div');
   document.body.appendChild(container);
 
@@ -61,7 +71,7 @@ async function createFoldFixture(): Promise<FoldFixture> {
     .replace('line 10\n', 'line 10 changed\n')
     .replace('line 50\n', 'line 50 changed\n');
 
-  const fileDiff = new FileDiff<undefined>({
+  const fileDiff = new TestFileDiff({
     disableFileHeader: true,
     theme: DEFAULT_THEMES,
     diffStyle: 'split',
@@ -220,6 +230,26 @@ describe('diff editor: fold-skip navigation', () => {
     }
   });
 
+  test('Windows Ctrl+Arrow word motion skips the gap', async () => {
+    const fixture = await createFoldFixture('Win32');
+    const { editor, content } = fixture;
+    try {
+      setCaret(editor, 13, 'line 14'.length);
+      await wait(0);
+      pressKey(content, 'ArrowRight', { ctrlKey: true });
+      let selection = editor.getViewState().selections?.at(-1);
+      expect(selection?.start.line).toBe(45);
+      expect(selection?.start.character).toBe(0);
+
+      pressKey(content, 'ArrowLeft', { ctrlKey: true });
+      selection = editor.getViewState().selections?.at(-1);
+      expect(selection?.start.line).toBe(13);
+      expect(selection?.start.character).toBe('line 14'.length);
+    } finally {
+      await fixture.cleanup();
+    }
+  });
+
   test('horizontal motion stays put when only collapsed lines remain', async () => {
     const fixture = await createFoldFixture();
     const { editor, content } = fixture;
@@ -318,7 +348,7 @@ describe('diff editor: reveal-on-jump', () => {
     const fixture = await createFoldFixture();
     const { container, editor, fileDiff } = fixture;
     try {
-      const externalHunks = fileDiff.fileDiff!.hunks;
+      const externalHunks = fileDiff.getInputDiffForTest()!.hunks;
       const sessionDiff = getEditSessionDiff(fileDiff);
       expect(sessionDiff).toBeDefined();
       const hunksBefore = sessionDiff!.hunks.length;
@@ -341,7 +371,9 @@ describe('diff editor: reveal-on-jump', () => {
 
       expect(getEditSessionDiff(fileDiff)).toBe(sessionDiff);
       expect(sessionDiff!.hunks.length).toBe(hunksBefore + 1);
-      expect(fileDiff.fileDiff!.hunks).toBe(externalHunks);
+      expect(fileDiff.getInputDiffForTest()!.hunks).toBe(externalHunks);
+      expect(fileDiff.fileDiff).not.toBe(sessionDiff);
+      expect(fileDiff.getRenderedDiffForTest()).toBe(sessionDiff);
       const content = findAdditionContent(container);
       const row = content?.querySelector('[data-line="30"]');
       expect(row).not.toBeNull();

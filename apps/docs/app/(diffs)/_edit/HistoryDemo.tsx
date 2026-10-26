@@ -27,6 +27,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { HISTORY_DEMO_EDITS, HISTORY_DEMO_FILE } from './constants';
 import { Button } from '@/components/ui/button';
+import { getPreferredHighlighter } from '@/lib/preferredHighlighter';
 
 interface HistoryDemoProps {
   // Server-preloaded, highlighted File; hydrating from it avoids a highlight flash on load.
@@ -83,9 +84,7 @@ const LANGUAGE = getFiletypeFromFileName(HISTORY_DEMO_FILE.name);
 // True once the shared main-thread highlighter has this file's grammar, which
 // is what the editor tokenizes edits with.
 function isLanguageReady(): boolean {
-  return (
-    getHighlighterIfLoaded()?.getLoadedLanguages().includes(LANGUAGE) ?? false
-  );
+  return getHighlighterIfLoaded({ lang: LANGUAGE }) != null;
 }
 
 function detectMac(): boolean {
@@ -316,9 +315,9 @@ export function HistoryDemo({ prerenderedFile }: HistoryDemoProps) {
       // Warm the shared highlighter before polling so the editor tokenizer can
       // pick up the grammar synchronously once the component attaches.
       void preloadHighlighter({
+        preferredHighlighter: getPreferredHighlighter(),
         themes: [DEFAULT_THEMES.dark, DEFAULT_THEMES.light],
         langs: [LANGUAGE],
-        preferredHighlighter: 'shiki-wasm',
       })
         .catch(() => {})
         .finally(() => {

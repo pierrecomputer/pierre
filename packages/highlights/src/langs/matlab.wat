@@ -6,7 +6,7 @@
 
   ;; Group order is the dispatch order in $hlMatlab. The high byte of a
   ;; declaration value names what follows: 1 a function head, 2 a class name.
-  (keyword-table $matlabWords $mem.matlabWords $mem.nixWords
+  (keyword-table $matlabWords $mem.matlabWords $mem.nimWords
     (group $Token.keyword.control ;; 1: control flow and block ends
       "if" "elseif" "else" "end" "for" "parfor" "while" "switch" "case" "otherwise" "break"
       "continue" "return" "try" "catch" "spmd")

@@ -203,7 +203,6 @@ const poolManager: WorkerPoolManager | undefined = WORKER_POOL
       const manager = createWorkerAPI({
         theme: DEMO_THEME,
         langs: ['typescript', 'tsx'],
-        preferredHighlighter: 'shiki-wasm',
         useTokenTransformer: true,
       });
       void manager.initialize().then(() => {
@@ -729,7 +728,12 @@ function handlePreload() {
       themes.push(item.options.theme.light);
     }
   }
-  void preloadHighlighter({ langs, themes });
+  // Match the pool even during initialization; two types cannot coexist.
+  void preloadHighlighter({
+    langs,
+    themes,
+    preferredHighlighter: poolManager?.getPreferredHighlighter(),
+  });
 }
 
 document.getElementById('toggle-theme')?.addEventListener('click', toggleTheme);

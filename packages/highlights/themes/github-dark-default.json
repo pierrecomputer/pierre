@@ -113,7 +113,7 @@
         "color": "#e6edf3"
       },
       "property": {
-        "color": "#FFA657"
+        "color": "#e6edf3"
       },
       "punctuation": {
         "color": "#e6edf3"
@@ -153,6 +153,12 @@
       },
       "selector.pseudo": {
         "color": "#79C0FF"
+      },
+      "punctuation.delimiter.jsx": {
+        "color": "#FF7B72"
+      },
+      "variable.parameter": {
+        "color": "#FFA657"
       }
     }
   }

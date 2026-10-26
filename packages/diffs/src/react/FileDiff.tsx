@@ -49,7 +49,13 @@ export function FileDiff<LAnnotation = undefined, Caret = undefined>({
   onEditChange,
   onEditComplete,
 }: FileDiffProps<LAnnotation, Caret>): React.JSX.Element {
-  const { ref, getHoveredLine, getAnnotationSlotName } = useFileDiffInstance({
+  const {
+    ref,
+    getHoveredLine,
+    getAnnotationSlotName,
+    fileDiff: renderedDiff,
+    lineAnnotations: renderedAnnotations,
+  } = useFileDiffInstance({
     fileDiff,
     options,
     editorOptions,
@@ -66,14 +72,14 @@ export function FileDiff<LAnnotation = undefined, Caret = undefined>({
     onEditComplete,
   });
   const children = renderDiffChildren({
-    fileDiff,
+    fileDiff: renderedDiff,
     renderCustomHeader,
     renderHeaderPrefix,
     renderHeaderFilenameSuffix,
     renderHeaderMetadata,
     renderAnnotation,
     renderGutterUtility,
-    lineAnnotations,
+    lineAnnotations: renderedAnnotations,
     getHoveredLine,
     getAnnotationSlotName,
   });

@@ -64,7 +64,7 @@ interface FileDiffMetadata {
   name: string;
 
   // Previous filename (for renames)
-  prevName: string | undefined;
+  prevName?: string;
 
   // Optional: Override language for syntax highlighting. Normally
   // language is detected automatically base on file extension and you do not
@@ -82,10 +82,18 @@ interface FileDiffMetadata {
   splitLineCount: number;
   unifiedLineCount: number;
 
-  // Full file contents (when generated using parseDiffFromFile,
-  // enables expansion around hunks)
-  oldLines?: string[];
-  newLines?: string[];
+  // True when parsed from a patch, so the line arrays hold only the patch's
+  // lines. False when generated from full files or after getting hydrated
+  // from \`loadDiffFiles\`
+  isPartial: boolean;
+
+  // Lines of the old and new file (or just the patch's lines when partial)
+  deletionLines: string[];
+  additionLines: string[];
+
+  // Total characters in deletionLines and additionLines.
+  deletionCharacterCount: number;
+  additionCharacterCount: number;
 
   // Optional: Cache key for AST caching in Worker Pool.
   // When provided, rendered diff AST results are cached and reused.
@@ -108,7 +116,7 @@ interface Hunk {
   hunkContent: (ContextContent | ChangeContent)[];
 
   // Optional context shown in hunk headers (e.g., function name)
-  hunkContext: string | undefined;
+  hunkContext?: string;
 
   // Line position information, mostly used internally for
   // rendering optimizations
@@ -116,24 +124,33 @@ interface Hunk {
   splitLineCount: number;
   unifiedLineStart: number;
   unifiedLineCount: number;
-}
 
-// ContextContent represents unchanged lines surrounding changes
-interface ContextContent {
-  type: 'context';
-  lines: string[];
-  // 'true' if the file does not have a blank newline at the end
-  noEOFCR: boolean;
-}
-
-// ChangeContent represents a group of additions and deletions
-interface ChangeContent {
-  type: 'change';
-  deletions: string[];
-  additions: string[];
-  // 'true' if the file does not have a blank newline at the end
+  // 'true' if the old/new file does not end with a newline
   noEOFCRDeletions: boolean;
   noEOFCRAdditions: boolean;
+}
+
+// ContextContent represents unchanged lines surrounding changes. The line
+// text lives in FileDiffMetadata's deletionLines/additionLines.
+interface ContextContent {
+  type: 'context';
+  // Number of unchanged lines
+  lines: number;
+  // Where this block starts in additionLines and deletionLines
+  additionLineIndex: number;
+  deletionLineIndex: number;
+}
+
+// ChangeContent represents a group of additions and deletions. The line
+// text lives in FileDiffMetadata's deletionLines/additionLines.
+interface ChangeContent {
+  type: 'change';
+  // Number of deleted lines, and where they start in deletionLines
+  deletions: number;
+  deletionLineIndex: number;
+  // Number of added lines, and where they start in additionLines
+  additions: number;
+  additionLineIndex: number;
 }`,
     },
     options,
@@ -208,8 +225,8 @@ const deletedFileDiff = parseDiffFromFile(oldFile, null);
 
 // parseDiffFromFile(null, null) throws because at least one side must exist.
 
-// The resulting diff includes oldLines and newLines,
-// which enables "expand unchanged" functionality in the UI.
+// The resulting diff holds the complete deletionLines and additionLines
+// (isPartial: false), which enables "expand unchanged" in the UI.
 // If both existing versions have cacheKey, the diff will have a combined
 // cacheKey of "greeting-old:greeting-new" for AST caching.`,
   },
@@ -248,7 +265,8 @@ const files: FileDiffMetadata[] = patches[0].files;
 // "my-patch-1", etc.
 // This enables AST caching in Worker Pool for parsed patches.
 
-// Note: Diffs from patch files don't include oldLines/newLines.
+// Note: Diffs from patch files are partial (isPartial: true), so their
+// deletionLines and additionLines hold only the lines in the patch.
 // Renderers can hydrate them with loadDiffFiles when full file
 // contents are needed for expanding unchanged context.`,
   },

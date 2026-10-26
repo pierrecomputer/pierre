@@ -1,11 +1,26 @@
 ## Highlights
 
-<Notice variant="warning" icon={<IconCiWarningFill />}>
-  Highlights is experimental. Its API can change. Try the [interactive
-  playground](/highlights) before you replace Shiki in production.
+Use Highlights with any `@pierre/diffs` component by setting
+`preferredHighlighter: 'highlights'`:
+
+```tsx
+<FileDiff
+  oldFile={oldFile}
+  newFile={newFile}
+  options={{ preferredHighlighter: 'highlights' }}
+/>
+```
+
+Highlights usually performs best without a [worker pool](#worker-pool). See
+[Highlighters](#highlighters) for backend selection and
+[registerCustomTheme](#utilities-registercustomtheme) for Zed themes and shared
+palettes. Custom TextMate grammars require Shiki.
+
+<Notice icon={<IconInfoFill />}>
+  Highlights is in beta, and its API may still change.
 </Notice>
 
-Highlights is a syntax highlighter with 73 built-in language lexers written in
+Highlights is a syntax highlighter with 84 built-in language lexers written in
 WebAssembly Text (WAT). It produces HTML or Shiki-compatible token objects. The
 package includes the lexers, so it does not download language grammars.
 
@@ -18,9 +33,7 @@ package includes the lexers, so it does not download language grammars.
 
 Install Highlights from npm:
 
-```bash
-pnpm add @pierre/highlights
-```
+<DocsCodeExample {...highlightsInstall} />
 
 The package runs in Node.js, browsers, and Cloudflare Workers. It selects and
 initializes the WebAssembly loader for your runtime at import. `codeToHtml()`
@@ -288,59 +301,100 @@ Built-in languages and their aliases are included in the `Lang` type:
 | Language             | Aliases                                                                     |
 | -------------------- | --------------------------------------------------------------------------- |
 | `plain`              | `plaintext`, `text`, `txt`                                                  |
+| `ada`                | `adb`, `ads`                                                                |
 | `angular-html`       | —                                                                           |
-| `asm`                | `assembly`, `s`                                                             |
+| `apache`             | `apacheconf`, `htaccess`                                                    |
+| `apex`               | —                                                                           |
+| `asciidoc`           | `adoc`                                                                      |
+| `asm`                | `assembly`, `mips`, `mipsasm`, `riscv`, `s`                                 |
 | `astro`              | —                                                                           |
+| `awk`                | —                                                                           |
 | `bash`               | `sh`, `shell`, `shellscript`, `shellsession`, `zsh`                         |
 | `batch`              | `bat`, `batchfile`, `cmd`, `dos`                                            |
+| `bicep`              | —                                                                           |
+| `blade`              | —                                                                           |
 | `c`                  | `h`                                                                         |
 | `c3`                 | —                                                                           |
 | `clojure`            | `clj`, `cljc`, `cljs`, `edn`                                                |
 | `cmake`              | —                                                                           |
+| `cobol`              | `cbl`, `cob`                                                                |
+| `coffee`             | `coffeescript`                                                              |
 | `cpp`                | `c++`, `cc`, `cxx`, `hh`, `hpp`, `hxx`                                      |
 | `csharp`             | `c#`, `cs`                                                                  |
-| `css`                | —                                                                           |
+| `css`                | `postcss`, `qss`                                                            |
+| `csv`                | —                                                                           |
 | `cuda`               | `cu`, `cuh`                                                                 |
 | `dart`               | —                                                                           |
 | `diff`               | `git-commit`, `git-rebase`, `patch`                                         |
 | `dockerfile`         | `containerfile`, `docker`                                                   |
+| `dotenv`             | `env`                                                                       |
 | `elixir`             | `ex`, `exs`                                                                 |
 | `elm`                | —                                                                           |
+| `erb`                | —                                                                           |
 | `erlang`             | `erl`, `hrl`                                                                |
 | `fortran`            | `f90`, `f95`, `f03`, `f08`, `fortran-free-form`                             |
 | `fortran-fixed-form` | `f`, `for`, `f77`                                                           |
 | `fsharp`             | `f#`, `fs`, `fsi`, `fsx`                                                    |
+| `gdresource`         | `godot-resource`, `tres`, `tscn`                                            |
+| `gdscript`           | `gd`                                                                        |
+| `gdshader`           | `gdshaderinc`, `godot-shader`                                               |
+| `gherkin`            | `cucumber`, `feature`                                                       |
 | `gleam`              | —                                                                           |
 | `glsl`               | `comp`, `frag`, `geom`, `vert`                                              |
+| `gnuplot`            | `gp`                                                                        |
 | `go`                 | `golang`                                                                    |
 | `graphql`            | `gql`                                                                       |
-| `groovy`             | `gradle`, `gsh`, `gvy`, `gy`                                                |
+| `groq`               | —                                                                           |
+| `groovy`             | `gradle`, `gsh`, `gvy`, `gy`, `nextflow`, `nextflow-groovy`, `nf`           |
+| `haml`               | —                                                                           |
+| `handlebars`         | `hbs`, `mustache`                                                           |
 | `haskell`            | `hs`                                                                        |
+| `haxe`               | `hx`                                                                        |
 | `hlsl`               | —                                                                           |
-| `html`               | `htm`                                                                       |
+| `html`               | `htm`, `html-derivative`                                                    |
+| `http`               | —                                                                           |
+| `ini`                | `desktop`, `properties`, `systemd`                                          |
 | `java`               | —                                                                           |
+| `jinja`              | `j2`, `jinja2`                                                              |
 | `js`                 | `cjs`, `javascript`, `mjs`                                                  |
 | `json`               | `jsonc`                                                                     |
+| `json5`              | —                                                                           |
+| `jsonl`              | —                                                                           |
 | `jsx`                | —                                                                           |
 | `julia`              | `jl`                                                                        |
 | `kotlin`             | `kt`, `kts`                                                                 |
+| `latex`              | `tex`                                                                       |
+| `lean`               | `lean4`                                                                     |
 | `less`               | —                                                                           |
+| `liquid`             | —                                                                           |
 | `lisp`               | `cl`, `el`, `elisp`, `emacs-lisp`, `lsp`, `scheme`, `scm`                   |
+| `log`                | —                                                                           |
 | `lua`                | —                                                                           |
 | `makefile`           | `make`, `mk`                                                                |
-| `markdown`           | `md`                                                                        |
+| `markdown`           | `mdc`, `md`                                                                 |
 | `matlab`             | `octave`                                                                    |
 | `mdx`                | —                                                                           |
+| `nginx`              | —                                                                           |
+| `nim`                | —                                                                           |
 | `nix`                | —                                                                           |
 | `objc`               | `m`, `mm`, `objcpp`, `objective-c`, `objective-cpp`, `objectivec`           |
 | `ocaml`              | `ml`, `mli`                                                                 |
+| `odin`               | —                                                                           |
 | `pascal`             | `delphi`, `dpk`, `dpr`, `lpr`, `object-pascal`, `objectpascal`, `pas`, `pp` |
 | `perl`               | `pl`, `pm`                                                                  |
 | `php`                | —                                                                           |
+| `plsql`              | —                                                                           |
+| `po`                 | `pot`, `potx`                                                               |
 | `powershell`         | `ps`, `ps1`, `psd1`, `psm1`, `pwsh`                                         |
+| `prisma`             | —                                                                           |
+| `prolog`             | —                                                                           |
 | `proto`              | `protobuf`                                                                  |
+| `pug`                | `jade`                                                                      |
 | `python`             | `py`                                                                        |
+| `qml`                | —                                                                           |
 | `r`                  | `rscript`                                                                   |
+| `razor`              | `cshtml`                                                                    |
+| `rst`                | `restructuredtext`                                                          |
 | `ruby`               | `rb`                                                                        |
 | `rust`               | `rs`                                                                        |
 | `sass`               | —                                                                           |
@@ -350,15 +404,21 @@ Built-in languages and their aliases are included in the `Lang` type:
 | `sql`                | —                                                                           |
 | `svelte`             | —                                                                           |
 | `swift`              | —                                                                           |
+| `tcl`                | —                                                                           |
 | `terraform`          | `hcl`, `tf`, `tfvars`                                                       |
 | `toml`               | —                                                                           |
-| `ts`                 | `angular-ts`, `cts`, `mts`, `typescript`                                    |
+| `ts`                 | `angular-ts`, `cts`, `lit`, `mts`, `ts-tags`, `typescript`                  |
 | `tsrx`               | —                                                                           |
+| `tsv`                | —                                                                           |
 | `tsx`                | —                                                                           |
-| `vue`                | —                                                                           |
+| `twig`               | —                                                                           |
+| `verilog`            | `sv`, `svh`, `system-verilog`, `systemverilog`                              |
+| `vhdl`               | `vhd`                                                                       |
+| `viml`               | `vim`, `vimscript`                                                          |
+| `vue`                | `vue-html`                                                                  |
 | `wat`                | `wasm`                                                                      |
 | `wgsl`               | —                                                                           |
-| `xml`                | `svg`, `xsd`                                                                |
+| `xml`                | `svg`, `xsd`, `xsl`, `xslt`                                                 |
 | `yaml`               | `yml`                                                                       |
 | `zig`                | `zon`                                                                       |
 
@@ -370,10 +430,10 @@ The main entry exports runtime functions and public types:
 
 <DocsCodeExample {...highlightsApiRuntime} />
 
-The runtime entry point initializes the shared instance. `init(module)` replaces
-that instance. `createHighlighter(module)` creates a separate `Highlighter` and
-leaves the shared instance unchanged. Both accept a compiled
-`WebAssembly.Module` for applications that supply their own module.
+The environment-specific entry point initializes the shared instance.
+`createHighlighter()` creates an isolated `Highlighter` using the initialized
+module. Embedders can pass their own compiled `WebAssembly.Module` to
+`createHighlighter(module)` or replace the shared instance with `init(module)`.
 
 The same entry exports the public types:
 

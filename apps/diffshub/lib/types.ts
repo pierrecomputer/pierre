@@ -84,8 +84,9 @@ export interface DiffsHubSavedCommentItem {
 // tree consumer can recognize append-only growth and apply the delta as
 // `model.batch` adds instead of rebuilding the entire path store. The link is
 // present only on snapshots that share the same underlying accumulator; the
-// initial publish and any non-streamed source leave it undefined and force a
-// full reset.
+// initial publish, any non-streamed source, and the first snapshot after the
+// accumulator renames an already-published path leave it undefined and force
+// a full reset.
 //
 // `paths` and `pathToItemId` may alias the live accumulator state for
 // streamed sources, so consumers must treat them as read-only and must use

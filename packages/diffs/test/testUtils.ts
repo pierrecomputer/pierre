@@ -22,6 +22,16 @@ export function createDeferred<T>(): Deferred<T> {
   return { promise, resolve, reject };
 }
 
+// Bun's expect().rejects chain does not provide a typed Error for assertions.
+export async function getRejection(promise: Promise<unknown>): Promise<Error> {
+  try {
+    await promise;
+  } catch (error) {
+    return error instanceof Error ? error : new Error(String(error));
+  }
+  throw new Error('Expected promise to reject');
+}
+
 // Assertion helpers
 
 export function assertDefined<T>(

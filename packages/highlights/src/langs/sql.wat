@@ -204,6 +204,79 @@
         (return (enum.get $Token.variable))))
     (enum.get $Token.variable))
 
+  (global $sqlPlsql (mut i32) (i32.const 0))
+
+  ;; Lowercase words $sqlWordHl does not know. Bits 8-9 capture the next name:
+  ;; 1 a routine, 2 a package, 3 a type. Bit 10 (`body`) keeps a capture armed.
+  (keyword-table $plsqlWords $mem.plsqlWords $mem.cobolWords
+    (group $Token.keyword.control
+      "if" "elsif" "loop" "while" "for" "exit" "continue" "return" "goto" "raise"
+      "forall")
+    (group $Token.keyword.declaration+256 "procedure" "function" "trigger")
+    (group $Token.keyword.declaration+512 "package")
+    (group $Token.keyword.declaration+768 "type" "subtype")
+    (group $Token.keyword.declaration+1024 "body")
+    (group $Token.keyword.declaration
+      "declare" "cursor" "constant" "pragma" "record" "varray" "nocopy" "deterministic"
+      "pipelined")
+    (group $Token.keyword
+      "begin" "exception" "is" "of" "out" "replace" "alter" "drop" "grant" "revoke" "view"
+      "index" "sequence" "merge" "minus" "intersect" "returning" "bulk" "collect" "open" "fetch"
+      "close" "commit" "rollback" "savepoint" "execute" "immediate" "others" "row" "rows" "only"
+      "first" "last" "next" "prior" "start" "level" "nulls" "key" "references"
+      "constraint" "unique" "check" "each" "before" "after" "instead" "partition" "over" "cross"
+      "matched" "current" "authid")
+    (group $Token.type.builtin
+      "varchar2" "nvarchar2" "number" "int" "pls_integer" "binary_integer" "simple_integer"
+      "timestamp" "interval" "clob" "nclob" "bfile" "raw" "long" "rowid" "float" "numeric"
+      "smallint" "binary_float" "binary_double" "sys_refcursor" "natural" "positive" "xmltype")
+    (group $Token.constant.builtin
+      "no_data_found" "too_many_rows" "dup_val_on_index" "value_error" "zero_divide"
+      "invalid_number" "cursor_already_open")
+    (group $Token.variable.special "sql" "sqlcode" "sqlerrm" "sysdate" "systimestamp"))
+
+  (func $plsqlWordHl (param $lhs i32) (param $rhs i32) (result i32)
+    (local $v i32)
+    (local.set $v
+      (keyword-table.value $plsqlWords
+        (i32.const $mem.lexLowerScratch)
+        (i32.add
+          (i32.const $mem.lexLowerScratch)
+          (call $lexLowerCopy (local.get $lhs) (local.get $rhs) (i32.const $mem.lexLowerScratch)))))
+    (if (result i32) (i32.ge_s (local.get $v) (i32.const 0))
+      (then (local.get $v))
+      (else (call $sqlWordHl (local.get $lhs) (local.get $rhs)))))
+
+  ;; Streaming checkpoints the closer at $end.
+  (func $plsqlQuote (param $p i32)
+    (local $close i32)
+    (local $lhs i32)
+    (local.set $lhs (global.get $ptr))
+    (local.set $close (call $templateByte (local.get $p)))
+    (if (i32.or (byteset.get "([{" (local.get $close)) (i32.eq (local.get $close) (i32.const "<")))
+      (then
+        (local.set $close
+          (i32.add
+            (local.get $close)
+            (select (i32.const 1) (i32.const 2) (i32.eq (local.get $close) (i32.const "(")))))))
+    (global.set $ptr (i32.add (local.get $p) (i32.const 1)))
+    (block $done
+      (loop $scan
+        (global.set $ptr (call $lexFindByte (global.get $ptr) (local.get $close)))
+        (if (i32.ge_u (i32.add (global.get $ptr) (i32.const 1)) (global.get $end))
+          (then
+            (global.set $ptr (global.get $end))
+            (call $emitTok (enum.get $Token.string) (local.get $lhs) (global.get $ptr))
+            (call $streamSetFixed32
+              (i32.or (local.get $close) (i32.const 0x2700))
+              (i32.const 2)
+              (enum.get $Token.string))
+            (return)))
+        (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
+        (br_if $scan (i32.ne (i32.load8_u (global.get $ptr)) (i32.const 39)))))
+    (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
+    (call $emitTok (enum.get $Token.string) (local.get $lhs) (global.get $ptr)))
+
   (func $sqlDollarString (result i32)
     (local $candidate i32)
     (local $delimiter i32)
@@ -343,15 +416,16 @@
 
   ;; $temp is 1 when the token is a T-SQL temp table name, `#name` or
   ;; `##name`. The name after the hashes is re-derived from $next where it is
-  ;; scanned, so no position carries between tokens: every local here is
-  ;; dead at the loop head and the stream checkpoint stays empty.
-  (func $hlSql
+  ;; scanned, so no position carries between tokens. Only $expect, the PL/SQL
+  ;; name capture, is checkpointed.
+  (func $hlSqlImpl
     (local $c i32)
     (local $hl i32)
     (local $lhs i32)
     (local $next i32)
     (local $p i32)
     (local $temp i32)
+    (local $expect i32)
     (call $lexEmitLeadingContinuation)
     (block $done
       (loop $token
@@ -366,6 +440,72 @@
             (i32.load8_u offset=1 (global.get $ptr))
             (i32.const 0)
             (i32.lt_u (i32.add (global.get $ptr) (i32.const 1)) (global.get $end))))
+
+        (if (global.get $sqlPlsql)
+          (then
+            (if
+              (i32.or
+                (i32.and (i32.eq (local.get $c) (i32.const ":")) (i32.eq (local.get $next) (i32.const "=")))
+                (i32.and (i32.eq (local.get $c) (i32.const ".")) (i32.eq (local.get $next) (i32.const "."))))
+              (then
+                (global.set $ptr (i32.add (local.get $lhs) (i32.const 2)))
+                (call $emitTok (enum.get $Token.operator) (local.get $lhs) (global.get $ptr))
+                (br $token)))
+            (if (i32.and (i32.eq (local.get $c) (i32.const "%")) (call $lexIsIdentStart (local.get $next)))
+              (then
+                (global.set $ptr (i32.add (local.get $lhs) (i32.const 1)))
+                (call $lexScanIdent)
+                (call $emitTok (enum.get $Token.keyword) (local.get $lhs) (global.get $ptr))
+                (br $token)))
+            (if (i32.eq (local.get $c) (i32.const "$"))
+              (then
+                (global.set $ptr (i32.add (local.get $lhs) (i32.const 1)))
+                (call $lexScanIdent)
+                (call $emitTok (enum.get $Token.preproc) (local.get $lhs) (global.get $ptr))
+                (br $token)))
+            (if (i32.eq (local.get $c) (i32.const "&"))
+              (then
+                (local.set $p
+                  (i32.add (local.get $lhs) (i32.add (i32.const 1) (i32.eq (local.get $next) (i32.const "&")))))
+                (if (call $lexIsIdentStart (call $templateByte (local.get $p)))
+                  (then
+                    (global.set $ptr (local.get $p))
+                    (call $lexScanIdent)
+                    (call $emitTok (enum.get $Token.variable.special) (local.get $lhs) (global.get $ptr))
+                    (br $token)))))
+            (if (i32.and (i32.eq (local.get $c) (i32.const "<")) (i32.eq (local.get $next) (i32.const "<")))
+              (then
+                (global.set $ptr (i32.add (local.get $lhs) (i32.const 2)))
+                (call $lexScanIdent)
+                (if
+                  (i32.and
+                    (i32.gt_u (global.get $ptr) (i32.add (local.get $lhs) (i32.const 2)))
+                    (i32.and
+                      (i32.eq (call $templateByte (global.get $ptr)) (i32.const ">"))
+                      (i32.eq (call $templateByte (i32.add (global.get $ptr) (i32.const 1))) (i32.const ">"))))
+                  (then
+                    (global.set $ptr (i32.add (global.get $ptr) (i32.const 2)))
+                    (call $emitTok (enum.get $Token.label) (local.get $lhs) (global.get $ptr))
+                    (br $token)))
+                (global.set $ptr (local.get $lhs))))
+            (local.set $p
+              (i32.add (local.get $lhs) (i32.eq (i32.or (local.get $c) (i32.const 32)) (i32.const "n"))))
+            ;; Oracle rejects a blank, tab, or line break as the delimiter
+            (if
+              (i32.and
+                (i32.and
+                  (i32.eq (i32.or (call $templateByte (local.get $p)) (i32.const 32)) (i32.const "q"))
+                  (i32.eq (call $templateByte (i32.add (local.get $p) (i32.const 1))) (i32.const 39)))
+                (i32.gt_u (call $templateByte (i32.add (local.get $p) (i32.const 2))) (i32.const 32)))
+              (then
+                (call $plsqlQuote (i32.add (local.get $p) (i32.const 2)))
+                (br $token)))
+            ;; `#` is a name byte in PL/SQL, never a MySQL comment
+            (if (i32.eq (local.get $c) (i32.const "#"))
+              (then
+                (global.set $ptr (i32.add (local.get $lhs) (i32.const 1)))
+                (call $emitTok (enum.get $Token.none) (local.get $lhs) (global.get $ptr))
+                (br $token)))))
 
         ;; `#` is MySQL's line comment only where no other dialect gives it
         ;; a meaning: PostgreSQL's `#>`, `#>>` and `#-` are JSON operators,
@@ -454,7 +594,40 @@
                 (call $lexScanIdent))
               (else
                 (call $lexScanIdent)
-                (local.set $hl (call $sqlWordHl (local.get $lhs) (global.get $ptr)))))
+                (if (global.get $sqlPlsql)
+                  (then
+                    ;; a member after `.` is never a keyword: `l_tab.first`
+                    (if
+                      (i32.or
+                        (i32.le_u (local.get $lhs) (global.get $srcBase))
+                        (i32.ne (i32.load8_u (i32.sub (local.get $lhs) (i32.const 1))) (i32.const ".")))
+                      (then (local.set $hl (call $plsqlWordHl (local.get $lhs) (global.get $ptr)))))
+                    (if (i32.gt_u (local.get $hl) (i32.const 255))
+                      (then
+                        (if (i32.lt_u (local.get $hl) (i32.const 1024))
+                          (then (local.set $expect (i32.shr_u (local.get $hl) (i32.const 8)))))
+                        (local.set $hl (i32.and (local.get $hl) (i32.const 255))))
+                      (else
+                        (if (i32.ne (local.get $hl) (enum.get $Token.variable))
+                          (then (local.set $expect (i32.const 0))))))
+                    (if
+                      (i32.and
+                        (i32.ne (local.get $expect) (i32.const 0))
+                        (i32.eq (local.get $hl) (enum.get $Token.variable)))
+                      (then
+                        (if (i32.eq (call $templateByte (global.get $ptr)) (i32.const "."))
+                          (then (local.set $hl (enum.get $Token.namespace)))
+                          (else
+                            (local.set $hl
+                              (select
+                                (enum.get $Token.function.definition)
+                                (select
+                                  (enum.get $Token.namespace)
+                                  (enum.get $Token.type)
+                                  (i32.eq (local.get $expect) (i32.const 2)))
+                                (i32.eq (local.get $expect) (i32.const 1))))
+                            (local.set $expect (i32.const 0)))))))
+                  (else (local.set $hl (call $sqlWordHl (local.get $lhs) (global.get $ptr)))))))
             (if
               (i32.and
                 (i32.eq (local.get $hl) (enum.get $Token.variable))
@@ -523,4 +696,8 @@
         (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
         (call $emitTok (enum.get $Token.none) (local.get $lhs) (global.get $ptr))
         (br $token))))
+
+  (func $hlSql
+    (global.set $sqlPlsql (i32.const 0))
+    (call $hlSqlImpl))
 )

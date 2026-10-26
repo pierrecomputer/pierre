@@ -7,11 +7,15 @@
   ;; f-strings. Returns the status in the low two bits - one after the closing
   ;; quote, two after a continued line, zero otherwise - and the field depth
   ;; still open at $ptr in the bits above, so a stream chunk can checkpoint it.
+  ;; Godot resource strings can span lines without triple quotes. A nonzero
+  ;; $hexU enables Godot escapes: four digits for \u and $hexU digits for \U.
   (func $pyStringBody
     (param $quote i32)
     (param $raw i32)
     (param $format i32)
     (param $triple i32)
+    (param $multiline i32)
+    (param $hexU i32)
     (param $seg i32)
     (param $depth i32)
     (result i32)
@@ -38,7 +42,7 @@
             (local.get $stop)
             (local.get $quote)
             (i32.const 1)
-            (i32.eqz (local.get $triple))))
+            (i32.eqz (local.get $multiline))))
         (br_if $done (i32.ge_u (global.get $ptr) (global.get $end)))
         (local.set $c (i32.load8_u (global.get $ptr)))
         (if (i32.eq (local.get $c) (local.get $quote))
@@ -61,7 +65,7 @@
                 (br $done)))))
         (br_if $done
           (i32.and
-            (i32.eqz (local.get $triple))
+            (i32.eqz (local.get $multiline))
             (i32.or (i32.eq (local.get $c) (i32.const 10)) (i32.eq (local.get $c) (i32.const 13)))))
         ;; A backslash escapes the next character, or continues the line when
         ;; it precedes LF or CRLF. Raw literals keep the bytes as plain body
@@ -71,6 +75,16 @@
             (local.set $e (call $lexEscapeEnd (global.get $ptr)))
             (if (i32.eqz (local.get $raw))
               (then
+                (if (local.get $hexU)
+                  (then
+                    (if (i32.lt_u (i32.add (global.get $ptr) (i32.const 1)) (global.get $end))
+                      (then
+                        (local.set $c (i32.load8_u offset=1 (global.get $ptr)))
+                        (if (i32.or (i32.eq (local.get $c) (i32.const "u")) (i32.eq (local.get $c) (i32.const "U")))
+                          (then
+                            (local.set $e
+                              (call $scanHexRun (local.get $e)
+                                (select (i32.const 4) (local.get $hexU) (i32.eq (local.get $c) (i32.const "u")))))))))))
                 (call $emitTok (enum.get $Token.string) (local.get $seg) (global.get $ptr))
                 (call $emitTok (enum.get $Token.string.escape) (global.get $ptr) (local.get $e))
                 (local.set $seg (local.get $e))))
@@ -143,6 +157,8 @@
         (local.get $raw)
         (local.get $format)
         (local.get $triple)
+        (local.get $triple)
+        (i32.const 0)
         (local.get $seg)
         (i32.const 0)))
     ;; a triple-quoted string spans chunks until its closing quotes; a
@@ -183,6 +199,8 @@
         (i32.and (local.get $flags) (i32.const 1))
         (i32.and (i32.shr_u (local.get $flags) (i32.const 1)) (i32.const 1))
         (i32.and (i32.shr_u (local.get $flags) (i32.const 2)) (i32.const 1))
+        (i32.and (i32.shr_u (local.get $flags) (i32.const 2)) (i32.const 1))
+        (i32.const 0)
         (global.get $ptr)
         (global.get $streamC)))
     (global.set $streamC (i32.shr_u (local.get $status) (i32.const 2)))

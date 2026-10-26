@@ -6,9 +6,10 @@
     line table, per-line token blocks, and interned per-line lexer states in
     linear memory:
 
-      page 1                    control, static data, lexer scratch,
-                                line-change list and size-class free-list heads
-      [65536:$lvHeapCeil)       size-class heap: staged text, line text
+      page 1                    control, static data, lexer scratch
+      [65536:82192)             line-change list, size-class free-list heads,
+                                and suspended lexer locals
+      [82192:$lvHeapCeil)       size-class heap: staged text, line text
                                 blocks, token blocks, state blobs, line table
       [$lvHeapCeil:mem end)     transient per-line scratch: the line's bytes,
                                 terminator, NUL sentinel, then the standard
@@ -229,12 +230,12 @@
   (global $lvStateCount (mut i32) (i32.const 0))
   (global $lvStateBytes (mut i32) (i32.const 0))
 
-  ;; FNV-1a 64 over 8-byte lanes with a byte-assembled tail
+  ;; FNV-1a 64 over 8-byte lanes with a masked tail, then a 64-bit finalizer.
+  ;; Tail loads require the heap and transient window's reserved slack.
   (func $lvHash (param $ptr i32) (param $len i32) (result i64)
     (local $h i64)
     (local $p i32)
     (local $stop i32)
-    (local $tail i64)
     (local $k i32)
     (local.set $h (i64.const 0xcbf29ce484222325))
     (local.set $p (local.get $ptr))
@@ -249,40 +250,43 @@
     (local.set $k (i32.and (local.get $len) (i32.const 7)))
     (if (local.get $k)
       (then
-        (block $tdone
-          (loop $tl
-            (br_if $tdone (i32.eqz (local.get $k)))
-            (local.set $k (i32.sub (local.get $k) (i32.const 1)))
-            (local.set $tail
-              (i64.or
-                (i64.shl (local.get $tail) (i64.const 8))
-                (i64.load8_u (i32.add (local.get $p) (local.get $k)))))
-            (br $tl)))
         (local.set $h
-          (i64.mul (i64.xor (local.get $h) (local.get $tail)) (i64.const 0x100000001b3)))))
-    (local.get $h))
+          (i64.mul
+            (i64.xor
+              (local.get $h)
+              (i64.and
+                (i64.load (local.get $p))
+                (i64.shr_u (i64.const -1)
+                  (i64.extend_i32_u (i32.shl (i32.sub (i32.const 8) (local.get $k)) (i32.const 3))))))
+            (i64.const 0x100000001b3)))))
+    ;; Finalize (murmur3 fmix64). The lane multiplies carry bits only upward,
+    ;; so without this the bucket index (the low bits) would depend only on
+    ;; the low bits of each 8-byte lane, and states that differ only in higher
+    ;; bytes would share one bucket chain (quadratic re-tokenization).
+    (local.set $h
+      (i64.mul (i64.xor (local.get $h) (i64.shr_u (local.get $h) (i64.const 33))) (i64.const 0xff51afd7ed558ccd)))
+    (local.set $h
+      (i64.mul (i64.xor (local.get $h) (i64.shr_u (local.get $h) (i64.const 33))) (i64.const 0xc4ceb9fe1a85ec53)))
+    (i64.xor (local.get $h) (i64.shr_u (local.get $h) (i64.const 33))))
 
   (func $lvBytesEq (param $a i32) (param $b i32) (param $len i32) (result i32)
-    (local $stop i32)
-    (local.set $stop (i32.add (local.get $a) (i32.and (local.get $len) (i32.const -8))))
-    (block $tail
-      (loop $wide
-        (br_if $tail (i32.ge_u (local.get $a) (local.get $stop)))
-        (if (i64.ne (i64.load (local.get $a)) (i64.load (local.get $b)))
-          (then (return (i32.const 0))))
-        (local.set $a (i32.add (local.get $a) (i32.const 8)))
-        (local.set $b (i32.add (local.get $b) (i32.const 8)))
-        (br $wide)))
-    (local.set $stop (i32.add (local.get $a) (i32.and (local.get $len) (i32.const 7))))
-    (block $done
-      (loop $one
-        (br_if $done (i32.ge_u (local.get $a) (local.get $stop)))
-        (if (i32.ne (i32.load8_u (local.get $a)) (i32.load8_u (local.get $b)))
-          (then (return (i32.const 0))))
-        (local.set $a (i32.add (local.get $a) (i32.const 1)))
-        (local.set $b (i32.add (local.get $b) (i32.const 1)))
-        (br $one)))
-    (i32.const 1))
+    (local $different v128)
+    (if (i32.eqz (local.get $len))
+      (then (return (i32.const 1))))
+    ;; Tail loads require the heap and transient window's reserved slack.
+    (loop $wide
+      (local.set $different (i8x16.ne (v128.load (local.get $a)) (v128.load (local.get $b))))
+      (if (v128.any_true (local.get $different))
+        (then
+          (return
+            (i32.ge_u (i32.ctz (i8x16.bitmask (local.get $different))) (local.get $len)))))
+      (if (i32.le_u (local.get $len) (i32.const 16))
+        (then (return (i32.const 1))))
+      (local.set $a (i32.add (local.get $a) (i32.const 16)))
+      (local.set $b (i32.add (local.get $b) (i32.const 16)))
+      (local.set $len (i32.sub (local.get $len) (i32.const 16)))
+      (br $wide))
+    (unreachable))
 
   ;; set up the id table and buckets; called from the document initializer
   (func $lvStateInit
@@ -481,7 +485,7 @@
     (global.set $lvIdFree (local.get $id)))
 
   ;; State image layout, in order:
-  ;; - [stackLen, brkLen, jsxLen] u32 header and 40 cross-chunk globals.
+  ;; - [stackLen, brkLen, jsxLen] u32 header and 41 cross-chunk globals.
   ;; - 32-byte stream delimiter and 96-byte nested Markdown fence registers.
   ;; - Active JSON/TOML or JavaScript template stack entries.
   ;; - Template HTML/CSS state, bracket and JSX stacks, then lexer checkpoints.
@@ -496,12 +500,23 @@
   (global $lvLang (mut i32) (i32.const 0))
   (global $lvMachineId (mut i32) (i32.const -1)) ;; state the machine holds now
 
+  ;; JSON, JSON5, and JSONL share the JSON lexer and its stack.
+  (func $lvIsJson (param $lang i32) (result i32)
+    (i32.or
+      (i32.eq (local.get $lang) (enum.get $Language.json))
+      (i32.or
+        (i32.eq (local.get $lang) (enum.get $Language.json5))
+        (i32.eq (local.get $lang) (enum.get $Language.jsonl)))))
+
   ;; Find the nesting stack used by the current fence body from its language
   ;; register. Bit 8 marks a lexer that has run. JSON and TOML use their own
   ;; stacks. Other bodies return 0. Markdown/MDX can suspend JavaScript
   ;; inside JSON fences, including nested Markdown fences.
   (func $lvFenceStack (param $reg i32) (result i32)
-    (if (i32.eq (local.get $reg) (i32.or (enum.get $Language.json) (i32.const 0x100)))
+    (if
+      (i32.and
+        (i32.eq (i32.and (local.get $reg) (i32.const -256)) (i32.const 0x100))
+        (call $lvIsJson (i32.and (local.get $reg) (i32.const 0xff))))
       (then (return (i32.const $mem.jsonStack))))
     (if (i32.eq (local.get $reg) (i32.or (enum.get $Language.toml) (i32.const 0x100)))
       (then (return (i32.const $mem.tomlStack))))
@@ -510,7 +525,13 @@
   (func $lvStackBase (result i32)
     (local $p i32)
     (local $stack i32)
-    (if (i32.eq (global.get $lvLang) (enum.get $Language.json))
+    (if (call $lvIsJson (global.get $lvLang))
+      (then (return (i32.const $mem.jsonStack))))
+    ;; an open HTTP JSON body, top level or fenced: region 29 of kind 2 (see $httpBody)
+    (if
+      (i32.and
+        (i32.eq (global.get $streamRegionKind) (i32.const 29))
+        (i32.eq (i32.and (global.get $streamRegionStarted) (i32.const 3)) (i32.const 2)))
       (then (return (i32.const $mem.jsonStack))))
     (if (i32.eq (global.get $lvLang) (enum.get $Language.toml))
       (then (return (i32.const $mem.tomlStack))))
@@ -549,6 +570,7 @@
 
   (func $lvCaptureBlob (param $dst i32) (result i32)
     (local $p i32)
+    (local $lo i32)
     (local $stackBase i32)
     (local $stackLen i32)
     (local $brkLen i32)
@@ -613,7 +635,8 @@
       (i32.const $mem.markdownFenceStack)
       (i32.const 96))
     (i32.store offset=300 (local.get $dst) (global.get $ecmaImport))
-    (local.set $p (i32.add (local.get $dst) (i32.const 304)))
+    (i32.store offset=304 (local.get $dst) (global.get $ternaryTop))
+    (local.set $p (i32.add (local.get $dst) (i32.const 308)))
     (memory.copy (local.get $p) (local.get $stackBase) (local.get $stackLen))
     (local.set $p (i32.add (local.get $p) (local.get $stackLen)))
     (if (i32.ne (local.get $stackBase) (i32.const $mem.jsTemplateBracketStack))
@@ -632,8 +655,35 @@
     (local.set $p (i32.add (local.get $p) (local.get $brkLen)))
     (memory.copy (local.get $p) (i32.const $mem.jsxStack) (local.get $jsxLen))
     (local.set $p (i32.add (local.get $p) (local.get $jsxLen)))
-    (memory.copy (local.get $p) (i32.const $mem.streamState) (i32.const $mem.streamStateUsed))
-    (i32.sub (i32.add (local.get $p) (i32.const $mem.streamStateUsed)) (local.get $dst)))
+    ;; Store the checkpoint bytes from their first nonzero byte, after its
+    ;; u16 offset. The windows below Lo are zero, so this skips them without
+    ;; a scan, and equal checkpoints still give equal bytes.
+    (local.set $lo (global.get $streamStateLo))
+    (block $chunks
+      (loop $wide
+        (br_if $chunks (i32.ge_u (local.get $lo) (global.get $streamStateHi)))
+        (br_if $chunks
+          (v128.any_true (v128.load (i32.add (i32.const $mem.streamState) (local.get $lo)))))
+        (local.set $lo (i32.add (local.get $lo) (i32.const 16)))
+        (br $wide)))
+    (block $found
+      (loop $byte
+        (br_if $found (i32.ge_u (local.get $lo) (global.get $streamStateHi)))
+        (br_if $found (i32.load8_u (i32.add (i32.const $mem.streamState) (local.get $lo))))
+        (local.set $lo (i32.add (local.get $lo) (i32.const 1)))
+        (br $byte)))
+    (if (i32.ge_u (local.get $lo) (global.get $streamStateHi))
+      (then
+        (i32.store16 (local.get $p) (i32.const 0))
+        (return (i32.sub (i32.add (local.get $p) (i32.const 2)) (local.get $dst)))))
+    (i32.store16 (local.get $p) (local.get $lo))
+    (memory.copy
+      (i32.add (local.get $p) (i32.const 2))
+      (i32.add (i32.const $mem.streamState) (local.get $lo))
+      (i32.sub (global.get $streamStateHi) (local.get $lo)))
+    (i32.sub
+      (i32.add (i32.add (local.get $p) (i32.const 2)) (i32.sub (global.get $streamStateHi) (local.get $lo)))
+      (local.get $dst)))
 
   ;; Return the blob length without trailing zeros. This avoids storing,
   ;; hashing, and comparing inactive checkpoints and empty stacks.
@@ -657,8 +707,9 @@
         (br $byte)))
     (i32.sub (local.get $p) (local.get $base)))
 
-  (func $lvRestoreBlob (param $src i32)
+  (func $lvRestoreBlob (param $src i32) (param $len i32)
     (local $p i32)
+    (local $lo i32)
     (local $stackBase i32)
     (local $stackLen i32)
     (local $brkLen i32)
@@ -716,7 +767,8 @@
       (i32.add (local.get $src) (i32.const 204))
       (i32.const 96))
     (global.set $ecmaImport (i32.load offset=300 (local.get $src)))
-    (local.set $p (i32.add (local.get $src) (i32.const 304)))
+    (global.set $ternaryTop (i32.load offset=304 (local.get $src)))
+    (local.set $p (i32.add (local.get $src) (i32.const 308)))
     (local.set $stackBase (call $lvStackBase))
     (memory.copy (local.get $stackBase) (local.get $p) (local.get $stackLen))
     (local.set $p (i32.add (local.get $p) (local.get $stackLen)))
@@ -736,37 +788,29 @@
     (local.set $p (i32.add (local.get $p) (local.get $brkLen)))
     (memory.copy (i32.const $mem.jsxStack) (local.get $p) (local.get $jsxLen))
     (local.set $p (i32.add (local.get $p) (local.get $jsxLen)))
-    (memory.copy (i32.const $mem.streamState) (local.get $p) (i32.const $mem.streamStateUsed)))
+    ;; the trimmed blob ends at the last nonzero checkpoint byte
+    (call $streamClearCheckpoints)
+    (local.set $lo (i32.load16_u (local.get $p)))
+    (local.set $p (i32.add (local.get $p) (i32.const 2)))
+    (local.set $len (i32.sub (i32.add (local.get $src) (local.get $len)) (local.get $p)))
+    (if (i32.gt_s (local.get $len) (i32.const 0))
+      (then
+        (memory.copy
+          (i32.add (i32.const $mem.streamState) (local.get $lo))
+          (local.get $p)
+          (local.get $len))
+        (global.set $streamStateLo (local.get $lo))
+        (global.set $streamStateHi (i32.add (local.get $lo) (local.get $len))))))
 
   ;; canonicalize every captured location before the first line so stale
   ;; values from earlier batches can never leak into a blob
   (func $lvResetCaptured
     (call $streamResetGlobals)
+    (call $streamClearEmbedded)
     (global.set $recCarryHl (i32.const -1))
     (global.set $markdownDepth (i32.const 0))
     (global.set $bashArith (i32.const 0))
-    (global.set $lto (i32.const 0))
-    (global.set $prevLto (i32.const 0))
-    (global.set $prevTok (i32.const 0))
-    (global.set $ecmaImport (i32.const 0))
-    (global.set $nlBefore (i32.const 0))
-    (global.set $braceDepth (i32.const 0))
-    (global.set $rxCloser (i32.const 0))
-    (global.set $jsTemplateLexSp (i32.const 0))
-    (global.set $jsTemplateMarker (i32.const 0))
-    (global.set $jsTemplateState (i32.const 0))
-    (global.set $jsTemplateEmitSp (i32.const 0))
-    (global.set $brkSp (i32.const 0))
-    (global.set $jsxSp (i32.const 0))
-    (global.set $tsxStreamMode (i32.const 0))
-    (global.set $tsxStreamNl (i32.const 0))
-    (global.set $tsxStreamExpressionClose (i32.const 0))
-    (global.set $tsxStreamExpressionClosed (i32.const 0))
-    (global.set $tsxStreamExpressionDepth (i32.const 0))
-    (call $sigReset)
-    (global.set $liveStackBytes (i32.const 0))
-    (memory.fill (i32.const $mem.streamDelimiter) (i32.const 0) (i32.const 32))
-    (memory.fill (i32.const $mem.streamState) (i32.const 0) (i32.const $mem.streamStateUsed)))
+    (global.set $liveStackBytes (i32.const 0)))
 
   ;; Gap buffer of 32-byte line descriptors:
   ;;   +0 textPtr  +4 byteLen (without terminator)  +8 utf16Len
@@ -929,13 +973,16 @@
                 (local.set $node
                   (i32.load
                     (i32.add (global.get $lvIdTab) (i32.shl (global.get $lvIncoming) (i32.const 2)))))
-                (call $lvGrowTo (i32.add (local.get $inBase) (i32.const $mem.streamStateUsed+8496)))
-                (memory.fill (local.get $inBase) (i32.const 0) (i32.const $mem.streamStateUsed+8496))
+                ;; a trimmed blob reads as zeros past its end: pad the head
+                ;; (308), the stack prefixes at their caps (8192), and the
+                ;; checkpoint offset (2); checkpoint bytes are copied by length
+                (call $lvGrowTo (i32.add (local.get $inBase) (i32.const $mem.streamStateUsed+8502)))
+                (memory.fill (local.get $inBase) (i32.const 0) (i32.const 8502))
                 (memory.copy
                   (local.get $inBase)
                   (i32.add (local.get $node) (i32.const 24))
                   (i32.load offset=8 (local.get $node)))
-                (call $lvRestoreBlob (local.get $inBase))))))
+                (call $lvRestoreBlob (local.get $inBase) (i32.load offset=8 (local.get $node)))))))
         (global.set $lvMachineId (i32.const -1))
         (memory.copy (local.get $inBase) (i32.load (local.get $slot)) (local.get $byteLen))
         (if (i32.eq (local.get $termBytes) (i32.const 2))
@@ -972,9 +1019,10 @@
           (i32.and
             (i32.add (i32.add (local.get $recStart) (local.get $recLen)) (i32.const 7))
             (i32.const -8)))
-        ;; head, globals, delimiter, and fence registers (304) plus the five
-        ;; stack prefixes at their caps (1024 * 4 + 4096), then the checkpoints
-        (call $lvGrowTo (i32.add (local.get $blobBase) (i32.const $mem.streamStateUsed+8576)))
+        ;; head, globals, delimiter, and fence registers (308) plus the five
+        ;; stack prefixes at their caps (1024 * 4 + 4096), then the checkpoint
+        ;; offset (2) and bytes
+        (call $lvGrowTo (i32.add (local.get $blobBase) (i32.const $mem.streamStateUsed+8580)))
         (local.set $blobLen
           (call $lvTrimBlob (local.get $blobBase) (call $lvCaptureBlob (local.get $blobBase))))
         (global.set $lvTransLo (local.get $recStart))

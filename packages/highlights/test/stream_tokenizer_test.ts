@@ -6,7 +6,7 @@ import { codeToTokens, StreamTokenizer } from '../lib/index';
 import pierreDark from '../themes/pierre-dark.json' with { type: 'json' };
 import pierreLight from '../themes/pierre-light.json' with { type: 'json' };
 import { tokenizerSamples } from './_samples';
-import { initFullModule, makeRand } from './_util';
+import { distinctTheme, initFullModule, makeRand } from './_util';
 
 t.before(initFullModule);
 
@@ -413,5 +413,47 @@ void t.test('StreamTokenizer: surrogate pair split across chunks', () => {
     ...stream.pushCode(`${low}"\nlet x = 1\n`),
     ...stream.end(),
   ];
+  assert.deepEqual(streamed, direct);
+});
+
+void t.test(
+  'StreamTokenizer: a fence body keeps its saved locals across chunks',
+  () => {
+    // a chunk that opens a fence runs the body lexer inside the markdown
+    // lexer; the markdown checkpoint must not overwrite the body's
+    for (const chunks of [
+      ['# T\n```rust\nfn\n', 'foo() {}\n```\n'],
+      ['- item\n  ```rust\n  fn\n', '  foo() {}\n  ```\n'],
+    ]) {
+      // the distinct theme tells function.definition from function
+      const direct = codeToTokens(chunks.join(''), {
+        lang: 'markdown',
+        theme: distinctTheme,
+      }).tokens;
+      const stream = new StreamTokenizer({
+        lang: 'markdown',
+        theme: distinctTheme,
+      });
+      const streamed = chunks.flatMap((chunk) => stream.pushCode(chunk));
+      streamed.push(...stream.end());
+      assert.deepEqual(streamed, direct, JSON.stringify(chunks));
+    }
+  }
+);
+
+void t.test('StreamTokenizer: non-ASCII runs keep UTF-16 offsets', () => {
+  // records end inside and after multi-byte runs, with surrogate pairs
+  const code =
+    'const s = "é🎈中文 x" // 注释 🎈🎈 é\nlet t = `中${a}é`\n🎈\n'.repeat(3);
+  const direct = codeToTokens(code, { lang: 'ts', theme: pierreDark }).tokens;
+  const lines = code.split('\n');
+  for (const [i, line] of direct.entries()) {
+    assert.equal(lineText(line), lines[i]);
+  }
+  const stream = new StreamTokenizer({ lang: 'ts', theme: pierreDark });
+  const streamed = code
+    .split(/(?<=\n)/)
+    .flatMap((chunk) => stream.pushCode(chunk));
+  streamed.push(...stream.end());
   assert.deepEqual(streamed, direct);
 });
