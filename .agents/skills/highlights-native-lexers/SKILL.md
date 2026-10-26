@@ -52,10 +52,14 @@ with `src/` (relative to `packages/highlights/`).
 6. **No git state changes.** No commits, `git add`, stash, branch, or reset.
    Keep scratch files (copies of binaries, notes, profiles) in
    `target/native-<module>/scratch/`, not a shared scratch directory.
-7. **Hard errors over silent damage.** Unchecked memory access only inside the
-   input slack (96 bytes past the input) and with a `// SAFETY:` comment. Record
-   writes go through `Recs` (or the same capacity-trapping pattern as
-   `fast.rs`); never write records without the capacity trap.
+7. **Hard errors over silent damage.** A module reads its input only through
+   `native::input::Input` and writes records only through `native::recs::Recs`:
+   no raw pointers, `from_raw_parts`, `set_len`, or hand-rolled record writers
+   in a module. Reads are checked (`byte`, `word`, `vec`) unless a measured hot
+   path needs `byte_unchecked`/`word_unchecked`/`vec_unchecked`, each with a
+   `// SAFETY:` comment (positions stay inside the input plus slack). Those
+   assert their bounds in checked builds, and
+   `scripts/native-check.sh <module> --checked` must pass.
 8. **Portable code.** Native lexers build and give identical output on every
    target in `rust-toolchain.toml` (macOS, Linux, Windows; ARM and x86-64;
    wasm). Vector code uses only `crate::simd::V` (see Portable SIMD below): no
@@ -67,22 +71,24 @@ with `src/` (relative to `packages/highlights/`).
 
 ## The Pieces
 
-| Piece                                      | What it is                                                                                                                                                                                                                                                                                                                           |
-| ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `src/langs/<module>.wat`                   | The lexer to port. `src/common.wat`, `src/scan.wat`, `src/sig.wat`, `src/embed.wat` hold shared helpers it may call.                                                                                                                                                                                                                 |
-| `src/languages.wat`                        | Which `$hl<Lang>` function each language name uses.                                                                                                                                                                                                                                                                                  |
-| `bun scripts/native-modules.ts [<module>]` | The modules and the languages each handles (e.g. `css` → `css less sass scss`).                                                                                                                                                                                                                                                      |
-| `highlights/src/generated/wat_tables.rs`   | Every `keyword-table` (`GO_WORDS`, …) as `&[Keyword]` with `word`, 1-based `group`, and `value` (`-1` if none), and every named memory address (`MEM_*`).                                                                                                                                                                            |
-| `highlights/src/generated/token_ids.rs`    | `$Token` ids (`crate::token_ids as tok`): `tok::KEYWORD_CONTROL`, …                                                                                                                                                                                                                                                                  |
-| `highlights/src/generated/lex_ids.rs`      | `$Lex` kinds of the ECMAScript scanner (`crate::lex_ids`).                                                                                                                                                                                                                                                                           |
-| `native/tables.rs`                         | `KeywordTable::<N>::new(GO_WORDS)` (compile-time perfect hash with a first-byte/length prefilter; `.group()` and `.value()` answer like `keyword-table.get`/`.value`; `N` a power of two ≥ words²/4) and `byteset(b"…")` for `byteset.get`. A module may build its own table from the same generated data when that measures faster. |
-| `native/recs.rs`                           | `Recs`: `load`, `tok(hl, end)` (`$emitTok`; the token must be non-empty), `gap(lhs, rhs)` (`$emitGap`), `store`.                                                                                                                                                                                                                     |
-| `native/scan.rs`                           | SIMD scans: `line_end`, `string_special`, `block_comment_end`, `utf8_span_end`, `find3`, and `first_lane` (the first set lane of a NEON compare) for module-local vector scans.                                                                                                                                                      |
-| `native/mod.rs`                            | The registry. A module provides `pub(crate) fn lexer(name: &str) -> Option<Lexer>`; `Lexer` is `fn(&mut Instance, base, len)`.                                                                                                                                                                                                       |
-| `scripts/native-check.sh <module>`         | The pass/fail check (below).                                                                                                                                                                                                                                                                                                         |
-| `scripts/parity-corpus.ts`                 | Builds `target/parity/<lang>/`: real files from this machine plus the test sample. Run once if missing.                                                                                                                                                                                                                              |
-| `scripts/native-report.sh`                 | PGO-built comparison of every native module against the translated lexers, written to `target/native-report.md`.                                                                                                                                                                                                                     |
-| `scripts/native-ab.sh <A> <B> <input>`     | Interleaved runs of two bench binaries on one input, with medians: how to decide a change whose cycles move but whose instructions don't (or the reverse).                                                                                                                                                                           |
+| Piece                                      | What it is                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| ------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/langs/<module>.wat`                   | The lexer to port. `src/common.wat`, `src/scan.wat`, `src/sig.wat`, `src/embed.wat` hold shared helpers it may call.                                                                                                                                                                                                                                                                                                                                                              |
+| `src/languages.wat`                        | Which `$hl<Lang>` function each language name uses.                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| `bun scripts/native-modules.ts [<module>]` | The modules and the languages each handles (e.g. `css` → `css less sass scss`).                                                                                                                                                                                                                                                                                                                                                                                                   |
+| `highlights/src/generated/wat_tables.rs`   | Every `keyword-table` (`GO_WORDS`, …) as `&[Keyword]` with `word`, 1-based `group`, and `value` (`-1` if none), and every named memory address (`MEM_*`).                                                                                                                                                                                                                                                                                                                         |
+| `highlights/src/generated/token_ids.rs`    | `$Token` ids (`crate::token_ids as tok`): `tok::KEYWORD_CONTROL`, …                                                                                                                                                                                                                                                                                                                                                                                                               |
+| `highlights/src/generated/lex_ids.rs`      | `$Lex` kinds of the ECMAScript scanner (`crate::lex_ids`).                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| `native/tables.rs`                         | `KeywordTable::<N>::new(GO_WORDS)` (compile-time perfect hash with a first-byte/length prefilter; `.group()` and `.value()` answer like `keyword-table.get`/`.value`; `N` a power of two ≥ words²/4) and `byteset(b"…")` for `byteset.get`. A module may build its own table from the same generated data when that measures faster.                                                                                                                                              |
+| `native/recs.rs`                           | `Recs`, the record writer (a moving pointer, three words; `Copy`, keep it in a local): `load`, `tok(hl, end)` (non-empty token), `tok_branching` (same result, merge decided by a branch; cheaper where merges are rare), `push` (a token known to differ from the last one: no merge test), `emit(hl, lhs, rhs)` (`$emitTok`, skips empty), `gap(lhs, rhs)` (`$emitGap`), `extend(end)` (traps with no record; `extend_unchecked` for a measured hot path), `is_empty`, `store`. |
+| `native/input.rs`                          | `Input`, the input plus slack: `unsafe Input::new(inst, base, len)` (the one slice construction; make a new one after every call into translated code), checked `byte`/`word`/`vec`, and `_unchecked` twins that assert in checked builds.                                                                                                                                                                                                                                        |
+| `native/scan.rs`                           | SIMD scans: `line_end`, `string_special`, `block_comment_end`, `utf8_span_end`, `find3`, and `first_lane` (the first set lane of a NEON compare) for module-local vector scans.                                                                                                                                                                                                                                                                                                   |
+| `native/mod.rs`                            | The registry. A module provides `pub(crate) fn lexer(name: &str) -> Option<Lexer>`; `Lexer` is `fn(&mut Instance, base, len)`.                                                                                                                                                                                                                                                                                                                                                    |
+| `scripts/native-check.sh <module>`         | The pass/fail check (below).                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| `scripts/parity-corpus.ts`                 | Builds `target/parity/<lang>/`: real files from this machine plus the test sample. Run once if missing.                                                                                                                                                                                                                                                                                                                                                                           |
+| `scripts/native-report.sh`                 | PGO-built comparison of every native module against the translated lexers, written to `target/native-report.md`.                                                                                                                                                                                                                                                                                                                                                                  |
+| `scripts/native-ab.sh <A> <B> <input>`     | Interleaved runs of two bench binaries on one input, with medians: how to decide a change whose cycles move but whose instructions don't (or the reverse).                                                                                                                                                                                                                                                                                                                        |
+| `scripts/native-pgo.sh <module>`           | A PGO bench with only that module, trained on its corpora: the shipped build's numbers in a few minutes. Build one before and one after a change and compare them with `native-ab.sh`.                                                                                                                                                                                                                                                                                            |
 
 ### How a native lexer runs
 
@@ -91,18 +97,17 @@ with `src/` (relative to `packages/highlights/`).
 records) and then calls your `Lexer` instead of the translated `$hl<Lang>`. Your
 lexer:
 
-- reads the input through a slice that doesn't borrow `inst`, so it can still
-  call translated functions, as `fast.rs` does:
+- reads the input through `Input`, which doesn't borrow `inst`, so it can still
+  call translated functions:
 
   ```rust
-  let mem_ptr = inst.mem.bytes().as_ptr();
-  // SAFETY: `base..base + len + 96` lies inside lexer memory. Re-derive this
-  // slice after every call into translated code.
-  let src: &[u8] = unsafe { core::slice::from_raw_parts(mem_ptr.add(base), len + 96) };
+  // SAFETY: `base..base + len + SLACK` lies in lexer memory; a new `Input`
+  // is made after every call into translated code, which may move it.
+  let src = unsafe { Input::new(inst, base, len) };
   ```
 
-  Re-derive `src` after every call into translated code: a translated function
-  may grow (move) memory. It is one load and costs nothing measurable.
+  Make a new `Input` after every call into translated code: it may grow (move)
+  memory.
 
   Positions are input offsets, and `src[len]` is NUL. The bytes after that NUL
   are leftovers from earlier inputs: never let a result depend on them.
@@ -285,10 +290,10 @@ What has worked (JS/TS: 262 → 100 instructions per token):
   one compare (`KeywordTable` does both). Test only names that can be keywords
   (e.g. constants only for `[A-Z_]` starts).
 - **Records through a moving pointer** (`Recs`, or a module-local writer like
-  the `emit!` pattern in `fast.rs`, which can fold a gap into one store), always
-  with the capacity trap. Don't pass `&mut Recs` to an out-of-line helper on the
-  hot path: its address escapes and the record state leaves registers. Pass it
-  by value and return it, or keep the writer in locals.
+  `Recs`, which keeps the writer in registers), always with the capacity trap.
+  Don't pass `&mut Recs` to an out-of-line helper on the hot path: its address
+  escapes and the record state leaves registers. Pass it by value and return it,
+  or keep the writer in locals.
 - **The NUL sentinel** as its own byte class, replacing a per-token end check,
   and dropping bounds checks it makes redundant.
 - **Handling common followers inline** right after a name (`(`, `.`, `)`, `,`),
@@ -302,6 +307,26 @@ What has worked (JS/TS: 262 → 100 instructions per token):
   Inline them unless they're rare.
 - **A compile-time dialect parameter** (`const LESS: bool`) when one module
   serves several languages (CSS: 236 → 64 instructions per token overall).
+
+- **Free bounds checks:** hoist one checked slice per function
+  (`let s = &src.bytes()[..end];`) and read `s[p]` behind the loop's existing
+  `p < end` guard; the compiler proves those reads and drops the check, with no
+  `unsafe`. Checked `Input` reads elsewhere cost a compare each (CSS: +17%
+  instructions with every read checked), so hot reads that can't use a guarded
+  slice use the `_unchecked` twins. Hot means: per-byte loops stopped by the NUL
+  at the input end, the per-token reads at the top of the main loop, vector
+  loads in scan loops, and `extend` after the leading whitespace
+  (`extend_unchecked`). Judge them with PGO builds (`scripts/native-pgo.sh`), on
+  cycles as well as instructions: checked reads there cost LaTeX 22% more
+  instructions under PGO while non-PGO comparisons showed no change, and one
+  checked read per token cost Matlab 10% in cycles with an unchanged instruction
+  count.
+- **Small structs, three words at most:** `Input` (two) and `Recs` (three) stay
+  in registers across calls; a fourth word gets spilled and reloaded around
+  every call, and a struct passed by pointer loses the slice's no-aliasing
+  guarantee. Pass `Recs` by value, or
+  `let mut r = recs; helper(&mut r); recs = r;`, never `&mut recs` into an
+  out-of-line hot helper.
 
 What has not worked (measured, don't repeat without a new reason):
 
@@ -329,7 +354,8 @@ little left.
    check, confirm it FAILs on parity, restore, confirm it PASSes.
 2. Final `scripts/native-check.sh <module> --update-lock`: full fuzz, perf, lock
    written.
-3. Other targets:
+3. Checked build: `scripts/native-check.sh <module> --checked` must PASS (every
+   unchecked read asserts its bounds there). Other targets:
    `scripts/native-check.sh <module> --target x86_64-apple-darwin` (parity and
    fuzz on x86-64 under Rosetta) must PASS, and
    `cargo check --release -p highlights --features native-<module> --target wasm32-unknown-unknown --target-dir target/native-<module>`
