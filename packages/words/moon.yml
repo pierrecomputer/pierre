@@ -37,6 +37,7 @@ tasks:
       - 'bench-chart-check'
       - 'bench-chart-test'
       - 'bench-harness-test'
+      - 'lab-test'
     options:
       merge: 'replace'
 
@@ -108,6 +109,22 @@ tasks:
     options:
       cache: false
       runInCI: 'skip'
+
+  # Local parser optimization; independent of competitor/browser tooling.
+  lab:
+    command: 'node benchmark/lab/run.mjs'
+    deps:
+      - 'build'
+    options:
+      cache: false
+      runInCI: 'skip'
+
+  lab-test:
+    command: 'node --test benchmark/lab/*_test.mjs'
+    deps:
+      - 'build'
+    options:
+      cache: false
 
   bench-stream:
     command: 'node benchmark/stream.ts'

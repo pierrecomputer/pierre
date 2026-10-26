@@ -1,5 +1,183 @@
 # Words benchmarks
 
+## Local parser optimization
+
+Use `words:lab` for parser optimization and hill-climbing. It needs the normal
+workspace dependencies, but no competitor harness, browser download, or mitata.
+It leaves production code and the published benchmark evidence unchanged. Run it
+on an idle machine, on power, without concurrent builds or benchmarks.
+
+```sh
+moonx words:lab --ignore-ci-checks -- list
+moonx words:lab --ignore-ci-checks -- quick
+moonx words:lab --ignore-ci-checks -- capture --output=/tmp/words-before
+# Make the optimization. The next command builds and captures the current code.
+moonx words:lab --ignore-ci-checks -- quick --baseline=/tmp/words-before
+moonx words:lab --ignore-ci-checks -- capture --output=/tmp/words-after
+moonx words:lab --ignore-ci-checks -- confirm --baseline=/tmp/words-before --candidate=/tmp/words-after
+```
+
+Capture directories contain the optimized Wasm, JavaScript glue, WAT sources,
+build-helper source, hashes, and environment metadata. Comparisons execute these
+saved artifacts rather than switching the working tree. An omitted candidate
+means the current build. Use a new output directory for each run; the runner
+rejects overwritten results and modified captures. Relative paths resolve from
+`packages/words`, where Moon runs the task. Default results live in gitignored
+`benchmark/output/lab/`.
+
+| Mode      | Defaults                                                                                                      | Use                                                      |
+| --------- | ------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------- |
+| `quick`   | 75 ms warmup, 5 batches targeting at least 15 ms each; 1 process per case, or 4 process pairs with a baseline | Screen ideas; all verdicts remain exploratory            |
+| `confirm` | 300 ms warmup, 9 batches targeting at least 30 ms each, 12 fresh process pairs                                | Estimate uncertainty for a selected change               |
+| `profile` | 3 seconds of CPU sampling plus a separate instrumented replay                                                 | Find hot functions and repeated work; no speedup verdict |
+
+### Select workloads and measurement boundaries
+
+`list` prints case IDs, sizes, delivery counts, and timing boundaries. The eight
+default cases cover a small real document, medium-document byte and string I/O,
+and streaming blocks, long paragraphs, open fences, late definitions, and
+Unicode. `--cases=all` adds the GFM specification, an approximately 850 KB
+stress input, tables/lists, malformed input, repeated deliveries, edits, and
+isolated kernels.
+
+```sh
+moonx words:lab --ignore-ci-checks -- quick --cases=all
+moonx words:lab --ignore-ci-checks -- quick --baseline=/tmp/words-before --cases=kernel-render,static-string,stream-blocks-suffix
+moonx words:lab --ignore-ci-checks -- quick --cases=stream-blocks-token,stream-blocks-suffix,stream-blocks-coarse
+```
+
+- `static-*`: one complete document. Byte-input cases include copying into Wasm;
+  string-output cases also include decoding HTML. Borrowed output is consumed
+  before the next render.
+- `stream-*-full`: render every accumulated prefix from scratch, including
+  incomplete-markdown completion and HTML decoding.
+- `stream-*-suffix`: create a fresh session and replay the whole stream,
+  consuming `addition` and `pending` without requesting full HTML.
+  `stream-blocks-session` requests the session's full HTML on the same
+  deliveries. These cases exclude network pacing, DOM, React, and highlighting.
+- Most streams deliver 64 UTF-16 code units per update. The token/coarse cases
+  deliver 8/1024 units of the same document. Unicode deliveries deliberately
+  include split surrogate pairs. Byte counts and UTF-16 counts are separate.
+- `kernel-encode`, `kernel-copy`, and `kernel-decode` isolate UTF-8 and
+  input-copy costs using prepared buffers. `kernel-render` calls the production
+  render export over preloaded input. `kernel-complete` calls completion with a
+  fixture whose authored bytes remain unchanged. Raw kernels include ABI reset
+  and output consumption; they exclude input encoding/copying.
+
+One streaming **operation is an entire replay**, including session creation.
+Milliseconds per operation are not per-token latency. Fixture construction,
+module compilation, imports, exact-output validation, and warmup stay outside
+timers. The harness uses time-sized batches for small functions and one
+iteration per batch when an operation exceeds the target duration. Normal GC
+remains enabled; it neither forces GC nor subtracts estimated loop overhead.
+Warm instances retain grown memory, so these measurements exclude cold-start and
+first-growth latency.
+
+### Read comparisons without overclaiming
+
+The runner starts one fresh Node process for each case/variant/round and
+executes them serially. It shuffles case order and balances baseline-first
+versus candidate-first pairs using a recorded seed. Each process reports its
+median batch-mean time. The comparison reports the geometric mean of paired
+candidate/baseline ratios and a percentile-bootstrap 95% interval, resampling
+whole process pairs. Loop iterations are not independent statistical samples.
+Intervals describe this machine, runtime, and workload; they are not universal
+performance guarantees.
+
+The default practical threshold is 2%:
+
+- `faster`: the whole interval is below 0.98.
+- `slower`: the whole interval is above 1.02.
+- `within-threshold`: the interval lies inside [0.98, 1.02].
+- `inconclusive`: the interval crosses a practical boundary.
+
+Confirmation requires at least eight pairs and an even round count. Quick
+results remain exploratory even when an interval looks decisive. Use
+`--rounds=24 --warmup-ms=1000 --sample-ms=50 --samples=12` for a longer fixed
+run, or change `--threshold=0.01` for a 1% decision boundary. `--timeout-ms`
+limits each worker, including validation and warmup. The runner never keeps
+sampling until it finds significance.
+
+`report.json` retains chronological batches, iteration counts, warmup work,
+per-process summaries, pair order, output digests, fixture/driver/artifact
+hashes, runtime and machine metadata, and failure status. Drift and dispersion
+warnings mean you should inspect the samples and repeat under better conditions.
+Memory readings around timing are observations, not peak-memory measurements.
+Verification checks each delivered HTML result and the session's stable/pending
+reconstruction before and after timing. Cross-target hashes cover semantic HTML,
+so changing a safe checkpoint boundary can remain a valid optimization.
+
+Before trusting small gains, run an A/A control:
+
+```sh
+moonx words:lab --ignore-ci-checks -- confirm --baseline=/tmp/words-before --candidate=/tmp/words-before --cases=static-string,stream-blocks-suffix
+```
+
+Use quick runs to choose experiments, then confirm the selected winner in a
+fresh run. Repeated selection biases apparent wins, and per-case intervals are
+not simultaneous confidence intervals for the whole matrix. Check regression
+cases as well as the target case; do not average away a slower workload. A
+kernel improvement does not establish an end-to-end win. Use the existing
+browser benchmarks below when a change needs downstream DOM/highlighting
+validation.
+
+### Profile hot paths and repeated work
+
+```sh
+moonx words:lab --ignore-ci-checks -- profile --candidate=/tmp/words-after --case=stream-blocks-suffix
+moonx words:lab --ignore-ci-checks -- profile --candidate=/tmp/words-after --case=stream-fence-suffix --duration-ms=5000
+```
+
+Open the resulting `.cpuprofile` in a CPU-profile viewer such as VS Code or
+Speedscope. The sampled Wasm retains optimized function names; the builder
+checks that its executable sections match the production binary byte for byte.
+Inlined functions may not have separate frames. The profile uses a private copy
+of the capture and never rewrites `dist` or the original capture.
+
+A separate instrumented build records block analysis, inline/render, completion,
+`encodeInto`, input copying, and decoding. Its JSON also records core calls,
+actual source bytes submitted, completion-repaired bytes, cache hits, reset
+results, definition-bearing calls, and observed Wasm memory growth. The source
+reprocessing ratio divides submitted source bytes by final source size across
+the replay. It includes stable-prefix rerenders and definition fallbacks.
+
+**Diagnostic timings are perturbed and overlap.** Renderer time includes core
+time; core time includes stage probes. Do not sum them or subtract them from
+normal benchmark results. The three-operation probe-cost comparison indicates
+instrumentation impact, not a correction factor. Memory growth counters observe
+page deltas at call boundaries after warmup, not individual `memory.grow`
+instructions. Exact output parity must hold for production, named, and
+instrumented builds.
+
+The implementation lives in `benchmark/lab/`. Add workloads in `cases.mjs`; keep
+fixture preparation and validation out of `run()`. Internal block and inline
+phases share mutable Wasm state, so the lab observes them in place rather than
+timing unsafe standalone calls against stale records.
+
+### Initial instrumentation check
+
+On Node 24.11.0, a 12-pair A/A run classified static-string, block-stream, and
+open-fence replay as `within-threshold` at 2%. Estimated time differences were
+below 0.5%; this checks local noise rather than proving sub-percent accuracy.
+All 29 cases completed their quick-run output checks.
+
+The diagnostic replay exposed different amounts of repeated parsing:
+
+| Case                | Updates per replay | Core renders per replay | Submitted source / final source |
+| ------------------- | -----------------: | ----------------------: | ------------------------------: |
+| Completed blocks    |                 46 |                      92 |                           2.44× |
+| Long open paragraph |                 77 |                      77 |                          39.25× |
+| Open fence          |                 73 |                      74 |                          37.21× |
+| Late definitions    |                 24 |                      47 |                           4.29× |
+
+These are work counts, not speedup estimates. The repeated-delivery case
+produced 92 cache hits per replay and the same core work as the block stream.
+Open-tail completion and reparsing are candidates to investigate; no parser
+optimization was made as part of this instrumentation.
+
+Run `moon run words:lab-test` to check workload replay/parity and comparison
+statistics. It builds the core before running integration checks.
+
 ## Reproduce from a fresh clone
 
 Use the toolchain in the repository's `.prototools` and follow
