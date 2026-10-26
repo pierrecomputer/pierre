@@ -13,6 +13,7 @@ use crate::generated::Instance;
 use crate::lex_ids as lex;
 use crate::native::ecma::{Next, metadata_marker, tag_marker};
 use crate::native::ecma_scan::{keyword, kf};
+use crate::native::input::Input;
 use crate::native::recs::Recs;
 use crate::native::scan;
 use crate::simd::V;
@@ -103,10 +104,12 @@ fn byte_mode(m: u8) -> bool {
 /// `p` past blanks and line breaks (`$jsxSpaceEndAt`), with a line break's
 /// indentation, often long between attributes, eight bytes at a time.
 #[inline(always)]
-fn space_skip(src: &[u8], end: usize, mut p: usize) -> usize {
-    if at(src, p) == b'\n' {
+fn space_skip(src: Input, end: usize, mut p: usize) -> usize {
+    // SAFETY: `p` is at most the input length (the scan position never passes it).
+    if unsafe { src.byte_unchecked(p) } == b'\n' {
         p += 1;
-        p = if at(src, p) == b'\t' {
+        // SAFETY: `p` follows a line feed inside the input, so it is at most the input length.
+        p = if unsafe { src.byte_unchecked(p) } == b'\t' {
             run_end(src, p, 0x0909_0909_0909_0909)
         } else {
             run_end(src, p, 0x2020_2020_2020_2020)
@@ -144,26 +147,22 @@ fn ident_byte(c: u8) -> bool {
     name_start(c) || c.is_ascii_digit()
 }
 
-/// The byte at `p`, which lies at most one byte past the input end (the
-/// NUL), unchecked.
-#[inline(always)]
-fn at(src: &[u8], p: usize) -> u8 {
-    debug_assert!(p < src.len());
-    // SAFETY: callers pass positions up to the input end, and the slack
-    // extends `src` 96 bytes past it.
-    unsafe { *src.get_unchecked(p) }
-}
-
 /// The byte at `p`, or 0 at or past `end` (`$tsxByte`).
 #[inline(always)]
-fn byte(src: &[u8], end: usize, p: usize) -> u8 {
-    if p < end { at(src, p) } else { 0 }
+fn byte(src: Input, end: usize, p: usize) -> u8 {
+    if p < end {
+        // SAFETY: `p` is below `end`, which every caller passes as the input length.
+        unsafe { src.byte_unchecked(p) }
+    } else {
+        0
+    }
 }
 
 /// `p` past a tag-name run (`$jsxNameEndAt`).
 #[inline(always)]
-fn name_end_at(src: &[u8], end: usize, mut p: usize) -> usize {
-    while p < end && name_cont(at(src, p)) {
+fn name_end_at(src: Input, end: usize, mut p: usize) -> usize {
+    // SAFETY: `p` is below `end`, the input length.
+    while p < end && name_cont(unsafe { src.byte_unchecked(p) }) {
         p += 1;
     }
     p
@@ -171,8 +170,9 @@ fn name_end_at(src: &[u8], end: usize, mut p: usize) -> usize {
 
 /// `p` past blanks and line breaks (`$jsxSpaceEndAt`).
 #[inline(always)]
-fn space_end_at(src: &[u8], end: usize, mut p: usize) -> usize {
-    while p < end && BLANK[at(src, p) as usize] {
+fn space_end_at(src: Input, end: usize, mut p: usize) -> usize {
+    // SAFETY: `p` is below `end`, the input length.
+    while p < end && BLANK[unsafe { src.byte_unchecked(p) } as usize] {
         p += 1;
     }
     p
@@ -197,14 +197,14 @@ static BLANK: [bool; 256] = {
 /// `>`, or `/`. TSRX also takes a dynamic tag `<{expr}`.
 #[inline(never)]
 pub(super) fn validate<const TS: bool, const TSRX: bool>(
-    src: &[u8],
+    src: Input,
     end: usize,
     mut p: usize,
 ) -> bool {
     if p >= end {
         return false;
     }
-    let mut c = at(src, p);
+    let mut c = src.byte(p);
     if c == b'>' {
         return true;
     }
@@ -218,7 +218,7 @@ pub(super) fn validate<const TS: bool, const TSRX: bool>(
     p = name_end_at(src, end, p + 1);
     if TS {
         // `<const T`: judge the name after the modifier.
-        if p - name == 5 && &src[name..name + 5] == b"const" {
+        if p - name == 5 && &src.bytes()[name..name + 5] == b"const" {
             let q = space_end_at(src, end, p);
             if q > p && name_start(byte(src, end, q)) {
                 p = name_end_at(src, end, q);
@@ -232,7 +232,8 @@ pub(super) fn validate<const TS: bool, const TSRX: bool>(
         if c == b'<' {
             return true;
         }
-        if p + 7 <= end && &src[p..p + 7] == b"extends" && !name_cont(byte(src, end, p + 7)) {
+        if p + 7 <= end && &src.bytes()[p..p + 7] == b"extends" && !name_cont(byte(src, end, p + 7))
+        {
             let c = byte(src, end, space_end_at(src, end, p + 7));
             if !(c == b'=' || c == b'>' || c == b'/') {
                 return false;
@@ -244,7 +245,7 @@ pub(super) fn validate<const TS: bool, const TSRX: bool>(
     if p >= end {
         return true;
     }
-    let c = at(src, p);
+    let c = src.byte(p);
     matches!(c, b'>' | b'/' | b'{' | b'"' | b'\'') || name_start(c)
 }
 
@@ -253,7 +254,7 @@ pub(super) fn validate<const TS: bool, const TSRX: bool>(
 /// `try`, `case`, `default`, `catch`, and `else` keep their own kind;
 /// `empty` and `pending` act like `else`.
 #[inline(always)]
-pub(super) fn directive_kind(src: &[u8], lhs: usize, rhs: usize) -> u8 {
+pub(super) fn directive_kind(src: Input, lhs: usize, rhs: usize) -> u8 {
     if let Some(
         k @ (lex::KEYWORD_IF
         | lex::KEYWORD_FOR
@@ -267,7 +268,7 @@ pub(super) fn directive_kind(src: &[u8], lhs: usize, rhs: usize) -> u8 {
     {
         return k;
     }
-    let w = &src[lhs..rhs];
+    let w = &src.bytes()[lhs..rhs];
     if w == b"empty" || w == b"pending" {
         return lex::KEYWORD_ELSE;
     }
@@ -276,9 +277,9 @@ pub(super) fn directive_kind(src: &[u8], lhs: usize, rhs: usize) -> u8 {
 
 /// Whether the identifier bytes at `p`, right after an `@` in TSRX text,
 /// spell a directive word (`$tsrxDirectiveAt`).
-fn directive_at(src: &[u8], end: usize, p: usize) -> bool {
+fn directive_at(src: Input, end: usize, p: usize) -> bool {
     let mut e = p;
-    while e < end && ident_byte(src[e]) {
+    while e < end && ident_byte(src.byte(e)) {
         e += 1;
     }
     directive_kind(src, p, e) != lex::INVALID
@@ -290,8 +291,8 @@ fn directive_at(src: &[u8], end: usize, p: usize) -> bool {
 /// else is an identifier.
 #[cold]
 #[inline(never)]
-pub(super) fn word_kind(src: &[u8], end: usize, lhs: usize, rhs: usize) -> u8 {
-    let w = &src[lhs..rhs];
+pub(super) fn word_kind(src: Input, end: usize, lhs: usize, rhs: usize) -> u8 {
+    let w = &src.bytes()[lhs..rhs];
     let fragment = w == b"fragment";
     if !fragment && w != b"module" {
         return lex::IDENTIFIER;
@@ -312,8 +313,8 @@ pub(super) fn word_kind(src: &[u8], end: usize, lhs: usize, rhs: usize) -> u8 {
 /// Whether the tag name `[lhs, rhs)` opens a TSRX raw-text element: 1
 /// `script`, 2 `style`, 0 other (`$tsrxRawKind`).
 #[inline(always)]
-fn raw_kind(src: &[u8], lhs: usize, rhs: usize) -> u8 {
-    match &src[lhs..rhs] {
+fn raw_kind(src: Input, lhs: usize, rhs: usize) -> u8 {
+    match &src.bytes()[lhs..rhs] {
         b"script" => 1,
         b"style" => 2,
         _ => 0,
@@ -324,25 +325,26 @@ fn raw_kind(src: &[u8], lhs: usize, rhs: usize) -> u8 {
 /// the name ending at whitespace, `>`, `/`, or the input end
 /// (`$tsrxRawClose`).
 #[inline(never)]
-pub(super) fn raw_close(src: &[u8], end: usize, p: usize, kind: u8) -> bool {
+pub(super) fn raw_close(src: Input, end: usize, p: usize, kind: u8) -> bool {
     let n = if kind == 1 { 8 } else { 7 };
-    if p + n > end || &src[p..p + 2] != b"</" || raw_kind(src, p + 2, p + n) != kind {
+    if p + n > end || &src.bytes()[p..p + 2] != b"</" || raw_kind(src, p + 2, p + n) != kind {
         return false;
     }
     if p + n >= end {
         return true;
     }
-    let c = src[p + n];
+    let c = src.byte(p + n);
     matches!(c, b'>' | b'/' | b' ') || c.wrapping_sub(9) <= 4
 }
 
 /// The next byte at or after `p` that ends a TSRX text run - `<`, `{`,
 /// `&`, `@`, `/`, or LF - or `end` (`$tsrxContentFind`).
 #[inline(always)]
-fn content_find(src: &[u8], mut p: usize, end: usize) -> usize {
+fn content_find(src: Input, mut p: usize, end: usize) -> usize {
     while p < end {
-        // SAFETY: `p < end`, and the slack covers 16 bytes past `end`.
-        let w = unsafe { V::load(src.as_ptr().add(p)) };
+        // SAFETY: `p` is below `end`, at most the input length, so the 16 bytes lie inside the
+        // slack.
+        let w = unsafe { src.vec_unchecked(p) };
         let eq = |b: u8| w.eq(V::splat(b));
         let hit = eq(b'<')
             .or(eq(b'{'))
@@ -361,19 +363,19 @@ fn content_find(src: &[u8], mut p: usize, end: usize) -> usize {
 /// The seven bytes at `p` as a little-endian word (`$tsrxWord` for seven
 /// bytes).
 #[inline(always)]
-fn word7(src: &[u8], p: usize) -> u64 {
-    // SAFETY: the input slack covers an eight-byte read at any position up
-    // to the input end.
-    u64::from_le(unsafe { src.as_ptr().add(p).cast::<u64>().read_unaligned() })
-        & 0x00ff_ffff_ffff_ffff
+fn word7(src: Input, p: usize) -> u64 {
+    // SAFETY: callers pass a position at most the input length, so the 8 bytes lie inside the
+    // slack.
+    let w = unsafe { src.word_unchecked(p) };
+    w & 0x00ff_ffff_ffff_ffff
 }
 
 /// Whether only blanks lie between `bound` and `p`, or since the last line
 /// break before `p`: where a `//` starts a comment in TSRX text
 /// (`$tsrxAtBoundary`).
-fn at_boundary(src: &[u8], bound: usize, mut p: usize) -> bool {
+fn at_boundary(src: Input, bound: usize, mut p: usize) -> bool {
     while p > bound {
-        let c = src[p - 1];
+        let c = src.byte(p - 1);
         if c == b'\n' || c == b'\r' {
             return true;
         }
@@ -389,10 +391,10 @@ fn at_boundary(src: &[u8], bound: usize, mut p: usize) -> bool {
 /// clause head of a TSRX template `@try`. Its position, if so
 /// (`$tsrxFinallyAhead`).
 #[inline(always)]
-fn finally_ahead(src: &[u8], end: usize, p: usize) -> Option<usize> {
+fn finally_ahead(src: Input, end: usize, p: usize) -> Option<usize> {
     // Indentation eight bytes at a time, then the rest of the blanks.
     let p = space_end_at(src, end, run_end(src, p, 0x2020_2020_2020_2020));
-    if at(src, p) != b'f' || p + 7 > end || word7(src, p) != u64::from_le_bytes(*b"finally\0") {
+    if src.byte(p) != b'f' || p + 7 > end || word7(src, p) != u64::from_le_bytes(*b"finally\0") {
         return None;
     }
     let q = p + 7;
@@ -407,7 +409,7 @@ fn finally_ahead(src: &[u8], end: usize, p: usize) -> Option<usize> {
 struct Markup<'c, 'a, 'i, const TS: bool, const TSRX: bool> {
     cold: &'c mut Cold<'a>,
     inst: &'i mut Instance,
-    src: &'a [u8],
+    src: Input<'a>,
     end: usize,
     ptr: usize,
     recs: Recs,
@@ -474,14 +476,16 @@ impl<'c, 'a, 'i, const TS: bool, const TSRX: bool> Markup<'c, 'a, 'i, TS, TSRX> 
         let from = self.ptr;
         let mut dotted = false;
         let mut p = from;
-        while p < end && name_cont(at(src, p)) {
-            dotted |= at(src, p) == b'.';
+        // SAFETY: `p` is below `end`, the input length.
+        while p < end && name_cont(unsafe { src.byte_unchecked(p) }) {
+            dotted |= unsafe { src.byte_unchecked(p) } == b'.';
             p += 1;
         }
         self.ptr = p;
         let mut kind = 0;
         if p > from {
-            let hl = if dotted || at(src, from).is_ascii_uppercase() {
+            // SAFETY: `from` is below `p`, inside the input.
+            let hl = if dotted || unsafe { src.byte_unchecked(from) }.is_ascii_uppercase() {
                 tok::TAG_COMPONENT_JSX
             } else {
                 tok::TAG_JSX
@@ -501,7 +505,7 @@ impl<'c, 'a, 'i, const TS: bool, const TSRX: bool> Markup<'c, 'a, 'i, TS, TSRX> 
     #[inline(always)]
     fn open_container(&mut self) {
         let lhs = self.ptr;
-        let two = TSRX && at(self.src, lhs) == b'@';
+        let two = TSRX && self.src.byte(lhs) == b'@';
         let c = &mut *self.cold;
         if two {
             c.brk_push(1);
@@ -538,12 +542,12 @@ impl<'c, 'a, 'i, const TS: bool, const TSRX: bool> Markup<'c, 'a, 'i, TS, TSRX> 
     fn container_ident(&mut self) {
         let src = self.src;
         let lhs = self.ptr;
-        if !name_start(at(src, lhs)) {
+        if !name_start(src.byte(lhs)) {
             return;
         }
         let rhs = ident_end(src, lhs + 1);
         let c = &mut *self.cold;
-        if at(src, rhs) != b'}'
+        if src.byte(rhs) != b'}'
             || c.busy()
             || keyword(src, lhs, rhs).is_some()
             || (TSRX && word_kind(src, self.end, lhs, rhs) != lex::IDENTIFIER)
@@ -568,7 +572,7 @@ impl<'c, 'a, 'i, const TS: bool, const TSRX: bool> Markup<'c, 'a, 'i, TS, TSRX> 
             nl: false,
         };
         let metadata = metadata_marker(src, lex::IDENTIFIER, lhs, rhs);
-        let hl = if PLAIN_START[at(src, lhs) as usize] {
+        let hl = if PLAIN_START[src.byte(lhs) as usize] {
             tok::VARIABLE
         } else {
             ident_word(c, lex::L_BRACE, next, lhs, rhs)
@@ -576,7 +580,7 @@ impl<'c, 'a, 'i, const TS: bool, const TSRX: bool> Markup<'c, 'a, 'i, TS, TSRX> 
         c.marker = if metadata != 0 {
             metadata
         } else if (rhs - lhs).wrapping_sub(3) <= 1 {
-            tag_marker(src, lex::IDENTIFIER, lhs, rhs)
+            tag_marker(src.bytes(), lex::IDENTIFIER, lhs, rhs)
         } else {
             0
         };
@@ -602,13 +606,15 @@ impl<'c, 'a, 'i, const TS: bool, const TSRX: bool> Markup<'c, 'a, 'i, TS, TSRX> 
             return;
         }
         let mut from = self.ptr;
-        let mut c = at(src, from);
+        // SAFETY: `from` is below `end`.
+        let mut c = unsafe { src.byte_unchecked(from) };
         // An attribute name, or a type name inside type arguments. Its `=`
         // and value usually follow at once; each is still the step it would
         // be on its own.
         if name_start(c) {
             let mut p = from + 1;
-            while p < end && name_cont(at(src, p)) {
+            // SAFETY: `p` is below `end`.
+            while p < end && name_cont(unsafe { src.byte_unchecked(p) }) {
                 p += 1;
             }
             self.ptr = p;
@@ -618,7 +624,8 @@ impl<'c, 'a, 'i, const TS: bool, const TSRX: bool> Markup<'c, 'a, 'i, TS, TSRX> 
                 tok::ATTRIBUTE_JSX
             };
             self.emit(hl, from, p);
-            if p >= end || at(src, p) != b'=' {
+            // SAFETY: `p` is below `end`.
+            if p >= end || unsafe { src.byte_unchecked(p) } != b'=' {
                 return;
             }
             from = p;
@@ -638,7 +645,8 @@ impl<'c, 'a, 'i, const TS: bool, const TSRX: bool> Markup<'c, 'a, 'i, TS, TSRX> 
             if from >= end {
                 return;
             }
-            c = at(src, from);
+            // SAFETY: `from` is below `end`.
+            c = unsafe { src.byte_unchecked(from) };
             if !matches!(c, b'"' | b'\'' | b'{') {
                 return;
             }
@@ -689,12 +697,12 @@ impl<'c, 'a, 'i, const TS: bool, const TSRX: bool> Markup<'c, 'a, 'i, TS, TSRX> 
                 }
                 // `// …` between attributes runs to the line end.
                 if q == b'/' {
-                    self.ptr = scan::line_end(src, from, end);
+                    self.ptr = scan::line_end(src.bytes(), from, end);
                     self.emit(tok::COMMENT, from, self.ptr);
                     return;
                 }
                 if q == b'*' {
-                    self.ptr = scan::block_comment_end(src, from + 2, end);
+                    self.ptr = scan::block_comment_end(src.bytes(), from + 2, end);
                     self.emit(tok::COMMENT, from, self.ptr);
                     return;
                 }
@@ -706,7 +714,7 @@ impl<'c, 'a, 'i, const TS: bool, const TSRX: bool> Markup<'c, 'a, 'i, TS, TSRX> 
             }
             // A quoted value, which may span lines and has no escapes.
             b'"' | b'\'' => {
-                let p = scan::find3(src, from + 1, end, c, c, c);
+                let p = scan::find3(src.bytes(), from + 1, end, c, c, c);
                 self.ptr = if p < end { p + 1 } else { p };
                 self.emit(tok::STRING, from, self.ptr);
                 return;
@@ -738,7 +746,8 @@ impl<'c, 'a, 'i, const TS: bool, const TSRX: bool> Markup<'c, 'a, 'i, TS, TSRX> 
                 return false;
             }
             let seg = self.ptr;
-            let c = at(src, seg);
+            // SAFETY: `seg` is below `end`.
+            let c = unsafe { src.byte_unchecked(seg) };
             if c == b'>' {
                 self.ptr = seg + 1;
                 self.emit(tok::PUNCTUATION_BRACKET_JSX, seg, self.ptr);
@@ -788,21 +797,27 @@ impl<'c, 'a, 'i, const TS: bool, const TSRX: bool> Markup<'c, 'a, 'i, TS, TSRX> 
             self.ptr = if TSRX {
                 content_find(src, self.ptr, end)
             } else {
-                scan::find3(src, self.ptr, end, b'<', b'{', b'&')
+                scan::find3(src.bytes(), self.ptr, end, b'<', b'{', b'&')
             };
             if self.ptr >= end {
                 break;
             }
-            c = at(src, self.ptr);
+            // SAFETY: `self.ptr` is below `end`.
+            c = unsafe { src.byte_unchecked(self.ptr) };
             if c == b'<' || c == b'{' {
                 break;
             }
             if c == b'&' {
                 let mut p = self.ptr + 1;
-                while p < end && (at(src, p).is_ascii_alphanumeric() || at(src, p) == b'#') {
+                while p < end
+                    // SAFETY: `p` is below `end`.
+                    && (unsafe { src.byte_unchecked(p) }.is_ascii_alphanumeric()
+                        || unsafe { src.byte_unchecked(p) } == b'#')
+                {
                     p += 1;
                 }
-                if p > self.ptr + 1 && p < end && at(src, p) == b';' {
+                // SAFETY: `p` is below `end`.
+                if p > self.ptr + 1 && p < end && unsafe { src.byte_unchecked(p) } == b';' {
                     self.emit(tok::TEXT_JSX, seg, self.ptr);
                     self.emit(tok::STRING_SPECIAL, self.ptr, p + 1);
                     self.ptr = p + 1;
@@ -843,7 +858,7 @@ impl<'c, 'a, 'i, const TS: bool, const TSRX: bool> Markup<'c, 'a, 'i, TS, TSRX> 
                 if c2 == b'*' {
                     self.emit(tok::TEXT_JSX, seg, self.ptr);
                     seg = self.ptr;
-                    self.ptr = scan::block_comment_end(src, self.ptr + 2, end);
+                    self.ptr = scan::block_comment_end(src.bytes(), self.ptr + 2, end);
                     self.emit(tok::COMMENT, seg, self.ptr);
                     seg = self.ptr;
                     bound = self.ptr;
@@ -852,7 +867,7 @@ impl<'c, 'a, 'i, const TS: bool, const TSRX: bool> Markup<'c, 'a, 'i, TS, TSRX> 
                 if c2 == b'/' && at_boundary(src, bound, self.ptr) {
                     self.emit(tok::TEXT_JSX, seg, self.ptr);
                     seg = self.ptr;
-                    self.ptr = scan::line_end(src, self.ptr, end);
+                    self.ptr = scan::line_end(src.bytes(), self.ptr, end);
                     self.emit(tok::COMMENT, seg, self.ptr);
                     seg = self.ptr;
                     bound = self.ptr;
@@ -922,7 +937,7 @@ impl<'c, 'a, 'i, const TS: bool, const TSRX: bool> Markup<'c, 'a, 'i, TS, TSRX> 
         let mut found = false;
         loop {
             // `$lexFindByte`.
-            p = scan::find3(src, p, end, b'<', b'<', b'<');
+            p = scan::find3(src.bytes(), p, end, b'<', b'<', b'<');
             if p >= end {
                 break;
             }
@@ -937,6 +952,10 @@ impl<'c, 'a, 'i, const TS: bool, const TSRX: bool> Markup<'c, 'a, 'i, TS, TSRX> 
             self.recs.store(self.inst);
             let state = css_body(self.inst, self.cold.base, from, p, state);
             self.recs = Recs::load(self.inst);
+            // SAFETY: `base..base + end + SLACK` lies inside lexer memory,
+            // which the translated CSS lexer may have moved.
+            self.cold.src = unsafe { Input::new(self.inst, self.cold.base, end) };
+            self.src = self.cold.src;
             self.cold.jsx.set_top_target(state);
         }
         self.ptr = p;
@@ -979,12 +998,7 @@ fn css_body(inst: &mut Instance, base: usize, from: usize, to: usize, state: i32
     inst.g_end = (base + to) as i32;
     inst.g_streaming = 0;
     inst.g_cssDialect = 0;
-    let mem = inst.mem.bytes().as_ptr();
     let state = inst.f_hlCssImpl(state);
-    assert!(
-        core::ptr::eq(inst.mem.bytes().as_ptr(), mem),
-        "lexer memory moved"
-    );
     (inst.g_ptr, inst.g_end, inst.g_streaming, inst.g_cssDialect) = saved;
     state
 }

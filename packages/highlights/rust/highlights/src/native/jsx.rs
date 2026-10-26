@@ -29,9 +29,9 @@ use super::ecma_scan::{
     BRACKETS, KIND_TABLE, TEMPLATES, code_point, keyword, kf, scan_regexp, scan_string,
     scan_template, utf8_bits,
 };
+use super::input::Input;
 use super::recs::Recs;
 use super::scan;
-use crate::Rec;
 use crate::generated::Instance;
 use crate::lex_ids as lex;
 use crate::simd::V;
@@ -129,54 +129,53 @@ static IDENT_CONT: [bool; 256] = {
 /// The end of the run of `[A-Za-z0-9_$]` bytes starting at `p`. The input
 /// ends with a NUL and slack, so the run stops by the end.
 #[inline(always)]
-fn ident_end(src: &[u8], mut p: usize) -> usize {
-    // SAFETY: runs stop at the NUL after the input, and each 16-byte load
-    // starts before it, inside the slack.
-    unsafe {
-        if !IDENT_CONT[*src.get_unchecked(p) as usize] {
-            return p;
+fn ident_end(src: Input, mut p: usize) -> usize {
+    // SAFETY: `p` is at most the input length (callers pass a position right after a token's first
+    // byte).
+    if !IDENT_CONT[unsafe { src.byte_unchecked(p) } as usize] {
+        return p;
+    }
+    loop {
+        // SAFETY: the NUL after the input ends the run, so `p` is at most the input length and the
+        // 16 bytes lie inside the slack.
+        let v = unsafe { src.vec_unchecked(p) };
+        let alpha = v.or(V::splat(0x20)).sub(V::splat(b'a')).le(V::splat(25));
+        let digit = v.sub(V::splat(b'0')).le(V::splat(9));
+        let extra = v.eq(V::splat(b'_')).or(v.eq(V::splat(b'$')));
+        let stop = alpha.or(digit).or(extra).not().lanes();
+        if stop.any() {
+            return p + stop.first();
         }
-        loop {
-            let v = V::load(src.as_ptr().add(p));
-            let alpha = v.or(V::splat(0x20)).sub(V::splat(b'a')).le(V::splat(25));
-            let digit = v.sub(V::splat(b'0')).le(V::splat(9));
-            let extra = v.eq(V::splat(b'_')).or(v.eq(V::splat(b'$')));
-            let stop = alpha.or(digit).or(extra).not().lanes();
-            if stop.any() {
-                return p + stop.first();
-            }
-            p += 16;
-        }
+        p += 16;
     }
 }
 
 /// The end of the run of whitespace bytes (space, TAB..CR) starting at
 /// `p`, and whether it holds a line break.
 #[inline(always)]
-fn space_run(src: &[u8], mut p: usize) -> (usize, bool) {
-    // SAFETY: as in `ident_end`; NUL is not whitespace.
-    unsafe {
-        let mut nl = false;
-        loop {
-            let v = V::load(src.as_ptr().add(p));
-            let sp = v.eq(V::splat(b' ')).or(v.sub(V::splat(9)).le(V::splat(4)));
-            let br = v.eq(V::splat(b'\n')).or(v.eq(V::splat(b'\r')));
-            let stop = sp.not().lanes();
-            let br = br.lanes();
-            if stop.any() {
-                nl |= br.and(stop.before_first()).any();
-                return (p + stop.first(), nl);
-            }
-            nl |= br.any();
-            p += 16;
+fn space_run(src: Input, mut p: usize) -> (usize, bool) {
+    let mut nl = false;
+    loop {
+        // SAFETY: the NUL after the input ends the run (NUL is not whitespace), so `p` is at most
+        // the input length and the 16 bytes lie inside the slack.
+        let v = unsafe { src.vec_unchecked(p) };
+        let sp = v.eq(V::splat(b' ')).or(v.sub(V::splat(9)).le(V::splat(4)));
+        let br = v.eq(V::splat(b'\n')).or(v.eq(V::splat(b'\r')));
+        let stop = sp.not().lanes();
+        let br = br.lanes();
+        if stop.any() {
+            nl |= br.and(stop.before_first()).any();
+            return (p + stop.first(), nl);
         }
+        nl |= br.any();
+        p += 16;
     }
 }
 
 /// The end of the run of spaces (0x20) starting at `p`, eight bytes at a
 /// time. The input ends with a NUL, so the run stops by the end.
 #[inline(always)]
-fn spaces_end(src: &[u8], p: usize) -> usize {
+fn spaces_end(src: Input, p: usize) -> usize {
     run_end(src, p, 0x2020_2020_2020_2020)
 }
 
@@ -184,11 +183,11 @@ fn spaces_end(src: &[u8], p: usize) -> usize {
 /// eight bytes at a time. The input ends with a NUL, so the run stops by
 /// the end.
 #[inline(always)]
-fn run_end(src: &[u8], mut p: usize, fill: u64) -> usize {
+fn run_end(src: Input, mut p: usize, fill: u64) -> usize {
     loop {
-        // SAFETY: the run stops at the NUL after the input; each load
-        // starts before it, inside the slack.
-        let w = u64::from_le(unsafe { src.as_ptr().add(p).cast::<u64>().read_unaligned() });
+        // SAFETY: the NUL after the input ends the run, so `p` is at most the input length and the
+        // 8 bytes lie inside the slack.
+        let w = unsafe { src.word_unchecked(p) };
         let x = w ^ fill;
         if x != 0 {
             return p + (x.trailing_zeros() / 8) as usize;
@@ -201,12 +200,11 @@ fn run_end(src: &[u8], mut p: usize, fill: u64) -> usize {
 /// paragraph separators, and byte order marks: the new position, and
 /// whether a line break was crossed.
 #[inline(always)]
-fn skip_space(src: &[u8], mut p: usize, end: usize) -> (usize, bool) {
+fn skip_space(src: Input, mut p: usize, end: usize) -> (usize, bool) {
     let mut nl = false;
-    // SAFETY: reads stay within a few bytes past `end`, inside the slack.
-    let at = |q: usize| unsafe { *src.get_unchecked(q) };
     while p < end {
-        let c = at(p);
+        // SAFETY: `p` is below `end`.
+        let c = unsafe { src.byte_unchecked(p) };
         if c.wrapping_sub(33) <= 93 {
             break;
         }
@@ -216,16 +214,27 @@ fn skip_space(src: &[u8], mut p: usize, end: usize) -> (usize, bool) {
             nl |= br;
             continue;
         }
-        if c == 194 && p + 1 < end && at(p + 1) == 160 {
+        // SAFETY: `p + 1` is below `end`.
+        if c == 194 && p + 1 < end && unsafe { src.byte_unchecked(p + 1) } == 160 {
             p += 2;
             continue;
         }
-        if p + 3 <= end && c == 0xe2 && at(p + 1) == 0x80 && at(p + 2) & 0xfe == 0xa8 {
+        if p + 3 <= end
+            && c == 0xe2
+            // SAFETY: `p + 2` is below `end`.
+            && unsafe { src.byte_unchecked(p + 1) } == 0x80
+            && unsafe { src.byte_unchecked(p + 2) } & 0xfe == 0xa8
+        {
             nl = true;
             p += 3;
             continue;
         }
-        if p + 3 <= end && c == 0xef && at(p + 1) == 0xbb && at(p + 2) == 0xbf {
+        if p + 3 <= end
+            && c == 0xef
+            // SAFETY: `p + 2` is below `end`.
+            && unsafe { src.byte_unchecked(p + 1) } == 0xbb
+            && unsafe { src.byte_unchecked(p + 2) } == 0xbf
+        {
             p += 3;
             continue;
         }
@@ -238,13 +247,13 @@ fn skip_space(src: &[u8], mut p: usize, end: usize) -> (usize, bool) {
 /// identifier characters.
 #[cold]
 #[inline(never)]
-fn ident_tail_unicode(src: &[u8], end: usize, mut p: usize) -> usize {
-    while p < end && src[p] >= 128 {
-        let bits = utf8_bits(src[p]);
+fn ident_tail_unicode(src: Input, end: usize, mut p: usize) -> usize {
+    while p < end && src.byte(p) >= 128 {
+        let bits = utf8_bits(src.byte(p));
         if bits == 0 {
             break;
         }
-        let ok = code_point(src, p, bits).is_some_and(|c| {
+        let ok = code_point(src.bytes(), p, bits).is_some_and(|c| {
             c == '\u{200c}' || c == '\u{200d}' || unicode_ident::is_xid_continue(c)
         });
         if !ok {
@@ -259,9 +268,9 @@ fn ident_tail_unicode(src: &[u8], end: usize, mut p: usize) -> usize {
 /// or one invalid code point. Returns its kind and end.
 #[cold]
 #[inline(never)]
-fn non_ascii(src: &[u8], end: usize, c: u8, lhs: usize) -> (u8, usize) {
+fn non_ascii(src: Input, end: usize, c: u8, lhs: usize) -> (u8, usize) {
     let bits = utf8_bits(c);
-    if bits != 0 && code_point(src, lhs, bits).is_some_and(unicode_ident::is_xid_start) {
+    if bits != 0 && code_point(src.bytes(), lhs, bits).is_some_and(unicode_ident::is_xid_start) {
         let p = ident_end(src, lhs + bits);
         return (lex::IDENTIFIER, ident_tail_unicode(src, end, p));
     }
@@ -271,13 +280,13 @@ fn non_ascii(src: &[u8], end: usize, c: u8, lhs: usize) -> (u8, usize) {
 /// A number's tail from `p`; the first digit or leading dot at `lhs` is
 /// already consumed (`$scanNumber`). Returns its end.
 #[inline(always)]
-fn number(src: &[u8], end: usize, lhs: usize, mut p: usize, seen_dot: bool) -> usize {
-    let byte = |q: usize| if q < end { src[q] } else { 0 };
-    let hex = src[lhs] == b'0' && byte(lhs + 1) | 32 == b'x';
+fn number(src: Input, end: usize, lhs: usize, mut p: usize, seen_dot: bool) -> usize {
+    let byte = |q: usize| if q < end { src.byte(q) } else { 0 };
+    let hex = src.byte(lhs) == b'0' && byte(lhs + 1) | 32 == b'x';
     let mut seen_dot = seen_dot;
     let mut prev = 0u8;
     while p < end {
-        let c = src[p];
+        let c = src.byte(p);
         let take = c.is_ascii_alphanumeric()
             || c == b'_'
             || ((c == b'+' || c == b'-') && !hex && prev | 32 == b'e')
@@ -298,7 +307,7 @@ fn number(src: &[u8], end: usize, lhs: usize, mut p: usize, seen_dot: bool) -> u
 /// variables stay in registers. The out-of-line helpers take it by
 /// reference.
 struct Cold<'a> {
-    src: &'a [u8],
+    src: Input<'a>,
     end: usize,
     /// Lexer memory offset of the input, for delegated calls.
     base: usize,
@@ -393,7 +402,7 @@ impl<'a> Cold<'a> {
     /// returns to. Returns the kind and end.
     #[inline(always)]
     fn template(&mut self, p: usize) -> (u8, usize) {
-        let (kind, q) = scan_template(self.src, p, self.end, self.tpl_sp >= TEMPLATES);
+        let (kind, q) = scan_template(self.src.bytes(), p, self.end, self.tpl_sp >= TEMPLATES);
         if kind == lex::DOLLAR_BRACE {
             self.tpl[self.tpl_sp] = self.brace_depth;
             self.tpl_sp += 1;
@@ -500,9 +509,9 @@ fn resolve_other(cold: &mut Cold, prev: u8, t: u8, next: Next, lhs: usize, rhs: 
 /// Whether `[lhs, rhs)` names a predefined TypeScript type
 /// (`$isPredefinedType`).
 #[inline(never)]
-fn predefined_type(src: &[u8], lhs: usize, rhs: usize) -> bool {
+fn predefined_type(src: Input, lhs: usize, rhs: usize) -> bool {
     matches!(
-        &src[lhs..rhs],
+        &src.bytes()[lhs..rhs],
         b"any" | b"never" | b"number" | b"string" | b"symbol" | b"object" | b"boolean" | b"unknown"
     )
 }
@@ -510,8 +519,8 @@ fn predefined_type(src: &[u8], lhs: usize, rhs: usize) -> bool {
 /// Whether `=>` follows `after` past whitespace and control bytes
 /// (`$sigArrowAhead`).
 #[inline(never)]
-fn arrow_ahead(src: &[u8], end: usize, after: usize) -> bool {
-    let byte = |q: usize| if q < end { src[q] } else { 0 };
+fn arrow_ahead(src: Input, end: usize, after: usize) -> bool {
+    let byte = |q: usize| if q < end { src.byte(q) } else { 0 };
     let mut p = after;
     let mut c = byte(p);
     while c != 0 && c <= 32 {
@@ -524,16 +533,17 @@ fn arrow_ahead(src: &[u8], end: usize, after: usize) -> bool {
 /// Whether `[lhs, rhs)` spells `undefined`, `NaN`, or `Infinity`
 /// (`$isBuiltinConst`).
 #[inline(always)]
-fn builtin_const(src: &[u8], lhs: usize, rhs: usize) -> bool {
-    matches!(rhs - lhs, 3 | 8 | 9) && matches!(&src[lhs..rhs], b"undefined" | b"NaN" | b"Infinity")
+fn builtin_const(src: Input, lhs: usize, rhs: usize) -> bool {
+    matches!(rhs - lhs, 3 | 8 | 9)
+        && matches!(&src.bytes()[lhs..rhs], b"undefined" | b"NaN" | b"Infinity")
 }
 
 /// The end of at most `max` ASCII hex digits from `p`, bounded by `end`
 /// (`$scanHexRun`).
 #[inline(always)]
-fn hex_run(src: &[u8], mut p: usize, max: usize, end: usize) -> usize {
+fn hex_run(src: Input, mut p: usize, max: usize, end: usize) -> usize {
     let stop = (p + max).min(end);
-    while p < stop && src[p].is_ascii_hexdigit() {
+    while p < stop && src.byte(p).is_ascii_hexdigit() {
         p += 1;
     }
     p
@@ -543,12 +553,12 @@ fn hex_run(src: &[u8], mut p: usize, max: usize, end: usize) -> usize {
 /// between escapes as strings, and each `\x`, `\u`, `\u{...}`, or
 /// single-character escape as an escape, never splitting a code point.
 #[inline(never)]
-fn emit_escaped(recs: &mut Recs, src: &[u8], end: usize, from: usize, to: usize) {
-    let byte = |q: usize| if q < end { src[q] } else { 0 };
+fn emit_escaped(recs: &mut Recs, src: Input, end: usize, from: usize, to: usize) {
+    let byte = |q: usize| if q < end { src.byte(q) } else { 0 };
     let mut seg = from;
     let mut p = from;
     while p < to {
-        let q = scan::find3(src, p, to, b'\\', b'\\', b'\\');
+        let q = scan::find3(src.bytes(), p, to, b'\\', b'\\', b'\\');
         if q >= to {
             break;
         }
@@ -558,13 +568,17 @@ fn emit_escaped(recs: &mut Recs, src: &[u8], end: usize, from: usize, to: usize)
         let mut e = match byte(q + 1) {
             b'u' if byte(q + 2) == b'{' => {
                 let e = hex_run(src, q + 3, 16, end);
-                if e < to && src[e] == b'}' { e + 1 } else { e }
+                if e < to && src.byte(e) == b'}' {
+                    e + 1
+                } else {
+                    e
+                }
             }
             b'u' => hex_run(src, q + 2, 4, end),
             b'x' => hex_run(src, q + 2, 2, end),
             _ => q + 2,
         };
-        e = scan::utf8_span_end(src, e, to);
+        e = scan::utf8_span_end(src.bytes(), e, to);
         if q < e {
             recs.tok(tok::STRING_ESCAPE, e);
         }
@@ -580,17 +594,17 @@ fn emit_escaped(recs: &mut Recs, src: &[u8], end: usize, from: usize, to: usize)
 /// (`$isDocComment`): a third `*`, except in the empty `/**/`. A comment
 /// still open at its end is judged by its opener alone.
 #[inline(always)]
-fn is_doc_comment(src: &[u8], end: usize, lhs: usize, rhs: usize) -> bool {
-    let open = rhs - lhs < 4 || &src[rhs - 2..rhs] != b"*/";
-    lhs + 2 < end && src[lhs + 2] == b'*' && (rhs - lhs > 4 || open)
+fn is_doc_comment(src: Input, end: usize, lhs: usize, rhs: usize) -> bool {
+    let open = rhs - lhs < 4 || &src.bytes()[rhs - 2..rhs] != b"*/";
+    lhs + 2 < end && src.byte(lhs + 2) == b'*' && (rhs - lhs > 4 || open)
 }
 
 /// Whether the JSDoc tag name `[lhs, rhs)` takes a parameter path
 /// (`$isParamTag`).
 #[inline(always)]
-fn is_param_tag(src: &[u8], lhs: usize, rhs: usize) -> bool {
+fn is_param_tag(src: Input, lhs: usize, rhs: usize) -> bool {
     matches!(
-        &src[lhs..rhs],
+        &src.bytes()[lhs..rhs],
         b"param"
             | b"arg"
             | b"argument"
@@ -612,8 +626,8 @@ fn doc_name_char(c: u8) -> bool {
 /// The first byte at or after `p` that is not a space or tab, or `rhs`
 /// (`$blanksEnd`).
 #[inline(always)]
-fn blanks_end(src: &[u8], mut p: usize, rhs: usize) -> usize {
-    while p < rhs && matches!(src[p], b' ' | b'\t') {
+fn blanks_end(src: Input, mut p: usize, rhs: usize) -> usize {
+    while p < rhs && matches!(src.byte(p), b' ' | b'\t') {
         p += 1;
     }
     p
@@ -625,7 +639,7 @@ fn blanks_end(src: &[u8], mut p: usize, rhs: usize) -> usize {
 /// name path after parameter-like tags as a JSDoc variable. Everything else
 /// is doc comment text.
 #[inline(never)]
-fn emit_doc_comment(recs: &mut Recs, src: &[u8], lhs: usize, rhs: usize) {
+fn emit_doc_comment(recs: &mut Recs, src: Input, lhs: usize, rhs: usize) {
     // `$emitTok`: empty ranges emit nothing.
     let emit = |recs: &mut Recs, hl: u32, a: usize, b: usize| {
         if a < b {
@@ -635,25 +649,25 @@ fn emit_doc_comment(recs: &mut Recs, src: &[u8], lhs: usize, rhs: usize) {
     let mut seg = lhs;
     let mut p = lhs + 3;
     loop {
-        p = scan::find3(src, p, rhs, b'@', b'@', b'@').max(p);
+        p = scan::find3(src.bytes(), p, rhs, b'@', b'@', b'@').max(p);
         if p >= rhs {
             break;
         }
         // A tag starts a word, after whitespace, `*`, `{`, or `(`.
-        let c = if p > lhs { src[p - 1] } else { b' ' };
+        let c = if p > lhs { src.byte(p - 1) } else { b' ' };
         if !(c == b' ' || c.wrapping_sub(9) <= 4 || matches!(c, b'*' | b'{' | b'(')) {
             p += 1;
             continue;
         }
         // ... and a letter follows the `@`.
         let mut e = p + 1;
-        if e >= rhs || !src[e].is_ascii_alphabetic() {
+        if e >= rhs || !src.byte(e).is_ascii_alphabetic() {
             p = e;
             continue;
         }
         loop {
             e += 1;
-            if e >= rhs || !src[e].is_ascii_alphanumeric() {
+            if e >= rhs || !src.byte(e).is_ascii_alphanumeric() {
                 break;
             }
         }
@@ -664,14 +678,14 @@ fn emit_doc_comment(recs: &mut Recs, src: &[u8], lhs: usize, rhs: usize) {
         p = e;
         // An optional `{type}`, balanced and on this line.
         let q = blanks_end(src, p, rhs);
-        if q < rhs && src[q] == b'{' {
+        if q < rhs && src.byte(q) == b'{' {
             let mut b = q + 1;
             let mut depth = 1;
             let closed = loop {
-                if b >= rhs || matches!(src[b], b'\n' | b'\r') {
+                if b >= rhs || matches!(src.byte(b), b'\n' | b'\r') {
                     break false;
                 }
-                match src[b] {
+                match src.byte(b) {
                     b'{' => depth += 1,
                     b'}' => depth -= 1,
                     _ => {}
@@ -695,7 +709,7 @@ fn emit_doc_comment(recs: &mut Recs, src: &[u8], lhs: usize, rhs: usize) {
             let q = blanks_end(src, p, rhs);
             if q < rhs {
                 let mut b = q;
-                while b < rhs && doc_name_char(src[b]) {
+                while b < rhs && doc_name_char(src.byte(b)) {
                     b += 1;
                 }
                 if b != q {
@@ -740,7 +754,7 @@ fn other(
         recs.tok(hl, rhs);
         recs.store(inst);
     } else if t == lex::STRING_LITERAL
-        || (t == lex::INVALID && matches!(cold.src[lhs], b'"' | b'\''))
+        || (t == lex::INVALID && matches!(cold.src.byte(lhs), b'"' | b'\''))
     {
         let mut recs = Recs::load(inst);
         emit_escaped(&mut recs, cold.src, cold.end, lhs, rhs);
@@ -758,18 +772,16 @@ fn other(
         // Delegated emitters read `$ptr`, `$end`, and the template globals.
         inst.g_ptr = abs(rhs);
         inst.g_jsTemplateMarker = cold.marker;
-        let mem = inst.mem.bytes().as_ptr();
-        emit_multi(inst, cold.src, t, abs(lhs), abs(rhs));
+        emit_multi(inst, cold.src.bytes(), t, abs(lhs), abs(rhs));
         cold.marker = inst.g_jsTemplateMarker;
-        assert!(
-            core::ptr::eq(inst.mem.bytes().as_ptr(), mem),
-            "lexer memory moved"
-        );
+        // SAFETY: `base..base + end + SLACK` lies inside lexer memory, which
+        // the translated emitters may have moved.
+        cold.src = unsafe { Input::new(inst, base, cold.end) };
     }
     let marker_before = cold.marker;
     cold.marker = 0;
     if t == lex::MULTILINE_COMMENT {
-        cold.marker = tag_marker(cold.src, t, lhs, rhs);
+        cold.marker = tag_marker(cold.src.bytes(), t, lhs, rhs);
     }
     if flags & kf::COMMENT != 0 && cold.marker == 0 {
         cold.marker = marker_before;
@@ -786,13 +798,22 @@ fn other(
 #[allow(unused_assignments)]
 #[inline(always)]
 fn lex<const TS: bool, const TSRX: bool>(cold: &mut Cold, inst: &mut Instance, base: usize) {
-    let src = cold.src;
+    // Made again from `cold.src` after the steps that may call translated
+    // code, which makes a new input.
+    let mut src = cold.src;
     let end = cold.end;
-    // SAFETY: reads stay within a few bytes past `end`, inside the slack.
-    // The byte at `end` is NUL, so an identifier run never reaches a
-    // non-ASCII byte there.
-    let at = |q: usize| unsafe { *src.get_unchecked(q) };
-    let byte = |q: usize| if q < end { at(q) } else { 0 };
+    // The byte at `q`, or 0 at or past the end (`$tsxByte`).
+    macro_rules! byte {
+        ($q:expr) => {{
+            let q: usize = $q;
+            if q < end {
+                // SAFETY: `q` is below `end`, the input length.
+                unsafe { src.byte_unchecked(q) }
+            } else {
+                0
+            }
+        }};
+    }
     let mut p = cold.source_start;
     // Kind of the last non-comment token as scanned, and as classified.
     let mut lto = lex::EOF;
@@ -803,67 +824,8 @@ fn lex<const TS: bool, const TSRX: bool>(cold: &mut Cold, inst: &mut Instance, b
     let mut done = p;
     // A line break precedes the current token.
     let mut nl: bool;
-    // The records: the vector's start, one past the last written one, and
-    // the end of its capacity.
-    let mut rp = inst.ext.recs.as_mut_ptr();
-    // SAFETY: `len` records are written.
-    let mut cur = unsafe { rp.add(inst.ext.recs.len()) };
-    // SAFETY: one past the allocation.
-    let mut limit = unsafe { rp.add(inst.ext.recs.capacity()) };
-    let mut last = inst.ext.recs.last().map_or(u32::MAX, |r| r.token);
+    let mut recs = Recs::load(inst);
 
-    // Append a record (`$emitTok`), merging with a same-colored last one.
-    // Records never outnumber input bytes, which the vector has room for;
-    // running out of room means a lexer bug, which traps.
-    macro_rules! emit {
-        ($hl:expr, $end:expr) => {{
-            let hl: u32 = $hl;
-            // SAFETY: see above; a merge rewrites the last record.
-            unsafe {
-                cur = cur.sub((last == hl) as usize);
-                if cur == limit {
-                    crate::rt::trap();
-                }
-                cur.write(Rec {
-                    end: $end as u32,
-                    token: hl,
-                });
-                cur = cur.add(1);
-            }
-            last = hl;
-        }};
-    }
-    // Whitespace before `lhs` extends the last record (`$emitGap`).
-    macro_rules! gap {
-        ($lhs:expr) => {{
-            let lhs: usize = $lhs;
-            if done < lhs {
-                if cur == rp {
-                    emit!(tok::NONE, lhs);
-                } else {
-                    // SAFETY: the record before `cur` is written.
-                    unsafe { (*cur.sub(1)).end = lhs as u32 };
-                }
-            }
-        }};
-    }
-    // Hand the records to `inst.ext.recs` around helpers that write them.
-    macro_rules! store_recs {
-        () => {
-            // SAFETY: the records before `cur` are written.
-            unsafe { inst.ext.recs.set_len(cur.offset_from(rp) as usize) }
-        };
-    }
-    macro_rules! load_recs {
-        () => {{
-            rp = inst.ext.recs.as_mut_ptr();
-            // SAFETY: `len` records are written.
-            cur = unsafe { rp.add(inst.ext.recs.len()) };
-            // SAFETY: one past the allocation.
-            limit = unsafe { rp.add(inst.ext.recs.capacity()) };
-            last = inst.ext.recs.last().map_or(u32::MAX, |r| r.token);
-        }};
-    }
     // `$classify` for the waiting identifier at `lhs..rhs`.
     macro_rules! identifier {
         ($next:expr, $lhs:expr, $rhs:expr) => {{
@@ -878,7 +840,8 @@ fn lex<const TS: bool, const TSRX: bool>(cold: &mut Cold, inst: &mut Instance, b
             } else if prev == lex::DOT || prev == lex::QUESTION_MARK_DOT {
                 if next.t != lex::L_PAREN {
                     tok::PROPERTY
-                } else if !at(lhs).is_ascii_uppercase() {
+                // SAFETY: `lhs` starts the waiting identifier, inside the input.
+                } else if !unsafe { src.byte_unchecked(lhs) }.is_ascii_uppercase() {
                     tok::FUNCTION_METHOD
                 } else {
                     classify(cold, prev, lex::IDENTIFIER, next, lhs, rhs)
@@ -889,7 +852,8 @@ fn lex<const TS: bool, const TSRX: bool>(cold: &mut Cold, inst: &mut Instance, b
                 && (prev != lex::L_PAREN || nf & ID_PAREN_NEXT == 0)
             {
                 // Only the builtin-constant, call, and word rules remain.
-                if PLAIN_START[at(lhs) as usize] {
+                // SAFETY: `lhs` starts the waiting identifier, inside the input.
+                if PLAIN_START[unsafe { src.byte_unchecked(lhs) } as usize] {
                     if next.t == lex::L_PAREN {
                         tok::FUNCTION
                     } else {
@@ -903,7 +867,8 @@ fn lex<const TS: bool, const TSRX: bool>(cold: &mut Cold, inst: &mut Instance, b
                 // open: predefined types, then the word rules.
                 if predefined_type(src, lhs, rhs) {
                     tok::TYPE_BUILTIN
-                } else if PLAIN_START[at(lhs) as usize] {
+                // SAFETY: `lhs` starts the waiting identifier, inside the input.
+                } else if PLAIN_START[unsafe { src.byte_unchecked(lhs) } as usize] {
                     if next.t == lex::L_PAREN {
                         tok::FUNCTION
                     } else {
@@ -917,14 +882,15 @@ fn lex<const TS: bool, const TSRX: bool>(cold: &mut Cold, inst: &mut Instance, b
                 // only the word rules apply.
                 if arrow_ahead(src, end, next.rhs) {
                     tok::VARIABLE_PARAMETER
-                } else if PLAIN_START[at(lhs) as usize] {
+                // SAFETY: `lhs` starts the waiting identifier, inside the input.
+                } else if PLAIN_START[unsafe { src.byte_unchecked(lhs) } as usize] {
                     tok::VARIABLE
                 } else {
                     ident_word(cold, prev, next, lhs, rhs)
                 }
             } else if (prev == lex::L_BRACE || prev == lex::COMMA || (TS && prev == lex::SEMICOLON))
                 && (next.t == lex::COLON
-                    || (TS && next.t == lex::QUESTION_MARK && byte(next.rhs) == b':'))
+                    || (TS && next.t == lex::QUESTION_MARK && byte!(next.rhs) == b':'))
                 && !builtin_const(src, lhs, rhs)
             {
                 // An object or member key: with no parameter list open, no
@@ -965,11 +931,11 @@ fn lex<const TS: bool, const TSRX: bool>(cold: &mut Cold, inst: &mut Instance, b
                     } else {
                         identifier!(next, lhs, rhs)
                     };
-                    emit!(hl, rhs);
+                    recs.tok(hl, rhs);
                     cold.marker = if metadata != 0 {
                         metadata
                     } else if (rhs - lhs).wrapping_sub(3) <= 1 {
-                        tag_marker(src, t, lhs, rhs)
+                        tag_marker(src.bytes(), t, lhs, rhs)
                     } else {
                         0
                     };
@@ -977,14 +943,15 @@ fn lex<const TS: bool, const TSRX: bool>(cold: &mut Cold, inst: &mut Instance, b
                     // `from 'module'`, which the parameter-list machine
                     // passes over.
                     cold.marker = 0;
-                    emit!(tok::KEYWORD_IMPORT, rhs);
+                    recs.tok(tok::KEYWORD_IMPORT, rhs);
                 } else if !busy && (t == lex::COLON || t == lex::QUESTION_MARK) {
                     // `$classify` for `:` and `?` with no parameter list
                     // open: TypeScript's `: Type` and `?:` are special.
                     let hl = if t == lex::COLON {
                         if TS
                             && next.t == lex::IDENTIFIER
-                            && (at(next.lhs).is_ascii_uppercase()
+                            // SAFETY: `next.lhs` starts the next token, inside the input.
+                            && (unsafe { src.byte_unchecked(next.lhs) }.is_ascii_uppercase()
                                 || predefined_type(src, next.lhs, next.rhs))
                         {
                             tok::PUNCTUATION_SPECIAL
@@ -1003,12 +970,12 @@ fn lex<const TS: bool, const TSRX: bool>(cold: &mut Cold, inst: &mut Instance, b
                     } else {
                         0
                     };
-                    emit!(hl, rhs);
+                    recs.tok(hl, rhs);
                 } else {
                     core::hint::cold_path();
                     let hl = resolve_other(cold, prev, t, next, lhs, rhs);
                     busy = cold.busy();
-                    emit!(hl, rhs);
+                    recs.tok(hl, rhs);
                 }
                 done = rhs;
                 prev = t;
@@ -1021,11 +988,12 @@ fn lex<const TS: bool, const TSRX: bool>(cold: &mut Cold, inst: &mut Instance, b
     // changes the last kinds, and take it back after.
     macro_rules! markup {
         ($call:expr) => {{
-            store_recs!();
+            recs.store(inst);
             cold.lto = lto;
             cold.prev = prev;
             p = $call;
-            load_recs!();
+            recs = Recs::load(inst);
+            src = cold.src;
             lto = cold.lto;
             prev = cold.prev;
             done = p;
@@ -1050,7 +1018,7 @@ fn lex<const TS: bool, const TSRX: bool>(cold: &mut Cold, inst: &mut Instance, b
                     busy = true;
                 }
             }
-            emit!(f >> 24, rhs);
+            recs.tok(f >> 24, rhs);
             cold.marker = 0;
             prev = t;
             done = rhs;
@@ -1067,7 +1035,7 @@ fn lex<const TS: bool, const TSRX: bool>(cold: &mut Cold, inst: &mut Instance, b
                 lto = t;
             }
             resolve!(t, lhs, rhs);
-            gap!(lhs);
+            recs.gap(done, lhs);
             if f & DEFER != 0 {
                 pend = t;
                 cold.pend_lhs = lhs;
@@ -1076,9 +1044,9 @@ fn lex<const TS: bool, const TSRX: bool>(cold: &mut Cold, inst: &mut Instance, b
                 plain!(t, rhs, f);
             } else if t == lex::COMMENT || t == lex::HASH_BANG {
                 // A line comment keeps the marker and the previous kind.
-                emit!(tok::COMMENT, rhs);
+                recs.tok(tok::COMMENT, rhs);
             } else if t == lex::STRING_LITERAL
-                && scan::find3(src, lhs, rhs, b'\\', b'\\', b'\\') >= rhs
+                && scan::find3(src.bytes(), lhs, rhs, b'\\', b'\\', b'\\') >= rhs
             {
                 // A string without escapes is one string token; it ends an
                 // import clause, and as a component metadata key sets the
@@ -1089,22 +1057,23 @@ fn lex<const TS: bool, const TSRX: bool>(cold: &mut Cold, inst: &mut Instance, b
                 } else {
                     0
                 };
-                emit!(tok::STRING, rhs);
+                recs.tok(tok::STRING, rhs);
                 cold.marker = metadata;
                 prev = t;
                 done = rhs;
             } else if !busy && (t == lex::KEYWORD_IMPORT || t == lex::KEYWORD_EXPORT) {
                 // `import` and `export` open an import clause.
                 cold.import = true;
-                emit!(tok::KEYWORD_IMPORT, rhs);
+                recs.tok(tok::KEYWORD_IMPORT, rhs);
                 cold.marker = 0;
                 prev = t;
                 done = rhs;
             } else {
-                store_recs!();
+                recs.store(inst);
                 core::hint::cold_path();
                 other(cold, inst, base, prev, t, lhs, rhs);
-                load_recs!();
+                recs = Recs::load(inst);
+                src = cold.src;
                 busy = cold.busy();
                 if f & kf::COMMENT == 0 {
                     prev = t;
@@ -1126,9 +1095,9 @@ fn lex<const TS: bool, const TSRX: bool>(cold: &mut Cold, inst: &mut Instance, b
     macro_rules! family {
         ($lhs:expr, $c:expr, $x:expr, $forms:expr) => {{
             let (lhs, c, x, forms): (usize, u8, u8, u8) = ($lhs, $c, $x, $forms);
-            let c2 = byte(lhs + 1);
+            let c2 = byte!(lhs + 1);
             let (kind, len) = if c2 == c && forms & 2 != 0 {
-                if forms & 4 != 0 && byte(lhs + 2) == b'=' {
+                if forms & 4 != 0 && byte!(lhs + 2) == b'=' {
                     (x - 3, 3)
                 } else {
                     (x - 2, 2)
@@ -1143,7 +1112,8 @@ fn lex<const TS: bool, const TSRX: bool>(cold: &mut Cold, inst: &mut Instance, b
     }
 
     loop {
-        let mut c = at(p);
+        // SAFETY: `p` is at most the input length: every token ends there or before.
+        let mut c = unsafe { src.byte_unchecked(p) };
         nl = false;
         if (c as u32).wrapping_sub(33) > 93 {
             if c == b' ' || c == b'\n' {
@@ -1152,12 +1122,15 @@ fn lex<const TS: bool, const TSRX: bool>(cold: &mut Cold, inst: &mut Instance, b
                     nl = true;
                     p += 1;
                     // Tab indentation.
-                    if at(p) == b'\t' {
+                    // SAFETY: `p` follows a line feed inside the input, so it is at most the input
+                    // length.
+                    if unsafe { src.byte_unchecked(p) } == b'\t' {
                         p = run_end(src, p, 0x0909_0909_0909_0909);
                     }
                 }
                 p = spaces_end(src, p);
-                if (at(p) as u32).wrapping_sub(33) > 93 {
+                // SAFETY: `p` ends a run of spaces, at most the input length.
+                if (unsafe { src.byte_unchecked(p) } as u32).wrapping_sub(33) > 93 {
                     let (q, br) = skip_space(src, p, end);
                     p = q;
                     nl |= br;
@@ -1166,13 +1139,15 @@ fn lex<const TS: bool, const TSRX: bool>(cold: &mut Cold, inst: &mut Instance, b
                 core::hint::cold_path();
                 (p, nl) = skip_space(src, p, end);
             }
-            c = at(p);
+            // SAFETY: `p` ends a whitespace run, at most the input length.
+            c = unsafe { src.byte_unchecked(p) };
         }
         let lhs = p;
         match c {
             b'a'..=b'z' | b'A'..=b'Z' | b'_' | b'$' => {
                 let mut q = ident_end(src, lhs + 1);
-                if at(q) >= 128 {
+                // SAFETY: `q` ends an identifier run, at most the input length.
+                if unsafe { src.byte_unchecked(q) } >= 128 {
                     q = ident_tail_unicode(src, end, q);
                 }
                 p = q;
@@ -1213,8 +1188,8 @@ fn lex<const TS: bool, const TSRX: bool>(cold: &mut Cold, inst: &mut Instance, b
                 take!(lhs, lex::R_PAREN, 1);
             }
             b'.' => {
-                let c2 = byte(lhs + 1);
-                if c2 == b'.' && byte(lhs + 2) == b'.' {
+                let c2 = byte!(lhs + 1);
+                if c2 == b'.' && byte!(lhs + 2) == b'.' {
                     take!(lhs, lex::SPREAD, 3);
                 } else if c2.is_ascii_digit() {
                     p = number(src, end, lhs, lhs + 1, true);
@@ -1251,7 +1226,7 @@ fn lex<const TS: bool, const TSRX: bool>(cold: &mut Cold, inst: &mut Instance, b
                         {
                             lto = lex::R_BRACE;
                             resolve!(lex::R_BRACE, lhs, p);
-                            gap!(lhs);
+                            recs.gap(done, lhs);
                             markup!(markup::close_container::<TS, TSRX>(cold, inst, lhs, p));
                             continue;
                         }
@@ -1260,22 +1235,22 @@ fn lex<const TS: bool, const TSRX: bool>(cold: &mut Cold, inst: &mut Instance, b
                 }
             }
             b'=' => {
-                if byte(lhs + 1) == b'>' {
+                if byte!(lhs + 1) == b'>' {
                     take!(lhs, lex::FUNCTION_ARROW, 2);
                 } else {
                     family!(lhs, c, lex::EQUAL, 6);
                 }
             }
             b'/' => {
-                let c2 = byte(lhs + 1);
+                let c2 = byte!(lhs + 1);
                 if c2 == b'/' {
-                    p = scan::line_end(src, lhs + 2, end);
+                    p = scan::line_end(src.bytes(), lhs + 2, end);
                     finish!(lex::COMMENT, lhs, p);
                 } else if c2 == b'*' {
-                    p = scan::block_comment_end(src, (lhs + 2).min(end), end);
+                    p = scan::block_comment_end(src.bytes(), (lhs + 2).min(end), end);
                     finish!(lex::MULTILINE_COMMENT, lhs, p);
                 } else if cold.rx_allowed_after(lto, nl) {
-                    let (t, q) = scan_regexp(src, lhs, end);
+                    let (t, q) = scan_regexp(src.bytes(), lhs, end);
                     p = q;
                     finish!(t, lhs, q);
                 } else {
@@ -1284,8 +1259,8 @@ fn lex<const TS: bool, const TSRX: bool>(cold: &mut Cold, inst: &mut Instance, b
             }
             b'&' => family!(lhs, c, lex::AMPERSAND, 7),
             b'!' => {
-                if byte(lhs + 1) == b'=' {
-                    if byte(lhs + 2) == b'=' {
+                if byte!(lhs + 1) == b'=' {
+                    if byte!(lhs + 2) == b'=' {
                         take!(lhs, lex::BANG_EQUAL_EQUAL, 3);
                     } else {
                         take!(lhs, lex::BANG_EQUAL, 2);
@@ -1296,8 +1271,8 @@ fn lex<const TS: bool, const TSRX: bool>(cold: &mut Cold, inst: &mut Instance, b
             }
             b'|' => family!(lhs, c, lex::PIPE, 7),
             b'?' => {
-                if byte(lhs + 1) == b'.' {
-                    if byte(lhs + 2).is_ascii_digit() {
+                if byte!(lhs + 1) == b'.' {
+                    if byte!(lhs + 2).is_ascii_digit() {
                         take!(lhs, lex::QUESTION_MARK, 1);
                     } else {
                         take!(lhs, lex::QUESTION_MARK_DOT, 2);
@@ -1315,7 +1290,7 @@ fn lex<const TS: bool, const TSRX: bool>(cold: &mut Cold, inst: &mut Instance, b
                 take!(lhs, lex::R_BRACKET, 1);
             }
             b'"' | b'\'' => {
-                let (t, q) = scan_string(src, lhs, end, c);
+                let (t, q) = scan_string(src.bytes(), lhs, end, c);
                 p = q;
                 finish!(t, lhs, q);
             }
@@ -1324,18 +1299,18 @@ fn lex<const TS: bool, const TSRX: bool>(cold: &mut Cold, inst: &mut Instance, b
                 // scanner reports as the end of input.
                 if TSRX && cold.jsx.top_mode() == 5 && markup::raw_close(src, end, lhs, 1) {
                     resolve!(lex::EOF, lhs, lhs);
-                    gap!(lhs);
+                    recs.gap(done, lhs);
                     markup!(markup::close_script::<TS, TSRX>(cold, inst, lhs));
                     continue;
                 }
-                let c2 = byte(lhs + 1);
+                let c2 = byte!(lhs + 1);
                 if c2 == b'<' || c2 == b'=' {
                     family!(lhs, c, lex::L_ANGLE, 7);
                 } else {
                     p = lhs + 1;
                     lto = lex::L_ANGLE;
                     resolve!(lex::L_ANGLE, lhs, p);
-                    gap!(lhs);
+                    recs.gap(done, lhs);
                     // In operand position with a tag-like shape, `<` opens
                     // JSX; otherwise it stays a comparison.
                     if cold.jsx_can_start(prev) && markup::validate::<TS, TSRX>(src, end, p) {
@@ -1347,8 +1322,8 @@ fn lex<const TS: bool, const TSRX: bool>(cold: &mut Cold, inst: &mut Instance, b
                 }
             }
             b'>' => {
-                if byte(lhs + 1) == b'>' && byte(lhs + 2) == b'>' {
-                    if byte(lhs + 3) == b'=' {
+                if byte!(lhs + 1) == b'>' && byte!(lhs + 2) == b'>' {
+                    if byte!(lhs + 3) == b'=' {
                         take!(lhs, lex::R_UNSIGNED_SHIFT_EQUAL, 4);
                     } else {
                         take!(lhs, lex::R_UNSIGNED_SHIFT, 3);
@@ -1369,7 +1344,7 @@ fn lex<const TS: bool, const TSRX: bool>(cold: &mut Cold, inst: &mut Instance, b
                 finish!(t, lhs, q);
             }
             b'@' => {
-                if TSRX && byte(lhs + 1) == b'{' {
+                if TSRX && byte!(lhs + 1) == b'{' {
                     // `@{` opens a TSRX statement container: one two-byte
                     // `{`, a block, whose `@` keeps the directive color.
                     cold.brk_push(1);
@@ -1377,20 +1352,21 @@ fn lex<const TS: bool, const TSRX: bool>(cold: &mut Cold, inst: &mut Instance, b
                     p = lhs + 2;
                     lto = lex::L_BRACE;
                     resolve!(lex::L_BRACE, lhs, p);
-                    gap!(lhs);
+                    recs.gap(done, lhs);
                     if busy {
                         core::hint::cold_path();
                         busy = sig_busy(cold, prev, lex::L_BRACE);
                     }
-                    emit!(tok::KEYWORD_CONTROL, lhs + 1);
-                    emit!(tok::PUNCTUATION_BRACKET, p);
+                    recs.tok(tok::KEYWORD_CONTROL, lhs + 1);
+                    recs.tok(tok::PUNCTUATION_BRACKET, p);
                     cold.marker = 0;
                     prev = lex::L_BRACE;
                     done = p;
                     continue;
                 }
                 let mut q = ident_end(src, lhs + 1);
-                if at(q) >= 128 {
+                // SAFETY: `q` ends an identifier run, at most the input length.
+                if unsafe { src.byte_unchecked(q) } >= 128 {
                     q = ident_tail_unicode(src, end, q);
                 }
                 p = q;
@@ -1407,12 +1383,13 @@ fn lex<const TS: bool, const TSRX: bool>(cold: &mut Cold, inst: &mut Instance, b
                 finish!(t, lhs, q);
             }
             b'#' => {
-                if lhs == cold.source_start && byte(lhs + 1) == b'!' {
-                    p = scan::line_end(src, lhs + 2, end);
+                if lhs == cold.source_start && byte!(lhs + 1) == b'!' {
+                    p = scan::line_end(src.bytes(), lhs + 2, end);
                     finish!(lex::HASH_BANG, lhs, p);
                 } else {
                     let mut q = ident_end(src, lhs + 1);
-                    if at(q) >= 128 {
+                    // SAFETY: `q` ends an identifier run, at most the input length.
+                    if unsafe { src.byte_unchecked(q) } >= 128 {
                         q = ident_tail_unicode(src, end, q);
                     }
                     p = q;
@@ -1424,18 +1401,14 @@ fn lex<const TS: bool, const TSRX: bool>(cold: &mut Cold, inst: &mut Instance, b
     }
     // The end of input: color the waiting token before it.
     resolve!(lex::EOF, p, p);
-    gap!(p);
-    store_recs!();
+    recs.gap(done, p);
+    recs.store(inst);
     inst.g_jsTemplateMarker = cold.marker;
 }
 
 /// Highlight `len` bytes of JSX, or TSX with `TS`, or TSRX with `TSRX`
 /// too, at lexer memory offset `base` into `inst.ext.recs`.
 fn highlight<const TS: bool, const TSRX: bool>(inst: &mut Instance, base: usize, len: usize) {
-    let mem_ptr = inst.mem.bytes().as_ptr();
-    // SAFETY: `base..base + len + 96` lies inside lexer memory, which the
-    // delegated emitters never reallocate (checked after each call).
-    let src: &[u8] = unsafe { core::slice::from_raw_parts(mem_ptr.add(base), len + 96) };
     let abs = |p: usize| (base + p) as i32;
 
     inst.g_srcBase = base as i32;
@@ -1447,9 +1420,12 @@ fn highlight<const TS: bool, const TSRX: bool>(inst: &mut Instance, base: usize,
     inst.f_ecmaReset();
     inst.ext.recs.clear();
     inst.ext.recs.reserve(len + 2);
+    // SAFETY: `base..base + len + SLACK` lies inside lexer memory. The steps
+    // that call translated code make the input again afterwards.
+    let src = unsafe { Input::new(inst, base, len) };
 
     // A range that starts inside a code point keeps its continuation bytes.
-    let start = scan::utf8_span_end(src, 0, len);
+    let start = scan::utf8_span_end(src.bytes(), 0, len);
     let mut recs = Recs::load(inst);
     recs.gap(0, start);
     recs.store(inst);

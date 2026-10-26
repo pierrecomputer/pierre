@@ -8,6 +8,7 @@
 //! call the translated WAT emitters, which append to the same records.
 
 use super::ecma_scan::{KIND, kf};
+use super::input::Input;
 use crate::generated::Instance;
 use crate::lex_ids as lex;
 use crate::token_ids as tok;
@@ -137,7 +138,7 @@ pub(super) struct Next {
 /// changed, so the hot loop keeps this in registers.
 #[derive(Clone, Copy)]
 pub(super) struct Ts<'a> {
-    pub src: &'a [u8],
+    pub src: Input<'a>,
     pub end: usize,
     /// TypeScript syntax and rules (`$ecmaHasTypeScript`).
     pub ts: bool,
@@ -149,12 +150,12 @@ pub(super) struct Ts<'a> {
 impl<'a> Ts<'a> {
     #[inline(always)]
     fn byte(&self, p: usize) -> u8 {
-        if p < self.end { self.src[p] } else { 0 }
+        if p < self.end { self.src.byte(p) } else { 0 }
     }
 
     #[inline(always)]
     fn word_eq(&self, lhs: usize, rhs: usize, w: &[u8]) -> bool {
-        rhs - lhs == w.len() && &self.src[lhs..rhs] == w
+        rhs - lhs == w.len() && &self.src.bytes()[lhs..rhs] == w
     }
 
     /// `$sigStep`. With no parameter list open and no function head
@@ -176,7 +177,7 @@ impl<'a> Ts<'a> {
             lex::IDENTIFIER | lex::CTXWORD_GET | lex::CTXWORD_SET
                 if !(prev == lex::DOT || prev == lex::QUESTION_MARK_DOT)
                     && (if t == lex::IDENTIFIER {
-                        next == lex::L_PAREN && &self.src[lhs..rhs] == b"constructor"
+                        next == lex::L_PAREN && &self.src.bytes()[lhs..rhs] == b"constructor"
                     } else {
                         is_identish(next) || next == lex::HASH_IDENTIFIER
                     }) =>
@@ -292,15 +293,16 @@ impl<'a> Ts<'a> {
     /// Eight bytes at `p` (the input slack covers reads past the end).
     #[inline(always)]
     fn word8(&self, p: usize) -> u64 {
-        // SAFETY: tokens end inside the input, which the slack extends by
-        // more than eight bytes.
-        u64::from_le(unsafe { self.src.as_ptr().add(p).cast::<u64>().read_unaligned() })
+        self.src.word(p)
     }
 
     #[inline(always)]
     pub(super) fn is_builtin_const(&self, lhs: usize, rhs: usize) -> bool {
         match rhs - lhs {
-            9 => self.word8(lhs) == u64::from_le_bytes(*b"undefine") && self.src[lhs + 8] == b'd',
+            9 => {
+                self.word8(lhs) == u64::from_le_bytes(*b"undefine")
+                    && self.src.byte(lhs + 8) == b'd'
+            }
             3 => self.word8(lhs) & 0xff_ffff == u64::from_le_bytes(*b"NaN\0\0\0\0\0"),
             8 => self.word8(lhs) == u64::from_le_bytes(*b"Infinity"),
             _ => false,
@@ -310,7 +312,7 @@ impl<'a> Ts<'a> {
     #[inline(always)]
     fn is_predefined_type(&self, lhs: usize, rhs: usize) -> bool {
         matches!(
-            &self.src[lhs..rhs],
+            &self.src.bytes()[lhs..rhs],
             b"any"
                 | b"never"
                 | b"number"
@@ -324,14 +326,14 @@ impl<'a> Ts<'a> {
 
     /// The position after the spaces and tabs that end just before `p`.
     fn blanks_before(&self, mut p: usize) -> usize {
-        while p > 0 && matches!(self.src[p - 1], b' ' | b'\t') {
+        while p > 0 && matches!(self.src.byte(p - 1), b' ' | b'\t') {
             p -= 1;
         }
         p
     }
 
     fn byte_before(&self, p: usize) -> u8 {
-        if p == 0 { 0 } else { self.src[p - 1] }
+        if p == 0 { 0 } else { self.src.byte(p - 1) }
     }
 
     fn return_colon_before(&self, lhs: usize) -> bool {
@@ -369,7 +371,7 @@ impl<'a> Ts<'a> {
         if p < 3 {
             return false;
         }
-        &self.src[p - 3..p] == b"new" && !is_name_start(self.byte_before(p - 3))
+        &self.src.bytes()[p - 3..p] == b"new" && !is_name_start(self.byte_before(p - 3))
     }
 
     #[inline(never)]
@@ -485,7 +487,7 @@ impl<'a> Ts<'a> {
     }
 
     fn ctx_ident_hl(&self, prev: u8, next: u8, lhs: usize, rhs: usize) -> Option<u32> {
-        let w = &self.src[lhs..rhs];
+        let w = &self.src.bytes()[lhs..rhs];
         if next == lex::L_BRACE {
             return (prev == lex::CTXWORD_DECLARE && w == b"global").then_some(tok::KEYWORD);
         }
@@ -513,11 +515,11 @@ impl<'a> Ts<'a> {
 
     #[inline(always)]
     fn is_const_case(&self, lhs: usize, rhs: usize) -> bool {
-        let c = self.src[lhs];
+        let c = self.src.byte(lhs);
         if !(c.is_ascii_uppercase() || c == b'_') {
             return false;
         }
-        self.src[lhs..rhs]
+        self.src.bytes()[lhs..rhs]
             .iter()
             .all(|&c| c.is_ascii_uppercase() || c.is_ascii_digit() || c == b'_')
     }
@@ -553,7 +555,7 @@ impl<'a> Ts<'a> {
     #[inline(always)]
     fn member_hl(&self, next: Next, lhs: usize) -> u32 {
         if next.t == lex::L_PAREN {
-            if self.src[lhs].is_ascii_uppercase() && self.new_member_before(lhs) {
+            if self.src.byte(lhs).is_ascii_uppercase() && self.new_member_before(lhs) {
                 return tok::TYPE_CLASS;
             }
             return tok::FUNCTION_METHOD;
@@ -574,7 +576,7 @@ impl<'a> Ts<'a> {
             }
             return tok::CONSTANT;
         }
-        if self.src[lhs].is_ascii_uppercase() {
+        if self.src.byte(lhs).is_ascii_uppercase() {
             return tok::TYPE;
         }
         tok::VARIABLE
@@ -651,7 +653,7 @@ impl<'a> Ts<'a> {
             if prev == lex::IDENTIFIER {
                 let c = self.blanks_before(lhs);
                 if c >= 6
-                    && &self.src[c - 6..c] == b"unique"
+                    && &self.src.bytes()[c - 6..c] == b"unique"
                     && !is_name_start(self.byte_before(c - 6))
                 {
                     return tok::TYPE_BUILTIN;
@@ -720,7 +722,7 @@ impl<'a> Ts<'a> {
 /// The marker a component metadata key sets for the template after its
 /// colon: `template` (HTML) or `styles` (CSS), bare or quoted; 0 otherwise.
 #[inline(always)]
-pub(super) fn metadata_marker(src: &[u8], t: u8, lhs: usize, rhs: usize) -> i32 {
+pub(super) fn metadata_marker(src: Input, t: u8, lhs: usize, rhs: usize) -> i32 {
     let (a, b) = if t == lex::STRING_LITERAL {
         (lhs + 1, rhs - 1)
     } else {
@@ -730,8 +732,9 @@ pub(super) fn metadata_marker(src: &[u8], t: u8, lhs: usize, rhs: usize) -> i32 
     if n != 8 && n != 6 {
         return 0;
     }
-    // SAFETY: the input slack covers an eight-byte read at any token.
-    let w = u64::from_le(unsafe { src.as_ptr().add(a).cast::<u64>().read_unaligned() });
+    // SAFETY: the token lies inside the input, and the slack covers an
+    // eight-byte read from anywhere in it.
+    let w = unsafe { src.word_unchecked(a) };
     if n == 8 && w == u64::from_le_bytes(*b"template") {
         0xc000_0001u32 as i32
     } else if n == 6 && w & 0xffff_ffff_ffff == u64::from_le_bytes(*b"styles\0\0") {

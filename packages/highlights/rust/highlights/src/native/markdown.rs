@@ -10,6 +10,7 @@
 //! input, so the WAT's streaming branches (`$streaming` set) never apply.
 
 use super::Lexer;
+use super::input::Input;
 use super::recs::Recs;
 use super::scan;
 use crate::generated::Instance;
@@ -27,15 +28,6 @@ pub(crate) fn lexer(name: &str) -> Option<Lexer> {
 
 /// No list item has started on the current line.
 const NO_LIST: usize = usize::MAX;
-
-/// The input and its 96-byte slack, read without borrowing `inst` so the
-/// lexer can still call translated functions.
-fn input<'a>(inst: &Instance, base: usize, len: usize) -> &'a [u8] {
-    let mem_ptr = inst.mem.bytes().as_ptr();
-    // SAFETY: `base..base + len + 96` lies inside lexer memory. The slice is
-    // derived again after every translated call, which may move memory.
-    unsafe { core::slice::from_raw_parts(mem_ptr.add(base), len + 96) }
-}
 
 /// Space, or TAB through CR (`$lexIsSpace`).
 #[inline(always)]
@@ -96,11 +88,11 @@ static PLAIN_START: [u8; 256] = {
 /// per step; loads may pass `stop` into the input slack, and matches there
 /// are clamped away.
 #[inline(always)]
-fn find_mask(src: &[u8], mut p: usize, stop: usize, hit: impl Fn(V) -> V) -> usize {
+fn find_mask(src: Input, mut p: usize, stop: usize, hit: impl Fn(V) -> V) -> usize {
     while p < stop {
-        // SAFETY: `p < stop`, which is at most the input length, so the
-        // 16 bytes lie inside the input and its slack.
-        let m = hit(unsafe { V::load(src.as_ptr().add(p)) }).lanes();
+        // SAFETY: `p` is below `stop`, at most the input length, so the 16 bytes lie inside the
+        // slack.
+        let m = hit(unsafe { src.vec_unchecked(p) }).lanes();
         if m.any() {
             return (p + m.first()).min(stop);
         }
@@ -111,7 +103,7 @@ fn find_mask(src: &[u8], mut p: usize, stop: usize, hit: impl Fn(V) -> V) -> usi
 
 /// The first position in `[p, stop)` whose byte is in `set`, or `stop`.
 #[inline(always)]
-fn find_any<const N: usize>(src: &[u8], p: usize, stop: usize, set: [u8; N]) -> usize {
+fn find_any<const N: usize>(src: Input, p: usize, stop: usize, set: [u8; N]) -> usize {
     find_mask(src, p, stop, |w| {
         let mut hit = w.eq(V::splat(set[0]));
         let mut i = 1;
@@ -131,26 +123,9 @@ fn emit(recs: &mut Recs, hl: u32, lhs: usize, rhs: usize) {
     }
 }
 
-/// The input bytes and their 96-byte slack. Indexing skips the bounds
-/// check: every position this module reads is below the input length plus
-/// 16, inside the slack.
-#[derive(Clone, Copy)]
-struct Src<'a>(&'a [u8]);
-
-impl core::ops::Index<usize> for Src<'_> {
-    type Output = u8;
-
-    #[inline(always)]
-    fn index(&self, i: usize) -> &u8 {
-        debug_assert!(i < self.0.len());
-        // SAFETY: `i` lies within the input or its slack (see `Src`).
-        unsafe { self.0.get_unchecked(i) }
-    }
-}
-
 /// The input being lexed: its bytes (with slack) and its length.
 struct Md<'a> {
-    src: Src<'a>,
+    src: Input<'a>,
     end: usize,
 }
 
@@ -159,7 +134,7 @@ impl Md<'_> {
     /// `$lexFindEither`).
     #[inline(always)]
     fn line_end(&self, p: usize) -> usize {
-        find_any(self.src.0, p, self.end, *b"\n\r")
+        find_any(self.src, p, self.end, *b"\n\r")
     }
 
     /// Just past the line break at `p`, or `p` at the end
@@ -168,7 +143,11 @@ impl Md<'_> {
     fn after_line(&self, p: usize) -> usize {
         let src = self.src;
         if p < self.end {
-            if src[p] == b'\r' && p + 1 < self.end && src[p + 1] == b'\n' {
+            // SAFETY: `p` and `p + 1` are below the end.
+            if unsafe { src.byte_unchecked(p) } == b'\r'
+                && p + 1 < self.end
+                && unsafe { src.byte_unchecked(p + 1) } == b'\n'
+            {
                 return p + 2;
             }
             return p + 1;
@@ -183,7 +162,7 @@ impl Md<'_> {
         if p >= stop {
             return p;
         }
-        find_any(self.src.0, p, stop, [q])
+        find_any(self.src, p, stop, [q])
     }
 
     /// The next `q` or backslash in `[p, stop)`, or `stop`; `p` itself when
@@ -193,20 +172,21 @@ impl Md<'_> {
         if p >= stop {
             return p;
         }
-        find_any(self.src.0, p, stop, [q, b'\\'])
+        find_any(self.src, p, stop, [q, b'\\'])
     }
 
     /// The next byte `a` at or after `p`, or the end (`$lexFindByte`).
     #[inline(always)]
     fn find_byte(&self, p: usize, a: u8) -> usize {
-        find_any(self.src.0, p, self.end, [a])
+        find_any(self.src, p, self.end, [a])
     }
 
     /// End of the backtick run at `p`, bounded by `stop`
     /// (`$markdownTickRunEnd`).
     #[inline(always)]
     fn tick_run_end(&self, mut p: usize, stop: usize) -> usize {
-        while p < stop && self.src[p] == b'`' {
+        // SAFETY: `p` is below `stop`, at most the input length.
+        while p < stop && unsafe { self.src.byte_unchecked(p) } == b'`' {
             p += 1;
         }
         p
@@ -241,8 +221,9 @@ impl Md<'_> {
         let mut p = self.tick_run_end(lhs, end);
         let count = p - lhs;
         loop {
-            p = find_any(src.0, p, end, *b"`\n\r");
-            if p >= end || src[p] != b'`' {
+            p = find_any(src, p, end, *b"`\n\r");
+            // SAFETY: `p` is below the end.
+            if p >= end || unsafe { src.byte_unchecked(p) } != b'`' {
                 return (0, p);
             }
             let q = self.tick_run_end(p, end);
@@ -258,15 +239,22 @@ impl Md<'_> {
     #[inline(always)]
     fn list_marker_end(&self, p: usize) -> usize {
         let src = self.src;
-        let c = src[p];
+        // SAFETY: `p` is below the end (the caller's precondition).
+        let c = unsafe { src.byte_unchecked(p) };
         if c == b'-' || c == b'+' || c == b'*' {
             return p + 1;
         }
         let mut q = p;
-        while q < self.end && is_digit(src[q]) {
+        // SAFETY: `q` is below the end.
+        while q < self.end && is_digit(unsafe { src.byte_unchecked(q) }) {
             q += 1;
         }
-        if q > p && q < self.end && (src[q] == b'.' || src[q] == b')') {
+        if q > p
+            && q < self.end
+            // SAFETY: `q` is below the end.
+            && (unsafe { src.byte_unchecked(q) } == b'.'
+                || unsafe { src.byte_unchecked(q) } == b')')
+        {
             return q + 1;
         }
         p
@@ -277,7 +265,8 @@ impl Md<'_> {
     #[inline(always)]
     fn skip_indent(&self, mut p: usize, stop: usize) -> usize {
         let mut n = 0;
-        while n < 3 && p < stop && self.src[p] == b' ' {
+        // SAFETY: `p` is below `stop`, at most the input length.
+        while n < 3 && p < stop && unsafe { self.src.byte_unchecked(p) } == b' ' {
             p += 1;
             n += 1;
         }
@@ -309,11 +298,13 @@ impl Md<'_> {
                 let mut n = quotes;
                 while n != 0 {
                     q = self.skip_indent(q, line_end);
-                    if q >= line_end || src[q] != b'>' {
+                    // SAFETY: `q` is below the line end, inside the input.
+                    if q >= line_end || unsafe { src.byte_unchecked(q) } != b'>' {
                         return (p, true);
                     }
                     q += 1;
-                    if q < line_end && src[q] == b' ' {
+                    // SAFETY: as above.
+                    if q < line_end && unsafe { src.byte_unchecked(q) } == b' ' {
                         q += 1;
                     }
                     n -= 1;
@@ -323,7 +314,8 @@ impl Md<'_> {
                     if q >= line_end {
                         break 'skip;
                     }
-                    let c = src[q];
+                    // SAFETY: as above.
+                    let c = unsafe { src.byte_unchecked(q) };
                     if c != b' ' && c != b'\t' {
                         return (p, true);
                     }
@@ -332,13 +324,18 @@ impl Md<'_> {
                 }
                 q = self.skip_indent(q, line_end);
                 let run = q;
-                while q < line_end && src[q] == fence {
+                // SAFETY: as above.
+                while q < line_end && unsafe { src.byte_unchecked(q) } == fence {
                     q += 1;
                 }
                 if q - run < len {
                     break 'skip;
                 }
-                while q < line_end && (src[q] == b' ' || src[q] == b'\t') {
+                // SAFETY: as above.
+                while q < line_end
+                    && (unsafe { src.byte_unchecked(q) } == b' '
+                        || unsafe { src.byte_unchecked(q) } == b'\t')
+                {
                     q += 1;
                 }
                 if q == line_end {
@@ -361,25 +358,40 @@ impl Md<'_> {
         let end = self.end;
         let mut f = body;
         loop {
-            f = find_any(src.0, f, end, [fence]);
+            f = find_any(src, f, end, [fence]);
             if f >= end {
                 return end;
             }
             // the line start: back over at most three spaces
             let mut s = f;
-            while f - s < 3 && s > body && src[s - 1] == b' ' {
+            // SAFETY: `s - 1` is at or after `body`, inside the input.
+            while f - s < 3 && s > body && unsafe { src.byte_unchecked(s - 1) } == b' ' {
                 s -= 1;
             }
             let mut q = f;
-            while q < end && src[q] == fence {
+            // SAFETY: `q` is below the end.
+            while q < end && unsafe { src.byte_unchecked(q) } == fence {
                 q += 1;
             }
-            if s == body || src[s - 1] == b'\n' || src[s - 1] == b'\r' {
+            if s == body
+                // SAFETY: `s` is past `body`, so `s - 1` lies inside the input.
+                || unsafe { src.byte_unchecked(s - 1) } == b'\n'
+                || unsafe { src.byte_unchecked(s - 1) } == b'\r'
+            {
                 let run = q - f;
-                while q < end && (src[q] == b' ' || src[q] == b'\t') {
+                while q < end
+                    // SAFETY: `q` is below the end.
+                    && (unsafe { src.byte_unchecked(q) } == b' '
+                        || unsafe { src.byte_unchecked(q) } == b'\t')
+                {
                     q += 1;
                 }
-                if run >= len && (q >= end || src[q] == b'\n' || src[q] == b'\r') {
+                if run >= len
+                    && (q >= end
+                        // SAFETY: `q` is below the end.
+                        || unsafe { src.byte_unchecked(q) } == b'\n'
+                        || unsafe { src.byte_unchecked(q) } == b'\r')
+                {
                     return s;
                 }
             }
@@ -400,7 +412,7 @@ impl Md<'_> {
         const LO: [u8; 16] = [16, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3, 8, 44, 1, 0, 8];
         let hi = V::from_array(&HI);
         let lo = V::from_array(&LO);
-        find_mask(self.src.0, p, self.end, |w| {
+        find_mask(self.src, p, self.end, |w| {
             lo.lookup(w.and(V::splat(15))).test(hi.lookup(w.shr::<4>()))
         })
     }
@@ -411,7 +423,8 @@ impl Md<'_> {
         let src = self.src;
         let mut p = lhs + 1;
         while p < line_end {
-            let c = src[p];
+            // SAFETY: `p` is below the line end, inside the input.
+            let c = unsafe { src.byte_unchecked(p) };
             if !((c | 32).wrapping_sub(b'a') <= 25
                 || c.wrapping_sub(b'+') <= 14
                 || c == b'_'
@@ -424,17 +437,20 @@ impl Md<'_> {
         if p >= line_end {
             return 0;
         }
-        let c = src[p];
+        // SAFETY: as above.
+        let c = unsafe { src.byte_unchecked(p) };
+        // SAFETY: `lhs + 1` is at most `p`, below the line end.
         if c == b':'
             && (p - lhs).wrapping_sub(3) <= 30
-            && (src[lhs + 1] | 32).wrapping_sub(b'a') <= 25
+            && (unsafe { src.byte_unchecked(lhs + 1) } | 32).wrapping_sub(b'a') <= 25
         {
             loop {
                 p += 1;
                 if p >= line_end {
                     break;
                 }
-                let c = src[p];
+                // SAFETY: `p` is below the line end.
+                let c = unsafe { src.byte_unchecked(p) };
                 if c == b'>' {
                     return p + 1;
                 }
@@ -454,12 +470,14 @@ impl Md<'_> {
             if p >= line_end {
                 break;
             }
-            let b = src[p];
+            // SAFETY: as above.
+            let b = unsafe { src.byte_unchecked(p) };
             if !(is_alnum(b) || b == b'.' || b == b'-') {
                 break;
             }
         }
-        if p > at + 1 && p < line_end && src[p] == b'>' {
+        // SAFETY: as above.
+        if p > at + 1 && p < line_end && unsafe { src.byte_unchecked(p) } == b'>' {
             return p + 1;
         }
         0
@@ -469,7 +487,7 @@ impl Md<'_> {
     /// (`$markdownFindEither`).
     #[inline(always)]
     fn find_either(&self, p: usize, stop: usize, c: u8) -> usize {
-        find_any(self.src.0, p, stop, [c, b'`'])
+        find_any(self.src, p, stop, [c, b'`'])
     }
 }
 
@@ -495,7 +513,12 @@ fn emphasis_end(
     let mut p = lhs + count;
     if c == b'_' {
         // `_` opens only when left-flanking.
-        if (lhs > 0 && is_alnum(src[lhs - 1])) || p >= line_end || is_space(src[p]) {
+        // SAFETY: `lhs - 1` is read only when `lhs > 0`, and `p` only below the
+        // line end.
+        if (lhs > 0 && is_alnum(unsafe { src.byte_unchecked(lhs - 1) }))
+            || p >= line_end
+            || is_space(unsafe { src.byte_unchecked(p) })
+        {
             return 0;
         }
         if lhs < under.before && count == under.count {
@@ -512,7 +535,8 @@ fn emphasis_end(
             return 0;
         }
         // A code span hides the markers inside it.
-        if src[p] == b'`' {
+        // SAFETY: `p` is below the line end.
+        if unsafe { src.byte_unchecked(p) } == b'`' {
             let q = md.code_span_end(p, line_end);
             p = if q != 0 {
                 q
@@ -523,13 +547,20 @@ fn emphasis_end(
         }
         let mut q = p + 1;
         if count == 2 {
-            q = if q < line_end && src[q] == c {
+            // SAFETY: `q` is below the line end.
+            q = if q < line_end && unsafe { src.byte_unchecked(q) } == c {
                 p + 2
             } else {
                 0
             };
         }
-        if q != 0 && (c != b'_' || q >= line_end || src[q] >= 0x80 || !is_alnum(src[q])) {
+        // SAFETY: as above.
+        if q != 0
+            && (c != b'_'
+                || q >= line_end
+                || unsafe { src.byte_unchecked(q) } >= 0x80
+                || !is_alnum(unsafe { src.byte_unchecked(q) }))
+        {
             return q;
         }
         p += 1;
@@ -544,13 +575,15 @@ fn quote_prefix(md: &Md, recs: &mut Recs, mut p: usize, line_end: usize, mut quo
     let src = md.src;
     while quotes != 0 {
         let q = md.skip_indent(p, line_end);
-        if q >= line_end || src[q] != b'>' {
+        // SAFETY: `q` is below the line end, inside the input.
+        if q >= line_end || unsafe { src.byte_unchecked(q) } != b'>' {
             break;
         }
         recs.gap(p, q);
         p = q + 1;
         recs.tok(tok::PUNCTUATION_MARKUP, p);
-        if p < line_end && src[p] == b' ' {
+        // SAFETY: `p` is below the line end.
+        if p < line_end && unsafe { src.byte_unchecked(p) } == b' ' {
             p += 1;
             recs.gap(p - 1, p);
         }
@@ -596,18 +629,28 @@ fn link(recs: &mut Recs, lhs: usize, close: usize, rhs: usize) {
 #[inline(always)]
 fn image_link(md: &Md, recs: &mut Recs, lhs: usize, line_end: usize, alt: usize) -> usize {
     let src = md.src;
-    if lhs + 3 >= line_end || src[lhs + 1] != b'!' || src[lhs + 2] != b'[' {
+    // SAFETY: each read is below the line end, which the checks before
+    // it ensure.
+    if lhs + 3 >= line_end
+        || unsafe { src.byte_unchecked(lhs + 1) } != b'!'
+        || unsafe { src.byte_unchecked(lhs + 2) } != b'['
+    {
         return 0;
     }
     // each of `](`, `)](`, and `)` must follow on the line
     if md.find_special(lhs + 3, alt, b'[') < alt {
         return 0;
     }
-    if alt + 1 >= line_end || src[alt + 1] != b'(' {
+    // SAFETY: as above.
+    if alt + 1 >= line_end || unsafe { src.byte_unchecked(alt + 1) } != b'(' {
         return 0;
     }
     let img = md.find_special(alt + 2, line_end, b')');
-    if img + 2 >= line_end || src[img + 1] != b']' || src[img + 2] != b'(' {
+    // SAFETY: as above.
+    if img + 2 >= line_end
+        || unsafe { src.byte_unchecked(img + 1) } != b']'
+        || unsafe { src.byte_unchecked(img + 2) } != b'('
+    {
         return 0;
     }
     let href = md.find_special(img + 3, line_end, b')');
@@ -624,14 +667,14 @@ fn image_link(md: &Md, recs: &mut Recs, lhs: usize, line_end: usize, alt: usize)
 /// The language named by `src[lhs..rhs]`, ignoring ASCII case, or 0
 /// (plain) when there is none (`$languageByName`). The names are grouped
 /// by length in the lexer memory at `$mem.languageNames`.
-fn language_by_name(inst: &Instance, src: &[u8], lhs: usize, rhs: usize) -> i32 {
+fn language_by_name(inst: &Instance, src: Input, lhs: usize, rhs: usize) -> i32 {
     let len = rhs.wrapping_sub(lhs);
     if len.wrapping_sub(1) > 17 {
         return 0;
     }
     let mem = inst.mem.bytes();
     let u16_at = |a: usize| u16::from_le_bytes([mem[a], mem[a + 1]]) as usize;
-    let u64_at = |s: &[u8], a: usize| u64::from_le_bytes(s[a..a + 8].try_into().unwrap());
+    let u64_at = |a: usize| u64::from_le_bytes(mem[a..a + 8].try_into().unwrap());
     let mut record = MEM_LANGUAGE_NAMES + u16_at(MEM_LANGUAGE_NAMES + 2 * len);
     let stop = MEM_LANGUAGE_NAMES + u16_at(MEM_LANGUAGE_NAMES + 2 + 2 * len);
     const LOWER: u64 = 0x2020_2020_2020_2020;
@@ -642,15 +685,18 @@ fn language_by_name(inst: &Instance, src: &[u8], lhs: usize, rhs: usize) -> i32 
             (1u64 << (n * 8)) - 1
         }
     };
-    let word = u64_at(src, lhs) | LOWER;
+    // SAFETY: the name starts at or before the input end, so its 8 bytes
+    // stay inside the slack.
+    let word = unsafe { src.word_unchecked(lhs) } | LOWER;
     let mask = mask_of(len);
     'alias: while record < stop {
-        if (word ^ u64_at(mem, record + 1)) & mask == 0 {
+        if (word ^ u64_at(record + 1)) & mask == 0 {
             // a name over eight bytes compares its remaining chunks
             let mut i = 8;
             while i < len {
-                let chunk = u64_at(src, lhs + i) | LOWER;
-                if (chunk ^ u64_at(mem, record + 1 + i)) & mask_of(len - i) != 0 {
+                // SAFETY: `lhs + i` lies inside the name, inside the input.
+                let chunk = unsafe { src.word_unchecked(lhs + i) } | LOWER;
+                if (chunk ^ u64_at(record + 1 + i)) & mask_of(len - i) != 0 {
                     record += len + 1;
                     continue 'alias;
                 }
@@ -671,13 +717,15 @@ fn highlight(inst: &mut Instance, base: usize, len: usize) {
     inst.g_srcBase = base as i32;
     inst.g_end = abs(len);
     let mut md = Md {
-        src: Src(input(inst, base, len)),
+        // SAFETY: `base..base + len + SLACK` lies inside lexer memory; the
+        // input is made again after every translated call, which may move it.
+        src: unsafe { Input::new(inst, base, len) },
         end,
     };
     let mut recs = Recs::load(inst);
 
     // $lexEmitLeadingContinuation
-    let mut ptr = scan::utf8_span_end(md.src.0, 0, end);
+    let mut ptr = scan::utf8_span_end(md.src.bytes(), 0, end);
     recs.gap(0, ptr);
 
     // YAML front matter.
@@ -698,11 +746,12 @@ fn highlight(inst: &mut Instance, base: usize, len: usize) {
         inst.g_ptr = close;
         inst.f_frontMatterCloser(close);
         ptr = inst.g_ptr as usize - base;
-        md.src = Src(input(inst, base, len));
+        // SAFETY: as above; memory may have moved during the call.
+        md.src = unsafe { Input::new(inst, base, len) };
     }
     recs = Recs::load(inst);
 
-    let mut line_start = ptr == 0 || md.src[ptr - 1] == b'\n' || md.src[ptr - 1] == b'\r';
+    let mut line_start = ptr == 0 || md.src.byte(ptr - 1) == b'\n' || md.src.byte(ptr - 1) == b'\r';
     let mut quotes: u32 = 0;
     let mut list_start = NO_LIST;
     // End of the line the cursor is on, valid only while `ptr` stays below.
@@ -721,7 +770,8 @@ fn highlight(inst: &mut Instance, base: usize, len: usize) {
         let src = md.src;
         // A byte no rule applies to starts plain text; the byte that ends
         // it always has a rule, so it is dispatched right after.
-        if PLAIN_START[src[ptr] as usize] & (1 << line_start as u8) != 0 {
+        // SAFETY: `ptr` is below the end.
+        if PLAIN_START[unsafe { src.byte_unchecked(ptr) } as usize] & (1 << line_start as u8) != 0 {
             line_start = false;
             ptr = md.plain_end(ptr + 1);
             recs.tok(tok::NONE, ptr);
@@ -730,7 +780,8 @@ fn highlight(inst: &mut Instance, base: usize, len: usize) {
             }
         }
         let lhs = ptr;
-        let c = src[ptr];
+        // SAFETY: `ptr` is below the end.
+        let c = unsafe { src.byte_unchecked(ptr) };
 
         // Newline bytes are gaps and reset block-prefix recognition.
         if c == b'\n' || c == b'\r' {
@@ -750,7 +801,8 @@ fn highlight(inst: &mut Instance, base: usize, len: usize) {
                 // Up to three leading spaces retain line-start meaning.
                 b' ' => {
                     let mut count = 0;
-                    while ptr < end && src[ptr] == b' ' && count < 3 {
+                    // SAFETY: `ptr` is below the end.
+                    while ptr < end && unsafe { src.byte_unchecked(ptr) } == b' ' && count < 3 {
                         ptr += 1;
                         count += 1;
                     }
@@ -773,16 +825,19 @@ fn highlight(inst: &mut Instance, base: usize, len: usize) {
                 // ATX heading.
                 b'#' => {
                     let mut p = ptr;
-                    while p < end && src[p] == b'#' {
+                    // SAFETY: `p` is below the end.
+                    while p < end && unsafe { src.byte_unchecked(p) } == b'#' {
                         p += 1;
                     }
-                    if p - ptr <= 6 && p < end && is_space(src[p]) {
+                    // SAFETY: `p` is below the end.
+                    if p - ptr <= 6 && p < end && is_space(unsafe { src.byte_unchecked(p) }) {
                         recs.tok(tok::TITLE, p);
                         ptr = p;
                         let line_end = md.line_end(ptr);
                         // The blanks after the marker stay on the line.
                         let p = ptr;
-                        while ptr < line_end && is_space(src[ptr]) {
+                        // SAFETY: `ptr` is below the line end.
+                        while ptr < line_end && is_space(unsafe { src.byte_unchecked(ptr) }) {
                             ptr += 1;
                         }
                         recs.gap(p, ptr);
@@ -797,33 +852,38 @@ fn highlight(inst: &mut Instance, base: usize, len: usize) {
                 b'`' | b'~' => {
                     let fence = c;
                     let mut p = ptr;
-                    while p < end && src[p] == fence {
+                    // SAFETY: `p` is below the end.
+                    while p < end && unsafe { src.byte_unchecked(p) } == fence {
                         p += 1;
                     }
                     let fence_len = p - ptr;
                     if fence_len >= 3 {
                         let line_end = md.line_end(ptr);
                         let mut q = p;
-                        while q < line_end && is_space(src[q]) {
+                        // SAFETY: `q` is below the line end.
+                        while q < line_end && is_space(unsafe { src.byte_unchecked(q) }) {
                             q += 1;
                         }
                         // Pandoc and Quarto brace the language: `{python}`, `{.rust}`.
-                        if q < line_end && src[q] == b'{' {
+                        // SAFETY: as above.
+                        if q < line_end && unsafe { src.byte_unchecked(q) } == b'{' {
                             q += 1;
-                            if q < line_end && src[q] == b'.' {
+                            // SAFETY: as above.
+                            if q < line_end && unsafe { src.byte_unchecked(q) } == b'.' {
                                 q += 1;
                             }
                         }
                         let info = q;
                         // The language word also ends at attributes glued to it.
                         while q < line_end {
-                            let c = src[q];
+                            // SAFETY: as above.
+                            let c = unsafe { src.byte_unchecked(q) };
                             if is_space(c) || c == b',' || c == b':' || c == b'{' || c == b'}' {
                                 break;
                             }
                             q += 1;
                         }
-                        let lang = language_by_name(inst, src.0, info, q);
+                        let lang = language_by_name(inst, src, info, q);
                         let indent = if list_start != NO_LIST {
                             (ptr - list_start) as u32
                         } else {
@@ -838,7 +898,8 @@ fn highlight(inst: &mut Instance, base: usize, len: usize) {
                             recs.store(inst);
                             inst.f_markdownFenceBody(lang, abs(body), abs(close), quotes as i32, 0);
                             recs = Recs::load(inst);
-                            md.src = Src(input(inst, base, len));
+                            // SAFETY: as above; memory may have moved during the call.
+                            md.src = unsafe { Input::new(inst, base, len) };
                         } else {
                             emit(&mut recs, tok::TEXT_LITERAL, body, close);
                         }
@@ -856,7 +917,8 @@ fn highlight(inst: &mut Instance, base: usize, len: usize) {
                 // Unordered and ordered list markers.
                 b'-' | b'+' | b'*' | b'0'..=b'9' => {
                     let p = md.list_marker_end(ptr);
-                    if p > ptr && p < end && is_space(src[p]) {
+                    // SAFETY: `p` is below the end.
+                    if p > ptr && p < end && is_space(unsafe { src.byte_unchecked(p) }) {
                         if list_start == NO_LIST {
                             list_start = ptr;
                         }
@@ -912,7 +974,8 @@ fn highlight(inst: &mut Instance, base: usize, len: usize) {
                         inst.g_end = save;
                         inst.g_ptr = abs(html_end);
                         recs = Recs::load(inst);
-                        md.src = Src(input(inst, base, len));
+                        // SAFETY: as above; memory may have moved during the call.
+                        md.src = unsafe { Input::new(inst, base, len) };
                         ptr = html_end;
                         continue;
                     }
@@ -952,7 +1015,8 @@ fn highlight(inst: &mut Instance, base: usize, len: usize) {
                     let mut q = ptr + 1;
                     loop {
                         q = md.find_special_esc(q, p, b'[');
-                        if q >= p || src[q] == b'[' {
+                        // SAFETY: `q` is below `p`, a position in the input.
+                        if q >= p || unsafe { src.byte_unchecked(q) } == b'[' {
                             break;
                         }
                         q += 2;
@@ -962,7 +1026,11 @@ fn highlight(inst: &mut Instance, base: usize, len: usize) {
                         recs.tok(tok::NONE, ptr);
                         continue;
                     }
-                    if p + 1 < line_cache && src[p] == b']' && src[p + 1] == b'(' {
+                    // SAFETY: `p + 1` is below the line end.
+                    if p + 1 < line_cache
+                        && unsafe { src.byte_unchecked(p) } == b']'
+                        && unsafe { src.byte_unchecked(p + 1) } == b'('
+                    {
                         let q = md.find_special(p + 2, line_cache, b')');
                         if q < line_cache {
                             link(&mut recs, ptr, p, q);
@@ -978,7 +1046,8 @@ fn highlight(inst: &mut Instance, base: usize, len: usize) {
 
             // Strong/emphasis spans.
             b'*' | b'_' => {
-                let count = if ptr + 1 < end && src[ptr + 1] == c {
+                // SAFETY: `ptr + 1` is below the end.
+                let count = if ptr + 1 < end && unsafe { src.byte_unchecked(ptr + 1) } == c {
                     2
                 } else {
                     1
@@ -1001,7 +1070,8 @@ fn highlight(inst: &mut Instance, base: usize, len: usize) {
                 }
                 // a `_` run that did not open emphasis is plain text as a whole
                 if c == b'_' {
-                    while ptr < end && src[ptr] == b'_' {
+                    // SAFETY: `ptr` is below the end.
+                    while ptr < end && unsafe { src.byte_unchecked(ptr) } == b'_' {
                         ptr += 1;
                     }
                     recs.tok(tok::NONE, ptr);
@@ -1012,7 +1082,8 @@ fn highlight(inst: &mut Instance, base: usize, len: usize) {
             // Backslash escape: only ASCII punctuation can be escaped.
             b'\\' => {
                 ptr += 1;
-                if ptr < end && is_punct(src[ptr]) {
+                // SAFETY: `ptr` is below the end.
+                if ptr < end && is_punct(unsafe { src.byte_unchecked(ptr) }) {
                     ptr += 1;
                     recs.tok(tok::STRING_ESCAPE, ptr);
                 } else {
@@ -1044,19 +1115,20 @@ fn html_end(md: &Md, inst: &mut Instance, base: usize, lhs: usize, line_end: usi
     if p >= end {
         return p;
     }
-    let c = src[p];
+    // SAFETY: `p` is below the end.
+    let c = unsafe { src.byte_unchecked(p) };
     if !(c == b'/' || c == b'!' || c == b'?' || is_ident_start(c) || c == b':') {
         return p;
     }
     // HTML comments need their real terminator, not the first `>`.
-    if lhs + 4 <= end && &src.0[lhs..lhs + 4] == b"<!--" {
+    if lhs + 4 <= end && &src.bytes()[lhs..lhs + 4] == b"<!--" {
         p = lhs + 4;
         loop {
             p = md.find_byte(p, b'-');
             if p >= end {
                 break;
             }
-            if p + 3 <= end && &src.0[p..p + 3] == b"-->" {
+            if p + 3 <= end && &src.bytes()[p..p + 3] == b"-->" {
                 return p + 3;
             }
             p += 1;
@@ -1066,11 +1138,12 @@ fn html_end(md: &Md, inst: &mut Instance, base: usize, lhs: usize, line_end: usi
     // The tag ends at the first `>` outside quotes on the line; without
     // one, nothing at or after `p` closes a tag.
     loop {
-        p = find_any(src.0, p, line_end, *b">\"'");
+        p = find_any(src, p, line_end, *b">\"'");
         if p >= line_end {
             return 0;
         }
-        let c = src[p];
+        // SAFETY: `p` is below the line end.
+        let c = unsafe { src.byte_unchecked(p) };
         p += 1;
         if c == b'>' {
             break;
@@ -1082,7 +1155,8 @@ fn html_end(md: &Md, inst: &mut Instance, base: usize, lhs: usize, line_end: usi
         p += 1;
     }
     // raw-text elements: run through the close tag the HTML lexer stops at
-    if is_ident_start(src[lhs + 1]) {
+    // SAFETY: `lhs + 1` held the first byte checked above, below the end.
+    if is_ident_start(unsafe { src.byte_unchecked(lhs + 1) }) {
         let name_end = inst.f_htmlNameEnd(abs(lhs + 1));
         let kind = inst.f_rawTextKind(abs(lhs + 1), name_end);
         if kind != 0 {

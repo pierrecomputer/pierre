@@ -3,6 +3,7 @@
 //! regexp scans, matching `$nextToken` in `src/langs/js.wat`. JSX and TSRX
 //! are not supported; this is the `ts`/`js` feature set.
 
+use super::input::Input;
 use super::scan;
 use crate::lex_ids as lex;
 
@@ -413,25 +414,38 @@ static KEYWORD_TABLE: [KeywordSlot; 256] = {
     t
 };
 
-/// Keyword and contextual-word kind for the identifier `src[lhs..rhs]`, or
-/// `None`. Reads 16 bytes at `lhs`, which the input slack allows.
+/// Keyword and contextual-word kind for the identifier `[lhs, rhs)`, or
+/// `None`.
 #[inline(always)]
-pub(super) fn keyword(src: &[u8], lhs: usize, rhs: usize) -> Option<u8> {
+pub(super) fn keyword(src: Input, lhs: usize, rhs: usize) -> Option<u8> {
     let len = rhs - lhs;
     if len.wrapping_sub(2) > 8 {
         return None;
     }
-    // SAFETY: the input extends at least 16 bytes past every token.
-    unsafe {
-        let at = |i: usize| *src.get_unchecked(i);
-        let slot = KEYWORD_TABLE[keyword_hash(at(lhs), at(lhs + 1), at(rhs - 1), len)];
-        if slot.kind == lex::INVALID {
-            return None;
-        }
-        let word = src.as_ptr().add(lhs).cast::<u128>().read_unaligned();
-        let word = u128::from_le(word) & (u128::MAX >> (128 - 8 * len));
-        (slot.word == word).then_some(slot.kind)
+    // SAFETY: the identifier lies inside the input, so its last byte and
+    // the 16 bytes from `lhs` lie inside the input plus slack.
+    let (lo, hi, last) = unsafe {
+        (
+            src.word_unchecked(lhs),
+            src.word_unchecked(lhs + 8),
+            src.byte_unchecked(rhs - 1),
+        )
+    };
+    keyword_word(len, last, u128::from(lo) | u128::from(hi) << 64)
+}
+
+/// Keyword and contextual-word kind for an identifier of 2 to 10 bytes,
+/// given its last byte and the 16 bytes from its start as a little-endian
+/// integer, or `None`.
+#[inline(always)]
+pub(super) fn keyword_word(len: usize, last: u8, word: u128) -> Option<u8> {
+    debug_assert!((2..=10).contains(&len));
+    let slot = KEYWORD_TABLE[keyword_hash(word as u8, (word >> 8) as u8, last, len)];
+    if slot.kind == lex::INVALID {
+        return None;
     }
+    let word = word & (u128::MAX >> (128 - 8 * len));
+    (slot.word == word).then_some(slot.kind)
 }
 
 /// Unicode identifier classes for non-ASCII code points, as the wasm host's

@@ -12,8 +12,9 @@
 //! tests only the rules that can match it, in the WAT's order.
 
 use super::Lexer;
+use super::input::Input;
+use super::recs::Recs;
 use super::scan;
-use crate::Rec;
 use crate::generated::Instance;
 use crate::simd::V;
 use crate::token_ids as tok;
@@ -104,62 +105,6 @@ fn is_digit(c: u8) -> bool {
     c.wrapping_sub(b'0') <= 9
 }
 
-/// The byte at `p`.
-#[inline(always)]
-fn at(src: &[u8], p: usize) -> u8 {
-    debug_assert!(p < src.len());
-    // SAFETY: every position read lies at most 16 bytes past the input
-    // end, inside the input slack `src` covers.
-    unsafe { *src.get_unchecked(p) }
-}
-
-/// Token records written through a moving pointer into `inst.ext.recs`,
-/// the way the translated `$emitTok` and `$emitGap` write them: a token
-/// extends the last record when its color matches, and whitespace extends
-/// the last record whatever its color. The vector has room for one record
-/// per input byte and every record covers at least one byte, so running
-/// out of room means a lexer bug, which traps.
-#[derive(Clone, Copy)]
-struct Out {
-    cur: *mut Rec,
-    limit: *mut Rec,
-    /// Token of the last record, or `u32::MAX` when there is none.
-    last: u32,
-}
-
-impl Out {
-    /// Append a non-empty token ending at `end` (`$emitTok`).
-    #[inline(always)]
-    fn tok(&mut self, hl: u32, end: usize) {
-        // SAFETY: `cur` stays within the vector's capacity: a merge steps
-        // back over the last record, and the trap stops a write at the
-        // limit.
-        unsafe {
-            self.cur = self.cur.sub((self.last == hl) as usize);
-            if self.cur == self.limit {
-                crate::rt::trap();
-            }
-            self.cur.write(Rec {
-                end: end as u32,
-                token: hl,
-            });
-            self.cur = self.cur.add(1);
-        }
-        self.last = hl;
-    }
-
-    /// Whitespace up to `end` extends the last record (`$emitGap`).
-    ///
-    /// # Safety
-    ///
-    /// A record must exist.
-    #[inline(always)]
-    unsafe fn extend(&mut self, end: usize) {
-        // SAFETY: the caller guarantees the record before `cur`.
-        unsafe { (*self.cur.sub(1)).end = end as u32 };
-    }
-}
-
 /// Identifier bytes (letters, digits, `_`, `-`, any byte from 128) as two
 /// nibble tables: byte `b` is one when `IDENT_HI[b >> 4] & IDENT_LO[b & 15]`
 /// is nonzero. Each bit stands for a group of high nibbles that admit the
@@ -211,30 +156,29 @@ const IDENT_LO: [u8; 16] = {
 /// byte from 128) from `p` (`$scanIdentRun` with `-`). The NUL after the
 /// input ends every run by the input end.
 #[inline(always)]
-fn ident_run(src: &[u8], mut p: usize) -> usize {
-    // SAFETY: the run stops at the NUL after the input, so each 16-byte
-    // load starts at or before it, inside the slack.
-    unsafe {
-        let hi_t = V::from_array(&IDENT_HI);
-        let lo_t = V::from_array(&IDENT_LO);
-        loop {
-            let v = V::load(src.as_ptr().add(p));
-            let hi = hi_t.lookup(v.shr::<4>());
-            let lo = lo_t.lookup(v.and(V::splat(15)));
-            let stop = hi.and(lo).eq(V::zero()).lanes();
-            if stop.any() {
-                return p + stop.first();
-            }
-            p += 16;
+fn ident_run(src: Input, mut p: usize) -> usize {
+    let hi_t = V::from_array(&IDENT_HI);
+    let lo_t = V::from_array(&IDENT_LO);
+    loop {
+        // SAFETY: `p` is at most the input length (the NUL after the input ends every run), so the
+        // 16 bytes lie inside the slack.
+        let v = unsafe { src.vec_unchecked(p) };
+        let hi = hi_t.lookup(v.shr::<4>());
+        let lo = lo_t.lookup(v.and(V::splat(15)));
+        let stop = hi.and(lo).eq(V::zero()).lanes();
+        if stop.any() {
+            return p + stop.first();
         }
+        p += 16;
     }
 }
 
 /// The end of the whitespace run from `p` (`$scanWhitespace`). The NUL
 /// after the input ends every run by the input end.
 #[inline(always)]
-fn space_end(src: &[u8], mut p: usize) -> usize {
-    while is_space(at(src, p)) {
+fn space_end(src: Input, mut p: usize) -> usize {
+    // SAFETY: `p` is at most the input length: the NUL after the input ends the run.
+    while is_space(unsafe { src.byte_unchecked(p) }) {
         p += 1;
     }
     p
@@ -243,9 +187,10 @@ fn space_end(src: &[u8], mut p: usize) -> usize {
 /// The end of a name from `p`: identifier bytes, `-`, and backslash
 /// escapes (`$cssScanIdent`).
 #[inline(always)]
-fn css_scan_ident(src: &[u8], end: usize, p: usize) -> usize {
+fn css_scan_ident(src: Input, end: usize, p: usize) -> usize {
     let p = ident_run(src, p);
-    if at(src, p) != b'\\' {
+    // SAFETY: `p` ends an identifier run, at most the input length.
+    if unsafe { src.byte_unchecked(p) } != b'\\' {
         return p;
     }
     core::hint::cold_path();
@@ -258,15 +203,15 @@ fn css_scan_ident(src: &[u8], end: usize, p: usize) -> usize {
 /// (`$cssScanIdent`, `$scanHexRun`, `$utf8SpanEnd`).
 #[cold]
 #[inline(never)]
-fn ident_escapes(src: &[u8], end: usize, mut p: usize) -> usize {
+fn ident_escapes(src: Input, end: usize, mut p: usize) -> usize {
     loop {
-        if p + 1 >= end || at(src, p) != b'\\' || at(src, p + 1).wrapping_sub(10) <= 3 {
+        if p + 1 >= end || src.byte(p) != b'\\' || src.byte(p + 1).wrapping_sub(10) <= 3 {
             return p;
         }
         let mut e = hex_run(src, end, p + 1, 6);
         if e == p + 1 {
-            e = scan::utf8_span_end(src, p + 2, end);
-        } else if e < end && (at(src, e) == 32 || at(src, e) == 9) {
+            e = scan::utf8_span_end(src.bytes(), p + 2, end);
+        } else if e < end && (src.byte(e) == 32 || src.byte(e) == 9) {
             e += 1;
         }
         p = ident_run(src, e);
@@ -276,9 +221,9 @@ fn ident_escapes(src: &[u8], end: usize, mut p: usize) -> usize {
 /// The end of at most `max` hex digits from `p`, bounded by `end`
 /// (`$scanHexRun`).
 #[inline(always)]
-fn hex_run(src: &[u8], end: usize, mut p: usize, max: usize) -> usize {
+fn hex_run(src: Input, end: usize, mut p: usize, max: usize) -> usize {
     let stop = (p + max).min(end);
-    while p < stop && at(src, p).is_ascii_hexdigit() {
+    while p < stop && src.byte(p).is_ascii_hexdigit() {
         p += 1;
     }
     p
@@ -288,10 +233,11 @@ fn hex_run(src: &[u8], end: usize, mut p: usize, max: usize) -> usize {
 /// digits, dots, exponents with their sign, then `%` or one name
 /// (`$cssScanNumber`). The NUL after the input stops every part.
 #[inline(always)]
-fn css_scan_number(src: &[u8], end: usize, mut p: usize) -> usize {
+fn css_scan_number(src: Input, end: usize, mut p: usize) -> usize {
     let mut prev: u8 = 0;
     loop {
-        let c = at(src, p);
+        // SAFETY: `p` is at most the input length: the NUL after the input ends the number.
+        let c = unsafe { src.byte_unchecked(p) };
         let consume = is_digit(c)
             || c == b'.'
             || c | 32 == b'e'
@@ -302,7 +248,8 @@ fn css_scan_number(src: &[u8], end: usize, mut p: usize) -> usize {
         prev = c;
         p += 1;
     }
-    let c = at(src, p);
+    // SAFETY: `p` is at most the input length.
+    let c = unsafe { src.byte_unchecked(p) };
     if c == b'%' {
         p + 1
     } else if ident_start(c) {
@@ -316,15 +263,16 @@ fn css_scan_number(src: &[u8], end: usize, mut p: usize) -> usize {
 /// tokens; returns its end. A raw CR or LF ends it unconsumed
 /// (`$cssString`, `$lexEscapeEnd`).
 #[inline(always)]
-fn css_string(src: &[u8], end: usize, mut out: Out, q: u8, lhs: usize) -> (usize, Out) {
+fn css_string(src: Input, end: usize, mut out: Recs, q: u8, lhs: usize) -> (usize, Recs) {
     let mut seg = lhs;
     let mut p = lhs + 1;
     loop {
-        p = scan::string_special(src, p, end, q);
+        p = scan::string_special(src.bytes(), p, end, q);
         if p >= end {
             break;
         }
-        let c = at(src, p);
+        // SAFETY: `p` is below `end`.
+        let c = unsafe { src.byte_unchecked(p) };
         if c == q {
             p += 1;
             break;
@@ -338,12 +286,12 @@ fn css_string(src: &[u8], end: usize, mut out: Out, q: u8, lhs: usize) -> (usize
         let mut e = hex_run(src, end, p + 1, 6);
         if e == p + 1 {
             // `$lexEscapeEnd`.
-            e = scan::utf8_span_end(src, p + 2, end);
-            if e == p + 2 && at(src, p + 1) == 13 && e < end && at(src, e) == 10 {
+            e = scan::utf8_span_end(src.bytes(), p + 2, end);
+            if e == p + 2 && src.byte(p + 1) == 13 && e < end && src.byte(e) == 10 {
                 e += 1;
             }
         } else {
-            e = scan::utf8_span_end(src, e, end);
+            e = scan::utf8_span_end(src.bytes(), e, end);
         }
         out.tok(tok::STRING_ESCAPE, e);
         p = e;
@@ -359,8 +307,8 @@ fn css_string(src: &[u8], end: usize, mut out: Out, q: u8, lhs: usize) -> (usize
 /// `or`, `not`, `only`), or in scss and sass a control word (`if`, `in`,
 /// `to`, `from`, `through`) (`$cssIsQueryOp`).
 #[inline(always)]
-fn css_is_query_op<const D: u32>(src: &[u8], lhs: usize, rhs: usize) -> bool {
-    let w = &src[lhs..rhs];
+fn css_is_query_op<const D: u32>(src: Input, lhs: usize, rhs: usize) -> bool {
+    let w = &src.bytes()[lhs..rhs];
     let pre = D >= SCSS;
     match rhs - lhs {
         2 => w == b"or" || (pre && (w == b"if" || w == b"in" || w == b"to")),
@@ -375,9 +323,9 @@ fn css_is_query_op<const D: u32>(src: &[u8], lhs: usize, rhs: usize) -> bool {
 /// or `)` (`$cssScanUrlBody`).
 #[cold]
 #[inline(never)]
-fn css_scan_url_body(src: &[u8], end: usize, mut p: usize) -> usize {
+fn css_scan_url_body(src: Input, end: usize, mut p: usize) -> usize {
     while p < end {
-        let c = at(src, p);
+        let c = src.byte(p);
         if c.wrapping_sub(9) <= 4 || c == 32 || c == 34 || c == 39 || c == 41 {
             break;
         }
@@ -396,11 +344,11 @@ const DECIDE_LO: [u8; 16] = [0, 0, 8, 0, 0, 0, 0, 8, 0, 0, 1 | 4, 2 | 4, 0, 1 | 
 /// line break, `{`, `}`, `;`, `/`, a quote, or `:`; or `stop`. The wide
 /// scan of `$cssDecide`.
 #[inline(always)]
-fn decide_special(src: &[u8], mut p: usize, stop: usize) -> usize {
+fn decide_special(src: Input, mut p: usize, stop: usize) -> usize {
     while p < stop {
-        // SAFETY: `p` is below `stop`, at most the input end, so the
-        // 16-byte load stays inside the slack.
-        let w = unsafe { V::load(src.as_ptr().add(p)) };
+        // SAFETY: `p` is below `stop`, at most the input length, so the 16 bytes lie inside the
+        // slack.
+        let w = unsafe { src.vec_unchecked(p) };
         let hi = V::from_array(&DECIDE_HI).lookup(w.shr::<4>());
         let lo = V::from_array(&DECIDE_LO).lookup(w.and(V::splat(15)));
         let hit = hi.test(lo).lanes();
@@ -418,7 +366,7 @@ fn decide_special(src: &[u8], mut p: usize, stop: usize) -> usize {
 /// [`css_decide_at_end`] decides. `depth` counts open blocks. The
 /// `name: ` fast path of the WAT runs at the call site (`$cssDecide`).
 #[inline(always)]
-fn css_decide<const D: u32>(src: &[u8], end: usize, start: usize, depth: u32) -> bool {
+fn css_decide<const D: u32>(src: Input, end: usize, start: usize, depth: u32) -> bool {
     let mut p = start;
     let mut stop = end;
     // The first `:`: 1 before a blank or the end, 2 otherwise.
@@ -430,14 +378,17 @@ fn css_decide<const D: u32>(src: &[u8], end: usize, start: usize, depth: u32) ->
         if p >= stop {
             break 'decl;
         }
-        let c = at(src, p);
+        // SAFETY: `p` is below `stop`.
+        let c = unsafe { src.byte_unchecked(p) };
         if c == 10 || c == 13 {
             stop = p;
             break 'decl;
         }
         if c == b'{' {
             if p > start
-                && ((at(src, p - 1) == b'#' && D >= SCSS) || (at(src, p - 1) == b'@' && D == LESS))
+                // SAFETY: `p - 1` lies at or after `start`, inside the input.
+                && ((unsafe { src.byte_unchecked(p - 1) } == b'#' && D >= SCSS)
+                    || (unsafe { src.byte_unchecked(p - 1) } == b'@' && D == LESS))
             {
                 interp += 1;
                 p += 1;
@@ -455,22 +406,29 @@ fn css_decide<const D: u32>(src: &[u8], end: usize, start: usize, depth: u32) ->
         }
         if c == b':' {
             if colon == 0 {
-                let n = if p + 1 < stop { at(src, p + 1) } else { 32 };
+                let n = if p + 1 < stop {
+                    // SAFETY: `p + 1` is below `stop`.
+                    unsafe { src.byte_unchecked(p + 1) }
+                } else {
+                    32
+                };
                 colon = if is_space(n) { 1 } else { 2 };
             }
             p += 1;
             continue;
         }
         if c == b'/' {
-            if p + 1 < end && at(src, p + 1) == b'*' {
+            // SAFETY: `p + 1` is below `end`.
+            if p + 1 < end && unsafe { src.byte_unchecked(p + 1) } == b'*' {
                 let line_break;
                 (p, line_break) = decide_skip_comment(src, stop, p + 2);
                 if line_break {
                     stop = p;
                     break 'decl;
                 }
-            } else if D != CSS && p + 1 < stop && at(src, p + 1) == b'/' {
-                p = scan::line_end(src, p, stop);
+            // SAFETY: `p + 1` is below `stop`.
+            } else if D != CSS && p + 1 < stop && unsafe { src.byte_unchecked(p + 1) } == b'/' {
+                p = scan::line_end(src.bytes(), p, stop);
             } else {
                 p += 1;
             }
@@ -486,20 +444,20 @@ fn css_decide<const D: u32>(src: &[u8], end: usize, start: usize, depth: u32) ->
 /// position of a line break inside it and `true` (`$cssDecide`).
 #[cold]
 #[inline(never)]
-fn decide_skip_comment(src: &[u8], stop: usize, mut p: usize) -> (usize, bool) {
+fn decide_skip_comment(src: Input, stop: usize, mut p: usize) -> (usize, bool) {
     loop {
         if p >= stop {
             return (p, false);
         }
-        p = scan::find3(src, p, stop, b'*', 10, 13);
+        p = scan::find3(src.bytes(), p, stop, b'*', 10, 13);
         if p >= stop {
             return (p, false);
         }
-        let c = at(src, p);
+        let c = src.byte(p);
         if c == 10 || c == 13 {
             return (p, true);
         }
-        if p + 1 < stop && at(src, p + 1) == b'/' {
+        if p + 1 < stop && src.byte(p + 1) == b'/' {
             return (p + 2, false);
         }
         p += 1;
@@ -511,16 +469,16 @@ fn decide_skip_comment(src: &[u8], stop: usize, mut p: usize) -> (usize, bool) {
 /// (`$cssDecide`).
 #[cold]
 #[inline(never)]
-fn decide_skip_string(src: &[u8], stop: usize, mut p: usize, q: u8) -> usize {
+fn decide_skip_string(src: Input, stop: usize, mut p: usize, q: u8) -> usize {
     loop {
         if p >= stop {
             return p;
         }
-        p = scan::string_special(src, p, stop, q);
+        p = scan::string_special(src.bytes(), p, stop, q);
         if p >= stop {
             return p;
         }
-        let c = at(src, p);
+        let c = src.byte(p);
         if c == q {
             return p + 1;
         }
@@ -534,7 +492,7 @@ fn decide_skip_string(src: &[u8], stop: usize, mut p: usize, q: u8) -> usize {
 /// Decide a statement from `start` that reached a line break or the end
 /// without a delimiter, from the shape of its line: `true` for a selector
 /// (`$cssDecideAtEnd`).
-fn css_decide_at_end(src: &[u8], start: usize, depth: u32, colon: u32, stop: usize) -> bool {
+fn css_decide_at_end(src: Input, start: usize, depth: u32, colon: u32, stop: usize) -> bool {
     if colon == 0 {
         return true;
     }
@@ -546,25 +504,29 @@ fn css_decide_at_end(src: &[u8], start: usize, depth: u32, colon: u32, stop: usi
     }
     let mut p = start;
     while p < stop {
-        let c = at(src, p);
+        // SAFETY: `p` is below `stop`.
+        let c = unsafe { src.byte_unchecked(p) };
         if !(ident_start(c) || c == b'-' || is_digit(c)) {
             break;
         }
         p += 1;
     }
     while p < stop {
-        let c = at(src, p);
+        // SAFETY: `p` is below `stop`.
+        let c = unsafe { src.byte_unchecked(p) };
         if c == 10 || c == 13 || !is_space(c) {
             break;
         }
         p += 1;
     }
-    if at(src, p) != b':' {
+    // SAFETY: `p` is at most `stop`, at most the input length.
+    if unsafe { src.byte_unchecked(p) } != b':' {
         return true;
     }
     let find = |x: u8| {
         let mut q = p;
-        while q < stop && at(src, q) != x {
+        // SAFETY: `q` is below `stop`.
+        while q < stop && unsafe { src.byte_unchecked(q) } != x {
             q += 1;
         }
         q
@@ -574,7 +536,7 @@ fn css_decide_at_end(src: &[u8], start: usize, depth: u32, colon: u32, stop: usi
 
 /// The state an at-rule keyword sets for its prelude.
 struct AtRule {
-    out: Out,
+    out: Recs,
     end: usize,
     mode: u32,
     namespace: bool,
@@ -585,15 +547,21 @@ struct AtRule {
 /// and the prelude state it sets. In less, `@name: value` declares a
 /// variable and `@name()` calls a detached ruleset (`$hlCssImpl`).
 #[inline(always)]
-fn at_rule<const D: u32>(src: &[u8], end: usize, mut out: Out, lhs: usize) -> AtRule {
+fn at_rule<const D: u32>(src: Input, end: usize, mut out: Recs, lhs: usize) -> AtRule {
     let p = css_scan_ident(src, end, lhs + 1);
     if D == LESS {
         let mut s = p;
-        while s < end && (at(src, s) == 32 || at(src, s) == 9) {
+        while s < end
+            // SAFETY: `s` is below `end`.
+            && (unsafe { src.byte_unchecked(s) } == 32 || unsafe { src.byte_unchecked(s) } == 9)
+        {
             s += 1;
         }
-        if (s < end && at(src, s) == b':')
-            || (p + 1 < end && at(src, p) == b'(' && at(src, p + 1) == b')')
+        // SAFETY: `s` and `p + 1` are below `end`.
+        if (s < end && unsafe { src.byte_unchecked(s) } == b':')
+            || (p + 1 < end
+                && unsafe { src.byte_unchecked(p) } == b'('
+                && unsafe { src.byte_unchecked(p + 1) } == b')')
         {
             out.tok(tok::VARIABLE, p);
             return AtRule {
@@ -605,7 +573,7 @@ fn at_rule<const D: u32>(src: &[u8], end: usize, mut out: Out, lhs: usize) -> At
             };
         }
     }
-    let w = &src[lhs..p];
+    let w = &src.bytes()[lhs..p];
     let namespace = w.len() == 10 && w[1..].iter().zip(b"namespace").all(|(&a, &b)| a | 32 == b);
     let mut mode = PRELUDE;
     let mut fn_prelude = false;
@@ -632,11 +600,12 @@ const URL: u32 = u32::MAX;
 
 /// Whether `[lhs, rhs)`, glued to `(`, is `url` in any case.
 #[inline(always)]
-fn is_url(src: &[u8], lhs: usize, rhs: usize) -> bool {
+fn is_url(src: Input, lhs: usize, rhs: usize) -> bool {
     rhs - lhs == 3
-        && at(src, lhs) | 32 == b'u'
-        && at(src, lhs + 1) | 32 == b'r'
-        && at(src, lhs + 2) | 32 == b'l'
+        // SAFETY: `lhs + 2` is below `rhs`, inside the input.
+        && unsafe { src.byte_unchecked(lhs) } | 32 == b'u'
+        && unsafe { src.byte_unchecked(lhs + 1) } | 32 == b'r'
+        && unsafe { src.byte_unchecked(lhs + 2) } | 32 == b'l'
 }
 
 /// The color of a name `[lhs, rhs)` in an at-rule prelude, and the
@@ -647,7 +616,7 @@ fn is_url(src: &[u8], lhs: usize, rhs: usize) -> bool {
 /// (`$hlCssImpl`, `$cssIsQueryOp`).
 #[inline(never)]
 fn prelude_word<const D: u32>(
-    src: &[u8],
+    src: Input,
     end: usize,
     lhs: usize,
     rhs: usize,
@@ -661,7 +630,8 @@ fn prelude_word<const D: u32>(
     if fn_prelude {
         return (tok::FUNCTION, namespace, false);
     }
-    if at(src, rhs) == b'(' {
+    // SAFETY: `rhs` ends a name, at most the input length.
+    if unsafe { src.byte_unchecked(rhs) } == b'(' {
         let hl = if is_url(src, lhs, rhs) {
             URL
         } else {
@@ -673,10 +643,12 @@ fn prelude_word<const D: u32>(
         return (tok::NAMESPACE, false, fn_prelude);
     }
     let mut p = rhs;
-    while p < end && is_space(at(src, p)) {
+    // SAFETY: `p` is below `end`.
+    while p < end && is_space(unsafe { src.byte_unchecked(p) }) {
         p += 1;
     }
-    let hl = if at(src, p) == b':' {
+    // SAFETY: `p` is at most `end`.
+    let hl = if unsafe { src.byte_unchecked(p) } == b':' {
         tok::PROPERTY
     } else if css_is_query_op::<D>(src, lhs, rhs) {
         tok::KEYWORD_OPERATOR
@@ -691,18 +663,17 @@ fn prelude_word<const D: u32>(
 /// loop (`$hlCssImpl`, `$cssScanUrlBody`).
 #[cold]
 #[inline(never)]
-fn url(src: &[u8], end: usize, mut out: Out, rhs: usize) -> (usize, Out) {
+fn url(src: Input, end: usize, mut out: Recs, rhs: usize) -> (usize, Recs) {
     out.tok(tok::FUNCTION, rhs);
     let mut p = rhs + 1;
     out.tok(tok::PUNCTUATION_BRACKET, p);
     let open = p;
-    while p < end && is_space(at(src, p)) {
+    while p < end && is_space(src.byte(p)) {
         p += 1;
     }
-    let c = at(src, p);
+    let c = src.byte(p);
     if p < end && !(c == b')' || c == 34 || c == 39) {
-        // SAFETY: the bracket's record exists.
-        unsafe { out.extend(p) };
+        out.extend(p);
         let e = css_scan_url_body(src, end, p);
         out.tok(tok::CONSTANT_BUILTIN, e);
         return (e, out);
@@ -713,39 +684,21 @@ fn url(src: &[u8], end: usize, mut out: Out, rhs: usize) -> (usize, Out) {
 /// Lex the input at `base` as dialect `D` (`$hlCss`, `$hlLess`, `$hlScss`,
 /// `$hlSass`).
 fn highlight<const D: u32>(inst: &mut Instance, base: usize, len: usize) {
-    let mem_ptr = inst.mem.bytes().as_ptr();
-    // SAFETY: `base..base + len + 96` lies inside lexer memory, and this
-    // lexer calls no translated function that could reallocate it.
-    let src: &[u8] = unsafe { core::slice::from_raw_parts(mem_ptr.add(base), len + 96) };
-    let v = &mut inst.ext.recs;
-    let rp = v.as_mut_ptr();
-    // SAFETY: the length and capacity bound the vector's allocation.
-    let mut out = unsafe {
-        Out {
-            cur: rp.add(v.len()),
-            limit: rp.add(v.capacity()),
-            last: v.last().map_or(u32::MAX, |r| r.token),
-        }
-    };
+    // SAFETY: `base..base + len + SLACK` lies inside lexer memory, and this
+    // lexer calls no translated function that could move it.
+    let src = unsafe { Input::new(inst, base, len) };
+    let mut out = Recs::load(inst);
     // `$lexEmitLeadingContinuation`, then the leading whitespace: both are
     // gaps, so with no record yet they make one plain record.
-    let p = space_end(src, scan::utf8_span_end(src, 0, len));
-    if p > 0 {
-        if out.cur == rp {
-            out.tok(tok::NONE, p);
-        } else {
-            // SAFETY: a record exists.
-            unsafe { out.extend(p) };
-        }
-    }
+    let p = space_end(src, scan::utf8_span_end(src.bytes(), 0, len));
+    out.gap(0, p);
     let out = lex::<D>(src, len, out, p);
-    // SAFETY: the records before `out.cur` are written, within capacity.
-    unsafe { v.set_len(out.cur.offset_from(rp) as usize) };
+    out.store(inst);
 }
 
 /// The lexer loop for every dialect, from the start of the input
 /// (`$hlCssImpl` with a zero state: no template part and no streaming).
-fn lex<const D: u32>(src: &[u8], end: usize, mut out: Out, mut p: usize) -> Out {
+fn lex<const D: u32>(src: Input, end: usize, mut out: Recs, mut p: usize) -> Recs {
     let mut mode = SELECTOR;
     // At a statement start: classify before dispatching.
     let mut decide = true;
@@ -766,17 +719,19 @@ fn lex<const D: u32>(src: &[u8], end: usize, mut out: Out, mut p: usize) -> Out 
     // emits at least one record, so a gap here always has a record to
     // extend.
     loop {
-        let mut c = at(src, p);
+        // SAFETY: `p` is at most the input length: every token ends there or before.
+        let mut c = unsafe { src.byte_unchecked(p) };
         if is_space(c) {
             let gap = p;
             p = space_end(src, p + 1);
             // The indented syntax ends a statement at its line break.
-            if D == SASS && src[gap..p].iter().any(|&b| b == 10 || b == 13) {
+            if D == SASS && src.bytes()[gap..p].iter().any(|&b| b == 10 || b == 13) {
                 decide = true;
             }
             // SAFETY: a gap here follows a pass, which emitted a record.
-            unsafe { out.extend(p) };
-            c = at(src, p);
+            unsafe { out.extend_unchecked(p) };
+            // SAFETY: `p` ends a whitespace run, at most the input length.
+            c = unsafe { src.byte_unchecked(p) };
         }
         if p >= end {
             break;
@@ -784,18 +739,19 @@ fn lex<const D: u32>(src: &[u8], end: usize, mut out: Out, mut p: usize) -> Out 
         let lhs = p;
         // The second byte; the WAT reads 0 past the end, and the NUL after
         // the input is 0. Read only by the rules that need it.
-        let c2 = || at(src, lhs + 1);
+        // SAFETY: `lhs` is below the input length, so `lhs + 1` is at most it.
+        let c2 = || unsafe { src.byte_unchecked(lhs + 1) };
 
         // Comments, in any mode, also while a decision is pending; `//`
         // only in the preprocessor dialects.
         if c == b'/' {
             if c2() == b'*' {
-                p = scan::block_comment_end(src, p + 2, end);
+                p = scan::block_comment_end(src.bytes(), p + 2, end);
                 out.tok(tok::COMMENT, p);
                 continue;
             }
             if D != CSS && c2() == b'/' {
-                p = scan::line_end(src, p + 2, end);
+                p = scan::line_end(src.bytes(), p + 2, end);
                 out.tok(tok::COMMENT, p);
                 continue;
             }
@@ -832,14 +788,21 @@ fn lex<const D: u32>(src: &[u8], end: usize, mut out: Out, mut p: usize) -> Out 
             } else {
                 // The indented syntax nests by indentation: a statement
                 // that does not start its line sits inside a block.
-                let sass_depth =
-                    D == SASS && p > 0 && (at(src, p - 1) == 32 || at(src, p - 1) == 9);
+                let sass_depth = D == SASS
+                    && p > 0
+                    // SAFETY: `p - 1` lies inside the input (`p > 0`).
+                    && (unsafe { src.byte_unchecked(p - 1) } == 32
+                        || unsafe { src.byte_unchecked(p - 1) } == 9);
                 let d = depth | sass_depth as u32;
                 // Inside a block, `name: ` can only open a declaration:
                 // color the property and its colon here.
                 if d != 0 && (ident_start(c) || c == b'-') {
                     let q = ident_run(src, p);
-                    if at(src, q) == b':' && at(src, q + 1) == b' ' {
+                    // SAFETY: `q` ends an identifier run, at most the input length, and `q + 1`
+                    // lies in the slack.
+                    if unsafe { src.byte_unchecked(q) } == b':'
+                        && unsafe { src.byte_unchecked(q + 1) } == b' '
+                    {
                         out.tok(
                             if c == b'-' && c2() == b'-' {
                                 tok::VARIABLE
@@ -871,10 +834,11 @@ fn lex<const D: u32>(src: &[u8], end: usize, mut out: Out, mut p: usize) -> Out 
                 if mode == SELECTOR {
                     // Element name, attribute name, or unquoted attribute
                     // value; less guards read `when`.
-                    hl = if D == LESS && &src[lhs..p] == b"when" {
+                    hl = if D == LESS && &src.bytes()[lhs..p] == b"when" {
                         tok::KEYWORD_OPERATOR
                     } else if attr == 0 {
-                        if at(src, p) == b'|' {
+                        // SAFETY: `p` ends a name, at most the input length.
+                        if unsafe { src.byte_unchecked(p) } == b'|' {
                             tok::NAMESPACE
                         } else {
                             tok::TAG
@@ -938,7 +902,10 @@ fn lex<const D: u32>(src: &[u8], end: usize, mut out: Out, mut p: usize) -> Out 
                             continue;
                         }
                     }
-                } else if is_digit(c2()) || (c2() == b'.' && is_digit(at(src, p + 2))) {
+                } else if is_digit(c2())
+                    // SAFETY: `p` is below the input length, so `p + 2` lies in the slack.
+                    || (c2() == b'.' && is_digit(unsafe { src.byte_unchecked(p + 2) }))
+                {
                     p = css_scan_number(src, end, p + 1);
                     hl = tok::NUMBER;
                 } else {
@@ -948,7 +915,9 @@ fn lex<const D: u32>(src: &[u8], end: usize, mut out: Out, mut p: usize) -> Out 
             }
             b'+' => {
                 if mode != SELECTOR
-                    && (is_digit(c2()) || (c2() == b'.' && is_digit(at(src, p + 2))))
+                    && (is_digit(c2())
+                        // SAFETY: `p` is below the input length, so `p + 2` lies in the slack.
+                        || (c2() == b'.' && is_digit(unsafe { src.byte_unchecked(p + 2) })))
                 {
                     p = css_scan_number(src, end, p + 1);
                     hl = tok::NUMBER;
@@ -1011,7 +980,8 @@ fn lex<const D: u32>(src: &[u8], end: usize, mut out: Out, mut p: usize) -> Out 
                 if mode == SELECTOR {
                     // `:pseudo` and `::pseudo`, the colons included; a bare
                     // colon is a delimiter.
-                    if at(src, p) == b':' {
+                    // SAFETY: `p` is at most the input length.
+                    if unsafe { src.byte_unchecked(p) } == b':' {
                         p += 1;
                     }
                     let mid = p;
@@ -1192,9 +1162,9 @@ fn lex<const D: u32>(src: &[u8], end: usize, mut out: Out, mut p: usize) -> Out 
 #[allow(clippy::too_many_arguments)]
 #[inline(always)]
 fn value_word<const D: u32>(
-    src: &[u8],
+    src: Input,
     end: usize,
-    out: &mut Out,
+    out: &mut Recs,
     lhs: usize,
     p: &mut usize,
     mode: u32,
@@ -1207,7 +1177,8 @@ fn value_word<const D: u32>(
         *namespace = ns;
         *fn_prelude = fp;
         hl
-    } else if at(src, rhs) == b'(' {
+    // SAFETY: `rhs` ends a name, at most the input length.
+    } else if unsafe { src.byte_unchecked(rhs) } == b'(' {
         // A name glued to `(` is a function; `url(` with an unquoted body
         // makes that body one token.
         if is_url(src, lhs, rhs) {
@@ -1224,7 +1195,8 @@ fn value_word<const D: u32>(
         return hl;
     }
     // A function name's `(` is always the next token: emit both here.
-    if hl == tok::FUNCTION && at(src, rhs) == b'(' {
+    // SAFETY: `rhs` ends a name, at most the input length.
+    if hl == tok::FUNCTION && unsafe { src.byte_unchecked(rhs) } == b'(' {
         out.tok(tok::FUNCTION, rhs);
         *p = rhs + 1;
         return tok::PUNCTUATION_BRACKET;
