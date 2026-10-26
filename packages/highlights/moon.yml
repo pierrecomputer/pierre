@@ -45,8 +45,10 @@ tasks:
   # The suite compiles the wasm from the WAT sources itself and imports the
   # glue straight from lib/, so it replaces the inherited deps and needs no
   # build.
+  # WARNING: most files compile the whole module in a setup hook, which can
+  # pass Bun's 5 s default on a loaded CI runner.
   test:
-    command: 'bun test'
+    command: 'bun test --timeout 30000'
     options:
       merge: 'replace'
 
