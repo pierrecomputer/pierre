@@ -8,8 +8,9 @@
 //! lexers' records.
 
 use super::Lexer;
+use super::input::Input;
+use super::recs::Recs;
 use super::scan;
-use crate::Rec;
 use crate::generated::Instance;
 use crate::simd::V;
 use crate::token_ids as tok;
@@ -47,15 +48,6 @@ fn jsonl(inst: &mut Instance, base: usize, len: usize) {
     highlight::<JSONL>(inst, base, len);
 }
 
-/// The byte at `p`.
-#[inline(always)]
-fn at(src: &[u8], p: usize) -> u8 {
-    debug_assert!(p < src.len());
-    // SAFETY: every position read lies at most 16 bytes past the input
-    // end, inside the input slack `src` covers.
-    unsafe { *src.get_unchecked(p) }
-}
-
 /// Whether `c` is ASCII whitespace (`$lexIsSpace`).
 #[inline(always)]
 const fn is_space(c: u8) -> bool {
@@ -81,99 +73,39 @@ fn is_ident_start(c: u8) -> bool {
     c >= 0x80 || is_letter(c) || c == b'_' || c == b'$'
 }
 
-/// Token records written through a moving pointer into `inst.ext.recs`,
-/// the way the translated `$emitTok` and `$emitGap` write them: a token
-/// extends the last record when its color matches, and whitespace extends
-/// the last record whatever its color. The vector has room for one record
-/// per input byte and every record covers at least one byte, so running
-/// out of room means a lexer bug, which traps.
-#[derive(Clone, Copy)]
-struct Out {
-    cur: *mut Rec,
-    limit: *mut Rec,
-    /// Token of the last record, or `u32::MAX` when there is none.
-    last: u32,
-}
-
-impl Out {
-    /// Append a non-empty token ending at `end` (`$emitTok`).
-    #[inline(always)]
-    fn tok(&mut self, hl: u32, end: usize) {
-        // SAFETY: `cur` stays within the vector's capacity: a merge steps
-        // back over the last record, and the trap stops a write at the
-        // limit.
-        unsafe {
-            self.cur = self.cur.sub((self.last == hl) as usize);
-            if self.cur == self.limit {
-                crate::rt::trap();
-            }
-            self.cur.write(Rec {
-                end: end as u32,
-                token: hl,
-            });
-            self.cur = self.cur.add(1);
-        }
-        self.last = hl;
-    }
-
-    /// Append a non-empty token ending at `end` whose color differs from
-    /// the last record's, so it never merges (`$emitTok`).
-    #[inline(always)]
-    fn push(&mut self, hl: u32, end: usize) {
-        debug_assert!(self.last != hl);
-        // SAFETY: the trap stops a write at the limit.
-        unsafe {
-            if self.cur == self.limit {
-                crate::rt::trap();
-            }
-            self.cur.write(Rec {
-                end: end as u32,
-                token: hl,
-            });
-            self.cur = self.cur.add(1);
-        }
-        self.last = hl;
-    }
-
-    /// Whitespace up to `end` extends the last record (`$emitGap`).
-    ///
-    /// # Safety
-    ///
-    /// A record must exist.
-    #[inline(always)]
-    unsafe fn extend(&mut self, end: usize) {
-        // SAFETY: the caller guarantees the record before `cur`.
-        unsafe { (*self.cur.sub(1)).end = end as u32 };
-    }
-}
-
 /// The end of the whitespace run from `p` (`$scanWhitespace`). The NUL
 /// after the input ends every run by the input end.
 #[inline(always)]
-fn space_end(src: &[u8], mut p: usize) -> usize {
+fn space_end(src: Input<'_>, mut p: usize) -> usize {
     // The first two bytes one by one: most gaps are a single space or a
     // line break with indentation.
-    if !SPACE[at(src, p) as usize] {
+    // SAFETY: `p` is at most the input end: whitespace runs stop at the NUL
+    // after it.
+    if !SPACE[unsafe { src.byte_unchecked(p) } as usize] {
         return p;
     }
     p += 1;
-    if !SPACE[at(src, p) as usize] {
+    // SAFETY: `p` is at most the input end: whitespace runs stop at the NUL
+    // after it.
+    if !SPACE[unsafe { src.byte_unchecked(p) } as usize] {
         return p;
     }
     p += 1;
     loop {
         // Skip spaces 8 bytes at a time, then step over one other
         // whitespace byte (TAB to CR) and go on.
-        // SAFETY: `p` lies at or before the NUL after the input, so the
-        // 8-byte read stays inside the slack.
-        let w = unsafe { src.as_ptr().add(p).cast::<u64>().read_unaligned() };
+        // SAFETY: `p` is at most the input end (the NUL after it ends the run),
+        // so its 8 bytes stay inside the slack.
+        let w = unsafe { src.word_unchecked(p) };
         let x = w ^ 0x2020_2020_2020_2020;
         if x == 0 {
             p += 8;
             continue;
         }
         p += (x.trailing_zeros() / 8) as usize;
-        if !SPACE[at(src, p) as usize] {
+        // SAFETY: `p` is at most the input end: whitespace runs stop at the NUL
+        // after it.
+        if !SPACE[unsafe { src.byte_unchecked(p) } as usize] {
             return p;
         }
         p += 1;
@@ -195,9 +127,11 @@ static SPACE: [bool; 256] = {
 /// byte from 128) from `p` (`$scanIdentRun` with `$`). The NUL after the
 /// input ends every run by the input end.
 #[inline(always)]
-fn ident_run(src: &[u8], mut p: usize) -> usize {
+fn ident_run(src: Input<'_>, mut p: usize) -> usize {
     loop {
-        let c = at(src, p);
+        // SAFETY: the run starts at or before the input end and stops at the
+        // NUL after it at the latest.
+        let c = unsafe { src.byte_unchecked(p) };
         if !(is_letter(c) || is_digit(c) || c == b'_' || c == b'$' || c >= 0x80) {
             return p;
         }
@@ -208,9 +142,10 @@ fn ident_run(src: &[u8], mut p: usize) -> usize {
 /// The end of at most `max` hex digits from `p`, bounded by `end`
 /// (`$scanHexRun`).
 #[inline(always)]
-fn hex_run(src: &[u8], end: usize, mut p: usize, max: usize) -> usize {
+fn hex_run(src: Input<'_>, end: usize, mut p: usize, max: usize) -> usize {
     let stop = (p + max).min(end);
-    while p < stop && at(src, p).is_ascii_hexdigit() {
+    // SAFETY: `p` is below `stop`, which is at most the input end.
+    while p < stop && unsafe { src.byte_unchecked(p) }.is_ascii_hexdigit() {
         p += 1;
     }
     p
@@ -219,9 +154,15 @@ fn hex_run(src: &[u8], end: usize, mut p: usize, max: usize) -> usize {
 /// The end of the escape at the backslash at `p`: one character, whole
 /// with its UTF-8 tail, and the LF of an escaped CRLF (`$lexEscapeEnd`).
 #[inline(always)]
-fn escape_end(src: &[u8], end: usize, p: usize) -> usize {
-    let mut e = scan::utf8_span_end(src, p + 2, end);
-    if e == p + 2 && at(src, p + 1) == 13 && e < end && at(src, e) == 10 {
+fn escape_end(src: Input<'_>, end: usize, p: usize) -> usize {
+    let mut e = scan::utf8_span_end(src.bytes(), p + 2, end);
+    // SAFETY: the backslash at `p` lies below the input end, so `p + 1` is
+    // at most the input end, and `e` is below it (tested).
+    if e == p + 2
+        && unsafe { src.byte_unchecked(p + 1) } == 13
+        && e < end
+        && unsafe { src.byte_unchecked(e) } == 10
+    {
         e += 1;
     }
     e
@@ -231,8 +172,8 @@ fn escape_end(src: &[u8], end: usize, p: usize) -> usize {
 /// `null` (and in JSON5 `Infinity` and `NaN`) a builtin constant, anything
 /// else plain (`$jsonWordHl`).
 #[inline(always)]
-fn word_hl(src: &[u8], lhs: usize, rhs: usize, json5: bool) -> u32 {
-    let w = &src[lhs..rhs];
+fn word_hl(src: Input<'_>, lhs: usize, rhs: usize, json5: bool) -> u32 {
+    let w = &src.bytes()[lhs..rhs];
     match w {
         b"true" | b"false" => tok::BOOLEAN,
         b"null" => tok::CONSTANT_BUILTIN,
@@ -248,18 +189,19 @@ fn word_hl(src: &[u8], lhs: usize, rhs: usize, json5: bool) -> u32 {
 #[allow(clippy::too_many_arguments)]
 #[inline(always)]
 fn json_string(
-    src: &[u8],
+    src: Input<'_>,
     end: usize,
-    mut out: Out,
+    mut out: Recs,
     hl: u32,
     quote: u8,
     json5: bool,
     mut seg: usize,
     mut p: usize,
-) -> (usize, Out) {
+) -> (usize, Recs) {
     loop {
         p = string_stop(src, p, quote);
-        let c = at(src, p);
+        // SAFETY: the stop scan ends at the NUL after the input at the latest.
+        let c = unsafe { src.byte_unchecked(p) };
         if c == quote {
             p += 1;
             break;
@@ -276,10 +218,12 @@ fn json_string(
         if seg < p {
             out.tok(hl, p);
         }
-        let c = at(src, p + 1);
+        // SAFETY: the backslash at `p` lies below the input end, so `p + 1` is
+        // at most the NUL after it.
+        let c = unsafe { src.byte_unchecked(p + 1) };
         let e = if c == b'u' || (json5 && c == b'x') {
             let max = if c == b'u' { 4 } else { 2 };
-            scan::utf8_span_end(src, hex_run(src, end, p + 2, max), end)
+            scan::utf8_span_end(src.bytes(), hex_run(src, end, p + 2, max), end)
         } else {
             escape_end(src, end, p)
         };
@@ -298,14 +242,14 @@ fn json_string(
 /// that can't (TAB, a NUL inside the input), which the caller steps over.
 /// The NUL after the input ends every scan.
 #[inline(always)]
-fn string_stop(src: &[u8], mut p: usize, quote: u8) -> usize {
+fn string_stop(src: Input<'_>, mut p: usize, quote: u8) -> usize {
     let q = V::splat(quote);
     let bs = V::splat(b'\\');
     let ctl = V::splat(13);
     loop {
-        // SAFETY: the scan stops at the NUL after the input at the latest,
-        // so each 16-byte load starts at or before it, inside the slack.
-        let v = unsafe { V::load(src.as_ptr().add(p)) };
+        // SAFETY: the scan stops at the NUL after the input at the latest, so
+        // each 16-byte read starts at or before it, inside the slack.
+        let v = unsafe { src.vec_unchecked(p) };
         let k = v.eq(q).or(v.eq(bs)).or(v.le(ctl)).first();
         if k < 16 {
             return p + k;
@@ -317,10 +261,12 @@ fn string_stop(src: &[u8], mut p: usize, quote: u8) -> usize {
 /// The loose number tail from `p`: digits, dots, and exponents with their
 /// sign (`$jsonNumber`). The NUL after the input stops it.
 #[inline(always)]
-fn json_number(src: &[u8], mut p: usize) -> usize {
+fn json_number(src: Input<'_>, mut p: usize) -> usize {
     let mut prev = 0u8;
     loop {
-        let c = at(src, p);
+        // SAFETY: the number starts at or before the input end and stops at the
+        // NUL after it at the latest.
+        let c = unsafe { src.byte_unchecked(p) };
         let consume = is_digit(c)
             || c == b'.'
             || c | 32 == b'e'
@@ -338,19 +284,23 @@ fn json_number(src: &[u8], mut p: usize) -> usize {
 /// dot. Returns its color and end; a sign before another word takes that
 /// word's color (`$json5Number`).
 #[inline(always)]
-fn json5_number(src: &[u8], end: usize, mut p: usize) -> (u32, usize) {
-    let mut c = at(src, p);
+fn json5_number(src: Input<'_>, end: usize, mut p: usize) -> (u32, usize) {
+    // SAFETY: the number starts below the input end, so the byte after its
+    // sign is at most the NUL after it.
+    let mut c = unsafe { src.byte_unchecked(p) };
     if c == b'+' || c == b'-' {
         p += 1;
         // The NUL after the input reads as the WAT's 0 past the end.
-        c = at(src, p);
+        // SAFETY: see above.
+        c = unsafe { src.byte_unchecked(p) };
     }
     let lhs = p;
     if is_letter(c) {
         p = ident_run(src, p);
         return (word_hl(src, lhs, p, true), p);
     }
-    if c == b'0' && p + 1 < end && at(src, p + 1) | 32 == b'x' {
+    // SAFETY: `p + 1` is below the input end (tested).
+    if c == b'0' && p + 1 < end && unsafe { src.byte_unchecked(p + 1) } | 32 == b'x' {
         return (tok::NUMBER, hex_run(src, end, p + 2, end - p));
     }
     (tok::NUMBER, json_number(src, p))
@@ -407,15 +357,15 @@ struct Window {
 /// The string-stop and non-whitespace masks of the 64 bytes from `b`.
 /// `b + 64` must lie inside the input slack.
 #[inline(always)]
-fn block_masks(src: &[u8], b: usize) -> (u64, u64) {
-    debug_assert!(b + 64 <= src.len());
+fn block_masks(src: Input<'_>, b: usize) -> (u64, u64) {
     let hi_t = V::from_array(&CLASS_HI);
     let lo_t = V::from_array(&CLASS_LO);
     let mut stop = [V::zero(); 4];
     let mut space = [V::zero(); 4];
     for i in 0..4 {
-        // SAFETY: the caller keeps the 64 bytes from `b` inside the slack.
-        let v = unsafe { V::load(src.as_ptr().add(b + 16 * i)) };
+        // SAFETY: every window block starts at or before the input end, so its
+        // 64 bytes stay inside the slack.
+        let v = unsafe { src.vec_unchecked(b + 16 * i) };
         let class = hi_t
             .lookup(v.shr::<4>())
             .and(lo_t.lookup(v.and(V::splat(15))));
@@ -433,7 +383,7 @@ impl Window {
     /// only when it starts by the input end `end`; past it they are never
     /// read, since the NUL after the input stops every scan.
     #[inline(always)]
-    fn at(src: &[u8], end: usize, blk: usize) -> Self {
+    fn at(src: Input<'_>, end: usize, blk: usize) -> Self {
         let (stop0, text0) = block_masks(src, blk);
         let mid = blk + 64;
         let (stop1, text1) = if mid <= end {
@@ -452,7 +402,7 @@ impl Window {
 
     /// Move the window so that `p` lies in its first block.
     #[inline(always)]
-    fn sync(&mut self, src: &[u8], end: usize, p: usize) {
+    fn sync(&mut self, src: Input<'_>, end: usize, p: usize) {
         if p < self.mid {
             return;
         }
@@ -480,7 +430,7 @@ impl Window {
     /// block (`$scanWhitespace`). The window moves so that the end lies in
     /// its first block too.
     #[inline(always)]
-    fn space_end(&mut self, src: &[u8], end: usize, p: usize) -> usize {
+    fn space_end(&mut self, src: Input<'_>, end: usize, p: usize) -> usize {
         // `sync` keeps `p` in the first block, whose start is `mid - 64`:
         // its offset there is `(p - mid) & 63`.
         let m = self.text0 >> (p.wrapping_sub(self.mid) & 63);
@@ -558,40 +508,21 @@ fn key_or_string(key: bool) -> u32 {
 /// Lex the input at `base` as dialect `D` (`$hlJson`, `$hlJson5`,
 /// `$hlJsonl`).
 fn highlight<const D: u32>(inst: &mut Instance, base: usize, len: usize) {
-    let mem_ptr = inst.mem.bytes().as_ptr();
-    // SAFETY: `base..base + len + 96` lies inside lexer memory, and this
-    // lexer calls no translated function that could reallocate it.
-    let src: &[u8] = unsafe { core::slice::from_raw_parts(mem_ptr.add(base), len + 96) };
-    let v = &mut inst.ext.recs;
-    let rp = v.as_mut_ptr();
-    // SAFETY: the length and capacity bound the vector's allocation.
-    let mut out = unsafe {
-        Out {
-            cur: rp.add(v.len()),
-            limit: rp.add(v.capacity()),
-            last: v.last().map_or(u32::MAX, |r| r.token),
-        }
-    };
+    // SAFETY: `base..base + len + SLACK` lies inside lexer memory, and this
+    // lexer calls no translated function that could move it.
+    let src = unsafe { Input::new(inst, base, len) };
+    let mut out = Recs::load(inst);
     // `$lexEmitLeadingContinuation`, then the leading whitespace: both are
     // gaps, so with no record yet they make one plain record. Depth and the
     // key flag start cleared, so the JSONL line reset has nothing to clear.
-    let p = space_end(src, scan::utf8_span_end(src, 0, len));
-    if p > 0 {
-        if out.cur == rp {
-            out.tok(tok::NONE, p);
-        } else {
-            // SAFETY: a record exists.
-            unsafe { out.extend(p) };
-        }
-    }
-    let out = lex::<D>(src, len, out, p);
-    // SAFETY: the records before `out.cur` are written, within capacity.
-    unsafe { v.set_len(out.cur.offset_from(rp) as usize) };
+    let p = space_end(src, scan::utf8_span_end(src.bytes(), 0, len));
+    out.gap(0, p);
+    lex::<D>(src, len, out, p).store(inst);
 }
 
 /// The lexer loop for every dialect, from the start of the input
 /// (`$hlJsonImpl` with no string left open by a streamed chunk).
-fn lex<const D: u32>(src: &[u8], end: usize, mut out: Out, mut p: usize) -> Out {
+fn lex<const D: u32>(src: Input<'_>, end: usize, mut out: Recs, mut p: usize) -> Recs {
     let json5 = D == JSON5;
     // Open containers, and for each of the first `STACK`, whether it is an
     // object.
@@ -608,7 +539,8 @@ fn lex<const D: u32>(src: &[u8], end: usize, mut out: Out, mut p: usize) -> Out 
     let mut win = Window::at(src, end, p & !63);
     while p < end {
         let mut lhs = p;
-        let c = at(src, p);
+        // SAFETY: `p` is below the input end.
+        let c = unsafe { src.byte_unchecked(p) };
         // The rules match disjoint first bytes: one bit test each.
         let k = KIND[c as usize];
         'token: {
@@ -619,7 +551,9 @@ fn lex<const D: u32>(src: &[u8], end: usize, mut out: Out, mut p: usize) -> Out 
                     // Most strings end at their closing quote with no escape:
                     // the first stop byte is that quote.
                     if let Some(e) = win.string_stop(lhs)
-                        && at(src, e) == b'"'
+                        // SAFETY: a string stop lies at or before the NUL after
+                        // the input.
+                        && unsafe { src.byte_unchecked(e) } == b'"'
                     {
                         p = e + 1;
                         out.tok(hl, p);
@@ -630,17 +564,23 @@ fn lex<const D: u32>(src: &[u8], end: usize, mut out: Out, mut p: usize) -> Out 
                     // A key's colon or a value's comma often follows at once:
                     // the rules below, taken here without the dispatch. The
                     // string's last record is a string, key, or escape.
-                    let c = at(src, p);
+                    // SAFETY: a string ends at or before the input end.
+                    let c = unsafe { src.byte_unchecked(p) };
                     if c == b':' {
                         p += 1;
                         out.push(tok::PUNCTUATION_DELIMITER, p);
                         // `: "value"` in the window's first block: the space
                         // joins the colon's record, and the value string
                         // follows.
-                        if at(src, p) == b' ' && at(src, p + 1) == b'"' && p + 1 < win.mid {
+                        // SAFETY: the colon lay below the input end, so `p + 1`
+                        // is at most the NUL after it.
+                        if unsafe { src.byte_unchecked(p) } == b' '
+                            && unsafe { src.byte_unchecked(p + 1) } == b'"'
+                            && p + 1 < win.mid
+                        {
                             p += 1;
-                            // SAFETY: the colon's record exists.
-                            unsafe { out.extend(p) };
+                            // SAFETY: the colon's record was just written.
+                            unsafe { out.extend_unchecked(p) };
                             lhs = p;
                             continue;
                         }
@@ -675,7 +615,8 @@ fn lex<const D: u32>(src: &[u8], end: usize, mut out: Out, mut p: usize) -> Out 
                 out.tok(tok::PUNCTUATION_BRACKET, p);
                 // A comma often follows at once: its rule below, taken here
                 // without the dispatch.
-                if at(src, p) == b',' {
+                // SAFETY: a bracket ends at or before the input end.
+                if unsafe { src.byte_unchecked(p) } == b',' {
                     string_hl = object_hl;
                     p += 1;
                     out.push(tok::PUNCTUATION_DELIMITER, p);
@@ -707,7 +648,8 @@ fn lex<const D: u32>(src: &[u8], end: usize, mut out: Out, mut p: usize) -> Out 
                     p = json_number(src, p + 1);
                     out.tok(tok::NUMBER, p);
                 }
-                if at(src, p) == b',' {
+                // SAFETY: a number ends at or before the input end.
+                if unsafe { src.byte_unchecked(p) } == b',' {
                     string_hl = object_hl;
                     p += 1;
                     out.push(tok::PUNCTUATION_DELIMITER, p);
@@ -718,15 +660,17 @@ fn lex<const D: u32>(src: &[u8], end: usize, mut out: Out, mut p: usize) -> Out 
             // JSONC comments. The NUL after the input reads as the WAT's 0
             // past the end.
             if k & K_SLASH != 0 {
-                let c2 = at(src, p + 1);
+                // SAFETY: `p` is below the input end, so `p + 1` is at most
+                // the NUL after it.
+                let c2 = unsafe { src.byte_unchecked(p + 1) };
                 if c2 == b'/' {
-                    p = scan::line_end(src, p + 2, end);
+                    p = scan::line_end(src.bytes(), p + 2, end);
                     out.tok(tok::COMMENT, p);
                     break 'token;
                 }
                 if c2 == b'*' {
                     // `$lexBlockComment`.
-                    p = scan::block_comment_end(src, p + 2, end);
+                    p = scan::block_comment_end(src.bytes(), p + 2, end);
                     out.tok(tok::COMMENT, p);
                     break 'token;
                 }
@@ -739,14 +683,21 @@ fn lex<const D: u32>(src: &[u8], end: usize, mut out: Out, mut p: usize) -> Out 
             // anything else plain. JSON5 names follow JavaScript identifiers,
             // `\uXXXX` escapes included, and can be object keys.
             if is_letter(c)
-                || (json5 && (is_ident_start(c) || (c == b'\\' && at(src, p + 1) == b'u')))
+                // SAFETY: `p` is below the input end, so `p + 1` is at most the
+                // NUL after it.
+                || (json5
+                    && (is_ident_start(c)
+                        || (c == b'\\' && unsafe { src.byte_unchecked(p + 1) } == b'u')))
             {
                 if json5 {
                     loop {
                         p = ident_run(src, p);
-                        // A backslash lies before the input end, so the byte
-                        // after it is in the input or its NUL.
-                        if at(src, p) == b'\\' && at(src, p + 1) == b'u' {
+                        // SAFETY: a run ends at or before the input end, and
+                        // a backslash lies before it, so the byte after it is
+                        // in the input or its NUL.
+                        if unsafe { src.byte_unchecked(p) } == b'\\'
+                            && unsafe { src.byte_unchecked(p + 1) } == b'u'
+                        {
                             p = hex_run(src, end, p + 2, 4);
                             continue;
                         }
@@ -754,7 +705,9 @@ fn lex<const D: u32>(src: &[u8], end: usize, mut out: Out, mut p: usize) -> Out 
                     }
                 } else {
                     p += 1;
-                    while is_letter(at(src, p)) {
+                    // SAFETY: the word starts below the input end and stops at
+                    // the NUL after it at the latest.
+                    while is_letter(unsafe { src.byte_unchecked(p) }) {
                         p += 1;
                     }
                 }
@@ -764,7 +717,8 @@ fn lex<const D: u32>(src: &[u8], end: usize, mut out: Out, mut p: usize) -> Out 
                     word_hl(src, lhs, p, json5)
                 };
                 out.tok(hl, p);
-                if at(src, p) == b',' {
+                // SAFETY: a word ends at or before the input end.
+                if unsafe { src.byte_unchecked(p) } == b',' {
                     string_hl = object_hl;
                     p += 1;
                     out.push(tok::PUNCTUATION_DELIMITER, p);
@@ -781,7 +735,10 @@ fn lex<const D: u32>(src: &[u8], end: usize, mut out: Out, mut p: usize) -> Out 
                     string_hl = tok::STRING;
                     break 'token;
                 }
-                if c == b'+' || (c == b'.' && p + 1 < end && is_digit(at(src, p + 1))) {
+                // SAFETY: `p + 1` is below the input end (tested).
+                if c == b'+'
+                    || (c == b'.' && p + 1 < end && is_digit(unsafe { src.byte_unchecked(p + 1) }))
+                {
                     let hl;
                     (hl, p) = json5_number(src, end, p);
                     out.tok(hl, p);
@@ -799,9 +756,9 @@ fn lex<const D: u32>(src: &[u8], end: usize, mut out: Out, mut p: usize) -> Out 
         win.sync(src, end, p);
         let gap = p;
         p = win.space_end(src, end, p);
-        // SAFETY: the token emitted a record.
-        unsafe { out.extend(p) };
-        if D == JSONL && p > gap && src[gap..p].contains(&b'\n') {
+        // SAFETY: every rule above emits a token, so a record exists.
+        unsafe { out.extend_unchecked(p) };
+        if D == JSONL && p > gap && src.bytes()[gap..p].contains(&b'\n') {
             depth = 0;
             object_hl = tok::STRING;
             string_hl = tok::STRING;

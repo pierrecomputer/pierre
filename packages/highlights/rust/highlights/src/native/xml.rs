@@ -7,8 +7,9 @@
 //! The records equal the translated `xml` lexer's records.
 
 use super::Lexer;
+use super::input::Input;
+use super::recs::Recs;
 use super::scan;
-use crate::Rec;
 use crate::generated::Instance;
 use crate::simd::V;
 use crate::token_ids as tok;
@@ -19,15 +20,6 @@ pub(crate) fn lexer(name: &str) -> Option<Lexer> {
         "xml" => Some(highlight),
         _ => None,
     }
-}
-
-/// The byte at `p`.
-#[inline(always)]
-fn at(src: &[u8], p: usize) -> u8 {
-    debug_assert!(p < src.len());
-    // SAFETY: every position read lies at most 16 bytes past the input
-    // end, inside the input slack `src` covers.
-    unsafe { *src.get_unchecked(p) }
 }
 
 /// Whether `c` is ASCII whitespace (`$lexIsSpace`).
@@ -54,78 +46,23 @@ const fn is_name_start(c: u8) -> bool {
     c >= 0x80 || (c | 32).wrapping_sub(b'a') <= 25 || c == b'_' || c == b':'
 }
 
-/// Token records written through a moving pointer into `inst.ext.recs`,
-/// the way the translated `$emitTok` and `$emitGap` write them: a token
-/// extends the last record when its color matches, and whitespace extends
-/// the last record whatever its color. The vector has room for one record
-/// per input byte and every record covers at least one byte, so running
-/// out of room means a lexer bug, which traps.
-#[derive(Clone, Copy)]
-struct Out {
-    cur: *mut Rec,
-    limit: *mut Rec,
-    /// Token of the last record, or `u32::MAX` when there is none.
-    last: u32,
-}
-
-impl Out {
-    /// Append a non-empty token ending at `end` (`$emitTok`).
-    #[inline(always)]
-    fn tok(&mut self, hl: u32, end: usize) {
-        if self.last == hl {
-            // SAFETY: a record with the last color exists.
-            unsafe { self.extend(end) };
-            return;
-        }
-        // SAFETY: the trap stops a write at the limit.
-        unsafe {
-            if self.cur == self.limit {
-                crate::rt::trap();
-            }
-            self.cur.write(Rec {
-                end: end as u32,
-                token: hl,
-            });
-            self.cur = self.cur.add(1);
-        }
-        self.last = hl;
-    }
-
-    /// The token `[lhs, rhs)`, if not empty (`$emitTok`).
-    #[inline(always)]
-    fn span(&mut self, hl: u32, lhs: usize, rhs: usize) {
-        if lhs < rhs {
-            self.tok(hl, rhs);
-        }
-    }
-
-    /// Whitespace up to `end` extends the last record (`$emitGap`).
-    ///
-    /// # Safety
-    ///
-    /// A record must exist.
-    #[inline(always)]
-    unsafe fn extend(&mut self, end: usize) {
-        // SAFETY: the caller guarantees the record before `cur`.
-        unsafe { (*self.cur.sub(1)).end = end as u32 };
-    }
-}
-
 /// The first `a` or `b` from `p`, or `end` (`$lexFindEither`,
 /// `$lexFindByte` when `a` and `b` are equal, `$scanFind3`).
 #[inline(always)]
-fn find2(src: &[u8], p: usize, end: usize, a: u8, b: u8) -> usize {
+fn find2(src: Input<'_>, p: usize, end: usize, a: u8, b: u8) -> usize {
     if p >= end {
         return end;
     }
-    scan::find3(src, p, end, a, b, b)
+    scan::find3(src.bytes(), p, end, a, b, b)
 }
 
 /// The end of the whitespace run from `p` (`$scanWhitespace`). The NUL
 /// after the input ends every run by the input end.
 #[inline(always)]
-fn space_end(src: &[u8], mut p: usize) -> usize {
-    while is_space(at(src, p)) {
+fn space_end(src: Input<'_>, mut p: usize) -> usize {
+    // SAFETY: the run starts at or before the input end and stops at the NUL
+    // after it at the latest.
+    while is_space(unsafe { src.byte_unchecked(p) }) {
         p += 1;
     }
     p
@@ -148,8 +85,10 @@ static NAME: [bool; 256] = {
 /// and `:` (`$xmlScanName`, `$scanIdentRun`). The NUL after the input ends
 /// every name by the input end.
 #[inline(always)]
-fn name_end(src: &[u8], mut p: usize) -> usize {
-    while NAME[at(src, p) as usize] {
+fn name_end(src: Input<'_>, mut p: usize) -> usize {
+    // SAFETY: the run starts at or before the input end and stops at the NUL
+    // after it at the latest.
+    while NAME[unsafe { src.byte_unchecked(p) } as usize] {
         p += 1;
     }
     p
@@ -158,10 +97,19 @@ fn name_end(src: &[u8], mut p: usize) -> usize {
 /// The rest of a quoted attribute value from `p` to its closing `quote`,
 /// emitted from `lhs` as one string; returns its end (`$xmlQuotedBody`).
 #[inline(always)]
-fn quoted_body(src: &[u8], end: usize, out: &mut Out, quote: u8, lhs: usize, p: usize) -> usize {
+fn quoted_body(
+    src: Input<'_>,
+    end: usize,
+    out: &mut Recs,
+    quote: u8,
+    lhs: usize,
+    p: usize,
+) -> usize {
     let q = find2(src, p, end, quote, quote);
     let p = if q < end { q + 1 } else { end };
-    out.span(tok::STRING, lhs, p);
+    if lhs < p {
+        out.tok_branching(tok::STRING, p);
+    }
     p
 }
 
@@ -169,7 +117,7 @@ fn quoted_body(src: &[u8], end: usize, out: &mut Out, quote: u8, lhs: usize, p: 
 /// opener of `skip` bytes recognized, up to just past the first `>` that
 /// ends `close` (`-->`, `]]>`, or `?>`, the opener's bytes included), or
 /// the end. Returns its end, the end of its one token (`$xmlSection`).
-fn section(src: &[u8], end: usize, lhs: usize, skip: usize, close: &[u8]) -> usize {
+fn section(src: Input<'_>, end: usize, lhs: usize, skip: usize, close: &[u8]) -> usize {
     let mut p = (lhs + skip).min(end);
     let n = close.len();
     loop {
@@ -177,7 +125,7 @@ fn section(src: &[u8], end: usize, lhs: usize, skip: usize, close: &[u8]) -> usi
         if p >= end {
             break;
         }
-        if &src[p + 1 - n..=p] == close {
+        if &src.bytes()[p + 1 - n..=p] == close {
             p += 1;
             break;
         }
@@ -189,7 +137,7 @@ fn section(src: &[u8], end: usize, lhs: usize, skip: usize, close: &[u8]) -> usi
 /// A doctype's body from `p`, after its `<!`: up to the first `>` outside
 /// quotes and the `[ ]` internal subset, or the end. Returns its end, the
 /// end of the doctype's one token (`$xmlDoctype`, `$xmlDoctypeBody`).
-fn doctype(src: &[u8], end: usize, mut p: usize) -> usize {
+fn doctype(src: Input<'_>, end: usize, mut p: usize) -> usize {
     let mut depth = 0u32;
     let mut quote = 0u8;
     while p < end {
@@ -209,7 +157,8 @@ fn doctype(src: &[u8], end: usize, mut p: usize) -> usize {
         if p >= end {
             break;
         }
-        let c = at(src, p);
+        // SAFETY: `p` is below the input end (tested above).
+        let c = unsafe { src.byte_unchecked(p) };
         p += 1;
         match c {
             b'"' | b'\'' => quote = c,
@@ -230,13 +179,14 @@ fn doctype(src: &[u8], end: usize, mut p: usize) -> usize {
 /// `#`, then `;`. Returns its end, or `None` when it is no entity
 /// (`$xmlEntity`).
 #[inline(always)]
-fn entity(src: &[u8], end: usize, lhs: usize) -> Option<usize> {
+fn entity(src: Input<'_>, end: usize, lhs: usize) -> Option<usize> {
     let mut p = lhs + 1;
     loop {
         if p >= end || p - lhs > 32 {
             return None;
         }
-        let c = at(src, p);
+        // SAFETY: `p` is below the input end (tested above).
+        let c = unsafe { src.byte_unchecked(p) };
         if c == b';' {
             if p == lhs + 1 {
                 return None;
@@ -289,29 +239,34 @@ static KIND: [u8; 256] = {
 /// `/>`, or up to a stray `<` or the end. Returns the end (`$xmlAttrs`
 /// with no quote left open). The rules match disjoint first bytes, so they
 /// are tested by kind, the common ones first.
-fn attrs(src: &[u8], end: usize, win: &Window, out: &mut Out, mut p: usize) -> usize {
+fn attrs(src: Input<'_>, end: usize, win: &Window, out: &mut Recs, mut p: usize) -> usize {
     loop {
         if p >= end {
             return p;
         }
         let lhs = p;
-        let c = at(src, p);
+        // SAFETY: `p` is below the input end (tested above).
+        let c = unsafe { src.byte_unchecked(p) };
         let k = KIND[c as usize];
         if k & K_NAME != 0 {
             p = win.name_end(src, p);
-            out.tok(tok::ATTRIBUTE, p);
+            out.tok_branching(tok::ATTRIBUTE, p);
             // `name="value"`: the `=` and quote rules below, taken here.
             // The NUL after the input matches neither.
-            if at(src, p) == b'=' {
+            // SAFETY: a name ends at or before the input end.
+            if unsafe { src.byte_unchecked(p) } == b'=' {
                 p += 1;
-                out.tok(tok::PUNCTUATION_DELIMITER_HTML, p);
-                let q = at(src, p);
+                out.tok_branching(tok::PUNCTUATION_DELIMITER_HTML, p);
+                // SAFETY: the `=` lay below the input end, so `p` is at most
+                // the NUL after it.
+                let q = unsafe { src.byte_unchecked(p) };
                 if q == b'"' || q == b'\'' {
                     p = quoted_body(src, end, out, q, p, p + 1);
                     // The tag's `>` often follows: its rule below.
-                    if at(src, p) == b'>' {
+                    // SAFETY: a quoted value ends at or before the input end.
+                    if unsafe { src.byte_unchecked(p) } == b'>' {
                         p += 1;
-                        out.tok(tok::PUNCTUATION_BRACKET_HTML, p);
+                        out.tok_branching(tok::PUNCTUATION_BRACKET_HTML, p);
                         return p;
                     }
                 }
@@ -320,23 +275,24 @@ fn attrs(src: &[u8], end: usize, win: &Window, out: &mut Out, mut p: usize) -> u
         }
         if k & K_SPACE != 0 {
             p = space_end(src, p);
-            // SAFETY: the tag name's record exists.
-            unsafe { out.extend(p) };
+            // SAFETY: the tag name's record comes before every attribute.
+            unsafe { out.extend_unchecked(p) };
             continue;
         }
         if k & K_GT != 0 {
             p += 1;
-            out.tok(tok::PUNCTUATION_BRACKET_HTML, p);
+            out.tok_branching(tok::PUNCTUATION_BRACKET_HTML, p);
             return p;
         }
-        if k & K_SLASH != 0 && p + 1 < end && at(src, p + 1) == b'>' {
+        // SAFETY: `p + 1` is below the input end (tested first).
+        if k & K_SLASH != 0 && p + 1 < end && unsafe { src.byte_unchecked(p + 1) } == b'>' {
             p += 2;
-            out.tok(tok::PUNCTUATION_BRACKET_HTML, p);
+            out.tok_branching(tok::PUNCTUATION_BRACKET_HTML, p);
             return p;
         }
         if k & K_EQ != 0 {
             p += 1;
-            out.tok(tok::PUNCTUATION_DELIMITER_HTML, p);
+            out.tok_branching(tok::PUNCTUATION_DELIMITER_HTML, p);
             continue;
         }
         if k & K_QUOTE != 0 {
@@ -351,13 +307,14 @@ fn attrs(src: &[u8], end: usize, win: &Window, out: &mut Out, mut p: usize) -> u
         // A malformed unquoted attribute value or stray punctuation.
         p += 1;
         while p < end {
-            let c = at(src, p);
+            // SAFETY: `p` is below the input end (tested above).
+            let c = unsafe { src.byte_unchecked(p) };
             if is_space(c) || c == b'>' || c == b'<' {
                 break;
             }
             p += 1;
         }
-        out.tok(tok::STRING, p);
+        out.tok_branching(tok::STRING, p);
     }
 }
 
@@ -393,15 +350,15 @@ const NAME_LO: [u8; 16] = {
 /// that are not name bytes among the 64 bytes from `b`, one bit per byte.
 /// `b + 64` must lie inside the input slack.
 #[inline(always)]
-fn block_masks(src: &[u8], b: usize) -> (u64, u64) {
-    debug_assert!(b + 64 <= src.len());
+fn block_masks(src: Input<'_>, b: usize) -> (u64, u64) {
     let hi_t = V::from_array(&NAME_HI);
     let lo_t = V::from_array(&NAME_LO);
     let mut stop = [V::zero(); 4];
     let mut name = [V::zero(); 4];
     for i in 0..4 {
-        // SAFETY: the caller keeps the 64 bytes from `b` inside the slack.
-        let v = unsafe { V::load(src.as_ptr().add(b + 16 * i)) };
+        // SAFETY: every window block starts at or before the input end, so its
+        // 64 bytes stay inside the slack.
+        let v = unsafe { src.vec_unchecked(b + 16 * i) };
         stop[i] = v.eq(V::splat(b'<')).or(v.eq(V::splat(b'&')));
         let class = hi_t
             .lookup(v.shr::<4>())
@@ -433,7 +390,7 @@ impl Window {
     /// only when it starts by the input end `end`; past it the results are
     /// clamped to the end, or stop at the NUL after the input.
     #[inline(always)]
-    fn at(src: &[u8], end: usize, blk: usize) -> Self {
+    fn at(src: Input<'_>, end: usize, blk: usize) -> Self {
         let (stop0, other0) = block_masks(src, blk);
         let mid = blk + 64;
         let (stop1, other1) = if mid <= end {
@@ -453,7 +410,7 @@ impl Window {
     /// Move the window so that `p`, at most `end`, lies in its first
     /// block.
     #[inline(always)]
-    fn sync(&mut self, src: &[u8], end: usize, p: usize) {
+    fn sync(&mut self, src: Input<'_>, end: usize, p: usize) {
         if p < self.mid {
             return;
         }
@@ -478,7 +435,7 @@ impl Window {
 
     /// The first `<` or `&` from `p`, or `end` (`$lexFindEither`).
     #[inline(always)]
-    fn text_end(&mut self, src: &[u8], end: usize, mut p: usize) -> usize {
+    fn text_end(&mut self, src: Input<'_>, end: usize, mut p: usize) -> usize {
         loop {
             self.sync(src, end, p);
             let m = self.stop0 >> (p.wrapping_sub(self.mid) & 63);
@@ -498,7 +455,7 @@ impl Window {
     /// The end of the name from `p`, at least the window start
     /// (`$xmlScanName`).
     #[inline(always)]
-    fn name_end(&self, src: &[u8], p: usize) -> usize {
+    fn name_end(&self, src: Input<'_>, p: usize) -> usize {
         let off = p - (self.mid - 64);
         if off < 64 {
             let m = self.other0 >> off;
@@ -520,86 +477,76 @@ impl Window {
 
 /// Lex the input at `base` (`$hlXml`).
 fn highlight(inst: &mut Instance, base: usize, len: usize) {
-    let mem_ptr = inst.mem.bytes().as_ptr();
-    // SAFETY: `base..base + len + 96` lies inside lexer memory, and this
-    // lexer calls no translated function that could reallocate it.
-    let src: &[u8] = unsafe { core::slice::from_raw_parts(mem_ptr.add(base), len + 96) };
-    let v = &mut inst.ext.recs;
-    let rp = v.as_mut_ptr();
-    // SAFETY: the length and capacity bound the vector's allocation.
-    let mut out = unsafe {
-        Out {
-            cur: rp.add(v.len()),
-            limit: rp.add(v.capacity()),
-            last: v.last().map_or(u32::MAX, |r| r.token),
-        }
-    };
+    // SAFETY: `base..base + len + SLACK` lies inside lexer memory, and this
+    // lexer calls no translated function that could move it.
+    let src = unsafe { Input::new(inst, base, len) };
+    let mut out = Recs::load(inst);
     // `$lexEmitLeadingContinuation`: a gap, so with no record yet it makes
     // one plain record.
-    let p = scan::utf8_span_end(src, 0, len);
-    if p > 0 {
-        if out.cur == rp {
-            out.tok(tok::NONE, p);
-        } else {
-            // SAFETY: a record exists.
-            unsafe { out.extend(p) };
-        }
-    }
-    let out = lex(src, len, out, p);
-    // SAFETY: the records before `out.cur` are written, within capacity.
-    unsafe { v.set_len(out.cur.offset_from(rp) as usize) };
+    let p = scan::utf8_span_end(src.bytes(), 0, len);
+    out.gap(0, p);
+    lex(src, len, out, p).store(inst);
 }
 
 /// The lexer loop, from the start of the input (`$hlXml` outside a
 /// resumed tag).
-fn lex(src: &[u8], end: usize, mut out: Out, mut p: usize) -> Out {
+fn lex(src: Input<'_>, end: usize, mut out: Recs, mut p: usize) -> Recs {
     let mut win = Window::at(src, end, p & !63);
     while p < end {
         // Text up to the next `<` or `&`.
         let lhs = p;
         p = win.text_end(src, end, p);
-        out.span(tok::NONE, lhs, p);
+        if lhs < p {
+            out.tok_branching(tok::NONE, p);
+        }
         if p >= end {
             break;
         }
         let lhs = p;
-        let c = at(src, p);
+        // SAFETY: `p` is below the input end (tested above).
+        let c = unsafe { src.byte_unchecked(p) };
         if c == b'&' {
             match entity(src, end, lhs) {
                 Some(e) => {
                     p = e;
-                    out.tok(tok::STRING_SPECIAL, p);
+                    out.tok_branching(tok::STRING_SPECIAL, p);
                 }
                 None => {
                     p += 1;
-                    out.tok(tok::NONE, p);
+                    out.tok_branching(tok::NONE, p);
                 }
             }
             continue;
         }
 
         // Exact, case-sensitive openers, which all start `<!` or `<?`.
-        let c2 = at(src, p + 1);
+        // SAFETY: `p` is below the input end, so `p + 1` is at most the NUL
+        // after it.
+        let c2 = unsafe { src.byte_unchecked(p + 1) };
         if c2 == b'!' || c2 == b'?' {
             core::hint::cold_path();
-            if p + 4 <= end && &src[p..p + 4] == b"<!--" {
+            // The openers' first 9 bytes, compared only up to the input end.
+            // SAFETY: `p` is below the input end, so the 9 bytes from it lie
+            // inside the slack.
+            let (w, w8) = unsafe { (src.word_unchecked(p), src.byte_unchecked(p + 8)) };
+            if p + 4 <= end && w as u32 == u32::from_le_bytes(*b"<!--") {
                 p = section(src, end, lhs, 4, b"-->");
-                out.tok(tok::COMMENT, p);
+                out.tok_branching(tok::COMMENT, p);
                 continue;
             }
-            if p + 9 <= end && &src[p..p + 9] == b"<![CDATA[" {
+            if p + 9 <= end && w == u64::from_le_bytes(*b"<![CDATA") && w8 == b'[' {
                 p = section(src, end, lhs, 9, b"]]>");
-                out.tok(tok::TEXT_LITERAL, p);
+                out.tok_branching(tok::TEXT_LITERAL, p);
                 continue;
             }
-            if p + 2 <= end && &src[p..p + 2] == b"<?" {
+            if p + 2 <= end && w as u16 == u16::from_le_bytes(*b"<?") {
                 p = section(src, end, lhs, 2, b"?>");
-                out.tok(tok::PREPROC, p);
+                out.tok_branching(tok::PREPROC, p);
                 continue;
             }
-            if p + 9 <= end && &src[p..p + 9] == b"<!DOCTYPE" {
+            if p + 9 <= end && w == u64::from_le_bytes(*b"<!DOCTYP") && w8 == b'E' {
                 p = doctype(src, end, p + 2);
-                out.tok(tok::TAG_DOCTYPE, p);
+                out.tok_branching(tok::TAG_DOCTYPE, p);
                 continue;
             }
         }
@@ -607,26 +554,31 @@ fn lex(src: &[u8], end: usize, mut out: Out, mut p: usize) -> Out {
         // Ordinary tags.
         p += 1;
         // The NUL after the input is neither `/` nor a name byte.
-        if at(src, p) == b'/' {
+        // SAFETY: the `<` at `p - 1` lies below the input end, so `p` is at
+        // most the NUL after it.
+        if unsafe { src.byte_unchecked(p) } == b'/' {
             p += 1;
         }
         let name = p;
-        if KIND[at(src, p) as usize] & K_NAME != 0 {
-            out.tok(tok::PUNCTUATION_BRACKET_HTML, name);
+        // SAFETY: `p` is at most the input end: a `/` before it lies inside the
+        // input.
+        if KIND[unsafe { src.byte_unchecked(p) } as usize] & K_NAME != 0 {
+            out.tok_branching(tok::PUNCTUATION_BRACKET_HTML, name);
             p = win.name_end(src, p);
-            out.tok(tok::TAG, p);
+            out.tok_branching(tok::TAG, p);
             // A tag with no attributes ends at once: the attributes' `>`
             // rule, taken here.
-            if at(src, p) == b'>' {
+            // SAFETY: a name ends at or before the input end.
+            if unsafe { src.byte_unchecked(p) } == b'>' {
                 p += 1;
-                out.tok(tok::PUNCTUATION_BRACKET_HTML, p);
+                out.tok_branching(tok::PUNCTUATION_BRACKET_HTML, p);
                 continue;
             }
             p = attrs(src, end, &win, &mut out, p);
             continue;
         }
         p = lhs + 1;
-        out.tok(tok::NONE, p);
+        out.tok_branching(tok::NONE, p);
     }
     out
 }
