@@ -9,9 +9,10 @@
 //! records.
 
 use super::Lexer;
+use super::input::Input;
+use super::recs::Recs;
 use super::scan;
 use super::tables::byteset;
-use crate::Rec;
 use crate::generated::Instance;
 use crate::simd::V;
 use crate::token_ids as tok;
@@ -149,7 +150,7 @@ const fn lower(w: u64) -> u64 {
 /// The value of the word `[lhs, rhs)` compared case-insensitively, or -1
 /// (`$fortranWordHl` on a `$lexLowerCopy` copy).
 #[inline(always)]
-fn word_value(src: &[u8], lhs: usize, rhs: usize) -> i32 {
+fn word_value(src: Input, lhs: usize, rhs: usize) -> i32 {
     let n = rhs - lhs;
     if n == 0 || n > WORD_MAX {
         return -1;
@@ -240,20 +241,15 @@ static NAME_CONT: [bool; 256] = {
     t
 };
 
-/// The byte at `i`. Every caller reads at most 16 bytes past the input
-/// end, which the 96-byte input slack covers. The byte at the input end is
-/// NUL, which matches none of the bytes a lookahead tests.
-#[inline(always)]
-fn at(src: &[u8], i: usize) -> u8 {
-    debug_assert!(i < src.len());
-    // SAFETY: `i` lies inside the input or its slack (see above).
-    unsafe { *src.get_unchecked(i) }
-}
-
 /// The byte at `i`, or 0 at and past `end` (`$fortranByte`).
 #[inline(always)]
-fn byte(src: &[u8], i: usize, end: usize) -> u8 {
-    if i < end { at(src, i) } else { 0 }
+fn byte(src: Input, i: usize, end: usize) -> u8 {
+    if i < end {
+        // SAFETY: `i` is inside the input.
+        unsafe { src.byte_unchecked(i) }
+    } else {
+        0
+    }
 }
 
 /// Whether `c` is an ASCII digit (`$lexIsDigit`).
@@ -278,8 +274,10 @@ const fn is_space(c: u8) -> bool {
 /// The end of the identifier run from `p` over `cont` bytes
 /// (`$scanIdentRun`). The NUL after the input ends every run.
 #[inline(always)]
-fn run_end(src: &[u8], mut p: usize, cont: &[bool; 256]) -> usize {
-    while cont[at(src, p) as usize] {
+fn run_end(src: Input, mut p: usize, cont: &[bool; 256]) -> usize {
+    // SAFETY: `p` starts at or before the input end, and the NUL there
+    // ends the run.
+    while cont[unsafe { src.byte_unchecked(p) } as usize] {
         p += 1;
     }
     p
@@ -289,10 +287,12 @@ fn run_end(src: &[u8], mut p: usize, cont: &[bool; 256]) -> usize {
 /// 0x80 (`$lexScanIdent`, `$scanIdentRun`). The NUL after the input ends
 /// every run.
 #[inline(always)]
-fn ident_end(src: &[u8], mut p: usize) -> usize {
+fn ident_end(src: Input, mut p: usize) -> usize {
     // Most names are short: test a few bytes one by one first.
     for _ in 0..8 {
-        if !IDENT_CONT[at(src, p) as usize] {
+        // SAFETY: `p` starts at or before the input end, and the NUL there
+        // ends the run, so `p` never passes it.
+        if !IDENT_CONT[unsafe { src.byte_unchecked(p) } as usize] {
             return p;
         }
         p += 1;
@@ -300,7 +300,7 @@ fn ident_end(src: &[u8], mut p: usize) -> usize {
     loop {
         // SAFETY: each 16-byte load starts at or before the NUL after the
         // input, inside the slack.
-        let v = unsafe { V::load(src.as_ptr().add(p)) };
+        let v = unsafe { src.vec_unchecked(p) };
         let alpha = v.or(V::splat(0x20)).sub(V::splat(b'a')).le(V::splat(25));
         let digit = v.sub(V::splat(b'0')).le(V::splat(9));
         let extra = v.eq(V::splat(b'_')).or(v.eq(V::splat(b'$')));
@@ -316,11 +316,11 @@ fn ident_end(src: &[u8], mut p: usize) -> usize {
 /// The next byte from `p` that a string body stops at: its `quote`, `&`,
 /// CR, or LF; or `end`.
 #[inline(always)]
-fn string_stop(src: &[u8], mut p: usize, end: usize, quote: u8) -> usize {
+fn string_stop(src: Input, mut p: usize, end: usize, quote: u8) -> usize {
     while p < end {
-        // SAFETY: `p` lies before the input end, so the 16-byte load stays
+        // SAFETY: `p` lies before the input end, so the 16-byte read stays
         // inside the slack.
-        let w = unsafe { V::load(src.as_ptr().add(p)) };
+        let w = unsafe { src.vec_unchecked(p) };
         let k = (w.eq(V::splat(quote)).or(w.eq(V::splat(b'&'))))
             .or(w.eq(V::splat(b'\n')).or(w.eq(V::splat(b'\r'))))
             .first();
@@ -334,8 +334,10 @@ fn string_stop(src: &[u8], mut p: usize, end: usize, quote: u8) -> usize {
 
 /// Skip spaces and tabs from `p` on the current line (`$lexSkipSpaceAt`).
 #[inline(always)]
-fn skip_space_at(src: &[u8], mut p: usize) -> usize {
-    while at(src, p) == b' ' || at(src, p) == b'\t' {
+fn skip_space_at(src: Input, mut p: usize) -> usize {
+    // SAFETY: `p` starts at or before the input end, and the NUL there
+    // ends the run.
+    while unsafe { src.byte_unchecked(p) } == b' ' || unsafe { src.byte_unchecked(p) } == b'\t' {
         p += 1;
     }
     p
@@ -344,11 +346,10 @@ fn skip_space_at(src: &[u8], mut p: usize) -> usize {
 /// The first `n` bytes at `p` as a little-endian integer. Reads 8 bytes,
 /// which the input slack allows.
 #[inline(always)]
-fn word_at(src: &[u8], p: usize, n: u32) -> u64 {
-    debug_assert!(p + 8 <= src.len());
-    // SAFETY: `p` lies before the input end, so `p + 8` lies inside the
-    // slack.
-    let w = unsafe { src.as_ptr().add(p).cast::<u64>().read_unaligned() };
+fn word_at(src: Input, p: usize, n: u32) -> u64 {
+    // SAFETY: every caller passes a position before the input end, so
+    // the 8 bytes stay inside the slack.
+    let w = unsafe { src.word_unchecked(p) };
     w & (u64::MAX >> (64 - 8 * n))
 }
 
@@ -356,18 +357,24 @@ fn word_at(src: &[u8], p: usize, n: u32) -> u64 {
 /// string open: 1 for a continuation line (columns one to five blank, a
 /// mark other than blank or `0` in column six), 2 for a comment line, 3 for
 /// a blank line, 0 otherwise (`$fortranFixedLineKind`).
-fn fixed_line_kind(src: &[u8], p: usize) -> u32 {
-    let c = at(src, p);
+fn fixed_line_kind(src: Input, p: usize) -> u32 {
+    // SAFETY: `p` is at or before the input end.
+    let c = unsafe { src.byte_unchecked(p) };
     if matches!(c, b'C' | b'c' | b'*' | b'!') {
         return 2;
     }
-    if (0..5).all(|i| at(src, p + i) == b' ') {
-        let c = at(src, p + 5);
+    // SAFETY: `p` is at or before the input end, and the NUL there stops
+    // the test, so every read is at most 4 bytes past it.
+    if (0..5).all(|i| unsafe { src.byte_unchecked(p + i) } == b' ') {
+        // SAFETY: five blanks lie before the NUL, so `p + 5` is at or
+        // before it.
+        let c = unsafe { src.byte_unchecked(p + 5) };
         if !(c == 0 || is_space(c) || c == b'0') {
             return 1;
         }
     }
-    let c = at(src, skip_space_at(src, p));
+    // SAFETY: the run ends at or before the NUL.
+    let c = unsafe { src.byte_unchecked(skip_space_at(src, p)) };
     if c == 0 || c == b'\n' || c == b'\r' {
         3
     } else {
@@ -378,10 +385,12 @@ fn fixed_line_kind(src: &[u8], p: usize) -> u32 {
 /// The end of a Fortran number from `p`: identifier bytes, a `.` unless a
 /// `.operator.` follows, and exponent signs (`$hlFortranImpl`'s number
 /// rule).
-fn number_end(src: &[u8], mut p: usize, end: usize) -> usize {
+fn number_end(src: Input, mut p: usize, end: usize) -> usize {
     let mut prev = 0u8;
     loop {
-        let c = at(src, p);
+        // SAFETY: `p` starts at or before the input end, and the NUL there
+        // ends the number, so `p` never passes it.
+        let c = unsafe { src.byte_unchecked(p) };
         let c2 = byte(src, p + 1, end);
         let n = byte(src, p + 2, end);
         let take = IDENT_CONT[c as usize]
@@ -400,76 +409,22 @@ fn number_end(src: &[u8], mut p: usize, end: usize) -> usize {
 /// Lex the Fortran input of `len` bytes at `base` (`$hlFortranImpl`);
 /// `FIXED` selects fixed form (`$fortranFixed`).
 fn highlight<const FIXED: bool>(inst: &mut Instance, base: usize, len: usize) {
-    let mem_ptr = inst.mem.bytes().as_ptr();
-    // SAFETY: `base..base + len + 96` lies inside lexer memory, which is not
-    // reallocated while this lexer runs.
-    let src: &[u8] = unsafe { core::slice::from_raw_parts(mem_ptr.add(base), len + 96) };
+    // SAFETY: `base..base + len + SLACK` lies inside lexer memory, which
+    // nothing moves while this lexer runs (it calls no translated code).
+    let src = unsafe { Input::new(inst, base, len) };
     let end = len;
+    let mut recs = Recs::load(inst);
 
-    // Records are written through `cur`, which moves along
-    // `inst.ext.recs`'s buffer from `rp` to at most `limit`; `last` is the
-    // last record's token, or `u32::MAX`.
-    let rp = inst.ext.recs.as_mut_ptr();
-    // SAFETY: `len` records are written.
-    let mut cur = unsafe { rp.add(inst.ext.recs.len()) };
-    // SAFETY: one past the allocation.
-    let limit = unsafe { rp.add(inst.ext.recs.capacity()) };
-    let mut last = inst.ext.recs.last().map_or(u32::MAX, |r| r.token);
-    // Append a non-empty token ending at `end`, merging it into the last
-    // record when the token matches (`$emitTok`). Running out of room
-    // means a lexer bug, which traps.
-    macro_rules! emit {
-        ($hl:expr, $end:expr $(,)?) => {{
-            let hl: u32 = $hl;
-            // SAFETY: `cur` stays within `rp..limit`; a merge rewrites the
-            // last record.
-            unsafe {
-                cur = cur.sub((last == hl) as usize);
-                if cur == limit {
-                    crate::rt::trap();
-                }
-                cur.write(Rec {
-                    end: $end as u32,
-                    token: hl,
-                });
-                cur = cur.add(1);
-            }
-            last = hl;
-        }};
-    }
-    // Append `hl` over `[lhs, rhs)` when it is not empty (`$emitTok`).
-    macro_rules! emit_span {
-        ($hl:expr, $lhs:expr, $rhs:expr) => {{
-            let (lhs, rhs): (usize, usize) = ($lhs, $rhs);
-            if lhs < rhs {
-                emit!($hl, rhs);
-            }
-        }};
-    }
-    // Whitespace `[lhs, rhs)` extends the last record (`$emitGap`).
-    macro_rules! gap {
-        ($lhs:expr, $rhs:expr) => {{
-            let (lhs, rhs): (usize, usize) = ($lhs, $rhs);
-            if lhs < rhs {
-                if cur == rp {
-                    emit!(tok::NONE, rhs);
-                } else {
-                    // SAFETY: the record before `cur` is written.
-                    unsafe { (*cur.sub(1)).end = rhs as u32 };
-                }
-            }
-        }};
-    }
     // `$lexEmitLeadingContinuation`
-    let mut ptr = scan::utf8_span_end(src, 0, end);
-    gap!(0, ptr);
+    let mut ptr = scan::utf8_span_end(src.bytes(), 0, end);
+    recs.gap(0, ptr);
 
     // The line comment from `ptr`, colored `hl` (`$lexLineComment` with
     // one byte skipped, `$scanToLineEnd`).
     macro_rules! line_comment {
         ($hl:expr) => {{
-            ptr = scan::line_end(src, (ptr + 1).min(end), end);
-            emit!($hl, ptr);
+            ptr = scan::line_end(src.bytes(), (ptr + 1).min(end), end);
+            recs.tok($hl, ptr);
         }};
     }
 
@@ -487,8 +442,10 @@ fn highlight<const FIXED: bool>(inst: &mut Instance, base: usize, len: usize) {
 
     while ptr < end {
         let mut lhs = ptr;
-        let c = at(src, lhs);
-        let c2 = at(src, lhs + 1);
+        // SAFETY: `lhs` is before the input end.
+        let c = unsafe { src.byte_unchecked(lhs) };
+        // SAFETY: as above.
+        let c2 = unsafe { src.byte_unchecked(lhs + 1) };
         // A fixed-form line after an unterminated string: a nonblank,
         // non-zero column six continues the statement, so the string
         // resumes at column seven. Comment and blank lines in between leave
@@ -498,10 +455,10 @@ fn highlight<const FIXED: bool>(inst: &mut Instance, base: usize, len: usize) {
             match fixed_line_kind(src, lhs) {
                 1 => {
                     ptr = lhs + 5;
-                    gap!(lhs, ptr);
+                    recs.gap(lhs, ptr);
                     lhs = ptr;
                     ptr = lhs + 1;
-                    emit!(tok::OPERATOR, ptr);
+                    recs.tok(tok::OPERATOR, ptr);
                     continued = 0;
                     continue;
                 }
@@ -521,7 +478,7 @@ fn highlight<const FIXED: bool>(inst: &mut Instance, base: usize, len: usize) {
         if quote != 0 || continued != 0 {
             if c == b'\n' || c == b'\r' {
                 ptr = lhs + 1;
-                gap!(lhs, ptr);
+                recs.gap(lhs, ptr);
                 line_start = ptr;
                 member = false;
                 // a string still open at a fixed-form line end may resume on a
@@ -544,7 +501,7 @@ fn highlight<const FIXED: bool>(inst: &mut Instance, base: usize, len: usize) {
                 if ptr == lhs {
                     ptr = lhs + 1;
                 }
-                gap!(lhs, ptr);
+                recs.gap(lhs, ptr);
                 continue;
             }
             if (quote == 0 || continued & 1 != 0) && c == b'!' {
@@ -557,7 +514,7 @@ fn highlight<const FIXED: bool>(inst: &mut Instance, base: usize, len: usize) {
             }
             if continued & 1 != 0 && c == b'&' {
                 ptr = lhs + 1;
-                emit!(tok::OPERATOR, ptr);
+                recs.tok(tok::OPERATOR, ptr);
                 continued = 0;
                 continue;
             }
@@ -570,13 +527,15 @@ fn highlight<const FIXED: bool>(inst: &mut Instance, base: usize, len: usize) {
                     if ptr >= end {
                         break;
                     }
-                    let c = at(src, ptr);
+                    // SAFETY: `ptr` lies before the input end.
+                    let c = unsafe { src.byte_unchecked(ptr) };
                     if c == b'\n' || c == b'\r' {
                         break;
                     }
                     if c == quote {
                         ptr += 1;
-                        if at(src, ptr) == quote {
+                        // SAFETY: `ptr` is at or before the input end.
+                        if unsafe { src.byte_unchecked(ptr) } == quote {
                             ptr += 1;
                         } else {
                             quote = 0;
@@ -585,11 +544,12 @@ fn highlight<const FIXED: bool>(inst: &mut Instance, base: usize, len: usize) {
                     } else {
                         if c == b'&' {
                             let p = skip_space_at(src, ptr + 1);
-                            let c2 = at(src, p);
+                            // SAFETY: the run ends at or before the NUL.
+                            let c2 = unsafe { src.byte_unchecked(p) };
                             if p >= end || c2 == b'!' || c2 == b'\n' || c2 == b'\r' {
-                                emit_span!(tok::STRING, lhs, ptr);
+                                recs.emit(tok::STRING, lhs, ptr);
                                 ptr += 1;
-                                emit!(tok::OPERATOR, ptr);
+                                recs.tok(tok::OPERATOR, ptr);
                                 lhs = ptr;
                                 continued = 1;
                                 break;
@@ -598,7 +558,7 @@ fn highlight<const FIXED: bool>(inst: &mut Instance, base: usize, len: usize) {
                         ptr += 1;
                     }
                 }
-                emit_span!(tok::STRING, lhs, ptr);
+                recs.emit(tok::STRING, lhs, ptr);
                 continue;
             }
         }
@@ -607,7 +567,7 @@ fn highlight<const FIXED: bool>(inst: &mut Instance, base: usize, len: usize) {
         match CLASS[c as usize] {
             class::NEWLINE => {
                 ptr = lhs + 1;
-                gap!(lhs, ptr);
+                recs.gap(lhs, ptr);
                 line_start = ptr;
                 member = false;
             }
@@ -616,7 +576,7 @@ fn highlight<const FIXED: bool>(inst: &mut Instance, base: usize, len: usize) {
                 if ptr == lhs {
                     ptr = lhs + 1;
                 }
-                gap!(lhs, ptr);
+                recs.gap(lhs, ptr);
             }
             class::BANG => {
                 line_comment!(if c2 == b'$' {
@@ -634,18 +594,19 @@ fn highlight<const FIXED: bool>(inst: &mut Instance, base: usize, len: usize) {
             class::QUOTE => {
                 quote = c;
                 ptr = lhs + 1;
-                emit!(tok::STRING, ptr);
+                recs.tok(tok::STRING, ptr);
             }
             class::BOZ if c2 == b'"' || c2 == b'\'' => {
                 // BOZ literals use a radix letter followed by either quote
                 // style (`$lexRawString`, `$lexRawStringBody`)
-                let close = scan::find3(src, lhs + 2, end, c2, b'\n', b'\r');
-                ptr = if close < end && at(src, close) == c2 {
+                let close = scan::find3(src.bytes(), lhs + 2, end, c2, b'\n', b'\r');
+                // SAFETY: `close` lies before the input end when read.
+                ptr = if close < end && unsafe { src.byte_unchecked(close) } == c2 {
                     close + 1
                 } else {
                     close
                 };
-                emit!(tok::NUMBER, ptr);
+                recs.tok(tok::NUMBER, ptr);
             }
             class::DOT if is_ident_start(c2) => {
                 let p = lhs + 1;
@@ -655,20 +616,21 @@ fn highlight<const FIXED: bool>(inst: &mut Instance, base: usize, len: usize) {
                 } else {
                     tok::KEYWORD_OPERATOR
                 };
-                if at(src, ptr) == b'.' {
+                // SAFETY: the run ends at or before the NUL.
+                if unsafe { src.byte_unchecked(ptr) } == b'.' {
                     ptr += 1;
                 }
-                emit!(hl, ptr);
+                recs.tok(hl, ptr);
             }
             class::DIGIT => {
                 // D exponents, kind suffixes, and a trailing decimal point
                 // are Fortran numbers; a following .operator. stays separate
                 ptr = number_end(src, lhs, end);
-                emit!(tok::NUMBER, ptr);
+                recs.tok(tok::NUMBER, ptr);
             }
             class::DOT if is_digit(c2) => {
                 ptr = number_end(src, lhs, end);
-                emit!(tok::NUMBER, ptr);
+                recs.tok(tok::NUMBER, ptr);
             }
             class::IDENT | class::BOZ | class::LETTER_C => {
                 // `$lexScanIdent`
@@ -690,14 +652,18 @@ fn highlight<const FIXED: bool>(inst: &mut Instance, base: usize, len: usize) {
                         tok::NAMESPACE
                     };
                     expect = 0;
-                } else if at(src, skip_space_at(src, rhs)) == b'(' {
-                    hl = tok::FUNCTION;
+                } else {
+                    // SAFETY: the run ends at or before the NUL.
+                    let next = unsafe { src.byte_unchecked(skip_space_at(src, rhs)) };
+                    if next == b'(' {
+                        hl = tok::FUNCTION;
+                    }
                 }
-                emit!(hl, rhs);
+                recs.tok(hl, rhs);
                 member = false;
             }
             _ => {
-                ptr = scan::utf8_span_end(src, lhs + 1, end);
+                ptr = scan::utf8_span_end(src.bytes(), lhs + 1, end);
                 let hl = match c {
                     b'(' | b')' | b'[' | b']' => tok::PUNCTUATION_BRACKET,
                     b':' | b',' | b';' => tok::PUNCTUATION_DELIMITER,
@@ -705,10 +671,9 @@ fn highlight<const FIXED: bool>(inst: &mut Instance, base: usize, len: usize) {
                     _ => tok::NONE,
                 };
                 member = c == b'%';
-                emit!(hl, ptr);
+                recs.tok(hl, ptr);
             }
         }
     }
-    // SAFETY: the records before `cur` are written.
-    unsafe { inst.ext.recs.set_len(cur.offset_from(rp) as usize) };
+    recs.store(inst);
 }
