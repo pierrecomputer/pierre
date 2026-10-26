@@ -128,6 +128,59 @@ void t.test('LiveTokenizer: edits restore TOML stacks inside fences', () => {
   }
 });
 
+void t.test('LiveTokenizer: edits restore HTTP JSON body stacks', () => {
+  // `b` is a key only while the innermost container is an object; the later
+  // JSON body leaves an array in that stack slot
+  const body = [
+    'POST /x HTTP/1.1',
+    'Content-Type: application/json',
+    '',
+    '{',
+    '  "first": {',
+    '    "a": 1,',
+    '    "b": 2',
+    '  },',
+    '  "second": [1]',
+    '}',
+  ];
+  const fenced = ['```http', ...body, '```', '```json', '[ [ 1,', '] ]', '```'];
+  for (const [lang, lines] of [
+    ['http', [...body, '###', 'GET /y HTTP/1.1', '', '[ [ 1,', '] ]']],
+    ['markdown', fenced],
+    ['mdx', fenced],
+  ] as const) {
+    const code = lines.join('\n');
+    const line = lines.indexOf('    "a": 1,');
+    const options = { lang, theme: distinctTheme } as const;
+    const live = new LiveTokenizer({ ...options, code });
+    live.applyEdits([
+      {
+        range: {
+          start: { line, character: 9 },
+          end: { line, character: 10 },
+        },
+        newText: '3',
+      },
+    ]);
+    const fresh = new LiveTokenizer({
+      ...options,
+      code: code.replace('"a": 1', '"a": 3'),
+    });
+    try {
+      for (let i = 0; i < live.lineCount; i++) {
+        assert.deepEqual(
+          live.getLineTokens(i),
+          fresh.getLineTokens(i),
+          `${lang}, line ${i}`
+        );
+      }
+    } finally {
+      live.dispose();
+      fresh.dispose();
+    }
+  }
+});
+
 void t.test(
   'LiveTokenizer: JSON fence stacks survive comments and full templates',
   () => {

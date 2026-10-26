@@ -527,13 +527,11 @@
     (local $stack i32)
     (if (call $lvIsJson (global.get $lvLang))
       (then (return (i32.const $mem.jsonStack))))
-    ;; an open HTTP JSON body: region 29 of kind 2 (see $httpBody)
+    ;; an open HTTP JSON body, top level or fenced: region 29 of kind 2 (see $httpBody)
     (if
       (i32.and
-        (i32.eq (global.get $lvLang) (enum.get $Language.http))
-        (i32.and
-          (i32.eq (global.get $streamRegionKind) (i32.const 29))
-          (i32.eq (i32.and (global.get $streamRegionStarted) (i32.const 3)) (i32.const 2))))
+        (i32.eq (global.get $streamRegionKind) (i32.const 29))
+        (i32.eq (i32.and (global.get $streamRegionStarted) (i32.const 3)) (i32.const 2)))
       (then (return (i32.const $mem.jsonStack))))
     (if (i32.eq (global.get $lvLang) (enum.get $Language.toml))
       (then (return (i32.const $mem.tomlStack))))
