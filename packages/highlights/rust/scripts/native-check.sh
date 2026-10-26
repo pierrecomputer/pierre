@@ -5,6 +5,7 @@
 #
 #   scripts/native-check.sh <module> [--fuzz N] [--target-dir DIR] [--no-perf]
 #                           [--update-lock] [--corpus DIR] [--target TRIPLE]
+#                           [--checked]
 #
 # <module> is a src/langs/<module>.wat name (scripts/native-modules.ts lists
 # them with their languages). Steps:
@@ -22,6 +23,11 @@
 #   4. instructions and cycles per record, native against translated, on
 #      the language's benchmark input and its training corpus.
 #
+# --checked builds with debug assertions and the translated lexers' checked
+# memory, so every `debug_assert!` and every unchecked access's own
+# precondition check is live, and runs steps 1-3: an out-of-range read then
+# fails loudly instead of passing unnoticed.
+#
 # --target builds for another target and runs steps 1-3 there (on this Mac,
 # x86_64-apple-darwin runs under Rosetta), without perf, which another
 # architecture's emulation would not measure.
@@ -38,9 +44,11 @@ perf=1
 update_lock=0
 corpus=target/parity
 triple=
+checked=0
 while [ $# -gt 0 ]; do
   case "$1" in
     --target) triple="$2"; perf=0; shift 2 ;;
+    --checked) checked=1; perf=0; shift ;;
     --corpus) corpus="$2"; shift 2 ;;
     --update-lock) update_lock=1; shift ;;
     --fuzz) fuzz="$2"; shift 2 ;;
@@ -95,7 +103,12 @@ if [ "$update_lock" = 0 ]; then
   fi
   echo "drift lock: in sync"
 fi
-if [ -n "$triple" ]; then
+if [ "$checked" = 1 ]; then
+  target="$target-checked"
+  RUSTFLAGS="-C debug-assertions" cargo build --quiet --release -p bench \
+    --features "$feature,highlights/checked" --target-dir "$target" || fail "build"
+  bench="$target/release/bench"
+elif [ -n "$triple" ]; then
   target="$target-$triple"
   cargo build --quiet --release -p bench --features "$feature" --target "$triple" \
     --target-dir "$target" || fail "build"

@@ -14,6 +14,11 @@
 pub mod ecma;
 pub mod ecma_scan;
 pub mod fast;
+// Parts are used only by the per-language modules.
+#[allow(dead_code)]
+pub mod input;
+// Parts are used only by the per-language modules.
+#[allow(dead_code)]
 pub mod recs;
 pub mod scan;
 // Used by the per-language modules, which build behind their own features.
