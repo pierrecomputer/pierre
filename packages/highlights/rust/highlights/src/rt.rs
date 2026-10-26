@@ -3,6 +3,8 @@
 
 pub const PAGE: usize = 65536;
 
+mod region;
+
 /// Abort on a wasm trap. The lexers never trap on valid input; reaching this
 /// means a lexer broke one of its invariants.
 #[cold]
@@ -11,33 +13,38 @@ pub fn trap() -> ! {
     panic!("highlights: wasm trap")
 }
 
-/// Wasm linear memory. Accesses are unchecked unless the `checked` feature is
-/// on; the lexers keep every read inside the input slack the host reserves.
+/// Wasm linear memory. On Unix and Windows it lives in an address-space
+/// reservation (see [`region`]) that covers every address a wasm access can
+/// form, so memory never moves and an access past its end hits unmapped
+/// pages instead of other data. Accesses are then unchecked unless the
+/// `checked` feature is on. Elsewhere (wasm targets) memory is a `Vec` and
+/// every access is bounds-checked.
 pub struct Memory {
-    buf: Vec<u8>,
-    /// Where `buf` lives, kept in step with every resize. All access goes
+    region: region::Region,
+    /// Where memory lives, kept in step with every resize. All access goes
     /// through this one pointer.
     view: MemView,
 }
 
-// SAFETY: `Memory` owns its buffer; `view` only points into it.
+// SAFETY: `Memory` owns its region; `view` only points into it.
 unsafe impl Send for Memory {}
 
-/// The address (and, with `checked`, the length) of linear memory. Each
-/// generated function copies it into a local, so the address stays in a
-/// register instead of being reloaded from the `Instance` after every call.
-/// The generated code refreshes it after anything that resizes memory.
+/// The address (and, when accesses are checked, the length) of linear
+/// memory. Each generated function copies it into a local, so the address
+/// stays in a register instead of being reloaded from the `Instance` after
+/// every call. The generated code refreshes it after anything that resizes
+/// memory.
 #[derive(Clone, Copy)]
 pub struct MemView {
     base: *mut u8,
-    #[cfg(feature = "checked")]
+    #[cfg(any(feature = "checked", not(any(unix, windows))))]
     len: usize,
 }
 
 macro_rules! access {
     ($self:ident, $addr:ident, $off:ident, $n:expr) => {{
         let at = $addr as u32 as usize + $off as usize;
-        #[cfg(feature = "checked")]
+        #[cfg(any(feature = "checked", not(any(unix, windows))))]
         if at + $n > $self.len {
             trap();
         }
@@ -47,10 +54,11 @@ macro_rules! access {
 
 impl Memory {
     pub fn new(pages: usize, init: &[u8; PAGE]) -> Self {
-        let mut buf = vec![0u8; pages * PAGE];
-        buf[..PAGE].copy_from_slice(init);
-        let view = MemView::of(&mut buf);
-        Memory { buf, view }
+        let mut region = region::Region::new(pages * PAGE);
+        let view = MemView::of(&mut region);
+        let mut mem = Memory { region, view };
+        mem.bytes_mut()[..PAGE].copy_from_slice(init);
+        mem
     }
 
     /// The current address of memory, for a generated function's local.
@@ -61,77 +69,84 @@ impl Memory {
 
     #[inline(always)]
     pub fn bytes(&self) -> &[u8] {
-        // SAFETY: `view` points at `buf`'s `len` initialized bytes.
-        unsafe { core::slice::from_raw_parts(self.view.base, self.buf.len()) }
+        // SAFETY: `view` points at the region's `len` committed bytes.
+        unsafe { core::slice::from_raw_parts(self.view.base, self.region.len()) }
     }
 
     #[inline(always)]
     pub fn bytes_mut(&mut self) -> &mut [u8] {
         // SAFETY: as in `bytes`, and `&mut self` makes this the only access.
-        unsafe { core::slice::from_raw_parts_mut(self.view.base, self.buf.len()) }
+        unsafe { core::slice::from_raw_parts_mut(self.view.base, self.region.len()) }
     }
 
-    /// Resize to `pages` pages, zero-filling new ones.
+    /// Grow to `pages` pages, zero-filling new ones.
     fn resize(&mut self, pages: usize) {
-        self.buf.resize(pages * PAGE, 0);
-        self.view = MemView::of(&mut self.buf);
+        self.region.commit(pages * PAGE);
+        self.view = MemView::of(&mut self.region);
     }
 
     /// Grow so that at least `len` bytes are addressable.
     pub fn reserve(&mut self, len: usize) {
-        if len > self.buf.len() {
+        if len > self.region.len() {
             self.resize(len.div_ceil(PAGE));
         }
     }
 
     #[inline(always)]
     pub fn pages(&self) -> i32 {
-        (self.buf.len() / PAGE) as i32
+        (self.region.len() / PAGE) as i32
     }
 
     pub fn grow(&mut self, delta: i32) -> i32 {
         let old = self.pages();
         let new = old as usize + delta as u32 as usize;
-        if new > 65536 {
+        if new > MAX_PAGES {
             return -1;
         }
         self.resize(new);
         old
     }
 
+    /// `memory.copy`. Copies through the raw address rather than a slice of
+    /// all memory, so it doesn't claim the bytes a native lexer is reading.
     #[inline(always)]
     pub fn copy(&mut self, dst: i32, src: i32, n: i32) {
         let (dst, src, n) = (dst as u32 as usize, src as u32 as usize, n as u32 as usize);
-        let mem = self.bytes_mut();
-        if dst.max(src) + n > mem.len() {
+        if dst.max(src) + n > self.region.len() {
             trap();
         }
-        mem.copy_within(src..src + n, dst);
+        // SAFETY: both ranges are inside committed memory (checked above).
+        unsafe { core::ptr::copy(self.view.ptr(src), self.view.ptr(dst), n) }
     }
 
+    /// `memory.fill`, through the raw address like [`Memory::copy`].
     #[inline(always)]
     pub fn fill(&mut self, dst: i32, v: i32, n: i32) {
         let (dst, n) = (dst as u32 as usize, n as u32 as usize);
-        let mem = self.bytes_mut();
-        if dst + n > mem.len() {
+        if dst + n > self.region.len() {
             trap();
         }
-        mem[dst..dst + n].fill(v as u8);
+        // SAFETY: the range is inside committed memory (checked above).
+        unsafe { core::ptr::write_bytes(self.view.ptr(dst), v as u8, n) }
     }
 }
 
+/// The most pages wasm32 memory can have (4 GiB).
+const MAX_PAGES: usize = 65536;
+
 impl MemView {
-    fn of(buf: &mut Vec<u8>) -> Self {
+    fn of(region: &mut region::Region) -> Self {
         MemView {
-            base: buf.as_mut_ptr(),
-            #[cfg(feature = "checked")]
-            len: buf.len(),
+            base: region.base(),
+            #[cfg(any(feature = "checked", not(any(unix, windows))))]
+            len: region.len(),
         }
     }
 
     #[inline(always)]
     fn ptr(self, at: usize) -> *mut u8 {
-        // SAFETY: callers stay in bounds; see `Memory`.
+        // SAFETY: `at` is at most a 32-bit address plus a 32-bit offset,
+        // inside the reservation (or bounds-checked; see `Memory`).
         unsafe { self.base.add(at) }
     }
 

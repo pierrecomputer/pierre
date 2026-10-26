@@ -165,3 +165,6 @@ native-zig = ["native-core"]
 
 [dependencies]
 unicode-ident = "1"
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"

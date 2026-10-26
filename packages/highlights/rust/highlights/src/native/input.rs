@@ -21,11 +21,14 @@ pub(crate) struct Input<'a> {
 impl<'a> Input<'a> {
     /// The input of `len` bytes at `base` in lexer memory. The slice does
     /// not borrow `inst`, so the lexer can still call translated functions.
+    /// On Unix and Windows lexer memory never moves (see `rt::Memory`), so
+    /// the slice stays valid across those calls.
     ///
     /// # Safety
-    /// `base..base + len + SLACK` must lie inside lexer memory, and the
-    /// result must not be used after anything that may move that memory:
-    /// make a new `Input` after every call into translated code.
+    /// The result must not outlive the lexer call, and the input bytes must
+    /// not change while it is used. On wasm targets, where growing memory
+    /// moves it, it must not be used after a call into translated code that
+    /// may grow memory.
     #[inline(always)]
     pub(crate) unsafe fn new(inst: &Instance, base: usize, len: usize) -> Input<'a> {
         let mem = inst.mem.bytes();
