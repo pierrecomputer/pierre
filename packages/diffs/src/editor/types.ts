@@ -336,11 +336,6 @@ export interface ApplyChangeOptions<EType extends EditorType, LAnnotation> {
   tokens?: ReadonlyMap<number, HighlightedToken[]>;
   /** The line annotations, already shifted for the change. */
   lineAnnotations?: EditorLineAnnotation<EType, LAnnotation>[];
-  /**
-   * The edit touched lines outside the rendered window, so a virtualized
-   * component must recompute its buffer sizes before its next render.
-   */
-  updateBuffer?: boolean;
 }
 
 export interface ApplyChangeResult {

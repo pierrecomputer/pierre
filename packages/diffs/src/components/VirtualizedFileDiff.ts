@@ -1,4 +1,6 @@
 import { DEFAULT_COLLAPSED_CONTEXT_THRESHOLD } from '../constants';
+import type { TextDocument, TextDocumentChange } from '../editor/textDocument';
+import type { ApplyChangeOptions, ApplyChangeResult } from '../editor/types';
 import type {
   BaseDiffOptions,
   DiffLineAnnotation,
@@ -546,13 +548,29 @@ export class VirtualizedFileDiff<
     return this.render();
   };
 
-  // Virtualized renders bypass FileDiff's queued render handler. Apply line
-  // state deferred during the refresh once managers target the rebuilt rows.
-  public override flushManagers(): void {
-    super.flushManagers();
-    if (this.lineStateRefreshPending) {
-      this.flushDeferredLineState();
+  // A structural change (line count or collapsed regions) also moves the
+  // rows below and the file's height, so the layout caches are invalidated
+  // with the render; a released item reports its new height from the next
+  // layout pass. Either way the render itself runs in the virtualizer's frame.
+  protected override renderChange(structural: boolean): void {
+    if (structural) {
+      this.escalateEditSessionRender();
+    } else {
+      this.rerender();
     }
+  }
+
+  public override applyChange(
+    document: TextDocument<'file-diff', LAnnotation>,
+    change: TextDocumentChange,
+    options?: ApplyChangeOptions<'file-diff', LAnnotation>
+  ): ApplyChangeResult {
+    // CodeView anchors scroll to what is on screen before the lines move, so
+    // its next frame keeps it in place.
+    if (change.lineDelta !== 0) {
+      this.getAdvancedVirtualizer()?.capturePendingLayoutAnchor();
+    }
+    return super.applyChange(document, change, options);
   }
 
   // CodeView positions every item before updating the DOM. Recalculate this

@@ -393,13 +393,6 @@ export interface EditorFocusOptions extends FocusOptions {
   offset?: number;
 }
 
-// Cap on how far an edit may widen the virtualized render window, as a multiple
-// of the bounded window the virtualizer last synced (~viewport + 2*hunkLineCount).
-// Edits within this many lines of the window bottom widen so their caret renders;
-// larger inserts fall back to the bounded buffer-only path instead of building a
-// row per inserted line. A safety bound, not a correctness-critical value.
-const MAX_EDIT_WIDEN_WINDOW_MULTIPLE = 2;
-
 // Wrap offsets persist across render-range syncs (see #resetCache), so
 // scrolling through a very large file could otherwise accumulate an entry per
 // line. Past this many lines the cache resets and refills lazily for whatever
@@ -516,13 +509,6 @@ export class Editor<
   readonly #editStateKey?: string;
   readonly #ownsVerticalViewport: boolean;
   #renderRange?: RenderRange;
-  // Bounded render-window size (~viewport + 2*hunkLineCount) from the last view
-  // sync. Used to cap how far #applyChange widens the window for an edit, so a
-  // large insert can't materialize an unbounded number of rows. Captured at sync
-  // time so consecutive edits that grow #renderRange can't ratchet the cap up.
-  // undefined until the first sync; Infinity for non-virtualized (whole-file)
-  // windows, where no cap is needed.
-  #viewportWindowLines?: number;
   #markerRenderer?: MarkerRenderer;
   #carets?: TrackedCaret<Caret>[];
   #searchPanel?: SearchPanelWidget;
@@ -1673,10 +1659,6 @@ export class Editor<
 
     this.#lineAnnotations = lineAnnotations;
     this.#renderRange = renderRange;
-    // Remember the bounded window the virtualizer just synced so #applyChange
-    // can clamp any edit-time widening against it. Refreshed on every scroll;
-    // undefined/Infinity windows leave the clamp disabled.
-    this.#viewportWindowLines = renderRange?.totalLines;
     this.#tokenizer?.prebuildStateStack(renderRange);
 
     const retainedEditorState = editSession.editor;
@@ -3729,10 +3711,9 @@ export class Editor<
 
   #rerender(
     change: TextDocumentChange,
-    newLineAnnotations?: EditorLineAnnotation<EType, LAnnotation>[],
-    renderRange = this.#renderRange,
-    shouldUpdateBuffer?: boolean
+    newLineAnnotations?: EditorLineAnnotation<EType, LAnnotation>[]
   ) {
+    const renderRange = this.#renderRange;
     const tokenizer = this.#tokenizer;
     const fileInstance = this.#fileInstance;
     const applyChange = this.#applyComponentChange;
@@ -3761,7 +3742,6 @@ export class Editor<
     const { rebuiltLines } = applyChange(textDocument, change, {
       tokens: dirtyLines,
       lineAnnotations: newLineAnnotations,
-      updateBuffer: shouldUpdateBuffer,
     });
 
     // Rebuilt rows are new elements, so cached geometry for the old ones is
@@ -6798,87 +6778,12 @@ export class Editor<
     }
     this.#lastAccessedCharX = undefined;
 
-    let renderRange = this.#renderRange;
-    let shouldUpdateBuffer: boolean | undefined;
-    if (
-      renderRange !== undefined &&
-      newSelections !== undefined &&
-      newSelections.length > 0
-    ) {
-      const primarySelection = newSelections.at(-1)!;
-      const renderRangeEndLine =
-        renderRange.startingLine + renderRange.totalLines;
-      // When an edit moves the caret to or past the last rendered line — typing
-      // Enter at the window's bottom edge, or pasting a few lines there — widen
-      // the render range so every new line up to the caret gets a row when
-      // #rerender runs below. The widened range is also written back to
-      // #renderRange: the next edit reads renderRangeEndLine from it, and
-      // #renderCaret/#isLineVisible read it to decide whether to draw the caret.
-      // Without persisting, the end line stays stale, a following edit is
-      // misclassified as "past the window", and its just-typed line is left
-      // unrendered until the next scroll re-syncs the range. Only edits that
-      // carry a caret reach here (the block is guarded on `selections` above), so
-      // a bare programmatic applyEdits with no active selection does not widen.
-      //
-      // Cap the widening at a multiple of the bounded window the virtualizer
-      // last synced. A large insert at the caret — most often a big multi-line
-      // paste, or a scripted set-selection-then-edit at scale — can drop the
-      // caret far below the window; widening to reach it would make #rerender
-      // build a row per inserted line synchronously, defeating virtualization.
-      // Past the cap, keep the bounded window and only recompute the buffer
-      // spacer — the scroll that follows a focused edit (or the next user scroll
-      // when unfocused) renders the far region with a bounded window.
-      if (primarySelection.end.line >= renderRangeEndLine) {
-        const widenedTotalLines =
-          primarySelection.end.line - renderRange.startingLine + 1;
-        const maxWidenLines =
-          this.#viewportWindowLines === undefined ||
-          this.#viewportWindowLines === Infinity
-            ? Infinity
-            : this.#viewportWindowLines * MAX_EDIT_WIDEN_WINDOW_MULTIPLE;
-        // Only widen when the edit actually reaches the rendered window — its
-        // dirty lines start at or before the window end. #rerender materializes
-        // rows from change.startLine onward, so widening for an edit that starts
-        // entirely below the window (e.g. setSelections to an offscreen line
-        // then applyEdits before the virtualizer re-syncs) would leave the
-        // rows between the window and the edit unbuilt while #isLineVisible
-        // reports them visible, mispositioning the new rows and caret until the
-        // next scroll.
-        if (
-          change.startLine <= renderRangeEndLine &&
-          widenedTotalLines <= maxWidenLines &&
-          // Widening exists to give the caret's line a row; a caret target
-          // hidden in a collapsed region can never gain one, so take the
-          // buffer-only path instead of building rows toward it.
-          this.#isLineRenderable(primarySelection.end.line)
-        ) {
-          if (primarySelection.end.line > renderRangeEndLine) {
-            // The line count grew below the window, so the buffer spacer must be
-            // recomputed (preserves the prior behavior for this case).
-            shouldUpdateBuffer = true;
-          }
-          renderRange = { ...renderRange, totalLines: widenedTotalLines };
-          this.#renderRange = renderRange;
-        } else {
-          // The edit is past the cap, or starts below the rendered window: keep
-          // the bounded window and only recompute the buffer; the scroll that
-          // follows a focused edit (or the next user scroll) renders the far
-          // region.
-          shouldUpdateBuffer = true;
-        }
-      }
-    }
     if (
       this.#isRendering &&
       this.#tokenizer != null &&
       this.#contentElement != null
     ) {
-      this.#rerender(
-        change,
-        newLineAnnotations,
-        renderRange,
-        shouldUpdateBuffer
-      );
+      this.#rerender(change, newLineAnnotations);
     } else if (textDocument != null) {
       // Recycling or pending hydration can leave the document editable
       // without editor markup. The component's model still takes the change,
@@ -6902,8 +6807,8 @@ export class Editor<
     this.#recordEditPredictionHistory(change, options?.editSource ?? 'user');
     this.#scheduleEditPrediction();
 
-    // The rows are written before observers hear of the change, so a callback
-    // that reads the component sees the edited document.
+    // The component's model is updated before observers hear of the change;
+    // the rows follow in its render.
     this.#emitChange(
       change.changes,
       newLineAnnotations ?? this.#lineAnnotations

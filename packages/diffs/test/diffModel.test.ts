@@ -330,6 +330,29 @@ describe('DiffModel.applyChange', () => {
 });
 
 describe('DiffModel sessions', () => {
+  test('the no-newline marker stays with a hunk that reaches the end of the file', () => {
+    const lines = Array.from({ length: 12 }, (_, index) => `line ${index};`);
+    const oldContents = lines.join('\n');
+    const model = DiffModel.startEditSession(
+      parseDiffFromFile(
+        { name: 'eof.ts', contents: oldContents },
+        {
+          name: 'eof.ts',
+          contents: oldContents.replace('line 5;', 'changed 5;'),
+        }
+      )
+    );
+    const document = makeDocument(model.diff);
+    // Collapsed context separates the hunk from the end of the file.
+    model.applyChange(edit(document, 5, 10, 10, '\nadded line;'), document);
+    expect(model.diff.hunks.at(-1)?.noEOFCRAdditions).toBe(false);
+    expect(model.diff.hunks.at(-1)?.noEOFCRDeletions).toBe(false);
+    // An edit on the last line brings the hunk to the end of the file.
+    model.applyChange(edit(document, 12, 0, 0, 'x'), document);
+    expect(model.diff.hunks.at(-1)?.noEOFCRAdditions).toBe(true);
+    expect(model.diff.hunks.at(-1)?.noEOFCRDeletions).toBe(true);
+  });
+
   test('line edits copy the input lines once and then edit in place', () => {
     const input = makeDiff();
     const inputLines = input.additionLines;
