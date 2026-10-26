@@ -9,9 +9,10 @@
 //! the rules that can match it, in the WAT's order.
 
 use super::Lexer;
+use super::input::Input;
+use super::recs::Recs;
 use super::scan;
 use super::tables::byteset;
-use crate::Rec;
 use crate::generated::Instance;
 use crate::simd::V;
 use crate::token_ids as tok;
@@ -197,17 +198,6 @@ static IDENT_CONT: [bool; 256] = {
     }
     t
 };
-/// The byte at `i`. Every caller reads inside the input or its 96-byte
-/// slack. The byte at the input end is NUL, which matches none of the
-/// bytes a lookahead tests, so a one-byte lookahead past a token needs no
-/// bounds check.
-#[inline(always)]
-fn at(src: &[u8], i: usize) -> u8 {
-    debug_assert!(i < src.len());
-    // SAFETY: `i` lies inside the input or its slack (see above).
-    unsafe { *src.get_unchecked(i) }
-}
-
 /// Whether `c` is ASCII whitespace: space or TAB through CR (`$lexIsSpace`).
 #[inline(always)]
 const fn is_space(c: u8) -> bool {
@@ -239,95 +229,16 @@ const fn is_ident_continue(c: u8) -> bool {
     is_ident_start(c) || is_digit(c)
 }
 
-/// Token records written straight into `inst.ext.recs` the way `$emitTok`
-/// and `$emitGap` write them: a token extends the last record when its
-/// color matches, and whitespace extends the last record whatever its
-/// color. The vector has room for one record per input byte and every
-/// record covers at least one byte, so running out of room means a lexer
-/// bug, which traps. Helpers off the hot path take it by value and return
-/// it, so its fields stay in registers in the main loop.
-struct Out {
-    base: *mut Rec,
-    cur: *mut Rec,
-    limit: *mut Rec,
-    /// Token of the last record, or `u32::MAX` when there is none.
-    last: u32,
-}
-
-impl Out {
-    fn load(inst: &mut Instance) -> Self {
-        let v = &mut inst.ext.recs;
-        let base = v.as_mut_ptr();
-        Out {
-            base,
-            // SAFETY: `len` records are written, within the allocation.
-            cur: unsafe { base.add(v.len()) },
-            // SAFETY: one past the allocation.
-            limit: unsafe { base.add(v.capacity()) },
-            last: v.last().map_or(u32::MAX, |r| r.token),
-        }
-    }
-
-    fn store(self, inst: &mut Instance) {
-        // SAFETY: the records before `cur` are written, within the
-        // capacity.
-        unsafe {
-            inst.ext
-                .recs
-                .set_len(self.cur.offset_from(self.base) as usize)
-        };
-    }
-
-    /// Append a non-empty token ending at `end` (`$emitTok`).
-    #[inline(always)]
-    fn tok(&mut self, hl: u32, end: usize) {
-        // SAFETY: `cur` stays within `base..limit`; a merge rewrites the
-        // last record, which exists when `last` matches.
-        unsafe {
-            self.cur = self.cur.sub((self.last == hl) as usize);
-            if self.cur == self.limit {
-                crate::rt::trap();
-            }
-            self.cur.write(Rec {
-                end: end as u32,
-                token: hl,
-            });
-            self.cur = self.cur.add(1);
-        }
-        self.last = hl;
-    }
-
-    /// Whitespace `[lhs, rhs)` (`$emitGap`).
-    #[inline(always)]
-    fn gap(&mut self, lhs: usize, rhs: usize) {
-        if lhs < rhs {
-            if self.cur == self.base {
-                self.tok(tok::NONE, rhs);
-            } else {
-                self.extend(rhs);
-            }
-        }
-    }
-
-    /// Whitespace up to `rhs` after a record: it extends that record.
-    #[inline(always)]
-    fn extend(&mut self, rhs: usize) {
-        debug_assert!(self.cur > self.base);
-        // SAFETY: a record precedes `cur`.
-        unsafe { (*self.cur.sub(1)).end = rhs as u32 };
-    }
-}
-
 /// The end of the whitespace run from `p` (`$scanWhitespace`). The NUL
 /// after the input ends every run.
 #[inline(always)]
-fn whitespace_end(src: &[u8], mut p: usize) -> usize {
+fn whitespace_end(src: Input, mut p: usize) -> usize {
     loop {
         // Skip spaces 8 bytes at a time, then step over one other
         // whitespace byte (TAB to CR) and go on.
         // SAFETY: `p` lies at or before the NUL after the input, so the
         // 8-byte read stays inside the slack.
-        let w = unsafe { src.as_ptr().add(p).cast::<u64>().read_unaligned() };
+        let w = unsafe { src.word_unchecked(p) };
         let x = w ^ 0x2020_2020_2020_2020;
         let other =
             (((x & 0x7f7f_7f7f_7f7f_7f7f) + 0x7f7f_7f7f_7f7f_7f7f) | x) & 0x8080_8080_8080_8080;
@@ -336,7 +247,8 @@ fn whitespace_end(src: &[u8], mut p: usize) -> usize {
             continue;
         }
         p += (other.trailing_zeros() / 8) as usize;
-        if !is_space(at(src, p)) {
+        // SAFETY: as above, `p` lies at or before the NUL.
+        if !is_space(unsafe { src.byte_unchecked(p) }) {
             return p;
         }
         p += 1;
@@ -347,10 +259,11 @@ fn whitespace_end(src: &[u8], mut p: usize) -> usize {
 /// 0x80 (`$lexScanIdent`, `$scanIdentRun`). The NUL after the input ends
 /// every run.
 #[inline(always)]
-fn ident_end(src: &[u8], mut p: usize) -> usize {
+fn ident_end(src: Input, mut p: usize) -> usize {
     // Most names are short: test a few bytes one by one first.
     for _ in 0..8 {
-        if !IDENT_CONT[at(src, p) as usize] {
+        // SAFETY: `p` lies at or before the NUL after the input.
+        if !IDENT_CONT[unsafe { src.byte_unchecked(p) } as usize] {
             return p;
         }
         p += 1;
@@ -358,7 +271,7 @@ fn ident_end(src: &[u8], mut p: usize) -> usize {
     loop {
         // SAFETY: each 16-byte load starts at or before the NUL after the
         // input, inside the slack.
-        let v = unsafe { V::load(src.as_ptr().add(p)) };
+        let v = unsafe { src.vec_unchecked(p) };
         let alpha = v.or(V::splat(0x20)).sub(V::splat(b'a')).le(V::splat(25));
         let digit = v.sub(V::splat(b'0')).le(V::splat(9));
         let extra = v.eq(V::splat(b'_')).or(v.eq(V::splat(b'$')));
@@ -374,22 +287,28 @@ fn ident_end(src: &[u8], mut p: usize) -> usize {
 /// Skip spaces and tabs from `p` on the current line (`$lexSkipSpaceAt`).
 /// The NUL after the input ends every run.
 #[inline(always)]
-fn skip_space_at(src: &[u8], mut p: usize) -> usize {
-    while at(src, p) == b' ' || at(src, p) == b'\t' {
+fn skip_space_at(src: Input, mut p: usize) -> usize {
+    loop {
+        // SAFETY: `p` starts at or before the NUL after the input, which
+        // ends the run.
+        let c = unsafe { src.byte_unchecked(p) };
+        if c != b' ' && c != b'\t' {
+            return p;
+        }
         p += 1;
     }
-    p
 }
 
 /// SCREAMING_CASE: at least two bytes, one uppercase letter, and only
 /// `[A-Z0-9_]` (`$lexIsConstCase`).
-fn is_const_case(src: &[u8], lhs: usize, rhs: usize) -> bool {
+fn is_const_case(src: Input, lhs: usize, rhs: usize) -> bool {
     if rhs - lhs < 2 {
         return false;
     }
     let mut upper = false;
     for p in lhs..rhs {
-        let c = at(src, p);
+        // SAFETY: the name lies inside the input.
+        let c = unsafe { src.byte_unchecked(p) };
         if c.wrapping_sub(b'A') <= 25 {
             upper = true;
         } else if !(is_digit(c) || c == b'_') {
@@ -399,14 +318,9 @@ fn is_const_case(src: &[u8], lhs: usize, rhs: usize) -> bool {
     upper
 }
 
-/// The first `n` bytes at `p` as a little-endian integer. Reads 8 bytes,
-/// which the input slack allows.
+/// The first `n` bytes of the little-endian integer `w`.
 #[inline(always)]
-fn word_at(src: &[u8], p: usize, n: u32) -> u64 {
-    debug_assert!(p + 8 <= src.len());
-    // SAFETY: `p` lies at or before the input end, so `p + 8` lies inside
-    // the slack.
-    let w = unsafe { src.as_ptr().add(p).cast::<u64>().read_unaligned() };
+const fn low_bytes(w: u64, n: u32) -> u64 {
     w & (u64::MAX >> (64 - 8 * n))
 }
 
@@ -425,17 +339,19 @@ const fn word(s: &[u8]) -> u64 {
 /// with `.` only before a digit (`$lexScanNumber`, `$lexScanNumberBody`).
 /// The NUL after the input ends every number.
 #[inline(always)]
-fn number_body(src: &[u8], mut p: usize, hex: bool) -> usize {
+fn number_body(src: Input, mut p: usize, hex: bool) -> usize {
     let mut prev = 0u8;
     loop {
-        let c = at(src, p);
+        // SAFETY: the NUL at the input end stops the run.
+        let c = unsafe { src.byte_unchecked(p) };
         if IDENT_CONT[c as usize] {
             prev = c;
             p += 1;
             continue;
         }
         if c == b'.' {
-            if !is_digit(at(src, p + 1)) {
+            // SAFETY: `p` holds `.`, inside the input.
+            if !is_digit(unsafe { src.byte_unchecked(p + 1) }) {
                 break;
             }
             prev = c;
@@ -456,10 +372,14 @@ fn number_body(src: &[u8], mut p: usize, hex: bool) -> usize {
 /// may start with an a-f digit or be empty (`$lexScanHexNumber` with no
 /// required exponent).
 #[inline(always)]
-fn hex_number_end(src: &[u8], lhs: usize) -> usize {
-    let hex = at(src, lhs) == b'0' && at(src, lhs + 1) | 0x20 == b'x';
+fn hex_number_end(src: Input, lhs: usize) -> usize {
+    // SAFETY: `lhs` lies inside the input and the number ends at or
+    // before the NUL after it.
+    let hex =
+        unsafe { src.byte_unchecked(lhs) == b'0' && src.byte_unchecked(lhs + 1) | 0x20 == b'x' };
     let p = number_body(src, lhs, hex);
-    if hex && at(src, p) == b'.' {
+    // SAFETY: as above.
+    if hex && unsafe { src.byte_unchecked(p) } == b'.' {
         hex_fraction(src, p)
     } else {
         p
@@ -471,50 +391,55 @@ fn hex_number_end(src: &[u8], lhs: usize) -> usize {
 /// `$lexScanHexNumber`).
 #[cold]
 #[inline(never)]
-fn hex_fraction(src: &[u8], p: usize) -> usize {
-    let next = at(src, p + 1);
+fn hex_fraction(src: Input, p: usize) -> usize {
+    let next = src.byte(p + 1);
     if !(is_hex(next) || next | 32 == b'p') {
         return p;
     }
     if next | 32 == b'p' {
         let mut q = p + 1;
-        while is_hex(at(src, q)) || at(src, q) == b'_' {
+        while is_hex(src.byte(q)) || src.byte(q) == b'_' {
             q += 1;
         }
-        if at(src, q) | 32 != b'p' {
+        if src.byte(q) | 32 != b'p' {
             return p;
         }
         q += 1;
-        if at(src, q) == b'+' || at(src, q) == b'-' {
+        if src.byte(q) == b'+' || src.byte(q) == b'-' {
             q += 1;
         }
-        if !is_digit(at(src, q)) {
+        if !is_digit(src.byte(q)) {
             return p;
         }
     }
     number_body(src, p + 1, true)
 }
 
-/// The `$wgslWords` value of the name `[lhs, rhs)`, or -1.
+/// The `$wgslWords` value of the name `[lhs, rhs)`, whose first byte is
+/// `c`, or -1.
 #[inline(always)]
-fn word_value(src: &[u8], lhs: usize, rhs: usize) -> i32 {
+fn word_value(src: Input, lhs: usize, rhs: usize, c: u8) -> i32 {
     let n = rhs - lhs;
-    if n > WORD_MAX || WORD_LENGTHS[at(src, lhs) as usize] >> n & 1 == 0 {
+    if n > WORD_MAX || WORD_LENGTHS[c as usize] >> n & 1 == 0 {
         return -1;
     }
-    let k = [
-        word_at(src, lhs, n.min(8) as u32),
-        if n > 8 {
-            word_at(src, lhs + 8, (n - 8).min(8) as u32)
-        } else {
-            0
-        },
-        if n > 16 {
-            word_at(src, lhs + 16, (n - 16) as u32)
-        } else {
-            0
-        },
-    ];
+    // SAFETY: the name ends at or before the input end, so each 8-byte
+    // read starts inside it and stays inside the slack.
+    let k = unsafe {
+        [
+            low_bytes(src.word_unchecked(lhs), n.min(8) as u32),
+            if n > 8 {
+                low_bytes(src.word_unchecked(lhs + 8), (n - 8).min(8) as u32)
+            } else {
+                0
+            },
+            if n > 16 {
+                low_bytes(src.word_unchecked(lhs + 16), (n - 16) as u32)
+            } else {
+                0
+            },
+        ]
+    };
     let e = WORDS.index[word_slot(k, WORDS.mul)] as usize;
     let key = &WORDS.keys[e.wrapping_sub(1) & 255];
     if e != 0 && (key[0] ^ k[0]) | (key[1] ^ k[1]) | (key[2] ^ k[2]) == 0 {
@@ -527,27 +452,29 @@ fn word_value(src: &[u8], lhs: usize, rhs: usize) -> i32 {
 /// `type.builtin` for the built-in type families the table cannot hold:
 /// `vec2`..`vec4` with an optional `f`/`i`/`u`/`h` suffix, `mat2x2`..
 /// `mat4x4` with an optional `f`/`h` suffix, and every `texture_` type;
-/// otherwise `tok::NONE` (`$wgslTypeHl`). The wide loads stay inside the
-/// input slack.
+/// otherwise `tok::NONE` (`$wgslTypeHl`). `c0` is the name's first byte.
 #[inline(always)]
-fn type_hl(src: &[u8], lhs: usize, rhs: usize) -> u32 {
+fn type_hl(src: Input, lhs: usize, rhs: usize, c0: u8) -> u32 {
     let mut len = rhs - lhs;
     // (each family starts with `t`, `v`, or `m`)
-    if len < 4 || !matches!(at(src, lhs), b't' | b'v' | b'm') {
+    if len < 4 || !matches!(c0, b't' | b'v' | b'm') {
         return tok::NONE;
     }
-    if len >= 9 && word_at(src, lhs, 8) == word(b"texture_") {
+    // SAFETY (this function): the name `[lhs, rhs)` lies inside the
+    // input, so 8 bytes from `lhs` lie inside the slack.
+    let head = unsafe { src.word_unchecked(lhs) };
+    if len >= 9 && head == word(b"texture_") {
         return tok::TYPE_BUILTIN;
     }
-    let w = word_at(src, lhs, 3);
-    let c = at(src, rhs - 1);
+    let w = low_bytes(head, 3);
+    let c = unsafe { src.byte_unchecked(rhs - 1) };
     // an element suffix letter is dropped before the digit check
     let mut rhs = rhs;
     if c == b'f' || c == b'h' || (w == word(b"vec") && (c == b'i' || c == b'u')) {
         rhs -= 1;
         len -= 1;
     }
-    if at(src, rhs - 1).wrapping_sub(b'2') > 2 {
+    if unsafe { src.byte_unchecked(rhs - 1) }.wrapping_sub(b'2') > 2 {
         return tok::NONE;
     }
     if len == 4 && w == word(b"vec") {
@@ -555,8 +482,8 @@ fn type_hl(src: &[u8], lhs: usize, rhs: usize) -> u32 {
     }
     if len == 6
         && w == word(b"mat")
-        && at(src, lhs + 3).wrapping_sub(b'2') <= 2
-        && at(src, lhs + 4) == b'x'
+        && unsafe { src.byte_unchecked(lhs + 3) }.wrapping_sub(b'2') <= 2
+        && unsafe { src.byte_unchecked(lhs + 4) } == b'x'
     {
         return tok::TYPE_BUILTIN;
     }
@@ -565,12 +492,12 @@ fn type_hl(src: &[u8], lhs: usize, rhs: usize) -> u32 {
 
 /// The word value of the name `[lhs, rhs)`: its token in the low byte and
 /// its next-name capture above (1 = function, 2 = type), or -1 for an
-/// ordinary name (`$wgslWordHl`).
+/// ordinary name. `c` is its first byte (`$wgslWordHl`).
 #[inline(always)]
-fn word_hl(src: &[u8], lhs: usize, rhs: usize) -> i32 {
-    let g = word_value(src, lhs, rhs);
+fn word_hl(src: Input, lhs: usize, rhs: usize, c: u8) -> i32 {
+    let g = word_value(src, lhs, rhs, c);
     if g < 0 {
-        let g = type_hl(src, lhs, rhs);
+        let g = type_hl(src, lhs, rhs, c);
         return if g != tok::NONE { g as i32 } else { -1 };
     }
     g
@@ -581,7 +508,7 @@ fn word_hl(src: &[u8], lhs: usize, rhs: usize) -> i32 {
 /// `/*` and `*/` from depth 1). A pair counts only when both its bytes lie
 /// before `end`; the NUL at `end` matches neither pair.
 #[inline(always)]
-fn nested_comment_end(src: &[u8], mut p: usize, end: usize) -> usize {
+fn nested_comment_end(src: Input, mut p: usize, end: usize) -> usize {
     let mut depth = 1u32;
     loop {
         // the earliest `/*` or `*/` at or after `p`
@@ -589,14 +516,9 @@ fn nested_comment_end(src: &[u8], mut p: usize, end: usize) -> usize {
             if p >= end {
                 return end;
             }
-            // SAFETY: each load starts before `end` and reads 17 bytes,
-            // inside the input slack.
-            let (a, b) = unsafe {
-                (
-                    V::load(src.as_ptr().add(p)),
-                    V::load(src.as_ptr().add(p + 1)),
-                )
-            };
+            // SAFETY: `p` lies before `end`, the input end, so the 17
+            // bytes these loads read stay inside the slack.
+            let (a, b) = unsafe { (src.vec_unchecked(p), src.vec_unchecked(p + 1)) };
             let open = a.eq(V::splat(b'/')).and(b.eq(V::splat(b'*')));
             let close = a.eq(V::splat(b'*')).and(b.eq(V::splat(b'/')));
             let k = open.or(close).first();
@@ -609,7 +531,7 @@ fn nested_comment_end(src: &[u8], mut p: usize, end: usize) -> usize {
         if p + 1 >= end {
             return end;
         }
-        if at(src, p) == b'/' {
+        if src.byte(p) == b'/' {
             depth += 1;
             p += 2;
             continue;
@@ -625,14 +547,16 @@ fn nested_comment_end(src: &[u8], mut p: usize, end: usize) -> usize {
 /// The end of the operator at `p`, whose first byte is `c` (`$hlWgsl`'s
 /// `$wgslIsOp` rule).
 #[inline(always)]
-fn operator_end(src: &[u8], p: usize, c: u8) -> usize {
-    let c2 = at(src, p + 1);
+fn operator_end(src: Input, p: usize, c: u8) -> usize {
+    // SAFETY (this function): the operator byte at `p` lies inside the
+    // input, so the two bytes after it lie inside the slack.
+    let c2 = unsafe { src.byte_unchecked(p + 1) };
     let mut p = p + 1;
     if c == b'-' && c2 == b'>' {
         p += 1;
     } else if c2 == b'=' || (c == c2 && DOUBLES[c as usize]) {
         p += 1;
-        if (c == b'<' || c == b'>') && at(src, p) == b'=' {
+        if (c == b'<' || c == b'>') && unsafe { src.byte_unchecked(p) } == b'=' {
             p += 1;
         }
     }
@@ -641,15 +565,14 @@ fn operator_end(src: &[u8], p: usize, c: u8) -> usize {
 
 /// Lex the WGSL input of `len` bytes at `base` (`$hlWgsl`).
 fn highlight(inst: &mut Instance, base: usize, len: usize) {
-    let mem_ptr = inst.mem.bytes().as_ptr();
-    // SAFETY: `base..base + len + 96` lies inside lexer memory, which is not
-    // reallocated while this lexer runs.
-    let src: &[u8] = unsafe { core::slice::from_raw_parts(mem_ptr.add(base), len + 96) };
+    // SAFETY: `base..base + len` plus the slack lies inside lexer memory,
+    // and this lexer calls no translated code, so memory stays in place.
+    let src = unsafe { Input::new(inst, base, len) };
     let end = len;
-    let mut out = Out::load(inst);
+    let mut out = Recs::load(inst);
 
     // `$lexEmitLeadingContinuation`
-    let mut ptr = scan::utf8_span_end(src, 0, end);
+    let mut ptr = scan::utf8_span_end(src.bytes(), 0, end);
     out.gap(0, ptr);
     // the pending next-name capture: 1 = function, 2 = type
     let mut expect = 0u32;
@@ -660,12 +583,16 @@ fn highlight(inst: &mut Instance, base: usize, len: usize) {
     out.gap(ptr, first);
     ptr = first;
 
+    // Every token ends at or before the input end, so `ptr` stays at or
+    // before the NUL and its lookahead bytes inside the slack.
     loop {
-        let mut c = at(src, ptr);
+        // SAFETY: `ptr` lies at or before the NUL (above).
+        let mut c = unsafe { src.byte_unchecked(ptr) };
         let mut class = CLASS[c as usize];
         if class == class::SPACE {
             // whitespace gaps
-            let next = at(src, ptr + 1);
+            // SAFETY: `ptr` lies before the NUL, at whitespace.
+            let next = unsafe { src.byte_unchecked(ptr + 1) };
             let next_class = CLASS[next as usize];
             if c == b' ' && next_class != class::SPACE {
                 // one space
@@ -674,17 +601,20 @@ fn highlight(inst: &mut Instance, base: usize, len: usize) {
                 class = next_class;
             } else {
                 ptr = whitespace_end(src, ptr + 1);
-                c = at(src, ptr);
+                // SAFETY: the run stops at or before the NUL.
+                c = unsafe { src.byte_unchecked(ptr) };
                 class = CLASS[c as usize];
             }
-            out.extend(ptr);
+            // SAFETY: the leading gap and every token before this one
+            // wrote a record.
+            unsafe { out.extend_unchecked(ptr) };
         }
         let lhs = ptr;
         match class {
             class::IDENT => {
                 ptr = ident_end(src, ptr + 1);
                 let rhs = ptr;
-                let kind = word_hl(src, lhs, rhs);
+                let kind = word_hl(src, lhs, rhs, c);
                 let hl;
                 if kind >= 0 {
                     hl = kind as u32 & 255;
@@ -696,7 +626,9 @@ fn highlight(inst: &mut Instance, base: usize, len: usize) {
                         tok::TYPE
                     };
                     expect = 0;
-                } else if at(src, skip_space_at(src, rhs)) == b'(' {
+                // SAFETY: the run of blanks after the name ends at or
+                // before the NUL after the input.
+                } else if unsafe { src.byte_unchecked(skip_space_at(src, rhs)) } == b'(' {
                     // `Foo(` constructs a struct; `.length(` calls a method
                     hl = if member {
                         tok::FUNCTION_METHOD
@@ -720,16 +652,19 @@ fn highlight(inst: &mut Instance, base: usize, len: usize) {
                 member = false;
                 // a bracket or delimiter right after a name: its rule runs
                 // here, without the gap and dispatch steps
-                let next = at(src, rhs);
+                // SAFETY: the name ends at or before the NUL.
+                let next = unsafe { src.byte_unchecked(rhs) };
                 if CLASS[next as usize] == class::PUNCT {
                     ptr += 1;
                     out.tok(PUNCT_HL[next as usize] as u32, ptr);
                     expect = 0;
                 }
             }
-            class::SLASH if at(src, ptr + 1) == b'/' => {
-                let c3 = at(src, ptr + 2);
-                ptr = scan::line_end(src, ptr + 2, end);
+            // SAFETY (the rules below): `ptr` holds a byte of the input, so
+            // the two bytes after it lie inside the slack.
+            class::SLASH if unsafe { src.byte_unchecked(ptr + 1) } == b'/' => {
+                let c3 = unsafe { src.byte_unchecked(ptr + 2) };
+                ptr = scan::line_end(src.bytes(), ptr + 2, end);
                 let hl = if c3 == b'/' || c3 == b'!' {
                     tok::COMMENT_DOC
                 } else {
@@ -737,9 +672,9 @@ fn highlight(inst: &mut Instance, base: usize, len: usize) {
                 };
                 out.tok(hl, ptr);
             }
-            class::SLASH if at(src, ptr + 1) == b'*' => {
+            class::SLASH if unsafe { src.byte_unchecked(ptr + 1) } == b'*' => {
                 // WGSL block comments nest
-                let c3 = at(src, ptr + 2);
+                let c3 = unsafe { src.byte_unchecked(ptr + 2) };
                 let hl = if c3 == b'*' || c3 == b'!' {
                     tok::COMMENT_DOC
                 } else {
@@ -748,7 +683,7 @@ fn highlight(inst: &mut Instance, base: usize, len: usize) {
                 ptr = nested_comment_end(src, ptr + 2, end);
                 out.tok(hl, ptr);
             }
-            class::AT if is_ident_start(at(src, ptr + 1)) => {
+            class::AT if is_ident_start(unsafe { src.byte_unchecked(ptr + 1) }) => {
                 // `@vertex`, `@location(0)`: the attribute name; its
                 // arguments are code
                 ptr = ident_end(src, ptr + 1);
@@ -760,7 +695,7 @@ fn highlight(inst: &mut Instance, base: usize, len: usize) {
                 out.tok(tok::NUMBER, ptr);
                 member = false;
             }
-            class::DOT if is_digit(at(src, ptr + 1)) => {
+            class::DOT if is_digit(unsafe { src.byte_unchecked(ptr + 1) }) => {
                 ptr = hex_number_end(src, ptr);
                 out.tok(tok::NUMBER, ptr);
                 member = false;
