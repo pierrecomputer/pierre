@@ -8,9 +8,10 @@
 //! equal the translated `latex` lexer's records.
 
 use super::Lexer;
+use super::input::Input;
+use super::recs::Recs;
 use super::scan;
 use super::tables::{KeywordTable, byteset};
-use crate::Rec;
 use crate::generated::Instance;
 use crate::simd::V;
 use crate::token_ids as tok;
@@ -54,90 +55,28 @@ static SPACE: [bool; 256] = {
     t
 };
 
-/// The byte at `i`. Callers read at most 16 bytes past the input end, which
-/// the 96-byte input slack covers.
-#[inline(always)]
-fn at(src: &[u8], i: usize) -> u8 {
-    debug_assert!(i < src.len());
-    // SAFETY: `i` lies inside the input or its slack (see above).
-    unsafe { *src.get_unchecked(i) }
-}
-
 /// Whether `c` is an ASCII letter.
 #[inline(always)]
 const fn is_letter(c: u8) -> bool {
     (c | 32).wrapping_sub(b'a') <= 25
 }
 
-/// Token records written through a moving pointer into `inst.ext.recs`,
-/// the way the translated `$emitTok` and `$emitGap` write them: a token
-/// extends the last record when its color matches, and whitespace extends
-/// the last record whatever its color. The vector has room for one record
-/// per input byte and every record covers at least one byte, so running
-/// out of room means a lexer bug, which traps.
-#[derive(Clone, Copy)]
-struct Out {
-    cur: *mut Rec,
-    limit: *mut Rec,
-    /// Token of the last record, or `u32::MAX` when there is none.
-    last: u32,
-}
-
-impl Out {
-    /// Append a non-empty token ending at `end` (`$emitTok`).
-    #[inline(always)]
-    fn tok(&mut self, hl: u32, end: usize) {
-        // SAFETY: `cur` stays within the vector's capacity: a merge steps
-        // back over the last record, and the trap stops a write at the
-        // limit.
-        unsafe {
-            self.cur = self.cur.sub((self.last == hl) as usize);
-            if self.cur == self.limit {
-                crate::rt::trap();
-            }
-            self.cur.write(Rec {
-                end: end as u32,
-                token: hl,
-            });
-            self.cur = self.cur.add(1);
-        }
-        self.last = hl;
-    }
-
-    /// `[lhs, rhs)` as `hl` when it is non-empty (`$emitTok`).
-    #[inline(always)]
-    fn emit(&mut self, hl: u32, lhs: usize, rhs: usize) {
-        if lhs < rhs {
-            self.tok(hl, rhs);
-        }
-    }
-
-    /// Whitespace `[lhs, rhs)` extends the last record (`$emitGap`). Every
-    /// gap after the input's leading whitespace follows a token's record.
-    #[inline(always)]
-    fn gap(&mut self, lhs: usize, rhs: usize) {
-        if lhs < rhs {
-            // SAFETY: the record before `cur` is written (see above).
-            unsafe { (*self.cur.sub(1)).end = rhs as u32 };
-        }
-    }
-}
-
 /// The next `a` or `b` from `p`, or `end` (`$lexFindEither`).
 #[inline(always)]
-fn find_either(src: &[u8], p: usize, end: usize, a: u8, b: u8) -> usize {
-    scan::find3(src, p, end, a, b, b)
+fn find_either(inp: Input, p: usize, end: usize, a: u8, b: u8) -> usize {
+    scan::find3(inp.bytes(), p, end, a, b, b)
 }
 
 /// The end of an environment name at `p`: its `}`, or the first byte that
 /// cannot be part of a name on this line (`$latexEnvNameEnd`).
 #[inline(always)]
-fn env_name_end(src: &[u8], mut p: usize, end: usize) -> usize {
+fn env_name_end(inp: Input, mut p: usize, end: usize) -> usize {
     loop {
-        while !ENV_NAME_STOP[at(src, p) as usize] {
+        // SAFETY: the NUL at the input end stops the run.
+        while !ENV_NAME_STOP[unsafe { inp.byte_unchecked(p) } as usize] {
             p += 1;
         }
-        if at(src, p) == 0 && p < end {
+        if inp.byte(p) == 0 && p < end {
             p += 1;
             continue;
         }
@@ -148,22 +87,22 @@ fn env_name_end(src: &[u8], mut p: usize, end: usize) -> usize {
 /// The keyword value of the environment name `[lhs, rhs)`, plus 4096 when
 /// it ends with `*`, or -1 for an unknown name (`$latexEnvKey`).
 #[inline(always)]
-fn env_key(src: &[u8], lhs: usize, rhs: usize) -> i32 {
-    let star = rhs > lhs && at(src, rhs - 1) == b'*';
-    WORDS.value(src, lhs, rhs - star as usize) | (star as i32) << 12
+fn env_key(inp: Input, lhs: usize, rhs: usize) -> i32 {
+    let star = rhs > lhs && inp.byte(rhs - 1) == b'*';
+    WORDS.value(inp.bytes(), lhs, rhs - star as usize) | (star as i32) << 12
 }
 
 /// The end of the plain text from `p`, or the input end, 16 bytes per
 /// step. Plain text ends at `#$%&`, `[\]`, `{`, `}`, or LF, and in math
 /// also at `^`, `_`, or `=`.
 #[inline(always)]
-fn text_end(src: &[u8], mut p: usize, end: usize, math: bool) -> usize {
+fn text_end(inp: Input, mut p: usize, end: usize, math: bool) -> usize {
     // `#$%&`, `[\]` (`[\]^_` in math), `{`, `}`, LF, and `=` in math
     let range = V::splat(if math { 4 } else { 2 });
     let extra = V::splat(if math { b'=' } else { b'\n' });
     while p < end {
         // SAFETY: each load starts before the input end, inside the slack.
-        let w = unsafe { V::load(src.as_ptr().add(p)) };
+        let w = unsafe { inp.vec_unchecked(p) };
         let hit = w
             .sub(V::splat(b'#'))
             .le(V::splat(3))
@@ -183,20 +122,11 @@ fn text_end(src: &[u8], mut p: usize, end: usize, math: bool) -> usize {
 
 /// Lex the LaTeX input of `len` bytes at `base` (`$hlLatex`).
 fn highlight(inst: &mut Instance, base: usize, len: usize) {
-    let mem_ptr = inst.mem.bytes().as_ptr();
-    // SAFETY: `base..base + len + 96` lies inside lexer memory, which is not
-    // reallocated while this lexer runs.
-    let src: &[u8] = unsafe { core::slice::from_raw_parts(mem_ptr.add(base), len + 96) };
+    // SAFETY: the input and its slack lie inside lexer memory, and this
+    // lexer calls no translated code that could move it.
+    let inp = unsafe { Input::new(inst, base, len) };
     let end = len;
-    let v = &mut inst.ext.recs;
-    let start = v.as_mut_ptr();
-    let mut o = Out {
-        // SAFETY: `len` records are written.
-        cur: unsafe { start.add(v.len()) },
-        // SAFETY: one past the allocation.
-        limit: unsafe { start.add(v.capacity()) },
-        last: v.last().map_or(u32::MAX, |r| r.token),
-    };
+    let mut o = Recs::load(inst);
 
     // 0 text, 1 `$`, 2 `$$`, 3 `\(`, 4 `\[`, 5 a math environment
     let mut math = 0u32;
@@ -220,29 +150,23 @@ fn highlight(inst: &mut Instance, base: usize, len: usize) {
     // which writes the first record when there is none yet. Its line
     // breaks change no state: blank lines reset what is already reset, and
     // the token after them clears `line_empty`.
-    let mut ptr = scan::utf8_span_end(src, 0, end);
-    while SPACE[at(src, ptr) as usize] {
+    let mut ptr = scan::utf8_span_end(inp.bytes(), 0, end);
+    while SPACE[inp.byte(ptr) as usize] {
         ptr += 1;
     }
-    if ptr > 0 {
-        if o.cur == start {
-            o.tok(tok::NONE, ptr);
-        } else {
-            o.gap(0, ptr);
-        }
-    }
+    o.gap(0, ptr);
     loop {
         // a verbatim or comment body
         if raw != 0 {
             let mut p = ptr;
             loop {
-                p = find_either(src, p, end, b'\\', b'\\');
+                p = find_either(inp, p, end, b'\\', b'\\');
                 if p >= end {
                     break;
                 }
-                if p + 5 <= end && src[p..p + 4] == *b"\\end" && at(src, p + 4) == b'{' {
-                    let q = env_name_end(src, p + 5, end);
-                    if q < end && at(src, q) == b'}' && env_key(src, p + 5, q) == raw {
+                if p + 5 <= end && inp.bytes()[p..p + 4] == *b"\\end" && inp.byte(p + 4) == b'{' {
+                    let q = env_name_end(inp, p + 5, end);
+                    if q < end && inp.byte(q) == b'}' && env_key(inp, p + 5, q) == raw {
                         break;
                     }
                 }
@@ -256,12 +180,14 @@ fn highlight(inst: &mut Instance, base: usize, len: usize) {
             raw = 0;
         }
 
-        let gap = ptr;
-        let mut c = at(src, ptr);
-        if c == b' ' && !SPACE[at(src, ptr + 1) as usize] {
+        // SAFETY: `ptr` never passes the input end, so these reads stay
+        // inside the input and its slack.
+        let mut c = unsafe { inp.byte_unchecked(ptr) };
+        if c == b' ' && !SPACE[unsafe { inp.byte_unchecked(ptr + 1) } as usize] {
             // one space
             ptr += 1;
-            o.gap(gap, ptr);
+            // SAFETY: whitespace after the leading run follows a record.
+            unsafe { o.extend_unchecked(ptr) };
         } else if SPACE[c as usize] {
             loop {
                 // A blank line ends math and arguments.
@@ -279,26 +205,28 @@ fn highlight(inst: &mut Instance, base: usize, len: usize) {
                     line_empty = true;
                 }
                 ptr += 1;
-                c = at(src, ptr);
+                // SAFETY: the NUL at the input end stops the run.
+                c = unsafe { inp.byte_unchecked(ptr) };
                 if !SPACE[c as usize] {
                     break;
                 }
             }
-            o.gap(gap, ptr);
+            // SAFETY: whitespace after the leading run follows a record.
+            unsafe { o.extend_unchecked(ptr) };
         }
         if ptr >= end {
             break;
         }
         line_empty = false;
         let lhs = ptr;
-        let c = at(src, lhs);
-        let c2 = at(src, lhs + 1);
+        // SAFETY: `lhs` is before the input end.
+        let (c, c2) = unsafe { (inp.byte_unchecked(lhs), inp.byte_unchecked(lhs + 1)) };
 
         // `true` for the one-byte bracket token after a brace or square
         // bracket's state change; `false` for plain text
         let bracket = match c {
             b'%' => {
-                ptr = scan::line_end(src, ptr + 1, end);
+                ptr = scan::line_end(inp.bytes(), ptr + 1, end);
                 o.tok(tok::COMMENT, ptr);
                 continue;
             }
@@ -399,7 +327,7 @@ fn highlight(inst: &mut Instance, base: usize, len: usize) {
                         hl = tok::PUNCTUATION_BRACKET;
                     }
                     if p < end && c2 != b'\n' && c2 != b'\r' {
-                        p = scan::utf8_span_end(src, p + 1, end);
+                        p = scan::utf8_span_end(inp.bytes(), p + 1, end);
                     }
                     ptr = p;
                     o.emit(hl, lhs, p);
@@ -408,12 +336,13 @@ fn highlight(inst: &mut Instance, base: usize, len: usize) {
                 // a control word: letters and `@`, then an optional `*`
                 // (the NUL at the input end stops the name)
                 let mut q = p + 1;
-                while NAME[at(src, q) as usize] {
+                // SAFETY: the NUL at the input end stops the run.
+                while NAME[unsafe { inp.byte_unchecked(q) } as usize] {
                     q += 1;
                 }
-                let v = WORDS.value(src, p, q);
+                let v = WORDS.value(inp.bytes(), p, q);
                 let kind = v >> 8;
-                if at(src, q) == b'*' && q < end {
+                if inp.byte(q) == b'*' && q < end {
                     q += 1;
                 }
                 ptr = q;
@@ -435,10 +364,10 @@ fn highlight(inst: &mut Instance, base: usize, len: usize) {
                 o.tok(hl, ptr);
                 // `\verb|...|`: the body ends at the delimiter or the line
                 if kind == 5 {
-                    let d = at(src, ptr);
+                    let d = inp.byte(ptr);
                     if ptr < end && d.wrapping_sub(33) <= 93 && !is_letter(d) {
-                        let mut p = find_either(src, ptr + 1, end, d, b'\n');
-                        if p < end && at(src, p) == d {
+                        let mut p = find_either(inp, ptr + 1, end, d, b'\n');
+                        if p < end && inp.byte(p) == d {
                             p += 1;
                         }
                         o.emit(tok::TEXT_LITERAL, ptr, p);
@@ -452,25 +381,28 @@ fn highlight(inst: &mut Instance, base: usize, len: usize) {
                     let is_end = ptr - lhs == 4;
                     let p = {
                         let mut s = ptr;
-                        while at(src, s) == b' ' || at(src, s) == b'\t' {
+                        while inp.byte(s) == b' ' || inp.byte(s) == b'\t' {
                             s += 1;
                         }
                         s
                     };
                     let mut q = p;
-                    if p < end && at(src, p) == b'{' {
-                        q = env_name_end(src, p + 1, end);
+                    if p < end && inp.byte(p) == b'{' {
+                        q = env_name_end(inp, p + 1, end);
                     }
-                    if q == p || q >= end || at(src, q) != b'}' {
+                    if q == p || q >= end || inp.byte(q) != b'}' {
                         pend = tok::TYPE;
                         continue;
                     }
-                    o.gap(ptr, p);
+                    // whitespace after the token before
+                    if ptr < p {
+                        o.extend(p);
+                    }
                     o.tok(tok::PUNCTUATION_BRACKET, p + 1);
                     o.emit(tok::TYPE, p + 1, q);
                     ptr = q + 1;
                     o.tok(tok::PUNCTUATION_BRACKET, ptr);
-                    let v = env_key(src, p + 1, q);
+                    let v = env_key(inp, p + 1, q);
                     let kind = if v >= 0 { (v & 4095) >> 8 } else { -1 };
                     if is_end {
                         if kind == 6 && math == 5 {
@@ -487,12 +419,12 @@ fn highlight(inst: &mut Instance, base: usize, len: usize) {
                         // minted's language, on the `\begin` line, precede
                         // the body
                         while (8..=10).contains(&kind) && ptr < end {
-                            let c = at(src, ptr);
+                            let c = inp.byte(ptr);
                             if c != b'[' && c != b'{' {
                                 break;
                             }
-                            let p = find_either(src, ptr + 1, end, c + 2, b'\n');
-                            if p >= end || at(src, p) == b'\n' {
+                            let p = find_either(inp, ptr + 1, end, c + 2, b'\n');
+                            if p >= end || inp.byte(p) == b'\n' {
                                 break;
                             }
                             o.tok(tok::PUNCTUATION_BRACKET, ptr + 1);
@@ -515,13 +447,12 @@ fn highlight(inst: &mut Instance, base: usize, len: usize) {
         // plain text up to the next special byte or line break; it ends a
         // pending argument unless it sits in that command's `[...]`
         pend *= pend_opt as u32;
-        ptr = text_end(src, lhs + 1, end, math != 0);
+        ptr = text_end(inp, lhs + 1, end, math != 0);
         let mut hl = if math != 0 { tok::NUMBER } else { tok::NONE };
         if arg_depth != 0 && (arg_hl >= 256 || math == 0) {
             hl = arg_hl & 255;
         }
         o.tok(hl, ptr);
     }
-    // SAFETY: the records before `cur` are written.
-    unsafe { inst.ext.recs.set_len(o.cur.offset_from(start) as usize) };
+    o.store(inst);
 }
