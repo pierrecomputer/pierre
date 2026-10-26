@@ -118,10 +118,12 @@ test('each pane host is its own compositor layer only when paneLayers asks for i
       (element) =>
         !(element.computedStyleMap().get('transform') as CSSTransformValue).is2D
     );
+  // The app shows 5 panes, fewer than the 6 from which the layers start by default.
+  expect(await layered('agent')).toBe(false);
+  await page.getByLabel('Pane layers').selectOption('on');
   expect(await layered('agent')).toBe(true);
   await page.getByLabel('Pane layers').selectOption('off');
   expect(await layered('agent')).toBe(false);
-  // The app shows 5 panes, fewer than the 8 from which the layers start.
   await page.getByLabel('Pane layers').selectOption('auto');
   expect(await layered('agent')).toBe(false);
   await page.getByLabel('Pane layers').selectOption('on');

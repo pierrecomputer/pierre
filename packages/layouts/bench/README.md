@@ -71,9 +71,9 @@ work that a layout operation pushes into content.
 `window.__layoutsBench` exposes the store, the counters, `append(id)` to add
 output to a pane, and `busy(ms)` to block the main thread.
 
-`?layers=` sets the `paneLayers` option: `off`, or a number of visible panes
-from which each pane host is its own compositor layer. Without it, the option
-has its default, `true`.
+`?layers=` sets the `paneLayers` option: `on`, `off`, or a number of visible
+panes from which each pane host is its own compositor layer. Without it, the
+option has its default, `{ minPanes: 6 }`.
 
 `?isolate=` selects a variant of compositing: `layer` adds
 `will-change: transform` to each pane host, which Chromium keeps at the raster

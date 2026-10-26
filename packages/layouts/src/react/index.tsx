@@ -59,6 +59,10 @@ export type { ResizeStrategy } from '../dom/resize-work';
 /** A button in a pane header: drag to move, zoom, or close. */
 export type PaneAction = 'move' | 'zoom' | 'close';
 
+// Pane layers save compositing time from about 6 visible panes, and cost
+// tile memory below that.
+const DEFAULT_PANE_LAYERS = { minPanes: 6 };
+
 const ALL_PANE_ACTIONS: readonly PaneAction[] = ['move', 'zoom', 'close'];
 
 export interface LayoutProps {
@@ -77,7 +81,8 @@ export interface LayoutProps {
    * `{ minPanes }` to turn the layers on from that number of visible panes.
    * A layer for each pane makes an update in one pane cheaper for the
    * compositor when there are many panes, and costs tile memory when there
-   * are few. `true` by default.
+   * are few. `{ minPanes: 6 }` by default: below 6 visible panes, the layers
+   * cost memory and save no measured time.
    */
   paneLayers?: boolean | { minPanes: number };
   /**
@@ -173,7 +178,7 @@ export function Layout({
   paneActions = ALL_PANE_ACTIONS,
   onPaneClose,
   animate: animateOptions,
-  paneLayers = true,
+  paneLayers = DEFAULT_PANE_LAYERS,
   experimentalResize = 'live',
   experimentalSizeAnimation = 'counter-scale',
 }: LayoutProps): JSX.Element {

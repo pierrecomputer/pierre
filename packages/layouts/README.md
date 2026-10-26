@@ -187,19 +187,20 @@ both axes. Escape cancels an active gesture or restores a zoomed layout. Hidden
 panes remain mounted but are inert and excluded from the accessibility tree.
 Motion respects `prefers-reduced-motion`.
 
-Each pane host clips its content at its rounded border with `overflow: clip`. By
-default each pane host is its own compositor layer (`transform: translateZ(0)`):
-an update in one pane then costs Blink less compositing work when there are many
-panes, at the cost of tile memory for each pane, which matters more when there
-are few. `paneLayers={false}` turns the layers off, and
-`paneLayers={{ minPanes: 8 }}` turns them on from 8 visible panes. Keep
-`--layout-pane-background` opaque, so that text in a layer keeps subpixel
-antialiasing. The host never scrolls; its content area scrolls. Put a menu or a
-tooltip that must extend past its pane in the top layer, with `popover` or
-`<dialog>`. The header and the content sit in a wrapper with an identity
-transform, so `position: fixed` in pane content is fixed to the pane. While a
-pane changes size, the wrapper takes the inverse of the pane's scale, so text
-and headers keep their shape and the pane's frame reveals or clips its content.
+Each pane host clips its content at its rounded border with `overflow: clip`.
+From 6 visible panes, each pane host is its own compositor layer
+(`transform: translateZ(0)`): an update in one pane then costs Blink less
+compositing work. With fewer panes, the layers cost tile memory and save no
+measured time. `paneLayers` changes this: `true` and `false` turn the layers on
+and off for every pane count, and `{ minPanes: n }` turns them on from `n`
+visible panes. Keep `--layout-pane-background` opaque, so that text in a layer
+keeps subpixel antialiasing. The host never scrolls; its content area scrolls.
+Put a menu or a tooltip that must extend past its pane in the top layer, with
+`popover` or `<dialog>`. The header and the content sit in a wrapper with an
+identity transform, so `position: fixed` in pane content is fixed to the pane.
+While a pane changes size, the wrapper takes the inverse of the pane's scale, so
+text and headers keep their shape and the pane's frame reveals or clips its
+content.
 
 Style with `--layout-accent`, `--layout-border`, `--layout-pane-background`, and
 `--layout-duration`. Discrete layout changes animate with transforms from each

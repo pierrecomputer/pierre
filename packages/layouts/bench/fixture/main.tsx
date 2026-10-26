@@ -71,14 +71,17 @@ if (isolate !== null && isolate in ISOLATION) {
   sheet.textContent = ISOLATION[isolate];
   document.head.append(sheet);
 }
-// The paneLayers option: `on`, `off`, or a number of panes from which the layers start.
+// The paneLayers option: `on`, `off`, or a number of panes from which the
+// layers start. Without the parameter, the option has its default.
 const requestedLayers = params.get('layers');
-const paneLayers: boolean | { minPanes: number } =
-  requestedLayers === 'off'
-    ? false
-    : requestedLayers !== null && /^\d+$/.test(requestedLayers)
-      ? { minPanes: Number(requestedLayers) }
-      : true;
+const paneLayers: boolean | { minPanes: number } | undefined =
+  requestedLayers === 'on'
+    ? true
+    : requestedLayers === 'off'
+      ? false
+      : requestedLayers !== null && /^\d+$/.test(requestedLayers)
+        ? { minPanes: Number(requestedLayers) }
+        : undefined;
 const paneIds = Array.from({ length: paneCount }, (_, index) => `p${index}`);
 const indexOf = new Map(paneIds.map((id, index) => [id, index]));
 
