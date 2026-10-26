@@ -8,6 +8,7 @@ import type {
   HighlightedToken,
   RenderRange,
 } from '../types';
+import { areRenderRangesEqual } from '../utils/areRenderRangesEqual';
 import type { TextDocument, TextDocumentChange } from './textDocument';
 import { addEventListener } from './utils';
 
@@ -31,6 +32,7 @@ export interface EditorTokenizerProps {
 /** Applies editor theme CSS and delegates tokenization to the selected backend. */
 export class EditorTokenizer {
   #highlighter: DiffsHighlighter;
+  readonly #textDocument: TextDocument;
   #tokenizer: DiffsEditorTokenizer;
   #mediaQueryList: MediaQueryList;
   #themeType: 'light' | 'dark' = 'dark';
@@ -109,6 +111,7 @@ export class EditorTokenizer {
       typeof theme === 'string' ? theme : theme[themeType],
       typeof theme === 'string' ? undefined : themeType
     );
+    this.#textDocument = textDocument;
     this.#tokenizer = highlighter.createEditorTokenizer({
       textDocument,
       theme: this.#themeName,
@@ -261,11 +264,32 @@ export class EditorTokenizer {
     return this.#tokenizer.getStringCommentRegexpRangesInLine(lineIndex);
   }
 
+  // Remembers which lines were last tokenized on demand, and for which
+  // version of the document. flush() tokenizes the whole visible range at
+  // once, which is the right thing when the user scrolls to new lines or
+  // types. It is the wrong thing when a render was triggered by the
+  // background tokenizer handing over a finished batch: that render already
+  // has its tokens, and tokenizing everything else right then would do all
+  // the remaining background work in one blocking pass. So flush() skips the
+  // work when the visible range and the document are the same as last time.
+  #prepared?: { version: number; renderRange: RenderRange | undefined };
+
   prebuildStateStack(renderRange?: RenderRange): void {
+    this.#prepared = { version: this.#textDocument.version, renderRange };
     this.#tokenizer.prebuildStateStack(renderRange);
   }
 
   flush(renderRange?: RenderRange): Map<number, HighlightedToken[]> {
+    const version = this.#textDocument.version;
+    const prepared = this.#prepared;
+    if (
+      prepared != null &&
+      prepared.version === version &&
+      areRenderRangesEqual(prepared.renderRange, renderRange)
+    ) {
+      return new Map();
+    }
+    this.#prepared = { version, renderRange };
     return this.#tokenizer.flush(renderRange);
   }
 

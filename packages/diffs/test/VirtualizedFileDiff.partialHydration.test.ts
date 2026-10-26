@@ -4,6 +4,7 @@ import { createTwoFilesPatch } from 'diff';
 import { disposeHighlighter, parseDiffFromFile, parsePatchFiles } from '../src';
 import { VirtualizedFileDiff } from '../src/components/VirtualizedFileDiff';
 import type { Virtualizer } from '../src/components/Virtualizer';
+import { Editor } from '../src/editor/editor';
 import type { FileContents, FileDiffMetadata } from '../src/types';
 import { installDom, wait } from './domHarness';
 import { createEditorInstance } from './editorTestUtils';
@@ -641,13 +642,12 @@ describe('VirtualizedFileDiff partial hydration', () => {
       },
       virtualizerState.virtualizer
     );
-    let detach:
-      | ReturnType<TestVirtualizedFileDiff['__attachEditor']>
-      | undefined;
+    const dom = installDom();
+    const editor = new Editor('file-diff');
 
     try {
       instance.updateCodeViewLayout(initial, 0);
-      detach = instance.__attachEditor(createEditorInstance('file-diff'));
+      editor.edit(instance);
       const previousSession = instance.getWorkingDiffForTest();
       expect(previousSession).not.toBe(initial);
 
@@ -674,8 +674,9 @@ describe('VirtualizedFileDiff partial hydration', () => {
       expect(nextSession?.additionLines).toBe(partial.additionLines);
       expect(nextSession?.deletionLines).toBe(partial.deletionLines);
     } finally {
-      detach?.();
+      editor.cleanUp();
       instance.cleanUp();
+      dom.cleanup();
     }
   });
 

@@ -388,6 +388,8 @@ function reparseHunkRegion(
   return true;
 }
 
+// Only a hunk whose lines run to the end of the file carries the "no newline
+// at end of file" marker; collapsed context after the last hunk keeps it off.
 export function syncHunkNoEOFCRFromFullFile(
   diff: FileDiffMetadata,
   hunkIndex: number
@@ -396,24 +398,33 @@ export function syncHunkNoEOFCRFromFullFile(
   if (hunk == null) {
     return;
   }
+  hunk.noEOFCRAdditions = endsFileWithoutNewline(
+    diff.additionLines,
+    hunk.additionLineIndex,
+    hunk.additionCount
+  );
+  hunk.noEOFCRDeletions = endsFileWithoutNewline(
+    diff.deletionLines,
+    hunk.deletionLineIndex,
+    hunk.deletionCount
+  );
+}
 
-  const isLastHunk = hunkIndex === diff.hunks.length - 1;
-  if (!isLastHunk) {
-    hunk.noEOFCRAdditions = false;
-    hunk.noEOFCRDeletions = false;
-    return;
-  }
-
-  const lastAdditionLine = diff.additionLines.at(-1);
-  const lastDeletionLine = diff.deletionLines.at(-1);
-  hunk.noEOFCRAdditions =
-    lastAdditionLine != null &&
-    lastAdditionLine !== '' &&
-    !lastAdditionLine.endsWith('\n');
-  hunk.noEOFCRDeletions =
-    lastDeletionLine != null &&
-    lastDeletionLine !== '' &&
-    !lastDeletionLine.endsWith('\n');
+// Whether `count` lines from `start` reach the end of `lines`, and the last
+// line has no line break.
+function endsFileWithoutNewline(
+  lines: readonly string[],
+  start: number,
+  count: number
+): boolean {
+  const last = lines.at(-1);
+  return (
+    start >= 0 &&
+    start + count === lines.length &&
+    last != null &&
+    last !== '' &&
+    !last.endsWith('\n')
+  );
 }
 
 function applyReparsedHunk(target: Hunk, parsed: Hunk): void {

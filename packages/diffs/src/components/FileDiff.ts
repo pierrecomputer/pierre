@@ -144,16 +144,6 @@ type LoadedPartialDiffContents = Awaited<
   ReturnType<NonNullable<BaseDiffOptions['loadDiffFiles']>>
 >;
 
-type DeferredSelectedLinesWrite = [
-  range: SelectedLineRange | null,
-  options: SelectionWriteOptions | undefined,
-];
-
-type DeferredEditorActiveLineWrite = [
-  lineNumber: number | null,
-  options: EditorActiveLineOptions | undefined,
-];
-
 function canHydrateDiff(fileDiff: FileDiffMetadata): boolean {
   return (
     fileDiff.isPartial &&
@@ -423,11 +413,6 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
   protected enabled = true;
 
   protected editor: Editor<'file-diff', LAnnotation, Caret> | undefined;
-  // Holds back selected-line and editor active-line writes until a queued
-  // render has rebuilt the diff rows.
-  protected lineStateRefreshPending = false;
-  protected deferredSelectedLines: DeferredSelectedLinesWrite | undefined;
-  protected deferredEditorActiveLine: DeferredEditorActiveLineWrite | undefined;
 
   constructor(
     public options: FileDiffOptions<LAnnotation, Caret> = {
@@ -764,44 +749,17 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
     range: SelectedLineRange | null,
     options?: SelectionWriteOptions
   ): void {
-    if (this.lineStateRefreshPending) {
-      this.deferredSelectedLines = [range, options];
-    } else {
-      this.interactionManager.setSelection(range, options);
-    }
+    this.interactionManager.setSelection(range, options);
   }
 
   public setEditorActiveLine(
     lineNumber: number | null,
     options?: EditorActiveLineOptions
   ): void {
-    if (this.lineStateRefreshPending) {
-      this.deferredEditorActiveLine = [lineNumber, options];
-    } else {
-      this.interactionManager.setEditorActiveLine(lineNumber, {
-        lineNumberOnly: options?.lineNumberOnly,
-        side: options?.side ?? 'additions',
-      });
-    }
-  }
-
-  // A refresh can receive selected-lines and editor active-line writes in either
-  // order. Apply the latest value from each after the rows are stable.
-  protected flushDeferredLineState(): void {
-    const {
-      deferredEditorActiveLine: editorActiveLine,
-      deferredSelectedLines: selectedLines,
-    } = this;
-    this.lineStateRefreshPending = false;
-    this.deferredEditorActiveLine = undefined;
-    this.deferredSelectedLines = undefined;
-
-    if (editorActiveLine != null) {
-      this.setEditorActiveLine(...editorActiveLine);
-    }
-    if (selectedLines != null) {
-      this.interactionManager.setSelection(...selectedLines);
-    }
+    this.interactionManager.setEditorActiveLine(lineNumber, {
+      lineNumberOnly: options?.lineNumberOnly,
+      side: options?.side ?? 'additions',
+    });
   }
 
   public flushManagers(): void {
@@ -939,9 +897,6 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
       this.deletionFile = undefined;
       this.additionFile = undefined;
     }
-    this.lineStateRefreshPending = false;
-    this.deferredEditorActiveLine = undefined;
-    this.deferredSelectedLines = undefined;
     this.enabled = false;
   }
 
@@ -2204,56 +2159,24 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
     if (lineAnnotations != null) {
       this.syncEditSessionAnnotationsFromEditor(lineAnnotations);
     }
-    // Nothing is on screen (not mounted, or recycled), so the next render
-    // picks the change up.
-    if (this.fileContainer == null) {
-      return { rebuiltLines: [] };
-    }
-    // A change in line count or in the collapsed regions also moves what
-    // surrounds the rows (buffers, separators, headers), so render it all.
-    // Otherwise only the rows need patching.
-    if (lineDelta !== 0 || regionsChanged) {
-      this.rerender();
-    } else {
-      this.patchRows();
-    }
-    // A render callback may have ended the session.
-    if (this.editSession == null) {
+    this.renderChange(lineDelta !== 0 || regionsChanged);
+    // Nothing was on screen, or a render callback ended the session.
+    if (this.fileContainer == null || this.editSession == null) {
       return { rebuiltLines: [] };
     }
     this.interactionManager.setSelectionDirty();
     return { rebuiltLines: this.takeRebuiltLines() };
   }
 
-  // Lays out the current window again and patches the rows that changed,
-  // leaving the header, buffers and managers as they are.
-  private patchRows(): void {
-    const { pre, fileContainer } = this;
-    const workingDiff = this.getWorkingDiff();
-    if (pre == null || fileContainer == null || workingDiff == null) {
-      this.rerender();
+  // Renders a document change. The rows are keyed, so the render only
+  // touches what changed. Does nothing when unmounted or recycled; the next
+  // render picks the change up. VirtualizedFileDiff renders in its host's
+  // frame and invalidates its layout for a structural change.
+  protected renderChange(_structural: boolean): void {
+    if (this.fileContainer == null) {
       return;
     }
-    const result = this.hunksRenderer.renderDiff(workingDiff, this.renderRange);
-    if (result != null) {
-      // An edit can change the header's line counts without changing the
-      // file's line count.
-      if (result.headerElement != null) {
-        this.applyHeaderToDOM(
-          result.headerElement,
-          fileContainer,
-          result.fileDiff
-        );
-      }
-      this.applyHunksToDOM(pre, result);
-      // Annotation elements are slotted into rows, so rebuilt rows need them
-      // slotted again, and the managers watching those rows set up again.
-      this.renderAnnotations();
-      if (this.changedRowKeys.some((key) => key.startsWith('ann:'))) {
-        this.managersDirty = true;
-        this.flushManagers();
-      }
-    }
+    this.rerender();
   }
 
   /** @internal Repaints lines the editor tokenized in the background. */
@@ -2262,8 +2185,10 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
       return;
     }
     const changed = this.hunksRenderer.setTokens(tokens);
-    if (changed.length > 0 && this.fileContainer != null) {
-      this.patchRows();
+    // Lines without a row on screen are drawn from the new tokens when a
+    // render brings them in; nothing to show until then.
+    if (changed.some((line) => this.lineElement(line) != null)) {
+      this.rerender();
     }
   }
 
@@ -2436,17 +2361,14 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
     return this.editor == null;
   }
 
-  // Deferred full re-render for session region changes. The subsequent
-  // render() ends in syncRenderViewToEditor, which resets the editor's
-  // geometry caches against the rebuilt rows. VirtualizedFileDiff overrides
-  // this to also invalidate its layout caches.
+  // Queued full render after the session's hunks are settled.
+  // VirtualizedFileDiff overrides this to also invalidate its layout caches.
   protected escalateEditSessionRender(): void {
     queueRender(this.handleEditSessionRender);
   }
 
   private handleEditSessionRender = (): void => {
     this.rerender();
-    this.flushDeferredLineState();
   };
 
   private removeRenderedCode(): void {

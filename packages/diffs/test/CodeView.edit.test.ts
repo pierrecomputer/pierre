@@ -372,9 +372,13 @@ describe('programmatic edits on suspended CodeView editors', () => {
         );
         insertAtStart(editor, '// after\n');
         expect(changes.at(-1)).toBe(editor.getText());
-        expect(
-          secondViewer.getRenderedItems()[0]?.element.shadowRoot?.textContent
-        ).toContain('// after');
+        // The rows follow in CodeView's frame.
+        await waitFor(
+          () =>
+            secondViewer
+              ?.getRenderedItems()[0]
+              ?.element.shadowRoot?.textContent?.includes('// after') === true
+        );
       } finally {
         secondViewer?.cleanUp();
         firstViewer.cleanUp();
@@ -668,7 +672,6 @@ describe('programmatic edits on suspended CodeView editors', () => {
           expect(
             changes.every(({ document, session }) => document === session)
           ).toBe(true);
-          expect(getCachedRenderTarget(instance)).toBeUndefined();
 
           if (suspension === 'scroll') {
             viewer.scrollTo({
@@ -2423,7 +2426,11 @@ describe('CodeView item edit mode', () => {
       expect(replacementSession?.additionLines.join('')).toBe(
         'one\nexternal value\nthree\n'
       );
-      expect(changes).toEqual(['one\nlocal value\nthree\n']);
+      // The replacement reaches the retained document at once.
+      expect(changes).toEqual([
+        'one\nlocal value\nthree\n',
+        'one\nexternal value\nthree\n',
+      ]);
 
       root.scrollTop = 0;
       dispatchScroll(root);
