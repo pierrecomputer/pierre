@@ -605,7 +605,9 @@
   ;; Save the kind of embedded region that continues in the next chunk:
   ;; 1 script, 2 style, 3 TSX front matter, 4 YAML front matter, 5 MDX JSX,
   ;; 6-8 framework expressions, 9-13 unfinished HTML/XML/Vue/Svelte/Astro
-  ;; start tags. The owning lexer resumes start tags through highlights.wat.
+  ;; start tags, 23 a Jinja-family start tag cut by a template tag, 26-27 an
+  ;; ERB start tag or ERB tag, 28 a Haml or Pug body, 29 an HTTP body. The
+  ;; owning lexer resumes start tags through highlights.wat.
   (func $streamSetRegion (param $kind i32)
     (if (i32.and (global.get $streaming) (i32.eq (global.get $ptr) (global.get $eof)))
       (then
@@ -976,8 +978,8 @@
     (i32.const 1))
 
   ;; The word bytes of every keyword table, packed by the build; descriptors
-  ;; address them with 13-bit offsets, so the pool holds at most 8191 bytes.
-  (keyword-pool $mem.keywordPool $mem.jsonStack)
+  ;; address them with 14-bit offsets, so the pool holds at most 16383 bytes.
+  (keyword-pool $mem.keywordPool $mem.keywordPoolEnd)
 
   ;; Look up a word with a perfect hash of its first two bytes, last byte,
   ;; and length. Return the 1-based group index, or 0 if absent.
@@ -1010,7 +1012,7 @@
         (i32.const 0xe51fac89)))
     (local.set $h (i32.xor (local.get $h) (i32.shr_u (local.get $h) (i32.const 24))))
     ;; Layout: displacement bytes at base, then 3-byte descriptors at
-    ;; base+buckets: (len<<19 | group<<13 | pool offset).
+    ;; base+buckets: (len<<19 | group<<14 | pool offset).
     ;; Add the bucket displacement times an odd second hash, then rotate
     ;; and reduce to the slot count with a multiply and shift.
     ;; Any slot count is valid. The 4-byte load reads one extra descriptor
@@ -1044,7 +1046,7 @@
       (then (return (i32.const 0))))
     ;; the exact word bytes sit in the shared pool
     (local.set $rec
-      (i32.add (i32.const $mem.keywordPool) (i32.and (local.get $entry) (i32.const 8191))))
+      (i32.add (i32.const $mem.keywordPool) (i32.and (local.get $entry) (i32.const 16383))))
     ;; Ignore differing bytes after the word: ctz(0) is 32, beyond every
     ;; supported length. Longer words also compare an overlapping tail.
     (if
@@ -1062,7 +1064,7 @@
               (v128.load (i32.sub (local.get $end) (i32.const 16)))
               (v128.load (i32.add (local.get $rec) (i32.sub (local.get $len) (i32.const 16))))))
           (then (return (i32.const 0))))))
-    (i32.and (i32.shr_u (local.get $entry) (i32.const 13)) (i32.const 63)))
+    (i32.and (i32.shr_u (local.get $entry) (i32.const 14)) (i32.const 31)))
 
   ;; Return the word's group value, or -1 if the word or value is absent.
   ;; See keyword-table.value. Signed 16-bit group values follow the

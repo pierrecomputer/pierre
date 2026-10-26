@@ -9,7 +9,7 @@
   ;; share hash features the table cannot separate.
   (keyword-table $rubyWords $mem.rubyWords $mem.rustWords
     (group ;; 1: control
-      "if" "do" "in" "END" "end" "for" "next" "redo" "then" "when" "BEGIN" "begin" "break" "elsif"
+      "if" "do" "in" "end" "for" "case" "else" "next" "redo" "then" "when" "begin" "break" "elsif"
       "raise" "retry" "until" "while" "yield" "ensure" "rescue" "return" "unless")
     (group "def")            ;; 2: declaration, next name is a method
     (group "class" "module") ;; 3: declaration, next name is a constant

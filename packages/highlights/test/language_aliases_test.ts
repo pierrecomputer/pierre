@@ -12,6 +12,48 @@ import {
 } from './_util';
 
 const additions = [
+  ['apache', ['apache', 'apacheconf', 'htaccess']],
+  ['asciidoc', ['asciidoc', 'adoc']],
+  ['bicep', ['bicep']],
+  ['blade', ['blade']],
+  ['dotenv', ['dotenv', 'env']],
+  ['gherkin', ['gherkin', 'cucumber', 'feature']],
+  ['gnuplot', ['gnuplot', 'gp']],
+  ['http', ['http']],
+  ['log', ['log']],
+  ['nginx', ['nginx']],
+  ['po', ['po', 'pot', 'potx']],
+  ['prisma', ['prisma']],
+  ['razor', ['razor', 'cshtml']],
+  ['rst', ['rst', 'restructuredtext']],
+  ['ini', ['ini', 'desktop', 'properties', 'systemd']],
+  ['ada', ['ada', 'adb', 'ads']],
+  ['apex', ['apex']],
+  ['asm', ['mips', 'mipsasm', 'riscv']],
+  ['awk', ['awk']],
+  ['cobol', ['cobol', 'cbl', 'cob']],
+  ['coffee', ['coffee', 'coffeescript']],
+  ['css', ['postcss', 'qss']],
+  ['erb', ['erb']],
+  ['groovy', ['nextflow', 'nextflow-groovy', 'nf']],
+  ['haml', ['haml']],
+  ['handlebars', ['handlebars', 'hbs', 'mustache']],
+  ['haxe', ['haxe', 'hx']],
+  ['html', ['html-derivative']],
+  ['jinja', ['jinja', 'j2', 'jinja2']],
+  ['liquid', ['liquid']],
+  ['plsql', ['plsql']],
+  ['prolog', ['prolog']],
+  ['pug', ['pug', 'jade']],
+  ['qml', ['qml']],
+  ['tcl', ['tcl']],
+  ['ts', ['lit', 'ts-tags']],
+  ['twig', ['twig']],
+  ['verilog', ['verilog', 'sv', 'svh', 'system-verilog', 'systemverilog']],
+  ['vhdl', ['vhdl', 'vhd']],
+  ['viml', ['viml', 'vim', 'vimscript']],
+  ['vue', ['vue-html']],
+  ['xml', ['xsl', 'xslt']],
   ['lean', ['lean', 'lean4']],
   ['gdresource', ['gdresource', 'godot-resource', 'tres', 'tscn']],
   ['gdscript', ['gdscript', 'gd']],
@@ -27,6 +69,10 @@ const additions = [
   ['solidity', ['solidity', 'sol']],
   ['zig', ['zig', 'zon']],
 ] as const satisfies readonly (readonly [Lang, readonly Lang[]])[];
+
+test('mdc resolves to the Markdown lexer', () => {
+  expect(languages.mdc).toBe(languages.markdown);
+});
 
 test('plain text aliases retain ID zero and bypass language syntax', () => {
   for (const alias of ['plain', 'plaintext', 'text', 'txt'] as const) {

@@ -140,7 +140,7 @@
   ;; `continue`, so the two words can never share a table and `comptime` is
   ;; matched directly. The one-byte names `c` and `_` are below the table's
   ;; minimum length and are matched directly too.
-  (keyword-table $zigWords $mem.zigWords $mem.keywordPool
+  (keyword-table $zigWords $mem.zigWords $mem.odinWords
     (group $Token.keyword.declaration+256 "fn") ;; 1: declaration, next name is a function
     (group $Token.keyword.declaration+512 "const" "var") ;; 2: declaration, next name is a variable
     (group $Token.keyword.declaration+768 "struct" "enum" "union" "opaque") ;; 3: declaration

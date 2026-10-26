@@ -23,7 +23,7 @@
   (func $streamResetGlobals
     (global.set $ecmaImport (i32.const 0))
     (memory.fill (i32.const $mem.streamDelimiter) (i32.const 0) (i32.const 32))
-    (memory.fill (i32.const $mem.streamState) (i32.const 0) (i32.const $mem.streamStateUsed))
+    (call $streamClearCheckpoints)
     (global.set $streamMode (i32.const 0))
     (global.set $streamA (i32.const 0))
     (global.set $streamB (i32.const 0))

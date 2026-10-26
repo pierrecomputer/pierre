@@ -6,9 +6,10 @@
     line table, per-line token blocks, and interned per-line lexer states in
     linear memory:
 
-      page 1                    control, static data, lexer scratch,
-                                line-change list and size-class free-list heads
-      [65536:$lvHeapCeil)       size-class heap: staged text, line text
+      page 1                    control, static data, lexer scratch
+      [65536:82192)             line-change list, size-class free-list heads,
+                                and suspended lexer locals
+      [82192:$lvHeapCeil)       size-class heap: staged text, line text
                                 blocks, token blocks, state blobs, line table
       [$lvHeapCeil:mem end)     transient per-line scratch: the line's bytes,
                                 terminator, NUL sentinel, then the standard
@@ -526,6 +527,14 @@
     (local $stack i32)
     (if (call $lvIsJson (global.get $lvLang))
       (then (return (i32.const $mem.jsonStack))))
+    ;; an open HTTP JSON body: region 29 of kind 2 (see $httpBody)
+    (if
+      (i32.and
+        (i32.eq (global.get $lvLang) (enum.get $Language.http))
+        (i32.and
+          (i32.eq (global.get $streamRegionKind) (i32.const 29))
+          (i32.eq (i32.and (global.get $streamRegionStarted) (i32.const 3)) (i32.const 2))))
+      (then (return (i32.const $mem.jsonStack))))
     (if (i32.eq (global.get $lvLang) (enum.get $Language.toml))
       (then (return (i32.const $mem.tomlStack))))
     (if
@@ -647,8 +656,8 @@
     (local.set $p (i32.add (local.get $p) (local.get $brkLen)))
     (memory.copy (local.get $p) (i32.const $mem.jsxStack) (local.get $jsxLen))
     (local.set $p (i32.add (local.get $p) (local.get $jsxLen)))
-    (memory.copy (local.get $p) (i32.const $mem.streamState) (i32.const $mem.streamStateUsed))
-    (i32.sub (i32.add (local.get $p) (i32.const $mem.streamStateUsed)) (local.get $dst)))
+    (memory.copy (local.get $p) (i32.const $mem.streamState) (global.get $streamStateHi))
+    (i32.sub (i32.add (local.get $p) (global.get $streamStateHi)) (local.get $dst)))
 
   ;; Return the blob length without trailing zeros. This avoids storing,
   ;; hashing, and comparing inactive checkpoints and empty stacks.
@@ -672,7 +681,7 @@
         (br $byte)))
     (i32.sub (local.get $p) (local.get $base)))
 
-  (func $lvRestoreBlob (param $src i32)
+  (func $lvRestoreBlob (param $src i32) (param $len i32)
     (local $p i32)
     (local $stackBase i32)
     (local $stackLen i32)
@@ -752,7 +761,13 @@
     (local.set $p (i32.add (local.get $p) (local.get $brkLen)))
     (memory.copy (i32.const $mem.jsxStack) (local.get $p) (local.get $jsxLen))
     (local.set $p (i32.add (local.get $p) (local.get $jsxLen)))
-    (memory.copy (i32.const $mem.streamState) (local.get $p) (i32.const $mem.streamStateUsed)))
+    (memory.copy (i32.const $mem.streamState) (local.get $p) (i32.const $mem.streamStateUsed))
+    ;; the trimmed blob ends at its last nonzero byte
+    (global.set $streamStateHi
+      (select
+        (i32.sub (i32.add (local.get $src) (local.get $len)) (local.get $p))
+        (i32.const 0)
+        (i32.gt_s (i32.sub (i32.add (local.get $src) (local.get $len)) (local.get $p)) (i32.const 0)))))
 
   ;; canonicalize every captured location before the first line so stale
   ;; values from earlier batches can never leak into a blob
@@ -931,7 +946,7 @@
                   (local.get $inBase)
                   (i32.add (local.get $node) (i32.const 24))
                   (i32.load offset=8 (local.get $node)))
-                (call $lvRestoreBlob (local.get $inBase))))))
+                (call $lvRestoreBlob (local.get $inBase) (i32.load offset=8 (local.get $node)))))))
         (global.set $lvMachineId (i32.const -1))
         (memory.copy (local.get $inBase) (i32.load (local.get $slot)) (local.get $byteLen))
         (if (i32.eq (local.get $termBytes) (i32.const 2))

@@ -34,7 +34,7 @@
     (global.set $streamC (i32.const 0))
     (global.set $streamHl (i32.const 0))
     (memory.fill (i32.const $mem.streamDelimiter) (i32.const 0) (i32.const 32))
-    (memory.fill (i32.const $mem.streamState) (i32.const 0) (i32.const $mem.streamStateUsed)))
+    (call $streamClearCheckpoints))
 
   (func $streamEmbedRange (param $kind i32) (param $from i32) (param $to i32)
     (local $reset i32)

@@ -51,7 +51,7 @@
   ;; Group values carry a declaration kind in the high byte so the `::`
   ;; lookahead can tell a proc definition from a type construction or a
   ;; constant: 1 = proc, 2 = type constructor, 3 = package/import namespace.
-  (keyword-table $odinWords $mem.odinWords $mem.odinWordsEnd
+  (keyword-table $odinWords $mem.odinWords $mem.leanWords
     (group $Token.keyword.control ;; 1: control flow
       "if" "else" "for" "in" "do" "when" "switch" "case" "break" "continue"
       "fallthrough" "defer" "return" "not_in" "or_else" "or_return" "or_break"

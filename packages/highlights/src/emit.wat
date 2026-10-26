@@ -42,6 +42,12 @@
   (global $streamRegionKind (mut i32) (i32.const 0))
   (global $streamRegionStarted (mut i32) (i32.const 0))
   (global $streamWindow (mut i32) (i32.const 0))
+  ;; The saved prefix of $mem.streamState; every byte past it is zero.
+  (global $streamStateHi (mut i32) (i32.const 0))
+
+  (func $streamClearCheckpoints
+    (memory.fill (i32.const $mem.streamState) (i32.const 0) (global.get $streamStateHi))
+    (global.set $streamStateHi (i32.const 0)))
   (global $liveStackBytes (mut i32) (i32.const 0))
 
   ;; write one byte as two lowercase hex digits

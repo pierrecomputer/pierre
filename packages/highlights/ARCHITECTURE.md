@@ -91,7 +91,12 @@ parameter of `$hlGlslImpl`. JSON, JSON5, and JSONL share `json.wat` the same way
 through `$hlJsonImpl`; JSONL starts a new value on each line. CSV and TSV share
 `csv.wat` through the delimiter and quoting parameters of `$hlCsvImpl`; only CSV
 has quoted fields. GDScript and Godot resources share the type lookup in
-`gdscript.wat` and scan strings with the Python string scanner.
+`gdscript.wat` and scan strings with the Python string scanner. SQL and PL/SQL
+share `sql.wat`, and Java and Apex share `java.wat`, through a dialect global
+that each entry point sets. Jinja, Twig, Liquid, and Handlebars share
+`jinja.wat` through a dialect parameter of `$hlJinjaImpl`. Blade and Razor share
+the markup lexer in `template.wat`, and AsciiDoc reuses the inline scans of
+`rst.wat`.
 
 The ECMAScript family uses `js.wat` to scan code and `ts.wat` to classify
 tokens. `jsx.wat` handles markup, and `tsx.wat` is the driver. Feature flags
