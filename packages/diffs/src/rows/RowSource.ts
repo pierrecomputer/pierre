@@ -1,6 +1,7 @@
 import type { ElementContent, Element as HASTElement } from 'hast';
 
 import type { DiffModel } from '../model/DiffModel';
+import type { FileModel } from '../model/FileModel';
 import type { HighlightedToken } from '../types';
 import { cleanLastNewline } from '../utils/cleanLastNewline';
 import { createPlainRow, createTokenRow } from '../utils/hast_utils';
@@ -106,6 +107,11 @@ export class RowSource {
     return this.#tokens.has(lineId);
   }
 
+  /** Drops the editor's tokens for every line. */
+  public forgetTokens(): void {
+    this.#tokens.clear();
+  }
+
   /** Drops what is held for lines an edit deleted. */
   public forgetLines(lineIds: readonly number[]): void {
     for (const lineId of lineIds) {
@@ -135,9 +141,12 @@ export class RowSource {
     return created;
   }
 
-  public additionRow(model: DiffModel, lineIndex: number): HASTElement {
+  public additionRow(
+    model: DiffModel | FileModel,
+    lineIndex: number
+  ): HASTElement {
     const lineId = model.lineId(lineIndex);
-    const text = model.diff.additionLines[lineIndex] ?? '';
+    const text = model.lineText(lineIndex);
     const lineText = cleanLastNewline(text);
     // Tokens from before the latest edit to this line spell the old text, so
     // they are skipped until the editor sends new ones.

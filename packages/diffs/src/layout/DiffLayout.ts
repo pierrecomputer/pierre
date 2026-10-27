@@ -23,7 +23,7 @@ import { createNoNewlineElement } from '../utils/createNoNewlineElement';
 import { createSeparator } from '../utils/createSeparator';
 import { getHunkSeparatorSlotName } from '../utils/getHunkSeparatorSlotName';
 import { getTotalLineCountFromHunks } from '../utils/getTotalLineCountFromHunks';
-import { createGutterGap, createGutterItem } from '../utils/hast_utils';
+import { createGutterGap } from '../utils/hast_utils';
 import {
   FILE_ANNOTATION_HUNK_INDEX,
   FILE_ANNOTATION_LINE_INDEX,
@@ -32,6 +32,13 @@ import {
 } from '../utils/includesFileAnnotations';
 import { iterateOverDiff } from '../utils/iterateOverDiff';
 import { getTrailingContextRangeSize } from '../utils/virtualDiffLayout';
+import {
+  type Column,
+  createColumn,
+  pushRow,
+  readOnly,
+  RowCells,
+} from './RowCells';
 import type {
   InjectedRow,
   LayoutColumns,
@@ -55,6 +62,7 @@ export interface DiffLayoutOptions {
 }
 
 export interface DiffLayoutInput<LAnnotation> {
+  host: DiffHunksRenderer<LAnnotation>;
   model: DiffModel;
   rows: RowSource;
   renderRange: RenderRange;
@@ -74,32 +82,6 @@ export interface DiffLayoutResult {
 interface MarkedRow {
   ranges: readonly LineDiffRange[];
   row: HASTElement;
-}
-
-interface StampedRow {
-  properties: Properties;
-  row: HASTElement;
-}
-
-interface GutterCell {
-  lineType: LineTypes;
-  lineNumber: number;
-  lineIndexText: string;
-  properties: Properties;
-  cell: HASTElement;
-}
-
-interface FixedRow {
-  signature: string;
-  gutter: HASTElement;
-  content: HASTElement;
-}
-
-// Rows pushed into one column, with the key of the last one for keys that
-// hang off their neighbor.
-interface Column {
-  specs: RowSpec[];
-  lastKey: RowKey | undefined;
 }
 
 // Filler rows a split view owes one column so both columns stay aligned.
@@ -130,22 +112,10 @@ const NO_RANGES: readonly LineDiffRange[] = Object.freeze([]);
  */
 export class DiffLayout<LAnnotation = undefined> {
   #ranges: LineDiffRangeCache;
+  readonly #cells = new RowCells();
   readonly #marked = new WeakMap<HASTElement, MarkedRow>();
-  readonly #stamped = new WeakMap<HASTElement, StampedRow>();
-  // Gutter cells by the highlight row they were built for, reused while the
-  // line number, type and decoration match so the element is kept too.
-  readonly #gutters = new WeakMap<HASTElement, GutterCell>();
-  // The highlight row each content row was built from, so a row that only
-  // got new attributes (a new line index, say) still finds its gutter cell.
-  readonly #baseOf = new WeakMap<HASTElement, HASTElement>();
-  // Rows that are not built from a line, kept by key while their inputs
-  // match, so a render that changes nothing hands back the same objects.
-  readonly #fixedRows = new Map<RowKey, FixedRow>();
 
-  constructor(
-    private options: DiffLayoutOptions,
-    private readonly host: DiffHunksRenderer<LAnnotation>
-  ) {
+  constructor(private options: DiffLayoutOptions) {
     this.#ranges = new LineDiffRangeCache(
       options.lineDiffType,
       options.maxLineDiffLength
@@ -165,20 +135,13 @@ export class DiffLayout<LAnnotation = undefined> {
     this.options = options;
   }
 
-  /**
-   * Drops the rows kept for lines an edit removed: their annotation rows and
-   * the buffers that followed them.
-   */
+  /** Drops the rows kept for lines an edit removed. */
   forgetLines(ids: readonly number[]): void {
-    for (const id of ids) {
-      this.#fixedRows.delete(`ann:a${id}`);
-      this.#fixedRows.delete(`buf:a${id}`);
-      this.#fixedRows.delete(`buf:ann:a${id}`);
-    }
+    this.#cells.forgetLines(ids);
   }
 
   layout(input: DiffLayoutInput<LAnnotation>): DiffLayoutResult {
-    const { model, rows, renderRange, expandedHunks } = input;
+    const { host, model, rows, renderRange, expandedHunks } = input;
     const { diff } = model;
     const {
       diffStyle,
@@ -188,7 +151,6 @@ export class DiffLayout<LAnnotation = undefined> {
       hunkSeparators,
       canHydrateContext,
     } = this.options;
-    const { host } = this;
     const unified = diffStyle === 'unified';
     const isExpandableDiff = !diff.isPartial || canHydrateContext;
     const marks = this.options.lineDiffType !== 'none';
@@ -209,7 +171,7 @@ export class DiffLayout<LAnnotation = undefined> {
       pendingBuffer.side = undefined;
       if (size <= 0 || side == null) return;
       const column = columns[side];
-      this.#pushFixedRow(column, bufferKey(column), `${size}`, () => ({
+      this.#cells.fixedRow(column, bufferKey(column), `${size}`, () => ({
         gutter: createGutterGap(undefined, 'buffer', size),
         content: createEmptyRowBuffer(size),
       }));
@@ -241,7 +203,7 @@ export class DiffLayout<LAnnotation = undefined> {
       span: AnnotationSpan,
       lineType: LineTypes
     ) => {
-      this.#pushFixedRow(
+      this.#cells.fixedRow(
         column,
         `ann:${lineKey}`,
         `${lineType}|${span.hunkIndex},${span.lineIndex}|${span.annotations.join(',')}`,
@@ -383,7 +345,7 @@ export class DiffLayout<LAnnotation = undefined> {
                 );
           pushRow(columns.unified, {
             key: lineKey,
-            gutter: this.#gutter(
+            gutter: this.#cells.gutter(
               content,
               decoration.gutterLineType,
               lineNumber,
@@ -478,7 +440,7 @@ export class DiffLayout<LAnnotation = undefined> {
             );
             pushRow(columns.deletions, {
               key: deletionsKey,
-              gutter: this.#gutter(
+              gutter: this.#cells.gutter(
                 content,
                 deletionDecoration.gutterLineType,
                 deletionLine.lineNumber,
@@ -500,7 +462,7 @@ export class DiffLayout<LAnnotation = undefined> {
             );
             pushRow(columns.additions, {
               key: additionsKey,
-              gutter: this.#gutter(
+              gutter: this.#cells.gutter(
                 content,
                 additionDecoration.gutterLineType,
                 additionLine.lineNumber,
@@ -568,7 +530,7 @@ export class DiffLayout<LAnnotation = undefined> {
               type === 'context' || type === 'context-expanded'
                 ? type
                 : 'change-deletion';
-            this.#pushFixedRow(
+            this.#cells.fixedRow(
               unified ? columns.unified : columns.deletions,
               'eof:d',
               noEOFType,
@@ -583,7 +545,7 @@ export class DiffLayout<LAnnotation = undefined> {
               }
             );
             if (!unified && !noEOFCRAddition) {
-              this.#pushFixedRow(
+              this.#cells.fixedRow(
                 columns.additions,
                 bufferKey(columns.additions),
                 '1',
@@ -602,7 +564,7 @@ export class DiffLayout<LAnnotation = undefined> {
               type === 'context' || type === 'context-expanded'
                 ? type
                 : 'change-addition';
-            this.#pushFixedRow(
+            this.#cells.fixedRow(
               unified ? columns.unified : columns.additions,
               'eof:a',
               noEOFType,
@@ -612,7 +574,7 @@ export class DiffLayout<LAnnotation = undefined> {
               })
             );
             if (!unified && !noEOFCRDeletion) {
-              this.#pushFixedRow(
+              this.#cells.fixedRow(
                 columns.deletions,
                 bufferKey(columns.deletions),
                 '1',
@@ -699,22 +661,6 @@ export class DiffLayout<LAnnotation = undefined> {
     return side === 'deletions' ? ranges.deletion : ranges.addition;
   }
 
-  // A row that is not built from a line: a filler, separator, annotation or
-  // "no newline" row. Reused while its signature matches.
-  #pushFixedRow(
-    column: Column,
-    key: RowKey,
-    signature: string,
-    create: () => { gutter: HASTElement; content: HASTElement }
-  ): void {
-    let fixed = this.#fixedRows.get(key);
-    if (fixed == null || fixed.signature !== signature) {
-      fixed = { signature, ...create() };
-      this.#fixedRows.set(key, fixed);
-    }
-    pushRow(column, { key, gutter: fixed.gutter, content: fixed.content });
-  }
-
   // Adds a separator row to one column. Returns whether a row was added.
   #pushSeparator(
     column: Column,
@@ -746,7 +692,7 @@ export class DiffLayout<LAnnotation = undefined> {
           isFirstHunk,
           isLastHunk,
         });
-      this.#pushFixedRow(
+      this.#cells.fixedRow(
         column,
         `sep:${type}:${hunkIndex}`,
         `metadata|${hunkSpecs}|${isFirstHunk}|${isLastHunk}`,
@@ -763,7 +709,7 @@ export class DiffLayout<LAnnotation = undefined> {
       }
       const separator = () =>
         createSeparator({ type: 'simple', isFirstHunk, isLastHunk: false });
-      this.#pushFixedRow(
+      this.#cells.fixedRow(
         column,
         `sep:${type}:${hunkIndex}`,
         `simple|${isFirstHunk}`,
@@ -791,7 +737,7 @@ export class DiffLayout<LAnnotation = undefined> {
         isFirstHunk,
         isLastHunk,
       });
-    this.#pushFixedRow(
+    this.#cells.fixedRow(
       column,
       `sep:${slotName}`,
       `${hunkSeparators}|${content}|${expandIndex}|${chunked}|${isFirstHunk}|${isLastHunk}`,
@@ -814,7 +760,7 @@ export class DiffLayout<LAnnotation = undefined> {
   }
 
   // The content cell of a line: the base row with its marks, then its line
-  // attributes. Both steps reuse their last result while the inputs match.
+  // attributes. Marks reuse their last result while the ranges match.
   #line(
     base: HASTElement,
     ranges: readonly LineDiffRange[],
@@ -833,66 +779,14 @@ export class DiffLayout<LAnnotation = undefined> {
         this.#marked.set(base, { ranges, row: marked });
       }
     }
-    // Line attributes in one order for every row, whichever source built it.
-    const properties: Properties = {
-      ...marked.properties,
-      'data-line': lineNumber,
-      'data-alt-line': altLineNumber,
-      'data-line-type':
-        contentProperties?.['data-line-type'] ??
-        marked.properties['data-line-type'],
-      'data-line-index': lineIndexText,
-      ...contentProperties,
-    };
-    const cached = this.#stamped.get(marked);
-    if (cached != null && arePropertiesEqual(cached.properties, properties)) {
-      return cached.row;
-    }
-    const row: HASTElement = { ...marked, properties };
-    this.#stamped.set(marked, { properties, row });
-    this.#baseOf.set(row, base);
-    return row;
-  }
-
-  // The gutter cell for a line, cached by its highlight row and reused while
-  // the line number, type and host properties match.
-  #gutter(
-    content: HASTElement,
-    lineType: LineTypes,
-    lineNumber: number,
-    lineIndexText: string,
-    properties: Properties = {}
-  ): HASTElement {
-    const base = this.#baseOf.get(content) ?? content;
-    const cached = this.#gutters.get(base);
-    if (
-      cached != null &&
-      cached.lineType === lineType &&
-      cached.lineNumber === lineNumber &&
-      cached.lineIndexText === lineIndexText &&
-      arePropertiesEqual(cached.properties, properties)
-    ) {
-      return cached.cell;
-    }
-    const cell = createGutterItem(
-      lineType,
+    return this.#cells.line(
+      marked,
+      base,
+      contentProperties,
       lineNumber,
-      lineIndexText,
-      properties
+      altLineNumber,
+      lineIndexText
     );
-    // Same line number means only attributes changed, so keep the children
-    // and let the reconciler patch attributes alone.
-    if (cached != null && cached.lineNumber === lineNumber) {
-      cell.children = cached.cell.children;
-    }
-    this.#gutters.set(base, {
-      lineType,
-      lineNumber,
-      lineIndexText,
-      properties,
-      cell,
-    });
-    return cell;
   }
 
   #pushFileAnnotations(
@@ -979,28 +873,9 @@ export function columnCells(specs: readonly RowSpec[]): {
   };
 }
 
-// Content cells that are not document lines, such as annotation rows and
-// separators, are never editable, so the caret cannot enter them while the
-// column is. Added on every render so attaching an editor changes no rows.
-function readOnly(cell: HASTElement): HASTElement {
-  return {
-    ...cell,
-    properties: { ...cell.properties, contenteditable: 'false' },
-  };
-}
-
-function createColumn(): Column {
-  return { specs: [], lastKey: undefined };
-}
-
 // The key of a filler row: it follows the row before it, or opens the column.
 function bufferKey(column: Column): RowKey {
   return `buf:${column.lastKey ?? 'top'}`;
-}
-
-function pushRow(column: Column, spec: RowSpec): void {
-  column.specs.push(spec);
-  column.lastKey = spec.key;
 }
 
 // Where injected rows hang: the line they belong to and which side of it.
@@ -1162,13 +1037,4 @@ function areRangesEqual(
         (range, index) => range[0] === b[index][0] && range[1] === b[index][1]
       ))
   );
-}
-
-function arePropertiesEqual(a: Properties, b: Properties): boolean {
-  const keys = Object.keys(a);
-  if (keys.length !== Object.keys(b).length) return false;
-  for (const key of keys) {
-    if (a[key] !== b[key]) return false;
-  }
-  return true;
 }

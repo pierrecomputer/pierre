@@ -138,6 +138,7 @@ function createTestFile(
       file: currentFile,
       lineAnnotations: undefined,
       renderRange: undefined,
+      domCurrent: false,
     });
   };
 

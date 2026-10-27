@@ -227,6 +227,7 @@ export class UnresolvedFileHunksRenderer<
     for (const row of rows) {
       if (row.type === 'actions') {
         before.push({
+          id: mergeConflictRowId(row.hunkIndex, row.conflictIndex, 'actions'),
           content: createMergeConflictActionsRowElement({
             row,
             includeDefaultActions: mergeConflictActionsType === 'default',
@@ -238,6 +239,7 @@ export class UnresolvedFileHunksRenderer<
       }
       const target = row.type === 'marker-end' ? after : before;
       target.push({
+        id: mergeConflictRowId(row.hunkIndex, row.conflictIndex, row.type),
         content: createMergeConflictMarkerRowElement(row),
         gutter: createMergeConflictGutterGap('marker', row.type),
       });
@@ -257,6 +259,16 @@ export class UnresolvedFileHunksRenderer<
       this.options.mergeConflictActionsType ?? 'default';
     return options as BaseUnresolvedOptionsWithDefaults;
   }
+}
+
+// The row key of a conflict's action or marker row, so the row keeps its
+// element as the lines around it move.
+function mergeConflictRowId(
+  hunkIndex: number,
+  conflictIndex: number,
+  kind: string
+): string {
+  return `conflict:${hunkIndex}:${conflictIndex}:${kind}`;
 }
 
 function getMergeConflictGutterProperties(

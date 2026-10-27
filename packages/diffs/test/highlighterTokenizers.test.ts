@@ -2,6 +2,7 @@ import { LiveTokenizer } from '@pierre/highlights';
 import { afterAll, beforeEach, describe, expect, spyOn, test } from 'bun:test';
 
 import { TextDocument } from '../src/editor/textDocument';
+import type { TextEdit } from '../src/editor/types';
 import {
   createHighlighter,
   disposeHighlighter,
@@ -573,7 +574,7 @@ describe('backend tokenizers', () => {
     }
   });
 
-  test('Highlights delivers only rows a render does not return', async () => {
+  test('Highlights returns every row a render finishes and delivers none', async () => {
     const highlighter = await getSharedHighlighter({
       preferredHighlighter: 'highlights',
       themes: ['pierre-dark'],
@@ -625,8 +626,14 @@ describe('backend tokenizers', () => {
       );
       for (let line = 100; line < 110; line++)
         expect(lines.has(line)).toBe(true);
-      expect(delivered.size).toBeGreaterThan(0);
-      for (const line of delivered) expect(line).toBeLessThan(100);
+      // Lines the flush finished above the window come back with the
+      // window's own, so the component applies them all against the same
+      // document. The background pass carries on below the window; nothing
+      // the call returned is delivered again.
+      expect([...lines.keys()].some((line) => line < 100)).toBe(true);
+      expect(delivered.size).toBe(0);
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect([...delivered].every((line) => line >= 110)).toBe(true);
     } finally {
       tokenizer.dispose();
     }
@@ -807,6 +814,226 @@ describe('Highlights bracket reads', () => {
       expect(delivered.length).toBeGreaterThan(completedByRead);
     } finally {
       tokenizer.dispose();
+    }
+  });
+});
+
+// Shiki schedules each background chunk through a window message. The stub
+// records them so a test runs the chunks when it chooses.
+function stubBackgroundMessages(): { drain(): void; restore(): void } {
+  const saved = {
+    addEventListener: globalThis.addEventListener,
+    removeEventListener: globalThis.removeEventListener,
+    postMessage: globalThis.postMessage,
+  };
+  let listener: ((event: MessageEvent) => void) | undefined;
+  const posted: unknown[] = [];
+  globalThis.addEventListener = ((
+    type: string,
+    callback: EventListenerOrEventListenerObject
+  ) => {
+    if (type === 'message' && typeof callback === 'function') {
+      listener = callback as (event: MessageEvent) => void;
+    }
+  }) as typeof globalThis.addEventListener;
+  globalThis.removeEventListener = ((
+    type: string,
+    callback: EventListenerOrEventListenerObject
+  ) => {
+    if (type === 'message' && callback === listener) {
+      listener = undefined;
+    }
+  }) as typeof globalThis.removeEventListener;
+  globalThis.postMessage = ((message: unknown) => {
+    posted.push(message);
+  }) as typeof globalThis.postMessage;
+  return {
+    drain() {
+      while (posted.length > 0) {
+        const data = posted.shift();
+        listener?.({ data } as MessageEvent);
+      }
+    },
+    restore() {
+      Object.assign(globalThis, saved);
+    },
+  };
+}
+
+function insertAt(line: number, character: number, newText: string): TextEdit {
+  return {
+    range: { start: { line, character }, end: { line, character } },
+    newText,
+  };
+}
+
+describe('Shiki background work', () => {
+  const lineCount = 40;
+  const contents = Array.from(
+    { length: lineCount },
+    (_, line) => `const value${line} = (${line});`
+  ).join('\n');
+  const window = {
+    startingLine: 10,
+    totalLines: 10,
+    bufferBefore: 0,
+    bufferAfter: 0,
+  };
+
+  // Every line's tokens, from the edit's return value or a later delivery,
+  // against a fresh tokenization of the document in `theme`.
+  function expectLinesColored(
+    highlighter: Awaited<ReturnType<typeof getSharedHighlighter>>,
+    document: TextDocument,
+    tokens: Map<number, HighlightedToken[]>,
+    lines: Iterable<number>,
+    theme: string
+  ): void {
+    const expected = highlighter.codeToTokens(document.getText(), {
+      lang: 'typescript',
+      theme,
+    });
+    for (const line of lines) {
+      const actual = tokens
+        .get(line)
+        ?.map((token): [string, string] => [token[1], token[2]]);
+      const wanted = expected.tokens[line].map((token): [string, string] => [
+        token.color ?? '',
+        token.content,
+      ]);
+      expect({ line, tokens: actual }).toEqual({ line, tokens: wanted });
+    }
+  }
+
+  test('a bracket read while a job is pending leaves its lines to the job', async () => {
+    const highlighter = await getSharedHighlighter({
+      preferredHighlighter: 'shiki-js',
+      themes: ['pierre-dark'],
+      langs: ['typescript'],
+    });
+    const messages = stubBackgroundMessages();
+    const document = new TextDocument('test.ts', contents, 'typescript');
+    const tokens = new Map<number, HighlightedToken[]>();
+    const tokenizer = highlighter.createEditorTokenizer({
+      textDocument: document,
+      theme: 'pierre-dark',
+      onDeferTokenize: (lines) => {
+        for (const [line, lineTokens] of lines) tokens.set(line, lineTokens);
+      },
+    });
+    try {
+      // Open a comment in the window and close it below it, in one batch. The
+      // lines below the window wait for the background job.
+      const open = document.applyEdits([
+        insertAt(10, 0, '/*'),
+        insertAt(32, 0, '*/'),
+      ]);
+      for (const [line, lineTokens] of tokenizer.tokenize(open!, window)) {
+        tokens.set(line, lineTokens);
+      }
+      // Bracket matching below the window reads the states down to its line
+      // before the job ran.
+      expect(tokenizer.getStringCommentRegexpRangesInLine(35)).toEqual([]);
+      // Another edit above, the way the editor applies one.
+      tokenizer.stopBackgroundTokenize();
+      const above = document.applyEdits([insertAt(0, 0, 'export ')]);
+      for (const [line, lineTokens] of tokenizer.tokenize(above!, window)) {
+        tokens.set(line, lineTokens);
+      }
+      messages.drain();
+      expectLinesColored(
+        highlighter,
+        document,
+        tokens,
+        Array.from({ length: 13 }, (_, index) => 20 + index),
+        'pierre-dark'
+      );
+    } finally {
+      tokenizer.dispose();
+      messages.restore();
+    }
+  });
+
+  test('a deletion above a cold window colors every line it reaches', async () => {
+    const highlighter = await getSharedHighlighter({
+      preferredHighlighter: 'shiki-js',
+      themes: ['pierre-dark'],
+      langs: ['typescript'],
+    });
+    const messages = stubBackgroundMessages();
+    const document = new TextDocument('test.ts', contents, 'typescript');
+    const tokens = new Map<number, HighlightedToken[]>();
+    const tokenizer = highlighter.createEditorTokenizer({
+      textDocument: document,
+      theme: 'pierre-dark',
+      onDeferTokenize: (lines) => {
+        for (const [line, lineTokens] of lines) tokens.set(line, lineTokens);
+      },
+    });
+    try {
+      // Nothing is lexed yet. Replacing two lines above the window with an
+      // open comment must recolor everything below it.
+      const change = document.applyEdits([
+        {
+          range: {
+            start: { line: 2, character: 0 },
+            end: { line: 4, character: 0 },
+          },
+          newText: '/*\n',
+        },
+      ]);
+      for (const [line, lineTokens] of tokenizer.tokenize(change!, window)) {
+        tokens.set(line, lineTokens);
+      }
+      messages.drain();
+      expectLinesColored(
+        highlighter,
+        document,
+        tokens,
+        Array.from({ length: lineCount - 1 - 2 }, (_, index) => 2 + index),
+        'pierre-dark'
+      );
+    } finally {
+      tokenizer.dispose();
+      messages.restore();
+    }
+  });
+
+  test('an edit during a theme pass leaves the rest of the pass to the job', async () => {
+    const highlighter = await getSharedHighlighter({
+      preferredHighlighter: 'shiki-js',
+      themes: ['pierre-dark', 'pierre-light'],
+      langs: ['typescript'],
+    });
+    const messages = stubBackgroundMessages();
+    const document = new TextDocument('test.ts', contents, 'typescript');
+    const tokens = new Map<number, HighlightedToken[]>();
+    const tokenizer = highlighter.createEditorTokenizer({
+      textDocument: document,
+      theme: 'pierre-dark',
+      onDeferTokenize: (lines) => {
+        for (const [line, lineTokens] of lines) tokens.set(line, lineTokens);
+      },
+    });
+    try {
+      tokenizer.setTheme('pierre-light');
+      // The theme pass has not run when the next edit interrupts it.
+      tokenizer.stopBackgroundTokenize();
+      const change = document.applyEdits([insertAt(15, 0, 'export ')]);
+      for (const [line, lineTokens] of tokenizer.tokenize(change!, window)) {
+        tokens.set(line, lineTokens);
+      }
+      messages.drain();
+      expectLinesColored(
+        highlighter,
+        document,
+        tokens,
+        Array.from({ length: lineCount }, (_, line) => line),
+        'pierre-light'
+      );
+    } finally {
+      tokenizer.dispose();
+      messages.restore();
     }
   });
 });

@@ -2,6 +2,7 @@ import { afterAll, beforeAll, expect, spyOn, test } from 'bun:test';
 import { toHtml } from 'hast-util-to-html';
 
 import { DEFAULT_RENDER_RANGE } from '../src/constants';
+import { TextDocument } from '../src/editor/textDocument';
 import {
   disposeHighlighter,
   getSharedHighlighter,
@@ -14,6 +15,7 @@ import { processPatch } from '../src/utils/parsePatchFiles';
 import { renderDiffWithHighlighter } from '../src/utils/renderDiffWithHighlighter';
 import { renderFileWithHighlighter } from '../src/utils/renderFileWithHighlighter';
 import { renderTokenLines } from '../src/utils/renderTokenLines';
+import { lineEdit } from './editorTestUtils';
 
 let highlighter: DiffsHighlighter;
 beforeAll(async () => {
@@ -201,16 +203,26 @@ test('cached file and diff renderers scroll across lazy rows without retokenizin
 
 test('editing after a lazy render regenerates writable editor rows', () => {
   const renderer = new FileRenderer(options);
-  const session = { ...file };
   const range = { ...DEFAULT_RENDER_RANGE, totalLines: 1 };
   try {
-    renderer.renderFile(session, range);
-    renderer.beginEditSession(session);
+    renderer.renderFile(file, range);
+    const session = renderer.startEditSession(file);
     const editing = renderer.renderFile(session, range);
     expect(toHtml(editing?.contentAST ?? [])).toContain('data-char');
-    renderer.updateRenderCache(
-      new Map([[3, [[0, '#fff', 'const edited = 3;']]]]),
-      'dark'
+    const document = new TextDocument<'file', undefined>(
+      'inmemory://lazy',
+      session.contents
+    );
+    const change = document.applyEdits([
+      lineEdit(document, 3, 'const edited = 3;'),
+    ]);
+    if (change == null) {
+      throw new Error('the edit applied nothing');
+    }
+    renderer.applyChange(
+      change,
+      document,
+      new Map([[3, [[0, '#fff', 'const edited = 3;']]]])
     );
     const later = renderer.renderFile(session, { ...range, startingLine: 3 });
     expect(toHtml(later?.contentAST ?? [])).toContain('edited');

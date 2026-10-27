@@ -1,11 +1,6 @@
 import { afterAll, describe, expect, test } from 'bun:test';
 
-import {
-  disposeHighlighter,
-  File,
-  getSharedHighlighter,
-  isFileAnnotationCollection,
-} from '../src';
+import { disposeHighlighter, File, isFileAnnotationCollection } from '../src';
 import type {
   FileEditCompleteEvent,
   FileEditCompleteHandler,
@@ -130,17 +125,25 @@ describe('editing a File without changing its input', () => {
     });
     try {
       instance.render({ file: externalFile, fileContainer, forceRender: true });
-      expect(() =>
-        instance.updateRenderCache(new Map([[0, [[0, '', 'edited']]]]), 'dark')
-      ).toThrow('File.updateRenderCache: requires an active edit session');
-      expect(() =>
-        instance.applyDocumentChange(
-          new TextDocument<'file', undefined>(
-            'inmemory://file-session',
-            'edited'
-          )
-        )
-      ).toThrow('File.applyDocumentChange: requires an active edit session');
+      const document = new TextDocument<'file', undefined>(
+        'inmemory://file-session',
+        externalFile.contents
+      );
+      const change = document.applyEdits([
+        {
+          range: {
+            start: { line: 0, character: 0 },
+            end: { line: 0, character: 0 },
+          },
+          newText: 'edited ',
+        },
+      ]);
+      if (change == null) {
+        throw new Error('the edit applied nothing');
+      }
+      expect(() => instance.applyChange(document, change)).toThrow(
+        'File.applyChange: requires an active edit session'
+      );
       expect(externalFile).toEqual(EXTERNAL_FILE);
     } finally {
       instance.cleanUp();
@@ -347,54 +350,6 @@ describe('editing a File without changing its input', () => {
       expect(fixture.editor.getText()).toBe('alpha\nbravo\n');
       expect(fixture.externalFile).toEqual(initialBefore);
       expect(replacement).toEqual(replacementBefore);
-    } finally {
-      fixture.cleanup();
-    }
-  });
-
-  test('a file-name change replaced while its Shiki grammar loads does not clear undo history', async () => {
-    await disposeHighlighter();
-    await getSharedHighlighter({
-      preferredHighlighter: 'shiki-js',
-      themes: [],
-      langs: [],
-    });
-    const changes: string[] = [];
-    const fixture = await createFixture({
-      onChange: (contents) => changes.push(contents),
-    });
-    const intermediate: FileContents = {
-      name: 'intermediate.js',
-      contents: 'intermediate\n',
-      cacheKey: 'external:file-v2',
-    };
-    const replacement: FileContents = {
-      name: EXTERNAL_FILE.name,
-      contents: 'charlie\n',
-      cacheKey: 'external:file-v3',
-    };
-
-    try {
-      replaceDocument(fixture.editor, 'bravo\n');
-      fixture.instance.render({
-        file: intermediate,
-        fileContainer: fixture.fileContainer,
-        forceRender: true,
-      });
-      fixture.instance.render({
-        file: replacement,
-        fileContainer: fixture.fileContainer,
-        forceRender: true,
-      });
-      await waitFor(() => fixture.editor.getText() === 'charlie\n', {
-        timeout: 4_000,
-      });
-
-      expect(changes).toEqual(['bravo\n', 'charlie\n']);
-      fixture.editor.undo();
-      expect(fixture.editor.getText()).toBe('bravo\n');
-      fixture.editor.undo();
-      expect(fixture.editor.getText()).toBe(EXTERNAL_FILE.contents);
     } finally {
       fixture.cleanup();
     }

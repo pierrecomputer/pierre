@@ -100,13 +100,13 @@ function createTestFile(
     return rendered;
   };
 
-  const applyDocumentChange = component.applyDocumentChange.bind(component);
-  component.applyDocumentChange = (textDocument, lineAnnotations) => {
-    currentFile = { ...currentFile, contents: textDocument.getText() };
-    if (lineAnnotations !== undefined) {
-      currentLineAnnotations = lineAnnotations;
+  const applyChange = component.applyChange.bind(component);
+  component.applyChange = (document, change, options) => {
+    currentFile = { ...currentFile, contents: document.getText() };
+    if (options?.lineAnnotations !== undefined) {
+      currentLineAnnotations = options.lineAnnotations;
     }
-    applyDocumentChange(textDocument, lineAnnotations);
+    return applyChange(document, change, options);
   };
 
   Object.defineProperties(component, {
@@ -337,6 +337,7 @@ describe('Editor onAttach lifecycle', () => {
         file,
         lineAnnotations: undefined,
         renderRange: undefined,
+        domCurrent: false,
       });
       await wait(0);
 

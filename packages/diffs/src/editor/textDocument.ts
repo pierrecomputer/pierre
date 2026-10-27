@@ -459,22 +459,35 @@ export class TextDocument<
   }
 
   #applyResolvedEditsToBuffer(edits: ResolvedTextEdit[]): TextDocumentChange {
-    const previousLineCount = this.#pieceTable.lineCount;
+    const table = this.#pieceTable;
+    const previousLineCount = table.lineCount;
+    const previousLastLineLength = table.getLineLength(previousLineCount - 1);
     const editPositions = this.positionsAt(
       edits.flatMap((edit) => [edit.start, edit.end])
     );
-    const changedLineRange = this.#computeChangedLineRange(
-      edits,
-      editPositions
-    );
+    // The text each edit removes, with the character on either side of it.
+    // The line count it changes depends on those neighbors, since a `\r`
+    // and a `\n` only make one break together, and they are gone once the
+    // edits are applied.
+    const replaced = edits.map((edit) => ({
+      before: edit.start > 0 ? table.charAt(edit.start - 1) : '',
+      text: table.getTextSlice(edit.start, edit.end),
+      after: table.charAt(edit.end),
+    }));
     const startPosition = editPositions[0];
     const endPosition = editPositions[editPositions.length - 1];
     const endedAtDocumentEnd =
       endPosition.line === previousLineCount - 1 &&
-      endPosition.character ===
-        this.#pieceTable.getLineLength(endPosition.line);
-    this.#pieceTable.applyEdits(edits);
-    const lineCount = this.#pieceTable.lineCount;
+      endPosition.character === previousLastLineLength;
+    table.applyEdits(edits);
+    const changedLineRange = this.#computeChangedLineRange(
+      edits,
+      editPositions,
+      this.#lineChangesOf(edits, replaced),
+      previousLineCount - 1,
+      previousLastLineLength
+    );
+    const lineCount = table.lineCount;
     const change: TextDocumentChange = {
       changes: edits.map((edit, index) => ({
         ...edit,
@@ -497,9 +510,45 @@ export class TextDocument<
     return change;
   }
 
+  // For each applied edit, how many lines it added or removed, and whether
+  // it turned the line break before it into a different one (`\r` into
+  // `\r\n`, or back). `replaced` is what the edits removed, read before they
+  // were applied.
+  #lineChangesOf(
+    edits: ResolvedTextEdit[],
+    replaced: { before: string; text: string; after: string }[]
+  ): { lineDelta: number; changesPreviousLine: boolean }[] {
+    const table = this.#pieceTable;
+    let shift = 0;
+    return edits.map((edit, index) => {
+      const old = replaced[index];
+      const newStart = edit.start + shift;
+      shift += edit.text.length - (edit.end - edit.start);
+      const newAfter = table.charAt(newStart + edit.text.length);
+      let lineDelta =
+        countBreakEnds(edit.text, newAfter) -
+        countBreakEnds(old.text, old.after);
+      let changesPreviousLine = false;
+      const touchesPrevious = index > 0 && edits[index - 1].end === edit.start;
+      if (!touchesPrevious && old.before === '\r') {
+        const pairedBefore =
+          (old.text === '' ? old.after : old.text[0]) === '\n';
+        const pairedNow = (edit.text === '' ? newAfter : edit.text[0]) === '\n';
+        if (pairedBefore !== pairedNow) {
+          lineDelta += pairedBefore ? 1 : -1;
+          changesPreviousLine = true;
+        }
+      }
+      return { lineDelta, changesPreviousLine };
+    });
+  }
+
   #computeChangedLineRange(
     edits: ResolvedTextEdit[],
-    editPositions: Position[]
+    editPositions: Position[],
+    lineChanges: { lineDelta: number; changesPreviousLine: boolean }[],
+    previousLastLine: number,
+    previousLastLineLength: number
   ): {
     startLine: number;
     endLine: number;
@@ -525,29 +574,37 @@ export class TextDocument<
       endCharacter: number,
       endedAtDocumentEnd: boolean,
     ][] = [];
-    const previousLastLine = this.#pieceTable.lineCount - 1;
-    const previousLastLineLength =
-      this.#pieceTable.getLineLength(previousLastLine);
     for (let i = 0; i < edits.length; i++) {
-      const edit = edits[i];
       const editStart = editPositions[i * 2];
       const editEnd = editPositions[i * 2 + 1];
       const editStartLine = editStart.line;
       const editEndLine = editEnd.line;
-      const insertedLineSpan = countLineBreaks(edit.text);
+      const { lineDelta, changesPreviousLine } = lineChanges[i];
+      // Which lines this edit changed. Normally they start at the edit's own
+      // line. If the edit changed the line ending of the line above, that
+      // line counts as changed too, so the range starts there.
+      const firstLine = changesPreviousLine
+        ? Math.max(0, editStartLine - 1)
+        : editStartLine;
       const changedStartLine = editStartLine + lineDeltaBeforeEdit;
-      const changedEndLine = changedStartLine + insertedLineSpan;
-      const lineDelta = insertedLineSpan - (editEndLine - editStartLine);
-      startLine = Math.min(startLine, editStartLine);
+      const changedEndLine =
+        changedStartLine + (editEndLine - editStartLine) + lineDelta;
+      const rangeStart = firstLine + lineDeltaBeforeEdit;
+      if (changedEndLine < rangeStart) {
+        throw new Error(
+          `TextDocument: edit ${i} changed lines ${rangeStart}..${changedEndLine}`
+        );
+      }
+      startLine = Math.min(startLine, firstLine);
       endLine = Math.max(endLine, changedEndLine);
       const lastRange = ranges[ranges.length - 1];
-      if (lastRange !== undefined && changedStartLine <= lastRange[1] + 1) {
+      if (lastRange !== undefined && rangeStart <= lastRange[1] + 1) {
         ranges[ranges.length - 1] = [
           lastRange[0],
           Math.max(lastRange[1], changedEndLine),
         ];
       } else {
-        ranges.push([changedStartLine, changedEndLine]);
+        ranges.push([rangeStart, changedEndLine]);
       }
       changes.push([
         changedStartLine,
@@ -570,4 +627,12 @@ export class TextDocument<
     }
     return { startLine, endLine, ranges, changes };
   }
+}
+
+// Counts the line breaks in `text`. A `\r` at the very end only counts if
+// `next`, the character that follows `text`, is not a `\n`, because `\r\n`
+// is one break and that one belongs to the `\n`.
+function countBreakEnds(text: string, next: string): number {
+  const nextIsBreak = next === '\n' || next === '\r';
+  return countLineBreaks(text + next) - (nextIsBreak ? 1 : 0);
 }

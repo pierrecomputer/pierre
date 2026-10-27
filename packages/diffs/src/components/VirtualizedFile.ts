@@ -1,5 +1,6 @@
 import { DEFAULT_VIRTUAL_FILE_METRICS } from '../constants';
-import type { TextDocument } from '../editor/textDocument';
+import type { TextDocument, TextDocumentChange } from '../editor/textDocument';
+import type { ApplyChangeOptions, ApplyChangeResult } from '../editor/types';
 import type {
   FileContents,
   LineAnnotation,
@@ -834,44 +835,34 @@ export class VirtualizedFile<
     }
   }
 
-  // normally triggered by the host when the document line count changes
-  override applyDocumentChange(
-    textDocument: TextDocument<'file', LAnnotation>,
-    newLineAnnotations?: LineAnnotation<LAnnotation>[],
-    shouldUpdateBuffer = false
-  ): void {
-    const { renderRange: previousRenderRange } = this;
-    // Capture the scroll anchor before the synchronous document swap and
-    // layout-cache wipe below; the host's next frame resolves it against the
-    // new geometry so on-screen rows do not shift.
-    this.getAdvancedVirtualizer()?.capturePendingLayoutAnchor();
-    super.applyDocumentChange(textDocument, newLineAnnotations);
+  // A line-count change also moves the rows below and the file's height, so
+  // the layout caches are invalidated with the render. Either way the render
+  // itself runs in the virtualizer's frame.
+  protected override renderChange(structural: boolean): void {
+    if (!structural) {
+      this.rerender();
+      return;
+    }
     this.getSimpleVirtualizer()?.markDOMDirty();
     this.resetLayoutCache(this.isSimpleMode(), false);
-
-    const file = this.getRenderedFile();
     if (!this.isSimpleMode()) {
       this.computeApproximateSize(true);
-    } else if (
-      shouldUpdateBuffer &&
-      previousRenderRange != null &&
-      file != null
-    ) {
-      // Update the buffers caused by the line-count change to ensure the host
-      // scrolls to the correct position before re-rendering.
-      const windowSpecs = this.virtualizer.getWindowSpecs();
-      const renderRange = this.computeRenderRangeFromWindow(
-        file,
-        this.top ?? 0,
-        windowSpecs
-      );
-      if (renderRange.bufferAfter !== previousRenderRange.bufferAfter) {
-        this.updateBuffers(renderRange);
-      }
     }
-
     this.forceRenderOverride = true;
     this.virtualizer.instanceChanged(this, true);
+  }
+
+  public override applyChange(
+    document: TextDocument<'file', LAnnotation>,
+    change: TextDocumentChange,
+    options?: ApplyChangeOptions<'file', LAnnotation>
+  ): ApplyChangeResult {
+    // CodeView anchors scroll to what is on screen before the lines move, so
+    // its next frame keeps it in place.
+    if (change.lineDelta !== 0) {
+      this.getAdvancedVirtualizer()?.capturePendingLayoutAnchor();
+    }
+    return super.applyChange(document, change, options);
   }
 
   override render({

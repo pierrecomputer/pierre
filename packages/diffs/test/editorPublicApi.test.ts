@@ -1741,8 +1741,11 @@ describe('Editor focus lifecycle', () => {
   });
 
   test('first-visible focus applies a top offset after sticky headers', async () => {
+    // The four leading rows stand in for the rows first-visible skips. They
+    // are relabeled in place: the column is written by key, so rows it did
+    // not write cannot be added to it.
     const { cleanup, container, content, editor } = await createEditorFixture(
-      'alpha\nbravo\ncharlie'
+      'r1\nr2\nr3\nr4\nalpha\nbravo\ncharlie'
     );
     try {
       const viewport = document.createElement('div');
@@ -1756,32 +1759,28 @@ describe('Editor focus lifecycle', () => {
       setRect(header, 0, 20);
       shadowRoot.prepend(header);
 
-      for (const lineType of [
+      const rows = getLineRows(content);
+      for (const [index, lineType] of [
         'annotation',
         'separator',
         'buffer',
         'change-deletion',
-      ]) {
-        const row = document.createElement('div');
+      ].entries()) {
+        const row = rows[index];
         row.dataset.line = '99';
         row.dataset.lineType = lineType;
         setRect(row, 35, 40);
-        content.prepend(row);
       }
-
-      const rows = getLineRows(content).filter(
-        (row) => row.dataset.line !== '99'
-      );
-      setRect(rows[0], 10, 20);
-      setRect(rows[1], 25, 35);
-      setRect(rows[2], 35, 45);
+      setRect(rows[4], 10, 20);
+      setRect(rows[5], 25, 35);
+      setRect(rows[6], 35, 45);
 
       editor.focus({
         lineNumber: 'first-visible',
         preventScroll: true,
         offset: 10,
       });
-      expect(editor.getViewState().selections?.[0]?.start.line).toBe(2);
+      expect(editor.getViewState().selections?.[0]?.start.line).toBe(6);
     } finally {
       cleanup();
     }

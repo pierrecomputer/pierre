@@ -64,7 +64,7 @@ describe('FileRenderer AST Structure', () => {
       );
       expect(lineElement.properties['data-line']).toBe(i + 1);
       expect(lineElement.properties['data-line-type']).toBe('context');
-      expect(lineElement.properties['data-line-index']).toBe(i);
+      expect(lineElement.properties['data-line-index']).toBe(`${i}`);
     }
 
     // Verify each gutter item

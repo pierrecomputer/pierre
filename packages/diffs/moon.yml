@@ -41,6 +41,17 @@ tasks:
       cache: false
       runInCI: 'always'
 
+  # The render benchmark's cases in real Chromium, on the built library: the
+  # Vite fixture server serves test/e2e/fixtures/benchmark.html and Playwright
+  # drives it. `--root` points it at another copy of the package to compare.
+  benchmark-browser:
+    command: 'bun scripts/benchmarkBrowser.ts'
+    deps:
+      - 'build'
+    options:
+      cache: false
+      runInCI: 'always'
+
   # Browser E2E for shadow-DOM rendering and contentEditable edit mode, which
   # the jsdom unit suite cannot exercise. Mirrors the trees E2E setup: a Vite
   # fixture server serves the built dist and Playwright drives real Chromium.

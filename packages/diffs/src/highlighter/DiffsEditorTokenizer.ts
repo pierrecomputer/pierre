@@ -2,13 +2,16 @@ import type { TextDocumentChange } from '../editor/textDocument';
 import type { HighlightedToken, RenderRange } from '../types';
 
 export interface DiffsEditorTokenizer {
+  // Applies an edit and returns the lines in `renderRange` whose tokens
+  // changed.
   tokenize(
     change: TextDocumentChange,
-    renderRange?: RenderRange,
-    hostRealignsRows?: boolean
+    renderRange?: RenderRange
   ): Map<number, HighlightedToken[]>;
 
-  prebuildStateStack(renderRange?: RenderRange): void;
+  // Gets the lines in `renderRange` ready before the first edit. With
+  // `domCurrent`, the rows on screen already match the document.
+  prebuildStateStack(renderRange?: RenderRange, domCurrent?: boolean): void;
 
   // Finishes tokenizing every line up to the end of `renderRange`, and
   // returns the lines whose tokens changed.

@@ -265,6 +265,7 @@ function primeTokenizer(
       previousLineCount: lineCount,
       lineCount,
       lineDelta: 0,
+      changes: [],
       changedLineRanges: [[0, lineCount - 1]],
     },
     renderRange ?? {
@@ -340,15 +341,10 @@ function createBenchmarkCases(
     bufferBefore: 0,
     bufferAfter: 0,
   };
-  const createVisibleNewlineCase = (
-    hostRealignsRows: boolean
-  ): BenchmarkCase => ({
-    name: hostRealignsRows
-      ? 'visible-newline-shifted'
-      : 'visible-newline-dense',
-    description: hostRealignsRows
-      ? 'Insert a newline and settle against shifted grammar state for a host that realigns rows.'
-      : 'Insert a newline and tokenize the full visible range for a host that cannot realign rows.',
+  const visibleNewlineCase: BenchmarkCase = {
+    name: 'visible-newline',
+    description:
+      'Insert a newline at line 0 and settle against the shifted grammar states of the rows below.',
     run() {
       resetMessages();
       const counters = { grammarCalls: 0, setThemeCalls: 0 };
@@ -378,11 +374,7 @@ function createBenchmarkCases(
       postedMessages.length = 0;
       collectGarbage();
       const started = performance.now();
-      const dirtyLines = tokenizer.tokenize(
-        change,
-        visibleRange,
-        hostRealignsRows
-      );
+      const dirtyLines = tokenizer.tokenize(change, visibleRange);
       const elapsedMs = performance.now() - started;
       const operations = {
         visibleLines: visibleRange.totalLines,
@@ -393,11 +385,10 @@ function createBenchmarkCases(
       tokenizer.cleanUp();
       return { elapsedMs, operations };
     },
-  });
+  };
 
   return [
-    createVisibleNewlineCase(false),
-    createVisibleNewlineCase(true),
+    visibleNewlineCase,
     {
       name: 'unbounded-structural-edit',
       description:
@@ -665,6 +656,7 @@ function createBenchmarkCases(
               previousLineCount: 2,
               lineCount: 2,
               lineDelta: 0,
+              changes: [],
               changedLineRanges: [[0, 1]],
             },
             {

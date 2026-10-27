@@ -61,6 +61,7 @@ import type {
   SupportedLanguages,
   ThemedDiffResult,
 } from '../types';
+import { addMissingRows } from '../utils/addMissingRows';
 import { areDiffRenderOptionsEqual } from '../utils/areDiffRenderOptionsEqual';
 import { areDiffTargetsEqual } from '../utils/areDiffTargetsEqual';
 import { areRenderRangesEqual } from '../utils/areRenderRangesEqual';
@@ -98,6 +99,14 @@ interface DiffRenderCache extends RenderedDiffASTCache {
   // when the result is stored for a diff being edited. Rows bind to these,
   // so later edits cannot pair a row with the wrong line.
   lines?: HighlightedLines;
+}
+
+// A row source with the highlight result and the model its rows are
+// bound to.
+interface BoundRowSource<TResult, TModel> {
+  result: TResult;
+  source: RowSource;
+  model: TModel;
 }
 
 interface HighlightedLines {
@@ -179,13 +188,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
   private layout: DiffLayout<LAnnotation> | undefined;
   // Where the rows of the rendered diff come from: the highlight result, plus
   // the tokens the editor sends for lines it has changed, keyed by line id.
-  private rowSource:
-    | {
-        result: ThemedDiffResult | undefined;
-        source: RowSource;
-        model: DiffModel;
-      }
-    | undefined;
+  private rowSource: BoundRowSource<ThemedDiffResult, DiffModel> | undefined;
   // The DiffModel for the diff currently rendered. While an editor is
   // attached, this is the model its edits are applied to.
   private model: DiffModel | undefined;
@@ -244,9 +247,8 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     this.editSessionActive = true;
     this.model = model;
     this.diff = model.diff;
-    this.rowSource = undefined;
     this.pendingHighlightResult = undefined;
-    const { renderCache } = this;
+    const { renderCache, rowSource } = this;
     const { options: renderOptions } = this.getRenderOptions(model.diff);
     // Reuse the input diff's highlighted rows when the session starts from the
     // input's own lines and the rows carry the token spans the editor reads;
@@ -258,16 +260,35 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       areDiffTargetsEqual(renderCache.diff, inputDiff) &&
       areDiffRenderOptionsEqual(renderCache.options, renderOptions)
     ) {
+      const { result } = renderCache;
+      const lines = {
+        ids: model.lineIds(),
+        texts: model.diff.additionLines.slice(),
+      };
       this.renderCache = {
         diff: model.diff,
         options: renderOptions,
         highlighted: true,
-        result: renderCache.result,
+        result,
         renderRange: renderCache.renderRange,
-        lines: this.lineSnapshot(model.diff),
+        lines,
       };
+      // The rows on screen become the session's rows, keyed by its line ids,
+      // so its first render changes nothing.
+      if (rowSource != null && rowSource.result === result) {
+        rowSource.source.setHighlightRows({
+          deletionRows: result.code.deletionLines,
+          additionRows: result.code.additionLines,
+          additionLines: lines.texts,
+          lineIds: lines.ids,
+        });
+        rowSource.model = model;
+      } else {
+        this.rowSource = undefined;
+      }
     } else {
       this.renderCache = undefined;
+      this.rowSource = undefined;
     }
     return model.diff;
   }
@@ -289,7 +310,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     });
     this.expandedHunks = result.expandedHunks;
     if (result.removedLineIds.length > 0) {
-      this.editSessionRows(model).forgetLines(result.removedLineIds);
+      this.editSessionRows(model).source.forgetLines(result.removedLineIds);
       this.layout?.forgetLines(result.removedLineIds);
     }
     if (tokens != null) {
@@ -304,7 +325,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
    */
   public setTokens(tokens: ReadonlyMap<number, HighlightedToken[]>): number[] {
     const model = this.requireSession();
-    const rows = this.editSessionRows(model);
+    const rows = this.editSessionRows(model).source;
     const changed: number[] = [];
     for (const [line, lineTokens] of tokens) {
       if (rows.setTokens(model.lineId(line), lineTokens)) {
@@ -362,15 +383,15 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     return model;
   }
 
-  // The row source for the diff being edited, created empty when nothing has
-  // been highlighted yet so the editor's tokens have somewhere to go. Its
-  // result stands in for a highlight result until one exists, so every render
-  // lays rows out from the editor's tokens and plain text; it carries no
-  // theme styles, which leaves the ones on screen alone.
-  private editSessionRows(model: DiffModel): RowSource {
+  // The session's row source. Until a highlight result exists it is empty,
+  // so rows come from the editor's tokens and the diff's text, and its empty
+  // result has no theme styles to replace the ones already applied.
+  private editSessionRows(
+    model: DiffModel
+  ): BoundRowSource<ThemedDiffResult, DiffModel> {
     const { rowSource } = this;
     if (rowSource != null && rowSource.model === model) {
-      return rowSource.source;
+      return rowSource;
     }
     const source = new RowSource({
       deletionRows: [],
@@ -378,7 +399,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       additionLines: [],
       lineIds: [],
     });
-    this.rowSource = {
+    return (this.rowSource = {
       result: {
         code: { additionLines: [], deletionLines: [] },
         themeStyles: '',
@@ -386,8 +407,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       },
       source,
       model,
-    };
-    return source;
+    });
   }
 
   /**
@@ -488,7 +508,11 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     this.renderCache = undefined;
     this.pendingHighlightResult = undefined;
     this.layout = undefined;
-    if (!this.editSessionActive) {
+    if (this.editSessionActive) {
+      // Rows built from the editor's tokens carry one theme; the highlight
+      // that follows replaces them.
+      this.rowSource?.source.forgetTokens();
+    } else {
       this.rowSource = undefined;
       this.model = undefined;
     }
@@ -1029,14 +1053,11 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     if (!this.editSessionActive) {
       return undefined;
     }
-    this.editSessionRows(this.requireSession());
-    const placeholder = this.rowSource?.result;
-    return placeholder == null
-      ? undefined
-      : this.layoutResult(this.renderCache.diff, renderRange, placeholder, {
-          ids: [],
-          texts: [],
-        });
+    const { result } = this.editSessionRows(this.requireSession());
+    return this.layoutResult(this.renderCache.diff, renderRange, result, {
+      ids: [],
+      texts: [],
+    });
   }
 
   public async asyncRender(
@@ -1256,7 +1277,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
         this.options.loadDiffFiles != null
       ),
     };
-    const layout = (this.layout ??= new DiffLayout(layoutOptions, this));
+    const layout = (this.layout ??= new DiffLayout(layoutOptions));
     layout.setOptions(layoutOptions);
     const model =
       this.model?.diff === diff
@@ -1265,6 +1286,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     const previousResult = this.rowSource?.result;
     const rows = this.getRowSource(result, model, lines);
     const { columns, hunkData, rowCount, totalLines } = layout.layout({
+      host: this,
       model,
       rows,
       renderRange,
@@ -1500,20 +1522,6 @@ function addPlainRows(
   addMissingRows(current.code.deletionLines, window.code.deletionLines);
   addMissingRows(current.code.additionLines, window.code.additionLines);
   return current;
-}
-
-function addMissingRows(
-  target: ElementContent[],
-  source: readonly ElementContent[]
-): void {
-  // Window results are sparse arrays indexed by line, so only the entries
-  // present are visited.
-  for (const key of Object.keys(source)) {
-    const index = Number(key);
-    if (!(index in target)) {
-      target[index] = source[index];
-    }
-  }
 }
 
 // Renames can supply 2 different languages, so lets go ahead and figure out

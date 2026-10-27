@@ -233,6 +233,11 @@ interface SyncRenderViewBaseProps {
   highlighter: DiffsHighlighter;
   fileContainer: HTMLElement;
   renderRange: RenderRange | undefined;
+  /**
+   * The DOM content for the rows matches the required editor tokenization
+   * structure, therefore we don't need to refresh the DOM on attach.
+   */
+  domCurrent: boolean;
 }
 
 interface SyncFileRenderViewProps<LAnnotation> extends SyncRenderViewBaseProps {
@@ -579,12 +584,11 @@ export class Editor<
   // can treat the same instance as "nothing changed".
   #ghostTextRows: ReadonlyMap<number, number> = new Map();
   #onDeferTokenize = (lines: Map<number, Array<HighlightedToken>>) => {
-    if (!this.#isRendering) {
-      return;
-    }
+    // Without rows on screen the component only keeps the tokens.
     this.#fileInstance?.applyTokens(lines);
     // A line with ghost text that was recolored needs its overlay redrawn.
     if (
+      this.#isRendering &&
       this.#renderRange !== undefined &&
       this.#renderRange.totalLines !== Infinity &&
       this.#editPrediction !== undefined &&
@@ -1161,11 +1165,14 @@ export class Editor<
     }
     this.#isRendering = false;
     dequeueRender(this.#handleCustomPasteEvent);
-    // The tokenizer is destroyed in both modes: it holds highlighter/worker
-    // resources and writes into the (removed below) theme style element.
-    // __syncRenderView recreates one for a retained document on render resume.
-    this.#tokenizer?.cleanUp();
-    this.#tokenizer = undefined;
+    // A recycled editor keeps its tokenizer with its document. It keeps
+    // working while the rows are gone: its tokens land in the component's
+    // model, and the render that brings the rows back shows them. A
+    // discarded editor releases it along with the document.
+    if (!recycle) {
+      this.#tokenizer?.cleanUp();
+      this.#tokenizer = undefined;
+    }
 
     // dispse event listeners
     this.#globalEventDisposes?.forEach((dispose) => dispose());
@@ -1451,7 +1458,7 @@ export class Editor<
 
   /** @internal */
   __syncRenderView(props: SyncRenderViewProps<EType, LAnnotation>): void {
-    const { highlighter, fileContainer, renderRange } = props;
+    const { highlighter, fileContainer, renderRange, domCurrent } = props;
     const renderView:
       | SyncFileRenderViewProps<LAnnotation>
       | SyncDiffRenderViewProps<LAnnotation> = props;
@@ -1581,11 +1588,9 @@ export class Editor<
       }
     }
 
-    // The tokenizer is (re)created whenever the current document lacks one:
-    // right after a fresh document build above, or on the first sync after a
-    // recycled surface resumes its retained document. Tying it to the document
-    // (rather than the rebuild) keeps an unchanged resumed document, which
-    // skips the rebuild, able to paint edits.
+    // A document without a tokenizer gets one here: a document just built
+    // above, or one a recycled editor retained and brought back. A tokenizer
+    // for another highlighter is replaced.
     const textDocument = editSession.document;
     if (
       this.#tokenizer != null &&
@@ -1603,7 +1608,9 @@ export class Editor<
         onDeferTokenize: this.#onDeferTokenize,
         onThemeChange: () => this.#scheduleThemeSelectionRefresh(),
         setStyle: (css) => {
-          this.#themeStyleElement!.textContent = css;
+          if (this.#themeStyleElement != null) {
+            this.#themeStyleElement.textContent = css;
+          }
         },
         __debug: this.#options.__debug,
       });
@@ -1641,7 +1648,7 @@ export class Editor<
     // The contenteditable host advertises role="textbox", so without an
     // accessible name screen readers announce an unlabeled text field. Label it
     // with the file name. The same content element is reused across file
-    // switches (see File#applyFullRender), so refresh the label on every sync
+    // switches (see File#applyRowsToDOM), so refresh the label on every sync
     // rather than only when the element is first initialized above.
     if (contentEl.ariaLabel !== fileOrDiff.name) {
       contentEl.ariaLabel = fileOrDiff.name;
@@ -1659,7 +1666,7 @@ export class Editor<
 
     this.#lineAnnotations = lineAnnotations;
     this.#renderRange = renderRange;
-    this.#tokenizer?.prebuildStateStack(renderRange);
+    this.#tokenizer?.prebuildStateStack(renderRange, domCurrent);
 
     const retainedEditorState = editSession.editor;
     const restoreEditorStateOnSync = this.#restoreEditorStateOnSync;
@@ -2006,6 +2013,8 @@ export class Editor<
     this.#themeStyleElement = h('style', {
       dataset: 'editorThemeCss',
     });
+    // A tokenizer kept across a recycle writes its theme into the new element.
+    this.#tokenizer?.applyStyle();
 
     this.#spriteElement = createSpriteElement();
 
@@ -3732,11 +3741,7 @@ export class Editor<
     tokenizer?.stopBackgroundTokenize();
 
     const t = performance.now();
-    const dirtyLines = tokenizer?.tokenize(
-      change,
-      renderRange,
-      !this.#isDiff && this.#virtualizedInstance != null
-    );
+    const dirtyLines = tokenizer?.tokenize(change, renderRange);
     const t2 = performance.now();
 
     const { rebuiltLines } = applyChange(textDocument, change, {
@@ -6786,9 +6791,13 @@ export class Editor<
       this.#rerender(change, newLineAnnotations);
     } else if (textDocument != null) {
       // Recycling or pending hydration can leave the document editable
-      // without editor markup. The component's model still takes the change,
-      // so onChange and a later render both see the current document.
+      // without editor markup. The tokenizer and the component's model still
+      // take the change, so onChange and a later render both see the current
+      // document with its colors.
+      const tokenizer = this.#tokenizer;
+      tokenizer?.stopBackgroundTokenize();
       this.#applyComponentChange?.(textDocument, change, {
+        tokens: tokenizer?.tokenize(change, this.#renderRange),
         lineAnnotations: newLineAnnotations,
       });
       if (newLineAnnotations != null) {

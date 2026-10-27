@@ -76,6 +76,7 @@ function createVirtualizedFile(modelLineHeight: number): {
       file,
       lineAnnotations: undefined,
       renderRange,
+      domCurrent: false,
     });
   };
   let attachedEditor: Editor<'file', undefined> | undefined;
