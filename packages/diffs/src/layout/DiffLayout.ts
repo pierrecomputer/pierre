@@ -70,6 +70,13 @@ export interface DiffLayoutInput<LAnnotation> {
   deletionAnnotations: AnnotationLineMap<LAnnotation>;
   additionAnnotations: AnnotationLineMap<LAnnotation>;
   annotationSlotName(annotation: DiffLineAnnotation<LAnnotation>): string;
+  /**
+   * Give the empty line after the new file's final line break a row of its
+   * own; see IterateOverDiffProps.includeTrailingNewline.
+   */
+  includeTrailingNewline: boolean;
+  /** Render the "No newline at end of file" marker rows. */
+  showNoNewlineMarkers: boolean;
 }
 
 export interface DiffLayoutResult {
@@ -141,7 +148,15 @@ export class DiffLayout<LAnnotation = undefined> {
   }
 
   layout(input: DiffLayoutInput<LAnnotation>): DiffLayoutResult {
-    const { host, model, rows, renderRange, expandedHunks } = input;
+    const {
+      host,
+      model,
+      rows,
+      renderRange,
+      expandedHunks,
+      includeTrailingNewline,
+      showNoNewlineMarkers,
+    } = input;
     const { diff } = model;
     const {
       diffStyle,
@@ -230,6 +245,7 @@ export class DiffLayout<LAnnotation = undefined> {
       totalLines: renderRange.totalLines,
       expandedHunks: expandUnchanged ? true : expandedHunks,
       collapsedContextThreshold,
+      includeTrailingNewline,
       callback: ({
         hunkIndex,
         hunk,
@@ -523,7 +539,7 @@ export class DiffLayout<LAnnotation = undefined> {
         const noEOFCRAddition =
           (additionLine?.noEOFCR ?? false) ||
           (isFinalSplitHunkRow && hunk.noEOFCRAdditions);
-        if (noEOFCRAddition || noEOFCRDeletion) {
+        if (showNoNewlineMarkers && (noEOFCRAddition || noEOFCRDeletion)) {
           flushBuffer();
           if (noEOFCRDeletion) {
             const noEOFType: LineTypes =
@@ -612,7 +628,7 @@ export class DiffLayout<LAnnotation = undefined> {
 
     const totalLines = Math.max(
       getTotalLineCountFromHunks(diff.hunks),
-      diff.additionLines.length,
+      model.lineCount,
       diff.deletionLines.length
     );
     const hasBuffer =

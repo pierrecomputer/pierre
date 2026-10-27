@@ -76,6 +76,7 @@ import { createGutterWrapper, createHastElement } from '../utils/hast_utils';
 import { hastToHtml } from '../utils/hastToHtml';
 import { isDefaultRenderRange } from '../utils/isDefaultRenderRange';
 import { isDiffPlainText } from '../utils/isDiffPlainText';
+import { endsWithNewline } from '../utils/iterateOverDiff';
 import { renderDiffWithHighlighter } from '../utils/renderDiffWithHighlighter';
 import { resolvePreferredHighlighter } from '../utils/resolvePreferredHighlighter';
 import type { WorkerPoolManager } from '../worker';
@@ -419,6 +420,23 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       this.renderCache.highlighted &&
       this.renderCache.result != null
     );
+  }
+
+  // An edit session renders the empty line after the new file's final line
+  // break as a row of its own.
+  public includesTrailingNewline(): boolean {
+    return this.editSessionActive;
+  }
+
+  // Whether the diff gets that row: a session is active and the new file
+  // ends with a line break.
+  public hasTrailingNewlineRow(diff: FileDiffMetadata): boolean {
+    return this.includesTrailingNewline() && endsWithNewline(diff, 'additions');
+  }
+
+  // "No newline at end of file" markers are hidden while editing.
+  public showsNoNewlineMarkers(): boolean {
+    return !this.editSessionActive;
   }
 
   /**
@@ -1294,6 +1312,8 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       deletionAnnotations: this.deletionAnnotations,
       additionAnnotations: this.additionAnnotations,
       annotationSlotName: this.annotationSlotName,
+      includeTrailingNewline: this.includesTrailingNewline(),
+      showNoNewlineMarkers: this.showsNoNewlineMarkers(),
     });
     const unified = lazyColumnCells(columns.unified);
     const deletions = lazyColumnCells(columns.deletions);
