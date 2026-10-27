@@ -156,10 +156,128 @@
 
   (func $renderInline (param $r i32)
     (drop (call $blockContent (local.get $r)))
-    (global.set $singleLineContent
-      (i32.eq (i32.load offset=$R.nLines (local.get $r)) (i32.const 1)))
+    ;; Resolve the proven literal range after reservation: rebuilt content may
+    ;; move even though ordinary root paragraphs usually alias immutable input.
+    (if (i32.and (i32.eqz (global.get $mode))
+          (i32.ne (i32.and (i32.load8_u offset=1 (local.get $r))
+            (i32.const $F.plainInline)) (i32.const 0)))
+      (then
+        (call $ensureOut (global.get $contentLen))
+        (memory.copy (global.get $out) (global.get $contentBase) (global.get $contentLen))
+        (global.set $out (i32.add (global.get $out) (global.get $contentLen)))
+        (return)))
+    (global.set $singleLineContent (i32.and
+      (i32.eq (i32.load offset=$R.nLines (local.get $r)) (i32.const 1))
+      (i32.eqz (i32.and (i32.load8_u offset=1 (local.get $r))
+        (i32.const $F.joinedLines)))))
     (call $inlineScan)
     (call $walkInlines))
+
+  ;; Emit an emphasis tag into an already-reserved HTML run without touching
+  ;; the global cursor or checking capacity for each fragment.
+  (func $htmlEmphCloseAt (param $dst i32) (param $kind i32) (result i32)
+    (if (i32.eq (local.get $kind) (i32.const $T.em))
+      (then
+        (i64.store (local.get $dst) (i64.const "</em>"))
+        (return (i32.add (local.get $dst) (i32.const 5)))))
+    (if (i32.eq (local.get $kind) (i32.const $T.strong))
+      (then
+        (i64.store (local.get $dst) (i64.const "</strong"))
+        (i32.store8 offset=8 (local.get $dst) (i32.const ">"))
+        (return (i32.add (local.get $dst) (i32.const 9)))))
+    (i64.store (local.get $dst) (i64.const "</del>"))
+    (i32.add (local.get $dst) (i32.const 6)))
+
+  ;; Opening tags share the same reserved-run contract as closing tags.
+  (func $htmlEmphOpenAt (param $dst i32) (param $kind i32) (result i32)
+    (if (i32.eq (local.get $kind) (i32.const $T.em))
+      (then
+        (i32.store (local.get $dst) (i32.const "<em>"))
+        (return (i32.add (local.get $dst) (i32.const 4)))))
+    (if (i32.eq (local.get $kind) (i32.const $T.strong))
+      (then
+        (i64.store (local.get $dst) (i64.const "<strong>"))
+        (return (i32.add (local.get $dst) (i32.const 8)))))
+    (i64.store (local.get $dst) (i64.const "<del>"))
+    (i32.add (local.get $dst) (i32.const 5)))
+
+  ;; Batch safe literal gaps and consecutive emphasis marks within at most 256
+  ;; source bytes. Six output bytes per source byte cover every emphasis tag.
+  ;; Reserve before resolving scratch pointers, then keep the cursor local;
+  ;; other mark kinds and image labels stay on the general rendering path.
+  ;; Return the next slot in the low word and source offset in the high word.
+  (func $htmlEmphasisRun (param $i i32) (param $p i32) (result i64)
+    (local $limit i32)
+    (local $n i32)
+    (local $dst i32)
+    (local $base i32)
+    (local $m i32)
+    (local $beg i32)
+    (local $end i32)
+    (local $tag i32)
+    (local $tail i32)
+    (local $word i32)
+    (local.set $n (i32.sub (global.get $contentLen) (local.get $p)))
+    (if (i32.gt_u (local.get $n) (i32.const 256))
+      (then (local.set $n (i32.const 256))))
+    (local.set $limit (i32.add (local.get $p) (local.get $n)))
+    (call $ensureOut (i32.mul (local.get $n) (i32.const 6)))
+    (local.set $dst (global.get $out))
+    (local.set $base (call $contentAt (i32.const 0)))
+    (block $done
+      (loop $marks
+        (br_if $done (i32.ge_u (local.get $i) (global.get $nSlots)))
+        (local.set $m (call $slotAt (local.get $i)))
+        (local.set $beg (i32.load offset=$M.beg (local.get $m)))
+        (if (i32.lt_u (local.get $beg) (local.get $p))
+          (then
+            (local.set $i (i32.add (local.get $i) (i32.const 1)))
+            (br $marks)))
+        (br_if $done (i32.ne (i32.load8_u offset=$M.type (local.get $m)) (enum.get $Mk.emph)))
+        (local.set $end (i32.load offset=$M.end (local.get $m)))
+        (br_if $done (i32.gt_u (local.get $end) (local.get $limit)))
+        (local.set $n (i32.sub (local.get $beg) (local.get $p)))
+        (if (local.get $n)
+          (then
+            (if (i32.le_u (local.get $n) (i32.const 16))
+              (then (v128.store (local.get $dst)
+                (v128.load (i32.add (local.get $base) (local.get $p)))))
+              (else (memory.copy (local.get $dst)
+                (i32.add (local.get $base) (local.get $p)) (local.get $n))))
+            (local.set $dst (i32.add (local.get $dst) (local.get $n)))))
+        (local.set $tail (i32.load offset=$M.closeTail (local.get $m)))
+        (if (local.get $tail)
+          (then
+            (local.set $tag (i32.and (i32.load (call $tagAt (local.get $tail)))
+              (i32.const $T.nextMask)))
+            (block $closed
+              (loop $closing
+                (local.set $word (i32.load (call $tagAt (local.get $tag))))
+                (local.set $dst (call $htmlEmphCloseAt (local.get $dst)
+                  (i32.and (local.get $word) (i32.const $T.kindMask))))
+                (br_if $closed (i32.eq (local.get $tag) (local.get $tail)))
+                (local.set $tag (i32.and (local.get $word) (i32.const $T.nextMask)))
+                (br $closing)))))
+        (local.set $n (i32.load offset=$M.rem (local.get $m)))
+        (if (local.get $n)
+          (then
+            (memory.fill (local.get $dst) (i32.load8_u offset=$M.ch (local.get $m)) (local.get $n))
+            (local.set $dst (i32.add (local.get $dst) (local.get $n)))))
+        (local.set $tag (i32.load offset=$M.openHead (local.get $m)))
+        (block $opened
+          (loop $opening
+            (br_if $opened (i32.eqz (local.get $tag)))
+            (local.set $word (i32.load (call $tagAt (local.get $tag))))
+            (local.set $dst (call $htmlEmphOpenAt (local.get $dst)
+              (i32.and (local.get $word) (i32.const $T.kindMask))))
+            (local.set $tag (i32.and (local.get $word) (i32.const $T.nextMask)))
+            (br $opening)))
+        (local.set $p (local.get $end))
+        (local.set $i (i32.add (local.get $i) (i32.const 1)))
+        (br $marks)))
+    (global.set $out (local.get $dst))
+    (i64.or (i64.extend_i32_u (local.get $i))
+      (i64.shl (i64.extend_i32_u (local.get $p)) (i64.const 32))))
 
   (func $walkInlines
     (local $i i32)
@@ -170,13 +288,17 @@
     (local $textEnd i32)
     (local $markType i32)
     (local $base i32)
+    (local $fastHtml i32)
+    (local $run i64)
+    (local.set $fastHtml (i32.eqz
+      (i32.or (global.get $mode) (global.get $literalNeedsEscape))))
     (block $done
       (loop $l
         (block $found
           (loop $skip
             (if (i32.ge_u (local.get $i) (global.get $nSlots))
               (then
-                (call $rText (local.get $p) (global.get $contentLen))
+                (call $rLiteral (local.get $p) (global.get $contentLen))
                 (br $done)))
             (local.set $m (call $slotAt (local.get $i)))
             (local.set $next (i32.load offset=$M.beg (local.get $m)))
@@ -186,6 +308,16 @@
         ;; Capture the mark bounds before text emission can grow the output
         ;; and rebase scratch. renderMark resolves its own fresh slot address.
         (local.set $markEnd (i32.load offset=$M.end (local.get $m)))
+        (if (i32.and (local.get $fastHtml) (i32.eqz (global.get $plain)))
+          (then
+            (if (i32.and
+                  (i32.eq (i32.load8_u offset=$M.type (local.get $m)) (enum.get $Mk.emph))
+                  (i32.le_u (i32.sub (local.get $markEnd) (local.get $p)) (i32.const 256)))
+              (then
+                (local.set $run (call $htmlEmphasisRun (local.get $i) (local.get $p)))
+                (local.set $i (i32.wrap_i64 (local.get $run)))
+                (local.set $p (i32.wrap_i64 (i64.shr_u (local.get $run) (i64.const 32))))
+                (br $l)))))
         (if (i32.gt_u (local.get $next) (local.get $p))
           (then
             (local.set $textEnd (local.get $next))
@@ -201,7 +333,7 @@
                     (i32.add (local.get $base) (local.get $next))
                     (local.get $base))
                   (local.get $base)))))
-            (call $rText (local.get $p) (local.get $textEnd))))
+            (call $rLiteral (local.get $p) (local.get $textEnd))))
         (call $renderMark (local.get $i))
         (local.set $p (local.get $markEnd))
         (local.set $i (i32.add (local.get $i) (i32.const 1)))
@@ -515,6 +647,21 @@
                       (else (out.str "<del>")))))))))
         (br $l))))
 
+  ;; Inline analysis already classified unmarked text. When none of it needs
+  ;; HTML escaping, copy gaps directly rather than classifying each span again.
+  ;; Marks (code, escapes, entities, image labels) retain their normal writers.
+  (func $rLiteral (param $b i32) (param $e i32)
+    (local $n i32)
+    (if (i32.ge_u (local.get $b) (local.get $e)) (then (return)))
+    (if (i32.or (global.get $mode) (global.get $literalNeedsEscape))
+      (then (call $rText (local.get $b) (local.get $e)) (return)))
+    (local.set $n (i32.sub (local.get $e) (local.get $b)))
+    (call $ensureOut (local.get $n))
+    (if (i32.le_u (local.get $n) (i32.const 16))
+      (then (v128.store (global.get $out) (v128.load (call $contentAt (local.get $b)))))
+      (else (memory.copy (global.get $out) (call $contentAt (local.get $b)) (local.get $n))))
+    (global.set $out (i32.add (global.get $out) (local.get $n))))
+
   ;; $b and $e are offsets into the current content. Resolve them only after
   ;; reserving output, because copied content can move with scratch.
   (func $rText (param $b i32) (param $e i32)
@@ -534,6 +681,43 @@
       (then (call $ansiRaw (local.get $p) (i32.add (local.get $p) (local.get $len)) (i32.const 0)))
       (else (call $outText (local.get $p) (i32.add (local.get $p) (local.get $len))))))
 
+  ;; Copy URL bytes that need neither decoding nor escaping in SIMD spans.
+  ;; The caller reserves the entire URL before resolving its source pointers.
+  (func $outHrefSafe (param $p i32) (param $e i32) (result i32)
+    (local $dst i32)
+    (local $w v128)
+    (local $mask i32)
+    (local $n i32)
+    (local $rem i32)
+    (local.set $dst (global.get $out))
+    (block $done
+      (loop $scan
+        (br_if $done (i32.ge_u (local.get $p) (local.get $e)))
+        (local.set $w (v128.load (local.get $p)))
+        ;; Low-nibble rows encode Houdini's safe ASCII set; high nibbles >=8
+        ;; select zero so every non-ASCII byte follows percent encoding.
+        (local.set $mask (i8x16.bitmask (i8x16.eq
+          (v128.and
+            (i8x16.swizzle (v128.const i8x16
+              184 252 248 252 252 252 248 248 252 252 252 92 84 92 212 124)
+              (v128.and (local.get $w) (i8x16.splat (i32.const 15))))
+            (i8x16.swizzle (v128.const i8x16
+              1 2 4 8 16 32 64 128 0 0 0 0 0 0 0 0)
+              (i8x16.shr_u (local.get $w) (i32.const 4))))
+          (i8x16.splat (i32.const 0)))))
+        (local.set $rem (i32.sub (local.get $e) (local.get $p)))
+        (local.set $n (select (call $firstBit (local.get $mask)) (i32.const 16)
+          (local.get $mask)))
+        (if (i32.gt_u (local.get $n) (local.get $rem))
+          (then (local.set $n (local.get $rem))))
+        (v128.store (local.get $dst) (local.get $w))
+        (local.set $dst (i32.add (local.get $dst) (local.get $n)))
+        (local.set $p (i32.add (local.get $p) (local.get $n)))
+        (br_if $done (i32.lt_u (local.get $n) (i32.const 16)))
+        (br $scan)))
+    (global.set $out (local.get $dst))
+    (local.get $p))
+
   ;; write [$p,$e) percent-encoded. Bit 0 of $flags decodes entity references,
   ;; bit 1 removes backslash escapes, matching what each link form cleans.
   (func $outHref (param $p i32) (param $e i32) (param $flags i32)
@@ -541,6 +725,7 @@
     (local $n i32)
     (block $done
       (loop $l
+        (local.set $p (call $outHrefSafe (local.get $p) (local.get $e)))
         (br_if $done (i32.ge_u (local.get $p) (local.get $e)))
         (local.set $c (i32.load8_u (local.get $p)))
         (if (i32.and (i32.eq (local.get $c) (i32.const "&"))
@@ -596,27 +781,50 @@
 
   (data (i32.const $mem.hexdigits) "0123456789ABCDEF")
 
-  ;; write [$p,$e) as escaped text, cleaning it the same way $outHref does
+  ;; Clean entities/backslashes and HTML-escape in one pass. The caller already
+  ;; reserved worst-case output; literal spans copy directly from SIMD loads.
+  ;; Decoded entities still use the text escaper, never another cleanup pass.
   (func $outCleanText (param $p i32) (param $e i32) (param $flags i32)
     (local $c i32)
     (local $n i32)
-    (local $seg i32)
-    (local.set $seg (local.get $p))
+    (local $rem i32)
+    (local $mask i32)
+    (local $dst i32)
+    (local $w v128)
+    (local $lo v128)
+    (local.set $lo (v128.load (i32.const $mem.escapeNibbles)))
+    (local.set $dst (global.get $out))
     (block $done
       (loop $l
         (br_if $done (i32.ge_u (local.get $p) (local.get $e)))
+        (local.set $w (v128.load (local.get $p)))
+        (local.set $mask (i8x16.bitmask (v128.or
+          (i8x16.eq
+            (i8x16.swizzle (local.get $lo)
+              (v128.and (local.get $w) (i8x16.splat (i32.const 15))))
+            (i8x16.shr_u (local.get $w) (i32.const 4)))
+          (i8x16.eq (local.get $w) (i8x16.splat (i32.const "\5c"))))))
+        (local.set $rem (i32.sub (local.get $e) (local.get $p)))
+        (local.set $n (select (call $firstBit (local.get $mask)) (i32.const 16) (local.get $mask)))
+        (if (i32.gt_u (local.get $n) (local.get $rem))
+          (then (local.set $n (local.get $rem))))
+        (v128.store (local.get $dst) (local.get $w))
+        (local.set $dst (i32.add (local.get $dst) (local.get $n)))
+        (local.set $p (i32.add (local.get $p) (local.get $n)))
+        (br_if $done (i32.ge_u (local.get $p) (local.get $e)))
+        (br_if $l (i32.eq (local.get $n) (i32.const 16)))
         (local.set $c (i32.load8_u (local.get $p)))
         (if (i32.and (i32.eq (local.get $c) (i32.const "&"))
-              (i32.ne (i32.and (local.get $flags) (i32.const 1)) (i32.const 0)))
+              (i32.and (local.get $flags) (i32.const 1)))
           (then
             (local.set $n (call $entityMatch (local.get $p) (local.get $e)))
             (if (local.get $n)
               (then
-                (call $outTextReserved (local.get $seg) (local.get $p))
+                (global.set $out (local.get $dst))
                 (call $outTextReserved (global.get $entVal)
                   (i32.add (global.get $entVal) (global.get $entLen)))
+                (local.set $dst (global.get $out))
                 (local.set $p (i32.add (local.get $p) (local.get $n)))
-                (local.set $seg (local.get $p))
                 (br $l)))))
         (if (i32.and (i32.eq (local.get $c) (i32.const "\5c"))
               (i32.ne (i32.and (local.get $flags) (i32.const 2)) (i32.const 0)))
@@ -624,12 +832,34 @@
             (if (i32.and (i32.lt_u (i32.add (local.get $p) (i32.const 1)) (local.get $e))
                   (call $isAsciiPunct (i32.load8_u offset=1 (local.get $p))))
               (then
-                (call $outTextReserved (local.get $seg) (local.get $p))
                 (local.set $p (i32.add (local.get $p) (i32.const 1)))
-                (local.set $seg (local.get $p))))))
+                (local.set $c (i32.load8_u (local.get $p)))))))
+        (if (i32.eq (local.get $c) (i32.const 34))
+          (then
+            (i64.store (local.get $dst) (i64.const "&quot;"))
+            (local.set $dst (i32.add (local.get $dst) (i32.const 6))))
+          (else (if (i32.eq (local.get $c) (i32.const "&"))
+            (then
+              (i64.store (local.get $dst) (i64.const "&amp;"))
+              (local.set $dst (i32.add (local.get $dst) (i32.const 5))))
+            (else (if (i32.eq (local.get $c) (i32.const "<"))
+              (then
+                (i32.store (local.get $dst) (i32.const "&lt;"))
+                (local.set $dst (i32.add (local.get $dst) (i32.const 4))))
+              (else (if (i32.eq (local.get $c) (i32.const ">"))
+                (then
+                  (i32.store (local.get $dst) (i32.const "&gt;"))
+                  (local.set $dst (i32.add (local.get $dst) (i32.const 4))))
+                (else (if (i32.eqz (local.get $c))
+                  (then
+                    (i32.store (local.get $dst) (i32.const "\ef\bf\bd"))
+                    (local.set $dst (i32.add (local.get $dst) (i32.const 3))))
+                  (else
+                    (i32.store8 (local.get $dst) (local.get $c))
+                    (local.set $dst (i32.add (local.get $dst) (i32.const 1)))))))))))))
         (local.set $p (i32.add (local.get $p) (i32.const 1)))
         (br $l)))
-    (call $outTextReserved (local.get $seg) (local.get $e)))
+    (global.set $out (local.get $dst)))
 
   ;; the url and title of a resolved link, as absolute byte ranges
   (global $linkUrlBeg (mut i32) (i32.const 0))

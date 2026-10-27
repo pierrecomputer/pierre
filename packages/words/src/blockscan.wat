@@ -78,6 +78,8 @@
     (global.set $col (global.get $fnsCol))
     (global.set $ptab (i32.const 0)))
 
+  ;; Reuse the first-nonspace column even when the cursor has reached that byte.
+  ;; Each new line invalidates fns with zero; advancing past it requires a scan.
   (func $findFirstNonspace
     (local $c i32)
     (local $toTab i32)
@@ -91,7 +93,7 @@
     (local.set $first (global.get $fns))
     (local.set $firstCol (global.get $fnsCol))
     (local.set $end (global.get $lineEnd))
-    (if (i32.le_u (local.get $first) (local.get $p))
+    (if (i32.lt_u (local.get $first) (local.get $p))
       (then
         (local.set $first (local.get $p))
         (local.set $firstCol (local.get $column))

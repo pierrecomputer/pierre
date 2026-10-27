@@ -48,6 +48,24 @@ void test('HTML additions reconstruct output through appends, repeated inputs, a
   }
 });
 
+void test('ordinary paragraph runs keep append boundaries through table conversion', () => {
+  const source =
+    'Alpha.\nBeta.\nGamma.\n\nBefore.\nMore.\nA | B\n' +
+    '--- | ---\nx | y\n\nTail 界.\nMore tail.\n===\n\nEnd.';
+  for (const newline of ['\n', '\r\n']) {
+    const input = source.replaceAll('\n', newline);
+    const session = createHtmlSession();
+    for (let end = 0; end <= input.length; end++) {
+      const prefix = input.slice(0, end);
+      assert.equal(
+        session.render(prefix).html,
+        full(prefix),
+        JSON.stringify(prefix)
+      );
+    }
+  }
+});
+
 void test('word-by-word streaming keeps incomplete emphasis through spaces', () => {
   const phrase = 'Great tools make you want to keep going.';
   for (const [delimiter, tag] of [

@@ -93,14 +93,16 @@
   ;; Single-line code needs only HTML escaping and its two tags. Reserve all
   ;; three writes together, then resolve content pointers after possible growth.
   (func $htmlCodeSpan (param $beg i32) (param $end i32)
+    (local $dst i32)
     (call $ensureOut (i32.add
       (i32.mul (i32.sub (local.get $end) (local.get $beg)) (i32.const 6))
       (i32.const 13)))
-    (i64.store (global.get $out) (i64.const "<code>"))
-    (global.set $out (i32.add (global.get $out) (i32.const 6)))
-    (call $outTextReserved (call $contentAt (local.get $beg)) (call $contentAt (local.get $end)))
-    (i64.store (global.get $out) (i64.const "</code>"))
-    (global.set $out (i32.add (global.get $out) (i32.const 7))))
+    (local.set $dst (global.get $out))
+    (i64.store (local.get $dst) (i64.const "<code>"))
+    (local.set $dst (call $outTextAt (call $contentAt (local.get $beg))
+      (call $contentAt (local.get $end)) (i32.add (local.get $dst) (i32.const 6))))
+    (i64.store (local.get $dst) (i64.const "</code>"))
+    (global.set $out (i32.add (local.get $dst) (i32.const 7))))
 
   (func $htmlCodeBlock (param $r i32)
     (local $n i32)
@@ -308,16 +310,7 @@
         (br_if $done (i32.ge_u (local.get $i) (local.get $cols)))
         (local.set $align (i32.load8_u
           (i32.add (i32.add (local.get $r) (i32.const $R.header)) (local.get $i))))
-        (if (local.get $head) (then (out.str "<th")) (else (out.str "<td")))
-        (if (i32.eq (local.get $align) (i32.const $A.left))
-          (then (out.str " align=\22left\22"))
-          (else
-            (if (i32.eq (local.get $align) (i32.const $A.center))
-              (then (out.str " align=\22center\22"))
-              (else
-                (if (i32.eq (local.get $align) (i32.const $A.right))
-                  (then (out.str " align=\22right\22")))))))
-        (call $outByte (i32.const ">"))
+        (call $htmlCellOpen (local.get $head) (local.get $align))
         (local.set $has (call $cellRange (local.get $p) (local.get $end)))
         (local.set $p (global.get $cellNext))
         (if (local.get $has)
@@ -327,6 +320,30 @@
         (local.set $i (i32.add (local.get $i) (i32.const 1)))
         (br $l)))
     (out.str "</tr>\n"))
+
+  ;; Emit the whole cell opener under one reservation instead of three small
+  ;; writes for its tag, optional alignment, and closing angle bracket.
+  (func $htmlCellOpen (param $head i32) (param $align i32)
+    (local $dst i32)
+    (local $n i32)
+    (call $ensureOut (i32.const 19))
+    (local.set $dst (global.get $out))
+    (i32.store (local.get $dst) (select
+      (i32.const "<th>") (i32.const "<td>") (local.get $head)))
+    (local.set $n (i32.const 4))
+    (if (local.get $align)
+      (then
+        (i64.store offset=3 (local.get $dst) (i64.const " align=\22"))
+        (i64.store offset=11 (local.get $dst) (select
+          (i64.const "left\22>")
+          (select (i64.const "center\22>") (i64.const "right\22>")
+            (i32.eq (local.get $align) (i32.const $A.center)))
+          (i32.eq (local.get $align) (i32.const $A.left))))
+        (local.set $n (select (i32.const 17)
+          (select (i32.const 19) (i32.const 18)
+            (i32.eq (local.get $align) (i32.const $A.center)))
+          (i32.eq (local.get $align) (i32.const $A.left))))))
+    (global.set $out (i32.add (local.get $dst) (local.get $n))))
 
   (func $htmlFootnoteRef (param $n i32) (param $k i32)
     (out.str "<sup class=\22footnote-ref\22><a href=\22#fn-")
@@ -411,14 +428,17 @@
     (out.str "<a href=\22")
     (call $ensureOut (i32.add (i32.mul (call $linkUrlLen) (i32.const 8)) (i32.const 64)))
     (call $outHref (call $linkUrl) (call $linkUrlTo) (i32.const 3))
-    (call $outByte (i32.const "\22"))
+    ;; URL and title reservations each leave 64 bytes beyond their maximum
+    ;; escaped text, enough for these attribute boundaries and the closing >.
     (if (call $linkTitleLen)
       (then
-        (out.str " title=\22")
+        (i64.store (global.get $out) (i64.const "\22 title="))
+        (i32.store8 offset=8 (global.get $out) (i32.const "\22"))
+        (global.set $out (i32.add (global.get $out) (i32.const 9)))
         (call $ensureOut (i32.add (i32.mul (call $linkTitleLen) (i32.const 12)) (i32.const 64)))
-        (call $outCleanText (call $linkTitle) (call $linkTitleTo) (i32.const 3))
-        (call $outByte (i32.const "\22"))))
-    (call $outByte (i32.const ">")))
+        (call $outCleanText (call $linkTitle) (call $linkTitleTo) (i32.const 3))))
+    (i32.store16 (global.get $out) (i32.const "\22>"))
+    (global.set $out (i32.add (global.get $out) (i32.const 2))))
 
   (func $htmlLinkClose (param $image i32)
     (if (local.get $image)

@@ -79,7 +79,7 @@
     (block $done
       (loop $l
         (br_if $done (i32.eqz (local.get $bits)))
-        (local.set $i (i32.ctz (local.get $bits)))
+        (local.set $i (call $firstBit (local.get $bits)))
         (local.set $bit (i32.shl (i32.const 1) (local.get $i)))
         (local.set $v (i32.add
           (i32.load8_u offset=$mem.sgr (local.get $i)) (local.get $delta)))
