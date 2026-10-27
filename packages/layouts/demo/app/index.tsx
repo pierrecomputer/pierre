@@ -10,10 +10,12 @@ import {
   getPanes,
   type LayoutNode,
   LayoutStore,
+  naryTree,
   type PaneNode,
 } from '../../src';
 import { Layout, type PaneAction } from '../../src/react';
 import AgentPane from '../agent';
+import { ModelSelect } from '../model-select';
 import { ResizeSelect, type ResizeStrategy } from '../resize-select';
 import { Sessions, useSessions } from './sessions';
 import './app.css';
@@ -31,34 +33,27 @@ const LABELS: Record<string, string> = Object.fromEntries(
 );
 
 // Every pane of the app, in place. A toggle hides a pane or shows it again.
+// The binary model nests the row as sessions | (agent | (tools | files)).
 const TEMPLATE: LayoutNode = {
   type: 'split',
-  id: 'app-sidebar',
+  id: 'app-row',
   direction: 'horizontal',
-  ratio: 0.16,
-  first: { type: 'pane', id: 'sessions', minWidth: 200, minHeight: 160 },
-  second: {
-    type: 'split',
-    id: 'app-main',
-    direction: 'horizontal',
-    ratio: 0.48,
-    first: { type: 'pane', id: 'agent', minWidth: 320, minHeight: 200 },
-    second: {
+  sizes: [0.16, 0.4, 0.29, 0.15],
+  children: [
+    { type: 'pane', id: 'sessions', minWidth: 200, minHeight: 160 },
+    { type: 'pane', id: 'agent', minWidth: 320, minHeight: 200 },
+    {
       type: 'split',
-      id: 'app-side',
-      direction: 'horizontal',
-      ratio: 0.66,
-      first: {
-        type: 'split',
-        id: 'app-tools',
-        direction: 'vertical',
-        ratio: 0.62,
-        first: { type: 'pane', id: 'editor', minWidth: 260, minHeight: 140 },
-        second: { type: 'pane', id: 'terminal', minWidth: 260, minHeight: 100 },
-      },
-      second: { type: 'pane', id: 'files', minWidth: 180, minHeight: 160 },
+      id: 'app-tools',
+      direction: 'vertical',
+      sizes: [0.62, 0.38],
+      children: [
+        { type: 'pane', id: 'editor', minWidth: 260, minHeight: 140 },
+        { type: 'pane', id: 'terminal', minWidth: 260, minHeight: 100 },
+      ],
     },
-  },
+    { type: 'pane', id: 'files', minWidth: 180, minHeight: 160 },
+  ],
 };
 
 // Sessions is a fixed sidebar; the agent chat can move but always stays; the
@@ -70,7 +65,8 @@ const paneActions = (pane: PaneNode): readonly PaneAction[] =>
       ? ['move', 'zoom']
       : ['move', 'zoom', 'close'];
 
-const store = new LayoutStore(TEMPLATE);
+// The n-ary model: a drag of a separator changes only the panes beside it.
+const store = new LayoutStore(TEMPLATE, { model: naryTree });
 
 // A hidden pane keeps its content, so the close button hides it, and the
 // header toggle shows it again in its place.
@@ -170,6 +166,13 @@ export default function App(): JSX.Element {
           <span className="app-resize">
             Resize drag
             <ResizeSelect value={resize} onChange={setResize} />
+          </span>
+          <span className="app-resize">
+            Tree
+            <ModelSelect
+              value={store.getModel()}
+              onChange={(model) => store.setModel(model)}
+            />
           </span>
           <a href="/">Playground</a>
         </div>

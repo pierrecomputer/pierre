@@ -17,6 +17,7 @@ import {
 } from '../src';
 import { Layout } from '../src/react';
 import '../src/styles.css';
+import { ModelSelect } from './model-select';
 import { ResizeSelect, type ResizeStrategy } from './resize-select';
 import './style.css';
 
@@ -24,78 +25,85 @@ function pane(id: string): PaneNode {
   return { type: 'pane', id, minWidth: 110, minHeight: 100 };
 }
 
+// The trees nest as binary trees, so that the binary model keeps their shape.
+// The n-ary model joins each split into a parent of the same direction.
 const mosaic: LayoutNode = {
   type: 'split',
   id: 'columns',
   direction: 'horizontal',
-  ratio: 0.33,
-  first: {
-    type: 'split',
-    id: 'left',
-    direction: 'vertical',
-    ratio: 0.65,
-    first: pane('1'),
-    second: pane('7'),
-  },
-  second: {
-    type: 'split',
-    id: 'right',
-    direction: 'vertical',
-    ratio: 0.7,
-    first: {
+  sizes: [0.33, 0.67],
+  children: [
+    {
       type: 'split',
-      id: 'middle',
+      id: 'left',
       direction: 'vertical',
-      ratio: 0.5,
-      first: {
-        type: 'split',
-        id: 'top',
-        direction: 'horizontal',
-        ratio: 0.5,
-        first: pane('2'),
-        second: pane('5'),
-      },
-      second: {
-        type: 'split',
-        id: 'bottom',
-        direction: 'horizontal',
-        ratio: 0.5,
-        first: pane('6'),
-        second: pane('4'),
-      },
+      sizes: [0.65, 0.35],
+      children: [pane('1'), pane('7')],
     },
-    second: pane('3'),
-  },
+    {
+      type: 'split',
+      id: 'right',
+      direction: 'vertical',
+      sizes: [0.7, 0.3],
+      children: [
+        {
+          type: 'split',
+          id: 'middle',
+          direction: 'vertical',
+          sizes: [0.5, 0.5],
+          children: [
+            {
+              type: 'split',
+              id: 'top',
+              direction: 'horizontal',
+              sizes: [0.5, 0.5],
+              children: [pane('2'), pane('5')],
+            },
+            {
+              type: 'split',
+              id: 'bottom',
+              direction: 'horizontal',
+              sizes: [0.5, 0.5],
+              children: [pane('6'), pane('4')],
+            },
+          ],
+        },
+        pane('3'),
+      ],
+    },
+  ],
 };
 
 const explorer: LayoutNode = {
   type: 'split',
   id: 'explorer-left',
   direction: 'horizontal',
-  ratio: 0.2,
-  first: pane('Files'),
-  second: {
-    type: 'split',
-    id: 'explorer-main',
-    direction: 'horizontal',
-    ratio: 0.75,
-    first: {
+  sizes: [0.2, 0.8],
+  children: [
+    pane('Files'),
+    {
       type: 'split',
-      id: 'explorer-terminal',
-      direction: 'vertical',
-      ratio: 0.75,
-      first: pane('Editor'),
-      second: pane('Terminal'),
+      id: 'explorer-main',
+      direction: 'horizontal',
+      sizes: [0.75, 0.25],
+      children: [
+        {
+          type: 'split',
+          id: 'explorer-terminal',
+          direction: 'vertical',
+          sizes: [0.75, 0.25],
+          children: [pane('Editor'), pane('Terminal')],
+        },
+        {
+          type: 'split',
+          id: 'explorer-details',
+          direction: 'vertical',
+          sizes: [0.5, 0.5],
+          children: [pane('History'), pane('Details')],
+        },
+      ],
     },
-    second: {
-      type: 'split',
-      id: 'explorer-details',
-      direction: 'vertical',
-      ratio: 0.5,
-      first: pane('History'),
-      second: pane('Details'),
-    },
-  },
+  ],
 };
 
 // An agent workspace with real content: files, the agent chat, and an editor
@@ -104,23 +112,29 @@ const agent: LayoutNode = {
   type: 'split',
   id: 'agent-left',
   direction: 'horizontal',
-  ratio: 0.18,
-  first: { type: 'pane', id: 'files', minWidth: 160, minHeight: 100 },
-  second: {
-    type: 'split',
-    id: 'agent-main',
-    direction: 'horizontal',
-    ratio: 0.5,
-    first: { type: 'pane', id: 'agent', minWidth: 300, minHeight: 160 },
-    second: {
+  sizes: [0.18, 0.82],
+  children: [
+    { type: 'pane', id: 'files', minWidth: 160, minHeight: 100 },
+    {
       type: 'split',
-      id: 'agent-tools',
-      direction: 'vertical',
-      ratio: 0.62,
-      first: { type: 'pane', id: 'editor', minWidth: 240, minHeight: 120 },
-      second: { type: 'pane', id: 'terminal', minWidth: 240, minHeight: 100 },
+      id: 'agent-main',
+      direction: 'horizontal',
+      sizes: [0.5, 0.5],
+      children: [
+        { type: 'pane', id: 'agent', minWidth: 300, minHeight: 160 },
+        {
+          type: 'split',
+          id: 'agent-tools',
+          direction: 'vertical',
+          sizes: [0.62, 0.38],
+          children: [
+            { type: 'pane', id: 'editor', minWidth: 240, minHeight: 120 },
+            { type: 'pane', id: 'terminal', minWidth: 240, minHeight: 100 },
+          ],
+        },
+      ],
     },
-  },
+  ],
 };
 
 const AGENT_TITLES: Partial<Record<string, string>> = {
@@ -193,7 +207,7 @@ function Playground(): JSX.Element {
   const [message, setMessage] = useState('Ready to rearrange.');
   const [target, setTarget] = useState('2');
   const [edge, setEdge] = useState<Edge>('right');
-  // Experimental: how a pointer resize applies its ratios, to compare how each feels.
+  // Experimental: how a pointer resize applies its sizes, to compare how each feels.
   const [resize, setResize] = useState<ResizeStrategy>('live');
   const panes = getPanes(state.root);
   const otherPanes = panes.filter(({ id }) => id !== state.focusedPane);
@@ -343,6 +357,11 @@ function Playground(): JSX.Element {
         </button>
         <span>Resize drag</span>
         <ResizeSelect value={resize} onChange={setResize} />
+        <span>Tree model</span>
+        <ModelSelect
+          value={store.getModel()}
+          onChange={(model) => store.setModel(model)}
+        />
         <span className="demo-message" role="status">
           {message}
         </span>

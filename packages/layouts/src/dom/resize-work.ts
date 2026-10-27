@@ -1,10 +1,11 @@
+import { separatorOffset } from '../gestures';
 import { getPanes } from '../model';
 import type { LayoutStore } from '../store';
 import type { SeparatorGeometry } from '../types';
 import { paneHosts } from './panes';
 
 /**
- * How a pointer resize applies its ratios. `live` writes them on each pointer
+ * How a pointer resize applies its sizes. `live` writes them on each pointer
  * move, `frame` once per animation frame, `preview` moves only the separator
  * and writes them on release, and `freeze` writes them live but keeps the size
  * of the content of the affected panes until the pointer pauses. `settle` is
@@ -17,15 +18,15 @@ const FREEZE_PAUSE_MS = 150;
 
 /** The DOM work of pointer resizes, from `createResizeWork`. */
 export interface ResizeWork {
-  /** Apply the ratios of one pointer move. */
+  /** Apply the split sizes of one pointer move. */
   apply(
     root: HTMLElement,
     strategy: ResizeStrategy,
     separators: readonly SeparatorGeometry[],
-    ratios: Record<string, number>,
-    corners: readonly { id: string; splitIds: readonly string[] }[]
+    sizes: Record<string, number[]>,
+    corners: readonly { id: string; separatorIds: readonly string[] }[]
   ): void;
-  /** End the work. Call it while the gesture is active, so that the last ratios do not animate. */
+  /** End the work. Call it while the gesture is active, so that the last sizes do not animate. */
   end(cancel: boolean): void;
 }
 
@@ -41,7 +42,7 @@ export function createResizeWork(store: LayoutStore): ResizeWork {
   let strategy: ResizeStrategy = 'live';
   let root: HTMLElement | null = null;
   let frame: number | null = null;
-  let pending: Record<string, number> | null = null;
+  let pending: Record<string, number[]> | null = null;
   let moved: HTMLElement[] = [];
   let frozen: HTMLElement[] = [];
   let pause: ReturnType<typeof setTimeout> | null = null;
@@ -50,8 +51,8 @@ export function createResizeWork(store: LayoutStore): ResizeWork {
   /** Move the dragged separators, and the corners that they join, with a transform. */
   function preview(
     separators: readonly SeparatorGeometry[],
-    ratios: Record<string, number>,
-    corners: readonly { id: string; splitIds: readonly string[] }[]
+    sizes: Record<string, number[]>,
+    corners: readonly { id: string; separatorIds: readonly string[] }[]
   ): void {
     if (root === null) return;
     const host = root;
@@ -60,25 +61,23 @@ export function createResizeWork(store: LayoutStore): ResizeWork {
       element.dataset.preview = 'true';
       if (!moved.includes(element)) moved.push(element);
     };
-    // The offset of each dragged split, along its own axis.
+    // The offset of each dragged separator, along the axis of its split.
     const offsets = new Map<string, number>();
     for (const separator of separators) {
       const element = host.querySelector<HTMLElement>(
-        `:scope > [data-layout-flip="separator:${CSS.escape(separator.split.id)}"]`
+        `:scope > [data-layout-flip="separator:${CSS.escape(separator.id)}"]`
       );
       if (element === null) continue;
       const horizontal = separator.split.direction === 'horizontal';
-      const available = horizontal
-        ? separator.container.width - separator.rect.width
-        : separator.container.height - separator.rect.height;
-      const offset =
-        ((ratios[separator.split.id] ?? separator.ratio) - separator.ratio) *
-        available;
-      offsets.set(separator.split.id, offset);
+      const offset = separatorOffset(
+        separator,
+        sizes[separator.split.id] ?? separator.split.sizes
+      );
+      offsets.set(separator.id, offset);
       move(element, horizontal ? offset : 0, horizontal ? 0 : offset);
     }
     for (const corner of corners) {
-      const [horizontal, vertical] = corner.splitIds;
+      const [horizontal, vertical] = corner.separatorIds;
       if (!offsets.has(horizontal) && !offsets.has(vertical)) continue;
       const element = host.querySelector<HTMLElement>(
         `:scope > [data-layout-corner="${CSS.escape(corner.id)}"]`
@@ -90,7 +89,7 @@ export function createResizeWork(store: LayoutStore): ResizeWork {
 
   /**
    * Give the content of each pane under the dragged splits its current size in
-   * pixels, so that a ratio change resizes the pane hosts but does not lay out
+   * pixels, so that a size change resizes the pane hosts but does not lay out
    * their content. While frozen, the content also has strict containment and
    * its own compositor layer, so that a host that moves or clips it does not
    * paint it again. All sizes are read before the first write.
@@ -152,21 +151,21 @@ export function createResizeWork(store: LayoutStore): ResizeWork {
   }
 
   return {
-    apply(element, next, separators, ratios, corners) {
+    apply(element, next, separators, sizes, corners) {
       root = element;
       strategy = next;
       if (strategy === 'frame') {
-        pending = ratios;
+        pending = sizes;
         frame ??= requestAnimationFrame(() => {
           frame = null;
-          if (pending !== null) store.setRatios(pending);
+          if (pending !== null) store.setSizes(pending);
           pending = null;
         });
         return;
       }
       if (strategy === 'preview') {
-        pending = ratios;
-        preview(separators, ratios, corners);
+        pending = sizes;
+        preview(separators, sizes, corners);
         return;
       }
       if (strategy === 'freeze' || strategy === 'settle') {
@@ -174,12 +173,12 @@ export function createResizeWork(store: LayoutStore): ResizeWork {
         if (pause !== null) clearTimeout(pause);
         pause = setTimeout(thaw, FREEZE_PAUSE_MS);
       }
-      store.setRatios(ratios);
+      store.setSizes(sizes);
     },
     end(cancel) {
       if (frame !== null && strategy === 'frame') cancelAnimationFrame(frame);
       if (pause !== null) clearTimeout(pause);
-      if (!cancel && pending !== null) store.setRatios(pending);
+      if (!cancel && pending !== null) store.setSizes(pending);
       for (const element of moved) {
         element.style.transform = '';
         delete element.dataset.preview;

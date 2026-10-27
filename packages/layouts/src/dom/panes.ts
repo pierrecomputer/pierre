@@ -114,15 +114,15 @@ export function focusZoomedPane(root: HTMLElement, id: string): void {
 }
 
 /**
- * The splits that a pointer or key on a separator or a corner resizes. Corners
- * that sit at the same point join their splits, so that one drag moves all
- * the separators that meet there.
+ * The separators that a pointer or key on a separator or a corner resizes.
+ * Corners that sit at the same point join their separators, so that one drag
+ * moves all the separators that meet there.
  */
-export function splitsAt(
+export function separatorIdsAt(
   root: HTMLElement,
   target: HTMLElement,
   ids: readonly string[],
-  corners: readonly { id: string; splitIds: readonly string[] }[]
+  corners: readonly { id: string; separatorIds: readonly string[] }[]
 ): Set<string> {
   const touching = new Set(ids);
   if (!target.classList.contains('pierre-layout-corner')) return touching;
@@ -133,7 +133,7 @@ export function splitsAt(
     const other = corner.getBoundingClientRect();
     if (Math.abs(bounds.x - other.x) < 1 && Math.abs(bounds.y - other.y) < 1) {
       const spec = corners.find(({ id }) => id === corner.dataset.layoutCorner);
-      for (const id of spec?.splitIds ?? []) touching.add(id);
+      for (const id of spec?.separatorIds ?? []) touching.add(id);
     }
   }
   return touching;

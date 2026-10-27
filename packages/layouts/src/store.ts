@@ -1,24 +1,39 @@
 import {
+  type BinaryLayoutNode,
+  fromBinaryLayout,
   getPanes,
-  hasVisiblePane,
-  movePane,
-  removePane,
   replaceNode,
+  sameNodes,
   setPaneHidden,
-  splitPane,
   validateLayout,
 } from './model';
-import type { Edge, LayoutNode, LayoutState, PaneNode } from './types';
+import { binaryTree } from './models/binary';
+import type {
+  Edge,
+  LayoutNode,
+  LayoutState,
+  PaneNode,
+  TreeModel,
+} from './types';
+
+export interface LayoutStoreOptions {
+  /**
+   * The rules of the tree's shape, and how a split and a close change it:
+   * `binaryTree` (the default) or `naryTree`.
+   */
+  model?: TreeModel;
+}
 
 /** Own immutable layout state and notify adapters without coupling the model to a UI framework. */
 export class LayoutStore {
   private state: LayoutState;
+  private model: TreeModel;
   private readonly listeners = new Set<() => void>();
   private sequence = 0;
 
-  constructor(root: LayoutNode) {
-    validateLayout(root);
-    const owned = copyAndFreeze(root);
+  constructor(root: LayoutNode, options: LayoutStoreOptions = {}) {
+    this.model = options.model ?? binaryTree;
+    const owned = copyAndFreeze(this.shape(root));
     this.state = Object.freeze({
       root: owned,
       focusedPane: getPanes(owned).filter(({ hidden }) => hidden !== true)[0]
@@ -35,9 +50,26 @@ export class LayoutStore {
     };
   };
 
+  getModel(): TreeModel {
+    return this.model;
+  }
+
+  /** Change the tree model, and give the tree the shape of the new model. */
+  setModel(model: TreeModel): void {
+    if (model === this.model) return;
+    const previous = this.model;
+    this.model = model;
+    try {
+      this.commit({ ...this.state, root: this.shape(this.state.root) });
+    } catch (error) {
+      this.model = previous;
+      throw error;
+    }
+  }
+
+  /** Set the tree. A tree of another shape takes the shape of the model. */
   setRoot(root: LayoutNode): void {
-    validateLayout(root);
-    this.commit({ ...this.state, root: copyAndFreeze(root) });
+    this.commit({ ...this.state, root: copyAndFreeze(this.shape(root)) });
   }
 
   focusPane(id: string): void {
@@ -57,21 +89,21 @@ export class LayoutStore {
 
   split(targetId: string, pane: PaneNode, edge: Edge = 'right'): void {
     // The new pane comes from the caller, so the store keeps its own copy.
-    const root = splitPane(
+    const root = this.model.split(
       this.state.root,
       targetId,
       { ...pane },
-      this.nextId(),
-      edge
+      edge,
+      () => this.nextId(this.state.root)
     );
     this.commit({ root, focusedPane: pane.id, zoomedPane: null });
   }
 
   close(id: string): void {
     this.requirePane(id);
-    const root = removePane(this.state.root, id);
+    const root = this.model.remove(this.state.root, id);
     // The last visible pane stays: a layout needs one.
-    if (root !== null && hasVisiblePane(root))
+    if (root !== null && getPanes(root).some((pane) => pane.hidden !== true))
       this.commit({ ...this.state, root });
   }
 
@@ -95,43 +127,54 @@ export class LayoutStore {
     });
   }
 
+  /** Move a pane to one edge of another pane. */
   move(sourceId: string, targetId: string, edge: Edge): void {
-    const root = movePane(
-      this.state.root,
-      sourceId,
-      targetId,
-      edge,
-      this.nextId()
-    );
+    const current = this.state.root;
+    const source = getPanes(current).find(({ id }) => id === sourceId);
+    if (source === undefined) throw new Error(`Pane not found: ${sourceId}`);
+    const remaining =
+      sourceId === targetId ? null : this.model.remove(current, sourceId);
+    const root =
+      remaining === null
+        ? current
+        : this.model.split(remaining, targetId, source, edge, () =>
+            this.nextId(current)
+          );
     this.commit({ root, focusedPane: sourceId, zoomedPane: null });
   }
 
-  setRatios(ratios: Readonly<Record<string, number>>): void {
+  /**
+   * Set the sizes of splits, by split ID: one positive weight for each child
+   * of the split, as in `SplitNode.sizes`.
+   */
+  setSizes(sizes: Readonly<Record<string, readonly number[]>>): void {
     let root = this.state.root;
-    for (const [id, ratio] of Object.entries(ratios)) {
-      if (!Number.isFinite(ratio))
-        throw new Error('Split ratio must be finite');
+    for (const [id, values] of Object.entries(sizes)) {
       root = replaceNode(root, id, (node) =>
-        node.type === 'split'
-          ? { ...node, ratio: Math.max(0.001, Math.min(0.999, ratio)) }
-          : node
+        node.type === 'split' ? { ...node, sizes: [...values] } : node
       );
     }
     this.commit({ ...this.state, root });
   }
 
   serialize(): string {
-    return JSON.stringify({ version: 1, ...this.state });
+    return JSON.stringify({ version: 2, ...this.state });
   }
 
+  /**
+   * Restore a layout from `serialize`. A layout of version 1, where each split
+   * had two children, also restores. The tree takes the shape of the model.
+   */
   restore(serialized: string): void {
     const value: unknown = JSON.parse(serialized);
     if (
       value === null ||
       typeof value !== 'object' ||
       !('version' in value) ||
-      value.version !== 1 ||
+      (value.version !== 1 && value.version !== 2) ||
       !('root' in value) ||
+      value.root === null ||
+      typeof value.root !== 'object' ||
       !('focusedPane' in value) ||
       typeof value.focusedPane !== 'string' ||
       !('zoomedPane' in value) ||
@@ -139,12 +182,26 @@ export class LayoutStore {
     ) {
       throw new Error('Invalid layout state');
     }
-    validateLayout(value.root as LayoutNode);
+    const root =
+      value.version === 1
+        ? fromBinaryLayout(value.root as BinaryLayoutNode)
+        : (value.root as LayoutNode);
     this.commit({
-      root: copyAndFreeze(value.root as LayoutNode),
+      root: copyAndFreeze(this.shape(root)),
       focusedPane: value.focusedPane,
       zoomedPane: value.zoomedPane,
     });
+  }
+
+  /**
+   * Give a tree the shape of the model, and validate it. The checks of
+   * `validateLayout` come first, so that the model gets a sound tree.
+   */
+  private shape(root: LayoutNode): LayoutNode {
+    validateLayout(root);
+    const shaped = this.model.normalize(root, () => this.nextId(root));
+    this.model.validate(shaped);
+    return shaped;
   }
 
   private requirePane(id: string): void {
@@ -152,20 +209,13 @@ export class LayoutStore {
       throw new Error(`Pane not found: ${id}`);
   }
 
-  private nextId(): string {
+  /** A split ID that the tree does not use. */
+  private nextId(root: LayoutNode): string {
     let id: string;
     do {
       id = `layout-split-${++this.sequence}`;
-    } while (this.hasId(this.state.root, id));
+    } while (hasId(root, id));
     return id;
-  }
-
-  private hasId(node: LayoutNode, id: string): boolean {
-    return (
-      node.id === id ||
-      (node.type === 'split' &&
-        (this.hasId(node.first, id) || this.hasId(node.second, id)))
-    );
   }
 
   // The root of `next` holds only nodes that the store owns: frozen nodes of
@@ -173,7 +223,7 @@ export class LayoutStore {
   // caller input. Unchanged nodes keep their identity, so a view can skip them.
   private commit(next: LayoutState): void {
     const sameTree = next.root === this.state.root;
-    if (!sameTree) validateLayout(next.root);
+    if (!sameTree) this.model.validate(next.root);
     // Focus and zoom belong to visible panes only.
     const panes = getPanes(next.root).filter(({ hidden }) => hidden !== true);
     const focusedPane = panes.some(({ id }) => id === next.focusedPane)
@@ -191,6 +241,13 @@ export class LayoutStore {
   }
 }
 
+function hasId(node: LayoutNode, id: string): boolean {
+  return (
+    node.id === id ||
+    (node.type === 'split' && node.children.some((child) => hasId(child, id)))
+  );
+}
+
 /**
  * Copy the nodes of a tree that a caller owns and freeze the copies, so
  * neither side can change the other's state. A node that is frozen with its
@@ -200,22 +257,31 @@ export class LayoutStore {
 function copyAndFreeze(node: LayoutNode): LayoutNode {
   if (node.type === 'pane')
     return Object.isFrozen(node) ? node : Object.freeze({ ...node });
-  const first = copyAndFreeze(node.first);
-  const second = copyAndFreeze(node.second);
-  if (Object.isFrozen(node) && first === node.first && second === node.second)
+  const children = node.children.map(copyAndFreeze);
+  if (
+    Object.isFrozen(node) &&
+    Object.isFrozen(node.sizes) &&
+    sameNodes(children, node.children)
+  )
     return node;
-  return Object.freeze({ ...node, first, second });
+  return Object.freeze({
+    ...node,
+    children: Object.freeze(children),
+    sizes: Object.freeze([...node.sizes]),
+  });
 }
 
 /**
- * Freeze the nodes that a model function created. A frozen node is a node of
- * an earlier tree, frozen with its whole subtree, so the walk stops there.
+ * Freeze the nodes that a model function created, with their lists. A frozen
+ * node is a node of an earlier tree, frozen with its whole subtree, so the
+ * walk stops there.
  */
 function freezeNew(node: LayoutNode): LayoutNode {
   if (Object.isFrozen(node)) return node;
   if (node.type === 'split') {
-    freezeNew(node.first);
-    freezeNew(node.second);
+    node.children.forEach(freezeNew);
+    Object.freeze(node.children);
+    Object.freeze(node.sizes);
   }
   return Object.freeze(node);
 }

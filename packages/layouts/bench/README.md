@@ -75,6 +75,10 @@ output to a pane, and `busy(ms)` to block the main thread.
 panes from which each pane host is its own compositor layer. Without it, the
 option has its default, `{ minPanes: 6 }`.
 
+`?model=n-ary` gives the store the n-ary tree model in place of the binary one.
+The balanced tree has the same shape in both models, so only the operations that
+change the tree (split, close, and move) can differ.
+
 `?isolate=` selects a variant of compositing: `layer` adds
 `will-change: transform` to each pane host, which Chromium keeps at the raster
 scale of its last animation (with `layers=off`, the pane layers from commit

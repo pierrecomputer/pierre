@@ -1,8 +1,11 @@
-import { getMinimumSize } from './geometry';
-import { hasVisiblePane, visibleTree } from './model';
+import {
+  byFreeOrder,
+  getMinimumSize,
+  separatorId,
+  visibleChildren,
+} from './geometry';
 import {
   add,
-  clamp,
   constant,
   max,
   min,
@@ -31,13 +34,25 @@ export interface CSSPane {
 }
 
 export interface CSSSeparator {
+  /** The ID of the separator (see `separatorId`). */
+  id: string;
   split: SplitNode;
+  /** The index in `split.children` of the child after the separator. */
+  index: number;
+  /** The visible child before the separator. */
+  before: LayoutNode;
+  /**
+   * The preferred place of the separator in the split, from 0 to 1: the
+   * weights of the visible children before it over those of all visible
+   * children.
+   */
+  value: number;
   rect: CSSRect;
 }
 
 export interface CSSCorner {
   id: string;
-  splitIds: readonly string[];
+  separatorIds: readonly string[];
   left: string;
   top: string;
 }
@@ -48,23 +63,32 @@ export interface CSSLayout {
   corners: CSSCorner[];
 }
 
-/** Find perpendicular dividers that meet a subtree boundary, independently of viewport size. */
-function boundarySplits(
+/**
+ * The IDs of the separators that meet one edge of a subtree at a right angle,
+ * independently of the container size.
+ */
+function boundarySeparators(
   node: LayoutNode,
   edge: 'left' | 'right' | 'top' | 'bottom'
-): SplitNode[] {
+): string[] {
   if (node.type === 'pane') return [];
-  const horizontalEdge = edge === 'left' || edge === 'right';
-  if ((node.direction === 'horizontal') === horizontalEdge) {
-    return boundarySplits(
-      edge === 'left' || edge === 'top' ? node.first : node.second,
+  const visible = visibleChildren(node);
+  if (visible.length === 1)
+    return boundarySeparators(node.children[visible[0]], edge);
+  const start = edge === 'left' || edge === 'top';
+  if (
+    (node.direction === 'horizontal') ===
+    (edge === 'left' || edge === 'right')
+  )
+    return boundarySeparators(
+      node.children[start ? visible[0] : visible[visible.length - 1]],
       edge
     );
-  }
   return [
-    node,
-    ...boundarySplits(node.first, edge),
-    ...boundarySplits(node.second, edge),
+    ...visible.slice(1).map((index) => separatorId(node, index)),
+    ...visible.flatMap((index) =>
+      boundarySeparators(node.children[index], edge)
+    ),
   ];
 }
 
@@ -82,19 +106,50 @@ const toRect = (box: Box): CSSRect => ({
   height: toCSS(box.height, '100cqh'),
 });
 
+/** `shareSpace` of geometry.ts, as a function of the container size. */
+function shareSpace(
+  available: Piecewise,
+  weights: readonly number[],
+  mins: readonly number[]
+): Piecewise[] {
+  const total = weights.reduce((sum, weight) => sum + weight, 0);
+  const shares = weights.map((weight) => weight / total);
+  const minimum = mins.reduce((sum, value) => sum + value, 0);
+  let lambda = available;
+  let pinned = minimum;
+  let free = 0;
+  for (const index of byFreeOrder(shares, mins).slice(0, -1)) {
+    pinned -= mins[index];
+    free += shares[index];
+    lambda = min(lambda, scale(add(available, constant(-pinned)), 1 / free));
+  }
+  const sizes = shares.map((share, index) =>
+    max(
+      minimum === 0
+        ? constant(0)
+        : min(constant(mins[index]), scale(available, mins[index] / minimum)),
+      scale(lambda, share)
+    )
+  );
+  sizes[sizes.length - 1] = sizes
+    .slice(0, -1)
+    .reduce((rest, size) => add(rest, scale(size, -1)), available);
+  return sizes;
+}
+
 /**
  * Compile the split tree to one CSS value for each property of each element,
  * once per tree change. Each horizontal edge is a piecewise-linear function of
  * the container width, and each vertical edge of its height, so `toCSS` writes
  * it with container units and one hinge term for each size at which a minimum
  * size or a gap starts to apply. The browser resolves container resizes with
- * no script, and a ratio change restyles only the elements whose values change.
+ * no script, and a size change restyles only the elements whose values change.
  */
 export function computeCSSLayout(root: LayoutNode, gap = 8): CSSLayout {
   if (!Number.isFinite(gap) || gap < 0)
     throw new Error('Layout gap must be finite and non-negative');
   const panes: CSSPane[] = [];
-  const separators: { split: SplitNode; box: Box }[] = [];
+  const separators: (Omit<CSSSeparator, 'rect'> & { box: Box })[] = [];
   function visit(node: LayoutNode, box: Box, hidden: boolean): void {
     if (node.type === 'pane') {
       panes.push({
@@ -104,50 +159,75 @@ export function computeCSSLayout(root: LayoutNode, gap = 8): CSSLayout {
       });
       return;
     }
-    const [first, handle, second] = divide(node, box);
-    const firstShown = hasVisiblePane(node.first);
-    const secondShown = hasVisiblePane(node.second);
-    if (!hidden && firstShown !== secondShown) {
-      // One side holds only hidden panes. The other side takes the whole box,
-      // and the hidden side keeps the box that it would have.
-      visit(node.first, firstShown ? box : first, !firstShown);
-      visit(node.second, secondShown ? box : second, !secondShown);
-      return;
+    const all = node.children.map((_, index) => index);
+    const visible = hidden ? all : visibleChildren(node);
+    const shown = divide(node, visible, box);
+    if (!hidden) {
+      const weights = visible.map((index) => node.sizes[index]);
+      const total = weights.reduce((sum, weight) => sum + weight, 0);
+      let before = 0;
+      visible.forEach((index, order) => {
+        if (order > 0)
+          separators.push({
+            id: separatorId(node, index),
+            split: node,
+            index,
+            before: node.children[visible[order - 1]],
+            value: before / total,
+            box: shown.handles[order - 1],
+          });
+        before += weights[order];
+      });
     }
-    if (!hidden) separators.push({ split: node, box: handle });
-    visit(node.first, first, hidden);
-    visit(node.second, second, hidden);
+    // A hidden child keeps the box that it would have if it were visible.
+    const wouldHave =
+      visible.length === all.length ? shown : divide(node, all, box);
+    node.children.forEach((child, index) => {
+      const order = visible.indexOf(index);
+      visit(
+        child,
+        order === -1 ? wouldHave.boxes[index] : shown.boxes[order],
+        hidden || order === -1
+      );
+    });
   }
-  /** The boxes of the two children of a split, and of the separator between them. */
-  function divide(node: SplitNode, box: Box): [Box, Box, Box] {
+  /**
+   * The boxes of some children of a split, in order, and of the separators
+   * between them. The children share the box of the split with `shareSpace`.
+   */
+  function divide(
+    node: SplitNode,
+    indexes: readonly number[],
+    box: Box
+  ): { boxes: Box[]; handles: Box[] } {
+    if (indexes.length === 1) return { boxes: [box], handles: [] };
     const horizontal = node.direction === 'horizontal';
     const axis = horizontal ? 'width' : 'height';
     const position = horizontal ? 'left' : 'top';
-    // The gap shrinks in a container smaller than the gap.
-    const actualGap = min(constant(gap), box[axis]);
-    const available = max(constant(0), add(box[axis], scale(actualGap, -1)));
-    const firstMin = getMinimumSize(node.first, gap)[axis];
-    const secondMin = getMinimumSize(node.second, gap)[axis];
-    // When the minimums cannot fit, the sides share the space in proportion.
-    const share =
-      firstMin + secondMin === 0 ? 0.5 : firstMin / (firstMin + secondMin);
-    const lower = min(constant(firstMin), scale(available, share));
-    const upper = max(lower, add(available, constant(-secondMin)));
-    const firstSize = clamp(lower, scale(available, node.ratio), upper);
-    const handle = {
-      ...box,
-      [position]: add(box[position], firstSize),
-      [axis]: actualGap,
-    };
-    return [
-      { ...box, [axis]: firstSize },
-      handle,
-      {
-        ...box,
-        [position]: add(handle[position], actualGap),
-        [axis]: add(available, scale(firstSize, -1)),
-      },
-    ];
+    const separatorCount = indexes.length - 1;
+    // The gaps shrink in a container smaller than the gaps.
+    const actualGap = min(constant(gap), scale(box[axis], 1 / separatorCount));
+    const available = max(
+      constant(0),
+      add(box[axis], scale(actualGap, -separatorCount))
+    );
+    const sizes = shareSpace(
+      available,
+      indexes.map((index) => node.sizes[index]),
+      indexes.map((index) => getMinimumSize(node.children[index], gap)[axis])
+    );
+    const boxes: Box[] = [];
+    const handles: Box[] = [];
+    let start = box[position];
+    sizes.forEach((childSize, order) => {
+      if (order > 0) {
+        handles.push({ ...box, [position]: start, [axis]: actualGap });
+        start = add(start, actualGap);
+      }
+      boxes.push({ ...box, [position]: start, [axis]: childSize });
+      start = add(start, childSize);
+    });
+    return { boxes, handles };
   }
   visit(
     root,
@@ -160,35 +240,28 @@ export function computeCSSLayout(root: LayoutNode, gap = 8): CSSLayout {
     false
   );
   const byId = new Map(
-    separators.map((separator) => [separator.split.id, separator])
+    separators.map((separator) => [separator.id, separator])
   );
-  // Corners join the separators of the tree that takes space.
-  const shown = new Map<string, SplitNode>();
-  const collect = (node: LayoutNode | null): void => {
-    if (node === null || node.type === 'pane') return;
-    shown.set(node.id, node);
-    collect(node.first);
-    collect(node.second);
-  };
-  collect(visibleTree(root));
   const corners: CSSCorner[] = [];
   for (const separator of separators) {
-    const split = shown.get(separator.split.id) ?? separator.split;
-    const horizontal = split.direction === 'horizontal';
+    const horizontal = separator.split.direction === 'horizontal';
     const adjacent = [
-      ...boundarySplits(split.first, horizontal ? 'right' : 'bottom'),
-      ...boundarySplits(split.second, horizontal ? 'left' : 'top'),
+      ...boundarySeparators(separator.before, horizontal ? 'right' : 'bottom'),
+      ...boundarySeparators(
+        separator.split.children[separator.index],
+        horizontal ? 'left' : 'top'
+      ),
     ];
-    for (const other of adjacent) {
-      const otherSeparator = byId.get(other.id);
-      if (otherSeparator === undefined) continue;
-      const h = horizontal ? separator : otherSeparator;
-      const v = horizontal ? otherSeparator : separator;
-      const id = `${h.split.id}:${v.split.id}`;
+    for (const otherId of adjacent) {
+      const other = byId.get(otherId);
+      if (other === undefined) continue;
+      const h = horizontal ? separator : other;
+      const v = horizontal ? other : separator;
+      const id = `${h.id}:${v.id}`;
       if (corners.some((corner) => corner.id === id)) continue;
       corners.push({
         id,
-        splitIds: [h.split.id, v.split.id],
+        separatorIds: [h.id, v.id],
         left: toCSS(
           add(add(h.box.left, scale(h.box.width, 0.5)), constant(-7)),
           '100cqw'
@@ -202,8 +275,8 @@ export function computeCSSLayout(root: LayoutNode, gap = 8): CSSLayout {
   }
   return {
     panes,
-    separators: separators.map(({ split, box }) => ({
-      split,
+    separators: separators.map(({ box, ...separator }) => ({
+      ...separator,
       rect: toRect(box),
     })),
     corners,

@@ -1,18 +1,20 @@
 export { computeLayout, getExitEdge } from './geometry';
 export {
+  type BinaryLayoutNode,
+  fromBinaryLayout,
   getPanes,
   hasVisiblePane,
-  movePane,
-  removePane,
   replaceNode,
   setPaneHidden,
-  splitPane,
   swapPanes,
   validateLayout,
   visibleTree,
 } from './model';
-export { LayoutStore } from './store';
+export { binaryTree } from './models/binary';
+export { naryTree } from './models/n-ary';
+export { LayoutStore, type LayoutStoreOptions } from './store';
 export type {
+  ChildExtent,
   CornerGeometry,
   Direction,
   Edge,
@@ -24,6 +26,7 @@ export type {
   Rect,
   SeparatorGeometry,
   SplitNode,
+  TreeModel,
 } from './types';
 export { computeCSSLayout } from './css-layout';
 export type {

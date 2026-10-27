@@ -25,6 +25,8 @@ function random(seed: number): () => number {
   };
 }
 
+// A tree with two to four children for each split, in either direction, so
+// that it covers the shapes of both tree models.
 function randomTree(
   next: () => number,
   panes: number,
@@ -37,15 +39,19 @@ function randomTree(
       minWidth: Math.round(20 + next() * 300),
       minHeight: Math.round(20 + next() * 200),
     };
-  const first = 1 + Math.floor(next() * (panes - 1));
-  const extreme = next() < 0.2;
+  const count = Math.min(panes, 2 + Math.floor(next() * 3));
+  // Give each child at least one pane, and share the others at random.
+  const counts = Array.from({ length: count }, () => 1);
+  for (let extra = panes - count; extra > 0; extra--)
+    counts[Math.floor(next() * count)]++;
+  const id = `s${ids.n++}`;
   return {
     type: 'split',
-    id: `s${ids.n++}`,
+    id,
     direction: next() < 0.5 ? 'horizontal' : 'vertical',
-    ratio: extreme ? Math.round(next()) : next(),
-    first: randomTree(next, first, ids),
-    second: randomTree(next, panes - first, ids),
+    // Some weights are extreme, so that a child holds its minimum size.
+    sizes: counts.map(() => (next() < 0.2 ? 0.001 : next() + 0.001)),
+    children: counts.map((childPanes) => randomTree(next, childPanes, ids)),
   };
 }
 
@@ -112,7 +118,7 @@ describe('piecewise', () => {
       const css = computeCSSLayout(root, gap);
       const panes = new Map(css.panes.map(({ pane, rect }) => [pane.id, rect]));
       const separators = new Map(
-        css.separators.map(({ split, rect }) => [split.id, rect])
+        css.separators.map(({ id, rect }) => [id, rect])
       );
       for (let sample = 0; sample < 20; sample++) {
         const width = next() < 0.3 ? next() * 100 : next() * 4000;
@@ -123,9 +129,9 @@ describe('piecewise', () => {
             rect,
             css: panes.get(pane.id),
           })),
-          ...pixels.separators.map(({ split, rect }) => ({
+          ...pixels.separators.map(({ id, rect }) => ({
             rect,
-            css: separators.get(split.id),
+            css: separators.get(id),
           })),
         ];
         for (const { rect, css: value } of boxes) {

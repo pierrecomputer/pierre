@@ -30,16 +30,16 @@ import {
   hideCoveredAfterAnimation,
   notifyCollapsed,
   readPixelGeometry,
+  separatorIdsAt,
   setCoveredHidden,
-  splitsAt,
 } from '../dom/panes';
 import { createResizeWork, type ResizeStrategy } from '../dom/resize-work';
 import {
-  dragRatios,
+  dragSizes,
   dropTarget,
   type DropTarget,
   getExitEdges,
-  keyRatios,
+  keySizes,
   paneAt,
 } from '../gestures';
 import { getPanes } from '../model';
@@ -104,7 +104,7 @@ export interface LayoutProps {
   label?: string;
   /**
    * Experimental, for `explore-resize-drag-content-layout`: how a pointer
-   * resize applies its ratios (see `ResizeStrategy`).
+   * resize applies its sizes (see `ResizeStrategy`).
    */
   experimentalResize?: ResizeStrategy;
   /**
@@ -121,7 +121,7 @@ interface ResizeGesture {
   x: number;
   y: number;
   separators: readonly SeparatorGeometry[];
-  originalRatios: Record<string, number>;
+  originalSizes: Record<string, readonly number[]>;
 }
 
 interface MoveGesture {
@@ -138,7 +138,7 @@ const shownPanes = (node: LayoutNode): PaneNode[] =>
 
 /**
  * The app's content of one pane. It renders only when its pane node or the
- * app's `renderPane` changes: focus, zoom, and ratio changes keep the pane
+ * app's `renderPane` changes: focus, zoom, and size changes keep the pane
  * node, because the store keeps the identity of unchanged nodes.
  */
 const PaneBody = memo(function PaneBody({
@@ -266,8 +266,8 @@ export function Layout({
         ])
       ),
       separators: new Map(
-        geometry.separators.map(({ split, rect }): [string, CSSProperties] => [
-          split.id,
+        geometry.separators.map(({ id, rect }): [string, CSSProperties] => [
+          id,
           rect,
         ])
       ),
@@ -356,10 +356,8 @@ export function Layout({
   ): SeparatorGeometry[] {
     const element = rootRef.current;
     if (element === null) return [];
-    const touching = splitsAt(element, target, ids, geometry.corners);
-    return readGeometry().separators.filter(({ split }) =>
-      touching.has(split.id)
-    );
+    const touching = separatorIdsAt(element, target, ids, geometry.corners);
+    return readGeometry().separators.filter(({ id }) => touching.has(id));
   }
 
   // Move the focus into the zoomed pane first: a focused element in a pane
@@ -399,8 +397,8 @@ export function Layout({
       x: event.clientX,
       y: event.clientY,
       separators,
-      originalRatios: Object.fromEntries(
-        separators.map(({ split }) => [split.id, split.ratio])
+      originalSizes: Object.fromEntries(
+        separators.map(({ split }) => [split.id, split.sizes])
       ),
     };
     setResizing(true);
@@ -440,7 +438,7 @@ export function Layout({
         element,
         experimentalResize,
         active.separators,
-        dragRatios(
+        dragSizes(
           active.separators,
           event.clientX - active.x,
           event.clientY - active.y
@@ -474,7 +472,7 @@ export function Layout({
     if (active.type === 'resize') resizeWork.end(cancel);
     gesture.current = null;
     if (active.type === 'resize' && cancel)
-      store.setRatios(active.originalRatios);
+      store.setSizes(active.originalSizes);
     if (active.type === 'move' && !cancel && dropRef.current !== null) {
       store.move(active.paneId, dropRef.current.paneId, dropRef.current.edge);
     }
@@ -488,14 +486,14 @@ export function Layout({
     event: KeyboardEvent<HTMLElement>,
     ids: readonly string[]
   ): void {
-    const ratios = keyRatios(
+    const sizes = keySizes(
       separatorsAt(event.currentTarget, ids),
       event.key,
       event.shiftKey
     );
-    if (ratios !== null) {
+    if (sizes !== null) {
       event.preventDefault();
-      store.setRatios(ratios);
+      store.setSizes(sizes);
     }
   }
 
@@ -631,32 +629,38 @@ export function Layout({
         />
       )}
       {state.zoomedPane === null &&
-        geometry.separators.map((separator) => (
-          <div
-            key={separator.split.id}
-            className="pierre-layout-separator"
-            role="separator"
-            tabIndex={0}
-            aria-label={`Resize ${shownPanes(separator.split.first).map(getPaneTitle).join(', ')} and ${shownPanes(separator.split.second).map(getPaneTitle).join(', ')}`}
-            aria-orientation={
-              separator.split.direction === 'horizontal'
-                ? 'vertical'
-                : 'horizontal'
-            }
-            aria-controls={shownPanes(separator.split)
-              .map(({ id }) => `${prefix}-${encodeURIComponent(id)}`)
-              .join(' ')}
-            aria-valuemin={0}
-            aria-valuemax={100}
-            aria-valuenow={Math.round(separator.split.ratio * 100)}
-            aria-valuetext={`${Math.round(separator.split.ratio * 100)}% preferred size`}
-            data-direction={separator.split.direction}
-            data-layout-flip={`separator:${separator.split.id}`}
-            style={styles.separators.get(separator.split.id)}
-            onPointerDown={(event) => startResize(event, [separator.split.id])}
-            onKeyDown={(event) => resizeKey(event, [separator.split.id])}
-          />
-        ))}
+        geometry.separators.map((separator) => {
+          // The separator resizes the two children beside it first.
+          const before = shownPanes(separator.before);
+          const after = shownPanes(separator.split.children[separator.index]);
+          const value = Math.round(separator.value * 100);
+          return (
+            <div
+              key={separator.id}
+              className="pierre-layout-separator"
+              role="separator"
+              tabIndex={0}
+              aria-label={`Resize ${before.map(getPaneTitle).join(', ')} and ${after.map(getPaneTitle).join(', ')}`}
+              aria-orientation={
+                separator.split.direction === 'horizontal'
+                  ? 'vertical'
+                  : 'horizontal'
+              }
+              aria-controls={[...before, ...after]
+                .map(({ id }) => `${prefix}-${encodeURIComponent(id)}`)
+                .join(' ')}
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-valuenow={value}
+              aria-valuetext={`${value}% preferred position`}
+              data-direction={separator.split.direction}
+              data-layout-flip={`separator:${separator.id}`}
+              style={styles.separators.get(separator.id)}
+              onPointerDown={(event) => startResize(event, [separator.id])}
+              onKeyDown={(event) => resizeKey(event, [separator.id])}
+            />
+          );
+        })}
       {state.zoomedPane === null &&
         geometry.corners.map((corner) => (
           <button
@@ -667,8 +671,8 @@ export function Layout({
             style={styles.corners.get(corner.id)}
             data-layout-corner={corner.id}
             data-layout-flip={`corner:${corner.id}`}
-            onPointerDown={(event) => startResize(event, corner.splitIds)}
-            onKeyDown={(event) => resizeKey(event, corner.splitIds)}
+            onPointerDown={(event) => startResize(event, corner.separatorIds)}
+            onKeyDown={(event) => resizeKey(event, corner.separatorIds)}
           />
         ))}
       {drop !== null && (
