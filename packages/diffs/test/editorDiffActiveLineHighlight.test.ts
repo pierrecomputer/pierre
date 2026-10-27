@@ -263,6 +263,71 @@ describe('editor active-line highlight on a diff', () => {
     }
   });
 
+  test('split: selection marks survive typing and reach an inserted row', async () => {
+    const fixture = await createDiffEditorFixture('split', OLD, NEW);
+    try {
+      fixture.fileDiff.setSelectedLines({ start: 1, end: 3 });
+      fixture.fileDiff.setEditorActiveLine(2);
+      // A selected row carries `first`, `last` or `single`, else an empty
+      // value, and the active line its own attribute.
+      const marks = (): [string | null, boolean][] => {
+        const { additions } = findCodeColumns(fixture.container);
+        return [1, 2, 3, 4].map((line) => {
+          const row = additions?.querySelector<HTMLElement>(
+            `[data-content] > [data-line="${line}"]`
+          );
+          return [
+            row?.getAttribute('data-selected-line') ?? null,
+            row?.hasAttribute('data-editor-active-line') ?? false,
+          ];
+        });
+      };
+      expect(marks()).toEqual([
+        ['first', false],
+        ['', true],
+        ['last', false],
+        [null, false],
+      ]);
+
+      // Typing patches the row in place; its marks stay.
+      fixture.editor.applyEdits([
+        {
+          range: {
+            start: { line: 1, character: 0 },
+            end: { line: 1, character: 0 },
+          },
+          newText: 'x',
+        },
+      ]);
+      expect(marks()).toEqual([
+        ['first', false],
+        ['', true],
+        ['last', false],
+        [null, false],
+      ]);
+
+      // Enter inserts a row for line 2; the marks for lines 1 to 3 move onto
+      // the rows now holding those lines, the inserted one included.
+      fixture.editor.applyEdits([
+        {
+          range: {
+            start: { line: 1, character: 0 },
+            end: { line: 1, character: 0 },
+          },
+          newText: '\n',
+        },
+      ]);
+      expect(marks()).toEqual([
+        ['first', false],
+        ['', true],
+        ['last', false],
+        [null, false],
+      ]);
+    } finally {
+      await fixture.cleanup();
+    }
+  });
+
   test('split: a deletion gutter utility does not change editor text selection', async () => {
     const clickedRanges: SelectedLineRange[] = [];
     const fixture = await createDiffEditorFixture('split', OLD, NEW, {

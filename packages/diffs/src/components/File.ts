@@ -1804,15 +1804,21 @@ export class File<LAnnotation = undefined, Caret = undefined> {
         reconciler.adopt(specs);
       }
     }
+    // Rows written anew carry no selection marks; rows patched in place
+    // keep theirs, so the marks are only rendered again when some were lost.
     if (allRowsChanged) {
       reconciler.replaceAll(specs);
       for (const spec of specs) {
         this.changedRowKeys.push(spec.key);
       }
+      this.interactionManager.setSelectionDirty();
     } else {
-      const { changed } = reconciler.reconcile(specs);
+      const { changed, attributesReset } = reconciler.reconcile(specs);
       for (const key of changed) {
         this.changedRowKeys.push(key);
+      }
+      if (attributesReset) {
+        this.interactionManager.setSelectionDirty();
       }
     }
   }

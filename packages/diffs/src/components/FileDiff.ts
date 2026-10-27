@@ -777,7 +777,10 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
     const { diffStyle = 'split', overflow = 'scroll' } = this.options;
     this.interactionManager.setup(this.pre);
     this.resizeManager.setup(this.pre, {
-      disableAnnotations: overflow === 'wrap',
+      // Pairing annotation heights scans every row; skipped when wrapping,
+      // which needs no pairing, and when there are no annotations.
+      disableAnnotations:
+        overflow === 'wrap' || this.lineAnnotations.length === 0,
       columnVariables: this.shouldApplyColumnVariables(overflow)
         ? 'apply'
         : 'measure',
@@ -3052,15 +3055,21 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
         reconciler.adopt(specs);
       }
     }
+    // Rows written anew carry no selection marks; rows patched in place
+    // keep theirs, so the marks are only rendered again when some were lost.
     if (allRowsChanged) {
       reconciler.replaceAll(specs);
       for (const spec of specs) {
         this.changedRowKeys.push(spec.key);
       }
+      this.interactionManager.setSelectionDirty();
     } else {
-      const { changed } = reconciler.reconcile(specs);
+      const { changed, attributesReset } = reconciler.reconcile(specs);
       for (const key of changed) {
         this.changedRowKeys.push(key);
+      }
+      if (attributesReset) {
+        this.interactionManager.setSelectionDirty();
       }
     }
   }
