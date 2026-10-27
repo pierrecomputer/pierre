@@ -104,6 +104,33 @@ describe('parseDiffFromFile', () => {
       ignoreWhitespace: true,
     });
     expect(withoutWhitespace.hunks).toHaveLength(0);
+
+    const withoutMatching = parseDiffFromFile(oldFile, newFile, {
+      ignoreWhitespace: true,
+      disableLineMatching: true,
+    });
+    expect(withoutMatching.hunks).toHaveLength(0);
+  });
+
+  test('preserves jsdiff context options when line matching is disabled', () => {
+    const diff = parseDiffFromFile(
+      { name: 'test.txt', contents: 'before\nold\nafter\n' },
+      { name: 'test.txt', contents: 'before\nnew\nafter\n' },
+      { context: 0, disableLineMatching: true },
+      true
+    );
+
+    expect(diff.hunks).toHaveLength(1);
+    expect(diff.hunks[0].hunkContent).toEqual([
+      {
+        type: 'change',
+        deletions: 1,
+        additions: 1,
+        deletionLineIndex: 1,
+        additionLineIndex: 1,
+      },
+    ]);
+    expect(verifyHunkLineValues(diff)).toEqual([]);
   });
 
   test('should have type "change" (default) when files did not change', () => {

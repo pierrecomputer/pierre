@@ -55,7 +55,7 @@ function changeBlocks(diff: FileDiffMetadata) {
   );
 }
 
-describe('patch change-block realignment', () => {
+describe('parsed change-block realignment', () => {
   test.each([undefined, false, true])(
     'issue 1229 block and unified row order with disableLineMatching=%p',
     (disableLineMatching) => {
@@ -64,6 +64,38 @@ describe('patch change-block realignment', () => {
         processFile(issue1229Patch, options),
         processPatch(issue1229Patch, options).files[0],
         parsePatchFiles(issue1229Patch, options)[0].files[0],
+        parseDiffFromFile(
+          {
+            name: 'load.ts',
+            contents: `export function load(path: string) {
+  const text = readFileSync(path, 'utf8');
+  const data = JSON.parse(text);
+  validate(data);
+  return data;
+}
+`,
+          },
+          {
+            name: 'load.ts',
+            contents: `export function load(path: string) {
+  let lastError: unknown;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      const text = readFileSync(path, 'utf8');
+      const data = JSON.parse(text);
+      validate(data);
+      return data;
+    } catch (err) {
+      lastError = err;
+    }
+  }
+  throw lastError;
+}
+`,
+          },
+          { disableLineMatching },
+          true
+        ),
       ];
 
       for (const file of files) {

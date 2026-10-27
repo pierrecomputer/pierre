@@ -19,7 +19,7 @@ const MISSING_FILE_NAME = '/dev/null';
 export function parseDiffFromFile(
   oldFile: FileContents | null,
   newFile: FileContents | null,
-  options?: ParseDiffOptions,
+  { disableLineMatching, ...diffOptions }: ParseDiffOptions = {},
   throwOnError = false
 ): FileDiffMetadata {
   if (oldFile === null && newFile === null) {
@@ -37,7 +37,7 @@ export function parseDiffFromFile(
     resolvedNewFile.contents,
     resolvedOldFile.header,
     resolvedNewFile.header,
-    options
+    diffOptions
   );
 
   const fileData = processFile(patch, {
@@ -50,6 +50,7 @@ export function parseDiffFromFile(
     })(),
     oldFile: resolvedOldFile,
     newFile: resolvedNewFile,
+    disableLineMatching,
     throwOnError,
   });
   if (fileData == null) {
