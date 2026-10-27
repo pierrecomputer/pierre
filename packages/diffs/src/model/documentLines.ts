@@ -8,6 +8,9 @@ export function readChangedLines(
   document: DocumentLines,
   change: DocumentLineChange
 ): Map<number, string> {
+  // A batch that adds lines in one place and removes as many in another
+  // keeps the line count but moves every line between the two, so the whole
+  // span is read in that case.
   const ranges =
     change.changedLineChanges?.some(([, , lineDelta]) => lineDelta !== 0) ===
     true

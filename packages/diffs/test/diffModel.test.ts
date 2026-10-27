@@ -210,7 +210,7 @@ describe('LineMap', () => {
     expect(map.lineCount).toBe(document.lineCount);
   });
 
-  test('an inserted carriage return joining a line feed adds no line', () => {
+  test('an inserted carriage return is a line break like any other', () => {
     const document = new TextDocument<'file-diff', undefined>(
       'inmemory://crlf',
       'a\nb',
@@ -218,13 +218,13 @@ describe('LineMap', () => {
     );
     const map = new LineMap(document.lineCount);
     map.applyChange(edit(document, 0, 1, 1, '\r'));
-    expect(document.getText()).toBe('a\r\nb');
-    expect(document.lineCount).toBe(2);
-    expect(map.lineCount).toBe(2);
-    expect([0, 1].map((line) => map.idAt(line))).toEqual([0, 1]);
+    expect(document.getText()).toBe('a\n\nb');
+    expect(document.lineCount).toBe(3);
+    expect(map.lineCount).toBe(3);
+    expect([map.idAt(0), map.idAt(2)]).toEqual([0, 1]);
   });
 
-  test('a batch whose breaks join neighbors falls back to one span', () => {
+  test('a batch of inserted breaks keeps the ids of the lines below', () => {
     const document = new TextDocument<'file-diff', undefined>(
       'inmemory://crlf-batch',
       'a\nb\nc\nd',
@@ -247,10 +247,11 @@ describe('LineMap', () => {
         newText: '\r',
       },
     ])!;
-    expect(document.lineCount).toBe(4);
+    expect(document.lineCount).toBe(6);
     map.applyChange(change);
-    expect(map.lineCount).toBe(4);
-    expect(map.idAt(3)).toBe(3);
+    expect(map.lineCount).toBe(6);
+    expect(map.idAt(3)).toBe(2);
+    expect(map.idAt(5)).toBe(3);
   });
 
   test('undo restores the line count with fresh ids for restored lines', () => {
@@ -262,6 +263,30 @@ describe('LineMap', () => {
     expect(map.lineCount).toBe(document.lineCount);
     expect(map.idAt(2)).toBe(2);
     expect(map.idAt(3)).toBe(3);
+  });
+});
+
+describe('DiffModel line endings', () => {
+  test('normalizing a mixed-ending file at session start is a change', () => {
+    const lines = ['aa\r\n', 'bb\n', 'cc\n'];
+    const diff = makeDiff(lines, lines);
+    expect(diff.hunks).toHaveLength(0);
+    const model = DiffModel.startEditSession(diff);
+    expect(model.diff.additionLines.join('')).toBe('aa\r\nbb\r\ncc\r\n');
+    // The lines whose ending changed now differ from the old file.
+    expect(model.diff.hunks.length).toBeGreaterThan(0);
+    expect(model.diff.editSessionDirty).toBe(true);
+    expect(model.finish(3).changed).toBe(true);
+    expect(model.diff.hunks.length).toBeGreaterThan(0);
+  });
+
+  test('a session holds the text the editor document holds', () => {
+    const diff = makeDiff(['aa\r\n', 'bb\n', 'cc\n'], ['aa\r\n', 'cc\n']);
+    const model = DiffModel.startEditSession(diff);
+    const contents = model.diff.additionLines.join('');
+    expect(contents).toBe('aa\r\nbb\r\ncc\r\n');
+    expect(contents).toBe(makeDocument(model.diff).getText());
+    expect(model.diff.additionCharacterCount).toBe(contents.length);
   });
 });
 

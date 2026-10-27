@@ -123,7 +123,16 @@ describe('FileModel', () => {
     expect(model.file.contents).toBe(document.getText());
   });
 
-  test('a line break completed across a line keeps the file current', () => {
+  test('a session holds the text the editor document holds', () => {
+    const file: FileContents = { name: 'mixed.ts', contents: 'aa\r\nbb\ncc' };
+    const model = FileModel.startEditSession(file);
+    const document = makeDocument(file);
+    expect(model.file.contents).toBe('aa\r\nbb\r\ncc');
+    expect(model.file.contents).toBe(document.getText());
+    expect(model.lines).toEqual(['aa\r\n', 'bb\r\n', 'cc']);
+  });
+
+  test('an inserted line break takes the file line ending', () => {
     const file: FileContents = { name: 'crlf.ts', contents: 'a\rb' };
     const document = makeDocument(file);
     const model = FileModel.startEditSession(file);
@@ -136,9 +145,9 @@ describe('FileModel', () => {
         newText: '\n',
       },
     ])!;
-    expect(model.applyChange(paired, document).lineDelta).toBe(0);
-    expect(model.file.contents).toBe('a\r\nb');
-    expect(model.lineText(0)).toBe('a\r\n');
+    expect(model.applyChange(paired, document).lineDelta).toBe(1);
+    expect(model.file.contents).toBe('a\r\rb');
+    expect(model.lineText(0)).toBe('a\r');
   });
 });
 

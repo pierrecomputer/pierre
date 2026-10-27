@@ -1,4 +1,5 @@
 import type { TextDocumentChange } from '../editor/textDocument';
+import { lineChangesOf } from '../utils/lineChanges';
 
 // Where a line of the document before `change` sits after it, or undefined
 // when the edits rewrote it.
@@ -20,16 +21,14 @@ export function lineRangesAfterChange(
   ranges: readonly (readonly [number, number])[],
   change: TextDocumentChange
 ): [number, number][] {
-  const { changes, changedLineChanges } = change;
-  if (changedLineChanges == null && changes.length > 0) {
-    throw new Error('lineRangesAfterChange: change has no line deltas');
-  }
+  const { changes } = change;
+  const lineChanges = lineChangesOf(change);
   const result: [number, number][] = [];
   for (const [first, last] of ranges) {
     let next = first;
     let shift = 0;
     for (const [index, { range }] of changes.entries()) {
-      const delta = changedLineChanges?.[index][2] ?? 0;
+      const delta = lineChanges[index][2];
       if (range.end.line < next) {
         shift += delta;
         continue;

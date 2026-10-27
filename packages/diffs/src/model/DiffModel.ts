@@ -17,6 +17,7 @@ import {
   remapExpandedHunksForRegionChange,
   type SessionRegionChange,
 } from '../utils/editSessionHunks';
+import { uniformLineEndings } from '../utils/lineEndings';
 import { splitFileContents } from '../utils/splitFileContents';
 import {
   recomputeDiffRenderLineCounts,
@@ -100,7 +101,12 @@ export class DiffModel {
         'DiffModel.startEditSession: the diff must not be partial'
       );
     }
-    const inputContents = inputDiff.additionLines.join('');
+    // The editor's document gives the new file one line ending; the model
+    // holds the same text, so the two never disagree.
+    const inputContents = uniformLineEndings(inputDiff.additionLines.join(''));
+    // A retained document is compared and restored in that same form.
+    const documentContents =
+      document == null ? undefined : uniformLineEndings(document.contents);
     const restoresSnapshot =
       snapshot != null && canRestoreSnapshot(snapshot, inputDiff);
     if (snapshot != null && !restoresSnapshot) {
@@ -109,8 +115,8 @@ export class DiffModel {
       );
     }
     if (
-      document != null &&
-      document.contents !== inputContents &&
+      documentContents != null &&
+      documentContents !== inputContents &&
       !restoresSnapshot
     ) {
       throw new Error(
@@ -119,18 +125,27 @@ export class DiffModel {
     }
     const diff: FileDiffMetadata = { ...inputDiff };
     delete diff.cacheKey;
+    if (inputContents !== inputDiff.additionLines.join('')) {
+      // Editing starts on the file with one line ending. The lines whose
+      // ending changed differ from the old file now, so the hunks say so
+      // and the session is dirty from the start.
+      diff.additionLines = splitFileContents(inputContents);
+      diff.additionCharacterCount = inputContents.length;
+      rebuildSessionHunks(diff, parseDiffOptions);
+      diff.editSessionDirty = true;
+    }
     const usesInputDocument =
       document == null ||
       (document.name === inputDiff.name &&
         document.lang === inputDiff.lang &&
-        document.contents === inputContents);
+        documentContents === inputContents);
     if (document != null && !usesInputDocument) {
       diff.name = document.name;
       diff.lang = document.lang;
     }
-    if (restoresSnapshot && snapshot != null && document != null) {
-      diff.additionLines = splitFileContents(document.contents);
-      diff.additionCharacterCount = document.contents.length;
+    if (restoresSnapshot && snapshot != null && documentContents != null) {
+      diff.additionLines = splitFileContents(documentContents);
+      diff.additionCharacterCount = documentContents.length;
       diff.type = snapshot.type;
       diff.hunks = snapshot.hunks;
       diff.editSessionDirty = true;
