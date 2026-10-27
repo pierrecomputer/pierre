@@ -41,6 +41,10 @@ export class EditorTokenizer {
   #style = '';
   #onThemeChange: EditorTokenizerProps['onThemeChange'];
   #disposes?: (() => void)[];
+  // True while the observers from the constructor watch the page's color
+  // scheme and keep `#themeType` current. Otherwise a sync has to read the
+  // document's computed color scheme, which forces a style pass.
+  #followsSystemThemeType = false;
 
   get themeType(): 'light' | 'dark' {
     return this.#themeType;
@@ -105,6 +109,7 @@ export class EditorTokenizer {
         () => observer.disconnect(),
       ];
     }
+    this.#followsSystemThemeType = this.#disposes != null;
     this.#highlighter = highlighter;
     this.#setStyle = setStyle;
     this.#onThemeChange = onThemeChange;
@@ -177,6 +182,7 @@ export class EditorTokenizer {
     // A single pinned theme does not follow the themeType option or system
     // scheme flips; its own classification stays authoritative.
     if (typeof theme === 'string') {
+      this.#followsSystemThemeType = false;
       const pinnedThemeType = this.#highlighter.getTheme(theme).type;
       if (theme === this.#themeName && pinnedThemeType === this.#themeType) {
         return;
@@ -184,8 +190,15 @@ export class EditorTokenizer {
       this.#emitThemeChange(theme, pinnedThemeType);
       return;
     }
+    // The document is only read when nothing keeps the type current.
     const nextThemeType =
-      themeType === 'system' ? this.#resolveSystemThemeType() : themeType;
+      themeType !== 'system'
+        ? themeType
+        : this.#followsSystemThemeType
+          ? this.#themeType
+          : this.#resolveSystemThemeType();
+    this.#followsSystemThemeType =
+      themeType === 'system' && this.#disposes != null;
     const nextThemeName = theme[nextThemeType];
     if (
       nextThemeType === this.#themeType &&

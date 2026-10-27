@@ -317,8 +317,9 @@ export class InteractionManager<TMode extends InteractionManagerMode> {
     this.setSelectionDirty();
   }
 
+  // Rows keep the selection marks written on them; the component calls
+  // `setSelectionDirty` when a render wrote rows that have none.
   setup(pre: HTMLPreElement): void {
-    this.setSelectionDirty();
     const { usesCustomGutterUtility = false, enableGutterUtility = false } =
       this.options;
 

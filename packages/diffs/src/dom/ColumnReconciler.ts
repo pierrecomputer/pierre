@@ -15,6 +15,12 @@ interface Row {
 export interface ReconcileResult {
   /** Keys of rows that were inserted or whose cells were rewritten. */
   changed: Set<RowKey>;
+  /**
+   * True when a row was created or rebuilt from scratch. Such a row has lost
+   * any attributes set on it outside the reconciler, like the selection
+   * marks, and they need to be applied again.
+   */
+  attributesReset: boolean;
 }
 
 /**
@@ -101,11 +107,13 @@ export class ColumnReconciler {
   reconcile(specs: readonly RowSpec[]): ReconcileResult {
     if (!this.#hasRows) {
       this.replaceAll(specs);
-      return { changed: new Set(specs.map((spec) => spec.key)) };
+      return {
+        changed: new Set(specs.map((spec) => spec.key)),
+        attributesReset: true,
+      };
     }
     this.#index();
-    const { changed } = this.#walk(specs);
-    return { changed };
+    return this.#walk(specs);
   }
 
   #walk(specs: readonly RowSpec[]): ReconcileResult {
@@ -113,6 +121,7 @@ export class ColumnReconciler {
     const content = this.#content;
     const rows = this.#rows;
     const changed = new Set<RowKey>();
+    let attributesReset = false;
     const nextKeys = new Set<RowKey>();
     for (const spec of specs) {
       if (nextKeys.has(spec.key)) {
@@ -163,6 +172,7 @@ export class ColumnReconciler {
         this.#keys.set(row.content, spec.key);
         changed.add(spec.key);
       }
+      attributesReset = true;
       pending = [];
     };
 
@@ -189,18 +199,21 @@ export class ColumnReconciler {
           previous?.content,
           spec.content
         );
-        if (patched !== existing.content) {
-          existing.content = patched;
-          this.#keys.set(patched, spec.key);
+        if (patched.element !== existing.content) {
+          existing.content = patched.element;
+          this.#keys.set(patched.element, spec.key);
         }
+        attributesReset ||= patched.reset;
         changed.add(spec.key);
       }
       if (previous?.gutter !== spec.gutter) {
-        existing.gutter = patchCell(
+        const patched = patchCell(
           existing.gutter,
           previous?.gutter,
           spec.gutter
         );
+        existing.gutter = patched.element;
+        attributesReset ||= patched.reset;
         changed.add(spec.key);
       }
       existing.spec = spec;
@@ -209,7 +222,7 @@ export class ColumnReconciler {
     while (cursor != null) {
       removeAtCursor();
     }
-    return { changed };
+    return { changed, attributesReset };
   }
 
   // Builds the key map from the specs the columns were last written from.
@@ -293,12 +306,13 @@ function insertRun(
 // shows it: the same element with what differs rewritten (attributes
 // always, children only when the next spec does not share the last one's
 // children array), or a new element when the tag changed, since a tag
-// cannot change in place.
+// cannot change in place. `reset` is true when the element's attributes
+// were written from the spec alone, so attributes set by other code are gone.
 function patchCell(
   element: HTMLElement,
   previous: HASTElement | undefined,
   next: HASTElement
-): HTMLElement {
+): { element: HTMLElement; reset: boolean } {
   if (element.tagName.toLowerCase() !== next.tagName.toLowerCase()) {
     element.insertAdjacentHTML('beforebegin', hastToHtml(next));
     const replacement = element.previousElementSibling;
@@ -308,15 +322,17 @@ function patchCell(
         'ColumnReconciler: a row cell did not parse to an element'
       );
     }
-    return replacement;
+    return { element: replacement, reset: true };
   }
+  let reset = false;
   if (previous == null || !patchAttributes(element, previous, next)) {
     syncAttributes(element, next);
+    reset = true;
   }
   if (previous == null || previous.children !== next.children) {
     element.innerHTML = hastToHtml(next.children);
   }
-  return element;
+  return { element, reset };
 }
 
 // Sets only the attributes that changed for the given element. Returns false
