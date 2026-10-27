@@ -44,6 +44,8 @@
 
   ;; Whether the bracket groups from `[` at $p close on this line before
   ;; `:=`, `=`, `^:=`, `^=`, or a `/;` condition: `f[x_] := ...` defines f.
+  ;; A statement `;` inside the groups rules a definition out. Stopping
+  ;; there keeps nested `f[0; f[0; ...]]` scans from repeating each other.
   (func $wlIsDefinition (param $p i32) (result i32)
     (local $c i32)
     (local $depth i32)
@@ -54,6 +56,11 @@
         (local.set $c (i32.load8_u (local.get $p)))
         (local.set $p (i32.add (local.get $p) (i32.const 1)))
         (if (byteset.get "\n\r" (local.get $c))
+          (then (return (i32.const 0))))
+        (if
+          (i32.and
+            (i32.eq (local.get $c) (i32.const ";"))
+            (i32.ne (i32.load8_u (i32.sub (local.get $p) (i32.const 2))) (i32.const "/")))
           (then (return (i32.const 0))))
         (if (i32.eq (local.get $c) (i32.const "["))
           (then (local.set $depth (i32.add (local.get $depth) (i32.const 1)))))
@@ -252,17 +259,18 @@
                       (local.get $kind)
                       (i32.and (local.get $call) (i32.eq (local.get $kind) (enum.get $Token.type.builtin)))))
                   (br $classified)))
+              ;; $q: just past the last byte before the name and its blanks
+              (local.set $q (local.get $lhs))
+              (block $back
+                (loop $blank
+                  (br_if $back (i32.le_u (local.get $q) (global.get $srcBase)))
+                  (local.set $kind (i32.load8_u (i32.sub (local.get $q) (i32.const 1))))
+                  (br_if $back (i32.eqz (byteset.get " \t" (local.get $kind))))
+                  (local.set $q (i32.sub (local.get $q) (i32.const 1)))
+                  (br $blank)))
               ;; postfix application: `x // f`
               (if (i32.eqz (local.get $call))
                 (then
-                  (local.set $q (local.get $lhs))
-                  (block $back
-                    (loop $blank
-                      (br_if $back (i32.le_u (local.get $q) (global.get $srcBase)))
-                      (local.set $kind (i32.load8_u (i32.sub (local.get $q) (i32.const 1))))
-                      (br_if $back (i32.eqz (byteset.get " \t" (local.get $kind))))
-                      (local.set $q (i32.sub (local.get $q) (i32.const 1)))
-                      (br $blank)))
                   (local.set $call
                     (i32.and
                       (i32.ge_u (local.get $q) (i32.add (global.get $srcBase) (i32.const 2)))
@@ -270,15 +278,24 @@
               (if (local.get $call)
                 (then
                   (local.set $hl (enum.get $Token.function))
-                  ;; a definition starts a line or follows `;`
-                  (local.set $q (call $lexLineByteBefore (local.get $lhs)))
-                  (if
-                    (i32.and
-                      (i32.eq (local.get $c2) (i32.const "["))
-                      (i32.or (i32.eqz (local.get $q)) (i32.eq (local.get $q) (i32.const ";"))))
+                  ;; a definition starts a line or follows a statement `;`,
+                  ;; not the `/;` of a condition
+                  (if (i32.eq (local.get $c2) (i32.const "["))
                     (then
-                      (if (call $wlIsDefinition (local.get $p))
-                        (then (local.set $hl (enum.get $Token.function.definition))))))
+                      (local.set $kind (i32.const 10))
+                      (if (i32.gt_u (local.get $q) (global.get $srcBase))
+                        (then (local.set $kind (i32.load8_u (i32.sub (local.get $q) (i32.const 1))))))
+                      (if
+                        (i32.or
+                          (byteset.get "\n\r" (local.get $kind))
+                          (i32.and
+                            (i32.eq (local.get $kind) (i32.const ";"))
+                            (i32.or
+                              (i32.lt_u (local.get $q) (i32.add (global.get $srcBase) (i32.const 2)))
+                              (i32.ne (i32.load8_u (i32.sub (local.get $q) (i32.const 2))) (i32.const "/")))))
+                        (then
+                          (if (call $wlIsDefinition (local.get $p))
+                            (then (local.set $hl (enum.get $Token.function.definition))))))))
                   (br $classified)))
               (if (i32.le_u (i32.sub (local.get $c) (i32.const "A")) (i32.const 25))
                 (then

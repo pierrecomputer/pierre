@@ -206,6 +206,28 @@ test('wolfram: nested comments, strings, and a script line resume line-fed', () 
   }
 });
 
+test('wolfram: nested calls after `;` check for a definition in linear time', () => {
+  // each `f[` after `;` scanned to its closing `]`: 32k nested calls took ~1.2s
+  for (const unit of ['f[0;', 'f[0/;', 'f[{0;']) {
+    const n = 32000;
+    const close = unit.includes('{') ? '}]' : ']';
+    const code = unit.repeat(n) + 'x' + close.repeat(n);
+    const start = performance.now();
+    tokenKinds('wolfram', code);
+    const elapsed = performance.now() - start;
+    expect(elapsed).toBeLessThan(250);
+  }
+  // a statement `;` starts a definition, a `/;` condition does not
+  const definitions = (code: string) =>
+    tokenKinds('wolfram', code)
+      .filter(([, kind]) => kind === 'function.definition')
+      .map(([text]) => text);
+  expect(definitions('a = 1; f[x_] := x')).toEqual(['f']);
+  expect(definitions('f[x_ /; x > 0] := x')).toEqual(['f']);
+  expect(definitions('g[x_ /; f[y_] := 1]')).toEqual([]);
+  expect(definitions('f[0; g[x_] := 1]')).toEqual(['g']);
+});
+
 test('wolfram: malformed and random input remains total, balanced and lossless', () => {
   const lexer = loadLang('wolfram', '$hlWolfram');
   for (const code of [
