@@ -126,7 +126,7 @@ export const VANILLA_API_LOAD_DIFF_FILES: PreloadFileOptions<
   parsePatchFiles,
 } from '@pierre/diffs';
 
-const [patch] = parsePatchFiles(patchText, 'pull-42');
+const [patch] = parsePatchFiles(patchText, { cacheKeyPrefix: 'pull-42' });
 const fileDiff = patch.files[0];
 
 const instance = new FileDiff({

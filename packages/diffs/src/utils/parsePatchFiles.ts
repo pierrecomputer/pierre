@@ -12,6 +12,7 @@ import type {
   Hunk,
   HunkLineType,
   ParsedPatch,
+  ParsePatchOptions,
 } from '../types';
 import { cleanLastNewline } from './cleanLastNewline';
 import { composeCacheKey } from './composeCacheKey';
@@ -38,11 +39,10 @@ interface ParsedHunkHeader {
 
 export function processPatch(
   data: string,
-  cacheKeyPrefix?: string,
-  throwOnError?: boolean
+  options?: ParsePatchOptions
 ): ParsedPatch {
   try {
-    return _processPatch(data, cacheKeyPrefix, throwOnError);
+    return _processPatch(data, options);
   } finally {
     releaseStringDetachBuffer();
   }
@@ -50,8 +50,7 @@ export function processPatch(
 
 function _processPatch(
   data: string,
-  cacheKeyPrefix?: string,
-  throwOnError = false,
+  { cacheKeyPrefix, throwOnError = false }: ParsePatchOptions = {},
   patchIndex?: number
 ): ParsedPatch {
   const isGitDiff = isGitDiffPatch(data);
@@ -122,6 +121,7 @@ function _processPatch(
 }
 
 interface ProcessFileOptions {
+  disableLineMatching?: boolean;
   cacheKey?: string;
   isGitDiff?: boolean;
   oldFile?: FileContents;
@@ -683,18 +683,13 @@ function _processFile(
  * Parses a patch file string into an array of parsed patches.
  *
  * @param data - The raw patch file content (supports multi-commit patches)
- * @param cacheKeyPrefix - Optional prefix for collision-safe cache keys derived
- *   from the prefix, patch index, and file index. This enables caching of
- *   rendered diff results in the worker pool.
- * @param throwOnError - When true, invalid data throws. When false, invalid data
- *   is reported with `console.error` and the parser attempts to recover when
- *   possible. Recovery is best-effort and does not guarantee valid output.
+ * @param options - Options for parsing patch text and generating cache keys.
  */
 export function parsePatchFiles(
   data: string,
-  cacheKeyPrefix?: string,
-  throwOnError = false
+  options: ParsePatchOptions = {}
 ): ParsedPatch[] {
+  const { cacheKeyPrefix, throwOnError = false } = options;
   // NOTE(amadeus): This function is pretty forgiving in that it can accept a
   // patch file that includes commit metdata, multiple commits, or not
   const patches: ParsedPatch[] = [];
@@ -706,8 +701,7 @@ export function parsePatchFiles(
       patches.push(
         _processPatch(
           patch,
-          cacheKeyPrefix,
-          throwOnError,
+          options,
           cacheKeyPrefix != null ? patches.length : undefined
         )
       );

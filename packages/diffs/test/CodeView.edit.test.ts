@@ -296,7 +296,10 @@ describe('programmatic edits on suspended CodeView editors', () => {
           loadedFiles.oldFile.contents,
           loadedFiles.newFile.contents
         );
-        const partial = parsePatchFiles(patch, 'partial', true)[0]?.files[0];
+        const partial = parsePatchFiles(patch, {
+          cacheKeyPrefix: 'partial',
+          throwOnError: true,
+        })[0]?.files[0];
         if (partial == null) throw new Error('Expected partial diff');
         let finishLoading: ((files: FileDiffLoadedFiles) => void) | undefined;
         const loadPromise = new Promise<FileDiffLoadedFiles>((resolve) => {
@@ -413,7 +416,10 @@ describe('programmatic edits on suspended CodeView editors', () => {
           oldFile.contents,
           newFile.contents
         );
-        const partial = parsePatchFiles(patch, 'partial', true)[0]?.files[0];
+        const partial = parsePatchFiles(patch, {
+          cacheKeyPrefix: 'partial',
+          throwOnError: true,
+        })[0]?.files[0];
         if (partial == null) throw new Error('Expected partial diff');
         const remoteFile = {
           name: newFile.name,
@@ -425,11 +431,10 @@ describe('programmatic edits on suspended CodeView editors', () => {
           oldFile.contents,
           remoteFile.contents
         );
-        const replacementPartial = parsePatchFiles(
-          replacementPatch,
-          'replacement',
-          true
-        )[0]?.files[0];
+        const replacementPartial = parsePatchFiles(replacementPatch, {
+          cacheKeyPrefix: 'replacement',
+          throwOnError: true,
+        })[0]?.files[0];
         if (replacementPartial == null) {
           throw new Error('Expected replacement partial diff');
         }
@@ -794,8 +799,7 @@ describe('CodeView item edit mode', () => {
         '@@ -0,0 +1 @@\n',
         '+hello\n',
       ].join(''),
-      'new.txt',
-      true
+      { cacheKeyPrefix: 'new.txt', throwOnError: true }
     )[0]?.files[0];
     if (partial == null) throw new Error('Expected partial diff');
     try {
@@ -2596,7 +2600,10 @@ describe('CodeView item edit mode', () => {
         loadedFiles.oldFile.contents,
         loadedFiles.newFile.contents
       );
-      const partial = parsePatchFiles(patch, 'partial', true)[0]?.files[0];
+      const partial = parsePatchFiles(patch, {
+        cacheKeyPrefix: 'partial',
+        throwOnError: true,
+      })[0]?.files[0];
       if (partial == null) {
         throw new Error('Expected a partial diff.');
       }

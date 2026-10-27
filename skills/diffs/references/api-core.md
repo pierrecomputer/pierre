@@ -140,6 +140,22 @@ hydration, placeholder, and cleanup members with diff data.
 
 ## Parsing and patch APIs
 
+`parsePatchFiles(patch, options?)` and `processPatch(patch, options?)` accept a
+`ParsePatchOptions` object as the second argument. Put `cacheKeyPrefix` and
+`throwOnError` in that object; the old positional arguments are no longer
+supported.
+
+```ts
+const patches = parsePatchFiles(patch, {
+  cacheKeyPrefix: 'pull-42',
+  throwOnError: true,
+});
+```
+
+For file pairs, `parseDiffFromFile(oldFile, newFile, options?, throwOnError?)`
+accepts `ParseDiffOptions`, including jsdiff settings such as `context` and
+`ignoreWhitespace`. Those settings do not apply to parsing existing patch text.
+
 | Export                       | Purpose                                               |
 | ---------------------------- | ----------------------------------------------------- |
 | `parseDiffFromFile`          | Creates `FileDiffMetadata` from old and new files.    |

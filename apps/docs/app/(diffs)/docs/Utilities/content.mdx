@@ -113,17 +113,16 @@ the console and parsing continues on a best-effort basis.
 
 ### parsePatchFiles [toc-ignore]
 
-Parse unified diff / patch file content into structured data. Handles both
-single patches and multi-commit patch files (like those from GitHub pull request
-`.patch` URLs). An optional second parameter `cacheKeyPrefix` can be provided to
-generate cache keys for each file in the patch (format:
-`prefix-patchIndex-fileIndex`), enabling
-[caching of rendered diff results](#worker-pool-render-cache) in the worker
-pool.
+Parses a patch file string into an array of parsed patches (e.g. from GitHub
+pull request `.patch` URLs). The optional second argument is an options object:
 
-An optional `throwOnError` parameter (default: `false`) controls error handling.
-When `true`, parsing errors throw exceptions; when `false`, errors are logged to
-the console and parsing continues on a best-effort basis.
+- `cacheKeyPrefix` generates cache keys for each file from the prefix, patch
+  index, and file index, enabling
+  [caching of rendered diff results](#worker-pool-render-cache) in the worker
+  pool.
+- `throwOnError` (default: `false`) controls error handling. When `true`,
+  parsing errors throw exceptions; when `false`, errors are logged to the
+  console and parsing continues on a best-effort basis.
 
 <DocsCodeExample {...parsePatchFiles} />
 

@@ -16,7 +16,8 @@ function parseSingleFile(
   patch: string,
   cacheKeyPrefix?: string
 ): FileDiffMetadata {
-  const file = parsePatchFiles(patch, cacheKeyPrefix, true)[0]?.files[0];
+  const file = parsePatchFiles(patch, { cacheKeyPrefix, throwOnError: true })[0]
+    ?.files[0];
   assertDefined(file, 'expected patch to contain one file');
   expect(file.isPartial).toBe(true);
   return file;

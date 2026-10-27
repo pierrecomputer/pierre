@@ -17,6 +17,29 @@ export type {
 
 export type { CreatePatchOptionsNonabortable };
 
+export interface ParseDiffOptions extends CreatePatchOptionsNonabortable {
+  /**
+   * Preserve the patch's change blocks and line order without similarity
+   * realignment. Defaults to false.
+   */
+  disableLineMatching?: boolean;
+}
+
+export interface ParsePatchOptions {
+  /**
+   * Preserve the patch's change blocks and line order without similarity
+   * realignment. Defaults to false.
+   */
+  disableLineMatching?: boolean;
+  /** Prefix used to derive cache keys for parsed files, enabling worker-pool caching. */
+  cacheKeyPrefix?: string;
+  /**
+   * Throw on invalid patch data. Defaults to false: errors are reported with
+   * console.error and recovery is best-effort, without guaranteed valid output.
+   */
+  throwOnError?: boolean;
+}
+
 export type CodeViewScrollBehavior = 'instant' | 'smooth' | 'smooth-auto';
 
 /**

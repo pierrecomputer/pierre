@@ -23,7 +23,9 @@ const patchFixture = readFileSync(resolve(__dirname, './file.patch'), 'utf-8');
 
 describe('file.patch fixture', () => {
   test('parses and renders the patch file', async () => {
-    const parsed = parsePatchFiles(patchFixture, 'file-patch');
+    const parsed = parsePatchFiles(patchFixture, {
+      cacheKeyPrefix: 'file-patch',
+    });
     expect(parsed.length).toBe(1);
     const file = parsed.at(0)?.files[0];
     assertDefined(file, 'file should be defined');

@@ -360,8 +360,7 @@ for (const partial of [false, true]) {
             oldFile.contents,
             newFile.contents
           ),
-          'replacement',
-          true
+          { cacheKeyPrefix: 'replacement', throwOnError: true }
         )[0]?.files[0]
       : parseDiffFromFile(oldFile, newFile);
     const viewer = new CodeView({

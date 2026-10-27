@@ -1161,7 +1161,10 @@ describe('React editor factory lifecycle', () => {
       'const value = 1;\n',
       'const value = 2;\n'
     );
-    const partial = parsePatchFiles(patch, 'edit.ts', true)[0]?.files[0];
+    const partial = parsePatchFiles(patch, {
+      cacheKeyPrefix: 'edit.ts',
+      throwOnError: true,
+    })[0]?.files[0];
     if (partial == null) throw new Error('Expected partial diff');
     let root: Root | undefined;
 
@@ -1204,7 +1207,10 @@ describe('React editor factory lifecycle', () => {
       oldFile.contents,
       newFile.contents
     );
-    const partial = parsePatchFiles(patch, 'edit.ts', true)[0]?.files[0];
+    const partial = parsePatchFiles(patch, {
+      cacheKeyPrefix: 'edit.ts',
+      throwOnError: true,
+    })[0]?.files[0];
     if (partial == null) throw new Error('Expected partial diff');
     let root: Root | undefined;
 

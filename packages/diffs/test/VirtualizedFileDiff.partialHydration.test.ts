@@ -100,7 +100,10 @@ function createAdvancedVirtualizer(): {
 }
 
 function parseSinglePartialFile(patch: string): FileDiffMetadata {
-  const file = parsePatchFiles(patch, 'partial', true)[0]?.files[0];
+  const file = parsePatchFiles(patch, {
+    cacheKeyPrefix: 'partial',
+    throwOnError: true,
+  })[0]?.files[0];
   assertDefined(file, 'expected patch to contain one file');
   expect(file.isPartial).toBe(true);
   return file;

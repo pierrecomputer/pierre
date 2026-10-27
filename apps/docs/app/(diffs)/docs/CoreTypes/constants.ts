@@ -255,14 +255,13 @@ const patchString = \`--- a/file.ts
  const z = 4;\`;
 
 // Returns an array of ParsedPatch objects (one per commit in the patch)
-// Pass an optional cacheKeyPrefix to enable AST caching with Worker Pool
-const patches: ParsedPatch[] = parsePatchFiles(patchString, 'my-patch-key');
+// Set options.cacheKeyPrefix to enable AST caching with Worker Pool
+const patches: ParsedPatch[] = parsePatchFiles(patchString, { cacheKeyPrefix: 'my-patch-key' });
 
 // Each ParsedPatch contains an array of FileDiffMetadata
 const files: FileDiffMetadata[] = patches[0].files;
 
-// With cacheKeyPrefix, each diff gets a cacheKey like "my-patch-0",
-// "my-patch-1", etc.
+// Each file's cacheKey is derived from the prefix, patch index, and file index.
 // This enables AST caching in Worker Pool for parsed patches.
 
 // Note: Diffs from patch files are partial (isPartial: true), so their

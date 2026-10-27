@@ -1479,8 +1479,7 @@ describe('__completeEditSession', () => {
         undefined,
         { context: 0 }
       ),
-      'partial',
-      true
+      { cacheKeyPrefix: 'partial', throwOnError: true }
     )[0]?.files[0];
     if (partial == null) {
       throw new Error('Expected the patch to parse into one partial diff');
