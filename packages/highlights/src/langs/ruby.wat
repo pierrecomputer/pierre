@@ -585,12 +585,13 @@
               (then
                 (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
                 (call $lexScanIdent)
+                (local.set $c3 (call $rubyByte (global.get $ptr)))
                 (if
                   (i32.or
-                    (i32.eq (call $rubyByte (global.get $ptr)) (i32.const "?"))
+                    (i32.eq (local.get $c3) (i32.const "?"))
                     (i32.or
-                      (i32.eq (call $rubyByte (global.get $ptr)) (i32.const "!"))
-                      (i32.eq (call $rubyByte (global.get $ptr)) (i32.const "="))))
+                      (i32.eq (local.get $c3) (i32.const "!"))
+                      (i32.eq (local.get $c3) (i32.const "="))))
                   (then (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))))
                 (local.set $hl (enum.get $Token.string.special.symbol))
                 (br $valueTok)))
@@ -631,20 +632,25 @@
         (if (i32.and (call $lexIsIdentStart (local.get $c)) (i32.ne (local.get $c) (i32.const "$")))
           (then
             (call $lexScanIdent)
-            ;; a method name may end in `?` or `!`, but not before `=`
+            ;; a method name may end in `?` or `!`, but not before `=`; $c3
+            ;; holds the byte at $rhs
+            (local.set $c3 (call $rubyByte (global.get $ptr)))
+            (local.set $kind (call $rubyByte (i32.add (global.get $ptr) (i32.const 1))))
             (if
               (i32.and
                 (i32.or
-                  (i32.eq (call $rubyByte (global.get $ptr)) (i32.const "?"))
-                  (i32.eq (call $rubyByte (global.get $ptr)) (i32.const "!")))
-                (i32.ne (call $rubyByte (i32.add (global.get $ptr) (i32.const 1))) (i32.const "=")))
-              (then (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))))
+                  (i32.eq (local.get $c3) (i32.const "?"))
+                  (i32.eq (local.get $c3) (i32.const "!")))
+                (i32.ne (local.get $kind) (i32.const "=")))
+              (then
+                (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
+                (local.set $c3 (local.get $kind))))
             (local.set $rhs (global.get $ptr))
             (local.set $p (call $lexSkipSpaceAt (local.get $rhs)))
             ;; `key:` is a symbol key, unless it is `key::Scope`
             (if
               (i32.and
-                (i32.eq (call $rubyByte (local.get $rhs)) (i32.const ":"))
+                (i32.eq (local.get $c3) (i32.const ":"))
                 (i32.and
                   (i32.ne (call $rubyByte (i32.add (local.get $rhs) (i32.const 1))) (i32.const ":"))
                   (i32.eqz (local.get $member))))
@@ -669,7 +675,7 @@
                 (if
                   (i32.and
                     (i32.eq (local.get $hl) (enum.get $Token.variable.special))
-                    (i32.eq (call $rubyByte (local.get $rhs)) (i32.const ".")))
+                    (i32.eq (local.get $c3) (i32.const ".")))
                   (then (local.set $decl (i32.const 1))))
                 ;; keywords and word operators expect a value next; values
                 ;; and method-like words do not
@@ -694,7 +700,7 @@
                     (if
                       (i32.eqz
                         (i32.and
-                          (i32.eq (call $rubyByte (local.get $rhs)) (i32.const ":"))
+                          (i32.eq (local.get $c3) (i32.const ":"))
                           (i32.eq
                             (call $rubyByte (i32.add (local.get $rhs) (i32.const 1)))
                             (i32.const ":"))))
@@ -745,7 +751,7 @@
                                 ;; and an identifier
                                 (if
                                   (if (result i32)
-                                    (i32.eq (call $rubyByte (local.get $rhs)) (i32.const "("))
+                                    (i32.eq (local.get $c3) (i32.const "("))
                                     (then (i32.const 1))
                                     (else
                                       (if (result i32) (i32.gt_u (local.get $p) (local.get $rhs))
@@ -864,14 +870,15 @@
               (i32.add
                 (global.get $ptr)
                 (select (i32.const 2) (i32.const 1) (i32.eq (local.get $c2) (i32.const 92)))))
-            (if (i32.gt_u (call $rubyByte (local.get $p)) (i32.const 32))
+            (local.set $c3 (call $rubyByte (local.get $p)))
+            (if (i32.gt_u (local.get $c3) (i32.const 32))
               (then
                 (local.set $kind (call $utf8SpanEnd (i32.add (local.get $p) (i32.const 1)) (global.get $end)))
                 (if
                   (i32.or
                     (i32.eq (local.get $c2) (i32.const 92))
                     (i32.or
-                      (i32.eqz (call $lexIsIdentContinue (call $rubyByte (local.get $p))))
+                      (i32.eqz (call $lexIsIdentContinue (local.get $c3)))
                       (i32.eqz (call $lexIsIdentContinue (call $rubyByte (local.get $kind))))))
                   (then
                     (global.set $ptr (local.get $kind))
@@ -881,11 +888,10 @@
           (then
             (block $opDone
               (loop $op
+                (local.set $c2 (call $rubyByte (global.get $ptr)))
                 (br_if $opDone
                   (i32.eqz
-                    (i32.or
-                      (call $rubyIsOp (call $rubyByte (global.get $ptr)))
-                      (i32.eq (call $rubyByte (global.get $ptr)) (i32.const ".")))))
+                    (i32.or (call $rubyIsOp (local.get $c2)) (i32.eq (local.get $c2) (i32.const ".")))))
                 (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
                 (br $op)))
             ;; `def ==(other)` names an operator method

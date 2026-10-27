@@ -157,6 +157,24 @@
                   (global.get $ptr))
                 (local.set $state (i32.const 2))
                 (br $next)))))
+        ;; `/>` closes the tag in any state; a lone slash is a value byte
+        ;; after `=`, else plain
+        (if
+          (i32.and
+            (i32.eq (local.get $c) (i32.const "/"))
+            (i32.and
+              (i32.lt_u (i32.add (global.get $ptr) (i32.const 1)) (global.get $end))
+              (i32.eq (i32.load8_u offset=1 (global.get $ptr)) (i32.const ">"))))
+          (then
+            (global.set $ptr (i32.add (global.get $ptr) (i32.const 2)))
+            (call $emitTok
+              (enum.get $Token.punctuation.bracket.html)
+              (local.get $lhs)
+              (global.get $ptr))
+            (br $done
+              (i32.or
+                (i32.const 2)
+                (i32.shl (i32.and (local.get $kind) (i32.const 63)) (i32.const 8))))))
         ;; the value after `=`: quoted, or a lenient unquoted run
         (if (i32.eq (local.get $state) (i32.const 2))
           (then
@@ -170,23 +188,6 @@
                 (local.set $state (i32.const 3))
                 (local.set $fresh (i32.const 1))
                 (br $next)))
-            (if (i32.eq (local.get $c) (i32.const "/"))
-              (then
-                ;; `/>` closes the tag; a lone slash is a value byte
-                (if
-                  (i32.and
-                    (i32.lt_u (i32.add (global.get $ptr) (i32.const 1)) (global.get $end))
-                    (i32.eq (i32.load8_u offset=1 (global.get $ptr)) (i32.const ">")))
-                  (then
-                    (global.set $ptr (i32.add (global.get $ptr) (i32.const 2)))
-                    (call $emitTok
-                      (enum.get $Token.punctuation.bracket.html)
-                      (local.get $lhs)
-                      (global.get $ptr))
-                    (br $done
-                      (i32.or
-                        (i32.const 2)
-                        (i32.shl (i32.and (local.get $kind) (i32.const 63)) (i32.const 8))))))))
             (global.set $ptr (call $htmlValueEnd (global.get $ptr)))
             (if (local.get $directive)
               (then (call $vueTsxRange (local.get $lhs) (global.get $ptr)))
@@ -196,29 +197,10 @@
                 (local.set $kind
                   (call $htmlLangValue (local.get $kind) (local.get $lhs) (global.get $ptr)))))
             (br $next)))
-        ;; an attribute name; `/>` closes, other stray punctuation is plain
-        (if (i32.eq (local.get $c) (i32.const "/"))
-          (then
-            (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
-            (if
-              (i32.and
-                (i32.lt_u (global.get $ptr) (global.get $end))
-                (i32.eq (i32.load8_u (global.get $ptr)) (i32.const ">")))
-              (then
-                (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
-                (call $emitTok
-                  (enum.get $Token.punctuation.bracket.html)
-                  (local.get $lhs)
-                  (global.get $ptr))
-                (br $done
-                  (i32.or
-                    (i32.const 2)
-                    (i32.shl (i32.and (local.get $kind) (i32.const 63)) (i32.const 8))))))
-            (call $emitTok (enum.get $Token.none) (local.get $lhs) (global.get $ptr))
-            (br $next)))
+        ;; an attribute name; stray punctuation is plain
         (if
           (i32.or
-            (i32.eq (local.get $c) (i32.const "="))
+            (i32.or (i32.eq (local.get $c) (i32.const "/")) (i32.eq (local.get $c) (i32.const "=")))
             (i32.or (i32.eq (local.get $c) (i32.const 34)) (i32.eq (local.get $c) (i32.const 39))))
           (then
             (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
@@ -274,11 +256,14 @@
     (local $c i32)
     (local $from i32)
     (local $p i32)
+    (local $q i32)
     (call $lexEmitLeadingContinuation)
     (local.set $from (global.get $ptr))
     (local.set $p (global.get $ptr))
     (block $done
       (loop $scan
+        ;; a construct consumed through $ptr branches to $resync
+        (block $resync
         (local.set $p (call $lexFindEither (local.get $p) (i32.const "{") (i32.const "<")))
         (br_if $done (i32.ge_u (local.get $p) (global.get $end)))
         (local.set $c (i32.load8_u (local.get $p)))
@@ -292,29 +277,24 @@
                 (call $vueHtmlRange (local.get $from) (local.get $p))
                 (global.set $ptr (local.get $p))
                 (call $htmlComment (local.get $p))
-                (local.set $from (global.get $ptr))
-                (local.set $p (global.get $ptr))
-                (br $scan)))
+                (br $resync)))
             ;; Tags are Vue's own: directive values are expressions, and a
             ;; script/style body is scanned once here. Declarations remain
             ;; the HTML lexer's job.
+            ;; $q: the name start, past the `/` of a close tag
+            (local.set $q
+              (i32.add
+                (i32.add (local.get $p) (i32.const 1))
+                (i32.eq (i32.load8_u offset=1 (local.get $p)) (i32.const "/"))))
             (if
               (i32.and
-                (i32.lt_u (i32.add (local.get $p) (i32.const 1)) (global.get $end))
-                (i32.or
-                  (call $lexIsIdentStart (i32.load8_u offset=1 (local.get $p)))
-                  (i32.and
-                    (i32.eq (i32.load8_u offset=1 (local.get $p)) (i32.const "/"))
-                    (i32.and
-                      (i32.lt_u (i32.add (local.get $p) (i32.const 2)) (global.get $end))
-                      (call $lexIsIdentStart (i32.load8_u offset=2 (local.get $p)))))))
+                (i32.lt_u (local.get $q) (global.get $end))
+                (call $lexIsIdentStart (i32.load8_u (local.get $q))))
               (then
                 (call $vueHtmlRange (local.get $from) (local.get $p))
                 (global.set $ptr (local.get $p))
                 (call $vueTag)
-                (local.set $from (global.get $ptr))
-                (local.set $p (global.get $ptr))
-                (br $scan)))))
+                (br $resync)))))
         (if
           (i32.and
             (i32.eq (local.get $c) (i32.const "{"))
@@ -337,10 +317,11 @@
                   (global.get $ptr)
                   (i32.add (global.get $ptr) (i32.const 2)))
                 (global.set $ptr (i32.add (global.get $ptr) (i32.const 2)))))
-            (local.set $from (global.get $ptr))
-            (local.set $p (global.get $ptr))
-            (br $scan)))
+            (br $resync)))
         (local.set $p (i32.add (local.get $p) (i32.const 1)))
+        (br $scan))
+        (local.set $from (global.get $ptr))
+        (local.set $p (global.get $ptr))
         (br $scan)))
     (call $vueHtmlRange (local.get $from) (global.get $end))
     (global.set $ptr (global.get $end)))

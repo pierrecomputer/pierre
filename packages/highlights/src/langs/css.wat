@@ -472,6 +472,8 @@
     (local $p i32)
     (local $q i32)
     (local $v i32)
+    (local $c2 i32)   ;; the byte after the one at $q
+    (local $name i32) ;; $c2 can start a name
     (if
       (i32.eqz
         (i32.or
@@ -484,11 +486,12 @@
     (local.set $p (global.get $ptr))
     (local.set $q (call $lexSkipSpaceAt (local.get $p)))
     (local.set $c (call $templateByte (local.get $q)))
+    (local.set $c2 (call $templateByte (i32.add (local.get $q) (i32.const 1))))
     (local.set $v
       (select
-        (i32.ne (call $templateByte (i32.add (local.get $q) (i32.const 1))) (i32.const "="))
+        (i32.ne (local.get $c2) (i32.const "="))
         (i32.and
-          (i32.eq (call $templateByte (i32.add (local.get $q) (i32.const 1))) (i32.const "="))
+          (i32.eq (local.get $c2) (i32.const "="))
           (byteset.get "%*+-/:?" (local.get $c)))
         (i32.eq (local.get $c) (i32.const "="))))
     (if (local.get $v)
@@ -514,13 +517,12 @@
         (i32.lt_u
           (call $scanFindSpecial (local.get $lhs) (local.get $p) (i32.const "-") (i32.const 0) (i32.const 0))
           (local.get $p))))
+    (local.set $name (call $cssIdentStart (local.get $c2)))
     ;; `a:hover` is a selector unless a property name precedes the colon
     (if
       (i32.and
         (i32.and (i32.eq (local.get $c) (i32.const ":")) (i32.eq (local.get $q) (local.get $p)))
-        (i32.and
-          (i32.eqz (local.get $v))
-          (call $cssIdentStart (call $templateByte (i32.add (local.get $q) (i32.const 1))))))
+        (i32.and (i32.eqz (local.get $v)) (local.get $name)))
       (then (return (i32.const 0))))
     ;; a selector shape after the name makes it a selector: `my-card .title`
     (select
@@ -534,9 +536,7 @@
             (i32.eqz
               (i32.or
                 (byteset.get "&*+,>[{~" (local.get $c))
-                (i32.and
-                  (i32.eq (local.get $c) (i32.const "."))
-                  (call $cssIdentStart (call $templateByte (i32.add (local.get $q) (i32.const 1))))))))
+                (i32.and (i32.eq (local.get $c) (i32.const ".")) (local.get $name)))))
           (local.get $v)))))
 
   ;; The entry points: css proper, and the four preprocessor dialects that

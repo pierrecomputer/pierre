@@ -48,6 +48,7 @@
   ;; `function`, 2 after its name, 3 in its parameters.
   (func $hlAwk
     (local $c i32)
+    (local $c2 i32)
     (local $gap i32)
     (local $lhs i32)
     (local $v i32)
@@ -81,6 +82,7 @@
             (local.set $div (i32.const 1))
             (br $next)))
         (global.set $ptr (i32.add (local.get $lhs) (i32.const 1)))
+        (local.set $c2 (call $templateByte (global.get $ptr)))
         (if (i32.eq (local.get $c) (i32.const "$"))
           (then
             (call $scanIdentRun (i32.const "_"))
@@ -92,7 +94,7 @@
             (br $next)))
         (if (i32.and
               (i32.eq (local.get $c) (i32.const "@"))
-              (call $lexIsIdentStart (call $templateByte (global.get $ptr))))
+              (call $lexIsIdentStart (local.get $c2)))
           (then
             (call $scanIdentRun (i32.const "_"))
             (call $emitTok (enum.get $Token.preproc) (local.get $lhs) (global.get $ptr))
@@ -126,7 +128,7 @@
               (call $lexIsDigit (local.get $c))
               (i32.and
                 (i32.eq (local.get $c) (i32.const "."))
-                (call $lexIsDigit (call $templateByte (global.get $ptr)))))
+                (call $lexIsDigit (local.get $c2))))
           (then
             (global.set $ptr (local.get $lhs))
             (call $lexScanNumber)

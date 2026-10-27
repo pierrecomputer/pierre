@@ -3,9 +3,6 @@
   ;; heredoc bodies share $dockerHeredoc
   (import "./dockerfile.wat")
 
-  (func $tfByte (param $p i32) (result i32)
-    (select (i32.load8_u (local.get $p)) (i32.const 0) (i32.lt_u (local.get $p) (global.get $end))))
-
   ;; group order is the dispatch order in $hlTerraform's identifier branch
   (keyword-table $tfWords $mem.terraformWords $mem.tsxWords
     (group "if" "in" "for" "else" "endif" "endfor") ;; 1: template and for-expression keywords
@@ -26,7 +23,6 @@
   ;; brace depth suffices.
   (func $tfStringBody (param $nested i32) (param $seg i32) (result i32)
     (local $c i32)
-    (local $e i32)
     (local $stop i32)
     (local $mark i32)
     (local $status i32)
@@ -69,31 +65,22 @@
           (i32.or (i32.eq (local.get $c) (i32.const 10)) (i32.eq (local.get $c) (i32.const 13))))
         (if (i32.eq (local.get $c) (i32.const 92))
           (then
-            (call $emitTok (enum.get $Token.string) (local.get $seg) (global.get $ptr))
-            (local.set $e (call $lexEscapeEnd (global.get $ptr)))
-            (call $emitTok (enum.get $Token.string.escape) (global.get $ptr) (local.get $e))
-            (global.set $ptr (local.get $e))
-            (local.set $seg (global.get $ptr))
-            (if
-              (i32.and
-                (i32.eq (global.get $ptr) (global.get $end))
-                (i32.or
-                  (i32.eq (i32.load8_u (i32.sub (global.get $ptr) (i32.const 1))) (i32.const 10))
-                  (i32.eq (i32.load8_u (i32.sub (global.get $ptr) (i32.const 1))) (i32.const 13))))
+            (if (call $stringEscapeAt (local.get $seg))
               (then (local.set $status (i32.const 3))))
+            (local.set $seg (global.get $ptr))
             (br $scan)))
         ;; `$` or `%`: doubled before a brace it is literal, otherwise a
         ;; brace opens an interpolation
         (if
           (i32.and
-            (i32.eq (call $tfByte (i32.add (global.get $ptr) (i32.const 1))) (local.get $c))
-            (i32.eq (call $tfByte (i32.add (global.get $ptr) (i32.const 2))) (i32.const "{")))
+            (i32.eq (call $templateByte (i32.add (global.get $ptr) (i32.const 1))) (local.get $c))
+            (i32.eq (call $templateByte (i32.add (global.get $ptr) (i32.const 2))) (i32.const "{")))
           (then
             (global.set $ptr (i32.add (global.get $ptr) (i32.const 3)))
             (br $scan)))
         (if
           (i32.and
-            (i32.eq (call $tfByte (i32.add (global.get $ptr) (i32.const 1))) (i32.const "{"))
+            (i32.eq (call $templateByte (i32.add (global.get $ptr) (i32.const 1))) (i32.const "{"))
             (i32.eqz (local.get $nested)))
           (then
             (call $emitTok (enum.get $Token.string) (local.get $seg) (global.get $ptr))
@@ -111,10 +98,12 @@
   (func $tfIsOp (param $c i32) (result i32)
     (byteset.get "!%&*+-/<=>?|~" (local.get $c)))
 
-  ;; $strOpen is 1 while a quoted template body is open, with $seg the start
-  ;; of its bytes not yet emitted; $interp counts braces inside a `${` or
-  ;; `%{`. A heredoc opener leaves $hdLen, $hdDelim, and $hdStrip pending
-  ;; until the line break, after which its body runs to the delimiter line.
+  ;; $seg is nonzero while a quoted template body is open: the start of its
+  ;; bytes not yet emitted, or 1 across a chunk boundary, where the body
+  ;; resumes at the chunk start. $interp counts braces inside a `${` or
+  ;; `%{`. A heredoc opener leaves $hdLen (the delimiter length times 2, plus
+  ;; 1 for `<<-`) and $hdDelim pending until the line break, after which its
+  ;; body runs to the delimiter line.
   ;; $lineHead is 1 until the first token of a line: a name there is a block
   ;; type unless `=` follows. $member is 1 after `.`. All are checkpointed.
   (func $hlTerraform
@@ -131,7 +120,6 @@
     (local $member i32)
     (local $lineHead i32)
     (local $atHead i32)
-    (local $strOpen i32)
     (local $seg i32)
     (local $interp i32)
     (local $status i32)
@@ -142,6 +130,10 @@
     (call $lexEmitLeadingContinuation)
     (block $done
       (loop $next
+        ;; token tails: $tok ends a member access, then $emit emits
+        ;; [$lhs,$ptr) as $hl
+        (block $emit
+        (block $tok
         (local.set $gap (global.get $ptr))
         ;; the pending heredoc body starts after this line's break
         (if (local.get $hdLen)
@@ -150,37 +142,30 @@
               (call $dockerHeredoc
                 (local.get $gap)
                 (local.get $hdDelim)
-                (local.get $hdLen)
-                (local.get $hdStrip))
+                (i32.shr_u (local.get $hdLen) (i32.const 1))
+                (i32.and (local.get $hdLen) (i32.const 1)))
               (then
                 (local.set $hdLen (i32.const 0))
                 (local.set $lineHead (i32.const 1))
                 (br $next)))))
 
-        ;; an open quoted template; $seg is zero across a chunk boundary,
-        ;; where the body resumes at the chunk start
-        (if (local.get $strOpen)
+        ;; an open quoted template
+        (if (local.get $seg)
           (then
             (if (i32.ge_u (global.get $ptr) (global.get $end))
               (then
-                (local.set $seg (i32.const 0))
+                (local.set $seg (i32.const 1))
                 (br $done)))
-            (if (i32.eqz (local.get $seg))
+            (if (i32.eq (local.get $seg) (i32.const 1))
               (then (local.set $seg (global.get $ptr))))
             (local.set $status (call $tfStringBody (local.get $interp) (local.get $seg)))
-            (local.set $seg (global.get $ptr))
             (if (i32.eq (local.get $status) (i32.const 2))
-              (then
-                (local.set $interp (i32.const 1))
-                (local.set $strOpen (i32.const 0))
-                (local.set $seg (i32.const 0)))
-              (else
-                ;; closed, or cut by a raw line break; only an escaped line
-                ;; break at $end keeps the body open for the next chunk
-                (if (i32.ne (local.get $status) (i32.const 3))
-                  (then
-                    (local.set $strOpen (i32.const 0))
-                    (local.set $seg (i32.const 0))))))
+              (then (local.set $interp (i32.const 1))))
+            ;; closed, opened an interpolation, or cut by a raw line break;
+            ;; only an escaped line break at $end keeps the body open for the
+            ;; next chunk
+            (local.set $seg
+              (select (global.get $ptr) (i32.const 0) (i32.eq (local.get $status) (i32.const 3))))
             (br $next)))
 
         (call $scanWhitespace)
@@ -195,8 +180,8 @@
         (br_if $done (i32.ge_u (global.get $ptr) (global.get $end)))
         (local.set $lhs (global.get $ptr))
         (local.set $c (i32.load8_u (global.get $ptr)))
-        (local.set $c2 (call $tfByte (i32.add (global.get $ptr) (i32.const 1))))
-        (local.set $c3 (call $tfByte (i32.add (global.get $ptr) (i32.const 2))))
+        (local.set $c2 (call $templateByte (i32.add (global.get $ptr) (i32.const 1))))
+        (local.set $c3 (call $templateByte (i32.add (global.get $ptr) (i32.const 2))))
         (local.set $atHead (local.get $lineHead))
         (local.set $lineHead (i32.const 0))
 
@@ -219,42 +204,45 @@
         (if (i32.eq (local.get $c) (i32.const 34))
           (then
             (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
-            (call $emitTok (enum.get $Token.string) (local.get $lhs) (global.get $ptr))
-            (local.set $strOpen (i32.const 1))
+            (local.set $hl (enum.get $Token.string))
             (local.set $seg (global.get $ptr))
-            (local.set $member (i32.const 0))
-            (br $next)))
+            (br $tok)))
 
         ;; `<<EOF` / `<<-EOF`: the opener is a string and the body follows
         ;; the line break
-        (if
-          (i32.and
-            (i32.and
-              (i32.eq (local.get $c) (i32.const "<"))
-              (i32.eq (local.get $c2) (i32.const "<")))
-            (i32.or
-              (call $lexIsIdentStart (local.get $c3))
-              (i32.and
-                (i32.eq (local.get $c3) (i32.const "-"))
-                (call $lexIsIdentStart (call $tfByte (i32.add (global.get $ptr) (i32.const 3)))))))
+        (if (i32.and (i32.eq (local.get $c) (i32.const "<")) (i32.eq (local.get $c2) (i32.const "<")))
           (then
             (local.set $hdStrip (i32.eq (local.get $c3) (i32.const "-")))
-            (global.set $ptr
-              (i32.add (global.get $ptr) (i32.add (i32.const 2) (local.get $hdStrip))))
-            (local.set $hdDelim (global.get $ptr))
-            (call $lexScanIdent)
-            (local.set $hdLen (i32.sub (global.get $ptr) (local.get $hdDelim)))
-            (call $emitTok (enum.get $Token.string) (local.get $lhs) (global.get $ptr))
-            (local.set $member (i32.const 0))
-            (br $next)))
+            (if
+              (call $lexIsIdentStart
+                (select
+                  (call $templateByte (i32.add (global.get $ptr) (i32.const 3)))
+                  (local.get $c3)
+                  (local.get $hdStrip)))
+              (then
+                (global.set $ptr
+                  (i32.add (global.get $ptr) (i32.add (i32.const 2) (local.get $hdStrip))))
+                (local.set $hdDelim (global.get $ptr))
+                (call $lexScanIdent)
+                (local.set $hdLen
+                  (i32.or
+                    (i32.shl (i32.sub (global.get $ptr) (local.get $hdDelim)) (i32.const 1))
+                    (local.get $hdStrip)))
+                (local.set $hl (enum.get $Token.string))
+                (br $tok)))))
 
         ;; `$` is not an identifier byte here: a stray one is plain text
-        (if (i32.and (call $lexIsIdentStart (local.get $c)) (i32.ne (local.get $c) (i32.const "$")))
+        (if
+          (i32.or
+            (i32.ge_u (local.get $c) (i32.const 0x80))
+            (i32.or
+              (i32.le_u (i32.sub (i32.or (local.get $c) (i32.const 32)) (i32.const "a")) (i32.const 25))
+              (i32.eq (local.get $c) (i32.const "_"))))
           (then
             (call $scanIdentRun (i32.const "-"))
             (local.set $rhs (global.get $ptr))
             (local.set $p (call $lexSkipSpaceAt (local.get $rhs)))
-            (local.set $pc (call $tfByte (local.get $p)))
+            (local.set $pc (call $templateByte (local.get $p)))
             (local.set $g
               (select
                 (i32.const 0)
@@ -288,7 +276,7 @@
                                       (i32.and
                                         (i32.eq (local.get $pc) (i32.const "="))
                                         (i32.ne
-                                          (call $tfByte (i32.add (local.get $p) (i32.const 1)))
+                                          (call $templateByte (i32.add (local.get $p) (i32.const 1)))
                                           (i32.const "=")))
                                       (then (local.set $hl (enum.get $Token.property)))
                                       (else
@@ -297,28 +285,24 @@
                                           (else
                                             ;; a name opening a line before a label,
                                             ;; a brace, or another name is a block type
-                                            (if
-                                              (i32.and
-                                                (local.get $atHead)
-                                                (i32.or
-                                                  (i32.or
-                                                    (i32.eq
-                                                      (local.get $pc)
-                                                      (i32.const 34))
-                                                    (i32.eq
-                                                      (local.get $pc)
-                                                      (i32.const "{")))
-                                                  (call $lexIsIdentStart
-                                                    (local.get $pc))))
+                                            (local.set $hl (enum.get $Token.variable))
+                                            (if (local.get $atHead)
                                               (then
-                                                (local.set $hl
-                                                  (enum.get $Token.keyword.declaration)))
-                                              (else
-                                                (local.set $hl
-                                                  (enum.get $Token.variable))))))))))))))))))))
-            (call $emitTok (local.get $hl) (local.get $lhs) (local.get $rhs))
-            (local.set $member (i32.const 0))
-            (br $next)))
+                                                (if
+                                                  (i32.or
+                                                    (i32.or
+                                                      (i32.eq
+                                                        (local.get $pc)
+                                                        (i32.const 34))
+                                                      (i32.eq
+                                                        (local.get $pc)
+                                                        (i32.const "{")))
+                                                    (call $lexIsIdentStart
+                                                      (local.get $pc)))
+                                                  (then
+                                                    (local.set $hl
+                                                      (enum.get $Token.keyword.declaration))))))))))))))))))))))
+            (br $tok)))
 
         (if
           (i32.or
@@ -326,9 +310,8 @@
             (i32.and (i32.eq (local.get $c) (i32.const ".")) (call $lexIsDigit (local.get $c2))))
           (then
             (call $lexScanNumber)
-            (call $emitTok (enum.get $Token.number) (local.get $lhs) (global.get $ptr))
-            (local.set $member (i32.const 0))
-            (br $next)))
+            (local.set $hl (enum.get $Token.number))
+            (br $tok)))
 
         (if (byteset.get "()[]{}" (local.get $c))
           (then
@@ -343,29 +326,19 @@
                     (if (i32.eqz (local.get $interp))
                       (then
                         ;; the brace matching `${` returns to the template body
-                        (call $emitTok
-                          (enum.get $Token.punctuation.special)
-                          (local.get $lhs)
-                          (global.get $ptr))
-                        (local.set $strOpen (i32.const 1))
+                        (local.set $hl (enum.get $Token.punctuation.special))
                         (local.set $seg (global.get $ptr))
-                        (local.set $member (i32.const 0))
-                        (br $next)))))))
-            (call $emitTok (enum.get $Token.punctuation.bracket) (local.get $lhs) (global.get $ptr))
-            (local.set $member (i32.const 0))
-            (br $next)))
+                        (br $tok)))))))
+            (local.set $hl (enum.get $Token.punctuation.bracket))
+            (br $tok)))
         (if
           (i32.or
             (i32.or (i32.eq (local.get $c) (i32.const ",")) (i32.eq (local.get $c) (i32.const ";")))
             (i32.eq (local.get $c) (i32.const ":")))
           (then
             (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
-            (call $emitTok
-              (enum.get $Token.punctuation.delimiter)
-              (local.get $lhs)
-              (global.get $ptr))
-            (local.set $member (i32.const 0))
-            (br $next)))
+            (local.set $hl (enum.get $Token.punctuation.delimiter))
+            (br $tok)))
         (if (i32.eq (local.get $c) (i32.const "."))
           (then
             (global.set $ptr
@@ -377,15 +350,13 @@
                   (i32.and
                     (i32.eq (local.get $c2) (i32.const "."))
                     (i32.eq (local.get $c3) (i32.const "."))))))
-            (call $emitTok
+            (local.set $hl
               (select
                 (enum.get $Token.operator)
                 (enum.get $Token.punctuation.delimiter)
-                (i32.eq (local.get $c2) (i32.const ".")))
-              (local.get $lhs)
-              (global.get $ptr))
+                (i32.eq (local.get $c2) (i32.const "."))))
             (local.set $member (i32.ne (local.get $c2) (i32.const ".")))
-            (br $next)))
+            (br $emit)))
 
         (if (call $tfIsOp (local.get $c))
           (then
@@ -403,12 +374,12 @@
                       (i32.eq (local.get $c) (i32.const "&"))
                       (i32.eq (local.get $c) (i32.const "|"))))))
               (then (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))))
-            (call $emitTok (enum.get $Token.operator) (local.get $lhs) (global.get $ptr))
-            (local.set $member (i32.const 0))
-            (br $next)))
+            (local.set $hl (enum.get $Token.operator))
+            (br $tok)))
 
         (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
-        (call $emitTok (enum.get $Token.none) (local.get $lhs) (global.get $ptr))
-        (local.set $member (i32.const 0))
+        (local.set $hl (enum.get $Token.none)))
+        (local.set $member (i32.const 0)))
+        (call $emitTok (local.get $hl) (local.get $lhs) (global.get $ptr))
         (br $next))))
 )

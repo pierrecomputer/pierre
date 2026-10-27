@@ -30,6 +30,8 @@
     (call $lexEmitLeadingContinuation)
     (block $done
       (loop $next
+        ;; a branch to $emit emits [$lhs,$ptr) as $hl
+        (block $emit
         (local.set $gap (global.get $ptr))
         (call $scanWhitespace)
         (if (call $lexGapHasBreak (local.get $gap) (global.get $ptr))
@@ -40,19 +42,21 @@
         (local.set $c (i32.load8_u (local.get $lhs)))
         (local.set $c2 (call $templateByte (i32.add (local.get $lhs) (i32.const 1))))
 
-        (if (i32.and (i32.eq (local.get $c) (i32.const "/")) (i32.eq (local.get $c2) (i32.const "/")))
+        (if (i32.eq (local.get $c) (i32.const "/"))
           (then
-            (call $lexLineComment
-              (i32.const 2)
-              (select
-                (enum.get $Token.comment.doc)
-                (enum.get $Token.comment)
-                (i32.eq (call $templateByte (i32.add (local.get $lhs) (i32.const 2))) (i32.const "/"))))
-            (br $next)))
-        (if (i32.and (i32.eq (local.get $c) (i32.const "/")) (i32.eq (local.get $c2) (i32.const "*")))
-          (then
-            (call $lexBlockComment (i32.const 2) (enum.get $Token.comment))
-            (br $next)))
+            (if (i32.eq (local.get $c2) (i32.const "/"))
+              (then
+                (call $lexLineComment
+                  (i32.const 2)
+                  (select
+                    (enum.get $Token.comment.doc)
+                    (enum.get $Token.comment)
+                    (i32.eq (call $templateByte (i32.add (local.get $lhs) (i32.const 2))) (i32.const "/"))))
+                (br $next)))
+            (if (i32.eq (local.get $c2) (i32.const "*"))
+              (then
+                (call $lexBlockComment (i32.const 2) (enum.get $Token.comment))
+                (br $next)))))
         (if (i32.eq (local.get $c) (i32.const 34))
           (then
             (call $lexString (i32.const 34) (i32.const 0) (enum.get $Token.string))
@@ -62,8 +66,8 @@
             (global.set $ptr
               (i32.add (local.get $lhs) (i32.add (i32.const 1) (i32.eq (local.get $c2) (i32.const "@")))))
             (call $scanIdentRun (i32.const "."))
-            (call $emitTok (enum.get $Token.attribute) (local.get $lhs) (global.get $ptr))
-            (br $next)))
+            (local.set $hl (enum.get $Token.attribute))
+            (br $emit)))
 
         (if (call $lexIsIdentStart (local.get $c))
           (then
@@ -129,8 +133,8 @@
           (then
             (global.set $ptr (i32.add (local.get $lhs) (i32.eq (local.get $c) (i32.const "-"))))
             (call $lexScanNumber)
-            (call $emitTok (enum.get $Token.number) (local.get $lhs) (global.get $ptr))
-            (br $next)))
+            (local.set $hl (enum.get $Token.number))
+            (br $emit)))
 
         (global.set $ptr (i32.add (local.get $lhs) (i32.const 1)))
         (if (byteset.get "()[]{}" (local.get $c))
@@ -147,17 +151,19 @@
               (then
                 (local.set $block (i32.const 0))
                 (local.set $paren (i32.const 0))))
-            (call $emitTok (enum.get $Token.punctuation.bracket) (local.get $lhs) (global.get $ptr))
-            (br $next)))
+            (local.set $hl (enum.get $Token.punctuation.bracket))
+            (br $emit)))
         (if (byteset.get ".,;:" (local.get $c))
           (then
-            (call $emitTok (enum.get $Token.punctuation.delimiter) (local.get $lhs) (global.get $ptr))
-            (br $next)))
+            (local.set $hl (enum.get $Token.punctuation.delimiter))
+            (br $emit)))
         (if (i32.or (i32.eq (local.get $c) (i32.const "=")) (i32.eq (local.get $c) (i32.const "?")))
           (then
-            (call $emitTok (enum.get $Token.operator) (local.get $lhs) (global.get $ptr))
-            (br $next)))
+            (local.set $hl (enum.get $Token.operator))
+            (br $emit)))
         (global.set $ptr (call $utf8SpanEnd (global.get $ptr) (global.get $end)))
-        (call $emitTok (enum.get $Token.none) (local.get $lhs) (global.get $ptr))
+        (local.set $hl (enum.get $Token.none))
+        (br $emit))
+        (call $emitTok (local.get $hl) (local.get $lhs) (global.get $ptr))
         (br $next))))
 )

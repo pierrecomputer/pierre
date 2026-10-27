@@ -218,6 +218,8 @@
                 (br_if $nameDone (i32.eqz (call $leanIsRest (call $leanCodepoint (global.get $ptr)))))
                 (br $name)))
             (local.set $rhs (global.get $ptr))
+            ;; the byte after the name
+            (local.set $c2 (call $leanByte (local.get $rhs)))
             (local.set $kind (call $leanWordKind (local.get $lhs) (local.get $rhs)))
             (local.set $hl (enum.get $Token.variable))
             (if (local.get $attribute)
@@ -226,14 +228,14 @@
                 (if (local.get $expect)
                   (then
                     (local.set $hl (call $leanNameKind (local.get $expect)))
-                    (if (i32.ne (call $leanByte (local.get $rhs)) (i32.const "."))
+                    (if (i32.ne (local.get $c2) (i32.const "."))
                       (then (local.set $expect (i32.const 0)))))
                   (else
                     (if (i32.ge_s (local.get $kind) (i32.const 0))
                       (then
                         (local.set $hl (i32.and (local.get $kind) (i32.const 255)))
                         (local.set $expect (i32.shr_u (local.get $kind) (i32.const 8)))))))
-                (if (i32.eq (call $leanByte (local.get $rhs)) (i32.const "."))
+                (if (i32.eq (local.get $c2) (i32.const "."))
                   (then (local.set $hl (enum.get $Token.namespace))))))
             (call $emitTok (local.get $hl) (local.get $lhs) (local.get $rhs))
             (br $next)))

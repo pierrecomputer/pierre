@@ -1,9 +1,6 @@
 (module
   (import "../common.wat")
 
-  (func $protoByte (param $p i32) (result i32)
-    (select (i32.load8_u (local.get $p)) (i32.const 0) (i32.lt_u (local.get $p) (global.get $end))))
-
   ;; Each value is the token in the low byte and the next-name capture
   ;; above it: 1 type, 2 function, 3 namespace. `required` and `reserved`
   ;; are absent on purpose: the table hash sees only the first two bytes,
@@ -65,7 +62,7 @@
         (br_if $done (i32.ge_u (global.get $ptr) (global.get $end)))
         (local.set $lhs (global.get $ptr))
         (local.set $c (i32.load8_u (global.get $ptr)))
-        (local.set $c2 (call $protoByte (i32.add (global.get $ptr) (i32.const 1))))
+        (local.set $c2 (call $templateByte (i32.add (global.get $ptr) (i32.const 1))))
 
         (if
           (i32.and (i32.eq (local.get $c) (i32.const "/")) (i32.eq (local.get $c2) (i32.const "/")))
@@ -89,7 +86,7 @@
             (local.set $rhs (global.get $ptr))
             (local.set $p (call $lexSkipSpaceAt (local.get $rhs)))
             ;; the byte after the name and its blanks
-            (local.set $c2 (call $protoByte (local.get $p)))
+            (local.set $c2 (call $templateByte (local.get $p)))
             (local.set $kind
               (select
                 (i32.const -1)
@@ -125,7 +122,7 @@
                           (else
                             (if
                               (i32.le_u
-                                (i32.sub (i32.load8_u (local.get $lhs)) (i32.const "A"))
+                                (i32.sub (local.get $c) (i32.const "A"))
                                 (i32.const 25))
                               (then (local.set $hl (enum.get $Token.type)))
                               (else

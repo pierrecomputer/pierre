@@ -15,10 +15,10 @@
     (i32.le_u (i32.sub (local.get $c) (i32.const "0")) (i32.const 9)))
 
   (func $lexIsHex (param $c i32) (result i32)
-    (i32.or
-      (call $lexIsDigit (local.get $c))
-      (i32.le_u (i32.sub (i32.or (local.get $c) (i32.const 32)) (i32.const "a")) (i32.const 5))))
+    (byteset.get "0123456789ABCDEFabcdef" (local.get $c)))
 
+  ;; WARNING: keep the compare chain. A byte-set load is shorter, but in a
+  ;; lexer's main dispatch it made JavaScriptCore up to 20% slower.
   (func $lexIsIdentStart (param $c i32) (result i32)
     (i32.or
       (i32.ge_u (local.get $c) (i32.const 0x80))
@@ -26,8 +26,17 @@
         (i32.le_u (i32.sub (i32.or (local.get $c) (i32.const 32)) (i32.const "a")) (i32.const 25))
         (i32.or (i32.eq (local.get $c) (i32.const "_")) (i32.eq (local.get $c) (i32.const "$"))))))
 
+  ;; $lexIsIdentStart without `$`: a letter, `_`, or a UTF-8 byte
+  (func $lexIsNameStart (param $c i32) (result i32)
+    (i32.or
+      (i32.ge_u (local.get $c) (i32.const 0x80))
+      (i32.or
+        (i32.le_u (i32.sub (i32.or (local.get $c) (i32.const 32)) (i32.const "a")) (i32.const 25))
+        (i32.eq (local.get $c) (i32.const "_")))))
+
+  ;; A byte-set load is shorter than the compare chain at each inlined call.
   (func $lexIsIdentContinue (param $c i32) (result i32)
-    (i32.or (call $lexIsIdentStart (local.get $c)) (call $lexIsDigit (local.get $c))))
+    (byteset.get "$_0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz\80\81\82\83\84\85\86\87\88\89\8a\8b\8c\8d\8e\8f\90\91\92\93\94\95\96\97\98\99\9a\9b\9c\9d\9e\9f\a0\a1\a2\a3\a4\a5\a6\a7\a8\a9\aa\ab\ac\ad\ae\af\b0\b1\b2\b3\b4\b5\b6\b7\b8\b9\ba\bb\bc\bd\be\bf\c0\c1\c2\c3\c4\c5\c6\c7\c8\c9\ca\cb\cc\cd\ce\cf\d0\d1\d2\d3\d4\d5\d6\d7\d8\d9\da\db\dc\dd\de\df\e0\e1\e2\e3\e4\e5\e6\e7\e8\e9\ea\eb\ec\ed\ee\ef\f0\f1\f2\f3\f4\f5\f6\f7\f8\f9\fa\fb\fc\fd\fe\ff" (local.get $c)))
 
   ;; the default identifier run: `$` is an identifier byte in every language
   ;; that uses it

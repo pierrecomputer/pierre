@@ -102,8 +102,10 @@
                 (if (i32.eq (call $templateByte (i32.add (local.get $p) (i32.const 2))) (i32.const "{"))
                   (then
                     (global.set $ptr (call $scanHexRun (i32.add (local.get $p) (i32.const 3)) (i32.const 6)))
-                    (if (i32.eq (call $templateByte (global.get $ptr)) (i32.const "}"))
-                      (then (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))))))))
+                    (global.set $ptr
+                      (i32.add
+                        (global.get $ptr)
+                        (i32.eq (call $templateByte (global.get $ptr)) (i32.const "}"))))))))
             (call $emitTok (enum.get $Token.string.escape) (local.get $p) (global.get $ptr))
             (local.set $seg (global.get $ptr))
             (br $l)))
@@ -240,11 +242,12 @@
                   (i32.and (i32.lt_u (global.get $ptr) (global.get $end)) (byteset.get "\n\r" (local.get $c)))
                   (then
                     (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
-                    (if
-                      (i32.and
-                        (i32.eq (local.get $c) (i32.const 13))
-                        (i32.eq (call $templateByte (global.get $ptr)) (i32.const 10)))
-                      (then (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))))
+                    (global.set $ptr
+                      (i32.add
+                        (global.get $ptr)
+                        (i32.and
+                          (i32.eq (local.get $c) (i32.const 13))
+                          (i32.eq (call $templateByte (global.get $ptr)) (i32.const 10)))))
                     (call $emitGap (local.get $gap) (global.get $ptr))
                     (local.set $hd (i32.xor (local.get $hd) (i32.const 512))))
                   (else (global.set $ptr (local.get $gap))))))

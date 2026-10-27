@@ -84,8 +84,10 @@
                 (br $next)))
             (if (i32.eq (local.get $c) (i32.const "<"))
               (then
-                (if (i32.eq (call $templateByte (global.get $ptr)) (i32.const "/"))
-                  (then (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))))
+                (global.set $ptr
+                  (i32.add
+                    (global.get $ptr)
+                    (i32.eq (call $templateByte (global.get $ptr)) (i32.const "/"))))
                 (call $emitTok (enum.get $Token.punctuation.bracket.html) (local.get $lhs) (global.get $ptr))
                 (local.set $lhs (global.get $ptr))
                 (call $scanIdentRun (i32.const 0))

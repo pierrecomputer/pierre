@@ -77,6 +77,17 @@
         (br $scan)))
     (select (local.get $p) (global.get $end) (i32.lt_u (local.get $p) (global.get $end))))
 
+  ;; The closing quote of a verbatim string body from $p, or $end; a doubled
+  ;; quote is an escaped one.
+  (func $razorVerbatimEnd (param $p i32) (result i32)
+    (loop $quote
+      (local.set $p (call $lexFindByte (local.get $p) (i32.const 34)))
+      (if (i32.eq (call $templateByte (i32.add (local.get $p) (i32.const 1))) (i32.const 34))
+        (then
+          (local.set $p (i32.add (local.get $p) (i32.const 2)))
+          (br $quote))))
+    (local.get $p))
+
   (func $razorImplicitEnd (param $p i32) (result i32)
     (local $c i32)
     (local $save i32)
@@ -147,6 +158,8 @@
             (i32.wrap_i64 (i64.and (local.get $stack) (i64.const 3)))
             (i32.const 4)
             (i64.gt_u (local.get $stack) (i64.const 1))))
+        (block $openBrace
+        (block $closeBrace
         (block $header
           (if (local.get $await)
             (then
@@ -160,14 +173,9 @@
                 (then
                   (if (i32.eq (i32.load8_u (local.get $lhs)) (i32.const "{"))
                     (then
-                      (global.set $ptr (i32.add (local.get $lhs) (i32.const 1)))
-                      (call $emitTok (enum.get $Token.punctuation.bracket) (local.get $lhs) (global.get $ptr))
-                      (local.set $stack
-                        (call $razorPush
-                          (local.get $stack)
-                          (select (i32.const 1) (i32.const 3) (i32.eq (local.get $c) (i32.const 1)))))
-                      (local.set $stmt (i32.const 1))
-                      (local.set $lineMarkup (i32.const 0))))
+                      (local.set $p (local.get $lhs))
+                      (local.set $q (select (i32.const 1) (i32.const 3) (i32.eq (local.get $c) (i32.const 1))))
+                      (br $openBrace)))
                   (br $next)))
               (call $scanIdentRun (i32.const "_"))
               (local.set $p (i32.sub (global.get $ptr) (local.get $lhs)))
@@ -217,13 +225,7 @@
                   (local.set $r (select (enum.get $Token.comment) (enum.get $Token.string) (i32.eq (local.get $xline) (i32.const 1))))
                   (if (i32.eq (local.get $xline) (i32.const 2))
                     (then
-                      (local.set $p (local.get $lhs))
-                      (loop $quote
-                        (local.set $p (call $lexFindByte (local.get $p) (i32.const 34)))
-                        (if (i32.eq (call $templateByte (i32.add (local.get $p) (i32.const 1))) (i32.const 34))
-                          (then
-                            (local.set $p (i32.add (local.get $p) (i32.const 2)))
-                            (br $quote))))
+                      (local.set $p (call $razorVerbatimEnd (local.get $lhs)))
                       (local.set $q (i32.const 1)))
                     (else
                       (local.set $q (select (i32.const 2) (i32.const 3) (i32.eq (local.get $xline) (i32.const 1))))
@@ -297,12 +299,7 @@
                                 (i32.gt_u (i32.sub (local.get $p) (i32.const 1)) (local.get $lhs))
                                 (i32.eq (i32.load8_u (i32.sub (local.get $p) (i32.const 2))) (i32.const "@"))))))
                         (then
-                          (loop $quote
-                            (local.set $p (call $lexFindByte (i32.add (local.get $p) (i32.const 1)) (i32.const 34)))
-                            (if (i32.eq (call $templateByte (i32.add (local.get $p) (i32.const 1))) (i32.const 34))
-                              (then
-                                (local.set $p (i32.add (local.get $p) (i32.const 1)))
-                                (br $quote))))
+                          (local.set $p (call $razorVerbatimEnd (i32.add (local.get $p) (i32.const 1))))
                           (if (i32.ge_u (local.get $p) (global.get $end))
                             (then (local.set $xline (i32.const 2))))
                           (local.set $p (i32.add (local.get $p) (i32.const 1)))
@@ -388,10 +385,8 @@
               (call $razorCs (local.get $p))
               (if (i32.eq (local.get $ev) (i32.const 1))
                 (then
-                  (global.set $ptr (i32.add (local.get $p) (i32.const 1)))
-                  (call $emitTok (enum.get $Token.punctuation.bracket) (local.get $p) (global.get $ptr))
-                  (local.set $stack (call $razorPop (local.get $stack)))
-                  (local.set $await (i32.const 3))))
+                  (local.set $await (i32.const 3))
+                  (br $closeBrace)))
               (if (i32.eq (local.get $ev) (i32.const 2))
                 (then (local.set $enter (i32.const 1))))
               (if (i32.eq (local.get $ev) (i32.const 3))
@@ -444,10 +439,8 @@
             (local.set $lhs (global.get $ptr))
             (if (i32.eq (i32.load8_u (local.get $lhs)) (i32.const "}"))
               (then
-                (global.set $ptr (i32.add (local.get $lhs) (i32.const 1)))
-                (call $emitTok (enum.get $Token.punctuation.bracket) (local.get $lhs) (global.get $ptr))
-                (local.set $stack (call $razorPop (local.get $stack)))
-                (br $next)))
+                (local.set $p (local.get $lhs))
+                (br $closeBrace)))
             (local.set $c (call $templateByte (i32.add (local.get $lhs) (i32.const 1))))
             (block $plain
               ;; an `@` after a letter or digit is part of an address
@@ -474,9 +467,10 @@
               (br_if $plain
                 (i32.and
                   (i32.ne (local.get $c) (i32.const "("))
-                  (i32.or
-                    (i32.eqz (call $lexIsIdentStart (local.get $c)))
-                    (i32.eq (local.get $c) (i32.const "$")))))
+                  (i32.eqz
+                    (i32.or
+                      (i32.le_u (i32.sub (i32.or (local.get $c) (i32.const 32)) (i32.const "a")) (i32.const 25))
+                      (i32.or (i32.eq (local.get $c) (i32.const "_")) (i32.ge_u (local.get $c) (i32.const 128)))))))
               (global.set $ptr (i32.add (local.get $lhs) (i32.const 1)))
               (call $emitTok (enum.get $Token.keyword.control) (local.get $lhs) (global.get $ptr))
               (if (i32.eq (local.get $c) (i32.const "("))
@@ -535,13 +529,20 @@
             (br $markupNext)))
         (local.set $p (call $razorExprEnd (global.get $ptr) (i32.const 1)))
         (call $razorCs (local.get $p))
-        (if (i32.eq (call $templateByte (local.get $p)) (i32.const "{"))
-          (then
-            (global.set $ptr (i32.add (local.get $p) (i32.const 1)))
-            (call $emitTok (enum.get $Token.punctuation.bracket) (local.get $p) (global.get $ptr))
-            (local.set $stack (call $razorPush (local.get $stack) (i32.const 1)))
-            (local.set $stmt (i32.const 1))
-            (local.set $lineMarkup (i32.const 0)))
-          (else (local.set $await (i32.const 1))))
+        (local.set $q (i32.const 1))
+        (br_if $openBrace (i32.eq (call $templateByte (local.get $p)) (i32.const "{")))
+        (local.set $await (i32.const 1))
+        (br $next))
+        ;; the `}` at $p closes the innermost block
+        (global.set $ptr (i32.add (local.get $p) (i32.const 1)))
+        (call $emitTok (enum.get $Token.punctuation.bracket) (local.get $p) (global.get $ptr))
+        (local.set $stack (call $razorPop (local.get $stack)))
+        (br $next))
+        ;; the `{` at $p opens a block of kind $q
+        (global.set $ptr (i32.add (local.get $p) (i32.const 1)))
+        (call $emitTok (enum.get $Token.punctuation.bracket) (local.get $p) (global.get $ptr))
+        (local.set $stack (call $razorPush (local.get $stack) (local.get $q)))
+        (local.set $stmt (i32.const 1))
+        (local.set $lineMarkup (i32.const 0))
         (br $next))))
 )

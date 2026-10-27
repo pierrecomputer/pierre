@@ -102,13 +102,19 @@
               (local.set $c (local.get $n))))
           (if (i32.or (i32.eq (local.get $c) (i32.const 34)) (i32.eq (local.get $c) (i32.const 39)))
             (then
-              (local.set $quote (local.get $c))
               (local.set $triple
                 (i32.and
                   (i32.lt_u (i32.add (global.get $ptr) (i32.const 2)) (global.get $end))
                   (i32.and
-                    (i32.eq (i32.load8_u offset=1 (global.get $ptr)) (local.get $quote))
-                    (i32.eq (i32.load8_u offset=2 (global.get $ptr)) (local.get $quote)))))
+                    (i32.eq (i32.load8_u offset=1 (global.get $ptr)) (local.get $c))
+                    (i32.eq (i32.load8_u offset=2 (global.get $ptr)) (local.get $c)))))
+              ;; the open string: its quote, bit 8 raw, bit 9 triple-quoted
+              (local.set $quote
+                (i32.or
+                  (local.get $c)
+                  (i32.or
+                    (i32.shl (local.get $raw) (i32.const 8))
+                    (i32.shl (local.get $triple) (i32.const 9)))))
               (global.set $ptr
                 (i32.add (global.get $ptr) (select (i32.const 3) (i32.const 1) (local.get $triple))))
               (br $string)))
@@ -119,10 +125,9 @@
               (call $emitTok (enum.get $Token.attribute) (local.get $lhs) (global.get $ptr))
               (br $token)))
           (if
-            (i32.or
-              (i32.eq (local.get $c) (i32.const "$"))
-              (i32.and (i32.eqz (local.get $operand))
-                (i32.and (i32.eq (local.get $c) (i32.const "%")) (call $lexIsIdentStart (local.get $n)))))
+            (if (result i32) (i32.eq (local.get $c) (i32.const "%"))
+              (then (i32.and (i32.eqz (local.get $operand)) (call $lexIsIdentStart (local.get $n))))
+              (else (i32.eq (local.get $c) (i32.const "$"))))
             (then
               (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
               (call $lexScanIdent)
@@ -146,7 +151,13 @@
               (local.set $operand (i32.const 1))
               (local.set $member (i32.const 0))
               (br $token)))
-          (if (call $lexIsIdentStart (local.get $c))
+          ;; `$` took the node path above
+          (if
+            (i32.or
+              (i32.ge_u (local.get $c) (i32.const 0x80))
+              (i32.or
+                (i32.le_u (i32.sub (i32.or (local.get $c) (i32.const 32)) (i32.const "a")) (i32.const 25))
+                (i32.eq (local.get $c) (i32.const "_"))))
             (then
               (call $lexScanIdent)
               (local.set $p (call $lexSkipSpaceAt (global.get $ptr)))
@@ -205,8 +216,10 @@
           (local.set $member (i32.eq (local.get $c) (i32.const ".")))
           (local.set $decl (i32.const 0))
           (br $token))
+        (local.set $triple (i32.shr_u (local.get $quote) (i32.const 9)))
         (local.set $status
-          (call $pyStringBody (local.get $quote) (local.get $raw) (i32.const 0)
+          (call $pyStringBody (i32.and (local.get $quote) (i32.const 255))
+            (i32.and (i32.shr_u (local.get $quote) (i32.const 8)) (i32.const 1)) (i32.const 0)
             (local.get $triple) (local.get $triple) (i32.const 6) (local.get $lhs) (i32.const 0)))
         (if
           (i32.or (i32.eq (local.get $status) (i32.const 1))

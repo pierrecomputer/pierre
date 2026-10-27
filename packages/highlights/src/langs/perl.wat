@@ -181,12 +181,11 @@
         (local.set $c (i32.load8_u (global.get $ptr)))
         (if (i32.eq (local.get $c) (local.get $close))
           (then
+            (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
             (if (local.get $depth)
               (then
                 (local.set $depth (i32.sub (local.get $depth) (i32.const 1)))
-                (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
                 (br $scan)))
-            (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
             (local.set $status (i32.const 1))
             (br $done)))
         (if
@@ -311,6 +310,8 @@
     (local $lhs i32)
     (local $rhs i32)
     (local $p i32)
+    (local $pc i32)
+    (local $path i32)
     (local $kind i32)
     (local $hl i32)
     (local $status i32)
@@ -694,6 +695,12 @@
                 (local.set $decl (i32.shr_u (local.get $kind) (i32.const 8)))
                 (local.set $operand (i32.ne (local.get $hl) (enum.get $Token.variable.special))))
               (else
+                (local.set $pc (call $perlByte (local.get $p)))
+                (local.set $path
+                  (i32.and
+                    (i32.lt_u (i32.add (local.get $rhs) (i32.const 1)) (global.get $end))
+                    (i32.eq (i32.load16_u (local.get $rhs)) (i32.const "::"))))
+                (local.set $operand (i32.const 0))
                 (if (local.get $decl)
                   (then
                     (local.set $hl
@@ -702,15 +709,8 @@
                         (enum.get $Token.namespace)
                         (i32.eq (local.get $decl) (i32.const 1))))
                     ;; a `::` path keeps the head open
-                    (if
-                      (i32.eqz
-                        (i32.and
-                          (i32.eq (call $perlByte (local.get $rhs)) (i32.const ":"))
-                          (i32.eq
-                            (call $perlByte (i32.add (local.get $rhs) (i32.const 1)))
-                            (i32.const ":"))))
-                      (then (local.set $decl (i32.const 0))))
-                    (local.set $operand (i32.const 0)))
+                    (if (i32.eqz (local.get $path))
+                      (then (local.set $decl (i32.const 0)))))
                   (else
                     (if (i32.eq (local.get $member) (i32.const 1))
                       (then
@@ -718,29 +718,19 @@
                           (select
                             (enum.get $Token.function.method)
                             (enum.get $Token.property)
-                            (i32.eq (call $perlByte (local.get $p)) (i32.const "("))))
-                        (local.set $operand (i32.const 0)))
+                            (i32.eq (local.get $pc) (i32.const "(")))))
                       (else
                         ;; `Foo::Bar` is a package, `Foo::bar(` a function
-                        (if
-                          (i32.and
-                            (i32.eq (call $perlByte (local.get $rhs)) (i32.const ":"))
-                            (i32.eq
-                              (call $perlByte (i32.add (local.get $rhs) (i32.const 1)))
-                              (i32.const ":")))
-                          (then
-                            (local.set $hl (enum.get $Token.namespace))
-                            (local.set $operand (i32.const 0)))
+                        (if (local.get $path)
+                          (then (local.set $hl (enum.get $Token.namespace)))
                           (else
-                            (if (i32.eq (call $perlByte (local.get $p)) (i32.const "("))
+                            (if (i32.eq (local.get $pc) (i32.const "("))
                               (then
                                 (local.set $hl (enum.get $Token.function))
                                 (local.set $operand (i32.const 1)))
                               (else
                                 (if (call $lexIsConstCase (local.get $lhs) (local.get $rhs))
-                                  (then
-                                    (local.set $hl (enum.get $Token.constant))
-                                    (local.set $operand (i32.const 0)))
+                                  (then (local.set $hl (enum.get $Token.constant)))
                                   (else
                                     (if
                                       (i32.le_u
@@ -751,33 +741,27 @@
                                           (select
                                             (enum.get $Token.namespace)
                                             (enum.get $Token.type)
-                                            (i32.eq (local.get $member) (i32.const 2))))
-                                        (local.set $operand (i32.const 0)))
+                                            (i32.eq (local.get $member) (i32.const 2)))))
                                       (else
                                         ;; a bare lowercase word before `=>` or alone
                                         ;; inside `{}` is a hash key; otherwise it
                                         ;; names a function
-                                        (if
-                                          (i32.or
-                                            (i32.and
-                                              (i32.eq
-                                                (call $perlByte (local.get $p))
-                                                (i32.const "="))
-                                              (i32.eq
-                                                (call $perlByte
-                                                  (i32.add (local.get $p) (i32.const 1)))
-                                                (i32.const ">")))
-                                            (i32.and
-                                              (i32.eq
-                                                (call $perlByte (local.get $p))
-                                                (i32.const "}"))
-                                              (i32.eq
-                                                (i32.load8_u
-                                                  (i32.sub (local.get $lhs) (i32.const 1)))
-                                                (i32.const "{"))))
-                                          (then
-                                            (local.set $hl (enum.get $Token.string.special.symbol)))
-                                          (else (local.set $hl (enum.get $Token.function))))))
+                                        (local.set $hl
+                                          (select
+                                            (enum.get $Token.string.special.symbol)
+                                            (enum.get $Token.function)
+                                            (i32.or
+                                              (i32.and
+                                                (i32.lt_u
+                                                  (i32.add (local.get $p) (i32.const 1))
+                                                  (global.get $end))
+                                                (i32.eq (i32.load16_u (local.get $p)) (i32.const "=>")))
+                                              (i32.and
+                                                (i32.eq (local.get $pc) (i32.const "}"))
+                                                (i32.eq
+                                                  (i32.load8_u
+                                                    (i32.sub (local.get $lhs) (i32.const 1)))
+                                                  (i32.const "{"))))))))
                                     (local.set $operand (i32.const 1))))))))))))))
             (br $tok)))
 

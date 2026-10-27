@@ -84,7 +84,9 @@
         (call $emitGap (local.get $gap) (global.get $ptr))
         (br_if $done (i32.ge_u (global.get $ptr) (global.get $end)))
         (local.set $lhs (global.get $ptr))
+        ;; every token but a comment clears the line head
         (local.set $atHead (local.get $lineHead))
+        (local.set $lineHead (i32.const 0))
         (local.set $c (i32.load8_u (global.get $ptr)))
         (local.set $c2
           (select
@@ -117,6 +119,7 @@
                   (then (local.set $hl (enum.get $Token.comment.doc))))
                 ;; Haskell block comments nest, unlike C-style comments.
                 (call $lexNestedBlockComment (i32.const "{-") (i32.const "-}") (local.get $hl))))
+            (local.set $lineHead (local.get $atHead))
             (br $next)))
         (block $notComment
           (if
@@ -156,11 +159,11 @@
                         (i32.eq (i32.load8_u (local.get $p)) (i32.const "$"))))
                     (then (local.set $hl (enum.get $Token.comment.doc))))))
               (call $lexLineComment (i32.const 2) (local.get $hl))
+              (local.set $lineHead (local.get $atHead))
               (br $next))))
         (if (i32.eq (local.get $c) (i32.const 34))
           (then
             (call $lexString (i32.const 34) (i32.const 0) (enum.get $Token.string))
-            (local.set $lineHead (i32.const 0))
             (br $next)))
         (if
           (if (result i32) (i32.eq (local.get $c) (i32.const 39))
@@ -168,21 +171,18 @@
             (else (i32.const 0)))
           (then
             (call $lexString (i32.const 39) (i32.const 0) (enum.get $Token.string.special))
-            (local.set $lineHead (i32.const 0))
             (br $next)))
         ;; a name-quoting tick: the constructor or name after it lexes as usual
         (if (i32.eq (local.get $c) (i32.const 39))
           (then
             (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
             (call $emitTok (enum.get $Token.punctuation.special) (local.get $lhs) (global.get $ptr))
-            (local.set $lineHead (i32.const 0))
             (br $next)))
         (if (i32.eq (local.get $c) (i32.const "`"))
           (then
             (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
             (call $emitTok (enum.get $Token.punctuation.special) (local.get $lhs) (global.get $ptr))
             (local.set $inBacktick (i32.eqz (local.get $inBacktick)))
-            (local.set $lineHead (i32.const 0))
             (br $next)))
         (if
           (i32.or
@@ -191,11 +191,13 @@
           (then
             (call $lexScanNumber)
             (call $emitTok (enum.get $Token.number) (local.get $lhs) (global.get $ptr))
-            (local.set $lineHead (i32.const 0))
             (br $next)))
         ;; `$` is an operator here, not an identifier byte as in the shared
         ;; predicate, so `f $ x` keeps its application operator
-        (if (i32.and (call $lexIsIdentStart (local.get $c)) (i32.ne (local.get $c) (i32.const "$")))
+        (if
+          (i32.or
+            (i32.le_u (i32.sub (i32.or (local.get $c) (i32.const 32)) (i32.const "a")) (i32.const 25))
+            (i32.or (i32.eq (local.get $c) (i32.const "_")) (i32.ge_u (local.get $c) (i32.const 128))))
           (then
             ;; identifier bytes plus prime, which marks variants like foldl';
             ;; 16 bytes per step
@@ -213,13 +215,13 @@
                       (i32.and
                         (local.get $importLine)
                         (i32.le_u
-                          (i32.sub (i32.load8_u (local.get $lhs)) (i32.const "A"))
+                          (i32.sub (local.get $c) (i32.const "A"))
                           (i32.const 25)))))
                   (then (local.set $hl (enum.get $Token.type)))
                   (else
                     (if
                       (i32.le_u
-                        (i32.sub (i32.load8_u (local.get $lhs)) (i32.const "A"))
+                        (i32.sub (local.get $c) (i32.const "A"))
                         (i32.const 25))
                       (then (local.set $hl (enum.get $Token.constructor)))
                       (else
@@ -250,7 +252,6 @@
                   (then (local.set $importLine (i32.const 1)))
                   (else (local.set $wantType (i32.const 0))))))
             (local.set $wantFunction (i32.gt_s (local.get $g) (i32.const 255)))
-            (local.set $lineHead (i32.const 0))
             (br $next)))
 
         ;; $braces is a stack of open brackets, one bit each with 1 for `{`,
@@ -267,7 +268,6 @@
                   (i32.or
                     (i32.shl (local.get $braces) (i32.const 1))
                     (i32.eq (local.get $c) (i32.const "{"))))))
-            (local.set $lineHead (i32.const 0))
             (br $next)))
         (if (i32.or (i32.eq (local.get $c) (i32.const ",")) (i32.eq (local.get $c) (i32.const ";")))
           (then
@@ -278,7 +278,6 @@
               (global.get $ptr))
             (if (i32.and (local.get $braces) (i32.const 1))
               (then (local.set $typeMode (i32.const 0))))
-            (local.set $lineHead (i32.const 0))
             (br $next)))
         (if (call $hsIsSymbol (local.get $c))
           (then
@@ -300,14 +299,12 @@
             (if
               (i32.and
                 (i32.eq (local.get $n) (i32.const 1))
-                (i32.eq (i32.load8_u (local.get $lhs)) (i32.const "=")))
+                (i32.eq (local.get $c) (i32.const "=")))
               (then
                 (local.set $typeMode (i32.const 0))
                 (local.set $wantType (i32.const 0))))
-            (local.set $lineHead (i32.const 0))
             (br $next)))
         (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
         (call $emitTok (enum.get $Token.none) (local.get $lhs) (global.get $ptr))
-        (local.set $lineHead (i32.const 0))
         (br $next))))
 )

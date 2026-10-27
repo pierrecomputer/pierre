@@ -276,9 +276,9 @@
                   (call $emitTok (enum.get $Token.preproc) (local.get $lhs) (global.get $ptr))
                   (local.set $php (i32.const 6))
                   (br $construct)))
+              (local.set $p (call $templateByte (i32.add (local.get $lhs) (i32.const 2))))
               (if (i32.eq (local.get $c) (i32.const "{"))
                 (then
-                  (local.set $p (call $templateByte (i32.add (local.get $lhs) (i32.const 2))))
                   (if (i32.eq (local.get $q) (i32.const "!"))
                     (then
                       (br_if $plain (i32.ne (local.get $p) (i32.const "!")))
@@ -301,9 +301,7 @@
               (if
                 (i32.or
                   (i32.eq (local.get $q) (i32.const "@"))
-                  (i32.and
-                    (i32.eq (local.get $q) (i32.const "{"))
-                    (i32.eq (call $templateByte (i32.add (local.get $lhs) (i32.const 2))) (i32.const "{"))))
+                  (i32.and (i32.eq (local.get $q) (i32.const "{")) (i32.eq (local.get $p) (i32.const "{"))))
                 (then
                   (global.set $ptr
                     (i32.add (local.get $lhs) (select (i32.const 3) (i32.const 2) (i32.eq (local.get $q) (i32.const "{")))))

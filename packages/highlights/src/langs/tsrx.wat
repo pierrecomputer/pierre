@@ -127,12 +127,11 @@
       (then (return (i32.const 0))))
     (if (i32.ne (i32.load16_u (local.get $p)) (i32.const "</"))
       (then (return (i32.const 0))))
+    ;; the name after `</`: `script` for kind 1, `style` for kind 2
     (if
-      (i32.ne
-        (call $tsrxRawKind
-          (i32.add (local.get $p) (i32.const 2))
-          (i32.add (local.get $p) (local.get $n)))
-        (local.get $kind))
+      (i64.ne
+        (call $tsrxWord (i32.add (local.get $p) (i32.const 2)) (i32.sub (local.get $n) (i32.const 2)))
+        (select (i64.const "script") (i64.const "style") (i32.eq (local.get $kind) (i32.const 1))))
       (then (return (i32.const 0))))
     (if (i32.ge_u (i32.add (local.get $p) (local.get $n)) (global.get $end))
       (then (return (i32.const 1))))
@@ -222,6 +221,7 @@
     (local $saveEnd i32)
     (local $saveStreaming i32)
     (local $saveDialect i32)
+    (local $slot i32)
     (local.set $from (global.get $ptr))
     (local.set $p (local.get $from))
     (block $done
@@ -244,7 +244,8 @@
         (global.set $end (local.get $p))
         (global.set $streaming (i32.const 0))
         (global.set $cssDialect (i32.const 0))
-        (call $jsxSetTopTarget (call $hlCssImpl (call $jsxTopTarget)))
+        (local.set $slot (call $jsxTopSlot))
+        (i32.store offset=4 (local.get $slot) (call $hlCssImpl (i32.load offset=4 (local.get $slot))))
         (global.set $cssDialect (local.get $saveDialect))
         (global.set $streaming (local.get $saveStreaming))
         (global.set $end (local.get $saveEnd))

@@ -186,32 +186,17 @@
             (br $next)))
         (global.set $ptr (i32.add (local.get $p) (i32.const 1)))
         (local.set $hl (enum.get $Token.operator))
-        (if
-          (i32.or
-            (i32.eq (local.get $c) (i32.const "("))
-            (i32.or
-              (i32.eq (local.get $c) (i32.const "["))
-              (i32.eq (local.get $c) (i32.const "{"))))
+        (if (byteset.get "([{" (local.get $c))
           (then
             (local.set $depth
               (i32.add (local.get $depth) (i32.lt_u (local.get $depth) (i32.const 4095))))
             (local.set $hl (enum.get $Token.punctuation.bracket))))
-        (if
-          (i32.or
-            (i32.eq (local.get $c) (i32.const ")"))
-            (i32.or
-              (i32.eq (local.get $c) (i32.const "]"))
-              (i32.eq (local.get $c) (i32.const "}"))))
+        (if (byteset.get ")]}" (local.get $c))
           (then
             (local.set $depth
               (i32.sub (local.get $depth) (i32.ne (local.get $depth) (i32.const 0))))
             (local.set $hl (enum.get $Token.punctuation.bracket))))
-        (if
-          (i32.or
-            (i32.eq (local.get $c) (i32.const ";"))
-            (i32.or
-              (i32.eq (local.get $c) (i32.const ":"))
-              (i32.eq (local.get $c) (i32.const ","))))
+        (if (byteset.get ",:;" (local.get $c))
           (then (local.set $hl (enum.get $Token.punctuation.delimiter))))
         (if (i32.eq (local.get $c) (i32.const "."))
           (then
@@ -433,16 +418,7 @@
                   (loop $text
                     (br_if $textEnd (i32.ge_u (global.get $ptr) (global.get $end)))
                     (local.set $c (i32.load8_u (global.get $ptr)))
-                    (br_if $textEnd
-                      (i32.or
-                        (i32.or
-                          (i32.eq (local.get $c) (i32.const "<"))
-                          (i32.eq (local.get $c) (i32.const "&")))
-                        (i32.or
-                          (i32.eq (local.get $c) (i32.const "@"))
-                          (i32.or
-                            (i32.eq (local.get $c) (i32.const "{"))
-                            (i32.eq (local.get $c) (i32.const "}"))))))
+                    (br_if $textEnd (byteset.get "&<@{}" (local.get $c)))
                     (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
                     (br $text))))
               (else

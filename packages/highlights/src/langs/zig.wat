@@ -239,9 +239,14 @@
     (local $word i32)
     (local $wantBreakLabel i32)
     (local $wantPayloadParen i32)
+    (local $wide i32)
     (call $lexEmitLeadingContinuation)
     (block $done
       (loop $next
+        ;; token tails, innermost first: $tokType ends a type annotation,
+        ;; and $tok emits [$lhs,$ptr) as $hl and ends a member access
+        (block $tok
+        (block $tokType
         (local.set $gap (global.get $ptr))
         (call $scanWhitespace)
         (call $emitGap (local.get $gap) (global.get $ptr))
@@ -359,10 +364,7 @@
                   (i32.eq (i32.sub (global.get $ptr) (local.get $lhs)) (i32.const 8))
                   (i64.eq (i64.load (local.get $lhs)) (i64.const "@cImport"))))
               (then (local.set $hl (enum.get $Token.keyword.import))))
-            (call $emitTok (local.get $hl) (local.get $lhs) (global.get $ptr))
-            (local.set $expectType (i32.const 0))
-            (local.set $prevDot (i32.const 0))
-            (br $next)))
+            (br $tokType)))
 
         (if (call $lexIsDigit (local.get $c))
           (then
@@ -414,17 +416,13 @@
                   (i32.eq (local.get $c) (i32.const "p"))))
               (then
                 (local.set $p (i32.add (global.get $ptr) (i32.const 1)))
-                (if
-                  (i32.or
-                    (i32.eq (call $zigByte (local.get $p)) (i32.const "+"))
-                    (i32.eq (call $zigByte (local.get $p)) (i32.const "-")))
+                (local.set $q (call $zigByte (local.get $p)))
+                (if (i32.or (i32.eq (local.get $q) (i32.const "+")) (i32.eq (local.get $q) (i32.const "-")))
                   (then (local.set $p (i32.add (local.get $p) (i32.const 1)))))
                 (if (call $lexIsDigit (call $zigByte (local.get $p)))
                   (then (global.set $ptr (call $zigScanDigits (local.get $p) (i32.const 10)))))))
-            (call $emitTok (enum.get $Token.number) (local.get $lhs) (global.get $ptr))
-            (local.set $prevDot (i32.const 0))
-            (local.set $expectType (i32.const 0))
-            (br $next)))
+            (local.set $hl (enum.get $Token.number))
+            (br $tokType)))
 
         (if (call $zigIsIdentStart (local.get $c))
           (then
@@ -449,14 +447,11 @@
                   (then (local.set $wantBreakLabel (i32.const 1))))
                 (if (i32.eq (local.get $word) (i32.const 8))
                   (then (local.set $payloadReady (i32.const 1))))
-                (call $emitTok (local.get $hl) (local.get $lhs) (global.get $ptr))
-                (local.set $prevDot (i32.const 0))
-                (if
+                (br_if $tokType
                   (i32.or
                     (i32.eq (local.get $hl) (enum.get $Token.type.builtin))
-                    (i32.eq (local.get $hl) (enum.get $Token.constant.builtin)))
-                  (then (local.set $expectType (i32.const 0))))
-                (br $next)))
+                    (i32.eq (local.get $hl) (enum.get $Token.constant.builtin))))
+                (br $tok)))
 
             (local.set $p (call $lexSkipSpaceAt (global.get $ptr)))
             ;; the byte after the name's blanks
@@ -566,16 +561,13 @@
                     (i32.eq (i32.and (i32.load (local.get $lhs)) (i32.const 0xffffff)) (i32.const "nan"))
                     (i32.eq (i32.and (i32.load (local.get $lhs)) (i32.const 0xffffff)) (i32.const "inf")))))
               (then (local.set $hl (enum.get $Token.number))))
-            (call $emitTok (local.get $hl) (local.get $lhs) (global.get $ptr))
             (local.set $expectFunc (i32.const 0))
             (local.set $expectLabel (i32.const 0))
-            (local.set $expectType (i32.const 0))
             (local.set $expectVar (i32.const 0))
-            (local.set $prevDot (i32.const 0))
             ;; a name consumes parameter position; keyword modifiers such as
             ;; `comptime` take the keyword path above and leave it alone
             (global.set $sigPattern (i32.const 0))
-            (br $next)))
+            (br $tokType)))
 
         (if (byteset.get "()[]{}" (local.get $c))
           (then
@@ -642,9 +634,8 @@
                                 (global.set $sigObscure
                                   (i32.sub (global.get $sigObscure) (i32.const 1)))))))))))))
             (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
-            (call $emitTok (enum.get $Token.punctuation.bracket) (local.get $lhs) (global.get $ptr))
-            (local.set $prevDot (i32.const 0))
-            (br $next)))
+            (local.set $hl (enum.get $Token.punctuation.bracket))
+            (br $tok)))
 
         ;; Arrows are delimiters in Zig's highlight query.
         (if
@@ -657,14 +648,10 @@
               (i32.eq (local.get $p) (i32.const ">"))))
           (then
             (global.set $ptr (i32.add (global.get $ptr) (i32.const 2)))
-            (call $emitTok
-              (enum.get $Token.punctuation.delimiter)
-              (local.get $lhs)
-              (global.get $ptr))
             (if (i32.eq (local.get $c) (i32.const "="))
               (then (local.set $payloadReady (i32.const 1))))
-            (local.set $prevDot (i32.const 0))
-            (br $next)))
+            (local.set $hl (enum.get $Token.punctuation.delimiter))
+            (br $tok)))
 
         (if (i32.eq (local.get $c) (i32.const "."))
           (then
@@ -677,12 +664,8 @@
                 (i32.eq (call $zigByte (i32.add (global.get $ptr) (i32.const 2))) (i32.const ".")))
               (then
                 (global.set $ptr (i32.add (global.get $ptr) (i32.const 3)))
-                (call $emitTok
-                  (enum.get $Token.variable.special)
-                  (local.get $lhs)
-                  (global.get $ptr))
-                (local.set $prevDot (i32.const 0))
-                (br $next)))
+                (local.set $hl (enum.get $Token.variable.special))
+                (br $tok)))
             (if
               (i32.or
                 (i32.eq (local.get $p) (i32.const "."))
@@ -691,9 +674,8 @@
                   (i32.eq (local.get $p) (i32.const "?"))))
               (then
                 (global.set $ptr (i32.add (global.get $ptr) (i32.const 2)))
-                (call $emitTok (enum.get $Token.operator) (local.get $lhs) (global.get $ptr))
-                (local.set $prevDot (i32.const 0))
-                (br $next)))
+                (local.set $hl (enum.get $Token.operator))
+                (br $tok)))
             (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
             (call $emitTok
               (enum.get $Token.punctuation.delimiter)
@@ -729,11 +711,6 @@
                           (then (local.set $expectType (i32.const 1))))))))))
             (local.set $labelColon (i32.const 0))
             (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
-            (call $emitTok
-              (enum.get $Token.punctuation.delimiter)
-              (local.get $lhs)
-              (global.get $ptr))
-            (local.set $prevDot (i32.const 0))
             ;; a comma returns to parameter position; a top-level `;` proves
             ;; the marked list was not a parameter list after all
             (global.set $sigPattern (i32.eq (local.get $c) (i32.const ",")))
@@ -742,7 +719,8 @@
                 (i32.eq (local.get $c) (i32.const ";"))
                 (i32.and (call $sigActive) (i32.eqz (global.get $sigObscure))))
               (then (call $sigUnmark)))
-            (br $next)))
+            (local.set $hl (enum.get $Token.punctuation.delimiter))
+            (br $tok)))
 
         ;; Payload captures use bracket-colored bars, unlike bitwise operators.
         (if
@@ -757,11 +735,10 @@
                   (i32.ne (local.get $p) (i32.const "="))))))
           (then
             (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
-            (call $emitTok (enum.get $Token.punctuation.bracket) (local.get $lhs) (global.get $ptr))
             (local.set $payload (i32.eqz (local.get $payload)))
             (local.set $payloadReady (i32.const 0))
-            (local.set $prevDot (i32.const 0))
-            (br $next)))
+            (local.set $hl (enum.get $Token.punctuation.bracket))
+            (br $tok)))
 
         (if (call $zigIsOp (local.get $c))
           (then
@@ -780,82 +757,68 @@
                       (i32.eq (local.get $c) (i32.const "/"))
                       (i32.eq (local.get $p) (i32.const "/")))))
                 (local.set $q (call $zigByte (i32.add (global.get $ptr) (i32.const 2))))
-                (local.set $base (i32.const 1))
-                (if
+                ;; $c is an operator byte, so `*`..`-` holds only `*`, `+`,
+                ;; and `-`: $base marks the wrapping and saturating `+%`,
+                ;; `-|`, and `*%`, and $wide marks `<<` and `>>`; both take
+                ;; a trailing `=`
+                (local.set $base
                   (i32.and
-                    (i32.eq (local.get $p) (i32.const "="))
-                    (i32.and
-                      (i32.ne (local.get $c) (i32.const "?"))
-                      (i32.ne (local.get $c) (i32.const "~"))))
-                  (then (local.set $base (i32.const 2))))
-                (if
-                  (i32.or
-                    (i32.and
-                      (i32.eq (local.get $c) (i32.const "*"))
-                      (i32.eq (local.get $p) (i32.const "*")))
-                    (i32.or
+                    (i32.le_u (i32.sub (local.get $c) (i32.const "*")) (i32.const 3))
+                    (i32.or (i32.eq (local.get $p) (i32.const "%")) (i32.eq (local.get $p) (i32.const "|")))))
+                (local.set $wide
+                  (i32.and
+                    (i32.eq (local.get $p) (local.get $c))
+                    (i32.eq (i32.or (local.get $c) (i32.const 2)) (i32.const ">"))))
+                (global.set $ptr
+                  (i32.add
+                    (global.get $ptr)
+                    (i32.add
+                      (i32.add
+                        (i32.const 1)
+                        (i32.or
+                          (i32.or (local.get $base) (local.get $wide))
+                          (i32.or
+                            (i32.and
+                              (i32.eq (local.get $p) (i32.const "="))
+                              (i32.and
+                                (i32.ne (local.get $c) (i32.const "?"))
+                                (i32.ne (local.get $c) (i32.const "~"))))
+                            ;; `**`, `++`, and `||`
+                            (i32.and
+                              (i32.eq (local.get $p) (local.get $c))
+                              (i32.or
+                                (i32.le_u (i32.sub (local.get $c) (i32.const "*")) (i32.const 1))
+                                (i32.eq (local.get $c) (i32.const "|")))))))
                       (i32.and
-                        (i32.eq (local.get $c) (i32.const "+"))
-                        (i32.eq (local.get $p) (i32.const "+")))
-                      (i32.and
-                        (i32.eq (local.get $c) (i32.const "|"))
-                        (i32.eq (local.get $p) (i32.const "|")))))
-                  (then (local.set $base (i32.const 2))))
-                (if
-                  (i32.and
-                    (i32.or
-                      (i32.eq (local.get $c) (i32.const "*"))
-                      (i32.or
-                        (i32.eq (local.get $c) (i32.const "+"))
-                        (i32.eq (local.get $c) (i32.const "-"))))
-                    (i32.or
-                      (i32.eq (local.get $p) (i32.const "%"))
-                      (i32.eq (local.get $p) (i32.const "|"))))
-                  (then
-                    (local.set $base
-                      (select
-                        (i32.const 3)
-                        (i32.const 2)
+                        (i32.or (local.get $base) (local.get $wide))
                         (i32.eq (local.get $q) (i32.const "="))))))
+                ;; `<<|` saturates, with an optional `=`
                 (if
                   (i32.and
-                    (i32.eq (local.get $c) (i32.const "<"))
-                    (i32.eq (local.get $p) (i32.const "<")))
+                    (i32.and (local.get $wide) (i32.eq (local.get $c) (i32.const "<")))
+                    (i32.eq (local.get $q) (i32.const "|")))
                   (then
-                    (local.set $base (i32.const 2))
-                    (if (i32.eq (local.get $q) (i32.const "="))
-                      (then (local.set $base (i32.const 3))))
-                    (if (i32.eq (local.get $q) (i32.const "|"))
-                      (then
-                        (local.set $base
-                          (select
-                            (i32.const 4)
-                            (i32.const 3)
-                            (i32.eq
-                              (call $zigByte (i32.add (global.get $ptr) (i32.const 3)))
-                              (i32.const "="))))))))
-                (if
-                  (i32.and
-                    (i32.eq (local.get $c) (i32.const ">"))
-                    (i32.eq (local.get $p) (i32.const ">")))
-                  (then
-                    (local.set $base
-                      (select
-                        (i32.const 3)
-                        (i32.const 2)
-                        (i32.eq (local.get $q) (i32.const "="))))))
-                (global.set $ptr (i32.add (global.get $ptr) (local.get $base)))
+                    (global.set $ptr
+                      (i32.add
+                        (global.get $ptr)
+                        (i32.add
+                          (i32.const 1)
+                          (i32.eq
+                            (call $zigByte (i32.add (global.get $ptr) (i32.const 1)))
+                            (i32.const "=")))))))
                 (br_if $op
                   (i32.and
                     (i32.lt_u (global.get $ptr) (global.get $end))
                     (call $zigIsOp (i32.load8_u (global.get $ptr)))))))
-            (call $emitTok (enum.get $Token.operator) (local.get $lhs) (global.get $ptr))
-            (local.set $prevDot (i32.const 0))
-            (br $next)))
+            (local.set $hl (enum.get $Token.operator))
+            (br $tok)))
 
         ;; Invalid bytes remain lossless and always advance.
         (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
-        (call $emitTok (enum.get $Token.none) (local.get $lhs) (global.get $ptr))
+        (local.set $hl (enum.get $Token.none))
+        (br $tok))
+        (local.set $expectType (i32.const 0)))
+        (call $emitTok (local.get $hl) (local.get $lhs) (global.get $ptr))
         (local.set $prevDot (i32.const 0))
         (br $next))))
 )

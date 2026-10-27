@@ -242,7 +242,10 @@
         (local.set $c (i32.load8_u (global.get $ptr)))
         (local.set $c2 (call $kotlinByte (i32.add (global.get $ptr) (i32.const 1))))
         (local.set $c3 (call $kotlinByte (i32.add (global.get $ptr) (i32.const 2))))
-
+        ;; a branch that leaves $tailE ends any pending declaration head and
+        ;; clears $member; one that leaves $tailM only clears $member
+        (block $tailM
+        (block $tailE
         (if
           (i32.and (i32.eq (local.get $c) (i32.const "/")) (i32.eq (local.get $c2) (i32.const "/")))
           (then
@@ -277,8 +280,7 @@
             (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
             (call $emitTok (enum.get $Token.string) (local.get $lhs) (global.get $ptr))
             (local.set $seg (global.get $ptr))
-            (local.set $member (i32.const 0))
-            (br $next)))
+            (br $tailM)))
         (if (i32.eq (local.get $c) (i32.const 39))
           (then
             (call $lexString (i32.const 39) (i32.const 0) (enum.get $Token.string))
@@ -309,7 +311,8 @@
                       (i32.and (i32.shr_u (local.get $kind) (i32.const 8)) (i32.const 3)))
                     (local.set $fnAngle (i32.const 0)))))
               (else
-                (local.set $p (call $lexSkipSpaceAt (local.get $rhs)))
+                ;; the byte after the name and its blanks
+                (local.set $c2 (call $kotlinByte (call $lexSkipSpaceAt (local.get $rhs))))
                 (if (local.get $expect)
                   (then
                     (if (local.get $fnAngle)
@@ -322,10 +325,10 @@
                           (i32.and
                             (i32.eq (local.get $expect) (i32.const 1))
                             (i32.or
-                              (i32.eq (call $kotlinByte (local.get $p)) (i32.const "."))
+                              (i32.eq (local.get $c2) (i32.const "."))
                               (i32.or
-                                (i32.eq (call $kotlinByte (local.get $p)) (i32.const "<"))
-                                (i32.eq (call $kotlinByte (local.get $p)) (i32.const "?")))))
+                                (i32.eq (local.get $c2) (i32.const "<"))
+                                (i32.eq (local.get $c2) (i32.const "?")))))
                           (then
                             ;; `fun Receiver.name` or `fun List<T>.name`: the
                             ;; receiver type; the head still expects its name
@@ -342,9 +345,9 @@
                     ;; `launch {` - but a capitalized `Name {` is a type
                     (if
                       (i32.or
-                        (i32.eq (call $kotlinByte (local.get $p)) (i32.const "("))
+                        (i32.eq (local.get $c2) (i32.const "("))
                         (i32.and
-                          (i32.eq (call $kotlinByte (local.get $p)) (i32.const "{"))
+                          (i32.eq (local.get $c2) (i32.const "{"))
                           (i32.or
                             (local.get $member)
                             (i32.gt_u
@@ -370,8 +373,7 @@
                                   (then (local.set $hl (enum.get $Token.type)))
                                   (else (local.set $hl (enum.get $Token.variable))))))))))))))
             (call $emitTok (local.get $hl) (local.get $lhs) (local.get $rhs))
-            (local.set $member (i32.const 0))
-            (br $next)))
+            (br $tailM)))
 
         (if
           (i32.or
@@ -380,8 +382,7 @@
           (then
             (call $lexScanNumber)
             (call $emitTok (enum.get $Token.number) (local.get $lhs) (global.get $ptr))
-            (local.set $member (i32.const 0))
-            (br $next)))
+            (br $tailM)))
 
         (if (byteset.get "()[]{}" (local.get $c))
           (then
@@ -403,16 +404,10 @@
                         (local.set $strKind (local.get $interpKind))
                         (local.set $interpKind (i32.const 0))
                         (local.set $seg (global.get $ptr))
-                        (local.set $member (i32.const 0))
-                        (local.set $expect (i32.const 0))
-                        (local.set $fnAngle (i32.const 0))
-                        (br $next)))))))
+                        (br $tailE)))))))
             (call $emitTok (enum.get $Token.punctuation.bracket) (local.get $lhs) (global.get $ptr))
-            (local.set $member (i32.const 0))
             ;; a bracket ends any pending declaration head
-            (local.set $expect (i32.const 0))
-            (local.set $fnAngle (i32.const 0))
-            (br $next)))
+            (br $tailE)))
         (if (i32.or (i32.eq (local.get $c) (i32.const ",")) (i32.eq (local.get $c) (i32.const ";")))
           (then
             (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
@@ -420,14 +415,10 @@
               (enum.get $Token.punctuation.delimiter)
               (local.get $lhs)
               (global.get $ptr))
-            (local.set $member (i32.const 0))
             ;; a comma separates type parameters of a pending head; anywhere
             ;; else it and `;` end the head
-            (if (i32.or (i32.eqz (local.get $fnAngle)) (i32.eq (local.get $c) (i32.const ";")))
-              (then
-                (local.set $expect (i32.const 0))
-                (local.set $fnAngle (i32.const 0))))
-            (br $next)))
+            (br_if $tailE (i32.or (i32.eqz (local.get $fnAngle)) (i32.eq (local.get $c) (i32.const ";"))))
+            (br $tailM)))
         (if (i32.eq (local.get $c) (i32.const ":"))
           (then
             (global.set $ptr
@@ -470,22 +461,17 @@
           (then
             (block $opDone
               (loop $op
-                (br_if $opDone (i32.eqz (call $kotlinIsOp (call $kotlinByte (global.get $ptr)))))
+                (local.set $c2 (call $kotlinByte (global.get $ptr)))
+                (br_if $opDone (i32.eqz (call $kotlinIsOp (local.get $c2))))
                 ;; a comment opener ends the run
+                (local.set $c3 (call $kotlinByte (i32.add (global.get $ptr) (i32.const 1))))
                 (br_if $opDone
                   (i32.and
-                    (i32.eq (call $kotlinByte (global.get $ptr)) (i32.const "/"))
-                    (i32.or
-                      (i32.eq
-                        (call $kotlinByte (i32.add (global.get $ptr) (i32.const 1)))
-                        (i32.const "/"))
-                      (i32.eq
-                        (call $kotlinByte (i32.add (global.get $ptr) (i32.const 1)))
-                        (i32.const "*")))))
+                    (i32.eq (local.get $c2) (i32.const "/"))
+                    (i32.or (i32.eq (local.get $c3) (i32.const "/")) (i32.eq (local.get $c3) (i32.const "*")))))
                 (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
                 (br $op)))
             (call $emitTok (enum.get $Token.operator) (local.get $lhs) (global.get $ptr))
-            (local.set $member (i32.const 0))
             ;; a pending declaration head rides its `<`/`>` type parameters
             (if (local.get $expect)
               (then
@@ -502,12 +488,12 @@
                       (then (local.set $fnAngle (i32.sub (local.get $fnAngle) (i32.const 1)))))
                     (local.set $p (i32.add (local.get $p) (i32.const 1)))
                     (br $angle)))))
-            (br $next)))
+            (br $tailM)))
 
         (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
-        (call $emitTok (enum.get $Token.none) (local.get $lhs) (global.get $ptr))
-        (local.set $member (i32.const 0))
+        (call $emitTok (enum.get $Token.none) (local.get $lhs) (global.get $ptr)))
         (local.set $expect (i32.const 0))
-        (local.set $fnAngle (i32.const 0))
+        (local.set $fnAngle (i32.const 0)))
+        (local.set $member (i32.const 0))
         (br $next))))
 )

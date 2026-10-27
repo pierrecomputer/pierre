@@ -1,9 +1,6 @@
 (module
   (import "../common.wat")
 
-  (func $gleamByte (param $p i32) (result i32)
-    (select (i32.load8_u (local.get $p)) (i32.const 0) (i32.lt_u (local.get $p) (global.get $end))))
-
   ;; Group order is the dispatch order in $gleamWordHl below.
   (keyword-table $gleamWords $mem.gleamWords $mem.glslWords
     (group $Token.keyword.control ;; 1: control
@@ -66,8 +63,8 @@
         (br_if $done (i32.ge_u (global.get $ptr) (global.get $end)))
         (local.set $lhs (global.get $ptr))
         (local.set $c (i32.load8_u (global.get $ptr)))
-        (local.set $c2 (call $gleamByte (i32.add (global.get $ptr) (i32.const 1))))
-        (local.set $c3 (call $gleamByte (i32.add (global.get $ptr) (i32.const 2))))
+        (local.set $c2 (call $templateByte (i32.add (global.get $ptr) (i32.const 1))))
+        (local.set $c3 (call $templateByte (i32.add (global.get $ptr) (i32.const 2))))
 
         (if
           (i32.and (i32.eq (local.get $c) (i32.const "/")) (i32.eq (local.get $c2) (i32.const "/")))
@@ -92,7 +89,13 @@
             (call $emitTok (enum.get $Token.attribute) (local.get $lhs) (global.get $ptr))
             (br $next)))
 
-        (if (i32.and (call $lexIsIdentStart (local.get $c)) (i32.ne (local.get $c) (i32.const "$")))
+        ;; an identifier start other than `$`
+        (if
+          (i32.or
+            (i32.ge_u (local.get $c) (i32.const 0x80))
+            (i32.or
+              (i32.le_u (i32.sub (i32.or (local.get $c) (i32.const 32)) (i32.const "a")) (i32.const 25))
+              (i32.eq (local.get $c) (i32.const "_"))))
           (then
             (call $scanIdentRun (i32.const "_"))
             (local.set $rhs (global.get $ptr))
@@ -137,7 +140,7 @@
                                 (enum.get $Token.constructor)
                                 (enum.get $Token.type)
                                 (i32.and
-                                  (i32.eq (call $gleamByte (local.get $rhs)) (i32.const "("))
+                                  (i32.eq (call $templateByte (local.get $rhs)) (i32.const "("))
                                   (i32.eqz (local.get $typeCtx))))))
                           (else
                             (if (local.get $member)
@@ -146,17 +149,17 @@
                                   (select
                                     (enum.get $Token.function.method)
                                     (enum.get $Token.property)
-                                    (i32.eq (call $gleamByte (local.get $p)) (i32.const "(")))))
+                                    (i32.eq (call $templateByte (local.get $p)) (i32.const "(")))))
                               (else
-                                (if (i32.eq (call $gleamByte (local.get $rhs)) (i32.const "("))
+                                (if (i32.eq (call $templateByte (local.get $rhs)) (i32.const "("))
                                   (then (local.set $hl (enum.get $Token.function)))
                                   (else
                                     ;; `name:` labels arguments and fields
                                     (if
                                       (i32.and
-                                        (i32.eq (call $gleamByte (local.get $p)) (i32.const ":"))
+                                        (i32.eq (call $templateByte (local.get $p)) (i32.const ":"))
                                         (i32.ne
-                                          (call $gleamByte (i32.add (local.get $p) (i32.const 1)))
+                                          (call $templateByte (i32.add (local.get $p) (i32.const 1)))
                                           (i32.const ":")))
                                       (then (local.set $hl (enum.get $Token.variable.parameter)))
                                       (else (local.set $hl (enum.get $Token.variable))))))))))))))))
@@ -247,13 +250,13 @@
                 (br_if $opDone
                   (i32.eqz
                     (i32.or
-                      (call $gleamIsOp (call $gleamByte (global.get $ptr)))
-                      (i32.eq (call $gleamByte (global.get $ptr)) (i32.const ".")))))
+                      (call $gleamIsOp (call $templateByte (global.get $ptr)))
+                      (i32.eq (call $templateByte (global.get $ptr)) (i32.const ".")))))
                 (br_if $opDone
                   (i32.and
-                    (i32.eq (call $gleamByte (global.get $ptr)) (i32.const "/"))
+                    (i32.eq (call $templateByte (global.get $ptr)) (i32.const "/"))
                     (i32.eq
-                      (call $gleamByte (i32.add (global.get $ptr) (i32.const 1)))
+                      (call $templateByte (i32.add (global.get $ptr) (i32.const 1)))
                       (i32.const "/"))))
                 (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
                 (br $op)))

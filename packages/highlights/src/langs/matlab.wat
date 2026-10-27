@@ -1,8 +1,6 @@
 (module
   (import "../common.wat")
-
-  (func $matByte (param $p i32) (result i32)
-    (select (i32.load8_u (local.get $p)) (i32.const 0) (i32.lt_u (local.get $p) (global.get $end))))
+  (import "./abap.wat")
 
   ;; Group order is the dispatch order in $hlMatlab. The high byte of a
   ;; declaration value names what follows: 1 a function head, 2 a class name.
@@ -28,7 +26,7 @@
   (func $matRestBlank (param $p i32) (result i32)
     (local $c i32)
     (local.set $p (call $lexSkipSpaceAt (local.get $p)))
-    (local.set $c (call $matByte (local.get $p)))
+    (local.set $c (call $templateByte (local.get $p)))
     (i32.or
       (i32.ge_u (local.get $p) (global.get $end))
       (i32.or (i32.eq (local.get $c) (i32.const 10)) (i32.eq (local.get $c) (i32.const 13)))))
@@ -50,9 +48,9 @@
         (local.set $line (call $lexSkipSpaceAt (global.get $ptr)))
         (if
           (i32.and
-            (i32.eq (call $matByte (local.get $line)) (i32.const "%"))
+            (i32.eq (call $templateByte (local.get $line)) (i32.const "%"))
             (i32.and
-              (i32.eq (call $matByte (i32.add (local.get $line) (i32.const 1))) (i32.const "}"))
+              (i32.eq (call $templateByte (i32.add (local.get $line) (i32.const 1))) (i32.const "}"))
               (call $matRestBlank (i32.add (local.get $line) (i32.const 2)))))
           (then
             (global.set $ptr (i32.add (local.get $line) (i32.const 2)))
@@ -67,34 +65,6 @@
       (i32.const 2)
       (i32.const 2)
       (enum.get $Token.comment)))
-
-  ;; A quoted text or char array from $ptr: a doubled quote escapes itself,
-  ;; and the literal ends at the quote or the line break.
-  (func $matQuoted (param $q i32)
-    (local $seg i32)
-    (local $p i32)
-    (local.set $seg (global.get $ptr))
-    (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
-    (block $done
-      (loop $l
-        (local.set $p
-          (call $scanFindSpecial
-            (global.get $ptr)
-            (global.get $end)
-            (local.get $q)
-            (i32.const 0)
-            (i32.const 1)))
-        (global.set $ptr (local.get $p))
-        (br_if $done (i32.ge_u (local.get $p) (global.get $end)))
-        (br_if $done (i32.ne (i32.load8_u (local.get $p)) (local.get $q)))
-        (global.set $ptr (i32.add (local.get $p) (i32.const 1)))
-        (br_if $done (i32.ne (call $matByte (global.get $ptr)) (local.get $q)))
-        (call $emitTok (enum.get $Token.string) (local.get $seg) (local.get $p))
-        (global.set $ptr (i32.add (local.get $p) (i32.const 2)))
-        (call $emitTok (enum.get $Token.string.escape) (local.get $p) (global.get $ptr))
-        (local.set $seg (global.get $ptr))
-        (br $l)))
-    (call $emitTok (enum.get $Token.string) (local.get $seg) (global.get $ptr)))
 
   (func $matIsOp (param $c i32) (result i32)
     (byteset.get "!&*+-/:<=>\5c^|~" (local.get $c)))
@@ -152,7 +122,7 @@
         (br_if $done (i32.ge_u (global.get $ptr) (global.get $end)))
         (local.set $lhs (global.get $ptr))
         (local.set $c (i32.load8_u (global.get $ptr)))
-        (local.set $c2 (call $matByte (i32.add (global.get $ptr) (i32.const 1))))
+        (local.set $c2 (call $templateByte (i32.add (global.get $ptr) (i32.const 1))))
         (local.set $atHead (local.get $lineHead))
         (local.set $lineHead (i32.const 0))
 
@@ -173,7 +143,7 @@
             (i32.eq (local.get $c) (i32.const "."))
             (i32.and
               (i32.eq (local.get $c2) (i32.const "."))
-              (i32.eq (call $matByte (i32.add (global.get $ptr) (i32.const 2))) (i32.const "."))))
+              (i32.eq (call $templateByte (i32.add (global.get $ptr) (i32.const 2))) (i32.const "."))))
           (then
             (call $lexLineComment (i32.const 3) (enum.get $Token.comment))
             (br $next)))
@@ -189,7 +159,7 @@
               (then
                 (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
                 (call $emitTok (enum.get $Token.operator) (local.get $lhs) (global.get $ptr)))
-              (else (call $matQuoted (local.get $c))))
+              (else (call $abapQuoted (local.get $c))))
             (local.set $afterValue (i32.const 1))
             (local.set $member (i32.const 0))
             (br $next)))
@@ -209,12 +179,18 @@
             (local.set $member (i32.const 0))
             (br $next)))
 
-        (if (i32.and (call $lexIsIdentStart (local.get $c)) (i32.ne (local.get $c) (i32.const "$")))
+        ;; an identifier start other than `$`
+        (if
+          (i32.or
+            (i32.ge_u (local.get $c) (i32.const 0x80))
+            (i32.or
+              (i32.le_u (i32.sub (i32.or (local.get $c) (i32.const 32)) (i32.const "a")) (i32.const 25))
+              (i32.eq (local.get $c) (i32.const "_"))))
           (then
             (call $scanIdentRun (i32.const "_"))
             (local.set $rhs (global.get $ptr))
             (local.set $p (call $lexSkipSpaceAt (local.get $rhs)))
-            (local.set $pc (call $matByte (local.get $p)))
+            (local.set $pc (call $templateByte (local.get $p)))
             (local.set $kind
               (select
                 (i32.const -1)
@@ -345,7 +321,7 @@
           (then
             (block $opDone
               (loop $op
-                (br_if $opDone (i32.eqz (call $matIsOp (call $matByte (global.get $ptr)))))
+                (br_if $opDone (i32.eqz (call $matIsOp (call $templateByte (global.get $ptr)))))
                 (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
                 (br $op)))
             (call $emitTok (enum.get $Token.operator) (local.get $lhs) (global.get $ptr))

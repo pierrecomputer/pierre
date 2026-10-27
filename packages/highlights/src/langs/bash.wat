@@ -412,11 +412,12 @@
               (then
                 (local.set $c (i32.load8_u (global.get $ptr)))
                 (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
-                (if
-                  (i32.and
-                    (i32.eq (local.get $c) (i32.const 13))
-                    (i32.eq (call $bashByte (global.get $ptr)) (i32.const 10)))
-                  (then (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))))
+                (global.set $ptr
+                  (i32.add
+                    (global.get $ptr)
+                    (i32.and
+                      (i32.eq (local.get $c) (i32.const 13))
+                      (i32.eq (call $bashByte (global.get $ptr)) (i32.const 10)))))
                 (call $emitGap (local.get $gap) (global.get $ptr))
                 (call $bashHeredocBody (local.get $hdDelim) (local.get $hdLen) (local.get $hdStrip))
                 (local.set $hdLen (i32.const 0))
@@ -471,21 +472,20 @@
               (i32.or
                 (i32.ge_u (i32.add (global.get $ptr) (i32.const 1)) (global.get $end))
                 (i32.or (i32.eq (local.get $c2) (i32.const 10)) (i32.eq (local.get $c2) (i32.const 13)))))))
+        ;; a branch that leaves $arg clears $cmd: arguments follow
+        (block $arg
         (if (i32.eq (local.get $c) (i32.const 39))
           (then
             (call $lexRawString (i32.const 39) (i32.const 1) (enum.get $Token.string))
-            (local.set $cmd (i32.const 0))
-            (br $next)))
+            (br $arg)))
         (if (i32.eq (local.get $c) (i32.const 34))
           (then
             (call $bashDouble)
-            (local.set $cmd (i32.const 0))
-            (br $next)))
+            (br $arg)))
         (if (i32.eq (local.get $c) (i32.const "`"))
           (then
             (call $lexString (i32.const "`") (i32.const 1) (enum.get $Token.string.special))
-            (local.set $cmd (i32.const 0))
-            (br $next)))
+            (br $arg)))
         (if (i32.eq (local.get $c) (i32.const "$"))
           (then
             (if (i32.eq (local.get $c2) (i32.const 39))
@@ -493,8 +493,7 @@
                 (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
                 (call $emitTok (enum.get $Token.string) (local.get $lhs) (global.get $ptr))
                 (call $lexString (i32.const 39) (i32.const 1) (enum.get $Token.string))
-                (local.set $cmd (i32.const 0))
-                (br $next)))
+                (br $arg)))
             (local.set $p (global.get $bashArith))
             (drop (call $bashDollar (i32.const 0)))
             ;; an unquoted `$(` opens a command; `$((` (which counted itself
@@ -554,8 +553,7 @@
                 (br $next)))
             (global.set $ptr (call $lexEscapeEnd (global.get $ptr)))
             (call $emitTok (enum.get $Token.string.escape) (local.get $lhs) (global.get $ptr))
-            (local.set $cmd (i32.const 0))
-            (br $next)))
+            (br $arg)))
         ;; `<<` opens a heredoc only as a redirection: `<<<` is a here-string and
         ;; a `<<` inside `$(( ))` is a left shift, and both fall through to the
         ;; operator path instead. The opener emits `<<`, blanks, and the
@@ -574,12 +572,8 @@
                 (i32.ne (i32.load8_u offset=2 (global.get $ptr)) (i32.const "<")))))
           (then
             (global.set $ptr (i32.add (global.get $ptr) (i32.const 2)))
-            (local.set $p (i32.const 0))
-            (if
-              (i32.eq (call $bashByte (global.get $ptr)) (i32.const "-"))
-              (then
-                (local.set $p (i32.const 1))
-                (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))))
+            (local.set $p (i32.eq (call $bashByte (global.get $ptr)) (i32.const "-")))
+            (global.set $ptr (i32.add (global.get $ptr) (local.get $p)))
             (call $emitTok (enum.get $Token.operator) (local.get $lhs) (global.get $ptr))
             (local.set $gap (global.get $ptr))
             (global.set $ptr (call $lexSkipSpaceAt (global.get $ptr)))
@@ -629,8 +623,7 @@
           (then
             (call $lexScanNumber)
             (call $emitTok (enum.get $Token.number) (local.get $lhs) (global.get $ptr))
-            (local.set $cmd (i32.const 0))
-            (br $next)))
+            (br $arg)))
         ;; a word; `$` never reaches here. A `\` reaches here only before a
         ;; letter: `\rm` bypasses an alias and still runs `rm`, so the word
         ;; keeps its `\`. The quoting also stops `\if` from being a keyword,
@@ -740,7 +733,7 @@
                 ;; range: a bounded scan must never emit a byte the host still
                 ;; owns
                 (if
-                  (i32.eq (call $bashByte (global.get $ptr)) (local.get $c))
+                  (i32.eq (local.get $c2) (local.get $c))
                   (then
                     (if (i32.le_u (local.get $c) (i32.const "]"))
                       (then (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))))))
@@ -759,9 +752,7 @@
                 (i32.and
                   (i32.ne (global.get $bashArith) (i32.const 0))
                   (i32.eq (local.get $c) (i32.const ")")))
-                (i32.and
-                  (i32.lt_u (global.get $ptr) (global.get $end))
-                  (i32.eq (i32.load8_u (global.get $ptr)) (i32.const ")"))))
+                (i32.eq (local.get $c2) (i32.const ")")))
               (then (global.set $bashArith (i32.sub (global.get $bashArith) (i32.const 1)))))
             (if (i32.eq (local.get $c) (i32.const "("))
               (then
@@ -769,7 +760,7 @@
                 (if
                   (i32.and
                     (i32.or (local.get $p) (i32.ne (i32.and (local.get $flow) (i32.const 4)) (i32.const 0)))
-                    (i32.eq (call $bashByte (global.get $ptr)) (i32.const "(")))
+                    (i32.eq (local.get $c2) (i32.const "(")))
                   (then
                     ;; `((` at command position, or the C-style header of a
                     ;; `for ((`, is arithmetic, where `<<` is a shift and not
@@ -808,12 +799,11 @@
         (if (call $bashIsOp (local.get $c))
           (then
             (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
+            ;; $c2 is 0 at $end, which matches neither
             (if
-              (i32.and
-                (i32.lt_u (global.get $ptr) (global.get $end))
-                (i32.or
-                  (i32.eq (local.get $c2) (i32.const "="))
-                  (i32.eq (local.get $c) (local.get $c2))))
+              (i32.or
+                (i32.eq (local.get $c2) (i32.const "="))
+                (i32.eq (local.get $c) (local.get $c2)))
               (then
                 (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
                 (if
@@ -844,7 +834,7 @@
                       (then (local.set $flow (i32.const 2))))))))
             (br $next)))
         (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
-        (call $emitTok (enum.get $Token.none) (local.get $lhs) (global.get $ptr))
+        (call $emitTok (enum.get $Token.none) (local.get $lhs) (global.get $ptr)))
         (local.set $cmd (i32.const 0))
         (br $next))))
 

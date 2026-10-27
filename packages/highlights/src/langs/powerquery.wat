@@ -92,14 +92,16 @@
         (local.set $c (i32.load8_u (local.get $lhs)))
         (local.set $c2 (call $templateByte (i32.add (local.get $lhs) (i32.const 1))))
 
-        (if (i32.and (i32.eq (local.get $c) (i32.const "/")) (i32.eq (local.get $c2) (i32.const "/")))
+        (if (i32.eq (local.get $c) (i32.const "/"))
           (then
-            (call $lexLineComment (i32.const 2) (enum.get $Token.comment))
-            (br $next)))
-        (if (i32.and (i32.eq (local.get $c) (i32.const "/")) (i32.eq (local.get $c2) (i32.const "*")))
-          (then
-            (call $lexBlockComment (i32.const 2) (enum.get $Token.comment))
-            (br $next)))
+            (if (i32.eq (local.get $c2) (i32.const "/"))
+              (then
+                (call $lexLineComment (i32.const 2) (enum.get $Token.comment))
+                (br $next)))
+            (if (i32.eq (local.get $c2) (i32.const "*"))
+              (then
+                (call $lexBlockComment (i32.const 2) (enum.get $Token.comment))
+                (br $next)))))
         (if (i32.eq (local.get $c) (i32.const 34))
           (then
             (global.set $ptr (i32.add (local.get $lhs) (i32.const 1)))
@@ -110,25 +112,24 @@
             (br $next)))
         ;; `#date(...)` and `#table(...)` build values; `#infinity`, `#nan`,
         ;; and `#shared` are constants
-        (if
-          (i32.and
-            (i32.eq (local.get $c) (i32.const "#"))
-            (i32.and (call $lexIsIdentStart (local.get $c2)) (i32.ne (local.get $c2) (i32.const "$"))))
+        (if (i32.eq (local.get $c) (i32.const "#"))
           (then
-            (global.set $ptr (i32.add (local.get $lhs) (i32.const 1)))
-            (call $scanIdentRun (i32.const "_"))
-            (call $emitTok
-              (select
-                (enum.get $Token.function)
-                (enum.get $Token.constant.builtin)
-                (i32.eq (call $templateByte (global.get $ptr)) (i32.const "(")))
-              (local.get $lhs)
-              (global.get $ptr))
-            (br $next)))
+            (if (call $lexIsNameStart (local.get $c2))
+              (then
+                (global.set $ptr (i32.add (local.get $lhs) (i32.const 1)))
+                (call $scanIdentRun (i32.const "_"))
+                (call $emitTok
+                  (select
+                    (enum.get $Token.function)
+                    (enum.get $Token.constant.builtin)
+                    (i32.eq (call $templateByte (global.get $ptr)) (i32.const "(")))
+                  (local.get $lhs)
+                  (global.get $ptr))
+                (br $next)))))
 
         (if
           (i32.or
-            (i32.and (call $lexIsIdentStart (local.get $c)) (i32.ne (local.get $c) (i32.const "$")))
+            (call $lexIsNameStart (local.get $c))
             (i32.and (i32.eq (local.get $c) (i32.const "#")) (i32.eq (local.get $c2) (i32.const 34))))
           (then
             (local.set $v (i32.const -1))
@@ -160,7 +161,7 @@
                   (if
                     (i32.and
                       (i32.eq (call $templateByte (global.get $ptr)) (i32.const "."))
-                      (i32.and (call $lexIsIdentStart (local.get $c2)) (i32.ne (local.get $c2) (i32.const "$"))))
+                      (call $lexIsNameStart (local.get $c2)))
                     (then
                       (local.set $dotted (i32.const 1))
                       (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))

@@ -106,6 +106,8 @@
             (local.set $cap (i32.le_u (i32.sub (local.get $c) (i32.const "A")) (i32.const 25)))
             (local.set $hl (enum.get $Token.variable))
             (block $classified
+              ;; a branch that leaves $mid1 also sets $mid to 1
+              (block $mid1
               (if (local.get $attr)
                 (then
                   (local.set $hl (enum.get $Token.attribute))
@@ -114,8 +116,7 @@
                 (then
                   (local.set $hl (i32.and (local.get $kind) (i32.const 255)))
                   (local.set $expect (i32.shr_u (local.get $kind) (i32.const 8)))
-                  (local.set $mid (i32.const 1))
-                  (br $classified)))
+                  (br $mid1)))
               (if (i32.le_u (i32.sub (local.get $expect) (i32.const 1)) (i32.const 2))
                 (then
                   (local.set $hl
@@ -124,14 +125,12 @@
                       (select (enum.get $Token.type) (enum.get $Token.namespace) (i32.eq (local.get $expect) (i32.const 2)))
                       (i32.eq (local.get $expect) (i32.const 1))))
                   (local.set $expect (select (i32.const 6) (i32.const 0) (i32.eq (local.get $expect) (i32.const 2))))
-                  (local.set $mid (i32.const 1))
-                  (br $classified)))
+                  (br $mid1)))
               (if (i32.eq (local.get $expect) (i32.const 7))
                 (then
                   (local.set $hl (enum.get $Token.constructor))
                   (local.set $expect (i32.const 6))
-                  (local.set $mid (i32.const 1))
-                  (br $classified)))
+                  (br $mid1)))
               (if (i32.and (i32.eqz (local.get $mid)) (local.get $cap))
                 (then
                   (local.set $hl (enum.get $Token.keyword))
@@ -144,8 +143,7 @@
               (if (i32.ge_s (local.get $kind) (i32.const 0))
                 (then
                   (local.set $hl (local.get $kind))
-                  (local.set $mid (i32.const 1))
-                  (br $classified)))
+                  (br $mid1)))
               ;; `Hint Resolve x`: a capitalized word between a command and
               ;; another word belongs to the command
               (if
@@ -157,12 +155,12 @@
                 (then
                   (local.set $hl (enum.get $Token.keyword))
                   (br $classified)))
-              (local.set $mid (i32.const 1))
               (if
                 (i32.and
                   (i32.eq (call $templateByte (local.get $rhs)) (i32.const "."))
                   (call $lexIsIdentStart (call $templateByte (i32.add (local.get $rhs) (i32.const 1)))))
                 (then (local.set $hl (enum.get $Token.namespace)))))
+              (local.set $mid (i32.const 1)))
             (call $emitTok (local.get $hl) (local.get $lhs) (local.get $rhs))
             (br $next)))
         ;; a `.` before a blank or the end closes the sentence

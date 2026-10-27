@@ -95,6 +95,11 @@
     (global.set $end (local.get $save))
     (global.set $ptr (local.get $to)))
 
+  ;; Start of the line after the one at $p, or $end. A shared call keeps
+  ;; the CR/LF step out of each line walk below.
+  (func $mdxNextLine (param $p i32) (result i32)
+    (call $markdownAfterLine (call $markdownLineEnd (local.get $p))))
+
   ;; The end of a `/* */` or `//` comment at the `/` at $p, or $p if no
   ;; comment starts there. Both MDX tag scans skip comments between
   ;; attributes, as the TSX tag steps do. An unclosed comment runs to $end.
@@ -172,17 +177,13 @@
                   (then (local.set $p (i32.add (local.get $p) (i32.const 1)))))
                 (local.set $value (i32.const 0))
                 (br $l)))
-            (if (i32.eq (local.get $c) (i32.const "{"))
-              (then
-                (local.set $to (call $tsxExpressionEnd (local.get $p) (local.get $p)))
-                (local.set $p (local.get $to))
-                (local.set $value (i32.const 0))
-                (br $l)))
-            (local.set $value (i32.const 2))))
-        (if (i32.and (i32.eqz (local.get $value)) (i32.eq (local.get $c) (i32.const "{")))
+            ;; a `{` value is an expression, as one between attributes
+            (if (i32.ne (local.get $c) (i32.const "{"))
+              (then (local.set $value (i32.const 2))))))
+        (if (i32.and (i32.le_u (local.get $value) (i32.const 1)) (i32.eq (local.get $c) (i32.const "{")))
           (then
-            (local.set $to (call $tsxExpressionEnd (local.get $p) (local.get $p)))
-            (local.set $p (local.get $to))
+            (local.set $p (call $tsxExpressionEnd (local.get $p) (local.get $p)))
+            (local.set $value (i32.const 0))
             (br $l)))
         (if (i32.and (i32.eqz (local.get $value)) (i32.eq (local.get $c) (i32.const "/")))
           (then
@@ -259,7 +260,7 @@
       (then (return (i32.const 0))))
     (local.set $close
       (call $markdownFenceClose
-        (call $markdownAfterLine (call $markdownLineEnd (local.get $q)))
+        (call $mdxNextLine (local.get $q))
         (local.get $fence)
         (local.get $len)
         (local.get $quotes)
@@ -269,7 +270,7 @@
     ;; unterminated: the block runs to the end, exactly as markdown treats it
     (if (i32.ge_u (local.get $close) (global.get $end))
       (then (return (global.get $end))))
-    (call $markdownAfterLine (call $markdownLineEnd (local.get $close))))
+    (call $mdxNextLine (local.get $close)))
 
   ;; When the line at $p opens an MDX ESM block - `import` or `export` at the
   ;; very line start, then a blank, `{`, or `*` - return 1. Otherwise return 0.
@@ -441,7 +442,7 @@
       (then
         (local.set $to (call $frontMatterClose (local.get $p)))
         (if (i32.lt_u (local.get $to) (global.get $end))
-          (then (local.set $to (call $markdownAfterLine (call $markdownLineEnd (local.get $to))))))
+          (then (local.set $to (call $mdxNextLine (local.get $to)))))
         (call $mdxMarkdownRange (global.get $ptr) (local.get $to))))
     (local.set $from (global.get $ptr))
     (local.set $p (global.get $ptr))
@@ -459,8 +460,7 @@
         (if (i32.lt_u (local.get $fenceAt) (local.get $from))
           (then
             (local.set $fenceAt
-              (call $markdownAfterLine
-                (call $markdownLineEnd (i32.sub (local.get $from) (i32.const 1)))))))
+              (call $mdxNextLine (i32.sub (local.get $from) (i32.const 1))))))
         (block $fenceChecked
           (loop $fenceLines
             (br_if $fenceChecked (i32.gt_u (local.get $fenceAt) (local.get $p)))
@@ -487,8 +487,7 @@
                       (then (local.set $p (local.get $to))))
                     (local.set $fenceAt (local.get $to))
                     (br $scan)))
-                (local.set $fenceAt
-                  (call $markdownAfterLine (call $markdownLineEnd (local.get $fenceAt))))))
+                (local.set $fenceAt (call $mdxNextLine (local.get $fenceAt)))))
             (br $fenceLines)))
         (br_if $done (i32.ge_u (local.get $p) (global.get $end)))
         (if (local.get $inFence)

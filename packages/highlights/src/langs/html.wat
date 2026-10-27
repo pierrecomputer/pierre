@@ -10,57 +10,44 @@
   ;; the OR 0x20 fold is safe: letters fold, digits/dashes already have bit 5
   (func $rawTextKind (param $lhs i32) (param $rhs i32) (result i32)
     (local $len i32)
+    (local $w i64)
     (local.set $len (i32.sub (local.get $rhs) (local.get $lhs)))
-    (if (i32.eq (local.get $len) (i32.const 6))
+    (if (i32.le_u (i32.sub (local.get $len) (i32.const 5)) (i32.const 1))
       (then
-        (if
-          (i64.eq
-            (i64.or
-              (i64.and (i64.load (local.get $lhs)) (i64.const 0xFFFFFFFFFFFF))
-              (i64.const 0x202020202020))
-            (i64.const "script"))
-          (then (return (i32.const 1))))))
-    (if (i32.eq (local.get $len) (i32.const 5))
-      (then
-        (if
-          (i64.eq
-            (i64.or
-              (i64.and (i64.load (local.get $lhs)) (i64.const 0xFFFFFFFFFF))
-              (i64.const 0x2020202020))
-            (i64.const "style"))
-          (then (return (i32.const 2))))))
+        ;; the name's $len bytes, folded
+        (local.set $w
+          (i64.and
+            (i64.or (i64.load (local.get $lhs)) (i64.const 0x202020202020))
+            (i64.sub
+              (i64.shl (i64.const 1) (i64.extend_i32_u (i32.shl (local.get $len) (i32.const 3))))
+              (i64.const 1))))
+        (return
+          (i32.or
+            (i64.eq (local.get $w) (i64.const "script"))
+            (i32.shl (i64.eq (local.get $w) (i64.const "style")) (i32.const 1))))))
     (i32.const 0))
 
   ;; is $p the start of `</script` (kind 1) or `</style` (kind 2), followed by
   ;; a name-ending byte? $p points at the `<`.
   (func $isRawTextClose (param $p i32) (param $kind i32) (result i32)
+    (local $n i32)
     (local $t i32)
     (local $tp i32)
-    (if (i32.eq (local.get $kind) (i32.const 1))
-      (then
-        (if (i32.gt_u (i32.add (local.get $p) (i32.const 8)) (global.get $end))
-          (then (return (i32.const 0))))
-        ;; bytes p+1..p+7 = "/script" (letters folded)
-        (if
-          (i64.ne
-            (i64.or
-              (i64.and (i64.load offset=1 (local.get $p)) (i64.const 0x00FFFFFFFFFFFFFF))
-              (i64.const 0x0020202020202000))
-            (i64.const "/script"))
-          (then (return (i32.const 0))))
-        (local.set $tp (i32.add (local.get $p) (i32.const 8))))
-      (else
-        (if (i32.gt_u (i32.add (local.get $p) (i32.const 7)) (global.get $end))
-          (then (return (i32.const 0))))
-        ;; bytes p+1..p+6 = "/style" (letters folded)
-        (if
-          (i64.ne
-            (i64.or
-              (i64.and (i64.load offset=1 (local.get $p)) (i64.const 0xFFFFFFFFFFFF))
-              (i64.const 0x202020202000))
-            (i64.const "/style"))
-          (then (return (i32.const 0))))
-        (local.set $tp (i32.add (local.get $p) (i32.const 7)))))
+    ;; bytes p+1.. = "/script" for kind 1, else "/style": $n bytes with the
+    ;; letters folded (the slash is not)
+    (local.set $n (select (i32.const 7) (i32.const 6) (i32.eq (local.get $kind) (i32.const 1))))
+    (local.set $tp (i32.add (i32.add (local.get $p) (local.get $n)) (i32.const 1)))
+    (if (i32.gt_u (local.get $tp) (global.get $end))
+      (then (return (i32.const 0))))
+    (if
+      (i64.ne
+        (i64.and
+          (i64.or (i64.load offset=1 (local.get $p)) (i64.const 0x2020202020202000))
+          (i64.sub
+            (i64.shl (i64.const 1) (i64.extend_i32_u (i32.shl (local.get $n) (i32.const 3))))
+            (i64.const 1)))
+        (select (i64.const "/script") (i64.const "/style") (i32.eq (local.get $kind) (i32.const 1))))
+      (then (return (i32.const 0))))
     ;; the close-tag name must end here: whitespace, `>`, `/`, or input end
     (if (i32.ge_u (local.get $tp) (global.get $end))
       (then (return (i32.const 1))))
@@ -142,19 +129,15 @@
             (i32.eq (i32.load8_u (i32.sub (local.get $p) (i32.const 1))) (i32.const "?"))))
         (local.set $p (i32.add (local.get $p) (i32.const 1)))
         (br $l)))
-    (if (i32.lt_u (local.get $p) (global.get $end))
+    (global.set $ptr
+      (select (i32.add (local.get $p) (i32.const 1)) (global.get $end) (i32.lt_u (local.get $p) (global.get $end))))
+    (call $emitTok (local.get $hl) (local.get $lhs) (global.get $ptr))
+    (if (i32.and (i32.ge_u (local.get $p) (global.get $end)) (i32.eq (global.get $ptr) (global.get $eof)))
       (then
-        (global.set $ptr (i32.add (local.get $p) (i32.const 1)))
-        (call $emitTok (local.get $hl) (local.get $lhs) (global.get $ptr)))
-      (else
-        (global.set $ptr (global.get $end))
-        (call $emitTok (local.get $hl) (local.get $lhs) (global.get $ptr))
-        (if (i32.eq (global.get $ptr) (global.get $eof))
-          (then
-            (call $streamSetFixed32
-              (select (i32.const "?>") (i32.const ">") (local.get $pi))
-              (i32.add (local.get $pi) (i32.const 1))
-              (local.get $hl)))))))
+        (call $streamSetFixed32
+          (select (i32.const "?>") (i32.const ">") (local.get $pi))
+          (i32.add (local.get $pi) (i32.const 1))
+          (local.get $hl)))))
 
   ;; tag / attribute name: ends at whitespace, `=`, `>`, `/`, a quote, or `<`
   ;; (so a stray tag start ends the run) - one byte-set test per byte
@@ -630,17 +613,22 @@
   (func $braceRawKind (param $p i32) (result i32)
     (local $kind i32)
     (local $q i32)
+    (local $w i64)
     (local.set $q (i32.add (local.get $p) (i32.const 1)))
-    (if (i32.le_u (i32.add (local.get $q) (i32.const 6)) (global.get $end))
-      (then
-        (local.set $kind
-          (call $rawTextKind (local.get $q) (i32.add (local.get $q) (i32.const 6))))))
-    (if (i32.eqz (local.get $kind))
-      (then
-        (if (i32.le_u (i32.add (local.get $q) (i32.const 5)) (global.get $end))
-          (then
-            (local.set $kind
-              (call $rawTextKind (local.get $q) (i32.add (local.get $q) (i32.const 5))))))))
+    ;; $rawTextKind's folded compares at its two lengths; the wide load stays
+    ;; inside the input slack
+    (local.set $w (i64.or (i64.load (local.get $q)) (i64.const 0x202020202020)))
+    (if
+      (i32.and
+        (i32.le_u (i32.add (local.get $q) (i32.const 6)) (global.get $end))
+        (i64.eq (i64.and (local.get $w) (i64.const 0xFFFFFFFFFFFF)) (i64.const "script")))
+      (then (local.set $kind (i32.const 1)))
+      (else
+        (if
+          (i32.and
+            (i32.le_u (i32.add (local.get $q) (i32.const 5)) (global.get $end))
+            (i64.eq (i64.and (local.get $w) (i64.const 0xFFFFFFFFFF)) (i64.const "style")))
+          (then (local.set $kind (i32.const 2))))))
     (if (local.get $kind)
       (then
         (local.set $q

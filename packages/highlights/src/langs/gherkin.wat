@@ -65,7 +65,7 @@
                 (global.set $ptr (i32.add (local.get $lhs) (i32.const 1)))
                 (call $emitTok (enum.get $Token.keyword) (local.get $lhs) (global.get $ptr))
                 (br $next)))
-            (if (i32.and (call $lexIsIdentStart (local.get $c)) (i32.ne (local.get $c) (i32.const "$")))
+            (if (call $lexIsNameStart (local.get $c))
               (then
                 (call $scanIdentRun (i32.const "-"))
                 (local.set $rhs (global.get $ptr))
@@ -125,20 +125,22 @@
             (drop
               (call $bicepStringBody (local.get $c) (local.get $lhs) (enum.get $Token.string) (i32.const 1)))
             (br $next)))
-        (if (i32.and (i32.eq (local.get $c) (i32.const "<")) (call $lexIsIdentStart (local.get $c2)))
+        (if (i32.eq (local.get $c) (i32.const "<"))
           (then
-            (local.set $p
-              (call $scanFindSpecial
-                (i32.add (local.get $lhs) (i32.const 1))
-                (global.get $end)
-                (i32.const ">")
-                (i32.const 0)
-                (i32.const 1)))
-            (if (i32.eq (call $templateByte (local.get $p)) (i32.const ">"))
+            (if (call $lexIsIdentStart (local.get $c2))
               (then
-                (global.set $ptr (i32.add (local.get $p) (i32.const 1)))
-                (call $emitTok (enum.get $Token.variable) (local.get $lhs) (global.get $ptr))
-                (br $next)))))
+                (local.set $p
+                  (call $scanFindSpecial
+                    (i32.add (local.get $lhs) (i32.const 1))
+                    (global.get $end)
+                    (i32.const ">")
+                    (i32.const 0)
+                    (i32.const 1)))
+                (if (i32.eq (call $templateByte (local.get $p)) (i32.const ">"))
+                  (then
+                    (global.set $ptr (i32.add (local.get $p) (i32.const 1)))
+                    (call $emitTok (enum.get $Token.variable) (local.get $lhs) (global.get $ptr))
+                    (br $next)))))))
         (if (local.get $row)
           (then
             (if (i32.eq (local.get $c) (i32.const "|"))
@@ -161,7 +163,7 @@
             (call $lexScanNumber)
             (call $emitTok (enum.get $Token.number) (local.get $lhs) (global.get $ptr))
             (br $next)))
-        (if (i32.and (call $lexIsIdentStart (local.get $c)) (i32.ne (local.get $c) (i32.const "$")))
+        (if (call $lexIsNameStart (local.get $c))
           (then
             (call $scanIdentRun (i32.const "'"))
             (call $emitTok (enum.get $Token.none) (local.get $lhs) (global.get $ptr))

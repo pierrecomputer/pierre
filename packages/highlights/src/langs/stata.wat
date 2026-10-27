@@ -124,7 +124,13 @@
             (if (i32.lt_u (global.get $ptr) (global.get $end))
               (then (global.set $ptr (i32.add (global.get $ptr) (i32.const 1))))))
           (else
-            (if (i32.or (i32.eqz (call $lexIsIdentStart (local.get $c))) (i32.eq (local.get $c) (i32.const "$")))
+            (if
+              (i32.eqz
+                (i32.or
+                  (i32.ge_u (local.get $c) (i32.const 0x80))
+                  (i32.or
+                    (i32.le_u (i32.sub (i32.or (local.get $c) (i32.const 32)) (i32.const "a")) (i32.const 25))
+                    (i32.eq (local.get $c) (i32.const "_")))))
               (then (return (i32.const 0))))
             (global.set $ptr (i32.add (local.get $lhs) (i32.const 1)))
             (call $scanIdentRun (i32.const "_"))))))
@@ -287,7 +293,12 @@
             (global.set $end (local.get $stop))
             (br_if $next (i32.gt_u (global.get $ptr) (local.get $lhs)))))
 
-        (if (i32.and (call $lexIsIdentStart (local.get $c)) (i32.ne (local.get $c) (i32.const "$")))
+        (if
+          (i32.or
+            (i32.ge_u (local.get $c) (i32.const 0x80))
+            (i32.or
+              (i32.le_u (i32.sub (i32.or (local.get $c) (i32.const 32)) (i32.const "a")) (i32.const 25))
+              (i32.eq (local.get $c) (i32.const "_"))))
           (then
             (call $scanIdentRun (i32.const "_"))
             (local.set $rhs (global.get $ptr))
@@ -301,7 +312,11 @@
                 (if
                   (i32.or
                     (i32.eq (local.get $c2) (i32.const "("))
-                    (i32.and (call $lexIsIdentStart (local.get $c2)) (i32.ne (local.get $c2) (i32.const "$"))))
+                    (i32.or
+                      (i32.ge_u (local.get $c2) (i32.const 0x80))
+                      (i32.or
+                        (i32.le_u (i32.sub (i32.or (local.get $c2) (i32.const 32)) (i32.const "a")) (i32.const 25))
+                        (i32.eq (local.get $c2) (i32.const "_")))))
                   (then
                     (global.set $ptr (i32.add (local.get $rhs) (i32.const 1)))
                     (call $emitTok (enum.get $Token.keyword.operator) (local.get $lhs) (global.get $ptr))

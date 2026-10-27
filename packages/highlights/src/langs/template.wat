@@ -86,7 +86,7 @@
       (then (return (i32.const 0))))
     (local.set $w
       (i64.and
-        (i64.or (i64.load (local.get $lhs)) (i64.const 0x2020202020202020))
+        (i64.or (i64.load (local.get $lhs)) (i64.const 0x202020202020))
         (i64.sub
           (i64.shl (i64.const 1) (i64.extend_i32_u (i32.shl (local.get $n) (i32.const 3))))
           (i64.const 1))))

@@ -93,6 +93,8 @@
     (call $lexEmitLeadingContinuation)
     (block $done
       (loop $next
+        ;; a branch to $emit emits [$lhs,$ptr) as $hl
+        (block $emit
         (local.set $gap (global.get $ptr))
         (call $scanWhitespace)
         (call $emitGap (local.get $gap) (global.get $ptr))
@@ -147,8 +149,8 @@
                 (if (byteset.get "+-" (local.get $c))
                   (then (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))))
                 (call $wlDigits)))
-            (call $emitTok (enum.get $Token.number) (local.get $lhs) (global.get $ptr))
-            (br $next)))
+            (local.set $hl (enum.get $Token.number))
+            (br $emit)))
         ;; `\[Alpha]` named characters
         (if (i32.and (i32.eq (local.get $c) (i32.const 92)) (i32.eq (local.get $c2) (i32.const "[")))
           (then
@@ -156,8 +158,8 @@
             (call $scanIdentRun (i32.const "$"))
             (if (i32.eq (call $templateByte (global.get $ptr)) (i32.const "]"))
               (then (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))))
-            (call $emitTok (enum.get $Token.string.special) (local.get $lhs) (global.get $ptr))
-            (br $next)))
+            (local.set $hl (enum.get $Token.string.special))
+            (br $emit)))
         ;; pure-function slots `#`, `#2`, `##`, `#name`, and outputs `%`, `%%`, `%3`
         (if (i32.or (i32.eq (local.get $c) (i32.const "#")) (i32.eq (local.get $c) (i32.const "%")))
           (then
@@ -165,11 +167,9 @@
             (if (i32.eq (local.get $c2) (local.get $c))
               (then (global.set $ptr (i32.add (local.get $lhs) (i32.const 2)))))
             (call $scanIdentRun (local.get $c))
-            (call $emitTok
-              (select (enum.get $Token.variable.parameter) (enum.get $Token.variable.special) (i32.eq (local.get $c) (i32.const "#")))
-              (local.get $lhs)
-              (global.get $ptr))
-            (br $next)))
+            (local.set $hl
+              (select (enum.get $Token.variable.parameter) (enum.get $Token.variable.special) (i32.eq (local.get $c) (i32.const "#"))))
+            (br $emit)))
         ;; pattern blanks `_`, `__`, `___`, `_.`, with an optional head: `_Integer`
         (if (i32.eq (local.get $c) (i32.const "_"))
           (then
@@ -186,30 +186,35 @@
               (then (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))))
             (call $emitTok (enum.get $Token.variable.parameter) (local.get $lhs) (global.get $ptr))
             (local.set $c (call $templateByte (global.get $ptr)))
-            (if (i32.and (call $lexIsIdentStart (local.get $c)) (i32.ne (local.get $c) (i32.const "_")))
+            ;; a head starts with a letter, `$`, or a UTF-8 byte
+            (if
+              (i32.or
+                (i32.ge_u (local.get $c) (i32.const 0x80))
+                (i32.or
+                  (i32.le_u (i32.sub (i32.or (local.get $c) (i32.const 32)) (i32.const "a")) (i32.const 25))
+                  (i32.eq (local.get $c) (i32.const "$"))))
               (then
                 (local.set $lhs (global.get $ptr))
                 (call $wlName)
                 (call $emitTok (enum.get $Token.type) (local.get $lhs) (global.get $ptr))))
             (br $next)))
-        ;; symbols, with optional contexts: `` System`Plot ``, `` `Private`x ``
+        ;; symbols, with optional contexts: `` System`Plot ``, `` `Private`x ``;
+        ;; after a leading backtick the next byte must start the name
         (if
-          (i32.or
-            (call $lexIsIdentStart (local.get $c))
-            (i32.and (i32.eq (local.get $c) (i32.const "`")) (call $lexIsIdentStart (local.get $c2))))
+          (call $lexIsIdentStart
+            (select (local.get $c2) (local.get $c) (i32.eq (local.get $c) (i32.const "`"))))
           (then
             (global.set $ptr (i32.add (local.get $lhs) (i32.eq (local.get $c) (i32.const "`"))))
             (local.set $p (local.get $lhs))
             (loop $context
               (call $wlName)
-              (if
-                (i32.and
-                  (i32.eq (call $templateByte (global.get $ptr)) (i32.const "`"))
-                  (call $lexIsIdentStart (call $templateByte (i32.add (global.get $ptr) (i32.const 1)))))
+              (if (i32.eq (call $templateByte (global.get $ptr)) (i32.const "`"))
                 (then
-                  (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
-                  (local.set $p (global.get $ptr))
-                  (br $context))))
+                  (if (call $lexIsIdentStart (call $templateByte (i32.add (global.get $ptr) (i32.const 1))))
+                    (then
+                      (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
+                      (local.set $p (global.get $ptr))
+                      (br $context))))))
             (if (i32.gt_u (local.get $p) (local.get $lhs))
               (then
                 (call $emitTok (enum.get $Token.namespace) (local.get $lhs) (local.get $p))
@@ -355,16 +360,17 @@
                 (if
                   (i32.and
                     (i32.eq (i32.sub (global.get $ptr) (local.get $lhs)) (i32.const 2))
-                    (i32.and
-                      (i32.eq (i32.load16_u (local.get $lhs)) (i32.const "::"))
-                      (call $lexIsIdentStart (call $templateByte (global.get $ptr)))))
+                    (i32.eq (i32.load16_u (local.get $lhs)) (i32.const "::")))
                   (then
-                    (call $emitTok (enum.get $Token.operator) (local.get $lhs) (global.get $ptr))
-                    (local.set $lhs (global.get $ptr))
-                    (call $wlName)
-                    (local.set $hl (enum.get $Token.property))))))))
+                    (if (call $lexIsIdentStart (call $templateByte (global.get $ptr)))
+                      (then
+                        (call $emitTok (enum.get $Token.operator) (local.get $lhs) (global.get $ptr))
+                        (local.set $lhs (global.get $ptr))
+                        (call $wlName)
+                        (local.set $hl (enum.get $Token.property))))))))))
         (if (i32.eq (local.get $hl) (enum.get $Token.none))
           (then (global.set $ptr (call $utf8SpanEnd (global.get $ptr) (global.get $end)))))
+        (br $emit))
         (call $emitTok (local.get $hl) (local.get $lhs) (global.get $ptr))
         (br $next))))
 )

@@ -180,12 +180,17 @@
                 (call $emitGap (global.get $ptr) (local.get $v))
                 (global.set $ptr (local.get $v))
                 (br $next)))
-            (if (i32.eq (i32.or (local.get $c2) (i32.const 32)) (i32.const "x"))
-              (then (local.set $v (call $scanHexRun (i32.add (local.get $lhs) (i32.const 2)) (i32.const 2)))))
-            (if (i32.eq (local.get $c2) (i32.const "u"))
-              (then (local.set $v (call $scanHexRun (i32.add (local.get $lhs) (i32.const 2)) (i32.const 4)))))
-            (if (i32.eq (local.get $c2) (i32.const "U"))
-              (then (local.set $v (call $scanHexRun (i32.add (local.get $lhs) (i32.const 2)) (i32.const 8)))))
+            ;; the most hex digits after `\x`, `\u`, or `\U`
+            (local.set $hl
+              (select
+                (i32.const 2)
+                (select
+                  (i32.const 4)
+                  (i32.shl (i32.eq (local.get $c2) (i32.const "U")) (i32.const 3))
+                  (i32.eq (local.get $c2) (i32.const "u")))
+                (i32.eq (i32.or (local.get $c2) (i32.const 32)) (i32.const "x"))))
+            (if (local.get $hl)
+              (then (local.set $v (call $scanHexRun (i32.add (local.get $lhs) (i32.const 2)) (local.get $hl)))))
             (global.set $ptr (local.get $v))
             (call $emitTok (enum.get $Token.string.escape) (local.get $lhs) (global.get $ptr))
             (local.set $cmd (i32.const 0))

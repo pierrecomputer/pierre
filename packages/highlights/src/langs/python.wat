@@ -63,10 +63,9 @@
                 (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
                 (local.set $status (i32.const 1))
                 (br $done)))))
+        ;; the scan stops at a line break only when it ends the string
         (br_if $done
-          (i32.and
-            (i32.eqz (local.get $multiline))
-            (i32.or (i32.eq (local.get $c) (i32.const 10)) (i32.eq (local.get $c) (i32.const 13)))))
+          (i32.or (i32.eq (local.get $c) (i32.const 10)) (i32.eq (local.get $c) (i32.const 13))))
         ;; A backslash escapes the next character, or continues the line when
         ;; it precedes LF or CRLF. Raw literals keep the bytes as plain body
         ;; but still continue the line, so both kinds share the span end.
@@ -290,7 +289,11 @@
     ;; unary minus, or splat star
     (i32.or
       (i32.or
-        (i32.and (call $lexIsIdentStart (local.get $c)) (i32.ne (local.get $c) (i32.const "$")))
+        (i32.or
+          (i32.ge_u (local.get $c) (i32.const 0x80))
+          (i32.or
+            (i32.le_u (i32.sub (i32.or (local.get $c) (i32.const 32)) (i32.const "a")) (i32.const 25))
+            (i32.eq (local.get $c) (i32.const "_"))))
         (call $lexIsDigit (local.get $c)))
       (byteset.get "\22'(*-[{" (local.get $c))))
 
@@ -301,25 +304,26 @@
     (local $afterDecl i32) ;; 1 = def, 2 = class
     (local $afterDot i32)
     (local $annotName i32) ;; the previous token can take a `: type` annotation
-    (local $brackDepth i32) ;; open `[`/`{` nesting - no annotations inside
+    ;; open `[`/`{` nesting times 2, plus 1 between `lambda` and the `:` that
+    ;; ends its head - no annotations in either
+    (local $brackDepth i32)
     (local $c i32)
     (local $c2 i32)
-    (local $format i32)
     (local $g i32)
     (local $gap i32)
     (local $hl i32)
-    (local $lambdaPend i32) ;; between `lambda` and the `:` that ends its head
     (local $lhs i32)
     (local $lineHead i32)
     (local $p i32)
-    (local $prefix i32)
     (local $q i32)
-    (local $raw i32)
     (local $typeNext i32)
     (call $lexEmitLeadingContinuation)
     (local.set $lineHead (i32.const 1))
     (block $done
       (loop $next
+        ;; a token that branches to $plain clears the annotation position,
+        ;; the line head, and a member access
+        (block $plain
         (local.set $gap (global.get $ptr))
         (call $scanWhitespace)
         ;; The gap crossed a line break when a CR/LF sits before the new $ptr.
@@ -392,48 +396,10 @@
             (local.set $annotName (i32.const 0))
             (local.set $lineHead (i32.const 0))
             (br $next)))
-        ;; two-byte raw prefixes before a quote; the f and 3.14 t-string forms
-        ;; have format fields. The quote is tested first: it rules out almost
-        ;; every token before the prefix compares run.
-        (if
-          (i32.and
-            (i32.lt_u (i32.add (local.get $lhs) (i32.const 2)) (global.get $end))
-            (i32.or
-              (i32.eq (i32.load8_u offset=2 (local.get $lhs)) (i32.const 34))
-              (i32.eq (i32.load8_u offset=2 (local.get $lhs)) (i32.const 39))))
-          (then
-            (local.set $p (i32.or (i32.load16_u (local.get $lhs)) (i32.const 0x2020)))
-            (if
-              (i32.or
-                (i32.or
-                  (i32.or
-                    (i32.eq (local.get $p) (i32.const "br"))
-                    (i32.eq (local.get $p) (i32.const "rb")))
-                  (i32.or
-                    (i32.eq (local.get $p) (i32.const "fr"))
-                    (i32.eq (local.get $p) (i32.const "rf"))))
-                (i32.or
-                  (i32.eq (local.get $p) (i32.const "tr"))
-                  (i32.eq (local.get $p) (i32.const "rt"))))
-              (then
-                (call $pyString
-                  (i32.const 2)
-                  (i32.load8_u offset=2 (local.get $lhs))
-                  (i32.const 1)
-                  (i32.and
-                    (i32.ne (local.get $p) (i32.const "br"))
-                    (i32.ne (local.get $p) (i32.const "rb"))))
-                (local.set $annotName (i32.const 0))
-                (local.set $lineHead (i32.const 0))
-                (local.set $afterDot (i32.const 0))
-                (br $next)))))
         (if (i32.or (i32.eq (local.get $c) (i32.const 34)) (i32.eq (local.get $c) (i32.const 39)))
           (then
             (call $pyString (i32.const 0) (local.get $c) (i32.const 0) (i32.const 0))
-            (local.set $annotName (i32.const 0))
-            (local.set $lineHead (i32.const 0))
-            (local.set $afterDot (i32.const 0))
-            (br $next)))
+            (br $plain)))
         (if
           (i32.or
             (call $lexIsDigit (local.get $c))
@@ -441,53 +407,63 @@
           (then
             (call $lexScanNumber)
             (call $emitTok (enum.get $Token.number) (local.get $lhs) (global.get $ptr))
-            (local.set $annotName (i32.const 0))
-            (local.set $lineHead (i32.const 0))
-            (local.set $afterDot (i32.const 0))
             (local.set $typeNext (i32.const 0))
-            (br $next)))
+            (br $plain)))
         (if (call $lexIsIdentStart (local.get $c))
           (then
-            ;; Recognize case-insensitive r/u/b/f/t prefixes (the two-byte
-            ;; ones are handled above); 3.14 t-strings format like f-strings.
-            (local.set $prefix (i32.const 0))
-            (local.set $raw (i32.const 0))
-            (local.set $format (i32.const 0))
+            ;; Recognize case-insensitive r/u/b/f/t prefixes and the two-byte
+            ;; raw ones; 3.14 t-strings format like f-strings. The quote is
+            ;; tested first: it rules out almost every name.
             (local.set $c (i32.or (local.get $c) (i32.const 32)))
-            (if
-              (i32.or
-                (i32.or
-                  (i32.or
-                    (i32.eq (local.get $c) (i32.const "r"))
-                    (i32.eq (local.get $c) (i32.const "u")))
-                  (i32.or
-                    (i32.eq (local.get $c) (i32.const "b"))
-                    (i32.eq (local.get $c) (i32.const "f"))))
-                (i32.eq (local.get $c) (i32.const "t")))
+            (if (i32.or (i32.eq (local.get $c2) (i32.const 34)) (i32.eq (local.get $c2) (i32.const 39)))
               (then
-                (local.set $prefix (i32.const 1))
-                (local.set $raw (i32.eq (local.get $c) (i32.const "r")))
-                (local.set $format
-                  (i32.or (i32.eq (local.get $c) (i32.const "f")) (i32.eq (local.get $c) (i32.const "t"))))))
-            (local.set $q (i32.add (local.get $lhs) (local.get $prefix)))
-            (if
-              (i32.and
-                (local.get $prefix)
-                (i32.and
-                  (i32.lt_u (local.get $q) (global.get $end))
+                (if
                   (i32.or
-                    (i32.eq (i32.load8_u (local.get $q)) (i32.const 34))
-                    (i32.eq (i32.load8_u (local.get $q)) (i32.const 39)))))
-              (then
-                (call $pyString
-                  (local.get $prefix)
-                  (i32.load8_u (local.get $q))
-                  (local.get $raw)
-                  (local.get $format))
-                (local.set $annotName (i32.const 0))
-                (local.set $lineHead (i32.const 0))
-                (local.set $afterDot (i32.const 0))
-                (br $next)))
+                    (i32.or
+                      (i32.or
+                        (i32.eq (local.get $c) (i32.const "r"))
+                        (i32.eq (local.get $c) (i32.const "u")))
+                      (i32.or
+                        (i32.eq (local.get $c) (i32.const "b"))
+                        (i32.eq (local.get $c) (i32.const "f"))))
+                    (i32.eq (local.get $c) (i32.const "t")))
+                  (then
+                    (call $pyString
+                      (i32.const 1)
+                      (local.get $c2)
+                      (i32.eq (local.get $c) (i32.const "r"))
+                      (i32.or (i32.eq (local.get $c) (i32.const "f")) (i32.eq (local.get $c) (i32.const "t"))))
+                    (br $plain))))
+              (else
+                (if
+                  (i32.and
+                    (i32.lt_u (i32.add (local.get $lhs) (i32.const 2)) (global.get $end))
+                    (i32.or
+                      (i32.eq (i32.load8_u offset=2 (local.get $lhs)) (i32.const 34))
+                      (i32.eq (i32.load8_u offset=2 (local.get $lhs)) (i32.const 39))))
+                  (then
+                    (local.set $p (i32.or (i32.load16_u (local.get $lhs)) (i32.const 0x2020)))
+                    (if
+                      (i32.or
+                        (i32.or
+                          (i32.or
+                            (i32.eq (local.get $p) (i32.const "br"))
+                            (i32.eq (local.get $p) (i32.const "rb")))
+                          (i32.or
+                            (i32.eq (local.get $p) (i32.const "fr"))
+                            (i32.eq (local.get $p) (i32.const "rf"))))
+                        (i32.or
+                          (i32.eq (local.get $p) (i32.const "tr"))
+                          (i32.eq (local.get $p) (i32.const "rt"))))
+                      (then
+                        (call $pyString
+                          (i32.const 2)
+                          (i32.load8_u offset=2 (local.get $lhs))
+                          (i32.const 1)
+                          (i32.and
+                            (i32.ne (local.get $p) (i32.const "br"))
+                            (i32.ne (local.get $p) (i32.const "rb"))))
+                        (br $plain)))))))
 
             (call $lexScanIdent)
             ;; a member name is never a keyword or builtin: `re.match` and
@@ -499,9 +475,9 @@
             (if (i32.eq (local.get $hl) (enum.get $Token.none))
               (then
                 (if
-                  (i32.and
-                    (local.get $lineHead)
-                    (call $pySoftKeyword (local.get $lhs) (global.get $ptr)))
+                  (if (result i32) (local.get $lineHead)
+                    (then (call $pySoftKeyword (local.get $lhs) (global.get $ptr)))
+                    (else (i32.const 0)))
                   (then (local.set $hl (enum.get $Token.keyword.control)))
                   (else
                     (if (local.get $afterDecl)
@@ -581,7 +557,7 @@
                 (i64.eq
                   (i64.and (i64.load (local.get $lhs)) (i64.const 0x0000ffffffffffff))
                   (i64.const "lambda")))
-              (then (local.set $lambdaPend (i32.const 1))))
+              (then (local.set $brackDepth (i32.or (local.get $brackDepth) (i32.const 1)))))
             (local.set $afterDecl (i32.shr_u (local.get $g) (i32.const 8)))
             (local.set $afterDot (i32.const 0))
             (local.set $typeNext (i32.const 0))
@@ -645,21 +621,18 @@
               (i32.or
                 (i32.eq (local.get $c) (i32.const "["))
                 (i32.eq (local.get $c) (i32.const "{")))
-              (then (local.set $brackDepth (i32.add (local.get $brackDepth) (i32.const 1))))
+              (then (local.set $brackDepth (i32.add (local.get $brackDepth) (i32.const 2))))
               (else
                 (if
                   (i32.and
-                    (local.get $brackDepth)
+                    (i32.shr_u (local.get $brackDepth) (i32.const 1))
                     (i32.or
                       (i32.eq (local.get $c) (i32.const "]"))
                       (i32.eq (local.get $c) (i32.const "}"))))
-                  (then (local.set $brackDepth (i32.sub (local.get $brackDepth) (i32.const 1)))))))
+                  (then (local.set $brackDepth (i32.sub (local.get $brackDepth) (i32.const 2)))))))
             (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
             (call $emitTok (enum.get $Token.punctuation.bracket) (local.get $lhs) (global.get $ptr))
-            (local.set $annotName (i32.const 0))
-            (local.set $afterDot (i32.const 0))
-            (local.set $lineHead (i32.const 0))
-            (br $next)))
+            (br $plain)))
         (if
           (i32.or
             (i32.or (i32.eq (local.get $c) (i32.const ".")) (i32.eq (local.get $c) (i32.const ",")))
@@ -683,9 +656,9 @@
                 (i32.eq (local.get $c) (i32.const ":"))
                 (i32.and
                   (local.get $annotName)
-                  (i32.and (i32.eqz (local.get $brackDepth)) (i32.eqz (local.get $lambdaPend))))))
+                  (i32.eqz (local.get $brackDepth)))))
             (if (i32.eq (local.get $c) (i32.const ":"))
-              (then (local.set $lambdaPend (i32.const 0))))
+              (then (local.set $brackDepth (i32.and (local.get $brackDepth) (i32.const -2)))))
             ;; a member access continues an annotated attribute chain
             (if (i32.ne (local.get $c) (i32.const "."))
               (then (local.set $annotName (i32.const 0))))
@@ -722,16 +695,13 @@
               (i32.and
                 (i32.eq (local.get $c) (i32.const "-"))
                 (i32.eq (local.get $c2) (i32.const ">"))))
-            (local.set $annotName (i32.const 0))
-            (local.set $afterDot (i32.const 0))
-            (local.set $lineHead (i32.const 0))
             ;; a splat star after `(` or `,` keeps parameter position, so
             ;; `*args` and `**kwargs` names still read as parameters
             (global.set $sigPattern
               (i32.and (global.get $sigPattern) (i32.eq (local.get $c) (i32.const "*"))))
-            (br $next)))
+            (br $plain)))
         (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
-        (call $emitTok (enum.get $Token.none) (local.get $lhs) (global.get $ptr))
+        (call $emitTok (enum.get $Token.none) (local.get $lhs) (global.get $ptr)))
         (local.set $annotName (i32.const 0))
         (local.set $afterDot (i32.const 0))
         (local.set $lineHead (i32.const 0))

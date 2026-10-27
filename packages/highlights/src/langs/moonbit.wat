@@ -106,6 +106,10 @@
     (call $lexEmitLeadingContinuation)
     (block $done
       (loop $next
+        ;; token tails: $sig leaves parameter position, then $tok ends a
+        ;; member access
+        (block $tok
+        (block $sig
         (local.set $gap (global.get $ptr))
         (call $scanWhitespace)
         (if (local.get $str)
@@ -163,8 +167,7 @@
                 (i32.and (i32.eq (local.get $c) (i32.const 34)) (i32.eqz (local.get $str)))
                 (local.get $lhs))
               (then (local.set $str (local.get $c))))
-            (local.set $member (i32.const 0))
-            (br $next)))
+            (br $tok)))
 
         ;; multi-line strings: each `#|` line is raw, each `$|` line escapes
         ;; and interpolates
@@ -173,28 +176,27 @@
             (if (i32.eq (local.get $c) (i32.const "#"))
               (then
                 (call $lexLineComment (i32.const 2) (enum.get $Token.string))
-                (local.set $member (i32.const 0))
-                (br $next)))
+                (br $tok)))
             (if (i32.eq (local.get $c) (i32.const "$"))
               (then
                 (global.set $ptr (i32.add (global.get $ptr) (i32.const 2)))
                 (if (call $moonbitString (i32.const 92) (i32.eqz (local.get $str)) (local.get $lhs))
                   (then (local.set $str (i32.const 92))))
-                (local.set $member (i32.const 0))
-                (br $next)))))
+                (br $tok)))))
 
-        ;; `#deprecated`, `#borrow(x)`, `#coverage.skip`
-        (if (i32.and (i32.eq (local.get $c) (i32.const "#")) (call $lexIsIdentStart (local.get $c2)))
+        ;; `#deprecated`, `#borrow(x)`, `#coverage.skip`; `@pkg` and
+        ;; `@author/pkg/sub` packages, whose `.` opens a path
+        (if
+          (i32.and
+            (i32.or (i32.eq (local.get $c) (i32.const "#")) (i32.eq (local.get $c) (i32.const "@")))
+            (call $lexIsIdentStart (local.get $c2)))
           (then
             (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
-            (call $scanIdentRun (i32.const "."))
-            (call $emitTok (enum.get $Token.attribute) (local.get $lhs) (global.get $ptr))
-            (br $next)))
-
-        ;; `@pkg` and `@author/pkg/sub` packages; their `.` opens a path
-        (if (i32.and (i32.eq (local.get $c) (i32.const "@")) (call $lexIsIdentStart (local.get $c2)))
-          (then
-            (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
+            (if (i32.eq (local.get $c) (i32.const "#"))
+              (then
+                (call $scanIdentRun (i32.const "."))
+                (call $emitTok (enum.get $Token.attribute) (local.get $lhs) (global.get $ptr))
+                (br $next)))
             (block $pathDone
               (loop $segment
                 (call $scanIdentRun (i32.const "_"))
@@ -218,7 +220,13 @@
                 (local.set $member (i32.const 2))))
             (br $next)))
 
-        (if (i32.and (call $lexIsIdentStart (local.get $c)) (i32.ne (local.get $c) (i32.const "$")))
+        ;; a name starts with a letter, `_`, or a UTF-8 byte
+        (if
+          (i32.or
+            (i32.ge_u (local.get $c) (i32.const 0x80))
+            (i32.or
+              (i32.le_u (i32.sub (i32.or (local.get $c) (i32.const 32)) (i32.const "a")) (i32.const 25))
+              (i32.eq (local.get $c) (i32.const "_"))))
           (then
             ;; a pending fn head outside its type parameters expects only
             ;; the opening paren; another name here is stale context
@@ -349,9 +357,7 @@
                                             (local.set $hl
                                               (enum.get $Token.variable.parameter))))))))))))))))))
             (call $emitTok (local.get $hl) (local.get $lhs) (local.get $rhs))
-            (local.set $member (i32.const 0))
-            (global.set $sigPattern (i32.const 0))
-            (br $next)))
+            (br $sig)))
 
         (if (call $lexIsDigit (local.get $c))
           (then
@@ -363,9 +369,7 @@
                   (br_if $index (call $lexIsDigit (call $templateByte (global.get $ptr))))))
               (else (call $lexScanNumber)))
             (call $emitTok (enum.get $Token.number) (local.get $lhs) (global.get $ptr))
-            (local.set $member (i32.const 0))
-            (global.set $sigPattern (i32.const 0))
-            (br $next)))
+            (br $sig)))
 
         (if (byteset.get "()[]{}" (local.get $c))
           (then
@@ -438,10 +442,9 @@
           (then
             (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
             (call $emitTok (enum.get $Token.punctuation.delimiter) (local.get $lhs) (global.get $ptr))
-            (local.set $member (i32.const 0))
             ;; a comma returns to parameter position
             (global.set $sigPattern (i32.eq (local.get $c) (i32.const ",")))
-            (br $next)))
+            (br $tok)))
         (if (i32.eq (local.get $c) (i32.const "."))
           (then
             (if (i32.eq (local.get $c2) (i32.const "."))
@@ -478,14 +481,14 @@
                     (call $templateByte (i32.add (global.get $ptr) (i32.const 1)))
                     (i32.const "/")))))
             (call $emitTok (enum.get $Token.operator) (local.get $lhs) (global.get $ptr))
-            (local.set $member (i32.const 0))
             (if (i32.eqz (global.get $sigFnAngle))
               (then (global.set $sigFnPend (i32.const 0))))
-            (global.set $sigPattern (i32.const 0))
-            (br $next)))
+            (br $sig)))
 
         (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
         (call $emitTok (enum.get $Token.none) (local.get $lhs) (global.get $ptr))
+        (br $tok))
+        (global.set $sigPattern (i32.const 0)))
         (local.set $member (i32.const 0))
         (br $next))))
 )

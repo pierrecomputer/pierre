@@ -52,7 +52,7 @@
     (group $Token.variable.special "me" "super"))
 
   ;; A '...' text field or `...` string literal; it ends at the line end, and
-  ;; a doubled quote inside is an escape.
+  ;; a doubled quote inside is an escape. Shared with matlab.
   (func $abapQuoted (param $q i32)
     (local $seg i32)
     (local.set $seg (global.get $ptr))
@@ -197,7 +197,13 @@
             (local.set $tpl (i32.sub (local.get $tpl) (i32.const 1)))
             (br $next)))
 
-        (if (i32.and (call $lexIsIdentStart (local.get $c)) (i32.ne (local.get $c) (i32.const "$")))
+        ;; an identifier start other than `$`
+        (if
+          (i32.or
+            (i32.ge_u (local.get $c) (i32.const 0x80))
+            (i32.or
+              (i32.le_u (i32.sub (i32.or (local.get $c) (i32.const 32)) (i32.const "a")) (i32.const 25))
+              (i32.eq (local.get $c) (i32.const "_"))))
           (then
             ;; the first word, then any hyphenated run (`field-symbols`, `ls_row-field`)
             (call $scanIdentRun (i32.const "_"))

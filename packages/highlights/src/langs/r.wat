@@ -15,11 +15,11 @@
       "NULL" "NA" "NA_integer_" "NA_real_" "NA_character_" "Inf" "NaN")
     (group "in"))          ;; 5: word operator
 
-  ;; Whether the name ending at $p is assigned a function: `<-`, `<<-`, or
-  ;; a single `=` follows on the same line, then `function` or a `\(`
-  ;; lambda.
+  ;; Whether the name whose trailing blanks end at $p is assigned a
+  ;; function: `<-`, `<<-`, or a single `=` follows on the same line, then
+  ;; `function` or a `\(` lambda.
   (func $rDefinedAhead (param $p i32) (result i32)
-    (local.set $p (call $lexSkipSpaceAt (local.get $p)))
+    (local $c i32)
     (if (i32.eq (call $rByte (local.get $p)) (i32.const "<"))
       (then
         (local.set $p (i32.add (local.get $p) (i32.const 1)))
@@ -43,12 +43,11 @@
       (then (return (i32.const 1))))
     (if (i32.gt_u (i32.add (local.get $p) (i32.const 8)) (global.get $end))
       (then (return (i32.const 0))))
+    (local.set $c (call $rByte (i32.add (local.get $p) (i32.const 8))))
     (i32.and
       (i64.eq (i64.load (local.get $p)) (i64.const "function"))
       (i32.eqz
-        (i32.or
-          (call $lexIsIdentContinue (call $rByte (i32.add (local.get $p) (i32.const 8))))
-          (i32.eq (call $rByte (i32.add (local.get $p) (i32.const 8))) (i32.const "."))))))
+        (i32.or (call $lexIsIdentContinue (local.get $c)) (i32.eq (local.get $c) (i32.const "."))))))
 
   ;; A raw string `r"(...)"`, `R'[...]'`, or `r"---(...)---"` whose prefix
   ;; sits at $ptr. The closer - the matching bracket, the same dashes, and
@@ -230,6 +229,8 @@
             (call $scanIdentRun (i32.const "."))
             (local.set $rhs (global.get $ptr))
             (local.set $p (call $lexSkipSpaceAt (local.get $rhs)))
+            ;; the byte after the name's blanks
+            (local.set $c2 (call $rByte (local.get $p)))
             (local.set $g
               (select
                 (i32.const 0)
@@ -255,7 +256,7 @@
                       (select
                         (enum.get $Token.function.method)
                         (enum.get $Token.property)
-                        (i32.eq (call $rByte (local.get $p)) (i32.const "(")))))
+                        (i32.eq (local.get $c2) (i32.const "(")))))
                   (else
                     (if
                       (i32.and
@@ -265,10 +266,10 @@
                           (i32.const ":")))
                       (then (local.set $hl (enum.get $Token.namespace)))
                       (else
-                        (if (call $rDefinedAhead (local.get $rhs))
+                        (if (call $rDefinedAhead (local.get $p))
                           (then (local.set $hl (enum.get $Token.function.definition)))
                           (else
-                            (if (i32.eq (call $rByte (local.get $p)) (i32.const "("))
+                            (if (i32.eq (local.get $c2) (i32.const "("))
                               (then (local.set $hl (enum.get $Token.function)))
                               (else
                                 ;; formals, and `name =` arguments of a call
@@ -280,7 +281,7 @@
                                     (i32.and
                                       (i32.ne (local.get $paren) (i32.const 0))
                                       (i32.and
-                                        (i32.eq (call $rByte (local.get $p)) (i32.const "="))
+                                        (i32.eq (local.get $c2) (i32.const "="))
                                         (i32.ne
                                           (call $rByte (i32.add (local.get $p) (i32.const 1)))
                                           (i32.const "=")))))

@@ -75,6 +75,8 @@
         (local.set $c (i32.load8_u (global.get $ptr)))
         (local.set $c2 (call $goByte (i32.add (global.get $ptr) (i32.const 1))))
         (local.set $c3 (call $goByte (i32.add (global.get $ptr) (i32.const 2))))
+        ;; a branch that leaves $tail0 clears $member
+        (block $tail0
 
         ;; `//` and `/*` comments; `///`, `//!`, `/**`, and `/*!` are doc
         ;; comments - the third byte repeats the second or is `!`
@@ -98,13 +100,11 @@
         (if (i32.or (i32.eq (local.get $c) (i32.const 34)) (i32.eq (local.get $c) (i32.const 39)))
           (then
             (call $lexString (local.get $c) (i32.const 0) (enum.get $Token.string))
-            (local.set $member (i32.const 0))
-            (br $next)))
+            (br $tail0)))
         (if (i32.eq (local.get $c) (i32.const "`"))
           (then
             (call $lexRawString (i32.const "`") (i32.const 1) (enum.get $Token.string))
-            (local.set $member (i32.const 0))
-            (br $next)))
+            (br $tail0)))
 
         (if (call $lexIsIdentStart (local.get $c))
           (then
@@ -121,13 +121,14 @@
                 (if (i32.shr_u (local.get $kind) (i32.const 8))
                   (then (local.set $expect (i32.shr_u (local.get $kind) (i32.const 8))))))
               (else
-                (local.set $p (call $lexSkipSpaceAt (local.get $rhs)))
+                ;; the byte after the name and its blanks
+                (local.set $p (call $goByte (call $lexSkipSpaceAt (local.get $rhs))))
                 ;; after a receiver, only a name with its own parameter
                 ;; list is the method being defined
                 (if
                   (i32.and
                     (i32.eq (local.get $expect) (i32.const 4))
-                    (i32.ne (call $goByte (local.get $p)) (i32.const "(")))
+                    (i32.ne (local.get $p) (i32.const "(")))
                   (then (local.set $expect (i32.const 0))))
                 (if (local.get $expect)
                   (then
@@ -143,7 +144,7 @@
                           (i32.eq (local.get $expect) (i32.const 4)))))
                     (local.set $expect (i32.const 0)))
                   (else
-                    (if (i32.eq (call $goByte (local.get $p)) (i32.const "("))
+                    (if (i32.eq (local.get $p) (i32.const "("))
                       (then
                         (local.set $hl
                           (select
@@ -164,8 +165,7 @@
                                   (then (local.set $hl (enum.get $Token.type)))
                                   (else (local.set $hl (enum.get $Token.variable))))))))))))))
             (call $emitTok (local.get $hl) (local.get $lhs) (local.get $rhs))
-            (local.set $member (i32.const 0))
-            (br $next)))
+            (br $tail0)))
 
         (if
           (i32.or
@@ -174,14 +174,12 @@
           (then
             (call $lexScanHexNumber (i32.const 1))
             (call $emitTok (enum.get $Token.number) (local.get $lhs) (global.get $ptr))
-            (local.set $member (i32.const 0))
-            (br $next)))
+            (br $tail0)))
 
         (if (byteset.get "()[]{}" (local.get $c))
           (then
             (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
             (call $emitTok (enum.get $Token.punctuation.bracket) (local.get $lhs) (global.get $ptr))
-            (local.set $member (i32.const 0))
             ;; A paren right after `func` opens a receiver or a literal's
             ;; parameter list and ends the plain next-name capture; its close
             ;; re-arms the conditional one when a name follows on the same
@@ -217,12 +215,9 @@
               (then
                 (local.set $recv (i32.const 0))
                 (local.set $expect (i32.const 0))))
-            (br $next)))
+            (br $tail0)))
         ;; `.` puts the next name in member position
-        (if
-          (i32.or
-            (i32.or (i32.eq (local.get $c) (i32.const ",")) (i32.eq (local.get $c) (i32.const ";")))
-            (i32.or (i32.eq (local.get $c) (i32.const ":")) (i32.eq (local.get $c) (i32.const "."))))
+        (if (byteset.get ",.:;" (local.get $c))
           (then
             (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
             (call $emitTok
@@ -252,14 +247,13 @@
                     (i32.or
                       (i32.eq (local.get $c) (i32.const "<"))
                       (i32.eq (local.get $c) (i32.const ">")))
-                    (i32.eq (call $goByte (global.get $ptr)) (i32.const "=")))
+                    (i32.eq (local.get $c3) (i32.const "=")))
                   (then (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))))))
             (call $emitTok (enum.get $Token.operator) (local.get $lhs) (global.get $ptr))
-            (local.set $member (i32.const 0))
-            (br $next)))
+            (br $tail0)))
 
         (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
-        (call $emitTok (enum.get $Token.none) (local.get $lhs) (global.get $ptr))
+        (call $emitTok (enum.get $Token.none) (local.get $lhs) (global.get $ptr)))
         (local.set $member (i32.const 0))
         (br $next))))
 )

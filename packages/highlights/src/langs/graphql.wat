@@ -1,9 +1,6 @@
 (module
   (import "../common.wat")
 
-  (func $gqlByte (param $p i32) (result i32)
-    (select (i32.load8_u (local.get $p)) (i32.const 0) (i32.lt_u (local.get $p) (global.get $end))))
-
   ;; Each value is the token in the low byte and, above it, the $expect
   ;; capture the word primes for the next name. The keyword groups are
   ;; contextual: `type`, `on`, or `input` is also an ordinary field name,
@@ -36,9 +33,9 @@
             (br $done)))
         (if
           (i32.and
-            (i32.eq (call $gqlByte (i32.add (local.get $p) (i32.const 1))) (i32.const 34))
+            (i32.eq (call $templateByte (i32.add (local.get $p) (i32.const 1))) (i32.const 34))
             (i32.and
-              (i32.eq (call $gqlByte (i32.add (local.get $p) (i32.const 2))) (i32.const 34))
+              (i32.eq (call $templateByte (i32.add (local.get $p) (i32.const 2))) (i32.const 34))
               (i32.ne (i32.load8_u (i32.sub (local.get $p) (i32.const 1))) (i32.const 92))))
           (then
             ;; both trailing quotes read below $end, so this cannot overshoot
@@ -79,8 +76,8 @@
         (br_if $done (i32.ge_u (global.get $ptr) (global.get $end)))
         (local.set $lhs (global.get $ptr))
         (local.set $c (i32.load8_u (global.get $ptr)))
-        (local.set $c2 (call $gqlByte (i32.add (global.get $ptr) (i32.const 1))))
-        (local.set $c3 (call $gqlByte (i32.add (global.get $ptr) (i32.const 2))))
+        (local.set $c2 (call $templateByte (i32.add (global.get $ptr) (i32.const 1))))
+        (local.set $c3 (call $templateByte (i32.add (global.get $ptr) (i32.const 2))))
 
         (if (i32.eq (local.get $c) (i32.const "#"))
           (then
@@ -95,20 +92,21 @@
               (then (call $gqlBlockString))
               (else (call $lexString (i32.const 34) (i32.const 0) (enum.get $Token.string))))
             (br $next)))
-        (if
-          (i32.and (i32.eq (local.get $c) (i32.const "$")) (call $lexIsIdentStart (local.get $c2)))
+        ;; `$variable` and `@directive`
+        (if (i32.or (i32.eq (local.get $c) (i32.const "$")) (i32.eq (local.get $c) (i32.const "@")))
           (then
-            (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
-            (call $scanIdentRun (i32.const "_"))
-            (call $emitTok (enum.get $Token.variable) (local.get $lhs) (global.get $ptr))
-            (br $next)))
-        (if
-          (i32.and (i32.eq (local.get $c) (i32.const "@")) (call $lexIsIdentStart (local.get $c2)))
-          (then
-            (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
-            (call $scanIdentRun (i32.const "_"))
-            (call $emitTok (enum.get $Token.attribute) (local.get $lhs) (global.get $ptr))
-            (br $next)))
+            (if (call $lexIsIdentStart (local.get $c2))
+              (then
+                (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
+                (call $scanIdentRun (i32.const "_"))
+                (call $emitTok
+                  (select
+                    (enum.get $Token.attribute)
+                    (enum.get $Token.variable)
+                    (i32.eq (local.get $c) (i32.const "@")))
+                  (local.get $lhs)
+                  (global.get $ptr))
+                (br $next)))))
         ;; `...Fragment` and `... on Type`
         (if
           (i32.and
@@ -122,30 +120,35 @@
             (local.set $expect (i32.const 3))
             (br $next)))
 
-        (if (i32.and (call $lexIsIdentStart (local.get $c)) (i32.ne (local.get $c) (i32.const "$")))
+        (if
+          (i32.or
+            (i32.ge_u (local.get $c) (i32.const 0x80))
+            (i32.or
+              (i32.le_u (i32.sub (i32.or (local.get $c) (i32.const 32)) (i32.const "a")) (i32.const 25))
+              (i32.eq (local.get $c) (i32.const "_"))))
           (then
             (call $scanIdentRun (i32.const "_"))
             (local.set $rhs (global.get $ptr))
             (local.set $p (call $lexSkipSpaceAt (local.get $rhs)))
             ;; the byte after the name and its blanks
-            (local.set $c3 (call $gqlByte (local.get $p)))
+            (local.set $c3 (call $templateByte (local.get $p)))
             (local.set $g (keyword-table.value $graphqlWords (local.get $lhs) (local.get $rhs)))
             ;; the contextual keywords need a name, brace, directive, paren,
             ;; or `&` after them on the same line
-            (if
-              (i32.and
-                (i32.eq (i32.and (local.get $g) (i32.const 255)) (enum.get $Token.keyword))
-                (i32.eqz
-                  (i32.or
-                    (i32.or
-                      (call $lexIsIdentStart (local.get $c3))
-                      (i32.eq (local.get $c3) (i32.const "{")))
+            (if (i32.eq (i32.and (local.get $g) (i32.const 255)) (enum.get $Token.keyword))
+              (then
+                (if
+                  (i32.eqz
                     (i32.or
                       (i32.or
-                        (i32.eq (local.get $c3) (i32.const "@"))
-                        (i32.eq (local.get $c3) (i32.const "(")))
-                      (i32.eq (local.get $c3) (i32.const "&"))))))
-              (then (local.set $g (i32.const -1))))
+                        (call $lexIsIdentStart (local.get $c3))
+                        (i32.eq (local.get $c3) (i32.const "{")))
+                      (i32.or
+                        (i32.or
+                          (i32.eq (local.get $c3) (i32.const "@"))
+                          (i32.eq (local.get $c3) (i32.const "(")))
+                        (i32.eq (local.get $c3) (i32.const "&")))))
+                  (then (local.set $g (i32.const -1))))))
             (if (i32.ge_s (local.get $g) (i32.const 0))
               (then
                 (local.set $hl (i32.and (local.get $g) (i32.const 255)))

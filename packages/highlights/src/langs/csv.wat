@@ -12,24 +12,28 @@
   ;; kinds that most bundled themes color differently, so adjacent columns
   ;; stay apart without a parser for the cell contents.
   (func $csvColumnTok (param $col i32) (result i32)
-    (block $c7
-      (block $c6
-        (block $c5
-          (block $c4
-            (block $c3
-              (block $c2
-                (block $c1
-                  (block $c0
-                    (br_table $c0 $c1 $c2 $c3 $c4 $c5 $c6 $c7
-                      (i32.and (local.get $col) (i32.const 7))))
-                  (return (enum.get $Token.string)))
-                (return (enum.get $Token.type)))
-              (return (enum.get $Token.keyword)))
-            (return (enum.get $Token.number)))
-          (return (enum.get $Token.function)))
-        (return (enum.get $Token.operator)))
-      (return (enum.get $Token.property)))
-    (enum.get $Token.variable.special))
+    ;; one token byte per column, lowest byte first; i64.shr_u takes its
+    ;; count mod 64, so the shift selects byte $col mod 8
+    (i32.and
+      (i32.wrap_i64
+        (i64.shr_u
+          (i64.or
+            (i64.or
+              (i64.or
+                (i64.extend_i32_u (enum.get $Token.string))
+                (i64.shl (i64.extend_i32_u (enum.get $Token.type)) (i64.const 8)))
+              (i64.or
+                (i64.shl (i64.extend_i32_u (enum.get $Token.keyword)) (i64.const 16))
+                (i64.shl (i64.extend_i32_u (enum.get $Token.number)) (i64.const 24))))
+            (i64.or
+              (i64.or
+                (i64.shl (i64.extend_i32_u (enum.get $Token.function)) (i64.const 32))
+                (i64.shl (i64.extend_i32_u (enum.get $Token.operator)) (i64.const 40)))
+              (i64.or
+                (i64.shl (i64.extend_i32_u (enum.get $Token.property)) (i64.const 48))
+                (i64.shl (i64.extend_i32_u (enum.get $Token.variable.special)) (i64.const 56)))))
+          (i64.extend_i32_u (i32.shl (local.get $col) (i32.const 3)))))
+      (i32.const 255)))
 
   ;; Delimiter-separated values. Each field takes its column's color and each
   ;; delimiter is punctuation. With $quoting (RFC 4180), a field that starts

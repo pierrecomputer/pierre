@@ -3,9 +3,6 @@
 
   ;; The container stack holds one kind byte per nesting level.
 
-  (func $tomlByte (param $p i32) (result i32)
-    (select (i32.load8_u (local.get $p)) (i32.const 0) (i32.lt_u (local.get $p) (global.get $end))))
-
   (func $tomlIsBareKey (param $c i32) (result i32)
     (i32.or
       (call $lexIsDigit (local.get $c))
@@ -52,67 +49,58 @@
 
   ;; TOML digits may contain underscores only between digits. $base is 2, 8,
   ;; 10, or 16; the caller checks that at least one digit was consumed.
+  ;; Returns the end of the last digit: $q trails $p by an underscore that
+  ;; has no digit after it yet.
   (func $tomlScanDigits (param $p i32) (param $base i32) (result i32)
     (local $c i32)
-    (local $next i32)
+    (local $q i32)
+    (local $start i32)
+    (local.set $q (local.get $p))
+    (local.set $start (local.get $p))
     (block $done
-      (br_if $done (i32.ge_u (local.get $p) (global.get $end)))
-      (local.set $c (i32.load8_u (local.get $p)))
-      (br_if $done
-        (i32.eqz
-          (select
-            (call $lexIsHex (local.get $c))
-            (i32.lt_u (i32.sub (local.get $c) (i32.const "0")) (local.get $base))
-            (i32.eq (local.get $base) (i32.const 16)))))
-      (local.set $p (i32.add (local.get $p) (i32.const 1)))
       (loop $digit
         (br_if $done (i32.ge_u (local.get $p) (global.get $end)))
         (local.set $c (i32.load8_u (local.get $p)))
+        (local.set $p (i32.add (local.get $p) (i32.const 1)))
         (if
           (select
             (call $lexIsHex (local.get $c))
             (i32.lt_u (i32.sub (local.get $c) (i32.const "0")) (local.get $base))
             (i32.eq (local.get $base) (i32.const 16)))
           (then
-            (local.set $p (i32.add (local.get $p) (i32.const 1)))
+            (local.set $q (local.get $p))
             (br $digit)))
-        (br_if $done (i32.ne (local.get $c) (i32.const "_")))
-        (local.set $next (i32.add (local.get $p) (i32.const 1)))
-        (br_if $done (i32.ge_u (local.get $next) (global.get $end)))
-        (local.set $c (i32.load8_u (local.get $next)))
-        (br_if $done
-          (i32.eqz
-            (select
-              (call $lexIsHex (local.get $c))
-              (i32.lt_u (i32.sub (local.get $c) (i32.const "0")) (local.get $base))
-              (i32.eq (local.get $base) (i32.const 16)))))
-        (local.set $p (i32.add (local.get $p) (i32.const 2)))
-        (br $digit)))
-    (local.get $p))
+        ;; one `_` may follow a digit
+        (br_if $digit
+          (i32.and
+            (i32.eq (local.get $c) (i32.const "_"))
+            (i32.and
+              (i32.eq (local.get $q) (i32.sub (local.get $p) (i32.const 1)))
+              (i32.gt_u (local.get $q) (local.get $start)))))))
+    (local.get $q))
 
   (func $tomlIsValueEnd (param $p i32) (result i32)
     (local $c i32)
     (if (i32.ge_u (local.get $p) (global.get $end))
       (then (return (i32.const 1))))
     (local.set $c (i32.load8_u (local.get $p)))
-    (i32.or
-      (i32.le_u (i32.sub (local.get $c) (i32.const 9)) (i32.const 1))
-      (byteset.get "\0d\20#,]}" (local.get $c))))
+    (byteset.get "\09\0a\0d\20#,]}" (local.get $c)))
 
   ;; The two-digit decimal number at $p, or -1 unless both bytes are digits
-  ;; before $end.
+  ;; before $end. Both loads stay inside the input slack.
   (func $tomlTwoDigitValue (param $p i32) (result i32)
-    (if (i32.gt_u (i32.add (local.get $p) (i32.const 2)) (global.get $end))
-      (then (return (i32.const -1))))
-    (if
-      (i32.eqz
+    (local $hi i32)
+    (local $lo i32)
+    (local.set $hi (i32.sub (i32.load8_u (local.get $p)) (i32.const "0")))
+    (local.set $lo (i32.sub (i32.load8_u offset=1 (local.get $p)) (i32.const "0")))
+    (select
+      (i32.add (i32.mul (local.get $hi) (i32.const 10)) (local.get $lo))
+      (i32.const -1)
+      (i32.and
+        (i32.le_u (i32.add (local.get $p) (i32.const 2)) (global.get $end))
         (i32.and
-          (call $lexIsDigit (i32.load8_u (local.get $p)))
-          (call $lexIsDigit (i32.load8_u offset=1 (local.get $p)))))
-      (then (return (i32.const -1))))
-    (i32.add
-      (i32.mul (i32.sub (i32.load8_u (local.get $p)) (i32.const "0")) (i32.const 10))
-      (i32.sub (i32.load8_u offset=1 (local.get $p)) (i32.const "0"))))
+          (i32.le_u (local.get $hi) (i32.const 9))
+          (i32.le_u (local.get $lo) (i32.const 9))))))
 
   ;; Whether two digits at $p read a number in [$min, $max]. The unsigned
   ;; compare sends a missing number (-1) out of range.
@@ -125,7 +113,7 @@
   ;; most values are not times.
   (func $tomlHourMinute (param $p i32) (result i32)
     (if (result i32)
-      (i32.eq (call $tomlByte (i32.add (local.get $p) (i32.const 2))) (i32.const ":"))
+      (i32.eq (call $templateByte (i32.add (local.get $p) (i32.const 2))) (i32.const ":"))
       (then
         (i32.and
           (call $tomlTwoDigits (local.get $p) (i32.const 0) (i32.const 23))
@@ -320,22 +308,16 @@
         (global.set $streamB (local.get $trim))
         (global.set $streamHl (local.get $hl)))))
 
-  ;; A basic string at $ptr: `"` single-line or `"""` multi-line.
-  (func $tomlBasicString (param $multiline i32) (param $hl i32)
+  ;; A `"""` multi-line basic string at $ptr. The caller checked that its
+  ;; three quotes end before $end.
+  (func $tomlBasicString (param $hl i32)
     (local $seg i32)
     (local $status i32)
     (local.set $seg (global.get $ptr))
-    (global.set $ptr
-      (i32.add (global.get $ptr) (select (i32.const 3) (i32.const 1) (local.get $multiline))))
-    (if (i32.gt_u (global.get $ptr) (global.get $end))
-      (then (global.set $ptr (global.get $end))))
+    (global.set $ptr (i32.add (global.get $ptr) (i32.const 3)))
     (local.set $status
-      (call $tomlBasicStringBody
-        (local.get $multiline)
-        (local.get $hl)
-        (local.get $seg)
-        (i32.const 0)))
-    (if (i32.and (local.get $multiline) (i32.ne (local.get $status) (i32.const 1)))
+      (call $tomlBasicStringBody (i32.const 1) (local.get $hl) (local.get $seg) (i32.const 0)))
+    (if (i32.ne (local.get $status) (i32.const 1))
       (then
         (call $tomlStreamOpen
           (i32.const 34)
@@ -370,13 +352,12 @@
     (call $emitTok (local.get $hl) (local.get $lhs) (global.get $ptr))
     (local.get $closed))
 
-  ;; A `'''` multi-line literal string at $ptr.
+  ;; A `'''` multi-line literal string at $ptr. The caller checked that its
+  ;; three quotes end before $end.
   (func $tomlLiteralString (param $hl i32)
     (local $lhs i32)
     (local.set $lhs (global.get $ptr))
     (global.set $ptr (i32.add (global.get $ptr) (i32.const 3)))
-    (if (i32.gt_u (global.get $ptr) (global.get $end))
-      (then (global.set $ptr (global.get $end))))
     (if (i32.eqz (call $tomlLiteralStringBody (local.get $hl) (local.get $lhs)))
       (then (call $tomlStreamOpen (i32.const 39) (i32.const 0) (local.get $hl)))))
 
@@ -452,19 +433,22 @@
                 (i32.and
                   (i32.le_u (i32.add (global.get $ptr) (i32.const 3)) (global.get $end))
                   (i32.and
-                    (i32.eq
-                      (call $tomlByte (i32.add (global.get $ptr) (i32.const 1)))
-                      (local.get $c))
-                    (i32.eq
-                      (call $tomlByte (i32.add (global.get $ptr) (i32.const 2)))
-                      (local.get $c)))))
+                    (i32.eq (i32.load8_u offset=1 (global.get $ptr)) (local.get $c))
+                    (i32.eq (i32.load8_u offset=2 (global.get $ptr)) (local.get $c)))))
               (then
                 (if (i32.eq (local.get $c) (i32.const 34))
-                  (then (call $tomlBasicString (i32.const 1) (local.get $hl)))
+                  (then (call $tomlBasicString (local.get $hl)))
                   (else (call $tomlLiteralString (local.get $hl)))))
               (else
                 (if (i32.eq (local.get $c) (i32.const 34))
-                  (then (call $tomlBasicString (i32.const 0) (local.get $hl)))
+                  (then
+                    (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
+                    (drop
+                      (call $tomlBasicStringBody
+                        (i32.const 0)
+                        (local.get $hl)
+                        (local.get $lhs)
+                        (i32.const 0))))
                   (else (call $lexRawString (i32.const 39) (i32.const 0) (local.get $hl))))))
             (br $next)))
 
@@ -503,7 +487,7 @@
             (if
               (i32.and
                 (local.get $header)
-                (i32.eq (call $tomlByte (global.get $ptr)) (i32.const "[")))
+                (i32.eq (call $templateByte (global.get $ptr)) (i32.const "[")))
               (then (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))))
             (call $emitTok (enum.get $Token.punctuation.bracket) (local.get $lhs) (global.get $ptr))
             (br $next)))
@@ -513,7 +497,7 @@
             (if
               (i32.and
                 (local.get $header)
-                (i32.eq (call $tomlByte (global.get $ptr)) (i32.const "]")))
+                (i32.eq (call $templateByte (global.get $ptr)) (i32.const "]")))
               (then (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))))
             (if (local.get $header)
               (then
@@ -654,7 +638,7 @@
                 (if (call $tomlTwoDigits (i32.add (local.get $lhs) (i32.const 8)) (i32.const 1) (local.get $limit))
                   (then
                     (local.set $p (i32.add (local.get $lhs) (i32.const 10)))
-                    (local.set $c (call $tomlByte (local.get $p)))
+                    (local.set $c (call $templateByte (local.get $p)))
                     (if
                       (i32.or
                         (i32.eq (i32.or (local.get $c) (i32.const 32)) (i32.const "t"))
@@ -681,7 +665,7 @@
             (local.set $r (i32.const 0))
             (if
               (i32.and
-                (i32.eq (call $tomlByte (local.get $p)) (i32.const ":"))
+                (i32.eq (call $templateByte (local.get $p)) (i32.const ":"))
                 (call $tomlTwoDigits
                   (i32.add (local.get $p) (i32.const 1))
                   (i32.const 0)
@@ -708,7 +692,7 @@
                     (br $fraction)))))
             (if (local.get $date)
               (then
-                (local.set $c (call $tomlByte (local.get $p)))
+                (local.set $c (call $templateByte (local.get $p)))
                 (if (i32.eq (i32.or (local.get $c) (i32.const 32)) (i32.const "z"))
                   (then (local.set $p (i32.add (local.get $p) (i32.const 1))))
                   (else
@@ -772,11 +756,11 @@
               (then
                 (local.set $p
                   (call $tomlScanDigits (i32.add (local.get $p) (i32.const 1)) (i32.const 10)))))
-            (local.set $c (call $tomlByte (local.get $p)))
+            (local.set $c (call $templateByte (local.get $p)))
             (if (i32.eq (i32.or (local.get $c) (i32.const 32)) (i32.const "e"))
               (then
                 (local.set $q (i32.add (local.get $p) (i32.const 1)))
-                (local.set $c (call $tomlByte (local.get $q)))
+                (local.set $c (call $templateByte (local.get $q)))
                 (if
                   (i32.or
                     (i32.eq (local.get $c) (i32.const "+"))
@@ -795,14 +779,9 @@
           (loop $atom
             ;; the shared terminators cover $end, whitespace, `#`, `,`, `]`,
             ;; and `}`; a plain atom also stops before the remaining punctuation
-            (br_if $atomDone (call $tomlIsValueEnd (global.get $ptr)))
+            (br_if $atomDone (i32.ge_u (global.get $ptr) (global.get $end)))
             (local.set $c (i32.load8_u (global.get $ptr)))
-            (br_if $atomDone (i32.eq (local.get $c) (i32.const "=")))
-            (br_if $atomDone (i32.eq (local.get $c) (i32.const ".")))
-            (br_if $atomDone (i32.eq (local.get $c) (i32.const 34)))
-            (br_if $atomDone (i32.eq (local.get $c) (i32.const 39)))
-            (br_if $atomDone (i32.eq (local.get $c) (i32.const "[")))
-            (br_if $atomDone (i32.eq (local.get $c) (i32.const "{")))
+            (br_if $atomDone (byteset.get "\09\0a\0d \22#',.=[]{}" (local.get $c)))
             (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
             (br $atom)))
         (if (i32.eq (global.get $ptr) (local.get $lhs))

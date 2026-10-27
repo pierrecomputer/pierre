@@ -398,8 +398,11 @@
               (then (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))))
             (local.set $rhs (global.get $ptr))
             (local.set $p (call $lexSkipSpaceAt (local.get $rhs)))
+            ;; the byte right after the name, and the one after its blanks
+            (local.set $c2 (call $jlByte (local.get $rhs)))
+            (local.set $c3 (call $jlByte (local.get $p)))
             ;; `r"..."`, `raw"..."`, `b"..."`: a prefix, then a raw string body
-            (if (i32.eq (call $jlByte (local.get $rhs)) (i32.const 34))
+            (if (i32.eq (local.get $c2) (i32.const 34))
               (then
                 (call $emitTok (enum.get $Token.function) (local.get $lhs) (local.get $rhs))
                 (local.set $strHl
@@ -466,7 +469,7 @@
                       (then
                         ;; `function Base.show(` qualifies the name; the
                         ;; module part keeps the capture open
-                        (if (i32.eq (call $jlByte (local.get $rhs)) (i32.const "."))
+                        (if (i32.eq (local.get $c2) (i32.const "."))
                           (then (local.set $hl (enum.get $Token.namespace)))
                           (else
                             (local.set $hl (enum.get $Token.function.definition))
@@ -482,7 +485,7 @@
                               (select
                                 (enum.get $Token.function.method)
                                 (enum.get $Token.property)
-                                (i32.eq (call $jlByte (local.get $p)) (i32.const "(")))))
+                                (i32.eq (local.get $c3) (i32.const "(")))))
                           (else
                             (if (call $jlIsConstName (local.get $lhs) (local.get $rhs))
                               (then (local.set $hl (enum.get $Token.constant)))
@@ -491,7 +494,7 @@
                                   (i32.le_u (i32.sub (local.get $c) (i32.const "A")) (i32.const 25))
                                   (then (local.set $hl (enum.get $Token.type)))
                                   (else
-                                    (if (i32.eq (call $jlByte (local.get $p)) (i32.const "("))
+                                    (if (i32.eq (local.get $c3) (i32.const "("))
                                       (then
                                         ;; `f(x) = ...` at a statement head defines
                                         ;; f; the line scan runs only there
@@ -614,13 +617,10 @@
           (then
             (block $opDone
               (loop $op
+                ;; a `#` comment opener is not an operator byte, so it ends the run
+                (local.set $c (call $jlByte (global.get $ptr)))
                 (br_if $opDone
-                  (i32.eqz
-                    (i32.or
-                      (call $jlIsOp (call $jlByte (global.get $ptr)))
-                      (i32.eq (call $jlByte (global.get $ptr)) (i32.const ".")))))
-                ;; a comment opener ends the run
-                (br_if $opDone (i32.eq (call $jlByte (global.get $ptr)) (i32.const "#")))
+                  (i32.eqz (i32.or (call $jlIsOp (local.get $c)) (i32.eq (local.get $c) (i32.const ".")))))
                 (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
                 (br $op)))
             (call $emitTok (enum.get $Token.operator) (local.get $lhs) (global.get $ptr))

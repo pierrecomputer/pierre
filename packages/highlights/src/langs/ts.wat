@@ -39,9 +39,9 @@
   (func $isIdentish (param $t i32) (result i32)
     (i32.or
       (i32.eq (local.get $t) (enum.get $Lex.identifier))
-      (i32.and
-        (i32.ge_u (local.get $t) (enum.get $Lex.keyword_break))
-        (i32.le_u (local.get $t) (enum.get $Lex.ctxword_type)))))
+      (i32.le_u
+        (i32.sub (local.get $t) (enum.get $Lex.keyword_break))
+        (i32.sub (enum.get $Lex.ctxword_type) (enum.get $Lex.keyword_break)))))
 
   ;; undefined / NaN / Infinity spelled out
   (func $isBuiltinConst (param $lhs i32) (param $rhs i32) (result i32)
@@ -368,9 +368,9 @@
                   (i32.eq (local.get $t) (enum.get $Lex.hash_identifier)))
                 (i32.or
                   (i32.eq (local.get $t) (enum.get $Lex.asterisk))
-                  (i32.and
-                    (i32.ge_u (local.get $t) (enum.get $Lex.ctxword_as))
-                    (i32.le_u (local.get $t) (enum.get $Lex.ctxword_type)))))))
+                  (i32.le_u
+                    (i32.sub (local.get $t) (enum.get $Lex.ctxword_as))
+                    (i32.sub (enum.get $Lex.ctxword_type) (enum.get $Lex.ctxword_as)))))))
           (then
             (global.set $sigFnPend (i32.const 0))
             (global.set $sigFnAngle (i32.const 0))))))
@@ -465,69 +465,57 @@
           (then (return (enum.get $Token.keyword.declaration))))))
     (if (i32.eq (local.get $t) (enum.get $Lex.ctxword_await))
       (then (return (enum.get $Token.keyword.control))))
-    (if (i32.eq (local.get $t) (enum.get $Lex.ctxword_async))
-      (then
-        (if
-          (i32.or
-            (call $isIdentish (local.get $next))
-            (i32.eq (local.get $next) (enum.get $Lex.l_paren)))
-          (then (return (enum.get $Token.keyword))))))
+    ;; `async (` and `keyof (`; before a name they take the shared rule below
+    (if
+      (i32.and
+        (i32.or
+          (i32.eq (local.get $t) (enum.get $Lex.ctxword_async))
+          (i32.eq (local.get $t) (enum.get $Lex.ctxword_keyof)))
+        (i32.eq (local.get $next) (enum.get $Lex.l_paren)))
+      (then (return (enum.get $Token.keyword))))
     (if (i32.eq (local.get $t) (enum.get $Lex.ctxword_of))
       (then
-        (if (bitset.get $LexBits.exprEnd (local.get $prev))
-          (then (return (enum.get $Token.keyword))))))
-    (if (i32.eq (local.get $t) (enum.get $Lex.ctxword_keyof))
-      (then
-        (if
-          (i32.or
-            (call $isIdentish (local.get $next))
-            (i32.eq (local.get $next) (enum.get $Lex.l_paren)))
-          (then (return (enum.get $Token.keyword))))))
+        (return
+          (select
+            (enum.get $Token.keyword)
+            (i32.const -1)
+            (bitset.get $LexBits.exprEnd (local.get $prev))))))
     (if (i32.eq (local.get $t) (enum.get $Lex.ctxword_from))
       (then
         (if (i32.eq (local.get $next) (enum.get $Lex.string_literal))
           (then (return (enum.get $Token.keyword.import))))
         ;; TSRX imports from a declared submodule by its name
         (if (i32.and (call $ecmaHasTsrx) (i32.eq (local.get $next) (enum.get $Lex.identifier)))
-          (then (return (enum.get $Token.keyword.import))))))
-    (if (i32.eq (local.get $t) (enum.get $Lex.ctxword_as))
-      (then
-        (if (call $isIdentish (local.get $next))
-          (then (return (enum.get $Token.keyword))))))
-    ;; the remaining ctxwords - type/satisfies/is/declare/abstract/namespace/
-    ;; readonly/override/infer/get/set - read as keywords before a name;
-    ;; `type` introduces a declaration, so it lands in Zed's declaration bucket.
-    ;; Accessors also name private members (`get #x()`), and `readonly`
-    ;; also marks index signatures and mapped types (`readonly [K in T]`)
+          (then (return (enum.get $Token.keyword.import))))
+        (return (i32.const -1))))
+    ;; the other ctxwords - as/async/keyof/type/satisfies/is/declare/abstract/
+    ;; namespace/readonly/override/infer/get/set - read as keywords before a
+    ;; name; `type` introduces a declaration, so it lands in Zed's declaration
+    ;; bucket. Accessors also name private members (`get #x()`), and
+    ;; `readonly` also marks index signatures and mapped types
+    ;; (`readonly [K in T]`)
     (if
-      (i32.and
-        (i32.ge_u (local.get $t) (enum.get $Lex.ctxword_get))
-        (i32.le_u (local.get $t) (enum.get $Lex.ctxword_type)))
-      (then
-        (if
-          (i32.and
-            (i32.ne (local.get $t) (enum.get $Lex.ctxword_of))
-            (i32.or
-              (call $isIdentish (local.get $next))
+      (i32.or
+        (call $isIdentish (local.get $next))
+        (i32.and
+          (i32.eqz (global.get $nlBefore))
+          (i32.or
+            (i32.and
+              (i32.eq (local.get $next) (enum.get $Lex.hash_identifier))
+              (i32.or
+                (i32.eq (local.get $t) (enum.get $Lex.ctxword_get))
+                (i32.eq (local.get $t) (enum.get $Lex.ctxword_set))))
+            (i32.and
+              (i32.eq (local.get $next) (enum.get $Lex.l_bracket))
               (i32.and
-                (i32.eqz (global.get $nlBefore))
-                (i32.or
-                  (i32.and
-                    (i32.eq (local.get $next) (enum.get $Lex.hash_identifier))
-                    (i32.or
-                      (i32.eq (local.get $t) (enum.get $Lex.ctxword_get))
-                      (i32.eq (local.get $t) (enum.get $Lex.ctxword_set))))
-                  (i32.and
-                    (i32.eq (local.get $next) (enum.get $Lex.l_bracket))
-                    (i32.and
-                      (i32.eq (local.get $t) (enum.get $Lex.ctxword_readonly))
-                      (i32.ne (local.get $prev) (enum.get $Lex.dot))))))))
-          (then
-            (return
-              (select
-                (enum.get $Token.keyword.declaration)
-                (enum.get $Token.keyword)
-                (i32.eq (local.get $t) (enum.get $Lex.ctxword_type))))))))
+                (i32.eq (local.get $t) (enum.get $Lex.ctxword_readonly))
+                (i32.ne (local.get $prev) (enum.get $Lex.dot)))))))
+      (then
+        (return
+          (select
+            (enum.get $Token.keyword.declaration)
+            (enum.get $Token.keyword)
+            (i32.eq (local.get $t) (enum.get $Lex.ctxword_type))))))
     (i32.const -1))
 
   ;; Match contextual keywords absent from the keyword table:

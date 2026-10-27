@@ -30,8 +30,10 @@
       (then
         (global.set $ptr
           (call $scanFind3 (i32.add (local.get $lhs) (i32.const 2)) (i32.const "}") (i32.const 10) (i32.const 13)))
-        (if (i32.eq (call $templateByte (global.get $ptr)) (i32.const "}"))
-          (then (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))))
+        (global.set $ptr
+          (i32.add
+            (global.get $ptr)
+            (i32.eq (call $templateByte (global.get $ptr)) (i32.const "}"))))
         (call $emitTok (enum.get $Token.variable) (local.get $lhs) (global.get $ptr))
         (return (i32.const 1))))
     (global.set $ptr (i32.add (local.get $lhs) (i32.const 1)))

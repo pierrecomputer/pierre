@@ -346,9 +346,10 @@
       (then (return (i32.const 0))))
     (local.set $c (i32.load8_u (local.get $p)))
     (if
-      (i32.or
-        (i32.eqz (call $lexIsIdentStart (local.get $c)))
-        (i32.eq (local.get $c) (i32.const "$")))
+      (i32.eqz
+        (i32.or
+          (i32.le_u (i32.sub (i32.or (local.get $c) (i32.const 32)) (i32.const "a")) (i32.const 25))
+          (i32.or (i32.eq (local.get $c) (i32.const "_")) (i32.ge_u (local.get $c) (i32.const 128)))))
       (then (return (i32.const 0))))
     (local.set $delim (local.get $p))
     (block $idDone
@@ -479,6 +480,8 @@
             (i32.and
               (i32.eq (local.get $c) (i32.const "?"))
               (i32.eq (local.get $next) (i32.const ">")))))
+        ;; a branch to $reset clears the pending name and member lookahead
+        (block $reset
         ;; Hack: a legacy `<?hh` header, and `<<Name, ...>>` attributes
         (if (i32.and (global.get $phpHack) (i32.eq (local.get $c) (i32.const "<")))
           (then
@@ -496,7 +499,9 @@
             (if
               (i32.and
                 (i32.eq (local.get $next) (i32.const "<"))
-                (i32.and (call $lexIsIdentStart (local.get $p)) (i32.ne (local.get $p) (i32.const "$"))))
+                (i32.or
+                  (i32.le_u (i32.sub (i32.or (local.get $p) (i32.const 32)) (i32.const "a")) (i32.const 25))
+                  (i32.or (i32.eq (local.get $p) (i32.const "_")) (i32.ge_u (local.get $p) (i32.const 128)))))
               (then
                 ;; after a value, `<<` shifts: `1<<BIT`, `$x<<SHIFT >> 2`
                 (local.set $p (call $lexLineByteBefore (local.get $lhs)))
@@ -510,9 +515,7 @@
                     (call $emitTok (enum.get $Token.attribute) (local.get $lhs) (global.get $ptr))
                     (local.set $attr (i32.const 1))
                     (local.set $attrAt (global.get $ptr))
-                    (local.set $decl (i32.const 0))
-                    (local.set $member (i32.const 0))
-                    (br $token)))))))
+                    (br $reset)))))))
         (if
           (i32.or
             (i32.and
@@ -541,11 +544,7 @@
               (i32.lt_u (i32.add (global.get $ptr) (i32.const 2)) (global.get $end))
               (i32.eq (i32.load8_u offset=2 (global.get $ptr)) (i32.const "<"))))
           (then
-            (if (call $phpHeredoc)
-              (then
-                (local.set $decl (i32.const 0))
-                (local.set $member (i32.const 0))
-                (br $token)))))
+            (br_if $reset (call $phpHeredoc))))
         (if
           (i32.or
             (i32.eq (local.get $c) (i32.const 34))
@@ -556,18 +555,14 @@
                 (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
                 (drop (call $phpSingleBody (local.get $lhs))))
               (else (call $lexString (local.get $c) (i32.const 1) (enum.get $Token.string))))
-            (local.set $decl (i32.const 0))
-            (local.set $member (i32.const 0))
-            (br $token)))
+            (br $reset)))
         (if (i32.eq (local.get $c) (i32.const "$"))
           (then
             (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
             (call $lexScanIdent)
             (call $emitTok (enum.get $Token.variable) (local.get $lhs) (global.get $ptr))
-            (local.set $decl (i32.const 0))
-            (local.set $member (i32.const 0))
             (global.set $sigPattern (i32.const 0))
-            (br $token)))
+            (br $reset)))
         (if
           (i32.or
             (call $lexIsDigit (local.get $c))
@@ -575,9 +570,7 @@
           (then
             (call $lexScanNumber)
             (call $emitTok (enum.get $Token.number) (local.get $lhs) (global.get $ptr))
-            (local.set $decl (i32.const 0))
-            (local.set $member (i32.const 0))
-            (br $token)))
+            (br $reset)))
         (if (call $lexIsIdentStart (local.get $c))
           (then
             (call $lexScanIdent)
@@ -725,11 +718,9 @@
           (then
             (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
             (call $emitTok (enum.get $Token.punctuation.bracket) (local.get $lhs) (global.get $ptr))
-            (local.set $decl (i32.const 0))
-            (local.set $member (i32.const 0))
             ;; an open paren puts the next bare word in named-argument position
             (global.set $sigPattern (i32.eq (local.get $c) (i32.const "(")))
-            (br $token)))
+            (br $reset)))
         (if
           (i32.or
             (i32.eq (local.get $c) (i32.const ","))
@@ -742,12 +733,10 @@
               (enum.get $Token.punctuation.delimiter)
               (local.get $lhs)
               (global.get $ptr))
-            (local.set $decl (i32.const 0))
-            (local.set $member (i32.const 0))
             (global.set $sigPattern (i32.eq (local.get $c) (i32.const ",")))
             (if (local.get $attr)
               (then (local.set $attr (i32.const 1))))
-            (br $token)))
+            (br $reset)))
         (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
         (local.set $hl
           (select
@@ -771,6 +760,9 @@
           (then
             (if (i32.and (i32.ne (local.get $c) (i32.const "&")) (i32.ne (local.get $c) (i32.const 92)))
               (then (local.set $decl (i32.const 0))))))
+        (local.set $member (i32.const 0))
+        (br $token))
+        (local.set $decl (i32.const 0))
         (local.set $member (i32.const 0))
         (br $token)))
     (if (global.get $streaming)
@@ -874,20 +866,18 @@
               (call $hlHtml)
               (br $out)))
           (local.set $snippet (i32.const 1))))
-      ;; the html prefix runs once here; each loop iteration ends by lexing
-      ;; the html between `?>` and the next opener itself
-      (if (i32.and (i32.eqz (local.get $snippet)) (i32.lt_u (global.get $ptr) (local.get $open)))
-        (then
-          (local.set $saveEnd (global.get $end))
-          (global.set $end (local.get $open))
-          (call $hlHtml)
-          (global.set $end (local.get $saveEnd))))
       (block $done
-        (br_if $done (i32.ge_u (global.get $ptr) (global.get $end)))
         (loop $part
-          ;; a snippet has no opener before its code
+          ;; a snippet has no html or opener before its code
           (if (i32.eqz (local.get $snippet))
             (then
+              (if (i32.lt_u (global.get $ptr) (local.get $open))
+                (then
+                  (local.set $saveEnd (global.get $end))
+                  (global.set $end (local.get $open))
+                  (call $hlHtml)
+                  (global.set $end (local.get $saveEnd))))
+              (br_if $done (i32.ge_u (global.get $ptr) (global.get $end)))
               (local.set $open (global.get $ptr))
               (global.set $ptr
                 (i32.add
@@ -913,12 +903,5 @@
               (global.set $phpStreamingCode (i32.const 1))
               (br $done)))
           (local.set $open (call $phpFindOpen (global.get $ptr)))
-          (if (i32.lt_u (global.get $ptr) (local.get $open))
-            (then
-              (local.set $saveEnd (global.get $end))
-              (global.set $end (local.get $open))
-              (call $hlHtml)
-              (global.set $end (local.get $saveEnd))))
-          (br_if $done (i32.ge_u (global.get $ptr) (global.get $end)))
           (br $part)))))
 )

@@ -38,14 +38,6 @@
     (if (i32.eqz (global.get $jsxSp))
       (then (return (i32.const 0))))
     (i32.load offset=4 (call $jsxTopSlot)))
-  (func $jsxSetTopMode (param $mode i32)
-    (if (i32.eqz (global.get $jsxSp))
-      (then (return)))
-    (i32.store (call $jsxTopSlot) (local.get $mode)))
-  (func $jsxSetTopTarget (param $target i32)
-    (if (i32.eqz (global.get $jsxSp))
-      (then (return)))
-    (i32.store offset=4 (call $jsxTopSlot) (local.get $target)))
   ;; modes that scan bytes rather than tokens: TAG, CONTENT, STYLE, CLOSE TAIL
   (func $jsxByteMode (param $mode i32) (result i32)
     (i32.or
@@ -95,13 +87,7 @@
 
   ;; tag-name continue: [A-Za-z0-9_$.:-]
   (func $jsxNameCont (param $c i32) (result i32)
-    (i32.or
-      (i32.or
-        (call $jsxNameStart (local.get $c))
-        (i32.le_u (i32.sub (local.get $c) (i32.const "0")) (i32.const 9)))
-      (i32.or
-        (i32.eq (local.get $c) (i32.const "."))
-        (i32.or (i32.eq (local.get $c) (i32.const ":")) (i32.eq (local.get $c) (i32.const "-"))))))
+    (byteset.get "$-.0123456789:ABCDEFGHIJKLMNOPQRSTUVWXYZ_abcdefghijklmnopqrstuvwxyz" (local.get $c)))
 
   ;; $p past a tag-name run
   (func $jsxNameEndAt (param $p i32) (result i32)
@@ -255,6 +241,7 @@
     (local $from i32)
     (local $c i32)
     (local $q i32)
+    (local $slot i32)
     (local.set $from (global.get $ptr))
     (global.set $ptr (call $jsxSpaceEndAt (global.get $ptr)))
     (call $jsxGap (local.get $from) (global.get $ptr))
@@ -262,6 +249,8 @@
       (then (return)))
     (local.set $from (global.get $ptr))
     (local.set $c (i32.load8_u (global.get $ptr)))
+    ;; the TAG entry: this step runs only in mode 1, so the stack is not empty
+    (local.set $slot (call $jsxTopSlot))
     ;; `>` - closes an open type-argument list, else the tag opens: children
     ;; follow. A TSRX raw-text element - the open tag recorded its kind in the
     ;; entry's target field - takes the style body mode with a fresh CSS
@@ -270,28 +259,28 @@
     (if (i32.eq (local.get $c) (i32.const ">"))
       (then
         (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
-        (local.set $q (call $jsxTopTarget))
+        (local.set $q (i32.load offset=4 (local.get $slot)))
         (if (i32.ge_u (local.get $q) (i32.const 256))
           (then
             (call $jsxEmit
               (enum.get $Token.punctuation.bracket)
               (local.get $from)
               (global.get $ptr))
-            (call $jsxSetTopTarget (i32.sub (local.get $q) (i32.const 256)))
+            (i32.store offset=4 (local.get $slot) (i32.sub (local.get $q) (i32.const 256)))
             (return)))
         (call $jsxEmit
           (enum.get $Token.punctuation.bracket.jsx)
           (local.get $from)
           (global.get $ptr))
-        (call $jsxSetTopMode (i32.const 2))
+        (i32.store (local.get $slot) (i32.const 2))
         (if (i32.eq (local.get $q) (i32.const 2))
           (then
-            (call $jsxSetTopMode (i32.const 6))
-            (call $jsxSetTopTarget (i32.const 260))))
+            (i32.store (local.get $slot) (i32.const 6))
+            (i32.store offset=4 (local.get $slot) (i32.const 260))))
         (if (i32.eq (local.get $q) (i32.const 1))
           (then
-            (call $jsxSetTopMode (i32.const 5))
-            (call $jsxSetTopTarget (i32.const 0))
+            (i32.store (local.get $slot) (i32.const 5))
+            (i32.store offset=4 (local.get $slot) (i32.const 0))
             (global.set $prevTok (enum.get $Lex.eof))
             (global.set $lto (enum.get $Lex.eof))))
         (return)))
@@ -300,7 +289,7 @@
       (then
         (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
         (call $jsxEmit (enum.get $Token.punctuation.bracket) (local.get $from) (global.get $ptr))
-        (call $jsxSetTopTarget (i32.add (call $jsxTopTarget) (i32.const 256)))
+        (i32.store offset=4 (local.get $slot) (i32.add (i32.load offset=4 (local.get $slot)) (i32.const 256)))
         (return)))
     (if (i32.eq (local.get $c) (i32.const "/"))
       (then
@@ -364,7 +353,7 @@
         (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
         (if (i32.eq (call $tsxByte (global.get $ptr)) (i32.const ">"))
           (then
-            (if (i32.ge_u (call $jsxTopTarget) (i32.const 256))
+            (if (i32.ge_u (i32.load offset=4 (local.get $slot)) (i32.const 256))
               (then
                 (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
                 (call $jsxEmit (enum.get $Token.operator) (local.get $from) (global.get $ptr))
@@ -386,7 +375,7 @@
           (select
             (enum.get $Token.type)
             (enum.get $Token.attribute.jsx)
-            (i32.ge_u (call $jsxTopTarget) (i32.const 256)))
+            (i32.ge_u (i32.load offset=4 (local.get $slot)) (i32.const 256)))
           (local.get $from)
           (global.get $ptr))
         (return)))
@@ -399,7 +388,7 @@
         (enum.get $Token.none)
         (i32.and
           (i32.eq (local.get $c) (i32.const ","))
-          (i32.ge_u (call $jsxTopTarget) (i32.const 256))))
+          (i32.ge_u (i32.load offset=4 (local.get $slot)) (i32.const 256))))
       (local.get $from)
       (global.get $ptr)))
 
@@ -494,20 +483,19 @@
     (local.set $tsrx (call $ecmaHasTsrx))
     (local.set $seg (global.get $ptr))
     (local.set $bound (global.get $ptr))
-    ;; TSRX: `finally {` as the first word of the run heads a try clause; the
-    ;; blanks before it are text, as they are when the run holds no clause
-    (if (local.get $tsrx)
-      (then
-        (local.set $p (call $tsrxFinallyAhead (global.get $ptr)))
-        (if (local.get $p)
-          (then
-            (call $jsxEmit (enum.get $Token.text.jsx) (global.get $ptr) (local.get $p))
-            (global.set $ptr (local.get $p))
-            (call $jsxPush (i32.const 4) (global.get $braceDepth))
-            (return)))))
     ;; text run up to `<` or `{`, hopping plain text 16 bytes per step;
     ;; `&entity;` gets a string.special span
     (block $textDone
+      ;; TSRX: `finally {` as the first word of the run heads a try clause; the
+      ;; blanks before it are text, as they are when the run holds no clause
+      (if (local.get $tsrx)
+        (then
+          (local.set $p (call $tsrxFinallyAhead (global.get $ptr)))
+          (if (local.get $p)
+            (then
+              (global.set $ptr (local.get $p))
+              (local.set $act (i32.const 2))
+              (br $textDone)))))
       (loop $text
         (if (local.get $tsrx)
           (then (global.set $ptr (call $tsrxContentFind (global.get $ptr))))
@@ -613,17 +601,13 @@
     (call $jsxEmit (enum.get $Token.text.jsx) (local.get $seg) (global.get $ptr))
     (if (i32.ge_u (global.get $ptr) (global.get $end))
       (then (return)))
-    ;; TSRX: an `@{` container, or a directive head the token pipeline scans
-    (if (i32.eq (local.get $act) (i32.const 1))
-      (then
-        (call $jsxOpenContainer)
-        (return)))
+    ;; TSRX: a directive head the token pipeline scans
     (if (i32.eq (local.get $act) (i32.const 2))
       (then
         (call $jsxPush (i32.const 4) (global.get $braceDepth))
         (return)))
-    ;; `{` container
-    (if (i32.eq (local.get $c) (i32.const "{"))
+    ;; a `{` container, or a TSRX `@{` one
+    (if (i32.or (i32.eq (local.get $act) (i32.const 1)) (i32.eq (local.get $c) (i32.const "{")))
       (then
         (call $jsxOpenContainer)
         (return)))
@@ -639,7 +623,7 @@
         ;; TSRX dynamic close tag `</{expr}>`: the tail waits for its container
         (if (i32.and (local.get $tsrx) (i32.eq (call $tsxByte (global.get $ptr)) (i32.const "{")))
           (then
-            (call $jsxSetTopMode (i32.const 7))
+            (i32.store (call $jsxTopSlot) (i32.const 7))
             (call $jsxOpenContainer)
             (return)))
         (drop (call $jsxCloseTagTail))

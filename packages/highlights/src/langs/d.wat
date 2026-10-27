@@ -249,7 +249,12 @@
                 (call $emitTok (enum.get $Token.string) (local.get $lhs) (global.get $ptr))
                 (local.set $qDepth (call $dTokenString (i32.const 1)))
                 (br $next)))))
-        (if (i32.and (call $lexIsIdentStart (local.get $c)) (i32.ne (local.get $c) (i32.const "$")))
+        (if
+          (i32.or
+            (i32.ge_u (local.get $c) (i32.const 0x80))
+            (i32.or
+              (i32.le_u (i32.sub (i32.or (local.get $c) (i32.const 32)) (i32.const "a")) (i32.const 25))
+              (i32.eq (local.get $c) (i32.const "_"))))
           (then
             (call $scanIdentRun (i32.const "_"))
             (local.set $rhs (global.get $ptr))
@@ -345,7 +350,12 @@
         (if (i32.eq (local.get $c) (i32.const "@"))
           (then
             (global.set $ptr (i32.add (local.get $lhs) (i32.const 1)))
-            (if (i32.and (call $lexIsIdentStart (local.get $c2)) (i32.ne (local.get $c2) (i32.const "$")))
+            (if
+              (i32.or
+                (i32.ge_u (local.get $c2) (i32.const 0x80))
+                (i32.or
+                  (i32.le_u (i32.sub (i32.or (local.get $c2) (i32.const 32)) (i32.const "a")) (i32.const 25))
+                  (i32.eq (local.get $c2) (i32.const "_"))))
               (then (call $scanIdentRun (i32.const "_"))))
             (call $emitTok (enum.get $Token.attribute) (local.get $lhs) (global.get $ptr))
             (local.set $afterType (i32.const 0))

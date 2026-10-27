@@ -124,66 +124,63 @@
     (if (i32.eqz (local.get $mode))
       (then (return (i32.const 0))))
     (local.set $from (global.get $ptr))
-    ;; template body
-    (if (i32.eq (local.get $mode) (i32.const 1))
-      (then
-        (local.set $t (call $scanTemplateBody))
-        ;; the continuation is template text from its first byte: a leading
-        ;; `}` here is a character, not a substitution close
-        (call $emitTemplate
-          (local.get $from)
-          (global.get $ptr)
-          (i32.eq (local.get $t) (enum.get $Lex.dollar_brace))
-          (i32.const 0)
-          (i32.eq (local.get $t) (enum.get $Lex.backtick)))
-        (if (i32.eq (local.get $t) (enum.get $Lex.invalid))
-          (then (return (i32.const 1))))
-        (global.set $tsxStreamMode (i32.const 0))
-        (call $tsxFinishStreamToken (local.get $t))
-        (return (i32.const 0))))
-    ;; block or doc comment
-    (if (i32.le_u (local.get $mode) (i32.const 3))
-      (then
-        (call $scanBlockCommentEnd)
-        (if (i32.eq (local.get $mode) (i32.const 3))
-          (then (call $emitDocCommentRange (local.get $from) (global.get $ptr) (i32.const 0)))
-          (else (call $emitTok (enum.get $Token.comment) (local.get $from) (global.get $ptr))))
-        (if
-          (i32.or
-            (i32.lt_u (i32.sub (global.get $ptr) (local.get $from)) (i32.const 2))
-            (i32.ne (i32.load16_u (i32.sub (global.get $ptr) (i32.const 2))) (i32.const 0x2f2a)))
-          (then (return (i32.const 1))))
-        (global.set $tsxStreamMode (i32.const 0))
-        (return (i32.const 0))))
-    ;; JavaScript string after a backslash line continuation
-    (if (i32.le_u (local.get $mode) (i32.const 5))
-      (then
-        (local.set $quote
-          (select (i32.const 34) (i32.const 39) (i32.eq (local.get $mode) (i32.const 4))))
-        (local.set $t (call $scanStringBody (local.get $quote)))
-        (call $emitEscaped (enum.get $Token.string) (local.get $from) (global.get $ptr))
-        (if
-          (i32.and
-            (i32.eq (local.get $t) (enum.get $Lex.invalid))
-            (i32.eq (global.get $ptr) (global.get $end)))
-          (then (return (i32.const 1))))
-        (global.set $tsxStreamMode (i32.const 0))
-        (call $tsxFinishStreamToken (local.get $t))
-        (return (i32.const 0))))
-    ;; quoted JSX attribute value: hop to the closing quote 16 bytes per step,
-    ;; as $jsxTagStep does for the opening chunk
+    ;; modes 4-7 resume a quoted body; even modes are double-quoted
     (local.set $quote
-      (select (i32.const 34) (i32.const 39) (i32.eq (local.get $mode) (i32.const 6))))
-    (global.set $ptr
-      (call $scanFind3 (global.get $ptr) (local.get $quote) (local.get $quote) (local.get $quote)))
-    (local.set $c (i32.lt_u (global.get $ptr) (global.get $end)))
-    (if (local.get $c)
-      (then (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))))
-    (call $emitTok (enum.get $Token.string) (local.get $from) (global.get $ptr))
-    (if (i32.eqz (local.get $c))
-      (then (return (i32.const 1))))
-    (global.set $tsxStreamMode (i32.const 0))
-    (i32.const 0))
+      (select (i32.const 34) (i32.const 39) (i32.eqz (i32.and (local.get $mode) (i32.const 1)))))
+    (block $cut
+      (block $done
+        ;; the resumed token completes as kind $t
+        (block $finish
+          ;; template body
+          (if (i32.eq (local.get $mode) (i32.const 1))
+            (then
+              (local.set $t (call $scanTemplateBody))
+              ;; the continuation is template text from its first byte: a leading
+              ;; `}` here is a character, not a substitution close
+              (call $emitTemplate
+                (local.get $from)
+                (global.get $ptr)
+                (i32.eq (local.get $t) (enum.get $Lex.dollar_brace))
+                (i32.const 0)
+                (i32.eq (local.get $t) (enum.get $Lex.backtick)))
+              (br_if $cut (i32.eq (local.get $t) (enum.get $Lex.invalid)))
+              (br $finish)))
+          ;; block or doc comment
+          (if (i32.le_u (local.get $mode) (i32.const 3))
+            (then
+              (call $scanBlockCommentEnd)
+              (if (i32.eq (local.get $mode) (i32.const 3))
+                (then (call $emitDocCommentRange (local.get $from) (global.get $ptr) (i32.const 0)))
+                (else (call $emitTok (enum.get $Token.comment) (local.get $from) (global.get $ptr))))
+              (br_if $cut
+                (i32.or
+                  (i32.lt_u (i32.sub (global.get $ptr) (local.get $from)) (i32.const 2))
+                  (i32.ne (i32.load16_u (i32.sub (global.get $ptr) (i32.const 2))) (i32.const 0x2f2a))))
+              (br $done)))
+          ;; JavaScript string after a backslash line continuation
+          (if (i32.le_u (local.get $mode) (i32.const 5))
+            (then
+              (local.set $t (call $scanStringBody (local.get $quote)))
+              (call $emitEscaped (enum.get $Token.string) (local.get $from) (global.get $ptr))
+              (br_if $cut
+                (i32.and
+                  (i32.eq (local.get $t) (enum.get $Lex.invalid))
+                  (i32.eq (global.get $ptr) (global.get $end))))
+              (br $finish)))
+          ;; quoted JSX attribute value: hop to the closing quote 16 bytes per step,
+          ;; as $jsxTagStep does for the opening chunk
+          (global.set $ptr
+            (call $scanFind3 (global.get $ptr) (local.get $quote) (local.get $quote) (local.get $quote)))
+          (local.set $c (i32.lt_u (global.get $ptr) (global.get $end)))
+          (if (local.get $c)
+            (then (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))))
+          (call $emitTok (enum.get $Token.string) (local.get $from) (global.get $ptr))
+          (br_if $cut (i32.eqz (local.get $c)))
+          (br $done))
+        (call $tsxFinishStreamToken (local.get $t)))
+      (global.set $tsxStreamMode (i32.const 0))
+      (return (i32.const 0)))
+    (i32.const 1))
 
   ;; Clear the ECMAScript machine: token history, bracket, template, and jsx
   ;; stacks, stream modes, and parameter registers. A new run starts here.
@@ -339,7 +336,7 @@
                 (i32.or (i32.eq (local.get $m) (i32.const 3)) (i32.eq (local.get $m) (i32.const 4)))))
             (else (i32.const 0)))
           (then
-            (if (i32.le_s (global.get $braceDepth) (call $jsxTopTarget))
+            (if (i32.le_s (global.get $braceDepth) (i32.load offset=4 (call $jsxTopSlot)))
               (then
                 (call $emitTok
                   (enum.get $Token.punctuation.bracket)

@@ -78,6 +78,8 @@
     (call $lexEmitLeadingContinuation)
     (block $done
       (loop $next
+        ;; $tok emits [$lhs,$ptr) as $hl
+        (block $tok
         (local.set $gap (global.get $ptr))
         (call $scanWhitespace)
         (if (call $lexGapHasBreak (local.get $gap) (global.get $ptr))
@@ -134,8 +136,8 @@
                     (local.set $p (i32.add (local.get $p) (i32.const 1)))
                     (br_if $raw (i32.ne (i32.load8_u (i32.sub (local.get $p) (i32.const 2))) (i32.const 0xc2)))))
                 (global.set $ptr (local.get $p))
-                (call $emitTok (enum.get $Token.constant) (local.get $lhs) (global.get $ptr))
-                (br $next)))
+                (local.set $hl (enum.get $Token.constant))
+                (br $tok)))
             (if (i32.eq (local.get $v) (i32.const 0xacc2))
               (then
                 (global.set $ptr (i32.add (local.get $lhs) (i32.const 2)))
@@ -168,8 +170,8 @@
             (if (i32.gt_u (local.get $p) (local.get $lhs))
               (then
                 (global.set $ptr (local.get $p))
-                (call $emitTok (enum.get $Token.operator) (local.get $lhs) (global.get $ptr))
-                (br $next)))))
+                (local.set $hl (enum.get $Token.operator))
+                (br $tok)))))
         ;; `|name with spaces|`
         (if (i32.eq (local.get $c) (i32.const "|"))
           (then
@@ -188,8 +190,7 @@
                 (global.set $ptr (i32.add (local.get $p) (i32.const 1)))
                 (if (i32.eq (local.get $expect) (i32.const 2))
                   (then (local.set $expect (i32.const 0))))))
-            (call $emitTok (local.get $hl) (local.get $lhs) (global.get $ptr))
-            (br $next)))
+            (br $tok)))
         ;; the possessive `'s`, as in `window's name`
         (if (i32.eq (local.get $c) (i32.const 39))
           (then
@@ -202,8 +203,7 @@
               (then
                 (local.set $hl (enum.get $Token.keyword.operator))
                 (global.set $ptr (i32.add (local.get $lhs) (i32.const 2)))))
-            (call $emitTok (local.get $hl) (local.get $lhs) (global.get $ptr))
-            (br $next)))
+            (br $tok)))
         (if (i32.and (call $lexIsIdentStart (local.get $c)) (i32.ne (local.get $c) (i32.const "$")))
           (then
             (call $scanIdentRun (i32.const "_"))
@@ -309,6 +309,8 @@
             (call $emitTok (local.get $hl) (local.get $lhs) (local.get $rhs))
             (br $next)))
         (global.set $ptr (i32.add (local.get $lhs) (i32.const 1)))
+        ;; WARNING: frequent tokens keep their own emits; sending them to the
+        ;; $tok tail made JavaScriptCore up to 30% slower
         (if (byteset.get "()[]{}" (local.get $c))
           (then
             (call $emitTok (enum.get $Token.punctuation.bracket) (local.get $lhs) (global.get $ptr))
@@ -328,6 +330,7 @@
             (call $emitTok (enum.get $Token.operator) (local.get $lhs) (global.get $ptr))
             (br $next)))
         (global.set $ptr (call $utf8SpanEnd (global.get $ptr) (global.get $end)))
-        (call $emitTok (enum.get $Token.none) (local.get $lhs) (global.get $ptr))
+        (local.set $hl (enum.get $Token.none)))
+        (call $emitTok (local.get $hl) (local.get $lhs) (global.get $ptr))
         (br $next))))
 )

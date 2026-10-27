@@ -17,7 +17,11 @@
         (local.set $p (call $lexFindByte (local.get $p) (i32.const "<")))
         (br_if $done (i32.ge_u (local.get $p) (global.get $end)))
         (local.set $c (call $templateByte (i32.add (local.get $p) (i32.const 1))))
-        (br_if $done (call $erbIsOpen (local.get $p)))
+        ;; $erbIsOpen with the byte after `<` already read
+        (br_if $done
+          (i32.and
+            (i32.eq (local.get $c) (i32.const "%"))
+            (i32.ne (call $templateByte (i32.add (local.get $p) (i32.const 2))) (i32.const "%"))))
         (br_if $done (i32.or (i32.eq (local.get $c) (i32.const "!")) (i32.eq (local.get $c) (i32.const "?"))))
         (br_if $done (call $erbRawKind (local.get $p)))
         (local.set $p (i32.add (local.get $p) (i32.const 1)))

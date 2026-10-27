@@ -129,6 +129,7 @@
     (local $c i32)
     (local $c2 i32)
     (local $c3 i32)
+    (local $c2Ident i32)
     (local $gap i32)
     (local $lhs i32)
     (local $rhs i32)
@@ -153,6 +154,10 @@
               (then (local.set $textBlock (i32.const 0))))
             (br $next)))
 
+        ;; token tails: $plainTok ends a pending type, and $tok emits
+        ;; [$lhs,$ptr) as $hl and clears $member
+        (block $tok
+        (block $plainTok
         (local.set $gap (global.get $ptr))
         (call $scanWhitespace)
         (call $emitGap (local.get $gap) (global.get $ptr))
@@ -201,11 +206,9 @@
               (i32.eq (local.get $c3) (i32.const 34))))
           (then
             (global.set $ptr (i32.add (global.get $ptr) (i32.const 3)))
-            (call $emitTok (enum.get $Token.string) (local.get $lhs) (global.get $ptr))
             (local.set $textBlock (i32.const 1))
-            (local.set $member (i32.const 0))
-            (local.set $afterType (i32.const 0))
-            (br $next)))
+            (local.set $hl (enum.get $Token.string))
+            (br $plainTok)))
         (if (i32.or (i32.eq (local.get $c) (i32.const 34)) (i32.eq (local.get $c) (i32.const 39)))
           (then
             (call $lexString (local.get $c) (i32.const 0) (enum.get $Token.string))
@@ -215,13 +218,14 @@
 
         ;; annotations, including `@interface`
         (if
-          (i32.and (i32.eq (local.get $c) (i32.const "@")) (call $lexIsIdentStart (local.get $c2)))
+          (i32.and
+            (i32.eq (local.get $c) (i32.const "@"))
+            (local.tee $c2Ident (call $lexIsIdentStart (local.get $c2))))
           (then
             (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
             (call $lexScanIdent)
-            (call $emitTok (enum.get $Token.attribute) (local.get $lhs) (global.get $ptr))
-            (local.set $member (i32.const 0))
-            (br $next)))
+            (local.set $hl (enum.get $Token.attribute))
+            (br $tok)))
 
         (if (call $lexIsIdentStart (local.get $c))
           (then
@@ -448,7 +452,7 @@
         (if
           (i32.and
             (i32.eq (local.get $c) (i32.const ":"))
-            (i32.and (i32.gt_u (local.get $soql) (i32.const 1)) (call $lexIsIdentStart (local.get $c2))))
+            (i32.and (i32.gt_u (local.get $soql) (i32.const 1)) (local.get $c2Ident)))
           (then
             (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
             (call $lexScanIdent)
@@ -546,9 +550,10 @@
             (br $next)))
 
         (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
-        (call $emitTok (enum.get $Token.none) (local.get $lhs) (global.get $ptr))
+        (local.set $hl (enum.get $Token.none)))
+        (local.set $afterType (i32.const 0)))
+        (call $emitTok (local.get $hl) (local.get $lhs) (global.get $ptr))
         (local.set $member (i32.const 0))
-        (local.set $afterType (i32.const 0))
         (br $next))))
 
   (func $hlJava

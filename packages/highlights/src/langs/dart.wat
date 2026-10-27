@@ -1,9 +1,6 @@
 (module
   (import "../common.wat")
 
-  (func $dartByte (param $p i32) (result i32)
-    (select (i32.load8_u (local.get $p)) (i32.const 0) (i32.lt_u (local.get $p) (global.get $end))))
-
   ;; Group order is the dispatch order in $dartWordHl below. `get` and `set`
   ;; are contextual: $hlDart keeps them in group 3 only when a name follows,
   ;; so `Set<int>` stays a type and `set(x)` a call.
@@ -121,10 +118,10 @@
                 (i32.eqz (local.get $triple))
                 (i32.and
                   (i32.eq
-                    (call $dartByte (i32.add (global.get $ptr) (i32.const 1)))
+                    (call $templateByte (i32.add (global.get $ptr) (i32.const 1)))
                     (local.get $quote))
                   (i32.eq
-                    (call $dartByte (i32.add (global.get $ptr) (i32.const 2)))
+                    (call $templateByte (i32.add (global.get $ptr) (i32.const 2)))
                     (local.get $quote))))
               (then
                 ;; both trailing quotes read below $end, so this cannot overshoot
@@ -231,8 +228,8 @@
         (br_if $done (i32.ge_u (global.get $ptr) (global.get $end)))
         (local.set $lhs (global.get $ptr))
         (local.set $c (i32.load8_u (global.get $ptr)))
-        (local.set $c2 (call $dartByte (i32.add (global.get $ptr) (i32.const 1))))
-        (local.set $c3 (call $dartByte (i32.add (global.get $ptr) (i32.const 2))))
+        (local.set $c2 (call $templateByte (i32.add (global.get $ptr) (i32.const 1))))
+        (local.set $c3 (call $templateByte (i32.add (global.get $ptr) (i32.const 2))))
 
         (if
           (i32.and (i32.eq (local.get $c) (i32.const "/")) (i32.eq (local.get $c2) (i32.const "/")))
@@ -257,7 +254,7 @@
                 (i32.and
                   (i32.eq (local.get $c3) (i32.const "*"))
                   (i32.ne
-                    (call $dartByte (i32.add (global.get $ptr) (i32.const 3)))
+                    (call $templateByte (i32.add (global.get $ptr) (i32.const 3)))
                     (i32.const "/")))))
             (br $next)))
 
@@ -280,7 +277,7 @@
                 (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
                 (local.set $c (local.get $c2))
                 (local.set $c2 (local.get $c3))
-                (local.set $c3 (call $dartByte (i32.add (global.get $ptr) (i32.const 2))))))
+                (local.set $c3 (call $templateByte (i32.add (global.get $ptr) (i32.const 2))))))
             (local.set $strKind (i32.or (local.get $strKind) (local.get $c)))
             (if
               (i32.and
@@ -323,12 +320,12 @@
                 (if
                   (i32.eqz
                     (i32.or
-                      (call $lexIsIdentStart (call $dartByte (local.get $p)))
+                      (call $lexIsIdentStart (call $templateByte (local.get $p)))
                       (i32.and
                         (i32.eq (local.get $g) (i32.const 11))
                         (i32.or
-                          (i32.eq (call $dartByte (local.get $p)) (i32.const 34))
-                          (i32.eq (call $dartByte (local.get $p)) (i32.const 39))))))
+                          (i32.eq (call $templateByte (local.get $p)) (i32.const 34))
+                          (i32.eq (call $templateByte (local.get $p)) (i32.const 39))))))
                   (then (local.set $g (i32.const 0))))))
             (local.set $kind (call $dartWordHl (local.get $g)))
             (if (i32.ge_s (local.get $kind) (i32.const 0))
@@ -354,7 +351,7 @@
                       (then
                         ;; `Foo.bar(` is a method, `Foo.Bar` a nested or
                         ;; prefixed type, `obj.field` a field
-                        (if (i32.eq (call $dartByte (local.get $p)) (i32.const "("))
+                        (if (i32.eq (call $templateByte (local.get $p)) (i32.const "("))
                           (then
                             (local.set $hl (enum.get $Token.function.method))
                             (local.set $afterType (i32.const 0)))
@@ -369,7 +366,7 @@
                                 (enum.get $Token.property)
                                 (local.get $afterType))))))
                       (else
-                        (if (i32.eq (call $dartByte (local.get $p)) (i32.const "("))
+                        (if (i32.eq (call $templateByte (local.get $p)) (i32.const "("))
                           (then
                             ;; `Foo(` is a constructor; a lowercase name after
                             ;; a type is the function being declared
@@ -547,7 +544,7 @@
                         (if
                           (i32.and
                             (i32.eq (local.get $c) (i32.const ">"))
-                            (i32.eq (call $dartByte (global.get $ptr)) (i32.const "=")))
+                            (i32.eq (call $templateByte (global.get $ptr)) (i32.const "=")))
                           (then (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))))))
                     (if
                       (i32.and

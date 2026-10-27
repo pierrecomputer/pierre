@@ -1,9 +1,6 @@
 (module
   (import "../common.wat")
 
-  (func $groovyByte (param $p i32) (result i32)
-    (select (i32.load8_u (local.get $p)) (i32.const 0) (i32.lt_u (local.get $p) (global.get $end))))
-
   ;; Group order is the dispatch order in $hlGroovy. The high byte of a
   ;; declaration value names the next name's capture: 1 after `def`, where
   ;; the name is a function when `(` follows, 2 a type.
@@ -89,10 +86,10 @@
                 (i32.eqz (local.get $triple))
                 (i32.and
                   (i32.eq
-                    (call $groovyByte (i32.add (global.get $ptr) (i32.const 1)))
+                    (call $templateByte (i32.add (global.get $ptr) (i32.const 1)))
                     (local.get $q))
                   (i32.eq
-                    (call $groovyByte (i32.add (global.get $ptr) (i32.const 2)))
+                    (call $templateByte (i32.add (global.get $ptr) (i32.const 2)))
                     (local.get $q))))
               (then
                 (global.set $ptr
@@ -207,8 +204,8 @@
         (br_if $done (i32.ge_u (global.get $ptr) (global.get $end)))
         (local.set $lhs (global.get $ptr))
         (local.set $c (i32.load8_u (global.get $ptr)))
-        (local.set $c2 (call $groovyByte (i32.add (global.get $ptr) (i32.const 1))))
-        (local.set $c3 (call $groovyByte (i32.add (global.get $ptr) (i32.const 2))))
+        (local.set $c2 (call $templateByte (i32.add (global.get $ptr) (i32.const 1))))
+        (local.set $c3 (call $templateByte (i32.add (global.get $ptr) (i32.const 2))))
 
         (if
           (i32.and (i32.eq (local.get $c) (i32.const "/")) (i32.eq (local.get $c2) (i32.const "/")))
@@ -226,7 +223,7 @@
                 (i32.and
                   (i32.eq (local.get $c3) (i32.const "*"))
                   (i32.ne
-                    (call $groovyByte (i32.add (global.get $ptr) (i32.const 3)))
+                    (call $templateByte (i32.add (global.get $ptr) (i32.const 3)))
                     (i32.const "/")))))
             (br $next)))
         ;; a `#!` line opens a script
@@ -263,9 +260,12 @@
         (if
           (i32.and
             (i32.eq (local.get $c) (i32.const "@"))
-            (i32.and
-              (call $lexIsIdentStart (local.get $c2))
-              (i32.ne (local.get $c2) (i32.const "$"))))
+            ;; an identifier start other than `$`
+            (i32.or
+              (i32.ge_u (local.get $c2) (i32.const 0x80))
+              (i32.or
+                (i32.le_u (i32.sub (i32.or (local.get $c2) (i32.const 32)) (i32.const "a")) (i32.const 25))
+                (i32.eq (local.get $c2) (i32.const "_")))))
           (then
             (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
             (call $scanIdentRun (i32.const "."))
@@ -278,7 +278,7 @@
             (call $lexScanIdent)
             (local.set $rhs (global.get $ptr))
             (local.set $p (call $lexSkipSpaceAt (local.get $rhs)))
-            (local.set $pc (call $groovyByte (local.get $p)))
+            (local.set $pc (call $templateByte (local.get $p)))
             (local.set $kind
               (select
                 (i32.const -1)
@@ -340,10 +340,10 @@
                                         (if
                                           (i32.and
                                             (i32.eq
-                                              (call $groovyByte (local.get $rhs))
+                                              (call $templateByte (local.get $rhs))
                                               (i32.const ":"))
                                             (i32.ne
-                                              (call $groovyByte
+                                              (call $templateByte
                                                 (i32.add (local.get $rhs) (i32.const 1)))
                                               (i32.const ":")))
                                           (then (local.set $hl (enum.get $Token.property)))
@@ -452,22 +452,16 @@
           (then
             (block $opDone
               (loop $op
+                (local.set $c3 (call $templateByte (global.get $ptr)))
                 (br_if $opDone
                   (i32.eqz
-                    (i32.or
-                      (call $groovyIsOp (call $groovyByte (global.get $ptr)))
-                      (i32.eq (call $groovyByte (global.get $ptr)) (i32.const ".")))))
+                    (i32.or (call $groovyIsOp (local.get $c3)) (i32.eq (local.get $c3) (i32.const ".")))))
                 ;; a comment opener ends the run
+                (local.set $c2 (call $templateByte (i32.add (global.get $ptr) (i32.const 1))))
                 (br_if $opDone
                   (i32.and
-                    (i32.eq (call $groovyByte (global.get $ptr)) (i32.const "/"))
-                    (i32.or
-                      (i32.eq
-                        (call $groovyByte (i32.add (global.get $ptr) (i32.const 1)))
-                        (i32.const "/"))
-                      (i32.eq
-                        (call $groovyByte (i32.add (global.get $ptr) (i32.const 1)))
-                        (i32.const "*")))))
+                    (i32.eq (local.get $c3) (i32.const "/"))
+                    (i32.or (i32.eq (local.get $c2) (i32.const "/")) (i32.eq (local.get $c2) (i32.const "*")))))
                 (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
                 (br $op)))
             (call $emitTok (enum.get $Token.operator) (local.get $lhs) (global.get $ptr))

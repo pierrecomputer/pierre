@@ -51,6 +51,7 @@
     (local $c2 i32)
     (local $e i32)
     (local $p i32)
+    (local $q i32)
     (local $verbatim i32)
     (local $interp i32)
     (local.set $verbatim (i32.ne (i32.and (local.get $kind) (i32.const 2)) (i32.const 0)))
@@ -60,6 +61,8 @@
     (local.set $p (i32.sub (global.get $ptr) (i32.const 1)))
     (block $done
       (loop $scan
+        ;; an escape [$q,$e) branches to the end of $escape
+        (block $escape
         (if (i32.gt_u (global.get $ptr) (local.get $p))
           (then
             (if (local.get $verbatim)
@@ -89,71 +92,51 @@
         ;; an interpolated body also escapes `}}`, found inside the run
         (if (local.get $interp)
           (then
-            (local.set $e
+            (local.set $q
               (call $scanFindSpecial
                 (global.get $ptr)
                 (local.get $p)
                 (i32.const "}")
                 (i32.const 0)
                 (i32.const 0)))
-            (if (i32.lt_u (local.get $e) (local.get $p))
+            (if (i32.lt_u (local.get $q) (local.get $p))
               (then
-                (if (i32.eq (call $fsByte (i32.add (local.get $e) (i32.const 1))) (i32.const "}"))
-                  (then
-                    (call $emitTok (enum.get $Token.string) (local.get $seg) (local.get $e))
-                    (global.set $ptr (i32.add (local.get $e) (i32.const 2)))
-                    (call $emitTok (enum.get $Token.string.escape) (local.get $e) (global.get $ptr))
-                    (local.set $seg (global.get $ptr)))
-                  (else (global.set $ptr (i32.add (local.get $e) (i32.const 1)))))
+                (local.set $e (i32.add (local.get $q) (i32.const 2)))
+                (br_if $escape (i32.eq (call $fsByte (i32.add (local.get $q) (i32.const 1))) (i32.const "}")))
+                (global.set $ptr (i32.add (local.get $q) (i32.const 1)))
                 (br $scan)))))
         (if (i32.ge_u (local.get $p) (global.get $end))
           (then
             (global.set $ptr (global.get $end))
             (br $done)))
         (global.set $ptr (local.get $p))
+        (local.set $q (local.get $p))
+        (local.set $e (i32.add (local.get $p) (i32.const 2)))
         (local.set $c (i32.load8_u (local.get $p)))
         (local.set $c2 (call $fsByte (i32.add (local.get $p) (i32.const 1))))
         (if (i32.eq (local.get $c) (i32.const 34))
           (then
             (if (i32.and (local.get $kind) (i32.const 1))
               (then
-                (if
-                  (i32.and
-                    (i32.eq (local.get $c2) (i32.const 34))
-                    (i32.eq (call $fsByte (i32.add (local.get $p) (i32.const 2))) (i32.const 34)))
-                  (then
-                    (global.set $ptr (i32.add (local.get $p) (i32.const 3)))
-                    (call $emitTok (enum.get $Token.string) (local.get $seg) (global.get $ptr))
-                    (return (i32.const 1))))
                 (global.set $ptr (i32.add (local.get $p) (i32.const 1)))
-                (br $scan)))
-            ;; a doubled quote escapes itself in a verbatim body
-            (if (i32.and (local.get $verbatim) (i32.eq (local.get $c2) (i32.const 34)))
-              (then
-                (call $emitTok (enum.get $Token.string) (local.get $seg) (local.get $p))
-                (global.set $ptr (i32.add (local.get $p) (i32.const 2)))
-                (call $emitTok (enum.get $Token.string.escape) (local.get $p) (global.get $ptr))
-                (local.set $seg (global.get $ptr))
-                (br $scan)))
-            (global.set $ptr (i32.add (local.get $p) (i32.const 1)))
+                (br_if $scan
+                  (i32.eqz
+                    (i32.and
+                      (i32.eq (local.get $c2) (i32.const 34))
+                      (i32.eq (call $fsByte (local.get $e)) (i32.const 34)))))
+                (global.set $ptr (i32.add (local.get $p) (i32.const 3))))
+              (else
+                ;; a doubled quote escapes itself in a verbatim body
+                (br_if $escape (i32.and (local.get $verbatim) (i32.eq (local.get $c2) (i32.const 34))))
+                (global.set $ptr (i32.add (local.get $p) (i32.const 1)))))
             (call $emitTok (enum.get $Token.string) (local.get $seg) (global.get $ptr))
             (return (i32.const 1))))
         (if (i32.eq (local.get $c) (i32.const 92))
           (then
-            (call $emitTok (enum.get $Token.string) (local.get $seg) (local.get $p))
             (local.set $e (call $lexEscapeEnd (local.get $p)))
-            (call $emitTok (enum.get $Token.string.escape) (local.get $p) (local.get $e))
-            (global.set $ptr (local.get $e))
-            (local.set $seg (local.get $e))
-            (br $scan)))
+            (br $escape)))
         ;; `{`: an escaped brace or a splice
-        (if (i32.eq (local.get $c2) (i32.const "{"))
-          (then
-            (call $emitTok (enum.get $Token.string) (local.get $seg) (local.get $p))
-            (global.set $ptr (i32.add (local.get $p) (i32.const 2)))
-            (call $emitTok (enum.get $Token.string.escape) (local.get $p) (global.get $ptr))
-            (local.set $seg (global.get $ptr))
-            (br $scan)))
+        (br_if $escape (i32.eq (local.get $c2) (i32.const "{")))
         (if (i32.eqz (local.get $nested))
           (then
             (call $emitTok (enum.get $Token.string) (local.get $seg) (local.get $p))
@@ -161,6 +144,11 @@
             (call $emitTok (enum.get $Token.punctuation.special) (local.get $p) (global.get $ptr))
             (return (i32.const 2))))
         (global.set $ptr (i32.add (local.get $p) (i32.const 1)))
+        (br $scan))
+        (call $emitTok (enum.get $Token.string) (local.get $seg) (local.get $q))
+        (call $emitTok (enum.get $Token.string.escape) (local.get $q) (local.get $e))
+        (global.set $ptr (local.get $e))
+        (local.set $seg (local.get $e))
         (br $scan)))
     (call $emitTok (enum.get $Token.string) (local.get $seg) (global.get $ptr))
     (i32.const 0))
@@ -198,13 +186,9 @@
         (br $scan)))
     (i32.const 0))
 
-  ;; Whether the bytes at $p begin an argument of an application: a value
-  ;; start that is not a keyword, so `match s with` does not apply `s`.
-  (func $fsIsArgAt (param $p i32) (result i32)
-    (local $c i32)
-    (local.set $c (call $fsByte (local.get $p)))
-    (if (i32.eqz (call $mlIsArgStart (local.get $c)))
-      (then (return (i32.const 0))))
+  ;; Whether the argument start $c at $p is not a keyword, so `match s with`
+  ;; does not apply `s`.
+  (func $fsIsArgAt (param $p i32) (param $c i32) (result i32)
     (if (i32.and (call $lexIsIdentStart (local.get $c)) (i32.ne (local.get $c) (i32.const "$")))
       (then
         (return
@@ -231,6 +215,7 @@
     (local $rhs i32)
     (local $p i32)
     (local $pc i32)
+    (local $arg i32)
     (local $kind i32)
     (local $hl i32)
     (local $status i32)
@@ -450,6 +435,7 @@
                       (i32.eq (local.get $hl) (enum.get $Token.constant.builtin)))
                     (i32.eq (local.get $hl) (enum.get $Token.variable.special)))))
               (else
+                (local.set $arg (call $mlIsArgStart (local.get $pc)))
                 (if (local.get $attr)
                   (then (local.set $hl (enum.get $Token.attribute)))
                   (else
@@ -479,7 +465,7 @@
                                   (select
                                     (enum.get $Token.function.method)
                                     (enum.get $Token.property)
-                                    (call $mlIsArgStart (local.get $pc))))))
+                                    (local.get $arg)))))
                             (if (i32.eq (local.get $expect) (i32.const 2))
                               (then (local.set $expect (i32.const 0)))))
                           (else
@@ -490,7 +476,7 @@
                                   (select
                                     (enum.get $Token.function.definition)
                                     (enum.get $Token.variable)
-                                    (call $mlIsArgStart (local.get $pc))))
+                                    (local.get $arg)))
                                 (local.set $expect (i32.const 0)))
                               (else
                                 (if (i32.eq (local.get $expect) (i32.const 2))
@@ -509,7 +495,7 @@
                                               (select
                                                 (enum.get $Token.function.method)
                                                 (enum.get $Token.property)
-                                                (call $mlIsArgStart (local.get $pc))))
+                                                (local.get $arg)))
                                             (local.set $expect (i32.const 0)))))
                                       (else
                                         (if (local.get $typeMode)
@@ -521,7 +507,7 @@
                                                   (select
                                                     (enum.get $Token.function.method)
                                                     (enum.get $Token.property)
-                                                    (call $mlIsArgStart (local.get $pc)))))
+                                                    (local.get $arg))))
                                               (else
                                                 ;; the head of an application - a name
                                                 ;; before an argument that no value
@@ -530,9 +516,12 @@
                                                   (select
                                                     (enum.get $Token.function)
                                                     (enum.get $Token.variable)
-                                                    (if (result i32) (local.get $afterValue)
-                                                      (then (i32.const 0))
-                                                      (else (call $fsIsArgAt (local.get $p))))))))))))))))))))))
+                                                    (if (result i32)
+                                                      (i32.and
+                                                        (local.get $arg)
+                                                        (i32.eqz (local.get $afterValue)))
+                                                      (then (call $fsIsArgAt (local.get $p) (local.get $pc)))
+                                                      (else (i32.const 0)))))))))))))))))))))
                 ;; defined and member names count too, so `let add x y` and
                 ;; `obj.Add x y` keep `x` a value
                 (local.set $afterValue

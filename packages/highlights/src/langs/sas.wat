@@ -144,6 +144,7 @@
     (local $hl i32)
     (local $pct i32)
     (local $eq i32)
+    (local $after i32)
     (local $atStmt i32)
     (local $stmt i32)
     (local $opts i32)
@@ -289,10 +290,12 @@
                 (i32.and (i32.ne (i32.and (local.get $v) (i32.const 2048)) (i32.const 0)) (i32.eqz (local.get $atStmt))))
               (then (local.set $v (i32.const -1))))
             (local.set $p (call $lexSkipSpaceAt (local.get $rhs)))
+            ;; the byte after the name and its blanks
+            (local.set $after (call $templateByte (local.get $p)))
             (if
               (i32.and
                 (i32.and (local.get $atStmt) (i32.ge_s (local.get $v) (i32.const 16384)))
-                (i32.eq (call $templateByte (local.get $p)) (i32.const ";")))
+                (i32.eq (local.get $after) (i32.const ";")))
               (then
                 (call $emitTok (enum.get $Token.keyword) (local.get $lhs) (local.get $rhs))
                 (call $emitGap (local.get $rhs) (local.get $p))
@@ -316,7 +319,7 @@
               (then (local.set $hl (i32.and (local.get $v) (i32.const 255)))))
             (local.set $eq
               (i32.and
-                (i32.eq (call $templateByte (local.get $p)) (i32.const "="))
+                (i32.eq (local.get $after) (i32.const "="))
                 (i32.ne (call $templateByte (i32.add (local.get $p) (i32.const 1))) (i32.const "="))))
             (if (local.get $expect)
               (then

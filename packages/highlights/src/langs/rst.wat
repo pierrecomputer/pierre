@@ -5,9 +5,7 @@
   (func $rstIsAlnum (param $c i32) (result i32)
     (i32.or
       (i32.ge_u (local.get $c) (i32.const 0x80))
-      (i32.or
-        (i32.le_u (i32.sub (i32.or (local.get $c) (i32.const 32)) (i32.const "a")) (i32.const 25))
-        (call $lexIsDigit (local.get $c)))))
+      (byteset.get "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz" (local.get $c))))
 
   ;; End of the run of $n `$c` bytes that closes markup in [$p,$stop), after a
   ;; non-blank byte and, with $tight, before no letter or digit; 0 when none.
@@ -309,7 +307,12 @@
                     (local.set $c2 (call $templateByte (local.get $p))))
                   (else (local.set $rhs (i32.const 0))))
                 (local.set $q (i32.const 0))
-                (if (i32.and (call $lexIsIdentStart (local.get $c2)) (i32.ne (local.get $c2) (i32.const "$")))
+                (if
+                  (i32.or
+                    (i32.ge_u (local.get $c2) (i32.const 0x80))
+                    (i32.or
+                      (i32.le_u (i32.sub (i32.or (local.get $c2) (i32.const 32)) (i32.const "a")) (i32.const 25))
+                      (i32.eq (local.get $c2) (i32.const "_"))))
                   (then
                     (block $name
                       (loop $part
@@ -389,14 +392,14 @@
                     (br_if $enumDone (i32.eqz (call $lexIsDigit (i32.load8_u (local.get $p)))))
                     (local.set $p (i32.add (local.get $p) (i32.const 1)))
                     (br $digits)))
+                (local.set $c2 (call $templateByte (local.get $p)))
                 (if
                   (i32.and
                     (i32.eq (local.get $p) (local.get $q))
-                    (i32.or
-                      (i32.eq (call $templateByte (local.get $p)) (i32.const "#"))
-                      (call $rstIsAlnum (call $templateByte (local.get $p)))))
-                  (then (local.set $p (i32.add (local.get $p) (i32.const 1)))))
-                (local.set $c2 (call $templateByte (local.get $p)))
+                    (i32.or (i32.eq (local.get $c2) (i32.const "#")) (call $rstIsAlnum (local.get $c2))))
+                  (then
+                    (local.set $p (i32.add (local.get $p) (i32.const 1)))
+                    (local.set $c2 (call $templateByte (local.get $p)))))
                 (local.set $p
                   (select
                     (i32.add (local.get $p) (i32.const 1))

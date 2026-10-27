@@ -444,6 +444,7 @@
             (call $emitTok (enum.get $Token.punctuation.special) (local.get $lhs) (global.get $ptr))
             (br $next)))
 
+        (block $key
         (block $scalar
           (if
             (i32.or
@@ -465,28 +466,13 @@
               (call $yamlScanPlain (local.get $flow))
               ;; a bare number is a mapping key when a `: ` follows it, as
               ;; with OpenAPI status codes (`200:`)
-              (if (i32.eq (global.get $ptr) (local.get $p))
-                (then
-                  (local.set $hl (enum.get $Token.number))
-                  (if (call $yamlColonEnds (call $yamlSkipHorizontal (global.get $ptr)) (local.get $flow))
-                    (then (local.set $hl (enum.get $Token.property))))
-                  (call $emitTok (local.get $hl) (local.get $lhs) (global.get $ptr))
-                  (br $next)))
+              (local.set $hl (enum.get $Token.number))
+              (br_if $key (i32.eq (global.get $ptr) (local.get $p)))
               (br $scalar)))
 
-          (if
-            (i32.or
-              (i32.or
-                (i32.eq (local.get $c) (i32.const "["))
-                (i32.eq (local.get $c) (i32.const "{")))
-              (i32.or
-                (i32.eq (local.get $c) (i32.const "]"))
-                (i32.eq (local.get $c) (i32.const "}"))))
+          (if (byteset.get "[]{}" (local.get $c))
             (then
-              (if
-                (i32.or
-                  (i32.eq (local.get $c) (i32.const "["))
-                  (i32.eq (local.get $c) (i32.const "{")))
+              (if (byteset.get "[{" (local.get $c))
                 (then (local.set $flow (i32.add (local.get $flow) (i32.const 1))))
                 (else
                   (if (local.get $flow)
@@ -505,16 +491,8 @@
           ;; a `:` that does not end a key, as in `:foo`, starts a plain scalar
           (if
             (i32.or
-              (i32.eq (local.get $c) (i32.const ","))
-              (i32.or
-                (call $yamlColonEnds (global.get $ptr) (local.get $flow))
-                (i32.or
-                  (i32.eq (local.get $c) (i32.const "?"))
-                  (i32.or
-                    (i32.eq (local.get $c) (i32.const "|"))
-                    (i32.or
-                      (i32.eq (local.get $c) (i32.const ">"))
-                      (i32.eq (local.get $c) (i32.const "-")))))))
+              (byteset.get ",-?>|" (local.get $c))
+              (call $yamlColonEnds (global.get $ptr) (local.get $flow)))
             (then
               (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
               (call $emitTok
@@ -523,17 +501,14 @@
                 (global.get $ptr))
               (br $next))))
 
-        ;; Plain scalar: stop at YAML structure or whitespace. A scalar that
-        ;; a `: ` follows is a mapping key.
+        ;; Plain scalar: stop at YAML structure or whitespace.
         (call $yamlScanPlain (local.get $flow))
         (if (i32.eq (global.get $ptr) (local.get $lhs))
           (then (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))))
-        (local.set $p (call $yamlSkipHorizontal (global.get $ptr)))
-        (local.set $hl
-          (select
-            (enum.get $Token.property)
-            (call $yamlWordHl (local.get $lhs) (global.get $ptr))
-            (call $yamlColonEnds (local.get $p) (local.get $flow))))
+        (local.set $hl (call $yamlWordHl (local.get $lhs) (global.get $ptr))))
+        ;; a scalar that a `: ` follows is a mapping key
+        (if (call $yamlColonEnds (call $yamlSkipHorizontal (global.get $ptr)) (local.get $flow))
+          (then (local.set $hl (enum.get $Token.property))))
         (call $emitTok (local.get $hl) (local.get $lhs) (global.get $ptr))
         (br $next))))
 )

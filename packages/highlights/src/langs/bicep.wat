@@ -58,9 +58,7 @@
             (local.set $seg (global.get $ptr))
             (global.set $ptr (i32.add (global.get $ptr) (i32.const 2)))
             (call $emitTok (enum.get $Token.punctuation.special) (local.get $seg) (global.get $ptr))
-            (local.set $status (i32.const 2))
-            (local.set $seg (global.get $ptr))
-            (br $done)))
+            (return (i32.const 2))))
         (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
         (br $scan)))
     (call $emitTok (local.get $hl) (local.get $seg) (global.get $ptr))
@@ -98,14 +96,16 @@
         (local.set $atHead (local.get $head))
         (local.set $head (i32.const 0))
 
-        (if (i32.and (i32.eq (local.get $c) (i32.const "/")) (i32.eq (local.get $c2) (i32.const "/")))
+        (if (i32.eq (local.get $c) (i32.const "/"))
           (then
-            (call $lexLineComment (i32.const 2) (enum.get $Token.comment))
-            (br $next)))
-        (if (i32.and (i32.eq (local.get $c) (i32.const "/")) (i32.eq (local.get $c2) (i32.const "*")))
-          (then
-            (call $lexBlockComment (i32.const 2) (enum.get $Token.comment))
-            (br $next)))
+            (if (i32.eq (local.get $c2) (i32.const "/"))
+              (then
+                (call $lexLineComment (i32.const 2) (enum.get $Token.comment))
+                (br $next)))
+            (if (i32.eq (local.get $c2) (i32.const "*"))
+              (then
+                (call $lexBlockComment (i32.const 2) (enum.get $Token.comment))
+                (br $next)))))
         (if (i32.eq (local.get $c) (i32.const "#"))
           (then
             (call $lexLineComment (i32.const 1) (enum.get $Token.preproc))
