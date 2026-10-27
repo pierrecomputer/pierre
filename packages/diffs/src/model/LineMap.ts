@@ -1,4 +1,4 @@
-import { countLineBreaks } from '../utils/computeFileOffsets';
+import { lineChangesOf, moveLineEntries } from '../utils/lineChanges';
 import type { DocumentLineChange } from './types';
 
 /**
@@ -14,8 +14,6 @@ export class LineMap {
   // Line by id, built when first asked for and dropped when lines are
   // inserted or removed; an edit that keeps every line keeps it.
   #linesById: Map<number, number> | undefined;
-  // The ids the change being applied has removed so far.
-  #removed: number[] = [];
 
   constructor(lineCount: number) {
     if (lineCount < 1) {
@@ -56,77 +54,22 @@ export class LineMap {
   }
 
   /**
-   * Applies the edits of one document change. Edits are given in document
-   * order with ranges from before the change, so they are applied from the
-   * last to the first and earlier ranges stay valid. Returns the ids of the
+   * Moves the ids through one document change. A line that stays keeps its
+   * id, a line the change added gets a fresh one. Returns the ids of the
    * lines the change removed.
    */
   applyChange(change: DocumentLineChange): number[] {
-    this.#removed = [];
-    const { changes } = change;
-    const lineDelta = change.lineCount - this.#ids.length;
-    if (changes.length === 1) {
-      const { range } = changes[0];
-      const replacedLines = range.end.line - range.start.line;
-      this.#replace(range.start.line, replacedLines, replacedLines + lineDelta);
-    } else if (changes.length > 1) {
-      // Counting the line breaks in each edit's text is right unless an
-      // inserted `\r` or `\n` joins a neighbor into one CRLF break. The
-      // document's line count is the truth: when the counts disagree with
-      // it, the whole edited span is treated as one edit.
-      let countedDelta = 0;
-      for (const { range, text } of changes) {
-        countedDelta +=
-          countLineBreaks(text) - (range.end.line - range.start.line);
-      }
-      if (countedDelta === lineDelta) {
-        for (let index = changes.length - 1; index >= 0; index--) {
-          const { range, text } = changes[index];
-          this.#replace(
-            range.start.line,
-            range.end.line - range.start.line,
-            countLineBreaks(text)
-          );
-        }
-      } else {
-        const start = changes[0].range.start.line;
-        const replacedLines =
-          changes[changes.length - 1].range.end.line - start;
-        this.#replace(start, replacedLines, replacedLines + lineDelta);
-      }
+    const lineChanges = lineChangesOf(change);
+    if (lineChanges.some(([, , lineDelta]) => lineDelta !== 0)) {
+      this.#linesById = undefined;
     }
+    const moved = moveLineEntries(this.#ids, lineChanges, () => this.#nextId++);
+    this.#ids = moved.entries;
     if (this.#ids.length !== change.lineCount) {
       throw new Error(
         `LineMap.applyChange: the document has ${change.lineCount} lines but the map has ${this.#ids.length}`
       );
     }
-    return this.#removed;
-  }
-
-  // Replaces the `replacedLines + 1` lines from `start` with
-  // `insertedLines + 1` lines. The first lines keep their ids; extra new
-  // lines get fresh ids; extra old lines are dropped.
-  #replace(start: number, replacedLines: number, insertedLines: number): void {
-    if (insertedLines > replacedLines) {
-      this.#insert(start + replacedLines + 1, insertedLines - replacedLines);
-    } else if (insertedLines < replacedLines) {
-      this.#remove(start + insertedLines + 1, replacedLines - insertedLines);
-    }
-  }
-
-  #insert(at: number, count: number): void {
-    this.#linesById = undefined;
-    const ids: number[] = [];
-    for (let offset = 0; offset < count; offset++) {
-      ids.push(this.#nextId++);
-    }
-    this.#ids = this.#ids.slice(0, at).concat(ids, this.#ids.slice(at));
-  }
-
-  #remove(at: number, count: number): void {
-    this.#linesById = undefined;
-    for (const id of this.#ids.splice(at, count)) {
-      this.#removed.push(id);
-    }
+    return moved.removed;
   }
 }

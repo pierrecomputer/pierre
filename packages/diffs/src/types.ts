@@ -8,9 +8,9 @@ export type {
   CodeToTokensOptions,
   DecorationItem,
   DiffsHighlighter,
-  DiffsEditorTokenizer,
   DiffsEditorTokenizerOptions,
   DiffsStreamTokenizer,
+  DiffsEditorTokenizer,
   ThemedToken,
   TokensResult,
 } from './highlighter/types';

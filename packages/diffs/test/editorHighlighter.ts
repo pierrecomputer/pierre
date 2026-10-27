@@ -1,5 +1,6 @@
 import type { HighlighterCore } from 'shiki/core';
 
+import { DiffsEditorTokenizer } from '../src/highlighter/DiffsEditorTokenizer';
 import { ShikiEditorTokenizer } from '../src/highlighter/shiki-editor';
 import type { DiffsHighlighter } from '../src/types';
 
@@ -28,6 +29,6 @@ export function createTestHighlighter(
     createEditorTokenizer: (
       options
     ): ReturnType<DiffsHighlighter['createEditorTokenizer']> =>
-      new ShikiEditorTokenizer(raw, options),
+      new DiffsEditorTokenizer(new ShikiEditorTokenizer(raw, options), options),
   } as DiffsHighlighter;
 }

@@ -19,6 +19,7 @@ import type {
 import { computeLineOffsets } from '../utils/computeFileOffsets';
 import { getFiletypeFromFileName } from '../utils/getFiletypeFromFileName';
 import { isGutterUtilityPath } from '../utils/isGutterUtilityPath';
+import { normalizeLineBreaks } from '../utils/lineEndings';
 import { cloneRetainedDiffSessionSnapshot } from './cloneRetainedDiffSessionSnapshot';
 import {
   type EditorCommand,
@@ -187,11 +188,14 @@ function getShadowRootRange(shadowRoot: ShadowRoot): StaticRange | undefined {
   };
 }
 
-/** Describe replacing the complete document from its previous text. */
+// Describes replacing the whole document, in the document's own text, with
+// one `\n` per line break.
 function createFullDocumentChange(
-  previousContents: string,
-  contents: string
+  previousText: string,
+  text: string
 ): EditorChange {
+  const previousContents = normalizeLineBreaks(previousText);
+  const contents = normalizeLineBreaks(text);
   const lineOffsets = computeLineOffsets(previousContents);
   const lastLineOffset = lineOffsets[lineOffsets.length - 1] ?? 0;
   return {
@@ -1752,7 +1756,19 @@ export class Editor<
     lineAnnotations: EditorLineAnnotation<EType, LAnnotation>[] | undefined
   ): void {
     const textDocument = editSession.document;
-    if (textDocument == null || textDocument.getText() === contents) {
+    if (textDocument == null) {
+      return;
+    }
+    // The replacement is the file as last given, so its line ending is the
+    // file's from here on, even when the text itself is the same.
+    textDocument.adoptLineEnding(contents);
+    const text = normalizeLineBreaks(contents);
+    const lastLine = textDocument.lineCount - 1;
+    const end = textDocument.offsetAt({
+      line: lastLine,
+      character: textDocument.getLineLength(lastLine),
+    });
+    if (textDocument.getTextSlice(0, end) === text) {
       return;
     }
 
@@ -1764,11 +1780,7 @@ export class Editor<
           textDocument.offsetAt(selection.end),
         ] as const
     );
-    const replacement = {
-      start: 0,
-      end: textDocument.getText().length,
-      text: contents,
-    };
+    const replacement = { start: 0, end, text };
     const change = textDocument.applyResolvedEdits(
       [replacement],
       true,
@@ -3432,25 +3444,25 @@ export class Editor<
       copiedLinesBefore.push(copiedLineCount);
       const blockLineCount = block.endLine - block.startLine + 1;
       copiedLineCount += blockLineCount;
-      const text = textDocument.getText({
-        start: { line: block.startLine, character: 0 },
-        end: {
+      const text = textDocument.getTextSlice(
+        textDocument.offsetAt({ line: block.startLine, character: 0 }),
+        textDocument.offsetAt({
           line: block.endLine,
           character: textDocument.getLineLength(block.endLine),
-        },
-      });
+        })
+      );
 
       if (direction > 0) {
         const position = { line: block.startLine, character: 0 };
         edits.push({
           range: { start: position, end: position },
-          newText: text + textDocument.eol,
+          newText: text + '\n',
         });
       } else if (block.endLine < textDocument.lineCount - 1) {
         const position = { line: block.endLine + 1, character: 0 };
         edits.push({
           range: { start: position, end: position },
-          newText: text + textDocument.eol,
+          newText: text + '\n',
         });
       } else {
         const position = {
@@ -3459,7 +3471,7 @@ export class Editor<
         };
         edits.push({
           range: { start: position, end: position },
-          newText: textDocument.eol + text,
+          newText: '\n' + text,
         });
       }
     }
@@ -3523,7 +3535,7 @@ export class Editor<
       };
       edits.push({
         range: { start: position, end: position },
-        newText: textDocument.eol + indent,
+        newText: '\n' + indent,
       });
     }
 
@@ -3565,8 +3577,8 @@ export class Editor<
     ): string => {
       const text = lines
         .map((line) => textDocument.getLineText(line))
-        .join(textDocument.eol);
-      return appendFinalLineBreak ? text + textDocument.eol : text;
+        .join('\n');
+      return appendFinalLineBreak ? `${text}\n` : text;
     };
 
     const edits: TextEdit[] = [];
@@ -3738,8 +3750,6 @@ export class Editor<
 
     // Without a tokenizer (the next sync creates one) the component still
     // takes the change and shows the lines as plain text until tokens come.
-    tokenizer?.stopBackgroundTokenize();
-
     const t = performance.now();
     const dirtyLines = tokenizer?.tokenize(change, renderRange);
     const t2 = performance.now();
@@ -3791,7 +3801,7 @@ export class Editor<
         break;
       case 'insertLineBreak':
       case 'insertParagraph': {
-        this.#replaceSelectionText(this.#editSession?.document?.eol ?? '\n');
+        this.#replaceSelectionText('\n');
         break;
       }
       case 'deleteContentBackward':
@@ -6319,7 +6329,10 @@ export class Editor<
           primarySelection
         );
         this.#updateSelections([...selections.slice(0, -1), primarySelection]);
-        const selectionText = textDocument.getText(primarySelection);
+        const selectionText = textDocument.getTextSlice(
+          textDocument.offsetAt(primarySelection.start),
+          textDocument.offsetAt(primarySelection.end)
+        );
         if (selectionText !== '' && !selectionText.includes('\n')) {
           defaultQuery = selectionText;
           initialMatch = [
@@ -6567,7 +6580,7 @@ export class Editor<
             {
               start: textDocument.offsetAt(primarySelection.start),
               end: textDocument.offsetAt(primarySelection.end),
-              text: Array.isArray(text) ? text.join(textDocument.eol) : text,
+              text: Array.isArray(text) ? text.join('\n') : text,
             },
             this.#lineAnnotations,
             undefined,
@@ -6794,10 +6807,8 @@ export class Editor<
       // without editor markup. The tokenizer and the component's model still
       // take the change, so onChange and a later render both see the current
       // document with its colors.
-      const tokenizer = this.#tokenizer;
-      tokenizer?.stopBackgroundTokenize();
       this.#applyComponentChange?.(textDocument, change, {
-        tokens: tokenizer?.tokenize(change, this.#renderRange),
+        tokens: this.#tokenizer?.tokenize(change, this.#renderRange),
         lineAnnotations: newLineAnnotations,
       });
       if (newLineAnnotations != null) {

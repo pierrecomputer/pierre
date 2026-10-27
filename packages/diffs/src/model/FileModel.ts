@@ -1,5 +1,6 @@
 import type { FileContents } from '../types';
 import { linesFromFileContents } from '../utils/computeFileOffsets';
+import { uniformLineEndings } from '../utils/lineEndings';
 import { readAllLines, readChangedLines } from './documentLines';
 import { LineMap } from './LineMap';
 import type { DocumentLineChange, DocumentLines } from './types';
@@ -34,12 +35,15 @@ export class FileModel {
     retained?: FileContents
   ): FileModel {
     const source = retained ?? file;
+    // The editor's document gives the file one line ending; the model
+    // holds the same text, so the two never disagree.
+    const contents = uniformLineEndings(source.contents);
     const sessionFile: FileContents = {
       name: source.name,
       lang: source.lang,
-      contents: source.contents,
+      contents,
     };
-    const lines = linesFromFileContents(source.contents);
+    const lines = linesFromFileContents(contents);
     return new FileModel(sessionFile, lines, new LineMap(lines.length));
   }
 

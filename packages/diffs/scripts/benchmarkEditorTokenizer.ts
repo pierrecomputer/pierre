@@ -3,6 +3,7 @@ import { type IGrammar, type StateStack } from 'shiki/textmate';
 
 import { TextDocument } from '../src/editor/textDocument';
 import { EditorTokenizer } from '../src/editor/tokenizer';
+import { DiffsEditorTokenizer } from '../src/highlighter/DiffsEditorTokenizer';
 import { ShikiEditorTokenizer } from '../src/highlighter/shiki-editor';
 import type { DiffsHighlighter, RenderRange } from '../src/types';
 
@@ -230,7 +231,8 @@ function createTokenizer(
     }),
     createEditorTokenizer: (
       options: Parameters<DiffsHighlighter['createEditorTokenizer']>[0]
-    ) => new ShikiEditorTokenizer(raw, options),
+    ) =>
+      new DiffsEditorTokenizer(new ShikiEditorTokenizer(raw, options), options),
   } as unknown as DiffsHighlighter;
   return new EditorTokenizer({
     highlighter,
@@ -249,9 +251,13 @@ function createTokenizer(
   });
 }
 
+// Colors the whole document so a case starts from settled state: all of it
+// at once without a render range, or the range now and the rest through the
+// background messages.
 function primeTokenizer(
   tokenizer: EditorTokenizer,
   textDocument: TextDocument<unknown>,
+  counters: MockCounters,
   renderRange?: RenderRange
 ): void {
   const lineCount = textDocument.lineCount;
@@ -268,13 +274,11 @@ function primeTokenizer(
       changes: [],
       changedLineRanges: [[0, lineCount - 1]],
     },
-    renderRange ?? {
-      startingLine: 0,
-      totalLines: lineCount,
-      bufferBefore: 0,
-      bufferAfter: 0,
-    }
+    renderRange
   );
+  if (renderRange != null) {
+    drainMessages(counters, lineCount + 1);
+  }
 }
 
 function resetMessages(): void {
@@ -356,8 +360,7 @@ function createBenchmarkCases(
       const tokenizer = createTokenizer(textDocument, counters, {
         matchBrackets: false,
       });
-      primeTokenizer(tokenizer, textDocument, visibleRange);
-      tokenizer.stopBackgroundTokenize();
+      primeTokenizer(tokenizer, textDocument, counters, visibleRange);
       const change = textDocument.applyEdits([
         {
           range: {
@@ -404,7 +407,7 @@ function createBenchmarkCases(
         const tokenizer = createTokenizer(textDocument, counters, {
           matchBrackets: false,
         });
-        primeTokenizer(tokenizer, textDocument);
+        primeTokenizer(tokenizer, textDocument, counters);
         const change = textDocument.applyEdits([
           {
             range: {
@@ -486,7 +489,7 @@ function createBenchmarkCases(
         const tokenizer = createTokenizer(textDocument, counters, {
           matchBrackets: true,
         });
-        primeTokenizer(tokenizer, textDocument);
+        primeTokenizer(tokenizer, textDocument, counters);
         const change = textDocument.applyEdits([
           {
             range: {
@@ -533,7 +536,7 @@ function createBenchmarkCases(
         const tokenizer = createTokenizer(textDocument, counters, {
           matchBrackets: false,
         });
-        primeTokenizer(tokenizer, textDocument);
+        primeTokenizer(tokenizer, textDocument, counters);
         const editCount = Math.min(
           128,
           config.lines,

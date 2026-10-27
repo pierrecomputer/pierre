@@ -158,8 +158,8 @@ describe('PieceTable', () => {
     ).toBe('bb');
   });
 
-  test('getLineText omits trailing CR/LF', () => {
-    const table = new PieceTable('first\r\nsecond\n');
+  test('getLineText omits the trailing line break', () => {
+    const table = new PieceTable('first\nsecond\n');
 
     expect(table.getLineText(0)).toBe('first');
     expect(table.getLineText(1)).toBe('second');
@@ -168,12 +168,12 @@ describe('PieceTable', () => {
   });
 
   test('getLineLength matches getLineText without slicing', () => {
-    const table = new PieceTable('first\r\nsecond\n');
+    const table = new PieceTable('first\nsecond\n');
 
     expect(table.getLineLength(0)).toBe(table.getLineText(0).length);
     expect(table.getLineLength(1)).toBe(table.getLineText(1).length);
     expect(table.getLineLength(2)).toBe(0);
-    expect(table.getLineLength(0, true)).toBe(7);
+    expect(table.getLineLength(0, true)).toBe(6);
     expect(table.getLineLength(1, true)).toBe(7);
     expect(() => table.getLineLength(99)).toThrow(
       'Line index out of range: 99'
@@ -223,19 +223,6 @@ describe('PieceTable', () => {
     expect(table.getText()).toBe('one zero\nTWO\nthree');
     expect(table.lineCount).toBe(3);
     expect(table.getLineText(1)).toBe('TWO');
-  });
-
-  test('handles CRLF split across piece boundaries', () => {
-    const table = new PieceTable('a\r\nb');
-
-    table.insert('X', 2);
-    table.delete(2, 1);
-
-    expect(table.getText()).toBe('a\r\nb');
-    expect(table.lineCount).toBe(2);
-    expect(table.getLineText(0)).toBe('a');
-    expect(table.positionAt(2)).toEqual({ line: 0, character: 2 });
-    expect(table.positionAt(3)).toEqual({ line: 1, character: 0 });
   });
 
   test('handles an empty document', () => {
@@ -289,9 +276,9 @@ describe('PieceTable', () => {
   test('searches text across piece boundaries', () => {
     const table = new PieceTable('a\nb');
 
-    table.insert('\r', 1);
+    table.insert('X', 1);
 
-    expect(table.includes('\r\n')).toBe(true);
+    expect(table.includes('X\n')).toBe(true);
     expect(table.includes('missing')).toBe(false);
     expect(table.includes('')).toBe(true);
   });
@@ -382,9 +369,9 @@ describe('PieceTable', () => {
   test('updates line metadata for inserted multiline text', () => {
     const table = new PieceTable('before\nafter');
 
-    table.insert('\ninserted\r\nlines', 6);
+    table.insert('\ninserted\nlines', 6);
 
-    expectTableToMatchText(table, 'before\ninserted\r\nlines\nafter');
+    expectTableToMatchText(table, 'before\ninserted\nlines\nafter');
   });
 
   test('deletes across several pieces', () => {
@@ -409,10 +396,10 @@ describe('PieceTable', () => {
   });
 
   test('matches plain string edits across many insertions and deletions', () => {
-    const table = new PieceTable('start\r\nmiddle\nend');
+    const table = new PieceTable('start\nmiddle\nend');
     const random = createRandom(42);
-    const inserts = ['a', 'BC', '\n', '\r\nx', '🙂', ''];
-    let text = 'start\r\nmiddle\nend';
+    const inserts = ['a', 'BC', '\n', '\nx', '🙂', ''];
+    let text = 'start\nmiddle\nend';
 
     for (let i = 0; i < 80; i++) {
       if (random() < 0.6) {
@@ -472,9 +459,6 @@ describe('PieceTable', () => {
       const random = createRandom(seed * 7 + 3);
       let text = 'function demo() {\n  return 42;\n}\n';
       const table = new PieceTable(text);
-      // No lone-`\r`-producing inserts here: the position oracle below splits
-      // on `\n` only. CRLF handling is fuzzed separately against the real
-      // computeLineOffsets oracle.
       const inserts = ['x', 'YZ', '\n', '  ', '🙂', 'abc'];
 
       for (let round = 0; round < 60; round++) {
@@ -546,36 +530,6 @@ describe('PieceTable', () => {
       expectTableToMatchText(table, text);
     }
   });
-
-  test('preserves CR/LF content across random edits that split pairs', () => {
-    // Edits can slice a `\r\n` pair across a piece boundary, so this stresses
-    // the split/merge content path (getText walks pieces in order; getTextSlice
-    // uses findPieceAtOffset and parent links). Line counting is buffer-based
-    // and pinned by the explicit CRLF tests, so it is not re-derived here.
-    for (let seed = 1; seed <= 5; seed++) {
-      const random = createRandom(seed * 977 + 5);
-      let text = 'a\r\nb\nc\r\n';
-      const table = new PieceTable(text);
-      const inserts = ['\r\n', '\r', '\n', 'd', 'EF', '\r\ng', ''];
-
-      for (let i = 0; i < 400; i++) {
-        if (random() < 0.6) {
-          const insert = inserts[Math.floor(random() * inserts.length)];
-          const offset = Math.floor(random() * (text.length + 1));
-          table.insert(insert, offset);
-          text = text.slice(0, offset) + insert + text.slice(offset);
-        } else {
-          const offset = Math.floor(random() * (text.length + 1));
-          const length = Math.floor(random() * 4);
-          table.delete(offset, length);
-          text = text.slice(0, offset) + text.slice(offset + length);
-        }
-
-        expect(table.getText()).toBe(text);
-        expect(table.getTextSlice(0, text.length)).toBe(text);
-      }
-    }
-  });
 });
 
 function doc(text: string) {
@@ -613,62 +567,6 @@ function oraclePositionAt(text: string, offset: number): Position {
     line++;
   }
   return { line, character: clamped - starts[line] };
-}
-
-function oracleOffsetAt(text: string, position: Position): number {
-  if (position.line < 0 || text.length === 0) {
-    return 0;
-  }
-  const starts = oracleLineStarts(text);
-  const lineStart = starts[position.line];
-  const lineEnd =
-    position.line + 1 < starts.length ? starts[position.line + 1] : text.length;
-  const character = Math.min(
-    Math.max(position.character, 0),
-    lineEnd - lineStart
-  );
-  return lineStart + character;
-}
-
-// Full line-metadata cross-check: content, line count, and both directions of
-// the offset<->position mapping over the entire document.
-function expectLineMetadataToMatch(table: PieceTable, text: string): void {
-  expect(table.getText()).toBe(text);
-
-  const starts = oracleLineStarts(text);
-  expect(table.lineCount).toBe(starts.length);
-
-  for (let offset = 0; offset <= text.length; offset++) {
-    expect(table.positionAt(offset)).toEqual(oraclePositionAt(text, offset));
-  }
-
-  for (let line = 0; line < starts.length; line++) {
-    const lineEnd = line + 1 < starts.length ? starts[line + 1] : text.length;
-    for (let character = 0; character <= lineEnd - starts[line]; character++) {
-      expect(table.offsetAt({ line, character })).toBe(
-        oracleOffsetAt(text, { line, character })
-      );
-    }
-  }
-}
-
-// End offset of a line's visible content (trailing CR/LF trimmed), matching
-// getLineLength(line) === contentEnd - starts[line].
-function oracleContentEnd(
-  text: string,
-  starts: number[],
-  line: number
-): number {
-  const spanEnd = line + 1 < starts.length ? starts[line + 1] : text.length;
-  let end = spanEnd;
-  while (end > starts[line]) {
-    const code = text.charCodeAt(end - 1);
-    if (code !== 10 && code !== 13) {
-      break;
-    }
-    end--;
-  }
-  return end;
 }
 
 // Full line-metadata cross-check against the oracle: line count, positionAt at
@@ -709,188 +607,14 @@ function buildRandomSingleLine(length: number, seed: number): string {
 // Offsets 4, 14, and 25 sit between the \r and \n of a CRLF pair.
 const MIXED = 'ivy\r\noak\relm\r\r\nfig\r\rash\n\r\nend';
 
-describe('PieceTable CRLF and lone-CR line breaks', () => {
-  test('lone \\r mixed with \\r\\n breaks reads back byte-for-byte untouched', () => {
-    // DIVERGENCE: a model that normalizes line endings would rewrite a lone
-    // \r to the document's dominant EOL on read. pierre-fe is diff-oriented
-    // and must preserve the original bytes exactly, so getText() returns the
-    // lone \r untouched.
-    const original = 'north\r\nsouth east\rwest\r\ncenter';
-    const table = new PieceTable(original);
-
-    expect(table.getText()).toBe(original);
-  });
-
-  test('lone \\r mixed with \\r\\n breaks still counts as its own line break', () => {
-    // The other half of the contract: even though the lone \r byte is
-    // preserved (see the divergence above), it is still a line break for line
-    // counting and position mapping.
-    const original = 'north\r\nsouth east\rwest\r\ncenter';
-    const table = new PieceTable(original);
-
-    expect(table.lineCount).toBe(4);
-    expect(table.getLineText(0)).toBe('north');
-    expect(table.getLineText(1)).toBe('south east');
-    expect(table.getLineText(2)).toBe('west');
-    expect(table.getLineText(3)).toBe('center');
-    // Offset 18 sits right after the lone \r: the start of line 2.
-    expect(table.positionAt(18)).toEqual({ line: 2, character: 0 });
-    expect(table.offsetAt({ line: 2, character: 0 })).toBe(18);
-  });
-
-  test('deleting exactly the \\r of a \\r\\n pair leaves a valid \\n break', () => {
-    const table = new PieceTable('cat\r\ndog');
-
-    table.delete(3, 1);
-
-    expect(table.getText()).toBe('cat\ndog');
-    expect(table.lineCount).toBe(2);
-  });
-
-  test('deleting exactly the \\n of a \\r\\n pair leaves a lone \\r break', () => {
-    const table = new PieceTable('cat\r\ndog');
-
-    table.delete(4, 1);
-
-    expect(table.getText()).toBe('cat\rdog');
-    expect(table.lineCount).toBe(2);
-  });
-
-  test('\\r\\n assembled from two separate inserts counts as one break', () => {
-    const table = new PieceTable('ab');
-
-    table.insert('\r', 1);
-    table.insert('\n', 2);
-
-    expect(table.getText()).toBe('a\r\nb');
-    expect(table.lineCount).toBe(2);
-  });
-
-  test('inserting between \\r and \\n promotes the \\r to its own break', () => {
-    const table = new PieceTable('a\r\nb');
-
-    table.insert('X', 2);
-
-    expect(table.getText()).toBe('a\rX\nb');
-    expect(table.lineCount).toBe(3);
-  });
-
-  test('line metadata matches a string oracle across CRLF-biased random edits', () => {
-    const random = createRandom(20260713);
-    const inserts = ['\r', '\n', '\r\n', '\n\r', '\r\nq', 'j\r', 'zz', ''];
-    let text = 'aa\r\nbb\ncc\r\ndd';
-    const table = new PieceTable(text);
-
-    for (let i = 0; i < 200; i++) {
-      if (random() < 0.65) {
-        const insert = inserts[Math.floor(random() * inserts.length)];
-        const offset = Math.floor(random() * (text.length + 1));
-        table.insert(insert, offset);
-        text = text.slice(0, offset) + insert + text.slice(offset);
-      } else {
-        const offset = Math.floor(random() * (text.length + 1));
-        const length = Math.floor(random() * 4);
-        table.delete(offset, length);
-        text = text.slice(0, offset) + text.slice(offset + length);
-      }
-
-      expectLineMetadataToMatch(table, text);
-    }
-  });
-});
-
-describe('mixed-EOL positionAt/offsetAt round trip', () => {
-  test('PieceTable: offsetAt of positionAt is the identity at every offset, even inside CRLF pairs', () => {
-    // DIVERGENCE: conventional editor buffers never let a line lookup land
-    // between the \r and \n of a CRLF pair — positions snap to a break
-    // boundary. PieceTable is offset-faithful instead: positionAt reports the
-    // raw split point and its own offsetAt maps it straight back, so the
-    // round trip is the identity and trivially idempotent. Self-consistent at
-    // this layer; the clamp policy lives one layer up in
-    // TextDocument.normalizePosition.
-    const table = new PieceTable(MIXED);
-
-    expectLinePositionsToMatchOracle(table, MIXED);
-    for (let offset = 0; offset <= MIXED.length; offset++) {
-      expect(table.offsetAt(table.positionAt(offset))).toBe(offset);
-    }
-  });
-
-  test('PieceTable.positionAt reports offsets between \\r and \\n faithfully', () => {
-    // DIVERGENCE: these positions point strictly inside a CRLF pair — their
-    // character exceeds the line's visible content length. A boundary-snapping
-    // mapping cannot produce them; PieceTable does, by design (see the
-    // identity round trip above).
-    const table = new PieceTable(MIXED);
-
-    expect(table.positionAt(4)).toEqual({ line: 0, character: 4 });
-    expect(table.getLineLength(0)).toBe(3);
-    expect(table.positionAt(14)).toEqual({ line: 3, character: 1 });
-    expect(table.getLineLength(3)).toBe(0);
-    expect(table.positionAt(25)).toEqual({ line: 7, character: 1 });
-    expect(table.getLineLength(7)).toBe(0);
-  });
-
-  test('TextDocument position APIs never land between the \\r and \\n of a CRLF pair', () => {
+describe('line breaks at the document level', () => {
+  test('TextDocument keeps one character per line break, so offsets round-trip exactly', () => {
     const d = doc(MIXED);
-    const offsets = Array.from({ length: MIXED.length + 1 }, (_, i) => i);
-    const positions = d.positionsAt(offsets);
-
-    for (let offset = 0; offset <= MIXED.length; offset++) {
-      const position = d.positionAt(offset);
-      expect(position).toEqual(positions[offset]);
-      expect(position.character).toBeLessThanOrEqual(
-        d.getLineLength(position.line)
-      );
+    const normalized = MIXED.replace(/\r\n|\r/g, '\n');
+    for (let offset = 0; offset <= normalized.length; offset++) {
+      expect(d.offsetAt(d.positionAt(offset))).toBe(offset);
     }
-
-    expect(d.positionsAt([4, 14, 25])).toEqual([
-      { line: 0, character: 3 },
-      { line: 3, character: 0 },
-      { line: 7, character: 0 },
-    ]);
-  });
-
-  test('TextDocument: offsetAt of positionAt is idempotent and snaps break-interior offsets to content end', () => {
-    // Unlike the PieceTable layer, the TextDocument round trip is not the
-    // identity: offsets between the \r and \n of a CRLF pair map to the end of
-    // the line's visible content. The mapping settles after one application —
-    // a second round trip is a fixpoint — which is the conventional stability
-    // guarantee for line/offset conversions.
-    const d = doc(MIXED);
-    const starts = oracleLineStarts(MIXED);
-    const roundTrip = (offset: number) => d.offsetAt(d.positionAt(offset));
-
-    for (let offset = 0; offset <= MIXED.length; offset++) {
-      const { line } = oraclePositionAt(MIXED, offset);
-      const expected = Math.min(offset, oracleContentEnd(MIXED, starts, line));
-      const once = roundTrip(offset);
-      expect(once).toBe(expected);
-      expect(roundTrip(once)).toBe(once);
-    }
-    // The three break-interior offsets are the only ones that move.
-    expect(roundTrip(4)).toBe(3);
-    expect(roundTrip(14)).toBe(13);
-    expect(roundTrip(25)).toBe(24);
-  });
-
-  test('edits invalidate the last position round trip', () => {
-    const table = new PieceTable('xxxx\nbbbb');
-    const position = table.positionAt(7);
-
-    expect(position).toEqual({ line: 1, character: 2 });
-    expect(table.offsetAt(position)).toBe(7);
-
-    table.insert('yy', 0);
-    expect(table.offsetAt(position)).toBe(9);
-    expect(table.offsetAt(table.positionAt(9))).toBe(9);
-
-    table.delete(0, 3);
-    expect(table.offsetAt(position)).toBe(6);
-    expect(table.offsetAt(table.positionAt(6))).toBe(6);
-
-    table.applyEdits([{ start: 0, end: 1, text: 'zzzz' }]);
-    expect(table.offsetAt(position)).toBe(9);
+    expect(d.getText()).toBe(MIXED.replace(/\r\n|\r|\n/g, d.eol));
   });
 });
 

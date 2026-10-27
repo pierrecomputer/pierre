@@ -731,6 +731,8 @@ describe('__completeEditSession', () => {
     lineAnnotations?: DiffLineAnnotation<undefined>[];
     externalDiff?: FileDiffMetadata;
     loadDiffFiles?: FileDiffOptions<undefined, undefined>['loadDiffFiles'];
+    /** The text the editor shows once attached, when it is not the input's. */
+    expectedText?: string;
   }) {
     const dom = installDom();
     const fileContainer = document.createElement('div');
@@ -756,10 +758,9 @@ describe('__completeEditSession', () => {
       await instance.__prepareForEditing();
     }
     editor.edit(instance);
-    await waitFor(
-      () => editor.getText() === externalDiff.additionLines.join(''),
-      { timeout: 4_000 }
-    );
+    const expectedText =
+      config?.expectedText ?? externalDiff.additionLines.join('');
+    await waitFor(() => editor.getText() === expectedText, { timeout: 4_000 });
     return {
       editor,
       externalDiff,
@@ -775,6 +776,96 @@ describe('__completeEditSession', () => {
       },
     };
   }
+
+  test('saving a mixed-ending file returns it normalized, with the hunks to match', async () => {
+    const events: FileDiffEditCompleteEvent<undefined, undefined>[] = [];
+    const externalDiff = parseDiffFromFile(
+      { name: 'w.ts', contents: 'a\r\nb\nc\n' },
+      { name: 'w.ts', contents: 'a\r\nb\nc\n' }
+    );
+    const fixture = await createCompletionFixture({
+      externalDiff,
+      expectedText: 'a\r\nb\r\nc\r\n',
+      onEditComplete(event) {
+        events.push(event);
+        return 'accept';
+      },
+    });
+    try {
+      const before = captureExternalDiffState(externalDiff);
+      fixture.editor.cleanUp('complete');
+      expect(events).toHaveLength(1);
+      const [event] = events;
+      expect(event.newFile?.contents).toBe('a\r\nb\r\nc\r\n');
+      expect(event.oldFile?.contents).toBe('a\r\nb\nc\n');
+      expect(event.fileDiff.hunks.length).toBeGreaterThan(0);
+      expect(event.originalFileDiff).toBe(externalDiff);
+      expect(externalDiff.additionLines).toBe(before.additionLines);
+      expect(externalDiff.hunks).toBe(before.hunks);
+    } finally {
+      fixture.cleanup();
+    }
+  });
+
+  test('cancelling on a mixed-ending file restores the original', async () => {
+    const events: FileDiffEditCompleteEvent<undefined, undefined>[] = [];
+    const externalDiff = parseDiffFromFile(
+      { name: 'w.ts', contents: 'a\r\nb\nc\n' },
+      { name: 'w.ts', contents: 'a\r\nb\nc\n' }
+    );
+    const fixture = await createCompletionFixture({
+      externalDiff,
+      expectedText: 'a\r\nb\r\nc\r\n',
+      onEditComplete(event) {
+        events.push(event);
+        return 'reject';
+      },
+    });
+    try {
+      const before = captureExternalDiffState(externalDiff);
+      fixture.editor.cleanUp('discard');
+      expect(events).toHaveLength(1);
+      expect(events[0].originalFileDiff).toBe(externalDiff);
+      expectExternalDiffUnchanged(fixture.instance, externalDiff, before);
+    } finally {
+      fixture.cleanup();
+    }
+  });
+
+  test('a partial initial state attaches to a mixed-ending file', async () => {
+    const dom = installDom();
+    const fileContainer = document.createElement('div');
+    document.body.appendChild(fileContainer);
+    const externalDiff = parseDiffFromFile(
+      { name: 'w.ts', contents: 'a\r\nb\nc\n' },
+      { name: 'w.ts', contents: 'a\r\nb\nc\n' }
+    );
+    const instance = new TestFileDiff({
+      disableErrorHandling: true,
+      disableFileHeader: true,
+    });
+    // Restored state names the file but carries no contents, so the input
+    // supplies them.
+    const editor = new Editor('file-diff', {
+      initialState: { type: 'file-diff', fileInfo: { name: 'w.ts' } },
+    });
+    try {
+      instance.render({
+        fileDiff: externalDiff,
+        fileContainer,
+        forceRender: true,
+      });
+      editor.edit(instance);
+      await waitFor(() => editor.getText() === 'a\r\nb\r\nc\r\n', {
+        timeout: 4_000,
+      });
+      expect(editor.getText()).toBe('a\r\nb\r\nc\r\n');
+    } finally {
+      editor.cleanUp();
+      instance.cleanUp();
+      dom.cleanup();
+    }
+  });
 
   test('completion settles the hunks with the current parse options', async () => {
     const events: FileDiffEditCompleteEvent<undefined, undefined>[] = [];

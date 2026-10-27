@@ -2476,3 +2476,111 @@ describe('Enter and indentation carry-over', () => {
     expect(nextSelections).toEqual([caret(1, 0)]);
   });
 });
+
+describe('line endings', () => {
+  test('a programmatic edit with CRLF text moves the caret by what was inserted', async () => {
+    const { cleanup, editor } = await createEditorFixture(
+      'alpha\r\nbravo\r\ncharlie'
+    );
+    try {
+      editor.setSelections([
+        {
+          start: { line: 2, character: 2 },
+          end: { line: 2, character: 2 },
+          direction: 'forward',
+        },
+      ]);
+      editor.applyEdits([
+        {
+          range: {
+            start: { line: 0, character: 0 },
+            end: { line: 0, character: 0 },
+          },
+          newText: 'NEW\r\n',
+        },
+      ]);
+      expect(editor.getText()).toBe('NEW\r\nalpha\r\nbravo\r\ncharlie');
+      expect(editor.getViewState().selections).toEqual([
+        {
+          start: { line: 3, character: 2 },
+          end: { line: 3, character: 2 },
+          direction: DirectionNone,
+        },
+      ]);
+    } finally {
+      cleanup();
+    }
+  });
+
+  test('a replacement brings its own line ending, which later edits keep', async () => {
+    const onChange = mock(
+      (
+        ..._args: Parameters<
+          NonNullable<EditorOptions<'file', undefined, undefined>['onChange']>
+        >
+      ) => {}
+    );
+    const { cleanup, editor, file, fileContainer } = await createEditorFixture(
+      'a\r\nb\r\nc\r\n',
+      { onChange }
+    );
+    try {
+      file.render({
+        file: { name: 'edits.ts', contents: 'a\nB\nc\n' },
+        fileContainer,
+        forceRender: true,
+      });
+      await waitFor(() => editor.getText() === 'a\nB\nc\n');
+      editor.applyEdits([
+        {
+          range: {
+            start: { line: 1, character: 1 },
+            end: { line: 1, character: 1 },
+          },
+          newText: 'X',
+        },
+      ]);
+      expect(editor.getText()).toBe('a\nBX\nc\n');
+      const [event] = onChange.mock.calls.at(-1) ?? [];
+      expect(event?.file.contents).toBe('a\nBX\nc\n');
+    } finally {
+      cleanup();
+    }
+  });
+
+  test('replacing the file while editing reports the change in document coordinates', async () => {
+    const onChange = mock(
+      (
+        ..._args: Parameters<
+          NonNullable<EditorOptions<'file', undefined, undefined>['onChange']>
+        >
+      ) => {}
+    );
+    const { cleanup, file, fileContainer } = await createEditorFixture(
+      'a\r\nb\r\nc',
+      { onChange }
+    );
+    try {
+      file.render({
+        file: { name: 'edits.ts', contents: 'x\r\ny\r\nz' },
+        fileContainer,
+        forceRender: true,
+      });
+      await waitFor(() => onChange.mock.calls.length > 0);
+      const [event] = onChange.mock.calls[0] ?? [];
+      expect(event?.changes).toEqual([
+        {
+          start: 0,
+          end: 5,
+          text: 'x\ny\nz',
+          range: {
+            start: { line: 0, character: 0 },
+            end: { line: 2, character: 1 },
+          },
+        },
+      ]);
+    } finally {
+      cleanup();
+    }
+  });
+});

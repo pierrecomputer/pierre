@@ -299,9 +299,6 @@ export class EditorTokenizer {
     return this.#tokenizer.flush(renderRange);
   }
 
-  stopBackgroundTokenize(): void {
-    this.#tokenizer.stopBackgroundTokenize();
-  }
   pauseBackgroundTokenize(): void {
     this.#tokenizer.pauseBackgroundTokenize();
   }
