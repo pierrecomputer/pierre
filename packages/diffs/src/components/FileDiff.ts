@@ -2146,7 +2146,7 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
       return;
     }
     void this.hunksRenderer.refreshHighlightedResult();
-    this.escalateEditSessionRender();
+    this.escalateEditSessionRender('exit');
   }
 
   /**
@@ -2372,9 +2372,10 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
     return this.editor == null;
   }
 
-  // Queued full render after the session's hunks are settled.
-  // VirtualizedFileDiff overrides this to also invalidate its layout caches.
-  protected escalateEditSessionRender(): void {
+  // Queued full render after the session's hunks are settled, for a change
+  // in the session or the recompute on exit. VirtualizedFileDiff overrides
+  // this to also invalidate its layout caches.
+  protected escalateEditSessionRender(_cause: 'change' | 'exit'): void {
     queueRender(this.handleEditSessionRender);
   }
 

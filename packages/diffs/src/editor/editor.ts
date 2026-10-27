@@ -14,6 +14,7 @@ import type {
   HighlightedToken,
   LineAnnotation,
   RenderRange,
+  ScrollRequestResult,
   SelectionSide,
 } from '../types';
 import { computeLineOffsets } from '../utils/computeFileOffsets';
@@ -543,6 +544,10 @@ export class Editor<
   // consuming a newer replacement's focus intent. Once synchronized, target
   // identifies the new content so a subsequent user blur can cancel it.
   #replacementFocusRequest?: { target?: HTMLElement };
+  // The frame callback that applies an explicit #focus() on the next frame.
+  // Until it runs, the control that held focus before the request is not a
+  // newer intent; focus moving elsewhere in the gap cancels it.
+  #queuedFocusFrame?: () => void;
   #isComposing = false;
   #isGutterMouseDown = false;
   #isContentMouseDown = false;
@@ -1017,6 +1022,8 @@ export class Editor<
       // guessing.
       const viewport = this.#getOwnedVerticalViewport();
       if (view.scrollTop !== undefined && viewport != null) {
+        // The restored position is the newest scroll intent.
+        this.#virtualizedInstance?.cancelScroll();
         viewport.scrollTop = view.scrollTop;
       }
     } else if (this.#ownsVerticalViewport) {
@@ -1152,6 +1159,8 @@ export class Editor<
     this.__assertOutsideChangeCallback('Editor.cleanUp');
     const fileInstance = this.#fileInstance;
     const recycle = reason === 'recycle';
+    // Cancel our pending caret scroll so it can't fire after we've detached.
+    this.#virtualizedInstance?.cancelScroll(this.#handleCaretRevealDone);
     this.#cancelEditPrediction(true, false);
     if (!recycle) {
       this.#editPredictionHistory = [];
@@ -2080,6 +2089,13 @@ export class Editor<
         'focusin',
         (event) => {
           if (!replacementFocusTargetIsContent(event)) {
+            const queuedFocusFrame = this.#queuedFocusFrame;
+            if (queuedFocusFrame !== undefined) {
+              dequeueRender(queuedFocusFrame);
+              this.#queuedFocusFrame = undefined;
+              this.#contentHasFocus = false;
+              this.#shouldIgnoreSelectionChange = false;
+            }
             cancelReplacementFocus();
           }
         },
@@ -2566,9 +2582,10 @@ export class Editor<
 
         const normalizedKey = e.key.length === 1 ? e.key.toLowerCase() : e.key;
         if (normalizedKey === 'v' && isPrimaryModifier(e)) {
-          // Holding paste can enqueue a costly full diff recompute for every
-          // keyboard repeat. Accept the first paste and suppress repeats.
-          if (e.repeat && this.#isDiff) {
+          // A held paste shortcut pastes once. The OS throttles repeated
+          // paste shortcuts heavily and the lag that comes with it is not
+          // ours to carry, so the repeats are dropped.
+          if (e.repeat) {
             e.preventDefault();
             return;
           }
@@ -3849,7 +3866,10 @@ export class Editor<
       });
       // call focus in a request animation frame to prevent conflict with
       // the `setBaseAndExtent` method
-      queueRender(() => {
+      const queuedFocusFrame = () => {
+        if (this.#queuedFocusFrame === queuedFocusFrame) {
+          this.#queuedFocusFrame = undefined;
+        }
         // #contentHasFocus was marked eagerly above; a blur (or cleanup) in
         // the deferred gap cedes focus, and this stale frame must not pull
         // it back into the current — possibly replaced — content.
@@ -3863,7 +3883,9 @@ export class Editor<
         queueRender(() => {
           this.#shouldIgnoreSelectionChange = false;
         });
-      });
+      };
+      this.#queuedFocusFrame = queuedFocusFrame;
+      queueRender(queuedFocusFrame);
     } else if (shouldFocus?.() !== false) {
       this.#contentElement?.focus({ preventScroll });
     } else {
@@ -3929,6 +3951,9 @@ export class Editor<
       !shadowRoot.contains(contentElement)
     ) {
       return false;
+    }
+    if (this.#queuedFocusFrame !== undefined) {
+      return true;
     }
     const { activeElement: shadowActiveElement } = shadowRoot;
     if (
@@ -4080,25 +4105,59 @@ export class Editor<
       return;
     }
     const primaryCaretElement = this.#primaryCaretElement;
-    if (primaryCaretElement !== undefined) {
+    if (this.#virtualizedInstance !== undefined) {
+      this.#requestCaretReveal(scrollPosition);
+    } else if (primaryCaretElement !== undefined) {
       primaryCaretElement.scrollIntoView({
         block: scrollPosition,
         inline: 'nearest',
       });
-      if (!noFocus) {
-        const position =
-          primarySelection.direction === DirectionBackward
-            ? primarySelection.end
-            : primarySelection.start;
-        if (this.#replacementFocusRequest !== undefined) {
-          this.#restoreReplacementFocus(position);
-        } else {
-          this.#focus(position);
-        }
-      }
     } else {
       const pos = getCaretPosition(primarySelection);
       this.#scrollToLine(pos.line, pos.character, noFocus);
+      return;
+    }
+    if (!noFocus) {
+      this.#focusAt(
+        primarySelection.direction === DirectionBackward
+          ? primarySelection.end
+          : primarySelection.start
+      );
+    }
+  }
+
+  // Virtualized hosts own scrolling: the host brings the primary caret's line
+  // into view, then whatever caret the selection holds once it settles gets its
+  // exact row and column revealed. The reveal never moves focus.
+  #requestCaretReveal(align: ScrollLogicalPosition): void {
+    const host = this.#virtualizedInstance;
+    const caret = this.#selections?.at(-1);
+    if (host === undefined || caret === undefined) {
+      return;
+    }
+    this.__postponeBgTokenizeToNextFrame();
+    host.scrollToLine(
+      getCaretPosition(caret).line + 1,
+      align,
+      this.#handleCaretRevealDone
+    );
+  }
+
+  // Hosts keep one pending request and cancel it when replaced, so a settled
+  // result always belongs to the newest reveal.
+  #handleCaretRevealDone = (result: ScrollRequestResult): void => {
+    const caret = this.#selections?.at(-1);
+    if (result === 'settled' && caret !== undefined) {
+      const { line, character } = getCaretPosition(caret);
+      this.#scrollCaretIntoView(line, character, 'nearest');
+    }
+  };
+
+  #focusAt(position: Position): void {
+    if (this.#replacementFocusRequest !== undefined) {
+      this.#restoreReplacementFocus(position);
+    } else {
+      this.#focus(position);
     }
   }
 
@@ -4119,7 +4178,89 @@ export class Editor<
   #scrollToLine(line: number, char = 0, noFocus = false) {
     this.__postponeBgTokenizeToNextFrame();
 
-    const virtualCaret = h('div', {
+    if (this.#scrollCaretIntoView(line, char, 'center')) {
+      if (!noFocus) {
+        this.#focusAt({ line, character: char });
+      }
+      this.#scrollingToLine = undefined;
+      this.#scrollingToLineChar = undefined;
+      this.#scrollingToLineFixed = false;
+      this.#scrollingToLineNoFocus = false;
+      return;
+    }
+
+    // if the line is not rendered yet, scroll to the approximate line position
+    // to trigger the line to be rendered, then recall this function to ensure
+    // the line is scrolled into view
+    let yFix = 0;
+    if (this.#scrollingToLine === line && this.#contentElement !== undefined) {
+      for (let i = this.#contentElement.childElementCount - 1; i >= 0; i--) {
+        const child = this.#contentElement.children[i] as HTMLElement;
+        const lineType = child.dataset.lineType;
+        const lineNumber = getLineNumberAttr(child);
+        if (
+          lineType !== undefined &&
+          isLineEditable(lineType) &&
+          lineNumber !== undefined
+        ) {
+          yFix = (line - (lineNumber - 1)) * this.#metrics.lineHeight;
+          break;
+        }
+      }
+    }
+    const lineAnnotations = (this.#lineAnnotations ?? []).filter(
+      (annotation) => annotation.lineNumber < line
+    ).length;
+    const approximateLineY =
+      (lineAnnotations + line) * this.#metrics.lineHeight + yFix;
+    const virtualCaret = this.#createVirtualCaret();
+    virtualCaret.style.top = approximateLineY + 'px';
+    this.#fileContainer?.shadowRoot?.appendChild(virtualCaret);
+    virtualCaret.scrollIntoView({ block: 'center', inline: 'nearest' });
+    virtualCaret.remove();
+
+    if (
+      (this.#scrollingToLine === line &&
+        (yFix === 0 || this.#scrollingToLineFixed)) ||
+      !this.#isLineRenderable(line)
+    ) {
+      this.#scrollingToLine = undefined;
+      this.#scrollingToLineChar = undefined;
+      this.#scrollingToLineFixed = false;
+      this.#scrollingToLineNoFocus = false;
+    } else {
+      this.#scrollingToLine = line;
+      this.#scrollingToLineChar = char;
+      this.#scrollingToLineFixed = yFix !== 0;
+      this.#scrollingToLineNoFocus = noFocus;
+    }
+  }
+
+  // Scroll the caret's exact wrapped row and column into view. Returns false
+  // when the line has no rendered row to reveal.
+  #scrollCaretIntoView(
+    line: number,
+    char: number,
+    block: ScrollLogicalPosition
+  ): boolean {
+    if (!this.#isRendering || this.#getLineElement(line) === undefined) {
+      return false;
+    }
+    const [left, wrapLine] = this.#getCharX(line, char);
+    const virtualCaret = this.#createVirtualCaret();
+    virtualCaret.style.top =
+      this.#getLineY(line) + wrapLine * this.#metrics.lineHeight + 'px';
+    virtualCaret.style.left = left + 'px';
+    this.#overlayElement?.appendChild(virtualCaret);
+    virtualCaret.scrollIntoView({ block, inline: 'nearest' });
+    virtualCaret.remove();
+    return true;
+  }
+
+  // A temporary one-line element that native scrollIntoView can target in
+  // place of a caret that is not rendered.
+  #createVirtualCaret(): HTMLElement {
+    return h('div', {
       style: {
         position: 'absolute',
         left: '0',
@@ -4128,100 +4269,6 @@ export class Editor<
         scrollMargin: this.#getScrollMargin(),
       },
     });
-    if (this.#getLineElement(line) !== undefined) {
-      const [left, wrapLine] = this.#getCharX(line, char);
-      const lineY = this.#getLineY(line) + wrapLine * this.#metrics.lineHeight;
-      virtualCaret.style.top = lineY + 'px';
-      virtualCaret.style.left = left + 'px';
-      this.#overlayElement?.appendChild(virtualCaret);
-      virtualCaret.scrollIntoView({ block: 'center', inline: 'nearest' });
-      if (!noFocus) {
-        const position = { line, character: char };
-        if (this.#replacementFocusRequest !== undefined) {
-          this.#restoreReplacementFocus(position);
-        } else {
-          this.#focus(position);
-        }
-      }
-      this.#scrollingToLine = undefined;
-      this.#scrollingToLineChar = undefined;
-      this.#scrollingToLineFixed = false;
-      this.#scrollingToLineNoFocus = false;
-    }
-    // if the line is not rendered yet(virtualized), scroll to the modeled or approximate
-    // line position to trigger the line to be rendered, then recall this function
-    // to ensure the line is scrolled into view
-    else {
-      const modelLinePosition = this.#virtualizedInstance?.getLinePosition?.(
-        line + 1
-      );
-      if (modelLinePosition !== undefined) {
-        virtualCaret.style.top = modelLinePosition.top + 'px';
-        this.#fileContainer?.shadowRoot?.appendChild(virtualCaret);
-        virtualCaret.scrollIntoView({ block: 'center', inline: 'nearest' });
-        // A collapsed line reports its separator's (nonzero) geometry, so
-        // parking the retry for it would re-scroll on every sync forever;
-        // only renderable lines may keep the retry alive.
-        if (modelLinePosition.height > 0 && this.#isLineRenderable(line)) {
-          this.#scrollingToLine = line;
-          this.#scrollingToLineChar = char;
-          this.#scrollingToLineNoFocus = noFocus;
-        } else {
-          this.#scrollingToLine = undefined;
-          this.#scrollingToLineChar = undefined;
-          this.#scrollingToLineNoFocus = false;
-        }
-      } else {
-        let yFix = 0;
-        if (
-          this.#scrollingToLine === line &&
-          this.#contentElement !== undefined
-        ) {
-          for (
-            let i = this.#contentElement.childElementCount - 1;
-            i >= 0;
-            i--
-          ) {
-            const child = this.#contentElement.children[i] as HTMLElement;
-            const lineType = child.dataset.lineType;
-            const lineNumber = getLineNumberAttr(child);
-            if (
-              lineType !== undefined &&
-              isLineEditable(lineType) &&
-              lineNumber !== undefined
-            ) {
-              yFix = (line - (lineNumber - 1)) * this.#metrics.lineHeight;
-              break;
-            }
-          }
-        }
-        const lineAnnotations = (this.#lineAnnotations ?? []).filter(
-          (annotation) => annotation.lineNumber < line
-        ).length;
-        const approximateLineY =
-          (lineAnnotations + line) * this.#metrics.lineHeight + yFix;
-        virtualCaret.style.top = approximateLineY + 'px';
-        this.#fileContainer?.shadowRoot?.appendChild(virtualCaret);
-        virtualCaret.scrollIntoView({ block: 'center', inline: 'nearest' });
-
-        if (
-          (this.#scrollingToLine === line &&
-            (yFix === 0 || this.#scrollingToLineFixed)) ||
-          !this.#isLineRenderable(line)
-        ) {
-          this.#scrollingToLine = undefined;
-          this.#scrollingToLineChar = undefined;
-          this.#scrollingToLineFixed = false;
-          this.#scrollingToLineNoFocus = false;
-        } else {
-          this.#scrollingToLine = line;
-          this.#scrollingToLineChar = char;
-          this.#scrollingToLineFixed = yFix !== 0;
-          this.#scrollingToLineNoFocus = noFocus;
-        }
-      }
-    }
-    virtualCaret.remove();
   }
 
   // Build a selection that fully covers every line from the anchor line to the
@@ -6854,7 +6901,9 @@ export class Editor<
         if (revealTarget !== undefined) {
           this.#revealLineIfCollapsed(getCaretPosition(revealTarget).line);
         }
-        if (this.#primaryCaretElement !== undefined) {
+        if (this.#virtualizedInstance !== undefined) {
+          this.#requestCaretReveal('nearest');
+        } else if (this.#primaryCaretElement !== undefined) {
           requestAnimationFrame(() => {
             this.#primaryCaretElement?.scrollIntoView({
               block: 'nearest',

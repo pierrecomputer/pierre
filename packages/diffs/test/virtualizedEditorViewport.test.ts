@@ -26,6 +26,8 @@ function createSimpleVirtualizer(root: HTMLElement) {
     isInstanceVisible: () => true,
     markDOMDirty() {},
     requestHeightReconcile() {},
+    scrollSpanIntoView() {},
+    cancelScroll() {},
   } as never;
 }
 
