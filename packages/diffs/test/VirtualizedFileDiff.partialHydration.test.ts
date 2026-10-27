@@ -71,6 +71,7 @@ function createVirtualizer(visible = true): {
     },
     markDOMDirty() {},
     requestHeightReconcile() {},
+    cancelScroll() {},
     isInstanceVisible() {
       return visible;
     },
@@ -96,6 +97,7 @@ function createAdvancedVirtualizer(): {
     instanceChanged(_instance: unknown, layoutDirty: boolean) {
       instanceChangedCalls.push({ layoutDirty });
     },
+    cancelScroll() {},
   } as unknown as Virtualizer;
 
   return { virtualizer, instanceChangedCalls };
