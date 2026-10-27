@@ -174,11 +174,18 @@ test.describe('CodeView annotation scroll anchoring', () => {
     expect((await measureViewport(page)).scrollHeight).toBe(
       before.scrollHeight - 40
     );
-    expect(
-      await page.evaluate(() => window.__annotationScroll?.getScrollTop())
-    ).toBe(
-      await page.evaluate(() => window.__annotationScroll?.root.scrollTop)
-    );
+    // The anchor correction for the new heights lands over a frame; the
+    // logical and DOM scroll positions agree once it has.
+    await expect
+      .poll(() =>
+        page.evaluate(() => {
+          const fixture = window.__annotationScroll;
+          return fixture == null
+            ? undefined
+            : fixture.getScrollTop() - fixture.root.scrollTop;
+        })
+      )
+      .toBe(0);
     expect(errors).toEqual([]);
   });
 
