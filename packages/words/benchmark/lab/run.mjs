@@ -1,22 +1,23 @@
 #!/usr/bin/env node
 
 import { fork } from 'node:child_process';
-import {
-  cpSync,
-  existsSync,
-  mkdirSync,
-  readdirSync,
-  readFileSync,
-  renameSync,
-  writeFileSync,
-} from 'node:fs';
+import { cpSync } from 'node:fs';
 import { loadavg } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { environmentMetadata, sha256 } from '../environment.mjs';
+import {
+  capture,
+  hashTree,
+  loadCapture,
+  newDirectory,
+  packageDirectory,
+  save,
+} from './capture.mjs';
 import { defaultCaseIds, listCases } from './cases.mjs';
 import {
+  aggregate,
   comparePairs,
   median,
   randomGenerator,
@@ -24,7 +25,6 @@ import {
 } from './statistics.mjs';
 
 const directory = dirname(fileURLToPath(import.meta.url));
-const packageDirectory = resolve(directory, '../..');
 const commands = ['list', 'capture', 'quick', 'confirm', 'profile'];
 const help = `Words optimization lab (Node; parser only, no browser/highlighter)
   moonx words:lab --ignore-ci-checks -- list
@@ -34,84 +34,16 @@ const help = `Words optimization lab (Node; parser only, no browser/highlighter)
   moonx words:lab --ignore-ci-checks -- profile --candidate=/tmp/words-after --case=CASE
 
 quick/confirm: --cases=id,id|all --output=NEW_DIRECTORY --rounds=N --seed=N
-               --warmup-ms=N --sample-ms=N --samples=N --threshold=0.02 --timeout-ms=N
+               --warmup-ms=N --warmup-deliveries=N --warmup-max-ms=N
+               --sample-ms=N --samples=N --threshold=R --timeout-ms=N
 profile:       --output=NEW_DIRECTORY --duration-ms=3000
 Omitted candidate captures the current build. Capture directories never change.
-Quick is exploratory; confirm defaults to 12 fresh process pairs and a 2% threshold.
-One operation is a whole document or whole replay, not one stream delivery.
+Quick screens with a 3% practical threshold (its measured A/A noise floor) and
+never reports intervals; confirm uses 12 fresh process pairs, a 2% threshold,
+and bootstrap intervals. Both write summary.json with one score: the geometric
+mean of per-case candidate/baseline time ratios (lower is better) and a
+regression list. One operation is a whole document or whole replay.
 `;
-
-/** Preserve partial runs without risking truncated JSON after interruption. */
-function save(path, value) {
-  writeFileSync(`${path}.tmp`, JSON.stringify(value, null, 2) + '\n');
-  renameSync(`${path}.tmp`, path);
-}
-
-function newDirectory(path) {
-  if (existsSync(path))
-    throw new Error(`Output already exists: ${path}; choose a new directory`);
-  mkdirSync(path, { recursive: true });
-  return path;
-}
-
-function hashTree(path) {
-  const files = {};
-  const visit = (relative) => {
-    for (const entry of readdirSync(join(path, relative), {
-      withFileTypes: true,
-    }).sort((a, b) => a.name.localeCompare(b.name))) {
-      const name = join(relative, entry.name);
-      if (entry.isDirectory()) visit(name);
-      else if (entry.isFile()) files[name] = sha256(join(path, name));
-    }
-  };
-  visit('');
-  return files;
-}
-
-/** Freeze the core module, its source, and identity without modifying dist. */
-function capture(output) {
-  newDirectory(output);
-  for (const name of ['index.mjs', 'md.wasm'])
-    cpSync(join(packageDirectory, 'dist', name), join(output, name));
-  cpSync(join(packageDirectory, 'src'), join(output, 'src'), {
-    recursive: true,
-  });
-  mkdirSync(join(output, 'scripts'));
-  cpSync(
-    join(packageDirectory, 'scripts/build.mjs'),
-    join(output, 'scripts/build.mjs')
-  );
-  const manifest = {
-    format: 'words-lab-capture',
-    schemaVersion: 1,
-    created: new Date().toISOString(),
-    artifacts: hashTree(output),
-    environment: environmentMetadata(),
-  };
-  save(join(output, 'capture.json'), manifest);
-  return { directory: output, manifest };
-}
-
-function loadCapture(path) {
-  const directory = resolve(path);
-  const manifest = JSON.parse(
-    readFileSync(join(directory, 'capture.json'), 'utf8')
-  );
-  if (manifest.format !== 'words-lab-capture' || manifest.schemaVersion !== 1)
-    throw new Error(`Not a words lab capture: ${directory}`);
-  for (const [name, hash] of Object.entries(manifest.artifacts))
-    if (sha256(join(directory, name)) !== hash)
-      throw new Error(`Capture changed: ${join(directory, name)}`);
-  for (const name of [
-    'index.mjs',
-    'md.wasm',
-    'src/md.wat',
-    'scripts/build.mjs',
-  ])
-    if (!manifest.artifacts[name]) throw new Error(`Capture missing ${name}`);
-  return { directory, manifest };
-}
 
 /** Workers run serially; each has a fresh VM, Wasm instance, and warmup. */
 function runWorker(configuration, timeoutMs) {
@@ -180,6 +112,8 @@ if (command === '--help' || args.includes('--help')) {
               'rounds',
               'seed',
               'warmup-ms',
+              'warmup-deliveries',
+              'warmup-max-ms',
               'sample-ms',
               'samples',
               'threshold',
@@ -217,7 +151,7 @@ if (command === '--help' || args.includes('--help')) {
       );
     console.log('* default quick/confirm selection');
   } else if (command === 'capture') {
-    capture(output);
+    await capture(output);
     console.log(`Captured ${output}`);
   } else if (command === 'profile') {
     const caseId = options.case ?? defaultCaseIds[0];
@@ -228,7 +162,7 @@ if (command === '--help' || args.includes('--help')) {
     newDirectory(output);
     const profileTarget = join(output, 'target');
     if (target) cpSync(target.directory, profileTarget, { recursive: true });
-    else capture(profileTarget);
+    else await capture(profileTarget);
     const saved = loadCapture(profileTarget);
     if (
       saved.manifest.artifacts['scripts/build.mjs'] !==
@@ -276,9 +210,11 @@ if (command === '--help' || args.includes('--help')) {
       ),
       seed: number('seed', 20261026, 0, 4294967295),
       warmupMs: number('warmup-ms', confirm ? 300 : 75, 1, 60000),
+      warmupDeliveries: number('warmup-deliveries', 20000, 0, 10000000),
+      warmupMaxMs: number('warmup-max-ms', confirm ? 10000 : 3000, 1, 600000),
       sampleMs: number('sample-ms', confirm ? 30 : 15, 1, 60000),
       samples: number('samples', confirm ? 9 : 5, 3, 1000),
-      threshold: number('threshold', 0.02, 0, 0.99, false),
+      threshold: number('threshold', confirm ? 0.02 : 0.03, 0, 0.99, false),
       timeoutMs: number('timeout-ms', 120000, 1000, 3600000),
       caseIds,
     };
@@ -291,7 +227,7 @@ if (command === '--help' || args.includes('--help')) {
     newDirectory(output);
     const targets = {
       ...(baseline ? { baseline } : {}),
-      candidate: candidate ?? capture(join(output, 'candidate')),
+      candidate: candidate ?? (await capture(join(output, 'candidate'))),
     };
     const report = {
       format: 'words-optimization-run',
@@ -383,6 +319,10 @@ if (command === '--help' || args.includes('--help')) {
           warnings.push(
             'Within-process first/last half differs by >10%; increase warmup or remove machine interference'
           );
+        if (runs.some((run) => !run.warmupReachedFloor))
+          warnings.push(
+            'Warmup hit its time cap before the delivery floor; the JIT may not have reached steady state'
+          );
         if (!baseline) return { caseId, candidateMs, warnings };
         const pairs = Array.from(
           { length: configuration.rounds },
@@ -408,6 +348,20 @@ if (command === '--help' || args.includes('--help')) {
         };
       });
       report.status = 'complete';
+      if (baseline) {
+        report.summary = aggregate(report.comparisons, {
+          threshold: configuration.threshold,
+        });
+        save(join(output, 'summary.json'), {
+          format: 'words-optimization-summary',
+          schemaVersion: 1,
+          mode: command,
+          baseline: baseline.directory,
+          candidate: targets.candidate.directory,
+          configuration,
+          ...report.summary,
+        });
+      }
     } catch (error) {
       report.status = 'failed';
       report.error = error.stack ?? String(error);
@@ -422,14 +376,24 @@ if (command === '--help' || args.includes('--help')) {
       const interval = row.ratio95
         ? `; 95% ratio [${row.ratio95.map((n) => n.toFixed(4)).join(', ')}]`
         : '';
+      const label = baseline
+        ? confirm
+          ? row.verdict
+          : report.summary.cases[row.caseId].screen
+        : '';
       console.log(
-        `${row.caseId}: ${row.candidateMs.toFixed(4)} ms/op${baseline ? `; ${row.timeReductionPercent.toFixed(2)}% less time${interval}; ${row.verdict}` : ''}`
+        `${row.caseId}: ${row.candidateMs.toFixed(4)} ms/op${baseline ? `; ${row.timeReductionPercent.toFixed(2)}% less time${interval}; ${label}` : ''}`
       );
       for (const warning of row.warnings) console.log(`  WARNING: ${warning}`);
     }
-    if (baseline)
+    if (baseline) {
+      const { summary } = report;
       console.log(
-        'Per-case intervals are not simultaneous. Repeated candidate selection biases wins; confirm a selected winner in a new run on an idle machine.'
+        `score ${summary.score.toFixed(4)} (${summary.scoreReductionPercent.toFixed(2)}% less time, ${summary.speedup.toFixed(3)}x) over ${caseIds.length} cases; status ${summary.status}${summary.regressions.length ? `; regressions: ${summary.regressions.join(', ')}` : ''}`
       );
+      console.log(
+        `Summary: ${join(output, 'summary.json')}. ${confirm ? 'Per-case intervals are not simultaneous.' : 'Quick point estimates within the threshold are noise.'} Repeated candidate selection biases wins; confirm a selected winner in a new run on an idle machine.`
+      );
+    }
   }
 }

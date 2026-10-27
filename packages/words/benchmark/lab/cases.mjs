@@ -5,6 +5,7 @@ import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import { createStressFixture } from '../fixtures.mjs';
+import { randomGenerator } from './statistics.mjs';
 
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
@@ -43,11 +44,38 @@ const malformed =
   'Unclosed [label](https://example.com **bold `code <span title="unfinished\n\n'.repeat(
     40
   );
+// Hand-written assistant-style responses: mixed headings, nested and task lists,
+// fences in several languages, a table, blockquote, links, footnote, non-ASCII.
+const assistant = fixture('assistant-explain');
+const review = fixture('assistant-review');
+const frontmatter =
+  '---\ntitle: Retry policy\ntags:\n  - http\n  - resilience\ndraft: false\n---\n' +
+  assistant;
 
 /** Prefixes use UTF-16 delivery boundaries, deliberately including split surrogates. */
 function prefixes(source, step = 64) {
   const result = [];
   for (let end = step; end < source.length; end += step)
+    result.push(source.slice(0, end));
+  result.push(source);
+  return result;
+}
+
+/**
+ * Seeded variable-size deliveries. `token` approximates a token stream
+ * (1–12 UTF-16 units, skewed small, mean ≈ 4.3); `chunk` approximates
+ * network-batched deliveries (16–96 units). Same seed, same boundaries.
+ */
+const chunkSizers = {
+  token: (random) => 1 + Math.floor(random() * random() * 12),
+  chunk: (random) => 16 + Math.floor(random() * 81),
+};
+export function seededPrefixes(source, style, seed = 20261026) {
+  const sizer = chunkSizers[style];
+  if (!sizer) throw new RangeError(`Unknown delivery style: ${style}`);
+  const random = randomGenerator(seed);
+  const result = [];
+  for (let end = sizer(random); end < source.length; end += sizer(random))
     result.push(source.slice(0, end));
   result.push(source);
   return result;
@@ -66,6 +94,23 @@ function streamCase(id, workload, operation, source, description, step = 64) {
     workload,
     operation,
     () => ({ inputs: prefixes(source, step) }),
+    description
+  );
+}
+function seededCase(
+  id,
+  workload,
+  operation,
+  source,
+  style,
+  description,
+  extra
+) {
+  add(
+    id,
+    workload,
+    operation,
+    () => ({ inputs: seededPrefixes(source, style), ...extra }),
     description
   );
 }
@@ -125,6 +170,41 @@ staticCase(
   'string-bytes',
   () => createStressFixture(100),
   'Optional existing 100-unit stress fixture, approximately 850 KB.'
+);
+staticCase(
+  'static-assistant',
+  'assistant-explain',
+  'string-bytes',
+  () => assistant,
+  'Assistant-style explanation with fences, table, lists, and links; string to HTML bytes.'
+);
+add(
+  'static-frontmatter',
+  'assistant-frontmatter',
+  'string-frontmatter',
+  () => ({ inputs: [frontmatter], frontmatter: true }),
+  'YAML frontmatter parsed to JSON plus the assistant document as HTML.'
+);
+add(
+  'static-ansi',
+  'simd',
+  'string-ansi',
+  () => ({ inputs: [fixture('simd')], width: 0 }),
+  'Real medium document through the ANSI backend, no wrapping.'
+);
+add(
+  'static-ansi-assistant',
+  'assistant-explain',
+  'string-ansi',
+  () => ({ inputs: [assistant], width: 0 }),
+  'Assistant document through the ANSI backend, no wrapping.'
+);
+add(
+  'static-ansi-wrap',
+  'assistant-explain',
+  'string-ansi',
+  () => ({ inputs: [assistant], width: 80 }),
+  'Assistant document through the ANSI backend wrapped at 80 columns.'
 );
 
 for (const [workload, source, description] of [
@@ -222,6 +302,44 @@ add(
   }),
   'Replacement, unchanged delivery, completion-mode change, empty reset, and late definition.'
 );
+for (const [workload, source, description] of [
+  ['assistant', assistant, 'Assistant explanation'],
+  ['review', review, 'Assistant code review'],
+]) {
+  for (const style of ['token', 'chunk'])
+    seededCase(
+      `stream-${workload}-${style}`,
+      `${workload}-${style}`,
+      'session-suffix',
+      source,
+      style,
+      `${description}; seeded ${style}-sized deliveries; consume addition and pending suffix.`
+    );
+}
+for (const [workload, source, description] of [
+  ['assistant', assistant, 'Assistant explanation'],
+  ['review', review, 'Assistant code review'],
+]) {
+  for (const style of ['token', 'chunk'])
+    seededCase(
+      `html-${workload}-${style}`,
+      `${workload}-${style}`,
+      'html-renderer',
+      source,
+      style,
+      `${description}; createHtmlRenderer with default options over seeded ${style}-sized deliveries.`,
+      { htmlVariant: 'default' }
+    );
+}
+seededCase(
+  'html-assistant-hooks',
+  'assistant-chunk',
+  'html-renderer',
+  assistant,
+  'chunk',
+  'Assistant explanation; createHtmlRenderer with an element hook and inline-code hook.',
+  { htmlVariant: 'hooks' }
+);
 
 staticCase(
   'kernel-encode',
@@ -260,15 +378,26 @@ staticCase(
 );
 
 export const defaultCaseIds = Object.freeze([
-  'static-tiny',
   'static-bytes',
   'static-string',
-  'stream-blocks-suffix',
+  'static-ansi',
+  'stream-assistant-token',
+  'stream-assistant-chunk',
   'stream-paragraph-suffix',
   'stream-fence-suffix',
-  'stream-definitions-suffix',
-  'stream-unicode-suffix',
+  'html-assistant-chunk',
 ]);
+
+/** Named option sets keep html cases serializable and comparable across captures. */
+const htmlVariants = {
+  default: () => ({}),
+  hooks: () => ({
+    components: {
+      a: (html) => html.replace('<a ', '<a class="message-link" '),
+      inlineCode: (html) => html,
+    },
+  }),
+};
 
 function sha256(value) {
   return createHash('sha256').update(value).digest('hex');
@@ -278,17 +407,28 @@ function prepare(recipe) {
   const loaded = recipe.load();
   const inputs = loaded.inputs;
   const source = inputs.at(-1);
-  const replay = ['replay-full', 'session-full', 'session-suffix'].includes(
-    recipe.operation
-  );
+  const replay = [
+    'replay-full',
+    'session-full',
+    'session-suffix',
+    'html-renderer',
+  ].includes(recipe.operation);
   const options = inputs.map((_, i) => ({
     incomplete: replay ? (loaded.incomplete?.[i] ?? true) : false,
     skipHtml: replay,
   }));
+  const settings = {
+    ...(loaded.width !== undefined ? { width: loaded.width } : {}),
+    ...(loaded.frontmatter ? { frontmatter: true } : {}),
+    ...(loaded.htmlVariant ? { htmlVariant: loaded.htmlVariant } : {}),
+  };
+  if (loaded.htmlVariant && !htmlVariants[loaded.htmlVariant])
+    throw new RangeError(`Unknown html variant: ${loaded.htmlVariant}`);
   return {
     inputs,
     source,
     options,
+    settings,
     descriptor: {
       id: recipe.id,
       workload: recipe.workload,
@@ -305,8 +445,12 @@ function prepare(recipe) {
         0
       ),
       updates: inputs.length,
+      ...settings,
       fixtureSha256: sha256(
-        JSON.stringify(inputs.map((input, i) => [input, options[i]]))
+        JSON.stringify([
+          inputs.map((input, i) => [input, options[i]]),
+          settings,
+        ])
       ),
       sourceSha256: sha256(source),
       description: recipe.description,
@@ -319,19 +463,17 @@ export function listCases() {
   return recipes.map((recipe) => prepare(recipe).descriptor);
 }
 
-// Sample length and three positions: observable consumption without a hash-sized scan.
+// Sample length and three positions: observable consumption without a hash-sized
+// scan. Empty values short-circuit; an out-of-bounds index deoptimizes the
+// consumer and perturbs the measured loop.
 function consumeBytes(bytes) {
   const n = bytes.length;
-  return (
-    (n ^
-      (bytes[0] ?? 0) ^
-      ((bytes[n >>> 1] ?? 0) << 8) ^
-      ((bytes[n - 1] ?? 0) << 16)) >>>
-    0
-  );
+  if (n === 0) return 0;
+  return (n ^ bytes[0] ^ (bytes[n >>> 1] << 8) ^ (bytes[n - 1] << 16)) >>> 0;
 }
 function consumeString(text) {
   const n = text.length;
+  if (n === 0) return 0;
   return (
     (n ^
       text.charCodeAt(0) ^
@@ -363,12 +505,15 @@ function outputDigest() {
   };
 }
 
-/** Import each target's glue into a private module, never the package singleton. */
+/**
+ * Import each target's glue into a private module, never the package singleton.
+ * html cases load the capture's bundled html.mjs, which inlines the same glue.
+ */
 async function loadTarget(
   targetDirectory,
-  { wasmFile = 'md.wasm', imports } = {}
+  { wasmFile = 'md.wasm', imports, entry = 'index.mjs' } = {}
 ) {
-  let glue = await readFile(join(targetDirectory, 'index.mjs'), 'utf8');
+  let glue = await readFile(join(targetDirectory, entry), 'utf8');
   if (imports) {
     const anchor = 'new WebAssembly.Instance(wasmModule, {})';
     assert.equal(
@@ -400,8 +545,11 @@ async function loadTarget(
 export async function createCase(id, targetDirectory, configuration = {}) {
   const recipe = recipes.find((candidate) => candidate.id === id);
   if (!recipe) throw new RangeError(`Unknown words measurement case: ${id}`);
-  const { descriptor, source, inputs, options } = prepare(recipe);
-  const { api, renderer } = await loadTarget(targetDirectory, configuration);
+  const { descriptor, source, inputs, options, settings } = prepare(recipe);
+  const { api, renderer } = await loadTarget(targetDirectory, {
+    ...configuration,
+    entry: recipe.operation === 'html-renderer' ? 'html.mjs' : 'index.mjs',
+  });
   const bytes = encoder.encode(source);
   const operation = recipe.operation;
   const sessionFactory = configuration.observeSession
@@ -428,7 +576,61 @@ export async function createCase(id, targetDirectory, configuration = {}) {
   let run;
   let verify;
 
-  if (operation === 'session-full' || operation === 'session-suffix') {
+  if (operation === 'html-renderer') {
+    const htmlOptions = htmlVariants[settings.htmlVariant];
+    run = () => {
+      const formatter = api.createHtmlRenderer(htmlOptions());
+      let checksum = 0;
+      let previous;
+      for (let i = 0; i < inputs.length; i++) {
+        const result = formatter.render(inputs[i], options[i].incomplete, true);
+        if (result !== previous)
+          checksum = mix(checksum, consumeString(result.addition));
+        checksum = mix(checksum, consumeString(result.pending));
+        previous = result;
+      }
+      formatter.dispose();
+      return checksum;
+    };
+    // Formatting hooks make direct parity impossible; check the checkpoint
+    // contract the DOM renderer relies on and hash every delivered document.
+    verify = () => {
+      const digest = outputDigest();
+      const formatter = api.createHtmlRenderer(htmlOptions());
+      let stable = '';
+      let previous;
+      for (let i = 0; i < inputs.length; i++) {
+        const result = formatter.render(inputs[i], options[i].incomplete, true);
+        if (result !== previous) {
+          assert.equal(
+            result.revision,
+            (previous?.revision ?? 0) + 1,
+            `${id}: revision at update ${i}`
+          );
+          stable = (result.reset ? '' : stable) + result.addition;
+        }
+        assert.equal(
+          stable,
+          result.stable,
+          `${id}: stable prefix at update ${i}`
+        );
+        assert.equal(
+          result.html,
+          stable + result.pending,
+          `${id}: html is stable plus pending at update ${i}`
+        );
+        digest.add(result.html);
+        previous = result;
+      }
+      assert.equal(
+        previous.html.length > 0,
+        true,
+        `${id}: final document rendered`
+      );
+      formatter.dispose();
+      return digest.finish();
+    };
+  } else if (operation === 'session-full' || operation === 'session-suffix') {
     const full = operation === 'session-full';
     run = () => {
       const session = sessionFactory();
@@ -584,6 +786,24 @@ export async function createCase(id, targetDirectory, configuration = {}) {
             'Completion mutated authored input; this fixture is not safe to preload'
           );
       }
+    } else if (operation === 'string-ansi') {
+      const ansiOptions = { width: settings.width };
+      produce = () => api.renderToAnsi(source, ansiOptions);
+    } else if (operation === 'string-frontmatter') {
+      // Consume the parsed metadata too: the YAML pass is part of this operation.
+      const frontmatterOptions = { frontmatter: true };
+      let meta;
+      produce = () => {
+        const [parsed, output] = api.renderToHtml(source, frontmatterOptions);
+        meta = parsed;
+        return output;
+      };
+      check = () =>
+        assert.deepEqual(
+          meta,
+          { title: 'Retry policy', tags: ['http', 'resilience'], draft: false },
+          `${id}: frontmatter metadata`
+        );
     } else {
       const input = operation === 'bytes-bytes' ? bytes : source;
       produce =

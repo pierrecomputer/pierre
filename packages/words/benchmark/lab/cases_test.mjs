@@ -1,28 +1,48 @@
 import assert from 'node:assert/strict';
-import { copyFileSync, mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { after, before, test } from 'node:test';
 
-import { createCase, listCases } from './cases.mjs';
+import { capture } from './capture.mjs';
+import { createCase, listCases, seededPrefixes } from './cases.mjs';
 
-const wasmPath = new URL('../../dist/md.wasm', import.meta.url);
 let target;
-before(() => {
+let scratch;
+before(async () => {
   if (process.env.WORDS_LAB_TARGET) {
     target = process.env.WORDS_LAB_TARGET;
     return;
   }
-  target = mkdtempSync(join(tmpdir(), 'words-lab-cases-'));
-  copyFileSync(
-    new URL('../../dist/index.mjs', import.meta.url),
-    join(target, 'index.mjs')
-  );
-  copyFileSync(wasmPath, join(target, 'md.wasm'));
+  scratch = mkdtempSync(join(tmpdir(), 'words-lab-cases-'));
+  target = join(scratch, 'capture');
+  await capture(target);
 });
 after(() => {
-  if (target && !process.env.WORDS_LAB_TARGET)
-    rmSync(target, { recursive: true, force: true });
+  if (scratch) rmSync(scratch, { recursive: true, force: true });
+});
+
+void test('seeded deliveries are reproducible, cover the source, and differ by style', () => {
+  const source = 'x'.repeat(5000);
+  const token = seededPrefixes(source, 'token');
+  const chunk = seededPrefixes(source, 'chunk');
+  assert.deepEqual(seededPrefixes(source, 'token'), token);
+  for (const [prefixes, min, max] of [
+    [token, 1, 12],
+    [chunk, 16, 96],
+  ]) {
+    assert.equal(prefixes.at(-1), source);
+    let previous = 0;
+    for (const prefix of prefixes.slice(0, -1)) {
+      assert.ok(
+        prefix.length - previous >= min && prefix.length - previous <= max
+      );
+      previous = prefix.length;
+    }
+  }
+  assert.ok(token.length > chunk.length * 5);
+  assert.notDeepEqual(seededPrefixes(source, 'token', 7), token);
+  assert.throws(() => seededPrefixes(source, 'words'));
 });
 
 void test('consumer contrasts replay identical deliveries and repeated work is counted', () => {

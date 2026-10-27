@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { comparePairs, median, summarize } from './statistics.mjs';
+import { aggregate, comparePairs, median, summarize } from './statistics.mjs';
 
 void test('paired ratios cancel shared machine drift and detect a practical win', () => {
   const pairs = [1, 3, 2, 7, 4, 2, 6, 5].map((baseline) => ({
@@ -46,10 +46,9 @@ void test('screening and undersampled comparisons cannot claim confirmation', ()
   const pair = { baseline: 10, candidate: 1 };
   assert.equal(comparePairs([pair], { confirm: true }).ratio95, null);
   assert.equal(comparePairs([pair], { confirm: true }).verdict, 'exploratory');
-  assert.equal(
-    comparePairs(Array(4).fill(pair), { confirm: true }).verdict,
-    'exploratory'
-  );
+  const four = comparePairs(Array(4).fill(pair), { confirm: true });
+  assert.equal(four.ratio95, null);
+  assert.equal(four.verdict, 'exploratory');
   assert.equal(comparePairs(Array(12).fill(pair)).verdict, 'exploratory');
 });
 
@@ -69,4 +68,34 @@ void test('invalid timings fail instead of producing misleading ratios', () => {
   }
   assert.throws(() => comparePairs([]));
   assert.throws(() => summarize([]));
+});
+
+void test('aggregate score is the geometric mean and a regression blocks an improved status', () => {
+  const row = (caseId, ratio, extra = {}) => ({
+    caseId,
+    candidateOverBaseline: ratio,
+    baselineMs: 1,
+    candidateMs: ratio,
+    ratio95: null,
+    verdict: 'exploratory',
+    warnings: [],
+    ...extra,
+  });
+  const improved = aggregate([row('a', 0.5), row('b', 2 * 0.5 * 0.5)], {
+    threshold: 0.03,
+  });
+  assert(Math.abs(improved.score - 0.5) < 1e-12);
+  assert.equal(improved.status, 'improved');
+  assert.deepEqual(improved.regressions, []);
+  assert.equal(improved.cases.a.screen, 'promising');
+  const mixed = aggregate([row('a', 0.8), row('b', 1.05)], { threshold: 0.03 });
+  assert(mixed.score < 1);
+  assert.equal(mixed.status, 'regressed');
+  assert.deepEqual(mixed.regressions, ['b']);
+  assert.equal(mixed.cases.b.screen, 'regression');
+  const flat = aggregate([row('a', 0.99), row('b', 1.02)], { threshold: 0.03 });
+  assert.equal(flat.status, 'noise');
+  assert.equal(flat.cases.a.screen, 'noise');
+  assert.throws(() => aggregate([row('a', 0)]));
+  assert.throws(() => aggregate([]));
 });

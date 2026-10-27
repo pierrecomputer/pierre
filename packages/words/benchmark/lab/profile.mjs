@@ -546,13 +546,26 @@ export async function profileCase({
   let profile;
   let profileOperations = 0;
   let checksum = 0;
-  // Exclude initial Wasm tier-up from the sampled hot path.
+  // Sample steady-state code: Wasm tier-up finishes quickly, but the streaming
+  // glue reaches TurboFan only after ~12–15k per-update invocations, and that
+  // code is slower than the Maglev code before it. Warm by delivery count.
   const warmupMs = 250;
+  const warmupDeliveries = 20000;
+  const warmupMaxMs = 5000;
+  const updates = production.descriptor.updates;
+  const warmupFloor =
+    production.descriptor.unit === 'replay' ? warmupDeliveries : 400;
   for (const workload of [named, diagnostic]) {
-    const deadline = performance.now() + warmupMs;
+    const started = performance.now();
+    let operations = 0;
     do {
       checksum = (checksum ^ workload.run()) >>> 0;
-    } while (performance.now() < deadline);
+      operations++;
+    } while (
+      performance.now() - started < warmupMaxMs &&
+      (performance.now() - started < warmupMs ||
+        operations * updates < warmupFloor)
+    );
   }
   session.connect();
   try {
@@ -631,6 +644,8 @@ export async function profileCase({
     cpu: {
       requestedDurationMs: durationMs,
       warmupMs,
+      warmupDeliveries,
+      warmupMaxMs,
       operations: profileOperations,
       samplingIntervalMicroseconds: 100,
       ...summarizeProfile(profile, names),

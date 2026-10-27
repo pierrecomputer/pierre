@@ -79,9 +79,10 @@ export function comparePairs(
   const ratio = Math.exp(
     logs.reduce((sum, value) => sum + value, 0) / logs.length
   );
-  // A single process pair cannot estimate process-to-process uncertainty.
+  // Fewer than eight pairs resample a handful of values; an A/A run produced an
+  // interval excluding 1.0 from four identical pairs. Report none instead.
   let ratio95 = null;
-  if (pairs.length >= 4) {
+  if (pairs.length >= 8) {
     const random = randomGenerator(seed);
     const boot = Array.from({ length: resamples }, () => {
       let total = 0;
@@ -112,5 +113,57 @@ export function comparePairs(
     ratio95,
     practicalThreshold: threshold,
     verdict,
+  };
+}
+
+/**
+ * One scalar for hill-climbing: the geometric mean of per-case candidate/baseline
+ * ratios (lower is better), plus a regression guard so a win on the target case
+ * cannot hide a loss elsewhere. `screen` labels compare the point estimate to the
+ * practical threshold; only confirm-mode verdicts use intervals.
+ */
+export function aggregate(comparisons, { threshold = 0.02 } = {}) {
+  assert(comparisons.length > 0, 'Aggregate requires comparisons');
+  const cases = {};
+  const regressions = [];
+  let logSum = 0;
+  for (const row of comparisons) {
+    const ratio = row.candidateOverBaseline;
+    assert(
+      Number.isFinite(ratio) && ratio > 0,
+      `Invalid ratio for ${row.caseId}`
+    );
+    logSum += Math.log(ratio);
+    const screen =
+      ratio > 1 + threshold
+        ? 'regression'
+        : ratio < 1 - threshold
+          ? 'promising'
+          : 'noise';
+    if (screen === 'regression') regressions.push(row.caseId);
+    cases[row.caseId] = {
+      baselineMs: row.baselineMs,
+      candidateMs: row.candidateMs,
+      ratio,
+      ratio95: row.ratio95,
+      screen,
+      verdict: row.verdict,
+      warnings: row.warnings,
+    };
+  }
+  const score = Math.exp(logSum / comparisons.length);
+  return {
+    score,
+    speedup: 1 / score,
+    scoreReductionPercent: (1 - score) * 100,
+    practicalThreshold: threshold,
+    status:
+      regressions.length > 0
+        ? 'regressed'
+        : score < 1 - threshold
+          ? 'improved'
+          : 'noise',
+    regressions,
+    cases,
   };
 }
