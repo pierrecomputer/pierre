@@ -7,7 +7,7 @@ import {
   renameSync,
   writeFileSync,
 } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
+import { dirname, join, posix, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { build } from 'tsdown';
 
@@ -31,13 +31,14 @@ export function newDirectory(path) {
   return path;
 }
 
+/** Keep manifest keys portable while resolving filesystem paths natively. */
 export function hashTree(path) {
   const files = {};
   const visit = (relative) => {
     for (const entry of readdirSync(join(path, relative), {
       withFileTypes: true,
     }).sort((a, b) => a.name.localeCompare(b.name))) {
-      const name = join(relative, entry.name);
+      const name = posix.join(relative, entry.name);
       if (entry.isDirectory()) visit(name);
       else if (entry.isFile()) files[name] = sha256(join(path, name));
     }

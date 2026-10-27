@@ -1,12 +1,12 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { cpSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { copyFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { after, before, test } from 'node:test';
 
-import { capture } from './capture.mjs';
+import { capture, loadCapture } from './capture.mjs';
 import { createCase, listCases, seededPrefixes } from './cases.mjs';
 
 let target;
@@ -22,6 +22,25 @@ before(async () => {
 });
 after(() => {
   if (scratch) rmSync(scratch, { recursive: true, force: true });
+});
+
+void test('captures preserve portable keys after relocation and reject changed artifacts', (t) => {
+  const directory = mkdtempSync(join(tmpdir(), 'words-lab-relocated-'));
+  t.after(() => rmSync(directory, { recursive: true, force: true }));
+  const relocated = join(directory, 'relocated capture');
+  cpSync(target, relocated, { recursive: true });
+
+  const original = loadCapture(target);
+  const loaded = loadCapture(relocated);
+  assert.deepEqual(loaded.manifest.artifacts, original.manifest.artifacts);
+  for (const name of ['src/md.wat', 'html/render.ts', 'scripts/build.mjs'])
+    assert.equal(typeof loaded.manifest.artifacts[name], 'string');
+  assert.ok(
+    Object.keys(loaded.manifest.artifacts).every((name) => !name.includes('\\'))
+  );
+
+  writeFileSync(join(relocated, 'src', 'md.wat'), 'changed captured source\n');
+  assert.throws(() => loadCapture(relocated), /Capture changed:/);
 });
 
 void test('seeded deliveries are reproducible, cover the source, and differ by style', () => {

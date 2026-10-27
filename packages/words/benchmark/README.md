@@ -29,6 +29,8 @@ the captured glue. Hashes and environment metadata identify the artifacts. The
 runner rejects modified captures and existing output directories. An omitted
 candidate captures the current build. Relative paths resolve from
 `packages/words`; default results live in gitignored `benchmark/output/lab/`.
+Manifest artifact keys use `/`-separated relative paths on every platform;
+filesystem operations still use native paths.
 
 ### Fixed objective and regression guards
 
