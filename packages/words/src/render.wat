@@ -17,6 +17,7 @@
   (global $rsp (mut i32) (i32.const 0))    ;; render container stack depth
   (global $pendingTask (mut i32) (i32.const 0))
   (global $fnSkip (mut i32) (i32.const 0))
+  (global $singleLineContent (mut i32) (i32.const 0))
 
   ;; the render-time container stack reuses the block analysis stack, which is
   ;; finished by now: one byte of type and one of list tightness per level
@@ -155,6 +156,8 @@
 
   (func $renderInline (param $r i32)
     (drop (call $blockContent (local.get $r)))
+    (global.set $singleLineContent
+      (i32.eq (i32.load offset=$R.nLines (local.get $r)) (i32.const 1)))
     (call $inlineScan)
     (call $walkInlines))
 
@@ -169,43 +172,36 @@
     (local $base i32)
     (block $done
       (loop $l
-        (block $skipped
+        (block $found
           (loop $skip
-            (br_if $skipped (i32.ge_u (local.get $i) (global.get $nSlots)))
-            (br_if $skipped (i32.ge_u
-              (i32.load offset=$M.beg (call $slotAt (local.get $i))) (local.get $p)))
+            (if (i32.ge_u (local.get $i) (global.get $nSlots))
+              (then
+                (call $rText (local.get $p) (global.get $contentLen))
+                (br $done)))
+            (local.set $m (call $slotAt (local.get $i)))
+            (local.set $next (i32.load offset=$M.beg (local.get $m)))
+            (br_if $found (i32.ge_u (local.get $next) (local.get $p)))
             (local.set $i (i32.add (local.get $i) (i32.const 1)))
             (br $skip)))
-        (local.set $next (global.get $contentLen))
-        (if (i32.lt_u (local.get $i) (global.get $nSlots))
-          (then (local.set $next
-            (i32.load offset=$M.beg (call $slotAt (local.get $i))))))
+        ;; Capture the mark bounds before text emission can grow the output
+        ;; and rebase scratch. renderMark resolves its own fresh slot address.
+        (local.set $markEnd (i32.load offset=$M.end (local.get $m)))
         (if (i32.gt_u (local.get $next) (local.get $p))
           (then
-            ;; Text that runs into a break is right-trimmed, keeping a hard
-            ;; break's own two spaces out of the output.
             (local.set $textEnd (local.get $next))
-            (if (i32.lt_u (local.get $i) (global.get $nSlots))
+            (local.set $markType (i32.load8_u offset=$M.type (local.get $m)))
+            ;; Keep a hard break's two source spaces out of the text span.
+            (if (i32.or
+                  (i32.eq (local.get $markType) (enum.get $Mk.softbreak))
+                  (i32.eq (local.get $markType) (enum.get $Mk.hardbreak)))
               (then
-                (local.set $markType
-                  (i32.load8_u offset=$M.type (call $slotAt (local.get $i))))
-                (if (i32.or
-                      (i32.eq (local.get $markType) (enum.get $Mk.softbreak))
-                      (i32.eq (local.get $markType) (enum.get $Mk.hardbreak)))
-                  (then
-                    (local.set $base (call $contentAt (i32.const 0)))
-                    (local.set $textEnd (i32.sub
-                      (call $trimSpaceBack
-                        (i32.add (local.get $base) (local.get $next))
-                        (local.get $base))
-                      (local.get $base)))))))
-            (call $rText (local.get $p) (local.get $textEnd))
-            (local.set $p (local.get $next))))
-        (br_if $done (i32.ge_u (local.get $i) (global.get $nSlots)))
-        (local.set $m (call $slotAt (local.get $i)))
-        ;; Rendering can grow the output and move scratch, so preserve the end
-        ;; before the mark pointer becomes stale.
-        (local.set $markEnd (i32.load offset=$M.end (local.get $m)))
+                (local.set $base (call $contentAt (i32.const 0)))
+                (local.set $textEnd (i32.sub
+                  (call $trimSpaceBack
+                    (i32.add (local.get $base) (local.get $next))
+                    (local.get $base))
+                  (local.get $base)))))
+            (call $rText (local.get $p) (local.get $textEnd))))
         (call $renderMark (local.get $i))
         (local.set $p (local.get $markEnd))
         (local.set $i (i32.add (local.get $i) (i32.const 1)))
@@ -283,11 +279,22 @@
                         (br $spaceScan)))
                     (local.set $q (i32.add (local.get $q) (i32.const 1)))
                     (br $spaces)))))))
+        (if (i32.and (global.get $singleLineContent)
+              (i32.eqz (i32.or (global.get $mode) (global.get $plain))))
+          (then
+            (call $htmlCodeSpan (local.get $b) (local.get $e))
+            (return)))
         (if (i32.and (global.get $mode) (i32.eqz (global.get $plain)))
           (then (call $sgrOn (i32.const $S.code))))
         (if (i32.and (i32.eqz (global.get $mode)) (i32.eqz (global.get $plain)))
           (then (out.str "<code>")))
         (block $codeDone
+          ;; Single-line leaves and table cells cannot contain a code newline;
+          ;; avoid searching them again before HTML escaping or ANSI emission.
+          (if (global.get $singleLineContent)
+            (then
+              (call $rText (local.get $b) (local.get $e))
+              (br $codeDone)))
           (loop $codeLine
             (br_if $codeDone (i32.ge_u (local.get $b) (local.get $e)))
             (local.set $base (call $contentAt (i32.const 0)))
@@ -683,16 +690,26 @@
           (i32.and (i32.load8_u offset=$M.flags (local.get $close))
             (i32.const $LF.hasTitle)))))))
 
-  (func $renderCell (param $beg i32) (param $end i32)
+  ;; Alias trimmed input unless the boundary scan found an escaped pipe.
+  ;; Only those cells need rebuilding; ordinary inline escapes stay in input.
+  (func $renderCell (param $beg i32) (param $end i32) (param $unescapePipe i32)
     (local $dst i32)
     (local $n i32)
     (local $c i32)
-    ;; Copy the cell into scratch, trimming it and unescaping `\|`.
+    ;; Trim before choosing between immutable input and rebuilt content.
+    (global.set $singleLineContent (i32.const 1))
     (global.set $scratchUsed (i32.const 0))
     (global.set $scratchTailUsed (i32.const 0))
     (local.set $beg (call $skipSpace (local.get $beg) (local.get $end)))
     (local.set $end (call $trimSpaceBack (local.get $end) (local.get $beg)))
     (global.set $contentInputEnd (local.get $end))
+    (if (i32.eqz (local.get $unescapePipe))
+      (then
+        (global.set $contentBase (local.get $beg))
+        (global.set $contentLen (i32.sub (local.get $end) (local.get $beg)))
+        (call $inlineScan)
+        (call $walkInlines)
+        (return)))
     (call $ensureScratch (i32.add (i32.sub (local.get $end) (local.get $beg)) (i32.const 64)))
     (local.set $dst (global.get $scratchBase))
     (global.set $contentBase (local.get $dst))
@@ -719,10 +736,11 @@
     (call $inlineScan)
     (call $walkInlines))
 
-  ;; Current cell range and the cursor immediately after it.
+  ;; Current cell range, following cursor, and whether pipe escapes need copying.
   (global $cellBeg (mut i32) (i32.const 0))
   (global $cellEnd (mut i32) (i32.const 0))
   (global $cellNext (mut i32) (i32.const 0))
+  (global $cellUnescapePipe (mut i32) (i32.const 0))
 
   ;; Scan one cell at $p and leave the cursor for the next cell in $cellNext.
   ;; Callers skip an optional leading pipe once before entering their row loop.
@@ -731,11 +749,13 @@
     (local $c i32)
     (local $pipe i32)
     (global.set $cellNext (local.get $end))
+    (global.set $cellUnescapePipe (i32.const 0))
     (block $done
       (br_if $done (i32.ge_u (local.get $p) (local.get $end)))
       (local.set $start (local.get $p))
       (block $cellDone
         (loop $byte
+          (local.set $p (call $findCellBoundary (local.get $p) (local.get $end)))
           (br_if $cellDone (i32.ge_u (local.get $p) (local.get $end)))
           (local.set $c (i32.load8_u (local.get $p)))
           (if (i32.eq (local.get $c) (i32.const "\5c"))
@@ -743,6 +763,8 @@
               (if (i32.and (i32.lt_u (i32.add (local.get $p) (i32.const 1)) (local.get $end))
                     (call $isAsciiPunct (i32.load8_u offset=1 (local.get $p))))
                 (then
+                  (if (i32.eq (i32.load8_u offset=1 (local.get $p)) (i32.const "|"))
+                    (then (global.set $cellUnescapePipe (i32.const 1))))
                   (local.set $p (i32.add (local.get $p) (i32.const 2)))
                   (br $byte)))))
           (br_if $cellDone (i32.eq (local.get $c) (i32.const "|")))

@@ -65,28 +65,55 @@
       (i32.add (i32.load offset=$R.nLines (global.get $leafRec)) (i32.const 1)))
     (call $recGrow (global.get $leafRec) (i32.const $R.line)))
 
+  ;; Unindented top-level HTML fences need no per-line container bookkeeping.
+  ;; Keep their LF-separated body as one span, stopping before the line of any
+  ;; fence byte or CR so ordinary scanning handles closers and normalization.
+  (func $tryCodeRun (result i32)
+    (local $stop i32)
+    (if (i32.or (global.get $mode)
+          (i32.or (global.get $sp)
+            (i32.or (i32.eqz (global.get $codeFenceCh)) (global.get $codeFenceOff))))
+      (then (return (i32.const 0))))
+    (local.set $stop (call $findCodeRunEnd (global.get $pos) (global.get $eof) (global.get $codeFenceCh)))
+    (if (i32.lt_u (local.get $stop) (global.get $eof))
+      (then
+        (local.set $stop (call $lineStartBefore (local.get $stop) (global.get $pos)))
+        (if (i32.le_u (local.get $stop) (global.get $pos))
+          (then (return (i32.const 0))))
+        (local.set $stop (i32.sub (local.get $stop) (i32.const 1))))
+      (else
+        (if (i32.and (i32.gt_u (local.get $stop) (global.get $pos))
+              (i32.eq (i32.load8_u (i32.sub (local.get $stop) (i32.const 1))) (i32.const 10)))
+          (then (local.set $stop (i32.sub (local.get $stop) (i32.const 1)))))))
+    (if (i32.le_u (local.get $stop) (global.get $lineEnd))
+      (then (return (i32.const 0))))
+    (global.set $lineEnd (local.get $stop))
+    (call $addLine)
+    (i32.const 1))
+
+  ;; Conservative first-byte filter shared by paragraph continuations and new
+  ;; blocks. Indentation is checked separately; non-ASCII text cannot open one.
+  (func $mayStartBlock (param $ch i32) (result i32)
+    (i32.and (i32.lt_u (local.get $ch) (i32.const 128))
+      (i64.ne (i64.and
+        (i64.shl (i64.const 1) (i64.extend_i32_u (local.get $ch)))
+        (select
+          (i64.const 0x5000000188000000)
+          (i64.const 0x77ff2c0900002600)
+          (i32.ge_u (local.get $ch) (i32.const 64))))
+        (i64.const 0))))
+
   ;; Append an ordinary paragraph continuation after phase 1 has established
   ;; $lastMatched and $findFirstNonspace has populated $fns/$blank. Returns 0
   ;; when phase 2 must still check a possible interrupting block start.
   (func $tryParagraphContinuation (result i32)
-    (local $ch i32)
-    (local $mask i64)
     (if (i32.or
           (i32.ne (global.get $leaf) (enum.get $Blk.p))
           (global.get $blank))
       (then (return (i32.const 0))))
-    (local.set $ch (i32.load8_u (global.get $fns)))
     ;; Block markers, table delimiters, and ordered-list digits retain the
     ;; full phase-2 precedence. Everything else can only continue the open p.
-    (local.set $mask (i64.and
-      (i64.shl (i64.const 1) (i64.extend_i32_u (local.get $ch)))
-      (select
-        (i64.const 0x5000000188000000)
-        (i64.const 0x77ff2c0900002600)
-        (i32.ge_u (local.get $ch) (i32.const 64)))))
-    (if (i32.and
-          (i32.lt_u (local.get $ch) (i32.const 128))
-          (i64.ne (local.get $mask) (i64.const 0)))
+    (if (call $mayStartBlock (i32.load8_u (global.get $fns)))
       (then (return (i32.const 0))))
     (global.set $curLevel (global.get $lastMatched))
     (if (i32.gt_u (global.get $lastMatched) (global.get $sp))
@@ -109,21 +136,10 @@
   (func $appendParagraphRun (param $p i32) (result i32)
     (local $end i32)
     (local $next i32)
-    (local $ch i32)
-    (local $mask i64)
     (loop $line
       (if (i32.ge_u (local.get $p) (global.get $eof))
         (then (return (local.get $p))))
-      (local.set $ch (i32.load8_u (local.get $p)))
-      (local.set $mask (i64.and
-        (i64.shl (i64.const 1) (i64.extend_i32_u (local.get $ch)))
-        (select
-          (i64.const 0x5000000188000000)
-          (i64.const 0x77ff2c0900002600)
-          (i32.ge_u (local.get $ch) (i32.const 64)))))
-      (if (i32.and
-            (i32.lt_u (local.get $ch) (i32.const 128))
-            (i64.ne (local.get $mask) (i64.const 0)))
+      (if (call $mayStartBlock (i32.load8_u (local.get $p)))
         (then (return (local.get $p))))
       (local.set $end (call $findLineEnd (local.get $p)))
       (global.set $pos (local.get $p))
@@ -499,6 +515,8 @@
           (i32.sub (local.get $contType) (enum.get $Blk.code)) (i32.const 1)))
         (call $findFirstNonspace)
         (local.set $indented (i32.ge_u (global.get $indent) (i32.const 4)))
+        (br_if $stop (i32.and (i32.eqz (local.get $indented))
+          (i32.eqz (call $mayStartBlock (i32.load8_u (global.get $fns))))))
 
         ;; block quote
         (if (i32.and (i32.eqz (local.get $indented))
@@ -696,6 +714,8 @@
                     (i32.mul (i32.sub (local.get $m) (i32.const 4)) (i32.const 3))))
                   (local.set $footR (call $recNew (enum.get $Blk.footnote)))
                   (call $recFlag (local.get $footR) (i32.const $F.opener))
+                  (call $noteDefinition (local.get $footR))
+                  (global.set $fnTotal (i32.add (global.get $fnTotal) (i32.const 1)))
                   (local.set $footDst
                     (i32.add (local.get $footR) (i32.const $R.labelBytes)))
                   (local.set $footNormalized (call $normalizeLabel

@@ -25,6 +25,76 @@ void test('leaf blocks', () => {
   assert.equal(html('<div>\nraw\n</div>'), '<div>\nraw\n</div>\n');
 });
 
+void test('fenced code spans preserve embedded fence bytes, line endings, and EOF', () => {
+  for (const fence of ['```', '~~~']) {
+    for (const eol of ['\n', '\r\n', '\r']) {
+      for (const ending of ['', '\n', '\n\n']) {
+        for (let padding = 0; padding < 65; padding++) {
+          const body = `first\nsecond\n${'x'.repeat(padding)}${fence} not a closer\n\nlast${ending}`;
+          for (const closed of [false, true]) {
+            const source = `${fence}\n${body}${closed ? `\n${fence}` : ''}`;
+            const expected =
+              body + (closed || !body.endsWith('\n') ? '\n' : '');
+            assert.equal(
+              html(source.replaceAll('\n', eol)),
+              `<pre><code>${expected}</code></pre>\n`,
+              JSON.stringify({ fence, eol, ending, padding, closed })
+            );
+          }
+        }
+      }
+    }
+  }
+});
+
+void test('reused inline slots initialize each mark kind independently', () => {
+  const cases = [
+    ['*a* **b** ~~c~~', '<p><em>a</em> <strong>b</strong> <del>c</del></p>\n'],
+    ['`code` &amp; \\*', '<p><code>code</code> &amp; *</p>\n'],
+    ['a\nb  \nc', '<p>a\nb<br />\nc</p>\n'],
+    ['[a](/url "title")', '<p><a href="/url" title="title">a</a></p>\n'],
+    ['![*alt*](/image)', '<p><img src="/image" alt="alt" /></p>\n'],
+    ['[unclosed', '<p>[unclosed</p>\n'],
+  ];
+  for (let round = 0; round < 3; round++) {
+    for (const [source, expected] of cases) {
+      html('***seed*** ~~old~~ [link](/old) '.repeat(100));
+      assert.equal(html(source), expected);
+    }
+  }
+});
+
+void test('table cells alternate input aliases and escaped-pipe copies at every alignment', () => {
+  for (let padding = 0; padding < 32; padding++) {
+    const text = 'x'.repeat(padding);
+    const source =
+      '| a | b | c |\n|---|---|---|\n' +
+      `| ${text}&amp; | \`${text}\\|é\` | \\*${text} |\n`;
+    assert.equal(
+      html(source),
+      '<table>\n<thead>\n<tr>\n<th>a</th>\n<th>b</th>\n<th>c</th>\n</tr>\n</thead>\n' +
+        `<tbody>\n<tr>\n<td>${text}&amp;</td>\n<td><code>${text}|é</code></td>\n` +
+        `<td>*${text}</td>\n</tr>\n</tbody>\n</table>\n`
+    );
+  }
+});
+
+void test('code newline normalization resets between single-line and multiline content', () => {
+  for (let round = 0; round < 3; round++) {
+    assert.equal(html('# `a`'), '<h1><code>a</code></h1>\n');
+    assert.equal(
+      html('`a\nb`\n\n`c`'),
+      '<p><code>a b</code></p>\n<p><code>c</code></p>\n'
+    );
+    assert.equal(
+      html('![`a\nb`](/img)'),
+      '<p><img src="/img" alt="a b" /></p>\n'
+    );
+    assert.equal(html('`  `'), '<p><code>  </code></p>\n');
+    assert.equal(html('`\n a \n`'), '<p><code>a </code></p>\n');
+  }
+});
+
 void test('container blocks', () => {
   assert.equal(
     html('> quoted'),
@@ -85,6 +155,27 @@ void test('links and images', () => {
     '<p><a href="/x?y=1&amp;z=2">a</a></p>\n'
   );
   assert.equal(html('[a](/ä)'), '<p><a href="/%C3%A4">a</a></p>\n');
+});
+
+void test('definition indexing preserves first matches across mixed blocks and resets', () => {
+  const filler = '# Heading\n\n- item\n\nordinary text\n\n'.repeat(100);
+  const reference = '[link]: /first\n\n[^note]: first note\n\n';
+  const use = 'See [link] and [^note].';
+  const expected = html(reference + filler + use);
+  for (let round = 0; round < 3; round++) {
+    assert.equal(
+      html(
+        reference + filler + '[link]: /second\n\n[^note]: second note\n\n' + use
+      ),
+      expected
+    );
+    assert.equal(html('[link] [^note]'), '<p>[link] [^note]</p>\n');
+    assert.equal(
+      html('[link]: /new\n\n[link]'),
+      '<p><a href="/new">link</a></p>\n'
+    );
+    assert.equal(html(reference + filler + use), expected);
+  }
 });
 
 void test('reference definitions are global and case folded', () => {

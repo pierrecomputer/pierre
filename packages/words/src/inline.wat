@@ -108,10 +108,9 @@
     (local.set $m (call $slotAt (local.get $i)))
     (i32.store offset=$M.beg (local.get $m) (local.get $beg))
     (i32.store offset=$M.end (local.get $m) (local.get $end))
-    ;; Every field a mark can read is initialized here.
+    ;; Initialize the shared header. Each constructor writes its own payload;
+    ;; only emphasis marks need delimiter links and tag-list heads.
     (i64.store offset=$M.type (local.get $m) (i64.extend_i32_u (local.get $type)))
-    (i64.store offset=$M.prev (local.get $m) (i64.const -1))
-    (i64.store offset=$M.openHead (local.get $m) (i64.const 0))
     (global.set $lastMarkEnd (local.get $end))
     (local.get $i))
 
@@ -140,6 +139,8 @@
     (local $end i32)
     (local $base i32)
     (local $c i32)
+    (local $mask i32)
+    (local $scanEnd i32)
     (global.set $markOff (select
       (i32.const 0)
       (i32.and (i32.add (global.get $contentLen) (i32.const 63)) (i32.const -32))
@@ -158,10 +159,31 @@
     (block $done
       (loop $l
         (local.set $base (call $contentAt (i32.const 0)))
-        (local.set $p (i32.sub
-          (call $findMark (i32.add (local.get $base) (local.get $p))
-            (i32.add (local.get $base) (local.get $end)))
-          (local.get $base)))
+        ;; Cached lanes are content-relative, so scratch growth cannot stale
+        ;; them. Handlers advance p past consumed syntax without changing text.
+        (if (i32.lt_u (local.get $p) (local.get $scanEnd))
+          (then
+            (local.set $mask (i32.and (local.get $mask)
+              (i32.shl (i32.const -1)
+                (i32.sub (local.get $p) (i32.sub (local.get $scanEnd) (i32.const 16))))))
+            (if (local.get $mask)
+              (then (local.set $p (i32.add
+                (i32.sub (local.get $scanEnd) (i32.const 16))
+                (i32.ctz (local.get $mask)))))
+              (else (local.set $p (local.get $scanEnd)))))
+          (else (local.set $mask (i32.const 0))))
+        (block $foundMark
+          (br_if $foundMark (local.get $mask))
+          (loop $scan
+            (br_if $foundMark (i32.ge_u (local.get $p) (local.get $end)))
+            (local.set $mask (call $markMask (i32.add (local.get $base) (local.get $p))))
+            (local.set $scanEnd (i32.add (local.get $p) (i32.const 16)))
+            (if (local.get $mask)
+              (then
+                (local.set $p (i32.add (local.get $p) (i32.ctz (local.get $mask))))
+                (br $foundMark)))
+            (local.set $p (local.get $scanEnd))
+            (br $scan)))
         (br_if $done (i32.ge_u (local.get $p) (local.get $end)))
         (local.set $c (i32.load8_u (i32.add (local.get $base) (local.get $p))))
         (block $dispatched
@@ -471,6 +493,8 @@
         (i32.const $MF.inList))
       (select (i32.const $MF.canClose) (i32.const 0) (local.get $canClose))))
     (i32.store offset=$M.prev (local.get $m) (global.get $delimTail))
+    (i32.store offset=$M.next (local.get $m) (i32.const -1))
+    (i64.store offset=$M.openHead (local.get $m) (i64.const 0))
     (if (i32.ge_s (global.get $delimTail) (i32.const 0))
       (then (i32.store offset=$M.next (call $slotAt (global.get $delimTail)) (local.get $i)))
       (else (global.set $delimHead (local.get $i))))
