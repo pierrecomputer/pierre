@@ -134,3 +134,41 @@ test('each pane host is its own compositor layer only when paneLayers asks for i
   expect(await layered('agent')).toBe(false);
   expect(await layered('editor')).toBe(true);
 });
+
+test('a separator drag changes only the panes beside it in the n-ary model', async ({
+  page,
+}) => {
+  const width = async (id: string): Promise<number> =>
+    (await host(page, id).boundingBox())?.width ?? 0;
+  // The first separator is the one between the sessions and the agent chat.
+  const drag = async (distance: number): Promise<void> => {
+    const box = await page
+      .locator('.pierre-layout-separator')
+      .first()
+      .boundingBox();
+    if (box === null) throw new Error('Missing separator');
+    const x = box.x + box.width / 2;
+    const y = box.y + box.height / 2;
+    await page.mouse.move(x, y);
+    await page.mouse.down();
+    await page.mouse.move(x + distance, y, { steps: 4 });
+    await page.mouse.up();
+  };
+
+  await expect(page.getByLabel('Tree model')).toHaveValue('n-ary');
+  const sessions = await width('sessions');
+  const agent = await width('agent');
+  const editor = await width('editor');
+  const files = await width('files');
+  await drag(80);
+  expect(await width('sessions')).toBeCloseTo(sessions + 80, 0);
+  expect(await width('agent')).toBeCloseTo(agent - 80, 0);
+  expect(await width('editor')).toBeCloseTo(editor, 0);
+  expect(await width('files')).toBeCloseTo(files, 0);
+
+  // In the binary model, the same drag also resizes the panes after the agent chat.
+  await page.getByLabel('Tree model').selectOption('binary');
+  const before = await width('editor');
+  await drag(40);
+  expect(await width('editor')).toBeLessThan(before - 5);
+});

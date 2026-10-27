@@ -38,9 +38,11 @@ const store = new LayoutStore({
   type: 'split',
   id: 'workspace',
   direction: 'horizontal',
-  ratio: 0.25,
-  first: { type: 'pane', id: 'files', minWidth: 160 },
-  second: { type: 'pane', id: 'editor', minWidth: 320 },
+  sizes: [0.25, 0.75],
+  children: [
+    { type: 'pane', id: 'files', minWidth: 160 },
+    { type: 'pane', id: 'editor', minWidth: 320 },
+  ],
 });
 
 // A stable function: each pane's content renders again only when this
@@ -99,8 +101,11 @@ it hides or shows.
 
 The layout fills its parent; give that parent a definite height. Pane IDs and
 split IDs share one namespace and must be unique, non-empty strings. Horizontal
-splits arrange children left/right; vertical splits arrange them top/bottom.
-Ratios describe the first child's preferred share of space, excluding the gap.
+splits arrange their children left to right; vertical splits arrange them top to
+bottom. A split has two or more children, and `sizes` holds one positive weight
+for each child. The visible children share the space of the split, without its
+separators, in proportion to their weights. A child whose share is below its
+minimum size gets its minimum, and the others share the rest.
 
 The React view generates CSS container-unit expressions from the split tree. The
 browser resolves panel bounds, gaps, and minimum-size constraints during
@@ -109,7 +114,7 @@ edge of each box is a piecewise-linear function of the container size, so each
 pane host, separator, and corner gets one short value for each property, such as
 `calc(-6px + 0.25 * 100cqw)`, with one `max(0px, 100cqw - 216px)` term for each
 size at which a minimum size or a gap starts to apply. The values use no custom
-properties, so a ratio change restyles only the elements that move, not the pane
+properties, so a size change restyles only the elements that move, not the pane
 content inside them. Pane hosts stay flat and stable so moving a pane preserves
 its content. JavaScript computes pixel geometry only for pointer/keyboard
 interactions and zoom exit directions. A ResizeObserver finishes an in-progress
@@ -163,11 +168,45 @@ store.move('terminal', 'files', 'right');
 store.focusPane('editor');
 store.toggleZoom();
 store.close('terminal');
-store.setRatios({ workspace: 0.3 });
+store.setSizes({ workspace: [0.3, 0.7] });
 
 const saved = store.serialize();
 store.restore(saved);
 ```
+
+The saved form has version 2. `restore` also accepts version 1, where each split
+had `ratio`, `first`, and `second`; `fromBinaryLayout` converts such a tree.
+
+### Tree models
+
+The tree model of the store sets the shape of the tree and how a split and a
+close change it. The geometry, the drag rules, and the view are the same for
+each model.
+
+- `binaryTree` (the default): each split has two children, and a split can hold
+  a split of the same direction. A split of a pane always puts a new split in
+  its place, and a close gives the space of the split to the sibling. A row of
+  three panes is a row in a row, so a drag of a separator also resizes every
+  pane of the subtree on the other side, and two rows that look the same can
+  behave differently.
+- `naryTree`: no split holds a split of the same direction, so each visual row
+  or column is one node. A split of a pane to its left or right, in a row, adds
+  the new pane to the row with half of the pane's size. A close gives the size
+  of a pane to the nearest visible child before it, or after it when there is
+  none. A drag of a separator changes only the panes beside it until one of them
+  reaches its minimum size.
+
+```ts
+import { binaryTree, LayoutStore, naryTree } from '@pierre/layouts';
+
+const store = new LayoutStore(root, { model: naryTree });
+store.setModel(binaryTree); // Gives the tree the shape of the binary model.
+```
+
+The store gives each tree that it receives the shape of its model: the n-ary
+model joins a split into a parent of the same direction, and the binary model
+nests the children after the first in new splits. A pane keeps its node, so its
+content does not render again.
 
 Subscribe with `store.subscribe(listener)` and read with `store.getSnapshot()`.
 Snapshots are immutable. Invalid tree updates throw before changing state.
@@ -178,14 +217,17 @@ content. Persistence is caller-owned; the playground uses local storage.
 `computeLayout(root, width, height, gap)` returns pane rectangles, separators,
 and corner intersections for other rendering adapters. Pane minimums default to
 120 × 80 pixels. When minimums cannot fit, the engine shares the shortage
-proportionally without creating negative dimensions or overflow. Preferred
-ratios survive temporary viewport constraints.
+proportionally without creating negative dimensions or overflow. Preferred sizes
+survive temporary viewport constraints.
 
-Resize separators with arrow keys; hold Shift for larger steps. Home/End reach
-the available limits; Enter balances the split. Corner controls accept arrows on
-both axes. Escape cancels an active gesture or restores a zoomed layout. Hidden
-panes remain mounted but are inert and excluded from the accessibility tree.
-Motion respects `prefers-reduced-motion`.
+A drag of a separator changes the two children of its split beside it. When one
+of them reaches its minimum size, the next child on that side gives the space,
+and so on. Resize separators with arrow keys; hold Shift for larger steps. Home
+and End move a separator until the child before or after it has its minimum
+size; Enter gives the two children beside it the same size. Corner controls
+accept arrows on both axes. Escape cancels an active gesture or restores a
+zoomed layout. Hidden panes remain mounted but are inert and excluded from the
+accessibility tree. Motion respects `prefers-reduced-motion`.
 
 Each pane host clips its content at its rounded border with `overflow: clip`.
 From 6 visible panes, each pane host is its own compositor layer

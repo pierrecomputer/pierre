@@ -29,13 +29,14 @@ The status column records the result for the revision in the heading.
 | B7  | Drag a corner where two separators meet. Both axes change.                                                                               | `e2e` corner dragging                        | pass    |
 | B8  | Zoom a pane to fill the layout, and restore it with its button or with Escape.                                                           | `e2e` zoom and rearrangement                 | pass    |
 | B9  | Content keeps its state through move, zoom, split, and close of another pane: input values, component state, scroll position, and focus. | `e2e` zoom and rearrangement                 | pass    |
-| B10 | A change of container size keeps the preferred ratios and the minimum sizes, with no script.                                             | `e2e` container resizing                     | pass    |
+| B10 | A change of container size keeps the preferred sizes and the minimum sizes, with no script.                                              | `e2e` container resizing                     | pass    |
 | B11 | Save the layout and restore it. The split tree is the same.                                                                              | `unit`, `e2e` saving and reloading           | pass    |
 | B12 | Restore rejects malformed saved state.                                                                                                   | `unit`                                       | pass    |
 | B13 | Escape or a pointer cancel during a drag restores the state before the drag.                                                             | `e2e` Escape cancellation                    | pass    |
-| B14 | A pane can keep a fixed size in pixels when the container changes size, for example a 240 px file tree.                                  | none; the model has ratios only              | fail    |
+| B14 | A pane can keep a fixed size in pixels when the container changes size, for example a 240 px file tree.                                  | none; the model has weights only             | fail    |
 | B15 | Overlays: a modal overlay and a slide-in menu open over the workspace and close back to the element that opened them.                    | none; not built                              | n/a     |
 | B16 | During a size animation, pane content keeps its shape: text and icons do not stretch.                                                    | manual: zoom a pane in the demo's agent view | fail    |
+| B17 | A drag of a separator changes only the panes beside it, until one reaches its minimum size; then the next pane on that side changes.     | `unit`, `e2e` n-ary separator drag           | partial |
 
 ### Accessibility
 

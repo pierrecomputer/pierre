@@ -1,7 +1,13 @@
 import { type JSX, useEffect } from 'react';
 import { createRoot } from 'react-dom/client';
 
-import { type LayoutNode, LayoutStore, type PaneNode } from '../../src';
+import {
+  binaryTree,
+  type LayoutNode,
+  LayoutStore,
+  naryTree,
+  type PaneNode,
+} from '../../src';
 import { Layout } from '../../src/react';
 import '../../src/styles.css';
 import {
@@ -94,13 +100,19 @@ function buildTree(ids: readonly string[], depth = 0): LayoutNode {
     type: 'split',
     id: `s${depth}-${ids[0]}`,
     direction: depth % 2 === 0 ? 'horizontal' : 'vertical',
-    ratio: middle / ids.length,
-    first: buildTree(ids.slice(0, middle), depth + 1),
-    second: buildTree(ids.slice(middle), depth + 1),
+    children: [
+      buildTree(ids.slice(0, middle), depth + 1),
+      buildTree(ids.slice(middle), depth + 1),
+    ],
+    sizes: [middle / ids.length, 1 - middle / ids.length],
   };
 }
 
-const store = new LayoutStore(buildTree(paneIds));
+// The tree model: `binary` by default, or `n-ary`. The balanced tree has the
+// same shape in both, but a split, a close, or a move can change it in
+// different ways.
+const model = params.get('model') === 'n-ary' ? naryTree : binaryTree;
+const store = new LayoutStore(buildTree(paneIds), { model });
 
 const title = (pane: PaneNode): string =>
   `${pane.id} ${kindOf(indexOf.get(pane.id) ?? 0)}`;

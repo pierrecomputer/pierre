@@ -4,7 +4,7 @@ import type { LayoutProps } from '../src/react';
 
 export type ResizeStrategy = NonNullable<LayoutProps['experimentalResize']>;
 
-/** Experimental: how a pointer resize applies its ratios, to compare how each feels. */
+/** Experimental: how a pointer resize applies its sizes, to compare how each feels. */
 export function ResizeSelect({
   value,
   onChange,
