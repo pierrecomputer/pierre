@@ -129,11 +129,9 @@
         (br $back)))
     (call $utf8At (local.get $q) (local.get $p)))
 
-  ;; the next mark candidate in [$p,$end), or $end. Sixteen bytes per step,
-  ;; classified by the two nibble tables. Wide loads may cross $end into the
-  ;; buffer slack; matches at or past $end are discarded.
-  (func $findMark (param $p i32) (param $end i32) (result i32)
-    (local $mask i32)
+  ;; Classify all sixteen bytes so the inline walker can reuse candidates
+  ;; after handling a mark. The caller discards matches beyond its content end.
+  (func $markMask (param $p i32) (result i32)
     (local $w v128)
     (local $lo v128)
     (local $hi v128)
@@ -141,23 +139,12 @@
       0x50 0x02 0 0 0 0 0x02 0 0 0 0x07 0x08 0x0c 0x08 0x22 0x08))
     (local.set $hi (v128.const i8x16
       0x01 0 0x02 0x04 0x40 0x08 0x10 0x20 0 0 0 0 0 0 0 0))
-    (block $done
-      (loop $wide
-        (br_if $done (i32.ge_u (local.get $p) (local.get $end)))
-        (local.set $w (v128.load (local.get $p)))
-        (local.set $mask (i8x16.bitmask (i8x16.ne
-          (v128.and
-            (i8x16.swizzle (local.get $lo) (v128.and (local.get $w) (i8x16.splat (i32.const 15))))
-            (i8x16.swizzle (local.get $hi) (i8x16.shr_u (local.get $w) (i32.const 4))))
-          (i8x16.splat (i32.const 0)))))
-        (if (local.get $mask)
-          (then
-            (local.set $p (i32.add (local.get $p) (i32.ctz (local.get $mask))))
-            (br $done)))
-        (local.set $p (i32.add (local.get $p) (i32.const 16)))
-        (br $wide)))
-    (if (i32.gt_u (local.get $p) (local.get $end)) (then (local.set $p (local.get $end))))
-    (local.get $p))
+    (local.set $w (v128.load (local.get $p)))
+    (i8x16.bitmask (i8x16.ne
+      (v128.and
+        (i8x16.swizzle (local.get $lo) (v128.and (local.get $w) (i8x16.splat (i32.const 15))))
+        (i8x16.swizzle (local.get $hi) (i8x16.shr_u (local.get $w) (i32.const 4))))
+      (i8x16.splat (i32.const 0)))))
 
   ;; the next $c in [$p,$end), or $end - 16 bytes per step
   (func $findByte (param $p i32) (param $end i32) (param $c i32) (result i32)
@@ -200,6 +187,70 @@
         (local.set $p (i32.add (local.get $p) (i32.const 16)))
         (br $wide)))
     (if (i32.gt_u (local.get $p) (local.get $end)) (then (local.set $p (local.get $end))))
+    (local.get $p))
+
+  ;; Find the next table separator or escape introducer without scanning
+  ;; ordinary cell text byte by byte. Ignore matches beyond the cell row.
+  (func $findCellBoundary (param $p i32) (param $end i32) (result i32)
+    (local $mask i32)
+    (local $w v128)
+    (block $done
+      (loop $wide
+        (br_if $done (i32.ge_u (local.get $p) (local.get $end)))
+        (local.set $w (v128.load (local.get $p)))
+        (local.set $mask (i8x16.bitmask (v128.or
+          (i8x16.eq (local.get $w) (i8x16.splat (i32.const "|")))
+          (i8x16.eq (local.get $w) (i8x16.splat (i32.const "\5c"))))))
+        (if (local.get $mask)
+          (then
+            (local.set $p (i32.add (local.get $p) (i32.ctz (local.get $mask))))
+            (br $done)))
+        (local.set $p (i32.add (local.get $p) (i32.const 16)))
+        (br $wide)))
+    (select (local.get $end) (local.get $p) (i32.gt_u (local.get $p) (local.get $end))))
+
+  ;; Find a possible fence byte or CR in one pass. Separate searches could
+  ;; repeatedly scan a long code block when only one of the bytes is present.
+  (func $findCodeRunEnd (param $p i32) (param $end i32) (param $fence i32) (result i32)
+    (local $mask i32)
+    (local $w v128)
+    (local $fv v128)
+    (local.set $fv (i8x16.splat (local.get $fence)))
+    (block $done
+      (loop $wide
+        (br_if $done (i32.ge_u (local.get $p) (local.get $end)))
+        (local.set $w (v128.load (local.get $p)))
+        (local.set $mask (i8x16.bitmask (v128.or
+          (i8x16.eq (local.get $w) (local.get $fv))
+          (i8x16.eq (local.get $w) (i8x16.splat (i32.const 13))))))
+        (if (local.get $mask)
+          (then
+            (local.set $p (i32.add (local.get $p) (i32.ctz (local.get $mask))))
+            (br $done)))
+        (local.set $p (i32.add (local.get $p) (i32.const 16)))
+        (br $wide)))
+    (select (local.get $end) (local.get $p) (i32.gt_u (local.get $p) (local.get $end))))
+
+  ;; Find the start of the LF-separated line containing p without reading
+  ;; before start. Used to stop a bulk code span before a possible fence.
+  (func $lineStartBefore (param $p i32) (param $start i32) (result i32)
+    (local $mask i32)
+    (block $tail
+      (loop $wide
+        (br_if $tail (i32.lt_u (i32.sub (local.get $p) (local.get $start)) (i32.const 16)))
+        (local.set $p (i32.sub (local.get $p) (i32.const 16)))
+        (local.set $mask (i8x16.bitmask (i8x16.eq
+          (v128.load (local.get $p)) (i8x16.splat (i32.const 10)))))
+        (if (local.get $mask)
+          (then (return (i32.add (local.get $p)
+            (i32.sub (i32.const 32) (i32.clz (local.get $mask)))))))
+        (br $wide)))
+    (block $done
+      (loop $byte
+        (br_if $done (i32.le_u (local.get $p) (local.get $start)))
+        (br_if $done (i32.eq (i32.load8_u (i32.sub (local.get $p) (i32.const 1))) (i32.const 10)))
+        (local.set $p (i32.sub (local.get $p) (i32.const 1)))
+        (br $byte)))
     (local.get $p))
 
   ;; skip spaces and tabs

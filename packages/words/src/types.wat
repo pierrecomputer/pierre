@@ -19,6 +19,7 @@
   (const $R.header 24)
   (const $R.line 8)
   (const $R.nLines 16)     ;; u32: a paragraph can have more than 65535 lines
+  (const $R.defNext 20)    ;; link/footnote definition chain, in source order
   (const $R.labelLen 24)   ;; link and footnote definitions only
   (const $R.hash 28)
   (const $R.labelBytes 32)

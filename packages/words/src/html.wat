@@ -90,6 +90,18 @@
       (else (out.str "<input disabled=\22\22 type=\22checkbox\22>")))
     (global.set $pendingTask (i32.const 0)))
 
+  ;; Single-line code needs only HTML escaping and its two tags. Reserve all
+  ;; three writes together, then resolve content pointers after possible growth.
+  (func $htmlCodeSpan (param $beg i32) (param $end i32)
+    (call $ensureOut (i32.add
+      (i32.mul (i32.sub (local.get $end) (local.get $beg)) (i32.const 6))
+      (i32.const 13)))
+    (i64.store (global.get $out) (i64.const "<code>"))
+    (global.set $out (i32.add (global.get $out) (i32.const 6)))
+    (call $outTextReserved (call $contentAt (local.get $beg)) (call $contentAt (local.get $end)))
+    (i64.store (global.get $out) (i64.const "</code>"))
+    (global.set $out (i32.add (global.get $out) (i32.const 7))))
+
   (func $htmlCodeBlock (param $r i32)
     (local $n i32)
     (local $i i32)
@@ -309,7 +321,8 @@
         (local.set $has (call $cellRange (local.get $p) (local.get $end)))
         (local.set $p (global.get $cellNext))
         (if (local.get $has)
-          (then (call $renderCell (global.get $cellBeg) (global.get $cellEnd))))
+          (then (call $renderCell (global.get $cellBeg) (global.get $cellEnd)
+            (global.get $cellUnescapePipe))))
         (if (local.get $head) (then (out.str "</th>\n")) (else (out.str "</td>\n")))
         (local.set $i (i32.add (local.get $i) (i32.const 1)))
         (br $l)))

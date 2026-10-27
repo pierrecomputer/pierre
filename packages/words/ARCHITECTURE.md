@@ -149,7 +149,11 @@ continuation, a run of unindented LF-separated lines whose first byte cannot
 interrupt the paragraph is appended without rebuilding the phase state; every
 line still keeps its own record. In HTML mode, contiguous unindented
 LF-separated fenced-code lines also coalesce into one span; ANSI retains
-individual lines so it can reapply their prefixes.
+individual lines so it can reapply their prefixes. Unindented top-level HTML
+fences scan whole LF-separated body spans, stopping before any line containing a
+fence byte or CR; ordinary scanning handles those lines and possible closers.
+Empty document-level LF lines close ordinary leaves before generic per-line
+state setup, but code and blank-insensitive HTML blocks retain the normal path.
 
 Containers appear as an opener record and a closer record around their children,
 so the renderer needs no stack to know where a block ends. List looseness is
@@ -161,9 +165,14 @@ Link reference definitions are records too; the renderer skips them, and a hash
 table appended after the last record maps a normalized label to its first
 definition. A footnote definition is a container whose record doubles as its
 label entry, so the same table indexes it, with a one-byte prefix keeping the
-two namespaces apart. The block walker skips definitions where they were
-written; the renderer emits them at the end, numbered in the order they were
-first referenced, and drops the ones nothing referenced.
+two namespaces apart. Definition records use the spare header word at byte 20 as
+a next pointer. Block analysis appends them to a source-ordered chain and counts
+them as they are created; building the hash table visits only this chain rather
+than scanning unrelated block records twice. The chain and counts reset on every
+render, and duplicate labels still resolve to the first record. The block walker
+skips definitions where they were written; the renderer emits them at the end,
+numbered in the order they were first referenced, and drops the ones nothing
+referenced.
 
 ## Inline analysis
 

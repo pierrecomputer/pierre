@@ -159,7 +159,8 @@
   ;; Copy escaped text after the caller has reserved the worst-case output.
   ;; This entry point is what lets scratch-backed callers reserve before they
   ;; turn their offsets into pointers, without paying for a second check.
-  ;; Processes 16 bytes per step.
+  ;; Processes 16 bytes per step, keeping the write cursor local until done:
+  ;; this reserved loop cannot allocate or call another output writer.
   ;; Wide loads may read up to 15 bytes past $rhs: always inside a buffer with
   ;; slack. Wide stores may write up to 15 bytes of garbage past the advanced
   ;; cursor; later writes overwrite it.
@@ -171,7 +172,9 @@
     (local $w v128)
     (local $lo v128)
     (local $hi v128)
+    (local $dst i32)
     (if (i32.ge_u (local.get $lhs) (local.get $rhs)) (then (return)))
+    (local.set $dst (global.get $out))
     (local.set $lo (v128.const i8x16
       0x01 0 0x02 0 0 0 0x02 0 0 0 0 0 0x04 0 0x04 0))
     (local.set $hi (v128.const i8x16
@@ -194,39 +197,40 @@
                 ;; A candidate in the wide-load slack is not part of the range.
                 (if (i32.lt_u (local.get $k) (local.get $rem))
                   (then
-                    (v128.store (global.get $out) (local.get $w))
-                    (global.set $out (i32.add (global.get $out) (local.get $k)))
+                    (v128.store (local.get $dst) (local.get $w))
+                    (local.set $dst (i32.add (local.get $dst) (local.get $k)))
                     (local.set $lhs (i32.add (local.get $lhs) (local.get $k)))
                     (br $special)))))
-            (v128.store (global.get $out) (local.get $w))
+            (v128.store (local.get $dst) (local.get $w))
             (if (i32.le_u (local.get $rem) (i32.const 16))
               (then
-                (global.set $out (i32.add (global.get $out) (local.get $rem)))
+                (local.set $dst (i32.add (local.get $dst) (local.get $rem)))
                 (br $done)))
-            (global.set $out (i32.add (global.get $out) (i32.const 16)))
+            (local.set $dst (i32.add (local.get $dst) (i32.const 16)))
             (local.set $lhs (i32.add (local.get $lhs) (i32.const 16)))
             (br $wide)))
         (local.set $c (i32.load8_u (local.get $lhs)))
         (if (i32.eqz (local.get $c))
           (then
             ;; the specification replaces NUL with the replacement character
-            (i32.store (global.get $out) (i32.const "\ef\bf\bd"))
-            (global.set $out (i32.add (global.get $out) (i32.const 3))))
+            (i32.store (local.get $dst) (i32.const "\ef\bf\bd"))
+            (local.set $dst (i32.add (local.get $dst) (i32.const 3))))
           (else (if (i32.eq (local.get $c) (i32.const "&"))
           (then
-            (i64.store (global.get $out) (i64.const "&amp;"))
-            (global.set $out (i32.add (global.get $out) (i32.const 5))))
+            (i64.store (local.get $dst) (i64.const "&amp;"))
+            (local.set $dst (i32.add (local.get $dst) (i32.const 5))))
           (else (if (i32.eq (local.get $c) (i32.const "<"))
             (then
-              (i32.store (global.get $out) (i32.const "&lt;"))
-              (global.set $out (i32.add (global.get $out) (i32.const 4))))
+              (i32.store (local.get $dst) (i32.const "&lt;"))
+              (local.set $dst (i32.add (local.get $dst) (i32.const 4))))
             (else (if (i32.eq (local.get $c) (i32.const ">"))
               (then
-                (i32.store (global.get $out) (i32.const "&gt;"))
-                (global.set $out (i32.add (global.get $out) (i32.const 4))))
+                (i32.store (local.get $dst) (i32.const "&gt;"))
+                (local.set $dst (i32.add (local.get $dst) (i32.const 4))))
               (else
-                (i64.store (global.get $out) (i64.const "&quot;"))
-                (global.set $out (i32.add (global.get $out) (i32.const 6)))))))))))
+                (i64.store (local.get $dst) (i64.const "&quot;"))
+                (local.set $dst (i32.add (local.get $dst) (i32.const 6)))))))))))
         (local.set $lhs (i32.add (local.get $lhs) (i32.const 1)))
-        (br $outer))))
+        (br $outer)))
+    (global.set $out (local.get $dst)))
 )
