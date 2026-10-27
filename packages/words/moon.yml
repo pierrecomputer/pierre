@@ -23,6 +23,12 @@ tasks:
     outputs:
       - 'dist'
 
+  # Self-imports resolve through this package's dist exports, so typecheck must
+  # wait for its own build as well as the inherited workspace dependency builds.
+  typecheck:
+    deps:
+      - 'build'
+
   # Node covers exhaustive core replay. Bun's optimizing Wasm tier produces
   # intermittent baseline-parser mismatches too; disable that tier for React
   # tests until the runtime issue is resolved. See benchmark/STREAMING.md.
