@@ -10,6 +10,10 @@
   ;;        (table alignments, link reference definition title and label)
   ;;   [..] nLines * {beg u32, end u32}
   ;;
+  ;; A descriptor can cover contiguous LF-separated source lines. Paragraphs
+  ;; retain their last physical line for table conversion; joinedLines marks
+  ;; records that cannot use single-line inline rendering merely from nLines.
+  ;;
   ;; `size` makes the stream walkable without knowing any type's layout, and
   ;; keeping the variable-length part *before* the lines means dropping
   ;; trailing lines never moves anything. A line's `end` carries the number of
@@ -18,7 +22,7 @@
   ;; ceiling long before that).
   (const $R.header 24)
   (const $R.line 8)
-  (const $R.nLines 16)     ;; u32: a paragraph can have more than 65535 lines
+  (const $R.nLines 16)     ;; u32 line/range count, not limited to 65535
   (const $R.defNext 20)    ;; link/footnote definition chain, in source order
   (const $R.labelLen 24)   ;; link and footnote definitions only
   (const $R.hash 28)
@@ -49,6 +53,8 @@
   (const $F.fenced 8)
   (const $F.task 16)
   (const $F.taskDone 32)
+  (const $F.joinedLines 64) ;; a paragraph descriptor contains multiple physical lines
+  (const $F.plainInline 128) ;; block scanning proved literal HTML content
   (const $Nest 250)        ;; CommonMark container-nesting limit
 
   ;; Container stack entry (see $mem.container): 24 bytes so 250 levels fill

@@ -52,6 +52,11 @@ const docs = {
       `[label ${i}]: /target/${i}\n\n[^note ${i}]: note ${i}\n\n` +
       `# Block ${i}\n\n[label ${i}] and [^note ${i}]\n\n`
   ).join(''),
+  plainParagraphs: Array.from(
+    { length: 3000 },
+    (_, i) => 'ordinary 界é. '.repeat(20) + `P${i}.\nnext.\nthird.\nlast.`
+  ).join('\n\n'),
+  plainEOFTail: 'ordinary 界é. '.repeat(30000) + '\t ',
   fencedCode: '```\n' + '<&"\n'.repeat(30000) + '```\n',
   openFencedCode: '~~~\n' + '<&"\n'.repeat(30000),
   entities: Array.from({ length: 3000 }, (_, i) =>
