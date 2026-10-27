@@ -1,7 +1,14 @@
 import { describe, expect, test } from 'bun:test';
 
 import type { FileDiffMetadata } from '../src/types';
+import { iterateOverDiff } from '../src/utils/iterateOverDiff';
 import { parseDiffFromFile } from '../src/utils/parseDiffFromFile';
+import {
+  parsePatchFiles,
+  processFile,
+  processPatch,
+} from '../src/utils/parsePatchFiles';
+import { assertDefined, verifyFileDiffHunkValues } from './testUtils';
 
 // parseDiffFromFile pairs change-block lines by similarity: the diff library
 // orders every deleted line before every added line in a block, and split
@@ -10,6 +17,30 @@ import { parseDiffFromFile } from '../src/utils/parseDiffFromFile';
 // edited line faces a gap.
 
 const CONTEXT = 'alpha\nbravo\ncharlie\ndelta\n';
+
+const issue1229Patch = `diff --git a/load.ts b/load.ts
+--- a/load.ts
++++ b/load.ts
+@@ -1,6 +1,14 @@
+ export function load(path: string) {
+-  const text = readFileSync(path, 'utf8');
+-  const data = JSON.parse(text);
+-  validate(data);
+-  return data;
++  let lastError: unknown;
++  for (let attempt = 0; attempt < 3; attempt++) {
++    try {
++      const text = readFileSync(path, 'utf8');
++      const data = JSON.parse(text);
++      validate(data);
++      return data;
++    } catch (err) {
++      lastError = err;
++    }
++  }
++  throw lastError;
+ }
+`;
 
 function parse(oldMiddle: string, newMiddle: string): FileDiffMetadata {
   return parseDiffFromFile(
@@ -23,6 +54,136 @@ function changeBlocks(diff: FileDiffMetadata) {
     hunk.hunkContent.filter((content) => content.type === 'change')
   );
 }
+
+describe('patch change-block realignment', () => {
+  test.each([undefined, false, true])(
+    'issue 1229 block and unified row order with disableLineMatching=%p',
+    (disableLineMatching) => {
+      const options = { disableLineMatching, throwOnError: true };
+      const files = [
+        processFile(issue1229Patch, options),
+        processPatch(issue1229Patch, options).files[0],
+        parsePatchFiles(issue1229Patch, options)[0].files[0],
+      ];
+
+      for (const file of files) {
+        assertDefined(file, 'Expected the issue 1229 patch to parse');
+        expect(changeBlocks(file)).toEqual(
+          disableLineMatching === true
+            ? [
+                {
+                  type: 'change',
+                  deletions: 4,
+                  additions: 12,
+                  deletionLineIndex: 1,
+                  additionLineIndex: 1,
+                },
+              ]
+            : [
+                {
+                  type: 'change',
+                  deletions: 0,
+                  additions: 3,
+                  deletionLineIndex: 1,
+                  additionLineIndex: 1,
+                },
+                {
+                  type: 'change',
+                  deletions: 4,
+                  additions: 4,
+                  deletionLineIndex: 1,
+                  additionLineIndex: 4,
+                },
+                {
+                  type: 'change',
+                  deletions: 0,
+                  additions: 5,
+                  deletionLineIndex: 5,
+                  additionLineIndex: 8,
+                },
+              ]
+        );
+
+        const rows: string[] = [];
+        iterateOverDiff({
+          diff: file,
+          diffStyle: 'unified',
+          callback({ type, deletionLine }) {
+            rows.push(
+              type !== 'change' ? ' ' : deletionLine != null ? '-' : '+'
+            );
+          },
+        });
+        expect(rows.join('')).toBe(
+          disableLineMatching === true
+            ? ' ----++++++++++++ '
+            : ' +++----+++++++++ '
+        );
+        expect(file.splitLineCount).toBe(14);
+        expect(file.unifiedLineCount).toBe(18);
+        expect(verifyFileDiffHunkValues(file)).toEqual({
+          valid: true,
+          errors: [],
+        });
+      }
+    }
+  );
+
+  test('preserves a deletion-heavy replacement as written', () => {
+    const patch = `--- image.html
++++ image.html
+@@ -1,3 +1 @@
+-<div>
+-  <img />
+-</div>
++<img />
+`;
+    const file = processFile(patch, {
+      disableLineMatching: true,
+      throwOnError: true,
+    });
+    assertDefined(file, 'Expected the image patch to parse');
+    expect(changeBlocks(file)).toEqual([
+      {
+        type: 'change',
+        deletions: 3,
+        additions: 1,
+        deletionLineIndex: 0,
+        additionLineIndex: 0,
+      },
+    ]);
+    expect(file.deletionLines).toEqual(['<div>\n', '  <img />\n', '</div>\n']);
+    expect(file.additionLines).toEqual(['<img />\n']);
+  });
+
+  test('disables matching for every file and commit in a patch', () => {
+    const twoFiles =
+      issue1229Patch + issue1229Patch.replaceAll('load.ts', 'retry.ts');
+    const options = { disableLineMatching: true, throwOnError: true };
+    const patches = [
+      processPatch(twoFiles, options),
+      ...parsePatchFiles(
+        `From aaaaa first patch\n${twoFiles}From bbbbb second patch\n${twoFiles}`,
+        options
+      ),
+    ];
+    expect(patches).toHaveLength(3);
+    for (const patch of patches) {
+      expect(patch.files).toHaveLength(2);
+      for (const file of patch.files) {
+        expect(changeBlocks(file)).toEqual([
+          {
+            type: 'change',
+            deletions: 4,
+            additions: 12,
+            deletionLineIndex: 1,
+            additionLineIndex: 1,
+          },
+        ]);
+      }
+    }
+  });
+});
 
 describe('parseDiffFromFile change-block realignment', () => {
   test('a blank line inserted above an edited line becomes its own insert block', () => {

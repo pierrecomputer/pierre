@@ -50,7 +50,11 @@ export function processPatch(
 
 function _processPatch(
   data: string,
-  { cacheKeyPrefix, throwOnError = false }: ParsePatchOptions = {},
+  {
+    cacheKeyPrefix,
+    disableLineMatching,
+    throwOnError = false,
+  }: ParsePatchOptions = {},
   patchIndex?: number
 ): ParsedPatch {
   const isGitDiff = isGitDiffPatch(data);
@@ -111,6 +115,7 @@ function _processPatch(
               )
           : undefined,
       isGitDiff,
+      disableLineMatching,
       throwOnError,
     });
     if (currentFile != null) {
@@ -144,6 +149,7 @@ function _processFile(
   fileDiffString: string,
   {
     cacheKey,
+    disableLineMatching = false,
     isGitDiff = GIT_DIFF_FILE_BREAK_REGEX.test(fileDiffString),
     oldFile,
     newFile,
@@ -672,10 +678,11 @@ function _processFile(
   ) {
     currentFile.prevName = undefined;
   }
-  // Pair change-block lines by similarity instead of the patch's positional
-  // ordering. Partial diffs work too: their hunk line indexes point into the
-  // patch-built line arrays, which hold every line a block references.
-  realignChangeContentBySimilarity(currentFile);
+  if (!disableLineMatching) {
+    // Partial diffs hold every line referenced by a change block, so they can
+    // use the same similarity alignment as complete diffs.
+    realignChangeContentBySimilarity(currentFile);
+  }
   return currentFile;
 }
 
