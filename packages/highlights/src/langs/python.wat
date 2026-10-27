@@ -625,7 +625,7 @@
               (else
                 (if
                   (i32.and
-                    (i32.shr_u (local.get $brackDepth) (i32.const 1))
+                    (i32.gt_u (local.get $brackDepth) (i32.const 1))
                     (i32.or
                       (i32.eq (local.get $c) (i32.const "]"))
                       (i32.eq (local.get $c) (i32.const "}"))))

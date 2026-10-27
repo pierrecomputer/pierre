@@ -90,6 +90,8 @@ test('llvm: strings, hex escapes, and comments', () => {
     ['b\\q"', 'string'],
     ['; done', 'comment'],
   ]);
+  // one hex digit is not an escape
+  expect(tokenKinds('llvm', 'c"\\4z\\4"')).toEqual([['c"\\4z\\4"', 'string']]);
   // a string ends at its line
   expect(tokenKinds('llvm', '"open\nret void')).toEqual([
     ['"open', 'string'],

@@ -93,12 +93,11 @@
             (br $done)))
         ;; a raw line break ends an unterminated string
         (br_if $done (i32.ne (i32.load8_u (global.get $ptr)) (i32.const 92)))
-        (local.set $e (call $scanHexRun (i32.add (global.get $ptr) (i32.const 1)) (i32.const 2)))
-        (if (i32.eq (call $templateByte (i32.add (global.get $ptr) (i32.const 1))) (i32.const 92))
-          (then (local.set $e (i32.add (global.get $ptr) (i32.const 2)))))
-        (if (i32.ne (i32.sub (local.get $e) (global.get $ptr)) (i32.const 2))
+        (local.set $e (i32.add (global.get $ptr) (i32.const 2)))
+        (if (i32.ne (call $templateByte (i32.sub (local.get $e) (i32.const 1))) (i32.const 92))
           (then
-            (if (i32.ne (i32.sub (local.get $e) (global.get $ptr)) (i32.const 3))
+            (local.set $e (i32.add (local.get $e) (i32.const 1)))
+            (if (i32.ne (call $scanHexRun (i32.add (global.get $ptr) (i32.const 1)) (i32.const 2)) (local.get $e))
               (then
                 (global.set $ptr (i32.add (global.get $ptr) (i32.const 1)))
                 (br $scan)))))

@@ -761,8 +761,8 @@
                                                 (i32.eq
                                                   (i32.load8_u
                                                     (i32.sub (local.get $lhs) (i32.const 1)))
-                                                  (i32.const "{"))))))))
-                                    (local.set $operand (i32.const 1))))))))))))))
+                                                  (i32.const "{"))))))
+                                        (local.set $operand (i32.const 1))))))))))))))))
             (br $tok)))
 
         (if
