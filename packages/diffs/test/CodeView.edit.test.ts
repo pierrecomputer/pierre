@@ -156,6 +156,25 @@ function getEditSessionDiff(instance: unknown): FileDiffMetadata | undefined {
     ?.diff;
 }
 
+// The editor's document for the item's file, and the change that replaces
+// its text with `next`, as the editor hands them to the component.
+function replaceItemContents(item: CodeViewItem<undefined>, next: string) {
+  if (item.type !== 'file') {
+    throw new Error('Expected a file item');
+  }
+  const document = new TextDocument<'file', undefined>(
+    `inmemory://${item.id}`,
+    item.file.contents
+  );
+  const change = document.applyEdits([
+    documentEdit(document, next.split(/(?<=\n)/)),
+  ]);
+  if (change == null) {
+    throw new Error('the edit applied nothing');
+  }
+  return { document, change };
+}
+
 function getEditSessionFile(instance: unknown): FileContents | undefined {
   return (instance as { editSession?: { file: FileContents } }).editSession
     ?.file;
@@ -1770,9 +1789,8 @@ describe('CodeView item edit mode', () => {
       viewer.setup(root);
       await renderItems(viewer, items);
 
-      // Mimic an edit session that grew the document: the editor pushes the
-      // larger document into the host, which patches its render caches and
-      // remembers the document's line count.
+      // Mimic an edit session that grew the document: the editor hands the
+      // change to the component, whose model takes the new line count.
       const edited = viewer.getRenderedItems()[0];
       if (edited.type !== 'file') {
         throw new Error('Expected an edited file');
@@ -1782,12 +1800,8 @@ describe('CodeView item edit mode', () => {
         { length: lineCount },
         (_, i) => `edited ${i}`
       ).join('\n');
-      edited.instance.applyDocumentChange(
-        new TextDocument<'file', undefined>(
-          'inmemory://code-view-file',
-          documentText
-        )
-      );
+      const grown = replaceItemContents(items[0], documentText);
+      edited.instance.applyChange(grown.document, grown.change);
 
       // Scroll the edited item out (recycle) and back in. The private session
       // keeps its patched render cache, so the remount renders its grown
@@ -1853,12 +1867,8 @@ describe('CodeView item edit mode', () => {
       if (edited.type !== 'file') {
         throw new Error('Expected an edited file');
       }
-      edited.instance.applyDocumentChange(
-        new TextDocument<'file', undefined>(
-          'inmemory://code-view-shrunk',
-          'only line'
-        )
-      );
+      const shrunk = replaceItemContents(items[0], 'only line');
+      edited.instance.applyChange(shrunk.document, shrunk.change);
       await wait(0);
 
       expect(viewer.getScrollHeight()).toBeLessThan(heightBefore);
@@ -1941,15 +1951,26 @@ describe('CodeView item edit mode', () => {
       viewer.setup(root);
       await renderItems(viewer, items);
 
-      // Mimic a same-line-count edit: the editor pushes the dirty line's
-      // tokens into the host render caches, exactly like #applyChange does
-      // after a keystroke.
+      // Mimic a same-line-count edit: the editor hands the change and the
+      // line's tokens to the component, as it does after a keystroke.
       const edited = viewer.getRenderedItems()[0];
       if (edited.type !== 'file') {
         throw new Error('Expected an edited file');
       }
       const tokens: HighlightedToken[] = [[0, '', 'edited marker line']];
-      edited.instance.updateRenderCache(new Map([[0, tokens]]), 'light');
+      const document = new TextDocument<'file', undefined>(
+        'inmemory://edited',
+        items[0].type === 'file' ? items[0].file.contents : ''
+      );
+      const change = document.applyEdits([
+        lineEdit(document, 0, 'edited marker line'),
+      ]);
+      if (change == null) {
+        throw new Error('the edit applied nothing');
+      }
+      edited.instance.applyChange(document, change, {
+        tokens: new Map([[0, tokens]]),
+      });
 
       // Scroll the edited item out (recycle) and back in. The private session
       // retains its patched render cache across the remount.
@@ -2529,7 +2550,8 @@ describe('CodeView item edit mode', () => {
       const replacementSession = getEditSessionFile(rendered.instance);
       expect(replacementSession).not.toBe(previousSession);
       expect(replacementSession?.contents).toBe(externalContents);
-      expect(changes).toEqual([localContents]);
+      // The replacement reaches the retained document at once.
+      expect(changes).toEqual([localContents, externalContents]);
 
       root.scrollTop = 0;
       dispatchScroll(root);

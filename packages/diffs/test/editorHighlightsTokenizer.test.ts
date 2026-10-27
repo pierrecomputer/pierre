@@ -9,7 +9,7 @@ import {
   disposeHighlighter,
   getSharedHighlighter,
 } from '../src/highlighter/shared_highlighter';
-import { installDom, wait, waitFor } from './domHarness';
+import { createRoot, installDom, wait, waitFor } from './domHarness';
 
 // Each test loads its backend fresh: only one highlighter type can be loaded.
 beforeEach(disposeHighlighter);
@@ -24,8 +24,9 @@ test.each(['file', 'virtualized'])(
       langs: ['typescript'],
     });
     const dom = installDom();
+    const root = createRoot();
     const fileContainer = document.createElement('div');
-    document.body.appendChild(fileContainer);
+    root.appendChild(fileContainer);
     const contents = [
       'const x = 1;',
       'const b = 2;',
@@ -40,14 +41,15 @@ test.each(['file', 'virtualized'])(
       disableErrorHandling: true,
       disableFileHeader: true,
     };
+    const virtualizer = type === 'virtualized' ? new Virtualizer() : undefined;
+    virtualizer?.setup(root);
     const file =
-      type === 'virtualized'
-        ? new VirtualizedFile(options, new Virtualizer())
+      virtualizer != null
+        ? new VirtualizedFile(options, virtualizer)
         : new File(options);
     const editor = new Editor('file');
     try {
       const source = { name: 'batch.ts', contents, lang: 'typescript' };
-      if (file instanceof VirtualizedFile) file.updateCodeViewLayout(source, 0);
       file.render({
         file: source,
         fileContainer,
@@ -97,17 +99,20 @@ test.each(['file', 'virtualized'])(
         'const f = 6;',
       ];
       expect(editor.getText()).toBe(expected.join('\n'));
-      expect(
+      // A virtualized file renders in the virtualizer's frame.
+      const rowTexts = () =>
         Array.from(
           fileContainer.shadowRoot!.querySelectorAll(
             '[data-content] [data-line]'
           ),
           (row) => row.textContent
-        )
-      ).toEqual(expected);
+        );
+      await waitFor(() => rowTexts().join('\n') === expected.join('\n'));
+      expect(rowTexts()).toEqual(expected);
     } finally {
       editor.cleanUp();
       file.cleanUp();
+      virtualizer?.cleanUp();
       dom.cleanup();
     }
   }
@@ -168,6 +173,153 @@ test('Highlights finishes every visible line an edit recolors in the same pass',
     // Nothing visible may change once background tokenizing finishes.
     await wait(200);
     expect(content()).toBe(afterEdit);
+  } finally {
+    editor.cleanUp();
+    file.cleanUp();
+    dom.cleanup();
+  }
+});
+
+test('Highlights primes the attached window, so the first edit touches only its line', async () => {
+  await getSharedHighlighter({
+    preferredHighlighter: 'highlights',
+    themes: ['pierre-dark'],
+    langs: ['typescript'],
+  });
+  const dom = installDom();
+  const fileContainer = document.createElement('div');
+  document.body.appendChild(fileContainer);
+  const contents = Array.from(
+    { length: 300 },
+    (_, i) => `const value${i} = ${i};`
+  ).join('\n');
+  const file = new File({
+    preferredHighlighter: 'highlights',
+    theme: 'pierre-dark',
+    disableErrorHandling: true,
+    disableFileHeader: true,
+    useTokenTransformer: true,
+  });
+  const editor = new Editor('file');
+  // The lines the editor hands the component tokens for, per change.
+  const tokenCounts: number[] = [];
+  const applyChange = file.applyChange.bind(file);
+  file.applyChange = (document, change, options) => {
+    tokenCounts.push(options?.tokens?.size ?? 0);
+    return applyChange(document, change, options);
+  };
+  const rows = () =>
+    Array.from(
+      fileContainer.shadowRoot?.querySelectorAll<HTMLElement>(
+        '[data-content] [data-line]'
+      ) ?? []
+    );
+  try {
+    file.render({
+      file: { name: 'primed.ts', contents, lang: 'typescript' },
+      fileContainer,
+      forceRender: true,
+      renderRange: {
+        startingLine: 0,
+        totalLines: 100,
+        bufferBefore: 0,
+        bufferAfter: 0,
+      },
+    });
+    editor.edit(file);
+    await waitFor(() => editor.getText() === contents);
+    const before = rows();
+    const markupBefore = before.map((row) => row.innerHTML);
+    // No settling: the window was lexed when the editor attached.
+    editor.applyEdits([
+      {
+        range: {
+          start: { line: 50, character: 0 },
+          end: { line: 50, character: 0 },
+        },
+        newText: 'x',
+      },
+    ]);
+    expect(tokenCounts).toEqual([1]);
+    const after = rows();
+    expect(after).toEqual(before);
+    const changed = after.flatMap((row, index) =>
+      row.innerHTML === markupBefore[index] ? [] : [index]
+    );
+    expect(changed).toEqual([50]);
+
+    // A line break adds one row and pushes the last one out of the window;
+    // the rows between move and keep their markup. The lexer re-reads the
+    // split line's remainder, at most.
+    const beforeEnter = rows();
+    const markupBeforeEnter = beforeEnter.map((row) => row.innerHTML);
+    editor.applyEdits([
+      {
+        range: {
+          start: { line: 60, character: 0 },
+          end: { line: 60, character: 0 },
+        },
+        newText: '\n',
+      },
+    ]);
+    expect(tokenCounts[1]).toBeLessThanOrEqual(2);
+    const afterEnter = rows();
+    expect(afterEnter.length).toBe(beforeEnter.length);
+    const keptChanged = beforeEnter.flatMap((row, index) =>
+      row.isConnected && row.innerHTML !== markupBeforeEnter[index]
+        ? [index]
+        : []
+    );
+    expect(keptChanged.every((index) => index === 60)).toBe(true);
+    const removed = beforeEnter.filter((row) => !row.isConnected);
+    expect(removed).toEqual([beforeEnter[beforeEnter.length - 1]]);
+  } finally {
+    editor.cleanUp();
+    file.cleanUp();
+    dom.cleanup();
+  }
+});
+
+test('Highlights colors a file rendered plain for its size once the editor attaches', async () => {
+  await getSharedHighlighter({
+    preferredHighlighter: 'highlights',
+    themes: ['pierre-dark'],
+    langs: ['typescript'],
+  });
+  const dom = installDom();
+  const fileContainer = document.createElement('div');
+  document.body.appendChild(fileContainer);
+  const contents = Array.from(
+    { length: 20 },
+    (_, i) => `const value${i} = ${i};`
+  ).join('\n');
+  const file = new File({
+    preferredHighlighter: 'highlights',
+    theme: 'pierre-dark',
+    disableErrorHandling: true,
+    disableFileHeader: true,
+    tokenizeMaxLength: 5,
+  });
+  const editor = new Editor('file');
+  // A plain row holds its text in one span; a tokenized row has one per token.
+  const coloredRows = () =>
+    Array.from(
+      fileContainer.shadowRoot?.querySelectorAll(
+        '[data-content] [data-line]'
+      ) ?? []
+    ).filter((row) => row.querySelectorAll('span').length > 1).length;
+  try {
+    file.render({
+      file: { name: 'big.ts', contents, lang: 'typescript' },
+      fileContainer,
+      forceRender: true,
+    });
+    expect(coloredRows()).toBe(0);
+    editor.edit(file);
+    await waitFor(() => editor.getText() === contents);
+    // The rows are not highlighted output, so the editor's tokens reach them.
+    await waitFor(() => coloredRows() > 0, { timeout: 3_000 });
+    expect(coloredRows()).toBeGreaterThan(0);
   } finally {
     editor.cleanUp();
     file.cleanUp();

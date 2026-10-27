@@ -83,10 +83,22 @@ function createFile(cacheKey: string): FileContents {
   return { name: 'demo.ts', contents: FILE_CONTENTS, cacheKey };
 }
 
-function createEditSessionFile(file: FileContents): FileContents {
-  const editSessionFile = { ...file };
-  delete editSessionFile.cacheKey;
-  return editSessionFile;
+// Applies an edit to the session as the editor does: the document changes,
+// then the renderer's model takes the change.
+function editFirstLine(
+  renderer: FileRenderer,
+  session: FileContents,
+  text: string
+): void {
+  const document = new TextDocument<'file', undefined>(
+    'inmemory://session',
+    session.contents
+  );
+  const change = document.applyEdits([lineEdit(document, 0, text)]);
+  if (change == null) {
+    throw new Error('the edit applied nothing');
+  }
+  renderer.applyChange(change, document);
 }
 
 // A structurally valid plain (non-transformer) worker result for `contents`:
@@ -266,8 +278,7 @@ describe('FileRenderer edit session', () => {
       await withTimeout(worker.waitForFileRequest());
       expect(worker.fileRequestCount).toBe(1);
 
-      const editSessionFile = createEditSessionFile(file);
-      renderer.beginEditSession(editSessionFile, file);
+      const editSessionFile = renderer.startEditSession(file);
       const result = renderer.renderFile(editSessionFile);
       if (result == null) {
         throw new Error('expected a render result');
@@ -297,8 +308,7 @@ describe('FileRenderer edit session', () => {
       renderer.renderFile(file);
       const request = await withTimeout(worker.waitForFileRequest());
 
-      const editSessionFile = createEditSessionFile(file);
-      renderer.beginEditSession(editSessionFile, file);
+      const editSessionFile = renderer.startEditSession(file);
       renderer.renderFile(editSessionFile);
       const poolMarker: ElementContent[] = [
         {
@@ -340,8 +350,7 @@ describe('FileRenderer edit session', () => {
       renderer.renderFile(file);
       const request = await withTimeout(worker.waitForFileRequest());
 
-      const editSessionFile = createEditSessionFile(file);
-      renderer.beginEditSession(editSessionFile, file);
+      const editSessionFile = renderer.startEditSession(file);
       renderer.renderFile(editSessionFile);
       const poolMarker: ElementContent[] = [
         {
@@ -391,8 +400,9 @@ describe('FileRenderer edit session', () => {
         undefined,
         manager
       );
-      const editSessionFile = createEditSessionFile(createFile('file:hydrate'));
-      renderer.beginEditSession(editSessionFile);
+      const editSessionFile = renderer.startEditSession(
+        createFile('file:hydrate')
+      );
       renderer.hydrate(editSessionFile);
       await wait(50);
       expect(worker.fileRequestCount).toBe(0);
@@ -424,15 +434,10 @@ describe('FileRenderer edit session', () => {
         plainFileCode(FILE_CONTENTS)
       );
 
-      const editSessionFile = createEditSessionFile(file);
-      renderer.beginEditSession(editSessionFile, file);
+      const editSessionFile = renderer.startEditSession(file);
       renderer.renderFile(editSessionFile);
 
-      // Simulate an editor keystroke: line 0 rewritten, cache marked dirty.
-      renderer.updateRenderCache(
-        new Map([[0, [[0, '#ffffff', 'const edited = 1;']]]]),
-        'dark'
-      );
+      editFirstLine(renderer, editSessionFile, 'const edited = 1;');
 
       renderer.endEditSession();
       const result = renderer.renderFile(editSessionFile);
@@ -459,8 +464,7 @@ describe('FileRenderer edit session', () => {
         manager
       );
       const file = createFile('file:detach');
-      const editSessionFile = createEditSessionFile(file);
-      renderer.beginEditSession(editSessionFile, file);
+      const editSessionFile = renderer.startEditSession(file);
 
       renderer.renderFile(editSessionFile);
       expect(worker.fileRequestCount).toBe(0);
@@ -499,13 +503,9 @@ describe('FileRenderer edit session', () => {
         manager.getFileResultCache(externalFile)
       );
 
-      const editSessionFile = createEditSessionFile(externalFile);
-      renderer.beginEditSession(editSessionFile, externalFile);
+      const editSessionFile = renderer.startEditSession(externalFile);
       expect(renderer.editorRenderReady()).toBe(true);
-      renderer.updateRenderCache(
-        new Map([[0, [[0, '#ffffff', 'const edited = true;']]]]),
-        'dark'
-      );
+      editFirstLine(renderer, editSessionFile, 'const edited = true;');
 
       expect(editSessionFile.contents).toContain('const edited = true;');
       expect(externalFile).toEqual(externalBefore);
@@ -522,6 +522,87 @@ describe('FileRenderer edit session', () => {
 });
 
 describe('FileRenderer worker rendering', () => {
+  test('moving the window keeps the plain rows already on screen', async () => {
+    const { manager } = await createInitializedManager({
+      theme: 'pierre-dark',
+    });
+    const renderer = new FileRenderer(
+      { theme: 'pierre-dark' },
+      undefined,
+      undefined,
+      manager
+    );
+    const file: FileContents = {
+      name: 'window.ts',
+      contents: Array.from(
+        { length: 40 },
+        (_, line) => `const value${line} = ${line};`
+      ).join('\n'),
+      cacheKey: 'window-file',
+    };
+    const range = (startingLine: number) => ({
+      startingLine,
+      totalLines: 20,
+      bufferBefore: 0,
+      bufferAfter: 0,
+    });
+    try {
+      const first = renderer.renderFile(file, range(0));
+      const second = renderer.renderFile(file, range(10));
+      if (first == null || second == null) {
+        throw new Error('expected plain render results');
+      }
+      expect(second.allRowsChanged).toBe(false);
+      expect(second.column[0].content).toBe(first.column[10].content);
+      expect(second.column[0].gutter).toBe(first.column[10].gutter);
+      expect(second.column[9].content).toBe(first.column[19].content);
+      expect(toHtml(second.contentAST[10])).toContain('const value20 = 20;');
+    } finally {
+      renderer.cleanUp();
+      manager.terminate();
+    }
+  });
+
+  test('a zero-line window adds no rows to the merged result', async () => {
+    const { manager } = await createInitializedManager({
+      theme: 'pierre-dark',
+    });
+    const renderer = new FileRenderer(
+      { theme: 'pierre-dark' },
+      undefined,
+      undefined,
+      manager
+    );
+    const file: FileContents = {
+      name: 'collapsed.ts',
+      contents: 'alpha\nbeta\ngamma',
+      cacheKey: 'collapsed-file',
+    };
+    try {
+      // A collapsed file renders a window of no lines before it expands.
+      const collapsed = renderer.renderFile(file, {
+        startingLine: 0,
+        totalLines: 0,
+        bufferBefore: 0,
+        bufferAfter: 0,
+      });
+      expect(collapsed?.rowCount).toBe(0);
+      const expanded = renderer.renderFile(file, {
+        startingLine: 0,
+        totalLines: 3,
+        bufferBefore: 0,
+        bufferAfter: 0,
+      });
+      expect(expanded?.contentAST.map((row) => toHtml(row))).toEqual(
+        expect.arrayContaining([expect.stringContaining('alpha')])
+      );
+      expect(toHtml(expanded?.contentAST[0] ?? [])).toContain('alpha');
+    } finally {
+      renderer.cleanUp();
+      manager.terminate();
+    }
+  });
+
   test('keeps a hydrated file selected when its replacement cannot render synchronously', async () => {
     const { manager } = await createInitializedManager({
       theme: 'pierre-dark',

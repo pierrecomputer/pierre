@@ -612,7 +612,13 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
       return;
     }
     this.mergeOptions({ themeType });
-    this.applyCachedThemeState(themeType);
+    // Rows the editor built from its tokens carry one theme, so a session is
+    // highlighted again; read-only rows switch through their theme styles.
+    if (this.editSession != null) {
+      this.onThemeChange();
+    } else {
+      this.applyCachedThemeState(themeType);
+    }
   }
 
   private applyCachedThemeState(themeType: ThemeTypes): boolean {
@@ -722,9 +728,9 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
   // annotation rows. Returns true when new annotations were adopted —
   // virtualized subclasses override this and refresh their layout on true.
   //
-  // The editor sends moved annotations with the edit, through
-  // applyDocumentChange or updateRenderCache, and again with the change event
-  // (__acceptEditorChange). The identity check makes the second call a no-op.
+  // The editor sends moved annotations with the edit (applyChange) and again
+  // with the change event (__acceptEditorChange). The identity check makes
+  // the second call a no-op.
   //
   // The annotations the caller passed in are never touched — stale
   // re-renders keep deduping against them.
@@ -1084,7 +1090,7 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
     this.render({ forceRender: true, renderRange: this.renderRange });
   }
 
-  // Editors update their rows directly. Other internal renders can be driven
+  // An edit session renders in place. Other internal renders can be driven
   // by the owner, so React updates its children before calling render().
   protected requestRender(): boolean {
     const { requestOwnerRender } = this;
@@ -1784,6 +1790,7 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
         fileDiff,
         lineAnnotations,
         renderRange,
+        domCurrent: this.hunksRenderer.editorRenderReady(),
       });
     };
     const theme = this.getTheme();
@@ -1976,24 +1983,25 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
     }
     const editSessionDiff = this.editSession?.diff;
     if (this.hunksRenderer.editorRenderReady()) {
-      // Compatible markup can be reused without repainting. Once the renderer
-      // transfers that cache to the private session, the existing DOM belongs
-      // to the session as well.
+      // The rows on screen have the token spans the editor needs. When the
+      // session took over the input's highlight, what is on screen is now the
+      // session diff.
       if (
         editSessionDiff != null &&
         this.hunksRenderer.diffCache === editSessionDiff
       ) {
         this.adoptRenderData(editSessionDiff);
       }
+      // Rows this instance wrote take the editor as they are. Hydrated markup
+      // is rendered once first, so its rows are written by key.
       if (this.columnsWritten()) {
         this.syncRenderViewToEditor();
       } else {
         this.rerender();
       }
     } else {
-      // The current markup is missing the editor's token metadata, or its
-      // highlight is still pending: render through the session, which also
-      // syncs the render view once it paints.
+      // The rows lack token spans, or the highlight is still pending. A render
+      // through the session gives the editor its rows and syncs it after.
       this.rerender();
     }
   }
@@ -3017,11 +3025,11 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
     }
   }
 
-  // Writes a column's rows into its code element. A fresh code element gets
-  // its gutter and content elements with every row in one string each. After
-  // that, rows are patched by key, so the element identity of a row and of
-  // the content element (the focused contenteditable in edit mode) survives,
-  // unless every row changed, when the columns are written whole again.
+  // Writes a column's rows into its code element. The first write creates
+  // the gutter and content elements and fills them. Later writes patch rows
+  // by key, so rows that stayed keep their elements, as does the content
+  // element the editor focuses. A new highlight result rewrites every row.
+  // The keys of the rows written are kept for the editor to re-measure.
   private writeColumn(
     code: HTMLElement,
     specs: readonly RowSpec[],

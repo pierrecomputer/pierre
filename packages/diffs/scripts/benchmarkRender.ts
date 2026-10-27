@@ -1,5 +1,5 @@
-// Render benchmark for FileDiff, the editor seam and CodeView scrolling, in
-// jsdom. Measures one operation per sample with setup excluded, so numbers
+// Render benchmark for FileDiff, File, the editor seam and CodeView scrolling,
+// in jsdom. Measures one operation per sample with setup excluded, so numbers
 // compare across refactors of the rendering pipeline. DOM costs in jsdom are
 // not browser costs; only relative changes between runs of this script mean
 // anything.
@@ -8,6 +8,7 @@
 //                                   [--only <substring>] [--json]
 
 import { CodeView } from '../src/components/CodeView';
+import { File, type FileOptions } from '../src/components/File';
 import { FileDiff, type FileDiffOptions } from '../src/components/FileDiff';
 import { DEFAULT_THEMES } from '../src/constants';
 import { Editor } from '../src/editor/editor';
@@ -269,7 +270,7 @@ async function renderEditable(
 }
 
 function replaceText(
-  editor: Editor<'file-diff', undefined>,
+  editor: Editor<'file', undefined> | Editor<'file-diff', undefined>,
   line: number,
   start: number,
   end: number,
@@ -573,6 +574,163 @@ function createCases(config: BenchmarkConfig): BenchmarkCase[] {
       });
     }
   }
+
+  // Plain files: File and a 'file' editor on the fixture's new file.
+  const fileOptions = (
+    extra: Partial<FileOptions<undefined, undefined>> = {}
+  ): FileOptions<undefined, undefined> => ({
+    theme: DEFAULT_THEMES,
+    preferredHighlighter: 'highlights',
+    disableFileHeader: true,
+    disableErrorHandling: true,
+    ...extra,
+  });
+  const renderFile = (
+    options: FileOptions<undefined, undefined>,
+    renderRange?: RenderRange
+  ): { file: File<undefined>; container: HTMLElement } => {
+    assertHighlighterReady();
+    const container = createContainer();
+    const file = new File<undefined>(options);
+    file.render({
+      file: fixture.newFile,
+      fileContainer: container,
+      forceRender: true,
+      renderRange,
+    });
+    if (!hasTokenSpans(container)) {
+      throw new Error('benchmarkRender: first file render was not highlighted');
+    }
+    return { file, container };
+  };
+  const renderEditableFile = async (renderRange?: RenderRange) => {
+    const { file, container } = renderFile(
+      fileOptions({ useTokenTransformer: true }),
+      renderRange
+    );
+    const editor = new Editor<'file', undefined>('file');
+    editor.edit(file);
+    await waitFor(() => isEditable(container), { timeout: 10_000 });
+    if (!isEditable(container)) {
+      throw new Error('benchmarkRender: file editor did not attach');
+    }
+    await wait(20);
+    return { file, editor, container };
+  };
+
+  for (const [scope, range] of [
+    ['window', windowRange(0, WINDOW)],
+    ['expanded', undefined],
+  ] as const) {
+    cases.push({
+      name: `file-first-paint/${scope}`,
+      description:
+        scope === 'window'
+          ? `File.render() of a ${WINDOW}-line window`
+          : 'File.render() of the whole file',
+      prepare() {
+        assertHighlighterReady();
+        const container = createContainer();
+        const file = new File<undefined>(fileOptions());
+        return {
+          run() {
+            file.render({
+              file: fixture.newFile,
+              fileContainer: container,
+              forceRender: true,
+              renderRange: range,
+            });
+          },
+          cleanup() {
+            file.cleanUp();
+            container.remove();
+          },
+        };
+      },
+    });
+
+    cases.push({
+      name: `file-type/${scope}`,
+      description: 'applyEdits() inside a line of a plain file',
+      async prepare() {
+        const { file, editor, container } = await renderEditableFile(range);
+        return {
+          run() {
+            replaceText(editor, fixture.contextLine, 13, 13, 'x');
+          },
+          cleanup() {
+            editor.cleanUp();
+            file.cleanUp();
+            container.remove();
+          },
+        };
+      },
+    });
+
+    cases.push({
+      name: `file-enter/${scope}`,
+      description: 'applyEdits() inserting a line break in a plain file',
+      async prepare() {
+        const { file, editor, container } = await renderEditableFile(range);
+        return {
+          run() {
+            replaceText(editor, fixture.contextLine, 0, 0, '\n');
+          },
+          cleanup() {
+            editor.cleanUp();
+            file.cleanUp();
+            container.remove();
+          },
+        };
+      },
+    });
+  }
+
+  cases.push({
+    name: 'file-scroll-step',
+    description: `File.render() moving a ${WINDOW}-line window by half`,
+    prepare() {
+      const { file, container } = renderFile(
+        fileOptions(),
+        windowRange(0, WINDOW)
+      );
+      return {
+        run() {
+          file.render({
+            file: fixture.newFile,
+            fileContainer: container,
+            renderRange: windowRange(WINDOW / 2, WINDOW),
+          });
+        },
+        cleanup() {
+          file.cleanUp();
+          container.remove();
+        },
+      };
+    },
+  });
+
+  cases.push({
+    name: 'file-edit-attach/window',
+    description: 'editor.edit() on a rendered file window with token spans',
+    prepare() {
+      const { file, container } = renderFile(
+        fileOptions({ useTokenTransformer: true }),
+        windowRange(0, WINDOW)
+      );
+      const editor = new Editor<'file', undefined>('file');
+      return {
+        run() {
+          editor.edit(file);
+        },
+        cleanup() {
+          editor.cleanUp();
+          file.cleanUp();
+          container.remove();
+        },
+      };
+    },
+  });
 
   // CodeView: one large diff item, scrolled and edited through the
   // virtualizer's own frame.

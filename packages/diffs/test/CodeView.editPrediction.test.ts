@@ -485,23 +485,13 @@ describe('CodeView edit prediction ghost rows', () => {
       const rowBefore = findLineRow(elementA, ANCHOR_LINE + 1);
       expect(rowBefore?.dataset.editPredictionSpacer).toBe('');
 
-      // A changed option re-renders every mounted item's rows in place; the
-      // editor re-tags the new rows once its render view syncs.
+      // A changed option re-renders every mounted item. Rows are written by
+      // key, so the row keeps its element and the spacer tag on it.
       viewer.setOptions({ ...options, themeType: 'light' });
       viewer.render(true);
-      await waitFor(
-        () => {
-          const row = findLineRow(elementA, ANCHOR_LINE + 1);
-          return (
-            row != null &&
-            row !== rowBefore &&
-            row.dataset.editPredictionSpacer === ''
-          );
-        },
-        { timeout: EDITABLE_TIMEOUT }
-      );
+      await wait(0);
       const rowAfter = findLineRow(elementA, ANCHOR_LINE + 1);
-      expect(rowAfter).not.toBe(rowBefore);
+      expect(rowAfter).toBe(rowBefore);
       expect(rowAfter?.dataset.editPredictionSpacer).toBe('');
       expect(predictionElements(elementA)).toHaveLength(1);
       viewer.render(true);

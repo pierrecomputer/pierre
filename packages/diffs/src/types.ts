@@ -781,7 +781,7 @@ export interface ForceFilePlainTextOptions {
   startingLine?: number;
   totalLines?: number;
   // Pre-split lines for caching in windowing scenarios
-  lines?: string[];
+  lines?: readonly string[];
 }
 
 export interface RenderFileOptions {

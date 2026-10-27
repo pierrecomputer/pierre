@@ -38,6 +38,7 @@ export class EditorTokenizer {
   #themeType: 'light' | 'dark' = 'dark';
   #themeName = '';
   #setStyle: EditorTokenizerProps['setStyle'];
+  #style = '';
   #onThemeChange: EditorTokenizerProps['onThemeChange'];
   #disposes?: (() => void)[];
 
@@ -226,7 +227,7 @@ export class EditorTokenizer {
     const infoForeground = colors['editorInfo.foreground'];
     const warningForeground = colors['editorWarning.foreground'];
     const errorForeground = colors['editorError.foreground'];
-    this.#setStyle(`:host {
+    this.#style = `:host {
       --diffs-editor-selection-bg: ${selectionBackground ?? 'var(--diffs-line-bg)'};
       --diffs-editor-line-highlight-border: ${lineHighlightBorder};
       --diffs-editor-active-line-source-mix: ${activeLineSourceMix};
@@ -239,9 +240,15 @@ export class EditorTokenizer {
       --diffs-editor-info-fg: ${infoForeground ?? 'initial'};
       --diffs-editor-warning-fg: ${warningForeground ?? 'initial'};
       --diffs-editor-error-fg: ${errorForeground ?? 'initial'};
-    }`);
+    }`;
+    this.#setStyle(this.#style);
     this.#themeName = themeName;
     this.#themeType = themeType ?? theme.type;
+  }
+
+  // Writes the theme style again, for a style element created after it.
+  applyStyle(): void {
+    this.#setStyle(this.#style);
   }
 
   cleanUp(): void {
@@ -252,10 +259,9 @@ export class EditorTokenizer {
 
   tokenize(
     change: TextDocumentChange,
-    renderRange?: RenderRange,
-    hostRealignsRows = false
+    renderRange?: RenderRange
   ): Map<number, HighlightedToken[]> {
-    return this.#tokenizer.tokenize(change, renderRange, hostRealignsRows);
+    return this.#tokenizer.tokenize(change, renderRange);
   }
 
   getStringCommentRegexpRangesInLine(
@@ -274,9 +280,9 @@ export class EditorTokenizer {
   // work when the visible range and the document are the same as last time.
   #prepared?: { version: number; renderRange: RenderRange | undefined };
 
-  prebuildStateStack(renderRange?: RenderRange): void {
+  prebuildStateStack(renderRange?: RenderRange, domCurrent = false): void {
     this.#prepared = { version: this.#textDocument.version, renderRange };
-    this.#tokenizer.prebuildStateStack(renderRange);
+    this.#tokenizer.prebuildStateStack(renderRange, domCurrent);
   }
 
   flush(renderRange?: RenderRange): Map<number, HighlightedToken[]> {

@@ -13,14 +13,18 @@ import {
   THEME_CSS_ATTRIBUTE,
   UNSAFE_CSS_ATTRIBUTE,
 } from '../constants';
+import { ColumnReconciler } from '../dom/ColumnReconciler';
 import type { Editor } from '../editor/editor';
-import type { TextDocument } from '../editor/textDocument';
+import type { TextDocument, TextDocumentChange } from '../editor/textDocument';
 import type {
+  ApplyChangeOptions,
+  ApplyChangeResult,
   EditCompletionDecision,
   EditorActiveLineOptions,
   EditorChangeEvent,
   FileEditCompleteEvent,
 } from '../editor/types';
+import type { RowKey } from '../layout/RowSpec';
 import {
   type GetHoveredLineResult,
   InteractionManager,
@@ -58,6 +62,7 @@ import { arePrePropertiesEqual } from '../utils/arePrePropertiesEqual';
 import { areRenderRangesEqual } from '../utils/areRenderRangesEqual';
 import { areThemesEqual } from '../utils/areThemesEqual';
 import { createAnnotationWrapperNode } from '../utils/createAnnotationWrapperNode';
+import { createContentColumn } from '../utils/createContentColumn';
 import { createGutterUtilityContentNode } from '../utils/createGutterUtilityContentNode';
 import { createUnsafeCSSStyleNode } from '../utils/createUnsafeCSSStyleNode';
 import {
@@ -77,6 +82,7 @@ import { getLineAnnotationName } from '../utils/getLineAnnotationName';
 import { getOrCreateCodeNode } from '../utils/getOrCreateCodeNode';
 import { getThemes } from '../utils/getThemes';
 import { guardWebKitScrollDuringRebuild } from '../utils/guardWebKitScrollDuringRebuild';
+import { createGutterWrapper } from '../utils/hast_utils';
 import { hastToHtml } from '../utils/hastToHtml';
 import { upsertHostThemeStyle } from '../utils/hostTheme';
 import { isFilePlainText } from '../utils/isFilePlainText';
@@ -89,8 +95,6 @@ import { setPreNodeProperties } from '../utils/setWrapperNodeProps';
 import type { WorkerPoolManager } from '../worker';
 import { isHandledWorkerPoolError } from '../worker/errors';
 import { DiffsContainerLoaded } from './web-components';
-
-const EMPTY_STRINGS: string[] = [''];
 
 export interface FileRenderProps<LAnnotation> {
   file: FileContents;
@@ -203,25 +207,12 @@ export interface FileRenderInput<LAnnotation> {
 }
 
 interface EditSession<LAnnotation> {
-  // Editable copy of the file. Changes in the editor are written here.
+  // The file as edited so far. The renderer's model keeps it current.
   file: FileContents;
-  // Latest input, kept separately so rejecting edits can restore it.
-  // Basically the original version of the FileContents before the edit took
-  // place
+  // The input the session started from or was last replaced with, so
+  // rejecting the edits can restore it.
   inputFile: FileContents;
   annotations: EditSessionAnnotations<LineAnnotation<LAnnotation>> | undefined;
-  /*
-   * `externalReplacement` records that the host swapped in a new file
-   * mid-session, so the next sync tells the editor to adopt `file` over its
-   * own document
-   */
-  externalReplacement: boolean;
-}
-
-function createEditSessionFile(file: FileContents): FileContents {
-  const editSessionFile = { ...file };
-  delete editSessionFile.cacheKey;
-  return editSessionFile;
 }
 
 let instanceId = -1;
@@ -250,6 +241,13 @@ export class File<LAnnotation = undefined, Caret = undefined> {
   protected cachedHeaderHTML: string | undefined;
   protected appliedPreAttributes: PrePropertiesConfig | undefined;
   protected lastRowCount: number | undefined;
+  // The keyed row writer of each code element on screen.
+  private readonly columnReconcilers = new WeakMap<
+    HTMLElement,
+    ColumnReconciler
+  >();
+  // Keys of the rows the last column write inserted or rewrote.
+  private changedRowKeys: RowKey[] = [];
   private mounted = false;
 
   protected headerElement: HTMLElement | undefined;
@@ -333,7 +331,7 @@ export class File<LAnnotation = undefined, Caret = undefined> {
     });
   }
 
-  // Editors update their rows directly. Other internal renders can be driven
+  // An edit session renders in place. Other internal renders can be driven
   // by the owner, so React updates its children before calling render().
   protected requestRender(): boolean {
     const { requestOwnerRender } = this;
@@ -463,9 +461,10 @@ export class File<LAnnotation = undefined, Caret = undefined> {
     );
   }
 
-  // Store a new input and create its editable copy if an editor is attached.
-  // The next editor sync decides whether to keep or reset undo history. Return
-  // false if the input has not changed.
+  // Store a new input. An active session restarts from it: the renderer's
+  // model takes the new file and the editor's document is replaced, which
+  // reports the change before anything renders. Returns false if the input
+  // has not changed.
   protected updateInputFile(
     incomingFile: FileContents,
     lineAnnotations?: LineAnnotation<LAnnotation>[]
@@ -473,31 +472,34 @@ export class File<LAnnotation = undefined, Caret = undefined> {
     if (areFileTargetsEqual(this.getInputFile(), incomingFile)) {
       return false;
     }
-
-    const hadSession = this.editSession != null;
+    this.editor?.__assertOutsideChangeCallback('File.render');
     const previousAnnotations = this.getLatestAnnotations();
     this.file = incomingFile;
-
-    if (hadSession || this.editor != null) {
-      this.installEditSession(
-        incomingFile,
-        hadSession
-          ? undefined
-          : this.editor?.__getDocumentContents(incomingFile),
-        true
-      );
-    } else {
-      this.editSession = undefined;
-    }
-    if (this.editSession?.annotations != null && lineAnnotations != null) {
+    const { editSession, editor } = this;
+    if (editSession?.annotations != null && lineAnnotations != null) {
       // These annotations arrived with the new file, so their line numbers
       // describe it. The positions the session tracked for the old document
       // mean nothing now: the session restarts from these annotations, and
       // they also become what renders once the session ends.
-      this.editSession.annotations = adoptEditSessionAnnotations(
+      editSession.annotations = adoptEditSessionAnnotations(
         lineAnnotations,
         getLineAnnotationName,
-        this.editSession.annotations
+        editSession.annotations
+      );
+    }
+    if (editSession != null) {
+      this.replaceEditSession(
+        incomingFile,
+        editSession.annotations?.current ??
+          lineAnnotations ??
+          previousAnnotations
+      );
+    } else if (editor != null) {
+      // The editor attached before the first file arrived. A document it
+      // kept from an earlier session seeds the new one.
+      this.installEditSession(
+        incomingFile,
+        editor.__getDocumentContents(incomingFile)
       );
     }
     this.pendingData = {
@@ -510,45 +512,40 @@ export class File<LAnnotation = undefined, Caret = undefined> {
     return true;
   }
 
-  // Create an editable copy of inputFile. When reopening a saved document,
-  // retainedDocument supplies its edited text instead. Keep tracked
-  // annotations if a session already exists.
-  //
-  // hostReplacement tells the next sync to replace the editor's text when
-  // the editable copy uses the new input text.
+  // Restarts the session from a new file and gives the editor's document the
+  // new contents. Undo history is kept unless the name or language changed.
+  private replaceEditSession(
+    incomingFile: FileContents,
+    lineAnnotations: LineAnnotation<LAnnotation>[] | undefined
+  ): void {
+    const { editor, editSession } = this;
+    this.installEditSession(incomingFile);
+    if (editor != null && editSession != null) {
+      editor.__replaceDocument(incomingFile, false, lineAnnotations);
+    }
+  }
+
+  // Start the renderer's session on inputFile, or on the document the editor
+  // retained from an earlier session. A session that already exists keeps
+  // its tracked annotations.
   private installEditSession(
     inputFile: FileContents,
-    retainedDocument?: FileContents,
-    hostReplacement = false
+    retainedDocument?: FileContents
   ): void {
-    const usesInputDocument =
-      retainedDocument == null ||
-      (retainedDocument.name === inputFile.name &&
-        retainedDocument.lang === inputFile.lang &&
-        retainedDocument.contents === inputFile.contents);
-    const file = createEditSessionFile(retainedDocument ?? inputFile);
-    // Seed annotations on first attach so a later external replacement can
-    // restart their positions. A live session keeps its current collection.
+    const file = this.fileRenderer.startEditSession(
+      inputFile,
+      retainedDocument
+    );
+    // Seed annotations on first attach so a later replacement can restart
+    // their positions.
     const annotations =
       this.editSession?.annotations ??
       adoptEditSessionAnnotations(
         this.getLatestAnnotations(),
         getLineAnnotationName
       );
-    this.editSession = {
-      file,
-      inputFile,
-      externalReplacement: hostReplacement && usesInputDocument,
-      annotations,
-    };
-    this.pendingData = {
-      file,
-      lineAnnotations: annotations.current,
-    };
-    this.fileRenderer.beginEditSession(
-      file,
-      usesInputDocument ? inputFile : undefined
-    );
+    this.editSession = { file, inputFile, annotations };
+    this.pendingData = { file, lineAnnotations: annotations.current };
   }
 
   public onThemeChange(): void {
@@ -580,7 +577,13 @@ export class File<LAnnotation = undefined, Caret = undefined> {
       return;
     }
     this.mergeOptions({ themeType });
-    this.applyCachedThemeState(themeType);
+    // Rows the editor built from its tokens carry one theme, so a session is
+    // highlighted again; read-only rows switch through their theme styles.
+    if (this.editSession != null) {
+      this.onThemeChange();
+    } else {
+      this.applyCachedThemeState(themeType);
+    }
   }
 
   private applyCachedThemeState(themeType: ThemeTypes): boolean {
@@ -642,11 +645,9 @@ export class File<LAnnotation = undefined, Caret = undefined> {
   // annotation rows. Returns true when new annotations were adopted —
   // virtualized subclasses override this and refresh their layout on true.
   //
-  // The editor delivers annotations through two calls. An edit that changes
-  // the line count sends them with the structural rebuild
-  // (applyDocumentChange) and again with the change event (__acceptEditorChange);
-  // the identity check makes the second call a no-op. An edit that keeps the
-  // line count skips the rebuild, so the event is its only path here.
+  // The editor sends moved annotations with the edit (applyChange) and again
+  // with the change event (__acceptEditorChange). The identity check makes
+  // the second call a no-op.
   //
   // The annotations the caller passed in are never touched — stale
   // re-renders keep deduping against them.
@@ -694,22 +695,82 @@ export class File<LAnnotation = undefined, Caret = undefined> {
     }
   }
 
-  public applyChange(): never {
-    throw new Error(
-      'File.applyChange: file editing moves to the row pipeline in phase 7'
+  /**
+   * @internal Applies one change of the editor's document to the file and the
+   * rows on screen.
+   */
+  public applyChange(
+    document: TextDocument<'file', LAnnotation>,
+    change: TextDocumentChange,
+    options: ApplyChangeOptions<'file', LAnnotation> = {}
+  ): ApplyChangeResult {
+    if (this.editSession == null) {
+      throw new Error('File.applyChange: requires an active edit session');
+    }
+    const { tokens, lineAnnotations } = options;
+    const { lineDelta } = this.fileRenderer.applyChange(
+      change,
+      document,
+      tokens
     );
+    if (lineAnnotations != null) {
+      this.syncEditSessionAnnotationsFromEditor(lineAnnotations);
+    }
+    this.renderChange(lineDelta !== 0);
+    // Nothing was on screen, or a render callback ended the session.
+    if (this.fileContainer == null || this.editSession == null) {
+      return { rebuiltLines: [] };
+    }
+    this.interactionManager.setSelectionDirty();
+    return { rebuiltLines: this.takeRebuiltLines() };
   }
 
-  public applyTokens(): never {
-    throw new Error(
-      'File.applyTokens: file editing moves to the row pipeline in phase 7'
-    );
+  // Renders the rows after the model changed. `structural` is true when the
+  // line count changed, which moves every row below the edit.
+  protected renderChange(_structural: boolean): void {
+    if (this.fileContainer == null) {
+      return;
+    }
+    this.rerender();
   }
 
-  public lineElement(): never {
-    throw new Error(
-      'File.lineElement: file editing moves to the row pipeline in phase 7'
-    );
+  /** @internal Background tokenizing finished coloring these lines. */
+  public applyTokens(tokens: ReadonlyMap<number, HighlightedToken[]>): void {
+    if (this.editSession == null) {
+      return;
+    }
+    const changed = this.fileRenderer.setTokens(tokens);
+    // Lines without a row on screen are drawn from the new tokens when a
+    // render brings them in; nothing to show until then.
+    if (changed.some((line) => this.lineElement(line) != null)) {
+      this.rerender();
+    }
+  }
+
+  /** @internal The content element of a document line's row, if on screen. */
+  public lineElement(line: number): HTMLElement | undefined {
+    const { code } = this;
+    if (code == null || this.editSession == null) {
+      return undefined;
+    }
+    const key = this.fileRenderer.lineKey(line);
+    return key == null
+      ? undefined
+      : this.columnReconcilers.get(code)?.elementFor(key)?.content;
+  }
+
+  // The document lines of the rows the last render inserted or rewrote.
+  private takeRebuiltLines(): number[] {
+    const { changedRowKeys: keys } = this;
+    this.changedRowKeys = [];
+    const lines: number[] = [];
+    for (const key of keys) {
+      const line = this.fileRenderer.lineOfKey(key);
+      if (line != null) {
+        lines.push(line);
+      }
+    }
+    return lines;
   }
 
   public __getEffectiveCodeOptions(): BaseCodeOptions {
@@ -929,20 +990,6 @@ export class File<LAnnotation = undefined, Caret = undefined> {
     this.flushManagers();
   }
 
-  public getOrCreateLineCache(
-    file: FileContents | undefined = this.getWorkingFile()
-  ): string[] {
-    return file != null
-      ? this.fileRenderer.getOrCreateLineCache(file)
-      : EMPTY_STRINGS;
-  }
-
-  protected updateBuffers(renderRange: RenderRange): void {
-    if (this.pre != null) {
-      this.applyBuffers(this.pre, renderRange);
-    }
-  }
-
   private syncRenderViewToEditor(): void {
     const { editor, fileContainer, renderRange } = this;
     const lineAnnotations = this.getLatestAnnotations();
@@ -965,6 +1012,7 @@ export class File<LAnnotation = undefined, Caret = undefined> {
         file,
         lineAnnotations,
         renderRange,
+        domCurrent: this.fileRenderer.editorRenderReady(),
       });
     };
 
@@ -993,13 +1041,6 @@ export class File<LAnnotation = undefined, Caret = undefined> {
             console.error(error);
           }
         });
-    }
-  }
-
-  /** @internal The editor applied or edited past the pending external replacement. */
-  public __acknowledgeDocumentUpdate(): void {
-    if (this.editSession != null) {
-      this.editSession.externalReplacement = false;
     }
   }
 
@@ -1057,34 +1098,36 @@ export class File<LAnnotation = undefined, Caret = undefined> {
   private resumeEditorRendering(
     editor: Editor<'file', LAnnotation, Caret>
   ): void {
-    // A retained session just re-starts its render; a fresh attach with a file
-    // installs a session seeded from the editor's document. The editor can also
-    // attach before the file arrives, there is nothing to begin yet, so the
-    // session installs on the later hydrate.
-    if (this.editSession != null) {
-      this.fileRenderer.beginEditSession(this.editSession.file);
-    } else {
-      const inputFile = this.getInputFile();
-      if (inputFile != null) {
-        this.installEditSession(
-          inputFile,
-          editor.__getDocumentContents(inputFile)
-        );
-      }
+    // Start a session unless one is retained from an earlier attach. Without
+    // a file yet, updateInputFile starts it when the file arrives.
+    const inputFile = this.getInputFile();
+    if (this.editSession == null && inputFile != null) {
+      this.installEditSession(
+        inputFile,
+        editor.__getDocumentContents(inputFile)
+      );
     }
     const editSessionFile = this.editSession?.file;
     if (this.fileRenderer.editorRenderReady()) {
+      // The rows on screen have the token spans the editor needs. When the
+      // session took over the input's highlight, what is on screen is now the
+      // session file.
       if (
         editSessionFile != null &&
         this.fileRenderer.fileCache === editSessionFile
       ) {
         this.adoptRenderData(editSessionFile);
       }
-      this.syncRenderViewToEditor();
+      // Rows this instance wrote take the editor as they are. Hydrated markup
+      // is rendered once first, so its rows are written by key.
+      if (this.columnsWritten()) {
+        this.syncRenderViewToEditor();
+      } else {
+        this.rerender();
+      }
     } else {
-      // The current markup is missing the editor's token metadata, or its
-      // highlight is still pending: render through the session, which also
-      // syncs the render view once it paints.
+      // The rows lack token spans, or the highlight is still pending. A render
+      // through the session gives the editor its rows and syncs it after.
       this.rerender();
     }
   }
@@ -1183,9 +1226,6 @@ export class File<LAnnotation = undefined, Caret = undefined> {
       file: settledFile,
       lineAnnotations: settledAnnotations,
     };
-    // The renderer can adopt the settled identity without repainting when
-    // its current content already matches the completed or reverted file.
-    this.fileRenderer.endEditSession(settledFile);
     if (areFileTargetsEqual(this.getRenderedFile(), settledFile)) {
       this.adoptRenderData(settledFile);
     }
@@ -1195,67 +1235,6 @@ export class File<LAnnotation = undefined, Caret = undefined> {
     if (failed) {
       throw failure;
     }
-  }
-
-  // normally triggered by the host when the document line count changes
-  public applyDocumentChange(
-    textDocument: TextDocument<'file', LAnnotation>,
-    newLineAnnotations?: LineAnnotation<LAnnotation>[]
-  ): void {
-    const editSessionFile = this.editSession?.file;
-    if (editSessionFile == null) {
-      throw new Error(
-        'File.applyDocumentChange: requires an active edit session'
-      );
-    }
-    this.fileRenderer.beginEditSession(editSessionFile);
-    this.fileRenderer.applyDocumentChange(textDocument);
-    if (newLineAnnotations != null) {
-      this.syncEditSessionAnnotationsFromEditor(newLineAnnotations);
-    }
-  }
-
-  /** Update the session source without editor DOM, then rehighlight on return. */
-  public applySuspendedDocumentChange(
-    textDocument: TextDocument<'file', LAnnotation>,
-    newLineAnnotations?: LineAnnotation<LAnnotation>[]
-  ): void {
-    if (this.editSession == null) {
-      return;
-    }
-    this.applyDocumentChange(textDocument, newLineAnnotations);
-    this.fileRenderer.clearRenderCache();
-  }
-
-  /** Files have no word diff highlights, so the editor draws plain tokens. */
-  public getRedrawnRowHTML(
-    _lineIndex: number,
-    _lineElement: HTMLElement
-  ): undefined {
-    return undefined;
-  }
-
-  public updateRenderCache(
-    dirtyLines: Map<number, Array<HighlightedToken>>,
-    themeType: 'dark' | 'light',
-    options?: {
-      lineCountChangeInFlight?: boolean;
-    }
-  ): boolean {
-    const editSessionFile = this.editSession?.file;
-    if (editSessionFile == null) {
-      throw new Error(
-        'File.updateRenderCache: requires an active edit session'
-      );
-    }
-    this.fileRenderer.beginEditSession(editSessionFile);
-    this.fileRenderer.updateRenderCache(
-      dirtyLines,
-      themeType,
-      options?.lineCountChangeInFlight
-    );
-    // Updating a file's cache never renders its rows again.
-    return false;
   }
 
   public render({
@@ -1282,7 +1261,6 @@ export class File<LAnnotation = undefined, Caret = undefined> {
 
     const { collapsed = false, themeType = 'system' } = this.options;
     const nextRenderRange = collapsed ? undefined : renderRange;
-    const previousRenderRange = this.renderRange;
     const themeChanged = this.hasThemeChanged();
     const annotationsChanged =
       lineAnnotations != null &&
@@ -1383,62 +1361,45 @@ export class File<LAnnotation = undefined, Caret = undefined> {
       return true;
     }
 
-    this.editor?.__prepareRender(nextRenderRange);
+    const finishedTokens = this.editor?.__prepareRender(nextRenderRange);
+    if (finishedTokens != null) {
+      this.fileRenderer.setTokens(finishedTokens);
+    }
     try {
       const pre = this.getOrCreatePreNode(fileContainer);
-      let renderedFile = this.getRenderedFile();
-      if (
-        !this.canPartiallyRender(
-          forceRender,
-          annotationsChanged,
-          didFileChange ||
-            themeChanged ||
-            !areFileTargetsEqual(this.getRenderedFile(), workingFile)
-        ) ||
-        !this.applyPartialRender(
-          workingFile,
-          previousRenderRange,
-          nextRenderRange
-        )
-      ) {
-        const fileResult = this.fileRenderer.renderFile(
-          workingFile,
-          nextRenderRange
-        );
-        if (fileResult == null) {
-          if (
-            this.workerManager?.isInitialized() === false &&
-            this.workerManager.isWorkingPool()
-          ) {
-            void this.workerManager
-              .initialize()
-              .catch(() => {})
-              .then(() => this.rerender());
-          }
-          return false;
+      const fileResult = this.fileRenderer.renderFile(
+        workingFile,
+        nextRenderRange
+      );
+      if (fileResult == null) {
+        if (
+          this.workerManager?.isInitialized() === false &&
+          this.workerManager.isWorkingPool()
+        ) {
+          void this.workerManager
+            .initialize()
+            .catch(() => {})
+            .then(() => this.rerender());
         }
-        this.applyThemeState(
-          fileContainer,
-          fileResult.themeStyles,
-          themeType,
-          fileResult.baseThemeType
-        );
-        if (fileResult.headerAST != null) {
-          this.applyHeaderToDOM(
-            fileResult.headerAST,
-            fileContainer,
-            fileResult.file
-          );
-        }
-        this.applyFullRender(fileResult, pre);
-        renderedFile = fileResult.file;
+        return false;
       }
-
+      this.applyThemeState(
+        fileContainer,
+        fileResult.themeStyles,
+        themeType,
+        fileResult.baseThemeType
+      );
+      if (fileResult.headerAST != null) {
+        this.applyHeaderToDOM(
+          fileResult.headerAST,
+          fileContainer,
+          fileResult.file
+        );
+      }
+      this.applyRowsToDOM(fileResult, pre);
       this.applyBuffers(pre, nextRenderRange);
       this.injectUnsafeCSS();
-      if (renderedFile != null) {
-        this.adoptRenderData(renderedFile);
-      }
+      this.adoptRenderData(fileResult.file);
       this.renderAnnotations();
       this.renderGutterUtility();
 
@@ -1526,17 +1487,6 @@ export class File<LAnnotation = undefined, Caret = undefined> {
     this.gutterUtilityContent = undefined;
   }
 
-  private canPartiallyRender(
-    forceRender: boolean,
-    annotationsChanged: boolean,
-    didContentChange: boolean
-  ): boolean {
-    if (forceRender || annotationsChanged || didContentChange) {
-      return false;
-    }
-    return true;
-  }
-
   public renderPlaceholder(height: number): boolean {
     if (this.fileContainer == null) {
       return false;
@@ -1578,8 +1528,7 @@ export class File<LAnnotation = undefined, Caret = undefined> {
     }
     const tokenizeMaxLength =
       this.options.tokenizeMaxLength ?? DEFAULT_TOKENIZE_MAX_LENGTH;
-    const lines = this.fileRenderer.getOrCreateLineCache(file);
-    if (lines.length > tokenizeMaxLength) {
+    if (this.fileRenderer.getLineCount(file) > tokenizeMaxLength) {
       return;
     }
 
@@ -1809,145 +1758,84 @@ export class File<LAnnotation = undefined, Caret = undefined> {
     return this.editor != null && isSafari();
   }
 
-  private applyFullRender(result: FileRenderResult, pre: HTMLPreElement): void {
+  private applyRowsToDOM(result: FileRenderResult, pre: HTMLPreElement): void {
     this.cleanupErrorWrapper();
     this.applyPreNodeAttributes(pre, result);
+    this.changedRowKeys = [];
     const code = (this.code = getOrCreateCodeNode({ code: this.code }));
-    const codeAst = this.fileRenderer.renderCodeAST(result);
     this.editor?.__captureFocusForDOMReplacement();
-    const applyColumns = () => {
-      if (code.childElementCount >= 2) {
-        for (let i = 0; i < 2; i++) {
-          const domEl = code.children[i] as HTMLElement;
-          const astEl = codeAst[i] as HASTElement;
-          domEl.innerHTML = hastToHtml(astEl.children);
-          domEl.style.cssText = astEl.properties.style as string;
-        }
-      } else {
-        code.innerHTML = hastToHtml(codeAst);
-      }
+    const write = () => {
+      this.writeColumn(code, result);
       if (!pre.contains(code)) {
         pre.replaceChildren(code);
       }
     };
     if (this.shouldGuardRebuildScroll()) {
-      guardWebKitScrollDuringRebuild(pre, applyColumns);
+      guardWebKitScrollDuringRebuild(pre, write);
     } else {
-      applyColumns();
+      write();
     }
     this.lastRowCount = result.rowCount;
   }
 
-  private applyPartialRender(
-    file: FileContents,
-    previousRenderRange: RenderRange | undefined,
-    renderRange: RenderRange | undefined
-  ): boolean {
-    if (previousRenderRange == null || renderRange == null) {
-      return false;
-    }
-    const { code } = this;
-    const columns = code != null ? this.getColumns(code) : undefined;
-    if (code == null || columns == null) {
-      return false;
-    }
-
-    const previousStart = previousRenderRange.startingLine;
-    const nextStart = renderRange.startingLine;
-    const previousEnd =
-      previousRenderRange.totalLines === Infinity
-        ? Number.POSITIVE_INFINITY
-        : previousStart + previousRenderRange.totalLines;
-    const nextEnd =
-      renderRange.totalLines === Infinity
-        ? Number.POSITIVE_INFINITY
-        : nextStart + renderRange.totalLines;
-
-    const overlapStart = Math.max(previousStart, nextStart);
-    const overlapEnd = Math.min(previousEnd, nextEnd);
-    if (overlapEnd <= overlapStart) {
-      return false;
-    }
-
-    if (
-      !this.trimDOMToOverlap(columns.gutter, overlapStart, overlapEnd) ||
-      !this.trimDOMToOverlap(columns.content, overlapStart, overlapEnd)
-    ) {
-      throw new Error('File.applyPartialRender: failed to trim to overlap');
-    }
-
-    let { length: rowCount } = columns.content.children;
-
-    const renderChunk = (
-      startingLine: number,
-      totalLines: number
-    ): FileRenderResult | undefined => {
-      if (totalLines <= 0) {
-        return undefined;
-      }
-      return this.fileRenderer.renderFile(file, {
-        startingLine,
-        totalLines,
-        bufferBefore: 0,
-        bufferAfter: 0,
-      });
-    };
-
-    const prependResult =
-      nextStart < overlapStart
-        ? renderChunk(nextStart, overlapStart - nextStart)
-        : undefined;
-    if (prependResult === undefined && nextStart < overlapStart) {
-      return false;
-    }
-
-    const appendTotalLines =
-      nextEnd === Number.POSITIVE_INFINITY
-        ? Number.POSITIVE_INFINITY
-        : Math.max(0, nextEnd - overlapEnd);
-    const appendResult =
-      nextEnd > overlapEnd
-        ? renderChunk(overlapEnd, appendTotalLines)
-        : undefined;
-    if (appendResult === undefined && nextEnd > overlapEnd) {
-      return false;
-    }
-
-    this.cleanupErrorWrapper();
-    if (prependResult != null) {
-      columns.gutter.insertAdjacentHTML(
-        'afterbegin',
-        this.fileRenderer.renderPartialHTML(prependResult.gutterAST)
-      );
-      columns.content.insertAdjacentHTML(
-        'afterbegin',
-        this.fileRenderer.renderPartialHTML(prependResult.contentAST)
-      );
-      rowCount += prependResult.rowCount;
-    }
-
-    if (appendResult != null) {
-      columns.gutter.insertAdjacentHTML(
-        'beforeend',
-        this.fileRenderer.renderPartialHTML(appendResult.gutterAST)
-      );
-      columns.content.insertAdjacentHTML(
-        'beforeend',
-        this.fileRenderer.renderPartialHTML(appendResult.contentAST)
-      );
-      rowCount += appendResult.rowCount;
-    }
-
-    if (this.lastRowCount !== rowCount) {
+  // Writes the window's rows into the code element. The first write creates
+  // the gutter and content elements and fills them. Later writes patch rows
+  // by key, so rows that stayed keep their elements, as does the content
+  // element the editor focuses. A new highlight result rewrites every row.
+  // The keys of the rows written are kept for the editor to re-measure.
+  private writeColumn(
+    code: HTMLElement,
+    { column: specs, rowCount, allRowsChanged }: FileRenderResult
+  ): void {
+    let columns = this.getColumnPair(code);
+    if (columns == null) {
+      columns = this.createColumns(code, rowCount);
+    } else if (rowCount !== this.lastRowCount) {
       columns.gutter.style.setProperty('grid-row', `span ${rowCount}`);
       columns.content.style.setProperty('grid-row', `span ${rowCount}`);
-      this.lastRowCount = rowCount;
     }
-
-    return true;
+    let reconciler = this.columnReconcilers.get(code);
+    if (reconciler == null) {
+      reconciler = new ColumnReconciler(columns.gutter, columns.content);
+      this.columnReconcilers.set(code, reconciler);
+      // Rows already in the column, such as server-rendered markup, stand in
+      // for the specs by position until the reconcile below corrects them.
+      if (!allRowsChanged && columns.content.childElementCount > 0) {
+        reconciler.adopt(specs);
+      }
+    }
+    if (allRowsChanged) {
+      reconciler.replaceAll(specs);
+      for (const spec of specs) {
+        this.changedRowKeys.push(spec.key);
+      }
+    } else {
+      const { changed } = reconciler.reconcile(specs);
+      for (const key of changed) {
+        this.changedRowKeys.push(key);
+      }
+    }
   }
 
-  private getColumns(code: HTMLElement): ColumnElements | undefined {
+  // Whether the code element on screen was written by this instance, so its
+  // rows can be patched by key.
+  private columnsWritten(): boolean {
+    const { code } = this;
+    return code == null || this.columnReconcilers.has(code);
+  }
+
+  private createColumns(code: HTMLElement, rowCount: number): ColumnElements {
+    const gutter = createGutterWrapper();
+    gutter.properties.style = `grid-row: span ${rowCount}`;
+    code.innerHTML = hastToHtml([gutter, createContentColumn([], rowCount)]);
+    const columns = this.getColumnPair(code);
+    if (columns == null) {
+      throw new Error('File.createColumns: the columns did not parse');
+    }
+    return columns;
+  }
+
+  private getColumnPair(code: HTMLElement): ColumnElements | undefined {
     const gutter = code.children[0];
     const content = code.children[1];
     if (
@@ -1959,88 +1847,6 @@ export class File<LAnnotation = undefined, Caret = undefined> {
       return undefined;
     }
     return { gutter, content };
-  }
-
-  private trimDOMToOverlap(
-    container: HTMLElement,
-    overlapStart: number,
-    overlapEnd: number
-  ): boolean {
-    const boundaryIndices = this.getDOMBoundaryIndices(container, [
-      overlapStart,
-      overlapEnd,
-    ]);
-    const startIndex =
-      boundaryIndices.get(overlapStart) ?? container.children.length;
-    const endIndex =
-      boundaryIndices.get(overlapEnd) ?? container.children.length;
-
-    if (startIndex > endIndex) {
-      return false;
-    }
-
-    for (let i = container.children.length - 1; i >= endIndex; i -= 1) {
-      container.children[i]?.remove();
-    }
-    for (let i = startIndex - 1; i >= 0; i -= 1) {
-      container.children[i]?.remove();
-    }
-    return true;
-  }
-
-  private getDOMBoundaryIndices(
-    container: HTMLElement,
-    boundaries: number[]
-  ): Map<number, number> {
-    const sortedBoundaries = [...new Set(boundaries)].sort((a, b) => a - b);
-    const boundaryIndices = new Map<number, number>();
-    if (sortedBoundaries.length === 0) {
-      return boundaryIndices;
-    }
-    let boundaryIndex = 0;
-    let nextBoundary = sortedBoundaries[boundaryIndex];
-    const { children } = container;
-
-    if (nextBoundary === 0) {
-      boundaryIndices.set(0, 0);
-      boundaryIndex += 1;
-      nextBoundary = sortedBoundaries[boundaryIndex];
-    }
-
-    for (let i = 0; i < children.length; i += 1) {
-      const child = children[i];
-      if (!(child instanceof HTMLElement)) {
-        continue;
-      }
-      const lineIndex = this.getLineIndexFromDOMNode(child);
-      if (lineIndex == null) {
-        continue;
-      }
-      while (nextBoundary != null && lineIndex >= nextBoundary) {
-        boundaryIndices.set(nextBoundary, i);
-        boundaryIndex += 1;
-        nextBoundary = sortedBoundaries[boundaryIndex];
-      }
-      if (boundaryIndex >= sortedBoundaries.length) {
-        break;
-      }
-    }
-
-    for (const boundary of sortedBoundaries) {
-      if (!boundaryIndices.has(boundary)) {
-        boundaryIndices.set(boundary, children.length);
-      }
-    }
-    return boundaryIndices;
-  }
-
-  private getLineIndexFromDOMNode(node: HTMLElement): number | undefined {
-    const lineIndexAttr = node.dataset.lineIndex;
-    if (lineIndexAttr == null) {
-      return undefined;
-    }
-    const parsed = Number(lineIndexAttr);
-    return Number.isNaN(parsed) ? undefined : parsed;
   }
 
   private applyBuffers(

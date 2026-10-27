@@ -7,7 +7,7 @@ import type {
   HunkExpansionRegion,
 } from '../types';
 import { cloneHunks } from '../utils/cloneFileDiffMetadata';
-import { linesFromFileContents } from '../utils/computeFileOffsets';
+import { countLineBreaks } from '../utils/computeFileOffsets';
 import {
   applySessionChangedLines,
   captureExpansionAnchors,
@@ -24,7 +24,8 @@ import {
   recomputeTopAlignedAdditionDiff,
   shouldTopAlignAdditionRecompute,
 } from '../utils/updateDiffHunks';
-import { countLineBreaks, LineMap } from './LineMap';
+import { readAllLines, readChangedLines } from './documentLines';
+import { LineMap } from './LineMap';
 import type {
   DiffModelChange,
   DiffSide,
@@ -178,6 +179,11 @@ export class DiffModel {
   /** A stable id for a new-file line while editing; the index otherwise. */
   lineId(line: number): number {
     return this.#lines?.idAt(line) ?? line;
+  }
+
+  /** The text of a new-file line, with its line break. */
+  lineText(line: number): string {
+    return this.diff.additionLines[line] ?? '';
   }
 
   /** The new-file line that has this id, or undefined once it was deleted. */
@@ -504,56 +510,6 @@ function canAppendFinalDocumentRow(
     documentLineCount === additionLines.length + 1 &&
     additionLines.at(-1)?.endsWith('\n') === true
   );
-}
-
-// The current text of every line an edit touched, by line, including lines
-// the editor's window does not show.
-function readChangedLines(
-  document: DocumentLines,
-  change: DocumentLineChange
-): Map<number, string> {
-  const ranges =
-    change.changedLineChanges?.some(([, , lineDelta]) => lineDelta !== 0) ===
-    true
-      ? [[change.startLine, change.endLine] as const]
-      : change.changedLineRanges;
-  const lines = new Map<number, string>();
-  for (const [start, end] of ranges) {
-    const last = Math.min(end, document.lineCount - 1);
-    if (last < start) continue;
-    if (last === start) {
-      lines.set(start, document.getLineText(start, true));
-      continue;
-    }
-    const endPosition =
-      last + 1 < document.lineCount
-        ? { line: last + 1, character: 0 }
-        : { line: last, character: document.getLineText(last).length };
-    const contents = document.getText({
-      start: { line: start, character: 0 },
-      end: endPosition,
-    });
-    const rangeLines = linesFromFileContents(contents);
-    for (let line = start; line <= last; line++) {
-      lines.set(line, rangeLines[line - start]);
-    }
-  }
-  return lines;
-}
-
-// Every document line with its line break, plus their total length.
-function readAllLines(document: DocumentLines): {
-  lines: string[];
-  characterCount: number;
-} {
-  const lines: string[] = [];
-  let characterCount = 0;
-  for (let line = 0; line < document.lineCount; line++) {
-    const text = document.getLineText(line, true);
-    lines.push(text);
-    characterCount += text.length;
-  }
-  return { lines, characterCount };
 }
 
 // The expansion after a change that moved or replaced regions; unchanged when

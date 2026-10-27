@@ -10,6 +10,7 @@ import type { TextDocumentChange } from '../editor/textDocument';
 import { debounce } from '../editor/utils';
 import type { HighlightedToken, RenderRange } from '../types';
 import type { DiffsEditorTokenizer } from './DiffsEditorTokenizer';
+import { lineAfterChange, lineRangesAfterChange } from './linesAfterChange';
 import type { DiffsEditorTokenizerOptions } from './tokenizer-types';
 import type { DiffsHighlighter } from './types';
 
@@ -42,6 +43,12 @@ export class ShikiEditorTokenizer implements DiffsEditorTokenizer {
   #tokenizerId = ++nextTokenizerId;
   #backgroundPrebuildEndLine = -1;
   #pendingPrebuildEndLine = -1;
+  // Lines that still need coloring because an edit stopped the background
+  // job before it got to them. The next edit picks them up again.
+  #unfinishedRanges: readonly [number, number][] = [];
+  // Lines a bracket read colored for a pending job, waiting for the read's
+  // caller to return before they are delivered.
+  #pendingDelivery: Map<number, HighlightedToken[]> | undefined;
   #backgroundChangedLineRanges: readonly [number, number][] | undefined;
   #backgroundChangedRangeIndex: number = 0;
   #bracketIgnoredRanges: ([number, number][] | null | undefined)[] = [];
@@ -111,10 +118,21 @@ export class ShikiEditorTokenizer implements DiffsEditorTokenizer {
       return null;
     }
     if (this.#bracketIgnoredRanges[lineIndex] === undefined) {
-      this.#buildStateStack(lineIndex);
-      const state = this.#stateStack[lineIndex] ?? INITIAL;
-      const result = this.#tokenizeLineAt(lineIndex, state);
-      this.#stateStack[lineIndex + 1] = result.state;
+      if (this.#ownsLine(lineIndex)) {
+        // The pending job owns the lines from its next one down. The read
+        // does the job's work up to its line, so the states it needs come
+        // with the tokens the rows need.
+        const run = this.#runJob(lineIndex + 1);
+        this.#queueDelivery(run.lines);
+        if (run.done) {
+          this.#finishBackgroundJob();
+        }
+      } else {
+        this.#buildStateStack(lineIndex);
+        const state = this.#stateStack[lineIndex] ?? INITIAL;
+        const result = this.#tokenizeLineAt(lineIndex, state);
+        this.#stateStack[lineIndex + 1] = result.state;
+      }
     }
     return this.#bracketIgnoredRanges[lineIndex] ?? null;
   }
@@ -145,12 +163,17 @@ export class ShikiEditorTokenizer implements DiffsEditorTokenizer {
     this.#themeName = themeName;
     this.#ensureActiveTheme();
     this.stopBackgroundTokenize();
+    // The new theme's pass covers the whole document.
+    this.#unfinishedRanges = [];
+    this.#pendingDelivery = undefined;
     this.#stateStack = [INITIAL];
     this.#comparisonStateStack = [];
     this.#comparisonStateStackStart = 0;
     this.#comparisonLineChanges = [];
     if (this.#grammar != null && this.#textDocument.lineCount > 0) {
-      this.#scheduleBackgroundTokenize(0);
+      this.#scheduleBackgroundTokenize(0, [
+        [0, this.#textDocument.lineCount - 1],
+      ]);
     }
   }
 
@@ -169,14 +192,15 @@ export class ShikiEditorTokenizer implements DiffsEditorTokenizer {
   dispose(): void {
     this.#isCleanedUp = true;
     this.stopBackgroundTokenize();
+    this.#unfinishedRanges = [];
+    this.#pendingDelivery = undefined;
     this.#detachMessageListener();
   }
 
   // Prebuild viewport state with prebuildStateStack before the first edit.
   tokenize(
     change: TextDocumentChange,
-    renderRange?: RenderRange,
-    hostRealignsRows = false
+    renderRange?: RenderRange
   ): Map<number, Array<HighlightedToken>> {
     this.#ensureGrammar();
     this.#ensureActiveTheme();
@@ -196,6 +220,26 @@ export class ShikiEditorTokenizer implements DiffsEditorTokenizer {
         ? lineCount
         : Math.min(startingLine + totalLines, lineCount);
 
+    // Lines a stopped background job never reached, renumbered through this
+    // edit. The ones above the edit are colored below, before the edit's own
+    // lines; the job scheduled at the end takes the rest.
+    this.#unfinishedRanges = lineRangesAfterChange(
+      this.#unfinishedRanges,
+      change
+    );
+    // Lines a bracket read colored still wait to be handed over; they ride
+    // with this edit, renumbered. Lines the edit rewrote are lexed again.
+    const dirtyLines: Map<number, Array<HighlightedToken>> = new Map();
+    const pending = this.#pendingDelivery;
+    this.#pendingDelivery = undefined;
+    if (pending != null) {
+      for (const [line, tokens] of pending) {
+        const moved = lineAfterChange(line, change);
+        if (moved != null) dirtyLines.set(moved, tokens);
+      }
+    }
+    const changedLineRanges: readonly [number, number][] =
+      change.changedLineRanges ?? [[change.startLine, change.endLine]];
     const dirtyStart = change.startLine;
     const viewStart = Math.max(startingLine, dirtyStart);
     const crossesRenderRangeEnd =
@@ -215,12 +259,13 @@ export class ShikiEditorTokenizer implements DiffsEditorTokenizer {
         change.startLine
       );
     }
+    // Rows are keyed by line, so after an edit that moved lines the states
+    // below it compare against their old positions and tokenizing stops once
+    // they match again.
     const canReuseShiftedStates =
-      hostRealignsRows && change.lineDelta !== 0 && dirtyStart >= startingLine;
+      !canReuseCachedStates && dirtyStart >= startingLine;
     const canCacheTokenizedStates =
       canReuseCachedStates || renderRange == null || dirtyStart >= viewStart;
-    const changedLineRanges: readonly [number, number][] =
-      change.changedLineRanges ?? [[dirtyStart, change.endLine]];
     this.#comparisonStateStack = [];
     this.#comparisonStateStackStart = 0;
     this.#comparisonLineChanges = [];
@@ -238,14 +283,10 @@ export class ShikiEditorTokenizer implements DiffsEditorTokenizer {
     const shouldFlushOffscreenLines =
       offscreenSyncEnd >= dirtyStart &&
       (canReuseCachedStates || change.lineDelta < 0);
-    if (canReuseCachedStates) {
-      this.#buildStateStack(dirtyStart);
-    } else {
+    if (!canReuseCachedStates) {
       this.#shiftComparisonStateStack(change);
-      if (renderRange == null || dirtyStart >= viewStart) {
-        this.#buildStateStack(viewStart);
-      }
     }
+    this.#colorOwedLinesAbove(dirtyStart, dirtyLines);
 
     let changedRangeIndex = 0;
     let currentChangedRangeEnd = changedLineRanges[changedRangeIndex][1];
@@ -255,7 +296,6 @@ export class ShikiEditorTokenizer implements DiffsEditorTokenizer {
       ? changedLineRanges[changedRangeIndex][0]
       : viewStart;
     let settled = false;
-    const dirtyLines: Map<number, Array<HighlightedToken>> = new Map();
     const offscreenDirtyLines:
       | Map<number, Array<HighlightedToken>>
       | undefined = shouldFlushOffscreenLines ? new Map() : undefined;
@@ -266,8 +306,8 @@ export class ShikiEditorTokenizer implements DiffsEditorTokenizer {
         renderRangeEndLine
       );
       if (offscreenEnd > dirtyStart) {
-        this.#buildStateStack(offscreenEnd);
         let offscreenLine = dirtyStart;
+        this.#buildStateStack(offscreenLine);
         let offscreenState = this.#stateStack[offscreenLine] ?? INITIAL;
         for (; offscreenLine < offscreenEnd; offscreenLine++) {
           const resolved = this.#tokenizeLineAt(offscreenLine, offscreenState);
@@ -279,6 +319,15 @@ export class ShikiEditorTokenizer implements DiffsEditorTokenizer {
     }
     // Read state after the offscreen flush; a deletion may have invalidated
     // the viewport's starting state inside a block comment or template literal.
+    // An edit above the window that added lines starts the window from the
+    // state it has, which the background job from the edit then corrects.
+    if (
+      canReuseCachedStates ||
+      renderRange == null ||
+      dirtyStart >= viewStart
+    ) {
+      this.#buildStateStack(line);
+    }
     let state = this.#stateStack[line] ?? INITIAL;
     for (; line < renderRangeEndLine; ) {
       const previousNextState = canReuseCachedStates
@@ -316,11 +365,8 @@ export class ShikiEditorTokenizer implements DiffsEditorTokenizer {
         if (nextRange == null) {
           break;
         }
-        if (nextRange[0] >= renderRangeEndLine) {
-          backgroundStartLine = nextRange[0];
-          backgroundChangedRangeIndex = changedRangeIndex;
-          break;
-        }
+        // The lines up to the next range kept their states, shifted; the
+        // next range starts from them, in this pass or in the background.
         let nextState: StateStack | undefined = this.#stateStack[nextRange[0]];
         if (canReuseShiftedStates) {
           for (
@@ -334,6 +380,11 @@ export class ShikiEditorTokenizer implements DiffsEditorTokenizer {
             }
             this.#stateStack[stateLine] = nextState;
           }
+        }
+        if (nextRange[0] >= renderRangeEndLine) {
+          backgroundStartLine = nextRange[0];
+          backgroundChangedRangeIndex = changedRangeIndex;
+          break;
         }
         if (nextState == null) {
           currentChangedRangeEnd = nextRange[1];
@@ -370,18 +421,20 @@ export class ShikiEditorTokenizer implements DiffsEditorTokenizer {
       this.#comparisonLineChanges = [];
     }
 
-    if (offscreenDirtyLines != null && offscreenDirtyLines.size > 0) {
-      this.#onDeferTokenize(offscreenDirtyLines);
+    // Lines above the window ride with the edit too, so the component applies
+    // them against the document the edit produced.
+    if (offscreenDirtyLines != null) {
+      for (const [line, tokens] of offscreenDirtyLines) {
+        dirtyLines.set(line, tokens);
+      }
     }
 
+    // The job takes the lines this edit left to it, from where the pass above
+    // stopped through the ranges it did not reach, and the unfinished ranges
+    // of the job it interrupted.
+    let left: readonly [number, number][] = [];
     if (backgroundStartLine != null) {
-      if (this.#matchBrackets && canReuseCachedStates) {
-        this.#bracketIgnoredRanges.length = Math.min(
-          this.#bracketIgnoredRanges.length,
-          backgroundStartLine
-        );
-      }
-      this.#scheduleBackgroundTokenize(
+      left = remainingRanges(
         backgroundStartLine,
         changedLineRanges,
         backgroundChangedRangeIndex
@@ -393,17 +446,23 @@ export class ShikiEditorTokenizer implements DiffsEditorTokenizer {
           : dirtyStart < viewStart && !canReuseCachedStates
             ? dirtyStart
             : line;
-      if (this.#matchBrackets && canReuseCachedStates) {
-        this.#bracketIgnoredRanges.length = Math.min(
-          this.#bracketIgnoredRanges.length,
-          backgroundLine
-        );
-      }
-      this.#scheduleBackgroundTokenize(
+      left = remainingRanges(
         backgroundLine,
         changedLineRanges,
         changedRangeIndex
       );
+    }
+    const jobRanges = mergeLineRanges(left, this.#unfinishedRanges);
+    this.#unfinishedRanges = [];
+    if (jobRanges.length > 0) {
+      const jobStart = jobRanges[0][0];
+      if (this.#matchBrackets && canReuseCachedStates) {
+        this.#bracketIgnoredRanges.length = Math.min(
+          this.#bracketIgnoredRanges.length,
+          jobStart
+        );
+      }
+      this.#scheduleBackgroundTokenize(jobStart, jobRanges);
     }
 
     return dirtyLines;
@@ -424,6 +483,19 @@ export class ShikiEditorTokenizer implements DiffsEditorTokenizer {
     if (this.#isStopped) {
       return;
     }
+    // A job with lines still to color keeps them for the next edit. A
+    // finished job, and a state prebuild, leave nothing.
+    const ranges = this.#backgroundChangedLineRanges;
+    if (ranges != null && this.#lastLine >= 0) {
+      this.#unfinishedRanges = mergeLineRanges(
+        this.#unfinishedRanges,
+        remainingRanges(
+          this.#lastLine,
+          ranges,
+          this.#backgroundChangedRangeIndex
+        )
+      );
+    }
     this.#isStopped = true;
     this.#isPaused = false;
     this.#lastLine = -1;
@@ -434,6 +506,12 @@ export class ShikiEditorTokenizer implements DiffsEditorTokenizer {
     this.#comparisonStateStackStart = 0;
     this.#comparisonLineChanges = [];
     this.#detachMessageListener();
+  }
+
+  // Ends a job that reached every line it was given.
+  #finishBackgroundJob(): void {
+    this.#lastLine = -1;
+    this.stopBackgroundTokenize();
   }
 
   pauseBackgroundTokenize(): void {
@@ -525,6 +603,18 @@ export class ShikiEditorTokenizer implements DiffsEditorTokenizer {
       });
     }
 
+    this.#startJob(startLine, changedLineRanges, changedRangeIndex);
+    this.#attachMessageListener();
+    this.#postTokenizeMessage(jobId);
+  }
+
+  // Makes a job of the lines from `startLine` through `changedLineRanges`
+  // the pending one, without running it.
+  #startJob(
+    startLine: number,
+    changedLineRanges: readonly [number, number][] | undefined,
+    changedRangeIndex: number
+  ): void {
     this.#isStopped = false;
     this.#isPaused = false;
     this.#lastLine = startLine;
@@ -537,8 +627,6 @@ export class ShikiEditorTokenizer implements DiffsEditorTokenizer {
     this.#backgroundPrebuildEndLine = -1;
     this.#backgroundChangedLineRanges = changedLineRanges;
     this.#backgroundChangedRangeIndex = changedRangeIndex;
-    this.#attachMessageListener();
-    this.#postTokenizeMessage(jobId);
   }
 
   #scheduleStatePrebuild(endLine: number): void {
@@ -637,7 +725,15 @@ export class ShikiEditorTokenizer implements DiffsEditorTokenizer {
     this.#comparisonLineChanges = lineChanges;
   }
 
+  // The state line `line` started from when its row was last colored, or
+  // undefined when that is not known. After an edit that moved lines it comes
+  // from the states kept aside, by the line's old number; a state this edit
+  // stored is never the answer, since the rows below it still show the old
+  // colors.
   #getPreviousEndState(line: number): StateStack | undefined {
+    if (this.#comparisonLineChanges.length === 0) {
+      return this.#stateStack[line];
+    }
     let previousLine = line;
     for (
       let index = this.#comparisonLineChanges.length - 1;
@@ -655,13 +751,100 @@ export class ShikiEditorTokenizer implements DiffsEditorTokenizer {
         return this.#stateStack[line];
       }
     }
+    if (previousLine < this.#comparisonStateStackStart) {
+      return this.#stateStack[line];
+    }
+    return this.#comparisonStateStack[
+      previousLine - this.#comparisonStateStackStart
+    ];
+  }
+
+  // Whether a pending job still has to color `line`: the job's next line and
+  // everything below it show colors from before the edit that started it.
+  #ownsLine(line: number): boolean {
     return (
-      this.#comparisonStateStack[
-        previousLine - this.#comparisonStateStackStart
-      ] ?? this.#stateStack[line]
+      !this.#isStopped &&
+      this.#backgroundPrebuildEndLine < 0 &&
+      this.#lastLine >= 0 &&
+      line >= this.#lastLine
     );
   }
 
+  // Colors the lines an interrupted job left above `until` now, into
+  // `lines`, so the states the edit starts from are current. What lies below
+  // stays for the job scheduled after the edit.
+  #colorOwedLinesAbove(
+    until: number,
+    lines: Map<number, HighlightedToken[]>
+  ): void {
+    const owed = this.#unfinishedRanges;
+    if (owed.length === 0 || owed[0][0] >= until || this.#grammar == null) {
+      return;
+    }
+    this.#startJob(owed[0][0], owed, 0);
+    const run = this.#runJob(until);
+    for (const [line, tokens] of run.lines) lines.set(line, tokens);
+    this.#unfinishedRanges = run.done
+      ? []
+      : remainingRanges(
+          this.#lastLine,
+          owed,
+          this.#backgroundChangedRangeIndex
+        );
+    this.#isStopped = true;
+    this.#lastLine = -1;
+    this.#backgroundChangedLineRanges = undefined;
+    this.#backgroundChangedRangeIndex = 0;
+  }
+
+  // Delivers lines colored inside a bracket read once its caller has
+  // returned, since the read runs inside the editor's own event handling.
+  #queueDelivery(lines: Map<number, HighlightedToken[]>): void {
+    if (lines.size === 0) return;
+    const pending = this.#pendingDelivery;
+    if (pending != null) {
+      for (const [line, tokens] of lines) pending.set(line, tokens);
+      return;
+    }
+    this.#pendingDelivery = lines;
+    queueMicrotask(() => {
+      const batch = this.#pendingDelivery;
+      this.#pendingDelivery = undefined;
+      if (batch != null && batch.size > 0 && !this.#isCleanedUp) {
+        this.#onDeferTokenize(batch);
+      }
+    });
+  }
+
+  // Lexes a line for its end state alone.
+  #lexState(line: number, state: StateStack): StateStack {
+    const lineText = this.#textDocument.getLineText(line);
+    if (
+      this.#grammar == null ||
+      lineText.length >= this.#tokenizeMaxLineLength ||
+      lineText === '' ||
+      lineText.trim() === ''
+    ) {
+      this.#cacheBracketIgnoredRanges(line, null);
+      return state;
+    }
+    const result = tokenizeLine(
+      this.#grammar,
+      this.#colorMap,
+      lineText,
+      state,
+      TOKENIZE_TIME_LIMIT,
+      this.#matchBrackets,
+      false
+    );
+    this.#cacheBracketIgnoredRanges(line, result.bracketIgnoredRanges);
+    return result.ruleStack;
+  }
+
+  // Stores the states up to `endAt`, lexing the lines past the last stored
+  // one. Those lines were never colored since the last edit above them, so
+  // the rows show them as the highlight result does, which these states
+  // describe. Returns whether the stored states reach `endAt`.
   #buildStateStack(endAt: number, timeBudget?: number): boolean {
     const boundedEndAt = Math.min(
       Math.max(0, endAt),
@@ -675,26 +858,7 @@ export class ShikiEditorTokenizer implements DiffsEditorTokenizer {
     let state = this.#stateStack[line] ?? INITIAL;
     while (line < boundedEndAt) {
       this.#stateStack[line] = state;
-      const lineText = this.#textDocument.getLineText(line);
-      if (
-        lineText.length < this.#tokenizeMaxLineLength &&
-        lineText !== '' &&
-        lineText.trim() !== ''
-      ) {
-        const result = tokenizeLine(
-          this.#grammar,
-          this.#colorMap,
-          lineText,
-          state,
-          TOKENIZE_TIME_LIMIT,
-          this.#matchBrackets,
-          false
-        );
-        this.#cacheBracketIgnoredRanges(line, result.bracketIgnoredRanges);
-        state = result.ruleStack;
-      } else {
-        this.#cacheBracketIgnoredRanges(line, null);
-      }
+      state = this.#lexState(line, state);
       line++;
       this.#stateStack[line] = state;
       if (timeBudget != null && performance.now() - startedAt > timeBudget) {
@@ -722,7 +886,7 @@ export class ShikiEditorTokenizer implements DiffsEditorTokenizer {
       return;
     }
     if (complete) {
-      this.stopBackgroundTokenize();
+      this.#finishBackgroundJob();
       return;
     }
     this.#lastLine = this.#stateStack.length - 1;
@@ -740,10 +904,33 @@ export class ShikiEditorTokenizer implements DiffsEditorTokenizer {
     }
 
     this.#ensureActiveTheme();
+    const run = this.#runJob(this.#textDocument.lineCount, 1);
+    this.#onDeferTokenize(run.lines);
+    if (this.#isStopped || this.#isPaused || jobId !== this.#backgroundJobId) {
+      return;
+    }
+    if (run.done) {
+      const pendingPrebuildEndLine = this.#pendingPrebuildEndLine;
+      this.#finishBackgroundJob();
+      if (pendingPrebuildEndLine >= 0) {
+        this.#scheduleStatePrebuild(pendingPrebuildEndLine);
+      }
+      return;
+    }
+    this.#postTokenizeMessage(jobId);
+  }
 
-    const t = performance.now();
+ // Runs the pending job from its next line: colors each line, stores its
+  // state, and moves on until every range settles, `until` is reached, or
+  // the time budget runs out. Returns the lines colored and whether the job
+  // is done; otherwise the job's next line is where this run stopped.
+  #runJob(
+    until: number,
+    budgetMs?: number
+  ): { lines: Map<number, HighlightedToken[]>; done: boolean } {
+    const startedAt = budgetMs == null ? 0 : performance.now();
     const lines = new Map<number, Array<HighlightedToken>>();
-    const totalLines = this.#textDocument.lineCount;
+    const end = Math.min(until, this.#textDocument.lineCount);
     const changedLineRanges = this.#backgroundChangedLineRanges;
 
     let line = this.#lastLine;
@@ -751,7 +938,7 @@ export class ShikiEditorTokenizer implements DiffsEditorTokenizer {
     let settled = false;
     let changedRangeIndex = this.#backgroundChangedRangeIndex;
     let currentChangedRangeEnd = changedLineRanges?.[changedRangeIndex]?.[1];
-    for (; line < totalLines; ) {
+    for (; line < end; ) {
       this.#stateStack[line] = state;
 
       const previousNextState =
@@ -786,29 +973,15 @@ export class ShikiEditorTokenizer implements DiffsEditorTokenizer {
         }
       }
 
-      // limit the time of partial tokenize to 1ms
-      if (performance.now() - t > 1) {
+      if (budgetMs != null && performance.now() - startedAt > budgetMs) {
         break;
       }
     }
 
-    this.#onDeferTokenize(lines);
-    if (this.#isStopped || this.#isPaused || jobId !== this.#backgroundJobId) {
-      return;
-    }
-
-    if (settled || line >= totalLines) {
-      const pendingPrebuildEndLine = this.#pendingPrebuildEndLine;
-      this.stopBackgroundTokenize();
-      if (pendingPrebuildEndLine >= 0) {
-        this.#scheduleStatePrebuild(pendingPrebuildEndLine);
-      }
-      return;
-    }
-
+    const done = settled || line >= this.#textDocument.lineCount;
     this.#lastLine = line;
     this.#backgroundChangedRangeIndex = changedRangeIndex;
-    this.#postTokenizeMessage(jobId);
+    return { lines, done };
   }
 }
 
@@ -876,4 +1049,39 @@ function tokenizeLine(
 // Shiki special-cases `text` and `ansi` in codeToHast but does not expose grammars.
 function isGrammarlessLanguage(languageId: string): boolean {
   return languageId === 'text' || languageId === 'ansi';
+}
+
+// The ranges a job still has to color when it is at `line` in the range at
+// `index`: the rest of that range, or `line` alone when the job is past its
+// end and looking for the point where the states match again, and every
+// range after it.
+function remainingRanges(
+  line: number,
+  ranges: readonly [number, number][],
+  index: number
+): readonly [number, number][] {
+  const end = ranges[index]?.[1] ?? line;
+  return [[line, Math.max(line, end)], ...ranges.slice(index + 1)];
+}
+
+// The union of two sorted lists of line ranges, sorted, with touching and
+// overlapping ranges joined.
+function mergeLineRanges(
+  first: readonly [number, number][],
+  second: readonly [number, number][]
+): readonly [number, number][] {
+  if (second.length === 0) {
+    return first;
+  }
+  const sorted = [...first, ...second].sort((a, b) => a[0] - b[0]);
+  const merged: [number, number][] = [];
+  for (const [start, end] of sorted) {
+    const last = merged[merged.length - 1];
+    if (last != null && start <= last[1] + 1) {
+      last[1] = Math.max(last[1], end);
+    } else {
+      merged.push([start, end]);
+    }
+  }
+  return merged;
 }

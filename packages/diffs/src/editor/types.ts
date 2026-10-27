@@ -133,7 +133,7 @@ export type EditorLineAnnotation<
   EType extends EditorType = EditorType,
   LAnnotation = unknown,
 > = EType extends 'file'
-  ? LineAnnotation<LAnnotation> & { side?: never }
+  ? LineAnnotation<LAnnotation>
   : DiffLineAnnotation<LAnnotation>;
 
 /** The document and normalized edits reported after an editor change. */

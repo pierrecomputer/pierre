@@ -65,8 +65,7 @@ describe('EditorTokenizer', () => {
 
   // A single pinned theme carries its own light/dark classification; the
   // themeType option (or a system flip) must not relabel it. A wrong label
-  // flows through updateRenderCache into the render cache's baseThemeType
-  // and flips the surface's effective scheme after the first edit.
+  // would flip the surface's effective scheme after the first edit.
   test('a single pinned theme keeps its own light/dark type', () => {
     const tokenizer = new EditorTokenizer({
       highlighter: createTestHighlighter(),
@@ -546,7 +545,7 @@ describe('EditorTokenizer', () => {
         newText: '\n',
       },
     ])!;
-    const insertedLines = tokenizer.tokenize(insertLine, renderRange, true);
+    const insertedLines = tokenizer.tokenize(insertLine, renderRange);
 
     expect([...insertedLines.keys()]).toEqual([50, 51]);
     expect(tokenizeLineCount).toBe(1);
@@ -561,7 +560,7 @@ describe('EditorTokenizer', () => {
         newText: 'changed ',
       },
     ])!;
-    const editedLines = tokenizer.tokenize(editLowerLine, renderRange, true);
+    const editedLines = tokenizer.tokenize(editLowerLine, renderRange);
 
     expect([...editedLines.keys()]).toEqual([80]);
     expect(tokenizeLineCount).toBe(1);
@@ -587,10 +586,12 @@ describe('EditorTokenizer', () => {
       netZeroChange.changedLineChanges?.map((change) => change[2])
     ).toEqual([1, -1]);
 
-    const netZeroLines = tokenizer.tokenize(netZeroChange, renderRange, true);
-    expect([...netZeroLines.keys()]).toEqual(
-      Array.from({ length: 90 }, (_, index) => index + 10)
-    );
+    // The lines between the two edits only moved. The edited lines tokenize
+    // again, plus the line after the insert, where the state settles.
+    tokenizeLineCount = 0;
+    const netZeroLines = tokenizer.tokenize(netZeroChange, renderRange);
+    expect([...netZeroLines.keys()]).toEqual([10, 11, 21]);
+    expect(tokenizeLineCount).toBe(3);
     tokenizer.cleanUp();
   });
 
@@ -658,9 +659,9 @@ describe('EditorTokenizer', () => {
     const dirtyLines = tokenizer.tokenize(change, renderRange);
 
     expect(change.lineDelta).toBeLessThan(0);
-    expect(dirtyLines.size).toBe(0);
-    expect(offscreenUpdates.at(-1)?.has(0)).toBe(true);
-    expect(offscreenUpdates.at(-1)?.get(0)?.[0]?.[2]).toBe('');
+    // The flushed line rides with the edit instead of being delivered.
+    expect(offscreenUpdates).toHaveLength(0);
+    expect(dirtyLines.get(0)?.[0]?.[2]).toBe('');
   });
 
   test('seeds the viewport from the propagated state when an offscreen delete reaches it', () => {
@@ -1498,8 +1499,10 @@ describe('EditorTokenizer', () => {
     });
 
     expect(tokenizeLineCount).toBe(1);
-    expect(dirtyLines.size).toBe(0);
-    expect(offscreenUpdates.at(-1)?.get(0)?.[0]?.[2]).toBe('LINE 0');
+    // The edited line rides with the edit instead of being delivered.
+    expect([...dirtyLines.keys()]).toEqual([0]);
+    expect(dirtyLines.get(0)?.[0]?.[2]).toBe('LINE 0');
+    expect(offscreenUpdates).toHaveLength(0);
   });
 
   test('ignores queued background messages from stopped jobs', () => {

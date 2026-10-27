@@ -1739,3 +1739,81 @@ describe('malformed numeric position components', () => {
     expect(text).toContain('#');
   });
 });
+
+describe('line deltas at CRLF boundaries', () => {
+  // A `\r` and a `\n` that meet across an edit's boundary make one break,
+  // so the per-edit delta must match the document's line count.
+  test.each([
+    ['a carriage return inserted before a line feed', 'a\nb', 1, 1, '\r'],
+    ['a line feed inserted after a carriage return', 'a\rb', 2, 2, '\n'],
+    ['text inserted inside a CRLF pair', 'a\r\nb', 2, 2, 'x'],
+    ['the line feed of a CRLF pair deleted', 'a\r\nb', 2, 3, ''],
+    ['the carriage return of a CRLF pair deleted', 'a\r\nb', 1, 2, ''],
+  ])('%s', (_name, contents, start, end, text) => {
+    const document = new TextDocument('test.txt', contents, 'text');
+    const before = document.lineCount;
+    const change = document.applyResolvedEdits([{ start, end, text }])!;
+    expect(change.lineDelta).toBe(document.lineCount - before);
+    expect(change.changedLineChanges?.[0][2]).toBe(change.lineDelta);
+    expect(change.changedLineRanges[0][1]).toBeLessThan(document.lineCount);
+  });
+
+  // Edits in one batch that touch share the breaks they form together.
+  test.each([
+    [
+      'a carriage return and a line feed from two touching edits',
+      'abc',
+      [
+        { start: 0, end: 1, text: '\r' },
+        { start: 1, end: 2, text: '\n' },
+      ],
+    ],
+    [
+      'a carriage return left by one edit and a line feed inserted by the next',
+      'a\rbc',
+      [
+        { start: 1, end: 2, text: '\r' },
+        { start: 2, end: 2, text: '\n' },
+      ],
+    ],
+    [
+      'a pair split by one deletion and rejoined by the next insertion',
+      'a\r\nb',
+      [
+        { start: 2, end: 3, text: '' },
+        { start: 3, end: 3, text: '\n' },
+      ],
+    ],
+  ])('%s', (_name, contents, edits) => {
+    const document = new TextDocument('test.txt', contents, 'text');
+    const before = document.lineCount;
+    const change = document.applyResolvedEdits(edits)!;
+    expect(change.lineDelta).toBe(document.lineCount - before);
+    const deltas = change.changedLineChanges?.map(([, , delta]) => delta);
+    expect(deltas?.reduce((sum, delta) => sum + delta, 0)).toBe(
+      change.lineDelta
+    );
+    for (const [start, end] of change.changedLineRanges) {
+      expect(start).toBeLessThanOrEqual(end);
+      expect(end).toBeLessThan(document.lineCount);
+    }
+  });
+
+  // A line whose terminator the edit changes is a changed line too.
+  test('the line before an edit is reported when its terminator changes', () => {
+    const document = new TextDocument('test.txt', 'a\rb', 'text');
+    const joined = document.applyResolvedEdits([
+      { start: 2, end: 2, text: '\n' },
+    ])!;
+    expect(joined.changedLineRanges).toEqual([[0, 1]]);
+    expect(joined.startLine).toBe(0);
+    const split = document.applyResolvedEdits([
+      { start: 2, end: 2, text: 'x' },
+    ])!;
+    expect(split.changedLineRanges).toEqual([[0, 1]]);
+    const unsplit = document.applyResolvedEdits([
+      { start: 2, end: 3, text: '' },
+    ])!;
+    expect(unsplit.changedLineRanges).toEqual([[0, 0]]);
+  });
+});

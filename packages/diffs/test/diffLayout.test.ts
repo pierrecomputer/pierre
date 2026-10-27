@@ -268,19 +268,16 @@ describe('DiffLayout matches processDiffResult', () => {
           maxLineDiffLength: 1000,
         });
         const model = DiffModel.fromDiff(diff);
-        const layout = new DiffLayout(
-          {
-            diffStyle: variant.diffStyle,
-            expandUnchanged: variant.expandUnchanged,
-            expansionLineCount: 100,
-            collapsedContextThreshold: 1,
-            hunkSeparators: variant.hunkSeparators,
-            lineDiffType: 'word-alt',
-            maxLineDiffLength: 1000,
-            canHydrateContext: false,
-          },
-          host
-        );
+        const layout = new DiffLayout({
+          diffStyle: variant.diffStyle,
+          expandUnchanged: variant.expandUnchanged,
+          expansionLineCount: 100,
+          collapsedContextThreshold: 1,
+          hunkSeparators: variant.hunkSeparators,
+          lineDiffType: 'word-alt',
+          maxLineDiffLength: 1000,
+          canHydrateContext: false,
+        });
         const rows = new RowSource({
           deletionRows: result.code.deletionLines,
           additionRows: result.code.additionLines,
@@ -288,6 +285,7 @@ describe('DiffLayout matches processDiffResult', () => {
           lineIds: model.live ? model.lineIds() : undefined,
         });
         const actual = layout.layout({
+          host,
           expandedHunks: renderer.getExpandedHunksMap(),
           model,
           rows,
@@ -367,19 +365,16 @@ describe('DiffLayout matches processDiffResult', () => {
       lineDiffType: 'none',
       maxLineDiffLength: 1000,
     });
-    const layout = new DiffLayout(
-      {
-        diffStyle: 'split',
-        expandUnchanged: true,
-        expansionLineCount: 100,
-        collapsedContextThreshold: 1,
-        hunkSeparators: 'line-info',
-        lineDiffType: 'word-alt',
-        maxLineDiffLength: 1000,
-        canHydrateContext: false,
-      },
-      host
-    );
+    const layout = new DiffLayout({
+      diffStyle: 'split',
+      expandUnchanged: true,
+      expansionLineCount: 100,
+      collapsedContextThreshold: 1,
+      hunkSeparators: 'line-info',
+      lineDiffType: 'word-alt',
+      maxLineDiffLength: 1000,
+      canHydrateContext: false,
+    });
     const model = DiffModel.startEditSession(diff);
     const rows = new RowSource({
       deletionRows: result.code.deletionLines,
@@ -388,6 +383,7 @@ describe('DiffLayout matches processDiffResult', () => {
       lineIds: model.live ? model.lineIds() : undefined,
     });
     const input = {
+      host,
       model,
       expandedHunks: new Map(),
       rows,
@@ -447,20 +443,18 @@ describe('DiffLayout matches processDiffResult', () => {
       lineIds: model.live ? model.lineIds() : undefined,
     });
     for (const diffStyle of ['split', 'unified'] as const) {
-      const layout = new DiffLayout(
-        {
-          diffStyle,
-          expandUnchanged: false,
-          expansionLineCount: 100,
-          collapsedContextThreshold: 1,
-          hunkSeparators: 'line-info',
-          lineDiffType: 'word-alt',
-          maxLineDiffLength: 1000,
-          canHydrateContext: false,
-        },
-        host
-      );
+      const layout = new DiffLayout({
+        diffStyle,
+        expandUnchanged: false,
+        expansionLineCount: 100,
+        collapsedContextThreshold: 1,
+        hunkSeparators: 'line-info',
+        lineDiffType: 'word-alt',
+        maxLineDiffLength: 1000,
+        canHydrateContext: false,
+      });
       const { columns } = layout.layout({
+        host,
         expandedHunks: new Map(),
         model,
         rows,
@@ -498,19 +492,16 @@ describe('DiffLayout matches processDiffResult', () => {
       lineDiffType: 'none',
       maxLineDiffLength: 1000,
     });
-    const layout = new DiffLayout(
-      {
-        diffStyle: 'split',
-        expandUnchanged: true,
-        expansionLineCount: 100,
-        collapsedContextThreshold: 1,
-        hunkSeparators: 'line-info',
-        lineDiffType: 'none',
-        maxLineDiffLength: 1000,
-        canHydrateContext: false,
-      },
-      host
-    );
+    const layout = new DiffLayout({
+      diffStyle: 'split',
+      expandUnchanged: true,
+      expansionLineCount: 100,
+      collapsedContextThreshold: 1,
+      hunkSeparators: 'line-info',
+      lineDiffType: 'none',
+      maxLineDiffLength: 1000,
+      canHydrateContext: false,
+    });
     const model = DiffModel.startEditSession(diff);
     const rows = new RowSource({
       deletionRows: result.code.deletionLines,
@@ -520,6 +511,7 @@ describe('DiffLayout matches processDiffResult', () => {
     });
     rows.setTokens(model.lineId(0), [[0, '#ff0000', 'bar']]);
     const actual = layout.layout({
+      host,
       expandedHunks: new Map(),
       model,
       rows,
@@ -557,21 +549,19 @@ describe('DiffLayout matches processDiffResult', () => {
       lineDiffType: 'none',
       maxLineDiffLength: 1000,
     });
-    const layout = new DiffLayout(
-      {
-        diffStyle: 'split',
-        expandUnchanged: true,
-        expansionLineCount: 100,
-        collapsedContextThreshold: 1,
-        hunkSeparators: 'line-info',
-        lineDiffType: 'word-alt',
-        maxLineDiffLength: 1000,
-        canHydrateContext: false,
-      },
-      host
-    );
+    const layout = new DiffLayout({
+      diffStyle: 'split',
+      expandUnchanged: true,
+      expansionLineCount: 100,
+      collapsedContextThreshold: 1,
+      hunkSeparators: 'line-info',
+      lineDiffType: 'word-alt',
+      maxLineDiffLength: 1000,
+      canHydrateContext: false,
+    });
     const model = DiffModel.fromDiff(diff);
     const input = {
+      host,
       model,
       expandedHunks: new Map(),
       rows: new RowSource({

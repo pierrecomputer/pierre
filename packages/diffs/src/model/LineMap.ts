@@ -1,3 +1,4 @@
+import { countLineBreaks } from '../utils/computeFileOffsets';
 import type { DocumentLineChange } from './types';
 
 /**
@@ -128,21 +129,4 @@ export class LineMap {
       this.#removed.push(id);
     }
   }
-}
-
-/** The number of line breaks in `text`, counting `\r\n` once. */
-export function countLineBreaks(text: string): number {
-  let count = 0;
-  for (let index = 0; index < text.length; index++) {
-    const code = text.charCodeAt(index);
-    if (code === 10) {
-      count++;
-    } else if (code === 13) {
-      count++;
-      if (text.charCodeAt(index + 1) === 10) {
-        index++;
-      }
-    }
-  }
-  return count;
 }
