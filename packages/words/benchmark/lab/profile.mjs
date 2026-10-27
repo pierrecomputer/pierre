@@ -8,6 +8,7 @@ import wabt from 'wabt';
 
 import { optimizeWasm, transformWat } from '../../scripts/build.mjs';
 import { createCase } from './cases.mjs';
+import { warmup } from './warmup.mjs';
 
 const packageDirectory = fileURLToPath(new URL('../../', import.meta.url));
 const stageNames = ['blockAnalysis', 'inlineAndRender'];
@@ -233,7 +234,21 @@ export async function buildDiagnostic(targetDirectory) {
   };
 }
 
-function makeProbes() {
+export function makeProbes({ operation }) {
+  const sessionObservation =
+    operation === 'html-renderer'
+      ? {
+          available: false,
+          reason:
+            'createHtmlRenderer owns an internal session that bypasses the lab observeSession hook.',
+        }
+      : {
+          available: true,
+          reason:
+            operation === 'session-full' || operation === 'session-suffix'
+              ? 'All core session deliveries are observed by the lab session wrapper.'
+              : 'This operation does not use sessions; session counters are zero.',
+        };
   const stages = Object.fromEntries(
     stageNames.map((name) => [name, { calls: 0, milliseconds: 0 }])
   );
@@ -245,9 +260,9 @@ function makeProbes() {
     sourceBytesSubmittedToCore: 0,
     coreInputBytesAfterCompletion: 0,
     completionInputBytes: 0,
-    sessionUpdates: 0,
-    cacheHits: 0,
-    resets: 0,
+    sessionUpdates: sessionObservation.available ? 0 : null,
+    cacheHits: sessionObservation.available ? 0 : null,
+    resets: sessionObservation.available ? 0 : null,
     definitionBearingCoreCalls: 0,
     memoryGrowthObservations: 0,
     memoryGrowthPages: 0,
@@ -271,6 +286,7 @@ function makeProbes() {
     counters,
     timings,
     stages,
+    sessionObservation,
     get active() {
       return active;
     },
@@ -303,7 +319,7 @@ function makeProbes() {
       },
     },
     observeSession({ result, cached }) {
-      if (!active) return;
+      if (!active || !sessionObservation.available) return;
       counters.sessionUpdates++;
       if (cached) counters.cacheHits++;
       else if (result.reset) counters.resets++;
@@ -311,7 +327,7 @@ function makeProbes() {
   };
 }
 
-function installProbes(workload, probes) {
+export function installProbes(workload, probes) {
   const renderer = workload.renderer;
   const { counters, timings } = probes;
   const undo = [];
@@ -507,6 +523,15 @@ function summarizeProfile(profile, names) {
   };
 }
 
+/** Private modules preserve source positions; remap to their actual captured entry. */
+export function remapProfileSources(profile, targetDirectory, entry) {
+  const url = pathToFileURL(join(targetDirectory, entry)).href;
+  for (const node of profile.nodes) {
+    if (node.callFrame.url.startsWith('data:text/javascript'))
+      node.callFrame.url = url;
+  }
+}
+
 /** CPU sampling and perturbed diagnostics are separate from headline timing. */
 export async function profileCase({
   caseId,
@@ -531,7 +556,7 @@ export async function profileCase({
   const names = functionNames(namedBytes);
   if (!names.length) throw new Error('Named Wasm has no function names.');
   const named = await createCase(caseId, target, { wasmFile: 'named.wasm' });
-  const probes = makeProbes();
+  const probes = makeProbes(production.descriptor);
   const diagnostic = await createCase(caseId, target, {
     wasmFile: 'diagnostic.wasm',
     imports: probes.imports,
@@ -546,26 +571,38 @@ export async function profileCase({
   let profile;
   let profileOperations = 0;
   let checksum = 0;
-  // Sample steady-state code: Wasm tier-up finishes quickly, but the streaming
-  // glue reaches TurboFan only after ~12–15k per-update invocations, and that
-  // code is slower than the Maglev code before it. Warm by delivery count.
+  // Diagnostics warm by both elapsed time and delivery/operation count, just
+  // like timing workers, but remain a separate perturbed measurement.
   const warmupMs = 250;
   const warmupDeliveries = 20000;
   const warmupMaxMs = 5000;
-  const updates = production.descriptor.updates;
+  const updates =
+    production.descriptor.unit === 'replay' ? production.descriptor.updates : 1;
   const warmupFloor =
     production.descriptor.unit === 'replay' ? warmupDeliveries : 400;
-  for (const workload of [named, diagnostic]) {
-    const started = performance.now();
-    let operations = 0;
-    do {
-      checksum = (checksum ^ workload.run()) >>> 0;
-      operations++;
-    } while (
-      performance.now() - started < warmupMaxMs &&
-      (performance.now() - started < warmupMs ||
-        operations * updates < warmupFloor)
-    );
+  const warmups = {};
+  const warnings = [];
+  for (const [name, workload] of Object.entries({ named, diagnostic })) {
+    const { sink, ...achieved } = warmup(workload.run, {
+      warmupMs,
+      warmupMaxMs,
+      warmupFloor,
+      updates,
+    });
+    checksum = (checksum ^ sink) >>> 0;
+    warmups[name] = {
+      ...achieved,
+      warmupReachedCap: achieved.warmupElapsedMs >= warmupMaxMs,
+    };
+    if (!achieved.warmupReachedFloor) {
+      const warning =
+        `${name} warmup did not reach both floors: ` +
+        `${achieved.warmupElapsedMs.toFixed(1)}ms / ${warmupMs}ms, ` +
+        `${achieved.warmupDeliveries} deliveries / ${warmupFloor}; ` +
+        `cap ${warmupMaxMs}ms. Diagnostic results are not fully warmed.`;
+      warnings.push(warning);
+      console.warn(warning);
+    }
   }
   session.connect();
   try {
@@ -581,11 +618,7 @@ export async function profileCase({
   } finally {
     session.disconnect();
   }
-  // Private ESM imports use data URLs; point viewers at the exact captured glue.
-  for (const node of profile.nodes) {
-    if (node.callFrame.url.startsWith('data:text/javascript'))
-      node.callFrame.url = pathToFileURL(join(target, 'index.mjs')).href;
-  }
+  remapProfileSources(profile, target, named.entry);
 
   // This small matched batch estimates probe cost, not renderer performance.
   // No stage probes, clock wrappers, or prototype patches are active above.
@@ -623,6 +656,7 @@ export async function profileCase({
   const report = {
     schemaVersion: 1,
     case: production.descriptor,
+    warnings,
     runtime: {
       node: process.versions.node,
       v8: process.versions.v8,
@@ -646,6 +680,7 @@ export async function profileCase({
       warmupMs,
       warmupDeliveries,
       warmupMaxMs,
+      warmup: warmups,
       operations: profileOperations,
       samplingIntervalMicroseconds: 100,
       ...summarizeProfile(profile, names),
@@ -654,6 +689,7 @@ export async function profileCase({
       perturbed: true,
       operations,
       milliseconds: diagnosticMs,
+      sessionObservation: probes.sessionObservation,
       counters: probes.counters,
       timings: probes.timings,
       stages: probes.stages,
@@ -682,7 +718,7 @@ export async function profileCase({
       'Renderer/core/stage/encoding times are inclusive and overlap. Remaining batch time includes session bookkeeping, string operations, checksums and probe work; it is not an exact glue-only time.',
       'Encoding measures encodeInto; copying measures Uint8Array.set into the Wasm input region; decoding includes all TextDecoder.decode calls in the synchronous diagnostic batch. Other copies and native string concatenation are not separately timed.',
       'Submitted source bytes count actual renderer arguments, including stable-prefix rerenders and definition fallback. Core input bytes additionally include completion repairs. Raw kernels bypassing Renderer use the control-block length.',
-      'Cache hits use session result identity. Resets count noncached results with reset=true, including initial option-state resets; they do not infer causes.',
+      'Cache hits use observed core-session result identity. Resets count noncached results with reset=true, including initial option-state resets; they do not infer causes. HTML internal sessions are not observable: their session counters are null, not zero.',
       'Memory growth reports observed page deltas at JS/core boundaries, not the exact number of memory.grow instructions. Parity verification warms memory before measurement.',
       'A workload dominated by JS or too short for sampling can have no named Wasm samples despite a valid name section. Inlined WAT functions need not appear as separate CPU frames.',
     ],
@@ -694,8 +730,12 @@ export async function profileCase({
     `Profile ${caseId}: ${report.cpu.totalSamples} samples; ${report.cpu.sampledNamedWasmFunctions} sampled named Wasm functions.`
   );
   console.log(
-    `Diagnostic only: ${probes.counters.coreRenderCalls} core renders, ${probes.counters.sourceBytesSubmittedToCore} source bytes submitted, ${probes.counters.cacheHits} cache hits, ${probes.counters.resets} resets.`
+    `Diagnostic only: ${probes.counters.coreRenderCalls} core renders, ${probes.counters.sourceBytesSubmittedToCore} source bytes submitted, ${probes.counters.cacheHits ?? 'unavailable'} cache hits, ${probes.counters.resets ?? 'unavailable'} resets.`
   );
+  if (!probes.sessionObservation.available)
+    console.log(
+      `Session observation unavailable: ${probes.sessionObservation.reason}`
+    );
   console.log(
     `Stages (perturbed): block ${probes.stages.blockAnalysis.milliseconds.toFixed(3)}ms; inline/render ${probes.stages.inlineAndRender.milliseconds.toFixed(3)}ms; completion ${probes.timings.completionMs.toFixed(3)}ms. No speedup claim.`
   );

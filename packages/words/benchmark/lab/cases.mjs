@@ -340,6 +340,21 @@ seededCase(
   'Assistant explanation; createHtmlRenderer with an element hook and inline-code hook.',
   { htmlVariant: 'hooks' }
 );
+add(
+  'html-fence-chunk',
+  'fence-chunk',
+  'html-renderer',
+  () => {
+    const deliveries = seededPrefixes(fence, 'chunk');
+    return {
+      inputs: [...deliveries, fence],
+      incomplete: [...deliveries.map(() => true), false],
+      active: [...deliveries.map(() => true), false],
+      htmlVariant: 'default',
+    };
+  },
+  'Open TypeScript fence with explicit settlement; active streaming attributes are removed.'
+);
 
 staticCase(
   'kernel-encode',
@@ -377,17 +392,6 @@ staticCase(
   'Raw completion export over preloaded open emphasis; original input ends in non-whitespace.'
 );
 
-export const defaultCaseIds = Object.freeze([
-  'static-bytes',
-  'static-string',
-  'static-ansi',
-  'stream-assistant-token',
-  'stream-assistant-chunk',
-  'stream-paragraph-suffix',
-  'stream-fence-suffix',
-  'html-assistant-chunk',
-]);
-
 /** Named option sets keep html cases serializable and comparable across captures. */
 const htmlVariants = {
   default: () => ({}),
@@ -405,7 +409,7 @@ function sha256(value) {
 
 function prepare(recipe) {
   const loaded = recipe.load();
-  const inputs = loaded.inputs;
+  const inputs = [...loaded.inputs];
   const source = inputs.at(-1);
   const replay = [
     'replay-full',
@@ -416,7 +420,36 @@ function prepare(recipe) {
   const options = inputs.map((_, i) => ({
     incomplete: replay ? (loaded.incomplete?.[i] ?? true) : false,
     skipHtml: replay,
+    ...(recipe.operation === 'html-renderer'
+      ? { active: loaded.active?.[i] ?? true }
+      : {}),
   }));
+  const lastOptions = options.at(-1);
+  const settlementAppended =
+    replay && (lastOptions.incomplete || lastOptions.active === true);
+  if (settlementAppended) {
+    inputs.push(source);
+    options.push({
+      ...lastOptions,
+      incomplete: false,
+      ...(recipe.operation === 'html-renderer' ? { active: false } : {}),
+    });
+  }
+  // Run-length modes preserve explicit authored transitions without repeating
+  // flags for every token-sized delivery in serialized descriptors.
+  const deliveryModes = [];
+  for (const { incomplete, active } of options) {
+    const previous = deliveryModes.at(-1);
+    if (previous?.incomplete === incomplete && previous?.active === active) {
+      previous.updates++;
+    } else {
+      deliveryModes.push({
+        updates: 1,
+        incomplete,
+        ...(active !== undefined ? { active } : {}),
+      });
+    }
+  }
   const settings = {
     ...(loaded.width !== undefined ? { width: loaded.width } : {}),
     ...(loaded.frontmatter ? { frontmatter: true } : {}),
@@ -445,11 +478,15 @@ function prepare(recipe) {
         0
       ),
       updates: inputs.length,
+      lifecycle: replay ? 'stream-to-settled' : 'settled',
+      settlementAppended,
+      deliveryModes,
       ...settings,
       fixtureSha256: sha256(
         JSON.stringify([
           inputs.map((input, i) => [input, options[i]]),
           settings,
+          replay ? 'stream-to-settled' : 'settled',
         ])
       ),
       sourceSha256: sha256(source),
@@ -491,16 +528,26 @@ function outputDigest() {
   const hash = createHash('sha256');
   let outputBytes = 0;
   let deliveries = 0;
+  let intermediate = hash.copy();
+  let finalOutputSha256;
   return {
     add(value) {
       const bytes = typeof value === 'string' ? Buffer.from(value) : value;
+      intermediate = hash.copy();
+      finalOutputSha256 = sha256(bytes);
       hash.update(`${bytes.byteLength}:`);
       hash.update(bytes);
       outputBytes += bytes.byteLength;
       deliveries++;
     },
     finish() {
-      return { outputSha256: hash.digest('hex'), outputBytes, deliveries };
+      return {
+        outputSha256: hash.digest('hex'),
+        intermediateOutputSha256: intermediate.digest('hex'),
+        finalOutputSha256,
+        outputBytes,
+        deliveries,
+      };
     },
   };
 }
@@ -546,9 +593,10 @@ export async function createCase(id, targetDirectory, configuration = {}) {
   const recipe = recipes.find((candidate) => candidate.id === id);
   if (!recipe) throw new RangeError(`Unknown words measurement case: ${id}`);
   const { descriptor, source, inputs, options, settings } = prepare(recipe);
+  const entry = recipe.operation === 'html-renderer' ? 'html.mjs' : 'index.mjs';
   const { api, renderer } = await loadTarget(targetDirectory, {
     ...configuration,
-    entry: recipe.operation === 'html-renderer' ? 'html.mjs' : 'index.mjs',
+    entry,
   });
   const bytes = encoder.encode(source);
   const operation = recipe.operation;
@@ -583,7 +631,11 @@ export async function createCase(id, targetDirectory, configuration = {}) {
       let checksum = 0;
       let previous;
       for (let i = 0; i < inputs.length; i++) {
-        const result = formatter.render(inputs[i], options[i].incomplete, true);
+        const result = formatter.render(
+          inputs[i],
+          options[i].incomplete,
+          options[i].active
+        );
         if (result !== previous)
           checksum = mix(checksum, consumeString(result.addition));
         checksum = mix(checksum, consumeString(result.pending));
@@ -600,7 +652,11 @@ export async function createCase(id, targetDirectory, configuration = {}) {
       let stable = '';
       let previous;
       for (let i = 0; i < inputs.length; i++) {
-        const result = formatter.render(inputs[i], options[i].incomplete, true);
+        const result = formatter.render(
+          inputs[i],
+          options[i].incomplete,
+          options[i].active
+        );
         if (result !== previous) {
           assert.equal(
             result.revision,
@@ -622,11 +678,16 @@ export async function createCase(id, targetDirectory, configuration = {}) {
         digest.add(result.html);
         previous = result;
       }
-      assert.equal(
-        previous.html.length > 0,
-        true,
-        `${id}: final document rendered`
-      );
+      const settled = api.createHtmlRenderer(htmlOptions());
+      try {
+        assert.equal(
+          previous.html,
+          settled.render(source, false, false).html,
+          `${id}: final HTML matches a fresh settled render`
+        );
+      } finally {
+        settled.dispose();
+      }
       formatter.dispose();
       return digest.finish();
     };
@@ -832,5 +893,15 @@ export async function createCase(id, targetDirectory, configuration = {}) {
       return digest.finish();
     };
   }
-  return { descriptor, run, verify, renderer, api, source, inputs };
+  return {
+    descriptor,
+    run,
+    verify,
+    renderer,
+    api,
+    entry,
+    source,
+    inputs,
+    options,
+  };
 }

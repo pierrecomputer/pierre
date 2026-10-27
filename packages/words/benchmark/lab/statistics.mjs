@@ -55,7 +55,13 @@ export function summarize(samples) {
 /** Resample independent process pairs, never the correlated batches within them. */
 export function comparePairs(
   pairs,
-  { seed = 1, resamples = 10000, threshold = 0.02, confirm = false } = {}
+  {
+    seed = 1,
+    resamples = 10000,
+    threshold = 0.02,
+    confirm = false,
+    confidence = 0.95,
+  } = {}
 ) {
   assert(pairs.length > 0, 'Comparison requires process pairs');
   assert(
@@ -65,6 +71,10 @@ export function comparePairs(
   assert(
     Number.isInteger(resamples) && resamples >= 100,
     'Too few bootstrap resamples'
+  );
+  assert(
+    Number.isFinite(confidence) && confidence > 0 && confidence < 1,
+    'Invalid confidence level'
   );
   const logs = pairs.map(({ baseline, candidate }) => {
     assert(
@@ -79,10 +89,10 @@ export function comparePairs(
   const ratio = Math.exp(
     logs.reduce((sum, value) => sum + value, 0) / logs.length
   );
-  // Fewer than eight pairs resample a handful of values; an A/A run produced an
-  // interval excluding 1.0 from four identical pairs. Report none instead.
-  let ratio95 = null;
-  if (pairs.length >= 8) {
+  // Screening never reports an interval, regardless of its number of rounds.
+  // Eight pairs is a minimum, not a guarantee of bootstrap coverage.
+  let ratioInterval = null;
+  if (confirm && pairs.length >= 8) {
     const random = randomGenerator(seed);
     const boot = Array.from({ length: resamples }, () => {
       let total = 0;
@@ -90,80 +100,160 @@ export function comparePairs(
         total += logs[Math.floor(random() * logs.length)];
       return Math.exp(total / logs.length);
     }).sort((a, b) => a - b);
-    ratio95 = [
-      boot[Math.floor(resamples * 0.025)],
-      boot[Math.ceil(resamples * 0.975) - 1],
+    const tail = (1 - confidence) / 2;
+    ratioInterval = [
+      boot[Math.floor(resamples * tail)],
+      boot[Math.ceil(resamples * (1 - tail)) - 1],
     ];
   }
   let verdict = 'exploratory';
   if (confirm && pairs.length >= 8) {
     verdict =
-      ratio95[1] < 1 - threshold
+      ratioInterval[1] < 1 - threshold
         ? 'faster'
-        : ratio95[0] > 1 + threshold
+        : ratioInterval[0] > 1 + threshold
           ? 'slower'
-          : ratio95[0] >= 1 - threshold && ratio95[1] <= 1 + threshold
+          : ratioInterval[0] >= 1 - threshold &&
+              ratioInterval[1] <= 1 + threshold
             ? 'within-threshold'
             : 'inconclusive';
   }
+  const ratios = logs.map(Math.exp);
+  const center = median(ratios);
   return {
     processPairs: pairs.length,
     candidateOverBaseline: ratio,
     timeReductionPercent: (1 - ratio) * 100,
-    ratio95,
+    ratioInterval,
+    confidence: ratioInterval ? confidence : null,
+    pairDispersion: {
+      relativeMad:
+        median(ratios.map((value) => Math.abs(value - center))) / center,
+      relativeRange: Math.max(...ratios) / Math.min(...ratios) - 1,
+    },
     practicalThreshold: threshold,
     verdict,
   };
 }
 
 /**
- * One scalar for hill-climbing: the geometric mean of per-case candidate/baseline
- * ratios (lower is better), plus a regression guard so a win on the target case
- * cannot hide a loss elsewhere. `screen` labels compare the point estimate to the
- * practical threshold; only confirm-mode verdicts use intervals.
+ * Rank the fixed objective independently of guards. A local objective win can
+ * nominate a candidate without clearing a diluted whole-suite threshold.
+ * Only a qualified confirmation with bounded regression risk may accept it.
  */
-export function aggregate(comparisons, { threshold = 0.02 } = {}) {
+export function aggregate(
+  comparisons,
+  {
+    threshold = 0.02,
+    confirm = false,
+    objectiveCaseIds,
+    requiredCaseIds,
+    qualificationIssues = [],
+  }
+) {
   assert(comparisons.length > 0, 'Aggregate requires comparisons');
+  assert(objectiveCaseIds.length > 0, 'An objective is required');
   const cases = {};
+  const invalidCases = [];
   const regressions = [];
+  const promisingCases = [];
+  const confirmedWins = [];
+  const unresolvedCases = [];
+  const scoreCaseIds = [];
   let logSum = 0;
   for (const row of comparisons) {
+    assert(!Object.hasOwn(cases, row.caseId), `Duplicate case ${row.caseId}`);
     const ratio = row.candidateOverBaseline;
     assert(
       Number.isFinite(ratio) && ratio > 0,
       `Invalid ratio for ${row.caseId}`
     );
-    logSum += Math.log(ratio);
+    const objective = objectiveCaseIds.includes(row.caseId);
+    if (objective) {
+      logSum += Math.log(ratio);
+      scoreCaseIds.push(row.caseId);
+    }
     const screen =
       ratio > 1 + threshold
-        ? 'regression'
+        ? 'regression-suspected'
         : ratio < 1 - threshold
           ? 'promising'
-          : 'noise';
-    if (screen === 'regression') regressions.push(row.caseId);
+          : 'no-signal';
+    if (row.warnings.length) invalidCases.push(row.caseId);
+    if (objective && screen === 'promising') promisingCases.push(row.caseId);
+    const interval = row.ratioInterval;
+    const usableInterval =
+      row.processPairs >= 8 &&
+      Array.isArray(interval) &&
+      interval.length === 2 &&
+      interval.every((value) => Number.isFinite(value) && value > 0) &&
+      interval[0] <= interval[1];
+    if (confirm) {
+      if (usableInterval && interval[0] > 1 + threshold)
+        regressions.push(row.caseId);
+      if (!usableInterval || interval[1] > 1 + threshold)
+        unresolvedCases.push(row.caseId);
+      if (objective && usableInterval && interval[1] < 1 - threshold)
+        confirmedWins.push(row.caseId);
+    } else if (screen === 'regression-suspected') {
+      regressions.push(row.caseId);
+    }
     cases[row.caseId] = {
+      role: objective ? 'objective' : 'guard',
       baselineMs: row.baselineMs,
       candidateMs: row.candidateMs,
       ratio,
-      ratio95: row.ratio95,
+      ratioInterval: row.ratioInterval,
+      confidence: row.confidence,
       screen,
       verdict: row.verdict,
+      pairDispersion: row.pairDispersion,
       warnings: row.warnings,
     };
   }
-  const score = Math.exp(logSum / comparisons.length);
+  const score = scoreCaseIds.length
+    ? Math.exp(logSum / scoreCaseIds.length)
+    : null;
+  const missingCases = [
+    ...new Set([...requiredCaseIds, ...objectiveCaseIds]),
+  ].filter((id) => !Object.hasOwn(cases, id));
+  let status;
+  if (invalidCases.length) status = 'invalid';
+  else if (!confirm) {
+    status = regressions.length
+      ? 'regression-suspected'
+      : promisingCases.length && score < 1
+        ? 'promising'
+        : 'no-signal';
+  } else if (regressions.length) status = 'regressed';
+  else if (missingCases.length || qualificationIssues.length)
+    status = 'diagnostic-only';
+  else if (unresolvedCases.length) status = 'inconclusive';
+  else if (confirmedWins.length && score < 1) status = 'accepted';
+  else
+    status = comparisons.some(
+      (row) =>
+        objectiveCaseIds.includes(row.caseId) &&
+        row.verdict !== 'within-threshold'
+    )
+      ? 'inconclusive'
+      : 'unchanged';
   return {
     score,
-    speedup: 1 / score,
-    scoreReductionPercent: (1 - score) * 100,
+    scoreCaseIds,
+    scoreComplete: objectiveCaseIds.every((id) => Object.hasOwn(cases, id)),
+    speedup: score === null ? null : 1 / score,
+    scoreReductionPercent: score === null ? null : (1 - score) * 100,
     practicalThreshold: threshold,
-    status:
-      regressions.length > 0
-        ? 'regressed'
-        : score < 1 - threshold
-          ? 'improved'
-          : 'noise',
+    status,
+    accepted: status === 'accepted',
+    invalidCases,
     regressions,
+    promisingCases,
+    confirmedWins,
+    unresolvedCases,
+    missingCases,
+    qualificationIssues,
     cases,
   };
 }

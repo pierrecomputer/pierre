@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { mkdtempSync, rmSync } from 'node:fs';
+import { copyFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { after, before, test } from 'node:test';
@@ -57,8 +59,11 @@ void test('consumer contrasts replay identical deliveries and repeated work is c
   const repeated = cases.get('stream-repeated-suffix');
   assert.equal(repeated.sourceSha256, full.sourceSha256);
   assert.equal(repeated.inputBytes, full.inputBytes);
-  assert.equal(repeated.updates, full.updates * 3);
-  assert.equal(repeated.submittedBytes, full.submittedBytes * 3);
+  assert.equal(repeated.updates, (full.updates - 1) * 3 + 1);
+  assert.equal(
+    repeated.submittedBytes,
+    (full.submittedBytes - full.inputBytes) * 3 + full.inputBytes
+  );
   assert.notEqual(repeated.fixtureSha256, full.fixtureSha256);
   const unicode = cases.get('stream-unicode-suffix');
   assert.ok(unicode.inputBytes > unicode.inputUnits);
@@ -89,7 +94,7 @@ void test('repeated sessions are fresh and report real cache hits without duplic
   assert.equal(oneReplay[0].revision, 1);
   assert.equal(
     oneReplay.filter(({ cached }) => cached).length,
-    (measured.inputs.length * 2) / 3
+    ((measured.inputs.length - 1) * 2) / 3
   );
   measured.verify();
 });
@@ -106,6 +111,9 @@ void test('edit replay observes replacement, mode changes, and empty resets', as
   assert.equal(events[5].reset, true);
   assert.equal(events[6].input, '');
   assert.equal(events[6].reset, true);
+  assert.equal(events.length, 11);
+  assert.equal(events.at(-1).input, measured.source);
+  assert.equal(events.at(-1).reset, true);
 });
 
 void test('exact verification includes intermediate outputs, not only the final document', async () => {
@@ -150,4 +158,94 @@ void test('two initialized cases do not share a package renderer singleton', asy
   assert.equal(calls, 0);
   second.run();
   assert.equal(calls, 1);
+});
+
+for (const id of [
+  'stream-fence-full',
+  'stream-fence-suffix',
+  'stream-blocks-session',
+  'html-fence-chunk',
+]) {
+  void test(`${id}: timed run and verification execute settlement`, async () => {
+    const measured = await createCase(id, target);
+    const render = measured.renderer.render.bind(measured.renderer);
+    measured.renderer.render = (input, mode, options) => {
+      if (options?.incomplete === false) throw new Error('settled delivery');
+      return render(input, mode, options);
+    };
+    assert.throws(() => measured.run(), /settled delivery/);
+    assert.throws(() => measured.verify(), /settled delivery/);
+  });
+}
+
+void test('open-fence HTML hashes every intermediate and removes active attributes on settlement', async () => {
+  const measured = await createCase('html-fence-chunk', target);
+  const formatter = measured.api.createHtmlRenderer();
+  const hash = createHash('sha256');
+  let intermediateOutputSha256;
+  let finalHtml;
+  let activeHtml;
+  try {
+    for (let i = 0; i < measured.inputs.length; i++) {
+      const { incomplete, active } = measured.options[i];
+      if (i === measured.inputs.length - 1)
+        intermediateOutputSha256 = hash.copy().digest('hex');
+      const result = formatter.render(measured.inputs[i], incomplete, active);
+      const bytes = Buffer.from(result.html);
+      hash.update(`${bytes.length}:`).update(bytes);
+      if (i === measured.inputs.length - 2) activeHtml = result.html;
+      finalHtml = result.html;
+    }
+  } finally {
+    formatter.dispose();
+  }
+  assert.match(activeHtml, /data-incomplete="true"/);
+  assert.doesNotMatch(finalHtml, /data-incomplete="true"/);
+  assert.notEqual(finalHtml, activeHtml);
+  const fresh = measured.api.createHtmlRenderer();
+  try {
+    assert.equal(finalHtml, fresh.render(measured.source, false, false).html);
+  } finally {
+    fresh.dispose();
+  }
+  const verification = measured.verify();
+  assert.equal(verification.outputSha256, hash.digest('hex'));
+  assert.equal(verification.intermediateOutputSha256, intermediateOutputSha256);
+  assert.equal(
+    verification.finalOutputSha256,
+    createHash('sha256').update(finalHtml).digest('hex')
+  );
+  assert.equal(verification.deliveries, measured.inputs.length);
+
+  // A separate capture directory and module instance must retain every output,
+  // not merely the final document or the source/fixture identity.
+  const otherTarget = mkdtempSync(join(tmpdir(), 'words-lab-html-parity-'));
+  try {
+    for (const file of ['html.mjs', 'md.wasm'])
+      await copyFile(join(target, file), join(otherTarget, file));
+    const other = await createCase('html-fence-chunk', otherTarget);
+    assert.deepEqual(other.verify(), verification);
+    assert.equal(other.run(), measured.run());
+  } finally {
+    rmSync(otherTarget, { recursive: true, force: true });
+  }
+});
+
+void test('HTML verification rejects a corrupt settled delivery', async () => {
+  const measured = await createCase('html-fence-chunk', target);
+  const render = measured.renderer.render.bind(measured.renderer);
+  let corrupted = false;
+  measured.renderer.render = (input, mode, options) => {
+    const result = render(input, mode, options);
+    if (options?.incomplete === false && !corrupted) {
+      result.output[result.output.length >>> 1] ^= 1;
+      corrupted = true;
+    }
+    return result;
+  };
+  assert.throws(
+    () => measured.verify(),
+    /final HTML matches a fresh settled render/
+  );
+  assert.equal(corrupted, true);
 });

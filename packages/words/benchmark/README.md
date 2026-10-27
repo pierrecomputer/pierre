@@ -2,290 +2,265 @@
 
 ## Local parser optimization
 
-Use `words:lab` for parser optimization and hill-climbing. It needs the normal
+Use `words:lab` for local optimization experiments. It needs the normal
 workspace dependencies, but no competitor harness, browser download, or mitata.
-It leaves production code and the published benchmark evidence unchanged. Run it
-on an idle machine, on power, without concurrent builds or benchmarks.
+Run it on an idle machine, on power, without concurrent builds or benchmarks.
 
 ```sh
 moonx words:lab --ignore-ci-checks -- list
-moonx words:lab --ignore-ci-checks -- quick
 moonx words:lab --ignore-ci-checks -- capture --output=/tmp/words-before
-# Make the optimization. The next command builds and captures the current code.
-moonx words:lab --ignore-ci-checks -- quick --baseline=/tmp/words-before
+# After an implementation change, Moon rebuilds before capturing the candidate.
+moonx words:lab --ignore-ci-checks -- quick --baseline=/tmp/words-before --output=/tmp/words-screen
 moonx words:lab --ignore-ci-checks -- capture --output=/tmp/words-after
-moonx words:lab --ignore-ci-checks -- confirm --baseline=/tmp/words-before --candidate=/tmp/words-after
+moonx words:lab --ignore-ci-checks -- confirm --baseline=/tmp/words-before --candidate=/tmp/words-after --output=/tmp/words-confirm
 ```
 
-### Where the time goes, and what is in scope
+The lab measures the WAT core, `lib/index.mjs` encoding/decoding and session
+bookkeeping, and `html/render.ts` formatting. Include all three in the search
+space: a faster kernel need not improve a streaming consumer. DOM patching,
+React, highlighting plugins, cold startup, and network pacing remain outside
+this lab. Use the browser harness below for downstream checks on finalists. Node
+measurements do not establish browser performance or a universal ceiling on WAT
+improvements.
 
-Measured on the current build (inclusive time inside `wasmRender` and
-`wasmComplete`, patch overhead under 4%):
+Captures contain optimized Wasm, glue, WAT sources, the build helper, and a
+self-contained `html.mjs` bundle built from the captured HTML sources against
+the captured glue. Hashes and environment metadata identify the artifacts. The
+runner rejects modified captures and existing output directories. An omitted
+candidate captures the current build. Relative paths resolve from
+`packages/words`; default results live in gitignored `benchmark/output/lab/`.
 
-| Case                                    | Wasm share of the operation |
-| --------------------------------------- | --------------------------: |
-| `static-bytes`                          |                        100% |
-| `static-gfm`                            |                         73% |
-| `static-string`                         |                         57% |
-| `stream-paragraph-suffix`               |                         55% |
-| `stream-fence-suffix`                   |                         41% |
-| `stream-blocks-suffix` (64-unit chunks) |                         25% |
-| `stream-blocks-token` (8-unit chunks)   |                         10% |
+### Fixed objective and regression guards
 
-For complete documents the WAT is the lever. For streaming, the lever is the
-JavaScript around it: `lib/index.mjs` renders the completed prefix a second time
-to produce `addition`, round-trips `TextEncoder`/`TextDecoder` three to four
-times per update (one decode exists only to count UTF-16 units), and re-encodes
-the whole open tail on every delivery. `html/render.ts` then runs a regex
-formatting pass over `addition` and `pending`; with default options it costs
-about as much as the session and Wasm together on fence streams. An optimization
-loop that may only edit `src/*.wat` has a ceiling near 1.1× on token streams.
-Captures therefore include `lib/index.mjs` (as `index.mjs`), `src/`, and a
-self-contained bundle of `html/` built against the captured glue (`html.mjs`),
-and all three are legitimate targets. DOM patching (`html/dom.ts`) and React
-remain on the browser harness below as a final gate; they are not in the lab.
+`lab/policy.mjs` defines `words-streaming-lifecycle-v1`. Freeze this file,
+workloads, fixtures, tests, and the benchmark driver during a search. Change the
+measurement contract between searches, not to accommodate a candidate.
 
-Capture directories contain those artifacts plus WAT and html sources, the build
-helper, hashes, and environment metadata. Comparisons execute saved artifacts
-rather than switching the working tree. An omitted candidate means the current
-build. Use a new output directory for each run; the runner rejects overwritten
-results and modified captures. Relative paths resolve from `packages/words`,
-where Moon runs the task. Default results live in gitignored
-`benchmark/output/lab/`.
+| Role                    | Cases                                                                                                                        |
+| ----------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| Objective, equal weight | `stream-assistant-token`, `stream-assistant-chunk`, `stream-paragraph-suffix`, `stream-fence-suffix`, `html-assistant-chunk` |
+| Regression guards       | `static-bytes`, `static-string`, `static-ansi`, `stream-review-chunk`, `stream-definitions-suffix`                           |
 
-| Mode      | Defaults                                                                                                     | Use                                                      |
-| --------- | ------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------- |
-| `quick`   | warmup ≥ 75 ms and ≥ 20,000 deliveries; 5 batches of ≥ 15 ms; 1 process per case, or 4 pairs with a baseline | Screen ideas at a 3% threshold; no intervals             |
-| `confirm` | warmup ≥ 300 ms and ≥ 20,000 deliveries; 9 batches of ≥ 30 ms; 12 fresh process pairs                        | Interval-based verdict at a 2% threshold                 |
-| `profile` | same warmup, then 3 s of CPU sampling plus a separate instrumented replay                                    | Find hot functions and repeated work; no speedup verdict |
+All ten run by default. `list` labels objective cases `O` and guards `G`. The
+objective score is the geometric mean of objective candidate/baseline time
+ratios; lower is better. Guards do not dilute that score, but can block
+acceptance. A localized objective win can nominate a candidate even when its
+contribution to the score is below the screening threshold.
 
-### Warm past V8 tier-up, or measure the wrong code
+`--cases=id,id` selects diagnostic workloads. Missing fixed-suite cases prevent
+acceptance, and `scoreComplete` identifies partial objective scores. Do not rank
+scores computed from different subsets. `--cases=all` exercises the broader
+matrix; additional cases act as guards, never as extra objective weights.
 
-Static cases are flat after a few hundred operations. Streaming cases are not:
-after roughly 12–15k invocations of the per-update path, V8 replaces Maglev code
-with TurboFan code that runs **1.6–2.5× slower** on this glue
-(`stream-assistant-chunk` 0.44 → 1.12 ms/op, `stream-blocks-suffix` 0.14 → 0.33,
-`stream-fence-suffix` 0.63 → 1.03) and stays there. With `--max-opt=2` the step
-disappears. A long session in a browser will reach the same tier, so the slow
-regime is the steady state that matters. Warmup therefore requires a delivery
-floor (`--warmup-deliveries`, default 20,000; static cases count one per
-operation) in addition to the time floor, capped by `--warmup-max-ms`. Every
-process records its warmup trajectory in 25 ms windows, and a case warns when a
-process hit the cap first or when its first and second half differ by more than
-10%. Why TurboFan pessimizes this code is an optimization question, not a
-measurement one; it is left alone here.
+### Screening, confirmation, and acceptance
 
-### Select workloads and measurement boundaries
+| Mode      | Warmup minimums per process                                                        | Samples and comparisons                                  | Purpose                                                               |
+| --------- | ---------------------------------------------------------------------------------- | -------------------------------------------------------- | --------------------------------------------------------------------- |
+| `quick`   | 75 ms and 20,000 replay deliveries, or 400 static/kernel operations; 3 s cap       | 5 batches targeting 15 ms; 4 pairs with a baseline       | Nominate experiments at a 3% per-case threshold; never accept         |
+| `confirm` | 1,000 ms and 60,000 replay deliveries, or 1,200 static/kernel operations; 10 s cap | 9 batches targeting 30 ms; 12 fresh pairs                | Confirm selected winners under longer warmup and 2% regression guards |
+| `profile` | 250 ms and 20,000 replay deliveries, or 400 static/kernel operations; 5 s cap      | 3 s of CPU sampling, then a separate instrumented replay | Find hot functions and repeated work; no speedup verdict              |
 
-`list` prints case IDs, sizes, delivery counts, and timing boundaries. The eight
-default cases: medium-document byte and string I/O, the ANSI backend, a
-hand-written assistant response streamed at token and network-chunk granularity
-through the session and through `createHtmlRenderer`, plus the long open
-paragraph and open fence. `--cases=all` adds a second assistant response (code
-review), the GFM specification, an approximately 850 KB stress input,
-frontmatter, ANSI wrapping, tables/lists, Unicode, malformed input, repeated
-deliveries, edits, hooks, and isolated kernels.
+Each case/variant/round gets a fresh Node process. Workers execute serially,
+case order is seeded and shuffled, and baseline-first/candidate-first pairs are
+balanced. A process reports the median of its batch-mean times. Per-case ratios
+use the geometric mean across process pairs.
+
+Quick mode reports point estimates only, even with extra rounds. Its statuses
+are `promising`, `regression-suspected`, or `no-signal`; measurement warnings
+override these with `invalid`. None sets `accepted: true`. Three percent is a
+screening choice, not a calibrated noise bound: an earlier four-pair A/A run
+reported a 5.66% token-streaming regression on identical captures.
+
+Confirmation bootstraps whole process pairs, not the correlated iterations
+inside a batch. It requires at least eight pairs and allocates a nominal 5%
+error budget across the measured cases using Bonferroni-adjusted intervals
+(99.5% per case for the default ten). `ratioInterval` and `confidence` record
+the actual interval and level. Bootstrap coverage remains approximate,
+particularly with few process pairs; this is not a guarantee against false wins.
+
+At the default 2% practical threshold, a per-case interval wholly below 0.98 is
+`faster`, wholly above 1.02 is `slower`, contained in [0.98, 1.02] is
+`within-threshold`, and otherwise is `inconclusive`. Acceptance requires:
+
+- A full fixed-suite confirmation meeting the longer-warmup and sampling
+  minimums.
+- No measurement warnings.
+- At least one objective case with an interval wholly below the improvement
+  boundary.
+- An objective score below 1.
+- Every measured case's interval upper bound at or below the regression
+  boundary.
+
+An uncertain improvement in another case is acceptable as a guard only when its
+interval excludes a material regression. A known regression yields `regressed`;
+unresolved regression risk yields `inconclusive`. Missing suite cases or reduced
+confirmation settings yield `diagnostic-only`, never acceptance. An unchanged
+objective yields `unchanged`; a faster guard alone is not an objective win.
+
+`summary.json` schema 2 separates `score` from `status` and **`accepted`**. It
+includes objective coverage, confirmed wins, unresolved cases, invalid cases,
+regressions, and qualification issues. A loop must require `accepted === true`
+for performance acceptance, not infer it from a low score or an individual
+`promising` label. Correctness tests remain a separate required gate. A non-zero
+command exit indicates an execution or output-parity failure; an invalid or
+inconclusive measurement can exit zero with `accepted: false`.
+
+Use `--rounds=24 --sample-ms=50 --samples=12` for a longer fixed confirmation.
+Predeclare `--threshold=0.01` if a 1% practical boundary matters; the smaller
+effect may require more samples. A threshold above 2% relaxes the fixed guard
+and makes confirmation diagnostic-only. There is no promised minimum detectable
+effect. The runner does not sample until it finds significance.
+
+### Warmup and measurement validity
+
+Earlier Node runs showed timing changes after many deliveries. The count floors
+reduce the chance of measuring a transient regime, but are baseline calibration,
+not proof of a JIT tier or of steady state in every candidate. Browser behavior
+requires browser evidence.
+
+Both elapsed-time and work-count requirements must be satisfied.
+`--warmup-max-ms` below `--warmup-ms` is an error. Workers record both achieved
+conditions and 25 ms warmup trajectory windows. The following invalidate a
+comparison rather than merely printing advisory text:
+
+- A process reaches its warmup cap before satisfying both floors.
+- Within-process relative MAD exceeds 10%.
+- First-half versus last-half batch medians differ by more than 10%.
+- The largest process-pair ratio exceeds the smallest by more than 10%.
+
+The last check catches process-level shifts that stable batches can miss. These
+gates are heuristics, not exhaustive noise detection. Inspect raw data and
+repeat a predeclared fixed run under better conditions when a gate trips. Do not
+drop unfavorable pairs or retry until a result passes. `--timeout-ms` bounds
+each worker, including validation and warmup.
+
+### Workloads and timing boundaries
+
+`list` reports sizes, delivery counts, and boundaries. The broader matrix covers
+GFM, an approximately 850 KB stress input, ANSI and wrapping, frontmatter,
+Unicode, malformed input, tables, late definitions, edits, repeated deliveries,
+hooks, and UTF-8/copy/render/completion kernels.
+
+The two `fixtures/assistant-*.md` documents are authored synthetic
+assistant-style responses, not captured production transcripts. They mix fences,
+lists, tables, links, and non-ASCII text. Seeded token deliveries contain 1–12
+UTF-16 units, skewed small; seeded network chunks contain 16–96. Older
+fixed-step streams use 64 units, with 8/1024-unit block contrasts. Split
+surrogate pairs are intentional. Byte counts and UTF-16 counts are separate.
+
+- `static-*`: one document. Byte-input cases include copying into Wasm;
+  string-output cases include decoding. ANSI width and frontmatter parsing
+  belong to the operation where enabled.
+- `stream-*-full`: render every accumulated prefix from scratch.
+- Session cases: create a fresh session and consume `addition` and `pending`.
+  `stream-blocks-session` requests full HTML on the same deliveries.
+- `html-*`: replay through `createHtmlRenderer`; the hooks case includes element
+  and inline-code hooks. `html-fence-chunk` exercises an unfinished fence
+  settling.
+- Kernels: prepared-buffer encoding/copying/decoding, or raw production Wasm
+  exports over valid preloaded input. ABI reset and output consumption remain
+  inside timing; input construction does not.
+
+Every streaming replay includes its final settled delivery: the final source
+again with `incomplete=false`, and `active=false` for HTML formatting. Existing
+explicit transitions remain intact; an already-settled final delivery is not
+duplicated. This transition is timed and verified, not deferred to disposal.
+Descriptor flags and fixture hashes identify the lifecycle. HTML verification
+also compares the final document with a fresh settled render.
+
+One operation is a whole document or replay, including session creation and
+settlement. It is not per-token latency. Imports, compilation, fixture setup,
+warmup, and exact verification stay outside timers. Small operations use
+time-sized batches; long operations can occupy one iteration per batch. Normal
+GC remains enabled, without forced collection or overhead subtraction. Instances
+retain grown memory, excluding cold-start and first-growth latency.
+
+`report.json` retains chronological batches, pair order, warmup trajectories,
+memory observations, environment metadata, and artifact/fixture/driver hashes.
+Verification covers every delivered document before and after timing, including
+stable/pending reconstruction. Cross-target hashes cover semantic output, not
+checkpoint partitioning. Intermediate and final output digests are also
+recorded. Memory observations are not peak-memory measurements.
+
+### Search protocol
+
+Keep the starting capture and compare each candidate against the current
+incumbent using fresh pairs. Use narrow runs to investigate, then the fixed
+suite to screen. Treat a localized `promising` result as a reason to confirm,
+not a reason to publish a win.
+
+For a selected candidate:
+
+1. Run `moon run words:test`; lab fixture hashes do not replace the conformance,
+   seeded fuzz, streaming, ANSI, and React correctness suites.
+2. Run a fresh default `confirm` against the saved incumbent. It uses the
+   predeclared longer warmup and all objective/guard cases.
+3. Require `accepted: true` and passing correctness checks before keeping it on
+   performance grounds. Preserve inconclusive results as inconclusive.
+4. Check finalists against the starting capture and the existing browser harness
+   when changes affect downstream DOM/highlighting behavior.
+
+Run an A/A control before trusting a search session:
 
 ```sh
-moonx words:lab --ignore-ci-checks -- quick --cases=all
-moonx words:lab --ignore-ci-checks -- quick --baseline=/tmp/words-before --cases=kernel-render,static-string,stream-assistant-token
-moonx words:lab --ignore-ci-checks -- quick --cases=stream-blocks-token,stream-blocks-suffix,stream-blocks-coarse
+moonx words:lab --ignore-ci-checks -- quick --baseline=/tmp/words-before --candidate=/tmp/words-before
+moonx words:lab --ignore-ci-checks -- confirm --baseline=/tmp/words-before --candidate=/tmp/words-before
 ```
 
-- `static-*`: one complete document. Byte-input cases include copying into Wasm;
-  string-output cases also include decoding HTML. `static-ansi*` use the ANSI
-  backend (`static-ansi-wrap` at 80 columns); `static-frontmatter` includes the
-  YAML pass and checks the parsed metadata. Borrowed output is consumed before
-  the next render.
-- `stream-*-full`: render every accumulated prefix from scratch, including
-  incomplete-markdown completion and HTML decoding.
-- `stream-*-suffix`, `stream-*-token`, `stream-*-chunk`: create a fresh session
-  and replay the whole stream, consuming `addition` and `pending` without
-  requesting full HTML. `stream-blocks-session` requests the session's full HTML
-  on the same deliveries.
-- `html-*`: the same replays through `createHtmlRenderer` (`html/render.ts`)
-  with `incomplete` and `active` set, as the React path calls it.
-  `html-assistant-hooks` adds an element hook and an inline-code hook.
-  Highlighting plugins are not loaded. These cases exclude network pacing, DOM,
-  and React.
-- Fixed-step streams deliver 64 UTF-16 code units per update; the blocks
-  token/coarse cases deliver 8/1024 units. `-token` and `-chunk` cases use
-  seeded variable sizes: 1–12 units skewed small (mean ≈ 4.3, ~1,700 deliveries
-  for the 6 KB assistant response) and 16–96 units. Unicode deliveries
-  deliberately include split surrogate pairs. Byte counts and UTF-16 counts are
-  separate.
-- `kernel-encode`, `kernel-copy`, and `kernel-decode` isolate UTF-8 and
-  input-copy costs using prepared buffers. `kernel-render` calls the production
-  render export over preloaded input. `kernel-complete` calls completion with a
-  fixture whose authored bytes remain unchanged. Raw kernels include ABI reset
-  and output consumption; they exclude input encoding/copying.
+Repeated selection still biases apparent wins. Freeze candidate selection before
+the confirmation run; a passing A/A control does not certify future
+measurements. Expect the full longer-warmup confirmation to take substantially
+longer than quick screening.
 
-The assistant fixtures (`fixtures/assistant-*.md`) are hand-written responses
-with the mix chat output has: headings, nested and task lists, fences in several
-languages, a table, blockquote, links, footnote, strikethrough, and non-ASCII
-text. The older generated fixtures are repetitive by construction; prefer the
-assistant cases when deciding what to keep.
+The readiness controls on Node 24.11.0 / Apple M3 Max exercised the full fixed
+suite without accepting a false win:
 
-One streaming **operation is an entire replay**, including session creation.
-Milliseconds per operation are not per-token latency. Fixture construction,
-module compilation, imports, exact-output validation, and warmup stay outside
-timers. The harness uses time-sized batches for small functions and one
-iteration per batch when an operation exceeds the target duration. Normal GC
-remains enabled; it neither forces GC nor subtracts estimated loop overhead.
-Warm instances retain grown memory, so these measurements exclude cold-start and
-first-growth latency.
+| Control                       | Runtime, excluding build | Decision                    |
+| ----------------------------- | ------------------------ | --------------------------- |
+| Four-pair quick A/A           | 29 s                     | `invalid`, `accepted=false` |
+| Twelve-pair longer-warmup A/A | 350 s                    | `invalid`, `accepted=false` |
 
-### Read comparisons without overclaiming
-
-The runner starts one fresh Node process for each case/variant/round and
-executes them serially. It shuffles case order and balances baseline-first
-versus candidate-first pairs using a recorded seed. Each process reports its
-median batch-mean time. Per case, the comparison is the geometric mean of paired
-candidate/baseline ratios. Across cases, `summary.json` reports one **score**:
-the geometric mean of those per-case ratios (lower is better, equal weights over
-the selected cases), `speedup` (its reciprocal), a `status`, and a `regressions`
-list naming any case whose ratio exceeds `1 + threshold`. A regression sets
-`status: regressed` regardless of the score, so a win on the target case cannot
-hide a loss elsewhere. Loop iterations are not independent statistical samples;
-intervals describe this machine, runtime, and workload.
-
-`quick` uses a 3% threshold and labels each case `promising`, `noise`, or
-`regression` from its point estimate. That threshold is the measured 4-pair A/A
-noise floor on this machine: identical captures scored within ±1.7% per case and
-0.9976 overall, and a 4-pair bootstrap interval once excluded 1.0 on identical
-binaries. Quick therefore never prints intervals. Treat `promising` as "worth
-confirming", not as a result.
-
-`confirm` uses a 2% threshold and a percentile-bootstrap 95% interval over whole
-process pairs (at least eight; the default twelve):
-
-- `faster`: the whole interval is below 0.98.
-- `slower`: the whole interval is above 1.02.
-- `within-threshold`: the interval lies inside [0.98, 1.02].
-- `inconclusive`: the interval crosses a practical boundary.
-
-A 12-pair A/A over the default cases gave half-widths of 0.2–0.9%, with one
-interval excluding 1.0 by under 1%, so ~1.5% effects are detectable in confirm
-and ~3% in quick; the practical threshold, not the interval alone, is what
-protects against sub-percent false positives. Use
-`--rounds=24 --warmup-ms=1000 --sample-ms=50 --samples=12` for a longer fixed
-run, or `--threshold=0.01` for a 1% boundary. `--timeout-ms` limits each worker,
-including validation and warmup. The runner never keeps sampling until it finds
-significance.
-
-`report.json` retains chronological batches, iteration counts, warmup
-trajectories, per-process summaries, pair order, output digests,
-fixture/driver/artifact hashes, runtime and machine metadata, and failure
-status. Drift, dispersion, and warmup-cap warnings mean you should inspect the
-samples and repeat under better conditions. Memory readings around timing are
-observations, not peak-memory measurements. Verification checks each delivered
-HTML result and the session's stable/pending reconstruction before and after
-timing. Cross-target hashes cover semantic HTML, so changing a safe checkpoint
-boundary can remain a valid optimization; changing any delivered HTML fails the
-run.
-
-Before trusting small gains, run an A/A control:
-
-```sh
-moonx words:lab --ignore-ci-checks -- confirm --baseline=/tmp/words-before --candidate=/tmp/words-before --cases=static-string,stream-assistant-chunk
-```
-
-Use quick runs to choose experiments, then confirm the selected winner in a
-fresh run. Repeated selection biases apparent wins, and per-case intervals are
-not simultaneous confidence intervals for the whole matrix. Check regression
-cases as well as the target case; do not average away a slower workload. A
-kernel improvement does not establish an end-to-end win. Use the existing
-browser benchmarks below when a change needs downstream DOM/highlighting
-validation.
-
-### Running it from a loop
-
-One iteration is: edit `src/*.wat`, `lib/index.mjs`, or `html/render.ts`; run
-`moonx words:lab --ignore-ci-checks -- quick --baseline=/tmp/words-before --output=/tmp/iter-N`
-(Moon rebuilds first); read `/tmp/iter-N/summary.json`. A non-zero exit means
-the harness failed, including any delivered-HTML change across targets; `status`
-in the summary is the measurement outcome. Run `moon run words:test` on anything
-you intend to keep: the conformance suites, seeded fuzzing, every-prefix
-streaming parity, ANSI, and React tests are the correctness gate, and the lab's
-hash check only covers its own fixtures. Expect about 20–35 s per quick
-iteration of the default cases on an M-series laptop (64 processes, dominated by
-warmup) and 3–5 minutes for a confirm run. Narrow with `--cases=` while
-exploring, but screen the full default set before confirming, and keep the cases
-you are not targeting in the regression guard. The `profile` command's
-repeated-work counters point at structural wins (the double render per update,
-whole-tail re-encoding); the CPU profile points at hot functions. Neither is a
-verdict.
+The longer run still found between-process variation in `stream-assistant-chunk`
+and within-process drift in `html-assistant-chunk`. These controls verify that
+the decision path refuses unstable evidence; they do not establish a calibrated
+search session. Obtain a stable A/A control before unattended keep/revert use.
+Investigate persistent timing modes rather than relaxing gates to make a control
+pass.
 
 ### Profile hot paths and repeated work
 
 ```sh
 moonx words:lab --ignore-ci-checks -- profile --candidate=/tmp/words-after --case=stream-blocks-suffix
-moonx words:lab --ignore-ci-checks -- profile --candidate=/tmp/words-after --case=stream-fence-suffix --duration-ms=5000
+moonx words:lab --ignore-ci-checks -- profile --candidate=/tmp/words-after --case=html-fence-chunk --duration-ms=5000
 ```
 
-Open the resulting `.cpuprofile` in a CPU-profile viewer such as VS Code or
-Speedscope. The sampled Wasm retains optimized function names; the builder
-checks that its executable sections match the production binary byte for byte.
-Inlined functions may not have separate frames. The profile uses a private copy
-of the capture and never rewrites `dist` or the original capture.
+Open `.cpuprofile` in a CPU-profile viewer such as VS Code or Speedscope. The
+named optimized Wasm must have identical executable sections to production.
+Captured JS frames map to the actual `index.mjs` or `html.mjs` entry. The
+profile uses a private capture copy and never rewrites the original or `dist`.
 
-A separate instrumented build records block analysis, inline/render, completion,
-`encodeInto`, input copying, and decoding. Its JSON also records core calls,
-actual source bytes submitted, completion-repaired bytes, cache hits, reset
-results, definition-bearing calls, and observed Wasm memory growth. The source
-reprocessing ratio divides submitted source bytes by final source size across
-the replay. It includes stable-prefix rerenders and definition fallbacks.
+A separate instrumented replay records block analysis, inline/render,
+completion, encoding, input copying, decoding, core calls, submitted/repaired
+bytes, and observed Wasm page growth. Core-session cases observe session
+updates, cache hits, and resets. HTML's internal session bypasses that observer,
+so its session counters are **null**, with `sessionObservation.available=false`
+and a reason. Unavailable observations are not measured zeros.
 
-**Diagnostic timings are perturbed and overlap.** Renderer time includes core
-time; core time includes stage probes. Do not sum them or subtract them from
-normal benchmark results. The three-operation probe-cost comparison indicates
-instrumentation impact, not a correction factor. Memory growth counters observe
-page deltas at call boundaries after warmup, not individual `memory.grow`
-instructions. Exact output parity must hold for production, named, and
-instrumented builds.
+Profiles record achieved warmup counts, time, floor status, and warnings for
+both the named and instrumented workloads. A capped profile is diagnostic only.
+All probe timings are perturbed and inclusive: do not sum them, subtract them
+from headline timings, or use the three-operation probe comparison as a
+correction factor. Observed page changes are not counts of `memory.grow`
+instructions. Production, named, and instrumented outputs must match.
 
-The implementation lives in `benchmark/lab/`. Add workloads in `cases.mjs`; keep
-fixture preparation and validation out of `run()`. Internal block and inline
-phases share mutable Wasm state, so the lab observes them in place rather than
-timing unsafe standalone calls against stale records.
+Earlier diagnostic work counts omitted settlement and used a different suite.
+Rerun profiles and controls rather than comparing their totals or aggregate
+scores directly with the lifecycle suite.
 
-### Instrumentation checks and findings so far
-
-On Node 24.11.0 with the shipped warmup, a 12-pair confirm A/A over the eight
-default cases classified every case `within-threshold` at 2% (score 0.9973, 2.4
-minutes), and a 4-pair quick A/A scored 0.995 with every case labeled `noise`
-and no warnings (25 seconds). These check local noise rather than proving
-sub-percent accuracy. All cases complete their output checks; the html cases
-additionally pass through the bundled `createHtmlRenderer`.
-
-The diagnostic replay exposed different amounts of repeated parsing:
-
-| Case                | Updates per replay | Core renders per replay | Submitted source / final source |
-| ------------------- | -----------------: | ----------------------: | ------------------------------: |
-| Completed blocks    |                 46 |                      92 |                           2.44× |
-| Long open paragraph |                 77 |                      77 |                          39.25× |
-| Open fence          |                 73 |                      74 |                          37.21× |
-| Late definitions    |                 24 |                      47 |                           4.29× |
-
-Layer costs per replay of the 2.9 KB block stream at 64-unit deliveries, from a
-throwaway probe on the same build (session-only numbers are lower than the lab's
-because the lab also flattens the delivered strings, as a consumer would):
-
-| Layer                                   | blocks / 64 | blocks / 8 | fence / 64 |
-| --------------------------------------- | ----------: | ---------: | ---------: |
-| `createHtmlSession` only                |    0.165 ms |   1.948 ms |   1.043 ms |
-| `createHtmlRenderer`, default options   |    0.329 ms |   2.565 ms |   2.330 ms |
-| `createHtmlRenderer` + one element hook |    0.506 ms |   2.741 ms |   2.329 ms |
-
-These are work counts and layer costs, not speedup estimates. The
-repeated-delivery case produced 92 cache hits per replay and the same core work
-as the block stream. Open-tail completion and reparsing, the second render per
-update, and the html formatting pass are candidates to investigate; no
-optimization was made as part of this instrumentation.
-
-Run `moon run words:lab-test` to check workload replay/parity, seeded
-deliveries, and comparison statistics. It builds the core before running
-integration checks.
+The implementation lives in `benchmark/lab/`. Internal block and inline phases
+share mutable Wasm state, so the lab observes them in place rather than timing
+standalone calls against stale records. Run `moon run words:lab-test` for the
+measurement-policy, warmup, replay, and diagnostic regression tests.
 
 ## Reproduce from a fresh clone
 

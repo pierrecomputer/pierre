@@ -15,7 +15,15 @@ import {
   packageDirectory,
   save,
 } from './capture.mjs';
-import { defaultCaseIds, listCases } from './cases.mjs';
+import { listCases } from './cases.mjs';
+import {
+  confirmationIssues,
+  guardCaseIds,
+  measurementProfiles,
+  objectiveCaseIds,
+  suiteCaseIds,
+  suiteId,
+} from './policy.mjs';
 import {
   aggregate,
   comparePairs,
@@ -34,15 +42,17 @@ const help = `Words optimization lab (Node; parser only, no browser/highlighter)
   moonx words:lab --ignore-ci-checks -- profile --candidate=/tmp/words-after --case=CASE
 
 quick/confirm: --cases=id,id|all --output=NEW_DIRECTORY --rounds=N --seed=N
-               --warmup-ms=N --warmup-deliveries=N --warmup-max-ms=N
+               --warmup-ms=N --warmup-deliveries=N --warmup-operations=N --warmup-max-ms=N
                --sample-ms=N --samples=N --threshold=R --timeout-ms=N
 profile:       --output=NEW_DIRECTORY --duration-ms=3000
 Omitted candidate captures the current build. Capture directories never change.
-Quick screens with a 3% practical threshold (its measured A/A noise floor) and
-never reports intervals; confirm uses 12 fresh process pairs, a 2% threshold,
-and bootstrap intervals. Both write summary.json with one score: the geometric
-mean of per-case candidate/baseline time ratios (lower is better) and a
-regression list. One operation is a whole document or whole replay.
+Quick nominates candidates at a 3% per-case screening threshold; it never accepts
+or reports intervals. Confirm uses 12 fresh pairs, longer warmup, a 2% practical
+threshold, and family-adjusted bootstrap intervals. summary.json separates the
+streaming objective score from regression guards and an explicit accepted flag.
+Only valid full-suite confirmations meeting the fixed measurement minimums can
+accept. Narrower or shortened runs are diagnostic. One operation is a complete
+document or a replay including its final settled delivery.
 `;
 
 /** Workers run serially; each has a fresh VM, Wasm instance, and warmup. */
@@ -113,6 +123,7 @@ if (command === '--help' || args.includes('--help')) {
               'seed',
               'warmup-ms',
               'warmup-deliveries',
+              'warmup-operations',
               'warmup-max-ms',
               'sample-ms',
               'samples',
@@ -147,14 +158,14 @@ if (command === '--help' || args.includes('--help')) {
   if (command === 'list') {
     for (const item of listCases())
       console.log(
-        `${defaultCaseIds.includes(item.id) ? '*' : ' '} ${item.id}\t${item.inputBytes} bytes; ${item.updates} updates\t${item.description}`
+        `${objectiveCaseIds.includes(item.id) ? 'O' : guardCaseIds.includes(item.id) ? 'G' : ' '} ${item.id}\t${item.inputBytes} bytes; ${item.updates} updates\t${item.description}`
       );
-    console.log('* default quick/confirm selection');
+    console.log('O objective; G regression guard; both run by default');
   } else if (command === 'capture') {
     await capture(output);
     console.log(`Captured ${output}`);
   } else if (command === 'profile') {
-    const caseId = options.case ?? defaultCaseIds[0];
+    const caseId = options.case ?? objectiveCaseIds[0];
     if (!listCases().some((item) => item.id === caseId))
       throw new Error(`Unknown case: ${caseId}`);
     const durationMs = number('duration-ms', 3000, 100, 600000);
@@ -194,13 +205,14 @@ if (command === '--help' || args.includes('--help')) {
     const caseIds =
       options.cases === 'all'
         ? listCases().map((item) => item.id)
-        : (options.cases?.split(',') ?? defaultCaseIds);
+        : (options.cases?.split(',') ?? suiteCaseIds);
     if (
       !caseIds.length ||
       new Set(caseIds).size !== caseIds.length ||
       caseIds.some((id) => !listCases().some((item) => item.id === id))
     )
       throw new Error('Select unique case IDs from the list command');
+    const profile = measurementProfiles[command];
     const configuration = {
       rounds: number(
         'rounds',
@@ -209,19 +221,36 @@ if (command === '--help' || args.includes('--help')) {
         200
       ),
       seed: number('seed', 20261026, 0, 4294967295),
-      warmupMs: number('warmup-ms', confirm ? 300 : 75, 1, 60000),
-      warmupDeliveries: number('warmup-deliveries', 20000, 0, 10000000),
-      warmupMaxMs: number('warmup-max-ms', confirm ? 10000 : 3000, 1, 600000),
-      sampleMs: number('sample-ms', confirm ? 30 : 15, 1, 60000),
-      samples: number('samples', confirm ? 9 : 5, 3, 1000),
-      threshold: number('threshold', confirm ? 0.02 : 0.03, 0, 0.99, false),
+      warmupMs: number('warmup-ms', profile.warmupMs, 1, 60000),
+      warmupDeliveries: number(
+        'warmup-deliveries',
+        profile.warmupDeliveries,
+        0,
+        10000000
+      ),
+      warmupOperations: number(
+        'warmup-operations',
+        profile.warmupOperations,
+        0,
+        10000000
+      ),
+      warmupMaxMs: number('warmup-max-ms', profile.warmupMaxMs, 1, 600000),
+      sampleMs: number('sample-ms', profile.sampleMs, 1, 60000),
+      samples: number('samples', profile.samples, 3, 1000),
+      threshold: number('threshold', profile.threshold, 0, 0.99, false),
       timeoutMs: number('timeout-ms', 120000, 1000, 3600000),
       caseIds,
+      warmupProfile: confirm ? 'long-confirmation' : 'quick-screen',
+      // A candidate can win on any objective case; allocate the nominal error
+      // budget across all measured cases instead of searching many 95% intervals.
+      confidence: confirm ? 1 - 0.05 / caseIds.length : null,
     };
     if (confirm && configuration.rounds % 2)
       throw new Error(
         'confirm requires an even number of rounds for balanced AB/BA ordering'
       );
+    if (configuration.warmupMaxMs < configuration.warmupMs)
+      throw new Error('--warmup-max-ms must be at least --warmup-ms');
     const baseline = options.baseline ? loadCapture(options.baseline) : null;
     const candidate = options.candidate ? loadCapture(options.candidate) : null;
     newDirectory(output);
@@ -231,11 +260,12 @@ if (command === '--help' || args.includes('--help')) {
     };
     const report = {
       format: 'words-optimization-run',
-      schemaVersion: 1,
+      schemaVersion: 2,
       mode: command,
       status: 'running',
       started: new Date().toISOString(),
       configuration,
+      policy: { suiteId, objectiveCaseIds, guardCaseIds },
       environment: environmentMetadata(),
       driverHashes: hashTree(directory),
       targets,
@@ -321,7 +351,7 @@ if (command === '--help' || args.includes('--help')) {
           );
         if (runs.some((run) => !run.warmupReachedFloor))
           warnings.push(
-            'Warmup hit its time cap before the delivery floor; the JIT may not have reached steady state'
+            'Warmup cap prevented satisfying both the time and count floors'
           );
         if (!baseline) return { caseId, candidateMs, warnings };
         const pairs = Array.from(
@@ -335,30 +365,41 @@ if (command === '--help' || args.includes('--help')) {
             ).summary.medianMs,
           })
         );
+        const comparison = comparePairs(pairs, {
+          seed: configuration.seed + index,
+          threshold: configuration.threshold,
+          confirm,
+          confidence: configuration.confidence ?? 0.95,
+        });
+        if (comparison.pairDispersion.relativeRange > 0.1)
+          warnings.push(
+            'Between-process pair ratios span >10%; repeat a fixed run under stable conditions'
+          );
         return {
           caseId,
           baselineMs: median(pairs.map((pair) => pair.baseline)),
           candidateMs,
           warnings,
-          ...comparePairs(pairs, {
-            seed: configuration.seed + index,
-            threshold: configuration.threshold,
-            confirm,
-          }),
+          ...comparison,
         };
       });
       report.status = 'complete';
       if (baseline) {
         report.summary = aggregate(report.comparisons, {
           threshold: configuration.threshold,
+          confirm,
+          objectiveCaseIds,
+          requiredCaseIds: suiteCaseIds,
+          qualificationIssues: confirm ? confirmationIssues(configuration) : [],
         });
         save(join(output, 'summary.json'), {
           format: 'words-optimization-summary',
-          schemaVersion: 1,
+          schemaVersion: 2,
           mode: command,
           baseline: baseline.directory,
           candidate: targets.candidate.directory,
           configuration,
+          policy: report.policy,
           ...report.summary,
         });
       }
@@ -373,8 +414,8 @@ if (command === '--help' || args.includes('--help')) {
       console.log(`Raw results: ${reportPath}`);
     }
     for (const row of report.comparisons) {
-      const interval = row.ratio95
-        ? `; 95% ratio [${row.ratio95.map((n) => n.toFixed(4)).join(', ')}]`
+      const interval = row.ratioInterval
+        ? `; ${(row.confidence * 100).toFixed(2)}% ratio [${row.ratioInterval.map((n) => n.toFixed(4)).join(', ')}]`
         : '';
       const label = baseline
         ? confirm
@@ -388,11 +429,21 @@ if (command === '--help' || args.includes('--help')) {
     }
     if (baseline) {
       const { summary } = report;
+      const scoreText =
+        summary.score === null
+          ? 'No objective cases measured'
+          : `objective score ${summary.score.toFixed(4)} (${summary.scoreReductionPercent.toFixed(2)}% less time, ${summary.speedup.toFixed(3)}x; ${summary.scoreCaseIds.length}/${objectiveCaseIds.length} objective cases)`;
       console.log(
-        `score ${summary.score.toFixed(4)} (${summary.scoreReductionPercent.toFixed(2)}% less time, ${summary.speedup.toFixed(3)}x) over ${caseIds.length} cases; status ${summary.status}${summary.regressions.length ? `; regressions: ${summary.regressions.join(', ')}` : ''}`
+        `${scoreText}; status ${summary.status}; accepted=${summary.accepted}${summary.regressions.length ? `; regressions: ${summary.regressions.join(', ')}` : ''}`
       );
+      for (const issue of summary.qualificationIssues)
+        console.log(`  DIAGNOSTIC: ${issue}`);
+      if (summary.missingCases.length)
+        console.log(
+          `  DIAGNOSTIC: missing suite cases: ${summary.missingCases.join(', ')}`
+        );
       console.log(
-        `Summary: ${join(output, 'summary.json')}. ${confirm ? 'Per-case intervals are not simultaneous.' : 'Quick point estimates within the threshold are noise.'} Repeated candidate selection biases wins; confirm a selected winner in a new run on an idle machine.`
+        `Summary: ${join(output, 'summary.json')}. ${confirm ? 'Intervals use a family-adjusted nominal error budget; bootstrap coverage remains approximate.' : 'Screening estimates nominate experiments, not keep/revert decisions.'} Freeze the benchmark policy during a search and confirm selected winners in a fresh, longer-warmup run.`
       );
     }
   }
