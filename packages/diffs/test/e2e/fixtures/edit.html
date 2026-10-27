@@ -143,12 +143,13 @@ export default value;
         window.__syncCount += 1;
         return result;
       };
+      // A theme change gives every row new tokens, so the columns are
+      // written whole: the rebuild the focus tests wait for. A forced render
+      // alone patches rows in place and swaps nothing.
+      let forcedThemeType = 'dark';
       window.__forceEditorFullRender = () => {
-        instance.setOptions({
-          ...instance.options,
-          disableLineNumbers: !(instance.options.disableLineNumbers ?? false),
-        });
-        instance.render({ oldFile, newFile, forceRender: true });
+        forcedThemeType = forcedThemeType === 'dark' ? 'light' : 'dark';
+        instance.setThemeType(forcedThemeType);
       };
       window.__moveEditorContainer = () => {
         const previousContainer = mount.querySelector('diffs-container');

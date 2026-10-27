@@ -197,10 +197,33 @@ export class ResizeManager {
         let item = observedNodes.get(child1);
 
         if (item != null) {
+          if (item.type !== 'annotations') {
+            throw new Error(
+              'ResizeManager.setup: an annotation child is observed as a code node'
+            );
+          }
           this.observedNodes.set(child1, item);
           this.observedNodes.set(child2, item);
           observedNodes.delete(child1);
           observedNodes.delete(child2);
+          // A row patched in place keeps its elements, so a height the render
+          // changed is measured now, in this frame, rather than when the
+          // observer reports it a frame later.
+          const child1Height = child1.getBoundingClientRect().height;
+          const child2Height = child2.getBoundingClientRect().height;
+          if (
+            child1Height !== item.column1.childHeight ||
+            child2Height !== item.column2.childHeight
+          ) {
+            item.column1.childHeight = child1Height;
+            item.column2.childHeight = child2Height;
+            annotationUpdates.add({
+              child1,
+              child2,
+              item,
+              newHeight: Math.max(child1Height, child2Height),
+            });
+          }
           continue;
         }
 
