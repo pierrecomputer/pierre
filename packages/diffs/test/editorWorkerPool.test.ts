@@ -2114,17 +2114,22 @@ describe('rendering when an editor attaches', () => {
 
       const detach = editor.edit(instance);
       // Compatible transformer markup is retained while its renderer cache is
-      // moved onto the private, keyless session model.
+      // moved onto the private, keyless session model: the session's render
+      // keeps the rows on screen by key and adds the row for the editor's
+      // empty last line after the file's final newline.
       await waitFor(() => expect(attaches).toBe(1));
       await wait(50);
 
-      expect(instanceChangedCalls).toBe(callsBefore);
+      expect(instanceChangedCalls).toBe(callsBefore + 1);
       expect(fileContainer.shadowRoot?.querySelector('[data-content]')).toBe(
         contentBefore
       );
       expect(fileContainer.shadowRoot?.querySelector('[data-line="1"]')).toBe(
         lineBefore
       );
+      expect(
+        fileContainer.shadowRoot?.querySelector('[data-line="2"]')
+      ).not.toBeNull();
       expect(editor.getFile()?.cacheKey).toBeUndefined();
       expect(instance.options.useTokenTransformer).toBeUndefined();
       expect(worker.diffRequestCount).toBe(1);

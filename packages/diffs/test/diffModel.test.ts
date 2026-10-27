@@ -316,22 +316,18 @@ describe('DiffModel pairs', () => {
     expect(model.pairFor('additions', 15)).toBeUndefined();
   });
 
-  test('never pairs the empty line after a final line break', () => {
-    // The last block has two old lines and one new line. The editor's empty
-    // line after the final line break joins it as a second new line.
+  test('the empty line after a final line break is a document line with no entry', () => {
+    // The last block has two old lines and one new line. The document's
+    // empty line after the final line break is outside every block.
     const diff = makeDiff(
       makeLines(30, { 30: 'changed 30' }),
       makeLines(31, { 30: 'old 30', 31: 'old 31' })
     );
-    const lastBlock = diff.hunks.at(-1)!.hunkContent.at(-1)!;
-    expect(lastBlock).toMatchObject({
-      type: 'change',
-      deletions: 2,
-      additions: 1,
-    });
-    diff.additionLines = [...diff.additionLines, ''];
-    if (lastBlock.type === 'change') lastBlock.additions += 1;
-    const model = DiffModel.fromDiff(diff);
+    const model = DiffModel.startEditSession(diff);
+    expect(model.lineCount).toBe(31);
+    expect(model.diff.additionLines).toHaveLength(30);
+    expect(model.lineText(30)).toBe('');
+    expect(model.blockAt('additions', 30)).toBeUndefined();
     expect(model.pairFor('additions', 29)).toBe(29);
     expect(model.pairFor('additions', 30)).toBeUndefined();
     expect(model.pairFor('deletions', 29)).toBe(29);

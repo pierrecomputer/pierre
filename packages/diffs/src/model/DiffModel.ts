@@ -79,6 +79,11 @@ interface BlockIndex {
  * session rules (regions keep their old-side bounds, a reverted region stays
  * as context until `finish`), and `LineMap` gives every document line a
  * stable id.
+ *
+ * The diff's new lines are the document's lines without the empty line after
+ * a final line break, so they always have the shape a parse gives them. That
+ * line is still a document line with an id; it renders as an extra row with
+ * no text.
  */
 export class DiffModel {
   /** A read-only model over a diff the caller owns. Nothing is copied. */
@@ -196,7 +201,10 @@ export class DiffModel {
     return this.#lines?.idAt(line) ?? line;
   }
 
-  /** The text of a new-file line, with its line break. */
+  /**
+   * The text of a new-file line, with its line break. Empty for the line
+   * after a final line break, which has no entry.
+   */
   lineText(line: number): string {
     return this.diff.additionLines[line] ?? '';
   }
@@ -230,8 +238,7 @@ export class DiffModel {
   /**
    * The line on the other side that a changed line is paired with, by
    * position inside its change block, for word diff highlights. Undefined for
-   * context, for unpaired lines, and for the empty line after a final line
-   * break, which is never paired.
+   * context and for unpaired lines.
    */
   pairFor(side: DiffSide, lineIndex: number): number | undefined {
     const block = this.blockAt(side, lineIndex);
@@ -250,8 +257,8 @@ export class DiffModel {
     const additionIndex = block.additionLineIndex + offset;
     const { deletionLines, additionLines } = this.diff;
     if (
-      !isPairableLine(deletionLines[deletionIndex]) ||
-      !isPairableLine(additionLines[additionIndex])
+      deletionLines[deletionIndex] == null ||
+      additionLines[additionIndex] == null
     ) {
       return undefined;
     }
@@ -287,28 +294,34 @@ export class DiffModel {
       changedLines = [];
       const previousTexts = new Map<number, string>();
       const lineCount = diff.additionLines.length;
-      const canAppendFinalRow = canAppendFinalDocumentRow(
-        diff.additionLines,
-        document.lineCount
-      );
       for (const [line, text] of readChangedLines(document, change)) {
-        // The parsed diff has no entry for the empty line after a final line
-        // break. That line joins the file once it has text.
+        // The diff has no entry for the empty line after a final line break.
+        // Text typed on that line joins the file; the last line emptied
+        // again leaves it. A document with more lines than that (a file
+        // with CR-only breaks, which the diff reads as one line) keeps the
+        // diff's lines as they are.
+        const isFinalEmptyLine =
+          line > 0 && line === document.lineCount - 1 && text === '';
         if (
           line < 0 ||
           line > lineCount ||
-          (line === lineCount && (text === '' || !canAppendFinalRow))
+          (line === lineCount &&
+            (isFinalEmptyLine || document.lineCount !== lineCount + 1))
         ) {
           continue;
         }
         const previous = diff.additionLines[line] ?? '';
-        if (previous === text) {
+        if (!isFinalEmptyLine && previous === text) {
           continue;
         }
         if (diff.additionLines === this.#sharedAdditionLines) {
           diff.additionLines = diff.additionLines.slice();
         }
-        diff.additionLines[line] = text;
+        if (isFinalEmptyLine) {
+          diff.additionLines.pop();
+        } else {
+          diff.additionLines[line] = text;
+        }
         diff.additionCharacterCount += text.length - previous.length;
         changedLines.push(line);
         previousTexts.set(line, previous);
@@ -329,6 +342,18 @@ export class DiffModel {
             )
           );
           regionsChanged = true;
+        } else if (diff.additionLines.length !== lineCount) {
+          // A line joined or left the file, so the regions are rebuilt.
+          const regionChange = rebuildSessionHunks(
+            diff,
+            parseDiffOptions,
+            (index) =>
+              previousTexts.has(index)
+                ? previousTexts.get(index)
+                : diff.additionLines[index]
+          );
+          expandedHunks = remapExpansion(expandedHunks, regionChange);
+          regionsChanged = regionChange != null;
         } else {
           const regionChange = applySessionChangedLines(
             diff,
@@ -343,6 +368,10 @@ export class DiffModel {
     } else {
       const previousLines = diff.additionLines;
       const { lines: nextLines, characterCount } = readAllLines(document);
+      // The diff has no entry for the empty line after a final line break.
+      if (nextLines.length > 1 && nextLines.at(-1) === '') {
+        nextLines.pop();
+      }
       diff.additionLines = nextLines;
       diff.additionCharacterCount = characterCount;
       if (isEmptyDocument(diff)) {
@@ -504,27 +533,8 @@ function canRestoreSnapshot(
   );
 }
 
-// The editor keeps an empty row after a final line break that the file does
-// not have. That row, stored as '', is never paired with an old line.
-function isPairableLine(text: string | undefined): text is string {
-  return text != null && text !== '';
-}
-
 function isEmptyDocument(diff: FileDiffMetadata): boolean {
   return diff.additionLines.length <= 1 && diff.additionLines.join('') === '';
-}
-
-// The editor shows one empty row after a final `\n` that the parsed diff has
-// no entry for. Text typed there is file content only when that row is the
-// document's single extra line; any other count means the two disagree.
-function canAppendFinalDocumentRow(
-  additionLines: readonly string[],
-  documentLineCount: number
-): boolean {
-  return (
-    documentLineCount === additionLines.length + 1 &&
-    additionLines.at(-1)?.endsWith('\n') === true
-  );
 }
 
 // The expansion after a change that moved or replaced regions; unchanged when

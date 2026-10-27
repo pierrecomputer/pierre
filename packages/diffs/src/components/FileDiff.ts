@@ -1857,6 +1857,7 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
         ? true
         : this.hunksRenderer.getExpandedHunksMap(),
       collapsedContextThreshold,
+      includeTrailingNewline: this.hunksRenderer.includesTrailingNewline(),
       callback: ({ additionLine }) => {
         if (additionLine != null) {
           firstLineNumber ??= additionLine.lineNumber;
@@ -1985,28 +1986,19 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
       this.loadFilesIfNecessary();
     }
     const editSessionDiff = this.editSession?.diff;
-    if (this.hunksRenderer.editorRenderReady()) {
-      // The rows on screen have the token spans the editor needs. When the
-      // session took over the input's highlight, what is on screen is now the
-      // session diff.
-      if (
-        editSessionDiff != null &&
-        this.hunksRenderer.diffCache === editSessionDiff
-      ) {
-        this.adoptRenderData(editSessionDiff);
-      }
-      // Rows this instance wrote take the editor as they are. Hydrated markup
-      // is rendered once first, so its rows are written by key.
-      if (this.columnsWritten()) {
-        this.syncRenderViewToEditor();
-      } else {
-        this.rerender();
-      }
-    } else {
-      // The rows lack token spans, or the highlight is still pending. A render
-      // through the session gives the editor its rows and syncs it after.
-      this.rerender();
+    // When the session took over the input's highlight, what is on screen is
+    // now the session diff.
+    if (
+      editSessionDiff != null &&
+      this.hunksRenderer.editorRenderReady() &&
+      this.hunksRenderer.diffCache === editSessionDiff
+    ) {
+      this.adoptRenderData(editSessionDiff);
     }
+    // A render through the session gives the editor its rows and syncs it
+    // after. Rows already on screen are kept by key; the end of the file
+    // gains the editor's empty last line and loses its "No newline" markers.
+    this.renderChange(true);
   }
 
   /**
@@ -2139,13 +2131,16 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
     }
   }
 
-  // Ends the edit session. If the hunks changed when editing ended, the diff
-  // is highlighted again and re-rendered.
+  // Ends the edit session and renders the diff the view-mode way again: the
+  // editor's empty last line goes, the "No newline" markers come back. If
+  // the hunks changed when editing ended, the diff is highlighted again too.
   private endEditSession(): void {
-    if (!this.hunksRenderer.endEditSession()) {
+    if (this.editSession == null) {
       return;
     }
-    void this.hunksRenderer.refreshHighlightedResult();
+    if (this.hunksRenderer.endEditSession()) {
+      void this.hunksRenderer.refreshHighlightedResult();
+    }
     this.escalateEditSessionRender('exit');
   }
 
@@ -3073,21 +3068,6 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
         this.interactionManager.setSelectionDirty();
       }
     }
-  }
-
-  // Whether a render has written every column on screen. Hydrated markup has
-  // rows no render wrote, and the editor cannot address them until one does.
-  private columnsWritten(): boolean {
-    for (const code of [
-      this.codeUnified,
-      this.codeDeletions,
-      this.codeAdditions,
-    ]) {
-      if (code != null && !this.columnReconcilers.has(code)) {
-        return false;
-      }
-    }
-    return true;
   }
 
   // Drops the rows a column is about to lose, before any column gains rows.

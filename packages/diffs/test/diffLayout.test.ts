@@ -292,6 +292,8 @@ describe('DiffLayout matches processDiffResult', () => {
           renderRange: RANGES[variant.range],
           ...annotationMaps(fixture.annotations),
           annotationSlotName: getLineAnnotationName,
+          includeTrailingNewline: model.live,
+          showNoNewlineMarkers: !model.live,
         });
 
         for (const type of ['unified', 'deletions', 'additions'] as const) {
@@ -390,10 +392,19 @@ describe('DiffLayout matches processDiffResult', () => {
       renderRange: RANGES.all,
       ...annotationMaps(annotations),
       annotationSlotName: getLineAnnotationName,
+      includeTrailingNewline: model.live,
+      showNoNewlineMarkers: !model.live,
     };
     const keysOf = (specs: { key: string }[]) => specs.map((spec) => spec.key);
+    // The session's model renders the empty line after the final line break
+    // as a row of its own, keyed d2 on the old side.
     const before = layout.layout(input);
-    expect(keysOf(before.columns.deletions!)).toEqual(['d0', 'd1', 'ann:d1']);
+    expect(keysOf(before.columns.deletions!)).toEqual([
+      'd0',
+      'd1',
+      'ann:d1',
+      'd2',
+    ]);
     const document = new TextDocument<'file-diff', undefined>(
       'inmemory://ann',
       diff.additionLines.join(''),
@@ -416,7 +427,7 @@ describe('DiffLayout matches processDiffResult', () => {
     // deletion rows and the annotation under old line 2 keep their keys.
     expect(
       keysOf(after.columns.deletions!).filter((key) => !key.startsWith('buf:'))
-    ).toEqual(['d0', 'd1', 'ann:d1']);
+    ).toEqual(['d0', 'd1', 'ann:d1', 'd2']);
   });
 
   test('content cells that are not document lines are never editable', () => {
@@ -461,6 +472,8 @@ describe('DiffLayout matches processDiffResult', () => {
         renderRange: RANGES.all,
         ...annotationMaps(annotations),
         annotationSlotName: getLineAnnotationName,
+        includeTrailingNewline: model.live,
+        showNoNewlineMarkers: !model.live,
       });
       const specs =
         diffStyle === 'split' ? columns.deletions! : columns.unified!;
@@ -518,6 +531,8 @@ describe('DiffLayout matches processDiffResult', () => {
       renderRange: RANGES.all,
       ...annotationMaps(),
       annotationSlotName: getLineAnnotationName,
+      includeTrailingNewline: model.live,
+      showNoNewlineMarkers: !model.live,
     });
     const [deletionRow] = columnCells(actual.columns.deletions!).content;
     const [additionRow] = columnCells(actual.columns.additions!).content;
@@ -573,6 +588,8 @@ describe('DiffLayout matches processDiffResult', () => {
       renderRange: RANGES.all,
       ...annotationMaps(),
       annotationSlotName: getLineAnnotationName,
+      includeTrailingNewline: model.live,
+      showNoNewlineMarkers: !model.live,
     };
     const first = layout.layout(input);
     const second = layout.layout(input);

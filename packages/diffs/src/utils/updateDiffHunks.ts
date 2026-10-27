@@ -170,62 +170,7 @@ export function recomputeDiffHunksForEdit(
       parseDiffOptions
     );
   }
-  const additionLines = diff.additionLines;
-  const recomputed = recomputeDiffHunks(diff, parseDiffOptions);
-  preserveTrailingEditorBlankLine(recomputed, additionLines);
-  return recomputed;
-}
-
-function hasTrailingEditorBlankLine(additionLines: string[]): boolean {
-  return additionLines.length > 1 && additionLines.at(-1) === '';
-}
-
-// Re-adds the editor's phantom trailing empty line (a document ending in a
-// newline exposes one extra empty line) as an addition row when the last
-// hunk's final change block can absorb it, so the caret keeps a rendered row.
-export function preserveTrailingEditorBlankLine(
-  recomputed: Pick<
-    FullDiffHunkUpdate,
-    'hunks' | 'additionLines' | 'splitLineCount' | 'unifiedLineCount'
-  >,
-  additionLines: string[]
-): void {
-  if (!hasTrailingEditorBlankLine(additionLines)) {
-    return;
-  }
-  const extraLineCount = additionLines.length - recomputed.additionLines.length;
-  if (extraLineCount <= 0) {
-    return;
-  }
-  const extraAdditionLineIndex = recomputed.additionLines.length;
-
-  const lastHunk = recomputed.hunks.at(-1);
-  if (lastHunk == null) {
-    return;
-  }
-
-  const lastHunkAdditionEnd = getHunkSideEndBoundary(
-    lastHunk.additionStart,
-    lastHunk.additionCount
-  );
-  if (lastHunkAdditionEnd !== extraAdditionLineIndex) {
-    return;
-  }
-
-  for (const content of lastHunk.hunkContent) {
-    if (
-      content.type === 'change' &&
-      content.additions < content.deletions &&
-      content.additionLineIndex + content.additions === extraAdditionLineIndex
-    ) {
-      recomputed.additionLines = additionLines;
-      content.additions += extraLineCount;
-      lastHunk.additionCount += extraLineCount;
-      lastHunk.additionLines += extraLineCount;
-      recomputeDiffRenderLineCounts(recomputed);
-      return;
-    }
-  }
+  return recomputeDiffHunks(diff, parseDiffOptions);
 }
 
 /** Updates hunk metadata after addition lines change; re-parses affected hunks only. */

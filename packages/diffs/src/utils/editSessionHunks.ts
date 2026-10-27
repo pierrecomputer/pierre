@@ -12,7 +12,6 @@ import { parseDiffFromFile } from './parseDiffFromFile';
 import { slideBlankBoundaryBlocksUp } from './realignChangeContent';
 import {
   offsetHunkContent,
-  preserveTrailingEditorBlankLine,
   recomputeDiffHunks,
   recomputeDiffHunksForEdit,
   recomputeDiffRenderLineCounts,
@@ -65,18 +64,6 @@ const deletionLineSetCache = new WeakMap<
 >();
 
 /**
- * Drops the editor document's phantom trailing empty line (a document ending
- * in a newline exposes one extra empty line the parsed diff never contains)
- * so session line arrays compare like parse-derived ones.
- */
-export function normalizeEditorLines(lines: string[]): string[] {
-  if (lines.length > 1 && lines[lines.length - 1] === '') {
-    return lines.slice(0, -1);
-  }
-  return lines;
-}
-
-/**
  * Find the complete old/current divergence core. The old side is immutable
  * during an edit session, so this result needs no prior-pass snapshot.
  */
@@ -117,14 +104,8 @@ export function rebuildSessionHunks(
   getPreviousAdditionLine?: (index: number) => string | undefined
 ): SessionRegionChange | undefined {
   const previousHunks = diff.hunks;
-  const editorAdditionLines = diff.additionLines;
-  const canonicalAdditionLines = normalizeEditorLines(editorAdditionLines);
-  const canonicalDiff =
-    canonicalAdditionLines === editorAdditionLines
-      ? diff
-      : { ...diff, additionLines: canonicalAdditionLines };
   const blocks = parseSessionChangeBlocks(
-    canonicalDiff,
+    diff,
     parseDiffOptions,
     getPreviousAdditionLine
   );
@@ -134,12 +115,9 @@ export function rebuildSessionHunks(
     diff.deletionLines.length
   );
 
-  const nextHunks = buildRegionHunks(canonicalDiff, plans);
-  diff.additionLines = canonicalAdditionLines;
-  diff.hunks = nextHunks;
+  diff.hunks = buildRegionHunks(diff, plans);
   diff.editSessionDirty = true;
   finalizeSessionHunks(diff);
-  preserveTrailingEditorBlankLine(diff, editorAdditionLines);
   const layoutChanged = hasRegionOrSplitLayoutChanged(
     previousHunks,
     diff.hunks

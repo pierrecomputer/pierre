@@ -160,6 +160,29 @@ async function renderReadOnly(
   }
 }
 
+// The rows and highlights an edit session shows for the same files: the
+// empty line after a final line break is a row of its own, and no row says
+// the file has no final newline.
+async function renderEditSessionView(
+  diffStyle: DiffStyle,
+  newContents: string,
+  oldContents = OLD,
+  renderRange?: RenderRange
+): Promise<{ highlights: string[]; layout: string[] }> {
+  const withFinalRow = (text: string) =>
+    text.endsWith('\n') ? `${text}\n` : text;
+  const { highlights, layout } = await renderReadOnly(
+    diffStyle,
+    withFinalRow(newContents),
+    withFinalRow(oldContents),
+    renderRange
+  );
+  return {
+    highlights,
+    layout: layout.filter((row) => !row.endsWith(':no-newline')),
+  };
+}
+
 // Renders the diff with an editor attached, runs `run`, then cleans up.
 async function withEditor(
   diffStyle: DiffStyle,
@@ -264,7 +287,7 @@ describe('word diff highlights while typing', () => {
         diffStyle,
         async (editor, container) => {
           replaceText(editor, 1, 15, 19, 'gamma');
-          const expected = await renderReadOnly(
+          const expected = await renderEditSessionView(
             diffStyle,
             NEW.replace('beta', 'gamma'),
             OLD,
@@ -286,7 +309,7 @@ describe('word diff highlights while typing', () => {
         diffStyle,
         async (editor, container) => {
           replaceText(editor, 1, 15, 19, 'gamma');
-          const expected = await renderReadOnly(
+          const expected = await renderEditSessionView(
             diffStyle,
             newContents.replace('beta', 'gamma'),
             oldContents,
@@ -309,7 +332,7 @@ describe('word diff highlights while typing', () => {
           // The old line after the added one becomes a change, so in split
           // view the empty row next to the added line moves below it.
           replaceText(editor, 2, 14, 19, 'gamma');
-          const expected = await renderReadOnly(
+          const expected = await renderEditSessionView(
             diffStyle,
             newContents.replace('omega', 'gamma'),
             oldContents
@@ -344,7 +367,7 @@ describe('word diff highlights while typing', () => {
               newText: 'OMEGA',
             },
           ]);
-          const expected = await renderReadOnly(
+          const expected = await renderEditSessionView(
             diffStyle,
             oldContents.replace('omega', 'OMEGA'),
             oldContents,
@@ -366,7 +389,7 @@ describe('word diff highlights while typing', () => {
           // The last line becomes a change, so the rows below it saying the
           // file has no final newline do too.
           replaceText(editor, 1, 15, 19, 'BETA');
-          const expected = await renderReadOnly(
+          const expected = await renderEditSessionView(
             diffStyle,
             newContents.replace('beta', 'BETA'),
             oldContents
