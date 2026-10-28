@@ -46,10 +46,10 @@ Offsets count UTF-16 code units from the start of the complete input.
 | `bgColor`, `htmlAttrs` | Optional background and span attributes for renderer/transformer integrations |
 
 Highlights emits italic (`1`) and bold (`2`) font flags. The type also supports
-underline (`4`) and strikethrough (`8`) supplied by transformers. Use text nodes
-or escape `content` in a custom HTML renderer. Apply root colors as well as
-token styles. Token objects are Shiki-compatible; lexer boundaries and syntax
-classifications can differ.
+underline (`4`) and strikethrough (`8`) supplied by transformers. `ansi` tokens
+can use all four flags and `bgColor`. Use text nodes or escape `content` in a
+custom HTML renderer. Apply root colors as well as token styles. Token objects
+are Shiki-compatible; lexer boundaries and syntax classifications can differ.
 
 With multiple themes, `fg` and `bg` can contain CSS declaration lists, and
 `defaultColor: false` supplies `rootStyle`. See [Themes](themes.md) for
@@ -88,8 +88,10 @@ const lang = isSupportedLanguage(requestedLanguage)
 ```
 
 `isSupportedLanguage()` narrows a string to `Lang`. Plain text aliases include
-`plain`, `text`, `plaintext`, and `txt`. Lexers are built in; custom TextMate
-grammar registration belongs to the Shiki APIs in `@pierre/diffs`.
+`plain`, `text`, `plaintext`, and `txt`. `ansi` reads terminal SGR colors, as in
+Shiki, and removes escape sequences from token content; `LiveTokenizer` treats
+it as `plain`. Lexers are built in; custom TextMate grammar registration belongs
+to the Shiki APIs in `@pierre/diffs`.
 
 ## Runtime and types
 

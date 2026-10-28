@@ -213,6 +213,40 @@ describe('backend rendering', () => {
       }
     });
 
+    test(`${preferredHighlighter} colors ansi output and drops escapes`, async () => {
+      const highlighter = await getSharedHighlighter({
+        preferredHighlighter,
+        themes: ['pierre-dark'],
+        langs: [],
+      });
+      const { tokens } = highlighter.codeToTokens(
+        'plain \x1b[31mred\x1b[0m\n\x1b[1mbold',
+        { lang: 'ansi', theme: 'pierre-dark' }
+      );
+      const red =
+        highlighter.getTheme('pierre-dark').colors?.[
+          preferredHighlighter === 'highlights'
+            ? 'terminal.ansi.red'
+            : 'terminal.ansiRed'
+        ];
+      expect(red).toBeDefined();
+      expect(
+        tokens.map((line) =>
+          line.map(({ content, color, fontStyle }) => [
+            content,
+            color?.toLowerCase(),
+            fontStyle,
+          ])
+        )
+      ).toEqual([
+        [
+          ['plain ', expect.any(String), 0],
+          ['red', red?.toLowerCase(), 0],
+        ],
+        [['bold', expect.any(String), 2]],
+      ]);
+    });
+
     test(`${preferredHighlighter} renders files, diffs and SSR`, async () => {
       const highlighter = await getSharedHighlighter({
         preferredHighlighter,

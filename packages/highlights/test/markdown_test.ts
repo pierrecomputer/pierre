@@ -224,7 +224,7 @@ void t.test(
     // body exactly as that language highlights the same code on its own
     const sampleOf = new Map<number, string>();
     for (const [name, sample] of Object.entries(samples)) {
-      const id = languages[name as Lang];
+      const id = languages[name as keyof typeof languages];
       if (!sampleOf.has(id))
         sampleOf.set(id, sample.code.replace(/\n*$/, '\n'));
     }
