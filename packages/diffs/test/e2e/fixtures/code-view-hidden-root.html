@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>diffs CodeView hidden-root fixture</title>
+    <style>
+      body {
+        margin: 0;
+        padding: 16px;
+        font-family: system-ui, sans-serif;
+      }
+      [data-code-view-root] {
+        width: min(720px, calc(100vw - 32px));
+        height: 400px;
+        overflow: auto;
+        border: 1px solid #ccc;
+      }
+      [data-wrapper][hidden] {
+        display: none;
+      }
+    </style>
+  </head>
+  <body>
+    <a
+      data-fixtures-index
+      href="/test/e2e/fixtures/index.html"
+      style="
+        display: inline-block;
+        margin-bottom: 16px;
+        font-family: system-ui, sans-serif;
+        font-size: 14px;
+        font-weight: 600;
+        color: #0b62d6;
+        text-decoration: none;
+      "
+      >&larr; All fixtures</a
+    >
+    <div data-wrapper>
+      <div data-code-view-root></div>
+    </div>
+
+    <script type="module">
+      import { CodeView } from '/dist/index.js';
+
+      const root = document.querySelector('[data-code-view-root]');
+      const wrapper = document.querySelector('[data-wrapper]');
+
+      // Long lines so every row soft-wraps to several visual lines.
+      const lines = [];
+      for (let index = 1; index <= 200; index++) {
+        lines.push(
+          `Line ${index}: ${'lorem ipsum dolor sit amet consectetur '.repeat(4)}`
+        );
+      }
+
+      const codeView = new CodeView({
+        theme: { dark: 'pierre-dark', light: 'pierre-light' },
+        themeType: 'dark',
+        overflow: 'wrap',
+        disableFileHeader: true,
+      });
+      codeView.setup(root);
+      codeView.setItems([
+        {
+          id: 'file',
+          type: 'file',
+          file: { name: 'wrapped.md', contents: `${lines.join('\n')}\n` },
+          version: 0,
+        },
+      ]);
+
+      window.__hiddenRoot = {
+        hide() {
+          wrapper.hidden = true;
+        },
+        show() {
+          wrapper.hidden = false;
+        },
+        // Rendered rows as [line number, top relative to the root, height].
+        rows() {
+          const content = codeView
+            .getRenderedItems()[0]
+            ?.element?.shadowRoot?.querySelector('[data-content]');
+          if (content == null) {
+            return [];
+          }
+          const rootTop = root.getBoundingClientRect().top;
+          return [...content.querySelectorAll('[data-line]')].map((row) => {
+            const rect = row.getBoundingClientRect();
+            return [
+              Number(row.dataset.line),
+              Math.round(rect.top - rootTop),
+              Math.round(rect.height),
+            ];
+          });
+        },
+        scrollTop: () => root.scrollTop,
+      };
+      window.__hiddenRootReady = true;
+    </script>
+  </body>
+</html>
