@@ -477,11 +477,12 @@ export interface BaseDiffOptions extends BaseCodeOptions {
   expansionLineCount?: number; // 100 is default
 
   /**
-   * Options forwarded to the underlying diff algorithm when computing
-   * diffs from file contents (oldFile/newFile) or recomputing edited
-   * diffs. Does not change the hunks in supplied pre-parsed patches.
+   * Parser options used when computing diffs from file contents
+   * (oldFile/newFile) or recomputing edited diffs. Includes jsdiff settings
+   * and the disableLineMatching escape hatch. Does not change the hunks in
+   * supplied pre-parsed patches.
    */
-  parseDiffOptions?: CreatePatchOptionsNonabortable;
+  parseDiffOptions?: ParseDiffOptions;
 }
 
 export type BaseDiffOptionsWithDefaults = Required<

@@ -56,6 +56,11 @@ When rendering direct file contents with `FileDiff.render`, pass `FileContents`
 for each existing side. Use `oldFile: null` for a new file, or `newFile: null`
 for a deleted file.
 
+The `parseDiffOptions` constructor option accepts `ParseDiffOptions`, including
+jsdiff settings and the `disableLineMatching` escape hatch (default: `false`).
+It applies when parsing file pairs or recomputing edited diffs. It does not
+rewrite the hunks of a supplied `fileDiff`.
+
 For partial diffs parsed from patches, pass `loadDiffFiles` to `FileDiff`
 constructor options. It is required whenever the component needs full file
 contents: `expandUnchanged`, `expandHunk`, or editing. Without it those paths

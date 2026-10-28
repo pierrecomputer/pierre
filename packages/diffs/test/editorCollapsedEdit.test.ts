@@ -1,5 +1,4 @@
 import { afterAll, describe, expect, spyOn, test } from 'bun:test';
-import type { CreatePatchOptionsNonabortable } from 'diff';
 
 import { FileDiff } from '../src/components/FileDiff';
 import { DEFAULT_THEMES } from '../src/constants';
@@ -7,7 +6,7 @@ import { Editor } from '../src/editor/editor';
 import { EditStateManager } from '../src/editor/EditStateManager';
 import { PieceTable } from '../src/editor/pieceTable';
 import { disposeHighlighter } from '../src/highlighter/shared_highlighter';
-import type { FileDiffMetadata } from '../src/types';
+import type { FileDiffMetadata, ParseDiffOptions } from '../src/types';
 import { installDom, wait, waitFor } from './domHarness';
 
 afterAll(async () => {
@@ -70,7 +69,7 @@ interface CollapsedEditFixture {
 // collapse-during-edit before the option forcing is removed.
 async function createCollapsedEditFixture(
   documentKey?: string,
-  parseDiffOptions?: CreatePatchOptionsNonabortable
+  parseDiffOptions?: ParseDiffOptions
 ): Promise<CollapsedEditFixture> {
   const dom = installDom();
   const container = document.createElement('div');

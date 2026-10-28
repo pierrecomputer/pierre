@@ -163,6 +163,12 @@ realignment (jsdiff's generated patch for file pairs). Keep the default unless
 the caller specifically needs this behavior. `processFile` accepts the same flag
 in its options object.
 
+The existing `parseDiffOptions` on `FileDiffOptions` and `CodeViewOptions` also
+accepts `ParseDiffOptions`. It controls file-pair parsing and edit
+recomputation, without rewriting supplied `fileDiff` metadata. In React this is
+`options.parseDiffOptions`; `MultiFileDiff` parses file pairs, while `FileDiff`
+and `CodeView` receive pre-parsed metadata.
+
 Generated cache keys distinguish the matching modes; omitted/`false` preserve
 existing keys. Explicit `processFile({ cacheKey })` values remain authoritative,
 so callers assigning keys must distinguish modes themselves.

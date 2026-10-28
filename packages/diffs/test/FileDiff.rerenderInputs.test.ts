@@ -15,6 +15,60 @@ class TestFileDiff extends FileDiff {
   }
 }
 
+test.each([false, true])(
+  'file-pair parsing forwards disableLineMatching=%p',
+  (disableLineMatching) => {
+    const { cleanup } = installDom();
+    const instance = new FileDiff({
+      parseDiffOptions: { disableLineMatching },
+    });
+    const oldFile = { name: 'option.ts', contents: 'const value = 1;\n' };
+    const newFile = { name: 'option.ts', contents: '\nconst value = 2;\n' };
+    try {
+      instance.render({
+        oldFile,
+        newFile,
+        fileContainer: document.createElement('div'),
+      });
+      expect(instance.fileDiff?.hunks[0].hunkContent).toEqual(
+        disableLineMatching
+          ? [
+              {
+                type: 'change',
+                deletions: 1,
+                additions: 2,
+                deletionLineIndex: 0,
+                additionLineIndex: 0,
+              },
+            ]
+          : [
+              {
+                type: 'change',
+                deletions: 0,
+                additions: 1,
+                deletionLineIndex: 0,
+                additionLineIndex: 0,
+              },
+              {
+                type: 'change',
+                deletions: 1,
+                additions: 1,
+                deletionLineIndex: 0,
+                additionLineIndex: 1,
+              },
+            ]
+      );
+      const supplied = parseDiffFromFile(oldFile, newFile);
+      instance.render({ fileDiff: supplied });
+      expect(instance.fileDiff).toBe(supplied);
+      expect(instance.fileDiff?.hunks[0].hunkContent).toHaveLength(2);
+    } finally {
+      instance.cleanUp();
+      cleanup();
+    }
+  }
+);
+
 // Waits until the first rendered row keeps the same DOM node across several
 // consecutive samples, so late async highlight rerenders (which rebuild rows)
 // cannot race the identity assertions below.

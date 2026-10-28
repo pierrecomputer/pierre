@@ -56,6 +56,9 @@ immutability or deep equality checks, which can quickly become expensive.
 - CodeView-level options such as `layout`, `itemMetrics`, `stickyHeaders`,
   `pointerEventsOnScroll`, and `smoothScrollSettings` allow you to configure the
   scroll view. All other options are shared between all files and diffs.
+- `parseDiffOptions` accepts `ParseDiffOptions` for recomputing edited diffs,
+  including jsdiff settings and the `disableLineMatching` escape hatch (default:
+  `false`). It does not rewrite the `fileDiff` supplied on an item.
 - `loadDiffFiles` is one of those shared diff options. It is required whenever a
   partial diff item needs its full contents: editing, `expandUnchanged`,
   `expandHunk`, or replacing an editing item with another partial diff. Without

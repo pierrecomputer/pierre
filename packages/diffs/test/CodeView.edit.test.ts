@@ -783,6 +783,62 @@ afterAll(async () => {
 });
 
 describe('CodeView item edit mode', () => {
+  test.each([false, true])(
+    'forwards disableLineMatching=%p when recomputing edits',
+    async (disableLineMatching) => {
+      const { cleanup } = installDom();
+      const { editors, createEditor } = createEditorHarness();
+      const viewer = new CodeView({
+        createEditor,
+        parseDiffOptions: { disableLineMatching },
+        onItemEditComplete() {
+          return 'accept';
+        },
+      });
+      const oldFile = { name: 'option.ts', contents: 'const value = 1;\n' };
+      const newFile = { name: 'option.ts', contents: '\nconst value = 3;\n' };
+      const item: CodeViewItem<undefined> = {
+        id: 'matching-option',
+        type: 'diff',
+        edit: true,
+        version: 0,
+        fileDiff: parseDiffFromFile(oldFile, {
+          name: oldFile.name,
+          contents: 'const value = 2;\n',
+        }),
+      };
+      try {
+        viewer.setup(createRoot());
+        await renderItems(viewer, [item]);
+        const editor = editors[0];
+        await waitFor(() => editor?.getFile() != null);
+        if (editor == null) throw new Error('Expected a diff editor');
+        setSessionText(editor, newFile.contents);
+        const expected = parseDiffFromFile(oldFile, newFile, {
+          disableLineMatching,
+        });
+        const session = getEditSessionDiff(
+          viewer.getRenderedItems()[0]?.instance
+        );
+        expect(session?.hunks[0].hunkContent).toEqual(
+          expected.hunks[0].hunkContent
+        );
+        expect(session?.hunks[0].hunkContent).toHaveLength(
+          disableLineMatching ? 1 : 2
+        );
+        await applyItemUpdate(viewer, { ...item, edit: false, version: 1 });
+        const accepted = viewer.getItem(item.id);
+        expect(accepted?.type === 'diff' && accepted.fileDiff.hunks).toEqual(
+          expected.hunks
+        );
+      } finally {
+        viewer.cleanUp();
+        await wait(0);
+        cleanup();
+      }
+    }
+  );
+
   test('releases an unhydratable partial item when editor preparation throws', () => {
     const { cleanup } = installDom();
     const root = createRoot();
