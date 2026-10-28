@@ -97,6 +97,31 @@ describe.each([
     );
   });
 
+  test.each([undefined, '', 'prefix-0:1', 'prefix","no-line-matching'])(
+    'separates matching modes for cache prefix %j',
+    (cacheKeyPrefix) => {
+      const patch = `${createFilePatch('one.txt')}${createFilePatch('two.txt')}`;
+      const getKeys = (disableLineMatching?: boolean) => {
+        const result = parse(patch, {
+          cacheKeyPrefix,
+          disableLineMatching,
+          throwOnError: true,
+        });
+        const files = Array.isArray(result) ? result[0].files : result.files;
+        return files.map((file) => file.cacheKey);
+      };
+      const defaultKeys = getKeys();
+      const unmatchedKeys = getKeys(true);
+      expect(getKeys(false)).toEqual(defaultKeys);
+      expect(getKeys(true)).toEqual(unmatchedKeys);
+      if (cacheKeyPrefix == null) {
+        expect(unmatchedKeys).toEqual([undefined, undefined]);
+      } else {
+        expect(new Set([...defaultKeys, ...unmatchedKeys]).size).toBe(4);
+      }
+    }
+  );
+
   test('keeps forgiving recovery as the options-object default', () => {
     const consoleError = spyOn(console, 'error').mockImplementation(() => {});
     try {
@@ -197,59 +222,69 @@ describe('parsePatchFiles', () => {
     expect(patchDigest(result)).toMatchSnapshot('git pr patch digest');
   });
 
-  test('generates deterministic keys from patch and file indexes', () => {
-    const prefix = 'prefix-0:1';
-    const firstPatch = `${createFilePatch('one.txt')}${createFilePatch('two.txt')}`;
-    const patchFile = [
-      'From aaaaa first patch\n',
-      firstPatch,
-      'From bbbbb second patch\n',
-      createFilePatch('three.txt'),
-      createFilePatch('four.txt'),
-    ].join('');
-    const getKeys = () =>
-      parsePatchFiles(patchFile, {
-        cacheKeyPrefix: prefix,
+  test.each([false, true])(
+    'generates deterministic keys from patch and file indexes with disableLineMatching=%p',
+    (disableLineMatching) => {
+      const scope = disableLineMatching ? 'patch-file-raw' : 'patch-file';
+      const prefix = 'prefix-0:1';
+      const firstPatch = `${createFilePatch('one.txt')}${createFilePatch('two.txt')}`;
+      const patchFile = [
+        'From aaaaa first patch\n',
+        firstPatch,
+        'From bbbbb second patch\n',
+        createFilePatch('three.txt'),
+        createFilePatch('four.txt'),
+      ].join('');
+      const getKeys = () =>
+        parsePatchFiles(patchFile, {
+          cacheKeyPrefix: prefix,
+          disableLineMatching,
+          throwOnError: true,
+        }).map((patch) => patch.files.map((file) => file.cacheKey));
+      const expectedKeys = [
+        [
+          composeCacheKey(scope, prefix, '0', '0'),
+          composeCacheKey(scope, prefix, '0', '1'),
+        ],
+        [
+          composeCacheKey(scope, prefix, '1', '0'),
+          composeCacheKey(scope, prefix, '1', '1'),
+        ],
+      ];
+
+      const keys = getKeys();
+      expect(keys).toEqual(expectedKeys);
+      expect(new Set(keys.flat()).size).toBe(4);
+      expect(getKeys()).toEqual(keys);
+
+      const directPrefix = `${prefix}-0`;
+      const directKeys = processPatch(firstPatch, {
+        cacheKeyPrefix: directPrefix,
+        disableLineMatching,
         throwOnError: true,
-      }).map((patch) => patch.files.map((file) => file.cacheKey));
-    const expectedKeys = [
-      [
-        composeCacheKey('patch-file', prefix, '0', '0'),
-        composeCacheKey('patch-file', prefix, '0', '1'),
-      ],
-      [
-        composeCacheKey('patch-file', prefix, '1', '0'),
-        composeCacheKey('patch-file', prefix, '1', '1'),
-      ],
-    ];
+      }).files.map((file) => file.cacheKey);
+      expect(directKeys).toEqual([
+        composeCacheKey(scope, directPrefix, '0'),
+        composeCacheKey(scope, directPrefix, '1'),
+      ]);
+      expect(new Set([...keys.flat(), ...directKeys]).size).toBe(6);
+    }
+  );
 
-    const keys = getKeys();
-    expect(keys).toEqual(expectedKeys);
-    expect(new Set(keys.flat()).size).toBe(4);
-    expect(getKeys()).toEqual(keys);
+  test.each([undefined, false, true])(
+    'keeps a direct processFile cache key authoritative with disableLineMatching=%p',
+    (disableLineMatching) => {
+      const cacheKey = 'caller:key-0-0:hydrated';
+      const file = processFile(createFilePatch('direct.txt'), {
+        cacheKey,
+        disableLineMatching,
+        isGitDiff: true,
+        throwOnError: true,
+      });
 
-    const directPrefix = `${prefix}-0`;
-    const directKeys = processPatch(firstPatch, {
-      cacheKeyPrefix: directPrefix,
-      throwOnError: true,
-    }).files.map((file) => file.cacheKey);
-    expect(directKeys).toEqual([
-      composeCacheKey('patch-file', directPrefix, '0'),
-      composeCacheKey('patch-file', directPrefix, '1'),
-    ]);
-    expect(new Set([...keys.flat(), ...directKeys]).size).toBe(6);
-  });
-
-  test('keeps a direct processFile cache key authoritative', () => {
-    const cacheKey = 'caller:key-0-0:hydrated';
-    const file = processFile(createFilePatch('direct.txt'), {
-      cacheKey,
-      isGitDiff: true,
-      throwOnError: true,
-    });
-
-    expect(file?.cacheKey).toBe(cacheKey);
-  });
+      expect(file?.cacheKey).toBe(cacheKey);
+    }
+  );
 
   test('patches with a final blank line should have a \\n added', () => {
     const result = parsePatchFiles(finalBlankLinePatch);

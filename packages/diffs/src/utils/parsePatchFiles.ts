@@ -61,6 +61,8 @@ function _processPatch(
   const rawFiles = isGitDiff
     ? splitGitDiffFiles(data)
     : splitUnifiedDiffFiles(data);
+  const cacheKeyScope =
+    disableLineMatching === true ? 'patch-file-raw' : 'patch-file';
   let patchMetadata: string | undefined;
   const files: FileDiffMetadata[] = [];
   for (const fileOrPatchMetadata of rawFiles) {
@@ -103,12 +105,12 @@ function _processPatch(
         cacheKeyPrefix != null
           ? patchIndex == null
             ? composeCacheKey(
-                'patch-file',
+                cacheKeyScope,
                 cacheKeyPrefix,
                 String(files.length)
               )
             : composeCacheKey(
-                'patch-file',
+                cacheKeyScope,
                 cacheKeyPrefix,
                 String(patchIndex),
                 String(files.length)
