@@ -33,7 +33,12 @@ import type { RenderDiffRequest } from '../src/worker/types';
 import type { WorkerPoolManager } from '../src/worker/WorkerPoolManager';
 import { createRoot, installDom, wait } from './domHarness';
 import { createEditorInstance, lineEdit } from './editorTestUtils';
-import { createDeferred, type Deferred } from './testUtils';
+import {
+  columnContent,
+  createDeferred,
+  type Deferred,
+  fileContentAST,
+} from './testUtils';
 import {
   createInitializedManager,
   installAnimationFramePolyfill,
@@ -120,9 +125,9 @@ function renderedDiffHtml(
   result: ReturnType<DiffHunksRenderer['renderDiff']>
 ): string {
   return toHtml([
-    ...(result?.unifiedContentAST ?? []),
-    ...(result?.additionsContentAST ?? []),
-    ...(result?.deletionsContentAST ?? []),
+    ...columnContent(result?.columns.unified),
+    ...columnContent(result?.columns.additions),
+    ...columnContent(result?.columns.deletions),
   ]);
 }
 
@@ -283,7 +288,7 @@ describe('FileRenderer edit session', () => {
       if (result == null) {
         throw new Error('expected a render result');
       }
-      const html = toHtml(result.contentAST);
+      const html = toHtml(fileContentAST(result));
       expect(html).toContain('data-char');
       expect(html).toContain('<br>');
       expect(worker.fileRequestCount).toBe(1);
@@ -327,7 +332,7 @@ describe('FileRenderer edit session', () => {
       if (result == null) {
         throw new Error('expected a render result');
       }
-      expect(toHtml(result.contentAST)).not.toContain('data-pool-result');
+      expect(toHtml(fileContentAST(result))).not.toContain('data-pool-result');
     } finally {
       manager.terminate();
     }
@@ -373,13 +378,13 @@ describe('FileRenderer edit session', () => {
       if (result == null) {
         throw new Error('expected a render result');
       }
-      expect(toHtml(result.contentAST)).not.toContain('data-pool-result');
+      expect(toHtml(fileContentAST(result))).not.toContain('data-pool-result');
 
       result = renderer.renderFile(editSessionFile);
       if (result == null) {
         throw new Error('expected a render result');
       }
-      const html = toHtml(result.contentAST);
+      const html = toHtml(fileContentAST(result));
       expect(html).not.toContain('data-pool-result');
       expect(html).toContain('data-char');
       expect(html).toContain('color:');
@@ -446,7 +451,7 @@ describe('FileRenderer edit session', () => {
       }
       expect(file.contents).toBe(FILE_CONTENTS);
       expect(editSessionFile.contents).toContain('const edited = 1;');
-      expect(toHtml(result.contentAST)).toContain('const edited = 1;');
+      expect(toHtml(fileContentAST(result))).toContain('const edited = 1;');
     } finally {
       manager.terminate();
     }
@@ -556,7 +561,9 @@ describe('FileRenderer worker rendering', () => {
       expect(second.column[0].content).toBe(first.column[10].content);
       expect(second.column[0].gutter).toBe(first.column[10].gutter);
       expect(second.column[9].content).toBe(first.column[19].content);
-      expect(toHtml(second.contentAST[10])).toContain('const value20 = 20;');
+      expect(toHtml(fileContentAST(second)[10])).toContain(
+        'const value20 = 20;'
+      );
     } finally {
       renderer.cleanUp();
       manager.terminate();
@@ -593,10 +600,10 @@ describe('FileRenderer worker rendering', () => {
         bufferBefore: 0,
         bufferAfter: 0,
       });
-      expect(expanded?.contentAST.map((row) => toHtml(row))).toEqual(
+      expect(fileContentAST(expanded).map((row) => toHtml(row))).toEqual(
         expect.arrayContaining([expect.stringContaining('alpha')])
       );
-      expect(toHtml(expanded?.contentAST[0] ?? [])).toContain('alpha');
+      expect(toHtml(fileContentAST(expanded)[0])).toContain('alpha');
     } finally {
       renderer.cleanUp();
       manager.terminate();
@@ -665,13 +672,17 @@ describe('FileRenderer worker rendering', () => {
       await respondWithRealFileHighlight(manager, worker, currentFile);
       await withTimeout(primeCurrent);
       const currentResult = renderer.renderFile(currentFile);
-      expect(toHtml(currentResult?.contentAST ?? [])).toContain('currentValue');
+      expect(toHtml(fileContentAST(currentResult) ?? [])).toContain(
+        'currentValue'
+      );
 
       const pendingResult = renderer.renderFile(replacementFile);
       expect(renderer.getFileForNextRender(replacementFile)).toBe(currentFile);
       expect(pendingResult?.file).toBe(currentFile);
-      expect(toHtml(pendingResult?.contentAST ?? [])).toContain('currentValue');
-      expect(toHtml(pendingResult?.contentAST ?? [])).not.toContain(
+      expect(toHtml(fileContentAST(pendingResult) ?? [])).toContain(
+        'currentValue'
+      );
+      expect(toHtml(fileContentAST(pendingResult) ?? [])).not.toContain(
         'replacementValue'
       );
 
@@ -702,10 +713,10 @@ describe('FileRenderer worker rendering', () => {
       const replacementResult = renderer.renderFile(replacementFile);
       expect(renderer.fileCache).toBe(replacementFile);
       expect(replacementResult?.file).toBe(replacementFile);
-      expect(toHtml(replacementResult?.contentAST ?? [])).toContain(
+      expect(toHtml(fileContentAST(replacementResult) ?? [])).toContain(
         'replacementValue'
       );
-      expect(toHtml(replacementResult?.contentAST ?? [])).not.toContain(
+      expect(toHtml(fileContentAST(replacementResult) ?? [])).not.toContain(
         'currentValue'
       );
     } finally {
@@ -1342,9 +1353,9 @@ describe('DiffHunksRenderer edit session', () => {
         throw new Error('expected a render result');
       }
       const html = toHtml([
-        ...(result.unifiedContentAST ?? []),
-        ...(result.additionsContentAST ?? []),
-        ...(result.deletionsContentAST ?? []),
+        ...columnContent(result?.columns.unified),
+        ...columnContent(result?.columns.additions),
+        ...columnContent(result?.columns.deletions),
       ]);
       expect(html).toContain('data-char');
       expect(renderer.diffCache).toBe(sessionDiff);
@@ -1543,9 +1554,9 @@ describe('DiffHunksRenderer edit session', () => {
         throw new Error('expected an editor-compatible session render');
       }
       const html = toHtml([
-        ...(result.unifiedContentAST ?? []),
-        ...(result.additionsContentAST ?? []),
-        ...(result.deletionsContentAST ?? []),
+        ...columnContent(result?.columns.unified),
+        ...columnContent(result?.columns.additions),
+        ...columnContent(result?.columns.deletions),
       ]);
 
       expect(html).toContain('data-char');
@@ -1612,9 +1623,9 @@ describe('DiffHunksRenderer edit session', () => {
         throw new Error('expected an editor-compatible session render');
       }
       const html = toHtml([
-        ...(result.unifiedContentAST ?? []),
-        ...(result.additionsContentAST ?? []),
-        ...(result.deletionsContentAST ?? []),
+        ...columnContent(result?.columns.unified),
+        ...columnContent(result?.columns.additions),
+        ...columnContent(result?.columns.deletions),
       ]);
 
       expect(html).toContain('session');
@@ -1696,9 +1707,9 @@ describe('DiffHunksRenderer edit session', () => {
           throw new Error('expected a session render result');
         }
         return toHtml([
-          ...(result.unifiedContentAST ?? []),
-          ...(result.additionsContentAST ?? []),
-          ...(result.deletionsContentAST ?? []),
+          ...columnContent(result?.columns.unified),
+          ...columnContent(result?.columns.additions),
+          ...columnContent(result?.columns.deletions),
         ]);
       };
 

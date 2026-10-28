@@ -14,22 +14,18 @@ import {
   HighlighterDisposedError,
 } from '../highlighter/shared_highlighter';
 import { areThemesAttached } from '../highlighter/themes/areThemesAttached';
+import { DiffLayout, type DiffLayoutOptions } from '../layout/DiffLayout';
 import {
   columnCells,
-  DiffLayout,
-  type DiffLayoutOptions,
-} from '../layout/DiffLayout';
-import type {
-  LayoutColumns,
-  LineDecoration,
-  LineKey,
-  RenderedLineContext,
-  RowKey,
-  RowSpec,
-  SplitInjectedRowPlacement,
-  SplitLineDecorationProps,
-  UnifiedInjectedRowPlacement,
-  UnifiedLineDecorationProps,
+  type LayoutColumns,
+  type LineDecoration,
+  type LineKey,
+  type RenderedLineContext,
+  type RowKey,
+  type SplitInjectedRowPlacement,
+  type SplitLineDecorationProps,
+  type UnifiedInjectedRowPlacement,
+  type UnifiedLineDecorationProps,
 } from '../layout/RowSpec';
 import { DiffModel, type StartSessionOptions } from '../model/DiffModel';
 import type {
@@ -146,14 +142,7 @@ export interface HunksRenderResult {
    * writing the columns whole beats patching rows one by one.
    */
   allRowsChanged: boolean;
-  unifiedGutterAST: ElementContent[] | undefined;
-  unifiedContentAST: ElementContent[] | undefined;
-  deletionsGutterAST: ElementContent[] | undefined;
-  deletionsContentAST: ElementContent[] | undefined;
-  additionsGutterAST: ElementContent[] | undefined;
-  additionsContentAST: ElementContent[] | undefined;
   hunkData: HunkData[];
-  css: string;
   preNode: HASTElement;
   headerElement: HASTElement | undefined;
   totalLines: number;
@@ -1315,31 +1304,10 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       includeTrailingNewline: this.includesTrailingNewline(),
       showNoNewlineMarkers: this.showsNoNewlineMarkers(),
     });
-    const unified = lazyColumnCells(columns.unified);
-    const deletions = lazyColumnCells(columns.deletions);
-    const additions = lazyColumnCells(columns.additions);
     return {
       fileDiff: diff,
       columns,
       allRowsChanged: previousResult !== result,
-      get unifiedGutterAST() {
-        return unified()?.gutter;
-      },
-      get unifiedContentAST() {
-        return unified()?.content;
-      },
-      get deletionsGutterAST() {
-        return deletions()?.gutter;
-      },
-      get deletionsContentAST() {
-        return deletions()?.content;
-      },
-      get additionsGutterAST() {
-        return additions()?.gutter;
-      },
-      get additionsContentAST() {
-        return additions()?.content;
-      },
       hunkData,
       preNode: this.createPreElement(
         columns.deletions != null && columns.additions != null,
@@ -1352,8 +1320,6 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       rowCount,
       bufferBefore: renderRange.bufferBefore,
       bufferAfter: renderRange.bufferAfter,
-      // FIXME
-      css: '',
     };
   }
 
@@ -1406,27 +1372,14 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     type: 'unified' | 'deletions' | 'additions',
     result: HunksRenderResult
   ): ElementContent[] | undefined {
-    const gutterAST =
-      type === 'unified'
-        ? result.unifiedGutterAST
-        : type === 'deletions'
-          ? result.deletionsGutterAST
-          : result.additionsGutterAST;
-
-    const contentAST =
-      type === 'unified'
-        ? result.unifiedContentAST
-        : type === 'deletions'
-          ? result.deletionsContentAST
-          : result.additionsContentAST;
-
-    if (gutterAST == null || contentAST == null) {
+    const specs = result.columns[type];
+    if (specs == null) {
       return undefined;
     }
-
-    const gutter = createGutterWrapper(gutterAST);
+    const cells = columnCells(specs);
+    const gutter = createGutterWrapper(cells.gutter);
     gutter.properties.style = `grid-row: span ${result.rowCount}`;
-    const contentColumn = createContentColumn(contentAST, result.rowCount);
+    const contentColumn = createContentColumn(cells.content, result.rowCount);
     return [gutter, contentColumn];
   }
 
@@ -1521,15 +1474,6 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
       stickyHeader,
     });
   }
-}
-
-// A column's cells as the gutter and content arrays that server rendering
-// and tests read, built on first read so a DOM render never maps the rows.
-function lazyColumnCells(
-  specs: RowSpec[] | undefined
-): () => ReturnType<typeof columnCells> | undefined {
-  let cells: ReturnType<typeof columnCells> | undefined;
-  return () => (specs == null ? undefined : (cells ??= columnCells(specs)));
 }
 
 // Adds the rows of a plain result for one window to the plain result already

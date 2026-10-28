@@ -16,6 +16,7 @@ import { renderDiffWithHighlighter } from '../src/utils/renderDiffWithHighlighte
 import { renderFileWithHighlighter } from '../src/utils/renderFileWithHighlighter';
 import { renderTokenLines } from '../src/utils/renderTokenLines';
 import { lineEdit } from './editorTestUtils';
+import { columnContent, fileContentAST } from './testUtils';
 
 let highlighter: DiffsHighlighter;
 beforeAll(async () => {
@@ -178,21 +179,23 @@ test('cached file and diff renderers scroll across lazy rows without retokenizin
   const firstRange = { ...DEFAULT_RENDER_RANGE, totalLines: 1 };
   const laterRange = { ...firstRange, startingLine: 3 };
   try {
-    expect(fileRenderer.renderFile(file, firstRange)?.contentAST).toHaveLength(
-      1
-    );
+    expect(
+      fileContentAST(fileRenderer.renderFile(file, firstRange))
+    ).toHaveLength(1);
     expect(highlight).toHaveBeenCalledTimes(1);
     const later = fileRenderer.renderFile(file, laterRange);
-    expect(toHtml(later?.contentAST ?? [])).toContain('outside');
+    expect(toHtml(fileContentAST(later))).toContain('outside');
     expect(highlight).toHaveBeenCalledTimes(1);
     const full = fileRenderer.renderFile(file);
-    expect(full?.contentAST).toHaveLength(5);
+    expect(fileContentAST(full)).toHaveLength(5);
     expect(highlight).toHaveBeenCalledTimes(1);
 
     expect(diffRenderer.renderDiff(diff, firstRange)).toBeDefined();
     expect(highlight).toHaveBeenCalledTimes(3);
     const laterDiff = diffRenderer.renderDiff(diff, laterRange);
-    expect(toHtml(laterDiff?.additionsContentAST ?? [])).toContain('outside');
+    expect(toHtml(columnContent(laterDiff?.columns.additions))).toContain(
+      'outside'
+    );
     expect(highlight).toHaveBeenCalledTimes(3);
   } finally {
     highlight.mockRestore();
@@ -208,7 +211,7 @@ test('editing after a lazy render regenerates writable editor rows', () => {
     renderer.renderFile(file, range);
     const session = renderer.startEditSession(file);
     const editing = renderer.renderFile(session, range);
-    expect(toHtml(editing?.contentAST ?? [])).toContain('data-char');
+    expect(toHtml(fileContentAST(editing))).toContain('data-char');
     const document = new TextDocument<'file', undefined>(
       'inmemory://lazy',
       session.contents
@@ -225,7 +228,7 @@ test('editing after a lazy render regenerates writable editor rows', () => {
       new Map([[3, [[0, '#fff', 'const edited = 3;']]]])
     );
     const later = renderer.renderFile(session, { ...range, startingLine: 3 });
-    expect(toHtml(later?.contentAST ?? [])).toContain('edited');
+    expect(toHtml(fileContentAST(later))).toContain('edited');
     expect(renderer.editorRenderReady()).toBe(true);
   } finally {
     renderer.cleanUp();
@@ -241,9 +244,9 @@ test('async windows and full-file SSR produce the same rows as eager rendering',
       totalLines: 2,
     });
     const eager = renderFileWithHighlighter(file, highlighter, options);
-    expect(toHtml(window.contentAST)).toBe(toHtml(eager.code.slice(1, 3)));
+    expect(toHtml(fileContentAST(window))).toBe(toHtml(eager.code.slice(1, 3)));
     const full = await renderer.asyncRender(file);
-    expect(toHtml(full.contentAST)).toBe(toHtml(eager.code));
+    expect(toHtml(fileContentAST(full))).toBe(toHtml(eager.code));
   } finally {
     renderer.cleanUp();
   }

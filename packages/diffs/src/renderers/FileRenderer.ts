@@ -13,7 +13,12 @@ import {
 } from '../highlighter/shared_highlighter';
 import { areThemesAttached } from '../highlighter/themes/areThemesAttached';
 import { FileLayout } from '../layout/FileLayout';
-import type { LineKey, RowKey, RowSpec } from '../layout/RowSpec';
+import {
+  columnCells,
+  type LineKey,
+  type RowKey,
+  type RowSpec,
+} from '../layout/RowSpec';
 import { FileModel, type FileModelChange } from '../model/FileModel';
 import type { DocumentLineChange, DocumentLines } from '../model/types';
 import { RowSource } from '../rows/RowSource';
@@ -93,11 +98,8 @@ export interface FileRenderResult {
   column: RowSpec[];
   /** Every row is new: the result the rows come from changed. */
   allRowsChanged: boolean;
-  gutterAST: ElementContent[];
-  contentAST: ElementContent[];
   preAST: HASTElement;
   headerAST: HASTElement | undefined;
-  css: string;
   totalLines: number;
   themeStyles: string;
   baseThemeType: 'light' | 'dark' | undefined;
@@ -884,12 +886,6 @@ export class FileRenderer<LAnnotation = undefined> {
       file,
       column,
       allRowsChanged: previousResult !== result,
-      get gutterAST() {
-        return column.map((spec) => spec.gutter);
-      },
-      get contentAST() {
-        return column.map((spec) => spec.content);
-      },
       preAST: this.createPreElement(totalLines),
       headerAST: !disableFileHeader ? this.renderHeader(file) : undefined,
       totalLines,
@@ -898,7 +894,6 @@ export class FileRenderer<LAnnotation = undefined> {
       baseThemeType,
       bufferBefore: renderRange.bufferBefore,
       bufferAfter: renderRange.bufferAfter,
-      css: '',
     };
   }
 
@@ -930,13 +925,11 @@ export class FileRenderer<LAnnotation = undefined> {
   }
 
   public renderCodeAST(result: FileRenderResult): ElementContent[] {
+    const cells = columnCells(result.column);
     const gutter = createGutterWrapper();
-    gutter.children = result.gutterAST;
+    gutter.children = cells.gutter;
     gutter.properties.style = `grid-row: span ${result.rowCount}`;
-    const contentColumn = createContentColumn(
-      result.contentAST,
-      result.rowCount
-    );
+    const contentColumn = createContentColumn(cells.content, result.rowCount);
     return [gutter, contentColumn];
   }
 

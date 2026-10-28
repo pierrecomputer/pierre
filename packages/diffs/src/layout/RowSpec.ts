@@ -1,4 +1,4 @@
-import type { Element as HASTElement, Properties } from 'hast';
+import type { ElementContent, Element as HASTElement, Properties } from 'hast';
 
 import type { LineTypes } from '../types';
 import type { DiffLineMetadata } from '../utils/iterateOverDiff';
@@ -110,4 +110,15 @@ export interface RenderedLineContext {
   splitLineIndex: number;
   deletionLine?: DiffLineMetadata;
   additionLine?: DiffLineMetadata;
+}
+
+/** The gutter and content cells of a column's rows, in order. */
+export function columnCells(specs: readonly RowSpec[]): {
+  gutter: ElementContent[];
+  content: ElementContent[];
+} {
+  return {
+    gutter: specs.map((spec) => spec.gutter),
+    content: specs.map((spec) => spec.content),
+  };
 }

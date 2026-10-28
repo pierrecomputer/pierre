@@ -7,7 +7,7 @@ import { FileRenderer } from '../src/renderers/FileRenderer';
 import type { FileContents, HighlightedToken } from '../src/types';
 import { documentEdit, lineEdit } from './editorTestUtils';
 import { mockFiles } from './mocks';
-import { hastTextContent } from './testUtils';
+import { fileContentAST, hastTextContent } from './testUtils';
 
 type FileRendererCacheProbe = {
   model?: { file: FileContents };
@@ -82,7 +82,10 @@ describe('FileRenderer', () => {
 
     const result = instance.renderFile(session);
     expect(result?.rowCount).toBe(2);
-    expect(result?.contentAST.map(hastTextContent)).toEqual(['alpha', 'gamma']);
+    expect(fileContentAST(result).map(hastTextContent)).toEqual([
+      'alpha',
+      'gamma',
+    ]);
     expect(session.contents).toBe('alpha\ngamma');
   });
 
@@ -124,7 +127,7 @@ describe('FileRenderer', () => {
       ])
     );
 
-    const rows = instance.renderFile(session)?.contentAST ?? [];
+    const rows = fileContentAST(instance.renderFile(session)) ?? [];
     expect(rows.map(hastTextContent)).toEqual(['A', 'B', 'X', 'C', 'D', '']);
     expect(rows[4]).toMatchObject({
       children: [
@@ -279,7 +282,7 @@ describe('FileRenderer', () => {
       const { document, change } = replaceDocument(session.contents, nextText);
       instance.applyChange(change, document, dirtyLines);
 
-      const rows = instance.renderFile(session)?.contentAST ?? [];
+      const rows = fileContentAST(instance.renderFile(session)) ?? [];
       expect(rows[0]).toMatchObject({
         children: [
           {
@@ -315,7 +318,7 @@ describe('FileRenderer', () => {
       document,
       new Map([[0, [[0, '#ff0000', 'const edited = 1;']]]])
     );
-    const rows = instance.renderFile(session)?.contentAST ?? [];
+    const rows = fileContentAST(instance.renderFile(session)) ?? [];
     expect(rows.map(hastTextContent)).toEqual([
       'const edited = 1;',
       'const b = 2;',
@@ -347,7 +350,7 @@ describe('FileRenderer', () => {
     expect(second?.column[0].gutter).toBe(first?.column[0].gutter);
     expect(second?.column[1].content).not.toBe(first?.column[1].content);
     expect(second?.column[2].content).toBe(first?.column[2].content);
-    expect(second?.contentAST.map(hastTextContent)).toEqual([
+    expect(fileContentAST(second).map(hastTextContent)).toEqual([
       'alpha',
       'bravo!',
       'charlie',
@@ -407,7 +410,7 @@ describe('FileRenderer', () => {
       name: 'restart.ts',
     });
     expect(
-      instance.renderFile(restarted)?.contentAST.map(hastTextContent)
+      fileContentAST(instance.renderFile(restarted)).map(hastTextContent)
     ).toEqual(['/*', 'a', 'b', 'c']);
   });
 
@@ -420,12 +423,12 @@ describe('FileRenderer', () => {
     await instance.asyncRender(session);
     instance.renderFile(session);
     instance.setTokens(new Map([[0, [[0, '#ff0000', 'alpha']]]]));
-    expect(instance.renderFile(session)?.contentAST[0]).toMatchObject({
+    expect(fileContentAST(instance.renderFile(session))[0]).toMatchObject({
       children: [{ properties: { style: 'color:#ff0000;' } }],
     });
 
     instance.clearRenderCache();
-    const row = instance.renderFile(session)?.contentAST[0];
+    const row = fileContentAST(instance.renderFile(session))[0];
     expect(row).toBeDefined();
     expect(JSON.stringify(row)).not.toContain('color:#ff0000;');
   });

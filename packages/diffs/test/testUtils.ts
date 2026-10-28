@@ -1,7 +1,9 @@
 import type { ElementContent, Element as HASTElement } from 'hast';
 
 import { DEFAULT_COLLAPSED_CONTEXT_THRESHOLD } from '../src/constants';
+import type { LayoutColumns, RowSpec } from '../src/layout/RowSpec';
 import type { HunksRenderResult } from '../src/renderers/DiffHunksRenderer';
+import type { FileRenderResult } from '../src/renderers/FileRenderer';
 import type { FileDiffMetadata, ParsedPatch } from '../src/types';
 
 // Async test helpers
@@ -308,11 +310,55 @@ export function countRenderedLines(ast: ElementContent[]): number {
   ).length;
 }
 
+// The content cells of a column's rows, in order; none for a column the
+// result does not have.
+export function columnContent(
+  specs: readonly RowSpec[] | undefined
+): ElementContent[] {
+  return specs?.map((spec) => spec.content) ?? [];
+}
+
+// A column the diff render result has; the test is wrong otherwise.
+function requireColumn(
+  result: HunksRenderResult | undefined,
+  column: keyof LayoutColumns
+): RowSpec[] {
+  const specs = result?.columns[column];
+  if (specs == null) {
+    throw new Error(`the render result has no ${column} column`);
+  }
+  return specs;
+}
+
+/** The content cells of one column of a diff render result, in row order. */
+export function contentAST(
+  result: HunksRenderResult | undefined,
+  column: keyof LayoutColumns
+): ElementContent[] {
+  return requireColumn(result, column).map((spec) => spec.content);
+}
+
+/** The gutter cells of one column of a diff render result, in row order. */
+export function gutterAST(
+  result: HunksRenderResult | undefined,
+  column: keyof LayoutColumns
+): ElementContent[] {
+  return requireColumn(result, column).map((spec) => spec.gutter);
+}
+
+/** The content cells of a file render result's rows, in row order. */
+export function fileContentAST(
+  result: FileRenderResult | undefined
+): ElementContent[] {
+  return columnContent(result?.column);
+}
+
 // Count rows in split mode by looking at line-index values
 // Each unique line-index represents one visual row in split view
 export function countSplitRows(result: HunksRenderResult): number {
   const lineIndices = new Set<number>();
-  const { additionsContentAST = [], deletionsContentAST = [] } = result;
+  const additionsContentAST = columnContent(result.columns.additions);
+  const deletionsContentAST = columnContent(result.columns.deletions);
 
   for (const nodes of [additionsContentAST, deletionsContentAST]) {
     const allElements = collectAllElements(nodes);
@@ -438,19 +484,14 @@ export interface RenderResultProjection {
 export function projectRenderResult(
   result: HunksRenderResult
 ): RenderResultProjection {
+  const project = (column: keyof LayoutColumns) => {
+    const cells = contentAST(result, column);
+    return cells == null ? undefined : projectColumn(cells);
+  };
   return {
-    unified:
-      result.unifiedContentAST != null
-        ? projectColumn(result.unifiedContentAST)
-        : undefined,
-    deletions:
-      result.deletionsContentAST != null
-        ? projectColumn(result.deletionsContentAST)
-        : undefined,
-    additions:
-      result.additionsContentAST != null
-        ? projectColumn(result.additionsContentAST)
-        : undefined,
+    unified: project('unified'),
+    deletions: project('deletions'),
+    additions: project('additions'),
     bufferBefore: result.bufferBefore,
     bufferAfter: result.bufferAfter,
   };

@@ -6,7 +6,8 @@ import {
   disposeHighlighter,
   getSharedHighlighter,
 } from '../src/highlighter/shared_highlighter';
-import { columnCells, DiffLayout } from '../src/layout/DiffLayout';
+import { DiffLayout } from '../src/layout/DiffLayout';
+import { columnCells } from '../src/layout/RowSpec';
 import { DiffModel } from '../src/model/DiffModel';
 import { DiffHunksRenderer } from '../src/renderers/DiffHunksRenderer';
 import { RowSource } from '../src/rows/RowSource';
@@ -298,26 +299,13 @@ describe('DiffLayout matches processDiffResult', () => {
 
         for (const type of ['unified', 'deletions', 'additions'] as const) {
           const specs = actual.columns[type];
-          const expectedGutter =
-            type === 'unified'
-              ? expected.unifiedGutterAST
-              : type === 'deletions'
-                ? expected.deletionsGutterAST
-                : expected.additionsGutterAST;
-          const expectedContent =
-            type === 'unified'
-              ? expected.unifiedContentAST
-              : type === 'deletions'
-                ? expected.deletionsContentAST
-                : expected.additionsContentAST;
-          expect(specs == null).toBe(expectedContent == null);
-          if (
-            specs == null ||
-            expectedGutter == null ||
-            expectedContent == null
-          ) {
+          const expectedSpecs = expected.columns[type];
+          expect(specs == null).toBe(expectedSpecs == null);
+          if (specs == null || expectedSpecs == null) {
             continue;
           }
+          const { gutter: expectedGutter, content: expectedContent } =
+            columnCells(expectedSpecs);
           // Row by row first, so a mismatch names the row.
           const actualCells = columnCells(specs);
           const rowCount = Math.max(

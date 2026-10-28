@@ -1,4 +1,4 @@
-import type { ElementContent, Element as HASTElement, Properties } from 'hast';
+import type { Element as HASTElement, Properties } from 'hast';
 
 import type { DiffModel } from '../model/DiffModel';
 import type { DiffHunksRenderer } from '../renderers/DiffHunksRenderer';
@@ -45,7 +45,6 @@ import type {
   LineKey,
   RenderedLineContext,
   RowKey,
-  RowSpec,
   SplitInjectedRow,
 } from './RowSpec';
 
@@ -876,17 +875,6 @@ export class DiffLayout<LAnnotation = undefined> {
     }
     countRow();
   }
-}
-
-/** The gutter and content cells of a column's rows, in order. */
-export function columnCells(specs: readonly RowSpec[]): {
-  gutter: ElementContent[];
-  content: ElementContent[];
-} {
-  return {
-    gutter: specs.map((spec) => spec.gutter),
-    content: specs.map((spec) => spec.content),
-  };
 }
 
 // The key of a filler row: it follows the row before it, or opens the column.
