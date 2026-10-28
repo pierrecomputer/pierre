@@ -91,11 +91,14 @@ describe.each([
     }
   );
 
-  test('honors strict errors from the options object', () => {
-    expect(() => parse(malformedPatch, { throwOnError: true })).toThrow(
-      'invalid hunk line'
-    );
-  });
+  test.each([false, true])(
+    'honors strict errors with disableLineMatching=%p',
+    (disableLineMatching) => {
+      expect(() =>
+        parse(malformedPatch, { throwOnError: true, disableLineMatching })
+      ).toThrow('invalid hunk line');
+    }
+  );
 
   test.each([undefined, '', 'prefix-0:1', 'prefix","no-line-matching'])(
     'separates matching modes for cache prefix %j',

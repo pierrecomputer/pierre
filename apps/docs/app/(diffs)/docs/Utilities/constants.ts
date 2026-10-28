@@ -90,7 +90,7 @@ index abc123..def456 100644
 const patches: ParsedPatch[] = parsePatchFiles(patchContent);
 
 // With cache key prefix for worker pool caching
-// Each file's cacheKey is derived from the prefix, patch index, and file index.
+// Keys include the prefix, patch/file indexes, and matching mode.
 // IMPORTANT: The prefix must change when patchContent changes!
 // Use a stable identifier like a commit SHA or content hash.
 const cachedPatches = parsePatchFiles(patchContent, { cacheKeyPrefix: 'my-pr-123-abc456' });

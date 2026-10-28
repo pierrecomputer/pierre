@@ -161,17 +161,17 @@ file or diff invalidates that cache.
 
 ## Tokenization and diff types
 
-| Export                                                | Purpose                                                                           |
-| ----------------------------------------------------- | --------------------------------------------------------------------------------- |
-| `DiffsTheme`                                          | Shared editor colors with optional TextMate and Zed syntax palettes.              |
-| `ThemedToken`                                         | One styled token with content, offset, color, and optional styles.                |
-| `TokensResult`                                        | Token rows and root colors/styles.                                                |
-| `CodeToTokensOptions`, `CodeToHtmlOptions`            | Select a language, themes, and tokenization limits.                               |
-| `DiffsStreamTokenizer`                                | Incremental tokenization of appended chunks.                                      |
-| `DiffsEditorTokenizer`, `DiffsEditorTokenizerOptions` | Incremental tokenization of document edits.                                       |
-| `CreatePatchOptionsNonabortable`                      | Configures the underlying patch algorithm.                                        |
-| `ParseDiffOptions`                                    | Configures `parseDiffFromFile`, extending the underlying patch algorithm options. |
-| `ParsePatchOptions`                                   | Configures `parsePatchFiles` and `processPatch` through their options object.     |
+| Export                                                | Purpose                                                                        |
+| ----------------------------------------------------- | ------------------------------------------------------------------------------ |
+| `DiffsTheme`                                          | Shared editor colors with optional TextMate and Zed syntax palettes.           |
+| `ThemedToken`                                         | One styled token with content, offset, color, and optional styles.             |
+| `TokensResult`                                        | Token rows and root colors/styles.                                             |
+| `CodeToTokensOptions`, `CodeToHtmlOptions`            | Select a language, themes, and tokenization limits.                            |
+| `DiffsStreamTokenizer`                                | Incremental tokenization of appended chunks.                                   |
+| `DiffsEditorTokenizer`, `DiffsEditorTokenizerOptions` | Incremental tokenization of document edits.                                    |
+| `CreatePatchOptionsNonabortable`                      | Configures the underlying patch algorithm.                                     |
+| `ParseDiffOptions`                                    | jsdiff options plus `disableLineMatching` for `parseDiffFromFile`.             |
+| `ParsePatchOptions`                                   | `disableLineMatching`, `cacheKeyPrefix`, and `throwOnError` for patch parsing. |
 
 Import TextMate registration and Shiki transformer types from `shiki`. Diffs no
 longer re-exports Shiki's public API.

@@ -141,8 +141,8 @@ hydration, placeholder, and cleanup members with diff data.
 ## Parsing and patch APIs
 
 `parsePatchFiles(patch, options?)` and `processPatch(patch, options?)` accept a
-`ParsePatchOptions` object as the second argument. Put `cacheKeyPrefix` and
-`throwOnError` in that object; the old positional arguments are no longer
+`ParsePatchOptions` object as the second argument, with `disableLineMatching`,
+`cacheKeyPrefix`, and `throwOnError`. The old positional arguments are no longer
 supported.
 
 ```ts
@@ -154,7 +154,18 @@ const patches = parsePatchFiles(patch, {
 
 For file pairs, `parseDiffFromFile(oldFile, newFile, options?, throwOnError?)`
 accepts `ParseDiffOptions`, including jsdiff settings such as `context` and
-`ignoreWhitespace`. Those settings do not apply to parsing existing patch text.
+`ignoreWhitespace`, plus `disableLineMatching`. The fourth `throwOnError`
+argument is unchanged. jsdiff settings do not apply to existing patch text.
+
+`disableLineMatching` is a parse-time escape hatch, defaulting to `false`. When
+true, it preserves the patch's change blocks and line order without similarity
+realignment (jsdiff's generated patch for file pairs). Keep the default unless
+the caller specifically needs this behavior. `processFile` accepts the same flag
+in its options object.
+
+Generated cache keys distinguish the matching modes; omitted/`false` preserve
+existing keys. Explicit `processFile({ cacheKey })` values remain authoritative,
+so callers assigning keys must distinguish modes themselves.
 
 | Export                       | Purpose                                               |
 | ---------------------------- | ----------------------------------------------------- |
