@@ -13,6 +13,7 @@ import {
   THEME_CSS_ATTRIBUTE,
   UNSAFE_CSS_ATTRIBUTE,
 } from '../constants';
+import { CodeColumns } from '../dom/CodeColumns';
 import { ColumnReconciler } from '../dom/ColumnReconciler';
 import type { Editor } from '../editor/editor';
 import type { TextDocument, TextDocumentChange } from '../editor/textDocument';
@@ -226,7 +227,7 @@ export class File<LAnnotation = undefined, Caret = undefined> {
   protected fileContainer: HTMLElement | undefined;
   protected spriteSVG: SVGElement | undefined;
   protected pre: HTMLPreElement | undefined;
-  protected code: HTMLElement | undefined;
+  private readonly codeColumns = new CodeColumns<'code'>();
   protected bufferBefore: HTMLElement | undefined;
   protected bufferAfter: HTMLElement | undefined;
   protected themeCSSStyle: HTMLStyleElement | undefined;
@@ -685,14 +686,20 @@ export class File<LAnnotation = undefined, Caret = undefined> {
     });
   }
 
+  protected get code(): HTMLElement | undefined {
+    return this.codeColumns.get('code');
+  }
+
+  protected set code(code: HTMLElement | undefined) {
+    this.codeColumns.set('code', code);
+  }
+
   public getCodeScrollLeft(): number {
-    return this.code?.scrollLeft ?? 0;
+    return this.codeColumns.scrollLeft;
   }
 
   public setCodeScrollLeft(position: number): void {
-    if (this.code != null) {
-      this.code.scrollLeft = position;
-    }
+    this.codeColumns.setScrollLeft(position);
   }
 
   /**
@@ -827,7 +834,7 @@ export class File<LAnnotation = undefined, Caret = undefined> {
     this.clearAuxiliaryNodes();
     this.pre?.remove();
     this.pre = undefined;
-    this.code = undefined;
+    this.codeColumns.cleanUp();
     this.bufferBefore?.remove();
     this.bufferBefore = undefined;
     this.bufferAfter?.remove();
@@ -1468,7 +1475,7 @@ export class File<LAnnotation = undefined, Caret = undefined> {
     this.bufferAfter = undefined;
 
     this.code?.remove();
-    this.code = undefined;
+    this.codeColumns.cleanUp();
 
     this.pre?.remove();
     this.pre = undefined;
@@ -1563,7 +1570,7 @@ export class File<LAnnotation = undefined, Caret = undefined> {
 
     this.bufferAfter = undefined;
     this.bufferBefore = undefined;
-    this.code = undefined;
+    this.codeColumns.cleanUp();
     this.errorWrapper = undefined;
     this.headerElement = undefined;
     this.headerPrefix = undefined;
@@ -2118,7 +2125,7 @@ export class File<LAnnotation = undefined, Caret = undefined> {
     if (this.pre == null) {
       this.pre = document.createElement('pre');
       this.appliedPreAttributes = undefined;
-      this.code = undefined;
+      this.codeColumns.cleanUp();
       shadowRoot.appendChild(this.pre);
     }
     // If we have a new parent container for the pre element, lets go ahead and
@@ -2136,7 +2143,7 @@ export class File<LAnnotation = undefined, Caret = undefined> {
   }
 
   private syncCodeNodeFromPre(pre: HTMLPreElement): void {
-    this.code = undefined;
+    this.codeColumns.cleanUp();
     for (const child of Array.from(pre.children)) {
       if (!(child instanceof HTMLElement)) {
         continue;
