@@ -17,6 +17,7 @@ import {
 import { parseDiffFromFile } from '../src/utils/parseDiffFromFile';
 import { parsePatchFiles } from '../src/utils/parsePatchFiles';
 import { installDom, wait } from './domHarness';
+import { contentAST } from './testUtils';
 
 afterAll(async () => {
   await disposeHighlighter();
@@ -328,13 +329,13 @@ describe('trailing newline row', () => {
 
       const row = lastElement(
         diffStyle === 'split'
-          ? result.additionsContentAST
-          : result.unifiedContentAST
+          ? contentAST(result, 'additions')
+          : contentAST(result, 'unified')
       );
       expect(String(row?.properties['data-line'])).toBe('4');
       expect(row?.properties['data-line-type']).toBe('context');
       if (diffStyle === 'split') {
-        const deletionRow = lastElement(result.deletionsContentAST);
+        const deletionRow = lastElement(contentAST(result, 'deletions'));
         expect(String(deletionRow?.properties['data-line'])).toBe('4');
         expect(deletionRow?.properties['data-line-type']).toBe('context');
       }
@@ -343,8 +344,8 @@ describe('trailing newline row', () => {
       const viewResult = renderer.renderDiff(sessionDiff);
       const viewRow = lastElement(
         diffStyle === 'split'
-          ? viewResult?.additionsContentAST
-          : viewResult?.unifiedContentAST
+          ? contentAST(viewResult, 'additions')
+          : contentAST(viewResult, 'unified')
       );
       expect(String(viewRow?.properties['data-line'])).toBe('3');
     });
@@ -361,11 +362,13 @@ describe('trailing newline row', () => {
     const result = renderer.renderDiff(sessionDiff);
     expect(result).toBeDefined();
     if (result == null) return;
-    const row = lastElement(result.additionsContentAST);
+    const row = lastElement(contentAST(result, 'additions'));
     expect(String(row?.properties['data-line'])).toBe('3');
     expect(row?.properties['data-line-type']).toBe('change-addition');
     expect(
-      lastElement(result.deletionsContentAST)?.properties['data-content-buffer']
+      lastElement(contentAST(result, 'deletions'))?.properties[
+        'data-content-buffer'
+      ]
     ).toBeDefined();
   });
 

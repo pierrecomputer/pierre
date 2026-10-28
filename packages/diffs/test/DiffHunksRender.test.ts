@@ -12,6 +12,8 @@ import { mockDiffs } from './mocks';
 import {
   assertDefined,
   collectAllElements,
+  columnContent,
+  contentAST,
   countSplitRows,
   projectColumn,
   rowDigests,
@@ -30,8 +32,8 @@ const loadedFiles: FileDiffLoadedFiles = {
 function countInlineDiffSpans(
   result: Awaited<ReturnType<DiffHunksRenderer['asyncRender']>>
 ) {
-  const additions = result.additionsContentAST ?? [];
-  const deletions = result.deletionsContentAST ?? [];
+  const additions = columnContent(result.columns.additions);
+  const deletions = columnContent(result.columns.deletions);
   return [
     ...collectAllElements(additions),
     ...collectAllElements(deletions),
@@ -143,17 +145,17 @@ describe('DiffHunksRenderer', () => {
     expect(verifyHunkLineValues(diff)).toEqual([]);
     const result = await instance.asyncRender(diff);
     assertDefined(
-      result.additionsContentAST,
-      'result.additionsContentAST should be defined'
+      contentAST(result, 'additions'),
+      'additions content should be defined'
     );
     assertDefined(
-      result.deletionsContentAST,
-      'result.deletionsContentAST should be defined'
+      contentAST(result, 'deletions'),
+      'deletions content should be defined'
     );
-    expect(result.unifiedContentAST).toBeUndefined();
+    expect(result.columns.unified).toBeUndefined();
 
-    const additionRows = projectColumn(result.additionsContentAST);
-    const deletionRows = projectColumn(result.deletionsContentAST);
+    const additionRows = projectColumn(contentAST(result, 'additions'));
+    const deletionRows = projectColumn(contentAST(result, 'deletions'));
     const surpluses = changeBlockSurpluses(diff);
     // The fixture has at least one block deleting more than it adds, so the
     // additions column must receive buffer rows of exactly those sizes
@@ -184,17 +186,17 @@ describe('DiffHunksRenderer', () => {
     expect(verifyHunkLineValues(diff)).toEqual([]);
     const result = await instance.asyncRender(diff);
     assertDefined(
-      result.additionsContentAST,
-      'result.additionsContentAST should be defined'
+      contentAST(result, 'additions'),
+      'additions content should be defined'
     );
     assertDefined(
-      result.deletionsContentAST,
-      'result.deletionsContentAST should be defined'
+      contentAST(result, 'deletions'),
+      'deletions content should be defined'
     );
-    expect(result.unifiedContentAST).toBeUndefined();
+    expect(result.columns.unified).toBeUndefined();
 
-    const additionRows = projectColumn(result.additionsContentAST);
-    const deletionRows = projectColumn(result.deletionsContentAST);
+    const additionRows = projectColumn(contentAST(result, 'additions'));
+    const deletionRows = projectColumn(contentAST(result, 'deletions'));
     const surpluses = changeBlockSurpluses(diff);
     // Reversed fixture: at least one block adds more than it deletes, so the
     // deletions column must receive buffer rows of exactly those sizes
@@ -237,16 +239,16 @@ describe('DiffHunksRenderer', () => {
     expect(verifyHunkLineValues(diff)).toEqual([]);
     const result = await instance.asyncRender(diff);
     assertDefined(
-      result.deletionsContentAST,
-      'result.deletionsContentAST should be defined'
+      contentAST(result, 'deletions'),
+      'deletions content should be defined'
     );
     assertDefined(
-      result.additionsContentAST,
-      'result.additionsContentAST should be defined'
+      contentAST(result, 'additions'),
+      'additions content should be defined'
     );
 
-    const deletionRows = projectColumn(result.deletionsContentAST);
-    const additionRows = projectColumn(result.additionsContentAST);
+    const deletionRows = projectColumn(contentAST(result, 'deletions'));
+    const additionRows = projectColumn(contentAST(result, 'additions'));
     // The deletion column renders the gap above the paired old line.
     const bufferIndex = deletionRows.findIndex((row) => row.kind === 'buffer');
     const deletionLineIndex = deletionRows.findIndex((row) =>
@@ -271,15 +273,15 @@ describe('DiffHunksRenderer', () => {
     );
     expect(verifyHunkLineValues(diff)).toEqual([]);
     const result = await instance.asyncRender(diff);
-    expect(result.additionsContentAST).toBeUndefined();
-    expect(result.deletionsContentAST).toBeUndefined();
+    expect(result.columns.additions).toBeUndefined();
+    expect(result.columns.deletions).toBeUndefined();
     assertDefined(
-      result.unifiedContentAST,
-      'result.unifiedContentAST should be defined'
+      contentAST(result, 'unified'),
+      'unified content should be defined'
     );
-    expect(rowDigests(projectColumn(result.unifiedContentAST))).toMatchSnapshot(
-      'rendered rows'
-    );
+    expect(
+      rowDigests(projectColumn(contentAST(result, 'unified')))
+    ).toMatchSnapshot('rendered rows');
   });
 
   test('a diff with only additions should have an empty deletions column', async () => {
@@ -293,14 +295,14 @@ describe('DiffHunksRenderer', () => {
     const result = await instance.asyncRender(diff);
     expect(result.preNode.properties?.['data-diff-type']).toBe('single');
     assertDefined(
-      result.additionsContentAST,
-      'result.additionsContentAST should be defined'
+      contentAST(result, 'additions'),
+      'additions content should be defined'
     );
     expect(countSplitRows(result)).toBe(diff.splitLineCount);
-    expect(result.deletionsContentAST).toBeUndefined();
-    expect(result.unifiedContentAST).toBeUndefined();
+    expect(result.columns.deletions).toBeUndefined();
+    expect(result.columns.unified).toBeUndefined();
     expect(
-      rowDigests(projectColumn(result.additionsContentAST))
+      rowDigests(projectColumn(contentAST(result, 'additions')))
     ).toMatchSnapshot('rendered rows');
   });
 
@@ -315,14 +317,14 @@ describe('DiffHunksRenderer', () => {
     const result = await instance.asyncRender(diff);
     expect(result.preNode.properties?.['data-diff-type']).toBe('single');
     assertDefined(
-      result.deletionsContentAST,
-      'result.deletionsContentAST should be defined'
+      contentAST(result, 'deletions'),
+      'deletions content should be defined'
     );
     expect(countSplitRows(result)).toBe(diff.splitLineCount);
-    expect(result.additionsContentAST).toBeUndefined();
-    expect(result.unifiedContentAST).toBeUndefined();
+    expect(result.columns.additions).toBeUndefined();
+    expect(result.columns.unified).toBeUndefined();
     expect(
-      rowDigests(projectColumn(result.deletionsContentAST))
+      rowDigests(projectColumn(contentAST(result, 'deletions')))
     ).toMatchSnapshot('rendered rows');
   });
 

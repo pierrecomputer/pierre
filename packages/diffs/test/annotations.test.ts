@@ -16,6 +16,7 @@ import {
   annotationProjection,
   assertDefined,
   collectAllElements,
+  contentAST,
   countHastAnnotationElements,
   findHastSlotElements,
   getHastAnnotationIndex,
@@ -93,9 +94,10 @@ describe('Annotation Rendering', () => {
       });
       renderer.setLineAnnotations(annotations);
 
-      const { unifiedContentAST } = await renderer.asyncRender(
+      const rendered = await renderer.asyncRender(
         createDiffWithLeadingSeparator()
       );
+      const unifiedContentAST = contentAST(rendered, 'unified');
       assertDefined(unifiedContentAST, 'unifiedContentAST should be defined');
       const firstAnnotationIndex = unifiedContentAST.findIndex(
         isHastAnnotationElement
@@ -132,8 +134,9 @@ describe('Annotation Rendering', () => {
         });
         renderer.setLineAnnotations(annotations);
 
-        const { additionsContentAST, deletionsContentAST } =
-          await renderer.asyncRender(diff);
+        const rendered = await renderer.asyncRender(diff);
+        const additionsContentAST = contentAST(rendered, 'additions');
+        const deletionsContentAST = contentAST(rendered, 'deletions');
         assertDefined(
           additionsContentAST,
           'additionsContentAST should be defined'
@@ -164,13 +167,14 @@ describe('Annotation Rendering', () => {
         { side: 'additions', lineNumber: 1, metadata: 'new-first-line' },
       ]);
 
-      const { additionsContentAST, deletionsContentAST } =
-        await renderer.asyncRender(
-          parseDiffFromFile(
-            { name: 'first-row.ts', contents: 'old\n' },
-            { name: 'first-row.ts', contents: 'new\n' }
-          )
-        );
+      const rendered = await renderer.asyncRender(
+        parseDiffFromFile(
+          { name: 'first-row.ts', contents: 'old\n' },
+          { name: 'first-row.ts', contents: 'new\n' }
+        )
+      );
+      const additionsContentAST = contentAST(rendered, 'additions');
+      const deletionsContentAST = contentAST(rendered, 'deletions');
       assertDefined(
         additionsContentAST,
         'additionsContentAST should be defined'
@@ -200,8 +204,10 @@ describe('Annotation Rendering', () => {
       const renderer = new DiffHunksRenderer<string>({ diffStyle: 'split' });
       renderer.setLineAnnotations(annotations);
 
-      const { additionsContentAST, deletionsContentAST, rowCount } =
-        await renderer.asyncRender(createNoHunkDiff());
+      const rendered = await renderer.asyncRender(createNoHunkDiff());
+      const { rowCount } = rendered;
+      const additionsContentAST = contentAST(rendered, 'additions');
+      const deletionsContentAST = contentAST(rendered, 'deletions');
       assertDefined(
         additionsContentAST,
         'additionsContentAST should be defined'
@@ -230,12 +236,13 @@ describe('Annotation Rendering', () => {
         { side: 'additions', lineNumber: 0, metadata: 'new-file' },
       ]);
 
-      const { unifiedContentAST } = await renderer.asyncRender(diff, {
+      const rendered = await renderer.asyncRender(diff, {
         startingLine: 1,
         totalLines: 5,
         bufferBefore: 0,
         bufferAfter: 0,
       });
+      const unifiedContentAST = contentAST(rendered, 'unified');
       assertDefined(unifiedContentAST, 'unifiedContentAST should be defined');
 
       expect(
@@ -259,7 +266,8 @@ describe('Annotation Rendering', () => {
         expandUnchanged: true,
       });
       renderer.setLineAnnotations(annotations);
-      const { unifiedContentAST } = await renderer.asyncRender(diff);
+      const rendered = await renderer.asyncRender(diff);
+      const unifiedContentAST = contentAST(rendered, 'unified');
       assertDefined(unifiedContentAST, 'unifiedContentAST should be defined');
       const unifiedAST = unifiedContentAST;
 
@@ -316,8 +324,9 @@ describe('Annotation Rendering', () => {
         expandUnchanged: true,
       });
       renderer.setLineAnnotations(annotations);
-      const { additionsContentAST, deletionsContentAST } =
-        await renderer.asyncRender(diff);
+      const rendered = await renderer.asyncRender(diff);
+      const additionsContentAST = contentAST(rendered, 'additions');
+      const deletionsContentAST = contentAST(rendered, 'deletions');
       assertDefined(
         additionsContentAST,
         'additionsContentAST should be defined'
@@ -419,7 +428,8 @@ describe('Annotation Rendering', () => {
         expandUnchanged: true,
       });
       renderer.setLineAnnotations(annotations);
-      const { unifiedContentAST } = await renderer.asyncRender(diff);
+      const rendered = await renderer.asyncRender(diff);
+      const unifiedContentAST = contentAST(rendered, 'unified');
       assertDefined(unifiedContentAST, 'unifiedContentAST should be defined');
       const unifiedAST = unifiedContentAST;
       expect(countHastAnnotationElements(unifiedAST)).toBe(annotations.length);
@@ -468,8 +478,9 @@ describe('Annotation Rendering', () => {
         expandUnchanged: true,
       });
       renderer.setLineAnnotations(annotations);
-      const { deletionsContentAST, additionsContentAST } =
-        await renderer.asyncRender(diff);
+      const rendered = await renderer.asyncRender(diff);
+      const deletionsContentAST = contentAST(rendered, 'deletions');
+      const additionsContentAST = contentAST(rendered, 'additions');
       assertDefined(
         additionsContentAST,
         'additionsContentAST should be defined'
@@ -550,7 +561,8 @@ describe('Annotation Rendering', () => {
 
       const renderer = new DiffHunksRenderer<string>({ diffStyle: 'unified' });
       renderer.setLineAnnotations(annotations);
-      const { unifiedContentAST } = await renderer.asyncRender(diff);
+      const rendered = await renderer.asyncRender(diff);
+      const unifiedContentAST = contentAST(rendered, 'unified');
       assertDefined(unifiedContentAST, 'unifiedContentAST should be defined');
       const unifiedAST = unifiedContentAST;
 
@@ -586,8 +598,9 @@ describe('Annotation Rendering', () => {
 
       const renderer = new DiffHunksRenderer<string>({ diffStyle: 'split' });
       renderer.setLineAnnotations(annotations);
-      const { additionsContentAST, deletionsContentAST } =
-        await renderer.asyncRender(diff);
+      const rendered = await renderer.asyncRender(diff);
+      const additionsContentAST = contentAST(rendered, 'additions');
+      const deletionsContentAST = contentAST(rendered, 'deletions');
       assertDefined(
         additionsContentAST,
         'additionsContentAST should be defined'

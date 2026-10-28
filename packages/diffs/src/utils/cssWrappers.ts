@@ -8,12 +8,10 @@ const SCROLLBAR_GUTTER_DECLARATION_PATTERN = new RegExp(
   `${escapeRegExp(DIFFS_SCROLLBAR_GUTTER_MEASURED_PROPERTY)}\\s*:\\s*[^;]+;`
 );
 
-export function wrapCoreCSS(mainCSS: string) {
+/** The package's base stylesheet, under the layer order it relies on. */
+export function wrapCoreCSS() {
   return `${LAYER_ORDER}
-${rawStyles}
-@layer theme {
-  ${mainCSS}
-}`;
+${rawStyles}`;
 }
 
 export function wrapUnsafeCSS(unsafeCSS: string) {

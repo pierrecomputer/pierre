@@ -165,14 +165,6 @@ describe('FileRenderer AST Structure', () => {
     expect(contentColumn.children).toHaveLength(2);
   });
 
-  test('css is always empty in the non-worker render path', async () => {
-    const instance = new FileRenderer();
-    const result = await instance.asyncRender(mockFiles.file2);
-    // processFileResult hardcodes css: '' here; only the worker pipeline
-    // produces theme CSS. If this ever changes, the renderer contract changed
-    expect(result.css).toBe('');
-  });
-
   test('renders file-level annotations before the first file line', async () => {
     const instance = new FileRenderer<string>();
     const annotations: LineAnnotation<string>[] = [

@@ -13,7 +13,12 @@ import {
 import { UnresolvedFileHunksRenderer } from '../src/renderers/UnresolvedFileHunksRenderer';
 import { createGutterGap, createHastElement } from '../src/utils/hast_utils';
 import { parseMergeConflictDiffFromFile } from '../src/utils/parseMergeConflictDiffFromFile';
-import { assertDefined, collectAllElements, isHastElement } from './testUtils';
+import {
+  assertDefined,
+  collectAllElements,
+  contentAST,
+  isHastElement,
+} from './testUtils';
 
 afterAll(async () => {
   await disposeHighlighter();
@@ -111,10 +116,13 @@ describe('injected row hooks', () => {
 
     const result = await renderer.asyncRender(diff);
 
-    assertDefined(result.unifiedContentAST, 'expected unified content AST');
-    const lineIndex = getTopLevelLineIndex(result.unifiedContentAST, 1);
+    assertDefined(
+      contentAST(result, 'unified'),
+      'expected unified content AST'
+    );
+    const lineIndex = getTopLevelLineIndex(contentAST(result, 'unified'), 1);
     const inlineRowIndex = getTopLevelRowIndex(
-      result.unifiedContentAST,
+      contentAST(result, 'unified'),
       'unified-before-line-1'
     );
 
@@ -135,31 +143,37 @@ describe('injected row hooks', () => {
 
     const result = await renderer.asyncRender(diff);
 
-    assertDefined(result.deletionsContentAST, 'expected deletions content AST');
-    assertDefined(result.additionsContentAST, 'expected additions content AST');
+    assertDefined(
+      contentAST(result, 'deletions'),
+      'expected deletions content AST'
+    );
+    assertDefined(
+      contentAST(result, 'additions'),
+      'expected additions content AST'
+    );
 
     expect(result.rowCount).toBe(diff.splitLineCount + 2);
-    expect(getTopLevelRowNames(result.deletionsContentAST)).toEqual([
+    expect(getTopLevelRowNames(contentAST(result, 'deletions'))).toEqual([
       'split-deletion-only',
       'split-deletion-paired',
     ]);
-    expect(getTopLevelRowNames(result.additionsContentAST)).toEqual([
+    expect(getTopLevelRowNames(contentAST(result, 'additions'))).toEqual([
       'split-addition-paired',
     ]);
 
     const additionBufferIndex = getTopLevelBufferIndex(
-      result.additionsContentAST
+      contentAST(result, 'additions')
     );
     const additionPairedIndex = getTopLevelRowIndex(
-      result.additionsContentAST,
+      contentAST(result, 'additions'),
       'split-addition-paired'
     );
     const deletionOnlyIndex = getTopLevelRowIndex(
-      result.deletionsContentAST,
+      contentAST(result, 'deletions'),
       'split-deletion-only'
     );
     const deletionPairedIndex = getTopLevelRowIndex(
-      result.deletionsContentAST,
+      contentAST(result, 'deletions'),
       'split-deletion-paired'
     );
 
@@ -192,18 +206,24 @@ describe('injected row hooks', () => {
 
     const result = await renderer.asyncRender(fileDiff);
 
-    assertDefined(result.unifiedContentAST, 'expected unified content AST');
-    const actionRowIndex = result.unifiedContentAST.findIndex((row) => {
+    assertDefined(
+      contentAST(result, 'unified'),
+      'expected unified content AST'
+    );
+    const actionRowIndex = contentAST(result, 'unified').findIndex((row) => {
       return (
         isHastElement(row) &&
         row.properties?.['data-merge-conflict-actions'] != null
       );
     });
-    const actionButtons = collectAllElements(result.unifiedContentAST).filter(
-      (el) => el.properties?.['data-merge-conflict-action'] != null
+    const actionButtons = collectAllElements(
+      contentAST(result, 'unified')
+    ).filter((el) => el.properties?.['data-merge-conflict-action'] != null);
+    const actionAnchorIndex = getTopLevelLineIndex(
+      contentAST(result, 'unified'),
+      1
     );
-    const actionAnchorIndex = getTopLevelLineIndex(result.unifiedContentAST, 1);
-    const markerRows = result.unifiedContentAST.filter((row) => {
+    const markerRows = contentAST(result, 'unified').filter((row) => {
       return (
         isHastElement(row) &&
         row.properties?.['data-merge-conflict-marker-row'] != null

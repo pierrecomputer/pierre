@@ -7,6 +7,7 @@ import { DiffHunksRenderer } from '../src/renderers/DiffHunksRenderer';
 import { parsePatchFiles } from '../src/utils/parsePatchFiles';
 import {
   assertDefined,
+  contentAST,
   patchDigest,
   projectColumn,
   rowDigests,
@@ -36,16 +37,16 @@ describe('file.patch fixture', () => {
     const renderer = new DiffHunksRenderer({ diffStyle: 'split' });
     const result = await renderer.asyncRender(file);
     assertDefined(
-      result.additionsContentAST,
+      contentAST(result, 'additions'),
       'additionsContentAST should be defined'
     );
     assertDefined(
-      result.deletionsContentAST,
+      contentAST(result, 'deletions'),
       'deletionsContentAST should be defined'
     );
     expect({
-      additions: rowDigests(projectColumn(result.additionsContentAST)),
-      deletions: rowDigests(projectColumn(result.deletionsContentAST)),
+      additions: rowDigests(projectColumn(contentAST(result, 'additions'))),
+      deletions: rowDigests(projectColumn(contentAST(result, 'deletions'))),
     }).toMatchSnapshot('rendered rows');
   });
 });
