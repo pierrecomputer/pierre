@@ -11,12 +11,13 @@ import { createRoot, installDom, makeFile, wait, waitFor } from './domHarness';
 // reserved height. Mirrors VirtualizedFileDiff.setVisibility.
 test('re-showing a hidden file with an unchanged window re-renders content', async () => {
   const dom = installDom();
+  const virtualizer = new Virtualizer();
+  let instance: VirtualizedFile | undefined;
   try {
     const root = createRoot();
     const container = document.createElement('diffs-container');
     root.appendChild(container);
 
-    const virtualizer = new Virtualizer();
     virtualizer.setup(root);
     // Settle the virtualizer's window specs before the first render so the
     // pre-hide and post-show renders resolve ranges against the same window.
@@ -24,17 +25,20 @@ test('re-showing a hidden file with an unchanged window re-renders content', asy
 
     const file = makeFile('visibility.ts', 40);
     // Like the React hook, the owner renders the current file on request.
-    const instance: VirtualizedFile = new VirtualizedFile(
+    instance = new VirtualizedFile(
       {},
       virtualizer,
       undefined,
       undefined,
       () => {
-        instance.render({ file });
+        instance?.render({ file });
       }
     );
     instance.render({ file, fileContainer: container });
-    await wait(10);
+    // Highlighting can finish after the first render; wait for actual rows.
+    await waitFor(
+      () => container.shadowRoot?.textContent?.includes('line 1') === true
+    );
     const placeholderCount = (): number =>
       container.shadowRoot?.querySelectorAll('[data-placeholder]').length ?? 0;
     expect(placeholderCount()).toBe(0);
@@ -49,14 +53,17 @@ test('re-showing a hidden file with an unchanged window re-renders content', asy
     // visible-instance render pass, which renders without forceRender.
     instance.setVisibility(true);
     instance.onRender(false);
-    await waitFor(() => placeholderCount() === 0);
+    await waitFor(
+      () =>
+        placeholderCount() === 0 &&
+        container.shadowRoot?.textContent?.includes('line 1') === true
+    );
     expect(placeholderCount()).toBe(0);
     expect(container.shadowRoot?.textContent).toContain('line 1');
-
-    instance.cleanUp();
+  } finally {
+    instance?.cleanUp();
     virtualizer.cleanUp();
     await wait(10);
-  } finally {
     dom.cleanup();
   }
 });
