@@ -141,6 +141,12 @@ its `cacheKey` yourself, use different keys for different matching modes;
 explicit keys are preserved. Parser-generated keys already distinguish modes,
 and omitted/`false` retain their existing keys.
 
+`hydratePartialDiff` accepts `ParseDiffOptions` as its fourth argument. Pass the
+options used to parse the patch; components forward their `parseDiffOptions`.
+Hydration appends `:hydrated` to an existing diff key. Otherwise, changed diffs
+derive a key from both loaded file keys and `disableLineMatching`. Omitted or
+`false` preserves the existing key format.
+
 <DocsCodeExample {...parsePatchFiles} />
 
 ### trimPatchContext [toc-ignore]

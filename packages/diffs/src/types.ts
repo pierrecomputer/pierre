@@ -374,10 +374,10 @@ export interface FileDiffMetadata {
    * you modify the contents of the diff in any way, you will need to update
    * the `cacheKey`.
    *
-   * When `loadDiffFiles` hydrates a partial diff, Diffs uses loaded file cache
-   * keys when they are available so full-file highlights can be reused. If the
-   * loaded files are unkeyed and this partial key exists, Diffs appends a
-   * hydration segment as a fallback.
+   * When `loadDiffFiles` hydrates a partial diff, Diffs appends `:hydrated` to
+   * this key. Without a partial key, changed diffs derive a key from both
+   * loaded file keys and `parseDiffOptions.disableLineMatching`. Pure renames
+   * use the loaded new file's key.
    */
   cacheKey?: string;
 }
@@ -479,8 +479,9 @@ export interface BaseDiffOptions extends BaseCodeOptions {
   /**
    * Parser options used when computing diffs from file contents
    * (oldFile/newFile) or recomputing edited diffs. Includes jsdiff settings
-   * and the disableLineMatching escape hatch. Does not change the hunks in
-   * supplied pre-parsed patches.
+   * and the disableLineMatching escape hatch. Also used when deriving cache
+   * keys during partial diff hydration; use the same matching mode as the
+   * supplied patch. Does not change the hunks in supplied pre-parsed patches.
    */
   parseDiffOptions?: ParseDiffOptions;
 }

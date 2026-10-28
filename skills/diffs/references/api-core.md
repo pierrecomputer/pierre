@@ -173,6 +173,12 @@ Generated cache keys distinguish the matching modes; omitted/`false` preserve
 existing keys. Explicit `processFile({ cacheKey })` values remain authoritative,
 so callers assigning keys must distinguish modes themselves.
 
+`hydratePartialDiff` accepts `ParseDiffOptions` as its fourth argument. Pass the
+options used to parse the patch; components forward their `parseDiffOptions`.
+Hydration appends `:hydrated` to an existing diff key. Otherwise, changed diffs
+derive a key from both loaded file keys and `disableLineMatching`. Omitted or
+`false` preserves the existing key format.
+
 | Export                       | Purpose                                               |
 | ---------------------------- | ----------------------------------------------------- |
 | `parseDiffFromFile`          | Creates `FileDiffMetadata` from old and new files.    |
