@@ -14,6 +14,7 @@ import {
   THEME_CSS_ATTRIBUTE,
   UNSAFE_CSS_ATTRIBUTE,
 } from '../constants';
+import { CodeColumns } from '../dom/CodeColumns';
 import { ColumnReconciler } from '../dom/ColumnReconciler';
 import type { Editor } from '../editor/editor';
 import type { TextDocument, TextDocumentChange } from '../editor/textDocument';
@@ -346,9 +347,9 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
   protected fileContainer: HTMLElement | undefined;
   protected spriteSVG: SVGElement | undefined;
   protected pre: HTMLPreElement | undefined;
-  protected codeUnified: HTMLElement | undefined;
-  protected codeDeletions: HTMLElement | undefined;
-  protected codeAdditions: HTMLElement | undefined;
+  private readonly codeColumns = new CodeColumns<
+    'unified' | 'deletions' | 'additions'
+  >();
   protected bufferBefore: HTMLElement | undefined;
   protected bufferAfter: HTMLElement | undefined;
   protected themeCSSStyle: HTMLStyleElement | undefined;
@@ -808,24 +809,36 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
     );
   }
 
+  protected get codeUnified(): HTMLElement | undefined {
+    return this.codeColumns.get('unified');
+  }
+
+  protected set codeUnified(code: HTMLElement | undefined) {
+    this.codeColumns.set('unified', code);
+  }
+
+  protected get codeDeletions(): HTMLElement | undefined {
+    return this.codeColumns.get('deletions');
+  }
+
+  protected set codeDeletions(code: HTMLElement | undefined) {
+    this.codeColumns.set('deletions', code);
+  }
+
+  protected get codeAdditions(): HTMLElement | undefined {
+    return this.codeColumns.get('additions');
+  }
+
+  protected set codeAdditions(code: HTMLElement | undefined) {
+    this.codeColumns.set('additions', code);
+  }
+
   public getCodeScrollLeft(): number {
-    return Math.max(
-      this.codeUnified?.scrollLeft ?? 0,
-      this.codeDeletions?.scrollLeft ?? 0,
-      this.codeAdditions?.scrollLeft ?? 0
-    );
+    return this.codeColumns.scrollLeft;
   }
 
   public setCodeScrollLeft(position: number): void {
-    if (this.codeUnified != null) {
-      this.codeUnified.scrollLeft = position;
-    }
-    if (this.codeAdditions != null) {
-      this.codeAdditions.scrollLeft = position;
-    }
-    if (this.codeDeletions != null) {
-      this.codeDeletions.scrollLeft = position;
-    }
+    this.codeColumns.setScrollLeft(position);
   }
 
   public __getEffectiveCodeOptions(): BaseCodeOptions {
@@ -868,9 +881,7 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
     this.annotationCache.clear();
     this.pre?.remove();
     this.pre = undefined;
-    this.codeUnified = undefined;
-    this.codeDeletions = undefined;
-    this.codeAdditions = undefined;
+    this.codeColumns.cleanUp();
     this.bufferBefore?.remove();
     this.bufferBefore = undefined;
     this.bufferAfter?.remove();
@@ -2389,11 +2400,9 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
     this.bufferAfter = undefined;
 
     this.codeUnified?.remove();
-    this.codeUnified = undefined;
     this.codeDeletions?.remove();
-    this.codeDeletions = undefined;
     this.codeAdditions?.remove();
-    this.codeAdditions = undefined;
+    this.codeColumns.cleanUp();
 
     this.pre?.remove();
     this.pre = undefined;
@@ -2499,9 +2508,7 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
 
     this.bufferAfter = undefined;
     this.bufferBefore = undefined;
-    this.codeAdditions = undefined;
-    this.codeDeletions = undefined;
-    this.codeUnified = undefined;
+    this.codeColumns.cleanUp();
     this.errorWrapper = undefined;
     this.headerElement = undefined;
     this.headerPrefix = undefined;
@@ -2715,9 +2722,7 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
     if (this.pre == null) {
       this.pre = document.createElement('pre');
       this.appliedPreAttributes = undefined;
-      this.codeUnified = undefined;
-      this.codeDeletions = undefined;
-      this.codeAdditions = undefined;
+      this.codeColumns.cleanUp();
       shadowRoot.appendChild(this.pre);
     }
     // If we have a new parent container for the pre element, lets go ahead and
@@ -2735,9 +2740,7 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
   }
 
   protected syncCodeNodesFromPre(pre: HTMLPreElement): void {
-    this.codeUnified = undefined;
-    this.codeDeletions = undefined;
-    this.codeAdditions = undefined;
+    this.codeColumns.cleanUp();
     for (const child of Array.from(pre.children)) {
       if (!(child instanceof HTMLElement)) {
         continue;
@@ -3181,11 +3184,9 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
       // if we get in here, there's no content to render, so lets just clean
       // everything up
       this.codeUnified?.remove();
-      this.codeUnified = undefined;
       this.codeDeletions?.remove();
-      this.codeDeletions = undefined;
       this.codeAdditions?.remove();
-      this.codeAdditions = undefined;
+      this.codeColumns.cleanUp();
     }
 
     if (codeElements.length === 0) {

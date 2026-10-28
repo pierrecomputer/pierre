@@ -518,6 +518,8 @@ export class Editor<
   #lineAnnotations?: EditorLineAnnotation<EType, LAnnotation>[];
   readonly #editStateKey?: string;
   readonly #ownsVerticalViewport: boolean;
+  #ownedViewport: HTMLElement | undefined;
+  #ownedViewportScrollTop = 0;
   #renderRange?: RenderRange;
   #markerRenderer?: MarkerRenderer;
   #carets?: TrackedCaret<Caret>[];
@@ -750,6 +752,7 @@ export class Editor<
     this.#initialState = undefined;
     this.#editSession = editSession;
     this.#fileInstance = fileInstance;
+    this.#trackOwnedViewport();
     this.#isRendering = true;
     this.#restoreEditorStateOnSync = editSession.editor != null;
     try {
@@ -823,6 +826,7 @@ export class Editor<
       this.#editSession = previousSession;
       if (this.#detach == null) {
         this.#fileInstance = undefined;
+        this.#trackOwnedViewport();
         this.#applyComponentChange = undefined;
         this.#publishChange = undefined;
       }
@@ -961,7 +965,6 @@ export class Editor<
 
   /** Return an isolated copy of selections and restorable view state. */
   getViewState(): EditorViewState {
-    const fileInstance = this.#isRendering ? this.#fileInstance : undefined;
     if (!this.#isRendering && this.#editSession?.editor != null) {
       return cloneEditorViewState(this.#editSession.editor);
     }
@@ -970,20 +973,49 @@ export class Editor<
       start: { ...selection.start },
       end: { ...selection.end },
     }));
-    if (fileInstance == null) {
-      return { selections };
-    }
-
-    const viewport = this.#getOwnedVerticalViewport();
-    const scrollLeft = fileInstance.getCodeScrollLeft();
-    if (viewport == null) {
-      return { selections, view: { scrollLeft } };
-    }
-    return {
-      selections,
-      view: { scrollLeft, scrollTop: viewport.scrollTop },
-    };
+    const view = this.#scrollOffsets();
+    return view == null ? { selections } : { selections, view };
   }
+
+  // The code column's horizontal scroll offset and, when the editor owns the
+  // vertical viewport, its scroll offset. Both are kept from scroll events,
+  // so this reads no DOM and never forces a layout.
+  #scrollOffsets(): EditorViewState['view'] {
+    const fileInstance = this.#isRendering ? this.#fileInstance : undefined;
+    if (fileInstance == null) {
+      return undefined;
+    }
+    this.#trackOwnedViewport();
+    const scrollLeft = fileInstance.getCodeScrollLeft();
+    return this.#ownedViewport == null
+      ? { scrollLeft }
+      : { scrollLeft, scrollTop: this.#ownedViewportScrollTop };
+  }
+
+  // Keeps the owned viewport's scroll offset current from its scroll events.
+  // The viewport is read once when it is bound. A host can get its viewport
+  // after the editor attached (a React Virtualizer sets up after its
+  // children mount), so every read checks the binding; a bound viewport
+  // costs one comparison.
+  #trackOwnedViewport(): void {
+    const viewport = this.#getOwnedVerticalViewport();
+    if (viewport === this.#ownedViewport) {
+      return;
+    }
+    this.#ownedViewport?.removeEventListener(
+      'scroll',
+      this.#handleOwnedViewportScroll
+    );
+    this.#ownedViewport = viewport;
+    this.#ownedViewportScrollTop = viewport?.scrollTop ?? 0;
+    viewport?.addEventListener('scroll', this.#handleOwnedViewportScroll, {
+      passive: true,
+    });
+  }
+
+  #handleOwnedViewportScroll = (): void => {
+    this.#ownedViewportScrollTop = this.#ownedViewport?.scrollTop ?? 0;
+  };
 
   /**
    * Return the objects that make up the active edit session, or undefined when
@@ -1022,9 +1054,12 @@ export class Editor<
       // guessing.
       const viewport = this.#getOwnedVerticalViewport();
       if (view.scrollTop !== undefined && viewport != null) {
-        // The restored position is the newest scroll intent.
+        // The restored position is the newest scroll intent. The viewport
+        // clamps a position past its content, and no scroll event follows
+        // when it did not move, so where it landed is read back.
         this.#virtualizedInstance?.cancelScroll();
         viewport.scrollTop = view.scrollTop;
+        this.#ownedViewportScrollTop = viewport.scrollTop;
       }
     } else if (this.#ownsVerticalViewport) {
       this.#scrollToPrimaryCaret();
@@ -1254,6 +1289,7 @@ export class Editor<
       } finally {
         this.#editSession = undefined;
         this.#fileInstance = undefined;
+        this.#trackOwnedViewport();
         this.#applyComponentChange = undefined;
         this.#publishChange = undefined;
       }

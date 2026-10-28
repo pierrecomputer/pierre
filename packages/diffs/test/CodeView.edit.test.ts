@@ -2166,6 +2166,7 @@ describe('CodeView item edit mode', () => {
         ?.element.shadowRoot?.querySelector('[data-code]');
       expect(code).toBeInstanceOf(HTMLElement);
       (code as HTMLElement).scrollLeft = 24;
+      dispatchScroll(code as HTMLElement);
       root.scrollTop = 48;
       const finalState: EditorViewState = {
         selections: [
