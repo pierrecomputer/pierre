@@ -11,6 +11,16 @@ export interface TransformedWat {
   code: string;
   enumMap: Map<string, Record<string, number>>;
   languages: Record<string, number>;
+  /** Named memory addresses (`const`), such as `$mem.byteSets`. */
+  addresses: Map<string, number>;
+  /** Every `keyword-table`: its groups in order, with their words and value. */
+  keywordTables: KeywordTableSource[];
+}
+
+/** A `keyword-table` as declared: groups in order, 1-based in lookups. */
+export interface KeywordTableSource {
+  name: string;
+  groups: { value: number | null; words: string[] }[];
 }
 
 /**
@@ -1065,6 +1075,14 @@ export function transformWat(
     code,
     enumMap,
     languages,
+    addresses: constMap,
+    keywordTables: pendingTables.map((t) => ({
+      name: t.name,
+      groups: t.values.slice(1).map((value, i) => ({
+        value,
+        words: t.words.filter((w) => w.group === i + 1).map((w) => w.word),
+      })),
+    })),
   };
 }
 

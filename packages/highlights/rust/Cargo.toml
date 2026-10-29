@@ -1,0 +1,17 @@
+[workspace]
+resolver = "3"
+members = ["xtask", "highlights", "bench", "hl"]
+
+[workspace.package]
+edition = "2024"
+license = "Apache-2.0"
+publish = false
+
+[profile.release]
+codegen-units = 1
+lto = "fat"
+panic = "abort"
+debug = "line-tables-only"
+
+[profile.bench]
+inherits = "release"

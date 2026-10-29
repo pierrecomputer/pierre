@@ -3,6 +3,7 @@
   "include": [
     "benchmark/**/*.ts",
     "lib/**/*.ts",
+    "rust/scripts/**/*.ts",
     "scripts/**/*.ts",
     "test/**/*.ts",
     "themes/*.json",

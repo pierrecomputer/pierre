@@ -1,0 +1,170 @@
+[package]
+name = "highlights"
+version = "0.0.0"
+description = "Native Rust build of the Highlights syntax highlighter"
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[features]
+# Bounds-check every memory access and trap instead of reading out of range.
+checked = []
+# Hand-written JS/TS lexer core (`src/native`), compared with the translated
+# lexer for parity and speed.
+native-core = []
+# Every native lexer: `tokens`, `html`, and `terminal` use a language's
+# native lexer when one is built.
+native = [
+  "native-angular-html",
+  "native-asm",
+  "native-astro",
+  "native-bash",
+  "native-batch",
+  "native-c",
+  "native-c3",
+  "native-clojure",
+  "native-cmake",
+  "native-cpp",
+  "native-csharp",
+  "native-css",
+  "native-cuda",
+  "native-dart",
+  "native-diff",
+  "native-dockerfile",
+  "native-elixir",
+  "native-elm",
+  "native-erlang",
+  "native-fortran",
+  "native-fsharp",
+  "native-gdresource",
+  "native-gdscript",
+  "native-gdshader",
+  "native-gleam",
+  "native-glsl",
+  "native-go",
+  "native-graphql",
+  "native-groovy",
+  "native-haskell",
+  "native-hlsl",
+  "native-html",
+  "native-java",
+  "native-json",
+  "native-jsx",
+  "native-julia",
+  "native-kotlin",
+  "native-latex",
+  "native-lisp",
+  "native-lua",
+  "native-makefile",
+  "native-markdown",
+  "native-matlab",
+  "native-mdx",
+  "native-nim",
+  "native-nix",
+  "native-objc",
+  "native-ocaml",
+  "native-pascal",
+  "native-perl",
+  "native-php",
+  "native-powershell",
+  "native-proto",
+  "native-python",
+  "native-r",
+  "native-ruby",
+  "native-rust",
+  "native-scala",
+  "native-solidity",
+  "native-sql",
+  "native-svelte",
+  "native-swift",
+  "native-terraform",
+  "native-toml",
+  "native-tsrx",
+  "native-tsx",
+  "native-vue",
+  "native-wat",
+  "native-wgsl",
+  "native-xml",
+  "native-yaml",
+  "native-zig",
+]
+# One hand-written lexer module each (`src/native/<module>.rs`), so a
+# module builds and is checked on its own while others are in progress.
+native-angular-html = ["native-core"]
+native-asm = ["native-core"]
+native-astro = ["native-core"]
+native-bash = ["native-core"]
+native-batch = ["native-core"]
+native-c = ["native-core"]
+native-c3 = ["native-core"]
+native-clojure = ["native-core"]
+native-cmake = ["native-core"]
+native-cpp = ["native-core"]
+native-csharp = ["native-core"]
+native-css = ["native-core"]
+native-cuda = ["native-core"]
+native-dart = ["native-core"]
+native-diff = ["native-core"]
+native-dockerfile = ["native-core"]
+native-elixir = ["native-core"]
+native-elm = ["native-core"]
+native-erlang = ["native-core"]
+native-fortran = ["native-core"]
+native-fsharp = ["native-core"]
+native-gdresource = ["native-core"]
+native-gdscript = ["native-core"]
+native-gdshader = ["native-core"]
+native-gleam = ["native-core"]
+native-glsl = ["native-core"]
+native-go = ["native-core"]
+native-graphql = ["native-core"]
+native-groovy = ["native-core"]
+native-haskell = ["native-core"]
+native-hlsl = ["native-core"]
+native-html = ["native-core"]
+native-java = ["native-core"]
+native-json = ["native-core"]
+native-jsx = ["native-core"]
+native-julia = ["native-core"]
+native-kotlin = ["native-core"]
+native-latex = ["native-core"]
+native-lisp = ["native-core"]
+native-lua = ["native-core"]
+native-makefile = ["native-core"]
+native-markdown = ["native-core"]
+native-matlab = ["native-core"]
+native-mdx = ["native-core"]
+native-nim = ["native-core"]
+native-nix = ["native-core"]
+native-objc = ["native-core"]
+native-ocaml = ["native-core"]
+native-pascal = ["native-core"]
+native-perl = ["native-core"]
+native-php = ["native-core"]
+native-powershell = ["native-core"]
+native-proto = ["native-core"]
+native-python = ["native-core"]
+native-r = ["native-core"]
+native-ruby = ["native-core"]
+native-rust = ["native-core"]
+native-scala = ["native-core"]
+native-solidity = ["native-core"]
+native-sql = ["native-core"]
+native-svelte = ["native-core"]
+native-swift = ["native-core"]
+native-terraform = ["native-core"]
+native-toml = ["native-core"]
+native-tsrx = ["native-core", "native-jsx"]
+native-tsx = ["native-core", "native-jsx"]
+native-vue = ["native-core"]
+native-wat = ["native-core"]
+native-wgsl = ["native-core"]
+native-xml = ["native-core"]
+native-yaml = ["native-core"]
+native-zig = ["native-core"]
+
+[dependencies]
+unicode-ident = "1"
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
