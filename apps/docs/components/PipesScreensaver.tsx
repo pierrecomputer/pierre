@@ -39,12 +39,27 @@ function attachScreensaver(canvas: HTMLCanvasElement) {
     }, IDLE_TIMEOUT_MS);
   }
 
-  document.addEventListener('mousemove', restartTimer);
+  const activityEvents = [
+    'pointermove',
+    'pointerdown',
+    'keydown',
+    'wheel',
+    'scroll',
+  ] as const;
+  // Capture includes activity inside nested scrollers and controls that stop propagation.
+  for (const event of activityEvents) {
+    document.addEventListener(event, restartTimer, {
+      capture: true,
+      passive: true,
+    });
+  }
   document.addEventListener('visibilitychange', restartTimer);
   restartTimer();
 
   return () => {
-    document.removeEventListener('mousemove', restartTimer);
+    for (const event of activityEvents) {
+      document.removeEventListener(event, restartTimer, true);
+    }
     document.removeEventListener('visibilitychange', restartTimer);
     dismiss();
   };
