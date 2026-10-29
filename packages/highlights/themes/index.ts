@@ -1,10 +1,9 @@
 import type { Theme } from '../lib/index';
 import {
-  ansiNames,
   defaultCssVariablePrefix,
   isThemeColor,
+  resolveThemeStyle,
   resolveThemeSyntax,
-  themeAnsiColors,
   themeBackground,
   themeForeground,
 } from '../lib/theme';
@@ -98,7 +97,7 @@ export const cssVariables: Theme = {
  * Emit only hex and numeric Display P3 colors. Omit invalid background
  * and foreground colors. Use `inherit` for invalid syntax colors.
  * Skip syntax scopes whose names are not plain dotted identifiers.
- * The 16 `ansi-*` colors use VS Code's terminal colors when missing.
+ * The 16 `terminal-ansi-*` colors use VS Code's terminal colors when missing.
  */
 export function toCSS(
   { style }: Theme,
@@ -119,15 +118,15 @@ export function toCSS(
   const syntax = style.syntax ?? {};
   for (const name of new Set([
     ...Object.keys(syntax),
-    ...tokenTypes.slice(1, -2),
+    ...tokenTypes
+      .slice(1)
+      .filter((name) => name !== 'background' && name !== 'foreground'),
   ])) {
     if (!/^[a-z0-9_.-]+$/i.test(name)) continue;
-    const color = resolveThemeSyntax(syntax, name)?.color ?? foreground;
+    const color = name.startsWith('terminal.ansi.')
+      ? resolveThemeStyle(style, name).color
+      : (resolveThemeSyntax(syntax, name)?.color ?? foreground);
     css += `${cssVariablePrefix}${name.replace(/[._]/g, '-')}: ${isThemeColor(color) ? color.trim() : 'inherit'};`;
-  }
-  const ansi = themeAnsiColors(style);
-  for (let i = 0; i < ansi.length; i++) {
-    css += `${cssVariablePrefix}ansi-${ansiNames[i].replace('_', '-')}: ${ansi[i]};`;
   }
   return css;
 }

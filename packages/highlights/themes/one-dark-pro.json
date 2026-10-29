@@ -54,9 +54,22 @@
     "error": "#c24038",
     "warning": "#d19a66",
     "hint": "#7a849c",
-    "terminal.ansi.green": "#8cc265",
+    "terminal.ansi.black": "#3f4451",
     "terminal.ansi.red": "#e05561",
+    "terminal.ansi.green": "#8cc265",
+    "terminal.ansi.yellow": "#d18f52",
     "terminal.ansi.blue": "#4aa5f0",
+    "terminal.ansi.magenta": "#c162de",
+    "terminal.ansi.cyan": "#42b3c2",
+    "terminal.ansi.white": "#d7dae0",
+    "terminal.ansi.bright_black": "#4f5666",
+    "terminal.ansi.bright_red": "#ff616e",
+    "terminal.ansi.bright_green": "#a5e075",
+    "terminal.ansi.bright_yellow": "#f0a45d",
+    "terminal.ansi.bright_blue": "#4dc4ff",
+    "terminal.ansi.bright_magenta": "#de73ff",
+    "terminal.ansi.bright_cyan": "#4cd1e0",
+    "terminal.ansi.bright_white": "#e6e6e6",
     "syntax": {
       "comment": {
         "color": "#7F838C"

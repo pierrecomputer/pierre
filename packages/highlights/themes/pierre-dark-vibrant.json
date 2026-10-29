@@ -16,9 +16,22 @@
     "created": "color(display-p3 0.304148 0.801790 0.517191)",
     "deleted": "color(display-p3 1.000000 0.250216 0.262337)",
     "modified": "color(display-p3 0.308664 0.645271 1.000000)",
-    "terminal.ansi.green": "color(display-p3 0.298067 0.776115 0.322484)",
+    "terminal.ansi.black": "color(display-p3 0.090196 0.090196 0.090196)",
     "terminal.ansi.red": "color(display-p3 1.000000 0.250216 0.262337)",
+    "terminal.ansi.green": "color(display-p3 0.298067 0.776115 0.322484)",
+    "terminal.ansi.yellow": "color(display-p3 1.000000 0.832068 0.300621)",
     "terminal.ansi.blue": "color(display-p3 0.308664 0.645271 1.000000)",
+    "terminal.ansi.magenta": "color(display-p3 0.885558 0.236588 0.705659)",
+    "terminal.ansi.cyan": "color(display-p3 0.327292 0.790977 0.995660)",
+    "terminal.ansi.white": "color(display-p3 0.737255 0.737255 0.737255)",
+    "terminal.ansi.bright_black": "color(display-p3 0.090196 0.090196 0.090196)",
+    "terminal.ansi.bright_red": "color(display-p3 1.000000 0.250216 0.262337)",
+    "terminal.ansi.bright_green": "color(display-p3 0.613906 0.826741 0.264677)",
+    "terminal.ansi.bright_yellow": "color(display-p3 1.000000 0.832068 0.300621)",
+    "terminal.ansi.bright_blue": "color(display-p3 0.308664 0.645271 1.000000)",
+    "terminal.ansi.bright_magenta": "color(display-p3 0.885558 0.236588 0.705659)",
+    "terminal.ansi.bright_cyan": "color(display-p3 0.327292 0.790977 0.995660)",
+    "terminal.ansi.bright_white": "color(display-p3 0.737255 0.737255 0.737255)",
     "syntax": {
       "comment": {
         "color": "color(display-p3 0.450980 0.450980 0.450980)"

@@ -509,8 +509,8 @@ void test('preprocessor: data segments count UTF-8 bytes', () => {
 void test('preprocessor: the $Token enum cannot outgrow the emitter regions', () => {
   const names = (n: number) =>
     Array.from({ length: n }, (_, i) => `"t${i}"`).join(' ');
-  const { enumMap } = synthetic(`(enum $Token ${names(74)})`);
-  assert.throws(() => listTokenTypes(enumMap), /span cache holds 73/);
-  const { enumMap: ok } = synthetic(`(enum $Token ${names(73)})`);
-  assert.equal(listTokenTypes(ok).length, 73);
+  const { enumMap } = synthetic(`(enum $Token ${names(90)})`);
+  assert.throws(() => listTokenTypes(enumMap), /span cache holds 89/);
+  const { enumMap: ok } = synthetic(`(enum $Token ${names(89)})`);
+  assert.equal(listTokenTypes(ok).length, 89);
 });

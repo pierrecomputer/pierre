@@ -1,4 +1,3 @@
-import { AnsiState, ansiTokens, isAnsi } from './ansi';
 import type {
   CodeToHtmlOptions,
   CodeToTokensOptions,
@@ -45,11 +44,10 @@ export function langIdOf(lang: string): number {
 }
 
 /**
- * Check whether a name or alias has a built-in lexer, including `plain`/`text`,
- * or is `ansi`.
+ * Check whether a name or alias has a built-in lexer, including `plain`/`text`.
  */
 export function isSupportedLanguage(lang: string): lang is Lang {
-  return typeof LANGS[String(lang).toLowerCase()] === 'number' || isAnsi(lang);
+  return typeof LANGS[String(lang).toLowerCase()] === 'number';
 }
 
 export class HighlightsHighlighter implements Highlighter {
@@ -149,41 +147,6 @@ export class HighlightsHighlighter implements Highlighter {
   ): Uint8Array {
     const cssVariablePrefix =
       options.cssVariablePrefix ?? defaultCssVariablePrefix;
-    if (isAnsi(options.lang)) {
-      const themes = resolveOptionThemes(options);
-      const { fg, bg, rootStyle } = themeMeta(themes, cssVariablePrefix);
-      const code = toCode(input);
-      // Tag a single theme as inline so every token gets `htmlStyle`.
-      const lines = ansiTokens(
-        code,
-        themes[0].role === 'single'
-          ? [{ ...themes[0], role: 'default' }]
-          : themes,
-        cssVariablePrefix
-      );
-      let html = `<pre class="highlights" style="${escapeAttribute(
-        rootStyle ??
-          (bg === undefined ? '' : `background-color:${bg};`) +
-            (fg === undefined ? '' : `color:${fg}`)
-      )}"><code>`;
-      for (let i = 0, lf = -1; i < lines.length; i++) {
-        if (i > 0) {
-          lf = code.indexOf('\n', lf + 1);
-          html += code.charCodeAt(lf - 1) === 13 ? '\r\n' : '\n';
-        }
-        for (const { content, htmlStyle } of lines[i]) {
-          let css = '';
-          for (const property in htmlStyle) {
-            css += `${css === '' ? '' : ';'}${property}:${htmlStyle[property]}`;
-          }
-          html += `<span style="${escapeAttribute(css)}">${content
-            .replaceAll('&', '&amp;')
-            .replaceAll('<', '&lt;')
-            .replaceAll('>', '&gt;')}</span>`;
-        }
-      }
-      return enc.encode(`${html}</code></pre>`);
-    }
     const langId = langIdOf(options.lang);
     let table: Uint8Array | undefined;
     let blob: Uint8Array | undefined;
@@ -271,18 +234,13 @@ export class HighlightsHighlighter implements Highlighter {
     const themes = resolveOptionThemes(options);
     const cssVariablePrefix =
       options.cssVariablePrefix ?? defaultCssVariablePrefix;
-    const tokens = isAnsi(options.lang)
-      ? ansiTokens(code, themes, cssVariablePrefix)
-      : lineRecordsToTokens(
-          code,
-          this.tokenizeLineRecords(
-            langIdOf(options.lang),
-            this.writeInput(input)
-          ),
-          themes,
-          cssVariablePrefix,
-          options.tokenizeMaxLineLength
-        );
+    const tokens = lineRecordsToTokens(
+      code,
+      this.tokenizeLineRecords(langIdOf(options.lang), this.writeInput(input)),
+      themes,
+      cssVariablePrefix,
+      options.tokenizeMaxLineLength
+    );
     return { tokens, ...themeMeta(themes, cssVariablePrefix) };
   }
 
@@ -437,7 +395,6 @@ export class StreamTokenizer extends TransformStream<
 > {
   #hl: HighlightsHighlighter | undefined;
   #langId: number;
-  #ansi: AnsiState | undefined;
   #themes: ResolvedTheme[];
   #cssVariablePrefix: string;
   #maxLineLength: number | undefined;
@@ -470,8 +427,7 @@ export class StreamTokenizer extends TransformStream<
 
     // validate the options before taking the pooled instance so a rejected
     // language or theme leaves the pool intact
-    this.#ansi = isAnsi(options.lang) ? new AnsiState() : undefined;
-    this.#langId = this.#ansi === undefined ? langIdOf(options.lang) : 0;
+    this.#langId = langIdOf(options.lang);
     this.#themes = resolveOptionThemes(options);
     const compiledWasm = assertWasmModule();
     this.#hl =
@@ -608,33 +564,22 @@ export class StreamTokenizer extends TransformStream<
     // Replacement characters must reach Wasm as valid UTF-8 for matching offsets.
     if (typeof input !== 'string' && code.includes('\ufffd')) input = code;
     code = prefix + code;
-    let lines: ThemedToken[][];
-    if (this.#ansi === undefined) {
-      let byteLen = prefix === '' ? 0 : hl.writeInput(prefix);
-      byteLen += hl.writeInput(input, byteLen);
-      const recs = hl.tokenizeLineRecords(
-        this.#langId,
-        byteLen,
-        !this.#streamStarted
-      );
-      this.#streamStarted = true;
-      lines = lineRecordsToTokens(
-        code,
-        recs,
-        this.#themes,
-        this.#cssVariablePrefix,
-        this.#maxLineLength,
-        this.#streamChar
-      );
-    } else {
-      lines = ansiTokens(
-        code,
-        this.#themes,
-        this.#cssVariablePrefix,
-        this.#ansi,
-        this.#streamChar
-      );
-    }
+    let byteLen = prefix === '' ? 0 : hl.writeInput(prefix);
+    byteLen += hl.writeInput(input, byteLen);
+    const recs = hl.tokenizeLineRecords(
+      this.#langId,
+      byteLen,
+      !this.#streamStarted
+    );
+    this.#streamStarted = true;
+    const lines = lineRecordsToTokens(
+      code,
+      recs,
+      this.#themes,
+      this.#cssVariablePrefix,
+      this.#maxLineLength,
+      this.#streamChar
+    );
     this.#streamChar += code.length;
     return lines;
   }

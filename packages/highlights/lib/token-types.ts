@@ -73,6 +73,22 @@ const tokenTypes: readonly string[] = [
   'variant',
   'background',
   'foreground',
+  'terminal.ansi.black',
+  'terminal.ansi.red',
+  'terminal.ansi.green',
+  'terminal.ansi.yellow',
+  'terminal.ansi.blue',
+  'terminal.ansi.magenta',
+  'terminal.ansi.cyan',
+  'terminal.ansi.white',
+  'terminal.ansi.bright_black',
+  'terminal.ansi.bright_red',
+  'terminal.ansi.bright_green',
+  'terminal.ansi.bright_yellow',
+  'terminal.ansi.bright_blue',
+  'terminal.ansi.bright_magenta',
+  'terminal.ansi.bright_cyan',
+  'terminal.ansi.bright_white',
 ];
 
 export default tokenTypes;

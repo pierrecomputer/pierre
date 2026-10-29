@@ -55,6 +55,22 @@
     "warning": "#C18401",
     "info": "#4078F2",
     "hint": "#9D9D9F",
+    "terminal.ansi.black": "#383A42",
+    "terminal.ansi.red": "#E45649",
+    "terminal.ansi.green": "#50A14F",
+    "terminal.ansi.yellow": "#C18401",
+    "terminal.ansi.blue": "#4078F2",
+    "terminal.ansi.magenta": "#A626A4",
+    "terminal.ansi.cyan": "#0184BC",
+    "terminal.ansi.white": "#FAFAFA",
+    "terminal.ansi.bright_black": "#696C77",
+    "terminal.ansi.bright_red": "#E45649",
+    "terminal.ansi.bright_green": "#50A14F",
+    "terminal.ansi.bright_yellow": "#C18401",
+    "terminal.ansi.bright_blue": "#4078F2",
+    "terminal.ansi.bright_magenta": "#A626A4",
+    "terminal.ansi.bright_cyan": "#0184BC",
+    "terminal.ansi.bright_white": "#FFFFFF",
     "syntax": {
       "attribute": {
         "color": "#986801"

@@ -20,7 +20,7 @@ palettes. Custom TextMate grammars require Shiki.
   Highlights is in beta, and its API may still change.
 </Notice>
 
-Highlights is a syntax highlighter with 151 built-in language lexers written in
+Highlights is a syntax highlighter with 152 built-in language lexers written in
 WebAssembly Text (WAT). It produces HTML or Shiki-compatible token objects. The
 package includes the lexers, so it does not download language grammars.
 
@@ -299,7 +299,7 @@ Use `isSupportedLanguage(value)` to validate a string and narrow its type to
 
 #### ANSI output
 
-`ansi` is Shiki's special language for terminal output. `codeToHtml()`,
+The `ansi` lexer handles terminal output in Wasm. `codeToHtml()`,
 `codeToTokens()`, and `StreamTokenizer` read SGR escape sequences for colors,
 backgrounds, bold, dim, italic, underline, strikethrough, and reverse. They
 remove other escape sequences, such as cursor movement and OSC links. Token
@@ -309,7 +309,8 @@ character in the input.
 Palette colors come from the theme's `terminal.ansi.*` keys, such as
 `terminal.ansi.red` and `terminal.ansi.bright_red`. Missing keys use VS Code's
 terminal colors, as in Shiki. With `cssVariables`, palette colors are
-`var(--hls-ansi-red)` and `var(--hls-ansi-bright-red)`; `toCSS()` emits them.
+`var(--hls-terminal-ansi-red)` and `var(--hls-terminal-ansi-bright-red)`;
+`toCSS()` emits them.
 
 `LiveTokenizer` edits the raw text, so it treats `ansi` as `plain`.
 
@@ -321,6 +322,7 @@ Built-in languages and their aliases are included in the `Lang` type:
 | `abap`               | —                                                                           |
 | `ada`                | `adb`, `ads`                                                                |
 | `angular-html`       | —                                                                           |
+| `ansi`               | —                                                                           |
 | `apache`             | `apacheconf`, `htaccess`                                                    |
 | `apex`               | —                                                                           |
 | `applescript`        | —                                                                           |

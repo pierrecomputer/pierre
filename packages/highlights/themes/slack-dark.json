@@ -15,6 +15,22 @@
     "created": "#ECB22E",
     "deleted": "#FFF",
     "modified": "#ECB22E",
+    "terminal.ansi.black": "#000000",
+    "terminal.ansi.red": "#cd3131",
+    "terminal.ansi.green": "#0dbc79",
+    "terminal.ansi.yellow": "#e5e510",
+    "terminal.ansi.blue": "#2472c8",
+    "terminal.ansi.magenta": "#bc3fbc",
+    "terminal.ansi.cyan": "#11a8cd",
+    "terminal.ansi.white": "#e5e5e5",
+    "terminal.ansi.bright_black": "#666666",
+    "terminal.ansi.bright_red": "#f14c4c",
+    "terminal.ansi.bright_green": "#23d18b",
+    "terminal.ansi.bright_yellow": "#f5f543",
+    "terminal.ansi.bright_blue": "#3b8eea",
+    "terminal.ansi.bright_magenta": "#d670d6",
+    "terminal.ansi.bright_cyan": "#29b8db",
+    "terminal.ansi.bright_white": "#e5e5e5",
     "syntax": {
       "attribute": {
         "color": "#9cdcfe"

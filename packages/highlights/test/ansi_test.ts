@@ -197,13 +197,13 @@ void t.test('ansi: CSS-variable themes use the ansi variables', () => {
   assert.deepEqual(
     tokens[0].map((token) => token.color),
     [
-      'var(--hls-ansi-bright-red)',
-      'color-mix(in srgb, var(--hls-ansi-bright-red) 50%, transparent)',
+      'var(--hls-terminal-ansi-bright-red)',
+      'color-mix(in srgb, var(--hls-terminal-ansi-bright-red) 50%, transparent)',
     ]
   );
   const css = toCSS(theme);
-  assert.ok(css.includes(`--hls-ansi-red: ${palette[1]};`));
-  assert.ok(css.includes(`--hls-ansi-bright-white: ${palette[15]};`));
+  assert.ok(css.includes(`--hls-terminal-ansi-red: ${palette[1]};`));
+  assert.ok(css.includes(`--hls-terminal-ansi-bright-white: ${palette[15]};`));
 });
 
 void t.test('ansi: HTML keeps visible text and line endings', () => {
@@ -254,3 +254,142 @@ void t.test('ansi: live documents keep the raw text', () => {
   );
   live.dispose();
 });
+
+void t.test('ansi: HTML matches token styles in every theme mode', () => {
+  const p3: Theme = {
+    ...theme,
+    name: 'P3',
+    style: { ...theme.style, 'terminal.ansi.red': 'color(display-p3 1 0 0)' },
+  };
+  const named: Theme = {
+    name: 'palette',
+    appearance: 'dark',
+    cssVariables: { prefix: '--palette-' },
+    style: { foreground: 'fg', background: 'bg', 'terminal.ansi.red': 'red' },
+  };
+  const code =
+    '\x1b[31;44;1;3;4;9m<&>\x1b[2m dim\x1b[0;7m reverse\x1b[0;38;2;10;20;30;48;5;200m RGB\x1b[2m dim RGB';
+  const empty: Theme = { name: 'empty', appearance: 'dark', style: {} };
+  for (const options of [
+    { theme },
+    { theme: cssVariables },
+    { theme: p3 },
+    { theme: named },
+    { theme: empty },
+    { themes: { light: empty, dark: p3 }, defaultColor: 'light-dark()' },
+    { themes: { light: empty, dark: theme }, defaultColor: 'light-dark()' },
+    { themes: { light, dark: theme } },
+    { themes: { light, dark: p3 }, defaultColor: false },
+    { themes: { light, dark: p3 }, defaultColor: 'light-dark()' },
+    { themes: { light, dark: theme }, defaultColor: 'light-dark()' },
+  ] as const) {
+    const html = decoder.decode(codeToHtml(code, { lang: 'ansi', ...options }));
+    const expected = codeToTokens(code, {
+      lang: 'ansi',
+      ...(options.theme !== undefined
+        ? { themes: { light: options.theme } }
+        : options),
+    }).tokens[0];
+    const spans = Array.from(
+      html.matchAll(/<span style="([^"]*)">([\s\S]*?)<\/span>/g),
+      ([, css, content]) => ({
+        content: content
+          .replaceAll('&lt;', '<')
+          .replaceAll('&gt;', '>')
+          .replaceAll('&amp;', '&'),
+        htmlStyle: Object.fromEntries(
+          css
+            .split(';')
+            .filter(Boolean)
+            .map((decl) => {
+              const at = decl.indexOf(':');
+              return [
+                decl.slice(0, at),
+                decl.slice(at + 1).replace(/^light-dark\((.*), \1\)$/, '$1'),
+              ];
+            })
+        ),
+      })
+    );
+    assert.deepEqual(
+      spans,
+      expected.map(({ content, htmlStyle }) => ({ content, htmlStyle })),
+      JSON.stringify(options)
+    );
+  }
+});
+
+void t.test(
+  'ansi: Unicode offsets and byte streams preserve visible runs',
+  () => {
+    const code =
+      '前😀\x1b[31m红😀\x1b[0m\r\n\x1b]8;;https://example.com\x07链接\x1b]8;;\x07\n終';
+    const expected = codeToTokens(code, { lang: 'ansi', theme }).tokens;
+    assert.deepEqual(
+      expected.map((line) =>
+        line.map(({ content, offset }) => [content, offset])
+      ),
+      [
+        [
+          ['前😀', 0],
+          ['红😀', 8],
+        ],
+        [['链接', code.indexOf('链接')]],
+        [['終', code.indexOf('終')]],
+      ]
+    );
+    const bytes = new TextEncoder().encode(code);
+    for (let split = 0; split <= bytes.length; split++) {
+      const stream = new StreamTokenizer({ lang: 'ansi', theme });
+      assert.deepEqual(
+        [
+          ...stream.pushCode(bytes.subarray(0, split)),
+          ...stream.pushCode(bytes.subarray(split)),
+          ...stream.end(),
+        ],
+        expected,
+        `byte split ${split}`
+      );
+    }
+  }
+);
+
+void t.test('ansi: Markdown fences use the registered lexer', () => {
+  const code = '```ansi\n\x1b[31mred\x1b[0m\n```\ntext';
+  const result = codeToTokens(code, { lang: 'md', theme }).tokens;
+  assert.equal(result[1].map((token) => token.content).join(''), 'red');
+  assert.equal(result[1][0].color, palette[1]);
+  assert.equal(
+    result
+      .at(-1)
+      ?.map((token) => token.content)
+      .join(''),
+    'text'
+  );
+  assert.equal(
+    textOf(decoder.decode(codeToHtml(code, { lang: 'md', theme }))),
+    '```ansi\nred\n```\ntext'
+  );
+});
+
+void t.test(
+  'ansi: many RGB styles merge the same way across stream chunks',
+  () => {
+    const code = Array.from(
+      { length: 160 },
+      (_, i) => `\x1b[38;2;${i};20;30ma\x1b[38;2;${i};20;30mb\n`
+    ).join('');
+    const whole = codeToTokens(code, { lang: 'ansi', theme }).tokens;
+    const stream = new StreamTokenizer({ lang: 'ansi', theme });
+    const chunked = code
+      .match(/[^]*?\n/g)!
+      .flatMap((line) => stream.pushCode(line));
+    chunked.push(...stream.end());
+    assert.deepEqual(chunked, whole);
+    assert.ok(
+      whole
+        .slice(0, -1)
+        .every((line) => line.length === 1 && line[0].content === 'ab')
+    );
+  }
+);

@@ -1,4 +1,3 @@
-import { isAnsi } from './ansi';
 import {
   assertWasmModule,
   HighlightsHighlighter,
@@ -291,9 +290,7 @@ export class LiveTokenizer {
   #updating = false;
 
   constructor(options: LiveTokenizerOptions) {
-    // Warning: an editor needs tokens that cover the raw text, so `ansi`
-    // keeps its escape sequences and uses the plain lexer.
-    this.#langId = isAnsi(options.lang) ? 0 : langIdOf(options.lang);
+    this.#langId = langIdOf(options.lang);
     this.#themes = resolveOptionThemes(options);
     this.#cssVariablePrefix =
       options.cssVariablePrefix ?? defaultCssVariablePrefix;

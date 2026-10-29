@@ -9,10 +9,10 @@ import tokenTypes from './token-types';
 export const defaultCssVariablePrefix = '--hls-';
 
 /**
- * Bytes of one packed Wasm theme table: 73 five-byte records padded for the
+ * Bytes of one packed Wasm theme table: 89 five-byte records padded for the
  * emitter's SIMD comparisons. Mirrors `$mem.themeTable` in src/memory.wat.
  */
-export const themeTableBytes = 384;
+export const themeTableBytes = 480;
 
 const enc = new TextEncoder();
 const colorReg = /^#([a-f0-9]{3,4}|[a-f0-9]{6}|[a-f0-9]{8})$/i;
@@ -86,17 +86,6 @@ const ansiDefaults = [
   '#29b8db',
   '#ffffff',
 ];
-
-/** The 16 ANSI colors of a theme. Missing or invalid colors use VS Code's. */
-export function themeAnsiColors(style: ThemeStyle): string[] {
-  return ansiNames.map(
-    (name, i) =>
-      resolveThemeStyle(
-        { foreground: style[`terminal.ansi.${name}`] as string },
-        'foreground'
-      ).color ?? ansiDefaults[i]
-  );
-}
 
 /** Describe a rejected theme value for the `invalid theme` error message. */
 function describeThemeValue(value: unknown): string {
@@ -173,7 +162,11 @@ export function resolveThemeStyle(style: ThemeStyle, name: string): TokenStyle {
   let font_weight: number | undefined;
   if (name === 'background') color = themeBackground(style);
   else if (name === 'foreground') color = themeForeground(style);
-  else {
+  else if (name.startsWith('terminal.ansi.')) {
+    const index = ansiNames.indexOf(name.slice(14));
+    color = style[name] as string | undefined;
+    if (!isThemeColor(color)) color = ansiDefaults[index];
+  } else {
     ({ color, font_style, font_weight } =
       resolveThemeSyntax(style.syntax ?? {}, name) ?? {});
     if (font_style != null || font_weight != null)
@@ -190,6 +183,8 @@ export function resolveThemeStyle(style: ThemeStyle, name: string): TokenStyle {
   } else {
     color = undefined;
   }
+  if (color === undefined && name.startsWith('terminal.ansi.'))
+    color = ansiDefaults[ansiNames.indexOf(name.slice(14))];
   return {
     color,
     italic: font_style === 'italic',
@@ -220,10 +215,24 @@ export function escapeAttribute(value: string): string {
 /**
  * Pack HTML openers for Wasm mode 4. Store the u32 span reserve, then
  * u32 byte offset/length pairs per token ID, then the UTF-8 bytes.
- * Slot 0 holds the root opener with `<code>`. Other slots hold span openers.
+ * Slot 0 holds the root opener with `<code>`. Other token slots hold spans.
+ * Warning: src/styles.wat also reads the following palette count/kind pair,
+ * then one name and all token colors per palette. Empty colors are unset.
  */
-export function packHtmlOpeners(openers: string[]): Uint8Array {
-  const bytes = openers.map((opener) => enc.encode(opener));
+export function packHtmlOpeners(
+  openers: string[],
+  palettes: { name: string; colors: (string | undefined)[] }[],
+  lightDark = false
+): Uint8Array {
+  const entries = [
+    ...openers,
+    '',
+    ...palettes.flatMap(({ name, colors }) => [
+      escapeAttribute(name),
+      ...colors.map((color) => escapeAttribute(color ?? '')),
+    ]),
+  ];
+  const bytes = entries.map((entry) => enc.encode(entry));
   let offset = 4 + 8 * bytes.length;
   const blob = new Uint8Array(
     offset + bytes.reduce((sum, entry) => sum + entry.length, 0)
@@ -237,6 +246,21 @@ export function packHtmlOpeners(openers: string[]): Uint8Array {
     offset += bytes[i].length;
     if (i !== 0) spanReserve = Math.max(spanReserve, bytes[i].length + 32);
   }
+  dv.setUint32(4 + 8 * tokenTypes.length, palettes.length, true);
+  dv.setUint32(8 + 8 * tokenTypes.length, lightDark ? 1 : 0, true);
+  spanReserve += palettes.reduce(
+    (n, { name, colors }) =>
+      n +
+      256 +
+      5 * enc.encode(escapeAttribute(name)).length +
+      2 *
+        Math.max(
+          ...colors.map(
+            (color) => enc.encode(escapeAttribute(color ?? 'inherit')).length
+          )
+        ),
+    0
+  );
   dv.setUint32(0, spanReserve, true);
   return blob;
 }
@@ -252,8 +276,6 @@ export interface PreparedTheme {
   table: Uint8Array | undefined;
   /** Lazy UTF-8 HTML openers for Display P3 themes and named CSS palettes. */
   readonly htmlOpeners: Uint8Array | undefined;
-  /** Lazy colors for ANSI palette indexes 0–15, in `ansiNames` order. */
-  readonly ansi: readonly string[];
 }
 
 // Theme names are not unique. Replace the object to change its cached styles.
@@ -299,9 +321,17 @@ function prepareCssPalette(theme: Theme): PreparedTheme {
   const styles: (TokenStyle | null)[] = new Array(tokenTypes.length).fill(null);
   const syntax = theme.style.syntax ?? {};
   for (let i = 1; i < tokenTypes.length; i++) {
-    const setting = resolveThemeSyntax(syntax, tokenTypes[i]);
+    const name = tokenTypes[i];
+    const setting = name.startsWith('terminal.ansi.')
+      ? { color: theme.style[name] as string | undefined }
+      : resolveThemeSyntax(syntax, name);
     styles[i] = {
-      color: variable(setting?.color ?? 'foreground'),
+      color: variable(
+        setting?.color ??
+          (name.startsWith('terminal.ansi.')
+            ? name.replace(/[._]/g, '-')
+            : 'foreground')
+      ),
       italic: setting?.font_style === 'italic',
       weight:
         setting?.font_weight === undefined
@@ -312,7 +342,6 @@ function prepareCssPalette(theme: Theme): PreparedTheme {
   const fg = variable(themeForeground(theme.style) ?? 'foreground');
   const bg = variable(themeBackground(theme.style) ?? 'background');
   let htmlOpeners: Uint8Array | undefined;
-  let ansi: string[] | undefined;
   return {
     name: theme.name,
     styles,
@@ -321,14 +350,6 @@ function prepareCssPalette(theme: Theme): PreparedTheme {
     table: undefined,
     get htmlOpeners() {
       return (htmlOpeners ??= themeHtmlOpeners(styles, fg, bg));
-    },
-    get ansi() {
-      return (ansi ??= ansiNames.map((name) => {
-        const value = theme.style[`terminal.ansi.${name}`];
-        return variable(
-          typeof value === 'string' ? value : `ansi-${name.replace('_', '-')}`
-        );
-      }));
     },
   };
 }
@@ -344,7 +365,6 @@ function prepareCssVariables(
 ): PreparedTheme {
   let variables: Pick<PreparedTheme, 'styles' | 'fg' | 'bg'> | undefined;
   const resolve = () => (variables ??= cssVariableStyles(cssVariablePrefix));
-  let ansi: string[] | undefined;
   return {
     name,
     get styles() {
@@ -358,11 +378,6 @@ function prepareCssVariables(
     },
     table: undefined,
     htmlOpeners: undefined,
-    get ansi() {
-      return (ansi ??= ansiNames.map((name) =>
-        cssVariable(`ansi.${name}`, cssVariablePrefix)
-      ));
-    },
   };
 }
 
@@ -422,7 +437,6 @@ function prepareStyles(theme: Theme): PreparedTheme {
     else styles[i] = style;
   }
   let htmlOpeners: Uint8Array | undefined;
-  let ansi: string[] | undefined;
   return {
     name: theme.name,
     styles,
@@ -432,9 +446,6 @@ function prepareStyles(theme: Theme): PreparedTheme {
     get htmlOpeners() {
       if (!usesDisplayP3) return undefined;
       return (htmlOpeners ??= themeHtmlOpeners(styles, fg, bg));
-    },
-    get ansi() {
-      return (ansi ??= themeAnsiColors(themeStyle));
     },
   };
 }
@@ -464,5 +475,16 @@ function themeHtmlOpeners(
         : '');
     openers.push(`<span style="${escapeAttribute(css)}">`);
   }
-  return packHtmlOpeners(openers);
+  return packHtmlOpeners(openers, [
+    {
+      name: '',
+      colors: tokenTypes.map((name, i) =>
+        name === 'foreground'
+          ? fg
+          : name === 'background'
+            ? bg
+            : styles[i]?.color
+      ),
+    },
+  ]);
 }

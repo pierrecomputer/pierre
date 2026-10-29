@@ -42,6 +42,9 @@ use.
 
 Shiki catalog and Pierre themes also include colors for Git changes and terminal
 output. The keys are `created`, `deleted`, `modified`, and `terminal.ansi.*`.
+Every theme defines all 16 terminal colors, from `terminal.ansi.black` through
+`terminal.ansi.bright_white`. These are also token names; `toCSS()` converts
+them to variables such as `--hls-terminal-ansi-bright-red`.
 
 For CSS-controlled colors, use `cssVariables`. See the
 [theme docs](https://diffs.com/docs#highlights-themes) for accepted properties

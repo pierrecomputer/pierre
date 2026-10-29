@@ -131,15 +131,15 @@ void test('span cache: HTML and token calls retain previously formatted styles',
     highlighter.buffer.slice(numberSlot, numberSlot + 66),
     number
   );
-  const spans = highlighter.buffer.slice(spanCache, spanCache + 4818);
-  const theme = highlighter.buffer.slice(themeCache, themeCache + 384);
+  const spans = highlighter.buffer.slice(spanCache, spanCache + 5874);
+  const theme = highlighter.buffer.slice(themeCache, themeCache + 480);
   highlighter.codeToTokens('1 "s"', { lang: 'json', theme: pierreLight });
   assert.deepEqual(
-    highlighter.buffer.slice(spanCache, spanCache + 4818),
+    highlighter.buffer.slice(spanCache, spanCache + 5874),
     spans
   );
   assert.deepEqual(
-    highlighter.buffer.slice(themeCache, themeCache + 384),
+    highlighter.buffer.slice(themeCache, themeCache + 480),
     theme
   );
 });
@@ -185,11 +185,11 @@ void test('span cache: direct theme writes invalidate colors, alpha, and fonts',
     [[0x12, 0x34, 0x56, 0xff, 0x09], '#123456', ';font-weight:900'],
     [[0x12, 0x34, 0x56, 0xff, 0], '#123456', ''],
   ] as const) {
-    const saved = highlighter.buffer.slice(themeCache, themeCache + 384);
+    const saved = highlighter.buffer.slice(themeCache, themeCache + 480);
     highlighter.buffer.set(bytes, record);
     highlighter.codeToTokens('1', options);
     assert.deepEqual(
-      highlighter.buffer.slice(themeCache, themeCache + 384),
+      highlighter.buffer.slice(themeCache, themeCache + 480),
       saved
     );
     const html = dec.decode(highlighter.codeToHtml('1', options));
@@ -207,7 +207,7 @@ void test('span cache: direct theme writes invalidate colors, alpha, and fonts',
 void test('token types: syntax captures are sorted and complete', () => {
   // One alphabetical run, then the rarely emitted members in a second run so
   // every common member keeps a one-byte Wasm constant (see src/token.wat).
-  const syntax = tokenTypes.slice(1, -2);
+  const syntax = tokenTypes.slice(1, tokenTypes.indexOf('background'));
   const descents = syntax.filter((name, i) => i > 0 && name < syntax[i - 1]);
   assert.equal(descents.length, 1, `runs start at: ${descents.join(', ')}`);
   assert.equal(descents[0], 'enum');
@@ -292,7 +292,7 @@ void test('bundled themes: matches Shiki and Pierre catalogs and metadata', () =
         );
       }
     }
-    for (const scope of tokenTypes.slice(1, -2)) {
+    for (const scope of tokenTypes.slice(1)) {
       assert.ok(
         isThemeColor(
           resolveThemeStyle(theme.style, scope).color ??
@@ -300,6 +300,11 @@ void test('bundled themes: matches Shiki and Pierre catalogs and metadata', () =
         ),
         `${id}: missing ${scope}`
       );
+    }
+    for (const scope of tokenTypes.filter((name) =>
+      name.startsWith('terminal.ansi.')
+    )) {
+      assert.ok(isThemeColor(theme.style[scope]), `${id}: missing ${scope}`);
     }
     for (const [status, terminal] of [
       ['created', 'green'],
@@ -441,7 +446,7 @@ void test('css variables: HTML and declarations use the supplied prefix', () => 
   const defaults = dec.decode(
     highlighter.codeToHtml(code, { lang: 'json', theme: cssVariables })
   );
-  const cached = highlighter.buffer.slice(spanCache, spanCache + 4818);
+  const cached = highlighter.buffer.slice(spanCache, spanCache + 5874);
   for (const cssVariablePrefix of [
     '--code-',
     '--日本語-',
@@ -465,7 +470,7 @@ void test('css variables: HTML and declarations use the supplied prefix', () => 
         )
       );
       assert.deepEqual(
-        highlighter.buffer.slice(spanCache, spanCache + 4818),
+        highlighter.buffer.slice(spanCache, spanCache + 5874),
         cached
       );
     }
@@ -575,7 +580,9 @@ void test('toCSS resolves every token scope through its parents and foreground',
     },
   ]) {
     const css = toCSS(theme);
-    for (const name of tokenTypes.slice(1, -2)) {
+    for (const name of tokenTypes
+      .slice(1)
+      .filter((name) => name !== 'background' && name !== 'foreground')) {
       assert.ok(
         css.includes(`--hls-${name.replace(/[._]/g, '-')}: `),
         `${theme.name}: ${name}`

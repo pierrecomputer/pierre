@@ -144,7 +144,10 @@ function tokenRuns(lines: ThemedToken[][]): Run[] {
   const out: Run[] = [];
   for (const line of lines) {
     for (const tok of line) {
-      out.push([kindOf(tok) === 'none' ? null : tok.color!, tok.content]);
+      out.push([
+        tok.color === distinct.style.foreground ? null : (tok.color ?? null),
+        tok.content,
+      ]);
     }
   }
   return normalizeRuns(out);
@@ -160,15 +163,26 @@ function htmlRuns(html: string): Run[] {
       .replace(/&lt;/g, '<')
       .replace(/&gt;/g, '>')
       .replace(/&amp;/g, '&');
-    out.push([m[1] ?? null, text]);
+    out.push([
+      m[1] === distinct.style.foreground ? null : (m[1] ?? null),
+      text,
+    ]);
   }
   return normalizeRuns(out);
+}
+
+function visible(lang: Lang, code: string): string {
+  return samples[lang]?.visible?.(code) ?? code;
 }
 
 /** Assert lossless HTML with balanced spans and return it. */
 function checkHtml(lang: Lang, code: string): string {
   const html = htmlOf(lang, code);
-  assert.equal(textOf(html), code, `${lang}: lossless ${JSON.stringify(code)}`);
+  assert.equal(
+    textOf(html),
+    visible(lang, code),
+    `${lang}: lossless ${JSON.stringify(code)}`
+  );
   spansOf(html);
   return html;
 }
@@ -189,14 +203,18 @@ function checkTokensLossless(lang: Lang, code: string, lines: ThemedToken[][]) {
   for (const [i, line] of lines.entries()) {
     for (const tok of line) {
       assert.ok(tok.content.length > 0, `${lang}: empty token on line ${i}`);
-      assert.equal(tok.offset, rebuilt.length, `${lang}: offset on line ${i}`);
+      assert.equal(
+        visible(lang, code.slice(0, tok.offset)).length,
+        rebuilt.length,
+        `${lang}: offset on line ${i}`
+      );
       rebuilt += tok.content;
     }
     if (i < terminators.length) rebuilt += terminators[i];
   }
   assert.equal(
     rebuilt,
-    code,
+    visible(lang, code),
     `${lang}: tokens rebuild ${JSON.stringify(code)}`
   );
 }
@@ -408,7 +426,7 @@ for (const name of lexers) {
       const html = dec.decode(codeToHtml(cutBytes, { lang, theme: distinct }));
       assert.equal(
         textOf(html),
-        dec.decode(cutBytes),
+        visible(lang, dec.decode(cutBytes)),
         `${name}: cut at ${cut}`
       );
       spansOf(html);
@@ -459,7 +477,21 @@ for (const name of lexers) {
           const html = split(input, at);
           assert.equal(
             textOf(html),
-            input,
+            samples[lang]?.visible === undefined
+              ? input
+              : dec.decode(
+                  Uint8Array.from(
+                    visible(
+                      lang,
+                      String.fromCharCode(...enc.encode(input).subarray(0, at))
+                    ) +
+                      visible(
+                        lang,
+                        String.fromCharCode(...enc.encode(input).subarray(at))
+                      ),
+                    (char) => char.charCodeAt(0)
+                  )
+                ),
             `${name}: byte ${at}/${length} of ${JSON.stringify(input.slice(0, 24))}`
           );
           spansOf(html);
