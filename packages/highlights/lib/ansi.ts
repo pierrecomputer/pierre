@@ -1,5 +1,5 @@
 import type { ThemedToken } from './index';
-import type { ResolvedTheme } from './tokens';
+import { rangeToToken, type ResolvedTheme } from './tokens';
 
 const BOLD = 1;
 const DIM = 2;
@@ -65,10 +65,12 @@ export function ansiTokens(
   code: string,
   themes: ResolvedTheme[],
   cssVariablePrefix: string,
+  maxLineLength?: number,
   state: AnsiState = new AnsiState(),
   offsetBase = 0
 ): ThemedToken[][] {
   const lines: ThemedToken[][] = [];
+  const max = maxLineLength ?? 0;
   let line: ThemedToken[] = [];
   // The fields for the current state; undefined after an SGR sequence.
   let style: AnsiStyle | undefined;
@@ -80,6 +82,7 @@ export function ansiTokens(
     const lf = code.indexOf('\n', pos);
     let end = lf < 0 ? code.length : lf;
     if (lf > pos && code.charCodeAt(lf - 1) === 13) end--;
+    const unstyled = max > 0 && end - pos >= max;
     while (pos < end) {
       if (esc >= 0 && esc < pos) esc = code.indexOf('\x1b', pos);
       let textEnd = esc >= 0 && esc < end ? esc : end;
@@ -99,7 +102,20 @@ export function ansiTokens(
           }
         }
       }
-      if (textEnd > pos) {
+      if (textEnd > pos && unstyled) {
+        if (last === undefined) {
+          last = rangeToToken(
+            code,
+            pos,
+            textEnd,
+            0,
+            themes,
+            cssVariablePrefix,
+            offsetBase
+          );
+          line.push(last);
+        } else last.content += code.slice(pos, textEnd);
+      } else if (textEnd > pos) {
         if (style === undefined) {
           const { fg, bg, flags } = state;
           const key = `${fg},${bg},${flags}`;

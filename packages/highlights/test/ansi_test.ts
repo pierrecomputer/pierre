@@ -5,6 +5,7 @@ import { createHighlighter } from 'shiki';
 import {
   codeToHtml,
   codeToTokens,
+  type CodeToTokensOptions,
   isSupportedLanguage,
   LiveTokenizer,
   StreamTokenizer,
@@ -339,6 +340,150 @@ void t.test('ansi: streams keep SGR state across chunks', () => {
     assert.deepEqual(lines, expected, `split at ${split}`);
   }
 });
+
+void t.test('ansi: long lines strip escapes and retain SGR state', () => {
+  const code = '\x1b[31ma\x1b[32mb\x1b[33mc';
+  assert.deepEqual(
+    codeToTokens(code, { lang: 'ansi', theme, tokenizeMaxLineLength: 2 })
+      .tokens,
+    [[{ content: 'abc', offset: 5, color: '#fafafa', fontStyle: 0 }]]
+  );
+  const input =
+    '\x1b[31;1;44ma\x1b[2Kb\x1b]0;title\x07😀\x1b[35;3m\r\n' + 'z\n\x1b[0m\nx';
+  const options = { lang: 'ansi', theme, tokenizeMaxLineLength: 2 } as const;
+  const expected = [
+    [
+      {
+        content: 'ab😀',
+        offset: input.indexOf('a'),
+        color: '#fafafa',
+        fontStyle: 0,
+      },
+    ],
+    [
+      {
+        content: 'z',
+        offset: input.indexOf('z'),
+        color: palette[5],
+        bgColor: palette[4],
+        fontStyle: 3,
+      },
+    ],
+    [],
+    [
+      {
+        content: 'x',
+        offset: input.length - 1,
+        color: '#fafafa',
+        fontStyle: 0,
+      },
+    ],
+  ];
+  assert.deepEqual(codeToTokens(input, options).tokens, expected);
+  for (const chunks of [input, new TextEncoder().encode(input)]) {
+    for (let split = 0; split <= chunks.length; split++) {
+      const stream = new StreamTokenizer(options);
+      assert.deepEqual(
+        [
+          ...stream.pushCode(chunks.slice(0, split)),
+          ...stream.pushCode(chunks.slice(split)),
+          ...stream.end(),
+        ],
+        expected,
+        `split at ${split} (${typeof chunks})`
+      );
+    }
+  }
+});
+
+void t.test(
+  'ansi: line limits count input UTF-16 and exclude terminators',
+  () => {
+    const line = '\x1b[31m😀\x1b[32mx';
+    for (const eol of ['', '\n', '\r\n']) {
+      const code = line + eol;
+      const styled = codeToTokens(code, { lang: 'ansi', theme }).tokens;
+      for (const limit of [
+        undefined,
+        0,
+        -1,
+        line.length - 1,
+        line.length,
+        line.length + 1,
+      ]) {
+        const actual = codeToTokens(code, {
+          lang: 'ansi',
+          theme,
+          tokenizeMaxLineLength: limit,
+        }).tokens;
+        if (limit !== undefined && limit > 0 && line.length >= limit) {
+          assert.deepEqual(actual[0], [
+            { content: '😀x', offset: 5, color: '#fafafa', fontStyle: 0 },
+          ]);
+          assert.deepEqual(actual.slice(1), eol === '' ? [] : [[]]);
+        } else assert.deepEqual(actual, styled);
+      }
+    }
+  }
+);
+
+void t.test(
+  'ansi: long lines use the plain token style for every theme mode',
+  () => {
+    const options: CodeToTokensOptions[] = [
+      { lang: 'ansi', theme },
+      { lang: 'ansi', theme: cssVariables, cssVariablePrefix: '--term-' },
+      { lang: 'ansi', themes: { light, dark: theme } },
+      {
+        lang: 'ansi',
+        themes: { light, dark: theme },
+        defaultColor: false,
+        cssVariablePrefix: '--term-',
+      },
+      {
+        lang: 'ansi',
+        themes: { light, dark: theme },
+        defaultColor: 'light-dark()',
+      },
+    ];
+    const code = '\x1b[31;44;1;3;4;7;9mabc';
+    for (const option of options) {
+      const expected = codeToTokens('abc', { ...option, lang: 'plain' }).tokens;
+      expected[0][0].offset = code.indexOf('abc');
+      const limited = { ...option, tokenizeMaxLineLength: 2 };
+      assert.deepEqual(codeToTokens(code, limited).tokens, expected);
+      const stream = new StreamTokenizer(limited);
+      assert.deepEqual([...stream.pushCode(code), ...stream.end()], expected);
+    }
+  }
+);
+
+void t.test(
+  'ansi: dense long lines produce one token and retain the last color',
+  () => {
+    const code =
+      Array.from(
+        { length: 1000 },
+        (_, i) => `\x1b[38;2;${i >> 8};${i & 255};0mx`
+      ).join('') + '\ny';
+    const { tokens } = codeToTokens(code, {
+      lang: 'ansi',
+      theme,
+      tokenizeMaxLineLength: 16,
+    });
+    assert.deepEqual(tokens[0], [
+      {
+        content: 'x'.repeat(1000),
+        offset: code.indexOf('x'),
+        color: '#fafafa',
+        fontStyle: 0,
+      },
+    ]);
+    assert.deepEqual(tokens[1], [
+      { content: 'y', offset: code.length - 1, color: '#03e700', fontStyle: 0 },
+    ]);
+  }
+);
 
 void t.test('ansi: live documents keep the raw text', () => {
   const live = new LiveTokenizer({ lang: 'ansi', theme, code: '\x1b[31ma' });

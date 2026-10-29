@@ -272,7 +272,12 @@ export class HighlightsHighlighter implements Highlighter {
     const cssVariablePrefix =
       options.cssVariablePrefix ?? defaultCssVariablePrefix;
     const tokens = isAnsi(options.lang)
-      ? ansiTokens(code, themes, cssVariablePrefix)
+      ? ansiTokens(
+          code,
+          themes,
+          cssVariablePrefix,
+          options.tokenizeMaxLineLength
+        )
       : lineRecordsToTokens(
           code,
           this.tokenizeLineRecords(
@@ -631,6 +636,7 @@ export class StreamTokenizer extends TransformStream<
         code,
         this.#themes,
         this.#cssVariablePrefix,
+        this.#maxLineLength,
         this.#ansi,
         this.#streamChar
       );

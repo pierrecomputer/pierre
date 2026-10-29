@@ -126,6 +126,8 @@ export interface CodeToTokensBaseOptions extends CodeToHtmlBaseOptions {
    * Lines at or above this length become one token without syntax styles,
    * as in Shiki. This limits the number of DOM elements for long lines.
    * `0` or `undefined` disables the limit.
+   * ANSI escape sequences count toward the input UTF-16 length but are
+   * removed from token content. Their SGR state still applies to later lines.
    */
   tokenizeMaxLineLength?: number;
 }
