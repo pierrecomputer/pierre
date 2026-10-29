@@ -1,6 +1,6 @@
 /** @jsxImportSource preact */
 import { Fragment } from 'preact';
-import type { JSX } from 'preact';
+import type { ComponentChildren, JSX } from 'preact';
 import {
   useCallback,
   useEffect,
@@ -41,6 +41,7 @@ import type {
   FileTreeItemHandle,
   FileTreeRowDecoration,
   FileTreeVisibleRow,
+  FileTreeVisibleSegment,
 } from '../model/publicTypes';
 import {
   FILE_TREE_DEFAULT_ITEM_HEIGHT,
@@ -86,30 +87,86 @@ function formatFlattenedSegments(
     return renameInput ?? row.name;
   }
 
-  return (
-    <span data-item-flattened-subitems>
-      {segments.map((segment, index) => {
-        const isLast = index === segments.length - 1;
-        return (
+  const isRenaming = renameInput != null;
+
+  const renderSegment = (
+    segment: FileTreeVisibleSegment,
+    content: ComponentChildren
+  ): JSX.Element => (
+    <span
+      key={segment.path}
+      data-item-flattened-subitem={segment.path}
+      data-item-flattened-subitem-drag-target={
+        dragTargetFlattenedSegmentPath === segment.path ? 'true' : undefined
+      }
+    >
+      {content}
+    </span>
+  );
+
+  // Renaming keeps every segment on a flex line of its own, where the terminal
+  // segment becomes the input. The input sizes itself against a flex item, and
+  // it has to stay visible rather than be truncated away.
+  if (isRenaming) {
+    return (
+      <span data-item-flattened-subitems>
+        {segments.map((segment, index) => (
           <Fragment key={segment.path}>
-            <span
-              data-item-flattened-subitem={segment.path}
-              data-item-flattened-subitem-drag-target={
-                dragTargetFlattenedSegmentPath === segment.path
-                  ? 'true'
-                  : undefined
-              }
-            >
-              {isLast && renameInput != null ? (
+            {renderSegment(
+              segment,
+              index === segments.length - 1 ? (
                 renameInput
               ) : (
                 <Truncate>{segment.name}</Truncate>
-              )}
-            </span>
+              )
+            )}
             {index < segments.length - 1 ? ' / ' : ''}
           </Fragment>
-        );
-      })}
+        ))}
+      </span>
+    );
+  }
+
+  // Otherwise the path splits at its last separator, the same place the
+  // `leaf-path` split picks. Truncating each segment on its own spent the row on
+  // ellipses ("t… / kc… / … / se…") instead of on the path; truncating the run
+  // as a whole would drop the terminal directory, which is the one the row
+  // actually opens. So the leading run absorbs the shrinking and the terminal
+  // directory holds its ground: "test / kotlin / com… / server".
+  const leading = segments.slice(0, -1);
+  const terminal = segments[segments.length - 1];
+  if (terminal == null) {
+    return row.name;
+  }
+
+  // This separator opens the terminal segment, so its leading space lands at
+  // the start of that line box, where the browser collapses it away ("b/ c").
+  // A non-breaking space survives.
+  const terminalSeparator = '\u00a0/ ';
+
+  // The hidden copies that detect overflow measure the same text without
+  // duplicating the per-segment markup that drag and drop and the tests query.
+  const leadingText = leading.map((segment) => segment.name).join(' / ');
+  const terminalText = `${terminalSeparator}${terminal.name}`;
+
+  return (
+    <span data-item-flattened-subitems>
+      <MiddleTruncate
+        priority="end"
+        contents={[
+          leading.map((segment, index) => (
+            <Fragment key={segment.path}>
+              {renderSegment(segment, segment.name)}
+              {index < leading.length - 1 ? ' / ' : ''}
+            </Fragment>
+          )),
+          <Fragment key={terminal.path}>
+            {terminalSeparator}
+            {renderSegment(terminal, terminal.name)}
+          </Fragment>,
+        ]}
+        measureContents={[leadingText, terminalText]}
+      />
     </span>
   );
 }
