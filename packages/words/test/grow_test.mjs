@@ -46,6 +46,19 @@ const docs = {
     { length: 3000 },
     (_, i) => '`' + `<${i}> & "${i}"`.repeat(6) + '`'
   ).join('\n\n'),
+  definitionChain: Array.from(
+    { length: 1000 },
+    (_, i) =>
+      `[label ${i}]: /target/${i}\n\n[^note ${i}]: note ${i}\n\n` +
+      `# Block ${i}\n\n[label ${i}] and [^note ${i}]\n\n`
+  ).join(''),
+  plainParagraphs: Array.from(
+    { length: 3000 },
+    (_, i) => 'ordinary 界é. '.repeat(20) + `P${i}.\nnext.\nthird.\nlast.`
+  ).join('\n\n'),
+  plainEOFTail: 'ordinary 界é. '.repeat(30000) + '\t ',
+  fencedCode: '```\n' + '<&"\n'.repeat(30000) + '```\n',
+  openFencedCode: '~~~\n' + '<&"\n'.repeat(30000),
   entities: Array.from({ length: 3000 }, (_, i) =>
     `&amp;&#${i};&nbsp;&lt;`.repeat(4)
   ).join('\n\n'),
@@ -53,6 +66,13 @@ const docs = {
     { length: 800 },
     (_, i) => `| a${i} | b |\n| --- | --: |\n| ${i} | *v* |`
   ).join('\n\n'),
+  // More cells than the ANSI width cache holds; exercise remeasurement while
+  // alternating input aliases and escaped-pipe copies in the same table.
+  tableWidthOverflow:
+    '| a | b |\n| --- | --- |\n' +
+    Array.from({ length: 2400 }, (_, i) => `| \\*${i} | \`<&"\\|é\` |\n`).join(
+      ''
+    ),
   // ANSI re-emits the line prefix at every wrap, so deep quotes write far more
   // than they read
   quoted: Array.from(

@@ -413,6 +413,8 @@ export function transformWat(url, content) {
     if (text.length === 0) return '(nop)';
     if (text.length <= 8)
       return `(call $outSmall (i64.const ${packLe(text)}) (i32.const ${text.length}))`;
+    if (text.length <= 16)
+      return `(call $outWide (v128.const i64x2 ${packLe(text.slice(0, 8))} ${packLe(text.slice(8))}) (i32.const ${text.length}))`;
     pool.push(text);
     return `(call $outRaw (i32.const  POOL:${pool.length - 1} ) (i32.const ${text.length}))`;
   });

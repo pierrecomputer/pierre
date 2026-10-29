@@ -135,8 +135,12 @@
     (global.set $recBase (global.get $rec))
     (global.set $sp (i32.const 0))
     (global.set $leaf (enum.get $Blk.none))
+    (global.set $plainRunLiteral (i32.const 0))
     (global.set $linkHash (i32.const 0))
     (global.set $linkMask (i32.const 0))
+    (global.set $defHead (i32.const 0))
+    (global.set $defTail (i32.const 0))
+    (global.set $defCount (i32.const 0))
     (global.set $fnOrder (i32.const 0))
     (global.set $fnTotal (i32.const 0))
     (global.set $fnUsed (i32.const 0))
@@ -144,19 +148,45 @@
     (block $blocksDone
       (loop $blockLine
         (br_if $blocksDone (i32.ge_u (local.get $blockStart) (global.get $eof)))
+        ;; A document-level empty LF line closes ordinary leaves immediately;
+        ;; no indentation scan or container state is needed for this boundary.
+        (if (i32.and
+              (i32.and (i32.eqz (global.get $sp))
+                (i32.eq (i32.load8_u (local.get $blockStart)) (i32.const 10)))
+              (i32.and (i32.ne (global.get $leaf) (enum.get $Blk.code))
+                (i32.or (i32.ne (global.get $leaf) (enum.get $Blk.html))
+                  (i32.gt_u (global.get $htmlKind) (i32.const 5)))))
+          (then
+            (call $closeLeaf)
+            (local.set $blockStart (i32.add (local.get $blockStart) (i32.const 1)))
+            (i32.store (i32.const 26)
+              (i32.sub (local.get $blockStart) (i32.const $mem.input)))
+            (br $blockLine)))
+        (if (i32.eqz (i32.or (global.get $mode)
+              (i32.or (global.get $sp) (global.get $leaf))))
+          (then
+            (if (i32.eqz (call $mayStartBlock (i32.load8_u (local.get $blockStart))))
+              (then
+                (local.set $blockStart (call $startPlainParagraphRun (local.get $blockStart)))
+                (br $blockLine)))))
         (local.set $blockEnd (call $findLineEnd (local.get $blockStart)))
         (global.set $lineEnd (local.get $blockEnd))
         (global.set $pos (local.get $blockStart))
         (global.set $col (i32.const 0))
         (global.set $ptab (i32.const 0))
-        (global.set $fns (local.get $blockStart))
+        (global.set $fns (i32.const 0))
         (global.set $allMatched (i32.const 1))
         (global.set $lastMatched (i32.const 0))
         (global.set $closed (i32.const 0))
         (global.set $skipLine (i32.const 0))
         (local.set $fastText (i32.const 0))
         (local.set $matched (i32.const 0))
-        (if (i32.eqz (global.get $sp))
+        (if (i32.eq (global.get $leaf) (enum.get $Blk.code))
+          (then
+            (local.set $fastText (call $tryCodeRun))
+            (if (local.get $fastText)
+              (then (local.set $blockEnd (global.get $lineEnd))))))
+        (if (i32.and (i32.eqz (local.get $fastText)) (i32.eqz (global.get $sp)))
           (then
             (call $findFirstNonspace)
             (if (global.get $blank)
