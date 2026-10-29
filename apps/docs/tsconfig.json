@@ -10,6 +10,9 @@
   "exclude": ["node_modules", ".next"],
   "references": [
     {
+      "path": "../../packages/pipes/tsconfig.json"
+    },
+    {
       "path": "../../packages/highlights/tsconfig.json"
     },
     {

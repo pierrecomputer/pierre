@@ -449,6 +449,9 @@ importers:
       '@pierre/icons':
         specifier: 'catalog:'
         version: 0.9.0(react@19.2.7)
+      '@pierre/pipes':
+        specifier: workspace:*
+        version: link:../../packages/pipes
       '@pierre/theme':
         specifier: workspace:*
         version: link:../../packages/theme

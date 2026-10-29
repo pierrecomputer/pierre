@@ -8,6 +8,7 @@
     "@pierre/diffs": "workspace:*",
     "@pierre/highlights": "workspace:*",
     "@pierre/icons": "catalog:",
+    "@pierre/pipes": "workspace:*",
     "@pierre/theme": "workspace:*",
     "@pierre/theming": "workspace:*",
     "@pierre/tree-test-data": "workspace:*",
