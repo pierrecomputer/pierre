@@ -1,9 +1,10 @@
 import type { Theme } from '../lib/index';
 import {
+  ansiNames,
   defaultCssVariablePrefix,
   isThemeColor,
-  resolveThemeStyle,
   resolveThemeSyntax,
+  themeAnsiColors,
   themeBackground,
   themeForeground,
 } from '../lib/theme';
@@ -118,15 +119,15 @@ export function toCSS(
   const syntax = style.syntax ?? {};
   for (const name of new Set([
     ...Object.keys(syntax),
-    ...tokenTypes
-      .slice(1)
-      .filter((name) => name !== 'background' && name !== 'foreground'),
+    ...tokenTypes.slice(1, -2),
   ])) {
     if (!/^[a-z0-9_.-]+$/i.test(name)) continue;
-    const color = name.startsWith('terminal.ansi.')
-      ? resolveThemeStyle(style, name).color
-      : (resolveThemeSyntax(syntax, name)?.color ?? foreground);
+    const color = resolveThemeSyntax(syntax, name)?.color ?? foreground;
     css += `${cssVariablePrefix}${name.replace(/[._]/g, '-')}: ${isThemeColor(color) ? color.trim() : 'inherit'};`;
+  }
+  const ansi = themeAnsiColors(style);
+  for (let i = 0; i < ansi.length; i++) {
+    css += `${cssVariablePrefix}terminal-ansi-${ansiNames[i].replace('_', '-')}: ${ansi[i]};`;
   }
   return css;
 }

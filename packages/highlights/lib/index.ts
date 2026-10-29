@@ -4,7 +4,7 @@ import type { Lang as LexerLang } from './languages';
  * A built-in language name or alias. `ansi` is terminal output with escape
  * sequences, as in Shiki.
  */
-export type Lang = LexerLang;
+export type Lang = LexerLang | 'ansi';
 
 /**
  * Styles for a Zed syntax scope. The `& {}` unions preserve literal

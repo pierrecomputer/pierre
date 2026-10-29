@@ -41,34 +41,9 @@ export const zonSample: string = lines(
 export interface LangSample {
   code: string;
   kinds: readonly string[];
-  visible?: (code: string) => string;
 }
 
 export const samples: Record<string, LangSample> = {
-  ansi: {
-    code: lines(
-      ...Array.from(
-        { length: 8 },
-        (_, i) => `\x1b[${30 + i}mMessage ${i}: <ready> & λ😀\x1b[0m`
-      )
-    ),
-    kinds: [
-      'black',
-      'red',
-      'green',
-      'yellow',
-      'blue',
-      'magenta',
-      'cyan',
-      'white',
-    ].map((name) => `terminal.ansi.${name}`),
-    visible: (code) =>
-      code.replace(
-        // oxlint-disable-next-line no-control-regex
-        /\x1b(?:\[([0-?]*)[ -/]*([@-~])|\][^\x07\x1b\n]*(?:\x07|\x1b\\)|[ -/]*[0-~])/g,
-        ''
-      ),
-  },
   abap: {
     code: lines(
       '* Inventory report λ😀',
@@ -7039,7 +7014,6 @@ export const samples: Record<string, LangSample> = {
 export const tokenizerSamples: [Lang, string][] = [
   ['abap', samples.abap.code],
   ['ada', samples.ada.code],
-  ['ansi', 'INFO request <ready> & waiting\nUnicode: λ😀\ndone\n'],
   ['apache', samples.apache.code],
   ['apex', samples.apex.code],
   ['applescript', samples.applescript.code],

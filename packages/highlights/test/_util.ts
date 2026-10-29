@@ -324,9 +324,6 @@ export const distinctTheme = {
   style: {
     background: '#000000',
     foreground: '#ffffff',
-    ...Object.fromEntries(
-      [...distinctColorOf].filter(([name]) => name.startsWith('terminal.ansi.'))
-    ),
     syntax: Object.fromEntries(distinctColorOf),
   },
 } as unknown as Theme;

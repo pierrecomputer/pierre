@@ -78,26 +78,10 @@
     "variant"
     ;; resolved from theme.style, not from syntax
     "background"
-    "foreground"
-    "terminal.ansi.black"
-    "terminal.ansi.red"
-    "terminal.ansi.green"
-    "terminal.ansi.yellow"
-    "terminal.ansi.blue"
-    "terminal.ansi.magenta"
-    "terminal.ansi.cyan"
-    "terminal.ansi.white"
-    "terminal.ansi.bright_black"
-    "terminal.ansi.bright_red"
-    "terminal.ansi.bright_green"
-    "terminal.ansi.bright_yellow"
-    "terminal.ansi.bright_blue"
-    "terminal.ansi.bright_magenta"
-    "terminal.ansi.bright_cyan"
-    "terminal.ansi.bright_white")
+    "foreground")
 
   ;; [ptr:u16, length:u8] records over the kebab-case CSS-variable suffixes
-  (css-variable-table $Token $mem.tokenCssTable $mem.tokenCssTable+1344)
+  (css-variable-table $Token $mem.tokenCssTable $mem.tokenCssTable+912)
 
   ;; theme record for a $Token member: [r][g][b][a][style], where style
   ;; packs italic in bit 4 and font-weight/100 in the low nibble;

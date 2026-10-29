@@ -4,7 +4,7 @@
   ;; Token in the low byte; the high byte holds what a word arms in
   ;; $hlMoonbit: 1 a function name, 2 a type name, 4 a `pub(...)` visibility
   ;; word.
-  (keyword-table $moonbitWords $mem.moonbitWords $mem.styledHtml
+  (keyword-table $moonbitWords $mem.moonbitWords $mem.laterWordsFree
     (group $Token.keyword.declaration+256 "fn") ;; 1: declaration, next name is a function
     (group $Token.keyword+256 "with")           ;; 2: impl method, next name is a function
     (group $Token.keyword.declaration+512 ;; 3: declaration, next name is a type

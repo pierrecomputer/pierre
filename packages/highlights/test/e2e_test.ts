@@ -176,7 +176,7 @@ void t.test(
       const html = decoder.decode(
         highlighter.codeToHtml(code, { lang, theme: distinctTheme })
       );
-      assert.equal(textOf(html), samples[name]?.visible?.(code) ?? code, lang);
+      assert.equal(textOf(html), code, lang);
       if (name !== 'plain') assert.ok(spansOf(html).length > 0, lang);
       const tokens = highlighter.codeToTokens(code, {
         lang,

@@ -1,5 +1,4 @@
 import type { CodeToHtmlOptions, ThemedToken, TokensResult } from './index';
-import { styledTokens } from './styles';
 import type { PreparedTheme } from './theme';
 import {
   escapeAttribute,
@@ -26,7 +25,7 @@ export type ThemeRole = 'single' | 'default' | 'variable' | 'light-dark';
  */
 export interface ResolvedTheme extends Pick<
   PreparedTheme,
-  'name' | 'styles' | 'fg' | 'bg' | 'table'
+  'name' | 'styles' | 'fg' | 'bg' | 'table' | 'ansi'
 > {
   color: string | null;
   role: ThemeRole;
@@ -105,6 +104,9 @@ function tagTheme(
     fg,
     bg,
     table,
+    get ansi() {
+      return prepared.ansi;
+    },
   };
 }
 
@@ -375,23 +377,7 @@ export function multiThemeHtmlOpeners(
     }
     openers.push(`<span style="${escapeAttribute(css)}">`);
   }
-  const blob = packHtmlOpeners(
-    openers,
-    themes.map((theme) => ({
-      name:
-        theme.role === 'default' || theme.role === 'light-dark'
-          ? ''
-          : `${cssVariablePrefix}${theme.color}`,
-      colors: tokenTypes.map((name, i) =>
-        name === 'foreground'
-          ? theme.fg
-          : name === 'background'
-            ? theme.bg
-            : theme.styles[i]?.color
-      ),
-    })),
-    themes[0].role === 'light-dark'
-  );
+  const blob = packHtmlOpeners(openers);
   prefixes.set(cssVariablePrefix, blob);
   return blob;
 }
@@ -442,15 +428,6 @@ export function lineRecordsToTokens(
   maxLineLength?: number,
   offsetBase = 0
 ): ThemedToken[][] {
-  if (recs[1] === 0xfffffffd)
-    return styledTokens(
-      code,
-      recs,
-      themes,
-      cssVariablePrefix,
-      maxLineLength,
-      offsetBase
-    );
   const lines: ThemedToken[][] = [];
   const max = maxLineLength ?? 0;
   const { styles, fg, role } = themes[0];

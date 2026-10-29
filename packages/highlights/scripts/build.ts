@@ -1981,17 +1981,17 @@ export function listTokenTypes(
   });
   if (names.length > tokenSlotLimit) {
     throw new Error(
-      `$Token has ${names.length} members; the emitter span cache holds ${tokenSlotLimit} (see $mem.emitterSpanCache in src/memory.wat, the 480-byte theme table, and lib/highlighter.ts themeBytes)`
+      `$Token has ${names.length} members; the emitter span cache holds ${tokenSlotLimit} (see $mem.emitterSpanCache in src/memory.wat, the 384-byte theme table, and lib/highlighter.ts themeBytes)`
     );
   }
   return names;
 }
 
 // Maximum token count supported by the fixed memory regions.
-// The span cache holds 89 slots of 66 bytes. Theme tables and SIMD
-// comparisons cover 480 bytes (96 five-byte records). Packed live records
+// The span cache holds 73 slots of 66 bytes. Theme tables and SIMD
+// comparisons cover 384 bytes (76 five-byte records). Packed live records
 // use one byte for the ID. Resize these regions before increasing the limit.
-const tokenSlotLimit = 89;
+const tokenSlotLimit = 73;
 
 /** Generate the checked-in language lookup and derive Lang from its keys. */
 export function generateLanguages(languages: Record<string, number>): string {
