@@ -3471,6 +3471,9 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
     if (!this.isReady()) {
       return;
     }
+    if (this.isRootHidden()) {
+      return;
+    }
 
     // Read the current viewport and logical scroll position before making DOM
     // mutations, then capture an anchor that can survive layout recalculation.
@@ -3922,7 +3925,19 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
     this.scrollAnimation = undefined;
   };
 
+  // Whether the root is not rendered, because it or an ancestor is
+  // `display: none`. Everything inside then measures as zero, and laying out
+  // would cache those zero heights for rows that are still there. The
+  // ResizeObserver fires again when the root is shown, which renders.
+  // Environments without checkVisibility() keep laying out as before.
+  private isRootHidden(): boolean {
+    return this.root?.checkVisibility?.() === false;
+  }
+
   private handleResize = (entries: ResizeObserverEntry[]) => {
+    if (this.isRootHidden()) {
+      return;
+    }
     let shouldRender = false;
     for (const entry of entries) {
       // If the sticky container resizes (could be from a render, which it will
