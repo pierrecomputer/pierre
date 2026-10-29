@@ -9,6 +9,7 @@
     "test/**/*.tsx",
     "tsdown.config.ts"
   ],
+  "exclude": ["benchmark/output"],
   "compilerOptions": {
     "allowJs": false,
     "checkJs": false,

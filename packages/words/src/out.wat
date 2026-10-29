@@ -1,9 +1,18 @@
 (module
   (import "./memory.wat")
+  (import "./scan.wat")
+
+  ;; Load this classifier once per writer. Some Wasm backends reconstruct
+  ;; vector immediates inside each iteration instead of retaining a register.
+  (data (i32.const $mem.escapeNibbles)
+    "\00\ff\02\ff\ff\ff\02\ff\ff\ff\ff\ff\03\ff\03\ff")
+
+  ;; A load-once quote replacement avoids reconstructing its six-byte integer
+  ;; immediate for each occurrence while retaining immediate dispatch otherwise.
+  (data (i32.const $mem.quoteEscape) "&quot;\00\00")
 
   ;; Nibble classification for the bytes $outText has to escape: NUL, `"`, `&`,
-  ;; `<` and `>`. Two i8x16.swizzle lookups classify sixteen bytes at once, which
-  ;; is both exact and cheaper than five comparisons.
+  ;; `<` and `>`. One swizzle and high-nibble equality classify sixteen bytes.
   ;; Four regions live above the input, in the order they stop growing:
   ;;
   ;;   [$metaBase   .. $recBase)   frontmatter JSON, written before block analysis
@@ -115,10 +124,19 @@
     (i64.store (global.get $out) (local.get $v))
     (global.set $out (i32.add (global.get $out) (local.get $n))))
 
-  ;; write $n literal bytes from the string pool
+  ;; Emit medium-sized compile-time literals without loading the string pool.
+  (func $outWide (param $v v128) (param $n i32)
+    (call $ensureOut (local.get $n))
+    (v128.store (global.get $out) (local.get $v))
+    (global.set $out (i32.add (global.get $out) (local.get $n))))
+
+  ;; Write pooled literals. A vector copy avoids bulk-memory setup for tags
+  ;; just larger than outSmall's eight-byte immediates; output has wide slack.
   (func $outRaw (param $ptr i32) (param $n i32)
     (call $ensureOut (local.get $n))
-    (memory.copy (global.get $out) (local.get $ptr) (local.get $n))
+    (if (i32.le_u (local.get $n) (i32.const 16))
+      (then (v128.store (global.get $out) (v128.load (local.get $ptr))))
+      (else (memory.copy (global.get $out) (local.get $ptr) (local.get $n))))
     (global.set $out (i32.add (global.get $out) (local.get $n))))
 
   (func $outByte (param $c i32)
@@ -159,74 +177,109 @@
   ;; Copy escaped text after the caller has reserved the worst-case output.
   ;; This entry point is what lets scratch-backed callers reserve before they
   ;; turn their offsets into pointers, without paying for a second check.
-  ;; Processes 16 bytes per step.
+  ;; Processes 16 bytes per step, keeping the write cursor local until done:
+  ;; this reserved loop cannot allocate or call another output writer.
   ;; Wide loads may read up to 15 bytes past $rhs: always inside a buffer with
   ;; slack. Wide stores may write up to 15 bytes of garbage past the advanced
   ;; cursor; later writes overwrite it.
   (func $outTextReserved (param $lhs i32) (param $rhs i32)
+    (global.set $out (call $outTextAt (local.get $lhs) (local.get $rhs) (global.get $out))))
+
+  ;; Return the reserved writer's cursor so compound emitters can keep it local
+  ;; until their closing tag, without publishing intermediate global positions.
+  (func $outTextAt (param $lhs i32) (param $rhs i32) (param $dst i32) (result i32)
     (local $c i32)
     (local $mask i32)
+    (local $belowMask i32)
     (local $k i32)
     (local $rem i32)
+    (local $scanBase i32)
+    (local $quote i64)
     (local $w v128)
     (local $lo v128)
-    (local $hi v128)
-    (if (i32.ge_u (local.get $lhs) (local.get $rhs)) (then (return)))
-    (local.set $lo (v128.const i8x16
-      0x01 0 0x02 0 0 0 0x02 0 0 0 0 0 0x04 0 0x04 0))
-    (local.set $hi (v128.const i8x16
-      0x01 0 0x02 0x04 0 0 0 0 0 0 0 0 0 0 0 0))
+    (if (i32.ge_u (local.get $lhs) (local.get $rhs)) (then (return (local.get $dst))))
+    ;; Each escaping byte has a distinct low nibble. Look up its required high
+    ;; nibble, using 255 for impossible rows, then compare with the source byte.
+    (local.set $lo (v128.load (i32.const $mem.escapeNibbles)))
+    (local.set $quote (i64.load (i32.const $mem.quoteEscape)))
     (block $done
       (loop $outer
         (br_if $done (i32.ge_u (local.get $lhs) (local.get $rhs)))
         (block $special
           (loop $wide
             (local.set $w (v128.load (local.get $lhs)))
-            (local.set $mask (i8x16.bitmask (i8x16.ne
-              (v128.and
-                (i8x16.swizzle (local.get $lo) (v128.and (local.get $w) (i8x16.splat (i32.const 15))))
-                (i8x16.swizzle (local.get $hi) (i8x16.shr_u (local.get $w) (i32.const 4))))
-              (i8x16.splat (i32.const 0)))))
+            (local.set $mask (i8x16.bitmask (i8x16.eq
+              (i8x16.swizzle (local.get $lo)
+                (v128.and (local.get $w) (i8x16.splat (i32.const 15))))
+              (i8x16.shr_u (local.get $w) (i32.const 4)))))
             (local.set $rem (i32.sub (local.get $rhs) (local.get $lhs)))
+            ;; Clip the final vector once, rather than bounds-checking every
+            ;; escaping byte while consuming its cached mask below.
+            (if (i32.lt_u (local.get $rem) (i32.const 16))
+              (then (local.set $mask (i32.and (local.get $mask)
+                (i32.sub (i32.shl (i32.const 1) (local.get $rem)) (i32.const 1))))))
             (if (local.get $mask)
               (then
-                (local.set $k (i32.ctz (local.get $mask)))
-                ;; A candidate in the wide-load slack is not part of the range.
-                (if (i32.lt_u (local.get $k) (local.get $rem))
-                  (then
-                    (v128.store (global.get $out) (local.get $w))
-                    (global.set $out (i32.add (global.get $out) (local.get $k)))
-                    (local.set $lhs (i32.add (local.get $lhs) (local.get $k)))
-                    (br $special)))))
-            (v128.store (global.get $out) (local.get $w))
+                ;; The bits through the first match are mask^(mask-1). Keep
+                ;; mask-1 for clearing that match without another subtraction.
+                (local.set $belowMask (i32.sub (local.get $mask) (i32.const 1)))
+                (local.set $k (i32.sub (i32.const 31)
+                  (i32.clz (i32.xor (local.get $mask) (local.get $belowMask)))))
+                (local.set $scanBase (local.get $lhs))
+                (v128.store (local.get $dst) (local.get $w))
+                (local.set $dst (i32.add (local.get $dst) (local.get $k)))
+                (local.set $lhs (i32.add (local.get $lhs) (local.get $k)))
+                (br $special)))
+            (v128.store (local.get $dst) (local.get $w))
             (if (i32.le_u (local.get $rem) (i32.const 16))
               (then
-                (global.set $out (i32.add (global.get $out) (local.get $rem)))
+                (local.set $dst (i32.add (local.get $dst) (local.get $rem)))
                 (br $done)))
-            (global.set $out (i32.add (global.get $out) (i32.const 16)))
+            (local.set $dst (i32.add (local.get $dst) (i32.const 16)))
             (local.set $lhs (i32.add (local.get $lhs) (i32.const 16)))
             (br $wide)))
-        (local.set $c (i32.load8_u (local.get $lhs)))
-        (if (i32.eqz (local.get $c))
-          (then
-            ;; the specification replaces NUL with the replacement character
-            (i32.store (global.get $out) (i32.const "\ef\bf\bd"))
-            (global.set $out (i32.add (global.get $out) (i32.const 3))))
-          (else (if (i32.eq (local.get $c) (i32.const "&"))
-          (then
-            (i64.store (global.get $out) (i64.const "&amp;"))
-            (global.set $out (i32.add (global.get $out) (i32.const 5))))
-          (else (if (i32.eq (local.get $c) (i32.const "<"))
+        ;; Consume the other escaping bytes already classified in this vector
+        ;; before returning to the long-span scanner.
+        (loop $escape
+          (local.set $c (i32.load8_u (local.get $lhs)))
+          (if (i32.lt_u (local.get $c) (i32.const "<"))
             (then
-              (i32.store (global.get $out) (i32.const "&lt;"))
-              (global.set $out (i32.add (global.get $out) (i32.const 4))))
-            (else (if (i32.eq (local.get $c) (i32.const ">"))
-              (then
-                (i32.store (global.get $out) (i32.const "&gt;"))
-                (global.set $out (i32.add (global.get $out) (i32.const 4))))
-              (else
-                (i64.store (global.get $out) (i64.const "&quot;"))
-                (global.set $out (i32.add (global.get $out) (i32.const 6)))))))))))
-        (local.set $lhs (i32.add (local.get $lhs) (i32.const 1)))
-        (br $outer))))
+              (if (i32.eq (local.get $c) (i32.const 34))
+                (then
+                  (i64.store (local.get $dst) (local.get $quote))
+                  (local.set $dst (i32.add (local.get $dst) (i32.const 6))))
+                (else
+                  (if (i32.eq (local.get $c) (i32.const "&"))
+                    (then
+                      (i64.store (local.get $dst) (i64.const "&amp;"))
+                      (local.set $dst (i32.add (local.get $dst) (i32.const 5))))
+                    (else
+                      ;; The remaining classified byte is NUL.
+                      (i32.store (local.get $dst) (i32.const "\ef\bf\bd"))
+                      (local.set $dst (i32.add (local.get $dst) (i32.const 3))))))))
+            (else
+              (if (i32.eq (local.get $c) (i32.const "<"))
+                (then
+                  (i32.store (local.get $dst) (i32.const "&lt;"))
+                  (local.set $dst (i32.add (local.get $dst) (i32.const 4))))
+                (else
+                  (i32.store (local.get $dst) (i32.const "&gt;"))
+                  (local.set $dst (i32.add (local.get $dst) (i32.const 4)))))))
+          (local.set $lhs (i32.add (local.get $lhs) (i32.const 1)))
+          (local.set $mask (i32.and (local.get $mask) (local.get $belowMask)))
+          (if (local.get $mask)
+            (then
+              (local.set $belowMask (i32.sub (local.get $mask) (i32.const 1)))
+              (local.set $k (i32.add (local.get $scanBase)
+                (i32.sub (i32.const 31)
+                  (i32.clz (i32.xor (local.get $mask) (local.get $belowMask))))))
+              (if (i32.gt_u (local.get $k) (local.get $lhs))
+                (then
+                  (v128.store (local.get $dst) (v128.load (local.get $lhs)))
+                  (local.set $dst (i32.add (local.get $dst)
+                    (i32.sub (local.get $k) (local.get $lhs))))))
+              (local.set $lhs (local.get $k))
+              (br $escape))))
+        (br $outer)))
+    (local.get $dst))
 )
