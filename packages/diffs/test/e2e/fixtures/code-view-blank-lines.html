@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>diffs CodeView blank-line insertion fixture</title>
+    <style>
+      body {
+        margin: 0;
+        padding: 16px;
+        font-family: system-ui, sans-serif;
+      }
+      [data-code-view-root] {
+        width: 720px;
+        height: 480px;
+        overflow: auto;
+        border: 1px solid #ccc;
+      }
+    </style>
+  </head>
+  <body>
+    <a
+      data-fixtures-index
+      href="/test/e2e/fixtures/index.html"
+      style="
+        display: inline-block;
+        margin-bottom: 16px;
+        font-family: system-ui, sans-serif;
+        font-size: 14px;
+        font-weight: 600;
+        color: #0b62d6;
+        text-decoration: none;
+      "
+      >&larr; All fixtures</a
+    >
+    <div data-code-view-root></div>
+
+    <script type="module">
+      import { CodeView } from '/dist/index.js';
+      import { Editor } from '/dist/edit/index.js';
+
+      const root = document.querySelector('[data-code-view-root]');
+      if (!(root instanceof HTMLElement)) {
+        throw new Error('Missing CodeView root.');
+      }
+
+      // Long enough that CodeView renders only a window of rows, so an edit
+      // tokenizes just the rows around the caret.
+      const lines = [];
+      for (let index = 1; index <= 1000; index++) {
+        lines.push(`const value${index} = ${index};`);
+      }
+
+      const codeView = new CodeView({
+        theme: { dark: 'pierre-dark', light: 'pierre-light' },
+        themeType: 'dark',
+        // Without a gutter, wrapped rows take their height from their content
+        // alone, so a row with an empty span collapses to zero height.
+        overflow: 'wrap',
+        disableLineNumbers: true,
+        disableFileHeader: true,
+        createEditor: (editorType, options, editStateKey) =>
+          new Editor(editorType, options, editStateKey),
+      });
+      codeView.setup(root);
+      codeView.setItems([
+        {
+          id: 'file',
+          type: 'file',
+          file: { name: 'blank-lines.ts', contents: `${lines.join('\n')}\n` },
+          version: 0,
+          edit: true,
+        },
+      ]);
+
+      const findContent = () =>
+        codeView
+          .getRenderedItems()
+          .find((item) => item.id === 'file')
+          ?.element?.shadowRoot?.querySelector('[data-content]');
+
+      const started = performance.now();
+      while (
+        codeView.getEditor('file') == null ||
+        findContent()?.getAttribute('contenteditable') !== 'true'
+      ) {
+        if (performance.now() - started > 5000) {
+          throw new Error('Timed out waiting for the editable CodeView item.');
+        }
+        await new Promise((resolve) => requestAnimationFrame(resolve));
+      }
+
+      window.__blankLines = {
+        root,
+        // Client point at the start of a rendered one-based line.
+        rowStart(lineNumber) {
+          const row = findContent().querySelector(
+            `[data-line="${lineNumber}"]`
+          );
+          const rect = row.getBoundingClientRect();
+          return { x: rect.left + 2, y: rect.top + rect.height / 2 };
+        },
+        // Rendered rows as { line, text, height } for one-based lines in [from, to].
+        rows(from, to) {
+          return [...findContent().querySelectorAll('[data-line]')]
+            .map((row) => ({
+              line: Number(row.dataset.line),
+              text: row.textContent,
+              height: Math.round(row.getBoundingClientRect().height),
+            }))
+            .filter(({ line }) => line >= from && line <= to);
+        },
+        lines: () => codeView.getEditor('file').getText().split('\n'),
+      };
+      window.__blankLinesReady = true;
+    </script>
+  </body>
+</html>

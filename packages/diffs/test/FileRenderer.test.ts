@@ -115,6 +115,67 @@ describe('FileRenderer', () => {
     ]);
   });
 
+  test('keeps tokenized rows at an edit inside a run of blank lines', async () => {
+    const instance = new FileRenderer();
+    const file: FileContents = {
+      cacheKey: 'editable-file',
+      contents: 'A\n\n\nB\n',
+      name: 'editable.txt',
+    };
+
+    const editSessionFile = createEditSessionFile(file);
+    instance.beginEditSession(editSessionFile);
+    await instance.asyncRender(editSessionFile);
+    instance.renderFile(editSessionFile);
+
+    // Enter at the start of the first blank line: the editor tokenizes the
+    // two rows at the caret and settles there.
+    instance.updateRenderCache(
+      new Map<number, HighlightedToken[]>([
+        [1, [[0, '', '']]],
+        [2, [[0, '', '']]],
+      ]),
+      'light',
+      true
+    );
+    instance.applyDocumentChange(
+      new TextDocument('inmemory://editable-file', 'A\n\n\n\nB\n')
+    );
+
+    const cache = (instance as unknown as FileRendererCacheProbe).renderCache;
+    const rows = cache?.result?.code ?? [];
+    expect(rows.map(hastTextContent)).toEqual(['A', '', '', '', 'B', '']);
+    // Every blank row needs a <br>; an empty span renders with no height.
+    for (const index of [1, 2, 3]) {
+      expect(rows[index]).toMatchObject({ children: [{ tagName: 'br' }] });
+    }
+  });
+
+  test('gives plain-filled blank rows a line break', async () => {
+    const instance = new FileRenderer();
+    const file: FileContents = {
+      cacheKey: 'editable-file',
+      contents: 'A\nB\n',
+      name: 'editable.txt',
+    };
+
+    const editSessionFile = createEditSessionFile(file);
+    instance.beginEditSession(editSessionFile);
+    await instance.asyncRender(editSessionFile);
+    instance.renderFile(editSessionFile);
+
+    // No tokenized rows, as for a structural edit outside the render range.
+    instance.updateRenderCache(new Map(), 'light', true);
+    instance.applyDocumentChange(
+      new TextDocument('inmemory://editable-file', 'A\nX\n\nB\n')
+    );
+
+    const cache = (instance as unknown as FileRendererCacheProbe).renderCache;
+    const rows = cache?.result?.code ?? [];
+    expect(rows.map(hastTextContent)).toEqual(['A', 'X', '', 'B', '']);
+    expect(rows[2]).toMatchObject({ children: [{ tagName: 'br' }] });
+  });
+
   test('reuses editor-compatible markup for a retained edit session', async () => {
     const instance = new FileRenderer({
       theme: 'pierre-light',

@@ -634,9 +634,20 @@ export class FileRenderer<LAnnotation = undefined> {
     const nextLines = linesFromFileContents(textDocument.getText());
     if (result != null && previousLines.length !== nextLines.length) {
       const maxShared = Math.min(previousLines.length, nextLines.length);
+      // The editor tokenized the rows from the edit onward, so the unchanged
+      // prefix ends at or before the first of them. Without this bound, an
+      // edit inside a run of identical lines (such as blank lines) is matched
+      // at the end of the run instead: the editor's rows then cover the wrong
+      // window and the real gap is plain-filled.
+      let prefixLimit = maxShared;
+      if (pendingStructuralRows !== undefined) {
+        for (const line of pendingStructuralRows.keys()) {
+          prefixLimit = Math.min(prefixLimit, line);
+        }
+      }
       let prefix = 0;
       while (
-        prefix < maxShared &&
+        prefix < prefixLimit &&
         previousLines[prefix] === nextLines[prefix]
       ) {
         prefix++;
@@ -667,6 +678,7 @@ export class FileRenderer<LAnnotation = undefined> {
         }
       }
       for (let i = prefix; i < nextLines.length - suffix; i++) {
+        const lineText = textDocument.getLineText(i);
         result.code[i] ??= this.ownRow({
           type: 'element',
           tagName: 'div',
@@ -675,20 +687,24 @@ export class FileRenderer<LAnnotation = undefined> {
             'data-line-type': 'context',
             'data-line-index': i,
           },
+          // An empty span has no height, so a blank line gets a <br> like
+          // tokenized blank rows do.
           children: [
-            {
-              type: 'element',
-              tagName: 'span',
-              properties: {
-                'data-char': 0,
-              },
-              children: [
-                {
-                  type: 'text',
-                  value: textDocument.getLineText(i),
+            lineText === ''
+              ? { type: 'element', tagName: 'br', properties: {}, children: [] }
+              : {
+                  type: 'element',
+                  tagName: 'span',
+                  properties: {
+                    'data-char': 0,
+                  },
+                  children: [
+                    {
+                      type: 'text',
+                      value: lineText,
+                    },
+                  ],
                 },
-              ],
-            },
           ],
         });
       }
