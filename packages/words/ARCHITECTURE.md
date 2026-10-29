@@ -54,8 +54,9 @@ before preprocessing, so editor warnings are expected.
    substituted. Definitions live in `src/memory.wat` and `src/types.wat`; names
    must not contain `-`.
 4. **String pool:** `(out.str "…")` writes a literal to the output. Literals of
-   eight bytes or fewer become one immediate store; longer ones are interned,
-   overlap-merged, and emitted by `(string-pool …)`.
+   up to eight bytes use an immediate integer store; nine to sixteen bytes use
+   an immediate SIMD store. Longer literals are interned, overlap-merged, and
+   emitted by `(string-pool …)`.
 5. **Generated tables:** `(entity-table …)` emits the 2125 HTML5 character
    references, `(unicode-punct-table …)` the P and S code point ranges,
    `(unicode-fold-table …)` full case folding, `(unicode-width-table …)` the
@@ -90,7 +91,14 @@ Page 1 is static. Everything that scales with the input lives above it.
   [30]            document contains global link/footnote definitions
   [32:48)         decimal conversion scratch
   [48:64)         hex digits
-  [64:1088)       pooled output string literals
+  [64:967)        pooled output string literals
+  [967:983)       paragraph syntax/escaping low-nibble classifier
+  [983:984)       carriage-return comparison byte
+  [984:992)       quote-escape output literal
+  [992:1008)      CR/LF byte classifier
+  [1008:1024)     first-match lane packing table
+  [1024:1072)     inline syntax/escaping nibble classifiers
+  [1072:1088)     HTML escape low-to-high nibble classifier
   [1088:27712)    HTML5 named character references
   [27712:29248)   Unicode P|S code point ranges
   [29248:32576)   Unicode case folding
@@ -143,13 +151,47 @@ moves anything. A line's `end` carries, in its top two bits, the number of
 virtual spaces a partially consumed tab left in front of it, which is what makes
 tab stops work without ever rewriting the input.
 
+Block phases share the first nonspace byte and its absolute column. A new line
+invalidates that byte's address with zero. Advancing to the cached byte
+preserves it; advancing past it triggers a scan. Partial-tab cursors derive
+indentation from the cached column.
+
 Top-level blank lines and paragraph continuations whose first nonspace byte
 cannot start a block bypass the generic three-phase dispatch. After one such
 continuation, a run of unindented LF-separated lines whose first byte cannot
-interrupt the paragraph is appended without rebuilding the phase state; every
-line still keeps its own record. In HTML mode, contiguous unindented
-LF-separated fenced-code lines also coalesce into one span; ANSI retains
-individual lines so it can reapply their prefixes.
+interrupt the paragraph is appended without rebuilding the phase state. In HTML
+mode, eligible runs coalesce older contiguous unpadded lines into source ranges
+and publish their final descriptors once. The last physical line stays separate
+for possible table-header conversion. The `joinedLines` flag prevents treating a
+surviving multiline range as single-line content after removing a table header
+or definitions.
+
+An ordinary unindented byte at an empty document spine can start a paragraph
+without those phases. In HTML mode, one SIMD scan then crosses ordinary lines,
+retaining its classification tables and candidate mask across periods and line
+feeds. An inner loop consumes the mask before advancing the vector base. The
+scan stops before a possible block start or after the first line needing inline
+processing. Construction reserves the complete header and at most two unpadded
+ranges together, again keeping the last physical line separate. The empty
+container stack needs no child bookkeeping.
+
+That scan also proves whether the content needs neither inline parsing nor HTML
+escaping. Syntax, possible autolinks, CR, and whitespace before an interior LF
+invalidate the proof; trailing EOF whitespace is safe because leaf finalization
+trims it. Construction stores the proof in the record's `plainInline` flag;
+further line additions clear it. Removing a table header preserves the proof for
+the remaining literal prefix. Completed leaves with that flag copy their
+normalized content after reserving output space and resolving the possibly
+movable content pointer. All other leaves use the general inline parser and
+renderer. ANSI and nested blocks keep their existing paths.
+
+Contiguous unindented LF-separated fenced-code lines also coalesce into one span
+in HTML mode; ANSI retains individual lines so it can reapply their prefixes.
+Unindented top-level HTML fences scan whole LF-separated body spans, stopping
+before any line containing a fence byte or CR; ordinary scanning handles those
+lines and possible closers. Empty document-level LF lines close ordinary leaves
+before generic per-line state setup, but code and blank-insensitive HTML blocks
+retain the normal path.
 
 Containers appear as an opener record and a closer record around their children,
 so the renderer needs no stack to know where a block ends. List looseness is
@@ -161,9 +203,14 @@ Link reference definitions are records too; the renderer skips them, and a hash
 table appended after the last record maps a normalized label to its first
 definition. A footnote definition is a container whose record doubles as its
 label entry, so the same table indexes it, with a one-byte prefix keeping the
-two namespaces apart. The block walker skips definitions where they were
-written; the renderer emits them at the end, numbered in the order they were
-first referenced, and drops the ones nothing referenced.
+two namespaces apart. Definition records use the spare header word at byte 20 as
+a next pointer. Block analysis appends them to a source-ordered chain and counts
+them as they are created; building the hash table visits only this chain rather
+than scanning unrelated block records twice. The chain and counts reset on every
+render, and duplicate labels still resolve to the first record. The block walker
+skips definitions where they were written; the renderer emits them at the end,
+numbered in the order they were first referenced, and drops the ones nothing
+referenced.
 
 ## Inline analysis
 
@@ -191,6 +238,43 @@ instead of rescanning delimiter runs before the bracket. Rendering emits an
 opener's tags in reverse creation order and a closer's in creation order, which
 is what produces `<em><strong>…</strong></em>` nesting.
 
+The inline scanner loads its classification tables once per leaf, retaining
+those vectors across scanning iterations. It tests raw per-byte class bits for
+any candidate before comparing them to zero and building a cached lane mask. The
+same SIMD scan tracks whether unmarked text needs HTML escaping. Leaves with no
+such bytes copy their literal gaps directly; recognized constructs keep their
+own escaping rules. Ordinary HTML soft breaks outside brackets remain in those
+gaps when neither adjacent byte needs whitespace trimming. Bracketed content
+retains break marks because image alt text replaces newlines with spaces; ANSI
+retains them for line prefixes and wrapping. After a literal quote, NUL, or `>`
+requires escaping, a syntax-only scanner skips further such bytes. It returns
+both its final vector's base and candidate mask so inline analysis can resume
+without classifying that vector again. Candidate dispatch first separates ASCII
+bytes below 64 from bytes 64 and above, avoiding unrelated handler checks while
+retaining the same parsing routines for both groups. Periods and newlines reach
+their handlers first in the low-ASCII group, before the checks for other
+constructs.
+
+Most scans that retain candidate masks select their lowest set lane with
+`31 - clz(mask & -mask)`. Callers guard zero masks or select a separate result
+for them. First-match-only scanners pack their per-byte match flags into four
+bits per byte, ordered for direct `clz` selection. Both avoid external helper
+calls on runtimes that do not inline Wasm `ctz`.
+
+Line-end scanning classifies CR and LF with one byte-indexed SIMD lookup. Its
+high-nibble flags need only one shift when packing a matching lane. It checks
+the first vector alone, then shares presence tests across pairs of vectors. It
+calculates a matching lane only after a hit; the input's 32-byte slack keeps the
+final paired load inside memory. Bulk code-block scans also calculate a lane
+only after a hit, retaining their fence and CR comparison vectors through the
+16-byte loop. Table-cell scanning folds bit 5 before comparing with `|`, which
+also recognizes the backslash byte without a second comparison.
+
+HTML rendering batches safe literal gaps and consecutive emphasis marks across
+at most 256 source bytes. One sixfold reservation covers the tags, and the
+writer keeps its output cursor local for the run. It resolves scratch addresses
+after reserving; other mark kinds and image labels use the general walker.
+
 Marks are contiguous 32-byte records and rendering walks them by ordinal.
 Emphasis tags are packed four-byte words in the scratch suffix: the low two bits
 hold the kind and the rest is a top-relative next ID. Open lists are singly
@@ -206,7 +290,24 @@ backends share the whole parser and differ only in what they write.
 
 The HTML backend reproduces the reference renderer byte for byte, down to its
 `cr()` newline rule, its `&quot;` text escaping, and its uppercase
-percent-encoding of link destinations.
+percent-encoding of link destinations. The five text-escaping bytes have
+distinct low nibbles: one SIMD lookup gives the required high nibble for each
+lane. Both text writers load that table once to avoid rebuilding vector
+immediates inside the scan loop. The text escaper also loads its six-byte quote
+replacement once, retaining that integer across repeated quotes. It consumes
+each vector's candidate mask before scanning again and clips its final mask to
+the input range, avoiding a bounds check per candidate. It selects a candidate
+with `31 - clz(mask ^ (mask - 1))`, retaining `mask - 1` to clear that bit
+without another subtraction. The reserved text writer returns its local cursor;
+single-line code-span emission uses it to write both tags and escaped content
+before publishing the output position.
+
+Href-safe ASCII runs copy in SIMD spans. Title and autolink text cleanup shares
+one pass with HTML escaping; decoded entities receive escaping without recursive
+entity or backslash cleanup. Table cell openers reserve and emit their complete
+markup together rather than checking capacity for each fragment. Link opening
+tags use the URL and title writers' existing 64-byte reservation allowances for
+their attribute boundaries, avoiding separate capacity checks for those bytes.
 
 The terminal backend keeps a line prefix (block quote bars, list indents) and
 re-emits it after every line break, so nested content stays aligned. Inline
@@ -223,8 +324,9 @@ and rewinding the output cursor.
   advances, every bounded construct is clamped to its range, and the fuzz suite
   checks that four thousand random inputs render to valid UTF-8 with balanced
   tags.
-- **Bounded.** Wide loads may read up to fifteen bytes past a range into the
-  buffer's slack, but a match at or past the end is discarded.
+- **Bounded.** Input line scans may read up to thirty-one bytes past the end
+  into the input's slack; other SIMD scans read up to fifteen bytes past their
+  range. Scanners discard matches at or past the range end.
 - **Reusable.** One instance renders any number of documents; `render` resets
   every global it depends on.
 - **Documented limits.** Container nesting stops at 250 levels, link labels at

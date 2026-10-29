@@ -81,6 +81,7 @@
   (global $bracketSp (mut i32) (i32.const 0))
   (global $scannedBackticks (mut i32) (i32.const 0))
   (global $lastMarkEnd (mut i32) (i32.const 0))
+  (global $literalNeedsEscape (mut i32) (i32.const 0))
 
   ;; the original length of a delimiter run, which the rule of three needs
   (func $markLen (param $m i32) (result i32)
@@ -108,10 +109,9 @@
     (local.set $m (call $slotAt (local.get $i)))
     (i32.store offset=$M.beg (local.get $m) (local.get $beg))
     (i32.store offset=$M.end (local.get $m) (local.get $end))
-    ;; Every field a mark can read is initialized here.
+    ;; Initialize the shared header. Each constructor writes its own payload;
+    ;; only emphasis marks need delimiter links and tag-list heads.
     (i64.store offset=$M.type (local.get $m) (i64.extend_i32_u (local.get $type)))
-    (i64.store offset=$M.prev (local.get $m) (i64.const -1))
-    (i64.store offset=$M.openHead (local.get $m) (i64.const 0))
     (global.set $lastMarkEnd (local.get $end))
     (local.get $i))
 
@@ -140,6 +140,16 @@
     (local $end i32)
     (local $base i32)
     (local $c i32)
+    (local $mask i32)
+    (local $scanEnd i32)
+    (local $next i32)
+    (local $syntaxScan i64)
+    (local $markLo v128)
+    (local $markHi v128)
+    (local $classFlags v128)
+    (local.set $markLo (v128.load (i32.const $mem.markLo)))
+    (local.set $markHi (v128.load (i32.const $mem.markHi)))
+    (global.set $literalNeedsEscape (i32.const 0))
     (global.set $markOff (select
       (i32.const 0)
       (i32.and (i32.add (global.get $contentLen) (i32.const 63)) (i32.const -32))
@@ -158,62 +168,114 @@
     (block $done
       (loop $l
         (local.set $base (call $contentAt (i32.const 0)))
-        (local.set $p (i32.sub
-          (call $findMark (i32.add (local.get $base) (local.get $p))
-            (i32.add (local.get $base) (local.get $end)))
-          (local.get $base)))
+        ;; Cached lanes are content-relative, so scratch growth cannot stale
+        ;; them. Handlers advance p past consumed syntax without changing text.
+        (if (i32.lt_u (local.get $p) (local.get $scanEnd))
+          (then
+            (local.set $mask (i32.and (local.get $mask)
+              (i32.shl (i32.const -1)
+                (i32.sub (local.get $p) (i32.sub (local.get $scanEnd) (i32.const 16))))))
+            (if (local.get $mask)
+              (then (local.set $p (i32.add
+                (i32.sub (local.get $scanEnd) (i32.const 16))
+                (call $firstBit (local.get $mask)))))
+              (else (local.set $p (local.get $scanEnd)))))
+          (else (local.set $mask (i32.const 0))))
+        (block $foundMark
+          (br_if $foundMark (local.get $mask))
+          (loop $scan
+            (br_if $foundMark (i32.ge_u (local.get $p) (local.get $end)))
+            (local.set $classFlags (call $markFlags (i32.add (local.get $base) (local.get $p))
+              (local.get $markLo) (local.get $markHi)))
+            (local.set $scanEnd (i32.add (local.get $p) (i32.const 16)))
+            (if (i64.ne (i64.or
+                  (i64x2.extract_lane 0 (local.get $classFlags))
+                  (i64x2.extract_lane 1 (local.get $classFlags))) (i64.const 0))
+              (then
+                (local.set $mask (i8x16.bitmask (i8x16.ne
+                  (local.get $classFlags) (i8x16.splat (i32.const 0)))))
+                (local.set $p (i32.add (local.get $p) (call $firstBit (local.get $mask))))
+                (br $foundMark)))
+            (local.set $p (local.get $scanEnd))
+            (br $scan)))
         (br_if $done (i32.ge_u (local.get $p) (local.get $end)))
         (local.set $c (i32.load8_u (i32.add (local.get $base) (local.get $p))))
         (block $dispatched
-          (if (i32.eq (local.get $c) (i32.const "\5c"))
-            (then
-              (local.set $p (call $handleBackslash (local.get $p) (local.get $end)))
-              (br $dispatched)))
-          (if (i32.eq (local.get $c) (i32.const "\60"))
-            (then
-              (local.set $p (call $handleBackticks (local.get $p) (local.get $end)))
-              (br $dispatched)))
-          (if (i32.eq (local.get $c) (i32.const 10))
-            (then
-              (local.set $p (call $handleNewline (local.get $p) (local.get $end)))
-              (br $dispatched)))
-          (if (i32.eq (local.get $c) (i32.const "&"))
-            (then
-              (local.set $p (call $handleEntity (local.get $p) (local.get $end)))
-              (br $dispatched)))
-          (if (i32.eq (local.get $c) (i32.const "<"))
-            (then
-              (local.set $p (call $handlePointy (local.get $p) (local.get $end)))
-              (br $dispatched)))
-          (if (i32.eq (local.get $c) (i32.const "["))
-            (then
-              (local.set $p (call $pushBracket (local.get $p) (i32.const 0)))
-              (br $dispatched)))
-          (if (i32.eq (local.get $c) (i32.const "!"))
-            (then
-              (if (i32.and (i32.lt_u (i32.add (local.get $p) (i32.const 1)) (local.get $end))
-                    (i32.eq (i32.load8_u
-                      (i32.add (local.get $base) (i32.add (local.get $p) (i32.const 1))))
-                      (i32.const "[")))
-                (then (local.set $p (call $pushBracket (local.get $p) (i32.const 1))))
-                (else (local.set $p (i32.add (local.get $p) (i32.const 1)))))
-              (br $dispatched)))
-          (if (i32.eq (local.get $c) (i32.const "]"))
-            (then
-              (local.set $p (call $handleCloseBracket (local.get $p) (local.get $end)))
-              (br $dispatched)))
-          (if (i32.eq (local.get $c) (i32.const ":"))
-            (then
-              (local.set $p (call $tryUrlAutolink (local.get $p) (local.get $end)))
-              (br $dispatched)))
-          (if (i32.eq (local.get $c) (i32.const "."))
-            (then
-              (local.set $p (call $tryWwwAutolink (local.get $p) (local.get $end)))
-              (br $dispatched)))
-          (if (i32.eq (local.get $c) (i32.const "@"))
-            (then
-              (local.set $p (call $tryEmailAutolink (local.get $p) (local.get $end)))
-              (br $dispatched)))
+          ;; Split the ASCII candidates before testing individual handlers.
+          ;; This keeps punctuation and emphasis from crossing unrelated cases.
+          (block $delimiters
+            (if (i32.ge_u (local.get $c) (i32.const 64))
+              (then
+                (if (i32.eq (local.get $c) (i32.const "\5c"))
+                  (then
+                    (local.set $p (call $handleBackslash (local.get $p) (local.get $end)))
+                    (br $dispatched)))
+                (if (i32.eq (local.get $c) (i32.const "\60"))
+                  (then
+                    (local.set $p (call $handleBackticks (local.get $p) (local.get $end)))
+                    (br $dispatched)))
+                (if (i32.eq (local.get $c) (i32.const "["))
+                  (then
+                    (local.set $p (call $pushBracket (local.get $p) (i32.const 0)))
+                    (br $dispatched)))
+                (if (i32.eq (local.get $c) (i32.const "]"))
+                  (then
+                    (local.set $p (call $handleCloseBracket (local.get $p) (local.get $end)))
+                    (br $dispatched)))
+                (if (i32.eq (local.get $c) (i32.const "@"))
+                  (then
+                    (local.set $p (call $tryEmailAutolink (local.get $p) (local.get $end)))
+                    (br $dispatched)))
+                (br $delimiters)))
+            (if (i32.eq (local.get $c) (i32.const "."))
+              (then
+                (local.set $p (call $tryWwwAutolink (local.get $p) (local.get $end)))
+                (br $dispatched)))
+            (if (i32.eq (local.get $c) (i32.const 10))
+              (then
+                (local.set $p (call $handleNewline (local.get $p) (local.get $end)))
+                (br $dispatched)))
+            ;; These bytes are literal text, but prevent copying unmarked gaps
+            ;; without HTML escaping. Recognized constructs keep their own escapers.
+            (if (i32.or (i32.eqz (local.get $c))
+                  (i32.or (i32.eq (local.get $c) (i32.const 34))
+                    (i32.eq (local.get $c) (i32.const ">"))))
+              (then
+                (global.set $literalNeedsEscape (i32.const 1))
+                (local.set $syntaxScan (call $scanInlineSyntax
+                  (i32.add (local.get $base) (i32.add (local.get $p) (i32.const 1)))
+                  (i32.add (local.get $base) (local.get $end))))
+                (local.set $p (i32.sub (i32.wrap_i64 (local.get $syntaxScan)) (local.get $base)))
+                (local.set $scanEnd (i32.add (local.get $p) (i32.const 16)))
+                (local.set $mask (i32.wrap_i64 (i64.shr_u (local.get $syntaxScan) (i64.const 32))))
+                (br $dispatched)))
+            (if (i32.eq (local.get $c) (i32.const "&"))
+              (then
+                (local.set $next (call $handleEntity (local.get $p) (local.get $end)))
+                (if (i32.eq (local.get $next) (i32.add (local.get $p) (i32.const 1)))
+                  (then (global.set $literalNeedsEscape (i32.const 1))))
+                (local.set $p (local.get $next))
+                (br $dispatched)))
+            (if (i32.eq (local.get $c) (i32.const "<"))
+              (then
+                (local.set $next (call $handlePointy (local.get $p) (local.get $end)))
+                (if (i32.eq (local.get $next) (i32.add (local.get $p) (i32.const 1)))
+                  (then (global.set $literalNeedsEscape (i32.const 1))))
+                (local.set $p (local.get $next))
+                (br $dispatched)))
+            (if (i32.eq (local.get $c) (i32.const "!"))
+              (then
+                (if (i32.and (i32.lt_u (i32.add (local.get $p) (i32.const 1)) (local.get $end))
+                      (i32.eq (i32.load8_u
+                        (i32.add (local.get $base) (i32.add (local.get $p) (i32.const 1))))
+                        (i32.const "[")))
+                  (then (local.set $p (call $pushBracket (local.get $p) (i32.const 1))))
+                  (else (local.set $p (i32.add (local.get $p) (i32.const 1)))))
+                (br $dispatched)))
+            (if (i32.eq (local.get $c) (i32.const ":"))
+              (then
+                (local.set $p (call $tryUrlAutolink (local.get $p) (local.get $end)))
+                (br $dispatched))))
           (local.set $p (call $handleDelim (local.get $p) (local.get $end))))
         (br $l)))
     (call $processEmphasis (i32.const 0) (i32.const -1)))
@@ -241,6 +303,22 @@
     (local $q i32)
     (local $hard i32)
     (local.set $base (call $contentAt (i32.const 0)))
+    ;; HTML copies an ordinary soft break verbatim. Leave it in the surrounding
+    ;; text span when neither side needs trimming. Brackets retain marks because
+    ;; an image's alt text turns newlines into spaces; ANSI also needs its hook.
+    (if (i32.eqz (i32.or (global.get $mode) (global.get $bracketSp)))
+      (then
+        (if (local.get $p)
+          (then
+            (if (i32.eqz (i32.or
+                  (call $isSpaceByte (i32.load8_u
+                    (i32.add (local.get $base) (i32.sub (local.get $p) (i32.const 1)))))
+                  (call $isSpaceByte (i32.load8_u
+                    (i32.add (local.get $base) (i32.add (local.get $p) (i32.const 1)))))))
+              (then
+                ;; Extended autolinks still cannot reach back across this break.
+                (global.set $lastMarkEnd (i32.add (local.get $p) (i32.const 1)))
+                (return (global.get $lastMarkEnd))))))))
     (if (i32.ge_u (local.get $p) (i32.const 2))
       (then (local.set $hard (i32.and
         (i32.eq (i32.load8_u (i32.add (local.get $base) (i32.sub (local.get $p) (i32.const 1))))
@@ -471,6 +549,8 @@
         (i32.const $MF.inList))
       (select (i32.const $MF.canClose) (i32.const 0) (local.get $canClose))))
     (i32.store offset=$M.prev (local.get $m) (global.get $delimTail))
+    (i32.store offset=$M.next (local.get $m) (i32.const -1))
+    (i64.store offset=$M.openHead (local.get $m) (i64.const 0))
     (if (i32.ge_s (global.get $delimTail) (i32.const 0))
       (then (i32.store offset=$M.next (call $slotAt (global.get $delimTail)) (local.get $i)))
       (else (global.set $delimHead (local.get $i))))

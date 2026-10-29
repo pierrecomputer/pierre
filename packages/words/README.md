@@ -89,6 +89,12 @@ the docs charts. Start with `moon run words:bench-setup`, then
 `moon run words:bench-quick`. Build-dependent benchmarks are opt-in in CI; use
 `moonx words:bench-quick --ignore-ci-checks` in CI-marked shells.
 
+For local parser optimization, start with
+`moonx words:lab --ignore-ci-checks -- quick`. The
+[optimization lab](./benchmark/README.md#local-parser-optimization) provides
+isolated A/B comparisons, workload-specific kernels, named Wasm CPU profiles,
+and diagnostic streaming-work counters without browser setup.
+
 Large workloads are generated on demand. Run
 `moon run words:bench-large -- 1000 16 /tmp/large.json` for the 8.53 MB case, or
 choose a large example in the docs demo. See the

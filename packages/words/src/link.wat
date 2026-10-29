@@ -11,6 +11,9 @@
 
   (global $linkHash (mut i32) (i32.const 0))
   (global $linkMask (mut i32) (i32.const 0))
+  (global $defHead (mut i32) (i32.const 0))
+  (global $defTail (mut i32) (i32.const 0))
+  (global $defCount (mut i32) (i32.const 0))
   (global $fnOrder (mut i32) (i32.const 0)) ;; definitions in order of first reference
   (global $fnTotal (mut i32) (i32.const 0))
   (global $fnUsed (mut i32) (i32.const 0))
@@ -412,6 +415,7 @@
             (i32.add (local.get $destLen) (local.get $titleLen)))))
           (local.set $base (call $contentAt (i32.const 0)))
           (local.set $def (call $recNew (enum.get $Blk.linkdef)))
+          (call $noteDefinition (local.get $def))
           (global.set $rec (i32.add (local.get $def) (i32.const $R.labelBytes)))
           (local.set $dst (global.get $rec))
           (local.set $normalized (call $normalizeLabel
@@ -499,39 +503,29 @@
         (if (local.get $blank)
           (then (i32.store offset=$R.nLines (local.get $r) (i32.const 0)))))))
 
-  ;; build the open-addressed table that maps a normalized label to its first
-  ;; definition; it lives at the end of the record region
+  ;; Link definitions as they are appended so indexing need not walk unrelated
+  ;; blocks twice. Record addresses do not move when scratch or memory grows.
+  (func $noteDefinition (param $r i32)
+    (if (global.get $defTail)
+      (then (i32.store offset=$R.defNext (global.get $defTail) (local.get $r)))
+      (else (global.set $defHead (local.get $r))))
+    (global.set $defTail (local.get $r))
+    (global.set $defCount (i32.add (global.get $defCount) (i32.const 1))))
+
+  ;; Build the open-addressed table from the source-ordered definition chain.
+  ;; The table lives at the end of the record region; first definitions win.
   (func $linkIndex
     (local $r i32)
-    (local $count i32)
     (local $slots i32)
     (local $table i32)
     (local $i i32)
     (local $slot i32)
-    (local $type i32)
     (global.set $recEnd (global.get $rec))
-    (local.set $r (global.get $recBase))
-    (block $counted
-      (loop $l
-        (br_if $counted (i32.ge_u (local.get $r) (global.get $rec)))
-        (local.set $type (i32.load8_u (local.get $r)))
-        (if (i32.eq (local.get $type) (enum.get $Blk.linkdef))
-          (then (local.set $count (i32.add (local.get $count) (i32.const 1))))
-          (else
-            (if (i32.and
-                  (i32.eq (local.get $type) (enum.get $Blk.footnote))
-                  (i32.ne (i32.and (i32.load8_u offset=1 (local.get $r))
-                    (i32.const $F.opener)) (i32.const 0)))
-              (then
-                (local.set $count (i32.add (local.get $count) (i32.const 1)))
-                (global.set $fnTotal (i32.add (global.get $fnTotal) (i32.const 1)))))))
-        (local.set $r (i32.add (local.get $r) (i32.load offset=4 (local.get $r))))
-        (br $l)))
-    (if (i32.eqz (local.get $count)) (then (return)))
+    (if (i32.eqz (global.get $defCount)) (then (return)))
     (local.set $slots (i32.const 16))
     (block $sized
       (loop $l
-        (br_if $sized (i32.ge_u (local.get $slots) (i32.mul (local.get $count) (i32.const 2))))
+        (br_if $sized (i32.ge_u (local.get $slots) (i32.mul (global.get $defCount) (i32.const 2))))
         (local.set $slots (i32.shl (local.get $slots) (i32.const 1)))
         (br $l)))
     (call $ensureRec (i32.add (i32.mul (local.get $slots) (i32.const 4)) (i32.const 16)))
@@ -539,35 +533,27 @@
     (memory.fill (local.get $table) (i32.const 0) (i32.mul (local.get $slots) (i32.const 4)))
     (global.set $linkHash (local.get $table))
     (global.set $linkMask (i32.sub (local.get $slots) (i32.const 1)))
-    (local.set $r (global.get $recBase))
+    (local.set $r (global.get $defHead))
     (block $filled
       (loop $l
-        (br_if $filled (i32.ge_u (local.get $r) (local.get $table)))
-        (local.set $type (i32.load8_u (local.get $r)))
-        (if (i32.or
-              (i32.eq (local.get $type) (enum.get $Blk.linkdef))
-              (i32.and
-                (i32.eq (local.get $type) (enum.get $Blk.footnote))
-                (i32.ne (i32.and (i32.load8_u offset=1 (local.get $r))
-                  (i32.const $F.opener)) (i32.const 0))))
-          (then
-            (local.set $i (i32.and (i32.load offset=$R.hash (local.get $r)) (global.get $linkMask)))
-            (block $placed
-              (loop $probe
-                (local.set $slot (i32.load
-                  (i32.add (local.get $table) (i32.mul (local.get $i) (i32.const 4)))))
-                (if (i32.eqz (local.get $slot))
-                  (then
-                    (i32.store (i32.add (local.get $table) (i32.mul (local.get $i) (i32.const 4)))
-                      (local.get $r))
-                    (br $placed)))
-                ;; the first definition wins
-                (br_if $placed (call $defLabelEq (local.get $slot)
-                  (i32.add (local.get $r) (i32.const $R.labelBytes))
-                  (i32.load offset=$R.labelLen (local.get $r))))
-                (local.set $i (i32.and (i32.add (local.get $i) (i32.const 1)) (global.get $linkMask)))
-                (br $probe)))))
-        (local.set $r (i32.add (local.get $r) (i32.load offset=4 (local.get $r))))
+        (br_if $filled (i32.eqz (local.get $r)))
+        (local.set $i (i32.and (i32.load offset=$R.hash (local.get $r)) (global.get $linkMask)))
+        (block $placed
+          (loop $probe
+            (local.set $slot (i32.load
+              (i32.add (local.get $table) (i32.mul (local.get $i) (i32.const 4)))))
+            (if (i32.eqz (local.get $slot))
+              (then
+                (i32.store (i32.add (local.get $table) (i32.mul (local.get $i) (i32.const 4)))
+                  (local.get $r))
+                (br $placed)))
+            ;; the first definition wins
+            (br_if $placed (call $defLabelEq (local.get $slot)
+              (i32.add (local.get $r) (i32.const $R.labelBytes))
+              (i32.load offset=$R.labelLen (local.get $r))))
+            (local.set $i (i32.and (i32.add (local.get $i) (i32.const 1)) (global.get $linkMask)))
+            (br $probe)))
+        (local.set $r (i32.load offset=$R.defNext (local.get $r)))
         (br $l)))
     (global.set $rec (i32.add (local.get $table) (i32.mul (local.get $slots) (i32.const 4))))
     (global.set $recEnd (local.get $table))

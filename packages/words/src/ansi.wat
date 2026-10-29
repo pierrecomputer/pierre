@@ -79,7 +79,7 @@
     (block $done
       (loop $l
         (br_if $done (i32.eqz (local.get $bits)))
-        (local.set $i (i32.ctz (local.get $bits)))
+        (local.set $i (call $firstBit (local.get $bits)))
         (local.set $bit (i32.shl (i32.const 1) (local.get $i)))
         (local.set $v (i32.add
           (i32.load8_u offset=$mem.sgr (local.get $i)) (local.get $delta)))
@@ -484,7 +484,8 @@
             (if (local.get $has)
               (then
                 (local.set $w
-                  (call $measureCell (global.get $cellBeg) (global.get $cellEnd)))))
+                  (call $measureCell (global.get $cellBeg) (global.get $cellEnd)
+                    (global.get $cellUnescapePipe)))))
             (if (i32.lt_u (local.get $cell) (i32.const $mem.cellWidthSlots))
               (then
                 (i32.store offset=$mem.cellWidth
@@ -517,7 +518,7 @@
   ;; render a cell, measure it, and rewind the output. Style state is snapshotted
   ;; because a held-back space defers $sgrSet: emitting into a buffer that is
   ;; then discarded would leave $sgrLive claiming bytes that are no longer there.
-  (func $measureCell (param $beg i32) (param $end i32) (result i32)
+  (func $measureCell (param $beg i32) (param $end i32) (param $unescapePipe i32) (result i32)
     (local $save i32)
     (local $w i32)
     (local $saveCol i32)
@@ -535,7 +536,7 @@
     (local.set $saveDepth (i64.load (i32.const $mem.sgr)))
     (global.set $atLineStart (i32.const 0))
     (global.set $noWrap (i32.const 1))
-    (call $renderCell (local.get $beg) (local.get $end))
+    (call $renderCell (local.get $beg) (local.get $end) (local.get $unescapePipe))
     (global.set $noWrap (i32.const 0))
     ;; a trailing space held back by $ansiRaw is still a column
     (local.set $w (i32.add (call $displayWidth (local.get $save) (global.get $out))
@@ -595,7 +596,8 @@
                 (local.set $w (i32.load offset=$mem.cellWidth
                   (i32.mul (local.get $cell) (i32.const 4)))))
               (else
-                (local.set $w (call $measureCell (local.get $beg) (local.get $cellTo)))))))
+                (local.set $w (call $measureCell (local.get $beg) (local.get $cellTo)
+                  (global.get $cellUnescapePipe)))))))
         (local.set $align (i32.load8_u
           (i32.add (i32.add (local.get $r) (i32.const $R.header)) (local.get $i))))
         (local.set $pad (i32.sub (local.get $want) (local.get $w)))
@@ -609,7 +611,8 @@
         (if (i32.eqz (local.get $row)) (then (call $sgrOn (i32.const $S.bold))))
         (global.set $noWrap (i32.const 1))
         (if (local.get $has)
-          (then (call $renderCell (local.get $beg) (local.get $cellTo))))
+          (then (call $renderCell (local.get $beg) (local.get $cellTo)
+            (global.get $cellUnescapePipe))))
         (global.set $noWrap (i32.const 0))
         ;; commit a held-back space (it belongs to this cell) and the style that
         ;; was waiting on it, so the separator does not inherit a deferred close
