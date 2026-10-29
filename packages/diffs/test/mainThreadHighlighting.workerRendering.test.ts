@@ -305,28 +305,34 @@ test('DiffHunksRenderer ignores a refresh canceled by a render options change', 
   }
 });
 
-test('FileDiff shares a main-thread highlight with the pool cache', async () => {
-  const { manager, container, cleanup } = await createFixture();
-  const instance = new FileDiff({ theme: 'pierre-dark' }, manager);
-  const fileDiff = parseDiffFromFile(
-    { ...smallFile, cacheKey: 'main-thread:shared-old' },
-    {
-      ...smallFile,
-      contents: 'const alpha = 10;\nconst beta = 2;\n',
-      cacheKey: 'main-thread:shared-new',
-    }
-  );
-  try {
-    instance.render({ fileDiff, fileContainer: container });
-
-    expect(manager.getDiffResultCache(fileDiff)?.options).toEqual(
-      manager.getDiffRenderOptions()
+test.each(['@pierre/patches', 'jsdiff'] as const)(
+  'FileDiff shares a main-thread %s highlight with the pool cache',
+  async (preferredDiffLib) => {
+    const { manager, container, cleanup } = await createFixture();
+    const instance = new FileDiff(
+      { theme: 'pierre-dark', parseDiffOptions: { preferredDiffLib } },
+      manager
     );
-  } finally {
-    instance.cleanUp();
-    cleanup();
+    const fileDiff = parseDiffFromFile(
+      { ...smallFile, cacheKey: 'main-thread:shared-old' },
+      {
+        ...smallFile,
+        contents: 'const alpha = 10;\nconst beta = 2;\n',
+        cacheKey: 'main-thread:shared-new',
+      }
+    );
+    try {
+      instance.render({ fileDiff, fileContainer: container });
+
+      expect(manager.getDiffResultCache(fileDiff)?.options).toEqual(
+        manager.getDiffRenderOptions(preferredDiffLib)
+      );
+    } finally {
+      instance.cleanUp();
+      cleanup();
+    }
   }
-});
+);
 
 test('File keeps annotations with the rendered file after the highlighter is recreated', async () => {
   const { manager, container, cleanup } = await createFixture();

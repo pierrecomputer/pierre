@@ -105,6 +105,13 @@ If both `oldFile` and `newFile` have a `cacheKey`, the resulting
 `oldKey:newKey`). See [Render Cache](#worker-pool-render-cache) for more
 information.
 
+The optional third parameter takes `ParseDiffOptions`: `context`,
+`ignoreWhitespace`, `stripTrailingCr`, and `preferredDiffLib`. Set
+`preferredDiffLib: '@pierre/patches'` to use the WebAssembly diff library
+instead of `jsdiff` (the default). Components take the same object as
+`options.parseDiffOptions`, and there `preferredDiffLib` also selects the
+library for inline change highlights.
+
 An optional `throwOnError` parameter (default: `false`) controls error handling.
 When `true`, parsing errors throw exceptions; when `false`, errors are logged to
 the console and parsing continues on a best-effort basis.

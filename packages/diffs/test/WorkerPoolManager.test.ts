@@ -518,6 +518,28 @@ describe('WorkerPoolManager cache priming', () => {
 });
 
 describe('WorkerPoolManager main-thread threshold', () => {
+  test('primes and reuses main-thread diff results with the requested backend', async () => {
+    const { manager, worker } = await createInitializedManager(
+      {},
+      { mainThreadMaxCharacters: 1000 }
+    );
+    const diff = createCacheableDiff();
+    try {
+      for (const preferredDiffLib of ['@pierre/patches', 'jsdiff'] as const) {
+        await manager.primeDiffHighlightCache(diff, preferredDiffLib);
+        const cached = manager.getDiffResultCache(diff);
+        expect(cached?.options.preferredDiffLib).toBe(preferredDiffLib);
+        expect(cached?.result.code.additionLines.length).toBeGreaterThan(0);
+
+        await manager.primeDiffHighlightCache(diff, preferredDiffLib);
+        expect(manager.getDiffResultCache(diff)).toBe(cached);
+      }
+      expect(worker.diffRequestCount).toBe(0);
+    } finally {
+      manager.terminate();
+    }
+  });
+
   test('routes files and diffs by character count against the threshold', async () => {
     const file = createCacheableFile();
     const diff = createCacheableDiff();

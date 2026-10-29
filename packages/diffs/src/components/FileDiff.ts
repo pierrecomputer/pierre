@@ -55,6 +55,7 @@ import type {
   BaseCodeOptions,
   BaseDiffOptions,
   CustomPreProperties,
+  DiffLib,
   DiffLineAnnotation,
   ExpansionDirections,
   DiffsHighlighter,
@@ -472,6 +473,7 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
   private mounted = false;
 
   protected enabled = true;
+  protected parsedDiffLib: DiffLib = 'jsdiff';
 
   protected editor: Editor<'file-diff', LAnnotation, Caret> | undefined;
   protected refreshViewTimeout: ReturnType<typeof setTimeout> | undefined;
@@ -1162,6 +1164,8 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
     this.pendingData = undefined;
     this.additionFile = newFile;
     this.deletionFile = oldFile;
+    this.parsedDiffLib =
+      this.options.parseDiffOptions?.preferredDiffLib ?? 'jsdiff';
     this.fileDiff =
       fileDiff ??
       (oldFile !== undefined && newFile !== undefined
@@ -1573,7 +1577,9 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
     const hasFileInput = fileInput != null;
     const filesDidChange =
       hasFileInput &&
-      (!areOptionalFilesEqual(oldFile, this.deletionFile) ||
+      (this.parsedDiffLib !==
+        (this.options.parseDiffOptions?.preferredDiffLib ?? 'jsdiff') ||
+        !areOptionalFilesEqual(oldFile, this.deletionFile) ||
         !areOptionalFilesEqual(newFile, this.additionFile));
     let diffDidChange =
       fileDiff != null && !areDiffTargetsEqual(fileDiff, this.getInputDiff());
@@ -1614,6 +1620,8 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
         fileInput.newFile,
         this.options.parseDiffOptions
       );
+      this.parsedDiffLib =
+        this.options.parseDiffOptions?.preferredDiffLib ?? 'jsdiff';
     }
 
     const { renderRange: previousRenderRange } = this;
@@ -2716,7 +2724,10 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
     }
 
     await workerManager
-      .primeDiffHighlightCache(fileDiff)
+      .primeDiffHighlightCache(
+        fileDiff,
+        this.options.parseDiffOptions?.preferredDiffLib
+      )
       .catch((error: unknown) => {
         if (isHandledWorkerPoolError(error)) {
           return;

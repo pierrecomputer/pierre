@@ -1,10 +1,9 @@
-import type { CreatePatchOptionsNonabortable } from 'diff';
-
 import type {
   ChangeContent,
   ContextContent,
   FileDiffMetadata,
   Hunk,
+  ParseDiffOptions,
 } from '../types';
 import { cleanLastNewline } from './cleanLastNewline';
 import {
@@ -33,7 +32,7 @@ type FullDiffHunkUpdate = HunkMetadataUpdate &
 /** Rebuilds all hunk metadata from the current deletion/addition line arrays. */
 export function recomputeDiffHunks(
   diff: FileDiffMetadata,
-  parseDiffOptions?: CreatePatchOptionsNonabortable
+  parseDiffOptions?: ParseDiffOptions
 ): FullDiffHunkUpdate {
   const recomputed = parseDiffFromFile(
     {
@@ -110,7 +109,7 @@ export function recomputeTopAlignedAdditionDiff(
   diff: FileDiffMetadata,
   additionLines: string[],
   additionCharacterCount: number,
-  parseDiffOptions?: CreatePatchOptionsNonabortable
+  parseDiffOptions?: ParseDiffOptions
 ): FullDiffHunkUpdate {
   const deletionContents = diff.deletionLines.join('');
   const additionSentinel = buildTopAlignedAdditionSentinel(
@@ -149,7 +148,7 @@ export function recomputeTopAlignedAdditionDiff(
 // no line element to host its caret.
 export function recomputeEmptyDocumentDiff(
   diff: FileDiffMetadata,
-  parseDiffOptions?: CreatePatchOptionsNonabortable
+  parseDiffOptions?: ParseDiffOptions
 ): FullDiffHunkUpdate {
   return recomputeTopAlignedAdditionDiff(diff, [''], 0, parseDiffOptions);
 }
@@ -157,7 +156,7 @@ export function recomputeEmptyDocumentDiff(
 /** Rebuilds diff hunks after an edit, top-aligning sparse addition sides when needed. */
 export function recomputeDiffHunksForEdit(
   diff: FileDiffMetadata,
-  parseDiffOptions?: CreatePatchOptionsNonabortable
+  parseDiffOptions?: ParseDiffOptions
 ): FullDiffHunkUpdate {
   if (diff.additionLines.length === 0) {
     return recomputeEmptyDocumentDiff(diff, parseDiffOptions);
@@ -232,7 +231,7 @@ export function preserveTrailingEditorBlankLine(
 export function updateDiffHunks(
   diff: FileDiffMetadata,
   changedAdditionLineIndexes: Iterable<number>,
-  parseDiffOptions?: CreatePatchOptionsNonabortable
+  parseDiffOptions?: ParseDiffOptions
 ): HunkMetadataUpdate {
   if (diff.isPartial) {
     return applyHunkUpdateResult(
@@ -349,7 +348,7 @@ function findHunkIndexForAdditionLine(
 function reparseHunkRegion(
   diff: FileDiffMetadata,
   hunkIndex: number,
-  parseDiffOptions?: CreatePatchOptionsNonabortable
+  parseDiffOptions?: ParseDiffOptions
 ): boolean {
   const hunk = diff.hunks[hunkIndex];
   if (hunk == null) {
