@@ -25,6 +25,7 @@ import type {
   EditCompletionDecision,
   EditorActiveLineOptions,
   EditorChangeEvent,
+  EditorColumns,
   FileDiffEditCompleteEvent,
   RetainedDiffSessionSnapshot,
 } from '../editor/types';
@@ -1801,6 +1802,7 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
       editor.__syncRenderView({
         highlighter,
         fileContainer,
+        columns: this.editorColumns(),
         fileDiff,
         lineAnnotations,
         renderRange,
@@ -2181,7 +2183,12 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
     if (this.fileContainer == null || this.editSession == null) {
       return { rebuiltLines: [] };
     }
-    this.interactionManager.setSelectionDirty();
+    // A patched row keeps its selection marks. After a structural change the
+    // rows that moved still carry theirs but show other lines, so the marks
+    // are drawn again from the selection state.
+    if (lineDelta !== 0 || regionsChanged) {
+      this.interactionManager.setSelectionDirty();
+    }
     return { rebuiltLines: this.takeRebuiltLines() };
   }
 
@@ -3196,6 +3203,22 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
     }
 
     this.lastRowCount = result.rowCount;
+  }
+
+  // The column the editor types in (additions in split view, else unified)
+  // and the deletions column beside it, from the elements already held.
+  private editorColumns(): EditorColumns | undefined {
+    const code = this.codeAdditions ?? this.codeUnified;
+    const pair = this.getColumnPair(code);
+    if (code == null || pair == null) {
+      return undefined;
+    }
+    return {
+      code,
+      gutter: pair.gutter,
+      content: pair.content,
+      deletions: this.getColumnPair(this.codeDeletions),
+    };
   }
 
   private getColumnPair(

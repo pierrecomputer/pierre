@@ -338,6 +338,17 @@ export interface ApplyChangeOptions<EType extends EditorType, LAnnotation> {
   lineAnnotations?: EditorLineAnnotation<EType, LAnnotation>[];
 }
 
+/**
+ * The code column the editor types in, with its gutter and content cells'
+ * parents, and the old-side column of a split diff when there is one.
+ */
+export interface EditorColumns {
+  code: HTMLElement;
+  gutter: HTMLElement;
+  content: HTMLElement;
+  deletions: { gutter: HTMLElement; content: HTMLElement } | undefined;
+}
+
 export interface ApplyChangeResult {
   /** Document lines whose rows were rebuilt, so the editor re-measures them. */
   rebuiltLines: number[];

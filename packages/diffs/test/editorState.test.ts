@@ -129,12 +129,20 @@ function createTestFile(
   };
 
   const syncRenderView = (editor: Editor<'file', undefined>) => {
+    const code =
+      fileContainer.shadowRoot?.querySelector<HTMLElement>('[data-code]');
+    const gutter = code?.querySelector<HTMLElement>('[data-gutter]');
+    const content = code?.querySelector<HTMLElement>('[data-content]');
     editor.__syncRenderView({
       highlighter: createTestHighlighter(
         { getLoadedLanguages: () => [] },
         'light'
       ),
       fileContainer,
+      columns:
+        code != null && gutter != null && content != null
+          ? { code, gutter, content, deletions: undefined }
+          : undefined,
       file: currentFile,
       lineAnnotations: undefined,
       renderRange: undefined,

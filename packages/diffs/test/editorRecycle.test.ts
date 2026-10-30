@@ -334,6 +334,7 @@ describe('Editor onAttach lifecycle', () => {
       editor.__syncRenderView({
         highlighter: getHighlighterIfLoaded()!,
         fileContainer: component.testFileContainer,
+        columns: undefined,
         file,
         lineAnnotations: undefined,
         renderRange: undefined,
