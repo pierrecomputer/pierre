@@ -208,6 +208,17 @@ theme styles for theme sets. Token calls keep the HTML caches.
 and `toCSS`, which produces CSS custom-property declarations. The build also
 emits individual theme modules and a lazy loader.
 
+## ANSI input
+
+`ansi` is not in the language table. [`lib/ansi.ts`](./lib/ansi.ts) tokenizes it
+in JavaScript for `codeToTokens`, `codeToHtml`, and `StreamTokenizer`, because
+SGR colors are arbitrary RGB values and palette indexes, not token IDs. Tokens
+omit the escape sequences, so `offset + content.length` can be less than the
+next offset. Prepared themes resolve the 16 palette colors from
+`terminal.ansi.*` keys on first use. The SGR state and its style cache persist
+between stream chunks. `LiveTokenizer` uses the plain lexer for `ansi`, because
+an editor needs tokens that cover the raw text.
+
 ## Streaming
 
 `StreamTokenizer` is a `TransformStream<Uint8Array, ThemedToken[]>` with

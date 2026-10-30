@@ -74,10 +74,11 @@ line break adds an empty final line.
 
 <DocsCodeExample {...highlightsTokens} />
 
-With a single `theme`, tokens have `color` and `fontStyle` fields. With
-`themes`, each token has an `htmlStyle` map with its styles and CSS custom
-properties. A custom renderer must apply this map and the result's root colors.
-`token.color` alone does not contain all styles for multiple themes.
+With a single `theme`, tokens have `color` and `fontStyle` fields, and `ansi`
+tokens can also have `bgColor`. With `themes`, each token has an `htmlStyle` map
+with its styles and CSS custom properties. A custom renderer must apply this map
+and the result's root colors. `token.color` alone does not contain all styles
+for multiple themes.
 
 The token object format is compatible with Shiki. Token boundaries and syntax
 classifications can differ.
@@ -295,6 +296,23 @@ Highlights does not detect the language from the code or filename.
 Use `isSupportedLanguage(value)` to validate a string and narrow its type to
 `Lang`. Use `plain` for text without syntax colors. Its aliases are `text`,
 `plaintext`, and `txt`.
+
+#### ANSI output
+
+`ansi` is Shiki's special language for terminal output. `codeToHtml()`,
+`codeToTokens()`, and `StreamTokenizer` read SGR escape sequences for colors,
+backgrounds, bold, dim, italic, underline, strikethrough, and reverse. They
+remove other escape sequences, such as cursor movement and OSC links. Token
+`content` is the visible text. Token `offset` is the position of its first
+character in the input.
+
+Palette colors come from the theme's `terminal.ansi.*` keys, such as
+`terminal.ansi.red` and `terminal.ansi.bright_red`. Missing keys use VS Code's
+terminal colors, as in Shiki. With `cssVariables`, palette colors are
+`var(--hls-terminal-ansi-red)` and `var(--hls-terminal-ansi-bright-red)`;
+`toCSS()` emits them.
+
+`LiveTokenizer` edits the raw text, so it treats `ansi` as `plain`.
 
 Built-in languages and their aliases are included in the `Lang` type:
 

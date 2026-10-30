@@ -1,6 +1,10 @@
-import type { Lang } from './languages';
+import type { Lang as LexerLang } from './languages';
 
-export type { Lang } from './languages';
+/**
+ * A built-in language name or alias. `ansi` is terminal output with escape
+ * sequences, as in Shiki.
+ */
+export type Lang = LexerLang | 'ansi';
 
 /**
  * Styles for a Zed syntax scope. The `& {}` unions preserve literal
@@ -79,11 +83,11 @@ export interface ThemedToken {
   offset: number;
   /** A theme color, or a prefixed `var(...)` for CSS-variable themes. */
   color?: string;
-  /** Background color. Highlights never emits it, but transformers may set it. */
+  /** Background color. Highlights emits it only for `ansi`. */
   bgColor?: string;
   /**
    * Shiki flags: italic 1, bold 2, underline 4, strikethrough 8.
-   * Highlights emits italic and bold. Transformers can set the other flags.
+   * Highlights emits italic and bold, and all four for `ansi`.
    */
   fontStyle?: number;
   /**
@@ -122,6 +126,8 @@ export interface CodeToTokensBaseOptions extends CodeToHtmlBaseOptions {
    * Lines at or above this length become one token without syntax styles,
    * as in Shiki. This limits the number of DOM elements for long lines.
    * `0` or `undefined` disables the limit.
+   * ANSI escape sequences count toward the input UTF-16 length but are
+   * removed from token content. Their SGR state still applies to later lines.
    */
   tokenizeMaxLineLength?: number;
 }
