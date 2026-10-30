@@ -29,8 +29,9 @@ export interface ReconcileResult {
  * that, a reconcile walks the specs once against the children: rows whose
  * key is gone are removed, missing rows are inserted (contiguous runs as one
  * string), rows that moved are moved, and rows whose spec changed have their
- * attributes and children rewritten. A row whose spec is the same object as
- * last time is not touched, so the layout's memoization decides the cost.
+ * attributes and children rewritten. A row whose gutter and content cells
+ * are the same objects as last time is not touched, so the layout's
+ * memoization decides the cost.
  */
 export class ColumnReconciler {
   readonly #gutter: HTMLElement;
