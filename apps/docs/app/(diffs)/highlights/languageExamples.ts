@@ -2653,6 +2653,19 @@ greeting --> [hello], name.
 check(L) :- \\+ member(x, L), ( L == [] -> true ; format("~w~n", [L]) ).`,
   ],
   [
+    'promql',
+    'PromQL',
+    `# Error ratio per job
+sum by (job) (
+  rate(http_requests_total{job="api", code=~"5.."}[5m] offset 1h)
+)
+/ ignoring (code) group_left (team)
+  sum by (job) (rate(http_requests_total[$__rate_interval]))
+> bool 0.05
+or histogram_quantile(0.99, sum by (le) (rate(latency_seconds_bucket[1h30m:1m])))
+unless topk(5, count_values("value", up)) * -Inf`,
+  ],
+  [
     'proto',
     'Protocol Buffers',
     `syntax = "proto3";

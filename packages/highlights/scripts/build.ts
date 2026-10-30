@@ -299,6 +299,7 @@ export function transformWat(
     '$hlPowershell',
     '$hlPrisma',
     '$hlProlog',
+    '$hlPromql',
     '$hlProto',
     '$hlPug',
     '$hlPuppet',
