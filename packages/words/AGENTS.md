@@ -25,12 +25,6 @@ Text (WAT).
 
 Read [ARCHITECTURE.md](./ARCHITECTURE.md) before changing `src/`.
 
-## Playground
-
-The playground is one Cloudflare Worker that serves a single HTML page and
-imports the built `dist/browser.mjs` in the browser, so `moonx words:build` has
-to have run first.
-
 ## Commands
 
 Build-dependent benchmarks are opt-in so CI does not run timing suites or
@@ -40,16 +34,14 @@ target). Run `words:bench-setup` once before browser comparisons. See
 [`benchmark/README.md`](./benchmark/README.md) for the pinned comparison tools,
 quick/full runs, and published chart evidence.
 
-| Command                                            | Purpose                                                                |
-| -------------------------------------------------- | ---------------------------------------------------------------------- |
-| `pnpm install`                                     | Install dev dependencies                                               |
-| `moonx words:build`                                | Emit `dist/md.wat`, `dist/md.wasm`, and the inlined Wasm JS in `dist/` |
-| `moonx words:test`                                 | Unit tests, fuzzing, and the grow suite                                |
-| `moonx words:test-spec`                            | The CommonMark and GFM conformance suites                              |
-| `moonx words:bench`                                | Benchmark against md4x and markdown-it                                 |
-| `moonx words:playground-dev --ignore-ci-checks`    | Serve `playground/index.mjs` with `dist/` as its assets                |
-| `moonx words:playground-deploy --ignore-ci-checks` | Publish the playground worker                                          |
-| `moonx words:gen-spec`                             | Re-download the specification fixtures                                 |
+| Command                 | Purpose                                                                |
+| ----------------------- | ---------------------------------------------------------------------- |
+| `pnpm install`          | Install dev dependencies                                               |
+| `moonx words:build`     | Emit `dist/md.wat`, `dist/md.wasm`, and the inlined Wasm JS in `dist/` |
+| `moonx words:test`      | Unit tests, fuzzing, and the grow suite                                |
+| `moonx words:test-spec` | The CommonMark and GFM conformance suites                              |
+| `moonx words:bench`     | Benchmark against md4x and markdown-it                                 |
+| `moonx words:gen-spec`  | Re-download the specification fixtures                                 |
 
 ## Traps this codebase has already hit
 

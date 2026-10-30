@@ -11,8 +11,6 @@ A fast markdown renderer written in WebAssembly Text (WAT).
 - **Two backends**: HTML, and ANSI for terminals.
 - **YAML frontmatter**, parsed in Wasm and handed back as a plain object.
 
-Try it in the [playground](https://md-playground.wat-labs.com).
-
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="./benchmark/benchmark-dark.svg">
   <img alt="benchmark" src="./benchmark/benchmark-light.svg">
@@ -72,14 +70,13 @@ interface RenderOptions {
 
 ## Development
 
-| Command                                         | Purpose                                                     |
-| ----------------------------------------------- | ----------------------------------------------------------- |
-| `pnpm install`                                  | Install the dev dependencies                                |
-| `moonx words:build`                             | Compile `src/*.wat` to `dist/md.wasm`                       |
-| `moonx words:test`                              | Unit tests, fuzzing, and the grow suite                     |
-| `moonx words:test-spec`                         | The CommonMark and GFM conformance suites                   |
-| `moonx words:bench`                             | Benchmark against md4x and markdown-it                      |
-| `moonx words:playground-dev --ignore-ci-checks` | Serve the [playground](./playground/index.mjs) on localhost |
+| Command                 | Purpose                                   |
+| ----------------------- | ----------------------------------------- |
+| `pnpm install`          | Install the dev dependencies              |
+| `moonx words:build`     | Compile `src/*.wat` to `dist/md.wasm`     |
+| `moonx words:test`      | Unit tests, fuzzing, and the grow suite   |
+| `moonx words:test-spec` | The CommonMark and GFM conformance suites |
+| `moonx words:bench`     | Benchmark against md4x and markdown-it    |
 
 Read [ARCHITECTURE.md](./ARCHITECTURE.md) before changing `src/`.
 
