@@ -25,7 +25,7 @@ import {
   createStressFixture,
   STRESS_BASE_CHARACTERS,
   STRESS_SCALES,
-} from '../../../../../packages/words/benchmark/fixtures.mjs';
+} from '../../../../../packages/words/benchmark/fixtures';
 import { getBenchmarkGradientStyle } from '../highlights/BenchmarkBar';
 import rainbowStyles from '../highlights/HighlightsRainbow.module.css';
 import styles from './WordsDemo.module.css';

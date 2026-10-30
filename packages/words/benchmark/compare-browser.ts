@@ -8,7 +8,7 @@ import {
 } from 'react';
 import { createRoot } from 'react-dom/client';
 
-import { createStressFixture } from './fixtures.mjs';
+import { createStressFixture } from './fixtures.ts';
 import './compare-browser.css';
 
 const parameters = new URLSearchParams(location.search);

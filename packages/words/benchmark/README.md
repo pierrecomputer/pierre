@@ -15,7 +15,7 @@ moonx words:lab --ignore-ci-checks -- capture --output=/tmp/words-after
 moonx words:lab --ignore-ci-checks -- confirm --baseline=/tmp/words-before --candidate=/tmp/words-after --output=/tmp/words-confirm
 ```
 
-The lab measures the WAT core, `lib/index.mjs` encoding/decoding and session
+The lab measures the WAT core, `lib/core.ts` encoding/decoding and session
 bookkeeping, and `html/render.ts` formatting. Include all three in the search
 space: a faster kernel need not improve a streaming consumer. DOM patching,
 React, highlighting plugins, cold startup, and network pacing remain outside
@@ -34,7 +34,7 @@ filesystem operations still use native paths.
 
 ### Fixed objective and regression guards
 
-`lab/policy.mjs` defines `words-streaming-lifecycle-v1`. Freeze this file,
+`lab/policy.ts` defines `words-streaming-lifecycle-v1`. Freeze this file,
 workloads, fixtures, tests, and the benchmark driver during a search. Change the
 measurement contract between searches, not to accommodate a candidate.
 
@@ -238,7 +238,7 @@ moonx words:lab --ignore-ci-checks -- profile --candidate=/tmp/words-after --cas
 
 Open `.cpuprofile` in a CPU-profile viewer such as VS Code or Speedscope. The
 named optimized Wasm must have identical executable sections to production.
-Captured JS frames map to the actual `index.mjs` or `html.mjs` entry. The
+Captured JS frames map to the actual `core.js` or `html.mjs` entry. The
 profile uses a private capture copy and never rewrites the original or `dist`.
 
 A separate instrumented replay records block analysis, inline/render,
@@ -376,7 +376,7 @@ moon run words:bench-chart-check
 moon run words:bench-chart-test
 ```
 
-[`chart-data.mjs`](./chart-data.mjs) validates the captured evidence and writes
+[`chart-data.ts`](./chart-data.ts) validates the captured evidence and writes
 the public summary plus a byte-identical raw download. To inspect another
 consolidated snapshot without publishing it, supply `--input`, `--output`, and
 `--raw-output` paths. Fresh quick/full runs also write a consolidated
