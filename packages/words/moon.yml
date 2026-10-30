@@ -203,23 +203,6 @@ tasks:
       cache: false
       runInCI: 'always'
 
-  playground-dev:
-    command: 'wrangler dev'
-    deps:
-      - 'build'
-    options:
-      cache: false
-      persistent: true
-      runInCI: 'skip'
-
-  playground-deploy:
-    command: 'wrangler deploy'
-    deps:
-      - 'build'
-    options:
-      cache: false
-      runInCI: 'skip'
-
   prepublish:
     deps:
       - 'test'

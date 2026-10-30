@@ -50,8 +50,7 @@
     "react-dom": "catalog:",
     "tsdown": "catalog:",
     "typescript": "catalog:",
-    "wabt": "catalog:",
-    "wrangler": "catalog:"
+    "wabt": "catalog:"
   },
   "peerDependencies": {
     "@pierre/highlights": "*",
