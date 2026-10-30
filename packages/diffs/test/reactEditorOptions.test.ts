@@ -72,6 +72,64 @@ const PatchDiffComponent = PatchDiff as ComponentType<
   PatchDiffProps<undefined, undefined>
 >;
 
+test('React file-pair parsing forwards changes to disableLineMatching', async () => {
+  const { cleanup } = installDom();
+  const cleanupAct = installReactActEnvironment();
+  const root = createReactRoot(document.createElement('div'));
+  const oldFile = { name: 'option.ts', contents: 'const value = 1;\n' };
+  const newFile = { name: 'option.ts', contents: '\nconst value = 2;\n' };
+  let instance: FileDiffInstance<undefined> | undefined;
+  try {
+    for (const disableLineMatching of [false, true, false]) {
+      const options: ReactFileDiffOptions<undefined, undefined> = {
+        parseDiffOptions: { disableLineMatching },
+        onPostRender(_node, current, phase) {
+          if (phase !== 'unmount') instance = current;
+        },
+      };
+      await act(async () => {
+        root.render(
+          createElement(MultiFileDiffComponent, {
+            oldFile,
+            newFile,
+            options,
+            disableWorkerPool: true,
+          })
+        );
+        await wait(0);
+      });
+      expect(instance?.fileDiff?.hunks).toEqual(
+        parseDiffFromFile(oldFile, newFile, { disableLineMatching }).hunks
+      );
+      expect(instance?.fileDiff?.hunks[0].hunkContent).toHaveLength(
+        disableLineMatching ? 1 : 2
+      );
+    }
+    const supplied = parseDiffFromFile(oldFile, newFile);
+    await act(async () => {
+      root.render(
+        createElement(ReactFileDiffComponent, {
+          fileDiff: supplied,
+          disableWorkerPool: true,
+          options: {
+            parseDiffOptions: { disableLineMatching: true },
+            onPostRender(_node, current, phase) {
+              if (phase !== 'unmount') instance = current;
+            },
+          },
+        })
+      );
+      await wait(0);
+    });
+    expect(instance?.fileDiff).toBe(supplied);
+    expect(instance?.fileDiff?.hunks[0].hunkContent).toHaveLength(2);
+  } finally {
+    await unmountRoot(root);
+    cleanupAct();
+    cleanup();
+  }
+});
+
 function createEditor<EType extends EditorType>(
   editorType: EType,
   options: EditorOptions<EType, undefined, undefined>
@@ -1161,7 +1219,10 @@ describe('React editor factory lifecycle', () => {
       'const value = 1;\n',
       'const value = 2;\n'
     );
-    const partial = parsePatchFiles(patch, 'edit.ts', true)[0]?.files[0];
+    const partial = parsePatchFiles(patch, {
+      cacheKeyPrefix: 'edit.ts',
+      throwOnError: true,
+    })[0]?.files[0];
     if (partial == null) throw new Error('Expected partial diff');
     let root: Root | undefined;
 
@@ -1204,7 +1265,10 @@ describe('React editor factory lifecycle', () => {
       oldFile.contents,
       newFile.contents
     );
-    const partial = parsePatchFiles(patch, 'edit.ts', true)[0]?.files[0];
+    const partial = parsePatchFiles(patch, {
+      cacheKeyPrefix: 'edit.ts',
+      throwOnError: true,
+    })[0]?.files[0];
     if (partial == null) throw new Error('Expected partial diff');
     let root: Root | undefined;
 

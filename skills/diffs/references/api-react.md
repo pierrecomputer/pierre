@@ -25,6 +25,12 @@ entry also re-exports every type in [Shared types](api-types.md).
 
 ## Component and provider types
 
+Diff components share `options.parseDiffOptions: ParseDiffOptions`, including
+jsdiff settings and the `disableLineMatching` escape hatch (default: `false`).
+`MultiFileDiff` uses it when parsing file pairs; editable diffs and CodeView use
+it when recomputing edits. Supplying it does not rewrite existing `fileDiff`
+metadata. See [Parsing and patch APIs](api-core.md#parsing-and-patch-apis).
+
 | Export                              | Purpose                                                           |
 | ----------------------------------- | ----------------------------------------------------------------- |
 | `FileProps`                         | Defines props for `File`.                                         |

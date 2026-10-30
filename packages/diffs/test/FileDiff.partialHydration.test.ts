@@ -14,6 +14,7 @@ import type {
   FileDiffMetadata,
   HighlightedToken,
 } from '../src/types';
+import { composeCacheKey } from '../src/utils/composeCacheKey';
 import type { WorkerPoolManager } from '../src/worker';
 import { installDom, wait } from './domHarness';
 import { createEditorInstance } from './editorTestUtils';
@@ -123,7 +124,10 @@ function createPrimeWorkerManager(): {
 }
 
 function parseSinglePartialFile(patch: string): FileDiffMetadata {
-  const file = parsePatchFiles(patch, 'partial', true)[0]?.files[0];
+  const file = parsePatchFiles(patch, {
+    cacheKeyPrefix: 'partial',
+    throwOnError: true,
+  })[0]?.files[0];
   assertDefined(file, 'expected patch to contain one file');
   expect(file.isPartial).toBe(true);
   return file;
@@ -999,6 +1003,43 @@ describe('FileDiff partial hydration', () => {
       cleanup();
     }
   });
+
+  for (const disableLineMatching of [false, true]) {
+    test(`derives hydrated cache keys using disableLineMatching=${disableLineMatching}`, async () => {
+      const { cleanup } = installDom();
+      let instance: TestFileDiff | undefined;
+      try {
+        const { oldFile, newFile, partial } = createPartialChange();
+        delete partial.cacheKey;
+        instance = new TestFileDiff({
+          disableErrorHandling: true,
+          disableFileHeader: true,
+          parseDiffOptions: { disableLineMatching },
+          loadDiffFiles: () => Promise.resolve({ oldFile, newFile }),
+        });
+        instance.render({
+          fileContainer: document.createElement('div'),
+          fileDiff: partial,
+          deferManagers: true,
+          preventEmit: true,
+        });
+        instance.expandHunk(0, 'down', 1);
+        await instance.getPendingFileLoadPromiseForTest();
+
+        expect(partial.isPartial).toBe(false);
+        expect(instance.getInputDiffForTest()?.cacheKey).toBe(
+          composeCacheKey(
+            disableLineMatching ? 'hydrated-files-raw' : 'hydrated-files',
+            oldFile.cacheKey!,
+            newFile.cacheKey!
+          )
+        );
+      } finally {
+        instance?.cleanUp();
+        cleanup();
+      }
+    });
+  }
 
   test('primes eligible worker highlights with the hydrated source diff', async () => {
     const { cleanup } = installDom();

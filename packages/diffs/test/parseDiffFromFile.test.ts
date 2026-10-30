@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 
 import type { FileContents } from '../src/types';
+import { areDiffTargetsEqual } from '../src/utils/areDiffTargetsEqual';
 import { getFiletypeFromFileName } from '../src/utils/getFiletypeFromFileName';
 import { parseDiffFromFile } from '../src/utils/parseDiffFromFile';
 import { splitFileContents } from '../src/utils/splitFileContents';
@@ -104,6 +105,33 @@ describe('parseDiffFromFile', () => {
       ignoreWhitespace: true,
     });
     expect(withoutWhitespace.hunks).toHaveLength(0);
+
+    const withoutMatching = parseDiffFromFile(oldFile, newFile, {
+      ignoreWhitespace: true,
+      disableLineMatching: true,
+    });
+    expect(withoutMatching.hunks).toHaveLength(0);
+  });
+
+  test('preserves jsdiff context options when line matching is disabled', () => {
+    const diff = parseDiffFromFile(
+      { name: 'test.txt', contents: 'before\nold\nafter\n' },
+      { name: 'test.txt', contents: 'before\nnew\nafter\n' },
+      { context: 0, disableLineMatching: true },
+      true
+    );
+
+    expect(diff.hunks).toHaveLength(1);
+    expect(diff.hunks[0].hunkContent).toEqual([
+      {
+        type: 'change',
+        deletions: 1,
+        additions: 1,
+        deletionLineIndex: 1,
+        additionLineIndex: 1,
+      },
+    ]);
+    expect(verifyHunkLineValues(diff)).toEqual([]);
   });
 
   test('should have type "change" (default) when files did not change', () => {
@@ -153,27 +181,84 @@ describe('parseDiffFromFile', () => {
     expect(result.cacheKey).toBe('ck1:["diff","old-cache","new-cache"]');
   });
 
-  test('encodes caller cache key segments without delimiter collisions', () => {
-    const parseWithKeys = (oldCacheKey: string, newCacheKey: string) =>
-      parseDiffFromFile(
-        {
-          name: 'test.txt',
-          contents: 'old\n',
-          cacheKey: oldCacheKey,
-        },
-        {
-          name: 'test.txt',
-          contents: 'new\n',
-          cacheKey: newCacheKey,
-        }
-      ).cacheKey;
+  test('gives different matching modes distinct cache identities', () => {
+    const oldFile = {
+      name: 'test.txt',
+      contents: 'const value = 1;\n',
+      cacheKey: 'old-cache',
+    };
+    const newFile = {
+      name: 'test.txt',
+      contents: '\nconst value = 2;\n',
+      cacheKey: 'new-cache',
+    };
+    const defaultDiff = parseDiffFromFile(oldFile, newFile);
+    const matchedDiff = parseDiffFromFile(oldFile, newFile, {
+      disableLineMatching: false,
+    });
+    const unmatchedDiff = parseDiffFromFile(oldFile, newFile, {
+      disableLineMatching: true,
+    });
 
-    const firstKey = parseWithKeys('a:b', 'c');
-    const secondKey = parseWithKeys('a', 'b:c');
-
-    expect(firstKey).not.toBe(secondKey);
-    expect(parseWithKeys('a:b', 'c')).toBe(firstKey);
+    expect(matchedDiff.cacheKey).toBe(defaultDiff.cacheKey);
+    expect(areDiffTargetsEqual(defaultDiff, matchedDiff)).toBe(true);
+    expect(unmatchedDiff.hunks).not.toEqual(defaultDiff.hunks);
+    expect(unmatchedDiff.cacheKey).toBe(
+      'ck1:["diff-raw","old-cache","new-cache"]'
+    );
+    expect(areDiffTargetsEqual(defaultDiff, unmatchedDiff)).toBe(false);
+    expect(
+      parseDiffFromFile(oldFile, newFile, { disableLineMatching: true })
+        .cacheKey
+    ).toBe(unmatchedDiff.cacheKey);
   });
+
+  test('does not invent source keys when line matching is disabled', () => {
+    const keyedFile = {
+      name: 'test.txt',
+      contents: 'keyed\n',
+      cacheKey: 'source-key',
+    };
+    const unkeyedFile = { name: 'test.txt', contents: 'unkeyed\n' };
+    for (const [oldFile, newFile] of [
+      [keyedFile, unkeyedFile],
+      [unkeyedFile, keyedFile],
+      [unkeyedFile, unkeyedFile],
+      [null, keyedFile],
+      [keyedFile, null],
+    ] as const) {
+      expect(
+        parseDiffFromFile(oldFile, newFile, { disableLineMatching: true })
+          .cacheKey
+      ).toBeUndefined();
+    }
+  });
+
+  test.each([false, true])(
+    'encodes caller cache key segments without delimiter collisions with disableLineMatching=%p',
+    (disableLineMatching) => {
+      const parseWithKeys = (oldCacheKey: string, newCacheKey: string) =>
+        parseDiffFromFile(
+          {
+            name: 'test.txt',
+            contents: 'old\n',
+            cacheKey: oldCacheKey,
+          },
+          {
+            name: 'test.txt',
+            contents: 'new\n',
+            cacheKey: newCacheKey,
+          },
+          { disableLineMatching }
+        ).cacheKey;
+
+      const firstKey = parseWithKeys('a:b', 'c');
+      const secondKey = parseWithKeys('a', 'b:c');
+
+      expect(firstKey).not.toBe(secondKey);
+      expect(parseWithKeys('a:b', 'c')).toBe(firstKey);
+    }
+  );
 
   test('leaves cacheKey unset when either side of a two-sided diff is unkeyed', () => {
     const keyedOldFile: FileContents = {

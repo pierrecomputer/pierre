@@ -3,6 +3,7 @@ import type {
   FileDiffLoadedFiles,
   FileDiffMetadata,
   Hunk,
+  ParseDiffOptions,
 } from '../types';
 import { cloneFileDiffMetadata } from './cloneFileDiffMetadata';
 import { composeCacheKey } from './composeCacheKey';
@@ -19,12 +20,15 @@ interface HydratedHunksResult {
 }
 
 /**
- * Hydrates a partial diff in place with full file line arrays.
+ * Hydrates a partial diff with full file line arrays, preserving its hunks.
+ * Pass the options used to parse the patch so derived cache keys distinguish
+ * line-matching modes.
  */
 export function hydratePartialDiff(
   type: 'clone' | 'merge',
   fileDiff: FileDiffMetadata,
-  files: FileDiffLoadedFiles
+  files: FileDiffLoadedFiles,
+  parseDiffOptions: ParseDiffOptions = {}
 ): FileDiffMetadata {
   const targetFileDiff =
     type === 'clone' ? cloneFileDiffMetadata(fileDiff) : fileDiff;
@@ -38,7 +42,12 @@ export function hydratePartialDiff(
     case 'rename-changed': {
       const oldFile = requireOldFile(targetFileDiff, files);
       const newFile = requireNewFile(targetFileDiff, files);
-      return hydrateTwoSidedFileDiff(targetFileDiff, oldFile, newFile);
+      return hydrateTwoSidedFileDiff(
+        targetFileDiff,
+        oldFile,
+        newFile,
+        parseDiffOptions
+      );
     }
     case 'rename-pure': {
       const newFile = requireNewFile(targetFileDiff, files);
@@ -49,7 +58,7 @@ export function hydratePartialDiff(
       targetFileDiff.additionLines = lines;
       targetFileDiff.deletionCharacterCount = newFile.contents.length;
       targetFileDiff.additionCharacterCount = newFile.contents.length;
-      setHydratedCacheKey(targetFileDiff, null, newFile);
+      setHydratedCacheKey(targetFileDiff, null, newFile, parseDiffOptions);
       return targetFileDiff;
     }
   }
@@ -61,7 +70,8 @@ export function hydratePartialDiff(
 function hydrateTwoSidedFileDiff(
   fileDiff: FileDiffMetadata,
   oldFile: FileContents,
-  newFile: FileContents
+  newFile: FileContents,
+  parseDiffOptions: ParseDiffOptions
 ): FileDiffMetadata {
   const deletionLines = splitFileContents(oldFile.contents);
   const additionLines = splitFileContents(newFile.contents);
@@ -78,7 +88,7 @@ function hydrateTwoSidedFileDiff(
   fileDiff.additionLines = additionLines;
   fileDiff.deletionCharacterCount = oldFile.contents.length;
   fileDiff.additionCharacterCount = newFile.contents.length;
-  setHydratedCacheKey(fileDiff, oldFile, newFile);
+  setHydratedCacheKey(fileDiff, oldFile, newFile, parseDiffOptions);
   return fileDiff;
 }
 
@@ -209,20 +219,27 @@ function requireMissingOldFile(
 function getHydratedCacheKey(
   fileDiff: FileDiffMetadata,
   oldFile: FileContents | null,
-  newFile: FileContents | null
+  newFile: FileContents | null,
+  parseDiffOptions: ParseDiffOptions
 ): string | undefined {
   if (fileDiff.cacheKey != null) {
     return `${fileDiff.cacheKey}:hydrated`;
   }
-  return getLoadedFileCacheKey(oldFile, newFile);
+  return getLoadedFileCacheKey(oldFile, newFile, parseDiffOptions);
 }
 
 function setHydratedCacheKey(
   fileDiff: FileDiffMetadata,
   oldFile: FileContents | null,
-  newFile: FileContents | null
+  newFile: FileContents | null,
+  parseDiffOptions: ParseDiffOptions
 ): void {
-  const cacheKey = getHydratedCacheKey(fileDiff, oldFile, newFile);
+  const cacheKey = getHydratedCacheKey(
+    fileDiff,
+    oldFile,
+    newFile,
+    parseDiffOptions
+  );
   if (cacheKey == null) {
     delete fileDiff.cacheKey;
     return;
@@ -232,11 +249,18 @@ function setHydratedCacheKey(
 
 function getLoadedFileCacheKey(
   oldFile: FileContents | null,
-  newFile: FileContents | null
+  newFile: FileContents | null,
+  parseDiffOptions: ParseDiffOptions
 ): string | undefined {
   if (oldFile != null && newFile != null) {
     return oldFile.cacheKey != null && newFile.cacheKey != null
-      ? composeCacheKey('hydrated-files', oldFile.cacheKey, newFile.cacheKey)
+      ? composeCacheKey(
+          parseDiffOptions.disableLineMatching === true
+            ? 'hydrated-files-raw'
+            : 'hydrated-files',
+          oldFile.cacheKey,
+          newFile.cacheKey
+        )
       : undefined;
   }
   return oldFile?.cacheKey ?? newFile?.cacheKey;

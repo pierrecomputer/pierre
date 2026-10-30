@@ -137,7 +137,10 @@ function createPartialDiff(
     oldContents,
     newContents
   );
-  const diff = parsePatchFiles(patch, 'partial', true)[0]?.files[0];
+  const diff = parsePatchFiles(patch, {
+    cacheKeyPrefix: 'partial',
+    throwOnError: true,
+  })[0]?.files[0];
   assertDefined(diff, 'expected a parsed partial diff');
   diff.cacheKey = 'session:partial-v2';
   return diff;

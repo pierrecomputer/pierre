@@ -1017,7 +1017,12 @@ export class VirtualizedFileDiff<
     // next diff immediately. Instead we clone and stage it for
     // CodeView layout to consume at render time.
     if (this.isAdvancedMode()) {
-      const nextDiff = hydratePartialDiff('clone', expectedDiff, files);
+      const nextDiff = hydratePartialDiff(
+        'clone',
+        expectedDiff,
+        files,
+        this.options.parseDiffOptions
+      );
       await awaitWithTimeout(() => this.primeHighlightCache(nextDiff));
       if (this.getInputDiff() !== expectedDiff) {
         return;
@@ -1028,7 +1033,12 @@ export class VirtualizedFileDiff<
         files,
       };
     } else {
-      hydratePartialDiff('merge', expectedDiff, files);
+      hydratePartialDiff(
+        'merge',
+        expectedDiff,
+        files,
+        this.options.parseDiffOptions
+      );
       this.setHydratedState(files);
       if (!this.installHydratedSessionDiff(expectedDiff)) {
         await awaitWithTimeout(() => this.primeHighlightCache(expectedDiff));

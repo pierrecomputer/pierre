@@ -66,7 +66,10 @@ function createPartialChange(name = 'partial.txt'): PartialChange {
     undefined,
     { context: 0 }
   );
-  const partial = parsePatchFiles(patch, name, true)[0]?.files[0];
+  const partial = parsePatchFiles(patch, {
+    cacheKeyPrefix: name,
+    throwOnError: true,
+  })[0]?.files[0];
   assertDefined(partial, 'expected patch to contain one file');
   expect(partial.isPartial).toBe(true);
   return { oldFile, newFile, partial, patch };

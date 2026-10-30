@@ -1363,7 +1363,12 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
     if (this.getInputDiff() !== expectedDiff || !expectedDiff.isPartial) {
       return;
     }
-    hydratePartialDiff('merge', expectedDiff, files);
+    hydratePartialDiff(
+      'merge',
+      expectedDiff,
+      files,
+      this.options.parseDiffOptions
+    );
     this.setHydratedState(files);
     if (this.installHydratedSessionDiff(expectedDiff)) {
       this.rerender();

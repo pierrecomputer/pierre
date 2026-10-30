@@ -1,5 +1,6 @@
 import { afterAll, describe, expect, spyOn, test } from 'bun:test';
 
+import type { ParsePatchOptions } from '../src';
 import { disposeHighlighter } from '../src/highlighter/shared_highlighter';
 import { DiffHunksRenderer } from '../src/renderers/DiffHunksRenderer';
 import { composeCacheKey } from '../src/utils/composeCacheKey';
@@ -57,6 +58,84 @@ function createFilePatch(name: string): string {
   ].join('');
 }
 
+describe.each([
+  ['parsePatchFiles', parsePatchFiles],
+  ['processPatch', processPatch],
+] as const)('%s options', (name, parse) => {
+  test.each([undefined, '', 'patch-prefix'])(
+    'derives file keys from cache prefix %j',
+    (cacheKeyPrefix) => {
+      const patch = `${createFilePatch('one.txt')}${createFilePatch('two.txt')}`;
+      const options: ParsePatchOptions = {
+        cacheKeyPrefix,
+        throwOnError: true,
+        disableLineMatching: false,
+      };
+
+      const result = parse(patch, options);
+      const files = Array.isArray(result) ? result[0].files : result.files;
+      expect(files.map((file) => file.cacheKey)).toEqual(
+        cacheKeyPrefix == null
+          ? [undefined, undefined]
+          : name === 'parsePatchFiles'
+            ? [
+                composeCacheKey('patch-file', cacheKeyPrefix, '0', '0'),
+                composeCacheKey('patch-file', cacheKeyPrefix, '0', '1'),
+              ]
+            : [
+                composeCacheKey('patch-file', cacheKeyPrefix, '0'),
+                composeCacheKey('patch-file', cacheKeyPrefix, '1'),
+              ]
+      );
+      expect(parse(patch, {})).toEqual(parse(patch));
+    }
+  );
+
+  test.each([false, true])(
+    'honors strict errors with disableLineMatching=%p',
+    (disableLineMatching) => {
+      expect(() =>
+        parse(malformedPatch, { throwOnError: true, disableLineMatching })
+      ).toThrow('invalid hunk line');
+    }
+  );
+
+  test.each([undefined, '', 'prefix-0:1', 'prefix","no-line-matching'])(
+    'separates matching modes for cache prefix %j',
+    (cacheKeyPrefix) => {
+      const patch = `${createFilePatch('one.txt')}${createFilePatch('two.txt')}`;
+      const getKeys = (disableLineMatching?: boolean) => {
+        const result = parse(patch, {
+          cacheKeyPrefix,
+          disableLineMatching,
+          throwOnError: true,
+        });
+        const files = Array.isArray(result) ? result[0].files : result.files;
+        return files.map((file) => file.cacheKey);
+      };
+      const defaultKeys = getKeys();
+      const unmatchedKeys = getKeys(true);
+      expect(getKeys(false)).toEqual(defaultKeys);
+      expect(getKeys(true)).toEqual(unmatchedKeys);
+      if (cacheKeyPrefix == null) {
+        expect(unmatchedKeys).toEqual([undefined, undefined]);
+      } else {
+        expect(new Set([...defaultKeys, ...unmatchedKeys]).size).toBe(4);
+      }
+    }
+  );
+
+  test('keeps forgiving recovery as the options-object default', () => {
+    const consoleError = spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      expect(parse(malformedPatch, {})).toEqual(parse(malformedPatch));
+      expect(consoleError).toHaveBeenCalled();
+    } finally {
+      consoleError.mockRestore();
+    }
+  });
+});
+
 describe('parsePatchFiles', () => {
   const result = parsePatchFiles(diffPatch);
   test('preserves the line-16 blank insertion from issue 1139', () => {
@@ -77,8 +156,8 @@ describe('parsePatchFiles', () => {
 
     const files = [
       processFile(patch, { isGitDiff: true, throwOnError: true }),
-      processPatch(patch, undefined, true).files[0],
-      parsePatchFiles(patch, undefined, true)[0].files[0],
+      processPatch(patch, { throwOnError: true }).files[0],
+      parsePatchFiles(patch, { throwOnError: true })[0].files[0],
     ];
     for (const file of files) {
       assertDefined(file, 'Expected the issue patch to parse');
@@ -146,57 +225,69 @@ describe('parsePatchFiles', () => {
     expect(patchDigest(result)).toMatchSnapshot('git pr patch digest');
   });
 
-  test('generates deterministic keys from patch and file indexes', () => {
-    const prefix = 'prefix-0:1';
-    const firstPatch = `${createFilePatch('one.txt')}${createFilePatch('two.txt')}`;
-    const patchFile = [
-      'From aaaaa first patch\n',
-      firstPatch,
-      'From bbbbb second patch\n',
-      createFilePatch('three.txt'),
-      createFilePatch('four.txt'),
-    ].join('');
-    const getKeys = () =>
-      parsePatchFiles(patchFile, prefix, true).map((patch) =>
-        patch.files.map((file) => file.cacheKey)
-      );
-    const expectedKeys = [
-      [
-        composeCacheKey('patch-file', prefix, '0', '0'),
-        composeCacheKey('patch-file', prefix, '0', '1'),
-      ],
-      [
-        composeCacheKey('patch-file', prefix, '1', '0'),
-        composeCacheKey('patch-file', prefix, '1', '1'),
-      ],
-    ];
+  test.each([false, true])(
+    'generates deterministic keys from patch and file indexes with disableLineMatching=%p',
+    (disableLineMatching) => {
+      const scope = disableLineMatching ? 'patch-file-raw' : 'patch-file';
+      const prefix = 'prefix-0:1';
+      const firstPatch = `${createFilePatch('one.txt')}${createFilePatch('two.txt')}`;
+      const patchFile = [
+        'From aaaaa first patch\n',
+        firstPatch,
+        'From bbbbb second patch\n',
+        createFilePatch('three.txt'),
+        createFilePatch('four.txt'),
+      ].join('');
+      const getKeys = () =>
+        parsePatchFiles(patchFile, {
+          cacheKeyPrefix: prefix,
+          disableLineMatching,
+          throwOnError: true,
+        }).map((patch) => patch.files.map((file) => file.cacheKey));
+      const expectedKeys = [
+        [
+          composeCacheKey(scope, prefix, '0', '0'),
+          composeCacheKey(scope, prefix, '0', '1'),
+        ],
+        [
+          composeCacheKey(scope, prefix, '1', '0'),
+          composeCacheKey(scope, prefix, '1', '1'),
+        ],
+      ];
 
-    const keys = getKeys();
-    expect(keys).toEqual(expectedKeys);
-    expect(new Set(keys.flat()).size).toBe(4);
-    expect(getKeys()).toEqual(keys);
+      const keys = getKeys();
+      expect(keys).toEqual(expectedKeys);
+      expect(new Set(keys.flat()).size).toBe(4);
+      expect(getKeys()).toEqual(keys);
 
-    const directPrefix = `${prefix}-0`;
-    const directKeys = processPatch(firstPatch, directPrefix, true).files.map(
-      (file) => file.cacheKey
-    );
-    expect(directKeys).toEqual([
-      composeCacheKey('patch-file', directPrefix, '0'),
-      composeCacheKey('patch-file', directPrefix, '1'),
-    ]);
-    expect(new Set([...keys.flat(), ...directKeys]).size).toBe(6);
-  });
+      const directPrefix = `${prefix}-0`;
+      const directKeys = processPatch(firstPatch, {
+        cacheKeyPrefix: directPrefix,
+        disableLineMatching,
+        throwOnError: true,
+      }).files.map((file) => file.cacheKey);
+      expect(directKeys).toEqual([
+        composeCacheKey(scope, directPrefix, '0'),
+        composeCacheKey(scope, directPrefix, '1'),
+      ]);
+      expect(new Set([...keys.flat(), ...directKeys]).size).toBe(6);
+    }
+  );
 
-  test('keeps a direct processFile cache key authoritative', () => {
-    const cacheKey = 'caller:key-0-0:hydrated';
-    const file = processFile(createFilePatch('direct.txt'), {
-      cacheKey,
-      isGitDiff: true,
-      throwOnError: true,
-    });
+  test.each([undefined, false, true])(
+    'keeps a direct processFile cache key authoritative with disableLineMatching=%p',
+    (disableLineMatching) => {
+      const cacheKey = 'caller:key-0-0:hydrated';
+      const file = processFile(createFilePatch('direct.txt'), {
+        cacheKey,
+        disableLineMatching,
+        isGitDiff: true,
+        throwOnError: true,
+      });
 
-    expect(file?.cacheKey).toBe(cacheKey);
-  });
+      expect(file?.cacheKey).toBe(cacheKey);
+    }
+  );
 
   test('patches with a final blank line should have a \\n added', () => {
     const result = parsePatchFiles(finalBlankLinePatch);
@@ -233,9 +324,9 @@ describe('parsePatchFiles', () => {
   });
 
   test('throws in strict mode for malformed patch with bare newline in hunk', () => {
-    expect(() => parsePatchFiles(malformedPatch, undefined, true)).toThrow(
-      'invalid hunk line'
-    );
+    expect(() =>
+      parsePatchFiles(malformedPatch, { throwOnError: true })
+    ).toThrow('invalid hunk line');
   });
 
   test('throws in strict mode when a hunk has too few lines', () => {
@@ -247,8 +338,7 @@ describe('parsePatchFiles', () => {
           '@@ -1 +1 @@\n',
           '-old line\n',
         ].join(''),
-        undefined,
-        true
+        { throwOnError: true }
       )
     ).toThrow('hunk line count mismatch');
   });
@@ -285,9 +375,9 @@ describe('parsePatchFiles', () => {
   });
 
   test('throws for the issue 1094 patch in strict mode', () => {
-    expect(() => parsePatchFiles(issue1094Patch, undefined, true)).toThrow(
-      'hunk line count mismatch'
-    );
+    expect(() =>
+      parsePatchFiles(issue1094Patch, { throwOnError: true })
+    ).toThrow('hunk line count mismatch');
   });
 
   test('leaves the valid issue 1094 patch unchanged', () => {
@@ -548,8 +638,7 @@ describe('parsePatchFiles', () => {
           '+new line\n',
           '-extra old line\n',
         ].join(''),
-        undefined,
-        true
+        { throwOnError: true }
       )
     ).toThrow('hunk has more lines than expected');
   });
@@ -566,8 +655,7 @@ describe('parsePatchFiles', () => {
           '--- fake-old-marker\n',
           '+++ fake-new-marker\n',
         ].join(''),
-        undefined,
-        true
+        { throwOnError: true }
       )
     ).toThrow('unified file has no hunks');
   });
@@ -598,8 +686,7 @@ describe('parsePatchFiles', () => {
         '-old line\n',
         '+new line\n',
       ].join(''),
-      undefined,
-      true
+      { throwOnError: true }
     );
 
     expect(result[0]?.patchMetadata).toBe(
@@ -621,8 +708,7 @@ describe('parsePatchFiles', () => {
         ' CREATE TABLE users (\n',
         ' id BIGSERIAL PRIMARY KEY,\n',
       ].join(''),
-      undefined,
-      true
+      { throwOnError: true }
     );
 
     const file = result[0]?.files[0];
@@ -652,8 +738,7 @@ describe('parsePatchFiles', () => {
         '--- old marker\n',
         '+++ new marker\n',
       ].join(''),
-      undefined,
-      true
+      { throwOnError: true }
     );
 
     const file = result[0]?.files[0];
@@ -756,7 +841,7 @@ describe('parsePatchFiles', () => {
       '+++ sp ace.ts\tnew timestamp\n',
       '@@ -1 +1 @@\n-before\n+after\n',
     ].join('');
-    const files = parsePatchFiles(patch, undefined, true)[0]?.files;
+    const files = parsePatchFiles(patch, { throwOnError: true })[0]?.files;
     expect(
       files?.map(({ name, prevName, type }) => ({ name, prevName, type }))
     ).toEqual([
@@ -817,8 +902,7 @@ describe('parsePatchFiles', () => {
         String.raw`diff --git "a/\303\274ber.ts" "b/\303\274ber.ts"` +
           '\n' +
           metadata,
-        undefined,
-        true
+        { throwOnError: true }
       )[0]?.files[0];
       expect(file?.name).toBe('über.ts');
       expect(file?.type).toBe(type);

@@ -376,7 +376,7 @@ import { useMemo } from 'react';
 
 declare const patchText: string;
 
-const fileDiff = parsePatchFiles(patchText, 'pull-42')[0]?.files[0];
+const fileDiff = parsePatchFiles(patchText, { cacheKeyPrefix: 'pull-42' })[0]?.files[0];
 if (fileDiff == null) {
   throw new Error('The patch does not contain a file diff');
 }

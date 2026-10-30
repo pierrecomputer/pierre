@@ -447,7 +447,7 @@ export function buildDiffsHubData(
   const parsedPatches = parsePatchFiles(
     patchContent,
     // Use the url as a cache key
-    encodeURIComponent(githubPath)
+    { cacheKeyPrefix: encodeURIComponent(githubPath) }
   );
 
   const accumulator = createDiffsHubDataAccumulator();

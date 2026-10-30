@@ -140,6 +140,45 @@ hydration, placeholder, and cleanup members with diff data.
 
 ## Parsing and patch APIs
 
+`parsePatchFiles(patch, options?)` and `processPatch(patch, options?)` accept a
+`ParsePatchOptions` object as the second argument, with `disableLineMatching`,
+`cacheKeyPrefix`, and `throwOnError`. The old positional arguments are no longer
+supported.
+
+```ts
+const patches = parsePatchFiles(patch, {
+  cacheKeyPrefix: 'pull-42',
+  throwOnError: true,
+});
+```
+
+For file pairs, `parseDiffFromFile(oldFile, newFile, options?, throwOnError?)`
+accepts `ParseDiffOptions`, including jsdiff settings such as `context` and
+`ignoreWhitespace`, plus `disableLineMatching`. The fourth `throwOnError`
+argument is unchanged. jsdiff settings do not apply to existing patch text.
+
+`disableLineMatching` is a parse-time escape hatch, defaulting to `false`. When
+true, it preserves the patch's change blocks and line order without similarity
+realignment (jsdiff's generated patch for file pairs). Keep the default unless
+the caller specifically needs this behavior. `processFile` accepts the same flag
+in its options object.
+
+The existing `parseDiffOptions` on `FileDiffOptions` and `CodeViewOptions` also
+accepts `ParseDiffOptions`. It controls file-pair parsing and edit
+recomputation, without rewriting supplied `fileDiff` metadata. In React this is
+`options.parseDiffOptions`; `MultiFileDiff` parses file pairs, while `FileDiff`
+and `CodeView` receive pre-parsed metadata.
+
+Generated cache keys distinguish the matching modes; omitted/`false` preserve
+existing keys. Explicit `processFile({ cacheKey })` values remain authoritative,
+so callers assigning keys must distinguish modes themselves.
+
+`hydratePartialDiff` accepts `ParseDiffOptions` as its fourth argument. Pass the
+options used to parse the patch; components forward their `parseDiffOptions`.
+Hydration appends `:hydrated` to an existing diff key. Otherwise, changed diffs
+derive a key from both loaded file keys and `disableLineMatching`. Omitted or
+`false` preserves the existing key format.
+
 | Export                       | Purpose                                               |
 | ---------------------------- | ----------------------------------------------------- |
 | `parseDiffFromFile`          | Creates `FileDiffMetadata` from old and new files.    |

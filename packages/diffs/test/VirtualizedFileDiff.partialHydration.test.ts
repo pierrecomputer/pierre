@@ -5,6 +5,7 @@ import { disposeHighlighter, parseDiffFromFile, parsePatchFiles } from '../src';
 import { VirtualizedFileDiff } from '../src/components/VirtualizedFileDiff';
 import type { Virtualizer } from '../src/components/Virtualizer';
 import type { FileContents, FileDiffMetadata } from '../src/types';
+import { composeCacheKey } from '../src/utils/composeCacheKey';
 import { installDom, wait } from './domHarness';
 import { createEditorInstance } from './editorTestUtils';
 import { assertDefined, createDeferred } from './testUtils';
@@ -100,7 +101,10 @@ function createAdvancedVirtualizer(): {
 }
 
 function parseSinglePartialFile(patch: string): FileDiffMetadata {
-  const file = parsePatchFiles(patch, 'partial', true)[0]?.files[0];
+  const file = parsePatchFiles(patch, {
+    cacheKeyPrefix: 'partial',
+    throwOnError: true,
+  })[0]?.files[0];
   assertDefined(file, 'expected patch to contain one file');
   expect(file.isPartial).toBe(true);
   return file;
@@ -452,6 +456,47 @@ describe('VirtualizedFileDiff partial hydration', () => {
       instance?.cleanUp();
     }
   });
+
+  for (const mode of ['simple', 'advanced'] as const) {
+    for (const disableLineMatching of [false, true]) {
+      test(`${mode} hydration derives cache keys using disableLineMatching=${disableLineMatching}`, async () => {
+        const { oldFile, newFile, partial } = createPartialChange();
+        delete partial.cacheKey;
+        const { virtualizer } =
+          mode === 'advanced'
+            ? createAdvancedVirtualizer()
+            : createVirtualizer();
+        const instance = new TestVirtualizedFileDiff(
+          {
+            disableErrorHandling: true,
+            disableFileHeader: true,
+            parseDiffOptions: { disableLineMatching },
+            loadDiffFiles: () => Promise.resolve({ oldFile, newFile }),
+          },
+          virtualizer
+        );
+        try {
+          instance.updateCodeViewLayout(partial, 0);
+          instance.expandHunk(0, 'down', 1);
+          await instance.getPendingFileLoadPromiseForTest();
+          if (mode === 'advanced') {
+            expect(partial.isPartial).toBe(true);
+            instance.updateCodeViewLayout(partial, 0);
+          }
+          expect(partial.isPartial).toBe(false);
+          expect(instance.getInputDiffForTest()?.cacheKey).toBe(
+            composeCacheKey(
+              disableLineMatching ? 'hydrated-files-raw' : 'hydrated-files',
+              oldFile.cacheKey!,
+              newFile.cacheKey!
+            )
+          );
+        } finally {
+          instance.cleanUp();
+        }
+      });
+    }
+  }
 
   test('commits staged CodeView hydration at the layout-consumption boundary', async () => {
     let instance: TestVirtualizedFileDiff | undefined;

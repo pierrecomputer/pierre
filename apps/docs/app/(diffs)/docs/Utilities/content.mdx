@@ -101,29 +101,51 @@ for deleted files.
 is no file to diff.
 
 If both `oldFile` and `newFile` have a `cacheKey`, the resulting
-`FileDiffMetadata` will automatically receive a combined cache key (format:
-`oldKey:newKey`). See [Render Cache](#worker-pool-render-cache) for more
-information.
+`FileDiffMetadata` will automatically receive a collision-safe cache key derived
+from both values and the line-matching mode. See
+[Render Cache](#worker-pool-render-cache) for more information.
 
-An optional `throwOnError` parameter (default: `false`) controls error handling.
-When `true`, parsing errors throw exceptions; when `false`, errors are logged to
-the console and parsing continues on a best-effort basis.
+The third argument accepts `ParseDiffOptions`: jsdiff settings such as `context`
+and `ignoreWhitespace`, plus `disableLineMatching` (default: `false`). When
+enabled, this escape hatch preserves the generated patch's change blocks and
+line order without similarity matching. It applies at parse time.
+
+Views that compute diffs accept the same `ParseDiffOptions` through
+`parseDiffOptions` (under `options` in React). This configures file-pair parsing
+and edit recomputation; it does not rewrite supplied `fileDiff` metadata.
+
+An optional fourth `throwOnError` parameter (default: `false`) controls error
+handling. When `true`, parsing errors throw exceptions; when `false`, errors are
+logged to the console and parsing continues on a best-effort basis.
 
 <DocsCodeExample {...parseDiffFromFile} />
 
 ### parsePatchFiles [toc-ignore]
 
-Parse unified diff / patch file content into structured data. Handles both
-single patches and multi-commit patch files (like those from GitHub pull request
-`.patch` URLs). An optional second parameter `cacheKeyPrefix` can be provided to
-generate cache keys for each file in the patch (format:
-`prefix-patchIndex-fileIndex`), enabling
-[caching of rendered diff results](#worker-pool-render-cache) in the worker
-pool.
+Parses a patch file string into an array of parsed patches (e.g. from GitHub
+pull request `.patch` URLs). The optional second argument is an options object:
 
-An optional `throwOnError` parameter (default: `false`) controls error handling.
-When `true`, parsing errors throw exceptions; when `false`, errors are logged to
-the console and parsing continues on a best-effort basis.
+- `disableLineMatching` (default: `false`) is an escape hatch that preserves the
+  patch's change blocks and line order without similarity matching.
+- `cacheKeyPrefix` generates cache keys for each file from the prefix, patch
+  index, file index, and matching mode, enabling
+  [caching of rendered diff results](#worker-pool-render-cache) in the worker
+  pool.
+- `throwOnError` (default: `false`) controls error handling. When `true`,
+  parsing errors throw exceptions; when `false`, errors are logged to the
+  console and parsing continues on a best-effort basis.
+
+`processPatch` accepts the same options for a single patch section.
+`processFile` also accepts `disableLineMatching` in its options. If you assign
+its `cacheKey` yourself, use different keys for different matching modes;
+explicit keys are preserved. Parser-generated keys already distinguish modes,
+and omitted/`false` retain their existing keys.
+
+`hydratePartialDiff` accepts `ParseDiffOptions` as its fourth argument. Pass the
+options used to parse the patch; components forward their `parseDiffOptions`.
+Hydration appends `:hydrated` to an existing diff key. Otherwise, changed diffs
+derive a key from both loaded file keys and `disableLineMatching`. Omitted or
+`false` preserves the existing key format.
 
 <DocsCodeExample {...parsePatchFiles} />
 
