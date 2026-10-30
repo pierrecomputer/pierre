@@ -18,8 +18,8 @@ Text (WAT).
   dependencies; the benchmark skips missing rivals.
 - Use pnpm for dependencies and Moon for tasks. Preserve the imported Node.js
   test runner (`node:test`, top-level await) while migrating this package.
-- Host glue remains JavaScript for this import; typecheck validates its public
-  declarations.
+- Host glue, scripts, tests, and benchmarks use TypeScript. The build emits
+  JavaScript and declarations with tsdown.
 
 ## Architecture
 
@@ -70,20 +70,19 @@ quick/full runs, and published chart evidence.
 
 ## Testing conventions
 
-`test/api_test.mjs` are `node:test` suites; add new cases to whichever fits.
+`test/api_test.ts` are `node:test` suites; add new cases to whichever fits.
 balanced tags, and determinism. A failure prints the offending input; reduce it
 by hand before fixing.
 
-- `test/fuzz_test.mjs` renders seeded random input and asserts no trap, valid
+- `test/fuzz_test.ts` renders seeded random input and asserts no trap, valid
   UTF-8,
-- `test/grow_test.mjs` renders each stress document twice, once on a fresh
+- `test/grow_test.ts` renders each stress document twice, once on a fresh
   instance that has to grow the memory and once on one already large enough, and
   requires the bytes to match. It is the detector for the stale-scratch-pointer
   class above; keep a case in it for any path that writes far more than it
   reads.
-- `test/html_test.mjs`, `test/ansi_test.mjs`, `test/frontmatter_test.mjs`, and
-- `test/spec_test.mjs` is the conformance gate. It reads
-  `test/spec/*-spec.json`.
+- `test/html_test.ts`, `test/ansi_test.ts`, `test/frontmatter_test.ts`, and
+- `test/spec_test.ts` is the conformance gate. It reads `test/spec/*-spec.json`.
 - To sweep for stale pointers exhaustively, build a variant whose `$ensureOut`
   and `$ensureRec` do `(memory.grow (i32.const 1))` and `$rebase` on _every_
   call, then diff it against the normal build over the spec fixtures. Every

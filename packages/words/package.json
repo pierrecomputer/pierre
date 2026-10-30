@@ -10,14 +10,14 @@
     "NOTICE.md"
   ],
   "type": "module",
-  "main": "./dist/browser.mjs",
+  "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
-      "workerd": "./dist/workerd.mjs",
-      "import": "./dist/browser.mjs",
-      "default": "./dist/browser.mjs"
+      "workerd": "./dist/workerd.js",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
     },
     "./react": {
       "types": "./dist/react.d.ts",

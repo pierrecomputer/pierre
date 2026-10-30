@@ -7,17 +7,17 @@ tags: ['publishable']
 tasks:
   build:
     script:
-      'node scripts/build.mjs && tsdown && cp react/styles.css dist/styles.css'
+      'node scripts/build.ts && tsdown && cp react/styles.css dist/styles.css'
     deps:
       - '^:build'
     inputs:
       - 'src/**/*'
       - 'lib/**/*'
-      - 'scripts/build.mjs'
+      - 'scripts/build.ts'
       - 'react/**/*'
       - 'html/**/*'
       # The docs demo imports this source; invalidate downstream builds too.
-      - 'benchmark/fixtures.mjs'
+      - 'benchmark/fixtures.ts'
       - 'tsdown.config.ts'
       - 'tsconfig.json'
     outputs:
@@ -34,8 +34,8 @@ tasks:
   # tests until the runtime issue is resolved. See benchmark/STREAMING.md.
   test:
     script:
-      'node test/index.mjs && node test/index.mjs --spec && node --test
-      test/stream_test.mjs test/stress_test.mjs && BUN_JSC_useOMGJIT=false bun
+      'node test/index.ts && node test/index.ts --spec && node --test
+      test/stream_test.ts test/stress_test.ts && BUN_JSC_useOMGJIT=false bun
       test test/react_test.tsx'
     deps:
       - 'build'
@@ -48,13 +48,13 @@ tasks:
       merge: 'replace'
 
   test-spec:
-    command: 'node test/index.mjs --spec'
+    command: 'node test/index.ts --spec'
     deps:
       - 'build'
 
   # Isolated competitor tools and exact Chrome build, outside shipped dependencies.
   bench-setup:
-    command: 'node benchmark/setup.mjs'
+    command: 'node benchmark/setup.ts'
     options:
       cache: false
       runInCI: 'always'
@@ -63,7 +63,7 @@ tasks:
   # Request them in CI-marked shells with moonx --ignore-ci-checks.
   # Quick verifies the full harness; full repeats the timing and heap matrix.
   bench-quick:
-    command: 'node benchmark/run.mjs quick'
+    command: 'node benchmark/run.ts quick'
     deps:
       - 'build'
     options:
@@ -71,7 +71,7 @@ tasks:
       runInCI: 'skip'
 
   bench-full:
-    command: 'node benchmark/run.mjs full'
+    command: 'node benchmark/run.ts full'
     deps:
       - 'build'
     options:
@@ -79,37 +79,37 @@ tasks:
       runInCI: 'skip'
 
   bench-report:
-    command: 'node benchmark/report.mjs'
+    command: 'node benchmark/report.ts'
     options:
       cache: false
       runInCI: 'always'
 
   bench-harness-test:
-    command: 'node --test benchmark/report_test.mjs'
+    command: 'node --test benchmark/report_test.ts'
     options:
       cache: false
       runInCI: 'always'
 
   bench-chart:
-    command: 'node benchmark/chart-data.mjs'
+    command: 'node benchmark/chart-data.ts'
     options:
       cache: false
       runInCI: 'always'
 
   bench-chart-check:
-    command: 'node benchmark/chart-data.mjs --check'
+    command: 'node benchmark/chart-data.ts --check'
     options:
       cache: false
       runInCI: 'always'
 
   bench-chart-test:
-    command: 'node --test benchmark/chart-data_test.mjs'
+    command: 'node --test benchmark/chart-data_test.ts'
     options:
       cache: false
       runInCI: 'always'
 
   bench:
-    command: 'node benchmark/bench.mjs'
+    command: 'node benchmark/bench.ts'
     deps:
       - 'build'
     options:
@@ -118,7 +118,7 @@ tasks:
 
   # Local parser optimization; independent of competitor/browser tooling.
   lab:
-    command: 'node benchmark/lab/run.mjs'
+    command: 'node benchmark/lab/run.ts'
     deps:
       - 'build'
     options:
@@ -126,7 +126,7 @@ tasks:
       runInCI: 'skip'
 
   lab-test:
-    command: 'node --test benchmark/lab/*_test.mjs'
+    command: 'node --test benchmark/lab/*_test.ts'
     deps:
       - 'build'
     options:
@@ -141,7 +141,7 @@ tasks:
       runInCI: 'skip'
 
   bench-fence:
-    command: 'node --expose-gc benchmark/fence.mjs'
+    command: 'node --expose-gc benchmark/fence.ts'
     deps:
       - 'build'
     options:
@@ -150,7 +150,7 @@ tasks:
 
   # Explicit large workloads keep routine replay checks bounded.
   bench-large:
-    command: 'node --expose-gc benchmark/large.mjs'
+    command: 'node --expose-gc benchmark/large.ts'
     deps:
       - 'build'
     options:
@@ -158,7 +158,7 @@ tasks:
       runInCI: 'skip'
 
   bench-html:
-    command: 'node --expose-gc benchmark/html.mjs'
+    command: 'node --expose-gc benchmark/html.ts'
     deps:
       - 'build'
     options:
@@ -166,13 +166,13 @@ tasks:
       runInCI: 'skip'
 
   bench-memory:
-    command: 'node benchmark/memory.mjs'
+    command: 'node benchmark/memory.ts'
     options:
       cache: false
       runInCI: 'always'
 
   bench-footprint:
-    command: 'node benchmark/footprint.mjs'
+    command: 'node benchmark/footprint.ts'
     deps:
       - 'build'
     options:
@@ -181,7 +181,7 @@ tasks:
 
   # Requires the production docs demo to be running at the supplied URL.
   bench-render:
-    command: 'node benchmark/browser.mjs'
+    command: 'node benchmark/browser.ts'
     deps:
       - 'build'
     options:
@@ -190,7 +190,7 @@ tasks:
 
   # Uses the pinned benchmark/harness toolchain; see benchmark/README.md.
   bench-render-compare:
-    command: 'node benchmark/compare-browser.mjs'
+    command: 'node benchmark/compare-browser-runner.ts'
     deps:
       - 'build'
     options:
@@ -198,7 +198,7 @@ tasks:
       runInCI: 'skip'
 
   gen-spec:
-    command: 'node scripts/gen-spec.mjs'
+    command: 'node scripts/gen-spec.ts'
     options:
       cache: false
       runInCI: 'always'
