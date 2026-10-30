@@ -42,6 +42,29 @@ test('promql: selectors, matchers, and regex strings', () => {
     ['"b"', 'string'],
     ['}', 'punctuation.bracket'],
   ]);
+  // a name may start with `:` except where it separates a subquery step
+  expect(
+    tokenKinds(
+      'promql',
+      'max(:node_memory_MemAvailable_bytes:sum{a="b"}[1h:]) by (c)'
+    )
+  ).toEqual([
+    ['max', 'keyword'],
+    ['(', 'punctuation.bracket'],
+    [':node_memory_MemAvailable_bytes:sum', 'variable'],
+    ['{', 'punctuation.bracket'],
+    ['a', 'property'],
+    ['=', 'operator'],
+    ['"b"', 'string'],
+    ['}[', 'punctuation.bracket'],
+    ['1h', 'number'],
+    [':', 'punctuation.delimiter'],
+    ['])', 'punctuation.bracket'],
+    ['by', 'keyword'],
+    ['(', 'punctuation.bracket'],
+    ['c', 'property'],
+    [')', 'punctuation.bracket'],
+  ]);
   expect(tokenKinds('promql', 'x{a="tab\\t\\"q\\""}')).toEqual([
     ['x', 'variable'],
     ['{', 'punctuation.bracket'],
@@ -220,6 +243,7 @@ test('promql: multiline constructs stream like the whole buffer', () => {
     'sum by (\n  job,\n  instance\n) (up)\n',
     'x{\n  a="b",\n  c!="d"\n}\n',
     'x{a="unterminated\nb="c"}\n',
+    'x[1h\n:5m] / :a:b\n',
   ]) {
     assertLineFedParity('promql', code);
   }

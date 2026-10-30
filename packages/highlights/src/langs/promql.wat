@@ -12,10 +12,11 @@
     (group $Token.keyword.operator "and" "or" "unless" "atan2")
     (group $Token.number "inf" "nan"))
 
-  ;; $nest is a stack of open brackets, two bits per level: 1 for `{`, where
-  ;; names are matcher labels, 2 for a label list such as `by (job)`, and 0
-  ;; otherwise. $arm is 1 right after a grouping word and 2 right after `=~`
-  ;; or `!~`, where a string is a regex. Both are checkpointed.
+  ;; $nest is a stack of open brackets, two bits per level: 1 for `{` or a
+  ;; label list such as `by (job)`, where names are labels, 2 for `[`, where
+  ;; `:` separates a subquery step, and 0 otherwise. $arm is 1 right after a
+  ;; grouping word and 2 right after `=~` or `!~`, where a string is a regex.
+  ;; Both are checkpointed.
   (func $hlPromql
     (local $c i32)
     (local $c2 i32)
@@ -86,14 +87,17 @@
             (call $emitTok (enum.get $Token.number) (local.get $lhs) (global.get $ptr))
             (br $next)))
 
-        ;; names; metric names may contain `:`
-        (if (call $lexIsNameStart (local.get $c))
+        ;; names; metric names may contain `:` and start with one outside `[`
+        (if
+          (i32.or
+            (call $lexIsNameStart (local.get $c))
+            (i32.and (i32.eq (local.get $c) (i32.const ":")) (i32.eqz (i32.and (local.get $nest) (i32.const 2)))))
           (then
             (call $scanIdentRun (i32.const ":"))
             (local.set $rhs (global.get $ptr))
             (block $classified
               (local.set $hl (enum.get $Token.property))
-              (br_if $classified (i32.and (local.get $nest) (i32.const 3)))
+              (br_if $classified (i32.and (local.get $nest) (i32.const 1)))
               ;; a keyword can name a metric: `count{job="a"}`, `offset[5m]`
               (local.set $p (call $templateByte (call $lexSkipSpaceAt (local.get $rhs))))
               (local.set $hl (enum.get $Token.variable))
@@ -124,10 +128,10 @@
                   (i32.or
                     (i32.shl (local.get $nest) (i32.const 2))
                     (i32.or
-                      (i32.eq (local.get $c) (i32.const "{"))
-                      (i32.shl
-                        (i32.and (i32.eq (local.get $c) (i32.const "(")) (i32.eq (local.get $was) (i32.const 1)))
-                        (i32.const 1))))))
+                      (i32.or
+                        (i32.eq (local.get $c) (i32.const "{"))
+                        (i32.and (i32.eq (local.get $c) (i32.const "(")) (i32.eq (local.get $was) (i32.const 1))))
+                      (i32.shl (i32.eq (local.get $c) (i32.const "[")) (i32.const 1))))))
               (else (local.set $nest (i32.shr_u (local.get $nest) (i32.const 2)))))
             (call $emitTok (enum.get $Token.punctuation.bracket) (local.get $lhs) (global.get $ptr))
             (br $next)))
