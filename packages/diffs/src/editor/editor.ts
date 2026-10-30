@@ -133,6 +133,7 @@ import type {
   EditorCaret,
   EditorChange,
   EditorChangeEvent,
+  EditorColumns,
   EditorEditCompleteEvent,
   EditorInitialState,
   EditorLineAnnotation,
@@ -237,6 +238,7 @@ interface TrackedCaret<T> {
 interface SyncRenderViewBaseProps {
   highlighter: DiffsHighlighter;
   fileContainer: HTMLElement;
+  columns: EditorColumns | undefined;
   renderRange: RenderRange | undefined;
   /**
    * The DOM content for the rows matches the required editor tokenization
@@ -1507,7 +1509,8 @@ export class Editor<
 
   /** @internal */
   __syncRenderView(props: SyncRenderViewProps<EType, LAnnotation>): void {
-    const { highlighter, fileContainer, renderRange, domCurrent } = props;
+    const { highlighter, fileContainer, columns, renderRange, domCurrent } =
+      props;
     const renderView:
       | SyncFileRenderViewProps<LAnnotation>
       | SyncDiffRenderViewProps<LAnnotation> = props;
@@ -1533,48 +1536,10 @@ export class Editor<
       return;
     }
 
-    let codeElement: HTMLElement | undefined;
-    let gutterEl: HTMLElement | undefined;
-    let contentEl: HTMLElement | undefined;
-    let deletionsGutterEl: HTMLElement | undefined;
-    let deletionsContentEl: HTMLElement | undefined;
-    for (const el of shadowRoot.querySelectorAll<HTMLElement>('[data-code]')) {
-      const isDeletions = el.dataset.deletions != null;
-      if (!isDeletions) {
-        codeElement = el;
-      }
-      for (const child of el.children) {
-        if (!(child instanceof HTMLElement)) {
-          continue;
-        }
-        const { gutter, content } = child.dataset;
-        if (gutter != null) {
-          if (isDeletions) {
-            deletionsGutterEl = child;
-          } else {
-            gutterEl = child;
-          }
-        } else if (content != null) {
-          if (isDeletions) {
-            deletionsContentEl = child;
-          } else {
-            contentEl = child;
-          }
-        }
-      }
-    }
-    if (deletionsContentEl == null) {
-      this.#deletionsColumn = undefined;
-    } else if (deletionsGutterEl == null) {
-      throw new Error(
-        'Editor.__syncRenderView: the deletions column has no gutter'
-      );
-    } else {
-      this.#deletionsColumn = {
-        content: deletionsContentEl,
-        gutter: deletionsGutterEl,
-      };
-    }
+    const codeElement = columns?.code;
+    const contentEl = columns?.content;
+    const gutterEl = columns?.gutter;
+    this.#deletionsColumn = columns?.deletions;
     if (codeElement === undefined || contentEl === undefined) {
       this.#replacementFocusRequest = undefined;
       return;

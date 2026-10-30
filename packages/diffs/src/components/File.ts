@@ -23,6 +23,7 @@ import type {
   EditCompletionDecision,
   EditorActiveLineOptions,
   EditorChangeEvent,
+  EditorColumns,
   FileEditCompleteEvent,
 } from '../editor/types';
 import type { RowKey } from '../layout/RowSpec';
@@ -728,7 +729,12 @@ export class File<LAnnotation = undefined, Caret = undefined> {
     if (this.fileContainer == null || this.editSession == null) {
       return { rebuiltLines: [] };
     }
-    this.interactionManager.setSelectionDirty();
+    // A patched row keeps its selection marks. After a line-count change the
+    // rows that moved still carry theirs but show other lines, so the marks
+    // are drawn again from the selection state.
+    if (lineDelta !== 0) {
+      this.interactionManager.setSelectionDirty();
+    }
     return { rebuiltLines: this.takeRebuiltLines() };
   }
 
@@ -1016,6 +1022,7 @@ export class File<LAnnotation = undefined, Caret = undefined> {
       editor.__syncRenderView({
         highlighter,
         fileContainer,
+        columns: this.editorColumns(),
         file,
         lineAnnotations,
         renderRange,
@@ -1846,6 +1853,21 @@ export class File<LAnnotation = undefined, Caret = undefined> {
       throw new Error('File.createColumns: the columns did not parse');
     }
     return columns;
+  }
+
+  // The one code column the editor types in, from the elements already held.
+  private editorColumns(): EditorColumns | undefined {
+    const code = this.codeColumns.get('code');
+    const pair = code == null ? undefined : this.getColumnPair(code);
+    if (code == null || pair == null) {
+      return undefined;
+    }
+    return {
+      code,
+      gutter: pair.gutter,
+      content: pair.content,
+      deletions: undefined,
+    };
   }
 
   private getColumnPair(code: HTMLElement): ColumnElements | undefined {
