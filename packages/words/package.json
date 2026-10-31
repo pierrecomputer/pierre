@@ -48,6 +48,7 @@
     "md4x": "catalog:",
     "react": "catalog:",
     "react-dom": "catalog:",
+    "streamdown": "catalog:",
     "tsdown": "catalog:",
     "typescript": "catalog:",
     "wabt": "catalog:"

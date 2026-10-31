@@ -12,7 +12,7 @@
     "tsdown.config.ts",
     "package.json"
   ],
-  "exclude": ["node_modules", "dist", "benchmark/output", "benchmark/harness"],
+  "exclude": ["node_modules", "dist", "benchmark/output"],
   "compilerOptions": {
     "allowJs": false,
     "checkJs": false,
