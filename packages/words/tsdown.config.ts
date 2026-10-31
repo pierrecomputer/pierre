@@ -14,7 +14,7 @@ export default defineConfig([
       react: 'react/react.tsx',
       highlights: 'react/highlights.ts',
       html: 'html/index.ts',
-      'benchmark/fixtures': 'benchmark/fixtures.ts',
+      'benchmark/fixtures/index': 'benchmark/fixtures/index.ts',
     },
     clean: false,
     platform: 'neutral',

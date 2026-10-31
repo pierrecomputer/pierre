@@ -1,129 +1,130 @@
-import pierreLight from '@pierre/highlights/themes/pierre-light';
-import { createHtmlSession, renderToHtml } from '@pierre/words';
-import { createHighlightsPlugin } from '@pierre/words/highlights';
-import { writeFileSync } from 'node:fs';
-import { performance } from 'node:perf_hooks';
+import type { JSDOM } from 'jsdom';
+import assert from 'node:assert/strict';
+import type { ComponentType } from 'react';
+import type { Root } from 'react-dom/client';
 
-const results: Array<{
-  name: string;
-  sourceCharacters: number;
-  updates: number;
-  fullMilliseconds: number;
-  incrementalMilliseconds: number;
-  ratio: number;
-}> = [];
+import type { streamers } from './shared.ts';
 
-/** Replay the same fixed append stream; report medians after one warmup. */
-function compare(
-  name: string,
-  source: string,
-  full: (input: string) => unknown,
-  incremental: () => { render(input: string): unknown; dispose?(): void }
-): void {
-  const inputs: string[] = [];
-  for (let end = 64; end < source.length; end += 64)
-    inputs.push(source.slice(0, end));
-  inputs.push(source);
-  const measure = (run: (input: string) => unknown): number => {
-    const start = performance.now();
-    for (const input of inputs) run(input);
-    return performance.now() - start;
-  };
-  const baseline: number[] = [];
-  const live: number[] = [];
-  for (let sample = 0; sample < 6; sample++) {
-    const session = incremental();
-    // Alternate ordering to reduce warmup and GC ordering bias.
-    const a = sample % 2 === 0 ? measure(full) : measure(session.render);
-    const b = sample % 2 === 0 ? measure(session.render) : measure(full);
-    if (sample > 0) {
-      baseline.push(sample % 2 === 0 ? a : b);
-      live.push(sample % 2 === 0 ? b : a);
-    }
-    session.dispose?.();
+let dom: JSDOM | undefined;
+
+export async function loadStream(engine: (typeof streamers)[number]) {
+  if (dom == null) {
+    const { JSDOM, VirtualConsole } = await import('jsdom');
+    const virtualConsole = new VirtualConsole();
+    virtualConsole.on('jsdomError', (error: Error) => {
+      throw error;
+    });
+    dom = new JSDOM('<!doctype html><html><body></body></html>', {
+      url: 'https://benchmark.example/',
+      pretendToBeVisual: true,
+      virtualConsole,
+    });
+    // JSDOM has no layout. Streamdown's scroll effects still need stored offsets.
+    dom.window.HTMLElement.prototype.scrollTo = function (
+      options?: ScrollToOptions | number,
+      top?: number
+    ) {
+      this.scrollLeft =
+        typeof options === 'number'
+          ? options
+          : (options?.left ?? this.scrollLeft);
+      this.scrollTop =
+        typeof options === 'number'
+          ? (top ?? this.scrollTop)
+          : (options?.top ?? this.scrollTop);
+    };
+    Object.assign(globalThis, {
+      window: dom.window,
+      document: dom.window.document,
+      HTMLElement: dom.window.HTMLElement,
+      Element: dom.window.Element,
+      Node: dom.window.Node,
+      MutationObserver: dom.window.MutationObserver,
+      requestAnimationFrame: dom.window.requestAnimationFrame.bind(dom.window),
+      cancelAnimationFrame: dom.window.cancelAnimationFrame.bind(dom.window),
+      getComputedStyle: dom.window.getComputedStyle.bind(dom.window),
+    });
   }
-  baseline.sort((a, b) => a - b);
-  live.sort((a, b) => a - b);
-  results.push({
-    name,
-    sourceCharacters: source.length,
-    updates: inputs.length,
-    fullMilliseconds: baseline[2],
-    incrementalMilliseconds: live[2],
-    ratio: baseline[2] / live[2],
-  });
-  console.log(
-    `${name}: ${source.length} UTF-16 units, ${inputs.length} appends; full ${baseline[2].toFixed(1)}ms, incremental ${live[2].toFixed(1)}ms, ${(baseline[2] / live[2]).toFixed(2)}×`
-  );
+  // Import after DOM setup: Words chooses its layout effect at module load.
+  const { createElement } = await import('react');
+  const { flushSync } = await import('react-dom');
+  const { createRoot } = await import('react-dom/client');
+  const Component = (
+    engine === 'words-react'
+      ? (await import('@pierre/words/react')).Markdown
+      : (await import('streamdown')).Streamdown
+  ) as ComponentType<{
+    children?: string;
+    mode: 'streaming';
+    isAnimating: boolean;
+    controls: false;
+    lineNumbers: false;
+  }>;
+  let root: Root | undefined;
+  let container: HTMLDivElement | undefined;
+  let renderError: unknown;
+  return {
+    run(source: string, chunkSize: number): HTMLElement {
+      assert.equal(
+        root,
+        undefined,
+        'Clean up the previous stream before replay'
+      );
+      container = document.createElement('div');
+      document.body.append(container);
+      root = createRoot(container, {
+        onUncaughtError(error) {
+          renderError = error;
+        },
+      });
+      for (const end of [...chunkEnds(source, chunkSize), -1]) {
+        const final = end === -1;
+        flushSync(() =>
+          root!.render(
+            createElement(
+              Component,
+              {
+                mode: 'streaming',
+                isAnimating: !final,
+                controls: false,
+                lineNumbers: false,
+              },
+              source.slice(0, final ? source.length : end)
+            )
+          )
+        );
+        if (renderError !== undefined) throw renderError;
+      }
+      return container;
+    },
+    cleanup() {
+      if (root != null) flushSync(() => root!.unmount());
+      root = undefined;
+      container?.remove();
+      container = undefined;
+      renderError = undefined;
+    },
+  };
 }
 
-const prose = Array.from(
-  { length: 160 },
-  (_, i) =>
-    `## Section ${i}\n\nA paragraph with **bold**, *emphasis*, and [a link](/docs/${i}).\n\n- One\n- Two\n\n`
-).join('');
-const decoder = new TextDecoder();
-const htmlOptions = { frontmatter: false, incomplete: true, skipHtml: true };
-/** Decode direct Wasm output with the same repair and raw-HTML flags as sessions. */
-const fullHtml = (input: string): string =>
-  decoder.decode(renderToHtml(input, htmlOptions));
-const incrementalHtml = (): { render(input: string): string } => {
-  const session = createHtmlSession();
-  return {
-    render: (input) => session.render(input, { incomplete: true }).html,
-  };
-};
-compare('Markdown HTML blocks', prose, fullHtml, incrementalHtml);
-compare(
-  'Markdown long open paragraph',
-  'A paragraph with **bold** words. '.repeat(500),
-  fullHtml,
-  incrementalHtml
-);
-compare(
-  'Markdown reference fallback',
-  `${prose}\n[id]: /target\n\n${prose}`,
-  fullHtml,
-  incrementalHtml
-);
-const plugin = createHighlightsPlugin({ theme: pierreLight });
-const code = Array.from(
-  { length: 500 },
-  (_, i) => `const value${i} = { name: "item ${i}", count: ${i} };\n`
-).join('');
-compare(
-  'TypeScript highlighting',
-  code,
-  (input) =>
-    plugin.highlight({ code: input, language: 'ts', isIncomplete: true }),
-  () => {
-    const session = plugin.createSession!();
-    return {
-      render: (input) =>
-        session.highlight({ code: input, language: 'ts', isIncomplete: true }),
-      dispose: session.dispose,
-    };
-  }
-);
-console.log(
-  'Parser/tokenization only; excludes React, DOM, network, and Streamdown. 64-character chunks, one warmup plus five measured replays.'
-);
-
-const jsonArgument = process.argv.find((argument) =>
-  argument.startsWith('--json=')
-);
-if (jsonArgument)
-  writeFileSync(
-    jsonArgument.slice('--json='.length),
-    JSON.stringify(
-      {
-        date: new Date().toISOString(),
-        runtime: process.version,
-        chunkCharacters: 64,
-        samples: 5,
-        results,
-      },
-      null,
-      2
-    ) + '\n'
+export function chunkEnds(source: string, chunkSize: number): number[] {
+  assert.ok(
+    Number.isSafeInteger(chunkSize) && chunkSize > 0,
+    '--chunk-size must be a positive integer'
   );
+  const ends: number[] = [];
+  for (let end = 0; end < source.length; ) {
+    end = Math.min(end + chunkSize, source.length);
+    const previous = source.charCodeAt(end - 1);
+    const next = source.charCodeAt(end);
+    if (
+      previous >= 0xd800 &&
+      previous <= 0xdbff &&
+      next >= 0xdc00 &&
+      next <= 0xdfff
+    )
+      end++;
+    ends.push(end);
+  }
+  return ends;
+}

@@ -27,12 +27,11 @@ Read [ARCHITECTURE.md](./ARCHITECTURE.md) before changing `src/`.
 
 ## Commands
 
-Build-dependent benchmarks are opt-in so CI does not run timing suites or
-download browsers automatically. In CI-marked shells, use
-`moonx words:bench-quick --ignore-ci-checks` (or the corresponding benchmark
-target). Run `words:bench-setup` once before browser comparisons. See
-[`benchmark/README.md`](./benchmark/README.md) for the pinned comparison tools,
-quick/full runs, and published chart evidence.
+Build-dependent benchmarks are opt-in so CI does not run timing suites. In
+CI-marked shells, use `moonx words:bench --ignore-ci-checks -- --quick`. Use
+`words:bench-stream` for React streams and `words:bench-memory` for memory
+comparisons. See [`benchmark/README.md`](./benchmark/README.md) for the commands
+and measurement methods.
 
 | Command                 | Purpose                                                                |
 | ----------------------- | ---------------------------------------------------------------------- |

@@ -5,7 +5,7 @@ import {
   createStressFixture,
   STRESS_BASE_CHARACTERS,
   STRESS_SCALES,
-} from '../benchmark/fixtures.ts';
+} from '../benchmark/fixtures/index.ts';
 import { createHtmlSession, renderToHtml } from '../dist/index.js';
 
 const decoder = new TextDecoder();

@@ -17,7 +17,7 @@ tasks:
       - 'react/**/*'
       - 'html/**/*'
       # The docs demo imports this source; invalidate downstream builds too.
-      - 'benchmark/fixtures.ts'
+      - 'benchmark/fixtures/index.ts'
       - 'tsdown.config.ts'
       - 'tsconfig.json'
     outputs:
@@ -31,7 +31,7 @@ tasks:
 
   # Node covers exhaustive core replay. Bun's optimizing Wasm tier produces
   # intermittent baseline-parser mismatches too; disable that tier for React
-  # tests until the runtime issue is resolved. See benchmark/STREAMING.md.
+  # tests until the runtime issue is resolved.
   test:
     script:
       'node test/index.ts && node test/index.ts --spec && node --test
@@ -39,11 +39,6 @@ tasks:
       test test/react_test.tsx'
     deps:
       - 'build'
-      # Validate published evidence and report assembly without timing workloads.
-      - 'bench-chart-check'
-      - 'bench-chart-test'
-      - 'bench-harness-test'
-      - 'lab-test'
     options:
       merge: 'replace'
 
@@ -52,62 +47,7 @@ tasks:
     deps:
       - 'build'
 
-  # Isolated competitor tools and exact Chrome build, outside shipped dependencies.
-  bench-setup:
-    command: 'node benchmark/setup.ts'
-    options:
-      cache: false
-      runInCI: 'always'
-
-  # Optional build-connected benchmarks stay out of the affected CI graph.
-  # Request them in CI-marked shells with moonx --ignore-ci-checks.
-  # Quick verifies the full harness; full repeats the timing and heap matrix.
-  bench-quick:
-    command: 'node benchmark/run.ts quick'
-    deps:
-      - 'build'
-    options:
-      cache: false
-      runInCI: 'skip'
-
-  bench-full:
-    command: 'node benchmark/run.ts full'
-    deps:
-      - 'build'
-    options:
-      cache: false
-      runInCI: 'skip'
-
-  bench-report:
-    command: 'node benchmark/report.ts'
-    options:
-      cache: false
-      runInCI: 'always'
-
-  bench-harness-test:
-    command: 'node --test benchmark/report_test.ts'
-    options:
-      cache: false
-      runInCI: 'always'
-
-  bench-chart:
-    command: 'node benchmark/chart-data.ts'
-    options:
-      cache: false
-      runInCI: 'always'
-
-  bench-chart-check:
-    command: 'node benchmark/chart-data.ts --check'
-    options:
-      cache: false
-      runInCI: 'always'
-
-  bench-chart-test:
-    command: 'node --test benchmark/chart-data_test.ts'
-    options:
-      cache: false
-      runInCI: 'always'
-
+  # Build-connected timing tasks must stay out of the affected CI graph.
   bench:
     command: 'node benchmark/bench.ts'
     deps:
@@ -116,49 +56,8 @@ tasks:
       cache: false
       runInCI: 'skip'
 
-  # Local parser optimization; independent of competitor/browser tooling.
-  lab:
-    command: 'node benchmark/lab/run.ts'
-    deps:
-      - 'build'
-    options:
-      cache: false
-      runInCI: 'skip'
-
-  lab-test:
-    command: 'node --test benchmark/lab/*_test.ts'
-    deps:
-      - 'build'
-    options:
-      cache: false
-
   bench-stream:
-    command: 'node benchmark/stream.ts'
-    deps:
-      - 'build'
-    options:
-      cache: false
-      runInCI: 'skip'
-
-  bench-fence:
-    command: 'node --expose-gc benchmark/fence.ts'
-    deps:
-      - 'build'
-    options:
-      cache: false
-      runInCI: 'skip'
-
-  # Explicit large workloads keep routine replay checks bounded.
-  bench-large:
-    command: 'node --expose-gc benchmark/large.ts'
-    deps:
-      - 'build'
-    options:
-      cache: false
-      runInCI: 'skip'
-
-  bench-html:
-    command: 'node --expose-gc benchmark/html.ts'
+    command: 'node benchmark/bench.ts --stream'
     deps:
       - 'build'
     options:
@@ -166,31 +65,7 @@ tasks:
       runInCI: 'skip'
 
   bench-memory:
-    command: 'node benchmark/memory.ts'
-    options:
-      cache: false
-      runInCI: 'always'
-
-  bench-footprint:
-    command: 'node benchmark/footprint.ts'
-    deps:
-      - 'build'
-    options:
-      cache: false
-      runInCI: 'skip'
-
-  # Requires the production docs demo to be running at the supplied URL.
-  bench-render:
-    command: 'node benchmark/browser.ts'
-    deps:
-      - 'build'
-    options:
-      cache: false
-      runInCI: 'skip'
-
-  # Uses the pinned benchmark/harness toolchain; see benchmark/README.md.
-  bench-render-compare:
-    command: 'node benchmark/compare-browser-runner.ts'
+    command: 'node benchmark/bench-memory.ts'
     deps:
       - 'build'
     options:
