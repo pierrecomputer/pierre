@@ -22,7 +22,7 @@ for a quick memory check. Add `--fixture tiny.md` to select one input, or
 `--json /tmp/words.json` to save raw samples and environment data. Use a
 separate JSON file for each mode. Memory also accepts `--mode html` or
 `--mode stream`. Both stream comparisons accept `--chunk-size 256`.
- 
+
 ## HTML generation
 
 Throughput is input MiB per second. Higher is better.
@@ -35,8 +35,8 @@ Throughput is input MiB per second. Higher is better.
 | `simd.md` (39.0 KiB)             |         316.5 |         179.7 |       125.4 |        20.8 |
 | `gfm-spec.md` (211.3 KiB)        |         301.6 |         163.1 |       118.3 |        28.8 |
 
-> These results are from **2026-10-31**. The run used Node 24.11.0 on an
-> Apple M4 Pro with 48GB RAM. 
+> These results are from **2026-10-31**. The run used Node 24.11.0 on an Apple
+> M4 Pro with 48GB RAM.
 
 ## Streaming
 
