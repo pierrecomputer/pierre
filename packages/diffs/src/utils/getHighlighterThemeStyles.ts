@@ -67,7 +67,7 @@ function getPairedEditorSearchVariables() {
   return [
     '--diffs-editor-selection-bg:light-dark(var(--diffs-light-editor-selection-bg, var(--diffs-line-bg)), var(--diffs-dark-editor-selection-bg, var(--diffs-line-bg)));',
     '--diffs-editor-match-bg:light-dark(var(--diffs-light-editor-match-bg, var(--diffs-light-editor-selection-bg, var(--diffs-editor-selection-bg))), var(--diffs-dark-editor-match-bg, var(--diffs-dark-editor-selection-bg, var(--diffs-editor-selection-bg))));',
-    '--diffs-editor-match-highlight-bg:light-dark(var(--diffs-light-editor-match-highlight-bg, #ff963288), var(--diffs-dark-editor-match-highlight-bg, #ff963266));',
+    '--diffs-editor-match-highlight-bg:light-dark(var(--diffs-light-editor-match-highlight-bg, var(--diffs-light-editor-search-yellow, #eab308)), var(--diffs-dark-editor-match-highlight-bg, var(--diffs-dark-editor-search-yellow, #eab308)));',
   ].join('');
 }
 
@@ -81,6 +81,10 @@ function getEditorSearchVariables(
   const selectionBackground = colors['editor.selectionBackground'];
   if (selectionBackground != null) {
     styles += `${formatCSSVariablePrefix('global')}${modePrefix}editor-selection-bg:${selectionBackground};`;
+  }
+  const searchYellow = colors['terminal.ansiYellow'];
+  if (searchYellow != null) {
+    styles += `${formatCSSVariablePrefix('global')}${modePrefix}editor-search-yellow:${searchYellow};`;
   }
   const findMatchBackground = colors['editor.findMatchBackground'];
   if (findMatchBackground != null) {

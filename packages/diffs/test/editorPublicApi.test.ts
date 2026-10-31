@@ -1479,6 +1479,47 @@ describe('Editor state round trip', () => {
 });
 
 describe('Editor.replaceSearchMatches', () => {
+  test('remaps existing selections through replacements and restores them on undo', async () => {
+    const fixture = await createEditorFixture('foo keep foo');
+    try {
+      fixture.editor.setSelections(
+        [
+          {
+            start: { line: 0, character: 4 },
+            end: { line: 0, character: 8 },
+            direction: 'backward',
+          },
+        ],
+        { skipScrollAndFocus: true }
+      );
+      const before = fixture.editor.getViewState().selections;
+      const params: SearchParams = {
+        text: 'foo',
+        replaceText: 'longer',
+        regex: false,
+        wholeWord: false,
+        caseSensitive: true,
+      };
+      const matches = fixture.editor.getEditState()!.document.search(params);
+      fixture.editor.replaceSearchMatches(matches, params);
+      expect(fixture.editor.getText()).toBe('longer keep longer');
+      const after = fixture.editor.getViewState().selections;
+      expect(after).toEqual([
+        {
+          start: { line: 0, character: 7 },
+          end: { line: 0, character: 11 },
+          direction: -1,
+        },
+      ]);
+      fixture.editor.undo();
+      expect(fixture.editor.getViewState().selections).toEqual(before);
+      fixture.editor.redo();
+      expect(fixture.editor.getViewState().selections).toEqual(after);
+    } finally {
+      fixture.cleanup();
+    }
+  });
+
   test.each(['file', 'file-diff'] as const)(
     'replaces regex matches in a %s as one undoable edit without taking focus',
     async (type) => {

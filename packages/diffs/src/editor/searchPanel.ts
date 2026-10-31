@@ -17,6 +17,11 @@ export type SearchPanelMode = 'find' | 'replace';
 
 export type { MatchRange, SearchParams } from '../search';
 
+export interface SearchResult<TMatch> {
+  matches: TMatch[];
+  preferredMatch?: TMatch;
+}
+
 export interface SearchPanelReplaceHandlers<TMatch> {
   replaceMatch: (
     match: TMatch,
@@ -30,13 +35,15 @@ export interface SearchPanelOptions<TMatch = MatchRange> {
   defaultQuery: string;
   mode?: SearchPanelMode;
   initialMatch?: TMatch;
-  search: (searchParams: SearchParams) => TMatch[];
+  search: (searchParams: SearchParams) => SearchResult<TMatch>;
   isSameMatch?: (a: TMatch, b: TMatch) => boolean;
   scrollToMatch: (nextMatch: TMatch, retainFocus: boolean) => void;
   replace?: SearchPanelReplaceHandlers<TMatch>;
+  /** Query text or matching options changed; excludes replacement text and refreshes. */
+  onQueryChange?: () => void;
   onUpdate: (
-    matches: TMatch[],
-    options?: { syncSelection?: boolean }
+    result: SearchResult<TMatch>,
+    options?: { skipNavigation?: boolean }
   ) => TMatch | undefined;
   onClose: () => void;
 }
@@ -45,7 +52,7 @@ export class SearchPanelWidget<TMatch = MatchRange> {
   #host: HTMLDivElement;
   #inputElement: HTMLInputElement;
   #initializeMatches: () => void;
-  #updateMatches?: (options?: { syncSelection?: boolean }) => void;
+  #updateMatches?: (options?: { skipNavigation?: boolean }) => void;
   #applyMode?: (mode: SearchPanelMode) => void;
   #setReplaceHandlers?: (
     handlers: SearchPanelReplaceHandlers<TMatch> | undefined
@@ -63,6 +70,7 @@ export class SearchPanelWidget<TMatch = MatchRange> {
       isSameMatch = Object.is,
       scrollToMatch,
       replace,
+      onQueryChange,
       onUpdate,
       onClose,
     } = options;
@@ -107,10 +115,13 @@ export class SearchPanelWidget<TMatch = MatchRange> {
     };
 
     let matchesUpdated = false;
-    const updateMatches = (options?: { syncSelection?: boolean }) => {
+    const updateMatches = (options?: { skipNavigation?: boolean }) => {
       matchesUpdated = true;
-      matches.all =
-        searchParams.text !== '' ? search(getSearchParamsSnapshot()) : [];
+      const result =
+        searchParams.text !== ''
+          ? search(getSearchParamsSnapshot())
+          : { matches: [] };
+      matches.all = result.matches;
       const noMatches = matches.all.length === 0;
       prevButton.disabled = noMatches;
       nextButton.disabled = noMatches;
@@ -122,25 +133,24 @@ export class SearchPanelWidget<TMatch = MatchRange> {
         matchResultElement.textContent = 'No results';
         matchResultElement.dataset.noMatches = '';
         matches.current = undefined;
-        onUpdate([]);
+        onUpdate(result);
         return;
       }
 
       delete matchResultElement.dataset.noMatches;
-      if (options?.syncSelection === false) {
-        const currentMatch = onUpdate(matches.all, { syncSelection: false });
-        updateCurrentMatch(currentMatch);
-        return;
-      }
-
-      updateCurrentMatch(onUpdate(matches.all));
+      updateCurrentMatch(onUpdate(result, options));
     };
     this.#updateMatches = updateMatches;
 
-    const updateSearchParam = <K extends keyof SearchParams>(
+    const updateSearchParam = <
+      K extends Exclude<keyof SearchParams, 'replaceText'>,
+    >(
       key: K,
       value: SearchParams[K]
     ) => {
+      if (searchParams[key] !== value) {
+        onQueryChange?.();
+      }
       searchParams[key] = value;
       updateMatches();
     };
@@ -285,9 +295,8 @@ export class SearchPanelWidget<TMatch = MatchRange> {
       dataset: 'search',
       value: defaultQuery,
       oninput: (e: Event) => {
-        searchParams.text = (e.target as HTMLInputElement).value;
         matches.current = undefined;
-        updateMatches();
+        updateSearchParam('text', (e.target as HTMLInputElement).value);
       },
       onkeydown: (e: KeyboardEvent) => {
         if (e.isComposing || e.keyCode === 229) {
@@ -430,11 +439,17 @@ export class SearchPanelWidget<TMatch = MatchRange> {
       },
     });
     replaceToggleElement.hidden = replaceHandlers == null;
-    replaceToggleElement.ariaExpanded = String(normalizeMode(mode) === 'replace');
+    replaceToggleElement.ariaExpanded = String(
+      normalizeMode(mode) === 'replace'
+    );
 
     let replaceCells =
       replaceHandlers != null ? createReplaceCells() : undefined;
-    const gridChildren: Node[] = [replaceToggleElement, findInputBox, ...(replaceCells ?? [])];
+    const gridChildren: Node[] = [
+      replaceToggleElement,
+      findInputBox,
+      ...(replaceCells ?? []),
+    ];
 
     gridChildren.push(matchResultElement, navElement, closeElement);
 
@@ -458,7 +473,9 @@ export class SearchPanelWidget<TMatch = MatchRange> {
       }
       gridElement.dataset.mode = normalizeMode(requestedMode);
       replaceToggleElement.hidden = replaceHandlers == null;
-      replaceToggleElement.ariaExpanded = String(gridElement.dataset.mode === 'replace');
+      replaceToggleElement.ariaExpanded = String(
+        gridElement.dataset.mode === 'replace'
+      );
     };
 
     // Toggles the panel between find and find/replace modes by showing or
@@ -467,7 +484,9 @@ export class SearchPanelWidget<TMatch = MatchRange> {
       requestedMode = next;
       gridElement.dataset.mode = normalizeMode(requestedMode);
       replaceToggleElement.hidden = replaceHandlers == null;
-      replaceToggleElement.ariaExpanded = String(gridElement.dataset.mode === 'replace');
+      replaceToggleElement.ariaExpanded = String(
+        gridElement.dataset.mode === 'replace'
+      );
       this.#inputElement.focus();
       this.#inputElement.select();
     };
@@ -514,7 +533,7 @@ export class SearchPanelWidget<TMatch = MatchRange> {
       if (initialMatch !== undefined) {
         updateMatches();
       } else {
-        onUpdate([]);
+        onUpdate({ matches: [] });
       }
     };
     queueRender(this.#initializeMatches);
@@ -532,7 +551,7 @@ export class SearchPanelWidget<TMatch = MatchRange> {
     this.#navigate?.(findPrevious);
   }
 
-  updateMatches(options?: { syncSelection?: boolean }): void {
+  updateMatches(options?: { skipNavigation?: boolean }): void {
     this.#updateMatches?.(options);
   }
 

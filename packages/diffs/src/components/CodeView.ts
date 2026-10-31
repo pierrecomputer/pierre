@@ -16,6 +16,7 @@ import { isPrimaryModifier } from '../editor/platform';
 import {
   type SearchPanelReplaceHandlers,
   SearchPanelWidget,
+  type SearchResult,
 } from '../editor/searchPanel';
 import type {
   EditCompletionDecision,
@@ -28,6 +29,7 @@ import {
   preloadHighlighter,
 } from '../highlighter/shared_highlighter';
 import type { SelectionWriteOptions } from '../managers/InteractionManager';
+import { SearchHighlighter } from '../managers/SearchHighlighter';
 import {
   dequeueRender,
   queueRender,
@@ -50,11 +52,9 @@ import type {
   CodeViewRangeScrollTarget,
   CodeViewScrollBehavior,
   CodeViewScrollTarget,
-  DiffSearchLineDecoration,
   DiffsThemeNames,
   HunkSeparators,
   PendingCodeViewLayoutReset,
-  SearchLineDecoration,
   SelectedLineRange,
   SelectionSide,
   SmoothScrollSettings,
@@ -93,7 +93,7 @@ export type CodeViewCreateEditorOptions<
 > = Required<
   Pick<
     EditorOptions<EType, LAnnotation, Caret>,
-    'onChange' | 'onFocus' | 'onBlur'
+    'onChange' | 'onFocus' | 'onBlur' | 'onRender'
   >
 >;
 
@@ -172,12 +172,18 @@ interface CodeViewSearchMatch extends CodeViewSearchLineMetadata {
   endCharacter: number;
 }
 
+type CodeViewItemSearchMatches = Map<string, CodeViewSearchMatch[]>;
+
 interface CodeViewSearchState {
   scope: { itemId: string } | undefined;
   params: SearchParams | undefined;
   matches: CodeViewSearchMatch[];
-  matchesByItem: Map<string, CodeViewSearchMatch[]>;
+  matchesByItem: Map<string, CodeViewItemSearchMatches>;
   current: CodeViewSearchMatch | undefined;
+  // Once a result requires scrolling, center subsequent navigation until the
+  // query or scope changes. Background match refreshes preserve this choice.
+  centerNavigation: boolean;
+  pendingHorizontalReveal: boolean;
 }
 
 interface AdvancedVirtualizedBaseItem {
@@ -194,8 +200,6 @@ interface AdvancedVirtualizedBaseItem {
   version: number | undefined;
   /** Last CodeView option revision this item rendered with. */
   renderedOptionsRevision: number;
-  /** Last CodeView search-highlight revision this item rendered with. */
-  renderedSearchRevision: number;
 }
 
 // CodeView uses virtualized instances as identity keys for layout bookkeeping;
@@ -637,7 +641,8 @@ export interface CodeViewOptions<LAnnotation, Caret>
    * editor constructor — `new Editor(editorType, options, editStateKey)` —
    * so CodeView can track editor focus, route changes to `onItemEditChange`,
    * and retain history when requested. Forward all supplied callbacks, including
-   * `onFocus` and `onBlur`; forwarding only `onChange` disables search scoping.
+   * `onFocus`, `onBlur`, and `onRender`, to keep search scope and highlights
+   * synchronized with the editor.
    * CodeView owns the returned editor's lifecycle: it
    * associates with the edited item, suspends and resumes rendering across
    * virtualization unmounts and collapse, and tears the editor down when the
@@ -906,9 +911,11 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
     matches: [],
     matchesByItem: new Map(),
     current: undefined,
+    centerNavigation: false,
+    pendingHorizontalReveal: false,
   };
   private searchMatchesDirty = false;
-  private searchRenderRevision = 0;
+  private searchHighlighter: SearchHighlighter | undefined;
 
   private container: HTMLDivElement | undefined = document.createElement('div');
   private stickyContainer = document.createElement('div');
@@ -1462,6 +1469,7 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
       return;
     }
     this.searchState.scope = scope;
+    this.searchState.centerNavigation = false;
     this.markSearchMatchesDirty();
   }
 
@@ -1513,34 +1521,37 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
       return;
     }
 
+    this.searchHighlighter ??= SearchHighlighter.create(
+      container.ownerDocument
+    );
     this.searchPanel = new SearchPanelWidget<CodeViewSearchMatch>({
       containerElement: container,
       defaultQuery: '',
       mode: 'replace',
       replace: this.getSearchReplaceHandlers(),
+      onQueryChange: () => {
+        this.searchState.centerNavigation = false;
+      },
       search: (searchParams) => {
-        const matches = this.searchCodeView(searchParams);
+        const result = this.searchCodeView(searchParams);
         this.searchState.params = searchParams;
-        return matches;
+        return result;
       },
       isSameMatch: areCodeViewSearchMatchesEqual,
       scrollToMatch: (match) => {
         this.scrollToSearchMatch(match);
       },
-      onUpdate: (matches, options) => {
+      onUpdate: ({ matches, preferredMatch }, options) => {
         const current = this.searchState.current;
-        if (current !== undefined) {
-          const nextCurrent = matches.find((match) =>
-            areCodeViewSearchMatchesEqual(match, current)
-          );
-          if (nextCurrent !== undefined) {
-            this.setSearchResults(matches, nextCurrent);
-            return nextCurrent;
-          }
-        }
-        if (matches.length === 0 || options?.syncSelection === false) {
-          this.setSearchResults(matches, undefined);
-          return undefined;
+        if (matches.length === 0 || options?.skipNavigation === true) {
+          const nextCurrent =
+            current == null
+              ? undefined
+              : matches.find((match) =>
+                  areCodeViewSearchMatchesEqual(match, current)
+                );
+          this.setSearchResults(matches, nextCurrent);
+          return nextCurrent;
         }
 
         // Replacement returns a collapsed match at the insertion end. Advance
@@ -1559,7 +1570,7 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
                   (match.lineIndex === replacementEnd.lineIndex &&
                     match.startCharacter >= replacementEnd.endCharacter)
               )
-            : matches[0];
+            : preferredMatch;
         this.setSearchResults(matches, nextCurrent);
         if (nextCurrent != null) {
           this.scrollToSearchMatch(nextCurrent);
@@ -1591,33 +1602,57 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
   }
 
   private resetSearchState(): void {
-    const hadSearchDecorations =
-      this.searchState.matches.length > 0 ||
-      this.searchState.current !== undefined;
+    dequeueRender(this.paintSearchHighlights);
+    this.searchHighlighter?.clear();
     this.searchState.scope = undefined;
     this.searchState.params = undefined;
     this.searchState.matches = [];
     this.searchState.matchesByItem = new Map();
     this.searchState.current = undefined;
+    this.searchState.centerNavigation = false;
     this.searchMatchesDirty = false;
-    if (hadSearchDecorations) {
-      this.invalidateSearchDecorations();
+    this.searchState.pendingHorizontalReveal = false;
+  }
+
+  // Check whether the match's line is visible in the viewport below the sticky
+  // header. Lines hidden in collapsed diff context are treated as offscreen.
+  private isSearchMatchInView(match: CodeViewSearchMatch): boolean {
+    const item = this.idToItem.get(match.itemId);
+    if (
+      item == null ||
+      (item.type === 'diff' &&
+        match.side === 'additions' &&
+        !item.instance.isLineRenderable(match.lineNumber))
+    ) {
+      return false;
     }
+    return (
+      this.normalizeScrollTarget({
+        type: 'line',
+        id: match.itemId,
+        lineNumber: match.lineNumber,
+        side: match.side,
+        align: 'nearest',
+      }) == null
+    );
   }
 
   private scrollToSearchMatch(match: CodeViewSearchMatch): void {
-    this.setCurrentSearchMatch(match);
-    if (this.searchState.scope?.itemId === match.itemId) {
-      this.itemEditors.get(match.itemId)?.editor.setSelections(
-        [
-          {
-            start: { line: match.lineIndex, character: match.startCharacter },
-            end: { line: match.lineIndex, character: match.endCharacter },
-            direction: 'forward',
-          },
-        ],
-        { skipScrollAndFocus: true }
-      );
+    this.searchState.pendingHorizontalReveal = true;
+    this.searchState.current = match;
+    this.render();
+    if (!this.searchState.centerNavigation && this.isSearchMatchInView(match)) {
+      this.clearPendingScroll();
+      return;
+    }
+    this.searchState.centerNavigation = true;
+    const item = this.idToItem.get(match.itemId);
+    if (
+      item?.type === 'diff' &&
+      match.side === 'additions' &&
+      !item.instance.isLineRenderable(match.lineNumber)
+    ) {
+      item.instance.revealLine(match.lineNumber);
     }
     this.scrollTo({
       type: 'line',
@@ -1683,8 +1718,12 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
         this.focusedEditor = undefined;
       }
     }
-    if (scopedItem?.item.edit !== true || scopedItem.item.collapsed === true) {
+    if (
+      this.searchState.scope != null &&
+      (scopedItem?.item.edit !== true || scopedItem.item.collapsed === true)
+    ) {
       this.searchState.scope = undefined;
+      this.searchState.centerNavigation = false;
     }
     this.searchPanel?.setReplaceHandlers(this.getSearchReplaceHandlers());
     if (
@@ -1711,7 +1750,7 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
       return;
     }
 
-    this.searchPanel.updateMatches({ syncSelection: false });
+    this.searchPanel.updateMatches({ skipNavigation: true });
   }
 
   private setSearchResults(
@@ -1733,73 +1772,61 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
         groupCodeViewSearchMatchesByItem(matches);
     }
     this.searchState.current = current;
+    if (current == null) this.searchState.pendingHorizontalReveal = false;
 
     if (matchesChanged || currentChanged) {
-      this.invalidateSearchDecorations();
+      this.render();
     }
   }
 
-  private setCurrentSearchMatch(match: CodeViewSearchMatch): void {
-    if (
-      areOptionalCodeViewSearchMatchesEqual(this.searchState.current, match)
-    ) {
-      return;
+  private queueSearchHighlightPaint = (): void => {
+    if (this.searchPanel != null) {
+      queueRender(this.paintSearchHighlights);
     }
+  };
 
-    this.searchState.current = match;
-    this.invalidateSearchDecorations();
-  }
-
-  private invalidateSearchDecorations(): void {
-    this.searchRenderRevision++;
-    this.render();
-  }
-
-  private getSearchDecorationsForItem(
-    item: CodeViewContextItem<LAnnotation, Caret>
-  ):
-    | readonly SearchLineDecoration[]
-    | readonly DiffSearchLineDecoration[]
-    | undefined {
-    const matches = this.searchState.matchesByItem.get(item.item.id);
-    if (matches == null || matches.length === 0) {
-      return undefined;
-    }
-
-    const current = this.searchState.current;
-    if (item.type === 'file') {
-      return matches.map(
-        (match): SearchLineDecoration => ({
-          lineIndex: match.lineIndex,
-          startCharacter: match.startCharacter,
-          endCharacter: match.endCharacter,
-          current:
-            current !== undefined &&
-            areCodeViewSearchMatchesEqual(match, current),
-        })
-      );
-    }
-
-    return matches.flatMap((match): DiffSearchLineDecoration[] => {
-      if (match.side === undefined) {
-        return [];
+  // DOM ranges belong to the mounted text nodes. Rebuild them after rendering
+  // so scrolling, tokenization, and edits cannot leave ranges on recycled rows.
+  private paintSearchHighlights = (): void => {
+    dequeueRender(this.paintSearchHighlights);
+    const { searchHighlighter: highlighter } = this;
+    if (highlighter == null) return;
+    highlighter.clear();
+    if (this.searchState.matches.length === 0) return;
+    const { firstIndex, lastIndex } = this.renderState;
+    for (let index = firstIndex; index >= 0 && index <= lastIndex; index++) {
+      const item = this.items[index];
+      const root = item.element?.shadowRoot;
+      const itemMatches = this.searchState.matchesByItem.get(item.item.id);
+      if (root != null && itemMatches != null) {
+        highlighter.paint(root, (lineNumber, side) =>
+          itemMatches.get(`${side}:${lineNumber}`)?.map((match) => ({
+            side: match.side,
+            lineNumber: match.lineNumber,
+            startCharacter: match.startCharacter,
+            endCharacter: match.endCharacter,
+            current:
+              this.searchState.current != null &&
+              areCodeViewSearchMatchesEqual(match, this.searchState.current),
+          }))
+        );
       }
-      return [
-        {
-          side: match.side,
-          lineIndex: match.lineIndex,
-          startCharacter: match.startCharacter,
-          endCharacter: match.endCharacter,
-          current:
-            current !== undefined &&
-            areCodeViewSearchMatchesEqual(match, current),
-        },
-      ];
-    });
-  }
+    }
+    if (this.searchState.pendingHorizontalReveal) {
+      this.searchState.pendingHorizontalReveal =
+        !highlighter.revealCurrentMatch();
+    }
+  };
 
-  private searchCodeView(searchParams: SearchParams): CodeViewSearchMatch[] {
+  private searchCodeView(
+    searchParams: SearchParams
+  ): SearchResult<CodeViewSearchMatch> {
     const matches: CodeViewSearchMatch[] = [];
+    let firstVisible: number | undefined;
+    let firstRendered: number | undefined;
+    let firstAfterRendered: number | undefined;
+    const lastRenderedItem = this.items[this.renderState.lastIndex];
+    const lastRenderedBounds = lastRenderedItem?.instance.getRenderedBounds();
     const { scope } = this.searchState;
     const scopedItem =
       scope != null ? this.idToItem.get(scope.itemId) : undefined;
@@ -1821,9 +1848,52 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
         (item.type === 'file'
           ? this.searchFileItem(item, searchParams, remaining)
           : this.searchDiffItem(item, searchParams, remaining));
-      matches.push(...nextMatches);
+      const bounds =
+        item.element == null ? undefined : item.instance.getRenderedBounds();
+      for (const match of nextMatches) {
+        const canBeRendered = firstVisible == null && bounds != null;
+        const canBeAfter =
+          firstAfterRendered == null &&
+          lastRenderedItem != null &&
+          item.index >= lastRenderedItem.index;
+        const position =
+          canBeRendered || (canBeAfter && item === lastRenderedItem)
+            ? this.getLineScrollPosition(item, {
+                type: 'line',
+                id: match.itemId,
+                lineNumber: match.lineNumber,
+                side: match.side,
+              })
+            : undefined;
+        if (
+          canBeRendered &&
+          position != null &&
+          position.height > 0 &&
+          position.top >= bounds.top &&
+          position.top < bounds.bottom &&
+          (item.type !== 'diff' ||
+            match.side !== 'additions' ||
+            item.instance.isLineRenderable(match.lineNumber))
+        ) {
+          firstRendered ??= matches.length;
+          if (this.isSearchMatchInView(match)) firstVisible = matches.length;
+        }
+        if (
+          canBeAfter &&
+          (item !== lastRenderedItem ||
+            lastRenderedBounds == null ||
+            (position != null && position.top >= lastRenderedBounds.bottom))
+        ) {
+          firstAfterRendered = matches.length;
+        }
+        matches.push(match);
+      }
     }
-    return matches;
+    return {
+      matches,
+      preferredMatch:
+        matches[firstVisible ?? firstRendered ?? firstAfterRendered ?? 0],
+    };
   }
 
   // Retained editor documents include edits the host has not echoed back yet.
@@ -2794,7 +2864,6 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
         height: 0,
         element: undefined,
         renderedOptionsRevision: this.renderOptionsRevision,
-        renderedSearchRevision: this.searchRenderRevision,
         instance,
       } satisfies CodeViewDiffItemContext<LAnnotation, Caret>;
     }
@@ -2814,7 +2883,6 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
       height: 0,
       element: undefined,
       renderedOptionsRevision: this.renderOptionsRevision,
-      renderedSearchRevision: this.searchRenderRevision,
       instance,
     } satisfies CodeViewFileItemContext<LAnnotation, Caret>;
   }
@@ -2936,11 +3004,12 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
             queueRender(this.syncSearchFocus);
           }
         };
+        const { queueSearchHighlightPaint: onRender } = this;
         const editStateKey = this.options.getEditStateKey?.(item.item);
         if (item.type === 'diff') {
           const editor = createEditor(
             'file-diff',
-            { onChange, onFocus, onBlur },
+            { onChange, onFocus, onBlur, onRender },
             editStateKey
           );
           createdEditor = editor;
@@ -2952,7 +3021,7 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
         } else {
           const editor = createEditor(
             'file',
-            { onChange, onFocus, onBlur },
+            { onChange, onFocus, onBlur, onRender },
             editStateKey
           );
           createdEditor = editor;
@@ -4277,16 +4346,8 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
         item.element = this.acquireElement();
         syncRenderedItemOrder(this.stickyContainer, item.element, prevElement);
         instance.virtualizedSetup();
-        if (
-          renderItem(
-            item,
-            item.element,
-            false,
-            this.getSearchDecorationsForItem(item)
-          )
-        ) {
+        if (renderItem(item, item.element, false)) {
           item.renderedOptionsRevision = this.renderOptionsRevision;
-          item.renderedSearchRevision = this.searchRenderRevision;
           updatedItems.add(item);
         }
         prevElement = item.element;
@@ -4295,18 +4356,9 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
       else {
         syncRenderedItemOrder(this.stickyContainer, item.element, prevElement);
         const forceRender =
-          item.renderedOptionsRevision !== this.renderOptionsRevision ||
-          item.renderedSearchRevision !== this.searchRenderRevision;
-        if (
-          renderItem(
-            item,
-            undefined,
-            forceRender,
-            this.getSearchDecorationsForItem(item)
-          )
-        ) {
+          item.renderedOptionsRevision !== this.renderOptionsRevision;
+        if (renderItem(item, undefined, forceRender)) {
           item.renderedOptionsRevision = this.renderOptionsRevision;
-          item.renderedSearchRevision = this.searchRenderRevision;
           updatedItems.add(item);
         }
         prevElement = item.element;
@@ -4408,9 +4460,9 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
     // renderRange (no-arg path) so renderState.stickyHeight matches the slice
     // actually in the DOM before we validate it.
     this.updateStickyPositioning();
-
     this.validateStickyContainerHeight();
     this.fixContainerFocus();
+    this.paintSearchHighlights();
 
     // If we are hitting a fitPerfectly heuristic, we should queue up another
     // render to fill out content. If we are performing a scroll animation we'll
@@ -4595,6 +4647,7 @@ export class CodeView<LAnnotation = undefined, Caret = undefined> {
     if (event?.defaultPrevented === true) {
       return;
     }
+    if (event != null) this.searchState.pendingHorizontalReveal = false;
     this.pendingScrollTarget = undefined;
     this.pendingLayoutAnchor = undefined;
     this.scrollAnimation = undefined;
@@ -5322,14 +5375,22 @@ function areCodeViewSearchMatchArraysEqual(
   return true;
 }
 
+// Index each result once by item and source line. Repaints can then look up
+// mounted rows without walking all matches in a large file again.
 function groupCodeViewSearchMatchesByItem(
   matches: readonly CodeViewSearchMatch[]
-): Map<string, CodeViewSearchMatch[]> {
-  const grouped = new Map<string, CodeViewSearchMatch[]>();
+): Map<string, CodeViewItemSearchMatches> {
+  const grouped = new Map<string, CodeViewItemSearchMatches>();
   for (const match of matches) {
-    const itemMatches = grouped.get(match.itemId) ?? [];
-    itemMatches.push(match);
-    grouped.set(match.itemId, itemMatches);
+    let itemMatches = grouped.get(match.itemId);
+    if (itemMatches == null) {
+      itemMatches = new Map();
+      grouped.set(match.itemId, itemMatches);
+    }
+    const key = `${match.side ?? 'additions'}:${match.lineNumber}`;
+    const lineMatches = itemMatches.get(key);
+    if (lineMatches == null) itemMatches.set(key, [match]);
+    else lineMatches.push(match);
   }
   return grouped;
 }
@@ -5463,10 +5524,7 @@ function formatSelectedLinePoint(
 function renderItem<LAnnotation, Caret>(
   item: CodeViewContextItem<LAnnotation, Caret>,
   fileContainer?: HTMLElement,
-  forceRender = false,
-  searchDecorations?:
-    | readonly SearchLineDecoration[]
-    | readonly DiffSearchLineDecoration[]
+  forceRender = false
 ): boolean {
   if (item.type === 'diff') {
     return item.instance.render({
@@ -5475,9 +5533,6 @@ function renderItem<LAnnotation, Caret>(
       fileDiff: item.item.fileDiff,
       forceRender,
       lineAnnotations: item.item.annotations ?? [],
-      searchDecorations: searchDecorations as
-        | readonly DiffSearchLineDecoration[]
-        | undefined,
     });
   } else {
     return item.instance.render({
@@ -5486,7 +5541,6 @@ function renderItem<LAnnotation, Caret>(
       file: item.item.file,
       forceRender,
       lineAnnotations: item.item.annotations ?? [],
-      searchDecorations,
     });
   }
 }

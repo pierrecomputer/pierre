@@ -1,6 +1,7 @@
 import {
   type MatchRange,
   searchLineByLine,
+  type SearchMatchVisitor,
   type SearchParams,
 } from '../search';
 import { computeLineOffsets } from '../utils/computeFileOffsets';
@@ -328,7 +329,11 @@ export class PieceTable {
     return foundOffset ?? wrappedOffset;
   }
 
-  search(searchParams: SearchParams, limit?: number): MatchRange[] {
+  search(
+    searchParams: SearchParams,
+    limit?: number,
+    onMatch?: SearchMatchVisitor
+  ): MatchRange[] {
     // Search scans the whole document, so flatten the treap once instead of
     // descending it again for every line and whole-word boundary.
     const documentText = this.#textFromPieces();
@@ -349,7 +354,8 @@ export class PieceTable {
         charAt: (offset) => documentText.charAt(offset),
       },
       searchParams,
-      limit
+      limit,
+      onMatch
     );
   }
 

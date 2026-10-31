@@ -56,7 +56,6 @@ import type {
   BaseDiffOptions,
   CustomPreProperties,
   DiffLineAnnotation,
-  DiffSearchLineDecoration,
   ExpansionDirections,
   DiffsHighlighter,
   FileContents,
@@ -240,7 +239,6 @@ export interface FileDiffRenderBaseProps<LAnnotation> {
   containerWrapper?: HTMLElement;
   lineAnnotations?: DiffLineAnnotation<LAnnotation>[];
   renderRange?: RenderRange;
-  searchDecorations?: readonly DiffSearchLineDecoration[];
 }
 
 export type FileDiffRenderProps<LAnnotation> =
@@ -935,7 +933,11 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
   }
 
   public __getEffectiveCodeOptions(): BaseCodeOptions {
-    return { ...this.options, ...this.hunksRenderer.getEffectiveCodeOptions() };
+    return {
+      ...this.options,
+      ...this.hunksRenderer.getEffectiveCodeOptions(),
+      themeType: this.options.themeType,
+    };
   }
 
   public cleanUp(recycle: boolean = false): void {
@@ -1550,7 +1552,6 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
     fileContainer,
     containerWrapper,
     renderRange,
-    searchDecorations,
     ...fileInputProps
   }: FileDiffRenderProps<LAnnotation>): boolean {
     if (!this.enabled) {
@@ -1675,7 +1676,6 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
     this.prepareRenderData(
       this.hunksRenderer.getDiffForNextRender(workingDiff)
     );
-    this.hunksRenderer.setSearchDecorations(searchDecorations);
 
     const { disableErrorHandling = false, disableFileHeader = false } =
       this.options;

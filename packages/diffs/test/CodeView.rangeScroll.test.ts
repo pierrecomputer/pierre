@@ -1,10 +1,14 @@
-import { describe, expect, test } from 'bun:test';
+import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 
 import { CodeView } from '../src/components/CodeView';
 import {
   DEFAULT_CODE_VIEW_FILE_METRICS,
   DEFAULT_CODE_VIEW_LAYOUT,
 } from '../src/constants';
+import {
+  disposeHighlighter,
+  getSharedHighlighter,
+} from '../src/highlighter/shared_highlighter';
 import type { CodeViewItem } from '../src/types';
 import { parseDiffFromFile } from '../src/utils/parseDiffFromFile';
 import {
@@ -18,6 +22,14 @@ import {
 
 const ROOT_HEIGHT = 800;
 const ROOT_WIDTH = 1000;
+
+beforeAll(async () => {
+  await getSharedHighlighter({
+    themes: ['pierre-dark', 'pierre-light'],
+    langs: ['typescript'],
+  });
+});
+afterAll(disposeHighlighter);
 
 function makeInsertedDiffItem(id: string): CodeViewItem<undefined> {
   const oldLines = Array.from(

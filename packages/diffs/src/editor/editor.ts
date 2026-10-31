@@ -3,6 +3,10 @@ import type { FileDiff } from '../components/FileDiff';
 import type { VirtualizedFile } from '../components/VirtualizedFile';
 import type { VirtualizedFileDiff } from '../components/VirtualizedFileDiff';
 import {
+  SearchHighlighter,
+  type SearchHighlightRange,
+} from '../managers/SearchHighlighter';
+import {
   dequeueRender,
   queueRender,
 } from '../managers/UniversalRenderingManager';
@@ -70,7 +74,11 @@ import {
   PopoverManager,
   type PopoverPlacementBounds,
 } from './popover';
-import { type SearchPanelMode, SearchPanelWidget } from './searchPanel';
+import {
+  type SearchPanelMode,
+  SearchPanelWidget,
+  type SearchResult,
+} from './searchPanel';
 import type {
   AutoSurround,
   CursorMoveOptions,
@@ -87,7 +95,6 @@ import {
   comparePosition,
   convertSelection,
   createSelectionFrom,
-  createSelectionFromAnchorAndFocusOffsets,
   DirectionBackward,
   DirectionForward,
   DirectionNone,
@@ -209,6 +216,11 @@ function createFullDocumentChange(
       },
     },
   };
+}
+
+interface ViewportBounds {
+  top: number;
+  bottom: number;
 }
 
 interface EditorAttachState {
@@ -385,6 +397,8 @@ export interface EditorOptions<EType extends EditorType, LAnnotation, Caret> {
   onFocus?: () => void;
   /** Callback when the editor loses focus. */
   onBlur?: () => void;
+  /** Called after rendered rows are synchronized or background tokens replace their text. */
+  onRender?: () => void;
   // debug flag
   __debug?: boolean;
 }
@@ -427,7 +441,6 @@ const MULTI_SELECTION_CLIPBOARD_TYPE =
   'application/vnd.pierre.diffs-selections+json';
 type OverlayRangeType =
   | 'selection'
-  | 'match'
   | 'marker'
   | 'bracketMatch'
   | 'caretHighlight'
@@ -577,6 +590,9 @@ export class Editor<
   #initSelections?: EditorSelection[];
   #selections?: EditorSelection[];
   #matches?: MatchRange[];
+  #searchHighlighter?: SearchHighlighter;
+  #currentSearchMatch?: MatchRange;
+  #pendingSearchHorizontalReveal = false;
   #scrollingToLine?: number;
   #scrollingToLineChar?: number;
   #scrollingToLineFixed = false;
@@ -629,6 +645,7 @@ export class Editor<
               )
             );
       let refreshPrediction = false;
+      let textNodesChanged = false;
       const { startingLine, totalLines } = this.#renderRange;
       const endLine = Math.min(
         startingLine + totalLines,
@@ -639,13 +656,17 @@ export class Editor<
           const lineElement = this.#getLineElement(line);
           if (lineElement !== undefined) {
             lineElement.replaceChildren(...renderLineTokens(tokens));
+            textNodesChanged = true;
             refreshPrediction ||= predictionLines?.has(line) === true;
           }
         }
       }
       if (refreshPrediction && this.#selections !== undefined) {
         this.#updateSelections(this.#selections);
+      } else if (this.#searchHighlighter != null) {
+        this.#renderSearchMatches();
       }
+      if (textNodesChanged) this.#options.onRender?.();
     }
   };
 
@@ -979,11 +1000,36 @@ export class Editor<
         newText,
       };
     });
-    const change = textDocument.applyEdits(edits, true, this.#selections);
+    const selectionsBefore = this.#selections;
+    const selectionOffsets = selectionsBefore?.map(
+      (selection) =>
+        [
+          textDocument.offsetAt(selection.start),
+          textDocument.offsetAt(selection.end),
+        ] as [number, number]
+    );
+    const resolvedEdits = textDocument
+      .resolveEdits(edits)
+      .sort((a, b) => a.start - b.start);
+    const change = textDocument.applyEdits(edits, true, selectionsBefore);
     if (change != null) {
+      // Replacements re-anchor the existing selections like any other edit;
+      // navigating between matches never changes them.
+      const nextSelections =
+        selectionsBefore != null && selectionOffsets != null
+          ? remapSelectionsAfterEdits(
+              textDocument,
+              selectionsBefore,
+              selectionOffsets,
+              resolvedEdits
+            )
+          : undefined;
+      if (nextSelections != null) {
+        textDocument.setLastUndoSelectionsAfter(nextSelections);
+      }
       this.#applyChange(
         change,
-        undefined,
+        nextSelections,
         this.#applyChangeToLineAnnotations(change),
         { skipSearchRefresh: true, skipFocus: true }
       );
@@ -1824,6 +1870,7 @@ export class Editor<
     }
 
     this.#scheduleOnAttach(fileInstance);
+    this.#options.onRender?.();
   }
 
   // The host component has already rendered these external contents. Update
@@ -1886,8 +1933,8 @@ export class Editor<
     this.#resetCache();
     this.#wrapLineOffsetsCache.clear();
     this.#markerRenderer?.removePopover();
-    if (this.#searchPanel !== undefined && this.#matches !== undefined) {
-      this.#searchPanel.updateMatches({ syncSelection: false });
+    if (this.#searchPanel != null) {
+      this.#searchPanel.updateMatches({ skipNavigation: true });
     }
   }
 
@@ -1972,6 +2019,8 @@ export class Editor<
   }
 
   #resetState(preserveCarets = false): void {
+    this.#searchHighlighter?.clear();
+    this.#searchHighlighter = undefined;
     this.#setEditorActiveLineSafe(null);
     this.#gutterWidthCache = undefined;
     this.#contentWidthCache = undefined;
@@ -1992,6 +2041,9 @@ export class Editor<
     this.#markerRenderer = undefined;
     this.#searchPanel?.cleanup();
     this.#searchPanel = undefined;
+    this.#matches = undefined;
+    this.#currentSearchMatch = undefined;
+    this.#pendingSearchHorizontalReveal = false;
     this.#selectionAction?.cleanup();
     this.#selectionAction = undefined;
     this.#canMountSelectionAction = true;
@@ -3323,7 +3375,7 @@ export class Editor<
         // whole document. #suppressNativeSelectionSync then stops the resulting
         // selectionchange from reading that shorter range back over #selections
         // before the delete runs.
-        const renderedLineRanges = this.#getRenderedEditableLineRanges();
+        const renderedLineRanges = this.#getEditableLineRanges().rendered;
         const firstRenderedLine = renderedLineRanges[0]?.[0];
         const lastRenderedLine = renderedLineRanges.at(-1)?.[1];
         if (firstRenderedLine !== undefined && lastRenderedLine !== undefined) {
@@ -5681,6 +5733,7 @@ export class Editor<
       this.#markerRenderer === undefined
     ) {
       this.#selections = undefined;
+      this.#searchHighlighter?.clear();
       this.#overlayElements?.forEach((el) => el.remove());
       this.#overlayElements?.clear();
       this.#selectionAction?.cleanup();
@@ -5738,80 +5791,7 @@ export class Editor<
     }
 
     const textDocument = this.#editSession?.document;
-    if (this.#matches !== undefined && textDocument !== undefined) {
-      const matches = this.#matches;
-      const renderRange = this.#renderRange;
-      const shouldCullMatches =
-        (renderRange != null && Number.isFinite(renderRange.totalLines)) ||
-        (this.#isDiff &&
-          this.#fileDiffInstance?.options.expandUnchanged !== true);
-      const renderedLineRanges = shouldCullMatches
-        ? this.#getRenderedEditableLineRanges()
-        : undefined;
-      const primarySelection = this.#selections?.at(-1);
-      const primaryStartOffset =
-        primarySelection !== undefined
-          ? textDocument.offsetAt(primarySelection.start)
-          : -1;
-      const primaryEndOffset =
-        primarySelection !== undefined
-          ? textDocument.offsetAt(primarySelection.end)
-          : -1;
-      let firstMatchIndex = 0;
-      const rangeCount = renderedLineRanges?.length ?? 1;
-      for (let rangeIndex = 0; rangeIndex < rangeCount; rangeIndex++) {
-        let visibleEndOffset = Infinity;
-        const lineRange = renderedLineRanges?.[rangeIndex];
-        if (lineRange !== undefined) {
-          const [firstLine, lastLine] = lineRange;
-          const visibleStartOffset = textDocument.offsetAt({
-            line: firstLine,
-            character: 0,
-          });
-          const endLine = lastLine + 1;
-          visibleEndOffset =
-            endLine < textDocument.lineCount
-              ? textDocument.offsetAt({ line: endLine, character: 0 })
-              : textDocument.offsetAt({
-                  line: endLine - 1,
-                  character: textDocument.getLineLength(endLine - 1),
-                });
-
-          // Matches are sorted and non-overlapping, so narrow the rendered
-          // offset window before resolving any match positions through the treap.
-          let low = firstMatchIndex;
-          let high = matches.length;
-          while (low < high) {
-            const middle = low + Math.floor((high - low) / 2);
-            if (matches[middle][1] <= visibleStartOffset) {
-              low = middle + 1;
-            } else {
-              high = middle;
-            }
-          }
-          firstMatchIndex = low;
-        }
-        for (; firstMatchIndex < matches.length; firstMatchIndex++) {
-          const [startOffset, endOffset] = matches[firstMatchIndex];
-          if (startOffset >= visibleEndOffset) {
-            break;
-          }
-          const range: Range = {
-            start: textDocument.positionAt(startOffset),
-            end: textDocument.positionAt(endOffset),
-          };
-          const isFocused =
-            primaryStartOffset === startOffset &&
-            primaryEndOffset === endOffset;
-          this.#renderSelection(
-            renderCtx,
-            'match',
-            range,
-            isFocused ? 'focus' : undefined
-          );
-        }
-      }
-    }
+    this.#renderSearchMatches();
 
     if (this.#markerRenderer !== undefined && textDocument !== undefined) {
       for (const marker of this.#markerRenderer.markers) {
@@ -5833,6 +5813,108 @@ export class Editor<
     this.#updateSelectionActionPopover();
     if (selectionsChanged) {
       this.#scheduleEditPrediction();
+    }
+  }
+
+  // Find paints native ranges independently of editor selections.
+  #renderSearchMatches(): void {
+    const highlighter = this.#searchHighlighter;
+    highlighter?.clear();
+    const textDocument = this.#editSession?.document;
+    if (highlighter == null || this.#matches == null || textDocument == null)
+      return;
+    const nativeRanges = new Map<number, SearchHighlightRange[]>();
+    const matches = this.#matches;
+    const renderRange = this.#renderRange;
+    const shouldCullMatches =
+      (renderRange != null && Number.isFinite(renderRange.totalLines)) ||
+      (this.#isDiff &&
+        this.#fileDiffInstance?.options.expandUnchanged !== true);
+    const renderedLineRanges = shouldCullMatches
+      ? this.#getEditableLineRanges().rendered
+      : undefined;
+    let firstMatchIndex = 0;
+    const rangeCount = renderedLineRanges?.length ?? 1;
+    for (let rangeIndex = 0; rangeIndex < rangeCount; rangeIndex++) {
+      let visibleEndOffset = Infinity;
+      const lineRange = renderedLineRanges?.[rangeIndex];
+      if (lineRange !== undefined) {
+        const [firstLine, lastLine] = lineRange;
+        const visibleStartOffset = textDocument.offsetAt({
+          line: firstLine,
+          character: 0,
+        });
+        const endLine = lastLine + 1;
+        visibleEndOffset =
+          endLine < textDocument.lineCount
+            ? textDocument.offsetAt({ line: endLine, character: 0 })
+            : textDocument.offsetAt({
+                line: endLine - 1,
+                character: textDocument.getLineLength(endLine - 1),
+              });
+
+        // Matches are sorted and non-overlapping, so narrow the rendered
+        // offset window before resolving any match positions through the treap.
+        let low = firstMatchIndex;
+        let high = matches.length;
+        while (low < high) {
+          const middle = low + Math.floor((high - low) / 2);
+          if (matches[middle][1] <= visibleStartOffset) {
+            low = middle + 1;
+          } else {
+            high = middle;
+          }
+        }
+        firstMatchIndex = low;
+      }
+      for (; firstMatchIndex < matches.length; firstMatchIndex++) {
+        const [startOffset, endOffset] = matches[firstMatchIndex];
+        if (startOffset >= visibleEndOffset) {
+          break;
+        }
+        const range: Range = {
+          start: textDocument.positionAt(startOffset),
+          end: textDocument.positionAt(endOffset),
+        };
+        const isFocused =
+          this.#currentSearchMatch?.[0] === startOffset &&
+          this.#currentSearchMatch[1] === endOffset;
+        const firstLine = Math.max(range.start.line, lineRange?.[0] ?? 0);
+        const lastLine = Math.min(
+          range.end.line,
+          lineRange?.[1] ?? textDocument.lineCount - 1
+        );
+        for (let line = firstLine; line <= lastLine; line++) {
+          const startCharacter =
+            line === range.start.line ? range.start.character : 0;
+          const endCharacter =
+            line === range.end.line
+              ? range.end.character
+              : textDocument.getLineLength(line);
+          if (endCharacter > startCharacter) {
+            let lineRanges = nativeRanges.get(line + 1);
+            if (lineRanges == null) {
+              lineRanges = [];
+              nativeRanges.set(line + 1, lineRanges);
+            }
+            lineRanges.push({
+              side: this.#isDiff ? 'additions' : undefined,
+              lineNumber: line + 1,
+              startCharacter,
+              endCharacter,
+              current: isFocused,
+            });
+          }
+        }
+      }
+    }
+    if (this.#contentElement != null && nativeRanges.size > 0) {
+      highlighter.paint(this.#contentElement, (lineNumber, side) =>
+        side === 'deletions' ? undefined : nativeRanges.get(lineNumber)
+      );
+      if (this.#pendingSearchHorizontalReveal) {
+        this.#pendingSearchHorizontalReveal = !highlighter.revealCurrentMatch();
+      }
     }
   }
 
@@ -6553,6 +6635,60 @@ export class Editor<
     this.#renderSearchPanel(mode);
   }
 
+  // Measure shared viewport geometry once per search lookup, rather than once
+  // for every match checked against it.
+  #getSearchViewportBounds(): ViewportBounds | undefined {
+    const viewport = this.#getScrollViewport();
+    if (viewport == null) return undefined;
+    let top = 0;
+    let bottom: number;
+    if (viewport instanceof HTMLElement) {
+      const rect = viewport.getBoundingClientRect();
+      top = rect.top;
+      bottom = rect.bottom;
+    } else {
+      bottom = viewport.defaultView?.innerHeight ?? 0;
+    }
+    const stickyHeader =
+      this.#fileContainer?.shadowRoot?.querySelector<HTMLElement>(
+        '[data-diffs-header][data-sticky]'
+      );
+    if (stickyHeader != null) {
+      top = Math.max(top, stickyHeader.getBoundingClientRect().bottom);
+    }
+    return { top, bottom };
+  }
+
+  // Mounted rows can still be outside the scroll viewport. Keep visible matches
+  // in place, including matches partway through a wrapped line.
+  #isSearchMatchInView(
+    [start, end]: MatchRange,
+    viewport = this.#getSearchViewportBounds()
+  ): boolean {
+    const textDocument = this.#editSession?.document;
+    if (textDocument == null || viewport == null) return false;
+    const startPosition = textDocument.positionAt(start);
+    const lastPosition = textDocument.positionAt(Math.max(start, end - 1));
+    const startRow = this.#getLineElement(startPosition.line);
+    const lastRow = this.#getLineElement(lastPosition.line);
+    if (startRow == null || lastRow == null) return false;
+
+    const startWrap = this.#getCharX(
+      startPosition.line,
+      startPosition.character
+    )[1];
+    const lastWrap = this.#getCharX(
+      lastPosition.line,
+      lastPosition.character
+    )[1];
+    const startRect = startRow.getBoundingClientRect();
+    const lastRect = lastRow.getBoundingClientRect();
+    if (startRect.height === 0 || lastRect.height === 0) return false;
+    const top = startRect.top + startWrap * this.#metrics.lineHeight;
+    const bottom = lastRect.top + (lastWrap + 1) * this.#metrics.lineHeight;
+    return bottom > top && top >= viewport.top && bottom <= viewport.bottom;
+  }
+
   #renderSearchPanel(mode: SearchPanelMode) {
     // cleanup the existing search panel
     this.#searchPanel?.cleanup();
@@ -6565,42 +6701,44 @@ export class Editor<
       return;
     }
 
-    let defaultQuery = '';
-    let initialMatch: [number, number] | undefined = undefined;
+    this.#searchHighlighter ??= SearchHighlighter.create(
+      preElement.ownerDocument
+    );
 
-    if (selections !== undefined && selections.length > 0) {
-      let primarySelection = selections.at(-1)!;
-      if (isCollapsedSelection(primarySelection)) {
-        primarySelection = expandCollapsedSelectionToWord(
-          textDocument,
-          primarySelection
-        );
-        this.#updateSelections([...selections.slice(0, -1), primarySelection]);
-        const selectionText = textDocument.getText(primarySelection);
-        if (selectionText !== '' && !selectionText.includes('\n')) {
-          defaultQuery = selectionText;
-          initialMatch = [
-            textDocument.offsetAt(primarySelection.start),
-            textDocument.offsetAt(primarySelection.end),
-          ];
-        }
+    let defaultQuery = '';
+    let initialMatch: MatchRange | undefined;
+    const primarySelection = selections?.at(-1);
+    if (primarySelection != null) {
+      const queryRange = isCollapsedSelection(primarySelection)
+        ? expandCollapsedSelectionToWord(textDocument, primarySelection)
+        : primarySelection;
+      const selectionText = textDocument.getText(queryRange);
+      if (selectionText !== '' && !selectionText.includes('\n')) {
+        defaultQuery = selectionText;
+        initialMatch = [
+          textDocument.offsetAt(queryRange.start),
+          textDocument.offsetAt(queryRange.end),
+        ];
       }
     }
+    this.#currentSearchMatch = undefined;
 
-    const scrollToMatch = (
-      [startOffset, endOffset]: MatchRange,
-      retainFocus: boolean
-    ) => {
-      const nextSelection = createSelectionFromAnchorAndFocusOffsets(
-        textDocument,
-        startOffset,
-        endOffset
-      );
-      this.#updateSelections([nextSelection]);
-      // Search counts include matches hidden in collapsed regions; navigating
-      // to one reveals it.
-      this.#revealLineIfCollapsed(getCaretPosition(nextSelection).line);
-      this.#scrollToPrimaryCaret(true); // scroll to the primary caret and don't focus
+    // Preserve the viewport until navigation first needs a scroll, then center
+    // every destination for this query, including already-visible matches.
+    let centerSearchNavigation = false;
+    const scrollToMatch = (match: MatchRange, retainFocus: boolean) => {
+      this.#currentSearchMatch = match;
+      this.#pendingSearchHorizontalReveal = true;
+      const position = textDocument.positionAt(match[0]);
+      this.#revealLineIfCollapsed(position.line);
+      // A new match supersedes any retry for an earlier offscreen result.
+      this.#scrollingToLine = undefined;
+      this.#scrollingToLineFixed = false;
+      if (centerSearchNavigation || !this.#isSearchMatchInView(match)) {
+        centerSearchNavigation = true;
+        this.#scrollToLine(position.line, position.character, true);
+      }
+      this.#renderSearchMatches();
       this.#retainSearchPanelFocus = retainFocus;
     };
 
@@ -6609,7 +6747,11 @@ export class Editor<
       defaultQuery,
       mode,
       initialMatch,
-      search: (searchParams) => textDocument.search(searchParams),
+      onQueryChange: () => {
+        centerSearchNavigation = false;
+      },
+      search: (searchParams) =>
+        this.#searchWithNavigationTarget(textDocument, searchParams),
       isSameMatch: ([aStart, aEnd], [bStart, bEnd]) =>
         aStart === bStart && aEnd === bEnd,
       scrollToMatch,
@@ -6621,60 +6763,105 @@ export class Editor<
         },
       },
       onUpdate: (
-        allMatches: MatchRange[],
-        options?: { syncSelection?: boolean }
+        { matches: allMatches, preferredMatch }: SearchResult<MatchRange>,
+        options?: { skipNavigation?: boolean }
       ): MatchRange | undefined => {
-        if (allMatches.length === 0) {
-          this.#matches = undefined;
-          this.#updateSelections(this.#selections ?? []);
+        const previous = this.#currentSearchMatch;
+        this.#matches = allMatches.length > 0 ? allMatches : undefined;
+        if (options?.skipNavigation === true) {
+          const current = allMatches.find(
+            ([start, end]) => start === previous?.[0] && end === previous[1]
+          );
+          this.#currentSearchMatch = current;
+          if (current == null) this.#pendingSearchHorizontalReveal = false;
+          this.#renderSearchMatches();
+          return current;
+        }
+
+        // Replacement leaves a collapsed marker at its end; advance past it.
+        const current =
+          previous != null && previous[0] === previous[1]
+            ? allMatches.find(([start]) => start >= previous[1])
+            : preferredMatch;
+        if (current == null) {
+          this.#currentSearchMatch = undefined;
+          this.#pendingSearchHorizontalReveal = false;
+          this.#renderSearchMatches();
           return;
         }
 
-        this.#matches = allMatches;
-        if (options?.syncSelection === false) {
-          this.#updateSelections(this.#selections ?? []);
-          const primarySelection = this.#selections?.at(-1);
-          if (primarySelection !== undefined) {
-            const startOffset = textDocument.offsetAt(primarySelection.start);
-            const endOffset = textDocument.offsetAt(primarySelection.end);
-            for (const match of allMatches) {
-              if (match[0] === startOffset && match[1] === endOffset) {
-                return match;
-              }
-            }
-          }
-          return undefined;
-        }
-
-        const primarySelection = this.#selections?.at(-1);
-        let searchOffset = 0;
-        let nextMatch: MatchRange | undefined;
-        if (primarySelection !== undefined) {
-          searchOffset = textDocument.offsetAt(primarySelection.start);
-        }
-        for (const m of allMatches) {
-          if (m[0] >= searchOffset) {
-            nextMatch = m;
-            break;
-          }
-        }
-        if (nextMatch !== undefined) {
-          scrollToMatch(nextMatch, true);
-        } else {
-          this.#updateSelections(this.#selections ?? []);
-        }
-        return nextMatch;
+        scrollToMatch(current, true);
+        return current;
       },
       onClose: () => {
         this.#searchPanel = undefined;
         this.#retainSearchPanelFocus = false;
         this.#matches = undefined;
-        this.#updateSelections(this.#selections ?? []);
+        this.#currentSearchMatch = undefined;
+        this.#pendingSearchHorizontalReveal = false;
+        this.#renderSearchMatches();
       },
     });
 
     this.#searchPanel = searchPanel;
     this.#retainSearchPanelFocus = false;
+  }
+
+  // Choose the starting match during collection so navigation needs neither
+  // another match scan nor intermediate state shared with the panel callbacks.
+  #searchWithNavigationTarget(
+    textDocument: TextDocument<EType, LAnnotation>,
+    searchParams: SearchParams
+  ): SearchResult<MatchRange> {
+    const viewport = this.#getSearchViewportBounds();
+    const { rendered, visible } = this.#getEditableLineRanges(viewport);
+    const toOffsets = ([first, last]: [number, number]): MatchRange => [
+      textDocument.offsetAt({ line: first, character: 0 }),
+      textDocument.offsetAt({
+        line: last,
+        character: textDocument.getLineLength(last),
+      }),
+    ];
+    const offsets = rendered.map(toOffsets);
+    const visibleOffsets = visible.map(toOffsets);
+    let rangeIndex = 0;
+    let visibleRangeIndex = 0;
+    const lastEnd = offsets.at(-1)?.[1];
+    let firstVisible: number | undefined;
+    let firstRendered: number | undefined;
+    let firstAfterRendered: number | undefined;
+    const matches = textDocument.search(
+      searchParams,
+      undefined,
+      (match, index) => {
+        const [start] = match;
+        while (rangeIndex < offsets.length && start > offsets[rangeIndex][1])
+          rangeIndex++;
+        while (
+          visibleRangeIndex < visibleOffsets.length &&
+          start > visibleOffsets[visibleRangeIndex][1]
+        )
+          visibleRangeIndex++;
+        if (rangeIndex < offsets.length && start >= offsets[rangeIndex][0]) {
+          firstRendered ??= index;
+          if (
+            firstVisible == null &&
+            visibleRangeIndex < visibleOffsets.length &&
+            start >= visibleOffsets[visibleRangeIndex][0] &&
+            this.#isSearchMatchInView(match, viewport)
+          ) {
+            firstVisible = index;
+          }
+        }
+        if (firstAfterRendered == null && lastEnd != null && start > lastEnd)
+          firstAfterRendered = index;
+      }
+    );
+    return {
+      matches,
+      preferredMatch:
+        matches[firstVisible ?? firstRendered ?? firstAfterRendered ?? 0],
+    };
   }
 
   #getSelectionText() {
@@ -7139,10 +7326,9 @@ export class Editor<
 
     if (
       options?.skipSearchRefresh !== true &&
-      this.#searchPanel !== undefined &&
-      this.#matches !== undefined
+      this.#searchPanel !== undefined
     ) {
-      this.#searchPanel.updateMatches({ syncSelection: false });
+      this.#searchPanel.updateMatches({ skipNavigation: true });
     }
 
     if (newSelections != null) {
@@ -7204,34 +7390,69 @@ export class Editor<
     return undefined;
   }
 
-  // Returns contiguous document-line ranges that have editable rows in the
-  // current render window. Collapsed diff sections create gaps between ranges.
-  #getRenderedEditableLineRanges(): [first: number, last: number][] {
-    const contentElement = this.#contentElement;
-    if (contentElement === undefined) {
-      return [];
+  // Collect mounted and visible source-line ranges in one walk, preserving
+  // collapsed gaps. Full-file searches can use the document's rendered range
+  // directly and only visit rows around the viewport.
+  #getEditableLineRanges(viewport?: ViewportBounds): {
+    rendered: [first: number, last: number][];
+    visible: [first: number, last: number][];
+  } {
+    const rendered: [number, number][] = [];
+    const visible: [number, number][] = [];
+    const rows = this.#contentElement?.children;
+    if (rows == null) return { rendered, visible };
+    const textDocument = this.#editSession?.document;
+    const useDocumentRange =
+      viewport != null &&
+      textDocument != null &&
+      this.#renderRange == null &&
+      (!this.#isDiff ||
+        this.#fileDiffInstance?.options.expandUnchanged === true);
+    if (useDocumentRange) rendered.push([0, textDocument.lineCount - 1]);
+
+    let firstVisibleRow = 0;
+    // Unvirtualized files can mount thousands of rows. Only that case needs
+    // a seek; a virtualized window is small enough to walk directly.
+    if (viewport != null && this.#virtualizedInstance == null) {
+      let end = rows.length;
+      while (firstVisibleRow < end) {
+        const middle =
+          firstVisibleRow + Math.floor((end - firstVisibleRow) / 2);
+        if (rows[middle].getBoundingClientRect().bottom <= viewport.top)
+          firstVisibleRow = middle + 1;
+        else end = middle;
+      }
     }
-    const ranges: [first: number, last: number][] = [];
-    for (const child of contentElement.children) {
-      const el = child as HTMLElement;
-      const lineType = el.dataset.lineType;
-      const lineNumber = getLineNumberAttr(el);
-      if (
-        lineNumber === undefined ||
-        lineType === undefined ||
-        !isLineEditable(lineType)
-      ) {
+    const appendLine = (ranges: [number, number][], line: number): void => {
+      const previous = ranges.at(-1);
+      if (previous != null && line <= previous[1] + 1)
+        previous[1] = Math.max(previous[1], line);
+      else ranges.push([line, line]);
+    };
+    let pastViewport = viewport != null && viewport.bottom <= viewport.top;
+    for (
+      let rowIndex = useDocumentRange ? firstVisibleRow : 0;
+      rowIndex < rows.length;
+      rowIndex++
+    ) {
+      const row = rows[rowIndex] as HTMLElement;
+      const lineType = row.dataset.lineType;
+      const lineNumber = getLineNumberAttr(row);
+      if (lineNumber == null || lineType == null || !isLineEditable(lineType))
         continue;
-      }
       const line = lineNumber - 1;
-      const current = ranges.at(-1);
-      if (current !== undefined && line <= current[1] + 1) {
-        current[1] = Math.max(current[1], line);
-      } else {
-        ranges.push([line, line]);
+      if (!useDocumentRange) appendLine(rendered, line);
+      if (viewport == null || pastViewport || rowIndex < firstVisibleRow)
+        continue;
+      const rect = row.getBoundingClientRect();
+      if (rect.top >= viewport.bottom) {
+        pastViewport = true;
+        if (useDocumentRange) break;
+      } else if (rect.bottom > viewport.top) {
+        appendLine(visible, line);
       }
     }
-    return ranges;
+    return { rendered, visible };
   }
 
   // Whether the File or FileDiff component this editor is attached to

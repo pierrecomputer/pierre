@@ -44,6 +44,21 @@ export function installDom(options: InstallDomOptions = {}): DomHandle {
   const dom = new JSDOM('<!DOCTYPE html><html><body></body></html>', {
     url: 'http://localhost',
   });
+  // jsdom supplies real DOM ranges but no Custom Highlight API. Model its
+  // range sets so component tests exercise native painting and cleanup.
+  class MockHighlight extends Set<AbstractRange> {
+    priority = 0;
+  }
+  Object.defineProperties(dom.window, {
+    Highlight: { value: MockHighlight },
+    CSS: {
+      value: {
+        ...dom.window.CSS,
+        highlights: new Map<string, MockHighlight>(),
+        registerProperty: () => {},
+      },
+    },
+  });
   const originalNavigatorDescriptor = Object.getOwnPropertyDescriptor(
     globalThis,
     'navigator'
@@ -67,6 +82,7 @@ export function installDom(options: InstallDomOptions = {}): DomHandle {
     MouseEvent: Reflect.get(globalThis, 'MouseEvent'),
     MutationObserver: Reflect.get(globalThis, 'MutationObserver'),
     Node: Reflect.get(globalThis, 'Node'),
+    NodeFilter: Reflect.get(globalThis, 'NodeFilter'),
     PointerEvent: Reflect.get(globalThis, 'PointerEvent'),
     requestAnimationFrame: Reflect.get(globalThis, 'requestAnimationFrame'),
     ResizeObserver: Reflect.get(globalThis, 'ResizeObserver'),
@@ -239,6 +255,7 @@ export function installDom(options: InstallDomOptions = {}): DomHandle {
     MouseEvent: dom.window.MouseEvent,
     MutationObserver: dom.window.MutationObserver,
     Node: dom.window.Node,
+    NodeFilter: dom.window.NodeFilter,
     PointerEvent: MockPointerEvent,
     requestAnimationFrame: (callback: FrameRequestCallback) => {
       const id = ++nextFrameId;
@@ -329,6 +346,41 @@ export interface CreateRootOptions {
 
 // Creates a scroll-container div with a stubbed scrollTo and a fixed
 // bounding rect, since jsdom performs no layout. Appends it to document.body.
+// Read registered ranges belonging to a surface, including its shadow roots,
+// in document order so tests can inspect matches without decoration elements.
+export function getSearchHighlightRanges(root: Node, current = false): Range[] {
+  const names = current
+    ? ['diffs-search-current']
+    : ['diffs-search-match', 'diffs-search-current'];
+  return names
+    .flatMap((name) => [...(window.CSS.highlights.get(name) ?? [])] as Range[])
+    .filter((range) => {
+      let node: Node | null = range.startContainer;
+      while (node != null) {
+        if (node === root) return true;
+        node =
+          node.parentNode ??
+          (node instanceof window.ShadowRoot ? node.host : null);
+      }
+      return false;
+    })
+    .sort((a, b) => {
+      const aRoot = a.startContainer.getRootNode();
+      const bRoot = b.startContainer.getRootNode();
+      if (aRoot === bRoot)
+        return a.compareBoundaryPoints(window.Range.START_TO_START, b);
+      const aHost =
+        aRoot instanceof window.ShadowRoot ? aRoot.host : a.startContainer;
+      const bHost =
+        bRoot instanceof window.ShadowRoot ? bRoot.host : b.startContainer;
+      return (aHost.compareDocumentPosition(bHost) &
+        Node.DOCUMENT_POSITION_FOLLOWING) !==
+        0
+        ? -1
+        : 1;
+    });
+}
+
 export function createRoot(options: CreateRootOptions = {}): HTMLDivElement {
   const { width = 1000, height = 800 } = options;
   const root = document.createElement('div');

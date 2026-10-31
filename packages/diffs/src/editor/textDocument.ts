@@ -1,4 +1,4 @@
-import type { MatchRange, SearchParams } from '../search';
+import type { MatchRange, SearchMatchVisitor, SearchParams } from '../search';
 import { countLineBreaks } from '../utils/computeFileOffsets';
 import {
   coalesceEditStackEntries,
@@ -213,8 +213,12 @@ export class TextDocument<
     return this.#pieceTable.findNextNonOverlappingSubstring(needle, occupied);
   }
 
-  search(searchParams: SearchParams, limit?: number): MatchRange[] {
-    return this.#pieceTable.search(searchParams, limit);
+  search(
+    searchParams: SearchParams,
+    limit?: number,
+    onMatch?: SearchMatchVisitor
+  ): MatchRange[] {
+    return this.#pieceTable.search(searchParams, limit, onMatch);
   }
 
   applyEdits(

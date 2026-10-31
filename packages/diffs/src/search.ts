@@ -8,6 +8,9 @@ export interface SearchParams {
   regex: boolean;
 }
 
+// Called for each accepted match while the complete result array is collected.
+export type SearchMatchVisitor = (match: MatchRange, index: number) => void;
+
 export interface SearchPosition {
   readonly line: number;
   readonly character: number;
@@ -29,7 +32,8 @@ const WORD_SEPARATORS = '`~!@#$%^&*()-=+[{]}\\|;:\'",.<>/?' as const;
 export function searchLineByLine(
   document: LineByLineSearchDocument,
   searchParams: SearchParams,
-  limit: number = MAX_FIND_MATCHES
+  limit: number = MAX_FIND_MATCHES,
+  onMatch?: SearchMatchVisitor
 ): MatchRange[] {
   if (searchParams.text.length === 0 || document.textLength === 0) {
     return [];
@@ -55,7 +59,8 @@ export function searchLineByLine(
     document,
     pattern,
     searchParams.wholeWord,
-    limit
+    limit,
+    onMatch
   );
 }
 
@@ -114,7 +119,8 @@ function collectSearchMatchesLineByLine(
   document: LineByLineSearchDocument,
   pattern: RegExp,
   wholeWord: boolean,
-  limit: number
+  limit: number,
+  onMatch?: SearchMatchVisitor
 ): MatchRange[] {
   const out: MatchRange[] = [];
   const charAt = (offset: number) => document.charAt(offset);
@@ -144,7 +150,9 @@ function collectSearchMatchesLineByLine(
           charAt
         )
       ) {
-        out.push([docStart, docStart + fragment.length]);
+        const range: MatchRange = [docStart, docStart + fragment.length];
+        out.push(range);
+        onMatch?.(range, out.length - 1);
         if (out.length >= limit) {
           return out;
         }

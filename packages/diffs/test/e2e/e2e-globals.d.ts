@@ -110,6 +110,8 @@ interface Window {
   __forceEditorFullRender?: () => void;
   __moveEditorContainer?: () => void;
   __syncCount?: number;
+  // editable.html: force a full render, optionally moving its bounded window.
+  __renderEditorWindow?: (startingLine: number) => void;
 
   // edit-collapsed.html helpers: rendered new-file line numbers in the
   // editable column, and the primary caret's zero-based line.

@@ -6,6 +6,7 @@ import {
   type SearchPanelOptions,
   SearchPanelWidget,
   type SearchParams,
+  type SearchResult,
 } from '../src/editor/searchPanel';
 import { TextDocument } from '../src/editor/textDocument';
 import type { ResolvedTextEdit } from '../src/editor/types';
@@ -128,7 +129,7 @@ function createWidget(
     defaultQuery,
     mode,
     initialMatch,
-    search: (searchParams) => textDocument.search(searchParams),
+    search: (searchParams) => ({ matches: textDocument.search(searchParams) }),
     isSameMatch: ([aStart, aEnd], [bStart, bEnd]) =>
       aStart === bStart && aEnd === bEnd,
     scrollToMatch: (nextMatch) => scrolled.push([...nextMatch]),
@@ -145,7 +146,7 @@ function createWidget(
         );
       },
     },
-    onUpdate: (matches) => {
+    onUpdate: ({ matches }) => {
       updates.push(matches.map((match) => [...match] as MatchRange));
       return selectCurrent ? matches[0] : undefined;
     },
@@ -180,6 +181,57 @@ function createWidget(
 }
 
 describe('SearchPanelWidget', () => {
+  test('reports query changes separately from replacement text and background refreshes', () => {
+    const dom = installDom();
+    let widget: SearchPanelWidget<MatchRange> | undefined;
+    try {
+      let queryChanges = 0;
+      const updates: ({ skipNavigation?: boolean } | undefined)[] = [];
+      widget = new SearchPanelWidget<MatchRange>({
+        containerElement: createContainer(),
+        defaultQuery: '',
+        mode: 'replace',
+        search: () => ({ matches: [[0, 6]] }),
+        scrollToMatch: () => {},
+        onQueryChange: () => {
+          queryChanges++;
+        },
+        onUpdate: (_result, options) => {
+          updates.push(options);
+          return undefined;
+        },
+        onClose: () => {},
+        replace: { replaceMatch: () => undefined, replaceAll: () => {} },
+      });
+      const panel = widget.getHostElement().shadowRoot!;
+      const query =
+        panel.querySelector<HTMLInputElement>('input[data-search]')!;
+      const replacement = panel.querySelector<HTMLInputElement>(
+        'input[data-replace]'
+      )!;
+      setInputValue(query, 'target');
+      expect(queryChanges).toBe(1);
+      const beforeReplacement = updates.length;
+      setInputValue(replacement, 'new');
+      expect(updates).toHaveLength(beforeReplacement);
+      widget.updateMatches({ skipNavigation: true });
+      expect(updates.at(-1)).toEqual({ skipNavigation: true });
+      setInputValue(query, 'target');
+      expect(queryChanges).toBe(1);
+      for (const title of ['Match Case', 'Whole Word', 'Regexp']) {
+        panel
+          .querySelector<HTMLButtonElement>(`button[title="${title}"]`)!
+          .click();
+      }
+      expect(queryChanges).toBe(4);
+      setInputValue(query, '');
+      expect(queryChanges).toBe(5);
+    } finally {
+      widget?.cleanup();
+      dom.cleanup();
+    }
+  });
+
   for (const initialMatch of [undefined, [0, 3] as MatchRange]) {
     test.each(['search', 'replace', 'outside'] as const)(
       `initial frame preserves an early search and navigation with ${initialMatch == null ? 'empty' : 'prefilled'} query and focus on %s`,
@@ -393,8 +445,9 @@ describe('SearchPanelWidget', () => {
     const harness = createWidget('foo foo foo');
     try {
       await wait(0);
-      const toggle = document.querySelector<HTMLButtonElement>(
-        '[data-search-panel] [data-replace-toggle]'
+      const panel = harness.widget.getHostElement().shadowRoot!;
+      const toggle = panel.querySelector<HTMLButtonElement>(
+        '[data-replace-toggle]'
       )!;
       expect(toggle.ariaLabel).toBe('Toggle Replace');
       expect(toggle.ariaExpanded).toBe('false');
@@ -403,13 +456,13 @@ describe('SearchPanelWidget', () => {
       toggle.click();
       expect(harness.mode()).toBe('replace');
       expect(toggle.ariaExpanded).toBe('true');
-      expect(document.activeElement).toBe(harness.replaceInput);
+      expect(panel.activeElement).toBe(harness.replaceInput);
 
       // Collapsing returns focus to the find input.
       toggle.click();
       expect(harness.mode()).toBe('find');
       expect(toggle.ariaExpanded).toBe('false');
-      expect(document.activeElement).toBe(harness.input);
+      expect(panel.activeElement).toBe(harness.input);
     } finally {
       harness.cleanup();
     }
@@ -419,9 +472,9 @@ describe('SearchPanelWidget', () => {
     const harness = createWidget('foo foo foo', { mode: 'replace' });
     try {
       await wait(0);
-      const toggle = document.querySelector<HTMLButtonElement>(
-        '[data-search-panel] [data-replace-toggle]'
-      )!;
+      const toggle = harness.widget
+        .getHostElement()
+        .shadowRoot!.querySelector<HTMLButtonElement>('[data-replace-toggle]')!;
       expect(toggle.ariaExpanded).toBe('true');
 
       pressKey(harness.input, 'f', { metaKey: true });
@@ -607,7 +660,7 @@ function mountReplaceHost(contents: string): ReplaceHostHarness {
     containerElement,
     defaultQuery: '',
     mode: 'replace',
-    search: (searchParams) => textDocument.search(searchParams),
+    search: (searchParams) => ({ matches: textDocument.search(searchParams) }),
     isSameMatch: ([aStart, aEnd], [bStart, bEnd]) =>
       aStart === bStart && aEnd === bEnd,
     scrollToMatch,
@@ -624,7 +677,7 @@ function mountReplaceHost(contents: string): ReplaceHostHarness {
         );
       },
     },
-    onUpdate: (matches) => {
+    onUpdate: ({ matches }) => {
       for (const match of matches) {
         if (match[0] >= selection[0]) {
           scrollToMatch(match);
@@ -1198,6 +1251,53 @@ describe('search agrees with a string-model oracle under random splices', () => 
   });
 });
 describe('SearchPanelWidget', () => {
+  test('delivers each search result with its preferred match and clears it with the query', () => {
+    const dom = installDom();
+    let widget: SearchPanelWidget<MatchRange> | undefined;
+    try {
+      const first: MatchRange = [0, 3];
+      const second: MatchRange = [4, 7];
+      const results: Record<string, SearchResult<MatchRange>> = {
+        foo: { matches: [first, second], preferredMatch: second },
+        bar: { matches: [first], preferredMatch: first },
+        missing: { matches: [] },
+      };
+      const updates: SearchResult<MatchRange>[] = [];
+      widget = new SearchPanelWidget<MatchRange>({
+        containerElement: createContainer(),
+        defaultQuery: '',
+        search: ({ text }) => results[text],
+        scrollToMatch: () => {},
+        onUpdate: (result) => {
+          updates.push(result);
+          return result.preferredMatch;
+        },
+        onClose: () => {},
+      });
+      const panel = widget.getHostElement().shadowRoot!;
+      const input =
+        panel.querySelector<HTMLInputElement>('input[data-search]')!;
+      const count = panel.querySelector('[data-matches]')!;
+
+      setInputValue(input, 'foo');
+      expect(updates.at(-1)).toBe(results.foo);
+      expect(count.textContent).toBe('2 of 2');
+      setInputValue(input, 'bar');
+      expect(updates.at(-1)).toBe(results.bar);
+      expect(count.textContent).toBe('1 of 1');
+      setInputValue(input, 'missing');
+      expect(updates.at(-1)).toBe(results.missing);
+      expect(count.textContent).toBe('No results');
+      setInputValue(input, 'foo');
+      setInputValue(input, '');
+      expect(updates.at(-1)).toEqual({ matches: [] });
+      expect(count.textContent).toBe('No results');
+    } finally {
+      widget?.cleanup();
+      dom.cleanup();
+    }
+  });
+
   test('changes replacement capability without rebuilding controls or moving focus', async () => {
     const dom = installDom();
     try {
@@ -1207,14 +1307,19 @@ describe('SearchPanelWidget', () => {
         defaultQuery: 'foo',
         mode: 'replace',
         initialMatch: [0, 3],
-        search: () => [[0, 3]],
+        search: () => ({ matches: [[0, 3]] }),
         scrollToMatch: () => {},
-        onUpdate: (matches) => matches[0],
+        onUpdate: ({ matches }) => matches[0],
         onClose: () => {},
       });
       await wait(0);
       const panel = widget.getHostElement().shadowRoot!;
       const grid = panel.querySelector<HTMLElement>('[data-search-grid]')!;
+      const toggle = panel.querySelector<HTMLButtonElement>(
+        '[data-replace-toggle]'
+      )!;
+      expect(toggle.hidden).toBe(true);
+      expect(toggle.ariaExpanded).toBe('false');
       const query =
         panel.querySelector<HTMLInputElement>('input[data-search]')!;
       const outside = document.createElement('input');
@@ -1229,6 +1334,8 @@ describe('SearchPanelWidget', () => {
       });
       widget.setReplaceHandlers(handlers('first'));
       expect(grid.dataset.mode).toBe('replace');
+      expect(toggle.hidden).toBe(false);
+      expect(toggle.ariaExpanded).toBe('true');
       expect(document.activeElement).toBe(outside);
       const replacement = panel.querySelector<HTMLInputElement>(
         'input[data-replace]'
@@ -1240,10 +1347,14 @@ describe('SearchPanelWidget', () => {
       button.click();
       widget.setReplaceHandlers(undefined);
       expect(grid.dataset.mode).toBe('find');
+      expect(toggle.hidden).toBe(true);
+      expect(toggle.ariaExpanded).toBe('false');
       button.click();
       expect(calls).toEqual(['first:foo:bar']);
       widget.setReplaceHandlers(handlers('second'));
       expect(grid.dataset.mode).toBe('replace');
+      expect(toggle.hidden).toBe(false);
+      expect(toggle.ariaExpanded).toBe('true');
       expect(panel.querySelector('input[data-replace]')).toBe(replacement);
       expect(replacement.value).toBe('bar');
       expect(query.value).toBe('foo');
@@ -1269,10 +1380,10 @@ describe('SearchPanelWidget', () => {
         initialMatch: [0, 3],
         search: (params) => {
           searchCalls.push(params);
-          return [[0, 3]];
+          return { matches: [[0, 3]] };
         },
         scrollToMatch: () => {},
-        onUpdate: (matches) => {
+        onUpdate: ({ matches }) => {
           updates.push(matches);
           return matches[0];
         },
@@ -1317,7 +1428,7 @@ describe('SearchPanelWidget', () => {
         defaultQuery: 'foo',
         mode: 'replace',
         initialMatch: matches[0],
-        search: () => matches,
+        search: () => ({ matches }),
         isSameMatch: ([aStart, aEnd], [bStart, bEnd]) =>
           aStart === bStart && aEnd === bEnd,
         scrollToMatch: (match, retainFocus) => {
@@ -1332,7 +1443,7 @@ describe('SearchPanelWidget', () => {
             replaceAllCalls.push([allMatches, params]);
           },
         },
-        onUpdate: (allMatches) => allMatches[0],
+        onUpdate: ({ matches: allMatches }) => allMatches[0],
         onClose: () => {},
       });
 
