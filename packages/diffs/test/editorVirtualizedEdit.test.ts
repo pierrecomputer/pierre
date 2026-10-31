@@ -7,7 +7,7 @@ import { PieceTable } from '../src/editor/pieceTable';
 import { DirectionForward } from '../src/editor/selection';
 import { disposeHighlighter } from '../src/highlighter/shared_highlighter';
 import type { FileContents, RenderRange } from '../src/types';
-import { installDom, wait } from './domHarness';
+import { getSearchHighlightRanges, installDom, wait } from './domHarness';
 
 afterAll(async () => {
   await disposeHighlighter();
@@ -416,9 +416,13 @@ describe('Editor search matches in a virtualized window', () => {
         })
       );
       await wait(0);
-      const input = fileContainer.shadowRoot?.querySelector<HTMLInputElement>(
-        '[data-search-panel] input[data-search]'
+      const panel = fileContainer.shadowRoot?.querySelector<HTMLElement>(
+        '[data-search-panel]'
       );
+      const input =
+        panel?.shadowRoot?.querySelector<HTMLInputElement>(
+          'input[data-search]'
+        );
       expect(input).not.toBeNull();
       input!.value = 'line';
       input!.dispatchEvent(new window.Event('input', { bubbles: true }));
@@ -431,10 +435,9 @@ describe('Editor search matches in a virtualized window', () => {
         // There is one match per document line. A repaint resolves only both
         // endpoints of the seven rendered matches, not all 2,000 matches.
         expect(positionAt).toHaveBeenCalledTimes(range.totalLines * 2);
-        expect(
-          fileContainer.shadowRoot?.querySelectorAll('[data-match-range]')
-            .length
-        ).toBe(range.totalLines);
+        expect(getSearchHighlightRanges(fileContainer).length).toBe(
+          range.totalLines
+        );
       } finally {
         positionAt.mockRestore();
       }

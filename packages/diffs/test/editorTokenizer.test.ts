@@ -84,6 +84,15 @@ describe('EditorTokenizer', () => {
     tokenizer.cleanUp();
   });
 
+  test('exposes ANSI yellow for search and clears it when a theme omits it', () => {
+    expect(getThemeStyle({ 'terminal.ansiYellow': '#c9a227' })).toContain(
+      '--diffs-editor-search-yellow: #c9a227;'
+    );
+    expect(getThemeStyle({})).toContain(
+      '--diffs-editor-search-yellow: initial;'
+    );
+  });
+
   test('derives the active-line background mix and border treatment', () => {
     const borderOnlyStyle = getThemeStyle({
       'editor.lineHighlightBorder': '#303030',

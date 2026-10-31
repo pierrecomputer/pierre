@@ -541,6 +541,25 @@ export class VirtualizedFile<
       : this.virtualizer.getContainerElement();
   }
 
+  public getRenderedBounds(): { top: number; bottom: number } | undefined {
+    const range = this.renderRange;
+    if (!this.enabled || range == null || range.totalLines <= 0)
+      return undefined;
+    const top =
+      getVirtualFileHeaderRegion(
+        this.metrics,
+        this.options.disableFileHeader ?? false
+      ) +
+      (range.startingLine === 0
+        ? this.cache.fileAnnotationHeight
+        : range.bufferBefore);
+    const bottom =
+      this.height -
+      getVirtualFilePaddingBottom(this.metrics) -
+      range.bufferAfter;
+    return { top, bottom };
+  }
+
   public getNumericScrollAnchor(
     localViewportTop: number
   ): NumericScrollLineAnchor | undefined {

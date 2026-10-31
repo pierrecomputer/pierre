@@ -7,6 +7,7 @@ import type {
   FileContents,
   FileDiffMetadata,
   Hunk,
+  HunkExpansionRegion,
   HunkSeparators,
   NumericScrollLineAnchor,
   PendingCodeViewLayoutReset,
@@ -789,6 +790,28 @@ export class VirtualizedFileDiff<
       : this.virtualizer.getContainerElement();
   }
 
+  public getRenderedBounds(): { top: number; bottom: number } | undefined {
+    const range = this.renderRange;
+    if (!this.enabled || range == null || range.totalLines <= 0)
+      return undefined;
+    const diff = this.getLayoutDiff();
+    const top =
+      getVirtualFileHeaderRegion(
+        this.metrics,
+        this.options.disableFileHeader ?? false
+      ) +
+      (range.startingLine === 0
+        ? this.cache.fileAnnotationHeight
+        : range.bufferBefore);
+    const bottom =
+      this.height -
+      (diff != null && diff.hunks.length === 0
+        ? 0
+        : getVirtualFilePaddingBottom(this.metrics)) -
+      range.bufferAfter;
+    return { top, bottom };
+  }
+
   public getNumericScrollAnchor(
     localViewportTop: number
   ): NumericScrollLineAnchor | undefined {
@@ -1146,6 +1169,16 @@ export class VirtualizedFileDiff<
     // CodeView sessions retain their editor association while rendering is
     // suspended; CodeView itself runs the exit recompute when it reaps one.
     return !this.isAdvancedMode() && super.shouldSelfHealEditSession();
+  }
+
+  public getExpandedHunksForSearch(): Map<number, HunkExpansionRegion> {
+    return this.hunksRenderer.getExpandedHunksMap();
+  }
+
+  // Search maps live editor lines against the session's hunks, including while
+  // the item is offscreen and its rendered diff may be out of date.
+  public getDiffForSearch(): FileDiffMetadata | undefined {
+    return this.getWorkingDiff();
   }
 
   public setVisibility(visible: boolean): void {

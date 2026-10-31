@@ -135,7 +135,7 @@ describe('highlights themes', () => {
             highlighter,
             theme: { dark: name, light: name },
           })
-        ).toBe(
+        ).toStartWith(
           '--diffs-dark:var(--diffs-token-foreground);--diffs-dark-bg:var(--diffs-token-background);' +
             '--diffs-light:var(--diffs-token-foreground);--diffs-light-bg:var(--diffs-token-background);'
         );
@@ -228,6 +228,7 @@ describe('highlights themes', () => {
       expect(getHighlighterThemeStyles({ highlighter, theme: name })).toBe(
         'color:var(--app-foreground, #eeeeee);background-color:var(--app-background, #111111);' +
           '--diffs-fg:var(--app-foreground, #eeeeee);--diffs-bg:var(--app-background, #111111);' +
+          '--diffs-editor-selection-bg:var(--app-selection);' +
           '--diffs-addition-color:var(--app-added, #00ff00);'
       );
     } finally {
@@ -244,6 +245,10 @@ describe('highlights themes', () => {
     });
     const pierre = highlighter.getTheme('pierre-dark');
     const pierreColors = pierre.colors ?? {};
+    expect(pierreColors['terminal.ansiYellow']).toBeDefined();
+    expect(pierreColors['terminal.ansiYellow']).toBe(
+      pierreColors['terminal.ansi.yellow']
+    );
     const player = pierre.zed?.style.players?.[0];
     expect(player?.cursor).toBeDefined();
     expect(player?.cursor).toBe(pierreColors['editorCursor.foreground']);

@@ -250,7 +250,6 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
 
   private deletionAnnotations: AnnotationLineMap<LAnnotation> = {};
   private additionAnnotations: AnnotationLineMap<LAnnotation> = {};
-
   private computedLangs: SupportedLanguages[] = ['text'];
   private renderCache: DiffRenderCache | undefined;
   // Completed background work waits here until the next render can update its
@@ -1747,7 +1746,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
             lineDecoration.gutterProperties
           );
           if (additionLineContent != null) {
-            additionLineContent = withContentProperties(
+            const decoratedLine = withContentProperties(
               additionLineContent,
               lineDecoration.contentProperties,
               isRenderCacheDirty && additionLine != null
@@ -1757,8 +1756,11 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
                   }
                 : undefined
             );
+            if (decoratedLine != null) {
+              additionLineContent = decoratedLine;
+            }
           } else if (deletionLineContent != null) {
-            deletionLineContent = withContentProperties(
+            const decoratedLine = withContentProperties(
               deletionLineContent,
               lineDecoration.contentProperties,
               isRenderCacheDirty && deletionLine != null
@@ -1768,6 +1770,9 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
                   }
                 : undefined
             );
+            if (decoratedLine != null) {
+              deletionLineContent = decoratedLine;
+            }
           }
           pushLineWithAnnotation({
             diffStyle: 'unified',

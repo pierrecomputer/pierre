@@ -298,6 +298,18 @@ function CodeViewInner<LAnnotation = undefined, Caret = undefined>(
       const resolvedOptions = {
         ...editorOptions,
         ...options,
+        onFocus: () => {
+          options.onFocus();
+          editorOptions?.onFocus?.();
+        },
+        onBlur: () => {
+          options.onBlur();
+          editorOptions?.onBlur?.();
+        },
+        onRender: () => {
+          options.onRender();
+          editorOptions?.onRender?.();
+        },
       } as EditorOptions<EType, LAnnotation, Caret>;
       const editor = contextCreateEditor(
         editorType,

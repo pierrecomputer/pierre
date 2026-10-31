@@ -213,6 +213,22 @@
       color-mix(in lab, var(--diffs-selection-base) 65%, var(--diffs-mixer)),
       color-mix(in lab, var(--diffs-selection-base) 75%, var(--diffs-mixer))
     );
+    --diffs-search-text-color: var(--diffs-fg);
+    --diffs-search-match-color: var(
+      --diffs-bg-search-match-override,
+      var(
+        --diffs-editor-match-highlight-bg,
+        var(--diffs-editor-search-yellow, #eab308)
+      )
+    );
+    --diffs-search-current-color: var(
+      --diffs-bg-search-match-current-override,
+      var(
+        --diffs-editor-match-bg,
+        var(--diffs-editor-selection-bg, var(--diffs-modified-base))
+      )
+    );
+
     background-color: var(--diffs-bg);
     color: var(--diffs-fg);
   }
@@ -1496,6 +1512,16 @@
   [data-diff-span] {
     border-radius: 3px;
     box-decoration-break: clone;
+  }
+
+  ::highlight(diffs-search-match) {
+    color: var(--diffs-search-text-color);
+    background-color: var(--diffs-search-match-color);
+  }
+
+  ::highlight(diffs-search-current) {
+    color: var(--diffs-search-text-color);
+    background-color: var(--diffs-search-current-color);
   }
 
   [data-line-type='change-addition'] [data-diff-span] {

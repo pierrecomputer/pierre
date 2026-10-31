@@ -933,7 +933,11 @@ export class FileDiff<LAnnotation = undefined, Caret = undefined> {
   }
 
   public __getEffectiveCodeOptions(): BaseCodeOptions {
-    return { ...this.options, ...this.hunksRenderer.getEffectiveCodeOptions() };
+    return {
+      ...this.options,
+      ...this.hunksRenderer.getEffectiveCodeOptions(),
+      themeType: this.options.themeType,
+    };
   }
 
   public cleanUp(recycle: boolean = false): void {

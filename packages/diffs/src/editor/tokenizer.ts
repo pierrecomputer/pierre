@@ -214,6 +214,7 @@ export class EditorTokenizer {
     const activeLineSourceMix =
       lineHighlightBackground == null ? '100%' : '85%';
     const cursorForeground = colors['editorCursor.foreground'];
+    const searchYellow = colors['terminal.ansiYellow'];
     const findMatchBackground = colors['editor.findMatchBackground'];
     const findMatchHighlightBackground =
       colors['editor.findMatchHighlightBackground'];
@@ -227,6 +228,7 @@ export class EditorTokenizer {
       --diffs-editor-selection-bg: ${selectionBackground ?? 'var(--diffs-line-bg)'};
       --diffs-editor-line-highlight-border: ${lineHighlightBorder};
       --diffs-editor-active-line-source-mix: ${activeLineSourceMix};
+      --diffs-editor-search-yellow: ${searchYellow ?? 'initial'};
       --diffs-editor-match-bg: ${findMatchBackground ?? 'initial'};
       --diffs-editor-match-highlight-bg: ${findMatchHighlightBackground ?? 'initial'};
       --diffs-editor-bracket-match-bg: ${bracketMatchBackground ?? 'initial'};
