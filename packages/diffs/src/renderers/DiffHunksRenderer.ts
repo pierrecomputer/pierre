@@ -76,7 +76,7 @@ import { createGutterWrapper, createHastElement } from '../utils/hast_utils';
 import { hastToHtml } from '../utils/hastToHtml';
 import { isDefaultRenderRange } from '../utils/isDefaultRenderRange';
 import { isDiffPlainText } from '../utils/isDiffPlainText';
-import { endsWithNewline, iterateOverDiff } from '../utils/iterateOverDiff';
+import { endsWithNewline } from '../utils/iterateOverDiff';
 import { renderDiffWithHighlighter } from '../utils/renderDiffWithHighlighter';
 import { resolvePreferredHighlighter } from '../utils/resolvePreferredHighlighter';
 import type { WorkerPoolManager } from '../worker';
@@ -1330,8 +1330,7 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
    * The editor works in new-file lines, while a window is a range of rows
    * (separators and old-side rows included). This is the range of new-file
    * lines the window's rows show, so the editor can finish coloring exactly
-   * those lines before a render. Read off the last layout while it stands;
-   * found by iterating the window when the next layout walks anyway.
+   * those lines before a render.
    */
   public editorRenderRange(
     diff: FileDiffMetadata | undefined,
@@ -1344,43 +1343,30 @@ export class DiffHunksRenderer<LAnnotation = undefined> {
     ) {
       return renderRange;
     }
-    let first: number | undefined;
-    let last: number | undefined;
-    const { model, rowSource } = this;
-    const standing =
-      model != null && model.diff === diff && rowSource != null
-        ? this.layoutWithOptions(diff).standingResult(
-            this.layoutInput(model, rowSource.source, renderRange)
-          )
-        : undefined;
-    if (standing != null) {
-      first = standing.newFileLines?.first;
-      last = standing.newFileLines?.last;
-    } else {
-      const { diffStyle, expandUnchanged, collapsedContextThreshold } =
-        this.getOptionsWithDefaults();
-      iterateOverDiff({
-        diff,
-        diffStyle,
-        startingLine: renderRange.startingLine,
-        totalLines: renderRange.totalLines,
-        expandedHunks: expandUnchanged ? true : this.expandedHunks,
-        collapsedContextThreshold,
-        includeTrailingNewline: this.includesTrailingNewline(),
-        callback: ({ additionLine }) => {
-          if (additionLine != null) {
-            first ??= additionLine.lineNumber;
-            last = additionLine.lineNumber;
-          }
-        },
+    // The model and the row source are what the coming render will lay out
+    // with; before the first render there is no row source yet, and the
+    // layout reads none of its rows for this.
+    const model =
+      this.model?.diff === diff
+        ? this.model
+        : (this.model = DiffModel.fromDiff(diff));
+    const rows =
+      this.rowSource?.source ??
+      new RowSource({
+        deletionRows: [],
+        additionRows: [],
+        additionLines: [],
+        lineIds: [],
       });
-    }
-    return first == null || last == null
+    const lines = this.layoutWithOptions(diff).newFileLines(
+      this.layoutInput(model, rows, renderRange)
+    );
+    return lines == null
       ? { ...renderRange, startingLine: 0, totalLines: 0 }
       : {
           ...renderRange,
-          startingLine: first - 1,
-          totalLines: last - first + 1,
+          startingLine: lines.first - 1,
+          totalLines: lines.last - lines.first + 1,
         };
   }
 

@@ -248,17 +248,40 @@ export class DiffLayout<LAnnotation = undefined> {
   }
 
   /**
-   * The last layout's result while a layout of `input` would patch it rather
-   * than walk again: the same rows show, so what the walk found about them
-   * still holds. Undefined when the next layout walks.
+   * The first and last new-file line numbers with a row in the window of
+   * `input`, or undefined when no row shows one. Read off the last walk while
+   * a layout of `input` would patch it rather than walk again; otherwise
+   * found the way the walk finds them, without building rows.
    */
-  standingResult(
+  newFileLines(
     input: DiffLayoutInput<LAnnotation>
-  ): DiffLayoutResult | undefined {
+  ): { first: number; last: number } | undefined {
     const last = this.#last;
-    return last != null && sameInputs(last.input, input)
-      ? last.result
-      : undefined;
+    if (last != null && sameInputs(last.input, input)) {
+      return last.result.newFileLines;
+    }
+    const { diffStyle, expandUnchanged, collapsedContextThreshold } =
+      this.options;
+    let first: number | undefined;
+    let lastLine: number | undefined;
+    iterateOverDiff({
+      diff: input.model.diff,
+      diffStyle,
+      startingLine: input.renderRange.startingLine,
+      totalLines: input.renderRange.totalLines,
+      expandedHunks: expandUnchanged ? true : input.expandedHunks,
+      collapsedContextThreshold,
+      includeTrailingNewline: input.includeTrailingNewline,
+      callback: ({ additionLine }) => {
+        if (additionLine != null) {
+          first ??= additionLine.lineNumber;
+          lastLine = additionLine.lineNumber;
+        }
+      },
+    });
+    return first == null || lastLine == null
+      ? undefined
+      : { first, last: lastLine };
   }
 
   layout(input: DiffLayoutInput<LAnnotation>): DiffLayoutResult {
