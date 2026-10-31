@@ -41,9 +41,43 @@
         throw new Error('Missing editable fixture mount.');
       }
 
+      const params = new URLSearchParams(location.search);
+      const windowed = params.has('windowed');
+      if (params.has('nested'))
+        mount.style.cssText = 'height: 560px; overflow: auto';
       const file = {
         name: 'editable.ts',
-        contents: `const foo = 1;
+        contents: params.has('horizontal')
+          ? Array.from({ length: 300 }, (_, index) =>
+              index === 7
+                ? `target ${'x'.repeat(300)} target`
+                : index === 8 || index === 200
+                  ? `${'y'.repeat(280)} target`
+                  : `padding ${index + 1}`
+            ).join('\n')
+          : params.has('candidates')
+            ? Array.from({ length: 3000 }, (_, index) =>
+                [9, 999, 1799].includes(index)
+                  ? `target ${index + 1}`
+                  : `padding ${index + 1}`
+              ).join('\n')
+            : params.has('large')
+              ? Array.from(
+                  { length: 10000 },
+                  (_, index) => `target line ${index + 1}`
+                ).join('\n')
+              : params.has('viewport')
+                ? Array.from({ length: 200 }, (_, index) =>
+                    [19, 99, 100, 160].includes(index)
+                      ? `target ${index + 1}`
+                      : `padding ${index + 1}`
+                  ).join('\n')
+                : windowed
+                  ? Array.from(
+                      { length: 300 },
+                      (_, index) => `const foo${index} = foo;`
+                    ).join('\n')
+                  : `const foo = 1;
 const bar = foo + foo;
 const baz = foo;
 `,
@@ -68,7 +102,23 @@ const baz = foo;
         themeType: 'dark',
         useTokenTransformer: true,
       });
-      instance.render({ file, containerWrapper: mount });
+      const renderRange = (startingLine) => ({
+        startingLine,
+        totalLines: 20,
+        bufferBefore: 0,
+        bufferAfter: 0,
+      });
+      instance.render({
+        file,
+        containerWrapper: mount,
+        renderRange: windowed ? renderRange(0) : undefined,
+      });
+      window.__renderEditorWindow = (startingLine) =>
+        instance.render({
+          file,
+          forceRender: true,
+          renderRange: windowed ? renderRange(startingLine) : undefined,
+        });
       editor.edit(instance);
 
       const waitForEditable = async () => {

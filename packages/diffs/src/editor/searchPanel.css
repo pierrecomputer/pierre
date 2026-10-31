@@ -209,6 +209,7 @@ svg {
 }
 
 [data-matches] {
+  font-variant-numeric: tabular-nums;
   grid-area: matches;
   flex-shrink: 0;
   min-width: 50px;

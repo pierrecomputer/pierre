@@ -1,8 +1,10 @@
 import { describe, expect, test } from 'bun:test';
 
+import { TextDocument } from '../src/editor/textDocument';
 import {
   buildSearchReplacementText,
   type LineByLineSearchDocument,
+  type MatchRange,
   searchLineByLine,
   type SearchParams,
 } from '../src/search';
@@ -52,6 +54,29 @@ function isLineEnding(charCode: number): boolean {
 }
 
 describe('searchLineByLine', () => {
+  test('visits accepted matches in order while collecting the complete limited result', () => {
+    const document = new TextDocument(
+      'inmemory://search-visitor',
+      'targeting target\ntarget target'
+    );
+    const visited: { match: MatchRange; index: number }[] = [];
+    const result = document.search(
+      searchParams({ text: 'target', wholeWord: true }),
+      2,
+      (match, index) => {
+        visited.push({ match, index });
+      }
+    );
+    expect(result).toEqual([
+      [10, 16],
+      [17, 23],
+    ]);
+    expect(visited).toEqual([
+      { match: [10, 16], index: 0 },
+      { match: [17, 23], index: 1 },
+    ]);
+  });
+
   test('searches a string document without TextDocument', () => {
     const document = createSearchDocument('Alpha beta\nalpha BETA');
 

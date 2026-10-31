@@ -306,6 +306,10 @@ function CodeViewInner<LAnnotation = undefined, Caret = undefined>(
           options.onBlur();
           editorOptions?.onBlur?.();
         },
+        onRender: () => {
+          options.onRender();
+          editorOptions?.onRender?.();
+        },
       } as EditorOptions<EType, LAnnotation, Caret>;
       const editor = contextCreateEditor(
         editorType,

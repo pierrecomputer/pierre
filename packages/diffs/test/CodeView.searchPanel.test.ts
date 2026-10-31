@@ -10,6 +10,7 @@ import {
 import { parseDiffFromFile } from '../src/utils/parseDiffFromFile';
 import {
   createRoot,
+  getSearchHighlightRanges,
   installDom,
   renderItems,
   wait,
@@ -195,33 +196,19 @@ function getSearchState(viewer: CodeView): SearchStateProbe['searchState'] {
   return (viewer as unknown as SearchStateProbe).searchState;
 }
 
-function getRenderedSearchMatches(root: HTMLElement): HTMLElement[] {
-  return Array.from(root.querySelectorAll<HTMLElement>('*')).flatMap(
-    (element) =>
-      Array.from(
-        element.shadowRoot?.querySelectorAll<HTMLElement>(
-          '[data-search-match]'
-        ) ?? []
-      )
-  );
+function getRenderedSearchMatches(root: HTMLElement): Range[] {
+  return getSearchHighlightRanges(root);
 }
 
-function getRenderedCurrentSearchMatches(root: HTMLElement): HTMLElement[] {
-  return getRenderedSearchMatches(root).filter(
-    (element) => element.dataset.searchMatchCurrent !== undefined
-  );
+function getRenderedCurrentSearchMatches(root: HTMLElement): Range[] {
+  return getSearchHighlightRanges(root, true);
 }
 
-function getSearchMatchSide(element: HTMLElement): string | undefined {
-  if (element.closest('[data-deletions]') != null) {
-    return 'deletions';
-  }
-  if (element.closest('[data-additions]') != null) {
-    return 'additions';
-  }
-  if (element.closest('[data-unified]') != null) {
-    return 'unified';
-  }
+function getSearchMatchSide(range: Range): string | undefined {
+  const element = range.startContainer.parentElement!;
+  if (element.closest('[data-deletions]') != null) return 'deletions';
+  if (element.closest('[data-additions]') != null) return 'additions';
+  if (element.closest('[data-unified]') != null) return 'unified';
   return undefined;
 }
 
@@ -452,7 +439,7 @@ describe('CodeView search panel', () => {
     }
   });
 
-  test('selects scoped file matches without editor scrolling and leaves global selections alone', async () => {
+  test('navigates scoped and global matches without changing editor selections', async () => {
     const dom = installDom();
     const viewer = new CodeView({
       createEditor: (type, options, key) => new Editor(type, options, key),
@@ -471,34 +458,31 @@ describe('CodeView search panel', () => {
       ]);
       const content = getEditorContent(viewer, 'file');
       content.focus();
+      const editor = viewer.getEditor('file')!;
+      editor.setSelections([
+        {
+          start: { line: 1, character: 0 },
+          end: { line: 1, character: 4 },
+          direction: 'forward',
+        },
+      ]);
+      const originalSelection = editor.getViewState().selections;
       dispatchPrimaryFind(content);
       await wait(0);
       const input = getSearchInput(root);
-      const editor = viewer.getEditor('file')!;
       const scroll = spyOn(window.HTMLElement.prototype, 'scrollIntoView');
       fillSearch(root, 'target');
-      expect(editor.getViewState().selections).toEqual([
-        {
-          start: { line: 0, character: 0 },
-          end: { line: 0, character: 6 },
-          direction: 1,
-        },
-      ]);
+      expect(editor.getViewState().selections).toEqual(originalSelection);
       pressSearchEnter(root);
       viewer.render(true);
       await wait(0);
-      expect(editor.getViewState().selections).toEqual([
-        {
-          start: { line: 1, character: 5 },
-          end: { line: 1, character: 11 },
-          direction: 1,
-        },
-      ]);
+      expect(editor.getViewState().selections).toEqual(originalSelection);
       expect(input.getRootNode()).toBe(getSearchPanelRoot(root));
       expect(getSearchPanelRoot(root).activeElement).toBe(input);
       expect(scroll).not.toHaveBeenCalled();
       dispatchFindAgain(input, { previous: true, composed: true });
-      expect(editor.getViewState().selections?.[0].start.line).toBe(0);
+      expect(editor.getViewState().selections).toEqual(originalSelection);
+      expect(getSearchState(viewer).current?.lineNumber).toBe(1);
 
       root.focus();
       await wait(0);
@@ -516,7 +500,7 @@ describe('CodeView search panel', () => {
   });
 
   test.each(['split', 'unified'] as const)(
-    'reveals and selects collapsed scoped diff matches in %s mode',
+    'reveals collapsed scoped diff matches without changing selections in %s mode',
     async (diffStyle) => {
       const dom = installDom();
       const viewer = new CodeView({
@@ -549,6 +533,9 @@ describe('CodeView search panel', () => {
           throw new Error('Expected diff instance');
         }
         expect(instance.isLineRenderable(101)).toBe(false);
+        const originalSelection = viewer
+          .getEditor('diff')!
+          .getViewState().selections;
         content.focus();
         dispatchPrimaryFind(content);
         await wait(0);
@@ -564,13 +551,9 @@ describe('CodeView search panel', () => {
         });
         expect(instance.isLineRenderable(101)).toBe(true);
         expect(instance.isLineRenderable(210)).toBe(false);
-        expect(viewer.getEditor('diff')!.getViewState().selections).toEqual([
-          {
-            start: { line: 100, character: 7 },
-            end: { line: 100, character: 13 },
-            direction: 1,
-          },
-        ]);
+        expect(viewer.getEditor('diff')!.getViewState().selections).toEqual(
+          originalSelection
+        );
         expect(getSearchPanelRoot(root).activeElement).toBe(
           getSearchInput(root)
         );
@@ -896,7 +879,7 @@ describe('CodeView search panel', () => {
         { lineNumber: 2, startCharacter: 7, endCharacter: 13 },
       ]);
       expect(
-        getRenderedSearchMatches(root).map((element) => element.textContent)
+        getRenderedSearchMatches(root).map((range) => range.toString())
       ).toEqual(['target', 'target']);
       editor.undo();
       await wait(0);
@@ -971,13 +954,16 @@ describe('CodeView search panel', () => {
           ).toBe(match.renderedLineIndex);
         }
         const highlights = getRenderedSearchMatches(root);
-        expect(highlights.map((element) => element.textContent)).toEqual([
+        expect(highlights.map((range) => range.toString())).toEqual([
           'target',
           'target',
         ]);
         expect(
           highlights.every(
-            (element) => element.closest('[data-deletions]') === null
+            (range) =>
+              range.startContainer.parentElement!.closest(
+                '[data-deletions]'
+              ) === null
           )
         ).toBe(true);
         root.tabIndex = 0;
@@ -999,8 +985,12 @@ describe('CodeView search panel', () => {
         expect(
           getRenderedSearchMatches(root).some(
             (element) =>
-              element.closest('[data-deletions]') !== null ||
-              element.closest('[data-line-type="change-deletion"]') !== null
+              element.startContainer.parentElement!.closest(
+                '[data-deletions]'
+              ) !== null ||
+              element.startContainer.parentElement!.closest(
+                '[data-line-type="change-deletion"]'
+              ) !== null
           )
         ).toBe(true);
       } finally {
@@ -1169,6 +1159,7 @@ describe('CodeView search panel', () => {
       ]);
       const itemElement = getEditorContent(viewer, 'file');
       itemElement.focus();
+      const originalSelection = editor.getViewState().selections;
       dispatchPrimaryFind(itemElement);
       await wait(0);
       fillSearch(root, 'target');
@@ -1190,18 +1181,13 @@ describe('CodeView search panel', () => {
       const input = getSearchInput(root);
       input.focus();
       pressSearchEnter(root);
-      expect(editor.getViewState().selections).toEqual([
-        {
-          start: { line: 0, character: 16 },
-          end: { line: 0, character: 22 },
-          direction: 1,
-        },
-      ]);
+      expect(editor.getViewState().selections).toEqual(originalSelection);
+      expect(getSearchState(viewer).current?.startCharacter).toBe(16);
       await waitFor(() => {
         viewer.render(true);
         return viewer.getRenderedItems().some((item) => item.id === 'file');
       });
-      expect(editor.getViewState().selections?.[0].start.character).toBe(16);
+      expect(editor.getViewState().selections).toEqual(originalSelection);
       expect(getSearchPanelRoot(root).activeElement).toBe(input);
 
       dispatchPrimaryFind(root);
@@ -1433,12 +1419,10 @@ describe('CodeView search panel', () => {
       await wait(0);
 
       expect(
-        getRenderedSearchMatches(root).map((element) => element.textContent)
+        getRenderedSearchMatches(root).map((range) => range.toString())
       ).toEqual(['hit', 'HIT', 'hit']);
       expect(
-        getRenderedCurrentSearchMatches(root).map(
-          (element) => element.textContent
-        )
+        getRenderedCurrentSearchMatches(root).map((range) => range.toString())
       ).toEqual(['hit']);
 
       pressSearchEnter(root);
@@ -1446,9 +1430,7 @@ describe('CodeView search panel', () => {
       await wait(0);
 
       expect(
-        getRenderedCurrentSearchMatches(root).map(
-          (element) => element.textContent
-        )
+        getRenderedCurrentSearchMatches(root).map((range) => range.toString())
       ).toEqual(['HIT']);
 
       dispatchEscape(root);
@@ -1538,7 +1520,7 @@ describe('CodeView search panel', () => {
       expect(
         getRenderedSearchMatches(root).map((element) => ({
           side: getSearchMatchSide(element),
-          text: element.textContent,
+          text: element.toString(),
         }))
       ).toEqual([
         { side: 'deletions', text: 'only' },

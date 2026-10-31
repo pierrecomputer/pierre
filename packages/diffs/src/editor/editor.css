@@ -71,7 +71,6 @@
 [data-caret],
 [data-edit-prediction],
 [data-selection-range],
-[data-match-range],
 [data-bracket-match-range],
 [data-edit-prediction-deletion-range],
 [data-edit-prediction-insertion-range],
@@ -193,23 +192,6 @@
   width: 100%;
   height: 100%;
   background-color: var(--diffs-selection-corner-bg, var(--diffs-bg));
-}
-[data-match-range] {
-  z-index: -10;
-  border: 0;
-  border-radius: 3px;
-  background-color: var(
-    --diffs-editor-match-bg,
-    var(--diffs-editor-selection-bg)
-  );
-  outline: none;
-  box-decoration-break: clone;
-}
-[data-match-range]:not([data-focus]) {
-  background-color: var(
-    --diffs-editor-match-highlight-bg,
-    light-dark(#ff963288, #ff963266)
-  );
 }
 [data-bracket-match-range] {
   z-index: -9;
